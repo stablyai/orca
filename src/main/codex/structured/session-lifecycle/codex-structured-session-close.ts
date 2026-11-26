@@ -67,7 +67,10 @@ export function handleCodexSessionExit(input: {
   // Refused terminal rows use host settlement fallback; the observed child exit remains proven.
   const admission = session.translator?.handle(event) ?? { accepted: true }
   // A quit's hand-off ends the session after its sink closed; the agent runs on, nothing was lost.
-  if (!admission.accepted && !providerRelayRunOutlivesQuit(input.sessionId)) {
+  if (
+    !admission.accepted &&
+    !providerRelayRunOutlivesQuit(input.connection?.relay ? 'relayed' : 'direct')
+  ) {
     input.logger?.warn("Codex's final rows were refused; the host settles the turn instead", {
       scope: 'codex-exit-rows',
       sessionId: input.sessionId,

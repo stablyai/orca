@@ -173,14 +173,14 @@ it.skipIf(process.platform === 'win32')(
     const startedAtMs = await readProcessStartTimeMs(pid)
     const daemonAlive = {
       ...relayed(pid, exitedPid()),
-      daemon: { instance: INSTANCE, pid, startedAtMs: startedAtMs ?? 1 }
+      // Its own start: a start names one daemon process, so its proof is shared only within it.
+      daemon: { instance: 'daemon-start-alive', pid, startedAtMs: startedAtMs ?? 1 }
     }
     expect(startedAtMs).not.toBeNull()
     expect(await relays.providerRelayRunLiveness(chat(daemonAlive))).toBe('unknown')
     agent.kill('SIGKILL')
-    expect(await relays.providerRelayRunLiveness(chat(relayed(exitedPid(), exitedPid())))).toBe(
-      'gone'
-    )
+    const goneRun = relayed(exitedPid(), exitedPid(), 'daemon-start-gone')
+    expect(await relays.providerRelayRunLiveness(chat(goneRun))).toBe('gone')
   }
 )
 
@@ -267,6 +267,35 @@ it.skipIf(process.platform === 'win32')(
     await expect(launch()).resolves.toBeNull()
     expect(settle).toHaveBeenCalledTimes(1)
     opens.dispose()
+  }
+)
+
+// A launch reattach whose kept agent ended since must end as gone (its cut turn gets its offer),
+// never quietly start a new agent in its place.
+it.skipIf(process.platform === 'win32')(
+  'a launch reattach whose kept agent is gone ends as gone instead of starting a new agent',
+  async () => {
+    const spawned: string[] = []
+    const current = daemon(INSTANCE, () => [])
+    const relays = await fresh([current])
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the spy keeps the fake's other members
+    const client = current as unknown as { request: (type: string) => Promise<unknown> }
+    const request = client.request
+    client.request = (type) => {
+      spawned.push(type)
+      return request(type)
+    }
+    relays.installProviderRelayRunGate(async () => 'gone')
+    const launch = relays.withProviderRelayRebind(SESSION, () =>
+      relays.launchRelayedProviderProcess(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an ended rebind reads no launch field
+        {} as never,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an ended rebind reads only chatKey
+        { chatKey: SESSION } as never
+      )
+    )
+    await expect(launch).rejects.toThrow('agent_kept_running_ended')
+    expect(spawned).not.toContain('relaySpawn')
   }
 )
 

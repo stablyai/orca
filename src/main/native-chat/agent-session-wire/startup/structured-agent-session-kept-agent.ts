@@ -1,6 +1,6 @@
 import {
   hasAttachedProviderRelay,
-  providerRelayRunMayContinue,
+  providerRelayRunLiveness,
   withProviderRelayRebind
 } from '../../../provider-relay/app-provider-relays'
 import type { StructuredAgentSessionAttachContext } from '../acquisition/structured-agent-session-attach-context'
@@ -32,8 +32,10 @@ export async function rebindKeptStructuredAgentSessionAgent(
       ...(outcome.refusal.details ? { details: outcome.refusal.details } : {})
     })
   }
-  // Its daemon start still lists it, or can't say yet: never settled as gone here.
-  if (providerRelayRunMayContinue(sessionId)) {
+  // Only its daemon start's word (or proof) ends the run, never what this app's maps hold: an
+  // abandoned rebind's agent (handed back at quit) is listed again and stays unresolved.
+  const record = context.deps.store.getRecord(sessionId)
+  if (record && (await providerRelayRunLiveness(record, { fresh: true })) !== 'gone') {
     return 'unresolved'
   }
   // Open skipped settling the last run's turn while the agent was kept; it ended, so settle now.

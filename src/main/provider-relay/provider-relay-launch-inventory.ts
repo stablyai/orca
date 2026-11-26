@@ -128,6 +128,8 @@ export function keptProviderRelaySpawnToken(chatKey: string): string | null {
 const INSTANCE_LISTING_FRESH_MS = 2_000
 type InstanceListing = {
   settledAt: number
+  /** Only an answer is reused; an unanswered listing is asked again by the next caller. */
+  answered: boolean
   listing: Promise<ReadonlyMap<string, ProviderRelayInfo> | null>
 }
 /** By daemon start; bounded by the daemons this app has talked to. */
@@ -135,8 +137,8 @@ const instanceListings = new Map<string, InstanceListing>()
 
 /**
  * The relays one daemon start holds, by relay id; null when it didn't answer. `fresh` asks again
- * unless a listing is in flight (a send, a failed attach, or an earlier timeout must not reuse an
- * answer); otherwise one settled within 2 s answers.
+ * unless a listing is in flight (a send or a failed attach must not reuse an answer); otherwise an
+ * answer settled within 2 s answers. An unanswered one is never reused.
  */
 export function listProviderRelayInstance(
   client: DaemonClient,
@@ -147,13 +149,14 @@ export function listProviderRelayInstance(
   if (
     cached &&
     (cached.settledAt === Number.POSITIVE_INFINITY ||
-      (!fresh && Date.now() - cached.settledAt < INSTANCE_LISTING_FRESH_MS))
+      (!fresh && cached.answered && Date.now() - cached.settledAt < INSTANCE_LISTING_FRESH_MS))
   ) {
     return cached.listing
   }
   const channel = providerRelayChannel(client)
   const entry: InstanceListing = {
     settledAt: Number.POSITIVE_INFINITY,
+    answered: false,
     listing: Promise.resolve(null)
   }
   entry.listing = withTimeout(
@@ -167,11 +170,18 @@ export function listProviderRelayInstance(
         return null
       }
       await keep(channel, result.relays)
+      entry.answered = true
       return new Map(result.relays.map((info) => [info.relayId, info]))
     })
     .finally(() => {
       entry.settledAt = Date.now()
     })
+  // Only a settled answer within its 2 s is ever reused: older ones (a restarted daemon's) go.
+  for (const [key, old] of instanceListings) {
+    if (Date.now() - old.settledAt >= INSTANCE_LISTING_FRESH_MS) {
+      instanceListings.delete(key)
+    }
+  }
   instanceListings.set(instance, entry)
   return entry.listing
 }
@@ -234,7 +244,7 @@ export function forgetListedProviderRelayChat(chatKey: string): void {
   spawnTokens.delete(chatKey)
 }
 
-/** Chats whose last run's daemon start couldn't say yet; they may still run. */
+/** Chats whose last run's daemon start couldn't say at their last ask; a close forgets one. */
 const unknownRuns = new Set<string>()
 
 export function noteProviderRelayRunVerdict(
@@ -248,14 +258,13 @@ export function noteProviderRelayRunVerdict(
   }
 }
 
+export function forgetProviderRelayRunVerdict(chatKey: string): void {
+  unknownRuns.delete(chatKey)
+}
+
 /** Its daemon start couldn't say at the last ask; the host holds the chat until it can. */
 export function providerRelayRunUnknown(chatKey: string): boolean {
   return unknownRuns.has(chatKey)
-}
-
-/** The last run may still be running: listed by its daemon start, or that start can't say yet. */
-export function providerRelayRunMayContinue(chatKey: string): boolean {
-  return unknownRuns.has(chatKey) || keptRunningProviderRelayPid(chatKey) !== null
 }
 
 export function forgetKeptProviderRelay(chatKey: string, relay: KeptProviderRelay): void {
