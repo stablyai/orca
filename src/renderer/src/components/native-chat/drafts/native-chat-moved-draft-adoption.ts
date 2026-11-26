@@ -13,10 +13,12 @@ import { moveNativeChatHeldNotes } from '../media/notes/native-chat-held-notes'
 // source lets go: of that entry alone while its draft no longer holds the image, or of its whole
 // draft once that draft is plainly the moved one (see `retireMovedSource`).
 
-/** Retires `from` when it is plainly an older copy of `to`: every image of it is in `to` with its
- *  notes saved there, and the notes held for its chat are saved in `to` too (copied now, joining
- *  any `to` holds; refused, the source stays). Never a queued edit, which copies a message's images
- *  without moving its draft, and never a source a move in this window still owns. */
+/** Retires `from` when it is plainly an older copy of `to`: written before `to` was, its words are
+ *  in `to` (or it has none), every image of it is in `to` with its notes saved there, and the notes
+ *  held for its chat are saved in `to` too (copied now, joining any `to` holds; refused, the source
+ *  stays). A source with words `to` doesn't have, or written since, is never retired: keeping it
+ *  only leaves a copy behind, retiring it could lose words. Never a queued edit, which copies a
+ *  message's images without moving its draft, and never a source a move in this window still owns. */
 function retireMovedSource(from: string, to: string): boolean {
   const source = records.get(from)
   const destination = records.get(to)
@@ -24,6 +26,8 @@ function retireMovedSource(from: string, to: string): boolean {
     !source ||
     !destination ||
     source.images.length === 0 ||
+    source.savedAt >= destination.savedAt ||
+    (source.text.trim() !== '' && !destination.text.includes(source.text)) ||
     isNativeChatEditDraft(from) ||
     isNativeChatEditDraft(to) ||
     keepsMovedNativeChatDraftNotes(from) ||

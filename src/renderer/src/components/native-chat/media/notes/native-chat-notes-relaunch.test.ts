@@ -19,10 +19,10 @@ import {
 } from './native-chat-attachment-notes'
 import { readHeldNativeChatNotes, resetNativeChatHeldNotesForTests } from './native-chat-held-notes'
 import {
-  appendToNativeChatComposerDraft,
   readNativeChatComposerDraft,
   updateNativeChatComposerDraft
 } from '../../drafts/native-chat-composer-draft-store'
+import { installNativeChatDraftRecord } from '../../drafts/native-chat-composer-draft-memory'
 import { createNativeChatNotesStorage } from './native-chat-notes-storage'
 
 const SOURCE = 'agent-session:pending-launch'
@@ -77,8 +77,7 @@ it('after a restart the session’s marked image shows its words, and the source
   expect(drafts.drafts.has(SOURCE)).toBe(true)
   full.mockRestore()
   // Storage has room again; the next edit of the session's draft adopts them and the source goes.
-  // The session's words are rewritten entirely; the launch draft is still plainly its older copy.
-  updateNativeChatComposerDraft(SESSION, { text: 'something else altogether' }, 'immediate')
+  updateNativeChatComposerDraft(SESSION, { text: 'look here, please' }, 'immediate')
   await nativeChatComposerDraftSaved(SESSION)
   await vi.waitFor(() => expect(cold(SESSION)).not.toBeNull())
   await nativeChatComposerDraftSaved(SOURCE)
@@ -116,9 +115,11 @@ it('with copies of an image’s notes under two scopes, the newer words are read
 
 it('a queued edit reads its message’s notes but never takes them over or retires the message', async () => {
   const edit = 'queued-edit:one'
-  appendToNativeChatComposerDraft(edit, {
+  // A queued edit's draft lives in memory while its editor is open, holding the message's images.
+  installNativeChatDraftRecord(edit, {
     text: '',
-    images: [{ id: 'marked', path: '/tmp/m.png' }]
+    images: [{ id: 'marked', path: '/tmp/m.png' }],
+    savedAt: 3
   })
   expect(readNativeChatComposerDraft(edit).images).toHaveLength(1)
   expect(readNativeChatAttachmentNotes(edit, 'marked')?.notes[0]?.text).toBe('the words')
@@ -126,4 +127,30 @@ it('a queued edit reads its message’s notes but never takes them over or retir
   await nativeChatComposerDraftSaved(SESSION)
   await Promise.resolve()
   expect(cold(edit)).toBeNull()
+  // The message it copies is never retired as an older copy of the edit.
+  expect(drafts.drafts.has(SESSION)).toBe(true)
+  expect(readNativeChatComposerDraft(SESSION).images.map(({ id }) => id)).toEqual(['marked'])
+})
+
+it('a launch draft whose words the session doesn’t have is kept, so no words are lost', async () => {
+  // The session's words were rewritten; the launch draft still holds its own, and is kept.
+  updateNativeChatComposerDraft(SESSION, { text: 'something else altogether' }, 'immediate')
+  expect(readNativeChatAttachmentNotes(SESSION, 'marked')?.notes[0]?.text).toBe('the words')
+  await nativeChatComposerDraftSaved(SESSION)
+  await vi.waitFor(() => expect(cold(SESSION)).not.toBeNull())
+  updateNativeChatComposerDraft(SESSION, { text: 'and once more' }, 'immediate')
+  await nativeChatComposerDraftSaved(SESSION)
+  await Promise.resolve()
+  expect(drafts.drafts.get(SOURCE)?.text).toBe('look here')
+})
+
+it('a launch draft given newer words after the move is never retired', async () => {
+  updateNativeChatComposerDraft(SOURCE, { text: 'look here, and these new words' }, 'immediate')
+  await nativeChatComposerDraftSaved(SOURCE)
+  expect(readNativeChatAttachmentNotes(SESSION, 'marked')?.notes[0]?.text).toBe('the words')
+  await vi.waitFor(() => expect(cold(SESSION)).not.toBeNull())
+  updateNativeChatComposerDraft(SESSION, { text: 'look here' }, 'immediate')
+  await nativeChatComposerDraftSaved(SESSION)
+  await Promise.resolve()
+  expect(drafts.drafts.get(SOURCE)?.text).toBe('look here, and these new words')
 })
