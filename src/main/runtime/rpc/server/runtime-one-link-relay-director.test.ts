@@ -72,4 +72,33 @@ describe('a desktop paired over Relay only, when its cell stops answering', () =
     // A real host and cell: each case waits on a few dials over loopback.
     RELAY_CASE_TIMEOUT_MS
   )
+
+  it(
+    'while its host is offline, its many callers wait out one backoff instead of each dialing',
+    async () => {
+      const host = await startHostOverRelay(cleanups)
+      expect((await host.link.request('status.get', { probe: true }, 15_000)).ok).toBe(true)
+      host.cellState.hostOffline = true
+      host.cell.cut()
+      const dialsBefore = host.cellState.dialedHosts.length
+      // Streams and probes asking again and again, as a client's many owners do.
+      const asking = setInterval(() => {
+        host.link.request('status.get', { probe: true }, 1_000).catch(() => {})
+      }, 100)
+      cleanups.push(() => clearInterval(asking))
+      // ast-grep-ignore: test-no-real-time-wait -- counts real dials over a stretch of the backoff
+      await new Promise((resolve) => setTimeout(resolve, 5_000))
+      // Dials at about 0, 1.5 and 4.5 s (1.5 s doubling), never one per caller.
+      expect(host.cellState.dialedHosts.length - dialsBefore).toBeLessThanOrEqual(4)
+
+      host.cellState.hostOffline = false
+      await vi.waitFor(
+        async () =>
+          expect((await host.link.request('status.get', { probe: true }, 2_000)).ok).toBe(true),
+        { timeout: 15_000 }
+      )
+    },
+    // A real host and cell: each case waits on a few dials over loopback.
+    RELAY_CASE_TIMEOUT_MS
+  )
 })

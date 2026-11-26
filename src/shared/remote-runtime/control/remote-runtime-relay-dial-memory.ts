@@ -1,5 +1,11 @@
 import type { SharedHostLinkEntry } from '../relay/client/shared-host-relay-link'
-import { RelayHostOfflineStreak } from '../relay/client/relay-host-offline-streak'
+import {
+  isHostAttachTimeout,
+  RelayHostOfflineStreak
+} from '../relay/client/relay-host-offline-streak'
+import { RelayOuterError } from '../relay/client/relay-e2ee-link'
+import { MOBILE_RELAY_CLOSE_CODE } from '../relay/mobile-relay-close-codes'
+import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import {
   RelayDirectorHttpError,
   resolveRelayEndpoint
@@ -17,7 +23,53 @@ export class RelayRuntimeDialMemory {
   lastConnectedAt: number | null = null
   assignmentEpoch: number | null = null
   readonly hostOfflineStreak = new RelayHostOfflineStreak(() => this.lastConnectedAt)
+  private hostOfflineDials = 0
+  private heldUntil = 0
+
+  /**
+   * A host offline (4404) holds the next dial 1.5 s, then doubling to 30 s, as paseo's client
+   * backs off (daemon-client.ts:1162-1163) and superset re-probes an offline host on its own
+   * cadence (relaySocket.ts:19-24). Every caller waits it out: a connection's many streams and
+   * calls each retrying would otherwise dial the cell about once a second. An attach timeout means
+   * the host was seated, so it redials at once, as the phone does.
+   */
+  noteDialFailed(error: Error, now: number): void {
+    if (
+      !(error instanceof RelayOuterError) ||
+      error.code !== MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE ||
+      isHostAttachTimeout(error)
+    ) {
+      return
+    }
+    this.hostOfflineDials += 1
+    const holdMs = Math.min(
+      HOST_OFFLINE_HOLD_MIN_MS * 2 ** (this.hostOfflineDials - 1),
+      HOST_OFFLINE_HOLD_MAX_MS
+    )
+    this.heldUntil = now + holdMs
+  }
+
+  noteConnected(now: number): void {
+    this.lastConnectedAt = now
+    this.hostOfflineDials = 0
+    this.heldUntil = 0
+  }
+
+  /** Why a dial may not go out yet (the host is held offline), or null when it may. */
+  heldDialRefusal(now: number): RemoteRuntimeClientError | null {
+    if (now >= this.heldUntil) {
+      return null
+    }
+    return new RemoteRuntimeClientError(
+      'remote_runtime_unavailable',
+      `This server is offline. Trying again in ${Math.ceil((this.heldUntil - now) / 1000)} s.`,
+      { closeCode: MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE }
+    )
+  }
 }
+
+const HOST_OFFLINE_HOLD_MIN_MS = 1_500
+const HOST_OFFLINE_HOLD_MAX_MS = 30_000
 
 /** Relay's verdict that this credential is gone: the cell refused it, or the director did (401). */
 export function relayCredentialRefused(error: Error): boolean {

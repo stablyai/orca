@@ -59,6 +59,11 @@ export function relayRuntimeChannelOpener(
     if (!entry || !dial) {
       return { ok: false, error: credentialUnavailableError() }
     }
+    // The host was offline: no dial before its hold ends, whoever asks.
+    const held = config.memory?.heldDialRefusal(Date.now())
+    if (held) {
+      return { ok: false, error: held }
+    }
     return {
       ok: true,
       channel: openRelayRuntimeChannel(connection, config, entry, dial, events)
@@ -133,6 +138,7 @@ function openRelayRuntimeChannel(
     if (state === 'closed' || error instanceof RelayDialAbortedError) {
       return
     }
+    memory.noteDialFailed(error, Date.now())
     if (relayCredentialRefused(error)) {
       const current = config.store.entry()
       const next = current ? withoutRefusedDial(current, dial) : undefined
@@ -196,7 +202,7 @@ function openRelayRuntimeChannel(
         events.onAuthenticating()
       },
       onAuthenticated: () => {
-        memory.lastConnectedAt = Date.now()
+        memory.noteConnected(Date.now())
         events.onAnswer()
         // Invite, or an install that may have committed: install (idempotent per reqId) before
         // anything else. Resume: renew alongside.

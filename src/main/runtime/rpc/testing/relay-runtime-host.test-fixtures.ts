@@ -96,12 +96,15 @@ export async function startHostOverRelay(
     /** The cell host the director names; a dial to any other host gets 4409 (wrong cell). */
     hostCell: string
     dialedHosts: string[]
+    /** The host is away: the cell answers 4404 (host offline) for any credential. */
+    hostOffline: boolean
   } = {
     resumeHash: null,
     inviteSpent: false,
     resumeRevoked: false,
     hostCell: 'cell.test',
-    dialedHosts: []
+    dialedHosts: [],
+    hostOffline: false
   }
   server.setMobileRelayPairingProvider({
     createPairingRelay: () => Promise.reject(new Error('not in this test')),
@@ -154,6 +157,9 @@ export async function startHostOverRelay(
     admit: (credential) => {
       if (cellState.dialedHosts.at(-1) !== cellState.hostCell) {
         return { closeCode: MOBILE_RELAY_CLOSE_CODE.WRONG_CELL }
+      }
+      if (cellState.hostOffline) {
+        return { closeCode: MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE }
       }
       const kind =
         credential === RELAY_TEST_INVITE && !cellState.inviteSpent
