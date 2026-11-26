@@ -63,6 +63,7 @@ type AlignedLaunch = {
   command: string | undefined
   launchConfig?: SleepingAgentLaunchConfig
   blocked?: 'unknown' | 'unavailable'
+  rebuiltHermesQuery?: true
 }
 
 function managedPathAgent(program: string): TuiAgent | undefined {
@@ -261,7 +262,8 @@ async function rewriteLaunchExecutable(
           [selected.kind === 'full-path' ? selected.path : program, ...hermesArgv.slice(1)],
           shell
         ),
-        launchConfig
+        launchConfig,
+        rebuiltHermesQuery: true
       }
     }
   }

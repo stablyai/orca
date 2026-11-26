@@ -195,6 +195,23 @@ export function matchesGeneratedHermesQuery(
   )
 }
 
+export function hermesStartupQueryFits(
+  command: string,
+  env: Readonly<Record<string, string>>,
+  platform: NodeJS.Platform
+): boolean {
+  const envSize = Object.entries(env).reduce((total, [key, value]) => {
+    if (platform === 'win32') {
+      return total + key.length + value.length + 2
+    }
+    return total + new TextEncoder().encode(`${key}=${value}`).byteLength + 1
+  }, 0)
+  const commandSize =
+    platform === 'win32' ? command.length : new TextEncoder().encode(command).byteLength
+  // WSL executes Linux plans through the Windows environment block; use a conservative bound safe across transports.
+  return commandSize + envSize <= QUERY_ENV_LIMIT
+}
+
 export function planHermesStartupQuery(args: {
   baseCommand: string
   agentArgs?: string | null
@@ -219,16 +236,7 @@ export function planHermesStartupQuery(args: {
     ...args.agentEnv,
     [ORCA_HERMES_STARTUP_QUERY_ENV]: args.prompt
   }
-  const envSize = Object.entries(env).reduce((total, [key, value]) => {
-    if (args.platform === 'win32') {
-      return total + key.length + value.length + 2
-    }
-    return total + new TextEncoder().encode(`${key}=${value}`).byteLength + 1
-  }, 0)
-  const commandSize =
-    args.platform === 'win32' ? command.length : new TextEncoder().encode(command).byteLength
-  // WSL executes Linux plans through the Windows environment block; use a conservative bound safe across transports.
-  if (commandSize + envSize > QUERY_ENV_LIMIT) {
+  if (!hermesStartupQueryFits(command, env, args.platform)) {
     return null
   }
   // Rebuild metadata is stripped before pane spawn.

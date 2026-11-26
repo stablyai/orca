@@ -6,7 +6,6 @@ import { applyAgentWorkspaceTrustToSpawn } from '../../../agent-launch/trust/age
 import type { PtySpawnOptions } from '../../../providers/pty/provider-contract'
 import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import { getStartupTerminalIngressIntent } from '../host-env/terminal-startup-color-query-replies'
-import { promoteAgentTeamsShimPath } from '../host-env/path'
 import { resolveConfiguredTerminalShellArgs } from '../host-env/configured-terminal-shell-args'
 import { ptySizes } from '../delivery/visibility-state'
 import { shouldSeedPreAttachPtySize } from '../delivery/attached-pty-size'
@@ -82,7 +81,6 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
     blocked,
     startupNotice
   } = await preparePtyAgentLaunch(input)
-  promoteAgentTeamsShimPath(env, input.requestedAgentTeamsPath)
   const spawnOptions: PtySpawnOptions = {
     cols: args.cols,
     rows: args.rows,

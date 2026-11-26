@@ -14,6 +14,7 @@ import { recognizeAgentLaunchCommand } from '../../../../shared/agent-launch/sta
 import { readLaunchPosition } from '../../../../shared/agent-launch/startup/launch-position'
 import { GENERATED_AGENT_LAUNCH_ENV } from '../../../../shared/agent-launch/startup/generated-agent-launch-inputs'
 import {
+  hermesStartupQueryFits,
   ORCA_HERMES_STARTUP_QUERY_ARGV_ENV,
   ORCA_HERMES_STARTUP_QUERY_ENV
 } from '../../../../shared/agent-launch/startup/hermes-startup-query'
@@ -30,6 +31,7 @@ import { alignManagedAgentLaunchAtSpawn } from '../../../managed-agent-cli/manag
 import { withSpawnTerminalMcpServers } from '../../../mcp-servers/terminal/terminal-mcp-spawn-step'
 import { prepareOpenCodePtyLaunch } from '../../../opencode/opencode-pty-launch'
 import { planCodexNoDaemonLaunch } from '../../../pty/shell-startup/codex-no-daemon-launch-command'
+import { promoteAgentTeamsShimPath } from '../host-env/path'
 import type { PtySpawnLaunchOptionsInput } from './spawn-options-assembly'
 import { applyTerminalImageEnvironment } from './terminal-image-environment'
 
@@ -37,8 +39,9 @@ export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
   const { args } = input
   const connectionId = args.connectionId ?? undefined
   const launchAgent = isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
+  const platform = input.codexRuntime === 'wsl' ? 'linux' : process.platform
   const paneShell = resolveStartupShell(
-    input.codexRuntime === 'wsl' ? 'linux' : process.platform,
+    platform,
     resolveLocalWindowsAgentStartupShell({
       platform: process.platform,
       isRemote: Boolean(connectionId) || input.codexRuntime === 'wsl',
@@ -56,7 +59,8 @@ export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
   const {
     command: startupCommand,
     launchConfig,
-    blocked
+    blocked,
+    rebuiltHermesQuery
   } = await alignManagedAgentLaunchAtSpawn(
     {
       ...input,
@@ -182,15 +186,29 @@ export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
     isRoot: root && !authored,
     env: [env, process.env]
   })
-  const agentCommand = rootLaunch?.command ?? viewedCommand
+  let agentCommand = rootLaunch?.command ?? viewedCommand
   const images = inlineImagesEnabled && !input.envToDelete.includes('KITTY_WINDOW_ID')
-  const prepared =
+  let prepared =
     connectionId ||
     args.nativeChatSignIn ||
     agentCommand === undefined ||
     launchConfig?.commandProvenance !== 'generated'
       ? agentCommand
       : await prepareDirectLaunch(agentCommand, shell, input, env, local, images)
+  promoteAgentTeamsShimPath(env, input.requestedAgentTeamsPath)
+  // Setup gates carry the wrapper in the environment, where it is counted once.
+  const keepOriginalHermesQuery =
+    rebuiltHermesQuery &&
+    prepared !== undefined &&
+    !hermesStartupQueryFits(
+      sequenced ? '' : prepared,
+      sequenced ? { ...env, [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: prepared } : env,
+      platform
+    )
+  if (keepOriginalHermesQuery) {
+    agentCommand = command
+    prepared = command
+  }
   if (sequenced) {
     if (prepared === undefined) {
       delete env[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]
@@ -201,7 +219,7 @@ export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
   return {
     env,
     launchAgent: blocked ? undefined : launchAgent,
-    launchConfig,
+    launchConfig: keepOriginalHermesQuery ? input.launchConfig : launchConfig,
     blocked,
     launchCommand: sequenced && !blocked ? input.launchCommand : agentCommand,
     startup: sequenced && !blocked ? input.launchCommand : prepared,
