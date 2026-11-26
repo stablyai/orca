@@ -123,8 +123,7 @@ export async function placeKeptProviderRelay(
     return
   }
   // The row and its token are published together, so no ask ever sees a row whose token is pending.
-  const { pid, exit } = relay.info
-  const token = pid !== null && exit === null ? await readSpawnToken(pid) : null
+  const token = await sharedTokenRead(chatKey, relay.info)
   if (!providerRelayRunAskUnfenced(chatKey, ask) || placed()) {
     return
   }
@@ -134,6 +133,27 @@ export async function placeKeptProviderRelay(
   } else {
     spawnTokens.delete(chatKey)
   }
+}
+
+/** One token read in flight per chat and relay, however many asks overlap it. */
+const tokenReads = new Map<string, { relayId: string; read: Promise<string | null> }>()
+
+function sharedTokenRead(chatKey: string, info: ProviderRelayInfo): Promise<string | null> {
+  const inFlight = tokenReads.get(chatKey)
+  if (inFlight?.relayId === info.relayId) {
+    return inFlight.read
+  }
+  const entry = {
+    relayId: info.relayId,
+    read: info.pid !== null && info.exit === null ? readSpawnToken(info.pid) : Promise.resolve(null)
+  }
+  tokenReads.set(chatKey, entry)
+  void entry.read.finally(() => {
+    if (tokenReads.get(chatKey) === entry) {
+      tokenReads.delete(chatKey)
+    }
+  })
+  return entry.read
 }
 
 async function readSpawnToken(pid: number): Promise<string | null> {
