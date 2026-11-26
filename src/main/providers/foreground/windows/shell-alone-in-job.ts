@@ -48,16 +48,18 @@ export async function isWindowsShellAloneInJob(
   if (!isLauncher) {
     return false
   }
-  const startMsByPid = new Map(members.map((row) => [row.pid, row.creationTimeMs]))
+  const memberIndex = buildProcessTableIndex(members)
   const visited = new Set([shellPid])
   let parentPid = shellPid
   while (visited.size < members.length) {
-    const children = members.filter((row) => row.ppid === parentPid && !visited.has(row.pid))
+    const children = (memberIndex.childrenByPpid.get(parentPid) ?? []).filter(
+      (row) => !visited.has(row.pid)
+    )
     const child = children[0]
     if (
       children.length !== 1 ||
       child.name.toLowerCase() !== MSYS_BASH_IMAGE ||
-      startedBefore(child.creationTimeMs, startMsByPid.get(parentPid))
+      startedBefore(child.creationTimeMs, memberIndex.byPid.get(parentPid)?.creationTimeMs)
     ) {
       return false
     }
