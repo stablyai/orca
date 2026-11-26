@@ -15,7 +15,20 @@ export async function closingTurnActsFor(
   runtime: OrcaRuntimeService,
   writer: Pick<BotItemWriter, 'sessionId'> & { actor: Pick<BotItemWriter['actor'], 'chatId'> }
 ): Promise<BotRequestAsker[]> {
-  return (await closingAskers(runtime, writer)).map((asker): BotRequestAsker =>
+  return whoOnly(await closingAskers(runtime, writer))
+}
+
+/** Whom the writer's chat acts for, by its record alone, as closes read it before they read turns:
+ *  for a write that most likely closes nothing, so it reads no turn. */
+export function closingChatActsFor(
+  runtime: OrcaRuntimeService,
+  writer: { actor: Pick<BotItemWriter['actor'], 'chatId'> }
+): BotRequestAsker[] {
+  return whoOnly(chatRecord(runtime, writer.actor.chatId))
+}
+
+function whoOnly(askers: readonly BotRequestAsker[]): BotRequestAsker[] {
+  return askers.map((asker): BotRequestAsker =>
     asker.kind === 'person'
       ? {
           kind: 'person',
