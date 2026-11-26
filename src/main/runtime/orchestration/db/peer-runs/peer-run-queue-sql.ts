@@ -46,7 +46,9 @@ CREATE VIEW peer_run_dispatch_state AS
 SELECT d.id AS dispatch_id, pr.conversation_id, pr.home_run_id, pr.run_id AS peer_run_id,
   json_object(
     'id', d.id, 'taskId', d.task_id, 'status', d.status, 'workerState', w.state,
-    'lastFailure', d.last_failure, 'agent', json_extract(w.start_options, '$.agent')
+    'lastFailure', d.last_failure, 'agent', json_extract(w.start_options, '$.agent'),
+    'worktreeId', w.worktree_id, 'creatorDispatchId', d.creator_dispatch_id,
+    'followUpOf', d.follow_up_of_dispatch_id
   ) AS dispatch_json,
   json_object('status', t.status, 'result', t.result) AS task_json
 FROM dispatch_contexts d
