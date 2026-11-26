@@ -1,4 +1,4 @@
-import { type BigIntStats, lstatSync, readdirSync, rmdirSync, unlinkSync } from 'node:fs'
+import { type BigIntStats, readdirSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { MERGE_PENDING_SUFFIX } from '../../../filesystem/merged-directory-link'
@@ -10,6 +10,16 @@ import {
 import { originalHoldsCopy } from './codex-account-copy-content'
 import { readKeptCopies, writeKeptCopies, type KeptCopies } from './codex-account-copies-kept'
 import { emptyTally, type CopiesTally } from './codex-account-copies-tally'
+import {
+  fileKey,
+  finishHeldCopies,
+  holdVerifiedCopies,
+  isInsideHome,
+  lstatOrNull,
+  releaseLeftoverHeldCopies,
+  removeEmptyFolders,
+  type VerifiedCopy
+} from './codex-account-copies-hold'
 import type {
   CodexAccountCopiesRequest,
   CodexAccountCopiesResponse
@@ -24,26 +34,7 @@ const MERGE_FOLDER = new RegExp(
 )
 const ROLLOUT_FILE = /^rollout-.*\.jsonl(?:\.zst)?$/
 
-/** A copy whose bytes its ~/.codex original holds, with both files as they were checked. */
-export type VerifiedCopy = { copy: string; original: string; copyKey: string; originalKey: string }
-
 export type VerifyBudget = { maxBytes: number; deadline: number }
-
-// Inode, size and mtime: any write, replace or compression since the check changes one of them.
-function fileKey(stats: BigIntStats): string {
-  return `${stats.dev}:${stats.ino}:${stats.size}:${stats.mtimeNs}`
-}
-
-function lstatOrNull(path: string): BigIntStats | null {
-  try {
-    return lstatSync(path, { bigint: true })
-  } catch (error) {
-    if (isDefinitiveAbsence(error)) {
-      return null
-    }
-    throw error
-  }
-}
 
 function realDirectory(path: string): boolean {
   const stats = lstatOrNull(path)
@@ -66,7 +57,9 @@ export function listCopyRoots(accountHome: string, storeHome: string): CopyRoot[
       })
     }
   }
-  for (const name of HISTORY_FOLDERS) {
+  for (const name of realDirectory(join(accountHome, SET_ASIDE_ROLLOUTS_DIR))
+    ? HISTORY_FOLDERS
+    : []) {
     roots.push({
       root: join(accountHome, SET_ASIDE_ROLLOUTS_DIR, name),
       storeFolder: join(storeHome, name),
@@ -128,6 +121,7 @@ export async function verifyCodexAccountCopies(args: {
 }): Promise<{ verified: VerifiedCopy[]; tally: CopiesTally; bytesRead: number }> {
   const tally = emptyTally()
   const verified: VerifiedCopy[] = []
+  releaseLeftoverHeldCopies(args.accountHome)
   const kept = readKeptCopies(args.accountHome)
   const nextKept: KeptCopies = {}
   let bytesRead = 0
@@ -137,6 +131,10 @@ export async function verifyCodexAccountCopies(args: {
       try {
         const copyStats = lstatOrNull(copy)
         if (!copyStats?.isFile()) {
+          continue
+        }
+        if (!isInsideHome(args.accountHome, copy)) {
+          tally.error += 1
           continue
         }
         const original = findOriginal(root, copy)
@@ -212,73 +210,31 @@ export async function verifyCodexAccountCopies(args: {
   return { verified, tally, bytesRead }
 }
 
-function removeEmptyFolders(folder: string): void {
-  let entries
-  try {
-    entries = readdirSync(folder, { withFileTypes: true })
-  } catch {
-    return
+/** Folders the deletes emptied go; anything else in them stays. */
+export function removeEmptiedCopyFolders(accountHome: string, storeHome: string): void {
+  for (const root of listCopyRoots(accountHome, storeHome)) {
+    removeEmptyFolders(root.root)
   }
-  for (const entry of entries) {
-    if (entry.isDirectory()) {
-      removeEmptyFolders(join(folder, entry.name))
-    }
+  const setAside = join(accountHome, SET_ASIDE_ROLLOUTS_DIR)
+  if (realDirectory(setAside)) {
+    removeEmptyFolders(setAside)
   }
-  try {
-    rmdirSync(folder)
-  } catch {
-    // Not empty, or held: it stays.
-  }
-}
-
-/**
- * Deletes each verified copy that no process has open, only if neither file changed since its
- * check; then removes folders the deletes emptied.
- */
-export function deleteVerifiedCodexAccountCopies(args: {
-  accountHome: string
-  storeHome: string
-  copies: VerifiedCopy[]
-}): CopiesTally {
-  const tally = emptyTally()
-  for (const copy of args.copies) {
-    try {
-      const copyStats = lstatOrNull(copy.copy)
-      const originalStats = lstatOrNull(copy.original)
-      if (
-        !copyStats?.isFile() ||
-        !originalStats?.isFile() ||
-        copyStats.nlink > 1n ||
-        fileKey(copyStats) !== copy.copyKey ||
-        fileKey(originalStats) !== copy.originalKey
-      ) {
-        tally.changed += 1
-        continue
-      }
-      unlinkSync(copy.copy)
-      tally.deleted += 1
-      tally.bytesReclaimed += Number(copyStats.size)
-    } catch {
-      tally.error += 1
-    }
-  }
-  if (tally.deleted > 0) {
-    for (const root of listCopyRoots(args.accountHome, args.storeHome)) {
-      removeEmptyFolders(root.root)
-    }
-    const setAside = join(args.accountHome, SET_ASIDE_ROLLOUTS_DIR)
-    if (realDirectory(setAside)) {
-      removeEmptyFolders(setAside)
-    }
-  }
-  return tally
 }
 
 export async function runCodexAccountCopiesRequest(
   request: CodexAccountCopiesRequest
 ): Promise<CodexAccountCopiesResponse> {
-  if (request.op === 'verify') {
-    return { ok: true, ...(await verifyCodexAccountCopies(request)) }
+  switch (request.op) {
+    case 'verify':
+      return { ok: true, op: 'verify', ...(await verifyCodexAccountCopies(request)) }
+    case 'hold':
+      return { ok: true, op: 'hold', ...holdVerifiedCopies(request.accountHome, request.copies) }
+    case 'finish': {
+      const tally = finishHeldCopies(request.accountHome, request.held, request.open)
+      if (tally.deleted > 0) {
+        removeEmptiedCopyFolders(request.accountHome, request.storeHome)
+      }
+      return { ok: true, op: 'finish', tally }
+    }
   }
-  return { ok: true, verified: [], tally: deleteVerifiedCodexAccountCopies(request), bytesRead: 0 }
 }

@@ -7,6 +7,7 @@ import {
   type CodexAccountCopiesWorker
 } from './codex-account-copies-cleanup'
 import { reportCodexHistoryCopiesCleanup } from '../../../telemetry/codex-history-copies-telemetry'
+import { forgetCodexHistoryDiskUsage } from '../disk-usage/codex-history-disk-usage'
 import type { CodexHistoryMoveOutcome } from '../../../telemetry/codex-history-move-telemetry'
 
 // Once per run, a while after the launch's passes settle, and only while no pass runs.
@@ -65,6 +66,9 @@ export class CodexAccountCopiesCleanupRun {
         shouldStop: () => this.worker !== worker || isCodexAccountHistoryWorkStopping(),
         worker
       })
+      if (tally && tally.deleted > 0) {
+        forgetCodexHistoryDiskUsage()
+      }
       if (tally) {
         await reportCodexHistoryCopiesCleanup(this.deps.markerPath(), tally)
       }

@@ -1,4 +1,12 @@
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { zstdCompressSync } from 'node:zlib'
@@ -28,7 +36,7 @@ function run(
   options: {
     outcome?: CodexHistoryMoveOutcome
     open?: (paths: string[]) => Set<string> | null
-    beforeDelete?: () => void
+    beforeHold?: () => void
   } = {}
 ) {
   return cleanUpCodexAccountCopies({
@@ -40,8 +48,8 @@ function run(
     findOpen: async (paths) => (options.open ? options.open(paths) : new Set()),
     worker: {
       call: async (request) => {
-        if (request.op === 'delete') {
-          options.beforeDelete?.()
+        if (request.op === 'hold') {
+          options.beforeHold?.()
         }
         return runCodexAccountCopiesRequest(request)
       },
@@ -96,11 +104,28 @@ describe('cleanUpCodexAccountCopies', () => {
     const otherRel = REL.replace('0199a1b2', '0199a1b3')
     put(`${storeFile(otherRel)}.zst`, zstdCompressSync(Buffer.from(LINE_1)))
     const extra = put(setAside(otherRel), LINE_1 + LINE_2)
+    // Decodes past the copy's bytes, then fails: no readable original holds them.
+    const damagedRel = REL.replace('0199a1b2', '0199a1b4')
+    const whole = zstdCompressSync(Buffer.from(LINE_1 + LINE_2.repeat(20_000)))
+    put(`${storeFile(damagedRel)}.zst`, whole.subarray(0, -64))
+    const readable = put(setAside(damagedRel), LINE_1)
 
     await run()
 
     expect(existsSync(prefix)).toBe(false)
     expect(existsSync(extra)).toBe(true)
+    expect(existsSync(readable)).toBe(true)
+  })
+
+  it('never follows a link out of the home', async () => {
+    put(`${storeFile()}.zst`, zstdCompressSync(Buffer.from(LINE_1)))
+    const elsewhere = join(root, 'backup')
+    const backupCopy = put(join(elsewhere, 'sessions', REL), LINE_1)
+    symlinkSync(elsewhere, join(home, '.orca-set-aside-rollouts'), 'junction')
+
+    await run()
+
+    expect(existsSync(backupCopy)).toBe(true)
   })
 
   it('keeps a copy a process has open, or when that cannot be told', async () => {
@@ -127,7 +152,7 @@ describe('cleanUpCodexAccountCopies', () => {
     put(storeFile(), LINE_1 + LINE_2)
     const copy = put(conflictCopy(), LINE_1)
 
-    await run({ beforeDelete: () => appendFileSync(copy, LINE_2.replace('second', 'other')) })
+    await run({ beforeHold: () => appendFileSync(copy, LINE_2.replace('second', 'other')) })
 
     expect(existsSync(copy)).toBe(true)
   })

@@ -5,6 +5,7 @@ import {
   resolveWorkerThreadEntryPath
 } from '../../../worker-threads/worker-thread-entry-path'
 import { findOpenFiles } from '../../../filesystem/open-file-check'
+import { withTimeoutResult } from '../../../../shared/concurrency/promise-timeout-fallback'
 import { addTally, emptyTally, type CopiesTally } from './codex-account-copies-tally'
 import type { CodexHistoryMoveOutcome } from '../../../telemetry/codex-history-move-telemetry'
 import type {
@@ -18,6 +19,7 @@ const WORKER_FILENAME = 'codex-account-copies-worker-entry.js'
 const MAX_BYTES_PER_LAUNCH = 4 * 1024 ** 3
 const MAX_MS_PER_LAUNCH = 3 * 60_000
 const GAP_BETWEEN_HOMES_MS = 1_000
+const STOP_WAIT_MS = 10_000
 
 export type CodexAccountCopiesWorker = {
   call(request: CodexAccountCopiesRequest): Promise<CodexAccountCopiesResponse>
@@ -52,7 +54,8 @@ export function startCodexAccountCopiesWorker(): CodexAccountCopiesWorker {
           }),
     stop: async () => {
       fail(new Error('Codex account copies cleanup stopped'))
-      await worker.terminate()
+      // A worker stuck in a read on a hung mount never exits; a pass must not wait on it.
+      await withTimeoutResult(worker.terminate(), STOP_WAIT_MS)
     }
   }
 }
@@ -105,38 +108,49 @@ export async function cleanUpCodexAccountCopies(args: {
       total.error += 1
       continue
     }
+    if (checked.op !== 'verify') {
+      total.error += 1
+      continue
+    }
     total.homes += 1
     bytesLeft = Math.max(0, bytesLeft - checked.bytesRead)
     addTally(total, checked.tally)
-    const open =
-      checked.verified.length > 0
-        ? await findOpen(
-            checked.verified.map((copy) => copy.copy),
-            { shouldStop: args.shouldStop }
-          )
-        : new Set<string>()
-    if (args.shouldStop()) {
-      return null
+    if (checked.verified.length === 0 || !moved(accountHome) || args.shouldStop()) {
+      total.open += moved(accountHome) ? 0 : checked.verified.length
+      continue
     }
-    // Can't tell, or a pass started meanwhile: every copy stays.
-    const deletable =
-      open && moved(accountHome) ? checked.verified.filter((copy) => !open.has(copy.copy)) : []
-    total.open += checked.verified.length - deletable.length
-    if (deletable.length > 0 && moved(accountHome)) {
-      const deleted = await args.worker.call({
-        op: 'delete',
-        accountHome,
-        storeHome: args.storeHome,
-        copies: deletable
-      })
-      if (!deleted.ok) {
-        if (args.shouldStop()) {
-          return null
-        }
-        total.error += deletable.length
-      } else {
-        addTally(total, deleted.tally)
+    const held = await args.worker.call({ op: 'hold', accountHome, copies: checked.verified })
+    if (!held.ok || held.op !== 'hold') {
+      // Stopped or failed: whatever it held goes back on the next launch's check.
+      if (args.shouldStop()) {
+        return null
       }
+      total.error += checked.verified.length
+      continue
+    }
+    addTally(total, held.tally)
+    if (held.held.length === 0) {
+      continue
+    }
+    const open = await findOpen(
+      held.held.map((copy) => copy.held),
+      { shouldStop: args.shouldStop }
+    )
+    // A pass started meanwhile, or the check couldn't tell: every held copy goes back.
+    const finished = await args.worker.call({
+      op: 'finish',
+      accountHome,
+      storeHome: args.storeHome,
+      held: held.held,
+      open: open && moved(accountHome) && !args.shouldStop() ? open : null
+    })
+    if (finished.ok && finished.op === 'finish') {
+      addTally(total, finished.tally)
+    } else {
+      if (args.shouldStop()) {
+        return null
+      }
+      total.error += held.held.length
     }
     await new Promise((resolve) => setTimeout(resolve, GAP_BETWEEN_HOMES_MS).unref?.())
   }
