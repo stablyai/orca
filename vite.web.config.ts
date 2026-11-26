@@ -17,6 +17,19 @@ export default defineConfig({
   cacheDir: resolve('.cache/vite/web'),
   // Resolve assets relatively for reverse-proxy pairing prefixes such as /orca/web-index.html.
   base: './',
+  // Registered block 5190-5199 for the standalone web server (VITE-RULES):
+  // strictPort keeps dev/preview from silently moving onto another port.
+  server: {
+    port: Number(process.env.VITE_PORT ?? 5196),
+    strictPort: true,
+    hmr: {
+      port: Number(process.env.VITE_HMR_PORT ?? 5197)
+    }
+  },
+  preview: {
+    port: Number(process.env.VITE_PREVIEW_PORT ?? 5198),
+    strictPort: true
+  },
   plugins: [
     react(reactPluginOptions()),
     tailwindcss(),

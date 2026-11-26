@@ -277,6 +277,14 @@ export const electronViteConfig: UserConfig = {
         output: { charset: 'ascii' }
       }
     },
+    // Dev server ports stay dynamic via ORCA_DEV_RENDERER_PORT (15200-15400,
+    // dev-instance-isolation). Preview is not covered by that mechanism, so it
+    // takes the registered block 5190-5199 port with strictPort to avoid the
+    // Vite/electron-vite 4173 default and prevent silent fallback.
+    preview: {
+      port: Number(process.env.VITE_PREVIEW_PORT ?? 5195),
+      strictPort: true
+    },
     build: {
       manifest: true,
       reportCompressedSize: false,
