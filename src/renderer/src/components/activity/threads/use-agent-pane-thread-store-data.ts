@@ -34,6 +34,7 @@ export type AllAgentPaneThreadsStoreData = Pick<
   | 'getKnownWorktreeById'
   | 'acknowledgedAgentsByPaneKey'
   | 'activityClearedAtByPaneKey'
+  | 'chatReadMarksCopiedHere'
   | 'acknowledgeAgents'
   | 'unacknowledgeAgents'
 > & {
@@ -99,6 +100,7 @@ export function selectAllAgentPaneThreadStoreData(s: AppState): AllAgentPaneThre
     repoMap: getIndexedRepoMap(s.repos),
     acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
     activityClearedAtByPaneKey: s.activityClearedAtByPaneKey,
+    chatReadMarksCopiedHere: s.chatReadMarksCopiedHere,
     acknowledgeAgents: s.acknowledgeAgents,
     unacknowledgeAgents: s.unacknowledgeAgents,
     generatedTitlesEnabled: s.settings?.tabAutoGenerateTitle === true

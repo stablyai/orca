@@ -10,6 +10,7 @@ import { recoverMirroredTerminalOrphansBeforeApply } from '../terminal-handles/m
 import {
   isSessionTabsListAllResult,
   recordReceivedWebSessionTabsSnapshot,
+  recordWebSessionTabsCensusForChatReadMarks,
   shouldApplyRecoveredWebSessionTabsSnapshot
 } from '../tracking/tracking'
 import { decideWebSessionTabsSnapshot } from '../tracking/tracking-decisions'
@@ -27,7 +28,6 @@ import { applyWebSessionTabsSnapshots } from '../snapshots/snapshot-api'
 import { applyWebSessionTabsStorePatch } from '../snapshots/store-patch'
 import { applyReceivedAgentSenderPublications } from '../tracking/received-agent-sender-publications'
 import { isHostMirroredWorktree } from '../identity/host-mirrored-worktree'
-import { hostSnapshotAffirmsAgentSessions } from '../../../../../shared/remote-runtime/session-graph/host-session-snapshot-authority'
 
 export type InitialSessionTabsLoadArgs = {
   environmentId: string
@@ -92,8 +92,15 @@ export function loadInitialWebSessionTabs({
           snapshot,
           requestReceivedFrame,
           runtimeId,
-          'bootstrap'
+          'bootstrap',
+          true
         )
+      )
+      recordWebSessionTabsCensusForChatReadMarks(
+        environmentId,
+        result.snapshots,
+        runtimeId,
+        requestReceivedFrame
       )
       applyReceivedAgentSenderPublications(environmentId, result.snapshots, runtimeId)
       const recovered = await Promise.all(
@@ -169,24 +176,7 @@ export function loadInitialWebSessionTabs({
                   // Workspaces the mirror never writes contribute no evidence to the environment-wide verdict.
                   publishedSnapshotCount: result.snapshots.filter((snapshot) =>
                     isHostMirroredWorktree(snapshot.worktree)
-                  ).length,
-                  mirroredWorkspaceIds: result.snapshots
-                    .filter((snapshot) => isHostMirroredWorktree(snapshot.worktree))
-                    .map((snapshot) => snapshot.worktree),
-                  affirmedAgentSessionWorkspaceIds: result.snapshots
-                    .filter(
-                      (snapshot) =>
-                        isHostMirroredWorktree(snapshot.worktree) &&
-                        hostSnapshotAffirmsAgentSessions(snapshot)
-                    )
-                    .map((snapshot) => snapshot.worktree),
-                  pendingAgentSessionWorkspaceIds: result.snapshots
-                    .filter(
-                      (snapshot) =>
-                        isHostMirroredWorktree(snapshot.worktree) &&
-                        !hostSnapshotAffirmsAgentSessions(snapshot)
-                    )
-                    .map((snapshot) => snapshot.worktree)
+                  ).length
                 }
               }
             : {})

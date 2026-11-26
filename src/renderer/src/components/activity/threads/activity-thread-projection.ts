@@ -236,6 +236,7 @@ function projectActivityEvents(inputs: ActivityThreadInputs): ActivityEventsBuil
       ],
       acknowledgedAgentsByPaneKey: storeData.acknowledgedAgentsByPaneKey,
       activityClearedAtByPaneKey: storeData.activityClearedAtByPaneKey,
+      chatReadMarksCopiedHere: storeData.chatReadMarksCopiedHere,
       // Read at build time; agentStatusEpoch in the inputs rebuilds when a freshness boundary passes.
       now: Date.now()
     },

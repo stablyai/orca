@@ -2,6 +2,7 @@ import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-con
 import { emitAgentSubjectReads } from '@/attention/agent-subject-read-actions'
 import { agentAttentionTurnAt } from '@/attention/agent-attention-acknowledgement'
 import { linkRecordWrite } from '@/store/record-transitions/keyed-record-transitions'
+import { legacyWebChatReadMarkKeys } from '../agent-status/structured-sessions/chat-read-mark-web-copy'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import {
   collectAcknowledgedAgentNotificationId,
@@ -78,7 +79,14 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
           }
         }
         let nextManual: Record<string, number> | null = null
-        for (const key of paneKeys) {
+        const manualKeys =
+          s.chatReadMarksCopiedHere || intent !== 'explicit'
+            ? paneKeys
+            : paneKeys.flatMap((key) => [
+                key,
+                ...(legacyWebChatReadMarkKeys('manuallyUnreadTurnsByPaneKey', key) ?? [])
+              ])
+        for (const key of manualKeys) {
           if (s.manuallyUnreadTurnsByPaneKey[key] !== undefined) {
             nextManual ??= { ...s.manuallyUnreadTurnsByPaneKey }
             delete nextManual[key]

@@ -7,6 +7,7 @@ import { queueAcceptedWebSessionTerminalSnapshot } from '../terminal-handles/web
 import {
   recordReceivedWebSessionTabsInventory,
   recordReceivedWebSessionTabsSnapshot,
+  recordWebSessionTabsCensusForChatReadMarks,
   shouldApplyRecoveredWebSessionTabsSnapshot
 } from '../tracking/tracking'
 import {
@@ -15,7 +16,6 @@ import {
 } from '../tracking/tracking-decisions'
 import {
   acceptReplayedWebSessionTabsSnapshot,
-  latestReceivedSessionTabsSnapshotByWorktree,
   latestSessionTabsSnapshotByWorktree,
   replayableSessionTabsSnapshotByWorktree
 } from '../state'
@@ -24,9 +24,7 @@ import { applyWebSessionTabsSnapshots } from '../snapshots/snapshot-api'
 
 import { applyWebSessionTabsStorePatch } from '../snapshots/store-patch'
 import { isHostMirroredWorktree } from '../identity/host-mirrored-worktree'
-import { hostSnapshotAffirmsAgentSessions } from '../../../../../shared/remote-runtime/session-graph/host-session-snapshot-authority'
 import type { VisibilityResumeCoordinator } from '../visibility-resume/visibility-resume-coordinator'
-import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 
 export type GlobalSessionInventoryEventArgs = {
   environmentId: string
@@ -62,7 +60,9 @@ export function handleGlobalSessionInventoryEvent({
       environmentId,
       snapshot,
       undefined,
-      runtimeId
+      runtimeId,
+      'stream',
+      true
     )
     coordinator.recordSnapshotReceipt(environmentId, snapshot, frame, runtimeId)
     return frame
@@ -80,6 +80,7 @@ export function handleGlobalSessionInventoryEvent({
     )
   })
   const inventoryFrame = recordReceivedWebSessionTabsInventory(environmentId)
+  recordWebSessionTabsCensusForChatReadMarks(environmentId, event.snapshots, runtimeId)
   const missing = coordinator.recordInventoryReceipt(
     environmentId,
     visibilityGeneration,
@@ -136,36 +137,6 @@ export function handleGlobalSessionInventoryEvent({
       const freshSnapshots = applicable.flatMap(({ snapshot }, index) =>
         decisions[index]!.apply ? [snapshot] : []
       )
-      const migrateChatReadMarks =
-        isWebClientLocation() && !useAppStore.getState().chatReadMarksCopiedHere
-      const settledWorkspaces = migrateChatReadMarks
-        ? new Set(
-            applicable.flatMap(({ snapshot }, index) =>
-              decisions[index]!.settlesHostMirror ? [snapshot.worktree] : []
-            )
-          )
-        : undefined
-      const pendingAgentSessionWorkspaceIds = migrateChatReadMarks
-        ? event.snapshots.flatMap((snapshot, index) => {
-            if (!isHostMirroredWorktree(snapshot.worktree)) {
-              return []
-            }
-            const key = `${environmentId}:${snapshot.worktree}`
-            const received = latestReceivedSessionTabsSnapshotByWorktree.get(key)
-            const applied = latestSessionTabsSnapshotByWorktree.get(key)
-            if (received && received.receivedFrame !== receivedFrames[index]) {
-              return !applied ||
-                applied.publicationEpoch !== received.publicationEpoch ||
-                applied.snapshotVersion !== received.snapshotVersion
-                ? [snapshot.worktree]
-                : []
-            }
-            if (!hostSnapshotAffirmsAgentSessions(snapshot)) {
-              return [snapshot.worktree]
-            }
-            return settledWorkspaces?.has(snapshot.worktree) ? [] : [snapshot.worktree]
-          })
-        : undefined
       settleHydration = applyWebSessionTabsStorePatch(
         (state, changedAgentPaneKeys) =>
           applyWebSessionTabsSnapshots(
@@ -193,22 +164,7 @@ export function handleGlobalSessionInventoryEvent({
             expectedTrackingGeneration,
             publishedSnapshotCount: event.snapshots.filter((snapshot) =>
               isHostMirroredWorktree(snapshot.worktree)
-            ).length,
-            mirroredWorkspaceIds: migrateChatReadMarks
-              ? event.snapshots
-                  .filter((snapshot) => isHostMirroredWorktree(snapshot.worktree))
-                  .map((snapshot) => snapshot.worktree)
-              : undefined,
-            affirmedAgentSessionWorkspaceIds: migrateChatReadMarks
-              ? event.snapshots
-                  .filter(
-                    (snapshot) =>
-                      isHostMirroredWorktree(snapshot.worktree) &&
-                      hostSnapshotAffirmsAgentSessions(snapshot)
-                  )
-                  .map((snapshot) => snapshot.worktree)
-              : undefined,
-            pendingAgentSessionWorkspaceIds
+            ).length
           }
         },
         freshSnapshots

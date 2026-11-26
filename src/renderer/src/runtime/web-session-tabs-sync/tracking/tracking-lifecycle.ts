@@ -57,6 +57,7 @@ import {
 import { clearHostSessionMirrorHydration } from '../hydration/host-session-mirror-hydration'
 import { clearHostMirrorHandleGapVerdictsForEnvironment } from '@/lib/agent-session/resume/host-mirror-handle-gap-wait'
 import { createBoundedGenerationMap } from '@/lib/bounded-generation-map'
+import { forgetWebChatReadMarkCensus } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-web-copy'
 import { clearHostSessionTabIdMappings } from '../identity/tracking-mappings'
 import { untrackWebSessionTabsWorktree, removeWebSessionTabsEnvironment } from './tracking'
 import {
@@ -145,6 +146,7 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
     return
   }
   const keyPrefix = `${trimmedEnvironmentId}:`
+  forgetWebChatReadMarkCensus(trimmedEnvironmentId)
   clearDirectlyOpenedChats((key) => key.startsWith(keyPrefix))
   sessionTabsTrackingGenerations.advance(trimmedEnvironmentId)
   forgetRetiredEpochCensuses((key) => key.startsWith(keyPrefix))

@@ -7,6 +7,7 @@ import type { AppState } from '@/store/types'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 
 import { freshActivityLiveAgentState, isHistoricalActivityState } from './activity-event-state'
+import { readWebChatMark } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-web-copy'
 
 type ActivityUnreadCountSource = Pick<
   AppState,
@@ -14,6 +15,7 @@ type ActivityUnreadCountSource = Pick<
 > & {
   /** Per-pane "Clear completed" cutoffs; hidden events must not count as unread. */
   activityClearedAtByPaneKey?: Record<string, number>
+  chatReadMarksCopiedHere?: boolean
 }
 
 /** Counts unread historical activity and fresh current turns. */
@@ -24,7 +26,7 @@ export function countActivityUnread(source: ActivityUnreadCountSource, now = Dat
   // Workspace unread flags have no Activity row to clear and must not light this badge.
   const countEntry = (entry: AgentStatusEntry, ackAt: number, live = false): void => {
     // Treat Clear completed’s per-pane cutoff as an acknowledgement floor so hidden events cannot keep the badge lit.
-    const clearedAt = source.activityClearedAtByPaneKey?.[entry.paneKey] ?? 0
+    const clearedAt = readWebChatMark(source, 'activityClearedAtByPaneKey', entry.paneKey) ?? 0
     const mutedAt = Math.max(ackAt, clearedAt)
     // Mirror the feed’s historical done/blocked/waiting event count.
     for (const history of entry.stateHistory) {
@@ -71,6 +73,7 @@ const createActivityUnreadCountSelector = () =>
       migrationUnsupportedByPtyId: AppState['migrationUnsupportedByPtyId'],
       acknowledgedAgentsByPaneKey: AppState['acknowledgedAgentsByPaneKey'],
       activityClearedAtByPaneKey: AppState['activityClearedAtByPaneKey'],
+      chatReadMarksCopiedHere: boolean,
       // Closing a tab can drop a pane's row without a status write.
       _rowOwnersRevision: number
     ) =>
@@ -78,7 +81,8 @@ const createActivityUnreadCountSelector = () =>
         agentStatusByPaneKey: state.agentStatusByPaneKey,
         migrationUnsupportedByPtyId,
         acknowledgedAgentsByPaneKey,
-        activityClearedAtByPaneKey
+        activityClearedAtByPaneKey,
+        chatReadMarksCopiedHere
       })
   )
 
@@ -90,6 +94,7 @@ export function useActivityUnreadCount(): number {
       state.migrationUnsupportedByPtyId,
       state.acknowledgedAgentsByPaneKey,
       state.activityClearedAtByPaneKey,
+      state.chatReadMarksCopiedHere,
       state.agentStatusByPaneKey.projection.rowOwnersRevision()
     )
   )

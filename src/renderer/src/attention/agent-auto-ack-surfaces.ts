@@ -9,6 +9,7 @@ import {
 import { createTerminalAttentionSurface } from '@/components/terminal-pane/notifications/terminal-attention-surface'
 import { createStructuredAttentionSurface } from '@/components/native-chat/session/attention/structured-attention-surface'
 import type { AutoAckTabTarget } from './agent-auto-ack-targets'
+import { readWebChatMark } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-web-copy'
 import {
   emitAgentSubjectReads,
   type AgentSubjectRead
@@ -42,20 +43,16 @@ export function acknowledgeViewedAutoAckTarget(
   const records = readAgentAttentionTurnRecords(state)
   const groupId = target.tabId
   const subjectKey = surfaceForAutoAckTarget(state, target).resolveViewedSubjectKey(groupId)
-  const toAck = computeAgentAcknowledgementTargets(records, subjectKey).filter(
-    (key) =>
-      state.manuallyUnreadTurnsByPaneKey[key] !== readAgentAttentionTurnStartedAt(records, key)
-  )
+  const protectedTurn =
+    subjectKey !== null &&
+    readWebChatMark(state, 'manuallyUnreadTurnsByPaneKey', subjectKey) ===
+      readAgentAttentionTurnStartedAt(records, subjectKey)
+  const toAck = protectedTurn ? [] : computeAgentAcknowledgementTargets(records, subjectKey)
   const viewedUnreadSubjectKey = resolveViewedUnreadSubjectKey(
     state.unreadAgentCompletionPanes,
     subjectKey
   )
-  const readViewed =
-    options?.readViewed &&
-    subjectKey !== null &&
-    (state.manuallyUnreadTurnsByPaneKey[subjectKey] === undefined ||
-      state.manuallyUnreadTurnsByPaneKey[subjectKey] !==
-        readAgentAttentionTurnStartedAt(records, subjectKey))
+  const readViewed = options?.readViewed && subjectKey !== null && !protectedTurn
   if (toAck.length === 0 && !viewedUnreadSubjectKey && !readViewed) {
     return
   }

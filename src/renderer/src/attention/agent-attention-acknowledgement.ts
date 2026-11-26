@@ -2,6 +2,10 @@ import {
   readAgentAttentionUnreadReason,
   type ReadableAgentAttentionUnread
 } from './agent-attention-contract'
+import {
+  legacyWebChatReadMarkKeys,
+  readWebChatMark
+} from '@/store/slices/agent-status/structured-sessions/chat-read-mark-web-copy'
 
 export type AgentAttentionTurn = {
   stateStartedAt: number
@@ -91,11 +95,37 @@ export function resolveViewedUnreadSubjectKey(
 export function computeLapsedManualUnreadProtections(
   records: Pick<AgentAttentionTurnRecords, 'liveTurns'> & {
     manuallyUnreadTurnStartedAt: Record<string, number>
+    chatReadMarksCopiedHere?: boolean
   },
   activeSubjectKeys: ReadonlySet<string>
 ): string[] {
+  const { manuallyUnreadTurnStartedAt: marks, chatReadMarksCopiedHere } = records
+  let protectedAliases: Set<string> | undefined
+  if (!chatReadMarksCopiedHere) {
+    for (const subjectKey of activeSubjectKeys) {
+      const aliases = legacyWebChatReadMarkKeys('manuallyUnreadTurnsByPaneKey', subjectKey)
+      if (!aliases) {
+        continue
+      }
+      const currentTurn = readAgentAttentionTurnStartedAt(records, subjectKey)
+      const protection = readWebChatMark(
+        { manuallyUnreadTurnsByPaneKey: marks },
+        'manuallyUnreadTurnsByPaneKey',
+        subjectKey
+      )
+      if (currentTurn === null || currentTurn === protection) {
+        protectedAliases ??= new Set()
+        for (const alias of aliases) {
+          protectedAliases.add(alias)
+        }
+      }
+    }
+  }
   const lapsed: string[] = []
-  for (const [subjectKey, turnStartedAt] of Object.entries(records.manuallyUnreadTurnStartedAt)) {
+  for (const [subjectKey, turnStartedAt] of Object.entries(marks)) {
+    if (protectedAliases?.has(subjectKey)) {
+      continue
+    }
     if (!activeSubjectKeys.has(subjectKey)) {
       lapsed.push(subjectKey)
       continue

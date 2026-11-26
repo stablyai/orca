@@ -221,7 +221,8 @@ export function startOnScreenAttentionScan(
       const lapsedProtections = computeLapsedManualUnreadProtections(
         {
           liveTurns: s.agentStatusByPaneKey,
-          manuallyUnreadTurnStartedAt: s.manuallyUnreadTurnsByPaneKey
+          manuallyUnreadTurnStartedAt: s.manuallyUnreadTurnsByPaneKey,
+          chatReadMarksCopiedHere: s.chatReadMarksCopiedHere
         },
         activeSubjectKeys
       )

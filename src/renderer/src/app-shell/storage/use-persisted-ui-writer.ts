@@ -1,6 +1,11 @@
 import { useEffect, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store/index'
+import { isWebClientLocation } from '../platform/web-client-location'
+import {
+  writeWebChatReadMarkEdits,
+  type ChatReadMarks
+} from '@/web/preload-api/preferences/web-chat-read-mark-storage'
 import {
   capturePersistedUIWriteBaseline,
   diffPersistedUIWriteFields,
@@ -52,8 +57,35 @@ function createPersistedUIWriteController(): PersistedUIWriteController {
     if (disposed) {
       return
     }
-    const fields = Object.keys(changed) as (keyof PersistedUIWriteBaseline)[]
     const state = useAppStore.getState()
+    if (isWebClientLocation()) {
+      const {
+        activityClearedAtByPaneKey,
+        manuallyUnreadTurnsByPaneKey,
+        chatReadMarksCopiedHere: _copiedHere,
+        ...hostAndOtherLocalChanges
+      } = changed
+      void _copiedHere
+      const marks: Partial<ChatReadMarks> = {
+        ...(activityClearedAtByPaneKey && { activityClearedAtByPaneKey }),
+        ...(manuallyUnreadTurnsByPaneKey && { manuallyUnreadTurnsByPaneKey })
+      }
+      const baseline = state.persistedUIWriteBaseline
+      if (baseline && (activityClearedAtByPaneKey || manuallyUnreadTurnsByPaneKey)) {
+        // Browser-local marks settle at storage, even if the host write fails.
+        try {
+          writeWebChatReadMarkEdits(marks, baseline)
+          useAppStore.setState({ persistedUIWriteBaseline: { ...baseline, ...marks } })
+        } catch {
+          // Leave local marks dirty when storage rejects the write.
+        }
+      }
+      changed = hostAndOtherLocalChanges
+    }
+    const fields = Object.keys(changed) as (keyof PersistedUIWriteBaseline)[]
+    if (fields.length === 0) {
+      return
+    }
     const sentAtGeneration = state.persistedUIWriteBaselineGeneration
     state.notePersistedUIWriteStarted(fields)
     let request: Promise<void>
@@ -179,7 +211,7 @@ export function usePersistedUIWriter(): void {
       if (!baseline) {
         return
       }
-      const changed = diffPersistedUIWriteFields(ui, baseline)
+      const changed = diffPersistedUIWriteFields(capturePersistedUIWriteBaseline(state), baseline)
       if (Object.keys(changed).length === 0) {
         return
       }

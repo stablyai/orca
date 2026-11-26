@@ -23,9 +23,19 @@ import {
   noteSessionTabsPublicationEpoch,
   recordReceivedWebSessionTabsEnvironmentFrame
 } from './publisher-identity-fences'
-import { hostSnapshotAffirmsWorktreeContents } from '../../../../../shared/remote-runtime/session-graph/host-session-snapshot-authority'
+import {
+  hostSnapshotAffirmsAgentSessions,
+  hostSnapshotAffirmsWorktreeContents
+} from '../../../../../shared/remote-runtime/session-graph/host-session-snapshot-authority'
 import { replayWebSessionClosesDueForSnapshot } from '../closing/web-session-close-replay'
 import { appPairedTerminalTabCloseIntentStore } from '../closing/paired-terminal-tab-close-intent-store'
+import { useAppStore } from '@/store/index'
+import {
+  isWebChatReadMarkCopyPending,
+  receiveWebChatReadMarkCensus,
+  receiveWebChatReadMarkFrame
+} from '@/store/slices/agent-status/structured-sessions/chat-read-mark-web-copy'
+import { isHostMirroredWorktree } from '../identity/host-mirrored-worktree'
 
 export function isSessionTabsListAllResult(value: unknown): value is SessionTabsListAllResult {
   return (
@@ -86,7 +96,8 @@ export function recordReceivedWebSessionTabsSnapshot(
   snapshot: RuntimeMobileSessionTabsResult,
   receivedFrame: number | undefined = undefined,
   runtimeId?: string,
-  source: 'stream' | 'bootstrap' = 'stream'
+  source: 'stream' | 'bootstrap' = 'stream',
+  censusMember = false
 ): number {
   const frame = receivedFrame ?? nextReceivedSessionTabsFrame()
   recordBrowserInitializationReceipt(environmentId, snapshot, frame)
@@ -145,8 +156,64 @@ export function recordReceivedWebSessionTabsSnapshot(
     if (isRetraction) {
       recordReceivedWebSessionTabsRemoval(environmentId, snapshot.worktree, frame, publicationEpoch)
     }
+    if (
+      isWebChatReadMarkCopyPending() &&
+      (source === 'stream' || censusMember) &&
+      !precedesWebSessionTabsRemoval(key, frame) &&
+      isHostMirroredWorktree(snapshot.worktree)
+    ) {
+      const copied = receiveWebChatReadMarkFrame(useAppStore.getState(), {
+        environmentId,
+        worktreeId: snapshot.worktree,
+        runtimeId,
+        trackingRecord: sessionTabsPublicationEpochHistoryByWorktree.get(key),
+        affirmsChats: !isRetraction && hostSnapshotAffirmsAgentSessions(snapshot),
+        tabs: snapshot.tabs,
+        censusMember
+      })
+      if (copied) {
+        useAppStore.setState(copied)
+      }
+    }
   }
   return frame
+}
+
+export function recordWebSessionTabsCensusForChatReadMarks(
+  environmentId: string,
+  snapshots: readonly RuntimeMobileSessionTabsResult[],
+  runtimeId: string | undefined,
+  requestReceivedFrame?: number
+): void {
+  if (
+    !isWebChatReadMarkCopyPending() ||
+    !isCurrentSessionTabsRuntimeFrame(environmentId, runtimeId) ||
+    (requestReceivedFrame !== undefined &&
+      (latestReceivedSessionTabsInventoryFrameByEnvironment.get(environmentId) ?? 0) >
+        requestReceivedFrame)
+  ) {
+    return
+  }
+  const copied = receiveWebChatReadMarkCensus(
+    useAppStore.getState(),
+    environmentId,
+    runtimeId,
+    (function* () {
+      for (const { worktree } of snapshots) {
+        if (isHostMirroredWorktree(worktree)) {
+          yield [
+            worktree,
+            sessionTabsPublicationEpochHistoryByWorktree.get(
+              sessionTabsFreshnessKey(environmentId, worktree)
+            )
+          ] as const
+        }
+      }
+    })()
+  )
+  if (copied) {
+    useAppStore.setState(copied)
+  }
 }
 
 export function recordReceivedWebSessionTabsInventory(environmentId: string): number {

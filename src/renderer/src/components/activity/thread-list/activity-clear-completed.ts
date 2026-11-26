@@ -3,11 +3,12 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { activityThreadStatusId } from '../threads/activity-thread-presentation'
 import type { AgentPaneThread } from '../threads/activity-thread-types'
+import { readWebChatMark } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-web-copy'
 
 export type ClearCompletedActivityPlan = {
   /** Panes whose activity gets a cleared-at cutoff stamped. */
   cutoffPatch: Record<string, number | null>
-  /** Exact prior cutoff values (or null when absent) so undo restores byte-for-byte. */
+  /** Effective prior cutoffs, or null when absent. */
   restorePatch: Record<string, number | null>
   clearedThreadCount: number
 }
@@ -26,6 +27,7 @@ export function planClearCompletedActivity(
   threads: readonly AgentPaneThread[],
   state: {
     activityClearedAtByPaneKey: Record<string, number>
+    chatReadMarksCopiedHere?: boolean
   },
   now: number = Date.now()
 ): ClearCompletedActivityPlan {
@@ -37,7 +39,7 @@ export function planClearCompletedActivity(
       continue
     }
     clearedThreadCount += 1
-    const previousCutoff = state.activityClearedAtByPaneKey[thread.paneKey] ?? null
+    const previousCutoff = readWebChatMark(state, 'activityClearedAtByPaneKey', thread.paneKey) ?? null
     const latestCutoff = Math.max(previousCutoff ?? 0, thread.latestTimestamp)
     // Hydration drops non-positive cutoffs; use now for unstamped threads so clears survive restart.
     cutoffPatch[thread.paneKey] = latestCutoff > 0 ? latestCutoff : now
