@@ -843,7 +843,6 @@
         "sshToggleDescription": "Herhangi biri kullanılabilir olduğunda yapılandırılmış SSH ve uzak Orca sunucularını göster.",
         "resourceUsageToggleDescription": "Kaynak Yöneticisini göster. CPU, bellek, oturumlar, arka plan hizmeti kontrolleri ve çalışma alanı disk taramaları için tıklayın.",
         "portsToggleDescription": "Canlı çalışma alanı portlarını göster. Çalışma alanı kapsamındaki portlar ve dış dinleyiciler için tıklayın.",
-        "antigravityToggleDescription": "Etkin çalışma alanı için Antigravity abonelik kullanımını göster.",
         "grokToggleDescription": "Grok CLI üzerinden oturum açıldığında Grok abonelik kredisi kullanımını göster.",
         "cursorToggleDescription": "cursor-agent veya Cursor IDE üzerinden oturum açıldığında Cursor plan kullanımını göster.",
         "zcodeToggleDescription": "ZCode Coding Plan kota kullanımını göster.",
@@ -6013,7 +6012,6 @@
             "c0e972d726": "İptal",
             "3bbf140864": "MiniMax Kullanımı",
             "remoteServerLabel": "Uzak sunucu",
-            "antigravityUsage": "Antigravity Kullanımı",
             "grokUsageMenu": "Grok Kullanımı",
             "floatingTerminalNewActivity": "{{label}}, yeni etkinlik",
             "4fba7dc1e7": "{{value0}} bakiye",
@@ -6474,16 +6472,9 @@
             "mainWorktree": "ana worktree",
             "detached": "ayrık"
           },
-          "antigravity": {
-            "unknownAccount": "Google hesabı",
-            "accounts": "Kayıtlı Antigravity Hesapları",
-            "readAgo": "Okunma zamanı: {{time}}",
-            "notRead": "Kullanım bilinmiyor: henüz okunmadı"
-          },
           "AccountSwitchList": {
             "used": "Kullanılan",
             "left": "Kalan",
-            "reset": "Sıfırlanma",
             "accounts": "Hesaplar"
           },
           "InlineUsageBars": {
@@ -11320,7 +11311,6 @@
             "d77537b580": "opencode-go",
             "a9d56852eb": "opencode",
             "7f72de7cbe": "Durum çubuğunda OpenCode Go token ve maliyet kullanımını gösterin.",
-            "51b0ccd6a2": "google",
             "97957e374e": "openai",
             "8dfd676c28": "codex",
             "e9e4412545": "Durum çubuğunda Codex token ve maliyet kullanımını gösterin.",
@@ -11362,8 +11352,6 @@
               "pr": "pr",
               "duplicate": "yinelenen"
             },
-            "antigravityUsageDescription": "Durum çubuğunda Antigravity abonelik kullanımını gösterin.",
-            "antigravityKeyword": "antigravity",
             "e7d1b0f3a5": "Grok CLI OAuth'tan haftalık kredi kullanımını gösterin.",
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
@@ -11407,7 +11395,6 @@
             "c29089716e": "Kimi Kullanımı",
             "96e32c1118": "MiniMax Kullanımı",
             "aff6e6afdf": "IDE Yazı Tipi",
-            "ba1f9d39a6": "Antigravity Kullanımı",
             "museUsageDescription": "Muse abonelik kotasını durum çubuğunda göster.",
             "muse": "muse",
             "meta": "meta",
@@ -15171,8 +15158,7 @@
             "windows": "kullanım aralığının yüzdesi",
             "reset": "sıfırlamaya kalan süre, ör. 3 sa 15 dk",
             "resetAt": "sıfırlama saati, ör. 20:50",
-            "optional": "içindeki yer tutuculardan biri boşsa bu bölüm gösterilmez",
-            "usagePools": "adlandırılmış kullanım havuzları, ör. Antigravity modelleri"
+            "optional": "içindeki yer tutuculardan biri boşsa bu bölüm gösterilmez"
           }
         }
       },
@@ -25517,13 +25503,10 @@
       "retry": "Tekrar dene",
       "changed": "agy'nin kendi hesabı değişti. agy'yi başlatmadan önce kayıtlı bir hesabı yeniden seçin.",
       "refresh": "Hesapları yenile",
-      "usage": "Kullanımı yenile",
-      "usageWithReading": "Kullanımı yenile ({{reading}})",
       "windowsChanged": "Ana bilgisayarın varsayılan hesabı değişti. Kayıtlı bir hesabı yeniden kullanmak için seçin.",
       "enterprise": "Gemini Enterprise",
       "projectPlaceholder": "my-project-id",
       "locationPlaceholder": "us-central1",
-      "usageReading": "Oturum: {{session}} · Haftalık: {{weekly}}",
       "saved": "Kaydedilmiş Google hesabı",
       "remove": "Kaldır",
       "searchDescription": "Çalıştırma ana makinesinde agy'nin kullandığı Google hesaplarını kaydedin ve seçin.",
@@ -25540,8 +25523,6 @@
       "settingsIncomplete": "Bir Antigravity hesap türü seçin ve Google Cloud projesini ve konumunu girin.",
       "settingsLoadFailed": "Orca Antigravity oturum açma ayarlarınızı yükleyemedi. Tekrar deneyin.",
       "settingsSaveFailed": "Orca Antigravity oturum açma ayarlarınızı kaydedemedi. Tekrar deneyin.",
-      "lastReading": "{{reading}} · Okunma zamanı: {{time}}",
-      "noReading": "Kullanım bilinmiyor: henüz okunmadı",
       "fd47b5a5dd": "Antigravity Hesapları",
       "personalOption": "Kişisel Google AI planınız",
       "enterpriseOption": "Kuruluşunuzun lisansı",
@@ -25572,7 +25553,6 @@
       "currentNotSaved": "Geçerli agy oturumu · kaydedilmedi",
       "noEmailNotSaved": "agy e-posta adresi bildirmedi · kaydedilmedi",
       "saveShort": "Kaydet",
-      "readAt": "Okunma zamanı: {{time}}",
       "active": "Etkin",
       "runtime": "Çalışma zamanı",
       "chatTitle": "Antigravity Chat",

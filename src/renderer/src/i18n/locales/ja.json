@@ -170,7 +170,6 @@
         "sshToggleDescription": "設定済み SSH ホストとリモート Orca ホストがある場合に表示します。",
         "resourceUsageToggleDescription": "リソースマネージャーを表示します。クリックすると、CPU、メモリ、セッション、デーモンコントロール、ワークスペースディスクスキャンの情報を確認できます。",
         "portsToggleDescription": "ライブワークスペースポートを表示します。ワークスペーススコープのポートと外部リスナーの場合はこれをクリックします。",
-        "antigravityToggleDescription": "アクティブなワークスペースの Antigravity サブスクリプション使用量を表示します。",
         "grokToggleDescription": "Grok CLI でサインインしている場合に Grok サブスクリプションのクレジット使用量を表示します。",
         "cursorToggleDescription": "cursor-agent または Cursor IDE でサインインしている場合に Cursor プランの使用状況を表示します。",
         "zcodeToggleDescription": "ZCode コーディングプランのクォータ使用量を表示します。",
@@ -5030,7 +5029,6 @@
             "c0e972d726": "キャンセル",
             "3bbf140864": "MiniMax 使用量",
             "remoteServerLabel": "リモートサーバー",
-            "antigravityUsage": "Antigravity の使用状況",
             "grokUsageMenu": "Grok の使用状況",
             "floatingTerminalNewActivity": "{{label}}、新規アクティビティ",
             "4fba7dc1e7": "残高 {{value0}}",
@@ -5456,16 +5454,9 @@
             "mainWorktree": "メインワークツリー",
             "detached": "分離状態"
           },
-          "antigravity": {
-            "unknownAccount": "Google アカウント",
-            "accounts": "保存済み Antigravity アカウント",
-            "readAgo": "{{time}} に取得",
-            "notRead": "使用量は不明：未取得"
-          },
           "AccountSwitchList": {
             "used": "使用済み",
             "left": "残り",
-            "reset": "リセット",
             "accounts": "アカウント"
           },
           "InlineUsageBars": {
@@ -10208,7 +10199,6 @@
             "d77537b580": "opencode-go",
             "a9d56852eb": "opencode",
             "7f72de7cbe": "OpenCode Go トークンとコストの使用状況をステータスバーに表示します。",
-            "51b0ccd6a2": "グーグル",
             "97957e374e": "openai",
             "8dfd676c28": "codex",
             "e9e4412545": "Codex トークンとコストの使用状況をステータスバーに表示します。",
@@ -10251,8 +10241,6 @@
               "pr": "PR",
               "duplicate": "重複"
             },
-            "antigravityUsageDescription": "ステータスバーに Antigravity サブスクリプションの使用量を表示します。",
-            "antigravityKeyword": "antigravity",
             "e7d1b0f3a5": "Grok CLI OAuth から Grok の週次クレジット使用量を表示します。",
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
@@ -10306,8 +10294,7 @@
             "c29089716e": "Kimi 使用量",
             "96e32c1118": "MiniMax 使用量",
             "e8d2710689": "Muse 使用量",
-            "aff6e6afdf": "IDE フォント",
-            "ba1f9d39a6": "Antigravity の使用状況"
+            "aff6e6afdf": "IDE フォント"
           }
         },
         "auto": {
@@ -14058,8 +14045,7 @@
             "windows": "ウィンドウごとの使用率",
             "reset": "リセットまでの時間 (例: 3h 15m)",
             "resetAt": "リセット時刻 (例: 20:50)",
-            "optional": "内側のプレースホルダーが空の場合は省略されます",
-            "usagePools": "名前付きの使用量プール（例: Antigravity のモデル）"
+            "optional": "内側のプレースホルダーが空の場合は省略されます"
           }
         },
         "RepositoryRemoveProjectSection": {
@@ -24656,9 +24642,6 @@
       "retry": "再試行",
       "changed": "ネイティブアカウントが変更されました。AGYを起動する前に、保存したアカウントを再度選択してください。",
       "refresh": "アカウントを更新する",
-      "usage": "使用量を更新",
-      "usageWithReading": "使用状況を更新 ({{reading}})",
-      "usageReading": "セッション： {{session}} ·毎週： {{weekly}}",
       "saved": "保存されたGoogleアカウント",
       "remove": "削除",
       "searchDescription": "実行ホストにネイティブのagy Googleアカウントを保存して選択します。",
@@ -24679,8 +24662,6 @@
       "settingsIncomplete": "Antigravity アカウントの種類を選択し、Google Cloud のプロジェクトとロケーションを入力してください。",
       "settingsLoadFailed": "Orca は Antigravity のサインイン設定を読み込めませんでした。もう一度お試しください。",
       "settingsSaveFailed": "Orca は Antigravity のサインイン設定を保存できませんでした。もう一度お試しください。",
-      "lastReading": "{{reading}} · {{time}} に取得",
-      "noReading": "使用量は不明：未取得",
       "fd47b5a5dd": "Antigravityアカウント",
       "personalOption": "個人の Google AI プラン",
       "enterpriseOption": "組織のライセンス",
@@ -24710,7 +24691,6 @@
       "currentNotSaved": "現在の agy ログイン · 未保存",
       "noEmailNotSaved": "agy からメールアドレスが返されませんでした · 未保存",
       "saveShort": "保存",
-      "readAt": "{{time}} に取得",
       "active": "アクティブ",
       "runtime": "ランタイム",
       "terminalTitle": "ターミナルの agy",
