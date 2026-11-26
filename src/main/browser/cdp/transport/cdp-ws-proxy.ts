@@ -12,7 +12,7 @@ import { CdpElementCapture } from '../commands/cdp-element-capture'
 import { CdpPageCaptureCommands } from '../commands/cdp-page-capture-commands'
 import type { CapturePaintHold } from '../debugger/guest-paint-hold'
 import type { AgentInputFocusGuard } from '../input/agent-input-focus-guard'
-import { CdpPageInputCommands, type ShowAgentPointer } from '../input/cdp-page-input-commands'
+import { CdpPageInputCommands, type AgentPointer } from '../input/cdp-page-input-commands'
 import { admitCdpProxyRequest, verifyCdpProxyUpgrade } from './cdp-loopback-request-guard'
 import { parseCdpClientCommand } from './cdp-client-command'
 import {
@@ -43,7 +43,7 @@ export class CdpWsProxy {
     private readonly webContents: WebContents,
     holdPaint: CapturePaintHold,
     guardFocus: AgentInputFocusGuard = async () => () => {},
-    showAgentPointer: ShowAgentPointer = async () => {}
+    agentPointer?: AgentPointer
   ) {
     this.discovery = new CdpTargetDiscovery(webContents, this.responder, this.sessions, () =>
       this.getEndpoint()
@@ -70,7 +70,7 @@ export class CdpWsProxy {
       this.debuggerChannel,
       this.domFocusReplay,
       guardFocus,
-      showAgentPointer,
+      agentPointer,
       holdPaint
     )
   }

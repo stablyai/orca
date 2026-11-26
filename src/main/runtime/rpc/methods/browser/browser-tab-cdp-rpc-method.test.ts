@@ -4,7 +4,7 @@ import type { RpcCallerIdentity } from '../../callers/rpc-caller-identity'
 import { BROWSER_TAB_CDP_METHODS } from './browser-tab-cdp-rpc-method'
 
 const method = BROWSER_TAB_CDP_METHODS.find((entry) => entry.name === 'browser.tabCdp')!
-const ENDPOINT = { browserPageId: 'page-1', cdpEndpoint: 'ws://127.0.0.1:4100/token' }
+const ENDPOINT = { browserPageId: 'page-1', url: 'ws://127.0.0.1:4100/token' }
 
 it('hands the raw CDP endpoint only to the local orca CLI', async () => {
   const cases: [RpcCallerIdentity | undefined, boolean][] = [
@@ -29,9 +29,4 @@ it('hands the raw CDP endpoint only to the local orca CLI', async () => {
       expect(runtime.browserTabCdp).not.toHaveBeenCalled()
     }
   }
-})
-
-it('requires an explicit page', () => {
-  expect(method.params.safeParse({}).success).toBe(false)
-  expect(method.params.safeParse({ worktree: 'wt' }).success).toBe(false)
 })

@@ -61,10 +61,9 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
         'orca tab cdp works only against the local Orca app, not over --environment or pairing'
       )
     }
-    const page = getRequiredStringFlag(flags, 'page')
-    const { worktree } = await getBrowserCommandTarget(flags, cwd, client)
-    const result = await client.call<BrowserTabCdpResult>('browser.tabCdp', { page, worktree })
-    printResult(result, json, (v) => v.cdpEndpoint)
+    const target = await getBrowserCommandTarget(flags, cwd, client)
+    const result = await client.call<BrowserTabCdpResult>('browser.tabCdp', target)
+    printResult(result, json, (v) => v.url)
   },
   'tab current': async ({ flags, client, cwd, json }) => {
     const worktree = await getScopedBrowserWorktreeSelector(flags, cwd, client)

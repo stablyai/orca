@@ -1,12 +1,12 @@
 import { defineMethod } from '../../core'
-import { TabShow } from '../../../../../shared/rpc-contract/browser/browser-params'
+import { BrowserTarget } from '../../../../../shared/rpc-contract/rpc-param-primitives'
 import { BrowserError } from '../../../../browser/browser-error'
 
 export const BROWSER_TAB_CDP_METHODS = [
   defineMethod({
     name: 'browser.tabCdp',
     permission: 'workspace',
-    params: TabShow,
+    params: BrowserTarget,
     handler: async (params, { runtime, caller }) => {
       // The endpoint is a loopback URL that skips per-action guards: only this host's own CLI gets it.
       if (caller?.kind !== 'local-cli') {

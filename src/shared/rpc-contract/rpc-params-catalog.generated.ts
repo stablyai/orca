@@ -1524,7 +1524,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.storage.session.get': StorageKey,
   'browser.storage.session.set': StorageKeyValue,
   'browser.tabAnnotations': BrowserTarget,
-  'browser.tabCdp': TabShow,
+  'browser.tabCdp': BrowserTarget,
   'browser.tabClose': TabClose,
   'browser.tabCreate': BrowserTabCreateParams,
   'browser.tabCurrent': TabCurrent,
