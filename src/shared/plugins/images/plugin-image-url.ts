@@ -58,9 +58,20 @@ export function parsePluginImageUrl(url: string): PluginImageReference | null {
       slot
     )
   ) {
-    return { kind: 'installed', pluginKey: decodeURIComponent(key), contentHash, slot }
+    const pluginKey = decodedPluginKey(key)
+    return pluginKey ? { kind: 'installed', pluginKey, contentHash, slot } : null
   }
   return null
+}
+
+/** Why null on a bad escape: the renderer parses URLs a paired host sends, and `%` alone would
+ *  throw while it builds the activity bar instead of falling back to `puzzle`. */
+function decodedPluginKey(key: string): string | null {
+  try {
+    return decodeURIComponent(key)
+  } catch {
+    return null
+  }
 }
 
 /** Only the images main serves over the plugin image scheme. Why: entries can come from a paired

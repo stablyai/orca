@@ -153,11 +153,13 @@ it('draws an image icon at the glyph size only when main serves it', () => {
   expect(img?.getAttribute('width')).toBe('18')
   expect(img?.getAttribute('alt')).toBe('')
   cleanup()
-  // Why: a paired host of another version could send a web URL; that must never load.
-  const Hotlink = resolvePluginPanelIcon(undefined, undefined, 'https://example.com/x.png')
-  expect(render(createElement(Hotlink, { size: 18 })).container.innerHTML).toBe(
-    renderIcon(undefined).innerHTML
-  )
+  const puzzle = renderIcon(undefined).innerHTML
+  // Why: a paired host of another version could send a web URL (that must never load) or a key
+  // with a bad escape (that must not throw while the activity bar is built).
+  for (const sent of ['https://example.com/x.png', 'orca-plugin-image://installed/%/dev/panel-0']) {
+    const Fallback = resolvePluginPanelIcon(undefined, undefined, sent)
+    expect(render(createElement(Fallback, { size: 18 })).container.innerHTML, sent).toBe(puzzle)
+  }
 })
 
 it('names the plugin in the accessible title unless the title already does', () => {
