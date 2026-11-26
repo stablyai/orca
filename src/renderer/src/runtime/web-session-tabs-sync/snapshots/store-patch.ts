@@ -27,6 +27,30 @@ import {
   type HostSessionMirrorSettle
 } from '../hydration/mirror-settle'
 import { recordAgentFinishDropped } from '@/attention/agent-finish-drop-breadcrumb'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { copyWebClientChatReadMarksForTabLists } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-web-copy'
+
+function copyWebClientChatReadMarksForPatch(
+  state: AppState,
+  patch: AppState | Partial<AppState>,
+  verdict: HostSessionMirrorPatchVerdict,
+  affectedWorkspaces: readonly string[]
+): AppState | Partial<AppState> {
+  if (!isWebClientLocation() || state.chatReadMarksCopiedHere) {
+    return patch
+  }
+  const complete = verdict.fullInventory !== undefined
+  const workspaceIds = complete
+    ? verdict.frames.map(({ worktreeId }) => worktreeId)
+    : affectedWorkspaces
+  const copied = copyWebClientChatReadMarksForTabLists(
+    state,
+    () => patch.unifiedTabsByWorktree ?? state.unifiedTabsByWorktree,
+    workspaceIds,
+    complete
+  )
+  return copied ? { ...patch, ...copied } : patch
+}
 
 /** Commit a reconciliation patch and return a receipt for its host evidence. */
 export function applyWebSessionTabsStorePatch(
@@ -55,7 +79,12 @@ export function applyWebSessionTabsStorePatch(
     state: AppState,
     changedAgentPaneKeys: Set<string>
   ): AppState | Partial<AppState> => {
-    const patch = buildPatch(state, changedAgentPaneKeys)
+    const patch = copyWebClientChatReadMarksForPatch(
+      state,
+      buildPatch(state, changedAgentPaneKeys),
+      hostMirrorVerdict,
+      affectedWorkspaces
+    )
     markHostMirrorPatchFullResync(state, patch)
     mirroredAgentStatusChanged = patch !== state && Object.hasOwn(patch, 'agentStatusByPaneKey')
     if (agentStatusSnapshots) {

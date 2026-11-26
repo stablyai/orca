@@ -1,4 +1,5 @@
 import { copyChatReadMarksToConversationKeys } from '../../../../../../shared/agent-session/view/chat-read-mark-copy'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AppState } from '../../../types'
 
 type WebCopyState = Pick<
@@ -6,13 +7,18 @@ type WebCopyState = Pick<
   'activityClearedAtByPaneKey' | 'manuallyUnreadTurnsByPaneKey' | 'chatReadMarksCopiedHere'
 >
 
-type ChatTabsSnapshot = { tabs: readonly { type: string; sessionId?: string }[] }
+type ChatTabsByWorkspace = Readonly<
+  Record<string, readonly { contentType: string; entityId?: string }[]>
+>
 
-/** Once per paired web client, from the host's first tab list: its own saved cutoffs and unread
- *  turns gain conversation keys (chat-read-mark-copy.ts). The host copies shared acknowledgements. */
+const copiedChatPaneKeys = new Set<string>()
+
+/** A paired web client copies its saved cutoffs and unread turns to conversation keys once; the host
+ *  copies shared acknowledgements. */
 export function copyWebClientChatReadMarksOnce(
   state: WebCopyState,
-  sessionIds: () => Iterable<string>
+  sessionIds: () => Iterable<string>,
+  complete = true
 ): Partial<WebCopyState> | null {
   if (state.chatReadMarksCopiedHere) {
     return null
@@ -24,18 +30,36 @@ export function copyWebClientChatReadMarksOnce(
     },
     sessionIds()
   )
-  return { ...copied, chatReadMarksCopiedHere: true }
+  return copied || complete ? { ...copied, ...(complete ? { chatReadMarksCopiedHere: true } : {}) } : null
 }
 
-/** Copy before the first snapshot that introduces chats can run attention cleanup. */
-export function copyWebClientChatReadMarksFromSnapshotsOnce(
+/** Copy each chat once before a full inventory makes this device's migration complete. */
+export function copyWebClientChatReadMarksForTabLists(
   state: WebCopyState,
-  snapshots: readonly ChatTabsSnapshot[]
+  readTabsByWorkspace: () => ChatTabsByWorkspace,
+  workspaceIds: Iterable<string>,
+  complete: boolean
 ): Partial<WebCopyState> | null {
-  const sessionIds = snapshots.flatMap((snapshot) =>
-    snapshot.tabs.flatMap((tab) =>
-      tab.type === 'agent-session' && typeof tab.sessionId === 'string' ? [tab.sessionId] : []
-    )
-  )
-  return sessionIds.length === 0 ? null : copyWebClientChatReadMarksOnce(state, () => sessionIds)
+  if (state.chatReadMarksCopiedHere) {
+    return null
+  }
+  const tabsByWorkspace = readTabsByWorkspace()
+  const sessionIds: string[] = []
+  for (const workspaceId of new Set(workspaceIds)) {
+    for (const tab of tabsByWorkspace[workspaceId] ?? []) {
+      if (tab.contentType !== 'agent-session' || !tab.entityId) {
+        continue
+      }
+      const key = chatPaneKey(tab.entityId)
+      if (!copiedChatPaneKeys.has(key)) {
+        copiedChatPaneKeys.add(key)
+        sessionIds.push(tab.entityId)
+      }
+    }
+  }
+  const copied = copyWebClientChatReadMarksOnce(state, () => sessionIds, complete)
+  if (complete) {
+    copiedChatPaneKeys.clear()
+  }
+  return copied
 }

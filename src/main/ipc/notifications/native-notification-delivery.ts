@@ -107,6 +107,7 @@ export function deliverNativeNotification(
         win.webContents.send('ui:focusEditorTab', {
           tabId: chatTarget.tabId,
           worktreeId,
+          paneKey: args.paneKey,
           userInitiated: true
         })
         return
