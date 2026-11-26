@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -25,7 +25,9 @@ vi.mock('electron', () => ({
   }
 }))
 
+import { PLUGIN_STORAGE_TOTAL_MAX_BYTES } from '../../../shared/plugins/workers/plugin-host-api-storage-schemas'
 import { PluginSecretsStore } from './plugin-secrets-store'
+import { PluginKvStore } from './plugin-storage-store'
 
 const roots: string[] = []
 const originalPlatform = process.platform
@@ -67,5 +69,44 @@ describe('PluginSecretsStore', () => {
     await expect(readFile(join(root, 'acme.demo', 'secrets.json.enc'))).rejects.toMatchObject({
       code: 'ENOENT'
     })
+  })
+
+  it('refuses to overwrite an oversized vault instead of treating it as empty', async () => {
+    const root = await tempRoot()
+    const vaultDir = join(root, 'acme.demo')
+    const vaultPath = join(vaultDir, 'secrets.json.enc')
+    await mkdir(vaultDir, { recursive: true })
+    const original = Buffer.alloc(PLUGIN_STORAGE_TOTAL_MAX_BYTES + 1, 'x')
+    await writeFile(vaultPath, original)
+    const store = new PluginSecretsStore(root, 'acme.demo')
+
+    expect(store.set('token', 'replacement')).toEqual({
+      ok: false,
+      error: 'secret vault exists but could not be read; refusing to overwrite it'
+    })
+    expect(store.get('token')).toEqual({
+      ok: false,
+      error: 'secret vault exists but could not be read; refusing to overwrite it'
+    })
+    expect((await readFile(vaultPath)).equals(original)).toBe(true)
+  })
+})
+
+describe('PluginKvStore', () => {
+  it('refuses to overwrite an oversized store instead of treating it as empty', async () => {
+    const root = await tempRoot()
+    const storeDir = join(root, 'acme.demo')
+    const storePath = join(storeDir, 'storage.json')
+    await mkdir(storeDir, { recursive: true })
+    const original = Buffer.alloc(PLUGIN_STORAGE_TOTAL_MAX_BYTES + 1, 'x')
+    await writeFile(storePath, original)
+    const store = new PluginKvStore(root, 'acme.demo', 'storage.json')
+
+    expect(store.set('token', 'replacement')).toEqual({
+      ok: false,
+      error: 'storage file exists but could not be read; refusing to overwrite it'
+    })
+    store.delete('token')
+    expect((await readFile(storePath)).equals(original)).toBe(true)
   })
 })

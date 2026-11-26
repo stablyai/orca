@@ -40,7 +40,8 @@ export class PluginKvStore {
         return {}
       }
       if (statSync(this.filePath).size > PLUGIN_STORAGE_TOTAL_MAX_BYTES) {
-        return {}
+        // Oversize is as unprovable as a read denial: the keys beyond the cap are still in the file.
+        return null
       }
       const parsed: PluginJsonValue = JSON.parse(readFileSync(this.filePath, 'utf8'))
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {

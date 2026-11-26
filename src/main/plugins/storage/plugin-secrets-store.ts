@@ -48,7 +48,8 @@ export class PluginSecretsStore {
         return empty
       }
       if (statSync(this.filePath).size > PLUGIN_STORAGE_TOTAL_MAX_BYTES) {
-        return empty
+        // Oversize is as unprovable as a read denial: the keys beyond the cap are still in the file.
+        return null
       }
       const parsed = JSON.parse(readFileSync(this.filePath, 'utf8')) as PersistedSecretsFile
       if (
