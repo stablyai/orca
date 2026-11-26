@@ -4,7 +4,6 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host/execution-h
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import type { AgentSessionRecordReader } from '../runtime/orchestration/addressing/session-lineage/structured-session-lineage'
 import { sessionTabClosedCheck } from '../runtime/orchestration/mailbox/routing/structured-session-mail-address'
-import { structuredWorkerHostScope } from '../runtime/orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { createIdleItemLineageReader, readIdleItemChat } from './bot-idle-item-lineage'
 
 type BotHome = Pick<Bot, 'id' | 'chatSessionId' | 'folderWorkspaceId'>
@@ -51,12 +50,11 @@ export function createBotIdleItemChatRouter() {
       if (
         !record ||
         record.location.workspaceId !== workspace ||
-        record.location.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
-        (record.sessionId !== turnSessionId && !structuredWorkerHostScope(record.location))
+        record.location.executionHostId !== LOCAL_EXECUTION_HOST_ID
       ) {
         return null
       }
-      return closed(record.sessionId)
+      return record.sessionId !== turnSessionId && closed(record.sessionId)
         ? { kind: 'gone' as const }
         : { kind: 'open' as const, id: record.sessionId }
     }

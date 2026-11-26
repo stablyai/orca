@@ -6,8 +6,8 @@ import {
 
 export type IdleItemLineageEnd = { id: string; unread?: true } | null
 type Subscription = NonNullable<AgentSessionRecordReader['onRecordsChanged']>
-type Entry = { end: IdleItemLineageEnd; path: string[]; stale: boolean }
-type Watched = { next: string | null | undefined; entries: Set<Entry> }
+type Entry = { end: IdleItemLineageEnd; path: string[]; dirtyFrom: number | null }
+type Watched = { next: string | null | undefined; entries: Map<Entry, number> }
 
 /** A missing record is distinct from one the host cannot read. */
 export function readIdleItemChat(records: AgentSessionRecordReader, id: string) {
@@ -21,7 +21,7 @@ export function readIdleItemChat(records: AgentSessionRecordReader, id: string) 
   }
 }
 
-/** Cache only the lineages of live candidates. Committed changes invalidate the paths they touch. */
+/** Cache live candidates' lineages. A committed change invalidates only the suffix from that edge. */
 class IdleItemLineages {
   private readonly bots = new Map<string, Map<string, Entry>>()
   private readonly watched = new Map<string, Watched>()
@@ -51,14 +51,15 @@ class IdleItemLineages {
   private update(watched: Watched, next: Watched['next']): void {
     if (watched.next !== next) {
       watched.next = next
-      for (const entry of watched.entries) {
-        entry.stale = true
+      for (const [entry, index] of watched.entries) {
+        entry.dirtyFrom = Math.min(entry.dirtyFrom ?? index, index)
       }
     }
   }
 
-  private forget(entry: Entry): void {
-    for (const id of entry.path) {
+  private forget(entry: Entry, from = 0): void {
+    while (entry.path.length > from) {
+      const id = entry.path.pop()!
       const watched = this.watched.get(id)!
       watched.entries.delete(entry)
       if (watched.entries.size === 0) {
@@ -99,31 +100,35 @@ class IdleItemLineages {
     this.bots.set(botId, ends)
     return (root, reread) => {
       const cached = ends.get(root)
-      if (cached && !cached.stale && !reread) {
+      if (cached && cached.dirtyFrom === null && !reread) {
         return cached.end
       }
-      if (cached) {
-        this.forget(cached)
-      }
+      const entry: Entry = cached ?? { end: null, path: [], dirtyFrom: null }
+      const from = entry.dirtyFrom ?? Math.max(0, entry.path.length - 1)
+      const start = entry.path[from] ?? root
+      this.forget(entry, from)
+      entry.dirtyFrom = null
       let unread: string | null = null
-      const entry: Entry = { end: null, path: [], stale: false }
       const running = resolveLineageRunningSession(
         {
           getRecord: (id) => {
+            const watched = this.watched.get(id) ?? { next: undefined, entries: new Map() }
+            // The resolver checks suffix cycles. A link back into the preserved prefix is also a cycle.
+            if (watched.entries.has(entry)) {
+              return null
+            }
             const record = readIdleItemChat(records, id)
             if (!record) {
               unread = id
             }
+            this.update(watched, record ? clearedInto(record) : undefined)
+            watched.entries.set(entry, entry.path.length)
             entry.path.push(id)
-            const next = record ? clearedInto(record) : undefined
-            const watched = this.watched.get(id) ?? { next, entries: new Set<Entry>() }
-            this.update(watched, next)
-            watched.entries.add(entry)
             this.watched.set(id, watched)
             return record ?? null
           }
         },
-        root
+        start
       )
       entry.end =
         running.kind !== 'unverifiable'

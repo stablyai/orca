@@ -115,10 +115,21 @@ it.each([750, 7_500])('reuses an unchanged %i-step /clear lineage on later turns
   const successor = chatId(depth)
   records.set(leaf, record(leaf, successor))
   records.set(successor, record(successor))
+  const beforeClear = store.count()
   store.lineageChanged(leaf, successor)
   expect(
     botIdleItemsNote(memo, successor, idle, route(BOT, store.records, successor, idle))
   ).not.toBeNull()
+  expect(store.count() - beforeClear).toBe(4)
+
+  // A broken suffix cannot redirect to Home or reuse an old endpoint.
+  records.set(successor, record(successor, chatId(0)))
+  store.lineageChanged(successor)
+  expect(route(BOT, store.records, successor, idle)(chatId(0))).toBeNull()
+  records.set(successor, record(successor))
+  store.lineageChanged(successor)
+  expect(route(BOT, store.records, successor, idle)(chatId(0))).toBe(successor)
+
   route(BOT, store.records, successor, [])
   const retired = store.count()
   store.lineageChanged(leaf, successor)

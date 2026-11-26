@@ -68,7 +68,13 @@ describe('an In progress item nothing runs for', () => {
           }
         })
       ],
-      [next, agentSessionConversationView(record(next))],
+      [
+        next,
+        agentSessionConversationView({
+          ...record(next),
+          location: { ...record(next).location, wslDistro: 'Ubuntu' }
+        })
+      ],
       [bot.chatSessionId, agentSessionConversationView(record(bot.chatSessionId))]
     ])
     const revision = {}
@@ -108,12 +114,13 @@ describe('an In progress item nothing runs for', () => {
     expect(say('pr-review-chat', revised).action).toBeNull()
     expect(say(bot.chatSessionId, revised).action).toContain('Item 7 is In progress')
     expect(say(bot.chatSessionId, revised).action).toBeNull()
-    retired.delete(next)
     expect(say(next, revised).action).toContain('Item 7 is In progress')
-    expect(say(next, [{ ...item, status: 'done', lastEventId: 'e12' }]).action).toBeNull()
+    retired.delete(next)
+    expect(say(next, [{ ...item, lastEventId: 'e12' }]).action).toContain('Item 7 is In progress')
+    expect(say(next, [{ ...item, status: 'done', lastEventId: 'e13' }]).action).toBeNull()
 
     const missingId = 'deleted-chat'
-    const gone = [{ ...item, chat: { ...owner, id: missingId, gone: true }, lastEventId: 'e13' }]
+    const gone = [{ ...item, chat: { ...owner, id: missingId, gone: true }, lastEventId: 'e14' }]
     unavailable.add(missingId)
     expect(say(bot.chatSessionId, gone).action).toBeNull()
     unavailable.delete(missingId)
@@ -133,9 +140,9 @@ describe('an In progress item nothing runs for', () => {
       })
     )
     retired.add(next)
-    expect(say(bot.chatSessionId, [{ ...item, lastEventId: 'e14' }]).action).toBeNull()
-    records.delete(next)
     expect(say(bot.chatSessionId, [{ ...item, lastEventId: 'e15' }]).action).toBeNull()
+    records.delete(next)
+    expect(say(bot.chatSessionId, [{ ...item, lastEventId: 'e16' }]).action).toBeNull()
   })
 
   it('is said again when the turn that had it never delivered it', () => {
