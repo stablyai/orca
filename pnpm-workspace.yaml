@@ -49,6 +49,7 @@ allowBuilds:
   koffi: false
   msw: false
   node-pty: true
+  protobufjs: false
   ssh2: false
   '@orca/windows-notifications': false
   '@orca/windows-registry': false

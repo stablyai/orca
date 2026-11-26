@@ -2,8 +2,9 @@ import type { ConnectorReplyJournal } from '../connector-cloud/connector-reply-o
 import { outcomeSentence } from '../connector-cloud/connector-reply-outcome-sentence'
 import type { JournalConnectorReplyRow } from '../../shared/agent-session/journal/journal-connector-reply'
 import { dmKey, type Binding } from './feishu-binding'
-import { FeishuReplyTargetGone } from './feishu-cli'
-import { replyFeishu, finalFeishuMessage, uploadFeishuFile } from './feishu-replies'
+import type { FeishuTransport } from './feishu-transport'
+import { FeishuReplyTargetGone, FeishuUploadPermissionError } from './feishu-transport'
+import { replyFeishu, finalFeishuMessage } from './feishu-replies'
 import type { FeishuStore } from './feishu-store-ops'
 
 class PostWindowClosed extends Error {}
@@ -12,12 +13,12 @@ type Reply = NonNullable<JournalConnectorReplyRow['fill']>
 
 /** Only the delivery named by the native turn's stamps owns the answer. */
 export async function drainFeishuOutbox(
+  api: Pick<FeishuTransport, 'reply' | 'upload'>,
   journal: Pick<ConnectorReplyJournal, 'readOwed' | 'sent'>,
   inbox: FeishuStore,
   b: Binding,
   signal: AbortSignal,
   active: () => boolean,
-  checkProfile: () => Promise<void>,
   changed: () => void
 ): Promise<void> {
   const chat = b.chat
@@ -45,7 +46,7 @@ export async function drainFeishuOutbox(
         }
       }
       requireSendWindow()
-      await replyFeishu(b.app, b.account, mid, chat, message, part, signal)
+      await replyFeishu(api, b.account, mid, chat, message, part)
     }
     const artifact =
       fill.outcome === 'answered' || fill.outcome === 'no_answer'
@@ -55,13 +56,15 @@ export async function drainFeishuOutbox(
       return
     }
     requireSendWindow()
-    await checkProfile()
     if (artifact) {
       if (!artifact.posted) {
         let key = artifact.key
         if (!key) {
           requireSendWindow()
-          key = await uploadFeishuFile(b.app, artifact.name, artifact.bytes, signal)
+          if (!artifact.bytes) {
+            throw new Error('File content is unavailable')
+          }
+          key = await api.upload(artifact.name, artifact.bytes)
           await inbox.uploaded(b.account, mid, key)
         }
         await reply({ type: 'file', content: { file_key: key } }, 'file')
@@ -98,6 +101,7 @@ export async function drainFeishuOutbox(
   }
   let after: string | null = null
   let retry = false
+  let uploadDenied = false
   do {
     const rows = await journal.readOwed(b.account, after, 32)
     for (const row of rows) {
@@ -119,6 +123,7 @@ export async function drainFeishuOutbox(
         if (error instanceof DeliveryPaused || !active()) {
           return
         }
+        uploadDenied ||= error instanceof FeishuUploadPermissionError
         retry = true
       }
     }
@@ -126,6 +131,9 @@ export async function drainFeishuOutbox(
       break
     }
   } while (!signal.aborted)
+  if (uploadDenied) {
+    throw new FeishuUploadPermissionError()
+  }
   if (retry) {
     throw new Error('Some Feishu replies need another attempt')
   }

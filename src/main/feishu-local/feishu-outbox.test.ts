@@ -4,25 +4,20 @@ import { BotsDbWorkerClient } from '../bots/db-worker/bots-db-worker-client'
 import { closeBotsDbStores, handleBotsDbRequest } from '../bots/db-worker/bots-db-worker-entry'
 import { inProcessWorker } from '../worker-threads/in-process-worker.test-fixture'
 import { dmKey, type Binding } from './feishu-binding'
-import * as cli from './feishu-cli'
+import type { FeishuTransport } from './feishu-transport'
+import { FeishuReplyTargetGone, FeishuUploadPermissionError } from './feishu-transport'
 import { drainFeishuOutbox } from './feishu-outbox'
 import { feishuStore, type FeishuStore } from './feishu-store-ops'
 
 let client: BotsDbWorkerClient, inbox: FeishuStore, binding: Binding
 let owed: JournalConnectorReplyRow[]
 const changed = vi.fn()
-const receipt = {
-  ok: true,
-  identity: 'bot',
-  data: { chat_id: 'oc_private', message_id: 'om_reply' }
-}
-const upload = { ok: true, identity: 'bot', data: { file_key: 'file_fixture' } }
+const api = { reply: vi.fn<FeishuTransport['reply']>(), upload: vi.fn<FeishuTransport['upload']>() }
 beforeEach(async () => {
   client = new BotsDbWorkerClient(inProcessWorker(handleBotsDbRequest).factory)
   inbox = feishuStore(client, ':memory:')
-  const b = await inbox.add('scope', 'bot', { name: 'fixture', appId: 'cli_demo', brand: 'feishu' })
+  const b = await inbox.add('scope', 'bot', { appId: 'cli_demo', sealedSecret: 'sealed' })
   await inbox.pair('scope', b, {
-    type: 'im.message.receive_v1',
     chat_type: 'p2p',
     message_type: 'text',
     sender_id: 'ou_owner',
@@ -33,6 +28,8 @@ beforeEach(async () => {
     content: 'pair'
   })
   ;[binding] = await inbox.bindings('scope')
+  api.reply.mockReset().mockResolvedValue(undefined)
+  api.upload.mockReset().mockResolvedValue('file_fixture')
   owed = []
   changed.mockClear()
 })
@@ -43,7 +40,6 @@ afterEach(() => {
 })
 async function admit(mid: string, outcome: 'answered' | 'no_answer' | 'failed' = 'answered') {
   await inbox.accept(binding, {
-    type: 'im.message.receive_v1',
     chat_type: 'p2p',
     message_type: 'text',
     sender_id: 'ou_owner',
@@ -64,11 +60,9 @@ async function admit(mid: string, outcome: 'answered' | 'no_answer' | 'failed' =
     fill: { outcome, answerDeliveryId: mid, filledAt: 1 }
   })
 }
-const drain = (
-  checkProfile: () => Promise<void> = async () => {},
-  beforeSettle: (mid: string) => void = () => {}
-) =>
+const drain = (beforeSettle: (mid: string) => void = () => {}) =>
   drainFeishuOutbox(
+    api,
     {
       readOwed: async (_, after, limit) =>
         owed.filter((r) => after === null || r.deliveryId > after).slice(0, limit),
@@ -83,7 +77,6 @@ const drain = (
     binding,
     new AbortController().signal,
     () => true,
-    checkProfile,
     changed
   )
 
@@ -96,14 +89,17 @@ it.each(['upload', 'file reply'])(
     vi.spyOn(Date, 'now').mockImplementation(() => time)
     await inbox.postWindowStart(binding.account, 'om_target', time)
     const calls: string[] = []
-    vi.spyOn(cli, 'feishuCommand').mockImplementation(async (args) => {
-      const part = args.includes('/open-apis/im/v1/files') ? 'upload' : 'file reply'
+    const record = (part: string) => {
       calls.push(part)
       if (part === phase) {
         time += 55 * 60_000
       }
-      return part === 'upload' ? upload : receipt
+    }
+    api.upload.mockImplementation(async () => {
+      record('upload')
+      return 'file_fixture'
     })
+    api.reply.mockImplementation(async () => record('file reply'))
     await drain()
     await drain()
     expect(calls).toEqual(phase === 'upload' ? ['upload'] : ['upload', 'file reply'])
@@ -119,15 +115,15 @@ it.each(['upload', 'file reply'])(
 it('delivers a file-only success once and settles the original without a no-answer fallback', async () => {
   await admit('om_target', 'no_answer')
   await inbox.stageFile(binding.account, 'om_target', 'receipt.txt', Buffer.from('one'))
-  const sent = vi
-    .spyOn(cli, 'feishuCommand')
-    .mockResolvedValueOnce(upload)
-    .mockResolvedValueOnce(receipt)
   await drain()
   await drain()
-  expect(sent).toHaveBeenCalledTimes(2)
-  expect(sent.mock.calls[1][0]).toContain('/open-apis/im/v1/messages/om_target/reply')
-  expect(sent.mock.calls[1][2]).toContain('"msg_type":"file"')
+  expect(api.upload).toHaveBeenCalledOnce()
+  expect(api.reply).toHaveBeenCalledOnce()
+  expect(api.reply.mock.calls[0][0]).toBe('om_target')
+  expect(api.reply.mock.calls[0][2]).toEqual({
+    type: 'file',
+    content: { file_key: 'file_fixture' }
+  })
   expect(owed).toEqual([])
   expect(changed).not.toHaveBeenCalled()
 })
@@ -135,47 +131,32 @@ it('retires a recalled original and retries only the transient failure after del
   for (const mid of ['om_a', 'om_b', 'om_c']) {
     await admit(mid)
   }
-  const sent = vi
-    .spyOn(cli, 'feishuCommand')
-    .mockRejectedValueOnce(new cli.FeishuReplyTargetGone())
+  const sent = api.reply
+    .mockRejectedValueOnce(new FeishuReplyTargetGone())
     .mockRejectedValueOnce(new Error('Temporary error'))
-    .mockResolvedValue(receipt)
+    .mockResolvedValue(undefined)
   await expect(drain()).rejects.toThrow('another attempt')
   expect(owed.map((r) => r.deliveryId)).toEqual(['om_b'])
   await drain()
   expect(owed).toEqual([])
-  expect(
-    sent.mock.calls.map((c) =>
-      c[0]
-        .find((s) => s.endsWith('/reply'))
-        ?.split('/')
-        .at(-2)
-    )
-  ).toEqual(['om_a', 'om_b', 'om_c', 'om_b'])
+  expect(sent.mock.calls.map(([mid]) => mid)).toEqual(['om_a', 'om_b', 'om_c', 'om_b'])
+  expect(sent.mock.calls[1][3]).toBe(sent.mock.calls[3][3])
   expect(changed).toHaveBeenCalledTimes(1)
 })
 
-it('opens the first POST window only after a profile outage and upload complete', async () => {
+it('opens the first POST window only after the upload succeeds', async () => {
   await admit('om_a', 'no_answer')
   await inbox.stageFile(binding.account, 'om_a', 'demo.txt', Buffer.from('one'))
   let time = 1000
   vi.spyOn(Date, 'now').mockImplementation(() => time)
-  await expect(
-    drain(async () => {
-      throw new Error('offline')
-    })
-  ).rejects.toThrow('another attempt')
+  api.upload.mockRejectedValueOnce(new Error('offline')).mockImplementationOnce(async () => {
+    time += 60 * 60_000
+    return 'file_fixture'
+  })
+  await expect(drain()).rejects.toThrow('another attempt')
   expect((await inbox.replyState(binding.account, 'om_a'))?.firstPost).toBeNull()
-  time += 60 * 60_000
-  const send = vi
-    .spyOn(cli, 'feishuCommand')
-    .mockImplementationOnce(async () => {
-      time += 60 * 60_000
-      return upload
-    })
-    .mockResolvedValue(receipt)
   await drain()
-  expect(send).toHaveBeenCalledTimes(2)
+  expect(api.reply).toHaveBeenCalledOnce()
   expect(await inbox.replyState(binding.account, 'om_a')).toMatchObject({
     firstPost: time,
     done: true,
@@ -188,7 +169,7 @@ it('settles an already-confirmed file-only reply after restart even if its windo
   await inbox.uploaded(binding.account, 'om_a', 'file_one')
   await inbox.postWindowStart(binding.account, 'om_a', 1)
   await inbox.filePosted(binding.account, 'om_a')
-  const send = vi.spyOn(cli, 'feishuCommand')
+  const send = api.reply
   await drain()
   expect(send).not.toHaveBeenCalled()
   expect(owed).toEqual([])
@@ -197,10 +178,9 @@ it('settles an already-confirmed file-only reply after restart even if its windo
 it('retains a failed turn’s file across a transient reply error and clears the bytes on settlement', async () => {
   await admit('om_a', 'failed')
   await inbox.stageFile(binding.account, 'om_a', 'one.txt', Buffer.from('a'))
-  const send = vi
-    .spyOn(cli, 'feishuCommand')
+  const send = api.reply
     .mockRejectedValueOnce(new Error('offline'))
-    .mockResolvedValueOnce(receipt)
+    .mockResolvedValueOnce(undefined)
   await expect(drain()).rejects.toThrow('another attempt')
   expect((await inbox.artifact(binding.account, 'om_a'))?.bytes).toBeInstanceOf(Uint8Array)
   await drain()
@@ -215,13 +195,12 @@ it('keeps a failed checkpoint owed without blocking other rows or resending a se
   for (const mid of ['om_a', 'om_b', 'om_c']) {
     await admit(mid)
   }
-  const send = vi
-    .spyOn(cli, 'feishuCommand')
-    .mockRejectedValueOnce(new cli.FeishuReplyTargetGone())
-    .mockResolvedValue(receipt)
+  const send = api.reply
+    .mockRejectedValueOnce(new FeishuReplyTargetGone())
+    .mockResolvedValue(undefined)
   vi.spyOn(inbox, 'finishReply').mockRejectedValueOnce(new Error('review checkpoint unavailable'))
   await expect(
-    drain(undefined, (mid) => {
+    drain((mid) => {
       if (mid === 'om_b') {
         throw new Error('journal unavailable')
       }
@@ -229,16 +208,21 @@ it('keeps a failed checkpoint owed without blocking other rows or resending a se
   ).rejects.toThrow('another attempt')
   expect(owed.map((r) => r.deliveryId)).toEqual(['om_a', 'om_b'])
   expect((await inbox.replyState(binding.account, 'om_b'))?.done).toBe(true)
-  send.mockRejectedValueOnce(new cli.FeishuReplyTargetGone())
+  send.mockRejectedValueOnce(new FeishuReplyTargetGone())
   await drain()
   expect(owed).toEqual([])
-  expect(
-    send.mock.calls.map((c) =>
-      c[0]
-        .find((s) => s.endsWith('/reply'))
-        ?.split('/')
-        .at(-2)
-    )
-  ).toEqual(['om_a', 'om_b', 'om_c', 'om_a'])
+  expect(send.mock.calls.map(([mid]) => mid)).toEqual(['om_a', 'om_b', 'om_c', 'om_a'])
   expect(changed).toHaveBeenCalledTimes(1)
+})
+
+it('keeps a denied tenant upload owed until the app permission is published', async () => {
+  await admit('om_upload')
+  await inbox.stageFile(binding.account, 'om_upload', 'receipt.txt', Buffer.from('synthetic'))
+  api.upload.mockRejectedValueOnce(new FeishuUploadPermissionError())
+  await expect(drain()).rejects.toBeInstanceOf(FeishuUploadPermissionError)
+  expect(owed).toHaveLength(1)
+  expect(api.reply).not.toHaveBeenCalled()
+  await drain()
+  expect(owed).toHaveLength(0)
+  expect(api.reply.mock.calls[0][0]).toBe('om_upload')
 })

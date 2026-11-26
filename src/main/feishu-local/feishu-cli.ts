@@ -3,6 +3,7 @@ import { signalProcessTree } from '@orca/process-host/process-tree-termination'
 import type { Readable } from 'node:stream'
 import { z } from 'zod'
 
+import { FeishuReplyTargetGone, FeishuPermissionError } from './feishu-transport'
 import { feishuDiagnostic, feishuProblem, FeishuHostError } from './feishu-cli-status'
 
 const EVENT = 'im.message.receive_v1'
@@ -36,9 +37,6 @@ export function readFeishuMessage(line: string): FeishuMessage | null {
   }
 }
 
-/** A recalled original or a missing topic cannot accept another reply. */
-export class FeishuReplyTargetGone extends Error {}
-
 export async function feishuCommand(
   args: string[],
   signal?: AbortSignal,
@@ -64,6 +62,9 @@ export async function feishuCommand(
       const code = z
         .object({ ok: z.literal(false), error: z.object({ code: z.number() }) })
         .safeParse(diagnostic).data?.error.code
+      if (code === 99991672) {
+        throw new FeishuPermissionError()
+      }
       if (code === 230011 || code === 230019 || code === 230110) {
         throw new FeishuReplyTargetGone('The Feishu reply target is unavailable')
       }
@@ -200,52 +201,4 @@ export async function consumeFeishu(
     clearTimeout(kill)
     clearTimeout(force)
   }
-}
-
-/** Confirm a pairing DM came from a human. The flattened event omits sender_type. */
-export async function humanSentPairing(
-  app: string,
-  m: FeishuMessage,
-  signal: AbortSignal
-): Promise<boolean> {
-  const response = await feishuCommand(
-    [
-      '--profile',
-      app,
-      'api',
-      'GET',
-      `/open-apis/im/v1/messages/${m.message_id}`,
-      '--as',
-      'bot',
-      '--params',
-      '{"user_id_type":"open_id"}'
-    ],
-    signal
-  )
-  const item = z.object({
-    message_id: z.literal(m.message_id),
-    chat_id: z.literal(m.chat_id),
-    msg_type: z.literal('text'),
-    body: z.object({
-      content: z.string().refine((raw) => {
-        try {
-          return JSON.parse(raw)?.text === m.content
-        } catch {
-          return false
-        }
-      })
-    }),
-    sender: z.object({
-      sender_type: z.literal('user'),
-      id: z.literal(m.sender_id),
-      id_type: z.literal('open_id')
-    })
-  })
-  return z
-    .object({
-      ok: z.literal(true),
-      identity: z.literal('bot'),
-      data: z.object({ items: z.tuple([item]) })
-    })
-    .safeParse(response).success
 }

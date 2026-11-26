@@ -8,6 +8,12 @@ import {
 } from '../../../../shared/rpc-contract/bots-feishu-local-params'
 import { defineMethod, type RpcContext } from '../core'
 
+import { ownerOnly } from './bots-caller-gates'
+
+function ownerHost(context: RpcContext) {
+  ownerOnly(context, 'Only the owner can set up a Feishu connection')
+  return host(context)
+}
 function host(context: RpcContext) {
   const host = context.runtime.feishuLocal
   if (!host) {
@@ -24,7 +30,7 @@ export const BOT_FEISHU_LOCAL_METHODS = [
       const caller = sessionCallerOf(context.orchestrationCaller)?.sessionId
       if (
         caller !== sessionId ||
-        (await botTurnFor(context.runtime, sessionId, caller)) !== 'owner'
+        (await botTurnFor(context.runtime, sessionId, { verifiedSessionId: caller })) !== 'owner'
       ) {
         throw new Error('Only the owner’s active Feishu DM turn can stage a file')
       }
@@ -54,20 +60,20 @@ export const BOT_FEISHU_LOCAL_METHODS = [
     name: 'bots.feishuLocal.state',
     permission: 'accounts-admin',
     params: FeishuLocalBot,
-    handler: ({ botId }, context) => host(context).state(botId)
+    handler: ({ botId }, context) => ownerHost(context).state(botId)
   }),
   defineMethod({
     name: 'bots.feishuLocal.profiles',
     permission: 'accounts-admin',
     params: null,
-    handler: (_, context) => host(context).profiles()
+    handler: (_, context) => ownerHost(context).profiles()
   }),
   defineMethod({
     name: 'bots.feishuLocal.connect',
     permission: 'accounts-admin',
     params: FeishuLocalConnect,
-    handler: async ({ botId, profile }, context) => {
-      await host(context).connect(botId, profile)
+    handler: async ({ botId, ...setup }, context) => {
+      await ownerHost(context).connect(botId, setup)
       return host(context).state(botId)
     }
   }),
@@ -76,7 +82,7 @@ export const BOT_FEISHU_LOCAL_METHODS = [
     permission: 'accounts-admin',
     params: FeishuLocalBot,
     handler: async ({ botId }, context) => {
-      await host(context).remove(botId)
+      await ownerHost(context).remove(botId)
       return host(context).state(botId)
     }
   })

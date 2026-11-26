@@ -1,11 +1,12 @@
 import { access, open } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import type { FeishuLocalState } from '../../shared/bots/feishu-local'
+import type { FeishuLocalState, FeishuSetup } from '../../shared/bots/feishu-local'
 import { dmKey, type Binding } from './feishu-binding'
 import { feishuStore, type FeishuStore } from './feishu-store-ops'
 import { errnoCodeOrUnknown } from '../../shared/errors/errno-code'
 import { listProfiles } from './feishu-cli'
+import { getSecretStore } from '../../shared/secure-storage/secret-store'
 import { FeishuConnection } from './feishu-connection'
 
 export class FeishuLocalHost {
@@ -58,16 +59,29 @@ export class FeishuLocalHost {
         return
       }
       if (this.runtime.bots.list().some((bot) => bot.id === b.bot)) {
-        this.launch(b, false)
+        let secret: string | null = null
+        if (b.profile === null) {
+          const sealed = await this.inbox.credential(b.account)
+          try {
+            if (sealed) {
+              secret = getSecretStore().decryptString(Buffer.from(sealed, 'base64'))
+            }
+          } catch {
+            /* Leave an unreadable credential disconnected. */
+          }
+        }
+        if (!this.stopping) {
+          this.launch(b, secret, false)
+        }
       } else {
         await this.inbox.remove(this.scope, b.bot, b.account)
       }
     }
   }
-  private launch(b: Binding, pair: boolean): void {
+  private launch(b: Binding, secret: string | null, pair: boolean): void {
     const c = new FeishuConnection(this.runtime, this.inbox, this.scope, b)
     this.active.set(b.bot, c)
-    c.start(pair)
+    c.start(secret, pair)
   }
   async state(bot: string): Promise<FeishuLocalState> {
     await this.opening
@@ -79,31 +93,47 @@ export class FeishuLocalHost {
   async profiles(): Promise<string[]> {
     return (await listProfiles()).map((p) => p.name)
   }
-  async connect(bot: string, profile: string): Promise<void> {
+  async connect(bot: string, setup: FeishuSetup): Promise<void> {
     await this.opening
-    const p = (await listProfiles()).find((entry) => entry.name === profile)
     if (
-      !p ||
       this.restoreFailed ||
       this.stopping ||
+      this.retiring.has(bot) ||
+      this.active.has(bot) ||
       !this.runtime.bots.enabled() ||
       !this.runtime.bots.list().some((b) => b.id === bot && !b.paused)
     ) {
-      throw new Error('The bot or Feishu profile is unavailable')
+      throw new Error('The bot is unavailable or already connected')
     }
-    let b: Binding
+    let reservation: Parameters<FeishuStore['add']>[2]
+    if ('profile' in setup) {
+      const profile = (await listProfiles()).find((p) => p.name === setup.profile)
+      if (!profile) {
+        throw new Error('The Feishu profile is unavailable')
+      }
+      reservation = profile
+    } else {
+      const store = getSecretStore()
+      const sealing = store.describeSealing?.()
+      if (!sealing || sealing.kind === 'none' || !store.isEncryptionAvailable()) {
+        throw new Error('Protected credential storage is unavailable on this host')
+      }
+      const encrypted = await (store.encryptStringAsync?.(setup.appSecret) ??
+        store.encryptString(setup.appSecret))
+      reservation = { appId: setup.appId, sealedSecret: encrypted.toString('base64') }
+    }
+    let binding: Binding
     try {
-      // Protect the inbox before SQLite opens it or creates its journal.
       await (await open(this.file, 'a', 0o600)).close()
-      b = await this.inbox.add(this.scope, bot, p)
+      binding = await this.inbox.add(this.scope, bot, reservation)
     } catch {
       throw new Error('Could not reserve this Feishu app for this bot')
     }
-    if (this.stopping || !this.runtime.bots.list().some((entry) => entry.id === bot)) {
-      await this.inbox.remove(this.scope, bot, b.account)
+    if (this.stopping || !this.runtime.bots.list().some((b) => b.id === bot && !b.paused)) {
+      await this.inbox.remove(this.scope, bot, binding.account)
       throw new Error('The bot is unavailable')
     }
-    this.launch(b, true)
+    this.launch(binding, 'appSecret' in setup ? setup.appSecret : null, true)
     this.runtime.notifyBotsChanged({ botIds: [bot], kinds: ['settings'] })
   }
   async remove(bot: string): Promise<void> {

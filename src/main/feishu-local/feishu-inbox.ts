@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import Database from '../sqlite/sync-database'
-import type { FeishuMessage, FeishuProfile } from './feishu-cli'
+import type { FeishuProfile } from './feishu-cli'
+import type { FeishuMessage } from './feishu-message'
 import { binding, type Binding } from './feishu-binding'
 /** One database per installation. A CLI app can belong to just one Orca profile and bot. */
 export class FeishuInbox {
@@ -22,6 +23,14 @@ export class FeishuInbox {
     ) {
       this.db.exec('ALTER TABLE reply_files ADD COLUMN sha256 TEXT')
     }
+    if (
+      !this.db
+        .prepare('PRAGMA table_info(bindings)')
+        .all()
+        .some((c) => c.name === 'sealed_secret')
+    ) {
+      this.db.exec('ALTER TABLE bindings ADD COLUMN sealed_secret TEXT')
+    }
     const columns = this.db.prepare('PRAGMA table_info(inbox)').all()
     if (!columns.some((c) => c.name === 'reply_done')) {
       this.db.exec('ALTER TABLE inbox ADD COLUMN reply_done INTEGER NOT NULL DEFAULT 0')
@@ -41,24 +50,42 @@ export class FeishuInbox {
   }
   bindings(scope: string): Binding[] {
     return this.db
-      .prepare('SELECT account,bot,profile,app,owner,chat,pairedAt FROM bindings WHERE scope=?')
+      .prepare(
+        'SELECT account,bot,CASE WHEN sealed_secret IS NULL THEN profile END AS profile,app,owner,chat,pairedAt FROM bindings WHERE scope=?'
+      )
       .all(scope)
       .map((row) => binding.parse(row))
   }
-  add(scope: string, bot: string, p: FeishuProfile): Binding {
+  add(
+    scope: string,
+    bot: string,
+    setup: FeishuProfile | { appId: string; sealedSecret: string }
+  ): Binding {
+    const sealed = 'sealedSecret' in setup ? setup.sealedSecret : null
+    if (sealed === '') {
+      throw new Error('Missing sealed Feishu credential')
+    }
     const b = {
       account: `local-feishu/${randomUUID()}`,
       bot,
-      profile: p.name,
-      app: p.appId,
+      profile: 'name' in setup ? setup.name : null,
+      app: setup.appId,
       owner: null,
       chat: null,
       pairedAt: null
     }
     this.db
-      .prepare('INSERT INTO bindings(account,scope,bot,profile,app) VALUES(?,?,?,?,?)')
-      .run(b.account, scope, bot, p.name, p.appId)
+      .prepare(
+        'INSERT INTO bindings(account,scope,bot,profile,app,sealed_secret) VALUES(?,?,?,?,?,?)'
+      )
+      .run(b.account, scope, bot, b.profile ?? b.app, b.app, sealed)
     return b
+  }
+  credential(account: string): string | null {
+    const value = this.db
+      .prepare('SELECT sealed_secret FROM bindings WHERE account=?')
+      .get(account)?.sealed_secret
+    return typeof value === 'string' ? value : null
   }
   remove(scope: string, bot: string, account: string): void {
     this.db
@@ -110,7 +137,7 @@ export class FeishuInbox {
         .object({
           mid: z.string(),
           body: z.string(),
-          kind: z.enum(['text', 'image', 'file']),
+          kind: z.enum(['text', 'image', 'file', 'post']),
           path: z.string().nullable()
         })
         .parse(row)

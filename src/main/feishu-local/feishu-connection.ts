@@ -1,4 +1,3 @@
-import { feishuProblem, FeishuHostError, type FeishuProblem } from './feishu-cli-status'
 import { acknowledgeFeishuMessage } from './feishu-replies'
 import { randomBytes } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -7,9 +6,14 @@ import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { runtimeConversationHost } from '../external-conversations/external-conversation-runtime-host'
 import { drainFeishuOutbox } from './feishu-outbox'
-import { consumeFeishu, humanSentPairing, listProfiles, type FeishuMessage } from './feishu-cli'
-import { feishuInput } from './feishu-resources'
-import { dmKey, type Binding } from './feishu-binding'
+import { matchesPairingOriginal, type FeishuMessage } from './feishu-message'
+import { feishuCliTransport } from './feishu-cli-transport'
+import { feishuProblem } from './feishu-cli-status'
+import { FeishuUploadPermissionError } from './feishu-transport'
+import { openFeishuSdk } from './feishu-sdk'
+import type { FeishuTransport } from './feishu-transport'
+import { startFeishuDm } from './feishu-dm-delivery'
+import type { Binding } from './feishu-binding'
 import type { FeishuStore } from './feishu-store-ops'
 
 /** One grant lifetime. Replacing or revoking a grant aborts its pending process and admission. */
@@ -20,12 +24,13 @@ export class FeishuConnection {
   private code: string | undefined
   private expires = 0
   private work: Promise<void> | undefined
+  private transport?: Promise<FeishuTransport>
   private consumer: Promise<void> | undefined
   private release?: () => void
   private tick?: NodeJS.Timeout
   private retry?: NodeJS.Timeout
   private again = false
-  private deliveryRetry = false
+  private deliveryRetry: 'retrying' | 'upload-permission' | null = null
   constructor(
     private readonly runtime: OrcaRuntimeService,
     private readonly inbox: FeishuStore,
@@ -42,17 +47,19 @@ export class FeishuConnection {
       this.changed()
     }
   }
-  start(pair: boolean): void {
-    if (pair) {
-      this.code = `Orca ${randomBytes(16).toString('hex')}`
-      this.expires = Date.now() + 5 * 60_000
+  start(secret: string | null, pair: boolean): void {
+    if (this.binding.profile === null && !secret) {
+      this.setPhase('credentials-required')
+      return
     }
-    if (!this.binding.owner && !this.code) {
+    if (!pair && !this.binding.owner) {
       this.setPhase('expired')
       return
     }
-    this.watch()
+
     if (pair) {
+      this.code = `Orca ${randomBytes(16).toString('hex')}`
+      this.expires = Date.now() + 5 * 60_000
       this.tick = setTimeout(() => {
         if (this.code) {
           this.setPhase('expired')
@@ -60,7 +67,12 @@ export class FeishuConnection {
         }
       }, 5 * 60_000).unref()
     }
-    this.consumer = this.listen()
+    this.watch()
+    this.transport =
+      this.binding.profile !== null
+        ? Promise.resolve(feishuCliTransport(this.binding.app, this.binding.profile, this.signal))
+        : openFeishuSdk(this.binding.app, secret!, this.signal)
+    this.consumer = this.listen(this.transport)
     this.wake()
   }
   watch(): void {
@@ -76,16 +88,20 @@ export class FeishuConnection {
     }
   }
   async state(): Promise<FeishuLocalState> {
-    const { account, profile } = this.binding
-    const status = (await this.inbox.needsReview(account))
-      ? 'review'
-      : !this.bot()
-        ? 'paused'
-        : this.deliveryRetry && this.phase === 'listening'
-          ? 'retrying'
-          : this.phase
+    const { account } = this.binding
+    const status =
+      this.phase === 'credentials-required'
+        ? this.phase
+        : (await this.inbox.needsReview(account))
+          ? 'review'
+          : !this.bot()
+            ? 'paused'
+            : this.deliveryRetry && this.phase === 'listening'
+              ? this.deliveryRetry
+              : this.phase
     return {
-      profile,
+      method: this.binding.profile === null ? 'sdk' : 'cli',
+      ...(this.binding.profile === null ? {} : { profile: this.binding.profile }),
       appId: this.binding.app,
       status,
       ...((status === 'pairing' || status === 'verification-failed') && this.code
@@ -107,30 +123,26 @@ export class FeishuConnection {
     clearTimeout(this.retry)
     await Promise.allSettled([this.consumer, this.work])
   }
-  private async checkProfile(): Promise<void> {
-    const profiles = await listProfiles(this.signal)
-    if (!profiles.some((p) => p.appId === this.binding.app && p.name === this.binding.profile)) {
-      throw new FeishuHostError('profile-changed')
-    }
-  }
-  private async listen(): Promise<void> {
+  private async listen(transport: Promise<FeishuTransport>): Promise<void> {
     let backoff = 1000
     while (!this.signal.aborted) {
-      let problem: FeishuProblem = 'retrying'
+      let problem: FeishuLocalState['status'] = 'retrying'
       try {
-        await this.checkProfile()
+        const api = await transport
         this.setPhase('connecting')
-        await consumeFeishu(
-          this.binding.app,
-          this.signal,
+        await api.listen(
           () => {
             this.setPhase(this.binding.owner ? 'listening' : 'pairing')
             backoff = 1000
+            this.wake()
           },
-          (m) => this.receive(m)
+          () => this.setPhase('retrying'),
+          (message) => this.receive(api, message)
         )
       } catch (error) {
-        problem = feishuProblem(error)
+        if (this.binding.profile !== null) {
+          problem = feishuProblem(error)
+        }
       }
       if (this.signal.aborted) {
         break
@@ -140,7 +152,7 @@ export class FeishuConnection {
       backoff = Math.min(backoff * 2, 30_000)
     }
   }
-  private async receive(m: FeishuMessage): Promise<void> {
+  private async receive(api: FeishuTransport, m: FeishuMessage): Promise<void> {
     if (!this.bot()) {
       return
     }
@@ -158,7 +170,7 @@ export class FeishuConnection {
       Date.now() < this.expires
     ) {
       try {
-        await this.confirm(m)
+        await this.confirm(api, m)
       } catch {
         if (!this.signal.aborted) {
           this.setPhase('verification-failed')
@@ -166,9 +178,9 @@ export class FeishuConnection {
       }
     }
   }
-  private async confirm(m: FeishuMessage): Promise<void> {
+  private async confirm(api: FeishuTransport, m: FeishuMessage): Promise<void> {
     if (
-      !(await humanSentPairing(this.binding.app, m, this.signal)) ||
+      !matchesPairingOriginal(await api.original(m.message_id), m) ||
       this.signal.aborted ||
       !this.bot() ||
       Date.now() >= this.expires
@@ -187,23 +199,32 @@ export class FeishuConnection {
     }
   }
   wake(): void {
-    if (this.signal.aborted || !this.binding.owner || !this.bot() || this.retry) {
+    if (
+      this.signal.aborted ||
+      !this.transport ||
+      !this.binding.owner ||
+      !this.bot() ||
+      this.retry
+    ) {
       return
     }
     if (this.work) {
       this.again = true
       return
     }
-    this.work = this.drain()
+    this.work = this.transport
+      .then((api) => this.drain(api))
       .then(() => {
         if (this.deliveryRetry && !this.retry) {
-          this.deliveryRetry = false
+          this.deliveryRetry = null
           this.changed()
         }
       })
-      .catch(() => {
-        if (!this.deliveryRetry) {
-          this.deliveryRetry = true
+      .catch((error: unknown) => {
+        const reason =
+          error instanceof FeishuUploadPermissionError ? 'upload-permission' : 'retrying'
+        if (reason !== this.deliveryRetry) {
+          this.deliveryRetry = reason
           this.changed()
         }
         this.retryWork()
@@ -225,41 +246,25 @@ export class FeishuConnection {
       this.wake()
     }, 15_000).unref()
   }
-  private async drain(): Promise<void> {
+  private async drain(api: FeishuTransport): Promise<void> {
     const b = this.binding
-    const seam = this.runtime.getExternalConversationSeam()
-    if (!b.owner || !b.chat || !seam || !this.bot()) {
-      return
-    }
-    const host = runtimeConversationHost(this.runtime)
-    const key = dmKey(b)
     let row = await this.inbox.next(b.account)
     while (row && !this.signal.aborted) {
-      if (row.kind !== 'text') {
-        await this.checkProfile()
-      }
       const bot = this.bot()
       if (!bot) {
         return
       }
-      const { prompt, storedImages } = await feishuInput(this.inbox, b, row, bot.agent, this.signal)
-      const { initial } = await seam.start(host, key, row.mid, {
-        agent: bot.agent,
-        transportSignal: this.signal,
-        target: { kind: 'bot', botId: bot.id },
-        prompt,
-        note: 'If the owner asks you to create a small file, pipe its generated bytes into `orca bot reply --file-stdin <filename>` in this turn. The host attaches it to this DM. Never send an unrelated local file.',
-        storedImages,
-        asker: {
-          userId: b.owner,
-          role: 'owner',
-          place: { kind: 'direct_message', id: b.chat },
-          text: prompt,
-          context: []
-        },
-        reply: { account: b.account }
-      })
-      if (this.signal.aborted) {
+      const initial = await startFeishuDm(
+        this.runtime,
+        api,
+        this.inbox,
+        b,
+        row,
+        bot.agent,
+        this.signal,
+        () => Boolean(this.bot())
+      )
+      if (!initial || this.signal.aborted) {
         return
       }
       if (initial.outcome === 'refused' && initial.reason === 'delivery_backlog_full') {
@@ -267,7 +272,7 @@ export class FeishuConnection {
         break
       }
       if (initial.outcome === 'accepted') {
-        await acknowledgeFeishuMessage(this.inbox, b, row.mid, this.signal, () =>
+        await acknowledgeFeishuMessage(api, this.inbox, b, row.mid, this.signal, () =>
           Boolean(this.bot())
         )
       } else {
@@ -277,13 +282,6 @@ export class FeishuConnection {
       await this.inbox.admitted(b.account, row.mid)
       row = await this.inbox.next(b.account)
     }
-    await this.sendOwed()
-  }
-  private async sendOwed(): Promise<void> {
-    const b = this.binding
-    if (!b.chat) {
-      return
-    }
     const journal = getStructuredAgentSessionHost()?.deps.store.connectorReplies()
     if (!journal) {
       await this.runtime.ensureStructuredAgentSessionHost()
@@ -291,12 +289,12 @@ export class FeishuConnection {
       return
     }
     await drainFeishuOutbox(
+      api,
       journal,
       this.inbox,
-      b,
+      this.binding,
       this.signal,
       () => !this.signal.aborted && Boolean(this.bot()),
-      () => this.checkProfile(),
       () => this.changed()
     )
   }

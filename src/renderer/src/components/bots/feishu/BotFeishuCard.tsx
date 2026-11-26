@@ -21,10 +21,12 @@ export function BotFeishuCard({
       icon={<FeishuIcon className="size-4" />}
       logo={<BotAppBrandLogo app={{ id: 'feishu-local' }} />}
       name={t('bots.feishu.name', 'Feishu')}
-      description={t('bots.feishu.line', 'Private messages through Feishu CLI on this host')}
+      description={t('bots.feishu.line', 'Private messages with your Feishu bot')}
       status={null}
     >
-      <p className="text-xs text-muted-foreground">{state.profile}</p>
+      <p className="text-xs text-muted-foreground">
+        {state.method === 'sdk' ? t('bots.feishu.credentials', 'App credentials') : state.profile}
+      </p>
       <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
         {t('bots.feishu.settings', 'Connection settings')}
       </Button>
