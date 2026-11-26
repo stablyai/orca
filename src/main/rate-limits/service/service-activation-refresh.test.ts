@@ -67,6 +67,10 @@ class TestRateLimitService extends RateLimitService {
     await this.fetchAll()
     return this.getState()
   }
+
+  publishClaude(limits: ProviderRateLimits): void {
+    this.updateState({ ...this.state, claude: limits })
+  }
 }
 
 beforeEach(() => {
@@ -188,6 +192,102 @@ it('waits out Kimchi Retry-After in automatic full cycles but allows manual refr
 
     await service.refresh()
     expect(vi.mocked(fetchKimchiRateLimits)).toHaveBeenCalledTimes(2)
+  } finally {
+    service.stop()
+  }
+})
+
+it('preserves sibling usage published during a Kimchi retry credential check', async () => {
+  vi.useFakeTimers()
+  const now = Date.parse('2026-11-26T12:00:00Z')
+  vi.setSystemTime(now)
+  vi.mocked(fetchKimiRateLimits).mockImplementation(unavailable('kimi'))
+  const limited: ProviderRateLimits = {
+    provider: 'kimchi',
+    session: null,
+    weekly: null,
+    monthly: null,
+    updatedAt: now,
+    error: 'Limited',
+    status: 'error',
+    usageMetadata: {
+      source: 'cli',
+      authProvenance: 'current-account',
+      failureKind: 'rate-limited',
+      retryAtMs: now + 600_000
+    }
+  }
+  vi.mocked(fetchKimchiRateLimits).mockResolvedValue(limited)
+  vi.mocked(readKimchiUsageAuth).mockResolvedValue({
+    status: 'ok',
+    auth: {
+      apiKey: 'current-key',
+      apiBaseUrl: 'https://api.cast.ai',
+      credentialSource: 'config',
+      authProvenance: 'current-account'
+    }
+  })
+  const service = new TestRateLimitService()
+
+  try {
+    expect((await service.refresh()).kimchi).toEqual(limited)
+
+    let resolveAuth: ((value: Awaited<ReturnType<typeof readKimchiUsageAuth>>) => void) | undefined
+    vi.mocked(readKimchiUsageAuth).mockClear()
+    vi.mocked(readKimchiUsageAuth).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveAuth = resolve
+        })
+    )
+    vi.mocked(readKimchiUsageAuth).mockResolvedValue({
+      status: 'ok',
+      auth: {
+        apiKey: 'current-key',
+        apiBaseUrl: 'https://api.cast.ai',
+        credentialSource: 'config',
+        authProvenance: 'current-account'
+      }
+    })
+    let resolveKimi: ((value: ProviderRateLimits) => void) | undefined
+    vi.mocked(fetchKimiRateLimits).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveKimi = resolve
+        })
+    )
+
+    const refreshing = service.refreshAutomatically()
+    await vi.waitFor(() => expect(readKimchiUsageAuth).toHaveBeenCalledTimes(1))
+    service.publishClaude({
+      provider: 'claude',
+      session: {
+        usedPercent: 72,
+        windowMinutes: 300,
+        resetsAt: null,
+        resetDescription: null
+      },
+      weekly: null,
+      updatedAt: now + 1,
+      error: null,
+      status: 'ok',
+      usageMetadata: { source: 'live-session', authProvenance: 'current-claude-account' }
+    })
+    resolveAuth?.({
+      status: 'ok',
+      auth: {
+        apiKey: 'current-key',
+        apiBaseUrl: 'https://api.cast.ai',
+        credentialSource: 'config',
+        authProvenance: 'current-account'
+      }
+    })
+
+    await vi.waitFor(async () =>
+      expect((await service.getState()).claude?.session?.usedPercent).toBe(72)
+    )
+    resolveKimi?.(await unavailable('kimi')())
+    await refreshing
   } finally {
     service.stop()
   }

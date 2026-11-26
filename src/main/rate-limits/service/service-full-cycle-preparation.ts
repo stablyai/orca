@@ -91,10 +91,6 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       this.fullFetchQueued ??= { force: options?.force ?? false }
       return null
     }
-    // Preserve live usage received while credentials were loading.
-    const previousState = this.state
-    const codexStateBeforeFetch =
-      previousState.codex?.status === 'fetching' ? null : previousState.codex
     // Probe auth during fetch, not hot renderer/mobile getState calls.
     const grokAuthReadResult = readGrokAuthSession()
     this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
@@ -133,10 +129,16 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
           baseUrl: ZCODE_PLAN_SITE_BASE_URLS[zcodePlanConfigResult.config.site]
         }
       : null
+    const kimchiRetryState = this.state.kimchi
     const kimchiFetchGated =
       !options?.force &&
-      this.isRetryAfterActive(previousState.kimchi) &&
-      (await isKimchiUsageCredentialCurrent(previousState.kimchi))
+      this.isRetryAfterActive(kimchiRetryState) &&
+      (await isKimchiUsageCredentialCurrent(kimchiRetryState)) &&
+      this.state.kimchi === kimchiRetryState
+    // Preserve live usage received while credentials were loading.
+    const previousState = this.state
+    const codexStateBeforeFetch =
+      previousState.codex?.status === 'fetching' ? null : previousState.codex
     this.updateState({
       ...previousState,
       claude: this.claudeStateAtCycleStart(previousState.claude),
