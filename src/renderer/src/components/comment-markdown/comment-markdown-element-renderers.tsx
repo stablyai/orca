@@ -1,11 +1,9 @@
 import { GitHubBodyImageUrlsContext } from './comment-markdown-github-image-urls'
 import React from 'react'
-import { cn } from '@/lib/class-names'
 import { isTrustedCompactImageSrc } from './comment-markdown-sanitize'
 import type { Components } from 'react-markdown'
 import { NATIVE_CHAT_FILE_HREF_PREFIX } from '../../../../shared/native-chat/file-access/native-chat-href-routing'
 import {
-  CommentMarkdownCodeBlock,
   CommentMarkdownDocumentCode,
   CommentMarkdownDocumentPre
 } from './comment-markdown-code-renderers'
@@ -73,8 +71,7 @@ function handleMarkdownImageClick(
 
 export function createCompactCommentMarkdownComponents(
   onLinkClick?: CommentMarkdownLinkClickHandler,
-  expandImages = false,
-  renderCodeBlock?: DocumentCodeBlockRenderer
+  expandImages = false
 ): Components {
   return {
     // Avoid paragraph margins in dense cards.
@@ -94,30 +91,15 @@ export function createCompactCommentMarkdownComponents(
     // Bare fences have no language class; style all code inline, then use higher-specificity pre/code overrides for blocks.
     // Keep compact diagrams as bounded source so async SVG cannot reshape sidebar lists.
     code: ({ children }) => (
-      <code
-        className={cn(
-          'rounded bg-accent px-1 py-px text-[10px] font-mono [overflow-wrap:anywhere]',
-          // A caller's code block draws bare fences; the inline chip would sit inside it.
-          renderCodeBlock &&
-            '[pre_&]:rounded-none [pre_&]:bg-transparent [pre_&]:p-0 [pre_&]:text-[length:inherit] [pre_&]:[overflow-wrap:normal]'
-        )}
-      >
+      <code className="rounded bg-accent px-1 py-px text-[10px] font-mono [overflow-wrap:anywhere]">
         {children}
       </code>
     ),
-    pre: ({ node, children }) =>
-      renderCodeBlock ? (
-        <CommentMarkdownCodeBlock
-          renderCodeBlock={renderCodeBlock}
-          blockLine={node?.position?.start.line}
-        >
-          {children}
-        </CommentMarkdownCodeBlock>
-      ) : (
-        <pre className="my-1 max-h-32 max-w-full overflow-x-auto rounded bg-accent p-1.5 text-[10px] font-mono">
-          {children}
-        </pre>
-      ),
+    pre: ({ children }) => (
+      <pre className="my-1 max-h-32 max-w-full overflow-x-auto rounded bg-accent p-1.5 text-[10px] font-mono">
+        {children}
+      </pre>
+    ),
     ul: ({ children }) => <ul className="my-0.5 ml-3 list-disc space-y-0">{children}</ul>,
     ol: ({ children, start }) => (
       <ol start={start} className="my-0.5 ml-3 list-decimal space-y-0">
@@ -383,7 +365,7 @@ export function selectCommentMarkdownComponents({
       ? createDocumentCommentMarkdownComponents(onLinkClick, renderCodeBlock)
       : documentCommentMarkdownComponents
   }
-  return onLinkClick || expandImages || renderCodeBlock
-    ? createCompactCommentMarkdownComponents(onLinkClick, expandImages, renderCodeBlock)
+  return onLinkClick || expandImages
+    ? createCompactCommentMarkdownComponents(onLinkClick, expandImages)
     : compactCommentMarkdownComponents
 }
