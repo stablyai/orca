@@ -1,0 +1,24 @@
+// What a workspace teammate (a share caller on the workspace tier) may call: every RPC method, named
+// once in teammate-method-classes.json under one class. A method the table leaves out is refused, and
+// a test fails until it is classified, so a new method can't reach a teammate without a decision.
+import classes from './teammate-method-classes.json'
+
+/** `scoped`: acts only on what its params name; a workspace, chat, terminal or party it names must
+ *  be one of the agent's (`teammate-call-admission.ts`). A method that names none touches no workspace.
+ *  `filtered`: a list or stream kept to the agent's workspaces (`teammate-workspace-lists.ts`, or its
+ *  handler through `teammate-workspace-view.ts`).
+ *  `own`: bound to the caller's own connection, uploads, subscriptions or device.
+ *  `refused`: the owner's own host, accounts, settings or other workspaces. */
+export type TeammateMethodClass = keyof typeof classes
+
+const KINDS: readonly TeammateMethodClass[] = ['scoped', 'filtered', 'own', 'refused']
+const CLASS_BY_METHOD: ReadonlyMap<string, TeammateMethodClass> = new Map(
+  KINDS.flatMap((kind) => classes[kind].map((name: string) => [name, kind] as const))
+)
+
+export function teammateMethodClass(methodName: string): TeammateMethodClass {
+  return CLASS_BY_METHOD.get(methodName) ?? 'refused'
+}
+
+/** Every classified method, for the census test. */
+export const TEAMMATE_METHOD_CLASS_TABLE = classes

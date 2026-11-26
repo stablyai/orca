@@ -1,20 +1,19 @@
 // The lists a workspace teammate reads, each kept to the agent's workspaces: one table, applied to the
-// admitted method once (`withTeammateLists`), so no handler scopes its own answer. Streams that must
-// filter before they encode deltas (client events, tab streams, `worktree.ps`) do it in their handlers,
-// through `teammate-workspace-view.ts`.
+// admitted method once (`withTeammateLists`), so no handler scopes its own answer. Answers that must be
+// filtered before they are snapshotted or encoded as deltas (repo.list, client events, tab streams,
+// worktree.ps, layout.subscribe, chat status) are filtered in their handlers, through
+// `teammate-workspace-view.ts`; `TEAMMATE_HANDLER_FILTERED` names them.
 import type { RpcContext, RpcMethod, RpcStreamingMethod } from '../../runtime/rpc/core'
 import { isStreamingMethod } from '../../runtime/rpc/core'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { locateParty } from '../../runtime/rpc/methods/orchestration/caller-show'
-import { OrchestrationError } from '../../runtime/orchestration/orchestration-error'
 import { teammateWorkspaceLists, type TeammateWorkspaceLists } from './teammate-workspace-view'
 
 type Row = Record<string, unknown>
 type ListScope = {
-  /** Before the handler: a stream outside the agent's workspaces is refused as not found. */
-  before?: (params: unknown, context: RpcContext, lists: TeammateWorkspaceLists) => Promise<void>
-  /** After the handler: its answer, kept to the agent's workspaces. */
-  after?: (result: unknown, lists: TeammateWorkspaceLists) => unknown
+  /** The answer, kept to the agent's workspaces. */
+  after: (result: unknown, lists: TeammateWorkspaceLists) => unknown
+  /** The page's `limit` param, applied after filtering so the owner's rows never use it up. */
+  limited?: string
 }
 
 const isRow = (value: unknown): value is Row => typeof value === 'object' && value !== null
@@ -49,11 +48,9 @@ function keepKeyed(result: unknown, fields: readonly string[], has: (id: string)
   return kept
 }
 
-const byWorktreeId = (field: string): ListScope => ({
-  after: (result, { has }) => keepRows(result, field, (row) => has(text(row.worktreeId)))
-})
-const byId = (field: string): ListScope => ({
-  after: (result, { has }) => keepRows(result, field, (row) => has(text(row.id)))
+const byWorktreeId = (field: string, limited?: string): ListScope => ({
+  after: (result, { has }) => keepRows(result, field, (row) => has(text(row.worktreeId))),
+  ...(limited ? { limited } : {})
 })
 
 /** Their repos' and folders' groups, with every group above them so the tree still nests. */
@@ -74,32 +71,18 @@ function groupsAbove(result: unknown, groupIds: ReadonlySet<string>): unknown {
   return keepRows(result, 'groups', (group) => kept.has(text(group.id) ?? ''))
 }
 
-/** A crew is watched by its party: a chat's or terminal's, which must be one of the agent's. */
-async function refuseOtherParty(
-  params: unknown,
-  context: RpcContext,
-  { has }: TeammateWorkspaceLists
-): Promise<void> {
-  const party = isRow(params) ? text(params.party) : undefined
-  const { location } = party ? await locateParty({ address: party }, context) : { location: null }
-  const workspace =
-    location?.kind === 'chat'
-      ? location.worktreeId
-      : location?.kind === 'terminal' && !location.environmentId
-        ? context.runtime.getTerminalWorktreeIdForHandle(location.handle)
-        : null
-  if (!has(workspace)) {
-    throw new OrchestrationError('not_found', `No party ${party} in this shared agent's workspaces`)
-  }
+function isTabs(value: unknown): value is RuntimeMobileSessionTabsResult {
+  return isRow(value) && typeof value.worktree === 'string' && Array.isArray(value.tabs)
 }
 
 const TEAMMATE_LISTS: Readonly<Record<string, ListScope>> = {
-  'repo.list': {
-    after: (result, { set }) =>
-      keepRows(result, 'repos', (row) => set.repoIds.has(text(row.id) ?? ''))
+  'worktree.list': {
+    after: (result, { has }) => keepRows(result, 'worktrees', (row) => has(text(row.id))),
+    limited: 'worktrees'
   },
-  'worktree.list': byId('worktrees'),
-  'worktree.detectedList': byId('worktrees'),
+  'worktree.detectedList': {
+    after: (result, { has }) => keepRows(result, 'worktrees', (row) => has(text(row.id)))
+  },
   'worktree.lineageList': {
     after: (result, { has }) =>
       keepKeyed(result, ['lineage', 'workspaceLineage', 'crossStoreLineage'], has)
@@ -109,8 +92,9 @@ const TEAMMATE_LISTS: Readonly<Record<string, ListScope>> = {
       keepRows(result, 'folderWorkspaces', (row) => has(`folder:${text(row.id)}`))
   },
   'projectGroup.list': { after: (result, { set }) => groupsAbove(result, set.groupIds) },
-  'terminal.list': byWorktreeId('terminals'),
+  'terminal.list': byWorktreeId('terminals', 'terminals'),
   'browser.tabList': byWorktreeId('tabs'),
+  'agent.list': byWorktreeId('agents'),
   'session.tabs.list': {
     after: (result, { sessionTabs }) => (isTabs(result) ? sessionTabs(result) : result)
   },
@@ -121,45 +105,57 @@ const TEAMMATE_LISTS: Readonly<Record<string, ListScope>> = {
         ? { ...kept, snapshots: kept.snapshots.filter(isTabs).map(lists.sessionTabs) }
         : kept
     }
-  },
-  'orchestration.crewSubscribe': { before: refuseOtherParty },
-  'orchestration.workerApprovalsSubscribe': { before: refuseOtherParty }
+  }
 }
 
-function isTabs(value: unknown): value is RuntimeMobileSessionTabsResult {
-  return isRow(value) && typeof value.worktree === 'string' && Array.isArray(value.tabs)
-}
+/** The filtered methods whose handlers keep their own answers to the agent's workspaces. */
+export const TEAMMATE_HANDLER_FILTERED: ReadonlySet<string> = new Set([
+  'repo.list',
+  'worktree.ps',
+  'runtime.clientEvents.subscribe',
+  'session.tabs.subscribe',
+  'session.tabs.subscribeAll',
+  'layout.subscribe',
+  'agentSession.subscribeStatus',
+  'status.get',
+  // Shared views (`botShareScopedView`): the shared agent's own, as for any teammate.
+  'bots.list',
+  'bots.roster',
+  'bots.chats.own',
+  'bots.agentChoices',
+  'google.status'
+])
+
+export const TEAMMATE_LISTED_METHODS: ReadonlySet<string> = new Set(Object.keys(TEAMMATE_LISTS))
 
 /** The admitted method as a workspace teammate runs it: its listed answer kept to the agent's
  *  workspaces. Every method off the table runs as it is. */
 export function withTeammateLists<M extends RpcMethod | RpcStreamingMethod>(method: M): M {
   const scope = TEAMMATE_LISTS[method.name]
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: scoped() replaces only the handler, with one of the same signature.
-  return scope ? (scoped(method, scope) as M) : method
+  if (!scope || isStreamingMethod(method)) {
+    return method
+  }
+  const handler: RpcMethod['handler'] = async (params, context) => {
+    const lists = await listsFor(context)
+    const limit = scope.limited && isRow(params) ? params.limit : undefined
+    const widened =
+      isRow(params) && typeof limit === 'number'
+        ? { ...params, limit: Number.MAX_SAFE_INTEGER }
+        : params
+    const kept = scope.after(await method.handler(widened, context), lists)
+    return typeof limit === 'number' && scope.limited ? firstRows(kept, scope.limited, limit) : kept
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only a unary method's handler is replaced, with one of the same signature.
+  return { ...method, handler } as M
 }
 
-function scoped(
-  method: RpcMethod | RpcStreamingMethod,
-  scope: ListScope
-): RpcMethod | RpcStreamingMethod {
-  if (isStreamingMethod(method)) {
-    return {
-      ...method,
-      handler: async (params, context, emit) => {
-        await scope.before?.(params, context, await listsFor(context))
-        return method.handler(params, context, emit)
-      }
-    }
+/** The first `limit` of `field`'s rows, marked truncated when more were kept. */
+function firstRows(result: unknown, field: string, limit: number): unknown {
+  const rows = isRow(result) ? result[field] : undefined
+  if (!isRow(result) || !Array.isArray(rows) || rows.length <= limit) {
+    return result
   }
-  return {
-    ...method,
-    handler: async (params, context) => {
-      const lists = await listsFor(context)
-      await scope.before?.(params, context, lists)
-      const result = await method.handler(params, context)
-      return scope.after ? scope.after(result, lists) : result
-    }
-  }
+  return { ...result, [field]: rows.slice(0, limit), truncated: true }
 }
 
 async function listsFor(context: RpcContext): Promise<TeammateWorkspaceLists> {

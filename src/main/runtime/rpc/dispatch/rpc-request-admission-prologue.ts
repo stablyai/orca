@@ -27,8 +27,8 @@ import {
 import { admitOrchestrationPeerCall } from '../orchestration/callers/orchestration-peer-caller'
 import { waitForRestoredWorkerCallerIdentity } from '../orchestration/callers/worker-caller-identity-restore-wait'
 import { admitBotShareCall } from './bot-share-call-admission'
-import { withTeammateLists } from '../../../bots/team-share/teammate-workspace-lists'
-import { folderConfinedTeammateOf } from '../../../bots/team-share/teammate-workspace-view'
+import { admitTeammateCall } from '../../../bots/team-share/teammate-call-admission'
+import { rpcCallContext } from '../rpc-call-context'
 
 type RpcRequestAdmissionDeps = {
   runtime: OrcaRuntimeService
@@ -99,18 +99,19 @@ export function admitRpcRequest<M extends RpcMethod | RpcStreamingMethod>(
     if (callerScope.kind !== 'bot-share') {
       return admitted
     }
-    // A not-shared method got past the refusal only on a workspace teammate's tiers, as a pairing's would;
-    // on those tiers a folder read is no longer held to the agent's home folder.
-    if (
-      method.share === 'not-shared' ||
-      (method.share.kind === 'bot-folder' && !folderConfinedTeammateOf({ callerScope }))
-    ) {
-      return { ...admitted, method: withTeammateLists(method) }
-    }
-    return admitBotShareCall(runtime, callerScope, method.share, admitted.params).then(
+    const answered = callerScope.workspaceTier
+      ? admitTeammateCall(
+          rpcCallContext(runtime, request, options, pinnedCallerScope, caller, admitted.params),
+          callerScope,
+          admitted
+        )
+      : admitBotShareCall(runtime, callerScope, method.share, admitted.params).then((answer) =>
+          'refusal' in answer ? answer : { ...admitted, params: answer.params }
+        )
+    return answered.then(
       (answer) => {
-        if ('params' in answer) {
-          return { ...admitted, params: answer.params }
+        if (!('refusal' in answer)) {
+          return answer
         }
         reportAgentShareFailure({ stage: 'admission_refused', reason: answer.refusal })
         return reject(errorResponse(request.id, meta, 'not_found', answer.refusal))

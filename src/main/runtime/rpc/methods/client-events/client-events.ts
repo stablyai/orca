@@ -21,7 +21,7 @@ import { structuredCallerFor } from '../structured-sessions/creation/structured-
 import {
   AgentWorkspaceTracker,
   workspaceTeammateOf
-} from '../../../../bots/team-share/teammate-workspace-view'
+} from '../../../../bots/team-share/agent-workspace-tracker'
 
 let clientEventSubscriptionSeq = 0
 

@@ -27,6 +27,9 @@ const SHARED = makeTestBot({ id: 'bot-shared', folderWorkspaceId: 'home-shared' 
 const HOME = 'folder:home-shared'
 const WORKER = 'repo-agent::/work/agent-task'
 const OWNERS = 'repo-owner::/work/owner-task'
+// The owner's own worktree in the agent's repo: never a teammate's.
+const OWNERS_IN_AGENT_REPO = 'repo-agent::/work/owner-in-agent-repo'
+const WORKER_2 = 'repo-agent::/work/agent-task-2'
 const alice: BotRequestAsker = {
   kind: 'person',
   source: 'orca',
@@ -38,6 +41,7 @@ const chat = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0
 const ALICES_CHAT = chat(1)
 const OWNERS_CHAT = chat(2)
 const OWNERS_WORKSPACE_CHAT = chat(3)
+const OWNERS_OTHER_CHAT = chat(4)
 
 const device = fake<BotShareDevice>({ botId: SHARED.id, accountId: 'acct-alice', name: 'Alice' })
 const TEAMMATE = botShareCallerScopeOf(device, [BOTS_SHARE_WORKSPACES_CAPABILITY])
@@ -62,6 +66,15 @@ let directory: string
 let db: OrchestrationDb
 let runtime: OrcaRuntimeService
 let dispatcher: RpcDispatcher
+let scanned: string[]
+let lineage: Record<string, unknown>
+const workerRecord = (id: string) => ({
+  childWorkspaceKey: `worktree:${id}`,
+  parentWorkspaceKey: HOME,
+  origin: 'orchestration',
+  capture: 'confirmed',
+  createdAt: 1
+})
 
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'teammate-workspaces-'))
@@ -71,26 +84,20 @@ beforeEach(() => {
     getBots: () => [SHARED],
     getFolderWorkspaces: () => [folder('home-shared'), folder('owner-folder')],
     // The worker was started from the bot's home: its record parents it there.
-    getAllWorkspaceLineage: () => ({
-      [`worktree:${WORKER}`]: {
-        childWorkspaceKey: `worktree:${WORKER}`,
-        parentWorkspaceKey: HOME,
-        origin: 'orchestration',
-        capture: 'confirmed',
-        createdAt: 1
-      }
-    }),
+    getAllWorkspaceLineage: () => lineage,
     getSettings: () => ({})
   }
+  scanned = [WORKER, OWNERS, OWNERS_IN_AGENT_REPO]
+  lineage = { [`worktree:${WORKER}`]: workerRecord(WORKER) }
   runtime = new OrcaRuntimeService(fake(store))
   // The host's cached worktree scan, which the set reads.
   vi.spyOn(
     fake<{ listResolvedWorktreeSnapshot: () => Promise<unknown> }>(runtime),
     'listResolvedWorktreeSnapshot'
-  ).mockResolvedValue({
-    worktrees: [worktree(WORKER, 'repo-agent'), worktree(OWNERS, 'repo-owner')],
+  ).mockImplementation(async () => ({
+    worktrees: scanned.map((id) => worktree(id, id.split('::')[0])),
     platformByRepoId: new Map()
-  })
+  }))
   vi.spyOn(runtime, 'getOrchestrationDb').mockReturnValue(db)
   vi.spyOn(runtime.bots, 'list').mockReturnValue([SHARED])
   vi.spyOn(runtime, 'listVisibleRepos').mockReturnValue(fake(store.getRepos()))
@@ -126,7 +133,8 @@ beforeEach(() => {
   const workspaceOf = new Map([
     [ALICES_CHAT, HOME],
     [OWNERS_CHAT, HOME],
-    [OWNERS_WORKSPACE_CHAT, WORKER]
+    [OWNERS_WORKSPACE_CHAT, WORKER],
+    [OWNERS_OTHER_CHAT, OWNERS]
   ])
   setStructuredAgentSessionHost(
     fake<StructuredAgentSessionHost>({
@@ -285,60 +293,169 @@ describe('a workspace teammate on a shared agent', () => {
     ])
   })
 
+  it('reads and sends to chats in the agent’s workers’ workspaces, and none of the owner’s', async () => {
+    const history = (scope: RpcCallerScope, sessionId: string) =>
+      call(scope, 'agentSession.history', { sessionId, direction: 'tail' })
+    expect(await history(TEAMMATE, OWNERS_WORKSPACE_CHAT)).not.toMatchObject({ code: 'not_found' })
+    expect(await history(CHATS_ONLY, OWNERS_WORKSPACE_CHAT)).toMatchObject({ code: 'not_found' })
+    expect(await history(TEAMMATE, OWNERS_OTHER_CHAT)).toMatchObject({ code: 'not_found' })
+  })
+
+  it('reads the host’s full status as a paired client does, without the update offer', async () => {
+    vi.spyOn(runtime, 'machineNameReady').mockResolvedValue(undefined)
+    expect(await call(TEAMMATE, 'status.get', {})).toMatchObject({
+      result: { pairedDeviceId: 'share-device' }
+    })
+    expect(await call(TEAMMATE, 'status.get', {})).not.toMatchObject({
+      result: { remoteUpdateSupport: expect.anything() }
+    })
+    expect(await call(CHATS_ONLY, 'status.get', {})).not.toMatchObject({
+      result: { pairedDeviceId: expect.anything() }
+    })
+  })
+
   it('streams only the agent’s workspaces’ events and none of the host’s own', async () => {
-    const stream = async (scope: RpcCallerScope) => {
-      const received: z.infer<typeof StreamedEvent>[] = []
-      let subscriptionId = ''
-      let ready!: () => void
-      const isReady = new Promise<void>((resolve) => (ready = resolve))
-      const done = dispatcher.dispatchStreamingObjects(
-        { id: 's1', authToken: '', method: 'runtime.clientEvents.subscribe', params: {} },
-        (response) => {
-          const event = response.ok ? StreamedEvent.parse(response.result) : null
-          if (event?.type === 'ready') {
-            subscriptionId = event.subscriptionId ?? ''
-            ready()
-          } else if (event && event.type !== 'end') {
-            received.push(event)
-          }
-        },
-        { ...options(scope), connectionId: `c-${scope.kind}` }
-      )
-      await isReady
-      const events: RuntimeClientEvent[] = [
-        { type: 'worktreesChanged', repoId: 'repo-agent' },
-        { type: 'worktreesChanged', repoId: 'repo-owner' },
-        { type: 'pullRequestChanged', worktreeId: OWNERS, repoId: 'repo-owner', branch: 'b' },
-        { type: 'pullRequestChanged', worktreeId: WORKER, repoId: 'repo-agent', branch: 'b' },
-        {
-          type: 'terminalSideEffects',
-          batch: { ptyId: 'p1', seq: 1, facts: [{ kind: 'bell' }], worktreeId: HOME }
-        },
-        {
-          type: 'terminalSideEffects',
-          batch: { ptyId: 'p2', seq: 1, facts: [{ kind: 'bell' }], worktreeId: OWNERS }
-        },
-        { type: 'activateWorktree', repoId: 'repo-agent', worktreeId: WORKER },
-        { type: 'settingsChanged', keys: ['theme'] },
-        { type: 'botsChanged', botIds: ['bot-other'] }
-      ]
-      // As the host's own producers publish them.
-      const host = fake<{ emitClientEvent: (event: RuntimeClientEvent) => void }>(runtime)
-      for (const event of events) {
-        host.emitClientEvent(event)
-      }
-      await new Promise((resolve) => setTimeout(resolve, 10))
-      runtime.cleanupSubscription(subscriptionId)
-      await done
-      return received.map(
-        (event) => `${event.type}:${event.batch?.worktreeId ?? event.worktreeId ?? event.repoId}`
-      )
-    }
-    expect(await stream(TEAMMATE)).toEqual([
+    const summarize = (event: z.infer<typeof StreamedEvent>) =>
+      `${event.type}:${event.batch?.worktreeId ?? event.worktreeId ?? event.repoId}`
+    const events: RuntimeClientEvent[] = [
+      { type: 'worktreesChanged', repoId: 'repo-agent' },
+      { type: 'worktreesChanged', repoId: 'repo-owner' },
+      { type: 'pullRequestChanged', worktreeId: OWNERS, repoId: 'repo-owner', branch: 'b' },
+      { type: 'pullRequestChanged', worktreeId: WORKER, repoId: 'repo-agent', branch: 'b' },
+      {
+        type: 'terminalSideEffects',
+        batch: { ptyId: 'p1', seq: 1, facts: [{ kind: 'bell' }], worktreeId: HOME }
+      },
+      {
+        type: 'terminalSideEffects',
+        batch: { ptyId: 'p2', seq: 1, facts: [{ kind: 'bell' }], worktreeId: OWNERS }
+      },
+      { type: 'activateWorktree', repoId: 'repo-agent', worktreeId: WORKER },
+      { type: 'settingsChanged', keys: ['theme'] },
+      { type: 'botsChanged', botIds: ['bot-other'] }
+    ]
+    expect((await clientEvents(TEAMMATE, events)).map(summarize)).toEqual([
       'worktreesChanged:repo-agent',
       `pullRequestChanged:${WORKER}`,
       `terminalSideEffects:${HOME}`
     ])
-    expect(await stream(OWNER)).toHaveLength(9)
+    expect(await clientEvents(OWNER, events)).toHaveLength(9)
+  })
+
+  it('tells a teammate when the agent’s last worker leaves a repo, without the owner’s rows', async () => {
+    const removed = await clientEvents(TEAMMATE, [], () => {
+      scanned = [OWNERS, OWNERS_IN_AGENT_REPO]
+      return [
+        {
+          type: 'worktreesChanged',
+          repoId: 'repo-agent',
+          sortOrders: [
+            { worktreeId: WORKER, sortOrder: 1 },
+            { worktreeId: OWNERS_IN_AGENT_REPO, sortOrder: 2 }
+          ]
+        }
+      ]
+    })
+    expect(removed).toEqual([
+      { type: 'worktreesChanged', repoId: 'repo-agent' },
+      { type: 'reposChanged' },
+      {
+        type: 'worktreesChanged',
+        repoId: 'repo-agent',
+        sortOrders: [{ worktreeId: WORKER, sortOrder: 1 }]
+      }
+    ])
+  })
+
+  it('streams a new worker workspace’s first tabs and a removed one’s removal', async () => {
+    const tabStream = await openTabStream(TEAMMATE)
+    const host = fake<{ emitClientEvent: (event: RuntimeClientEvent) => void }>(runtime)
+    // Made: its record lands, its repo is announced, and its first chat tab follows at once.
+    scanned = [...scanned, WORKER_2]
+    lineage = { ...lineage, [`worktree:${WORKER_2}`]: workerRecord(WORKER_2) }
+    host.emitClientEvent({ type: 'worktreesChanged', repoId: 'repo-agent' })
+    tabStream.change(tabs(WORKER_2, [OWNERS_WORKSPACE_CHAT]), 2)
+    // Removed: the set drops it before its removal reaches the stream.
+    scanned = scanned.filter((id) => id !== WORKER)
+    host.emitClientEvent({ type: 'worktreesChanged', repoId: 'repo-agent' })
+    tabStream.change({ ...tabs(WORKER, []), removed: true }, 3)
+    // The owner's own workspace never reaches them.
+    tabStream.change(tabs(OWNERS, [OWNERS_OTHER_CHAT]), 4)
+    await vi.waitFor(() => expect(tabStream.updates()).toHaveLength(2))
+    expect(tabStream.updates()).toEqual([
+      { worktree: WORKER_2, removed: undefined },
+      { worktree: WORKER, removed: true }
+    ])
+    tabStream.close()
   })
 })
+
+const StreamedTabs = z.looseObject({
+  type: z.string(),
+  worktree: z.string().optional(),
+  removed: z.boolean().optional()
+})
+
+/** A teammate's session.tabs.subscribeAll, its host-side change feed in the test's hands. */
+async function openTabStream(scope: RpcCallerScope) {
+  let feed: ((snapshot: unknown, changeSequence: number) => void) | undefined
+  vi.spyOn(runtime, 'onMobileSessionTabsChanged').mockImplementation((listener) => {
+    feed = fake(listener)
+    return () => {}
+  })
+  vi.spyOn(runtime, 'listAllMobileSessionTabsWithChangeSequence').mockResolvedValue(
+    fake({ snapshots: [tabs(HOME, [ALICES_CHAT]), tabs(WORKER, [])], changeSequence: 1 })
+  )
+  const frames: z.infer<typeof StreamedTabs>[] = []
+  void dispatcher.dispatchStreamingObjects(
+    { id: 't1', authToken: '', method: 'session.tabs.subscribeAll', params: null },
+    (response) => {
+      if (response.ok) {
+        frames.push(StreamedTabs.parse(response.result))
+      }
+    },
+    { ...options(scope), connectionId: 'c-tabs' }
+  )
+  await vi.waitFor(() => expect(frames.some((frame) => frame.type === 'snapshots')).toBe(true))
+  return {
+    change: (snapshot: unknown, changeSequence: number) => feed?.(snapshot, changeSequence),
+    updates: () =>
+      frames
+        .filter((frame) => frame.type === 'updated')
+        .map((frame) => ({ worktree: frame.worktree, removed: frame.removed })),
+    close: () => runtime.cleanupSubscription('session.tabs:c-tabs:*')
+  }
+}
+
+/** The client-events a caller receives for `events`, each judged as the host publishes it; `moving`
+ *  first changes the host and returns the events that announce it. */
+async function clientEvents(
+  scope: RpcCallerScope,
+  events: RuntimeClientEvent[],
+  moving?: () => RuntimeClientEvent[]
+): Promise<z.infer<typeof StreamedEvent>[]> {
+  const received: z.infer<typeof StreamedEvent>[] = []
+  let subscriptionId = ''
+  const done = dispatcher.dispatchStreamingObjects(
+    { id: 's1', authToken: '', method: 'runtime.clientEvents.subscribe', params: {} },
+    (response) => {
+      const event = response.ok ? StreamedEvent.parse(response.result) : null
+      if (event?.type === 'ready') {
+        subscriptionId = event.subscriptionId ?? ''
+      } else if (event && event.type !== 'end') {
+        received.push(event)
+      }
+    },
+    { ...options(scope), connectionId: `c-${scope.kind}` }
+  )
+  await vi.waitFor(() => expect(subscriptionId).not.toBe(''))
+  // As the host's own producers publish them, then one every caller receives, to know all arrived.
+  const host = fake<{ emitClientEvent: (event: RuntimeClientEvent) => void }>(runtime)
+  for (const event of [...events, ...(moving?.() ?? []), { type: 'agentListChanged' as const }]) {
+    host.emitClientEvent(event)
+  }
+  await vi.waitFor(() => expect(received.at(-1)?.type).toBe('agentListChanged'))
+  runtime.cleanupSubscription(subscriptionId)
+  await done
+  return received.slice(0, -1)
+}

@@ -16,6 +16,7 @@ import type { WorkspaceLayoutStreamFrame } from '../../../../../shared/workspace
 import { defineMethod, defineStreamingMethod } from '../../core'
 import { getAppEnvironment } from '../../../../../shared/app-lifecycle/app-environment'
 import { listEnvironments } from '../../../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { openTracker } from '../../../../bots/team-share/agent-workspace-tracker'
 
 let layoutSubscriptionSeq = 0
 
@@ -29,13 +30,17 @@ export const WORKSPACE_LAYOUT_METHODS = [
     permission: 'workspace',
     share: 'not-shared',
     params: LayoutSubscribeParams,
-    handler: async (params, { runtime, connectionId, signal, clientCapabilities }, emitFrame) => {
+    handler: async (params, context, emitFrame) => {
+      const { runtime, connectionId, signal, clientCapabilities } = context
       // Keep emitted frames checked against the client contract.
       const project = createGitGraphFrameProjection()
       const emit = (frame: WorkspaceLayoutStreamFrame): void =>
         emitFrame(readsGitGraph(clientCapabilities) ? frame : project(frame))
       const keys = params?.workspaces
-      const wanted = (key: string) => !Array.isArray(keys) || keys.includes(key)
+      // A workspace teammate's frames carry only the agent's workspaces.
+      const teammate = await openTracker(context)
+      const wanted = (key: string) =>
+        (!Array.isArray(keys) || keys.includes(key)) && (!teammate || teammate.has(key))
       await new Promise<void>((resolve) => {
         const subscriptionId = `layout-${connectionId ?? 'inproc'}-${++layoutSubscriptionSeq}`
         const cleanupKey = layoutCleanupKey(connectionId, subscriptionId)
@@ -52,6 +57,7 @@ export const WORKSPACE_LAYOUT_METHODS = [
           cleanupKey,
           () => {
             unsubscribe()
+            teammate?.dispose()
             signal?.removeEventListener('abort', release)
             emit({ type: 'end' })
             resolve()

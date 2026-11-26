@@ -1,5 +1,6 @@
 /** Transport stamps proven scope; unstamped calls are local desktop/owner CLI. Non-owner methods require an explicitly granted permission. */
 import { MOBILE_RPC_METHOD_ALLOWLIST } from '../server/runtime-rpc-mobile-method-allowlist'
+import { teammateMethodClass } from './teammate-method-classes'
 import type { RpcMethodPermission, RuntimeDeviceGrant } from './rpc-method-permission'
 import type { RpcMethodShare } from '../../../../shared/bots/bot-share-rpc-methods'
 
@@ -21,8 +22,8 @@ export type BotShareCallerScope = {
   botId: string
   accountId: string
   name: string
-  /** Their Orca works in the agent's workspaces (`bots.share-workspaces.v1`): it gets a pairing's
-   *  workspace tiers, with every list scoped to the agent (`teammateWorkspaceView`). */
+  /** Their Orca works in the agent's workspaces (`bots.share-workspaces.v1`): every method as
+   *  teammate-method-classes.json classifies it, each list kept to the agent's workspaces. */
   workspaceTier?: true
 }
 
@@ -37,19 +38,6 @@ const RUNTIME_PAIRED_STANDARD: ReadonlySet<RpcMethodPermission> = new Set([
   'skills-admin',
   'host-admin',
   'device-self'
-])
-
-// A workspace teammate is trusted as the owner within the agent's workspaces; nothing of the host's
-// settings, accounts, skills, pairing or desktop.
-const BOT_SHARE_WORKSPACE_TIERS: ReadonlySet<RpcMethodPermission> = new Set([
-  'workspace',
-  'device-self'
-])
-
-// The owner's own streams: their notifications and their agent accounts' usage.
-const OWNER_ONLY_WORKSPACE_METHODS: ReadonlySet<string> = new Set([
-  'notifications.subscribe',
-  'accounts.subscribe'
 ])
 
 // A Relay client's calls for its own Relay credential (installed and renewed through this host).
@@ -74,12 +62,10 @@ export function denyRpcMethodForCaller(
       : null
   }
   if (scope.kind === 'bot-share') {
-    const allowed =
-      (share !== undefined && share !== 'not-shared') ||
-      (scope.workspaceTier === true &&
-        permission !== undefined &&
-        BOT_SHARE_WORKSPACE_TIERS.has(permission) &&
-        !OWNER_ONLY_WORKSPACE_METHODS.has(methodName))
+    // The workspace tier admits by its one table; a chats-only teammate by each method's share rule.
+    const allowed = scope.workspaceTier
+      ? teammateMethodClass(methodName) !== 'refused'
+      : share !== undefined && share !== 'not-shared'
     return allowed ? null : `Method '${methodName}' is not available to a shared agent's teammates`
   }
   if (scope.kind === 'owner' || permission === undefined) {

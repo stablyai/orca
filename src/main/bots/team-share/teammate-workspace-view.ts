@@ -2,7 +2,6 @@
 // one place that scopes every list and stream to `agentWorkspaceSet`, the agent's home and its workers'
 // worktrees. It narrows what the host lists, never what it lets them do there; the owner gets null.
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import type { RuntimeClientEvent } from '../../../shared/remote-runtime/session-graph/runtime-client-events'
 import {
   folderWorkspaceKey,
   type WorkspaceKey
@@ -13,19 +12,19 @@ import {
 } from '../../runtime/workspaces/process-listing/agent-workspace-set'
 import type { BotShareCallerScope } from '../../runtime/rpc/callers/rpc-caller-scope'
 import type { RpcContext } from '../../runtime/rpc/core'
-import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { botShareOwnsSession } from './bot-share-chats'
-import { teammateClientEvent } from './teammate-client-events'
+import { chatWorkspaceOf } from './teammate-client-events'
+import {
+  NO_WORKSPACES,
+  openTracker,
+  readTeammateWorkspaceSet,
+  workspaceTeammateOf
+} from './agent-workspace-tracker'
 
-type ViewRuntime = Pick<OrcaRuntimeService, 'readAgentWorkspaceSet' | 'onClientEvent' | 'bots'> &
-  Parameters<typeof botShareOwnsSession>[0]
+type ViewRuntime = Parameters<typeof botShareOwnsSession>[0]
 
-const NO_WORKSPACES: AgentWorkspaceSet = {
-  homeKey: 'folder:',
-  keys: new Set(),
-  repoIds: new Set(),
-  groupIds: new Set()
-}
+// `getWorktreePs`'s own default page.
+const DEFAULT_PS_LIMIT = 200
 
 /** A chats-only teammate's file reads stay in the agent's home folder; the workspace tier reads every
  *  workspace as the owner does, so it is never held to that folder. */
@@ -34,21 +33,6 @@ export function folderConfinedTeammateOf(
 ): BotShareCallerScope | null {
   const scope = context.callerScope
   return scope?.kind === 'bot-share' && scope.workspaceTier !== true ? scope : null
-}
-
-/** The workspace teammate's scope, or null for anyone else. */
-export function workspaceTeammateOf(
-  context: Pick<RpcContext, 'callerScope'>
-): BotShareCallerScope | null {
-  const scope = context.callerScope
-  return scope?.kind === 'bot-share' && scope.workspaceTier === true ? scope : null
-}
-
-export async function readTeammateWorkspaceSet(
-  runtime: Pick<OrcaRuntimeService, 'readAgentWorkspaceSet'>,
-  scope: BotShareCallerScope
-): Promise<AgentWorkspaceSet> {
-  return (await runtime.readAgentWorkspaceSet(scope.botId)) ?? NO_WORKSPACES
 }
 
 /** One request's lists, each kept to the agent's workspaces; null for anyone but a workspace teammate. */
@@ -74,12 +58,25 @@ function teammateWorkspaceListsOf(
   return {
     set,
     has,
-    /** A `worktree.ps` page: its rows by workspace id, and its count. */
-    psRows: <P extends { worktrees: readonly { worktreeId: string }[]; totalCount: number }>(
-      page: P
+    /** A `worktree.ps` page read unlimited: the agent's rows, their count, then the first `limit`
+     *  (the listing's own default when absent). */
+    psRows: <
+      P extends {
+        worktrees: readonly { worktreeId: string }[]
+        totalCount: number
+        truncated: boolean
+      }
+    >(
+      page: P,
+      limit = DEFAULT_PS_LIMIT
     ): P => {
       const worktrees = page.worktrees.filter((row) => has(row.worktreeId))
-      return { ...page, worktrees, totalCount: worktrees.length }
+      return {
+        ...page,
+        worktrees: worktrees.slice(0, limit),
+        totalCount: worktrees.length,
+        truncated: worktrees.length > limit
+      }
     },
     sessionTabs: teammateSessionTabs(runtime, scope, set.homeKey)
   }
@@ -144,110 +141,48 @@ export function teammateSessionTabsOf(
   )
 }
 
-/** A tab stream's scope for a workspace teammate, once the set is read: the worktrees it hides, the
- *  home's own tabs, and its census kept to the agent's. Null for anyone else. */
+/** A tab stream's scope for a workspace teammate, once the set is read: the home's own tabs, its
+ *  census kept to the agent's, and its tab changes registered to run in order after any re-read
+ *  they wait on, for the agent's worktrees and those `shown` already holds (so a removal arrives).
+ *  Null for anyone else. */
 export async function openTeammateTabStream(
-  context: Pick<RpcContext, 'callerScope' | 'runtime' | 'signal'>
+  context: Pick<RpcContext, 'callerScope' | 'runtime' | 'signal'>,
+  shown: ReadonlyMap<string, unknown>
 ) {
-  const scope = workspaceTeammateOf(context)
-  if (!scope) {
+  const tracker = await openTracker(context)
+  if (!tracker) {
     return null
   }
-  // Built before the stream listens, so a new worker workspace is in the set before its tabs arrive.
-  const tracker = new AgentWorkspaceTracker(context.runtime, scope)
-  await tracker.ready()
-  if (context.signal?.aborted) {
-    tracker.dispose()
-    throw new Error('client_disconnected')
-  }
+  const onTabsChanged = context.runtime.onMobileSessionTabsChanged.bind(context.runtime)
   return {
-    hides: (worktree: string) => !tracker.has(worktree),
-    person: teammateSessionTabs(context.runtime, scope, tracker.current().homeKey),
+    person: teammateSessionTabs(context.runtime, tracker.scope, tracker.current().homeKey),
     census: <I extends { snapshots: readonly { worktree: string }[] }>(inventory: I): I => ({
       ...inventory,
       snapshots: inventory.snapshots.filter((snapshot) => tracker.has(snapshot.worktree))
     }),
+    onMobileSessionTabsChanged: ((listener, ...rest) =>
+      onTabsChanged(
+        (snapshot, ...args) =>
+          tracker.after(() => {
+            if (tracker.has(snapshot.worktree) || shown.has(snapshot.worktree)) {
+              listener(snapshot, ...args)
+            }
+          }),
+        ...rest
+      )) satisfies typeof onTabsChanged,
     dispose: () => tracker.dispose()
   }
 }
 
-// Events after which the set may have grown or shrunk: a worktree, repo, Dispatch or bot changed.
-function movesTheSet(event: RuntimeClientEvent): boolean {
-  return (
-    event.type === 'worktreesChanged' ||
-    event.type === 'reposChanged' ||
-    event.type === 'agentOrchestrationChanged' ||
-    (event.type === 'botsChanged' &&
-      (event.kinds === undefined || event.kinds.includes('workers') || event.kinds.includes('bot')))
-  )
-}
-
-/** A stream's live copy of the set: read once, then again after each event that may move it. A
- *  stream's events wait for a pending read, so one that added a workspace is judged after it. */
-export class AgentWorkspaceTracker {
-  private set: AgentWorkspaceSet = NO_WORKSPACES
-  private reading: Promise<void>
-  private readonly stopListening: () => void
-
-  constructor(
-    private readonly runtime: ViewRuntime,
-    readonly scope: BotShareCallerScope
-  ) {
-    this.reading = this.read()
-    // Registered before any stream's own listener, so a stream sees this event's read already pending.
-    this.stopListening = runtime.onClientEvent((event) => {
-      if (movesTheSet(event)) {
-        this.reading = this.reading.then(() => this.read())
+/** A chat status stream's filter for a workspace teammate: chats in the agent's workspaces. */
+export async function openTeammateChatFilter(
+  context: Pick<RpcContext, 'callerScope' | 'runtime' | 'signal'>
+) {
+  const tracker = await openTracker(context)
+  return tracker
+    ? {
+        listed: (sessionId: string) => tracker.has(chatWorkspaceOf(sessionId)),
+        dispose: () => tracker.dispose()
       }
-    })
-  }
-
-  ready(): Promise<void> {
-    return this.reading
-  }
-
-  has(id: string | null | undefined): boolean {
-    return agentHasWorkspace(this.set, id)
-  }
-
-  current(): AgentWorkspaceSet {
-    return this.set
-  }
-
-  /** Each event judged in arrival order against the set as of that event; call once `ready()`. */
-  orderedClientEvents(
-    emit: (event: RuntimeClientEvent) => void
-  ): (event: RuntimeClientEvent) => void {
-    let queue: Promise<void> = this.reading
-    let pending = 0
-    const judge = (event: RuntimeClientEvent) => {
-      const kept = teammateClientEvent(event, this.set, this.scope)
-      if (kept) {
-        emit(kept)
-      }
-    }
-    return (event) => {
-      if (pending === 0 && !movesTheSet(event)) {
-        judge(event)
-        return
-      }
-      pending += 1
-      queue = queue
-        .then(() => this.reading)
-        .then(() => judge(event))
-        // A closed stream's emit may throw; the events after it still run in order.
-        .catch(() => undefined)
-        .finally(() => {
-          pending -= 1
-        })
-    }
-  }
-
-  private async read(): Promise<void> {
-    this.set = await readTeammateWorkspaceSet(this.runtime, this.scope).catch(() => this.set)
-  }
-
-  dispose(): void {
-    this.stopListening()
-  }
+    : null
 }

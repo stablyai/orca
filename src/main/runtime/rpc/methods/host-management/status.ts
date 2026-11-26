@@ -6,6 +6,7 @@ import { StatusGetParams } from '../../../../../shared/rpc-contract/host-managem
 import { readHostMachineWithin } from '../../../hosts/platform-probe/runtime-host-machine'
 import { MACHINE_NAME_PUBLISH_WAIT_MS } from '../../../hosts/platform-probe/runtime-machine-name'
 import { botShareScopedView } from '../../../../bots/team-share/bot-share-scoped-view'
+import { workspaceTeammateOf } from '../../../../bots/team-share/agent-workspace-tracker'
 
 export const STATUS_METHODS = [
   defineMethod({
@@ -19,7 +20,10 @@ export const STATUS_METHODS = [
       if (params.probe === true) {
         return { runtimeId: runtime.getRuntimeId() }
       }
-      const share = botShareScopedView(context)?.['status.get']
+      // A workspace teammate reads the host as a paired client does, all but the update offer
+      // (updates are the owner's); any other teammate, only what their Orca checks.
+      const teammate = workspaceTeammateOf(context)
+      const share = teammate ? undefined : botShareScopedView(context)?.['status.get']
       if (share) {
         const { appVersion } = getRemoteServerUpdaterSnapshot(runtime.getRuntimeId())
         return share({ ...runtime.getStatus(), appVersion })
@@ -38,7 +42,7 @@ export const STATUS_METHODS = [
         ...(hostMachine ? { hostMachine } : {}),
         ...(pairedDeviceId ? { pairedDeviceId } : {}),
         appVersion: snapshot.appVersion,
-        remoteUpdateSupport: snapshot.support
+        ...(teammate ? {} : { remoteUpdateSupport: snapshot.support })
       }
     }
   })

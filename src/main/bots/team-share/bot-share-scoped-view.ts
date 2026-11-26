@@ -88,7 +88,7 @@ export function botShareScopedView(
     },
     'bots.agentChoices': ({ newChatAgents }) => ({ newChatAgents }),
     'agentSession.subscribeStatus': botShareSessionFilter(runtime, scope),
-    'status.get': scope.workspaceTier ? workspaceTeammateStatus : botShareStatus,
+    'status.get': botShareStatus,
     'bots.linear.state': (state) => botShareLinearState(state, scope.botId),
     'bots.github.state': (state) => botShareGitHubState(state, scope.botId),
     'google.status': sharedGoogleStatus(runtime.bots.list(), scope.botId),
@@ -105,13 +105,6 @@ function sharedGoogleStatus(
 ): BotShareScopedView['google.status'] {
   const bot = bots.find((entry) => entry.id === botId) ?? null
   return { bot, view: (view) => (bot ? botShareGoogleStatus(view, bot) : view) }
-}
-
-/** A workspace teammate's Orca reads the host as a paired client does: every field, but no update
- *  offer, as updates are the owner's (host-admin). */
-function workspaceTeammateStatus(status: RuntimeStatus): RuntimeStatus {
-  const { remoteUpdateSupport: _ownerOnly, ...paired } = status
-  return paired
 }
 
 function botShareStatus(status: RuntimeStatus): RuntimeStatus {

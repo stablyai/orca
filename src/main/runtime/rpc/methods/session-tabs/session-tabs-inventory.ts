@@ -27,7 +27,6 @@ export async function subscribeSessionTabsInventory(
   if (context.signal?.aborted) {
     throw new Error('client_disconnected')
   }
-  const teammate = await openTeammateTabStream(context)
   const cleanupPrefix = `session.tabs:${connectionId ?? 'local'}:*`
   const subscriptionId = requestId ? `${cleanupPrefix}:${requestId}` : cleanupPrefix
   const observation = Symbol('session-tabs-stream')
@@ -170,7 +169,8 @@ export async function subscribeSessionTabsInventory(
       deliveredChangeSequenceByWorktree.set(snapshot.worktree, changeSequence)
     }
   }
-  const unsubscribe = runtime.onMobileSessionTabsChanged(
+  const teammate = await openTeammateTabStream(context, publishedSnapshotsByWorktree)
+  const unsubscribe = (teammate ?? runtime).onMobileSessionTabsChanged(
     (runtimeSnapshot, changeSequence, delivery) => {
       if (closed) {
         return
@@ -190,7 +190,7 @@ export async function subscribeSessionTabsInventory(
     },
     pairedDeviceId,
     context.clientKind,
-    { observation: 'caller', acceptsWorktree: (worktree) => !closed && !teammate?.hides(worktree) }
+    { observation: 'caller', acceptsWorktree: () => !closed }
   )
   const stopCapabilities = context.capabilitySource?.observe(() => {
     if (!initialized || closed) {
