@@ -18,7 +18,7 @@ import {
 } from './command-path-directory'
 import {
   recordDirectoryMatch,
-  scanInventoryPathCommand,
+  scanInventoryPathCommands,
   type AgentPathMatch,
   type DirectoryCandidate,
   type PathDirectory
@@ -76,6 +76,8 @@ export async function findCommandsOnLocalPath(
     unverified?: Set<string>
     found?: Set<string>
     probes?: InventoryFsProbes
+    onMatch?: () => void
+    onCommandComplete?: (command: string, uncertain: boolean) => void
   } = {}
 ): Promise<Set<string>> {
   const found = options.found ?? new Set<string>()
@@ -95,6 +97,7 @@ export async function findCommandsOnLocalPath(
   }
   await Promise.all(
     [...direct].map(async (command) => {
+      let uncertain = false
       const executable = await isCommandOnLocalPath(command, {
         ...options,
         probeCandidate:
@@ -102,6 +105,7 @@ export async function findCommandsOnLocalPath(
           (async (candidate) => {
             const result = await checkExecutableFile(candidate, isWin, probes)
             if (result === 'unknown') {
+              uncertain = true
               options.unverified?.add(command)
             }
             return result === 'executable'
@@ -110,6 +114,7 @@ export async function findCommandsOnLocalPath(
       if (executable) {
         found.add(command)
       }
+      options.onCommandComplete?.(command, uncertain)
     })
   )
   if (remaining.size === 0) {
@@ -193,35 +198,40 @@ export async function findCommandsOnLocalPath(
   if (inventory && probes && options.signal) {
     const { signal } = options
     const listings = new Map<string, Promise<Listing>>()
-    await Promise.all(
-      [...remaining].map(async (command) => {
-        const candidates = new Map<string, Promise<DirectoryCandidate>>()
-        const uncertain = await scanInventoryPathCommand(
-          directories,
-          (dir) => {
-            let candidate = candidates.get(dir.key)
-            if (!candidate) {
-              const listing = listings.get(dir.key) ?? readListing(dir)
-              listings.set(dir.key, listing)
-              candidate = listing.then((names) => probeCommand(command, dir, names))
-              candidates.set(dir.key, candidate)
-            }
-            return candidate
-          },
-          (match) => {
-            inventory.matches.set(command, match)
-            if (match.user) {
-              found.add(command)
-              options.matches?.set(command, match.user)
-            }
-          },
-          signal
-        )
+    const candidates = new Map<string, Map<string, Promise<DirectoryCandidate>>>()
+    await scanInventoryPathCommands(
+      directories,
+      remaining,
+      (command, dir) => {
+        const byDirectory =
+          candidates.get(command) ?? new Map<string, Promise<DirectoryCandidate>>()
+        candidates.set(command, byDirectory)
+        let candidate = byDirectory.get(dir.key)
+        if (!candidate) {
+          const listing = listings.get(dir.key) ?? readListing(dir)
+          listings.set(dir.key, listing)
+          candidate = listing.then((names) => probeCommand(command, dir, names))
+          byDirectory.set(dir.key, candidate)
+        }
+        return candidate
+      },
+      (command, match) => {
+        inventory.matches.set(command, match)
+        if (match.user) {
+          found.add(command)
+          options.matches?.set(command, match.user)
+          options.onMatch?.()
+        }
+      },
+      (command, uncertain) => {
         remaining.delete(command)
+        candidates.delete(command)
         if (uncertain) {
           options.unverified?.add(command)
         }
-      })
+        options.onCommandComplete?.(command, uncertain)
+      },
+      signal
     )
     return found
   }

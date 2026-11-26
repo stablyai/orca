@@ -7,6 +7,7 @@ export type AgentPathMatch = {
 
 export type PathDirectory = { dir: string; key: string; quoted: boolean; runtime: boolean }
 export type DirectoryCandidate = { hit?: string; uncertain: boolean }
+const PATH_HEAD_START_MS = 100
 
 export function recordDirectoryMatch(
   match: AgentPathMatch,
@@ -26,51 +27,105 @@ export function recordDirectoryMatch(
   return match.unquoted === undefined ? undefined : match.user
 }
 
-export function scanInventoryPathCommand(
-  directories: readonly PathDirectory[],
-  scan: (dir: PathDirectory) => Promise<DirectoryCandidate>,
+function trackPathCommand(
+  directoryCount: number,
   publish: (match: AgentPathMatch) => void,
-  signal: AbortSignal
-): Promise<boolean> {
-  if (directories.length === 0) {
-    return Promise.resolve(false)
-  }
-  const complete = Promise.withResolvers<boolean>()
-  const settled = new Map<number, DirectoryCandidate>()
+  complete: (uncertain: boolean) => void
+): (index: number, dir: PathDirectory, outcome: DirectoryCandidate) => void {
+  const settled = new Map<number, { dir: PathDirectory; outcome: DirectoryCandidate }>()
   const match: AgentPathMatch = {}
   let next = 0
-  let done = false
   let uncertain = false
   let earliestUser: { index: number; hit: string } | undefined
-  for (const [index, dir] of directories.entries()) {
-    void scan(dir).then((outcome) => {
-      if (done || signal.aborted) {
-        complete.resolve(uncertain)
-        return
+  return (index, dir, outcome) => {
+    const previousUser = earliestUser
+    const { first, unquoted } = match
+    if (!dir.runtime && outcome.hit && (!earliestUser || index < earliestUser.index)) {
+      earliestUser = { index, hit: outcome.hit }
+    }
+    settled.set(index, { dir, outcome })
+    let done = false
+    for (let entry = settled.get(next); entry; entry = settled.get(next)) {
+      settled.delete(next++)
+      uncertain ||= entry.outcome.uncertain
+      if (recordDirectoryMatch(match, entry.dir, entry.outcome)) {
+        done = true
+        break
       }
-      if (!dir.runtime && outcome.hit && (!earliestUser || index < earliestUser.index)) {
-        earliestUser = { index, hit: outcome.hit }
-      }
-      settled.set(index, outcome)
-      for (let entry = settled.get(next); entry; entry = settled.get(next)) {
-        settled.delete(next)
-        uncertain ||= entry.uncertain
-        if (recordDirectoryMatch(match, directories[next++], entry)) {
-          done = true
-          break
-        }
-      }
-      done ||= next === directories.length
+    }
+    done ||= next === directoryCount
+    if (
+      done ||
+      previousUser !== earliestUser ||
+      first !== match.first ||
+      unquoted !== match.unquoted
+    ) {
       // Only the settled prefix can prove by-name lookup safe.
-      if (earliestUser) {
-        publish({ ...match, user: earliestUser.hit })
-      } else if (done) {
-        publish(match)
-      }
-      if (done) {
-        complete.resolve(uncertain)
-      }
-    }, complete.reject)
+      publish({ ...match, user: earliestUser?.hit })
+    }
+    if (done) {
+      complete(uncertain)
+    }
   }
-  return complete.promise
+}
+
+export async function scanInventoryPathCommands(
+  directories: readonly PathDirectory[],
+  commands: ReadonlySet<string>,
+  scan: (command: string, dir: PathDirectory) => Promise<DirectoryCandidate>,
+  publish: (command: string, match: AgentPathMatch) => void,
+  complete: (command: string, uncertain: boolean) => void,
+  signal: AbortSignal
+): Promise<void> {
+  const pending = new Map<string, ReturnType<typeof trackPathCommand>>()
+  const allCommandsDecided = Promise.withResolvers<void>()
+  for (const command of commands) {
+    if (directories.length === 0) {
+      complete(command, false)
+      continue
+    }
+    pending.set(
+      command,
+      trackPathCommand(
+        directories.length,
+        (match) => publish(command, match),
+        (uncertain) => {
+          pending.delete(command)
+          complete(command, uncertain)
+          if (pending.size === 0) {
+            allCommandsDecided.resolve()
+          }
+        }
+      )
+    )
+  }
+  if (pending.size === 0) {
+    return
+  }
+  let nextDirectory = 0
+  const run = async (): Promise<void> => {
+    while (!signal.aborted && pending.size && nextDirectory < directories.length) {
+      const index = nextDirectory++
+      const dir = directories[index]
+      await Promise.all(
+        [...pending].map(async ([command, record]) => {
+          const outcome = await scan(command, dir)
+          if (!signal.aborted && pending.has(command)) {
+            record(index, dir, outcome)
+          }
+        })
+      )
+    }
+  }
+  // Let the head settle first on healthy PATHs, then give slow reads one independent directory scan.
+  let overlap: Promise<void> | undefined
+  const timer = setTimeout(() => {
+    overlap = run()
+    void overlap.catch(allCommandsDecided.reject)
+  }, PATH_HEAD_START_MS)
+  try {
+    await Promise.race([allCommandsDecided.promise, run().then(() => overlap)])
+  } finally {
+    clearTimeout(timer)
+  }
 }

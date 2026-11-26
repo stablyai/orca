@@ -23,7 +23,8 @@ export type InventoryPublications = {
 export function mergeInventory(
   result: CommandInventory,
   previous: CommandInventory | undefined,
-  replaced: ReadonlySet<string>
+  replaced: ReadonlySet<string>,
+  pinPrevious = false
 ): CommandInventory {
   const keep = (command: string) => !replaced.has(command)
   return previous
@@ -32,7 +33,12 @@ export function mergeInventory(
         found: new Set([...result.found, ...[...previous.found].filter(keep)]),
         matches: new Map([
           ...result.matches,
-          ...[...previous.matches].filter(([command]) => keep(command))
+          ...[...previous.matches]
+            .filter(([command]) => keep(command))
+            .map(([command, match]): [string, AgentPathMatch] => [
+              command,
+              pinPrevious ? { user: match.user } : match
+            ])
         ]),
         probed: new Set([...result.probed, ...[...previous.probed].filter(keep)])
       }

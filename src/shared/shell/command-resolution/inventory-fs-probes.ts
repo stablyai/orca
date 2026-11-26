@@ -1,8 +1,10 @@
 import type { Stats } from 'node:fs'
 import { access, constants } from 'node:fs/promises'
 import { waitForPromiseWithSignal } from '../../concurrency/abort-signal-reason'
+import { PrioritySemaphore } from '../../concurrency/priority-semaphore'
 
 export const UNVERIFIED_FS_PROBE = Symbol('unverified filesystem probe')
+const SKIPPED_FS_PROBE = Symbol('filesystem probe canceled before admission')
 
 type ProbeValues = {
   stat: Stats
@@ -15,9 +17,11 @@ type ProbeValues = {
 type ProbeKind = keyof ProbeValues
 type ProbeValue = ProbeValues[ProbeKind] | null
 type ProbeResult = ProbeValue | typeof UNVERIFIED_FS_PROBE
-type PendingProbe = { kind: ProbeKind; result: Promise<ProbeResult> }
+type PendingProbe = { kind: ProbeKind; result: Promise<ProbeResult | typeof SKIPPED_FS_PROBE> }
 
 const pendingByPath = new Map<string, PendingProbe>()
+const overrideLane = new PrioritySemaphore(1)
+const inventoryLane = new PrioritySemaphore(2)
 
 export function isPathPermissionError(error: unknown): boolean {
   return (
@@ -38,7 +42,28 @@ export function isMissingPathError(error: unknown): boolean {
 }
 
 export class InventoryFsProbes {
-  constructor(private readonly signal: AbortSignal) {}
+  private readonly lane: PrioritySemaphore
+
+  constructor(
+    readonly signal: AbortSignal,
+    lane: 'inventory' | 'override' = 'inventory'
+  ) {
+    this.lane = lane === 'override' ? overrideLane : inventoryLane
+  }
+
+  private async readWithPermit(
+    read: () => Promise<ProbeResult>
+  ): Promise<ProbeResult | typeof SKIPPED_FS_PROBE> {
+    const release = await this.lane.acquire(0, this.signal).catch(() => undefined)
+    if (!release) {
+      return SKIPPED_FS_PROBE
+    }
+    try {
+      return this.signal.aborted ? SKIPPED_FS_PROBE : await read()
+    } finally {
+      release()
+    }
+  }
 
   read<K extends ProbeKind>(
     path: string,
@@ -53,12 +78,10 @@ export class InventoryFsProbes {
     while (!this.signal.aborted) {
       let pending = pendingByPath.get(path)
       if (!pending) {
-        const result = Promise.resolve()
-          .then(read)
+        const result = this.readWithPermit(read)
           .catch((error: unknown): null | typeof UNVERIFIED_FS_PROBE =>
             isMissingPathError(error) ||
-            ((kind === 'stat' || kind === 'dirs' || kind === 'listing') &&
-              isPathPermissionError(error))
+            ((kind === 'stat' || kind === 'dirs') && isPathPermissionError(error))
               ? null
               : UNVERIFIED_FS_PROBE
           )
@@ -69,7 +92,7 @@ export class InventoryFsProbes {
       const value = await waitForPromiseWithSignal(pending.result, this.signal).catch(
         (): typeof UNVERIFIED_FS_PROBE => UNVERIFIED_FS_PROBE
       )
-      if (pending.kind === kind) {
+      if (value !== SKIPPED_FS_PROBE && pending.kind === kind) {
         return value
       }
     }

@@ -106,7 +106,7 @@ export function envWithPathRelativeTo<T extends Record<string, string | undefine
   return key ? { ...env, [key]: pathEnvRelativeTo(env[key], cwd) } : env
 }
 
-function* firstRunnable(
+export function* firstRunnable(
   platform: NodeJS.Platform,
   directories: string[],
   executableNames: string[]
@@ -183,7 +183,10 @@ function getVersionManagerDirectories(
 }
 
 // Share native/WSL ordering: version-manager bins must precede system Homebrew/npm/snap installs.
-function* cliInstallDirectories(platform: NodeJS.Platform, homePath: string): CliFsReads<string[]> {
+export function* cliInstallDirectories(
+  platform: NodeJS.Platform,
+  homePath: string
+): CliFsReads<string[]> {
   return [
     ...(yield* nvmVersionDirectories(homePath)),
     ...getBaseVersionManagerDirectories(platform, homePath),
@@ -264,30 +267,6 @@ export function expandHomeArgs(args: readonly string[], homePath?: string): stri
 // Extensionless commands cannot spawn on Windows; .cmd/.bat use Orca's shim handling.
 export function isSpawnableCommand(platform: NodeJS.Platform, command: string): boolean {
   return platform !== 'win32' || /\.(exe|com|cmd|bat)$/i.test(command)
-}
-
-export function* cliCommandsLookup(
-  commandNames: readonly string[],
-  options: ResolveCommandOptions = {}
-): CliFsReads<Map<string, string>> {
-  const platform = options.platform ?? process.platform
-  const pathEnv = options.pathEnv ?? process.env.PATH ?? process.env.Path ?? null
-  const pathDirectories = splitPath(pathEnv, platform)
-  const homePath = options.homePath ?? homedir()
-  const installDirectories = yield* cliInstallDirectories(platform, homePath)
-  const resolved = new Map<string, string>()
-
-  for (const commandName of new Set(commandNames)) {
-    const executableNames = getExecutableNames(platform, commandName)
-    const pathCandidate = options.skipPathSearch
-      ? undefined
-      : yield* firstRunnable(platform, pathDirectories, executableNames)
-    const installCandidate =
-      pathCandidate ?? (yield* firstRunnable(platform, installDirectories, executableNames))
-    resolved.set(commandName, installCandidate ?? commandName)
-  }
-
-  return resolved
 }
 
 export function resolveCodexCommand(options: ResolveCommandOptions = {}): string {

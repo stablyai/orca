@@ -1,7 +1,9 @@
 import { accessSync, constants, readFileSync, readdirSync, statSync } from 'node:fs'
-import { access, open, readdir, readFile, stat } from 'node:fs/promises'
+import { access, lstat, open, readdir, readFile, stat } from 'node:fs/promises'
+import { join } from 'node:path'
 import {
   isMissingPathError,
+  isPathPermissionError,
   UNVERIFIED_FS_PROBE,
   type InventoryFsProbes
 } from './inventory-fs-probes'
@@ -88,6 +90,22 @@ async function isNativeExecutableAsync(path: string): Promise<boolean> {
 
 export type CliFsProbeOptions = { probes: InventoryFsProbes; onUnverified: () => void }
 
+async function readInstallDirectoryNames(path: string): Promise<string[]> {
+  const directories: string[] = []
+  for (const name of await readdir(path)) {
+    try {
+      if ((await lstat(join(path, name))).isDirectory()) {
+        directories.push(name)
+      }
+    } catch (error) {
+      if (!isMissingPathError(error) && !isPathPermissionError(error)) {
+        throw error
+      }
+    }
+  }
+  return directories
+}
+
 async function readInstallDirectories(path: string): Promise<string[]> {
   try {
     return (await readdir(path, { withFileTypes: true }))
@@ -101,7 +119,7 @@ async function readInstallDirectories(path: string): Promise<string[]> {
       throw error
     }
     // On DT_UNKNOWN filesystems a vanished entry can fail the Dirent conversion.
-    return readdir(path)
+    return readInstallDirectoryNames(path)
   }
 }
 
@@ -133,8 +151,9 @@ async function readAsync(
           : readFile(read.path, 'utf8'))
       }
       case 'dirs':
+        // Dirent conversion can fan out DT_UNKNOWN lstat calls beyond the inventory permit.
         return probes
-          ? await probes.read(read.path, 'dirs', () => readInstallDirectories(read.path))
+          ? await probes.read(read.path, 'dirs', () => readInstallDirectoryNames(read.path))
           : await readInstallDirectories(read.path)
       case 'native':
         return await isNativeExecutableAsync(read.path)

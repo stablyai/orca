@@ -179,11 +179,11 @@ it.each([
     command: test.expected,
     launchConfig: { ...legacy(test.recipe), commandProvenance: 'generated' }
   })
+  await detectAgentCommandsOnHost(['qoder', 'qodercli'], { afterPublication: 0 })
   expect(fixture.enumerate).toHaveBeenCalledTimes(1)
 })
 
 it('opens a usable shell after one Qoder inventory deadline from terminal create', async () => {
-  await executable('path', windows ? 'qodercli.exe' : 'qodercli')
   const entered = Promise.withResolvers<void>()
   const held = Promise.withResolvers<void>()
   fixture.onScan = entered.resolve
@@ -224,7 +224,7 @@ it('opens a usable shell after one Qoder inventory deadline from terminal create
       blocked: 'unknown'
     })
   } finally {
-    const completion = readLocalTerminalAgentProgram('qodercli', shell)
+    const completion = detectAgentCommandsOnHost(['qodercli'], { waitForCompletion: true })
     held.resolve()
     await Promise.all([completion, launch])
   }
@@ -446,7 +446,7 @@ it('shares guest inventory until that distro is invalidated', async () => {
   expect(fixture.wslProcess).toHaveBeenCalledTimes(3)
 })
 
-it('publishes a completed scan and resolves its early waiter while a successor runs', async () => {
+it('launches from each scan while unrelated installer reads are still pending', async () => {
   const user = await executable('path', claudeName)
   const replacement = await executable('new-path', claudeName)
   const entered = Promise.withResolvers<void>()
@@ -456,27 +456,21 @@ it('publishes a completed scan and resolves its early waiter while a successor r
   fixture.onScan = entered.resolve
   fixture.installs = held.promise
   const early = readLocalTerminalAgentProgram('claude', shell)
-  let earlyResult: Awaited<typeof early> | undefined
-  void early.then((result) => {
-    earlyResult = result
-  })
   try {
     await entered.promise
+    await expect(early).resolves.toEqual({ kind: 'by-name', path: user })
     fixture.path = dirname(replacement)
     fixture.onScan = successorEntered.resolve
     fixture.installs = successorHeld.promise
     const refresh = detectAgentCommandsOnHost(['claude'], { refresh: true })
     held.resolve()
     await successorEntered.promise
-    const published = await Promise.race([
-      readLocalTerminalAgentProgram('claude', shell),
-      new Promise((resolve) => setImmediate(() => resolve('pending')))
-    ])
-    const settledWhileSuccessorRan = earlyResult
+    await expect(readLocalTerminalAgentProgram('claude', shell)).resolves.toEqual({
+      kind: 'by-name',
+      path: replacement
+    })
     successorHeld.resolve()
     await expect(refresh).resolves.toEqual(new Set(['claude']))
-    expect(settledWhileSuccessorRan).toEqual({ kind: 'by-name', path: user })
-    expect(published).toEqual({ kind: 'by-name', path: user })
     await expect(readLocalTerminalAgentProgram('claude', shell)).resolves.toEqual({
       kind: 'by-name',
       path: replacement
@@ -501,6 +495,7 @@ it('lets two pickers reuse a completed inventory after their cold deadlines', as
   const detections = Promise.all([detectForPicker(), detectForPicker()])
   try {
     await entered.promise
+    await readLocalTerminalAgentProgram('claude', shell)
     await vi.advanceTimersByTimeAsync(10_000)
     await expect(detections).resolves.toMatchObject([
       { agents: ['claude'], incomplete: true, afterPublication: 0 },
@@ -539,6 +534,7 @@ it('returns the published agents as incomplete when a detect wait expires', asyn
   )
   try {
     await entered.promise
+    await readLocalTerminalAgentProgram('claude', shell)
     await vi.advanceTimersByTimeAsync(10_000)
     expect(await detect).toMatchObject({
       agents: ['claude'],
@@ -605,7 +601,10 @@ it('allows workspace creation to retry its draft after an inventory timeout', as
     expect(refusal).toHaveProperty('data', { afterPublication })
     expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
   } finally {
-    const completion = readLocalTerminalAgentProgram('claude', shell)
+    const completion = detectAgentCommandsOnHost(['claude'], {
+      afterPublication,
+      waitForCompletion: true
+    })
     held.resolve()
     await completion
   }

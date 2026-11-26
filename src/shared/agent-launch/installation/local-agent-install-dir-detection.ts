@@ -1,34 +1,51 @@
+import { homedir } from 'node:os'
 import path from 'node:path'
-import { resolveCliCommandsAsync } from '../../shell/command-resolution/node-cli-command-async-resolution'
-import type { CliFsProbeOptions } from '../../shell/command-resolution/cli-fs-reads'
+import { runCliFsReadsAsync } from '../../shell/command-resolution/cli-fs-reads'
+import type { InventoryFsProbes } from '../../shell/command-resolution/inventory-fs-probes'
+import {
+  cliInstallDirectories,
+  firstRunnable,
+  getExecutableNames
+} from '../../shell/command-resolution/node-cli-command-resolution'
 
-// Why: detection may precede shell-PATH hydration, but the fallback stays bounded.
 export async function detectCommandsInInstallDirs(
   commands: readonly string[],
-  /** The PATH detection searched; defaults to this process's own. */
-  pathEnv?: string,
-  options?: { skipPathSearch?: boolean; fs?: CliFsProbeOptions }
-): Promise<Map<string, string>> {
-  if (commands.length === 0) {
-    return new Map()
+  {
+    probes,
+    needsLookup,
+    complete
+  }: {
+    probes: InventoryFsProbes
+    needsLookup: (command: string) => Promise<boolean>
+    complete: (command: string, user: string | null, uncertain: boolean) => void
   }
-  try {
-    const resolvedCommands = await resolveCliCommandsAsync(
-      commands,
-      {
-        ...(pathEnv === undefined ? {} : { pathEnv }),
-        ...(options?.skipPathSearch ? { skipPathSearch: true } : {})
-      },
-      options?.fs
-    )
-    // Each command found, to the full path it was found at.
-    return new Map(
-      commands.flatMap((command) => {
-        const resolved = resolvedCommands.get(command)
-        return resolved && path.isAbsolute(resolved) ? [[command, resolved] as const] : []
+): Promise<void> {
+  const platform = process.platform
+  let directories: Promise<string[]> | undefined
+  let unverifiedDirectories = false
+  await Promise.all(
+    commands.map(async (command) => {
+      if (!(await needsLookup(command)) || probes.signal.aborted) {
+        return
+      }
+      directories ??= runCliFsReadsAsync(cliInstallDirectories(platform, homedir()), {
+        probes,
+        onUnverified: () => {
+          unverifiedDirectories = true
+        }
       })
-    )
-  } catch {
-    return new Map()
-  }
+      const dirs = await directories
+      let uncertain = unverifiedDirectories
+      const user = await runCliFsReadsAsync(
+        firstRunnable(platform, dirs, getExecutableNames(platform, command)),
+        {
+          probes,
+          onUnverified: () => {
+            uncertain = true
+          }
+        }
+      )
+      complete(command, user && path.isAbsolute(user) ? user : null, uncertain)
+    })
+  )
 }

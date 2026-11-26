@@ -121,6 +121,9 @@ export async function selectTerminalAgentProgram(
     const read = slot
       ? readInventory(slot, programs, refresh ? 'revalidate' : 'read', {
           acceptAnyMatch: true,
+          qualifiesEarly: wsl
+            ? undefined
+            : (match) => qualifyProgram(match, shell).kind === 'by-name',
           revalidateUnavailable: options.revalidateUnavailable,
           waitForCompletion: true
         })

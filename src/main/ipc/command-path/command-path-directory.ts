@@ -1,5 +1,5 @@
 import type { Dir, Stats } from 'node:fs'
-import { access, constants as fsConstants, opendir, stat } from 'node:fs/promises'
+import { access, constants as fsConstants, opendir, readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import {
   isMissingPathError,
@@ -93,15 +93,30 @@ export async function readDetectionDirectory(
   dir: string,
   inventory = false
 ): Promise<DetectionDirectoryListing> {
+  if (inventory) {
+    try {
+      // Names-only reads avoid synchronous DT_UNKNOWN lookups in the directory worker.
+      const names = await readdir(dir)
+      return names.length > MAX_DETECTION_DIRECTORY_ENTRIES ||
+        names.some((name) => /[^\p{ASCII}]/u.test(name))
+        ? null
+        : new Map(names.map((name) => [directoryNameKey(name), name]))
+    } catch (error) {
+      if (isMissingPathError(error)) {
+        return new Map()
+      }
+      return isPathPermissionError(error) ? null : 'unverified'
+    }
+  }
   let directory: Dir
   try {
     directory = await opendir(dir, { bufferSize: MAX_DETECTION_DIRECTORY_ENTRIES + 1 })
   } catch (error) {
-    if (isMissingPathError(error) || (inventory && isPathPermissionError(error))) {
+    if (isMissingPathError(error)) {
       return new Map()
     }
     // Searchable-but-unreadable directories still admit stat on known names.
-    return inventory ? 'unverified' : null
+    return null
   }
   try {
     const names = new Map<string, string>()
@@ -118,11 +133,7 @@ export async function readDetectionDirectory(
       names.set(directoryNameKey(entry.name), entry.name)
     }
     return names
-  } catch (error) {
-    if (inventory && isPathPermissionError(error)) {
-      return new Map()
-    }
-    // A vanished entry during Dirent conversion cannot prove the directory empty.
-    return inventory ? 'unverified' : null
+  } catch {
+    return null
   }
 }

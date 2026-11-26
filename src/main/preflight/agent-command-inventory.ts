@@ -4,6 +4,7 @@ import {
   invalidateWslGuestEnvironment
 } from '../wsl/execution/wsl-guest-environment'
 import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-reason'
+import type { AgentPathMatch } from '../ipc/command-path/command-path-batch'
 import {
   mergeInventory,
   publishInventory,
@@ -11,21 +12,21 @@ import {
   type InventoryPublication,
   type InventoryPublications
 } from './agent-command-inventory-publication'
+import { readInventoryScan, type InventoryRead } from './agent-command-inventory-scan-read'
 import {
+  notifyScanChange,
   partialLocalAgentCommandInventory,
-  scanLocalAgentCommandInventory
+  scanLocalAgentCommandInventory,
+  type LocalInventoryScan
 } from './local-agent-command-inventory'
 
 export const INVENTORY_WAIT_MS = 10_000
 const INVENTORY_RETRY_MS = 5_000
 
 type InventoryMode = 'read' | 'detect' | 'revalidate' | 'refresh'
-type InventoryScan = {
+export type InventoryScan = LocalInventoryScan & {
   publication: PromiseWithResolvers<InventoryPublication | null>
   complete: PromiseWithResolvers<InventoryPublication | null>
-  controller: AbortController
-  progress: Pick<CommandInventory, 'found' | 'matches'>
-  partial?: InventoryPublication
   successor?: InventoryScan
   started: boolean
   commands: Set<string>
@@ -37,10 +38,6 @@ type InventoryScan = {
 type PendingInventory = {
   active: InventoryScan
   queued?: InventoryScan
-}
-type InventoryRead = {
-  wait: (signal: AbortSignal) => Promise<InventoryPublication | null>
-  snapshot: () => InventoryPublication | null
 }
 export type InventorySlot = InventoryPublications & {
   stockCommands: readonly string[]
@@ -89,7 +86,13 @@ async function scanInventory(
     }
   }
   const readLoginPath = !targeted && (mode === 'read' || mode === 'revalidate')
-  return scanLocalAgentCommandInventory(commands, readLoginPath, progress, controller.signal)
+  return scanLocalAgentCommandInventory(
+    commands,
+    readLoginPath,
+    progress,
+    () => notifyScanChange(scan),
+    controller.signal
+  )
 }
 
 function partialInventory(slot: InventorySlot, scan: InventoryScan): CommandInventory {
@@ -97,7 +100,8 @@ function partialInventory(slot: InventorySlot, scan: InventoryScan): CommandInve
   return mergeInventory(
     progress,
     currentInventoryPublication(slot, 'complete')?.inventory,
-    progress.probed
+    progress.probed,
+    true
   )
 }
 
@@ -111,7 +115,8 @@ function createScan(
     publication: Promise.withResolvers(),
     complete: Promise.withResolvers(),
     controller: new AbortController(),
-    progress: { found: new Set(), matches: new Map() },
+    progress: { found: new Set(), matches: new Map(), probed: new Set() },
+    changed: Promise.withResolvers(),
     started: false,
     commands: new Set(commands),
     mode,
@@ -144,6 +149,7 @@ async function runInventoryScans(slot: InventorySlot, pending: PendingInventory)
       : setTimeout(() => {
           scan.partial = publishInventory(slot, partialInventory(slot, scan), scan, true)
           scan.publication.resolve(scan.partial)
+          notifyScanChange(scan)
           if (pending.queued) {
             scan.controller.abort()
           }
@@ -181,6 +187,8 @@ async function runInventoryScans(slot: InventorySlot, pending: PendingInventory)
     }
     scan.publication.resolve(publication)
     scan.complete.resolve(publication)
+    scan.finished = true
+    notifyScanChange(scan)
     if (pending.queued) {
       pending.active = pending.queued
       delete pending.queued
@@ -198,11 +206,13 @@ export function readInventory(
   {
     targeted = false,
     acceptAnyMatch = false,
+    qualifiesEarly,
     revalidateUnavailable = false,
     waitForCompletion = false
   }: {
     targeted?: boolean
     acceptAnyMatch?: boolean
+    qualifiesEarly?: (match: AgentPathMatch | undefined) => boolean
     revalidateUnavailable?: boolean
     waitForCompletion?: boolean
   } = {}
@@ -226,34 +236,30 @@ export function readInventory(
     wait: (signal) => waitForPromiseWithSignal(Promise.resolve(published ?? null), signal),
     snapshot: () => published ?? null
   })
-  if (settled && !revalidateMiss && (!published?.partial || !waitForCompletion || acceptAnyMatch)) {
+  if (
+    settled &&
+    !revalidateMiss &&
+    (!qualifiesEarly || !slot.pending) &&
+    (!published?.partial || !waitForCompletion || acceptAnyMatch)
+  ) {
     return readPublished()
   }
 
-  const readScan = (scan: InventoryScan): InventoryRead => ({
-    wait: async (signal) => {
-      if (!waitForCompletion) {
-        return waitForPromiseWithSignal(scan.publication.promise, signal)
-      }
-      for (;;) {
-        const publication = await waitForPromiseWithSignal(scan.complete.promise, signal)
-        const successor = scan.successor
-        if (!successor || !requested.every((command) => successor.commands.has(command))) {
-          return publication
-        }
-        scan = successor
-      }
-    },
-    snapshot: () =>
-      slot.distro
-        ? (currentInventoryPublication(slot) ?? null)
-        : {
-            inventory: partialInventory(slot, scan),
-            generation,
-            sequence: scan.partial?.sequence ?? slot.published?.sequence ?? 0,
-            partial: true
-          }
-  })
+  const readScan = (scan: InventoryScan): InventoryRead =>
+    readInventoryScan(scan, {
+      requested,
+      qualifiesEarly,
+      waitForCompletion,
+      snapshot: (current, inventory) =>
+        slot.distro
+          ? (currentInventoryPublication(slot) ?? null)
+          : {
+              inventory: inventory ?? partialInventory(slot, current),
+              generation,
+              sequence: current.partial?.sequence ?? slot.published?.sequence ?? 0,
+              partial: true
+            }
+    })
   const commands = targeted ? requested : [...slot.stockCommands, ...requested]
   const pending = slot.pending
   if (pending) {
