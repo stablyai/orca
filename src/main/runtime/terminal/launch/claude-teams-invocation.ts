@@ -4,10 +4,8 @@ import { delimiter, isAbsolute, join, resolve } from 'node:path'
 import { readLaunchPosition } from '../../../../shared/agent-launch/startup/launch-position'
 import { structuredAgentCommandPlan } from '../../../../shared/agent-launch/startup/tui-agent-launch-command-override'
 import { launchCommandProvenance } from '../../../../shared/agent-launch/startup/managed-agent-launch-program'
-import {
-  throwIfSignalAborted,
-  waitForPromiseWithSignal
-} from '../../../../shared/concurrency/abort-signal-reason'
+import { abortSignalReason } from '../../../../shared/concurrency/abort-signal-reason'
+import { PromiseSettlementWaiters } from '../../../../shared/concurrency/promise-settlement-waiters'
 import { stripWindowsPathQuotes } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
 import {
   AgentInventoryDeadlineError,
@@ -22,7 +20,8 @@ import {
 } from '../../../ipc/command-path/command-path-resolver'
 
 type Caller = { env?: Record<string, string>; cwd?: string }
-const pendingCallerClaudeLookups = new Map<string, Promise<string | null>>()
+const pendingCallerClaudeLookups = new Map<string, PromiseSettlementWaiters<string | null>>()
+const windowsDirectExecutable = /\.(exe|com)$/i
 
 export async function resolveClaudeTeamsInvocation(
   override: string | undefined,
@@ -56,59 +55,93 @@ export async function resolveClaudeTeamsInvocation(
 
 async function userClaude(caller: Caller): Promise<string> {
   return withAgentInventoryDeadline(async (signal) => {
-    const selection = await readLocalTerminalAgentProgram('claude', 'posix', false, signal)
-    throwIfSignalAborted(signal)
-    if ('path' in selection) {
-      return selection.path
-    }
-    if (caller.env) {
-      const command = await waitForPromiseWithSignal(
-        resolveClaudeOnCallerPath(caller.env, caller.cwd ?? caller.env.PWD),
-        signal
-      )
+    const callerWait = new AbortController()
+    const callerSignal = AbortSignal.any([signal, callerWait.signal])
+    const callerResult = caller.env
+      ? resolveClaudeOnCallerPath(caller.env, caller.cwd ?? caller.env.PWD, callerSignal).catch(
+          () => null
+        )
+      : null
+    try {
+      const selection = await readLocalTerminalAgentProgram('claude', 'posix', false, signal)
+      if (
+        'path' in selection &&
+        (process.platform !== 'win32' || windowsDirectExecutable.test(selection.path))
+      ) {
+        return selection.path
+      }
+      const command = await callerResult
       if (command) {
         return command
       }
+      if (signal.aborted || selection.kind === 'unknown') {
+        throw new AgentInventoryDeadlineError()
+      }
+      throw new Error('Your Claude installation could not be found.')
+    } finally {
+      callerWait.abort()
     }
-    if (selection.kind === 'unknown') {
-      throw new AgentInventoryDeadlineError()
-    }
-    throw new Error('Your Claude installation could not be found.')
   })
 }
 
 function resolveClaudeOnCallerPath(
   env: Record<string, string>,
-  cwd: string | undefined
+  cwd: string | undefined,
+  signal: AbortSignal
 ): Promise<string | null> {
   const windows = process.platform === 'win32'
   const callerPath = windows
     ? (readEnvCaseInsensitive(env, 'PATH') ?? '')
     : (env.PATH ?? '/usr/bin:/bin')
+  const callerDirectory = cwd && isAbsolute(cwd) ? cwd : undefined
   const path = callerPath
     .split(delimiter)
     .map((dir) => (windows ? stripWindowsPathQuotes(dir) : dir))
-    .map((dir) => (cwd && isAbsolute(cwd) ? resolve(cwd, dir) : dir))
+    .map((dir) => (callerDirectory || isAbsolute(dir) ? resolve(callerDirectory ?? '', dir) : dir))
     .filter((dir) => isAbsolute(dir) && !isOrcaAgentRuntimePath(dir))
     .join(delimiter)
   const pathExt = windows ? readEnvCaseInsensitive(env, 'PATHEXT') : undefined
-  const key = JSON.stringify([path, cwd, pathExt])
+  // Relative entries already contain the caller's directory after resolution.
+  const key = JSON.stringify([path, pathExt])
   let pending = pendingCallerClaudeLookups.get(key)
   if (!pending) {
-    pending = resolveCommandOnLocalPath('claude', {
-      env: { PATH: path, PATHEXT: pathExt },
-      cwd,
-      probeCandidate: async (candidate) => {
-        if (isOrcaAgentRuntimePath(candidate) || !(await isExecutableFile(candidate, windows))) {
-          return false
+    const controller = new AbortController()
+    const lookup = new PromiseSettlementWaiters<string | null>(
+      Promise.resolve().then(() => {
+        if (lookup.waiterCount === 0) {
+          return null
         }
-        const target = await realpath(candidate).catch(() => undefined)
-        return Boolean(target && !isOrcaAgentRuntimePath(target))
-      }
-    }).finally(() => {
-      pendingCallerClaudeLookups.delete(key)
-    })
+        return resolveCommandOnLocalPath('claude', {
+          env: { PATH: path, PATHEXT: pathExt },
+          // The direct launcher receives an absolute path from the caller's PATH search.
+          cwd: '',
+          signal: controller.signal,
+          probeCandidate: async (candidate) => {
+            if (
+              (windows && !windowsDirectExecutable.test(candidate)) ||
+              isOrcaAgentRuntimePath(candidate)
+            ) {
+              return false
+            }
+            try {
+              if (!(await isExecutableFile(candidate, windows)) || lookup.waiterCount === 0) {
+                return false
+              }
+              const target = await realpath(candidate).catch(() => undefined)
+              return Boolean(target && !isOrcaAgentRuntimePath(target))
+            } finally {
+              // Let a new waiter join an issued probe, then stop before admitting another.
+              if (lookup.waiterCount === 0) {
+                controller.abort()
+              }
+            }
+          }
+        })
+      }),
+      () => pendingCallerClaudeLookups.delete(key)
+    )
+    pending = lookup
     pendingCallerClaudeLookups.set(key, pending)
   }
-  return pending
+  return pending.wait({ signal, createAbortError: () => abortSignalReason(signal) })
 }

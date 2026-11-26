@@ -7,6 +7,7 @@ import {
 import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import type { RuntimeLocalWorktreeTerminalPorts } from '../startup/runtime-local-worktree-terminal-startup'
 import { wslUserAct } from '../startup/workspace-create-activation'
@@ -22,7 +23,8 @@ export abstract class OrcaRuntimeWithGroupFolderSetup extends OrcaRuntimeWithGet
   protected finishGroupFolderCreation = async (
     input: RuntimeGroupFolderCreateInput,
     group: ProjectGroup,
-    workspace: FolderWorkspace
+    workspace: FolderWorkspace,
+    draftAgent?: TuiAgent | null
   ) => {
     const store = this.requireStore()
     const worktree = this.folderWorkspaceToResolvedWorktree(workspace)
@@ -74,6 +76,7 @@ export abstract class OrcaRuntimeWithGroupFolderSetup extends OrcaRuntimeWithGet
             },
             draft,
             requestedAgent,
+            resolvedAgent: draftAgent,
             originalAgent: inputs?.createdWithAgent ?? requestedAgent,
             agentArgs: inputs?.startupAgentArgs,
             sessionOptions:

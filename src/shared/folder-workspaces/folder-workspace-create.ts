@@ -22,6 +22,7 @@ export type FolderWorkspaceCreateInput = {
   startupAgent?: TuiAgent
   startupPrompt?: string
   startupDraft?: string
+  afterPublication?: number
   startupAgentArgs?: string | null
   startupSessionOptions?: Record<string, string>
   startupLaunchPreferences?: AgentLaunchPreferences

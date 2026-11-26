@@ -190,7 +190,7 @@ export async function detectInstalledAgents(
 
 function completeAgentList(inventory: InstalledAgentInventory): string[] {
   if (inventory.incomplete) {
-    throw new AgentInventoryDeadlineError()
+    throw new AgentInventoryDeadlineError(inventory.afterPublication)
   }
   return inventory.agents
 }

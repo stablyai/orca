@@ -5,6 +5,7 @@ import type { RuntimeGroupFolderCreateInput } from '../workspaces/creation/runti
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project/groups/project-group-types'
 import type { Repo } from '../../../shared/repository/repo-types'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import type { RuntimeWorktreeLifecycleEvent } from '../workspaces/lifecycle/worktree-lifecycle-event'
 
@@ -24,7 +25,8 @@ export type RuntimeProjectGroupDependencies = {
   finishFolderCreation?: (
     input: RuntimeGroupFolderCreateInput,
     group: ProjectGroup,
-    workspace: FolderWorkspace
+    workspace: FolderWorkspace,
+    draftAgent?: TuiAgent | null
   ) => Promise<FolderWorkspaceCreateResult>
 }
 

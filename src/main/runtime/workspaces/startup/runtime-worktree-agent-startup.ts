@@ -57,7 +57,10 @@ type StartupEnvironment = {
 
 /** Choose requested, default or execution-host-detected agent; null means no agent. */
 export async function resolveWorktreeStartupDraftAgent(
-  environment: Pick<StartupEnvironment, 'repo' | 'settings'> & { requestedAgent?: TuiAgent }
+  environment: Pick<StartupEnvironment, 'repo' | 'settings'> & {
+    requestedAgent?: TuiAgent
+    afterPublication?: number
+  }
 ): Promise<TuiAgent | null> {
   const { repo, settings } = environment
   const preferredAgent = environment.requestedAgent ?? settings.defaultTuiAgent
@@ -78,6 +81,7 @@ export async function resolveWorktreeStartupDraftAgent(
       sshConnectionId ? { kind: 'ssh', connectionId: sshConnectionId } : { kind: 'local' },
       {
         disabledTuiAgents: settings.disabledTuiAgents,
+        afterPublication: environment.afterPublication,
         ...agentCommandOverrideDetectionOptions(settings.agentCmdOverrides)
       }
     )
@@ -94,6 +98,8 @@ export async function buildWorktreeStartupForDraft(
     draft: string
     requestedAgent?: TuiAgent
     originalAgent?: TuiAgent
+    resolvedAgent?: TuiAgent | null
+    afterPublication?: number
   }
 ): Promise<{
   agent: TuiAgent
@@ -106,8 +112,11 @@ export async function buildWorktreeStartupForDraft(
     return null
   }
   const { repo, settings } = environment
-  const agent = await resolveWorktreeStartupDraftAgent(environment)
-  if (!agent) {
+  const agent =
+    environment.resolvedAgent === undefined
+      ? await resolveWorktreeStartupDraftAgent(environment)
+      : environment.resolvedAgent
+  if (!agent || !isTuiAgentEnabled(agent, settings.disabledTuiAgents)) {
     return null
   }
 

@@ -128,6 +128,21 @@ export async function createWorktreeWithNameRetry(
       response = fallback.response
       replayed = fallback.replayed
     }
+    if (!response.ok && !replayed && !launch && params.startupDraft) {
+      const afterPublication = readInventoryRetryCursor(response.error.data)
+      if (afterPublication !== undefined) {
+        // The host refused before creating. Retry this draft once with the same mutation key.
+        const retry = await sendWorktreeCreateResilient(
+          client,
+          null,
+          null,
+          { ...params, afterPublication },
+          worktreeCreateIdempotency
+        )
+        response = retry.response
+        replayed = retry.replayed
+      }
+    }
     // Ledger refusal may follow creation; never retry unnamed. Inspect raw refusal messages for legacy collision handling.
     if (response.ok) {
       const created = readCreateResult(response, launch)
@@ -159,6 +174,15 @@ export async function createWorktreeWithNameRetry(
       lastError ??
       translate('tasks.worktreeCreateRetry.createFailed', 'Failed to create workspace'),
     ...(lastReplayed ? { replayed: true as const } : {})
+  }
+}
+
+function readInventoryRetryCursor(data: unknown): number | undefined {
+  if (data && typeof data === 'object' && 'afterPublication' in data) {
+    const cursor = data.afterPublication
+    if (typeof cursor === 'number' && Number.isSafeInteger(cursor) && cursor >= 0) {
+      return cursor
+    }
   }
 }
 

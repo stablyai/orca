@@ -1,11 +1,12 @@
 import type * as PreflightRuntimeTarget from '../../../../ipc/preflight/preflight-runtime-target'
 import type * as InstallerDetection from '../../../../../shared/agent-launch/installation/local-agent-install-dir-detection'
+import type * as FileSystem from 'node:fs/promises'
 import type * as NodeOs from 'node:os'
 import type * as AppEnvironment from '../../../../../shared/app-lifecycle/app-environment'
 import type * as WslDefaultDistro from '../../../../wsl/discovery/wsl-default-distro'
 import type * as WslRunner from '../../../../wsl/execution/wsl-runner'
 import type { SleepingAgentLaunchConfig } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -18,7 +19,8 @@ import {
 import {
   detectAgentCommandsOnHost,
   readLocalTerminalAgentProgram,
-  readWslTerminalAgentProgram
+  readWslTerminalAgentProgram,
+  selectTerminalAgentProgram
 } from '../../../../preflight/agent-command-detection'
 import { invalidateWslGuestEnvironment } from '../../../../wsl/execution/wsl-guest-environment'
 import {
@@ -59,6 +61,10 @@ vi.mock('../../../../../shared/app-lifecycle/app-environment', async (original) 
 vi.mock('../../../../orca-profiles/profile-storage-paths', () => ({
   getProfileUserDataPath: () => fixture.root
 }))
+vi.mock('node:fs/promises', async (original) => {
+  const fs = await original<typeof FileSystem>()
+  return { ...fs, realpath: vi.fn(fs.realpath) }
+})
 vi.mock('node:os', async (original) => ({
   ...(await original<typeof NodeOs>()),
   homedir: () => fixture.root
@@ -192,7 +198,10 @@ it('opens a usable shell after one Qoder inventory deadline from terminal create
       command: 'qodercli --verbose',
       launchAgent: 'qoder',
       launchConfig,
-      launchRuntime: { platform: process.platform, pty: {} }
+      launchRuntime: {
+        platform: process.platform,
+        pty: { shellOverride: undefined, terminalWindowsWslDistro: null }
+      }
     },
     { store: partialRuntimeStore(), hostIdentity: 'test', toSessionOptions: () => undefined }
   ).then((options) =>
@@ -619,6 +628,26 @@ it('uses WSL fallback hits and retries inconclusive misses after cooldown', asyn
   expect(fixture.wslProcess).toHaveBeenCalledTimes(2)
 })
 
+it('selects and reuses a confirmed WSL Qoder alias with an unverified preferred spelling', async () => {
+  vi.useFakeTimers()
+  fixture.wslProcess.mockResolvedValueOnce({
+    code: 0,
+    stdout: '__ORCA_AGENT_PATH__qoder\t/opt/qoder/bin/qoder\n',
+    stderr: '',
+    timedOut: false,
+    environmentResolved: false
+  })
+  const select = () =>
+    selectTerminalAgentProgram(['qodercli', 'qoder'], 'posix', {
+      wsl: { distro: 'QoderAliasUbuntu' }
+    })
+  const expected = { program: 'qoder', result: { kind: 'by-name', path: 'qoder' } }
+  await expect(select()).resolves.toEqual(expected)
+  await vi.advanceTimersByTimeAsync(5_001)
+  await expect(select()).resolves.toEqual(expected)
+  expect(fixture.wslProcess).toHaveBeenCalledTimes(1)
+})
+
 it('coalesces refreshes requested during an active WSL refresh into one successor', async () => {
   const entered = Promise.withResolvers<void>()
   const held = Promise.withResolvers<WslRunner.WslResult>()
@@ -677,4 +706,31 @@ it.skipIf(windows)('expands the executable head for standalone Agent Teams', asy
     args: ['--verbose']
   })
   await expect(resolveClaudeTeamsInvocation('claude $FLAGS')).rejects.toThrow('requires a shell')
+})
+
+it('uses the verified caller PATH for standalone Agent Teams when host inventory times out', async () => {
+  const callerClaude = await executable('caller-bin', claudeName)
+  const entered = Promise.withResolvers<void>()
+  const held = Promise.withResolvers<void>()
+  fixture.onScan = entered.resolve
+  fixture.installs = held.promise
+  const checked = vi.mocked(realpath).mockClear()
+  vi.useFakeTimers()
+  const launch = resolveClaudeTeamsInvocation(undefined, {
+    env: { PATH: dirname(callerClaude), PATHEXT: '.exe' }
+  })
+  const resolved = launch.catch((error: unknown) => error)
+  try {
+    await entered.promise
+    await vi.waitFor(() => {
+      const call = checked.mock.calls.findIndex(([file]) => file === callerClaude)
+      expect(checked.mock.settledResults[call]?.type).toBe('fulfilled')
+    })
+    await vi.advanceTimersByTimeAsync(10_000)
+    await expect(resolved).resolves.toEqual({ command: callerClaude })
+  } finally {
+    const completion = readLocalTerminalAgentProgram('claude', shell)
+    held.resolve()
+    await Promise.all([completion, resolved])
+  }
 })

@@ -123,6 +123,7 @@ export function buildManagedWorktreeCreateArgs(
       ? { startupLaunchPreferences: params.startupLaunchPreferences }
       : {}),
     startupDraft: params.startupDraft,
+    ...(params.afterPublication === undefined ? {} : { afterPublication: params.afterPublication }),
     lineage: {
       parentWorkspace: params.parentWorkspace,
       ...(params.parentWorkspaceOrigin ? { parentWorkspaceOrigin: 'manual' as const } : {}),

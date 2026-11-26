@@ -23,6 +23,7 @@ export const FolderWorkspaceHookCreateShape = {
   startupAgent: z.string().refine(isTuiAgent).optional(),
   startupPrompt: OptionalString,
   startupDraft: OptionalString,
+  afterPublication: z.number().int().nonnegative().optional(),
   startupAgentArgs: AgentArgs.optional(),
   startupSessionOptions: z.record(z.string(), z.string()).optional(),
   startupLaunchPreferences: LaunchPreferences.optional(),

@@ -23,8 +23,13 @@ import {
 
 const INVENTORY_WAIT_MS = 10_000
 export class AgentInventoryDeadlineError extends Error {
-  constructor() {
+  readonly data?: { afterPublication: number }
+
+  constructor(afterPublication?: number) {
     super('Agent inventory is still running. Try again.')
+    if (afterPublication !== undefined) {
+      this.data = { afterPublication }
+    }
   }
 }
 
@@ -101,16 +106,20 @@ export async function selectTerminalAgentProgram(
     throwIfSignalAborted(waitSignal)
     const inventory = slot
       ? await waitForPromiseWithSignal(
-          readInventory(slot, programs, refresh ? 'revalidate' : 'read'),
+          readInventory(slot, programs, refresh ? 'revalidate' : 'read', {
+            acceptAnyMatch: true
+          }),
           waitSignal
         )
       : null
     if (!inventory || (!wsl && slot !== getLocalInventory())) {
       return { program: preferred, result: { kind: 'unknown' } }
     }
+    let inconclusive = false
     for (const program of programs) {
       if (!inventory.probed.has(program)) {
-        return { program, result: { kind: 'unknown' } }
+        inconclusive = true
+        continue
       }
       const result: TerminalAgentProgram = wsl
         ? inventory.found.has(program)
@@ -121,7 +130,7 @@ export async function selectTerminalAgentProgram(
         return { program, result }
       }
     }
-    return { program: preferred, result: { kind: 'unavailable' } }
+    return { program: preferred, result: { kind: inconclusive ? 'unknown' : 'unavailable' } }
   }, signal).catch(() => ({ program: preferred, result: { kind: 'unknown' as const } }))
 }
 
@@ -191,7 +200,9 @@ export async function detectAgentCommandInventoryOnHost(
         const inventory =
           (!options.refresh ? completeInventoryAfter(slot, before, commands) : undefined) ??
           (await waitForPromiseWithSignal(
-            readInventory(slot, commands, options.refresh ? refreshMode : ordinaryMode, targeted),
+            readInventory(slot, commands, options.refresh ? refreshMode : ordinaryMode, {
+              targeted
+            }),
             waitSignal
           ))
         return { slot, inventory }

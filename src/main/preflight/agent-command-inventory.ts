@@ -251,16 +251,21 @@ export function readInventory(
   slot: InventorySlot,
   requested: readonly string[],
   mode: InventoryMode,
-  targeted = false
+  {
+    targeted = false,
+    acceptAnyMatch = false
+  }: { targeted?: boolean; acceptAnyMatch?: boolean } = {}
 ): Promise<CommandInventory | null> {
   const generation = inventoryGeneration(slot)
   const current = slot.published?.generation === generation ? slot.published?.inventory : undefined
   if (
     mode === 'read' &&
     current &&
-    requested.every(
+    (requested.every(
       (cmd) => current.probed.has(cmd) && (!current.incomplete || current.found.has(cmd))
-    )
+    ) ||
+      (acceptAnyMatch &&
+        requested.some((cmd) => current.probed.has(cmd) && current.found.has(cmd))))
   ) {
     return Promise.resolve(current)
   }

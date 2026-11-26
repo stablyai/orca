@@ -126,13 +126,18 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
   }
 
   /** Use buildStartupForDraft's selection so launches can name the agent before creation. */
-  async resolveStartupDraftAgent(repo: Repo, requestedAgent?: TuiAgent): Promise<TuiAgent | null> {
+  async resolveStartupDraftAgent(
+    repo: Repo,
+    requestedAgent?: TuiAgent,
+    afterPublication?: number
+  ): Promise<TuiAgent | null> {
     if (!this.store) {
       return null
     }
     return resolveWorktreeStartupDraftAgent({
       repo,
       settings: this.store.getSettings(),
+      afterPublication,
       ...(requestedAgent ? { requestedAgent } : {})
     })
   }
@@ -147,6 +152,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       startupAgentArgs?: string | null
       startupSessionOptions?: Parameters<typeof buildWorktreeStartupForDraft>[0]['sessionOptions']
       startupLaunchPreferences?: AgentLaunchPreferences
+      afterPublication?: number
     }
   ): ReturnType<typeof buildWorktreeStartupForDraft> {
     if (!this.store) {
@@ -157,6 +163,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       draft,
       originalAgent: inputs?.createdWithAgent ?? requestedAgent,
       agentArgs: inputs?.startupAgentArgs,
+      afterPublication: inputs?.afterPublication,
       sessionOptions:
         inputs?.startupSessionOptions ??
         this.toAgentSessionOptions(inputs?.startupLaunchPreferences),

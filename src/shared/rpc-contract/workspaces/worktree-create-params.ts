@@ -150,6 +150,7 @@ export const WorktreeCreate = z
     launchSource: LaunchSourceParam.optional(),
     // Task-driven mobile creation uses desktop-equivalent host defaults and linked issue/PR draft URLs.
     startupDraft: OptionalString,
+    afterPublication: z.number().int().nonnegative().optional(),
     createdWithAgent: z
       .unknown()
       .transform((value) => (isTuiAgent(value) ? value : undefined))
