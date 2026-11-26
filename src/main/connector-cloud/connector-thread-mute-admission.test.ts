@@ -70,6 +70,25 @@ const send = (conversation: ConnectorConversation, text: string, extra = {}) => 
   ...extra
 })
 
+const start = (conversation: ConnectorConversation, prompt: string, extra = {}) => ({
+  kind: 'start' as const,
+  deliveryId: `start${++sent}`,
+  expiresAt: 1_900_000_000_000,
+  conversation,
+  agent: 'claude',
+  placeId: Buffer.from(JSON.stringify(['bot', 'bot1'])).toString('base64url'),
+  prompt,
+  asker: {
+    userId: 'U1',
+    role: 'member',
+    place: { kind: 'public_channel', id: 'C1' },
+    text: prompt,
+    context: [],
+    messageRef: `slack:${THREAD}:1800000000.000${200 + sent}`
+  },
+  ...extra
+})
+
 let orchestration: OrchestrationDb
 
 beforeEach(() => {
@@ -125,6 +144,7 @@ function connector(
   queue?: ThreadMuteDeps['queued']
 ) {
   const turns: string[] = []
+  const starts: string[] = []
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mute path calls only these seam members.
   const seam = {
     receipts,
@@ -133,7 +153,19 @@ function connector(
       receipts.run(key, id, 'connector.send', [message.text], async () => {
         turns.push(message.text)
         return { outcome: 'accepted' }
+      }),
+    start: async (
+      _host: unknown,
+      key: ConnectorConversation,
+      id: string,
+      input: { agent: string; prompt: string }
+    ) => ({
+      conversation: key,
+      initial: receipts.run(key, id, 'connector.start', [input.agent, input.prompt], async () => {
+        starts.push(input.prompt)
+        return { outcome: 'accepted' }
       })
+    })
   } as unknown as ExternalConversationSeam
   const deps = {
     waiting: new Map<string, Promise<unknown>>(),
@@ -163,7 +195,7 @@ function connector(
       raw,
       () => 60_000
     )?.done
-  return { deliver, turns }
+  return { deliver, turns, starts }
 }
 
 const TURN_ID = 1_800_000_000_300
@@ -261,6 +293,56 @@ function leaver(
 }
 
 describe('a muted bot thread', () => {
+  it('settles both observed post-leave fresh starts without a turn, card admission, or replay', async () => {
+    const store = await botHome({ first: true })
+    const { deliver, turns, starts } = connector(store)
+
+    // These model the two reported roots: their plain follower posts arrived after the previous
+    // turn ended, so the connector chose fresh `start` rather than `send`.
+    const first = start(FIRST, 'hi', { mentioned: false })
+    const second = start(ELSEWHERE, 'test', { mentioned: false })
+    await threadMuteSaves(store)(ELSEWHERE, true)
+    expect(await deliver(first)).toEqual({ outcome: 'accepted' })
+    expect(await deliver(second)).toEqual({ outcome: 'accepted' })
+    expect(await deliver(first)).toEqual({ outcome: 'accepted' })
+    expect(await deliver(second)).toEqual({ outcome: 'accepted' })
+    expect(turns).toEqual([])
+    expect(starts).toEqual([])
+
+    await closeTestStores()
+    const reopened = connector(createStore())
+    expect(await reopened.deliver(first)).toEqual({ outcome: 'accepted' })
+    expect(await reopened.deliver(second)).toEqual({ outcome: 'accepted' })
+    expect(reopened.turns).toEqual([])
+    expect(reopened.starts).toEqual([])
+
+    // A legacy start whose cloud omitted the fact keeps its old admission, rather than risking an
+    // explicit current mention being dropped during the staged rollout.
+    expect(await reopened.deliver(start(FIRST, 'legacy mention shape'))).toEqual({
+      outcome: 'accepted'
+    })
+    expect(reopened.starts).toEqual(['legacy mention shape'])
+  })
+
+  it('lets a current explicit mention reopen from a fresh start, then leaves other bots isolated', async () => {
+    const store = await botHome({ first: true, second: true })
+    const { deliver, turns, starts } = connector(store)
+
+    expect(await deliver(start(FIRST, 'please return', { mentioned: true }))).toEqual({
+      outcome: 'accepted'
+    })
+    expect(starts).toEqual(['please return'])
+    expect(readThreadMute(store, FIRST)).toMatchObject({ muted: false })
+
+    expect(await deliver(send(FIRST, 'ordinary follow-up'))).toEqual({ outcome: 'accepted' })
+    expect(await deliver(start(SECOND, 'still muted', { mentioned: false }))).toEqual({
+      outcome: 'accepted'
+    })
+    expect(turns).toEqual(['ordinary follow-up'])
+    expect(starts).toEqual(['please return'])
+    expect(readThreadMute(store, SECOND)).toMatchObject({ muted: true })
+  })
+
   it('admits no unmentioned reply, and one turn for a mention that unmutes it on disk', async () => {
     const store = await botHome({ first: true })
     const { deliver, turns } = connector(store)

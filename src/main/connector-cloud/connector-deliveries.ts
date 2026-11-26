@@ -97,10 +97,8 @@ export type DispatchMachine = Pick<
 >
 export type RequestDelivery = Extract<ConnectorDelivery, { kind: 'start' | 'send' }>
 export type SendDelivery = Extract<ConnectorDelivery, { kind: 'send' }>
-export type ThreadDelivery = Exclude<
-  ConnectorDelivery,
-  { kind: 'trigger' | 'webhook_notice' | 'pr_event' }
->
+const requestText = (delivery: RequestDelivery) =>
+  delivery.kind === 'start' ? delivery.prompt : delivery.text
 
 /** When the cloud took the message and how long it waited, both on the cloud's clock. */
 function sentTiming(
@@ -192,17 +190,20 @@ export function dispatchDelivery(
     })
     return { deliveryId, received: false, done }
   }
-  // A send this machine already took replays its receipt, never decided again: one the thread's
+  // A request this machine already took replays its receipt, never decided again: one the thread's
   // mute held replays as it was, with no turn and so no automations run in one.
   const heldByMute =
-    delivery.kind === 'send'
-      ? seam.receipts.heldByMute(delivery.conversation, deliveryId, [delivery.text])
+    delivery.kind === 'start' || delivery.kind === 'send'
+      ? seam.receipts.heldByMute(delivery.conversation, deliveryId, [requestText(delivery)])
       : null
   if (heldByMute) {
     const done = settle(async () => withoutAutomations(delivery, await heldByMute))
     return { deliveryId, received: false, done }
   }
-  if (delivery.kind === 'send' && !seam.receipts.known(delivery.conversation, deliveryId)) {
+  if (
+    (delivery.kind === 'start' || delivery.kind === 'send') &&
+    !seam.receipts.known(delivery.conversation, deliveryId)
+  ) {
     // Before the seam: a muted thread's reply never reaches the agent. Done alone, so its batch's
     // later sends go on their own.
     const record = (handled: () => Promise<Delivery>) =>
@@ -210,7 +211,7 @@ export function dispatchDelivery(
         delivery.conversation,
         deliveryId,
         'connector.mute',
-        [delivery.text],
+        [requestText(delivery)],
         handled
       )
     const muted = machine.threadMute?.(delivery, record, carriedBefore)

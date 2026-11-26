@@ -187,6 +187,9 @@ export const ConnectorDeliverySchema = z.discriminatedUnion('kind', [
     // A bot's: an older machine ignores it.
     asker: ConnectorAskerSchema.optional(),
     automations: TurnAutomations,
+    // An older cloud omitted this; a newer one says whether this start explicitly @mentioned the
+    // bot, so a machine can distinguish it from a legacy start.
+    mentioned: z.literal(true).optional(),
     bareMention: BareMention,
     askedAt: AskedAt
   }),
@@ -199,7 +202,7 @@ export const ConnectorDeliverySchema = z.discriminatedUnion('kind', [
     bareMention: BareMention,
     // The reply @mentioned the bot, so a thread its machine muted takes it again. An older machine
     // ignores it.
-    mentioned: z.literal(true).optional(),
+    mentioned: z.boolean().optional(),
     askedAt: AskedAt,
     // Resume pressed on the failed turn `turnId` (its turn-started `at`): the machine continues the
     // chat only while its newest turn is still failed, else refuses NOT_FAILED_REFUSAL. Sent only
