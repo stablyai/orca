@@ -67,6 +67,7 @@ export class FeishuResponseStore {
     data.response.turn = before.response.turn
     data.response.native = before.response.native
     data.response.baseline = before.response.native
+    data.response.question = before.response.question
     before.response.supersededBy = id
     before.response.stoppedAt = change.at
     before.text = '已转至最新提问'

@@ -70,6 +70,7 @@ export class FeishuCardStore {
         throw new Error('Card identity changed')
       }
       if (data.kind !== 'status' && data.kind !== 'response') {
+        this.syncQuestion(account, existing)
         return
       }
       this.db
@@ -83,6 +84,45 @@ export class FeishuCardStore {
           'INSERT INTO feishu_cards(account,id,external,original,chat,body) VALUES(?,?,?,?,?,?)'
         )
         .run(account, id, external, original, chat, body)
+    }
+    if (data.kind === 'async-question') {
+      this.syncQuestion(account, this.get(account, id)!)
+    }
+  }
+  private syncQuestion(account: string, question: FeishuCardRow) {
+    if (cardData.parse(JSON.parse(question.body)).kind !== 'async-question') {
+      return
+    }
+    let id = `response:${question.original}`
+    const seen = new Set<string>()
+    while (!seen.has(id)) {
+      seen.add(id)
+      const card = this.get(account, id)
+      if (!card || card.external !== question.external || card.chat !== question.chat) {
+        return
+      }
+      const data = cardData.parse(JSON.parse(card.body))
+      if (!data.response) {
+        return
+      }
+      if (data.response.supersededBy) {
+        id = data.response.supersededBy
+        continue
+      }
+      const current = data.response.question
+      if (current && current.id !== question.id) {
+        const newer = this.db
+          .prepare(
+            'SELECT 1 FROM feishu_cards WHERE account=? AND id=? AND rowid>(SELECT rowid FROM feishu_cards WHERE account=? AND id=?)'
+          )
+          .get(account, question.id, account, current.id)
+        if (!newer) {
+          return
+        }
+      }
+      data.response.question = { id: question.id, pending: question.state === 'open' }
+      this.put(account, card.id, card.external, card.original, card.chat, data)
+      return
     }
   }
   get(account: string, id: string) {
@@ -139,7 +179,11 @@ export class FeishuCardStore {
         account,
         card.id
       ).changes
-    return changed ? this.get(account, card.id) : null
+    const claimed = changed ? this.get(account, card.id) : null
+    if (claimed) {
+      this.syncQuestion(account, claimed)
+    }
+    return claimed
   }
   close(account: string, id: string, note: string) {
     const card = this.get(account, id)
@@ -152,6 +196,7 @@ export class FeishuCardStore {
         "UPDATE feishu_cards SET body=?,state='closed',revision=revision+1 WHERE account=? AND id=?"
       )
       .run(JSON.stringify({ ...data, note }), account, id)
+    this.syncQuestion(account, this.get(account, id)!)
   }
   closePrompts(
     account: string,

@@ -45,7 +45,8 @@ export function feishuResponseCard(data: FeishuCardData, botName: string, stream
   const response = data.response!
   const complete = response.final !== undefined
   const superseded = Boolean(response.supersededBy)
-  const stopped = complete || superseded
+  const waiting = Boolean(response.question?.pending) && !superseded
+  const stopped = complete || superseded || waiting
   const native = response.native
   const text = feishuResponseText(data)
   const tools = (native?.tools ?? []).filter(
@@ -82,7 +83,12 @@ export function feishuResponseCard(data: FeishuCardData, botName: string, stream
     elements.push({ ...folded('执行记录', trace), expanded: !stopped })
   }
   if (stopped) {
-    elements.push(prose(text || (superseded ? '后续内容见最新提问下的回复' : '已处理')))
+    elements.push(
+      prose(
+        text ||
+          (superseded ? '后续内容见最新提问下的回复' : waiting ? '请在选项卡片中回答' : '已处理')
+      )
+    )
   } else {
     elements.push({
       ...prose(text || (tools.length ? '正在执行上述步骤…' : '等待 Agent 生成回复…')),
@@ -91,13 +97,15 @@ export function feishuResponseCard(data: FeishuCardData, botName: string, stream
   }
   const status = superseded
     ? '已转至最新提问'
-    : complete
-      ? `${data.text}${elapsed === undefined ? '' : ` · ${formatElapsed(elapsed)}`}`
-      : tools.some((t) => t.status === 'running')
-        ? '正在执行工具'
-        : text
-          ? '正在生成回复'
-          : '正在准备回复'
+    : waiting
+      ? '等待你的选择'
+      : complete
+        ? `${data.text}${elapsed === undefined ? '' : ` · ${formatElapsed(elapsed)}`}`
+        : tools.some((t) => t.status === 'running')
+          ? '正在执行工具'
+          : text
+            ? '正在生成回复'
+            : '正在准备回复'
   return {
     schema: '2.0',
     config: {
@@ -119,11 +127,13 @@ export function feishuResponseCard(data: FeishuCardData, botName: string, stream
       title: { tag: 'plain_text', content: `${botName} · ${status}` },
       template: superseded
         ? 'grey'
-        : response.phase === 'failed'
-          ? 'red'
-          : complete
-            ? 'green'
-            : 'blue',
+        : waiting
+          ? 'blue'
+          : response.phase === 'failed'
+            ? 'red'
+            : complete
+              ? 'green'
+              : 'blue',
       icon: { tag: 'standard_icon', token: 'ai-common_colorful' }
     },
     body: { direction: 'vertical', padding: '12px', vertical_spacing: '8px', elements }

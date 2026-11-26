@@ -17,6 +17,7 @@ export const cardData = z.object({
       progress: z.array(z.object({ id: z.string(), text: z.string() })),
       trace: z.array(z.string()),
       final: z.string().optional(),
+      question: z.object({ id: z.string(), pending: z.boolean() }).optional(),
       native: nativeResponse.optional(),
       baseline: nativeResponse.optional(),
       supersededBy: z.string().optional(),

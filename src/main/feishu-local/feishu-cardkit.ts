@@ -57,13 +57,17 @@ export class FeishuCardKit {
       await this.store.cardkit(this.b.account, card.id, entity)
     }
     const sequence = () => this.store.cardSequence(this.b.account, card.id)
-    const complete = data.response?.final !== undefined || Boolean(data.response?.supersededBy)
+    const complete =
+      data.response?.final !== undefined ||
+      Boolean(data.response?.supersededBy) ||
+      Boolean(data.response?.question?.pending)
     const text = feishuResponseText(data)
     // Layout changes replace the card; ordinary token updates touch only the answer element.
     const layout = JSON.stringify({
       tools: data.response?.native?.tools,
       trace: data.response?.native ? undefined : data.response?.trace,
       complete,
+      question: data.response?.question,
       answerFormat: text.includes('![') || /<img\b/i.test(text) ? 'plain' : 'markdown',
       hasText: Boolean(text),
       phase: data.response?.phase

@@ -10,7 +10,7 @@ import { replyFeishu } from './feishu-replies'
 
 export class FeishuCardDelivery {
   private readonly cardkit: FeishuCardKit
-  private writes: Promise<unknown> = Promise.resolve()
+  private readonly writes = new Map<string, Promise<unknown>>()
   name = 'Orca'
   constructor(
     private readonly store: FeishuStore,
@@ -22,9 +22,16 @@ export class FeishuCardDelivery {
   }
 
   publish(id: string): Promise<string | null> {
-    const next = this.writes.catch(() => {}).then(() => this.write(id))
-    this.writes = next
-    return next
+    // Serialize each card, without making a click wait behind another card's streaming updates.
+    const next = (this.writes.get(id) ?? Promise.resolve())
+      .catch(() => {})
+      .then(() => this.write(id))
+    this.writes.set(id, next)
+    return next.finally(() => {
+      if (this.writes.get(id) === next) {
+        this.writes.delete(id)
+      }
+    })
   }
 
   private async write(id: string): Promise<string | null> {

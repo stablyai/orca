@@ -6,6 +6,7 @@ import type {
 import { describeToolInput } from '../../shared/native-chat/tools/native-chat-tool-summary'
 import { connectorTurnActivityStepTitle } from '../../shared/connectors/connector-turn-activity-line'
 import type { FeishuNativeResponse } from './feishu-native-data'
+import { CODEX_ASYNC_QUESTION_TOOL } from '../../shared/native-chat/input/questions/codex-async-question-input'
 
 const TOOL_LABELS: [RegExp, string, string][] = [
   [/search/i, '搜索', 'search_outlined'],
@@ -98,6 +99,13 @@ export class FeishuNativeProjection {
           continuations.push(stamp.deliveryId)
         }
       } else if (body.kind === 'message' && body.role === 'assistant') {
+        if (
+          body.blocks.some((b) => b.type === 'tool-call' && b.name === CODEX_ASYNC_QUESTION_TOOL)
+        ) {
+          // Replace any previously projected summary; the interactive question owns this text.
+          native.messages.push({ id: item.itemId, text: '' })
+          continue
+        }
         const text = body.blocks.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('\n')
         if (text.trim() && !'NO_REPLY'.startsWith(text.trim()) && text.trim() !== 'NO_REPLY') {
           native.messages.push({ id: item.itemId, text })

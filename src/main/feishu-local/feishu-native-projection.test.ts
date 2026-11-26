@@ -117,6 +117,41 @@ it('projects only the stamped turn, revises calls and text in place, and exclude
   expect(projected.native.tools).toMatchObject([
     { id: 'call', status: 'success', durationMs: 1200 }
   ])
+  apply(
+    row(
+      'question',
+      {
+        kind: 'message',
+        role: 'assistant',
+        blocks: [{ type: 'text', text: 'Choose\n- Yes\n- No' }]
+      },
+      'turn'
+    )
+  )
+  apply(
+    row(
+      'question',
+      {
+        kind: 'message',
+        role: 'assistant',
+        blocks: [
+          { type: 'text', text: 'Choose\n- Yes\n- No' },
+          {
+            type: 'tool-call',
+            name: 'request_user_input_async',
+            callId: 'ask',
+            input: { questions: [{ title: 'Choose', options: ['Yes', 'No'] }] }
+          }
+        ]
+      },
+      'turn',
+      1
+    )
+  )
+  expect(projection.project('account', 'lane')?.native.messages).toEqual([
+    { id: 'text', text: 'Checking sources' },
+    { id: 'question', text: '' }
+  ])
   const followup = (deliveryId: string, externalId = 'lane'): AgentJournalRenderItem['body'] => ({
     kind: 'message',
     role: 'user',
