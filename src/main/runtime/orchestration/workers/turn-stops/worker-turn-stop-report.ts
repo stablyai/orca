@@ -35,6 +35,8 @@ export type WorkerTurnStop = {
   reason: WorkerTurnStopReason
   /** Coordinator mail the worker had taken when the stop was seen; mail it takes later is its next turn's. */
   mailTaken?: number
+  /** Highest sequence among coordinator messages consumed when the stop was seen. */
+  latestCoordinatorSequence?: number
   lastOutput: string | undefined
   /** For `needs-input`: the turn ended asking for a reply, which a message answers; else a prompt does. */
   awaitsReply?: boolean
@@ -74,6 +76,7 @@ export type WorkerRestFact =
   | 'approval'
   | 'turnStartedAt'
   | 'mailTaken'
+  | 'latestCoordinatorSequence'
   | 'requestError'
   | 'startSurface'
   | 'startEvidence'
@@ -119,7 +122,12 @@ export function isDeliberateRest(
   target: WorkerTurnStopDispatch,
   stop: Pick<
     WorkerTurnStop,
-    'reason' | 'turnStartedAt' | 'mailTaken' | 'requestError' | 'backgroundWait'
+    | 'reason'
+    | 'turnStartedAt'
+    | 'mailTaken'
+    | 'latestCoordinatorSequence'
+    | 'requestError'
+    | 'backgroundWait'
   >,
   deps: Pick<WorkerTurnStopReportDeps, 'isWaitingForMail'>
 ): boolean {

@@ -10,7 +10,7 @@ import {
   TerminalAgentTurnNews,
   type TerminalAgentTurnNewsItem
 } from '../../../push/notifications/terminal-agent-turn-news'
-import { readCoordinatorMailCount } from '../../db/messages/dispatch-read-mail'
+import { readCoordinatorMailSnapshot } from '../../db/messages/dispatch-read-mail'
 import { redactWorkerTerminalView } from '../../terminal-authority/views/worker-terminal-redaction'
 import {
   failedLeadTurnFence,
@@ -47,7 +47,11 @@ export type TerminalWorkerTurnStopsDeps = WorkerTurnStopReportDeps & {
 }
 
 /** Report a terminal worker whose turn ended (or stopped at a prompt) while its Dispatch is open. */
-type PreparedStop = TerminalAgentTurnNewsItem & { dispatchId: string | null; mailTaken?: number }
+type PreparedStop = TerminalAgentTurnNewsItem & {
+  dispatchId: string | null
+  mailTaken?: number
+  latestCoordinatorSequence?: number
+}
 
 export class TerminalWorkerTurnStops {
   private readonly news: TerminalAgentTurnNews<PreparedStop>
@@ -65,9 +69,7 @@ export class TerminalWorkerTurnStops {
         return {
           ...news,
           dispatchId,
-          ...(resolved && dispatchId
-            ? { mailTaken: readCoordinatorMailCount(resolved.db, dispatchId) }
-            : {})
+          ...(resolved && dispatchId ? readCoordinatorMailSnapshot(resolved.db, dispatchId) : {})
         }
       },
       deliver: (stop, row) => void this.report(stop, row),
@@ -118,7 +120,7 @@ export class TerminalWorkerTurnStops {
         worktreeId: row.worktreeId ?? '',
         row,
         dispatchId,
-        mailTaken: readCoordinatorMailCount(resolved.db, dispatchId)
+        ...readCoordinatorMailSnapshot(resolved.db, dispatchId)
       },
       row
     )
@@ -179,6 +181,7 @@ export class TerminalWorkerTurnStops {
           turnStartedAt: stop.row.turnStartedAt,
           reason,
           mailTaken: stop.mailTaken,
+          latestCoordinatorSequence: stop.latestCoordinatorSequence,
           lastOutput,
           ...(requestError ? { requestError } : {}),
           ...(approval ? { approval } : {})

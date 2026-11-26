@@ -4,8 +4,8 @@ import type { OrchestrationDb } from '../orchestration-db'
 import type { DispatchContextRow, RemoteDispatchAttachmentRow } from '../orchestration-records'
 import {
   coordinatorRecipients,
+  latestConsumedCoordinatorMessage,
   parseDispatchUtcMs,
-  readCoordinatorMessages,
   type ConsumedCoordinatorMessage
 } from './dispatch-read-mail'
 
@@ -31,9 +31,11 @@ const CANDIDATE_COLUMNS =
 type OutboundReportTarget =
   | { kind: 'local'; dispatch: DispatchContextRow }
   | { kind: 'remote'; attachment: Pick<RemoteDispatchAttachmentRow, 'dispatch_id' | 'task_id'> }
-
-type OutboundReportStop = { mailTaken?: number; turnStartedAt?: number }
-
+type OutboundReportStop = {
+  mailTaken?: number
+  latestCoordinatorSequence?: number
+  turnStartedAt?: number
+}
 type CandidateMessage = {
   id: string
   sequence: number
@@ -52,16 +54,14 @@ export function hasOutboundCoordinatorReport(
   target: OutboundReportTarget,
   stop: OutboundReportStop
 ): boolean {
-  const sqliteNowSec = currentSqliteEpochSeconds(db)
+  const row = db.db.prepare("SELECT unixepoch('now') AS now").get()
+  const sqliteNowSec = typeof row?.now === 'number' ? row.now : Math.floor(Date.now() / 1000)
   if (target.kind === 'remote') {
     return hasRemoteOutboundReport(db, target.attachment.dispatch_id, stop, sqliteNowSec)
   }
   const { dispatch } = target
-  const allConsumed = readCoordinatorMessages(db, dispatch.id)
-  const consumed =
-    stop.mailTaken !== undefined ? allConsumed.slice(0, Math.max(0, stop.mailTaken)) : allConsumed
-  const latest = consumed.at(-1)
-  if (latest && hasPeerMailReplyTo(db, latest)) {
+  const latest = latestConsumedCoordinatorMessage(db, dispatch.id, stop)
+  if (latest && hasPeerMailReplyTo(db, latest, stop, sqliteNowSec)) {
     return true
   }
   const recipients = coordinatorRecipients(db, dispatch, latest?.from)
@@ -76,7 +76,7 @@ export function hasOutboundCoordinatorReport(
     ? formatOrcaSessionAddress(dispatch.assignee_orca_session_id)
     : null
   return candidates.some((candidate) => {
-    if (!isWorkerReportCandidate(db, dispatch.id, candidate)) {
+    if (!isWorkerReportCandidate(db, dispatch.id, candidate) || !recipients.has(candidate.to)) {
       return false
     }
     const sentAt = parseDispatchUtcMs(candidate.createdAt)
@@ -94,12 +94,10 @@ export function hasOutboundCoordinatorReport(
       return (
         answersCoordinatorMessage(candidate, latest) ||
         (candidate.sequence > latest.sequence &&
-          recipients.has(candidate.to) &&
           sentInOrAfterTurn(candidate.createdAt, stop.turnStartedAt, sqliteNowSec))
       )
     }
     return (
-      recipients.has(candidate.to) &&
       sentAt >= dispatchCreatedAt &&
       sentInOrAfterTurn(candidate.createdAt, stop.turnStartedAt, sqliteNowSec)
     )
@@ -114,15 +112,17 @@ function isWorkerReportCandidate(
   if (!OUTBOUND_REPORT_TYPES.has(candidate.type) || isSystemReportId(candidate.id)) {
     return false
   }
-  const parsed = parseJsonRecord(candidate.payload)
-  if (candidate.from === `dispatch:${dispatchId}` && typeof parsed?.setupState === 'string') {
+  if (
+    candidate.from === `dispatch:${dispatchId}` &&
+    typeof parseJsonRecord(candidate.payload)?.setupState === 'string'
+  ) {
     return false
   }
-  if (candidate.threadId && candidate.payload === null) {
-    const outcome = db.getBotRequestOutcome(candidate.threadId)
-    return outcome === null || outcome === 'answered'
-  }
-  return true
+  const outcome =
+    candidate.threadId && candidate.payload === null
+      ? db.getBotRequestOutcome(candidate.threadId)
+      : null
+  return outcome === null || outcome === 'answered'
 }
 
 function readWorkerOutboundCandidates(
@@ -161,8 +161,7 @@ function readWorkerOutboundCandidates(
   addRows(
     db.db
       .prepare(
-        `SELECT m.id, m.sequence, m.from_handle, m.to_handle, m.type, m.thread_id,
-                m.payload, m.sender_pane_key, m.created_at
+        `SELECT m.id, m.sequence, m.from_handle, m.to_handle, m.type, m.thread_id, m.payload, m.sender_pane_key, m.created_at
            FROM message_dispatch_provenance p JOIN messages m ON m.id = p.message_id
           WHERE p.dispatch_id = ? AND m.type <> 'heartbeat'`
       )
@@ -201,28 +200,38 @@ function answersCoordinatorMessage(
   if (candidate.sequence <= latest.sequence) {
     return false
   }
-  if (
+  const sameThread =
     candidate.threadId === latest.id ||
     (latest.threadId !== null && candidate.threadId === latest.threadId)
-  ) {
-    return true
-  }
-  const parsed = parseJsonRecord(candidate.payload)
-  return parsed?.requestId === latest.id || parsed?.replyTo === latest.id
+  const parsed = sameThread ? null : parseJsonRecord(candidate.payload)
+  return sameThread || parsed?.requestId === latest.id || parsed?.replyTo === latest.id
 }
 
-function hasPeerMailReplyTo(db: OrchestrationDb, latest: ConsumedCoordinatorMessage): boolean {
+function hasPeerMailReplyTo(
+  db: OrchestrationDb,
+  latest: ConsumedCoordinatorMessage,
+  stop: OutboundReportStop,
+  sqliteNowSec: number
+): boolean {
   const route = db.getPeerMailMessage(latest.id)
   if (!route) {
     return false
   }
   const expectedThread = latest.threadId ?? latest.id
+  const latestSec = Math.floor(parseDispatchUtcMs(latest.createdAt) / 1000)
   return db.db
     .prepare(
-      "SELECT payload FROM federation_relay_items WHERE dispatch_id = ? AND direction = 'to_home'"
+      "SELECT payload, created_at FROM federation_relay_items WHERE dispatch_id = ? AND direction = 'to_home'"
     )
     .all(route.conversation_id)
     .some((row) => {
+      const createdAt = text(row.created_at) ?? ''
+      if (
+        Math.floor(parseDispatchUtcMs(createdAt) / 1000) < latestSec ||
+        !sentInOrAfterTurn(createdAt, stop.turnStartedAt, sqliteNowSec)
+      ) {
+        return false
+      }
       const parsed = parseJsonRecord(text(row.payload))
       return parsed?.threadId === expectedThread && !('notice' in parsed)
     })
@@ -234,19 +243,11 @@ function hasRemoteOutboundReport(
   stop: OutboundReportStop,
   sqliteNowSec: number
 ): boolean {
-  const allRead = db.db
-    .prepare(
-      'SELECT id, thread_id, created_at FROM messages WHERE to_handle = ? AND read = 1 ORDER BY sequence ASC'
-    )
-    .all(`dispatch:${dispatchId}`)
-  const consumed =
-    stop.mailTaken !== undefined ? allRead.slice(0, Math.max(0, stop.mailTaken)) : allRead
-  const latest = consumed.at(-1)
-  const latestThread = text(latest?.thread_id) ?? text(latest?.id)
-  const latestSec = latest ? Math.floor(parseDispatchUtcMs(text(latest.created_at)) / 1000) : null
+  const latest = latestConsumedCoordinatorMessage(db, dispatchId, stop)
+  const latestSec = latest ? Math.floor(parseDispatchUtcMs(latest.createdAt) / 1000) : null
   return db.db
     .prepare(
-      "SELECT message_id, kind, payload, created_at FROM federation_relay_items WHERE dispatch_id = ? AND direction = 'to_home' ORDER BY sequence ASC"
+      "SELECT message_id, kind, created_at FROM federation_relay_items WHERE dispatch_id = ? AND direction = 'to_home' ORDER BY sequence ASC"
     )
     .all(dispatchId)
     .some((row) => {
@@ -255,9 +256,6 @@ function hasRemoteOutboundReport(
       const createdAt = text(row.created_at) ?? ''
       if (!OUTBOUND_REPORT_TYPES.has(kind) || isSystemReportId(messageId)) {
         return false
-      }
-      if (latestThread && parseJsonRecord(text(row.payload))?.threadId === latestThread) {
-        return true
       }
       if (latestSec !== null && Math.floor(parseDispatchUtcMs(createdAt) / 1000) < latestSec) {
         return false
@@ -297,9 +295,4 @@ function sentInOrAfterTurn(
   return (
     turnStartSec > sqliteNowSec || Math.floor(parseDispatchUtcMs(createdAt) / 1000) >= turnStartSec
   )
-}
-
-function currentSqliteEpochSeconds(db: OrchestrationDb): number {
-  const row = db.db.prepare("SELECT unixepoch('now') AS now").get()
-  return typeof row?.now === 'number' ? row.now : Math.floor(Date.now() / 1000)
 }

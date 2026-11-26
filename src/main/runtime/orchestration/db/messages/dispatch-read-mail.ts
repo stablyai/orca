@@ -16,11 +16,45 @@ export type ConsumedCoordinatorMessage = {
   createdAt: string
 }
 
+export type CoordinatorMailSnapshot = {
+  mailTaken: number
+  latestCoordinatorSequence?: number
+}
+
 /** How much mail from above (its coordinator, or Orca for it) the worker has consumed, in any order.
  *  Mail a worker of the Run sent while its Dispatch was open (this worker's own heartbeats, its helpers'
  *  reports, a sibling's broadcast) does not count, nor does mail it has not taken yet. */
 export function readCoordinatorMailCount(db: OrchestrationDb, dispatchId: string): number {
   return readCoordinatorMessages(db, dispatchId).length
+}
+
+/** Captures both the consumed count and highest consumed sequence at stop time. */
+export function readCoordinatorMailSnapshot(
+  db: OrchestrationDb,
+  dispatchId: string
+): CoordinatorMailSnapshot {
+  const messages = readCoordinatorMessages(db, dispatchId)
+  const latest = messages.at(-1)
+  return {
+    mailTaken: messages.length,
+    ...(latest ? { latestCoordinatorSequence: latest.sequence } : {})
+  }
+}
+
+/** Resolves the latest coordinator message the worker had consumed when its turn stopped. */
+export function latestConsumedCoordinatorMessage(
+  db: OrchestrationDb,
+  dispatchId: string,
+  stop: { mailTaken?: number; latestCoordinatorSequence?: number }
+): ConsumedCoordinatorMessage | undefined {
+  if (stop.mailTaken === 0) {
+    return undefined
+  }
+  const allConsumed = readCoordinatorMessages(db, dispatchId)
+  const maxSeq = stop.latestCoordinatorSequence
+  return maxSeq !== undefined
+    ? allConsumed.findLast((message) => message.sequence <= maxSeq)
+    : allConsumed.at(-1)
 }
 
 export function readCoordinatorMessages(

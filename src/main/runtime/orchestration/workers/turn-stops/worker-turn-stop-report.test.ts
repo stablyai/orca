@@ -236,9 +236,135 @@ describe('post-reply idle-stop dedupe for open chat workers', () => {
     expect(stopEscalations()).toEqual([])
 
     clock += 10_000
-    sendCoordinatorMail('question 2')
+    const second = sendCoordinatorMail('question 2')
+    // Threaded mail addressed to a non-coordinator peer does not answer the coordinator.
+    db.insertMessage({
+      from: WORKER_ADDRESS,
+      senderDispatchId: dispatchId,
+      to: 'term_sibling',
+      subject: 'Peer note',
+      body: 'Not sent to coordinator',
+      type: 'status',
+      threadId: second.id,
+      runId
+    })
     completeTurn(reporter, 'turn-second-silent')
     expect(stopEscalations()).toEqual(['Worker stopped without reporting'])
+  })
+
+  it('still escalates when coordinator mail is consumed out of order and an older message becomes read during the quiet window', () => {
+    const reporter = createReporter()
+
+    const first = sendCoordinatorMail('first')
+    db.insertMessage({
+      from: WORKER_ADDRESS,
+      senderDispatchId: dispatchId,
+      to: `run:${runId}`,
+      subject: `Re: ${first.subject}`,
+      body: 'Answered first.',
+      type: 'status',
+      threadId: first.id,
+      runId
+    })
+    completeTurn(reporter, 'turn-1')
+    expect(stopEscalations()).toEqual([])
+
+    clock += 5_000
+    const skipped = db.insertMessage({
+      from: COORDINATOR_ADDRESS,
+      to: `dispatch:${dispatchId}`,
+      subject: 'skipped for now',
+      body: 'Unread earlier sequence',
+      type: 'status',
+      runId
+    })
+    const third = sendCoordinatorMail('third consumed first')
+
+    // Turn ends without answering `third`; before the quiet timer fires, `skipped` is marked read.
+    reporter.onTurnAttention(
+      {
+        type: 'completion',
+        completion: {
+          scope: SESSION_SCOPE,
+          sessionId: WORKER_SESSION,
+          turnId: 'turn-out-of-order',
+          outcome: 'success',
+          completedAt: clock
+        }
+      },
+      () => ({ status: 'idle', lastAssistantMessage: 'Done.' })
+    )
+    expect(third.sequence).toBeGreaterThan(skipped.sequence)
+    db.markAsRead([skipped.id], { kind: 'session', sessionId: WORKER_SESSION })
+    flushTimers()
+    expect(stopEscalations()).toEqual(['Worker stopped without reporting'])
+  })
+
+  it('does not treat an earlier remote reply on the same thread as answering a newer coordinator message', () => {
+    const remoteTarget = {
+      kind: 'remote' as const,
+      attachment: { dispatch_id: 'dsp_remote', task_id: 'task_remote' }
+    }
+    const deps = { getDb: () => db, isWaitingForMail: () => false, notify: () => {} }
+
+    const first = db.insertMessage({
+      from: COORDINATOR_ADDRESS,
+      to: 'dispatch:dsp_remote',
+      subject: 'remote q1',
+      body: 'First question',
+      type: 'status',
+      threadId: 'thread_shared',
+      runId
+    })
+    db.markAsRead([first.id], { kind: 'terminal', handle: 'term_remote' })
+    const earlyReply = db.enqueueFederationRelay({
+      dispatchId: 'dsp_remote',
+      direction: 'to_home',
+      kind: 'status',
+      payload: JSON.stringify({
+        from: 'term_remote',
+        subject: 'Re: remote q1',
+        body: 'First answer',
+        type: 'status',
+        threadId: 'thread_shared'
+      })
+    })
+    db.db
+      .prepare(
+        "UPDATE federation_relay_items SET created_at = datetime('now', '-10 seconds') WHERE dispatch_id = ? AND sequence = ?"
+      )
+      .run('dsp_remote', earlyReply.sequence)
+
+    const second = db.insertMessage({
+      from: COORDINATOR_ADDRESS,
+      to: 'dispatch:dsp_remote',
+      subject: 'remote q2',
+      body: 'Follow-up on same thread',
+      type: 'status',
+      threadId: 'thread_shared',
+      runId
+    })
+    db.markAsRead([second.id], { kind: 'terminal', handle: 'term_remote' })
+
+    expect(
+      observeWorker(
+        db,
+        remoteTarget,
+        {
+          presence: 'at-rest',
+          fence: 'remote-turn-2',
+          legacyStopKey: 'remote-turn-2',
+          rest: {
+            from: 'term_remote',
+            reason: 'finished',
+            mailTaken: 2,
+            latestCoordinatorSequence: second.sequence,
+            lastOutput: 'Silent stop'
+          }
+        },
+        deps
+      )
+    ).toBe(true)
   })
 
   it('still escalates errored, needs-input, and exited stops even after an outbound status message', () => {

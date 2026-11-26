@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { WORKER_SHOW_VIEW } from '../../../../../cli/orchestration/workers/worker-agent-views'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { sessionWorkerAgentState } from '../../../../../shared/orchestration-session-workers'
+import { sessionWorkerBackgroundWait } from '../../../rpc/methods/orchestration/worker/session-worker-background-wait'
 import { OrchestrationDb } from '../../db/orchestration-db'
 import '../../db/contract-constants'
 import '../../db/messages/mailbox-routing-page'
@@ -47,7 +47,6 @@ function leadWorkingRow(at: number): AgentStatusIpcPayload {
 describe('a worker waiting on its own background task', () => {
   let db: OrchestrationDb
   let dispatchId: string
-  let taskId: string
   let runId: string
   let timers: Timer[]
   let row: AgentStatusIpcPayload | null
@@ -63,7 +62,6 @@ describe('a worker waiting on its own background task', () => {
     })
     runId = run.id
     const task = db.createTask({ spec: 'run the soak', runId: run.id })
-    taskId = task.id
     dispatchId = db.createDispatchContext({
       taskId: task.id,
       assigneeHandle: HANDLE,
@@ -136,27 +134,27 @@ describe('a worker waiting on its own background task', () => {
       backgroundWait: { since: TURN_END, commands: ['./rig/soak.sh 3'], paneKey: PANE }
     })
 
-    const shown = WORKER_SHOW_VIEW.fields({
-      dispatch: { id: dispatchId, taskId, runId, status: 'dispatched' },
-      worker: { dispatchId, state: 'ready', stage: 'running', agentTerminalHandle: HANDLE },
-      projection: {
-        runId,
-        host: { id: 'local' },
-        liveness: { verdict: 'live' },
+    const projectedWait = sessionWorkerBackgroundWait(
+      {
         stage: {
+          worker: 'ready',
+          dispatch: 'dispatched',
+          detail: 'running',
           activity: 'working',
           backgroundWait: { since: TURN_END, commands: ['./rig/soak.sh 3'] }
-        },
-        nextAction: { argv: ['orchestration', 'worker-read', '--dispatch', dispatchId] }
-      }
-    })
-    expect(shown.activity).toBe(
-      'waiting on its background task `./rig/soak.sh 3` since 2026-11-22T06:31:00.000Z'
+        }
+      },
+      'working',
+      null,
+      new Map()
     )
+    expect(projectedWait).toEqual({
+      backgroundWait: { since: TURN_END, commands: ['./rig/soak.sh 3'] }
+    })
     expect(
       sessionWorkerAgentState({
         activity: 'working',
-        backgroundWait: { since: TURN_END, commands: ['./rig/soak.sh 3'] }
+        ...projectedWait
       })
     ).toBe('done')
 
