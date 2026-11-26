@@ -33,7 +33,7 @@ export async function verifySwap(
   deps: RotationSwapDeps,
   force = false
 ): Promise<{ outcome: RotationVerifyOutcome; journal: RotationJournal } | null> {
-  const journal = deps.files.loadJournal()
+  const journal = await deps.files.loadJournal()
   if (!journal || journal.step !== 'b_written') {
     return null
   }
@@ -70,7 +70,7 @@ export async function verifySwap(
     if (reverted && journal.meta === 'ok') {
       await swapMeta(a, b, deps)
     }
-    nudgeRunningSessions(a, b)
+    await nudgeRunningSessions(a, b)
     return done(reverted ? 'reverted' : 'revert_failed')
   }
   if (who !== null) {
@@ -90,7 +90,7 @@ async function revertSecondSlot(
   journal: RotationJournal,
   deps: RotationSwapDeps
 ): Promise<boolean> {
-  const lock = refreshLock(deps, a, b)
+  const lock = await refreshLock(deps, a, b)
   if (!(await lock.acquire(ROTATION_TIMING.lockWaitMs))) {
     return false
   }
@@ -108,6 +108,6 @@ async function revertSecondSlot(
   } catch {
     return false
   } finally {
-    lock.release()
+    await lock.release()
   }
 }

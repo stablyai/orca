@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Store } from '../../persistence/loading-store/store'
 import type { RateLimitService } from '../../rate-limits/service/rate-limit-service'
@@ -7,18 +6,26 @@ import {
   type ClaudeAccountRotationPause,
   type ClaudeAccountRotationStatus
 } from '../../../shared/agent-accounts/claude/claude-account-rotation'
-import { claudeKeychainService } from '../runtime-auth/keychain'
-import { claudeStateFile } from '../sign-in/claude-account-folder'
 import { getSelectedClaudeAccountIdForTarget } from '../selection/runtime-selection'
 import { claudeAccountLabel, swappedAccountRecords } from './claude-rotation-account-records'
 import { fetchClaudeAccountOfToken, fetchRotationUsage } from './claude-rotation-api'
 import type { RotationCheckDeps } from './claude-rotation-candidates'
+import {
+  externalRotatorActive,
+  listRotationFolders,
+  type RotationRouter
+} from './claude-rotation-folders'
 import { checkRotationFolder, type RotationCheckResult } from './claude-rotation-check'
 import { createMacKeychainSlotStore } from './claude-rotation-keychain'
 import type { RotationFolder } from './claude-rotation-login-meta'
 import { ROTATION_TIMING } from './claude-rotation-policy'
+import { RotationTimer } from './claude-rotation-timer'
 import { readClaudeSessionsByHome } from './claude-rotation-sessions'
-import { RotationStateFiles, type RotationJournal } from './claude-rotation-state-files'
+import {
+  RotationStateFiles,
+  type RotationJournal,
+  type RotationState
+} from './claude-rotation-state-files'
 import {
   buildRotationStatus,
   snapshotRotationFolders,
@@ -29,12 +36,8 @@ import { verifySwap, type RotationVerifyOutcome } from './claude-rotation-verify
 import { rotationNotice, type RotationNotice } from './claude-rotation-notices'
 
 export type ClaudeAccountRotationServiceOptions = {
-  store: Pick<Store, 'getSettings' | 'updateSettings'>
-  router: {
-    accountHome: (accountId: string) => string
-    coveredBySystemDefault: (accountId: string) => boolean
-    readonly userHome: string
-  }
+  store: Pick<Store, 'getSettings' | 'updateSettings' | 'onSettingsChanged'>
+  router: RotationRouter
   rateLimits?: Pick<RateLimitService, 'evictInactiveClaudeCache' | 'refreshForClaudeAccountChange'>
   dataRoot: string
   notify: (notice: RotationNotice) => void
@@ -42,13 +45,19 @@ export type ClaudeAccountRotationServiceOptions = {
   deps?: Partial<RotationCheckDeps>
 }
 
+// A settings change is often several saves in a row; act once they settle.
+const SETTINGS_SETTLE_MS = 2_000
+
 /** Swaps Claude logins between account folders near their limits; desktop main only. */
 export class ClaudeAccountRotationService {
   readonly files: RotationStateFiles
   private readonly deps: RotationCheckDeps
   private readonly profilesRoot: string
-  private timer: ReturnType<typeof setInterval> | null = null
-  private running: Promise<void> | null = null
+  private readonly timer: RotationTimer
+  private running: Promise<number | null> | null = null
+  private settingsKey: string | null = null
+  private idleDelayMs: number = ROTATION_TIMING.cycleMs
+  private unsubscribe: (() => void) | null = null
   private snapshot = new Map<string, RotationFolderSnapshot>()
 
   constructor(private readonly options: ClaudeAccountRotationServiceOptions) {
@@ -64,29 +73,32 @@ export class ClaudeAccountRotationService {
       ...options.deps,
       onMetaSwapped: (a, b) => this.swapAccountRecords(a, b)
     }
+    this.timer = new RotationTimer(() => this.runCycle(), SETTINGS_SETTLE_MS)
   }
 
   start(): void {
-    if (this.timer || this.platform() !== 'darwin') {
+    if (this.settingsKey !== null || this.platform() !== 'darwin') {
       return
     }
-    // Its own timer: usage polling pauses with the window, but limits are reached in the background.
-    this.timer = setInterval(() => void this.runCycle(), ROTATION_TIMING.cycleMs)
-    this.timer.unref?.()
-    setTimeout(() => void this.runCycle(), 5_000).unref?.()
+    this.settingsKey = this.rotationSettingsKey()
+    this.unsubscribe = this.options.store.onSettingsChanged(() => this.settingsChanged())
+    // The first look also finishes a swap cut off by a quit, even with the feature off.
+    this.timer.start(5_000)
   }
 
   stop(): void {
-    if (this.timer) {
-      clearInterval(this.timer)
-      this.timer = null
-    }
+    this.settingsKey = null
+    this.unsubscribe?.()
+    this.unsubscribe = null
+    this.timer.stop()
   }
 
-  runCycle(): Promise<void> {
+  /** Resolves with the delay before the next cycle, or null when there is nothing to watch. */
+  runCycle(): Promise<number | null> {
     this.running ??= this.cycle()
       .catch((error: unknown) => {
         this.files.log('cycle_failed', { error: error instanceof Error ? error.name : 'unknown' })
+        return ROTATION_TIMING.cycleMs
       })
       .finally(() => {
         this.running = null
@@ -94,26 +106,37 @@ export class ClaudeAccountRotationService {
     return this.running
   }
 
-  externalRotatorActive(): boolean {
-    const dir = join(this.options.router.userHome, '.claude', 'rotate')
-    return existsSync(join(dir, 'enabled')) || existsSync(join(dir, 'journal.json'))
+  private rotationSettingsKey(): string {
+    const settings = this.options.store.getSettings()
+    return `${JSON.stringify(settings.claudeAccountRotation ?? null)}\0${settings.claudeManagedAccounts.length}`
   }
 
-  getStatus(): ClaudeAccountRotationStatus {
+  private settingsChanged(): void {
+    const key = this.rotationSettingsKey()
+    if (this.settingsKey === null || key === this.settingsKey) {
+      return
+    }
+    this.settingsKey = key
+    this.idleDelayMs = ROTATION_TIMING.cycleMs
+    this.timer.poke()
+  }
+
+  async getStatus(): Promise<ClaudeAccountRotationStatus> {
     const settings = this.options.store.getSettings()
     const rotation = resolveClaudeAccountRotationSettings(settings)
-    const folders = this.folders()
+    const external = await externalRotatorActive(this.options.router.userHome)
+    const folders = await this.folders()
     return buildRotationStatus({
       rotation,
       supported: this.platform() === 'darwin',
-      externalRotatorActive: this.externalRotatorActive(),
-      pause: this.pauseReason(folders),
+      externalRotatorActive: external,
+      pause: this.pauseReason(folders, external),
       folders,
       selectedAccountId: getSelectedClaudeAccountIdForTarget(settings, { runtime: 'host' }),
       label: (id) => claudeAccountLabel(settings, id),
       snapshot: this.snapshot,
-      state: this.files.loadState(),
-      pendingSwitch: this.files.loadJournal() !== null,
+      state: await this.files.loadState(),
+      pendingSwitch: (await this.files.loadJournal()) !== null,
       now: this.deps.now()
     })
   }
@@ -122,53 +145,39 @@ export class ClaudeAccountRotationService {
     return this.options.platform ?? process.platform
   }
 
-  private pauseReason(folders: RotationFolder[]): ClaudeAccountRotationPause {
+  private pauseReason(folders: RotationFolder[], external: boolean): ClaudeAccountRotationPause {
     if (this.platform() !== 'darwin') {
       return 'unsupported-platform'
     }
     if (!resolveClaudeAccountRotationSettings(this.options.store.getSettings()).enabled) {
       return 'off'
     }
-    if (this.externalRotatorActive()) {
+    if (external) {
       return 'external-rotator'
     }
     return folders.length < 2 ? 'no-accounts' : null
   }
 
-  /** Host account folders with their own login; WSL and System default ones are left alone. */
-  private folders(): RotationFolder[] {
-    const { router } = this.options
-    const folders: RotationFolder[] = []
-    for (const account of this.options.store.getSettings().claudeManagedAccounts) {
-      if (account.managedAuthRuntime === 'wsl') {
-        continue
-      }
-      try {
-        if (router.coveredBySystemDefault(account.id)) {
-          continue
-        }
-        const home = router.accountHome(account.id)
-        folders.push({
-          accountId: account.id,
-          home,
-          service: claudeKeychainService(home),
-          stateFile: claudeStateFile(home, router.userHome)
-        })
-      } catch {
-        // An unreadable folder cannot take part in a swap.
-      }
-    }
-    return folders
+  private folders(): Promise<RotationFolder[]> {
+    return listRotationFolders(
+      this.options.store.getSettings().claudeManagedAccounts,
+      this.options.router
+    )
   }
 
-  private async cycle(): Promise<void> {
-    if (this.platform() !== 'darwin' || this.externalRotatorActive()) {
-      return
+  private async cycle(): Promise<number | null> {
+    if (this.platform() !== 'darwin') {
+      return null
     }
-    const folders = this.folders()
+    const enabled = resolveClaudeAccountRotationSettings(this.options.store.getSettings()).enabled
+    if (await externalRotatorActive(this.options.router.userHome)) {
+      // Nothing says when the other tool stops, so look again now and then while the setting is on.
+      return enabled ? ROTATION_TIMING.idleMaxMs : null
+    }
+    const folders = await this.folders()
     const byId = new Map(folders.map((folder) => [folder.accountId, folder]))
     // A swap in flight is finished or checked even after the feature is turned off.
-    if (this.files.loadJournal()) {
+    if (await this.files.loadJournal()) {
       const recovered = await recoverInterruptedSwap(byId, this.deps)
       if (recovered) {
         this.files.log('recover_cycle', { result: recovered })
@@ -177,24 +186,25 @@ export class ClaudeAccountRotationService {
       if (verified) {
         this.afterVerify(verified.outcome, verified.journal)
       }
-      if (this.files.loadJournal()) {
-        return
+      if (await this.files.loadJournal()) {
+        return ROTATION_TIMING.cycleMs
       }
     }
-    if (this.pauseReason(folders) !== null) {
-      return
+    if (this.pauseReason(folders, false) !== null) {
+      return null
     }
     const settings = this.options.store.getSettings()
     const rotation = resolveClaudeAccountRotationSettings(settings)
     const labels = new Map(
       folders.map((f) => [f.accountId, claudeAccountLabel(settings, f.accountId)])
     )
-    const state = this.files.loadState()
+    const state = await this.files.loadState()
     const sessions = await this.deps.readSessions()
     const selectedId = getSelectedClaudeAccountIdForTarget(settings, { runtime: 'host' })
     const targets = folders.filter(
       (folder) => folder.accountId === selectedId || (sessions?.get(folder.home) ?? 0) > 0
     )
+    let swapped = false
     for (const target of targets) {
       const result = await checkRotationFolder({
         target,
@@ -206,6 +216,7 @@ export class ClaudeAccountRotationService {
       })
       if (result?.note === 'swapped' && 'journal' in result) {
         this.afterSwap(result, labels, state)
+        swapped = true
         break
       }
       if (result && 'alert' in result && result.alert) {
@@ -214,13 +225,21 @@ export class ClaudeAccountRotationService {
     }
     state.lastCheckedAt = this.deps.now()
     this.snapshot = await snapshotRotationFolders(folders, sessions, state, this.deps)
-    this.files.saveState(state)
+    await this.files.saveState(state)
+    const busy = sessions === null || folders.some((f) => (sessions.get(f.home) ?? 0) > 0)
+    if (swapped || busy) {
+      this.idleDelayMs = ROTATION_TIMING.cycleMs
+      return ROTATION_TIMING.cycleMs
+    }
+    // No Claude session runs in any account folder, so none can reach a limit: look less often.
+    this.idleDelayMs = Math.min(this.idleDelayMs * 2, ROTATION_TIMING.idleMaxMs)
+    return this.idleDelayMs
   }
 
   private afterSwap(
     result: Extract<RotationCheckResult, { note: 'swapped' }>,
     labels: Map<string, string | null>,
-    state: ReturnType<RotationStateFiles['loadState']>
+    state: RotationState
   ): void {
     const { journal } = result
     const fromLabel = labels.get(journal.a) ?? null

@@ -1,6 +1,6 @@
-import { appendFileSync, mkdirSync, readFileSync, rmSync, statSync } from 'node:fs'
-import { join } from 'node:path'
-import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
+import { appendFile, mkdir, readFile, rm, stat } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
+import { durableWriteTempPath, writeFileDurable } from '../../filesystem/durable-file-write'
 import type { ClaudeAccountRotationSwitch } from '../../../shared/agent-accounts/claude/claude-account-rotation'
 import { isRecord } from './claude-rotation-keychain'
 import type { RotationUsageRecord } from './claude-rotation-policy'
@@ -46,9 +46,15 @@ export type RotationJournal = {
 const LOG_MAX_BYTES = 1024 * 1024
 const LOG_KEEP_LINES = 2000
 
-function readJson(path: string): unknown {
+/** Rotation is macOS only, so mode 0o600 keeps the file to its owner. */
+async function writeOwnerOnly(path: string, contents: string): Promise<void> {
+  await mkdir(dirname(path), { recursive: true, mode: 0o700 })
+  await writeFileDurable(durableWriteTempPath(path), path, contents, 0o600)
+}
+
+async function readJson(path: string): Promise<unknown> {
   try {
-    return JSON.parse(readFileSync(path, 'utf8'))
+    return JSON.parse(await readFile(path, 'utf8'))
   } catch {
     return null
   }
@@ -122,6 +128,7 @@ export class RotationStateFiles {
   readonly statePath: string
   readonly journalPath: string
   readonly logPath: string
+  private logQueue: Promise<void> = Promise.resolve()
 
   constructor(readonly dir: string) {
     this.statePath = join(dir, 'state.json')
@@ -129,12 +136,8 @@ export class RotationStateFiles {
     this.logPath = join(dir, 'log.jsonl')
   }
 
-  private ensureDir(): void {
-    mkdirSync(this.dir, { recursive: true, mode: 0o700 })
-  }
-
-  loadState(): RotationState {
-    const raw = readJson(this.statePath)
+  async loadState(): Promise<RotationState> {
+    const raw = await readJson(this.statePath)
     const saved = isRecord(raw) ? raw : {}
     return {
       accounts: recordOf(saved.accounts, isUsageRecord),
@@ -149,40 +152,38 @@ export class RotationStateFiles {
     }
   }
 
-  saveState(state: RotationState): void {
-    this.ensureDir()
-    writeFileAtomically(this.statePath, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 })
+  saveState(state: RotationState): Promise<void> {
+    return writeOwnerOnly(this.statePath, `${JSON.stringify(state, null, 2)}\n`)
   }
 
-  loadJournal(): RotationJournal | null {
-    const raw = readJson(this.journalPath)
+  async loadJournal(): Promise<RotationJournal | null> {
+    const raw = await readJson(this.journalPath)
     return isJournal(raw) ? raw : null
   }
 
-  saveJournal(journal: RotationJournal): void {
-    this.ensureDir()
-    writeFileAtomically(this.journalPath, `${JSON.stringify(journal, null, 2)}\n`, {
-      mode: 0o600
-    })
+  saveJournal(journal: RotationJournal): Promise<void> {
+    return writeOwnerOnly(this.journalPath, `${JSON.stringify(journal, null, 2)}\n`)
   }
 
-  removeJournal(): void {
-    rmSync(this.journalPath, { force: true })
+  async removeJournal(): Promise<void> {
+    await rm(this.journalPath, { force: true })
   }
 
+  /** Lines are written in order without making callers wait. */
   log(event: string, fields: Record<string, unknown> = {}): void {
-    try {
-      this.ensureDir()
-      const line = JSON.stringify({ at: new Date().toISOString(), event, ...fields })
-      appendFileSync(this.logPath, `${line}\n`, { mode: 0o600 })
-      if (statSync(this.logPath).size > LOG_MAX_BYTES) {
-        const lines = readFileSync(this.logPath, 'utf8').trimEnd().split('\n')
-        writeFileAtomically(this.logPath, `${lines.slice(-LOG_KEEP_LINES).join('\n')}\n`, {
-          mode: 0o600
-        })
-      }
-    } catch {
+    const line = JSON.stringify({ at: new Date().toISOString(), event, ...fields })
+    this.logQueue = this.logQueue
+      .then(() => this.appendLog(line))
       // The log is a convenience; a full disk must not stop a swap.
+      .catch(() => {})
+  }
+
+  private async appendLog(line: string): Promise<void> {
+    await mkdir(this.dir, { recursive: true, mode: 0o700 })
+    await appendFile(this.logPath, `${line}\n`, { mode: 0o600 })
+    if ((await stat(this.logPath)).size > LOG_MAX_BYTES) {
+      const lines = (await readFile(this.logPath, 'utf8')).trimEnd().split('\n')
+      await writeOwnerOnly(this.logPath, `${lines.slice(-LOG_KEEP_LINES).join('\n')}\n`)
     }
   }
 }

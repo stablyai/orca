@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ClaudeAccountRotationStatus } from '../../../../../../shared/agent-accounts/claude/claude-account-rotation'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 
 const STATUS_POLL_MS = 15_000
 
@@ -24,11 +25,11 @@ export function useClaudeAccountRotationStatus(
         })
         .catch(() => {})
     }
-    refresh()
-    const timer = window.setInterval(refresh, STATUS_POLL_MS)
+    // Runs once right away, then on the interval while the window is visible.
+    const stop = installWindowVisibilityInterval({ run: refresh, intervalMs: STATUS_POLL_MS })
     return () => {
       cancelled = true
-      window.clearInterval(timer)
+      stop()
     }
   }, [settingsKey])
   return status

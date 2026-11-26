@@ -44,7 +44,7 @@ export async function claudeAccountOf(
   deps: RotationCheckDeps
 ): Promise<string | null> {
   const guess =
-    accountPrefix(oauth.accountUuid) ?? accountPrefix(readOauthAccount(folder).accountUuid)
+    accountPrefix(oauth.accountUuid) ?? accountPrefix((await readOauthAccount(folder)).accountUuid)
   const token = accessTokenOf(oauth)
   const now = deps.now()
   if (!token || !accessUsable(oauth, now)) {

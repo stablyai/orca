@@ -52,12 +52,12 @@ export async function snapshotRotationFolders(
   return snapshot
 }
 
-function folderAccountFromFile(folder: RotationFolder): string | null {
-  const uuid = readOauthAccount(folder).accountUuid
+async function folderAccountFromFile(folder: RotationFolder): Promise<string | null> {
+  const uuid = (await readOauthAccount(folder)).accountUuid
   return typeof uuid === 'string' && uuid ? uuid.slice(0, 8) : null
 }
 
-export function buildRotationStatus(args: {
+export async function buildRotationStatus(args: {
   rotation: ClaudeAccountRotationSettings
   supported: boolean
   externalRotatorActive: boolean
@@ -69,14 +69,15 @@ export function buildRotationStatus(args: {
   state: RotationState
   pendingSwitch: boolean
   now: number
-}): ClaudeAccountRotationStatus {
+}): Promise<ClaudeAccountRotationStatus> {
   const { rotation, state, now } = args
-  const folders = args.folders.map((folder): ClaudeAccountRotationFolder => {
+  const folders: ClaudeAccountRotationFolder[] = []
+  for (const folder of args.folders) {
     const snap = args.snapshot.get(folder.accountId)
-    const claudeAccount = snap?.claudeAccount ?? folderAccountFromFile(folder)
+    const claudeAccount = snap?.claudeAccount ?? (await folderAccountFromFile(folder))
     const record = claudeAccount ? state.accounts[claudeAccount] : undefined
     const usage = record ? effectiveUsage(record, now) : null
-    return {
+    folders.push({
       accountId: folder.accountId,
       claudeAccount,
       label: args.label(folder.accountId),
@@ -95,8 +96,8 @@ export function buildRotationStatus(args: {
       preferred:
         claudeAccount !== null &&
         preferRank(rotation.preferredAccounts, claudeAccount) < rotation.preferredAccounts.length
-    }
-  })
+    })
+  }
   const selected = folders.find((folder) => folder.selected)
   const candidates: RotationCandidate[] = []
   for (const folder of folders) {

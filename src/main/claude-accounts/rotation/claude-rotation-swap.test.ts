@@ -133,13 +133,13 @@ it('finishes or cancels a swap cut off mid-write without losing either login', a
   const b = folder(cut.folders, 'b')
   const first = await swapFolderLogins(a, b, request, cut.deps)
   expect(first.ok).toBe(false)
-  expect(cut.files.loadJournal()?.step).toBe('a_written')
+  expect((await cut.files.loadJournal())?.step).toBe('a_written')
 
   expect(await recoverInterruptedSwap(cut.folders, cut.deps)).toBe('finished')
   expect(cut.keychain.slots.get('svc-a')).toEqual({ ...slotOf('a'), claudeAiOauth: login('b') })
   expect(cut.keychain.slots.get('svc-b')).toEqual({ ...slotOf('b'), claudeAiOauth: login('a') })
   expect((await verifySwap(cut.folders, cut.deps, true))?.outcome).toBe('ok')
-  expect(cut.files.loadJournal()).toBeNull()
+  expect(await cut.files.loadJournal()).toBeNull()
   expect([...cut.keychain.slots.keys()].sort()).toEqual(['svc-a', 'svc-b'])
 
   // Crash on write 3 (the first folder): nothing changed, so the journal just goes away.
@@ -154,7 +154,7 @@ it('finishes or cancels a swap cut off mid-write without losing either login', a
   expect(await recoverInterruptedSwap(early.folders, early.deps)).toBe('nothing_written')
   expect(early.keychain.slots.get('svc-a')).toEqual(slotOf('a'))
   expect(early.keychain.slots.get('svc-b')).toEqual(slotOf('b'))
-  expect(early.files.loadJournal()).toBeNull()
+  expect(await early.files.loadJournal()).toBeNull()
 })
 
 it('moves only claudeAiOauth and oauthAccount between folders', async () => {
@@ -206,7 +206,7 @@ it('never takes the login of a folder with running Claude sessions', async () =>
     target,
     folders: all,
     sessions: busyB,
-    state: files.loadState(),
+    state: await files.loadState(),
     settings,
     deps
   })
@@ -222,7 +222,7 @@ it('never takes the login of a folder with running Claude sessions', async () =>
     target: folder(late.folders, 'a'),
     folders: [...late.folders.values()],
     sessions: new Map(),
-    state: late.files.loadState(),
+    state: await late.files.loadState(),
     settings,
     deps: late.deps
   })
@@ -236,7 +236,7 @@ it('never takes the login of a folder with running Claude sessions', async () =>
     target: folder(unknown.folders, 'a'),
     folders: [...unknown.folders.values()],
     sessions: null,
-    state: unknown.files.loadState(),
+    state: await unknown.files.loadState(),
     settings,
     deps: unknown.deps
   })

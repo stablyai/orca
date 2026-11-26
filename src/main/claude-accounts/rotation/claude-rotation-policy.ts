@@ -7,6 +7,8 @@ import type {
 // Timings mirror the external claude_rotate.py defaults so both behave alike.
 export const ROTATION_TIMING = {
   cycleMs: 60_000,
+  /** The longest gap between checks while no Claude session runs in an account folder. */
+  idleMaxMs: 600_000,
   checkGapMs: 55_000,
   minSwapGapMs: 600_000,
   alertGapMs: 1_800_000,

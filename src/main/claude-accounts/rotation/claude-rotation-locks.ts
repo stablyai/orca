@@ -1,21 +1,21 @@
-import { mkdirSync, realpathSync, rmdirSync, utimesSync } from 'node:fs'
+import { mkdir, realpath, rmdir, utimes } from 'node:fs/promises'
 import { join } from 'node:path'
 
-function realpathOrSelf(path: string): string {
+async function realpathOrSelf(path: string): Promise<string> {
   try {
-    return realpathSync(path)
+    return await realpath(path)
   } catch {
     return path
   }
 }
 
 /** The two mkdir locks Claude Code takes while it refreshes a folder's login. */
-export function claudeRefreshLockPaths(home: string): string[] {
-  return [join(home, '.oauth_refresh.lock'), `${realpathOrSelf(home)}.lock`]
+export async function claudeRefreshLockPaths(home: string): Promise<string[]> {
+  return [join(home, '.oauth_refresh.lock'), `${await realpathOrSelf(home)}.lock`]
 }
 
-export function claudeFileLockPath(file: string): string {
-  return `${realpathOrSelf(file)}.lock`
+export async function claudeFileLockPath(file: string): Promise<string> {
+  return `${await realpathOrSelf(file)}.lock`
 }
 
 const defaultSleep = (ms: number): Promise<void> =>
@@ -36,7 +36,7 @@ export class RotationDirLock {
       const got: string[] = []
       for (const path of this.paths) {
         try {
-          mkdirSync(path)
+          await mkdir(path)
           got.push(path)
         } catch {
           break
@@ -47,7 +47,7 @@ export class RotationDirLock {
         return true
       }
       for (const path of got.toReversed()) {
-        tryRemoveDir(path)
+        await tryRemoveDir(path)
       }
       if (Date.now() >= end) {
         return false
@@ -57,28 +57,29 @@ export class RotationDirLock {
   }
 
   /** Lockfile readers treat an old lock as abandoned, so refresh it between writes. */
-  touch(): void {
+  async touch(): Promise<void> {
     const now = new Date()
     for (const path of this.held) {
       try {
-        utimesSync(path, now, now)
+        await utimes(path, now, now)
       } catch {
         // A missing lock cannot be refreshed; release still skips it.
       }
     }
   }
 
-  release(): void {
-    for (const path of this.held.toReversed()) {
-      tryRemoveDir(path)
-    }
+  async release(): Promise<void> {
+    const held = this.held
     this.held = []
+    for (const path of held.toReversed()) {
+      await tryRemoveDir(path)
+    }
   }
 }
 
-function tryRemoveDir(path: string): void {
+async function tryRemoveDir(path: string): Promise<void> {
   try {
-    rmdirSync(path)
+    await rmdir(path)
   } catch {
     // Already gone.
   }

@@ -44,11 +44,15 @@ export type RotationSwapResult =
   | { ok: true; journal: RotationJournal }
   | { ok: false; detail: string }
 
-export function refreshLock(deps: RotationSwapDeps, ...folders: RotationFolder[]): RotationDirLock {
-  return new RotationDirLock(
-    folders.flatMap((folder) => claudeRefreshLockPaths(folder.home)),
-    deps.sleep
-  )
+export async function refreshLock(
+  deps: RotationSwapDeps,
+  ...folders: RotationFolder[]
+): Promise<RotationDirLock> {
+  const paths: string[] = []
+  for (const folder of folders) {
+    paths.push(...(await claudeRefreshLockPaths(folder.home)))
+  }
+  return new RotationDirLock(paths, deps.sleep)
 }
 
 export async function swapMeta(
@@ -66,7 +70,7 @@ export async function swapMeta(
 export async function clearRotationJournal(deps: RotationSwapDeps): Promise<void> {
   await deps.slots.remove(ROTATION_JOURNAL_SERVICE_A)
   await deps.slots.remove(ROTATION_JOURNAL_SERVICE_B)
-  deps.files.removeJournal()
+  await deps.files.removeJournal()
 }
 
 /** Gives `a` the login of `b` and `b` the login of `a`; only `claudeAiOauth` moves. */
@@ -76,10 +80,10 @@ export async function swapFolderLogins(
   request: RotationSwapRequest,
   deps: RotationSwapDeps
 ): Promise<RotationSwapResult> {
-  if (deps.files.loadJournal()) {
+  if (await deps.files.loadJournal()) {
     return { ok: false, detail: 'previous_swap_unverified' }
   }
-  const lock = refreshLock(deps, a, b)
+  const lock = await refreshLock(deps, a, b)
   if (!(await lock.acquire(ROTATION_TIMING.lockWaitMs))) {
     return { ok: false, detail: 'refresh_in_progress' }
   }
@@ -114,9 +118,9 @@ export async function swapFolderLogins(
       aOldRefresh: tokenHash(oauthA.refreshToken),
       bOldRefresh: tokenHash(oauthB.refreshToken)
     }
-    deps.files.saveJournal(journal)
+    await deps.files.saveJournal(journal)
     wrote = true
-    lock.touch()
+    await lock.touch()
     if (!(await deps.slots.write(a.service, nextA))) {
       const restored = await deps.slots.write(a.service, slotA)
       if (restored) {
@@ -129,8 +133,8 @@ export async function swapFolderLogins(
       }
     }
     journal.step = 'a_written'
-    deps.files.saveJournal(journal)
-    lock.touch()
+    await deps.files.saveJournal(journal)
+    await lock.touch()
     if (!(await deps.slots.write(b.service, nextB))) {
       const restored =
         (await deps.slots.write(a.service, slotA)) && (await deps.slots.write(b.service, slotB))
@@ -144,17 +148,17 @@ export async function swapFolderLogins(
       }
     }
     journal.step = 'b_written'
-    deps.files.saveJournal(journal)
+    await deps.files.saveJournal(journal)
   } catch {
     return { ok: false, detail: wrote ? 'interrupted_recovering' : 'keychain_unavailable' }
   } finally {
-    lock.release()
+    await lock.release()
     if (wrote) {
-      nudgeRunningSessions(a, b)
+      await nudgeRunningSessions(a, b)
     }
   }
   journal.meta = await swapMeta(a, b, deps)
-  deps.files.saveJournal(journal)
+  await deps.files.saveJournal(journal)
   return { ok: true, journal }
 }
 
@@ -163,7 +167,7 @@ export async function recoverInterruptedSwap(
   folders: Map<string, RotationFolder>,
   deps: RotationSwapDeps
 ): Promise<string | null> {
-  const journal = deps.files.loadJournal()
+  const journal = await deps.files.loadJournal()
   if (!journal || (journal.step !== 'begin' && journal.step !== 'a_written')) {
     return null
   }
@@ -172,7 +176,7 @@ export async function recoverInterruptedSwap(
   if (!a || !b) {
     return 'folder_missing'
   }
-  const lock = refreshLock(deps, a, b)
+  const lock = await refreshLock(deps, a, b)
   if (!(await lock.acquire(ROTATION_TIMING.lockWaitMs))) {
     return 'refresh_in_progress'
   }
@@ -213,17 +217,17 @@ export async function recoverInterruptedSwap(
       result = 'finished'
     }
     journal.step = 'b_written'
-    deps.files.saveJournal(journal)
+    await deps.files.saveJournal(journal)
   } catch {
     return 'keychain_unavailable'
   } finally {
-    lock.release()
+    await lock.release()
   }
   if (journal.meta === undefined) {
     journal.meta = await swapMeta(a, b, deps)
-    deps.files.saveJournal(journal)
+    await deps.files.saveJournal(journal)
   }
-  nudgeRunningSessions(a, b)
+  await nudgeRunningSessions(a, b)
   deps.files.log('recover', { result })
   return result
 }
