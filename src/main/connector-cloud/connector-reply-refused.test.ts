@@ -12,7 +12,6 @@ import {
   CONNECTOR_SLACK_PRESENTATION_TEXT_FEATURE,
   CONNECTOR_SLACK_PRESENTATION_TURN_END_FEATURE,
   SlackAnswerPresentationSchema,
-  SLACK_PRESENTATION_UNCONFIRMED,
   slackAnswerText
 } from '../../shared/connectors/slack-answer-presentation'
 import type { ConnectorReplyBody } from './connector-replies'
@@ -28,6 +27,18 @@ import {
   settle
 } from './connector-poll-client.test-fixture'
 import type { ConversationEvent } from '../external-conversations/external-conversation-events'
+import Database from '../sqlite/sync-database'
+import { migrateJournalDomainSchema } from '../native-chat/agent-session-journal/database/journal-domain-migrations'
+import {
+  fillJournalConnectorReplies,
+  recordJournalConnectorReplies,
+  sentJournalConnectorReplies
+} from '../native-chat/agent-session-journal/connector-replies/journal-connector-replies'
+import {
+  readJournalConnectorReplies,
+  readOwedJournalConnectorReplies
+} from '../native-chat/agent-session-journal/connector-replies/journal-connector-replies-read'
+import { prepareSlackAnswerPresentation } from '../native-chat/agent-session-journal/connector-replies/journal-slack-answer-presentation'
 
 const dirs: string[] = []
 afterEach(() => dirs.splice(0).forEach((dir) => rmSync(dir, { recursive: true, force: true })))
@@ -166,25 +177,48 @@ it('hands an owed answer to the disclosure check after the event route rolls bac
     }
   })
   const posted: ConnectorReplyBody[] = []
+  const db = new Database(join(dir, 'journal.db'))
+  migrateJournalDomainSchema(db)
+  const turn = { sessionId: row.sessionId, epoch: row.epoch, turnItemId: 'turn-1' }
+  db.prepare(`INSERT INTO journal_items
+    (session_id,epoch,item_id,ordinal,revision,sequence,sequence_index,owner_fence,kind,lifecycle_state,payload_json)
+    VALUES(?,?,?,1,1,1,0,0,'turn','running','{}')`).run(turn.sessionId, turn.epoch, turn.turnItemId)
+  expect(prepareSlackAnswerPresentation(db, turn, presentation)).toBe(true)
+  recordJournalConnectorReplies(db, turn, row.messageId, false, {
+    kind: 'message',
+    role: 'user',
+    blocks: [{ type: 'text', text: 'What passed?' }],
+    connectorDelivery: {
+      account: row.account,
+      conversation: row.conversation,
+      deliveryId: row.deliveryId
+    }
+  })
+  expect(
+    fillJournalConnectorReplies(
+      db,
+      [
+        {
+          account: row.account,
+          deliveryId: row.deliveryId,
+          answerDeliveryId: row.deliveryId,
+          outcome: 'answered',
+          prose: slackAnswerText(presentation),
+          turnStartedAt: 8,
+          turnItemId: turn.turnItemId,
+          presentationTurn: turn
+        }
+      ],
+      10
+    )
+  ).toBe(1)
   const events = new ConnectorTurnEvents(dir, 'ada', undefined, {
     journal: () => ({
-      read: async () => [],
-      readOwed: async (_account, after, _limit, includePresentations) =>
-        after === null
-          ? [
-              {
-                ...row,
-                fill: {
-                  ...row.fill!,
-                  prose: SLACK_PRESENTATION_UNCONFIRMED,
-                  turnStartedAt: 8,
-                  ...(includePresentations ? { presentation } : {})
-                }
-              }
-            ]
-          : [],
+      read: async (sessionId) => readJournalConnectorReplies(db, sessionId),
+      readOwed: async (account, after, limit, includePresentations) =>
+        readOwedJournalConnectorReplies(db, account, after, limit, includePresentations),
       fillOutcomes: async () => false,
-      sent: async () => {}
+      sent: async (keys) => sentJournalConnectorReplies(db, keys, 11)
     }),
     onOwed: () => {},
     post: async (body) => {
@@ -223,9 +257,19 @@ it('hands an owed answer to the disclosure check after the event route rolls bac
     events.resetLive()
     requests.watch()
     await events.drainReplies()
-    expect(posted).toMatchObject([{ text: slackAnswerText(presentation), presentation, turnId: 8 }])
+    expect(posted).toMatchObject([
+      {
+        replyId: 'outcome-i1NjnxUsj8bvMIAv3kYroL6c8IX3WA3Gnv1y4AKruzU',
+        answerDeliveryId: 'd1',
+        text: slackAnswerText(presentation),
+        presentation,
+        turnId: 8
+      }
+    ])
+    expect(readOwedJournalConnectorReplies(db, 'ada', null, 1, true)).toEqual([])
   } finally {
     events.clear()
+    db.close()
   }
 })
 const h = pollClientHarness()
