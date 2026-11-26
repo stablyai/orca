@@ -38,6 +38,9 @@ export type HostDirectEndpointFollower = {
   directEndpoint(): string
   onConnected(): void
   refresh(): void
+  /** Abort a verification dial in flight; the next foreground refresh tries again. */
+  cancel(): void
+  stop(): void
 }
 
 /**
@@ -63,6 +66,9 @@ export function createHostDirectEndpointFollower(args: {
   // After one answer only a desktop-owned row can change, so manual and unknown rows stop asking.
   let answered = false
   let failedReplacement: { endpoint: string; at: number } | null = null
+  let connection = 0
+  let verifying: AbortController | null = null
+  let stopped = false
   let unsupported = false
   let inFlight = false
   // A cutover can publish the new session's connected edge while the old session's read is pending.
@@ -75,17 +81,30 @@ export function createHostDirectEndpointFollower(args: {
   }
   const tryReplacement = async (replacement: string): Promise<void> => {
     if (
-      failedReplacement?.endpoint === replacement &&
-      args.now() - failedReplacement.at < FAILED_REPLACEMENT_RETRY_MS
+      stopped ||
+      !args.isForeground() ||
+      (failedReplacement?.endpoint === replacement &&
+        args.now() - failedReplacement.at < FAILED_REPLACEMENT_RETRY_MS)
     ) {
       return
     }
+    const attempt = connection
+    const controller = new AbortController()
+    verifying = controller
     const reached = await openAuthenticatedDirectEndpoint(
       () => args.openDirect(replacement),
-      directProbeTimeoutMsForEndpoint(replacement)
-    )
+      directProbeTimeoutMsForEndpoint(replacement),
+      controller.signal
+    ).finally(() => {
+      if (verifying === controller) {
+        verifying = null
+      }
+    })
     if (!reached) {
-      failedReplacement = { endpoint: replacement, at: args.now() }
+      // A miss on an older connection says nothing about the network the new one is on.
+      if (attempt === connection && !controller.signal.aborted) {
+        failedReplacement = { endpoint: replacement, at: args.now() }
+      }
       return
     }
     // Return probes dial the saved endpoint and own promotion; this dial only proved it reachable.
@@ -117,6 +136,7 @@ export function createHostDirectEndpointFollower(args: {
       return
     }
     if (
+      stopped ||
       unsupported ||
       (answered && saved.directEndpointOrigin !== 'host') ||
       !args.isForeground() ||
@@ -141,10 +161,18 @@ export function createHostDirectEndpointFollower(args: {
     directEndpoint: () => saved.endpoint,
     onConnected() {
       // A new connection may be on a new network, where an earlier miss can now answer.
+      connection += 1
       unsupported = false
       failedReplacement = null
       refresh()
     },
-    refresh
+    refresh,
+    cancel() {
+      verifying?.abort()
+    },
+    stop() {
+      stopped = true
+      verifying?.abort()
+    }
   }
 }

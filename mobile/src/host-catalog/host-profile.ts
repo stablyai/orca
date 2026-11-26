@@ -21,8 +21,9 @@ export type HostProfile = {
   lastKnownHostMachine?: HostMachine
   endpoint: string
   /**
-   * Who chose `endpoint`: 'host' once the desktop listed it as one of its own addresses, so it may follow
-   * the desktop when that address goes away; 'manual' after Edit Host. Absent means unknown, never rewritten.
+   * Who chose `endpoint`: 'host' once the desktop lists it as one of its own addresses, so it may follow
+   * the desktop when that address goes away; 'manual' after Edit Host, never rewritten. Absent means not
+   * yet seen in the desktop's list (pairing, or a row from before origins), so a tunnel is never followed.
    */
   directEndpointOrigin?: HostDirectEndpointOrigin
   deviceToken: string

@@ -92,6 +92,9 @@ export function startMobileEndpointLifecycle(
   return {
     setForeground(next) {
       foreground = next
+      if (!next) {
+        directEndpoints.cancel()
+      }
       owner.setForeground(next)
     },
     nudge(reason) {
@@ -106,6 +109,7 @@ export function startMobileEndpointLifecycle(
     stop() {
       stopped = true
       unsubscribeDirectEndpoints()
+      directEndpoints.stop()
       owner.stop()
     }
   }
