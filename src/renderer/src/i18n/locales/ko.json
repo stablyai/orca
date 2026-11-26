@@ -873,6 +873,8 @@
       }
     },
     "bots": {
+      "muteNotifications": "알림 음소거",
+      "muteNotificationsDescription": "시스템 알림을 보내지 않습니다. 읽지 않음 표시는 계속 나타납니다.",
       "avatarSlackNoteColor": "Slack에는 사진만 적용되고 색상은 적용되지 않습니다.",
       "tidyUp": {
         "everyNightLine": "매일 밤 오전 3시 이후, 또는 이 컴퓨터가 깨어난 후",
@@ -882,6 +884,11 @@
       "teamDisabled": "팀에서 Bots를 꺼 두었습니다.",
       "lookAround": {
         "title": "둘러보기"
+      },
+      "tools": {
+        "hostMcpNone": "이 호스트에는 아직 없음",
+        "hostMcp": "내 MCP 서버",
+        "hostMcpAndMore": "내 MCP 서버, {{rest}}"
       },
       "skills": {
         "claudeOnly": "Claude 전용",
@@ -27456,7 +27463,17 @@
           "ask": "이 PR 리뷰해 줘",
           "bot": "bot",
           "reply": "바로 시작하겠습니다."
-        }
+        },
+        "cancel": "취소",
+        "installApp": "앱 설치",
+        "add": "추가",
+        "addTitle": "{{name}} 추가",
+        "addShort": "추가",
+        "allRepos": "모든 저장소",
+        "repoCount_one": "저장소 {{count}}개",
+        "repoCount_other": "저장소 {{count}}개",
+        "finishInYourBrowser": "브라우저에서 마무리하세요…",
+        "whoCanAsk": "요청할 수 있는 사람"
       },
       "account": {
         "descriptionPlural": "내 GitHub 계정들입니다. bots가 어떤 댓글이 내 것인지 아는 데 사용됩니다.",
@@ -27934,6 +27951,7 @@
       "computerHint": "봇이 실행되는 위치입니다.",
       "computerAccountHint": "Orca에 {{account}}(으)로 로그인한 상태에서 봇이 실행되는 위치입니다.",
       "useChatDefaults": "채팅 기본값 사용",
+      "useChatDefaultsHint": "에이전트의 모델, 옵션, 권한을 채팅 기본값으로 되돌립니다",
       "agent": "에이전트",
       "folder": "폴더: {{path}}",
       "name": "이름",
@@ -27949,7 +27967,36 @@
         "updateOrca": "Orca 업데이트"
       },
       "identityWatches": "감시: {{what}}",
-      "identityReports": "보고: {{what}}"
+      "identityReports": "보고: {{what}}",
+      "wslSetupFailedShort": "설정을 마치지 못함",
+      "wslSettingUp": "설정 중…",
+      "wslSetup": {
+        "waiting": "{{distro}}을(를) 기다리는 중…",
+        "starting": "{{distro}} 시작 중",
+        "installing": "~/.orca-remote에 Orca 서버 설치 중",
+        "connecting": "연결 중",
+        "findingAgents": "{{distro}}에서 에이전트 찾는 중",
+        "installingHint": "처음에는 Linux용 Node 런타임도 다운로드합니다.",
+        "failedTitle": "{{distro}}을(를) 설정하지 못했습니다",
+        "details": "세부 정보",
+        "retry": "다시 시도",
+        "chooseAnother": "다른 컴퓨터 선택",
+        "title": "{{distro}}을(를) 호스트로 설정하는 중",
+        "subtitle": "처음에는 1분 정도 걸립니다. Windows 파일과 다른 배포판은 건드리지 않습니다.",
+        "cancel": "취소",
+        "failedGeneric": "배포판에서 Orca 서버가 시작되지 않았습니다. 무엇이 막았는지는 세부 정보에 나옵니다."
+      },
+      "wslNoAgent": {
+        "field": "{{distro}}에 에이전트 없음",
+        "title": "{{distro}} 안에 에이전트를 설치하세요",
+        "body": "Windows에 설치한 에이전트는 WSL 안에서 실행할 수 없습니다. 배포판에 에이전트를 설치하고 로그인하면 여기에 나타납니다.",
+        "copied": "복사됨",
+        "copy": "복사",
+        "checking": "다시 확인하는 중…"
+      },
+      "hostSleeping": "절전 중 · 사용하면 깨어남",
+      "wslWaking": "{{distro}}을(를) 깨우는 중…",
+      "hostWaking": "깨우는 중…"
     },
     "googleSetup": {
       "receipt": {
@@ -27967,8 +28014,16 @@
       "paste": {
         "remoteSignIn": "원격 로그인"
       },
+      "searchAdded": "추가한 앱 검색",
+      "filters": "앱 필터",
       "composio": {
-        "withComposio": "Composio로 연결"
+        "withComposio": "Composio로 연결",
+        "signsIn": "Composio 계정을 통해 로그인합니다.",
+        "changeKeyTitle": "Composio 키 변경",
+        "replacesKeyEnding": "모든 봇에 대해 끝자리가 {{hint}}인 키를 교체합니다.",
+        "replacesKey": "모든 봇에 대해 저장된 키를 교체합니다.",
+        "newKeyNeeds": "새 키에는 <permission/> 권한이 필요합니다.",
+        "replaceKey": "키 교체 후 계속"
       },
       "mcp": {
         "addTitle": "{{app}} 추가",
@@ -28049,8 +28104,23 @@
         "miro": "보드, 스티커 메모, 프레임",
         "reddit": "게시물, 댓글, 서브레딧"
       },
+      "addAppsTitle": "{{bot}}에 앱 추가",
+      "addedCount": "{{count}}개 추가됨",
+      "addedCaption": "추가됨",
+      "chip": {
+        "all": "전체",
+        "composio": "Composio",
+        "more": "기타"
+      },
+      "setUpNamed": "{{name}} 설정",
+      "setUp": "설정",
+      "couldNotConnect": "{{app}}을(를) 연결하지 못했습니다",
       "webhooks": {
         "line": "모든 도구나 스크립트의 이벤트"
+      },
+      "custom": {
+        "name": "사용자 지정",
+        "rowLine": "원하는 MCP 서버"
       }
     },
     "row": {
@@ -28329,6 +28399,7 @@
       "controlBriefIfAdded": "추가하는 사람은 누구나 여기서 나를 대신해 작업할 수 있습니다.",
       "controlBriefOnHost": "이들은 {{computer}}에서 나를 대신해 작업할 수 있습니다.",
       "controlBriefIfAddedOnHost": "추가하는 사람은 누구나 {{computer}}에서 나를 대신해 작업할 수 있습니다.",
+      "actsAsYou": "이들은 {{computer}}에서 나를 대신해 작업합니다.",
       "reachSlack": "Slack에서 {{name}}(으)로 게시",
       "here": "여기",
       "thisServer": "이 서버",
@@ -28378,6 +28449,11 @@
       "nudgeMany": "{{app}}에서 봇 {{count}}개를 찾았습니다.",
       "nudgeDismiss": "다시 표시하지 않기",
       "menu": "다른 앱에서 가져오기…"
+    },
+    "composio": {
+      "key": {
+        "changeKey": "키 변경"
+      }
     },
     "share": {
       "linkStatusUnavailable": "공유 링크를 확인할 수 없습니다",
@@ -28474,6 +28550,7 @@
       "toolCredentialsRaced": "다른 Orca에서 봇의 도구 자격 증명이 바뀌었습니다. 다시 시도하세요.",
       "toolSourceManaged": "이 도구는 Orca가 관리합니다. 설정한 곳에서 변경하세요.",
       "toolValuesUnmoved": "저장된 값을 아직 가진 도구가 있습니다. 봇의 도구를 다시 열어 옮기세요.",
+      "googleAccountsChanged": "계정 목록을 연 뒤 봇의 Google 계정이 바뀌었습니다. 확인하고 다시 저장하세요.",
       "toolCodexCheckFailed": "Codex가 도구를 확인하거나 연결하지 못했습니다. 설정을 확인하고 다시 시도하세요.",
       "toolCodexNoThread": "Codex가 도구를 확인할 스레드를 시작하지 않았습니다.",
       "toolSignInFolderFailed": "로그인 폴더를 준비하지 못했습니다: {{detail}}",
@@ -28529,7 +28606,10 @@
       "groupReplierNotMember": "방 답장에서 현재 방 멤버를 선택하세요.",
       "groupMailNeverStarted": "이 메일은 턴을 시작하지 못했습니다.",
       "groupRemoteUnreachable": "{{host}}에 연결할 수 없었습니다. {{detail}}",
-      "groupRemoteUnreachableRetry": "{{host}}에 연결할 수 없었습니다. {{detail}} 다시 시도하려면 다시 게시하세요."
+      "groupRemoteUnreachableRetry": "{{host}}에 연결할 수 없었습니다. {{detail}} 다시 시도하려면 다시 게시하세요.",
+      "composioKeyCantCreateSessions": "이 Composio 키로는 세션을 만들 수 없습니다. {{permission}} 권한이 필요합니다.",
+      "composioKeyNeedsPermission": "이 Composio 키에 권한이 하나 빠져 있습니다. {{permission}} 권한이 필요합니다.",
+      "composioKeyMissingPermission": "이 Composio 키에 Orca에 필요한 권한이 빠져 있습니다."
     },
     "lookAroundEvery": {
       "every4h": "오전 8시~오후 8시, 4시간마다",
@@ -28571,7 +28651,10 @@
     "google": {
       "bot": {
         "account": "계정",
-        "settingUp": "설정 중"
+        "settingUp": "설정 중",
+        "reconnectAccount": "{{email}} 다시 연결",
+        "chooseAccounts": "계정 선택…",
+        "accounts": "계정"
       },
       "disconnect": {
         "promotes": "{{email}}이(가) 기본값이 됩니다.",
@@ -28605,7 +28688,14 @@
       "useAnotherSignInDetail": "현재 Google 앱 사용",
       "setUpNewApp": "새 Google 앱 설정",
       "setUpNewAppDetail": "현재 앱이 이 계정이나 조직에서 작동하지 않는 경우",
-      "updateToSetUpNewApp": "새 Google 앱을 설정하려면 {{host}}의 Orca를 업데이트하세요."
+      "updateToSetUpNewApp": "새 Google 앱을 설정하려면 {{host}}의 Orca를 업데이트하세요.",
+      "updateToChooseAccounts": "계정을 선택하려면 {{host}}의 Orca를 업데이트하세요.",
+      "picker": {
+        "label": "Google 계정",
+        "addAccount": "다른 계정 추가",
+        "caption": "{{bot}}이(가) 사용할 수 있는 계정",
+        "save": "저장"
+      }
     },
     "notices": {
       "couldNotFinish": "{{bot}}이(가) 끝내지 못했습니다",
