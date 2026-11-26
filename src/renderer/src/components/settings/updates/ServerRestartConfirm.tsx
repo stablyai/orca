@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useId, useRef, useState } from 'react'
+import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useTranslate } from '@/i18n/use-translate'
@@ -7,6 +7,75 @@ import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-ser
 
 const WAIT_FOR_EXPANSION = Symbol()
 const NAME_TOKEN = '\u0000'
+
+function ServerNameWithSuffix({
+  name,
+  suffix
+}: {
+  name: string
+  suffix: string
+}): React.JSX.Element {
+  const ref = useRef<HTMLSpanElement>(null)
+  const fullNameRef = useRef<HTMLSpanElement>(null)
+  const [visibleName, setVisibleName] = useState(name)
+
+  useLayoutEffect(() => {
+    const element = ref.current
+    const fullName = fullNameRef.current
+    if (!element || !fullName) {
+      return
+    }
+    const probe = element.ownerDocument.createElement('span')
+    probe.className = 'invisible absolute w-max'
+    const fitName = (): void => {
+      const width = element.getBoundingClientRect().width
+      if (width === 0 || fullName.getBoundingClientRect().width <= width) {
+        setVisibleName(name)
+        return
+      }
+      // Measure in the dialog's own typography so the suffix fits beside the last visible glyph.
+      element.append(probe)
+      const fits = (candidate: string): boolean => {
+        probe.textContent = `${candidate}…${suffix}`
+        return probe.getBoundingClientRect().width <= width
+      }
+      if (!fits('')) {
+        setVisibleName('')
+        return
+      }
+      const graphemes = Array.from(new Intl.Segmenter().segment(name), ({ segment }) => segment)
+      let lower = 0
+      let upper = graphemes.length
+      while (lower < upper) {
+        const middle = Math.ceil((lower + upper) / 2)
+        if (fits(graphemes.slice(0, middle).join(''))) {
+          lower = middle
+        } else {
+          upper = middle - 1
+        }
+      }
+      setVisibleName(`${graphemes.slice(0, lower).join('')}…`)
+    }
+    fitName()
+    const observer = new ResizeObserver(fitName)
+    observer.observe(element)
+    observer.observe(fullName)
+    return () => {
+      observer.disconnect()
+      probe.remove()
+    }
+  }, [name, suffix])
+
+  return (
+    <span ref={ref} className="relative min-w-0 overflow-hidden whitespace-nowrap">
+      {/* Keep the available width independent of the display name after truncation. */}
+      <span ref={fullNameRef} aria-hidden className="invisible inline-block">
+        {`${name}${suffix}`}
+      </span>
+      <span className="absolute inset-0 overflow-hidden">{`${visibleName}${suffix}`}</span>
+    </span>
+  )
+}
 
 /** Updating restarts servers, so every update asks once, naming what restarts and whether live sessions drop. */
 export function ServerRestartConfirm({
@@ -144,8 +213,7 @@ export function ServerRestartConfirm({
               ) : (
                 <>
                   <span className="shrink-0 whitespace-pre">{beforeName}</span>
-                  <span className="min-w-0 truncate">{serverName}</span>
-                  <span className="shrink-0 whitespace-pre">{afterName}</span>
+                  <ServerNameWithSuffix name={serverName ?? ''} suffix={afterName} />
                 </>
               )}
             </span>
