@@ -1,4 +1,5 @@
 import { installBrowserInitializationPresentationLifetime } from '@/runtime/web-session-tabs-sync/tab-projection/browser-initialization-presentation'
+import { followSharedHostsInRepoCatalog } from '@/store/repos/shared-host-repo-catalog'
 import { observeJiraImageHostStatus } from '@/runtime/jira/runtime-jira-image-cache'
 import { observeRuntimeHostStatusForPendingRemovals } from '@/store/repos/pending-runtime-repo-removal-replay'
 import type { RuntimeHostStatusSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
@@ -86,7 +87,10 @@ export function installAppLifetimeIpcEvents(): () => void {
     )
   )
   if (!isPairedWebClientWindow()) {
-    unsubs.push(installSharedBotHostCatalog(), installSharedBotNewChatSwap())
+    unsubs.push(
+      installSharedBotHostCatalog(followSharedHostsInRepoCatalog(useAppStore)),
+      installSharedBotNewChatSwap()
+    )
   }
   unsubs.push(installBotHostListing(useAppStore, isPairedWebClientWindow()))
   const stopSessionWorkerNotices = window.api.runtime.onOrchestrationSessionWorkersChanged?.(

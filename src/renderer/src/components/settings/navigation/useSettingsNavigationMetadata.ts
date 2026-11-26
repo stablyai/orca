@@ -1,4 +1,5 @@
 import { shallow } from 'zustand/shallow'
+import { useUserManagedRepos } from '@/store/repos/user-managed-repos'
 import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useSupportedGroupHookSettings } from '../repository/hooks/use-supported-group-hook-settings'
 import type { ProjectGroupSettingsEntry } from '../repository/hooks/use-supported-group-hook-settings'
@@ -156,7 +157,7 @@ export function useSettingsNavigationMetadata(
   // The locale subscription must also invalidate the memo or labels retain the previous language.
   const languageRevision = useUiLanguageRevision()
   const projectGroups = useSupportedGroupHookSettings()
-  const repos = useAppStore((state) => state.repos)
+  const repos = useUserManagedRepos()
   const botsEnabled = useBotsEnabled()
   const bots = useBots(botsEnabled)
   const projectHostSetupProjection = useProjectHostSetupProjection()

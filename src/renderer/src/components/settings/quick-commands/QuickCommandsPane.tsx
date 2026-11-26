@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useUserManagedRepos } from '@/store/repos/user-managed-repos'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { TerminalQuickCommand } from '../../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import { getTerminalQuickCommandScope } from '../../../../../shared/terminal/quick-commands/terminal-quick-commands'
@@ -91,7 +92,7 @@ export function QuickCommandsPane({
   addCommandIntentSignal
 }: QuickCommandsPaneProps): React.JSX.Element {
   const t = useTranslate()
-  const repos = useAppStore((s) => s.repos)
+  const repos = useUserManagedRepos()
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatuses = useRuntimeStatusByEnvironmentId()

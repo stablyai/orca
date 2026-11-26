@@ -3,7 +3,7 @@ import { CircleX } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import { isRepoHidden } from '../../../../../../shared/project/catalog/hidden-projects'
+import { everyUserProjectHidden } from '../../../../../../shared/project/catalog/hidden-projects'
 
 export function SidebarWorktreeListEmptyState({
   hasFilters,
@@ -15,7 +15,7 @@ export function SidebarWorktreeListEmptyState({
   const t = useTranslate()
   const discoveryCompleted = useAppStore((s) => s.startupWorktreeRefreshCompleted)
   const repos = useAppStore((s) => s.repos)
-  const everyProjectHidden = useMemo(() => repos.length > 0 && repos.every(isRepoHidden), [repos])
+  const everyProjectHidden = useMemo(() => everyUserProjectHidden(repos), [repos])
   return (
     <div
       data-worktree-sidebar-container

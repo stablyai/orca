@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react'
+import { useUserManagedRepos } from '@/store/repos/user-managed-repos'
 import { Folder, Info, LoaderCircle, Plus, Server, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -332,7 +333,7 @@ export function BotSkillsSection({
 }): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
-  const repos = useAppStore((state) => state.repos)
+  const repos = useUserManagedRepos()
   const linked = bot.skillProjects ?? []
   const views = useBotSkillProjects(bot, linked)
   const own = useBotOwnSkills(bot)

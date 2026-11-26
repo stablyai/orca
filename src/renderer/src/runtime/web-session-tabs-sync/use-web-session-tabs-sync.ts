@@ -14,6 +14,7 @@ import {
 } from './subscriptions/global-session-subscription'
 import { installActiveSessionTabsSubscription } from './subscriptions/active-session-subscription'
 import { mirroredRuntimeEnvironmentIdForWorkspace } from './workspace-selection/mirrored-workspace-owner'
+import { useSharedBotHosts } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import { listedRuntimeEnvironmentRevision } from '../rpc/environment-revisions/runtime-environment-revision'
 import {
   createWarmWorktreeSessionSubscriptions,
@@ -70,6 +71,8 @@ export function useWebSessionTabsSync(): void {
     activeWorktreeRuntimeEnvironmentId || null,
     selectHostContactEpoch
   )
+  // A shared host's revision comes from its share, so a share arriving or ending re-reads it.
+  useSharedBotHosts()
   const activeWorktreeRuntimePairingRevision = useAppStore((state) => {
     const environmentId = mirroredRuntimeEnvironmentIdForWorkspace(state, state.activeWorktreeId)
     const environment = state.runtimeEnvironments.find(

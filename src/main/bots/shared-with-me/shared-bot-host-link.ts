@@ -117,8 +117,9 @@ export function sharedBotHostLink(deps: {
       settleDial('live')
     } else if (state === 'awaiting_ready' || state === 'awaiting_authenticated') {
       dial.sawAttempt = true
-    } else if (dial.sawAttempt) {
-      // Closed only after this dial tried: the close that reopened it is not its outcome.
+    } else if (dial.sawAttempt || !deps.hasCredential()) {
+      // Closed after this dial tried (the close that reopened it is not its outcome), or refused at
+      // once with no credential left to dial.
       settleDial(deps.hasCredential() ? 'offline' : 'unpaired')
     }
   })

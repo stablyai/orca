@@ -4,7 +4,10 @@ import type {
   DerivedBrowserRoutePartition
 } from '../partitions/browser-route-identity'
 import type { BrowserRoutePageAuthorityRetirement } from '../guest-authority/browser-route-page-authority'
-import type { BrowserRouteElectronSession } from './browser-route-session-policy'
+import type {
+  BrowserRouteElectronSession,
+  BrowserRouteViewer
+} from './browser-route-session-policy'
 
 export type BrowserRoutePartitionBindingStore = {
   get(partition: string): string | null
@@ -29,6 +32,7 @@ export type BrowserRouteSessionRegistryDependencies = {
     partition: string
     browserProfileId: string
     session: BrowserRouteElectronSession
+    viewer: BrowserRouteViewer
   }): void | Promise<void>
   clearPolicies(input: { partition: string; session: BrowserRouteElectronSession }): void
   retirePageAuthority(input: BrowserRoutePageAuthorityRetirement): boolean

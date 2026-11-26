@@ -8,7 +8,7 @@ import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../../store/slices
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
 import { getHiddenExternalWorktrees as getHiddenImportedWorktrees } from '../../../../../../shared/worktree/visibility/external-worktree-inbox'
 import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
-import { isRepoHidden } from '../../../../../../shared/project/catalog/hidden-projects'
+import { isRepoHiddenFromProjects } from '../../../../../../shared/project/catalog/hidden-projects'
 import '../../../../../../shared/worktree/visibility/ownership'
 import {
   effectiveExternalWorktreeVisibility,
@@ -38,7 +38,7 @@ export function buildImportedWorktreesCardCandidates(args: {
       continue
     }
     // A hidden project draws nothing in the sidebar, notices included.
-    if (!isGitRepoKind(repo) || isRepoHidden(repo)) {
+    if (!isGitRepoKind(repo) || isRepoHiddenFromProjects(repo)) {
       continue
     }
     if (typeof repo.externalWorktreeVisibilityPromptDismissedAt === 'number') {

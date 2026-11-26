@@ -23,8 +23,7 @@ import {
   assertBrowserRouteProxyEndpoint,
   prepareBrowserRouteSessionPolicy,
   sameBrowserRouteProxyEndpoint,
-  type BrowserRouteElectronSession,
-  type BrowserRouteProxyEndpoint as ProxyEndpoint
+  type BrowserRouteElectronSession
 } from './browser-route-session-policy'
 import type { BrowserRouteSessionRegistryDependencies } from './browser-route-session-registry-contract'
 import {
@@ -144,7 +143,7 @@ export class BrowserRouteSessionRegistry {
     )
     let state = this.live.get(derived.partition)
     if (state) {
-      this.assertReusable(state, derived, input.proxyEndpoint)
+      this.assertReusable(state, derived, input)
       rendererFence.assertCurrent()
       return this.linkPage(
         state,
@@ -156,7 +155,7 @@ export class BrowserRouteSessionRegistry {
 
     const pending = this.pending.get(derived.partition)
     if (pending) {
-      this.assertReusable(pending, derived, input.proxyEndpoint)
+      this.assertReusable(pending, derived, input)
       return this.linkPendingPage(pending, input, rendererFence)
     }
 
@@ -164,16 +163,12 @@ export class BrowserRouteSessionRegistry {
       throw new Error('browser_route_partition_capacity')
     }
     persistBrowserRouteSessionBinding(this.dependencies, derived, input.storageScope)
-    const promise = this.preparePartition(
-      derived,
-      input.identity.browserProfileId,
-      input.proxyEndpoint,
-      metadata
-    )
+    const promise = this.preparePartition(derived, input, metadata)
     const pendingState = {
       partition: derived.partition,
       bindingFingerprint: derived.bindingFingerprint,
       proxyEndpoint: input.proxyEndpoint,
+      viewer: input.viewer ?? 'own-computer',
       promise,
       state: null,
       waiters: 0,
@@ -230,9 +225,9 @@ export class BrowserRouteSessionRegistry {
   }
 
   private assertReusable(
-    state: Pick<PreparedPartition, 'bindingFingerprint' | 'proxyEndpoint'>,
+    state: Pick<PreparedPartition, 'bindingFingerprint' | 'proxyEndpoint' | 'viewer'>,
     derived: DerivedBrowserRoutePartition,
-    proxyEndpoint: ProxyEndpoint
+    { proxyEndpoint, viewer = 'own-computer' }: BrowserRoutePreparePageInput
   ): void {
     if (state.bindingFingerprint !== derived.bindingFingerprint) {
       // Re-pairing can change a live jar's owner; trust the persisted binding over its opening fingerprint.
@@ -244,19 +239,24 @@ export class BrowserRouteSessionRegistry {
     if (!sameBrowserRouteProxyEndpoint(state.proxyEndpoint, proxyEndpoint)) {
       throw new Error('browser_route_partition_proxy_retarget')
     }
+    // What a partition sends through its host is set once, when it is made.
+    if (state.viewer !== viewer) {
+      throw new Error('browser_route_partition_viewer_mismatch')
+    }
   }
 
   private async preparePartition(
     derived: DerivedBrowserRoutePartition,
-    browserProfileId: string,
-    proxyEndpoint: ProxyEndpoint,
+    { identity, proxyEndpoint, viewer }: BrowserRoutePreparePageInput,
     profileMetadata?: BrowserClientProfileMetadata
   ): Promise<PreparedPartition> {
+    const { browserProfileId } = identity
     const session = await prepareBrowserRouteSessionPolicy({
       ...(profileMetadata ? { profileMetadata } : {}),
       partition: derived.partition,
       browserProfileId,
       proxyEndpoint,
+      ...(viewer ? { viewer } : {}),
       dependencies: this.dependencies
     })
     return {
@@ -264,6 +264,7 @@ export class BrowserRouteSessionRegistry {
       bindingFingerprint: derived.bindingFingerprint,
       browserProfileId,
       proxyEndpoint,
+      viewer: viewer ?? 'own-computer',
       session,
       pages: new BrowserRoutePreparedPageLedger(derived.partition, this.maxPagesPerPartition)
     }

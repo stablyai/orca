@@ -14,7 +14,6 @@ import {
   isHostCatalogFenceCurrent
 } from '../host-catalog/host-catalog-fence'
 import type { RepoSlice } from './repo-state'
-import { sharedBotHostFor } from '../../runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import {
   fetchRepoCatalogForTarget,
   filterSetupsForPrunedRepoRows,
@@ -37,12 +36,8 @@ export function createRuntimeRepoCatalogActions(
 ): Pick<RepoSlice, 'fetchRuntimeEnvironmentRepos'> {
   return {
     fetchRuntimeEnvironmentRepos: async (environmentId) => {
-      const target = { kind: 'environment' as const, environmentId }
-      // A shared agent's host is reached for its agent alone: its projects never join this window's.
-      if (sharedBotHostFor(target)) {
-        return []
-      }
       set((s) => ({ reposFetchGeneration: s.reposFetchGeneration + 1 }))
+      const target = { kind: 'environment' as const, environmentId }
       const targetHostId = getRuntimeTargetHostId(target)
       const fence = claimHostCatalogFence(get, 'repos', target)
       try {

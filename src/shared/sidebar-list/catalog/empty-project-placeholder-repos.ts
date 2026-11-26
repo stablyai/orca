@@ -1,6 +1,6 @@
 import type { Repo } from '../../repository/repo-types'
 import {
-  isRepoHidden,
+  isRepoHiddenFromProjects,
   withoutHiddenFilterRepoIds,
   type HiddenProjects
 } from '../../project/catalog/hidden-projects'
@@ -30,7 +30,7 @@ export function getEmptyProjectPlaceholderRepoIds(args: {
     if (
       (filterSet && !filterSet.has(repo.id)) ||
       args.pendingVmRepoIds?.has(repo.id) ||
-      isRepoHidden(repo)
+      isRepoHiddenFromProjects(repo)
     ) {
       continue
     }

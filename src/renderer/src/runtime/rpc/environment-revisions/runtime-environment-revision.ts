@@ -114,11 +114,13 @@ export function getRuntimeEnvironmentRevision(environmentId: string): number | u
 /** A host's revision as its catalog row gives it, or a shared agent's host's (which has no row). */
 export function listedRuntimeEnvironmentRevision(
   environment: { createdAt: number; pairingRevision?: number } | undefined,
-  environmentId: string
+  environmentId: string,
+  isSharedHost: (environmentId: string) => boolean = (id) =>
+    sharedBotHostFor({ kind: 'environment', environmentId: id }) !== null
 ): number | undefined {
   return environment
     ? (environment.pairingRevision ?? environment.createdAt)
-    : sharedBotHostFor({ kind: 'environment', environmentId })
+    : isSharedHost(environmentId)
       ? SHARED_BOT_HOST_REVISION
       : undefined
 }

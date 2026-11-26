@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useSharedBotHosts } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import { shallow } from 'zustand/shallow'
 import { getReachableRuntimeSessionMirrorTargets } from '@/runtime/web-session-tabs-sync/subscriptions/runtime-session-mirror-targets'
 import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
@@ -46,7 +47,7 @@ export type RuntimeSessionMirrorEnvironmentKeys = {
 }
 
 export function buildRuntimeSessionMirrorEnvironmentKeys(
-  inputs: RuntimeSessionMirrorTargetInputs
+  inputs: RuntimeSessionMirrorTargetInputs & { sharedHostEnvironmentIds?: ReadonlySet<string> }
 ): RuntimeSessionMirrorEnvironmentKeys {
   const targets = getReachableRuntimeSessionMirrorTargets({
     settings: { activeRuntimeEnvironmentId: inputs.activeRuntimeEnvironmentId },
@@ -56,7 +57,10 @@ export function buildRuntimeSessionMirrorEnvironmentKeys(
     projectGroups: inputs.projectGroups,
     restoredRuntimeHostIdByWorkspaceSessionKey: inputs.restoredRuntimeHostIdByWorkspaceSessionKey,
     runtimeEnvironments: inputs.runtimeEnvironments,
-    runtimeStatusByEnvironmentId: inputs.runtimeStatusByEnvironmentId
+    runtimeStatusByEnvironmentId: inputs.runtimeStatusByEnvironmentId,
+    ...(inputs.sharedHostEnvironmentIds
+      ? { sharedHostEnvironmentIds: inputs.sharedHostEnvironmentIds }
+      : {})
   })
   return {
     environmentKey: targets
@@ -84,6 +88,12 @@ export function useRuntimeSessionMirrorEnvironmentKeys(): RuntimeSessionMirrorEn
     runtimeEnvironments,
     runtimeStatusByEnvironmentId
   } = inputs
+  // A shared host's revision comes from its share: a share arriving or ending re-reads the targets.
+  const sharedHosts = useSharedBotHosts()
+  const sharedHostEnvironmentIds = useMemo(
+    () => new Set(sharedHosts.map((host) => host.environmentId)),
+    [sharedHosts]
+  )
   return useMemo(
     () =>
       buildRuntimeSessionMirrorEnvironmentKeys({
@@ -94,7 +104,8 @@ export function useRuntimeSessionMirrorEnvironmentKeys(): RuntimeSessionMirrorEn
         projectGroups,
         restoredRuntimeHostIdByWorkspaceSessionKey,
         runtimeEnvironments,
-        runtimeStatusByEnvironmentId
+        runtimeStatusByEnvironmentId,
+        sharedHostEnvironmentIds
       }),
     [
       activeRuntimeEnvironmentId,
@@ -104,7 +115,8 @@ export function useRuntimeSessionMirrorEnvironmentKeys(): RuntimeSessionMirrorEn
       projectGroups,
       restoredRuntimeHostIdByWorkspaceSessionKey,
       runtimeEnvironments,
-      runtimeStatusByEnvironmentId
+      runtimeStatusByEnvironmentId,
+      sharedHostEnvironmentIds
     ]
   )
 }
