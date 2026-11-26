@@ -223,6 +223,31 @@ describe('orchestration.progress passive worker status', () => {
     ).rejects.toMatchObject({
       code: 'dispatch_inactive'
     })
+
+    // Legacy remote-attached panes reject instead of returning an unstored receipt.
+    db.db
+      .prepare(
+        `INSERT INTO remote_dispatch_attachments (
+          dispatch_id, task_id, home_peer_fingerprint, runtime_epoch, home_run_id,
+          pane_key, terminal_handle, process_incarnation, state, stage
+        ) VALUES (?, ?, 'peer_fp_1', 'epoch_1', 'run_home_1', ?, ?, ?, 'ready', 'ready')`
+      )
+      .run(
+        'ctx_remote_1',
+        'task_remote_1',
+        OTHER_WORKER_PANE,
+        OTHER_WORKER_HANDLE,
+        `runtime_test:${OTHER_WORKER_HANDLE}:1`
+      )
+    await expect(
+      harness.call(
+        'orchestration.progress',
+        { from: OTHER_WORKER_HANDLE, note: 'remote note' },
+        ctx
+      )
+    ).rejects.toMatchObject({
+      code: 'unsupported_remote_dispatch'
+    })
     expect(db.getDispatchContextById(second.dispatch.id)?.progress_note).toBeNull()
   })
 

@@ -63,31 +63,11 @@ export const ORCHESTRATION_WORKER_PROGRESS_METHODS = [
 
       const remoteAttachment = paneKey ? db.findActiveRemoteAttachmentForPane(paneKey) : undefined
       if (remoteAttachment && paneKey) {
-        if (params.dispatchId && params.dispatchId !== remoteAttachment.dispatch_id) {
-          throw new OrchestrationError(
-            'dispatch_inactive',
-            `Dispatch ${params.dispatchId} is not the active remote Dispatch (${remoteAttachment.dispatch_id}) for this pane.`
-          )
-        }
-        assertWorkerCanReport({
-          dispatchId: remoteAttachment.dispatch_id,
-          from,
-          workerState: remoteAttachment.state,
-          processCurrent: db.isRemoteAttachmentProcessCurrent({
-            dispatchId: remoteAttachment.dispatch_id,
-            paneKey,
-            processIncarnation: reporter.processIncarnation()
-          })
-        })
-        const receipt: WorkerProgressResult = {
-          dispatchId: remoteAttachment.dispatch_id,
-          taskId: remoteAttachment.task_id,
-          runId: remoteAttachment.home_run_id || null,
-          note: params.note,
-          updatedAt: new Date().toISOString()
-        }
-        recordMutationReceipt?.(receipt)
-        return receipt
+        throw new OrchestrationError(
+          'unsupported_remote_dispatch',
+          `Passive progress notes are not supported for legacy remote-attached Dispatch ${remoteAttachment.dispatch_id}. No effects were applied.`,
+          { effectsApplied: false }
+        )
       }
 
       let workingDispatch = db.getActiveDispatchForIdentity(from, paneKey)

@@ -42,6 +42,7 @@ describe('orchestration progress CLI and prompt contract', () => {
   it('validates bounded notes, caller context, and --note-file before calling orchestration.progress', async () => {
     vi.stubEnv('ORCA_TERMINAL_HANDLE', '')
     vi.stubEnv('ORCA_AGENT_SESSION_ID', '')
+    vi.stubEnv('ORCA_PANE_KEY', '')
 
     // Outside a worker context with no --from, rejects before any RPC call.
     const unusedClient = fakeClient()

@@ -14,12 +14,12 @@ const STATE_WORDS: Record<OrchestrationSessionWorkerState, string> = {
   unverifiable: 'out of contact'
 }
 
-/** One line, at most 120 characters; nothing in it reads as Orca's own brackets, quotes or code. */
-export function cleanBotWorkText(text: string): string {
+/** One line, bounded in length; nothing in it reads as Orca's own brackets, quotes or code. */
+export function cleanBotWorkText(text: string, maxLength = 120): string {
   return text
     .replace(/[[\]`"\s]+/g, ' ')
     .trim()
-    .slice(0, 120)
+    .slice(0, maxLength)
 }
 
 export function botWorkTurnNote({ row, worker, workspace }: BotWorkCheck): string {

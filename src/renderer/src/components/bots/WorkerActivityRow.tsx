@@ -78,11 +78,19 @@ function Elapsed({
   )
 }
 
-function Detail({ label, value }: { label: string; value: string }): React.JSX.Element {
+function Detail({
+  label,
+  value,
+  wrap
+}: {
+  label: string
+  value: string
+  wrap?: boolean
+}): React.JSX.Element {
   return (
     <>
       <dt className="text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 truncate">{value}</dd>
+      <dd className={cn('min-w-0', wrap ? 'break-words' : 'truncate')}>{value}</dd>
     </>
   )
 }
@@ -237,7 +245,7 @@ export function WorkerActivityDetails({
       {title ? <dd className="col-span-2 break-words font-medium">{title}</dd> : null}
       {agent ? <Detail label={t('bots.activity.agent', 'Agent')} value={agent} /> : null}
       {progressNote ? (
-        <Detail label={t('bots.activity.progress', 'Progress')} value={progressNote} />
+        <Detail label={t('bots.activity.progress', 'Progress')} value={progressNote} wrap />
       ) : null}
       {summary ? <Detail label={t('bots.activity.result', 'Result')} value={summary} /> : null}
       {chat ? <Detail label={t('bots.activity.chat', 'Chat')} value={chat} /> : null}
