@@ -51,6 +51,8 @@ export type NativeChatTurnFoldRow = {
   asks: boolean
   /** How an agent's spoken reply ends; a row draws its tool calls after its words, so `work` means work followed them. */
   replyEnd: 'words' | 'work' | undefined
+  /** Only settled turns inspect the reply text; streamed fragments can be arbitrarily long. */
+  replyProse?: readonly NativeChatBlock[]
   /** A hook failed; it reports on the turn without ending it. */
   failedHook: boolean
 }
@@ -151,7 +153,11 @@ function deriveTurnFoldRow(
     content.hasText &&
     !facts.outlivesTurn &&
     !facts.explainsTurn
-  return { ...facts, replyEnd: speaks ? (content.tools.length > 0 ? 'work' : 'words') : undefined }
+  return {
+    ...facts,
+    replyEnd: speaks ? (content.tools.length > 0 ? 'work' : 'words') : undefined,
+    replyProse: speaks ? content.prose : undefined
+  }
 }
 
 export type NativeChatTurnFold = {
@@ -166,9 +172,28 @@ export const NATIVE_CHAT_EMPTY_TURN_FOLD: NativeChatTurnFold = {
   foldableTurnKeys: new Set()
 }
 
+const replyHeadingOrLink = new WeakMap<readonly NativeChatBlock[], boolean>()
+
+function hasReplyHeadingOrLink(prose: readonly NativeChatBlock[]): boolean {
+  const cached = replyHeadingOrLink.get(prose)
+  if (cached !== undefined) {
+    return cached
+  }
+  const found = prose.some(
+    (block) =>
+      block.type === 'text' &&
+      !block.providerFrame &&
+      !block.presentation &&
+      /(?:^ {0,3}#{1,6}[ \t]+\S|\bhttps?:\/\/[^\s<>]+)/im.test(block.text)
+  )
+  replyHeadingOrLink.set(prose, found)
+  return found
+}
+
 /** Last assistant prose/system failure per turn, before each steer or send-back, leading into each question, and before another reply; no answer means fold all work. */
 export function nativeChatTurnAnswerRows(
-  rows: readonly NativeChatTurnFoldRow[]
+  rows: readonly NativeChatTurnFoldRow[],
+  settledTurnKeys?: ReadonlySet<string>
 ): ReadonlySet<number> {
   const answers = new Set<number>()
   const latest = new Map<string, number>()
@@ -182,6 +207,13 @@ export function nativeChatTurnAnswerRows(
     }
     if (row.turnKey === undefined) {
       continue
+    }
+    if (
+      row.replyProse &&
+      (!settledTurnKeys || settledTurnKeys.has(row.turnKey)) &&
+      hasReplyHeadingOrLink(row.replyProse)
+    ) {
+      answers.add(index)
     }
     const answer = latest.get(row.turnKey)
     const previous = previousDrawn.get(row.turnKey)
@@ -240,7 +272,7 @@ export function nativeChatTurnFold({
   settledTurnKeys: ReadonlySet<string>
   expandedTurnKeys: ReadonlySet<string>
 }): NativeChatTurnFold {
-  const answers = nativeChatTurnAnswerRows(rows)
+  const answers = nativeChatTurnAnswerRows(rows, settledTurnKeys)
   const lastWorkByTurn = new Map<string, number>()
   for (const [index, row] of rows.entries()) {
     if (row.turnKey !== undefined && row.draws && !row.failedHook) {
