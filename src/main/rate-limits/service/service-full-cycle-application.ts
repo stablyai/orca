@@ -50,9 +50,11 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       zcodeGeneration,
       antigravityGeneration,
       claudeFetchGated,
+      kimchiFetchGated,
       results: [claudeResult, codexResult, opencodeGoResult, kimiResult, miniMaxResult],
       grokResultPromise,
       cursorResultPromise,
+      kimchiResultPromise,
       zcodeResultPromise,
       antigravityResultPromise
     } = prepared
@@ -194,17 +196,20 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         : this.state.minimax
     })
 
-    const [grokSettled, cursorSettled, zcodeSettled, antigravitySettled] = await Promise.all([
-      grokResultPromise,
-      cursorResultPromise,
-      zcodeResultPromise,
-      antigravityResultPromise
-    ])
+    const [grokSettled, cursorSettled, kimchiSettled, zcodeSettled, antigravitySettled] =
+      await Promise.all([
+        grokResultPromise,
+        cursorResultPromise,
+        kimchiResultPromise,
+        zcodeResultPromise,
+        antigravityResultPromise
+      ])
     if (signal.aborted) {
       return
     }
     const grok = settleSiblingProviderResult('grok', grokSettled)
     const cursor = settleSiblingProviderResult('cursor', cursorSettled)
+    const kimchi = settleSiblingProviderResult('kimchi', kimchiSettled)
     const settledZcode = settleSiblingProviderResult('zcode', zcodeSettled)
     const zcode = isZcodeUsageCredentialCurrent(settledZcode)
       ? settledZcode
@@ -221,6 +226,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     const shouldApplyAntigravity = antigravityGeneration === this.antigravityFetchGeneration
     // Discard Cursor stale usage only for a known account change; unidentified transient failures retain their last reading.
     const cursorAccountChanged = hasKnownProvenanceChange(previousState.cursor, cursor)
+    const kimchiAccountChanged = hasKnownProvenanceChange(previousState.kimchi, kimchi)
     const previousZcodeAccount = previousState.zcode?.usageMetadata?.authProvenance
     const zcodeAccount = zcode.usageMetadata?.authProvenance
     const sameZcodeAccount =
@@ -229,6 +235,9 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       previousZcodeAccount === zcodeAccount
     this.trackActiveFailureStreak('grok', grok)
     this.trackActiveFailureStreak('cursor', cursor)
+    if (!kimchiFetchGated) {
+      this.trackActiveFailureStreak('kimchi', kimchi)
+    }
     if (shouldApplyZcode) {
       this.trackActiveFailureStreak('zcode', zcode)
     }
@@ -239,6 +248,11 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok),
       cursor: cursorAccountChanged ? cursor : this.applyStalePolicy(cursor, previousState.cursor),
+      kimchi: kimchiFetchGated
+        ? previousState.kimchi
+        : kimchiAccountChanged
+          ? kimchi
+          : this.applyStalePolicy(kimchi, previousState.kimchi),
       zcode: !shouldApplyZcode
         ? this.state.zcode
         : zcodeConfigChanged

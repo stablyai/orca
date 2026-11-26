@@ -1,11 +1,12 @@
 import { EventEmitter } from 'node:events'
 import type { BrowserWindow } from 'electron'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type {
   ProviderRateLimits,
   RateLimitState
 } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { fetchKimiRateLimits } from '../providers/kimi/kimi-fetcher'
+import { fetchKimchiRateLimits } from '../providers/kimchi/kimchi-fetcher'
 import { RateLimitService } from './rate-limit-service'
 
 const { unavailable } = vi.hoisted(() => ({
@@ -30,6 +31,7 @@ vi.mock('../providers/opencode-go/opencode-go-usage-source-selection', () => ({
   fetchOpenCodeGoUsage: unavailable('opencode-go')
 }))
 vi.mock('../providers/kimi/kimi-fetcher', () => ({ fetchKimiRateLimits: vi.fn() }))
+vi.mock('../providers/kimchi/kimchi-fetcher', () => ({ fetchKimchiRateLimits: vi.fn() }))
 vi.mock('../providers/minimax/minimax-fetcher', () => ({
   fetchMiniMaxRateLimits: unavailable('minimax')
 }))
@@ -57,6 +59,11 @@ vi.mock('../../minimax/minimax-cookie-store', () => ({
 }))
 vi.mock('../../minimax/minimax-api-key-store', () => ({ hasMiniMaxApiKey: async () => false }))
 vi.mock('../../zcode/zcode-plan-api-key-store', () => ({ hasZcodePlanApiKey: async () => false }))
+
+beforeEach(() => {
+  vi.mocked(fetchKimchiRateLimits).mockReset()
+  vi.mocked(fetchKimchiRateLimits).mockImplementation(unavailable('kimchi'))
+})
 
 afterEach(() => {
   vi.useRealTimers()
@@ -128,6 +135,45 @@ it('publishes local usage without a window activation and limits repeated owner 
     vi.setSystemTime(start + 1_680_000)
     await service.refreshOnOwnerReturn()
     expect((await service.getState()).kimi?.session?.usedPercent).toBe(95)
+  } finally {
+    service.stop()
+  }
+})
+
+it('waits out Kimchi Retry-After in automatic full cycles but allows manual refresh', async () => {
+  vi.useFakeTimers()
+  const now = Date.parse('2026-11-26T12:00:00Z')
+  vi.setSystemTime(now)
+  vi.mocked(fetchKimiRateLimits).mockResolvedValue({
+    provider: 'kimi',
+    session: null,
+    weekly: null,
+    updatedAt: 0,
+    error: null,
+    status: 'unavailable'
+  })
+  const limited: ProviderRateLimits = {
+    provider: 'kimchi',
+    session: null,
+    weekly: null,
+    monthly: null,
+    updatedAt: now,
+    error: 'Limited',
+    status: 'error',
+    usageMetadata: { failureKind: 'rate-limited', retryAtMs: now + 600_000 }
+  }
+  vi.mocked(fetchKimchiRateLimits).mockResolvedValue(limited)
+  const service = new RateLimitService()
+
+  try {
+    expect((await service.refresh()).kimchi).toEqual(limited)
+
+    await service.refreshIfStale()
+    expect(vi.mocked(fetchKimchiRateLimits)).toHaveBeenCalledTimes(1)
+    expect((await service.getState()).kimchi).toEqual(limited)
+
+    await service.refresh()
+    expect(vi.mocked(fetchKimchiRateLimits)).toHaveBeenCalledTimes(2)
   } finally {
     service.stop()
   }

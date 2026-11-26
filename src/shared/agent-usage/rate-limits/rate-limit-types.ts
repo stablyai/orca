@@ -104,6 +104,7 @@ export type ProviderRateLimits = {
     | 'codex'
     | 'opencode-go'
     | 'kimi'
+    | 'kimchi'
     | 'minimax'
     | 'grok'
     | 'antigravity'
@@ -198,6 +199,7 @@ export type RateLimitState = {
   codex: ProviderRateLimits | null
   opencodeGo: ProviderRateLimits | null
   kimi: ProviderRateLimits | null
+  kimchi: ProviderRateLimits | null
   antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
   grok: ProviderRateLimits | null

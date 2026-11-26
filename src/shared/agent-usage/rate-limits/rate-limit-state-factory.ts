@@ -7,6 +7,7 @@ export function createEmptyRateLimitState(overrides: Partial<RateLimitState> = {
     codex: null,
     opencodeGo: null,
     kimi: null,
+    kimchi: null,
     antigravity: null,
     minimax: null,
     grok: null,

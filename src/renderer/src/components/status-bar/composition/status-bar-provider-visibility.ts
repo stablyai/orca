@@ -24,6 +24,7 @@ type UsageProviderSnapshots = {
   codex: ProviderRateLimits | null | undefined
   opencodeGo: ProviderRateLimits | null | undefined
   kimi: ProviderRateLimits | null | undefined
+  kimchi?: ProviderRateLimits | null
   antigravity: ProviderRateLimits | null | undefined
   minimax: ProviderRateLimits | null | undefined
   grok: ProviderRateLimits | null | undefined
@@ -152,6 +153,7 @@ export function isUsageEmptyState(
     isProviderSnapshotPending(providers.codex) ||
     isProviderSnapshotPending(providers.opencodeGo) ||
     isProviderSnapshotPending(providers.kimi) ||
+    (providers.kimchi != null && isProviderSnapshotPending(providers.kimchi)) ||
     antigravitySnapshotPending ||
     isProviderSnapshotPending(providers.minimax) ||
     isProviderSnapshotPending(providers.grok) ||
@@ -167,6 +169,7 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.codex) &&
     !isProviderConfigured(providers.opencodeGo) &&
     !isProviderConfigured(providers.kimi) &&
+    !isProviderConfigured(providers.kimchi) &&
     !isProviderConfigured(providers.antigravity) &&
     !isProviderConfigured(providers.minimax) &&
     !isProviderConfigured(providers.grok) &&

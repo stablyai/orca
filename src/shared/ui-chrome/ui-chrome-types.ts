@@ -62,6 +62,7 @@ export type StatusBarItem =
   | 'antigravity'
   | 'opencode-go'
   | 'kimi'
+  | 'kimchi'
   | 'minimax'
   | 'grok'
   | 'cursor'

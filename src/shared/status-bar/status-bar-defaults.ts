@@ -7,6 +7,7 @@ export const DEFAULT_STATUS_BAR_ITEMS: StatusBarItem[] = [
   'antigravity',
   'opencode-go',
   'kimi',
+  'kimchi',
   'minimax',
   'grok',
   'cursor',
@@ -22,6 +23,7 @@ export const DEFAULT_STATUS_BAR_ITEMS: StatusBarItem[] = [
 const DEFAULT_ON_STATUS_BAR_ITEMS = [
   ['_portsStatusBarDefaultAdded', 'ports'],
   ['_kimiStatusBarDefaultAdded', 'kimi'],
+  ['_kimchiStatusBarDefaultAdded', 'kimchi'],
   ['_minimaxStatusBarDefaultAdded', 'minimax'],
   ['_antigravityStatusBarDefaultAdded', 'antigravity'],
   ['_grokStatusBarDefaultAdded', 'grok'],

@@ -205,6 +205,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   '_inlineAgentsDefaultedForExperiment',
   '_jiraIssueWorktreeCardPropertyDefaulted',
   '_kimiStatusBarDefaultAdded',
+  '_kimchiStatusBarDefaultAdded',
   '_minimaxStatusBarDefaultAdded',
   '_museStatusBarDefaultAdded',
   '_portsStatusBarDefaultAdded',

@@ -6,6 +6,7 @@ export const StatusBarItem = z.enum([
   'antigravity',
   'opencode-go',
   'kimi',
+  'kimchi',
   'minimax',
   'grok',
   'cursor',

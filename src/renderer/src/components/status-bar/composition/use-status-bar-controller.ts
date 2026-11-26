@@ -101,7 +101,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     return null
   }
 
-  const { claude, codex, opencodeGo, kimi, antigravity, minimax, grok, cursor, zcode } = rateLimits
+  const { claude, codex, opencodeGo, kimi, kimchi, antigravity, minimax, grok, cursor, zcode } =
+    rateLimits
   const muse = rateLimits.muse
 
   // Antigravity has no saved credential; the checked item and detected CLI establish setup.
@@ -123,6 +124,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const visibleClaude = getVisibleUsageProvider('claude', claude, usageSettings)
   const visibleCodex = getVisibleUsageProvider('codex', codex, usageSettings)
   const visibleKimi = getVisibleUsageProvider('kimi', kimi, usageSettings)
+  const visibleKimchi = getVisibleUsageProvider('kimchi', kimchi, usageSettings)
   const visibleAntigravity = getVisibleUsageProvider('antigravity', antigravity, usageSettings)
   const visibleMiniMax = getVisibleUsageProvider('minimax', minimax, usageSettings)
   const visibleGrok = getVisibleUsageProvider('grok', grok, usageSettings)
@@ -141,6 +143,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     visibleKimi !== null &&
     statusBarItems.includes('kimi') &&
     isStatusBarItemAvailable('kimi', detectedAgentIds)
+  // Kimchi's saved API key can provide usage independently of CLI detection.
+  const showKimchi = visibleKimchi !== null && statusBarItems.includes('kimchi')
   const showAntigravity =
     visibleAntigravity !== null &&
     statusBarItems.includes('antigravity') &&
@@ -177,6 +181,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showCodex ||
     showOpencodeGo ||
     showKimi ||
+    showKimchi ||
     showAntigravity ||
     showMiniMax ||
     showGrok ||
@@ -193,6 +198,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     codex?.status === 'fetching' ||
     opencodeGo?.status === 'fetching' ||
     kimi?.status === 'fetching' ||
+    kimchi?.status === 'fetching' ||
     antigravity?.status === 'fetching' ||
     minimax?.status === 'fetching' ||
     grok?.status === 'fetching' ||
@@ -212,6 +218,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showAntigravity ? visibleAntigravity : null,
     showOpencodeGo ? visibleOpencodeGo : null,
     showKimi ? visibleKimi : null,
+    showKimchi ? visibleKimchi : null,
     showMiniMax ? visibleMiniMax : null,
     showGrok ? visibleGrok : null,
     showCursor ? visibleCursor : null,

@@ -110,6 +110,7 @@ export type InternalRateLimitState = {
   codex: ProviderRateLimits | null
   opencodeGo: ProviderRateLimits | null
   kimi: ProviderRateLimits | null
+  kimchi: ProviderRateLimits | null
   antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
   grok: ProviderRateLimits | null
