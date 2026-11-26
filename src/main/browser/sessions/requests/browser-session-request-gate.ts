@@ -1,4 +1,8 @@
 import type { Session } from 'electron'
+import {
+  browserSessionHasSiteList,
+  onBrowserProfileSiteListsChanged
+} from '../site-list/browser-session-site-list'
 
 import {
   getProxySessionApplicationReadiness,
@@ -26,6 +30,12 @@ onProxySessionReadinessChanged((proxySession) => {
   }
 })
 
+onBrowserProfileSiteListsChanged(() => {
+  for (const { session } of gatedSessions.values()) {
+    refresh(session)
+  }
+})
+
 /**
  * Any session listener makes every page request wait on main (Electron's per-request loader
  * gate), so the gate listens only while it can change an outcome: until the session's newest
@@ -38,6 +48,7 @@ function refresh(session: Session): void {
     return
   }
   const needed =
+    browserSessionHasSiteList(session) ||
     gateHoldsBySession.has(session) ||
     !isProxySessionApplicationReady(session) ||
     (session.extensions?.getAllExtensions().length ?? 0) > 0

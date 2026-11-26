@@ -25,6 +25,7 @@ import {
   persistBrowserSessionMeta,
   type BrowserSessionMeta
 } from './browser-session-meta-store'
+import { seedBrowserProfileSiteLists } from '../site-list/browser-session-site-list'
 import {
   installBrowserSessionPartitionPolicies,
   restoreBrowserSessionPartitionPolicies
@@ -69,7 +70,7 @@ class BrowserSessionRegistry {
   private readonly profiles = new BrowserSessionProfileMap()
   private activeOrcaProfileId = DEFAULT_LOCAL_ORCA_PROFILE_ID
   private metadataPathOverride: string | null = null
-  private defaultPartition = ORCA_BROWSER_PARTITION
+  defaultPartition = ORCA_BROWSER_PARTITION
   // Why: profiles change from IPC, the CLI and managed-profile owners; open windows and paired clients only learn of it here.
   onProfilesChanged: (() => void) | null = null
   onProfileDeleted: ((profileId: string) => Promise<void>) | null = null
@@ -96,7 +97,7 @@ class BrowserSessionRegistry {
     })
   }
 
-  private get metadataPath(): string {
+  get metadataPath(): string {
     return (
       this.metadataPathOverride ?? join(app.getPath('userData'), BROWSER_SESSION_META_FILE_NAME)
     )
@@ -116,7 +117,8 @@ class BrowserSessionRegistry {
 
   // Restore profiles and their policies before any webview loads; false when the saved profiles could not be read.
   initializeBrowserSessionsFromPersistedState(): boolean {
-    const meta = this.loadPersistedMeta()
+    // Site lists go live before any session binds to its profile.
+    const meta = seedBrowserProfileSiteLists(this.loadPersistedMeta())
     const migration = inspectRetiredBrowserSessionProfileUserAgentModes(
       meta.profiles,
       this.activeOrcaProfileId

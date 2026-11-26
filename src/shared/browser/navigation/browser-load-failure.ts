@@ -14,6 +14,7 @@ export type BrowserLoadFailureKind =
   | 'reset'
   | 'route-down'
   | 'blocked'
+  | 'site-list-blocked'
   | 'other'
 
 /** `poll`: re-attempt the load with backoff. `online`: re-attempt when the network returns. */
@@ -48,6 +49,10 @@ export const BROWSER_LOAD_FAILURE_COPY = {
   blockedTitle: '{{host}} is blocked',
   blockedDescription:
     'An extension blocked this page. To open it, allow this site in the extension, then retry.',
+  siteListBlockedTitle: "{{host}} is not on this profile's site list",
+  siteListBlockedDescription: 'To open it, add it in Settings > Browser > Site list.',
+  siteListBlockedProtocolDescription:
+    "ftp: and file: pages can't open while this profile has a site list.",
   otherTitle: "Can't reach {{host}}",
   otherTitleWithoutHost: "Can't load this page",
   waiting: 'Reloads when the server responds',
@@ -70,6 +75,10 @@ const KIND_COPY: Record<
   reset: { title: 'resetTitle', description: null },
   'route-down': { title: 'routeDownTitle', description: 'routeDownDescription' },
   blocked: { title: 'blockedTitle', description: 'blockedDescription' },
+  'site-list-blocked': {
+    title: 'siteListBlockedTitle',
+    description: 'siteListBlockedDescription'
+  },
   other: { title: 'otherTitle', description: null }
 }
 
@@ -98,13 +107,17 @@ export function formatBrowserLoadFailureText(
     description:
       loadError.code === 0
         ? loadError.description
-        : copy.description && render(copy.description, { host })
+        : failure.kind === 'site-list-blocked' && /^(ftp|file):/.test(loadError.validatedUrl)
+          ? render('siteListBlockedProtocolDescription', { host })
+          : copy.description && render(copy.description, { host })
   }
 }
 
 const REFUSED = -102
 // ERR_BLOCKED_BY_CLIENT: an extension's blocking rule cancelled the load.
 const BLOCKED_BY_EXTENSION = -20
+// Orca's own name for a block by the profile site list, which reuses the code above.
+export const SITE_LIST_BLOCKED_ERROR_NAME = 'ERR_BLOCKED_BY_SITE_LIST'
 const OFFLINE = -106
 const DNS_CODES = [-105, -137]
 const TIMEOUT_CODES = [-7, -118]
@@ -141,10 +154,11 @@ function readHost(url: string): { host: string | null; isDevHost: boolean } {
 }
 
 function classifyKind(
-  code: number,
+  loadError: BrowserLoadError,
   isDevHost: boolean,
   route: BrowserLoadFailureRoute | null
 ): BrowserLoadFailureKind {
+  const code = loadError.code
   if (code === REFUSED) {
     return isDevHost ? 'not-running' : 'refused'
   }
@@ -152,7 +166,7 @@ function classifyKind(
     return 'offline'
   }
   if (code === BLOCKED_BY_EXTENSION) {
-    return 'blocked'
+    return loadError.description === SITE_LIST_BLOCKED_ERROR_NAME ? 'site-list-blocked' : 'blocked'
   }
   if (DNS_CODES.includes(code)) {
     return 'dns'
@@ -177,7 +191,7 @@ export function describeBrowserLoadFailure(
   route: BrowserLoadFailureRoute | null
 ): BrowserLoadFailureDescription {
   const { host, isDevHost } = readHost(loadError.validatedUrl)
-  const kind = classifyKind(loadError.code, isDevHost, route)
+  const kind = classifyKind(loadError, isDevHost, route)
   const recovery: BrowserLoadFailureRecovery =
     kind === 'offline'
       ? 'online'

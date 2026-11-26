@@ -17,8 +17,11 @@ export async function installBrowserRoutePartitionPolicies(
   partition: string,
   {
     sitePermissions,
-    clipboardRead
-  }: Pick<BrowserSessionPermissionOptions, 'sitePermissions' | 'clipboardRead'> = {}
+    clipboardRead,
+    siteListProfile
+  }: Pick<BrowserSessionPermissionOptions, 'sitePermissions' | 'clipboardRead'> & {
+    siteListProfile?: boolean
+  } = {}
 ): Promise<void> {
   if (!isBrowserRoutePartition(partition)) {
     throw new Error('browser_route_partition_profile_unavailable')
@@ -26,7 +29,13 @@ export async function installBrowserRoutePartitionPolicies(
   await Promise.all([
     installBrowserSessionPartitionPolicies(
       { ...profile, partition },
-      { applyAppWideProxy: false, fileSystemAccess: false, sitePermissions, clipboardRead }
+      {
+        applyAppWideProxy: false,
+        fileSystemAccess: false,
+        sitePermissions,
+        clipboardRead,
+        siteListProfile
+      }
     ),
     // Why here: SSH and This-device partitions both pass through before their first page loads.
     withTimeout(

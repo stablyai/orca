@@ -9,7 +9,9 @@ import { Label } from '../../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { BrowserProfileRow, type BrowserProfileRowProps } from './BrowserProfileRow'
+import { BrowserProfileSiteList } from './BrowserProfileSiteList'
 import {
+  LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host/execution-host'
@@ -53,6 +55,13 @@ export function BrowserSessionCookiesSection({
     activeProfile?.label
   )
   const selectedHost = hostOptions.find((host) => host.id === selectedHostId) ?? hostOptions[0]
+  const shownDefaultProfile: BrowserSessionProfile = defaultProfile ?? {
+    id: 'default',
+    scope: 'default',
+    partition: '',
+    label: t('auto.components.settings.BrowserPane.4399c77caa', 'Default'),
+    source: null
+  }
   const parsedSelectedHost = parseExecutionHostId(selectedHost?.id)
   const sshRoute =
     parsedSelectedHost?.kind === 'ssh' && selectedHost
@@ -87,6 +96,7 @@ export function BrowserSessionCookiesSection({
           undefined,
           t
         ),
+        ...translateSearchKeyword('browser.siteList.label', 'Site list', undefined, t),
         'cookies',
         'session',
         'import',
@@ -158,15 +168,7 @@ export function BrowserSessionCookiesSection({
 
       <div className="space-y-2">
         <BrowserProfileRow
-          profile={
-            defaultProfile ?? {
-              id: 'default',
-              scope: 'default',
-              partition: '',
-              label: t('auto.components.settings.BrowserPane.4399c77caa', 'Default'),
-              source: null
-            }
-          }
+          profile={shownDefaultProfile}
           detectedBrowsers={detectedBrowsers}
           importState={importState}
           isActive={activeProfileId === 'default'}
@@ -185,6 +187,9 @@ export function BrowserSessionCookiesSection({
           />
         ))}
       </div>
+      {selectedHostId === LOCAL_EXECUTION_HOST_ID ? (
+        <BrowserProfileSiteList profiles={[shownDefaultProfile, ...nonDefaultProfiles]} />
+      ) : null}
       <div className="flex items-center justify-between gap-3 pt-3">
         <div className="min-w-0 space-y-0.5">
           <Label>{t('browser.profileCookieClear.label', 'Cookies')}</Label>

@@ -189,6 +189,15 @@ const LOAD_FAILURE_PIECES: Record<BrowserLoadFailureCopyId, (values: { host: str
     blockedTitle: (v) => translate('browser.loadFailure.blockedTitle', COPY.blockedTitle, v),
     blockedDescription: () =>
       translate('browser.loadFailure.blockedDescription', COPY.blockedDescription),
+    siteListBlockedTitle: (v) =>
+      translate('browser.loadFailure.siteListBlockedTitle', COPY.siteListBlockedTitle, v),
+    siteListBlockedDescription: () =>
+      translate('browser.loadFailure.siteListBlockedDescription', COPY.siteListBlockedDescription),
+    siteListBlockedProtocolDescription: () =>
+      translate(
+        'browser.loadFailure.siteListBlockedProtocolDescription',
+        COPY.siteListBlockedProtocolDescription
+      ),
     routeDownDescription: () =>
       translate('browser.loadFailure.routeDownDescription', COPY.routeDownDescription),
     otherTitle: (v) =>

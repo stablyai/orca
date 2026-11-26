@@ -1,3 +1,4 @@
+import { isBrowserSessionRequestOutsideSiteList } from '../site-list/browser-session-site-list'
 import {
   reportBrowserSessionWebRequest,
   type ObservedWebRequestDetails
@@ -44,7 +45,12 @@ function warn(event: string, error: unknown): void {
   console.warn(`[browser] request decision for ${event} failed:`, error)
 }
 
-const blockedMainFrameWatchers = new Map<number, (url: string) => void>()
+export type BrowserMainFrameBlockReason = 'extension' | 'site-list'
+
+const blockedMainFrameWatchers = new Map<
+  number,
+  (url: string, reason: BrowserMainFrameBlockReason) => void
+>()
 
 /**
  * Calls `onBlocked` when the decider (an extension) cancels this webContents' main-frame load.
@@ -52,7 +58,7 @@ const blockedMainFrameWatchers = new Map<number, (url: string) => void>()
  */
 export function watchDecisionBlockedMainFrames(
   webContentsId: number,
-  onBlocked: (url: string) => void
+  onBlocked: (url: string, reason: BrowserMainFrameBlockReason) => void
 ): () => void {
   blockedMainFrameWatchers.set(webContentsId, onBlocked)
   return () => {
@@ -64,7 +70,8 @@ export function watchDecisionBlockedMainFrames(
 
 function noteBlockedMainFrame(
   details: Electron.OnBeforeRequestListenerDetails,
-  response: Electron.CallbackResponse
+  response: Electron.CallbackResponse,
+  reason: BrowserMainFrameBlockReason
 ): void {
   if (
     response.cancel &&
@@ -74,7 +81,7 @@ function noteBlockedMainFrame(
     const onBlocked = blockedMainFrameWatchers.get(details.webContentsId)
     reportingBlockedRequestId = details.id
     try {
-      onBlocked?.(details.url)
+      onBlocked?.(details.url, reason)
     } finally {
       reportingBlockedRequestId = null
     }
@@ -94,9 +101,16 @@ export function answerBrowserSessionBeforeRequest(
   details: Electron.OnBeforeRequestListenerDetails,
   callback: (response: Electron.CallbackResponse) => void
 ): void {
-  const answer = (response: Electron.CallbackResponse): void => {
-    noteBlockedMainFrame(details, response)
+  const answer = (
+    response: Electron.CallbackResponse,
+    reason: BrowserMainFrameBlockReason = 'extension'
+  ): void => {
+    noteBlockedMainFrame(details, response, reason)
     callback(response)
+  }
+  if (isBrowserSessionRequestOutsideSiteList(session, details.url)) {
+    answer({ cancel: true }, 'site-list')
+    return
   }
   let decision: ReturnType<BrowserSessionRequestDecider['beforeRequest']> = null
   try {
@@ -107,9 +121,14 @@ export function answerBrowserSessionBeforeRequest(
   if (decision === null) {
     callback({})
   } else if ('then' in decision) {
-    decision.then(answer, (error: unknown) => {
+    // The list can change while the decision is pending.
+    const settled = (response: Electron.CallbackResponse): void =>
+      isBrowserSessionRequestOutsideSiteList(session, details.url)
+        ? answer({ cancel: true }, 'site-list')
+        : answer(response)
+    decision.then(settled, (error: unknown) => {
       warn('onBeforeRequest', error)
-      callback({})
+      settled({})
     })
   } else {
     answer(decision)

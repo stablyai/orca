@@ -2,6 +2,7 @@ import type {
   GoogleCookieClearLocalTarget,
   GoogleCookieClearResult
 } from '../../../shared/browser/cookies/browser-google-cookie-clear'
+import type { BrowserSiteListSetResult } from '../../../shared/browser/profiles/browser-profile-site-list'
 import type {
   BrowserClientHostCookieImportArgs,
   BrowserCookieImportResult
@@ -22,6 +23,11 @@ export type BrowserSessionCookieApi = {
   ) => Promise<GoogleCookieClearResult>
   /** One profile's jar on this computer. */
   sessionClearCookies: (args: { profileId: string }) => Promise<boolean>
+  sessionGetAllowedHosts: (args: { profileId: string }) => Promise<string[] | null>
+  sessionSetAllowedHosts: (args: {
+    profileId: string
+    hosts: string[]
+  }) => Promise<BrowserSiteListSetResult>
   /** Null when the environment's pages are not client-hosted on this desktop. */
   sessionClearCookiesForClientHost: (args: {
     environmentId: string

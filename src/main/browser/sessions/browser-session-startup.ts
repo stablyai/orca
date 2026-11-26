@@ -11,6 +11,7 @@ import { configurePairedRuntimeBrowserClientHostsForOrcaProfile } from '../clien
 import { configureBrowserPasswordVaults } from '../../browser-passwords/browser-password-vaults'
 import { restoreBrowserSessionCookies } from '../cookies/session-restore/browser-session-cookie-restore'
 import { configureBrowserSessionCookieSnapshots } from '../cookies/session-restore/browser-session-cookie-snapshot-file'
+import { loadBrowserProfileSiteListsWithRetry } from './site-list/browser-profile-site-list-store'
 import { awaitBrowserSessionProxies } from './proxy/browser-session-proxy'
 import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import { listenForBrowserPasskeyRequests } from '../webauthn/browser-passkey-requests'
@@ -56,6 +57,8 @@ export function initializeBrowserSessionsForApp(
   // Replay cookies before Chromium opens the live DB via session.fromPartition.
   browserSessionRegistry.applyPendingCookieImport()
   profilesRead = browserSessionRegistry.initializeBrowserSessionsFromPersistedState()
+  // Retry unreadable site lists without changing the saved-profile startup result.
+  loadBrowserProfileSiteListsWithRetry()
   initialized = true
 }
 

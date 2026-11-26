@@ -11,6 +11,10 @@ import {
   TabSetProfile,
   TabShow
 } from '../../../../../shared/rpc-contract/browser/browser-params'
+import {
+  pinAgentTabProfileChange,
+  assertAgentMayDeleteProfile
+} from './browser-site-list-agent-gate'
 
 /** Clearing a profile's cookies signs the person out everywhere; only their own click in Settings may. */
 export function refuseAgentCookieClear(context: Pick<RpcContext, 'caller'>): void {
@@ -27,7 +31,11 @@ export const BROWSER_PROFILE_METHODS = [
     name: 'browser.tabSetProfile',
     permission: 'workspace',
     params: TabSetProfile,
-    handler: async (params, { runtime }) => runtime.browserTabSetProfile(params)
+    handler: async (params, context) => {
+      return context.runtime.browserTabSetProfile(
+        await pinAgentTabProfileChange(context, params, params.profileId)
+      )
+    }
   }),
   defineMethod({
     name: 'browser.tabProfileShow',
@@ -39,7 +47,11 @@ export const BROWSER_PROFILE_METHODS = [
     name: 'browser.tabProfileClone',
     permission: 'workspace',
     params: TabProfileClone,
-    handler: async (params, { runtime }) => runtime.browserTabProfileClone(params)
+    handler: async (params, context) => {
+      return context.runtime.browserTabProfileClone(
+        await pinAgentTabProfileChange(context, params, params.profileId)
+      )
+    }
   }),
   defineMethod({
     name: 'browser.profileList',
@@ -57,7 +69,10 @@ export const BROWSER_PROFILE_METHODS = [
     name: 'browser.profileDelete',
     permission: 'workspace',
     params: ProfileDelete,
-    handler: async (params, { runtime }) => runtime.browserProfileDelete(params)
+    handler: async (params, context) => {
+      assertAgentMayDeleteProfile(context, params.profileId)
+      return context.runtime.browserProfileDelete(params)
+    }
   }),
   defineMethod({
     name: 'browser.profileDetectBrowsers',

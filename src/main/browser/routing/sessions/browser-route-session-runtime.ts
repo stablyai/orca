@@ -55,7 +55,8 @@ export const browserRouteSessionRegistry = new BrowserRouteSessionRegistry({
     // The server's agents can script these pages, so pages never read the desktop clipboard.
     return installBrowserRoutePartitionPolicies(profile, partition, {
       sitePermissions: 'session',
-      clipboardRead: false
+      clipboardRead: false,
+      siteListProfile: !profileMetadata
     })
   },
   clearPolicies: ({ partition }) => {
