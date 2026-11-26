@@ -34,7 +34,6 @@
   "agentHistory": {
     "panel": {
       "all": "Toutes",
-      "emptyScope": "Aucune session d'agent passée dans ce périmètre.",
       "missingResumeId": "Cette session n'a pas d'identifiant de reprise.",
       "noSearchResults": "Aucune session ne correspond à votre recherche.",
       "noSessions": "Aucune session d'agent",
@@ -62,7 +61,6 @@
       "untitledSession": "Session sans titre"
     },
     "sessionHistoryList": {
-      "currentWorktree": "worktree actuel",
       "messages_many": "{{count}} messages",
       "messages_one": "{{count}} message",
       "messages_other": "{{count}} messages",
