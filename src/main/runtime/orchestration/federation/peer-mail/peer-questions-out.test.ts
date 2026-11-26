@@ -145,7 +145,7 @@ describe('questions asked of an agent on a paired computer', () => {
 
     expect(
       told()
-        .filter(([, body]) => body.startsWith(REMOVED))
+        .filter(([, body]) => body?.startsWith(REMOVED))
         .sort()
     ).toEqual([
       [
