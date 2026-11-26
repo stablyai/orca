@@ -2,7 +2,7 @@ import type { RuntimeTerminalCreate } from '../../../../../../../../shared/termi
 import type { AgentLaunchPreferences } from '../../../../../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import { narrowStructuredLaunchSeedOptions } from '../../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent'
-import type { AgentChatPermissionChoice } from '../../../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import type { CoordinatorChatPermission } from '../worker-chat-permission'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode-option-id'
 import {
   agentChatPermissionModes,
@@ -102,21 +102,23 @@ export async function createStructuredWorkerSessionForWorktree(args: {
   worktreeId: string
   agent: TuiAgent
   dispatchId: string
-  parentPermissionMode: AgentChatPermissionChoice | undefined
+  parentPermission: CoordinatorChatPermission | undefined
   /** `--model`/`--effort`, laid over the saved selection; a leveled Antigravity `--model` replaces it. */
   launchPreferences?: AgentLaunchPreferences
   effects: WorkerEffect[]
 }): Promise<Awaited<ReturnType<typeof createStructuredWorkerSession>>> {
   const selection = narrowStructuredLaunchSeedOptions(args.launchPreferences)
   const support = agentChatPermissionModes(args.agent)
+  const { parentPermission } = args
+  const inheritedMode =
+    parentPermission?.mode === 'own' && parentPermission.agent !== args.agent
+      ? 'ask'
+      : parentPermission?.mode
   const options =
-    support && args.parentPermissionMode !== undefined
+    support && inheritedMode !== undefined
       ? {
           ...selection,
-          [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: savedChatPermissionMode(
-            support,
-            args.parentPermissionMode
-          )
+          [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: savedChatPermissionMode(support, inheritedMode)
         }
       : selection
   const created = await createStructuredWorkerSession({

@@ -75,7 +75,7 @@ export async function startWorker(
     )
   }
   // A permission switch during preflight must not change the choice this start inherits.
-  const parentPermissionMode =
+  const parentPermission =
     startParams.on || startParams.terminal || startFollowUp
       ? undefined
       : snapshotCoordinatorChatPermission(orchestrationCaller)
@@ -123,7 +123,7 @@ export async function startWorker(
     existingTask,
     orchestrationMutation,
     mode,
-    parentPermissionMode,
+    parentPermission,
     chatLineage,
     helperCreator,
     followUp

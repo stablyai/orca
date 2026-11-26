@@ -9,16 +9,21 @@ import {
   type OrchestrationEntryCaller
 } from '../../../../../orchestration/addressing/orchestration-caller-identity'
 
+export type CoordinatorChatPermission = {
+  agent: string
+  mode: AgentChatPermissionChoice
+}
+
 export function snapshotCoordinatorChatPermission(
   caller: OrchestrationEntryCaller | undefined
-): AgentChatPermissionChoice | undefined {
+): CoordinatorChatPermission | undefined {
   const session = sessionCallerOf(caller)
   const host = session && getStructuredAgentSessionHost()
   if (!session || !host) {
     return undefined
   }
   const record = host.deps.store.getRecord(session.sessionId)
-  if (record?.permissionMode === undefined) {
+  if (!record) {
     return undefined
   }
   const support = agentChatPermissionModes(record.provider)
@@ -26,6 +31,11 @@ export function snapshotCoordinatorChatPermission(
     return undefined
   }
   const saved = savedChatPermissionMode(support, record.permissionMode)
-  const running = host.deps.adapter.runningPermissionMode?.(session.sessionId)
-  return running === undefined || running === saved ? saved : 'ask'
+  const running =
+    host.deps.adapter.runningPermissionMode?.(session.sessionId) ??
+    host.reads.childLaunchPermissionMode(session.sessionId)
+  return {
+    agent: record.provider,
+    mode: running === undefined || running === saved ? saved : 'ask'
+  }
 }

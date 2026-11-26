@@ -26,8 +26,10 @@ type Case = {
   name: string
   saved?: AgentChatPermissionChoice
   running?: AgentChatPermissionChoice
+  launched?: AgentChatPermissionChoice
   global: 'ask' | 'full-access'
   expected: AgentChatPermissionChoice | undefined
+  coordinator?: 'claude'
   worker?: 'codex' | 'pi'
   terminalCaller?: boolean
   switchAfterStart?: boolean
@@ -43,7 +45,19 @@ it.each<Case>([
     global: 'full-access',
     expected: 'ask'
   },
-  { name: 'agent settings delegation', saved: 'own', global: 'full-access', expected: 'own' },
+  {
+    name: 'agent settings for the same agent',
+    saved: 'own',
+    global: 'full-access',
+    expected: 'own'
+  },
+  {
+    name: 'agent settings for a different agent',
+    saved: 'own',
+    worker: 'codex',
+    global: 'full-access',
+    expected: 'ask'
+  },
   {
     name: 'a pending switch to Full access',
     saved: 'full-access',
@@ -55,6 +69,14 @@ it.each<Case>([
     name: 'a pending switch to Ask',
     saved: 'ask',
     running: 'full-access',
+    global: 'full-access',
+    expected: 'ask'
+  },
+  {
+    name: 'a pending switch to Full access without an adapter report',
+    coordinator: 'claude',
+    saved: 'full-access',
+    launched: 'ask',
     global: 'full-access',
     expected: 'ask'
   },
@@ -73,7 +95,7 @@ it.each<Case>([
     expected: 'full-access',
     terminalCaller: true
   },
-  { name: 'a chat with no saved mode', global: 'full-access', expected: 'full-access' },
+  { name: 'a chat with no saved mode', global: 'full-access', expected: 'ask' },
   {
     name: 'a worker with no permission modes',
     saved: 'ask',
@@ -86,7 +108,7 @@ it.each<Case>([
   const agent = scenario.worker ?? 'antigravity'
   const record = {
     ...agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: SESSION })),
-    provider: 'antigravity',
+    provider: scenario.coordinator ?? 'antigravity',
     permissionMode: scenario.saved
   }
   const caller: OrchestrationSessionCaller = {
@@ -129,8 +151,10 @@ it.each<Case>([
     create,
     captureAgentStartDestination: () => null,
     publishBackgroundTasks: () => {},
+    reads: { childLaunchPermissionMode: () => scenario.launched },
     deps: {
-      adapter: { runningPermissionMode: () => scenario.running },
+      adapter:
+        scenario.running === undefined ? {} : { runningPermissionMode: () => scenario.running },
       store: {
         getRecord: (id: string) => (id === SESSION ? record : null),
         getConversation: (id: string) =>
