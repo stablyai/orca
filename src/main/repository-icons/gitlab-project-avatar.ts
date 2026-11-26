@@ -51,8 +51,10 @@ export async function detectGitLabProjectAvatar(
   if (!project) {
     return null
   }
-  await acquire()
+  let acquired = false
   try {
+    await acquire()
+    acquired = true
     const { stdout } = await glabExecFileAsync(
       ['api', '--hostname', project.host, `projects/${encodedProject(project.path)}/avatar`],
       {
@@ -68,6 +70,8 @@ export async function detectGitLabProjectAvatar(
     // Optional metadata: retain the cached avatar or initials when offline or unauthorized.
     return null
   } finally {
-    release()
+    if (acquired) {
+      release()
+    }
   }
 }
