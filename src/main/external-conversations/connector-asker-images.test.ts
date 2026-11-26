@@ -41,7 +41,7 @@ describe('connectorAskerImages', () => {
     }))
     const get = connectorAskerImages({
       reader: () => read,
-      store: async (name) => `/attachments/${name}`,
+      store: async (name) => ({ path: `/attachments/${name}` }),
       fetch: async () => new Response(new Uint8Array(PNG))
     })
     const earlier = Array.from({ length: 4 }, (_, index) => ({
@@ -90,7 +90,7 @@ describe('connectorAskerImages', () => {
     }))
     const get = connectorAskerImages({
       reader: () => read,
-      store: async (name) => `/attachments/${name}`,
+      store: async (name) => ({ path: `/attachments/${name}` }),
       fetch: async () => new Response(new Uint8Array(PNG))
     })
     const asker: ConnectorAsker = {
@@ -144,7 +144,7 @@ describe('connectorAskerImages', () => {
     }))
     const get = connectorAskerImages({
       reader: () => read,
-      store: async (name) => `/attachments/${name}`,
+      store: async (name) => ({ path: `/attachments/${name}` }),
       fetch: async () => new Response(new Uint8Array(PNG))
     })
     const staged = await get({
@@ -188,7 +188,7 @@ describe('connectorAskerImages', () => {
   ])('stops streaming a body with an invalid image signature (%#)', async (prefix) => {
     let chunks = 0
     let cancelled = false
-    const store = vi.fn(async () => '/attachments/image.png')
+    const store = vi.fn(async () => ({ path: '/attachments/image.png' }))
     const get = connectorAskerImages({
       reader: () => async () => ({
         ok: true,
@@ -235,7 +235,7 @@ describe('connectorAskerImages', () => {
     const read = vi.fn(async () => null)
     const get = connectorAskerImages({
       reader: () => read,
-      store: async () => '/attachments/image.png'
+      store: async () => ({ path: '/attachments/image.png' })
     })
     const staged = get({
       botId: 'bot-1',

@@ -90,10 +90,16 @@ it.each(['accepted', 'unknown', 'rejected'] as const)(
         id: HOME_ID,
         externalConversations: []
       }
+      const runtime = {
+        host: rig.host,
+        async ensureStructuredAgentSessionHost() {
+          setStructuredAgentSessionHost(this.host)
+        }
+      }
       const receipts: DeliveryReceipts = new DeliveryReceipts(
         () => db,
         (attempt) =>
-          recoverConnectorAdmission(attempt, undefined, (key, chat) => {
+          recoverConnectorAdmission(attempt, runtime, (key, chat) => {
             if (!seam.linkedChat(key)) {
               seam.linkChat(key, chat, { title: key.title }, key.asker)
             }
@@ -127,9 +133,8 @@ it.each(['accepted', 'unknown', 'rejected'] as const)(
         onAgentPaneChange: () => () => {},
         readHookRow: () => null
       })
-      setStructuredAgentSessionHost(rig.host)
       const host = {
-        chat: runtimeChatHost({ ensureStructuredAgentSessionHost: async () => {} }),
+        chat: runtimeChatHost(runtime),
         bots: {
           refusal: () => null,
           open: async () => {

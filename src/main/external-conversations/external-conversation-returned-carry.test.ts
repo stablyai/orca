@@ -460,7 +460,7 @@ it('keeps a failed request and stages only new earlier images that fit the byte 
   const fixture = Buffer.alloc(byteLength)
   fixture.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
   for (const fileId of oldIds) {
-    const path = await storeConnectorImage(
+    const { path } = await storeConnectorImage(
       attachmentStore,
       `${fileId}.png`,
       fixture,
@@ -517,7 +517,7 @@ it('keeps a failed request and stages only new earlier images that fit the byte 
           }
         }
       },
-    store: async (name, image) => stagedImage(name, image.byteLength),
+    store: async (name, image) => ({ path: stagedImage(name, image.byteLength) }),
     fetch: async () => new Response(new Uint8Array(fixture))
   })
   const staged = await stage({
@@ -552,7 +552,7 @@ it('keeps a failed request and stages only new earlier images that fit the byte 
   expect(reads).toEqual(['F4', 'F5', 'F6', 'F7'])
 })
 
-it('updates screenshot positions when two failed requests are carried together', async () => {
+it('updates screenshot positions even when a nested image precedes its label', async () => {
   const store = new AgentSessionAttachmentStore(join(dir, 'agent-session-attachments'), {
     hasSession: () => true
   })
@@ -560,7 +560,7 @@ it('updates screenshot positions when two failed requests are carried together',
   const image = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
   const quoted = '[Orca: file FAFTER: quoted.png; attached to this turn as image 1]'
   for (const [index, fileId] of ['FBEFORE', 'FAFTER'].entries()) {
-    const path = await storeConnectorImage(store, `${fileId}.png`, image, fileId, signal)
+    const { path } = await storeConnectorImage(store, `${fileId}.png`, image, fileId, signal)
     const text = connectorAskerPrompt(
       'slack',
       {
@@ -583,7 +583,17 @@ it('updates screenshot positions when two failed requests are carried together',
       undefined,
       { attached: new Map([[fileId, 1]]) }
     )
-    failedStart(fileId, asked(fileId, text, THREAD, [path]), 'notSignedIn', NOW + index)
+    const card = asked(fileId, text, THREAD)
+    const attachment = { type: 'image-ref' as const, path }
+    if (index === 0) {
+      card.blocks.unshift(
+        { type: 'text', text: 'An earlier returned request sent this image.' },
+        attachment
+      )
+    } else {
+      card.blocks.push(attachment)
+    }
+    failedStart(fileId, card, 'notSignedIn', NOW + index)
   }
   const returned = readJournalDomainReturnedCards(db, target, NOW + 3)
   const carried = await carriedMessages(
@@ -592,23 +602,24 @@ it('updates screenshot positions when two failed requests are carried together',
     ACCOUNT,
     NOW + 3,
     [],
-    connectorImageInspection(store.rootDir, signal)
+    connectorImageInspection(store.rootDir, signal, undefined, false)
   )
   const blocks = reconcileCarriedImageLabels(carried.blocks, carried.imagePositions)
   expect(carried.cards.map((card) => card.messageId)).toEqual(['FBEFORE', 'FAFTER'])
   expect(blocks).toMatchObject([
+    { type: 'text', text: 'An earlier returned request sent this image.' },
+    { type: 'image-ref' },
     {
       type: 'text',
       text: expect.stringContaining('FBEFORE.png, image/png; attached to this turn as image 1')
     },
-    { type: 'image-ref' },
     {
       type: 'text',
       text: expect.stringContaining('FAFTER.png, image/png; attached to this turn as image 2')
     },
     { type: 'image-ref' }
   ])
-  expect(blocks[2]).toMatchObject({ type: 'text', text: expect.stringContaining(quoted) })
+  expect(blocks[3]).toMatchObject({ type: 'text', text: expect.stringContaining(quoted) })
 })
 
 /** Who each message of a chain of 20 failed starts carries, the senders taking turns. */

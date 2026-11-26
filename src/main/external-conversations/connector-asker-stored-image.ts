@@ -19,8 +19,9 @@ export async function storeConnectorImage(
   bytes: Buffer,
   fileId: string | undefined,
   signal: AbortSignal
-): Promise<string> {
+) {
   const path = await store.storeFile(name, bytes)
+  const discard = () => removeQuietly(dirname(path))
   try {
     signal.throwIfAborted()
     if (fileId !== undefined) {
@@ -28,10 +29,10 @@ export async function storeConnectorImage(
       signal.throwIfAborted()
     }
   } catch (error) {
-    await removeQuietly(dirname(path))
+    await discard()
     throw error
   }
-  return path
+  return { path, discard }
 }
 
 async function storedConnectorImageId(

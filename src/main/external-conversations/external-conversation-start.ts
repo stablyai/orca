@@ -3,7 +3,7 @@ import type { ConnectorAsker } from '../../shared/connectors/connector-cloud-con
 import type { NativeChatAgent } from '../../shared/agent-launch/permissions/agent-chat-permission-support'
 import { isBotAgent } from '../../shared/bot-types'
 import { budgetForEarlierImages } from './connector-asker-image-budget'
-import type { AskerImages, StagedConnectorImages } from './connector-asker-images'
+import { StagedConnectorImages, type AskerImages } from './connector-asker-images'
 import { NOTHING_CARRIED } from './external-conversation-returned-carry'
 import { botChatFor, deliveryChatId } from './external-conversation-bots'
 import type { ConnectorChatDelivery, LinkableChat } from './external-conversation-chat-delivery'
@@ -112,6 +112,7 @@ export async function startConnectorConversation(
           }
           throw error
         } finally {
+          await stagedImages?.discardUnused()
           if (preparedThread && abandoned) {
             await host.bots?.forgetUnusedStart?.(preparedThread)
           }
@@ -160,8 +161,5 @@ async function stageInitialImages(
       )
     }
   }).catch(() => [])
-  return {
-    direct: images.slice(0, directCount),
-    earlier: directCount === undefined ? [] : images.slice(directCount)
-  }
+  return new StagedConnectorImages(images, directCount)
 }

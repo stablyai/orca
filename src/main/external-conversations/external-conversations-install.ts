@@ -150,7 +150,7 @@ export function installExternalConversations(
         (attempt) =>
           recoverConnectorAdmission(
             attempt,
-            runtime.ensureStructuredAgentSessionHost,
+            runtime,
             (thread, chat) => {
               const { source, externalId, title, asker } = thread
               const key = { source, externalId }

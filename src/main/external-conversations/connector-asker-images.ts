@@ -15,9 +15,35 @@ import {
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 import type { ConnectorResult } from '../connector-cloud/connector-cloud-request'
 
-export type ConnectorImage = { path: string; fileId: string; bytes: number }
+type ConnectorImageUpload = { path: string; discard?: () => Promise<void> }
 
-export type StagedConnectorImages = { direct: ConnectorImage[]; earlier: ConnectorImage[] }
+export type ConnectorImage = ConnectorImageUpload & { fileId: string; bytes: number }
+
+export class StagedConnectorImages {
+  readonly direct: ConnectorImage[]
+  readonly earlier: ConnectorImage[]
+  private retained: readonly ConnectorImage[] = []
+
+  constructor(
+    private readonly images: readonly ConnectorImage[],
+    directCount: number | undefined
+  ) {
+    this.direct = images.slice(0, directCount)
+    this.earlier = directCount === undefined ? [] : images.slice(directCount)
+  }
+
+  retain(images: readonly ConnectorImage[]): void {
+    this.retained = images
+  }
+
+  async discardUnused(): Promise<void> {
+    for (const image of this.images) {
+      if (!this.retained.includes(image)) {
+        await image.discard?.()
+      }
+    }
+  }
+}
 
 export type EarlierImageBudget = {
   count: number
@@ -162,7 +188,7 @@ export function connectorAskerImages(deps: {
     bytes: Buffer,
     slackFileId: string | undefined,
     signal: AbortSignal
-  ) => Promise<string>
+  ) => Promise<ConnectorImageUpload>
   fetch?: typeof fetch
   budgetMs?: number
 }): AskerImages {
@@ -202,18 +228,26 @@ export function connectorAskerImages(deps: {
           const { bytes, extension } = image
           const named = typeof download.name === 'string' ? download.name : fileId
           const base = named.slice(0, named.length - extname(named).length) || fileId
-          const path = await deps.store(
+          const upload = await deps.store(
             `${base}${extension}`,
             bytes,
             conversation.source === 'slack' ? fileId : undefined,
             bounded
           )
-          return { path, fileId, bytes: bytes.byteLength }
+          if (bounded.aborted) {
+            await upload.discard?.()
+            return null
+          }
+          return { ...upload, fileId, bytes: bytes.byteLength }
         } finally {
           release()
         }
       }
-      const image = await waitForPromiseWithSignal(work(), bounded).catch(() => null)
+      const staging = work()
+      const image = await waitForPromiseWithSignal(staging, bounded).catch(() => {
+        void staging.then((late) => late?.discard?.()).catch(() => {})
+        return null
+      })
       if (!image) {
         return 0
       }

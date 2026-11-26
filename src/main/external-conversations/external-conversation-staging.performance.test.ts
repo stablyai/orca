@@ -1,0 +1,101 @@
+import { mkdtemp, readdir, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { expect, it } from 'vitest'
+import { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
+import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
+import { connectorAskerImages } from './connector-asker-images'
+import { storeConnectorImage } from './connector-asker-stored-image'
+import { ChatDeliveries } from './external-conversation-chat-delivery'
+import { DeliveryPreparation, DeliveryReceipts } from './external-conversation-delivery-receipts'
+import type { ExternalConversationSeamDeps } from './external-conversation-host'
+import { startConnectorConversation } from './external-conversation-start'
+import type { ConnectorStartInput, Delivery } from './external-conversation-types'
+
+const TARGET = { kind: 'bot' as const, botId: 'fixture-bot' }
+const KEY = { source: 'slack' as const, externalId: 'T1:C1:1.2:UBOT' }
+const INPUT: ConnectorStartInput = {
+  agent: 'codex',
+  target: TARGET,
+  prompt: '@bot',
+  asker: {
+    text: '@bot',
+    userId: 'U1',
+    role: 'owner',
+    place: { kind: 'public_channel', id: 'C1' },
+    earlierOwn: {
+      messages: [
+        {
+          at: 1,
+          text: 'Four screenshots',
+          messageRef: 'slack:T1:C1:1.2:1.2',
+          files: ['F1', 'F2', 'F3', 'F4'].map((id) => ({ id, name: 'shot.png', type: 'image/png' }))
+        }
+      ]
+    },
+    context: []
+  }
+}
+
+it.each([10, 100])('retains no unadmitted uploads after %i retired starts', async (count) => {
+  const root = await mkdtemp(join(tmpdir(), 'orca-connector-staging-'))
+  const attachments = new AgentSessionAttachmentStore(root, { hasSession: () => false })
+  const db = new OrchestrationDb(':memory:')
+  const deliveries = new ChatDeliveries(() => {})
+  const signal = new AbortController().signal
+  const store: ExternalConversationSeamDeps['store'] = {
+    getAllWorktreeMeta: () => ({}),
+    getWorktreeMeta: () => undefined,
+    setWorktreeMeta: () => {},
+    getRepos: () => []
+  }
+  const askerImages = connectorAskerImages({
+    reader: () => async () => ({
+      ok: true,
+      value: {
+        ok: true,
+        result: { download: { url: 'https://fixture.invalid/image', ticket: 'fixture' } }
+      }
+    }),
+    store: (name, bytes, fileId, stagingSignal) =>
+      storeConnectorImage(attachments, name, bytes, fileId, stagingSignal),
+    fetch: async () => new Response(Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10))
+  })
+  const receipts = new DeliveryReceipts(() => db)
+  try {
+    for (let delivery = 0; delivery < count; delivery++) {
+      const poll = new AbortController()
+      const result = await startConnectorConversation(
+        {
+          store,
+          receipts,
+          askerImages,
+          enqueue: (run: (signal: AbortSignal) => Promise<Delivery>) => run(signal),
+          deliver: (chat, message) => deliveries.deliver(undefined, KEY, chat, message),
+          link: () => {}
+        },
+        {
+          bots: {
+            refusal: () => null,
+            open: async (_, opening) => {
+              await opening?.beforeCreate?.('codex')
+              expect(await readdir(root)).toHaveLength(4)
+              poll.abort('connectors_disabled')
+              return { sessionId: opening!.sessionId, agent: 'codex', worktreeId: 'fixture' }
+            },
+            workLinks: async () => []
+          }
+        },
+        KEY,
+        `delivery-${delivery}`,
+        INPUT,
+        new DeliveryPreparation(poll.signal)
+      )
+      expect(result.initial).toEqual({ outcome: 'refused', reason: 'connectors_disabled' })
+    }
+    expect(await readdir(root)).toEqual([])
+  } finally {
+    db.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})

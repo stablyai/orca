@@ -1,3 +1,5 @@
+import { readFile, readdir } from 'node:fs/promises'
+import { basename, join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { agentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
@@ -9,9 +11,11 @@ import {
 } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
 import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
+import { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
 import { ChatDeliveries, type LinkableChat } from './external-conversation-chat-delivery'
 import type { ConversationChat, ConversationChatHost } from './external-conversation-chat'
 import { connectorAskerImages, type ConnectorImage } from './connector-asker-images'
+import { storeConnectorImage } from './connector-asker-stored-image'
 import { DeliveryPreparation } from './external-conversation-delivery-receipts'
 
 // The real chat host and journal: a connector message whose start failed, then the conversation's next.
@@ -134,7 +138,7 @@ async function holdImageDelivery(
     }
   })
   await preparing.promise
-  return { result, finish: () => staged.resolve([]) }
+  return { result, finish: (images: ConnectorImage[] = []) => staged.resolve(images) }
 }
 
 it('a request preparing its attachments does not own a concurrent local turn', async () => {
@@ -162,16 +166,22 @@ it.each(['old poll stops', 'cloud lease expires'])(
       rig.host,
       new DeliveryPreparation(poll.signal, () => left)
     )
+    const attachments = new AgentSessionAttachmentStore(join(rig.root, 'fixture-attachments'), {
+      hasSession: () => true
+    })
+    const bytes = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
+    const upload = await storeConnectorImage(attachments, 'shot.png', bytes, 'FSHOT', poll.signal)
     if (ending === 'old poll stops') {
       poll.abort()
     } else {
       left = 0
     }
-    finish()
+    finish([{ ...upload, fileId: 'FSHOT', bytes: bytes.length }])
     await expect(result).resolves.toMatchObject({
       outcome: ending === 'cloud lease expires' ? 'expired' : 'refused'
     })
     expect(await (await journal()).reads.sendFingerprints()).toEqual([])
+    expect(await readdir(attachments.rootDir)).toEqual([])
     expect(deliveries.pending(SESSION)).toBe(false)
   }
 )
@@ -244,7 +254,7 @@ it('delivers the request as text when an automatic attachment exceeds legacy Pi 
           }
         }),
         fetch,
-        store: async () => '/attachments/image.png'
+        store: async () => ({ path: '/attachments/image.png' })
       })
     }
   )
@@ -314,6 +324,9 @@ it('names the native positions of earlier screenshots in their chronological con
   rig = await createQueuedMessageTestRig({ starting: true })
   const deliveries = new ChatDeliveries(vi.fn())
   const png = Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10)
+  const store = new AgentSessionAttachmentStore(join(rig.root, 'fixture-attachments'), {
+    hasSession: () => true
+  })
   const request = {
     deliveryId: 'compare',
     text: 'Compare the before and after images',
@@ -358,22 +371,38 @@ it('names the native positions of earlier screenshots in their chronological con
           }
         }),
       fetch: async () => new Response(png),
-      store: async (name) => `/attachments/${name}`
+      store: (name, bytes, fileId, signal) => storeConnectorImage(store, name, bytes, fileId, signal)
     })
   }
   expect(await deliveries.deliver(chatHost(rig.host), KEY, CHAT, request)).toEqual({
     outcome: 'accepted'
   })
-  const { body } = await lastSent()
+  const { id, body } = await lastSent()
   const [text, ...attachments] = body.blocks
-  expect(attachments).toEqual([
-    { type: 'image-ref', path: '/attachments/FAFTER.png' },
-    { type: 'image-ref', path: '/attachments/FBEFORE.png' }
-  ])
+  const paths = attachments.flatMap((block) =>
+    block.type === 'image-ref' && block.path ? [block.path] : []
+  )
+  expect(paths.map((path) => basename(path))).toEqual(['FAFTER.png', 'FBEFORE.png'])
+  for (const path of paths) {
+    expect(await readFile(path)).toEqual(Buffer.from(png))
+  }
   expect(text).toMatchObject({
     type: 'text',
     text: expect.stringMatching(
       /file FBEFORE: before\.png, image\/png; attached to this turn as image 2\][\s\S]*file FAFTER: after\.png, image\/png; attached to this turn as image 1\]/
     )
   })
+  const j = await journal()
+  await j.settleStartFailure({
+    startKey: id,
+    clientMessageId: id,
+    fence: rig.store.getRecord(SESSION)!.lease.runtimeFence,
+    ...agentSessionFailureWords(agentSessionFailureFact('notSignedIn'), { surface: 'rejection' })
+  })
+  expect(await j.queuedMessages.returned()).toMatchObject([
+    { card: { body: { blocks: body.blocks } } }
+  ])
+  for (const path of paths) {
+    expect(await readFile(path)).toEqual(Buffer.from(png))
+  }
 })

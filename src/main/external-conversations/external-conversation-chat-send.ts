@@ -28,9 +28,9 @@ import {
 import {
   ASKER_IMAGES_BUDGET_MS,
   hasEarlierImages,
+  StagedConnectorImages,
   type AskerImages,
-  type ConnectorImage,
-  type StagedConnectorImages
+  type ConnectorImage
 } from './connector-asker-images'
 import {
   connectorImageInspection,
@@ -76,6 +76,8 @@ export async function deliverToChat(
     return refused(CHAT_GONE_REFUSAL)
   }
   let admitted = false
+  let staged = delivery.stagedImages
+  let selected: readonly ConnectorImage[] = []
   // What takes back an admission the writer then refused.
   const taken: { back?: (() => void) | void } = {}
   const admit = () => {
@@ -135,9 +137,8 @@ export async function deliverToChat(
             })
             .catch(() => [])
         : []
-    const direct = delivery.stagedImages?.direct ?? images.slice(0, directCount)
-    const earlier =
-      delivery.stagedImages?.earlier ?? (directCount === undefined ? [] : images.slice(directCount))
+    staged ??= new StagedConnectorImages(images, directCount)
+    const { direct, earlier } = staged
     // A carried card that changed since it was read (a Retry, an edit) refuses the send: read again.
     for (let attempt = 1; ; attempt += 1) {
       const stoppedBeforeCarry = stopped()
@@ -156,12 +157,13 @@ export async function deliverToChat(
         return refused(CHAT_GONE_REFUSAL)
       }
       const fitting = earlierImagesThatFit(earlier, earlierBudget(carried, direct))
+      selected = [...direct, ...fitting]
       const outcome = await sendConnectorTurn(
         chat,
         link,
         { ...delivery, signal },
         carried,
-        [...direct, ...fitting],
+        selected,
         admit
       )
       if (
@@ -178,6 +180,8 @@ export async function deliverToChat(
       if (outcome.kind === 'refused') {
         return stopped() ?? refused('agent_not_reachable')
       }
+      // A rejected dispatch can still leave a returned request that references these files.
+      staged.retain(selected)
       const dispatched = outcome.kind === 'sent' ? outcome.submission?.dispatchState : 'accepted'
       if (dispatched === 'rejected') {
         // Why the agent couldn't take it (signed out, not installed…), or that a person's Stop did.
@@ -193,9 +197,14 @@ export async function deliverToChat(
     }
   } catch {
     if (admitted) {
+      staged?.retain(selected)
       return { outcome: 'unknown', reason: 'writer_failed' }
     }
     return stopped() ?? refused('agent_not_reachable')
+  } finally {
+    if (!delivery.stagedImages) {
+      await staged?.discardUnused()
+    }
   }
 }
 

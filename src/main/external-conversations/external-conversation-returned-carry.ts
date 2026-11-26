@@ -126,18 +126,18 @@ export async function carriedMessages(
     const ownBlocks: NativeChatBlock[] = []
     let cardBytes = 0
     let cardImages = 0
-    let positioned = false
+    const inspectImages =
+      inspection?.allPaths ||
+      each.card.body.blocks.some(
+        (block) => block.type === 'text' && hasConnectorImagePositions(block.text)
+      )
     for (const block of each.card.body.blocks) {
       if (block.type !== 'image-ref') {
-        positioned ||= block.type === 'text' && hasConnectorImagePositions(block.text)
         ownBlocks.push(block)
         continue
       }
       const path = block.url ? undefined : block.path
-      const stored =
-        path && inspection && (positioned || inspection.allPaths)
-          ? await inspection.image(path)
-          : undefined
+      const stored = path && inspection && inspectImages ? await inspection.image(path) : undefined
       if (stored === 'limit') {
         break cards
       }
