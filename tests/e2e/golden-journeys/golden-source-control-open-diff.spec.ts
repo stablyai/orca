@@ -131,6 +131,15 @@ test('@golden navigates changed files in panel order from diff controls', async 
     'unstaged.ts',
     UNSTAGED_CHANGES
   )
+
+  // Staging the active file drops its working-tree row; the hop must continue from where that row sat.
+  execFileSync('git', ['add', 'unstaged.ts'], { cwd: fixture.worktreePath, stdio: 'pipe' })
+  await expect
+    .poll(() => getShownRowKeys(orcaPage), { timeout: 20_000 })
+    .not.toContain('unstaged::unstaged.ts')
+  // One click only: a hop that started from the file's new staged row would land on untracked.ts instead.
+  await orcaPage.getByRole('button', { name: 'Previous change' }).click()
+  await expectActiveEditor(orcaPage, fixture.worktreePath, 'deleted.ts', DELETED_DIFF)
   await openEntry(orcaPage, 'staged-only.ts')
   await expectActiveEditor(orcaPage, fixture.worktreePath, 'staged-only.ts', STAGED_DIFF)
   await pressDiffShortcutUntil(
@@ -176,6 +185,14 @@ async function getActiveEditorRelativePath(page: Page): Promise<string | null> {
     const state = window.__store?.getState()
     return state?.openFiles.find((file) => file.id === state.activeFileId)?.relativePath ?? null
   })
+}
+
+async function getShownRowKeys(page: Page): Promise<string[]> {
+  return page.evaluate(() =>
+    Object.values(window.__store?.getState().sourceControlVisibleRowsByWorktree ?? {})
+      .flat()
+      .map((row) => row.key)
+  )
 }
 
 async function openEntry(page: Page, relativePath: string): Promise<void> {

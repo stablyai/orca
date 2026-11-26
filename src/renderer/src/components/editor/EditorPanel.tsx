@@ -185,7 +185,11 @@ function EditorPanelInner({
     handleNavigateWorktreeFile,
     isWorktreeFileNavigationSurface,
     worktreeFileArrivalReveal
-  } = useWorktreeDiffFileNavigation({ activeFile, requestedChangesMode })
+  } = useWorktreeDiffFileNavigation({
+    activeFile,
+    viewStateId: activeViewStateId,
+    requestedChangesMode
+  })
   useEditorCmdSaveRequest({
     activeFile,
     openFiles,

@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { getWorktreeOnHostFromState } from '@/store/workspaces/selection/worktree-on-host-selector'
+import { editorViewPlacement } from '@/store/slices/editor/tabs/editor-view-placement'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import {
-  toSshExecutionHostId,
-  type ExecutionHostId
-} from '../../../../../../shared/execution-host/execution-host'
 import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import { joinPath } from '@/lib/path'
+import {
+  getOpenFileExecutionHostId,
+  hasOpenFileExecutionHostEvidence
+} from '@/lib/workspace/ownership/unified-tab-host-ownership'
 import {
   buildActiveOpenFileSignature,
   buildActiveOpenRowKeys
@@ -33,28 +34,27 @@ function inferWorktreeRoot(filePath: string, relativePath: string): string | nul
   return match?.index === undefined ? null : filePath.slice(0, match.index)
 }
 
-// The destination must open on the file it is reached from, never on the host that happens to be active.
-function getActiveFileExecutionHostId(activeFile: OpenFile): ExecutionHostId | null {
-  const provenanceHostId = activeFile.operationProvenance?.generation.route.executionHostId
-  if (provenanceHostId) {
-    return provenanceHostId
-  }
-  return activeFile.externalSshTargetId
-    ? toSshExecutionHostId(activeFile.externalSshTargetId)
-    : null
-}
-
 type WorktreeDiffFileArrival = {
   worktreeId: string
   rowKey: string
   direction: WorktreeDiffNavigationDirection
 }
 
+/** The last row that matched a file, with the row order of that moment. */
+type RetainedRow = {
+  fileId: string
+  rowKey: string
+  rowKeys: readonly string[]
+}
+
 export function useWorktreeDiffFileNavigation({
   activeFile,
+  viewStateId,
   requestedChangesMode
 }: {
   activeFile: OpenFile | null
+  /** The invoking pane's view; hops open in that pane, not in the worktree's last active one. */
+  viewStateId: string | null
   requestedChangesMode: boolean
 }): {
   canNavigateWorktreeFile: boolean
@@ -69,18 +69,11 @@ export function useWorktreeDiffFileNavigation({
     if (!activeFile || !worktreeId) {
       return null
     }
-    const hostId =
-      activeFile.operationProvenance?.generation.route.executionHostId ??
-      (activeFile.externalSshTargetId
-        ? toSshExecutionHostId(activeFile.externalSshTargetId)
-        : undefined)
+    const hostId = hasOpenFileExecutionHostEvidence(activeFile)
+      ? getOpenFileExecutionHostId(activeFile)
+      : undefined
     return getWorktreeOnHostFromState(s, worktreeId, hostId)?.path ?? null
   })
-  const activeEditorTargetGroupId = useAppStore((s) =>
-    worktreeId
-      ? (s.activeGroupIdByWorktree[worktreeId] ?? s.groupsByWorktree[worktreeId]?.[0]?.id)
-      : undefined
-  )
   const visibleRows = useAppStore((s) =>
     worktreeId ? s.sourceControlVisibleRowsByWorktree[worktreeId] : undefined
   )
@@ -94,20 +87,32 @@ export function useWorktreeDiffFileNavigation({
     () => navigationRows && new Set(navigationRows.map((row) => row.key)),
     [navigationRows]
   )
-  const activeOpenRowKey = useMemo(() => {
+  const shownRowKey = useMemo(() => {
     if (!activeFile) {
       return null
     }
     const signature = buildActiveOpenFileSignature(activeFile.diffSource, activeFile.relativePath)
     return buildActiveOpenRowKeys(signature, shownRowKeys).values().next().value ?? null
   }, [activeFile, shownRowKeys])
-  // Remembered so a hop continues from where a row sat before the panel dropped it.
-  const rememberedRowKeysRef = useRef<readonly string[] | null>(null)
+  // Kept so a hop still knows where the active file's row sat once the panel drops it.
+  const [retainedRow, setRetainedRow] = useState<RetainedRow | null>(null)
+  // Scoped to the file so a retained row can never place another file's hop. It wins over the shown key:
+  // once staging removes a file's working-tree row, its edit tab would otherwise match the staged row instead.
+  const retainedActiveRow = activeFile && retainedRow?.fileId === activeFile.id ? retainedRow : null
+  const activeRowKey = retainedActiveRow?.rowKey ?? shownRowKey
   useEffect(() => {
-    if (navigationRows?.some((row) => row.key === activeOpenRowKey)) {
-      rememberedRowKeysRef.current = navigationRows.map((row) => row.key)
+    if (!activeFile || !navigationRows?.some((row) => row.key === activeRowKey)) {
+      return
     }
-  }, [activeOpenRowKey, navigationRows])
+    const fileId = activeFile.id
+    const rowKey = activeRowKey ?? ''
+    const rowKeys = navigationRows.map((row) => row.key)
+    setRetainedRow((previous) =>
+      previous?.fileId === fileId && previous.rowKey === rowKey && previous.rowKeys === rowKeys
+        ? previous
+        : { fileId, rowKey, rowKeys }
+    )
+  }, [activeFile, activeRowKey, navigationRows])
 
   const isWorktreeDiffSurface = Boolean(
     activeFile?.mode === 'diff' &&
@@ -117,10 +122,10 @@ export function useWorktreeDiffFileNavigation({
   const isEligibleChangesSurface = Boolean(requestedChangesMode && worktreeId)
   const isWorktreeFileNavigationSurface = isWorktreeDiffSurface || isEligibleChangesSurface
   const canNavigateWorktreeFile = Boolean(
-    isWorktreeFileNavigationSurface && navigationRows?.some((row) => row.key !== activeOpenRowKey)
+    isWorktreeFileNavigationSurface && navigationRows?.some((row) => row.key !== activeRowKey)
   )
   const arrivalReveal =
-    arrival && worktreeId === arrival.worktreeId && activeOpenRowKey === arrival.rowKey
+    arrival && worktreeId === arrival.worktreeId && shownRowKey === arrival.rowKey
       ? arrival.direction
       : null
 
@@ -131,24 +136,40 @@ export function useWorktreeDiffFileNavigation({
       }
       const target = getAdjacentWorktreeDiffRow({
         rows: navigationRows,
-        currentKey: activeOpenRowKey ?? '',
-        previousKeys: rememberedRowKeysRef.current,
+        currentKey: activeRowKey ?? '',
+        previousKeys: retainedActiveRow?.rowKeys ?? null,
         direction
       })
       const worktreeRoot =
         activeWorktreeRoot ?? inferWorktreeRoot(activeFile.filePath, activeFile.relativePath)
-      const executionHostId = getActiveFileExecutionHostId(activeFile)
+      // With no ownership evidence the opener would guess from ambient state; decline instead.
+      const executionHostId = hasOpenFileExecutionHostEvidence(activeFile)
+        ? getOpenFileExecutionHostId(activeFile)
+        : null
       if (!target || !worktreeRoot || !executionHostId) {
         return false
+      }
+      const { placementWorkspaceId, targetGroupId } = editorViewPlacement(
+        useAppStore.getState(),
+        activeFile,
+        viewStateId
+      )
+      const options = {
+        targetGroupId,
+        placementWorkspaceId,
+        executionHostId,
+        runtimeEnvironmentId: activeFile.runtimeEnvironmentId
       }
       // A host the owner check rejects throws inside the opener; decline so the same-file wrap runs.
       try {
         if (target.entry.area === 'staged' || target.entry.status === 'deleted') {
-          openUncommittedEntry(useAppStore.getState(), worktreeId, worktreeRoot, target.entry, {
-            targetGroupId: activeEditorTargetGroupId,
-            executionHostId,
-            runtimeEnvironmentId: activeFile.runtimeEnvironmentId
-          })
+          openUncommittedEntry(
+            useAppStore.getState(),
+            worktreeId,
+            worktreeRoot,
+            target.entry,
+            options
+          )
         } else {
           const openedFileId = openFile(
             {
@@ -159,7 +180,7 @@ export function useWorktreeDiffFileNavigation({
               language: detectLanguage(target.entry.path),
               mode: 'edit'
             },
-            { targetGroupId: activeEditorTargetGroupId, executionHostId }
+            options
           )
           setEditorViewMode(openedFileId, 'changes')
         }
@@ -170,14 +191,15 @@ export function useWorktreeDiffFileNavigation({
       return true
     },
     [
-      activeEditorTargetGroupId,
       activeFile,
-      activeOpenRowKey,
+      activeRowKey,
       activeWorktreeRoot,
       canNavigateWorktreeFile,
       navigationRows,
       openFile,
+      retainedActiveRow,
       setEditorViewMode,
+      viewStateId,
       worktreeId
     ]
   )
