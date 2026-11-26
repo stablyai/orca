@@ -2,26 +2,16 @@ import { X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
-import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
-import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { formatBytes } from '../../../../../shared/text/format-bytes'
-import { formatResetDuration } from '../../../../../shared/agent-usage/rate-limits/rate-limit-reset-format'
-
-const PROGRESS_RENDER_INTERVAL_MS = 100
-// Hold the estimate until a few seconds of transfer give a rate worth trusting.
-const TIME_LEFT_WARMUP_MS = 3_000
-// Chunk acknowledgements arrive in bursts; smooth over ~5 s so the estimate doesn't jump.
-const RATE_SMOOTHING_MS = 5_000
-
-// Intl formatter caches key on option identity, so these must be module constants.
-const PERCENT_FORMAT: Intl.NumberFormatOptions = { style: 'percent' }
-const DURATION_UNIT_FORMATS: Record<'minute' | 'hour' | 'day', Intl.NumberFormatOptions> = {
-  minute: { style: 'unit', unit: 'minute', unitDisplay: 'short' },
-  hour: { style: 'unit', unit: 'hour', unitDisplay: 'short' },
-  day: { style: 'unit', unit: 'day', unitDisplay: 'short' }
-}
+import {
+  bytesOfTotalText,
+  createTimeLeftEstimate,
+  throttleProgressRender,
+  transferPercent,
+  TransferStatusLine,
+  TransferTimeLeft
+} from '../transfer/transfer-progress'
 
 let nextUploadToastId = 0
 
@@ -50,7 +40,6 @@ export function showUploadProgressToast(title: string): UploadProgressToast {
   const sourceControllers: AbortController[] = []
   const estimateTimeLeft = createTimeLeftEstimate()
   let rows: UploadRow[] = []
-  let renderedAt = 0
   let closed = false
 
   // Created on first use by either side, so an X clicked while a file waits still reaches its upload.
@@ -63,6 +52,7 @@ export function showUploadProgressToast(title: string): UploadProgressToast {
   }
   const close = (): void => {
     closed = true
+    progressRender.cancel()
     toast.dismiss(id)
   }
   const cancelAll = (): void => {
@@ -80,14 +70,13 @@ export function showUploadProgressToast(title: string): UploadProgressToast {
     }
     updateRow(index, { status: 'cancelled' })
     sourceController(index).abort()
-    render()
+    progressRender.flush()
   }
   const render = (): void => {
     // A late progress event must not reopen a toast that Cancel or completion closed.
     if (closed) {
       return
     }
-    renderedAt = Date.now()
     const remainingMs =
       rows.length > 0
         ? estimateTimeLeft(
@@ -96,7 +85,7 @@ export function showUploadProgressToast(title: string): UploadProgressToast {
               (sum, row) => (isPending(row) ? sum + Math.max(0, row.byteLength - row.sent) : sum),
               0
             ),
-            renderedAt
+            Date.now()
           )
         : null
     showUploadProgressView(id, title, rows, remainingMs, {
@@ -104,16 +93,18 @@ export function showUploadProgressToast(title: string): UploadProgressToast {
       onCancelAll: cancelAll,
       onDismiss: () => {
         closed = true
+        progressRender.cancel()
       }
     })
   }
+  const progressRender = throttleProgressRender(render)
 
-  render()
+  progressRender.flush()
   return {
     signal: controller.signal,
     onStart: (sources) => {
       rows = sources.map((source) => ({ ...source, sent: 0, status: 'waiting' }))
-      render()
+      progressRender.flush()
     },
     sourceSignal: (index) => sourceController(index).signal,
     onProgress: (index, sentBytes) => {
@@ -122,8 +113,10 @@ export function showUploadProgressToast(title: string): UploadProgressToast {
         return
       }
       updateRow(index, { sent: sentBytes, status: 'uploading' })
-      if (row.status === 'waiting' || Date.now() - renderedAt >= PROGRESS_RENDER_INTERVAL_MS) {
-        render()
+      if (row.status === 'waiting') {
+        progressRender.flush()
+      } else {
+        progressRender.schedule()
       }
     },
     onDone: (index, outcome) => {
@@ -131,7 +124,7 @@ export function showUploadProgressToast(title: string): UploadProgressToast {
         return
       }
       updateRow(index, { status: outcome })
-      render()
+      progressRender.flush()
     },
     close
   }
@@ -167,54 +160,6 @@ export function showUploadProgressView(
   })
 }
 
-/** Milliseconds left at the smoothed rate; null until a steady rate is known. Transferred bytes include
- *  cancelled and failed files' partial bytes so the rate never dips when one stops. */
-function createTimeLeftEstimate(): (
-  transferredBytes: number,
-  remainingBytes: number,
-  now: number
-) => number | null {
-  let startedAt: number | null = null
-  let startTransferred = 0
-  let lastAt = 0
-  let lastTransferred = 0
-  let bytesPerMs: number | null = null
-  let remainingMs: number | null = null
-  return (transferred, remaining, now) => {
-    if (startedAt === null) {
-      startedAt = lastAt = now
-      startTransferred = lastTransferred = transferred
-      return null
-    }
-    const elapsed = now - lastAt
-    if (elapsed <= 0 || now - startedAt < TIME_LEFT_WARMUP_MS) {
-      return remainingMs
-    }
-    const recent = (transferred - lastTransferred) / elapsed
-    lastAt = now
-    lastTransferred = transferred
-    // Seed with the warm-up average, then follow the recent rate.
-    bytesPerMs =
-      bytesPerMs === null
-        ? (transferred - startTransferred) / (now - startedAt)
-        : bytesPerMs + (1 - Math.exp(-elapsed / RATE_SMOOTHING_MS)) * (recent - bytesPerMs)
-    remainingMs = bytesPerMs > 0 ? remaining / bytesPerMs : null
-    return remainingMs
-  }
-}
-
-function timeLeftText(t: Translate, remainingMs: number): string {
-  if (remainingMs < 60_000) {
-    return t('files.uploadProgress.lessThanMinuteLeft', 'Less than a minute remaining')
-  }
-  // Round up so the last minute reads "Less than a minute", never "About 0 min".
-  const duration = formatResetDuration(Math.ceil(remainingMs / 60_000) * 60_000, (value, unit) =>
-    uiNumberFormat(DURATION_UNIT_FORMATS[unit]).format(value)
-  )
-  return t('files.uploadProgress.timeLeft', 'About {{duration}} remaining', { duration })
-}
-
-// Floor so a row never says 100% while its bytes are still in flight.
 function rowPercent(row: UploadRow): number {
   if (row.status === 'uploaded') {
     return 100
@@ -223,9 +168,7 @@ function rowPercent(row: UploadRow): number {
   if (row.status === 'cancelled' || row.status === 'failed') {
     return 0
   }
-  return row.byteLength > 0
-    ? Math.floor((Math.min(row.sent, row.byteLength) / row.byteLength) * 100)
-    : 0
+  return transferPercent(row.sent, row.byteLength)
 }
 
 function UploadProgressDetail({
@@ -238,12 +181,7 @@ function UploadProgressDetail({
   onCancelFile: (index: number) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const timeLeft = (
-    // Kept in the layout during the warm-up, so the toast doesn't grow when the estimate appears.
-    <span className={cn('text-xs', remainingMs === null && 'invisible')}>
-      {remainingMs === null ? '\u00a0' : timeLeftText(t, remainingMs)}
-    </span>
-  )
+  const timeLeft = <TransferTimeLeft remainingMs={remainingMs} />
   if (rows.length === 1) {
     const percent = rowPercent(rows[0])
     return (
@@ -308,22 +246,10 @@ function RowStatusLine({
         ? t('files.uploadProgress.cancelled', 'Cancelled')
         : row.status === 'failed'
           ? t('files.uploadProgress.failed', 'Failed')
-          : t('files.uploadProgress.sentOfTotal', '{{sent}} of {{total}}', {
-              sent: formatBytes(Math.min(row.sent, row.byteLength)),
-              total: formatBytes(row.byteLength)
-            })
+          : bytesOfTotalText(t, row.sent, row.byteLength)
   const showPercent =
     row.status === 'uploading' || row.status === 'uploaded' || (row.status === 'waiting' && !inList)
   return (
-    <div
-      className={cn('flex items-baseline justify-between gap-3 tabular-nums', inList && 'text-xs')}
-    >
-      <span className="min-w-0 truncate">{label}</span>
-      {showPercent ? (
-        <span className="shrink-0 text-popover-foreground">
-          {uiNumberFormat(PERCENT_FORMAT).format(percent / 100)}
-        </span>
-      ) : null}
-    </div>
+    <TransferStatusLine label={label} percent={showPercent ? percent : null} compact={inList} />
   )
 }
