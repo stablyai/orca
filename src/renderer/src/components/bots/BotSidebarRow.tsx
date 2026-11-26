@@ -17,6 +17,7 @@ import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
 import { getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
+import { SidebarNumberHintBadge } from '@/components/sidebar/number-shortcuts/SidebarNumberHintBadge'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   BotAvatarStatusBadge,
@@ -46,6 +47,8 @@ export type BotSidebarRowProps = {
   /** Set for a row that folds: whether it is unfolded. */
   expanded?: boolean
   onOpen: (event: { detail: number; target: EventTarget; repeat?: boolean }) => void
+  /** Set for a row Cmd/Ctrl+1–9 can address, so its number shows while the modifier is held. */
+  numberHintKey?: string
   onRename: (name: string) => Promise<void>
   /** How long ago its newest line happened. */
   age: string | null
@@ -75,6 +78,7 @@ export function BotSidebarRow({
   actionsDisabled = false,
   dragHandle = false,
   onOpen,
+  numberHintKey,
   onRename,
   age,
   line,
@@ -126,6 +130,7 @@ export function BotSidebarRow({
             }
           }}
         >
+          {numberHintKey ? <SidebarNumberHintBadge hintKey={numberHintKey} /> : null}
           {/* Exceptions sit on the picture's corner, the same in both card styles. */}
           <span className="relative mr-2 shrink-0">
             <span className="flex" style={botAvatarBadgeCutout(badge)}>

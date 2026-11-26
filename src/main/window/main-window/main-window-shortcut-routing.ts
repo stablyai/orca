@@ -25,6 +25,9 @@ import {
   type TextShortcutInput
 } from '../../../shared/keybindings/text-input-shortcut-policy'
 
+// Routing only ever prevents the keydown, so a tracked stand-in can see whether it did.
+type ConsumableInputEvent = Pick<Electron.Event, 'preventDefault'>
+
 export function installMainWindowShortcutRouting(args: {
   focus: MainWindowFocusLifecycle
   mainWindow: BrowserWindow
@@ -35,7 +38,7 @@ export function installMainWindowShortcutRouting(args: {
   const doubleTapDetector = new ModifierDoubleTapDetector()
 
   const dispatchResolvedWindowShortcutAction = (
-    event: Electron.Event,
+    event: ConsumableInputEvent,
     action: WindowShortcutAction,
     options: {
       isAutoRepeat: boolean
@@ -115,7 +118,7 @@ export function installMainWindowShortcutRouting(args: {
     return true
   }
 
-  mainWindow.webContents.on('before-input-event', (event, input) => {
+  const routeInput = (event: ConsumableInputEvent, input: Electron.Input): void => {
     if (focus.isShortcutRecorderFocused()) {
       return
     }
@@ -234,6 +237,23 @@ export function installMainWindowShortcutRouting(args: {
       focusedShortcutContext: terminalShortcutContext,
       input
     })
+  }
+
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    let consumed = false
+    routeInput(
+      {
+        preventDefault: () => {
+          consumed = true
+          event.preventDefault()
+        }
+      },
+      input
+    )
+    // Why: Chromium drops the keyups after a prevented keydown, so the renderer never sees the modifier released.
+    if (consumed && input.type === 'keyDown' && (input.meta || input.control || input.alt)) {
+      mainWindow.webContents.send('ui:modifierChordConsumed')
+    }
   })
 
   // Reset on focus loss or the next modifier could complete a phantom double tap.

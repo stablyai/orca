@@ -29,6 +29,7 @@ import { revealBotUpNext } from './bot-up-next-reveal'
 import { useDeleteBot } from './use-delete-bot'
 import { setBotPurpose } from './bot-purpose-cache'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
+import { botRowNumberHintKey } from '@/components/sidebar/number-shortcuts/sidebar-number-shortcut-targets'
 
 type BotRowFold = {
   folded: boolean
@@ -95,6 +96,7 @@ export function BotRow({
       actionsDisabled={offline}
       dragHandle={dragHandle}
       onOpen={open}
+      numberHintKey={botRowNumberHintKey(botSidebarEntryKey(bot))}
       onRename={async (name) => {
         try {
           await updateBot(bot, { name })
