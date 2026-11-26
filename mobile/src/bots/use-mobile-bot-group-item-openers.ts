@@ -56,12 +56,9 @@ export function useMobileBotGroupItemOpeners({
             name: bot.name
           }),
         home: (bot, current) =>
-          openBotHome(
-            { pairedHostId: hostId, executionHost: LOCAL_EXECUTION_HOST_ID },
-            bot,
-            undefined,
+          openBotHome({ pairedHostId: hostId, executionHost: LOCAL_EXECUTION_HOST_ID }, bot, {
             current
-          )
+          })
       }),
     [client, hostId, openMobileSession, openBotHome]
   )

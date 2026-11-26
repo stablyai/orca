@@ -70,8 +70,7 @@ export function MobileBotCardHostProvider({
           openBotHome(
             { pairedHostId, executionHost: executionHost ?? LOCAL_EXECUTION_HOST_ID },
             bot,
-            undefined,
-            current
+            { current }
           )
       }),
     [client, pairedHostId, executionHost, openMobileSession, openBotHome]

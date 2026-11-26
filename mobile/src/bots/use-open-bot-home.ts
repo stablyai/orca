@@ -26,13 +26,12 @@ export function botPlaceClient(paired: RpcClient, place: BotHomePlace): RpcClien
 export function useOpenBotHome({ standalone = false } = {}): (
   place: BotHomePlace,
   bot: HostBot,
-  homeDraft?: string,
-  current?: () => boolean
+  options?: { homeDraft?: string; current?: () => boolean }
 ) => void {
   const openMobileSession = useOpenMobileSession()
   const clients = useRpcClientContext()
   return useCallback(
-    (place, bot, homeDraft, current) => {
+    (place, bot, { homeDraft, current } = {}) => {
       const openHome = () =>
         openMobileSession({
           hostId: place.pairedHostId,
