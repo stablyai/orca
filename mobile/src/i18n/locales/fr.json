@@ -2437,8 +2437,8 @@
       "titleLabel": "Titre",
       "descriptionLabel": "Description",
       "writeWithAi": "Rédiger avec l'IA",
-      "descriptionPlaceholder": "Facultatif",
-      "draft": "Créer en brouillon"
+      "draft": "Créer en brouillon",
+      "create": "Créer"
     },
     "screens": {
       "hideLog": "Masquer le journal",

@@ -2364,8 +2364,8 @@
       "titleLabel": "Titel",
       "descriptionLabel": "Beschreibung",
       "writeWithAi": "Mit KI schreiben",
-      "descriptionPlaceholder": "Optional",
-      "draft": "Als Entwurf erstellen"
+      "draft": "Als Entwurf erstellen",
+      "create": "Erstellen"
     },
     "screens": {
       "hideLog": "Protokoll ausblenden",
