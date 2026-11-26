@@ -128,14 +128,27 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   const setDialogOpen = useAppStore((state) => state.setRemoteServerUpdateDialogOpen)
   const [open, setOpen] = useState(false)
   // Opening owes a default-track re-check; it waits for any in-flight (possibly modifier) check,
-  // and updates stay off until it has run, so a confirm never acts on a stale or one-off snapshot.
-  const [refreshOwed, setRefreshOwed] = useState(false)
+  // and updates stay off until one succeeds, so a confirm never acts on a stale or one-off
+  // snapshot. A failed re-check keeps updates off; the header Check retries.
+  const [snapshot, setSnapshot] = useState<'owed' | 'running' | 'ready' | 'failed'>('owed')
+  const settleRefresh = useCallback((run: Promise<void>): void => {
+    setSnapshot('running')
+    run.then(
+      () => setSnapshot('ready'),
+      () => setSnapshot('failed')
+    )
+  }, [])
   useEffect(() => {
-    if (open && refreshOwed && !checking && !running) {
-      setRefreshOwed(false)
-      void refresh()
+    if (!open || snapshot !== 'owed' || checking || running) {
+      return
     }
-  }, [open, refreshOwed, checking, running, refresh])
+    // refresh() returns early while another check or batch holds the store; leave it owed then.
+    const store = useAppStore.getState()
+    if (store.remoteServerUpdatesChecking || store.remoteServerUpdatesRunning) {
+      return
+    }
+    settleRefresh(refresh())
+  }, [open, snapshot, checking, running, refresh, settleRefresh])
 
   // A modifier-click Check picks a one-off release track; closing the dialog clears it, and so
   // does folding this list or leaving the page, so a later Update all can't inherit it.
@@ -151,7 +164,8 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   }
 
   const eligible = entries.filter(isEligible)
-  const busy = checking || running || refreshOwed
+  const busy = checking || running
+  const updatesBlocked = busy || snapshot !== 'ready'
   const updateLabel =
     eligible.length === 1
       ? t('settings.about.action.update', 'Update')
@@ -160,7 +174,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   // counts are never a stale snapshot from an earlier (possibly modifier) check.
   const setOpenAndRefresh = (next: boolean): void => {
     setOpen(next)
-    setRefreshOwed(next)
+    setSnapshot('owed')
     if (!next) {
       clearCheckOptions()
     }
@@ -186,7 +200,8 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
       disabled={busy}
       onClick={(event) => {
         setOpen(true)
-        void refresh(getUpdateCheckClickOptions(event))
+        // An explicit Check is its own snapshot, including a modifier one the user asked for.
+        settleRefresh(refresh(getUpdateCheckClickOptions(event)))
       }}
     >
       {checking ? <Loader2 className="animate-spin" /> : null}
@@ -219,7 +234,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
               <RemoteServerAboutRow
                 key={entry.environmentId}
                 entry={entry}
-                disabled={busy}
+                disabled={updatesBlocked}
                 onUpdate={(ids) => void start(ids)}
               />
             ))}
@@ -229,7 +244,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
                   servers={eligible}
                   label={updateLabel}
                   variant="default"
-                  disabled={busy}
+                  disabled={updatesBlocked}
                   onConfirm={(ids) => void start(ids)}
                 />
               </div>
@@ -261,6 +276,11 @@ function ServerRestartConfirm({
   const key = ids.join('\n')
   // Bound to the servers it named: if the set changes while open, the question closes unanswered.
   const [openKey, setOpenKey] = useState<string | null>(null)
+  // Invalidation is durable: once the set changes or updates block, the question is dropped and
+  // never reopens by itself.
+  if (openKey !== null && (openKey !== key || disabled)) {
+    setOpenKey(null)
+  }
   const open = openKey === key && !disabled
   const live = servers.some((entry) => entry.liveTabCount > 0 || entry.liveLeafCount > 0)
   const question =
