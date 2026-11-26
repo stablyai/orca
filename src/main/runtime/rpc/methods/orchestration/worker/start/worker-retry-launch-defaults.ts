@@ -2,6 +2,7 @@ import { isTuiAgent } from '../../../../../../../shared/agent-launch/catalog/tui
 import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
+import { getRemoteDispatch } from '../../../../../orchestration/db/remote-owned/remote-dispatch-records'
 import { OrchestrationError } from '../../../../../orchestration/orchestration-error'
 import {
   createPendingWorkerLaunchReceipt,
@@ -29,12 +30,25 @@ export function withRetryWorkerLaunchDefaults<
     effort?: string
     inheritedLaunchPreferences?: boolean
   }
->(runtime: RetryLaunchRuntime, db: OrchestrationDb, taskId: string | undefined, params: T): T {
+>(
+  runtime: RetryLaunchRuntime,
+  db: OrchestrationDb,
+  taskId: string | undefined,
+  params: T
+): T & { inheritedLaunchPreferences?: boolean } {
   if (!params.retryOf || params.terminal) {
     return params
   }
   const priorContext = db.getDispatchContextById(params.retryOf)
-  if (!priorContext || (taskId !== undefined && priorContext.task_id !== taskId)) {
+  if (!priorContext) {
+    const remotePrior = getRemoteDispatch(db, params.retryOf)
+    if (!remotePrior || (taskId !== undefined && remotePrior.task_id !== taskId)) {
+      return params
+    }
+    const agent = params.agent ?? remotePrior.agent ?? undefined
+    return agent !== undefined && agent !== params.agent ? { ...params, agent } : params
+  }
+  if (taskId !== undefined && priorContext.task_id !== taskId) {
     return params
   }
   const priorWorker = db.getWorkerDispatch(params.retryOf)

@@ -10,6 +10,7 @@ import {
   ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY
 } from '../../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { WorkerStartParams } from '../../../../../../../shared/rpc-contract/orchestration/orchestration-worker-start-params'
+import { peerCoordinatorCaller } from '../../../../../orchestration/addressing/orchestration-caller-identity'
 import { startRemoteOwnedWorker } from '../../../../../orchestration/federation/remote-owned/remote-owned-start'
 import { OrchestrationError } from '../../../../../orchestration/orchestration-error'
 import { eraseRpcMethods, isStreamingMethod, type RpcContext } from '../../../../core'
@@ -20,6 +21,10 @@ import {
   isStartReceipt,
   type WorkerReleaseFixture
 } from '../release/worker-release.test-fixture'
+import {
+  callRemoteStartWithRetryLaunchFallback,
+  prepareRemoteOwnedRetryLaunch
+} from './worker-retry-launch-defaults'
 
 function createRetryStartFixture() {
   const base: WorkerReleaseFixture = createWorkerReleaseFixture()
@@ -113,6 +118,20 @@ function createRetryStartFixture() {
     return `term_worker_${seq}`
   }
 
+  function stubOpenCode() {
+    vi.spyOn(runtime, 'resolveOrchestrationAgentLauncher').mockImplementation((selector) =>
+      selector === 'opencode' ? 'opencode' : undefined
+    )
+    vi.spyOn(runtime, 'waitForFreshWorkerComposer').mockImplementation(async (handle) => ({
+      handle,
+      condition: 'tui-idle',
+      satisfied: true,
+      status: 'running',
+      exitCode: null
+    }))
+    return vi.spyOn(runtime, 'probeOrchestrationOpenCodeModelLaunchSupport')
+  }
+
   return {
     db,
     runtime,
@@ -120,7 +139,8 @@ function createRetryStartFixture() {
     callStart,
     startFailedAttempt,
     releaseWorker,
-    nextWorkerHandle
+    nextWorkerHandle,
+    stubOpenCode
   }
 }
 
@@ -425,20 +445,10 @@ describe('worker-start --retry-of launch preference rehydration', () => {
   })
 
   it('drops inherited opencode --model with a warning on new-top-level', async () => {
-    const { db, runtime, callStart, startFailedAttempt, nextWorkerHandle } =
+    const { db, runtime, callStart, startFailedAttempt, nextWorkerHandle, stubOpenCode } =
       createRetryStartFixture()
     activeDb = db
-    vi.spyOn(runtime, 'resolveOrchestrationAgentLauncher').mockImplementation((selector) =>
-      selector === 'opencode' ? 'opencode' : undefined
-    )
-    vi.spyOn(runtime, 'waitForFreshWorkerComposer').mockImplementation(async (handle) => ({
-      handle,
-      condition: 'tui-idle',
-      satisfied: true,
-      status: 'running',
-      exitCode: null
-    }))
-    vi.spyOn(runtime, 'probeOrchestrationOpenCodeModelLaunchSupport').mockResolvedValue(true)
+    stubOpenCode().mockResolvedValue(true)
     vi.spyOn(runtime, 'showRepo').mockResolvedValue(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: setup resolution reads only repo hook metadata when present.
       { id: 'repo', path: '/tmp/repo' } as never
@@ -503,20 +513,9 @@ describe('worker-start --retry-of launch preference rehydration', () => {
   })
 
   it('drops inherited opencode --model with a warning when host probe fails', async () => {
-    const { db, runtime, callStart, startFailedAttempt } = createRetryStartFixture()
+    const { db, callStart, startFailedAttempt, stubOpenCode } = createRetryStartFixture()
     activeDb = db
-    vi.spyOn(runtime, 'resolveOrchestrationAgentLauncher').mockImplementation((selector) =>
-      selector === 'opencode' ? 'opencode' : undefined
-    )
-    vi.spyOn(runtime, 'waitForFreshWorkerComposer').mockImplementation(async (handle) => ({
-      handle,
-      condition: 'tui-idle',
-      satisfied: true,
-      status: 'running',
-      exitCode: null
-    }))
-    const probe = vi
-      .spyOn(runtime, 'probeOrchestrationOpenCodeModelLaunchSupport')
+    const probe = stubOpenCode()
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(false)
       .mockResolvedValueOnce(false)
@@ -557,22 +556,16 @@ describe('worker-start --retry-of launch preference rehydration', () => {
   })
 
   it('drops inherited opencode --model on federated attach host refusal', async () => {
-    const { db, runtime, callStart, startFailedAttempt } = createRetryStartFixture()
+    const { db, runtime, callStart, startFailedAttempt, stubOpenCode } = createRetryStartFixture()
     activeDb = db
-    vi.spyOn(runtime, 'resolveOrchestrationAgentLauncher').mockImplementation((selector) =>
-      selector === 'opencode' ? 'opencode' : undefined
-    )
-    vi.spyOn(runtime, 'waitForFreshWorkerComposer').mockImplementation(async (handle) => ({
-      handle,
-      condition: 'tui-idle',
-      satisfied: true,
-      status: 'running',
-      exitCode: null
-    }))
-    vi.spyOn(runtime, 'probeOrchestrationOpenCodeModelLaunchSupport').mockResolvedValue(true)
+    stubOpenCode().mockResolvedValue(true)
     vi.spyOn(runtime, 'ensureOrchestrationFederationRelay').mockImplementation(() => {})
 
     const first = await startFailedAttempt({
+      agent: 'opencode',
+      model: 'anthropic/claude-sonnet-4-5'
+    })
+    const second = await startFailedAttempt({
       agent: 'opencode',
       model: 'anthropic/claude-sonnet-4-5'
     })
@@ -638,9 +631,9 @@ describe('worker-start --retry-of launch preference rehydration', () => {
 
     const federatedRetry = await callStart(
       {
-        task: first.taskId,
+        task: second.taskId,
         from: 'term_coord',
-        retryOf: first.dispatchId,
+        retryOf: second.dispatchId,
         on: 'attach-peer',
         worktree: 'id:remote-worktree'
       },
@@ -666,98 +659,154 @@ describe('worker-start --retry-of launch preference rehydration', () => {
   })
 
   it('drops inherited opencode --model on remote-owned server refusal', async () => {
-    const { db, runtime, startFailedAttempt } = createRetryStartFixture()
-    activeDb = db
-    vi.spyOn(runtime, 'resolveOrchestrationAgentLauncher').mockImplementation((selector) =>
-      selector === 'opencode' ? 'opencode' : undefined
-    )
-    vi.spyOn(runtime, 'waitForFreshWorkerComposer').mockImplementation(async (handle) => ({
-      handle,
-      condition: 'tui-idle',
-      satisfied: true,
-      status: 'running',
-      exitCode: null
-    }))
-    vi.spyOn(runtime, 'probeOrchestrationOpenCodeModelLaunchSupport').mockResolvedValue(true)
-    vi.spyOn(runtime, 'ensureOrchestrationFederationRelay').mockImplementation(() => {})
-    vi.spyOn(runtime, 'readMachineName').mockReturnValue('home-mac')
+    const home = createRetryStartFixture()
+    const peer = createRetryStartFixture()
+    activeDb = home.db
+    try {
+      const peerProbe = peer.stubOpenCode().mockResolvedValue(true)
+      vi.spyOn(peer.runtime, 'showManagedTerminalWorkspace').mockResolvedValue(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: worker start reads only workspace id.
+        { id: 'remote-worktree' } as never
+      )
+      vi.spyOn(home.runtime, 'ensureOrchestrationFederationRelay').mockImplementation(() => {})
+      vi.spyOn(home.runtime, 'readMachineName').mockReturnValue('home-mac')
+      vi.spyOn(home.runtime, 'resolveOrchestrationWorkerServer').mockResolvedValue({
+        environmentId: 'env_owned_peer',
+        name: 'owned-peer',
+        peerFingerprint: 'peer_fp_owned',
+        homePeerFingerprint: 'home_fp',
+        pairingRevision: 1
+      })
+      vi.spyOn(home.runtime, 'callOrchestrationWorkerServer').mockImplementation(
+        async (_envId, method, payload, _timeoutMs, meta) => {
+          if (method === 'status.get') {
+            return {
+              runtimeId: 'rt_owned_peer',
+              capabilities: [
+                ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
+                ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY,
+                ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY
+              ]
+            }
+          }
+          const caller = peerCoordinatorCaller(
+            peer.db.admitPeerRun({
+              peerFingerprint: 'home_fp',
+              peerRun: meta!.orchestrationPeerRun!
+            })
+          )
+          const record = typeof payload === 'object' && payload !== null ? payload : {}
+          return peer.callStart(
+            { ...record, from: caller.address },
+            { runtime: peer.runtime, orchestrationCaller: caller }
+          )
+        }
+      )
 
-    const first = await startFailedAttempt({
-      agent: 'opencode',
-      model: 'anthropic/claude-sonnet-4-5'
-    })
-    const hostRefusal = new OrchestrationError(
-      'capability_unsupported',
-      'OpenCode cannot apply a model choice on this execution host. Use a fresh local terminal in an existing workspace, or omit --model.'
-    )
-    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockResolvedValue({
-      environmentId: 'env_owned_peer',
-      name: 'owned-peer',
-      peerFingerprint: 'peer_fp_owned',
-      pairingRevision: 1
-    })
-    vi.spyOn(runtime, 'callOrchestrationWorkerServer').mockImplementation(
-      async (_envId, method, payload) => {
-        if (method === 'status.get') {
-          return {
-            runtimeId: 'rt_owned_peer',
-            capabilities: [
-              ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
-              ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY,
-              ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY
-            ]
-          }
-        }
-        const record = typeof payload === 'object' && payload !== null ? payload : null
-        if (record && 'model' in record && Boolean(record.model)) {
-          throw hostRefusal
-        }
-        return {
-          dispatchId: 'ctx_remote_owned_retry',
-          state: 'ready',
-          launch: {
-            requested: { agent: 'opencode', model: null, effort: null },
-            effective: { agent: 'opencode', model: null, effort: null }
-          }
-        }
+      const first = await startRemoteOwnedWorker(
+        home.runtime,
+        WorkerStartParams.parse({
+          spec: 'remote-owned retry task',
+          from: 'term_coord',
+          on: 'owned-peer',
+          worktree: 'id:remote-worktree',
+          agent: 'opencode',
+          model: 'anthropic/claude-sonnet-4-5'
+        }),
+        { runtime: home.runtime },
+        'req_remote_owned_first'
+      )
+      if (!isStartReceipt(first) || !('taskId' in first) || typeof first.taskId !== 'string') {
+        throw new Error('expected remote-owned start receipt')
       }
-    )
+      expect(first.state).toBe('ready')
+      expect(
+        peer.db.settleWorkerReport({
+          taskId: first.taskId,
+          dispatchId: first.dispatchId,
+          outcome: 'failed',
+          result: 'remote attempt failed'
+        }).action
+      ).toBe('settled')
+      await peer.releaseWorker(first.dispatchId)
+      home.db.db.prepare("UPDATE tasks SET status = 'failed' WHERE id = ?").run(first.taskId)
+      peerProbe.mockResolvedValue(false)
 
-    await expect(
-      startRemoteOwnedWorker(
-        runtime,
+      await expect(
+        startRemoteOwnedWorker(
+          home.runtime,
+          WorkerStartParams.parse({
+            task: first.taskId,
+            from: 'term_coord',
+            retryOf: first.dispatchId,
+            on: 'owned-peer',
+            worktree: 'id:remote-worktree',
+            model: 'anthropic/claude-sonnet-4-5'
+          }),
+          { runtime: home.runtime },
+          'req_explicit_remote_owned_retry'
+        )
+      ).rejects.toMatchObject({ code: 'capability_unsupported' })
+
+      const retried = await startRemoteOwnedWorker(
+        home.runtime,
         WorkerStartParams.parse({
           task: first.taskId,
           from: 'term_coord',
           retryOf: first.dispatchId,
           on: 'owned-peer',
-          worktree: 'id:remote-worktree',
-          model: 'anthropic/claude-sonnet-4-5'
+          worktree: 'id:remote-worktree'
         }),
-        { runtime },
-        'req_explicit_remote_owned_retry'
+        { runtime: home.runtime },
+        'req_inherited_remote_owned_retry'
       )
-    ).rejects.toMatchObject({
-      code: 'capability_unsupported'
-    })
+      expect(retried).toMatchObject({
+        state: 'ready',
+        launch: {
+          requested: { agent: 'opencode', model: null, effort: null },
+          effective: { agent: 'opencode', model: null, effort: null }
+        },
+        warning:
+          'not carrying over model anthropic/claude-sonnet-4-5 from the retried worker: OpenCode cannot apply a model choice on this execution host. Use a fresh local terminal in an existing workspace, or omit --model.'
+      })
 
-    const remoteOwnedRetry = await startRemoteOwnedWorker(
-      runtime,
-      WorkerStartParams.parse({
-        task: first.taskId,
-        from: 'term_coord',
-        retryOf: first.dispatchId,
-        on: 'owned-peer',
-        worktree: 'id:remote-worktree'
-      }),
-      { runtime },
-      'req_inherited_remote_owned_retry'
-    )
-    expect(remoteOwnedRetry).toMatchObject({
-      dispatchId: 'ctx_remote_owned_retry',
-      state: 'ready',
-      warning:
-        'not carrying over model anthropic/claude-sonnet-4-5 from the retried worker: OpenCode cannot apply a model choice on this execution host. Use a fresh local terminal in an existing workspace, or omit --model.'
-    })
+      const prechecked = await prepareRemoteOwnedRetryLaunch(
+        {
+          agent: 'codex',
+          model: 'gpt-5.2-codex',
+          effort: 'high',
+          inheritedLaunchPreferences: true
+        },
+        'older-owned-peer',
+        async () => false
+      )
+      expect(prechecked).toEqual({
+        params: {
+          agent: 'codex',
+          model: undefined,
+          effort: undefined,
+          inheritedLaunchPreferences: true
+        },
+        warning:
+          'not carrying over model gpt-5.2-codex / effort high from the retried worker: Connected server older-owned-peer does not support worker model or effort overrides.'
+      })
+      const fallback = await callRemoteStartWithRetryLaunchFallback({
+        inherited: true,
+        model: 'anthropic/claude-sonnet-4-5',
+        send: async ({ model }) => {
+          if (model) {
+            throw new OrchestrationError('capability_unsupported', 'Host rejected model.')
+          }
+          return 'ok'
+        }
+      })
+      expect(fallback).toMatchObject({
+        result: 'ok',
+        droppedWarning:
+          'not carrying over model anthropic/claude-sonnet-4-5 from the retried worker: Host rejected model.'
+      })
+    } finally {
+      peer.db.close()
+    }
   })
 })
