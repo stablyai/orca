@@ -31,6 +31,10 @@ function serverPaneRetries(
 ): RemoteServerPaneRetries {
   let latched = false
   for (const state of states) {
+    // Why skipped: an ownership handoff is not an outage, as the pane banner also treats it.
+    if (state?.reason === 'ownership') {
+      continue
+    }
     if (state?.phase === 'recovering' || state?.phase === 'backoff') {
       return 'retrying'
     }
