@@ -49,11 +49,18 @@ async function freshRelays(daemon: DaemonClient) {
   return { relays, open }
 }
 
-const chat = (ownerPid: number) => ({
+const owner = (pid: number, processStartTimeMs: number | null = null) => ({
+  hostId: LOCAL_EXECUTION_HOST_ID,
+  pid,
+  processStartTimeMs,
+  spawnToken: 'kept-agent-token'
+})
+
+const chat = (ownerProcess: ReturnType<typeof owner>) => ({
   sessionId: SESSION,
   provider: 'codex',
   location: { executionHostId: LOCAL_EXECUTION_HOST_ID },
-  ownerObservation: { ownerProcess: { pid: ownerPid } }
+  ownerObservation: { ownerProcess }
 })
 
 function exitedPid(): number {
@@ -75,13 +82,18 @@ it.skipIf(process.platform === 'win32')(
     const late = lateDaemon()
     const { open } = await freshRelays(late.client)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the verdict reads only these fields
-    const record = chat(process.pid) as unknown as Parameters<
+    const record = chat(owner(process.pid)) as unknown as Parameters<
       typeof open.structuredAgentSessionKeptAtOpen
     >[0]
     expect(await open.structuredAgentSessionKeptAtOpen(record, 10)).toBe(true)
 
     const settled = vi.fn(async () => {})
-    const reconciled = open.reconcileStructuredAgentSessionKeptAtOpen(SESSION, settled)
+    const reconciled = open.reconcileStructuredAgentSessionKeptAtOpen(
+      SESSION,
+      { warn: () => {} },
+      () => owner(process.pid),
+      settled
+    )
     late.answer([keptRelay('another-chat')])
     await reconciled
     expect(settled).toHaveBeenCalledTimes(1)
@@ -94,13 +106,18 @@ it.skipIf(process.platform === 'win32')(
     const late = lateDaemon()
     const { open } = await freshRelays(late.client)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the verdict reads only these fields
-    const record = chat(process.pid) as unknown as Parameters<
+    const record = chat(owner(process.pid)) as unknown as Parameters<
       typeof open.structuredAgentSessionKeptAtOpen
     >[0]
     expect(await open.structuredAgentSessionKeptAtOpen(record, 10)).toBe(true)
 
     const settled = vi.fn(async () => {})
-    const reconciled = open.reconcileStructuredAgentSessionKeptAtOpen(SESSION, settled)
+    const reconciled = open.reconcileStructuredAgentSessionKeptAtOpen(
+      SESSION,
+      { warn: () => {} },
+      () => owner(process.pid),
+      settled
+    )
     late.answer([keptRelay(SESSION)])
     await reconciled
     expect(settled).not.toHaveBeenCalled()
@@ -112,7 +129,20 @@ it.skipIf(process.platform === 'win32')(
   async () => {
     const { open } = await freshRelays(lateDaemon().client)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the verdict reads only these fields
-    const record = chat(exitedPid()) as unknown as Parameters<
+    const record = chat(owner(exitedPid())) as unknown as Parameters<
+      typeof open.structuredAgentSessionKeptAtOpen
+    >[0]
+    expect(await open.structuredAgentSessionKeptAtOpen(record, 10)).toBe(false)
+  }
+)
+
+it.skipIf(process.platform === 'win32')(
+  'settles at open when the owner pid now names another process, even while the listing is late',
+  async () => {
+    const { open } = await freshRelays(lateDaemon().client)
+    // The pid is live, but started long after the recorded owner: a reused pid, not the kept agent.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the verdict reads only these fields
+    const record = chat(owner(process.pid, 1)) as unknown as Parameters<
       typeof open.structuredAgentSessionKeptAtOpen
     >[0]
     expect(await open.structuredAgentSessionKeptAtOpen(record, 10)).toBe(false)

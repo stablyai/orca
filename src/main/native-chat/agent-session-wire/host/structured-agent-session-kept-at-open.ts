@@ -2,14 +2,33 @@ import {
   keptRunningProviderRelayPid,
   listProviderRelaysAtLaunchWithin,
   noteProviderRelayKeptUnverified,
-  processProvenGone,
+  providerRelayInventoryCompleted,
   providerRelayKeptFromLastRun,
   providerRelayKeptUnverified,
   providerRelayListingSettled,
   providerRelayMayKeepChat
 } from '../../../provider-relay/app-provider-relays'
+import { providerOwnerHeldElsewhere } from '../../../provider-relay/provider-relay-owner-ancestry'
+import { probeAgentSessionProcessIdentity } from '../../../runtime/agent-session/ownership/agent-session-process-identity-probe'
+import { readEchoedAgentSessionSpawnToken } from '../../../runtime/agent-session/ownership/agent-session-spawn-token-readback'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
+import type { AgentSessionProcessIdentity } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
+import {
+  restoreJournalSqlFailure,
+  type JournalWriterSettled
+} from '../../agent-session-journal/journal-sql-failure'
+
+/** Gone, or its pid now names another process: pid reuse never keeps a dead chat's last run. */
+async function ownerProvenGone(owner: AgentSessionProcessIdentity): Promise<boolean> {
+  const probe = await probeAgentSessionProcessIdentity({
+    identity: owner,
+    deps: { readEchoedSpawnToken: readEchoedAgentSessionSpawnToken }
+  }).catch(() => null)
+  return probe?.outcome === 'pid-absent' || probe?.outcome === 'identity-mismatch'
+}
 
 /** A chat's history never waits long on a late terminal host; its first send waits instead. */
 const KEPT_LISTING_OPEN_WAIT_MS = 1_500
@@ -38,22 +57,66 @@ export async function structuredAgentSessionKeptAtOpen(
   if (listed || keptRunningProviderRelayPid(sessionId) !== null) {
     return keptRunningProviderRelayPid(sessionId) !== null
   }
-  if (processProvenGone(owner.pid)) {
+  if (await ownerProvenGone(owner)) {
     return false
   }
   noteProviderRelayKeptUnverified(sessionId)
   return true
 }
 
-/** Once the late listing answers, a chat opened as kept whose agent wasn't kept settles as gone. */
-export async function reconcileStructuredAgentSessionKeptAtOpen(
+/**
+ * Once the late listing answers, a chat opened as kept whose agent wasn't kept settles as gone. While
+ * no listing hears every daemon, process proof settles it (a gone owner, or one no terminal host
+ * holds); otherwise it waits for whichever later listing does.
+ */
+export function reconcileStructuredAgentSessionKeptAtOpen(
   sessionId: string,
+  logger: Pick<StructuredAgentSessionLogger, 'warn'>,
+  owner: () => AgentSessionProcessIdentity | null,
   settleGone: () => Promise<void>
 ): Promise<void> {
-  if (!providerRelayKeptUnverified(sessionId) || !(await providerRelayListingSettled())) {
+  return reconcile(sessionId, owner, settleGone).catch((error: unknown) =>
+    logger.warn('settling a chat whose agent turned out not kept failed', {
+      scope: 'kept-open-reconcile',
+      sessionId,
+      error
+    })
+  )
+}
+
+async function reconcile(
+  sessionId: string,
+  owner: () => AgentSessionProcessIdentity | null,
+  settleGone: () => Promise<void>
+): Promise<void> {
+  if (!providerRelayKeptUnverified(sessionId)) {
     return
+  }
+  if (!(await providerRelayListingSettled())) {
+    const ownerNow = owner()
+    const proven =
+      ownerNow !== null &&
+      ((await ownerProvenGone(ownerNow)) ||
+        (await providerOwnerHeldElsewhere(ownerNow.pid).catch(() => null)) === false)
+    if (!proven) {
+      await providerRelayInventoryCompleted()
+    }
   }
   if (!providerRelayKeptFromLastRun(sessionId)) {
     await settleGone()
   }
+}
+
+/** The open recovery a kept open skipped: handed-over sends become unknown, a stopped queue awaits reopen. */
+export async function recoverStructuredAgentSessionKeptOpen(
+  journal: Pick<SqlAgentSessionJournal, 'write' | 'markQueueReopen'>,
+  fence: number
+): Promise<void> {
+  const commit = await journal.write({ kind: 'pending-unknown', fence })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: pending-unknown returns settled ids or a serialized writer failure.
+  const result = commit.value as JournalWriterSettled<unknown>
+  if (result !== null && typeof result === 'object' && 'failure' in result) {
+    throw restoreJournalSqlFailure(result.failure)
+  }
+  await journal.markQueueReopen(fence)
 }

@@ -39,7 +39,10 @@ import {
   retireStructuredAgentSessionChildOnOtherAccount
 } from './structured-agent-session-outgrown-retirement'
 import { closeWhatTheUserClosed } from '../structured-agent-session-user-closed-sends'
-import { reconcileStructuredAgentSessionKeptAtOpen } from '../host/structured-agent-session-kept-at-open'
+import {
+  reconcileStructuredAgentSessionKeptAtOpen,
+  recoverStructuredAgentSessionKeptOpen
+} from '../host/structured-agent-session-kept-at-open'
 import type { StructuredAgentSessionAcquireAborts } from '../startup/structured-agent-session-acquire-aborts'
 import type { StructuredAgentSessionStopEnding } from '../termination/structured-agent-session-host-stop-event'
 import { settleStructuredAgentSessionLeftovers } from '../termination/structured-agent-session-leftover-settlement'
@@ -203,24 +206,25 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   ): Promise<void> => {
     sessions.set(sessionId, session)
     input.clientDelivery.publishRestored(sessionId)
-    void input
-      .trackStart(
-        reconcileStructuredAgentSessionKeptAtOpen(sessionId, () =>
-          input.serialize(sessionId, async () => {
-            const open = sessions.get(sessionId)
-            if (open === session && !open.child) {
-              await settleGoneStructuredAgentSessionGeneration(deps, sessionId, open)
-            }
-          })
-        )
-      )
-      .catch((error: unknown) =>
-        deps.logger.warn('settling a chat whose agent turned out not kept failed', {
-          scope: 'kept-open-reconcile',
-          sessionId,
-          error
-        })
-      )
+    // Quit never waits on the listing: only the settle itself is tracked.
+    void reconcileStructuredAgentSessionKeptAtOpen(
+      sessionId,
+      deps.logger,
+      () => deps.store.getConversation(sessionId)?.ownerObservation.ownerProcess ?? null,
+      () =>
+        sessions.get(sessionId) === session
+          ? input.trackStart(
+              input.serialize(sessionId, async () => {
+                const open = sessions.get(sessionId)
+                const fence = deps.store.getConversation(sessionId)?.currentFence
+                if (open === session && !open.child && fence !== undefined) {
+                  await settleGoneStructuredAgentSessionGeneration(deps, sessionId, open)
+                  await recoverStructuredAgentSessionKeptOpen(open.journal, fence)
+                }
+              })
+            )
+          : Promise.resolve()
+    )
     await settleInterruptedStructuredAgentSessionCommands(deps, sessionId, session)
     input.clientDelivery.publishRestored(sessionId)
     if (

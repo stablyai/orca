@@ -16,6 +16,11 @@ const listed = new Map<string, KeptProviderRelay>()
 let listing: Promise<void> | null = null
 let firstListing: Promise<void> | null = null
 let complete = false
+let markComplete: () => void = () => {}
+/** Settles once every daemon has answered a listing, however many tries that took. */
+const completed = new Promise<void>((resolve) => {
+  markComplete = resolve
+})
 /** After a daemon didn't answer, callers use what is known until this; then one asks again. */
 let retryAt = 0
 const RETRY_AFTER_MS = 30_000
@@ -155,6 +160,7 @@ export function listKeptProviderRelays(
         retryAt = Date.now() + RETRY_AFTER_MS
       } else {
         complete = true
+        markComplete()
       }
       listing = null
     })()
@@ -174,6 +180,11 @@ export function noteProviderRelayKeptUnverified(chatKey: string): void {
 
 export function providerRelayKeptUnverified(chatKey: string): boolean {
   return keptUnverified.has(chatKey)
+}
+
+/** Waits for whichever listing first hears every daemon; it never asks a daemon itself. */
+export function providerRelayInventoryCompleted(): Promise<void> {
+  return completed
 }
 
 /** Every daemon answered a listing, so a kept agent not in it isn't kept. */
@@ -263,7 +274,7 @@ export async function recheckKeptProviderRelay(
 }
 
 /** Only ESRCH proves absence; "can't tell" keeps the agent. */
-export function processProvenGone(pid: number): boolean {
+function processProvenGone(pid: number): boolean {
   try {
     process.kill(pid, 0)
     return false

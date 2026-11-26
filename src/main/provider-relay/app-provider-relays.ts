@@ -9,7 +9,7 @@ export {
   providerRelayChatsIdleStoppedThisRun,
   liveKeptProviderRelayChats as liveProviderRelayChats,
   noteProviderRelayKeptUnverified,
-  processProvenGone,
+  providerRelayInventoryCompleted,
   providerRelayKeptUnverified,
   registerReattachableProviderRelayAgent
 } from './provider-relay-launch-inventory'
@@ -128,16 +128,9 @@ export function listProviderRelaysAtLaunch(): Promise<void> {
   return installed ? listKeptProviderRelays(() => installed.all()) : Promise.resolve()
 }
 
-/** The launch listing, asked once more if a daemon missed it: true once every daemon has answered. */
+/** The shared launch listing, never asked again here: true once every daemon has answered. */
 export async function providerRelayListingSettled(): Promise<boolean> {
-  const installed = route
-  if (!installed) {
-    return false
-  }
   await listProviderRelaysAtLaunch()
-  if (!inventoryComplete()) {
-    await listKeptProviderRelays(() => installed.all(), true)
-  }
   return inventoryComplete()
 }
 
