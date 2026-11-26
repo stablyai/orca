@@ -1,0 +1,73 @@
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { removeTempDirs } from '../../../shared/testing/remove-temp-dirs.test-support'
+import type { WslHostDeploymentRecord } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
+import type { WslHostConnector } from './wsl-host-connector-contract'
+
+const store = vi.hoisted(() => ({ removed: [] as string[], pending: [] as string[] }))
+// Only the store worker is faked; the removal decision runs for real.
+vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store', () => ({
+  removeWslHostEnvironment: async (_path: string, id: string) => void store.removed.push(id),
+  setWslHostPendingStop: async (_path: string, id: string) => void store.pending.push(id)
+}))
+
+const { removeWslHostServer } = await import('./wsl-host-removal')
+
+const record: WslHostDeploymentRecord = {
+  kind: 'wsl',
+  distro: 'Ubuntu-24.04',
+  localPort: 41000,
+  remotePort: 6800,
+  environmentId: 'wsl:ubuntu-24.04',
+  createdAt: 1
+}
+
+function unreachableConnector(): WslHostConnector & { stopCalls: number } {
+  const connector = {
+    stopCalls: 0,
+    resolveDistroName: async () => 'Ubuntu-24.04',
+    stopServer: async () => {
+      connector.stopCalls += 1
+      throw new Error('orcad_identity_mismatch: the server on remote port 6800 is not this host’s')
+    },
+    disconnect: async () => {},
+    releaseHolder: async () => {}
+  }
+  return connector as unknown as WslHostConnector & { stopCalls: number }
+}
+
+// #49180: a host whose server can't be reached must never be stuck listed.
+describe('removing a WSL host whose server Orca cannot reach', () => {
+  let userDataPath: string
+  beforeEach(() => {
+    userDataPath = mkdtempSync(join(tmpdir(), 'orca-wsl-removal-'))
+    store.removed = []
+    store.pending = []
+  })
+  afterEach(async () => await removeTempDirs([userDataPath]))
+
+  it('keeps it pending on the first Remove and removes it on the next', async () => {
+    const first = await removeWslHostServer(userDataPath, unreachableConnector(), record)
+    expect(first.removed).toBe(false)
+    expect(store).toEqual({ removed: [], pending: [record.environmentId] })
+
+    const pendingStop = { since: 2, reason: 'mismatch', verdict: 'unverifiable' as const }
+    const again = await removeWslHostServer(userDataPath, unreachableConnector(), {
+      ...record,
+      pendingStop
+    })
+    expect(again.removed).toBe(true)
+    expect(again.serverStop).toMatchObject({ stopped: false, forgotten: true })
+    expect(store.removed).toEqual([record.environmentId])
+  })
+
+  it('forgets it without contacting the distro', async () => {
+    const connector = unreachableConnector()
+    const forgotten = await removeWslHostServer(userDataPath, connector, record, true)
+    expect(forgotten.removed).toBe(true)
+    expect(connector.stopCalls).toBe(0)
+    expect(store.removed).toEqual([record.environmentId])
+  })
+})

@@ -14,6 +14,7 @@ import type {
 import type { WslOrcadConnection } from '../orcad/wsl-orcad-connection-types'
 import type { WslOrcadConnectionStatus } from '../orcad/wsl-orcad-connection-status'
 import type { WslLivenessUnverifiableReason } from '../orcad/wsl-orcad-liveness-verdict'
+import { pinWslHostLinuxUsers } from '../orcad/wsl-orcad-host-user'
 
 /** Saves an explicit re-pair or a moved bridge; true when the pairing changed. */
 export async function persistWslHostConnection(
@@ -26,7 +27,8 @@ export async function persistWslHostConnection(
       await refreshWslHostPairing(userDataPath, record.environmentId, {
         pairingCode: connection.pairingOffer,
         localPort: connection.localPort,
-        remotePort: connection.remotePort
+        remotePort: connection.remotePort,
+        linuxUser: connection.linuxUser
       })
     ).pairingChanged
   } catch (error) {
@@ -134,7 +136,10 @@ export async function readWslHostRecordsQuietly(
   userDataPath: string
 ): Promise<WslHostDeploymentRecord[]> {
   try {
-    return (await readWslHostDeployments(userDataPath)).deployments
+    const { deployments } = await readWslHostDeployments(userDataPath)
+    // Every host command path reads records first, so the pins follow each read.
+    pinWslHostLinuxUsers(deployments)
+    return deployments
   } catch (error) {
     console.warn('[wsl-hosts] Could not read WSL host records:', error)
     return []

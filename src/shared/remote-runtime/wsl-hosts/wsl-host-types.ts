@@ -110,6 +110,8 @@ export type WslHostServerStop =
       reasonParams?: WslHostCopyParams
       verdict?: 'live' | 'unverifiable'
       kept?: boolean
+      /** Removed anyway (a repeated Remove, or forget): its server may still run in the distro. */
+      forgotten?: boolean
     }
 
 export type WslHostAddFailureKind =

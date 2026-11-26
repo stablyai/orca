@@ -11,6 +11,10 @@ import {
 
 /** Refuses replacing or removing a pairing that SSH access or a managed deployment depends on. */
 export function assertNoIndependentSshAccess(environment: KnownRuntimeEnvironment): void {
+  // #49180: a WSL host isn't an SSH deployment, so the SSH stop/forget advice would mislead.
+  if (environment.orcadDeployment?.kind === 'wsl') {
+    throw remoteServerPairingStoreError('wslHostDeployment')
+  }
   if (environment.orcadDeployment) {
     throw remoteServerPairingStoreError('managedDeployment')
   }

@@ -70,11 +70,12 @@ export const MANAGED_SERVER_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['environment', 'forget'],
     destructive: true,
-    summary: 'Unlink a managed Orca server whose SSH host is gone, without stopping it',
+    summary: 'Unlink a managed Orca server (SSH or WSL host) without stopping it',
     usage: 'orca environment forget --environment <selector> --yes [--json]',
     allowedFlags: [...LOCAL_COMMAND_FLAGS, 'environment', 'yes'],
     notes: [
       'Removes the server from this machine without contacting its host, so the SSH host can then be removed. Use it when the host was deleted or can never be reached again. Requires --yes.',
+      'For a WSL host, removes the host from this machine without contacting its distro, for example when Orca can no longer reach its server there.',
       'Nothing on the host is stopped: if it comes back, orcad may still be running there.',
       'The SSH host is left disconnected, since no Orca server serves it any more. Connecting it again (Connect in Orca) sets its server up again, relinking one still running there.',
       SELECTOR_NOTE,

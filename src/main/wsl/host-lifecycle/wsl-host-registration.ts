@@ -1,7 +1,10 @@
 /** Admit, refuse duplicate orcad ownership, connect (possibly booting), then persist the environment and WSL record. */
 import { errorMessage } from '../../../shared/errors/error-message'
 import { addWslHostEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
-import type { WslHostDeploymentRecord } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
+import {
+  pinnableWslLinuxUser,
+  type WslHostDeploymentRecord
+} from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
 import {
   wslHostEnvironmentLabel,
   type WslHostAddResult
@@ -87,7 +90,8 @@ export async function registerWslHost(
         distro: distro.name,
         distroId: distro.id,
         localPort: connection.localPort,
-        remotePort: connection.remotePort
+        remotePort: connection.remotePort,
+        ...pinnedUser(connection)
       }
     })
   } catch (error) {
@@ -100,4 +104,10 @@ export async function registerWslHost(
   }
   context.deps.ready(environmentId, distro.name)
   return { ok: true, environmentId }
+}
+
+/** The account the Add's server runs as, pinned so a later default-user change keeps it (#49180). */
+function pinnedUser(connection: WslOrcadConnection): { linuxUser?: string } {
+  const linuxUser = pinnableWslLinuxUser(connection.linuxUser)
+  return linuxUser ? { linuxUser } : {}
 }

@@ -134,7 +134,8 @@ export type OrcadManagedForgetResult =
       outcome: 'forgotten'
       verdict: 'unverifiable'
       environmentId: string
-      sshTargetId: string
+      /** Absent for a WSL host, which Orca reaches without SSH. */
+      sshTargetId?: string
     }
   | OrcadManagedRefusal
 

@@ -103,7 +103,7 @@ async function launchOverTransport(
   const distroId = (options.readRegistryId ?? readWslDistroRegistryIdShared)(name).catch(() => null)
   options.onStage?.('starting-distro')
   const first = await holdWslDistroWithContext(name, target, conn, holder, signal)
-  const { held, connectState } = first
+  const { connectState, launchIdentity } = first
   let context = first.context
   const hints = wslOrcadConnectStateHints(connectState, context.activationRecord)
   const slot = managedOrcadSlot(context, ORCAD_MANAGED_REMOTE_PORT, signal)
@@ -313,7 +313,7 @@ async function launchOverTransport(
       fullVersion: serving.fullVersion,
       pid,
       readiness: serving.readiness,
-      holder: held.outcome,
+      ...launchIdentity,
       ...(adoption.outcome === 'adopted'
         ? { adoptedInstance: { version: adoption.version, pid: adoption.pid } }
         : {})

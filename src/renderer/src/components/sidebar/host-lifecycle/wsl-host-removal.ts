@@ -49,12 +49,24 @@ export function warnWslHostServerStop(serverStop: WslHostServerStop | undefined)
   if (serverStop?.stopped !== false) {
     return false
   }
+  if (serverStop.forgotten) {
+    // #49180: a repeated Remove (or forget) dropped a host whose server Orca couldn't stop.
+    toast.warning(
+      translate(
+        'auto.components.sidebar.wslHostRemoval.forgotten',
+        'Removed the host from Orca without stopping its server, which may still be running in the distro: {{value0}}',
+        { value0: wslHostStopReasonMessage(serverStop) }
+      ),
+      { duration: Infinity }
+    )
+    return true
+  }
   if (serverStop.kept) {
     // E11: a stop Orca couldn't prove keeps the host listed, so Remove can retry it.
     toast.warning(
       translate(
         'auto.components.sidebar.wslHostRemoval.pending',
-        'Orca didn’t remove the host yet: {{value0}} Remove it again to retry, or connect it to keep it.',
+        'Orca didn’t remove the host yet: {{value0}} Remove it again to retry; if Orca still can’t stop its server, it removes the host anyway. Or connect it to keep it.',
         { value0: wslHostStopReasonMessage(serverStop) }
       ),
       { duration: Infinity }

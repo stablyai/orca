@@ -27,6 +27,7 @@ import {
   WSL_ORCAD_IDLE_EXIT_TIMEOUT_MS
 } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-idle-exit'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
+import { pinnedWslHostLinuxUser } from './wsl-orcad-host-user'
 
 export type WslOrcadHostTransport = OrcadHostTransport & {
   getTarget(): WslOrcadHostTarget
@@ -56,7 +57,9 @@ export function createWslOrcadHostTransport(
   const { target } = options
   const spawnWsl = (shellArgs: string[]) => {
     const program = resolveWslExecutablePath()
-    const args = buildWslExecArgs(target.distro, shellArgs)
+    const args = buildWslExecArgs(target.distro, shellArgs, {
+      user: pinnedWslHostLinuxUser(target.distro)
+    })
     if (commandLineLength([program, ...args]) > MAX_COMMAND_LINE_CHARS) {
       throw new Error('WSL command exceeds the Windows command-line limit')
     }

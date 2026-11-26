@@ -6,6 +6,8 @@ export const REMOTE_SERVER_PAIRING_FAILURE_COPY = {
     'This pairing code is for this Orca itself. Generate the code on the other computer instead.',
   managedDeployment:
     'Orca runs this server on an SSH host for you; its pairing cannot be replaced or removed here. To decommission it, run `orca environment stop --environment <name> --yes` or use Settings > Orca on your SSH hosts; for a host that is gone, run `orca environment forget --environment <name> --yes`.',
+  wslHostDeployment:
+    'Orca runs this server in a WSL distro for you; its pairing cannot be replaced or removed here. Remove the WSL host in Orca, or run `orca environment forget --environment <name> --yes` to remove it without contacting its distro.',
   sshAccessChangePending:
     "This server's SSH access change didn't finish. Retry or cancel it under Settings > Remote Orca Servers > SSH access for paired servers before replacing its pairing or removing it.",
   sshAccessLinked:

@@ -8718,8 +8718,9 @@
         },
         "wslHostRemoval": {
           "keptForOthers": "Removed from this Orca. The host keeps running for {{value0}}.",
+          "forgotten": "Removed the host from Orca without stopping its server, which may still be running in the distro: {{value0}}",
           "partial": "The host was removed, but something in the distro is still running: {{value0}}",
-          "pending": "Orca didn’t remove the host yet: {{value0}} Remove it again to retry, or connect it to keep it.",
+          "pending": "Orca didn’t remove the host yet: {{value0}} Remove it again to retry; if Orca still can’t stop its server, it removes the host anyway. Or connect it to keep it.",
           "unavailable": "WSL hosts are not available on this computer."
         },
         "addRepoWslHostFolderPicker": {
@@ -26947,6 +26948,7 @@
       "invalidPairingCode": "Invalid pairing code. Expected an orca://pair?... URL or bare pairing payload.",
       "selfPairingCode": "This pairing code is for this Orca itself. Generate the code on the other computer instead.",
       "managedDeployment": "Orca runs this server on an SSH host for you; its pairing cannot be replaced or removed here. To decommission it, run `orca environment stop --environment <name> --yes` or use Settings > Orca on your SSH hosts; for a host that is gone, run `orca environment forget --environment <name> --yes`.",
+      "wslHostDeployment": "Orca runs this server in a WSL distro for you; its pairing cannot be replaced or removed here. Remove the WSL host in Orca, or run `orca environment forget --environment <name> --yes` to remove it without contacting its distro.",
       "sshAccessChangePending": "This server's SSH access change didn't finish. Retry or cancel it under Settings > Remote Orca Servers > SSH access for paired servers before replacing its pairing or removing it.",
       "sshAccessLinked": "Unlink this server's SSH access under Settings > Remote Orca Servers > SSH access for paired servers before replacing its pairing or removing it.",
       "alreadyPairedCloudWorkspace": "This server is already paired as \"{{name}}\". It belongs to a cloud workspace, which pairs it again when it resumes.",

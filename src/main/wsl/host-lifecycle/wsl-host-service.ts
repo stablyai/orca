@@ -142,7 +142,8 @@ export class WslHostService {
     return operation
   }
 
-  async remove(environmentId: string): Promise<WslHostServerStop> {
+  /** `forget` drops the host without contacting its distro (CLI `environment forget`). */
+  async remove(environmentId: string, forget = false): Promise<WslHostServerStop> {
     const record = await this.recordForEnvironment(environmentId)
     if (!record) {
       throw new Error('This server is not a WSL host.')
@@ -153,7 +154,8 @@ export class WslHostService {
     const removal = await removeWslHostServer(
       this.deps.userDataPath(),
       this.connector,
-      record
+      record,
+      forget
     ).finally(() => this.removing.delete(environmentId))
     if (!removal.removed) {
       this.setStatus((await this.recordForEnvironment(environmentId)) ?? record, {

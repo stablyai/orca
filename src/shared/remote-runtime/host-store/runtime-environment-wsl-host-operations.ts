@@ -20,6 +20,7 @@ import {
   hasNonWslOwner,
   readWslHostDeployments,
   writeWslHostDeployment,
+  pinnableWslLinuxUser,
   type WslHostDeploymentRecord,
   type WslHostPendingStop
 } from './wsl-host-deployment-store'
@@ -111,7 +112,7 @@ export function addWslHostEnvironment(
 export function refreshWslHostPairing(
   userDataPath: string,
   environmentId: string,
-  args: { pairingCode: string } & WslHostPorts,
+  args: { pairingCode: string; linuxUser?: string | null } & WslHostPorts,
   now = Date.now()
 ): { environment: KnownRuntimeEnvironment; pairingChanged: boolean } {
   const offer = parseBridgedPairing(args.pairingCode)
@@ -141,10 +142,18 @@ export function refreshWslHostPairing(
     assertPairingUsesBridge(next, args.localPort)
   }
   const keyChanged = record.pairingPublicKeyB64 !== offer.publicKeyB64
-  if (record.localPort !== args.localPort || record.remotePort !== args.remotePort || keyChanged) {
+  // A record from before pinning takes the account its verified server runs as; a pin never moves.
+  const pinUser = record.linuxUser === undefined ? pinnableWslLinuxUser(args.linuxUser) : undefined
+  if (
+    record.localPort !== args.localPort ||
+    record.remotePort !== args.remotePort ||
+    keyChanged ||
+    pinUser
+  ) {
     // The previous key keeps the record bound to the old pairing until the write below lands.
     writeWslHostDeployment(userDataPath, environmentId, {
       ...record,
+      ...(pinUser ? { linuxUser: pinUser } : {}),
       localPort: args.localPort,
       remotePort: args.remotePort,
       pairingPublicKeyB64: offer.publicKeyB64,
