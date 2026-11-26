@@ -109,7 +109,7 @@ export function useMobileNativeChatComposerMenu(input: {
       mobileComposerCatalog({
         agent: input.nextAgent ?? agent,
         structured: input.nextAgent === undefined ? structuredCatalog : undefined,
-        discovery: input.nextAgent === undefined ? skillDiscovery : undefined,
+        discovery: skillDiscovery,
         interactionModeSupported: input.interactionModeSupported
       }),
     [agent, skillDiscovery, structuredCatalog, input.interactionModeSupported, input.nextAgent]

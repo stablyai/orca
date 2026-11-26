@@ -186,7 +186,9 @@ export function useMobileNativeChatController(args: {
     [captureSendOrigin, workingEpoch]
   )
 
-  const workspaceCatalog = useMobileNativeChatWorkspaceCatalog(args, activeChatAgent)
+  const activeProvider = providerPicker?.active ?? activeChatAgent
+  const nextProvider = providerPicker?.selection?.agent
+  const workspaceCatalog = useMobileNativeChatWorkspaceCatalog(args, activeProvider, nextProvider)
 
   const recordSessionOptionCommandRef = useRef<(command: string) => void>(() => {})
 
@@ -211,9 +213,6 @@ export function useMobileNativeChatController(args: {
   })
 
   const structuredSend = useMobileStructuredNativeChatSendBridge({
-    agent:
-      providerPicker?.selection?.agent ?? providerPicker?.active ?? activeChatResolution?.agent,
-    sessionCommands: nativeChatLane.sessionCommands.commands,
     sendStructured: structuredNativeChat.sendWithOutcome,
     captureSendOrigin,
     clearDraftForSend,
@@ -224,13 +223,11 @@ export function useMobileNativeChatController(args: {
 
   const { nativeChatSessionOptions, recordCommand: recordNativeChatSessionOptionCommand } =
     useMobileNativeChatSessionOptionController({
-      client,
+      ...args,
       activeChatStructured,
-      activeSessionTabId,
-      agent: providerPicker?.active ?? activeChatResolution?.agent ?? null,
+      agent: activeProvider,
       providerPicker,
       dispatchCommand: handleNativeChatDispatchCommand,
-      hostId,
       isTabChatView,
       isWorking: activeTurn.isWorking,
       reportedStatus: activeSessionTab?.agentStatus,
@@ -246,8 +243,7 @@ export function useMobileNativeChatController(args: {
         setOption: structuredNativeChat.setStructuredOption,
         invokeAction: structuredNativeChat.invokeStructuredOption
       },
-      toggleTabChatView,
-      worktreeId
+      toggleTabChatView
     })
   useLayoutEffect(() => {
     recordSessionOptionCommandRef.current = recordNativeChatSessionOptionCommand
@@ -263,7 +259,7 @@ export function useMobileNativeChatController(args: {
     toggleTabChatView,
     showNativeChat,
     showNativeChatRef,
-    nativeChatAgent: providerPicker?.active ?? activeChatResolution?.agent ?? null,
+    nativeChatAgent: activeProvider,
     nativeChatSessionLive: activeChatResolution?.sessionLive === true,
     chatDraftKey,
     setChatComposerText,

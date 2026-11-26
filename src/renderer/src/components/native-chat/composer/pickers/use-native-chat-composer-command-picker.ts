@@ -47,10 +47,11 @@ export function useNativeChatComposerCommandPicker(
 } {
   const { structuredTransport, editor, setNotice, mode, room, nextAgent, ...pickerArgs } = args
   const { agent, terminalTabId } = pickerArgs
+  const composerNextAgent = mode === 'edit' ? undefined : nextAgent
   const { agentCommands, sessionSkills } = useNativeChatComposerCatalog(
     agent,
     structuredTransport,
-    nextAgent
+    composerNextAgent
   )
   const reported = structuredTransport?.sessionCommands
   const hostSetsGoals = structuredTransport?.threadGoal !== undefined
@@ -74,6 +75,7 @@ export function useNativeChatComposerCommandPicker(
   )
   const listed = useNativeChatPickerState({
     ...pickerArgs,
+    agent: composerNextAgent ?? agent,
     ...(mode === 'launch' ? { launchWorktreeId: structuredTransport?.worktreeId } : {}),
     ...editor,
     agentCommands,

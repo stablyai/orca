@@ -14,7 +14,8 @@ export function useMobileNativeChatWorkspaceCatalog(
       'discoverWorkspaceSkills'
     > | null
   },
-  agent: string | null
+  agent: string | null,
+  nextAgent?: string
 ): ReturnType<typeof useMobileNativeChatFileSearch> & ReturnType<typeof useMobileNativeChatSkills> {
   const { hostId, client, worktreeId } = scope
   const files = useMobileNativeChatFileSearch({ client, worktreeId })
@@ -23,6 +24,7 @@ export function useMobileNativeChatWorkspaceCatalog(
     client,
     worktreeId,
     agent,
+    nextAgent,
     supported: scope.agentSessionHostSupport?.discoverWorkspaceSkills === true
   })
   return { ...files, ...skills }
