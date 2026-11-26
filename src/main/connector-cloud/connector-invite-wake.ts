@@ -29,9 +29,7 @@ export type InviteWakeSignIn = {
   call: SignInCall
   /** This install's id, the one connector tokens are minted for. */
   machineId: () => Promise<string>
-  /** The session's wake token as its last refresh left it, expired or not. */
-  storedWakeToken: () => OrcaCloudWakeToken | null
-  /** The same after the session's usual refresh, when its access token is about to expire. */
+  /** The session's wake token, after its usual refresh when its access token is about to expire. */
   freshWakeToken: () => Promise<OrcaCloudWakeToken | null>
 }
 
@@ -67,6 +65,8 @@ export class InviteWake {
   // waits for the next refresh).
   private offered: { url: string; token: string } | null = null
   private dialed: string | null = null
+  // The newest wake token the session gave a read or a dial.
+  private issued: OrcaCloudWakeToken | null = null
   // Country refused or a frame too big: no socket until the app restarts.
   private halted = false
   private readonly now: () => number
@@ -115,11 +115,10 @@ export class InviteWake {
         ? await signIn.machineId().catch(() => null)
         : null
     // The session's usual refresh runs first if due (sending that id), so its wake token is the newest.
-    // A refresh that failed just now proves nothing: a kept token still says this cloud issues them.
+    // A refresh that failed just now proves nothing: a token already given still says this cloud
+    // issues them.
     const issued =
-      machineId && signIn
-        ? await signIn.freshWakeToken().catch(() => signIn.storedWakeToken())
-        : null
+      machineId && signIn ? await signIn.freshWakeToken().catch(() => this.issued) : null
     if (!signIn || !machineId || !issued) {
       return await this.deps.connectorRead(path, schema, options)
     }
@@ -132,6 +131,7 @@ export class InviteWake {
       fetchImpl: this.deps.fetchImpl ?? globalThis.fetch
     })
     if (result.ok && this.deps.account() === account && !this.deps.connectorHolds()) {
+      this.issued = issued
       this.offer(wakeUrl)
     }
     return result
@@ -155,7 +155,7 @@ export class InviteWake {
       this.stop()
       return
     }
-    const token = this.deps.signIn?.storedWakeToken() ?? null
+    const token = this.issued
     if (!token || token.expiresAt <= this.now()) {
       return
     }
@@ -171,6 +171,7 @@ export class InviteWake {
   stop(): void {
     const wasUp = this.up
     this.offered = null
+    this.issued = null
     this.channel.offer(null)
     if (wasUp) {
       this.emit('closed')
@@ -179,26 +180,21 @@ export class InviteWake {
 
   // A refused token (4401) redials once only with a newer one; none newer waits for the next refresh.
   private async dialToken(renew: boolean): Promise<ConnectorWakeTokenResult> {
-    const usable = (token: OrcaCloudWakeToken | null): token is OrcaCloudWakeToken =>
-      token !== null && token.expiresAt > this.now()
-    const { signIn } = this.deps
     // A connector holds the same wake object with its own socket; signed out or quitting, none.
-    if (this.deps.connectorHolds() || !this.deps.account()) {
+    if (this.deps.connectorHolds() || !this.deps.account() || !this.deps.signIn) {
       return 'none'
     }
-    let token = signIn?.storedWakeToken() ?? null
-    if (renew) {
-      token = usable(token) && token.token !== this.dialed ? token : null
-    } else if (!usable(token)) {
-      try {
-        token = (await signIn?.freshWakeToken()) ?? null
-      } catch {
-        return 'failed'
-      }
+    let token: OrcaCloudWakeToken | null
+    try {
+      token = await this.deps.signIn.freshWakeToken()
+    } catch {
+      return 'failed'
     }
-    if (!usable(token)) {
+    // Refused (4401): only a newer token redials; none newer waits for the next refresh.
+    if (!token || token.expiresAt <= this.now() || (renew && token.token === this.dialed)) {
       return 'none'
     }
+    this.issued = token
     this.dialed = token.token
     return { token: token.token }
   }

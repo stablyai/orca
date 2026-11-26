@@ -1,6 +1,5 @@
 import { createHmac, randomUUID } from 'node:crypto'
-import { readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import { readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import {
   RuntimeHostDescriptorSchema,
@@ -53,59 +52,47 @@ export async function readExistingHostInstallationId(
 ): Promise<string | undefined> {
   try {
     const current = await readInstallation(join(userDataPath, HOST_INSTALLATION_FILENAME))
-    return current.kind === 'valid' ? current.installationId : undefined
+    return current.kind === 'valid' ? known(userDataPath, current.installationId) : undefined
   } catch {
     return undefined
   }
 }
 
-// An identity never changes once valid, so one read serves every later caller.
+// An identity never changes once valid, so each one read or created is kept for later callers.
 const knownInstallationIds = new Map<string, string>()
 
-/** The profile's existing identity without awaiting the disk (for a request whose timing must not
- *  shift); never created or repaired; undefined when absent or unreadable. */
-export function existingHostInstallationIdSync(userDataPath: string): string | undefined {
-  const known = knownInstallationIds.get(userDataPath)
-  if (known) {
-    return known
-  }
-  try {
-    const raw = readFileSync(join(userDataPath, HOST_INSTALLATION_FILENAME), 'utf8')
-    const parsed =
-      raw.length <= MAX_INSTALLATION_FILE_BYTES
-        ? InstallationFileSchema.safeParse(JSON.parse(raw))
-        : null
-    if (parsed?.success) {
-      knownInstallationIds.set(userDataPath, parsed.data.installationId)
-      return parsed.data.installationId
-    }
-  } catch {
-    // Absent or unreadable: no identity to send.
-  }
-  return undefined
+/** The profile's identity if this process already read or created it; never touches the disk, for a
+ *  request whose timing must not shift. */
+export function knownHostInstallationId(userDataPath: string): string | undefined {
+  return knownInstallationIds.get(userDataPath)
+}
+
+function known(userDataPath: string, installationId: string): string {
+  knownInstallationIds.set(userDataPath, installationId)
+  return installationId
 }
 
 export async function loadOrCreateHostInstallationId(userDataPath: string): Promise<string> {
   const filePath = join(userDataPath, HOST_INSTALLATION_FILENAME)
   const current = await readInstallation(filePath)
   if (current.kind === 'valid') {
-    return current.installationId
+    return known(userDataPath, current.installationId)
   }
   // Decide only after any racing creator/repairer publishes.
   return await withFileTransactionLock(filePath, async () => {
     const locked = await readInstallation(filePath)
     if (locked.kind === 'valid') {
-      return locked.installationId
+      return known(userDataPath, locked.installationId)
     }
     const installationId = randomUUID()
     const draftPath = `${filePath}.${installationId}.draft`
     try {
-      writeFileSync(draftPath, JSON.stringify({ installationId }), { flag: 'wx', mode: 0o600 })
-      renameSync(draftPath, filePath)
+      await writeFile(draftPath, JSON.stringify({ installationId }), { flag: 'wx', mode: 0o600 })
+      await rename(draftPath, filePath)
     } finally {
-      rmSync(draftPath, { force: true })
+      await rm(draftPath, { force: true })
     }
-    return installationId
+    return known(userDataPath, installationId)
   })
 }
 

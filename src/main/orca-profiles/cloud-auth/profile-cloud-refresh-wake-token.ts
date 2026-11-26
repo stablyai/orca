@@ -12,10 +12,10 @@ export function wakeTokenRequest(machineId: string | null | undefined): { machin
 
 /** Read leniently: a missing or malformed wake token is none, and the refresh still counts. */
 export function readWakeToken(value: unknown): OrcaCloudWakeToken | undefined {
-  if (!value || typeof value !== 'object') {
+  if (!value || typeof value !== 'object' || !('token' in value) || !('expiresAt' in value)) {
     return undefined
   }
-  const { token, expiresAt } = value as Record<string, unknown>
+  const { token, expiresAt } = value
   return typeof token === 'string' &&
     token.length > 0 &&
     token.length <= MAX_TOKEN_LENGTH &&

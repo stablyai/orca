@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 import { setSecretStore } from '../../shared/secure-storage/secret-store'
 import { CONNECTOR_PATHS } from '../../shared/connectors/connector-cloud-contract'
 import { NODE_RELAY_CLIENT_PLATFORM } from '../../shared/remote-runtime/relay/client/node/node-relay-client-platform'
@@ -12,7 +13,7 @@ import { linkOrcaProfileToCloud } from '../orca-profiles/cloud-auth/profile-clou
 import { signInCloudSession } from '../orca-profiles/cloud-session/profile-cloud-session-owner'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import {
-  existingHostInstallationIdSync,
+  knownHostInstallationId,
   loadOrCreateHostInstallationId
 } from '../runtime/hosts/platform-probe/host-descriptor'
 import { exchangeOrcaCloudAuthCode } from '../orca-profiles/cloud-auth/profile-cloud-client'
@@ -22,11 +23,7 @@ import { SharedBotHosts } from '../bots/shared-with-me/shared-bot-hosts'
 import { sharedBotsCloud } from '../bots/shared-with-me/shared-bots-cloud'
 import { memorySharedBotHomes } from '../bots/shared-with-me/shared-bot-home.test-fixture'
 import { ConnectorCloud } from './connector-cloud'
-import {
-  connectorAccountCloudCall,
-  freshSignInWakeToken,
-  storedSignInWakeToken
-} from './connector-token-mint'
+import { desktopConnectorCredentials } from './connector-token-mint'
 import { FakeConnectorCloud } from './fake-connector-cloud.test-fixture'
 import { fakeMachine, fakeSeam } from './fake-connector-seam.test-fixture'
 import { FakeWakeSockets } from './fake-wake-socket.test-fixture'
@@ -54,6 +51,8 @@ const config: OrcaCloudAuthConfig = {
 }
 const cloudSummary = { userId: 'ada', cloudProfileId: 'cp-ada', email: 'ada@example.test' }
 
+const RequestBody = z.record(z.string(), z.unknown())
+
 let userDataPath = ''
 let fake: FakeConnectorCloud
 let wake: FakeWakeSockets
@@ -70,7 +69,7 @@ let cloud: {
 const fetchImpl: typeof globalThis.fetch = async (input, init) => {
   const url = new URL(String(input))
   if (url.origin === AUTH && url.pathname === '/refresh') {
-    const body = JSON.parse(String(init?.body)) as Record<string, unknown>
+    const body = RequestBody.parse(JSON.parse(String(init?.body)))
     cloud.refreshes.push(body)
     const n = cloud.refreshes.length
     return Response.json({
@@ -85,7 +84,7 @@ const fetchImpl: typeof globalThis.fetch = async (input, init) => {
     })
   }
   if (url.origin === AUTH && url.pathname === '/session') {
-    const body = JSON.parse(String(init?.body)) as Record<string, unknown>
+    const body = RequestBody.parse(JSON.parse(String(init?.body)))
     cloud.signIns.push(body)
     return Response.json({
       accessToken: 'access-signin',
@@ -137,12 +136,7 @@ function setUp(options: { connector: boolean; connectNow?: boolean }) {
     isFenced: () => quit.fenced,
     mintFor: (account) => fake.mintFor(account),
     fetchImpl,
-    signIn: {
-      call: connectorAccountCloudCall(config, userDataPath),
-      machineId: () => loadOrCreateHostInstallationId(userDataPath),
-      storedWakeToken: () => storedSignInWakeToken(userDataPath),
-      freshWakeToken: () => freshSignInWakeToken(config, userDataPath)
-    },
+    signIn: desktopConnectorCredentials(config, userDataPath).signIn,
     wakeSocketFactory: wake.factory
   })
   if (options.connectNow !== false) {
@@ -255,7 +249,7 @@ describe('the invite wake on a desktop with no connector', () => {
       redirectUri: 'http://127.0.0.1/callback',
       state: 'state-1',
       localProfileId: profileId,
-      machineId: existingHostInstallationIdSync(userDataPath)
+      machineId: knownHostInstallationId(userDataPath)
     })
     await expect(
       commitExchangedCloudSession({
