@@ -26015,7 +26015,18 @@
       "addEmoji": "Add emoji",
       "addEmojiTooltip": "Add emoji (or type :)",
       "noEmojiFound": "No emoji found",
-      "labels": "Labels: {{labels}}"
+      "labels": "Labels: {{labels}}",
+      "peek": {
+        "closed": "closed",
+        "open": "open",
+        "merged": "merged",
+        "draft": "draft",
+        "failing": "failing",
+        "running": "running",
+        "cancelled": "cancelled",
+        "passing": "passing",
+        "more": "+{{count}} more"
+      }
     },
     "attachments": {
       "updateRuntime": "Update the remote runtime to change workspace links",
