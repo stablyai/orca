@@ -28767,6 +28767,7 @@
     "usageLimit": {
       "continuesAt": "{{time}} saatinde devam eder",
       "continuesShort": "{{time}} devam eder",
+      "rowLine": "Kullanım sınırı · {{time}}",
       "continuesTip": "{{time}} saatinde otomatik devam eder",
       "hitLimit": "Limite ulaşıldı · {{time}} saatinde sıfırlanır",
       "hitShort": "Limite ulaşıldı",

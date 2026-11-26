@@ -28267,6 +28267,7 @@
     "usageLimit": {
       "continuesAt": "{{time}}에 계속",
       "continuesShort": "{{time}}에 계속",
+      "rowLine": "사용 한도 · {{time}}",
       "continuesTip": "{{time}}에 자동으로 계속",
       "hitLimit": "한도 도달 · {{time}}에 초기화",
       "hitShort": "한도 도달",

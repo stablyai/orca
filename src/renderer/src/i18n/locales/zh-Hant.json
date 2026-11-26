@@ -27322,6 +27322,7 @@
     "usageLimit": {
       "continuesAt": "將於 {{time}} 繼續",
       "continuesShort": "{{time}} 繼續",
+      "rowLine": "使用上限 · {{time}}",
       "continuesTip": "將於 {{time}} 自動繼續",
       "hitLimit": "已達上限 · {{time}} 重設",
       "hitShort": "已達上限",

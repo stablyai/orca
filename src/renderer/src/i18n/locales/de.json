@@ -27661,6 +27661,7 @@
     "usageLimit": {
       "continuesAt": "Fortsetzung um {{time}}",
       "continuesShort": "Fortsetzung {{time}}",
+      "rowLine": "Nutzungslimit · {{time}}",
       "continuesTip": "Automatische Fortsetzung um {{time}}",
       "hitLimit": "Limit erreicht · Reset {{time}}",
       "hitShort": "Limit erreicht",
