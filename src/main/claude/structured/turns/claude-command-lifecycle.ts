@@ -1,3 +1,4 @@
+import { publishProviderReceipt } from '../../../native-chat/agent-session-wire/journal-ingress/provider-receipt-publication'
 import type { StructuredAgentSessionTransitionSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
 // Lifecycle frames can reject only unstarted sends; completed alone leaves delivery uncertain.
 
@@ -91,17 +92,21 @@ export function recordClaudeDispatchReceipt(
   record: StructuredAgentSessionTransitionSink['recordProviderReceipt']
 ): void {
   if (
+    record &&
     waiter.clientMessageId !== null &&
     waiter.handover !== undefined &&
     waiter.dispatchFence === session.fence &&
     session.dispatchWaiters.includes(waiter)
   ) {
-    record?.({
-      clientMessageId: waiter.clientMessageId,
-      fence: waiter.dispatchFence,
-      ...waiter.handover,
-      observedAt
-    })
+    const { clientMessageId, handover, dispatchFence: fence } = waiter
+    publishProviderReceipt(() =>
+      record({
+        clientMessageId,
+        fence,
+        ...handover,
+        observedAt
+      })
+    )
   }
 }
 

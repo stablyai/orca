@@ -2,6 +2,7 @@ import { expect, it, vi } from 'vitest'
 import { createQueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
 import {
   claudeReceiptIngress,
+  faultingReceiptPublisher,
   openReceiptStream
 } from './structured-agent-session-provider-receipt-rig.test-fixture'
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
@@ -13,7 +14,7 @@ import {
 import { structuredAgentSessionHandingOver } from '../../delivery/structured-agent-session-handing-over'
 import { retireWaiter } from '../../../../claude/structured/dispatch/claude-structured-dispatch-waiters'
 
-it.each(['discard', 'stall'] as const)(
+it.each(['discard', 'stall', 'throw', 'reject'] as const)(
   'preserves Claude lifecycle, durable echo and assistant content after receipt %s',
   async (failure) => {
     const rig = await createQueuedMessageTestRig({ agent: 'claude' })
@@ -25,7 +26,14 @@ it.each(['discard', 'stall'] as const)(
       await eventually(() => expect(structuredAgentSessionHandingOver(journal).size).toBe(0))
       const ingress = claudeReceiptIngress(rig)
       const stream = await openReceiptStream(rig, { paused: true })
-      const read = stream.read()
+      const fails = failure === 'throw' || failure === 'reject'
+      const publisher = fails ? faultingReceiptPublisher(failure) : undefined
+      if (publisher) {
+        vi.spyOn(ingress.sink, 'recordProviderReceipt').mockImplementation(publisher.publish)
+      }
+      // The ingress binds the translator for each incoming frame.
+      const translator = vi.spyOn(ingress.translator, 'handle')
+      const read = fails ? undefined : stream.read()
       const cursor = journal.cursor()
       const activity = rig.host.collaboratorsForTests().sessions.lastActivityAt(CHAT)
       ingress.lifecycle('queued', NOW + 100)
@@ -33,8 +41,19 @@ it.each(['discard', 'stall'] as const)(
       ingress.lifecycle('started', NOW + 150)
       expect(await ingress.flush()).toEqual({ ok: true })
       expect(ingress.waiter.commandLifecycle).toBe('started')
-      await read
-      expect(stream.frames[1]?.updates).toEqual([{ clientMessageId: id, observedAt: NOW + 100 }])
+      expect(translator).toHaveBeenCalledWith(
+        expect.objectContaining({ message: expect.objectContaining({ state: 'queued' }) })
+      )
+      if (fails) {
+        expect(publisher?.publish).toHaveBeenCalledTimes(1)
+        if (failure === 'reject') {
+          expect(publisher?.handled).toHaveBeenCalledOnce()
+        }
+        expect(stream.frames).toHaveLength(1)
+      } else {
+        await read
+        expect(stream.frames[1]?.updates).toEqual([{ clientMessageId: id, observedAt: NOW + 100 }])
+      }
       expect(journal.cursor()).toEqual(cursor)
       expect(rig.host.collaboratorsForTests().sessions.lastActivityAt(CHAT)).toEqual(activity)
       expect(await journal.reads.runningTurn()).toBeNull()
@@ -50,11 +69,13 @@ it.each(['discard', 'stall'] as const)(
       expect(rig.host.collaboratorsForTests().sessions.get(CHAT)?.child).toBe(child)
       expect(rig.closeSession).not.toHaveBeenCalled()
 
-      expect(stream.frames).toHaveLength(2)
-      await stream.read({ discarded: failure === 'discard' })
-      const last = stream.frames.at(-1)
-      expect(last?.revision.sequence).toBeGreaterThan(stream.frames[1]!.revision.sequence)
-      expect(last?.updates.some((update) => update.observedAt !== null)).toBe(false)
+      if (!fails) {
+        expect(stream.frames).toHaveLength(2)
+        await stream.read({ discarded: failure === 'discard' })
+        const last = stream.frames.at(-1)
+        expect(last?.revision.sequence).toBeGreaterThan(stream.frames[1]!.revision.sequence)
+        expect(last?.updates.some((update) => update.observedAt !== null)).toBe(false)
+      }
       stream.close()
     } finally {
       await rig.dispose()

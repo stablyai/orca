@@ -4,7 +4,10 @@ import type { CodexTurnHost } from '../../../../codex/structured/turns/codex-str
 import { createCodexDispatchEchoes } from '../../../../codex/structured/turns/codex-structured-dispatch-echo'
 import { dispatchCodexTurn } from '../../../../codex/structured/turns/codex-structured-turn-start'
 import { createQueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
-import { openReceiptStream } from './structured-agent-session-provider-receipt-rig.test-fixture'
+import {
+  faultingReceiptPublisher,
+  openReceiptStream
+} from './structured-agent-session-provider-receipt-rig.test-fixture'
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import {
   HOST_TEST_NOW as NOW,
@@ -12,7 +15,7 @@ import {
   HOST_TEST_THREAD as THREAD
 } from './structured-agent-session-host-test-data.test-fixture'
 
-it.each(['start', 'steer', 'refused-steer', 'echo-first'] as const)(
+it.each(['start', 'steer', 'refused-steer', 'echo-first', 'throw', 'reject'] as const)(
   'uses only a live fresh Codex start reply to stamp receipt (%s)',
   async (mode) => {
     const rig = await createQueuedMessageTestRig()
@@ -20,6 +23,9 @@ it.each(['start', 'steer', 'refused-steer', 'echo-first'] as const)(
     const methods: string[] = []
     try {
       const stream = await openReceiptStream(rig)
+      const fails = mode === 'throw' || mode === 'reject'
+      const publisher = fails ? faultingReceiptPublisher(mode) : undefined
+      const admitted = Promise.withResolvers<unknown>()
       rig.dispatch.mockImplementationOnce(async (input) => {
         const activeTurnIds = new Set(mode.includes('steer') ? ['previous'] : [])
         const dispatchEchoes = createCodexDispatchEchoes()
@@ -43,10 +49,12 @@ it.each(['start', 'steer', 'refused-steer', 'echo-first'] as const)(
           return reply
         }
         try {
-          return await dispatchCodexTurn(
+          const outcome = await dispatchCodexTurn(
             {
               fence: input.fence,
-              events: rig.providerEvents(),
+              events: publisher
+                ? { recordProviderReceipt: publisher.publish }
+                : rig.providerEvents(),
               connection: { request },
               threadId: THREAD,
               options: new Map(),
@@ -58,6 +66,11 @@ it.each(['start', 'steer', 'refused-steer', 'echo-first'] as const)(
             undefined,
             () => NOW + 250
           )
+          admitted.resolve(outcome)
+          return outcome
+        } catch (error) {
+          admitted.resolve(error)
+          throw error
         } finally {
           completed.resolve()
         }
@@ -78,6 +91,15 @@ it.each(['start', 'steer', 'refused-steer', 'echo-first'] as const)(
         )
       } else {
         expect(stream.frames).toHaveLength(1)
+      }
+      if (publisher) {
+        expect(publisher.publish).toHaveBeenCalledTimes(1)
+        if (mode === 'reject') {
+          expect(publisher.handled).toHaveBeenCalledOnce()
+        }
+        expect(await admitted.promise).toMatchObject({ state: 'admitted' })
+        await rig.settleAccepted(id, 'echo-after-receipt-fault')
+        expect((await rig.submission(id))?.dispatchState).toBe('accepted')
       }
       stream.close()
     } finally {

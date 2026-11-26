@@ -1,3 +1,4 @@
+import { publishProviderReceipt } from '../../../native-chat/agent-session-wire/journal-ingress/provider-receipt-publication'
 import type { JournalHandoverIdentity } from '../../../native-chat/agent-session-journal/journal-store-contracts'
 import type { ClaudeDispatchWaiter, ClaudeSession } from '../claude-structured-session-state'
 
@@ -52,11 +53,14 @@ export function withdrawClaudeDispatchReceipt(
   waiter: ClaudeDispatchWaiter
 ): void {
   if (waiter.clientMessageId !== null && waiter.handover !== undefined) {
-    session.events?.withdrawProviderReceipt?.({
-      clientMessageId: waiter.clientMessageId,
-      ...waiter.handover,
-      fence: waiter.dispatchFence
-    })
+    const { handover, clientMessageId, dispatchFence: fence } = waiter
+    publishProviderReceipt(() =>
+      session.events?.withdrawProviderReceipt?.({
+        clientMessageId,
+        ...handover,
+        fence
+      })
+    )
   }
 }
 

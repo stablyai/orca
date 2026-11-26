@@ -1,5 +1,6 @@
 import type { CodexTurnHost, CodexTurnInput } from './codex-structured-turn-contract'
 import type { JournalHandoverIdentity } from '../../../native-chat/agent-session-journal/journal-store-contracts'
+import { publishProviderReceipt } from '../../../native-chat/agent-session-wire/journal-ingress/provider-receipt-publication'
 import type { StructuredAgentSessionTransitionSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
 import { captureCodexMessageCompilerInputs } from '../catalog/codex-structured-service-tier'
 import {
@@ -247,12 +248,14 @@ export async function dispatchCodexTurn(
     }
     return () => {
       if (input.isCurrent?.() !== false) {
-        session.events?.recordProviderReceipt?.({
-          clientMessageId: input.clientMessageId,
-          ...handover,
-          fence,
-          observedAt: now()
-        })
+        publishProviderReceipt(() =>
+          session.events?.recordProviderReceipt?.({
+            clientMessageId: input.clientMessageId,
+            ...handover,
+            fence,
+            observedAt: now()
+          })
+        )
       }
     }
   }

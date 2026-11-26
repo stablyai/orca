@@ -49,8 +49,8 @@ export type StructuredAgentSessionTransition = {
 }
 
 export type StructuredAgentSessionTransitionSink = {
-  withdrawProviderReceipt?(handover: ProviderReceiptHandover): void
-  recordProviderReceipt?(receipt: ProviderReceiptObservation): void
+  withdrawProviderReceipt?(handover: ProviderReceiptHandover): void | Promise<void>
+  recordProviderReceipt?(receipt: ProviderReceiptObservation): void | Promise<void>
   tryAppendTransition?(
     transition: StructuredAgentSessionTransition
   ): StructuredAgentSessionSinkAdmission

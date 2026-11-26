@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { expect } from 'vitest'
+import { expect, vi } from 'vitest'
 import { deliverClaudeReplayFrame } from '../../../../claude/structured/lifecycle/claude-structured-event-delivery'
 import { waitForReplay } from '../../../../claude/structured/dispatch/claude-structured-dispatch-waiters'
 import { createClaudeJournalTranslator } from '../../../../claude/structured/journal/claude-structured-journal-translation'
@@ -105,6 +105,21 @@ export async function openReceiptStream(
   return { close, frames, structural, read }
 }
 
+export function faultingReceiptPublisher(failure: 'throw' | 'reject') {
+  const rejected = Promise.reject<void>(new Error('receipt publish rejected'))
+  // Observe the rejection in the fixture too, so a regression fails by assertion on each runner.
+  void rejected.catch(() => undefined)
+  return {
+    publish: vi.fn(() => {
+      if (failure === 'throw') {
+        throw new Error('receipt publish threw')
+      }
+      return rejected
+    }),
+    handled: vi.spyOn(rejected, 'catch')
+  }
+}
+
 export function claudeReceiptIngress(
   rig: QueuedMessageTestRig,
   dispatch: Pick<
@@ -150,6 +165,7 @@ export function claudeReceiptIngress(
         void settlements.push(rig.host.settleLateDispatch({ sessionId: CHAT, ...outcome }))
     })
   return {
+    translator,
     handover,
     fence: dispatch.fence,
     waiter,
