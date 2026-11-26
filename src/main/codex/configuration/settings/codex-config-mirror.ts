@@ -81,7 +81,10 @@ function mirrorSystemConfigIntoManagedCodexHome(homes: CodexSettingsPromotionHom
     // Keep the baseline: it must describe a config this pass published. The guard is still owed.
     return { ran: false, complete: false }
   }
-  reportCodexConfigSyncOutcome(homes.runtimeHomePath, getCodexConfigSyncStatus(homes))
+  if (!homes.guestHome) {
+    // The WSL guest reports the status it reads after the pass instead.
+    reportCodexConfigSyncOutcome(homes.runtimeHomePath, getCodexConfigSyncStatus(homes))
+  }
   if (mirrorResult.status === 'skipped-missing-source') {
     // Bootstrap seeded homes only; advancing an existing baseline would strand unmirrored changes.
     const seeded = !readCodexSettingsBaseline(homes.runtimeHomePath)
