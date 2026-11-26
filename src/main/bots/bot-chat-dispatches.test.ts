@@ -8,16 +8,13 @@ import '../runtime/orchestration/db/contract-constants'
 import '../runtime/orchestration/db/messages/mailbox-routing-page'
 import '../runtime/orchestration/db/dispatch-row-writer'
 import '../runtime/orchestration/db/attempt-outcome-projection'
-import { botDispatches } from './bot-chat-dispatches'
+import { botDispatches, workerRecordDispatchIds } from './bot-chat-dispatches'
 import { openRemoteRunLink } from '../runtime/orchestration/db/remote-owned/remote-run-links'
 import {
   recordRemoteStart,
   reserveRemotePlacement
 } from '../runtime/orchestration/db/remote-owned/remote-placements'
-import {
-  botChatTreeDispatchIds,
-  placeBotChatDispatches
-} from '../../shared/bots/bot-chat-tree-model'
+import { placeBotChatDispatches } from '../../shared/bots/bot-chat-tree-model'
 import { botWorkspaceChats } from '../../shared/bots/bot-workspace-chats'
 
 const CHAT_SESSION = testOrcaSessionId('chat-session')
@@ -146,7 +143,7 @@ describe('botDispatches: a worker started on a paired server', () => {
       }
     ]
     // Its row is its Dispatch's: no worker record here is read for it, so settled reads stay cached.
-    expect(botChatTreeDispatchIds(chats, placeBotChatDispatches(chats, [remote!]), [])).toEqual([])
+    expect(workerRecordDispatchIds(chats, placeBotChatDispatches(chats, [remote!]), [])).toEqual([])
     // The sidebar lists the server's workspace under its chat, not Home.
     expect(botWorkspaceChats(placeBotChatDispatches(chats, [remote!]), [], 'home')).toEqual({
       'repo::/server/child': 'chat'

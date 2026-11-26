@@ -1,5 +1,8 @@
 // Follows a bot's Dispatches from the chats that started them through the workers they started in turn.
-import type { BotChatTreeDispatch } from '../../shared/bots/bot-chat-tree-model'
+import {
+  botChatTreeDispatchIds,
+  type BotChatTreeDispatch
+} from '../../shared/bots/bot-chat-tree-model'
 import type { DispatchCreatorLink } from '../runtime/orchestration/db/dispatch-context/dispatch-links-by-id'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 
@@ -166,4 +169,15 @@ export function botDispatches(
   creators: Creators
 ): BotChatTreeDispatch[] {
   return new BotDispatchPlacement(chatOfSession, chatOfPaneKey, creators).walk(db).dispatches()
+}
+
+/** The Dispatches whose worker records a tree read needs. A paired server's own Dispatch has none
+ *  here (its row is its Dispatch's), so asking would defeat the settled-worker cache every read. */
+export function workerRecordDispatchIds(
+  ...args: Parameters<typeof botChatTreeDispatchIds>
+): string[] {
+  const serverOwned = new Set(
+    args[1].flatMap((entry) => (entry.dispatch.serverEnvironmentId ? [entry.dispatch.id] : []))
+  )
+  return botChatTreeDispatchIds(...args).filter((id) => !serverOwned.has(id))
 }
