@@ -29,3 +29,15 @@ it('bounds a hand-built record with many keys sharing a chat leaf', () => {
   expect(Object.keys(kept)).toHaveLength(1_000)
   expect(kept[`structured-agent-session-s1:${LEAF_1}`]).toBe(1)
 })
+
+it('keeps the conversation mark ahead of newer legacy marks at the key cap', () => {
+  const marks: Record<string, number> = { [`structured-agent-session-s1:${LEAF_1}`]: 1 }
+  for (let index = 0; index < 1_000; index++) {
+    marks[`agent-chat-tab-v1-${index}:${LEAF_1}`] = index + 2
+  }
+
+  const kept = sanitizePaneKeyTimestampRecord(marks)
+  expect(Object.keys(kept)).toHaveLength(1_000)
+  expect(kept[`structured-agent-session-s1:${LEAF_1}`]).toBe(1)
+  expect(kept[`agent-chat-tab-v1-0:${LEAF_1}`]).toBeUndefined()
+})

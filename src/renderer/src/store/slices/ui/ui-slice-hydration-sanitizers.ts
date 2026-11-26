@@ -180,7 +180,12 @@ export function sanitizePaneKeyTimestampRecord(
     .flatMap(({ keys }) =>
       keys
         .filter(([key]) => current === undefined || !Object.hasOwn(current, key))
-        .toSorted((left, right) => right[1] - left[1])
+        .toSorted(
+          ([leftKey, leftAt], [rightKey, rightAt]) =>
+            Number(chatPaneKeySessionId(rightKey) !== null) -
+              Number(chatPaneKeySessionId(leftKey) !== null) ||
+            rightAt - leftAt
+        )
     )
     .slice(0, available)
   return Object.fromEntries([...retained, ...remaining])
