@@ -43,7 +43,7 @@ export function markdownToDocText(markdown: string): MarkdownText {
   const spans: Span[] = []
   const out: string[] = []
   let length = 0
-  const fence = createMarkdownFenceTracker()
+  const fence = createMarkdownFenceTracker({ closingFenceRules: 'commonmark' })
   // A soft-wrapped line continues the paragraph above it.
   let open = false
   const push = (line: string, style: Omit<Paragraph, 'start' | 'end'> = {}, raw = false) => {

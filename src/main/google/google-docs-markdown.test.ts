@@ -17,4 +17,15 @@ it('keeps shorter and mismatched fences literal inside a Docs code block', () =>
   expect(markdownToDocText('~~~\n```\n**literal**\n~~~\nAfter').text).toBe(
     '```\n**literal**\nAfter'
   )
+  const mixed = markdownToDocText('~~~\n~~~```\n**literal**\n~~~\n# After')
+  expect(mixed.text).toBe('~~~```\n**literal**\nAfter')
+  expect(mixed.spans).toEqual([
+    { start: 0, end: 6, code: true },
+    { start: 7, end: 18, code: true }
+  ])
+  expect(mixed.paragraphs.at(-1)).toEqual({ start: 19, end: 24, heading: 1 })
+  const tab = markdownToDocText('```\nx\n```\t\n# After')
+  expect(tab.text).toBe('x\nAfter')
+  expect(tab.spans).toEqual([{ start: 0, end: 1, code: true }])
+  expect(tab.paragraphs.at(-1)).toEqual({ start: 2, end: 7, heading: 1 })
 })

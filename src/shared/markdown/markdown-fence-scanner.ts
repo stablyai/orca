@@ -9,15 +9,20 @@ export type MarkdownFenceTracker = {
 
 // Top-level fence delimiters may be indented by at most three spaces.
 const FENCE_LINE = /[ ]{0,3}(`{3,}|~{3,})/y
-function hasClosingSuffix(content: string, start: number, end: number): boolean {
+function hasClosingSuffix(
+  content: string,
+  start: number,
+  end: number,
+  commonMark: boolean
+): boolean {
   let sawWhitespace = false
   for (let index = start; index < end; index += 1) {
     const character = content.charCodeAt(index)
-    if (character === 32) {
+    if (character === 32 || (commonMark && character === 9)) {
       sawWhitespace = true
       continue
     }
-    if ((character === 126 || character === 96) && !sawWhitespace) {
+    if (!commonMark && (character === 126 || character === 96) && !sawWhitespace) {
       continue
     }
     return false
@@ -34,10 +39,13 @@ function hasBacktick(content: string, start: number, end: number): boolean {
   return false
 }
 
-/** Tracks fenced blocks using the editor parser's closing rules. */
-export function createMarkdownFenceTracker(): MarkdownFenceTracker {
+/** Tracks fenced blocks, defaulting to the editor parser's closing rules. */
+export function createMarkdownFenceTracker(
+  options: { closingFenceRules?: 'editor' | 'commonmark' } = {}
+): MarkdownFenceTracker {
   let marker = ''
   let length = 0
+  const commonMark = options.closingFenceRules === 'commonmark'
 
   return {
     get insideFence(): boolean {
@@ -60,7 +68,7 @@ export function createMarkdownFenceTracker(): MarkdownFenceTracker {
         if (
           lineMarker === marker &&
           lineLength >= length &&
-          hasClosingSuffix(content, suffixStart, lineEnd)
+          hasClosingSuffix(content, suffixStart, lineEnd, commonMark)
         ) {
           marker = ''
           length = 0
