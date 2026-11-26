@@ -78,14 +78,17 @@ export function enrichStructuredAgentEfforts(
   ) {
     return state
   }
+  const listed = catalog.models.map((row) => discoveredModel(row, false, state.record.agent))
+  const detailsById = new Map(listed.map((row) => [row.id, row.details]))
+  const models = fillUnknownCatalogEfforts(state.catalog.models, listed).map((model) => {
+    const listedDetails = detailsById.get(model.id)
+    return listedDetails ? { ...model, details: { ...model.details, ...listedDetails } } : model
+  })
   return {
     ...state,
     catalog: {
       ...state.catalog,
-      models: fillUnknownCatalogEfforts(
-        state.catalog.models,
-        catalog.models.map((row) => discoveredModel(row, false, state.record.agent))
-      )
+      models
     }
   }
 }

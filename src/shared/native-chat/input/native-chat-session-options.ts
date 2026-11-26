@@ -3,6 +3,7 @@ import type {
   AgentCliModelRequirement,
   AgentCliUpdateAgent
 } from '../../agent-launch/installation/agent-cli-update'
+import type { NativeChatModelDetails } from './native-chat-model-details'
 
 export type SessionOptionValue = string | boolean
 
@@ -16,6 +17,8 @@ export type SessionOptionSelectChoice = {
   legacy?: true
   /** Listed only by a matching search; never set on the current choice. */
   hidden?: true
+  /** Model choices only: what the host's listing states about the model. */
+  details?: NativeChatModelDetails
 }
 
 /** default describes catalog display, never running-agent evidence. dispatched is sent but unread and may be corrected by reports.

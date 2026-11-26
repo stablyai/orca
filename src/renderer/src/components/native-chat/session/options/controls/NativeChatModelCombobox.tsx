@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { Check } from 'lucide-react'
 import {
   Command,
@@ -8,6 +8,7 @@ import {
   CommandItem,
   CommandList
 } from '@/components/ui/command'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { nativeChatModelDescription } from './native-chat-model-description'
 import { useTranslate } from '@/i18n/use-translate'
 import type {
@@ -21,6 +22,9 @@ import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWrit
 import { AgentPickerLegacyModelsToggle } from '../../../../agent/AgentPickerLegacyModelsToggle'
 import { useLegacyModelsExpanded } from '../../../../agent/use-legacy-models-expanded'
 import { NativeChatModelNeedsCliUpdateRow } from './NativeChatModelNeedsCliUpdateRow'
+import { NativeChatModelDetailsCard } from './NativeChatModelDetailsCard'
+
+const LIST_NAVIGATION_KEYS = new Set(['ArrowUp', 'ArrowDown', 'Home', 'End'])
 
 type NativeChatModelComboboxProps = {
   choices: readonly SessionOptionSelectChoice[]
@@ -43,6 +47,7 @@ function modelChoiceFilter(value: string, search: string, keywords?: string[]): 
   return terms.every((term) => haystack.includes(term)) ? 1 : 0
 }
 
+/** Searchable model picker with hover and keyboard-accessible model details. */
 export function NativeChatModelCombobox({
   choices,
   currentValue,
@@ -71,10 +76,18 @@ export function NativeChatModelCombobox({
   const needsUpdate = cliUpdate
     ? cliUpdate.models.filter((model) => !choices.some((choice) => choice.value === model.id))
     : []
+  // Controlled because cmdk reports highlight moves only to a controlled root.
+  const [highlighted, setHighlighted] = useState(currentValue ?? '')
+  // The row whose details card is open: the hovered row, or the row arrow keys moved to.
+  const [detailsValue, setDetailsValue] = useState<string | null>(null)
+  const detailsIdPrefix = useId()
+  const navigatingByKey = useRef(false)
   const renderChoice = (choice: SessionOptionSelectChoice) => {
     const label = nativeChatSessionChoiceLabel(choice, say)
     const current = choice.value === currentValue
-    return (
+    const detailsOpen = choice.details !== undefined && detailsValue === choice.value
+    const detailsId = `${detailsIdPrefix}-${choice.value.replace(/\s+/g, '-')}`
+    const item = (
       <CommandItem
         key={choice.value}
         value={choice.value}
@@ -82,6 +95,7 @@ export function NativeChatModelCombobox({
         selection="palette"
         disabled={readOnly}
         aria-current={current || undefined}
+        aria-describedby={detailsOpen ? detailsId : undefined}
         onSelect={() => {
           if (!current) {
             onSelect(choice.value)
@@ -98,6 +112,34 @@ export function NativeChatModelCombobox({
         </span>
       </CommandItem>
     )
+    if (!choice.details) {
+      return item
+    }
+    const details = choice.details
+    return (
+      <HoverCard
+        key={choice.value}
+        open={detailsOpen}
+        onOpenChange={(open) => {
+          navigatingByKey.current = false
+          setDetailsValue((shown) => (open ? choice.value : shown === choice.value ? null : shown))
+        }}
+        openDelay={300}
+        closeDelay={100}
+      >
+        <HoverCardTrigger asChild>{item}</HoverCardTrigger>
+        <HoverCardContent
+          id={detailsId}
+          side="left"
+          align="start"
+          sideOffset={8}
+          collisionPadding={8}
+          variant="row-details"
+        >
+          <NativeChatModelDetailsCard label={label} details={details} />
+        </HoverCardContent>
+      </HoverCard>
+    )
   }
   return (
     <Command
@@ -105,9 +147,38 @@ export function NativeChatModelCombobox({
       density="menu"
       label={searchLabel}
       filter={modelChoiceFilter}
-      defaultValue={currentValue}
+      value={highlighted}
+      onValueChange={(value) => {
+        setHighlighted(value)
+        if (navigatingByKey.current) {
+          setDetailsValue(value)
+        }
+      }}
     >
-      <CommandInput ref={search} placeholder={searchLabel} value={query} onValueChange={setQuery} />
+      <CommandInput
+        ref={search}
+        placeholder={searchLabel}
+        value={query}
+        onValueChange={(value) => {
+          setQuery(value)
+          navigatingByKey.current = false
+          setDetailsValue(null)
+        }}
+        // Runs before cmdk's root handler moves the highlight, so the move opens that row's card.
+        onKeyDown={(event) => {
+          if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) {
+            navigatingByKey.current = false
+            return
+          }
+          navigatingByKey.current = LIST_NAVIGATION_KEYS.has(event.key)
+          if (navigatingByKey.current) {
+            // A no-op move (one visible row, or a list edge) fires no onValueChange; open that row now.
+            setDetailsValue(highlighted)
+          } else {
+            setDetailsValue(null)
+          }
+        }}
+      />
       {readOnly && readOnlyReason ? (
         <div className="px-3 py-1.5 text-xs text-muted-foreground">{readOnlyReason}</div>
       ) : null}

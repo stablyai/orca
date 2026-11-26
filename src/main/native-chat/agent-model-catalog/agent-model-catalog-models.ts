@@ -6,7 +6,10 @@ import type {
   AgentModelCatalogConfiguredChoice
 } from './agent-model-catalog-entry'
 
-/** Newer listings own membership/menus; configured facts then discovery/live determine defaults. */
+/**
+ * Merge model rows from discovery and live listings, preserving newer facts and configured defaults.
+ * Newer listings own membership and menus; configured facts then discovery/live determine defaults.
+ */
 export function mergedAgentModelCatalogModels(
   discovered: AgentModelCatalogListing | null,
   live: AgentModelCatalogListing | null,
@@ -60,9 +63,22 @@ export function mergedAgentModelCatalogModels(
       chatEfforts: _newerChatEfforts,
       ...rest
     } = model
+    // Session answers omit listing facts the CLI listing stated.
+    const mergedDetails =
+      model.details || olderModel?.details
+        ? {
+            ...olderModel?.details,
+            ...Object.fromEntries(
+              Object.entries(model.details ?? {}).filter(([, value]) => value !== undefined)
+            )
+          }
+        : undefined
+    const details =
+      mergedDetails && Object.keys(mergedDetails).length > 0 ? mergedDetails : undefined
     return {
       ...rest,
       ...(chatEfforts && efforts === keptEfforts ? { chatEfforts } : {}),
+      ...(details ? { details } : {}),
       // Efforts stay unknown only when neither listing knows this model's menu.
       ...(effortsKnown === false ? { effortsKnown } : {}),
       // Without discovery/configuration, live flags are the only available default evidence.
