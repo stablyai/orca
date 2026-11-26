@@ -16,7 +16,8 @@ const ASKED_BY =
 /** Show the sender's words and keep the images, including on recovered requests. */
 export function connectorMessageShown(
   { role, blocks, origin, asker }: ShownMessage,
-  drawMarkdown = true
+  drawMarkdown = true,
+  textLimit = Infinity
 ): {
   blocks: NativeChatBlock[]
   drawnMarkdown?: string
@@ -28,14 +29,25 @@ export function connectorMessageShown(
   let drawnMarkdown: string | undefined
   const own = blocks.findLastIndex((block) => block.type === 'text')
   const singleText = own === blocks.findIndex((block) => block.type === 'text')
-  const projected = blocks.map((block, index) => {
+  let remaining = textLimit
+  const projected = blocks.flatMap((block, index): NativeChatBlock[] => {
     if (block.type !== 'text') {
-      return block
+      return [block]
+    }
+    if (remaining <= 0) {
+      changed = true
+      return []
     }
     const text = block.text.replace(SENT_LINE, '')
-    const shown = connectorMessageShownText(text)
+    const shown = connectorMessageShownText(text, remaining)
     if (shown === null) {
-      return block
+      if (textLimit === Infinity) {
+        return [block]
+      }
+      const prefix = block.text.slice(0, remaining)
+      remaining -= prefix.length + 2
+      changed ||= prefix.length < block.text.length
+      return [{ ...block, text: prefix }]
     }
     changed = true
     // A failed request carries its own sender; the message's tag names only the latest requester.
@@ -46,7 +58,8 @@ export function connectorMessageShown(
     if (drawMarkdown && singleText && slack) {
       drawnMarkdown = slack.markdown
     }
-    return shownBlock
+    remaining -= shownBlock.text.length + 2
+    return [shownBlock]
   })
   if (!changed) {
     return { blocks }

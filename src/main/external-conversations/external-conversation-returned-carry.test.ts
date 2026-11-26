@@ -454,7 +454,13 @@ it('keeps a failed request and stages only new earlier images that fit the byte 
   const fixture = Buffer.alloc(byteLength)
   fixture.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
   for (const fileId of oldIds) {
-    const path = await storeConnectorImage(attachmentStore, `${fileId}.png`, fixture, fileId)
+    const path = await storeConnectorImage(
+      attachmentStore,
+      `${fileId}.png`,
+      fixture,
+      fileId,
+      new AbortController().signal
+    )
     failed.blocks.push({ type: 'image-ref', path })
   }
   for (let index = 0; index < 20; index += 1) {

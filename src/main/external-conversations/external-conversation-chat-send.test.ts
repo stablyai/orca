@@ -168,7 +168,9 @@ it.each(['old poll stops', 'cloud lease expires'])(
       left = 0
     }
     finish()
-    await expect(result).resolves.toMatchObject({ outcome: 'refused' })
+    await expect(result).resolves.toMatchObject({
+      outcome: ending === 'cloud lease expires' ? 'expired' : 'refused'
+    })
     expect(await (await journal()).reads.sendFingerprints()).toEqual([])
     expect(deliveries.pending(SESSION)).toBe(false)
   }

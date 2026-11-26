@@ -173,10 +173,8 @@ export class PiRpcTurns {
       case 'turn_end':
         this.refreshUsage()
         break
-      case 'agent_end':
-        // This can precede automatic retry or detached compaction.
-        break
       case 'agent_settled':
+        // agent_end can precede automatic retry or detached compaction.
         this.commandCompleted()
         return
       case 'compaction_start':
@@ -226,6 +224,7 @@ export class PiRpcTurns {
 
   stop(): void {
     this.stopped = true
+    this.delivery.stop()
   }
 
   beginCommand(command: StructuredAgentSessionCommandRun): void {

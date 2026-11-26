@@ -14,6 +14,7 @@ import { HOST_CLOCK } from './external-conversation-host'
 import type { ConnectorMessage, ConversationKey, Delivery } from './external-conversation-types'
 import type { AskerImages } from './connector-asker-images'
 import type { DeliveryPreparation } from './external-conversation-delivery-receipts'
+import { ReturnedImageProgress } from './external-conversation-returned-image-progress'
 import { connectorMissingImages } from './connector-asker-stored-image'
 
 /** A native chat a conversation links to; chats run only on this host. */
@@ -50,6 +51,7 @@ export function linkedChat(worktreeId: string, link: ExternalConversationLink): 
 
 export class ChatDeliveries {
   private readonly missingImages = connectorMissingImages()
+  private readonly returnedImageProgress = new ReturnedImageProgress()
   // Chats sent a delivery since their last turn ended; that turn is the delivery's, not Orca-typed.
   private readonly delivered = new Set<string>()
   // Chats a delivery is being sent to; their turn may start before the send returns.
@@ -73,6 +75,7 @@ export class ChatDeliveries {
   /** A watch gap leaves no proof these deliveries still belong to the current turn. */
   clear(): void {
     this.missingImages.clear()
+    this.returnedImageProgress.clear()
     this.generations.clear()
     this.sending.clear()
     this.delivered.clear()
@@ -228,16 +231,21 @@ export class ChatDeliveries {
         stopSending()
       }
     }
+    const stopped = delivery.preparation?.stopped(delivery.preparation.signal(delivery.signal))
+    if (stopped) {
+      return stopped
+    }
     const outcome = await deliverToChat((await chats?.ensure()) ?? null, chatLink(key, chat), {
       ...delivery,
       missingImages: this.missingImages,
+      returnedImageProgress: this.returnedImageProgress,
       admitted
     }).finally(stopSending)
     if (!current()) {
       return outcome
     }
     // Only a committed send's turn is the delivery's. A bot's title reads what its asker wrote.
-    if (outcome.outcome === 'refused') {
+    if (outcome.outcome === 'refused' || outcome.outcome === 'expired') {
       if (sent) {
         this.unadmit(chat.sessionId, sent)
       }

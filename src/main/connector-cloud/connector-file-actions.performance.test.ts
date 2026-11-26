@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
 import { z } from 'zod'
+import { connectorAskerImages } from '../external-conversations/connector-asker-images'
 import { ConnectorCloud } from './connector-cloud'
 import { SIGNED_OUT } from './connector-cloud-request'
 import { fakeMachine, fakeSeam } from './fake-connector-seam.test-fixture'
@@ -81,4 +82,60 @@ it('still offers reconnection when a refresh is rejected and polling can retry',
     fenced = true
     connector.fence()
   }
+})
+
+it.each([20, 200])('bounds image stores for %d simultaneous deliveries', async (count) => {
+  const firstFour = Promise.withResolvers<void>()
+  const finishStores = Promise.withResolvers<string>()
+  const retired = new AbortController()
+  let active = 0
+  let maximum = 0
+  const get = connectorAskerImages({
+    reader: () => async () => ({
+      ok: true,
+      value: {
+        ok: true,
+        result: { download: { url: 'https://fixture.invalid/file', ticket: 'ticket' } }
+      }
+    }),
+    fetch: async () => new Response(Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10)),
+    store: async () => {
+      active += 1
+      maximum = Math.max(active, maximum)
+      if (active === 4) {
+        firstFour.resolve()
+      }
+      try {
+        return await finishStores.promise
+      } finally {
+        active -= 1
+      }
+    }
+  })
+  const request = (index: number, signal: AbortSignal) =>
+    get({
+      botId: 'bot',
+      conversation: { source: 'slack', externalId: String(index) },
+      asker: {
+        userId: 'U1',
+        role: 'owner',
+        place: { kind: 'public_channel', id: 'C1' },
+        text: '@bot\n[image: fixture.png, file FQA]',
+        messageRef: 'slack:T1:C1:2.0:2.0',
+        context: []
+      },
+      signal
+    })
+  const work = Array.from({ length: count }, (_, index) => request(index, retired.signal))
+  await firstFour.promise
+  retired.abort()
+  await Promise.all(work)
+  const successor = request(count, new AbortController().signal)
+  try {
+    expect(active).toBe(4)
+  } finally {
+    finishStores.resolve('/fixture/image.png')
+  }
+  await expect(successor).resolves.toHaveLength(1)
+  expect(maximum).toBe(4)
 })

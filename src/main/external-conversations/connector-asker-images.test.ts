@@ -181,7 +181,11 @@ describe('connectorAskerImages', () => {
     expect(read).toHaveBeenCalledTimes(4)
   })
 
-  it('stops reading an earlier image whose bytes do not match a supported format', async () => {
+  it.each([
+    new Uint8Array(12),
+    new TextEncoder().encode('GIF8zzzzzzzz'),
+    new TextEncoder().encode('zzzzzzzzWEBP')
+  ])('stops streaming a body with an invalid image signature (%#)', async (prefix) => {
     let chunks = 0
     let cancelled = false
     const store = vi.fn(async () => '/attachments/image.png')
@@ -200,7 +204,7 @@ describe('connectorAskerImages', () => {
             {
               pull(controller) {
                 chunks++
-                controller.enqueue(new Uint8Array(12))
+                controller.enqueue(prefix)
                 if (chunks === 4) {
                   controller.close()
                 }

@@ -156,19 +156,19 @@ export function checkpointPendingMutationReceipt(
   return row
 }
 
-export function admitPreparedMutationReceipts(
+export function checkpointPendingMutationReceipts(
   this: OrchestrationDb,
   callerFingerprint: string,
   requestIds: readonly string[],
-  pendingReceipt: string
+  receipt: string
 ): void {
   this.db
     .prepare(
-      `UPDATE mutation_receipts SET receipt = NULL
+      `UPDATE mutation_receipts SET receipt = ?
        WHERE caller_fingerprint = ? AND request_id IN (SELECT value FROM json_each(?))
-         AND state = 'pending' AND receipt = ?`
+         AND state = 'pending'`
     )
-    .run(callerFingerprint, JSON.stringify(requestIds), pendingReceipt)
+    .run(receipt, callerFingerprint, JSON.stringify(requestIds))
 }
 
 export function discardPendingMutationReceipt(
@@ -202,33 +202,42 @@ export function settlePendingMutationReceipts(
   this: OrchestrationDb,
   callerFingerprints: readonly string[],
   receipt: string,
-  retryableReceipt?: string
+  retryableReceipt: string,
+  deferredReceiptPrefix: string
 ): void {
   const fingerprints = JSON.stringify(callerFingerprints)
-  const settle = `UPDATE mutation_receipts
-    SET state = 'completed', receipt = CASE WHEN receipt = ? THEN receipt ELSE ? END,
-        updated_at = datetime('now')
-    WHERE caller_fingerprint IN (SELECT value FROM json_each(?)) AND state = 'pending'`
+  const scope = `caller_fingerprint IN (SELECT value FROM json_each(?)) AND state = 'pending'`
   this.db.exec('BEGIN IMMEDIATE')
   try {
-    const settled = this.db
-      .prepare(`${settle} RETURNING caller_fingerprint, request_id, receipt`)
-      .all(retryableReceipt ?? null, receipt, fingerprints)
-    if (settled.some((row) => row.receipt === retryableReceipt)) {
-      const discard = this.db.prepare(
-        'DELETE FROM mutation_receipts WHERE caller_fingerprint = ? AND request_id = ?'
-      )
-      for (const row of settled) {
-        if (row.receipt === retryableReceipt) {
-          discard.run(String(row.caller_fingerprint), String(row.request_id))
-        }
-      }
-    }
+    this.db
+      .prepare(`DELETE FROM mutation_receipts WHERE ${scope} AND receipt = ?`)
+      .run(fingerprints, retryableReceipt)
+    this.db
+      .prepare(`UPDATE mutation_receipts SET state = 'completed', receipt = ?, updated_at = datetime('now')
+        WHERE ${scope} AND (receipt IS NULL OR instr(receipt, ?) <> 1)`)
+      .run(receipt, fingerprints, deferredReceiptPrefix)
     this.db.exec('COMMIT')
   } catch (error) {
     this.db.exec('ROLLBACK')
     throw error
   }
+}
+
+export function pendingMutationReceiptsWithPrefix(
+  this: OrchestrationDb,
+  callerFingerprints: readonly string[],
+  prefix: string
+): { callerFingerprint: string; requestId: string; receipt: string }[] {
+  return this.db
+    .prepare(`SELECT caller_fingerprint, request_id, receipt FROM mutation_receipts
+      WHERE caller_fingerprint IN (SELECT value FROM json_each(?))
+        AND state = 'pending' AND instr(receipt, ?) = 1`)
+    .all(JSON.stringify(callerFingerprints), prefix)
+    .map((row) => ({
+      callerFingerprint: String(row.caller_fingerprint),
+      requestId: String(row.request_id),
+      receipt: String(row.receipt)
+    }))
 }
 
 export function getMutationReceipt(
@@ -250,10 +259,11 @@ export type MutationReceiptStoreMethods = {
   beginMutationReceipt: typeof beginMutationReceipt
   completeMutationReceipt: typeof completeMutationReceipt
   checkpointPendingMutationReceipt: typeof checkpointPendingMutationReceipt
-  admitPreparedMutationReceipts: typeof admitPreparedMutationReceipts
+  checkpointPendingMutationReceipts: typeof checkpointPendingMutationReceipts
   discardPendingMutationReceipt: typeof discardPendingMutationReceipt
   countPendingMutationReceipts: typeof countPendingMutationReceipts
   settlePendingMutationReceipts: typeof settlePendingMutationReceipts
+  pendingMutationReceiptsWithPrefix: typeof pendingMutationReceiptsWithPrefix
   getMutationReceipt: typeof getMutationReceipt
 }
 
@@ -263,10 +273,11 @@ export function attachMutationReceiptStore(ctor: { prototype: object }): void {
     beginMutationReceipt,
     completeMutationReceipt,
     checkpointPendingMutationReceipt,
-    admitPreparedMutationReceipts,
+    checkpointPendingMutationReceipts,
     discardPendingMutationReceipt,
     countPendingMutationReceipts,
     settlePendingMutationReceipts,
+    pendingMutationReceiptsWithPrefix,
     getMutationReceipt
   })
 }

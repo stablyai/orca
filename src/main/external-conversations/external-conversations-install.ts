@@ -21,6 +21,7 @@ import { connectorImageReader } from './connector-asker-image-reader'
 import type { ConnectorCloud } from '../connector-cloud/connector-cloud'
 import { getAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import type { SlackMirrorCloud } from './slack-mirror-cloud'
+import { recoverConnectorAdmission } from './external-conversation-delivery-preparation'
 import { DeliveryReceipts, type DeliveryReceiptDb } from './external-conversation-delivery-receipts'
 import {
   findLinkForSession,
@@ -143,7 +144,10 @@ export function installExternalConversations(
       replyFill: () => replyOutbox?.fill ?? null,
       replyAdmitted: (sessionId) => replyOutbox?.admitted(sessionId),
       store,
-      receipts: new DeliveryReceipts(() => runtime.getOrchestrationDb()),
+      receipts: new DeliveryReceipts(
+        () => runtime.getOrchestrationDb(),
+        (attempt) => recoverConnectorAdmission(attempt, runtime.ensureStructuredAgentSessionHost)
+      ),
       onWorkspaceRemoved: (listener) =>
         runtime.onWorktreeLifecycle((event) => {
           if (event.kind === 'removed') {
@@ -156,12 +160,12 @@ export function installExternalConversations(
       // Through the cloud a bot's own `read --download` goes through, into the attachment store.
       askerImages: connectorAskerImages({
         reader: () => connectorImageReader(runtime.getConnectorCloud?.()?.fileActionTransport()),
-        store: async (name, bytes, fileId) => {
+        store: async (name, bytes, fileId, signal) => {
           const attachments = getAgentSessionAttachmentStore()
           if (!attachments) {
             throw new Error('no attachment store')
           }
-          return await storeConnectorImage(attachments, name, bytes, fileId)
+          return await storeConnectorImage(attachments, name, bytes, fileId, signal)
         }
       }),
       // An older cloud without refs names no channel; the row then shows Slack's name.

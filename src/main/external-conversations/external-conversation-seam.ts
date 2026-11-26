@@ -4,7 +4,6 @@ import type {
 } from '../../shared/connectors/connector-cloud-contract'
 import type { AdmittedMessage } from '../native-chat/agent-session-wire/host/structured-agent-session-host-types'
 import { nameLinkedPlace } from './external-conversation-place'
-import { isBotAgent } from '../../shared/bot-types'
 import {
   type ConversationChatHost,
   chatTurnFacts,
@@ -12,7 +11,7 @@ import {
 } from './external-conversation-chat'
 import { answerConversation } from './external-conversation-answer'
 import { chatPromptFacts } from './external-conversation-chat-prompts'
-import { botChatFor } from './external-conversation-bots'
+import { startConnectorConversation } from './external-conversation-start'
 import { chatForConversationSend, sendConnectorChat } from './external-conversation-delivery-target'
 import {
   ChatDeliveries,
@@ -193,38 +192,26 @@ export class ExternalConversationSeam {
   }
 
   /** A bot's conversation is a native chat, which starts whether or not status hooks are on. */
-  async start(
+  start(
     host: ExternalConversationHost,
     key: ConversationKey,
     deliveryId: string,
     input: ConnectorStartInput,
     preparation?: DeliveryPreparation
   ): Promise<ConversationStart> {
-    const { agent, target, prompt, ...message } = input
-    const initial = await this.deps.receipts.run(
+    return startConnectorConversation(
+      {
+        ...this.deps,
+        enqueue: (signalWork) => this.chain.enqueue(conversationId(key), signalWork),
+        deliver: (chat, delivery) => this.deliverToChat(host, key, chat, delivery, preparation),
+        link: (chat, text, asker) => this.linkChat(key, chat, text, asker)
+      },
+      host,
       key,
       deliveryId,
-      'connector.start',
-      [agent, target, prompt],
-      () =>
-        this.chain.enqueue(conversationId(key), async (signal) => {
-          if (!isBotAgent(agent)) {
-            return refused('unsupported_agent')
-          }
-          const chat = await botChatFor(this.deps.store, host.bots, key, target)
-          return 'outcome' in chat
-            ? chat
-            : this.deliverToChat(
-                host,
-                key,
-                chat,
-                { ...message, text: prompt, deliveryId, signal },
-                preparation
-              )
-        }),
+      input,
       preparation
     )
-    return { conversation: key, initial }
   }
 
   send(
@@ -246,6 +233,10 @@ export class ExternalConversationSeam {
           this.linked.set(id, { key, worktreeId: queued.workspace.worktreeId })
         }
         return this.chain.enqueue(id, async (signal) => {
+          const stopped = preparation?.stopped(preparation.signal(signal))
+          if (stopped) {
+            return stopped
+          }
           const linked = findLink(this.deps.store, key)
           if (!linked) {
             throw new Error('external_conversation_not_found')

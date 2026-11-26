@@ -24,7 +24,8 @@ function toolResult(
 
 export function itemBlocks(
   item: AgentJournalRenderItem,
-  drawMarkdown: boolean
+  drawMarkdown: boolean,
+  connectorTextLimit?: number
 ): {
   role: NativeChatMessage['role']
   blocks: NativeChatBlock[]
@@ -32,7 +33,7 @@ export function itemBlocks(
 } | null {
   const body = item.body
   if (body.kind === 'message') {
-    return { role: body.role, ...connectorMessageShown(body, drawMarkdown) }
+    return { role: body.role, ...connectorMessageShown(body, drawMarkdown, connectorTextLimit) }
   }
   if (isStructuredAgentSessionToolAction(body)) {
     const call = structuredAgentSessionToolCallBlock(body, item.itemId)

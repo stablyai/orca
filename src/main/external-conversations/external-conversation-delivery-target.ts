@@ -49,7 +49,7 @@ export async function sendConnectorChat(
   if (delivery.reply) {
     deps.replyAdmitted?.(chat.sessionId)
   }
-  if (delivered.outcome !== 'refused') {
+  if (delivered.outcome === 'accepted' || delivered.outcome === 'unknown') {
     recordLastTurn(deps, key, 'conversation', { worktreeId: chat.worktreeId, sshHostId: null })
   }
   return delivered

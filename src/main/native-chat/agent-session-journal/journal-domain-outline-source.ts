@@ -80,7 +80,7 @@ export function journalDomainOutlineSource(item: AgentJournalRenderItem): string
           : { kind: 'status', text: '' }
   }
   const projected = isRootAgentJournalItem(item)
-    ? projectStructuredItemToNativeChat(item, false)
+    ? projectStructuredItemToNativeChat(item, false, 320)
     : null
   let message: JournalOutlineSource['message'] = null
   let preview: NativeChatUserMessagePreview | null = null

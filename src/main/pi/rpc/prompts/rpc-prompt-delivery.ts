@@ -16,6 +16,7 @@ type Submission = {
   bytes: number
   accepted: boolean
   retries: number
+  stopped?: true
   /** Retain sign-in refusal until resubmission. */
   signInRefusal?: string
 }
@@ -86,7 +87,7 @@ function piRejection(fact: SubmissionRejectionFact): AgentSessionDispatchOutcome
 export class PiRpcPromptDelivery {
   private readonly acknowledgements: Submission[] = []
   private readonly waiting: Submission[] = []
-  private readonly retries = new Set<ReturnType<typeof setTimeout>>()
+  private readonly retries = new Map<ReturnType<typeof setTimeout>, Submission>()
   private readonly pending = new Set<Submission>()
   private heldBytes = 0
   private ended = false
@@ -122,6 +123,10 @@ export class PiRpcPromptDelivery {
     this.heldBytes += bytes
     try {
       await before?.()
+      if (submission.stopped) {
+        this.remove(submission)
+        return piRejection(agentSessionFailureFact('cancelled', { neverReachedAgent: true }))
+      }
       if (this.ended) {
         throw new Error('Pi ended before writing the prompt')
       }
@@ -157,6 +162,7 @@ export class PiRpcPromptDelivery {
       const fact = piRpcFailureFact(error, 'providerRejected')
       if (
         !submission.accepted &&
+        !submission.stopped &&
         error.startsWith(MISSING_KEY_PREFIX) &&
         submission.retries++ < 8
       ) {
@@ -182,7 +188,7 @@ export class PiRpcPromptDelivery {
             )
         }, 250)
         timer.unref()
-        this.retries.add(timer)
+        this.retries.set(timer, submission)
         return
       }
       this.remove(submission)
@@ -207,9 +213,26 @@ export class PiRpcPromptDelivery {
     this.finishIfConsumed(submission)
   }
 
+  stop(): void {
+    for (const submission of this.pending) {
+      if (!submission.accepted) {
+        submission.stopped = true
+      }
+    }
+    for (const [timer, submission] of this.retries) {
+      clearTimeout(timer)
+      this.remove(submission)
+      this.deps.settled(
+        submission.id,
+        piRejection(agentSessionFailureFact('cancelled', { neverReachedAgent: true }))
+      )
+    }
+    this.retries.clear()
+  }
+
   end(): void {
     this.ended = true
-    for (const timer of this.retries) {
+    for (const timer of this.retries.keys()) {
       clearTimeout(timer)
     }
     this.retries.clear()

@@ -91,14 +91,16 @@ export function projectStructuredItemsToNativeChat(
 
 export function projectStructuredItemToNativeChat(
   item: AgentJournalRenderItem,
-  drawMarkdown = true
+  drawMarkdown = true,
+  connectorTextLimit?: number
 ): NativeChatMessage | null {
-  const cached = drawMarkdown ? projectedItems.get(item) : undefined
+  const cacheable = drawMarkdown && connectorTextLimit === undefined
+  const cached = cacheable ? projectedItems.get(item) : undefined
   if (cached !== undefined) {
     return cached
   }
   // Reducer updates replace journal items, so unchanged rows keep their render caches.
-  const projected = itemBlocks(item, drawMarkdown)
+  const projected = itemBlocks(item, drawMarkdown, connectorTextLimit)
   const sentAs = item.body.kind === 'message' ? item.body.sentAs : undefined
   const lifecycle = item.body.kind === 'message' ? messageLifecycle(item.body) : {}
   const command = item.body.kind === 'message' ? item.body.command : undefined
@@ -120,7 +122,7 @@ export function projectStructuredItemToNativeChat(
         journalRevision: item.revision
       }
     : null
-  if (drawMarkdown) {
+  if (cacheable) {
     projectedItems.set(item, message)
   }
   return message

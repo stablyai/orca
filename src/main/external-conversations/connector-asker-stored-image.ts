@@ -4,7 +4,6 @@ import { isConnectorFileId } from '../../shared/connector-asker-file-validation'
 import { AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT } from '../../shared/agent-session/agent-session-attachments'
 import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-reason'
 import { CapabilityProbeCache } from '../../shared/concurrency/capability-probe-cache'
-import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import { parseAgentSessionAttachmentStorePath } from '../native-chat/agent-session-attachments/agent-session-attachment-references'
 import {
   removeQuietly,
@@ -18,16 +17,19 @@ export async function storeConnectorImage(
   store: AgentSessionAttachmentStore,
   name: string,
   bytes: Buffer,
-  fileId: string | undefined
+  fileId: string | undefined,
+  signal: AbortSignal
 ): Promise<string> {
   const path = await store.storeFile(name, bytes)
-  if (fileId !== undefined) {
-    try {
+  try {
+    signal.throwIfAborted()
+    if (fileId !== undefined) {
       await writeFile(join(dirname(path), CONNECTOR_FILE_ID), fileId, { flag: 'wx' })
-    } catch (error) {
-      await removeQuietly(dirname(path))
-      throw error
+      signal.throwIfAborted()
     }
+  } catch (error) {
+    await removeQuietly(dirname(path))
+    throw error
   }
   return path
 }
@@ -59,8 +61,7 @@ async function storedConnectorImageId(
 type StoredImage = { bytes: number; fileId: string | undefined }
 
 export function connectorMissingImages(): CapabilityProbeCache<string> {
-  // A stored upload path is never reused. Keep its absence long enough for sparse requests to advance.
-  return new CapabilityProbeCache(Number.POSITIVE_INFINITY, 4096)
+  return new CapabilityProbeCache(5 * 60_000, 4096)
 }
 
 export function connectorImageInspection(
@@ -84,7 +85,12 @@ export function connectorImageInspection(
         lookup = inspectConnectorImage(root, path, signal, missing)
         images.set(path, lookup)
       }
-      return waitForPromiseWithSignal(lookup, signal)
+      return waitForPromiseWithSignal(lookup, signal).catch((error) => {
+        if (signal.aborted) {
+          return 'limit' as const
+        }
+        throw error
+      })
     }
   }
 }
@@ -95,13 +101,12 @@ async function inspectConnectorImage(
   signal: AbortSignal,
   missing: CapabilityProbeCache<string>
 ): Promise<StoredImage | null> {
-  const info = await stat(path).catch((error) => {
-    if (!signal.aborted && isDefinitiveAbsence(error)) {
-      missing.rememberUnsupported(path)
-    }
+  const info = await stat(path).catch(() => null)
+  if (signal.aborted) {
     return null
-  })
-  if (signal.aborted || !info?.isFile() || info.size === 0) {
+  }
+  if (!info?.isFile() || info.size === 0) {
+    missing.rememberUnsupported(path)
     return null
   }
   return { bytes: info.size, fileId: await storedConnectorImageId(root, path) }

@@ -21,6 +21,7 @@ import {
 import type { JournalReturnedCard } from '../native-chat/agent-session-journal/journal-domain-queue-reads'
 import type { ConversationChat } from './external-conversation-chat'
 import type { EarlierImageBudget, ConnectorImage } from './connector-asker-images'
+import type { ReturnedImageProgress } from './external-conversation-returned-image-progress'
 import type { ConnectorImageInspection } from './connector-asker-stored-image'
 
 // What a later send can get past: the agent itself couldn't take the message. A refusal of the
@@ -90,7 +91,8 @@ export async function carriedMessages(
   account: string | undefined,
   now: number,
   direct: readonly ConnectorImage[] = [],
-  inspection?: ConnectorImageInspection
+  inspection?: ConnectorImageInspection,
+  progress?: { owner: ReturnedImageProgress; key: string }
 ): Promise<CarriedMessages> {
   // Oldest first: a failed start's card goes ahead of the queue, so queue order is newest first. A
   // card whose send time is gone came from an earlier Orca, so it is the older.
@@ -104,10 +106,13 @@ export async function carriedMessages(
     AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES -
     direct.reduce((total, image) => total + image.bytes, 0)
   let fileIds = new Set(direct.map((image) => image.fileId))
+  const start = progress?.owner.read(progress.key, eligible) ?? 0
+  let missingPrefix = start
   const carried: JournalReturnedCard[] = []
   const blocks: NativeChatBlock[] = []
   // Keep the oldest whole requests whose images fit; each remaining card can still be retried.
-  cards: for (const each of eligible) {
+  cards: for (let index = start; index < eligible.length; index += 1) {
+    const each = eligible[index]!
     const cardFileIds = new Set(fileIds)
     const ownBlocks: NativeChatBlock[] = []
     let cardBytes = 0
@@ -124,6 +129,9 @@ export async function carriedMessages(
       }
       // An older, unreadable card can still be edited. It needn't hold up the later ones.
       if (stored === null) {
+        if (index === missingPrefix && !inspection?.signal.aborted) {
+          missingPrefix += 1
+        }
         continue cards
       }
       const fileId = stored?.fileId
@@ -147,6 +155,9 @@ export async function carriedMessages(
     fileIds = cardFileIds
     carried.push(each)
     blocks.push(...withSentLine(ownBlocks, each.submittedAt, now))
+  }
+  if (progress && missingPrefix > start) {
+    progress.owner.remember(progress.key, eligible, missingPrefix)
   }
   return {
     blocks,
@@ -230,30 +241,15 @@ export async function readCarriedMessages(
   account: string | undefined,
   direct: readonly ConnectorImage[],
   signal: AbortSignal,
-  inspection?: ConnectorImageInspection
+  inspection?: ConnectorImageInspection,
+  progress?: { owner: ReturnedImageProgress; key: string }
 ): Promise<CarriedMessages> {
   try {
     const returned = await waitForPromiseWithSignal(
       chat.conversation(link.sessionId).then(({ journal }) => journal.queuedMessages.returned()),
       signal
     )
-    const now = Date.now()
-    if (!inspection) {
-      return await carriedMessages(link, returned, account, now, direct)
-    }
-    if (!inspection.signal.aborted) {
-      try {
-        return await carriedMessages(link, returned, account, now, direct, inspection)
-      } catch (error) {
-        if (!inspection.signal.aborted) {
-          throw error
-        }
-      }
-    }
-    // The image deadline may expire. Preserve normal returned requests and omit new earlier images
-    // when their remaining byte budget could not be measured.
-    const carried = await carriedMessages(link, returned, account, now, direct)
-    return { ...carried, earlierBudget: { ...carried.earlierBudget, bytes: 0 } }
+    return await carriedMessages(link, returned, account, Date.now(), direct, inspection, progress)
   } catch (error) {
     if (!signal.aborted) {
       console.warn('[connectors] could not read the chat’s unsent messages', error)

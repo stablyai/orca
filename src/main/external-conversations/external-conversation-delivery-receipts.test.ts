@@ -123,38 +123,45 @@ describe('DeliveryReceipts ledger capacity', () => {
 })
 
 describe('DeliveryReceipts.recorded', () => {
-  it('can retry a batch interrupted before image preparation finished', async () => {
+  it('recovers a prepared batch from the journal outcome of its last admission attempt', async () => {
     const { path, db } = fileDb()
     const before = new DeliveryReceipts(() => db)
     const stalled = new DeliveryPreparation()
+    const superseded = new DeliveryPreparation()
     const sent = new DeliveryPreparation()
     for (const [id, phase] of [
       ['stalled', stalled],
+      ['superseded', superseded],
       ['sent', sent]
     ] as const) {
       const head = before.run(KEY, id, 'connector.start', ['hi'], never, phase)
       void before.carried(KEY, `${id}-later`, 'and this', head, phase)
     }
-    sent.ready()
+    superseded.attempting('session', 'refused-operation')
+    sent.attempting('session', 'accepted-operation')
     db.close()
 
     const reopened = new OrchestrationDb(path)
-    const after = new DeliveryReceipts(() => reopened)
-    const execute = async (): Promise<Delivery> => ({ outcome: 'accepted' })
-    await expect(after.run(KEY, 'stalled', 'connector.start', ['hi'], execute)).resolves.toEqual({
-      outcome: 'accepted'
-    })
-    await expect(
-      after.run(KEY, 'stalled-later', 'connector.send', ['and this'], execute)
-    ).resolves.toEqual({
-      outcome: 'accepted'
-    })
-    for (const id of ['sent', 'sent-later']) {
-      await expect(after.recorded(KEY, id)).resolves.toEqual({
-        outcome: 'unknown',
-        reason: 'replayed_after_restart'
-      })
+    const after = new DeliveryReceipts(
+      () => reopened,
+      async ({ operationId }) =>
+        operationId === 'refused-operation' ? null : { outcome: 'accepted' }
+    )
+    let executed = 0
+    const execute = async (): Promise<Delivery> => {
+      executed += 1
+      return { outcome: 'accepted' }
     }
+    for (const id of ['stalled', 'superseded', 'sent']) {
+      await expect(after.run(KEY, id, 'connector.start', ['hi'], execute)).resolves.toEqual({
+        outcome: 'accepted'
+      })
+      await expect(
+        after.run(KEY, `${id}-later`, 'connector.send', ['and this'], execute)
+      ).resolves.toEqual({ outcome: 'accepted' })
+    }
+    expect(executed).toBe(4)
+    expect(reopened.countPendingMutationReceipts(['connector:slack'])).toBe(0)
     reopened.close()
   })
 

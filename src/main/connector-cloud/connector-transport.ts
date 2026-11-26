@@ -1,6 +1,7 @@
 import type { z } from 'zod'
 import {
   requestConnector,
+  UNREADABLE_ANSWER,
   type ConnectorRequest,
   type ConnectorResult
 } from './connector-cloud-request'
@@ -61,13 +62,19 @@ export class ConnectorAccountTransport {
     const { requests } = options
     requests?.callStarted()
     try {
+      if (options.signal?.aborted) {
+        return UNREADABLE_ANSWER
+      }
       const token = await this.ensure()
       if (!token.ok) {
         requests?.noRequest('token')
         return token
       }
+      if (options.signal?.aborted) {
+        return UNREADABLE_ANSWER
+      }
       const result = await this.send(token.value, path, body, schema, options, false)
-      if (result.ok || result.status !== 401) {
+      if (result.ok || result.status !== 401 || options.signal?.aborted) {
         return result
       }
       // Drop only the refused token; a concurrent call may already hold its replacement.
@@ -78,6 +85,9 @@ export class ConnectorAccountTransport {
       if (!renewed.ok) {
         requests?.noRequest('token')
         return renewed
+      }
+      if (options.signal?.aborted) {
+        return UNREADABLE_ANSWER
       }
       return await this.send(renewed.value, path, body, schema, options, true)
     } finally {

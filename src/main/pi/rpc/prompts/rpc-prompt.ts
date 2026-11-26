@@ -60,7 +60,8 @@ function attachmentError(
 
 async function readImage(
   block: NativeChatImageRefBlock,
-  maxBytes: number
+  maxBytes: number,
+  signal?: AbortSignal
 ): Promise<{ bytes: Buffer; mimeType: string }> {
   if (block.url) {
     throw attachmentError('Pi does not accept image URLs', { reason: 'unsupportedType' })
@@ -74,8 +75,9 @@ async function readImage(
   }
   let bytes: Buffer
   try {
-    bytes = await readClaudeImage(block.path, maxBytes)
+    bytes = await readClaudeImage(block.path, maxBytes, undefined, signal)
   } catch (error) {
+    signal?.throwIfAborted()
     if (error instanceof ClaudeDispatchContentError) {
       throw new PiRpcPromptError('Pi image could not be read', error.failure)
     }
@@ -97,8 +99,10 @@ async function readImage(
 
 export async function preparePiRpcPrompt(
   body: AgentJournalMessageItem,
-  piShrinksImages: boolean
+  piShrinksImages: boolean,
+  signal?: AbortSignal
 ): Promise<PiRpcPrompt> {
+  signal?.throwIfAborted()
   const limits = piRpcImageLimits(piShrinksImages)
   if (body.role !== 'user') {
     throw new Error('Pi prompt must be a user message')
@@ -116,7 +120,8 @@ export async function preparePiRpcPrompt(
           limit: AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT
         })
       }
-      const { bytes, mimeType } = await readImage(block, limits.image)
+      const { bytes, mimeType } = await readImage(block, limits.image, signal)
+      signal?.throwIfAborted()
       totalImageBytes += bytes.byteLength
       if (totalImageBytes > limits.total) {
         throw attachmentError('Pi images exceed the total size limit', {

@@ -6,6 +6,7 @@ import type {
 } from '../../shared/connectors/external-conversation-link'
 import { linkedChat, type LinkableChat } from './external-conversation-chat-delivery'
 import { findLink, type ExternalConversationLinkStore } from './external-conversation-links'
+import { deterministicAgentSessionUuid } from '../runtime/terminal/launch/runtime-agent-launch-resolution'
 import type { Bot } from '../../shared/bot-types'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import {
@@ -19,7 +20,7 @@ export type ConversationBots = {
   /** Why the bot takes no conversation now; null when it does. */
   refusal(botId: string): 'bot_not_found' | 'bot_paused' | null
   /** A new chat for a thread, or the bot's current Chat. */
-  open(target: ExternalConversationBot): Promise<LinkableChat>
+  open(target: ExternalConversationBot, sessionId?: string): Promise<LinkableChat>
   /** The pull requests a bot conversation's work opened. */
   workLinks(link: ExternalConversationLink): Promise<ConnectorWorkLink[]>
 }
@@ -32,7 +33,8 @@ export async function botChatFor(
   store: ExternalConversationLinkStore,
   bots: ConversationBots | undefined,
   key: ConversationKey,
-  bot: ExternalConversationBot
+  bot: ExternalConversationBot,
+  deliveryId?: string
 ): Promise<LinkableChat | Delivery> {
   if (!bots) {
     return refused('bot_not_found')
@@ -46,7 +48,20 @@ export async function botChatFor(
   if (bot.kind === 'bot' && linked && linked.link.bot?.kind !== 'bot-chat') {
     return linkedChat(linked.workspace.worktreeId, linked.link)
   }
-  return { ...(await bots.open(bot)), bot }
+  const sessionId =
+    bot.kind === 'bot' && deliveryId ? deliveryChatId(key, bot, deliveryId) : undefined
+  return { ...(await (sessionId ? bots.open(bot, sessionId) : bots.open(bot))), bot }
+}
+
+/** Reuse the same new thread chat when its first delivery is retried. */
+export function deliveryChatId(
+  key: ConversationKey,
+  bot: ExternalConversationBot,
+  deliveryId: string
+): string {
+  return deterministicAgentSessionUuid(
+    JSON.stringify(['connector-start', key.source, key.externalId, bot.botId, deliveryId])
+  )
 }
 
 /**
