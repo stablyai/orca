@@ -16,7 +16,12 @@ const MAX_REFERENCES = 8
 
 type ConfigPaths = { entries: Record<string, string[]>; originDir: string }
 type ConfigSpecs = { specs: string[]; originDir: string }
-type ConfigSources = { include: ConfigSpecs | null; files: ConfigSpecs | null; configDir: string }
+type ConfigSources = {
+  include: ConfigSpecs | null
+  exclude: ConfigSpecs | null
+  files: ConfigSpecs | null
+  configDir: string
+}
 
 type ConfigMappings = {
   baseUrl: string | null
@@ -30,6 +35,7 @@ type RawConfig = {
   baseUrl?: string
   paths?: Record<string, string[]>
   include?: string[]
+  exclude?: string[]
   files?: string[]
   references: string[]
 }
@@ -61,6 +67,7 @@ function parseConfig(text: string): RawConfig | null {
     baseUrl: typeof options.baseUrl === 'string' ? options.baseUrl : undefined,
     paths,
     include: Array.isArray(config.include) ? stringArray(config.include) : undefined,
+    exclude: Array.isArray(config.exclude) ? stringArray(config.exclude) : undefined,
     files: Array.isArray(config.files) ? stringArray(config.files) : undefined,
     references: references.flatMap((reference) =>
       isRecord(reference) && typeof reference.path === 'string' ? [reference.path] : []
@@ -90,6 +97,7 @@ async function loadConfigMappings(
   let inheritedBaseUrl: string | null = null
   let inheritedPaths: ConfigPaths | null = null
   let inheritedInclude: ConfigSpecs | null = null
+  let inheritedExclude: ConfigSpecs | null = null
   let inheritedFiles: ConfigSpecs | null = null
   if (depth < MAX_EXTENDS_DEPTH) {
     // Why: package-name bases (e.g. @tsconfig/node20) never define project aliases.
@@ -99,10 +107,11 @@ async function loadConfigMappings(
       inheritedBaseUrl = parent?.baseUrl ?? inheritedBaseUrl
       inheritedPaths = parent?.paths ?? inheritedPaths
       inheritedInclude = parent?.sources.include ?? inheritedInclude
+      inheritedExclude = parent?.sources.exclude ?? inheritedExclude
       inheritedFiles = parent?.sources.files ?? inheritedFiles
     }
   }
-  // Why: TypeScript inherits `include` and `files` separately, each relative to the config that set it.
+  // Why: TypeScript inherits `include`, `exclude` and `files` one by one, each relative to its config.
   const ownSpecs = (specs: string[] | undefined): ConfigSpecs | null =>
     specs ? { specs, originDir: configDir } : null
   return {
@@ -113,6 +122,7 @@ async function loadConfigMappings(
     paths: config.paths ? { entries: config.paths, originDir: configDir } : inheritedPaths,
     sources: {
       include: ownSpecs(config.include) ?? inheritedInclude,
+      exclude: ownSpecs(config.exclude) ?? inheritedExclude,
       files: ownSpecs(config.files) ?? inheritedFiles,
       configDir
     },
@@ -157,8 +167,10 @@ function toMappings(config: ConfigMappings): ImportPathMappings | null {
   }
 }
 
+type SpecUsage = 'include' | 'exclude'
+
 /** TypeScript's wildcards: `**` spans directories, while `*` and `?` stay within one segment. */
-function wildcardSegmentsPattern(segments: string[]): RegExp {
+function wildcardSegmentsPattern(segments: string[], usage: SpecUsage): RegExp {
   const source = segments.map((segment, index) => {
     if (segment === '**') {
       return '(?:[^/]+/)*'
@@ -169,39 +181,49 @@ function wildcardSegmentsPattern(segments: string[]): RegExp {
       .join('')
     return index < segments.length - 1 ? `${literal}/` : literal
   })
-  return new RegExp(`^${source.join('')}$`)
+  // Why: an `exclude` entry also drops everything beneath the path it matches.
+  return new RegExp(`^${source.join('')}${usage === 'exclude' ? '(?:$|/)' : '$'}`)
 }
 
-/** Whether an `include` entry, already resolved against its config, names `filePath`. */
-function includeSpecMatches(spec: string, filePath: string): boolean {
-  const lastSegment = spec.slice(Math.max(spec.lastIndexOf('/'), spec.lastIndexOf('\\')) + 1)
+/** Whether an `include` or `exclude` entry, already resolved against its config, names `filePath`. */
+function specMatches(resolvedSpec: string, filePath: string, usage: SpecUsage): boolean {
+  const trimmed = usage === 'exclude' ? resolvedSpec.replace(/[\\/]\*\*$/, '') : resolvedSpec
+  const lastSegment = trimmed.slice(
+    Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\')) + 1
+  )
   // Why: TypeScript reads a last segment without `.`, `*` or `?` as a directory (`src` → `src/**/*`).
-  if (!/[.*?]/.test(lastSegment)) {
-    return getRelativePathInsideRoot(filePath, spec) !== null
-  }
+  const spec = /[.*?]/.test(lastSegment) ? trimmed : `${trimmed}/**/*`
   const wildcardAt = spec.search(/[^\\/]*[*?]/)
   if (wildcardAt === -1) {
-    return getRelativePathInsideRoot(filePath, spec) === ''
+    const relative = getRelativePathInsideRoot(filePath, spec)
+    return usage === 'exclude' ? relative !== null : relative === ''
   }
   const relative = getRelativePathInsideRoot(filePath, spec.slice(0, wildcardAt))
   return (
     relative !== null &&
-    wildcardSegmentsPattern(spec.slice(wildcardAt).split(/[\\/]+/)).test(relative)
+    wildcardSegmentsPattern(spec.slice(wildcardAt).split(/[\\/]+/), usage).test(relative)
   )
 }
 
-/** Whether a project's `files` or `include` list `filePath`; with neither set, all files under it count. */
-function sourcesCover({ include, files, configDir }: ConfigSources, filePath: string): boolean {
+function specsMatch(specs: ConfigSpecs | null, filePath: string, usage: SpecUsage): boolean {
+  return (
+    specs?.specs.some((spec) =>
+      specMatches(resolveModulePath(specs.originDir, spec), filePath, usage)
+    ) ?? false
+  )
+}
+
+/** Whether a project owns `filePath`: listed in `files`, or matched by `include` and not `exclude`. */
+function sourcesCover(
+  { include, exclude, files, configDir }: ConfigSources,
+  filePath: string
+): boolean {
   if (files?.specs.some((file) => resolveModulePath(files.originDir, file) === filePath)) {
     return true
   }
+  // Why: with neither `files` nor `include` set, TypeScript includes everything under the config.
   const includes = include ?? (files ? null : { specs: ['**/*'], originDir: configDir })
-  if (!includes) {
-    return false
-  }
-  return includes.specs.some((spec) =>
-    includeSpecMatches(resolveModulePath(includes.originDir, spec), filePath)
-  )
+  return specsMatch(includes, filePath, 'include') && !specsMatch(exclude, filePath, 'exclude')
 }
 
 /** Alias rules from the nearest tsconfig/jsconfig at or above `filePath`, inside `rootPath`. */

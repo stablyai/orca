@@ -145,9 +145,11 @@ describe('resolveImportNavigationTarget', () => {
   it('uses the referenced project that owns the file, with inherited include and effective baseUrl', async () => {
     const files = memoryFiles({
       '/repo/tsconfig.json':
-        '{ "files": [], "compilerOptions": { "baseUrl": "." }, "references": [{ "path": "./tsconfig.test.json" }, { "path": "./tsconfig.app.json" }] }',
+        '{ "files": [], "compilerOptions": { "baseUrl": "." }, "references": [{ "path": "./tsconfig.test.json" }, { "path": "./tsconfig.legacy.json" }, { "path": "./tsconfig.app.json" }] }',
       '/repo/tsconfig.test.json':
         '{ "include": ["src/**/*.test.ts"], "compilerOptions": { "paths": { "@/*": ["./test-support/*"] } } }',
+      '/repo/tsconfig.legacy.json':
+        '{ "include": ["src"], "exclude": ["**/features"], "compilerOptions": { "paths": { "@/*": ["./test-support/*"] } } }',
       '/repo/tsconfig.app.json':
         '{ "extends": "./config/tsconfig.base.json", "files": ["./types/env.d.ts"], "compilerOptions": { "baseUrl": "." } }',
       '/repo/config/tsconfig.base.json':
