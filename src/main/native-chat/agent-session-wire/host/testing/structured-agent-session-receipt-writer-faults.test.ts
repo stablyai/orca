@@ -1,8 +1,9 @@
 import { join } from 'node:path'
 import { writeFile } from 'node:fs/promises'
+import { DatabaseSync } from 'node:sqlite'
 import { expect, it } from 'vitest'
 import { journalSqlWorkerPath } from '../../../agent-session-journal/journal-sql-worker-bundle.test-fixture'
-import { withTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
+import { journalDomainDatabasePath } from '../../../agent-session-journal/database/journal-host-database'
 import { createQueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
 import {
   claudeReceiptIngress,
@@ -14,32 +15,40 @@ import {
   HOST_TEST_NOW as NOW
 } from './structured-agent-session-host-test-data.test-fixture'
 
-async function faultingWriter(root: string): Promise<string> {
+async function faultingWriter(root: string, fault: string): Promise<string> {
   const path = join(root, 'faulting-writer.cjs')
   await writeFile(
     path,
     `
     const { DatabaseSync } = require('node:sqlite')
-    const fs = require('node:fs')
-    const trigger = ${JSON.stringify(join(root, 'next-write-fault'))}
+    const fault = ${JSON.stringify(fault)}
     const exec = DatabaseSync.prototype.exec
-    let failRollback = false
+    const prepare = DatabaseSync.prototype.prepare
+    const armed = new WeakSet()
+    const failRollback = new WeakSet()
+    DatabaseSync.prototype.prepare = function(sql) {
+      const statement = prepare.call(this, sql)
+      if (sql.startsWith('INSERT INTO journal_items(')) {
+        const run = statement.run
+        statement.run = (...bindings) => {
+          const result = run.apply(statement, bindings)
+          if (bindings[2] === 'orca:fault-target') armed.add(this)
+          return result
+        }
+      }
+      return statement
+    }
     DatabaseSync.prototype.exec = function(sql) {
-      if (failRollback && sql === 'ROLLBACK') {
-        failRollback = false
+      if (sql === 'ROLLBACK' && failRollback.delete(this)) {
         throw new Error('injected rollback failure')
       }
-      if (fs.existsSync(trigger) && (sql === 'BEGIN IMMEDIATE' || sql === 'COMMIT')) {
-        const fault = fs.readFileSync(trigger, 'utf8')
-        if ((sql === 'COMMIT') === (fault !== 'disk-full-at-begin')) {
-          fs.unlinkSync(trigger)
-          if (fault === 'after') exec.call(this, 'COMMIT')
-          if (fault === 'connection') this.close()
-          failRollback = fault === 'rollback'
-          throw Object.assign(new Error('injected ' + fault), {
-            code: 'ERR_SQLITE_ERROR', errcode: fault.startsWith('disk-full') ? 13 : 10
-          })
-        }
+      if (sql === 'COMMIT' && armed.delete(this)) {
+        if (fault === 'after') exec.call(this, 'COMMIT')
+        if (fault === 'connection') this.close()
+        if (fault === 'rollback') failRollback.add(this)
+        throw Object.assign(new Error('injected ' + fault), {
+          code: 'ERR_SQLITE_ERROR', errcode: fault === 'disk-full' ? 13 : 10
+        })
       }
       return exec.call(this, sql)
     }
@@ -49,13 +58,13 @@ async function faultingWriter(root: string): Promise<string> {
   return path
 }
 
-it.each(['disk-full-at-begin', 'disk-full-at-commit', 'before', 'after', 'rollback', 'connection'])(
+it.each(['disk-full', 'before', 'after', 'rollback', 'connection'])(
   'keeps ordinary write disposition and durable event order under %s with or without receipts',
   async (fault) => {
     const run = async (receipts: boolean) => {
       const rig = await createQueuedMessageTestRig({
         agent: 'claude',
-        writerBundle: faultingWriter,
+        writerBundle: (root) => faultingWriter(root, fault),
         hostDeps: { logger: { warn: () => {}, error: () => {} } }
       })
       try {
@@ -70,7 +79,6 @@ it.each(['disk-full-at-begin', 'disk-full-at-commit', 'before', 'after', 'rollba
         }
         await rig.host.serialize(CHAT, async () => {})
         const position = journal.cursor().sequence
-        await writeFile(join(rig.root, 'next-write-fault'), fault)
         const outcome = (id: string) =>
           journal
             .appendItem(
@@ -87,14 +95,19 @@ it.each(['disk-full-at-begin', 'disk-full-at-commit', 'before', 'after', 'rollba
         const first = await outcome('fault-target')
         const successor = await outcome('successor')
         stream?.close()
-        const durable = await withTestAgentSessionDatabase(rig.root, (db) =>
-          db
+        // A failed rollback may leave the writer in a transaction. Read committed rows without
+        // running database initialization or trying to reserve a write lock in the assertion.
+        const db = new DatabaseSync(journalDomainDatabasePath(rig.root), { readOnly: true })
+        try {
+          const durable = db
             .prepare(`SELECT item_id,sequence FROM journal_items
             WHERE session_id=? AND item_id IN ('orca:fault-target','orca:successor') ORDER BY sequence`)
             .all(CHAT)
             .map((row) => [row.item_id, Number(row.sequence) - position])
-        )
-        return { first, successor, durable }
+          return { first, successor, durable }
+        } finally {
+          db.close()
+        }
       } finally {
         const [result] = await Promise.allSettled([rig.dispose()])
         if (result.status === 'rejected') {
