@@ -9,23 +9,31 @@ module.exports = ({ config }) => ({
   // rebuilding; scripts/native-client.mjs populates the cache.
   buildCacheProvider: { plugin: './scripts/native-build-cache.cjs' },
   // Watch action spike: only builds made with ORCA_WATCH_SPIKE=1 register its category and Troubleshoot row.
-  extra: { ...config.extra, orcaWatchSpike: process.env.ORCA_WATCH_SPIKE === '1' },
+  // Siri actions: only builds made with ORCA_SIRI=1 get the App Intents and the setup row.
+  extra: {
+    ...config.extra,
+    orcaWatchSpike: process.env.ORCA_WATCH_SPIKE === '1',
+    orcaSiri: process.env.ORCA_SIRI === '1'
+  },
   ios: {
     ...config.ios,
     // Watch action spike: lets a developer sign a device build under their own Apple team.
     bundleIdentifier: process.env.ORCA_IOS_BUNDLE_ID || config.ios?.bundleIdentifier,
     entitlements: { ...config.ios?.entitlements, 'aps-environment': APS_ENVIRONMENT }
   },
-  plugins: (config.plugins ?? []).map((plugin) =>
-    plugin === 'expo-notifications'
-      ? [
-          'expo-notifications',
-          {
-            enableBackgroundRemoteNotifications: true,
-            mode: APS_ENVIRONMENT,
-            icon: './assets/notification-icon.png'
-          }
-        ]
-      : plugin
-  )
+  plugins: [
+    ...(config.plugins ?? []).map((plugin) =>
+      plugin === 'expo-notifications'
+        ? [
+            'expo-notifications',
+            {
+              enableBackgroundRemoteNotifications: true,
+              mode: APS_ENVIRONMENT,
+              icon: './assets/notification-icon.png'
+            }
+          ]
+        : plugin
+    ),
+    ...(process.env.ORCA_SIRI === '1' ? ['./plugins/ios-siri-app-intents.js'] : [])
+  ]
 })

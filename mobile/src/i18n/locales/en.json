@@ -8695,5 +8695,18 @@
     "replyPlaceholder": "Say a reply",
     "testTitle": "Orca watch test",
     "testBody": "Claude wants to run: echo hello. Allow?"
+  },
+  "siri": {
+    "nativeMissing": "Siri module missing from this build.",
+    "testing": "Testing…",
+    "testOk": "{{ms}} ms. Siri would say: “{{speech}}”",
+    "testFailed": "Failed after {{ms}} ms: {{message}}",
+    "bridge": "Siri bridge",
+    "notSet": "Not set",
+    "urlPlaceholder": "https://your-mac.ts.net:8443",
+    "tokenPlaceholder": "Siri token (~/.orca/siri-bridge-token)",
+    "save": "Save and test",
+    "test": "Test Siri connection",
+    "clear": "Remove Siri bridge"
   }
 }

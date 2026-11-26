@@ -2,7 +2,8 @@
 // Watch bridge (spike): lets the standalone Watch app list and answer terminal Claude Code permission
 // prompts over plain HTTPS. Reads agent status from the local Orca runtime and answers by typing the
 // option's key into that terminal through the version-matched `orca` CLI. Binds to loopback only; expose
-// it with `tailscale funnel`. Every request needs the bearer token in ~/.orca/watch-bridge-token.
+// it with `tailscale funnel`. Every request needs a bearer token: the Watch token in ~/.orca/watch-bridge-token
+// or the Siri token in ~/.orca/siri-bridge-token, each limited to its own endpoints.
 import { createHash, createPrivateKey, randomBytes, sign, timingSafeEqual } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -18,6 +19,7 @@ const PORT = Number(process.env.ORCA_WATCH_BRIDGE_PORT ?? 6790)
 const ORCA_CLI = process.env.ORCA_CLI ?? '/Applications/Orca.app/Contents/Resources/bin/orca'
 const RUNTIME_METADATA = join(homedir(), 'Library/Application Support/orca/orca-runtime.json')
 const TOKEN_PATH = join(homedir(), '.orca', 'watch-bridge-token')
+const SIRI_TOKEN_PATH = join(homedir(), '.orca', 'siri-bridge-token')
 const DEVICES_PATH = join(homedir(), '.orca', 'watch-bridge-devices.json')
 const APNS_DIR = join(homedir(), '.orca', 'watch-apns')
 const APNS_TEAM_ID = process.env.ORCA_WATCH_APNS_TEAM_ID ?? '28HX49S37H'
@@ -25,20 +27,52 @@ const APNS_TOPIC = process.env.ORCA_WATCH_APNS_TOPIC ?? 'com.cjna.orca.watch'
 const POLL_MS = 2000
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
-function loadToken() {
-  if (!existsSync(TOKEN_PATH)) {
+function loadToken(path) {
+  if (!existsSync(path)) {
     mkdirSync(join(homedir(), '.orca'), { recursive: true })
-    writeFileSync(TOKEN_PATH, randomBytes(32).toString('base64url'), { mode: 0o600 })
+    writeFileSync(path, randomBytes(32).toString('base64url'), { mode: 0o600 })
   }
-  chmodSync(TOKEN_PATH, 0o600)
-  return Buffer.from(readFileSync(TOKEN_PATH, 'utf8').trim())
+  chmodSync(path, 0o600)
+  return Buffer.from(readFileSync(path, 'utf8').trim())
 }
-const TOKEN = loadToken()
 
-function authorized(req) {
+// Each client gets only the endpoints it uses: the Watch can't send free text to an idle agent.
+const CLIENTS = [
+  {
+    name: 'watch',
+    token: loadToken(TOKEN_PATH),
+    scopes: new Set(['prompts', 'answer', 'register'])
+  },
+  {
+    name: 'siri',
+    token: loadToken(SIRI_TOKEN_PATH),
+    scopes: new Set(['prompts', 'answer', 'agents', 'message'])
+  }
+]
+
+function authorizedClient(req) {
   const header = req.headers.authorization ?? ''
   const given = Buffer.from(header.startsWith('Bearer ') ? header.slice(7) : '')
-  return given.length === TOKEN.length && timingSafeEqual(given, TOKEN)
+  return (
+    CLIENTS.find(
+      (client) => given.length === client.token.length && timingSafeEqual(given, client.token)
+    ) ?? null
+  )
+}
+
+// Writes type into terminals, so a leaked token can't be used to flood them.
+const WRITE_LIMIT_PER_MINUTE = 20
+const writeLog = new Map()
+function allowWrite(client) {
+  const now = Date.now()
+  const recent = (writeLog.get(client.name) ?? []).filter((at) => now - at < 60_000)
+  if (recent.length >= WRITE_LIMIT_PER_MINUTE) {
+    writeLog.set(client.name, recent)
+    return false
+  }
+  recent.push(now)
+  writeLog.set(client.name, recent)
+  return true
 }
 
 // One newline-delimited JSON request over the runtime's private Unix socket, as the CLI does.
@@ -154,7 +188,9 @@ async function pendingPrompts() {
       detail: [`${status.toolName}: ${status.toolInput ?? ''}`, ...dialog.context]
         .join('\n')
         .slice(0, 1200),
-      source: [status.terminalTitle || tab.title, workspace].filter(Boolean).join(' · '),
+      source: [agentDisplayName(status.terminalTitle || tab.title, status.agentType, ''), workspace]
+        .filter(Boolean)
+        .join(' · '),
       options: dialog.options.map((option) => ({ ...option, label: option.label.slice(0, 90) })),
       allowsText: true,
       createdAt: status.stateStartedAt,
@@ -171,9 +207,124 @@ async function stillWaiting(handle, since) {
   )
 }
 
+// --- Siri: every terminal agent, with text short enough to speak. ---
+
+// Turns agent markdown into one or two sentences Siri can read aloud.
+export function speakable(text, max) {
+  if (typeof text !== 'string') {
+    return ''
+  }
+  const plain = text
+    .replace(/```[\s\S]*?(```|$)/g, ' (code omitted) ')
+    .replace(/`([^`]*)`/g, '$1')
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/https?:\/\/\S+/g, 'a link')
+    .replace(/^\s{0,3}#{1,6}\s+(.*?)[.:]?\s*$/gm, '$1.')
+    .replace(/^\s{0,3}([-*+>]|\d+\.)\s+/gm, '')
+    .replace(/[*_~|]+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (plain.length <= max) {
+    return plain
+  }
+  const cut = plain.slice(0, max)
+  const sentenceEnd = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('? '), cut.lastIndexOf('! '))
+  if (sentenceEnd > max * 0.4) {
+    return cut.slice(0, sentenceEnd + 1)
+  }
+  return `${cut.slice(0, cut.lastIndexOf(' ') > 0 ? cut.lastIndexOf(' ') : max)}…`
+}
+
+// Claude Code and others put a spinner or status glyph before the terminal title.
+export function agentDisplayName(title, agentType, workspace) {
+  const cleaned = (title ?? '').replace(/^[^\p{L}\p{N}]+/u, '').trim()
+  if (cleaned && cleaned.toLowerCase() !== String(agentType).toLowerCase()) {
+    return cleaned.slice(0, 60)
+  }
+  return [agentType, workspace].filter(Boolean).join(' in ')
+}
+
+function isApprovalWait(status) {
+  return status.state === 'waiting' && Boolean(status.interactivePrompt?.includes('"approval"'))
+}
+
+async function terminalAgents() {
+  const { snapshots } = await runtimeCall('session.tabs.listAll', {})
+  return snapshots
+    .flatMap((snapshot) => snapshot.tabs ?? [])
+    .filter((tab) => tab.type === 'terminal' && tab.agentStatus?.terminalHandle)
+    .map((tab) => {
+      const status = tab.agentStatus
+      const workspace = basename((status.worktreeId ?? '').split('::').at(-1) ?? '')
+      const agentType = status.agentType ?? 'agent'
+      const message = status.lastAssistantMessageIsToolOutput
+        ? status.lastCompletedAssistantMessage
+        : status.lastAssistantMessage || status.lastCompletedAssistantMessage
+      return {
+        id: status.paneKey,
+        name: agentDisplayName(status.terminalTitle || tab.title, agentType, workspace),
+        workspace,
+        agentType,
+        state: status.state,
+        stateStartedAt: status.stateStartedAt,
+        needsApproval: isApprovalWait(status),
+        task: speakable(status.prompt, 160),
+        lastMessage: speakable(message, 400),
+        handle: status.terminalHandle
+      }
+    })
+    .sort((a, b) => b.stateStartedAt - a.stateStartedAt)
+}
+
+const withoutHandle = ({ handle: _handle, ...rest }) => rest
+
+async function typeReply(handle, text, declineFirst) {
+  if (declineFirst) {
+    // Esc declines the tool call; the reply then goes in as the next message.
+    await orca('terminal', 'send', '--terminal', handle, '--text', '\u001b')
+    await sleep(600)
+  }
+  // A leading dash would be read as a CLI flag.
+  const safe = text.trim().slice(0, 2000).replace(/^-/, ' -')
+  await orca('terminal', 'send', '--terminal', handle, '--text', safe, '--enter')
+}
+
+// One write at a time: a key typed while another answer is landing could hit the wrong screen.
 let answerChain = Promise.resolve()
+function enqueue(task) {
+  const next = answerChain.then(task)
+  answerChain = next.catch(() => {})
+  return next
+}
+
+function messageAgent(body) {
+  return enqueue(async () => {
+    const text = typeof body.text === 'string' ? body.text.trim() : ''
+    if (!text) {
+      return { status: 400, body: { error: 'Say what to send' } }
+    }
+    const agent = (await terminalAgents()).find((entry) => entry.id === body.agentId)
+    console.log(`message agent=${body.agentId} found=${Boolean(agent)} state=${agent?.state}`)
+    if (!agent) {
+      return { status: 404, body: { error: 'That agent is gone' } }
+    }
+    if (agent.state === 'working') {
+      return { status: 409, body: { error: `${agent.name} is still working` } }
+    }
+    await typeReply(agent.handle, text, agent.needsApproval)
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      await sleep(400)
+      const now = (await terminalAgents()).find((entry) => entry.id === agent.id)
+      if (!now || now.stateStartedAt !== agent.stateStartedAt) {
+        return { status: 200, body: { ok: true, confirmed: true, name: agent.name } }
+      }
+    }
+    return { status: 200, body: { ok: true, confirmed: false, name: agent.name } }
+  })
+}
+
 function answerPrompt(body) {
-  const next = answerChain.then(async () => {
+  return enqueue(async () => {
     // Re-read right before typing: a key sent to a changed screen would answer something else.
     const prompt = (await pendingPrompts()).find((entry) => entry.id === body.promptId)
     console.log(
@@ -188,18 +339,7 @@ function answerPrompt(body) {
       }
       await orca('terminal', 'send', '--terminal', prompt.handle, '--text', body.optionId)
     } else if (body.decision === 'text' && typeof body.text === 'string' && body.text.trim()) {
-      // Esc declines the tool call; the reply then goes in as the next message.
-      await orca('terminal', 'send', '--terminal', prompt.handle, '--text', '\u001b')
-      await sleep(600)
-      await orca(
-        'terminal',
-        'send',
-        '--terminal',
-        prompt.handle,
-        '--text',
-        body.text.slice(0, 2000),
-        '--enter'
-      )
+      await typeReply(prompt.handle, body.text, true)
     } else {
       return { status: 400, body: { error: 'Unsupported answer' } }
     }
@@ -211,8 +351,6 @@ function answerPrompt(body) {
     }
     return { status: 200, body: { ok: true, confirmed: false } }
   })
-  answerChain = next.catch(() => {})
-  return next
 }
 
 // --- Push: one APNs alert per newly waiting prompt, straight to the Watch app's own token. ---
@@ -394,6 +532,28 @@ function readBody(req) {
   })
 }
 
+const listPrompts = async () => (await pendingPrompts()).map(withoutHandle)
+
+// `${method} ${path}` → scope it needs, whether it types into a terminal, and its handler.
+const ROUTES = {
+  'GET /watch/v1/prompts': {
+    scope: 'prompts',
+    handle: async () => ({ status: 200, body: { prompts: await listPrompts() } })
+  },
+  'POST /watch/v1/register': { scope: 'register', handle: (body) => registerDevice(body) },
+  'POST /watch/v1/answer': { scope: 'answer', writes: true, handle: (body) => answerPrompt(body) },
+  // One round trip for Siri: what's waiting plus every agent's state and last words.
+  'GET /siri/v1/overview': {
+    scope: 'agents',
+    handle: async () => {
+      const [prompts, agents] = await Promise.all([listPrompts(), terminalAgents()])
+      return { status: 200, body: { prompts, agents: agents.map(withoutHandle) } }
+    }
+  },
+  'POST /siri/v1/answer': { scope: 'answer', writes: true, handle: (body) => answerPrompt(body) },
+  'POST /siri/v1/message': { scope: 'message', writes: true, handle: (body) => messageAgent(body) }
+}
+
 const server = createServer(async (req, res) => {
   const started = Date.now()
   const reply = (status, body) => {
@@ -404,22 +564,23 @@ const server = createServer(async (req, res) => {
     )
   }
   try {
-    if (!authorized(req)) {
+    const client = authorizedClient(req)
+    if (!client) {
       return reply(401, { error: 'Unauthorized' })
     }
-    if (req.method === 'GET' && req.url === '/watch/v1/prompts') {
-      const prompts = (await pendingPrompts()).map(({ handle: _handle, ...prompt }) => prompt)
-      return reply(200, { prompts })
+    const route = ROUTES[`${req.method} ${req.url}`]
+    if (!route) {
+      return reply(404, { error: 'Not found' })
     }
-    if (req.method === 'POST' && req.url === '/watch/v1/register') {
-      const result = registerDevice(JSON.parse(await readBody(req)))
-      return reply(result.status, result.body)
+    if (!client.scopes.has(route.scope)) {
+      return reply(403, { error: 'This token cannot do that' })
     }
-    if (req.method === 'POST' && req.url === '/watch/v1/answer') {
-      const result = await answerPrompt(JSON.parse(await readBody(req)))
-      return reply(result.status, result.body)
+    if (route.writes && !allowWrite(client)) {
+      return reply(429, { error: 'Too many answers in the last minute' })
     }
-    return reply(404, { error: 'Not found' })
+    const body = req.method === 'POST' ? JSON.parse(await readBody(req)) : undefined
+    const result = await route.handle(body)
+    return reply(result.status, result.body)
   } catch (error) {
     return reply(500, { error: error instanceof Error ? error.message : String(error) })
   }
