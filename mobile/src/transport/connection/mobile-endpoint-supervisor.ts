@@ -52,7 +52,10 @@ export class MobileEndpointSupervisor {
   ) {
     this.hysteresis = new MobileEndpointHysteresis(dependencies.now())
     this.logRelay = createRelayRecoveryLog(dependencies.now, dependencies.onLog)
-    this.relayReconnect = new RelayReconnectController(dependencies, this.recoverRelay.bind(this))
+    // A due lease rotation rides every retry tick, so a gated reprobe still replaces a live session.
+    this.relayReconnect = new RelayReconnectController(dependencies, () =>
+      this.recoverRelay(this.relayRotationPending)
+    )
     this.relayReconnect.reportRecoveryTo(logical)
     this.nudgeRouter = new MobileEndpointNudgeRouter({
       logical,
@@ -264,7 +267,7 @@ export class MobileEndpointSupervisor {
         bundle: this.bundle,
         controller: this.relayReconnect,
         readBundle: () => this.dependencies.readBundle(this.hostId),
-        pendingProven: this.sessionEstablisher.pendingProven,
+        pendingSettled: this.sessionEstablisher.pendingSettled(),
         onAdoptedFresherBundle: () => this.logRelay('adopted fresher durable credential bundle')
       })
       this.bundle = selection.bundle
@@ -312,12 +315,7 @@ export class MobileEndpointSupervisor {
     } finally {
       this.operationInFlight = false
       if (forceReplacement && this.relayRotationPending && this.isActive()) {
-        // A gate (say, a refused pending) books no lease retry, so keep its slow reprobe running instead.
-        const leaseRetryMs = this.relayReconnect.retryDelayMs(leaseRetryFloorMs)
-        if (leaseRetryMs === null) {
-          this.relayReconnect.armCredentialReprobe()
-        }
-        this.leaseRotation.armRetry(leaseRetryMs)
+        this.leaseRotation.armRetry(this.relayReconnect.retryDelayMs(leaseRetryFloorMs))
       }
       // Why: an unforced operation that skipped its dial (direct redialing) or was aborted
       // schedules no retry, so a direct-grace race queued behind it would wait for the next state change.

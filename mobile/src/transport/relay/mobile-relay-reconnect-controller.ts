@@ -284,8 +284,10 @@ export class RelayReconnectController {
     this.scheduleRetry(delay)
   }
 
+  // Null under a gate, whose own slow reprobe (which the caller's retry would otherwise lack) is booked instead.
   retryDelayMs(minimumMs: number): number | null {
     if (this.recoveryGate) {
+      this.scheduleGateReprobe()
       return null
     }
     return Math.max(minimumMs, this.nextAttemptAt - this.dependencies.now())

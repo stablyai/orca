@@ -79,6 +79,11 @@ export class MobileRelaySessionEstablisher {
     this.hostOfflineStreak = new RelayHostOfflineStreak(() => args.logical.getLastConnectedAt())
   }
 
+  // Proven by a 4404 or paused: either way, rereading the keychain for it would find nothing to dial.
+  pendingSettled(): boolean {
+    return this.pendingProven || this.pendingPauseRemainingMs() > 0
+  }
+
   // Time left before a paused pending may dial again; zero while it isn't paused.
   pendingPauseRemainingMs(): number {
     return this.pendingFailures >= PENDING_DIAL_BUDGET
