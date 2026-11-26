@@ -39,3 +39,26 @@ it('keeps a listed level id even when its family row offers that level', () => {
     antigravityListedFamilySelection({ model: 'gemini-3.5-flash-medium', effort: 'medium' }, live)
   ).toBeNull()
 })
+
+it('matches uppercase and mixed-case level suffixes case-insensitively', () => {
+  expect(antigravityListedFamilySelection({ model: 'gemini-4-argon-HIGH' }, LISTED)).toEqual({
+    model: 'gemini-4-argon',
+    effort: 'high'
+  })
+  expect(
+    antigravityListedFamilySelection({ model: 'gemini-4-argon-High', effort: 'medium' }, LISTED)
+  ).toEqual({
+    model: 'gemini-4-argon',
+    effort: 'medium'
+  })
+  const mixed = parseAgyModelListing(
+    [
+      'gemini-4-neon-HIGH\tGemini 4 Neon (High)',
+      'gemini-4-neon-XHigh\tGemini 4 Neon (Extra high)'
+    ].join('\n')
+  )
+  expect(antigravityListedFamilySelection({ model: 'gemini-4-neon-XHigh' }, mixed)).toEqual({
+    model: 'gemini-4-neon',
+    effort: 'xhigh'
+  })
+})

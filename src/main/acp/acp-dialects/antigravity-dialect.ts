@@ -7,15 +7,18 @@ import {
   acpFormElicitationPresentation
 } from '../requests/acp-form-elicitation'
 import { acpPermissionPresentation } from '../requests/acp-timeline-requests'
-import type { ModelInfo, ToolCallUpdate } from '../generated/acp-protocol.generated'
+import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { StructuredAgentListedSelection } from '../../native-chat/agent-session-wire/providers/structured-agent-definition'
 import { pendingAcpResolution, type AcpDialect, type AcpRequestPresentation } from './acp-dialect'
 import { acpReplyNoticeFailure } from './acp-reply-notice-failure'
 import { antigravityExecutorErrorWords } from './antigravity-executor-error'
 import {
-  ANTIGRAVITY_EFFORT_LEVELS,
-  ANTIGRAVITY_LEVEL_SUFFIX
-} from '../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-antigravity'
+  antigravityFamilyEfforts,
+  antigravityModelChoices,
+  splitAntigravityLeveledModelId
+} from '../../../shared/agent-session/options/model-catalog/antigravity-model-families'
+
+export { antigravityModelChoices }
 
 // The server's question forms open with only a count; each field's title is the real question.
 const QUESTION_FORM_MESSAGE = /^The agent has (?:a question|\d+ questions)\.$/
@@ -162,49 +165,16 @@ const TURN_FAILURE_NOTICE =
 // agy drops a session whose agent it cannot rebuild; later prompts find no session.
 const REBUILD_FAILED = 'Failed to rebuild agent: '
 
-// Model options list families; availableModels lists each level as "<family>-<level>".
-function familyEfforts(family: string, models: readonly ModelInfo[]) {
-  const efforts = ANTIGRAVITY_EFFORT_LEVELS.flatMap((value) => {
-    const variant = models.find((model) => model.modelId === `${family}-${value}`)
-    return variant ? [{ value, label: /\(([^()]+)\)$/.exec(variant.name)?.[1] ?? value }] : []
-  })
-  return efforts.length > 0 ? { efforts } : undefined
-}
-
-/** The model choices a chat offers: a family for levels listed as "<family>-<level>" (two or
- *  more, and the family isn't a model itself), every other model on its own. */
-export function antigravityModelChoices(
-  models: readonly Pick<ModelInfo, 'modelId' | 'name'>[]
-): { id: string; label: string }[] {
-  const ids = new Set(models.map((model) => model.modelId))
-  const levels = new Map<string, number>()
-  for (const model of models) {
-    const family = ANTIGRAVITY_LEVEL_SUFFIX.exec(model.modelId)?.[1]
-    if (family && !ids.has(family)) {
-      levels.set(family, (levels.get(family) ?? 0) + 1)
-    }
-  }
-  const choices = new Map<string, string>()
-  for (const model of models) {
-    const family = ANTIGRAVITY_LEVEL_SUFFIX.exec(model.modelId)?.[1]
-    if (family && (levels.get(family) ?? 0) > 1) {
-      if (!choices.has(family)) {
-        choices.set(family, model.name.replace(/\s*\([^()]+\)$/, ''))
-      }
-    } else {
-      choices.set(model.modelId, model.name)
-    }
-  }
-  return [...choices].map(([id, label]) => ({ id, label }))
-}
-
 /** A level id as the family row and level a chat lists in its place; null when the listing names
  *  the id itself or the family does not offer that level and the requested effort. */
 export const antigravityListedFamilySelection: StructuredAgentListedSelection = (
   options,
   listed
 ) => {
-  const [, family, level] = ANTIGRAVITY_LEVEL_SUFFIX.exec(options.model ?? '') ?? []
+  const { family, level } = splitAntigravityLeveledModelId(options.model ?? '') ?? {}
+  if (!family || !level) {
+    return null
+  }
   const offered = listed.find((model) => model.id === family)?.efforts.map(({ value }) => value)
   const effort = options.effort ?? level
   return offered?.includes(level) &&
@@ -248,7 +218,7 @@ export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   toolName: (update) => (update.kind === 'execute' ? 'execute' : undefined),
   // Logout would clear the account shared by every Antigravity chat on this host.
   withheldCommands: ['logout'],
-  familyEfforts,
+  familyEfforts: antigravityFamilyEfforts,
   listedSelection: antigravityListedFamilySelection
 }
 
