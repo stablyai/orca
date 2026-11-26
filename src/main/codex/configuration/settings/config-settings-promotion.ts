@@ -280,7 +280,14 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   }
   const computedFrom = targetExists ? writeTargetObservation.value : null
   // Promotion never rotated the user's config.toml.bak; keep it that way.
-  if (!writeTomlConfigAtomically(writeTarget.path, nextContent, computedFrom, { backup: false })) {
+  // Defense in depth: never publish over \\wsl$, even if ~/.codex became a link into a distro
+  // after the check above; the retry then finds the link and pauses the sync.
+  if (
+    !writeTomlConfigAtomically(writeTarget.path, nextContent, computedFrom, {
+      backup: false,
+      refuseWslTarget: true
+    })
+  ) {
     return null
   }
   return plan

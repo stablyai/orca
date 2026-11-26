@@ -300,7 +300,7 @@
 1 src/main/codex/configuration/shared-server/codex-shared-server-fix.ts
 3 src/main/codex/configuration/shared-server/codex-shared-server-pane.ts
 2 src/main/codex/configuration/shared-server/codex-shared-server-probe.ts
-7 src/main/codex/configuration/toml/config-toml-atomic-write.ts # compare-before-publish re-read of config.toml so a save made after Orca read it is never overwritten (moved here from the worker-only trust transaction)
+8 src/main/codex/configuration/toml/config-toml-atomic-write.ts # compare-before-publish re-read of config.toml so a save made after Orca read it is never overwritten (moved here from the worker-only trust transaction); +1 resolvesIntoWslShare only with refuseWslTarget (promotion write-back), realpath.native only for a Windows drive-letter target (#45247)
 4 src/main/codex/configuration/toml/config-toml-runtime-owned-sections.ts
 9 src/main/codex/history/backfill/codex-session-backfill-marker.ts
 6 src/main/codex/history/backfill/codex-session-backfill.ts
