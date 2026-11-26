@@ -7,6 +7,16 @@ const maxResponseBytes = 1024 * 1024
 
 class DesktopControlError extends Error {}
 class DesktopSignInRequired extends DesktopControlError {}
+class DesktopTemporarilyUnavailable extends DesktopControlError {}
+
+function rethrowRequestError(error) {
+  if (['ABORT_ERR', 'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT'].includes(error?.code)) {
+    throw new DesktopTemporarilyUnavailable(
+      'QwenWork desktop did not respond. Check local control and try again.'
+    )
+  }
+  throw error
+}
 
 function readPrivateFile(path, limit) {
   const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
@@ -112,7 +122,7 @@ function openDesktopConnection(profile, windowsSecurityModule) {
   const endpoint = readEndpoint(profile, windows)
   let account
   let supportsModelSelection = false
-  async function call(method, params) {
+  async function call(method, params, signal) {
     const current = readEndpoint(profile, windows)
     if (
       current.instanceId !== endpoint.instanceId ||
@@ -121,6 +131,7 @@ function openDesktopConnection(profile, windowsSecurityModule) {
     ) {
       throw new DesktopControlError('QwenWork desktop restarted. Launch the chat again.')
     }
+    const timeout = AbortSignal.timeout(12000)
     const response = await new Promise((resolve, reject) => {
       const body = JSON.stringify({ schema_version: 'qwenwork.desktop-request.v1', method, params })
       const outgoing = request(
@@ -136,18 +147,24 @@ function openDesktopConnection(profile, windowsSecurityModule) {
             'content-length': Buffer.byteLength(body),
             authorization: `Bearer ${endpoint.authorization}`
           },
-          signal: AbortSignal.timeout(12000)
+          signal: signal ? AbortSignal.any([signal, timeout]) : timeout
         },
         resolve
       )
       outgoing.on('error', reject)
       outgoing.end(body)
-    })
+    }).catch(rethrowRequestError)
     if (response.headers['x-qwenwork-instance'] !== endpoint.instanceId) {
       response.destroy()
       throw new DesktopControlError('QwenWork desktop instance does not match.')
     }
-    const result = await readResponse(response)
+    if ([429, 502, 503, 504].includes(response.statusCode)) {
+      response.destroy()
+      throw new DesktopTemporarilyUnavailable(
+        'QwenWork desktop is temporarily unavailable. Try again.'
+      )
+    }
+    const result = await readResponse(response).catch(rethrowRequestError)
     if (
       response.statusCode !== 200 ||
       result.schema_version !== 'qwenwork.response.v1' ||
@@ -161,8 +178,8 @@ function openDesktopConnection(profile, windowsSecurityModule) {
     }
     return result.data
   }
-  async function status() {
-    const data = await call('desktop.status', {})
+  async function status(signal) {
+    const data = await call('desktop.status', {}, signal)
     if (
       data.authenticated !== true ||
       typeof data.user?.user_id !== 'string' ||
@@ -190,8 +207,26 @@ function openDesktopConnection(profile, windowsSecurityModule) {
     call,
     status,
     supportsModelSelection: () => supportsModelSelection,
-    containsAuthorization: (text) => text.includes(endpoint.authorization)
+    containsAuthorization: (text) => text.includes(endpoint.authorization),
+    pendingAuthorizationLength: (text) => {
+      // A response may split a credential across polls.
+      for (
+        let length = Math.min(text.length, endpoint.authorization.length - 1);
+        length > 0;
+        length--
+      ) {
+        if (endpoint.authorization.startsWith(text.slice(-length))) {
+          return length
+        }
+      }
+      return 0
+    }
   }
 }
 
-module.exports = { DesktopControlError, DesktopSignInRequired, openDesktopConnection }
+module.exports = {
+  DesktopControlError,
+  DesktopSignInRequired,
+  DesktopTemporarilyUnavailable,
+  openDesktopConnection
+}

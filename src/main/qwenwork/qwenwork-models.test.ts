@@ -7,13 +7,19 @@ import { createAcpAgentConnection } from '../acp/process/acp-agent-connection'
 import { loadWindowsSecurity } from '../../shared/secure-storage/windows-security-addon'
 import { restrictWindowsPathSync } from '../../shared/secure-storage/secure-path-windows-acl'
 
-it('lists enabled desktop models and preserves only the chat selection after reattaching', async () => {
+it('recovers model selection and streams and stops replies in the same desktop conversation', async () => {
   const root = await mkdtemp(join(tmpdir(), 'orca-qwenwork-models-'))
   const control = join(root, 'cli-control')
   const instanceId = '1'.repeat(32)
   const ticket = '2'.repeat(64)
   const sessionId = 'test-chat'
   let sessionModel: string | undefined
+  let catalogUnavailable = false
+  let loseWriteResponse = true
+  let stopping = false
+  const waitingForResult = Promise.withResolvers<void>()
+  const fragments: string[] = []
+  const newModels: string[] = []
   const catalog = [
     { key: 'automatic', display_name: 'Automatic', enabled: true },
     { key: 'second', display_name: 'Second model', enabled: true },
@@ -41,12 +47,18 @@ it('lists enabled desktop models and preserves only the chat selection after rea
         break
       case 'session.create':
         sessionModel = 'automatic'
+        catalogUnavailable = true
         data = { session_id: sessionId }
         break
       case 'session.get':
         data = { session: { session_id: sessionId } }
         break
       case 'model.list':
+        if (catalogUnavailable) {
+          catalogUnavailable = false
+          response.writeHead(503, { 'x-qwenwork-instance': instanceId }).end()
+          return
+        }
         data = { models: catalog }
         break
       case 'model.set':
@@ -55,12 +67,52 @@ it('lists enabled desktop models and preserves only the chat selection after rea
           return
         }
         sessionModel = params.model
+        if (loseWriteResponse) {
+          loseWriteResponse = false
+          response.writeHead(503, { 'x-qwenwork-instance': instanceId }).end()
+          return
+        }
+        data = { scope: 'session', session_id: sessionId, model: sessionModel }
         break
       case 'model.get':
         data = {
           scope: params.scope,
           session_id: params.scope === 'session' ? sessionId : null,
           model: params.scope === 'session' ? sessionModel : 'automatic'
+        }
+        break
+      case 'task.submit':
+        stopping = params.prompt === 'Stop this turn'
+        data = {
+          task_id: params.request_id,
+          session_id: sessionId,
+          terminal: stopping,
+          status: stopping ? 'completed' : 'running',
+          ...(stopping ? {} : { answer: 'Hello', answer_is_final: false })
+        }
+        break
+      case 'task.get':
+        data = {
+          task_id: params.task_id,
+          session_id: sessionId,
+          terminal: fragments.includes('Hello'),
+          status: fragments.includes('Hello') ? 'completed' : 'running',
+          answer: 'Hello'
+        }
+        break
+      case 'task.result':
+        if (stopping) {
+          waitingForResult.resolve()
+          await new Promise<void>((closed) => response.once('close', closed))
+          return
+        }
+        data = {
+          task_id: params.task_id,
+          session_id: sessionId,
+          terminal: true,
+          status: 'completed',
+          answer: 'Hello world',
+          answer_is_final: true
         }
         break
       default:
@@ -119,18 +171,46 @@ it('lists enabled desktop models and preserves only the chat selection after rea
       ]
     })
     expect(sessionModel).toBeUndefined()
-    await original.start({ cwd: root, mcpServers: [] })
-    await expect(original.setConfigOption('model', 'disabled')).rejects.toThrow(/unavailable/i)
-    expect((await original.setConfigOption('model', 'second')).configOptions[0]).toMatchObject({
-      id: 'model',
-      currentValue: 'second'
+    original.subscribe((event) => {
+      if (event.kind !== 'known') {
+        return
+      }
+      const { update } = event.notification
+      if (update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'text') {
+        fragments.push(update.content.text)
+      }
+      if (update.sessionUpdate === 'config_option_update') {
+        newModels.push(
+          ...update.configOptions.flatMap((option) =>
+            option.id === 'model' && option.type === 'select' ? [option.currentValue] : []
+          )
+        )
+      }
     })
+    const started = await original.start({ cwd: root, mcpServers: [] })
+    expect(started.sessionId).toBe(sessionId)
+    expect(started.response.configOptions).toEqual([])
+    await expect(original.setConfigOption('model', 'disabled')).rejects.toThrow(/unavailable/i)
+    await expect(original.setConfigOption('model', 'second')).rejects.toThrow(
+      /temporarily unavailable/i
+    )
+    const send = (text: string) => original.prompt([{ type: 'text', text }])
+    await expect(send('Check the recovered model')).rejects.toThrow(/check it and send again/i)
+    expect(newModels.at(-1)).toBe('second')
+    expect((await send('Reply in two pieces')).stopReason).toBe('end_turn')
+    expect(fragments).toEqual(['Hello', ' world'])
+    const stopped = send('Stop this turn')
+    await waitingForResult.promise
+    await original.cancel()
+    expect((await stopped).stopReason).toBe('cancelled')
+    expect(fragments).toEqual(['Hello', ' world'])
     await original.close()
     const reattached = await connect().start({
       cwd: root,
       mcpServers: [],
       sessionId
     })
+    expect(reattached.kind).toBe('resume')
     expect(reattached.response.configOptions?.[0]).toMatchObject({
       id: 'model',
       currentValue: 'second'
