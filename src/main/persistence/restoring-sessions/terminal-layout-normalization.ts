@@ -59,15 +59,15 @@ export function cloneLayoutWithLeafIds(
   }
 }
 
-export function remapLeafRecordForPersistence(
-  source: Record<string, string> | undefined,
+export function remapLeafRecordForPersistence<T>(
+  source: Record<string, T> | undefined,
   leafIdByInputLeafId: Map<string, string>,
   duplicatedInputLeafIds: Set<string>
-): Record<string, string> | undefined {
+): Record<string, T> | undefined {
   if (!source) {
     return undefined
   }
-  const next: Record<string, string> = {}
+  const next: Record<string, T> = {}
   for (const [leafId, value] of Object.entries(source)) {
     if (duplicatedInputLeafIds.has(leafId)) {
       continue
@@ -80,9 +80,9 @@ export function remapLeafRecordForPersistence(
   return Object.keys(next).length > 0 ? next : undefined
 }
 
-export function leafRecordEquivalent(
-  left: Record<string, string> | undefined,
-  right: Record<string, string> | undefined
+export function leafRecordEquivalent<T>(
+  left: Record<string, T> | undefined,
+  right: Record<string, T> | undefined
 ): boolean {
   const leftEntries = Object.entries(left ?? {})
   const rightRecord = right ?? {}
@@ -189,11 +189,17 @@ export function normalizeTerminalLayoutSnapshotForPersistence(
     leafIdByInputLeafId,
     duplicatedInputLeafIds
   )
+  const paneTitleRevisionByLeafId = remapLeafRecordForPersistence(
+    snapshot.paneTitleRevisionByLeafId,
+    leafIdByInputLeafId,
+    duplicatedInputLeafIds
+  )
   const recordsChanged =
     !leafRecordEquivalent(snapshot.ptyIdsByLeafId, ptyIdsByLeafId) ||
     !leafRecordEquivalent(snapshot.buffersByLeafId, buffersByLeafId) ||
     !leafRecordEquivalent(snapshot.scrollbackRefsByLeafId, scrollbackRefsByLeafId) ||
-    !leafRecordEquivalent(snapshot.titlesByLeafId, titlesByLeafId)
+    !leafRecordEquivalent(snapshot.titlesByLeafId, titlesByLeafId) ||
+    !leafRecordEquivalent(snapshot.paneTitleRevisionByLeafId, paneTitleRevisionByLeafId)
   const metadataChanged =
     activeLeafId !== snapshot.activeLeafId ||
     expandedLeafId !== snapshot.expandedLeafId ||
@@ -206,6 +212,7 @@ export function normalizeTerminalLayoutSnapshotForPersistence(
     buffersByLeafId: _oldBuffersByLeafId,
     scrollbackRefsByLeafId: _oldScrollbackRefsByLeafId,
     titlesByLeafId: _oldTitlesByLeafId,
+    paneTitleRevisionByLeafId: _oldPaneTitleRevisions,
     chatLeafId: _oldChatLeafId,
     ...snapshotWithoutLeafRecords
   } = snapshot
@@ -219,7 +226,8 @@ export function normalizeTerminalLayoutSnapshotForPersistence(
       ...(ptyIdsByLeafId ? { ptyIdsByLeafId } : {}),
       ...(buffersByLeafId ? { buffersByLeafId } : {}),
       ...(scrollbackRefsByLeafId ? { scrollbackRefsByLeafId } : {}),
-      ...(titlesByLeafId ? { titlesByLeafId } : {})
+      ...(titlesByLeafId ? { titlesByLeafId } : {}),
+      ...(paneTitleRevisionByLeafId ? { paneTitleRevisionByLeafId } : {})
     },
     changed: true,
     leafIdByInputLeafId

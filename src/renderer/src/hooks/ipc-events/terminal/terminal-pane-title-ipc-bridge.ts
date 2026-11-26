@@ -30,7 +30,7 @@ function showRuntimePaneTitle(tabId: string, leafId: string, title: string | nul
     Object.keys(titlesByLeafId).length > 0
       ? { ...layoutWithoutTitles, titlesByLeafId }
       : layoutWithoutTitles
-  store.setTabLayout(tabId, nextLayout)
+  store.setTabLayout(tabId, nextLayout, leafId)
   const detail: SetTerminalPaneTitleDetail = { tabId, leafId, title }
   window.dispatchEvent(new CustomEvent(SET_TERMINAL_PANE_TITLE_EVENT, { detail }))
 }

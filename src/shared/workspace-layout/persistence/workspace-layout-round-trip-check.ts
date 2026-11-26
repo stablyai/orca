@@ -58,6 +58,7 @@ export const KNOWN_LOAD_CHANGES: ReadonlySet<string> = new Set([
     'chatLeafId',
     'ptyIdsByLeafId',
     'titlesByLeafId',
+    'paneTitleRevisionByLeafId',
     'lastGridsByLeafId',
     'buffersByLeafId',
     'scrollbackRefsByLeafId'

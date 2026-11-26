@@ -79,6 +79,9 @@ export function cloneTerminalLayoutSnapshot(
   if (layout.titlesByLeafId) {
     cloned.titlesByLeafId = { ...layout.titlesByLeafId }
   }
+  if (layout.paneTitleRevisionByLeafId) {
+    cloned.paneTitleRevisionByLeafId = { ...layout.paneTitleRevisionByLeafId }
+  }
   return cloned
 }
 

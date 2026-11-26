@@ -114,6 +114,8 @@ export type TerminalLayoutSnapshot = {
   /** Durable scrollback snapshot refs per leaf; raw bytes live outside session JSON. */
   scrollbackRefsByLeafId?: Record<string, string>
   titlesByLeafId?: Record<string, string>
+  /** Last explicit edit per pane, including clears that leave no title. */
+  paneTitleRevisionByLeafId?: Record<string, number>
   /** Each pane's last grid, so main starts its terminal at that size. Older builds drop it. */
   lastGridsByLeafId?: Record<string, TerminalGrid>
 }

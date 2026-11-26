@@ -16,6 +16,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-
 import { formatShutdownCheckpointFailureReason } from '../../shared/app-lifecycle/shutdown/renderer-shutdown-events'
 import type { DesktopRelayWrite } from '../../shared/workspace-session/desktop-relay-write'
 import { windowSaveKeepingRelayOwnership } from '../persistence/window-save-relay-ownership'
+import { windowSaveKeepingPaneTitles } from '../persistence/window-save-pane-titles'
 import { applyDesktopRelayWrite } from '../../shared/workspace-session/desktop-relay-ownership'
 
 export type RendererShutdownCapture = {
@@ -168,7 +169,7 @@ export function createRendererShutdownCheckpointService(
                     quitResumeRecordsFor,
                     reconnectFactsFor
                   )
-                : state,
+                : windowSaveKeepingPaneTitles(store.getWorkspaceSession(hostId), state, hostId),
               hostId
             )
           }

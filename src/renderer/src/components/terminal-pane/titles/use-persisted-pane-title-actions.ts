@@ -21,7 +21,7 @@ export function usePersistedPaneTitleActions({
   | 'setPaneTitles'
   | 'tabId'
   | 'worktreeId'
-> & { persistLayoutSnapshot: () => void }) {
+> & { persistLayoutSnapshot: (renamedLeafId?: string) => void }) {
   const removePaneTitleLocally = useCallback(
     (paneId: number) => {
       setPaneTitles((previous) => {
@@ -41,7 +41,7 @@ export function usePersistedPaneTitleActions({
       if (leafId) {
         removedTitleLeafIdsRef.current.add(leafId)
       }
-      persistLayoutSnapshot()
+      persistLayoutSnapshot(leafId)
     },
     [persistLayoutSnapshot, managerRef, paneTitlesRef, removedTitleLeafIdsRef, setPaneTitles]
   )
@@ -53,7 +53,7 @@ export function usePersistedPaneTitleActions({
       if (leafId) {
         removedTitleLeafIdsRef.current.delete(leafId)
       }
-      persistLayoutSnapshot()
+      persistLayoutSnapshot(leafId)
     },
     [persistLayoutSnapshot, managerRef, paneTitlesRef, removedTitleLeafIdsRef, setPaneTitles]
   )
