@@ -217,5 +217,10 @@ export const OPENCODE_ACP_DIALECT: AcpDialect = {
   notification: openCodeChildUpdate,
   promptFailure,
   providerRetry,
+  // OpenCode answers session/prompt at once for a command its catalog
+  // knows: the command steers into the session, and its work streams on
+  // unprompted — a turn of its own, which quiet, Stop or the next send
+  // ends.
+  reactiveWakeups: true,
   sessionInOtherFolder
 }
