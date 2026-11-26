@@ -1,14 +1,10 @@
-import { nativeChatTextAttachmentParts } from '../../../../../shared/native-chat/attachments/native-chat-text-attachment-references'
 import {
   isBrowserAttachmentToken,
   readBrowserAttachmentFile
 } from '@/lib/files/drop/browser-attachment-files'
 import {
   adoptNativeChatStagedFile,
-  currentFiles,
   nativeChatStagedFileOwners,
-  stagedNativeChatFiles,
-  type NativeChatStagedInput,
   type NativeChatStagedUpload,
   type StagedFiles
 } from './native-chat-draft-attachment-staging'
@@ -80,41 +76,4 @@ export function commitNativeChatExpiredUploadRestore(
     restored.add(host)
   }
   return restored
-}
-
-/**
- * The part of a send this draft can still make. A renderer-only browser-file reference that this draft
- * no longer stages (adopted by the chat a refusal returned it to, or released) names bytes it does not
- * own: it is left out, attachment and text reference alike, so a send or Retry from here never ships a
- * reference nothing on the host can read. Everything else is kept as it is.
- */
-export function ownedNativeChatStagedInput<T extends NativeChatStagedInput>(
-  scope: string,
-  input: T
-): T {
-  const files = stagedNativeChatFiles(scope)
-  return withoutUnownedBrowserFiles(files && currentFiles(files), input)
-}
-
-/**
- * The fail-closed rule, applied with the staging that sends: a browser-file reference `owner` does not
- * stage at this moment is removed, attachment and text reference alike. It is the same rule the first
- * send's plan applies, checked again where the payload leaves (see `captureNativeChatStagedInput`).
- */
-export function withoutUnownedBrowserFiles<T extends NativeChatStagedInput>(
-  owner: StagedFiles | undefined,
-  input: T
-): T {
-  const foreign = (path: string): boolean =>
-    isBrowserAttachmentToken(path) && !owner?.paths.has(path)
-  const text = nativeChatTextAttachmentParts(input.text, true, foreign)
-    .map((part) => (part.path ? '' : part.text))
-    .join('')
-  return {
-    ...input,
-    text,
-    ...(input.attachments
-      ? { attachments: input.attachments.filter(({ path }) => !foreign(path)) }
-      : {})
-  }
 }

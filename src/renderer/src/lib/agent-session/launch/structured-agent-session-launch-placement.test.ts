@@ -165,3 +165,55 @@ it('leaves the chat placement untouched when the moved draft is empty', () => {
   expect(positionOf(scope)).toBe(own)
   expect(own.pending).toBe(true)
 })
+
+const { createMemoryNativeChatComposerDraftStorage, setNativeChatComposerDraftStorageForTests } =
+  await import('@/components/native-chat/drafts/native-chat-composer-draft-storage')
+const { clearNativeChatComposerDraftsForTests } =
+  await import('@/components/native-chat/drafts/native-chat-draft-reset')
+const { hydrateNativeChatComposerDrafts } =
+  await import('@/components/native-chat/drafts/native-chat-composer-draft-load')
+
+/** Saved drafts have not loaded yet; `scope` has `saved` waiting in storage. */
+const beforeLoad = (scope: string, saved: StoredNativeChatComposerDraft): void => {
+  clearNativeChatComposerDraftsForTests()
+  const storage = createMemoryNativeChatComposerDraftStorage()
+  storage.drafts.set(scope, saved)
+  setNativeChatComposerDraftStorageForTests(storage)
+}
+const savedEarlier: StoredNativeChatComposerDraft = {
+  text: 'saved earlier',
+  images: [],
+  savedAt: 1
+}
+
+// Hydration may move a placement but never create or revive one. An image-only refusal after the move
+// changes no text: the replay keeps the move's pending placement through that step, rebased onto the
+// draft that loaded.
+it('keeps a pending placement through an image-only replay step onto the loaded draft', async () => {
+  const scope = structuredAgentSessionDraftScopeKey('placement-image-replay')
+  beforeLoad(scope, savedEarlier)
+  move('image-replay', '', { text: 'hello world' }, { from: 6, to: 11 })
+  appendToNativeChatComposerDraft(scope, { images: [{ id: 'late', path: 'blob:late' }] })
+
+  await hydrateNativeChatComposerDrafts()
+
+  const loaded = readNativeChatComposerDraft(scope)
+  expect(loaded.text).toBe('saved earlier\n\nhello world')
+  expect(loaded.images.map(({ id }) => id)).toEqual(['late'])
+  const { from, to } = spanOf(positionOf(scope))
+  expect(loaded.text.slice(from, to)).toBe('world')
+  expect(positionOf(scope)?.pending).toBe(true)
+})
+
+// Once the editor applied the move's placement, the replay over the loaded draft does not arm it again.
+it('does not revive a placement the editor already applied when the drafts load', async () => {
+  const scope = structuredAgentSessionDraftScopeKey('placement-applied-replay')
+  beforeLoad(scope, savedEarlier)
+  const placed = move('applied-replay', '', { text: 'hello world' }, { from: 6, to: 11 })
+  placed.position!.pending = false
+
+  await hydrateNativeChatComposerDrafts()
+
+  expect(readNativeChatComposerDraft(scope).text).toBe('saved earlier\n\nhello world')
+  expect(positionOf(scope)?.pending ?? false).toBe(false)
+})

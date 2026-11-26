@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { AgentJournalMessageItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type * as SendAttempt from '../session/structured/delivery/structured-agent-session-send-attempt'
 
 // The host upload boundary is the only stand-in: browser files, staging, the send lease, the hand-back,
 // the draft store and the first-send plan all run for real.
@@ -13,6 +14,18 @@ let runtimeId = 'rt'
 // Set to hold the next upload until the test settles it (true: it uploads; false: it fails).
 let holdUpload = false
 let settleHeldUpload: ((uploads: boolean) => void) | undefined
+// The host request is the other stand-in: it records what would have left the renderer.
+const attempted: unknown[] = []
+vi.mock(
+  '../session/structured/delivery/structured-agent-session-send-attempt',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof SendAttempt>()),
+    attemptStructuredAgentSessionSend: (args: { entry: { body: unknown } }) => {
+      attempted.push(args.entry.body)
+      return new Promise(() => {})
+    }
+  })
+)
 vi.mock('../attachments/uploads/native-chat-attachment-owner', () => ({
   resolveNativeChatRuntimeSessionAttachmentOwner: (session: { sessionId: string }) => ({
     kind: 'runtime-session',
@@ -75,9 +88,25 @@ const { agentSessionWriteNotDoneParts } =
 const { agentSessionWriteNoticeText } =
   await import('../messages/notices/agent-session-write-notice-text')
 
+const { nativeChatBrowserFileRefusalParts } =
+  await import('../attachments/native-chat-browser-file-references')
+const { imageReferenceToken } =
+  await import('../../../../../shared/native-chat/attachments/native-chat-image-reference')
+
 beforeEach(() => {
   uploadedSources.length = 0
+  attempted.length = 0
 })
+
+/** Send `input` from `sessionId` the way every message leaves: reserved, prepared, then sent. */
+const sendThroughGate = async (
+  sessionId: string,
+  input: { text: string; attachments?: { path: string; previewUri: string }[] }
+) => {
+  const slot = reserveStructuredAgentSessionSend({ sessionId, ...input })!
+  slot.prepare(input)
+  return slot.send({ kind: 'environment', environmentId: 'env' })!.outcome
+}
 
 const session = { runtimeEnvironmentId: 'env' }
 const uploadIdOf = (host: string): string => agentSessionAttachmentUploadIdOfPath(host)!
@@ -98,14 +127,17 @@ const firstSendFromPendingSource = async (name: string) => {
     ['image.png', 'notes.txt', 'sibling.png'].map((file) => new File([file], file))
   )
   ;[image, text, sibling].forEach((path) => stageNativeChatDraftFile(source, path))
-  const request = { quickPrompt: `see ${formatNativeChatFileReference(text)}` }
+  // Numbered as the pending composer numbers its chips: by attachment order, before capture.
+  const request = {
+    quickPrompt: `see [Image #1] and [Image #2], notes ${formatNativeChatFileReference(text)}`
+  }
   const pending = {
     heldChatAttachments: [
       { id: 'image', path: image },
       { id: 'sibling', path: sibling }
     ]
   }
-  const first = worktreeCreationFirstSend(source, request, pending)
+  const first = worktreeCreationFirstSend(request, pending)
   const send = captureNativeChatStagedInput(source, first)
   reconcileNativeChatStagedDraft(source, { text: '', images: [] })
   const prepared = await send.prepare(first, { ...session, sessionId })
@@ -141,14 +173,13 @@ const refusedMessage = (sent: FirstSend): AgentJournalMessageItem => ({
 const expiredOf = (sent: FirstSend): Set<string> =>
   new Set([uploadIdOf(sent.imageHost), uploadIdOf(sent.textHost)])
 
-// One ownership rule for a restored browser file: once the chat a refusal returned it to holds it, that
-// chat owns it and the pending source does not. The source's Retry (planned exactly as the creation
-// plans it) leaves it out, attachment and text reference alike, so nothing it sends names a
-// renderer-only file; the recipient keeps it whole and uploads it on its own Send.
-it('leaves an adopted browser file out of the source Retry and keeps it whole in the recipient', async () => {
+// The structural invariant: a message naming a renderer-only browser file never reaches the host, and
+// it is never edited on the way. A Retry planned after the old chat's refusal adopted the image and
+// file is refused whole before any request: it comes back to the Retry chat intact (its `[Image #k]`
+// numbers still on the images they were given), with a notice naming exactly those files, while the
+// old chat keeps the originals and uploads them on its own Send.
+it('refuses a Retry naming an adopted browser file whole, before any request', async () => {
   const sent = await firstSendFromPendingSource('retry')
-  expect(sent.first.attachments?.map(({ path }) => path)).toEqual([sent.image, sent.sibling])
-
   handBackStructuredAgentSessionMessage(
     sent.sessionId,
     'first',
@@ -157,23 +188,31 @@ it('leaves an adopted browser file out of the source Retry and keeps it whole in
     expiredOf(sent)
   )
 
-  const retry = worktreeCreationFirstSend(sent.source, sent.request, sent.pending)
-  // The plan itself is what goes out when the source has nothing left to prepare.
-  expect(retry.attachments?.map(({ path }) => path)).toEqual([sent.sibling])
-  expect(retry.text).not.toContain(sent.text)
+  const retry = worktreeCreationFirstSend(sent.request, sent.pending)
+  expect(retry).toEqual(sent.first)
+  const retrySession = `${sent.sessionId}-retry`
   const outgoing = await captureNativeChatStagedInput(sent.source, retry).prepare(retry, {
     ...session,
-    sessionId: sent.sessionId
+    sessionId: retrySession
   })
-  const shipped = [outgoing.text, ...(outgoing.attachments ?? []).map(({ path }) => path)]
-  expect(shipped.join(' ')).not.toContain('orca-browser-file:')
-  expect(outgoing.attachments?.map(({ path }) => path)).toEqual([sent.siblingHost])
-  expect(outgoing.text).not.toContain(sent.textHost)
-  expect(uploadedSources).toEqual([])
+  const outcome = await sendThroughGate(retrySession, outgoing)
+
+  expect(outcome).toBe('returned')
+  expect(attempted).toEqual([])
+  expect(getStructuredAgentSessionSendNotice(retrySession)).toBe(
+    agentSessionWriteNoticeText(nativeChatBrowserFileRefusalParts([sent.image, sent.text]))
+  )
+  const backInRetry = readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(retrySession))
+  const chips = backInRetry.images.map(({ id }) => id)
+  expect(backInRetry.images.map(({ path }) => path)).toEqual([sent.image, hostOf(sent.sibling, -1)])
+  expect(backInRetry.text).toBe(
+    `see ${imageReferenceToken(chips[0])} and ${imageReferenceToken(chips[1])}, notes ${formatNativeChatFileReference(sent.text)}`
+  )
 
   const returned = readNativeChatComposerDraft(sent.recipient)
   expect(returned.images.map(({ path }) => path)).toEqual([sent.image, sent.siblingHost])
   expect(returned.text).toContain(formatNativeChatFileReference(sent.text))
+  uploadedSources.length = 0
   const own = { text: returned.text, attachments: [{ path: sent.image }] }
   const resent = await captureNativeChatStagedInput(sent.recipient, own).prepare(own, {
     ...session,
@@ -301,34 +340,65 @@ const lateRefusal = (sent: FirstSend) =>
     undefined,
     expiredOf(sent)
   )
-const browserTokensIn = (input: { text: string; attachments?: readonly { path: string }[] }) =>
-  [input.text, ...(input.attachments ?? []).map(({ path }) => path)].join(' ')
-
-// The fail-closed invariant at the boundary where the payload leaves: a Retry planned while the source
-// still owned its browser files is prepared after the old send's late refusal gave them to the old
-// chat. What goes out holds no browser-file reference the sending staging does not own at that moment,
-// attachment or text reference, with a healthy sibling (uploaded and sent) and without one (nothing left).
-it('never lets a browser file adopted after the plan leave in the prepared payload', async () => {
+// The late interval: the Retry is planned and captured while the source still owns its files, then the
+// old send's late refusal adopts them into the old chat, then the Retry is prepared and sent. Nothing
+// reaches the host, with a healthy sibling (uploaded, yet the message is still refused whole) and
+// without one: a message of one numbered image that went elsewhere is refused, not sent empty and not
+// left as an empty launch.
+it('refuses a Retry whose browser file was adopted after the plan, with or without a sibling', async () => {
   const sent = await firstSendFromPendingSource('late')
-  const retry = worktreeCreationFirstSend(sent.source, sent.request, sent.pending)
-  expect(retry.attachments?.map(({ path }) => path)).toEqual([sent.image, sent.sibling])
+  const retry = worktreeCreationFirstSend(sent.request, sent.pending)
   const withSibling = captureNativeChatStagedInput(sent.source, retry)
-  const alone = { text: '', attachments: [{ path: sent.image }] }
+  const alone = {
+    text: 'look at [Image #1]',
+    attachments: [{ path: sent.image, previewUri: '' }]
+  }
   const withoutSibling = captureNativeChatStagedInput(sent.source, alone)
 
   lateRefusal(sent)
 
-  const retrySession = { ...session, sessionId: `${sent.sessionId}-retry` }
-  const outgoing = await withSibling.prepare(retry, retrySession)
-  expect(browserTokensIn(outgoing)).not.toContain('orca-browser-file:')
-  expect(outgoing.attachments?.map(({ path }) => path)).toEqual([hostOf(sent.sibling, -1)])
+  const bothSession = `${sent.sessionId}-retry`
+  const both = await withSibling.prepare(retry, { ...session, sessionId: bothSession })
   expect(uploadedSources).toEqual([sent.sibling])
+  expect(await sendThroughGate(bothSession, both)).toBe('returned')
 
-  const nothing = await withoutSibling.prepare(alone, retrySession)
-  expect(nothing).toMatchObject({ text: '', attachments: [] })
+  const aloneSession = `${sent.sessionId}-alone`
+  const one = await withoutSibling.prepare(alone, { ...session, sessionId: aloneSession })
+  expect(one).toEqual(alone)
+  expect(await sendThroughGate(aloneSession, one)).toBe('returned')
+  expect(getStructuredAgentSessionSendNotice(aloneSession)).toBe(
+    agentSessionWriteNoticeText(nativeChatBrowserFileRefusalParts([sent.image]))
+  )
+
+  expect(attempted).toEqual([])
   expect(readNativeChatComposerDraft(sent.recipient).images.map(({ path }) => path)).toContain(
     sent.image
   )
+})
+
+// What does leave is the whole prepared message, exactly: a Retry whose originals this source still
+// owns goes out once, every browser file replaced by its host upload and the numbering unchanged.
+it('sends a message whose browser files all became host uploads, whole', async () => {
+  const sent = await firstSendFromPendingSource('owned')
+  const retrySession = `${sent.sessionId}-retry`
+  const retry = worktreeCreationFirstSend(sent.request, sent.pending)
+  const outgoing = await captureNativeChatStagedInput(sent.source, retry).prepare(retry, {
+    ...session,
+    sessionId: retrySession
+  })
+
+  void sendThroughGate(retrySession, outgoing)
+
+  expect(attempted).toHaveLength(1)
+  expect(JSON.stringify(attempted[0])).not.toContain('orca-browser-file:')
+  expect(JSON.stringify(attempted[0])).toContain('see [Image #1] and [Image #2], notes ')
+})
+
+// Preparation never empties a message, but no empty body reaches the host whatever produced it.
+it('sends no request for a message with no content', async () => {
+  const sessionId = 'restore-empty-body'
+  expect(await sendThroughGate(sessionId, { text: '', attachments: [] })).toBe('dropped')
+  expect(attempted).toEqual([])
 })
 
 // An upload still in flight when its original is adopted settles with the staging that holds it then:

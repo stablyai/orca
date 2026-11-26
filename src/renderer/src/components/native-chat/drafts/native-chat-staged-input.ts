@@ -10,7 +10,6 @@ import {
   type NativeChatStagedInput,
   type StagedFiles
 } from './native-chat-draft-attachment-staging'
-import { withoutUnownedBrowserFiles } from './native-chat-expired-upload-restore'
 
 type UploadSession = { sessionId: string; runtimeEnvironmentId: string | null }
 
@@ -139,16 +138,10 @@ export function captureNativeChatStagedInput(scope: string, input?: NativeChatSt
       }
     },
     /**
-     * The payload as it leaves: staged originals become host uploads, then, fail-closed and checked at
-     * this moment (after every upload settled, whatever the plan held when it was made), no browser-file
-     * reference the sending staging does not own goes out, attachment or text reference.
+     * Staged originals this draft owns become their host uploads; nothing else changes. A reference
+     * left unmapped (an original this draft no longer owns) is refused whole where the message leaves.
      */
-    prepare: async <T extends NativeChatStagedInput>(
-      input: T,
-      session: UploadSession
-    ): Promise<T> => {
-      const prepared = await uploadStagedInput(files, input, session)
-      return withoutUnownedBrowserFiles(files && currentFiles(files), prepared)
-    }
+    prepare: <T extends NativeChatStagedInput>(input: T, session: UploadSession): Promise<T> =>
+      uploadStagedInput(files, input, session)
   }
 }

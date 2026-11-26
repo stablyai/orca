@@ -245,9 +245,16 @@ export function appendToNativeChatComposerDraft(
     (loaded) => {
       // Replayed over the loaded draft, the placement follows the same rule as the immediate write.
       const merged = compose(loaded)
+      const kept = nativeChatDraftPositions.get(loaded)
       const placed = position
         ? position(merged)
-        : carriedNativeChatDraftPosition(loaded, merged.text)
+        : merged.text === loaded.text
+          ? // An image-only or same-text step keeps the placement where it was (a copy: installing
+            // one record retires its predecessor's object).
+            kept?.pending
+            ? { ...kept }
+            : undefined
+          : carriedNativeChatDraftPosition(loaded, merged.text)
       if (placed) {
         nativeChatDraftPositions.set(merged, placed)
       }

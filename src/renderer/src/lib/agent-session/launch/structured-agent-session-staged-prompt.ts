@@ -15,6 +15,7 @@ import type { StructuredPromptDeliveryResult } from './structured-agent-session-
 import { abandonNativeChatPendingStagedLeases } from '@/components/native-chat/drafts/native-chat-draft-attachment-staging'
 import type { StructuredAgentSessionSendOutcome } from '@/components/native-chat/session/structured/delivery/structured-agent-session-send-runtime'
 import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
+import { nativeChatBrowserFileReferences } from '@/components/native-chat/attachments/native-chat-browser-file-references'
 
 type LaunchMessage = Pick<StructuredAgentSessionSendInput, 'text' | 'attachments' | 'skills'>
 
@@ -249,7 +250,12 @@ export function prepareStructuredLaunchPromptForCreate(
   if (!prompt) {
     return {}
   }
-  if (prompt.prepare && target.kind === 'environment') {
+  // A prompt still naming a browser file is not the create's to send: after create, the ordinary send
+  // reaches the one place that admits a body (and refuses this one with its notice).
+  if (
+    (prompt.prepare && target.kind === 'environment') ||
+    nativeChatBrowserFileReferences(prompt.text, prompt.attachments).length > 0
+  ) {
     prompt.slot?.legacy()
     return { deferred: true }
   }

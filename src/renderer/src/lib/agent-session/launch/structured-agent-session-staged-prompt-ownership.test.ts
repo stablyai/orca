@@ -1,5 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import type * as HandBack from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-hand-back'
+import type * as SendAttempt from '@/components/native-chat/session/structured/delivery/structured-agent-session-send-attempt'
 
 // The draft write is the only stand-in, counted: reservations, Stop, settlement and the terminal
 // hand-back run for real.
@@ -15,11 +16,26 @@ vi.mock(
   })
 )
 
+// The host request records what would have left the renderer.
+const attempted: unknown[] = []
+vi.mock(
+  '@/components/native-chat/session/structured/delivery/structured-agent-session-send-attempt',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof SendAttempt>()),
+    attemptStructuredAgentSessionSend: (args: { entry: { body: unknown } }) => {
+      attempted.push(args.entry.body)
+      return new Promise(() => {})
+    }
+  })
+)
+
 const {
   finishStagedLaunchPromptWithHandBack,
+  prepareStructuredLaunchPromptForCreate,
   stageStructuredLaunchPrompt,
   takeBackLegacyStructuredLaunchPrompts
 } = await import('./structured-agent-session-staged-prompt')
+const { holdBrowserAttachmentFiles } = await import('@/lib/files/drop/browser-attachment-files')
 const { settleStructuredAgentLaunchPrompt } =
   await import('./structured-agent-session-launch-prompt')
 const { getStructuredAgentSessionPendingSends } =
@@ -67,25 +83,28 @@ it('reports a stopped reservation outcome without a second hand-back', async () 
 
 const target = { kind: 'environment' as const, environmentId: 'env' }
 
-// Preparation can leave nothing this chat owns (everything went to the chat a refusal returned it to,
-// after the plan was made): nothing is sent and nothing is handed back here, and the result says the
-// launch input is finished with, so the first send's files are not kept waiting for this chat.
-it('sends and hands back nothing when preparation leaves nothing this chat owns', async () => {
-  const sessionId = 'ownership-prepared-empty'
-  const prompt = stageStructuredLaunchPrompt(sessionId, 'see the image', {
-    prepare: async () => ({ text: '', attachments: [] })
-  })
+// A create never carries a first message that still names a browser file (nothing prepared it into a
+// host upload): the create goes without it, and the launch's own send afterwards reaches the one place
+// a message leaves, which refuses it whole before any request and returns it to the chat's composer.
+it('lets no create carry a prompt naming a browser file; it is refused before any request', async () => {
+  const sessionId = 'ownership-browser-file'
+  const [token] = holdBrowserAttachmentFiles([new File(['x'], 'shot.png')])
+  const attachments = [{ path: token, previewUri: '' }]
+  const prompt = stageStructuredLaunchPrompt(sessionId, 'look at [Image #1]', { attachments })
+
+  expect(prepareStructuredLaunchPromptForCreate(sessionId, target)).toEqual({ deferred: true })
+  expect(prompt.createOwned).toBeUndefined()
 
   const result = await settleStructuredAgentLaunchPrompt({
     launchResult: Promise.resolve({ sessionId, fence: 1 }),
     target,
-    options: { prompt: 'see the image' },
+    options: { prompt: 'look at [Image #1]', promptAttachments: attachments },
     stagedPrompt: prompt
   })
 
-  expect(result).toMatchObject({ delivered: false, handBackFinished: true })
-  expect(result?.inComposer).toBeUndefined()
-  expect(count(sessionId)).toBe(0)
+  expect(result).toMatchObject({ delivered: false, inComposer: true })
+  expect(attempted).toEqual([])
+  expect(count(sessionId)).toBe(1)
   expect(getStructuredAgentSessionPendingSends(sessionId)).toEqual([])
 })
 

@@ -115,10 +115,18 @@ function applyLoaded(
     }
     const { draft, changed, position } = withAppends(scopeKey, stored, readAtSequence)
     reconcileRestoredImageChecks(scopeKey, draft.images, records.get(scopeKey)?.images ?? [])
+    // Replay may move a placement but never create or revive one: the replayed placement stands only
+    // while the live one it replays is still pending (an applied caret is not armed again).
+    const live = records.get(scopeKey)
+    const livePosition = live && nativeChatDraftPositions.get(live)
     installNativeChatDraftRecord(
       scopeKey,
       draft,
-      position ?? (changed ? undefined : { at: 'start', pending: true })
+      changed
+        ? position && livePosition?.pending
+          ? { ...position, pending: true }
+          : undefined
+        : { at: 'start', pending: true }
     )
     if (changed) {
       dirtyScopes.add(scopeKey)

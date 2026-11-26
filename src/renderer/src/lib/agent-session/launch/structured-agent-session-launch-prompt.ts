@@ -37,18 +37,6 @@ function sendStagedPrompt(
         if (prompt.discarded) {
           return { delivered: false, inComposer: false }
         }
-        if (!input.text.trim() && !input.attachments?.length) {
-          // Preparation left nothing this chat owns (it went to the chat a refusal returned it to):
-          // nothing is sent and nothing is handed back here.
-          const result: StagedDelivery = {
-            delivered: false,
-            inComposer: false,
-            handBackFinished: true
-          }
-          prompt.settleCreate(result)
-          unstageStructuredLaunchPrompt(prompt)
-          return result
-        }
         prompt.text = input.text
         prompt.attachments = input.attachments
         prompt.skills = input.skills

@@ -7,11 +7,18 @@ import { agentSessionWriteNoticeText } from '../../messages/notices/agent-sessio
 import { imageReferencesToPromptMarkers } from '../../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import type { StructuredAgentSessionCommandOutcome } from '../../../../../../shared/agent-session/view/structured-agent-session-composer'
 import type { NativeChatStructuredComposerTransport } from './native-chat-structured-composer-transport'
+import {
+  nativeChatBrowserFileReferences,
+  nativeChatBrowserFileRefusalParts
+} from '../../attachments/native-chat-browser-file-references'
 import type { NativeChatComposerImageAttachment } from '../../attachments/chips/native-chat-image-attachment'
 import type { StructuredAgentSessionSendRequest } from '../../session/structured/delivery/structured-agent-session-send-slot'
 
 export async function dispatchNativeChatStructuredComposerText(
-  transport: NativeChatStructuredComposerTransport,
+  transport: Pick<
+    NativeChatStructuredComposerTransport,
+    'dispatchCommand' | 'send' | 'attachmentStagingScope'
+  >,
   draftText: string,
   attachments: readonly NativeChatComposerImageAttachment[] = [],
   skills: readonly AgentJournalSkillRef[] = [],
@@ -26,6 +33,20 @@ export async function dispatchNativeChatStructuredComposerText(
     draftText,
     attachments.map((attachment) => attachment.id)
   )
+  // Content naming a renderer-only browser file never leaves the renderer. Unless preparation will turn
+  // it into a host upload (a staged send, or a pending creation capturing its first send), it is
+  // refused here, before any command or send, while the composer still owns the draft.
+  const browserFiles =
+    transport.attachmentStagingScope || intent.prepareAttachments
+      ? []
+      : nativeChatBrowserFileReferences(prompt, attachments)
+  if (browserFiles.length > 0) {
+    return {
+      accepted: false,
+      error: agentSessionWriteNoticeText(nativeChatBrowserFileRefusalParts(browserFiles)),
+      revealsTranscript: false
+    }
+  }
   const pickedModeSkill =
     agentSessionInteractionCommand('codex', prompt) !== null &&
     skills.some((skill) => prompt.trimEnd() === `/${skill.name}`)

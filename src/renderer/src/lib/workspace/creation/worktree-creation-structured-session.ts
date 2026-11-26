@@ -26,7 +26,10 @@ import { openBackgroundDeclinedTerminal } from '@/lib/workspace/creation/worktre
 import { settleAgentTabLaunch } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-host-agents'
 import { hasNativeChatStagedFiles } from '@/components/native-chat/drafts/native-chat-draft-attachment-staging'
 import { captureNativeChatStagedInput } from '@/components/native-chat/drafts/native-chat-staged-input'
-import { worktreeCreationFirstSend } from '@/lib/workspace/creation/worktree-creation-first-send'
+import {
+  worktreeCreationFirstSend,
+  worktreeCreationFirstSendNeedsChat
+} from '@/lib/workspace/creation/worktree-creation-first-send'
 import { nativeChatComposerHasUserContent } from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
 
 const HANDOFF_READY_TIMEOUT_MS = 5000
@@ -81,7 +84,7 @@ export async function launchStructuredWorktreeSession(
       : {})
   })
   const sourceScope = pendingCreationChatDraftScopeKey(args.creationId)
-  const firstSend = worktreeCreationFirstSend(sourceScope, request, pending)
+  const firstSend = worktreeCreationFirstSend(request, pending)
   const promptAttachments = firstSend.attachments
   const prepareInput = captureNativeChatStagedInput(sourceScope, firstSend)
   // The composer's own input (typing, chips still saving, staged files), apart from the first send,
@@ -91,7 +94,7 @@ export async function launchStructuredWorktreeSession(
     hasNativeChatStagedFiles(sourceScope) ||
     hasDeferredNativeChatComposerNotice(sourceScope)
   const needsChat = (): boolean =>
-    Boolean(promptAttachments?.length || pending?.heldChatSkills?.length) || sourceHoldsInput()
+    worktreeCreationFirstSendNeedsChat(firstSend, pending?.heldChatSkills, sourceHoldsInput)
   const retainInput = (): WorktreeCreationStructuredSessionResult => {
     useAppStore.getState().updatePendingWorktreeCreation(args.creationId, {
       worktreeId: args.worktreeId,
