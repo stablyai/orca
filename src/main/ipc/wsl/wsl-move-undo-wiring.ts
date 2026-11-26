@@ -99,8 +99,9 @@ type UndoStore = Pick<
   | 'getWorkspaceSession'
   | 'patchWorkspaceSession'
   | 'listAutomations'
-  | 'updateAutomation'
-  | 'advanceAutomationNextRun'
+  | 'updateAutomations'
+  | 'advanceAutomationNextRuns'
+  | 'flushPendingOrThrowAsync'
   | 'getUI'
   | 'updateUI'
 >
@@ -192,15 +193,29 @@ export function createWslMoveUndoPorts(
 ): WslMoveUndoPorts {
   const here = {
     listHere: () => store.listAutomations(),
-    setHere: (id: string, enabled: boolean) => {
-      store.updateAutomation(id, { enabled })
-    },
-    // A wait's due time is its own; only a schedule has a next run to move.
-    advanceHere: (id: string) => {
-      if (store.listAutomations().some((a) => a.id === id && !a.once)) {
-        store.advanceAutomationNextRun(id)
+    setHere: (updates: readonly { id: string; enabled: boolean }[]) => {
+      const results = store.updateAutomations(
+        updates.map(({ id, enabled }) => ({ id, updates: { enabled } }))
+      )
+      const applied: { id: string; enabled: boolean }[] = []
+      let error: unknown
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i]
+        if ('error' in result) {
+          error ??= result.error
+        } else {
+          applied.push(updates[i])
+        }
       }
-    }
+      return error === undefined ? { applied } : { applied, error }
+    },
+    // A wait's due time is its own; advanceAutomationNextRuns skips `once` rows in one pass.
+    advanceHere: (ids: readonly string[]) => {
+      if (ids.length > 0) {
+        store.advanceAutomationNextRuns(new Set(ids))
+      }
+    },
+    flushHere: () => store.flushPendingOrThrowAsync()
   }
   return {
     stopHostCopies: (move) =>

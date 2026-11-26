@@ -26,15 +26,18 @@ import { productionWslMoveBrowserCookieCopyDependencies } from '../desktop-state
 /** Resolves once interrupted moves are reset or finished; main-process-ready waits on it, bounded. */
 export function startWslMoveStartup(userDataPath: string, store: Store): Promise<void> {
   setWslMoveHostAutomationRestorer({
-    restore: (environmentId, ids) => restoreWslHostAutomations(userDataPath, environmentId, ids),
-    disable: (environmentId, ids) => disableWslHostAutomations(userDataPath, environmentId, ids)
+    restore: (environmentId, ids, signal) =>
+      restoreWslHostAutomations(userDataPath, environmentId, ids, signal),
+    disable: (environmentId, ids, signal) =>
+      disableWslHostAutomations(userDataPath, environmentId, ids, signal)
   })
   registerWslMoveDesktopRewriteRegistry({
     userDataPath,
     profile: store,
     orchestrationDatabasePath: orchestrationDbFile(userDataPath),
     hostAutomations: {
-      enable: (environmentId, ids) => enableWslHostAutomations(userDataPath, environmentId, ids)
+      enable: (environmentId, ids, signal, onSettled) =>
+        enableWslHostAutomations(userDataPath, environmentId, ids, signal, onSettled)
     },
     browserCookies: productionWslMoveBrowserCookieCopyDependencies(userDataPath)
   })

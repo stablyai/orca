@@ -183,6 +183,7 @@ async function createRig() {
       lookAround: { botOfLook: () => null, botOfTidyUp: () => null },
       bots: { list: () => [bot, otherBot] },
       botItems: {
+        openedStore: () => items,
         chatRootOf: (sessionId: string) => sessionId,
         chatSource: (
           target: { chatSessionId: string | null },

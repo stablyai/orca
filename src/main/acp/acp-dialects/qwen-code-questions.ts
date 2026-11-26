@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import {
   isValidAgentSessionQuestionAnswers,
   legacyAgentSessionQuestionAnswers
@@ -7,25 +8,27 @@ import { AcpRpcError } from '../transport/acp-errors'
 import { pendingAcpResolution, type AcpRequestPresentation } from './acp-dialect'
 
 // ask_user_question arrives as a permission request whose Submit reply carries `answers`.
-const questionRequestSchema = z.looseObject({
-  toolCall: z.looseObject({
-    _meta: z.looseObject({
-      qwenInteractionKind: z.literal('user_question'),
-      qwenQuestions: z
-        .array(
-          z.looseObject({
-            question: z.string(),
-            header: z.string().nullish(),
-            multiSelect: z.boolean().nullish(),
-            options: z.array(
-              z.looseObject({ label: z.string(), description: z.string().nullish() })
-            )
-          })
-        )
-        .min(1)
+const questionRequestSchema = lazyZodSchema(() =>
+  z.looseObject({
+    toolCall: z.looseObject({
+      _meta: z.looseObject({
+        qwenInteractionKind: z.literal('user_question'),
+        qwenQuestions: z
+          .array(
+            z.looseObject({
+              question: z.string(),
+              header: z.string().nullish(),
+              multiSelect: z.boolean().nullish(),
+              options: z.array(
+                z.looseObject({ label: z.string(), description: z.string().nullish() })
+              )
+            })
+          )
+          .min(1)
+      })
     })
   })
-})
+)
 
 /** Qwen takes each answer as text keyed by the question's index, so typed answers go through too. */
 export function qwenCodeQuestionRequest(

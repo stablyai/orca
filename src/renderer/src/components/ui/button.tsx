@@ -75,7 +75,7 @@ const buttonVariants = cva(
         // A chat notice's quiet icon tool: faint until hovered or open; pressed fills like a toggle.
         'chat-tool':
           'text-chat-foreground-faint hover:bg-accent hover:text-chat-foreground aria-expanded:bg-accent aria-expanded:text-chat-foreground aria-pressed:bg-foreground/10 aria-pressed:text-primary aria-pressed:hover:text-primary dark:aria-pressed:bg-accent',
-        // The worktree card's "rename failed" chip, for a failure the user can open.
+        // A small red failure chip the user can open, e.g. a failed rebase.
         'destructive-chip':
           'border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive'
       },

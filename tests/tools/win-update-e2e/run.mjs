@@ -171,7 +171,17 @@ async function runProof(ctx, args) {
   const seededRepo = createSeededRepo(path.join(runDir, 'fixture-repo'))
   const seedProfile = buildFreshProfile({ repo: seededRepo })
 
-  let session = await launchInstalledApp({ exePath: base.exePath, userDataDir, seedProfile })
+  // A LOCALAPPDATA this deep puts the daemon-host copy past conpty's 250-character path budget, so
+  // the daemon starts from the install folder's Orca.exe (daemon-host-relocation.ts).
+  const appEnv = opts.daemonFallback
+    ? { LOCALAPPDATA: path.join(runDir, 'deep-local-app-data', 'x'.repeat(180)) }
+    : {}
+  let session = await launchInstalledApp({
+    exePath: base.exePath,
+    userDataDir,
+    seedProfile,
+    extraEnv: appEnv
+  })
   ctx.session = session
   // Create first workspace/terminal and clear intercepting overlays.
   await ensureTerminal(session.page, { allowCreate: true })
@@ -192,6 +202,15 @@ async function runProof(ctx, args) {
   preDaemon.pids.forEach((p) => created.daemonPids.add(p))
   log('daemon', `pre-update daemon pid=${preDaemon.pid} appVersion=${preDaemon.appVersion}`)
   log('daemon', `pre-update daemon exe: ${preDaemon.exePath ?? '(unknown)'}`)
+  if (opts.daemonFallback) {
+    const installFolder = path.dirname(base.exePath).toLowerCase()
+    if (!preDaemon.exePath?.toLowerCase().startsWith(`${installFolder}${path.sep}`)) {
+      throw new Error(
+        `--daemon-fallback: daemon runs from ${preDaemon.exePath}, not ${installFolder}`
+      )
+    }
+    log('daemon', 'fallback confirmed: the daemon runs from the install folder')
+  }
 
   // Close app normally; the detached daemon must remain alive.
   // Allow renderer acknowledgement and teardown; a tree kill invalidates survival evidence.
@@ -218,7 +237,7 @@ async function runProof(ctx, args) {
     assetPattern: opts.assetPattern
   })
   log('update', `installing ${toInstaller}`)
-  const updated = silentInstall(toInstaller, { installDir })
+  const updated = silentInstall(toInstaller, { installDir, updated: opts.updated })
   // Record exact installed directory for teardown; never scan-discover a user install.
   ctx.installedExePath = updated.exePath
   log('update', `installed ${updated.exePath} (version ${updated.version})`)
@@ -232,7 +251,7 @@ async function runProof(ctx, args) {
     })
   )
 
-  session = await launchInstalledApp({ exePath: updated.exePath, userDataDir })
+  session = await launchInstalledApp({ exePath: updated.exePath, userDataDir, extraEnv: appEnv })
   ctx.session = session
   // No create on relaunch: the session must be RESTORED, not freshly made.
   await ensureTerminal(session.page, { allowCreate: false })

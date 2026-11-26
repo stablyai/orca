@@ -38,6 +38,7 @@ const UNIQUE_FOLDER_ID = 'folder workspace ids are minted UUIDs, one row per id 
 /** Matches exempt by method, with the reason. Keep each reason true. */
 export const NOT_HOST_TWINNED = new Map([
   ['AutomationPersistence.advanceAutomationNextRun', 'automation ids are minted UUIDs'],
+  ['AutomationPersistence.advanceAutomationNextRuns', 'automation ids are minted UUIDs'],
   ['AutomationPersistence.deleteAutomation', 'automation ids are minted UUIDs'],
   ['AutomationPersistence.disableAutomations', 'automation ids are minted UUIDs'],
   ['AutomationPersistence.updateAutomation', 'automation ids are minted UUIDs'],

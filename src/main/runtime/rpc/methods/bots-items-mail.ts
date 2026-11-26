@@ -9,6 +9,7 @@ import {
 } from '../../../../shared/bots/bot-item-note-runs'
 import { botMailSession, botMailSessionStillCurrent } from '../../../bots/bot-mail-chat'
 import { ownerCommentAttachmentBody } from '../../../bots/bot-item-comment-attachment-body'
+import { takeAdmittedCommentClaim } from '../../../bots/bot-item-comment-admitted-claims'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { isAgentSessionAttachmentExpiredError } from '../../../native-chat/agent-session-attachments/agent-session-attachment-claims'
 import {
@@ -141,20 +142,29 @@ export async function sendBotItemMail(
   let sessionId = await botMailSession(runtime, bot, owed.chatId)
   if (!selfEcho) {
     const expired = new Set<string>()
-    const attachment =
-      owed.changes
-        .map(({ event }) => ownerCommentAttachmentBody(event))
-        .find((body) => body !== null) ?? null
-    if (attachment) {
+    const comment = owed.changes.find(
+      ({ event }) => ownerCommentAttachmentBody(event) !== null
+    )?.event
+    const attachment = comment ? ownerCommentAttachmentBody(comment) : null
+    if (comment && attachment) {
       const store = getAgentSessionAttachmentStore()
       const claim = getAgentSessionAttachmentClaimer()
       if (!store || !claim) {
         return false
       }
-      if (agentSessionAttachmentReferences(store.rootDir, attachment).size > 0) {
+      const uploadIds = agentSessionAttachmentReferences(store.rootDir, attachment)
+      if (uploadIds.size > 0) {
+        // Never opens a store: a drain only runs on one already open.
+        const items = runtime.botItems.openedStore()
         // The outbox keeps the uploads until the actual recipient claims them.
         for (let attempt = 0; ; attempt++) {
-          await claimItemMailUploads(claim, store.rootDir, sessionId, attachment, expired)
+          if (
+            attempt > 0 ||
+            !items ||
+            !takeAdmittedCommentClaim(items, comment.id, { sessionId, uploadIds })
+          ) {
+            await claimItemMailUploads(claim, store.rootDir, sessionId, attachment, expired)
+          }
           if (botMailSessionStillCurrent(runtime, bot.id, owed.chatId, sessionId)) {
             break
           }
