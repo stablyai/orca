@@ -32,7 +32,9 @@ function launchesMayOpenChats(state: Pick<AppState, 'settings'>): boolean {
 }
 
 async function syncLocalHost(settings: AppState['settings']): Promise<void> {
-  if (!(await localStructuredChatsInUse(settings))) {
+  // Custom ACP agents open only as chats, so defining one is using chats.
+  const customAgents = (settings?.customAcpAgents?.length ?? 0) > 0
+  if (!customAgents && !(await localStructuredChatsInUse(settings))) {
     return
   }
   void useAppStore.getState().ensureNativeDetectedAgents()
@@ -40,6 +42,16 @@ async function syncLocalHost(settings: AppState['settings']): Promise<void> {
     LOCAL_EXECUTION_HOST_ID,
     await ensureLocalRuntimeCapabilities(),
     null
+  )
+}
+
+/** Re-reads this machine's agents after its custom ACP agents were saved. */
+export async function reloadLocalHostStructuredAgents(): Promise<void> {
+  await loadHostStructuredAgents(
+    LOCAL_EXECUTION_HOST_ID,
+    await ensureLocalRuntimeCapabilities(),
+    null,
+    true
   )
 }
 

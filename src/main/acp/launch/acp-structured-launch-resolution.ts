@@ -33,7 +33,7 @@ import {
   NATIVE_CHAT_SCRATCH_DIR_ENV,
   withNativeChatVisualsEnv
 } from '../../native-chat/conversation-files/native-chat-visuals-delivery'
-import type { AcpLaunchSpec } from './acp-launch-contract'
+import { isBuiltinAcpAgent, type AcpLaunchSpec } from './acp-launch-contract'
 import { acpLaunchSpecForAccount, resolveAcpLaunchCommand } from './acp-launch-command'
 import { homeBeforeFirstTurn } from './acp-launch-home-before-first-turn'
 import {
@@ -220,7 +220,8 @@ export function acpStructuredLaunchPart(
       roots.length > 0,
       deps.probeVersion
     )
-    if (launchVersion.status === 'tooOld') {
+    // Custom agents set no minimum, so only a built-in is ever too old.
+    if (launchVersion.status === 'tooOld' && isBuiltinAcpAgent(spec.agent)) {
       throw AgentCliInstallationError.tooOld(spec.agent, launchVersion)
     }
     const inherited = deps.inheritedEnv ?? process.env

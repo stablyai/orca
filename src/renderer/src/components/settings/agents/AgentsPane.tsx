@@ -30,6 +30,7 @@ import type { SettingsHostScope } from '../host-scope/settings-host-scope'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentWorkspaceTrustSetting } from './behavior/AgentWorkspaceTrustSetting'
+import { CustomAcpAgentsSetting } from './custom-acp/CustomAcpAgentsSetting'
 
 type AgentSettingProps = {
   settings: GlobalSettings
@@ -66,6 +67,10 @@ export function AgentsPane({
         hostScope={hostScope}
         renderPermissions={renderAgentPermissions}
       />
+      {/* Saved in this machine's settings; a paired server keeps its own. */}
+      {hostScope.target.kind === 'local' && !isPairedWebClientWindow() ? (
+        <CustomAcpAgentsSetting settings={settings} updateSettings={updateSettings} />
+      ) : null}
       <SettingsGroup>
         <CodexHistorySharingSetting
           settings={settings}

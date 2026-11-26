@@ -35,6 +35,7 @@ import {
   structuredAgentLaunchSources
 } from '../launch/structured-agent-launch-composition'
 import {
+  customAcpRuntimeCatalogEntry,
   STRUCTURED_AGENT_RUNTIME_CATALOG,
   type StructuredAgentRuntimeCatalogEntry
 } from './structured-agent-runtime-metadata'
@@ -262,12 +263,20 @@ function registrationWithAdapter(
 export const STRUCTURED_AGENT_RUNTIME_REGISTRATIONS: readonly StructuredAgentRuntimeRegistration[] =
   STRUCTURED_AGENT_RUNTIME_CATALOG.map(registrationWithAdapter)
 
+/** A custom ACP agent's registration while the host's settings define it; null otherwise. */
+export function customAcpRuntimeRegistration(
+  agent: string
+): StructuredAgentRuntimeRegistration | null {
+  const entry = customAcpRuntimeCatalogEntry(agent)
+  return entry ? { ...entry.metadata, createAdapter: createAcpAdapter(entry.spec) } : null
+}
+
 /** The registration of `agent`; null for an agent this runtime does not drive. */
 export function structuredAgentRuntimeRegistration(
   agent: string
 ): StructuredAgentRuntimeRegistration | null {
   return (
     STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.find(({ definition }) => definition.agent === agent) ??
-    null
+    customAcpRuntimeRegistration(agent)
   )
 }

@@ -1307,7 +1307,34 @@
       "hideAgentDetails": "Hide {{agent}} details",
       "defaultAutoBadge": "Default · Auto",
       "newAgentsTitle": "New agents",
-      "defaultSurfaceServerDescription": "The default for agents {{host}} starts itself, such as from its CLI or orchestration workers. Agents you open from this computer follow This computer's choice."
+      "defaultSurfaceServerDescription": "The default for agents {{host}} starts itself, such as from its CLI or orchestration workers. Agents you open from this computer follow This computer's choice.",
+      "customAcp": {
+        "title": "Custom ACP agents",
+        "description": "Run any local command that speaks the Agent Client Protocol as a Chat agent. Orca starts it directly, without a shell.",
+        "add": "Local ACP command",
+        "empty": "No custom agents yet.",
+        "edit": "Edit {{value0}}",
+        "remove": "Remove {{value0}}",
+        "name": "Display name",
+        "namePlaceholder": "My agent",
+        "command": "Command",
+        "commandDescription": "An executable path, or a program name on PATH.",
+        "args": "Arguments",
+        "argsDescription": "One argument per row, passed as written: no shell expansion or quoting.",
+        "argLabel": "Argument {{value0}}",
+        "removeArg": "Remove argument {{value0}}",
+        "addArg": "Add argument",
+        "env": "Environment variables",
+        "envName": "Variable {{value0}} name",
+        "envValue": "Variable {{value0}} value",
+        "removeEnv": "Remove variable {{value0}}",
+        "addEnv": "Add variable",
+        "cancel": "Cancel",
+        "save": "Save",
+        "commandPlaceholder": "my-agent",
+        "envNamePlaceholder": "NAME",
+        "envValuePlaceholder": "value"
+      }
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "symlink",
@@ -31404,5 +31431,15 @@
       "badJson": "Check the pasted JSON: it doesn’t parse.",
       "none": "Orca found no server it can add. SSE servers, servers with their own OAuth client or tool filters, and values read from the environment (${VAR}) aren’t supported."
     }
+  },
+  "agentMenu": {
+    "customAcpAgent": {
+      "title": "Open a {{value0}} chat",
+      "missing": "Command not found",
+      "badge": "ACP"
+    }
+  },
+  "agentCatalog": {
+    "customAcpAgent": "Custom ACP agent"
   }
 }

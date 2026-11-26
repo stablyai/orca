@@ -160,6 +160,7 @@ export type RuntimeStore = {
     agentLaunchChoices?: GlobalSettings['agentLaunchChoices']
     agentDefaultArgs?: GlobalSettings['agentDefaultArgs']
     agentDefaultEnv?: GlobalSettings['agentDefaultEnv']
+    customAcpAgents?: GlobalSettings['customAcpAgents']
     agentPermissionDefault?: GlobalSettings['agentPermissionDefault']
     agentPermissionOverrides?: GlobalSettings['agentPermissionOverrides']
     terminalWindowsShell?: GlobalSettings['terminalWindowsShell']

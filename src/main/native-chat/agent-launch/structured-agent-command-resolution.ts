@@ -3,6 +3,10 @@ import { delimiter, isAbsolute, posix, resolve as resolvePath, win32 } from 'nod
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
+  isCustomAcpAgentId,
+  type CustomAcpAgentId
+} from '../../../shared/agent-launch/custom-acp/custom-acp-agent'
+import {
   expandHomeArgs,
   isSpawnableCommand,
   resolveCliCommand,
@@ -88,12 +92,13 @@ export type StructuredAgentCommand = {
 
 /** Read live settings on every lookup; invalid explicit commands must refuse instead of launching stock CLI. */
 export function resolveStructuredAgentCommand(
-  agent: TuiAgent,
+  agent: TuiAgent | CustomAcpAgentId,
   settings: CommandSettings,
   options: CommandOptions = {},
   stock: { command?: string; resolve?: typeof resolveCliCommand; managedCopy?: boolean } = {}
 ): StructuredAgentCommand {
-  if (!hasExplicitTuiLaunchCommand(settings, agent)) {
+  // A custom agent has no Command setting: its own command is the whole definition.
+  if (isCustomAcpAgentId(agent) || !hasExplicitTuiLaunchCommand(settings, agent)) {
     // WSL PATH may contain drive-mounted Windows shims after native entries.
     const command = stock.command ?? agent
     const resolved = resolveGuestNativeProgram(command, options, stock.resolve)

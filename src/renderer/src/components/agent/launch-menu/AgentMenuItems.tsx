@@ -21,6 +21,10 @@ import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { cn } from '@/lib/class-names'
 import { useNewTabAgentMenuRows } from './use-new-tab-agent-menu-rows'
 import type { NewTabAgentMenuModel } from './new-tab-agent-menu-model'
+import {
+  CustomAcpAgentMenuItems,
+  type CustomAcpAgentLaunchTarget
+} from './custom-acp-agent-menu-items'
 import { useAgentDetectionTargetForWorktree } from '@/lib/agent-session/launch/inventory/useAgentDetectionTarget'
 import {
   chatUnavailableLabel,
@@ -44,13 +48,23 @@ function QuickLaunchAgentMenuItemsInner(props: QuickLaunchAgentMenuItemsProps): 
   const detectionTarget = useAgentDetectionTargetForWorktree(props.worktreeId)
   const model = useNewTabAgentMenuRows(props.worktreeId, true, detectionTarget)
   const runLaunch = useTabAgentMenuLaunch(props)
-  return <ProjectedAgentMenuItems {...props} model={model} runLaunch={runLaunch} />
+  return (
+    <ProjectedAgentMenuItems
+      {...props}
+      model={model}
+      runLaunch={runLaunch}
+      {...(props.prompt === undefined
+        ? { customLaunchTarget: { worktreeId: props.worktreeId, groupId: props.groupId } }
+        : {})}
+    />
+  )
 }
 
 export function ProjectedAgentMenuItems({
   disabled = false,
   model,
   runLaunch,
+  customLaunchTarget,
   pickerInventory,
   onSelectPickerAgent,
   hidePickerSearch
@@ -58,6 +72,8 @@ export function ProjectedAgentMenuItems({
   disabled?: boolean
   model: NewTabAgentMenuModel
   runLaunch: React.ComponentProps<typeof SubscribedAgentLaunchPickerMenu>['runLaunch']
+  /** Absent hides custom ACP agents, e.g. where the launch carries a prompt they cannot take. */
+  customLaunchTarget?: CustomAcpAgentLaunchTarget
   pickerInventory?: AgentPickerInventorySource
   onSelectPickerAgent?: (agent: AgentPickerEntry['agent']) => void
   hidePickerSearch?: boolean
@@ -194,6 +210,13 @@ export function ProjectedAgentMenuItems({
           )
         })
       )}
+      {customLaunchTarget && model.customAgents?.length ? (
+        <CustomAcpAgentMenuItems
+          rows={model.customAgents}
+          disabled={disabled}
+          target={customLaunchTarget}
+        />
+      ) : null}
       <OpenAgentSettingsMenuItem />
     </>
   )

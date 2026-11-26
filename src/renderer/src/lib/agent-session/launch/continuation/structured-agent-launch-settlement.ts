@@ -1,3 +1,4 @@
+import type { ChatAgentId } from '../../../../../../shared/agent-launch/custom-acp/custom-acp-agent'
 import '@/lib/agent-session/launch/structured-agent-session-launch-intent'
 import {
   StructuredAgentSessionCreateRefusalError,
@@ -8,7 +9,6 @@ import {
   cancelStructuredAgentLaunch,
   startStructuredAgentLaunch
 } from '@/lib/agent-session/launch/structured-agent-session-launch'
-import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type {
   StructuredAgentLaunchOptions,
@@ -111,7 +111,7 @@ async function settleStartedStructuredAgentLaunch(
 /** Exposes the durable identity before host acquisition so its chat can render immediately. */
 export function beginStructuredAgentLaunchSettlement(
   worktreeId: string,
-  agent: TuiAgent,
+  agent: ChatAgentId,
   options: StructuredAgentLaunchOptions,
   hooks: StructuredAgentLaunchHooks
 ): StructuredAgentLaunchHandle {

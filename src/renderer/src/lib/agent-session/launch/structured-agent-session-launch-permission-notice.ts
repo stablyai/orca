@@ -1,3 +1,4 @@
+import type { ChatAgentId } from '../../../../../shared/agent-launch/custom-acp/custom-acp-agent'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -6,7 +7,6 @@ import {
   isAgentChatPermissionMode,
   newChatPermissionModeForSettings
 } from '../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
-import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { nativeChatPermissionModeLabel } from '@/components/native-chat/session/options/controls/native-chat-permission-mode-labels'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 
@@ -36,7 +36,10 @@ export function hostPermissionRefusedText(
       )
 }
 
-export function notifyHostPermissionRefused(agent: TuiAgent, kind: 'refused' | 'unverified'): void {
+export function notifyHostPermissionRefused(
+  agent: ChatAgentId,
+  kind: 'refused' | 'unverified'
+): void {
   const agentLabel = structuredAgentLabel(agent)
   toast.error(
     translate(

@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import type { ChatAgentId } from '../../../../../shared/agent-launch/custom-acp/custom-acp-agent'
 import { structuredLaunchesHoldingIdentity } from './structured-agent-session-launch-holders'
 import {
   structuredLaunchIdentity,
@@ -10,7 +10,7 @@ import { structuredAgentSessionLaunchHasRetainedInput } from './structured-agent
 /** Whether a chat for this pair is being created here: its own first create, or an adoption. */
 export function getStructuredAgentLaunchStatus(
   worktreeId: string,
-  agent: TuiAgent
+  agent: ChatAgentId
 ): StructuredAgentLaunchStatus {
   // Any launch holding an identity for this pair, adopted conversations included, is starting here.
   // A failed chat is not, nor an unconfirmed or retried blank one: a new launch opens its own chat.
@@ -33,7 +33,7 @@ export function getStructuredAgentLaunchStatus(
 
 /** Whether any agent's chat create in this worktree is still unsettled: pending or unanswered. */
 export function hasStructuredAgentLaunchInWorktree(worktreeId: string): boolean {
-  const checkedAgents = new Set<TuiAgent>()
+  const checkedAgents = new Set<ChatAgentId>()
   for (const state of structuredLaunchStates()) {
     if (state.intent.worktreeId === worktreeId && !checkedAgents.has(state.intent.agent)) {
       checkedAgents.add(state.intent.agent)

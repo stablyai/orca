@@ -6,6 +6,12 @@ import '../../components/agent/icons/agent-icon-glyphs'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import '../../components/agent/icons/agent-favicon-assets'
 import { buildAgentCatalogEntries } from './agent-catalog-entries'
+import { customAcpAgentLabel } from './custom-acp-agent-labels'
+import { translate } from '@/i18n/i18n'
+import {
+  isCustomAcpAgentId,
+  type CustomAcpAgentId
+} from '../../../../shared/agent-launch/custom-acp/custom-acp-agent'
 
 export type AgentCatalogEntry = {
   id: TuiAgent
@@ -26,6 +32,14 @@ export const getAgentCatalog = createLocalizedCatalog(buildAgentCatalogEntries)
 // Why: tests and a few legacy call sites still import a catalog snapshot.
 export const AGENT_CATALOG: AgentCatalogEntry[] = getAgentCatalog()
 
-export function getAgentLabel(agent: TerminalAgent): string {
+export function getAgentLabel(agent: TerminalAgent | CustomAcpAgentId): string {
+  if (isCustomAcpAgentId(agent)) {
+    return customAcpAgentLabelOrFallback(agent)
+  }
   return getAgentCatalog().find((entry) => entry.id === agent)?.label ?? formatAgentTypeLabel(agent)
+}
+
+/** A custom agent's name, or a generic one before any host has named it. */
+export function customAcpAgentLabelOrFallback(agent: string): string {
+  return customAcpAgentLabel(agent) ?? translate('agentCatalog.customAcpAgent', 'Custom ACP agent')
 }

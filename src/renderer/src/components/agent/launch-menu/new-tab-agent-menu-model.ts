@@ -8,12 +8,24 @@ import type { UseDetectedAgentsResult } from '@/lib/agent-session/launch/invento
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { ProspectiveWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import type { AgentPickerDefaultSettings } from '../../../../../shared/agent-launch/picker/agent-launch-picker-defaults'
+import type { CustomAcpAgentId } from '../../../../../shared/agent-launch/custom-acp/custom-acp-agent'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+
+/** A custom ACP agent the workspace's host defines; it opens only as a chat. */
+export type CustomAcpAgentMenuRow = {
+  agent: CustomAcpAgentId
+  label: string
+  executionHostId: ExecutionHostId
+  /** The host reported its command is not on its PATH. */
+  missing?: true
+}
 
 export type NewTabAgentMenuModel =
   | { state: 'loading'; placeholderCount: number }
   | {
       state: 'settled'
       rows: ReturnType<typeof buildNewTabAgentMenuRows>
+      customAgents?: readonly CustomAcpAgentMenuRow[]
       detection: UseDetectedAgentsResult
       /** The default these rows were ordered by, so the new-agent badge marks the same agent. */
       defaultTuiAgent?: GlobalSettings['defaultTuiAgent']
@@ -78,7 +90,8 @@ export function sameAgentLaunchPickerModel(a: NewTabAgentMenuModel, b: NewTabAge
         row.executionHostId,
         'reason' in row ? row.reason : undefined,
         'setup' in row ? row.setup : undefined
-      ])
+      ]),
+      ...(a.customAgents ?? []).flatMap((row) => [row.agent, row.label, row.missing])
     ],
     [
       b.defaultTuiAgent,
@@ -107,7 +120,8 @@ export function sameAgentLaunchPickerModel(a: NewTabAgentMenuModel, b: NewTabAge
         row.executionHostId,
         'reason' in row ? row.reason : undefined,
         'setup' in row ? row.setup : undefined
-      ])
+      ]),
+      ...(b.customAgents ?? []).flatMap((row) => [row.agent, row.label, row.missing])
     ]
   )
 }

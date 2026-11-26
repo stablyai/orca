@@ -20,10 +20,11 @@ import {
   resolveInstalledRuntimeRelease
 } from '../../node-runtime/managed-runtime-release'
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../../runtime/agent-session/environment/structured-session-child-env'
-import type {
-  AcpHostBackendInput,
-  AcpHostBackendSettings,
-  AcpLaunchSpec
+import {
+  isBuiltinAcpAgent,
+  type AcpHostBackendInput,
+  type AcpHostBackendSettings,
+  type AcpLaunchSpec
 } from './acp-launch-contract'
 
 /** Prefer explicit commands, then managed releases, then complete pinned copies on PATH. */
@@ -55,7 +56,10 @@ export function resolveAcpLaunchCommand(
       }
     )
   const { managedRuntime } = spec
-  if (!managedRuntime || hasExplicitTuiLaunchCommand(settings, spec.agent)) {
+  if (
+    !managedRuntime ||
+    (isBuiltinAcpAgent(spec.agent) && hasExplicitTuiLaunchCommand(settings, spec.agent))
+  ) {
     return resolve(pathEnv)
   }
   const pin = managedRuntime.pin()

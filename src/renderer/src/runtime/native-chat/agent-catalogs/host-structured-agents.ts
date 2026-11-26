@@ -11,6 +11,7 @@ import {
 } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { ensureLocalRuntimeCapabilities } from '../../hosts/capabilities/local-runtime-capabilities'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
+import { rememberCustomAcpAgentLabels } from '@/lib/agent-catalog/custom-acp-agent-labels'
 
 /** One registered-agent cache per execution host/runtime. Query only capable hosts; unknown/unsupported hosts offer built-ins. Runtime changes invalidate learned lists until that instance answers. */
 
@@ -90,13 +91,15 @@ export function readHostStructuredAgents(
 export function loadHostStructuredAgents(
   executionHostId: string,
   hostCapabilities: readonly string[] | null | undefined,
-  runtimeId: string | null
+  runtimeId: string | null,
+  /** Ask again although this runtime answered: its settings changed which agents it defines. */
+  reread = false
 ): Promise<void> {
   const host = parseExecutionHostId(executionHostId)
   if (
     (host?.kind !== 'local' && host?.kind !== 'runtime') ||
     !hostCapabilities?.includes(STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY) ||
-    entries.get(executionHostId)?.runtimeId === runtimeId
+    (!reread && entries.get(executionHostId)?.runtimeId === runtimeId)
   ) {
     return Promise.resolve()
   }
@@ -119,6 +122,7 @@ export function loadHostStructuredAgents(
         throw new Error('Invalid registered-agent response')
       }
       failed.delete(key)
+      rememberCustomAcpAgentLabels(agents)
       entries.set(executionHostId, { runtimeId, agents })
       publish()
     })

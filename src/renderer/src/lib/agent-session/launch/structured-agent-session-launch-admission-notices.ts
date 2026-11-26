@@ -1,7 +1,7 @@
 // The toasts a host-admitted launch shows when its host declines or can't be reached.
 
+import type { ChatAgentId } from '../../../../../shared/agent-launch/custom-acp/custom-acp-agent'
 import { toast } from 'sonner'
-import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
@@ -10,7 +10,7 @@ import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agen
 import { structuredChatUnavailableToast } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
 
 export function notifyExplicitChatFailure(
-  agent: TuiAgent,
+  agent: ChatAgentId,
   reason?: string,
   worktreeId?: string
 ): void {
@@ -24,7 +24,7 @@ export function notifyExplicitChatFailure(
   )
 }
 
-export function notifyHostDeclined(agent: TuiAgent, explain = true): void {
+export function notifyHostDeclined(agent: ChatAgentId, explain = true): void {
   const agentLabel = structuredAgentLabel(agent)
   toast.info(
     translate(
@@ -44,7 +44,7 @@ export function notifyHostDeclined(agent: TuiAgent, explain = true): void {
   )
 }
 
-export function notifyHostUnreachable(agent: TuiAgent, executionHostId: ExecutionHostId): void {
+export function notifyHostUnreachable(agent: ChatAgentId, executionHostId: ExecutionHostId): void {
   const hostLabel = selectExecutionHostDisplayLabel(useAppStore.getState(), executionHostId)
   toast.error(
     translate(
