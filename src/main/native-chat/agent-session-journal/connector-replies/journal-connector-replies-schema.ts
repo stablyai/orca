@@ -35,6 +35,8 @@ CREATE TABLE IF NOT EXISTS journal_connector_replies (
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS journal_connector_replies_open
   ON journal_connector_replies(session_id, outcome, sent_at);
+CREATE INDEX IF NOT EXISTS journal_connector_replies_owed
+  ON journal_connector_replies(account, delivery_id) WHERE outcome IS NOT NULL AND sent_at IS NULL;
 CREATE TABLE IF NOT EXISTS journal_slack_answer_presentations (
   session_id TEXT NOT NULL,
   epoch TEXT NOT NULL,

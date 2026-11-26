@@ -62,18 +62,18 @@ export function readOwedJournalConnectorReplies(
   limit: number,
   includePresentations = false
 ): JournalConnectorReplyRow[] {
+  const cursor = after === null ? '' : 'AND delivery_id>?'
   const rows = db
     .prepare(`SELECT ${REPLY_COLUMNS},${includePresentations ? 'has_presentation,' : ''}
       CASE WHEN octet_length(prose)>? THEN substr(prose,1,?) ELSE prose END AS prose
       FROM journal_connector_replies
-      WHERE account=? AND (? IS NULL OR delivery_id>?) AND outcome IS NOT NULL AND sent_at IS NULL
+      WHERE account=? ${cursor} AND outcome IS NOT NULL AND sent_at IS NULL
       ORDER BY delivery_id LIMIT ?`)
     .all(
       JOURNAL_CONNECTOR_REPLY_PROSE_BYTES,
       JOURNAL_CONNECTOR_REPLY_PROSE_BYTES + 1,
       account,
-      after,
-      after,
+      ...(after === null ? [] : [after]),
       limit
     )
   const presentations = new Map<string, SlackAnswerPresentation | undefined>()
