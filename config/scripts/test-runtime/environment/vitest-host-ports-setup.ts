@@ -22,7 +22,7 @@ function userDataPath(): string {
 
 afterAll(() => {
   if (userData) {
-    rmSync(userData, { recursive: true, force: true })
+    rmSync(userData, { recursive: true, force: true, maxRetries: 3 })
   }
 })
 
