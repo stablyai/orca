@@ -102,6 +102,7 @@ export function NativeChatAssistantMessageRow({
       visualMessageId={message.role === 'assistant' ? message.id : undefined}
       // Only the live turn’s prose frontier can be mid-sentence; structured rows have no per-row streaming flag.
       streaming={streaming}
+      phraseChunks={messaging}
     />
   ) : null
 

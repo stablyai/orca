@@ -1,3 +1,4 @@
+import { NativeChatReplyRevealsContext } from '../../markdown/native-chat-reply-reveals'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { useAppStore } from '../../../../store/index'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
@@ -161,5 +162,28 @@ export const streamingLong = defineFixture({
   setup: () => setStyle('messaging'),
   render: () => (
     <Conversation streamingText="I’ll check your calendar for tomorrow and keep your afternoon free." />
+  )
+})
+
+export const arrival = defineFixture({
+  width: 640,
+  setup: () => setStyle('messaging'),
+  render: () => (
+    <NativeChatReplyRevealsContext
+      value={{ begun: new Set(['followup']), arrived: new Set(), drawn: new Map() }}
+    >
+      <Conversation />
+    </NativeChatReplyRevealsContext>
+  )
+})
+export const streamingArrival = defineFixture({
+  width: 640,
+  setup: () => setStyle('messaging'),
+  render: () => (
+    <NativeChatReplyRevealsContext
+      value={{ begun: new Set(['followup']), arrived: new Set(), drawn: new Map() }}
+    >
+      <Conversation streamingText="I’ll check your calendar, then keep tomorrow afternoon free." />
+    </NativeChatReplyRevealsContext>
   )
 })

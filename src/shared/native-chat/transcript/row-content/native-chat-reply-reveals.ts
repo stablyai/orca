@@ -6,6 +6,7 @@ import type { NativeChatTextReveal } from './native-chat-text-reveal'
 export type NativeChatReplyReveals = {
   /** Tail replies first seen while the transcript was open; exclude history already written before opening. */
   begun: Set<string>
+  arrived?: Set<string>
   /** How much of a row was drawn when it left the window, so returning does not replay it. */
   drawn: Map<string, NativeChatTextReveal>
 }
@@ -19,7 +20,7 @@ export type NativeChatReplyRevealTracker = {
 
 export function createNativeChatReplyRevealTracker(): NativeChatReplyRevealTracker {
   return {
-    reveals: { begun: new Set(), drawn: new Map() },
+    reveals: { begun: new Set(), arrived: new Set(), drawn: new Map() },
     rowKeys: [],
     loadedMessageIds: null,
     known: new Set()
@@ -37,10 +38,11 @@ export function trackNativeChatReplyRows(
     const lastKey = rowKeys.at(-1)
     const { begun, drawn } = state.reveals
     // Progress belongs to the row that made it: a later row carrying the key starts its own.
-    for (const key of [...begun, ...drawn.keys()]) {
+    for (const key of [...begun, ...drawn.keys(), ...(state.reveals.arrived ?? [])]) {
       if (!present.has(key)) {
         begun.delete(key)
         drawn.delete(key)
+        state.reveals.arrived?.delete(key)
       }
     }
     // Remember loaded rows across section collapse/reopen so returning history cannot begin a new reveal.

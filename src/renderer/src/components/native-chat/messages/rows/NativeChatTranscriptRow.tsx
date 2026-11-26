@@ -1,3 +1,5 @@
+import { useNativeChatMessageArrival } from './use-native-chat-message-arrival'
+import { observeOffscreenAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { memo, useContext } from 'react'
 import type { BotChatIdentity } from '../../../bots/use-bot-chat-identity'
 import { useNativeChatMessagingStyle } from '../../appearance/use-native-chat-messaging-style'
@@ -133,6 +135,13 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
 }): React.JSX.Element {
   const messagingEnabled = useNativeChatMessagingStyle()
   const messaging = messagingEnabled && context.turnBot != null
+  const arriving = useNativeChatMessageArrival(
+    slot.kind === 'message' ? slot.message.id : undefined,
+    messaging &&
+      slot.kind === 'message' &&
+      slot.drawsMessage &&
+      (slot.message.role === 'user' || slot.message.role === 'assistant')
+  )
   // Offered only on the conversation's own turn-opening prompts (`nativeChatRowOffersRewind`).
   const rewind = useContext(NativeChatRewindContext)
   const fork = useContext(NativeChatForkContext)
@@ -188,8 +197,11 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
     // agent's next step (`actionsHang` is unset there), which then sits a full gap below them.
     // So does a row the "New" line follows, so the line sits the same full gap below any row.
     <div
+      ref={arriving ? observeOffscreenAnimation : undefined}
+      data-native-chat-arrival={arriving ? '' : undefined}
       className={cn(
         'flex flex-col gap-5',
+        arriving && 'native-chat-message-arrival',
         slot.continuesTurn &&
           !(slot.endsResponse && !slot.activeTurnIsWorking) &&
           !newRowsMarkerBelow &&

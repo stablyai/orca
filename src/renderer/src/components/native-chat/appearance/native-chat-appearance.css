@@ -228,3 +228,22 @@
     animation: none;
   }
 }
+
+@keyframes native-chat-message-arrival {
+  from {
+    opacity: 0;
+    transform: translateY(var(--spacing));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.native-chat-message-arrival {
+  animation: native-chat-message-arrival 180ms ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .native-chat-message-arrival {
+    animation: none;
+  }
+}
