@@ -11,7 +11,10 @@ import {
 } from '../../clipboard/terminal-clipboard-event-paste'
 import { assertClipboardTextWithinLimitWithYield } from '../../../../../../shared/clipboard/clipboard-text'
 import { pasteTerminalClipboard } from '../../clipboard/terminal-clipboard-paste'
-import { requestNativePasteForUnreadWindowsClipboard } from './terminal-unread-clipboard-native-paste'
+import {
+  clipboardEventCarriesFiles,
+  requestNativePasteForUnreadWindowsClipboard
+} from './terminal-unread-clipboard-native-paste'
 import { clipboardEventCopiedFilePaths } from '@/components/native-chat/paste/native-chat-clipboard-payload'
 import { APP_MENU_PASTE_EVENT } from '@/lib/clipboard/menu/app-menu-paste'
 import {
@@ -152,15 +155,17 @@ export function registerTerminalPanePasteListeners({
       return
     }
     const eventCopiedFilePaths = clipboardEventCopiedFilePaths(event)
+    const eventCarriedFiles = clipboardEventCarriesFiles(event)
     if (isClipboardEventPasteRequired()) {
       const eventText = getClipboardEventText(event)
       pasteFromClipboard(pane, 'paste-event', {
         readClipboardText: (options) => assertClipboardTextWithinLimitWithYield(eventText, options),
-        eventCopiedFilePaths
+        eventCopiedFilePaths,
+        eventCarriedFiles
       })
       return
     }
-    pasteFromClipboard(pane, 'paste-event', { eventCopiedFilePaths })
+    pasteFromClipboard(pane, 'paste-event', { eventCopiedFilePaths, eventCarriedFiles })
   }
 
   const onAppMenuPaste = (event: Event): void => {
