@@ -225,6 +225,8 @@ export class RuntimeRpcDeviceDispatch extends RuntimeRpcMobileDevices {
           this.registerBinaryMessageHandler(connectionId, handler)
       })
     } finally {
+      // The stream is over (ended, failed or refused): its channel goes with it.
+      channel?.release()
       abortRegistration?.dispose()
       this.releaseLongPoll(longPoll, device.deviceId)
     }
@@ -241,10 +243,12 @@ export class RuntimeRpcDeviceDispatch extends RuntimeRpcMobileDevices {
     }
     if (
       !socketConnectionId ||
-      !authenticatedSocket?.clientCapabilities.includes(RUNTIME_BINARY_CHANNELS_CAPABILITY) ||
-      !isBinaryChannelNumber(request.binaryChannel)
+      !authenticatedSocket?.clientCapabilities.includes(RUNTIME_BINARY_CHANNELS_CAPABILITY)
     ) {
       return { error: 'Binary channels are not available on this connection.' }
+    }
+    if (!isBinaryChannelNumber(request.binaryChannel)) {
+      return { error: 'Binary channel must be an integer from 1 to 2^32-1.' }
     }
     return this.binaryChannels.open(socketConnectionId, request.binaryChannel, sendBinary)
   }

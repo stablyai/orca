@@ -1,15 +1,16 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   BinaryChannelOpcode,
   decodeBinaryChannelFrame,
-  encodeBinaryChannelFrame
+  encodeBinaryChannelFrame,
+  MAX_OPEN_BINARY_CHANNELS
 } from '../../../../shared/remote-runtime/protocol/runtime-binary-channel'
 import {
   decodeTerminalStreamFrame,
   encodeTerminalStreamFrame,
   TerminalStreamOpcode
 } from '../../../../shared/terminal/stream/terminal-stream-protocol'
-import { RuntimeBinaryChannels } from './runtime-binary-channels'
+import { RuntimeBinaryChannels, type OpenedBinaryChannel } from './runtime-binary-channels'
 import { RuntimeBinaryMessageRouter } from './runtime-binary-message-router'
 
 const input = (streamId: number, text: string): Uint8Array =>
@@ -22,43 +23,49 @@ const input = (streamId: number, text: string): Uint8Array =>
 
 const data = (channel: number, payload: Uint8Array): Uint8Array =>
   encodeBinaryChannelFrame({ opcode: BinaryChannelOpcode.Data, channel, payload })
+const closeFrame = (channel: number): Uint8Array =>
+  encodeBinaryChannelFrame({
+    opcode: BinaryChannelOpcode.Close,
+    channel,
+    payload: new Uint8Array()
+  })
 
-function host() {
+function host(releaseConnection?: (connectionId: string) => void) {
   const router = new RuntimeBinaryMessageRouter()
   const released: string[] = []
   const channels = new RuntimeBinaryChannels((connectionId) => {
     released.push(connectionId)
     router.deleteConnection(connectionId)
+    releaseConnection?.(connectionId)
   })
   const receive = (bytes: Uint8Array): void => {
     if (!channels.route('socket', bytes, (id, payload) => router.dispatch(id, payload))) {
       router.dispatch('socket', bytes)
     }
   }
-  return { router, channels, released, receive }
+  const open = (channel: number, send: OpenedBinaryChannel['sendBinary'] = () => true) => {
+    const opened = channels.open('socket', channel, send)
+    if ('error' in opened) {
+      throw new Error(opened.error)
+    }
+    return opened
+  }
+  return { router, channels, released, receive, open }
 }
 
 describe('runtime binary channels', () => {
   it('keeps each channel a connection of its own, both ways, until it closes', () => {
-    const { router, channels, released, receive } = host()
+    const { router, channels, released, receive, open } = host()
     const sent: Uint8Array[] = []
-    const a = channels.open('socket', 1, (bytes) => {
+    const a = open(1, (bytes) => {
       sent.push(bytes)
     })
-    const b = channels.open('socket', 2, (bytes) => {
-      sent.push(bytes)
-    })
-    if ('error' in a || 'error' in b) {
-      throw new Error('open failed')
-    }
+    const b = open(2)
     // Two terminal multiplexes and a raw stream on one socket: the router alone refuses this mix.
     const seen: string[] = []
     router.registerTerminalStream(a.connectionId, 7, (f) => seen.push(`a:${f.payload.length}`))
     router.registerTerminalStream(b.connectionId, 7, (f) => seen.push(`b:${f.payload.length}`))
-    const c = channels.open('socket', 3, () => true)
-    if ('error' in c) {
-      throw new Error('open failed')
-    }
+    const c = open(3)
     router.registerRawMessage(c.connectionId, (bytes) => seen.push(`c:${bytes.length}`))
 
     receive(data(2, input(7, 'xx')))
@@ -71,12 +78,11 @@ describe('runtime binary channels', () => {
     expect(outbound?.channel).toBe(1)
     expect(decodeTerminalStreamFrame(outbound!.payload)?.streamId).toBe(7)
 
-    receive(encodeBinaryChannelFrame({ opcode: 2, channel: 1, payload: new Uint8Array() }))
+    receive(closeFrame(1))
     expect(a.signal.aborted).toBe(true)
     expect(b.signal.aborted).toBe(false)
     expect(released).toEqual([a.connectionId])
     expect(a.sendBinary(input(7, 'late'))).toBe(false)
-    // A late frame for the closed channel is dropped, never handed to another stream.
     receive(data(1, input(7, 'late')))
     expect(seen).toEqual(['b:2', 'a:1', 'c:5'])
 
@@ -85,28 +91,89 @@ describe('runtime binary channels', () => {
     expect(b.signal.aborted && c.signal.aborted).toBe(true)
   })
 
+  it('drops late and malformed channel frames even after its last channel closed', () => {
+    const { router, receive, open } = host()
+    const raw: number[] = []
+    router.registerRawMessage('socket', (bytes) => raw.push(bytes.length))
+    open(1).release()
+    receive(data(1, new Uint8Array(3)))
+    const malformed = [
+      Uint8Array.of(0x6d, 2, 1, 0, 1, 0, 0, 0),
+      Uint8Array.of(0x6d, 1, 3, 0, 1, 0, 0, 0),
+      Uint8Array.of(0x6d, 1, 1, 0, 0, 0, 0, 0),
+      Uint8Array.of(0x6d, 1, 1, 7, 1, 0, 0, 0),
+      Uint8Array.of(0x6d, 1, 1)
+    ]
+    for (const frame of malformed) {
+      receive(frame)
+    }
+    expect(raw).toEqual([])
+    // Frames that aren't channel frames still reach the socket's own handler.
+    receive(Uint8Array.of(1, 2))
+    expect(raw).toEqual([2])
+  })
+
   it('leaves sockets that never opened a channel on their own handlers', () => {
     const { router, receive } = host()
     const raw: number[] = []
     router.registerRawMessage('socket', (bytes) => raw.push(bytes[0]))
-    // Even a frame that looks like a channel frame is the raw stream's data on such a socket.
     receive(data(1, new Uint8Array(1)))
     expect(raw).toEqual([0x6d])
   })
 
-  it('refuses a channel already open, and decodes only well-formed frames', () => {
-    const { channels } = host()
-    expect('error' in channels.open('socket', 1, () => true)).toBe(false)
-    expect(channels.open('socket', 1, () => true)).toEqual({
-      error: 'Binary channel is already open.'
+  it('caps open channels, frees a slot on release, and lets calls join an open channel', () => {
+    const { channels, open } = host()
+    const first = open(1)
+    const call = open(1)
+    expect(call.connectionId).toBe(first.connectionId)
+    // A joined request ending leaves the channel to the stream that opened it.
+    call.release()
+    expect(first.signal.aborted).toBe(false)
+    for (let channel = 2; channel <= MAX_OPEN_BINARY_CHANNELS; channel += 1) {
+      open(channel)
+    }
+    expect(channels.open('socket', MAX_OPEN_BINARY_CHANNELS + 1, () => true)).toEqual({
+      error: 'Too many binary channels are open on this connection.'
     })
+    first.release()
+    expect(first.signal.aborted).toBe(true)
+    expect('error' in channels.open('socket', MAX_OPEN_BINARY_CHANNELS + 1, () => true)).toBe(false)
+  })
+
+  it('releases every channel on socket close even when one cleanup throws', () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { channels, released, open } = host((connectionId) => {
+      if (connectionId.endsWith('#1')) {
+        throw new Error('cleanup failed')
+      }
+    })
+    const a = open(1)
+    const b = open(2)
+    channels.closeSocket('socket')
+    expect(released).toEqual([a.connectionId, b.connectionId])
+    expect(b.signal.aborted).toBe(true)
+    errors.mockRestore()
+  })
+
+  it('never sends a frame the header would push over the frame limit', () => {
+    const { open } = host()
+    const sent: number[] = []
+    const channel = open(1, (bytes) => {
+      sent.push(bytes.byteLength)
+    })
+    expect(channel.sendBinary(new Uint8Array(8 * 1024 * 1024))).toBe(false)
+    channel.sendBinary(new Uint8Array(8 * 1024 * 1024 - 8))
+    expect(sent).toEqual([8 * 1024 * 1024])
+  })
+
+  it('encodes only valid channel numbers and decodes only well-formed frames', () => {
     const frame = data(0xffffffff, Uint8Array.of(1, 2, 3))
     expect(decodeBinaryChannelFrame(frame)).toEqual({
       opcode: BinaryChannelOpcode.Data,
       channel: 0xffffffff,
       payload: Uint8Array.of(1, 2, 3)
     })
-    expect(decodeBinaryChannelFrame(data(0, new Uint8Array()))).toBeNull()
+    expect(() => data(0, new Uint8Array())).toThrow(RangeError)
     expect(decodeBinaryChannelFrame(input(1, 'x'))).toBeNull()
     expect(decodeBinaryChannelFrame(frame.subarray(0, 7))).toBeNull()
   })

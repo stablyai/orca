@@ -1,9 +1,12 @@
 import {
+  BINARY_CHANNEL_HEADER_BYTES,
   BinaryChannelOpcode,
   decodeBinaryChannelFrame,
   encodeBinaryChannelFrame,
+  isBinaryChannelKind,
   MAX_OPEN_BINARY_CHANNELS
 } from '../../../../shared/remote-runtime/protocol/runtime-binary-channel'
+import { REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES } from '../../../../shared/remote-runtime/remote-runtime-memory-limits'
 import type { RpcBinarySender } from '../transports/rpc-binary-sender'
 
 type OpenChannel = { connectionId: string; abort: AbortController }
@@ -14,7 +17,14 @@ export type OpenedBinaryChannel = {
   /** Aborts when the client closes the channel or the socket closes. */
   signal: AbortSignal
   sendBinary: RpcBinarySender
+  /** Releases the channel if this request opened it; a request that joined it leaves it open. */
+  release: () => void
 }
+
+// The channel header must not push a frame the stream sized to the limit over it, which would
+// close the whole socket instead of failing one send.
+const MAX_CHANNEL_PAYLOAD_BYTES =
+  REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES - BINARY_CHANNEL_HEADER_BYTES
 
 /**
  * The binary channels open on each socket (see `runtime-binary-channel.ts`). Each channel is a
@@ -26,32 +36,38 @@ export class RuntimeBinaryChannels {
 
   constructor(private readonly releaseConnection: (connectionId: string) => void) {}
 
+  /**
+   * The channel's connection, opened by its first request and released when that request's
+   * dispatch ends (the stream is over), the client closes it, or the socket closes. Later requests
+   * naming an open channel (a stream's own calls) run under the same connection, as they did on
+   * that stream's own socket.
+   */
   open(
     socketConnectionId: string,
     channel: number,
     sendBinary: RpcBinarySender
   ): OpenedBinaryChannel | { error: string } {
     let channels = this.bySocket.get(socketConnectionId)
-    if (channels?.has(channel)) {
-      return { error: 'Binary channel is already open.' }
+    let current = channels?.get(channel)
+    const opener = !current
+    if (!current) {
+      if ((channels?.size ?? 0) >= MAX_OPEN_BINARY_CHANNELS) {
+        return { error: 'Too many binary channels are open on this connection.' }
+      }
+      if (!channels) {
+        channels = new Map()
+        this.bySocket.set(socketConnectionId, channels)
+      }
+      current = { connectionId: `${socketConnectionId}#${channel}`, abort: new AbortController() }
+      channels.set(channel, current)
     }
-    if ((channels?.size ?? 0) >= MAX_OPEN_BINARY_CHANNELS) {
-      return { error: 'Too many binary channels are open on this connection.' }
-    }
-    if (!channels) {
-      channels = new Map()
-      this.bySocket.set(socketConnectionId, channels)
-    }
-    const opened = {
-      connectionId: `${socketConnectionId}#${channel}`,
-      abort: new AbortController()
-    }
-    channels.set(channel, opened)
+    const table = channels!
+    const open = current
     return {
-      connectionId: opened.connectionId,
-      signal: opened.abort.signal,
+      connectionId: open.connectionId,
+      signal: open.abort.signal,
       sendBinary: (bytes, options) =>
-        channels.get(channel) === opened
+        table.get(channel) === open && bytes.byteLength <= MAX_CHANNEL_PAYLOAD_BYTES
           ? sendBinary(
               encodeBinaryChannelFrame({
                 opcode: BinaryChannelOpcode.Data,
@@ -60,13 +76,20 @@ export class RuntimeBinaryChannels {
               }),
               options
             )
-          : false
+          : false,
+      release: () => {
+        if (opener && table.get(channel) === open) {
+          this.close(socketConnectionId, channel)
+        }
+      }
     }
   }
 
   /**
    * Hands a channel frame's payload to its channel's connection. False for a socket that never
-   * opened a channel, or bytes that aren't a channel frame: the socket's own handlers take those.
+   * opened a channel, or bytes that aren't channel frames: the socket's own handlers take those.
+   * On a socket that uses channels, a channel frame is never handed to the socket itself: a late
+   * one (its channel released) or a malformed one is dropped.
    */
   route(
     socketConnectionId: string,
@@ -74,18 +97,17 @@ export class RuntimeBinaryChannels {
     deliver: (connectionId: string, payload: Uint8Array<ArrayBufferLike>) => void
   ): boolean {
     const channels = this.bySocket.get(socketConnectionId)
-    if (!channels) {
+    if (!channels || !isBinaryChannelKind(bytes)) {
       return false
     }
     const frame = decodeBinaryChannelFrame(bytes)
     if (!frame) {
-      return false
+      return true
     }
     if (frame.opcode === BinaryChannelOpcode.Close) {
       this.close(socketConnectionId, frame.channel)
       return true
     }
-    // A frame for a channel already released is late, not misrouted: drop it.
     const open = channels.get(frame.channel)
     if (open) {
       deliver(open.connectionId, frame.payload)
@@ -99,10 +121,8 @@ export class RuntimeBinaryChannels {
     if (!channels || !open) {
       return
     }
+    // The socket keeps its (possibly empty) table until it closes, so its late frames stay dropped.
     channels.delete(channel)
-    if (channels.size === 0) {
-      this.bySocket.delete(socketConnectionId)
-    }
     this.release(open)
   }
 
@@ -117,8 +137,17 @@ export class RuntimeBinaryChannels {
     }
   }
 
+  // One channel's failing cleanup must not stop its siblings' or the socket's.
   private release(open: OpenChannel): void {
-    open.abort.abort()
-    this.releaseConnection(open.connectionId)
+    try {
+      open.abort.abort()
+    } catch (error) {
+      console.error('[runtime] A binary channel stream failed to stop:', error)
+    }
+    try {
+      this.releaseConnection(open.connectionId)
+    } catch (error) {
+      console.error('[runtime] A binary channel failed to release its stream:', error)
+    }
   }
 }

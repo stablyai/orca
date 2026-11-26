@@ -36,12 +36,21 @@ export function isBinaryChannelNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= 0xffffffff
 }
 
+/** Whether bytes lead like a channel frame, well-formed or not. */
+export function isBinaryChannelKind(bytes: Uint8Array<ArrayBufferLike>): boolean {
+  return bytes[0] === BINARY_CHANNEL_KIND
+}
+
 export function encodeBinaryChannelFrame(frame: BinaryChannelFrame): Uint8Array {
+  if (!isBinaryChannelNumber(frame.channel)) {
+    throw new RangeError('Binary channel numbers run from 1 to 2^32-1.')
+  }
   const out = new Uint8Array(BINARY_CHANNEL_HEADER_BYTES + frame.payload.byteLength)
   const view = new DataView(out.buffer, out.byteOffset, out.byteLength)
   view.setUint8(0, BINARY_CHANNEL_KIND)
   view.setUint8(1, BINARY_CHANNEL_VERSION)
   view.setUint8(2, frame.opcode)
+  // Reserved; a frame that sets it is not one this version reads.
   view.setUint8(3, 0)
   view.setUint32(4, frame.channel, true)
   out.set(frame.payload, BINARY_CHANNEL_HEADER_BYTES)
@@ -55,7 +64,8 @@ export function decodeBinaryChannelFrame(
   if (
     bytes.byteLength < BINARY_CHANNEL_HEADER_BYTES ||
     bytes[0] !== BINARY_CHANNEL_KIND ||
-    bytes[1] !== BINARY_CHANNEL_VERSION
+    bytes[1] !== BINARY_CHANNEL_VERSION ||
+    bytes[3] !== 0
   ) {
     return null
   }
