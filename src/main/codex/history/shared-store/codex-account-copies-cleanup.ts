@@ -1,0 +1,144 @@
+import type { Worker } from 'node:worker_threads'
+import { spawnWorkerThread } from '../../../worker-threads/worker-thread-spawn'
+import {
+  currentWorkerEntryLayout,
+  resolveWorkerThreadEntryPath
+} from '../../../worker-threads/worker-thread-entry-path'
+import { findOpenFiles } from '../../../filesystem/open-file-check'
+import { addTally, emptyTally, type CopiesTally } from './codex-account-copies-tally'
+import type { CodexHistoryMoveOutcome } from '../../../telemetry/codex-history-move-telemetry'
+import type {
+  CodexAccountCopiesRequest,
+  CodexAccountCopiesResponse
+} from './codex-account-copies-worker-protocol'
+
+const WORKER_FILENAME = 'codex-account-copies-worker-entry.js'
+// One launch reads at most this much of the copies (and as much of their originals); the rest
+// waits for later launches, so a heavy history costs a few idle minutes spread over runs.
+const MAX_BYTES_PER_LAUNCH = 4 * 1024 ** 3
+const MAX_MS_PER_LAUNCH = 3 * 60_000
+const GAP_BETWEEN_HOMES_MS = 1_000
+
+export type CodexAccountCopiesWorker = {
+  call(request: CodexAccountCopiesRequest): Promise<CodexAccountCopiesResponse>
+  stop(): Promise<void>
+}
+
+export function startCodexAccountCopiesWorker(): CodexAccountCopiesWorker {
+  const worker: Worker = spawnWorkerThread(
+    resolveWorkerThreadEntryPath(currentWorkerEntryLayout(__dirname), WORKER_FILENAME),
+    { name: 'orca-codex-account-copies' }
+  )
+  let failure: Error | null = null
+  let pending: ((response: CodexAccountCopiesResponse) => void) | null = null
+  const fail = (error: Error): void => {
+    failure ??= error
+    pending?.({ ok: false, message: failure.message })
+    pending = null
+  }
+  worker.on('message', (response: CodexAccountCopiesResponse) => {
+    pending?.(response)
+    pending = null
+  })
+  worker.on('error', (error) => fail(error instanceof Error ? error : new Error(String(error))))
+  worker.on('exit', (code) => fail(new Error(`Codex account copies worker exited (${code})`)))
+  return {
+    call: (request) =>
+      failure
+        ? Promise.resolve({ ok: false, message: failure.message })
+        : new Promise((resolve) => {
+            pending = resolve
+            worker.postMessage(request)
+          }),
+    stop: async () => {
+      fail(new Error('Codex account copies cleanup stopped'))
+      await worker.terminate()
+    }
+  }
+}
+
+/**
+ * Deletes, in homes whose history moved into ~/.codex, each rollout copy the move left behind
+ * whose bytes ~/.codex holds and that no process has open; everything else stays for a later
+ * launch. Null when nothing ran: this platform can't tell open files (Linux), or it stopped.
+ */
+export async function cleanUpCodexAccountCopies(args: {
+  homes: string[]
+  storeHome: string
+  /**
+   * The home's move outcome this run, asked before each step; null once it is no longer shared or
+   * a pass is due. Stuck homes (busy, refused, incomplete, failed) keep every file.
+   */
+  moveOutcome: (accountHome: string) => CodexHistoryMoveOutcome | null
+  shouldStop: () => boolean
+  worker: CodexAccountCopiesWorker
+  findOpen?: typeof findOpenFiles
+  platform?: NodeJS.Platform
+}): Promise<(CopiesTally & { homes: number }) | null> {
+  const platform = args.platform ?? process.platform
+  if (platform !== 'darwin' && platform !== 'win32') {
+    return null
+  }
+  const moved = (home: string): boolean => args.moveOutcome(home) === 'moved'
+  const findOpen = args.findOpen ?? findOpenFiles
+  const total = { ...emptyTally(), homes: 0 }
+  const deadline = Date.now() + MAX_MS_PER_LAUNCH
+  let bytesLeft = MAX_BYTES_PER_LAUNCH
+  for (const accountHome of args.homes) {
+    if (args.shouldStop()) {
+      return null
+    }
+    if (!moved(accountHome)) {
+      continue
+    }
+    const checked = await args.worker.call({
+      op: 'verify',
+      accountHome,
+      storeHome: args.storeHome,
+      budget: { maxBytes: bytesLeft, deadline }
+    })
+    if (!checked.ok) {
+      if (args.shouldStop()) {
+        return null
+      }
+      console.warn('[codex-account-history] Old copies were not checked:', checked.message)
+      total.error += 1
+      continue
+    }
+    total.homes += 1
+    bytesLeft = Math.max(0, bytesLeft - checked.bytesRead)
+    addTally(total, checked.tally)
+    const open =
+      checked.verified.length > 0
+        ? await findOpen(
+            checked.verified.map((copy) => copy.copy),
+            { shouldStop: args.shouldStop }
+          )
+        : new Set<string>()
+    if (args.shouldStop()) {
+      return null
+    }
+    // Can't tell, or a pass started meanwhile: every copy stays.
+    const deletable =
+      open && moved(accountHome) ? checked.verified.filter((copy) => !open.has(copy.copy)) : []
+    total.open += checked.verified.length - deletable.length
+    if (deletable.length > 0 && moved(accountHome)) {
+      const deleted = await args.worker.call({
+        op: 'delete',
+        accountHome,
+        storeHome: args.storeHome,
+        copies: deletable
+      })
+      if (!deleted.ok) {
+        if (args.shouldStop()) {
+          return null
+        }
+        total.error += deletable.length
+      } else {
+        addTally(total, deleted.tally)
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, GAP_BETWEEN_HOMES_MS).unref?.())
+  }
+  return total
+}

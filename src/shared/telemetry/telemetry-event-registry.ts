@@ -1,4 +1,5 @@
 import { codexHistoryMoveStatusSchema } from './schemas/telemetry-codex-history-move-event-schemas'
+import { codexHistoryCopiesCleanupSchema } from './schemas/telemetry-codex-history-copies-event-schemas'
 import {
   onboardingLanguagePickerOpenedSchema,
   onboardingLanguageChangedSchema,
@@ -271,6 +272,7 @@ export const eventSchemas = {
   plugin_installed: pluginInstalledSchema,
 
   codex_history_move_status: codexHistoryMoveStatusSchema,
+  codex_history_copies_cleanup: codexHistoryCopiesCleanupSchema,
 
   ...browserExtensionsEventSchemas
 } as const

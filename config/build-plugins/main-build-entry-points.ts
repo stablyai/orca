@@ -64,6 +64,9 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   'codex-history-disk-usage-worker-entry': resolve(
     'src/main/codex/history/disk-usage/codex-history-disk-usage-worker-entry.ts'
   ),
+  'codex-account-copies-worker-entry': resolve(
+    'src/main/codex/history/shared-store/codex-account-copies-worker-entry.ts'
+  ),
   'codex-rollout-history-references-worker-entry': resolve(
     'src/main/codex/history/cleanup/codex-rollout-history-references-worker-entry.ts'
   ),

@@ -24,6 +24,7 @@ import {
   type CodexHistoryMoveOutcome
 } from '../../../telemetry/codex-history-move-telemetry'
 import { isLinkedDirectory } from '../../../filesystem/merged-directory-link'
+import { CodexAccountCopiesCleanupRun } from './codex-account-copies-cleanup-run'
 
 const BUSY_RETRY_MS = 5 * 60_000
 // Retries start outside any pass's trace, so each is its own trace instead of nesting forever.
@@ -111,6 +112,13 @@ export class CodexAccountHistoryPasses {
     }
   })
   private startedPasses = 0
+  private readonly copiesCleanup = new CodexAccountCopiesCleanupRun({
+    passRunning: () => this.activePasses > 0,
+    homes: () => this.homes.sharedHomes() ?? [],
+    moveOutcome: (home) => this.moveOutcomeNow(home),
+    markerPath: () =>
+      join(getOrcaUserDataPath(), 'codex-account-history', 'copies-cleanup-sent.json')
+  })
   private readonly passProgress = {
     isPaused: (): boolean => this.activePasses > 0,
     started: (): number => this.startedPasses
@@ -180,6 +188,7 @@ export class CodexAccountHistoryPasses {
     this.censusWaiting = true
     void Promise.all(accountHomes.map((home) => this.run(home, shared).catch(() => {})))
       .then(() => this.reportUnlessPending(null))
+      .then(() => this.copiesCleanup.schedule())
       .finally(() => {
         this.censusWaiting = false
       })
@@ -204,6 +213,8 @@ export class CodexAccountHistoryPasses {
     shared: boolean,
     forLaunch: boolean
   ): Promise<void> {
+    // A pass may move files in that home's folders: no copy is deleted beside it.
+    await this.copiesCleanup.stop()
     this.settledThisRun.delete(key)
     // Recorded in the trace log, so a home that never moves shows why.
     const outcome = await withSpan('codex-account-history.pass', async (span) => {
@@ -276,6 +287,16 @@ export class CodexAccountHistoryPasses {
       onWarning(error)
       return 'failed'
     }
+  }
+
+  // Moved: this run's pass shared it, it should still be shared, and no pass is due.
+  private moveOutcomeNow(accountHome: string): CodexHistoryMoveOutcome | null {
+    const key = normalizeRuntimePathForComparison(accountHome)
+    return this.settledThisRun.get(key) === true &&
+      this.isStillShared(accountHome) &&
+      !this.requests.has(key)
+      ? 'moved'
+      : null
   }
 
   private cancelRetry(key: string): void {
