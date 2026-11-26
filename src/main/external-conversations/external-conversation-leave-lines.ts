@@ -170,7 +170,7 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
       }
       // The leave's save is on disk first: one that fails puts the thread back, owing nothing, and
       // one whose outcome was unknown is written again before the line says so.
-      await threadMuteSaving(link)?.catch(() => undefined)
+      await threadMuteSaving(conversation)?.catch(() => undefined)
       if (owed(link, turnId) && deps.flush) {
         try {
           await deps.flush()

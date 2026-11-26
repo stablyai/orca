@@ -1,5 +1,7 @@
 // Main-process dependencies compiled into the bundle instead of loaded from node_modules.
 export const BUNDLED_MAIN_DEPENDENCIES = new Set([
+  // Ship the on-demand Feishu client once, without the SDK’s generated types and duplicate builds.
+  '@larksuiteoapi/node-sdk',
   'stream-json',
   'stream-chain',
   '@xterm/headless',
