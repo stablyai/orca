@@ -42,6 +42,18 @@ describe('regionalDateTimeFormat', () => {
     expect(shape('ja', { region: 'US', hourCycle: 'h12' }).hourCycle).toMatch(/^h1[12]$/)
   })
 
+  it('gives a 24-hour hour its minutes so it never reads as a bare number', () => {
+    const hourParts = (os: OsDateTimeRegion | null) => {
+      setOsDateTimeRegion(os)
+      return regionalDateTimeFormat({ hour: 'numeric' }, 'en')
+        .formatToParts(new Date(2026, 10, 26, 20))
+        .some((part) => part.type === 'minute')
+    }
+    expect(hourParts(null)).toBe(false)
+    expect(hourParts({ region: 'US', hourCycle: 'h12' })).toBe(false)
+    expect(hourParts({ region: 'US', hourCycle: 'h23' })).toBe(true)
+  })
+
   it('keeps the UI script when the region implies another', () => {
     setOsDateTimeRegion({ region: 'TW', hourCycle: null })
     // Simplified 周, not the Traditional 週 a bare zh-TW would pick.

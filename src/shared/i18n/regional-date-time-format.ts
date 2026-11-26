@@ -92,7 +92,14 @@ export function createRegionalDateTimeFormat(
       ? { ...options, hourCycle }
       : options
   try {
-    return new Intl.DateTimeFormat(withOsRegion(uiLocale, region), regional)
+    const tag = withOsRegion(uiLocale, region)
+    const formatter = new Intl.DateTimeFormat(tag, regional)
+    // A 24-hour hour alone reads as a bare number ("20"), so it gets its minutes ("20:00").
+    const bareHour =
+      (region || hourCycle) && options.hour !== undefined && options.minute === undefined
+    return bareHour && /^h2[34]$/.test(formatter.resolvedOptions().hourCycle ?? '')
+      ? new Intl.DateTimeFormat(tag, { ...regional, minute: '2-digit' })
+      : formatter
   } catch {
     return new Intl.DateTimeFormat(uiLocale, options)
   }
