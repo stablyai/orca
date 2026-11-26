@@ -299,6 +299,7 @@ export function ListRow({
       disabled={inertState.disabled}
       accessibilityRole={accessibilityRole ?? (selected === undefined ? 'button' : 'radio')}
       accessibilityLabel={accessibilityLabel ?? (value ? `${title}, ${value}` : title)}
+      aria-checked={selected ?? checked}
       accessibilityState={
         selected === undefined
           ? { ...inertState, ...(checked !== undefined && { checked }) }
