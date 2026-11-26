@@ -15224,7 +15224,9 @@
           "previous": "Imagem anterior",
           "next": "Próxima imagem",
           "copiedPng": "Copiado como PNG",
-          "copyPngFailed": "Não foi possível copiar a imagem"
+          "copyPngFailed": "Não foi possível copiar a imagem",
+          "download": "Baixar",
+          "downloadFailed": "Não foi possível baixar a imagem"
         },
         "richMarkdownImageInsertionFeedback": {
           "importedFileKept": "A inserção da imagem foi cancelada porque o destino mudou. O arquivo importado foi mantido.",

@@ -17050,7 +17050,9 @@
           "previous": "前の画像",
           "next": "次の画像",
           "copiedPng": "PNG としてコピーしました",
-          "copyPngFailed": "画像をコピーできませんでした"
+          "copyPngFailed": "画像をコピーできませんでした",
+          "download": "ダウンロード",
+          "downloadFailed": "画像をダウンロードできませんでした"
         },
         "MermaidBlock": {
           "dcc132e691": "図のエラー:",

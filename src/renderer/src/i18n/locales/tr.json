@@ -18181,7 +18181,9 @@
           "copiedPng": "PNG olarak kopyalandı",
           "copyPngFailed": "Görsel kopyalanamadı",
           "previous": "Önceki görsel",
-          "next": "Sonraki görsel"
+          "next": "Sonraki görsel",
+          "download": "İndir",
+          "downloadFailed": "Görsel indirilemedi"
         },
         "MermaidBlock": {
           "dcc132e691": "Diyagram hatası:",

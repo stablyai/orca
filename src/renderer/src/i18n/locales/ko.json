@@ -17227,7 +17227,9 @@
           "previous": "이전 이미지",
           "next": "다음 이미지",
           "copiedPng": "PNG로 복사했습니다",
-          "copyPngFailed": "이미지를 복사할 수 없습니다"
+          "copyPngFailed": "이미지를 복사할 수 없습니다",
+          "download": "다운로드",
+          "downloadFailed": "이미지를 다운로드할 수 없습니다"
         },
         "MermaidBlock": {
           "dcc132e691": "다이어그램 오류:",

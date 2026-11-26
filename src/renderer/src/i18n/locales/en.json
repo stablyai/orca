@@ -18186,7 +18186,9 @@
           "copyPngFailed": "Could not copy image",
           "copyPng": "Copy as PNG",
           "previous": "Previous image",
-          "next": "Next image"
+          "next": "Next image",
+          "download": "Download",
+          "downloadFailed": "Could not download the image"
         },
         "MermaidBlock": {
           "dcc132e691": "Diagram error:",
