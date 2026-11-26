@@ -168,6 +168,16 @@ export const TerminalSetPaneTitle = TerminalHandle.extend({
   title: z.string()
 })
 
+const TerminalClientPaste = z.object({
+  lane: z.string().min(1).max(128),
+  seq: z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
+})
+
+// Asking about a client paste withdraws it if this host has not seen it. Older hosts strip it.
+export const TerminalAgentStatus = TerminalHandle.extend({
+  clientPaste: TerminalClientPaste.optional()
+})
+
 export const TerminalSend = TerminalHandle.extend({
   inputSequence: z
     .object({
@@ -191,6 +201,10 @@ export const TerminalSend = TerminalHandle.extend({
     })
     .optional(),
   requireAgentStatus: z.enum(['sendable']).optional(),
+  // A guarded Enter is refused when the terminal took other input since the paste that named this. Older hosts strip it.
+  expectInputGeneration: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
+  // Names a guarded paste so a client that loses its reply can ask about it. Older hosts strip it.
+  clientPaste: TerminalClientPaste.optional(),
   // A startup-dialog card's choice: refused unless the screen still reads as this card. Older hosts strip it.
   requireStartupDialog: z
     .string()

@@ -38,6 +38,7 @@ import {
   type ActiveAgentNotesSendResult
 } from '@/lib/agent-session/messaging/terminal/active-agent-note-send-result'
 import { sendMessageToAgent } from '@/lib/agent-session/messaging/agent-message-send'
+import { showNoteSendResultToast } from '@/components/notes/delivery/note-pasted-toast'
 import {
   deriveNotesSendAgentTargets,
   type NotesSendAgentTarget
@@ -153,7 +154,7 @@ export function ReviewNotesSendMenuContent({
     (
       send: () => Promise<ActiveAgentNotesSendResult>,
       onSent: () => void,
-      options: { explicitTarget?: boolean; structured?: boolean } = {}
+      target: NotesSendAgentTarget
     ) => {
       // Settle the loading toast in place: immediate sends can resolve before Sonner mounts, racing a separate dismissal.
       const pending = toast.loading(
@@ -177,25 +178,23 @@ export function ReviewNotesSendMenuContent({
             return
           }
 
-          if (options.structured && result.status === 'unconfirmed') {
-            toast.dismiss(pending)
-            return
+          if (result.status === 'pasted') {
+            // The terminal holds the notes now; sending them again would paste them twice.
+            onPromptDelivered?.()
           }
-
-          // Use a typed toast update; toast.message preserves the loading spinner.
-          toast.info(
-            activeAgentNotesSendFailureMessage(result.status, {
-              explicitTarget: options.explicitTarget,
-              code: result.code
-            }),
-            { id: pending }
-          )
+          showNoteSendResultToast({
+            result,
+            worktreeId,
+            target: target.messageTarget,
+            agentLabel: formatAgentTypeLabel(target.agentType),
+            toastId: pending
+          })
         })
         .catch(() => {
           console.error('Failed to send notes:', { code: 'runtime-unverifiable' })
           toast.error(
             activeAgentNotesSendFailureMessage('status-unavailable', {
-              explicitTarget: options.explicitTarget,
+              explicitTarget: true,
               code: 'runtime-unverifiable'
             }),
             { id: pending }
@@ -203,7 +202,7 @@ export function ReviewNotesSendMenuContent({
         })
       onPromptHandedOff?.(sending)
     },
-    [onPromptHandedOff]
+    [onPromptHandedOff, onPromptDelivered, worktreeId]
   )
 
   const sendToAgentTarget = useCallback(
@@ -231,8 +230,10 @@ export function ReviewNotesSendMenuContent({
         return
       }
 
+      const { messageTarget } = target
       runNotesSend(
-        () => sendMessageToAgent({ worktreeId, prompt, target: target.messageTarget }),
+        () =>
+          sendMessageToAgent({ worktreeId, prompt, target: messageTarget, userInitiated: true }),
         () => {
           onPromptDelivered?.()
           // Match sidebar telemetry for follow-up notes sent through the dropdown.
@@ -242,7 +243,7 @@ export function ReviewNotesSendMenuContent({
             request_kind: 'followup'
           })
         },
-        { explicitTarget: true, structured: target.messageTarget.kind === 'structured-session' }
+        target
       )
     },
     [hasPrompt, mode, runNotesSend, worktreeId, prompt, onPromptDelivered, launchSource]

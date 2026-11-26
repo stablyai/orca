@@ -187,7 +187,7 @@ export async function findActiveRuntimeTerminal(
   )
 }
 
-function getActivePanePtyId(
+export function getActivePanePtyId(
   state: ActiveTerminalNoteTargetState,
   noteTarget: ActiveTerminalNoteTarget
 ): string | null {

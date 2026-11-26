@@ -24177,6 +24177,11 @@
         "cancel": "Abbrechen",
         "tryAgain": "Erneut versuchen"
       }
+    },
+    "agentNotes": {
+      "pastedPressEnter": "Notiz in {{agent}} eingefügt. Drücken Sie dort die Eingabetaste, um sie zu senden.",
+      "pastingNote": "Notiz wird in {{agent}} eingefügt…",
+      "pastedNoteWaiting": "In {{agent}} wartet eine eingefügte Notiz. Drücken Sie dort zuerst die Eingabetaste."
     }
   },
   "dashboardPopout": {

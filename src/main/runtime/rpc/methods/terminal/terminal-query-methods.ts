@@ -9,6 +9,7 @@ import {
 } from '../../../../../shared/agent-session/identity/orca-session-address'
 import {
   TerminalAgentId,
+  TerminalAgentStatus,
   TerminalHandle,
   TerminalInspectProcess,
   TerminalListParams,
@@ -158,10 +159,26 @@ export const TERMINAL_QUERY_METHODS = [
   defineMethod({
     name: 'terminal.agentStatus',
     permission: 'workspace',
-    params: TerminalHandle,
-    handler: async (params, { runtime }) => ({
-      agentStatus: await runtime.getTerminalAgentStatus(params.terminal)
-    })
+    params: TerminalAgentStatus,
+    handler: async (params, { runtime }) => {
+      const agentStatus = await runtime.getTerminalAgentStatus(params.terminal)
+      const ptyId = runtime.resolveLiveLeafForHandle(params.terminal)?.ptyId
+      const runFacts = runtime.terminalRunFacts
+      return {
+        agentStatus,
+        // Lets a sender tell whether the terminal took input since a paste it left unsent.
+        ...(ptyId
+          ? {
+              // Read with the generations, so the receipt and its resolution agree.
+              ...(params.clientPaste
+                ? { clientPaste: runFacts.reconcileClientPaste(ptyId, params.clientPaste) }
+                : {}),
+              inputGeneration: runFacts.readInputGeneration(ptyId),
+              resolvedInputGeneration: runFacts.readResolvedInputGeneration(ptyId)
+            }
+          : {})
+      }
+    }
   }),
   defineMethod({
     name: 'terminal.rename',

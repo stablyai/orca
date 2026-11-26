@@ -5,10 +5,29 @@ export type RuntimeTerminalSend = {
   handle: string
   accepted: boolean
   bytesWritten: number
-  refusedReason?: 'no-agent' | 'permission' | 'approval-unseen'
+  /** `input-changed`: the terminal took other input after the text `expectInputGeneration` names. */
+  refusedReason?: 'no-agent' | 'permission' | 'approval-unseen' | 'input-changed'
   prompt?: RuntimeTerminalPromptDelivery
   writeSettlement?: WriteSettlement
+  /** How long the client must wait before sending this text's Enter. Older hosts omit it. */
+  submitDelayMs?: number
+  /** Names this text as the terminal's last input; its Enter passes it back as
+   *  `expectInputGeneration`. Older hosts omit it. */
+  /** On an input-changed refusal, names the input now waiting instead. */
+  inputGeneration?: number
 }
+
+/** Names one paste from one client window; `seq` only grows within a `lane`. */
+export type RuntimeTerminalClientPaste = { lane: string; seq: number }
+
+/** What the host knows of a client paste whose reply the client lost. `withdrawn`: it never
+ *  arrived and now never will write; `refused`: it wrote nothing; `written`: some or all of it
+ *  reached the terminal, and a later Enter or Ctrl+C past `inputGeneration` resolves it;
+ *  `unknown`: the host can no longer tell. */
+export type RuntimeTerminalClientPasteReceipt =
+  | { state: 'withdrawn' | 'refused' | 'unknown' }
+  | { state: 'writing'; settlesInMs: number }
+  | { state: 'written'; inputGeneration: number; settlesInMs: number }
 
 export type RuntimeTerminalPromptStage = 'input_accepted' | 'turn_started'
 

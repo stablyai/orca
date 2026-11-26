@@ -23470,7 +23470,10 @@
       "notWritable": "{{target}} 에이전트가 메모를 받지 않았습니다.",
       "selectedSubmitFailed": "선택한 터미널에 메모가 이미 붙여넣어졌을 수 있지만 Orca가 제출하지 못했습니다.",
       "activeSubmitFailed": "활성 터미널에 메모가 이미 붙여넣어졌을 수 있지만 Orca가 제출하지 못했습니다.",
-      "notWritableSelection": "{{target}} 에이전트가 선택 영역을 받지 않았습니다."
+      "notWritableSelection": "{{target}} 에이전트가 선택 영역을 받지 않았습니다.",
+      "pastedPressEnter": "메모를 {{agent}}에 붙여넣었습니다. 보내려면 해당 터미널에서 Enter 키를 누르세요.",
+      "pastingNote": "메모를 {{agent}}에 붙여넣는 중…",
+      "pastedNoteWaiting": "{{agent}}에 붙여넣은 메모가 대기 중입니다. 먼저 해당 터미널에서 Enter 키를 누르세요."
     },
     "contextualTours": {
       "agentSessions": {

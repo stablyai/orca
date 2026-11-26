@@ -23141,7 +23141,10 @@
       "notWritable": "{{target}} Agent はメモを受け付けませんでした。",
       "selectedSubmitFailed": "メモは選択中のターミナルにすでに貼り付けられている可能性がありますが、送信できませんでした。",
       "activeSubmitFailed": "メモはアクティブなターミナルにすでに貼り付けられている可能性がありますが、送信できませんでした。",
-      "notWritableSelection": "{{target}} Agent は選択範囲を受け付けませんでした。"
+      "notWritableSelection": "{{target}} Agent は選択範囲を受け付けませんでした。",
+      "pastedPressEnter": "メモを {{agent}} に貼り付けました。送信するには、そこで Enter キーを押してください。",
+      "pastingNote": "メモを {{agent}} に貼り付けています…",
+      "pastedNoteWaiting": "{{agent}} に貼り付けたメモが送信待ちです。先にそこで Enter キーを押してください。"
     },
     "crash": {
       "report": {

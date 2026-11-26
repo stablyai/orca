@@ -23249,6 +23249,11 @@
         "cancel": "Annuler",
         "tryAgain": "Réessayer"
       }
+    },
+    "agentNotes": {
+      "pastedPressEnter": "Note collée dans {{agent}}. Appuyez sur Entrée dans ce terminal pour l’envoyer.",
+      "pastingNote": "Collage de la note dans {{agent}}…",
+      "pastedNoteWaiting": "Une note collée attend dans {{agent}}. Appuyez d’abord sur Entrée dans ce terminal."
     }
   },
   "dashboardPopout": {

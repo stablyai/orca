@@ -1,3 +1,5 @@
+import { forgetTerminalNoteDraft } from '@/lib/agent-session/messaging/terminal/active-agent-terminal-send-lane'
+
 export type TerminalNotice = 'claude-old-terminal' | 'codex-shared-server'
 export type TerminalNoticeStart = {
   paneKey: string
@@ -82,6 +84,7 @@ export function admitTerminalNoticeStart(
 export function retireTerminalNoticeLifetime(lifetime: TerminalNoticeLifetime): void {
   if (lifetimes.get(lifetime.ptyId) === lifetime) {
     lifetimes.delete(lifetime.ptyId)
+    forgetTerminalNoteDraft(lifetime.ptyId)
   }
   lifetime.retired = true
   lifetime.dismissed.clear()
