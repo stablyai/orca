@@ -246,6 +246,10 @@ export async function launchRelayedProviderProcess(
   if (verdict === 'unknown' || (verdict === 'kept' && !keptProviderRelay(relay.chatKey))) {
     throw new KeptProviderRelayUnreachableError(relay.chatKey)
   }
+  // A launch reattach whose kept agent ended since ends as gone, so its cut turn gets its offer.
+  if (verdict === 'gone' && providerRelayRebinding(relay.chatKey)) {
+    throw new KeptProviderRelayEndedError(relay.chatKey)
+  }
   const kept = await reattachListed(relay)
   if (kept) {
     return kept

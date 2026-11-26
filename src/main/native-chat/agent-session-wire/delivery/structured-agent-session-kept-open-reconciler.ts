@@ -26,16 +26,18 @@ export type StructuredAgentSessionKeptOpensInput = {
 
 const RETRY_FIRST_MS = 2_000
 const RETRY_MAX_MS = 60_000
+/** About four minutes of retries per daemon start; after that only a send asks again. */
+const RETRY_ATTEMPTS = 8
 
 /**
  * Chats opened as kept while their run's daemon start couldn't say whether it still runs. Only that
  * start's word, or its daemon and agent proven gone, settles one. The open's boundary lives on its
- * session, so a closed chat keeps nothing. One backoff retry per daemon start asks again while any
- * open chat waits on it; a send asks at once through the gate.
+ * session, so a closed chat keeps nothing. One bounded backoff retry per daemon start asks again
+ * while any open chat waits on it; a send asks at once through the gate, however long it waited.
  */
 export class StructuredAgentSessionKeptOpens {
   private readonly opened = new WeakMap<StructuredAgentSessionHostSession, number>()
-  private readonly retries = new Map<string, { timer: NodeJS.Timeout; delayMs: number }>()
+  private readonly retries = new Map<string, NodeJS.Timeout>()
 
   constructor(private readonly input: StructuredAgentSessionKeptOpensInput) {
     // A start asks fresh; a gone run the host held settles inside that start, before it spawns.
@@ -61,12 +63,12 @@ export class StructuredAgentSessionKeptOpens {
     this.opened.set(session, session.journal.cursor().sequence + 1)
     const instance = this.instanceOf(sessionId)
     if (instance) {
-      this.retryLater(instance, RETRY_FIRST_MS)
+      this.retryLater(instance, 1)
     }
   }
 
   dispose(): void {
-    for (const { timer } of this.retries.values()) {
+    for (const timer of this.retries.values()) {
       clearTimeout(timer)
     }
     this.retries.clear()
@@ -79,24 +81,25 @@ export class StructuredAgentSessionKeptOpens {
     return placement?.kind === 'relayed' ? placement.daemon.instance : null
   }
 
-  private retryLater(instance: string, delayMs: number): void {
-    if (this.retries.has(instance)) {
+  private retryLater(instance: string, attempt: number): void {
+    if (this.retries.has(instance) || attempt > RETRY_ATTEMPTS) {
       return
     }
+    const delayMs = Math.min(RETRY_FIRST_MS * 2 ** (attempt - 1), RETRY_MAX_MS)
     const timer = setTimeout(() => {
       this.retries.delete(instance)
-      void this.retry(instance, delayMs).catch((error: unknown) => this.warn(instance, error))
+      void this.retry(instance, attempt).catch((error: unknown) => this.warn(instance, error))
     }, delayMs)
     timer.unref?.()
-    this.retries.set(instance, { timer, delayMs })
+    this.retries.set(instance, timer)
   }
 
   /** Asks again for each open chat still waiting on this daemon start; backs off while any is. */
-  private async retry(instance: string, delayMs: number): Promise<void> {
+  private async retry(instance: string, attempt: number): Promise<void> {
     const waiting = [...this.input.sessions].filter(
       ([id, session]) => this.opened.has(session) && this.instanceOf(id) === instance
     )
-    const verdicts = await Promise.all(
+    const verdicts = await Promise.allSettled(
       waiting.map(async ([id]) => {
         const record = this.input.record(id)
         const verdict = record ? await providerRelayRunLiveness(record, { fresh: true }) : 'gone'
@@ -108,8 +111,9 @@ export class StructuredAgentSessionKeptOpens {
         return verdict
       })
     )
-    if (verdicts.includes('unknown')) {
-      this.retryLater(instance, Math.min(delayMs * 2, RETRY_MAX_MS))
+    // A chat whose ask failed is as undecided as one its daemon start couldn't answer.
+    if (verdicts.some((settled) => settled.status === 'rejected' || settled.value === 'unknown')) {
+      this.retryLater(instance, attempt + 1)
     }
   }
 

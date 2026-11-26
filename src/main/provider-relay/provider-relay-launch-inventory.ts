@@ -128,6 +128,8 @@ export function keptProviderRelaySpawnToken(chatKey: string): string | null {
 const INSTANCE_LISTING_FRESH_MS = 2_000
 type InstanceListing = {
   settledAt: number
+  /** Only an answer is reused; an unanswered listing is asked again by the next caller. */
+  answered: boolean
   listing: Promise<ReadonlyMap<string, ProviderRelayInfo> | null>
 }
 /** By daemon start; bounded by the daemons this app has talked to. */
@@ -135,8 +137,8 @@ const instanceListings = new Map<string, InstanceListing>()
 
 /**
  * The relays one daemon start holds, by relay id; null when it didn't answer. `fresh` asks again
- * unless a listing is in flight (a send, a failed attach, or an earlier timeout must not reuse an
- * answer); otherwise one settled within 2 s answers.
+ * unless a listing is in flight (a send or a failed attach must not reuse an answer); otherwise an
+ * answer settled within 2 s answers. An unanswered one is never reused.
  */
 export function listProviderRelayInstance(
   client: DaemonClient,
@@ -147,13 +149,14 @@ export function listProviderRelayInstance(
   if (
     cached &&
     (cached.settledAt === Number.POSITIVE_INFINITY ||
-      (!fresh && Date.now() - cached.settledAt < INSTANCE_LISTING_FRESH_MS))
+      (!fresh && cached.answered && Date.now() - cached.settledAt < INSTANCE_LISTING_FRESH_MS))
   ) {
     return cached.listing
   }
   const channel = providerRelayChannel(client)
   const entry: InstanceListing = {
     settledAt: Number.POSITIVE_INFINITY,
+    answered: false,
     listing: Promise.resolve(null)
   }
   entry.listing = withTimeout(
@@ -167,6 +170,7 @@ export function listProviderRelayInstance(
         return null
       }
       await keep(channel, result.relays)
+      entry.answered = true
       return new Map(result.relays.map((info) => [info.relayId, info]))
     })
     .finally(() => {

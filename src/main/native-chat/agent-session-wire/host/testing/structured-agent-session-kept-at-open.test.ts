@@ -270,6 +270,35 @@ it.skipIf(process.platform === 'win32')(
   }
 )
 
+// A launch reattach whose kept agent ended since must end as gone (its cut turn gets its offer),
+// never quietly start a new agent in its place.
+it.skipIf(process.platform === 'win32')(
+  'a launch reattach whose kept agent is gone ends as gone instead of starting a new agent',
+  async () => {
+    const spawned: string[] = []
+    const current = daemon(INSTANCE, () => [])
+    const relays = await fresh([current])
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the spy keeps the fake's other members
+    const client = current as unknown as { request: (type: string) => Promise<unknown> }
+    const request = client.request
+    client.request = (type) => {
+      spawned.push(type)
+      return request(type)
+    }
+    relays.installProviderRelayRunGate(async () => 'gone')
+    const launch = relays.withProviderRelayRebind(SESSION, () =>
+      relays.launchRelayedProviderProcess(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an ended rebind reads no launch field
+        {} as never,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an ended rebind reads only chatKey
+        { chatKey: SESSION } as never
+      )
+    )
+    await expect(launch).rejects.toThrow('agent_kept_running_ended')
+    expect(spawned).not.toContain('relaySpawn')
+  }
+)
+
 // A start refused beside a possibly running kept agent proves no exit: death evidence from it would
 // resettle the chat's last turn before the kept agent's buffered end replays.
 it('a start refused beside an unreachable kept agent settles as unproven, however it is wrapped', async () => {
