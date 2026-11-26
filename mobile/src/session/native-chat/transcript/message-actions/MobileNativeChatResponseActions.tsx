@@ -7,6 +7,7 @@ import { colors, radii } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
+import { MobileNativeChatReadAloudButton } from './MobileNativeChatReadAloudButton'
 import {
   MobileNativeChatForkContext,
   type MobileNativeChatForkOffer
@@ -45,6 +46,9 @@ export function MobileNativeChatResponseActions({
           text={copyText}
           accessibilityLabel={t('chat.message.copyMessage', 'Copy message')}
         />
+      ) : null}
+      {message.role === 'assistant' && copyText.length > 0 ? (
+        <MobileNativeChatReadAloudButton messageId={message.id} markdown={copyText} />
       ) : null}
       {fork && offer !== 'hidden' ? (
         <ForkButton offer={offer} onFork={() => fork.fork(message)} />

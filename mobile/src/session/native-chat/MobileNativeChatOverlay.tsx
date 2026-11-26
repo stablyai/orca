@@ -29,6 +29,7 @@ import type { MobileNativeChatHostOutage } from './status/mobile-native-chat-hos
 import { MobileMarkdownLinksContext } from '../../components/markdown/links/mobile-markdown-links-context'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { useStopReadAloudWithChat } from '../../platform/read-aloud/read-aloud-turn'
 
 type Props = {
   controller: MobileNativeChatController
@@ -166,6 +167,7 @@ function MobileNativeChatOverlayContent({
   })
   const visuals = useMobileNativeChatVisualRenderer(controller.nativeChatVisualSource)
   const replyReveals = useMobileNativeChatReplyReveals(folded, streaming !== null, sendSurfaceId)
+  useStopReadAloudWithChat(sendSurfaceId)
   const itemSource = controller.nativeChatItemSource
   const committedDetail = useMemo(
     () => ({ current: fullContent.detail }),
