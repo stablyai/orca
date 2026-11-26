@@ -1,12 +1,22 @@
 import { isTuiAgent } from '../../../../../../../shared/agent-launch/catalog/tui-agent-config'
+import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
+import { OrchestrationError } from '../../../../../orchestration/orchestration-error'
 import {
+  createPendingWorkerLaunchReceipt,
+  formatDroppedRetryLaunchWarning,
+  joinWorkerStartWarnings,
   parseRecordedWorkerLaunchOptions,
+  resolveFederatedWorkerLaunchPreferences,
+  type OrchestrationWorkerLaunchReceipt,
   type RecordedWorkerLaunchOptions
 } from './launch/worker-launch-preferences'
 
 type RetryLaunchRuntime = Partial<Pick<OrcaRuntimeService, 'resolveOrchestrationAgentLauncher'>>
+
+const REMOTE_LAUNCH_PREFERENCE_MESSAGE =
+  /launch-time model selection|needs a provider\/id model|does not support effort|requested launch preferences|^--effort requires --model\.$/
 
 /** Rehydrates `--agent`, `--model`, and `--effort` from a retried Dispatch when `--terminal` is absent. */
 export function withRetryWorkerLaunchDefaults<
@@ -47,6 +57,107 @@ export function withRetryWorkerLaunchDefaults<
     ...(inheritPreferences && prior.effort !== undefined ? { effort: prior.effort } : {}),
     ...(inheritPreferences ? { inheritedLaunchPreferences: true } : {})
   }
+}
+
+export async function prepareRemoteOwnedRetryLaunch<
+  T extends {
+    agent?: string
+    model?: string
+    effort?: string
+    worktree?: string
+    inheritedLaunchPreferences?: boolean
+  }
+>(
+  params: T,
+  serverName: string,
+  supportsLaunchPreferences: () => Promise<boolean>
+): Promise<{ params: T; warning?: string }> {
+  if (!params.model && !params.effort) {
+    return { params }
+  }
+  const capabilities = (await supportsLaunchPreferences())
+    ? [ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY]
+    : []
+  const createsWorktree = params.worktree === 'new-top-level' || params.worktree === 'new-child'
+  try {
+    const plan = resolveFederatedWorkerLaunchPreferences({
+      params,
+      createsWorktree,
+      capabilities,
+      serverName
+    })
+    return {
+      params: { ...params, model: plan.model, effort: plan.effort },
+      ...(plan.warning ? { warning: plan.warning } : {})
+    }
+  } catch (error) {
+    if (error instanceof OrchestrationError) {
+      throw new OrchestrationError(error.code, error.message, { effectsApplied: false })
+    }
+    throw error
+  }
+}
+
+export async function callRemoteStartWithRetryLaunchFallback<T>(args: {
+  inherited?: boolean
+  model?: string
+  effort?: string
+  requestedLaunch?: OrchestrationWorkerLaunchReceipt
+  warning?: string
+  send: (overrides: { model: string | undefined; effort: string | undefined }) => Promise<T>
+}): Promise<{
+  result: T
+  requestedLaunch: OrchestrationWorkerLaunchReceipt
+  warning?: string
+  droppedWarning?: string
+}> {
+  const fallbackReceipt = args.requestedLaunch ?? createPendingWorkerLaunchReceipt({ agent: null })
+  try {
+    return {
+      result: await args.send({ model: args.model, effort: args.effort }),
+      requestedLaunch: fallbackReceipt,
+      warning: args.warning
+    }
+  } catch (error) {
+    if (!args.inherited || (!args.model && !args.effort) || !isRemoteLaunchRefusal(error)) {
+      throw error
+    }
+    const droppedWarning = formatDroppedRetryLaunchWarning(args, error.message)
+    return {
+      result: await args.send({ model: undefined, effort: undefined }),
+      requestedLaunch: createPendingWorkerLaunchReceipt({ agent: fallbackReceipt.requested.agent }),
+      warning: droppedWarning,
+      droppedWarning
+    }
+  }
+}
+
+export function withRemoteStartWarning<T>(answer: T, warning: string | undefined): T {
+  if (!warning || !answer || typeof answer !== 'object') {
+    return answer
+  }
+  const existing =
+    'warning' in answer && typeof answer.warning === 'string' ? answer.warning : undefined
+  const joined = joinWorkerStartWarnings(warning, existing)
+  return joined ? { ...answer, warning: joined } : answer
+}
+
+function isRemoteLaunchRefusal(error: unknown): error is OrchestrationError {
+  if (!(error instanceof OrchestrationError)) {
+    return false
+  }
+  if (
+    typeof error.data === 'object' &&
+    error.data !== null &&
+    'dispatchId' in error.data &&
+    typeof error.data.dispatchId === 'string'
+  ) {
+    return false
+  }
+  return (
+    error.code === 'capability_unsupported' ||
+    (error.code === 'invalid_argument' && REMOTE_LAUNCH_PREFERENCE_MESSAGE.test(error.message))
+  )
 }
 
 function matchesRetriedAgent(
