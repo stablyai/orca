@@ -69,6 +69,21 @@ if (channel) {
   channel.postMessage({ type: 'query' })
 }
 
+// A window that goes away (closed or reloaded) with an editor still open lets go of its claims, so
+// without Web Locks no other window waits on them for the full ten minutes; with Web Locks this
+// only makes them go sooner. A window that crashes can't, and is cleared by its lock or its time.
+globalThis.addEventListener?.('pagehide', () => {
+  for (const [token, claim] of ownClaims) {
+    channel?.postMessage({ type: 'release', token })
+    try {
+      globalThis.localStorage?.removeItem(`${claimPrefix(claim.scopeKey, claim.id)}${token}`)
+    } catch {
+      // Left for its lock or its time limit.
+    }
+  }
+  ownClaims.clear()
+})
+
 function claimsOf(scopeKey: string, id: string): Claim[] {
   const storage = globalThis.localStorage
   const prefix = claimPrefix(scopeKey, id)
