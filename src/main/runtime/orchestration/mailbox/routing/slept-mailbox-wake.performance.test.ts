@@ -508,7 +508,9 @@ it.each([100, 500])(
           sessions.get(host === hostA ? hostA : 'local') ?? getDefaultWorkspaceSession(),
         getWorkspaceSessionHostIds: () => [...sessions.keys()],
         onWorkspaceSessionWritten: () => () => {},
-        // B registered the twin first, so a first-registration lookup would name B.
+        // B registered the twin first, so a first-registration lookup names B.
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: host checks read only the repo's host fields.
+        getRepo: (id: string) => ({ id, connectionId: 'host-b' }) as never,
         getRepoRegistrationHosts: () => new Set(['ssh:host-b', hostA] as const)
       })
     )

@@ -2,7 +2,8 @@ import {
   canonicalExecutionHostId,
   isRemoteExecutionHostId,
   isUnresolvedOwnerHostId,
-  parseExecutionHostId
+  parseExecutionHostId,
+  toSshExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import type { SleptMailRecord } from './mail-wake-obligation'
@@ -33,30 +34,26 @@ export class SleptPaneHost {
         return true
       }
       const partition = this.index.hostOf(paneKey)
+      // Only the local partition holds other hosts' panes (older builds saved SSH panes there).
+      if (isRemoteExecutionHostId(partition) && !isUnresolvedOwnerHostId(partition)) {
+        // A runtime's pane may still name the nested SSH target it dials.
+        return onHost(partition) || (sshTarget !== undefined && record.connectionId === sshTarget)
+      }
+      if (record.connectionId) {
+        return onHost(toSshExecutionHostId(record.connectionId))
+      }
       if (onHost(partition)) {
         return true
       }
-      if (sshTarget !== undefined && record.connectionId === sshTarget) {
-        return true
-      }
-      // Only the local partition holds other hosts' panes (older builds saved SSH panes there).
-      if (isRemoteExecutionHostId(partition) && !isUnresolvedOwnerHostId(partition)) {
-        return false
-      }
-      if (sshTarget !== undefined && record.connectionId) {
-        return false
-      }
       // A twin repo registered on several hosts can't name one owner, so any of them counts.
-      const hosts = this.repoHosts(getRepoIdFromWorktreeId(record.worktreeId))
-      if (!hosts?.size) {
-        return true
-      }
-      for (const saved of hosts) {
+      let known = false
+      for (const saved of this.repoHosts(getRepoIdFromWorktreeId(record.worktreeId)) ?? []) {
         if (onHost(saved)) {
           return true
         }
+        known ||= !isUnresolvedOwnerHostId(saved)
       }
-      return false
+      return !known
     }
   }
 }

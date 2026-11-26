@@ -29,12 +29,22 @@ it('a pane whose partition or saved connection names host A is not on its twin r
   const folder = hostsFor({ worktreeId: 'folder:f', connectionId: null }, 'ssh:host-a', [])
   for (const hosts of [byPartition, byConnection, folder]) {
     expect(hosts.on('ssh:host-b')('pane')).toBe(false)
+    expect(hosts.on('runtime:env-b')('pane')).toBe(false)
     expect(hosts.on('ssh:host-a')('pane')).toBe(true)
   }
+  expect(byConnection.on('local')('pane')).toBe(false)
+  const nested = hostsFor({ worktreeId: 'twin::/w', connectionId: 'host-a' }, 'runtime:env', twins)
+  expect(nested.on('runtime:env')('pane')).toBe(true)
+  expect(nested.on('ssh:host-a')('pane')).toBe(true)
+  expect(nested.on('ssh:host-b')('pane')).toBe(false)
 })
 
 it('a pane with no known owner counts as on every host', () => {
   const unknown = hostsFor({ worktreeId: 'folder:f', connectionId: null }, 'local', [])
   expect(unknown.on('ssh:host-b')('pane')).toBe(true)
   expect(unknown.on('runtime:env')('pane')).toBe(true)
+  const unresolved = hostsFor({ worktreeId: 'twin::/w', connectionId: null }, null, [
+    'runtime:unresolved-owner'
+  ])
+  expect(unresolved.on('ssh:host-b')('pane')).toBe(true)
 })
