@@ -65,18 +65,6 @@ const ADD_COPY: Record<WslHostAddRefusalCode, (values: Values) => string | null>
     return distro === null || server === null
       ? null
       : translate('sidebar.wslHosts.addErrors.sshManaged', ADD.sshManaged, { distro, server })
-  },
-  otherAccountServer: ({ text }) => {
-    const distro = text('distro')
-    const user = text('user')
-    const port = text('port')
-    return distro === null || user === null || port === null
-      ? null
-      : translate('sidebar.wslHosts.addErrors.otherAccountServer', ADD.otherAccountServer, {
-          distro,
-          user,
-          port
-        })
   }
 }
 

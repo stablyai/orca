@@ -2,8 +2,10 @@
 import { wslDistroHolderKey } from '../discovery/wsl-distro-holder-record'
 
 const pinned = new Map<string, string>()
+// Set and cleared by one operation (a removal under a new name, a migration's trial connect); record reads never touch them.
+const overrides = new Map<string, string>()
 
-/** Replaces the pins with what the saved records name; records without a user stay unpinned. */
+/** Replaces the record pins with what the saved records name; records without a user stay unpinned. */
 export function pinWslHostLinuxUsers(
   records: readonly { distro: string; linuxUser?: string }[]
 ): void {
@@ -17,10 +19,26 @@ export function pinWslHostLinuxUsers(
 
 /** The account to run host commands as; undefined runs as the distro's default user (an Add). */
 export function pinnedWslHostLinuxUser(distro: string): string | undefined {
-  return pinned.get(wslDistroHolderKey(distro))
+  const key = wslDistroHolderKey(distro)
+  return overrides.get(key) ?? pinned.get(key)
 }
 
-/** Adds one more name for a pinned host (a renamed distro) until the next records read. */
-export function pinWslHostLinuxUser(distro: string, linuxUser: string): void {
-  pinned.set(wslDistroHolderKey(distro), linuxUser)
+/** Runs `task` with `distro` pinned to `linuxUser`, whatever the records say meanwhile. */
+export async function withWslHostLinuxUser<T>(
+  distro: string,
+  linuxUser: string,
+  task: () => Promise<T>
+): Promise<T> {
+  const key = wslDistroHolderKey(distro)
+  const previous = overrides.get(key)
+  overrides.set(key, linuxUser)
+  try {
+    return await task()
+  } finally {
+    if (previous === undefined) {
+      overrides.delete(key)
+    } else {
+      overrides.set(key, previous)
+    }
+  }
 }

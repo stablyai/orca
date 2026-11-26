@@ -15,7 +15,7 @@ import type { WslHostDistroCandidate } from './wsl-host-distro-list'
 import type { WslHostConnector } from './wsl-host-connector-contract'
 import { noteWslHostUserAction } from './wsl-host-user-actions'
 import { forgetWslHostKeptForPeers, recordWslHostKeptForPeers } from './wsl-host-kept-for-peers'
-import { pinWslHostLinuxUser } from '../orcad/wsl-orcad-host-user'
+import { withWslHostLinuxUser } from '../orcad/wsl-orcad-host-user'
 
 export type WslHostRemoval = { serverStop: WslHostServerStop; removed: boolean }
 
@@ -43,19 +43,18 @@ export async function removeWslHostServer(
       .resolveDistroName(record.distro, record.distroId)
       .catch(() => null)
     if (current !== false) {
-      // A renamed distro keeps its account: the pins are keyed by the record's name.
-      if (current && record.linuxUser) {
-        pinWslHostLinuxUser(current, record.linuxUser)
-      }
       // Under its current name: a renamed distro never reads as running under the old one.
       // Never boots: a stopped distro is itself a proven stop.
-      serverStop = await connector
-        .stopServer(current ?? record.distro, record.environmentId)
-        .catch((error: unknown): WslHostServerStop => ({
-          stopped: false,
-          verdict: 'unverifiable',
-          reason: errorMessage(error)
-        }))
+      const name = current ?? record.distro
+      const stop = () => connector.stopServer(name, record.environmentId)
+      // The record's account, under the name it resolves to: pins are keyed by the record's name.
+      serverStop = await (
+        record.linuxUser ? withWslHostLinuxUser(name, record.linuxUser, stop) : stop()
+      ).catch((error: unknown): WslHostServerStop => ({
+        stopped: false,
+        verdict: 'unverifiable',
+        reason: errorMessage(error)
+      }))
     }
     await connector.disconnect(record.distro)
     // Without its holder the distro stops once nothing started in it (a peer's orcad, user jobs) runs.

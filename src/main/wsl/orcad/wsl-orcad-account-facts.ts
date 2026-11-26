@@ -1,5 +1,4 @@
-/** The Linux account a WSL host runs as, and whether another account's orcad holds its port (#49180). */
-import { ORCAD_MANAGED_REMOTE_PORT } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
+/** The Linux account a WSL host runs as, its orcad key, and any other account's orcad in the distro (#49180). */
 import { OrcadHostUnsupportedError } from '../../orcad/diagnostics/orcad-host-unavailable'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
@@ -12,30 +11,19 @@ const KEY_MARKER = '__ORCA_WSL_KEY__ '
 const PEER_MARKER = '__ORCA_WSL_PEER__ '
 // Every managed orcad's argv names its entry this way; the probe's own argv runs as this account.
 const ORCAD_ARGV = '/orcad.js --json --bind '
-const UNAVAILABLE = '?'
 
-type FactsSources = { processes: string; tcpFiles: readonly string[] }
+/** Test seam: where the probe reads the process list. */
+type FactsSources = { processes: string }
 
-const LIVE_SOURCES: FactsSources = {
-  processes: 'ps -eo uid=,args= 2>/dev/null',
-  tcpFiles: ['/proc/net/tcp', '/proc/net/tcp6']
-}
-
-/** Account, key and peer lines; the peer must own both the port's listener and an orcad process, since WSL2 distros share one network. */
+/** Account and key lines, then the first other account running a managed orcad here, if any. */
 export function wslAccountFactsCommand(
-  sources: FactsSources = LIVE_SOURCES,
-  port = ORCAD_MANAGED_REMOTE_PORT
+  sources: FactsSources = { processes: 'ps -eo uid=,args= 2>/dev/null' }
 ): string {
-  const hexPort = port.toString(16).toUpperCase().padStart(4, '0')
-  const files = sources.tcpFiles.map((file) => `'${file}'`).join(' ')
   return [
     `_orca_me=$(id -u); printf '${USER_MARKER}%s %s\\n' "$_orca_me" "$(id -un 2>/dev/null)";`,
     `printf '${KEY_MARKER}%s\\n' "$(${orcadPublicKeyCommand('$HOME')})";`,
-    `_orca_tcp=; for _orca_f in ${files}; do [ -r "$_orca_f" ] && _orca_tcp="$_orca_tcp $_orca_f"; done;`,
-    `_orca_ps=$(${sources.processes});`,
-    `if [ -z "$_orca_ps" ] || [ -z "$_orca_tcp" ]; then _orca_peer='${UNAVAILABLE}'; else`,
-    `_orca_peer=$(printf '%s\\n' "$_orca_ps" | awk -v me="$_orca_me" 'FILENAME ~ /^\\// { if ($4 == "0A" && toupper($2) ~ /:${hexPort}$/) port[$8] = 1; next } $1 != me && ($1 in port) && index($0, "${ORCAD_ARGV}") { print $1; exit }' $_orca_tcp -); fi;`,
-    `printf '${PEER_MARKER}%s %s\\n' "$_orca_peer" "$(case $_orca_peer in (''|'${UNAVAILABLE}') ;; (*) getent passwd "$_orca_peer" | cut -d: -f1 ;; esac)"`
+    `_orca_peer=$(${sources.processes} | awk -v me="$_orca_me" '$1 != me && index($0, "${ORCAD_ARGV}") { print $1; exit }');`,
+    `printf '${PEER_MARKER}%s %s\\n' "$_orca_peer" "$([ -n "$_orca_peer" ] && getent passwd "$_orca_peer" | cut -d: -f1)"`
   ].join(' ')
 }
 
@@ -48,10 +36,8 @@ export type WslAccountFacts = {
   account?: WslLinuxAccount
   /** This account's orcad host key, or null when it has none yet. */
   ownKey?: string | null
-  /** Another account whose managed orcad holds this host's port. */
+  /** Another account whose managed orcad also runs in this distro (on its own port). */
   otherServerAccount?: WslLinuxAccount
-  /** ps or the socket tables were unreadable, so the port check was skipped. */
-  portCheckUnavailable?: true
 }
 
 function readAccount(line: string, marker: string): WslLinuxAccount | null | undefined {
@@ -74,22 +60,21 @@ export function readWslAccountFacts(
     return null
   }
   const ownKey = keyLine.slice(KEY_MARKER.length).trim() || null
-  const unavailable = peerLine.slice(PEER_MARKER.length).trim().startsWith(UNAVAILABLE)
   return {
     ...(account ? { account, ownKey } : {}),
-    ...(peer && peer.uid !== account?.uid ? { otherServerAccount: peer } : {}),
-    ...(unavailable ? { portCheckUnavailable: true as const } : {})
+    ...(peer && peer.uid !== account?.uid ? { otherServerAccount: peer } : {})
   }
 }
 
-const warnedUnavailable = new Set<string>()
+const warnedPeers = new Set<string>()
 
-/** Fails open without ps or /proc/net, as before the check; says so once per distro. */
-export function noteWslPortCheckUnavailable(distro: string): void {
-  if (!warnedUnavailable.has(distro)) {
-    warnedUnavailable.add(distro)
+/** Each account's orcad binds its own port, so they coexist; say once that two run here. */
+export function noteWslOtherAccountServer(distro: string, other: WslLinuxAccount): void {
+  const key = `${distro}\0${other.uid}`
+  if (!warnedPeers.has(key)) {
+    warnedPeers.add(key)
     console.warn(
-      `[wsl-hosts] Couldn’t check which Linux account holds Orca’s port in ${distro} (ps or /proc/net unreadable).`
+      `[wsl-hosts] ${distro} also runs Orca’s server for the Linux user ${accountName(other)}; this host keeps its own account’s server and port.`
     )
   }
 }
@@ -119,26 +104,6 @@ function accountName(account: WslLinuxAccount): string {
   return account.name ?? `uid ${account.uid}`
 }
 
-/** Final: retrying can't free the port, so the connect waits on the user (never liveness). */
-export class WslOrcadOtherAccountServerError extends OrcadHostUnsupportedError {
-  readonly code = 'wsl_orcad_other_account_server'
-  readonly port = ORCAD_MANAGED_REMOTE_PORT
-  constructor(
-    readonly distro: string,
-    readonly other: WslLinuxAccount,
-    account: WslLinuxAccount | undefined
-  ) {
-    const self = account ? ` as ${accountName(account)}` : ''
-    super(
-      `Port ${ORCAD_MANAGED_REMOTE_PORT} in ${distro} is held by Orca’s server for the Linux user ` +
-        `${accountName(other)}, so Orca can’t run this host’s server${self}. Remove the WSL host ` +
-        `that runs as ${accountName(other)} in the Orca that added it, or end that server as ` +
-        `${accountName(other)} (\`wsl.exe -d ${distro} -u ${other.name ?? 'root'} pkill -f /orcad.js\`).`
-    )
-    this.name = 'WslOrcadOtherAccountServerError'
-  }
-}
-
 /** Final until the user's Connect: an unpinned host's default account isn't the paired server's. */
 export class WslHostAccountChangedError extends OrcadHostUnsupportedError {
   readonly code = 'wsl_host_account_changed'
@@ -146,11 +111,25 @@ export class WslHostAccountChangedError extends OrcadHostUnsupportedError {
     readonly distro: string,
     readonly account: WslLinuxAccount
   ) {
+    // Neutral: a reset identity looks the same; only Connect's search can tell the user changed.
     super(
-      `${distro}’s default Linux user is now ${accountName(account)}, which isn’t the account ` +
-        'this host’s Orca server runs as. Click Connect to find that account and keep using it; ' +
-        'to switch to the new user, remove the WSL host and add it again.'
+      `The Orca server for ${distro}’s default Linux user (${accountName(account)}) isn’t the one ` +
+        'this desktop paired with. Click Connect to look for it under the distro’s other Linux ' +
+        'users, or remove the WSL host and add it again to use this one.'
     )
     this.name = 'WslHostAccountChangedError'
+  }
+}
+
+/** Final: no Linux user in the distro holds the paired server, so only a fresh Add helps. */
+export class WslHostPairedAccountMissingError extends OrcadHostUnsupportedError {
+  readonly code = 'wsl_host_paired_account_missing'
+  constructor(distro: string) {
+    super(
+      `No Linux user in ${distro} runs the Orca server this desktop paired with (it was ` +
+        'reinstalled, its identity was reset, or Orca couldn’t look as root). Remove the WSL host ' +
+        'and add it again.'
+    )
+    this.name = 'WslHostPairedAccountMissingError'
   }
 }

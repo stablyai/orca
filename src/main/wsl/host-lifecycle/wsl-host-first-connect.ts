@@ -4,7 +4,6 @@ import type { WslHostAddResult } from '../../../shared/remote-runtime/wsl-hosts/
 import { OrcadHostUnsupportedError } from '../../orcad/diagnostics/orcad-host-unavailable'
 import type { WslHostConnector } from './wsl-host-connector-contract'
 import { WslOrcadLaunchDeferredError } from '../orcad/wsl-orcad-connection-errors'
-import { WslOrcadOtherAccountServerError } from '../orcad/wsl-orcad-account-facts'
 import {
   WslDistroNotRegisteredError,
   WslDistroVersion1Error,
@@ -38,15 +37,6 @@ export async function connectForWslHostAdd(
     }
     if (error instanceof WslDistroVersion1Error) {
       return wslHostAddRefusal('unsupported-wsl1', 'wsl1', { distro: error.distro })
-    }
-    if (error instanceof WslOrcadOtherAccountServerError) {
-      const { distro: name, other, port } = error
-      const user = other.name ?? `uid ${other.uid}`
-      return wslHostAddRefusal('failed', 'otherAccountServer', {
-        distro: name,
-        user,
-        port: String(port)
-      })
     }
     if (error instanceof WslDistroNotRegisteredError) {
       return wslHostAddRefusal('unsupported-distro', 'notRegistered', { distro: error.distro })

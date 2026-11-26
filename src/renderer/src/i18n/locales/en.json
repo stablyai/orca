@@ -179,8 +179,7 @@
         "distroUnverifiable": "WSL didn’t answer whether {{distro}} is running. Refresh the list, or add it from the dialog, which starts it if needed.",
         "wsl1": "{{distro}} runs WSL 1, which Orca no longer supports. Convert it to WSL 2 in a Windows terminal with: {{command}}",
         "notRegistered": "{{distro}} is not an installed WSL distro. Run {{command}} in a Windows terminal to see the installed ones, or reinstall it and try again.",
-        "sshManaged": "{{distro}} already runs the Orca server for “{{server}}”, which this computer reaches over SSH. Remove that server first; moving it to a WSL host isn’t supported yet.",
-        "otherAccountServer": "{{distro}} already runs Orca’s server for the Linux user {{user}} on port {{port}}, so Orca can’t add it as this user. To add it as {{user}}, make {{user}} the distro’s default user and add it again; otherwise end that server first."
+        "sshManaged": "{{distro}} already runs the Orca server for “{{server}}”, which this computer reaches over SSH. Remove that server first; moving it to a WSL host isn’t supported yet."
       },
       "statusDetails": {
         "runningListUnavailable": "Windows didn’t report whether the distro is running.",

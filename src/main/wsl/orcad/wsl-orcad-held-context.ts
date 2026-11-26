@@ -18,8 +18,7 @@ import {
   readWslAccountFacts,
   WSL_ACCOUNT_FACTS_COMMAND,
   WslHostAccountChangedError,
-  WslOrcadOtherAccountServerError,
-  noteWslPortCheckUnavailable,
+  noteWslOtherAccountServer,
   readWslDefaultUserBesidePin,
   type WslAccountFacts
 } from './wsl-orcad-account-facts'
@@ -81,6 +80,17 @@ function withPlatform(platform: RemoteHostPlatform | null): { platform?: RemoteH
   return platform ? { platform } : {}
 }
 
+/** Before any deploy (#49180): an unpinned host's default account must hold the paired key, or Orca would start a stranger. */
+export function refuseUnpairedDefaultAccount(
+  distro: string,
+  facts: WslAccountFacts,
+  pairedKey: string | undefined
+): void {
+  if (facts.account && pairedKey && facts.ownKey !== pairedKey && !pinnedWslHostLinuxUser(distro)) {
+    throw new WslHostAccountChangedError(distro, facts.account)
+  }
+}
+
 /** WSL 1 runs no Linux kernel, so the pinned Node and its pty cannot run there. */
 export function isWsl1KernelRelease(release: string): boolean {
   return /^\d+\.\d+\.\d+-\d+-Microsoft$/.test(release.trim())
@@ -107,22 +117,10 @@ export async function holdWslDistroWithContext(
   if (isWsl1KernelRelease(facts.kernel)) {
     throw new WslDistroVersion1Error(name)
   }
-  // Before the holder or any launch: another account's orcad already holds this host's port.
   if (facts.otherServerAccount) {
-    throw new WslOrcadOtherAccountServerError(name, facts.otherServerAccount, facts.account)
+    noteWslOtherAccountServer(name, facts.otherServerAccount)
   }
-  if (facts.portCheckUnavailable) {
-    noteWslPortCheckUnavailable(name)
-  }
-  // An unpinned host whose default account doesn't hold the paired key would deploy a stranger.
-  if (
-    facts.account &&
-    pairedOffer &&
-    facts.ownKey !== pairedOffer.publicKeyB64 &&
-    !pinnedWslHostLinuxUser(name)
-  ) {
-    throw new WslHostAccountChangedError(name, facts.account)
-  }
+  refuseUnpairedDefaultAccount(name, facts, pairedOffer?.publicKeyB64)
   // Once the hold fails, stop the probes: after dispose they fall back to fresh wsl.exe execs,
   // which would boot a distro that just went away (E9).
   const probes = new AbortController()

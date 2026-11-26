@@ -9,15 +9,16 @@ import {
   WSL_ACCOUNT_FACTS_COMMAND,
   wslAccountFactsCommand
 } from './wsl-orcad-account-facts'
-import { readWslHostFacts, WSL_HOST_FACTS_COMMAND } from './wsl-orcad-held-context'
+import {
+  readWslHostFacts,
+  refuseUnpairedDefaultAccount,
+  WSL_HOST_FACTS_COMMAND
+} from './wsl-orcad-held-context'
+import { withWslHostLinuxUser } from './wsl-orcad-host-user'
 
+// A managed orcad's argv as `ps -eo uid=,args=` prints it; it listens on 6800 or the next free port.
 const ROOT_ORCAD =
-  '0 /root/.orca-remote/1.4.274/node /root/.orca-remote/1.4.274/orcad.js --json --bind 127.0.0.1 --port 6768'
-// /proc/net/tcp rows: `sl local rem st tx:rx tr:tm retrnsmt uid ...`; 0A is LISTEN, 1A70 is 6768.
-const HEADER =
-  '  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode'
-const listener = (port: string, uid: string): string =>
-  `   0: 0100007F:${port} 00000000:0000 0A 00000000:00000000 00:00000000 00000000 ${uid} 0 1 1`
+  '    0 /root/.orca-remote/1.4.274/node /root/.orca-remote/1.4.274/orcad.js --json --bind 127.0.0.1 --port 6768'
 
 function run(command: string): ReturnType<typeof readWslAccountFacts> {
   const [userLine = '', keyLine = '', peerLine = ''] = execFileSync('sh', ['-c', command], {
@@ -29,14 +30,6 @@ function run(command: string): ReturnType<typeof readWslAccountFacts> {
 describe.skipIf(process.platform === 'win32')('WSL account facts probe', () => {
   const dirs: string[] = []
   afterEach(async () => await removeTempDirs(dirs.splice(0)))
-
-  function sources(processes: string, tcp: string): Parameters<typeof wslAccountFactsCommand>[0] {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-wsl-facts-'))
-    dirs.push(dir)
-    writeFileSync(join(dir, 'ps'), processes)
-    writeFileSync(join(dir, 'tcp'), tcp)
-    return { processes: `cat '${join(dir, 'ps')}'`, tcpFiles: [join(dir, 'tcp')] }
-  }
 
   // The probe's own shell carries the orcad argv it scans for, under this account: never a peer.
   it('names this account and no other server', () => {
@@ -52,35 +45,43 @@ describe.skipIf(process.platform === 'win32')('WSL account facts probe', () => {
     expect(readWslHostFacts(output)?.account?.uid).toBe(String(process.getuid?.()))
   })
 
-  it("flags another account's orcad only while it holds this host's port", () => {
-    const holding = run(
-      wslAccountFactsCommand(sources(`${ROOT_ORCAD}\n`, `${HEADER}\n${listener('1A70', '0')}\n`))
-    )
-    expect(holding?.otherServerAccount?.uid).toBe('0')
-    // Another port, or a listener another uid owns (another distro shares the network): ignored.
-    const elsewhere = run(
-      wslAccountFactsCommand(
-        sources(
-          `${ROOT_ORCAD}\n`,
-          `${HEADER}\n${listener('1A71', '0')}\n${listener('1A70', '1000')}\n`
-        )
-      )
-    )
-    expect(elsewhere?.otherServerAccount).toBeUndefined()
-    expect(elsewhere?.portCheckUnavailable).toBeUndefined()
-  })
-
-  it('fails open, and says so, without a process list', () => {
-    const facts = run(wslAccountFactsCommand(sources('', `${HEADER}\n${listener('1A70', '0')}\n`)))
-    expect(facts?.otherServerAccount).toBeUndefined()
-    expect(facts?.portCheckUnavailable).toBe(true)
+  it("names another account's managed orcad", () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-wsl-facts-'))
+    dirs.push(dir)
+    writeFileSync(join(dir, 'ps'), `${ROOT_ORCAD}\n`)
+    const facts = run(wslAccountFactsCommand({ processes: `cat '${join(dir, 'ps')}'` }))
+    expect(facts?.otherServerAccount?.uid).toBe('0')
   })
 })
 
 describe('WSL account facts parsing', () => {
-  it("refuses output that isn't the probe's", () => {
+  it("refuses output that isn't the probe's, and reads a missing key as none", () => {
     expect(
-      readWslAccountFacts('Welcome to Ubuntu', '__ORCA_WSL_KEY__ ', '__ORCA_WSL_PEER__ 0 root')
+      readWslAccountFacts('Welcome to Ubuntu', '__ORCA_WSL_KEY__ ', '__ORCA_WSL_PEER__  ')
     ).toBeNull()
+    expect(
+      readWslAccountFacts(
+        '__ORCA_WSL_USER__ 1001 qauser',
+        '__ORCA_WSL_KEY__ ',
+        '__ORCA_WSL_PEER__  '
+      )
+    ).toEqual({ account: { uid: '1001', name: 'qauser' }, ownKey: null })
+  })
+})
+
+// #49180 repro: after the default user became qauser, Orca deployed a new server for it and then
+// refused it as foreign. The check runs on the facts, before anything is deployed.
+describe('an unpinned host whose default account lacks the paired key', () => {
+  const qauser = { account: { uid: '1001', name: 'qauser' }, ownKey: 'QQQQ' }
+  it('is refused before deploy unless that account holds the key or the host is pinned', async () => {
+    expect(() => refuseUnpairedDefaultAccount('Ubuntu', qauser, 'RRRR')).toThrow(/qauser/)
+    expect(() =>
+      refuseUnpairedDefaultAccount('Ubuntu', { ...qauser, ownKey: null }, 'RRRR')
+    ).toThrow(/qauser/)
+    expect(() => refuseUnpairedDefaultAccount('Ubuntu', qauser, 'QQQQ')).not.toThrow()
+    expect(() => refuseUnpairedDefaultAccount('Ubuntu', qauser, undefined)).not.toThrow()
+    await withWslHostLinuxUser('Ubuntu', 'root', async () =>
+      expect(() => refuseUnpairedDefaultAccount('Ubuntu', qauser, 'RRRR')).not.toThrow()
+    )
   })
 })

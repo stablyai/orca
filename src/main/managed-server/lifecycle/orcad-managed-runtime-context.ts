@@ -54,12 +54,19 @@ export function requireManagedOrcadTargetStore() {
   return targetStore
 }
 
+export const WSL_HOST_SERVER_ACTION_MESSAGE =
+  'Orca runs this server in a WSL distro for you. To stop it, remove the WSL host in Orca; to remove the host without contacting its distro, run `orca environment forget --environment <name> --yes`.'
+
 export async function requireManagedOrcadEnvironment(
   userDataPath: string,
   selector: string
 ): Promise<{ environment: KnownRuntimeEnvironment; deployment: OrcadSshDeploymentLink }> {
   const environment = await resolveEnvironment(userDataPath, selector)
   const deployment = getOrcadSshDeployment(environment)
+  // #49180: a WSL host's server is stopped by removing the host, not by these SSH actions.
+  if (environment.orcadDeployment?.kind === 'wsl') {
+    throw new Error(WSL_HOST_SERVER_ACTION_MESSAGE)
+  }
   if (!deployment || environment.connectionDependency !== 'ssh-tunnel') {
     throw new Error('This server is not managed through an orcad SSH deployment.')
   }

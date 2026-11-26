@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { removeTempDirs } from '../../../shared/testing/remove-temp-dirs.test-support'
 import type { WslHostDeploymentRecord } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
 import type { WslHostConnector } from './wsl-host-connector-contract'
+import { pinnedWslHostLinuxUser, pinWslHostLinuxUsers } from '../orcad/wsl-orcad-host-user'
 
 const store = vi.hoisted((): { removed: string[]; pending: string[] } => ({
   removed: [],
@@ -85,6 +86,20 @@ describe('removing a WSL host whose server Orca cannot reach', () => {
     const again = await removeWslHostServer(userDataPath, connector, { ...record, pendingStop })
     expect(again.removed).toBe(false)
     expect(store.removed).toEqual([])
+  })
+
+  it("stops a renamed distro as the record's account, even after a records re-read", async () => {
+    const connector = unreachableConnector()
+    let stoppedAs: string | undefined
+    connector.resolveDistroName = async () => 'Ubuntu-Renamed'
+    connector.stopServer = async (distro) => {
+      pinWslHostLinuxUsers([])
+      stoppedAs = pinnedWslHostLinuxUser(distro)
+      return { stopped: true }
+    }
+    await removeWslHostServer(userDataPath, connector, { ...record, linuxUser: 'root' })
+    expect(stoppedAs).toBe('root')
+    expect(pinnedWslHostLinuxUser('Ubuntu-Renamed')).toBeUndefined()
   })
 
   it('forgets it without contacting the distro', async () => {
