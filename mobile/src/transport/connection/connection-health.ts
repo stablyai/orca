@@ -25,10 +25,7 @@ export function isUndialableLinkLocal(endpoint: string | null | undefined): bool
   return /\/\/(169\.254\.|\[(fe[89ab]|::ffff:(169\.254\.|a9fe:)))/i.test(endpoint ?? '')
 }
 
-function relayHostCopy(
-  host: string,
-  directRefreshUnavailable: boolean
-): Record<
+function relayHostCopy(): Record<
   Exclude<RelayHostReachability, 'connecting'>,
   { kind: 'warning' | 'unreachable'; label: (host: string) => string; detail: string }
 > {
@@ -64,13 +61,8 @@ function relayHostCopy(
             host
           }
         ),
-      detail: directRefreshUnavailable
-        ? translate('connection.connectionHealth.rePairDetail', 'Re-pair with your desktop')
-        : translate(
-            'connection.connectionHealth.relayAccessRefreshDetail',
-            "Connect once on {{host}}'s network to refresh Relay access, or re-pair",
-            { host }
-          )
+      // Placeholder: refusedCredentialDetail fills in the host-specific advice for this verdict only.
+      detail: ''
     },
     // Cell reachability failure says nothing about desktop health, so keep it amber.
     unreachable: {
@@ -79,6 +71,17 @@ function relayHostCopy(
       detail: translate('connection.connectionHealth.checkConnection', 'Check your connection')
     }
   }
+}
+
+// Only a refused verdict pays for the endpoint check and the interpolated advice.
+function refusedCredentialDetail(host: string, endpoint: string | null | undefined): string {
+  return isUndialableLinkLocal(endpoint)
+    ? translate('connection.connectionHealth.rePairDetail', 'Re-pair with your desktop')
+    : translate(
+        'connection.connectionHealth.relayAccessRefreshDetail',
+        "Connect once on {{host}}'s network to refresh Relay access, or re-pair",
+        { host }
+      )
 }
 
 /** The Relay evidence a verdict came from, so callers can tell a desktop that is off from one Relay cannot vouch for. */
@@ -144,14 +147,17 @@ export function classifyConnection(args: {
   // Revoked pairing outranks sign-in advice; explicit relay verdicts must survive a cleared pending path.
   const reachability = args.relayHostReachability ?? 'connecting'
   if (reachability !== 'connecting') {
-    const copy = relayHostCopy(host, isUndialableLinkLocal(args.endpoint))[reachability]
+    const copy = relayHostCopy()[reachability]
     return copy.kind === 'warning'
       ? { kind: 'warning', label: copy.label(host), detail: copy.detail, relay: reachability }
       : {
           kind: 'unreachable',
           label: copy.label(host),
           reason: staleReason,
-          detail: copy.detail,
+          detail:
+            reachability === 'credential-refused'
+              ? refusedCredentialDetail(host, args.endpoint)
+              : copy.detail,
           relay: reachability
         }
   }

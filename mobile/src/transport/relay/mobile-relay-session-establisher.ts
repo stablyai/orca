@@ -32,6 +32,9 @@ export class MobileRelaySessionEstablisher {
   private readonly hostOfflineStreak: RelayHostOfflineStreak
   private readonly resolveTimeout = new RelayResolveTimeoutBudget()
   private resolvedThisAttempt = false
+  // A director 401 for an older token: the next attempt gives pending the director lookup, so a moved host's
+  // pending can find its cell, while current stays eligible (it is retired only by pending's promotion).
+  private pendingLookupNext = false
 
   constructor(
     private readonly args: {
@@ -82,8 +85,16 @@ export class MobileRelaySessionEstablisher {
     let refusal: Error | undefined
     let directorRefused = false
     const pendingToken = this.args.bundle()?.pending?.token
+    const pendingFirst = this.pendingLookupNext
+    this.pendingLookupNext = false
+    const ordered = pendingFirst
+      ? [
+          ...credentials.filter((credential) => credential.token === pendingToken),
+          ...credentials.filter((credential) => credential.token !== pendingToken)
+        ]
+      : credentials
     this.resolvedThisAttempt = false
-    for (const credential of credentials) {
+    for (const credential of ordered) {
       // After a director 401 the rest only redial the cell that sent us there, which can know only the newer
       // pending install; redialing current or grace would just repeat its wrong-assignment answer.
       if (directorRefused && credential.token !== pendingToken) {
@@ -105,15 +116,12 @@ export class MobileRelaySessionEstablisher {
         refusal ??= result.error
         continue
       }
-      // A director 401 can be stale (it reads a store an edge-hosted host may have outgrown), so try pending at
-      // this cell now. With a pending to fall back on, the refused token also sits out later attempts, so a
-      // moved host's pending gets the director lookup itself; without one, base retries are kept.
+      // A director 401 can be stale (it reads a store an edge-hosted host may have outgrown), so it condemns
+      // nothing: try pending at this cell now, and give pending the lookup on the next attempt.
       if (!isDirectorRefusal(result.error)) {
         break
       }
-      if (pendingToken !== undefined && credential.token !== pendingToken) {
-        this.args.controller.recordRejectedCredential(credential.version)
-      }
+      this.pendingLookupNext ||= pendingToken !== undefined && credential.token !== pendingToken
       directorRefused = true
     }
     return {
