@@ -435,7 +435,7 @@
   },
   {
     "filePath": "src/shared/bots/bot-item-ask-while.ts",
-    "reason": "CLI and agent text for orca bot item set --while; the owner's Activity text is localized in the renderer."
+    "reason": "CLI and agent text for orca bot item set --while, and the stored English fallback note an older client or the phone shows as stored; the desktop Activity text is localized in the renderer."
   },
   {
     "filePath": "src/shared/bots/bot-connector-offer.ts",
