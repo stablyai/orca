@@ -32,15 +32,12 @@ function createEditorDouble(): monaco.editor.IStandaloneCodeEditor {
   const double = {
     getModel: () => model,
     getRawOptions: () => ({ lineNumbers: rawLineNumbers }),
-    updateOptions: (options: { lineNumbers?: unknown }) => {
+    updateOptions: (options: monaco.editor.IEditorOptions) => {
       if (!('lineNumbers' in options)) {
         return
       }
       rawLineNumbers = options.lineNumbers
-      renderer =
-        typeof options.lineNumbers === 'function'
-          ? (options.lineNumbers as (lineNumber: number) => string)
-          : null
+      renderer = typeof options.lineNumbers === 'function' ? options.lineNumbers : null
       paint()
       configListeners.forEach((listener) => listener())
     },
@@ -95,8 +92,9 @@ function mountColumn(): { type: (lineNumber: number) => void; tooltips: () => st
         .getAllDecorations()
         .filter((decoration) => decoration.options.lineNumberHoverMessage)
         .map((decoration) => {
-          const { value } = decoration.options.lineNumberHoverMessage as monaco.IMarkdownString
-          const author = /^\*\*(\w+)\*\*/.exec(value)?.[1]
+          const message = decoration.options.lineNumberHoverMessage
+          const text = message && !Array.isArray(message) ? message.value : ''
+          const author = /^\*\*(\w+)\*\*/.exec(text)?.[1]
           return `${decoration.range.startLineNumber}-${decoration.range.endLineNumber}:${author}`
         })
         .sort()
