@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { assemblePtySpawnLaunchOptions } from './spawn-options-assembly'
 
 const assemble = () =>
@@ -23,8 +23,15 @@ const assemble = () =>
     claudeAuth: null
   })
 
+beforeEach(() => {
+  // A root CI container may export these; the gate must be tested apart from the runner's env.
+  vi.stubEnv('IS_SANDBOX', '')
+  vi.stubEnv('CLAUDE_CODE_BUBBLEWRAP', '')
+})
+
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllEnvs()
 })
 
 // Claude exits as root on its bypass switch; the host that spawns the shell owns that uid.
