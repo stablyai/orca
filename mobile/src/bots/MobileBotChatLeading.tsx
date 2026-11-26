@@ -11,6 +11,7 @@ import {
   WorkingRing
 } from '../agents/presentation/AgentStateDot'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import type { Translate } from '../i18n/mobile-i18n'
 import { colors, radii } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -127,6 +128,8 @@ function ChatIcon({ chat, badgeSize }: { chat: LeadingChat; badgeSize?: number }
         </CalendarClock>
       )
     case 'side':
+    case 'feishu-local':
+    case 'feishu-group':
       return (
         <MessageSquare size={LUCIDE_SIZE} color={colors.textSecondary} mask={mask}>
           {defs}
@@ -135,21 +138,31 @@ function ChatIcon({ chat, badgeSize }: { chat: LeadingChat; badgeSize?: number }
   }
 }
 
+function chatKindLabel(t: Translate, origin: LeadingChat['origin']): string {
+  switch (origin) {
+    case 'feishu-local':
+      return t('bots.chats.kindFeishuDm', 'Feishu DM')
+    case 'feishu-group':
+      return t('bots.chats.kindFeishuGroup', 'Feishu group topic')
+    case 'home':
+      return t('bots.chats.home', 'Home Chat')
+    case 'slack':
+      return t('bots.chats.kindSlack', 'Slack thread')
+    case 'linear':
+      return t('bots.chats.kindLinear', 'Linear issue')
+    case 'github':
+      return t('bots.chats.kindGithub', 'GitHub thread')
+    case 'automation':
+      return t('bots.chats.kindAutomation', 'Automation run')
+    case 'side':
+      return t('bots.chats.kindSide', 'Side chat')
+  }
+}
+
 /** A chat row's spoken name: title, kind, state; the kind skipped when the title already says it. */
 export function useMobileBotChatLabel(chat: LeadingChat, title: string): string {
   const t = useMobileTranslation()
-  const kind =
-    chat.origin === 'home'
-      ? t('bots.chats.home', 'Home Chat')
-      : chat.origin === 'slack'
-        ? t('bots.chats.kindSlack', 'Slack thread')
-        : chat.origin === 'linear'
-          ? t('bots.chats.kindLinear', 'Linear issue')
-          : chat.origin === 'github'
-            ? t('bots.chats.kindGithub', 'GitHub thread')
-            : chat.origin === 'automation'
-              ? t('bots.chats.kindAutomation', 'Automation run')
-              : t('bots.chats.kindSide', 'Side chat')
+  const kind = chatKindLabel(t, chat.origin)
   const state =
     chat.live === 'replying'
       ? t('bots.chats.replyingState', 'Replying')

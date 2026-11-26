@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import Svg, { Path } from 'react-native-svg'
+import { MessageSquare } from 'lucide-react-native'
 import type { ConnectorSource } from '../../../src/shared/connectors/external-conversation-link'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -25,7 +26,7 @@ const SLACK_PARTS: readonly (readonly [fill: string, d: string])[] = [
 ]
 
 // The desktop's monochrome marks (src/renderer/src/components/icons), for a connector source.
-const SOURCE_PATHS: Record<ConnectorSource, string> = {
+const SOURCE_PATHS: Record<Exclude<ConnectorSource, 'feishu-local' | 'feishu-group'>, string> = {
   github:
     'M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z',
   slack: SLACK_PARTS.map(([, d]) => d).join(''),
@@ -40,7 +41,9 @@ export const SOURCE_ICON_VIEW_BOX: Record<ConnectorSource, number> = {
   github: 16,
   slack: 24,
   linear: 24,
-  discord: 20
+  discord: 20,
+  'feishu-local': 24,
+  'feishu-group': 24
 }
 
 /** `mask` and `children` (its defs) let a row cut a badge's gap out of the mark. */
@@ -56,6 +59,13 @@ export function MobileConnectorSourceIcon({
   children?: ReactNode
 }) {
   useMobileColorScheme()
+  if (source === 'feishu-local' || source === 'feishu-group') {
+    return (
+      <MessageSquare size={size} color={colors.textSecondary} mask={mask}>
+        {children}
+      </MessageSquare>
+    )
+  }
   const side = SOURCE_ICON_VIEW_BOX[source]
   return (
     <Svg width={size} height={size} viewBox={`0 0 ${side} ${side}`} fill={colors.textSecondary}>
@@ -105,6 +115,9 @@ export function MobileConnectorLogo({
   size?: number
 }) {
   useMobileColorScheme()
+  if (source === 'feishu-local' || source === 'feishu-group') {
+    return <MobileConnectorSourceIcon source={source} size={size} />
+  }
   if (source === 'slack' || source === 'google') {
     const side = source === 'google' ? 48 : 24
     return (

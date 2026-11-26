@@ -54,6 +54,7 @@ export function botStructuredSessionWiring(deps: {
   /** Which worker a turn's conversation handed its code work to. */
   work: Pick<BotWorkRecord, 'turnNote' | 'handedOver' | 'turnEnded'>
   lookAround: Pick<BotLookAroundStore, 'botOfLook' | 'botOfTidyUp' | 'lookTurnIsQuiet'>
+  isFeishuGroupSession?: (sessionId: string) => boolean
   /** A turn ended: one that worked on another bot's request and left it unanswered tells that bot. */
   requestTurnEnded?: (sessionId: string, turnId: string, ended?: TurnEndedVerdict) => void
   /** The bots the host holds when this is installed; none when it has no store yet. */
@@ -87,6 +88,7 @@ export function botStructuredSessionWiring(deps: {
   >
 > {
   const lookup = createBotLookupIndex(() => deps.store().getBots?.() ?? [])
+  const group = (sessionId: string) => deps.isFeishuGroupSession?.(sessionId) === true
   const botById = (botId: string): Bot | undefined => lookup.byId(botId)
   /** Only a new bot's Chat runs first run; its automations and threads run in the same home without. */
   const inFirstRun = (botId: string, sessionId: string): boolean => {
@@ -162,6 +164,9 @@ export function botStructuredSessionWiring(deps: {
   })
   return {
     resolveSessionInstructions: (record, launchDirectory, linkedSkills, eachStart) => {
+      if (group(record.sessionId)) {
+        return Promise.resolve(null)
+      }
       const bot = botOfRecord(record)
       return botSessionInstructions(
         turnContext,
@@ -181,6 +186,9 @@ export function botStructuredSessionWiring(deps: {
     },
     // Every launch of a bot's chat, Look around too: a copy left in its config would be readable by it.
     prepareSessionLaunch: async (record) => {
+      if (group(record.sessionId)) {
+        return
+      }
       const bot = botOfRecord(record)
       if (bot) {
         await deps.scrubToolSecrets?.(bot)
@@ -218,11 +226,11 @@ export function botStructuredSessionWiring(deps: {
     },
     prepareSessionLinkedSkills: async (record) => {
       const bot = botOfRecord(record)
-      return bot ? syncLinkedSkills(bot) : NO_LINKED_SKILLS
+      return bot && !group(record.sessionId) ? syncLinkedSkills(bot) : NO_LINKED_SKILLS
     },
     resolveSessionLinkedSkills: async (record) => {
       const bot = botOfRecord(record)
-      if (!bot) {
+      if (!bot || group(record.sessionId)) {
         return NO_LINKED_SKILLS
       }
       try {
@@ -244,12 +252,21 @@ export function botStructuredSessionWiring(deps: {
     },
     turnContext: {
       ...turnContext,
-      mentions,
+      plan: (sessionId, message, held) =>
+        group(sessionId) ? Promise.resolve(null) : turnContext.plan(sessionId, message, held),
+      mentions: (sessionId, message) =>
+        group(sessionId) ? Promise.resolve(null) : mentions(sessionId, message),
       handedOver: (sessionId, message) => {
+        if (group(sessionId)) {
+          return
+        }
         deps.work.handedOver(sessionId, message)
         turnContext.handedOver?.(sessionId, message)
       },
       turnEnded: (sessionId, turnId, readItems, writeNote, ended) => {
+        if (group(sessionId)) {
+          return
+        }
         deps.work.turnEnded(sessionId)
         deps.requestTurnEnded?.(sessionId, turnId, ended)
         turnContext.turnEnded?.(sessionId, turnId, readItems, writeNote)
@@ -257,11 +274,13 @@ export function botStructuredSessionWiring(deps: {
     },
     // A look reads through its allow-list; a tidy-up only replies, its new memory in its reply.
     readOnlySession: (sessionId) =>
-      deps.lookAround.botOfLook(sessionId) !== null
-        ? 'look-around'
-        : deps.lookAround.botOfTidyUp(sessionId) !== null
-          ? 'reply-only'
-          : null,
+      group(sessionId)
+        ? 'reply-only'
+        : deps.lookAround.botOfLook(sessionId) !== null
+          ? 'look-around'
+          : deps.lookAround.botOfTidyUp(sessionId) !== null
+            ? 'reply-only'
+            : null,
     quietTurnEnd: (sessionId, outcome, usageLimited) =>
       deps.lookAround.lookTurnIsQuiet(sessionId, outcome, usageLimited === true),
     isBotHome: (workspaceId) => lookup.byHome(workspaceId) !== null

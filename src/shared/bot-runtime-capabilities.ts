@@ -102,7 +102,14 @@ export const BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY = 'bots.google-phone-s
 // steering its running turn. An older host only takes them typed.
 export const BOTS_OFFER_ANSWER_RUNTIME_CAPABILITY = 'bots.offer-answer.v1' as const
 
+export const BOTS_FEISHU_SDK_CAPABILITY = 'bots.feishu-sdk.v1' as const
+export const BOTS_FEISHU_LOCAL_CAPABILITY = 'bots.feishu-local.v1' as const
+export const BOTS_FEISHU_GROUP_CAPABILITY = 'bots.feishu-group.v1' as const
+
 export const BOT_RUNTIME_CAPABILITIES = [
+  BOTS_FEISHU_LOCAL_CAPABILITY,
+  BOTS_FEISHU_SDK_CAPABILITY,
+  BOTS_FEISHU_GROUP_CAPABILITY,
   BOTS_GROUPS_RUNTIME_CAPABILITY,
   BOTS_GROUP_ATTACHMENTS_RUNTIME_CAPABILITY,
   BOTS_MOBILE_RUNTIME_CAPABILITY,
