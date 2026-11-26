@@ -5,11 +5,7 @@ import { hostObserverOptions } from '../query/host-query'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { HostWorktreeInfo } from '../worktree/catalog/home-worktree-info'
 import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
-import {
-  homeRelayedServerRowsQuery,
-  homeRelayedServersQuery,
-  relayedServerRowsPollMs
-} from './home-relayed-server-queries'
+import { homeRelayedServerRowsQuery, homeRelayedServersQuery } from './home-relayed-server-queries'
 import {
   pickRelayedServers,
   withRelayedServerAgents,
@@ -66,16 +62,15 @@ export function useHomeServerAgents(
   )
   const rowQueries = useMemo(() => {
     const clients = new Map(homeHosts.map((host) => [host.hostId, host.client]))
-    return picks.map((pick) => ({
-      ...hostObserverOptions(
+    return picks.map((pick) =>
+      hostObserverOptions(
         homeRelayedServerRowsQuery,
         clients.get(pick.desktopHostId) ?? null,
         pick.desktopHostId,
         { exec: pick.server.hostId },
         { deltas: pick.deltas, rowChanges: pick.server.rowChanges === true }
-      ),
-      refetchInterval: relayedServerRowsPollMs(pick.server)
-    }))
+      )
+    )
   }, [homeHosts, picks])
   // Like a desktop's own agents, a relayed server's show only from a read on this connection.
   const combineRows = useCallback(
