@@ -137,11 +137,13 @@ describe('wake alerts', () => {
   it('leaves out hibernated socket events that throw, and still counts Worker and object fetch/RPC errors', async () => {
     const ns = 'c9b66c56'
     const doGroup = (type: string, status: string, requests: number) => ({ sum: { requests }, dimensions: { namespaceId: ns, type, status } })
-    const answer = (o0: unknown[]) => async (input: string) => {
+    let graphql: { query: string; variables: Record<string, unknown> } | undefined
+    const answer = (o0: unknown[]) => async (input: string, init?: RequestInit) => {
       const url = String(input)
       if (url === env.ALERT_WEBHOOK_URL || url.endsWith('/v1/connector/wake')) { return new Response(null, { status: url.endsWith('/wake') ? 401 : 200 }) }
       if (url.endsWith('/__health/object')) { return Response.json({ ok: true }) }
       if (url.endsWith('/graphql')) {
+        graphql = JSON.parse(String(init?.body))
         const w0 = [{ sum: { requests: 1000 }, dimensions: { status: 'success' } }]
         return Response.json({ data: { viewer: { accounts: [{ w0, w1: [], o0, o1: [] }] } } })
       }
@@ -150,6 +152,9 @@ describe('wake alerts', () => {
     const retirement = [doGroup('hibernation', 'success', 800), doGroup('hibernation', 'scriptThrewException', 200)]
     vi.stubGlobal('fetch', answer(retirement))
     expect(await evaluate({ ...env, CF_DO_NAMESPACE_IDS: ns }, at(10, 17))).toEqual([])
+    // Cloudflare filters to the configured namespaces, so other objects never fill the group limit.
+    expect(graphql?.variables.ns).toEqual([ns])
+    expect(graphql?.query).toContain('durableObjectsInvocationsAdaptiveGroups(limit:200,filter:{namespaceId_in:$ns,')
     vi.stubGlobal('fetch', answer([...retirement, doGroup('jsrpc', 'scriptThrewException', 30), doGroup('http', 'internalError', 30)]))
     expect(await evaluate({ ...env, CF_DO_NAMESPACE_IDS: ns }, at(10, 17))).toEqual(['FIRING cloudflare-errors: Worker/Durable Object errors 60 = 2.9% of 2060 invocations in 15 min'])
   })
