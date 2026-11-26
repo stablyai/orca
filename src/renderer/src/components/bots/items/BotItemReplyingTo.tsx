@@ -37,7 +37,7 @@ export function useBotItemReplyMark(
   const t = useTranslate()
   const [hidden, setHidden] = useState<string | null>(null)
   const long = question?.replies
-    ? t('bots.items.comment.replyOrPick', 'Reply in your own words, or pick an option')
+    ? t('bots.items.comment.replyOrPick', 'Reply or pick an option')
     : t('bots.items.comment.replyTo', 'Reply to {{name}}…', { name: question?.asker ?? '' })
   const fits = useTextFits(box, long)
   const glowing = useNativeChatComposerGlow(scopeKey)
@@ -76,8 +76,9 @@ export function BotItemReplyingTo({ mark }: { mark: BotItemReplyMark }): React.J
   }
   const question = mark.quote.line
   return (
-    // Two sibling buttons: the mark shows the question, its × hides the mark.
-    <div className="mx-1 mb-0.5 mt-0.5 flex h-6 max-w-[calc(100%-8px)] min-w-0 items-center gap-1 self-start rounded-md bg-foreground/[0.06] pr-[3px] text-xs text-muted-foreground">
+    // Two sibling buttons: the mark shows the question, its × hides the mark. The dot and × sit on the
+    // + and send buttons' centers, and the mark's edges on theirs.
+    <div className="mb-1 flex h-[22px] max-w-full min-w-0 items-center gap-1 self-start rounded-md bg-foreground/[0.06] pr-[7px] text-xs text-muted-foreground">
       <Tooltip>
         <TooltipTrigger asChild>
           <button
@@ -89,7 +90,7 @@ export function BotItemReplyingTo({ mark }: { mark: BotItemReplyMark }): React.J
                 question
               }
             )}
-            className="flex h-full min-w-0 cursor-pointer items-center gap-2 rounded-md pl-2.5 pr-1 outline-none hover:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-ring/50"
+            className="flex h-full min-w-0 cursor-pointer items-center gap-2 rounded-md pl-[13px] pr-1 outline-none hover:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-ring/50"
             // A click leaves the caret where it was in the box.
             onMouseDown={(event) => event.preventDefault()}
             onClick={mark.reveal}

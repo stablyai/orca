@@ -112,7 +112,7 @@ function commentBox(
   }
 }
 
-/** Empty: four lines of room above the + / mic / send row. */
+/** Empty: one row, + / text / mic / send. */
 export const empty = defineFixture({ width: 380, ...commentBox(item, '') })
 
 const LONG_ANSWER = [

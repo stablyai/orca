@@ -1,6 +1,6 @@
-// The item view's comment box: chat's prompt editor and attachment pieces in one row (attach, text, mic,
-// send), the text on its own row above them from its second line; while the agent's question waits,
-// "Replying to" names it and the text opens on its own row, four lines tall. Enter sends, Shift+Enter
+// The item view's comment box: chat's prompt editor and attachment pieces in one row (attach, text, arrows,
+// mic, send), the text on its own row above them from its second line or in a narrow pane; while the agent's
+// question waits, "Replying to" names it above that row. Enter sends, Shift+Enter
 // adds a line; images paste, drop or attach as thumbnails with an "Image #N" pill at the caret, other
 // files as `@path` pills. Uploads go to the item's chat on the bot's host, which then holds them as its own.
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type Ref } from 'react'
@@ -208,8 +208,7 @@ function BotItemCommentField({
   }, [draft, ime])
 
   const reply = useBotItemReplyMark(box, question ?? null, scopeKey, onShowQuestion)
-  // Replying to a question, the text has its own row and room for an answer from the start.
-  const { field, stacked, height } = useBotItemCommentStacked(draft, reply.quote !== null)
+  const { field, stacked, height } = useBotItemCommentStacked(draft)
   const caretToEnd = useBotItemCommentBoxHandle(ref, {
     scopeKey,
     input: () => input.current,
@@ -332,7 +331,7 @@ function BotItemCommentField({
         data-native-chat-composer-scope={scopeKey}
         onClick={focusAtEnd}
         className={cn(
-          'mx-3 mb-3 mt-2 flex shrink-0 cursor-text flex-col rounded-xl border border-chat-composer-border bg-chat-composer-surface p-1.5 shadow-xs',
+          'mx-3 mb-3 mt-2 flex shrink-0 cursor-text flex-col rounded-xl border border-chat-composer-border bg-chat-composer-surface p-2 shadow-xs',
           reply.glowing && 'native-chat-composer-glow'
         )}
       >
@@ -363,7 +362,16 @@ function BotItemCommentField({
         ) : null}
         <div className={cn('flex flex-wrap items-end gap-0.5', nav && BOT_ITEM_TOOL_ROW_TOUCH_FIT)}>
           {access.session ? <NativeChatAttachButton onAttach={fileDrops.pickAttachments} /> : null}
-          <div ref={field} className={cn('min-w-0 flex-1', stacked && 'order-first basis-full')}>
+          {/* A narrow pane leaves the text too little room beside the controls, so it takes its own row. */}
+          <div
+            ref={field}
+            className={cn(
+              'min-w-0 flex-1',
+              stacked
+                ? 'order-first basis-full'
+                : '@max-[440px]/item-pane:order-first @max-[440px]/item-pane:basis-full'
+            )}
+          >
             <NativeChatPromptEditor
               key={scopeKey}
               scopeKey={scopeKey}
@@ -383,10 +391,20 @@ function BotItemCommentField({
               onCompositionStart={editorCompositionStart}
               onCompositionEnd={editorCompositionEnd}
               onBlur={editorBlur}
-              className={`scrollbar-sleek block overflow-y-auto bg-transparent px-1 py-1.5 text-sm leading-5 text-chat-foreground-strong outline-none [&_p.is-editor-empty:only-child]:before:!h-auto [&_p.is-editor-empty:only-child]:before:mr-[-100%] [&_p.is-editor-empty:only-child]:before:w-full [&_p.is-editor-empty:only-child]:before:truncate ${height}`}
+              className={`scrollbar-sleek block overflow-y-auto bg-transparent px-1 py-1.5 text-[13px] leading-5 text-chat-foreground-strong outline-none [&_p.is-editor-empty:only-child]:before:!h-auto [&_p.is-editor-empty:only-child]:before:mr-[-100%] [&_p.is-editor-empty:only-child]:before:w-full [&_p.is-editor-empty:only-child]:before:truncate ${height}`}
             />
           </div>
-          {nav}
+          {/* Beside the text the arrows keep their counter's width; on their own row they take the free space. */}
+          {nav ? (
+            <div
+              className={cn(
+                'flex min-w-0',
+                stacked ? 'flex-1' : 'shrink-0 @max-[440px]/item-pane:flex-1'
+              )}
+            >
+              {nav}
+            </div>
+          ) : null}
           <span className="ml-auto flex shrink-0">
             <NativeChatDictationButton
               disabled={dictation.dictationDisabled}

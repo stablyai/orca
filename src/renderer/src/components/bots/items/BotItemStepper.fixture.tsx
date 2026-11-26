@@ -5,6 +5,7 @@ import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixtur
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { BotItemCommentBox } from './BotItemCommentBox'
 import { BotItemNavRow, BotItemStepper } from './BotItemStepper'
+import type { BotItemWaitingQuestion } from './BotItemReplyingTo'
 import { botRefKey } from '@/lib/bot-hosts'
 import { updateNativeChatComposerDraft } from '../../native-chat/drafts/native-chat-composer-draft-store'
 
@@ -18,6 +19,7 @@ function Row({
   attach,
   loading = false,
   placeholder = false,
+  question = null,
   onStep = NO_STEP
 }: {
   width: number
@@ -25,6 +27,7 @@ function Row({
   attach: boolean
   loading?: boolean
   placeholder?: boolean
+  question?: BotItemWaitingQuestion | null
   onStep?: () => void
 }): React.JSX.Element {
   const pane = useRef<HTMLDivElement | null>(null)
@@ -57,6 +60,7 @@ function Row({
           }
           onSend={() => null}
           nav={nav}
+          question={question}
         />
       )}
     </div>
@@ -159,3 +163,35 @@ export const wideUnbroken = typed('g'.repeat(400))
 export const wideLines = typed(
   'Link expiry should default to 7 days, with a picker for 1 day, 30 days and never; owners can change it after sharing.\nResharing stays with editors.\nShip it behind the existing sharing flag.'
 )
+
+const ASK: BotItemWaitingQuestion = {
+  id: 'ask:0',
+  eventId: 'ask',
+  line: 'After reviewing the explainer, may I merge #48120 once CI is green?',
+  replies: true,
+  asker: 'CoS'
+}
+
+/** The agent's question waiting, in a pane `width` wide, with `text` typed. */
+function asking(width: number, text = ''): ComponentFixture {
+  return defineFixture({
+    width: width + 32,
+    setup: () =>
+      updateNativeChatComposerDraft(
+        `bot-item-comment:${botRefKey(fixtureCos)}:${item.uid}`,
+        { text, images: [] },
+        'immediate'
+      ),
+    render: () => <Row width={width} total={13} attach question={ASK} />
+  })
+}
+const ASK_LONG =
+  'Yes, merge it once CI is green and the review has passed on the latest commit. Also add the screenshots to the PR description before you do. Thanks!'
+export const askWide = asking(480)
+export const askMid = asking(340)
+export const askNarrow = asking(220)
+export const askBreak = asking(439)
+export const askAboveBreak = asking(440)
+export const askLong = asking(480, ASK_LONG)
+export const askLongNarrow = asking(260, ASK_LONG)
+export const askVeryLong = asking(480, Array(6).fill(ASK_LONG).join('\n'))
