@@ -9,13 +9,13 @@ const LONG_PATH =
 const LONG_BRANCH = 'release/2026-11-hotfix-for-workspace-creation-local-base'
 
 // Why 340px: the narrowest real toast width (sonner's --width clamps to the window).
-const NARROWEST_TOAST_STYLE = {
+const NARROWEST_TOAST_STYLE: React.CSSProperties & Record<`--${string}`, string> = {
   '--normal-bg': 'var(--notice-surface)',
   '--normal-text': 'var(--popover-foreground)',
   '--normal-border': 'var(--notice-border)',
   '--border-radius': 'var(--radius)',
   '--width': '340px'
-} as React.CSSProperties
+}
 
 function ToastFrame({ result }: { result: LocalBaseRefRefreshResult }): React.JSX.Element {
   useEffect(() => {

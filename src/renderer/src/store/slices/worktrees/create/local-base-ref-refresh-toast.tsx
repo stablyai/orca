@@ -102,13 +102,10 @@ function refreshFailureReason(result: LocalBaseRefRefreshResult): string {
   }
 }
 
-function ShallowHistoryDescription({
-  result,
-  worktreeName
-}: {
-  result: LocalBaseRefRefreshResult
+function shallowHistoryDescription(
+  result: LocalBaseRefRefreshResult,
   worktreeName: string
-}): React.JSX.Element {
+): React.ReactNode {
   const explanation = worktreeName
     ? translate(
         'auto.store.slices.worktrees.localBaseRefShallowHistoryNamed',
@@ -132,15 +129,20 @@ function ShallowHistoryDescription({
 
 // Why: the raw Git guidance (incl. the owner worktree path) stays behind a click so the toast reads in one line.
 function RefreshFailureDetails({
-  result,
+  reason,
+  detail,
+  showLabel,
+  hideLabel,
   actions
 }: {
-  result: LocalBaseRefRefreshResult
+  reason: string
+  detail: string
+  showLabel: string
+  hideLabel: string
   actions: React.ReactNode
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const detailId = useId()
-  const reason = refreshFailureReason(result)
   return (
     <div className="flex w-full min-w-0 flex-col gap-2">
       <p className="truncate text-sm leading-5 text-popover-foreground/80" title={reason}>
@@ -151,7 +153,7 @@ function RefreshFailureDetails({
           id={detailId}
           className="rounded-md bg-accent px-2 py-1.5 font-mono text-xs leading-4 text-muted-foreground [overflow-wrap:anywhere]"
         >
-          {localBaseRefRefreshFailureDetail(result)}
+          {detail}
         </p>
       ) : null}
       <div className="flex items-center gap-2">
@@ -162,9 +164,7 @@ function RefreshFailureDetails({
           onClick={() => setOpen((value) => !value)}
           className="mr-auto rounded-sm text-xs text-muted-foreground underline underline-offset-2 outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
-          {open
-            ? translate('auto.store.slices.worktrees.localBaseRefHideDetails', 'Hide details')
-            : translate('auto.store.slices.worktrees.localBaseRefShowDetails', 'Details')}
+          {open ? hideLabel : showLabel}
         </button>
         {actions}
       </div>
@@ -326,11 +326,17 @@ export function showLocalBaseRefRefreshToast(
     id,
     description: result.shallowHistory ? (
       <div className="flex w-full flex-col gap-3">
-        <ShallowHistoryDescription result={result} worktreeName={worktreeName} />
+        {shallowHistoryDescription(result, worktreeName)}
         <div className="flex items-center justify-end gap-2">{actions}</div>
       </div>
     ) : (
-      <RefreshFailureDetails result={result} actions={actions} />
+      <RefreshFailureDetails
+        reason={refreshFailureReason(result)}
+        detail={localBaseRefRefreshFailureDetail(result)}
+        showLabel={translate('auto.store.slices.worktrees.localBaseRefShowDetails', 'Details')}
+        hideLabel={translate('auto.store.slices.worktrees.localBaseRefHideDetails', 'Hide details')}
+        actions={actions}
+      />
     ),
     duration: Infinity,
     dismissible: true
