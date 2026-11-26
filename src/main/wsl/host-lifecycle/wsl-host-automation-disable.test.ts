@@ -13,9 +13,9 @@ import type * as EnableModule from './wsl-host-automation-enable'
 const { readWslHostAutomationStates } = await import('./wsl-host-automation-disable')
 
 describe('readWslHostAutomationStates', () => {
-  it('reads one the host no longer has as off so undo does not reactivate a deleted automation', async () => {
+  it('reads one the host no longer has as deleted so undo does not reactivate it', async () => {
     await expect(
       readWslHostAutomationStates('/u', 'wsl:Ubuntu', ['kept', 'gone'])
-    ).resolves.toEqual({ kept: true, gone: false })
+    ).resolves.toEqual({ kept: true, gone: 'deleted' })
   })
 })

@@ -30,8 +30,8 @@ export type WslMoveLocalAutomationWriteResult = {
 }
 
 export type WslMoveHostAutomationPorts = {
-  /** The host's state of each; one deleted there reads as off. */
-  read: (automationIds: readonly string[]) => Promise<Record<string, boolean>>
+  /** The host's state of each; one deleted there reads `deleted`, and stays off here. */
+  read: (automationIds: readonly string[]) => Promise<Record<string, boolean | 'deleted'>>
   /** Throws on a refusal; ids it could not turn back on ride the error as `leftOff`. */
   disable: (automationIds: readonly string[]) => Promise<string[]>
   restore: (automationIds: readonly string[]) => Promise<void>
@@ -88,13 +88,17 @@ export async function stopWslMoveHostAutomations(
   if (automationIds.length === 0) {
     return { outcome: 'stopped', restore: async () => {}, applyHere: async () => async () => {} }
   }
-  let hostStates: Record<string, boolean>
+  let read: Record<string, boolean | 'deleted'>
   try {
-    hostStates = await ports.read(automationIds)
+    read = await ports.read(automationIds)
   } catch (error) {
     return { outcome: classify(error) }
   }
-  const { intent, recorded } = recordUndoIntent(userDataPath, migrationId, hostStates)
+  const deleted = new Set(Object.keys(read).filter((id) => read[id] === 'deleted'))
+  const hostStates = Object.fromEntries(
+    Object.entries(read).map(([id, state]) => [id, state === true])
+  )
+  const { intent, recorded } = recordUndoIntent(userDataPath, migrationId, hostStates, deleted)
   let turnedOff: string[]
   try {
     turnedOff = await ports.disable(automationIds.filter((id) => hostStates[id]))
@@ -188,22 +192,31 @@ function readMove(userDataPath: string, migrationId: string): WslMoveCutover | u
   return listWslMoveCutovers(userDataPath).find((entry) => entry.migrationId === migrationId)
 }
 
-/** Adds what this attempt read; an earlier attempt's entry wins, as the host shows its own off. */
+/**
+ * Adds what this attempt read; an earlier attempt's entry wins, as the host shows its own off.
+ * A deletion on the host is the user's latest choice instead: it overrides any earlier entry.
+ */
 function recordUndoIntent(
   userDataPath: string,
   migrationId: string,
-  hostStates: Readonly<Record<string, boolean>>
+  hostStates: Readonly<Record<string, boolean>>,
+  deleted: ReadonlySet<string>
 ): { intent: Record<string, boolean>; recorded: string[] } {
   const cutover = readMove(userDataPath, migrationId)
-  // Left off by an earlier undo: on is the choice, whatever the host shows now.
-  const earlier = {
-    ...Object.fromEntries((cutover?.hostAutomationsLeftOff ?? []).map((id) => [id, true])),
-    ...cutover?.undoHostAutomationIntent
-  }
+  // Left off by an earlier undo: on is the choice, whatever the host shows now, unless deleted.
+  const earlier = Object.fromEntries(
+    Object.entries({
+      ...Object.fromEntries((cutover?.hostAutomationsLeftOff ?? []).map((id) => [id, true])),
+      ...cutover?.undoHostAutomationIntent
+    }).filter(([id]) => !deleted.has(id))
+  )
   const recorded = Object.keys(hostStates).filter((id) => !Object.hasOwn(earlier, id))
   const intent = { ...hostStates, ...earlier }
-  if (cutover && recorded.length > 0) {
-    writeWslMoveCutover(userDataPath, { ...cutover, undoHostAutomationIntent: intent })
+  const leftOff = cutover?.hostAutomationsLeftOff ?? []
+  // A deleted one can no longer be turned back on there, so it stops waiting to be retried.
+  const keptLeftOff = leftOff.filter((id) => !deleted.has(id))
+  if (cutover && (recorded.length > 0 || keptLeftOff.length !== leftOff.length)) {
+    writeWslMoveCutover(userDataPath, withUndoAutomationFields(cutover, intent, keptLeftOff))
   }
   return { intent, recorded }
 }

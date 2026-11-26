@@ -14,6 +14,7 @@ import {
   resetWslMoveDesktopRewriteStoresForTests,
   type WslMoveDesktopRewriteContext
 } from './wsl-move-desktop-rewrite-stores'
+import { listWslMoveCutovers } from '../cutover-recovery/wsl-move-cutover-journal'
 import { advanceAutomationNextRuns } from '../../scheduling-automations/automation-schedule-operations'
 import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import {
@@ -47,7 +48,7 @@ function seed(phase: WslMoveCutover['phase'], rewrittenStores: string[] = []): v
 
 /** Undo with both copies here off, as the move left them; returns their states after. */
 async function undoHere(
-  hostStates: Record<string, boolean>,
+  hostStates: Record<string, boolean | 'deleted'>,
   flushHere: () => Promise<void> = async () => {}
 ) {
   const here = new Map([
@@ -143,10 +144,28 @@ describe('the local copies of moved automations', () => {
 
   it('come back on at undo with a fresh next run while paused or deleted ones stay off', async () => {
     seed('client-rewritten')
-    // auto-1 stayed on on the host; auto-2 was paused or deleted there (both read as false).
-    const { here, advanced } = await undoHere({ 'auto-1': true, 'auto-2': false })
+    // auto-1 stayed on on the host; auto-2 was deleted there.
+    const { here, advanced } = await undoHere({ 'auto-1': true, 'auto-2': 'deleted' })
     expect(here).toEqual({ 'auto-1': true, 'auto-2': false })
     expect(advanced).toEqual(['auto-1'])
+  })
+
+  it('stay off at undo when deleted on the host after an earlier refused undo left them off', async () => {
+    seedWslMoveCutover(
+      userDataPath,
+      wslMoveCutoverFixture('move-1', 'client-rewritten', {
+        automationsToReenable: ['auto-1', 'auto-2'],
+        hostAutomationsLeftOff: ['auto-1', 'auto-2'],
+        undoHostAutomationIntent: { 'auto-1': true, 'auto-2': true }
+      })
+    )
+    const { here, advanced } = await undoHere({ 'auto-1': false, 'auto-2': 'deleted' })
+    // auto-1 is off on the host only because the refused undo left it off, so it comes back on.
+    expect(here).toEqual({ 'auto-1': true, 'auto-2': false })
+    expect(advanced).toEqual(['auto-1'])
+    const cutover = listWslMoveCutovers(userDataPath)[0]
+    expect(cutover?.hostAutomationsLeftOff).toEqual(['auto-1'])
+    expect(cutover?.undoHostAutomationIntent).toEqual({ 'auto-1': true, 'auto-2': false })
   })
 
   it('reverts local writes and rejects when flushing local automations fails before release', async () => {
