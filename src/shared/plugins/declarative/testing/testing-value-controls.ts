@@ -111,7 +111,9 @@ export function createValueControls() {
           `type: a ${element.type} takes no text; expected an Input, Textarea or CodeInput`
         )
       }
-      let value = replace ? '' : String(current(element).value)
+      const base = replace ? '' : String(current(element).value)
+      // A rendered CodeInput reports its text with `\n` only, so its edits build on that text.
+      let value = element.type === 'CodeInput' ? base.replace(/\r\n?/g, '\n') : base
       const edits: ControlEdit[] = []
       if (replace) {
         edits.push(edit(element, value))
