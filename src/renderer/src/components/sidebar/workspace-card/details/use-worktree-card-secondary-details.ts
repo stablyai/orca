@@ -218,7 +218,7 @@ export function useWorktreeCardSecondaryDetails({
       cliProvenance: metaCliProvenance,
       bot: metaBot
     })
-  const hasPorts = showPorts && workspacePorts.length > 0
+  const hasPorts = showPorts && (workspacePorts.length > 0 || Boolean(worktree.workspaceUrl))
   const cacheStartedAt = usePromptCacheCountdownStartedAt(worktree.id, showAggregateCacheTimer)
   // Reuse subscribed card settings to avoid another per-card listener on every store write.
   const cacheTtlMs = showAggregateCacheTimer ? (settings?.promptCacheTtlMs ?? 0) : 0

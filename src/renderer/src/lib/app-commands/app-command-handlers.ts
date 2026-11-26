@@ -19,6 +19,7 @@ import { requestTerminalTabRename } from '../../components/tab-bar/terminal-tabs
 import { useAppStore } from '../../store/index'
 import { showWorkspaceListThen } from '../../components/app-rail/app-rail-navigation'
 import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
+import { claimOpenWorkspaceUrl } from './workspace-open-url-command'
 import type { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
 import { openPluginsSettings } from '@/components/settings/navigation/open-plugins-settings'
@@ -306,6 +307,7 @@ export function createAppCommandHandlers(
           : revealRightSidebarTab('sidebar.sourceControl.toggle', 'source-control')
     ],
     ['sidebar.checks.toggle', () => revealRightSidebarTab('sidebar.checks.toggle', 'checks')],
-    ['sidebar.ports.toggle', () => revealRightSidebarTab('sidebar.ports.toggle', 'ports')]
+    ['sidebar.ports.toggle', () => revealRightSidebarTab('sidebar.ports.toggle', 'ports')],
+    ['workspace.openUrl', () => claimOpenWorkspaceUrl(claim)]
   ])
 }
