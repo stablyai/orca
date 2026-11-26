@@ -39,7 +39,8 @@ export abstract class RateLimitServiceState {
     grok: null,
     cursor: null,
     zcode: null,
-    muse: null
+    muse: null,
+    commandCode: null
   }
   protected grokAuthConfigured = readGrokAuthSession().status === 'ok'
   // Async Keychain/desktop DB probing belongs in fetch cycles, never synchronous construction.
@@ -59,7 +60,8 @@ export abstract class RateLimitServiceState {
     antigravity: 0,
     cursor: 0,
     zcode: 0,
-    muse: 0
+    muse: 0,
+    'command-code': 0
   }
   // Failures increase activation backoff; success/unavailable resets it.
   protected activeFailureStreakByProvider: Record<ActiveRateLimitProvider, number> = {
@@ -72,7 +74,8 @@ export abstract class RateLimitServiceState {
     antigravity: 0,
     cursor: 0,
     zcode: 0,
-    muse: 0
+    muse: 0,
+    'command-code': 0
   }
   protected mainWindow: BrowserWindow | null = null
   /** Paired clients streaming usage (accounts.subscribe); headless hosts have no window to watch. */
@@ -104,6 +107,8 @@ export abstract class RateLimitServiceState {
   protected opencodeFetchGeneration = 0
   protected minimaxFetchGeneration = 0
   protected zcodeFetchGeneration = 0
+  protected commandCodeFetchGeneration = 0
+  protected lastCommandCodeConfigHash = ''
   protected antigravityFetchGeneration = 0
   protected lastOpencodeConfigHash = ''
   protected lastMiniMaxConfigHash = ''
@@ -125,6 +130,7 @@ export abstract class RateLimitServiceState {
   protected miniMaxConfigResolver:
     | (() => MiniMaxRateLimitConfig | Promise<MiniMaxRateLimitConfig>)
     | null = null
+  protected commandCodeApiKeyResolver: (() => string | null | Promise<string | null>) | null = null
   protected zcodePlanConfigResolver:
     | (() => ZcodePlanRateLimitConfig | Promise<ZcodePlanRateLimitConfig>)
     | null = null

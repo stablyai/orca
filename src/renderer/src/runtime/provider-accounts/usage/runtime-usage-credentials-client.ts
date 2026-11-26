@@ -1,3 +1,4 @@
+import type { CommandCodeCredentialsStatus } from '../../../../../shared/agent-accounts/usage-credentials/command-code-credentials'
 import type { MiniMaxCredentialsStatus } from '../../../../../shared/agent-accounts/usage-credentials/minimax-credentials-status'
 import type { ZcodePlanCredentialsStatus } from '../../../../../shared/agent-accounts/usage-credentials/zcode-plan-sites'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
@@ -110,5 +111,34 @@ export function callZcodePlanCredentials(
       return callHost(environmentId, 'accounts.zcodePlanSaveApiKey', { apiKey: value })
     case 'clearApiKey':
       return callHost(environmentId, 'accounts.zcodePlanClearApiKey')
+  }
+}
+
+export type CommandCodeCredentialAction = 'getStatus' | 'saveApiKey' | 'clearApiKey'
+
+export function callCommandCodeCredentials(
+  owner: RuntimeClientTarget,
+  action: CommandCodeCredentialAction,
+  value = ''
+): Promise<CommandCodeCredentialsStatus> {
+  if (owner.kind === 'local') {
+    const api = window.api.commandCodeCredentials
+    switch (action) {
+      case 'getStatus':
+        return api.getStatus()
+      case 'saveApiKey':
+        return api.saveApiKey(value)
+      case 'clearApiKey':
+        return api.clearApiKey()
+    }
+  }
+  const { environmentId } = owner
+  switch (action) {
+    case 'getStatus':
+      return callHost(environmentId, 'accounts.commandCodeCredentialsStatus')
+    case 'saveApiKey':
+      return callHost(environmentId, 'accounts.commandCodeSaveApiKey', { apiKey: value })
+    case 'clearApiKey':
+      return callHost(environmentId, 'accounts.commandCodeClearApiKey')
   }
 }

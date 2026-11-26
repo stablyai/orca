@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { RateLimitServiceResultPolicy } from './service-result-policy'
 import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
 import { withCodexReadingAccount } from '../providers/codex/codex-reading-account'
@@ -254,6 +255,38 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
         error: toErrorMessage(error)
       }
     }
+  }
+
+  protected async resolveCommandCodeApiKey(): Promise<{
+    apiKey: string | null
+    error: string | null
+  }> {
+    try {
+      const apiKey = (await this.commandCodeApiKeyResolver?.())?.trim() ?? ''
+      return { apiKey: apiKey || null, error: null }
+    } catch (error) {
+      // Decryption failure affects Command Code only, not sibling refreshes.
+      return { apiKey: null, error: toErrorMessage(error) }
+    }
+  }
+
+  // Hash the key so only identity changes discard the previous account's usage.
+  protected advanceCommandCodeGeneration(keyResult: {
+    apiKey: string | null
+    error: string | null
+  }): {
+    changed: boolean
+    generation: number
+  } {
+    const configHash = keyResult.apiKey
+      ? createHash('sha256').update(keyResult.apiKey).digest('hex')
+      : (keyResult.error ?? '')
+    const changed = configHash !== this.lastCommandCodeConfigHash
+    if (changed) {
+      this.lastCommandCodeConfigHash = configHash
+      this.commandCodeFetchGeneration += 1
+    }
+    return { changed, generation: this.commandCodeFetchGeneration }
   }
 
   protected async resolveZcodePlanConfig(): Promise<ZcodePlanResolvedConfig> {

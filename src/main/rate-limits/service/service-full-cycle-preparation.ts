@@ -26,7 +26,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const credentialGenerations = [
       this.opencodeFetchGeneration,
       this.minimaxFetchGeneration,
-      this.zcodeFetchGeneration
+      this.zcodeFetchGeneration,
+      this.commandCodeFetchGeneration
     ]
     // Capture identities before awaits so a switch cannot reattribute the old credentials.
     const claudeTarget = this.claudeFetchTarget
@@ -70,6 +71,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const miniMaxEndpoint = miniMaxConfigResult.config.endpoint
     const miniMaxApiKey = miniMaxConfigResult.config.apiKey
     const zcodePlanConfigResult = await this.resolveZcodePlanConfig()
+    const commandCodeKeyResult = await this.resolveCommandCodeApiKey()
     if (signal.aborted) {
       return null
     }
@@ -80,9 +82,12 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       credentialGenerations.some(
         (generation, index) =>
           generation !==
-          [this.opencodeFetchGeneration, this.minimaxFetchGeneration, this.zcodeFetchGeneration][
-            index
-          ]
+          [
+            this.opencodeFetchGeneration,
+            this.minimaxFetchGeneration,
+            this.zcodeFetchGeneration,
+            this.commandCodeFetchGeneration
+          ][index]
       )
     ) {
       // Retry through the existing queue with current account homes and credentials.
@@ -125,6 +130,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       this.zcodeFetchGeneration += 1
     }
     const zcodeGeneration = this.zcodeFetchGeneration
+    const { changed: commandCodeConfigChanged, generation: commandCodeGeneration } =
+      this.advanceCommandCodeGeneration(commandCodeKeyResult)
     const zcodePlanCredential = zcodePlanApiKey
       ? {
           apiKey: zcodePlanApiKey,
@@ -152,7 +159,10 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       cursor: this.withFetchingStatus(previousState.cursor, 'cursor'),
       zcode: zcodeConfigChanged
         ? this.withFetchingStatus(null, 'zcode')
-        : this.withFetchingStatus(previousState.zcode, 'zcode')
+        : this.withFetchingStatus(previousState.zcode, 'zcode'),
+      commandCode: commandCodeConfigChanged
+        ? this.withFetchingStatus(null, 'command-code')
+        : this.withFetchingStatus(previousState.commandCode, 'command-code')
     })
     // Async Keychain/worker DB reads must not delay other providers.
     const cursorResultPromise = readCursorAuthSession()
@@ -164,6 +174,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         (value) => ({ status: 'fulfilled', value }) as const,
         (reason) => ({ status: 'rejected', reason }) as const
       )
+    const commandCodeResultPromise = this.startCommandCodeFetch(commandCodeKeyResult, signal)
     const zcodeResultPromise = (
       zcodePlanConfigResult.error
         ? Promise.resolve(this.getZcodePlanCredentialError(zcodePlanConfigResult.error))
@@ -284,12 +295,15 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       miniMaxGeneration,
       zcodeConfigChanged,
       zcodeGeneration,
+      commandCodeConfigChanged,
+      commandCodeGeneration,
       antigravityGeneration,
       claudeFetchGated,
       results: [claudeResult, codexResult, opencodeGoResult, kimiResult, miniMaxResult],
       grokResultPromise,
       cursorResultPromise,
       zcodeResultPromise,
+      commandCodeResultPromise,
       antigravityResultPromise
     }
   }

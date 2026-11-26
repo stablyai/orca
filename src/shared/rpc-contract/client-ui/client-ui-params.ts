@@ -208,6 +208,7 @@ export const UiUpdateFields = lazyZodSchema(() =>
       _grokStatusBarDefaultAdded: z.boolean().optional(),
       _cursorStatusBarDefaultAdded: z.boolean().optional(),
       _zcodeStatusBarDefaultAdded: z.boolean().optional(),
+      _commandCodeStatusBarDefaultAdded: z.boolean().optional(),
       _museStatusBarDefaultAdded: z.boolean().optional(),
       _gitBlameStatusBarDefaultAdded: z.boolean().optional(),
       statusBarVisible: z.boolean().optional(),
@@ -227,7 +228,8 @@ export const UiUpdateFields = lazyZodSchema(() =>
               antigravity: z.string().optional(),
               cursor: z.string().optional(),
               zcode: z.string().optional(),
-              muse: z.string().optional()
+              muse: z.string().optional(),
+              'command-code': z.string().optional()
             })
             .optional()
         })

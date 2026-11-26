@@ -15,6 +15,8 @@ export type UsageProviderSettings = Pick<
   zcodePlanApiKeyConfigured: boolean
   // Main reports OpenCode key presence because the renderer cannot inspect its environment or CLI store.
   opencodeGoApiKeyConfigured: boolean
+  // Main reports Command Code key presence; the key itself stays in main.
+  commandCodeApiKeyConfigured: boolean
   grokAuthConfigured: boolean
   cursorAuthConfigured: boolean
 }
@@ -30,6 +32,7 @@ type UsageProviderSnapshots = {
   cursor: ProviderRateLimits | null | undefined
   zcode?: ProviderRateLimits | null
   muse?: ProviderRateLimits | null
+  commandCode?: ProviderRateLimits | null
 }
 
 type UsageProviderId = ProviderRateLimits['provider']
@@ -65,7 +68,8 @@ export function hasUsageProviderSettings(
     settings?.minimaxApiKeyConfigured === true ||
     settings?.grokAuthConfigured === true ||
     settings?.cursorAuthConfigured === true ||
-    settings?.zcodePlanApiKeyConfigured === true
+    settings?.zcodePlanApiKeyConfigured === true ||
+    settings?.commandCodeApiKeyConfigured === true
   )
 }
 
@@ -103,6 +107,9 @@ export function hasUsageProviderSettingsForProvider(
   }
   if (providerId === 'zcode') {
     return settings.zcodePlanApiKeyConfigured === true
+  }
+  if (providerId === 'command-code') {
+    return settings.commandCodeApiKeyConfigured === true
   }
   return false
 }
@@ -157,7 +164,8 @@ export function isUsageEmptyState(
     isProviderSnapshotPending(providers.grok) ||
     isProviderSnapshotPending(providers.cursor) ||
     (providers.zcode !== undefined && isProviderSnapshotPending(providers.zcode)) ||
-    (providers.muse !== undefined && isProviderSnapshotPending(providers.muse))
+    (providers.muse !== undefined && isProviderSnapshotPending(providers.muse)) ||
+    (providers.commandCode !== undefined && isProviderSnapshotPending(providers.commandCode))
   ) {
     return false
   }
@@ -172,6 +180,7 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.grok) &&
     !isProviderConfigured(providers.cursor) &&
     !isProviderConfigured(providers.zcode) &&
-    !isProviderConfigured(providers.muse)
+    !isProviderConfigured(providers.muse) &&
+    !isProviderConfigured(providers.commandCode)
   )
 }

@@ -123,6 +123,15 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     })
   }
 
+  invalidateCommandCodeCredentialState(): void {
+    this.commandCodeFetchGeneration += 1
+    // Clear before an old-key fetch can return.
+    this.updateState({
+      ...this.state,
+      commandCode: this.withFetchingStatus(null, 'command-code')
+    })
+  }
+
   invalidateZcodeCredentialState(): void {
     this.zcodeFetchGeneration += 1
     // Clear before an old-key fetch can return.

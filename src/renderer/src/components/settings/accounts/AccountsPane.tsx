@@ -27,7 +27,8 @@ import {
   getAccountsLocationSearchEntries,
   getAccountsMiniMaxSearchEntries,
   getAccountsOpencodeSearchEntries,
-  getAccountsZcodePlanSearchEntries
+  getAccountsZcodePlanSearchEntries,
+  getAccountsCommandCodeSearchEntries
 } from './accounts-search'
 import { getRemoteAccountsPaneScope } from '../../provider-accounts/provider-account-scope'
 import { ProviderHostScopeControl } from '../../provider-accounts/ProviderHostScopeControl'
@@ -45,6 +46,7 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { CursorAccountsSection } from './providers/CursorAccountsSection'
 import { ZcodePlanAccountsSection } from './usage/ZcodePlanAccountsSection'
+import { renderCommandCodeAccountsSection } from './usage/CommandCodeAccountsSection'
 import type {
   AccountsPaneProps,
   AccountsPaneSectionModel,
@@ -398,6 +400,9 @@ export function AccountsPane({
     readsOwnerGrokCursor && matchesSettingsSearch(searchQuery, getAccountsCursorSearchEntries()) ? (
       <CursorAccountsSection key="cursor" />
     ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsCommandCodeSearchEntries())
+      ? renderCommandCodeAccountsSection(accountOwnerKey, usageCredentialHost, ownerUsage)
+      : null,
     matchesSettingsSearch(searchQuery, getAccountsZcodePlanSearchEntries()) ? (
       <ZcodePlanAccountsSection
         key={`zcode:${accountOwnerKey}`}

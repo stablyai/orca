@@ -275,5 +275,34 @@ export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsS
   ...getAccountsGrokSearchEntries(),
   ...getAccountsAntigravitySearchEntries(),
   ...getAccountsCursorSearchEntries(),
-  ...getAccountsZcodePlanSearchEntries()
+  ...getAccountsZcodePlanSearchEntries(),
+  ...getAccountsCommandCodeSearchEntries()
+])
+
+export const getAccountsCommandCodeSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('auto.components.settings.accounts.search.commandCode.title', 'Command Code'),
+    description: translate(
+      'auto.components.settings.accounts.search.commandCode.description',
+      'Save a Command Code API key to see plan usage and credits.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.commandCode.kw.name',
+        'command code'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.commandCode.kw.key',
+        'api key'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.commandCode.kw.usage',
+        'usage'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.commandCode.kw.credits',
+        'credits'
+      )
+    ]
+  }
 ])

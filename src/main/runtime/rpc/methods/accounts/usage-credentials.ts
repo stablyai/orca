@@ -12,6 +12,11 @@ import {
   saveMiniMaxSessionCookieCredential
 } from '../../../../minimax/minimax-credential-commands'
 import {
+  clearCommandCodeApiKeyCredential,
+  getCommandCodeCredentialsStatus,
+  saveCommandCodeApiKeyCredential
+} from '../../../../command-code/command-code-credential-commands'
+import {
   assertZcodePlanApiKeyOpensHere,
   clearZcodePlanApiKeyCredential,
   getZcodePlanCredentialsStatus,
@@ -94,6 +99,33 @@ export const USAGE_CREDENTIAL_METHODS = [
     handler: async (_, { runtime }) => {
       const rateLimits = runtime.requireUsageRateLimits()
       return clearZcodePlanApiKeyCredential(rateLimits)
+    }
+  }),
+  defineMethod({
+    name: 'accounts.commandCodeCredentialsStatus',
+    permission: 'workspace',
+    params: null,
+    handler: async (_, { runtime }) => {
+      runtime.requireUsageRateLimits()
+      return getCommandCodeCredentialsStatus()
+    }
+  }),
+  defineMethod({
+    name: 'accounts.commandCodeSaveApiKey',
+    permission: 'accounts-admin',
+    params: UsageCredentialApiKeyParams,
+    handler: async ({ apiKey }, { runtime }) => {
+      const rateLimits = runtime.requireUsageRateLimits()
+      return saveCommandCodeApiKeyCredential(rateLimits, apiKey)
+    }
+  }),
+  defineMethod({
+    name: 'accounts.commandCodeClearApiKey',
+    permission: 'accounts-admin',
+    params: null,
+    handler: async (_, { runtime }) => {
+      const rateLimits = runtime.requireUsageRateLimits()
+      return clearCommandCodeApiKeyCredential(rateLimits)
     }
   })
 ] as const
