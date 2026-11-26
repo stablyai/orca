@@ -1098,8 +1098,152 @@
       "keywordSecurity": "보안"
     },
     "mcpServers": {
+      "custom": {
+        "noneChecked": "추가할 서버를 선택하세요.",
+        "addMany": "서버 {{count}}개 추가",
+        "found": "서버 {{count}}개를 찾았습니다",
+        "foundUrl": "URL · {{line}}",
+        "foundCommand": "명령 · {{line}}",
+        "title": "사용자 지정 서버",
+        "sourceLabel": "서버 URL, 시작 명령 또는 구성",
+        "sourceHint": "서버 URL, 시작 명령 또는 구성을 붙여넣거나 세부 정보를 직접 입력하세요.",
+        "nameTaken": "이름이 {{name}}인 서버가 이미 있습니다. 다른 이름을 선택하세요.",
+        "line": "URL, 시작 명령 또는 구성",
+        "foundTaken": "이미 추가됨"
+      },
+      "empty": {
+        "copied": "{{host}}에서 서버 {{count}}개를 복사했습니다",
+        "title": "{{host}}에 MCP 서버가 없습니다",
+        "copyFrom": "{{host}}에서 복사"
+      },
+      "addServer": "서버 추가",
+      "toast": {
+        "allOn": "모든 에이전트에서 {{name}}을(를) 켰습니다",
+        "allOff": "모든 에이전트에서 {{name}}을(를) 껐습니다",
+        "agentOn": "{{agent}}에서 {{name}}을(를) 켰습니다",
+        "agentOff": "{{agent}}에서 {{name}}을(를) 껐습니다",
+        "saved": "{{name}}을(를) 저장했습니다",
+        "sharedOn": "{{name}}이(가) 프로세스 하나를 공유합니다",
+        "sharedOff": "{{name}}이(가) 세션마다 따로 실행됩니다",
+        "signedOut": "{{name}}에서 로그아웃했습니다",
+        "removed": "{{name}}을(를) 제거했습니다",
+        "workspaces": "{{name}}: {{workspaces}}",
+        "added": "{{name}}을(를) 추가했습니다",
+        "newSessions": "새 세션부터 적용됩니다",
+        "restart_one": "세션 {{count}}개 다시 시작",
+        "restart_other": "세션 {{count}}개 다시 시작",
+        "staleTerminals_one": "에이전트 터미널 {{count}}개가 이전 MCP 설정을 사용 중입니다",
+        "staleTerminals_other": "에이전트 터미널 {{count}}개가 이전 MCP 설정을 사용 중입니다",
+        "staleTerminalsOnHost_one": "{{host}}의 에이전트 터미널 {{count}}개가 이전 MCP 설정을 사용 중입니다",
+        "staleTerminalsOnHost_other": "{{host}}의 에이전트 터미널 {{count}}개가 이전 MCP 설정을 사용 중입니다",
+        "staleTerminalsRestart_one": "Orca의 MCP 서버에 다시 연결하려면 터미널을 다시 시작하세요.",
+        "staleTerminalsRestart_other": "Orca의 MCP 서버에 다시 연결하려면 터미널을 다시 시작하세요.",
+        "staleTerminalsRestartManual_one": "Orca의 MCP 서버에 다시 연결하려면 터미널을 직접 다시 시작하세요.",
+        "staleTerminalsRestartManual_other": "Orca의 MCP 서버에 다시 연결하려면 터미널을 직접 다시 시작하세요.",
+        "staleTerminalsRestartSome_one": "{{restartable}}개는 여기에서 재개할 수 있습니다. 나머지 {{count}}개는 직접 다시 시작하세요.",
+        "staleTerminalsRestartSome_other": "{{restartable}}개는 여기에서 재개할 수 있습니다. 나머지 {{count}}개는 직접 다시 시작하세요.",
+        "addedMany": "서버 {{count}}개를 추가했습니다",
+        "repoOn": "{{repo}}에서 {{name}}을(를) 켰습니다",
+        "repoOff": "{{repo}}에서 {{name}}을(를) 껐습니다"
+      },
+      "fileAgent": {
+        "title": "Orca가 {{agent}}의 MCP 파일을 편집하도록 허용하시겠습니까?",
+        "line": "Orca가 {{agent}}의 설정 파일({{file}})에서 MCP 서버를 관리합니다. 직접 추가한 항목은 그대로 유지됩니다.",
+        "allow": "허용"
+      },
       "agents": {
+        "title": "에이전트",
+        "allOff": "모두 끄기",
+        "allOn": "모두 켜기",
+        "all": "모든 에이전트",
+        "someOff": "에이전트 {{count}}개 꺼짐",
+        "none": "에이전트 없음",
+        "some": "에이전트 {{total}}개 중 {{on}}개",
         "blocked": "조직의 Claude 설정에 의해 차단됨"
+      },
+      "stale": "이 서버가 다른 곳에서 변경되었습니다. 현재 상태를 표시합니다.",
+      "launch": {
+        "title": "실행",
+        "command": "명령",
+        "args": "인수",
+        "env": "환경"
+      },
+      "connection": {
+        "title": "연결",
+        "url": "URL",
+        "headers": "헤더"
+      },
+      "shared": {
+        "title": "에이전트 간에 프로세스 하나를 공유",
+        "line": "메모리를 덜 사용합니다. 서버는 워크스페이스 폴더 밖에서 실행됩니다."
+      },
+      "status": {
+        "needsSignIn": "로그인 필요",
+        "signedIn": "로그인됨",
+        "commandFailed": "{{host}}에서 명령을 찾을 수 없음",
+        "unreachable": "{{host}}에 연결할 수 없음"
+      },
+      "signIn": "로그인",
+      "signInActions": "로그인 작업",
+      "signInAgain": "다시 로그인",
+      "signOut": "로그아웃",
+      "loading": "MCP 서버를 읽는 중…",
+      "remove": {
+        "title": "{{name}}을(를) 제거하시겠습니까?",
+        "line": "{{host}}의 새 세션에서는 이 서버를 사용할 수 없습니다. 저장된 값과 로그인 정보가 삭제됩니다.",
+        "confirm": "제거",
+        "button": "서버 제거"
+      },
+      "found": {
+        "onlyIn": "{{agents}} · {{projects}}에서만",
+        "move": "Orca로 이동",
+        "actions": "{{name}} 작업",
+        "copy": "Orca로 복사",
+        "open": "열기",
+        "copied": "{{name}}을(를) Orca로 복사했습니다",
+        "title": "내 에이전트에 있는 서버",
+        "summary": "{{agents}}에서 서버 {{count}}개를 찾았습니다",
+        "moveAll": "모두 Orca로 이동"
+      },
+      "signedInToast": "{{name}}에 로그인했습니다",
+      "pasteRefused": "이 로그인에서 나온 주소가 아닙니다.",
+      "workspaces": {
+        "title": "워크스페이스",
+        "later": "나중에 추가하는 워크스페이스",
+        "all": "모든 워크스페이스",
+        "none": "워크스페이스 없음",
+        "allBut": "{{names}} 제외 전체",
+        "only": "{{names}}만"
+      },
+      "catalog": {
+        "noMatch": "“{{query}}”와(과) 일치하는 서버가 없습니다.",
+        "search": "서버 검색",
+        "caption": "서버"
+      },
+      "add": {
+        "title": "MCP 서버 추가"
+      },
+      "catalogLine": {
+        "github": "이슈, PR, 코드 검색",
+        "linear": "이슈와 프로젝트 읽기 및 업데이트"
+      },
+      "move": {
+        "title": "{{name}}을(를) Orca로 이동하시겠습니까?",
+        "allTitle": "서버 {{count}}개를 Orca로 이동하시겠습니까?",
+        "line": "Orca가 {{agents}} 설정에서 이 서버를 제거하고 백업을 보관합니다.",
+        "allLine": "Orca가 {{agents}} 설정에서 서버를 제거하고 백업을 보관합니다.",
+        "confirm": "이동"
+      },
+      "yours": "내 서버",
+      "fromPlugins": "플러그인 제공",
+      "unsupported": "{{host}}에서는 MCP 서버를 사용할 수 없습니다.",
+      "title": "MCP 서버",
+      "description": "에이전트가 사용할 수 있는 서버입니다. 변경 사항은 새 세션부터 적용됩니다.",
+      "repo": {
+        "on": "이 저장소에서 사용",
+        "add": "이 저장소에 서버 추가",
+        "files": "이 저장소 파일에 있는 서버",
+        "open": "{{file}} 열기"
       }
     }
   },
@@ -28725,5 +28869,14 @@
     "moveLeft": "왼쪽으로 이동",
     "moveRight": "오른쪽으로 이동",
     "reset": "탭 순서 초기화"
+  },
+  "mcpServers": {
+    "paste": {
+      "badCommand": "mcp add 명령에 값을 직접 넣으세요. Orca는 $VARIABLES나 다른 셸 표현식을 채울 수 없습니다.",
+      "unsupported": "Orca는 이 서버를 적힌 그대로 추가할 수 없습니다. 이 서버는 SSE, 자체 OAuth 클라이언트 또는 환경에서 읽는 값을 사용합니다.",
+      "badAddCommand": "mcp add 명령을 확인하세요. 이름과 함께 URL이나 명령이 있어야 합니다.",
+      "badJson": "붙여넣은 JSON을 확인하세요. 해석할 수 없습니다.",
+      "none": "Orca가 추가할 수 있는 서버를 찾지 못했습니다. SSE 서버, 자체 OAuth 클라이언트나 도구 필터가 있는 서버, 환경에서 읽는 값(${VAR})은 지원하지 않습니다."
+    }
   }
 }
