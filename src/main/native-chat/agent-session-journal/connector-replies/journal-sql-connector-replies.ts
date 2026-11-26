@@ -5,8 +5,14 @@ import type {
   JournalConnectorReplyFill,
   JournalConnectorReplyKey,
   JournalConnectorReplyRetryRows,
-  JournalConnectorReplyRow
+  JournalConnectorReplyRow,
+  JournalSlackAnswerTurn
 } from '../../../../shared/agent-session/journal/journal-connector-reply'
+import {
+  SLACK_ANSWER_MAX_TEXT,
+  slackAnswerText,
+  type SlackAnswerPresentation
+} from '../../../../shared/connectors/slack-answer-presentation'
 import type { JournalSqlDatabase } from '../database/journal-sql-database'
 import type { JournalSqlMaintenance } from '../journal-sql-maintenance'
 
@@ -18,6 +24,29 @@ export class JournalSqlConnectorReplies {
   constructor(
     private readonly db: Pick<JournalSqlDatabase, 'readers' | 'serialize' | 'readOnly'>
   ) {}
+
+  async prepareAnswer(
+    turn: JournalSlackAnswerTurn,
+    presentation: SlackAnswerPresentation
+  ): Promise<boolean> {
+    return this.maintain({ kind: 'slack-answer-prepare', turn, presentation })
+  }
+
+  /** Only the final root prose that the caller already selected can release its presentation. */
+  async answerPresentation(
+    turn: JournalSlackAnswerTurn,
+    prose: string
+  ): Promise<SlackAnswerPresentation | undefined> {
+    if (prose.length > SLACK_ANSWER_MAX_TEXT || !prose.includes('\nSource: ')) {
+      return undefined
+    }
+    const result = await this.db.readers.database({ kind: 'slack-answer-presentation', turn })
+    const presentation =
+      result.kind === 'slack-answer-presentation' ? result.presentation : undefined
+    return presentation?.visual && slackAnswerText(presentation) === prose.trim()
+      ? presentation
+      : undefined
+  }
 
   /** Rows not yet accepted: one chat's, or all of them. */
   async read(sessionId?: string): Promise<JournalConnectorReplyRow[]> {

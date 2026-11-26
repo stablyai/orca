@@ -3,9 +3,24 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import Database from '../../../sqlite/sync-database'
-import { recordJournalConnectorReplies } from './journal-connector-replies'
-import { readJournalConnectorReplies } from './journal-connector-replies-read'
+import {
+  fillJournalConnectorReplies,
+  recordJournalConnectorReplies
+} from './journal-connector-replies'
+import {
+  readJournalConnectorReplies,
+  readOwedJournalConnectorReplies
+} from './journal-connector-replies-read'
 import { ensureJournalConnectorRepliesSchema } from './journal-connector-replies-schema'
+import { JOURNAL_DOMAIN_SCHEMA_001 } from '../database/journal-domain-schema-001'
+import {
+  SlackAnswerPresentationSchema,
+  slackAnswerText
+} from '../../../../shared/connectors/slack-answer-presentation'
+import {
+  journalSlackAnswerPresentation,
+  prepareSlackAnswerPresentation
+} from './journal-slack-answer-presentation'
 
 let dir = ''
 afterEach(() => rmSync(dir, { recursive: true, force: true }))
@@ -38,4 +53,80 @@ it('reads a row an older build left as the older quiet rule, and records new row
   )
   db.close()
   expect(rules).toEqual({ old: null, new: 'trailing' })
+})
+
+it('binds preparation to a running root turn and keeps the first filled presentation after reopen', () => {
+  dir = mkdtempSync(join(tmpdir(), 'orca-reply-schema-'))
+  const file = join(dir, 'journal.db')
+  const db = new Database(file)
+  db.exec(JOURNAL_DOMAIN_SCHEMA_001)
+  ensureJournalConnectorRepliesSchema(db)
+  const turn = { sessionId: 'chat-1', epoch: 'e', turnItemId: 'turn-1' }
+  db.exec(`INSERT INTO journal_items
+    (session_id,epoch,item_id,ordinal,revision,sequence,sequence_index,owner_fence,kind,lifecycle_state,payload_json)
+    VALUES('chat-1','e','turn-1',1,1,1,0,0,'turn','running','{}')`)
+  const presentation = SlackAnswerPresentationSchema.parse({
+    v: 1,
+    text: 'Compile took longest.',
+    visual: {
+      kind: 'table',
+      title: 'Build stages',
+      source: 'Build report',
+      columns: [{ label: 'Stage' }, { label: 'Time', unit: 's' }],
+      rows: [
+        ['Install', 14],
+        ['Compile', 87]
+      ]
+    }
+  })
+  expect(prepareSlackAnswerPresentation(db, { ...turn, epoch: 'older' }, presentation)).toBe(false)
+  expect(prepareSlackAnswerPresentation(db, turn, presentation)).toBe(true)
+  db.exec(`UPDATE journal_items SET lifecycle_state='completed' WHERE item_id='turn-1'`)
+  expect(
+    prepareSlackAnswerPresentation(db, turn, { ...presentation, text: 'A later answer.' })
+  ).toBe(false)
+  recordJournalConnectorReplies(db, turn, 'm1', false, {
+    kind: 'message',
+    role: 'user',
+    blocks: [{ type: 'text', text: 'What took the most time?' }],
+    connectorDelivery: {
+      account: 'a',
+      deliveryId: 'd',
+      conversation: { source: 'slack', externalId: 'slack:T1:C1:1.2' }
+    }
+  })
+  const first = {
+    account: 'a',
+    deliveryId: 'd',
+    answerDeliveryId: 'd',
+    turnItemId: turn.turnItemId,
+    outcome: 'answered' as const,
+    prose: slackAnswerText(presentation),
+    presentation
+  }
+  expect(fillJournalConnectorReplies(db, [first], 10)).toBe(1)
+  expect(
+    fillJournalConnectorReplies(
+      db,
+      [{ ...first, outcome: 'quiet', prose: undefined, presentation: undefined }],
+      11
+    )
+  ).toBe(0)
+  db.close()
+
+  const reopened = new Database(file)
+  try {
+    expect(journalSlackAnswerPresentation(reopened, turn)).toEqual(presentation)
+    expect(readOwedJournalConnectorReplies(reopened, 'a', null, 1)[0]?.fill).toEqual({
+      outcome: 'answered',
+      answerDeliveryId: 'd',
+      turnItemId: 'turn-1',
+      prose:
+        'Compile took longest.\n\nBuild stages\nSource: Build report\nStage: Install, Time: 14 s\nStage: Compile, Time: 87 s',
+      presentation,
+      filledAt: 10
+    })
+  } finally {
+    reopened.close()
+  }
 })

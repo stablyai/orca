@@ -4,6 +4,7 @@ import {
   JOURNAL_CONNECTOR_REPLY_PROSE_BYTES,
   type JournalConnectorReplyRow
 } from '../../../../shared/agent-session/journal/journal-connector-reply'
+import { readSlackAnswerPresentation } from './journal-slack-answer-presentation'
 
 // The reply outbox's reads (design item 125 §3), on the journal's reader workers.
 
@@ -42,7 +43,7 @@ export function hasUnsentJournalConnectorReply(
 // Every column a row reads but prose, which a page reads bounded.
 const OWED_COLUMNS = `account,delivery_id,source,external_id,session_id,epoch,message_id,queued,
   outcome,answer_delivery_id,turn_item_id,failure_json,links_json,took_ms,turn_started_at,filled_at,cut_turn_id,
-  cut_kind,claim_message_id,tools_ran,empty_retried`
+  cut_kind,claim_message_id,tools_ran,empty_retried,presentation_json`
 
 /** One page of an account's filled, unsent rows after a delivery id, in key order: what the outbox
  *  sends. Paged so a backlog never outgrows one reader reply. A prose over the cap (kept whole by
@@ -73,6 +74,10 @@ export function readOwedJournalConnectorReplies(
 
 function replyRowOf(row: Record<string, unknown>): JournalConnectorReplyRow {
   const outcome = JOURNAL_CONNECTOR_REPLY_OUTCOMES.find((known) => known === row.outcome)
+  const presentation =
+    outcome === 'answered' && row.source === 'slack'
+      ? readSlackAnswerPresentation(row.presentation_json)
+      : undefined
   return {
     account: String(row.account),
     deliveryId: String(row.delivery_id),
@@ -106,6 +111,7 @@ function replyRowOf(row: Record<string, unknown>): JournalConnectorReplyRow {
             answerDeliveryId: String(row.answer_delivery_id),
             ...(row.turn_item_id === null ? {} : { turnItemId: String(row.turn_item_id) }),
             ...(row.prose === null ? {} : { prose: String(row.prose) }),
+            ...(presentation ? { presentation } : {}),
             ...(row.failure_json === null ? {} : { failure: JSON.parse(String(row.failure_json)) }),
             ...(row.links_json === null ? {} : { links: JSON.parse(String(row.links_json)) }),
             ...(row.took_ms === null || row.took_ms === undefined

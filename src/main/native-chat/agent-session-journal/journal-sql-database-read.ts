@@ -28,7 +28,12 @@ import {
   readJournalConnectorReplies,
   readOwedJournalConnectorReplies
 } from './connector-replies/journal-connector-replies-read'
-import type { JournalConnectorReplyRow } from '../../../shared/agent-session/journal/journal-connector-reply'
+import type {
+  JournalConnectorReplyRow,
+  JournalSlackAnswerTurn
+} from '../../../shared/agent-session/journal/journal-connector-reply'
+import type { SlackAnswerPresentation } from '../../../shared/connectors/slack-answer-presentation'
+import { journalSlackAnswerPresentation } from './connector-replies/journal-slack-answer-presentation'
 
 export type JournalSqlStoredRecords = Omit<AgentSessionStoreState, 'sessionTabs'> & {
   sessionTabs: [tabId: string, sessionId: string][] | null
@@ -59,6 +64,7 @@ export type JournalSqlDatabaseRead =
   | { kind: 'deleted-chats' }
   | { kind: 'connector-replies'; sessionId?: string }
   | { kind: 'connector-replies-owed'; account: string; after: string | null; limit: number }
+  | { kind: 'slack-answer-presentation'; turn: JournalSlackAnswerTurn }
   | {
       kind: 'connector-reply-unsent'
       sessionId: string
@@ -84,6 +90,7 @@ export type JournalSqlDatabaseReadResult =
   | { kind: 'deleted-chats'; chats: DeletedChat[] }
   | { kind: 'connector-replies'; rows: JournalConnectorReplyRow[] }
   | { kind: 'connector-reply-unsent'; unsent: boolean }
+  | { kind: 'slack-answer-presentation'; presentation: SlackAnswerPresentation | undefined }
 
 /** Profile metadata has no chat projection prerequisite; all reads still share one WAL snapshot. */
 export function readJournalSqlDatabase(
@@ -128,6 +135,11 @@ function read(
       return {
         kind: 'connector-replies',
         rows: readJournalConnectorReplies(db, operation.sessionId)
+      }
+    case 'slack-answer-presentation':
+      return {
+        kind: 'slack-answer-presentation',
+        presentation: journalSlackAnswerPresentation(db, operation.turn)
       }
     case 'connector-reply-unsent':
       return {

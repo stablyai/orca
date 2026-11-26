@@ -1,0 +1,196 @@
+import * as z from 'zod'
+
+export const CONNECTOR_SLACK_PRESENTATION_FEATURE = 'slack.answerPresentation'
+export const SLACK_ANSWER_MAX_BYTES = 12 * 1024
+export const SLACK_ANSWER_MAX_TEXT = 3_000
+// Older connector revisions cap ordinary answer prose at 8 KiB.
+const MAX_PROJECTED_BYTES = 8 * 1024
+
+// A presentation is literal text. An independently authorized source link can be
+// rendered by the posting adapter, but the author cannot supply a URL or Slack markup.
+const UNSAFE_TEXT =
+  /[<>`@]|\p{Cf}|\p{Cs}|\b(?:[a-z][a-z\d+.-]*:\/\/|javascript:|data:|mailto:|www\.)|\b(?:[a-z0-9-]+\.)+[a-z]{2,63}\b|\]\s*\(/iu
+const CONTROL = /\p{Cc}/u
+
+function literal(max: number, multiline = false) {
+  return z
+    .string()
+    .min(1)
+    .max(max)
+    .refine(
+      (text) =>
+        text === text.trim() &&
+        !UNSAFE_TEXT.test(text) &&
+        !CONTROL.test(multiline ? text.replaceAll('\n', '') : text) &&
+        (multiline || !text.includes('\n')),
+      { message: 'Expected literal text without links, mentions, or control characters' }
+    )
+}
+
+function distinct(labels: readonly string[]): boolean {
+  return (
+    new Set(labels.map((label) => label.normalize('NFKC').toLowerCase())).size === labels.length
+  )
+}
+
+// An explicit unit also gives the renderer the label to show alongside each measure.
+const Unit = z.enum([
+  'count',
+  'percent',
+  'ratio',
+  'ms',
+  's',
+  'min',
+  'h',
+  'days',
+  'bytes',
+  'KiB',
+  'MiB',
+  'GiB',
+  'requests/s',
+  'USD',
+  'EUR',
+  'GBP'
+])
+const Label = literal(20)
+const Value = z.number().finite()
+const DateTime = z.iso.datetime({ precision: 0 })
+const Window = z.strictObject({ from: DateTime, to: DateTime }).refine(({ from, to }) => from < to)
+const Timing = z.union([z.strictObject({ asOf: DateTime }), Window])
+const Frame = { title: literal(50), source: literal(80) }
+const Chart = {
+  ...Frame,
+  axis: literal(25),
+  unit: Unit,
+  series: z
+    .array(z.strictObject({ label: Label, values: z.array(Value).min(2).max(12) }))
+    .min(1)
+    .max(2)
+}
+
+const Line = z.strictObject({
+  ...Chart,
+  kind: z.literal('line'),
+  window: Window,
+  // UTC timestamps constrain spacing, and the short labels are the ones both views display.
+  points: z
+    .array(z.strictObject({ at: DateTime, label: Label }))
+    .min(2)
+    .max(12)
+})
+
+const Bar = z.strictObject({
+  ...Chart,
+  kind: z.literal('bar'),
+  timing: Timing.optional(),
+  labels: z.array(Label).min(2).max(12)
+})
+
+const Table = z.strictObject({
+  ...Frame,
+  kind: z.literal('table'),
+  timing: Timing.optional(),
+  columns: z
+    .array(z.strictObject({ label: Label, unit: Unit.optional() }))
+    .min(1)
+    .max(4),
+  rows: z
+    .array(
+      z
+        .array(z.union([literal(60), Value]))
+        .min(1)
+        .max(4)
+    )
+    .min(1)
+    .max(8)
+})
+
+const Visual = z.discriminatedUnion('kind', [Line, Bar, Table]).refine(
+  (visual) => {
+    if (visual.kind === 'table') {
+      return (
+        !visual.columns[0]?.unit &&
+        distinct(visual.columns.map(({ label }) => label)) &&
+        visual.rows.every((row) => row.length === visual.columns.length) &&
+        visual.columns.every((column, index) =>
+          visual.rows.every((row) => typeof row[index] === (column.unit ? 'number' : 'string'))
+        ) &&
+        distinct(visual.rows.map((row) => String(row[0])))
+      )
+    }
+    const labels = visual.kind === 'line' ? visual.points.map(({ label }) => label) : visual.labels
+    if (
+      !distinct(labels) ||
+      !distinct(visual.series.map(({ label }) => label)) ||
+      !visual.series.every(({ values }) => values.length === labels.length)
+    ) {
+      return false
+    }
+    if (visual.kind === 'bar') {
+      return true
+    }
+    const stamps = visual.points.map(({ at }) => Date.parse(at))
+    const step = stamps[1]! - stamps[0]!
+    return (
+      step > 0 &&
+      stamps[0]! >= Date.parse(visual.window.from) &&
+      stamps.at(-1)! <= Date.parse(visual.window.to) &&
+      stamps.every((stamp, index) => stamp === stamps[0]! + index * step)
+    )
+  },
+  { message: 'Expected unique labels and complete values on a common scale' }
+)
+
+const Presentation = z.strictObject({
+  v: z.literal(1),
+  text: literal(SLACK_ANSWER_MAX_TEXT, true),
+  visual: Visual.optional()
+})
+
+export type SlackAnswerPresentation = z.infer<typeof Presentation>
+
+export const SlackAnswerPresentationSchema = Presentation.refine(
+  (answer) => {
+    const encoder = new TextEncoder()
+    const text = slackAnswerText(answer)
+    return (
+      text.length <= SLACK_ANSWER_MAX_TEXT &&
+      encoder.encode(text).byteLength <= MAX_PROJECTED_BYTES &&
+      encoder.encode(JSON.stringify(answer)).byteLength <= SLACK_ANSWER_MAX_BYTES
+    )
+  },
+  { message: 'The complete answer and its exact values must fit in one message' }
+)
+
+export function slackAnswerText({ text, visual }: SlackAnswerPresentation): string {
+  if (!visual) {
+    return text
+  }
+  const timing = visual.kind === 'line' ? visual.window : visual.timing
+  const when = timing
+    ? 'asOf' in timing
+      ? `As of ${timing.asOf}`
+      : `${timing.from} to ${timing.to}`
+    : ''
+  return `${text}\n\n${[visual.title, `Source: ${visual.source}`, when, ...valueLines(visual)].filter(Boolean).join('\n')}`
+}
+
+function valueLines(visual: NonNullable<SlackAnswerPresentation['visual']>): string[] {
+  if (visual.kind === 'table') {
+    return visual.rows.map((row) =>
+      row
+        .map((value, index) => {
+          const column = visual.columns[index]!
+          return `${column.label}: ${value}${column.unit ? ` ${column.unit}` : ''}`
+        })
+        .join(', ')
+    )
+  }
+  const labels = visual.kind === 'line' ? visual.points.map(({ label }) => label) : visual.labels
+  return labels.map((label, index) => {
+    const values = visual.series.map(
+      ({ label: series, values }) => `${series} ${values[index]} ${visual.unit}`
+    )
+    return `${label}: ${values.join(', ')}`
+  })
+}

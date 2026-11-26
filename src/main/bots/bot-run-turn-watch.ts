@@ -12,6 +12,9 @@ import { readAgentJournalTurnOutcome } from '../../shared/agent-session/lifecycl
 import { pendingStructuredAgentSessionPrompt } from '../../shared/agent-session/view/structured-agent-session-projection'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { createKeyedTrailingEdgeCoalescer } from '../runtime/client/events/keyed-trailing-edge-coalescer'
+import { structuredAgentSessionTurnReply } from '../../shared/agent-session/requests/structured-agent-session-turn-reply'
+import type { JournalSlackAnswerTurn } from '../../shared/agent-session/journal/journal-connector-reply'
+import type { SlackAnswerPresentation } from '../../shared/connectors/slack-answer-presentation'
 
 /** Why a run has no result of its own (result_unavailable). */
 export type BotRunUnavailable =
@@ -30,6 +33,7 @@ export type BotTurnEnd =
   | {
       outcome: AgentJournalTurnOutcome
       message: string
+      presentation?: SlackAnswerPresentation
       error?: string
       /** Why the agent refused the prompt before any turn, such as a failed start. */
       refusal?: AgentJournalSubmission['rejection']
@@ -50,6 +54,10 @@ type BotTurnHost = Pick<
   StructuredAgentSessionHost,
   'subscribeTurnCompletions' | 'subscribe' | 'journalReads' | 'history' | 'currentWork'
 >
+type RunPresentation = (
+  turn: JournalSlackAnswerTurn,
+  prose: string
+) => Promise<SlackAnswerPresentation | undefined>
 
 /** Streaming changes the journal many times a second; the run re-reads it once it settles. */
 const JOURNAL_WAKE = { flushMs: 300, maxWaitMs: 2_000 }
@@ -57,7 +65,11 @@ const JOURNAL_WAKE = { flushMs: 300, maxWaitMs: 2_000 }
 const unavailable = (reason: BotRunUnavailable): BotTurnEnd => ({ unavailable: reason })
 
 /** How the turn this send started ended. Null while it hasn't. */
-async function readRunTurn(host: BotTurnHost, send: BotRunSend): Promise<BotTurnEnd | null> {
+async function readRunTurn(
+  host: BotTurnHost,
+  send: BotRunSend,
+  readPresentation?: RunPresentation
+): Promise<BotTurnEnd | null> {
   const { sessionId, clientMessageId } = send
   // Before the journal: a card handed over between the two reads then shows its handoff.
   const history = await host.history({ sessionId, direction: 'tail' })
@@ -67,7 +79,7 @@ async function readRunTurn(host: BotTurnHost, send: BotRunSend): Promise<BotTurn
       (card) => card.messageId === clientMessageId && card.state === 'waiting'
     ) === true
   // The rows that place this send's turn, not the whole chat: the run re-reads at each change.
-  const { items, submissions } = (
+  const { cursor, items, submissions } = (
     await (await host.journalReads(sessionId)).operationWindow({ operationIds: [clientMessageId] })
   ).snapshot
   const placed = structuredAgentSessionSendTurn({ items, submissions }, send)
@@ -117,10 +129,22 @@ async function readRunTurn(host: BotTurnHost, send: BotRunSend): Promise<BotTurn
   if (shared && outcome === 'success') {
     return unavailable('shared')
   }
+  const message = shared ? '' : structuredAgentSessionTurnAssistantMessage(items, sent.itemId)
+  const presentation =
+    readPresentation &&
+    outcome === 'success' &&
+    message.includes('\nSource: ') &&
+    structuredAgentSessionTurnReply(items, sent.itemId).botProse === message
+      ? await readPresentation(
+          { sessionId, epoch: cursor.epoch, turnItemId: sent.itemId },
+          message
+        ).catch(() => undefined)
+      : undefined
   return outcome
     ? {
         outcome,
-        message: shared ? '' : structuredAgentSessionTurnAssistantMessage(items, sent.itemId),
+        message,
+        ...(presentation ? { presentation } : {}),
         ...(outcome === 'failure'
           ? { error: structuredAgentSessionTurnFailureLine(items, sent.itemId) }
           : {})
@@ -131,7 +155,10 @@ async function readRunTurn(host: BotTurnHost, send: BotRunSend): Promise<BotTurn
 /** Started before the prompt is sent, so a turn that ends before its session id is known still
  *  counts. The run re-reads its turn at each turn end and journal change in its session: in a busy
  *  Chat other turns end first, and a turn end is announced only once no queued send is owed. */
-export function watchBotTurnEnds(host: BotTurnHost): BotTurnWatch {
+export function watchBotTurnEnds(
+  host: BotTurnHost,
+  readPresentation?: RunPresentation
+): BotTurnWatch {
   const turnEnds = new Map<string, number>()
   let ended = false
   let wake = (): void => {}
@@ -174,7 +201,9 @@ export function watchBotTurnEnds(host: BotTurnHost): BotTurnWatch {
         for (;;) {
           const before = seen()
           // A journal that can't be read can't tell which turn was the run's.
-          const end = await readRunTurn(host, send).catch(() => unavailable('unread'))
+          const end = await readRunTurn(host, send, readPresentation).catch(() =>
+            unavailable('unread')
+          )
           if (end) {
             return end
           }

@@ -149,6 +149,7 @@ export async function endRepliedTurn(
   const { covered, resumesAt } = await fill({
     sessionId: end.news.sessionId,
     turnItemId: turn.turnItemId,
+    ...(turn.journalEpoch ? { journalEpoch: turn.journalEpoch } : {}),
     stamps: turn.stamps,
     ...(turn.opener ? { openerItemId: turn.opener.itemId } : {}),
     outcome: end.news.outcome,

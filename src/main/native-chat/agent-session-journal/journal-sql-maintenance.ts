@@ -1,4 +1,6 @@
 import type { ConnectorFailure } from '../../../shared/connectors/connector-cloud-contract'
+import type { SlackAnswerPresentation } from '../../../shared/connectors/slack-answer-presentation'
+import { prepareSlackAnswerPresentation } from './connector-replies/journal-slack-answer-presentation'
 import { prepareJournalLegacyClaimsInsert } from './database/journal-legacy-claims'
 import { createHash } from 'node:crypto'
 import type { LegacyDestinationIdentity } from './journal-legacy-retirement-files'
@@ -56,7 +58,8 @@ import type {
   JournalConnectorReplyCutRows,
   JournalConnectorReplyRetryRows,
   JournalConnectorReplyFill,
-  JournalConnectorReplyKey
+  JournalConnectorReplyKey,
+  JournalSlackAnswerTurn
 } from '../../../shared/agent-session/journal/journal-connector-reply'
 
 /** Operations the background pass runs a bounded page at a time. */
@@ -100,6 +103,11 @@ export type JournalSqlMaintenance =
   | { kind: 'legacy-copy-failed'; sessionId: string; error: string }
   // The reply outbox's rows outside any chat's lane: filled with outcomes, and sent.
   | { kind: 'connector-replies-fill'; fills: readonly JournalConnectorReplyFill[]; now: number }
+  | {
+      kind: 'slack-answer-prepare'
+      turn: JournalSlackAnswerTurn
+      presentation: SlackAnswerPresentation
+    }
   | { kind: 'connector-replies-sent'; keys: readonly JournalConnectorReplyKey[]; now: number }
   | { kind: 'connector-replies-cut'; rows: JournalConnectorReplyCutRows }
   | {
@@ -209,6 +217,8 @@ export function applyJournalSqlMaintenance(
       return discardForgottenJournalChatPage(db, operation.sessionId)
     case 'connector-replies-fill':
       return fillJournalConnectorReplies(db, operation.fills, operation.now) > 0
+    case 'slack-answer-prepare':
+      return prepareSlackAnswerPresentation(db, operation.turn, operation.presentation)
     case 'connector-replies-sent':
       sentJournalConnectorReplies(db, operation.keys, operation.now)
       return true

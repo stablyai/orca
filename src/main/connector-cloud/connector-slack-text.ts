@@ -4,9 +4,24 @@ import type { ConnectorActionArgs } from '../../shared/connector-action-contract
 import type { ConnectorReview } from '../../shared/connector-review-contract'
 import { isRefOf, slackChannelIdOf } from '../../shared/connector-place-names'
 import { redactLocalPaths } from '../../shared/connectors/slack-local-paths'
+import {
+  slackAnswerText,
+  type SlackAnswerPresentation
+} from '../../shared/connectors/slack-answer-presentation'
 
 export const isSlackConversation = (conversation: { source: string } | null | undefined): boolean =>
   conversation?.source === 'slack'
+
+export function matchingSlackPresentation(
+  presentation: SlackAnswerPresentation,
+  text: string
+): boolean {
+  return (
+    presentation.visual !== undefined &&
+    slackAnswerText(presentation) === text &&
+    redactLocalPaths(text) === text
+  )
+}
 
 /** A review's notes as Slack shows them; their paths are repo paths, which stay. */
 export function slackReview(review: ConnectorReview): ConnectorReview {

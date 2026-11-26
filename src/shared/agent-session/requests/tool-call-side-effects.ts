@@ -196,6 +196,18 @@ const ORCA_READS: readonly (readonly string[])[] = [
 ]
 
 function orcaReads(args: readonly string[]): boolean {
+  const [group, command, fileFlag, path, mode] = args
+  if (
+    args.length === 5 &&
+    group === 'bot' &&
+    command === 'reply' &&
+    fileFlag === '--presentation-file' &&
+    path &&
+    !path.startsWith('-') &&
+    mode === '--prepare-final'
+  ) {
+    return true
+  }
   return (
     !args.some((word) => /^--(join|download|out|offer)/.test(word)) &&
     ORCA_READS.some((path) => path.every((word, index) => args[index] === word))

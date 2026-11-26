@@ -18,10 +18,12 @@ import { isSlackDirectMessage } from '../../shared/connectors/slack-direct-messa
 import type { EmptyTurnRetry } from './external-conversation-reply-empty-retry'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import { slackAnswerText } from '../../shared/connectors/slack-answer-presentation'
 
 export type EndedTurnReplies = {
   sessionId: string
   turnItemId: string
+  journalEpoch?: string
   /** The deliveries the turn answered, opener first (connectorReplyTurnStamps). */
   stamps: readonly ConnectorReplyStamp[]
   /** The turn's opening message: a continuation fills only the rows its admission claimed. */
@@ -181,6 +183,15 @@ export function conversationReplyFill(
       silencedWhole.set(conversation, row.quietRule === undefined && !ownerDm)
     }
     const fills: JournalConnectorReplyFill[] = []
+    const presentation =
+      turn.bot && turn.outcome === 'success' && turn.journalEpoch && own.length > 0
+        ? await store
+            .answerPresentation?.(
+              { sessionId: turn.sessionId, epoch: turn.journalEpoch, turnItemId: turn.turnItemId },
+              turn.prose
+            )
+            .catch(() => undefined)
+        : undefined
     for (const row of own) {
       const conversation = JSON.stringify([row.account, row.conversation])
       const { outcome, prose } = connectorReplyTurnOutcome({
@@ -188,6 +199,7 @@ export function conversationReplyFill(
         silencedWhole: silencedWhole.get(conversation) === true
       })
       const answerDeliveryId = answers.get(conversation) ?? row.deliveryId
+      const visualAnswer = presentation && prose === turn.prose ? presentation : undefined
       fills.push({
         account: row.account,
         deliveryId: row.deliveryId,
@@ -195,7 +207,11 @@ export function conversationReplyFill(
         outcome,
         answerDeliveryId,
         turnItemId: turn.turnItemId,
-        ...(prose ? { prose: capAnswer(prose, JOURNAL_CONNECTOR_REPLY_PROSE_BYTES) } : {}),
+        ...(visualAnswer
+          ? { prose: slackAnswerText(visualAnswer), presentation: visualAnswer }
+          : prose
+            ? { prose: capAnswer(prose, JOURNAL_CONNECTOR_REPLY_PROSE_BYTES) }
+            : {}),
         ...(outcome === 'failed' && turn.failure ? { failure: turn.failure } : {}),
         ...(turn.links.length > 0 ? { links: turn.links } : {}),
         ...(outcome === 'answered' && turn.tookMs !== undefined ? { tookMs: turn.tookMs } : {}),

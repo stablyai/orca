@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS journal_connector_replies (
   answer_delivery_id TEXT,
   turn_item_id TEXT,
   prose TEXT,
+  presentation_json TEXT,
   failure_json TEXT,
   links_json TEXT,
   filled_at INTEGER,
@@ -34,6 +35,15 @@ CREATE TABLE IF NOT EXISTS journal_connector_replies (
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS journal_connector_replies_open
   ON journal_connector_replies(session_id, outcome, sent_at);
+CREATE TABLE IF NOT EXISTS journal_slack_answer_presentations (
+  session_id TEXT NOT NULL,
+  epoch TEXT NOT NULL,
+  turn_item_id TEXT NOT NULL,
+  presentation_json TEXT NOT NULL,
+  PRIMARY KEY(session_id, epoch, turn_item_id),
+  FOREIGN KEY(session_id, epoch, turn_item_id) REFERENCES journal_items(session_id, epoch, item_id)
+    ON DELETE CASCADE
+) WITHOUT ROWID;
 `
 
 // Columns later builds added the same way, with no user_version change: an older build never reads
@@ -49,7 +59,8 @@ const ADDED_COLUMNS = [
   ['claim_message_id', 'TEXT'],
   ['quiet_rule', 'TEXT'],
   ['tools_ran', 'INTEGER'],
-  ['empty_retried', 'INTEGER']
+  ['empty_retried', 'INTEGER'],
+  ['presentation_json', 'TEXT']
 ] as const
 
 /** Creates the table, and adds the columns a table an earlier build made lacks. */

@@ -16,6 +16,8 @@ import { connectorHelloSaid, sayConnectorHello } from './connector-hello'
 import type { ConnectorPollClientOptions, ConnectorTransport } from './connector-machine'
 import {
   foldConnectorReview,
+  replyPresentationFor,
+  botPostPresentationFor,
   postConnectorBotMessage,
   postConnectorReply,
   type ConnectorBotPostBody,
@@ -140,15 +142,17 @@ export class ConnectorPollClient {
 
   /** Posts an agent's reply to its conversation's thread while this client runs. */
   reply(body: ConnectorReplyBody, proceed?: () => boolean) {
-    const sent = this.features?.has(REVIEW_FEATURE) ? body : foldConnectorReview(body)
+    const eligible = replyPresentationFor(body, this.features)
+    const sent = this.features?.has(REVIEW_FEATURE) ? eligible : foldConnectorReview(eligible)
     const { transport, stopped, random } = this
     return this.posted(postConnectorReply(transport, sent, stopped.signal, random, proceed))
   }
 
   /** Posts as a bot in one of its app's channels while this client runs. */
   postAsBot(botId: string, body: ConnectorBotPostBody) {
+    const eligible = botPostPresentationFor(body, this.features)
     return this.posted(
-      postConnectorBotMessage(this.transport, botId, body, this.stopped.signal, this.random)
+      postConnectorBotMessage(this.transport, botId, eligible, this.stopped.signal, this.random)
     )
   }
 

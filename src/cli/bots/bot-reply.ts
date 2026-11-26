@@ -27,6 +27,7 @@ import {
 import { readMessageText } from '../slack/slack-action-args'
 import type { ActionResult } from '../slack/slack-action-format'
 import { replyWithHtmlPages } from './bot-reply-html-pages'
+import { replyWithPresentation } from './bot-reply-presentation'
 import {
   formatAttached,
   formatOffered,
@@ -199,7 +200,23 @@ function refuseFlags(flags: HandlerContext['flags']): void {
 }
 
 export const BOT_REPLY_HANDLERS: Record<string, CommandHandler> = {
-  'bot reply': async ({ flags, client, json, cwd }) => {
+  'bot reply': async (context) => {
+    const { flags, client, json, cwd } = context
+    const presentationFile = getOptionalStringFlag(flags, 'presentation-file')
+    if (presentationFile !== undefined) {
+      return replyWithPresentation(
+        context,
+        presentationFile,
+        readInjectedAgentSessionId(),
+        REPLY_TIMEOUT_MS
+      )
+    }
+    if (flags.has('prepare-final')) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Use --prepare-final with --presentation-file.'
+      )
+    }
     if (flags.has('leave-thread')) {
       return leaveThread({ client, flags, json })
     }

@@ -381,8 +381,10 @@ import {
 import {
   ConnectorAct,
   ConnectorLeaveThread,
+  ConnectorPrepareSlackAnswer,
   ConnectorReact,
   ConnectorReply,
+  ConnectorReplySlackAnswer,
   ConnectorSlackMirrorPost,
   ConnectorSlackMirrorSet,
   ConnectorSlackMirrorStatus
@@ -1561,8 +1563,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'computer.typeText': TypeText,
   'connector.act': ConnectorAct,
   'connector.leaveThread': ConnectorLeaveThread,
+  'connector.prepareSlackAnswer': ConnectorPrepareSlackAnswer,
   'connector.react': ConnectorReact,
   'connector.reply': ConnectorReply,
+  'connector.replySlackAnswer': ConnectorReplySlackAnswer,
   'connector.slackMirror.post': ConnectorSlackMirrorPost,
   'connector.slackMirror.set': ConnectorSlackMirrorSet,
   'connector.slackMirror.status': ConnectorSlackMirrorStatus,

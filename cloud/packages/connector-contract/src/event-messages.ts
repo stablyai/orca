@@ -8,6 +8,7 @@ import {
   ConnectorTurnForSchema
 } from './connector-wire-scalars.js'
 import { OptionalConnectorFailureSchema } from './failure-messages.js'
+import { SlackAnswerPresentationSchema, slackAnswerText } from './slack-answer-presentation.js'
 
 const PromptOptionSchema = z.object({
   id: OpaqueIdSchema,
@@ -129,6 +130,7 @@ export const ConnectorReplyEventSchema = z
       .refine((text) => text.trim().length > 0)
       .refine((text) => utf8Bytes(text) <= CONNECTOR_LIMITS.maxLongAnswerBytes)
       .optional(),
+    presentation: SlackAnswerPresentationSchema.optional(),
     failure: OptionalConnectorFailureSchema,
     links: OptionalWorkLinksSchema,
     turnId: EpochMsSchema.optional(),
@@ -139,6 +141,12 @@ export const ConnectorReplyEventSchema = z
   })
   .refine((reply) => reply.deliveryIds.includes(reply.answerDeliveryId))
   .refine((reply) => (reply.outcome === 'answered') === (reply.prose !== undefined))
+  .refine(({ conversation, outcome, prose, presentation }) =>
+    !presentation || (
+      conversation.source === 'slack' && outcome === 'answered' &&
+      prose === slackAnswerText(presentation)
+    )
+  )
 
 const ActivityTextSchema = z.string().min(1).max(CONNECTOR_LIMITS.maxActivityTextChars)
 
@@ -303,6 +311,7 @@ export const ConnectorReplyRequestSchema = z.object({
   conversation: ConnectorConversationSchema,
   turnId: EpochMsSchema,
   text: z.string().min(1),
+  presentation: SlackAnswerPresentationSchema.optional(),
   answerDeliveryId: OpaqueIdSchema.optional(),
   // Whom the turn acts for when no delivery started it (see ConnectorTurnForSchema).
   turnFor: ConnectorTurnForSchema.optional(),
@@ -311,7 +320,9 @@ export const ConnectorReplyRequestSchema = z.object({
       comments: z.array(ConnectorReviewCommentSchema).min(1).max(CONNECTOR_LIMITS.maxReviewComments)
     })
     .optional()
-})
+}).refine(({ conversation, review, text, presentation }) =>
+  !presentation || (conversation.source === 'slack' && !review && text === slackAnswerText(presentation))
+)
 
 // notices: why the reply can't wake an Orca bot it mentions; an older machine drops them.
 export const ConnectorReplyResponseSchema = z.discriminatedUnion('status', [

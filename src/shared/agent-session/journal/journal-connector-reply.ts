@@ -1,5 +1,8 @@
 import type { ConnectorFailure } from '../../connectors/connector-cloud-contract'
 import type { ConnectorWorkLink } from '../../connector-work-link-contract'
+import type { SlackAnswerPresentation } from '../../connectors/slack-answer-presentation'
+
+export type JournalSlackAnswerTurn = { sessionId: string; epoch: string; turnItemId: string }
 
 /** How an admitted connector request ended, as the machine that ran it says (design item 125). */
 export const JOURNAL_CONNECTOR_REPLY_OUTCOMES = [
@@ -42,6 +45,7 @@ export type JournalConnectorReplyFill = JournalConnectorReplyKey & {
   answerDeliveryId: string
   turnItemId?: string
   prose?: string
+  presentation?: SlackAnswerPresentation
   failure?: ConnectorFailure
   links?: ConnectorWorkLink[]
   /** How long the answered turn ran, on the machine's own clock. */

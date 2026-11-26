@@ -8,6 +8,7 @@ import {
   ConnectorPostNoticesSchema,
   ConnectorTurnForSchema
 } from './connector-wire-scalars.js'
+import { SlackAnswerPresentationSchema, slackAnswerText } from './slack-answer-presentation.js'
 
 // The shared verbs a bot takes in a source; a source that doesn't take one answers it as unsupported.
 // Reply is `orca bot reply`, listed so capabilities name it; it answers the run's own conversation,
@@ -223,6 +224,7 @@ export const ConnectorActionArgsSchema = z
     limit: z.number().int().min(1).max(100).optional(),
     before: z.string().min(1).max(2048).optional(),
     text: z.string().min(1).max(ACT_ARGS_MAX_TEXT).optional(),
+    presentation: SlackAnswerPresentationSchema.optional(),
     join: z.literal(true).optional(),
     // A post's idempotency key, minted once by the CLI: a retry with it never posts twice.
     postId: z.string().min(1).max(128).optional(),
@@ -287,7 +289,12 @@ export const ConnectorActionRequestSchema = z.object({
   turnId: EpochMsSchema.optional(),
   // Whom the run's turn acts for when no delivery started it (see ConnectorTurnForSchema).
   turnFor: ConnectorTurnForSchema.optional()
-})
+}).refine(({ verb, ref, args }) =>
+  !args.presentation || (
+    verb === 'post' && ref?.startsWith('slack:') && args.postAt === undefined &&
+    args.title === undefined && args.text === slackAnswerText(args.presentation)
+  )
+)
 export type ConnectorActionRequest = z.infer<typeof ConnectorActionRequestSchema>
 
 // A file posted on a message: its id downloads it (`read <message> --download <id>`).

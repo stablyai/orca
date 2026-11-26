@@ -24,6 +24,7 @@ import { journalTurnAnsweredMessages } from '../../shared/agent-session/journal/
 // A chat's ended turn, read from its journal as of the turn's end.
 
 export type EndedChatTurn = {
+  journalEpoch?: string
   opener?: AgentJournalRenderItem | null
   lastAssistantMessage?: string
   /** Why the turn failed, as the chat's typed failure says, when it did. */
@@ -77,6 +78,7 @@ export async function endedTurn(
   const lastAssistantMessage = latestStructuredAgentSessionAssistantMessage(items)
   const failure = latestStructuredAgentSessionFailure(items, journal.submissions)
   return {
+    journalEpoch: cursor.epoch,
     ...(lastAssistantMessage ? { lastAssistantMessage } : {}),
     ...(failure ? { failure } : {}),
     latestOpener: latestTurnOpener(items),

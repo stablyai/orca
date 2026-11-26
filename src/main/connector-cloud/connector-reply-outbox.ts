@@ -14,8 +14,10 @@ import type {
   JournalConnectorReplyFill,
   JournalConnectorReplyKey,
   JournalConnectorReplyRetryRows,
-  JournalConnectorReplyRow
+  JournalConnectorReplyRow,
+  JournalSlackAnswerTurn
 } from '../../shared/agent-session/journal/journal-connector-reply'
+import type { SlackAnswerPresentation } from '../../shared/connectors/slack-answer-presentation'
 import { JOURNAL_CONNECTOR_REPLY_PROSE_BYTES } from '../../shared/agent-session/journal/journal-connector-reply'
 import type { ConnectorResult } from './connector-cloud-request'
 import { capAnswer } from './connector-snapshot'
@@ -31,6 +33,10 @@ export type ConnectorReplyJournal = {
     limit: number
   ): Promise<JournalConnectorReplyRow[]>
   fillOutcomes(fills: readonly JournalConnectorReplyFill[]): Promise<boolean>
+  answerPresentation?(
+    turn: JournalSlackAnswerTurn,
+    prose: string
+  ): Promise<SlackAnswerPresentation | undefined>
   sent(keys: readonly JournalConnectorReplyKey[]): Promise<void>
 }
 
@@ -111,8 +117,17 @@ export function replyEventsOf(rows: readonly Filled[]): ConnectorReplyEvent[] {
     if (!first || !conversation) {
       continue
     }
-    const { answerDeliveryId, outcome, prose, failure, links, tookMs, turnStartedAt, toolsRan } =
-      first.fill
+    const {
+      answerDeliveryId,
+      outcome,
+      prose,
+      presentation,
+      failure,
+      links,
+      tookMs,
+      turnStartedAt,
+      toolsRan
+    } = first.fill
     // Each event names the answer's own delivery among its ids.
     const others = group.map((row) => row.deliveryId).filter((id) => id !== answerDeliveryId)
     const room = CONNECTOR_CLIENT_LIMITS.maxReplyDeliveryIds - 1
@@ -124,6 +139,9 @@ export function replyEventsOf(rows: readonly Filled[]): ConnectorReplyEvent[] {
         answerDeliveryId,
         outcome,
         ...(outcome === 'answered' && prose ? { prose } : {}),
+        ...(outcome === 'answered' && conversation.source === 'slack' && presentation
+          ? { presentation }
+          : {}),
         ...(failure ? { failure } : {}),
         ...(links?.length ? { links } : {}),
         ...(outcome === 'answered' && tookMs ? { tookMs } : {}),

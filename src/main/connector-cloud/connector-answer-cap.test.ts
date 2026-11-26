@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest'
 import type { ConnectorEvent } from '../../shared/connectors/connector-cloud-contract'
 import { answerFor } from './connector-event-wire'
 import { capAnswer } from './connector-snapshot'
+import {
+  CONNECTOR_SLACK_PRESENTATION_FEATURE,
+  SlackAnswerPresentationSchema,
+  slackAnswerText
+} from '../../shared/connectors/slack-answer-presentation'
 
 const NOTE = '_… cut short here. The full answer is in Orca._'
 
@@ -55,5 +60,29 @@ describe('answerFor', () => {
     expect(cut.kind === 'reply' && cut.prose).toBe(
       `${'a'.repeat(8_137)}\n\n_… cut short here. The full answer is in Orca._`
     )
+  })
+
+  it('keeps complete answer text when Slack capability disappears during an outbox retry', () => {
+    const presentation = SlackAnswerPresentationSchema.parse({
+      v: 1,
+      text: 'Compile took longest.',
+      visual: {
+        kind: 'table',
+        title: 'Build stages',
+        source: 'Build report',
+        columns: [{ label: 'Stage' }, { label: 'Time', unit: 's' }],
+        rows: [
+          ['Install', 14],
+          ['Compile', 87]
+        ]
+      }
+    })
+    const rich = { ...reply, prose: slackAnswerText(presentation), presentation }
+    expect(answerFor(rich, new Set([CONNECTOR_SLACK_PRESENTATION_FEATURE]))).toBe(rich)
+    expect(answerFor(rich, new Set())).toEqual({
+      ...reply,
+      prose:
+        'Compile took longest.\n\nBuild stages\nSource: Build report\nStage: Install, Time: 14 s\nStage: Compile, Time: 87 s'
+    })
   })
 })
