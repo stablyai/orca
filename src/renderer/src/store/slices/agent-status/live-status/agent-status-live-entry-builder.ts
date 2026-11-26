@@ -51,6 +51,8 @@ export function buildAgentStatusLiveEntry(
     resolveAgentStatusLiveEntryStateHistory(existing, payload, updatedAt)
   const identity = resolveAgentStatusIdentity({
     existing:
+      // A chat feed reports its own provider; a preceding working frame cannot claim the pane.
+      !metadata?.structuredSessionStatus &&
       existing &&
       sameAgentStatusTerminalOwner(
         { connectionId: existing.connectionId ?? null, worktreeId: existing.worktreeId },
@@ -219,9 +221,7 @@ export function buildAgentStatusLiveEntry(
     ...(providerSession ? { providerSession } : {}),
     ...(orcaSessionId !== undefined ? { orcaSessionId } : {}),
     ...(launchAttested !== undefined ? { launchAttested } : {}),
-    ...(metadata?.terminalResumeEligible === false
-      ? { terminalResumeEligible: false as const }
-      : {}),
+    ...(metadata?.structuredSessionStatus ? { terminalResumeEligible: false as const } : {}),
     // A status that reuses the pane's session keeps that session's tmux host.
     ...(metadata?.executionHost === 'shared' ||
     (!metadata?.providerSession && providerSession && existing?.executionHost === 'shared')
