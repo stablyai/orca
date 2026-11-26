@@ -439,6 +439,20 @@ it('opens a ./ path in a sibling worktree registered through a symlink', async (
       false
     )
     expect(target).toEqual({ worktree: 'id:feature', relativePath: 'README.md' })
+    const missing = await resolveFileOpenTarget(
+      {
+        flags: new Map(),
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: resolveFileOpenTarget only reads client.call, client.isRemote, and cwd.
+        client: { call, isRemote: false } as unknown as HandlerContext['client'],
+        cwd: join(base, 'real', 'current'),
+        json: false,
+        rawArgs: []
+      },
+      'id:current',
+      './../feature/NEW.md',
+      false
+    )
+    expect(missing).toEqual({ worktree: 'id:feature', relativePath: 'NEW.md' })
   } finally {
     rmSync(base, { recursive: true, force: true })
   }

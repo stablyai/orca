@@ -7,6 +7,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId
 } from '../../shared/execution-host/execution-host'
+import { basename, dirname, join } from 'node:path'
 import { resolveRealPathSync } from '../../shared/file-access/real-path-sync'
 import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from '../../shared/file-access/wsl-paths'
 import type { HandlerContext } from '../dispatch/dispatch'
@@ -81,6 +82,22 @@ function outsideSelectedWorktree(isRemote: boolean): RuntimeClientError {
   )
 }
 
+function realPathForComparison(path: string): string | null {
+  const existing = resolveRealPathSync(path)
+  if (existing) {
+    return existing
+  }
+  const realParent = resolveRealPathSync(dirname(path))
+  if (!realParent) {
+    return null
+  }
+  const name = basename(path)
+  if (!name || name === '.' || name === '..') {
+    return realParent
+  }
+  return join(realParent, name)
+}
+
 function relativePathForCandidate(
   rootPath: string,
   cwd: string,
@@ -105,7 +122,7 @@ function pickContainingWorktree(
   worktrees: readonly ListedWorktree[]
 ): FileOpenTarget {
   const callerHostId = getCallerExecutionHostId()
-  const realFile = callerHostId === LOCAL_EXECUTION_HOST_ID ? resolveRealPathSync(path) : null
+  const realFile = callerHostId === LOCAL_EXECUTION_HOST_ID ? realPathForComparison(path) : null
   const matches: ContainingWorktree[] = []
   for (const candidate of worktrees) {
     if (!candidate.id || !candidate.path || !isListedOnCallerHost(candidate.hostId, callerHostId)) {
