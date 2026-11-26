@@ -239,10 +239,8 @@ export async function initializeAcpStructuredSession(
   const childStops = await probeAcpChildStops(connection, spec.dialect, initialized)
   assertStarting()
   liveLane.apply(liveLane.translator.contextModels(started.response.models, now()))
-  const mode = spec.permissionModeConfig
-  if (mode && acquire.permissionMode !== 'own') {
-    // Fail startup rather than silently use a different permission mode.
-    const wanted = acquire.permissionMode ?? 'ask'
+  if (spec.permissionModeConfig && (launch.readOnly || acquire.permissionMode !== 'own')) {
+    const wanted = launch.readOnly ? 'ask' : (acquire.permissionMode ?? 'ask')
     const requested = child.permissionModes?.[wanted]
     if (requested === undefined) {
       throw new Error(`${agentName} on this host cannot run in the ${wanted} permission mode`)

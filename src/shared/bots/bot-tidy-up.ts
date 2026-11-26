@@ -1,10 +1,18 @@
 // Tidy-up: a bot tidies its own memory overnight. The setting lives on the bot; absent means on,
 // each night. A run's summary and the Home Chat line it leaves are read by desktop and phone alike.
 import * as z from 'zod'
+import type { BotAgent } from '../bot-types'
 import type {
   AgentJournalItemBody,
   AgentJournalPlainStatusItem
 } from '../agent-session/journal/agent-session-journal-types'
+
+/** Only these agents have a place where Orca can hold a run to replies with no tools. */
+export const TIDY_UP_AGENTS = ['claude', 'codex'] as const satisfies readonly BotAgent[]
+
+export function tidyUpSupported(agent: string): boolean {
+  return TIDY_UP_AGENTS.some((entry) => entry === agent)
+}
 
 export const TIDY_UP_EVERY_CHOICES = ['night', 'week'] as const
 export type TidyUpEvery = (typeof TIDY_UP_EVERY_CHOICES)[number]

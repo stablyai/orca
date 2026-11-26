@@ -1,5 +1,7 @@
 import type { AntigravityChatAuthConfig } from '../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+import type { ReadOnlySessionMode } from '../../bots/bot-look-around-policy'
+import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { AcpHistoryTurnIdentity } from '../history/acp-history-replay'
 import type { AcpDialect } from '../acp-dialects/acp-dialect'
 import type { AcpAccountBinding } from './acp-account-binding'
@@ -31,6 +33,20 @@ export type AcpLaunchSpec = {
   ignoreAgentCommandSetting?: true
   /** `model` is the chat's saved model, passed only to specs that launch with it. */
   args(input: { fullAccess: boolean; pluginDirs: readonly string[]; model?: string }): string[]
+  /** Prepares an isolated read-only launch (e.g. Tidy-up). Absent fails closed for read-only runs. */
+  prepareReadOnlyLaunch?(input: {
+    mode: ReadOnlySessionMode
+    dataDirectory: string
+    env: Readonly<Record<string, string>>
+    antigravityChatAuth?: AntigravityChatAuthConfig
+    logger?: StructuredAgentSessionLogger
+  }): Promise<{
+    /** Replaces `args(...)` for this read-only launch. */
+    args: string[]
+    /** Isolated working directory replacing the workspace `cwd` for process launch and ACP handshake. */
+    cwd?: string
+    release: () => Promise<void>
+  }>
   /** The ACP model option cannot name every selection the CLI resolves, so the launch line carries it. */
   launchesWithModel?: true
   /** Applied after the account and user environment. */

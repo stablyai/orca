@@ -21,8 +21,6 @@ import {
 
 import type { AntigravityChatAuthConfig } from '../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
-import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
-import { agentSessionProviderHandleKey } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { resolveCliCommand } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import type { AgentCliVersionReader } from '../../agent-launch/preflight/agent-cli-version-probe'
@@ -36,16 +34,15 @@ import {
 import type { AcpLaunchSpec } from './acp-launch-contract'
 import { acpLaunchSpecForAccount, resolveAcpLaunchCommand } from './acp-launch-command'
 import { homeBeforeFirstTurn } from './acp-launch-home-before-first-turn'
-import {
-  nothingExchangedOn,
-  type SavedProviderTurnReads
-} from '../../native-chat/agent-session-journal/journal-provider-turn-saved'
+import type { SavedProviderTurnReads } from '../../native-chat/agent-session-journal/journal-provider-turn-saved'
 import {
   childEnvironmentView,
   loadAcpSkillRoots,
   type AcpLaunchVisualsDeps
 } from './acp-structured-launch-skill-roots'
-import { linkedSkillsSection } from '../../native-chat/native-chat-skill-roots'
+import { linkedSkillsSection, NO_LINKED_SKILLS } from '../../native-chat/native-chat-skill-roots'
+import type { ReadOnlySessionMode } from '../../bots/bot-look-around-policy'
+import { acpLaunchResumeInfo, resolveAcpLaunchArgsAndRelease } from './acp-read-only-launch'
 import { noteManagedServerUse } from '../../node-runtime/managed-runtime-release'
 import type { AcpInstructionsLaunch } from './acp-instructions'
 import { acpInstructionsWithVisuals, visualsByInstructions } from './acp-visuals-instructions'
@@ -69,6 +66,8 @@ export type AcpStructuredLaunch = StructuredAgentCommand & {
   env: Record<string, string>
   envToDelete: string[]
   fullAccess: boolean
+  /** Read-only enforcement mode for background bot runs (e.g. reply-only Tidy-up). */
+  readOnly?: ReadOnlySessionMode
   /** See `AcpInstructionsLaunch`. */
   sessionMeta?: Record<string, unknown>
   sessionMetaOnReopen?: true
@@ -200,9 +199,10 @@ export function acpStructuredLaunchPart(
         dataDirectory: deps.dataDirectory
       })
     noteManagedServerUse(spec.agent, spec.managedRuntime, version)
+    const readOnly = basis.readOnly
     const cwd = await basis.launchDirectory()
     const visuals = spec.skillRoots || visualsByInstructions(spec) ? await basis.visuals() : null
-    const linked = await basis.linkedSkills()
+    const linked = readOnly === 'reply-only' ? NO_LINKED_SKILLS : await basis.linkedSkills()
     // Only a folder with skills: these agents read it once, so a later link reaches them as a list.
     const linkedRoot = linked.projects.length > 0 ? linked.root : null
     const roots = [...(visuals ? [visuals.skill] : []), ...(linkedRoot ? [linkedRoot] : [])]
@@ -264,22 +264,35 @@ export function acpStructuredLaunchPart(
     )
     const instructions = delivered.launch
     const visualsLoaded = skillLoaded ?? (delivered.visuals ? visuals : null)
-    const fullAccess = basis.permissionMode === 'full-access'
+    const fullAccess = !readOnly && basis.permissionMode === 'full-access'
     const botServers = toolsOff ? [] : acpBotMcpServers(tools)
     // On a shared name the bot's server wins; the host list's never shares one (above).
     const mcpServers = [
       ...botServers,
       ...ownServers.filter((own) => !botServers.some((bot) => bot.name === own.name))
     ]
-    const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
+    const resume = acpLaunchResumeInfo(record, identity.sessionId, deps.savedSession)
     // A load restores the conversation's own model, and a stale role there would stop the agent
     // before it opens; resumed chats apply their model through the session instead.
-    const model = spec.launchesWithModel && !head ? record.options?.model : undefined
-    const args = [
-      ...spec.args({ fullAccess, pluginDirs: skill?.pluginDirs ?? [], model }),
-      ...(skill?.args ?? []),
-      ...(instructions?.args ?? [])
-    ]
+    const model = spec.launchesWithModel && !resume ? record.options?.model : undefined
+    const {
+      args,
+      cwd: isolatedCwd,
+      release
+    } = await resolveAcpLaunchArgsAndRelease({
+      spec,
+      readOnly,
+      fullAccess,
+      pluginDirs: skill?.pluginDirs ?? [],
+      model,
+      skillArgs: skill?.args,
+      instructionArgs: instructions?.args,
+      instructionRelease: instructions?.release,
+      dataDirectory: deps.dataDirectory,
+      env: childEnvironmentView(env, inherited, envToDelete),
+      antigravityChatAuth,
+      logger: deps.logger
+    })
     return {
       launch: {
         spec,
@@ -288,6 +301,7 @@ export function acpStructuredLaunchPart(
         prefixArgs,
         args: [...prefixArgs, ...args],
         fullAccess,
+        ...(readOnly ? { readOnly } : {}),
         ...(instructions?.sessionMeta
           ? {
               sessionMeta: instructions.sessionMeta,
@@ -299,28 +313,14 @@ export function acpStructuredLaunchPart(
         ...(instructions?.aroundSessionOpen
           ? { aroundSessionOpen: instructions.aroundSessionOpen }
           : {}),
-        ...(instructions?.release ? { release: instructions.release } : {}),
+        ...(release ? { release } : {}),
         ...(mcpServers.length > 0 ? { mcpServers } : {}),
         ...(model ? { launchModel: model } : {}),
         ...(launchedVersion ? { version: launchedVersion } : {}),
         ...(movedHome ? { launchedAccountHome: movedHome } : {}),
-        resume: head
-          ? {
-              sessionId: head.handle.nativeId,
-              key: agentSessionProviderHandleKey(head.handle),
-              mayBeUnsaved: async () =>
-                head.origin === 'created' &&
-                (await nothingExchangedOn(
-                  deps.savedSession,
-                  identity.sessionId,
-                  head.handle.nativeId
-                )),
-              lossKeys: record.providerHandleChain.flatMap((link) =>
-                link.replaces?.reason === 'restore-failed' ? [link.replaces.key] : []
-              )
-            }
-          : null
+        resume
       },
+      ...(isolatedCwd ? { cwd: isolatedCwd } : {}),
       env: withNativeChatVisualsEnv(
         withSessionMcpToolsEnv({ ...env, ...skill?.env, ...instructions?.env }, tools),
         visualsLoaded

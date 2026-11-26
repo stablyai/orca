@@ -1,4 +1,4 @@
-// Compose shared admission, cwd, environment, visuals and child sealing; agent parts add only agent-specific inputs and never set cwd/sealed env.
+// Compose shared admission, cwd, environment, visuals and child sealing; agent parts add agent-specific inputs (and an optional isolated cwd override) and never set sealed env.
 
 import type { ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
 import { SessionMcpTools } from '../../../mcp-servers/session-mcp-tools'
@@ -105,6 +105,8 @@ type ComposedLaunchFields = 'cwd' | 'env' | 'envToDelete' | 'commandEnv'
 
 export type StructuredAgentLaunchPart<L> = {
   launch: Omit<L, ComposedLaunchFields>
+  /** Optional isolated working directory replacing `basis.launchDirectory()` for this launch (e.g. reply-only). */
+  cwd?: string
   /** The agent's environment, before the seal names the child. */
   env: Record<string, string>
   /** Agent-specific inherited keys to strip; composition adds the shared pane-identity keys. */
@@ -244,7 +246,7 @@ async function composedPart<L>(
     ...composed,
     // Why: applied once here so no agent can opt out of stripping the launching pane's identity.
     inheritedEnvToDelete: [...STRUCTURED_CHILD_ENV_TO_DELETE, ...composed.inheritedEnvToDelete],
-    cwd: await basis.launchDirectory()
+    cwd: composed.cwd ?? (await basis.launchDirectory())
   }
 }
 

@@ -22,14 +22,27 @@ function acpLaunchPermissionModes(
 export function acpLaunchPermission(
   spec: Pick<AcpLaunchSpec, 'permissionModeConfig' | 'args'>,
   fullAccess: boolean,
-  permission: AgentChatPermissionChoice | undefined
+  permission: AgentChatPermissionChoice | undefined,
+  readOnly = false
 ) {
   const args = (grant: boolean) => spec.args({ fullAccess: grant, pluginDirs: [] }).join('\0')
   return {
     permissionModes: acpLaunchPermissionModes(spec, fullAccess),
-    permission: permission ?? 'ask',
+    permission: readOnly ? ('ask' as const) : (permission ?? 'ask'),
     launchArgsGrantFullAccess: fullAccess && args(true) !== args(false)
   }
+}
+
+/** Permission facts for a resolved launch, locking read-only sessions to ask mode. */
+export function acpPermissionForLaunch(
+  launch: Pick<AcpLaunchSpec, never> & {
+    spec: Pick<AcpLaunchSpec, 'permissionModeConfig' | 'args'>
+    fullAccess: boolean
+    readOnly?: unknown
+  },
+  permission: AgentChatPermissionChoice | undefined
+) {
+  return acpLaunchPermission(launch.spec, launch.fullAccess, permission, launch.readOnly != null)
 }
 
 /** Whether Orca answers the agent's permission requests itself under full access. */

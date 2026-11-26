@@ -24,9 +24,12 @@ import {
 import { acpProcessEnvironment } from '../launch/acp-structured-launch-resolution'
 import { SharedToolProcessSession } from '../../runtime/agent-session/environment/shared-tool-process-callers'
 import { AcpStructuredOptions } from '../options/acp-structured-options'
-import { acpLaunchPermission } from '../launch/acp-launch-permission-modes'
+import { acpPermissionForLaunch } from '../launch/acp-launch-permission-modes'
 import { AcpStructuredPrompts } from '../requests/acp-structured-prompts'
-import { acpStructuredPermissionHandler } from '../requests/acp-structured-permission-handler'
+import {
+  acpStructuredPermissionHandler,
+  acpStructuredRequestHandler
+} from '../requests/acp-structured-permission-handler'
 import { withAcpUrlElicitation } from '../requests/acp-url-elicitation'
 import { AcpLoadHistory } from '../history/acp-history-replay'
 import { asReattachHistory } from '../history/acp-reattach-history'
@@ -80,7 +83,7 @@ export async function acquireAcpStructuredSession(input: {
     history: AcpLoadHistory | null
   } = { lane: null, reattaching: false, history: null }
   const options = new AcpStructuredOptions(spec.dialect)
-  const launchPermission = acpLaunchPermission(spec, launch.fullAccess, acquire.permissionMode)
+  const launchPermission = acpPermissionForLaunch(launch, acquire.permissionMode)
   const prompts = new AcpStructuredPrompts(
     () => slot.lane,
     () => childState.isAcpReadySession(session) && session.turns?.acceptsRequests === true
@@ -110,7 +113,7 @@ export async function acquireAcpStructuredSession(input: {
       retryBusyPrompts: spec.agent === 'omp',
       ...(spec.signIn ? { signIn: spec.signIn } : {}),
       onPermission: acpStructuredPermissionHandler(() => session, spec, prompts),
-      onRequest: (method, params, context) => prompts.handle(method, params, context),
+      onRequest: acpStructuredRequestHandler(() => session, prompts),
       onExtensionNotification: (method, params) =>
         whenLane(() => {
           if (slot.reattaching) {
@@ -252,6 +255,7 @@ export async function acquireAcpStructuredSession(input: {
     spec,
     cwd: launch.cwd,
     ...launchPermission,
+    readOnly: launch.readOnly,
     connection,
     lane: null,
     turns: null,

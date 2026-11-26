@@ -3,7 +3,7 @@ import type { Bot } from '../../../../shared/bot-types'
 import type { BotActivity } from '../../../../shared/bots/bot-activity-model'
 import type { BotAutomationRow } from '../../../../shared/bots/bot-automation-rows'
 import { botLookAround, lookAroundSupported } from '../../../../shared/bots/bot-look-around'
-import { botTidyUp } from '../../../../shared/bots/bot-tidy-up'
+import { botTidyUp, tidyUpSupported } from '../../../../shared/bots/bot-tidy-up'
 
 export type BotUpcomingRow = { key: string; on: boolean } & (
   | { kind: 'look-around' }
@@ -22,9 +22,10 @@ export function botUpcomingRows(
   activity: Pick<BotActivity, 'automations' | 'waits'>
 ): BotUpcomingRow[] {
   const rows: BotUpcomingRow[] = []
-  // Tidy memory and Look around run only for agents Orca can hold to reads.
-  if (lookAroundSupported(bot.agent)) {
+  if (tidyUpSupported(bot.agent)) {
     rows.push({ kind: 'tidy-up', key: 'tidy-up', on: botTidyUp(bot).on })
+  }
+  if (lookAroundSupported(bot.agent)) {
     rows.push({ kind: 'look-around', key: 'look-around', on: botLookAround(bot).on })
   }
   for (const row of [...activity.automations].sort(byCreation)) {

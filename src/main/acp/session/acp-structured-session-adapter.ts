@@ -189,9 +189,10 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     SessionAdapter['permissionModeRequiresAcquisition']
   > = (sessionId, mode) => {
     const session = this.children.sessions.get(sessionId)
-    return childState.isAcpReadySession(session)
-      ? acpRunningPermission(session) !== mode
-      : undefined
+    if (!childState.isAcpReadySession(session)) {
+      return undefined
+    }
+    return session.readOnly ? false : acpRunningPermission(session) !== mode
   }
 
   runningPermissionMode: NonNullable<SessionAdapter['runningPermissionMode']> = (sessionId) => {
@@ -203,7 +204,7 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
 
   applyPermissionMode: NonNullable<SessionAdapter['applyPermissionMode']> = async (input) => {
     const session = this.live(input.sessionId)
-    if (session.fence === input.fence) {
+    if (session.fence === input.fence && !session.readOnly) {
       await applyAcpLivePermissionMode(session, input.mode, this.writeBound(session))
     }
   }

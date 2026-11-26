@@ -5,7 +5,7 @@ import {
   lookAroundSupported,
   type BotLookAround
 } from '../../../src/shared/bots/bot-look-around'
-import { botTidyUp, type BotTidyUp } from '../../../src/shared/bots/bot-tidy-up'
+import { botTidyUp, tidyUpSupported, type BotTidyUp } from '../../../src/shared/bots/bot-tidy-up'
 import type { BotUpdateParams } from '../../../src/shared/rpc-contract/bots-params'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { DrillRow } from '../host-screen/workspace-options/workspace-option-rows'
@@ -58,8 +58,10 @@ export function useBotScheduleSettings(
       : null
   )
   const tidyUp = useMobileBotTidyUp(settings.client, bot.id, reads, settings.showToast)
-  const lookAround = lookAroundSupported(bot.agent) ? settings.upNext : null
-  if (!lookAround) {
+  const hasLookAround = lookAroundSupported(bot.agent)
+  const hasTidyUp = tidyUpSupported(bot.agent)
+  const lookAround = hasLookAround ? settings.upNext : null
+  if (!hasLookAround && !hasTidyUp) {
     return { rows: [], page: null }
   }
   const saveLookAround = (change: Partial<BotLookAround>) => void save({ lookAround: change })
@@ -69,32 +71,40 @@ export function useBotScheduleSettings(
     onPress: () => setPage(null)
   }
   const rows: SettingsFeature['rows'] = [
-    {
-      key: 'look-around',
-      group: 'schedule',
-      node: (
-        <DrillRow
-          label={t('bots.lookAround.title', 'Look around')}
-          value={lookAroundLine(botLookAround(bot), activity?.upNext?.state.lastLookedAt)}
-          detail
-          onPress={() => setPage('look-around')}
-        />
-      )
-    },
-    {
-      key: 'tidy-up',
-      group: 'schedule',
-      node: (
-        <DrillRow
-          label={t('bots.tidyUp.title', 'Memory upkeep')}
-          value={tidyUpLine(botTidyUp(bot), tidyUp.view?.last?.at)}
-          detail
-          onPress={() => setPage('tidy-up')}
-        />
-      )
-    }
+    ...(hasLookAround
+      ? [
+          {
+            key: 'look-around',
+            group: 'schedule' as const,
+            node: (
+              <DrillRow
+                label={t('bots.lookAround.title', 'Look around')}
+                value={lookAroundLine(botLookAround(bot), activity?.upNext?.state.lastLookedAt)}
+                detail
+                onPress={() => setPage('look-around')}
+              />
+            )
+          }
+        ]
+      : []),
+    ...(hasTidyUp
+      ? [
+          {
+            key: 'tidy-up',
+            group: 'schedule' as const,
+            node: (
+              <DrillRow
+                label={t('bots.tidyUp.title', 'Memory upkeep')}
+                value={tidyUpLine(botTidyUp(bot), tidyUp.view?.last?.at)}
+                detail
+                onPress={() => setPage('tidy-up')}
+              />
+            )
+          }
+        ]
+      : [])
   ]
-  if (page === 'tidy-up') {
+  if (page === 'tidy-up' && hasTidyUp) {
     return {
       rows,
       page: tidyPage ? (
@@ -125,7 +135,7 @@ export function useBotScheduleSettings(
       )
     }
   }
-  if (page === 'look-around') {
+  if (page === 'look-around' && lookAround) {
     return {
       rows,
       page: lookPage ? (

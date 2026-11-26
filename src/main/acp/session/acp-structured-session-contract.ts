@@ -1,4 +1,5 @@
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
+import type { ReadOnlySessionMode } from '../../bots/bot-look-around-policy'
 import type {
   AgentChatPermissionChoice,
   AgentChatPermissionMode
@@ -26,6 +27,8 @@ export type AcpStructuredSession = {
   permission: AgentChatPermissionChoice
   /** Full access came from launch arguments, so only a restart can take it away. */
   launchArgsGrantFullAccess: boolean
+  /** Read-only enforcement mode for background bot runs (e.g. reply-only Tidy-up). */
+  readOnly?: ReadOnlySessionMode
   childStops?: AcpChildStops
   connection: AcpStructuredConnection
   lane: AcpStructuredLane
