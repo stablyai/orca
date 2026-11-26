@@ -8,7 +8,7 @@ import { aliasKey, rowIdentities, type RowIdentities } from './orchestration-row
 import { terminalProvenance } from './terminal-provenance'
 
 type Contexts = Record<string, AgentStatusOrchestrationContext>
-type TerminalHosts = {
+export type TerminalHosts = {
   ptys: ReadonlyMap<string, string | null>
   tabs: ReadonlyMap<string, string | null>
 }
@@ -21,7 +21,7 @@ type RemoteRowState = Parameters<typeof rowIdentities>[0] &
 let cache: { inputs: unknown[]; contexts: Contexts } | undefined
 
 /** The row this window shows for a host's pane key: that host's chat row, or a terminal tab it runs. */
-function rowOnHost(
+export function rowOnHost(
   host: string,
   key: string,
   rows: RowIdentities,
