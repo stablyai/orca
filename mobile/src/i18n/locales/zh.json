@@ -5305,6 +5305,9 @@
     }
   },
   "webShell": {
+    "downloadProgress": {
+      "megabytes": "{{received}} / {{total}} MB"
+    },
     "shellStateScreen": {
       "checkingHost": "正在检查主机",
       "connectToDownload": "连接到此主机以下载最新版本的应用",
@@ -5317,7 +5320,9 @@
       "openingWorkspace": "正在打开工作区",
       "renderProcessGone": "工作区已停止响应",
       "statusUnreadable": "无法读取此主机的状态。请返回后重新打开",
-      "tryAgain": "重试"
+      "tryAgain": "重试",
+      "downloadingLatestApp": "正在下载最新版本的应用",
+      "downloadProgressFromHost": "来自 {{host}} · {{progress}}"
     }
   },
   "workspace": {

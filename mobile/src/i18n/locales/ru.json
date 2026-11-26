@@ -5746,7 +5746,9 @@
       "statusUnreadable": "Не удалось прочитать статус этого сервера. Вернитесь назад и откройте его снова.",
       "tryAgain": "Повторить попытку",
       "isolationUnavailableAndroid": "Для Orca нужен Android System WebView или Chrome версии 101 или новее. Обновите его в Play Маркете или выберите более новый в «Параметры разработчика > Реализация WebView».",
-      "webViewInUse": "На этом устройстве установлен {{name}} {{version}}."
+      "webViewInUse": "На этом устройстве установлен {{name}} {{version}}.",
+      "downloadingLatestApp": "Скачивание последней версии",
+      "downloadProgressFromHost": "с {{host}} · {{progress}}"
     },
     "pageRouteUnavailable": {
       "updateTitle": "Обновите Orca",
@@ -5754,6 +5756,9 @@
       "updateMessageNoHost": "Для этого экрана нужна более новая версия Orca.",
       "serverTitle": "Не удаётся подключиться к этому серверу",
       "serverMessage": "Телефон не может подключиться к серверу этого рабочего пространства через {{host}}."
+    },
+    "downloadProgress": {
+      "megabytes": "{{received}} из {{total}} МБ"
     }
   },
   "workspace": {

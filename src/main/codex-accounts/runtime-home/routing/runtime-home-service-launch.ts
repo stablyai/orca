@@ -46,7 +46,8 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
       const wslTarget = this.resolveWslDefaultTarget(target)
       const homePath = this.getWslCodexHomePathForSelection(wslTarget)
       this.startLegacyWslAuthDrain(wslTarget)
-      this.finishWslLaunchPreparation(wslTarget, homePath)
+      // No caller prepares a WSL launch synchronously; the async path awaits this sync.
+      void this.syncWslConfigAndGlobalInstructionsForLaunch(wslTarget, homePath)
       void this.prepareWslAccountHistory(wslTarget, homePath)
       return homePath
     }
@@ -155,7 +156,7 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     await this.prepareWslAccountHistory(wslTarget, homePath)
     // WSL moves aren't counted, but an install with only WSL homes still reports how many.
     this.accountHistoryPasses.reportMoves()
-    this.finishWslLaunchPreparation(wslTarget, homePath)
+    await this.syncWslConfigAndGlobalInstructionsForLaunch(wslTarget, homePath)
     return homePath
   }
 
