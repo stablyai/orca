@@ -18,15 +18,21 @@ import { RailUsageRing } from './RailUsageRing'
 import { RailBandAtStripTopContext } from './RailUsageSpan'
 import { railRingStackFit } from './rail-ring-stack-fit'
 
-/** The percent label below a ring hangs this far past its bottom edge. */
+/** The percent label below a ring hangs this far past its bottom edge (4.25pt, rounded up). */
 const RING_LABEL_OVERHANG = 5
 const MIN_RING_GAP = spacing.sm
 const CUT_FADE = spacing.md
 /**
- * The reported status column reaches this far below the Wi-Fi ring's dots (23pt folded, 26pt
- * unfolded, iOS 27.1 simulator); a stack at the strip's top rises into it, to sit one gap under them.
+ * How far the reported status column runs below the Wi-Fi ring's page dots (iOS 27.1 simulator).
+ * iOS reports no frame for what the column draws, so these are calibrated, not measured.
  */
-const STATUS_COLUMN_SLACK = 22
+const STATUS_COLUMN_SLACK_FOLDED = 23
+const STATUS_COLUMN_SLACK_UNFOLDED = 26
+/**
+ * Kept below the dots on top of the column gap: a Focus icon above the clock pushes the
+ * dots ~10pt into the slack, leaving the same gap as between rings.
+ */
+const FOCUS_ROW_MARGIN = 13
 
 /** The host's usage rings for the Duo side rail; empty until it reports a provider. */
 export function HostRailUsageStack({ hostId }: { hostId: string }): React.JSX.Element | null {
@@ -48,6 +54,16 @@ function useRailRingCenter(strip: SideRailStrip | null): number {
   })
 }
 
+/** How far a stack at the strip's top rises into the column's slack: one gap plus margin under the dots. */
+function useStatusColumnLift(atStripTop: boolean): number {
+  const { hasFoldDivision } = useReservedRegions()
+  if (!atStripTop) {
+    return 0
+  }
+  const slack = hasFoldDivision ? STATUS_COLUMN_SLACK_UNFOLDED : STATUS_COLUMN_SLACK_FOLDED
+  return slack - FOCUS_ROW_MARGIN
+}
+
 /** A scrolling column of usage rings; a tap opens the usage pop-up on that provider. */
 export function RailUsageStack({
   snapshot
@@ -66,7 +82,7 @@ export function RailUsageStack({
   const center = useRailRingCenter(strip)
   // The band the rail gives the stack; a chat's composer can leave less than the whole column.
   const [room, setRoom] = useState<number | null>(null)
-  const lift = useContext(RailBandAtStripTopContext) ? STATUS_COLUMN_SLACK : 0
+  const lift = useStatusColumnLift(useContext(RailBandAtStripTopContext))
   const fit = railRingStackFit({
     count: usages.length,
     room,
