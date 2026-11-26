@@ -261,6 +261,29 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
+it('replays the original path-only report on a runtime that only advertises replay', async () => {
+  const key = randomUUID()
+  const payload = JSON.stringify({
+    taskId: 'task_1',
+    dispatchId: 'ctx_1',
+    outcome: 'succeeded',
+    reportPath: 'removed-report.txt'
+  })
+  const runtime = scriptedRuntime([() => completedReceipt(key, true)])
+  runtime.call.mockResolvedValueOnce({
+    result: { state: 'completed', receipt: { message: { id: 'msg_original', payload } } }
+  })
+
+  await send(runtime.call, 'worker_done', [
+    ['report-path', 'removed-report.txt'],
+    ['retry-request', key]
+  ])
+
+  expect(runtime.attempts).toEqual([
+    { requestId: key, replayOnly: true, params: expect.objectContaining({ payload }) }
+  ])
+})
+
 it('retries a possibly delivered worker_done timeout as a replay of the same key and payload', async () => {
   const runtime = scriptedRuntime([
     sentTimeout,

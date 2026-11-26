@@ -113,6 +113,8 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
     const captureReport = type === 'worker_done' && flags.has('report-path')
     const retryReport = captureReport ? readRetryRequestFlag(flags) : undefined
     const originalReport = retryReport ? await reportReplay(client, retryReport) : undefined
+    const needsReportFiles =
+      captureReport && (!originalReport || originalReport.contentBase64 !== undefined)
     const sendParams = {
       from,
       to,
@@ -144,7 +146,7 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       sendParams,
       {
         ...(dispatchCapability ? { orchestrationCapability: dispatchCapability } : {}),
-        ...(captureReport ? { requestSelection: reportFileRecipient(sendParams) } : {}),
+        ...(needsReportFiles ? { requestSelection: reportFileRecipient(sendParams) } : {}),
         ...(originalReport ? { orchestrationReplayOnly: true } : {})
       },
       // Workers report once before ending their turn; retry outages and timeouts so worker_done is not lost.

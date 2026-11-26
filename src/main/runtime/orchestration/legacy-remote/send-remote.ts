@@ -69,10 +69,18 @@ export async function sendRemoteMessage(args: {
     )
   }
 
+  let relayPayload = bindCoordinatorMutationPayload(
+    type,
+    params.payload,
+    remoteAttachment.dispatch_id
+  )
   if (type === 'worker_done') {
     assertReportPathCaptured(payload)
+    if (payload.dispatchId === undefined && typeof payload.reportContentBase64 === 'string') {
+      relayPayload = JSON.stringify({ ...payload, dispatchId: remoteAttachment.dispatch_id })
+    }
     // Refuse malformed bytes before they enter the homeward queue.
-    unpackWorkerReport(params.payload)
+    unpackWorkerReport(relayPayload)
   }
 
   const supportsLifecycleSettlement =
@@ -89,7 +97,7 @@ export async function sendRemoteMessage(args: {
       type,
       priority: params.priority ?? 'normal',
       threadId: params.threadId ?? null,
-      payload: bindCoordinatorMutationPayload(type, params.payload, remoteAttachment.dispatch_id)
+      payload: relayPayload
     }),
     ...(!supportsLifecycleSettlement && outcome ? { settleRemoteOutcome: outcome } : {})
   })

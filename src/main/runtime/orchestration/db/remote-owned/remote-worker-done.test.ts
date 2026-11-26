@@ -105,15 +105,16 @@ describe('worker_done from a worker on a paired server', () => {
       requestKey: KEY,
       peerRunId
     })
+    const contentBase64 = Buffer.alloc(512 * 1024, 'R').toString('base64')
     const { result, message } = deliverWorkerDone(dispatchId, {
       taskId: TASK,
       dispatchId,
       reportPath: 'worker-only/report.bin',
-      reportContentBase64: 'AP9B'
+      reportContentBase64: contentBase64
     })
     expect(readWorkerReportFile(home, message.id)).toMatchObject({
       dispatchId,
-      contentBase64: 'AP9B'
+      contentBase64
     })
     expect(result).toEqual({ action: 'ignored' })
     expect(message).toMatchObject({ type: 'worker_done', subject: 'done', body: 'report' })

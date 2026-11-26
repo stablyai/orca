@@ -13,6 +13,8 @@ import {
   SETTLEABLE_WORKER_STATES
 } from '../workers/reports/worker-report-admission'
 
+const MAX_RELAY_MESSAGE_BYTES = 64 * 1024
+
 export function enqueueFederationRelay(
   this: OrchestrationDb,
   params: {
@@ -29,7 +31,14 @@ export function enqueueFederationRelay(
   const answer = readAnswerSenderRelayReport(params.answerSenderReport)
   const byteCount = Buffer.byteLength(params.payload, 'utf8')
   const messageId = params.messageId ?? generateId('relay')
-  if (byteCount > 64 * 1024) {
+  if (byteCount > MAX_RELAY_MESSAGE_BYTES) {
+    if (params.kind === 'worker_done') {
+      throw new OrchestrationError(
+        'relay_quota_exceeded',
+        `The encoded worker_done message is ${byteCount} bytes. The relay limit is 64 KiB including the body, metadata and base64 report. Nothing was queued. Shorten the body or report and submit again.`,
+        { effectsApplied: false, encodedBytes: byteCount, limitBytes: MAX_RELAY_MESSAGE_BYTES }
+      )
+    }
     throw new OrchestrationError(
       'relay_quota_exceeded',
       'A federated orchestration message cannot exceed 64 KiB.'
