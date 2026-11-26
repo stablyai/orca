@@ -27,6 +27,7 @@ import {
   TIDY_UP_FAILURES,
   TIDY_UP_FIRST_LOOKBACK_MS,
   TIDY_UP_RUN_LIMIT_MS,
+  tidyUpOfferedNow,
   tidyUpOwed,
   tidyUpRunSummary,
   type TidyUpApplied,
@@ -90,6 +91,9 @@ export class BotTidyUpRunner {
       const now = this.deps.now()
       const bots = this.deps.bots()
       this.closeAbandoned(bots, now)
+      bots
+        .filter((bot) => tidyUpOfferedNow(bot, tidyUpState(this.deps.store.get(bot.id)), now))
+        .forEach((bot) => this.change(bot.id, (state) => tidyUpOfferedNow(bot, state, now)))
       // Never in a dark wake, where the host sleeps again within seconds. Read every tick while
       // a bot tidies, so the awake clock keeps sampling and sees a sleep without power events.
       const settled = bots.some((bot) => botTidyUp(bot).on) && this.deps.power.settled()

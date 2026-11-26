@@ -14,6 +14,7 @@ import {
 } from '../../shared/bots/bot-tidy-up'
 import type { BotMemoryHistoryRow } from '../../shared/bots/bot-memory-history'
 import { tidyUpSupported, type Bot } from '../../shared/bot-types'
+import { lookAroundSupported } from '../../shared/bots/bot-look-around'
 import { nativeChatProseToMarkdown } from '../../shared/native-chat/transcript/row-content/native-chat-prose'
 import { fenceQuotedText } from '../../shared/quoted-text-fence'
 import { BOT_MEMORY_ARCHIVE_TOPIC } from '../../shared/bots/bot-memory-archive'
@@ -81,6 +82,9 @@ export type BotTidyUpState = BackgroundRuns & {
   checkedAt?: number
   /** The last tidy-up that changed something, for its summary. */
   last?: BotTidyUpSummary
+  /** When this host first offered it to a bot made before its agent could tidy (see
+   *  `tidyUpOfferedNow`); no night before it is caught up. */
+  offeredAt?: number
 }
 
 const EMPTY: BotTidyUpState = { runs: [] }
@@ -136,7 +140,21 @@ export function tidyUpOwed(
   now: number
 ): boolean {
   const setting = botTidyUp(bot)
-  return setting.on && tidyUpDue(state, now, setting.every, setting.since ?? bot.createdAt)
+  const onSince = Math.max(setting.since ?? bot.createdAt, state.offeredAt ?? 0)
+  return setting.on && tidyUpDue(state, now, setting.every, onSince)
+}
+
+/** Until every agent could tidy, only Look around's agents could; a bot on another agent that never
+ *  set Tidy-up is offered it now, so its first run waits for the next night instead of catching up
+ *  at once. Null when it needs no stamp. */
+export function tidyUpOfferedNow(
+  bot: Pick<Bot, 'agent' | 'tidyUp'>,
+  state: BotTidyUpState,
+  now: number
+): BotTidyUpState | null {
+  const offered =
+    lookAroundSupported(bot.agent) || bot.tidyUp !== undefined || state.offeredAt !== undefined
+  return offered || state.runs.length > 0 ? null : { ...state, offeredAt: now }
 }
 
 export type TidyUpApplied = Pick<

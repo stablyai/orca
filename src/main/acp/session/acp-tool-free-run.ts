@@ -1,10 +1,12 @@
 // A tool-free ACP run (see `toolFreeSession`): ACP has no way to turn an agent's tools off, so the
-// run starts in an empty folder, every request it sends is refused, and its first tool call stops it.
+// run starts in an empty folder, asks for every tool, has every request refused, and is stopped at
+// its first tool call.
 import { join } from 'node:path'
 import { realpath } from 'node:fs/promises'
 import { AcpRpcError } from '../transport/acp-errors'
 import { acpRunFolder } from '../launch/acp-private-temp'
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
+import type { AcpStructuredLaunch } from '../launch/acp-structured-launch-resolution'
 import type { AcpSessionRuntimeOptions } from '../protocol/acp-session-runtime-options'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import { acpStructuredPermissionHandler } from '../requests/acp-structured-permission-handler'
@@ -12,29 +14,64 @@ import type { AcpStructuredPrompts } from '../requests/acp-structured-prompts'
 import { denyAcpTextTaskPermission } from '../text-task/acp-text-task-policy'
 import type { AcpStructuredChild } from './children/acp-structured-child'
 import { acpAgentName } from './acp-structured-agent-definitions'
+import type { StructuredAgentLaunchPartResolver } from '../../runtime/agent-session/launch/structured-agent-launch-composition'
+import type { AgentChatPermissionChoice } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 
-type ToolFreeLaunch = {
-  spec: AcpLaunchSpec
-  toolFree?: true
-  cwd: string
-  release?: () => Promise<void>
-}
+type ToolFreeLaunch = { spec: AcpLaunchSpec; toolFree?: { cwd: string } }
 type RunRequests = Required<Pick<AcpSessionRuntimeOptions, 'onPermission' | 'onRequest'>>
-type Guard = (
-  connection: Pick<AcpStructuredConnection, 'subscribe' | 'onExit'>,
-  stop: (reason: string) => void
-) => void
 
 /** The agent started tool work: a tool call, or an update to one. */
 export function isAcpToolWork(update: { sessionUpdate: string }): boolean {
   return update.sessionUpdate === 'tool_call' || update.sessionUpdate === 'tool_call_update'
 }
 
+/** A tool-free launch resolves in an empty folder of its own, so files the agent's instructions
+ *  are written to never land in the session's own folder; the launch's release removes it. */
+export function withAcpToolFreeFolder(
+  deps: { dataDirectory: string; logger?: StructuredAgentSessionLogger },
+  part: StructuredAgentLaunchPartResolver<AcpStructuredLaunch>
+): StructuredAgentLaunchPartResolver<AcpStructuredLaunch> {
+  return async (basis, identity) => {
+    if (!basis.toolFree) {
+      return part(basis, identity)
+    }
+    const folder = await acpRunFolder(join(deps.dataDirectory, 'acp-tool-free'), deps.logger)
+    try {
+      // Agents compare the session folder with their own resolved cwd (macOS /var is /private/var).
+      const cwd = await realpath(folder.path)
+      const composed = await part({ ...basis, launchDirectory: async () => cwd }, identity)
+      const { release } = composed.launch
+      const releaseAll = async (): Promise<void> => {
+        await release?.()
+        await folder.remove()
+      }
+      return { ...composed, launch: { ...composed.launch, toolFree: { cwd }, release: releaseAll } }
+    } catch (error) {
+      await folder.remove()
+      throw error
+    }
+  }
+}
+
+/** A tool-free run starts in its folder and asks, whatever the chat chose, so a mode an agent
+ *  enforces itself never approves for it. Any other launch is unchanged. */
+export function acpToolFreeRun<
+  L extends ToolFreeLaunch & { cwd: string },
+  A extends { permissionMode?: AgentChatPermissionChoice }
+>(launch: L, acquire: A): { launch: L; acquire: A } {
+  return launch.toolFree
+    ? {
+        launch: { ...launch, cwd: launch.toolFree.cwd },
+        acquire: { ...acquire, permissionMode: 'ask' }
+      }
+    : { launch, acquire }
+}
+
 /** A tool-free run turns every permission request down and refuses every other request, since
  *  nobody is there to answer; a chat answers through its prompts. */
 export function acpRunRequests(
-  launch: Pick<ToolFreeLaunch, 'spec' | 'toolFree'>,
+  launch: ToolFreeLaunch,
   session: () => AcpStructuredChild | null,
   prompts: AcpStructuredPrompts
 ): RunRequests {
@@ -51,31 +88,19 @@ export function acpRunRequests(
       }
 }
 
-/** A tool-free run starts in an empty folder of its own; its guard stops the run at its first tool
- *  call and removes the folder when the process exits. Any other launch is unchanged. */
-export async function acpToolFreeLaunch<L extends ToolFreeLaunch>(
-  launch: L,
-  deps: { dataDirectory: string; logger?: StructuredAgentSessionLogger }
-): Promise<{ launch: L; guard: Guard }> {
+/** Stops a tool-free run at its first tool call. */
+export function stopAtToolWork(
+  launch: ToolFreeLaunch,
+  connection: Pick<AcpStructuredConnection, 'subscribe'>,
+  stop: (reason: string) => void
+): void {
   if (!launch.toolFree) {
-    return { launch, guard: () => {} }
+    return
   }
-  try {
-    const folder = await acpRunFolder(join(deps.dataDirectory, 'acp-tool-free'), deps.logger)
-    // Agents compare the session folder with their own resolved cwd (macOS /var is /private/var).
-    const cwd = await realpath(folder.path)
-    const reason = `Orca stopped ${acpAgentName(launch.spec.agent)}: it tried to use a tool in a run that needs none`
-    const guard: Guard = (connection, stop) => {
-      connection.onExit(() => void folder.remove())
-      connection.subscribe((event) => {
-        if (isAcpToolWork(event.kind === 'known' ? event.notification.update : event.raw.update)) {
-          stop(reason)
-        }
-      })
+  const reason = `Orca stopped ${acpAgentName(launch.spec.agent)}: it tried to use a tool in a run that needs none`
+  connection.subscribe((event) => {
+    if (isAcpToolWork(event.kind === 'known' ? event.notification.update : event.raw.update)) {
+      stop(reason)
     }
-    return { launch: { ...launch, cwd }, guard }
-  } catch (error) {
-    void launch.release?.().catch(() => undefined)
-    throw error
-  }
+  })
 }
