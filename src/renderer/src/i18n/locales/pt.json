@@ -7821,6 +7821,7 @@
           "readsCursor": "O Orca lê o login do Cursor em {{host}}.",
           "notReportedGrok": "{{host}} não informou o uso do Grok",
           "notReportedCursor": "{{host}} não informou o uso do Cursor",
+          "checkingOn": "Verificando o uso em {{host}}…",
           "grokHint": "Execute grok em {{host}} e aguarde ele iniciar, fazendo login se solicitado. Depois clique em Atualizar uso.",
           "cursorHint": "Faça login no Cursor em {{host}} (Cursor IDE ou cursor-agent login) e depois clique em Atualizar uso.",
           "cursorSubtitle": "Mostra o uso do plano Cursor pela sessão conectada em {{host}}. O Orca apenas a lê — nunca altera esse login no Cursor.",

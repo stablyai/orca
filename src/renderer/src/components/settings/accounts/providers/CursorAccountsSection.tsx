@@ -179,11 +179,11 @@ function CursorAccountsGroup({
 }
 
 function ServerCursorAccountsSection({ server }: { server: ServerCliUsage }): React.JSX.Element {
-  const { usage, refreshing, error, refresh } = useServerCliUsage(server, 'cursor')
+  const { usage, usageKnown, refreshing, refresh } = useServerCliUsage(server, 'cursor')
   return (
     <CursorAccountsGroup
       cursorUsage={usage}
-      usageKnown={usage !== null}
+      usageKnown={usageKnown}
       serverLabel={server.label}
       statusRow={
         <ServerCliUsageRow
@@ -191,8 +191,7 @@ function ServerCursorAccountsSection({ server }: { server: ServerCliUsage }): Re
           label={server.label}
           usage={usage}
           refreshing={refreshing}
-          error={error}
-          onRefresh={() => void refresh()}
+          onRefresh={refresh}
         />
       }
     />

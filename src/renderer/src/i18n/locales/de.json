@@ -12002,6 +12002,7 @@
           "readsCursor": "Orca liest die Cursor-Anmeldung auf {{host}}.",
           "notReportedGrok": "{{host}} hat keine Grok-Nutzung gemeldet",
           "notReportedCursor": "{{host}} hat keine Cursor-Nutzung gemeldet",
+          "checkingOn": "Nutzung auf {{host}} wird geprüft…",
           "grokHint": "Führen Sie grok auf {{host}} aus und warten Sie, bis es gestartet ist; melden Sie sich an, falls Sie dazu aufgefordert werden. Klicken Sie dann auf „Nutzung aktualisieren“.",
           "cursorHint": "Melden Sie sich auf {{host}} bei Cursor an (Cursor IDE oder cursor-agent login) und klicken Sie dann auf „Nutzung aktualisieren“.",
           "cursorSubtitle": "Zeigt die Cursor-Tarifnutzung anhand der Anmeldung auf {{host}} an. Orca liest sie nur und ändert diese Cursor-Anmeldung niemals.",

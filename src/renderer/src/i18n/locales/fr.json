@@ -11866,6 +11866,7 @@
           "readsCursor": "Orca lit la connexion à Cursor sur {{host}}.",
           "notReportedGrok": "{{host}} n'a pas signalé l'utilisation de Grok",
           "notReportedCursor": "{{host}} n'a pas signalé l'utilisation de Cursor",
+          "checkingOn": "Vérification de l'utilisation sur {{host}}…",
           "grokHint": "Exécutez grok sur {{host}} et attendez qu'il démarre, en vous connectant si on vous le demande. Cliquez ensuite sur Actualiser l'utilisation.",
           "cursorHint": "Connectez-vous à Cursor sur {{host}} (Cursor IDE ou cursor-agent login), puis cliquez sur Actualiser l'utilisation.",
           "cursorSubtitle": "Affiche l'utilisation du forfait Cursor à partir de la connexion sur {{host}}. Orca se contente de la lire — il ne modifie jamais cette connexion Cursor.",

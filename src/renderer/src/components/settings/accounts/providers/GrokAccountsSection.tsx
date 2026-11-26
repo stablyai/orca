@@ -126,19 +126,18 @@ function GrokAccountsGroup({
 }
 
 function ServerGrokAccountsSection({ server }: { server: ServerCliUsage }): React.JSX.Element {
-  const { usage, refreshing, error, refresh } = useServerCliUsage(server, 'grok')
+  const { usage, usageKnown, refreshing, refresh } = useServerCliUsage(server, 'grok')
   return (
     <GrokAccountsGroup
       grokUsage={usage}
-      usageKnown={usage !== null}
+      usageKnown={usageKnown}
       statusRow={
         <ServerCliUsageRow
           provider="grok"
           label={server.label}
           usage={usage}
           refreshing={refreshing}
-          error={error}
-          onRefresh={() => void refresh()}
+          onRefresh={refresh}
         />
       }
     />

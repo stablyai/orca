@@ -44,7 +44,6 @@ import { AntigravityAccountsSection } from './providers/AntigravityAccountsSecti
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { CursorAccountsSection } from './providers/CursorAccountsSection'
-import { serverCliUsagesFor } from './providers/server-cli-usage-status'
 import { ZcodePlanAccountsSection } from './usage/ZcodePlanAccountsSection'
 import type {
   AccountsPaneProps,
@@ -152,15 +151,14 @@ export function AccountsPane({
     environmentId: string
     rateLimits: RateLimitState | null
   } | null>(null)
-  const ownerRateLimits =
-    scopeEnvironmentId && ownerUsage?.environmentId === scopeEnvironmentId
-      ? ownerUsage.rateLimits
-      : null
   const claudeSectionShown = matchesSettingsSearch(searchQuery, getAccountsClaudeSearchEntries())
   const codexSectionShown = matchesSettingsSearch(searchQuery, getAccountsCodexSearchEntries())
   const { claudeAccountPlans, codexAccountPlans } = useObservedAccountPlans({
     isRemoteAccountScope,
-    ownerUsage: ownerRateLimits,
+    ownerUsage:
+      scopeEnvironmentId && ownerUsage?.environmentId === scopeEnvironmentId
+        ? ownerUsage.rateLimits
+        : null,
     claudeShown: claudeSectionShown,
     codexShown: codexSectionShown
   })
@@ -357,9 +355,9 @@ export function AccountsPane({
     recordOpenCodeSettingEdit
   }
   // A desktop's own Grok/Cursor files must not sit under a server header; show only the server's usage there.
-  const remoteCliUsage =
+  const remoteCli =
     isRemoteAccountScope && !isWebClientLocation()
-      ? serverCliUsagesFor(accountOwner, remoteServerLabel ?? '', ownerRateLimits)
+      ? { owner: accountOwner, label: remoteServerLabel ?? '' }
       : undefined
   const visibleSections = [
     !searchQuery || /opencode|devin|account/i.test(searchQuery) ? (
@@ -398,10 +396,10 @@ export function AccountsPane({
       />
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
-      <GrokAccountsSection key={`grok:${accountOwnerKey}`} server={remoteCliUsage?.grok} />
+      <GrokAccountsSection key={`grok:${accountOwnerKey}`} server={remoteCli} />
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsCursorSearchEntries()) ? (
-      <CursorAccountsSection key={`cursor:${accountOwnerKey}`} server={remoteCliUsage?.cursor} />
+      <CursorAccountsSection key={`cursor:${accountOwnerKey}`} server={remoteCli} />
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsZcodePlanSearchEntries()) ? (
       <ZcodePlanAccountsSection

@@ -12931,6 +12931,7 @@
           "readsCursor": "Orca 會讀取 {{host}} 上的 Cursor 登入資訊。",
           "notReportedGrok": "{{host}} 尚未回報 Grok 用量",
           "notReportedCursor": "{{host}} 尚未回報 Cursor 用量",
+          "checkingOn": "正在檢查 {{host}} 上的用量…",
           "grokHint": "在 {{host}} 上執行 grok 並等待其啟動，若有提示請登入。然後點選「重新整理用量」。",
           "cursorHint": "在 {{host}} 上登入 Cursor（Cursor IDE 或 cursor-agent login），然後點選「重新整理用量」。",
           "cursorSubtitle": "從 {{host}} 上的 Cursor 登入狀態讀取並顯示方案用量。Orca 僅讀取資訊，不會變更該 Cursor 登入狀態。",
