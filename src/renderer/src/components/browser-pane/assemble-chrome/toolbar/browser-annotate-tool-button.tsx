@@ -125,9 +125,10 @@ export function BrowserAnnotateToolButton({
 }): React.JSX.Element {
   const t = useTranslate()
   const [menuOpen, setMenuOpen] = useState(false)
+  // Draw can start from an armed picker, but its discovery hint waits until the user isn't mid-pick.
   const { showHint, dismissHint } = useMarkupDrawHintState(
     markup.canShowDiscoveryHint,
-    !markup.disabled && !markup.active
+    !markup.disabled && !markup.active && tools.activeIntent === null
   )
   const annotateLabel = t(
     'auto.components.browser.pane.BrowserPane.fc9be38f6f',

@@ -73,7 +73,7 @@ export function BrowserPageToolbar({
   addressBarInputRef,
   dismissAddressBarSuggestionsRef,
   elementTools,
-  grabIdle,
+  annotationDraftOpen,
   isBlankTab,
   markupIsActive,
   markupStart,
@@ -113,7 +113,8 @@ export function BrowserPageToolbar({
   addressBarInputRef: RefObject<HTMLInputElement | null>
   dismissAddressBarSuggestionsRef: RefObject<(() => void) | null>
   elementTools: BrowserChromeElementTools
-  grabIdle: boolean
+  /** Draw would drop the unsent comment, so it waits until the card is added or dismissed. */
+  annotationDraftOpen: boolean
   isBlankTab: boolean
   markupIsActive: boolean
   markupStart: () => Promise<void>
@@ -243,7 +244,7 @@ export function BrowserPageToolbar({
       elementTools={elementTools}
       markup={{
         active: markupIsActive,
-        disabled: isBlankTab || !grabIdle,
+        disabled: isBlankTab || annotationDraftOpen,
         onToggle: () => (markupIsActive ? markupCancel() : void markupStart()),
         canShowDiscoveryHint: isActive
       }}

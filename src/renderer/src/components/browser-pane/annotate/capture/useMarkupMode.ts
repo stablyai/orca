@@ -37,7 +37,8 @@ export type MarkupModeController = {
   state: MarkupModeState
   isActive: boolean
   baseImage: MarkupBaseImage | null
-  start: () => Promise<void>
+  /** `prepare` runs while capturing, so whatever it removes from the page is gone before the screenshot. */
+  start: (prepare?: () => Promise<boolean>) => Promise<void>
   cancel: () => void
   complete: (input: MarkupCompleteInput) => Promise<void>
 }
@@ -63,37 +64,46 @@ export function useMarkupMode({
     toast.error(translate(key, fallback))
   }, [])
 
-  const start = useCallback(async () => {
-    const context = getCaptureContext()
-    if (!context) {
-      reportError(
-        'auto.components.browser-pane.markup.errorUnavailable',
-        'Screenshot markup is not available on this page.'
-      )
-      return
-    }
-    const token = (captureTokenRef.current += 1)
-    contextRef.current = context
-    setState('capturing')
-    try {
-      const image = await captureMarkupBaseImage(context.source)
-      if (captureTokenRef.current !== token) {
+  const start = useCallback(
+    async (prepare?: () => Promise<boolean>) => {
+      const context = getCaptureContext()
+      if (!context) {
+        reportError(
+          'auto.components.browser-pane.markup.errorUnavailable',
+          'Screenshot markup is not available on this page.'
+        )
         return
       }
-      setBaseImage(image)
-      setState('drawing')
-    } catch {
-      if (captureTokenRef.current !== token) {
-        return
+      const token = (captureTokenRef.current += 1)
+      contextRef.current = context
+      setState('capturing')
+      try {
+        if (prepare && !(await prepare())) {
+          throw new Error('markup: the page could not be prepared for capture')
+        }
+        if (captureTokenRef.current !== token) {
+          return
+        }
+        const image = await captureMarkupBaseImage(context.source)
+        if (captureTokenRef.current !== token) {
+          return
+        }
+        setBaseImage(image)
+        setState('drawing')
+      } catch {
+        if (captureTokenRef.current !== token) {
+          return
+        }
+        // Return to idle on capture failure; no overlay exists to offer recovery.
+        reportError(
+          'auto.components.browser-pane.markup.errorCapture',
+          'Could not capture the page to draw on.'
+        )
+        reset()
       }
-      // Return to idle on capture failure; no overlay exists to offer recovery.
-      reportError(
-        'auto.components.browser-pane.markup.errorCapture',
-        'Could not capture the page to draw on.'
-      )
-      reset()
-    }
-  }, [getCaptureContext, reportError, reset])
+    },
+    [getCaptureContext, reportError, reset]
+  )
 
   const cancel = useCallback(() => {
     reset()

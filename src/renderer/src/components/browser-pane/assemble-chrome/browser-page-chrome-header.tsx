@@ -99,7 +99,7 @@ export function BrowserPageChromeHeader({
         addressBarInputRef={addressBarInputRef}
         dismissAddressBarSuggestionsRef={dismissAddressBarSuggestionsRef}
         elementTools={elementTools}
-        grabIdle={grab.state === 'idle'}
+        annotationDraftOpen={grabAnnotations.pendingAnnotationPayload !== null}
         isBlankTab={isBlankTab}
         markupIsActive={markupIsActive}
         markupStart={markupStart}

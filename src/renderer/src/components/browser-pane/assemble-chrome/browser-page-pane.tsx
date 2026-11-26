@@ -31,6 +31,7 @@ import { useBrowserPageFindShortcuts } from './find/use-browser-page-find-shortc
 import { useBrowserGuestAnnotateTools } from '../annotate/use-browser-guest-annotate-tools'
 import { useBrowserPageWebviewShortcuts } from '../host-guest/input/use-browser-page-webview-shortcuts'
 import { useBrowserPageMarkupCapture } from '../annotate/capture/use-browser-page-markup-capture'
+import { useMarkupStartAfterPicker } from '../annotate/capture/use-markup-start-after-picker'
 import { useBrowserPageNavigationDownloads } from '../navigate/use-browser-page-navigation-downloads'
 import { useBrowserPageReloadActions } from '../navigate/use-browser-page-reload-actions'
 import { useBrowserPageResourceNotices } from '../navigate/use-browser-page-resource-notices'
@@ -178,6 +179,13 @@ export function BrowserPagePane({
     trackingScroller: pageViewport?.scroller ?? null,
     currentDocumentUrl: browserTab.url,
     shortcuts: { workspaceId, chromeShortcutScope }
+  })
+  const startMarkup = useMarkupStartAfterPicker({
+    browserPageId: browserTab.id,
+    markup,
+    grab,
+    stopPicker: grabAnnotations.cancelPendingBrowserCapture,
+    webviewRef
   })
   const nav = useBrowserPageNavigationDownloads({
     browserTabId: browserTab.id,
@@ -355,7 +363,7 @@ export function BrowserPagePane({
         notes={notes}
         onOpenFind={() => setFindOpen(true)}
         markupIsActive={markup.isActive}
-        markupStart={markup.start}
+        markupStart={startMarkup}
         markupCancel={markup.cancel}
         shareableArtifactFile={shareableArtifactFile}
         currentBrowserUrl={currentBrowserUrl}

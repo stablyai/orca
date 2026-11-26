@@ -68,11 +68,8 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
     guest: Electron.WebContents
   ): Promise<boolean> {
     if (!enabled) {
-      const hadActiveGrabOp = this.hasActiveGrabOp(browserTabId)
       this.cancelGrabOp(browserTabId, 'user')
-      if (hadActiveGrabOp) {
-        return true
-      }
+      // A cancelled op only queues its teardown; awaiting this idempotent one after it means "off" is off in the page.
       return runOverlayScript(guest, 'teardown')
     }
     // Arm eagerly so hover feedback appears before selection starts.
