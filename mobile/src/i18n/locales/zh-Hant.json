@@ -805,6 +805,267 @@
       "action": "引用",
       "hint": "將所選文字作為引用加入訊息"
     },
+    "botCards": {
+      "request": {
+        "pairedComputer": "已配對的電腦",
+        "notConnected": "未連線",
+        "declined": "已拒絕",
+        "waitingOn": "正在等待 {{computer}} 上的核准"
+      },
+      "offer": {
+        "openBot": "開啟 {{name}}",
+        "notNow": "暫時不要",
+        "heading": "新機器人"
+      },
+      "toolAdded": {
+        "added": "已新增"
+      },
+      "memory": {
+        "openMemory": "開啟記憶"
+      },
+      "google": {
+        "ended": "此 Google 設定已結束。",
+        "receipt": {
+          "change": "更改",
+          "dismissed": "✓ 已關閉",
+          "imported": "✓ 你已新增團隊的檔案",
+          "chose": "✓ 你選擇了「{{what}}」",
+          "signedInAs": "✓ 已以 {{email}} 身份登入",
+          "signedIn": "✓ 已登入",
+          "done": "✓ 已完成",
+          "takeOver": "✓ 接下來由 {{bot}} 接手",
+          "stopped": "設定已停止"
+        },
+        "heading": "連線 Google",
+        "path": {
+          "title": "要如何設定？",
+          "why": "你將自行建立 Google 應用程式，因此你的登入資訊會保留在你的電腦上。",
+          "doIt": "幫我完成",
+          "guideHere": "在這裡指導我",
+          "guideBrowser": "在我的瀏覽器中指導我",
+          "doItNote": "由 {{bot}} 替你點選完成",
+          "guideHereNote": "你在 Orca 中點選操作",
+          "guideBrowserNote": "你在瀏覽器中點選操作"
+        },
+        "notNow": "暫時不要",
+        "progress": {
+          "heading": "正在設定 Google",
+          "done": "已完成",
+          "waiting": "等待你處理",
+          "working": "工作中",
+          "stopped": "已停止",
+          "doneCount": "已完成 {{count}} 個步驟",
+          "more": "+ 另外 {{count}} 個步驟"
+        },
+        "account": {
+          "title": "我應該使用哪個 Google 帳戶？",
+          "personal": "個人帳戶",
+          "work": "工作帳戶",
+          "note": "所有 Google Cloud 頁面都會以你選擇的帳戶開啟。"
+        },
+        "services": {
+          "title": "我應該使用哪些 Google 服務？",
+          "note": "無論選擇哪一項，我都能按姓名查詢聯絡人。你之後還可以新增更多服務。"
+        },
+        "continue": "繼續",
+        "connect": {
+          "titleAccount": "登入以連線 {{email}}",
+          "title": "登入以連線",
+          "onComputer": "請在電腦上的 Orca 中登入 Google。",
+          "signIn": "登入 Google"
+        },
+        "movedDown": "已在下方繼續。",
+        "connected": {
+          "heading": "Google 已連線",
+          "canUse": "{{bot}} 可以使用 {{services}}。"
+        },
+        "copied": "已複製。請傳送給你的 Google 管理員。",
+        "action": {
+          "onComputer": "如需「{{action}}」，請使用電腦上的 Orca。",
+          "makeNewKey": "新增金鑰",
+          "importKey": "匯入金鑰檔案",
+          "allow": "授權 {{services}}",
+          "signInAgain": "重新登入",
+          "continueWithout": "略過這些服務並繼續",
+          "keep": "繼續使用 {{email}}",
+          "signInAs": "以 {{email}} 身份登入",
+          "turnOn": "啟用",
+          "copyForAdmin": "複製給管理員",
+          "checkAgain": "重新檢查",
+          "continue": "繼續",
+          "startOver": "重新開始"
+        },
+        "otherAccount": "切換帳戶",
+        "letMe": "這一步我來做",
+        "step": {
+          "headingCount": "輪到你了 · 第 {{n}} 步，共 {{total}} 步",
+          "watching": "正在觀察頁面",
+          "onComputer": "請在電腦上的 Google Cloud 中完成此操作。",
+          "account": "登入 Google",
+          "project": "建立專案",
+          "apis": "啟用 {{services}}",
+          "branding": "設定 Google 登入介面",
+          "links": "新增應用程式連結",
+          "publish": "發布應用程式",
+          "client": "建立應用程式金鑰",
+          "connect": "連線並檢查"
+        },
+        "done": "完成",
+        "takeOver": "接下來交給機器人",
+        "choice": {
+          "gmail": "Gmail",
+          "calendar": "Google 日曆",
+          "files": "雲端硬碟、文件和表格",
+          "gmailDescription": "搜尋和閱讀郵件、撰寫草稿，經你同意後傳送",
+          "calendarDescription": "檢視、建立和調整行程",
+          "filesDescription": "查詢、閱讀和編輯檔案"
+        },
+        "notes": {
+          "project": {
+            "account": "確認右上角的帳戶是你要使用的帳戶。",
+            "create": "點選<b>建立</b>。名稱不重要。"
+          },
+          "apis": {
+            "project": "確認頂部顯示的專案是你剛剛建立的專案。",
+            "enable": "點選<b>下一步</b>，然後點選<b>啟用</b>。"
+          },
+          "branding": {
+            "start": "點選<b>開始</b>。",
+            "name": "應用程式名稱填寫 <b>Orca</b>，使用者支援電子郵件選擇你的電子郵件位址。",
+            "external": "受眾群體：<b>外部</b>。",
+            "internal": "受眾群體：<b>內部</b>。",
+            "either": "受眾群體：Gmail 帳戶選擇<b>外部</b>，工作帳戶選擇<b>內部</b>。",
+            "contact": "聯絡資訊中填寫你的電子郵件位址。",
+            "agree": "勾選 <b>I agree to the Google API Services: User Data Policy</b>，然後點選<b>建立</b>。"
+          },
+          "links": {
+            "domain": "在<b>應用程式網域</b>下，貼上首頁和隱私權政策連結。",
+            "authorized": "在<b>已獲授權的網域</b>下，新增該網域。",
+            "save": "點選<b>儲存</b>。"
+          },
+          "publish": {
+            "publish": "點選<b>發布應用程式</b>，然後點選<b>確認</b>。",
+            "why": "應用程式發布後，你的登入狀態不會在 7 天後失效。"
+          },
+          "client": {
+            "type": "應用程式類型選擇<b>桌面應用程式</b>，然後點選<b>建立</b>。",
+            "agent": "如果看到 <b>Use this client for an AI-powered agent</b>，請勾選。",
+            "download": "點選<b>下載 JSON</b>。Orca 會儲存該金鑰。"
+          }
+        },
+        "blocker": {
+          "stoppedWhy": "設定已停止：{{reason}}",
+          "stopped": "設定已停止。",
+          "paused": "設定在「{{step}}」這一步暫停了。目前的進度都已儲存。",
+          "yourTurn": "輪到你了：{{step}}。",
+          "noKey": "Orca 需要先取得應用程式金鑰。",
+          "keyGone": "此應用程式的金鑰已失效：它已在 Google Cloud 中被刪除。",
+          "keyOtherProject": "已儲存的金鑰屬於專案 {{keyProject}}，而不是 {{project}}。",
+          "otherAccount": "你以 {{signedIn}} 身份登入；但此設定針對的是 {{wanted}}。",
+          "signedOut": "{{email}} 的登入已失效。",
+          "needsPermission": "快完成了：請授權 {{services}}。Google 會為每項服務顯示一個核取方塊，請全部勾選。",
+          "apiOff": "{{services}} 已在 Google Cloud 中停用。",
+          "adminBlocked": "你公司的 Google 管理員已阻止 {{services}}。",
+          "checkFailed": "Orca 無法檢查 {{services}}。"
+        },
+        "ownerStep": "第 {{step}} 步，共 3 步",
+        "adminRequest": "請在 Google 管理控制台（安全性 › API 控制元件 › 管理第三方應用程式存取權限）中將此 Google 應用程式標記為「可信」：{{clientId}}"
+      },
+      "importDone": {
+        "heading": "匯入完成",
+        "title": "已從 {{app}} 匯入 {{name}}",
+        "open": "開啟",
+        "stayed": "保留在 {{app}}：{{things}}。{{app}} 中的內容皆未變更。",
+        "unchanged": "{{app}} 中的內容皆未變更。",
+        "paused": "自動化已暫停，以免重複執行。請在 {{app}} 中關閉舊機器人後再開啟它們。",
+        "soulOnComputer": "請在電腦上的 Orca 中開啟靈魂與記憶。"
+      },
+      "importPlan": {
+        "comes": "將匯入",
+        "changed": "將匯入並調整",
+        "already": "已存在",
+        "stays": "保留在 {{app}}",
+        "fromAgain": "來自 {{app}}（再次匯入）",
+        "from": "來自 {{app}}",
+        "selected": "已選取 {{chosen}} / {{total}} 項 · 金鑰與登入資訊絕不會被複製",
+        "importOne": "匯入 1 個項目",
+        "importMany": "匯入 {{count}} 個項目",
+        "askedOne": "已要求匯入 1 個項目",
+        "askedMany": "已要求匯入 {{count}} 個項目"
+      },
+      "composio": {
+        "heading": "Composio",
+        "step": "第 {{index}} 步，共 {{total}} 步",
+        "setUpTitle": "{{app}} 需要在 Composio 中完成一次性設定",
+        "setUpDeveloperApp": "在 {{app}} 的開發者網站上建立開發者應用程式。Composio 的 {{app}} 頁面中有操作說明。",
+        "setUpAuthConfig": "在 Composio 中開啟 Auth Configs，為 {{app}} 新增一個 Auth Config，並貼上你的開發者應用程式的金鑰。",
+        "setUpCheckAgain": "回到這裡，然後選擇「重新檢查」。",
+        "setUpNotYet": "Composio 中還沒有 {{app}} 的 Auth Config。",
+        "openAuthConfigs": "開啟 Auth Configs",
+        "appGuide": "{{app}} 頁面",
+        "checkAgain": "重新檢查",
+        "connectTitle": "連線 {{app}}",
+        "connecting": "正在等待你在瀏覽器中完成登入",
+        "connectKeyNote": "將開啟 Composio，以輸入你的 {{app}} API 金鑰。該金鑰由 Composio 保管，而非 Orca。",
+        "connectNote": "將在瀏覽器中開啟 Composio 提供的 {{app}} 登入頁面。此登入資訊由 Composio 保管，而非 Orca。",
+        "signInOnComposio": "請在 Composio 頁面上登入 {{app}}。",
+        "openAgain": "再次開啟",
+        "cancel": "取消",
+        "keyFirst": "請先新增你的 Composio 金鑰。",
+        "connect": "連線 {{app}}",
+        "byHandCopy": "複製 {{bot}} 的位址。",
+        "byHandPaste": "在 Composio 中開啟專案設定，進入 Webhooks，然後貼上該位址。",
+        "byHandOpen": "開啟 Composio",
+        "byHandDone": "完成",
+        "byHandDoneNote": "隨後 Orca 會啟用 {{trigger}}，並儲存 Composio 的簽名金鑰。",
+        "eventsTitle": "讓 Composio 在 {{trigger}} 觸發時呼叫 {{bot}}",
+        "eventsReplaceNote": "你的 Composio 專案已將事件傳送到另一個位址。完成此設定後，事件將改為傳送到這裡，原位址將不再收到事件。",
+        "eventsOneAddressNote": "Orca 會為你登入的帳戶啟用 {{trigger}}。你的 Composio 專案的事件都會傳送到 Orca 的同一個位址，再分別轉給對應的機器人。",
+        "eventsDone": "✓ 已設定",
+        "eventsChosenByHand": "在 Composio 中手動設定",
+        "eventsReplace": "取代並設定",
+        "eventsSetUp": "立即設定",
+        "eventsByHand": "手動設定",
+        "keyAdded": "✓ 已新增金鑰",
+        "declined": "已關閉",
+        "keyRejectedTitle": "取代你的 Composio 金鑰",
+        "keyTitle": "新增你的 Composio 金鑰",
+        "keyRejectedNote": "Composio 不再接受已儲存的金鑰。請在 Composio 的 Settings 中開啟 API Keys，新增一個金鑰。",
+        "keyLabel": "Composio API 金鑰",
+        "keyPlaceholder": "貼上你的金鑰",
+        "keyPurposeOnHost": "你的 Composio 專案金鑰可讓 {{host}} 上的機器人使用你在 Composio 中連線的應用程式。金鑰儲存在 {{host}} 上；機器人永遠看不到它。",
+        "keyPurpose": "你的 Composio 專案金鑰讓你的機器人可以使用你在那裡連線的應用程式。它儲存在你的電腦上，機器人永遠看不到它。",
+        "checking": "檢查中…",
+        "replaceKey": "更換金鑰",
+        "addKey": "新增金鑰",
+        "getKey": "取得金鑰",
+        "dismiss": "關閉",
+        "goneHeading": "需要設定",
+        "ready": "就緒",
+        "goneTitle": "{{bot}} 目前無法使用 {{app}}",
+        "readyTitle": "{{bot}} 現在可以使用 {{app}} 了",
+        "goneDetail": "請在機器人的「工具」中重新設定。",
+        "readyAs": "已以 {{label}} 身份連線。你的應用程式登入資訊由 Composio 保管。",
+        "custody": "你的應用程式登入資訊由 Composio 保管。",
+        "browseOnComputer": "在電腦上的 Orca 中，從機器人的「工具」瀏覽更多應用程式。",
+        "browse": "瀏覽更多應用程式"
+      },
+      "webhookSetup": {
+        "heading": "設定 Webhook",
+        "on": "已開啟",
+        "hint": "將你的服務指向此 URL",
+        "gettingUrl": "正在取得 URL…",
+        "keyAndSecret": "金鑰與簽名金鑰",
+        "headerKey": "標頭金鑰",
+        "copy": "複製",
+        "signingSecret": "簽名金鑰",
+        "noSecret": "無",
+        "sampleCall": "呼叫範例",
+        "sampleNote": "會啟動一次實際執行",
+        "send": "傳送",
+        "copiedReceipt": "✓ 已複製 URL"
+      }
+    },
     "eventRow": {
       "running": "執行中",
       "failed": "失敗"
@@ -1349,11 +1610,37 @@
     "native-chat": {
       "composer": {
         "planMode": "計畫",
-        "exitPlanMode": "結束計畫模式"
+        "exitPlanMode": "結束計畫模式",
+        "botChats": "聊天",
+        "backToBots": "返回機器人",
+        "loadingBotChats": "正在載入 {{name}} 的聊天…",
+        "noOtherChats": "沒有其他聊天",
+        "noMatchingChats": "沒有符合的聊天",
+        "retryChats": "重試",
+        "permissionAsk": "請求核准",
+        "permissionAcceptEdits": "接受編輯",
+        "permissionAuto": "替我核准",
+        "permissionFullAccess": "完整存取權",
+        "permissionAskDescription": "在設定未允許的編輯和命令前詢問",
+        "permissionAskSharedDescription": "在執行尚未獲準的編輯或命令前詢問",
+        "permissionAcceptEditsAntigravityDescription": "允許編輯檔案；其餘操作會先詢問",
+        "permissionAcceptEditsDescription": "核准檔案編輯和檔案命令；其餘操作會詢問",
+        "permissionAutoDescription": "代你審查核准要求",
+        "permissionFullAccessCodexDescription": "從不詢問；可以編輯任何檔案並使用網路",
+        "permissionFullAccessDescription": "編輯或執行命令前從不詢問"
       },
       "goal": {
         "sentAsGoal": "作為目標傳送"
-      }
+      },
+      "connectorAsker": {
+        "via": "{{name}}（透過 {{bot}}）"
+      },
+      "slackMirror": {
+        "retry": "重試",
+        "switch": "將此聊天張貼到 Slack",
+        "delete": "從 Slack 刪除"
+      },
+      "dismissDeliveryNotice": "關閉"
     }
   },
   "connection": {
@@ -1784,6 +2071,14 @@
       "showUsageFor": "選擇要顯示用量的電腦",
       "updatedAgo": "{{time}}前更新",
       "updatedJustNow": "剛剛更新"
+    },
+    "bots": {
+      "waits": {
+        "questions_other": "{{count}} 個問題",
+        "access_other": "{{count}} 個存取要求",
+        "workers_other": "{{count}} 個工作者",
+        "items_other": "{{count}} 個項目"
+      }
     }
   },
   "hooks": {
@@ -1834,7 +2129,8 @@
       "hideSidebar": "隱藏側邊欄",
       "reconnect": "重新連線",
       "tasks": "任務",
-      "automations": "自動化"
+      "automations": "自動化",
+      "sharedLinks": "共用連結"
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "要刪除「{{name}}」（{{branch}}）嗎？",
@@ -2517,6 +2813,7 @@
       "terminalLayout": "終端機版面配置",
       "fileExplorer": "檔案總管",
       "sourceControl": "原始碼控制",
+      "itemsNeedYou": "項目，{{count}} 個需要你處理",
       "newTab": "新分頁",
       "quickCommands": "快速命令",
       "items": "項目",
@@ -3313,6 +3610,36 @@
       "download": "下載到此手機",
       "downloadSize": "約 {{size}} MB",
       "phoneChecking": "正在檢查…"
+    },
+    "bots": {
+      "slackStatus": {
+        "notInstalled": "未安裝",
+        "unknown": "無法檢查",
+        "updateNeeded": "需要更新",
+        "waiting": "等待安裝"
+      },
+      "addConnector": "新增連接器",
+      "connectors": "連接器",
+      "retry": "重試",
+      "memoryHistory": {
+        "today": "今天",
+        "yesterday": "昨天",
+        "undoAction": "復原",
+        "nothingToUndo": "沒有可復原的內容：這些行之後已被更改。",
+        "empty": "還沒有更改。"
+      },
+      "githubStatus": {
+        "notInstalled": "未安裝 Orca",
+        "unlinked": "未連結"
+      },
+      "linearStatus": {
+        "unlinked": "未連結",
+        "notInstalled": "未安裝 Orca"
+      }
+    },
+    "sharedLinks": {
+      "title": "共用連結",
+      "description": "你發布的連結。"
     }
   },
   "sourceControl": {
