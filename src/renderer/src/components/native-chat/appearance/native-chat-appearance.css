@@ -194,3 +194,56 @@
 [data-native-chat-dock-fit~='card'] .native-chat-question-card-footer {
   animation-timeline: --native-chat-question-body;
 }
+
+@keyframes native-chat-status-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes native-chat-status-leave {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+.native-chat-status-enter {
+  animation: native-chat-status-enter 180ms ease-out;
+}
+.native-chat-status-leave {
+  opacity: 0;
+  animation: native-chat-status-leave 180ms ease-out;
+}
+[data-native-chat-motion-paused],
+[data-native-chat-motion-paused] * {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .native-chat-status-enter,
+  .native-chat-status-leave {
+    animation: none;
+  }
+}
+
+@keyframes native-chat-message-arrival {
+  from {
+    opacity: 0;
+    transform: translateY(var(--spacing));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.native-chat-message-arrival {
+  animation: native-chat-message-arrival 180ms ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .native-chat-message-arrival {
+    animation: none;
+  }
+}

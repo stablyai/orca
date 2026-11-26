@@ -17,10 +17,9 @@ import { useNativeChatQuestionReceipts } from './conversation/projection/use-nat
 import { useNativeChatTaskListPredecessors } from './tools/use-native-chat-task-list-predecessors'
 import { NativeChatDockedTaskList } from './tools/tasks/NativeChatDockedTaskList'
 import { useNativeChatTurnStatus } from './conversation/turns/use-native-chat-turn-status'
-import { NativeChatAwaitingInputRow } from './prompts/NativeChatAwaitingInputRow'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { NativeChatTurnActivity } from '../../../../shared/native-chat/transcript/turns/native-chat-turn-activity'
-import { NativeChatTurnActivityLine } from './messages/reasoning/NativeChatTurnActivityLine'
+import { NativeChatTranscriptTail } from './conversation/turns/NativeChatTranscriptTail'
 import {
   NativeChatTranscriptItems,
   NativeChatWaitingTranscriptItems
@@ -260,6 +259,7 @@ export function NativeChatMessageList({
     // Rail jumps, diff reveals and subagent reveals share one mutually exclusive pin.
     revealIndex: navigationRequest.revealIndex,
     newRowsMarkerIndex: newRows.index,
+    botChat: turnBot ? { timedRows } : undefined,
     typography
   })
   const transcriptScroll = useNativeChatTranscriptScroll({
@@ -278,10 +278,9 @@ export function NativeChatMessageList({
     onLeaveEnd: historyRetention.leaveEnd,
     onReturnToEnd: historyRetention.returnToEnd
   })
-  const { showJump, onScroll, scrollToBottom, readerAtEnd, scrollMessageToTop, readerLeavesEnd } =
-    transcriptScroll
+  const { scrollToBottom, readerAtEnd, scrollMessageToTop, readerLeavesEnd } = transcriptScroll
+  const { showJump, onScroll, recordReaderScroll } = transcriptScroll
   const toolRunScroll = useToolRunScroll(scrollRef, isVisible, transcriptWindow, transcriptScroll)
-  const { recordReaderScroll } = transcriptScroll
   const olderHistory = useNativeChatOlderHistoryAutoload({
     scrollRef,
     historyKey: `${session.agent}:${session.sessionId ?? ''}:${session.olderHistoryGeneration}`,
@@ -362,6 +361,7 @@ export function NativeChatMessageList({
     readerAtEnd,
     onRevealDiff: navigation.revealDiff
   })
+  const waitingRows = { slots: waitingSlots, context: rowContext, preceding: slots }
 
   return (
     <NativeChatBotHomeScope kickoff={botHome} isVisible={isVisible}>
@@ -409,12 +409,14 @@ export function NativeChatMessageList({
                   window={transcriptWindow}
                   newRowsMarker={newRows.marker}
                 />
-                {liveLine ? (
-                  <NativeChatTurnActivityLine line={liveLine} context={rowContext} />
-                ) : tailRow === 'awaiting-input' ? (
-                  <NativeChatAwaitingInputRow subject={null} pending />
-                ) : null}
-                <NativeChatWaitingTranscriptItems slots={waitingSlots} context={rowContext} />
+                <NativeChatTranscriptTail
+                  line={liveLine}
+                  awaitingInput={tailRow === 'awaiting-input'}
+                  context={rowContext}
+                  slots={slots}
+                  visible={isVisible}
+                />
+                <NativeChatWaitingTranscriptItems {...waitingRows} />
               </NativeChatTranscriptColumn>
             </div>
           </NativeChatTranscriptViewport>

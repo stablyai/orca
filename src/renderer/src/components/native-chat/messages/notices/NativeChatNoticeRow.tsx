@@ -99,13 +99,15 @@ export function NativeChatNoticeRow({
   block,
   messageId,
   timestamp = null,
-  agentName
+  agentName,
+  messaging = false
 }: {
   block: NativeChatTextBlock
   /** The transcript row's message, so a plan's code blocks keep their wrap past the row's mount. */
   messageId?: string
   timestamp?: number | null
   agentName?: string
+  messaging?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   useTranslation()
@@ -139,7 +141,7 @@ export function NativeChatNoticeRow({
       </pre>
     )
   }
-  const botCard = nativeChatBotCard(block, messageId ?? '', timestamp)
+  const botCard = nativeChatBotCard(block, messageId ?? '', timestamp, messaging)
   if (botCard) {
     return botCard
   }

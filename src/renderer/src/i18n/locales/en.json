@@ -895,7 +895,11 @@
         "softer": "Softer",
         "sharper": "Sharper",
         "terminalControlledHint": "Set by terminal interface.",
-        "terminalControlledTooltip": "Matching your terminal interface. Turn off Match terminal interface to change this."
+        "terminalControlledTooltip": "Matching your terminal interface. Turn off Match terminal interface to change this.",
+        "messageStyle": "Message style",
+        "messageStyleDefault": "Default",
+        "messageStyleMessaging": "Messaging",
+        "messageStyleDescription": "Messaging adds live status, arrival motion, time and New dividers, and compact handoff notes to one-to-one bot chats. Coding chats keep the default layout."
       },
       "editorTheme": {
         "light": "Light editor theme",
@@ -23105,6 +23109,14 @@
         "sampleCall": "Sample call",
         "sampleNote": "Starts a real run",
         "send": "Send"
+      },
+      "messaging": {
+        "usingTool": "Using {{tool}}",
+        "todayAt": "Today {{time}}",
+        "messaged": "Messaged {{name}}",
+        "messageFrom": "Message from {{name}}",
+        "answered": "Answered",
+        "waiting": "Waiting"
       }
     },
     "tab": {

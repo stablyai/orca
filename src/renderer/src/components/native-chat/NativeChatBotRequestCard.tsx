@@ -1,10 +1,11 @@
 // The row Orca leaves in the owner's chat when its bot asks or hands work to another bot: who it went
 // to, which kind, and its answer or why it wasn't sent, read from Orca's record as that bot's chat changes.
+import { NativeChatBotMessageNote } from './messages/rows/NativeChatBotMessageNote'
 import { cn } from '@/lib/class-names'
 import { callBotRpc } from '@/lib/bot-hosts'
 import { useEffect, useState } from 'react'
 import { Send } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
+import { useTranslate } from '@/i18n/use-translate'
 import { translate } from '@/i18n/i18n'
 import { openBotHomeTab, useBots } from '@/lib/bot-catalog'
 import { openBotSession } from '../bots/bot-session-open'
@@ -83,17 +84,51 @@ export function NativeChatBotRequestCard({
   card,
   cardId,
   timestamp,
-  fallback
+  fallback,
+  messaging = false,
+  defaultOpen = false
 }: {
   card: BotRequestCard
+  messaging?: boolean
+  defaultOpen?: boolean
   /** The transcript item carrying the card, so its fold outlives the row. */
   cardId: string
   timestamp: number | null
   /** The host's line, for a bot this window doesn't list. */
   fallback: string
 }): React.JSX.Element {
-  useTranslation()
+  const t = useTranslate()
   const bot = useBots().find((entry) => entry.id === card.toBotId)
+  if (messaging && card.messageId && !card.client) {
+    if (bot) {
+      return (
+        <KnownBotRequestCard
+          bot={bot}
+          card={card}
+          cardId={cardId}
+          timestamp={timestamp}
+          defaultOpen
+          compact
+        />
+      )
+    }
+    return (
+      <NativeChatBotMessageNote
+        id={cardId}
+        label={t('components.native-chat.messaging.messaged', 'Messaged {{name}}', {
+          name: card.toBotName
+        })}
+      >
+        <NativeChatBotRequestCard
+          card={card}
+          cardId={cardId}
+          timestamp={timestamp}
+          fallback={fallback}
+          defaultOpen
+        />
+      </NativeChatBotMessageNote>
+    )
+  }
   // Asked of an agent on a computer paired to this chat's host: read from that host, not a bot's.
   if (card.client) {
     return (
@@ -116,20 +151,33 @@ export function NativeChatBotRequestCard({
       </NativeChatEventRow>
     )
   }
-  return <KnownBotRequestCard bot={bot} card={card} cardId={cardId} timestamp={timestamp} />
+  return (
+    <KnownBotRequestCard
+      bot={bot}
+      card={card}
+      cardId={cardId}
+      timestamp={timestamp}
+      defaultOpen={defaultOpen}
+    />
+  )
 }
 
 function KnownBotRequestCard({
   bot,
   card,
   cardId,
-  timestamp
+  timestamp,
+  defaultOpen,
+  compact = false
 }: {
   bot: Bot
+  compact?: boolean
+  defaultOpen: boolean
   card: BotRequestCard
   cardId: string
   timestamp: number | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const status = useWorktreeActivityStatus(folderWorkspaceKey(bot.folderWorkspaceId))
   const reading = useOutcome(bot, card.messageId, status)
   // The chat the request went to, unless that is Home now; Home until it's known.
@@ -138,8 +186,9 @@ function KnownBotRequestCard({
     chatId && chatId !== bot.chatSessionId ? openBotSession(bot, chatId) : void openBotHomeTab(bot)
   const view = botRequestCardView(card, reading, status, say)
   const subject = view.sent ? card.subject : ''
-  return (
+  const row = (
     <NativeChatEventRow
+      defaultOpen={defaultOpen}
       icon={REQUEST_ICON}
       badge={view.badge}
       label={[`${view.heading} ${bot.name}`, subject].filter(Boolean).join(' · ')}
@@ -182,5 +231,24 @@ function KnownBotRequestCard({
         </span>
       ) : null}
     </NativeChatEventRow>
+  )
+  return compact ? (
+    <NativeChatBotMessageNote
+      id={cardId}
+      label={t('components.native-chat.messaging.messaged', 'Messaged {{name}}', {
+        name: bot.name
+      })}
+      status={
+        reading.outcome === 'answered'
+          ? 'answered'
+          : view.dot === 'working' || view.dot === 'permission'
+            ? 'waiting'
+            : undefined
+      }
+    >
+      {row}
+    </NativeChatBotMessageNote>
+  ) : (
+    row
   )
 }

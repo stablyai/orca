@@ -222,3 +222,14 @@ export function estimateNativeChatRowHeight(
   height += Math.max(0, partCount - 1) * NATIVE_CHAT_ROW_GAP_PX
   return Math.min(ROW_MAX_PX, Math.max(ROW_MIN_PX, height))
 }
+
+/** Include messaging chrome without rescanning message blocks during virtual measurements. */
+export function nativeChatMessagingRowHeight(
+  height: number,
+  divider: boolean,
+  joinsAbove: boolean,
+  typography = DEFAULT_ROW_TYPOGRAPHY
+): number {
+  const added = divider ? 32 + NATIVE_CHAT_ROW_GAP_PX : joinsAbove ? -12 : 0
+  return Math.min(ROW_MAX_PX, Math.max(0, height + added * typography.spacingScale))
+}

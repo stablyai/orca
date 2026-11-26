@@ -1,5 +1,9 @@
-import type { BotChatIdentity } from '../../../bots/use-bot-chat-identity'
+import { NativeChatTimeDivider } from '../../NativeChatDividerRow'
+import { useNativeChatMessageArrival } from './use-native-chat-message-arrival'
+import { observeOffscreenAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { memo, useContext } from 'react'
+import type { BotChatIdentity } from '../../../bots/use-bot-chat-identity'
+import { useNativeChatMessagingStyle } from '../../appearance/use-native-chat-messaging-style'
 import { cn } from '@/lib/class-names'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { MessageRow, type NativeChatDeliveryNotice } from './NativeChatMessageRow'
@@ -91,9 +95,13 @@ function NativeChatRowNewRowsMarker({
   slot,
   deliveryNotice,
   readerAtEnd,
-  onReveal
+  onReveal,
+  messaging,
+  botColor
 }: {
   marker: NativeChatNewRowsMarkerState
+  messaging: boolean
+  botColor?: string
   slot: Extract<NativeChatTranscriptSlot, { kind: 'message' }>
   deliveryNotice: NativeChatDeliveryNotice | undefined
   readerAtEnd: () => boolean
@@ -104,6 +112,8 @@ function NativeChatRowNewRowsMarker({
   return (
     <NativeChatNewRowsMarker
       marker={marker}
+      messaging={messaging}
+      botColor={botColor}
       readerAtEnd={readerAtEnd}
       onReveal={onReveal}
       className={newRowsMarkerSpacing(marker.place, slot, deliveryNotice, slackPostLineDraws)}
@@ -117,7 +127,10 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   context,
   newRowsMarker,
   newRowsMarkerBelow = false,
-  joinsActivityAbove = false
+  joinsActivityAbove = false,
+  joinsMessageAbove = false,
+  timeDivider,
+  timeDividerBelow = false
 }: {
   slot: NativeChatTranscriptSlot
   context: NativeChatTranscriptRowContext
@@ -127,7 +140,19 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   newRowsMarkerBelow?: boolean
   /** Opens 4 px below the row above's activity row (`nativeChatSlotJoinsActivityAbove`). */
   joinsActivityAbove?: boolean
+  joinsMessageAbove?: boolean
+  timeDivider?: number
+  timeDividerBelow?: boolean
 }): React.JSX.Element {
+  const messagingEnabled = useNativeChatMessagingStyle()
+  const messaging = messagingEnabled && context.turnBot != null
+  const { arriving, finish: finishArrival } = useNativeChatMessageArrival(
+    slot.kind === 'message' ? slot.message.id : undefined,
+    messaging &&
+      slot.kind === 'message' &&
+      slot.drawsMessage &&
+      (slot.message.role === 'user' || slot.message.role === 'assistant')
+  )
   // Offered only on the conversation's own turn-opening prompts (`nativeChatRowOffersRewind`).
   const rewind = useContext(NativeChatRewindContext)
   const fork = useContext(NativeChatForkContext)
@@ -148,6 +173,8 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   const marker = newRowsMarker ? (
     <NativeChatRowNewRowsMarker
       marker={newRowsMarker}
+      messaging={messaging}
+      botColor={context.turnBot?.color}
       slot={slot}
       deliveryNotice={deliveryNotice}
       readerAtEnd={context.readerAtEnd}
@@ -156,18 +183,19 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   ) : null
   // A settling quiet turn's bar fades alone, or with its whole row when nothing else draws in it.
   const leavesWhole = nativeChatSlotLeavesWhole(slot)
-  const bar = status ? (
-    <NativeChatWorkingStatus
-      bot={context.turnBot}
-      startedAt={status.startedAt}
-      workedSeconds={status.workedSeconds}
-      verdict={status.verdict}
-      expanded={expanded === true}
-      onToggleExpanded={
-        slot.turnFolds && turnKey ? () => context.onToggleExpandedTurn(turnKey) : undefined
-      }
-    />
-  ) : null
+  const bar =
+    status && !(messaging && status.workedSeconds == null) ? (
+      <NativeChatWorkingStatus
+        bot={context.turnBot}
+        startedAt={status.startedAt}
+        workedSeconds={status.workedSeconds}
+        verdict={status.verdict}
+        expanded={expanded === true}
+        onToggleExpanded={
+          slot.turnFolds && turnKey ? () => context.onToggleExpandedTurn(turnKey) : undefined
+        }
+      />
+    ) : null
   const statusRow =
     bar && slot.leaving === 'bar' && !leavesWhole ? (
       <NativeChatQuietTurnLeave gap={slot.statusAbove ? 'below' : 'above'}>
@@ -182,17 +210,38 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
     // agent's next step (`actionsHang` is unset there), which then sits a full gap below them.
     // So does a row the "New" line follows, so the line sits the same full gap below any row.
     <div
+      ref={arriving ? observeOffscreenAnimation : undefined}
+      data-native-chat-arrival={arriving ? '' : undefined}
+      onAnimationEnd={(event) => {
+        if (
+          event.target === event.currentTarget &&
+          event.animationName === 'native-chat-message-arrival'
+        ) {
+          finishArrival()
+        }
+      }}
       className={cn(
         'flex flex-col gap-5',
+        arriving && 'native-chat-message-arrival',
         slot.continuesTurn &&
           !(slot.endsResponse && !slot.activeTurnIsWorking) &&
           !newRowsMarkerBelow &&
+          !(messaging && timeDividerBelow) &&
           '-mb-3',
         // Into the row gap (gap-5) all but the one-line rows' own gap (gap-1.5,
         // NATIVE_CHAT_ACTIVITY_ROW_GAP_PX).
-        joinsActivityAbove && '-mt-3.5'
+        joinsActivityAbove && !(messaging && timeDivider !== undefined) && '-mt-3.5',
+        messaging &&
+          joinsMessageAbove &&
+          !newRowsMarker &&
+          timeDivider === undefined &&
+          !joinsActivityAbove &&
+          '-mt-3'
       )}
     >
+      {messaging && timeDivider !== undefined ? (
+        <NativeChatTimeDivider timestamp={timeDivider} />
+      ) : null}
       {newRowsMarker?.place === 'above-row' ? marker : null}
       {/* A turn with no user bubble carries its bar above its first row. */}
       {slot.statusAbove ? statusRow : null}
@@ -219,6 +268,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       ) : (
         <MessageRow
           message={message}
+          messaging={messaging}
           agentName={context.agentName}
           previousTodoWrite={predecessors?.todowrite}
           previousUpdatePlan={predecessors?.update_plan}

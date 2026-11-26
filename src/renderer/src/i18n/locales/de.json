@@ -891,7 +891,11 @@
         "softer": "Weicher",
         "sharper": "Schärfer",
         "terminalControlledHint": "Durch die Terminal-Oberfläche festgelegt.",
-        "terminalControlledTooltip": "An die Terminal-Oberfläche angepasst. Zum Ändern „An Terminal-Oberfläche anpassen“ deaktivieren."
+        "terminalControlledTooltip": "An die Terminal-Oberfläche angepasst. Zum Ändern „An Terminal-Oberfläche anpassen“ deaktivieren.",
+        "messageStyle": "Nachrichtenstil",
+        "messageStyleDefault": "Standard",
+        "messageStyleMessaging": "Messenger",
+        "messageStyleDescription": "Messenger ergänzt Einzelchats mit Bots um Live-Status, Eingangsanimationen, Zeit- und Neu-Trenner sowie kompakte Übergabenotizen. Programmierchats behalten das Standardlayout."
       },
       "editorTheme": {
         "light": "Helles Editor-Design",
@@ -22779,6 +22783,14 @@
           "plugin": "Plugin",
           "session": "Sitzung"
         }
+      },
+      "messaging": {
+        "usingTool": "Verwendet {{tool}}",
+        "todayAt": "Heute {{time}}",
+        "messaged": "Nachricht an {{name}}",
+        "messageFrom": "Nachricht von {{name}}",
+        "answered": "Beantwortet",
+        "waiting": "Wartet"
       }
     },
     "tab": {

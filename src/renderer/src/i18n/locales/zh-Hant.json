@@ -863,7 +863,11 @@
         "softer": "更柔和",
         "sharper": "更清晰",
         "terminalControlledHint": "由終端機介面設定。",
-        "terminalControlledTooltip": "目前與終端機介面一致。若要變更此項，請關閉「與終端機介面一致」。"
+        "terminalControlledTooltip": "目前與終端機介面一致。若要變更此項，請關閉「與終端機介面一致」。",
+        "messageStyle": "訊息樣式",
+        "messageStyleDefault": "預設",
+        "messageStyleMessaging": "即時通訊",
+        "messageStyleDescription": "即時通訊會為與機器人的一對一聊天加入即時狀態、訊息進場動畫、時間與新訊息分隔線及精簡交接註記。程式設計聊天保留預設版面配置。"
       },
       "editorTheme": {
         "light": "淺色編輯器主題",
@@ -22471,6 +22475,14 @@
           "plugin": "外掛",
           "session": "工作階段"
         }
+      },
+      "messaging": {
+        "usingTool": "正在使用 {{tool}}",
+        "todayAt": "今天 {{time}}",
+        "messaged": "已傳送訊息給 {{name}}",
+        "messageFrom": "來自 {{name}} 的訊息",
+        "answered": "已回覆",
+        "waiting": "等待中"
       }
     },
     "tab": {

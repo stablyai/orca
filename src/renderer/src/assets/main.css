@@ -69,6 +69,8 @@
   --color-chat-unread: var(--chat-unread);
   --color-chat-user-surface: var(--chat-user-surface);
   --color-chat-user-border: var(--chat-user-border);
+  --color-chat-messaging-user-surface: var(--chat-messaging-user-surface);
+  --color-chat-messaging-assistant-surface: var(--chat-messaging-assistant-surface);
   --color-chat-code-foreground: var(--chat-code-foreground);
   --color-chat-code-surface: var(--chat-code-surface);
   --color-chat-code-border: var(--chat-code-border);
@@ -922,6 +924,12 @@ body[data-modal-overlay-open]
     --chat-user-message,
     color-mix(in srgb, var(--chat-source-foreground) var(--chat-user-mix), var(--chat-canvas))
   );
+  --chat-messaging-user-surface: color-mix(
+    in srgb,
+    var(--chat-link) calc(var(--chat-strong-mix) * 0.18),
+    var(--chat-canvas)
+  );
+  --chat-messaging-assistant-surface: var(--chat-user-surface);
   --chat-user-border: color-mix(
     in srgb,
     var(--chat-source-foreground) var(--chat-user-border-mix),

@@ -222,7 +222,11 @@
         "terminalControlledHint": "ターミナルの外観設定に従います。",
         "terminalControlledTooltip": "ターミナルの外観に合わせています。変更するには「ターミナルの外観に合わせる」をオフにしてください。",
         "fontKeywordTypeface": "書体",
-        "fontKeywordTypography": "タイポグラフィ"
+        "fontKeywordTypography": "タイポグラフィ",
+        "messageStyle": "メッセージスタイル",
+        "messageStyleDefault": "デフォルト",
+        "messageStyleMessaging": "メッセージ形式",
+        "messageStyleDescription": "メッセージ形式では、ボットとの1対1のチャットに進行状況、到着アニメーション、時刻と新着の区切り、簡潔な引き継ぎメモを追加します。コーディングチャットはデフォルトのレイアウトを維持します。"
       },
       "editorTheme": {
         "light": "エディターのライトテーマ",
@@ -21814,6 +21818,14 @@
           "plugin": "プラグイン",
           "session": "セッション"
         }
+      },
+      "messaging": {
+        "usingTool": "{{tool}} を使用中",
+        "todayAt": "今日 {{time}}",
+        "messaged": "{{name}} にメッセージを送信",
+        "messageFrom": "{{name}} からのメッセージ",
+        "answered": "回答済み",
+        "waiting": "待機中"
       }
     },
     "tab": {

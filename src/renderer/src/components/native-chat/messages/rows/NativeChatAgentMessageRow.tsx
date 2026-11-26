@@ -82,7 +82,8 @@ export function NativeChatAgentMessageRow({
   details,
   disclosureKey,
   onOpenChange,
-  className
+  className,
+  defaultOpen = false
 }: {
   icon: React.ReactNode
   badge?: NativeChatEventBadge | null
@@ -107,9 +108,10 @@ export function NativeChatAgentMessageRow({
   disclosureKey: string
   onOpenChange?: (open: boolean) => void
   className?: string
+  defaultOpen?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  const disclosure = useNativeChatDisclosure(disclosureKey, false)
+  const disclosure = useNativeChatDisclosure(disclosureKey, defaultOpen)
   const { findActive } = useContext(NativeChatToolRunWindowContext)
   const time = useNativeChatMessageTimeLabel(timestamp)
   const detailsId = useId()

@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { NativeChatDividerRow } from '../../NativeChatDividerRow'
+import { useEffect, useLayoutEffect, useRef, type CSSProperties } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { NativeChatNewRowsMarkerState } from './native-chat-new-rows-marker'
@@ -11,9 +12,13 @@ export function NativeChatNewRowsMarker({
   marker: { arriving, onArrived, onDismiss },
   readerAtEnd,
   onReveal,
-  className
+  className,
+  messaging = false,
+  botColor
 }: {
   marker: NativeChatNewRowsMarkerState
+  messaging?: boolean
+  botColor?: string
   /** Only a reader who was following the end is taken to the marker; anyone else keeps their place. */
   readerAtEnd: () => boolean
   /** Scrolls a transcript element to the top of the view, and stops following the end. */
@@ -60,19 +65,32 @@ export function NativeChatNewRowsMarker({
     return () => pane?.removeEventListener('beforeinput', onInput)
   }, [onDismiss])
 
+  const style: CSSProperties & { '--chat-unread'?: string } =
+    messaging && botColor
+      ? { '--chat-unread': `color-mix(in srgb, ${botColor} 35%, var(--chat-source-foreground))` }
+      : {}
   return (
     <div
       ref={ref}
-      role="separator"
-      aria-label={label}
+      style={style}
+      role={messaging ? undefined : 'separator'}
+      aria-label={messaging ? undefined : label}
       // Nothing to click; pulled up over your bubble's copy button, it must not take its clicks or hover.
       className={cn(
-        'pointer-events-none flex items-center gap-3 text-2xs font-semibold uppercase tracking-[0.05em] text-chat-unread transition-opacity duration-300 ease-out starting:opacity-0 motion-reduce:transition-none',
+        messaging
+          ? 'pointer-events-none'
+          : 'pointer-events-none flex items-center gap-3 text-2xs font-semibold uppercase tracking-[0.05em] text-chat-unread transition-opacity duration-300 ease-out starting:opacity-0 motion-reduce:transition-none',
         className
       )}
     >
-      <span>{label}</span>
-      <span aria-hidden className="h-px flex-1 bg-chat-unread/50" />
+      {messaging ? (
+        <NativeChatDividerRow label={label} tone="unread" />
+      ) : (
+        <>
+          <span>{label}</span>
+          <span aria-hidden className="h-px flex-1 bg-chat-unread/50" />
+        </>
+      )}
     </div>
   )
 }

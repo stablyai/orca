@@ -1673,7 +1673,11 @@
         "terminalControlledHint": "Definido pela interface do terminal.",
         "terminalControlledTooltip": "Usando a aparência da interface do terminal. Desative Usar aparência da interface do terminal para alterar isto.",
         "fontKeywordTypeface": "tipo de letra",
-        "fontKeywordTypography": "tipografia"
+        "fontKeywordTypography": "tipografia",
+        "messageStyle": "Estilo de mensagens",
+        "messageStyleDefault": "Padrão",
+        "messageStyleMessaging": "Mensagens",
+        "messageStyleDescription": "Mensagens adiciona status ao vivo, animações de chegada, divisórias de horário e novas mensagens e notas compactas de transferência às conversas individuais com bots. Os chats de programação mantêm o layout padrão."
       },
       "editorTheme": {
         "light": "Tema claro do editor",
@@ -23895,6 +23899,14 @@
           "plugin": "Plugin",
           "session": "Sessão"
         }
+      },
+      "messaging": {
+        "usingTool": "Usando {{tool}}",
+        "todayAt": "Hoje {{time}}",
+        "messaged": "Mensagem enviada a {{name}}",
+        "messageFrom": "Mensagem de {{name}}",
+        "answered": "Respondido",
+        "waiting": "Aguardando"
       }
     },
     "tab": {

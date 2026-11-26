@@ -5,6 +5,8 @@ import {
   useNativeChatHeldReveals
 } from '../../markdown/native-chat-reply-reveals'
 import type { NativeChatTranscriptRowContext } from '../rows/NativeChatTranscriptRow'
+import { NativeChatMessagingStatus } from './NativeChatMessagingStatus'
+import { cn } from '@/lib/class-names'
 import { useId } from 'react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { translate } from '@/i18n/i18n'
@@ -40,9 +42,13 @@ function statusLabel(
 /** Keep the clock in the turn bar; this tail shows activity or discloses open reasoning. */
 export function NativeChatTurnActivityLine({
   line,
-  context
+  context,
+  messaging = false,
+  visible = true
 }: {
   line: NativeChatLiveLine
+  messaging?: boolean
+  visible?: boolean
   /** The transcript's, so reasoning held while the window was hidden is drawn at once too. */
   context?: Pick<NativeChatTranscriptRowContext, 'heldTextSession' | 'savesAsRepliesGrow'>
 }): React.JSX.Element {
@@ -61,19 +67,32 @@ export function NativeChatTurnActivityLine({
   const heldReveals = useNativeChatHeldReveals(disclosureKey)
 
   return (
-    <Collapsible open={open} onOpenChange={disclosure.setOpen}>
+    <Collapsible
+      open={open}
+      onOpenChange={disclosure.setOpen}
+      className={messaging ? '-mt-3' : undefined}
+    >
       {/* Keep one live region so label changes announce; overlay its trigger and place reasoning outside it. */}
       <div
-        className="group/reasoning relative flex min-h-6 items-center gap-1.5 text-sm leading-relaxed text-chat-foreground-faint"
+        className={cn(
+          'group/reasoning relative flex min-h-6 items-center gap-1.5 text-sm leading-relaxed text-chat-foreground-faint',
+          messaging && 'px-3.5 py-2.5'
+        )}
         data-native-chat-turn-activity="true"
         data-state={open ? 'open' : 'closed'}
         aria-live="polite"
         aria-atomic="true"
       >
-        <LoadingSpinner className="size-4 shrink-0" />
-        <span id={labelId} className="min-w-0 truncate text-chat-foreground">
-          {label}
-        </span>
+        {messaging ? (
+          <NativeChatMessagingStatus id={labelId} label={label} visible={visible} />
+        ) : (
+          <>
+            <LoadingSpinner className="size-4 shrink-0" />
+            <span id={labelId} className="min-w-0 truncate text-chat-foreground">
+              {label}
+            </span>
+          </>
+        )}
         {reasoning ? (
           <>
             <NativeChatReasoningChevron />

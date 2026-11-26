@@ -11,6 +11,7 @@ import {
   NATIVE_CHAT_ROW_GAP_PX,
   type NativeChatRowTypography
 } from '../../viewport/virtualization/native-chat-row-height-estimate'
+import { nativeChatSlotLeavesWhole } from './native-chat-quiet-turn-rows'
 import type { NativeChatTimedRow } from './native-chat-timed-rows'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 
@@ -94,5 +95,48 @@ export function nativeChatSlotJoinsActivityAbove({
   }
   return !(previous.itemNotes ?? [previous.message]).some(
     (member) => (timedRowsAfter?.get(member.id)?.length ?? 0) > 0
+  )
+}
+
+export function nativeChatSlotJoinsMessageAbove({
+  slot,
+  previous,
+  timedRowsAfter,
+  markerKey,
+  leavesWhole
+}: Parameters<typeof nativeChatSlotJoinsActivityAbove>[0]): boolean {
+  if (
+    slot.kind !== 'message' ||
+    previous?.kind !== 'message' ||
+    leavesWhole ||
+    nativeChatSlotLeavesWhole(previous)
+  ) {
+    return false
+  }
+  const previousKeepsActions = previous.endsResponse && !previous.activeTurnIsWorking
+  const previousAlreadyJoinsNext = previous.continuesTurn && !previousKeepsActions
+  if (previousAlreadyJoinsNext || markerKey === slot.message.id) {
+    return false
+  }
+  const textOnly = (candidate: typeof slot) =>
+    candidate.drawsMessage &&
+    !candidate.folded &&
+    !candidate.status &&
+    !candidate.receipt &&
+    !candidate.itemNotes &&
+    !candidate.workRun &&
+    !candidate.message.from &&
+    candidate.message.blocks.length > 0 &&
+    candidate.message.blocks.every((block) => block.type === 'text')
+  return !!(
+    textOnly(slot) &&
+    textOnly(previous) &&
+    !previous.turnDiff &&
+    !previous.openedPullRequests &&
+    (slot.message.role === 'user' || slot.message.role === 'assistant') &&
+    slot.message.role === previous.message.role &&
+    !(previous.itemNotes ?? [previous.message]).some(
+      (member) => (timedRowsAfter?.get(member.id)?.length ?? 0) > 0
+    )
   )
 }

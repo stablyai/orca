@@ -1,6 +1,8 @@
+import { useNativeChatMessagingStyle } from '../../appearance/use-native-chat-messaging-style'
+import { nativeChatTimeDividers } from '../../conversation/slots/native-chat-time-dividers'
+import { Fragment, useMemo } from 'react'
 import { stageBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { NativeChatWaitingAgentMailRows } from '../../queue/NativeChatWaitingAgentMailRows'
-import { Fragment, useMemo } from 'react'
 import {
   NativeChatTranscriptRow,
   type NativeChatTranscriptRowContext
@@ -8,7 +10,10 @@ import {
 import { nativeChatSlotKey } from '../../conversation/slots/native-chat-transcript-slot-selection'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
 import { nativeChatSlotLeavesWhole } from '../../conversation/slots/native-chat-quiet-turn-rows'
-import { nativeChatSlotJoinsActivityAbove } from '../../conversation/slots/native-chat-activity-row-joins'
+import {
+  nativeChatSlotJoinsActivityAbove,
+  nativeChatSlotJoinsMessageAbove
+} from '../../conversation/slots/native-chat-activity-row-joins'
 import {
   useNativeChatTimedRows,
   type NativeChatTimedRow
@@ -41,7 +46,12 @@ export function NativeChatTranscriptItems({
   newRowsMarker?: NativeChatNewRowsMarkerState
 }): React.JSX.Element {
   // A streamed text revision draws the same rows, so its keys are its base's.
+  const messaging = useNativeChatMessagingStyle() && context.turnBot != null
   const keySlots = stageBesideStreamedText(slots)
+  const timeDividers = useMemo(
+    () => (messaging ? nativeChatTimeDividers(keySlots) : new Map<number, number>()),
+    [keySlots, messaging]
+  )
   const rowKeys = useMemo(() => keySlots.map(nativeChatSlotKey), [keySlots])
   const replyReveals = useNativeChatReplyReveals(rowKeys, loadedMessageIds)
   const placed = useNativeChatTimedRows(slots, timedRows)
@@ -79,6 +89,15 @@ export function NativeChatTranscriptItems({
                       <NativeChatTranscriptRow
                         slot={slot}
                         context={rowContext}
+                        timeDivider={timeDividers.get(item.index)}
+                        timeDividerBelow={timeDividers.has(item.index + 1)}
+                        joinsMessageAbove={nativeChatSlotJoinsMessageAbove({
+                          slot,
+                          previous: slots[item.index - 1],
+                          timedRowsAfter: rowContext.timedRows,
+                          markerKey: newRowsMarker?.key,
+                          leavesWhole
+                        })}
                         newRowsMarker={
                           rowKeys[item.index] === newRowsMarker?.key ? newRowsMarker : undefined
                         }
@@ -124,13 +143,29 @@ export function NativeChatTranscriptItems({
 export function NativeChatWaitingTranscriptItems({
   slots,
   context,
-  agentMail = true
+  agentMail = true,
+  preceding
 }: {
   slots: readonly NativeChatTranscriptSlot[]
   context: NativeChatTranscriptRowContext
   /** Ends with other agents' waiting mail; rows stacked outside a conversation have none. */
   agentMail?: boolean
+  preceding?: readonly NativeChatTranscriptSlot[]
 }): React.JSX.Element {
+  const messaging = useNativeChatMessagingStyle() && context.turnBot != null
+  const timeDividers = useMemo(
+    () =>
+      messaging
+        ? nativeChatTimeDividers(
+            slots,
+            preceding?.findLast(
+              (slot) =>
+                slot.kind === 'message' && slot.drawsMessage && slot.message.timestamp !== null
+            )
+          )
+        : new Map<number, number>(),
+    [slots, messaging, preceding]
+  )
   return (
     <>
       {slots.map((slot, index) => (
@@ -138,6 +173,15 @@ export function NativeChatWaitingTranscriptItems({
           key={nativeChatSlotKey(slot)}
           slot={slot}
           context={context}
+          timeDivider={timeDividers.get(index)}
+          timeDividerBelow={timeDividers.has(index + 1)}
+          joinsMessageAbove={nativeChatSlotJoinsMessageAbove({
+            slot,
+            previous: slots[index - 1],
+            timedRowsAfter: context.timedRows,
+            markerKey: undefined,
+            leavesWhole: nativeChatSlotLeavesWhole(slot)
+          })}
           joinsActivityAbove={nativeChatSlotJoinsActivityAbove({
             slot,
             previous: slots[index - 1],

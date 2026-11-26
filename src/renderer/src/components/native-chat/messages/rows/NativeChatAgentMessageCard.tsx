@@ -75,6 +75,7 @@ type AgentMessageCardProps = {
   runtimeContext?: RuntimeFileOperationArgs | null
   textAttachmentContent?: string
   onRefolded: () => void
+  defaultOpen?: boolean
 }
 
 /** A message between agents (a start, a task, a worker's update) as one line: the sender's agent mark
@@ -84,7 +85,8 @@ export function NativeChatAgentMessageCard({
   from,
   runtimeContext,
   textAttachmentContent,
-  onRefolded
+  onRefolded,
+  defaultOpen = false
 }: AgentMessageCardProps): React.JSX.Element {
   const t = useTranslate()
   const owner = useNativeChatVisualOwner()
@@ -121,6 +123,7 @@ export function NativeChatAgentMessageCard({
   const waitingId = agentMessageWaitingQueuedId(message)
   return (
     <NativeChatAgentMessageRow
+      defaultOpen={defaultOpen}
       className={waiting ? 'w-full opacity-70' : 'w-full'}
       icon={
         <AgentMessageAvatar

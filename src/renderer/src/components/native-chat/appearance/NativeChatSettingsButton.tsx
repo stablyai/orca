@@ -8,15 +8,22 @@ import {
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '../../ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
-import { getChatWidthOptions } from '../../settings/appearance/chat/chat-appearance-search'
+import {
+  getChatWidthOptions,
+  getChatMessageStyleOptions
+} from '../../settings/appearance/chat/chat-appearance-search'
 import { writeNativeChatAppearance } from './native-chat-appearance-write'
 
 export function NativeChatSettingsButton(): React.JSX.Element {
   const t = useTranslate()
   const width = useAppStore((state) => state.settings?.nativeChatAppearance?.width ?? 'comfortable')
+  const messageStyle = useAppStore(
+    (state) => state.settings?.nativeChatAppearance?.messageStyle ?? 'default'
+  )
   const label = t('components.native-chat.settings', 'Chat settings')
 
   return (
@@ -48,6 +55,26 @@ export function NativeChatSettingsButton(): React.JSX.Element {
               value={option.value}
               onSelect={() => {
                 void writeNativeChatAppearance((current) => ({ ...current, width: option.value }))
+              }}
+            >
+              {option.label}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel>
+          {t('settings.appearance.chat.messageStyle', 'Message style')}
+        </DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={messageStyle}>
+          {getChatMessageStyleOptions(t).map((option) => (
+            <DropdownMenuRadioItem
+              key={option.value}
+              value={option.value}
+              onSelect={() => {
+                void writeNativeChatAppearance((current) => ({
+                  ...current,
+                  messageStyle: option.value
+                }))
               }}
             >
               {option.label}
