@@ -146,9 +146,10 @@ export function retireClosedBotItemAskCardDrafts(
     const draft = cards.get(item.uid)
     if (draft && draft.at <= askedAt) {
       cards.delete(item.uid)
+      if (cards.size === 0) {
+        drafts.delete(bot)
+        return
+      }
     }
-  }
-  if (cards.size === 0) {
-    drafts.delete(bot)
   }
 }
