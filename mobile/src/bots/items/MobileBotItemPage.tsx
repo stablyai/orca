@@ -128,7 +128,7 @@ export function MobileBotItemPage({
   const noWords = useBotItemCommentDraftEmpty(botItemCommentDraftKey(hostId, uid))
   const photos = useMobileNativeChatDraftInputs(uid, 'images')
   const boxEmpty = noWords && photos.length === 0
-  const { sent, quick, fromBox, waitingLine } = useBotItemQuestionSteps(
+  const { sent, quick, fromBox, waitingLine, replyMark } = useBotItemQuestionSteps(
     itemKey,
     view.item,
     view.events,
@@ -354,6 +354,7 @@ export function MobileBotItemPage({
                     ? { ...waitingLine, asker: item.owner.name ?? bot.name }
                     : null
                 }
+                replyMark={replyMark}
                 attachTo={
                   stagesImages
                     ? botItemAttachmentTarget(item.uid)

@@ -29,7 +29,7 @@ import {
   type BotItemWaitingLine
 } from './bot-item-question-answers'
 import type { BotItemPendingComment, BotItemPendingIntent } from './bot-item-pending-comments'
-import { createBotItemReplyTargetHook } from './bot-item-reply-target'
+import { createBotItemReplyTargetHook, type BotItemReplyMarkState } from './bot-item-reply-target'
 
 const NO_ASK: BotItemQuestionShape = { body: '', decisions: [] }
 
@@ -117,6 +117,8 @@ export type BotItemQuestionStepsState = {
   ) => BotItemHeldAnswersLimit | null
   /** What the comment box replies to: with several questions, the line the step is on. */
   waitingLine: BotItemWaitingLine | null
+  /** Its "Replying to" closed (×) on that line, kept with the draft. */
+  replyMark: BotItemReplyMarkState
 }
 
 type HeldDraft = (scopeKey: string) => { draft: string; setDraft: (next: string) => void }
@@ -133,7 +135,7 @@ export function createBotItemQuestionStepsHooks(
   }: Pick<typeof React, 'useCallback' | 'useLayoutEffect' | 'useMemo' | 'useRef' | 'useState'>,
   useHeldDraft: HeldDraft
 ) {
-  const useBotItemReplyTarget = createBotItemReplyTargetHook({ useState })
+  const useBotItemReplyTarget = createBotItemReplyTargetHook({ useState, useLayoutEffect })
 
   /** A stable function calling the latest committed handler. */
   function useLatest<A extends unknown[], R>(handler: (...args: A) => R): (...args: A) => R {
@@ -319,7 +321,8 @@ export function createBotItemQuestionStepsHooks(
       sent: sent && pending.some((entry) => isBotItemSentComment(entry, sent)) ? sent : null,
       quick,
       fromBox,
-      waitingLine: target.line
+      waitingLine: target.line,
+      replyMark: target
     }
   }
 

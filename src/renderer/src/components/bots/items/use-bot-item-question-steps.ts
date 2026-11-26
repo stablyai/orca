@@ -6,7 +6,7 @@
 // sent with (src/shared/bots/bot-item-held-answers). Box words with no line named post at once and
 // take the picks along. What each send answers is kept on its pending entry
 // (`intent`), so its lines show as sent and can't be sent twice, whatever its words.
-import { useCallback, useState, useSyncExternalStore } from 'react'
+import { useCallback, useLayoutEffect, useState, useSyncExternalStore } from 'react'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { Bot } from '../../../../../shared/bot-types'
 import type {
@@ -31,13 +31,16 @@ import {
   botItemWaitingLine,
   type BotItemWaitingLine
 } from '../../../../../shared/bots/bot-item-question-answers'
-import { createBotItemReplyTargetHook } from '../../../../../shared/bots/bot-item-reply-target'
+import {
+  createBotItemReplyTargetHook,
+  type BotItemReplyMarkState
+} from '../../../../../shared/bots/bot-item-reply-target'
 import type {
   BotItemPendingComment,
   BotItemPendingIntent
 } from '../../../../../shared/bots/bot-item-pending-comments'
 import { botItemSentAnswers } from '../../../../../shared/bots/bot-item-sent-answers'
-import { botItemCommentDraftScope } from './bot-item-comment-draft'
+import { botItemCommentDraftScope, botItemReplyTargetDrafts } from './bot-item-comment-draft'
 import { botItemHeldAnswersScope, useBotItemHeldAnswers } from './bot-item-held-answers'
 import {
   readNativeChatComposerDraft,
@@ -46,7 +49,10 @@ import {
 
 const NO_ASK: BotItemQuestionShape = { body: '', decisions: [] }
 
-const useBotItemReplyTarget = createBotItemReplyTargetHook({ useState })
+const useBotItemReplyTarget = createBotItemReplyTargetHook(
+  { useState, useLayoutEffect },
+  botItemReplyTargetDrafts
+)
 
 export type BotItemQuestionSteps = {
   askId: string
@@ -116,6 +122,8 @@ export function useBotItemQuestionSteps(
   answerWaiting: () => void
   /** What the comment box replies to: the line named when its draft started (shared with the phone). */
   waitingLine: BotItemWaitingLine | null
+  /** Its "Replying to" closed (×) on that line, kept with the draft (shared with the phone). */
+  replyMark: BotItemReplyMarkState
 } {
   // As cheap as the box's own waiting-line read, on each render.
   const asked = botItemWaitingAsk(item, events)
@@ -296,6 +304,7 @@ export function useBotItemQuestionSteps(
     fromBox,
     answerNone,
     answerWaiting,
-    waitingLine: target.line
+    waitingLine: target.line,
+    replyMark: target
   }
 }

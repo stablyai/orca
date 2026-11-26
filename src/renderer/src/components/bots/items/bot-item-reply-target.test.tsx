@@ -3,7 +3,7 @@
 // question or says it answers none: on the desktop's hook and on the phone's (the shared one).
 import * as React from 'react'
 import { act, cleanup, renderHook } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../../shared/bot-types'
 import { botItemAskText, type BotItemAsk } from '../../../../../shared/bots/bot-item-ask'
 import type { BotItem, BotItemEvent } from '../../../../../shared/bots/bot-items'
@@ -108,6 +108,9 @@ type Hook = {
   type: (text: string) => void
   show: (view: View) => void
   send: () => void
+  /** The chip's ×. */
+  hide: () => void
+  hidden: () => boolean
   posted: Posted[]
 }
 
@@ -132,10 +135,14 @@ function desktop(uid: string, start: View): Hook {
         updateNativeChatComposerDraft(botItemCommentDraftScope(bot, uid), { text }, 'immediate')
       ),
     show: (view) => hook.rerender(view),
+    // As the box sends: the line its chip names, none once its × closed it.
     send: () =>
-      act(() =>
-        hook.result.current.fromBox('words', [], hook.result.current.waitingLine?.id ?? null)
-      )
+      act(() => {
+        const { fromBox, waitingLine, replyMark } = hook.result.current
+        fromBox('words', [], replyMark.hidden ? null : (waitingLine?.id ?? null))
+      }),
+    hide: () => act(() => hook.result.current.replyMark.hide()),
+    hidden: () => hook.result.current.replyMark.hidden
   }
 }
 
@@ -165,10 +172,14 @@ function phone(uid: string, start: View, boxEmpty = true): Hook {
     line: () => hook.result.current.waitingLine,
     type: (text) => hook.rerender((props = { ...props, boxEmpty: !text })),
     show: (view) => hook.rerender((props = { ...props, ...view })),
+    // As the box sends: the line its chip names, none once its × closed it.
     send: () =>
-      act(() =>
-        hook.result.current.fromBox('words', [], hook.result.current.waitingLine?.id ?? null)
-      )
+      act(() => {
+        const { fromBox, waitingLine, replyMark } = hook.result.current
+        fromBox('words', [], replyMark.hidden ? null : (waitingLine?.id ?? null))
+      }),
+    hide: () => act(() => hook.result.current.replyMark.hide()),
+    hidden: () => hook.result.current.replyMark.hidden
   }
 }
 
@@ -241,4 +252,90 @@ describe.each([
     again.send()
     expect(again.posted).toEqual([{ questionId: A.id, plain: false }])
   })
+})
+
+describe.each([
+  ['desktop', desktop],
+  ['phone', phone]
+] as const)('%s comment box closed with × then remounted', (app, open) => {
+  it('stays a comment of its own', () => {
+    const start = { item: needsYou(A), events: [A] }
+    const first = open(`${app}-closed`, start)
+    first.type('words')
+    first.hide()
+    expect(first.hidden()).toBe(true)
+    cleanup()
+    const again = open(`${app}-closed`, start, false)
+    expect(again.hidden()).toBe(true)
+    again.send()
+    expect(again.posted).toEqual([{ questionId: undefined, plain: true }])
+  })
+})
+
+// A restart: every module fresh, with only what the draft storage saved.
+async function launchDesktop(saved: ReadonlyMap<string, unknown>) {
+  vi.resetModules()
+  const drafts = '../../native-chat/drafts/'
+  const storage = await import(`${drafts}native-chat-composer-draft-storage`)
+  const disk = storage.createMemoryNativeChatComposerDraftStorage()
+  for (const [key, value] of saved) {
+    disk.drafts.set(key, value)
+  }
+  storage.setNativeChatComposerDraftStorageForTests(disk)
+  await (await import(`${drafts}native-chat-composer-draft-load`)).hydrateNativeChatComposerDrafts()
+  const testing = await import('@testing-library/react')
+  const { useBotItemQuestionSteps: useSteps } = await import('./use-bot-item-question-steps')
+  const { flushNativeChatComposerDrafts } = await import(
+    `${drafts}native-chat-composer-draft-persistence`
+  )
+  const { updateNativeChatComposerDraft: update } = await import(
+    `${drafts}native-chat-composer-draft-store`
+  )
+  const posted: Posted[] = []
+  const view = { ...needsYou(A), uid: 'restart' }
+  const hook = testing.renderHook(() =>
+    useSteps(
+      bot,
+      view,
+      [A],
+      (_t, _p, questionId, plain) => void posted.push({ questionId, plain }),
+      []
+    )
+  )
+  return {
+    disk: disk.drafts,
+    posted,
+    hook,
+    type: (text: string) =>
+      testing.act(() => update(botItemCommentDraftScope(bot, 'restart'), { text }, 'immediate')),
+    quit: async () => {
+      flushNativeChatComposerDrafts()
+      await Promise.resolve()
+      testing.cleanup()
+    },
+    act: testing.act
+  }
+}
+
+it.each([
+  ['the question the draft started on', false],
+  ['closed with ×, a comment of its own', true]
+])('a desktop draft kept over a restart keeps %s', async (_name, close) => {
+  const before = await launchDesktop(new Map())
+  await before.type('words')
+  const started = before.hook.result.current.waitingLine
+  expect(started?.eventId).toBe(A.id)
+  if (close) {
+    before.act(() => before.hook.result.current.replyMark.hide())
+  }
+  await before.quit()
+  const after = await launchDesktop(before.disk)
+  const { waitingLine, replyMark, fromBox } = after.hook.result.current
+  expect(waitingLine?.id).toBe(started?.id)
+  expect(replyMark.hidden).toBe(close)
+  after.act(() => void fromBox('words', [], replyMark.hidden ? null : (waitingLine?.id ?? null)))
+  expect(after.posted).toEqual([
+    close ? { questionId: undefined, plain: true } : { questionId: A.id, plain: false }
+  ])
+  await after.quit()
 })
