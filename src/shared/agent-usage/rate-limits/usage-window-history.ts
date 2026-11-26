@@ -111,10 +111,16 @@ export function recordUsageWindowSample(
     last && beforeLast && at - beforeLast.at < sliceMs
       ? [...samples.slice(0, -1), { at, usedPercent }]
       : [...samples, { at, usedPercent }]
-  if (samples.length > USAGE_HISTORY_MAX_SAMPLES) {
-    samples = samples.slice(samples.length - USAGE_HISTORY_MAX_SAMPLES)
+  while (samples.length > USAGE_HISTORY_MAX_SAMPLES) {
+    samples = thinOlderHalf(samples)
   }
   return { resetsAt: window.resetsAt, windowMinutes: window.windowMinutes, samples }
+}
+
+/** Halves the older half's points, so a full series still starts where the window did. */
+function thinOlderHalf(samples: UsageHistorySample[]): UsageHistorySample[] {
+  const half = Math.floor(samples.length / 2)
+  return [...samples.slice(0, half).filter((_, index) => index % 2 === 0), ...samples.slice(half)]
 }
 
 /** Drops series whose window has ended, so the store only ever holds current windows. */

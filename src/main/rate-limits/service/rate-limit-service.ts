@@ -166,6 +166,12 @@ export class RateLimitService extends RateLimitServiceTargetUsageRead {
   setUsageHistoryRecorder(recorder: UsageHistoryRecorder): void {
     this.usageHistory = recorder
     recorder.record(this.state)
+    // A client that read state before the saved history loaded gets it without waiting for a poll.
+    void recorder.loaded.then(() => {
+      if (this.usageHistory === recorder) {
+        this.pushToRenderer()
+      }
+    })
   }
 
   setInactiveClaudeAccountsResolver(resolver: () => InactiveClaudeAccount[]): void {
