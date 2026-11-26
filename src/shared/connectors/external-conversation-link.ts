@@ -4,6 +4,13 @@ import type { NativeChatAgent } from '../agent-launch/permissions/agent-chat-per
 export const CONNECTOR_SOURCES = ['slack', 'github', 'linear', 'discord'] as const
 export type ConnectorSource = (typeof CONNECTOR_SOURCES)[number]
 
+/** Sources a connector on the bot's own host speaks for, with no Orca cloud between: it answers
+ *  through the reply outbox and only its paired owner can ask. A platform adds its source here. */
+export const LOCAL_CONNECTOR_SOURCES = [] as const satisfies readonly ConnectorSource[]
+export type LocalConnectorSource = (typeof LOCAL_CONNECTOR_SOURCES)[number]
+export const isLocalConnectorSource = (source: string): source is LocalConnectorSource =>
+  LOCAL_CONNECTOR_SOURCES.some((local) => local === source)
+
 /** How agent-facing text names where a conversation comes from. */
 export const CONNECTOR_SOURCE_NAMES: Record<ConnectorSource, string> = {
   slack: 'Slack',

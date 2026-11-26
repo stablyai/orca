@@ -118,6 +118,10 @@ export type ConnectorMessage = {
   reply?: { account: string; carried?: string[] }
   /** Resume on a failed turn's status: delivered only while the chat it reaches still awaits it. */
   resume?: true
+  /** Images a local connector already saved to the attachment store, sent instead of the asker's. */
+  storedImages?: readonly string[]
+  /** A local connector's lifetime: a delivery still waiting when it ends is refused. */
+  transportSignal?: AbortSignal
 }
 
 /** A later message as the turn takes it: its words as an older Orca reads them, and its asker. */
@@ -130,7 +134,7 @@ export type ConnectorLaterText = {
 /** What a connector start carries: the bot's home and its agent, checked by the seam, and who asked. */
 export type ConnectorStartInput = Pick<
   ConnectorMessage,
-  'asker' | 'note' | 'sent' | 'later' | 'reply'
+  'asker' | 'note' | 'sent' | 'later' | 'reply' | 'storedImages' | 'transportSignal'
 > & {
   agent: string
   target: ExternalConversationBot
