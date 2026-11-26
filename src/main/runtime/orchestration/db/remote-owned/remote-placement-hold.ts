@@ -15,6 +15,16 @@ export type RemotePlacementRow = {
   never_sent_at: string | null
 }
 
+export function getRemotePlacement(
+  db: OrchestrationDb,
+  taskId: string
+): RemotePlacementRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns exactly its row shape.
+  return db.db.prepare('SELECT * FROM remote_placements WHERE task_id = ?').get(taskId) as
+    | RemotePlacementRow
+    | undefined
+}
+
 /**
  * The Task's placement on a server, while its link is open. Under a closed link (a re-made
  * pairing) the server can never answer for it, so it holds nothing: not the Task, not its starts.

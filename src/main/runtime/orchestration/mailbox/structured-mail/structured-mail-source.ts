@@ -1,3 +1,4 @@
+import { getRemoteDispatch } from '../../db/remote-owned/remote-dispatch-records'
 import type { ChatMailPlace } from '../../../../../shared/connectors/external-conversation-link'
 import { readAnswerSenderSnapshot } from '../../../../../shared/agent-session/journal/answer-sender-snapshot'
 /** Snapshot distinct sender provenance and join mail to its surviving Run, Dispatch and message records. */
@@ -64,7 +65,12 @@ export function structuredMailSource(input: {
   }
   const senders: AgentMessageSender[] = []
   for (const group of groups.values()) {
-    const address = group[0]!.message.from_handle
+    const recorded = group[0]!.recorded
+    const remote = input.db && recorded && getRemoteDispatch(input.db, recorded.dispatchId)
+    const address =
+      remote && remote.run_id === group[0]!.message.run_id
+        ? `dispatch:${remote.dispatch_id}`
+        : group[0]!.message.from_handle
     const saved = readAnswerSenderSnapshot(group[0]!.message.answer_sender_snapshot)
     const accepted = saved?.party.address === address ? saved : undefined
     const reported = group.find(({ report }) => report.kind === 'valid')?.report

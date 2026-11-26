@@ -1,3 +1,4 @@
+import { resolveDispatchCreator } from '../../../rpc/methods/orchestration/runs/dispatch-creator'
 import { coordinatorKeepOpenByDefault } from '../../../rpc/methods/orchestration/worker/start/worker-keep-open-default'
 import { botOfSession } from '../../../../bots/bot-session-tabs'
 import { createHash, randomUUID } from 'node:crypto'
@@ -163,6 +164,7 @@ export async function startRemoteOwnedWorker(
     taskId,
     requestKey: forward.key,
     retryOf: params.retryOf,
+    creator: resolveDispatchCreator(runtime, params.from, ctx.orchestrationCaller),
     create: existingTask
       ? undefined
       : {
