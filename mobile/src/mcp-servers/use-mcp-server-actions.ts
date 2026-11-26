@@ -11,8 +11,7 @@ import { formatAgentTypeLabel } from '../../../src/shared/agent-status/presentat
 import type { Translate } from '../i18n/mobile-i18n'
 import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import type { BotToolDetails } from '../../../src/shared/bot-tools'
-import { mcpServerRemoveMessage, mcpServerTitle } from './mcp-server-words'
+import { mcpServerTitle } from './mcp-server-words'
 import {
   mcpServerAgentFilesAllow,
   mcpServerCopy,
@@ -225,10 +224,15 @@ export function useMcpServerActions(args: {
   )
 
   const remove = useCallback(
-    (server: PhoneMcpServer, details: BotToolDetails | null, onRemoved: () => void) =>
+    (server: PhoneMcpServer, onRemoved: () => void) =>
       setConfirm({
         title: t('mcpServers.removeTitle', 'Remove {{name}}?', { name: mcpServerTitle(server) }),
-        message: mcpServerRemoveMessage(server, details, t),
+        // One line for every server: what goes depends on host state the phone can't see for sure
+        // (a credential another entry shares, one this host can't open, a read still pending).
+        message: t(
+          'mcpServers.removeMessageSavedData',
+          'Sessions using it may lose access now. This can delete any saved headers, environment variables or sign-in for it; you’ll need to re-enter or sign in again to add it back.'
+        ),
         confirmLabel: t('mcpServers.remove', 'Remove'),
         destructive: true,
         onConfirm: () =>

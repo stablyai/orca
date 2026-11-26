@@ -16,7 +16,6 @@ const server: PhoneMcpServer = {
   detail: 'https://mcp.example.test/mcp',
   transport: 'http',
   remote: false,
-  signIn: { state: 'signed-in', limited: false },
   agentsOff: [],
   workspaces: { later: true, on: [], off: [] },
   sharedProcess: false
@@ -50,13 +49,13 @@ describe('useMcpServerActions remove', () => {
       renderer = create(createElement(Harness, { client }))
     })
 
-    act(() => actions?.remove(server, null, () => {}))
-    expect(actions?.confirm?.message).toBe('mcpServers.removeMessageSignIn')
+    act(() => actions?.remove(server, () => {}))
+    expect(actions?.confirm?.message).toBe('mcpServers.removeMessageSavedData')
     act(() => actions?.closeConfirm())
     expect(actions?.confirm).toBeNull()
     expect(client.requests).toHaveLength(0)
 
-    act(() => actions?.remove(server, null, () => {}))
+    act(() => actions?.remove(server, () => {}))
     await act(async () => actions?.confirm?.onConfirm())
     expect(client.requests.map((request) => [request.method, request.args[1]])).toEqual([
       ['mcpServers.remove', { id: server.id }]
