@@ -145,9 +145,16 @@ export async function main(root = process.cwd(), locale = parseLocaleArg(process
   const enCatalog = JSON.parse(await fs.readFile(enPath, 'utf8'))
   const localeCatalog = structuredClone(enCatalog)
   const leaves = collectStringLeaves(enCatalog)
+  const reviewed =
+    locale === 'ko'
+      ? await (await import('./locale-ko-bootstrap-reviewed.mjs')).reviewedKoreanLeaves(leaves)
+      : new Map()
   const uniqueValues = [...new Set(leaves.map((leaf) => leaf.value))]
+  const uncoveredValues = new Set(
+    leaves.filter((leaf) => !reviewed.has(leaf.key)).map((leaf) => leaf.value)
+  )
   const cache = await loadCache(cachePath)
-  const toTranslate = uniqueValues.filter(
+  const toTranslate = [...uncoveredValues].filter(
     (value) => !shouldSkipTranslation(value) && !cache.has(value)
   )
 
@@ -181,7 +188,7 @@ export async function main(root = process.cwd(), locale = parseLocaleArg(process
   await saveCache(cachePath, cache)
 
   for (const leaf of leaves) {
-    const cached = cache.get(leaf.value) ?? leaf.value
+    const cached = reviewed.get(leaf.key) ?? cache.get(leaf.value) ?? leaf.value
     setLeaf(
       localeCatalog,
       leaf.key,
@@ -195,6 +202,12 @@ export async function main(root = process.cwd(), locale = parseLocaleArg(process
   }
 
   repairCatalog(enCatalog, localeCatalog, locale)
+
+  for (const leaf of collectStringLeaves(localeCatalog)) {
+    if (reviewed.has(leaf.key) && reviewed.get(leaf.key) !== leaf.value) {
+      throw new Error(`${leaf.key}: Korean bootstrap value changed during catalog repair`)
+    }
+  }
 
   await fs.writeFile(localePath, `${JSON.stringify(localeCatalog, null, 2)}\n`, 'utf8')
   console.log(`Wrote ${localePath}`)

@@ -127,10 +127,10 @@ export class BotItemsHost {
     await this.sendOwedMail()
   }
 
+  /** Leaves the bots DB worker client alone: the runtime owns it, shared with the work record. */
   dispose(): void {
     this.usageLimitWaits.stop()
     this.stores.clear()
-    this.deps.db.dispose()
   }
 
   /** Where a chat came from: the bot's Home Chat, a connector thread, an automation run, a side chat. */
@@ -306,6 +306,11 @@ export class BotItemsHost {
   /** The newest `limit` events before `beforeId` (0: the newest of all), oldest first. */
   async eventsBefore(uid: string, beforeId: number, limit: number): Promise<BotItemEvent[]> {
     return (await this.store().eventsBefore(uid, beforeId, limit)).map(eventViewOf)
+  }
+
+  /** A write to any Dispatch's rows (the database's notice), or a paired server's verdict on one. */
+  workersWritten(dispatchIds: readonly string[] = [], deleted = false): void {
+    this.join.workersWritten(dispatchIds, deleted)
   }
 
   /** A Dispatch row changed: a start for an item is linked, and linked items re-read. */

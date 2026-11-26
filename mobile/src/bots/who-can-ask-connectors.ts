@@ -13,7 +13,6 @@ import {
 } from '../../../src/shared/bot-types'
 import { BOT_CONNECTOR_NAMES } from '../../../src/shared/bots/bot-templates'
 import type { BotAccessConnector } from '../../../src/shared/bots/bot-access-reach'
-import type { ConnectorAccessRequest } from '../../../src/shared/connector-bot-access-contract'
 import {
   gitHubLinkedAccounts,
   type ConnectorGitHubState
@@ -68,11 +67,7 @@ export type WhoCanAskConnector = {
   idleHint?: { title: string; detail: string }
   /** The owner's own accounts there: found as the owner, never offered. */
   ownerIds: readonly string[]
-  /** The Request access asks this list answers. */
-  takes: (request: ConnectorAccessRequest) => boolean
 }
-
-const TAKES_NONE = () => false
 
 function searchError(code: string, service: string, hostName: string, t: Translate): string {
   switch (code) {
@@ -174,10 +169,7 @@ export function whoCanAskConnectors({
           { workspace: place }
         )
       }),
-      ownerIds: installed?.installerUserId ? [installed.installerUserId] : [],
-      takes: installed
-        ? (request) => request.source === 'slack' && request.workspaceId === installed.teamId
-        : TAKES_NONE
+      ownerIds: installed?.installerUserId ? [installed.installerUserId] : []
     })
   }
   // People added in Slack stay listed after its app is removed, so they can be removed too.
@@ -225,8 +217,7 @@ export function whoCanAskConnectors({
           { workspace: place }
         )
       }),
-      ownerIds: owner ? [owner.userId] : [],
-      takes: (request) => request.source === 'linear' && request.workspaceId === workspaceId
+      ownerIds: owner ? [owner.userId] : []
     })
   }
 
@@ -274,8 +265,7 @@ export function whoCanAskConnectors({
           title: t('bots.github.whoCanAsk.typeUsername', 'Type a GitHub username'),
           detail: exactOnly
         },
-        ownerIds,
-        takes: TAKES_NONE
+        ownerIds
       })
     }
     const people = botMembersFrom(bot.members, 'github')
@@ -320,7 +310,6 @@ function unreachable(
     searchPlaceholder: '',
     peopleHeading: '',
     noMatch: () => ({ title: '', detail: '' }),
-    ownerIds: [],
-    takes: TAKES_NONE
+    ownerIds: []
   }
 }

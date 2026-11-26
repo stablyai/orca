@@ -90,7 +90,8 @@ export const browserRouteWebContentsRegistry = new BrowserRouteWebContentsRegist
   openNewTabPopup: (source, request, observed, childOpener) =>
     browserManager.openNewTabPopup(source, request, observed, childOpener),
   releaseAgentLead: (openerWebContentsId) => browserManager.releaseAgentLead(openerWebContentsId),
-  isAgentCommandShownHere: (webContentsId) => browserManager.isAgentCommandShownHere(webContentsId)
+  isAgentCommandShownHere: (webContentsId) => browserManager.isAgentCommandShownHere(webContentsId),
+  isPersonCommandRunning: (webContentsId) => browserManager.isPersonCommandRunning(webContentsId)
 })
 routeWebContentsRegistryRef.current = browserRouteWebContentsRegistry
 

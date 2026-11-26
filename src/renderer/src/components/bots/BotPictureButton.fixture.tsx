@@ -68,7 +68,9 @@ function Picture({
     color,
     pickColor: setColor,
     outfit: null,
-    pickOutfit: () => {}
+    pickOutfit: () => {},
+    beginIntake: () => () => {},
+    uploads: () => 0
   }
   return (
     <div className="flex h-[380px] items-start gap-4 p-6">

@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import type React from 'react'
 import { toast } from 'sonner'
-import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
 import type {
@@ -41,7 +40,6 @@ import { useSourceControlActionAgentInventory } from './use-source-control-actio
 
 type SourceControlAiActionRecipeDefaultsProps = {
   config: SourceControlAiSettings
-  defaultTuiAgent: GlobalSettings['defaultTuiAgent']
   customPromptDiscardSignal?: number
   onCustomPromptDirtyChange?: (dirty: boolean) => void
   searchQuery: string
@@ -98,7 +96,6 @@ const ACTION_RECIPES_SEARCH_ENTRY = {
 
 export function SourceControlAiActionRecipeDefaults({
   config,
-  defaultTuiAgent,
   customPromptDiscardSignal,
   onCustomPromptDirtyChange,
   searchQuery,
@@ -242,7 +239,6 @@ export function SourceControlAiActionRecipeDefaults({
               selectedAgent={selectedAgent as TuiAgent | CustomAgentId | null}
               draftValue={actionRecipeDraftState.values[actionId]}
               baseValue={actionRecipeDraftState.baseValues[actionId]}
-              defaultTuiAgent={defaultTuiAgent}
               isSavingTemplate={savingActionTemplateIds[actionId] === true}
               repoOverrideNote={
                 <SourceControlActionRepoOverrideNote

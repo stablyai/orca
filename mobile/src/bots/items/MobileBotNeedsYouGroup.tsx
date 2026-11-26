@@ -1,9 +1,10 @@
-// The Items tab's Needs you group on the phone: Orca's asks it can read (approvals first), then the
-// items the bot set to Needs you. Five rows, then Show N more; approvals never fold. A tap opens where
-// the ask was made, or an access request's decision; a row the phone can't reach is dimmed and says so.
+// The Items tab's Needs you group on the phone: approvals, then questions (chats, workers, the items
+// the bot set to Needs you), then access requests, then one row for every connector sign-in. Each row
+// is a glyph, a title, one line and its age. Five rows, then Show N more; approvals never fold. A tap
+// opens where the ask was made, or an access request's decision; a row the phone can't reach is dimmed.
 import { useMemo, useState, type ReactNode } from 'react'
-import { Text, View } from 'react-native'
-import { CircleAlert, CircleHelp, KeyRound, Shield, UserPlus } from 'lucide-react-native'
+import { View } from 'react-native'
+import { CircleHelp, KeyRound, Shield, UserPlus } from 'lucide-react-native'
 import { CONNECTOR_SOURCE_NAMES } from '../../../../src/shared/connectors/external-conversation-link'
 import { accessRequestPerson } from '../../../../src/shared/bots/bot-access-request'
 import { needsYouFold } from '../../../../src/shared/bots/needs-you-fold'
@@ -18,10 +19,9 @@ import {
 } from '../../components/list/ListGroup'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { Translate } from '../../i18n/mobile-i18n'
-import { colors, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
+import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { phoneAskCounts, type PhoneAsk } from './phone-needs-you-asks'
+import type { PhoneAsk } from './phone-needs-you-asks'
 import { chatSessionId } from './use-phone-chat-prompts'
 import type { PhoneConnectorNeed } from '../connectors/phone-connector-needs'
 import type { ConnectorAccessRequest } from '../../../../src/shared/connector-bot-access-contract'
@@ -32,7 +32,7 @@ import { structuredAgentSessionHostSupport } from '../../session/native-chat/age
 import { useMobileStructuredAsyncQuestions } from '../../session/native-chat/agent-session/use-mobile-structured-async-questions'
 import { MobileBotTextButton } from '../MobileBotTextButton'
 import type { MobileBotAvatarSource } from '../host-bot-row-facts'
-import { MobileBotItemOwnerLine } from './MobileBotItemRow'
+import { MobileBotAskAge, MobileBotItemOwnerLine } from './MobileBotItemRow'
 
 /** In a group's list: the member an ask is from. */
 export type PhoneAskOwner = { name: string; avatar: MobileBotAvatarSource }
@@ -51,19 +51,20 @@ function askTitle(ask: PhoneAsk, title: string): string {
   return ask.number === null ? title : `${formatBotItemNumber(ask.number)} ${title}`
 }
 
+/** One line: the worker that asks, then the tool and what it would run, or the question. */
 function askLine(ask: PhoneAsk, t: Translate, question: string | undefined): string {
   const need = ask.approval
     ? ask.tool
-      ? t('bots.needs.permissionTool', 'Permission · {{tool}}', { tool: ask.tool.name })
+      ? [ask.tool.name, ask.tool.input].filter(Boolean).join(' · ')
       : t('bots.needs.permission', 'Permission needed')
     : question || t('bots.needs.waiting', 'Waiting for you')
   const line = ask.open
     ? need
     : t('bots.needs.whereItRuns', '{{need}} · open it where it runs', { need })
-  return ask.worker
-    ? `${t('bots.needs.worker', 'Worker: {{name}}', { name: ask.worker })} · ${line}`
-    : line
+  return ask.worker ? `${ask.worker} · ${line}` : line
 }
+
+const NEED_GLYPH = { size: 17, strokeWidth: 2.1 } as const
 
 /** One ask; a chat's says the question it waits on without stopping, as its host publishes it,
  *  with Skip to settle it here. */
@@ -71,6 +72,7 @@ function AskRow({
   ask,
   botName,
   owner,
+  now,
   client,
   disabled,
   onOpen,
@@ -79,6 +81,7 @@ function AskRow({
   ask: PhoneAsk
   botName: string
   owner: PhoneAskOwner | undefined
+  now: number
   client: RpcClient | null
   disabled: boolean
   onOpen: () => void
@@ -100,32 +103,18 @@ function AskRow({
   const save = asyncQuestionSkip?.save
   const title = askRowTitle(ask, owner?.name ?? botName, t)
   const line = askLine(ask, t, ask.question ?? asked?.text)
-  const command = ask.tool?.input ? (
-    <Text style={styles.command} numberOfLines={1}>
-      {ask.tool.input}
-    </Text>
-  ) : null
   return (
     <ListRow
       title={title}
-      marker={ask.number === null ? undefined : formatBotItemNumber(ask.number)}
+      titlePrefix={ask.number === null ? undefined : formatBotItemNumber(ask.number)}
       subtitle={owner ? undefined : line}
       subtitleLines={1}
-      detail={
-        owner ? (
-          <>
-            <MobileBotItemOwnerLine owner={owner} line={line} />
-            {command}
-          </>
-        ) : (
-          (command ?? undefined)
-        )
-      }
+      detail={owner ? <MobileBotItemOwnerLine owner={owner} line={line} /> : undefined}
       leading={
         ask.approval ? (
-          <Shield size={17} strokeWidth={2.1} color={colors.agentQuestion} />
+          <Shield {...NEED_GLYPH} color={colors.agentQuestion} />
         ) : (
-          <CircleHelp size={17} strokeWidth={2.1} color={colors.agentQuestion} />
+          <CircleHelp {...NEED_GLYPH} color={colors.agentQuestion} />
         )
       }
       accessory={
@@ -143,6 +132,8 @@ function AskRow({
               )
             }
           />
+        ) : ask.at !== null ? (
+          <MobileBotAskAge at={ask.at} now={now} />
         ) : undefined
       }
       disabled={disabled || !ask.open}
@@ -159,10 +150,12 @@ function AskRow({
 /** Someone asked for access: a tap opens the decision, as the desktop's Review does. */
 function AccessAskRow({
   request,
+  now,
   disabled,
   onOpen
 }: {
   request: ConnectorAccessRequest
+  now: number
   disabled: boolean
   onOpen: () => void
 }) {
@@ -177,7 +170,8 @@ function AccessAskRow({
         .filter(Boolean)
         .join(' · ')}
       subtitleLines={1}
-      leading={<UserPlus size={17} strokeWidth={2.1} color={colors.agentQuestion} />}
+      leading={<UserPlus {...NEED_GLYPH} color={colors.agentQuestion} />}
+      accessory={<MobileBotAskAge at={request.createdAt} now={now} />}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={t('bots.needs.actionFor', '{{action}}: {{title}}', {
@@ -195,12 +189,14 @@ function PairedAskRow({
   ask,
   card,
   botName,
+  now,
   disabled,
   onOpen
 }: {
   ask: PhoneAsk
   card: PairedServerAskCard
   botName: string
+  now: number
   disabled: boolean
   onOpen: (() => void) | null
 }) {
@@ -213,15 +209,10 @@ function PairedAskRow({
   return (
     <ListRow
       title={title}
-      wrapTitle
-      subtitle={[
-        card.serverName,
-        t('bots.needs.pairedAskDetail', 'Permission · Message {{name}}', { name })
-      ]
-        .filter(Boolean)
-        .join(' · ')}
+      subtitle={[card.serverName, card.subject].filter(Boolean).join(' · ')}
       subtitleLines={1}
-      leading={<Shield size={17} strokeWidth={2.1} color={colors.agentQuestion} />}
+      leading={<Shield {...NEED_GLYPH} color={colors.agentQuestion} />}
+      accessory={ask.at !== null ? <MobileBotAskAge at={ask.at} now={now} /> : undefined}
       disabled={disabled || !onOpen}
       accessibilityRole="button"
       accessibilityLabel={t('bots.needs.actionFor', '{{action}}: {{title}}', {
@@ -233,47 +224,39 @@ function PairedAskRow({
   )
 }
 
-/** A connector to sign in to or fix: a tap opens its page in Settings › Connectors. */
-function ConnectorAskRow({
-  need,
+/** Every connector to sign in to or fix, as one row: one names itself and opens its page; several are
+ *  counted and open Connectors, which lists them. */
+function ConnectorsAskRow({
+  needs,
   disabled,
   onOpen
 }: {
-  need: PhoneConnectorNeed
+  needs: readonly PhoneConnectorNeed[]
   disabled: boolean
   onOpen: () => void
 }) {
   const t = useMobileTranslation()
-  return (
-    <ListRow
-      title={need.title}
-      subtitle={need.need}
-      subtitleLines={2}
-      leading={<KeyRound size={17} strokeWidth={2.1} color={colors.agentQuestion} />}
-      disabled={disabled}
-      accessibilityRole="button"
-      accessibilityLabel={t('bots.needs.fixConnector', 'Open {{name}}', { name: need.title })}
-      onPress={onOpen}
-    />
-  )
-}
-
-/** A run a sign-in stopped, its mark muted: context for the sign-in above it, not a need of its own. */
-function StoppedAskRow({ title, onOpen }: { title: string; onOpen: (() => void) | null }) {
-  const t = useMobileTranslation()
+  const [only] = needs
+  const several = needs.length > 1
+  const title = several
+    ? t('bots.needs.signInApps', 'Sign in to {{count}} apps', { count: needs.length })
+    : only.title
   return (
     <ListRow
       title={title}
-      subtitle={t('bots.needs.runSignIn', 'Couldn’t run until you sign in.')}
+      subtitle={
+        several
+          ? [...new Set(needs.map((need) => need.service))].join(
+              t('bots.needs.listSeparator', ', ')
+            )
+          : only.need
+      }
       subtitleLines={1}
-      leading={<CircleAlert size={17} strokeWidth={2.1} color={colors.textMuted} />}
-      disabled={!onOpen}
+      leading={<KeyRound {...NEED_GLYPH} color={colors.agentQuestion} />}
+      disabled={disabled}
       accessibilityRole="button"
-      accessibilityLabel={t('bots.needs.actionFor', '{{action}}: {{title}}', {
-        action: t('bots.needs.openRun', 'Open run'),
-        title
-      })}
-      onPress={onOpen ?? undefined}
+      accessibilityLabel={t('bots.needs.fixConnector', 'Open {{name}}', { name: title })}
+      onPress={onOpen}
     />
   )
 }
@@ -282,6 +265,7 @@ export function MobileBotNeedsYouGroup({
   botName,
   asks,
   items,
+  now,
   disabled,
   renderItem,
   onOpenAsk,
@@ -290,10 +274,12 @@ export function MobileBotNeedsYouGroup({
   onSkipFailed
 }: {
   botName: string
+  /** Approvals and questions first; access requests and the connectors' row last. */
   asks: readonly PhoneAsk[]
   /** In a group's list: the member each ask is from, named under its title. */
   ownerOf?: (ask: PhoneAsk) => PhoneAskOwner | undefined
   items: readonly BotItem[]
+  now: number
   /** Offline or the read failed: rows stay, taps wait. */
   disabled: boolean
   renderItem: (item: BotItem) => ReactNode
@@ -306,9 +292,14 @@ export function MobileBotNeedsYouGroup({
   const t = useMobileTranslation()
   const [folded, setFolded] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  const last = (ask: PhoneAsk) =>
+    ask.open !== null && ('access' in ask.open || 'connectors' in ask.open)
+  const askRow = (ask: PhoneAsk): Row => ({ key: ask.key, approval: ask.approval, ask })
+  // Items are questions too: after the chats' asks, before access and sign-ins.
   const rows: Row[] = [
-    ...asks.map((ask) => ({ key: ask.key, approval: ask.approval, ask })),
-    ...items.map((item) => ({ key: `item:${item.uid}`, approval: false, item }))
+    ...asks.filter((ask) => !last(ask)).map(askRow),
+    ...items.map((item) => ({ key: `item:${item.uid}`, approval: false, item })),
+    ...asks.filter(last).map(askRow)
   ]
   if (rows.length === 0) {
     return null
@@ -318,7 +309,7 @@ export function MobileBotNeedsYouGroup({
   return (
     <>
       <SectionHeader
-        title={`${botItemStatusName('needs_you', t)} ${botNeedsYouCount(asks.filter(phoneAskCounts).length, items.length)}`}
+        title={`${botItemStatusName('needs_you', t)} ${botNeedsYouCount(asks.length, items.length)}`}
         expanded={!folded}
         onToggle={() => setFolded(!folded)}
       />
@@ -328,18 +319,12 @@ export function MobileBotNeedsYouGroup({
             ...fold.ordered
               .filter((row) => shown.has(row.key))
               .map((row) =>
-                row.ask?.open && 'connector' in row.ask.open ? (
-                  <ConnectorAskRow
+                row.ask?.open && 'connectors' in row.ask.open ? (
+                  <ConnectorsAskRow
                     key={row.key}
-                    need={row.ask.open.connector}
+                    needs={row.ask.open.connectors}
                     disabled={disabled}
                     onOpen={() => onOpenAsk(row.ask!)}
-                  />
-                ) : row.ask?.open && 'stopped' in row.ask.open ? (
-                  <StoppedAskRow
-                    key={row.key}
-                    title={row.ask.title}
-                    onOpen={disabled ? null : () => onOpenAsk(row.ask!)}
                   />
                 ) : row.ask?.open && 'pairedAsk' in row.ask.open ? (
                   <PairedAskRow
@@ -347,6 +332,7 @@ export function MobileBotNeedsYouGroup({
                     ask={row.ask}
                     card={row.ask.open.pairedAsk.card}
                     botName={botName}
+                    now={now}
                     disabled={disabled}
                     onOpen={row.ask.open.pairedAsk.home ? () => onOpenAsk(row.ask!) : null}
                   />
@@ -354,6 +340,7 @@ export function MobileBotNeedsYouGroup({
                   <AccessAskRow
                     key={row.key}
                     request={row.ask.open.access}
+                    now={now}
                     disabled={disabled}
                     onOpen={() => onOpenAsk(row.ask!)}
                   />
@@ -363,6 +350,7 @@ export function MobileBotNeedsYouGroup({
                     ask={row.ask}
                     botName={botName}
                     owner={ownerOf?.(row.ask)}
+                    now={now}
                     client={client}
                     disabled={disabled}
                     onOpen={() => onOpenAsk(row.ask!)}
@@ -390,12 +378,3 @@ export function MobileBotNeedsYouGroup({
     </>
   )
 }
-
-const styles = themedStyleSheet(() => ({
-  command: {
-    fontFamily: typography.monoFamily,
-    fontSize: typography.metaSize,
-    color: colors.textSecondary,
-    marginTop: 2
-  }
-}))

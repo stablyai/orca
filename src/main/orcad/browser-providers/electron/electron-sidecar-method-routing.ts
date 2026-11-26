@@ -1,6 +1,7 @@
 export const TARGETLESS_BROWSER_METHODS: Record<string, true> = {
   browserProfileClearGoogleCookies: true,
   browserProfileClearDefaultCookies: true,
+  browserProfileClearCookies: true,
   browserProfileCreate: true,
   browserProfileDelete: true,
   browserProfileDetectBrowsers: true,

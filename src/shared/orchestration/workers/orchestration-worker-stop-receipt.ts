@@ -12,12 +12,23 @@ export const HelperStopOutcome = z.object({
 })
 export type HelperStopOutcome = z.infer<typeof HelperStopOutcome>
 
+/** A helper whose stop is done: it stopped, had already finished, or the user kept it open. */
+export function isHelperStopDone(helper: Pick<HelperStopOutcome, 'outcome'>): boolean {
+  return (
+    helper.outcome === 'stopped' ||
+    helper.outcome === 'already_finished' ||
+    helper.outcome === 'kept_open'
+  )
+}
+
 export type WorkerStopReceipt = {
   dispatchId: string
   state: string
   alreadySettled: boolean
   processAction: string
   close?: unknown
+  /** How a stop settled without a proven exit, such as a start it cancelled. */
+  reason?: string
   lastError?: string | null
   warning?: string
   helpers?: HelperStopOutcome[]

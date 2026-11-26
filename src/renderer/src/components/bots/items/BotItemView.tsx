@@ -16,6 +16,7 @@ import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItem, BotItemStatus } from '../../../../../shared/bots/bot-items'
 import { useBotItemQuestionSteps } from './use-bot-item-question-steps'
+import type { BotItemHeldAnswer } from '../../../../../shared/bots/bot-item-held-answers'
 import { NativeChatJumpToLatest } from '../../native-chat/viewport/scroll/NativeChatJumpToLatest'
 import { NativeChatPaneFileDropSurface } from '../../native-chat/attachments/intake/NativeChatPaneFileDropSurface'
 import {
@@ -45,6 +46,7 @@ import { useBotItemPendingComments } from './use-bot-item-pending-comments'
 import { BotItemsReadFailed } from './BotItemsReadFailed'
 import { BotItemNavRow } from './BotItemStepper'
 import { BotItemLoading } from './BotItemLoading'
+import { BotItemCloseNote } from './BotItemCloseNote'
 
 const NO_FOLDERS: never[] = []
 
@@ -202,11 +204,13 @@ export function BotItemBody({
   const pending = useBotItemPendingComments(bot, item.uid, view.events)
   // The header and comment box paint first; the Activity, the costly part, renders right after.
   const activityMounted = useDeferredValue(true, false)
-  const { scrollRef, contentRef, scrollerProps, showJump, jumpToLatest } = useBotTranscriptFollow({
-    itemCount: view.events.length + pending.shown.length,
-    isWorking: false,
-    isVisible: true
-  })
+  const { scrollRef, contentRef, scrollerProps, showJump, jumpToLatest, leaveEnd } =
+    useBotTranscriptFollow({
+      itemCount: view.events.length + pending.shown.length,
+      isWorking: false,
+      isVisible: true,
+      preserveReaderOnViewportResize: true
+    })
   // From the comment box or a quick reply: shown at once, then sent to the host.
   const sendComment: Parameters<typeof useBotItemQuestionSteps>[3] = (
     text,
@@ -243,29 +247,35 @@ export function BotItemBody({
     [fileContext?.fileLinkContext, runtimeContext]
   )
   // `waitingLine`: the question the comment box names, until a reply is on its way.
-  const { steps, sent, quick, fromBox, waitingLine } = useBotItemQuestionSteps(
-    bot,
-    item,
-    view.events,
-    sendLatest,
-    pending.shown
-  )
+  const { steps, sent, quick, fromBox, answerNone, answerWaiting, waitingLine } =
+    useBotItemQuestionSteps(bot, item, view.events, sendLatest, pending.shown)
   const quickReplies = useMemo(
     () =>
       deleted
         ? undefined
         : {
             send: quick,
-            edit: (text: string) => comment.current?.fill(text),
-            recover: (text: string) => comment.current?.fill(text, true),
-            type: () => comment.current?.answer(),
+            edit: (text: string) => {
+              answerWaiting()
+              comment.current?.fill(text)
+            },
+            restore: (answer: BotItemHeldAnswer, plain?: boolean) => {
+              // A comment of its own answers no line, whatever the box names next.
+              const bind = plain ? answerNone : answerWaiting
+              bind()
+              return comment.current?.restore(answer, plain) ?? false
+            },
+            type: () => {
+              answerWaiting()
+              comment.current?.answer()
+            },
             steps,
             sent
           },
-    [deleted, comment, quick, steps, sent]
+    [deleted, comment, quick, answerNone, answerWaiting, steps, sent]
   )
   // The waiting question's comment, with its words and quick replies, is read even when it is older
-  // than the loaded page (an ask a later question left open can be): earlier pages load until it shows.
+  // than the loaded page (later comments can push it back): earlier pages load until it shows.
   const questionId = item.waitingAsk ?? item.question?.eventId
   const questionUnread =
     view.eventsRead &&
@@ -278,10 +288,7 @@ export function BotItemBody({
       loadEarlier()
     }
   }, [questionUnread, hasEarlier, earliest, loadEarlier])
-  const waitingOn =
-    waitingLine && !pending.shown.some(({ failed }) => !failed)
-      ? { ...waitingLine, asker: item.owner.name ?? bot.name }
-      : null
+  const waitingOn = waitingLine ? { ...waitingLine, asker: item.owner.name ?? bot.name } : null
   const links = useNativeChatLinkActions(fileContext?.fileLinkContext ?? null, pane, {
     sessionId: null,
     isVisible: true
@@ -320,10 +327,15 @@ export function BotItemBody({
                     />
                     <div ref={contentRef} className="flex flex-col gap-4 px-3.5 pt-2">
                       {item.description ? (
-                        <BotItemClampedText text={item.description} clampClassName="max-h-[57px]" />
+                        <BotItemClampedText
+                          text={item.description}
+                          clampClassName="max-h-[57px]"
+                          // Opening the description above the Activity must not follow it to the end.
+                          onToggle={leaveEnd}
+                        />
                       ) : null}
                       {item.status === 'canceled' || item.status === 'done' ? (
-                        <CloseNote item={item} />
+                        <BotItemCloseNote item={item} />
                       ) : null}
                       <dl className="grid grid-cols-[84px_minmax(0,1fr)] items-start gap-x-2 gap-y-1 text-xs @max-[284px]:grid-cols-[72px_minmax(0,1fr)]">
                         <dt className="leading-6 text-muted-foreground">
@@ -345,7 +357,9 @@ export function BotItemBody({
                             <dt className="leading-[18px] text-muted-foreground">
                               {t('bots.items.field.doneMeans', 'Done means')}
                             </dt>
-                            <dd className="leading-[18px] text-foreground">{item.doneMeans}</dd>
+                            <dd className="leading-[18px] text-foreground [overflow-wrap:anywhere]">
+                              {item.doneMeans}
+                            </dd>
                           </>
                         ) : null}
                       </dl>
@@ -404,20 +418,5 @@ export function BotItemBody({
       {notes.dialog}
       {snoozing.dialog}
     </div>
-  )
-}
-
-function CloseNote({ item }: { item: BotItem }): React.JSX.Element | null {
-  const t = useTranslate()
-  if (!item.closeNote) {
-    return null
-  }
-  return (
-    <p className="rounded-md bg-muted px-2.5 py-2 text-xs text-muted-foreground">
-      {item.status === 'canceled'
-        ? t('bots.items.view.canceledNote', 'Canceled:')
-        : t('bots.items.view.doneNote', 'Done:')}{' '}
-      <span className="text-foreground">{item.closeNote}</span>
-    </p>
   )
 }

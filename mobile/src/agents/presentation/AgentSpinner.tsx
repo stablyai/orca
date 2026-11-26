@@ -9,16 +9,20 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { ArrivalFade } from '../../components/motion/ArrivalFade'
-import { WorkingRing } from './AgentStateDot'
+import { agentStateLabel } from '../../worktree/agent-lineage/agent-row-display'
+import { AGENT_FAILURE_COLOR, AgentQuestionIcon, WorkingRing } from './AgentStateDot'
+
+const STATUS_SLOT_SIZE = 12
+
+export type AgentSpinnerStatus = WorktreeStatus | 'blocked' | 'waiting'
 
 // Match desktop sidebar StatusIndicator colors/sizes for the worktree rollup; palette distinguishes moving/alive/completed states.
-export const agentStatusColors = (): Record<WorktreeStatus, string> => ({
+const agentStatusColors = (): Record<Exclude<WorktreeStatus, 'permission'>, string> => ({
   working: '#eab308',
   monitoring: '#eab308',
   active: '#10b981',
   done: '#10b981',
-  permission: '#ef4444',
-  failed: '#ef4444',
+  failed: AGENT_FAILURE_COLOR,
   interrupted: colors.textMuted,
   unconfirmed: colors.statusAmber,
   inactive: 'rgba(115,115,115,0.4)'
@@ -29,7 +33,7 @@ export function AgentSpinner({
   status,
   workingMode
 }: {
-  status: WorktreeStatus | null
+  status: AgentSpinnerStatus | null
   workingMode?: AgentWorkingMode
 }) {
   const [startedEmpty] = useState(status === null)
@@ -48,7 +52,7 @@ function ArrivingAgentStatus({
   status,
   workingMode
 }: {
-  status: WorktreeStatus | null
+  status: AgentSpinnerStatus | null
   workingMode?: AgentWorkingMode
 }) {
   const reducedMotion = useReducedMotionEnabled()
@@ -66,11 +70,19 @@ function AgentStatusGlyph({
   status,
   workingMode
 }: {
-  status: WorktreeStatus
+  status: AgentSpinnerStatus
   workingMode?: AgentWorkingMode
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
+  if (status === 'blocked' || status === 'waiting' || status === 'permission') {
+    return (
+      <View accessible style={styles.wrapper} accessibilityLabel={agentStateLabel(status)}>
+        <AgentQuestionIcon size={STATUS_SLOT_SIZE} />
+      </View>
+    )
+  }
+
   const monitoring =
     status === 'monitoring' || (status === 'working' && workingMode === 'monitoring')
 
@@ -80,10 +92,11 @@ function AgentStatusGlyph({
   if (monitoring) {
     return (
       <View
+        accessible
         style={styles.wrapper}
         accessibilityLabel={t('components.agentSpinner.monitoring', 'Monitoring background tasks')}
       >
-        <Activity size={12} color={palette.working} />
+        <Activity size={STATUS_SLOT_SIZE} color={palette.working} />
       </View>
     )
   }
@@ -117,8 +130,8 @@ function AgentStatusGlyph({
 const styles = themedStyleSheet(() => ({
   // Match desktop 12px shell/8px glyph so row baseline remains stable through status transitions.
   wrapper: {
-    width: 12,
-    height: 12,
+    width: STATUS_SLOT_SIZE,
+    height: STATUS_SLOT_SIZE,
     alignItems: 'center',
     justifyContent: 'center'
   },

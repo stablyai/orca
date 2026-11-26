@@ -12,7 +12,9 @@ function formatMebibytes(bytes: number): string {
 export function limitRuntimeRpcReplySize(
   requestId: string,
   reply: (response: string) => void,
-  buildError: (id: string, code: string, message: string) => RpcResponse
+  buildError: (id: string, code: string, message: string) => RpcResponse,
+  /** Keeps an oversize reply for a client that reads it in parts; returns the reply naming it. */
+  stageReply?: (response: string, bytes: number) => RpcResponse | null
 ): (response: string) => void {
   return (response) => {
     if (isMobileE2EETextPayloadWithinLimit(response)) {
@@ -20,6 +22,11 @@ export function limitRuntimeRpcReplySize(
       return
     }
     const bytes = Buffer.byteLength(response, 'utf8')
+    const staged = stageReply?.(response, bytes)
+    if (staged) {
+      reply(JSON.stringify(staged))
+      return
+    }
     reply(
       JSON.stringify(
         buildError(

@@ -151,7 +151,8 @@ export function loadInitialWebSessionTabs({
             freshSnapshots,
             environmentId,
             undefined,
-            changedAgentPaneKeys
+            changedAgentPaneKeys,
+            { requestReceivedFrame }
           )
           // In the same commit as the first tabs, so no chat shows before its marks.
           const copied = isWebClientLocation()

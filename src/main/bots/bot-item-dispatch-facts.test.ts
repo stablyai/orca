@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Bot } from '../../shared/bot-types'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import type { AgentSessionRecordReader } from '../runtime/orchestration/addressing/session-lineage/structured-session-lineage'
-import { dispatchStarterBotId } from './bot-item-dispatch-facts'
+import { dispatchStarterBotId, linksOutsideLinkedChains } from './bot-item-dispatch-facts'
 
 // Whether a session is an agent's own chat is orchestration's own answer; here, by name.
 vi.mock('./bot-own-chat', () => ({
@@ -42,5 +42,29 @@ describe('dispatchStarterBotId', () => {
     expect(starter('worker-in-b-home')).toBeNull()
     expect(starter('gone-chat')).toBeNull()
     expect(starter('a-chat', null)).toBeNull()
+  })
+})
+
+describe('linksOutsideLinkedChains', () => {
+  // ctx_b follows up ctx_a; ctx_c starts its own chain.
+  const followUpOf: Record<string, string> = { ctx_b: 'ctx_a' }
+  const getDispatchContextById = vi.fn((id: string) => ({
+    follow_up_of_dispatch_id: followUpOf[id] ?? null
+  }))
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only follow-up ids are read.
+  const db = { getDispatchContextById } as unknown as OrchestrationDb
+  const held = [{ kind: 'dispatch' as const, ref: 'ctx_a' }]
+
+  it('reads no worker history when nothing added is a worker', () => {
+    getDispatchContextById.mockClear()
+    const links = [{ kind: 'automation' as const, ref: 'new' }]
+    expect(linksOutsideLinkedChains(db, held, links)).toEqual(links)
+    expect(getDispatchContextById).not.toHaveBeenCalled()
+  })
+
+  it('drops a worker on a chain the item already links', () => {
+    const b = { kind: 'dispatch' as const, ref: 'ctx_b' }
+    const c = { kind: 'dispatch' as const, ref: 'ctx_c' }
+    expect(linksOutsideLinkedChains(db, held, [b, c])).toEqual([c])
   })
 })

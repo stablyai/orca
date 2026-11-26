@@ -118,6 +118,7 @@ on:
       - 'config/scripts/mobile-test-change-scope*'
       - 'config/scripts/workflow/source-routing/pr-code-change-scope.mjs'
       - 'config/scripts/workflow/source-routing/pr-xterm-patch-prefixes.mjs'
+      - 'config/scripts/workflow/source-routing/pr-added-package-imports.mjs'
       - 'config/scripts/workflow/source-routing/pr-package-test-paths.mjs'
       # Desktop suites do not feed mobile; keep fixtures and test/toolchain config inputs.
       - '!src/shared/**/*.test.[jt]s'

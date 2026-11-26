@@ -33,6 +33,8 @@ export class LocalSshBrowserRoute {
   private routePromise: Promise<Awaited<ReturnType<BrowserNetworkExecutionRouteResolver>>> | null =
     null
   private listenPromise: Promise<{ host: string; port: number }> | null = null
+  // Cancels a route still being resolved, such as a host relay being installed.
+  private readonly closing = new AbortController()
   private closed = false
 
   constructor(
@@ -57,6 +59,7 @@ export class LocalSshBrowserRoute {
       return
     }
     this.closed = true
+    this.closing.abort()
     const route = this.executionRoute
     this.executionRoute = null
     await Promise.all([this.socks.close(), route ? route.close() : Promise.resolve()])
@@ -67,35 +70,19 @@ export class LocalSshBrowserRoute {
     return openExecutionRouteSocketAsDuplex(route.connect(target))
   }
 
-  // Destination failures are inconclusive: port 9 may be closed even when forwarding is allowed.
-  async probeForwarding(
-    timeoutMs = 4_000
-  ): Promise<'ok' | 'forwarding-blocked' | 'ssh-unavailable'> {
+  /** Resolving the route probes the host's forwarding policy and starts a relay where forwarding stops at loopback. */
+  async probeForwarding(): Promise<'ok' | 'forwarding-blocked' | 'ssh-unavailable'> {
     let route: Awaited<ReturnType<BrowserNetworkExecutionRouteResolver>>
     try {
+      // A host that refused forwarding may run the relay now (Node installed, a session slot free).
+      if (this.executionRoute?.forwardingBlocked) {
+        this.retireExecutionRoute()
+      }
       route = await this.requireExecutionRoute()
     } catch {
       return 'ssh-unavailable'
     }
-    const socket = route.connect({ host: '127.0.0.1', port: 9 })
-    return new Promise((resolve) => {
-      let settled = false
-      const settle = (verdict: 'ok' | 'forwarding-blocked' | 'ssh-unavailable'): void => {
-        if (settled) {
-          return
-        }
-        settled = true
-        clearTimeout(timeout)
-        socket.destroy()
-        resolve(verdict)
-      }
-      const timeout = setTimeout(() => settle('ok'), timeoutMs)
-      socket.on('connect', () => settle('ok'))
-      socket.on('error', (error) =>
-        settle(isAdministrativelyProhibited(error) ? 'forwarding-blocked' : 'ok')
-      )
-      socket.on('close', () => settle('ok'))
-    })
+    return route.forwardingBlocked ? 'forwarding-blocked' : 'ok'
   }
 
   private async requireExecutionRoute(): Promise<
@@ -114,14 +101,18 @@ export class LocalSshBrowserRoute {
     return this.routePromise
   }
 
-  private async resolveFreshRoute(): Promise<
-    Awaited<ReturnType<BrowserNetworkExecutionRouteResolver>>
-  > {
+  private retireExecutionRoute(): void {
     const stale = this.executionRoute
     this.executionRoute = null
     if (stale) {
       void Promise.resolve(stale.close()).catch(() => {})
     }
+  }
+
+  private async resolveFreshRoute(): Promise<
+    Awaited<ReturnType<BrowserNetworkExecutionRouteResolver>>
+  > {
+    this.retireExecutionRoute()
     const authority = this.dependencies.getAuthority(this.targetId)
     const route = await this.dependencies.resolveExecutionRoute({
       executionHost: {
@@ -132,7 +123,8 @@ export class LocalSshBrowserRoute {
       },
       // SSH uses executionHost authority; runtimeId and runtimeRevision apply only to native/WSL.
       runtimeId: 'local-ssh-browser-route',
-      runtimeRevision: 0
+      runtimeRevision: 0,
+      signal: this.closing.signal
     })
     if (this.closed) {
       void Promise.resolve(route.close()).catch(() => {})
@@ -147,17 +139,6 @@ export class LocalSshBrowserRoute {
     })
     return route
   }
-}
-
-const SSH_OPEN_ADMINISTRATIVELY_PROHIBITED = 1
-
-// Prefer numeric SSH reasons; broad text matching could mistake destination refusal for policy denial.
-function isAdministrativelyProhibited(error: Error): boolean {
-  const reason = (error as Error & { reason?: unknown }).reason
-  if (typeof reason === 'number') {
-    return reason === SSH_OPEN_ADMINISTRATIVELY_PROHIBITED
-  }
-  return /administratively prohibited/i.test(error.message)
 }
 
 const routesByTargetId = new Map<string, LocalSshBrowserRoute>()

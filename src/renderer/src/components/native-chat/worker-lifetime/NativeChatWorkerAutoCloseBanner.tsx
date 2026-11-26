@@ -30,7 +30,8 @@ export function NativeChatWorkerAutoCloseBanner({
   )
   const banner = workerAutoCloseBannerProps(state, nowMs, keepOpen, t, environmentId)
   // In flow, so messages start below it. Not `font-sans`: chat maps that to its font, which can be monospace.
+  // px-2 lines it up with the chat's pane header, which has no floating controls to clear.
   return banner ? (
-    <PaneTopBanner {...banner} className="shrink-0 font-(family-name:--font-sans)" />
+    <PaneTopBanner {...banner} className="shrink-0 px-2 font-(family-name:--font-sans)" />
   ) : null
 }

@@ -4,6 +4,7 @@ import { StringDecoder } from 'node:string_decoder'
 import type { EphemeralVmRecipeContext } from './ephemeral-vm-recipe-runner'
 import { buildRecipeInheritedEnv } from './ephemeral-vm-recipe-env'
 import { admitProcessTreeKill } from '@orca/process-host/process-tree-kill-gate'
+import { childProcessHasExited } from '@orca/process-host/process-tree-termination'
 import { GrowingByteBuffer } from '@orca/process-host/growing-byte-buffer'
 import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 
@@ -219,13 +220,13 @@ export function killRecipeProcess(child: ChildProcessWithoutNullStreams, force =
     // cmd.exe /c wraps recipes; child.kill alone orphans cloud/provisioning children, so taskkill /T walks the tree.
     if (child.pid) {
       if (
+        childProcessHasExited(child) ||
         !admitProcessTreeKill({
           pid: child.pid,
           site: 'ephemeral-vm-recipe',
           scope: 'win-taskkill-tree'
         })
       ) {
-        // Refusal blocks unsafe PID tree walking; handle-addressed root termination cannot hit the recycled PID.
         child.kill(signal)
         return
       }

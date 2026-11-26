@@ -67,4 +67,25 @@ describe('resumeRefusal', () => {
     await eventually(() => expect(rig!.dispatch).toHaveBeenCalledTimes(2))
     expect(await rig.drafts()).toEqual([])
   })
+
+  // A quit cut mid-turn reads as failed in its thread, so its Resume continues it once.
+  it('lets a chat a quit cut resume, then refuses once it ran again', async () => {
+    rig = await createQueuedMessageTestRig(OWNED)
+    const id = await rig.workingSend()
+    const turnId = `turn-${id}`
+    await rig.settleAccepted(id, id)
+    rig
+      .providerEvents()
+      .appendItem(
+        { provider: 'codex', threadId: THREAD, turnId, ordinal: 1 },
+        { kind: 'turn', turnId, state: 'running', userItemId: `orca:${id}` },
+        { turnScope: { kind: 'thread' } }
+      )
+    rig.providerEvents().publish()
+    await rig.providerEvents().written?.()
+    await rig.restartHostProcess()
+    await eventually(async () => expect(await resume(rig!)).toBeNull())
+    await rig.send('carry on').result
+    await eventually(async () => expect(await resume(rig!)).toMatchObject(NOT_FAILED))
+  })
 })

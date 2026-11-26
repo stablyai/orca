@@ -8,10 +8,7 @@ import {
   type AvatarGenerationCapability,
   type AvatarGenerationResult
 } from '../../shared/avatar-generation/avatar-generation-contract'
-import {
-  avatarGenerationPrompt,
-  describesRealPerson
-} from '../../shared/avatar-generation/avatar-generation-prompt'
+import { avatarGenerationPrompt } from '../../shared/avatar-generation/avatar-generation-prompt'
 import {
   prepareLocalCommitMessageAgentEnv,
   type CommitMessageAgentEnvironmentResolvers
@@ -68,10 +65,6 @@ export function registerAvatarGenerationHandlers(
     'avatarGeneration:generate',
     async (event, raw: unknown): Promise<AvatarGenerationResult> => {
       const { requestId, description, agent } = GenerateArgs.parse(raw)
-      // The renderer checks too; this keeps any other caller from skipping it.
-      if (describesRealPerson(description)) {
-        return { ok: false, error: 'real-person' }
-      }
       // Registered before any await, so a cancel during the probe still lands.
       runs.get(requestId)?.abort()
       const controller = new AbortController()

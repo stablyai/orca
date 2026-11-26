@@ -28,6 +28,7 @@ import {
   SETTINGS_SEARCH_RESULT_LIMIT,
   type SettingsSearchResult
 } from './settings-search-results'
+import { WorkspaceCleanupNavProgress } from '../../workspace-cleanup/removal/run/WorkspaceCleanupNavProgress'
 import { SettingsSearchField, SettingsSearchResultsList } from './SettingsSidebarSearch'
 
 type NavSection = {
@@ -315,6 +316,9 @@ export function SettingsSidebar({
                             <Icon className="size-4 shrink-0" />
                           )}
                           <span className="truncate">{section.title}</span>
+                          {section.id === 'workspace-cleanup' ? (
+                            <WorkspaceCleanupNavProgress />
+                          ) : null}
                           {isVisibleInstallStatus(section.installStatus) ? (
                             <span className={installStatusClassName}>
                               {installStatusLabel(section.installStatus)}

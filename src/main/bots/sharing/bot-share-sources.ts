@@ -266,27 +266,27 @@ export async function readBotShareable(
   }
   const soul = await readFile(soulPath.own, 'utf8')
   const automationParts = readAutomations(input.bot, input.automations, leftOut)
-  const listSkills = async (signal?: AbortSignal): Promise<BotShareSkillListing> => {
-    const skillsLeftOut: BotShareLeftOut[] = []
-    const skills = await readShareSkills(input.bot, home, skillsLeftOut, skillProjects, signal)
-    return { skills, leftOut: skillsLeftOut }
-  }
-  // A project path that now resolves elsewhere lists that folder's skills, so it reads again.
-  const projectRoots = await Promise.all(
-    skillProjects.map((project) => realpath(project.path).catch(() => null))
-  )
-  const sources = JSON.stringify([
-    input.bot.agent,
-    home.path,
-    home.real,
-    skillProjects,
-    projectRoots
-  ])
   const readSkills = async (): Promise<BotShareSkill[]> => {
+    // Each project's real folder, resolved once: the listing is read from these folders and kept
+    // under them, so a path that now resolves elsewhere reads again, and nothing reads it twice.
+    const roots = await Promise.all(
+      skillProjects.map(async (project) => ({
+        ...project,
+        real: await realpath(project.path).catch(() => null)
+      }))
+    )
+    const listSkills = async (signal?: AbortSignal): Promise<BotShareSkillListing> => {
+      const skillsLeftOut: BotShareLeftOut[] = []
+      const read = await readShareSkills(input.bot, home, skillsLeftOut, roots, signal)
+      return { skills: read.skills, leftOut: skillsLeftOut, moved: read.moved }
+    }
     const listing = await (input.skillReads && input.session
       ? input.skillReads.read(
           skillsSessionKey(input.bot.id, input.session),
-          sources,
+          // A root that could not be resolved may resolve elsewhere next time: never kept.
+          roots.some((root) => root.real === null)
+            ? null
+            : JSON.stringify([input.bot.agent, home.path, home.real, roots]),
           input.reuseSkills === true,
           listSkills,
           input.build

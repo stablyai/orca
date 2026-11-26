@@ -57,6 +57,13 @@ export const sayMobileNativeChatSessionOption: NativeChatSessionOptionSay = (id,
         'chat.sessionOptionCopy.availableAfterSessionStarts',
         'Available after the session starts.'
       )
+    case 'modelsLoading':
+      return translate('chat.sessionOptionCopy.modelsLoading', 'Loading models…')
+    case 'signInForModels':
+      return translate(
+        'chat.sessionOptionCopy.signInForModels',
+        'Sign in to see the models you can use.'
+      )
     case 'sessionOptions':
       return translate('chat.sessionOptionCopy.sessionOptions', 'Session options')
   }
