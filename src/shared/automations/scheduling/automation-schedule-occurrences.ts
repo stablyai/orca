@@ -112,6 +112,34 @@ function latestMatchingMinute(
   return null
 }
 
+function matchingCronMinute(
+  rule: ParsedCron,
+  calendar: ScheduleCalendar,
+  first: number,
+  dtstart: number,
+  direction: 1 | -1
+): number | null {
+  const end = first + direction * CRON_SCAN_MINUTES * MINUTE_MS
+  let candidate = first
+  while ((candidate - end) * direction < 0 && candidate >= dtstart) {
+    if (cronDateMatches(rule, candidate, calendar)) {
+      if (cronMatches(rule, candidate, calendar)) {
+        return candidate
+      }
+      candidate += direction * MINUTE_MS
+      continue
+    }
+    // Skip excluded dates in calendar time; matching dates still visit both DST clock passes.
+    const day = calendar.startOfDay(candidate)
+    const next = direction === 1 ? calendar.addDays(day, 1) : day - MINUTE_MS
+    candidate =
+      direction === 1
+        ? Math.max(candidate + MINUTE_MS, next)
+        : Math.min(candidate - MINUTE_MS, next)
+  }
+  return null
+}
+
 export function buildAutomationRrule(args: {
   preset: Exclude<AutomationSchedulePreset, 'custom'>
   hour: number
@@ -164,7 +192,15 @@ export function nextAutomationOccurrenceAfter(
   const rule = parseSchedule(rrule)
   const calendar = automationScheduleCalendar(timezone)
   if (rule.kind === 'cron' && !rule.fixedTime) {
-    return nextMatchingMinute(dtstart, after, (candidate) => cronMatches(rule, candidate, calendar))
+    let first = floorToMinute(Math.max(dtstart, after))
+    if (first <= after || first < dtstart) {
+      first += MINUTE_MS
+    }
+    const candidate = matchingCronMinute(rule, calendar, first, dtstart, 1)
+    if (candidate === null) {
+      throw new Error('Unable to compute next automation run.')
+    }
+    return candidate
   }
   if (rule.kind === 'rrule' && rule.freq === 'HOURLY') {
     return nextMatchingMinute(dtstart, after, (candidate) =>
@@ -196,7 +232,7 @@ export function latestAutomationOccurrenceAtOrBefore(
   const rule = parseSchedule(rrule)
   const calendar = automationScheduleCalendar(timezone)
   if (rule.kind === 'cron' && !rule.fixedTime) {
-    return latestMatchingMinute(dtstart, now, (candidate) => cronMatches(rule, candidate, calendar))
+    return matchingCronMinute(rule, calendar, floorToMinute(now), dtstart, -1)
   }
   if (rule.kind === 'rrule' && rule.freq === 'HOURLY') {
     return latestMatchingMinute(dtstart, now, (candidate) =>
