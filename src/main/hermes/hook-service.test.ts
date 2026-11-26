@@ -206,6 +206,7 @@ describe('HermesHookService', () => {
 
     expect(status.state).toBe('error')
     expect(status.detail).toContain('kept changing')
+    expect(status.managedHooksPresent).toBe(true)
     expect(files.get(configPath)).toBe(`plugins:\nmodel: "v${version}"\n`)
   })
 })

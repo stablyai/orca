@@ -133,6 +133,8 @@ export async function installHermesHooksRemote(
   const remoteHermesHome = `${remoteRoot}/.hermes`
   const remoteConfigPath = `${remoteHermesHome}/config.yaml`
   const remotePluginDir = `${remoteHermesHome}/plugins/${HERMES_PLUGIN_NAME}`
+  // Why: config contention throws after both plugin files landed; status must still report them.
+  let pluginFilesWritten = false
   try {
     const existingPlugin = await readRemotePluginFiles(sftp, remotePluginDir)
     if (hasUnmanagedRemotePluginFile(existingPlugin)) {
@@ -156,6 +158,7 @@ export async function installHermesHooksRemote(
       }
     }
     await writeRemotePluginFiles(sftp, remotePluginDir, existingPlugin)
+    pluginFilesWritten = true
     const updated = await updateRemoteConfigAtomic(
       sftp,
       remoteConfigPath,
@@ -184,7 +187,7 @@ export async function installHermesHooksRemote(
       agent: 'hermes',
       state: 'error',
       configPath: remoteConfigPath,
-      managedHooksPresent: false,
+      managedHooksPresent: pluginFilesWritten,
       detail: error instanceof Error ? error.message : String(error)
     }
   }
