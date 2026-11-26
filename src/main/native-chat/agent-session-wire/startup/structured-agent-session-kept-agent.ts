@@ -1,5 +1,4 @@
 import {
-  forgetProviderRelayRunVerdict,
   hasAttachedProviderRelay,
   providerRelayRunLiveness,
   withProviderRelayRebind
@@ -7,6 +6,7 @@ import {
 import type { StructuredAgentSessionAttachContext } from '../acquisition/structured-agent-session-attach-context'
 import { settleGoneStructuredAgentSessionGeneration } from '../host/structured-agent-session-conversation-open'
 import { startStructuredAgentSessionAgentForOperation } from './structured-agent-session-agent-start'
+import { forgetIdleProviderRelayRunVerdict } from '../../../provider-relay/provider-relay-launch-inventory'
 
 /** `gone`: the kept agent ended before it could be reattached, so the chat was cut after all. */
 export type KeptAgentRebind = 'attached' | 'unresolved' | 'gone'
@@ -22,7 +22,7 @@ export async function rebindKeptStructuredAgentSessionAgent(
   } finally {
     // A chat that never opened has no retry or close to clear its undecided run; its next open asks.
     if (!context.sessions.has(sessionId)) {
-      forgetProviderRelayRunVerdict(sessionId)
+      forgetIdleProviderRelayRunVerdict(sessionId)
     }
   }
 }

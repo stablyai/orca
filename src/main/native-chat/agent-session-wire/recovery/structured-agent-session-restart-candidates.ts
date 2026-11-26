@@ -18,6 +18,8 @@ import {
   structuredAgentSessionResumableSet,
   type StructuredAgentSessionResumableSet
 } from './structured-agent-session-restart-resume-set'
+import { agentSessionRunPlacement } from '../../../../shared/agent-session/lifecycle/agent-session-run-placement'
+import { providerRelayListedIdleStopped } from '../../../provider-relay/provider-relay-launch-inventory'
 
 export type StructuredAgentSessionRestartJournalSource = { journal: AgentSessionJournal }
 
@@ -65,15 +67,25 @@ async function withoutKeptRunningChats(
   // Its run may still be going (its daemon start lists it or can't say yet), or was already
   // reattached: either way its agent never stopped. One the daemon idle-stopped had finished its
   // work, so nothing was cut either. Each relayed run asks only its own daemon start.
-  const mayRun = await Promise.all(
+  const reads = await Promise.all(
     markers.map(async ({ sessionId }) => {
       const record = getRecord(sessionId)
-      return record ? (await providerRelayRunLiveness(record, { observe: true })) !== 'gone' : false
+      if (!record) {
+        return { mayRun: false, idleStopped: false }
+      }
+      const mayRun = (await providerRelayRunLiveness(record, { observe: true })) !== 'gone'
+      // Read from the answer it just heard: an observer records nothing, idle stops included.
+      const placement = agentSessionRunPlacement(record)
+      const idleStopped =
+        placement?.kind === 'relayed' &&
+        providerRelayListedIdleStopped(placement.daemon.instance, placement.relayId)
+      return { mayRun, idleStopped }
     })
   )
   return markers.filter(
     (marker, index) =>
-      !mayRun[index] &&
+      !reads[index].mayRun &&
+      !reads[index].idleStopped &&
       !finished.has(marker.sessionId) &&
       !providerRelayKeptFromLastRun(marker.sessionId)
   )
