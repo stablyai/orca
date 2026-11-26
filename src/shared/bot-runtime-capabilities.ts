@@ -98,9 +98,9 @@ export const BOTS_SLACK_POST_AS_RUNTIME_CAPABILITY = 'bots.slack-post-as.v1' as 
 // an older host refuses those calls, so the phone hands that step to the computer.
 export const BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY = 'bots.google-phone-sign-in.v1' as const
 
-// Host serves bots.offer.dismiss: an offer card's Not now reaches the bot as a queued card answer, never
-// steering its running turn. An older host only takes the typed "Dismiss".
-export const BOTS_OFFER_DISMISS_RUNTIME_CAPABILITY = 'bots.offer-dismiss.v1' as const
+// Host serves bots.offer.answer: an offer card's answers reach the bot as queued card answers, never
+// steering its running turn. An older host only takes them typed.
+export const BOTS_OFFER_ANSWER_RUNTIME_CAPABILITY = 'bots.offer-answer.v1' as const
 
 export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_GROUPS_RUNTIME_CAPABILITY,
@@ -129,5 +129,5 @@ export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_ITEM_CANCEL_NO_REASON_CAPABILITY,
   BOTS_AVATAR_REVISION_RUNTIME_CAPABILITY,
   BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY,
-  BOTS_OFFER_DISMISS_RUNTIME_CAPABILITY
+  BOTS_OFFER_ANSWER_RUNTIME_CAPABILITY
 ] as const
