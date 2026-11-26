@@ -1,6 +1,12 @@
 import { createMarkdownFenceTracker } from './markdown-fence-scanner'
 
 const WHOLE_HTML_DOCUMENT = /^\s*<(?:!doctype\s+html|html)[\s>]/i
+const HTML_FENCE_OPENER = /(?:^|\n) {0,3}(?=`{3}|~{3})[`~]+[^\S\n]*html(?=\s|$)/i
+
+/** A cheap precheck; nested, unclosed and snippet fences can still match. */
+export function hasHtmlFenceCandidate(text: string): boolean {
+  return HTML_FENCE_OPENER.test(text)
+}
 
 /** A fence tagged html whose code is a full page (doctype or <html> first), not a snippet. */
 export function isHtmlDocumentCodeBlock(language: string | undefined, code: string): boolean {

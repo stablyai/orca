@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { getMainHttpClient } from '../../network/http-client'
 import type { ManagedRuntime, ManagedRuntimePin } from '../../node-runtime/managed-runtime-release'
 import { followLatestRelease } from '../../node-runtime/managed-runtime-latest-release'
@@ -12,17 +13,19 @@ import { isMuslHost } from '../../node-runtime/linux-libc-probe'
 
 const RELEASES = 'https://downloads.claude.ai/claude-code-releases'
 
-const manifestSchema = z.object({
-  version: z.string().regex(/^\d+\.\d+\.\d+$/),
-  platforms: z.record(
-    z.string(),
-    z.object({
-      binary: z.string().regex(/^claude(\.exe)?$/),
-      checksum: z.string().regex(/^[a-f0-9]{64}$/),
-      size: z.number().int().positive()
-    })
-  )
-})
+const manifestSchema = lazyZodSchema(() =>
+  z.object({
+    version: z.string().regex(/^\d+\.\d+\.\d+$/),
+    platforms: z.record(
+      z.string(),
+      z.object({
+        binary: z.string().regex(/^claude(\.exe)?$/),
+        checksum: z.string().regex(/^[a-f0-9]{64}$/),
+        size: z.number().int().positive()
+      })
+    )
+  })
+)
 
 /** The release folder name this host downloads; null where Claude ships no native build. */
 export function claudeManagedPlatform(
@@ -39,9 +42,11 @@ export function claudeManagedPlatform(
   return platform === 'linux' ? `linux-${arch}${musl ? '-musl' : ''}` : null
 }
 
-const channelSettingsSchema = z.object({
-  autoUpdatesChannel: z.enum(['latest', 'stable']).optional()
-})
+const channelSettingsSchema = lazyZodSchema(() =>
+  z.object({
+    autoUpdatesChannel: z.enum(['latest', 'stable']).optional()
+  })
+)
 
 /** Claude's own `autoUpdatesChannel`; managed settings win over the user's, and Claude defaults to latest. */
 export async function claudeUpdateChannel(

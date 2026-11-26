@@ -1,16 +1,21 @@
 // Droid 1.17.2 reports a Task subagent only on its own call, keyed by the call id.
 
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { AgentJournalToolCallItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpSubagentUpdate } from './acp-dialect'
 
-const taskInputSchema = z.looseObject({
-  description: z.string().optional(),
-  subagent_type: z.string().optional()
-})
-const taskOutputSchema = z.looseObject({ text: z.string() })
-const childLinkSchema = z.looseObject({ subagent_session_info: z.looseObject({}) })
+const taskInputSchema = lazyZodSchema(() =>
+  z.looseObject({
+    description: z.string().optional(),
+    subagent_type: z.string().optional()
+  })
+)
+const taskOutputSchema = lazyZodSchema(() => z.looseObject({ text: z.string() }))
+const childLinkSchema = lazyZodSchema(() =>
+  z.looseObject({ subagent_session_info: z.looseObject({}) })
+)
 // The results Droid writes for a call that a Stop or its own shutdown cut off.
 const INTERRUPTED = /^Tool execution (?:cancelled by user|was interrupted)$/
 

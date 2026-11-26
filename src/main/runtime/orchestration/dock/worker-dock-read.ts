@@ -4,6 +4,7 @@ export { acknowledgeWorkerDock } from './worker-dock-acknowledgment'
 import { readWorkerDockSnapshot } from './worker-dock-read-snapshot'
 import { workerLaunchModel } from '../workers/launch/worker-launch-observation'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import {
   type WorkerDockRead,
@@ -30,15 +31,17 @@ const stateSql = `CASE f.state
   WHEN 'start_unknown' THEN 'unavailable' WHEN 'stop_unknown' THEN 'unavailable'
   ELSE f.state END`
 const identitySql = `json_array(f.home, f.source, 'worker', f.dispatch_id)`
-const Metadata = z.object({
-  id: z.string(),
-  dispatchId: z.string(),
-  state: WorkerDockEntry.shape.state,
-  changedAt: z.number().nullable(),
-  ownerActionsAvailable: z.coerce.boolean(),
-  hasModel: z.coerce.boolean(),
-  settlement: z.string().nullable()
-})
+const Metadata = lazyZodSchema(() =>
+  z.object({
+    id: z.string(),
+    dispatchId: z.string(),
+    state: WorkerDockEntry.shape.state,
+    changedAt: z.number().nullable(),
+    ownerActionsAvailable: z.coerce.boolean(),
+    hasModel: z.coerce.boolean(),
+    settlement: z.string().nullable()
+  })
+)
 
 function epoch(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -50,11 +53,13 @@ function epoch(value: unknown): number | null {
   const ms = Date.parse(exposeUtcTimestamp(value) ?? '')
   return Number.isFinite(ms) ? ms : null
 }
-const Launch = z.object({
-  name: z.string().optional(),
-  launch: z.unknown().optional(),
-  agent: z.string().optional()
-})
+const Launch = lazyZodSchema(() =>
+  z.object({
+    name: z.string().optional(),
+    launch: z.unknown().optional(),
+    agent: z.string().optional()
+  })
+)
 function launchOptions(value: unknown): z.infer<typeof Launch> {
   try {
     return Launch.parse(JSON.parse(typeof value === 'string' ? value : '{}'))
