@@ -75,6 +75,7 @@ export function providerRelayRunAskCurrent(chatKey: string, seq: number): boolea
 export function forgetIdleProviderRelayRunVerdict(chatKey: string): void {
   if (!asks.has(chatKey)) {
     unknownRuns.delete(chatKey)
+    cancelProviderRelayExitProbes(chatKey)
   }
 }
 
