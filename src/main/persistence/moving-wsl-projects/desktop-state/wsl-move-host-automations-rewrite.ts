@@ -6,7 +6,10 @@
 import type { WslMoveCutover } from '../../../../shared/wsl-move/wsl-move-cutover'
 import type { WslMoveUnfinished } from '../../../../shared/wsl-move/wsl-move-driver-types'
 import { listWslMoveCutovers } from '../cutover-recovery/wsl-move-cutover-journal'
-import { runWslMoveHostAutomationsExclusive } from '../cutover-recovery/wsl-move-host-automations-lock'
+import {
+  runWslMoveHostAutomationsTurn,
+  untilWslMoveTurnAborted
+} from '../cutover-recovery/wsl-move-host-automations-lock'
 import { registerWslMoveDesktopRewriteStore } from './wsl-move-desktop-rewrite-stores'
 
 export const WSL_MOVE_HOST_AUTOMATIONS_STORE_ID = 'host-automations'
@@ -19,7 +22,11 @@ export type WslMoveHostAutomations = {
    * Idempotent; throws unless the host answered for every one. An automation the host no longer
    * has, already has on, or that changed there since the move (the user's own choice) is done.
    */
-  enable: (environmentId: string, automations: readonly WslMoveMovedAutomation[]) => Promise<void>
+  enable: (
+    environmentId: string,
+    automations: readonly WslMoveMovedAutomation[],
+    signal?: AbortSignal
+  ) => Promise<void>
 }
 
 export function registerWslMoveHostAutomationsStore(
@@ -31,7 +38,7 @@ export function registerWslMoveHostAutomationsStore(
     side: 'main',
     // In undo's turn, on a fresh read: a released move's copy here runs again, so its host copy stays off.
     run: ({ cutover: planned }) =>
-      runWslMoveHostAutomationsExclusive(async () => {
+      runWslMoveHostAutomationsTurn(async (signal) => {
         const cutover = listWslMoveCutovers(userDataPath).find(
           (entry) => entry.migrationId === planned.migrationId
         )
@@ -45,9 +52,14 @@ export function registerWslMoveHostAutomationsStore(
             row.updatedAt
           ])
         )
-        await host.enable(
-          cutover.destinationEnvironmentId,
-          ids.map((id) => ({ id, updatedAt: carried.get(id) ?? null }))
+        // Past the deadline the step stays unledgered and the next pass retries it.
+        await untilWslMoveTurnAborted(
+          host.enable(
+            cutover.destinationEnvironmentId,
+            ids.map((id) => ({ id, updatedAt: carried.get(id) ?? null })),
+            signal
+          ),
+          signal
         )
       }),
     // Nothing to flush here: the write is the host's.

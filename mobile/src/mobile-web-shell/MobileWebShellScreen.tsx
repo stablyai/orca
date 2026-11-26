@@ -348,7 +348,6 @@ export function MobileWebShellScreen({
     }
   }, [hostId, unreadable])
 
-  const openingLabel = t('webShell.shellStateScreen.openingWorkspace', 'Opening workspace')
   if (overlay && state.kind !== 'ready') {
     return null
   }
@@ -425,7 +424,7 @@ export function MobileWebShellScreen({
           }
         }}
       />
-      {overlay ? null : <ShellPageCover label={openingLabel} visible={pageFrame === 'unpainted'} />}
+      {overlay ? null : <ShellPageCover visible={pageFrame === 'unpainted'} />}
       <ShellDevFacts state={state} droppedBinaryFrames={droppedBinaryFrames} />
     </View>
   )

@@ -16,27 +16,28 @@ export function ShellDownloadProgress({
 }) {
   const t = useMobileTranslation()
   const hostTitle = useHostDisplay(host).title
-  const downloadingLabel = t(
-    'webShell.shellStateScreen.downloadingLatest',
-    'Downloading the latest app'
-  )
-  const source =
+  const label = t('webShell.shellStateScreen.downloadingLatestApp', 'Downloading the latest app')
+  const progress = downloadedMegabytesCaption(state.receivedBytes, state.totalBytes, t)
+  const caption =
     host === null
-      ? ''
-      : t('webShell.shellStateScreen.downloadingFrom', 'from {{host}} · ', { host: hostTitle })
+      ? progress
+      : t('webShell.shellStateScreen.downloadProgressFromHost', 'from {{host}} · {{progress}}', {
+          host: hostTitle,
+          progress
+        })
   return (
     <ShellWaitingFrame
-      label={downloadingLabel}
+      label={label}
       indicator={
         <DownloadProgressBar
           feed={feed}
           receivedBytes={state.receivedBytes}
           totalBytes={state.totalBytes}
-          accessibilityLabel={downloadingLabel}
+          accessibilityLabel={label}
           testID="mobile-web-shell-progress-bar"
         />
       }
-      caption={`${source}${downloadedMegabytesCaption(state.receivedBytes, state.totalBytes, t)}`}
+      caption={caption}
     />
   )
 }

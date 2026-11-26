@@ -4057,6 +4057,9 @@
     }
   },
   "webShell": {
+    "downloadProgress": {
+      "megabytes": "{{received}} / {{total}} MB"
+    },
     "shellStateScreen": {
       "checkingHost": "正在檢查主機",
       "connectToDownload": "連線至此主機以下載最新版應用程式",
@@ -4071,7 +4074,9 @@
       "openingWorkspace": "正在開啟工作區",
       "renderProcessGone": "工作區已停止回應。",
       "statusUnreadable": "無法讀取此主機的狀態。請返回後重新開啟。",
-      "tryAgain": "重試"
+      "tryAgain": "重試",
+      "downloadingLatestApp": "正在下載最新版應用程式",
+      "downloadProgressFromHost": "來自 {{host}} · {{progress}}"
     }
   },
   "workspace": {
