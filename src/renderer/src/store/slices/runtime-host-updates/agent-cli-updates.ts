@@ -1,8 +1,10 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import { runtimeStatusSubscriptionsFor } from '../runtime-status/views/runtime-status-subscriptions'
+import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import {
   AGENT_CLI_UPDATE_AGENTS,
+  AGENT_CLI_UPDATE_CACHED_RUNTIME_CAPABILITY,
   AGENT_CLI_UPDATE_RUNTIME_CAPABILITY,
   type AgentCliUpdate,
   type AgentCliUpdateAgent,
@@ -24,6 +26,8 @@ const OPEN_CHECK_INTERVAL_MS = 10_000
 // The host runs three --version probes (5s cap each, some read twice) at a time; 17 agents plus
 // release lookups can approach a minute.
 const CHECK_TIMEOUT_MS = 2 * 60_000
+// A cached-only answer is a map read on the host.
+const CACHED_READ_TIMEOUT_MS = 15_000
 
 export type AgentCliUpdateRun =
   /** Waiting for one of the host's few update slots. */
@@ -89,6 +93,8 @@ export type AgentCliUpdatesSlice = {
   recheckAgentCliUpdates: (target: RuntimeClientTarget) => void
   /** Checks as `checkAgentCliUpdates` does, but past a much shorter interval, when the user opens the list. */
   checkAgentCliUpdatesOnOpen: (target: RuntimeClientTarget) => Promise<void>
+  /** Lists what each connected paired host already found, once per connection; the host spawns nothing for it. */
+  checkConnectedAgentCliUpdateHosts: () => void
   /** Drops the answers of paired hosts that were removed or re-paired; a disconnected host keeps its own. */
   forgetAgentCliUpdateHosts: (environmentIds: readonly string[]) => void
   /** Resolves true once the host reports the CLI current. */
@@ -110,6 +116,8 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
       next.set(key, write(state.agentCliUpdates.get(key) ?? EMPTY_HOST))
       return { agentCliUpdates: next }
     })
+  // Paired hosts read since they last connected, by that read; dropping out lets the next connect read again.
+  const cachedReads = new Map<string, symbol>()
   const updateSlotsByHost = new Map<string, PrioritySemaphore>()
   const updateSlots = (key: string): PrioritySemaphore => {
     let slots = updateSlotsByHost.get(key)
@@ -144,11 +152,12 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
     })
     return null
   }
-  const hostAnswers = (target: RuntimeClientTarget): boolean =>
-    target.kind === 'local' ||
+  const hostHas = (environmentId: string, capability: string): boolean =>
     lastVerifiedRuntimeStatus(
-      runtimeStatusSubscriptionsFor(store).readStatuses().get(target.environmentId)
-    )?.capabilities?.includes(AGENT_CLI_UPDATE_RUNTIME_CAPABILITY) === true
+      runtimeStatusSubscriptionsFor(store).readStatuses().get(environmentId)
+    )?.capabilities?.includes(capability) === true
+  const hostAnswers = (target: RuntimeClientTarget): boolean =>
+    target.kind === 'local' || hostHas(target.environmentId, AGENT_CLI_UPDATE_RUNTIME_CAPABILITY)
   // An update run from any window re-checks here at once, so this window drops its older answer.
   const followLocal = (): void => {
     if (followsLocal) {
@@ -221,10 +230,52 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
 
     checkAgentCliUpdatesOnOpen: (target) => checkPastInterval(target, OPEN_CHECK_INTERVAL_MS),
 
+    checkConnectedAgentCliUpdateHosts: () => {
+      const statuses = runtimeStatusSubscriptionsFor(store).readStatuses()
+      const removed = get().removedRuntimeEnvironmentIds
+      for (const environmentId of cachedReads.keys()) {
+        if (runtimeHostConnectionStateForEntry(statuses.get(environmentId)) !== 'connected') {
+          cachedReads.delete(environmentId)
+        }
+      }
+      for (const [environmentId, entry] of statuses) {
+        if (
+          cachedReads.has(environmentId) ||
+          removed.has(environmentId) ||
+          runtimeHostConnectionStateForEntry(entry) !== 'connected' ||
+          // Older hosts ignore `cached` and would run every --version probe.
+          !hostHas(environmentId, AGENT_CLI_UPDATE_CACHED_RUNTIME_CAPABILITY)
+        ) {
+          continue
+        }
+        const read = Symbol(environmentId)
+        cachedReads.set(environmentId, read)
+        callRuntimeRpc<{ updates: AgentCliUpdate[] }>(
+          { kind: 'environment', environmentId },
+          'agentCliUpdate.check',
+          { agents: AGENT_CLI_UPDATE_AGENTS, cached: true },
+          { timeoutMs: CACHED_READ_TIMEOUT_MS }
+        )
+          .then(({ updates }) => {
+            // A real check's answer, or a forgotten host, wins over this one.
+            if (
+              updates.length > 0 &&
+              cachedReads.get(environmentId) === read &&
+              !checkedAt.has(environmentId) &&
+              !get().agentCliUpdates.has(environmentId)
+            ) {
+              writeHost(environmentId, (host) => ({ ...host, updates }))
+            }
+          })
+          .catch((error: unknown) => console.warn('[agent-cli-update] cached read failed:', error))
+      }
+    },
+
     forgetAgentCliUpdateHosts: (environmentIds) => {
       environmentIds.forEach((id) => {
         checkedAt.delete(id)
         checks.delete(id)
+        cachedReads.delete(id)
       })
       set((state) => {
         const next = new Map(state.agentCliUpdates)

@@ -22,7 +22,11 @@ vi.mock('../native-chat/agent-model-catalog/agent-model-catalog-store', () => ({
 vi.mock('./agent-cli-latest-release', () => ({ latestAgentCliRelease }))
 vi.mock('./agent-cli-model-requirements', () => ({ readModelsNeedingCliUpdate: async () => [] }))
 
-import { checkAgentCliUpdates, runAgentCliUpdate } from './agent-cli-update-service'
+import {
+  cachedAgentCliUpdates,
+  checkAgentCliUpdates,
+  runAgentCliUpdate
+} from './agent-cli-update-service'
 
 const cliAt = (program: string) => ({
   program,
@@ -98,5 +102,26 @@ describe('runAgentCliUpdate', () => {
     runProcess.mockResolvedValue({ code: 1, stdout: '', stderr: 'unsupported', timedOut: false })
 
     expect(await runAgentCliUpdate('opencode', {})).toEqual({ ok: true })
+  })
+})
+
+describe('cachedAgentCliUpdates', () => {
+  it('answers what the last check found, spawning nothing, until an update runs', async () => {
+    onDisk = new Map([['/c/bin/goose', '1.0.0']])
+    found = '/c/bin/goose'
+    expect(cachedAgentCliUpdates({}, ['goose'])).toEqual([])
+    const checked = await checkAgentCliUpdates({}, ['goose'])
+    expect(checked).toMatchObject([{ agent: 'goose', installedVersion: '1.0.0' }])
+    vi.clearAllMocks()
+
+    expect(cachedAgentCliUpdates({}, ['goose'])).toEqual(checked)
+    expect(cachedAgentCliUpdates({ disabledTuiAgents: ['goose'] }, ['goose'])).toEqual([])
+    expect(findOwnAgentCli).not.toHaveBeenCalled()
+    expect(readAgentCliVersion).not.toHaveBeenCalled()
+    expect(latestAgentCliRelease).not.toHaveBeenCalled()
+
+    runProcess.mockResolvedValue({ code: 1, stdout: '', stderr: 'failed', timedOut: false })
+    void runAgentCliUpdate('goose', {})
+    expect(cachedAgentCliUpdates({}, ['goose'])).toEqual([])
   })
 })

@@ -5,6 +5,7 @@ import {
   AgentCliUpdateRunParams
 } from '../../../../../shared/rpc-contract/host-management/agent-cli-update-params'
 import {
+  cachedAgentCliUpdates,
   checkAgentCliUpdates,
   onAgentCliUpdateFinished,
   runAgentCliUpdate
@@ -17,9 +18,14 @@ export const AGENT_CLI_UPDATE_METHODS = [
     name: 'agentCliUpdate.check',
     permission: 'workspace',
     params: AgentCliUpdateCheckParams,
-    handler: async ({ agents }, { runtime }) => ({
-      updates: await checkAgentCliUpdates(runtime.requireStore().getSettings(), agents)
-    })
+    handler: async ({ agents, cached }, { runtime }) => {
+      const settings = runtime.requireStore().getSettings()
+      return {
+        updates: cached
+          ? cachedAgentCliUpdates(settings, agents)
+          : await checkAgentCliUpdates(settings, agents)
+      }
+    }
   }),
   defineMethod({
     name: 'agentCliUpdate.run',

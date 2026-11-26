@@ -32,6 +32,8 @@ const versionReads = new PrioritySemaphore(3)
 
 const versions = new Map<string, { stamp: string; version: string | null; at: number }>()
 const checks = new Map<AgentCliUpdateAgent, Promise<AgentCliUpdate | null>>()
+// Each agent's last finished read (null: current or not installed), served to cached-only checks.
+const lastAnswers = new Map<AgentCliUpdateAgent, AgentCliUpdate | null>()
 const runs = new Map<AgentCliUpdateAgent, Promise<AgentCliUpdateRunResult>>()
 const finishedListeners = new Set<(agent: AgentCliUpdateAgent) => void>()
 // Calls of checkAgentCliUpdates not yet answered, with the agents updated while they were out.
@@ -133,15 +135,32 @@ async function readAgentCliUpdate(
   }
 }
 
+function enabledAgents(
+  settings: AgentCliUpdateSettings,
+  requested: readonly string[]
+): AgentCliUpdateAgent[] {
+  return [...new Set(requested)].filter(
+    (agent): agent is AgentCliUpdateAgent =>
+      isAgentCliUpdateAgent(agent) && isTuiAgentEnabled(agent, settings.disabledTuiAgents)
+  )
+}
+
+/** What earlier checks on this host found, without resolving, spawning or fetching anything. */
+export function cachedAgentCliUpdates(
+  settings: AgentCliUpdateSettings,
+  requested: readonly string[] = LEGACY_AGENT_CLI_UPDATE_AGENTS
+): AgentCliUpdate[] {
+  return enabledAgents(settings, requested)
+    .map((agent) => lastAnswers.get(agent))
+    .filter((update) => update != null)
+}
+
 /** Enabled agents among `requested` whose own CLI is behind its latest release. */
 export async function checkAgentCliUpdates(
   settings: AgentCliUpdateSettings,
   requested: readonly string[] = LEGACY_AGENT_CLI_UPDATE_AGENTS
 ): Promise<AgentCliUpdate[]> {
-  const agents = [...new Set(requested)].filter(
-    (agent): agent is AgentCliUpdateAgent =>
-      isAgentCliUpdateAgent(agent) && isTuiAgentEnabled(agent, settings.disabledTuiAgents)
-  )
+  const agents = enabledAgents(settings, requested)
   const call = { agents, updated: new Set<AgentCliUpdateAgent>() }
   answering.add(call)
   try {
@@ -169,6 +188,13 @@ function sharedCheck(
   let check = checks.get(agent)
   if (!check) {
     check = checkThroughGate(agent, () => readAgentCliUpdate(agent, settings))
+      .then((update) => {
+        // A read that an update overtook would put the old version back.
+        if (checks.get(agent) === check) {
+          lastAnswers.set(agent, update)
+        }
+        return update
+      })
       .catch((error: unknown) => {
         console.warn(`[agent-cli-update] ${agent} not checked:`, error)
         return null
@@ -189,6 +215,7 @@ function runUpdate(
 ): Promise<AgentCliUpdateRunResult> {
   // Later checks start their own read behind the update, and calls already out read this agent again.
   checks.delete(agent)
+  lastAnswers.delete(agent)
   for (const call of answering) {
     if (call.agents.includes(agent)) {
       call.updated.add(agent)

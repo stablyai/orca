@@ -1,5 +1,7 @@
 // The host answers agentCliUpdate.check and agentCliUpdate.run.
 export const AGENT_CLI_UPDATE_RUNTIME_CAPABILITY = 'agent-cli-update.v1' as const
+// The host answers agentCliUpdate.check with `cached` from earlier reads alone, spawning nothing.
+export const AGENT_CLI_UPDATE_CACHED_RUNTIME_CAPABILITY = 'agent-cli-update.cached.v1' as const
 
 /** Every agent whose own CLI a native chat runs; Antigravity runs Orca's fixed-version copy. */
 export const AGENT_CLI_UPDATE_AGENTS = [
