@@ -155,9 +155,10 @@ export class UsageLastGoodStore {
           (error: unknown) => console.warn('[rate-limits] Failed to save last usage', error)
         )
       } while (this.dirty)
+      // Null this before the promise resolves, so a reading in the gap starts its own writer.
+      this.saving = null
     })()
     await this.saving
-    this.saving = null
   }
 }
 

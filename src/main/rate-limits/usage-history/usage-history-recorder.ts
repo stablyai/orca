@@ -21,6 +21,8 @@ export class UsageHistoryRecorder {
   private readonly lastReadingAt = new Map<string, number>()
   /** Settles once the saved history has been merged in. */
   readonly loaded: Promise<void>
+  /** Writes already queued, including follow-ups marked dirty while one was in flight. */
+  private drain: Promise<void> = Promise.resolve()
 
   constructor(private readonly filePath: string | null) {
     this.loaded = !filePath
@@ -29,8 +31,25 @@ export class UsageHistoryRecorder {
           .then((text) => parseUsageHistory(JSON.parse(text)))
           .catch(() => ({}))
           .then((saved) => {
-            // Readings taken while the file loaded are newer than anything saved for the same window.
-            this.history = pruneEndedUsageHistory({ ...saved, ...this.history }, Date.now())
+            // Replay startup readings onto the saved series. A spread would drop every saved sample for that key.
+            let history = saved
+            for (const [key, series] of Object.entries(this.history)) {
+              for (const sample of series.samples) {
+                history = {
+                  ...history,
+                  [key]: recordUsageWindowSample(
+                    history[key],
+                    {
+                      usedPercent: sample.usedPercent,
+                      windowMinutes: series.windowMinutes,
+                      resetsAt: series.resetsAt
+                    },
+                    sample.at
+                  )
+                }
+              }
+            }
+            this.history = pruneEndedUsageHistory(history, Date.now())
           })
   }
 
@@ -73,12 +92,12 @@ export class UsageHistoryRecorder {
 
   /** Writes now instead of after the save delay; used when the service stops. */
   flush(): Promise<void> {
-    if (!this.saveTimer) {
-      return this.saving ?? Promise.resolve()
+    if (this.saveTimer) {
+      clearTimeout(this.saveTimer)
+      this.saveTimer = null
+      return this.save()
     }
-    clearTimeout(this.saveTimer)
-    this.saveTimer = null
-    return this.save()
+    return this.saving ?? Promise.resolve()
   }
 
   private scheduleSave(): void {
@@ -92,22 +111,23 @@ export class UsageHistoryRecorder {
     this.saveTimer.unref?.()
   }
 
-  private async save(): Promise<void> {
+  private save(): Promise<void> {
     if (!this.filePath) {
-      return
+      return Promise.resolve()
     }
-    if (this.saving) {
-      this.dirty = true
-      return
-    }
-    this.saving = writePluginFileAtomically(this.filePath, JSON.stringify(this.history), {
-      mode: 0o600
-    }).catch((error: unknown) => console.warn('[rate-limits] Failed to save usage history', error))
-    await this.saving
-    this.saving = null
-    if (this.dirty) {
-      this.dirty = false
-      await this.save()
-    }
+    this.dirty = true
+    const filePath = this.filePath
+    this.drain = this.drain.then(async () => {
+      while (this.dirty) {
+        this.dirty = false
+        await writePluginFileAtomically(filePath, JSON.stringify(this.history), {
+          mode: 0o600
+        }).catch((error: unknown) =>
+          console.warn('[rate-limits] Failed to save usage history', error)
+        )
+      }
+    })
+    this.saving = this.drain
+    return this.drain
   }
 }

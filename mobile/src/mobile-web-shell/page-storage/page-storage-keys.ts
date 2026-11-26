@@ -57,6 +57,8 @@ export const PAGE_STORAGE_EXACT_KEYS = [
   'orca:composerUsageWindow',
   /** Whether that meter shows percent used or percent left. */
   'orca:composerUsageDisplay',
+  /** Whether that meter sits in the controls row or above the text. */
+  'orca:composerUsagePosition',
   /** Terminal font, line spacing and weight. */
   'orca:terminalFontStyle',
   /** Chat text size, font and spacing; a pinch in a chat saves here. */
@@ -77,6 +79,7 @@ export const NEGOTIATED_PAGE_STORAGE_KEYS = [
   'orca:duoChatExpanded',
   'orca:composerUsageWindow',
   'orca:composerUsageDisplay',
+  'orca:composerUsagePosition',
   'orca:terminalFontStyle',
   'orca:nativeChatText',
   'orca:newAgentSurface',

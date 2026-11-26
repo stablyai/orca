@@ -286,6 +286,10 @@ export function ComposerUsageStrip({
   )
 }
 
+// The row meter and the above-text strip are different mounts. The open flag lives here so
+// switching position does not drop a pop-up the other mount already showed.
+let sheetHeldOpen = false
+
 function useComposerUsageSheet(
   reading: Reading | null,
   spanSideStrip: boolean
@@ -293,17 +297,22 @@ function useComposerUsageSheet(
   const [open, setOpen] = useState(false)
   // Latched on first open: the lazy pop-up mounts once, then stays mounted while the meter lives.
   const [opened, setOpened] = useState(false)
+  const visible = open || sheetHeldOpen
   return {
     showSheet: () => {
+      sheetHeldOpen = true
       setOpened(true)
       setOpen(true)
     },
     sheet:
-      opened && reading ? (
+      (opened || sheetHeldOpen) && reading ? (
         <Suspense fallback={null}>
           <ComposerUsageSheet
-            visible={open}
-            onClose={() => setOpen(false)}
+            visible={visible}
+            onClose={() => {
+              sheetHeldOpen = false
+              setOpen(false)
+            }}
             usage={reading.usage}
             snapshot={reading.snapshot}
             spanSideStrip={spanSideStrip}

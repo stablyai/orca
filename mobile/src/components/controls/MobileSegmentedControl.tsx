@@ -114,8 +114,8 @@ export function MobileSegmentedControl<Value extends string>(props: Props<Value>
           styles.segment,
           props.fill && !props.scrollWhenCrowded && styles.segmentFill,
           props.scrollWhenCrowded && styles.segmentCrowdable,
-          segment.icon !== undefined && segment.label === '' && styles.segmentIconOnly,
           equalShare,
+          segment.icon !== undefined && segment.label === '' && styles.segmentIconOnly,
           active && (props.onSheet ? styles.segmentActiveOnSheet : styles.segmentActive),
           pressed && !active && styles.segmentPressed
         ]}
