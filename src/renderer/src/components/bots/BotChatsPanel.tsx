@@ -36,12 +36,7 @@ import { updateBotReporting } from './bot-update-reporting'
 import { useBotPictureSetting } from '../settings/bots/use-bot-picture-setting'
 import { BotChatsSkeleton } from './BotChatsSkeleton'
 import { BotChatsPersonFilter } from './BotChatsPersonFilter'
-import {
-  botItemsPersonPick,
-  botPickedOther,
-  type BotChatPersonPick
-} from '../../../../shared/bots/bot-chat-people'
-import { useBotItemsPeople } from './BotPersonPickItems'
+import { useBotChatsPersonPick } from './use-bot-chats-person-pick'
 
 const useBotChatSearch = createBotChatSearchHook({ useCallback, useEffect, useMemo, useState })
 
@@ -82,12 +77,7 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
   const tree = useBotOwnChatTree(bot)
   // Its server is down: the last read shows with its actions off until it's back.
   const offline = useBotHostOffline(bot.hostId)
-  // Whose chats: the viewer's own until another pick, as Items opens; a pick whose person is gone
-  // falls back to the viewer's own.
-  const people = useBotItemsPeople(bot)
-  const [picked, setPick] = useState<BotChatPersonPick | null>(null)
-  const pick = botItemsPersonPick(people, picked)
-  const other = botPickedOther(pick, people)
+  const { people, pick, other, setPick } = useBotChatsPersonPick(bot)
   const chats = useMemo(() => orderChatsTab(tree.chats), [tree.chats])
   // Its home's chats and runs, and each listed worker's own workspace.
   const stopWorkspaces = useMemo(

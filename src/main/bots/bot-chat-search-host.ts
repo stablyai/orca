@@ -1,9 +1,10 @@
 // `bots.chats.search`: every chat and worker of a bot, matched on its host. Names come from one chats-tree
 // read; conversation text comes from the host's session search index when the owner turned it on.
-import type { BotChatTreeChat, BotChatTreeWorker } from '../../shared/bots/bot-chat-tree'
+import type { BotChatTreeWorker } from '../../shared/bots/bot-chat-tree'
 import { orderBotChats } from '../../shared/bots/bot-chat-tree'
 import {
   botChatTreeDispatchWorker,
+  type BotChatHostChat,
   type BotChatTreePlaced
 } from '../../shared/bots/bot-chat-tree-model'
 import {
@@ -66,9 +67,14 @@ export function recentBotChatTreeParts(
   }
 }
 
+/** `bots.chats.search`'s answer before a viewer's projection: its chats still say whose Home they are. */
+export type BotChatHostSearchResult = Omit<BotChatSearchResult, 'chats'> & {
+  chats: BotChatHostChat[]
+}
+
 type BotChatSearchIndex = {
-  chats: BotChatTreeChat[]
-  byId: ReadonlyMap<string, BotChatTreeChat>
+  chats: BotChatHostChat[]
+  byId: ReadonlyMap<string, BotChatHostChat>
   /** The worker rows the tree drew, by key. */
   shown: ReadonlyMap<string, BotChatTreeWorker>
   workers: BotChatSearchWorker[]
@@ -117,7 +123,7 @@ function searchIndexOf(parts: BotChatTreeParts): BotChatSearchIndex {
 export async function searchBotChats(
   host: Pick<BotChatSearchHost, 'bots' | 'treeParts' | 'contentMatches' | 'dispatchWorkers'>,
   params: BotChatSearchParams
-): Promise<BotChatSearchResult> {
+): Promise<BotChatHostSearchResult> {
   const bot = host.bots().find((entry) => entry.id === params.botId)
   if (!bot) {
     throw new Error('bot_not_found')

@@ -771,6 +771,7 @@ describe('the share guard', () => {
         'bots.chatTree',
         'bots.chats',
         'bots.chats.own',
+        'bots.chats.search',
         'bots.items.owner.comment',
         'bots.items.owner.list',
         'bots.items.owner.opened',

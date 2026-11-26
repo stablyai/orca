@@ -9,7 +9,7 @@ import {
   type BotChatTreeDispatch
 } from '../../shared/bots/bot-chat-tree-model'
 import type { BotHomeOf } from '../../shared/bots/bot-home-of'
-import { botChatTreeForViewer } from './bot-chat-tree-viewer'
+import { botChatSearchForViewer, botChatTreeForViewer } from './bot-chat-tree-viewer'
 import {
   botSidebarListedChats,
   withViewerChatTabs
@@ -205,5 +205,31 @@ describe('a teammate’s chats on their own sidebar', () => {
     // The owner's own agent: its Home lists with its tab closed, a side chat with no tab does not.
     const ownerChats = owner.chats.map((entry) => ({ ...entry, tab: false }))
     expect(botSidebarListedChats(ownerChats).map((e) => e.chatId)).toEqual(['owner-home'])
+  })
+})
+
+describe('a search answer per viewer', () => {
+  it('lists each match on the row the viewer has, and drops matches on rows they don’t', () => {
+    const { host } = trees(false)
+    const aliceHome = host.chats.find(
+      (entry) =>
+        entry.whoseHome !== undefined &&
+        entry.whoseHome !== 'owner' &&
+        entry.whoseHome.accountId === ALICE
+    )
+    const matches = [
+      { chatId: aliceHome!.chatId, workerKeys: null },
+      { chatId: 'owner-side', workerKeys: null },
+      { chatId: 'gone', workerKeys: null }
+    ]
+    const result = { chats: host.chats, matches, more: 0 }
+    expect(botChatSearchForViewer(result, viewerAlice).matches.map((m) => m.chatId)).toEqual([
+      NO_HOME_CHAT_ID,
+      'owner-side'
+    ])
+    expect(botChatSearchForViewer(result, owner).matches.map((m) => m.chatId)).toEqual([
+      aliceHome!.chatId,
+      'owner-side'
+    ])
   })
 })

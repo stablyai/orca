@@ -8,6 +8,8 @@ import {
   type BotChatHostTree
 } from '../../shared/bots/bot-chat-tree-model'
 import { botHomePlaceholderAccount, type BotHomeOf } from '../../shared/bots/bot-home-of'
+import type { BotChatSearchResult } from '../../shared/bots/bot-chat-search'
+import type { BotChatHostSearchResult } from './bot-chat-search-host'
 
 export type BotChatTreeViewer =
   | { kind: 'owner'; personName: (accountId: string) => string }
@@ -34,6 +36,29 @@ function isPlaceholder(chat: BotChatHostChat): boolean {
 
 function teammateHome(whoseHome: BotHomeOf | undefined, accountId: string): boolean {
   return whoseHome !== undefined && whoseHome !== 'owner' && whoseHome.accountId === accountId
+}
+
+/** A search's answer as `viewer` lists those chats: each match keeps to a row the viewer has. */
+export function botChatSearchForViewer(
+  result: BotChatHostSearchResult,
+  viewer: BotChatTreeViewer
+): BotChatSearchResult {
+  const { chats } = botChatTreeForViewer({ chats: result.chats, workspaceChats: {} }, viewer, {
+    page: true
+  })
+  const listed = new Set(chats.map((chat) => chat.chatId))
+  const asListed = (chatId: string): string =>
+    viewer.kind === 'teammate' && botHomePlaceholderAccount(chatId) === viewer.accountId
+      ? NO_HOME_CHAT_ID
+      : chatId
+  return {
+    ...result,
+    chats,
+    matches: result.matches.flatMap((match) => {
+      const chatId = asListed(match.chatId)
+      return listed.has(chatId) ? [{ ...match, chatId }] : []
+    })
+  }
 }
 
 /** Rows are added only on a full read; a page read (`page`) keeps the rows it was asked for. */
