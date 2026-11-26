@@ -11,7 +11,7 @@ import type { JournalSqlScope } from './journal-sql-scope'
 import type { JournalSqlQueueFacts } from './journal-sql-queued-messages'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
-const MAX_OWED_MAIL_STEERS = 32
+const MAX_OWED_STEERS = 32
 
 /** Send, automatic claim and publication derive the same barriers from current SQL rows. */
 export function journalDomainInputEligibility(
@@ -75,13 +75,20 @@ export function journalDomainResolvedInputEligibility(
   }
 }
 
-/** Claude and Codex take every waiting message in at their next step, so other agents' messages
- *  the agent has not taken in yet never hold the next mail card, up to a bound below the smallest
- *  provider's limit on sends awaiting their echo. */
-function owedSendsAreFromAgents(owed: readonly AgentJournalSubmission[]): boolean {
+/** Claude, Codex and Pi take every waiting message in at their next step, so queued sends the agent
+ *  has not taken in yet never hold the next card that joins the turn, up to a bound below the
+ *  smallest provider's limit on sends awaiting their echo. Where the provider cannot take input
+ *  mid-turn, only other agents' mail goes past. */
+function owedSendsLetTurnJoin(
+  owed: readonly AgentJournalSubmission[],
+  providerInjects: boolean
+): boolean {
   return (
-    owed.length < MAX_OWED_MAIL_STEERS &&
-    owed.every((send) => send.source?.kind === 'agent' && send.queuedMessageId !== undefined)
+    owed.length < MAX_OWED_STEERS &&
+    owed.every(
+      (send) =>
+        send.queuedMessageId !== undefined && (providerInjects || send.source?.kind === 'agent')
+    )
   )
 }
 
@@ -101,9 +108,12 @@ export function selectJournalEligibleQueueCard(
   if (state.blocked || state.prompts.length > 0 || state.pending || (steer && !allowSteer)) {
     return none
   }
-  const mailOnly = state.handover.length > 0
-  // Earlier mail used to stop selection here; a child that cannot take input yet still does.
-  if (mailOnly && !(steer && childAcceptsInput && owedSendsAreFromAgents(state.handover))) {
+  const behindOwed = state.handover.length > 0
+  // Earlier sends used to stop selection here; a child that cannot take input yet still does.
+  if (
+    behindOwed &&
+    !(steer && childAcceptsInput && owedSendsLetTurnJoin(state.handover, mailJoinsTurn))
+  ) {
     return none
   }
   return {
@@ -116,7 +126,7 @@ export function selectJournalEligibleQueueCard(
         steer,
         automatic: true,
         mail: facts.mail,
-        mailOnly,
+        behindOwed,
         mailJoinsTurn
       },
       state.context.inputHead
