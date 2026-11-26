@@ -6,6 +6,7 @@ import {
 } from './structured-agent-session-provider-receipt-rig.test-fixture'
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import {
+  hostTestMessage,
   HOST_TEST_SESSION as CHAT,
   HOST_TEST_NOW as NOW
 } from './structured-agent-session-host-test-data.test-fixture'
@@ -106,6 +107,78 @@ it('withdraws a retired waiter before any durable settlement and ignores its old
     await rig.dispose()
   }
 })
+
+it.each(['late echo', 'mail read'] as const)(
+  'preserves the other pending send receipt across a %s that seals the sink',
+  async (operation) => {
+    const rig = await createQueuedMessageTestRig({ agent: 'claude' })
+    try {
+      const first = await rig.workingSend()
+      await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(1))
+      const firstIngress = claudeReceiptIngress(rig)
+      const { journal, child, providerReceipts } = await rig.host.conversation(CHAT)
+      const second = 'another-pending-send'
+      const body = hostTestMessage('a second send')
+      const { fence } = firstIngress
+      await journal.appendSubmission({
+        clientMessageId: second,
+        fence,
+        handoverRecorded: true,
+        payloadFingerprint: second,
+        body,
+        origin: 'client'
+      })
+      const { handover } = await journal.prepareHandover({
+        clientMessageId: second,
+        fence,
+        turnScope: { kind: 'thread' },
+        body
+      })
+      providerReceipts!.register(CHAT, journal, child!, second, handover)
+      const secondIngress = claudeReceiptIngress(rig, {
+        clientMessageId: second,
+        fence,
+        handover: () => handover
+      })
+      const stream = await openReceiptStream(rig)
+      firstIngress.lifecycle('queued', NOW + 100)
+      secondIngress.lifecycle('queued', NOW + 110)
+      await eventually(() => {
+        expect(stream.frames.flatMap((frame) => frame.updates)).toEqual([
+          { clientMessageId: first, observedAt: NOW + 100 },
+          { clientMessageId: second, observedAt: NOW + 110 }
+        ])
+      })
+
+      if (operation === 'late echo') {
+        firstIngress.echo()
+        expect(await firstIngress.flush()).toEqual({ ok: true })
+        expect((await rig.submission(first))?.dispatchState).toBe('accepted')
+      } else {
+        const hold = await rig.host.holdMailSources(
+          [{ mailbox_handle: 'mailbox', message_id: first, operation_id: first, session_id: CHAT }],
+          new AbortController().signal
+        )
+        try {
+          expect(hold.current()).toBe(true)
+        } finally {
+          hold.release()
+        }
+      }
+
+      expect((await rig.submission(second))?.dispatchState).toBe('pending')
+      const restated = await openReceiptStream(rig)
+      expect(restated.frames[0]?.updates).toEqual([
+        ...(operation === 'mail read' ? [{ clientMessageId: first, observedAt: NOW + 100 }] : []),
+        { clientMessageId: second, observedAt: NOW + 110 }
+      ])
+      stream.close()
+      restated.close()
+    } finally {
+      await rig.dispose()
+    }
+  }
+)
 
 it.each([false, true])(
   'preserves the owed opening frame at the last structural cursor (bounded frames %s)',

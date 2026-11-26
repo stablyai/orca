@@ -36,14 +36,9 @@ export function createHostedEventSink(
       session.providerReceipts?.withdraw(sessionId, session.child, handover)
     }
   }
-  const { seal, close } = sink
-  const retire = () => owner()?.providerReceipts?.retire(sessionId)
-  sink.seal = () => {
-    retire()
-    seal()
-  }
+  const { close } = sink
   sink.close = () => {
-    retire()
+    owner()?.providerReceipts?.retire(sessionId)
     close()
   }
   return sink
