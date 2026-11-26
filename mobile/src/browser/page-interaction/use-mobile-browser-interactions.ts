@@ -28,7 +28,7 @@ import { useMobileBrowserCommands } from './use-mobile-browser-commands'
 const TAP_SLOP = 16
 const SCROLL_START_SLOP = 22
 const LONG_PRESS_MS = 550
-const WHEEL_INTERVAL_MS = 70
+const WHEEL_INTERVAL_MS = 40
 
 type PanGesture = { x: number; y: number; offsetX: number; offsetY: number }
 type SendBrowserRequest = (

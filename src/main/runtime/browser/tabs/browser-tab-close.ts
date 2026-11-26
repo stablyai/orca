@@ -100,12 +100,21 @@ export class RuntimeBrowserTabClose {
 
     // Popups are windows, not renderer tabs; close them as the page's own window.close() would.
     const popupPageId = tabId ?? bridge.getActivePageId(worktreeId)
-    if (
-      popupPageId &&
-      bridge.getRegisteredTabs(worktreeId).has(popupPageId) &&
-      (await browserManager.closePopupPage(popupPageId))
-    ) {
-      return { closed: true }
+    if (popupPageId?.startsWith('popup-')) {
+      if (
+        bridge.getRegisteredTabs(worktreeId).has(popupPageId) &&
+        (await browserManager.closePopupPage(popupPageId))
+      ) {
+        return { closed: true }
+      }
+      if (this.targets.retireGhostBrowserSessionRow(worktreeId, popupPageId)) {
+        return { closed: true }
+      }
+      const scope = worktreeId ? ' in this worktree' : ''
+      throw new BrowserError(
+        'browser_tab_not_found',
+        `Browser page ${popupPageId} was not found${scope}`
+      )
     }
 
     const authoritativeWindowId = this.host.getAvailableAuthoritativeWindowId()

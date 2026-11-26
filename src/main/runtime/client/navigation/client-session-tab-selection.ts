@@ -133,6 +133,12 @@ export class ClientSessionTabSelectionStore {
     }
   }
 
+  getActiveTabId(clientNavigationId: string, worktreeId: string): string | null {
+    return (
+      this.statesByClient.get(clientNavigationId)?.get(worktreeId)?.selection.activeTabId ?? null
+    )
+  }
+
   activate(
     snapshot: RuntimeMobileSessionTabsResult,
     clientNavigationId: string,

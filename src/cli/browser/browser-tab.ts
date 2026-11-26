@@ -20,12 +20,13 @@ import { isBrowserTabSplitDirection } from '../../shared/browser/workspaces/brow
 import { getBrowserWorktreeSelector } from '../workspace-selection/workspace-selector'
 import { getBrowserCommandTarget, getScopedBrowserWorktreeSelector } from './browser-command-target'
 import { BROWSER_OPEN_URL_MOBILE_RUNTIME_CAPABILITY } from '../../shared/browser/runtime/browser-runtime-capabilities'
+import { ORCA_SCRUB_SAFE_PANE_ENV } from '../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
 import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
   'open-url': async ({ flags, client, cwd, json }) => {
     const url = getRequiredStringFlag(flags, 'url')
-    const paneKey = process.env.ORCA_PANE_KEY || undefined
+    const paneKey = process.env.ORCA_PANE_KEY || process.env[ORCA_SCRUB_SAFE_PANE_ENV] || undefined
     const onlyWhenMobileViewing = flags.has('if-mobile-viewing')
     if (onlyWhenMobileViewing) {
       // Older runtimes drop onlyWhenMobileViewing and would hijack desktop open; fall through cleanly.

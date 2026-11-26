@@ -1,5 +1,5 @@
-// Frames a phone may have in flight before it acks one. Two cover decode and one round trip on a fast link.
-const BASE_WINDOW_FRAMES = 2
+// Frames a phone may have in flight before it acks one. Three cover ~100ms RTT at 30fps without stalling.
+const BASE_WINDOW_FRAMES = 3
 // A backstop only: the queue-delay test bounds buffering. 16 keeps 10 fps up to a 1.6 s round trip.
 const MAX_WINDOW_FRAMES = 16
 // Beyond the base window, a frame goes out only while the link has queued less than this.

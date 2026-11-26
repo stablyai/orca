@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { RuntimeBrowserTabCreation } from './browser-tab-creation'
+import { activeMobileViewerClientIdsForPane } from './mobile-terminal-browser-open'
 
 type CreationHost = ConstructorParameters<typeof RuntimeBrowserTabCreation>[0]
 type CreationTargets = ConstructorParameters<typeof RuntimeBrowserTabCreation>[1]
@@ -52,7 +53,7 @@ describe('RuntimeBrowserTabCreation.browserOpenUrlOnClient', () => {
     })
 
     const result = await creation.browserOpenUrlOnClient({
-      url: 'https://auth.example.com/oauth2/authorize?redirect_uri=http%3A%2F%2Flocalhost%3A9615',
+      url: 'https://auth.example.com/oauth2/authorize?redirect_uri=http%3A%2F%2Flocalhost%3A8400',
       worktree: 'id:wt-1',
       paneKey: 'tab-1:leaf-1',
       onlyWhenMobileViewing: true
@@ -61,7 +62,7 @@ describe('RuntimeBrowserTabCreation.browserOpenUrlOnClient', () => {
     expect(result).toEqual({ browserPageId: 'page-mobile-1' })
     expect(createTab).toHaveBeenCalledWith(
       expect.objectContaining({
-        url: 'https://auth.example.com/oauth2/authorize?redirect_uri=http%3A%2F%2Flocalhost%3A9615',
+        url: 'https://auth.example.com/oauth2/authorize?redirect_uri=http%3A%2F%2Flocalhost%3A8400',
         worktreeId: 'wt-1'
       })
     )
@@ -103,5 +104,42 @@ describe('RuntimeBrowserTabCreation.browserOpenUrlOnClient', () => {
 
     expect(result).toEqual({ browserPageId: null })
     expect(closeServerTab).toHaveBeenCalledWith('page-mobile-1', 'id:wt-1')
+  })
+
+  it('detects a connected phone whose active tab matches the pane even when terminal.subscribe is paused', () => {
+    const leafUuid = '11111111-1111-4111-8111-111111111111'
+    const viewers = activeMobileViewerClientIdsForPane(
+      {
+        getLeafPtyId: () => 'pty-1',
+        getPanePtyId: () => 'pty-1',
+        getDisplayMode: () => 'desktop',
+        getDriverKind: () => 'idle',
+        getSubscribers: () => [],
+        getMobileListenerIds: () => ['phone-1'],
+        getClientActiveTabId: () => 'term-leaf-1',
+        getMobileSessionSnapshot: () => ({
+          worktree: 'wt-1',
+          publicationEpoch: 'e1',
+          snapshotVersion: 1,
+          activeGroupId: null,
+          activeTabId: 'term-leaf-1',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'term-leaf-1',
+              parentTabId: 'tab-1',
+              leafId: leafUuid,
+              title: 'zsh',
+              ptyId: 'pty-1',
+              isActive: true
+            }
+          ]
+        })
+      },
+      `tab-1:${leafUuid}`,
+      'wt-1'
+    )
+    expect(viewers).toEqual(['phone-1'])
   })
 })

@@ -56,7 +56,7 @@ describe('macos-terminal-open-shim', () => {
       expect(shimDir).toBe(join(dir, 'macos-open-shim'))
 
       const url =
-        'https://auth.example.com/oauth2/authorize?client_id=abc&redirect_uri=http%3A%2F%2Flocalhost%3A9615'
+        'https://auth.example.com/oauth2/authorize?client_id=abc&redirect_uri=http%3A%2F%2Flocalhost%3A8400'
       const result = spawnSync(join(shimDir!, 'open'), [url], {
         env: { ...process.env, ORCA_PANE_KEY: 'tab-1:leaf-1', ORCA_CLI_COMMAND: fakeCli },
         encoding: 'utf8'
@@ -72,6 +72,18 @@ describe('macos-terminal-open-shim', () => {
         '--if-mobile-viewing',
         '--quiet'
       ])
+
+      const scrubbedEnv: NodeJS.ProcessEnv = {
+        ...process.env,
+        ORCA_AGENT_PANE: 'tab-1:leaf-1',
+        ORCA_CLI_COMMAND: fakeCli
+      }
+      delete scrubbedEnv.ORCA_PANE_KEY
+      const scrubbed = spawnSync(join(shimDir!, 'open'), [url], {
+        env: scrubbedEnv,
+        encoding: 'utf8'
+      })
+      expect(scrubbed.status).toBe(0)
 
       expect(buildMacosTerminalOpenShimScript(null)).toContain('exec /usr/bin/open "$@"')
     }

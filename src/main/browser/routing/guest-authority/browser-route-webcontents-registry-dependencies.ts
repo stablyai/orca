@@ -22,5 +22,7 @@ export type BrowserRouteWebContentsRegistryDependencies = {
   releaseAgentLead?: BrowserRouteGuestPopupDependencies['releaseAgentLead']
   isAgentCommandShownHere?: BrowserRouteGuestPopupDependencies['isAgentCommandShownHere']
   isPersonCommandRunning?: BrowserRouteGuestPopupDependencies['isPersonCommandRunning']
+  isPopupShownToViewers?: BrowserRouteGuestPopupDependencies['isPopupShownToViewers']
+  popupOpened?: BrowserRouteGuestPopupDependencies['popupOpened']
   maxGuests?: number
 }

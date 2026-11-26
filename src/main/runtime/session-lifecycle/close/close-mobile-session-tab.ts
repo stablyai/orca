@@ -267,15 +267,13 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
       await this.closeMobileSessionTerminalPane(worktreeId, tab)
       return finishCommittedClose()
     } else if (tab.type === 'browser') {
-      // Client-hosted, offscreen and renderer browser pages each own their retirement path.
-      const clientPage = tab.browserPageId
-        ? getRuntimeBrowserPageRegistry(this).getPage(tab.browserPageId)
-        : undefined
-      if (clientPage) {
-        await this.browserTabClose({
-          worktree: `id:${worktreeId}`,
-          page: clientPage.browserPageId
-        })
+      // Client-hosted, popup, offscreen and renderer browser pages each own their retirement path.
+      const pageId = tab.browserPageId
+      if (
+        pageId &&
+        (getRuntimeBrowserPageRegistry(this).getPage(pageId) || pageId.startsWith('popup-'))
+      ) {
+        await this.browserTabClose({ worktree: `id:${worktreeId}`, page: pageId })
       } else if (this.isOffscreenMobileSessionBrowserTab(snapshot, tab)) {
         await this.offscreenBrowserBackend!.closeTab(tab.browserPageId!).catch(() => {})
         this.retireRuntimeOwnedBrowserSessionTab(worktreeId, tab.browserPageId!)

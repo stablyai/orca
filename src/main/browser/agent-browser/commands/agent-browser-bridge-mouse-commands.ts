@@ -14,7 +14,10 @@ import { touchEmulationParams } from '../../cdp/input/guest-touch-emulation'
 import { assertRemoteCliBrowserAccess } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import { AgentBrowserBridgePointerCommands } from './agent-browser-bridge-pointer-commands'
 import { agentBrowserSetMediaArguments } from '../protocol/agent-browser-set-media-arguments'
-import { forgetBrowserGuestInputGestures } from '../../guest-lifecycle/input/browser-guest-input-gesture'
+import {
+  forgetBrowserGuestInputGestures,
+  primeSyntheticBrowserGuestGesture
+} from '../../guest-lifecycle/input/browser-guest-input-gesture'
 import { assertFinitePointerValues } from '../../cdp/input/cdp-pointer-input'
 import { assertUploadFilesExist } from '../../cdp/input/browser-upload-files'
 import { noteInjectedRightPress } from '../../guest-lifecycle/input/browser-guest-context-menu-target'
@@ -61,6 +64,13 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
           // A DOM-activated tap fires no guest input event, so credit it before it can open a link.
           this.browserManager.creditPageInput(target.webContentsId)
           forgetBrowserGuestInputGestures(wc)
+          if (cdpButton === 'left' && cdpModifiers === 0) {
+            primeSyntheticBrowserGuestGesture(wc, {
+              byAgent: true,
+              fromThisDesktop: this.browserManager.isAgentCommandShownHere(target.webContentsId),
+              fromPairedViewer: this.browserManager.isPersonCommandRunning(target.webContentsId)
+            })
+          }
           const point =
             cdpButton === 'left'
               ? // DOM activation drops modifiers; let CDP dispatch modifier clicks.

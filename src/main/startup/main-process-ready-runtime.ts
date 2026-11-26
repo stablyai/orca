@@ -114,6 +114,16 @@ function desktopCoreNative(store: Store): DesktopCoreNative {
           console.warn('[browser] could not show a page popup to its client:', error)
         })
       })
+      browserManager.setServerPagePopupCloser((popup) =>
+        runtime.closeServerPagePopupForClient(popup).catch((error: unknown) => {
+          console.warn('[browser] could not return a client to its popup opener:', error)
+        })
+      )
+      browserManager.setServerPageLinkTabPresenter((link) => {
+        void runtime.showOpenedLinkTabToClient(link).catch((error: unknown) => {
+          console.warn('[browser] could not show an opened link tab to its client:', error)
+        })
+      })
       browserSessionRegistry.onProfilesChanged = () => runtime.notifyBrowserProfilesChanged()
     },
     createAgentBrowserBridge: (onTabsChanged) => {

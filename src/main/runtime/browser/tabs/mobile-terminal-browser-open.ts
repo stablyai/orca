@@ -4,7 +4,10 @@ import type {
   RuntimeMobileSessionTabsSnapshot
 } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
-import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import {
+  parseLegacyNumericPaneKey,
+  parsePaneKey
+} from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   assertClientOpenableUrl,
   openBrowserUrlOnClient,
@@ -88,23 +91,54 @@ export function activeMobileViewerClientIdsForPane(
     getLeafPtyId(tabId: string, leafId: string): string | null | undefined
     getPanePtyId(paneKey: string): string | null | undefined
     getDisplayMode(ptyId: string): string
+    getDriverKind?(ptyId: string): string
     getSubscribers(ptyId: string): Iterable<{ clientId: string; viewport: unknown }> | undefined
+    getMobileListenerIds?(worktreeId: string): string[]
+    getClientActiveTabId?(clientId: string, worktreeId: string): string | null
+    getMobileSessionSnapshot?(worktreeId: string): RuntimeMobileSessionTabsSnapshot | undefined
   },
-  paneKey: string
+  paneKey: string,
+  worktreeId?: string
 ): string[] {
   const parsed = parsePaneKey(paneKey)
   const ptyId =
     (parsed ? source.getLeafPtyId(parsed.tabId, parsed.leafId) : null) ??
     source.getPanePtyId(paneKey) ??
     null
-  if (ptyId === null || source.getDisplayMode(ptyId) === 'desktop') {
+  const desktopReclaimed =
+    ptyId !== null &&
+    (source.getDriverKind
+      ? source.getDriverKind(ptyId) === 'desktop'
+      : source.getDisplayMode(ptyId) === 'desktop')
+  if (desktopReclaimed) {
     return []
   }
-  const subscribers = source.getSubscribers(ptyId)
-  // Exclude lease-only/unmeasured subscribers (background chat leases have viewport: null).
-  return subscribers
-    ? [...subscribers].filter((s) => s.viewport !== null).map((s) => s.clientId)
-    : []
+  const ptyViewers =
+    ptyId !== null
+      ? [...(source.getSubscribers(ptyId) ?? [])]
+          .filter((s) => s.viewport !== null)
+          .map((s) => s.clientId)
+      : []
+  const tabId = parsed?.tabId ?? parseLegacyNumericPaneKey(paneKey)?.tabId ?? null
+  if (ptyViewers.length > 0 || !worktreeId || (!tabId && !ptyId) || !source.getMobileListenerIds) {
+    return ptyViewers
+  }
+  // Chat UI pauses terminal.subscribe; still route when a connected phone has this pane's tab selected.
+  const snapshot = source.getMobileSessionSnapshot?.(worktreeId)
+  const matchingTabIds = new Set(
+    snapshot?.tabs
+      .filter(
+        (t) =>
+          (tabId !== null &&
+            (t.id === tabId || (t.type === 'terminal' && t.parentTabId === tabId))) ||
+          (ptyId !== null && t.type === 'terminal' && t.ptyId === ptyId)
+      )
+      .map((t) => t.id) ?? (tabId ? [tabId] : [])
+  )
+  return source.getMobileListenerIds(worktreeId).filter((clientId) => {
+    const activeId = source.getClientActiveTabId?.(clientId, worktreeId) ?? snapshot?.activeTabId
+    return Boolean(activeId && matchingTabIds.has(activeId))
+  })
 }
 
 export function selectTargetMobileNavigationIds(
@@ -130,8 +164,10 @@ export function createMobileBrowserOpenRuntimeHost(runtime: {
   getLeafPtyId(tabId: string, leafId: string): string | null | undefined
   getPanePtyId(paneKey: string): string | null | undefined
   getDisplayMode(ptyId: string): string
+  getDriverKind?(ptyId: string): string
   getSubscribers(ptyId: string): Iterable<{ clientId: string; viewport: unknown }> | undefined
   getMobileListenerIds(worktreeId: string): string[]
+  getClientActiveTabId?(clientId: string, worktreeId: string): string | null
   hasOffscreenBrowser(): boolean
   hydrateHeadlessTabs(worktreeId: string): void
   getMobileSessionSnapshot(worktreeId: string): RuntimeMobileSessionTabsSnapshot | undefined
@@ -147,7 +183,7 @@ export function createMobileBrowserOpenRuntimeHost(runtime: {
 }) {
   return {
     hasMobileTerminalViewer(paneKey: string, worktreeId?: string): boolean {
-      const viewers = activeMobileViewerClientIdsForPane(runtime, paneKey)
+      const viewers = activeMobileViewerClientIdsForPane(runtime, paneKey, worktreeId)
       return (
         viewers.length > 0 && (!worktreeId || runtime.getMobileListenerIds(worktreeId).length > 0)
       )
@@ -166,7 +202,7 @@ export function createMobileBrowserOpenRuntimeHost(runtime: {
           getMobileClientNavigationIds: (id, paneKey) =>
             selectTargetMobileNavigationIds(
               runtime.getMobileListenerIds(id),
-              paneKey ? activeMobileViewerClientIdsForPane(runtime, paneKey) : undefined
+              paneKey ? activeMobileViewerClientIdsForPane(runtime, paneKey, id) : undefined
             ),
           getMobileSessionTabsForWorktree: runtime.getMobileSessionTabsForWorktree,
           applyTabNavigation: runtime.applyTabNavigation

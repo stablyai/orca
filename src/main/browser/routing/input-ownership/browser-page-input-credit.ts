@@ -92,6 +92,12 @@ export class BrowserPageInputCredit {
     return credit && isRecentBrowserGuestInput(credit.at, this.now()) ? credit.pairedDeviceId : null
   }
 
+  /** Non-consuming check for recent paired-client input on this tab. */
+  peek(browserTabId: string): string | null {
+    const credit = this.creditByTabId.get(browserTabId)
+    return credit && isRecentBrowserGuestInput(credit.at, this.now()) ? credit.pairedDeviceId : null
+  }
+
   /** Single-use, like the input gesture it accompanies: one click cannot steer a second tab. */
   consume(browserTabId: string): string | null {
     const credit = this.creditByTabId.get(browserTabId)

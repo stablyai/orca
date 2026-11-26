@@ -188,15 +188,20 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
       return
     }
     const { targetGroupId, focusesHost } = options
-    // Client-placed pages use the registry, not offscreen backing.
+    const isPopupPage = browserPageId.startsWith('popup-')
+    // Client-placed and popup pages live outside offscreen backing.
     if (
       !this.offscreenBrowserBackend &&
+      !isPopupPage &&
       !getRuntimeBrowserPageRegistry(this).getPage(browserPageId)
     ) {
       return
     }
     // Hydrate first so the freshly created browser tab is present in the snapshot.
-    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
+    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
+      worktreeId,
+      isPopupPage ? { allowAttachedWindow: true, onlyRuntimeOwnedTerminals: true } : undefined
+    )
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     const tab = snapshot?.tabs.find(
       (candidate): candidate is RuntimeMobileSessionBrowserTab =>

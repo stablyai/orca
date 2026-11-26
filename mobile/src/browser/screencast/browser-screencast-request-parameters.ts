@@ -23,15 +23,15 @@ export type MobileBrowserScreencastRequest = {
 export type MobileBrowserViewMode = 'web' | 'mobile'
 
 export const BROWSER_FRAME_FORMAT: BrowserScreencastFormat = 'jpeg'
-export const BROWSER_FRAME_QUALITY = 72
+export const BROWSER_FRAME_QUALITY = 65
 // Do not skip compositor frames: menus can be final static update; time throttling still bounds throughput.
 const BROWSER_FRAME_EVERY_NTH_FRAME = 1
-export const MOBILE_BROWSER_FRAME_MIN_INTERVAL_MS = 100
+export const MOBILE_BROWSER_FRAME_MIN_INTERVAL_MS = 33
 const BROWSER_MIN_FRAME_WIDTH = 320
 const BROWSER_MIN_FRAME_HEIGHT = 240
-const BROWSER_MAX_FRAME_WIDTH = 2400
-const BROWSER_MAX_FRAME_HEIGHT = 2160
-const BROWSER_MAX_STREAM_SCALE = 2.5
+const BROWSER_MAX_FRAME_WIDTH = 1600
+const BROWSER_MAX_FRAME_HEIGHT = 1600
+const BROWSER_MAX_STREAM_SCALE = 2
 
 /** What a phone's mobile view asks for when nothing is bounding the frame it gets back. */
 export const MOBILE_VIEW_DEVICE_SCALE_FACTOR = 2

@@ -19,13 +19,19 @@ export class BrowserManager extends BrowserManagerEventForwarding {
     const renderer = this.resolveRendererForBrowserTab(browserTabId)
     const open: OpenLinkInTab | null = renderer
       ? // The renderer owns Orca's tab model; forward the validated URL for materialization.
-        (url, activateTab) =>
+        (url, activateTab) => {
+          const pairedDeviceId = this.pageInputCredit.consume(browserTabId)
+          const worktreeId = this.worktreeIdByTabId.get(browserTabId)
+          if (pairedDeviceId && worktreeId && activateTab) {
+            this.serverPageLinkTabPresenter?.({ worktreeId, url, pairedDeviceId })
+          }
           renderer.send('browser:open-link-in-orca-tab', {
             browserPageId: browserTabId,
             url,
-            // An agent's link must not move the desktop user's view.
-            ...(activateTab && !agentOpened ? {} : { activate: false })
+            // An agent's or paired viewer's link must not move the desktop user's view.
+            ...(activateTab && !agentOpened && !pairedDeviceId ? {} : { activate: false })
           })
+        }
       : this.resolveOffscreenTabOpener(browserTabId)
     if (!open) {
       return false

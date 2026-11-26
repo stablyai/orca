@@ -51,6 +51,8 @@ export type BrowserRouteGuestPopupDependencies = {
   isAgentCommandShownHere?: (webContentsId: number) => boolean
   /** Injected input reaching this popup now is a paired viewer's, not an agent's. */
   isPersonCommandRunning?: (webContentsId: number) => boolean
+  isPopupShownToViewers?: (openerWebContentsId: number) => boolean
+  popupOpened?: (opener: WebContents, popupContents: WebContents) => void
   openPopupWindow?: (
     options: PopupChildWindowOptions,
     targetUrl: string,
@@ -84,8 +86,11 @@ export function createBrowserRouteGuestPopupController(input: {
   const popups = new Set<BrowserRouteGuestPopupWindow>()
   const gestures = new Set<BrowserGuestInputGesture>()
   const popupWebContentsIds = new Set<number>()
-  const { isAgentCommandShownHere } = input.dependencies
-  const openerGesture = trackBrowserGuestInputGesture(input.opener, { isAgentCommandShownHere })
+  const { isAgentCommandShownHere, isPersonCommandRunning } = input.dependencies
+  const openerGesture = trackBrowserGuestInputGesture(input.opener, {
+    isAgentCommandShownHere,
+    isPairedViewerCommandRunning: isPersonCommandRunning
+  })
   gestures.add(openerGesture)
   // Only disposal is permanent; navigation authority may return after reconnect.
   let disposed = false
@@ -125,6 +130,7 @@ export function createBrowserRouteGuestPopupController(input: {
     }
     const gesture = trackBrowserGuestInputGesture(contents, {
       isAgentCommandShownHere,
+      isPairedViewerCommandRunning: isPersonCommandRunning,
       onActivatingInput: (byAgent) => {
         if (byAgent && !input.dependencies.isPersonCommandRunning?.(contents.id)) {
           return
@@ -157,6 +163,7 @@ export function createBrowserRouteGuestPopupController(input: {
         gestures.delete(gesture)
         gesture.dispose()
       })
+      input.dependencies.popupOpened?.(input.opener, contents)
     } catch {
       releasePopupOwnership(popupWebContentsId)
       gestures.delete(gesture)
@@ -235,8 +242,10 @@ export function createBrowserRouteGuestPopupController(input: {
         }
         return { action: 'deny' }
       }
+      const shownToViewers = input.dependencies.isPopupShownToViewers?.(source.id) === true
       const options = {
         ...ROUTE_POPUP_WINDOW_OPTIONS,
+        ...(shownToViewers ? { show: false } : {}),
         webPreferences: {
           ...ROUTE_POPUP_WINDOW_OPTIONS.webPreferences,
           // Inherit the opener's cookies and SOCKS route even without a Chromium opener relationship.
@@ -278,6 +287,7 @@ export function createBrowserRouteGuestPopupController(input: {
           return openPopup(
             {
               ...options,
+              ...(shownToViewers ? { show: false } : {}),
               showWhenAppActive: observed.byAgent,
               // Reopening a POST by URL would discard its body.
               loadInitialUrl:

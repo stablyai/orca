@@ -7,18 +7,19 @@ const SHIM_DIR_NAME = 'macos-open-shim'
 
 /** Routes single http(s) URL opens to Orca when a mobile client is viewing the terminal, else /usr/bin/open. */
 export function buildMacosTerminalOpenShimScript(cliLauncher: string | null): string {
-  const fallbackCli = quotePosixShell(cliLauncher ?? 'orca')
+  // Pin this instance's launcher so dev/nested shells never invoke an outer Orca.app's older CLI.
+  const cliAssignment = cliLauncher
+    ? `cli=${quotePosixShell(cliLauncher)}`
+    : 'cli="${ORCA_CLI_COMMAND:-orca}"'
   // Keep stderr silent on success: some CLIs treat any stderr output from `open` as failure.
   // Pass --environment local so ambient ORCA_ENVIRONMENT / ORCA_PAIRING_CODE never misroutes local opens.
   return `#!/bin/sh
-if [ "$#" -eq 1 ] && [ -n "\${ORCA_PANE_KEY:-}" ]; then
+pane_key="\${ORCA_PANE_KEY:-\${ORCA_AGENT_PANE:-}}"
+if [ "$#" -eq 1 ] && [ -n "$pane_key" ]; then
   case "$1" in
     http://*|https://*)
-      cli="\${ORCA_CLI_COMMAND:-}"
-      if [ -z "$cli" ]; then
-        cli=${fallbackCli}
-      fi
-      if "$cli" open-url --environment local --url "$1" --if-mobile-viewing --quiet 2>/dev/null; then
+      ${cliAssignment}
+      if ORCA_PANE_KEY="$pane_key" "$cli" open-url --environment local --url "$1" --if-mobile-viewing --quiet 2>/dev/null; then
         exit 0
       fi
       ;;

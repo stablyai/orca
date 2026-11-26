@@ -80,6 +80,8 @@ export class BrowserRouteWebContentsRegistry {
         releaseAgentLead: this.dependencies.releaseAgentLead,
         isAgentCommandShownHere: this.dependencies.isAgentCommandShownHere,
         isPersonCommandRunning: this.dependencies.isPersonCommandRunning,
+        isPopupShownToViewers: this.dependencies.isPopupShownToViewers,
+        popupOpened: this.dependencies.popupOpened,
         isPopupNavigationAllowed: (url) => this.navigationAllowed(state, url, false)
       })
     } catch {
