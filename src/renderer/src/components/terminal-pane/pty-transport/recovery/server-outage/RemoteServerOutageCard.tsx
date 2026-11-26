@@ -28,6 +28,24 @@ import {
 
 const FADE_OUT_MS = 150
 const NUDGE_MS = 500
+// Why: a tab switch drops one surface's speaker an effect before the next one speaks.
+const SPEAKER_SWAP_GRACE_MS = 100
+const RECONNECT_COOLDOWN_MS = 2_000
+
+function useHeldTrue(value: boolean, holdMs: number): boolean {
+  const [held, setHeld] = useState(value)
+  if (value && !held) {
+    setHeld(true)
+  }
+  useEffect(() => {
+    if (value || !held) {
+      return
+    }
+    const timer = window.setTimeout(() => setHeld(false), holdMs)
+    return () => window.clearTimeout(timer)
+  }, [held, holdMs, value])
+  return held
+}
 
 type ShownCard = { downSince: number | null; stopped: boolean }
 
@@ -37,24 +55,27 @@ export function RemoteServerOutageCard({
 }: {
   environmentId: string
 }): React.JSX.Element | null {
-  const { speaking, since, stopped } = useRemoteServerOutageCardInputs(environmentId)
-  const reveal = useCalmStatusReveal(speaking, false, since)
-  usePublishRemoteServerNoticeShowing(environmentId, reveal.visible)
+  const { speaking, down, since, stopped } = useRemoteServerOutageCardInputs(environmentId)
+  const speakingNow = useHeldTrue(speaking, SPEAKER_SWAP_GRACE_MS)
+  const reveal = useCalmStatusReveal(speakingNow, false, since)
+  // Why: with the server still down, losing the last visible surface means the user moved to other work, so the card goes at once; only a healthy return holds it.
+  const visible = reveal.visible && (speakingNow || !down)
+  usePublishRemoteServerNoticeShowing(environmentId, visible)
   const [shown, setShown] = useState<ShownCard | null>(null)
   if (
-    reveal.visible &&
+    visible &&
     (shown === null || shown.downSince !== reveal.downSince || shown.stopped !== stopped)
   ) {
     setShown({ downSince: reveal.downSince, stopped })
   }
   // Why kept briefly: the card fades out instead of vanishing when the server returns.
   useEffect(() => {
-    if (reveal.visible) {
+    if (visible) {
       return
     }
     const timer = window.setTimeout(() => setShown(null), FADE_OUT_MS)
     return () => window.clearTimeout(timer)
-  }, [reveal.visible])
+  }, [visible])
   if (shown === null) {
     return null
   }
@@ -63,7 +84,7 @@ export function RemoteServerOutageCard({
       environmentId={environmentId}
       downSince={shown.downSince}
       stopped={shown.stopped}
-      leaving={!reveal.visible}
+      leaving={!visible}
     />
   )
 }
@@ -140,8 +161,17 @@ export function RemoteServerOutageCardLine({
     : remoteRuntimeRecoveryCopy(cause, SERVER_SLOT, t).title
   const timer =
     downSince === null ? null : remoteRuntimeDownForCompactLabel(now - downSince, intlLocale)
+  const [cooling, setCooling] = useState(false)
+  useEffect(() => {
+    if (!cooling) {
+      return
+    }
+    const timer = window.setTimeout(() => setCooling(false), RECONNECT_COOLDOWN_MS)
+    return () => window.clearTimeout(timer)
+  }, [cooling])
   const reconnect = (): void => {
     setDetailsOpen(false)
+    setCooling(true)
     reconnectRemoteServerNow(environmentId)
   }
   const showTailscale = cause === 'connection-lost' && tailscaleHost !== null
@@ -173,7 +203,7 @@ export function RemoteServerOutageCardLine({
             </span>
           ) : null}
           {stopped ? (
-            <Button size="xs" className="shrink-0" onClick={reconnect}>
+            <Button size="xs" className="shrink-0" disabled={cooling} onClick={reconnect}>
               {t(
                 'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.reconnectButton',
                 'Reconnect'
@@ -249,7 +279,7 @@ export function RemoteServerOutageCardLine({
           <div className="px-1 py-1 leading-5 text-muted-foreground">{copy.body}</div>
         )}
         <div className="flex justify-end px-1 pt-0.5">
-          <Button size="xs" onClick={reconnect}>
+          <Button size="xs" disabled={cooling} onClick={reconnect}>
             {t(
               'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.reconnectNowButton',
               'Reconnect now'

@@ -1,4 +1,5 @@
 import { useEffect, useId, useSyncExternalStore } from 'react'
+import type { RemoteServerPaneRetries } from './remote-server-pane-retries'
 import { CALM_STATUS_HEALTHY_HOLD_MS } from '../../../../../../../shared/remote-runtime/connection-status/calm-status-reveal'
 
 /** Share one outage clock per server across a window's surfaces; the window's one card shows while a visible surface speaks, and every pane stays quiet while any notice is speaking or held on screen. */
@@ -13,9 +14,6 @@ type ServerOutage = {
   since: number
   releaseTimer: number | null
 }
-
-/** A surface's own panes on the down server: still retrying, all stopped, or none in recovery. */
-export type RemoteServerPaneRetries = 'retrying' | 'latched' | null
 
 const outages = new Map<string, ServerOutage>()
 const listeners = new Set<() => void>()
@@ -177,6 +175,8 @@ export function useRemoteServerOutageIds(): readonly string[] {
 export type RemoteServerOutageCardInputs = {
   /** A visible surface on this server can show the card. */
   speaking: boolean
+  /** A mounted surface still sees the server down. */
+  down: boolean
   /** When any surface in this window first saw the outage. */
   since: number | null
   /** Every reporting surface's panes stopped retrying. */
@@ -190,10 +190,14 @@ export function useRemoteServerOutageCardInputs(
     subscribe,
     () => (outages.get(environmentId)?.speakers.length ?? 0) > 0
   )
+  const down = useSyncExternalStore(
+    subscribe,
+    () => (outages.get(environmentId)?.observers.size ?? 0) > 0
+  )
   const since = useSyncExternalStore(subscribe, () => outages.get(environmentId)?.since ?? null)
   const stopped = useSyncExternalStore(subscribe, () => {
     const outage = outages.get(environmentId)
     return outage !== undefined && outage.latched.size > 0 && outage.retrying.size === 0
   })
-  return { speaking, since, stopped }
+  return { speaking, down, since, stopped }
 }

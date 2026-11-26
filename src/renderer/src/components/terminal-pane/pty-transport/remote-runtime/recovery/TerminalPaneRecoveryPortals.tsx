@@ -11,8 +11,7 @@ import { useRetryingOutageEnvironmentId } from '../../recovery/server-outage/rem
 import { useWorkspaceRuntimeEnvironmentId } from '../../../../../lib/workspace/ownership/workspace-runtime-environment'
 import {
   useRemoteServerNoticeClaim,
-  useReportRemoteServerPaneRetries,
-  type RemoteServerPaneRetries
+  useReportRemoteServerPaneRetries
 } from '../../recovery/server-outage/remote-server-notice-claims'
 import { usePublishRemoteServerDownTab } from '../../recovery/server-outage/remote-server-outage-signals'
 import { RemoteServerPaneVeil } from '../../recovery/server-outage/RemoteServerPaneVeil'
@@ -23,25 +22,7 @@ import { paneShowsWslHostStoppedCard } from '@/runtime/hosts/wsl/wsl-host-stoppe
 import { withoutWslHostStoppedLines } from '../../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-stopped-message'
 import { mapPaneTerminalErrors } from '../../../errors/terminal-error-accumulation'
 import type { TerminalPaneController } from '../../../controller/use-terminal-pane-controller'
-import type { VisiblePtyRecoveryState } from './terminal-remote-runtime-recovery-ui-state'
-
-/** Whether this surface's panes on the down server still retry or all stopped; the window's card says which. */
-function serverPaneRetries(
-  states: (VisiblePtyRecoveryState | undefined)[]
-): RemoteServerPaneRetries {
-  let latched = false
-  for (const state of states) {
-    // Why skipped: an ownership handoff is not an outage, as the pane banner also treats it.
-    if (state?.reason === 'ownership') {
-      continue
-    }
-    if (state?.phase === 'recovering' || state?.phase === 'backoff') {
-      return 'retrying'
-    }
-    latched ||= state?.phase === 'disconnected'
-  }
-  return latched ? 'latched' : null
-}
+import { classifyRemoteServerPaneRetries } from '../../recovery/server-outage/remote-server-pane-retries'
 
 /** Reconnect pairs refused servers, signs in SSH hosts awaiting credentials, or otherwise retries the pane. */
 export function createPaneRecoveryReconnect(
@@ -165,7 +146,9 @@ export function TerminalPaneRecoveryPortals({
   useReportRemoteServerPaneRetries(
     serverDown ? ownerEnvironmentId : null,
     serverDown
-      ? serverPaneRetries(serverPanes.map((pane) => ptyRecoveryStatesByPaneId[pane.id]))
+      ? classifyRemoteServerPaneRetries(
+          serverPanes.map((pane) => ptyRecoveryStatesByPaneId[pane.id])
+        )
       : null
   )
   // Why gated on the card: a veil must never appear without the card that explains it.

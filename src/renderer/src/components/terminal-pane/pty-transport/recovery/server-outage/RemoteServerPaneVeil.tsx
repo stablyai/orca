@@ -2,13 +2,22 @@ import { useEffect, useRef } from 'react'
 import type { Terminal } from '@xterm/xterm'
 import { nudgeRemoteServerOutageCard } from './remote-server-outage-signals'
 
+/** Scrollback scrolling only: on the alt screen or with mouse tracking, xterm turns a wheel into keys or mouse reports, which the input hold would replay into the program when the server returns. */
+function veilWheelScrollsScrollback(terminal: Terminal, event: WheelEvent): boolean {
+  return (
+    !event.ctrlKey &&
+    terminal.buffer.active.type === 'normal' &&
+    terminal.modes.mouseTrackingMode === 'none'
+  )
+}
+
 function forwardWheelToTerminal(event: WheelEvent, terminal: Terminal): void {
-  const target = terminal.element?.querySelector('.xterm-screen') ?? terminal.element
-  if (!target) {
-    return
-  }
   // Why: only the copy may reach ancestors, or a wheel listener above the pane would run twice.
   event.stopPropagation()
+  const target = terminal.element?.querySelector('.xterm-screen') ?? terminal.element
+  if (!target || !veilWheelScrollsScrollback(terminal, event)) {
+    return
+  }
   const copy = new WheelEvent('wheel', {
     deltaX: event.deltaX,
     deltaY: event.deltaY,

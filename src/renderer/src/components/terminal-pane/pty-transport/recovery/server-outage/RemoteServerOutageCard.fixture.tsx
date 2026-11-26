@@ -42,9 +42,11 @@ const SCROLLBACK = Array.from({ length: 120 }, (_, index) =>
 ).join('\r\n')
 
 function FixtureTerminal({
-  onTerminal
+  onTerminal,
+  mouseTracking
 }: {
   onTerminal: (terminal: Terminal) => void
+  mouseTracking: boolean
 }): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -63,15 +65,26 @@ function FixtureTerminal({
     })
     terminal.open(host)
     terminal.write(SCROLLBACK)
+    if (mouseTracking) {
+      // Like tmux or vim with the mouse on: a wheel here would become input for the program.
+      terminal.write('\x1b[?1000h\x1b[?1006h')
+    }
+    const input = terminal.onData((data) => {
+      const fixtureWindow = window as unknown as { fixturePaneInput?: string }
+      fixtureWindow.fixturePaneInput = (fixtureWindow.fixturePaneInput ?? '') + data
+    })
     onTerminal(terminal)
-    return () => terminal.dispose()
-  }, [onTerminal])
+    return () => {
+      input.dispose()
+      terminal.dispose()
+    }
+  }, [mouseTracking, onTerminal])
   return (
     <div ref={hostRef} className="absolute inset-0 overflow-hidden px-2 pt-1 text-foreground" />
   )
 }
 
-type PaneSpec = { environmentId: string | null; id: string }
+type PaneSpec = { environmentId: string | null; id: string; mouseTracking?: boolean }
 type GroupSpec = { tabs: { title: string; down: boolean }[]; panes: PaneSpec[] }
 
 function FixturePane({ pane, veiled }: { pane: PaneSpec; veiled: boolean }): React.JSX.Element {
@@ -81,7 +94,7 @@ function FixturePane({ pane, veiled }: { pane: PaneSpec; veiled: boolean }): Rea
       className="relative min-w-0 flex-1 border-r border-border bg-background last:border-r-0"
       data-fixture-pane={pane.id}
     >
-      <FixtureTerminal onTerminal={setTerminal} />
+      <FixtureTerminal onTerminal={setTerminal} mouseTracking={pane.mouseTracking ?? false} />
       {veiled && terminal && pane.environmentId ? (
         <RemoteServerPaneVeil environmentId={pane.environmentId} terminal={terminal} />
       ) : null}
@@ -181,7 +194,7 @@ const SPLIT: GroupSpec[] = [
     ],
     panes: [
       { environmentId: DEVBOX, id: 'b' },
-      { environmentId: DEVBOX, id: 'c' }
+      { environmentId: DEVBOX, id: 'c', mouseTracking: true }
     ]
   }
 ]
@@ -257,15 +270,17 @@ function LiveSurface({
   environmentId,
   down,
   stopped,
+  visible,
   tabId
 }: {
   group: GroupSpec
   environmentId: string
   down: boolean
   stopped: boolean
+  visible: boolean
   tabId: string
 }): React.JSX.Element {
-  const notice = useRemoteServerNoticeClaim(environmentId, down, true)
+  const notice = useRemoteServerNoticeClaim(environmentId, down, visible)
   useReportRemoteServerPaneRetries(environmentId, down ? (stopped ? 'latched' : 'retrying') : null)
   const veiled = down && notice.showing
   usePublishRemoteServerDownTab(tabId, veiled)
@@ -284,6 +299,7 @@ function LiveSurface({
 function LiveWorkbench(): React.JSX.Element {
   const [down, setDown] = useState(true)
   const [stopped, setStopped] = useState(false)
+  const [away, setAway] = useState(false)
   return (
     <div className="flex flex-col gap-2">
       <div className="flex gap-2 text-xs">
@@ -292,6 +308,9 @@ function LiveWorkbench(): React.JSX.Element {
         </button>
         <button type="button" data-fixture-toggle-stopped="" onClick={() => setStopped((v) => !v)}>
           {stopped ? 'Resume retries' : 'Stop retries'}
+        </button>
+        <button type="button" data-fixture-toggle-away="" onClick={() => setAway((v) => !v)}>
+          {away ? 'Back to devbox-1 work' : 'Switch to local work'}
         </button>
       </div>
       <div
@@ -305,6 +324,7 @@ function LiveWorkbench(): React.JSX.Element {
             environmentId={DEVBOX}
             down={down}
             stopped={stopped}
+            visible={!away}
             tabId={`tab-${index}`}
           />
         ))}
