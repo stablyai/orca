@@ -89,7 +89,7 @@ export class OrchestrationMutationExecutor {
     if (refusedBeforeWake) {
       return await invoke()
     }
-    if (isPromptMutation && !existingPromptReceipt && !refusedBeforeWake) {
+    if (isPromptMutation && !existingPromptReceipt) {
       // A slept agent resumes in place first, so the prompt binds to its woken process.
       await this.runtime.wakeSleptAgentHandle((params as { terminal: string }).terminal, {})
     }
