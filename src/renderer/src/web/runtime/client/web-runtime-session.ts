@@ -27,6 +27,8 @@ export const webRuntimeState: {
   worktreeVisibilityDefaultsRuntimeEnvironmentId: string | null
   worktreeVisibilityDefaultsRuntimeValue: WorktreeVisibilityDefaults | null
   worktreeCardDetailsRowRuntimeEnvironmentId: string | null
+  hidePrimaryWorktreeMarkerRuntimeEnvironmentId: string | null
+  worktreeIndentPxRuntimeEnvironmentId: string | null
   activeClient: WebRuntimeClient | null
   activeClientEnvironmentId: string | null
   cachedDetectedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null
@@ -37,6 +39,8 @@ export const webRuntimeState: {
   worktreeVisibilityDefaultsRuntimeEnvironmentId: null,
   worktreeVisibilityDefaultsRuntimeValue: null,
   worktreeCardDetailsRowRuntimeEnvironmentId: null,
+  hidePrimaryWorktreeMarkerRuntimeEnvironmentId: null,
+  worktreeIndentPxRuntimeEnvironmentId: null,
   activeClient: null,
   activeClientEnvironmentId: null,
   cachedDetectedWorktrees: null

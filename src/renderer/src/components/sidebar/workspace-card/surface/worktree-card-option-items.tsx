@@ -20,6 +20,7 @@ import {
 } from '../../worktree-list/controls/sidebar-workspace-option-items'
 import { useTranslate } from '@/i18n/use-translate'
 import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
+import { getSidebarTreeIndent } from '../../worktree-list/rows/indentation'
 
 type CardMenuItemProps = {
   preserveWorkspaceBoardOpen: boolean
@@ -71,6 +72,8 @@ export function WorktreeCardDisplayMenuItem({
   const options = useMemo(() => getWorktreeCardDisplayOptions(hasProjectGroups), [hasProjectGroups])
   const experimentalCard = useAppStore(selectDrawsNewWorktreeCards)
   const detailsRow = useAppStore((s) => s.settings?.worktreeCardDetailsRow !== false)
+  const showPrimaryMarker = useAppStore((s) => s.settings?.hidePrimaryWorktreeMarker !== true)
+  const indentPx = useAppStore((s) => getSidebarTreeIndent(s.settings?.worktreeIndentPx))
   const updateSettings = useAppStore((s) => s.updateSettings)
   return (
     <DropdownMenuSub>
@@ -110,6 +113,37 @@ export function WorktreeCardDisplayMenuItem({
             {opt.label}
           </DropdownMenuCheckboxItem>
         ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuCheckboxItem
+          checked={showPrimaryMarker}
+          onCheckedChange={(checked) =>
+            void updateSettings({ hidePrimaryWorktreeMarker: checked !== true })
+          }
+          onSelect={(e) => e.preventDefault()}
+        >
+          {t('sidebar.cardProperties.primaryMarker', 'Primary worktree marker')}
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel>
+          {t('sidebar.cardProperties.worktreeIndent', 'Worktree indent')}
+        </DropdownMenuLabel>
+        <DropdownMenuRadioGroup
+          value={String(indentPx)}
+          onValueChange={(value) => void updateSettings({ worktreeIndentPx: Number(value) })}
+        >
+          <DropdownMenuRadioItem value="12" onSelect={(e) => e.preventDefault()}>
+            {t('sidebar.cardProperties.indentCompact', 'Compact')}
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="18" onSelect={(e) => e.preventDefault()}>
+            {t('sidebar.cardProperties.indentDefault', 'Default')}
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="30" onSelect={(e) => e.preventDefault()}>
+            {t('sidebar.cardProperties.indentDeep', 'Deep')}
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="48" onSelect={(e) => e.preventDefault()}>
+            {t('sidebar.cardProperties.indentDeeper', 'Deeper')}
+          </DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
         <AgentModelProperty />
       </DropdownMenuSubContent>
     </DropdownMenuSub>

@@ -190,6 +190,8 @@ export type RuntimeStore = {
     experimentalNewWorktreeCardStyle?: GlobalSettings['experimentalNewWorktreeCardStyle']
     botsEnabled?: GlobalSettings['botsEnabled']
     worktreeCardDetailsRow?: GlobalSettings['worktreeCardDetailsRow']
+    hidePrimaryWorktreeMarker?: GlobalSettings['hidePrimaryWorktreeMarker']
+    worktreeIndentPx?: GlobalSettings['worktreeIndentPx']
     compactWorktreeCards?: GlobalSettings['compactWorktreeCards']
     minimaxGroupId?: GlobalSettings['minimaxGroupId']
     minimaxUsageModels?: GlobalSettings['minimaxUsageModels']

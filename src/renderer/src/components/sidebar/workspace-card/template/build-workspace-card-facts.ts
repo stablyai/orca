@@ -130,6 +130,7 @@ export function buildWorkspaceCardFacts(card: WorktreeCardController): Workspace
     options: {
       style: card.newCardStyle ? 'new' : card.compactCards ? 'compact' : 'classic',
       show: showOptions(card.cardProps),
+      showPrimaryMarker: card.settings?.hidePrimaryWorktreeMarker !== true,
       detailsRow: card.settings?.worktreeCardDetailsRow !== false,
       agentRows: card.agentActivityDisplayMode === 'compact' ? 'compact' : 'full'
     },

@@ -17,7 +17,7 @@ import {
   NEW_CARD_STYLE_STATUS_LANE_EXTRA_PULLBACK,
   FLUSH_CARD_MIN_CONTENT_INSET,
   WORKTREE_CARD_SURFACE_MARGIN,
-  LINEAGE_CHILDREN_INLINE_OFFSET
+  getLineageChildrenInlineOffset
 } from '../rows/indentation'
 
 export type LineageRowFrame = {
@@ -59,7 +59,8 @@ export function buildLineageRowProjection(
   rows: readonly RenderRow[],
   groupBy: WorktreeGroupBy,
   newCardStyle: boolean,
-  statusLane = newCardStyle
+  statusLane = newCardStyle,
+  indentPx?: number
 ) {
   const rowIndexByKey = new Map<string, number>()
   const rowKeys: string[] = []
@@ -108,7 +109,8 @@ export function buildLineageRowProjection(
                 groupBy === 'repo' && row.projectGroup.createdFrom === 'folder-scan',
               isGrouped: groupBy !== 'none',
               groupDepth: row.groupDepth,
-              lineageDepth: row.depth
+              lineageDepth: row.depth,
+              indentPx
             })
           : {
               surfaceInset: getWorktreeCardSurfaceInset({
@@ -119,7 +121,8 @@ export function buildLineageRowProjection(
                 getWorktreeCardContentIndent({
                   isGrouped: groupBy !== 'none',
                   groupDepth: row.groupDepth,
-                  lineageDepth: row.depth
+                  lineageDepth: row.depth,
+                  indentPx
                 }) -
                 getWorktreeCardSurfaceInset({
                   isGrouped: groupBy !== 'none',
@@ -141,7 +144,7 @@ export function buildLineageRowProjection(
           WORKTREE_CARD_SURFACE_MARGIN +
           1 +
           padding +
-          LINEAGE_CHILDREN_INLINE_OFFSET
+          getLineageChildrenInlineOffset(indentPx)
         frame.right = ancestor.right + 7
         frame.contentIndent = 0
         frame.before = parent === index - 1 ? (newCardStyle ? 6 : 12) : 4
@@ -229,9 +232,10 @@ export function useLineageRowProjection(args: {
 }) {
   const { rows, groupBy, newCardStyle, activeWorktreeId, activeWorkspaceExecutionHostId } = args
   const statusLane = useAppStore((s) => s.worktreeCardProperties.includes('status')) && newCardStyle
+  const indentPx = useAppStore((s) => s.settings?.worktreeIndentPx)
   const projection = useMemo(
-    () => buildLineageRowProjection(rows, groupBy, newCardStyle, statusLane),
-    [rows, groupBy, newCardStyle, statusLane]
+    () => buildLineageRowProjection(rows, groupBy, newCardStyle, statusLane, indentPx),
+    [rows, groupBy, newCardStyle, statusLane, indentPx]
   )
   const firstHeaderIndex = useMemo(
     () => rows.findIndex((row) => row.type === 'header' || row.type === 'host-header'),

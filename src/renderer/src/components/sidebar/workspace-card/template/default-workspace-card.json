@@ -26,7 +26,7 @@
     "metaIndicators": "vars.metaRow && vars.indicators && (vars.classic || vars.metaLead)",
     "titleIndicators": "vars.indicators && !vars.metaIndicators",
     "hasMetaRow": "vars.metaRow ? vars.metaLead || vars.metaIndicators : vars.conflict || git.cacheTimerActive",
-    "star": "vars.compact && ws.isMain && !vars.folder",
+    "star": "vars.compact && ws.isMain && !vars.folder && options.showPrimaryMarker",
     "headerActions": "vars.star || place.deleteQuickAction",
     "inlineAgents": "options.show.inlineAgents && !vars.compact",
     "title": "trim(ws.title)",
@@ -80,7 +80,7 @@
                 { "el": "RenameError", "when": "ws.hasRenameError && !ws.isRenaming" },
                 {
                   "el": "PrimaryBadge",
-                  "when": "!vars.compact && ws.isMain && !vars.folder",
+                  "when": "!vars.compact && ws.isMain && !vars.folder && options.showPrimaryMarker",
                   "props": { "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming" }
                 },
                 {

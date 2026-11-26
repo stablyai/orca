@@ -244,7 +244,9 @@ export async function syncRuntimeBackedSettings(
         // Host-gated settings are written only to the host whose support was checked.
         const result =
           typeof runtimeUpdates.nativeChatAutoContinueAfterUsageLimit === 'boolean' ||
-          typeof runtimeUpdates.worktreeCardDetailsRow === 'boolean'
+          typeof runtimeUpdates.worktreeCardDetailsRow === 'boolean' ||
+          typeof runtimeUpdates.hidePrimaryWorktreeMarker === 'boolean' ||
+          typeof runtimeUpdates.worktreeIndentPx === 'number'
             ? await chatSettings.call<SettingsResult>(
                 requestedEnvironment,
                 'settings.update',
@@ -274,6 +276,8 @@ export async function syncRuntimeBackedSettings(
         Reflect.deleteProperty(runtimeSettings, 'hostNotifications')
         if (requireActiveEnvironmentOrNull()?.id !== requestedEnvironment.id) {
           delete runtimeSettings.worktreeCardDetailsRow
+          delete runtimeSettings.hidePrimaryWorktreeMarker
+          delete runtimeSettings.worktreeIndentPx
         }
         return settleRuntimeSettings(runtimeSettings)
       } catch (error) {
