@@ -319,3 +319,27 @@ describe('command detail credit runtime identity (D5 pinned runtime)', () => {
     expect(fresh.runtimeId).toBe('rt-b')
   })
 })
+
+describe('command detail credit decodes the whole list strictly (sole consumer)', () => {
+  it('a valid tuple listed beside a malformed entry grants nothing, with two command children listed', () => {
+    const read = run()
+    read.open()
+    const malformed = { ...OTHER, extra: 1 }
+    read.deliver(
+      batch(5, {
+        fence: 7,
+        backgroundTasks: {
+          state: 'monitoring',
+          children: [child(TUPLE), child(OTHER)],
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a deliberately malformed wire entry; the latch must refuse the whole list
+          commandDetailsAvailable: [TUPLE, malformed] as never
+        }
+      })
+    )
+    expect(read.authority.inspect().available.size).toBe(0)
+    expect(read.authority.open(TUPLE, () => true)).toBeNull()
+    // Control: the same roster with only valid tuples grants both.
+    read.deliver(batch(6, { fence: 7, backgroundTasks: roster([TUPLE, OTHER]) }))
+    expect(read.authority.open(TUPLE, () => true)).not.toBeNull()
+  })
+})

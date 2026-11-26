@@ -18,28 +18,32 @@ export function WorkerDockCommandBlock({
   const t = useTranslate()
   const scroller = useRef<HTMLPreElement>(null)
   const [overflows, setOverflows] = useState(false)
+  const [blockFocused, setBlockFocused] = useState(false)
   const [copied, setCopied] = useState(false)
   const reset = useRef<number | null>(null)
   const root = useRef<HTMLDivElement>(null)
   const hadExact = useRef(exact)
-  const hadOverflow = useRef(overflows)
-  // Copy withdrawn while it held focus, or the scroll area no longer scrolling (so no longer a
-  // tab stop) while it held focus, leaves focus on the page or the bare dialog: hand it to Close,
-  // so focus stays visible. Focus anywhere else in the dialog stays where it is. Runs after the
-  // re-measure, so a revoked preview that now fits is seen.
+  // Only a withdrawal of the exact command moves focus, and only from a stop it took away: Copy
+  // itself (focus is left on the page or the bare dialog), or the scroll area when the preview that
+  // replaced the text fits and so is no longer a tab stop. A scroll area that still scrolls keeps
+  // focus, and a resize alone never moves it. This runs before the overflow state re-measures, so
+  // it measures the new text directly.
   useLayoutEffect(() => {
-    const lostStop = (hadExact.current && !exact) || (hadOverflow.current && !overflows)
+    const withdrawn = hadExact.current && !exact
     hadExact.current = exact
-    hadOverflow.current = overflows
-    const dialog = lostStop ? root.current?.closest<HTMLElement>('[role="dialog"]') : null
+    const dialog = withdrawn ? root.current?.closest<HTMLElement>('[role="dialog"]') : null
+    if (!dialog) {
+      return
+    }
+    const block = scroller.current
     const active = document.activeElement
-    if (
-      dialog &&
-      (!active || active === document.body || active === dialog || active === scroller.current)
-    ) {
+    const copyHadFocus = !active || active === document.body || active === dialog
+    const blockStopGone =
+      block !== null && active === block && block.scrollHeight <= block.clientHeight + 1
+    if (copyHadFocus || blockStopGone) {
       dialog.querySelector<HTMLElement>('[data-slot="dialog-close"]')?.focus()
     }
-  }, [exact, overflows])
+  }, [exact])
   useLayoutEffect(() => {
     const element = scroller.current
     if (!element) {
@@ -84,8 +88,11 @@ export function WorkerDockCommandBlock({
       <DialogDescription asChild>
         <pre
           ref={scroller}
-          // Scrolls by keyboard only when there is something to scroll.
-          tabIndex={overflows ? 0 : undefined}
+          // A tab stop while there is something to scroll, and for as long as it holds focus, so
+          // a resize that makes it fit never drops focus; the next Tab moves on as usual.
+          tabIndex={overflows || blockFocused ? 0 : undefined}
+          onFocus={() => setBlockFocused(true)}
+          onBlur={() => setBlockFocused(false)}
           className={cn(
             'max-h-[40vh] overflow-y-auto rounded-md bg-foreground/[0.035] p-2 text-left font-mono text-chat-code leading-[1.6] whitespace-pre-wrap text-foreground [overflow-wrap:anywhere] scrollbar-sleek focus-visible:outline-none focus-visible:ring-[1.5px] focus-visible:ring-ring focus-visible:ring-inset',
             exact && 'pr-8'
