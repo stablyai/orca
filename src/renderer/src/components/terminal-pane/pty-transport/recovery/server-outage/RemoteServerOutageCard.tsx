@@ -58,10 +58,10 @@ export function RemoteServerOutageCard({
   const { speaking, down, since, stopped } = useRemoteServerOutageCardInputs(environmentId)
   const speakingNow = useHeldTrue(speaking, SPEAKER_SWAP_GRACE_MS)
   const reveal = useCalmStatusReveal(speakingNow, false, since)
-  // Why: with the server still down, losing the last visible surface means the user moved to other work, so the card goes at once; only a healthy return holds it.
-  const visible = reveal.visible && (speakingNow || !down)
-  usePublishRemoteServerNoticeShowing(environmentId, visible)
   const [shown, setShown] = useState<ShownCard | null>(null)
+  // Only retrying cards keep the healthy hold, so "Can't reach" fades as soon as the panes recover.
+  const visible = reveal.visible && (down ? speakingNow : shown?.stopped === false)
+  usePublishRemoteServerNoticeShowing(environmentId, visible)
   // Keep the last outage state while the healthy hold and exit fade finish.
   if (
     visible &&
