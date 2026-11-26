@@ -251,7 +251,7 @@
 1 src/main/hang-watchdog/previous-hang-detection.ts
 9 src/main/hang-watchdog/renderer-hang-records.ts
 1 src/main/hermes/hermes-default-home.ts
-10 src/main/hermes/hermes-home-filesystem.ts
+7 src/main/hermes/hermes-home-filesystem.ts
 2 src/main/hermes/hook-service.ts
 2 src/main/host/secret-protection-report.ts
 1 src/main/ipc/app.ts

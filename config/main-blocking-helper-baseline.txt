@@ -552,7 +552,7 @@
 4 src/main/hang-watchdog/renderer-hang-records.ts
 4 src/main/hermes/hermes-acp-launch-spec.ts
 4 src/main/hermes/hermes-default-home.ts
-15 src/main/hermes/hermes-home-filesystem.ts
+10 src/main/hermes/hermes-home-filesystem.ts
 2 src/main/hermes/hermes-transcript-import.ts
 27 src/main/hermes/hook-service.ts
 2 src/main/host/deferred-secret-protection-report.ts
