@@ -15,22 +15,12 @@ export const automationStyles = themedStyleSheet(() => ({
     paddingTop: spacing.lg,
     paddingBottom: spacing.xl
   },
-  instructions: {
-    color: colors.textPrimary,
-    fontSize: 15,
-    lineHeight: 21,
-    paddingHorizontal: LIST_ROW_PADDING,
-    paddingVertical: spacing.md
-  },
   bottomBar: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
     paddingBottom: spacing.md,
     backgroundColor: colors.bgBase
   },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  grow: { flex: 1, minWidth: 0 },
   stack: { gap: spacing.sm },
   card: {
     borderWidth: 1,
@@ -45,10 +35,10 @@ export const automationStyles = themedStyleSheet(() => ({
   text: { color: colors.textPrimary, fontSize: typography.bodySize, lineHeight: 21 },
   meta: { color: colors.textSecondary, fontSize: typography.metaSize, lineHeight: 18 },
   error: { color: colors.statusRed, fontSize: typography.bodySize, lineHeight: 21 },
-  field: { gap: spacing.sm },
-  // These fields also sit on plain pages, where a group's fill would vanish in light: the filled grey reads on both.
+  // Text starts where row titles do: the row inset less the field's 1 pt edge. The filled grey reads on sheets and plain pages.
   input: {
-    padding: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: LIST_ROW_PADDING - 1,
     borderRadius: radii.control,
     backgroundColor: colors.translucentFill,
     fontSize: COMPOSER_TEXT_SIZE,
@@ -78,7 +68,5 @@ export const automationStyles = themedStyleSheet(() => ({
     fontFamily: typography.monoFamily,
     fontSize: typography.metaSize,
     lineHeight: 19
-  },
-  empty: { paddingVertical: spacing.xl, gap: spacing.md, alignItems: 'center' },
-  separator: { height: 1, backgroundColor: colors.borderSubtle }
+  }
 }))
