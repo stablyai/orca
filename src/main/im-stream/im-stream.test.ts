@@ -594,4 +594,14 @@ describe('ImReplyStream final answer', () => {
       LONG_ANSWER
     )
   })
+
+  it('sends the first part as a message when the card refuses the final edit', async () => {
+    const store = memoryStore()
+    const { port, calls } = replyPort('exactly-once', { update: true })
+    await replyStream(port, store).finish(LONG_ANSWER)
+    const sends = calls.filter((call) => call.kind === 'send')
+    expect(sends[0]!.key).toBe('reply-1:part:0')
+    expect(delivered(sends).join('')).toBe(LONG_ANSWER)
+    expect(store.read()).toMatchObject({ state: 'done', cardRefused: true })
+  })
 })
