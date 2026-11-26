@@ -35,6 +35,10 @@ const darkColors = {
   chatUserSurface: '#262626',
   chatUserBorder: 'rgba(250, 250, 250, 0.06)',
   chatForegroundStrong: '#e3e3e3',
+  // --chat-canvas: the chat's one ground, under its header, tabs, transcript and composer.
+  chatCanvas: '#161616',
+  // A box inside a chat or rendered Markdown: bgPanel would vanish on chatCanvas, so dark lifts it to bgRaised.
+  chatPanel: '#262626',
 
   // --foreground, --muted-foreground, --chat-foreground-faint
   textPrimary: '#fafafa',
@@ -127,6 +131,8 @@ const lightColors: MobilePalette = {
   chatUserSurface: '#f5f5f5',
   chatUserBorder: 'rgba(10, 10, 10, 0.07)',
   chatForegroundStrong: '#1e1e1e',
+  chatCanvas: '#ffffff',
+  chatPanel: '#fafafa',
 
   textPrimary: '#0a0a0a',
   textSecondary: '#696969',

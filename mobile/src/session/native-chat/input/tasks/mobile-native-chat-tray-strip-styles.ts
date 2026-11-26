@@ -9,7 +9,7 @@ export const trayStripStyles = themedStyleSheet(() => ({
     marginVertical: spacing.xs
   },
   box: {
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.chatPanel,
     borderRadius: radii.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,

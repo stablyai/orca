@@ -186,7 +186,7 @@ const styles = themedStyleSheet(() => ({
     borderRadius: radii.floating,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.composerBorder,
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.chatPanel,
     overflow: 'hidden'
   },
   scroll: {
