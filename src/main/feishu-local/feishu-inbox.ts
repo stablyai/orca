@@ -5,8 +5,9 @@ import type { FeishuMessage, FeishuProfile } from './feishu-cli'
 import { FeishuResponseStore } from './feishu-response-store'
 import { FeishuCardStore } from './feishu-card-store'
 import { FeishuRoutes } from './feishu-routes'
-import type { FeishuRoute } from './feishu-route-key'
 import { binding, type Binding } from './feishu-binding'
+import type { ConnectorContextItem } from '../../shared/connector-asker-contract'
+import { feishuStoredContext } from './feishu-history-context'
 
 const inReplyWindow = (first: number, now: number): boolean =>
   now >= first && now - first < 55 * 60_000
@@ -40,10 +41,11 @@ export class FeishuInbox {
     if (!columns.some((c) => c.name === 'stored_path')) {
       this.db.exec('ALTER TABLE inbox ADD COLUMN stored_path TEXT')
     }
+    if (!columns.some((c) => c.name === 'context')) {
+      this.db.exec('ALTER TABLE inbox ADD COLUMN context TEXT')
+    }
   }
-  putRoute(account: string, mid: string, route: FeishuRoute) {
-    this.routes.put(account, mid, route)
-  }
+  putRoute = (...args: Parameters<FeishuRoutes['put']>) => this.routes.put(...args)
   messageRoute(account: string, mid: string) {
     return this.routes.message(account, mid)
   }
@@ -125,7 +127,7 @@ export class FeishuInbox {
       throw error
     }
   }
-  accept(b: Binding, m: FeishuMessage): void {
+  accept(b: Binding, m: FeishuMessage, context: ConnectorContextItem[] = []): void {
     if (
       m.sender_id !== b.owner ||
       (m.chat_id !== b.chat && !this.routes.message(b.account, m.message_id)) ||
@@ -135,13 +137,15 @@ export class FeishuInbox {
       return
     }
     this.db
-      .prepare('INSERT OR IGNORE INTO inbox(account,mid,event,body,kind) VALUES(?,?,?,?,?)')
-      .run(b.account, m.message_id, m.event_id, m.content, m.message_type)
+      .prepare(
+        'INSERT OR IGNORE INTO inbox(account,mid,event,body,kind,context) VALUES(?,?,?,?,?,?)'
+      )
+      .run(b.account, m.message_id, m.event_id, m.content, m.message_type, JSON.stringify(context))
   }
   next(account: string) {
     const row = this.db
       .prepare(
-        'SELECT mid,body,kind,stored_path AS path FROM inbox WHERE account=? AND body IS NOT NULL AND review=0 ORDER BY rowid LIMIT 1'
+        'SELECT mid,body,kind,stored_path AS path,context FROM inbox WHERE account=? AND body IS NOT NULL AND review=0 ORDER BY rowid LIMIT 1'
       )
       .get(account)
     return (
@@ -151,6 +155,7 @@ export class FeishuInbox {
           mid: z.string(),
           body: z.string(),
           kind: z.enum(['text', 'image', 'file']),
+          context: feishuStoredContext,
           path: z.string().nullable()
         })
         .parse(row)
@@ -212,7 +217,7 @@ export class FeishuInbox {
   }
   admitted(account: string, mid: string): void {
     this.db
-      .prepare('UPDATE inbox SET body=NULL,stored_path=NULL WHERE account=? AND mid=?')
+      .prepare('UPDATE inbox SET body=NULL,stored_path=NULL,context=NULL WHERE account=? AND mid=?')
       .run(account, mid)
   }
   queueReply(account: string, mid: string, id: string, text: string) {

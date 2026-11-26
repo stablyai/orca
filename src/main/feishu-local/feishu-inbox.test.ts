@@ -64,7 +64,15 @@ it('keeps the pairing, actor, original DM and both replay keys bound across a re
       inbox.accept(bound, denied)
     }
     expect(inbox.next(b.account)).toBeUndefined()
-    inbox.accept(bound, next)
+    inbox.accept(bound, next, [
+      { kind: 'no_access', userId: 'ou_other', text: 'Historical context only' }
+    ])
+    inbox.close()
+    inbox = new FeishuInbox(path)
+    expect(inbox.next(b.account)).toMatchObject({
+      body: 'Hello',
+      context: [{ kind: 'no_access', userId: 'ou_other', text: 'Historical context only' }]
+    })
     inbox.admitted(b.account, next.message_id)
     inbox.accept(bound, { ...next, message_id: 'om_another' })
     inbox.accept(bound, { ...next, event_id: 'other' })

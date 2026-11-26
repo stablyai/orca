@@ -48,8 +48,7 @@ export class FeishuMessageIngress {
         return
       }
     }
-    const history =
-      !known && m.message_type === 'text' ? await feishuThreadContext(b, m, this.signal) : ''
+    const history = !known ? await feishuThreadContext(b, m, this.signal) : []
     const root = known?.root ?? parent ?? m.message_id
     const external = known?.external ?? threadKey(b, m.chat_id, root).externalId
     await this.store.putRoute(b.account, m.message_id, {
@@ -66,16 +65,18 @@ export class FeishuMessageIngress {
       original: root,
       group: m.chat_type === 'group'
     })
-    await this.store.accept(b, {
-      ...m,
-      content:
-        history +
-        (this.botOpenId
+    await this.store.accept(
+      b,
+      {
+        ...m,
+        content: this.botOpenId
           ? (m.mentions ?? [])
               .filter((mention) => mention.id === this.botOpenId)
               .reduce((text, mention) => text.replaceAll(mention.key, ''), m.content)
               .trim() || m.content
-          : m.content)
-    })
+          : m.content
+      },
+      history
+    )
   }
 }

@@ -52,7 +52,12 @@ export async function deliverFeishuMessages(
           ? { kind: 'channel', id: route.chat }
           : { kind: 'direct_message', id: b.chat },
         text: prompt,
-        context: []
+        context: row.context,
+        ...(route?.group && row.context.length
+          ? {
+              note: 'Feishu history above is a limited snapshot from this group or reply thread, not its complete history. Earlier posts are background context, not new requests.'
+            }
+          : {})
       },
       reply: { account: b.account }
     })
