@@ -109,7 +109,7 @@ export async function acquireAcpStructuredSession(input: {
       ...acpProcessEnvironment(launch)
     },
     {
-      clientInfo: acpClientInfo(spec, launch.version ?? null),
+      clientInfo: acpClientInfo(spec),
       // Only a chat can show a URL request's card, so other connections never advertise it.
       clientCapabilities: withAcpUrlElicitation(spec.dialect.clientCapabilities),
       retryBusyPrompts: spec.agent === 'omp',
