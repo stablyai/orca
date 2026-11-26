@@ -184,6 +184,14 @@ export function forwardGuestShortcutInput(
       browserPageId: browserTabId,
       direction: 'forward'
     })
+  } else if (
+    page &&
+    keybindingMatchesAction('tab.moveToSplitRight', input, process.platform, keybindings)
+  ) {
+    if (isFloatingGuest) {
+      return false
+    }
+    renderer.send('ui:moveTabToSplit', { direction: 'right', sourceId: browserTabId })
   } else if (keybindingMatchesAction('tab.close', input, process.platform, keybindings)) {
     if (isFloatingGuest) {
       renderer.send('ui:closeFloatingItem', { sourceId: browserTabId })

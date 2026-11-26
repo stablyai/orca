@@ -1,3 +1,4 @@
+import { dispatchActiveTabSplitShortcut } from '@/components/tab-bar/active-tab-pane-column-split'
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -10,7 +11,10 @@ import {
   findPluginCommandForKeybinding,
   globalShortcutTargetYields
 } from '@/lib/plugins/commands/plugin-command-keybindings'
-import { shouldMinimizeFloatingWorkspacePanelOnCloseShortcut } from '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
+import {
+  isFloatingWorkspacePanelFocused,
+  shouldMinimizeFloatingWorkspacePanelOnCloseShortcut
+} from '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
 import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/terminal-shortcut-capture-notification'
 import {
   folderRelativePathToIncludeGlob,
@@ -223,6 +227,16 @@ export function useGlobalKeybindings(args: {
           return
         }
       }
+
+      if (
+        state.workspaceChromeActive &&
+        !isFloatingWorkspacePanelFocused() &&
+        dispatchActiveTabSplitShortcut(activeWorktreeId, matchShortcut, (actionId) => {
+          input.preventDefault()
+          notifyTerminalCapture(actionId)
+        })
+      )
+        return
 
       const handlers = createAppCommandHandlers(state, input, context)
       if (

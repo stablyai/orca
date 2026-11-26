@@ -77,6 +77,8 @@ const STATIC_TITLE_COPY = {
   'tab.closeAll': () => translate('keybindings.title.tabCloseAll', 'Close all editor tabs'),
   'tab.rename': () => translate('keybindings.title.tabRename', 'Rename active tab'),
   'tab.reopenClosed': () => translate('keybindings.title.tabReopenClosed', 'Reopen closed tab'),
+  'tab.moveToSplitRight': () =>
+    translate('keybindings.title.tabMoveToSplitRight', 'Move active tab to split right'),
   'tab.moveLeft': () => translate('keybindings.title.tabMoveLeft', 'Move active tab left'),
   'tab.moveRight': () => translate('keybindings.title.tabMoveRight', 'Move active tab right'),
   'tab.nextSameType': () => translate('keybindings.title.tabNextSameType', 'Next tab (same type)'),

@@ -9,6 +9,7 @@ import {
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Columns2 } from 'lucide-react'
 import type { TabSplitDirection } from '../../../store/slices/tabs/tabs-slice-contract'
 import { translate } from '@/i18n/i18n'
+import { useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { canMoveTabToNewPaneColumn, moveTabToNewPaneColumn } from './tab-move-to-pane-column'
 
@@ -54,6 +55,8 @@ export function TabWorkspaceLayoutMenuSection({
   shortcutLabels?: Partial<Record<TabSplitDirection, string>>
 }): React.JSX.Element | null {
   const t = useTranslate()
+  const rightShortcut = useOptionalShortcutLabel('tab.moveToSplitRight')
+  const directionLabels = { right: rightShortcut, ...shortcutLabels }
   if (!canMoveTabToNewPaneColumn(unifiedTabId, groupId)) {
     return null
   }
@@ -82,8 +85,8 @@ export function TabWorkspaceLayoutMenuSection({
             >
               {paneColumnDirectionIcon(direction)}
               {paneColumnDirectionLabel(direction, t)}
-              {shortcutLabels?.[direction] ? (
-                <ContextMenuShortcut>{shortcutLabels[direction]}</ContextMenuShortcut>
+              {directionLabels[direction] ? (
+                <ContextMenuShortcut>{directionLabels[direction]}</ContextMenuShortcut>
               ) : null}
             </ContextMenuItem>
           ))}

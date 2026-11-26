@@ -1,6 +1,11 @@
+import { resolveBrowserSourcePaneColumnTarget } from '@/components/tab-bar/active-tab-pane-column-split'
+import { moveTabToNewPaneColumn } from '@/components/tab-bar/pane-actions/tab-move-to-pane-column'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
 import { replayAppKeyDown } from '@/lib/keyboard/app-keyboard-router'
-import { resolveFloatingWorkspaceBrowserWorkspaceId } from '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
+import {
+  isFloatingWorkspacePanelFocused,
+  resolveFloatingWorkspaceBrowserWorkspaceId
+} from '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
 import {
   dispatchFloatingWorkspaceGuestClose,
   dispatchFloatingWorkspaceGuestSelectIndex
@@ -9,6 +14,20 @@ import {
 import { useAppStore } from '../../../store/index'
 
 export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
+  const subscribeMoveTabToSplit = window.api.ui.onMoveTabToSplit
+  if (subscribeMoveTabToSplit) {
+    unsubs.push(
+      subscribeMoveTabToSplit(({ direction, sourceId }) => {
+        if (isFloatingWorkspacePanelFocused()) {
+          return
+        }
+        const target = resolveBrowserSourcePaneColumnTarget(sourceId)
+        if (target) {
+          moveTabToNewPaneColumn({ ...target, direction })
+        }
+      })
+    )
+  }
   unsubs.push(
     // Why: a focused page is its own process, so main hands its tab chords back to run through
     // the same app shortcut owners a key pressed in Orca's own UI reaches.

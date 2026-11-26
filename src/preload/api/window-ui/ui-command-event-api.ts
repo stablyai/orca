@@ -78,6 +78,10 @@ import type {
 } from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
 
 export type CloseActiveTabPayload = { sourceId: string }
+export type MoveTabToSplitPayload = {
+  direction: 'left' | 'right' | 'up' | 'down'
+  sourceId: string
+}
 
 export type UiCommandEventApi = {
   getJiraQuickFilters?: () => Promise<JiraQuickFilterState>
@@ -170,6 +174,7 @@ export type UiCommandEventApi = {
   onCloseActiveTab: (callback: (payload?: CloseActiveTabPayload) => void) => () => void
   onCloseFloatingItem: (callback: (payload: { sourceId: string }) => void) => () => void
   onSelectFloatingIndex: (callback: (payload: { index: number }) => void) => () => void
+  onMoveTabToSplit?: (callback: (payload: MoveTabToSplitPayload) => void) => () => void
   onSwitchRecentTab: (callback: () => void) => () => void
   onCtrlTabKeyDown: (callback: (data: { shiftKey: boolean }) => void) => () => void
   onCtrlTabKeyUp: (callback: () => void) => () => void

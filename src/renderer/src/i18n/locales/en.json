@@ -26764,7 +26764,8 @@
       "d286d1ab85": "Clear pane title",
       "botItemBack": "Back to items",
       "botItemPrevious": "Previous item",
-      "botItemNext": "Next item"
+      "botItemNext": "Next item",
+      "tabMoveToSplitRight": "Move active tab to split right"
     },
     "group": {
       "global": "Global",
