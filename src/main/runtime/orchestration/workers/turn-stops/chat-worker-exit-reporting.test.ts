@@ -240,7 +240,16 @@ it('reports the same interrupted request once and offers in-place resume after t
     attention: { requiresAction: true, categories: ['interruption'] },
     nextAction: {
       kind: 'recover',
-      argv: ['orchestration', 'send', '--to', `dispatch:${worker.dispatch.id}`, '--subject', 'Continue']
+      argv: [
+        'orchestration',
+        'send',
+        '--to',
+        `dispatch:${worker.dispatch.id}`,
+        '--subject',
+        'Continue',
+        '--body',
+        'Continue the interrupted task.'
+      ]
     }
   })
 

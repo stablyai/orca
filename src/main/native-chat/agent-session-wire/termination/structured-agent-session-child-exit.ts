@@ -300,7 +300,8 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
       sessionId,
       child.fence,
       { ...exit, expected },
-      observedAt
+      observedAt,
+      session.journal
     )
     endChild()
     // Unexpected death rebaselines fences; requested close preserves outstanding Stop replies.

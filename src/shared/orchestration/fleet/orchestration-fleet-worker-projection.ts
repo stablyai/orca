@@ -206,7 +206,16 @@ export function projectFleetNextAction(
     return {
       kind: 'recover',
       argv: canResume
-        ? ['orchestration', 'send', '--to', `dispatch:${worker.dispatchId}`, '--subject', 'Continue']
+        ? [
+            'orchestration',
+            'send',
+            '--to',
+            `dispatch:${worker.dispatchId}`,
+            '--subject',
+            'Continue',
+            '--body',
+            'Continue the interrupted task.'
+          ]
         : ['orchestration', 'worker-read', '--dispatch', worker.dispatchId]
     }
   }

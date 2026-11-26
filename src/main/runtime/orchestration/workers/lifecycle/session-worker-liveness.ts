@@ -135,7 +135,7 @@ export function createSessionWorkerLivenessReader(
       if (
         options.includeResumeGuidance &&
         running.kind === 'here' &&
-        running.record.ownerObservation.deathEvidence?.unexpectedExit === true &&
+        running.record.ownerObservation.deathEvidence?.resumeByMail === true &&
         structuredWorkerOwned(running)
       ) {
         const resource = worker.resource

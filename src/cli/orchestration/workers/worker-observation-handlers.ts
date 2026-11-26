@@ -1,6 +1,7 @@
 import type { CommandHandler } from '../../dispatch/dispatch'
 import { printResult } from '../../output/command-result-output'
 import { printOrchestrationReceipt, printOrchestrationResult } from '../agent-view'
+import { renderCommand } from '../recovery/orchestration-mutation-recovery'
 import { WORKER_SHOW_VIEW } from './worker-agent-views'
 import type { WorkerShowResult } from './worker-view-results'
 import {
@@ -43,7 +44,7 @@ export const ORCHESTRATION_WORKER_OBSERVATION_HANDLERS: Record<string, CommandHa
       if (value.projection) {
         lines.push(
           `Agent liveness: ${value.projection.liveness.verdict}`,
-          `Next action: ${value.projection.nextAction.argv.join(' ') || 'none'}`
+          `Next action: ${renderCommand(value.projection.nextAction.argv) || 'none'}`
         )
         // `input` is a question the worker asked that awaits an answer, as worker-list shows.
         if (value.projection.attention) {
