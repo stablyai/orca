@@ -24,7 +24,7 @@ import { useAppStore } from '@/store'
 import { unnestWorktrees } from '../../../sidebar/workspace-actions/parenting/worktree-unnest'
 import { useSourceControlScopeOwner } from './worktree-scope'
 
-type PanelActions = {
+export type SourceControlPanelActions = {
   sourceControlViewMode: SourceControlViewMode
   viewModeToggleDisabled: boolean
   onToggleViewMode: () => void
@@ -37,10 +37,12 @@ type PanelActions = {
 
 export function SourceControlHeaderOverflowMenu({
   panelActions,
-  worktree
+  worktree,
+  triggerClassName
 }: {
-  panelActions?: PanelActions
+  panelActions?: SourceControlPanelActions
   worktree?: Worktree
+  triggerClassName?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const scopeOwner = useSourceControlScopeOwner()
@@ -59,7 +61,7 @@ export function SourceControlHeaderOverflowMenu({
               type="button"
               variant="ghost"
               size="icon-xs"
-              className={ownerWorktree ? 'size-6' : 'size-7'}
+              className={triggerClassName ?? (ownerWorktree ? 'size-6' : 'size-7')}
               aria-label={t(
                 'auto.components.right.sidebar.SourceControl.f71c4a8d90',
                 'More source control actions'

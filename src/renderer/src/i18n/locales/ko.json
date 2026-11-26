@@ -14480,7 +14480,6 @@
             "476b77745b": "기준 참조 변경",
             "ed34038d0d": "브랜치 비교 새로 고침",
             "493f963029": "기준 참조 변경",
-            "11b5dd8e41": "비교 대상",
             "a9bf7c171a": "커밋 실패",
             "011f9713fc": "커밋이 차단되었습니다.",
             "cc199ccc5f": "더 많은 커밋 및 원격 작업",
@@ -14624,7 +14623,6 @@
             "c8e4a1f902": "필터: {{value0}}",
             "b3c8f1a902": "파일 이름으로 필터링",
             "d4f8c2a901": "필터 지우고 닫기",
-            "e8a1c4b203": "vs",
             "4b4a7de138": "브라우저에서 검토 페이지 열기",
             "createPrIntentCommitBlockedSummary": "커밋이 차단됨: {{value0}} 이슈를 수정한 후 PR 만들기를 다시 시도하세요.",
             "pushRecovery": {
@@ -14645,7 +14643,6 @@
             "97e7124eac": "소스 제어를 새로 고칠 수 없습니다. 다시 시도하세요.",
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "현재 브랜치: {{value0}}",
-            "c7d4e2f801": "기준 참조 변경: {{value0}}",
             "createPrIntentGenerateDetailsFailed": "검토 세부 정보를 생성할 수 없습니다. PR 생성을 다시 시도하세요.",
             "entryStageFailed": "'{{value0}}'을(를) 스테이징하지 못했습니다.",
             "entryUnstageFailed": "'{{value0}}'을(를) 스테이지 해제하지 못했습니다.",
@@ -14693,9 +14690,6 @@
             "keepFile": "파일 유지",
             "keepDeletion": "삭제 유지",
             "refreshAll": "모두 새로 고침",
-            "baseUpToDate": "최신 상태",
-            "rebaseOperationInProgress": "현재 Git 작업이 끝날 때까지 기다리세요",
-            "rebaseButton": "리베이스",
             "rebaseConflictCount_one": "충돌 {{count}}개",
             "rebaseConflictCount_other": "충돌 {{count}}개",
             "rebasePaused": "리베이스 일시 중지됨",
@@ -14725,9 +14719,7 @@
             "scopeUncommitted": "커밋되지 않음",
             "scopeAllChanges": "모든 변경 사항",
             "scopeNone": "없음",
-            "scopeOpenDiff": "차이 열기",
             "scopeShowAll": "모든 변경 사항 표시",
-            "scopeLoadingBranchChanges": "브랜치 변경 사항 로드 중…",
             "scopeBranchCommits": "이 브랜치의 커밋",
             "scopeRecentCommits": "최근 커밋",
             "scopeCompareTo": "{{ref}}과(와) 비교",
@@ -14744,7 +14736,8 @@
             "scopeOlderHistory": "Git Graph에서 이전 기록 보기",
             "scopeNoUncommitted": "커밋되지 않은 변경 사항이 없습니다.",
             "scopeCommitFiles": "파일",
-            "gitGraphButton": "그래프"
+            "gitGraphButton": "그래프",
+            "compareLoadingAgainst": "{{base}}와(과) 비교 중"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 에이전트를 시작할 수 없습니다.",

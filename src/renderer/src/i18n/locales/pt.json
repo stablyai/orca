@@ -11258,7 +11258,6 @@
             "476b77745b": "Alterar Ref Base",
             "ed34038d0d": "Atualizar comparação de branch",
             "493f963029": "Alterar ref base",
-            "11b5dd8e41": "Comparando com",
             "a9bf7c171a": "Falha no Commit",
             "011f9713fc": "Commit bloqueado",
             "cc199ccc5f": "Mais ações de commit e remote",
@@ -11402,7 +11401,6 @@
             "c8e4a1f902": "Filtro: {{value0}}",
             "b3c8f1a902": "Filtrar arquivos por nome",
             "d4f8c2a901": "Limpar e fechar filtro",
-            "e8a1c4b203": "vs",
             "4b4a7de138": "Abrir página de revisão no navegador",
             "createPrIntentCommitBlockedSummary": "Commit bloqueado: {{value0}} Corrija o problema e tente novamente Criar PR.",
             "pushRecovery": {
@@ -11423,7 +11421,6 @@
             "97e7124eac": "Não foi possível atualizar o Controle de Versão. Tente novamente.",
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "Branch atual: {{value0}}",
-            "c7d4e2f801": "Alterar ref base: {{value0}}",
             "createPrIntentGenerateDetailsFailed": "Não foi possível gerar os detalhes da revisão. Tente novamente Criar PR.",
             "entryStageFailed": "Falha ao adicionar “{{value0}}” ao stage",
             "entryUnstageFailed": "Falha ao remover “{{value0}}” do stage",
@@ -11481,9 +11478,6 @@
             "keepDeletion": "Manter exclusão",
             "refreshAll": "Atualizar tudo",
             "statusReadFailed": "O Git não conseguiu ler este espaço de trabalho. As alterações mostradas podem estar desatualizadas.",
-            "baseUpToDate": "Atualizado",
-            "rebaseOperationInProgress": "Aguarde a operação Git atual terminar",
-            "rebaseButton": "Rebase",
             "rebaseConflictCount_one": "{{count}} conflito",
             "rebaseConflictCount_other": "{{count}} conflitos",
             "rebaseConflictCount_many": "{{count}} conflitos",
@@ -11514,9 +11508,7 @@
             "scopeUncommitted": "Não commitadas",
             "scopeAllChanges": "Todas as alterações",
             "scopeNone": "Nenhuma",
-            "scopeOpenDiff": "Abrir diff",
             "scopeShowAll": "Mostrar todas as alterações",
-            "scopeLoadingBranchChanges": "Carregando alterações da branch…",
             "scopeBranchCommits": "Commits nesta branch",
             "scopeRecentCommits": "Commits recentes",
             "scopeCompareTo": "Comparar com {{ref}}",
@@ -11535,7 +11527,8 @@
             "scopeCommitFiles": "Arquivos",
             "gitGraphButton": "Grafo",
             "scopeFileCount_many": "{{count}} arquivos",
-            "scopeCommitCount_many": "{{count}} commits"
+            "scopeCommitCount_many": "{{count}} commits",
+            "compareLoadingAgainst": "Comparando com {{base}}"
           },
           "checks": {
             "panel": {

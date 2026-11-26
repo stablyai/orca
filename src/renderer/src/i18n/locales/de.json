@@ -15168,7 +15168,6 @@
             "476b77745b": "Basisreferenz ändern",
             "ed34038d0d": "Branch-Vergleich aktualisieren",
             "493f963029": "Basisreferenz ändern",
-            "11b5dd8e41": "Vergleich mit",
             "a9bf7c171a": "Commit fehlgeschlagen",
             "011f9713fc": "Commit blockiert",
             "cc199ccc5f": "Weitere Commit- und Remote-Aktionen",
@@ -15312,7 +15311,6 @@
             "c8e4a1f902": "Filter: {{value0}}",
             "b3c8f1a902": "Dateien nach Namen filtern",
             "d4f8c2a901": "Filter leeren und schließen",
-            "e8a1c4b203": "gegenüber",
             "4b4a7de138": "Review-Seite im Browser öffnen",
             "createPrIntentCommitBlockedSummary": "Commit blockiert: {{value0}} Problem beheben und anschließend „PR erstellen“ erneut versuchen.",
             "pushRecovery": {
@@ -15333,7 +15331,6 @@
             "97e7124eac": "Quellcodeverwaltung konnte nicht aktualisiert werden. Erneut versuchen.",
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "Aktueller Branch: {{value0}}",
-            "c7d4e2f801": "Basisreferenz ändern: {{value0}}",
             "createPrIntentGenerateDetailsFailed": "Review-Details konnten nicht generiert werden. „PR erstellen“ erneut versuchen.",
             "entryStageFailed": "„{{value0}}“ konnte nicht vorgemerkt werden",
             "entryUnstageFailed": "Vormerkung für „{{value0}}“ konnte nicht aufgehoben werden",
@@ -15381,9 +15378,6 @@
             "keepFile": "Datei behalten",
             "keepDeletion": "Löschung beibehalten",
             "refreshAll": "Alle aktualisieren",
-            "baseUpToDate": "Aktuell",
-            "rebaseOperationInProgress": "Warte, bis der aktuelle Git-Vorgang abgeschlossen ist",
-            "rebaseButton": "Rebase",
             "rebaseConflictCount_one": "{{count}} Konflikt",
             "rebaseConflictCount_other": "{{count}} Konflikte",
             "rebasePaused": "Rebase angehalten",
@@ -15413,9 +15407,7 @@
             "scopeUncommitted": "Nicht committet",
             "scopeAllChanges": "Alle Änderungen",
             "scopeNone": "Keine",
-            "scopeOpenDiff": "Diff öffnen",
             "scopeShowAll": "Alle Änderungen anzeigen",
-            "scopeLoadingBranchChanges": "Branch-Änderungen werden geladen…",
             "scopeBranchCommits": "Commits auf diesem Branch",
             "scopeRecentCommits": "Letzte Commits",
             "scopeCompareTo": "Mit {{ref}} vergleichen",
@@ -15432,7 +15424,8 @@
             "scopeOlderHistory": "Älterer Verlauf in Git Graph",
             "scopeNoUncommitted": "Keine nicht committeten Änderungen.",
             "scopeCommitFiles": "Dateien",
-            "gitGraphButton": "Graph"
+            "gitGraphButton": "Graph",
+            "compareLoadingAgainst": "Vergleich mit {{base}}"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Der ausgewählte Agent konnte nicht gestartet werden.",

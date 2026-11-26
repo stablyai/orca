@@ -14774,7 +14774,6 @@
             "476b77745b": "Изменить базовую ссылку",
             "ed34038d0d": "Обновить сравнение веток",
             "493f963029": "Изменить базовую ссылку",
-            "11b5dd8e41": "Сравнение с",
             "a9bf7c171a": "Не удалось создать коммит",
             "011f9713fc": "Создание коммита заблокировано",
             "cc199ccc5f": "Другие действия с коммитами и удалённым репозиторием",
@@ -14916,7 +14915,6 @@
             "c8e4a1f902": "Фильтр: {{value0}}",
             "b3c8f1a902": "Фильтр файлов по имени",
             "d4f8c2a901": "Очистить и закрыть фильтр",
-            "e8a1c4b203": "относительно",
             "4b4a7de138": "Открыть страницу ревью в браузере",
             "createPrIntentCommitBlockedSummary": "Создание коммита заблокировано: {{value0}} Устраните проблему и повторите «Создать PR».",
             "pushRecovery": {
@@ -14937,7 +14935,6 @@
             "97e7124eac": "Не удалось обновить управление версиями. Попробуйте снова.",
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "Текущая ветка: {{value0}}",
-            "c7d4e2f801": "Изменить базовую ссылку: {{value0}}",
             "createPrIntentGenerateDetailsFailed": "Не удалось создать заголовок и описание. Нажмите «Создать PR» ещё раз.",
             "entryStageFailed": "Не удалось добавить «{{value0}}» в индекс",
             "entryUnstageFailed": "Не удалось убрать «{{value0}}» из индекса",
@@ -15006,9 +15003,6 @@
             "keepFile": "Сохранить файл",
             "keepDeletion": "Сохранить удаление",
             "refreshAll": "Обновить всё",
-            "baseUpToDate": "Актуально",
-            "rebaseOperationInProgress": "Дождитесь завершения текущей операции Git",
-            "rebaseButton": "Rebase",
             "rebaseConflictCount_one": "{{count}} конфликт",
             "rebaseConflictCount_few": "{{count}} конфликта",
             "rebaseConflictCount_many": "{{count}} конфликтов",
@@ -15040,9 +15034,7 @@
             "scopeUncommitted": "Незакоммиченные",
             "scopeAllChanges": "Все изменения",
             "scopeNone": "Нет",
-            "scopeOpenDiff": "Открыть diff",
             "scopeShowAll": "Показать все изменения",
-            "scopeLoadingBranchChanges": "Загрузка изменений ветки…",
             "scopeBranchCommits": "Коммиты в этой ветке",
             "scopeRecentCommits": "Последние коммиты",
             "scopeCompareTo": "Сравнить с {{ref}}",
@@ -15063,7 +15055,8 @@
             "scopeFileCount_few": "{{count}} файла",
             "scopeFileCount_many": "{{count}} файлов",
             "scopeCommitCount_few": "{{count}} коммита",
-            "scopeCommitCount_many": "{{count}} коммитов"
+            "scopeCommitCount_many": "{{count}} коммитов",
+            "compareLoadingAgainst": "Сравнение с {{base}}"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Не удалось запустить выбранного агента.",

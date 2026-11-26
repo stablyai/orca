@@ -15435,7 +15435,6 @@
             "476b77745b": "Base Ref'i Değiştir",
             "ed34038d0d": "Branch karşılaştırmasını yenile",
             "493f963029": "Base ref'i değiştir",
-            "11b5dd8e41": "Şununla karşılaştırılıyor",
             "a9bf7c171a": "Commit Başarısız Oldu",
             "011f9713fc": "Commit engellendi",
             "cc199ccc5f": "Diğer commit ve remote işlemleri",
@@ -15579,7 +15578,6 @@
             "c8e4a1f902": "Filtre: {{value0}}",
             "b3c8f1a902": "Dosyaları ada göre filtrele",
             "d4f8c2a901": "Filtreyi temizle ve kapat",
-            "e8a1c4b203": "vs",
             "4b4a7de138": "İnceleme sayfasını tarayıcıda aç",
             "createPrIntentCommitBlockedSummary": "Commit engellendi: {{value0}} Sorunu düzeltip PR Oluştur'u tekrar deneyin.",
             "pushRecovery": {
@@ -15600,7 +15598,6 @@
             "97e7124eac": "Kaynak Kontrolü yenilenemedi. Tekrar deneyin.",
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "Geçerli branch: {{value0}}",
-            "c7d4e2f801": "Base ref'i değiştir: {{value0}}",
             "createPrIntentGenerateDetailsFailed": "İnceleme ayrıntıları oluşturulamadı. PR Oluştur'u tekrar deneyin.",
             "entryStageFailed": "“{{value0}}” stage edilemedi",
             "entryUnstageFailed": "“{{value0}}” stage'den çıkarılamadı",
@@ -15648,9 +15645,6 @@
             "keepDeletion": "Silmeyi koru",
             "refreshAll": "Tümünü yenile",
             "statusReadFailed": "Git bu çalışma alanını okuyamadı. Gösterilen değişiklikler güncel olmayabilir.",
-            "baseUpToDate": "Güncel",
-            "rebaseOperationInProgress": "Geçerli Git işleminin bitmesini bekleyin",
-            "rebaseButton": "Rebase",
             "rebaseConflictCount_one": "{{count}} çakışma",
             "rebaseConflictCount_other": "{{count}} çakışma",
             "rebasePaused": "Rebase duraklatıldı",
@@ -15680,9 +15674,7 @@
             "scopeUncommitted": "Commit edilmemiş",
             "scopeAllChanges": "Tüm değişiklikler",
             "scopeNone": "Yok",
-            "scopeOpenDiff": "Diff aç",
             "scopeShowAll": "Tüm değişiklikleri göster",
-            "scopeLoadingBranchChanges": "Dal değişiklikleri yükleniyor…",
             "scopeBranchCommits": "Bu daldaki commitler",
             "scopeRecentCommits": "Son commitler",
             "scopeCompareTo": "{{ref}} ile karşılaştır",
@@ -15699,7 +15691,8 @@
             "scopeOlderHistory": "Git Graph içinde daha eski geçmiş",
             "scopeNoUncommitted": "Commit edilmemiş değişiklik yok.",
             "scopeCommitFiles": "Dosyalar",
-            "gitGraphButton": "Grafik"
+            "gitGraphButton": "Grafik",
+            "compareLoadingAgainst": "{{base}} ile karşılaştırılıyor"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Seçilen ajan başlatılamadı.",

@@ -14375,7 +14375,6 @@
             "476b77745b": "Modifier la ref de base",
             "ed34038d0d": "Actualiser la comparaison de branches",
             "493f963029": "Modifier la ref de base",
-            "11b5dd8e41": "Comparaison avec",
             "a9bf7c171a": "Échec du commit",
             "011f9713fc": "Commit bloqué",
             "cc199ccc5f": "Autres actions de commit et de remote",
@@ -14519,7 +14518,6 @@
             "c8e4a1f902": "Filtre : {{value0}}",
             "b3c8f1a902": "Filtrer les fichiers par nom",
             "d4f8c2a901": "Effacer et fermer le filtre",
-            "e8a1c4b203": "vs",
             "4b4a7de138": "Ouvrir la page de revue dans le navigateur",
             "createPrIntentCommitBlockedSummary": "Commit bloqué : {{value0}} Corrigez le problème, puis réessayez Créer une PR.",
             "pushRecovery": {
@@ -14540,7 +14538,6 @@
             "97e7124eac": "Impossible d'actualiser le contrôle de code source. Réessayez.",
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "Branche actuelle : {{value0}}",
-            "c7d4e2f801": "Modifier la ref de base : {{value0}}",
             "createPrIntentGenerateDetailsFailed": "Impossible de générer les détails de revue. Réessayez Créer une PR.",
             "entryStageFailed": "Échec de la préparation de « {{value0}} »",
             "entryUnstageFailed": "Échec de la désactivation de « {{value0}} »",
@@ -14598,9 +14595,6 @@
             "keepFile": "Conserver le fichier",
             "keepDeletion": "Conserver la suppression",
             "refreshAll": "Tout actualiser",
-            "baseUpToDate": "À jour",
-            "rebaseOperationInProgress": "Attendez la fin de l’opération Git en cours",
-            "rebaseButton": "Rebaser",
             "rebaseConflictCount_one": "{{count}} conflit",
             "rebaseConflictCount_other": "{{count}} conflits",
             "rebaseConflictCount_many": "{{count}} conflits",
@@ -14633,9 +14627,7 @@
             "scopeUncommitted": "Non validées",
             "scopeAllChanges": "Toutes les modifications",
             "scopeNone": "Aucune",
-            "scopeOpenDiff": "Ouvrir le diff",
             "scopeShowAll": "Afficher toutes les modifications",
-            "scopeLoadingBranchChanges": "Chargement des modifications de la branche…",
             "scopeBranchCommits": "Commits sur cette branche",
             "scopeRecentCommits": "Commits récents",
             "scopeCompareTo": "Comparer à {{ref}}",
@@ -14652,7 +14644,8 @@
             "scopeOlderHistory": "Historique plus ancien dans Git Graph",
             "scopeNoUncommitted": "Aucune modification non validée.",
             "scopeCommitFiles": "Fichiers",
-            "gitGraphButton": "Graphe"
+            "gitGraphButton": "Graphe",
+            "compareLoadingAgainst": "Comparaison avec {{base}}"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Impossible de démarrer l'agent sélectionné.",
