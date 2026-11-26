@@ -14211,6 +14211,8 @@
             "unverifiable": "Not done: Orca couldn’t confirm what is running on this server. Try again when the host is reachable.",
             "migration": "Not done: a move onto this server is unfinished. Resume it first.",
             "deferred": "Not done yet: the server isn’t ready for this. Try again later.",
+            "stopIncomplete": "Not done: Orca couldn’t confirm the current server exited, so it did not start the update. Check orcad.log in the server’s install folder under ~/.orca-remote on the host before trying again.",
+            "rollbackStopIncomplete": "Not done: Orca couldn’t confirm the current server exited, so it did not roll back. Check orcad.log in the server’s install folder under ~/.orca-remote on the host before trying again.",
             "failed": "Orca couldn’t finish this on the server. Try again.",
             "defaultServer": "Not done: this server is the default host for new projects. Choose another one under New projects open on before stopping it.",
             "wslMoveRunning": "Not done: a project is moving onto this server. Orca updates it once the move finishes."
