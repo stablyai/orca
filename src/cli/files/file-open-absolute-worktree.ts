@@ -7,6 +7,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId
 } from '../../shared/execution-host/execution-host'
+import { resolveRealPathSync } from '../../shared/file-access/real-path-sync'
 import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from '../../shared/file-access/wsl-paths'
 import type { HandlerContext } from '../dispatch/dispatch'
 import { RuntimeClientError } from '../runtime/connection/types'
@@ -80,21 +81,37 @@ function outsideSelectedWorktree(isRemote: boolean): RuntimeClientError {
   )
 }
 
+function relativePathForCandidate(
+  rootPath: string,
+  cwd: string,
+  path: string,
+  realFile: string | null
+): string | null {
+  const direct = relativePathInsideRoot(rootPath, toWorktreeRootPathFlavor(rootPath, cwd, path))
+  if (direct !== null) {
+    return direct
+  }
+  // A ./ path from a physical cwd will not match a worktree registered through a symlink.
+  if (!realFile) {
+    return null
+  }
+  const realRoot = resolveRealPathSync(rootPath)
+  return realRoot ? relativePathInsideRoot(realRoot, realFile) : null
+}
+
 function pickContainingWorktree(
   cwd: string,
   path: string,
   worktrees: readonly ListedWorktree[]
 ): FileOpenTarget {
   const callerHostId = getCallerExecutionHostId()
+  const realFile = callerHostId === LOCAL_EXECUTION_HOST_ID ? resolveRealPathSync(path) : null
   const matches: ContainingWorktree[] = []
   for (const candidate of worktrees) {
     if (!candidate.id || !candidate.path || !isListedOnCallerHost(candidate.hostId, callerHostId)) {
       continue
     }
-    const relativePath = relativePathInsideRoot(
-      candidate.path,
-      toWorktreeRootPathFlavor(candidate.path, cwd, path)
-    )
+    const relativePath = relativePathForCandidate(candidate.path, cwd, path, realFile)
     if (!relativePath) {
       continue
     }

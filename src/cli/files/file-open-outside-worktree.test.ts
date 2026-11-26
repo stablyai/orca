@@ -1,9 +1,13 @@
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { COMMAND_SPECS } from '../specs/index'
 import { normalizeCommandPositionals, parseArgs } from '../arguments/args'
 import { specPaths } from '../discovery/command-spec'
 import type { HandlerContext } from '../dispatch/dispatch'
 import type { RuntimeClient } from '../runtime/client'
+import { resolveFileOpenTarget } from './file-open-absolute-worktree'
 import { FILE_HANDLERS } from './file'
 
 const selectorMocks = vi.hoisted(() => ({
@@ -394,4 +398,48 @@ describe('file open absolute paths outside the selected worktree', () => {
       ]
     ])
   })
+})
+
+it('opens a ./ path in a sibling worktree registered through a symlink', async () => {
+  const base = realpathSync(mkdtempSync(join(tmpdir(), 'orca-file-open-sibling-')))
+  try {
+    mkdirSync(join(base, 'real', 'current'), { recursive: true })
+    mkdirSync(join(base, 'real', 'feature'), { recursive: true })
+    writeFileSync(join(base, 'real', 'feature', 'README.md'), 'ok')
+    symlinkSync(join(base, 'real'), join(base, 'alias'), 'junction')
+    const currentRoot = join(base, 'alias', 'current')
+    const featureRoot = join(base, 'alias', 'feature')
+    const call = vi.fn(async (method: string) => {
+      if (method === 'worktree.show') {
+        return { result: { worktree: { path: currentRoot } } }
+      }
+      if (method === 'worktree.list') {
+        return {
+          result: {
+            worktrees: [
+              { id: 'current', path: currentRoot },
+              { id: 'feature', path: featureRoot }
+            ]
+          }
+        }
+      }
+      throw new Error(`unexpected ${method}`)
+    })
+    const target = await resolveFileOpenTarget(
+      {
+        flags: new Map(),
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: resolveFileOpenTarget only reads client.call, client.isRemote, and cwd.
+        client: { call, isRemote: false } as unknown as HandlerContext['client'],
+        cwd: join(base, 'real', 'current'),
+        json: false,
+        rawArgs: []
+      },
+      'id:current',
+      './../feature/README.md',
+      false
+    )
+    expect(target).toEqual({ worktree: 'id:feature', relativePath: 'README.md' })
+  } finally {
+    rmSync(base, { recursive: true, force: true })
+  }
 })
