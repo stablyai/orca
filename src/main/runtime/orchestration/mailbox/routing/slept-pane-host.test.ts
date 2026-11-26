@@ -1,8 +1,9 @@
 import { expect, it } from 'vitest'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { SleptMailRecord } from './mail-wake-obligation'
 import { SleptPaneHost } from './slept-pane-host'
 
-type Registration = string | { executionHostId: string; connectionId: string }
+type Registration = ExecutionHostId | { executionHostId: ExecutionHostId; connectionId: string }
 
 const hostsFor = (
   record: Pick<SleptMailRecord, 'worktreeId' | 'connectionId'>,
@@ -28,7 +29,7 @@ it('matches a slept pane to its host however the saved host id is spelled', () =
 })
 
 it('a pane whose partition or saved connection names host A is not on its twin repo host B', () => {
-  const twins = ['ssh:host-b', 'ssh:host-a']
+  const twins = ['ssh:host-b', 'ssh:host-a'] as const
   const byPartition = hostsFor({ worktreeId: 'twin::/w', connectionId: null }, 'ssh:host-a', twins)
   const byConnection = hostsFor({ worktreeId: 'twin::/w', connectionId: 'host-a' }, 'local', twins)
   const folder = hostsFor({ worktreeId: 'folder:f', connectionId: null }, 'ssh:host-a', [])

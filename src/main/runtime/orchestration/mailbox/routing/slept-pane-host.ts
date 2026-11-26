@@ -2,6 +2,7 @@ import type { Repo } from '../../../../../shared/repository/repo-types'
 import {
   canonicalExecutionHostId,
   getRepoExecutionHostId,
+  getRepoRoutingConnectionId,
   isRemoteExecutionHostId,
   isUnresolvedOwnerHostId,
   parseExecutionHostId,
@@ -53,7 +54,9 @@ export class SleptPaneHost {
           ssh?.kind === 'runtime' &&
           parseExecutionHostId(partition)?.kind === 'runtime' &&
           repos.some(repoOnHost) &&
-          !repos.some((repo) => canonicalExecutionHostId(getRepoExecutionHostId(repo)) === savedCanonical)
+          !repos.some(
+            (repo) => canonicalExecutionHostId(getRepoExecutionHostId(repo)) === savedCanonical
+          )
         )
       }
       if (record.connectionId) {
@@ -61,7 +64,9 @@ export class SleptPaneHost {
         return (
           onHost(toSshExecutionHostId(record.connectionId)) ||
           (ssh?.kind === 'runtime' &&
-            repos.some((repo) => repo.connectionId === record.connectionId && repoOnHost(repo)))
+            repos.some(
+              (repo) => getRepoRoutingConnectionId(repo) === record.connectionId && repoOnHost(repo)
+            ))
         )
       }
       if (onHost(partition)) {
