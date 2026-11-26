@@ -241,7 +241,9 @@ export function buildWorktreeTabEntries(
       document: documentFor(tabIdentity, {
         id: tab.id,
         title,
-        secondaryTexts: [file.relativePath, file.filePath],
+        secondaryTexts: [file.relativePath],
+        // The absolute path repeats the workspace folder, so it only proves location.
+        containerSecondaryTexts: [file.filePath],
         worktreeName,
         branch,
         repoName
