@@ -360,7 +360,6 @@
       "addToMessage": "Добавить к сообщению",
       "attachImage": "Прикрепить изображение",
       "cancelEditing": "Отменить редактирование",
-      "placeholder": "Задайте вопрос; @ — файлы, / — команды",
       "saveEditedMessage": "Сохранить изменённое сообщение",
       "sendMessage": "Отправить сообщение",
       "sendQueue": "В очередь",
@@ -370,10 +369,7 @@
       "sendSteerHint": "Попадёт в то, что агент делает сейчас"
     },
     "contextUsage": {
-      "label": "Контекст: {{used}} из {{window}} токенов, использовано {{percent}}%",
-      "title": "Контекст",
-      "estimated": "Оценка по последнему ответу.",
-      "deferredNote": "Загружается по запросу. Не входит в использованный объём."
+      "title": "Контекст"
     },
     "composerAttachments": {
       "attachedImage": "Прикреплённое изображение",
@@ -385,7 +381,6 @@
       "uploadingImage": "Загрузка изображения"
     },
     "composerPlaceholder": {
-      "prompt": "Задайте вопрос; @ — файлы, / — команды",
       "waitingForTerminal": "Ожидание терминала…"
     },
     "diffCard": {
@@ -604,8 +599,6 @@
       "permissionAppliesNextMessageTiming": "Применится к следующему сообщению · сейчас действует {{active}}"
     },
     "sessionOptionPickers": {
-      "agentWorking": "Агент работает",
-      "backToModels": "Назад к моделям",
       "dispatchUnconfirmed": "Отправлено агенту — получение не подтверждено",
       "modelFullAccessLabel": "Модель: {{value}}, полный доступ",
       "modelLabel": "Модель: {{value}}",
@@ -615,17 +608,13 @@
       "workingAnnouncement": "Агент работает. Настройки модели станут доступны после завершения текущего ответа.",
       "applying": "Применяется…",
       "onAttach": "Применится при подключении к чату",
-      "heldPickRefused": "{{picked}} недоступно в этом чате. Оставлено: {{kept}}.",
-      "optionsSection": "Параметры"
+      "heldPickRefused": "{{picked}} недоступно в этом чате. Оставлено: {{kept}}."
     },
     "sessionOptionRows": {
       "defaultMarker": "По умолчанию",
       "notReportedMarker": "Нет данных",
       "moreModels": "Другие модели",
       "fewerModels": "Меньше моделей"
-    },
-    "sessionOptionSegments": {
-      "dispatchUnconfirmed": "Отправлено агенту — получение не подтверждено"
     },
     "stopButton": {
       "stopAgent": "Остановить агента",
@@ -3577,9 +3566,7 @@
       "loading": "Загрузка документа…"
     },
     "nativeChatAttachActions": {
-      "availableSkills": "Доступно: {{count}}",
       "commands": "Команды",
-      "fileTypes": "PDF, текст, код…",
       "files": "Файлы",
       "photos": "Фото",
       "skills": "Навыки",
@@ -8137,7 +8124,6 @@
       "nothingToReport": "Сообщать нечего",
       "mentionPaused": "Приостановлен",
       "mentionOwnChats": "Ваши другие чаты",
-      "mentionPlaceholder": "Спросите что угодно; @ — упомянуть ботов или файлы, / — команды",
       "mentionChatsLoadFailed": "Не удалось загрузить чаты"
     },
     "access": {

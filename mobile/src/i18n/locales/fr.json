@@ -305,7 +305,6 @@
       "addToMessage": "Ajouter au message",
       "attachImage": "Joindre une image",
       "cancelEditing": "Annuler la modification",
-      "placeholder": "Posez votre question, @ pour référencer des fichiers, / pour les commandes",
       "saveEditedMessage": "Enregistrer le message modifié",
       "sendMessage": "Envoyer le message",
       "sendQueue": "Mettre en file d’attente",
@@ -315,10 +314,7 @@
       "sendSteerHint": "S’ajoute à ce que l’agent fait en ce moment"
     },
     "contextUsage": {
-      "label": "Contexte : {{used}} tokens sur {{window}}, {{percent}} % utilisés",
-      "title": "Contexte",
-      "estimated": "Estimation basée sur la dernière réponse.",
-      "deferredNote": "Chargé à la demande. Non compté dans le total utilisé."
+      "title": "Contexte"
     },
     "composerAttachments": {
       "attachedImage": "Image jointe",
@@ -329,7 +325,6 @@
       "uploadingFile": "Envoi de {{name}}"
     },
     "composerPlaceholder": {
-      "prompt": "Posez votre question, @ pour référencer des fichiers, / pour les commandes",
       "waitingForTerminal": "En attente du terminal…"
     },
     "diffCard": {
@@ -531,8 +526,6 @@
       "xhighShort": "Extra"
     },
     "sessionOptionPickers": {
-      "agentWorking": "L'agent travaille",
-      "backToModels": "Retour aux modèles",
       "dispatchUnconfirmed": "Envoyé à l'agent — non confirmé",
       "modelFullAccessLabel": "Modèle, {{value}}, accès complet",
       "modelLabel": "Modèle, {{value}}",
@@ -546,9 +539,6 @@
       "notReportedMarker": "Non communiqué",
       "moreModels": "Plus de modèles",
       "fewerModels": "Moins de modèles"
-    },
-    "sessionOptionSegments": {
-      "dispatchUnconfirmed": "Envoyé à l'agent — non confirmé"
     },
     "stopButton": {
       "stopAgent": "Arrêter l'agent",
@@ -2916,9 +2906,7 @@
       "readOnly": "Lecture seule"
     },
     "nativeChatAttachActions": {
-      "availableSkills": "Disponibles : {{count}}",
       "commands": "Commandes",
-      "fileTypes": "PDF, texte, code…",
       "files": "Fichiers",
       "photos": "Photos",
       "skills": "Skills",

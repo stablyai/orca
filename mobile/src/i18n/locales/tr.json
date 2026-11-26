@@ -346,7 +346,6 @@
       "addToMessage": "Mesaja ekle",
       "attachImage": "Görsel ekle",
       "cancelEditing": "Düzenlemeyi iptal et",
-      "placeholder": "Bir şey sorun; dosyalara başvurmak için @, komutlar için / kullanın",
       "saveEditedMessage": "Düzenlenen mesajı kaydet",
       "sendMessage": "Mesaj gönder",
       "sendQueue": "Sıraya al",
@@ -356,10 +355,7 @@
       "sendSteerHint": "Ajanın şu anda yaptığı işe katılır"
     },
     "contextUsage": {
-      "label": "Bağlam: {{used}} / {{window}} token kullanıldı (%{{percent}})",
-      "title": "Bağlam",
-      "estimated": "Son yanıta göre tahmin edilmiştir.",
-      "deferredNote": "İhtiyaç olduğunda yüklenir. Kullanılan toplama dahil değildir."
+      "title": "Bağlam"
     },
     "composerAttachments": {
       "attachedImage": "Ekli görsel",
@@ -371,7 +367,6 @@
       "uploadingImage": "Görsel yükleniyor"
     },
     "composerPlaceholder": {
-      "prompt": "Bir şey sorun; dosyalara başvurmak için @, komutlar için / kullanın",
       "waitingForTerminal": "Terminal bekleniyor…"
     },
     "diffCard": {
@@ -595,8 +590,6 @@
       "permissionAppliesNextMessageTiming": "Sonraki mesajda uygulanır · şu anda {{active}} kullanılıyor"
     },
     "sessionOptionPickers": {
-      "agentWorking": "Ajan çalışıyor",
-      "backToModels": "Modellere dön",
       "dispatchUnconfirmed": "Ajana gönderildi, onaylanmadı",
       "modelFullAccessLabel": "Model, {{value}}, tam erişim",
       "modelLabel": "Model, {{value}}",
@@ -606,17 +599,13 @@
       "workingAnnouncement": "Ajan çalışıyor. Bu tur tamamlandığında model ayarlarının kilidi açılır.",
       "applying": "Uygulanıyor…",
       "onAttach": "Sohbet bağlandığında uygulanır",
-      "heldPickRefused": "{{picked}} bu sohbette kullanılamıyor. {{kept}} korundu.",
-      "optionsSection": "Seçenekler"
+      "heldPickRefused": "{{picked}} bu sohbette kullanılamıyor. {{kept}} korundu."
     },
     "sessionOptionRows": {
       "defaultMarker": "Varsayılan",
       "notReportedMarker": "Bildirilmedi",
       "moreModels": "Daha fazla model",
       "fewerModels": "Daha az model"
-    },
-    "sessionOptionSegments": {
-      "dispatchUnconfirmed": "Ajana gönderildi, onaylanmadı"
     },
     "stopButton": {
       "stopAgent": "Ajanı durdur",
@@ -3363,9 +3352,7 @@
       "loading": "Belge yükleniyor…"
     },
     "nativeChatAttachActions": {
-      "availableSkills": "{{count}} beceri mevcut",
       "commands": "Komutlar",
-      "fileTypes": "PDF, metin, kod…",
       "files": "Dosyalar",
       "photos": "Fotoğraflar",
       "skills": "Beceriler",
@@ -5950,7 +5937,6 @@
       "nothingToReport": "Bildirilecek bir şey yok",
       "mentionOwnChats": "Diğer sohbetleriniz",
       "mentionPaused": "Duraklatıldı",
-      "mentionPlaceholder": "Sorunuzu yazın. Botlardan veya dosyalardan bahsetmek için @, komutlar için / kullanın.",
       "mentionChatsLoadFailed": "Sohbetler yüklenemedi"
     },
     "access": {

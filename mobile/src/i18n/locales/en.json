@@ -2746,11 +2746,11 @@
     "nativeChatAttachActions": {
       "photos": "Photos",
       "files": "Files",
-      "fileTypes": "PDF, text, code…",
       "workspaceFile": "Workspace file",
       "skills": "Skills",
-      "availableSkills": "{{count}} available",
-      "commands": "Commands"
+      "commands": "Commands",
+      "plan": "Plan first",
+      "goal": "Set a goal"
     },
     "nativeChatCliFork": {
       "resumeInNewCli": "Resume in New CLI"
@@ -3345,7 +3345,7 @@
     "composer": {
       "addToMessage": "Add to message",
       "attachImage": "Attach image",
-      "placeholder": "Ask anything, @ to mention files, / for commands",
+      "askAnything": "Ask anything",
       "cancelEditing": "Cancel editing",
       "saveEditedMessage": "Save edited message",
       "sendMessage": "Send message",
@@ -3356,10 +3356,10 @@
       "sendSteerHint": "Goes into what the agent is doing now"
     },
     "contextUsage": {
-      "label": "Context {{used}} of {{window}} tokens, {{percent}}% used",
       "title": "Context",
-      "estimated": "Estimated from the last response.",
-      "deferredNote": "Loaded on demand. Not counted in the used total."
+      "left": "{{percent}}% context left",
+      "used": "{{percent}}% used",
+      "compact": "Compact"
     },
     "composerAttachments": {
       "file": "File",
@@ -3428,27 +3428,22 @@
     },
     "sessionOptionPickers": {
       "workingAnnouncement": "Agent is working. Model settings unlock when this turn finishes.",
+      "title": "Chat options",
       "modelFullAccessLabel": "Model, {{value}}, full access",
       "modelLabel": "Model, {{value}}",
       "permissionsLabel": "Permissions, {{value}}",
-      "backToModels": "Back to models",
-      "agentWorking": "Agent is working",
       "settingsLocked": "Model settings unlock when this turn finishes.",
       "dispatchUnconfirmed": "Sent to the agent — not confirmed",
       "permissions": "Permissions",
       "applying": "Applying…",
       "onAttach": "Applies when the chat attaches",
-      "heldPickRefused": "{{picked}} isn't available in this chat. Kept {{kept}}.",
-      "optionsSection": "Options"
+      "heldPickRefused": "{{picked}} isn't available in this chat. Kept {{kept}}."
     },
     "sessionOptionRows": {
       "defaultMarker": "Default",
       "notReportedMarker": "Not reported",
       "moreModels": "More models",
       "fewerModels": "Fewer models"
-    },
-    "sessionOptionSegments": {
-      "dispatchUnconfirmed": "Sent to the agent — not confirmed"
     },
     "stopButton": {
       "stoppingState": "Stopping…",
@@ -3718,8 +3713,7 @@
       "statusWontContinue": "Orca won't continue automatically"
     },
     "composerPlaceholder": {
-      "waitingForTerminal": "Waiting for terminal…",
-      "prompt": "Ask anything, @ to mention files, / for commands"
+      "waitingForTerminal": "Waiting for terminal…"
     },
     "nativeChatImageViewer": {
       "closeImage": "Close image",
@@ -6650,7 +6644,6 @@
       "nothingToReport": "Nothing to report",
       "mentionOwnChats": "Your other chats",
       "mentionPaused": "Paused",
-      "mentionPlaceholder": "Ask anything, @ to mention bots or files, / for commands",
       "mentionChatsLoadFailed": "Couldn't load chats"
     },
     "access": {
