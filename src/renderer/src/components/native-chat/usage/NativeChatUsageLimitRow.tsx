@@ -315,7 +315,7 @@ function UsageLimitCard({
               className="mt-px size-4 shrink-0 text-status-success @max-[260px]:hidden"
             />
           ) : (
-            <GaugeMaxIcon className="mt-px size-4 shrink-0 text-status-warning @max-[260px]:hidden" />
+            <GaugeMaxIcon className="mt-px size-4 shrink-0 text-status-warning-text @max-[260px]:hidden" />
           )}
           <div
             aria-hidden="true"

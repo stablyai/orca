@@ -184,15 +184,15 @@ export function BotRowLineView({
   return (
     <div className="flex min-w-0 items-center gap-1.5 text-xs leading-4 text-muted-foreground">
       {leading}
-      {/* No title: the row's hover card shows the whole line. */}
       {limit && !disconnected ? (
-        // The picture's badge says which state; the line says when, in the badge's amber.
+        // Amber like the badge; the badge's tooltip says where it stopped and if it continues.
         <span className="min-w-0 flex-1 truncate text-status-warning-text tabular-nums">
           {t('bots.usageLimit.rowLine', 'Usage limit · {{time}}', {
             time: formatUsageLimitResetShort(limit.stop.at, now, intlLocale)
           })}
         </span>
       ) : (
+        // No title: the row's hover card shows the whole line.
         <span className={cn('min-w-0 flex-1 truncate', unread && 'text-foreground')}>
           <BotRowLineText
             line={line}

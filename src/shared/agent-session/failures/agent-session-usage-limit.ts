@@ -45,7 +45,6 @@ export function readAgentSessionUsageLimit(value: unknown): AgentSessionUsageLim
     : undefined
 }
 
-/** A reset time in the reader's own clock: the time alone today, else with its day. */
 /** A row's short reset: the time today, else weekday and time within the week, else the date. */
 export function formatUsageLimitResetShort(
   resetsAt: number,
@@ -65,6 +64,7 @@ export function formatUsageLimitResetShort(
   ).format(at)
 }
 
+/** A reset time in the reader's own clock: the time alone today, else with its day. */
 export function formatUsageLimitResetClock(
   resetsAt: number,
   now: number = Date.now(),
