@@ -1,8 +1,14 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { resolveCliCommand, resolveCliCommands } from './node-cli-command-resolution'
+
+vi.mock('./system-cli-install-dirs', () => ({
+  getSystemCliInstallDirectories: (_platform: NodeJS.Platform, homePath: string) => [
+    join(homePath, 'system-bin')
+  ]
+}))
 
 function writeExecutable(path: string): void {
   mkdirSync(dirname(path), { recursive: true })
@@ -17,6 +23,7 @@ it.skipIf(process.platform === 'win32')(
       const pathEnv = join(homePath, 'bin')
       const pathCodex = join(pathEnv, 'codex')
       const standaloneCodex = join(homePath, '.local', 'bin', 'codex')
+      const systemCodex = join(homePath, 'system-bin', 'codex')
       const appCodex = join(
         homePath,
         'Applications',
@@ -29,17 +36,20 @@ it.skipIf(process.platform === 'win32')(
       )
       writeExecutable(pathCodex)
       writeExecutable(standaloneCodex)
+      writeExecutable(systemCodex)
       writeExecutable(appCodex)
       const options = { platform: 'darwin' as const, homePath, pathEnv, codexAppFallback: true }
+      const detectionOptions = { ...options, skipPathSearch: true }
 
       expect(resolveCliCommand('codex', options)).toBe(pathCodex)
       rmSync(pathCodex)
       expect(resolveCliCommand('codex', options)).toBe(standaloneCodex)
       rmSync(standaloneCodex)
+      expect(resolveCliCommand('codex', options)).toBe(systemCodex)
+      expect(resolveCliCommands(['codex'], detectionOptions).get('codex')).toBe(systemCodex)
+      rmSync(systemCodex)
       expect(resolveCliCommand('codex', options)).toBe(appCodex)
-      expect(resolveCliCommands(['codex'], { ...options, skipPathSearch: true }).get('codex')).toBe(
-        appCodex
-      )
+      expect(resolveCliCommands(['codex'], detectionOptions).get('codex')).toBe(appCodex)
     } finally {
       rmSync(homePath, { recursive: true, force: true })
     }
