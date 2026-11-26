@@ -3,7 +3,10 @@ import { RefreshControl, SectionList, View } from 'react-native'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { SectionHeader } from '../components/list/ListGroup'
-import type { AiVaultSession } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
+import type {
+  AiVaultSession,
+  AiVaultSessionOpenTab
+} from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import type { MobileAgentHistorySection } from './agent-history-sections'
 import type {
   MobileAgentHistoryCard,
@@ -12,6 +15,8 @@ import type {
 import { AgentHistorySessionRow } from './AgentHistorySessionRow'
 import { styles } from './agent-history-styles'
 
+export { useMobileAgentHistoryOpenTabActions } from './use-mobile-agent-history-open-tab-actions'
+
 type Props = {
   sections: MobileAgentHistorySection[]
   sessionsById: ReadonlyMap<string, AiVaultSession>
@@ -19,6 +24,11 @@ type Props = {
   showCurrentWorktreeBadges: boolean
   resumeActionStateBySessionId?: ReadonlyMap<string, MobileAgentHistoryResumeActionState>
   onResume?: (session: AiVaultSession) => void | Promise<void>
+  onJumpToOpenTab?: (
+    session: AiVaultSession,
+    openTab: AiVaultSessionOpenTab
+  ) => void | Promise<void>
+  onCloseOpenTab?: (session: AiVaultSession, openTab: AiVaultSessionOpenTab) => void | Promise<void>
   primaryAction?: 'resume' | 'handoff'
   onLongPress?: (session: AiVaultSession) => void
   onRefresh: () => void
@@ -33,6 +43,8 @@ export function MobileAgentSessionHistoryList({
   showCurrentWorktreeBadges,
   resumeActionStateBySessionId,
   onResume,
+  onJumpToOpenTab,
+  onCloseOpenTab,
   primaryAction,
   onLongPress,
   onRefresh,
@@ -54,6 +66,8 @@ export function MobileAgentSessionHistoryList({
         showCurrentWorktreeBadge={showCurrentWorktreeBadges}
         resumeActionState={resumeActionStateBySessionId?.get(item.id)}
         onResume={onResume}
+        onJumpToOpenTab={onJumpToOpenTab}
+        onCloseOpenTab={onCloseOpenTab}
         primaryAction={primaryAction}
         onPress={() => toggleExpanded(item.id)}
         onLongPress={onLongPress}
@@ -61,6 +75,8 @@ export function MobileAgentSessionHistoryList({
     ),
     [
       expandedId,
+      onCloseOpenTab,
+      onJumpToOpenTab,
       onLongPress,
       primaryAction,
       onResume,

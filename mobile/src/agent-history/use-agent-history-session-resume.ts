@@ -203,7 +203,9 @@ export function useAgentHistorySessionResume({
     setResumeMessage,
     resumeToast,
     setBusySessionId,
-    isBusy
+    isBusy,
+    resumeLaunchInFlightRef,
+    setResumingSessionId
   }
 }
 

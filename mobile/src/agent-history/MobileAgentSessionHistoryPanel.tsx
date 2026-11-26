@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ChevronLeft, History, MessageSquarePlus, Play, RefreshCw } from 'lucide-react-native'
@@ -18,7 +18,11 @@ import { useAgentHistoryWorkspaceContext } from './use-agent-history-workspace-c
 import { useRefreshHint } from '../query/refresh-hint'
 import { buildMobileAgentHistorySections } from './agent-history-sections'
 import { shouldShowMobileCurrentWorktreeBadge } from './agent-history-current-worktree-badge'
-import { MobileAgentSessionHistoryList } from './MobileAgentSessionHistoryList'
+import {
+  MobileAgentSessionHistoryList,
+  useMobileAgentHistoryOpenTabActions
+} from './MobileAgentSessionHistoryList'
+import { openHistorySession } from './worktree-navigation-actions'
 import { buildMobileAgentHistoryResumeActionState } from './agent-history-session-card'
 import { styles } from './agent-history-styles'
 import {
@@ -65,6 +69,7 @@ function scopeSegments(t: Translate): MobileSegment<AiVault.AiVaultScope>[] {
   ]
 }
 
+
 export function MobileAgentSessionHistoryPanel(props: MobileAgentSessionHistoryPanelProps) {
   return <MobileAgentSessionHistoryPanelContent key={props.hostId} {...props} />
 }
@@ -73,7 +78,7 @@ function MobileAgentSessionHistoryPanelContent({
   hostId,
   worktreeId,
   name = '',
-  origin = ''
+  origin
 }: MobileAgentSessionHistoryPanelProps) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -111,31 +116,45 @@ function MobileAgentSessionHistoryPanelContent({
     retry
   } = useMobileAgentHistoryState({ hostId, worktreeId, worktrees, worktreesLoaded, projectSetups })
 
-  const sessions = screenState.kind === 'ready' ? screenState.sessions : EMPTY_SESSIONS
-  const issues = screenState.kind === 'ready' ? screenState.issues : EMPTY_ISSUES
-  const sessionsById = useMemo(
-    () => new Map(sessions.map((session) => [session.id, session])),
-    [sessions]
-  )
-  const sections = useMemo(
-    () =>
-      buildMobileAgentHistorySections(sessions, {
-        query,
-        agents,
-        sort,
-        scope,
-        scopeFilterPaths,
-        activeWorktreePath,
-        now
-      }),
-    [sessions, query, agents, sort, scope, scopeFilterPaths, activeWorktreePath, now, t]
-  )
-
-  const showRefreshLine = useRefreshHint(revalidating)
-  const restartOffer = useAgentHistoryRestartOffer(client, connState === 'connected')
   const owner = { hostId, worktreeId, client, connState, worktrees }
   const resume = useAgentHistorySessionResume({ ...owner, origin, claimResumeOwnership })
-  const { onResumeSession, resumingSessionId, resumeMessage, setResumeMessage } = resume
+  const {
+    onResumeSession: resumeSession,
+    resumingSessionId,
+    resumeMessage,
+    setResumeMessage,
+    resumeLaunchInFlightRef,
+    setResumingSessionId
+  } = resume
+  const issues = screenState.kind === 'ready' ? screenState.issues : EMPTY_ISSUES
+  const openTabActions = useMobileAgentHistoryOpenTabActions({
+    client,
+    connected: connState === 'connected',
+    hostId,
+    worktreeId,
+    worktrees,
+    origin,
+    router,
+    onRefresh,
+    sessions: screenState.kind === 'ready' ? screenState.sessions : EMPTY_SESSIONS,
+    launchInFlightRef: resumeLaunchInFlightRef,
+    setResumingSessionId,
+    setResumeMessage
+  })
+  const sessions = openTabActions.sessionsWithOpenTabs
+  const { closingSessionId, closedSessionIds, fallbackOpenTabsPending, onJumpToOpenSession } =
+    openTabActions
+  const onResumeSession = useCallback(
+    async (session: AiVault.AiVaultSession): Promise<void> => {
+      // The tab is already open; focusing it must not spawn a second terminal.
+      if (session.openTab && !closedSessionIds.has(session.id)) {
+        await onJumpToOpenSession(session, session.openTab)
+        return
+      }
+      await resumeSession(session)
+    },
+    [closedSessionIds, onJumpToOpenSession, resumeSession]
+  )
   const handoff = useAgentHistoryHandoff({
     ...owner,
     claimOwnership: claimResumeOwnership,
@@ -145,8 +164,14 @@ function MobileAgentSessionHistoryPanelContent({
   })
 
   const resumeActionStateBySessionId = useMemo(
-    () => buildMobileAgentHistoryResumeActionState(sessions, resumingSessionId),
-    [resumingSessionId, sessions]
+    () =>
+      buildMobileAgentHistoryResumeActionState(
+        sessions,
+        resumingSessionId,
+        closingSessionId,
+        fallbackOpenTabsPending
+      ),
+    [closingSessionId, fallbackOpenTabsPending, resumingSessionId, sessions]
   )
 
   return (
@@ -249,6 +274,8 @@ function MobileAgentSessionHistoryPanelContent({
               onResume={pickingHandoff ? handoff.open : onResumeSession}
               primaryAction={pickingHandoff ? 'handoff' : 'resume'}
               onLongPress={pickingHandoff ? undefined : setActionSession}
+              onJumpToOpenTab={onJumpToOpenSession}
+              onCloseOpenTab={openTabActions.onCloseOpenSession}
               onRefresh={() => void onRefresh()}
               bottomPadding={searchBarHeight}
             />
