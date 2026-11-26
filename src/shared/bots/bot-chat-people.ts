@@ -4,6 +4,7 @@ import type { BotItem } from './bot-items'
 import type { BotChatPerson, BotChatTreeChat } from './bot-chat-tree'
 import { botSharePersonName } from './bot-home-of'
 import { botShareUsable } from './bot-team-shares'
+import { HOME_CHAT_TITLE } from './bot-chat-tree-homes'
 
 /** A teammate as the owner's lists name them: the one name lookup for whose chat or item it is. */
 export function botChatPerson(bot: Pick<Bot, 'shares'>, accountId: string): BotChatPerson {
@@ -33,6 +34,22 @@ export function botChatPickHas(pick: BotChatPersonPick, chat: BotChatTreeChat): 
     case 'person':
       return chat.person?.accountId === pick.person.accountId
   }
+}
+
+/** Whose a chat is, as an Everyone row names it: anyone's but the viewer's own (null). Another
+ *  person's Home is named unless its title already names them. `viewer` as in `botItemPersonMark`. */
+export function botChatPersonMark(
+  chat: Pick<BotChatTreeChat, 'person' | 'homeOf' | 'title'>,
+  viewer: Bot['shareViewer'],
+  ownerFallback: string
+): string | null {
+  if (chat.homeOf) {
+    return chat.title === HOME_CHAT_TITLE ? chat.homeOf : null
+  }
+  if (!chat.person) {
+    return viewer ? (viewer.ownerName ?? ownerFallback) : null
+  }
+  return chat.person.accountId === viewer?.accountId ? null : chat.person.name
 }
 
 /** One person the pick offers, the viewer ("you") first; `name` null when the host doesn't know it. */

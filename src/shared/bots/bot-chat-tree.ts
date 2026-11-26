@@ -116,7 +116,7 @@ function orderRank(chat: BotChatTreeChat): number {
 }
 
 /** Home pinned, then chats waiting on the owner, then replying, then newest; closed last. */
-export function orderBotChats(chats: readonly BotChatTreeChat[]): BotChatTreeChat[] {
+export function orderBotChats<T extends BotChatTreeChat>(chats: readonly T[]): T[] {
   return [...chats].sort((a, b) => orderRank(a) - orderRank(b) || b.lastActiveAt - a.lastActiveAt)
 }
 

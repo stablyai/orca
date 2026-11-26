@@ -10,6 +10,7 @@ import { cn } from '@/lib/class-names'
 import { useBotUsageLimitStopIndex } from './use-bot-usage-limit-stops'
 import { UsageLimitStopMark } from './BotUsageLimitMark'
 import { usageLimitStopText } from '../../../../shared/bots/bot-usage-limit-stop'
+import { botChatPersonMark } from '../../../../shared/bots/bot-chat-people'
 import type { Bot } from '../../../../shared/bot-types'
 import {
   CHAT_TREE_CAPS,
@@ -128,8 +129,9 @@ function BotChatPreview({
       : chat.live === 'idle'
         ? t('bots.chats.noMessages', 'No messages yet')
         : null)
-  // A teammate's Home is titled by their name already.
-  const person = hidePerson || chat.homeOf ? null : (chat.person?.name ?? null)
+  const person = hidePerson
+    ? null
+    : botChatPersonMark(chat, bot.shareViewer, t('bots.items.filter.owner', 'Owner'))
   const parts: { key: string; node: React.ReactNode }[] = [
     { key: 'place', node: botChatPlace(chat) },
     {

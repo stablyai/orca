@@ -9,9 +9,7 @@ import {
   type BotChatTreeDispatch
 } from '../../shared/bots/bot-chat-tree-model'
 import type { BotHomeOf } from '../../shared/bots/bot-home-of'
-import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
-import { botShareChatFilter } from './team-share/bot-share-chats'
-import { botChatTreeForViewer } from './bot-chat-tree-viewer'
+import { botChatSearchForViewer, botChatTreeForViewer } from './bot-chat-tree-viewer'
 import {
   botSidebarListedChats,
   withViewerChatTabs
@@ -19,47 +17,13 @@ import {
 
 const ALICE = 'acct-alice'
 const ALICE_TOO = 'acct-alice-2'
-const member = (userId: string) => ({
-  kind: 'person' as const,
-  source: 'orca' as const,
-  userId,
-  name: 'Alice',
-  workspaceId: null,
-  role: 'member' as const
-})
-
-// Whom each chat acts for, as Orca recorded it: the real filter reads this.
-const ACTS_FOR: Record<string, ReturnType<typeof member>[] | [{ kind: 'owner' }]> = {
-  'owner-home': [{ kind: 'owner' }],
-  'alice-home': [member(ALICE)],
-  'alice2-home': [member(ALICE_TOO)],
-  'alice-side': [member(ALICE)],
-  'alice-new': [member(ALICE)],
-  'owner-side': [{ kind: 'owner' }]
-}
-const sources = {
-  getOrchestrationDb: () =>
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the filter reads only this record.
-    ({
-      listBotConversationActsFor: (roots: readonly string[]) =>
-        new Map(
-          roots.flatMap((root) => (ACTS_FOR[root] ? [[root, { actsFor: ACTS_FOR[root] }]] : []))
-        )
-    }) as unknown as OrchestrationDb,
-  listAutomationRuns: () => [],
-  showAutomation: () => {
-    throw new Error('gone')
-  }
-}
 const viewerAlice = {
   kind: 'teammate' as const,
   accountId: ALICE,
-  owns: botShareChatFilter(sources, {
-    kind: 'bot-share',
-    botId: 'bot-1',
-    accountId: ALICE,
-    name: 'Alice'
-  })
+  personName: () => 'Alice',
+  ownerName: 'Jinwoo',
+  everyone: true,
+  owns: () => false
 }
 const owner = { kind: 'owner' as const, personName: () => 'Alice' }
 
@@ -82,9 +46,11 @@ const homeOfChat = (chatId: string): BotHomeOf =>
   chatId.startsWith('alice-') ? { accountId: ALICE } : 'owner'
 
 /** The host tree, then each viewer's projection, from one set of chats and Dispatches. */
-function trees(aliceHomeMade: boolean, page = false) {
+function trees(aliceHomeMade: boolean, page = false, ownerHomeMade = true) {
   const chats = [
-    chat('owner-home', { origin: 'home', title: HOME_CHAT_TITLE, whoseHome: 'owner' }),
+    ...(ownerHomeMade
+      ? [chat('owner-home', { origin: 'home', title: HOME_CHAT_TITLE, whoseHome: 'owner' })]
+      : []),
     ...(aliceHomeMade
       ? [chat('alice-home', { title: 'Alice’s Home', whoseHome: { accountId: ALICE } })]
       : []),
@@ -146,11 +112,25 @@ describe.each([true, false])('chats tree per viewer (Alice’s Home made: %s)', 
       title: HOME_CHAT_TITLE
     })
     expect(home.homeOf).toBeUndefined()
+    expect(home.person).toEqual({ accountId: ALICE, name: 'Alice' })
     expect(home.running.map((worker) => worker.key)).toEqual(['worker:d-alice'])
-    expect(alice.workspaceChats).toEqual({ 'wt-alice': home.chatId })
-    expect(alice.chats.map((entry) => entry.chatId).sort()).toEqual(
-      [home.chatId, 'alice-side'].sort()
+    expect(alice.workspaceChats['wt-alice']).toBe(home.chatId)
+  })
+
+  it('shows Alice everyone’s chats, the owner’s Home named for the owner', () => {
+    const { alice } = trees(made)
+    expect(alice.chats.find((entry) => entry.chatId === 'owner-home')).toMatchObject({
+      origin: 'side',
+      homeOf: 'Jinwoo'
+    })
+    expect(alice.chats.map((entry) => entry.chatId)).toEqual(
+      expect.arrayContaining(['owner-home', 'owner-side', 'alice-side', 'alice2-home'])
     )
+    expect(alice.workspaceChats).toMatchObject({
+      'wt-owner': 'owner-side',
+      'wt-handed': 'owner-home',
+      'wt-moved-in': 'owner-home'
+    })
   })
 
   it('never shows Alice’s worker under the owner’s Home', () => {
@@ -165,7 +145,7 @@ describe.each([true, false])('chats tree per viewer (Alice’s Home made: %s)', 
 
   it('a page read adds no row', () => {
     const { alice, owner } = trees(made, true)
-    expect(alice.chats).toEqual([])
+    expect(alice.chats.map((entry) => entry.chatId)).toEqual(['owner-side'])
     expect(owner.chats.map((entry) => entry.chatId)).toEqual(['owner-side'])
   })
 })
@@ -174,7 +154,7 @@ describe('two teammates both named Alice', () => {
   it('match by account, so each sees only their own Home', () => {
     const { alice, owner } = trees(true)
     expect(homes(alice).map((entry) => entry.chatId)).toEqual(['alice-home'])
-    expect(alice.chats.some((entry) => entry.chatId === 'alice2-home')).toBe(false)
+    expect(alice.chats.find((entry) => entry.chatId === 'alice2-home')?.homeOf).toBe('Alice')
     expect(
       owner.chats
         .filter((entry) => entry.homeOf === 'Alice')
@@ -198,7 +178,7 @@ describe('a teammate’s chats on their own sidebar', () => {
       workers: new Map()
     })
     const alice = botChatTreeForViewer(host, viewerAlice, { page: false })
-    expect(alice.chats.map((entry) => entry.tab)).toEqual([undefined, undefined])
+    expect(alice.chats.map((entry) => entry.tab)).toEqual([undefined, undefined, undefined])
 
     const listed = botSidebarListedChats(
       withViewerChatTabs(alice.chats, new Set(['alice-home', 'alice-new']))
@@ -207,6 +187,12 @@ describe('a teammate’s chats on their own sidebar', () => {
       ['alice-home', 'home'],
       ['alice-new', 'side']
     ])
+    // The owner's Home lists on Alice's sidebar only once she opens it here.
+    expect(
+      botSidebarListedChats(withViewerChatTabs(alice.chats, new Set(['owner-home']))).map(
+        (entry) => entry.chatId
+      )
+    ).toEqual(['owner-home', 'alice-home'])
     expect(
       botSidebarListedChats(withViewerChatTabs(alice.chats, new Set(['alice-home']))).map(
         (entry) => entry.chatId
@@ -223,5 +209,57 @@ describe('a teammate’s chats on their own sidebar', () => {
     // The owner's own agent: its Home lists with its tab closed, a side chat with no tab does not.
     const ownerChats = owner.chats.map((entry) => ({ ...entry, tab: false }))
     expect(botSidebarListedChats(ownerChats).map((e) => e.chatId)).toEqual(['owner-home'])
+  })
+})
+
+describe('a search answer per viewer', () => {
+  it('lists each match on the row the viewer has, and drops matches on rows they don’t', () => {
+    const { host } = trees(false)
+    const aliceHome = host.chats.find(
+      (entry) =>
+        entry.whoseHome !== undefined &&
+        entry.whoseHome !== 'owner' &&
+        entry.whoseHome.accountId === ALICE
+    )
+    const matches = [
+      { chatId: aliceHome!.chatId, workerKeys: null },
+      { chatId: 'owner-side', workerKeys: null },
+      { chatId: 'gone', workerKeys: null }
+    ]
+    const result = { chats: host.chats, matches, more: 0 }
+    expect(botChatSearchForViewer(result, viewerAlice).matches.map((m) => m.chatId)).toEqual([
+      NO_HOME_CHAT_ID,
+      'owner-side'
+    ])
+    expect(botChatSearchForViewer(result, owner).matches.map((m) => m.chatId)).toEqual([
+      aliceHome!.chatId,
+      'owner-side'
+    ])
+  })
+})
+
+describe.each([true, false])('the owner’s Home not made yet (Alice’s made: %s)', (made) => {
+  it('leaves Alice one Home row, hers, and none of the owner’s work under it', () => {
+    const { alice } = trees(made, false, false)
+    const [home] = homes(alice)
+    expect(homes(alice)).toHaveLength(1)
+    expect(home).toMatchObject({ person: { accountId: ALICE, name: 'Alice' } })
+    expect(alice.chats.filter((entry) => entry.chatId === home.chatId)).toHaveLength(1)
+    expect(workerKeys(alice, home.chatId)).toEqual(['worker:d-alice'])
+    expect(alice.workspaceChats['wt-handed']).toBeUndefined()
+    expect(alice.workspaceChats['wt-moved-in']).toBeUndefined()
+  })
+})
+
+describe('an older teammate Orca, with no person filter', () => {
+  it('is sent only the teammate’s own chats, unnamed', () => {
+    const { host } = trees(true)
+    const older = botChatTreeForViewer(
+      host,
+      { ...viewerAlice, everyone: false, owns: (chatId) => chatId === 'alice-side' },
+      { page: false }
+    )
+    expect(older.chats.map((entry) => entry.chatId).sort()).toEqual(['alice-home', 'alice-side'])
+    expect(older.chats.every((entry) => entry.person === undefined && !entry.homeOf)).toBe(true)
   })
 })

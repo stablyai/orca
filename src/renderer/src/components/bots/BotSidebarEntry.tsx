@@ -25,6 +25,7 @@ import { BotRow } from './BotRow'
 import { BotSidebarChats } from './BotSidebarChats'
 import { botListsUnderRow } from '../../../../shared/bots/bot-sidebar-tree'
 import { useBotOwnChatTree } from './use-bot-chat-tree'
+import { useBotChatsPersonPick, useBotChatTreeOfPick } from './use-bot-chats-person-pick'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
 import { useBotHostOffline } from '@/lib/bot-host-views'
 import { useBotWorkspaceOrder } from './use-bot-workspace-order'
@@ -202,7 +203,8 @@ function BotSidebarList({
   onOpen: () => void
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const chatTree = useBotOwnChatTree(bot)
+  // The Chats tab's person pick: the sidebar lists the same person's chats.
+  const chatTree = useBotChatTreeOfPick(useBotOwnChatTree(bot), useBotChatsPersonPick(bot).pick)
   const entryKey = botSidebarEntryKey(bot)
   useEffect(() => {
     if (chatTree.state === 'ready') {

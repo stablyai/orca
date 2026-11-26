@@ -7,16 +7,62 @@ import {
 import { readSharedBotChatTree, runtimeBotChatTreeHost } from '../../../bots/bot-chat-tree-host'
 import { readBotOwnChatPanes } from '../../../bots/bot-own-chat-panes'
 import { runtimeBotChatSearchHost, searchBotChats } from '../../../bots/bot-chat-search-host'
-import { defineMethod } from '../core'
+import { defineMethod, type RpcContext } from '../core'
 import {
   botShareChatFilter,
   botShareScopeOf,
   withBotChatPeople
 } from '../../../bots/team-share/bot-share-chats'
-import { botShareScopedView } from '../../../bots/team-share/bot-share-scoped-view'
-import { botChatTreeForViewer, type BotChatTreeViewer } from '../../../bots/bot-chat-tree-viewer'
+import { BOTS_SHARE_EVERYONE_CHATS_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
+import {
+  botShareHostOwnerName,
+  botShareScopedView,
+  HOST_OWNER_FALLBACK_NAME
+} from '../../../bots/team-share/bot-share-scoped-view'
+import {
+  botChatSearchForViewer,
+  botChatTreeForViewer,
+  type BotChatTreeViewer
+} from '../../../bots/bot-chat-tree-viewer'
+import type { Bot } from '../../../../shared/bot-types'
+import type { BotChatTreeChat } from '../../../../shared/bots/bot-chat-tree'
+import type { OrcaRuntimeService } from '../../orca-runtime'
 import { NO_HOME_CHAT_ID } from '../../../../shared/bots/bot-chat-tree-model'
 import { botHomePlaceholderId, botSharePersonName } from '../../../../shared/bots/bot-home-of'
+
+/** Who reads the bot's chats: the owner, or the teammate a share connection is. */
+function botChatTreeViewerOf(
+  context: Pick<RpcContext, 'callerScope' | 'clientCapabilities' | 'runtime'>,
+  bot: Pick<Bot, 'shares'> | undefined
+): BotChatTreeViewer {
+  const share = botShareScopeOf(context)
+  const personName = (accountId: string): string => botSharePersonName(bot ?? {}, accountId)
+  return share
+    ? {
+        kind: 'teammate',
+        accountId: share.accountId,
+        personName,
+        ownerName: botShareHostOwnerName() ?? HOST_OWNER_FALLBACK_NAME,
+        everyone:
+          context.clientCapabilities?.includes(BOTS_SHARE_EVERYONE_CHATS_RUNTIME_CAPABILITY) ??
+          false,
+        owns: botShareChatFilter(context.runtime, share)
+      }
+    : { kind: 'owner', personName }
+}
+
+/** Each chat named for whose it is, for a viewer that filters by person; an older teammate's Orca
+ *  would print its own name on its own chats. */
+function withViewerPeople<T extends { chats: BotChatTreeChat[] }>(
+  runtime: OrcaRuntimeService,
+  bot: Bot | undefined,
+  viewer: BotChatTreeViewer,
+  read: T
+): T {
+  return viewer.kind === 'teammate' && !viewer.everyone
+    ? read
+    : withBotChatPeople(runtime, bot, read)
+}
 
 export const BOT_CHAT_TREE_METHODS = [
   defineMethod({
@@ -34,18 +80,9 @@ export const BOT_CHAT_TREE_METHODS = [
           : params
       const tree = await readSharedBotChatTree(runtime, read)
       const bot = runtime.bots.list().find((entry) => entry.id === params.botId)
-      const viewer: BotChatTreeViewer = share
-        ? {
-            kind: 'teammate',
-            accountId: share.accountId,
-            owns: botShareChatFilter(runtime, share)
-          }
-        : {
-            kind: 'owner',
-            personName: (accountId) => botSharePersonName(bot ?? {}, accountId)
-          }
+      const viewer = botChatTreeViewerOf(context, bot)
       const view = botChatTreeForViewer(tree, viewer, { page: params.chatId !== undefined })
-      return share ? view : withBotChatPeople(runtime, bot, view)
+      return withViewerPeople(runtime, bot, viewer, view)
     }
   }),
   // Each bot's own side chats, pane and title, so its row's line says what any of them is doing.
@@ -67,13 +104,14 @@ export const BOT_CHAT_TREE_METHODS = [
   defineMethod({
     name: 'bots.chats.search',
     permission: 'workspace',
-    share: 'not-shared',
+    share: SHARE_BY_BOT,
     params: BotChatSearch,
-    handler: async (params, { runtime }) =>
-      withBotChatPeople(
-        runtime,
-        runtime.bots.list().find((bot) => bot.id === params.botId),
-        await searchBotChats(runtimeBotChatSearchHost(runtime), params)
-      )
+    handler: async (params, context) => {
+      const { runtime } = context
+      const bot = runtime.bots.list().find((entry) => entry.id === params.botId)
+      const result = await searchBotChats(runtimeBotChatSearchHost(runtime), params)
+      const viewer = botChatTreeViewerOf(context, bot)
+      return withViewerPeople(runtime, bot, viewer, botChatSearchForViewer(result, viewer))
+    }
   })
 ]

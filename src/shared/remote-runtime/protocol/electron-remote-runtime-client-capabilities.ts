@@ -22,9 +22,13 @@ import {
   BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY
 } from '../../browser/runtime/browser-runtime-capabilities'
 
+import { BOTS_SHARE_EVERYONE_CHATS_RUNTIME_CAPABILITY } from '../../bot-runtime-capabilities'
+
 // Electron clients can decode client-hosted page placement; becoming a page
 // host still requires the separate authenticated browser-client lease.
 export const ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
+  // A shared agent's Chats tab filters everyone's chats by person.
+  BOTS_SHARE_EVERYONE_CHATS_RUNTIME_CAPABILITY,
   GIT_GRAPH_TAB_CAPABILITY,
   GIT_REVERT_CONFLICT_CLIENT_CAPABILITY,
   STRUCTURED_CHAT_START_TELEMETRY_CLIENT_CAPABILITY,

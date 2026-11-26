@@ -1,5 +1,5 @@
-// Which of a shared bot's chats are a teammate's own: the only chats their share connection lists, reads
-// or acts in. Others' chats are not theirs to see, Home Chat included.
+// A teammate's chats on a shared bot: they read and act in any of its chats, as the owner does; which
+// are their own decides only their defaults (their Activity, the empty chat New chat reopens).
 import type { BotRequestPerson } from '../../../shared/bots/bot-acts-for'
 import { actsForOwner, shareOwnsChat } from '../../../shared/bots/bot-acts-for'
 import type { Bot } from '../../../shared/bot-types'
@@ -8,15 +8,12 @@ import { botChatPerson } from '../../../shared/bots/bot-chat-people'
 import type { BotShareCallerScope } from '../../runtime/rpc/callers/rpc-caller-scope'
 import type { RpcContext } from '../../runtime/rpc/core'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { createChatOrcaSessionIdResolver } from '../../runtime/orchestration/addressing/session-lineage/canonical-orca-session-id'
 import { botOfSession } from '../bot-session-tabs'
 import {
   botHomesOfChats,
   readBotConversationActsFor,
   type BotConversationActsForSources
 } from '../bot-conversation-acts-for'
-
-type BotShareChatSources = BotConversationActsForSources & Pick<OrcaRuntimeService, 'bots'>
 
 export function botShareScopeOf(
   context: Pick<RpcContext, 'callerScope'>
@@ -47,34 +44,31 @@ export function botShareChatFilter(
   }
 }
 
-/** Whether a session is one of the teammate's chats on the shared bot. */
-export function botShareOwnsSession(
-  sources: BotShareChatSources,
+/** Whether a session is a chat of the shared bot, whoever started it. */
+export function botShareSeesSession(
+  sources: Pick<OrcaRuntimeService, 'bots'>,
   scope: BotShareCallerScope,
   sessionId: string
 ): boolean {
-  return (
-    botOfSession(sources.bots, sessionId)?.id === scope.botId &&
-    botShareChatFilter(sources, scope)(createChatOrcaSessionIdResolver()(sessionId))
-  )
+  return botOfSession(sources.bots, sessionId)?.id === scope.botId
 }
 
-/** `botShareOwnsSession` for a stream that asks again on every event: a chat once theirs stays theirs
- *  (whom a chat acts for never changes), so only those answers are kept. */
+/** `botShareSeesSession` for a stream that asks again on every event: a chat stays in its bot's home,
+ *  so only the yes answers are kept. */
 export function botShareSessionFilter(
-  sources: BotShareChatSources,
+  sources: Pick<OrcaRuntimeService, 'bots'>,
   scope: BotShareCallerScope
 ): (sessionId: string) => boolean {
-  const theirs = new Set<string>()
+  const seen = new Set<string>()
   return (sessionId) => {
-    if (theirs.has(sessionId)) {
+    if (seen.has(sessionId)) {
       return true
     }
-    const owned = botShareOwnsSession(sources, scope, sessionId)
-    if (owned) {
-      theirs.add(sessionId)
+    const sees = botShareSeesSession(sources, scope, sessionId)
+    if (sees) {
+      seen.add(sessionId)
     }
-    return owned
+    return sees
   }
 }
 
