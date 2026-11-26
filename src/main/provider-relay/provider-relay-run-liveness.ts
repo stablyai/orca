@@ -3,6 +3,7 @@ import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host/execution-host'
 import {
   agentSessionRunPlacement,
+  type AgentSessionRunDaemon,
   type AgentSessionRunPlacement
 } from '../../shared/agent-session/lifecycle/agent-session-run-placement'
 import type { AgentSessionProcessIdentity } from '../../shared/agent-session/lifecycle/agent-session-record'
@@ -27,6 +28,9 @@ export type ProviderRelayRunRecord = {
   provider: string
   location: { executionHostId: string }
   lastRunPlacement?: unknown
+  /** The recorded owner (a store record's lease, or a conversation view's observation). */
+  lease?: { ownerProcess: AgentSessionProcessIdentity | null }
+  ownerObservation?: { ownerProcess: AgentSessionProcessIdentity | null }
 }
 
 const DEFAULT_WAIT_MS = 3_000
@@ -54,7 +58,7 @@ async function decide(
 ): Promise<ProviderRelayRunLiveness> {
   const route = providerRelayRoute()
   const local = record.location.executionHostId === LOCAL_EXECUTION_HOST_ID
-  const placement = agentSessionRunPlacement(record)
+  const placement = currentPlacement(record)
   if (!route || !providerRelayMayKeep(record.provider, local) || placement?.kind !== 'relayed') {
     forgetListedProviderRelayChat(record.sessionId)
     return 'gone'
@@ -88,6 +92,24 @@ async function decide(
     return 'gone'
   }
   return 'unknown'
+}
+
+/**
+ * The placement of the run the record's owner belongs to. A recorded owner that isn't the
+ * placement's agent means a build that records no placement started a later run: the placement is
+ * stale and names nothing.
+ */
+function currentPlacement(record: ProviderRelayRunRecord): AgentSessionRunPlacement | null {
+  const placement = agentSessionRunPlacement(record)
+  const owner = record.lease?.ownerProcess ?? record.ownerObservation?.ownerProcess ?? null
+  if (
+    placement?.kind === 'relayed' &&
+    owner &&
+    (owner.pid !== placement.agent.pid || owner.spawnToken !== placement.agent.spawnToken)
+  ) {
+    return null
+  }
+  return placement
 }
 
 /** The connected client whose hello names this daemon start, if any answers in time. */
@@ -124,23 +146,34 @@ async function provenGone(identity: AgentSessionProcessIdentity, readToken: bool
   return probe?.outcome === 'pid-absent' || probe?.outcome === 'identity-mismatch'
 }
 
+/** One daemon start's proof, shared by every chat asking within 2 s; bounded by daemon starts. */
+const DAEMON_PROOF_FRESH_MS = 2_000
+const daemonProofs = new Map<string, { at: number; gone: Promise<boolean> }>()
+
+function daemonProvenGone(daemon: AgentSessionRunDaemon, hostId: string): Promise<boolean> {
+  const cached = daemonProofs.get(daemon.instance)
+  if (cached && Date.now() - cached.at < DAEMON_PROOF_FRESH_MS) {
+    return cached.gone
+  }
+  const gone = provenGone(
+    { hostId, pid: daemon.pid, processStartTimeMs: Math.round(daemon.startedAtMs), spawnToken: '' },
+    false
+  )
+  for (const [key, old] of daemonProofs) {
+    if (Date.now() - old.at >= DAEMON_PROOF_FRESH_MS) {
+      daemonProofs.delete(key)
+    }
+  }
+  daemonProofs.set(daemon.instance, { at: Date.now(), gone })
+  return gone
+}
+
 async function processesProvenGone(
   placement: Extract<AgentSessionRunPlacement, { kind: 'relayed' }>
 ): Promise<boolean> {
   const { daemon, agent } = placement
-  const [daemonGone, agentGone] = await Promise.all([
-    provenGone(
-      {
-        hostId: agent.hostId,
-        pid: daemon.pid,
-        processStartTimeMs: Math.round(daemon.startedAtMs),
-        spawnToken: ''
-      },
-      false
-    ),
-    provenGone(agent, true)
-  ])
-  return daemonGone && agentGone
+  // A live daemon decides alone; its agent is only probed once the daemon is proven gone.
+  return (await daemonProvenGone(daemon, agent.hostId)) && provenGone(agent, true)
 }
 
 /**

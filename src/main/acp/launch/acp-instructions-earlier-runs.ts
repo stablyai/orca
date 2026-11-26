@@ -1,11 +1,9 @@
 import { lstat, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { nativeChatScratchFolderName } from '../../native-chat/conversation-files/native-chat-scratch-folder'
-import { listProviderRelaysAtLaunch } from '../../provider-relay/app-provider-relays'
-import {
-  providerRelayChatsKeptThisRun,
-  providerRelayLaunchListed
-} from '../../provider-relay/provider-relay-launch-inventory'
+import { providerRelayRunLiveness } from '../../provider-relay/app-provider-relays'
+import { peekOpenedAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-slot'
+import { agentSessionRunPlacement } from '../../../shared/agent-session/lifecycle/agent-session-run-placement'
 
 /** Removals run this many at a time, so a large leftover folder doesn't hold the launch long. */
 const REMOVE_BATCH = 16
@@ -64,22 +62,48 @@ async function olderLaunches(
     .map((launch) => launch.name)
 }
 
+/**
+ * Chats whose last run went to a terminal host and isn't proven gone, by folder name: their agent
+ * may still read these. Only the run's own daemon start decides, as for every kept chat.
+ */
+async function relayedRunsNotGone(present: ReadonlySet<string>) {
+  const store = peekOpenedAgentSessionRecordStore()
+  if (!store) {
+    return null
+  }
+  const spawnedAt = new Map<string, number>()
+  const relayed = store.listRecords().flatMap((record) => {
+    const placement = agentSessionRunPlacement(record)
+    const folder = nativeChatScratchFolderName(record.sessionId)
+    return placement?.kind === 'relayed' && present.has(folder)
+      ? [{ folder, record, placement }]
+      : []
+  })
+  for (let at = 0; at < relayed.length; at += REMOVE_BATCH) {
+    await Promise.all(
+      relayed.slice(at, at + REMOVE_BATCH).map(async ({ folder, record, placement }) => {
+        if ((await providerRelayRunLiveness(record)) !== 'gone') {
+          // Without a start time the chat keeps its newest folder only.
+          spawnedAt.set(folder, placement.agent.processStartTimeMs ?? Number.POSITIVE_INFINITY)
+        }
+      })
+    )
+  }
+  return spawnedAt
+}
+
 /** An earlier run's leftovers go, except those of chats whose agent the terminal host kept running
  *  (that agent still reads them) and of chats this run launched. One host holds a profile. */
 async function clearEarlierRuns(root: string, remove: (path: string) => Promise<void>) {
-  await listProviderRelaysAtLaunch()
-  // A daemon that didn't answer may still run agents reading these; a later launch tries again.
-  if (!providerRelayLaunchListed()) {
+  const length = nativeChatScratchFolderName('').length
+  const present = new Set(
+    (await readdir(root).catch(() => [])).map((name) => name.slice(0, length))
+  )
+  const spawnedAt = await relayedRunsNotGone(present)
+  // Without the records no chat's run is known; a later launch tries again.
+  if (!spawnedAt) {
     return false
   }
-  // Every chat's folder name has the same length; its entries are it, `<it>.md` or `<it>-<uuid>`.
-  const spawnedAt = new Map(
-    [...providerRelayChatsKeptThisRun()].map(([chat, at]) => [
-      nativeChatScratchFolderName(chat),
-      at
-    ])
-  )
-  const length = nativeChatScratchFolderName('').length
   // Read live: a launch that didn't wait for this names its chat before writing its folder.
   const keptBy = (name: string): boolean => {
     const chat = name.slice(0, length)
@@ -102,7 +126,7 @@ async function clearEarlierRuns(root: string, remove: (path: string) => Promise<
 }
 
 /** A launch never waits for the clear: it names its chat first, which keeps its folder. A clear
- *  skipped while a daemon was late is tried again by a later launch. Resolves when the clear ends. */
+ *  skipped before the chat records opened is tried again by a later launch. Resolves when it ends. */
 export function clearEarlierRunsOnce(
   root: string,
   sessionId: string,

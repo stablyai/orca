@@ -5,12 +5,25 @@ import { describe, expect, it, vi } from 'vitest'
 import { nativeChatScratchFolderName } from '../../../native-chat/conversation-files/native-chat-scratch-folder'
 
 const SPAWNED_AT = 1_800_000_000_000
+const relayedRun = (sessionId: string) => ({
+  sessionId,
+  lastRunPlacement: {
+    fence: 3,
+    kind: 'relayed',
+    relayId: `r-${sessionId}`,
+    daemon: { instance: 'daemon-start', pid: 4242, startedAtMs: 1 },
+    agent: { hostId: 'local', pid: 4243, processStartTimeMs: SPAWNED_AT, spawnToken: 't' }
+  }
+})
+// Its daemon can't say yet whether the kept chat's run still goes: that alone keeps its files.
 vi.mock('../../../provider-relay/app-provider-relays', () => ({
-  listProviderRelaysAtLaunch: async () => {}
+  providerRelayRunLiveness: async ({ sessionId }: { sessionId: string }) =>
+    sessionId === 'kept-chat' ? 'unknown' : 'gone'
 }))
-vi.mock('../../../provider-relay/provider-relay-launch-inventory', () => ({
-  providerRelayChatsKeptThisRun: () => new Map([['kept-chat', SPAWNED_AT]]),
-  providerRelayLaunchListed: () => true
+vi.mock('../../../runtime/agent-session/records/agent-session-record-store-slot', () => ({
+  peekOpenedAgentSessionRecordStore: () => ({
+    listRecords: () => [relayedRun('kept-chat'), relayedRun('gone-chat')]
+  })
 }))
 
 const { clearEarlierRunsOnce } = await import('../acp-instructions-earlier-runs')
