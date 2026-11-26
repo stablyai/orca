@@ -69,6 +69,32 @@ describe('regionalDateTimeFormat', () => {
     })
     expect(shape('en', { region: 'AQ', hourCycle: null }).hourCycle).toBe('h12')
   })
+
+  it("uses the region's clock where ICU has no data for the language in that region", () => {
+    // No ICU ships ko-DE, so it resolves to plain ko and its 12-hour clock.
+    expect(shape('ko', { region: 'DE', hourCycle: null }).hourCycle).toBe('h23')
+    expect(shape('ko', { region: 'RU', hourCycle: null }).hourCycle).toBe('h23')
+    expect(shape('en', { region: 'US', hourCycle: null }).hourCycle).toBe('h12')
+  })
+
+  it('reads an out-of-range date as "Invalid Date" instead of throwing', () => {
+    setOsDateTimeRegion({ region: 'NL', hourCycle: null })
+    const format = regionalDateTimeFormat(DAY_CLOCK, 'en')
+    expect(format.format(Number.NaN)).toBe('Invalid Date')
+    expect(format.format(new Date(8.64e15 + 1))).toBe('Invalid Date')
+    expect(format.formatToParts(Number.NaN)).toEqual([{ type: 'literal', value: 'Invalid Date' }])
+  })
+
+  it('keeps a bounded number of formatters per options as languages come and go', () => {
+    const options = { hour: 'numeric' } as const
+    const first = regionalDateTimeFormat(options, 'en')
+    expect(regionalDateTimeFormat(options, 'en')).toBe(first)
+    for (let index = 0; index < 50; index++) {
+      regionalDateTimeFormat(options, `en-x-pack${index}`)
+    }
+    // Evicted, so rebuilt: the cache did not keep all 51 languages.
+    expect(regionalDateTimeFormat(options, 'en')).not.toBe(first)
+  })
 })
 
 describe('OS locale readers', () => {

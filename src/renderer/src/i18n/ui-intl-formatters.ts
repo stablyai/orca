@@ -1,6 +1,9 @@
 import { getIntlLocale } from './i18n'
 import { supportedIntlLocale } from './intl-locale-support'
-import { regionalDateTimeFormat } from '../../../shared/i18n/regional-date-time-format'
+import {
+  regionalDateTimeFormat,
+  type RegionalDateTimeFormat
+} from '../../../shared/i18n/regional-date-time-format'
 
 type CachedFormatter<T> = { locale: string; formatter: T }
 type FormatterOptions = Intl.NumberFormatOptions | Intl.CollatorOptions | Intl.DisplayNamesOptions
@@ -33,7 +36,7 @@ function cachedFormatter<T>(
 export function uiDateTimeFormat(
   options: Intl.DateTimeFormatOptions,
   intlLocale: string = getIntlLocale()
-): Intl.DateTimeFormat {
+): RegionalDateTimeFormat {
   return regionalDateTimeFormat(options, supportedIntlLocale(intlLocale, Intl.DateTimeFormat))
 }
 

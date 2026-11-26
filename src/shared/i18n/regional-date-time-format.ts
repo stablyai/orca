@@ -86,14 +86,63 @@ function resolveLocale(locale: string | undefined): string {
   return locale ?? (runtimeLocale ??= new Intl.DateTimeFormat().resolvedOptions().locale)
 }
 
-/** Uncached; for callers that cache per dynamic option such as a time zone (key on osDateTimeRegionKey()). */
-export function createRegionalDateTimeFormat(
+let regionClock: { region: string; hourCycle: OsDateTimeRegion['hourCycle'] } | undefined
+
+// The region's own clock, from its main language: ICU has no data for many pairs (en-BR, en-RU)
+// and would fall back to the UI language's clock without a word.
+function regionHourCycle(region: string | null): OsDateTimeRegion['hourCycle'] {
+  if (!region || typeof Intl.Locale !== 'function') {
+    return null
+  }
+  if (regionClock?.region !== region) {
+    let hourCycle: OsDateTimeRegion['hourCycle'] = null
+    try {
+      const { language } = new Intl.Locale(`und-${region}`).maximize()
+      const cycle = new Intl.DateTimeFormat(`${language}-${region}`, {
+        hour: 'numeric'
+      }).resolvedOptions().hourCycle
+      hourCycle = cycle === 'h11' || cycle === 'h12' ? 'h12' : cycle ? 'h23' : null
+    } catch {
+      hourCycle = null
+    }
+    regionClock = { region, hourCycle }
+  }
+  return regionClock.hourCycle
+}
+
+/** The calls Orca makes on a date format; out-of-range dates read "Invalid Date" as
+ *  `toLocaleString` does, instead of throwing in render. */
+export type RegionalDateTimeFormat = Pick<
+  Intl.DateTimeFormat,
+  'format' | 'formatToParts' | 'resolvedOptions'
+>
+
+const INVALID_DATE = 'Invalid Date'
+// The JavaScript Date range, in ms either side of the epoch.
+const MAX_TIME = 8.64e15
+
+function validTime(value: Parameters<Intl.DateTimeFormat['format']>[0]): boolean {
+  const time = typeof value === 'number' ? value : value instanceof Date ? value.getTime() : 0
+  return Number.isFinite(time) && Math.abs(time) <= MAX_TIME
+}
+
+function forgiving(formatter: Intl.DateTimeFormat): RegionalDateTimeFormat {
+  return {
+    format: (value) => (validTime(value) ? formatter.format(value) : INVALID_DATE),
+    formatToParts: (value) =>
+      validTime(value)
+        ? formatter.formatToParts(value)
+        : [{ type: 'literal' as const, value: INVALID_DATE }],
+    resolvedOptions: () => formatter.resolvedOptions()
+  }
+}
+
+function buildDateTimeFormat(
   options: Intl.DateTimeFormatOptions,
-  locale?: string
+  uiLocale: string
 ): Intl.DateTimeFormat {
-  formatsBuilt = true
-  const uiLocale = resolveLocale(locale)
-  const { region, hourCycle } = osDateTimeRegion
+  const { region, hourCycle: forced } = osDateTimeRegion
+  const hourCycle = forced ?? regionHourCycle(region)
   const regional =
     hourCycle && options.hour12 === undefined && options.hourCycle === undefined
       ? { ...options, hourCycle }
@@ -103,7 +152,7 @@ export function createRegionalDateTimeFormat(
     const formatter = new Intl.DateTimeFormat(tag, regional)
     // A 24-hour hour alone reads as a bare number ("20"), so it gets its minutes ("20:00").
     const bareHour =
-      (region || hourCycle) && options.hour !== undefined && options.minute === undefined
+      (region || forced) && options.hour !== undefined && options.minute === undefined
     return bareHour && /^h2[34]$/.test(formatter.resolvedOptions().hourCycle ?? '')
       ? new Intl.DateTimeFormat(tag, { ...regional, minute: '2-digit' })
       : formatter
@@ -112,15 +161,25 @@ export function createRegionalDateTimeFormat(
   }
 }
 
-// Keyed by options identity, then language and OS region: the same constant serves the UI
-// language and the runtime default side by side without rebuilding. A handful of keys per options.
-const formats = new WeakMap<Intl.DateTimeFormatOptions, Map<string, Intl.DateTimeFormat>>()
+/** Uncached; for callers that cache per dynamic option such as a time zone (key on osDateTimeRegionKey()). */
+export function createRegionalDateTimeFormat(
+  options: Intl.DateTimeFormatOptions,
+  locale?: string
+): RegionalDateTimeFormat {
+  formatsBuilt = true
+  return forgiving(buildDateTimeFormat(options, resolveLocale(locale)))
+}
+
+// Keyed by options identity, then language and OS region. Live keys are the UI language, its English
+// fallback and the runtime default; the cap drops ones left behind by language switches.
+const MAX_KEYS_PER_OPTIONS = 4
+const formats = new WeakMap<Intl.DateTimeFormatOptions, Map<string, RegionalDateTimeFormat>>()
 
 /** Cached per options object (pass module constants) and rebuilt when the language or OS region changes. */
 export function regionalDateTimeFormat(
   options: Intl.DateTimeFormatOptions,
   locale?: string
-): Intl.DateTimeFormat {
+): RegionalDateTimeFormat {
   const key = `${locale}|${osDateTimeRegionKey()}`
   let byKey = formats.get(options)
   if (!byKey) {
@@ -130,6 +189,9 @@ export function regionalDateTimeFormat(
   let formatter = byKey.get(key)
   if (!formatter) {
     formatter = createRegionalDateTimeFormat(options, locale)
+    if (byKey.size >= MAX_KEYS_PER_OPTIONS) {
+      byKey.delete(byKey.keys().next().value as string)
+    }
     byKey.set(key, formatter)
   }
   return formatter

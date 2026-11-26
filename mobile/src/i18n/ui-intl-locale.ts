@@ -1,6 +1,9 @@
 import type { SupportedUiLocale } from '../../../src/shared/i18n/ui-locale'
 import { getMobileUiLocale } from './mobile-i18n'
-import { regionalDateTimeFormat } from '../../../src/shared/i18n/regional-date-time-format'
+import {
+  regionalDateTimeFormat,
+  type RegionalDateTimeFormat
+} from '../../../src/shared/i18n/regional-date-time-format'
 
 // Explicit script/region: Hermes passes tags to the platform formatter, which reads bare `zh` and `pt` differently by OS.
 const INTL_LOCALE: Record<SupportedUiLocale, string> = {
@@ -27,6 +30,6 @@ export function getUiIntlLocale(): string {
 }
 
 /** Dates and times in the UI language with the phone's region and clock; pass module-constant options. */
-export function uiDateTimeFormat(options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+export function uiDateTimeFormat(options: Intl.DateTimeFormatOptions): RegionalDateTimeFormat {
   return regionalDateTimeFormat(options, getUiIntlLocale())
 }

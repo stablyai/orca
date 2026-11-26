@@ -38,6 +38,7 @@ import {
   type BrowserHistoryClearRange
 } from './browser-history-view-rows'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import type { RegionalDateTimeFormat } from '../../../../../shared/i18n/regional-date-time-format'
 
 type BrowserHistoryDialogProps = {
   pageId: string
@@ -57,8 +58,8 @@ const HISTORY_DAY: Intl.DateTimeFormatOptions = { dateStyle: 'full' }
 const HISTORY_TIME: Intl.DateTimeFormatOptions = { timeStyle: 'short' }
 
 function getHistoryFormats(intlLocale: string = getIntlLocale()): {
-  dateFormat: Intl.DateTimeFormat
-  timeFormat: Intl.DateTimeFormat
+  dateFormat: RegionalDateTimeFormat
+  timeFormat: RegionalDateTimeFormat
 } {
   return {
     dateFormat: uiDateTimeFormat(HISTORY_DAY, intlLocale),
@@ -69,7 +70,7 @@ function getHistoryFormats(intlLocale: string = getIntlLocale()): {
 function formatDayHeading(
   startsAt: number,
   now: number,
-  dateFormat: Intl.DateTimeFormat,
+  dateFormat: RegionalDateTimeFormat,
   t: Translate = translate
 ): string {
   const today = startOfLocalDay(now)

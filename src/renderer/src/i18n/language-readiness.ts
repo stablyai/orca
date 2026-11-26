@@ -33,10 +33,17 @@ function publishLanguageDetection(detection: UiLanguageDetection): UiLanguageDet
   return detection
 }
 
+// Readiness waits at most a second; a later answer still applies and repaints dates once.
 async function loadOsDateTimeRegion(): Promise<void> {
   try {
     const region = window.api?.app?.getOsDateTimeRegion?.()
-    setRendererOsDateTimeRegion(region ? await withTimeout(region, 1000, null) : null)
+    if (region) {
+      await withTimeout(
+        region.then(setRendererOsDateTimeRegion, () => undefined),
+        1000,
+        undefined
+      )
+    }
   } catch {
     // Older bridges keep dates in the UI language's own conventions.
   }
