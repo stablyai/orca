@@ -20,7 +20,6 @@ type ProbeKind = keyof ProbeValues
 type ProbeValue = ProbeValues[ProbeKind] | null
 type ProbeResult = ProbeValue | typeof UNVERIFIED_FS_PROBE
 const pendingByKind = new Map<ProbeKind, Map<string, Promise<ProbeResult>>>()
-const overrideLane = new PrioritySemaphore(1)
 const installerLane = new PrioritySemaphore(2)
 
 export function isPathPermissionError(error: unknown): boolean {
@@ -70,10 +69,9 @@ export class InventoryFsProbes {
 
   constructor(
     readonly signal: AbortSignal,
-    lane: 'path' | 'installer' | 'override' = 'path'
+    lane: 'path' | 'installer' = 'path'
   ) {
-    this.lane =
-      lane === 'override' ? overrideLane : lane === 'installer' ? installerLane : undefined
+    this.lane = lane === 'installer' ? installerLane : undefined
   }
 
   private async readWithPermit(

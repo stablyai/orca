@@ -1,9 +1,14 @@
 import { forkProcess } from '@orca/process-host/fork-process'
-import { killActiveShellProbes } from '../../main/startup/shell-environment/shell-probe-lifetime'
+import {
+  AgentInventoryDeadlineError,
+  INVENTORY_COMPLETION_WAIT_MS
+} from '../../main/skills/bundled-skill-install/bundled-skill-local-host'
 import {
   isSkillInstallProviderId,
   type SkillInstallProviderId
 } from '../../shared/skills/installation/skill-install-providers'
+
+export { sendCliSkillAgentInventory } from '../../main/skills/bundled-skill-install/bundled-skill-local-host'
 
 export const CLI_SKILL_AGENT_INVENTORY_ARG = '--internal-skill-agent-inventory'
 
@@ -17,44 +22,30 @@ export async function readCliSkillAgentInventory(
     execArgv: [],
     stdio: ['ignore', 'ignore', 'ignore', 'ipc']
   })
+  const { promise, resolve, reject } = Promise.withResolvers<SkillInstallProviderId[]>()
+  child.once('error', reject)
+  child.once('exit', () => reject(new Error('Could not complete local agent inventory')))
+  child.once('message', (reply: unknown) => {
+    if (Array.isArray(reply) && reply.every(isSkillInstallProviderId)) {
+      resolve(reply)
+    } else {
+      reject(new Error(typeof reply === 'string' ? reply : 'Invalid local agent inventory'))
+    }
+  })
+  // A synchronous directory read can prevent the child from handling its own deadline.
+  const timer = setTimeout(
+    () => reject(new AgentInventoryDeadlineError()),
+    INVENTORY_COMPLETION_WAIT_MS
+  )
   try {
-    return await new Promise<SkillInstallProviderId[]>((resolve, reject) => {
-      child.once('error', reject)
-      child.once('exit', () => reject(new Error('Could not complete local agent inventory')))
-      child.once('message', (reply: unknown) => {
-        if (Array.isArray(reply) && reply.every(isSkillInstallProviderId)) {
-          resolve(reply)
-        } else {
-          reject(new Error(typeof reply === 'string' ? reply : 'Invalid local agent inventory'))
-        }
-      })
-    })
+    return await promise
   } finally {
+    clearTimeout(timer)
     child.unref()
     child.channel?.unref()
     if (child.connected) {
       child.disconnect()
     }
-  }
-}
-
-export async function sendCliSkillAgentInventory(): Promise<void> {
-  const stop = (): void => {
-    killActiveShellProbes()
-    // Force exit only after cleanup, since Node can hang joining native filesystem work.
-    process.kill(process.pid, 'SIGKILL')
-  }
-  process.once('disconnect', stop)
-  if (!process.connected) {
-    stop()
-    return
-  }
-  try {
-    const { detectInstalledAgentsWithShellPathHydration } =
-      await import('../../main/preflight/installed-agent-detection.js')
-    const agents = await detectInstalledAgentsWithShellPathHydration()
-    process.send?.(agents.filter(isSkillInstallProviderId), () => {})
-  } catch (error) {
-    process.send?.(error instanceof Error ? error.message : String(error), () => {})
+    child.kill('SIGKILL')
   }
 }

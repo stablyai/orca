@@ -370,7 +370,6 @@ module.exports = {
     'out/main/hermes/**',
     'out/main/filesystem/asar-transparent-fs.js',
     'out/main/filesystem/macos-tree-clone.js',
-    'out/main/ipc/command-path/command-path-directory-worker-entry.js',
     'out/main/orca-profiles/profile-index-store.js',
     'out/main/persistence/profile-state/**',
     'out/main/plugins/artifacts/plugin-artifact-validation.js',

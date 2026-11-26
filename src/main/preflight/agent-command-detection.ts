@@ -20,7 +20,7 @@ import {
 } from './agent-command-inventory'
 import { getLocalInventory, wslInventory } from './agent-command-inventory-host'
 
-const INVENTORY_COMPLETION_WAIT_MS = 60_000
+export const INVENTORY_COMPLETION_WAIT_MS = 60_000
 
 export class AgentInventoryDeadlineError extends Error {
   readonly data?: { afterPublication: number }

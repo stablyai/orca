@@ -29,7 +29,7 @@ export function recordDirectoryMatch(
 function trackPathCommand(
   directoryCount: number,
   publish: (match: AgentPathMatch) => void,
-  complete: (uncertain: boolean) => void
+  complete: (uncertain: boolean, user: string | undefined) => void
 ): (index: number, dir: PathDirectory, outcome: DirectoryCandidate) => void {
   const settled = new Map<number, { dir: PathDirectory; outcome: DirectoryCandidate }>()
   const match: AgentPathMatch = {}
@@ -63,7 +63,7 @@ function trackPathCommand(
       publish({ ...match, user: earliestUser?.hit })
     }
     if (done) {
-      complete(uncertain)
+      complete(uncertain, match.user)
     }
   }
 }
@@ -78,7 +78,8 @@ export async function scanInventoryPathCommands(
   signal: AbortSignal
 ): Promise<void> {
   const pending = new Map<string, ReturnType<typeof trackPathCommand>>()
-  const allCommandsDecided = Promise.withResolvers<void>()
+  const allCommandsFound = Promise.withResolvers<void>()
+  let hasMiss = false
   for (const command of commands) {
     if (directories.length === 0) {
       complete(command, false)
@@ -89,11 +90,13 @@ export async function scanInventoryPathCommands(
       trackPathCommand(
         directories.length,
         (match) => publish(command, match),
-        (uncertain) => {
+        (uncertain, user) => {
+          hasMiss ||= !user
           pending.delete(command)
           complete(command, uncertain)
-          if (pending.size === 0) {
-            allCommandsDecided.resolve()
+          // An installer fallback must wait for any outstanding PATH walks.
+          if (pending.size === 0 && !hasMiss) {
+            allCommandsFound.resolve()
           }
         }
       )
@@ -122,7 +125,7 @@ export async function scanInventoryPathCommands(
   }
   await scanDirectory()
   await Promise.race([
-    allCommandsDecided.promise,
+    allCommandsFound.promise,
     Promise.all(Array.from({ length: concurrency }, run))
   ])
 }

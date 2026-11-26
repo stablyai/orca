@@ -15,32 +15,25 @@ export async function detectCommandsInInstallDirs(
   commands: readonly string[],
   {
     probes,
-    needsLookup,
     readDirectories,
     complete
   }: {
     probes: InventoryFsProbes
-    needsLookup: (command: string) => Promise<boolean>
     readDirectories: NonNullable<CliFsProbeOptions['readDirectories']>
     complete: (command: string, user: string | null, uncertain: boolean) => void
   }
 ): Promise<void> {
   const platform = process.platform
-  let directories: Promise<string[]> | undefined
   let unverifiedDirectories = false
+  const dirs = await runCliFsReadsAsync(cliInstallDirectories(platform, homedir()), {
+    probes,
+    readDirectories,
+    onUnverified: () => {
+      unverifiedDirectories = true
+    }
+  })
   await Promise.all(
     commands.map(async (command) => {
-      if (!(await needsLookup(command)) || probes.signal.aborted) {
-        return
-      }
-      directories ??= runCliFsReadsAsync(cliInstallDirectories(platform, homedir()), {
-        probes,
-        readDirectories,
-        onUnverified: () => {
-          unverifiedDirectories = true
-        }
-      })
-      const dirs = await directories
       let uncertain = unverifiedDirectories
       const user = await runCliFsReadsAsync(
         firstRunnable(platform, dirs, getExecutableNames(platform, command)),
