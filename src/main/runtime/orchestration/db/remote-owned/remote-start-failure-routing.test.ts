@@ -41,11 +41,17 @@ const THREAD_TURN: DispatchCreator = {
 const ORCA_TURN: DispatchCreator = { kind: 'terminal', handle: COORDINATOR }
 
 /** How a start ends before its worker runs, each reported in production order. */
-type Failure = 'start-failed' | 'never-ready' | 'never-ready-in-terminal' | 'start-blocked'
+type Failure =
+  | 'start-failed'
+  | 'never-ready'
+  | 'never-ready-in-terminal'
+  | 'never-ready-unbound'
+  | 'start-blocked'
 const FAILURES: readonly Failure[] = [
   'start-failed',
   'never-ready',
   'never-ready-in-terminal',
+  'never-ready-unbound',
   'start-blocked'
 ]
 
@@ -108,8 +114,9 @@ function fail(db: OrchestrationDb, dispatchId: string, failure: Failure): void {
     return
   }
   if (failure !== 'start-blocked') {
-    if (failure === 'never-ready-in-terminal') {
-      openTerminal(db, dispatchId, true)
+    // A restart that cuts a start before it bound its terminal reports never-ready from it unbound.
+    if (failure !== 'never-ready') {
+      openTerminal(db, dispatchId, failure === 'never-ready-in-terminal')
     }
     const failed = db.failWorkerStart(dispatchId, 'agent_readiness', 'terminal never ready')
     reportNeverReadyWorkerStart(db, failed, undefined, () => {})
@@ -282,11 +289,12 @@ describe("a paired server's start outcome reaches its asker as a local one does"
     expect(failOnServer(creator, failure)).toEqual(failLocally(creator, failure))
   })
 
-  it('answers in the thread for failed and never-ready starts, and keeps a blocked one in Orca', () => {
+  it('answers in the thread for failed and never-ready starts, and keeps an unbound one in Orca', () => {
     expect(FAILURES.map((failure) => failLocally(THREAD_TURN, failure).toThread)).toEqual([
       true,
       true,
       true,
+      false,
       false
     ])
   })
@@ -367,6 +375,23 @@ describe('the asker a paired-server attempt reports for', () => {
     run.fail(dispatchId, 'never-ready')
     run.pull()
     expect(run.judge().toThread).toBe(false)
+  })
+
+  it("names no one for work a re-send starts after the server forgot the key's answer", () => {
+    const run = pairedRun()
+    run.reserve(THREAD_TURN)
+    const first = run.start()
+    run.receive(first)
+    run.fail(first, 'never-ready')
+    // The server evicted the key's receipt, so the same key starts fresh work there.
+    run.reserve(ORCA_TURN)
+    const second = run.start(first)
+    run.receive(second)
+    run.receive(first)
+    run.fail(second, 'never-ready')
+    run.pull()
+    expect(run.judge(sentBy(`dispatch:${first}`)).toThread).toBe(true)
+    expect(run.judge(sentBy(`dispatch:${second}`)).toThread).toBe(false)
   })
 
   it('names no one for an attempt the server started by itself', () => {

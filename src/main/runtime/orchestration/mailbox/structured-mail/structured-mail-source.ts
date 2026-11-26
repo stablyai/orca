@@ -18,7 +18,7 @@ import {
 import { agentMessageSender, type SenderSnapshotResolver } from '../senders/agent-message-sender'
 import { answersConversationAsk } from '../senders/conversation-ask-answer'
 import { readMessageSenderDispatch } from '../../db/messages/message-sender-dispatch'
-import { startOutcomeReportId } from '../../workers/turn-stops/worker-turn-stop-report'
+import { startOutcomeReportId } from '../../workers/turn-stops/start-outcome-report'
 import type { WorkerIdentity } from '../../workers/identity/worker-identity'
 import type { OrchestrationCliCommand } from '../../workers/launch/orchestration-cli-command'
 import type { ReportFollowUpAction } from '../../../../../shared/orchestration/mailbox/orchestration-report-follow-up'

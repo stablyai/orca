@@ -15,7 +15,6 @@ import {
   isDeliberateRest,
   isFailedLeadTurnFence,
   presenceReportId,
-  startOutcomeReportId,
   sendWorkerReport,
   stopReportId,
   workerTurnStopDispatchId,
@@ -25,6 +24,7 @@ import {
   type WorkerTurnStopReportDeps
 } from './worker-turn-stop-report'
 import { awaitsAPerson, isWorkerGone, isWorkerStartRest } from './worker-turn-stop-wording'
+import { startOutcomeReportIdFor } from './start-outcome-report'
 
 const LIVE_ATTACHMENT_STATES: readonly string[] = POTENTIALLY_LIVE_REMOTE_ATTACHMENT_STATES
 
@@ -295,9 +295,8 @@ function reconcileWorkerReport(
         ? stopReportId(dispatchId, `background:${rest.backgroundWait.since}`)
         : isFailedLeadTurnFence(row.fence)
           ? stopReportId(dispatchId, row.fence)
-          : rest.reason === 'start-failed' || rest.reason === 'never-ready'
-            ? startOutcomeReportId(dispatchId)
-            : presenceReportId(dispatchId, row.generation)
+          : (startOutcomeReportIdFor(db, target, rest) ??
+            presenceReportId(dispatchId, row.generation))
   const sent = sendWorkerReport(db, target, rest, id, deps, () =>
     writeWorkerPresence(db, dispatchId, decided(finishedMail))
   )

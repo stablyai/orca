@@ -125,7 +125,7 @@ export function ensureRemoteDispatchRecord(
 }
 
 /** The attempt that answers this Orca's own reservation was asked by its creator, as a local
- *  Dispatch records; one the server started by itself names no one here. */
+ *  Dispatch records; one the server started by itself names no one here. The first asker stands. */
 export function recordRemoteAttemptCreator(
   db: OrchestrationDb,
   dispatchId: string,
@@ -135,7 +135,8 @@ export function recordRemoteAttemptCreator(
     .prepare(
       `UPDATE remote_dispatches
        SET creator_handle = ?, creator_orca_session_id = ?, creator_turn_source = ?
-       WHERE dispatch_id = ?`
+       WHERE dispatch_id = ? AND creator_handle IS NULL AND creator_orca_session_id IS NULL
+         AND creator_turn_source IS NULL`
     )
     .run(
       placement.creator_handle,

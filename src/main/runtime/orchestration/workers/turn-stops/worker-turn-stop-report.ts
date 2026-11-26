@@ -301,12 +301,6 @@ export function stopReportId(dispatchId: string, stopKey: string): string {
     .slice(0, 24)}`
 }
 
-/** The one id Orca writes a start's outcome (it failed, or never became ready) under, wherever the
- *  worker runs: a paired Orca's import keeps it, so its Run home knows the report is Orca's own. */
-export function startOutcomeReportId(dispatchId: string): string {
-  return stopReportId(dispatchId, 'start-outcome')
-}
-
 /** One stable id per rest: writing it twice, here or at a Run home, is a no-op. */
 export function presenceReportId(dispatchId: string, generation: number): string {
   return `msg_rest_${createHash('sha256')

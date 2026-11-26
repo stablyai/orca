@@ -43,15 +43,18 @@ export function recordPlacementCreator(
 }
 
 /** A same-key retry sends again. When nothing under the key left this Orca, it is the first ask the
- *  server will see, so it names who asks now. */
+ *  server will see, so it names who asks now. Once the server answered the key, a send that still
+ *  starts work there (its receipt gone) is no one's ask that this Orca can prove: it names no one. */
 export function resendRemoteReservation(
   db: OrchestrationDb,
-  existing: Pick<RemotePlacementRow, 'never_sent_at'>,
+  existing: Pick<RemotePlacementRow, 'never_sent_at' | 'state'>,
   placement: { taskId: string; requestKey: string },
   creator: RemoteStartCreator | undefined
 ): void {
   if (existing.never_sent_at !== null) {
     recordPlacementCreator(db, placement.taskId, creator)
+  } else if (existing.state === 'accepted') {
+    recordPlacementCreator(db, placement.taskId, undefined)
   }
   db.db
     .prepare('UPDATE remote_placements SET never_sent_at = NULL WHERE task_id = ?')
