@@ -38,7 +38,10 @@ export async function moveClaudeSessionIntoAccountHome(args: {
     if (errnoCodeOrUnknown(error) !== 'EEXIST') {
       throw error
     }
-    const [before, after] = await Promise.all([lstat(source), lstat(destination)])
+    const [before, after] = await Promise.all([
+      lstat(source, { bigint: true }),
+      lstat(destination, { bigint: true })
+    ])
     if (!after.isFile() || before.dev !== after.dev || before.ino !== after.ino) {
       throw new Error('A different Claude transcript occupies the target path.', { cause: error })
     }
