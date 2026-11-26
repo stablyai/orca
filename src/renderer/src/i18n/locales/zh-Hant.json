@@ -21517,6 +21517,7 @@
       "htmlView": "HTML 檢視",
       "htmlViewCode": "程式碼",
       "htmlViewPreview": "預覽",
+      "htmlViewPreviewWaiting": "此程式碼區塊完成後即可預覽。",
       "context": {
         "unavailable": "上下文用量暫時未知，將在代理程式下次回應後提供。",
         "summary": "上下文：{{used}}/{{window}} token（{{percent}}%），根據上一次回應的估算值。",
@@ -24780,12 +24781,24 @@
       "scopeDetails": "關於稀疏檢出範圍",
       "scopeExplanation": "資料夾選擇器只改變顯示範圍，不會改變檢出的檔案。存放庫根目錄檢視也會顯示根目錄和上層資料夾中已檢出的檔案。",
       "folderLoadError": "無法載入此資料夾：",
-      "emptyFolder": "此資料夾中沒有檔案"
+      "emptyFolder": "此資料夾中沒有檔案",
+      "combinedSearchExplanation": "搜尋會比對你正在檢視的資料夾中的檔案名稱，以及整個工作區中的文字。稀疏檢出略過的檔案不會被搜尋。"
     },
     "trashFailed": {
       "titleRecycleBin": "無法將「{{name}}」移至資源回收筒。要永久刪除嗎？",
       "titleTrash": "無法將「{{name}}」移至垃圾桶。要永久刪除嗎？",
       "description": "此操作無法復原。"
+    },
+    "combinedSearch": {
+      "text": "文字",
+      "filesIn": "{{path}} 中的檔案",
+      "files": "檔案",
+      "showAll": "顯示全部 {{count}} 個",
+      "noResults": "沒有結果",
+      "placeholder": "搜尋",
+      "placeholderScoped": "搜尋 {{path}}",
+      "textInWorkspace": "工作區中的文字",
+      "refine": "符合項目過多"
     }
   },
   "sparsePreset": {
@@ -25055,7 +25068,8 @@
     "filters": {
       "toggle": "顯示或隱藏搜尋詳細設定",
       "active": "已啟用 {{count}} 個"
-    }
+    },
+    "unavailable": "此處無法使用"
   },
   "workspaceDeletion": {
     "preferenceSaveFailed": "無法儲存刪除偏好設定",
