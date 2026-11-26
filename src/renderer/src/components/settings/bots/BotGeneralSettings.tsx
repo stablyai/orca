@@ -28,6 +28,7 @@ import {
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
+import { BotClaudeAccountPicker } from './BotClaudeAccountPicker'
 import { useBotSettingsModel } from './use-bot-settings-model'
 
 type Update = (updates: BotUpdateParams['updates']) => Promise<Bot | null>
@@ -58,16 +59,13 @@ export function BotAgentSettings({ bot, update }: { bot: Bot; update: Update }):
   }
   return (
     <SettingsInsetGroup>
-      <div className="flex flex-col gap-2 px-3 py-2.5">
-        <div className="min-w-0 text-[13px]">
-          <div className="font-medium leading-[18px]">{t('settings.bots.agent', 'Agent')}</div>
-          <p className="text-xs leading-4 text-muted-foreground">
-            {t(
-              'settings.bots.agentModelDescription',
-              'Used for bot conversations and automations. A new model applies to new conversations; the Home Chat keeps its current one.'
-            )}
-          </p>
-        </div>
+      <AgentField
+        label={t('settings.bots.agent', 'Agent')}
+        description={t(
+          'settings.bots.agentModelDescription',
+          'Used for bot conversations and automations. A new model applies to new conversations; the Home Chat keeps its current one.'
+        )}
+      >
         <BotAgentLaunchPicker
           model={menu.model}
           choices={menu.choices}
@@ -77,8 +75,41 @@ export function BotAgentSettings({ bot, update }: { bot: Bot; update: Update }):
           withPermission={false}
           onChange={(setup) => void setAgentSetup(setup)}
         />
-      </div>
+      </AgentField>
+      {/* Only Claude chats launch under a bot's own account. */}
+      {bot.agent === 'claude' ? (
+        <AgentField
+          label={t('settings.bots.claudeAccount', 'Claude account')}
+          description={t(
+            'settings.bots.claudeAccountDescription',
+            'Used for the bot’s Claude conversations. A new account applies to new conversations, and to the Home Chat when it next starts.'
+          )}
+        >
+          <BotClaudeAccountPicker bot={bot} update={update} />
+        </AgentField>
+      ) : null}
     </SettingsInsetGroup>
+  )
+}
+
+/** One setting of the agent page: its control under its label at any width. */
+function AgentField({
+  label,
+  description,
+  children
+}: {
+  label: string
+  description: string
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <div className="flex flex-col gap-2 px-3 py-2.5">
+      <div className="min-w-0 text-[13px]">
+        <div className="font-medium leading-[18px]">{label}</div>
+        <p className="text-xs leading-4 text-muted-foreground">{description}</p>
+      </div>
+      {children}
+    </div>
   )
 }
 

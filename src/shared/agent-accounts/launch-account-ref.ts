@@ -34,7 +34,7 @@ export type ResolvedLaunchAccount =
  */
 export function resolveClaudeAccountRef(
   ref: string,
-  accounts: readonly ClaudeManagedAccount[],
+  accounts: readonly Pick<ClaudeManagedAccount, 'id' | 'email'>[],
   names?: ManagedAccountDisplayNames | null
 ): ResolvedLaunchAccount | null {
   const wanted = ref.trim()
@@ -46,7 +46,7 @@ export function resolveClaudeAccountRef(
     return { kind: 'managed', accountId: byId.id }
   }
   const lower = wanted.toLowerCase()
-  const only = (matches: ClaudeManagedAccount[]): ResolvedLaunchAccount | null =>
+  const only = (matches: readonly { id: string }[]): ResolvedLaunchAccount | null =>
     matches.length === 1 ? { kind: 'managed', accountId: matches[0].id } : null
   const byEmail = accounts.filter((account) => account.email.toLowerCase() === lower)
   if (byEmail.length > 0) {
