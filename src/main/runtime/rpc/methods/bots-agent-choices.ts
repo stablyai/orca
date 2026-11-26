@@ -93,6 +93,9 @@ export async function hostBotAgentChoices(runtime: OrcaRuntimeService) {
   const agents = botAgentChoices(model)
   return {
     agents,
+    setupRequired: agents.filter((agent) =>
+      rows.some((row) => row.agent === agent && row.kind === 'chat' && row.setup)
+    ),
     defaultAgent: newBotAgent(agents, readyBotDefaultAgent(model, settings.defaultTuiAgent))
   }
 }

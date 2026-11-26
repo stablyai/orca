@@ -21,6 +21,7 @@ export function CheckRow(props: {
       selected={props.checked}
       disabled={props.disabled}
       onPress={props.onPress}
+      accessibilityLabel={props.detail ? `${props.label}, ${props.detail}` : undefined}
       accessibilityRole={props.radio ? 'radio' : 'checkbox'}
     />
   )

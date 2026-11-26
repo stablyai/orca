@@ -1,7 +1,5 @@
-import { botSwitchPermissionCopy } from '../../../src/shared/agent-session/options/permissions/provider-switch-permission-copy'
-// Agent and model: the agents this bot's computer can run; switching asks first, as the desktop does,
-// because the Home Chat starts over on the new agent.
 import { useState, type ReactNode } from 'react'
+import { botSwitchPermissionCopy } from '../../../src/shared/agent-session/options/permissions/provider-switch-permission-copy'
 import { RotateCcw } from 'lucide-react-native'
 import { isBotAgent, type BotAgent } from '../../../src/shared/bot-types'
 import {
@@ -46,7 +44,8 @@ export function MobileBotAgentPage(props: {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { bot } = props
-  const choices = useNewBotAgentChoices(props.client)?.agents ?? null
+  const inventory = useNewBotAgentChoices(props.client)
+  const choices = inventory?.agents
   const [switching, setSwitching] = useState<
     (BotAgentSwitchPreviewResult & { agent: BotAgent }) | null
   >(null)
@@ -188,24 +187,35 @@ export function MobileBotAgentPage(props: {
       />
       {props.banner}
       <SettingsSection title={t('bots.settings.agent', 'Agent')} first radioGroup>
-        {agents.map((agent) => (
-          <CheckRow
-            key={agent}
-            label={botAgentLabel(agent)}
-            radio
-            checked={agent === bot.agent}
-            disabled={props.disabled}
-            onPress={() => {
-              if (agent !== bot.agent) {
-                void props.previewSwitch(agent).then((preview) => {
-                  if (preview) {
-                    setSwitching({ agent, ...preview })
-                  }
-                })
+        {agents.map((agent) => {
+          const setupRequired = inventory?.setupRequired?.includes(agent) === true
+          return (
+            <CheckRow
+              key={agent}
+              label={botAgentLabel(agent)}
+              detail={
+                setupRequired
+                  ? t(
+                      'bots.agentSwitch.installRequired',
+                      'Install this agent on the bot’s computer first.'
+                    )
+                  : undefined
               }
-            }}
-          />
-        ))}
+              radio
+              checked={agent === bot.agent}
+              disabled={props.disabled || setupRequired}
+              onPress={() => {
+                if (agent !== bot.agent) {
+                  void props.previewSwitch(agent).then((preview) => {
+                    if (preview) {
+                      setSwitching({ agent, ...preview })
+                    }
+                  })
+                }
+              }}
+            />
+          )
+        })}
       </SettingsSection>
       {modelChoices && modelChoices.models.length > 0 ? (
         <SettingsSection
