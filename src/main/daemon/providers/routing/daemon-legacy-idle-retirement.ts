@@ -7,7 +7,10 @@ export class DaemonLegacyIdleRetirement {
   private stopped = false
   private readonly pending = new Map<DaemonPtyAdapter, RetirementAttempt>()
 
-  constructor(private readonly isLegacy: (adapter: DaemonPtyAdapter) => boolean) {}
+  constructor(
+    private readonly isLegacy: (adapter: DaemonPtyAdapter) => boolean,
+    private readonly spawnPending: () => boolean = () => false
+  ) {}
 
   request(adapter: DaemonPtyAdapter): Promise<void> {
     if (this.stopped || !this.isLegacy(adapter)) {
@@ -23,9 +26,7 @@ export class DaemonLegacyIdleRetirement {
     }
     const attempt = { repeat: false, promise: Promise.resolve() }
     this.pending.set(adapter, attempt)
-    attempt.promise = Promise.resolve()
-      .then(() => this.retire(adapter, attempt))
-      .finally(() => this.pending.delete(adapter))
+    attempt.promise = Promise.resolve().then(() => this.retire(adapter, attempt))
     return attempt.promise
   }
 
@@ -36,6 +37,7 @@ export class DaemonLegacyIdleRetirement {
   private canRetire(adapter: DaemonPtyAdapter): boolean {
     return (
       !this.stopped &&
+      !this.spawnPending() &&
       this.isLegacy(adapter) &&
       adapter.protocolVersion >= CLEAN_DISCONNECT_PROTOCOL_VERSION &&
       !adapter.isIdleRetirementAdmissionClosed()
@@ -43,9 +45,9 @@ export class DaemonLegacyIdleRetirement {
   }
 
   private async retire(adapter: DaemonPtyAdapter, attempt: RetirementAttempt): Promise<void> {
-    while (this.canRetire(adapter)) {
-      attempt.repeat = false
-      try {
+    try {
+      while (this.canRetire(adapter)) {
+        attempt.repeat = false
         const sessions = await adapter.listSessions()
         if (!this.canRetire(adapter)) {
           return
@@ -56,13 +58,14 @@ export class DaemonLegacyIdleRetirement {
             return
           }
         }
-      } catch {
-        // An unreadable inventory cannot prove the host is empty.
-        return
+        if (!attempt.repeat) {
+          return
+        }
       }
-      if (!attempt.repeat) {
-        return
-      }
+    } catch {
+      // An unreadable inventory cannot prove the host is empty.
+    } finally {
+      this.pending.delete(adapter)
     }
   }
 }

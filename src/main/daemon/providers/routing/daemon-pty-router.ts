@@ -37,7 +37,8 @@ export class DaemonPtyRouter implements IPtyProvider {
   private readonly subscriptions: DaemonPtyAdapterSubscriptionFanout
   private readonly legacyExitProof = new LegacyDaemonExitProof()
   private readonly legacyIdleRetirement = new DaemonLegacyIdleRetirement(
-    (adapter) => adapter !== this.current && this.legacy.includes(adapter)
+    (adapter) => adapter !== this.current && this.legacy.includes(adapter),
+    () => this.retirement.spawnInFlight > 0
   )
   readonly retirement = new DaemonRouterRetirement(() => this.allAdapters())
 

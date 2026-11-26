@@ -195,6 +195,52 @@ describe.skipIf(process.platform === 'win32')('empty legacy daemon retirement', 
     await legacy.shutdown
   })
 
+  it('accepts a new check in the same turn that a previous inventory finishes', async () => {
+    const legacy = await daemon(61)
+    await legacy.adapter.spawn({ sessionId: 'old', cols: 80, rows: 24, cwd: legacy.dir })
+    const retirement = new DaemonLegacyIdleRetirement(() => true)
+    const live = await legacy.adapter.listSessions()
+    const inventory = deferred<typeof live>()
+    const started = deferred<void>()
+    vi.spyOn(legacy.adapter, 'listSessions').mockImplementationOnce(() => {
+      started.resolve()
+      return inventory.promise
+    })
+    const first = retirement.request(legacy.adapter)
+    await started.promise
+    legacy.children[0].exit()
+    await vi.waitFor(async () => expect(await legacy.adapter.listSessions()).toEqual([]))
+    const next = inventory.promise.then(() => retirement.request(legacy.adapter))
+    inventory.resolve(live)
+    await Promise.all([first, next])
+    expect(legacy.adapter.hasRetiredForIdle()).toBe(true)
+  })
+
+  it('preserves a legacy host while a routed spawn waits to reach the server', async () => {
+    const current = await daemon(62)
+    const legacy = await daemon(61)
+    const opts = { sessionId: 'old', cols: 80, rows: 24, cwd: legacy.dir }
+    await legacy.adapter.spawn(opts)
+    const routed = router(current.adapter, legacy.adapter)
+    await routed.discoverLegacySessions()
+    const started = deferred<void>()
+    const release = deferred<void>()
+    const spawn = legacy.adapter.spawn.bind(legacy.adapter)
+    vi.spyOn(legacy.adapter, 'spawn').mockImplementationOnce(async (request) => {
+      started.resolve()
+      await release.promise
+      return spawn(request)
+    })
+    const pending = routed.spawn(opts)
+    await started.promise
+    legacy.children[0].exit()
+    await vi.waitFor(async () => expect(await legacy.adapter.listSessions()).toEqual([]))
+    await routed.discoverLegacySessions()
+    release.resolve()
+    await pending
+    expect(legacy.adapter.hasRetiredForIdle()).toBe(false)
+  })
+
   it('does not retire an adapter reused after its old router is disposed', async () => {
     const current = await daemon(62)
     const legacy = await daemon(61)
