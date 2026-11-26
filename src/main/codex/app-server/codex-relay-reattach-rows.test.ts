@@ -570,7 +570,6 @@ describe('codex rows across a reattach', () => {
           releaseOutput: () => {},
           endedWork: () => undefined,
           openWork: () => undefined,
-          handedOff: () => kept.length > 0,
           keep: async () => {
             kept.push('kept')
           }

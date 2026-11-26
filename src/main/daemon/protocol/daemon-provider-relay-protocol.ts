@@ -105,8 +105,12 @@ export type ProviderRelayAckPayload = {
 /** More acks than this in one `relayAcks` is refused whole. */
 export const RELAY_ACKS_MAX = 1024
 
+/**
+ * `daemonInstance` is this daemon start's hello `launchNonce`, so a client records which instance
+ * holds the agent without racing a reconnect's new hello. Older daemons omit it.
+ */
 export type ProviderRelaySpawnResult =
-  | { relayId: string; pid: number }
+  | { relayId: string; pid: number; daemonInstance?: string }
   | { spawnError: { code: string; message: string } }
   | { refused: 'stale-bundle' | 'unavailable' }
 
@@ -258,7 +262,8 @@ export type ProviderRelayInfo = {
   pendingCount: number
 }
 
-export type ProviderRelayListResult = { relays: ProviderRelayInfo[] }
+/** `daemonInstance`: as in `ProviderRelaySpawnResult`, the instance this listing speaks for. */
+export type ProviderRelayListResult = { relays: ProviderRelayInfo[]; daemonInstance?: string }
 
 /** A line longer than one frame piece arrives as consecutive pieces of one seq; `more` marks all but the last. */
 export type ProviderRelayDataEvent = {

@@ -242,8 +242,7 @@ export async function launchRelayedAcpAgent(
     chatKey: input.acquire.identity.sessionId,
     markers: { ...acpRelayWorkMarkers(spec.agent), ackFloor, continuation },
     keep: { ...acpRelayKeep(spec.dialect), note: acpLaunchNote(launch.fullAccess) },
-    passWhileHeld: (line) => isJsonRpcAnswerAbove(line, floor),
-    handsOffOnQuit: true
+    passWhileHeld: (line) => isJsonRpcAnswerAbove(line, floor)
   }
   const relayed = await launchRelayedProviderProcess(processLaunch, relay).catch(refuse)
   floor = relayed?.child.attachResult?.maxClientRequestId ?? 0

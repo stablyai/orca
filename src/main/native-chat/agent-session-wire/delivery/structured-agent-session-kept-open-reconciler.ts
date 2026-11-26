@@ -1,12 +1,10 @@
 import {
-  installProviderRelayKeptUnverifiedProof,
-  providerRelayInventoryCompleted,
-  providerRelayKeptFromLastRun,
-  providerRelayKeptUnverified,
-  providerRelayListingSettled
+  installProviderRelayRunGate,
+  providerRelayRunLiveness,
+  providerRelayRunUnknown,
+  type ProviderRelayRunRecord
 } from '../../../provider-relay/app-provider-relays'
-import { ownerProvenGone } from '../host/structured-agent-session-kept-at-open'
-import type { AgentSessionProcessIdentity } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import { agentSessionRunPlacement } from '../../../../shared/agent-session/lifecycle/agent-session-run-placement'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 import type { StructuredAgentSessionHostSession } from '../host/structured-agent-session-host-types'
 
@@ -14,7 +12,7 @@ export type StructuredAgentSessionKeptOpensInput = {
   sessions: ReadonlyMap<string, StructuredAgentSessionHostSession>
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   trackStart: <T>(start: Promise<T>) => Promise<T>
-  owner: (sessionId: string) => AgentSessionProcessIdentity | null
+  record: (sessionId: string) => ProviderRelayRunRecord | null
   fence: (sessionId: string) => number | undefined
   /** Settles the gone last run and the open recovery it skipped, from the open's own boundary. */
   settle: (
@@ -26,107 +24,125 @@ export type StructuredAgentSessionKeptOpensInput = {
   logger: Pick<StructuredAgentSessionLogger, 'warn'>
 }
 
-/** The gone run as the open saw it: a send reserves the next run, clearing its owner and fence. */
-type KeptOpen = {
-  since: number
-  owner: AgentSessionProcessIdentity | null
-  fence: number | undefined
-}
+const RETRY_FIRST_MS = 2_000
+const RETRY_MAX_MS = 60_000
 
 /**
- * Chats opened as kept while the relay listing was late. Only proof settles one: a complete listing
- * without its agent, or its owner proven gone. What the open saw lives on its session, so a closed
- * chat keeps nothing; one subscription waits for the inventory, then settles whichever are open.
+ * Chats opened as kept while their run's daemon start couldn't say whether it still runs. Only that
+ * start's word, or its daemon and agent proven gone, settles one. The open's boundary lives on its
+ * session, so a closed chat keeps nothing. One backoff retry per daemon start asks again while any
+ * open chat waits on it; a send asks at once through the gate.
  */
 export class StructuredAgentSessionKeptOpens {
-  private readonly opened = new WeakMap<StructuredAgentSessionHostSession, KeptOpen>()
-  private waiting = false
+  private readonly opened = new WeakMap<StructuredAgentSessionHostSession, number>()
+  private readonly retries = new Map<string, { timer: NodeJS.Timeout; delayMs: number }>()
 
   constructor(private readonly input: StructuredAgentSessionKeptOpensInput) {
-    // A send to a chat no listing has placed: an owner proven gone since settles it inside that start.
-    installProviderRelayKeptUnverifiedProof(async (chatKey) => {
-      const owner = this.keptOpen(chatKey)?.owner
-      if (!owner || !(await ownerProvenGone(owner))) {
-        return false
+    // A start asks fresh; a gone run the host held settles inside that start, before it spawns.
+    installProviderRelayRunGate(async (chatKey) => {
+      const record = input.record(chatKey)
+      if (!record) {
+        return 'gone'
       }
-      await this.settleNow(chatKey)
-      return true
+      const verdict = await providerRelayRunLiveness(record, { fresh: true })
+      if (verdict === 'gone') {
+        await this.settleNow(chatKey)
+      } else if (verdict === 'kept') {
+        this.release(chatKey)
+      }
+      return verdict
     })
   }
 
   adopted(sessionId: string, session: StructuredAgentSessionHostSession): void {
-    if (!providerRelayKeptUnverified(sessionId)) {
+    if (!providerRelayRunUnknown(sessionId)) {
       return
     }
-    this.opened.set(session, {
-      since: session.journal.cursor().sequence + 1,
-      owner: this.input.owner(sessionId),
-      fence: this.input.fence(sessionId)
-    })
-    void this.reconcile(sessionId).catch((error: unknown) => this.warn(sessionId, error))
+    this.opened.set(session, session.journal.cursor().sequence + 1)
+    const instance = this.instanceOf(sessionId)
+    if (instance) {
+      this.retryLater(instance, RETRY_FIRST_MS)
+    }
   }
 
   dispose(): void {
-    installProviderRelayKeptUnverifiedProof(null)
+    for (const { timer } of this.retries.values()) {
+      clearTimeout(timer)
+    }
+    this.retries.clear()
+    installProviderRelayRunGate(null)
   }
 
-  private keptOpen(sessionId: string): KeptOpen | undefined {
-    const session = this.input.sessions.get(sessionId)
-    return session ? this.opened.get(session) : undefined
+  private instanceOf(sessionId: string): string | null {
+    const record = this.input.record(sessionId)
+    const placement = record ? agentSessionRunPlacement(record) : null
+    return placement?.kind === 'relayed' ? placement.daemon.instance : null
   }
 
-  private async reconcile(sessionId: string): Promise<void> {
-    if (await providerRelayListingSettled()) {
-      return this.settleIfNotKept(sessionId)
+  private retryLater(instance: string, delayMs: number): void {
+    if (this.retries.has(instance)) {
+      return
     }
-    const owner = this.keptOpen(sessionId)?.owner
-    if (owner && (await ownerProvenGone(owner))) {
-      return this.settleSerialized(sessionId)
-    }
-    if (!this.waiting) {
-      this.waiting = true
-      void providerRelayInventoryCompleted().then(() => {
-        for (const [id, session] of this.input.sessions) {
-          if (this.opened.has(session)) {
-            void this.settleIfNotKept(id).catch((error: unknown) => this.warn(id, error))
-          }
+    const timer = setTimeout(() => {
+      this.retries.delete(instance)
+      void this.retry(instance, delayMs).catch((error: unknown) => this.warn(instance, error))
+    }, delayMs)
+    timer.unref?.()
+    this.retries.set(instance, { timer, delayMs })
+  }
+
+  /** Asks again for each open chat still waiting on this daemon start; backs off while any is. */
+  private async retry(instance: string, delayMs: number): Promise<void> {
+    const waiting = [...this.input.sessions].filter(
+      ([id, session]) => this.opened.has(session) && this.instanceOf(id) === instance
+    )
+    const verdicts = await Promise.all(
+      waiting.map(async ([id]) => {
+        const record = this.input.record(id)
+        const verdict = record ? await providerRelayRunLiveness(record, { fresh: true }) : 'gone'
+        if (verdict === 'gone') {
+          await this.settleSerialized(id)
+        } else if (verdict === 'kept') {
+          this.release(id)
         }
+        return verdict
       })
+    )
+    if (verdicts.includes('unknown')) {
+      this.retryLater(instance, Math.min(delayMs * 2, RETRY_MAX_MS))
     }
   }
 
-  private settleIfNotKept(sessionId: string): Promise<void> {
-    if (providerRelayKeptUnverified(sessionId) && !providerRelayKeptFromLastRun(sessionId)) {
-      return this.settleSerialized(sessionId)
-    }
+  private release(sessionId: string): void {
     const session = this.input.sessions.get(sessionId)
     if (session) {
       this.opened.delete(session)
     }
-    return Promise.resolve()
   }
 
-  /** Quit waits only for the settle itself, never for a listing. */
+  /** Quit waits only for the settle itself, never for a daemon. */
   private settleSerialized(sessionId: string): Promise<void> {
     return this.input.trackStart(this.input.serialize(sessionId, () => this.settleNow(sessionId)))
   }
 
   private async settleNow(sessionId: string): Promise<void> {
     const open = this.input.sessions.get(sessionId)
-    const kept = open ? this.opened.get(open) : undefined
-    if (!open || !kept) {
+    const since = open ? this.opened.get(open) : undefined
+    if (!open || since === undefined) {
       return
     }
-    this.opened.delete(open)
-    if (!open.child && kept.fence !== undefined) {
-      await this.input.settle(sessionId, open, kept.fence, kept.since)
+    // Writes go at the journal's current fence; a failed settle keeps its entry for a later try.
+    const fence = this.input.fence(sessionId)
+    if (!open.child && fence !== undefined) {
+      await this.input.settle(sessionId, open, fence, since)
     }
+    this.opened.delete(open)
   }
 
-  private warn(sessionId: string, error: unknown): void {
+  private warn(scopeId: string, error: unknown): void {
     this.input.logger.warn('settling a chat whose agent turned out not kept failed', {
       scope: 'kept-open-reconcile',
-      sessionId,
+      sessionId: scopeId,
       error
     })
   }

@@ -19,9 +19,8 @@ import {
 } from './structured-agent-session-queued-edit'
 import { moveQueuedStructuredAgentMessage } from './structured-agent-session-queued-move'
 import {
-  keptRunningProviderRelayPid,
-  listProviderRelaysAtLaunch,
-  providerRelayMayKeepChat
+  providerRelayMayKeepChat,
+  providerRelayRunLiveness
 } from '../../../provider-relay/app-provider-relays'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 
@@ -47,8 +46,8 @@ export function wireStructuredAgentSessionQueuedMessages(
       if (!record || !providerRelayMayKeepChat(record.provider, local)) {
         return false
       }
-      await listProviderRelaysAtLaunch()
-      return keptRunningProviderRelayPid(sessionId) !== null
+      // Kept or not yet known: either way a queued card waits for the run it may belong to.
+      return (await providerRelayRunLiveness(record)) !== 'gone'
     },
     captureSelection: async (sessionId, journal) => {
       const ctx = context()

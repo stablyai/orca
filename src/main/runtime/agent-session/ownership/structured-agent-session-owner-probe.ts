@@ -7,45 +7,30 @@ import {
 } from './agent-session-process-identity-probe'
 import { findAgentSessionSpawnTokenProcesses } from './agent-session-spawn-token-process-scan'
 import { readEchoedAgentSessionSpawnToken } from './agent-session-spawn-token-readback'
-import {
-  keptRunningProviderRelayPid,
-  listProviderRelaysAtLaunch,
-  providerRelayInventoryComplete,
-  providerRelayMayKeepChat
-} from '../../../provider-relay/app-provider-relays'
-import { providerRelayProviderOpensEnded } from '../../../provider-relay/provider-relay-launch-inventory'
-import {
-  providerOwnerHeldElsewhere,
-  providerOwnerProcessRows,
-  type ProviderOwnerProcessRows
-} from '../../../provider-relay/provider-relay-owner-ancestry'
+import { providerRelayRunLiveness } from '../../../provider-relay/app-provider-relays'
 
 /**
- * An owner still running under the terminal host is this app's to reattach, not an orphan to stop:
- * it reads as unprovable, which recovery releases without signalling it.
+ * An owner whose run may still be going under the terminal host is this app's to reattach, not an
+ * orphan to stop: it reads as unprovable, which recovery releases without signalling it. Only the
+ * run's placement and its own daemon start decide.
  */
 async function keptRunningProbe(
-  record: AgentSessionRecord,
-  hostId: string,
-  rows?: ProviderOwnerProcessRows
+  record: AgentSessionRecord
 ): Promise<AgentSessionOwnerProbe | null> {
-  const owner = record.lease.ownerProcess
-  if (!owner || !providerRelayMayKeepChat(record.provider, owner.hostId === hostId)) {
+  if (!record.lease.ownerProcess) {
     return null
   }
-  await listProviderRelaysAtLaunch()
-  // Until every daemon has answered, the inventory may miss a kept agent; the process tree can't,
-  // except for an agent that ends with output still to open, which only the listing proves gone.
-  const kept =
-    keptRunningProviderRelayPid(record.sessionId) === owner.pid ||
-    (owner.hostId === hostId &&
-      process.platform !== 'win32' &&
-      !providerRelayInventoryComplete() &&
-      (providerRelayProviderOpensEnded(record.provider) ||
-        (await providerOwnerHeldElsewhere(owner.pid, rows)) === true))
-  return kept
-    ? { outcome: 'indeterminate', reason: 'owner kept running under the terminal host' }
-    : null
+  const verdict = await providerRelayRunLiveness(record)
+  if (verdict === 'gone') {
+    return null
+  }
+  return {
+    outcome: 'indeterminate',
+    reason:
+      verdict === 'kept'
+        ? 'owner kept running under the terminal host'
+        : "the terminal host holding this run can't say yet whether it still runs"
+  }
 }
 
 /** Probe previous owners with PID-reuse-safe evidence; unresolved ownership remains indeterminate. */
@@ -55,7 +40,7 @@ export function createStructuredAgentSessionOwnerProbe(
   findSpawnTokenProcesses = findAgentSessionSpawnTokenProcesses
 ): (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe> {
   return async (record) => {
-    const kept = await keptRunningProbe(record, hostId)
+    const kept = await keptRunningProbe(record)
     if (kept) {
       return kept
     }
@@ -106,10 +91,11 @@ export function createStructuredAgentSessionOwnerProbes(
       record: AgentSessionRecord
       owner: NonNullable<AgentSessionRecord['lease']['ownerProcess']>
     }[] = []
-    const rows = providerOwnerProcessRows()
-    for (const record of records) {
+    // Each relayed run asks its own daemon start; the rest answer at once.
+    const keptProbes = await Promise.all(records.map(keptRunningProbe))
+    for (const [index, record] of records.entries()) {
       const owner = record.lease.ownerProcess
-      const kept = await keptRunningProbe(record, hostId, rows)
+      const kept = keptProbes[index]
       if (kept) {
         results.set(record.sessionId, kept)
       } else if (owner?.hostId === hostId) {

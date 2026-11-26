@@ -88,7 +88,7 @@ export function keptInitializeResult(
 
 /** What a Codex connection exposes of its relayed app-server. */
 export function codexConnectionRelay(
-  child: Pick<RelayedProviderChild, 'releaseOutput' | 'attachResult' | 'handedOff'>,
+  child: Pick<RelayedProviderChild, 'releaseOutput' | 'attachResult'>,
   reattached: boolean,
   keep?: () => Promise<void>,
   ownServer = true
@@ -99,7 +99,6 @@ export function codexConnectionRelay(
     ...(keep ? { keep } : {}),
     releaseOutput: () => child.releaseOutput(),
     endedWork: () => child.attachResult?.endedWork,
-    openWork: () => child.attachResult?.openWork,
-    handedOff: () => child.handedOff
+    openWork: () => child.attachResult?.openWork
   }
 }

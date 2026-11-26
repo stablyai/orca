@@ -9,9 +9,10 @@ import { hostCanStartRecord } from '../providers/structured-agent-session-provid
 import type { StructuredAgentRegistry } from '../providers/structured-agent-registry'
 import {
   listProviderRelaysAtLaunch,
-  liveProviderRelayChats,
   providerRelayChatsIdleStoppedThisRun,
-  providerRelayKeptFromLastRun
+  providerRelayKeptFromLastRun,
+  providerRelayRunLiveness,
+  type ProviderRelayRunRecord
 } from '../../../provider-relay/app-provider-relays'
 import {
   structuredAgentSessionResumableSet,
@@ -37,7 +38,7 @@ export function createStructuredAgentSessionRestartCandidateReader(deps: {
   return async (markers, leaseState) =>
     structuredAgentSessionResumableSet({
       // A chat whose agent kept working under the terminal host was never cut; it reattaches.
-      markers: await withoutKeptRunningChats(markers),
+      markers: await withoutKeptRunningChats(markers, deps.getRecord),
       getRecord: deps.getRecord,
       supportsRecord: (record) => hostCanStartRecord(deps, record),
       movedOn: deps.movedOn,
@@ -53,19 +54,26 @@ export function createStructuredAgentSessionRestartCandidateReader(deps: {
 }
 
 async function withoutKeptRunningChats(
-  markers: readonly AgentSessionResumeMarker[]
+  markers: readonly AgentSessionResumeMarker[],
+  getRecord: (sessionId: string) => ProviderRelayRunRecord | null | undefined
 ): Promise<readonly AgentSessionResumeMarker[]> {
   if (markers.length === 0) {
     return markers
   }
   await listProviderRelaysAtLaunch()
-  const kept = liveProviderRelayChats()
   const finished = providerRelayChatsIdleStoppedThisRun()
-  // Still held by the daemon, or already reattached: either way its agent never stopped. One the
-  // daemon idle-stopped had finished its work, so nothing was cut either.
+  // Its run may still be going (its daemon start lists it or can't say yet), or was already
+  // reattached: either way its agent never stopped. One the daemon idle-stopped had finished its
+  // work, so nothing was cut either. Each relayed run asks only its own daemon start.
+  const mayRun = await Promise.all(
+    markers.map(async ({ sessionId }) => {
+      const record = getRecord(sessionId)
+      return record ? (await providerRelayRunLiveness(record)) !== 'gone' : false
+    })
+  )
   return markers.filter(
-    (marker) =>
-      !kept.has(marker.sessionId) &&
+    (marker, index) =>
+      !mayRun[index] &&
       !finished.has(marker.sessionId) &&
       !providerRelayKeptFromLastRun(marker.sessionId)
   )
