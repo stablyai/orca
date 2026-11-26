@@ -27,7 +27,7 @@ export function AccountSwitchRowItem({
     // Why the wrapper owns the fill: the row and its action are two menu items that must hover as one.
     <div
       data-current={active ? 'true' : undefined}
-      className="flex items-center rounded-[8px] hover:has-[[role=menuitem]:not([data-disabled])]:bg-foreground/5 has-[[data-highlighted]]:bg-foreground/5 data-[current=true]:bg-accent"
+      className="flex items-center rounded-[8px] data-[current=true]:bg-accent not-data-[current=true]:hover:has-[[role=menuitem]:not([data-disabled])]:bg-black/8 not-data-[current=true]:has-[[data-highlighted]]:bg-black/8 dark:not-data-[current=true]:hover:has-[[role=menuitem]:not([data-disabled])]:bg-white/14 dark:not-data-[current=true]:has-[[data-highlighted]]:bg-white/14"
     >
       <DropdownMenuItem
         title={detail ? `${label}\n${detail}` : label}
