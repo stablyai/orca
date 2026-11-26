@@ -58,6 +58,7 @@ const WORKTREE_HANDLER_CHANNELS = [
   'worktrees:getBranchAutoRenameRetryAvailability',
   'worktrees:retryBranchAutoRename',
   'worktrees:dismissBranchAutoRename',
+  'worktrees:waitBranchAutoRenameAttempt',
   'hooks:check',
   'hooks:inspectSetupScriptImports',
   'hooks:readIssueCommand',

@@ -4,7 +4,8 @@ import {
   canDismissAutoName,
   dismissAutoName,
   getAutoNameRetryAvailability,
-  retryAutoName
+  retryAutoName,
+  waitForAutoNameAttempt
 } from './branch-auto-rename-actions'
 
 // `old` predates the auto-name actions; `new` serves them.
@@ -31,11 +32,13 @@ vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: async (_target: unknown, method: string, params: unknown) => {
     calls.push({ method, params })
-    return method.endsWith('dismiss')
-      ? { dismissed: true }
-      : method.endsWith('availability')
-        ? { available: true, runningAttemptId: null }
-        : { attemptId: 7, outcome: { kind: 'renamed' }, finishedAt: 1 }
+    return method.endsWith('wait')
+      ? { attemptId: 42, outcome: { kind: 'failed' }, finishedAt: 2 }
+      : method.endsWith('dismiss')
+        ? { dismissed: true }
+        : method.endsWith('availability')
+          ? { available: true, runningAttemptId: null }
+          : { attemptId: 7, outcome: { kind: 'renamed' }, finishedAt: 1 }
   }
 }))
 
@@ -78,6 +81,19 @@ describe('auto-name actions routing', () => {
       { method: 'worktree.autoName.retry', params: { worktreeId: 'repo::/new' } }
     ])
     expect(local.dismissBranchAutoRename).not.toHaveBeenCalled()
+  })
+
+  it('waits on a paired server’s running attempt through the same gate', async () => {
+    expect(await waitForAutoNameAttempt(at('old'), 42)).toBeNull()
+    expect(calls).toEqual([])
+    expect(await waitForAutoNameAttempt(at('new'), 42)).toEqual({
+      attemptId: 42,
+      outcome: { kind: 'failed' },
+      finishedAt: 2
+    })
+    expect(calls).toEqual([
+      { method: 'worktree.autoName.wait', params: { worktreeId: 'repo::/new', attemptId: 42 } }
+    ])
   })
 
   it('keeps this app’s own workspaces on the desktop bridge', async () => {

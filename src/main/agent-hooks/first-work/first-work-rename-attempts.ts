@@ -95,6 +95,15 @@ export function runningFirstWorkAttempt(
   return entry && entry.incarnation === incarnation && !entry.lookupExpired ? entry : null
 }
 
+/** Attempt `attemptId`'s result once it settles; null when it is not the one running (already finished). */
+export function waitForFirstWorkAttempt(
+  worktreeId: string,
+  attemptId: number
+): Promise<FirstWorkAttemptResult> | null {
+  const entry = inFlight.get(worktreeId)
+  return entry?.attemptId === attemptId ? entry.promise : null
+}
+
 function rememberSettled(worktreeId: string, incarnation: string): void {
   // Bound long-lived deduplication at the cost of occasional re-probes.
   settled.delete(worktreeId)

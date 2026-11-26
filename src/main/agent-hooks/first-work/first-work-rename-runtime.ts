@@ -13,6 +13,7 @@ import type { Store } from '../../persistence/loading-store/store'
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { resolveWorktreeMetaOwner } from '../../persistence/host-qualified-worktree-meta'
+import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 const ENABLE_FIRST_WORK_FOLDER_RENAME = false
 
@@ -190,30 +191,40 @@ export function firstWorkDismissDeps(
   store: Parameters<typeof firstWorkRenameDeps>[0],
   runtime: Parameters<typeof firstWorkRenameDeps>[1]
 ): FirstWorkDismissDeps {
+  const localMeta = (worktreeId: string) =>
+    store.getWorktreeMetaForHost?.(worktreeId, LOCAL_EXECUTION_HOST_ID) ??
+    store.getWorktreeMeta(worktreeId)
   return {
     readIncarnation: firstWorkRenameDeps(store, runtime).readIncarnation,
     keepCurrentName: (worktreeId) => {
       rememberBranchRenameFailureOutput(worktreeId, null)
       const scope = parseWorkspaceKey(worktreeId)
       if (scope?.type === 'folder') {
+        if (!store.getFolderWorkspace!(scope.folderWorkspaceId)) {
+          return false
+        }
         store.updateFolderWorkspace!(scope.folderWorkspaceId, {
           pendingFirstAgentMessageRename: false,
           firstAgentMessageRenameError: null
         })
         runtime.notifyFolderWorkspaceChanged()
-        return
+        return true
       }
-      const target = resolveWorktreeMetaOwner(store, worktreeId)
-      if (!target) {
-        return
+      if (!localMeta(worktreeId)) {
+        return false
       }
+      // This host's own row, as auto-naming reads it; a same-id repo on another host must not hide it.
       // The same mark an in-app branch switch leaves: first-work naming must not rename this branch.
-      store.setWorktreeMeta(target, {
-        branchNameIsUserChosen: true,
-        pendingFirstAgentMessageRename: false,
-        firstAgentMessageRenameError: null
-      })
+      store.setWorktreeMeta(
+        hostWorktreeTarget({ id: worktreeId, hostId: LOCAL_EXECUTION_HOST_ID }),
+        {
+          branchNameIsUserChosen: true,
+          pendingFirstAgentMessageRename: false,
+          firstAgentMessageRenameError: null
+        }
+      )
       runtime.notifyBranchRenamed(getRepoIdFromWorktreeId(worktreeId))
+      return true
     }
   }
 }

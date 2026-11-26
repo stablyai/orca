@@ -13,7 +13,10 @@ type WorktreesApi = NonNullable<PreloadApi['worktrees']>
 // The server runs these on its own store; one that predates them refuses, so no actions show.
 export const webWorktreeAutoNameCalls: Pick<
   WorktreesApi,
-  'getBranchAutoRenameRetryAvailability' | 'retryBranchAutoRename' | 'dismissBranchAutoRename'
+  | 'getBranchAutoRenameRetryAvailability'
+  | 'retryBranchAutoRename'
+  | 'dismissBranchAutoRename'
+  | 'waitBranchAutoRenameAttempt'
 > = {
   getBranchAutoRenameRetryAvailability: ({ worktreeId }) =>
     callRuntimeResult<BranchAutoRenameRetryAvailability>(AUTO_NAME_RPC_METHODS.availability, {
@@ -25,6 +28,12 @@ export const webWorktreeAutoNameCalls: Pick<
       { worktreeId },
       AUTO_NAME_RETRY_TIMEOUT_MS
     ),
+  waitBranchAutoRenameAttempt: ({ worktreeId, attemptId }) =>
+    callRuntimeResult<BranchAutoRenameRetryResult | null>(
+      AUTO_NAME_RPC_METHODS.wait,
+      { worktreeId, attemptId },
+      AUTO_NAME_RETRY_TIMEOUT_MS
+    ).catch(() => null),
   dismissBranchAutoRename: ({ worktreeId }) =>
     callRuntimeResult<BranchAutoRenameDismissResult>(AUTO_NAME_RPC_METHODS.dismiss, {
       worktreeId

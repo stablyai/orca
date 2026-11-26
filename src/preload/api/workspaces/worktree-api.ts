@@ -181,6 +181,12 @@ export type WorktreeApi = {
     worktreeId: string
     executionHostId?: ExecutionHostId
   }) => Promise<BranchAutoRenameDismissResult>
+  /** Resolves when that running attempt finishes; null when it already had. */
+  waitBranchAutoRenameAttempt: (args: {
+    worktreeId: string
+    executionHostId?: ExecutionHostId
+    attemptId: number
+  }) => Promise<BranchAutoRenameRetryResult | null>
   onBranchAutoRenameAttempt: (callback: (event: BranchAutoRenameAttemptEvent) => void) => () => void
   onChanged: (callback: (data: { repoId: string }) => void) => () => void
   onGitStatusMetadataChanged: (

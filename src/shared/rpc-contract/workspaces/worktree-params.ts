@@ -128,6 +128,11 @@ export const WorktreeAutoNameParams = z.object({
   worktreeId: z.string().min(1, 'Missing worktree id')
 })
 
+/** Waits on one running attempt, so a client without the host's attempt events still sees it finish. */
+export const WorktreeAutoNameWaitParams = WorktreeAutoNameParams.extend({
+  attemptId: z.number().int().nonnegative()
+})
+
 export const WorktreeActivate = WorktreeSelector.extend({
   notifyClients: OptionalBoolean,
   navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional()

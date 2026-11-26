@@ -65,5 +65,6 @@ export const AUTO_NAME_RETRY_TIMEOUT_MS = 120_000
 export const AUTO_NAME_RPC_METHODS = {
   availability: 'worktree.autoName.availability',
   retry: 'worktree.autoName.retry',
-  dismiss: 'worktree.autoName.dismiss'
+  dismiss: 'worktree.autoName.dismiss',
+  wait: 'worktree.autoName.wait'
 } as const

@@ -48,7 +48,7 @@ async function resolveAutoNameRoute({
 async function routeAutoName<T>(
   args: AutoNameTarget,
   local: () => Promise<T>,
-  remote: { method: string; timeoutMs?: number },
+  remote: { method: string; timeoutMs?: number; params?: Record<string, unknown> },
   unsupported: T
 ): Promise<T> {
   const route = await resolveAutoNameRoute(args)
@@ -61,7 +61,7 @@ async function routeAutoName<T>(
   return callRuntimeRpc<T>(
     route.target,
     remote.method,
-    { worktreeId: args.worktreeId },
+    { worktreeId: args.worktreeId, ...remote.params },
     remote.timeoutMs ? { timeoutMs: remote.timeoutMs } : {}
   )
 }
@@ -96,6 +96,23 @@ export function dismissAutoName(args: AutoNameTarget): Promise<BranchAutoRenameD
     () => window.api.worktrees.dismissBranchAutoRename(args),
     { method: AUTO_NAME_RPC_METHODS.dismiss },
     { dismissed: false }
+  )
+}
+
+/** Attempt `attemptId`'s result once it finishes, from the host that runs it; null when it already had. */
+export function waitForAutoNameAttempt(
+  args: AutoNameTarget,
+  attemptId: number
+): Promise<BranchAutoRenameRetryResult | null> {
+  return routeAutoName(
+    args,
+    () => window.api.worktrees.waitBranchAutoRenameAttempt({ ...args, attemptId }),
+    {
+      method: AUTO_NAME_RPC_METHODS.wait,
+      timeoutMs: AUTO_NAME_RETRY_TIMEOUT_MS,
+      params: { attemptId }
+    },
+    null
   )
 }
 

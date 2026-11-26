@@ -80,6 +80,9 @@ export const worktreesApi = {
 
   dismissBranchAutoRename: (args) => ipcRenderer.invoke('worktrees:dismissBranchAutoRename', args),
 
+  waitBranchAutoRenameAttempt: (args) =>
+    ipcRenderer.invoke('worktrees:waitBranchAutoRenameAttempt', args),
+
   onBranchAutoRenameAttempt: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, data: BranchAutoRenameAttemptEvent) =>
       callback(data)

@@ -1,4 +1,7 @@
-import { WorktreeAutoNameParams } from '../../../../../shared/rpc-contract/workspaces/worktree-params'
+import {
+  WorktreeAutoNameParams,
+  WorktreeAutoNameWaitParams
+} from '../../../../../shared/rpc-contract/workspaces/worktree-params'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import {
   firstWorkDismissDeps,
@@ -10,6 +13,7 @@ import {
   retryFirstWorkRename
 } from '../../../../agent-hooks/first-work/first-work-rename-retry'
 import { dismissFirstWorkRename } from '../../../../agent-hooks/first-work/first-work-rename-dismiss'
+import { waitForFirstWorkAttempt } from '../../../../agent-hooks/first-work/first-work-rename-attempts'
 import { AUTO_NAME_RPC_METHODS } from '../../../../../shared/worktree/branch-auto-rename-attempt'
 import { defineMethod } from '../../core'
 
@@ -42,5 +46,12 @@ export const WORKTREE_AUTO_NAME_METHODS = [
         params.worktreeId,
         firstWorkDismissDeps(runtime.requireStore(), runtime)
       )
+  }),
+  defineMethod({
+    name: AUTO_NAME_RPC_METHODS.wait,
+    permission: 'workspace',
+    params: WorktreeAutoNameWaitParams,
+    handler: async (params) =>
+      (await waitForFirstWorkAttempt(params.worktreeId, params.attemptId)) ?? null
   })
 ]

@@ -68,6 +68,34 @@ describe('dismissFirstWorkRename', () => {
     expect(meta[WORKTREE_ID].firstAgentMessageRenameError).toBeNull()
   })
 
+  it('writes this host’s own row when a same-id repo is also registered on another host', () => {
+    const writes: { id: string; hostId: string }[] = []
+    const meta: Record<string, WorktreeMeta> = {
+      [WORKTREE_ID]: {
+        orcaCreationSource: 'desktop',
+        firstAgentMessageRenameError: 'Generation timed out after 60s.'
+      } as WorktreeMeta
+    }
+    const store = {
+      ...makeStore(meta),
+      getRepos: () => [REPO, { ...REPO, executionHostId: 'runtime:g16' }],
+      setWorktreeMeta: (target: { id: string; hostId: string }, updates: Partial<WorktreeMeta>) => {
+        writes.push({ id: target.id, hostId: target.hostId })
+        meta[target.id] = { ...meta[target.id], ...updates } as WorktreeMeta
+        return meta[target.id]
+      }
+    } as unknown as Parameters<typeof firstWorkRenameDeps>[0]
+
+    expect(dismissFirstWorkRename(WORKTREE_ID, firstWorkDismissDeps(store, runtime))).toEqual({
+      dismissed: true
+    })
+    expect(writes).toEqual([{ id: WORKTREE_ID, hostId: 'local' }])
+    expect(meta[WORKTREE_ID]).toMatchObject({
+      branchNameIsUserChosen: true,
+      firstAgentMessageRenameError: null
+    })
+  })
+
   it('reports a workspace that no longer exists as not dismissed', () => {
     const store = makeStore({})
     expect(dismissFirstWorkRename(WORKTREE_ID, firstWorkDismissDeps(store, runtime))).toEqual({
