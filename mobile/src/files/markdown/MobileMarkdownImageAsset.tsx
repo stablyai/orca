@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Image } from 'react-native'
 import { colors } from '../../theme/mobile-theme'
+import { isSvgDataUri, MobileSvgImage } from '../media/presentation/MobileSvgImage'
 
 export type MobileMarkdownImageAssetProps = {
   uri: string
@@ -10,7 +11,15 @@ export type MobileMarkdownImageAssetProps = {
   onError: () => void
 }
 
-export function MobileMarkdownImageAsset({
+export function MobileMarkdownImageAsset(props: MobileMarkdownImageAssetProps) {
+  return isSvgDataUri(props.uri) ? (
+    <MobileSvgImage {...props} />
+  ) : (
+    <MobileMarkdownRasterImage {...props} />
+  )
+}
+
+function MobileMarkdownRasterImage({
   uri,
   label,
   width,

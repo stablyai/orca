@@ -2,7 +2,6 @@ import { useEffect, useRef, type ComponentType } from 'react'
 import {
   Animated,
   Easing,
-  Image,
   Modal,
   Platform,
   Pressable,
@@ -16,7 +15,7 @@ import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { PanZoomSize } from '../../../../../src/shared/document-preview/pan-zoom-view'
-import { MobilePanZoomImage } from './MobilePanZoomImage'
+import { MobileImageViewerContent } from './MobileImageViewerContent'
 import { REDUCED_MOTION_FADE_MS, SHEET_CURVE } from '../../../components/motion/sheet-motion-values'
 import { useReducedMotionEnabled } from '../../../platform/accessibility/use-reduced-motion'
 import { useBackClaim } from '../../../navigation/use-back-claim'
@@ -70,16 +69,13 @@ export function MobileImageViewer({
     <Modal visible transparent animationType="none" onRequestClose={close}>
       <Animated.View style={[styles.backdrop, style]}>
         <Animated.View style={[styles.stage, stageStyle]}>
-          {Platform.OS === 'web' ? (
-            <MobilePanZoomImage key={uri} uri={uri} label={label} size={size} upscale={upscale} />
-          ) : (
-            <Image
-              source={{ uri }}
-              accessibilityLabel={label}
-              resizeMode="contain"
-              style={styles.nativeImage}
-            />
-          )}
+          <MobileImageViewerContent
+            key={uri}
+            uri={uri}
+            label={label}
+            size={size}
+            upscale={upscale}
+          />
         </Animated.View>
         {onPrevious !== undefined || onNext !== undefined ? (
           <>
@@ -206,10 +202,6 @@ const styles = themedStyleSheet(() => ({
   },
   stage: {
     flex: 1
-  },
-  nativeImage: {
-    width: '100%',
-    height: '100%'
   },
   close: {
     position: 'absolute',
