@@ -37,6 +37,11 @@ it('a pane whose partition or saved connection names host A is not on its twin r
   expect(nested.on('runtime:env')('pane')).toBe(true)
   expect(nested.on('ssh:host-a')('pane')).toBe(true)
   expect(nested.on('ssh:host-b')('pane')).toBe(false)
+  const unpartitioned = hostsFor({ worktreeId: 'rt::/w', connectionId: 'host-a' }, 'local', [
+    'runtime:env'
+  ])
+  expect(unpartitioned.on('runtime:env')('pane')).toBe(true)
+  expect(unpartitioned.on('runtime:other')('pane')).toBe(false)
 })
 
 it('a pane with no known owner counts as on every host', () => {

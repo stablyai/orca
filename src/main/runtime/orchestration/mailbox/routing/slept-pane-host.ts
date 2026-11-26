@@ -34,20 +34,25 @@ export class SleptPaneHost {
         return true
       }
       const partition = this.index.hostOf(paneKey)
-      // Only the local partition holds other hosts' panes (older builds saved SSH panes there).
+      // A record whose host was unresolved when saved lands in the local partition.
       if (isRemoteExecutionHostId(partition) && !isUnresolvedOwnerHostId(partition)) {
         // A runtime's pane may still name the nested SSH target it dials.
         return onHost(partition) || (sshTarget !== undefined && record.connectionId === sshTarget)
       }
+      const repoId = getRepoIdFromWorktreeId(record.worktreeId)
       if (record.connectionId) {
-        return onHost(toSshExecutionHostId(record.connectionId))
+        // A runtime's pane names the nested SSH target it dials, so its runtime registration counts.
+        return (
+          onHost(toSshExecutionHostId(record.connectionId)) ||
+          (ssh?.kind === 'runtime' && [...(this.repoHosts(repoId) ?? [])].some(onHost))
+        )
       }
       if (onHost(partition)) {
         return true
       }
       // A twin repo registered on several hosts can't name one owner, so any of them counts.
       let known = false
-      for (const saved of this.repoHosts(getRepoIdFromWorktreeId(record.worktreeId)) ?? []) {
+      for (const saved of this.repoHosts(repoId) ?? []) {
         if (onHost(saved)) {
           return true
         }
