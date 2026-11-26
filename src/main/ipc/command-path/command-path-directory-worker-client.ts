@@ -42,8 +42,7 @@ export class DetectionDirectoryWorkerClient {
 
   constructor(
     workerFactory: WorkerThreadFactory = createWorker,
-    private readonly mode: DetectionDirectoryRequest['mode'] = 'path',
-    private readonly requestTimeoutMs: number | null = REQUEST_TIMEOUT_MS
+    private readonly mode: DetectionDirectoryRequest['mode'] = 'path'
   ) {
     this.host = new LazyWorkerThreadHost({
       factory: workerFactory,
@@ -76,15 +75,13 @@ export class DetectionDirectoryWorkerClient {
     }
     const worker = this.host.ensure()
     if (!worker) {
-      return Promise.resolve(null)
+      return Promise.resolve('unverified')
     }
     this.host.clearIdleTimer()
     const id = this.nextId++
     return new Promise((resolve) => {
       const timer =
-        this.mode === 'install' || this.requestTimeoutMs === null
-          ? undefined
-          : setTimeout(() => this.dispose(), this.requestTimeoutMs)
+        this.mode === 'install' ? undefined : setTimeout(() => this.dispose(), REQUEST_TIMEOUT_MS)
       if (this.mode !== 'path' && 'ref' in worker && typeof worker.ref === 'function') {
         worker.ref()
       }
@@ -103,7 +100,7 @@ export class DetectionDirectoryWorkerClient {
     this.host.destroy()
     for (const { resolve, timer } of this.pending.values()) {
       clearTimeout(timer)
-      resolve(null)
+      resolve('unverified')
     }
     this.pending.clear()
   }
@@ -134,11 +131,7 @@ export async function readDetectionDirectoryViaWorker(
   inventory = false
 ): Promise<DetectionDirectoryListing> {
   const workerClient = inventory
-    ? (inventoryClient ??= new DetectionDirectoryWorkerClient(
-        createWorker,
-        'inventory',
-        cliInventory ? null : REQUEST_TIMEOUT_MS
-      ))
+    ? (inventoryClient ??= new DetectionDirectoryWorkerClient(createWorker, 'inventory'))
     : (client ??= new DetectionDirectoryWorkerClient())
   const listing = await workerClient.read(dir)
   return listing instanceof Map || listing === 'unverified' ? listing : null

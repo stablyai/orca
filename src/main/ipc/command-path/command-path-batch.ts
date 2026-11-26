@@ -51,13 +51,12 @@ function getDetectionDirectories(
   const isAbsolute = isWin ? path.win32.isAbsolute : path.posix.isAbsolute
   const directories = new Map<string, PathDirectory & { index: number }>()
   const cwdDir = isWin ? (cwd ?? process.cwd()) : ''
-  // Preserve exact PATH spellings apart from trailing separators on the CWD alias.
-  const cwdKey = isAbsolute(cwdDir) ? cwdDir.replace(/[\\/]+$/, '') : undefined
   const add = (dir: string, onPath: boolean) => {
     if (!isAbsolute(dir)) {
       return undefined
     }
-    const key = cwdKey !== undefined && dir.replace(/[\\/]+$/, '') === cwdKey ? cwdDir : dir
+    // Keep case-distinct Windows directories separate for case-sensitive filesystems.
+    const key = isWin ? dir.replace(/[\\/]+$/, '') : dir
     const entry: PathDirectory & { index: number } = directories.get(key) ?? {
       dir,
       index: directories.size,
