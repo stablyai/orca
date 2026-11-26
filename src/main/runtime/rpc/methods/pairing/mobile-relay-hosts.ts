@@ -1,4 +1,4 @@
-import { defineMethod } from '../../core'
+import { defineMethod, type RpcContext } from '../../core'
 import { resolveWorktreeCatalogSnapshot } from '../../workspace-client-views/worktree-catalog-snapshot'
 import {
   MOBILE_RELAY_HOST_WORKTREES_METHOD,
@@ -6,34 +6,35 @@ import {
   MobileRelayHostWorktreesParamsSchema
 } from '../../../../../shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import { MOBILE_RELAY_HOST_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/relay/mobile-desktop-relay-contract'
+import type { RelayPhoneReader } from '../../../mobile-desktop-relay/mobile-relay-host-rows-announcer'
+
+// Holds a watch for this phone until it disconnects; a phone that can't hear the events costs none.
+function capablePhone(ctx: RpcContext, key: string): RelayPhoneReader | undefined {
+  const { connectionId, runtime } = ctx
+  return connectionId &&
+    ctx.clientCapabilities?.includes(MOBILE_RELAY_HOST_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY)
+    ? {
+        connectionId,
+        onClose: (release) =>
+          runtime.registerSubscriptionCleanup(`${key}:${connectionId}`, release, connectionId)
+      }
+    : undefined
+}
 
 export const MOBILE_RELAY_HOSTS_METHODS = [
   defineMethod({
     name: MOBILE_RELAY_HOSTS_LIST_METHOD,
     permission: 'workspace',
     params: null,
-    handler: async (_params, ctx) => (await ctx.mobileRelayHosts?.list()) ?? { hosts: [] }
+    handler: async (_params, ctx) =>
+      (await ctx.mobileRelayHosts?.list(capablePhone(ctx, 'relay-host-list'))) ?? { hosts: [] }
   }),
   defineMethod({
     name: MOBILE_RELAY_HOST_WORKTREES_METHOD,
     permission: 'workspace',
     params: MobileRelayHostWorktreesParamsSchema,
     handler: async (params, ctx) => {
-      const { connectionId, runtime } = ctx
-      // Watch the server for this phone until it disconnects; a phone that can't hear the event costs none.
-      const reader =
-        connectionId &&
-        ctx.clientCapabilities?.includes(MOBILE_RELAY_HOST_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY)
-          ? {
-              connectionId,
-              onClose: (release: () => void) =>
-                runtime.registerSubscriptionCleanup(
-                  `relay-host-rows:${connectionId}:${params.hostId}`,
-                  release,
-                  connectionId
-                )
-            }
-          : undefined
+      const reader = capablePhone(ctx, `relay-host-rows:${params.hostId}`)
       const result = (await ctx.mobileRelayHosts?.worktrees(params.hostId, reader)) ?? {
         worktrees: null
       }

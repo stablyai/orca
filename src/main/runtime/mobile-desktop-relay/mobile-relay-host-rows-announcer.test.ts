@@ -11,7 +11,8 @@ const host: DescribedRelayHost = {
   health: 'available',
   relay: 'ready',
   environmentId: 'env-1',
-  identity: { pairingRevision: 1, runtimeId: 'rt-1' }
+  identity: { pairingRevision: 1, runtimeId: 'rt-1' },
+  rowChanges: true
 }
 
 type StatusListener = Parameters<MobileDesktopRelayHosts['onStatusChanged']>[0]
@@ -45,7 +46,7 @@ function fakeHosts() {
           status.listener = null
         }
       },
-      describe: async () => status.now
+      describe: async () => (status.now ? [status.now] : [])
     }
   }
 }
@@ -122,7 +123,45 @@ describe('RelayHostRowsAnnouncer', () => {
     status.listener?.({ environmentId: 'env-1', inContact: true })
     await vi.advanceTimersByTimeAsync(2000)
     expect(watches).toHaveLength(2)
+    // Announced once the new stream is ready, so the phone's read meets a live watch.
+    expect(changed).not.toHaveBeenCalled()
+    watches[1]?.callbacks.onChange({ catalog: true })
+    await vi.advanceTimersByTimeAsync(2000)
     expect(changed).toHaveBeenCalledTimes(1)
+  })
+
+  it('opens no watch and announces nothing while a dropped server stays unavailable', async () => {
+    const { hosts, watches, status } = fakeHosts()
+    const changed = vi.fn()
+    const announcer = new RelayHostRowsAnnouncer(hosts, changed)
+    announcer.hold(host, reader('phone-1').reader)
+    await vi.runAllTimersAsync()
+    watches[0]?.callbacks.onClose()
+    status.now = { ...host, health: 'disconnected' }
+    status.listener?.({ environmentId: 'env-1', inContact: true })
+    status.listener?.()
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(watches).toHaveLength(1)
+    expect(changed).not.toHaveBeenCalled()
+  })
+
+  it('announces the ready of a watch whose read fetched rows before the stream was up', async () => {
+    const { hosts, watches } = fakeHosts()
+    const changed = vi.fn()
+    const announcer = new RelayHostRowsAnnouncer(hosts, changed)
+    announcer.hold(host, reader('phone-1').reader)
+    announcer.refreshed('env-1')
+    await vi.runAllTimersAsync()
+    watches[0]?.callbacks.onChange({ catalog: true })
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(changed).toHaveBeenCalledTimes(1)
+  })
+
+  it('watches no server that publishes no row notices', () => {
+    const { hosts, watches } = fakeHosts()
+    const announcer = new RelayHostRowsAnnouncer(hosts, vi.fn())
+    announcer.hold({ ...host, rowChanges: undefined }, reader('phone-1').reader)
+    expect(watches).toHaveLength(0)
   })
 
   it('moves every phone’s hold to the new watch on a re-pair', async () => {

@@ -23,7 +23,7 @@ import { describeRelayHosts, relayHostFence } from './mobile-relay-host-descript
 import {
   RelayHostRowsAnnouncer,
   relayHostRowsSources,
-  type RelayHostRowsReader
+  type RelayPhoneReader
 } from './mobile-relay-host-rows-announcer'
 import {
   RelayHostListAnnouncer,
@@ -160,9 +160,9 @@ export class MobileRelayHostCatalog {
 
   private announcer: RelayHostListAnnouncer | null = null
 
-  async list(): Promise<MobileRelayHostsListResult> {
+  async list(reader?: RelayPhoneReader): Promise<MobileRelayHostsListResult> {
     const result = await this.describe()
-    this.announcer?.listed(result)
+    this.announcer?.listed(result, reader)
     return result
   }
 
@@ -199,7 +199,8 @@ export class MobileRelayHostCatalog {
           relay,
           stoppedOnDesktop,
           unavailableOnDesktop,
-          installationId
+          installationId,
+          rowChanges
         }) => ({
           hostId,
           label,
@@ -207,7 +208,8 @@ export class MobileRelayHostCatalog {
           relay,
           ...(stoppedOnDesktop ? { stoppedOnDesktop } : {}),
           ...(unavailableOnDesktop ? { unavailableOnDesktop } : {}),
-          ...(installationId ? { installationId } : {})
+          ...(installationId ? { installationId } : {}),
+          ...(rowChanges ? { rowChanges } : {})
         })
       )
     }
@@ -222,10 +224,8 @@ export class MobileRelayHostCatalog {
     return () => announcer.dispose()
   }
 
-  async worktrees(
-    hostId: string,
-    reader?: RelayHostRowsReader
-  ): Promise<MobileRelayHostWorktreesResult> {
+  /** `by` is the phone connection reading, so the server stays watched for it. */
+  async worktrees(hostId: string, by?: RelayPhoneReader): Promise<MobileRelayHostWorktreesResult> {
     const parsed = parseExecutionHostId(hostId)
     // Re-pairing since status publication must fetch under the new identity.
     await this.options.serverRows.sync()
@@ -239,11 +239,12 @@ export class MobileRelayHostCatalog {
       return { worktrees: null }
     }
     if (host.health === 'available') {
-      this.rowsAnnouncer?.hold(host, reader)
+      this.rowsAnnouncer?.hold(host, by)
       await withinFetchBound(
         this.options.serverRows.refresh(host.environmentId),
         SERVER_FETCH_TIMEOUT_MS
       )
+      this.rowsAnnouncer?.refreshed(host.environmentId)
     }
     const { environments, statusByEnvironmentId } = await this.options.hosts.list()
     const current = environments.find((environment) => environment.id === host.environmentId)

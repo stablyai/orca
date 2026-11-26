@@ -18,7 +18,7 @@ vi.mock('../worktree/execution-hosts/relay-hosts-feed', () => ({
   relayHostsFeed: () => ({ read: readHosts })
 }))
 
-const { homeRelayedServerRowsQuery, homeRelayedServersQuery } =
+const { homeRelayedServerRowsQuery, homeRelayedServersQuery, relayedServerRowsPollMs } =
   await import('./home-relayed-server-queries')
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fetch hands the client only to the mocked status and host reads.
@@ -38,6 +38,13 @@ describe('Home relayed server reads', () => {
     expect(signal?.events).toContain('relayHostRowsChanged')
     expect(signal?.matches?.(notice, { exec: 'runtime:a' })).toBe(true)
     expect(signal?.matches?.(notice, { exec: 'runtime:b' })).toBe(false)
+    // A host list change re-reads no server whose read is already mounted.
+    expect(signal?.events).not.toContain('relayHostsChanged')
+    expect(relayedServerRowsPollMs({ rowChanges: true })).toBe(false)
+  })
+
+  it('backs up a server that publishes no row notices with the workspace list’s slow poll', () => {
+    expect(relayedServerRowsPollMs({})).toBe(60_000)
   })
 
   it('reads no relayed servers from a desktop that does not announce their changes', async () => {

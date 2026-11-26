@@ -3,6 +3,7 @@ import {
   MOBILE_RELAY_HOST_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY,
   MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY
 } from '../../../src/shared/remote-runtime/relay/mobile-desktop-relay-contract'
+import type { MobileRelayHost } from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import type { NO_HOST_LIST_INPUT } from '../host-screen/catalog/host-list-queries'
 import { defineHostQuery } from '../query/host-query'
 import { readHostStatusReply } from '../query/host-status-query'
@@ -15,6 +16,13 @@ import type { HomeRelayedServers } from './home-relayed-servers'
 
 // Same pace as the workspace list's poll; a busy agent's notices can arrive many times a second.
 const HOME_RELAYED_REFRESH_FLOOR_MS = 3000
+// The workspace list's backstop pace, for a server whose desktop can't tell Home its rows changed.
+const HOME_RELAYED_BACKSTOP_POLL_MS = 60_000
+
+/** Only a server that publishes row notices is left to them; others re-read while Home is focused. */
+export const relayedServerRowsPollMs = (
+  server: Pick<MobileRelayHost, 'rowChanges'>
+): number | false => (server.rowChanges ? false : HOME_RELAYED_BACKSTOP_POLL_MS)
 
 /** A desktop's relayed servers, read on open, foreground and relayHostsChanged; never on a timer. */
 export const homeRelayedServersQuery = defineHostQuery<
@@ -77,12 +85,12 @@ export const homeRelayedServerRowsQuery = defineHostQuery<{ deltas: boolean }, r
     staleTime: HOME_RELAYED_REFRESH_FLOOR_MS,
     gcTime: 30 * 60_000,
     refetchOnWindowFocus: true,
+    // A server that comes back mounts its read again, so a host list change re-reads no other server.
     signal: {
-      // relayHostsChanged may stand for a server coming back, whose watch the read reopens.
-      events: ['relayHostRowsChanged', 'relayHostsChanged'],
+      events: ['relayHostRowsChanged'],
       floorMs: HOME_RELAYED_REFRESH_FLOOR_MS,
       matches: (event, target) =>
-        event.type !== 'relayHostRowsChanged' || event.hostId === target.exec
+        event.type === 'relayHostRowsChanged' && event.hostId === target.exec
     }
   }
 )
