@@ -9,10 +9,12 @@ You propose; your owner creates. Nothing exists until they press the button on y
 
 ## Before proposing
 
-1. Run \`orca bot list\`. If a bot already does the job, say so and stop.
+1. Run \`orca bot list\`.
 2. One bot, one job. Split work that has two owners or two schedules into two bots.
 
 ## A new bot
+
+If a bot already does the job, say so and stop.
 
 \`\`\`
 orca bot create --offer --name "<name>" --purpose "<one sentence>" [--template <id>] [--watches "<text>"] [--does "<text>"] [--reports "<text>"]

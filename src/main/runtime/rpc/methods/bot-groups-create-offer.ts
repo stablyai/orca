@@ -1,7 +1,11 @@
 // `orca bot group create --offer`: a bot proposes a group chat, and Orca puts a card in its chat.
 // Nothing is created until the owner presses Create group on it.
 import { randomUUID } from 'node:crypto'
-import { BotGroupOfferRequest, botGroupOfferBody } from '../../../../shared/bots/bot-group-offer'
+import {
+  BOT_GROUP_OFFER_MAX_MEMBERS,
+  BotGroupOfferRequest,
+  botGroupOfferBody
+} from '../../../../shared/bots/bot-group-offer'
 import { runtimeBotGroups } from '../../../bots/bot-group-runtime'
 import { requireGroupBots } from '../../../bots/bot-group-membership'
 import { refuseBotGroupRoomCard } from '../../../bots/bot-group-session-access'
@@ -30,6 +34,11 @@ export const BOT_GROUP_CREATE_OFFER_METHOD = defineMethod({
     refuseBotGroupRoomCard(callerSessionId)
     const others = botIds.filter((id) => id !== bot.id)
     const wanted = withoutCaller ? others : [bot.id, ...others]
+    if (wanted.length > BOT_GROUP_OFFER_MAX_MEMBERS) {
+      throw new InvalidArgumentError(
+        `A group offer can have at most ${BOT_GROUP_OFFER_MAX_MEMBERS} bots, including yourself.`
+      )
+    }
     if (wanted.length === 0) {
       throw new InvalidArgumentError(
         'Name the bots for the group with --bot <name>, as `orca bot list` shows them.'
