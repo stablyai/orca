@@ -6,8 +6,11 @@ const GUEST_PAINT_DEADLINE_MS = 500
 const TWO_FRAMES_SCRIPT =
   'new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))'
 
-/** Watches for anything that retires the document a capture began on: navigation (including same-URL reloads) or teardown. */
-function watchDocument(guest: Electron.WebContents): { retired: () => boolean; stop: () => void } {
+/** Flags the end of the document a capture was admitted for: navigation (same-URL reloads too), a crash, or teardown. */
+export function watchGuestDocument(guest: Electron.WebContents): {
+  retired: () => boolean
+  stop: () => void
+} {
   let retired = guest.isDestroyed()
   const onNavigation = (
     _event: unknown,
@@ -19,40 +22,43 @@ function watchDocument(guest: Electron.WebContents): { retired: () => boolean; s
       retired = true
     }
   }
-  const onDestroyed = (): void => {
+  const onGone = (): void => {
     retired = true
   }
   guest.on('did-start-navigation', onNavigation)
-  guest.on('destroyed', onDestroyed)
+  guest.on('render-process-gone', onGone)
+  guest.on('destroyed', onGone)
   return {
     retired: () => retired,
     stop: () => {
       guest.off('did-start-navigation', onNavigation)
-      guest.off('destroyed', onDestroyed)
+      guest.off('render-process-gone', onGone)
+      guest.off('destroyed', onGone)
     }
   }
 }
 
 /**
  * Draw's page image, taken only after the picker's teardown ran and the page painted two frames without it.
- * Callers run this inside the page's serialized grab mode queue, so no arm from any viewer lands in between.
+ * Each stage starts only while `isLive`; a stage already issued is awaited, so the caller's queue stays held.
  */
 export async function captureCleanGuestPage({
   guest,
-  resolveGuest,
+  isLive,
   teardown,
   holdPaint
 }: {
   guest: Electron.WebContents
-  /** The guest the caller may still capture; null or another guest once its viewer is retired. */
-  resolveGuest: () => Electron.WebContents | null
+  isLive: () => boolean
   teardown: () => Promise<boolean>
   holdPaint: () => () => void
 }): Promise<BrowserCleanPageCapture | null> {
-  const document = watchDocument(guest)
-  const isLive = (): boolean => !document.retired() && resolveGuest() === guest
-  const releasePaint = holdPaint()
+  if (!isLive()) {
+    return null
+  }
+  let releasePaint = (): void => {}
   try {
+    releasePaint = holdPaint()
     if (!(await teardown()) || !isLive()) {
       return null
     }
@@ -69,10 +75,7 @@ export async function captureCleanGuestPage({
       return null
     }
     return { dataUrl: image.toDataURL(), ...image.getSize() }
-  } catch {
-    return null
   } finally {
     releasePaint()
-    document.stop()
   }
 }

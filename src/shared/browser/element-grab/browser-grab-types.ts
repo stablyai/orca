@@ -115,24 +115,43 @@ export type BrowserGrabRejectReason =
   | 'already-active'
   | 'injection-failed'
 
-/** `superseded`: a newer request for the page won before this one took effect, so it proves nothing about the page. */
+/**
+ * `superseded`: a newer request for the page won before this one took effect, so it proves nothing about the page.
+ * `armToken`: names a successful arm; an await must present it, and any newer request for the page voids it.
+ */
 export type BrowserSetGrabModeResult =
-  | { ok: true; superseded?: true }
+  | { ok: true; superseded?: true; armToken?: string }
   | { ok: false; reason: BrowserGrabRejectReason }
 
 /** Draw's page image, captured in main after the picker was removed and the page repainted without it. */
 export type BrowserCleanPageCapture = { dataUrl: string; width: number; height: number }
 
-export type BrowserCaptureCleanPageArgs = { browserPageId: string }
+export type BrowserCaptureCleanPageArgs = { browserPageId: string; attemptId: string }
 
 /** Turns the page's picker off and captures it repainted without it; null when that could not be proven. */
 export type BrowserCaptureCleanPage = (
   args: BrowserCaptureCleanPageArgs
 ) => Promise<BrowserCleanPageCapture | null>
 
+export function isBrowserCaptureCleanPageArgs(
+  value: unknown
+): value is BrowserCaptureCleanPageArgs {
+  const isId = (id: unknown): boolean => typeof id === 'string' && id.length > 0 && id.length <= 200
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'browserPageId' in value &&
+    isId(value.browserPageId) &&
+    'attemptId' in value &&
+    isId(value.attemptId)
+  )
+}
+
 export type BrowserAwaitGrabSelectionArgs = {
   browserPageId: string
   opId: string
+  /** From the enable this pick follows; required locally, optional from older remote viewers. */
+  armToken?: string
 }
 
 export type BrowserCancelGrabArgs = {

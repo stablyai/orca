@@ -14,7 +14,8 @@ export const GrabSetMode = BrowserTarget.extend({
 })
 
 export const GrabAwait = BrowserTarget.extend({
-  opId: z.string().min(1).max(120)
+  opId: z.string().min(1).max(120),
+  armToken: z.string().min(1).max(120).optional()
 })
 
 export const GrabCaptureSelection = BrowserTarget.extend({

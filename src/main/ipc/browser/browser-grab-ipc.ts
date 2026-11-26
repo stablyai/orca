@@ -6,8 +6,10 @@ import { waitForNextTabRegistration } from './browser-tab-registration-wait'
 import {
   captureCleanBrowserPage,
   disposeGrabModeStateForPage,
+  isCurrentGrabArm,
   setBrowserGrabMode
 } from '../../browser/element-grab/browser-grab-mode-sequencer'
+import { isBrowserCaptureCleanPageArgs } from '../../../shared/browser/element-grab/browser-grab-types'
 import type {
   BrowserSetGrabModeArgs,
   BrowserSetGrabModeResult,
@@ -18,11 +20,11 @@ import type {
   BrowserCaptureSelectionScreenshotResult,
   BrowserExtractHoverArgs,
   BrowserExtractHoverResult,
-  BrowserCaptureCleanPageArgs,
   BrowserCleanPageCapture
 } from '../../../shared/browser/element-grab/browser-grab-types'
 
 const GRAB_REGISTRATION_WAIT_MS = 1_000
+const cleanCapturesByAttemptId = new Map<string, { senderId: number; retire: () => void }>()
 
 // Previews withdraw through grant revocation, not unregisterGuest; dispose their retained intent then.
 let disposePreviewGrantSubscription: (() => void) | null = null
@@ -44,6 +46,7 @@ export function registerBrowserGrabHandlers(): void {
   ipcMain.removeHandler('browser:captureSelectionScreenshot')
   ipcMain.removeHandler('browser:extractHoverPayload')
   ipcMain.removeHandler('browser:captureCleanPage')
+  ipcMain.removeHandler('browser:retireCleanCapture')
 
   ipcMain.handle(
     'browser:setGrabMode',
@@ -64,16 +67,39 @@ export function registerBrowserGrabHandlers(): void {
 
   ipcMain.handle(
     'browser:captureCleanPage',
-    async (event, args: BrowserCaptureCleanPageArgs): Promise<BrowserCleanPageCapture | null> => {
-      if (!isTrustedBrowserRenderer(event.sender)) {
+    async (event, args: unknown): Promise<BrowserCleanPageCapture | null> => {
+      // Validated and authorized before anything shared changes, so a denied caller can't retire a live arm.
+      if (
+        !isTrustedBrowserRenderer(event.sender) ||
+        !isBrowserCaptureCleanPageArgs(args) ||
+        cleanCapturesByAttemptId.has(args.attemptId)
+      ) {
         return null
       }
-      // Re-resolved at each step, so a viewer retired mid-capture gets nothing.
-      return captureCleanBrowserPage(args.browserPageId, () =>
+      const resolveGuest = (): Electron.WebContents | null =>
         browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
-      )
+      const guest = resolveGuest()
+      if (!guest) {
+        return null
+      }
+      const { capture, retire } = captureCleanBrowserPage(args.browserPageId, guest, resolveGuest)
+      cleanCapturesByAttemptId.set(args.attemptId, { senderId: event.sender.id, retire })
+      try {
+        return await capture
+      } finally {
+        cleanCapturesByAttemptId.delete(args.attemptId)
+      }
     }
   )
+
+  ipcMain.handle('browser:retireCleanCapture', (event, args: unknown): void => {
+    const attemptId =
+      typeof args === 'object' && args !== null && 'attemptId' in args ? args.attemptId : null
+    const attempt = typeof attemptId === 'string' ? cleanCapturesByAttemptId.get(attemptId) : null
+    if (attempt?.senderId === event.sender.id) {
+      attempt.retire()
+    }
+  })
 
   ipcMain.handle(
     'browser:awaitGrabSelection',
@@ -84,6 +110,10 @@ export function registerBrowserGrabHandlers(): void {
       const guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
       if (!guest) {
         return { opId: args.opId, kind: 'error', reason: 'Guest not ready' }
+      }
+      // A stale arm (a newer enable, Draw's capture or a disable came since) gets no pick and sends no off.
+      if (!isCurrentGrabArm(args.browserPageId, args.armToken)) {
+        return { opId: args.opId, kind: 'cancelled', reason: 'user' }
       }
       // awaitGrabSelection cancels previous grabs; an extra active-op guard would race rearming.
       return browserManager.awaitGrabSelection(args.browserPageId, args.opId, guest)

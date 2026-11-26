@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react'
-import { beforeEach, expect, it, vi } from 'vitest'
-import { useMarkupMode, type MarkupCaptureContext } from './useMarkupMode'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { useBrowserPageMarkupCapture } from './use-browser-page-markup-capture'
 import { useLocalPageDraw } from './use-local-page-draw'
 import { useGrabMode, type GrabModeState } from '../grab/useGrabMode'
 import type { BrowserGuestAnnotationViewportBridge } from '../use-browser-guest-annotate-tools'
@@ -9,13 +9,14 @@ import type { BrowserGuestToolsTransport } from '../browser-guest-tools-transpor
 import type { BrowserSetGrabModeResult } from '../../../../../../shared/browser/element-grab/browser-grab-types'
 
 const page = vi.hoisted(() => ({
-  captures: [] as { finish: (ok: boolean) => void }[],
+  captures: [] as { finish: (ok: boolean) => void; signal?: AbortSignal }[],
   errors: 0
 }))
 vi.mock('./markup-base-image', () => ({
-  captureMarkupBaseImage: () =>
+  captureMarkupBaseImage: (_source: unknown, signal?: AbortSignal) =>
     new Promise((resolve, reject) =>
       page.captures.push({
+        signal,
         finish: (ok) =>
           ok
             ? resolve({ dataUrl: 'data:image/png;base64,', width: 1, height: 1 })
@@ -25,87 +26,104 @@ vi.mock('./markup-base-image', () => ({
 }))
 vi.mock('sonner', () => ({ toast: { error: () => (page.errors += 1) } }))
 
-const captureContext = (): MarkupCaptureContext => ({
-  source: { kind: 'clean-page', browserPageId: 'page-1' },
-  cssWidth: 1,
-  cssHeight: 1,
-  outputScale: 1
-})
-const useMarkup = (): ReturnType<typeof useMarkupMode> =>
-  useMarkupMode({ getCaptureContext: captureContext, onDeliver: () => {} })
+/** A connected webview stand-in whose guest id the test can swap, as a recovered or reattached guest would. */
+function fakeWebview(): { webview: Electron.WebviewTag; guestId: { current: number } } {
+  const guestId = { current: 1 }
+  const element = Object.assign(document.createElement('div'), {
+    getWebContentsId: () => guestId.current,
+    getBoundingClientRect: () => ({ width: 10, height: 10 })
+  })
+  document.body.append(element)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the Draw path reads only events, isConnected, size and the guest id.
+  return { webview: element as unknown as Electron.WebviewTag, guestId }
+}
+
 const finishCapture = (ok: boolean): Promise<void> =>
   act(async () => {
     page.captures.shift()!.finish(ok)
   })
 
+function renderLocalDraw(webview: Electron.WebviewTag) {
+  const webviewRef = { current: webview }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the Draw path reads only invalidateDocument from the bridge.
+  const bridge = { invalidateDocument: vi.fn() } as unknown as BrowserGuestAnnotationViewportBridge
+  const stops: string[] = []
+  const hook = renderHook(
+    ({ grabState, isActive }: { grabState: GrabModeState; isActive: boolean }) => {
+      const markup = useBrowserPageMarkupCapture(webviewRef, 'page-1')
+      const draw = useLocalPageDraw({
+        markup,
+        grabState,
+        stopPicker: () => stops.push('stop'),
+        isActive,
+        viewportBridge: bridge,
+        webviewRef
+      })
+      return { markup, draw }
+    },
+    { initialProps: { grabState: 'idle' as GrabModeState, isActive: true } }
+  )
+  const start = (): void => act(() => void hook.result.current.draw.startMarkup())
+  return { ...hook, start, stops }
+}
+
 beforeEach(() => {
   page.captures.length = 0
   page.errors = 0
 })
+afterEach(() => vi.unstubAllGlobals())
 
-it('a capture its tab closed or its page replaced never opens or reports an error; a drawing survives abandon', async () => {
-  const closed = renderHook(useMarkup)
-  act(() => void closed.result.current.start())
-  closed.unmount()
+it('Draw stops an armed picker first; a reload, hidden pane or closed tab retires its capture silently', async () => {
+  const { webview } = fakeWebview()
+  const draw = renderLocalDraw(webview)
+  draw.rerender({ grabState: 'armed', isActive: true })
+  draw.start()
+  expect(draw.stops).toEqual(['stop'])
+  act(() => draw.result.current.draw.viewportBridge.invalidateDocument())
+  expect(page.captures[0].signal?.aborted).toBe(true)
   await finishCapture(false)
-  expect(page.errors).toBe(0)
 
-  const { result } = renderHook(useMarkup)
-  act(() => void result.current.start())
-  act(() => result.current.abandonCapture())
+  draw.rerender({ grabState: 'idle', isActive: true })
+  draw.start()
+  draw.rerender({ grabState: 'idle', isActive: false })
+  expect(page.captures[0].signal?.aborted).toBe(true)
   await finishCapture(true)
-  expect(result.current.state).toBe('idle')
+  expect(draw.result.current.markup.state).toBe('idle')
 
-  act(() => void result.current.start())
-  await finishCapture(true)
-  expect(result.current.state).toBe('drawing')
-  act(() => result.current.abandonCapture())
-  expect(result.current.state).toBe('drawing')
+  draw.rerender({ grabState: 'idle', isActive: true })
+  draw.start()
+  const closing = page.captures[0]
+  draw.unmount()
+  expect(closing.signal?.aborted).toBe(true)
+  await finishCapture(false)
   expect(page.errors).toBe(0)
 })
 
-it('local Draw stops an armed picker first, and drops its capture on a reload or a hidden pane', async () => {
-  const order: string[] = []
-  const invalidateDocument = vi.fn()
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the Draw path reads only invalidateDocument from the bridge.
-  const bridge = { invalidateDocument } as unknown as BrowserGuestAnnotationViewportBridge
-  const { result, rerender } = renderHook(
-    ({ grabState, isActive }: { grabState: GrabModeState; isActive: boolean }) => {
-      const markup = useMarkup()
-      const draw = useLocalPageDraw({
-        markup,
-        grabState,
-        stopPicker: () => order.push('stop'),
-        isActive,
-        viewportBridge: bridge
-      })
-      return { markup, draw }
-    },
-    { initialProps: { grabState: 'armed', isActive: true } }
-  )
+it('a lost or replaced guest drops a held capture and its error, but keeps a drawing already open', async () => {
+  const { webview, guestId } = fakeWebview()
+  const draw = renderLocalDraw(webview)
+  draw.start()
+  act(() => void webview.dispatchEvent(new Event('render-process-gone')))
+  expect(draw.result.current.markup.state).toBe('idle')
+  await finishCapture(true)
 
-  act(() => void result.current.draw.startMarkup().then(() => order.push('settled')))
-  expect(order).toEqual(['stop'])
-  act(() => result.current.draw.viewportBridge.invalidateDocument())
-  expect(invalidateDocument).toHaveBeenCalledOnce()
+  draw.start()
+  guestId.current = 2
   await finishCapture(false)
-  expect(result.current.markup.state).toBe('idle')
-
-  rerender({ grabState: 'idle', isActive: true })
-  act(() => void result.current.draw.startMarkup())
-  rerender({ grabState: 'idle', isActive: false })
-  await finishCapture(false)
-  expect(result.current.markup.state).toBe('idle')
+  draw.start()
+  guestId.current = 3
+  await finishCapture(true)
+  expect(draw.result.current.markup.state).toBe('idle')
   expect(page.errors).toBe(0)
 
-  rerender({ grabState: 'idle', isActive: true })
-  act(() => void result.current.draw.startMarkup())
+  draw.start()
   await finishCapture(true)
-  expect(result.current.markup.state).toBe('drawing')
-  expect(order).toEqual(['stop', 'settled'])
+  expect(draw.result.current.markup.state).toBe('drawing')
+  act(() => void webview.dispatchEvent(new Event('destroyed')))
+  expect(draw.result.current.markup.state).toBe('drawing')
 })
 
-it('a stale enable reply sends no second off, and a superseded enable never starts a pick', async () => {
+it('a pick awaits with its own arm token; a stale reply sends no second off and a superseded one starts no pick', async () => {
   const replies: ((result: BrowserSetGrabModeResult) => void)[] = []
   const sent: string[] = []
   const transport = {
@@ -119,8 +137,8 @@ it('a stale enable reply sends no second off, and a superseded enable never star
       sent.push('cancel')
       return true
     },
-    awaitGrabSelection: () => {
-      sent.push('await')
+    awaitGrabSelection: ({ armToken }: { armToken?: string }) => {
+      sent.push(`await:${armToken}`)
       return new Promise(() => {})
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: arming and cancelling use only these three calls.
@@ -130,12 +148,11 @@ it('a stale enable reply sends no second off, and a superseded enable never star
 
   act(() => result.current.toggle())
   act(() => result.current.cancel())
-  await act(async () => replies.shift()!({ ok: true, superseded: true }))
-  expect(sent).toEqual(['on', 'off'])
-
+  await act(async () => replies.shift()!({ ok: true, armToken: 'arm-1' }))
   act(() => result.current.toggle())
   await act(async () => replies.shift()!({ ok: true, superseded: true }))
-  expect(sent).toEqual(['on', 'off', 'on'])
   expect(result.current.state).toBe('idle')
-  vi.unstubAllGlobals()
+  act(() => result.current.toggle())
+  await act(async () => replies.shift()!({ ok: true, armToken: 'arm-3' }))
+  expect(sent).toEqual(['on', 'off', 'on', 'on', 'await:arm-3'])
 })

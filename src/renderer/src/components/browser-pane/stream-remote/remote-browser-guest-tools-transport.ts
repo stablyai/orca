@@ -77,14 +77,14 @@ export function createRemoteBrowserGuestToolsTransport({
       })
     },
     // Not queued: it waits for a click, and the click must be able to reach the page meanwhile.
-    awaitGrabSelection: async ({ opId }): Promise<BrowserGrabResult> => {
+    awaitGrabSelection: async ({ opId, armToken }): Promise<BrowserGrabResult> => {
       const controller = new AbortController()
       awaitingSelections.add(controller)
       try {
         return (
           (await call<BrowserGrabResult>(
             'browser.grab.await',
-            { opId },
+            { opId, ...(armToken ? { armToken } : {}) },
             { signal: controller.signal }
           )) ?? { opId, kind: 'error', reason: 'Guest not ready' }
         )

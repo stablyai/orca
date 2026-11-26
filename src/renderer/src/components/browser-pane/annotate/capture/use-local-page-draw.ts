@@ -1,18 +1,20 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, type RefObject } from 'react'
 import type { GrabModeState } from '../grab/useGrabMode'
 import type { BrowserGuestAnnotationViewportBridge } from '../use-browser-guest-annotate-tools'
 import type { MarkupModeController } from './useMarkupMode'
 
 /**
  * Draw on a local page, which may start while Grab or Annotate is on: main clears the picker before capturing.
- * A capture still in flight is dropped once its document is replaced (reloads included) or its pane is hidden.
+ * A capture still in flight is dropped once its document is replaced (reloads included), its guest is lost, or its
+ * pane is hidden.
  */
 export function useLocalPageDraw({
   markup,
   grabState,
   stopPicker,
   isActive,
-  viewportBridge
+  viewportBridge,
+  webviewRef
 }: {
   markup: MarkupModeController
   grabState: GrabModeState
@@ -20,6 +22,7 @@ export function useLocalPageDraw({
   stopPicker: () => void
   isActive: boolean
   viewportBridge: BrowserGuestAnnotationViewportBridge
+  webviewRef: RefObject<Electron.WebviewTag | null>
 }): { startMarkup: () => Promise<void>; viewportBridge: BrowserGuestAnnotationViewportBridge } {
   const { start, abandonCapture } = markup
   const startMarkup = useCallback(() => {
@@ -34,6 +37,20 @@ export function useLocalPageDraw({
       abandonCapture()
     }
   }, [abandonCapture, isActive])
+
+  const capturing = markup.state === 'capturing'
+  useEffect(() => {
+    const webview = webviewRef.current
+    if (!capturing || !webview) {
+      return
+    }
+    webview.addEventListener('destroyed', abandonCapture)
+    webview.addEventListener('render-process-gone', abandonCapture)
+    return () => {
+      webview.removeEventListener('destroyed', abandonCapture)
+      webview.removeEventListener('render-process-gone', abandonCapture)
+    }
+  }, [abandonCapture, capturing, webviewRef])
 
   const drawAwareBridge = useMemo<BrowserGuestAnnotationViewportBridge>(
     () => ({

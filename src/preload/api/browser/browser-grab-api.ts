@@ -22,6 +22,8 @@ export type BrowserGrabApi = {
   ) => Promise<BrowserCaptureSelectionScreenshotResult>
   extractHoverPayload: (args: BrowserExtractHoverArgs) => Promise<BrowserExtractHoverResult>
   captureCleanPage: BrowserCaptureCleanPage
+  /** Retires a clean capture the renderer gave up on: stages not yet started are skipped. */
+  retireCleanCapture: (args: { attemptId: string }) => Promise<void>
   onGrabModeToggle: (callback: (browserPageId: string, intent: GrabIntent) => void) => () => void
   onGrabActionShortcut: (
     callback: (args: { browserPageId: string; key: 'c' | 's' }) => void

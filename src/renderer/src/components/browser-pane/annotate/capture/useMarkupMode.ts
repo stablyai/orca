@@ -21,6 +21,8 @@ export type MarkupCaptureContext = {
   cssWidth: number
   cssHeight: number
   outputScale: number
+  /** False once the page this capture began on is gone, so its result or error is dropped silently. */
+  isCurrent?: () => boolean
 }
 
 export type MarkupCompleteInput = {
@@ -54,18 +56,21 @@ export function useMarkupMode({
   // Cancellation invalidates pending captures so stale completions cannot reopen drawing.
   const captureTokenRef = useRef(0)
 
-  const capturingRef = useRef(false)
+  // Aborting retires the capture in flight, including its attempt in main.
+  const captureAbortRef = useRef<AbortController | null>(null)
 
   // Unmount retires any capture in flight, so a closed tab never captures, updates state, or shows an error toast.
   useEffect(
     () => () => {
       captureTokenRef.current += 1
+      captureAbortRef.current?.abort()
     },
     []
   )
 
   const reset = useCallback(() => {
-    capturingRef.current = false
+    captureAbortRef.current?.abort()
+    captureAbortRef.current = null
     captureTokenRef.current += 1
     contextRef.current = null
     setBaseImage(null)
@@ -85,20 +90,32 @@ export function useMarkupMode({
       )
       return
     }
+    captureAbortRef.current?.abort()
+    const abort = new AbortController()
+    captureAbortRef.current = abort
     const token = (captureTokenRef.current += 1)
     contextRef.current = context
-    capturingRef.current = true
     setState('capturing')
-    try {
-      const image = await captureMarkupBaseImage(context.source)
+    const isStale = (): boolean => {
       if (captureTokenRef.current !== token) {
+        return true
+      }
+      if (context.isCurrent?.() === false) {
+        reset()
+        return true
+      }
+      return false
+    }
+    try {
+      const image = await captureMarkupBaseImage(context.source, abort.signal)
+      if (isStale()) {
         return
       }
-      capturingRef.current = false
+      captureAbortRef.current = null
       setBaseImage(image)
       setState('drawing')
     } catch {
-      if (captureTokenRef.current !== token) {
+      if (isStale()) {
         return
       }
       // Return to idle on capture failure; no overlay exists to offer recovery.
@@ -115,7 +132,7 @@ export function useMarkupMode({
   }, [reset])
 
   const abandonCapture = useCallback(() => {
-    if (capturingRef.current) {
+    if (captureAbortRef.current) {
       reset()
     }
   }, [reset])

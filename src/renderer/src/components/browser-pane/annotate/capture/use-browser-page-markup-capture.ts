@@ -6,6 +6,14 @@ import {
   type MarkupModeController
 } from './useMarkupMode'
 
+function readGuestId(webview: Electron.WebviewTag): number | null {
+  try {
+    return webview.isConnected ? webview.getWebContentsId() : null
+  } catch {
+    return null
+  }
+}
+
 export function useBrowserPageMarkupCapture(
   webviewRef: MutableRefObject<Electron.WebviewTag | null>,
   /** Set for local browser pages: main clears the picker before capturing, so Draw can start from Grab. */
@@ -27,7 +35,16 @@ export function useBrowserPageMarkupCapture(
           : { kind: 'webview', webview },
         cssWidth: rect.width,
         cssHeight: rect.height,
-        outputScale: window.devicePixelRatio || 1
+        outputScale: window.devicePixelRatio || 1,
+        // The same element and guest the capture began on; a replaced or reattached guest is another page.
+        ...(cleanPageId
+          ? {
+              isCurrent: (
+                (guestId) => () =>
+                  webviewRef.current === webview && readGuestId(webview) === guestId
+              )(readGuestId(webview))
+            }
+          : {})
       }
     }, [cleanPageId, webviewRef]),
     onDeliver: deliverMarkupToClipboard

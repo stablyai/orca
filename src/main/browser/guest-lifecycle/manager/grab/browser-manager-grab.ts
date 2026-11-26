@@ -15,6 +15,9 @@ import type {
 } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import { BrowserManagerViewport } from '../viewport/browser-manager-viewport'
 
+// A guest no arm ever reached has no overlay to remove, so its teardown never waits behind a page load.
+const armedGuests = new WeakSet<Electron.WebContents>()
+
 // Electron's executeJavaScript waits for did-stop-loading, so a guest destroyed mid-load never settles it.
 function runOverlayScript(guest: Electron.WebContents, mode: 'arm' | 'teardown'): Promise<boolean> {
   return new Promise((resolve) => {
@@ -70,8 +73,9 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
     if (!enabled) {
       this.cancelGrabOp(browserTabId, 'user')
       // A cancelled op only queues its teardown; awaiting this idempotent one after it means "off" is off in the page.
-      return runOverlayScript(guest, 'teardown')
+      return armedGuests.has(guest) ? runOverlayScript(guest, 'teardown') : true
     }
+    armedGuests.add(guest)
     // Arm eagerly so hover feedback appears before selection starts.
     return runOverlayScript(guest, 'arm')
   }

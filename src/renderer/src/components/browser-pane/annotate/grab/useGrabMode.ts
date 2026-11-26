@@ -145,7 +145,7 @@ export function useGrabMode(
 
     setState('awaiting')
     const result = await transport
-      .awaitGrabSelection({ browserPageId: tabId, opId })
+      .awaitGrabSelection({ browserPageId: tabId, opId, armToken: setResult.armToken })
       .catch((): BrowserGrabResult => ({ opId, kind: 'error', reason: 'Selection failed' }))
 
     if (!mountedRef.current || activeOpIdRef.current !== opId || grabTabIdRef.current !== tabId) {

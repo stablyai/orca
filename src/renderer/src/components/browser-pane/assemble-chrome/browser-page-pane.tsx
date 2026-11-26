@@ -185,7 +185,8 @@ export function BrowserPagePane({
     grabState: grab.state,
     stopPicker: grabAnnotations.cancelPendingBrowserCapture,
     isActive,
-    viewportBridge
+    viewportBridge,
+    webviewRef
   })
   const nav = useBrowserPageNavigationDownloads({
     browserTabId: browserTab.id,

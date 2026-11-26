@@ -1,4 +1,5 @@
 import { withTimeout } from '../../../../../../shared/concurrency/promise-timeout-fallback'
+import { createNonSecureContextUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 
 // Capture in the renderer from local webviews or streamed images so local and remote panes share markup delivery.
 
@@ -18,14 +19,16 @@ export type MarkupCaptureSource =
 // A page still loading delays the teardown; past this Draw reports a failed capture instead of hanging.
 const CLEAN_PAGE_CAPTURE_DEADLINE_MS = 10_000
 
+/** `signal` aborts when Draw gives up; a clean-page capture then retires its attempt in main. */
 export async function captureMarkupBaseImage(
-  source: MarkupCaptureSource
+  source: MarkupCaptureSource,
+  signal?: AbortSignal
 ): Promise<MarkupBaseImage> {
   if (source.kind === 'webview') {
     return captureFromWebview(source.webview)
   }
   if (source.kind === 'clean-page') {
-    return captureCleanPage(source.browserPageId)
+    return captureCleanPage(source.browserPageId, signal)
   }
   return captureFromImage(source.element)
 }
@@ -41,13 +44,26 @@ async function captureFromWebview(webview: Electron.WebviewTag): Promise<MarkupB
   return { dataUrl: flattenToOpaquePng(image, size.width, size.height), ...size }
 }
 
-async function captureCleanPage(browserPageId: string): Promise<MarkupBaseImage> {
+async function captureCleanPage(
+  browserPageId: string,
+  signal: AbortSignal | undefined
+): Promise<MarkupBaseImage> {
+  const attemptId = createNonSecureContextUuid()
+  let retired = false
+  const retire = (): void => {
+    if (!retired) {
+      retired = true
+      void window.api.browser.retireCleanCapture({ attemptId })
+    }
+  }
+  signal?.addEventListener('abort', retire, { once: true })
   const capture = await withTimeout(
-    window.api.browser.captureCleanPage({ browserPageId }),
+    window.api.browser.captureCleanPage({ browserPageId, attemptId }),
     CLEAN_PAGE_CAPTURE_DEADLINE_MS,
     null
-  )
+  ).finally(() => signal?.removeEventListener('abort', retire))
   if (!capture) {
+    retire()
     throw new Error('markup: the page could not be captured without the picker')
   }
   const image = await loadImage(capture.dataUrl)

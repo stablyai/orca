@@ -87,6 +87,7 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
         )
       }),
     captureCleanPage: () => Promise.resolve(null),
+    retireCleanCapture: () => Promise.resolve(),
     onGrabModeToggle: () => noopUnsubscribe,
     onGrabActionShortcut: () => noopUnsubscribe,
     onGuestEscape: () => noopUnsubscribe,
