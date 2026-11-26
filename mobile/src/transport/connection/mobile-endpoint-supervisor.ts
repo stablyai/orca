@@ -64,6 +64,7 @@ export class MobileEndpointSupervisor {
       readLocalNetwork: dependencies.readLocalNetwork,
       now: dependencies.now,
       setTimer: dependencies.setTimer,
+      clearTimer: dependencies.clearTimer,
       onLocalNetworkArrival: () => this.directProbe.arrive()
     })
     this.leaseRotation = new RelayLeaseRotationTimer(dependencies, () => {
@@ -198,6 +199,7 @@ export class MobileEndpointSupervisor {
   setForeground(foreground: boolean): void {
     if (!foreground) {
       this.replaceQueuedBehindRecovery = false
+      this.nudgeRouter.cancelTrailingLift()
     }
     this.backgroundGrace.setForeground(foreground)
     if (foreground && this.relayRotationPending) {
@@ -210,6 +212,7 @@ export class MobileEndpointSupervisor {
   stop(): void {
     this.stopped = true
     this.replaceQueuedBehindRecovery = false
+    this.nudgeRouter.cancelTrailingLift()
     this.directProbe.stop()
     this.unsubscribeState?.()
     this.unsubscribeState = null

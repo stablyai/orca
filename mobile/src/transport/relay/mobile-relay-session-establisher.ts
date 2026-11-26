@@ -41,6 +41,7 @@ export class MobileRelaySessionEstablisher {
   private directorTrySeq = 0
   // A refused pending gets a few slow reprobes for a late commit, then counts as refused for good.
   private pendingRefusals = 0
+  private resolvedThisAttempt = false
 
   constructor(
     private readonly args: {
@@ -103,11 +104,11 @@ export class MobileRelaySessionEstablisher {
     this.directorTried = kept
     const lastTried = (token: string) => this.directorTried.get(token) ?? -1
     const ordered = [...credentials].sort((a, b) => lastTried(a.token) - lastTried(b.token))
-    let directorAnswered = false
+    this.resolvedThisAttempt = false
     for (const credential of ordered) {
       usedPending = credential.token === pending?.token
-      // The director admits one resolve per host per window, so after a 401 the rest only dial the cell.
-      const result = await this.dial(credential, !directorAnswered)
+      // The director admits one resolve per host per window, so after any lookup the rest only dial the cell.
+      const result = await this.dial(credential, !this.resolvedThisAttempt)
       if (result.ok) {
         this.directorTried.clear()
         this.pendingRefusals = 0
@@ -120,7 +121,6 @@ export class MobileRelaySessionEstablisher {
       this.args.onDialFailure(result.error)
       // Only a 401 used the admission; a rate-limited 503/429 never reached the token, so it goes first next.
       if (isDirectorRefusal(result.error)) {
-        directorAnswered = true
         this.directorTried.set(credential.token, ++this.directorTrySeq)
       }
       if (isExplicitCredentialRejection(result.error)) {
@@ -163,6 +163,7 @@ export class MobileRelaySessionEstablisher {
     relay: MobileRelayEndpoint
     resumeToken: string
   }): Promise<MobileRelayEndpoint> {
+    this.resolvedThisAttempt = true
     try {
       const resolved = await this.args.resolveRelay({
         ...input,

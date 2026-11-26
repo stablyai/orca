@@ -25,6 +25,7 @@ export class MobileEndpointNudgeRouter {
       readLocalNetwork: () => Promise<string | null>
       now: () => number
       setTimer: ScheduleTimer
+      clearTimer: typeof clearTimeout
       onLocalNetworkArrival: () => void
     }
   ) {
@@ -55,6 +56,7 @@ export class MobileEndpointNudgeRouter {
     // slow gate, a Wi-Fi move lifts it at once, any other callback at most once per window.
     if (reason === 'network-change' && args.controller.holdsExternalSignalGate()) {
       const liftGate = () => {
+        this.cancelTrailingLift()
         this.lastGateLiftAt = args.now()
         args.controller.handleActiveNudge(args.logical, reason)
       }
@@ -81,6 +83,14 @@ export class MobileEndpointNudgeRouter {
     // The phone usually joins home Wi-Fi in a pocket, so a resume can be the first sight of the new network.
     if (reason !== 'focus') {
       void this.routeNetworkChange()
+    }
+  }
+
+  // A newer lift, background or stop supersedes the window's trailing retry.
+  cancelTrailingLift(): void {
+    if (this.trailingLift) {
+      this.args.clearTimer(this.trailingLift)
+      this.trailingLift = null
     }
   }
 
