@@ -37,6 +37,7 @@ import {
   createPluginWorkerOrcaApi,
   type PluginWorkerOrcaApi
 } from '../../../../shared/plugins/workers/plugin-worker-orca-api'
+import { pluginPanelAnswerOutput } from '../../../../shared/plugins/workers/plugin-panel-answer-output'
 
 export type PluginHostCallError = Error & {
   code: PluginErrorCode
@@ -225,8 +226,14 @@ export function createPluginWorkerRuntime(
     const controller = new AbortController()
     runningCommands.set(request.id, controller)
     try {
-      const { input, panel } = parsed.data
-      send(pluginResult(request.id, await handler(input, { panel, signal: controller.signal })))
+      const { name, input, panel } = parsed.data
+      const output = await handler(input, { panel, signal: controller.signal })
+      const answer = pluginPanelAnswerOutput(name, output)
+      send(
+        'error' in answer
+          ? pluginFailure(request.id, answer.error)
+          : pluginResult(request.id, answer.output)
+      )
     } catch (error) {
       send(pluginFailure(request.id, handlerFailure(error)))
     } finally {

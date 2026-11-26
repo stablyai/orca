@@ -115,6 +115,8 @@ export function resolvePluginServiceHostCallPolicy(input: {
 export function pluginPanelBridgeServices(bridge: PluginPanelBridge): PluginPanelBridgeServices {
   return {
     request: (pluginKey, request, caller) => bridge.request({ pluginKey, caller, ...request }),
+    requestBytes: (pluginKey, request, caller) =>
+      bridge.requestBytes({ pluginKey, caller, ...request }),
     subscribe: (pluginKey, panelId, event) => bridge.subscribe(pluginKey, panelId, event),
     dataChanged: (pluginKey, area, key) => bridge.dataChanged(pluginKey, area, key)
   }

@@ -40,9 +40,10 @@ declare module 'orca/worker' {
   /** `signal` aborts when the request times out or its panel closes. */
   export type PanelRequestContext = { panel: PanelCaller; signal: AbortSignal }
   export type PanelsApi = {
-    /** Answers a panel's `plugin.request(name, input)` with a JSON value. A thrown error whose
-     *  `code` is a host error code (`invalid_params`, `conflict`, ...) reaches the panel with it;
-     *  any other is `action_failed`. */
+    /** Answers a panel's `plugin.request(name, input)` with a JSON value, or its
+     *  `plugin.requestBytes` with an `ArrayBuffer` or a typed array (at most 2 MiB). A thrown
+     *  error whose `code` is a host error code (`invalid_params`, `conflict`, ...) reaches the
+     *  panel with it; any other is `action_failed`. */
     handle<K extends keyof PluginRequests>(
       name: K,
       handler: (

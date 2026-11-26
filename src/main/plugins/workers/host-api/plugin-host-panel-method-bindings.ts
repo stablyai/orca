@@ -17,6 +17,11 @@ export type PluginPanelBridgeServices = {
     request: { name: string; input: unknown; timeoutMs?: number },
     caller: PluginPanelCaller
   ): Promise<PluginJsonValue>
+  requestBytes(
+    pluginId: string,
+    request: { name: string; input: unknown; timeoutMs?: number },
+    caller: PluginPanelCaller
+  ): Promise<ArrayBuffer>
   subscribe(pluginId: string, panelId: string, event: PluginEventName): void
   dataChanged(pluginId: string, area: PluginDataArea, key: string): void
 }
@@ -50,6 +55,25 @@ export const PLUGIN_PANEL_BRIDGE_HANDLERS = {
         caller
       )
       return { output }
+    }
+  ),
+  'plugin.requestBytes': bind(
+    api['plugin.requestBytes'],
+    async ({ name, input, timeoutMs }, { pluginId, services, scope }) => {
+      const caller = requirePanel(scope.panel)
+      // Why before the worker runs: a paired client's JSON RPC cannot carry an ArrayBuffer.
+      if (scope.callerWebContentsId === undefined) {
+        throw new PluginHostCallError(
+          'not_permitted',
+          'this method is only available in the Orca desktop app'
+        )
+      }
+      const bytes = await requireBridge(services.panels).requestBytes(
+        pluginId,
+        { name, input: input ?? null, timeoutMs },
+        caller
+      )
+      return { bytes }
     }
   ),
   'events.subscribe': bind(
