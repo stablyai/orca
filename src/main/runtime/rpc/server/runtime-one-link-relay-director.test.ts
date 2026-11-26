@@ -162,7 +162,7 @@ describe('a desktop paired over Relay only, when its cell stops answering', () =
 function parkedRelayDials(): () => number {
   let parked = 0
   const afterHold = RelayRuntimeDialMemory.prototype.afterHold
-  vi.spyOn(RelayRuntimeDialMemory.prototype, 'afterHold').mockImplementation(function (
+  const spy = vi.spyOn(RelayRuntimeDialMemory.prototype, 'afterHold').mockImplementation(function (
     this: RelayRuntimeDialMemory,
     dial: () => void
   ) {
@@ -188,5 +188,6 @@ function parkedRelayDials(): () => number {
       cancel()
     }
   })
+  cleanups.push(() => spy.mockRestore())
   return () => parked
 }
