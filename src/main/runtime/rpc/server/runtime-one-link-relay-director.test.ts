@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RelayDirectorHttpError } from '../../../../shared/remote-runtime/relay/client/relay-director-resolve'
 import type { MobileRelayEndpoint } from '../../../../shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { startHostOverRelay } from '../testing/relay-runtime-host.test-fixtures'
+import { clearRelayDialHolds } from '../../../ipc/runtime-environments/connections/runtime-environment-relay-link'
 
 const cleanups: (() => Promise<void> | void)[] = []
 afterEach(async () => {
@@ -74,29 +75,75 @@ describe('a desktop paired over Relay only, when its cell stops answering', () =
   )
 
   it(
-    'while its host is offline, its many callers wait out one backoff instead of each dialing',
+    'while its host is offline, its callers wait on one hold: few dials, no spun backoff, the hold kept past a failed director lookup',
     async () => {
-      const host = await startHostOverRelay(cleanups)
+      const resolvedAt: number[] = []
+      // The director can't be reached: the lookup the 4404 streak asks for fails.
+      const resolveRelay = vi.fn(async () => {
+        resolvedAt.push(performance.now())
+        throw new Error('director unreachable')
+      })
+      const host = await startHostOverRelay(cleanups, { resolveRelay })
       expect((await host.link.request('status.get', { probe: true }, 15_000)).ok).toBe(true)
       host.cellState.hostOffline = true
       host.cell.cut()
-      const dialsBefore = host.cellState.dialedHosts.length
+      const dialsBefore = host.cellState.dialedAt.length
       // Streams and probes asking again and again, as a client's many owners do.
       const asking = setInterval(() => {
         host.link.request('status.get', { probe: true }, 1_000).catch(() => {})
       }, 100)
       cleanups.push(() => clearInterval(asking))
-      // ast-grep-ignore: test-no-real-time-wait -- counts real dials over a stretch of the backoff
+      // ast-grep-ignore: test-no-real-time-wait -- counts real dials over a stretch of the hold
       await new Promise((resolve) => setTimeout(resolve, 5_000))
-      // Dials at about 0, 1.5 and 4.5 s (1.5 s doubling), never one per caller.
-      expect(host.cellState.dialedHosts.length - dialsBefore).toBeLessThanOrEqual(4)
+      const dials = host.cellState.dialedAt.slice(dialsBefore)
+      // Dials at about 0, 1.5 and 3-4.5 s, never one per caller.
+      expect(dials.length).toBeLessThanOrEqual(4)
+      // One timer: after the episode's first 4404 the channel redials itself on the hold, so the
+      // connection's own backoff isn't stacked on it, nor spun by each held caller.
+      expect(host.link.getDiagnostics().reconnectAttempt).toBeLessThanOrEqual(2)
+      // The failed lookup kept the 4404's hold: the next dial still waited.
+      expect(resolvedAt).toHaveLength(1)
+      const nextDial = dials.find((at) => at > resolvedAt[0])
+      if (nextDial !== undefined) {
+        expect(nextDial - resolvedAt[0]).toBeGreaterThanOrEqual(1_000)
+      }
 
       host.cellState.hostOffline = false
       await vi.waitFor(
         async () =>
           expect((await host.link.request('status.get', { probe: true }, 2_000)).ok).toBe(true),
-        { timeout: 15_000 }
+        // The hold is capped at 15 s.
+        { timeout: 20_000 }
       )
+    },
+    // A real host and cell: each case waits on a few dials over loopback.
+    RELAY_CASE_TIMEOUT_MS
+  )
+
+  it(
+    'an explicit Connect lifts the hold: the host back online is dialed at once',
+    async () => {
+      vi.stubEnv('ORCA_TEST_REMOTE_RUNTIME_ONE_LINK', '1')
+      const host = await startHostOverRelay(cleanups, { mainOpener: true })
+      expect((await host.link.request('status.get', { probe: true }, 15_000)).ok).toBe(true)
+      host.cellState.hostOffline = true
+      host.cell.cut()
+      const asking = setInterval(() => {
+        host.link.request('status.get', { probe: true }, 1_000).catch(() => {})
+      }, 100)
+      cleanups.push(() => clearInterval(asking))
+      // Three 4404s: the next hold is at least 1.5 s.
+      await vi.waitFor(() => expect(host.cellState.dialedAt.length).toBeGreaterThanOrEqual(4), {
+        timeout: 15_000
+      })
+      const dials = host.cellState.dialedAt.length
+      host.cellState.hostOffline = false
+      const connectAt = performance.now()
+      clearRelayDialHolds('relay-link-test')
+      await vi.waitFor(() => expect(host.cellState.dialedAt.length).toBeGreaterThan(dials), {
+        timeout: 5_000
+      })
+      expect(host.cellState.dialedAt[dials] - connectAt).toBeLessThan(500)
     },
     // A real host and cell: each case waits on a few dials over loopback.
     RELAY_CASE_TIMEOUT_MS

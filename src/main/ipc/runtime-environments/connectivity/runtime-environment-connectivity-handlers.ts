@@ -1,4 +1,5 @@
 import { withTestRelayReach } from '../../../../shared/remote-runtime/pairing/runtime-relay-endpoint'
+import { clearRelayDialHolds } from '../connections/runtime-environment-relay-link'
 import { handleRuntimeEnvironmentChannel } from '../runtime-environment-channel-handling'
 import { sharedHostStatusSnapshots } from '../requests/runtime-environment-shared-hosts'
 import {
@@ -135,6 +136,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       assertWslHostReachable(environment)
       clearRuntimeEnvironmentManualDisconnect(environment.id)
       noteRuntimeEnvironmentConnectRequested(environment.id)
+      clearRelayDialHolds(environment.id)
       clearSshCredentialDeclinedForEnvironment(environment)
       await liftSshUserDisconnectForEnvironment(environment)
       await connectThroughOwningService(environment)

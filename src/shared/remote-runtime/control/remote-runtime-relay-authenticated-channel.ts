@@ -1,6 +1,7 @@
 import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
 import { parseRuntimeRelayEndpoint } from '../pairing/runtime-relay-endpoint'
 import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
+import { errorMessage } from '../../errors/error-message'
 import type { RelayClientPlatform } from '../relay/client/relay-client-platform'
 import { PairedE2EEAuthenticationError } from '../relay/client/paired-e2ee-v2-physical-channel'
 import { RelayE2eeLink, RelayOuterError } from '../relay/client/relay-e2ee-link'
@@ -10,7 +11,10 @@ import {
   type SharedHostLinkEntry
 } from '../relay/client/shared-host-relay-link'
 import { RelayDialAbortedError } from '../relay/client/relay-director-fallback'
-import type { resolveRelayEndpoint } from '../relay/client/relay-director-resolve'
+import {
+  relayDirectorRetryAfterMs,
+  type resolveRelayEndpoint
+} from '../relay/client/relay-director-resolve'
 import {
   dialRelayRuntimeLink,
   RelayRuntimeDialMemory,
@@ -59,11 +63,6 @@ export function relayRuntimeChannelOpener(
     if (!entry || !dial) {
       return { ok: false, error: credentialUnavailableError() }
     }
-    // The host was offline: no dial before its hold ends, whoever asks.
-    const held = config.memory?.heldDialRefusal(Date.now())
-    if (held) {
-      return { ok: false, error: held }
-    }
     return {
       ok: true,
       channel: openRelayRuntimeChannel(connection, config, entry, dial, events)
@@ -94,6 +93,7 @@ function openRelayRuntimeChannel(
   let state: 'connecting' | 'open' | 'closed' = 'connecting'
   let ready = false
   let link: RelayE2eeLink | null = null
+  let cancelHold = (): void => {}
   // Settles the dial in flight: the cell admitted it (hello), or refused or dropped it first.
   let settleDial: ((result: { ok: true } | { ok: false; error: Error }) => void) | null = null
   const memory = config.memory ?? new RelayRuntimeDialMemory()
@@ -109,6 +109,7 @@ function openRelayRuntimeChannel(
   const shut = (): void => {
     state = 'closed'
     calls.failAll(new Error('relay link closed'))
+    cancelHold()
     link?.close()
     takeDial()?.({ ok: false, error: new RelayDialAbortedError() })
   }
@@ -138,7 +139,7 @@ function openRelayRuntimeChannel(
     if (state === 'closed' || error instanceof RelayDialAbortedError) {
       return
     }
-    memory.noteDialFailed(error, Date.now())
+    memory.noteRetryAfter(relayDirectorRetryAfterMs(error))
     if (relayCredentialRefused(error)) {
       const current = config.store.entry()
       const next = current ? withoutRefusedDial(current, dial) : undefined
@@ -202,7 +203,7 @@ function openRelayRuntimeChannel(
         events.onAuthenticating()
       },
       onAuthenticated: () => {
-        memory.noteConnected(Date.now())
+        memory.noteConnected()
         events.onAnswer()
         // Invite, or an install that may have committed: install (idempotent per reqId) before
         // anything else. Resume: renew alongside.
@@ -253,6 +254,8 @@ function openRelayRuntimeChannel(
         }
       },
       onError: (error) => {
+        // Each dial's own outcome: a director lookup failing after a 4404 keeps the 4404's hold.
+        memory.noteDialFailed(error)
         const settle = takeDial()
         if (settle) {
           settle({ ok: false, error })
@@ -268,7 +271,12 @@ function openRelayRuntimeChannel(
         return
       }
       settleDial = resolve
-      link = openLink(cell())
+      // A host held offline: wait out its hold (one timer), then dial; closing cancels the wait.
+      cancelHold = memory.afterHold(() => {
+        if (state !== 'closed') {
+          link = openLink(cell())
+        }
+      })
     })
   const dialed = dialRelayRuntimeLink({
     endpoint: connection.endpoint,
@@ -277,7 +285,8 @@ function openRelayRuntimeChannel(
     cell,
     dialOnce,
     store: config.store,
-    resolveRelay: config.resolveRelay
+    resolveRelay: config.resolveRelay,
+    beforeRedial: () => void (state = 'connecting')
   })
   void dialed.then((result) => {
     if (!result.ok) {
@@ -305,10 +314,6 @@ function credentialUnavailableError(): RemoteRuntimeClientError {
     'relay_credential_unavailable',
     'This server can be reached only over Relay, and its pairing has expired. Pair it again.'
   )
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }
 
 /** The Relay reach a test-paired runtime's endpoint names, as a link entry with its first invite. */

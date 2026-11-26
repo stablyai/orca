@@ -18,6 +18,8 @@ import { NODE_RELAY_CLIENT_PLATFORM } from '../../../../shared/remote-runtime/re
 
 // Test-only Relay pairings keep their resume credential for this app run; a restart pairs again.
 const entries = new Map<string, SharedHostLinkEntry>()
+// Each Relay host's dial memory, so an explicit Connect or a wake can lift its offline hold.
+const dialMemories = new Map<string, RelayRuntimeDialMemory>()
 // Relay channels open now, each with its one-link decision and a cut that ends it as a drop.
 const liveRelayChannels = new Set<{ allowed: () => boolean; cut: () => void }>()
 
@@ -29,6 +31,8 @@ const liveRelayChannels = new Set<{ allowed: () => boolean; cut: () => void }>()
 export function relayControlChannelOpener(
   connection: PairedRuntimeConnection,
   allowed: () => boolean,
+  // Across this connection's dials: its 4404 hold and streak, the cell the director last named.
+  memory = new RelayRuntimeDialMemory(),
   // Tests reach a stand-in cell; the app dials the real one.
   platform = NODE_RELAY_CLIENT_PLATFORM
 ): ((clientCapabilities: readonly string[]) => AuthenticatedRuntimeChannelOpener) | null {
@@ -36,8 +40,6 @@ export function relayControlChannelOpener(
     return null
   }
   const key = connection.credential.deviceToken
-  // Across this connection's dials: its 4404 streak and the cell the director last named.
-  const memory = new RelayRuntimeDialMemory()
   return (clientCapabilities) => {
     const relay = relayRuntimeChannelOpener(connection, {
       platform,
@@ -83,11 +85,20 @@ export function relayControlChannelOpener(
 /** A control connection's one-link options for its host (runtime-environment-one-link.ts). */
 export function controlLinkOptions(
   environmentId: string,
-  connection: PairedRuntimeConnection
+  connection: PairedRuntimeConnection,
+  // Tests reach a stand-in cell; the app dials the real one.
+  platform = NODE_RELAY_CLIENT_PLATFORM
 ): Pick<RemoteRuntimeSharedControlConnectionOptions, 'binaryChannels' | 'openChannel'> {
-  const openChannel = relayControlChannelOpener(connection, () =>
-    remoteRuntimeOneLinkAllowed(environmentId, connection)
+  const memory = new RelayRuntimeDialMemory()
+  const openChannel = relayControlChannelOpener(
+    connection,
+    () => remoteRuntimeOneLinkAllowed(environmentId, connection),
+    memory,
+    platform
   )
+  if (openChannel) {
+    dialMemories.set(environmentId, memory)
+  }
   if (openChannel) {
     // Its link is all a Relay host has, so it always carries channels; the opener decides per dial.
     return { binaryChannels: true, openChannel }
@@ -127,4 +138,13 @@ function relayOneLinkOffError(): RemoteRuntimeClientError {
     'relay_one_link_off',
     'Connections to this server over Relay are turned off.'
   )
+}
+
+/** Explicit Connect (one host) or the OS or network coming back (all): dial now, not after a hold. */
+export function clearRelayDialHolds(environmentId?: string): void {
+  for (const [id, memory] of dialMemories) {
+    if (environmentId === undefined || id === environmentId) {
+      memory.clearHold()
+    }
+  }
 }

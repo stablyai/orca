@@ -19,7 +19,10 @@ import { RelayRuntimeDialMemory } from '../../../../shared/remote-runtime/contro
 import { MOBILE_RELAY_CLOSE_CODE } from '../../../../shared/remote-runtime/relay/mobile-relay-close-codes'
 import { parsePairingCode } from '../../../../shared/remote-runtime/pairing/pairing'
 import { pairedRuntimeConnectionFromOffer } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
-import { runtimeRelayEndpoint } from '../../../../shared/remote-runtime/pairing/runtime-relay-endpoint'
+import {
+  parseRuntimeRelayEndpoint,
+  runtimeRelayEndpoint
+} from '../../../../shared/remote-runtime/pairing/runtime-relay-endpoint'
 import { NODE_RELAY_CLIENT_PLATFORM } from '../../../../shared/remote-runtime/relay/client/node/node-relay-client-platform'
 import type { RelayClientPlatform } from '../../../../shared/remote-runtime/relay/client/relay-client-platform'
 import type { SharedHostLinkEntry } from '../../../../shared/remote-runtime/relay/client/shared-host-relay-link'
@@ -34,8 +37,7 @@ import { CloudRelayTransport } from '../transports/relay-transport'
 import { OrcaRuntimeRpcServer } from '../server/runtime-rpc'
 import { burst, ticks } from './one-link-burst-streams.test-fixtures'
 import { startRelayProtocolCellStandIn } from './relay-protocol-cell-stand-in'
-import { relayControlChannelOpener } from '../../../ipc/runtime-environments/connections/runtime-environment-relay-link'
-import { remoteRuntimeOneLinkAllowed } from '../../../ipc/runtime-environments/connections/runtime-environment-one-link'
+import { controlLinkOptions } from '../../../ipc/runtime-environments/connections/runtime-environment-relay-link'
 
 export const RELAY_TEST_INVITE = 'I'.repeat(43)
 const CELL_ORIGIN = 'https://cell.test'
@@ -50,7 +52,7 @@ export async function startHostOverRelay(
     control?: Partial<RemoteRuntimeSharedControlConnectionOptions>
     /** Dial through main's opener (its one-link decision and cut), not the bare Relay channel. */
     mainOpener?: boolean
-    /** Stands in for the Relay director's lookup (the bare channel only). */
+    /** Stands in for the Relay director's lookup (the bare channel only; main's asks the real one). */
     resolveRelay?: Parameters<typeof relayRuntimeChannelOpener>[1]['resolveRelay']
   } = {}
 ) {
@@ -98,13 +100,16 @@ export async function startHostOverRelay(
     dialedHosts: string[]
     /** The host is away: the cell answers 4404 (host offline) for any credential. */
     hostOffline: boolean
+    /** When each dial left, for gaps between them. */
+    dialedAt: number[]
   } = {
     resumeHash: null,
     inviteSpent: false,
     resumeRevoked: false,
     hostCell: 'cell.test',
     dialedHosts: [],
-    hostOffline: false
+    hostOffline: false,
+    dialedAt: []
   }
   server.setMobileRelayPairingProvider({
     createPairingRelay: () => Promise.reject(new Error('not in this test')),
@@ -217,16 +222,21 @@ export async function startHostOverRelay(
   const direct = pairedRuntimeConnectionFromOffer(parsePairingCode(offer.pairingUrl)!)
   const connection = {
     ...direct,
-    endpoint: runtimeRelayEndpoint({
-      ...relay,
-      inviteToken: RELAY_TEST_INVITE,
-      inviteExpiresAt: FAR_FUTURE
-    })
+    endpoint: withoutDirectorIf(
+      // Main's opener asks the real director; tests through it name none, so none is reached.
+      options.mainOpener === true,
+      runtimeRelayEndpoint({
+        ...relay,
+        inviteToken: RELAY_TEST_INVITE,
+        inviteExpiresAt: FAR_FUTURE
+      })
+    )
   }
   const platform: RelayClientPlatform = {
     ...NODE_RELAY_CLIENT_PLATFORM,
     createSocket: (url, events) => {
       cellState.dialedHosts.push(new URL(url).host)
+      cellState.dialedAt.push(performance.now())
       return NODE_RELAY_CLIENT_PLATFORM.createSocket(
         url.replace(/^wss:\/\/[^/]+/, cell.url),
         events
@@ -241,11 +251,7 @@ export async function startHostOverRelay(
     appHeartbeat: {},
     ...options.control,
     openChannel: options.mainOpener
-      ? relayControlChannelOpener(
-          connection,
-          () => remoteRuntimeOneLinkAllowed('relay-link-test', connection),
-          platform
-        )!
+      ? controlLinkOptions('relay-link-test', connection, platform).openChannel!
       : (clientCapabilities) =>
           relayRuntimeChannelOpener(connection, {
             platform,
@@ -273,4 +279,13 @@ export async function startHostOverRelay(
     entry: () => entry,
     setEntry: (next: SharedHostLinkEntry | undefined) => void (entry = next)
   }
+}
+
+function withoutDirectorIf(strip: boolean, endpoint: string): string {
+  const reach = parseRuntimeRelayEndpoint(endpoint)
+  if (!strip || !reach) {
+    return endpoint
+  }
+  const { directorUrl: _directorUrl, ...rest } = reach
+  return `orca-relay:${btoa(JSON.stringify(rest))}`
 }

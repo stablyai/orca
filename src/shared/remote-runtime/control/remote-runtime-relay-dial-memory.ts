@@ -5,12 +5,16 @@ import {
 } from '../relay/client/relay-host-offline-streak'
 import { RelayOuterError } from '../relay/client/relay-e2ee-link'
 import { MOBILE_RELAY_CLOSE_CODE } from '../relay/mobile-relay-close-codes'
-import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import {
+  RELAY_DIRECTOR_RETRY_AFTER_MAX_MS,
   RelayDirectorHttpError,
   resolveRelayEndpoint
 } from '../relay/client/relay-director-resolve'
-import { dialRelayThroughDirectorFallback } from '../relay/client/relay-director-fallback'
+import {
+  dialRelayThroughDirectorFallback,
+  RelayDialAbortedError
+} from '../relay/client/relay-director-fallback'
+import { PairedE2EEAuthenticationError } from '../relay/client/paired-e2ee-v2-physical-channel'
 import { parseRuntimeRelayEndpoint } from '../pairing/runtime-relay-endpoint'
 import { relayRefusedCredential } from '../relay/client/shared-host-relay-link'
 
@@ -25,15 +29,20 @@ export class RelayRuntimeDialMemory {
   readonly hostOfflineStreak = new RelayHostOfflineStreak(() => this.lastConnectedAt)
   private hostOfflineDials = 0
   private heldUntil = 0
+  private readonly holdWaiters = new Set<() => void>()
+
+  constructor(
+    private readonly now: () => number = Date.now,
+    private readonly random: () => number = Math.random
+  ) {}
 
   /**
-   * A host offline (4404) holds the next dial 1.5 s, then doubling to 30 s, as paseo's client
-   * backs off (daemon-client.ts:1162-1163) and superset re-probes an offline host on its own
-   * cadence (relaySocket.ts:19-24). Every caller waits it out: a connection's many streams and
-   * calls each retrying would otherwise dial the cell about once a second. An attach timeout means
-   * the host was seated, so it redials at once, as the phone does.
+   * A host offline (4404) holds the next dial: 1.5 s, doubling to a 15 s cap, jittered down to
+   * half so a fleet doesn't redial in step. The phone retries an offline host jittered within 15 s
+   * (mobile-relay-retry-delays.ts:6-7, 25-30) and superset's active pane caps at 10 s
+   * (terminal-ws-transport.ts:232-233). An attach timeout means the host was seated: no hold.
    */
-  noteDialFailed(error: Error, now: number): void {
+  noteDialFailed(error: Error): void {
     if (
       !(error instanceof RelayOuterError) ||
       error.code !== MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE ||
@@ -42,34 +51,85 @@ export class RelayRuntimeDialMemory {
       return
     }
     this.hostOfflineDials += 1
-    const holdMs = Math.min(
+    const capMs = Math.min(
       HOST_OFFLINE_HOLD_MIN_MS * 2 ** (this.hostOfflineDials - 1),
       HOST_OFFLINE_HOLD_MAX_MS
     )
-    this.heldUntil = now + holdMs
+    this.extendHold(this.hostOfflineDials === 1 ? capMs : capMs * (0.5 + 0.5 * this.random()))
   }
 
-  noteConnected(now: number): void {
-    this.lastConnectedAt = now
+  /** The director asked for a pause (Retry-After): no dial before it, capped as the phone caps it. */
+  noteRetryAfter(retryAfterMs: number): void {
+    if (retryAfterMs > 0) {
+      this.extendHold(Math.min(retryAfterMs, RELAY_DIRECTOR_RETRY_AFTER_MAX_MS))
+    }
+  }
+
+  /**
+   * After the first 4404 of an episode (which told every caller the host is offline), a failed
+   * dial that isn't a verdict on the credential redials inside the same channel when its hold
+   * ends: one timer, as the phone's reconnect controller keeps (mobile-relay-reconnect-controller.ts:229-232),
+   * not the connection's own backoff stacked on the hold.
+   */
+  redialsWithinOfflineEpisode(error: Error): boolean {
+    return (
+      this.hostOfflineDials > 1 &&
+      !(error instanceof RelayDialAbortedError) &&
+      !relayCredentialRefused(error) &&
+      !(error instanceof PairedE2EEAuthenticationError)
+    )
+  }
+
+  noteConnected(): void {
+    this.lastConnectedAt = this.now()
     this.hostOfflineDials = 0
     this.heldUntil = 0
   }
 
-  /** Why a dial may not go out yet (the host is held offline), or null when it may. */
-  heldDialRefusal(now: number): RemoteRuntimeClientError | null {
-    if (now >= this.heldUntil) {
-      return null
+  /**
+   * Explicit Connect, or the OS or network coming back: dial now, as the phone's foreground reset
+   * (mobile-relay-reconnect-controller.ts:64-98), superset's reconnect() (relaySocket.ts:150-154)
+   * and paseo's ensureConnected (daemon-client.ts:1855-1874) do. A held dial goes out at once.
+   */
+  clearHold(): void {
+    this.hostOfflineDials = 0
+    this.heldUntil = 0
+    for (const release of this.holdWaiters) {
+      release()
     }
-    return new RemoteRuntimeClientError(
-      'remote_runtime_unavailable',
-      `This server is offline. Trying again in ${Math.ceil((this.heldUntil - now) / 1000)} s.`,
-      { closeCode: MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE }
-    )
+  }
+
+  /**
+   * Runs `dial` now, or once the hold ends: the one timer a held dial waits on, so callers and
+   * scheduled retries that open meanwhile wait with it instead of each dialing or being refused.
+   */
+  afterHold(dial: () => void): () => void {
+    const waitMs = this.heldUntil - this.now()
+    if (waitMs <= 0) {
+      dial()
+      return () => {}
+    }
+    const release = (): void => {
+      clearTimeout(timer)
+      this.holdWaiters.delete(release)
+      dial()
+    }
+    const timer = setTimeout(release, waitMs)
+    timer.unref?.()
+    this.holdWaiters.add(release)
+    return () => {
+      clearTimeout(timer)
+      this.holdWaiters.delete(release)
+    }
+  }
+
+  private extendHold(holdMs: number): void {
+    this.heldUntil = Math.max(this.heldUntil, this.now() + Math.floor(holdMs))
   }
 }
 
 const HOST_OFFLINE_HOLD_MIN_MS = 1_500
-const HOST_OFFLINE_HOLD_MAX_MS = 30_000
+const HOST_OFFLINE_HOLD_MAX_MS = 15_000
 
 /** Relay's verdict that this credential is gone: the cell refused it, or the director did (401). */
 export function relayCredentialRefused(error: Error): boolean {
@@ -89,12 +149,8 @@ export function withRelayCell(entry: SharedHostLinkEntry, cellUrl: string): Shar
     : entry
 }
 
-/**
- * Dials a host's Relay link as the phone does: a wrong, draining or dead cell (4409, 4503, 1006),
- * or a host offline for a while, asks the director where the host is now, then redials once. An
- * invite has no resume token to ask with; an older pairing doesn't name its director.
- */
-export function dialRelayRuntimeLink(args: {
+/** Dials a host's Relay link, redialing within an offline episode until it connects or ends. */
+export async function dialRelayRuntimeLink(args: {
   endpoint: string
   resumeToken: string | null
   memory: RelayRuntimeDialMemory
@@ -105,7 +161,26 @@ export function dialRelayRuntimeLink(args: {
     save: (entry: SharedHostLinkEntry) => void
   }
   resolveRelay?: typeof resolveRelayEndpoint
+  /** Before each redial within an offline episode: the channel is connecting again. */
+  beforeRedial: () => void
 }): Promise<{ ok: true } | { ok: false; error: Error }> {
+  for (;;) {
+    const result = await dialThroughDirector(args)
+    if (result.ok || !args.memory.redialsWithinOfflineEpisode(result.error)) {
+      return result
+    }
+    args.beforeRedial()
+  }
+}
+
+/**
+ * One dial as the phone makes it: a wrong, draining or dead cell (4409, 4503, 1006), or a host
+ * offline for a while, asks the director where the host is now, then redials once. An invite has
+ * no resume token to ask with; an older pairing doesn't name its director.
+ */
+function dialThroughDirector(
+  args: Parameters<typeof dialRelayRuntimeLink>[0]
+): Promise<{ ok: true } | { ok: false; error: Error }> {
   const reach = parseRuntimeRelayEndpoint(args.endpoint)
   const directorUrl = reach?.directorUrl
   if (!args.resumeToken || !directorUrl) {
