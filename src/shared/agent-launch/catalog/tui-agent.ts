@@ -27,6 +27,7 @@ export type TuiAgent =
   | 'continue'
   | 'cursor'
   | 'droid' // Factory Droid
+  | 'kimchi'
   | 'kimi'
   | 'mistral-vibe'
   | 'qwen-code'

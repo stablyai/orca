@@ -37,6 +37,7 @@ export const TUI_AGENT_DISPLAY_NAMES: Record<TuiAgent, string> = {
   continue: 'Continue',
   cursor: 'Cursor',
   droid: 'Droid',
+  kimchi: 'Kimchi',
   kimi: 'Kimi',
   'mistral-vibe': 'Mistral Vibe',
   'qwen-code': 'Qwen Code',

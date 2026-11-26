@@ -46,6 +46,7 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     loginCommand: ['kimi', 'login'],
     installCommand: 'curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash'
   },
+  { agent: 'kimchi', loginCommand: ['kimchi', 'login'] },
   {
     agent: 'cursor',
     loginCommand: ['cursor-agent', 'login'],

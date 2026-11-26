@@ -35,6 +35,7 @@ export const BOT_AGENTS = [
   'hermes',
   'copilot',
   'opencode2',
+  'kimchi',
   'kimi',
   'kiro',
   'aug',
