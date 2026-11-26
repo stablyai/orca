@@ -211,9 +211,8 @@ describe('WSL host owner usage', () => {
     // Piggybacking on the desktop poller refreshes after the TTL without its own timer.
     await act(() => vi.advanceTimersByTimeAsync(100_000))
     expect(mocks.readUsageForRuntimeTarget).toHaveBeenCalledTimes(2)
-    const polled = createEmptyRateLimitState({
-      claude: { ...provider('claude', 12), updatedAt: 2 }
-    })
+    // A poll push whose desktop stamps did not advance (gated or WSL-only credentials) still counts.
+    const polled = { ...local }
     await act(async () => {
       rerender({ state: polled })
     })

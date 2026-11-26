@@ -119,18 +119,19 @@ export function useWslOwnerUsage(
     return () => window.removeEventListener('focus', read)
   }, [distro, claudeKey, codexKey, selection])
 
-  // Why: piggyback on the desktop poller's updates instead of running a separate idle timer.
-  const localPollStamp = Math.max(local.claude?.updatedAt ?? 0, local.codex?.updatedAt ?? 0)
-  const lastPollStampRef = useRef(localPollStamp)
+  // Why: piggyback on the desktop poller instead of running a separate idle timer. Every poll
+  // cycle pushes a new state object even when provider stamps are gated or null (WSL-only
+  // credentials); the non-forced request is a local TTL check, so extra pushes cost no IPC.
+  const lastLocalRef = useRef(local)
   useEffect(() => {
-    if (localPollStamp === lastPollStampRef.current) {
+    if (local === lastLocalRef.current) {
       return
     }
-    lastPollStampRef.current = localPollStamp
+    lastLocalRef.current = local
     if (distro && (claudeKey || codexKey) && isOrcaWindowForegroundFocused()) {
       void requestWslOwnerUsage(distro, selection)
     }
-  }, [distro, claudeKey, codexKey, selection, localPollStamp])
+  }, [distro, claudeKey, codexKey, selection, local])
 
   // Why: retry only when main could not attribute a mid-switch read, never on a settled reading.
   const retryAt = Math.min(
