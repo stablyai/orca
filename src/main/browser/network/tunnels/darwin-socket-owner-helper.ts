@@ -20,12 +20,17 @@ type Lookup = {
   signal?: AbortSignal
   resolve: (own: boolean) => void
   reject: (error: Error) => void
+  /** A dropped lookup stays in the queue array and is skipped once when it reaches the head. */
+  state: 'queued' | 'sent' | 'dropped'
 }
 type RunningHelper = {
   child: ChildProcessWithoutNullStreams
   /** Written one at a time, so a lookup whose connection closed while queued is never scanned.
-   *  Insertion-ordered, so a cancel removes its own entry without searching. */
-  queued: Set<Lookup>
+   *  Entries before `head` are done; dropping marks a lookup instead of searching for it. */
+  queue: Lookup[]
+  head: number
+  /** Queued lookups not yet sent or dropped. */
+  waiting: number
   inFlight: Lookup | null
   buffered: string
   /** Armed while a lookup is in flight; no answer by then means the helper is stuck. */
@@ -83,7 +88,7 @@ export function isOwnDarwinConnection(
     return Promise.reject(new Error('connection has no IP address'))
   }
   const helper = running ?? start()
-  if (helper.queued.size + (helper.inFlight ? 1 : 0) >= MAX_PENDING_LOOKUPS) {
+  if (helper.waiting + (helper.inFlight ? 1 : 0) >= MAX_PENDING_LOOKUPS) {
     return Promise.reject(new Error('too many connections are waiting for an owner check'))
   }
   return new Promise((resolve, reject) => {
@@ -91,29 +96,53 @@ export function isOwnDarwinConnection(
       request: `${client.host} ${client.port} ${listener.host} ${listener.port}\n`,
       signal,
       resolve,
-      reject
+      reject,
+      state: 'queued'
     }
-    helper.queued.add(lookup)
+    helper.queue.push(lookup)
+    helper.waiting++
     signal?.addEventListener('abort', () => dropQueued(helper, lookup), { once: true })
     sendNext(helper)
   })
 }
 
 function dropQueued(helper: RunningHelper, lookup: Lookup): void {
-  if (helper.queued.delete(lookup)) {
-    lookup.reject(new Error('the connection closed before its owner check'))
+  if (lookup.state !== 'queued' || running !== helper) {
+    return
   }
+  lookup.state = 'dropped'
+  helper.waiting--
+  lookup.reject(new Error('the connection closed before its owner check'))
+}
+
+/** The next queued lookup, stepping over dropped ones; each entry is passed once. */
+function takeNext(helper: RunningHelper): Lookup | undefined {
+  while (helper.head < helper.queue.length) {
+    const lookup = helper.queue[helper.head++]!
+    if (lookup.state === 'queued') {
+      helper.waiting--
+      return lookup
+    }
+  }
+  helper.queue = []
+  helper.head = 0
+  return undefined
 }
 
 function sendNext(helper: RunningHelper): void {
   if (helper.inFlight || running !== helper) {
     return
   }
-  const next = helper.queued.values().next().value
+  const next = takeNext(helper)
   if (!next) {
     return
   }
-  helper.queued.delete(next)
+  next.state = 'sent'
+  // Done entries are released once they make up half the array, so it stays within twice the queue.
+  if (helper.head * 2 >= helper.queue.length) {
+    helper.queue = helper.queue.slice(helper.head)
+    helper.head = 0
+  }
   helper.inFlight = next
   helper.stall = setTimeout(
     () => fail(helper, 'the macOS socket owner helper stopped answering'),
@@ -126,7 +155,9 @@ function start(): RunningHelper {
   const child = spawnProcess({ program: helperPath(), args: [] })
   const helper: RunningHelper = {
     child,
-    queued: new Set(),
+    queue: [],
+    head: 0,
+    waiting: 0,
     inFlight: null,
     buffered: '',
     stall: null
@@ -183,8 +214,10 @@ function stop(helper: RunningHelper | null, reason: string): void {
   if (helper.stall) {
     clearTimeout(helper.stall)
   }
-  const lookups = [...helper.queued]
-  helper.queued.clear()
+  const lookups = helper.queue.slice(helper.head).filter((lookup) => lookup.state === 'queued')
+  helper.queue = []
+  helper.head = 0
+  helper.waiting = 0
   if (helper.inFlight) {
     lookups.push(helper.inFlight)
     helper.inFlight = null
