@@ -8,6 +8,61 @@ import {
   journalProviderHandleOwners
 } from './journal-retained-provider-handles'
 
+it('preserves ownership when a chat UPSERT records repeated visits to a native handle', () => {
+  const db = new Database(':memory:')
+  try {
+    db.exec(JOURNAL_DOMAIN_SCHEMA_001)
+    db.pragma('user_version = 2')
+    migrateJournalDomainSchema(db)
+    const ensure = () =>
+      ensureJournalRetainedProviderHandles(db, (run) => runJournalTransaction(db, run))
+    ensure()
+    const put =
+      db.prepare(`INSERT INTO agent_session_records(session_id,record_json) VALUES('chat',?)
+      ON CONFLICT(session_id) DO UPDATE SET record_json=excluded.record_json`)
+    const write = (active: string, inactive: string[]) =>
+      put.run(
+        JSON.stringify({
+          providerHandleChain: [{ handle: { nativeId: active } }],
+          inactiveProviderHandleLinks: inactive.map((nativeId) => ({ handle: { nativeId } }))
+        })
+      )
+
+    write('a', [])
+    write('b', ['a'])
+    write('a', ['b', 'a'])
+    write('b', ['a', 'b', 'a'])
+    expect(journalProviderHandleOwners(db, 'a')).toEqual(['chat'])
+    expect(journalProviderHandleOwners(db, 'b')).toEqual(['chat'])
+
+    write('a', [])
+    expect(journalProviderHandleOwners(db, 'a')).toEqual(['chat'])
+    expect(journalProviderHandleOwners(db, 'b')).toEqual([])
+
+    const previousUpdate = String(
+      db
+        .prepare(
+          "SELECT sql FROM sqlite_master WHERE name='journal_retained_provider_handles_update'"
+        )
+        .get()?.sql
+    )
+      .replace(
+        'INSERT INTO journal_retained_provider_handles',
+        'INSERT OR IGNORE INTO journal_retained_provider_handles'
+      )
+      .replace(' ON CONFLICT(session_id,native_id) DO NOTHING', '')
+    db.exec(`DROP TRIGGER journal_retained_provider_handles_update; ${previousUpdate};`)
+    write('b', ['a'])
+    expect(() => write('b', ['a', 'b', 'a'])).toThrow('UNIQUE constraint failed')
+    ensure()
+    expect(journalProviderHandleOwners(db, 'a')).toEqual(['chat'])
+    write('b', ['a', 'b', 'a'])
+    expect(journalProviderHandleOwners(db, 'b')).toEqual(['chat'])
+  } finally {
+    db.close()
+  }
+})
+
 it('looks up an earlier native handle by index regardless of saved chat count', () => {
   const record = (id: string, inactive?: string) =>
     JSON.stringify({
