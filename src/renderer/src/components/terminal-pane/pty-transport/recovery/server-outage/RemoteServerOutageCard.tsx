@@ -86,6 +86,7 @@ export function RemoteServerOutageCard({
       environmentId={environmentId}
       downSince={shown.downSince}
       stopped={shown.stopped}
+      interactive={down}
       leaving={!visible}
     />
   )
@@ -141,11 +142,13 @@ export function RemoteServerOutageCardLine({
   environmentId,
   downSince,
   stopped,
+  interactive = true,
   leaving = false
 }: {
   environmentId: string
   downSince: number | null
   stopped: boolean
+  interactive?: boolean
   leaving?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
@@ -157,7 +160,8 @@ export function RemoteServerOutageCardLine({
   )
   const nudging = useNudging(environmentId)
   const [detailsOpen, setDetailsOpen] = useState(false)
-  if (detailsOpen && (stopped || leaving)) {
+  const inert = leaving || !interactive
+  if (detailsOpen && (stopped || inert)) {
     setDetailsOpen(false)
   }
   const detailsRef = useRef<HTMLDivElement>(null)
@@ -191,12 +195,13 @@ export function RemoteServerOutageCardLine({
           data-remote-server-outage-state={stopped ? 'stopped' : 'retrying'}
           className={cn(
             'pointer-events-auto flex max-w-full items-center gap-2.5 rounded-[10px] border border-border bg-card py-2.5 pr-2 pl-3 text-[13px] text-card-foreground shadow-floating transition-opacity duration-150',
-            leaving && 'pointer-events-none opacity-0',
+            inert && 'pointer-events-none',
+            leaving && 'opacity-0',
             nudging && 'remote-server-outage-nudge'
           )}
           role="status"
           aria-live="polite"
-          inert={leaving}
+          inert={inert}
         >
           {stopped ? (
             <span aria-hidden className="size-[7px] shrink-0 rounded-full bg-status-warning" />
@@ -245,6 +250,7 @@ export function RemoteServerOutageCardLine({
         sideOffset={8}
         className="w-[var(--radix-popover-trigger-width)] p-2 text-xs outline-none"
         data-remote-server-outage-details-popover={environmentId}
+        inert={inert}
         // Why the panel itself: focusing its first control would ring the copy button on every open.
         onOpenAutoFocus={(event) => {
           event.preventDefault()
