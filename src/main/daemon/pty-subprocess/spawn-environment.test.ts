@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
+import { createPtyShellLaunchPlan } from './shell-launch-plan'
 import { createDaemonPtyEnvironment } from './spawn-environment'
 
 afterEach(() => {
@@ -19,3 +20,22 @@ it('drops the inherited Chromium crashpad pipe but keeps an explicit one (#19792
     Object.entries(env).filter(([key]) => key.toUpperCase() === 'CHROME_CRASHPAD_PIPE_NAME')
   ).toEqual([['CHROME_CRASHPAD_PIPE_NAME', 'explicit']])
 })
+
+it.skipIf(process.platform !== 'win32')(
+  'exports the pane handle from a daemon PowerShell PTY (#49580)',
+  () => {
+    const opts = {
+      sessionId: 'pane',
+      cols: 80,
+      rows: 24,
+      cwd: 'C:\\work',
+      shellOverride: 'powershell.exe',
+      env: { ORCA_TERMINAL_HANDLE: 'term_daemon' }
+    }
+    const env = createDaemonPtyEnvironment(opts)
+    createPtyShellLaunchPlan(opts, env)
+
+    expect(env.WSLENV).toContain('ORCA_TERMINAL_HANDLE/u')
+    expect(env.ORCA_TERMINAL_HANDLE).toBe('term_daemon')
+  }
+)
