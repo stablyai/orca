@@ -4,7 +4,7 @@ import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { printResult } from '../output/command-result-output'
 import {
   getOptionalNumberFlag,
-  getOptionalStringFlag,
+  getPresentStringFlag,
   getRequiredStringFlag
 } from '../arguments/flags'
 import { RuntimeClientError } from '../runtime/connection/types'
@@ -28,7 +28,7 @@ export const PROJECT_GROUP_HANDLERS: Record<string, CommandHandler> = {
   },
   'project group create': async ({ flags, client, json }) => {
     const name = getRequiredStringFlag(flags, 'name')
-    const parentSelector = getOptionalStringFlag(flags, 'parent-group')
+    const parentSelector = getPresentStringFlag(flags, 'parent-group')
     const parent =
       parentSelector === undefined
         ? undefined
@@ -54,7 +54,7 @@ export const PROJECT_GROUP_HANDLERS: Record<string, CommandHandler> = {
   },
   'project group move': async ({ flags, client, json }) => {
     const repo = getRequiredStringFlag(flags, 'repo')
-    const groupSelector = getOptionalStringFlag(flags, 'group')
+    const groupSelector = getPresentStringFlag(flags, 'group')
     const noGroup = flags.get('no-group') === true
     if ((groupSelector === undefined) === !noGroup) {
       throw new RuntimeClientError('invalid_argument', 'Pass exactly one of --group or --no-group.')
