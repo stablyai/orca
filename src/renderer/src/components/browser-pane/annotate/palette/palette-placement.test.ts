@@ -3,12 +3,51 @@ import {
   clampPaletteOffset,
   paletteDragRest,
   paletteKeyMove,
+  paletteHintPlacement,
+  paletteMeasuredLayout,
   paletteOffsetForRatio,
   paletteRatioForOffset,
   snapPaletteRatio
 } from './palette-placement'
 
 describe('annotate palette placement', () => {
+  it("lines a right-side palette's hint up with its right edge and keeps it inside the page", () => {
+    const layout = (x: number, left: number) =>
+      paletteHintPlacement({
+        boundsWidth: 560,
+        boundsHeight: 400,
+        paletteWidth: 300,
+        paletteHeight: 38,
+        left,
+        top: 8,
+        x,
+        y: 0,
+        topMin: 8
+      })
+    expect(layout(1, 252)).toEqual({ top: 54, right: 8, maxWidth: 'calc(100% - 16px)' })
+    expect(layout(0.5, 130)).toEqual({ top: 54, left: 130, maxWidth: 'calc(100% - 138px)' })
+  })
+
+  it('keeps a placed palette on its saved side when compaction narrows it', () => {
+    const measured = (
+      x: number,
+      paletteWidth: number,
+      prev: ReturnType<typeof paletteMeasuredLayout> | null
+    ) =>
+      paletteMeasuredLayout(
+        prev,
+        { boundsWidth: 560, boundsHeight: 400, paletteWidth, paletteHeight: 38 },
+        { x, y: 0 },
+        8
+      )
+    // Centred and right-edge palettes that fit, then compact to 380px.
+    expect(measured(0.5, 380, measured(0.5, 500, null)).left).toBe(90)
+    expect(measured(1, 380, measured(1, 500, null)).left).toBe(172)
+    expect(measured(0, 380, measured(0, 500, null)).left).toBe(8)
+    // Too wide to move at first, so pinned left; once it fits it goes back to the centre.
+    expect(measured(0.5, 380, measured(0.5, 600, null)).left).toBe(90)
+  })
+
   it('keeps the palette 8px inside both edges of the page on either axis', () => {
     expect(paletteOffsetForRatio(0, 600, 200)).toBe(8)
     expect(paletteOffsetForRatio(1, 600, 200)).toBe(392)

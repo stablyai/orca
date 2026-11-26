@@ -55,7 +55,17 @@ export type BrowserPageGrabToastState = {
   y: number
   below: boolean
   payload: BrowserGrabPayload | null
+  /** A text copy, the only success the palette's Copy button reports as Copied. */
+  copied?: boolean
 }
+
+/** Shows the toast beside the element; `copied` marks a text copy (see BrowserPageGrabToastState). */
+export type ShowGrabToast = (
+  message: string,
+  type: BrowserPageGrabToastState['type'],
+  payload?: BrowserGrabPayload | null,
+  copied?: boolean
+) => void
 
 export type BrowserPageGrabAnnotationsOptions = {
   /** Scopes the stored annotations. Stable for the life of the surface. */

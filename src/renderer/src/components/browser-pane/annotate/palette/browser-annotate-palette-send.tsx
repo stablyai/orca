@@ -32,6 +32,10 @@ export function BrowserAnnotatePaletteNotes({
   sendMenu: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
+  const countLabel =
+    count === 1
+      ? t('browser.annotatePalette.noteCountOne', '1 note')
+      : t('browser.annotatePalette.noteCount', '{{count}} notes', { count })
   const sendLabel = t(
     'auto.components.browser.pane.BrowserPane.95af781091',
     'Send feedback to an agent'
@@ -45,13 +49,11 @@ export function BrowserAnnotatePaletteNotes({
         onClick={onShowNotes}
         aria-expanded={notesOpen}
         data-browser-annotate-notes-chip
+        // The narrow chip shows a bare number; its name still says what it counts.
+        aria-label={countLabel}
         title={t('browser.annotatePalette.showNotes', 'Show notes')}
       >
-        {short
-          ? count
-          : count === 1
-            ? t('browser.annotatePalette.noteCountOne', '1 note')
-            : t('browser.annotatePalette.noteCount', '{{count}} notes', { count })}
+        {short ? count : countLabel}
       </Button>
       <DropdownMenu modal={false} open={sendOpen} onOpenChange={onSendOpenChange}>
         <DropdownMenuTrigger asChild>

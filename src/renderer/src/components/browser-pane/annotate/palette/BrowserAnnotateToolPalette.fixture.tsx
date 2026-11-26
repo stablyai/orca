@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { MarkupPaletteTools, type MarkupPaletteDensity } from './MarkupPaletteTools'
@@ -10,6 +11,8 @@ import type { BrowserAnnotateTool } from './use-browser-annotate-tool-switch'
 import BrowserFind from '../../assemble-chrome/find/BrowserFind'
 
 const noop = (): void => {}
+// Fit compaction steps one level every two frames; let it settle before the shot.
+const settleFit = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 400))
 
 /** A page-sized backdrop with the palette over it, as it sits in the browser pane. */
 function PalettePage({
@@ -20,7 +23,8 @@ function PalettePage({
   y = 0,
   hint = 'Click an element to add feedback for the agent.',
   waiting = false,
-  findOpen = false
+  findOpen = false,
+  hintIsError = false
 }: {
   initialTool: BrowserAnnotateTool
   notes?: number
@@ -31,6 +35,8 @@ function PalettePage({
   hint?: string
   waiting?: boolean
   findOpen?: boolean
+  /** An error status, which stays shown on a compacted palette. */
+  hintIsError?: boolean
 }): React.JSX.Element {
   const boundsRef = useRef<HTMLDivElement>(null)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
@@ -78,7 +84,8 @@ function PalettePage({
         drawWaitingForPage={waiting}
         drawHasActions={tool === 'draw' && !waiting}
         hint={waiting ? 'Waiting for page…' : tool === 'draw' ? '' : hint}
-        hintIsError={false}
+        hintIsError={hintIsError}
+        hintKeepsWhenCompact={waiting || hintIsError}
         annotateActions={
           notes > 0
             ? (short) => (
@@ -136,8 +143,13 @@ function DrawSlotContent({
         onRedo={noop}
         onClear={noop}
       />
-      <Button size="xs" className="shrink-0" disabled>
-        {density === 'compact' ? 'Copy' : 'Copy markup'}
+      <Button
+        size={density === 'compact' ? 'icon-xs' : 'xs'}
+        className="shrink-0"
+        disabled
+        aria-label="Copy markup"
+      >
+        {density === 'compact' ? <Copy className="size-3.5" /> : 'Copy markup'}
       </Button>
     </div>,
     slot
@@ -176,21 +188,25 @@ export const movedDown = defineFixture({
 
 export const narrow = defineFixture({
   width: 320,
+  interact: settleFit,
   render: () => <PalettePage initialTool="copy" picked />
 })
 
 export const drawNarrow = defineFixture({
   width: 420,
+  interact: settleFit,
   render: () => <PalettePage initialTool="draw" />
 })
 
 export const drawNarrowest = defineFixture({
   width: 320,
+  interact: settleFit,
   render: () => <PalettePage initialTool="draw" />
 })
 
 export const annotateWithNotesNarrow = defineFixture({
   width: 420,
+  interact: settleFit,
   render: () => <PalettePage initialTool="annotate" notes={3} hint="" />
 })
 
@@ -201,10 +217,54 @@ export const waitingForPage = defineFixture({
 
 export const waitingForPageCompact = defineFixture({
   width: 240,
+  interact: settleFit,
   render: () => <PalettePage initialTool="draw" waiting />
 })
 
 export const findGeometry = defineFixture({
   width: 650,
+  interact: settleFit,
   render: () => <PalettePage initialTool="annotate" ratio={0} findOpen />
+})
+
+export const annotate560 = defineFixture({
+  width: 560,
+  interact: settleFit,
+  render: () => <PalettePage initialTool="annotate" />
+})
+
+export const annotate420 = defineFixture({
+  width: 420,
+  interact: settleFit,
+  render: () => <PalettePage initialTool="annotate" />
+})
+
+export const annotate320 = defineFixture({
+  width: 320,
+  interact: settleFit,
+  render: () => <PalettePage initialTool="annotate" />
+})
+
+export const rightGrab560 = defineFixture({
+  width: 560,
+  interact: settleFit,
+  render: () => <PalettePage initialTool="copy" ratio={1} />
+})
+
+export const rightGrab420 = defineFixture({
+  width: 420,
+  interact: settleFit,
+  render: () => <PalettePage initialTool="copy" ratio={1} />
+})
+
+export const grabErrorCompact = defineFixture({
+  width: 320,
+  interact: settleFit,
+  render: () => (
+    <PalettePage
+      initialTool="copy"
+      hint="Grab failed: Could not start element selection on this page"
+      hintIsError
+    />
+  )
 })

@@ -1,4 +1,4 @@
-import { Camera, Check, Copy, GripVertical } from 'lucide-react'
+import { Camera, Check, Copy, GripVertical, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
@@ -76,6 +76,42 @@ export function PaletteGrabActions({
   )
 }
 
+/** Leaves the mode. Leaving Draw with strokes drops them (with an Undo toast), so it says Discard there. */
+export function PaletteDoneButton({
+  discardsDrawing,
+  onDone
+}: {
+  discardsDrawing: boolean
+  onDone: () => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          className="order-1 size-7 shrink-0"
+          onClick={onDone}
+          aria-label={
+            discardsDrawing
+              ? t('browser.annotatePalette.discardDrawing', 'Discard drawing')
+              : t('browser.annotatePalette.done', 'Done')
+          }
+          aria-keyshortcuts="Escape"
+        >
+          <X className="size-3.5" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent data-annotate-palette-tooltip="" side="bottom" sideOffset={6}>
+        {discardsDrawing
+          ? t('browser.annotatePalette.discardDrawingTitle', 'Discard drawing (Esc)')
+          : t('browser.annotatePalette.doneTitle', 'Done (Esc)')}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 /**
  * The palette's move handle: drag it anywhere, or use the arrow keys. A slider for the horizontal value (as it
  * was before the palette moved vertically), with the vertical place spoken in its value text.
@@ -98,7 +134,7 @@ export function PaletteGrip({
       ? t('browser.annotatePalette.positionLeft', 'Left')
       : percent > 66
         ? t('browser.annotatePalette.positionRight', 'Right')
-        : t('browser.annotatePalette.positionCentre', 'Centre')
+        : t('browser.annotatePalette.positionCenter', 'Center')
   const vertical =
     verticalPercent < 34
       ? t('browser.annotatePalette.positionTop', 'Top')
@@ -122,7 +158,7 @@ export function PaletteGrip({
             { side, percent, vertical, verticalPercent }
           )}
           className={cn(
-            'order-0 flex h-7 w-4 shrink-0 touch-none items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none',
+            'order-0 flex h-7 w-6 shrink-0 touch-none items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none',
             dragging ? 'cursor-grabbing' : 'cursor-grab'
           )}
           {...gripProps}
@@ -133,7 +169,7 @@ export function PaletteGrip({
       <TooltipContent data-annotate-palette-tooltip="" side="bottom" sideOffset={6}>
         {t(
           'browser.annotatePalette.moveAnywhereTooltip',
-          'Drag or use arrow keys to move · hold {{key}} to see under',
+          'Drag or use arrow keys to move · double-click to reset · hold {{key}} to see under',
           { key: altKeyLabel }
         )}
       </TooltipContent>

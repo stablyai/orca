@@ -6,7 +6,7 @@ import type {
 } from '../../../../../../shared/browser/element-grab/browser-grab-types'
 import { formatGrabPayloadAsText } from './GrabConfirmationSheet'
 import type { GrabModeHook } from './useGrabMode'
-import type { BrowserPageGrabToastState } from '../../describe-page/browser-page-types'
+import type { ShowGrabToast } from '../../describe-page/browser-page-types'
 import { translate } from '@/i18n/i18n'
 
 /** Snapshot of the picker's target at action start; true while the same Grab session on the same page is on. */
@@ -37,11 +37,7 @@ export function runBrowserGrabActionShortcut({
   grabPayloadRef: MutableRefObject<BrowserGrabPayload | null>
   toolTargetIdRef: MutableRefObject<string>
   recordFeatureInteraction: (feature: 'browser-grab') => void | Promise<void>
-  showGrabToast: (
-    message: string,
-    type: BrowserPageGrabToastState['type'],
-    payload?: BrowserGrabPayload | null
-  ) => void
+  showGrabToast: ShowGrabToast
   copyGrabScreenshot: (dataUrl: string, payload: BrowserGrabPayload) => void
   /** False once the user left Grab or the page changed; a late hover result is then dropped. */
   isStillCurrent?: () => boolean
@@ -59,7 +55,7 @@ export function runBrowserGrabActionShortcut({
       const text = formatGrabPayloadAsText(payload)
       void window.api.ui.writeClipboardText(text)
       recordFeatureInteraction('browser-grab')
-      showGrabToast('Copied', 'success', payload)
+      showGrabToast('Copied', 'success', payload, true)
     } else {
       const dataUrl = payload.screenshot?.dataUrl
       if (dataUrl?.startsWith('data:image/png;base64,')) {

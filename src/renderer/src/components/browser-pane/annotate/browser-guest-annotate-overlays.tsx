@@ -219,6 +219,7 @@ export function BrowserGuestAnnotateOverlays({
           drawHasActions={markup?.baseImage !== null}
           hint={paletteHint.text}
           hintIsError={paletteHint.isError}
+          hintKeepsWhenCompact={paletteHint.keepWhenCompact === true}
           annotateActions={
             browserAnnotations.length > 0
               ? (short) => (
@@ -252,7 +253,7 @@ export function BrowserGuestAnnotateOverlays({
                 )
               : null
           }
-          grabCopyDone={grabToast?.type === 'success'}
+          grabCopyDone={grabToast?.copied === true}
           grabPicked={heldPayload !== null}
           grabCanScreenshot={Boolean(
             heldPayload?.screenshot?.dataUrl?.startsWith('data:image/png;')

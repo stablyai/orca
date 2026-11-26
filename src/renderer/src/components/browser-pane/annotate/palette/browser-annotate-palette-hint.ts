@@ -7,7 +7,10 @@ import { browserAnnotationLimitMessage } from '../delivery/browser-annotation-li
 import type { GrabModeHook } from '../grab/useGrabMode'
 import type { BrowserAnnotateTool } from './use-browser-annotate-tool-switch'
 
-/** The palette's one-line hint; empty once the palette's own controls say it (Draw, notes, a Grab pick). */
+/**
+ * The palette's one-line hint; empty once the palette's own controls say it (Draw, notes, a Grab pick).
+ * `keepWhenCompact` marks a status the user must see even where a compacted palette drops its tips.
+ */
 export function browserAnnotatePaletteHint({
   t,
   activeTool,
@@ -25,11 +28,12 @@ export function browserAnnotatePaletteHint({
   browserAnnotationsLength: number
   /** Draw was chosen while the page is still loading. */
   drawWaitingForPage?: boolean
-}): { text: string; isError: boolean } {
+}): { text: string; isError: boolean; keepWhenCompact?: boolean } {
   if (activeTool === 'draw' && drawWaitingForPage) {
     return {
       text: t('browser.annotatePalette.waitingForPage', 'Waiting for page…'),
-      isError: false
+      isError: false,
+      keepWhenCompact: true
     }
   }
   if (activeTool === 'draw') {
@@ -40,7 +44,8 @@ export function browserAnnotatePaletteHint({
       text: t('auto.components.browser.pane.BrowserPane.4328a0a062', 'Grab failed: {{value0}}', {
         value0: grab.error ?? 'Unknown error'
       }),
-      isError: true
+      isError: true,
+      keepWhenCompact: true
     }
   }
   if (grabIntent === 'annotate') {
@@ -54,7 +59,7 @@ export function browserAnnotatePaletteHint({
       }
     }
     if (isBrowserAnnotationPageFull(browserAnnotationsLength)) {
-      return { text: browserAnnotationLimitMessage(t), isError: false }
+      return { text: browserAnnotationLimitMessage(t), isError: false, keepWhenCompact: true }
     }
     // The palette's note count and Send say the rest; a second sentence here would point at actions not shown.
     if (browserAnnotationsLength > 0) {

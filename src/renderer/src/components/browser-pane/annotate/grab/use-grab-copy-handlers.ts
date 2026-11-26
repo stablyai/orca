@@ -1,6 +1,6 @@
 import { useCallback, type MutableRefObject } from 'react'
 import type { BrowserGrabPayload } from '../../../../../../shared/browser/element-grab/browser-grab-types'
-import type { BrowserPageGrabToastState } from '../../describe-page/browser-page-types'
+import type { ShowGrabToast } from '../../describe-page/browser-page-types'
 import { formatGrabPayloadAsText } from './GrabConfirmationSheet'
 import type { GrabModeHook } from './useGrabMode'
 
@@ -22,11 +22,7 @@ export function useGrabCopyHandlers({
   grabPayloadRef: MutableRefObject<BrowserGrabPayload | null>
   grabMenuActionTakenRef: MutableRefObject<boolean>
   recordFeatureInteraction: (feature: 'browser-grab') => void | Promise<void>
-  showGrabToast: (
-    message: string,
-    type: BrowserPageGrabToastState['type'],
-    payload?: BrowserGrabPayload | null
-  ) => void
+  showGrabToast: ShowGrabToast
   showGrabScreenshotToast: (copied: boolean, payload: BrowserGrabPayload) => void
   copyGrabScreenshot: (dataUrl: string, onDone: (copied: boolean) => void) => void
   copiedMessage: () => string
@@ -43,7 +39,7 @@ export function useGrabCopyHandlers({
       }
       void window.api.ui.writeClipboardText(formatGrabPayloadAsText(payload))
       recordFeatureInteraction('browser-grab')
-      showGrabToast(copiedMessage(), 'success', payload)
+      showGrabToast(copiedMessage(), 'success', payload, true)
       if (grab.state === 'confirming') {
         grab.rearm()
       }

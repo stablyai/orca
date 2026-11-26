@@ -110,17 +110,26 @@ export function paletteRatioPercent(ratio: number): number {
 /**
  * The hint sits under the palette, or above it near the page's bottom where there's no room under it.
  * Measured height: at the last fit level a row can wrap and make the palette taller than one line.
+ * It lines up with the palette's edge on its saved side and never runs past the page's far edge.
  */
 export function paletteHintPlacement(layout: PaletteLayout): CSSProperties {
-  const { left, top, paletteHeight } = layout
-  return layout.boundsHeight - top - paletteHeight < HINT_ROOM_PX
-    ? { left, bottom: `calc(100% - ${top - HINT_GAP_PX}px)` }
-    : { left, top: top + paletteHeight + HINT_GAP_PX }
+  const { left, top, paletteHeight, paletteWidth, boundsWidth } = layout
+  const vertical =
+    layout.boundsHeight - top - paletteHeight < HINT_ROOM_PX
+      ? { bottom: `calc(100% - ${top - HINT_GAP_PX}px)` }
+      : { top: top + paletteHeight + HINT_GAP_PX }
+  if (layout.x > 0.5) {
+    const right = Math.max(0, boundsWidth - left - paletteWidth)
+    return { ...vertical, right, maxWidth: `calc(100% - ${right + PALETTE_EDGE_INSET_PX}px)` }
+  }
+  return { ...vertical, left, maxWidth: `calc(100% - ${left + PALETTE_EDGE_INSET_PX}px)` }
 }
 
 /**
  * The layout for a fresh measurement. A bounds resize, a new saved position or a new top limit re-derives that axis
- * from the saved fraction; a content-only size change keeps the edge (see usePaletteDrag).
+ * from the saved fraction. A content-only width change (a tool switch, fit compaction) keeps the point at the saved
+ * fraction of the palette's width where it was: a centred palette stays centred and a right one keeps its right edge.
+ * A palette that had no room to move was pinned, not placed, so it re-derives.
  */
 export function paletteMeasuredLayout(
   prev: PaletteLayout | null,
@@ -130,9 +139,15 @@ export function paletteMeasuredLayout(
 ): PaletteLayout {
   const { boundsWidth, boundsHeight, paletteWidth, paletteHeight } = sizes
   const { x, y } = saved
-  const keepLeft = prev !== null && prev.boundsWidth === boundsWidth && prev.x === x
+  const keepLeft =
+    prev !== null &&
+    prev.boundsWidth === boundsWidth &&
+    prev.x === x &&
+    prev.boundsWidth - prev.paletteWidth - PALETTE_EDGE_INSET_PX * 2 > 0
   const left = clampPaletteOffset(
-    keepLeft ? prev.left : paletteOffsetForRatio(x, boundsWidth, paletteWidth),
+    keepLeft
+      ? prev.left + Math.min(1, Math.max(0, x)) * (prev.paletteWidth - paletteWidth)
+      : paletteOffsetForRatio(x, boundsWidth, paletteWidth),
     boundsWidth,
     paletteWidth
   )

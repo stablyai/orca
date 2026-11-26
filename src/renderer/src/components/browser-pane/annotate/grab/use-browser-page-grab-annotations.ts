@@ -29,7 +29,8 @@ import { useGrabCopyHandlers } from './use-grab-copy-handlers'
 import type {
   BrowserPageGrabAnnotations,
   BrowserPageGrabAnnotationsOptions,
-  BrowserPageGrabToastState
+  BrowserPageGrabToastState,
+  ShowGrabToast
 } from '../../describe-page/browser-page-types'
 
 export function useBrowserPageGrabAnnotations({
@@ -98,8 +99,8 @@ export function useBrowserPageGrabAnnotations({
     }
   }, [claimGrabToast])
 
-  const showGrabToast = useCallback(
-    (message: string, type: 'success' | 'error', payload?: BrowserGrabPayload | null) => {
+  const showGrabToast = useCallback<ShowGrabToast>(
+    (message, type, payload, copied = false) => {
       if (!mountedRef.current) {
         return
       }
@@ -126,7 +127,7 @@ export function useBrowserPageGrabAnnotations({
       }
       claimGrabToast()
       clearTimeout(grabToastTimerRef.current)
-      setGrabToast({ message, type, x, y, below, payload: payload ?? null })
+      setGrabToast({ message, type, x, y, below, payload: payload ?? null, copied })
       grabToastTimerRef.current = setTimeout(() => dismissGrabToast(), 2000)
     },
     [claimGrabToast, containerRef, dismissGrabToast, guestSurfaceRef, mountedRef]
@@ -166,7 +167,7 @@ export function useBrowserPageGrabAnnotations({
       const text = formatGrabPayloadAsText(grab.payload)
       void window.api.ui.writeClipboardText(text)
       recordFeatureInteraction('browser-grab')
-      showGrabToast(copiedGrabToastMessage(), 'success', grab.payload)
+      showGrabToast(copiedGrabToastMessage(), 'success', grab.payload, true)
     }
   }, [
     grab.state,

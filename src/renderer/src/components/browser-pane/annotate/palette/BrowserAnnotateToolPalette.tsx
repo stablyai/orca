@@ -1,8 +1,7 @@
 import type { OverlayRectSource } from '../../describe-page/browser-annotation-geometry'
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
-import { Crosshair, Hourglass, MessageSquarePlus, PenTool, X } from 'lucide-react'
+import { Crosshair, Hourglass, MessageSquarePlus, PenTool } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -15,7 +14,7 @@ import {
   setAnnotatePalettePosition,
   useAnnotatePalettePosition
 } from './annotate-palette-position-store'
-import { PaletteGrabActions, PaletteGrip } from './palette-controls'
+import { PaletteDoneButton, PaletteGrabActions, PaletteGrip } from './palette-controls'
 import { usePaletteTopOffset } from './use-palette-top-offset'
 import { useHoldAltSeeThrough } from './use-hold-alt-see-through'
 import { useGrabLabelAvoidArea } from './use-grab-label-avoid-area'
@@ -28,7 +27,6 @@ type ToolOption = {
   tooltip: string
 }
 
-/** Steps applied in order until the palette fits: short action labels, then let actions wrap. */
 /** Fit steps, in order: Draw folds its tools into ⋯, then short labels with a minimal Draw row, then wrap. */
 const FIT_LEVEL_DRAW_ROW = 1
 const FIT_LEVEL_SHORT_ACTIONS = 2
@@ -48,6 +46,7 @@ export function BrowserAnnotateToolPalette({
   showKeyHints,
   hint,
   hintIsError,
+  hintKeepsWhenCompact = false,
   annotateActions,
   grabCopyDone,
   grabPicked,
@@ -75,6 +74,8 @@ export function BrowserAnnotateToolPalette({
   showKeyHints: boolean
   hint: string
   hintIsError: boolean
+  /** A status (an error, a limit, a wait) that stays shown when compaction drops the palette's tips. */
+  hintKeepsWhenCompact?: boolean
   /** Notes and Send while Annotate is on; null with no notes. */
   annotateActions: ((short: boolean) => React.ReactNode) | null
   /** Grab just copied: Copy shows a check. */
@@ -171,9 +172,11 @@ export function BrowserAnnotateToolPalette({
     // Draw's action row comes and goes with its screenshot; losing it may let fuller labels fit again.
     `${activeTool}|${showToolLabels}|${annotateActions ? 1 : 0}|${activeTool === 'draw' && drawHasActions ? 1 : 0}`
   )
+  const discardsDrawing = activeTool === 'draw' && drawHasActions
   const shortActions = fitLevel >= FIT_LEVEL_SHORT_ACTIONS
   const wrapActions = fitLevel >= FIT_LEVEL_WRAP
-  const showHint = Boolean(hint) && fitLevel === 0 && !dragging && left !== null
+  const showHint =
+    Boolean(hint) && (fitLevel === 0 || hintKeepsWhenCompact) && !dragging && left !== null
   const hasActions =
     activeTool === 'draw' ? drawHasActions : activeTool === 'copy' || annotateActions !== null
   useGrabLabelAvoidArea({
@@ -381,23 +384,7 @@ export function BrowserAnnotateToolPalette({
           ) : null}
         </div>
         <span className="order-1 mx-0.5 h-4 w-px shrink-0 bg-border" aria-hidden />
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              size="icon-xs"
-              variant="ghost"
-              className="order-1 size-7 shrink-0"
-              onClick={onDone}
-              aria-label={t('browser.annotatePalette.done', 'Done')}
-              aria-keyshortcuts="Escape"
-            >
-              <X className="size-3.5" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent data-annotate-palette-tooltip="" side="bottom" sideOffset={6}>
-            {t('browser.annotatePalette.doneTitle', 'Done (Esc)')}
-          </TooltipContent>
-        </Tooltip>
+        <PaletteDoneButton discardsDrawing={discardsDrawing} onDone={onDone} />
         {/* Last in DOM so keyboard users reach the tools first; shown first visually. */}
         {/* Kept while dragging, so a resize that removes the room can't detach the grip mid-drag. */}
         {canMove || dragging ? (
@@ -413,12 +400,13 @@ export function BrowserAnnotateToolPalette({
         <div
           ref={hintRef}
           className={cn(
-            'pointer-events-none absolute z-40 max-w-[calc(100%-16px)] truncate rounded-md border border-border bg-popover/95 px-2 py-0.5 text-2xs backdrop-blur',
+            'pointer-events-none absolute z-40 truncate rounded-md border border-border bg-popover/95 px-2 py-0.5 text-2xs backdrop-blur',
             'transition-opacity duration-100',
             seeThrough && 'opacity-15',
             hintIsError ? 'text-destructive' : 'text-muted-foreground'
           )}
           style={hintPlacement}
+          title={hint}
         >
           {hint}
         </div>

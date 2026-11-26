@@ -1,7 +1,7 @@
 import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, X } from 'lucide-react'
+import { Check, Copy, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
@@ -79,16 +79,21 @@ export function MarkupOverlay({
         onClear={editor.clear}
         canClear={editor.shapes.length > 0}
       />
+      {/* Narrow palettes show Copy as an icon, so it stays on the tools' row instead of wrapping alone. */}
       <Button
         type="button"
-        size="xs"
+        size={paletteDensity === 'compact' ? 'icon-xs' : 'xs'}
         className="shrink-0"
         onClick={handleDone}
         disabled={busy || !baseLoaded || editor.shapes.length === 0}
+        aria-label={t('browser.annotatePalette.copyMarkup', 'Copy markup')}
+        title={t('browser.annotatePalette.copyMarkup', 'Copy markup')}
       >
-        {paletteDensity === 'compact'
-          ? t('browser.annotatePalette.copy', 'Copy')
-          : t('browser.annotatePalette.copyMarkup', 'Copy markup')}
+        {paletteDensity === 'compact' ? (
+          <Copy className="size-3.5" />
+        ) : (
+          t('browser.annotatePalette.copyMarkup', 'Copy markup')
+        )}
       </Button>
     </div>
   ) : null
