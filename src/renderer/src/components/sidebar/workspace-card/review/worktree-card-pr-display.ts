@@ -40,6 +40,7 @@ export type WorktreeCardPrDisplay =
       url?: string
       status?: HostedReviewInfo['status']
       checksSummary?: HostedReviewInfo['checksSummary']
+      mergeQueueEntry?: HostedReviewInfo['mergeQueueEntry']
     }
 
 type WorktreeCardPrDisplayOptions = {

@@ -7,7 +7,7 @@ import { GitMerge } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { getReviewStateIcon } from '@/components/github/review-state-presentation'
 import '../activity/worktree-card-empty-inputs'
-import { PullRequestIcon } from '../identity/worktree-card-glyphs'
+import { MergeQueueIcon, PullRequestIcon } from '../identity/worktree-card-glyphs'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 
 // Last-known review data; the marker lets offscreen rows drop it so reveal re-anchors its shared clock.
@@ -81,12 +81,20 @@ export function ReviewIcon({
   variant = 'provider',
   showChecks = true
 }: {
-  review: Pick<WorktreeCardPrDisplay, 'state' | 'status' | 'checksSummary'> &
+  review: Pick<WorktreeCardPrDisplay, 'state' | 'status' | 'checksSummary' | 'mergeQueueEntry'> &
     Partial<Pick<WorktreeCardPrDisplay, 'provider'>>
   className?: string
   variant?: 'provider' | 'generic'
   showChecks?: boolean
 }): React.JSX.Element {
+  if (review.state === 'open' && review.mergeQueueEntry) {
+    return createElement(MergeQueueIcon, {
+      className: cn(
+        className,
+        review.mergeQueueEntry.state === 'UNMERGEABLE' ? 'text-destructive' : 'text-status-warning'
+      )
+    })
+  }
   const providerIcon =
     variant === 'provider' && review.provider === 'gitlab' ? GitMerge : PullRequestIcon
   const Icon = getReviewStateIcon(review.state) ?? providerIcon
