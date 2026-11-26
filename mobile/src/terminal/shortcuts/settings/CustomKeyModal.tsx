@@ -4,7 +4,7 @@ import { ChevronLeft } from 'lucide-react-native'
 import { colors, pressedStyle } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { BottomDrawer } from '../../../components/bottom-drawer/BottomDrawer'
-import { composerInputStyles as inputStyles } from '../../../components/composer-input/composer-input-styles'
+import { groupFieldStyles } from '../../../components/composer-input/composer-input-styles'
 import { TextField } from '../../../components/composer-input/TextField'
 import {
   buildTerminalShortcutKey,
@@ -375,55 +375,56 @@ export function CustomKeyModal(props: Props) {
       )}
 
       {step === 'text-macro' && (
-        <View style={styles.group}>
-          <View style={styles.macroForm}>
-            <Text style={styles.fieldLabel}>{t('components.customKeyModal.label', 'Label')}</Text>
+        <View>
+          <ListGroup>
             <TextField
+              key="label"
+              label={t('components.customKeyModal.label', 'Label')}
               value={macroLabel}
               onChangeText={setMacroLabel}
               placeholder={t('components.customKeyModal.labelPlaceholder', 'e.g. Build')}
               autoCapitalize="none"
               autoCorrect={false}
-              style={inputStyles.filledField}
+              style={groupFieldStyles.line}
             />
-            <Text style={styles.fieldLabel}>
-              {t('components.customKeyModal.command', 'Command')}
-            </Text>
             <TextField
+              key="command"
+              label={t('components.customKeyModal.command', 'Command')}
               monospace
               value={macroText}
               onChangeText={setMacroText}
               placeholder={t('components.customKeyModal.commandPlaceholder', 'e.g. pnpm build')}
               autoCapitalize="none"
               autoCorrect={false}
-              style={inputStyles.filledField}
+              style={groupFieldStyles.line}
             />
-            <View style={styles.switchRow}>
-              <Text style={styles.switchLabel}>
-                {t('components.customKeyModal.pressEnter', 'Press Enter')}
-              </Text>
-              <MobileSwitch
-                accessibilityLabel={t('components.customKeyModal.pressEnter', 'Press Enter')}
-                value={macroEnter}
-                onValueChange={setMacroEnter}
-              />
-            </View>
-            <Pressable
-              style={({ pressed }) => [
-                styles.saveButton,
-                !macroText.trim() && styles.saveButtonDisabled,
-                pressed && pressedStyle
-              ]}
-              disabled={!macroText.trim()}
-              onPress={handleMacroSave}
+            <ListRow
+              key="enter"
+              title={t('components.customKeyModal.pressEnter', 'Press Enter')}
+              accessory={
+                <MobileSwitch
+                  accessibilityLabel={t('components.customKeyModal.pressEnter', 'Press Enter')}
+                  value={macroEnter}
+                  onValueChange={setMacroEnter}
+                />
+              }
+            />
+          </ListGroup>
+          <Pressable
+            style={({ pressed }) => [
+              styles.saveButton,
+              !macroText.trim() && styles.saveButtonDisabled,
+              pressed && pressedStyle
+            ]}
+            disabled={!macroText.trim()}
+            onPress={handleMacroSave}
+          >
+            <Text
+              style={[styles.saveButtonText, !macroText.trim() && styles.saveButtonTextDisabled]}
             >
-              <Text
-                style={[styles.saveButtonText, !macroText.trim() && styles.saveButtonTextDisabled]}
-              >
-                {t('components.customKeyModal.addShortcut', 'Add Shortcut')}
-              </Text>
-            </Pressable>
-          </View>
+              {t('components.customKeyModal.addShortcut', 'Add Shortcut')}
+            </Text>
+          </Pressable>
         </View>
       )}
     </BottomDrawer>

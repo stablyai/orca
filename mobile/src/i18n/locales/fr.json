@@ -2978,7 +2978,6 @@
     },
     "quickCommandEditorForm": {
       "action": "Action",
-      "addQuickCommand": "Ajouter une commande rapide",
       "advanced": "Avancé",
       "agent": "Agent",
       "agentPrompt": "Prompt d'agent",
@@ -2997,7 +2996,6 @@
       "promptSizeCharacters": "{{used}} / {{max}} caractères",
       "promptSizeKilobytes": "{{used}} Ko / {{max}} Ko",
       "promptTooLong": "Trop long pour être enregistré.",
-      "scope": "Portée",
       "terminalCommand": "Commande de terminal"
     },
     "quickCommandLaunch": {
@@ -3026,9 +3024,9 @@
       "chooseAgentTitle": "Choisir un agent",
       "deleteConfirmMessage": "Cette commande rapide sera retirée de votre liste enregistrée.",
       "editTitle": "Modifier la commande rapide",
-      "editorDescription": "Enregistrez des commandes de terminal ou des prompts d'agent pour y accéder rapidement.",
       "title": "Commandes rapides",
-      "untitled": "Sans titre"
+      "untitled": "Sans titre",
+      "add": "Ajouter"
     },
     "routeHelpers": {
       "connected": "Connecté",

@@ -3635,7 +3635,6 @@
     },
     "quickCommandEditorForm": {
       "action": "Действие",
-      "addQuickCommand": "Добавить быструю команду",
       "advanced": "Дополнительно",
       "agent": "Агент",
       "agentPrompt": "Запрос агенту",
@@ -3654,7 +3653,6 @@
       "promptSizeCharacters": "{{used}} / {{max}} символов",
       "promptSizeKilobytes": "{{used}} КБ / {{max}} КБ",
       "promptTooLong": "Текст слишком длинный для сохранения.",
-      "scope": "Область",
       "terminalCommand": "Команда терминала"
     },
     "quickCommandLaunch": {
@@ -3683,9 +3681,9 @@
       "chooseAgentTitle": "Выбрать агента",
       "deleteConfirmMessage": "Эта быстрая команда будет удалена из сохранённого списка.",
       "editTitle": "Изменить быструю команду",
-      "editorDescription": "Сохраняйте команды терминала или запросы агентам для быстрого доступа.",
       "title": "Быстрые команды",
-      "untitled": "Без названия"
+      "untitled": "Без названия",
+      "add": "Добавить"
     },
     "routeHelpers": {
       "connected": "Подключён",

@@ -3061,7 +3061,6 @@
     },
     "quickCommandEditorForm": {
       "action": "동작",
-      "addQuickCommand": "빠른 명령 추가",
       "advanced": "고급",
       "agent": "에이전트",
       "agentPrompt": "에이전트 프롬프트",
@@ -3080,7 +3079,6 @@
       "promptSizeCharacters": "{{used}} / {{max}}자",
       "promptSizeKilobytes": "{{used}} KB / {{max}} KB",
       "promptTooLong": "너무 길어서 저장할 수 없습니다.",
-      "scope": "범위",
       "terminalCommand": "터미널 명령"
     },
     "quickCommandLaunch": {
@@ -3109,9 +3107,9 @@
       "chooseAgentTitle": "에이전트 선택",
       "deleteConfirmMessage": "이 빠른 명령은 저장된 목록에서 제거됩니다.",
       "editTitle": "빠른 명령 편집",
-      "editorDescription": "터미널 명령이나 에이전트 프롬프트를 저장하여 빠르게 사용하세요.",
       "title": "빠른 명령어",
-      "untitled": "제목 없음"
+      "untitled": "제목 없음",
+      "add": "추가"
     },
     "routeHelpers": {
       "connected": "연결됨",

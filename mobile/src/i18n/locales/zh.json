@@ -3291,7 +3291,6 @@
     },
     "quickCommandEditorForm": {
       "action": "操作",
-      "addQuickCommand": "添加快捷命令",
       "advanced": "高级",
       "agent": "智能体",
       "agentPrompt": "智能体提示",
@@ -3310,7 +3309,6 @@
       "promptSizeCharacters": "{{used}} / {{max}} 个字符",
       "promptSizeKilobytes": "{{used}} KB / {{max}} KB",
       "promptTooLong": "内容过长，无法保存",
-      "scope": "范围",
       "terminalCommand": "终端命令"
     },
     "quickCommandLaunch": {
@@ -3339,9 +3337,9 @@
       "chooseAgentTitle": "选择智能体",
       "deleteConfirmMessage": "该快捷命令将从您保存的列表中删除",
       "editTitle": "编辑快捷命令",
-      "editorDescription": "保存终端命令或智能体提示词，便于快速调用",
       "title": "快捷命令",
-      "untitled": "无题"
+      "untitled": "无题",
+      "add": "添加"
     },
     "routeHelpers": {
       "connected": "已连接",

@@ -2580,10 +2580,8 @@
       "advanced": "Advanced",
       "appendEnter": "Append Enter",
       "appendEnterDescription": "Submit immediately instead of only inserting text.",
-      "scope": "Scope",
       "globalScope": "Global",
-      "projectScope": "Project",
-      "addQuickCommand": "Add Quick Command"
+      "projectScope": "Project"
     },
     "quickCommandRow": {
       "copyFailed": "Couldn't copy",
@@ -2608,7 +2606,7 @@
       "addTitle": "Add Quick Command",
       "chooseAgentTitle": "Choose Agent",
       "title": "Quick Commands",
-      "editorDescription": "Save terminal commands or agent prompts for quick access."
+      "add": "Add"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "Failed to create terminal",

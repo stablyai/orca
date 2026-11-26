@@ -3421,7 +3421,6 @@
     },
     "quickCommandEditorForm": {
       "action": "Eylem",
-      "addQuickCommand": "Hızlı Komut Ekle",
       "advanced": "Gelişmiş",
       "agent": "Ajan",
       "agentPrompt": "Ajan İstemi",
@@ -3440,7 +3439,6 @@
       "promptSizeCharacters": "{{used}} / {{max}} karakter",
       "promptSizeKilobytes": "{{used}} KB / {{max}} KB",
       "promptTooLong": "Kaydetmek için çok uzun.",
-      "scope": "Kapsam",
       "terminalCommand": "Terminal Komutu"
     },
     "quickCommandLaunch": {
@@ -3469,9 +3467,9 @@
       "chooseAgentTitle": "Ajan Seç",
       "deleteConfirmMessage": "Bu hızlı komut kayıtlı listenizden kaldırılacak.",
       "editTitle": "Hızlı Komutu Düzenle",
-      "editorDescription": "Hızlı erişim için terminal komutlarını veya ajan istemlerini kaydedin.",
       "title": "Hızlı Komutlar",
-      "untitled": "Adsız"
+      "untitled": "Adsız",
+      "add": "Ekle"
     },
     "routeHelpers": {
       "connected": "Bağlı",

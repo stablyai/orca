@@ -42,11 +42,6 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
     color: colors.textPrimary,
     textAlign: 'center'
   },
-  group: {
-    backgroundColor: colors.sheetGroup,
-    borderRadius: radii.surface,
-    overflow: 'hidden'
-  },
   smartRailGroup: {
     marginTop: spacing.md
   },
@@ -207,25 +202,6 @@ export const customKeyModalStyles = themedStyleSheet(() => ({
   },
   keyCellTextSelected: {
     color: colors.bgBase
-  },
-  macroForm: {
-    padding: spacing.md,
-    gap: spacing.sm
-  },
-  fieldLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textSecondary
-  },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.xs
-  },
-  switchLabel: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
   },
   saveButton: {
     marginTop: spacing.md,

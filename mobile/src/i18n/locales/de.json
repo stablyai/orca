@@ -2935,7 +2935,6 @@
     },
     "quickCommandEditorForm": {
       "action": "Aktion",
-      "addQuickCommand": "Schnellbefehl hinzufügen",
       "advanced": "Erweitert",
       "agent": "Agent",
       "agentPrompt": "Agenten-Prompt",
@@ -2954,7 +2953,6 @@
       "promptSizeCharacters": "{{used}} / {{max}} Zeichen",
       "promptSizeKilobytes": "{{used}} KB / {{max}} KB",
       "promptTooLong": "Zu lang zum Speichern.",
-      "scope": "Geltungsbereich",
       "terminalCommand": "Terminal-Befehl"
     },
     "quickCommandLaunch": {
@@ -2983,9 +2981,9 @@
       "chooseAgentTitle": "Agenten auswählen",
       "deleteConfirmMessage": "Dieser Schnellbefehl wird aus der Liste gespeicherter Befehle entfernt.",
       "editTitle": "Schnellbefehl bearbeiten",
-      "editorDescription": "Terminal-Befehle oder Agenten-Prompts für den Schnellzugriff speichern.",
       "title": "Schnellbefehle",
-      "untitled": "Ohne Titel"
+      "untitled": "Ohne Titel",
+      "add": "Hinzufügen"
     },
     "routeHelpers": {
       "connected": "Verbunden",
