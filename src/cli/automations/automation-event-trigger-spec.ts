@@ -35,12 +35,13 @@ import {
   WEBHOOK_TRIGGER_OPTIONS
 } from '../webhooks/webhook-trigger-spec'
 import {
-  describeGoogleTrigger,
-  formatGoogleTrigger,
-  GOOGLE_TRIGGER_OPTIONS,
-  parseGoogleTrigger
-} from '../google/google-event-trigger-spec'
+  describeHostTrigger,
+  formatHostTrigger,
+  hostTriggerOptions,
+  parseHostTrigger
+} from './automation-host-trigger-spec'
 import { GOOGLE_EVENT_SOURCES, isGoogleTrigger } from '../../shared/automation-google-triggers'
+import { isNgitTrigger } from '../../shared/automation-ngit-triggers'
 
 type ConnectorEventSource = AutomationConnectorEventTrigger['source']
 
@@ -59,6 +60,7 @@ const CONNECTOR_SOURCES: readonly ConnectorEventSource[] = ['slack', 'github', '
 const ALL_SOURCES: readonly AutomationEventSource[] = [
   ...CONNECTOR_SOURCES,
   ...GOOGLE_EVENT_SOURCES,
+  'ngit',
   'webhook'
 ]
 
@@ -124,8 +126,8 @@ export function formatAutomationEventTrigger(trigger: AutomationEventTrigger): s
   if (isWebhookTrigger(trigger)) {
     return formatWebhookTrigger(trigger)
   }
-  if (isGoogleTrigger(trigger)) {
-    return formatGoogleTrigger(trigger)
+  if (isGoogleTrigger(trigger) || isNgitTrigger(trigger)) {
+    return formatHostTrigger(trigger, quoteValue)
   }
   return [
     `${trigger.source}.${trigger.event}`,
@@ -147,8 +149,9 @@ export function parseAutomationEventTrigger(spec: string): AutomationEventTrigge
   if (head[3] === 'webhook.call') {
     return parseWebhookTrigger(spec, entriesOf(spec, rest))
   }
-  if (head[3] === 'gmail.new_email' || head[3] === 'calendar.starting_soon') {
-    return parseGoogleTrigger(spec, head[3], entriesOf(spec, rest))
+  const hostRule = parseHostTrigger(spec, head[3], () => entriesOf(spec, rest))
+  if (hostRule) {
+    return hostRule
   }
   const filters = filtersOf(spec, rest)
   const sourceEvent = eventOf(head[3])
@@ -228,8 +231,8 @@ export function describeAutomationEventTrigger(trigger: AutomationEventTrigger):
   if (isWebhookTrigger(trigger)) {
     return describeWebhookTrigger(trigger)
   }
-  if (isGoogleTrigger(trigger)) {
-    return describeGoogleTrigger(trigger)
+  if (isGoogleTrigger(trigger) || isNgitTrigger(trigger)) {
+    return describeHostTrigger(trigger)
   }
   const words: Record<string, string> = EVENT_WORDS[trigger.source]
   return [
@@ -262,10 +265,8 @@ export function formatAutomationTriggerOptions(
     if (source === 'webhook') {
       return WEBHOOK_TRIGGER_OPTIONS
     }
-    if (isGoogleTrigger({ source })) {
-      return bot && !heard?.includes(source)
-        ? `${source}: none of these start ${bot.name}: Google is off for it. Its owner can turn it on with \`orca google bot "${bot.name}" --on\`.`
-        : GOOGLE_TRIGGER_OPTIONS[source]
+    if (isGoogleTrigger({ source }) || isNgitTrigger({ source })) {
+      return hostTriggerOptions(source, bot && !heard?.includes(source) ? bot.name : null)
     }
     const words: Record<string, string> = EVENT_WORDS[source]
     if (bot && !heard?.includes(source)) {

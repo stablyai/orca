@@ -20,6 +20,7 @@ import {
   TERMINAL_QUICK_COMMAND_LARGE_LISTS_RUNTIME_CAPABILITY,
   TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY
 } from '../../terminal/quick-commands/terminal-quick-command-capabilities'
+import { NGIT_TRIGGERS_RUNTIME_CAPABILITY } from '../../automation-ngit-triggers'
 import { GOOGLE_TRIGGERS_RUNTIME_CAPABILITY } from '../../google/google-connect-types'
 
 /** What the browser client advertises in its handshake with the host it is paired to. */
@@ -42,5 +43,6 @@ export const WEB_RUNTIME_CLIENT_CAPABILITIES = [
   TERMINAL_QUICK_COMMAND_LARGE_LISTS_RUNTIME_CAPABILITY,
   // Same renderer as the desktop: a restored, unconfirmed agent row shows as identity only.
   AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,
-  GOOGLE_TRIGGERS_RUNTIME_CAPABILITY
+  GOOGLE_TRIGGERS_RUNTIME_CAPABILITY,
+  NGIT_TRIGGERS_RUNTIME_CAPABILITY
 ] as const

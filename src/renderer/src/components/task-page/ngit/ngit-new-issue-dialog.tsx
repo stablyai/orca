@@ -25,6 +25,16 @@ import { ngitApiFor } from '@/runtime/repository-ngit/ngit-owner-api'
 import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 
+/** Null once published, else why not. */
+async function publishIssue(repo: Repo, title: string, body: string): Promise<string | null> {
+  try {
+    const result = await ngitApiFor(repo).createIssue(title, body)
+    return result.ok ? null : result.error
+  } catch (error) {
+    return readIpcErrorDetail(error) ?? String(error)
+  }
+}
+
 export function NgitNewIssueDialog({
   repos,
   onClose,
@@ -46,18 +56,13 @@ export function NgitNewIssueDialog({
       return
     }
     setPublishing(true)
-    try {
-      const result = await ngitApiFor(repo).createIssue(title.trim(), body)
-      if (result.ok) {
-        onCreated()
-        onClose()
-      } else {
-        toast.error(result.error)
-      }
-    } catch (error) {
-      toast.error(readIpcErrorDetail(error) ?? String(error))
-    } finally {
-      setPublishing(false)
+    const failure = await publishIssue(repo, title.trim(), body)
+    setPublishing(false)
+    if (failure === null) {
+      onCreated()
+      onClose()
+    } else {
+      toast.error(failure)
     }
   }
 

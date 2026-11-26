@@ -11,6 +11,25 @@ import { ngitApiFor } from '@/runtime/repository-ngit/ngit-owner-api'
 import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
 import { translate } from '@/i18n/i18n'
 
+type NgitWrite = (api: ReturnType<typeof ngitApiFor>) => Promise<NgitMutationResult>
+
+async function publishWithToast(pending: Promise<NgitMutationResult>): Promise<boolean> {
+  try {
+    const result = await pending
+    if (!result.ok) {
+      toast.error(result.error)
+    }
+    return result.ok
+  } catch (reason) {
+    toast.error(
+      translate('components.taskPage.ngit.publishFailed', 'ngit could not publish: {{error}}', {
+        error: readIpcErrorDetail(reason) ?? String(reason)
+      })
+    )
+    return false
+  }
+}
+
 /** One open item's relay details, the signing identity, and the writes made against it. */
 export function useNgitItemDetails(item: NgitWorkItem, repo: Repo, onChanged: () => void) {
   const [details, setDetails] = useState<NgitWorkItemDetails | null>(null)
@@ -21,7 +40,9 @@ export function useNgitItemDetails(item: NgitWorkItem, repo: Repo, onChanged: ()
   const [refreshNonce, setRefreshNonce] = useState(0)
   const lastNonceRef = useRef(0)
   const repoRef = useRef(repo)
-  repoRef.current = repo
+  useEffect(() => {
+    repoRef.current = repo
+  }, [repo])
 
   useEffect(() => {
     const force = refreshNonce !== lastNonceRef.current
@@ -70,27 +91,15 @@ export function useNgitItemDetails(item: NgitWorkItem, repo: Repo, onChanged: ()
   const refresh = useCallback(() => setRefreshNonce((nonce) => nonce + 1), [])
 
   const publish = useCallback(
-    async (write: (api: ReturnType<typeof ngitApiFor>) => Promise<NgitMutationResult>) => {
+    async (write: NgitWrite) => {
       setWriting(true)
-      try {
-        const result = await write(ngitApiFor(repoRef.current))
-        if (!result.ok) {
-          toast.error(result.error)
-          return false
-        }
+      const published = await publishWithToast(write(ngitApiFor(repoRef.current)))
+      setWriting(false)
+      if (published) {
         refresh()
         onChanged()
-        return true
-      } catch (reason) {
-        toast.error(
-          translate('components.taskPage.ngit.publishFailed', 'ngit could not publish: {{error}}', {
-            error: readIpcErrorDetail(reason) ?? String(reason)
-          })
-        )
-        return false
-      } finally {
-        setWriting(false)
       }
+      return published
     },
     [onChanged, refresh]
   )

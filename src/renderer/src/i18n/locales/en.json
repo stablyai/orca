@@ -22884,7 +22884,16 @@
           "calendar": {
             "starting_soon": "Meeting starting soon"
           },
-          "other": "Event"
+          "other": "Event",
+          "ngit": {
+            "comment": "Comment",
+            "issue_closed": "Issue closed",
+            "issue_opened": "Issue opened",
+            "pr_closed": "Pull request closed",
+            "pr_merged": "Pull request merged",
+            "pr_opened": "Pull request opened",
+            "pr_pushed": "Pull request updated"
+          }
         },
         "afterThirtyDays": "After 30 days",
         "cancel": "Cancel",
@@ -22906,7 +22915,8 @@
         "until": "Until {{time}}",
         "updatedAutomation": "Updated automation",
         "waiting": "Waiting",
-        "waitsFor": "Waits for"
+        "waitsFor": "Waits for",
+        "ngit": "ngit"
       },
       "slackMirror": {
         "ownDm": "Also posts to your DM with {{bot}}",
@@ -24512,7 +24522,8 @@
         "disconnectedHostLine": "{{host}} isn’t connected. Its files stay on the host.",
         "filesStayLine": "Its files stay on {{host}}.",
         "removing": "Removing…"
-      }
+      },
+      "openNgitTasks": "Open ngit tasks"
     },
     "taskPage": {
       "ngit": {
@@ -24552,7 +24563,6 @@
         "description": "Description",
         "cancel": "Cancel",
         "publishIssue": "Publish issue",
-        "actionClose": "Close",
         "actionResolved": "Mark resolved",
         "actionReopen": "Reopen",
         "actionReady": "Ready for review",
@@ -24563,7 +24573,11 @@
         "typePatch": "Patch",
         "typePr": "PR",
         "publishFailed": "ngit could not publish: {{error}}",
-        "fetchingPr": "Fetching the pull request…"
+        "fetchingPr": "Fetching the pull request…",
+        "commentCount": "Comments: {{total}}",
+        "viewDetails": "View details",
+        "actionCloseIssue": "Close issue",
+        "actionClosePr": "Close PR"
       }
     }
   },
@@ -28504,7 +28518,14 @@
         "linearIssueMoved": "When a Linear issue moves",
         "webhookCall": "When its webhook is called",
         "gmailNewEmail": "On a new email",
-        "calendarStartingSoon": "Before a meeting starts"
+        "calendarStartingSoon": "Before a meeting starts",
+        "ngitIssueOpened": "When an ngit issue is opened",
+        "ngitPrOpened": "When an ngit PR is opened",
+        "ngitPrPushed": "When an ngit PR is updated",
+        "ngitPrMerged": "When an ngit PR is merged",
+        "ngitPrClosed": "When an ngit PR is closed",
+        "ngitIssueClosed": "When an ngit issue is closed",
+        "ngitComment": "On an ngit comment"
       },
       "google": {
         "minutesBefore": "{{count}} min before",

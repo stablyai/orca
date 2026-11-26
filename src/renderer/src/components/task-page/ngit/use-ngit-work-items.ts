@@ -28,7 +28,10 @@ export function useNgitWorkItems(repos: readonly Repo[], reposKey: string): Ngit
   const [refreshNonce, setRefreshNonce] = useState(0)
   const lastNonceRef = useRef(0)
   const reposRef = useRef(repos)
-  reposRef.current = repos
+  // Declared first, so the load below reads this render's rows; row identity alone never reloads.
+  useEffect(() => {
+    reposRef.current = repos
+  }, [repos])
 
   useEffect(() => {
     const force = refreshNonce !== lastNonceRef.current

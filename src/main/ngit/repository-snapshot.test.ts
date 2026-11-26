@@ -106,7 +106,7 @@ describe('ngit repository snapshot', () => {
       headSha: 'b'.repeat(40),
       branchName: 'splicing'
     })
-  }, 30_000)
+  })
 
   it('orders a patch series by parentage and follows its newest revision', async () => {
     const coordinate = `30617:${owner.pubkey}:demo`
@@ -146,7 +146,7 @@ describe('ngit repository snapshot', () => {
     expect(snapshot!.items).toHaveLength(1)
     expect(snapshot!.items[0].patches.map((p) => p.commit)).toEqual(['d1', 'd2'])
     expect(snapshot!.items[0].item).toMatchObject({ headSha: 'd2', title: 'step c1' })
-  }, 30_000)
+  })
 
   it('drops forged and unrequested events, and fails rather than reporting empty', async () => {
     const genuine = owner.sign(1621, [['subject', 'real']])
@@ -183,5 +183,5 @@ describe('ngit repository snapshot', () => {
     await expect(session.query(['http://example.invalid'], [{}])).rejects.toThrow(
       NostrRelaysUnreachableError
     )
-  }, 30_000)
+  })
 })

@@ -49,7 +49,9 @@ export function botEventSources(bot: BotConnectors): AutomationEventSource[] {
     webhook: bot.webhooks === true,
     // Google events come from this host's own sign-in, once the owner turns Google on for the bot.
     gmail: bot.google === true,
-    calendar: bot.google === true
+    calendar: bot.google === true,
+    // Public relay reads, so every bot hears them.
+    ngit: true
   }
   return Object.keys(connected)
     .filter(isEventSource)

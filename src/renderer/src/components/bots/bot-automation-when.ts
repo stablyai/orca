@@ -1,3 +1,4 @@
+import type { NgitEventKind } from '../../../../shared/automation-ngit-triggers'
 import { translate } from '@/i18n/i18n'
 import { formatUiAutomationScheduleDescriptor } from '../automations/details/automation-schedule-label'
 import {
@@ -102,6 +103,25 @@ function linearLabel(event: LinearTrigger['event']): string {
   }
 }
 
+function ngitLabel(event: NgitEventKind): string {
+  switch (event) {
+    case 'issue_opened':
+      return translate('bots.automations.on.ngitIssueOpened', 'When an ngit issue is opened')
+    case 'pr_opened':
+      return translate('bots.automations.on.ngitPrOpened', 'When an ngit PR is opened')
+    case 'pr_pushed':
+      return translate('bots.automations.on.ngitPrPushed', 'When an ngit PR is updated')
+    case 'pr_merged':
+      return translate('bots.automations.on.ngitPrMerged', 'When an ngit PR is merged')
+    case 'pr_closed':
+      return translate('bots.automations.on.ngitPrClosed', 'When an ngit PR is closed')
+    case 'issue_closed':
+      return translate('bots.automations.on.ngitIssueClosed', 'When an ngit issue is closed')
+    case 'comment':
+      return translate('bots.automations.on.ngitComment', 'On an ngit comment')
+  }
+}
+
 export function eventLabel(trigger: AutomationEventKind): string {
   switch (trigger.source) {
     case 'slack':
@@ -112,6 +132,8 @@ export function eventLabel(trigger: AutomationEventKind): string {
       return linearLabel(trigger.event)
     case 'webhook':
       return translate('bots.automations.on.webhookCall', 'When its webhook is called')
+    case 'ngit':
+      return ngitLabel(trigger.event)
     case 'gmail':
       return translate('bots.automations.on.gmailNewEmail', 'On a new email')
     case 'calendar':

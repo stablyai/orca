@@ -23,6 +23,10 @@ export type NostrProfile = { name: string | null; picture: string | null }
 /** A work item before it is stamped with the Orca repo that asked for it. */
 export type ProjectedWorkItem = {
   item: Omit<NgitWorkItem, 'repoId' | 'id'>
+  /** The event that opened it. */
+  root: NostrEvent
+  /** Trusted pushes, revisions and status changes since it opened. */
+  activity: NostrEvent[]
   authorPubkey: string
   body: string
   comments: NostrEvent[]
@@ -213,7 +217,18 @@ export function projectNostrWorkItems(
         relays: repository.relays.slice(0, 1),
         author: root.pubkey
       })
+      const activity = [
+        ...authorised.filter(
+          (event) =>
+            event.kind === NOSTR_KIND.pullRequestUpdate || STATUS_KINDS.includes(event.kind)
+        ),
+        ...related.filter(
+          (event) => event.kind === NOSTR_KIND.patch && isPatchRevision(event) && trusted(event)
+        )
+      ]
       return {
+        root,
+        activity,
         authorPubkey: root.pubkey,
         body: message ? tagValue(root, 'description') || message.body : root.content,
         comments,

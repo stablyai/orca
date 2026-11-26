@@ -1,4 +1,4 @@
-import { execFileCaptureToTermination } from '../git/command-runner/process-capture/exec-file-capture'
+import { runProcess } from '@orca/process-host'
 import { resolveCliCommandAsync } from '../../shared/shell/command-resolution/node-cli-command-async-resolution'
 
 const NGIT_TIMEOUT_MS = 180_000
@@ -25,24 +25,24 @@ export function ngitErrorMessage(stdout: string, stderr: string, fallback: strin
 
 /** Runs `ngit` the way Orca runs `gh`: the CLI owns the signing identity and publishes. */
 export const execNgit: NgitExec = async (args, cwd) => {
-  try {
-    const { stdout } = await execFileCaptureToTermination(
-      await resolveCliCommandAsync('ngit'),
-      args,
-      { cwd, timeout: NGIT_TIMEOUT_MS, maxBuffer: NGIT_MAX_BUFFER, encoding: 'utf-8' }
-    )
-    return String(stdout)
-  } catch (error) {
-    const failure: { code?: unknown; stdout?: unknown; stderr?: unknown } = Object(error)
-    if (failure.code === 'ENOENT') {
-      throw new NgitCliMissingError()
-    }
-    throw new Error(
-      ngitErrorMessage(
-        String(failure.stdout ?? ''),
-        String(failure.stderr ?? ''),
-        error instanceof Error ? error.message : 'ngit failed.'
-      )
-    )
+  const result = await runProcess({
+    program: await resolveCliCommandAsync('ngit'),
+    args,
+    cwd,
+    timeoutMs: NGIT_TIMEOUT_MS,
+    maxOutputBytes: NGIT_MAX_BUFFER
+  }).catch((error: unknown) => {
+    const failure: { code?: unknown } = Object(error)
+    throw failure.code === 'ENOENT' ? new NgitCliMissingError() : error
+  })
+  if (result.code === 0 && !result.timedOut && !result.outputTruncated) {
+    return result.stdout
   }
+  throw new Error(
+    ngitErrorMessage(
+      result.stdout,
+      result.stderr,
+      result.timedOut ? 'ngit timed out.' : `ngit exited with ${result.code}.`
+    )
+  )
 }

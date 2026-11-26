@@ -25,6 +25,7 @@ const SOURCE_MARKS = {
   linear: 'linear',
   gmail: 'google',
   calendar: 'google',
+  ngit: 'event',
   webhook: 'webhook'
 } as const satisfies Record<AutomationEventSource, AutomationRowMark>
 

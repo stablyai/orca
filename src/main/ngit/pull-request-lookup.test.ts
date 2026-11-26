@@ -26,6 +26,16 @@ function pull(
       branchName,
       headSha
     },
+    root: {
+      id: eventId,
+      pubkey: '',
+      created_at: 0,
+      kind: 1618,
+      tags: [],
+      content: '',
+      sig: ''
+    },
+    activity: [],
     authorPubkey: '',
     body: '',
     comments: [],
