@@ -5,6 +5,7 @@
 import { useRef } from 'react'
 import { ScrollView, Text, View, type TextInputInstance } from 'react-native'
 import { House, MessageSquare } from 'lucide-react-native'
+import type { Bot } from '../../../../src/shared/bot-types'
 import { BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY } from '../../../../src/shared/bot-runtime-capabilities'
 import {
   formatBotItemNumber,
@@ -73,7 +74,10 @@ export function MobileBotItemPage({
   hostKey: string
   /** That host's id, which the bot folder's file and skill reads go through. */
   hostId: string
-  bot: { id: string; name: string; folderWorkspaceId: string; agent: string }
+  bot: { id: string; name: string; folderWorkspaceId: string; agent: string } & Pick<
+    Bot,
+    'shareViewer'
+  >
   uid: string
   /** Up and down through the list the item opened from; null when it opened from elsewhere. */
   stepper: PhoneBotItemStepper | null
@@ -309,6 +313,7 @@ export function MobileBotItemPage({
               />
             ) : null}
             <MobileBotItemActivity
+              viewer={bot}
               item={item}
               events={view.events}
               attachments={{ client, onOpenFile }}

@@ -149,6 +149,8 @@ export function useBotChatItems(
 ): {
   read: BotItemsRead | null
   failed: boolean
+  /** A read of this scope landed since it was asked for here; until then `read` may be a kept list. */
+  landed: boolean
   retry: () => void
   /** Their next Closed page; the list as it lands, or null when that read failed. */
   readMore: () => Promise<BotItemsRead | null>
@@ -158,6 +160,7 @@ export function useBotChatItems(
   type Scoped = { chats: readonly string[] | null; whose: BotItemsWhose; value: BotItemsRead }
   const [read, setRead] = useState<Scoped | null>(null)
   const [failed, setFailed] = useState(false)
+  const [landedKey, setLandedKey] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
   const moreRef = useRef<() => Promise<BotItemsRead | null>>(async () => null)
   // The last read of this scope outlives a Retry, so it keeps its loaded Closed depth.
@@ -205,6 +208,7 @@ export function useBotChatItems(
           if (live) {
             landed = value
             land(value)
+            setLandedKey(key)
             missed = false
             setFailed(false)
           }
@@ -258,6 +262,7 @@ export function useBotChatItems(
   return {
     read: read && read.chats === chats && read.whose === whose ? read.value : null,
     failed,
+    landed: landedKey === scopedReadKey({ hostId, id }, chats, whose),
     retry,
     readMore
   }

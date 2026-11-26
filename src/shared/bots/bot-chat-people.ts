@@ -1,5 +1,6 @@
 // Whose chat or item each of a shared bot's is on the owner's lists, and the person filters of Chats and Items.
 import type { Bot } from '../bot-types'
+import type { BotItem } from './bot-items'
 import type { BotChatPerson, BotChatTreeChat } from './bot-chat-tree'
 import { botSharePersonName } from './bot-home-of'
 import { botShareUsable } from './bot-team-shares'
@@ -118,4 +119,33 @@ export function botItemsWhoseParams(whose: BotItemsWhose): {
     return { everyone: true }
   }
   return { person: whose === 'owner' ? null : whose.slice('person:'.length) }
+}
+
+/** The pick's entry when it names someone other than the viewer, whose own is the default; null for
+ *  everyone and for the viewer's own. */
+export function botPickedOther<E extends { pick: BotChatPersonPick }>(
+  pick: BotChatPersonPick,
+  entries: readonly E[] | null
+): E | null {
+  const own = entries?.[0]
+  if (!entries || !own || pick.kind === 'everyone' || sameBotPersonPick(pick, own.pick)) {
+    return null
+  }
+  return entries.find((entry) => sameBotPersonPick(entry.pick, pick)) ?? null
+}
+
+/** Whose an item is, as an Everyone row names it before its age: anyone's but the viewer's own (null).
+ *  `viewer`: a teammate's copy's `shareViewer`; absent, the owner looks. */
+export function botItemPersonMark(
+  item: Pick<BotItem, 'people'>,
+  viewer: Bot['shareViewer'],
+  ownerLabel: string
+): string | null {
+  if (!item.people) {
+    return viewer ? ownerLabel : null
+  }
+  const others = viewer
+    ? item.people.filter((person) => person.accountId !== viewer.accountId)
+    : item.people
+  return others.map((person) => person.name).join(', ') || null
 }

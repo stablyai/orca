@@ -53,10 +53,33 @@ export function useBotItemsShownList(
   /** Whose items it shows; `default`: the caller's own default list. */
   whose: BotItemsWhose = 'default'
 ): BotItemsShownList {
+  const shownRead = useBotItemsShownRead(bot, botRead, filter, whose)
+  return useBotItemsShownGroups(bot, shownRead, filter, now, seenEventId)
+}
+
+/** The read a list shows: the bot's, or its chats' or person's own. */
+export type BotItemsShownRead = Pick<BotItemsShownList, 'read' | 'scoped' | 'chatRead'>
+
+export function useBotItemsShownRead(
+  bot: Bot,
+  botRead: BotItemsRead | null,
+  filter: BotItemFilter,
+  whose: BotItemsWhose = 'default'
+): BotItemsShownRead {
   // Some chats or one person shown: their own read, so counts and Closed pages are theirs.
   const chatRead = useBotChatItems(bot, filter.chatIds, whose)
-  const filtered = filter.chatIds !== null || whose !== 'default'
-  const read = filtered ? chatRead.read : botRead
+  const scoped = filter.chatIds !== null || whose !== 'default'
+  return { read: scoped ? chatRead.read : botRead, scoped, chatRead }
+}
+
+/** That read filtered and grouped, Closed as deep as loaded. */
+export function useBotItemsShownGroups(
+  bot: Bot,
+  { read, scoped: filtered, chatRead }: BotItemsShownRead,
+  filter: BotItemFilter,
+  now: number,
+  seenEventId: string
+): BotItemsShownList {
   // Closed loads as deep as asked inside the read itself: Show more is one more read of it, in turn.
   const items = read?.items ?? NONE
   const cursor = read?.nextClosedCursor ?? null
@@ -108,20 +131,23 @@ export type BotItemsShownReadState = {
   state: BotHostReadState
   /** The latest re-read failed; the list shows the last good one. */
   refreshFailed: boolean
+  /** A read of it landed since the tab opened; until then `read` may be a kept list. */
+  landed: boolean
   retry: () => void
 }
 
 export function botItemsShownReadState(
   list: Pick<BotItemsShownList, 'scoped' | 'read'> & {
-    chatRead: Pick<BotItemsShownList['chatRead'], 'failed' | 'retry'>
+    chatRead: Pick<BotItemsShownList['chatRead'], 'failed' | 'retry' | 'landed'>
   },
   bot: BotItemsShownReadState
 ): BotItemsShownReadState {
   if (!list.scoped) {
     return bot
   }
-  const { failed, retry } = list.chatRead
+  const { failed, retry, landed } = list.chatRead
   return {
+    landed,
     state: list.read ? 'ready' : failed ? 'failed' : 'loading',
     refreshFailed: failed && list.read !== null,
     retry

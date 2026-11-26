@@ -27,15 +27,13 @@ export type ListOwner = Omit<BotItemsListMembers, 'needBot'> & {
 }
 
 const noPerson = (): null => null
-const personName = (item: BotItem): string | null =>
-  item.people?.map((person) => person.name).join(', ') || null
 
 export function listOwner(
   bot: Bot | BotItemsListMembers,
   seenEventId: string,
-  marksPeople = false
+  personMark: ((item: BotItem) => string | null) | null = null
 ): ListOwner {
-  const personOf = marksPeople ? personName : noPerson
+  const personOf = personMark ?? noPerson
   if ('botOf' in bot) {
     return { ...bot, faces: true, personOf }
   }

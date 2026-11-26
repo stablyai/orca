@@ -2,7 +2,13 @@
 // the owner's pick to chats that name no teammate, and a person with none says so. Items open on the owner's own.
 import { describe, expect, it } from 'vitest'
 import type { BotChatTreeChat } from './bot-chat-tree'
-import { botItemsPersonPick, botItemsWhoseOfPick, botPeoplePicker } from './bot-chat-people'
+import {
+  botItemPersonMark,
+  botItemsPersonPick,
+  botItemsWhoseOfPick,
+  botPeoplePicker,
+  botPickedOther
+} from './bot-chat-people'
 import { botChatListView, type BotChatSearchState } from './bot-chat-tree-view'
 
 const ALICE = { accountId: 'acc-alice', name: 'Alice Park' }
@@ -113,5 +119,36 @@ describe("the Items tab's person pick", () => {
     expect(botItemsPersonPick(entries, bo)).toEqual(bo)
     const gone = { kind: 'person', person: { accountId: 'acct-z', name: 'Zed' } } as const
     expect(botItemsWhoseOfPick(botItemsPersonPick(entries, gone), true)).toBe('person:acct-a')
+  })
+})
+
+describe('whom an Items empty list and row names, as each viewer sees it', () => {
+  const alice = { accountId: 'acct-a', name: 'Alice Park' }
+  const bo = { accountId: 'acct-b', name: 'Bo Chen' }
+  const VIEWER = { accountId: 'acct-a', ownerName: 'Jinwoo', teammates: [alice, bo] }
+  const label = (
+    entries: ReturnType<typeof botPeoplePicker>,
+    pick: Parameters<typeof botPickedOther>[0]
+  ) => botPickedOther(pick, entries)?.name ?? null
+
+  it("names a picked person other than the viewer, never the viewer's own", () => {
+    const teammates = botPeoplePicker({ shareViewer: VIEWER }, null)
+    expect(label(teammates, { kind: 'person', person: alice })).toBeNull()
+    expect(label(teammates, { kind: 'owner' })).toBe('Jinwoo')
+    expect(label(teammates, { kind: 'person', person: bo })).toBe('Bo Chen')
+    expect(label(teammates, { kind: 'everyone' })).toBeNull()
+    const owners = botPeoplePicker({ shares: [] }, 'Jinwoo')
+    expect(owners).toBeNull()
+  })
+
+  it("marks Everyone's rows with anyone's but the viewer's own", () => {
+    const ownersItem = {}
+    const alicesItem = { people: [alice] }
+    const shared = { people: [alice, bo] }
+    expect(botItemPersonMark(ownersItem, undefined, 'Owner')).toBeNull()
+    expect(botItemPersonMark(alicesItem, undefined, 'Owner')).toBe('Alice Park')
+    expect(botItemPersonMark(ownersItem, VIEWER, 'Jinwoo')).toBe('Jinwoo')
+    expect(botItemPersonMark(alicesItem, VIEWER, 'Jinwoo')).toBeNull()
+    expect(botItemPersonMark(shared, VIEWER, 'Jinwoo')).toBe('Bo Chen')
   })
 })

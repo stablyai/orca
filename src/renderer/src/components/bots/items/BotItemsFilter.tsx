@@ -14,10 +14,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
-import {
-  sameBotPersonPick,
-  type BotChatPersonPick
-} from '../../../../../shared/bots/bot-chat-people'
+import { botPickedOther, type BotChatPersonPick } from '../../../../../shared/bots/bot-chat-people'
 import { BotAvatar } from '../BotAvatar'
 import {
   BotPersonPickItems,
@@ -211,10 +208,7 @@ export function BotItemsFilterChips({
   const t = useTranslate()
   // Another person than the viewer's own, the default: by name, removing back to the viewer's own.
   const own = people?.entries[0]
-  const other =
-    people && own && people.pick.kind !== 'everyone' && !sameBotPersonPick(people.pick, own.pick)
-      ? botPersonPickName(people.pick, people.entries)
-      : null
+  const other = people ? (botPickedOther(people.pick, people.entries)?.label ?? null) : null
   if (!filter.needsYou && !other) {
     return null
   }

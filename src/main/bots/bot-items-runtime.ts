@@ -235,11 +235,16 @@ export class BotItemsHost {
   }
 
   /** Each bot's unstale Needs you items, counted at `now`; null when unreadable, never a false zero.
-   *  The owner's own only: a teammate's item asks that teammate, as the list's default shows. */
-  async needsYouCounts(now: number): Promise<BotNeedsYouCounts | null> {
+   *  One person's own, as their list's default shows: the owner's (null), or a teammate's. */
+  async needsYouCounts(
+    now: number,
+    account: string | null = null
+  ): Promise<BotNeedsYouCounts | null> {
     const store = this.openedStore()
     const rows = store
-      ? await store.needsYou(botItemListScope(botItemsOfPeople(null))).catch(warn)
+      ? await store
+          .needsYou(botItemListScope(botItemsOfPeople(account === null ? null : [account])))
+          .catch(warn)
       : []
     return rows && { ...botItemsNeedingOwnerByBot(rows, this.deps.bots(), now), at: now }
   }

@@ -8,6 +8,7 @@ import type { BotItemActivityEntry } from '../../../../src/shared/bots/bot-item-
 import { botItemActorName } from '../../../../src/shared/bots/bot-item-actor-name'
 import { botItemQuestionShape } from '../../../../src/shared/bots/bot-item-ask'
 import type { BotItem } from '../../../../src/shared/bots/bot-items'
+import type { Bot } from '../../../../src/shared/bot-types'
 import type { BotItemSentAnswers } from '../../../../src/shared/bots/use-bot-item-question-steps'
 import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -26,6 +27,7 @@ import { useMobileMessageTime } from '../../session/native-chat/transcript/messa
 const ICON = 13
 
 export function MobileBotItemCommentCard({
+  viewer,
   item,
   entry,
   attachments,
@@ -38,6 +40,8 @@ export function MobileBotItemCommentCard({
   asking = false,
   onQuote
 }: {
+  /** The bot as this phone has it: a teammate's copy names who is looking. */
+  viewer: Pick<Bot, 'shareViewer'>
   item: BotItem
   entry: Pick<Extract<BotItemActivityEntry, { kind: 'comment' }>, 'event' | 'replyTo' | 'waiting'> &
     Partial<
@@ -80,7 +84,7 @@ export function MobileBotItemCommentCard({
       <View style={styles.body}>
         <View style={styles.head}>
           <Text style={styles.author} numberOfLines={1}>
-            {botItemActorName(event, item, t)}
+            {botItemActorName(event, item, t, viewer)}
           </Text>
           {onQuote && quoted ? (
             <Pressable

@@ -68,15 +68,15 @@ export type BotItemsListProps = {
   focusFallback?: React.RefObject<HTMLElement | null>
   /** The panel's scroller, which a long group windows its rows against. */
   scroller?: React.RefObject<HTMLDivElement | null>
-  /** Rows name the teammate they are for: the list shows everyone's. */
-  marksPeople?: boolean
+  /** Each row's person before its age (`botItemPersonMark`): the list shows everyone's. */
+  personMark?: ((item: BotItem) => string | null) | null
 }
 
 const NO_ASKS: BotNeedsYouAsks = { needs: [], stoppedForSignIn: [], itemOf: () => null }
 
 export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
   const { groups, onOpen, scroller: panelScroller } = props
-  const owner = listOwner(props.bot, props.seenEventId, props.marksPeople)
+  const owner = listOwner(props.bot, props.seenEventId, props.personMark)
   const { botOf } = owner
   const t = useTranslate()
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())

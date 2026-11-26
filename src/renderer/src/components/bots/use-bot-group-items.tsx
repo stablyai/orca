@@ -94,6 +94,7 @@ const MemberReader = memo(function MemberReader({
   const {
     read: chatListRead,
     failed: chatFailed,
+    landed: chatLanded,
     retry: chatRetry,
     readMore: chatReadMore
   } = list.chatRead
@@ -109,6 +110,7 @@ const MemberReader = memo(function MemberReader({
         chatRead: {
           read: chatListRead,
           failed: chatFailed,
+          landed: chatLanded,
           retry: chatRetry,
           readMore: chatReadMore
         },
@@ -138,6 +140,7 @@ const MemberReader = memo(function MemberReader({
     scoped,
     chatListRead,
     chatFailed,
+    chatLanded,
     chatRetry,
     chatReadMore,
     listItems,

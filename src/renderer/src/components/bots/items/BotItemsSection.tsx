@@ -43,7 +43,7 @@ export function BotItemsSection({
   offline,
   focusFallback,
   scroller,
-  marksPeople = false,
+  personMark = null,
   teammate = null
 }: {
   bot: Bot
@@ -64,8 +64,8 @@ export function BotItemsSection({
   focusFallback: React.RefObject<HTMLElement | null>
   /** The panel's scroller, for windowing long groups. */
   scroller?: React.RefObject<HTMLDivElement | null>
-  /** Rows name the teammate they are for: the list shows everyone's. */
-  marksPeople?: boolean
+  /** Each row's person before its age (`botItemPersonMark`): the list shows everyone's. */
+  personMark?: ((item: BotItem) => string | null) | null
   /** The teammate whose items the list shows, by name. */
   teammate?: string | null
 }): React.JSX.Element {
@@ -151,7 +151,7 @@ export function BotItemsSection({
         offline={offline}
         focusFallback={focusFallback}
         scroller={scroller}
-        marksPeople={marksPeople}
+        personMark={personMark}
       />
       {itemsNote()}
     </>

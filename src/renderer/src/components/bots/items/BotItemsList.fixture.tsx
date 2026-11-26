@@ -219,7 +219,7 @@ export const everyone = defineFixture({
         staleDays={5}
         now={now}
         onOpen={() => {}}
-        marksPeople
+        personMark={(item) => item.people?.map((person) => person.name).join(', ') ?? null}
       />
     </div>
   )
