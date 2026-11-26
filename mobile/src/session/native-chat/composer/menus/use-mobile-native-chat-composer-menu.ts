@@ -45,6 +45,7 @@ export function useMobileNativeChatComposerMenu(input: {
   value: string
   onChangeText: (text: string) => void
   agent: string | null
+  nextAgent?: string
   /** Undefined on a terminal-backed chat. */
   structuredCatalog: MobileComposerStructuredCatalog | undefined
   filePaths: readonly string[]
@@ -106,12 +107,12 @@ export function useMobileNativeChatComposerMenu(input: {
   const catalog = useMemo(
     () =>
       mobileComposerCatalog({
-        agent,
-        structured: structuredCatalog,
-        discovery: skillDiscovery,
+        agent: input.nextAgent ?? agent,
+        structured: input.nextAgent === undefined ? structuredCatalog : undefined,
+        discovery: input.nextAgent === undefined ? skillDiscovery : undefined,
         interactionModeSupported: input.interactionModeSupported
       }),
-    [agent, skillDiscovery, structuredCatalog, input.interactionModeSupported]
+    [agent, skillDiscovery, structuredCatalog, input.interactionModeSupported, input.nextAgent]
   )
   const skillTokens = useMemo(() => mobileComposerSkillTokens(catalog), [catalog])
   const skillToken = leadingSkillToken(value, skillTokens)

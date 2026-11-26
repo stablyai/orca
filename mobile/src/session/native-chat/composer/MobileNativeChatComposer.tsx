@@ -144,6 +144,7 @@ export function MobileNativeChatComposer({
     editing: editSession !== undefined,
     goalMode: goal.menu,
     agent,
+    nextAgent: sessionOptions?.providerPicker?.selection?.agent,
     structuredCatalog: orca.catalog,
     interactionModeSupported:
       editSession?.interactionModeSupported ??
