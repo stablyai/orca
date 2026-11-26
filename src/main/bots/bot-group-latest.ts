@@ -6,6 +6,7 @@ import {
   isBotGroupMemberSession
 } from '../../shared/bots/bot-group'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { botGroupRoomNoticeKey } from '../../shared/bots/bot-change-scope'
 import { requireStructuredHost } from './bot-chat-session'
 import { type BotGroupRuntime, runtimeBotGroups } from './bot-group-runtime'
 import { handOffGroupMentions } from './bot-group-mention-handoffs'
@@ -39,7 +40,10 @@ export async function noteBotGroupMemberReply(
     runtime.notifyBotsChanged({
       kinds: ['groups'],
       groupIds: [owner.group.id],
-      groupPosts: { [owner.group.id]: [saved.message.id] },
+      groupPosts: {
+        [botGroupRoomNoticeKey(owner.group.id, saved.message.threadId)]: [saved.message.id]
+      },
+      scopedRoomPosts: true,
       ...(saved.sidebarChanged ? {} : { roomPostsOnly: true })
     })
   }

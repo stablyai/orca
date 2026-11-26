@@ -11,7 +11,8 @@ export function readBotGroup(
   beforeSequence?: number,
   threadId?: string,
   knownReplyKeys?: readonly string[],
-  updatedPostIds?: readonly string[]
+  updatedPostIds?: readonly string[],
+  updatesOnly?: true
 ): BotGroupTranscript {
   const group = groups.store.room(groupId, threadId)
   if (knownReplyKeys === undefined) {
@@ -38,7 +39,9 @@ export function readBotGroup(
       hasEarlier: stored.length > messages.length
     }
   }
-  const stored = groups.store.roomPageMessages(groupId, threadId, 41, beforeSequence)
+  const stored = updatesOnly
+    ? []
+    : groups.store.roomPageMessages(groupId, threadId, 41, beforeSequence)
   const recent = stored.slice(-40)
   const recentIds = new Set(recent.map(({ id }) => id))
   const updates = [...new Set(updatedPostIds)].flatMap((id) => {
@@ -54,7 +57,14 @@ export function readBotGroup(
     post === candidates[index] ? post : projectBotGroupRoomPost(post)
   )
   settleDeadGroupMailTurns(groups, messages)
-  const page = presentBotGroupPage(group, presentPageAnswers(messages), knownReplyKeys, recentIds)
+  const answers = presentPageAnswers(messages)
+  // An updates-only read has its own budget and must advance even if one post needs a cut.
+  const page = presentBotGroupPage(
+    group,
+    answers,
+    knownReplyKeys,
+    updatesOnly ? new Set(updates.map(({ id }) => id)) : recentIds
+  )
   const current = page.filter(({ id }) => recentIds.has(id))
   const updatedPosts = page.filter(({ id }) => !recentIds.has(id))
   const admittedUpdates = new Set(updatedPosts.map(({ id }) => id))

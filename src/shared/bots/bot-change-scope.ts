@@ -48,8 +48,10 @@ export type BotChangeScope = {
   /** A `groups` change's rooms, by group id: an open room re-reads only when its group is named. Absent
    *  (and an older host's notice): every room re-reads. */
   groupIds?: readonly string[]
-  /** Changed room records by group. Catalog and unrelated cards do not read transcript-only notices. */
+  /** Changed post IDs by room key, including the thread for its own transcript. */
   groupPosts?: Readonly<Record<string, readonly string[]>>
+  overflowRoomPosts?: readonly string[]
+  scopedRoomPosts?: true
   roomPostsOnly?: true
   /** `groupIds` as a peer's notice carried it, unread: only an open room reads it (botGroupRoomConcerned),
    *  so a reader that wants no room never walks the list. */
@@ -157,6 +159,8 @@ export type PendingBotChanges = {
   /** The rooms a `groups` change named; null once one named none (every room), absent before any. */
   groupIds?: Set<string> | null
   groupPosts?: Map<string, Set<string>>
+  overflowRoomPosts?: Set<string>
+  unscopedRoomPosts?: true
   groupCatalogChanged?: true
 }
 
@@ -174,15 +178,25 @@ export function addBotChange(pending: PendingBotChanges, scope: BotChangeScope):
     if (!scope.roomPostsOnly) {
       pending.groupCatalogChanged = true
     }
+    if (!scope.scopedRoomPosts) {
+      pending.unscopedRoomPosts = true
+    }
     for (const [groupId, postIds] of Object.entries(scope.groupPosts ?? {})) {
       pending.groupPosts ??= new Map()
       const posts = pending.groupPosts.get(groupId) ?? new Set<string>()
       for (const id of postIds) {
-        if (posts.size < 40) {
+        if (posts.size < 40 || posts.has(id)) {
           posts.add(id)
+        } else {
+          pending.overflowRoomPosts ??= new Set()
+          pending.overflowRoomPosts.add(groupId)
         }
       }
       pending.groupPosts.set(groupId, posts)
+    }
+    for (const room of scope.overflowRoomPosts ?? []) {
+      pending.overflowRoomPosts ??= new Set()
+      pending.overflowRoomPosts.add(room)
     }
     // A change naming no room (no list, or an empty one) reaches every room.
     if (!scope.groupIds?.length || pending.groupIds === null) {
@@ -255,10 +269,36 @@ export function botChangeNotice(pending: PendingBotChanges): BotChangeScope {
           )
         }
       : {}),
+    ...(pending.groupPosts?.size && !pending.unscopedRoomPosts
+      ? { scopedRoomPosts: true as const }
+      : {}),
+    ...(pending.overflowRoomPosts?.size
+      ? { overflowRoomPosts: [...pending.overflowRoomPosts] }
+      : {}),
     ...(pending.kinds.has('groups') && !pending.groupCatalogChanged
       ? { roomPostsOnly: true as const }
       : {})
   }
+}
+
+export function botGroupRoomNoticeKey(groupId: string, threadId?: string): string {
+  return JSON.stringify([groupId, threadId])
+}
+
+export function botGroupChangedPosts(
+  scope: BotChangeScope | undefined,
+  groupId: string,
+  threadId?: string
+): { ids: readonly string[]; recover: boolean } | null {
+  const key = botGroupRoomNoticeKey(groupId, threadId)
+  const posts = scope?.groupPosts?.[key] ?? scope?.groupPosts?.[groupId]
+  // A regular room change has no post IDs to target. Re-read the visible page rather than assuming
+  // that the newest page is the only place that can have changed.
+  const recover =
+    !scope ||
+    (scope.overflowRoomPosts?.includes(key) ?? false) ||
+    (!scope.scopedRoomPosts && !posts)
+  return scope?.scopedRoomPosts && !posts && !recover ? null : { ids: posts ?? [], recover }
 }
 
 /** Whether an open room of `groupId` re-reads for this notice: a `groups` change (or one of any or an

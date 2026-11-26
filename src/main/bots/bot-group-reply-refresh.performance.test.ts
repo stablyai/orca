@@ -124,11 +124,59 @@ it('reads the frozen source once across consecutive detail pages at both sizes',
       const older = read(newest.page.before?.journal?.[0])
       expect(older?.kind === 'frozen' && older.page.items.at(-1)?.sequence).toBe(count - 128)
       expect(
-        source.mock.calls.filter(([sql]) => sql.includes("json_each(m.record, '$.turns')"))
+        source.mock.calls.filter(([sql]) =>
+          sql.includes("SELECT json_remove(turn.value,'$.frozenItems')")
+        )
       ).toHaveLength(1)
 
-      store.update({ ...stored, turns: [{ ...stored.turns[0], frozenItems: [] }] })
+      store.update({ ...stored, turns: [{ ...stored.turns[0], frozenItems: [] }] }, true)
       expect(read()).toEqual({ kind: 'frozen', page: { items: [] } })
+
+      for (let index = 0; index < 9; index++) {
+        const nextOperationId = `next-frozen-${index}`
+        store.append({
+          id: `next-post-${index}`,
+          groupId: 'room',
+          author: { kind: 'owner' },
+          text: 'Check the next status',
+          createdAt: index + 3,
+          turns: [
+            {
+              operationId: nextOperationId,
+              botId: `next-retired-${index}`,
+              botName: 'Next retired',
+              avatar: null,
+              agent: 'codex',
+              sessionId: `next-retired-session-${index}`,
+              revoked: true,
+              frozenItems: []
+            }
+          ]
+        })
+        expect(
+          readBotGroupTurnSource(db.db, {
+            ...store.detailSource(nextOperationId)!,
+            groupId: 'room',
+            operationId: nextOperationId
+          })?.kind
+        ).toBe('frozen')
+      }
+      expect(
+        db.db.prepare('SELECT COUNT(*) AS count FROM bot_group_archive_turn').get().count
+      ).toBe(8)
+      const interleaved = 'next-frozen-1'
+      expect(
+        readBotGroupTurnSource(db.db, {
+          ...store.detailSource(interleaved)!,
+          groupId: 'room',
+          operationId: interleaved
+        })?.kind
+      ).toBe('frozen')
+      expect(
+        source.mock.calls.filter(([sql]) =>
+          sql.includes("SELECT json_remove(turn.value,'$.frozenItems')")
+        )
+      ).toHaveLength(11)
     } finally {
       db.close()
     }

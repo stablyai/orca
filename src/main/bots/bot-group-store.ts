@@ -268,6 +268,7 @@ export class BotGroupStore {
     this.transaction(() => {
       const { error: _error, failure: _failure, ...turn } = message.turns[0]
       this.update({ ...message, turns: [{ ...turn, operationId }] })
+      this.posts.invalidateArchive(messageId)
       this.link(operationId, messageId)
     })
   }
@@ -341,7 +342,7 @@ export class BotGroupStore {
     }
   }
 
-  update({ sequence: _sequence, ...message }: BotGroupMessage): void {
+  update({ sequence: _sequence, ...message }: BotGroupMessage, archiveChanged = false): void {
     const turns = message.turns.map(
       ({ workerDispatchIds: _workers, replyKey: _replyKey, ...turn }) => turn
     )
@@ -349,6 +350,9 @@ export class BotGroupStore {
       .prepare('UPDATE bot_group_messages SET record = ? WHERE id = ? AND group_id = ?')
       .run(JSON.stringify({ ...message, turns }), message.id, message.groupId)
     this.posts.invalidate(message.id)
+    if (archiveChanged) {
+      this.posts.invalidateArchive(message.id)
+    }
   }
 }
 

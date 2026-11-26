@@ -16,6 +16,10 @@ export function readBotChangeScope(event: unknown): BotChangeScope | undefined {
   const kindBots = 'kindBots' in event ? readStringLists(event.kindBots) : undefined
   const needsYou = 'needsYou' in event ? readBotNeedsYouCounts(event.needsYou) : undefined
   const groupPosts = 'groupPosts' in event ? readStringLists(event.groupPosts) : undefined
+  const overflowRoomPosts =
+    'overflowRoomPosts' in event && Array.isArray(event.overflowRoomPosts)
+      ? event.overflowRoomPosts.filter((id): id is string => typeof id === 'string')
+      : undefined
   // Kept as sent: only an open room walks it, once per notice.
   // A notice read once already (the preload's, a paired host's) carries it as `receivedGroupIds`.
   const receivedGroupIds: readonly unknown[] | undefined =
@@ -31,6 +35,10 @@ export function readBotChangeScope(event: unknown): BotChangeScope | undefined {
         ...(kindBots ? { kindBots } : {}),
         ...(needsYou ? { needsYou } : {}),
         ...(groupPosts ? { groupPosts } : {}),
+        ...(overflowRoomPosts ? { overflowRoomPosts } : {}),
+        ...('scopedRoomPosts' in event && event.scopedRoomPosts === true
+          ? { scopedRoomPosts: true as const }
+          : {}),
         ...('roomPostsOnly' in event && event.roomPostsOnly === true
           ? { roomPostsOnly: true as const }
           : {}),

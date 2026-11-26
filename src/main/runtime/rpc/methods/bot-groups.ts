@@ -87,7 +87,8 @@ export const BOT_GROUP_METHODS = [
         params.beforeSequence,
         params.threadId,
         params.knownReplyKeys,
-        params.updatedPostIds
+        params.updatedPostIds,
+        params.updatesOnly
       )
     }
   }),
@@ -97,7 +98,11 @@ export const BOT_GROUP_METHODS = [
     params: BotGroupTurnRows,
     handler: async (params, context) => {
       assertBotGroupOwner(context)
-      return runtimeBotGroups(context.runtime).turnRows(params, context.signal)
+      return runtimeBotGroups(context.runtime).turnRows(
+        params,
+        context.signal,
+        context.connectionId
+      )
     }
   }),
   defineMethod({

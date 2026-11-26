@@ -1,5 +1,5 @@
 import type { z } from 'zod'
-import { readBotGroupTurnRows } from './bot-group-turn-rows'
+import { readBotGroupTurnRows, type BotGroupTurnRead } from './bot-group-turn-rows'
 import type {
   BotGroup,
   BotGroupCreate,
@@ -146,7 +146,8 @@ export class BotGroupRuntime {
   readonly queues = new Map<string, Promise<void>>()
   /** Operations whose native admission is in flight. */
   readonly deliveries = new Set<string>()
-  readonly turnDetailReads = new Map<string, ReturnType<typeof readBotGroupTurnRows>>()
+  readonly turnDetailReads = new Map<string, BotGroupTurnRead>()
+  readonly turnDetailViewers = new Map<string, AbortController>()
   /** Mail turns being checked for a dead attempt, last found open, or whose chat answers for them now. */
   readonly mailTurnChecks = new Map<
     string,
@@ -183,10 +184,23 @@ export class BotGroupRuntime {
     beforeSequence?: number,
     threadId?: string,
     knownReplyKeys?: readonly string[],
-    updatedPostIds?: readonly string[]
-  ) => readBotGroup(this, groupId, beforeSequence, threadId, knownReplyKeys, updatedPostIds)
-  turnRows = (input: Parameters<typeof readBotGroupTurnRows>[1], signal?: AbortSignal) =>
-    readBotGroupTurnRows(this, input, signal)
+    updatedPostIds?: readonly string[],
+    updatesOnly?: true
+  ) =>
+    readBotGroup(
+      this,
+      groupId,
+      beforeSequence,
+      threadId,
+      knownReplyKeys,
+      updatedPostIds,
+      updatesOnly
+    )
+  turnRows = (
+    input: Parameters<typeof readBotGroupTurnRows>[1],
+    signal?: AbortSignal,
+    client?: string
+  ) => readBotGroupTurnRows(this, input, signal, client)
   stop = (groupId: string, botId?: string, threadId?: string) =>
     stopBotGroup(this, groupId, botId, threadId)
   resumePending = () => resumePendingGroupDeliveries(this)

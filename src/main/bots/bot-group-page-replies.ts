@@ -49,25 +49,24 @@ const previewBytesByKey = new BoundedMap<string, number>({ maxEntries: 4_096 })
 
 /** Cache room previews independently of the larger reply text used by delivery and quoting. */
 export function projectBotGroupRoomPost(message: BotGroupMessage): BotGroupMessage {
-  const largeFrozenPost =
-    message.turns.some((turn) => turn.frozenItems !== undefined) &&
-    Buffer.byteLength(JSON.stringify(message)) > REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES / 2
   return {
     ...message,
     turns: message.turns.map(({ turnItemId: _turnItemId, roomReply, ...record }, index) => {
       const { frozenItems } = record
-      const moveFrozen = largeFrozenPost && frozenItems !== undefined
-      const turn = moveFrozen
-        ? {
-            ...record,
-            ...botGroupTurnEnd(frozenItems),
-            frozenHistory: true as const,
-            frozenItems: undefined,
-            workerDispatchIds: undefined
-          }
-        : record
+      const turn =
+        frozenItems !== undefined
+          ? {
+              ...record,
+              ...botGroupTurnEnd(frozenItems),
+              frozenHistory: true as const,
+              frozenItems: undefined,
+              workerDispatchIds: undefined
+            }
+          : record
       const source =
-        roomReply ?? (moveFrozen ? settledGroupRoomReply(frozenItems) : undefined) ?? turn.reply
+        roomReply ??
+        (typeof turn.reply === 'string' ? turn.reply : undefined) ??
+        (frozenItems ? settledGroupRoomReply(frozenItems) : undefined)
       if (typeof source !== 'string') {
         return turn
       }

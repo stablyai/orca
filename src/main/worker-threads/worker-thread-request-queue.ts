@@ -21,6 +21,8 @@ export type WorkerThreadRequestQueueOptions<TRequest> = {
   onUnavailable: (error: unknown) => void
   /** Refuse new work until the terminated worker exits; native calls can delay its exit. */
   awaitRetirement?: boolean
+  /** A bounded native read can finish without destroying a shared worker on caller abort. */
+  finishActiveOnAbort?: boolean
 }
 
 export type WorkerThreadRequestOwner = { readonly signal: AbortSignal }
@@ -107,6 +109,9 @@ export class WorkerThreadRequestQueue<
       }
       const abort = (): void => {
         if (this.active === call) {
+          if (this.options.finishActiveOnAbort) {
+            return
+          }
           this.host.destroy()
         } else {
           this.queue = this.queue.filter((queued) => queued !== call)

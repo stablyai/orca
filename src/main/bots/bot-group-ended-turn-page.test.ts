@@ -169,7 +169,7 @@ it('keeps the recent page when named older updates fill the transport budget', (
   )
 })
 
-it('keeps consecutive root messages in the saved reply', () => {
+it('keeps consecutive root answers and folds earlier work out of the saved reply', () => {
   const text = (sequence: number, content: string, agentId?: string): AgentJournalRenderItem => ({
     itemId: `row-${sequence}`,
     revision: 1,
@@ -180,9 +180,18 @@ it('keeps consecutive root messages in the saved reply', () => {
   })
   expect(
     settledGroupRoomReply([
-      text(1, 'Apply this configuration.'),
-      text(2, 'Only the child agent said this.', 'child'),
-      text(3, 'Restart afterward.')
+      text(1, 'I will check the configuration.'),
+      {
+        ...text(2, ''),
+        body: {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'tool-call', name: 'Read', input: { path: 'config' } }]
+        }
+      },
+      text(3, 'Apply this configuration.'),
+      text(4, 'Only the child agent said this.', 'child'),
+      text(5, 'Restart afterward.')
     ])
   ).toBe('Apply this configuration.\n\nRestart afterward.')
 })

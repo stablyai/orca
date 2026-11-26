@@ -7,7 +7,8 @@ export const BotGroupRead = Room.extend({
     .array(z.string().length(43))
     .max(40 * 32)
     .optional(),
-  updatedPostIds: z.array(z.string().min(1)).max(40).optional()
+  updatedPostIds: z.array(z.string().min(1)).max(40).optional(),
+  updatesOnly: z.literal(true).optional()
 })
 export const BotGroupTurnDetailCursorSchema = z.object({
   journal: z
@@ -22,5 +23,7 @@ export const BotGroupTurnDetailCursorSchema = z.object({
 export type BotGroupTurnDetailCursor = z.infer<typeof BotGroupTurnDetailCursorSchema>
 export const BotGroupTurnRows = Room.extend({
   operationId: z.string().min(1),
-  before: BotGroupTurnDetailCursorSchema.optional()
+  before: BotGroupTurnDetailCursorSchema.optional(),
+  requestId: z.string().min(1).max(80).optional(),
+  cancel: z.literal(true).optional()
 })

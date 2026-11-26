@@ -3,6 +3,7 @@ import {
   addBotChange,
   botChangeConcerns,
   botChangeNotice,
+  botGroupChangedPosts,
   botGroupRoomConcerned,
   pendingBotChanges,
   readBotChangeScope,
@@ -64,4 +65,12 @@ it('keeps a saved-post notice local to transcript readers unless the room catalo
   expect(botChangeConcerns(transcript, { kinds: ['groups'], roomPosts: true })).toBe(true)
   expect(botChangeConcerns(transcript, { kinds: ['groups'] })).toBe(false)
   expect(botChangeConcerns(notice(saved, { kinds: ['groups'] }), { kinds: ['groups'] })).toBe(true)
+})
+
+it('recovers an open transcript for an unscoped room change', () => {
+  const changed = botGroupChangedPosts(
+    readBotChangeScope({ kinds: ['groups'], groupIds: ['room-a'] }),
+    'room-a'
+  )
+  expect(changed).toEqual({ ids: [], recover: true })
 })

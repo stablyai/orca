@@ -38,7 +38,10 @@ import {
 import { createStructuredQuestionProjection } from '../../../src/shared/native-chat/transcript/messages/structured-agent-question-projection'
 import { projectStructuredAgentStartItem } from '../../../src/shared/native-chat/transcript/messages/structured-agent-start-projection'
 import { botCodedText } from '../../../src/shared/bots/bot-failure-copy'
-import { createBotGroupTurnDetailsHook } from '../../../src/shared/bots/use-bot-group-turn-details'
+import {
+  createBotGroupTurnDetailsHook,
+  requestBotGroupTurnPage
+} from '../../../src/shared/bots/use-bot-group-turn-details'
 import { groupTurnRows } from './bot-group-operations'
 
 export type MobileBotGroupSession = StructuredMobileSession & {
@@ -143,13 +146,17 @@ export function MobileBotGroupTurn({
   const ended = turn.end !== undefined || turn.reply !== undefined
   const readTurn = session?.groupTurnItems
   const loadDetails = useCallback(
-    async (before: BotGroupTurnDetailCursor | undefined, signal: AbortSignal) =>
-      groupTurnRows.interpret(
-        await groupTurnRows.request(
-          client,
-          { groupId, threadId, operationId: turn.operationId, before },
-          { signal }
-        )
+    (before: BotGroupTurnDetailCursor | undefined, signal: AbortSignal) =>
+      requestBotGroupTurnPage(
+        async (viewer, requestSignal) =>
+          groupTurnRows.interpret(
+            await groupTurnRows.request(
+              client,
+              { groupId, threadId, operationId: turn.operationId, before, ...viewer },
+              { signal: requestSignal }
+            )
+          ),
+        signal
       ),
     [client, groupId, threadId, turn.operationId]
   )

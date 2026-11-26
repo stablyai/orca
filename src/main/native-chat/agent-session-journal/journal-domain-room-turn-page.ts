@@ -20,7 +20,11 @@ export type JournalRoomTurnPageRequest = {
 
 type RoomTurnPosition = [sequence: number, sequenceIndex: number, ordinal: number]
 
-export type JournalRoomTurnPage = { items: AgentJournalRenderItem[]; before?: RoomTurnPosition }
+export type JournalRoomTurnPage = {
+  items: AgentJournalRenderItem[]
+  before?: RoomTurnPosition
+  workersRead: number
+}
 
 const DETAIL_LIMIT = 128
 const VISIBLE = 'session_id=? AND epoch=? AND hidden=0'
@@ -36,12 +40,12 @@ export function readJournalDomainRoomTurnPage(
 ): JournalRoomTurnPage {
   const turnId = request.turnItemId ?? legacyTurnItemId(scope, request.operationId)
   if (!turnId) {
-    return { items: [] }
+    return { items: [], workersRead: request.workerDispatchIds?.length ?? 0 }
   }
   const { db, prefix } = scope
   const position = db.prepare(`SELECT sequence ${BY_ID} AND kind='turn'`).get(...prefix, turnId)
   if (!position) {
-    return { items: [] }
+    return { items: [], workersRead: request.workerDispatchIds?.length ?? 0 }
   }
   const start = Number(position.sequence)
   const root = db
@@ -58,7 +62,9 @@ export function readJournalDomainRoomTurnPage(
     .get(...prefix, start, Number(root?.sequence ?? Number.MAX_SAFE_INTEGER), DETAIL_LIMIT, turnId)
   const ids: string[] = []
   let budget = HISTORY_PAGE_CONTENT_BUDGET_BYTES - 2 * DETAIL_LIMIT
-  for (const id of [turnId, ...(answer ? [String(answer.item_id)] : [])]) {
+  for (const id of request.onlyWorkers
+    ? []
+    : [turnId, ...(answer ? [String(answer.item_id)] : [])]) {
     const header = db.prepare(`SELECT ${BYTES} AS bytes ${BY_ID}`).get(...prefix, id)
     const bytes = Number(header?.bytes ?? 0)
     if (header && bytes <= budget) {
@@ -103,6 +109,8 @@ export function readJournalDomainRoomTurnPage(
   const edge = consumed < headers.length ? headers[consumed - 1] : undefined
   // Linked worker cards are outside the provider's turn scope. Their IDs were bounded at the
   // room store before coming to this owner.
+  const workersBudget = HISTORY_PAGE_CONTENT_BUDGET_BYTES - 2 * DETAIL_LIMIT
+  let workersRead = 0
   for (const dispatch of request.workerDispatchIds ?? []) {
     const id = agentJournalSubmissionKey(`agent-start:${dispatch}`)
     const header = db.prepare(`SELECT ${BYTES} AS bytes ${BY_ID}`).get(...prefix, id)
@@ -110,12 +118,16 @@ export function readJournalDomainRoomTurnPage(
     if (header && bytes <= budget) {
       ids.push(id)
       budget -= bytes
-    } else if (header) {
+    } else if (header && bytes > workersBudget) {
       oversized.push(oversizedHistoryItem(readJournalDomainHistoryEnvelope(db, prefix, id)))
+    } else if (header) {
+      break
     }
+    workersRead++
   }
   const items = [...readJournalDomainClientItems(db, scope, ids), ...oversized]
   return {
+    workersRead,
     items: items.sort(
       (a, b) => a.sequence - b.sequence || (a.sequenceIndex ?? 0) - (b.sequenceIndex ?? 0)
     ),

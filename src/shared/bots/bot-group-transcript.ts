@@ -13,15 +13,36 @@ export function pendingBotGroupPosts(page: BotGroupTranscript | null, groupId: s
   if (page?.group.id !== groupId) {
     return []
   }
-  return page.messages
-    .flatMap((post) =>
-      post.turns.some(
-        (turn) => !turn.revoked && !turn.error && turn.end === undefined && turn.reply === undefined
-      )
-        ? [post.id]
-        : []
+  return page.messages.flatMap((post) =>
+    post.turns.some(
+      (turn) => !turn.revoked && !turn.error && turn.end === undefined && turn.reply === undefined
     )
-    .slice(-40)
+      ? [post.id]
+      : []
+  )
+}
+
+/** Drain named updates already requested by this read without reading older history pages. */
+export async function drainBotGroupPostUpdates(
+  ids: readonly string[],
+  read: (ids: string[]) => Promise<BotGroupTranscript>,
+  isCurrent: () => boolean,
+  publish: (page: BotGroupTranscript, remaining: string[]) => void
+): Promise<void> {
+  let pending = [...new Set(ids)]
+  while (isCurrent() && pending.length > 0) {
+    const batch = pending.slice(0, 40)
+    const page = await read(batch)
+    if (!isCurrent()) {
+      return
+    }
+    const deferred = page.deferredPostIds ?? []
+    if (deferred.length >= batch.length) {
+      return
+    }
+    pending = [...deferred, ...pending.slice(40)]
+    publish(page, pending)
+  }
 }
 
 export function botGroupReplyBodies(page: BotGroupTranscript): ReadonlyMap<string, string> {
@@ -61,14 +82,21 @@ export type BotGroupTranscriptAction =
   | { kind: 'recent'; page: BotGroupTranscript }
   /** An older page, loaded on request. */
   | { kind: 'earlier'; page: BotGroupTranscript }
+  | { kind: 'updated'; page: BotGroupTranscript }
   | { kind: 'sent'; message: BotGroupMessage }
   | { kind: 'group'; group: BotGroup }
 
 function upsert(
   messages: readonly BotGroupMessage[],
-  incoming: readonly BotGroupMessage[]
+  incoming: readonly BotGroupMessage[],
+  updates: readonly BotGroupMessage[] = []
 ): BotGroupMessage[] {
   const byId = new Map(messages.map((message) => [message.id, message]))
+  for (const message of updates) {
+    if (byId.has(message.id)) {
+      byId.set(message.id, message)
+    }
+  }
   for (const message of incoming) {
     byId.set(message.id, message)
   }
@@ -119,12 +147,7 @@ export function reduceBotGroupTranscript(
         ? {
             ...current,
             group,
-            messages: upsert(current.messages, [
-              ...(updatedPosts?.filter(({ id }) =>
-                current.messages.some((post) => post.id === id)
-              ) ?? []),
-              ...page.messages
-            ])
+            messages: upsert(current.messages, page.messages, updatedPosts)
           }
         : page
     }
@@ -135,6 +158,10 @@ export function reduceBotGroupTranscript(
             hasEarlier: action.page.hasEarlier,
             messages: upsert(current.messages, action.page.messages)
           }
+        : current
+    case 'updated':
+      return accepted === 'same' && action.page.updatedPosts?.length
+        ? { ...current, messages: upsert(current.messages, [], action.page.updatedPosts) }
         : current
     case 'group':
       // A member change waits for the next read, which brings the rows that change rewrote.

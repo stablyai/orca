@@ -40,7 +40,12 @@ const FENCE = /^ {0,3}(`{3,}(?!`)|~{3,}(?!~))(.*)$/
  *  own character at least as long, so a longer block may hold shorter fences. */
 export function botGroupOpenFence(text: string, previous: string | null = null): string | null {
   let open = previous
-  for (const line of text.split('\n')) {
+  let start = 0
+  while (start < text.length) {
+    const newline = text.indexOf('\n', start)
+    const end = newline === -1 ? text.length : newline
+    const line = text.slice(start, end)
+    start = end + 1
     const match = FENCE.exec(line)
     if (!match) {
       continue
@@ -68,14 +73,37 @@ function tailFromLine(reply: string, budget: number): string {
 
 /** Keep a whole-line tail and restore the fence state at the cut. */
 export function botGroupPageReply(reply: string): string {
-  if (reply.length <= BOT_GROUP_PAGE_REPLY_MAX) {
-    return reply
+  return reply.length <= BOT_GROUP_PAGE_REPLY_MAX ? reply : botGroupPageReplyParts([reply])
+}
+
+export function botGroupPageReplyParts(parts: readonly string[]): string {
+  const chunks = parts.flatMap((part, index) => (index === 0 ? [part] : ['\n\n', part]))
+  const length = chunks.reduce((total, chunk) => total + chunk.length, 0)
+  if (length <= BOT_GROUP_PAGE_REPLY_MAX) {
+    return chunks.join('')
   }
   // Normal fences need at most 16 characters of delimiter. Longer delimiters are represented as
   // indented code so a delimiter cannot itself overrun the preview.
-  const rest = tailFromLine(reply, BOT_GROUP_PAGE_REPLY_MAX - CUT_PREFIX.length - 21)
-  const prefix = reply.slice(0, reply.length - rest.length)
-  const fence = botGroupOpenFence(prefix.slice(0, prefix.lastIndexOf('\n') + 1))
+  const limit = BOT_GROUP_PAGE_REPLY_MAX - CUT_PREFIX.length - 21
+  let wanted = limit + 1
+  const tails: string[] = []
+  for (let index = chunks.length - 1; index >= 0 && wanted > 0; index--) {
+    const tail = chunks[index].slice(-wanted)
+    tails.push(tail)
+    wanted -= tail.length
+  }
+  const rest = tailFromLine(tails.toReversed().join(''), limit)
+  let before = length - rest.length
+  let fence: string | null = null
+  for (const chunk of chunks) {
+    if (before <= 0) {
+      break
+    }
+    const prefix =
+      before >= chunk.length ? chunk : chunk.slice(0, chunk.lastIndexOf('\n', before - 1) + 1)
+    fence = botGroupOpenFence(prefix, fence)
+    before -= chunk.length
+  }
   if (!fence) {
     return CUT_PREFIX + rest
   }

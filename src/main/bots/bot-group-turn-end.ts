@@ -1,8 +1,14 @@
 // How a member's ended turn is saved on its room post, so the room draws it without its chat rows.
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { isRootAgentJournalItem } from '../../shared/agent-session/journal/agent-session-journal-producer'
 import type { BotGroupTurn } from '../../shared/bots/bot-group'
 import { rootAssistantProse } from '../../shared/agent-session/requests/structured-agent-session-latest-request'
-import { botGroupPageReply } from '../../shared/bots/bot-group-reply-preview'
+import { projectStructuredItemToNativeChat } from '../../shared/agent-session/view/structured-agent-session-projection'
+import { botGroupPageReplyParts } from '../../shared/bots/bot-group-reply-preview'
+import {
+  nativeChatTurnAnswerRows,
+  nativeChatTurnFoldRow
+} from '../../shared/native-chat/transcript/folding/native-chat-turn-fold'
 
 /** The ended turn among `items`, worded as its header words it: a Stop or a replacement stopped it,
  *  a provider fault failed it; null while it runs or when its turn row is not among them. */
@@ -47,9 +53,13 @@ export function botGroupTurnEnd(
 export function settledGroupRoomReply(
   items: readonly AgentJournalRenderItem[]
 ): string | undefined {
-  const text = items
-    .map(rootAssistantProse)
+  const rows = items.filter(isRootAgentJournalItem).flatMap((item) => {
+    const message = projectStructuredItemToNativeChat(item)
+    return message ? [{ item, fold: nativeChatTurnFoldRow(message, 'turn', undefined) }] : []
+  })
+  const answers = nativeChatTurnAnswerRows(rows.map(({ fold }) => fold))
+  const parts = rows
+    .map(({ item }, index) => (answers.has(index) ? rootAssistantProse(item) : ''))
     .filter((prose) => prose.trim())
-    .join('\n\n')
-  return text ? botGroupPageReply(text) : undefined
+  return parts.length > 0 ? botGroupPageReplyParts(parts) : undefined
 }

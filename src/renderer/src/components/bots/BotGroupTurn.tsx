@@ -42,6 +42,7 @@ import { botCodedText } from '../../../../shared/bots/bot-failure-copy'
 import { callBotRpc } from '@/lib/bot-hosts'
 import {
   createBotGroupTurnDetailsHook,
+  requestBotGroupTurnPage,
   type BotGroupTurnDetailPage
 } from '../../../../shared/bots/use-bot-group-turn-details'
 const noItems: never[] = []
@@ -97,16 +98,19 @@ export const BotGroupTurn = memo(function BotGroupTurn({
   const ended = turn.end !== undefined || turn.reply !== undefined
   const loadDetails = useCallback(
     (before: BotGroupTurnDetailCursor | undefined, signal: AbortSignal) =>
-      callBotRpc<BotGroupTurnDetailPage>(
-        { hostId },
-        'bots.groups.turnRows',
-        {
-          groupId,
-          threadId,
-          operationId: turn.operationId,
-          before
-        },
-        { signal }
+      requestBotGroupTurnPage(
+        (viewer, requestSignal) =>
+          callBotRpc<BotGroupTurnDetailPage>(
+            { hostId },
+            'bots.groups.turnRows',
+            { groupId, threadId, operationId: turn.operationId, before, ...viewer },
+            {
+              signal: requestSignal,
+              background: viewer.cancel,
+              wake: viewer.cancel ? false : undefined
+            }
+          ),
+        signal
       ),
     [hostId, groupId, threadId, turn.operationId]
   )
@@ -361,7 +365,7 @@ export const BotGroupTurn = memo(function BotGroupTurn({
           {scope.lead}
           {expanded && details.back ? (
             <Button variant="ghost" size="sm" onClick={details.back} disabled={details.loading}>
-              {t('common.back', 'Back')}
+              {t('components.native-chat.question.back', 'Back')}
             </Button>
           ) : null}
           {expanded && details.loadEarlier ? (

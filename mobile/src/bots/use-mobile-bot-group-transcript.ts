@@ -11,6 +11,7 @@ import { isBotAgent } from '../../../src/shared/bot-types'
 import { AppState } from 'react-native'
 import {
   botGroupReplyBodies,
+  drainBotGroupPostUpdates,
   pendingBotGroupPosts,
   reduceBotGroupTranscript,
   restoreBotGroupReplies,
@@ -25,6 +26,7 @@ import { startHostBotRefresh } from './host-bot-refresh'
 import {
   botChangeBotIds,
   botChangeConcerns,
+  botGroupChangedPosts,
   botGroupRoomConcerned,
   type BotChangeKind,
   type BotChangeScope
@@ -130,6 +132,7 @@ export function useMobileBotGroupTranscript(
     let replies: ReadonlyMap<string, string> = new Map()
     let updates: string[] = []
     const refresh = (changed?: BotChangeScope) => {
+      const changedPosts = botGroupChangedPosts(changed, groupId, threadId)
       const rooms = botChangeConcerns(changed, { kinds: ['groups'] })
       // An items or workers change naming no bot can change every member's list; another bot's
       // changes nothing a member's list shows. A group change reaches the lists only by moving their
@@ -158,7 +161,8 @@ export function useMobileBotGroupTranscript(
       // A groups change naming other rooms leaves this one as it is.
       const room =
         botChangeConcerns(changed, { kinds: ['bot'] }) ||
-        (botChangeConcerns(changed, { kinds: ['groups'], roomPosts: true }) &&
+        (changedPosts !== null &&
+          botChangeConcerns(changed, { kinds: ['groups'], roomPosts: true }) &&
           botGroupRoomConcerned(changed, groupId))
       if (!room) {
         return
@@ -168,30 +172,50 @@ export function useMobileBotGroupTranscript(
       updates = [
         ...new Set([
           ...updates,
-          ...(changed?.groupPosts?.[groupId] ?? (changed ? [] : pendingPosts()))
+          ...(changedPosts?.ids ?? []),
+          ...(changedPosts?.recover ? pendingPosts() : [])
         ])
-      ].slice(-40)
+      ]
+      const currentRead = () => !closed && current === request
       void Promise.all([
         groupRead.request(client, {
           groupId,
           threadId,
           knownReplyKeys: [...held.keys()].slice(-1_280),
-          updatedPostIds: updates
+          updatedPostIds: updates.slice(0, 40)
         }),
         changed?.roomPostsOnly ? undefined : readHostBots(client, hostBotsKey(hostId))
       ])
-        .then(([reply, bots]) => {
+        .then(async ([reply, bots]) => {
           if (closed || current !== request) {
             return
           }
           const page = restoreBotGroupReplies(groupRead.interpret(reply), held)
           replies = botGroupReplyBodies(page)
-          updates = page.deferredPostIds ?? []
+          updates = [...(page.deferredPostIds ?? []), ...updates.slice(40)]
           apply({ kind: 'recent', page })
           if (bots?.kind === 'bots') {
             setBots(bots.bots)
             setNeedsYou((last) => (sameCounts(last, bots.needsYou) ? last : bots.needsYou))
           }
+          await drainBotGroupPostUpdates(
+            updates,
+            async (ids) =>
+              groupRead.interpret(
+                await groupRead.request(client, {
+                  groupId,
+                  threadId,
+                  knownReplyKeys: [],
+                  updatedPostIds: ids,
+                  updatesOnly: true
+                })
+              ),
+            currentRead,
+            (updated, remaining) => {
+              updates = remaining
+              apply({ kind: 'updated', page: updated })
+            }
+          )
         })
         .catch((error: unknown) => {
           if (!closed) {

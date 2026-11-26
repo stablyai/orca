@@ -19,6 +19,9 @@ export class BotGroupPostRead {
 
   invalidate(id: string): void {
     this.roomPosts.delete(id)
+  }
+
+  invalidateArchive(id: string): void {
     this.detailVersions.delete(id)
   }
 
