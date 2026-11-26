@@ -1,4 +1,5 @@
 import { isWorktreeRetiredByRemoval } from '../../../../../shared/worktree/removal/removal-visibility'
+import { pickerRepos } from '../../../../../shared/project/catalog/hidden-projects'
 import { worktreeMatchesGitHubNumber } from '@/lib/work-items/github/github-work-item-workspace-attachment'
 import { getPaletteWorktreeExecutionHostId } from '@/lib/workspace/search/palette-repo-resolution'
 import { findRepoForHost } from '@/store/repos/repo-host-identity'
@@ -15,7 +16,6 @@ import type { WorktreeJumpPaletteCreateWorktreeInput } from './worktree-jump-pal
 import { lookupGitHubWorkItemForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace/activation/workspace-activation-terminal-focus'
-import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import { useAppStore } from '@/store/index'
 import { isGitRepoKind } from '../../../../../shared/repository/repo-kind'
 import { buildTaskSourceContextFromRepo } from '../../../../../shared/work-items/task-source-context'
@@ -169,7 +169,7 @@ export function createWorktreeJumpPaletteWorktreeHandler({
 
     if (taskUrlCreatePreview) {
       const state = useAppStore.getState()
-      const eligibleRepos = state.repos.filter((repo) => isGitRepoKind(repo))
+      const eligibleRepos = pickerRepos(state.repos).filter((repo) => isGitRepoKind(repo))
       const repo =
         (state.activeRepoId &&
           eligibleRepos.find((candidate) => candidate.id === state.activeRepoId)) ||
@@ -216,7 +216,7 @@ export function createWorktreeJumpPaletteWorktreeHandler({
       }
       const repo =
         (state.activeRepoId ? (repoMap.get(state.activeRepoId) ?? null) : null) ||
-        [...getIndexedRepoMap(state.repos).values()].find((candidate) => isGitRepoKind(candidate))
+        pickerRepos(state.repos).find((candidate) => isGitRepoKind(candidate))
       if (!repo || !isGitRepoKind(repo)) {
         openComposer({ prefilledName: trimmed })
         return

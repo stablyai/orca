@@ -16,12 +16,15 @@ import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/e
 import { useAppStore } from '@/store'
 import { resolveNativeChatRuntimeSessionAttachmentOwner } from '@/components/native-chat/attachments/uploads/native-chat-attachment-owner'
 import {
+  everyUserProjectHidden,
   indexHiddenProjects,
   isRepoHidden,
   isRepoHiddenFromProjects,
   pickerRepos,
   userManagedRepos
 } from '../../../../../shared/project/catalog/hidden-projects'
+import { buildExecutionHostRegistry } from '../../../../../shared/execution-host/execution-host-registry'
+import { followSharedHostsInRepoCatalog } from '@/store/repos/shared-host-repo-catalog'
 import { setProjectHidden } from '@/components/sidebar/hidden-projects/set-project-hidden'
 import { loadRuntimeHostCatalogs } from '@/store/host-catalog/host-catalog-fence'
 import { getRuntimeClientEventEnvironmentIds } from '@/hooks/ipc-events/runtime-events/runtime-environment-subscription-selection'
@@ -227,15 +230,37 @@ describe('a shared agent’s chats in this window', () => {
     expect(pickerRepos(repos)).toEqual([local])
     // Settings lists and pickers: the repos this user manages.
     expect(userManagedRepos(repos)).toEqual([local])
-    // Hide/Show never writes to the owner's repo.
-    const updateRepo = vi.spyOn(useAppStore.getState(), 'updateRepo')
+    // Hide/Show writes only the user's own copy of a project both hosts have, and says it worked.
+    const updateRepo = vi.fn(async () => true)
     useAppStore.setState({ updateRepo })
-    await setProjectHidden([shared], false, 'shared')
-    expect(updateRepo).not.toHaveBeenCalled()
-    // The share ends: nothing of the host is kept out any more.
-    changed({ hosts: [], sharing: true })
-    expect(isRepoHiddenFromProjects(shared)).toBe(false)
-    expect(indexHiddenProjects(repos, 'local').any).toBe(false)
+    const both = { ...shared, executionHostId: 'local' as const }
+    await expect(setProjectHidden([shared, both], true, 'proj')).resolves.toBe(true)
+    expect(updateRepo).toHaveBeenCalledTimes(1)
+    expect(updateRepo).toHaveBeenCalledWith('repo-1', expect.anything(), { hostId: 'local' })
+    // No "every project is hidden" for a user with none of their own.
+    expect(everyUserProjectHidden([shared])).toBe(false)
+    // Nor is the host one of this user's hosts.
+    expect(
+      buildExecutionHostRegistry({
+        repos,
+        settings: null,
+        runtimeStatusByEnvironmentId: new Map([
+          [
+            HOST.environmentId,
+            runtimeEnvironmentStatusFromSnapshot({
+              environmentId: HOST.environmentId,
+              pairingRevision: 0,
+              sequence: 1,
+              checkedAt: 1,
+              status: null,
+              verification: 'checking',
+              transport: 'ready',
+              sharedHost: true
+            })
+          ]
+        ])
+      }).map((host) => host.id)
+    ).toEqual(['local'])
   })
 })
 
@@ -268,4 +293,42 @@ it('lists its home with every host’s folders even when that load starts before
   // Listed, so a restored chat on its home keeps its owner.
   expect(listed).toEqual([HOST.environmentId])
   expect(loaded).toEqual([HOST.environmentId])
+})
+
+it('drops an ended share’s repos where the share ends, and republishes the catalog only when the shares change', () => {
+  uninstall()
+  let push: (state: SharedBotHostsState) => void = () => {}
+  vi.stubGlobal('window', {
+    api: {
+      sharedBotHosts: {
+        list: () => new Promise<SharedBotHostsState>(() => {}),
+        onChanged: (listener: typeof push) => ((push = listener), () => {})
+      }
+    }
+  })
+  uninstall = installSharedBotHostCatalog(followSharedHostsInRepoCatalog(useAppStore))
+  push({ hosts: [HOST], sharing: true })
+  const shared = {
+    id: 'repo-1',
+    path: '/proj',
+    displayName: 'proj',
+    badgeColor: '#000',
+    addedAt: 1,
+    connectionId: null,
+    executionHostId: toRuntimeExecutionHostId(HOST.environmentId)
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the purge reads ids and hosts.
+  useAppStore.setState({ repos: [shared] as never })
+  const before = useAppStore.getState().repos
+  // A link-state change alone leaves the catalog as it was.
+  push({ hosts: [{ ...HOST, link: 'offline' }], sharing: true })
+  expect(useAppStore.getState().repos).toBe(before)
+  // A share arriving republishes it, so every reader keyed on it re-reads which hosts are kept out.
+  push({ hosts: [HOST, { ...HOST, environmentId: 'env-2', shareId: 'share-2' }], sharing: true })
+  expect(useAppStore.getState().repos).not.toBe(before)
+  expect(isRepoHiddenFromProjects(shared)).toBe(true)
+  push({ hosts: [HOST], sharing: true })
+  // The share ends: its host's repos go, so nothing of it reaches Projects or settings.
+  push({ hosts: [], sharing: true })
+  expect(useAppStore.getState().repos).toEqual([])
 })

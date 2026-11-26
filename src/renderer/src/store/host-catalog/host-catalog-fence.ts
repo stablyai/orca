@@ -103,16 +103,16 @@ export async function loadRuntimeHostCatalogs(
   /** Called only when the environment list itself answered, so absence from it is authoritative. */
   onListed?: (environmentIds: readonly string[]) => void
 ): Promise<void> {
-  // A shared agent's host lists its agent's home and groups here; its repos stay out of Projects.
-  // Its shares are awaited, so a load at startup does not read the hosts as gone.
+  // A shared agent's host lists its agent's workspaces here (its repos load for worker pages and
+  // stay out of Projects). Its shares are awaited, so a load at startup does not read them as gone.
   const [listed] = await Promise.all([
     listRuntimeEnvironmentsForAllHostLoad(),
-    kind === 'repos' ? null : sharedBotHostsAnswered()
+    sharedBotHostsAnswered()
   ])
   if (!isCurrentLoad()) {
     return
   }
-  const shared = kind === 'repos' ? [] : sharedBotHostEnvironmentIds()
+  const shared = sharedBotHostEnvironmentIds()
   const environmentIds = [
     ...new Set([...(listed ?? []).map((environment) => environment.id), ...shared])
   ]

@@ -22,20 +22,36 @@ type HostedRepoRow = Pick<Repo, 'hiddenAt' | 'connectionId' | 'executionHostId'>
 
 // Hosts whose projects this window reaches but never lists: a shared agent's host, whose repos load
 // only for its workers' workspace pages (design G8). Set by the window that knows them.
-let projectsHiddenHosts: ReadonlySet<ExecutionHostId> = new Set()
+let projectsHiddenHosts: ReadonlySet<string> = new Set()
 let projectsHiddenRevision = 0
+
+/** Moves whenever the projects-hidden hosts change; caches of hidden-project reads key on it. */
+export function projectsHiddenHostsRevision(): number {
+  return projectsHiddenRevision
+}
 
 export function setProjectsHiddenHosts(hostIds: ReadonlySet<ExecutionHostId>): void {
   projectsHiddenHosts = hostIds
   projectsHiddenRevision += 1
 }
 
+/** Whether `hostId` is a host whose projects are never listed here (a shared agent's host). */
+export function isProjectsHiddenHost(hostId: string | null | undefined): boolean {
+  return !!hostId && projectsHiddenHosts.has(hostId)
+}
+
 /** Whether a repo is on a host whose projects are never listed here; false for unstamped repos. */
 export function isRepoOnProjectsHiddenHost(
   repo: Pick<Repo, 'connectionId' | 'executionHostId'>,
-  hosts: ReadonlySet<ExecutionHostId> = projectsHiddenHosts
+  hosts: ReadonlySet<string> = projectsHiddenHosts
 ) {
   return hosts.size > 0 && hosts.has(getRepoExecutionHostIdOrDefault(repo, LOCAL_EXECUTION_HOST_ID))
+}
+
+/** Whether the user hid every project they have; a shared host's projects are not theirs to show. */
+export function everyUserProjectHidden(repos: readonly HostedRepoRow[]): boolean {
+  const managed = userManagedRepos(repos)
+  return managed.length > 0 && managed.every(isRepoHidden)
 }
 
 /** The one "kept out of Projects" check: hidden by the user, or on a host whose projects aren't listed. */
@@ -46,7 +62,7 @@ export function isRepoHiddenFromProjects(repo: HostedRepoRow | null | undefined)
 /** The repos this user configures here: never a projects-hidden host's (its owner's to manage). */
 export function userManagedRepos<R extends Pick<Repo, 'connectionId' | 'executionHostId'>>(
   repos: readonly R[],
-  hosts: ReadonlySet<ExecutionHostId> = projectsHiddenHosts
+  hosts: ReadonlySet<string> = projectsHiddenHosts
 ): readonly R[] {
   const onHidden = (repo: R) => isRepoOnProjectsHiddenHost(repo, hosts)
   return repos.some(onHidden) ? repos.filter((repo) => !onHidden(repo)) : repos

@@ -26,31 +26,54 @@ let hydrated = false
 // Main's first answer, which catalogs listing every host wait for (none outside a desktop window).
 let firstAnswer: Promise<void> = Promise.resolve()
 const listeners = new Set<() => void>()
+let hostsChanged: SharedBotHostsChanged = () => {}
+
+/** Called when the set of shared hosts changes (never for a link-state change alone), with the
+ *  hosts whose share ended, after their projects stop being kept out of Projects. */
+export type SharedBotHostsChanged = (endedEnvironmentIds: readonly string[]) => void
 
 function setState(next: SharedBotHostsState): void {
+  const before = new Set(views.map((view) => view.environmentId))
   // A cloud that doesn't take shares has none to show, whatever was kept from before.
   views = next.sharing === false ? NO_HOSTS : next.hosts
   requests = next.sharing === false ? NO_REQUESTS : (next.requests ?? NO_REQUESTS)
   sharing = next.sharing
   hydrated = true
-  setProjectsHiddenHosts(new Set(views.map((view) => toRuntimeExecutionHostId(view.environmentId))))
+  applyHosts(before)
   for (const listener of listeners) {
     listener()
   }
 }
 
-/** Follows main's list; a paired web window has no account of its own, so it never has any. */
-export function installSharedBotHostCatalog(): () => void {
+function applyHosts(before: ReadonlySet<string>): void {
+  const after = new Set(views.map((view) => view.environmentId))
+  if (after.size === before.size && [...after].every((id) => before.has(id))) {
+    return
+  }
+  setProjectsHiddenHosts(new Set([...after].map(toRuntimeExecutionHostId)))
+  hostsChanged([...before].filter((id) => !after.has(id)))
+}
+
+/**
+ * Follows main's list; a paired web window has no account of its own, so it never has any.
+ * `onHostsChanged` is the one place the window reacts to shares arriving or ending.
+ */
+export function installSharedBotHostCatalog(
+  onHostsChanged: SharedBotHostsChanged = () => {}
+): () => void {
+  hostsChanged = onHostsChanged
   const stop = window.api.sharedBotHosts.onChanged(setState)
   firstAnswer = window.api.sharedBotHosts.list().then(setState, () => {})
   return () => {
     stop()
     firstAnswer = Promise.resolve()
+    const before = new Set(views.map((view) => view.environmentId))
     views = NO_HOSTS
     requests = NO_REQUESTS
     sharing = null
     hydrated = false
-    setProjectsHiddenHosts(new Set())
+    applyHosts(before)
+    hostsChanged = () => {}
     for (const listener of listeners) {
       listener()
     }

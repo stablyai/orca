@@ -20,14 +20,12 @@ async function writeHidden(
   hiddenAt: number | null
 ): Promise<HiddenTarget[]> {
   const { updateRepo } = useAppStore.getState()
-  // A shared agent's host's projects are its owner's: this window never hides or shows them there.
-  const managed = userManagedRepos(targets)
   const results = await Promise.all(
-    managed.map((target) =>
+    targets.map((target) =>
       updateRepo(target.id, { hiddenAt }, { hostId: getRepoExecutionHostId(target) })
     )
   )
-  return managed.filter((_, index) => results[index])
+  return targets.filter((_, index) => results[index])
 }
 
 /** Undoes only this toast's hide: a copy shown since, or hidden again by a newer hide, is left alone. */
@@ -61,9 +59,14 @@ export async function setProjectHidden(
   hidden: boolean,
   name: string
 ): Promise<boolean> {
+  // A shared agent's host's projects are its owner's: this window never hides or shows them there.
+  const managed = userManagedRepos(targets)
+  if (managed.length === 0) {
+    return true
+  }
   const hiddenAt = hidden ? Date.now() : null
-  const written = await writeHidden(targets, hiddenAt)
-  if (written.length < targets.length) {
+  const written = await writeHidden(managed, hiddenAt)
+  if (written.length < managed.length) {
     toast.error(
       hidden
         ? translate(
@@ -86,5 +89,5 @@ export async function setProjectHidden(
       }
     })
   }
-  return written.length === targets.length
+  return written.length === managed.length
 }

@@ -38,6 +38,7 @@ export type PreparedBrowserRoutePartition = {
   bindingFingerprint: string
   browserProfileId: string
   proxyEndpoint: BrowserRouteProxyEndpoint
+  viewer: BrowserRouteViewer
   session: BrowserRouteElectronSession
   pages: BrowserRoutePreparedPageLedger
 }
@@ -46,6 +47,7 @@ export type PendingBrowserRoutePartition = {
   partition: string
   bindingFingerprint: string
   proxyEndpoint: BrowserRouteProxyEndpoint
+  viewer: BrowserRouteViewer
   promise: Promise<PreparedBrowserRoutePartition>
   state: PreparedBrowserRoutePartition | null
   waiters: number

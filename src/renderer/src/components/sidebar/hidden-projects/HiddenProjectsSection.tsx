@@ -1,4 +1,5 @@
 import React, { useId, useMemo, useState } from 'react'
+import { useUserManagedRepos } from '@/store/repos/user-managed-repos'
 import { useTranslation } from 'react-i18next'
 import { ChevronRight } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
@@ -12,16 +13,13 @@ import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
 } from '../../../../../shared/execution-host/execution-host'
-import {
-  isRepoHidden,
-  userManagedRepos
-} from '../../../../../shared/project/catalog/hidden-projects'
+import { isRepoHidden } from '../../../../../shared/project/catalog/hidden-projects'
 import { getRepoRowIdentity } from '@/store/repos/repo-host-identity'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import { setProjectHidden } from './set-project-hidden'
 
 function selectHiddenRepos(repos: readonly Repo[]): Repo[] {
-  return userManagedRepos(repos)
+  return repos
     .filter(isRepoHidden)
     .sort(
       (a, b) => (b.hiddenAt ?? 0) - (a.hiddenAt ?? 0) || a.displayName.localeCompare(b.displayName)
@@ -34,7 +32,7 @@ const HiddenProjectsSection = React.memo(function HiddenProjectsSection() {
   // Own language subscription: this memo boundary would otherwise keep the boot language.
   useTranslation()
   const listId = useId()
-  const repos = useAppStore((state) => state.repos)
+  const repos = useUserManagedRepos()
   const hiddenRepos = useMemo(() => selectHiddenRepos(repos), [repos])
   const [expanded, setExpanded] = useState(false)
   const [pendingKeys, setPendingKeys] = useState<ReadonlySet<string>>(new Set())

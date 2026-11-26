@@ -1,4 +1,5 @@
 import { ArrowRight, Bot, Check, Copy, Loader2, RefreshCw, Server } from 'lucide-react'
+import { useUserManagedRepos } from '@/store/repos/user-managed-repos'
 import type React from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
@@ -31,7 +32,7 @@ const AGENT_PROMPT =
 export function EphemeralVmsPane(): React.JSX.Element {
   const t = useTranslate()
   const openModal = useAppStore((state) => state.openModal)
-  const repos = useAppStore((state) => state.repos)
+  const repos = useUserManagedRepos()
   const activeRepoId = useAppStore((state) => state.activeRepoId)
   const setupRepo = pickEnvironmentSetupRepo(repos, activeRepoId)
   const [agentLaunching, setAgentLaunching] = useState(false)

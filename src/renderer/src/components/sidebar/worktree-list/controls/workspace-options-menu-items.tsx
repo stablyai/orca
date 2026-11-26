@@ -1,4 +1,5 @@
 import { Fragment, useMemo, type ComponentType, type JSX } from 'react'
+import { useUserManagedRepos } from '@/store/repos/user-managed-repos'
 import { useAppStore } from '@/store'
 import {
   DropdownMenuLabel,
@@ -240,7 +241,7 @@ export function WorkspaceOptionsMenuItems({
 }: {
   preserveWorkspaceBoardOpen?: boolean
 }): JSX.Element {
-  const repoCount = useAppStore((s) => s.repos.length)
+  const repoCount = useUserManagedRepos().length
   const groupBy = useAppStore((s) => s.groupBy)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideWorkspacesFromOtherDevices = useAppStore((s) => s.hideWorkspacesFromOtherDevices)

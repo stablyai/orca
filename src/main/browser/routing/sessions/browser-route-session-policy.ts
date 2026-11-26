@@ -7,9 +7,9 @@ export type BrowserRouteViewer = 'own-computer' | 'teammate'
 
 /**
  * The one choice of what a client-hosted page sends through its host. Your own computer: everything,
- * as before. A teammate: only loopback and link-local (the host's dev servers), the rest direct from
- * this machine. `*` bypasses everything and the later `<-loopback>` takes loopback back out of that
- * bypass, with link-local, as in t3code's LoopbackTunnel.ts:586-599.
+ * as before. A teammate: only loopback (the host's dev servers), the rest direct from this machine.
+ * `*` bypasses everything, the later `<-loopback>` takes loopback and link-local back out of that
+ * bypass, and the CIDRs return link-local to it, as in t3code's LoopbackTunnel.ts:586-599.
  */
 export function browserRouteProxyBypassRules(viewer: BrowserRouteViewer): string {
   return viewer === 'teammate' ? '*,<-loopback>,169.254.0.0/16,fe80::/10' : '<-loopback>'
@@ -34,6 +34,7 @@ type BrowserRouteSessionPolicyDependencies = {
     partition: string
     browserProfileId: string
     session: BrowserRouteElectronSession
+    viewer: BrowserRouteViewer
   }): void | Promise<void>
   clearPolicies(input: { partition: string; session: BrowserRouteElectronSession }): void
 }
@@ -60,7 +61,8 @@ export async function prepareBrowserRouteSessionPolicy(input: {
       ...(input.profileMetadata ? { profileMetadata: input.profileMetadata } : {}),
       partition: input.partition,
       browserProfileId: input.browserProfileId,
-      session
+      session,
+      viewer
     })
     await proxySetup
     await session.closeAllConnections()

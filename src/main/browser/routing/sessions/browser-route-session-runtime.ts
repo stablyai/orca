@@ -1,4 +1,5 @@
 import { BrowserClientProfileMetadata } from '../../../../shared/browser/client-hosting/browser-client-profile-switch-protocol'
+import { setBrowserSessionRedirectUnspecifiedToLoopback } from '../../sessions/requests/browser-session-request-gate'
 import { installBrowserRoutePartitionPolicies } from './browser-session-route-policies'
 import { validateBrowserRouteProfile } from './browser-route-profile-validation'
 import { session, webContents } from 'electron'
@@ -43,7 +44,7 @@ const bindingStore = {
 export const browserRouteSessionRegistry = new BrowserRouteSessionRegistry({
   validateProfile: validateBrowserRouteProfile,
   getSession: (partition) => session.fromPartition(partition),
-  setupPolicies: ({ partition, browserProfileId, profileMetadata }) => {
+  setupPolicies: async ({ partition, browserProfileId, profileMetadata, viewer }) => {
     // Default profiles arrive without metadata.
     const profile = profileMetadata
       ? { ...BrowserClientProfileMetadata.parse(profileMetadata), partition, source: null }
@@ -53,12 +54,18 @@ export const browserRouteSessionRegistry = new BrowserRouteSessionRegistry({
     }
     // Keep remote profile permissions in the session; their ids may collide with local profiles.
     // The server's agents can script these pages, so pages never read the desktop clipboard.
-    return installBrowserRoutePartitionPolicies(profile, partition, {
+    await installBrowserRoutePartitionPolicies(profile, partition, {
       sitePermissions: 'session',
       clipboardRead: false
     })
+    // A teammate's 0.0.0.0/[::] would go direct to this machine; it means the host's loopback.
+    setBrowserSessionRedirectUnspecifiedToLoopback(
+      session.fromPartition(partition),
+      viewer === 'teammate'
+    )
   },
   clearPolicies: ({ partition }) => {
+    setBrowserSessionRedirectUnspecifiedToLoopback(session.fromPartition(partition), false)
     browserSessionRegistry.clearRoutePartitionPolicies(partition)
   },
   retirePageAuthority: (retirement) =>
