@@ -109,43 +109,47 @@ export function useMobileSessionSidebar(wideLayout: boolean) {
   )
 
   // The card follows the finger 1:1 from where it was caught, and the release carries its speed.
+  // One set of phases for every drag: the bar and card (gesture handler) and the page's own swipe.
+  const dragBegin = () => {
+    cancelAnimation(progress)
+    dragStart.value = progress.value
+    setShown(true)
+  }
+  const dragFollow = (translationX: number) => {
+    const travel = Math.max(width.value - SIDEBAR_PEEK, 1)
+    progress.value = banded(dragStart.value - translationX / travel)
+  }
+  const dragEnd = (velocityX: number, success: boolean) => {
+    // oxlint-disable-next-line react/purity -- runs when the drag ends, never during render.
+    dragEndedAtRef.current = Date.now()
+    const travel = Math.max(width.value - SIDEBAR_PEEK, 1)
+    const velocity = -velocityX / travel
+    const projected = progress.value + velocity * RELEASE_PROJECTION_S
+    const target: 0 | 1 = !success
+      ? openRef.current
+        ? 1
+        : 0
+      : Math.abs(velocityX) > FLICK_VELOCITY
+        ? velocityX < 0
+          ? 1
+          : 0
+        : projected > 0.5
+          ? 1
+          : 0
+    if (target !== (openRef.current ? 1 : 0)) {
+      triggerEdgeBump()
+    }
+    settle(target, velocity)
+  }
   const drag = (activeOffsetX: number | [number, number]) =>
     Gesture.Pan()
       .runOnJS(true)
       .enabled(!docked)
       .activeOffsetX(activeOffsetX)
       .failOffsetY([-DRAG_SLOP, DRAG_SLOP])
-      .onStart(() => {
-        cancelAnimation(progress)
-        dragStart.value = progress.value
-        setShown(true)
-      })
-      .onUpdate((event) => {
-        const travel = Math.max(width.value - SIDEBAR_PEEK, 1)
-        progress.value = banded(dragStart.value - event.translationX / travel)
-      })
-      .onEnd((event, success) => {
-        // oxlint-disable-next-line react/purity -- runs when the drag ends, never during render.
-        dragEndedAtRef.current = Date.now()
-        const travel = Math.max(width.value - SIDEBAR_PEEK, 1)
-        const velocity = -event.velocityX / travel
-        const projected = progress.value + velocity * RELEASE_PROJECTION_S
-        const target: 0 | 1 = !success
-          ? openRef.current
-            ? 1
-            : 0
-          : Math.abs(event.velocityX) > FLICK_VELOCITY
-            ? event.velocityX < 0
-              ? 1
-              : 0
-            : projected > 0.5
-              ? 1
-              : 0
-        if (target !== (openRef.current ? 1 : 0)) {
-          triggerEdgeBump()
-        }
-        settle(target, velocity)
-      })
+      .onStart(dragBegin)
+      .onUpdate((event) => dragFollow(event.translationX))
+      .onEnd((event, success) => dragEnd(event.velocityX, success))
 
   return {
     docked,
@@ -164,6 +168,8 @@ export function useMobileSessionSidebar(wideLayout: boolean) {
     barDrag: drag(-DRAG_SLOP),
     /** Dragging the card either way, once it's aside. */
     cardDrag: drag([-DRAG_SLOP, DRAG_SLOP]),
+    /** A drag the page recognised itself (a swipe across the chat), driven through the same phases. */
+    pageDrag: docked ? null : { begin: dragBegin, follow: dragFollow, end: dragEnd },
     /** A tap on the card that isn't the end of a drag. */
     // oxlint-disable-next-line react/purity -- runs on a tap, never during render.
     tapIsDragEnd: () => Date.now() - dragEndedAtRef.current < DRAG_CLICK_WINDOW_MS
