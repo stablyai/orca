@@ -20,6 +20,7 @@ import {
   type MobileInputFloorClaimHolder
 } from './terminal-input-delivery'
 import { updateViewportForClient } from './terminal-viewport-update'
+import { isGuardedCombinedTerminalSend } from './terminal-send-pre-wake-refusal'
 import {
   ensureUnsupportedTerminalPromptReceipt,
   observeReplayedTerminalPrompt
@@ -98,6 +99,9 @@ export const TERMINAL_SEND_METHODS = [
         if (replayObservation) {
           return replayObservation
         }
+        if (isGuardedCombinedTerminalSend(params)) {
+          return refusedSend(params.terminal)
+        }
         // A slept agent resumes in place first, so every check below reads its woken process.
         if (params.inputKind !== 'query-reply' && (params.text || params.enter)) {
           await runtime.wakeSleptAgentHandle(params.terminal, { signal })
@@ -144,12 +148,6 @@ export const TERMINAL_SEND_METHODS = [
           if (!claim.updated || isTerminalInputPaused(runtime, leaf.ptyId, inputSource)) {
             return refusedSend(params.terminal)
           }
-        }
-        const hasText = typeof params.text === 'string' && params.text.length > 0
-        const hasSuffix = params.enter === true || params.interrupt === true
-        if (params.requireAgentStatus === 'sendable' && hasText && hasSuffix) {
-          // Guarded sends are two-phase; combined payload/submit could partially deliver across a guard flip.
-          return refusedSend(params.terminal)
         }
         // Recheck permission and agent presence immediately before PTY acceptance.
         const assertSendPreconditions =
@@ -207,7 +205,8 @@ export const TERMINAL_SEND_METHODS = [
             : undefined
         const useSettledAgentPrompt =
           params.agentPrompt === true &&
-          hasText &&
+          typeof params.text === 'string' &&
+          params.text.length > 0 &&
           params.enter === true &&
           params.interrupt !== true &&
           params.client?.type === 'desktop' &&

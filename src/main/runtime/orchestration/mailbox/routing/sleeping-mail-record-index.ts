@@ -196,6 +196,14 @@ export class SleepingMailRecordIndex {
       const pane = record.paneKey
       const before = previous.get(pane)
       next.set(pane, record)
+      // A write elsewhere in the map keeps this record object, and its indexes still name it.
+      if (
+        before === record &&
+        this.records.get(pane) === record &&
+        this.hostByPane.get(pane) === host
+      ) {
+        continue
+      }
       if (before && before.worktreeId !== record.worktreeId) {
         this.indexWorktree(before.worktreeId, pane, false)
       }

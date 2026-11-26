@@ -95,20 +95,31 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     pty.tailWaitState = undefined
   }
 
+  // How many archives the last full sweep kept (its slept panes over the cap included).
+  private settledDisconnectedPtyRecordCount = DISCONNECTED_PTY_RECORD_MAX
+
   protected pruneDisconnectedPtyRecords(): void {
-    let retained = [...this.ptysById.values()].filter(
+    const candidates = [...this.ptysById.values()].filter(
       (pty) => !pty.connected && !this.leafExistsForPty(pty.ptyId)
     )
-    if (retained.length > DISCONNECTED_PTY_RECORD_MAX) {
-      // An open slept pane's handle still names its stopped process; that archive goes with the pane.
-      retained = retained.filter((pty) => !this.isSleptPanePty(pty))
+    const candidateCount = candidates.length
+    // No more archives than the last sweep kept: re-classifying the same slept panes would drop nothing.
+    if (candidateCount <= this.settledDisconnectedPtyRecordCount) {
+      this.settledDisconnectedPtyRecordCount = Math.max(DISCONNECTED_PTY_RECORD_MAX, candidateCount)
+      return
     }
+    // An open slept pane's handle still names its stopped process; that archive goes with the pane.
+    const retained = candidates.filter((pty) => !this.isSleptPanePty(pty))
     retained.sort((a, b) => (a.disconnectedAt ?? 0) - (b.disconnectedAt ?? 0))
     const staleCount = Math.max(0, retained.length - DISCONNECTED_PTY_RECORD_MAX)
     for (const stale of retained.slice(0, staleCount)) {
       // Bound retained exited-terminal archives in long-lived runtimes.
       this.dropDisconnectedPtyRecord(stale.ptyId)
     }
+    this.settledDisconnectedPtyRecordCount = Math.max(
+      DISCONNECTED_PTY_RECORD_MAX,
+      candidateCount - staleCount
+    )
   }
 
   /** A stopped process whose handle a processless pane still holds: only a sleep keeps it so. The
