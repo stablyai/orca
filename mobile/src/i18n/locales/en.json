@@ -2327,8 +2327,6 @@
   "session": {
     "browserTabActionSheet": {
       "title": "Browser",
-      "forward": "Forward",
-      "reload": "Reload",
       "hardReload": "Hard reload"
     },
     "terminalLiveInputStatus": {
@@ -2399,12 +2397,12 @@
       "pasteFromClipboard": "Paste from clipboard"
     },
     "activeContent": {
-      "noTabs": "No tabs in this session",
+      "noTabs": "No tabs open",
       "creatingTab": "Creating...",
-      "createTab": "Create Tab",
       "fileTitle": "File",
       "terminalTakingLonger": "Terminal is taking longer than expected",
-      "loadingTerminal": "Loading terminal"
+      "loadingTerminal": "Loading terminal",
+      "noTabsHint": "Start an agent or a terminal with +."
     },
     "commandDock": {
       "liveInputLabel": "Live terminal input",
@@ -2460,18 +2458,17 @@
       "openingWorkspace": "Opening workspace"
     },
     "sheets": {
-      "newTab": "New Tab",
+      "newTab": "New tab",
       "terminal": "Terminal",
       "browser": "Browser",
-      "browserStreamingUnavailable": "This host can't stream browser tabs",
-      "markdownNote": "Markdown Note",
+      "markdownNote": "Markdown note",
       "sendReviewNotes": "Send Review Notes",
       "notesHint": "Choose an agent session for the current notes.",
       "copyNotes": "Copy Notes",
       "notesCopied": "Notes copied",
       "copyNotesFailed": "Couldn't copy notes",
       "markdown": "Markdown",
-      "copyPath": "Copy Path",
+      "copyPath": "Copy path",
       "file": "File",
       "chat": "Chat",
       "cli": "CLI",
@@ -2484,11 +2481,9 @@
       "discardChanges": "Discard Changes",
       "discardMessage": "Replace the phone draft with the latest desktop file?",
       "discard": "Discard",
-      "newBrowser": "New Browser",
-      "urlPrompt": "Enter a URL, or leave blank for a new tab.",
       "shortcut": "Shortcut",
       "removeShortcutMessage": "Remove this custom shortcut?",
-      "renameTerminal": "Rename Terminal",
+      "renameTerminal": "Rename terminal",
       "renameTerminalFailed": "Couldn't rename the terminal. {{reason}}",
       "terminalName": "Terminal name",
       "allowAutoClose": "Allow Auto-Close",
@@ -2650,15 +2645,13 @@
       "stateUnverifiableCount_other": "{{value0}} with status unavailable"
     },
     "bulkCloseSheetActions": {
-      "closeOtherTabs": "Close Other Tabs"
+      "closeOtherTabs": "Close other tabs"
     },
     "bulkTabClose": {
-      "titleOthers": "Close other tabs?",
-      "titleRight": "Close tabs to the right?",
-      "titleLeft": "Close tabs to the left?",
-      "titleEditors": "Close all editor tabs?",
-      "description": "The selected tabs will be closed. Pinned tabs will stay open.",
-      "confirm": "Close tabs"
+      "titleOthers_one": "Close {{count}} other tab?",
+      "titleOthers_other": "Close {{count}} other tabs?",
+      "confirm_one": "Close {{count}} tab",
+      "confirm_other": "Close {{count}} tabs"
     },
     "diffReviewLoaders": {
       "committedChangesUnavailable": "Committed changes unavailable",
@@ -2758,10 +2751,10 @@
       "messageNotSent": "Message not sent"
     },
     "terminalActionSheetActions": {
-      "switchToDesktop": "Switch to Desktop",
-      "switchToPhone": "Switch to Phone",
+      "switchToDesktop": "Switch to desktop",
+      "switchToPhone": "Switch to phone",
       "rename": "Rename",
-      "clearTerminal": "Clear Terminal"
+      "clearTerminal": "Clear terminal"
     },
     "terminalRecords": {
       "defaultTitle": "Terminal"
@@ -3140,8 +3133,8 @@
       "tryAgain": "Try again."
     },
     "workerAutoClose": {
-      "running": "Temporary orchestration worker · Closes 2 minutes after it finishes",
-      "finished": "Temporary orchestration worker finished · Closes in {{countdown}}",
+      "running": "Closes 2 min after it finishes",
+      "finished": "Closes in {{countdown}}",
       "keepOpen": "Keep open"
     },
     "terminalMoreKeys": {
@@ -3252,10 +3245,14 @@
       "everythingElse": "Everything else",
       "closeTab": "Close {{title}}",
       "panes_one": "{{count}} pane",
-      "panes_other": "{{count}} panes"
+      "panes_other": "{{count}} panes",
+      "stopTitle": "Stop and close?",
+      "stopWaiting": "{{title}} is waiting for you. Closing the tab stops it.",
+      "stopWorking": "{{title}} is still working. Closing the tab stops it.",
+      "stopConfirm": "Stop and close"
     },
     "tabMenu": {
-      "closeTab": "Close Tab"
+      "closeTab": "Close tab"
     },
     "tabRows": {
       "browser": "Browser",
@@ -3267,11 +3264,13 @@
     "tabBar": {
       "oneTab": "1 tab",
       "tabCount": "{{count}} tabs",
-      "anotherNeedsYou": "another tab needs you",
       "actionsHint": "Shows actions for this tab",
       "next": "Next tab",
       "previous": "Previous tab",
-      "hint": "Shows all tabs"
+      "hint": "Shows all tabs",
+      "noTabs": "No tabs",
+      "needYou_one": "{{count}} needs you",
+      "needYou_other": "{{count}} need you"
     },
     "textSizeSheet": {
       "chatTitle": "Chat text",

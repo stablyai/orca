@@ -3095,11 +3095,9 @@
       "shift": "Shift"
     },
     "activeContent": {
-      "createTab": "Создать вкладку",
       "creatingTab": "Создание…",
       "fileTitle": "Файл",
       "loadingTerminal": "Загрузка терминала",
-      "noTabs": "В этой сессии нет вкладок",
       "terminalTakingLonger": "Загрузка терминала занимает больше времени, чем ожидалось"
     },
     "agentChildRow": {
@@ -3216,21 +3214,11 @@
       "workflow": "Фоновый процесс"
     },
     "browserTabActionSheet": {
-      "forward": "Вперёд",
-      "reload": "Перезагрузить",
       "title": "Браузер",
       "hardReload": "Полная перезагрузка"
     },
     "bulkCloseSheetActions": {
       "closeOtherTabs": "Закрыть другие вкладки"
-    },
-    "bulkTabClose": {
-      "confirm": "Закрыть вкладки",
-      "description": "Выбранные вкладки закроются. Закреплённые вкладки останутся открытыми.",
-      "titleEditors": "Закрыть все вкладки редактора?",
-      "titleLeft": "Закрыть вкладки слева?",
-      "titleOthers": "Закрыть остальные вкладки?",
-      "titleRight": "Закрыть вкладки справа?"
     },
     "commandDock": {
       "liveInputHint": "Вводимый текст отправляется прямо в активный терминал",
@@ -3635,7 +3623,6 @@
       "file": "Файл",
       "markdown": "Markdown",
       "markdownNote": "Заметка Markdown",
-      "newBrowser": "Новый браузер",
       "newTab": "Новая вкладка",
       "notesCopied": "Заметки скопированы",
       "notesHint": "Выберите сессию агента для текущих заметок.",
@@ -3651,11 +3638,9 @@
       "shellWsl": "WSL",
       "terminalName": "Название терминала",
       "unsavedMarkdown": "Несохранённые изменения в Markdown",
-      "urlPrompt": "Введите URL или оставьте поле пустым, чтобы открыть новую вкладку.",
       "allowAutoClose": "Разрешить автоматическое закрытие",
       "agents": "Агенты",
       "renameTerminalFailed": "Не удалось переименовать терминал. {{reason}}",
-      "browserStreamingUnavailable": "Этот сервер не может транслировать вкладки браузера",
       "cli": "CLI",
       "cliOnly": "Только CLI",
       "more": "Ещё",
@@ -3927,8 +3912,6 @@
       "mailOwnerUnconfirmed": "Orca не смогла подтвердить, что это сообщение по-прежнему предназначено для этого чата."
     },
     "workerAutoClose": {
-      "running": "Временный агент оркестрации · Закроется через 2 минуты после завершения",
-      "finished": "Временный агент оркестрации завершил работу · Закроется через {{countdown}}",
       "keepOpen": "Оставить открытым"
     },
     "terminalLayoutSheet": {
@@ -4002,7 +3985,6 @@
     "tabBar": {
       "oneTab": "1 вкладка",
       "tabCount": "Вкладок: {{count}}",
-      "anotherNeedsYou": "другая вкладка требует вашего внимания",
       "actionsHint": "Показывает действия для этой вкладки",
       "next": "Следующая вкладка",
       "previous": "Предыдущая вкладка",

@@ -1,26 +1,22 @@
-import { useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { Bell, Plus } from 'lucide-react-native'
+import { Plus } from 'lucide-react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
-  Easing,
   ReduceMotion,
   useAnimatedStyle,
   useSharedValue,
-  withSequence,
+  withSpring,
   withTiming
 } from 'react-native-reanimated'
-import { triggerMediumImpact, triggerSelection } from '../../platform/haptics/haptics'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { AgentStateDot } from '../../agents/presentation/AgentStateDot'
-import { ArrivalFade } from '../../components/motion/ArrivalFade'
 import { useDrawerReducedMotion } from '../../components/bottom-drawer/bottom-drawer-constants'
-import { SHEET_CURVE } from '../../components/motion/sheet-motion-values'
-import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
+import { SETTLE_SPRING } from '../../components/motion/sheet-motion-values'
+import { NavBarBadge } from '../../components/nav-bar/NavBarButton'
 import { useKeyboardPersistingTaps } from '../../platform/keyboard/keyboard-persisting-taps'
 import { useNow } from '../../hooks/use-now'
-import { agentStateLabel, type AgentDotState } from '../../worktree/agent-lineage/agent-row-display'
-import { colors, feedback, radii, spacing } from '../../theme/mobile-theme'
+import { agentStateLabel } from '../../worktree/agent-lineage/agent-row-display'
+import { colors, feedback, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import {
@@ -29,41 +25,19 @@ import {
   isForkedChatTab,
   type MobileSessionTabSummary
 } from './mobile-session-tab-rows'
-import { MobileSessionTabMark } from './MobileSessionTabMark'
+import { MobileSessionTabBarLayer, tabBarLayerStyles } from './MobileSessionTabBarLayer'
 import { MobileSessionTabsSheet } from './MobileSessionTabsSheet'
-import { MobileForkMarkedName } from '../fork/MobileForkMarkedName'
+import { useMobileSessionTabStopConfirm } from './MobileSessionTabStopConfirm'
 import { mobileForkAccessibleName } from '../fork/mobile-fork-marked-name'
 import type { MobileSessionController } from '../use-mobile-session-controller'
 
-const SWIPE_SETTLE_MS = 250
-// A tab arriving from the side starts this far out, as a share of the tab cell's width.
-const SWIPE_ENTRY_SHARE = 0.4
+// A drag that ends faster than this toward a tab moves there, however short it was.
 const FLICK_VELOCITY = 600
 // With no tab on that side, the tab gives only this share of the drag.
 const EDGE_RESISTANCE = 0.25
+// A tab a full width out of the middle is drawn this faint, so the arriving one brightens as it comes.
+const SIDE_OPACITY = 0.4
 const DRAG_CLICK_WINDOW_MS = 400
-
-// A tab drawn before it had any agent state (from the phone's store) fades its dot in when one lands.
-function TabBarDot({ tabId, state }: { tabId: string; state: AgentDotState | undefined }) {
-  const [startedEmpty] = useState({ tabId, empty: state === undefined })
-  if (startedEmpty.tabId === tabId && startedEmpty.empty) {
-    return <ArrivingTabBarDot state={state} />
-  }
-  return state && state !== 'idle' ? <AgentStateDot state={state} decorative /> : null
-}
-
-// Mounted with the bare tab, so the motion preference is read before the dot arrives.
-function ArrivingTabBarDot({ state }: { state: AgentDotState | undefined }) {
-  const reducedMotion = useReducedMotionEnabled()
-  if (!state || state === 'idle') {
-    return null
-  }
-  return (
-    <ArrivalFade animate={reducedMotion === false}>
-      <AgentStateDot state={state} decorative />
-    </ArrivalFade>
-  )
-}
 
 /** The tab you're in as one cell: tap for its actions, swipe for the next one; the count shows every tab, + adds one. */
 export function MobileSessionTabBar({
@@ -87,6 +61,7 @@ export function MobileSessionTabBar({
     handleOpenNewTab,
     switchSessionTab,
     openSessionTabActionSheetAfterKeyboardDismiss,
+    handleCloseSessionTab,
     visibleTabs,
     terminals
   } = controller
@@ -115,34 +90,44 @@ export function MobileSessionTabBar({
   const active: MobileSessionTabSummary | undefined = rows[activeIndex]
   const previous = activeIndex > 0 ? rows[activeIndex - 1] : undefined
   const next = activeIndex !== -1 ? rows[activeIndex + 1] : undefined
-  const othersNeedYou = rows.some(
-    (row) => row.tab.id !== activeSessionTabId && row.group === 'needs-you'
+  const needYou = countMobileSessionDesktopTabs(
+    rows.filter((row) => row.tab.id !== activeSessionTabId && row.group === 'needs-you')
   )
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [dragging, setDragging] = useState(false)
+  const stopConfirm = useMobileSessionTabStopConfirm(handleCloseSessionTab)
 
   const reducedMotion = useDrawerReducedMotion()
   const offset = useSharedValue(0)
   const width = useSharedValue(0)
+  // A committed swipe, waiting for its tab to open before the track re-bases under it.
+  const arrivingRef = useRef<{ tabId: string; shift: number; velocity: number } | null>(null)
   // On the web, releasing a mouse drag also clicks the tab.
   const dragEndedAtRef = useRef(0)
-  const settle = (to: number) =>
-    withTiming(
-      to,
-      reducedMotion
-        ? { duration: 0, reduceMotion: ReduceMotion.Never }
-        : { duration: SWIPE_SETTLE_MS, easing: Easing.bezier(...SHEET_CURVE) }
-    )
-  const step = (target: MobileSessionTabSummary | undefined, direction: 1 | -1) => {
-    if (!target) {
-      offset.value = settle(0)
+  const settle = (velocity: number) =>
+    reducedMotion
+      ? withTiming(0, { duration: 0, reduceMotion: ReduceMotion.Never })
+      : withSpring(0, { ...SETTLE_SPRING, velocity })
+  // The arriving tab is open now: draw it where its peek was, then let it settle at the finger's speed.
+  useLayoutEffect(() => {
+    const arriving = arrivingRef.current
+    arrivingRef.current = null
+    if (arriving && arriving.tabId === activeSessionTabId) {
+      offset.value = offset.value + arriving.shift
+      offset.value = settle(arriving.velocity)
       return
     }
-    triggerSelection()
+    offset.value = 0
+  }, [activeSessionTabId])
+  // `direction` 1 steps to the previous tab (a rightward swipe), -1 to the next one.
+  const step = (target: MobileSessionTabSummary | undefined, direction: 1 | -1, velocity = 0) => {
+    if (!target) {
+      offset.value = settle(velocity)
+      return
+    }
+    arrivingRef.current = { tabId: target.tab.id, shift: -direction * width.value, velocity }
+    // switchSessionTab plays the switch's one haptic.
     switchSessionTab(target.tab)
-    offset.value = withSequence(
-      withTiming(-direction * width.value * SWIPE_ENTRY_SHARE, { duration: 0 }),
-      settle(0)
-    )
   }
   // Callbacks run on JS: the session page is a web document, and stepping switches React state.
   const pan = Gesture.Pan()
@@ -150,6 +135,9 @@ export function MobileSessionTabBar({
     .enabled(rows.length > 1)
     .activeOffsetX([-12, 12])
     .failOffsetY([-10, 10])
+    // A drag isn't a tap, so the cell drops its pressed fill once the tab starts to move.
+    .onStart(() => setDragging(true))
+    .onFinalize(() => setDragging(false))
     .onUpdate((event) => {
       const target = event.translationX > 0 ? previous : next
       offset.value = target ? event.translationX : event.translationX * EDGE_RESISTANCE
@@ -166,19 +154,23 @@ export function MobileSessionTabBar({
       const flicked =
         Math.abs(event.velocityX) > FLICK_VELOCITY && Math.sign(event.velocityX) === direction
       if (Math.abs(event.translationX) > width.value / 2 || flicked) {
-        step(direction === 1 ? previous : next, direction)
+        step(direction === 1 ? previous : next, direction, event.velocityX)
         return
       }
-      offset.value = settle(0)
+      // Past the last tab the drag moved at a quarter speed, so the release does too.
+      const target = direction === 1 ? previous : next
+      offset.value = settle(target ? event.velocityX : event.velocityX * EDGE_RESISTANCE)
     })
+  // Each layer sits a width from its neighbour and fades with its distance from the middle.
+  const layerStyle = (place: -1 | 0 | 1) => () => {
+    const x = offset.value + place * width.value
+    const away = Math.min(Math.abs(x) / Math.max(width.value, 1), 1)
+    return { transform: [{ translateX: x }], opacity: 1 - away * (1 - SIDE_OPACITY) }
+  }
   // Web has no worklet plugin; mapper hooks need this explicit dependency list.
-  const contentStyle = useAnimatedStyle(
-    () => ({
-      transform: [{ translateX: offset.value }],
-      opacity: 1 - Math.min(Math.abs(offset.value) / Math.max(width.value, 1), 1) * 0.6
-    }),
-    [offset, width]
-  )
+  const previousStyle = useAnimatedStyle(layerStyle(-1), [offset, width])
+  const currentStyle = useAnimatedStyle(layerStyle(0), [offset, width])
+  const nextStyle = useAnimatedStyle(layerStyle(1), [offset, width])
 
   const status = active?.dotState && active.dotState !== 'idle' ? active.dotState : undefined
   const tabCount = countMobileSessionDesktopTabs(rows)
@@ -192,14 +184,11 @@ export function MobileSessionTabBar({
   ]
     .filter(Boolean)
     .join(', ')
-  const anyUnread = rows.some((row) => row.unread)
-  const countAccessibilityLabel = [
-    countLabel,
-    anyUnread ? t('agents.list.unread', 'Unread') : null,
-    othersNeedYou ? t('session.tabBar.anotherNeedsYou', 'another tab needs you') : null
-  ]
-    .filter(Boolean)
-    .join(', ')
+  const needYouLabel =
+    needYou === 1
+      ? t('session.tabBar.needYou_one', '{{count}} needs you', { count: needYou })
+      : t('session.tabBar.needYou_other', '{{count}} need you', { count: needYou })
+  const countAccessibilityLabel = needYou > 0 ? `${countLabel}, ${needYouLabel}` : countLabel
   const createDisabled = createTabBusy || connState !== 'connected'
   const openTabActions = () => {
     // The click a drag release produces on the web belongs to the drag.
@@ -211,79 +200,104 @@ export function MobileSessionTabBar({
 
   return (
     <View ref={keepsKeyboard} style={inTopBar ? styles.barInTopBar : styles.bar}>
-      {/* pan-y keeps vertical touches with the page on the web. */}
-      <GestureDetector gesture={pan} touchAction="pan-y">
-        <View
-          style={styles.tabCell}
-          onLayout={(event) => {
-            width.value = event.nativeEvent.layout.width
-          }}
-        >
+      {rows.length === 0 ? (
+        <View style={[styles.tabCell, styles.emptyCell]}>
+          <Text style={styles.emptyTitle} numberOfLines={1}>
+            {t('session.tabBar.noTabs', 'No tabs')}
+          </Text>
+        </View>
+      ) : (
+        <>
+          {/* pan-y keeps vertical touches with the page on the web. */}
+          <GestureDetector gesture={pan} touchAction="pan-y">
+            <View
+              style={styles.tabCell}
+              // Neighbours sit a whole cell aside, so none shows at rest and each arrives at the same inset.
+              onLayout={(event) => {
+                width.value = event.nativeEvent.layout.width
+              }}
+            >
+              <Pressable
+                style={({ pressed }) => [
+                  styles.tabPress,
+                  pressed && !dragging && styles.cellPressed
+                ]}
+                onPress={openTabActions}
+                disabled={!active}
+                accessibilityRole="button"
+                accessibilityLabel={tabLabel || countLabel}
+                accessibilityHint={t('session.tabBar.actionsHint', 'Shows actions for this tab')}
+                accessibilityActions={[
+                  ...(next
+                    ? [{ name: 'nextTab', label: t('session.tabBar.next', 'Next tab') }]
+                    : []),
+                  ...(previous
+                    ? [{ name: 'previousTab', label: t('session.tabBar.previous', 'Previous tab') }]
+                    : [])
+                ]}
+                onAccessibilityAction={(event) => {
+                  const name = event.nativeEvent.actionName
+                  if (name === 'nextTab') {
+                    step(next, -1)
+                  } else if (name === 'previousTab') {
+                    step(previous, 1)
+                  }
+                }}
+              >
+                {/* Only the contents slide, so the cell stays flush with the screen edge. */}
+                <View style={styles.track}>
+                  {previous ? (
+                    <Animated.View
+                      style={[tabBarLayerStyles.tabContent, styles.sideLayer, previousStyle]}
+                      importantForAccessibility="no-hide-descendants"
+                    >
+                      <MobileSessionTabBarLayer row={previous} live={false} />
+                    </Animated.View>
+                  ) : null}
+                  <Animated.View style={[tabBarLayerStyles.tabContent, currentStyle]}>
+                    {active ? (
+                      <MobileSessionTabBarLayer row={active} live />
+                    ) : (
+                      <Text style={tabBarLayerStyles.title} numberOfLines={1}>
+                        {countLabel}
+                      </Text>
+                    )}
+                  </Animated.View>
+                  {next ? (
+                    <Animated.View
+                      style={[tabBarLayerStyles.tabContent, styles.sideLayer, nextStyle]}
+                      importantForAccessibility="no-hide-descendants"
+                    >
+                      <MobileSessionTabBarLayer row={next} live={false} />
+                    </Animated.View>
+                  ) : null}
+                </View>
+              </Pressable>
+            </View>
+          </GestureDetector>
           <Pressable
-            style={({ pressed }) => [styles.tabPress, pressed && styles.cellPressed]}
-            onPress={openTabActions}
-            onLongPress={() => {
-              triggerMediumImpact()
-              openTabActions()
-            }}
-            delayLongPress={400}
-            disabled={!active}
-            accessibilityRole="button"
-            accessibilityLabel={tabLabel || countLabel}
-            accessibilityHint={t('session.tabBar.actionsHint', 'Shows actions for this tab')}
-            accessibilityActions={[
-              ...(next ? [{ name: 'nextTab', label: t('session.tabBar.next', 'Next tab') }] : []),
-              ...(previous
-                ? [{ name: 'previousTab', label: t('session.tabBar.previous', 'Previous tab') }]
-                : [])
+            style={({ pressed }) => [
+              styles.sideCell,
+              actionsCollapsed && !inTopBar && styles.lastCell,
+              pressed && styles.cellPressed
             ]}
-            onAccessibilityAction={(event) => {
-              const name = event.nativeEvent.actionName
-              if (name === 'nextTab') {
-                step(next, -1)
-              } else if (name === 'previousTab') {
-                step(previous, 1)
-              }
-            }}
+            onPress={() => setSheetOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel={countAccessibilityLabel}
+            accessibilityHint={t('session.tabBar.hint', 'Shows all tabs')}
           >
-            {/* Only the contents slide, so the cell stays flush with the screen edge. */}
-            <Animated.View style={[styles.tabContent, contentStyle]}>
-              {active ? (
-                <>
-                  <TabBarDot tabId={active.tab.id} state={active.dotState} />
-                  <View style={styles.mark}>
-                    <MobileSessionTabMark row={active} size={14} />
-                  </View>
-                </>
-              ) : null}
-              <Text style={styles.title} numberOfLines={1}>
-                {active && isForkedChatTab(active.tab) ? (
-                  <MobileForkMarkedName name={active.title} />
-                ) : (
-                  (active?.title ?? countLabel)
-                )}
-              </Text>
-            </Animated.View>
+            <View style={styles.countBox}>
+              <Text style={styles.countText}>{tabCount}</Text>
+              <NavBarBadge
+                count={needYou}
+                color={colors.agentQuestion}
+                ringColor={colors.bgPanel}
+                style={styles.countBadge}
+              />
+            </View>
           </Pressable>
-        </View>
-      </GestureDetector>
-      <Pressable
-        style={({ pressed }) => [
-          styles.sideCell,
-          actionsCollapsed && !inTopBar && styles.lastCell,
-          pressed && styles.cellPressed
-        ]}
-        onPress={() => setSheetOpen(true)}
-        accessibilityRole="button"
-        accessibilityLabel={countAccessibilityLabel}
-        accessibilityHint={t('session.tabBar.hint', 'Shows all tabs')}
-      >
-        <View style={styles.countBox}>
-          <Text style={styles.countText}>{tabCount}</Text>
-          {othersNeedYou ? <View style={styles.alert} /> : null}
-        </View>
-        {anyUnread ? <Bell size={12} color={colors.statusAmber} fill={colors.statusAmber} /> : null}
-      </Pressable>
+        </>
+      )}
       {/* A collapsed bar's + lives in the header's ⋯ menu. */}
       {!actionsCollapsed ? (
         <Pressable
@@ -307,7 +321,9 @@ export function MobileSessionTabBar({
         tabs={rows}
         visible={sheetOpen}
         onClose={() => setSheetOpen(false)}
+        onStopTabs={stopConfirm.ask}
       />
+      {stopConfirm.confirm}
     </View>
   )
 }
@@ -349,20 +365,19 @@ const styles = themedStyleSheet(() => ({
     paddingLeft: spacing.lg,
     paddingRight: spacing.sm
   },
-  tabContent: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  // Keeps web SVGs from shrinking before the title ellipsizes.
-  mark: { flexShrink: 0 },
-  title: {
-    flexShrink: 1,
-    minWidth: 0,
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textPrimary
+  track: { flex: 1, justifyContent: 'center' },
+  // Neighbours lie over the open tab's row; their transform moves them a width aside.
+  sideLayer: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
+  // With no tab to raise, the cell sits flat in the bar like the side cells.
+  emptyCell: {
+    backgroundColor: 'transparent',
+    borderBottomColor: 'transparent',
+    justifyContent: 'center',
+    paddingLeft: spacing.lg
   },
+  emptyTitle: { fontSize: 14, color: colors.textMuted },
   sideCell: {
     width: 46,
-    flexDirection: 'row',
-    gap: 2,
     alignItems: 'center',
     justifyContent: 'center',
     borderRightWidth: 1,
@@ -388,18 +403,8 @@ const styles = themedStyleSheet(() => ({
     color: colors.textPrimary,
     fontVariant: ['tabular-nums']
   },
-  // Another tab needs you: a red dot on the count's corner, ringed in the bar's colour.
-  alert: {
-    position: 'absolute',
-    top: -6,
-    right: -7,
-    width: 9,
-    height: 9,
-    borderRadius: radii.pill,
-    backgroundColor: colors.statusRed,
-    borderWidth: 2,
-    borderColor: colors.bgPanel
-  }
+  // How many other tabs need you, on the count's corner.
+  countBadge: { position: 'absolute', top: -8, right: -10 }
 }))
 
 // The group room's thread bar draws its cells with these too.

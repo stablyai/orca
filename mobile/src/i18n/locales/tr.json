@@ -2925,11 +2925,9 @@
       "shift": "Shift"
     },
     "activeContent": {
-      "createTab": "Sekme Oluştur",
       "creatingTab": "Oluşturuluyor…",
       "fileTitle": "Dosya",
       "loadingTerminal": "Terminal yükleniyor",
-      "noTabs": "Bu oturumda sekme yok",
       "terminalTakingLonger": "Terminalin yüklenmesi beklenenden uzun sürüyor"
     },
     "agentChildRow": {
@@ -3014,21 +3012,11 @@
       "workflow": "Arka plan iş akışı"
     },
     "browserTabActionSheet": {
-      "forward": "İleri",
-      "reload": "Yenile",
       "hardReload": "Önbelleği atlayarak yenile",
       "title": "Tarayıcı"
     },
     "bulkCloseSheetActions": {
       "closeOtherTabs": "Diğer Sekmeleri Kapat"
-    },
-    "bulkTabClose": {
-      "confirm": "Sekmeleri kapat",
-      "description": "Seçilen sekmeler kapatılacak. Sabitlenmiş sekmeler açık kalacak.",
-      "titleEditors": "Tüm düzenleyici sekmeleri kapatılsın mı?",
-      "titleLeft": "Soldaki sekmeler kapatılsın mı?",
-      "titleOthers": "Diğer sekmeler kapatılsın mı?",
-      "titleRight": "Sağdaki sekmeler kapatılsın mı?"
     },
     "commandDock": {
       "liveInputHint": "Yazılan metin doğrudan etkin terminale gönderilir",
@@ -3425,7 +3413,6 @@
       "file": "Dosya",
       "markdown": "Markdown",
       "markdownNote": "Markdown Notu",
-      "newBrowser": "Yeni Tarayıcı",
       "newTab": "Yeni Sekme",
       "notesCopied": "Notlar kopyalandı",
       "notesHint": "Mevcut notlar için bir ajan oturumu seçin.",
@@ -3441,14 +3428,12 @@
       "shellWsl": "WSL",
       "terminalName": "Terminal adı",
       "unsavedMarkdown": "Kaydedilmemiş Markdown değişiklikleri",
-      "urlPrompt": "Bir URL girin veya yeni sekme için boş bırakın.",
       "allowAutoClose": "Otomatik kapatmaya izin ver",
       "agents": "Ajanlar",
       "more": "Daha fazla",
       "linkCopied": "Bağlantı kopyalandı",
       "copyLinkFailed": "Bağlantı kopyalanamadı",
       "renameTerminalFailed": "Terminal yeniden adlandırılamadı. {{reason}}",
-      "browserStreamingUnavailable": "Bu cihaz tarayıcı sekmelerini aktaramıyor",
       "cli": "CLI",
       "cliOnly": "Yalnızca CLI"
     },
@@ -3717,8 +3702,6 @@
       "mailOwnerUnconfirmed": "Orca bu mesajın hâlâ bu sohbet için olduğunu doğrulayamadı."
     },
     "workerAutoClose": {
-      "running": "Geçici orkestrasyon çalışanı · Tamamlandıktan 2 dakika sonra kapanır",
-      "finished": "Geçici orkestrasyon çalışanı tamamlandı · {{countdown}} içinde kapanır",
       "keepOpen": "Açık tut"
     },
     "terminalLayoutSheet": {
@@ -3804,7 +3787,6 @@
     "tabBar": {
       "oneTab": "1 sekme",
       "tabCount": "{{count}} sekme",
-      "anotherNeedsYou": "başka bir sekme ilginizi bekliyor",
       "actionsHint": "Bu sekmenin işlemlerini gösterir",
       "next": "Sonraki sekme",
       "previous": "Önceki sekme",

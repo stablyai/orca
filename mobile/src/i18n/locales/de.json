@@ -2450,11 +2450,9 @@
       "pasteFromClipboard": "Aus der Zwischenablage einfügen"
     },
     "activeContent": {
-      "createTab": "Tab erstellen",
       "creatingTab": "Wird erstellt…",
       "fileTitle": "Datei",
       "loadingTerminal": "Terminal wird geladen",
-      "noTabs": "Keine Tabs in dieser Sitzung",
       "terminalTakingLonger": "Das Laden des Terminals dauert länger als erwartet"
     },
     "agentChildRow": {
@@ -2539,21 +2537,11 @@
       "workflow": "Arbeitsablauf im Hintergrund"
     },
     "browserTabActionSheet": {
-      "forward": "Vorwärts",
-      "reload": "Neu laden",
       "hardReload": "Ohne Cache neu laden",
       "title": "Browser"
     },
     "bulkCloseSheetActions": {
       "closeOtherTabs": "Andere Tabs schließen"
-    },
-    "bulkTabClose": {
-      "confirm": "Tabs schließen",
-      "description": "Die ausgewählten Tabs werden geschlossen. Angeheftete Tabs bleiben geöffnet.",
-      "titleEditors": "Alle Editor-Tabs schließen?",
-      "titleLeft": "Tabs links schließen?",
-      "titleOthers": "Andere Tabs schließen?",
-      "titleRight": "Tabs rechts schließen?"
     },
     "commandDock": {
       "liveInputHint": "Eingegebener Text wird direkt an das aktive Terminal gesendet",
@@ -2953,7 +2941,6 @@
       "file": "Datei",
       "markdown": "Markdown",
       "markdownNote": "Markdown-Notiz",
-      "newBrowser": "Neuen Browser öffnen",
       "newTab": "Neuer Tab",
       "notesCopied": "Notizen kopiert",
       "notesHint": "Eine Agentensitzung für die aktuellen Notizen auswählen.",
@@ -2972,7 +2959,6 @@
       "shellWsl": "WSL",
       "terminalName": "Terminal-Name",
       "unsavedMarkdown": "Ungespeicherte Markdown-Änderungen",
-      "urlPrompt": "URL eingeben oder für einen neuen Tab leer lassen.",
       "allowAutoClose": "Automatisches Schließen erlauben",
       "agents": "Agenten",
       "renameTerminalFailed": "Das Terminal konnte nicht umbenannt werden. {{reason}}"
@@ -3241,8 +3227,6 @@
       "waitMoment": "Einen Moment warten."
     },
     "workerAutoClose": {
-      "running": "Temporärer Orchestrierungs-Worker · Schließt sich 2 Minuten nach Abschluss",
-      "finished": "Temporärer Orchestrierungs-Worker abgeschlossen · Schließt sich in {{countdown}}",
       "keepOpen": "Offen halten"
     },
     "terminalLayoutSheet": {
@@ -3363,7 +3347,6 @@
     "tabBar": {
       "oneTab": "1 Tab",
       "tabCount": "{{count}} Tabs",
-      "anotherNeedsYou": "ein anderer Tab benötigt dich",
       "actionsHint": "Zeigt Aktionen für diesen Tab",
       "next": "Nächster Tab",
       "previous": "Vorheriger Tab",
