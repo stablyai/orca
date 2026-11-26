@@ -121,13 +121,8 @@ export async function acquireAcpStructuredSession(input: {
         if (slot.reattaching) {
           slot.history?.keep(method, params)
         }
-        slot.lane?.apply(
-          slot.lane.translator.notification(
-            method,
-            slot.reattaching ? asReattachHistory(params) : params,
-            now()
-          )
-        )
+        const sent = slot.reattaching ? asReattachHistory(params) : params
+        slot.lane?.apply(slot.lane.translator.notification(method, sent, now()))
       }),
     onDiagnostic: (message) =>
       deps.logger?.warn('ACP agent protocol diagnostic', {
@@ -312,7 +307,12 @@ export async function acquireAcpStructuredSession(input: {
   session = child
   childState.assertAcpStartingSession(child, input.abandoned)
   return {
-    acquisition: { process, acquisitionGeneration: generation },
+    acquisition: {
+      process,
+      acquisitionGeneration: generation,
+      // The chat keeps the home this launch moved it to.
+      ...(launch.launchedAccountHome ? { movedAccountHome: launch.launchedAccountHome } : {})
+    },
     session: child
   }
 }

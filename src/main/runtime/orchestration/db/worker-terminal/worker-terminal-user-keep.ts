@@ -14,10 +14,8 @@ import type { WorkerAutoCloseState } from '../../../../../shared/orchestration/w
 import { exposeUtcTimestamp, toSqliteUtcTimestamp } from '../utc-timestamp'
 import { OrchestrationError } from '../../orchestration-error'
 import { retainTerminalResourceInTransaction } from './worker-terminal-archive'
-import {
-  OWNER_RELEASABLE_SQL,
-  WORKER_TERMINAL_AUTO_RELEASE_GRACE_MS
-} from './worker-terminal-auto-release'
+import { OWNER_RELEASABLE_SQL } from './worker-terminal-auto-release'
+import { WORKER_AUTO_CLOSE_GRACE_MS } from '../../../../../shared/orchestration/workers/worker-auto-close'
 
 type PaneResource = { id: string; owner_dispatch_id: string; pane_key: string }
 
@@ -102,9 +100,7 @@ export function allowWorkerTerminalAutoClose(
       const resource = this.getWorkerTerminalResource(candidate.id)
       const restMs = resource ? restAt(resource) : null
       const deadline =
-        restMs === null
-          ? null
-          : toSqliteUtcTimestamp(restMs + WORKER_TERMINAL_AUTO_RELEASE_GRACE_MS)
+        restMs === null ? null : toSqliteUtcTimestamp(restMs + WORKER_AUTO_CLOSE_GRACE_MS)
       changed += Number(update.run(deadline, candidate.id).changes)
     }
     this.db.exec('COMMIT')

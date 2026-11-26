@@ -54,10 +54,7 @@ export class ProviderTimelineTextStreams {
       emit: (id, text) => this.flushOnWindow(id, text)
     })
     this.releaseLiveText = deps.sink.bindLiveText?.({
-      read: (epoch) =>
-        [...this.byId.values()].flatMap((stream) =>
-          providerTimelineLiveText(stream, epoch, this.coalescer.snapshot(stream.id))
-        ),
+      read: (epoch, readers) => this.liveText(epoch, readers?.takes),
       has: (epoch) => providerTimelineHasLiveText(this.byId.values(), epoch, this.coalescer.has),
       flush: () => this.flush()
     })
@@ -260,6 +257,12 @@ export class ProviderTimelineTextStreams {
     }
     const admission = this.deps.sink.publishLiveText?.()
     return admission?.accepted !== false || admission.reason !== 'backpressure'
+  }
+
+  private liveText(epoch: string, takes?: (itemId: string) => boolean) {
+    return [...this.byId.values()].flatMap((stream) =>
+      providerTimelineLiveText(stream, epoch, () => this.coalescer.snapshot(stream.id), takes)
+    )
   }
 
   private planText(

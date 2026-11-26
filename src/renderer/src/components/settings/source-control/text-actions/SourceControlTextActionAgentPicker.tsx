@@ -24,6 +24,7 @@ import {
 } from '../../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import {
   getDiscoveredModels,
+  getTextGenerationModels,
   readSourceControlAiModelChoiceForHost,
   resolveThinkingLevel
 } from '../../../../../../shared/source-control/ai/settings/source-control-ai-model-selection'
@@ -193,7 +194,9 @@ const TextActionPicker = memo(
         )
         const params = inherited.ok ? inherited.value.params : undefined
         const models = new Map(
-          [...discovered, ...capability.models].map((model) => [model.id, model])
+          getTextGenerationModels(capability.models, source, legacy, hostKey, agent.id).map(
+            (model) => [model.id, model]
+          )
         )
         const effortByModel = Object.fromEntries(
           [...models.values()].map((model) => [
@@ -260,10 +263,8 @@ const TextActionPicker = memo(
     const draftForEntry = (entry: AgentPickerEntry): AgentPickerDraft => {
       const saved = readSourceControlAiModelChoiceForHost(choice, hostKey, entry.agent)
       const models = entry.catalog.origin !== 'unknown' ? entry.catalog.models : []
-      const selectedModel =
-        saved && !models.some((model) => model.id === saved)
-          ? getCommitMessageAgentCapability(entry.agent)?.defaultModelId
-          : saved
+      // A pick this host can't run falls through to what generation runs instead.
+      const selectedModel = saved && models.some((model) => model.id === saved) ? saved : undefined
       const model = selectedModel ?? entry.terminal.model
       const effort = entry.textGeneration?.effortByModel[model ?? '']
       return {

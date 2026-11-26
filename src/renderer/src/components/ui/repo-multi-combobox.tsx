@@ -52,11 +52,7 @@ function renderTriggerLabel(
   return (
     <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
       {first ? (
-        <RepoBadgeLabel
-          name={first.displayName}
-          color={first.badgeColor}
-          badgeClassName="size-1.5"
-        />
+        <RepoBadgeLabel name={first.displayName} color={first.badgeColor} repo={first} />
       ) : null}
       {second ? <span className="text-muted-foreground">, {second.displayName}</span> : null}
       {rest.length > 0 ? <span className="text-muted-foreground">+{rest.length}</span> : null}
@@ -203,6 +199,7 @@ export default function RepoMultiCombobox({
                       <RepoBadgeLabel
                         name={repo.displayName}
                         color={repo.badgeColor}
+                        repo={repo}
                         className="max-w-full"
                       />
                     </span>

@@ -127,6 +127,11 @@ export type ProviderRelayDetachPolicy = {
    */
   quiet?: string[]
   /**
+   * Agent request methods that ask to start an item: until such a request (naming `params.itemId`,
+   * with no `approvalId`) is answered, that item hasn't started, so it isn't running work.
+   */
+  startApprovals?: string[]
+  /**
    * Work open when a detach was sent, as task keys per marker group. Only a detach carries it, and
    * only a detach that carries it can idle-stop: a stream that just dropped keeps the agent running.
    */

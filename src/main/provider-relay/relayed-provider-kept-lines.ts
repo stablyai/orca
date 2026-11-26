@@ -30,20 +30,5 @@ export class RelayedProviderKeptLines {
 const HAND_OFF_READER_WAIT_MS = 2_000
 let handOffDeadline: number | null = null
 
-/** The first spool line still held from `at` on, not yet handed on to the chat. */
-export function firstHeldSeq(
-  held: readonly { seq: number | null }[] | null,
-  at: number,
-  releasedThrough: number
-): number | null {
-  for (let next = at; next < (held?.length ?? 0); next++) {
-    const seq = held![next]!.seq
-    if (seq !== null && seq > releasedThrough) {
-      return seq
-    }
-  }
-  return null
-}
-
 export const relayHandOffWaitMs = (): number =>
   Math.max(0, (handOffDeadline ??= Date.now() + HAND_OFF_READER_WAIT_MS) - Date.now())

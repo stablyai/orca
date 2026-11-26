@@ -34,6 +34,8 @@ export type StructuredAgentSessionLaunchContinuation = {
   /** Whether this start continued on its own. Off, every cut waits for the person, and only a
    *  dismissal tells a coordinator. */
   automatic: boolean
+  /** Kept chats whose agent ended before its reattach, cut once every reattach settled. */
+  goneCut?: Promise<ReadonlySet<string>>
 }
 
 export type StructuredAgentSessionLaunchContinuationDeps = {
@@ -62,20 +64,52 @@ export async function continueStructuredAgentSessionsAtLaunch(
   onReserved: (rows: StructuredAgentSessionResumeCandidate[]) => void = () => {}
 ): Promise<StructuredAgentSessionLaunchContinuation> {
   const listedKept = (await deps.keptRunning?.().catch(() => null)) ?? new Set<string>()
-  // Kept chats reattach before any restart offer runs; one whose agent ended meanwhile was cut
-  // after all and goes through the ordinary cold path below.
-  const kept = new Set<string>()
-  await mapWithConcurrency([...listedKept], KEPT_REBIND_CONCURRENCY, async (sessionId) => {
-    const rebound = await (
-      deps.rebindKeptAgent?.(sessionId) ?? Promise.resolve('unresolved')
-    ).catch((error: unknown) => {
-      console.warn('[agent-session] reattaching a kept chat agent failed', error)
-      return 'unresolved' as const
-    })
-    if (rebound !== 'gone') {
-      kept.add(sessionId)
+  // Kept chats reattach beside the offers below, which never wait on them; one whose agent ended
+  // meanwhile was cut after all and takes the ordinary crash cut once its reattach settles.
+  const gone = new Set<string>()
+  const rebinds = mapWithConcurrency(
+    [...listedKept],
+    KEPT_REBIND_CONCURRENCY,
+    async (sessionId) => {
+      const rebound = await (
+        deps.rebindKeptAgent?.(sessionId) ?? Promise.resolve('unresolved')
+      ).catch((error: unknown) => {
+        console.warn('[agent-session] reattaching a kept chat agent failed', error)
+        return 'unresolved' as const
+      })
+      if (rebound === 'gone') {
+        gone.add(sessionId)
+      }
     }
-  })
+  )
+  const continued = continueColdChats(deps, listedKept, onReserved)
+  // A kept agent that ended before its reattach takes the ordinary crash cut, after the offers.
+  const goneCut: Promise<ReadonlySet<string>> = Promise.all([rebinds, continued.catch(() => null)])
+    .then(async () => {
+      const held = new Set(gone.size > 0 ? deps.store.listHeldSessionIds() : [])
+      const cuts = [...gone].flatMap((sessionId) => {
+        const replaced = deps.store.replacedRuntime(sessionId)
+        return held.has(sessionId) && replaced?.runtime
+          ? [{ sessionId, crashedRuntime: replaced.runtime }]
+          : []
+      })
+      if (cuts.length > 0) {
+        await deps.restartResume.adoptCrashCuts(cuts, deps.startedAt)
+      }
+      return new Set(cuts.map(({ sessionId }) => sessionId))
+    })
+    .catch((error: unknown) => {
+      console.warn('[agent-session] cutting kept chats whose agent ended failed', error)
+      return new Set<string>()
+    })
+  return continued.then((result) => ({ ...result, goneCut }))
+}
+
+async function continueColdChats(
+  deps: StructuredAgentSessionLaunchContinuationDeps,
+  kept: ReadonlySet<string>,
+  onReserved: (rows: StructuredAgentSessionResumeCandidate[]) => void
+): Promise<StructuredAgentSessionLaunchContinuation> {
   const finished = deps.finishedWhileDetached?.() ?? new Set<string>()
   const heldByLastRun = deps.store
     .listHeldSessionIds()

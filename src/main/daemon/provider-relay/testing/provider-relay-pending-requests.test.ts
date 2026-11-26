@@ -504,3 +504,27 @@ describe('provider relay kept lines', () => {
     ])
   })
 })
+
+describe('a request asking to start an item', () => {
+  it('marks only a whole-item approval as not started, until it is answered', () => {
+    const pending = new ProviderRelayPendingRequests()
+    const ask = (id: number, params: Record<string, unknown>) =>
+      pending.observeAgentLine({
+        seq: id,
+        line: JSON.stringify({ method: 'item/commandExecution/requestApproval', id, params })
+      })
+    ask(1, { itemId: 'cmd-new' })
+    expect(pending.awaitingStart('cmd-new')).toBe(false)
+    // A policy naming the start method later reclassifies the request already held.
+    pending.setStartMethods(['item/commandExecution/requestApproval'])
+    // Writing to a command that already runs names it too, with its own approval id.
+    ask(2, { itemId: 'cmd-running', approvalId: 'stdin-1' })
+    expect(pending.awaitingStart('cmd-new')).toBe(true)
+    expect(pending.awaitingStart('cmd-running')).toBe(false)
+    pending.observeAgentLine({
+      seq: 3,
+      line: JSON.stringify({ method: 'serverRequest/resolved', params: { requestId: 1 } })
+    })
+    expect(pending.awaitingStart('cmd-new')).toBe(false)
+  })
+})

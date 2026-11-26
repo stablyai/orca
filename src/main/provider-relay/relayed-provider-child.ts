@@ -9,23 +9,19 @@ import type {
 } from '../daemon/protocol/daemon-provider-relay-protocol'
 import { RELAY_WRITE_CHUNK_CHARS } from '../daemon/protocol/daemon-provider-relay-protocol'
 import type { ProviderRelayChannel } from './provider-relay-channel'
+import { sendRelayedInput, type RelayState } from './relayed-provider-input'
 import { RelayedProviderOutput, type ProviderRelayAckFloor } from './relayed-provider-output'
 import type { ProviderRelayRecordTaking } from './relayed-provider-consumption'
 import {
   attachContinuation,
+  RelayedProviderContinuation,
   type ProviderRelayItemContinuation
 } from './relayed-provider-continuation'
-
-/** The daemon refuses input past its queue cap; the write is offered again after this. */
-const INPUT_FULL_RETRY_MS = 50
-const INPUT_FULL = 'Relay input is full'
 
 /** How long an attach waits for its preamble's stream events after the reply. */
 const PREAMBLE_WAIT_MS = 10_000
 /** A reader paused this long past an exit (a stuck journal drain) no longer holds the exit back. */
 const EXIT_AFTER_OUTPUT_WAIT_MS = 10_000
-
-type RelayState = 'attaching' | 'attached' | 'reattaching' | 'detached' | 'exited'
 
 export type RelayedProviderChildOptions = {
   channel: ProviderRelayChannel
@@ -48,6 +44,9 @@ export type RelayedProviderChildOptions = {
  * An agent the terminal daemon owns, seen through the relay as a child process: stdout is the
  * agent's lines in seq order (unanswered requests first), stdin goes out as `relayWrite`s.
  */
+/** Emitted once the agent is the daemon's: this app no longer owns its process. */
+export const RELAYED_CHILD_HANDED_OFF = 'handedOff'
+
 export class RelayedProviderChild extends EventEmitter implements ProviderChild {
   readonly pid: number
   readonly stdout: Readable & { relayRecords: ProviderRelayRecordTaking } = Object.assign(
@@ -96,7 +95,12 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
       scheduleAck: (run) => options.channel.scheduleAck(run),
       ...(options.durable ? { durable: options.durable } : {}),
       ...(options.passWhileHeld ? { passWhileHeld: options.passWhileHeld } : {}),
-      ...(options.ackFloor ? { ackFloor: options.ackFloor } : {})
+      ...(options.ackFloor ? { ackFloor: options.ackFloor } : {}),
+      onHeldCut: (through) =>
+        options.continuation &&
+        this.output.continueWith(
+          new RelayedProviderContinuation(options.continuation, options.relayId, through, through)
+        )
     })
     this.ready = new Promise((resolve, reject) => {
       this.resolveReady = resolve
@@ -156,6 +160,7 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
       const kept = this.output.kept.wanted(this.output.holding)
       const result = await channel.attach(this.relayId, fromSeq, this.options.policy(), kept)
       await this.output.awaitPreamble(result, PREAMBLE_WAIT_MS, kept)
+      this.output.deliveredPending.forgetSettled(fromSeq, result.pending)
       this.attachResult = result
       const { continuation } = this.options
       if (continuation) {
@@ -169,6 +174,15 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     } catch (error) {
       const failure = error instanceof Error ? error : new Error(String(error))
       this.rejectReady(failure)
+      if (this.output.holding) {
+        // A reattach that never opened lets go of the relay: its output stays the daemon's, unacked.
+        this.output.stop()
+        this.unbind?.()
+        this.unbind = null
+        // One the daemon finished after this app gave up is handed back under its policy (sent
+        // before any later attach on this connection, so it never detaches that one).
+        void this.options.channel.detach(this.relayId, this.options.policy()).catch(() => {})
+      }
       this.end({ code: null, signal: null }, true)
       throw failure
     }
@@ -208,13 +222,19 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
   }
 
   /** Everything handed on is durable and acked, so a later attach replays nothing twice. */
-  async settle(handingOff = false): Promise<void> {
+  /** `waitMs`: a hand-off of this chat alone waits its own time for its reader, not quit's. */
+  async settle(handingOff = false, waitMs?: number): Promise<void> {
     await this.writing
-    await (handingOff ? this.output.flush() : this.output.settle())
+    await (handingOff ? this.output.flush(waitMs) : this.output.settle())
+  }
+
+  /** After a hand-back: output held for a chat that never opened goes (the daemon keeps it). */
+  dropHeldOutput(): void {
+    this.output.restartAt()
   }
 
   /** The agent keeps running under the daemon; this app stops seeing it. */
-  async detach(policy: ProviderRelayDetachPolicy): Promise<void> {
+  async detach(policy: ProviderRelayDetachPolicy, waitMs?: number): Promise<void> {
     if (this.state === 'exited' || this.handedOff) {
       return
     }
@@ -222,9 +242,10 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     // Nothing more is read first: a line read during the last ack would be saved but not acked.
     this.unbind?.()
     this.unbind = null
-    await this.settle(true)
+    await this.settle(true, waitMs)
     this.state = 'detached'
     this.output.stop()
+    this.emit(RELAYED_CHILD_HANDED_OFF)
     await this.options.channel.detach(this.relayId, policy)
   }
 
@@ -238,38 +259,23 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
         await this.send(data.slice(at, at + RELAY_WRITE_CHUNK_CHARS))
       }
     })
-    this.writing = sent.then(
-      () => {},
-      () => {}
-    )
+    this.writing = sent.catch(() => {})
     sent.then(
       () => callback(),
       (error: unknown) => callback(error instanceof Error ? error : new Error(String(error)))
     )
   }
 
-  private async send(data: string): Promise<void> {
-    for (;;) {
-      if (this.state === 'detached') {
-        return
-      }
-      if (this.state === 'exited') {
-        throw Object.assign(new Error('write EPIPE'), { code: 'EPIPE' })
-      }
-      try {
-        await this.options.channel.write(this.relayId, data)
-        return
-      } catch (error) {
-        if (!(error instanceof Error) || !error.message.includes(INPUT_FULL)) {
-          if (this.state === 'reattaching' || this.state === 'attaching') {
-            await Promise.all([this.ready.catch(() => {}), this.reattached])
-            continue
-          }
-          throw error
-        }
-        await new Promise((resolve) => setTimeout(resolve, INPUT_FULL_RETRY_MS))
-      }
-    }
+  private send(data: string): Promise<void> {
+    return sendRelayedInput(
+      {
+        state: () => this.state,
+        ready: () => this.ready,
+        reattached: () => this.reattached,
+        write: (chunk) => this.options.channel.write(this.relayId, chunk)
+      },
+      data
+    )
   }
 
   /** The daemon detached us when the stream dropped; the same daemon resumes from our cursor. */
@@ -282,6 +288,7 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
       this.output.stop()
       this.unbind?.()
       this.unbind = null
+      this.emit(RELAYED_CHILD_HANDED_OFF)
       return
     }
     this.state = 'reattaching'
@@ -293,11 +300,9 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
       if (this.options.channel.daemonPid !== daemonPid) {
         throw new Error('A different terminal host answered')
       }
-      await this.options.channel.attach(
-        this.relayId,
-        this.output.restartAt(),
-        this.options.policy()
-      )
+      const fromSeq = this.output.restartAt()
+      const result = await this.options.channel.attach(this.relayId, fromSeq, this.options.policy())
+      this.output.deliveredPending.forgetSettled(fromSeq, result.pending)
       if (this.state === 'reattaching') {
         this.state = 'attached'
       }

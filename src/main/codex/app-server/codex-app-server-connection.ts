@@ -67,7 +67,7 @@ async function connectCodexAppServer(
         supervised: managed.supervised
       })
   const reattached = relayed?.reattached === true
-  const keptInitialize = reattached ? keptInitializeResult(relayed.child.initializeLine) : null
+  const keptInitialize = reattached ? keptInitializeResult(relayed.child) : null
   requestFloor = relayed?.child.attachResult?.maxClientRequestId ?? 0
 
   // A reattached agent already saw the last app's requests; new ids start above them.
@@ -158,7 +158,7 @@ async function connectCodexAppServer(
       return
     }
     // The kept agent was initialized by the app that started it.
-    if (reattached && method === 'initialized') {
+    if (keptInitialize !== null && method === 'initialized') {
       return
     }
     try {
@@ -182,7 +182,7 @@ async function connectCodexAppServer(
     if (managed.rootVerdict === 'exited') {
       return Promise.reject(buildExitError())
     }
-    if (reattached && method === 'initialize') {
+    if (keptInitialize !== null && method === 'initialize') {
       return Promise.resolve(keptInitialize)
     }
     const id = nextRequestId++
@@ -282,7 +282,7 @@ async function connectCodexAppServer(
     pauseReading: recordReader.pause,
     resumeReading: recordReader.resume,
     close,
-    ...(relayed ? { relay: codexConnectionRelay(relayed.child, reattached) } : {})
+    ...(relayed ? { relay: codexConnectionRelay(relayed.child, reattached, relayed.keep) } : {})
   }
 
   let handshaking = false

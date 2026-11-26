@@ -164,6 +164,11 @@ export type AcpHostBackend = {
   spec: AcpLaunchSpec
   /** Whether chats pinned to `home` run the host program (any of its homes). */
   pins(home: AgentSessionAccountHome): boolean
+  /** Whether chats pinned to `home` run on the program's own login, not the saved method. */
+  ownLogin?(home: AgentSessionAccountHome): boolean
+  /** A chat with no conversation yet launches in what `select` picks now, so a sign-in method
+   *  chosen before its first turn applies to it. */
+  followsSelectionBeforeFirstTurn?: true
   /** The spec a pinned home launches, when the host program runs differently per home (its own
    *  home, or one Orca owns); absent or null launches `spec`. */
   specFor?(home: AgentSessionAccountHome): AcpLaunchSpec | null
@@ -184,8 +189,7 @@ export type AcpHostBackend = {
 /** The settings a host backend weighs; a change to any of them can change its answers. */
 export const ACP_HOST_BACKEND_SETTING_KEYS = [
   'antigravityChatAuth',
-  'antigravityManagedAgyEnabled',
-  'antigravityGoogleSignIn'
+  'antigravityManagedAgyEnabled'
 ] as const
 export type AcpHostBackendSettings = Partial<
   Pick<GlobalSettings, (typeof ACP_HOST_BACKEND_SETTING_KEYS)[number]>

@@ -1,4 +1,8 @@
-import type { MessageType, RunRow } from '../../../../orchestration/db/orchestration-records'
+import type {
+  DispatchContextRow,
+  MessageType,
+  RunRow
+} from '../../../../orchestration/db/orchestration-records'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { interruptedAcknowledgedCheck } from '../routing'
@@ -14,22 +18,35 @@ import type {
 } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import type { CheckParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import type { z } from 'zod'
+import {
+  asRecoveredAssignee,
+  type RemintedWorkerReporter
+} from '../../../../orchestration/workers/reports/reminted-worker-reporter'
 
-export async function checkRunPendingMail(args: {
-  params: z.infer<typeof CheckParams>
-  runtime: OrcaRuntimeService
-  db: OrchestrationDb
-  run: RunRow
-  handle: string
-  paneKey: string | undefined
-  callerSession: OrchestrationEntryCaller | undefined
-  reader: OrchestrationSessionCaller | undefined
-  typeFilter: MessageType[] | undefined
-  signal: AbortSignal | undefined
-  revalidateConsumer: () => void
-  reconciliation: CheckMailReconciliation
-  recordMutationReceipt: ((receipt: unknown) => void) | undefined
-}): Promise<{ acknowledged?: string; result?: unknown }> {
+/** A restart-reissued caller, recovered at entry: its stale handle names no terminal or process. */
+export type RecoveredRunChecker = {
+  recovered?: RemintedWorkerReporter | null
+  processIncarnation?: () => string | null
+  recoveredLocalProcessCurrent?: () => boolean
+}
+
+export async function checkRunPendingMail(
+  args: {
+    params: z.infer<typeof CheckParams>
+    runtime: OrcaRuntimeService
+    db: OrchestrationDb
+    run: RunRow
+    handle: string
+    paneKey: string | undefined
+    callerSession: OrchestrationEntryCaller | undefined
+    reader: OrchestrationSessionCaller | undefined
+    typeFilter: MessageType[] | undefined
+    signal: AbortSignal | undefined
+    revalidateConsumer: () => void
+    reconciliation: CheckMailReconciliation
+    recordMutationReceipt: ((receipt: unknown) => void) | undefined
+  } & RecoveredRunChecker
+): Promise<{ acknowledged?: string; result?: unknown }> {
   const {
     params,
     runtime,
@@ -44,8 +61,19 @@ export async function checkRunPendingMail(args: {
   } = args
   const generation = run.consumer_generation
   const address = `run:${run.id}`
-  // Drain pre-bind mail through its original Dispatch owner, never by changing its Run.
-  const residual = !params.run ? db.getActiveDispatchForIdentity(handle, paneKey) : undefined
+  const { recovered } = args
+  // Drain pre-bind mail through its original Dispatch owner, never by changing its Run. A recovered
+  // caller drains only the Dispatch it was recovered as, while its recovered process still holds it.
+  const residualFor = (): DispatchContextRow | undefined => {
+    const found = !params.run ? db.getActiveDispatchForIdentity(handle, paneKey) : undefined
+    return !recovered ||
+      (found?.id === recovered.dispatchId && args.recoveredLocalProcessCurrent?.())
+      ? found
+      : undefined
+  }
+  const assigneeRun = (dispatch: DispatchContextRow) =>
+    currentDispatchAssigneeRun(runtime, db, asRecoveredAssignee(dispatch, recovered))
+  const residual = residualFor()
   const caller = orchestrationCallerIdentity(runtime, {
     handle,
     paneKey,
@@ -87,7 +115,7 @@ export async function checkRunPendingMail(args: {
     (residual.assignee_orca_session_id === null ||
       residual.assignee_orca_session_id === caller.orcaSessionId) &&
     callerHoldsDispatchPane(residual, paneKey) &&
-    currentDispatchAssigneeRun(runtime, db, residual)?.id === run.id &&
+    assigneeRun(residual)?.id === run.id &&
     (residualAck || !db.hasOutstandingMailboxDelivery(address))
   ) {
     const result = await checkWorkerMailbox({
@@ -101,17 +129,17 @@ export async function checkRunPendingMail(args: {
       signal,
       activeDispatch: residual,
       remoteAttachment: undefined,
+      processIncarnation:
+        args.processIncarnation ?? (() => runtime.getTerminalProcessIncarnation(handle)),
+      recovered,
+      recoveredLocalProcessCurrent: args.recoveredLocalProcessCurrent,
       wakeTypes: params.wait ? typeFilter : undefined,
       // Accept the original owner's ack without creating a batch ahead of Run replay.
       deferDelivery: () => db.hasOutstandingMailboxDelivery(address),
       revalidateConsumer: () => {
         revalidateConsumer()
-        const current = db.getActiveDispatchForIdentity(handle, paneKey)
-        if (
-          !current ||
-          current.id !== residual.id ||
-          currentDispatchAssigneeRun(runtime, db, current)?.id !== run.id
-        ) {
+        const current = residualFor()
+        if (!current || current.id !== residual.id || assigneeRun(current)?.id !== run.id) {
           throw dispatchFenced()
         }
       },

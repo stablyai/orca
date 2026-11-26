@@ -54,7 +54,6 @@ src/main/plugins/catalog/plugin-private-marketplace-ssh-shim.cjs
 src/main/ports/port-scan-command-execution.ts
 src/main/providers/working-directory/process-cwd.ts
 src/main/pty/process-retirement/pty-descendant-fresh-table.ts
-src/main/rate-limits/providers/gemini/gemini-cli-oauth-extractor.ts
 src/main/runtime/rpc/server/pairing/network/windows-default-route-interfaces.ts
 src/main/runtime/rpc/server/pairing/network/windows-mobile-firewall.ts
 src/main/ssh/system-transport/ssh-proxy-command.ts

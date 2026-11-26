@@ -31,7 +31,7 @@ export type ProviderRelayAckFlags = {
 export function relayAckFlags(
   floor: ProviderRelayAckFloor | undefined,
   cut: boolean,
-  heldFrom: number | null,
+  held: boolean,
   keepFrom: number | null,
   target: number,
   savedThrough: number
@@ -41,7 +41,7 @@ export function relayAckFlags(
     cut || everyAck ? boundedCutKeys(floor, keepFrom === null ? target : undefined) : null
   return {
     ...(cut ? { cut: true as const } : {}),
-    ...(heldFrom !== null ? { held: true as const } : {}),
+    ...(held ? { held: true as const } : {}),
     ...(cutKeys ? { cutKeys } : {}),
     ...(cutKeys || everyAck ? { savedThrough } : {})
   }

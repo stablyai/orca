@@ -4,7 +4,13 @@ import { CONNECTOR_LIMITS } from './connector-limits.js'
 import { ConnectorAskerSchema, ConnectorDeliverySchema } from './delivery-messages.js'
 import { SourceTriggerEventSchema } from './trigger-messages.js'
 import { ConnectorHelloRequestSchema } from './hello-messages.js'
-import { ConnectorSharesMineSchema, SharePublicKeySchema, ShareIdSchema } from './share-messages.js'
+import {
+  ConnectorShareDeclineRequestSchema,
+  ConnectorShareDeclineSchema,
+  ConnectorSharesMineSchema,
+  SharePublicKeySchema,
+  ShareIdSchema
+} from './share-messages.js'
 
 const hello = {
   v: 1,
@@ -104,6 +110,76 @@ describe('bot shares contract', () => {
         prompt: 'hi'
       }).success
     ).toBe(false)
+  })
+
+  it('takes a decline, and tells the host on the share queue', () => {
+    expect(ConnectorShareDeclineRequestSchema.safeParse({ v: 1 }).success).toBe(true)
+    expect(ConnectorShareDeclineRequestSchema.safeParse({}).success).toBe(false)
+    expect(ConnectorShareDeclineSchema.parse({ status: 'declined' })).toEqual({ status: 'declined' })
+    const declined = {
+      kind: 'share_declined',
+      deliveryId: 'd1',
+      seq: 1,
+      expiresAt: 1,
+      shareId: 's1',
+      botId: 'bot-1',
+      accountId: 'acct-1'
+    }
+    const onShare = { source: 'orca', externalId: 's1' }
+    expect(ConnectorDeliverySchema.safeParse({ ...declined, conversation: onShare }).success).toBe(true)
+    expect(
+      ConnectorDeliverySchema.safeParse({ ...declined, conversation: { ...onShare, externalId: 's2' } }).success
+    ).toBe(false)
+    const { accountId: _accountId, ...anonymous } = declined
+    expect(ConnectorDeliverySchema.safeParse({ ...anonymous, conversation: onShare }).success).toBe(false)
+  })
+
+  it('carries an optional purpose from the hello to the share list, within its limit', () => {
+    const purposed = (botPurpose: unknown) =>
+      ConnectorHelloRequestSchema.safeParse({ ...hello, bots: [{ ...bot, botPurpose }] }).success
+    expect(ConnectorHelloRequestSchema.safeParse({ ...hello, bots: [bot] }).success).toBe(true)
+    expect(purposed('Reviews pull requests')).toBe(true)
+    expect(purposed('x'.repeat(CONNECTOR_LIMITS.maxBotPurposeLength))).toBe(true)
+    expect(purposed('x'.repeat(CONNECTOR_LIMITS.maxBotPurposeLength + 1))).toBe(false)
+    expect(purposed('')).toBe(false)
+    const share = {
+      shareId: 's1',
+      botId: 'bot-1',
+      botName: 'Reviewer',
+      ownerName: 'Jinwoo Hong',
+      hostOnline: true,
+      state: 'needs-accept',
+      held: []
+    }
+    const listed = (entry: object) => ConnectorSharesMineSchema.safeParse({ v: 1, shares: [entry] }).success
+    expect(listed(share)).toBe(true)
+    expect(listed({ ...share, botPurpose: 'Reviews pull requests' })).toBe(true)
+    expect(listed({ ...share, botPurpose: 'x'.repeat(CONNECTOR_LIMITS.maxBotPurposeLength + 1) })).toBe(false)
+  })
+
+  it('carries an optional card from the hello to the share list, and drops one that does not parse', () => {
+    const card = { mascot: 'H1', color: '#f4c4cf', outfit: 'tie', services: ['github', 'slack'] }
+    const helloCard = (agentCard: unknown) =>
+      ConnectorHelloRequestSchema.parse({ ...hello, bots: [{ ...bot, agentCard }] }).bots?.[0]?.agentCard
+    expect(helloCard(card)).toEqual(card)
+    expect(helloCard(undefined)).toBeUndefined()
+    // A card no reader understands costs only the card: the hello still lands.
+    expect(helloCard({ mascot: 'x'.repeat(CONNECTOR_LIMITS.maxAgentCardIdLength + 1) })).toBeUndefined()
+    expect(helloCard({ services: 'github' })).toBeUndefined()
+    const share = {
+      shareId: 's1',
+      botId: 'bot-1',
+      botName: 'Reviewer',
+      ownerName: 'Jinwoo Hong',
+      hostOnline: true,
+      state: 'needs-accept',
+      held: []
+    }
+    const listedCard = (agentCard: unknown) =>
+      ConnectorSharesMineSchema.parse({ v: 1, shares: [{ ...share, agentCard }] }).shares[0]?.agentCard
+    expect(listedCard(card)).toEqual(card)
+    expect(listedCard(undefined)).toBeUndefined()
+    expect(listedCard({ services: Array(CONNECTOR_LIMITS.maxAgentCardServices + 1).fill('github') })).toBeUndefined()
   })
 
   it('names the shared account a person asked through, on a request and a trigger actor', () => {

@@ -1,6 +1,6 @@
 // Where a new bot runs: Computer and Agent side by side in New bot, or the folded "Runs on <host> with
 // <agent>" row in Import from another app.
-import React, { useId } from 'react'
+import React, { useEffect, useId, useRef } from 'react'
 import { Trans } from 'react-i18next'
 import { ChevronDown } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -28,6 +28,9 @@ import { botAgentLabel, botFolderDisplay } from './bot-presentation'
 import type { BotPermissionIntent } from './use-bot-agent-setup'
 import { nativeChatSessionChoiceShortLabel } from '../../../../shared/native-chat/input/session-options/native-chat-session-option-labels'
 import { sayNativeChatSessionOptionTranslated } from '../native-chat/session/options/controls/native-chat-session-option-labels-text'
+import { useWslHostDistro } from '@/components/wsl-host-mark/WslHostMark'
+import { BotWslSetupCard } from './BotWslSetupCard'
+import { BotWslNoAgentHint } from './BotWslNoAgentHint'
 
 function computerErrorLabel(blocked: BotCreateHostBlock, updatable: boolean, t: Translate): string {
   switch (blocked) {
@@ -114,7 +117,26 @@ export function BotRunsOnPicker({
         ? null
         : t('bots.new.computerHint', 'Where the bot runs.'))
   const noAgents = model.state === 'settled' && choices.length === 0
-  const agentInvalid = showSubmitFeedback && !host.blocked && noAgents
+  const computerRef = useRef<HTMLDivElement>(null)
+  const wslSetup = hostChoice.wslSetup
+  const setupState = wslSetup.state
+  const settingUp = setupState.phase !== 'idle'
+  const wslDistro = useWslHostDistro(host.hostId)
+  const addedHostReady =
+    setupState.phase === 'finding-agents' &&
+    host.environmentId === setupState.environmentId &&
+    model.state === 'settled'
+  const { finish } = wslSetup
+  useEffect(() => {
+    if (addedHostReady) {
+      finish()
+    }
+  }, [addedHostReady, finish])
+  // A sleeping, waking or unreachable host's agents are unknown, not missing.
+  const hostWaking = Boolean(host.sleeping || host.waking)
+  const wslNoAgent =
+    fields && noAgents && !settingUp && !hostWaking && !host.blocked && wslDistro !== null
+  const agentInvalid = showSubmitFeedback && !host.blocked && noAgents && !settingUp
   const findingAgents = showSubmitFeedback && !host.blocked && model.state === 'loading'
   const agentLabel = t('bots.new.agent', 'Agent')
   const modelId = setup.launch?.model
@@ -164,11 +186,13 @@ export function BotRunsOnPicker({
     <>
       <div className="min-w-0 space-y-1">
         <Label variant={labelVariant}>{t('bots.new.computer', 'Computer')}</Label>
-        <BotComputerPicker
-          hostChoice={hostChoice}
-          onAddHost={onAddHost}
-          errorId={computerError ? computerErrorId : undefined}
-        />
+        <div ref={computerRef}>
+          <BotComputerPicker
+            hostChoice={hostChoice}
+            onAddHost={onAddHost}
+            errorId={computerError ? computerErrorId : undefined}
+          />
+        </div>
         {computerHint ? (
           <p
             id={computerError ? computerErrorId : undefined}
@@ -193,14 +217,26 @@ export function BotRunsOnPicker({
               : undefined
           }
         >
-          {fields && noAgents ? (
+          {fields && (settingUp || noAgents || (hostWaking && wslDistro)) ? (
             <div
               className={cn(
                 COMBOBOX_FIELD_SHELL,
                 'text-sm text-muted-foreground group-aria-invalid/agent:border-destructive'
               )}
             >
-              {t('bots.new.validation.noAgents', 'No agents')}
+              <span className="truncate">
+                {settingUp
+                  ? t('bots.new.wslSetup.waiting', 'Waiting for {{distro}}…', {
+                      distro: setupState.distro.name
+                    })
+                  : hostWaking && wslDistro
+                    ? t('bots.new.wslWaking', 'Waking {{distro}}…', { distro: wslDistro })
+                    : wslDistro
+                      ? t('bots.new.wslNoAgent.field', 'No agent in {{distro}}', {
+                          distro: wslDistro
+                        })
+                      : t('bots.new.validation.noAgents', 'No agents')}
+              </span>
             </div>
           ) : noAgents ? (
             <p className="text-2xs text-muted-foreground">
@@ -233,7 +269,24 @@ export function BotRunsOnPicker({
     </>
   )
   if (fields) {
-    return <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2">{controls}</div>
+    return (
+      <div className="space-y-2">
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2">{controls}</div>
+        <BotWslSetupCard
+          state={setupState}
+          onCancel={wslSetup.cancel}
+          onRetry={wslSetup.retry}
+          onChooseAnother={() => {
+            wslSetup.cancel()
+            // Opens the Computer list, as a click on the field does.
+            computerRef.current?.querySelector<HTMLElement>('[role="combobox"]')?.click()
+          }}
+        />
+        {wslNoAgent && wslDistro && host.environmentId ? (
+          <BotWslNoAgentHint distro={wslDistro} environmentId={host.environmentId} />
+        ) : null}
+      </div>
+    )
   }
   return (
     <Collapsible>

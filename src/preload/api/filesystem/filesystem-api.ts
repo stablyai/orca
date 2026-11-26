@@ -190,8 +190,12 @@ export type FilesystemApi = {
       access?: LocalFileAccess
       wakeWslDistro?: boolean
     }) => Promise<{ size: number; isDirectory: boolean; mtime: number }>
-    /** Local only: whether a symlink below `rootPath` leads to `path` (the root watch can't see past it). */
-    hasSymlinkBelowRoot: (args: { rootPath: string; path: string }) => Promise<boolean>
+    /** Local only: the first or deepest symlink below `rootPath` on the way to `path`, or null (the root watch can't see past one). */
+    findSymlinkBelowRoot: (args: {
+      rootPath: string
+      path: string
+      which: 'first' | 'deepest'
+    }) => Promise<string | null>
     pathsExist?: (args: {
       filePaths: string[]
       connectionId?: string

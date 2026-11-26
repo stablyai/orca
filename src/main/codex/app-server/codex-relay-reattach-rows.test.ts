@@ -14,9 +14,16 @@ import { createCodexJournalTranslator } from '../structured/journal/codex-struct
 import {
   restateKeptCodexBackgroundWork,
   seedCarriedKeptCodexCommands,
-  seedKeptCodexCommandOutput,
-  seedKeptCodexTurnOrdinals
+  seedKeptCodexCommandOutput
 } from '../structured/threads/codex-kept-turn-ordinals'
+import {
+  openKeptCodexState,
+  readKeptCodexSnapshot
+} from '../structured/threads/codex-kept-snapshot'
+import { KeptProviderRelayUnreachableError } from '../../provider-relay/provider-relay-kept-rebind'
+import { AgentSessionStartFailure } from '../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
+import { readRecord } from './codex-item-field-readers'
+import { CodexAppServerTimeoutError } from './codex-app-server-request-error'
 import { CodexBackgroundTaskTracker } from '../structured/background-work/codex-background-task-tracker'
 import { CodexTurnOrdinals } from '../structured/journal/codex-turn-ordinals'
 import {
@@ -391,37 +398,199 @@ describe('codex rows across a reattach', () => {
     expect(row).not.toContain('line-one\\nline-one')
   })
 
-  it("numbers a kept chat's and its subagents' running turns as the live run did", async () => {
-    const turns: Record<string, unknown> = {
+  it("rebuilds a kept chat from the agent's own state: finished turns stay finished, children stay reachable", async () => {
+    const latest: Record<string, unknown> = {
       main: {
-        id: 'turn-1',
-        status: 'inProgress',
+        id: 'turn-2',
+        status: 'completed',
+        startedAt: 100,
         items: [
-          { type: 'userMessage', id: 'u1' },
-          { type: 'commandExecution', id: 'c1' },
-          { type: 'agentMessage', id: 'm1' },
-          { type: 'collabAgentToolCall', id: 'x', tool: 'spawnAgent', receiverThreadIds: ['sub'] }
+          { type: 'userMessage', id: 'u2' },
+          { type: 'agentMessage', id: 'm2' }
         ]
       },
-      sub: { id: 'turn-s', status: 'inProgress', items: [{ type: 'agentMessage', id: 's1' }] }
+      // Spawned in an earlier parent turn: only the daemon's carried turns name it.
+      child: {
+        id: 'turn-c',
+        status: 'inProgress',
+        items: [
+          { type: 'agentMessage', id: 'c1' },
+          { type: 'collabAgentToolCall', id: 'x', tool: 'spawnAgent', receiverThreadIds: ['grand'] }
+        ]
+      },
+      grand: { id: 'turn-g', status: 'inProgress', items: [] },
+      // Finished while no app was attached.
+      done: {
+        id: 'turn-d',
+        status: 'completed',
+        items: [
+          { type: 'agentMessage', id: 'd0', text: 'Running it.' },
+          { type: 'agentMessage', id: 'd1', text: 'CHILD-DONE' }
+        ],
+        completedAt: 150
+      },
+      // Finished before the chat's latest turn began: retired then, and left so.
+      old: { id: 'turn-o', status: 'completed', items: [], completedAt: 50 },
+      // Running, but its metadata read fails: still followed by its turns.
+      lost: { id: 'turn-l', status: 'inProgress', items: [] },
+      // Running, but its metadata read runs out of time: one turns-only read still finds it.
+      slow: { id: 'turn-s', status: 'inProgress', items: [{ type: 'agentMessage', id: 's0' }] },
+      // A review's thread whose first metadata read runs out of time: never taken for a child.
+      late: { id: 'turn-r', status: 'inProgress', items: [] }
     }
-    const ordinals = new CodexTurnOrdinals()
-    await seedKeptCodexTurnOrdinals({
-      connection: {
-        request: async (_method, params) => ({ data: [turns[String(params?.threadId)]] })
-      },
-      translator: {
-        seedTurnOrdinals: (threadId, turnId, ids) =>
-          ids.forEach((id) => ordinals.ordinalFor(threadId, turnId, id)),
-        seedRunningItems: () => []
-      },
-      threadId: 'main',
-      timeoutMs: 1_000
+    let lateReads = 0
+    const request = async (method: string, params?: unknown) => {
+      const threadId = String(readRecord(params).threadId)
+      // Only the app-server's loaded threads name the child: no carried work does.
+      if (method === 'thread/loaded/list') {
+        return { data: ['main', 'child', 'grand', 'done', 'old', 'review', 'lost', 'slow', 'late'] }
+      }
+      // Loaded, but not a spawned agent: never one of the chat's children.
+      if (method === 'thread/read' && threadId === 'review') {
+        return { thread: { id: threadId, source: { subAgent: 'review' } } }
+      }
+      if (method === 'thread/read' && (threadId === 'grand' || threadId === 'lost')) {
+        throw new Error('timed out')
+      }
+      if (method === 'thread/read' && threadId === 'late' && lateReads++ > 0) {
+        return { thread: { id: threadId, source: { subAgent: 'review' } } }
+      }
+      if (method === 'thread/read' && (threadId === 'slow' || threadId === 'late')) {
+        throw new CodexAppServerTimeoutError('thread/read timed out')
+      }
+      if (method === 'thread/read') {
+        const spawn = { parent_thread_id: 'main', agent_path: `/root/${threadId}_agent` }
+        return { thread: { id: threadId, source: { subAgent: { thread_spawn: spawn } } } }
+      }
+      return { data: [latest[threadId]] }
+    }
+    const rows = new Map<string, string>()
+    const translator = createCodexJournalTranslator({
+      sessionId: 's',
+      primaryThreadId: () => 'main',
+      sink: {
+        appendItem: (identity, body) =>
+          rows.set(agentJournalItemKey(identity), JSON.stringify(body)),
+        appendTombstone: (identity) => rows.delete(agentJournalItemKey(identity)),
+        publish: () => {}
+      }
     })
-    // A replayed message keeps its number; the next new one follows, never taking an earlier row.
-    expect(ordinals.ordinalFor('main', 'turn-1', 'm1')).toBe(1)
-    expect(ordinals.ordinalFor('main', 'turn-1', 'm2')).toBe(2)
-    expect(ordinals.ordinalFor('sub', 'turn-s', 's2')).toBe(1)
+    const { turns, spawns } = await readKeptCodexSnapshot({
+      connection: { request },
+      translator,
+      threadId: 'main',
+      carriedThreadIds: [],
+      ownServer: true,
+      timeoutMs: 1_000,
+      onError: () => {}
+    })
+    const evidence: unknown[] = []
+    const tracker = new CodexBackgroundTaskTracker('main', undefined, {
+      deliver: (batch) => evidence.push(...batch),
+      now: () => 0
+    })
+    restateKeptCodexBackgroundWork(tracker, turns, [], [], spawns)
+    expect(turns.map(({ threadId }) => threadId)).not.toContain('review')
+    expect(tracker.subagentStopTargets(['lost', 'slow']).turns).toEqual(
+      expect.arrayContaining([
+        { threadId: 'slow', turnId: 'turn-s' },
+        { threadId: 'lost', turnId: 'turn-l' }
+      ])
+    )
+    expect(turns.map(({ threadId }) => threadId)).toContain('slow')
+    expect(turns.map(({ threadId }) => threadId)).not.toContain('late')
+    expect(tracker.subagentStopTargets(['late']).turns).toEqual([])
+    expect(evidence).not.toContainEqual(
+      expect.objectContaining({
+        type: 'live',
+        child: expect.objectContaining({ handle: expect.objectContaining({ id: 'old' }) })
+      })
+    )
+    // A running child keeps the name it was spawned under.
+    expect(JSON.stringify(tracker.state)).toContain('child_agent')
+    // A child that finished while closed is settled, not left working.
+    expect(tracker.runsSubagentTurn('done', 'turn-d')).toBe(false)
+    // Seen live first, as a live end is, so the new session has a record of it to settle.
+    expect(evidence).toContainEqual(
+      expect.objectContaining({
+        type: 'live',
+        child: expect.objectContaining({
+          handle: expect.objectContaining({ id: 'done', runId: 'turn-d' })
+        })
+      })
+    )
+    expect(evidence).toContainEqual(
+      expect.objectContaining({
+        type: 'ended',
+        handle: expect.objectContaining({ id: 'done', runId: 'turn-d' }),
+        outcome: 'succeeded',
+        // Its own last message, so the card shows no older one after it.
+        lastMessage: 'CHILD-DONE'
+      })
+    )
+    // The replay re-sends the finished turn from its start: it must not reopen it.
+    const send = (threadId: string, method: string, params: Record<string, unknown>) =>
+      translator.handle({
+        type: 'notification',
+        sessionId: 's',
+        threadId,
+        method,
+        params: { threadId, ...params }
+      })
+    send('main', 'turn/started', { turn: { id: 'turn-2', status: 'inProgress' } })
+    send('main', 'item/completed', {
+      turnId: 'turn-2',
+      item: { type: 'agentMessage', id: 'm2', text: 'done' }
+    })
+    translator.flush()
+    expect([...rows.values()].some((body) => body.includes('"state":"running"'))).toBe(false)
+    // Its message keeps the row the live run gave it.
+    expect(rows.has('codex:main:turn-2:1')).toBe(true)
+    // The child is registered under its parent, so Stop interrupts its running turn.
+    // A grandchild whose parent read failed stays under the child that spawned it, so Stop on
+    // the child reaches it too.
+    expect(tracker.subagentStopTargets(['child']).turns).toEqual([
+      { threadId: 'child', turnId: 'turn-c' },
+      { threadId: 'grand', turnId: 'turn-g' }
+    ])
+  })
+
+  it("gives a kept agent back to the daemon, never ending it, when the chat's own state can't be read", async () => {
+    let asked = 0
+    const kept: string[] = []
+    const opening = openKeptCodexState({
+      connection: {
+        request: async () => {
+          asked += 1
+          throw new Error('timed out')
+        },
+        relay: {
+          reattached: true,
+          ownServer: true,
+          releaseOutput: () => {},
+          endedWork: () => undefined,
+          openWork: () => undefined,
+          handedOff: () => kept.length > 0,
+          keep: async () => {
+            kept.push('kept')
+          }
+        }
+      },
+      translator: createCodexJournalTranslator({
+        sink: { appendItem: () => {}, appendTombstone: () => {}, publish: () => {} }
+      }),
+      chatKey: 'chat',
+      threadId: 'main',
+      journal: null,
+      timeoutMs: 1_000,
+      onError: () => {}
+    })
+    const failure: unknown = await opening.catch((error: unknown) => error)
+    expect(failure).toBeInstanceOf(AgentSessionStartFailure)
+    expect(failure).toMatchObject({ cause: expect.any(KeptProviderRelayUnreachableError) })
+    // Asked again once before giving up; the agent is kept, not closed.
+    expect(asked).toBeGreaterThanOrEqual(2)
+    expect(kept).toEqual(['kept'])
   })
 
   it('restates a command that ended while no app was attached, so its replayed end settles it', () => {
@@ -481,7 +650,7 @@ describe('codex rows across a reattach', () => {
     ])
   })
 
-  it("numbers a cut message's continuation after the message itself, so it never takes the saved row", () => {
+  it("keeps a cut message's number and gives its continuation none, so no later message moves", () => {
     const ordinals = new CodexTurnOrdinals()
     // History at reattach has the user's message only: the message still streaming isn't in it.
     ordinals.ordinalFor('t', 'turn-a', 'user-1')
@@ -493,8 +662,10 @@ describe('codex rows across a reattach', () => {
         ordinals
       })
     const continuation = identity('relay:r-1-abc:6872:msg-a')
-    expect(identity('msg-a')).toEqual({ ...continuation, ordinal: 1 })
-    expect(continuation).toMatchObject({ ordinal: 2 })
+    expect(identity('msg-a')).toMatchObject({ ordinal: 1 })
+    expect(continuation).not.toHaveProperty('ordinal')
+    // The next message numbers as Codex's history will after another restart (no gap at 2).
+    expect(identity('msg-b')).toMatchObject({ ordinal: 2 })
   })
 
   it("restores a carried command's row from its saved body when Codex's history leaves it out", async () => {

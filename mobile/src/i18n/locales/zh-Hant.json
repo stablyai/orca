@@ -1213,7 +1213,7 @@
       "pairingInvalid": "配對已失效，請重新與電腦配對",
       "rePairDetail": "重新與電腦配對",
       "reconnecting": "正在重新連線…",
-      "relayAccessExpired": "{{host}} 的 Relay 存取權已到期",
+      "relayAccessRefused": "Relay 拒絕了對 {{host}} 的存取",
       "relayConnectFailed": "無法透過 Relay 連線",
       "relayUnreachable": "無法連上 Relay",
       "signInDetail": "在電腦上登入 Orca 即可重新連線",
@@ -4416,6 +4416,12 @@
                 "message": "Claude 用量將在下次執行 Claude 時更新。"
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "執行 Codex 時更新",
+                "message": "Codex 用量將在下次執行 Codex 時更新。"
+              }
+            },
             "1804cd8c3f": "正在重新整理登入",
             "bf2e739f18": "登入不可用",
             "f8f0f9d8cc": "網路問題",
@@ -4615,7 +4621,9 @@
       "ask": {
         "replaced": "代理程式提出了新問題。請先閱讀，再回覆。",
         "replacedByNewer": "已由較新的問題取代",
-        "skipped": "已略過"
+        "skipped": "已略過",
+        "heldImagesLimit": "你的回答會作為一則留言送出，一則留言最多包含 {{max}} 張照片。請移除一些後再試一次。",
+        "heldSkillsLimit": "你的回答會作為一則留言送出，一則留言最多包含 {{max}} 個技能。請移除一些後再試一次。"
       }
     },
     "needs": {
@@ -5114,7 +5122,13 @@
         "github": "議題和 PR 中的提及與事件",
         "slack": "訊息和提及",
         "linear": "指派的議題和提及",
-        "google": "以你的身分使用 Gmail、日曆和雲端硬碟"
+        "google": "以你的身分使用 Gmail、日曆和雲端硬碟",
+        "clickup": "管理任務、清單和文件",
+        "airtable": "查詢及編輯 Base、資料表和記錄",
+        "todoist": "新增、排序和完成任務",
+        "zapier": "在你於 Zapier 設定的應用程式中執行動作",
+        "granola": "搜尋會議筆記和逐字稿",
+        "intercom": "搜尋對話、聯絡人和文章"
       },
       "composioLine": {
         "outlook": "郵件、行事曆和聯絡人",
@@ -5163,11 +5177,17 @@
       "continuesAt": "將於 {{time}} 繼續",
       "continues": "將於 {{time}} 繼續",
       "hitLimit": "已達上限 · {{time}} 重設"
+    },
+    "new": {
+      "purposeTooLongForHost": "{{host}} 上的 Orca 最多接受 200 個字元的用途說明。請縮短內容，或更新 {{host}} 上的 Orca。"
     }
   },
   "sidebar": {
     "cardSlot": {
       "working": "執行中"
     }
+  },
+  "mcpServers": {
+    "agentBlocked": "已被你所屬組織的 Claude 設定阻止"
   }
 }

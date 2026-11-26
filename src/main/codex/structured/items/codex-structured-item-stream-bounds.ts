@@ -26,6 +26,21 @@ export function pendingPatchBytes(pending: { body: unknown }): number {
   return Buffer.byteLength(JSON.stringify(pending.body), 'utf8')
 }
 
+/** Drops the oldest pending patches past the cap; returns the bytes they held. */
+export function trimCodexPendingPatches(pending: Map<string, { body: unknown }>): number {
+  let freed = 0
+  while (pending.size > MAX_CODEX_ITEM_STREAM_PENDING_PATCHES) {
+    const oldest = pending.keys().next().value
+    if (typeof oldest !== 'string') {
+      break
+    }
+    const patch = pending.get(oldest)
+    freed += patch ? pendingPatchBytes(patch) : 0
+    pending.delete(oldest)
+  }
+  return freed
+}
+
 export function boundStreamItem(item: Record<string, unknown>): Record<string, unknown> {
   if (Buffer.byteLength(JSON.stringify(item), 'utf8') <= MAX_CODEX_ITEM_STREAM_ITEM_BYTES) {
     return item

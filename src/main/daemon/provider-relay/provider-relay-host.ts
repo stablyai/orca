@@ -1,7 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { lstat, mkdir, readdir, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { spawnManagedProviderProcess } from '../../provider-process/managed-provider-process'
 import {
   readProviderRelayCutKeys,
   type ProviderRelayAttachResult,
@@ -16,13 +14,14 @@ import type { ProviderRelayStream } from './provider-relay-attachment'
 import { waitAtMost } from './provider-relay-bounded-wait'
 import { readProviderRelayDetachPolicy } from './provider-relay-idle-stop'
 import { validProviderRelaySpawnSpec } from './provider-relay-spawn-spec'
-
-type SpawnManaged = typeof spawnManagedProviderProcess
+import {
+  prepareProviderRelayDirectory,
+  type ProviderRelayDirectory as Prepared
+} from './provider-relay-directory'
 
 const MAX_CHAT_KEY_CHARS = 1024
 /** Relay cleanup is disk work; shutdown waits for it only this long. */
 const DISPOSE_WAIT_MS = 3000
-const RELAY_SPOOL_NAME = /^r-(\d+)-[0-9a-f-]{36}\.ndjson(?:\.line|\.compact)?$/
 
 type RelayHostOptions = {
   /** `<daemon runtime dir>`; spools and the ownership journal live under its `chat-relay/`. */
@@ -33,16 +32,6 @@ type RelayHostOptions = {
   acceptsWork: () => boolean
   onLiveCountChanged: () => void
   log: (event: string, details?: Record<string, unknown>) => void
-}
-
-/** Only a proven-absent pid (ESRCH) frees a spool; "can't tell" keeps it. */
-function ownerProvenGone(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-    return false
-  } catch (error) {
-    return error instanceof Error && 'code' in error && error.code === 'ESRCH'
-  }
 }
 
 /** Agents this daemon owns for chats; nothing here runs until a client's first `relaySpawn`. */
@@ -57,7 +46,7 @@ export class ProviderRelayHost {
     this.options.log(event, details)
   )
   private readonly platform: NodeJS.Platform
-  private ready: Promise<{ directory: string; spawn: SpawnManaged }> | null = null
+  private ready: Promise<Prepared> | null = null
   private disposed = false
   private disposing: Promise<void> | null = null
 
@@ -100,7 +89,7 @@ export class ProviderRelayHost {
     ) {
       throw new Error('Invalid relay launch')
     }
-    const { directory, spawn } = await this.prepare()
+    const { directory, spawn, reaper } = await this.prepare()
     if (this.disposed || !this.options.acceptsWork()) {
       return { refused: 'unavailable' }
     }
@@ -122,6 +111,12 @@ export class ProviderRelayHost {
       chatKey,
       agent: typeof agent === 'string' && agent.length <= MAX_CHAT_KEY_CHARS ? agent : null,
       managed,
+      // A command the agent moved to its own process group must not outlive a close.
+      tree: reaper(managed.child, {
+        site: 'daemon-provider-relay-close',
+        exited: () => managed.rootVerdict === 'exited',
+        supervised: managed.supervised
+      }),
       spoolPath: join(directory, `${relayId}.ndjson`),
       log: this.options.log,
       onSettled: () => {
@@ -133,7 +128,8 @@ export class ProviderRelayHost {
       onDetached: () => {
         this.expireWhenAbandoned(relay)
         this.cap.detached(relay)
-      }
+      },
+      onIdleUnread: () => this.cap.idleUnread(relay)
     })
     relay.idleStopPolicy.configure(readProviderRelayDetachPolicy(policy))
     relay.pending.kept.configure(keep)
@@ -156,6 +152,7 @@ export class ProviderRelayHost {
       }
     }
     this.options.log('relay-spawned', { relayId, pid })
+    this.cap.spawned(relay)
     return { relayId, pid }
   }
 
@@ -173,9 +170,17 @@ export class ProviderRelayHost {
     relay.idleStopPolicy.configure(readProviderRelayDetachPolicy(policy))
     relay.pending.kept.sendOnAttach = kept === true
     try {
-      return await relay.attach(clientId, stream, typeof fromSeq === 'number' ? fromSeq : 0)
+      const attached = await relay.attach(
+        clientId,
+        stream,
+        typeof fromSeq === 'number' ? fromSeq : 0
+      )
+      // Only an attach that held counts: a failed one leaves the detach's deadline in place.
+      if (relay.attachedClientId !== null) {
+        this.cap.forget(relay)
+      }
+      return attached
     } finally {
-      this.cap.forget(relay)
       // An ended relay with nothing left to ack is done once a client has seen its outcome.
       this.removeIfFinished(relay)
     }
@@ -287,47 +292,13 @@ export class ProviderRelayHost {
     }
   }
 
-  private prepare(): Promise<{ directory: string; spawn: SpawnManaged }> {
-    this.ready ??= this.prepareOnce().catch((error: unknown) => {
-      this.ready = null
-      throw error
-    })
+  private prepare(): Promise<Prepared> {
+    this.ready ??= prepareProviderRelayDirectory(this.options.runtimeDir).catch(
+      (error: unknown) => {
+        this.ready = null
+        throw error
+      }
+    )
     return this.ready
-  }
-
-  /** Spawn code loads on the first chat only, so a daemon that never relays starts as fast as before. */
-  private async prepareOnce(): Promise<{ directory: string; spawn: SpawnManaged }> {
-    const directory = join(this.options.runtimeDir, 'chat-relay')
-    const journal = join(directory, 'provider-processes')
-    await mkdir(journal, { recursive: true, mode: 0o700 })
-    for (const path of [directory, journal]) {
-      const info = await lstat(path)
-      if (
-        !info.isDirectory() ||
-        (info.mode & 0o077) !== 0 ||
-        (process.getuid && info.uid !== process.getuid())
-      ) {
-        throw new Error('Relay directory is not private')
-      }
-    }
-    const [{ spawnManagedProviderProcess }, { installProviderOwnershipDirectory }] =
-      await Promise.all([
-        import('../../provider-process/managed-provider-process'),
-        import('../../provider-process/provider-ownership-journal')
-      ])
-    installProviderOwnershipDirectory(journal)
-    await this.removeDeadOwnersSpools(directory)
-    return { directory, spawn: spawnManagedProviderProcess }
-  }
-
-  /** A spool only its creating daemon can read; once that daemon is proven gone, nobody can. */
-  private async removeDeadOwnersSpools(directory: string): Promise<void> {
-    const names = await readdir(directory).catch(() => [])
-    for (const name of names) {
-      const owner = RELAY_SPOOL_NAME.exec(name)?.[1]
-      if (owner && Number(owner) !== process.pid && ownerProvenGone(Number(owner))) {
-        await unlink(join(directory, name)).catch(() => {})
-      }
-    }
   }
 }

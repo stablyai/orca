@@ -17,4 +17,6 @@ export type ProviderRelayWorkMarkers = {
   requests?: readonly string[]
   /** Transport-only lines (a keep-alive) by top-level name; the daemon drops them. */
   quiet?: readonly string[]
+  /** Request methods asking to start an item, which isn't running until answered. */
+  startApprovals?: readonly string[]
 }

@@ -30,8 +30,10 @@ export function useStructuredAgentSessionRead(args: {
   target: RuntimeClientTarget
   isVisible?: boolean
   isViewed?: boolean
+  /** Draws reply and reasoning text (a transcript), so a shown window takes live text. */
+  showsReplyText?: boolean
 }) {
-  const { sessionId, target, isVisible = true } = args
+  const { sessionId, target, isVisible = true, showsReplyText = false } = args
   const { owner, snapshot } = useReadOwnerSnapshot(sessionId, target)
   const isViewed = args.isViewed ?? isVisible
   const environmentId = target.kind === 'environment' ? target.environmentId : null
@@ -46,12 +48,13 @@ export function useStructuredAgentSessionRead(args: {
     if (isVisible) {
       return owner.activate({
         getState: useAppStore.getState,
+        showsReplyText,
         subscribeRetryNow: (retry) =>
           environmentId ? subscribeRuntimeHostContactRegained(environmentId, retry) : () => {}
       })
     }
     return undefined
-  }, [isVisible, owner, environmentId, showsPromptSuggestions])
+  }, [isVisible, owner, environmentId, showsPromptSuggestions, showsReplyText])
   useEffect(() => {
     const observedCursor = snapshot.state.cursor
     if (!isViewed) {
