@@ -180,4 +180,20 @@ describe('Hermes YAML document edits', () => {
       expect(output).toContain('custom: >-\n        First\n        Second\n')
     }
   })
+
+  it.each([
+    [
+      'plugins:\r\n  enabled:\r\n    - other\r\n    # - spare\r\n\r\n\r\nmodel: x\r\n',
+      'plugins:\r\n  enabled:\r\n    - other\r\n    - orca-status\r\n    # - spare\r\n\r\n\r\nmodel: x\r\n'
+    ],
+    [
+      '---\r\n# a\r\n\r\n# b\r\n',
+      '---\r\nplugins:\r\n  enabled:\r\n    - orca-status\r\n# a\r\n\r\n# b\r\n'
+    ]
+  ])(
+    'keeps a CRLF edit free of stray carriage returns when comments follow (%j)',
+    (initial, expected) => {
+      expect(updateConfigContent(initial, enablePlugin).content).toBe(expected)
+    }
+  )
 })
