@@ -37,6 +37,19 @@ export function useMenuHeldInPlace(
   return { alignOffset, sticky: 'always' }
 }
 
+/**
+ * Radix leaves focus where an outside click put it, which is the body when the click lands on blank space; hand it back
+ * to the menu's trigger then. Checked a frame later, after the dismissing click's own focus change.
+ */
+export function refocusTriggerIfFocusLost(trigger: HTMLElement | null): void {
+  requestAnimationFrame(() => {
+    const active = document.activeElement
+    if ((!active || active === document.body || !active.isConnected) && trigger?.isConnected) {
+      trigger.focus({ preventScroll: true })
+    }
+  })
+}
+
 export type AppRailCustomizeRow = {
   id: string
   label: string
@@ -116,7 +129,13 @@ export function AppRailCustomizeMenu({
           {label}
         </TooltipContent>
       </Tooltip>
-      <DropdownMenuContent side="right" align="start" sideOffset={8} {...heldInPlace}>
+      <DropdownMenuContent
+        side="right"
+        align="start"
+        sideOffset={8}
+        {...heldInPlace}
+        onCloseAutoFocus={() => refocusTriggerIfFocusLost(triggerRef.current)}
+      >
         <AppRailCustomizeRows rows={rows} />
       </DropdownMenuContent>
     </DropdownMenu>

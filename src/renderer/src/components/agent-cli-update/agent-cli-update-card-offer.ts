@@ -54,7 +54,8 @@ export function agentCliUpdateCardWait(
   memory: AgentCliUpdateCardMemory,
   now: number
 ): number | null {
-  if (offerKeys.every((key) => memory.seen.includes(key))) {
+  const seen = new Set(memory.seen)
+  if (offerKeys.every((key) => seen.has(key))) {
     return null
   }
   // Clamped so a clock set back can't hold the card off for more than a day.

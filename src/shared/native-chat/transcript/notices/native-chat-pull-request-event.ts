@@ -1,3 +1,7 @@
+import {
+  noteRevisedInPlace,
+  revisedInPlace
+} from '../../../agent-session/view/revised-in-place-lists'
 import { parseAgentJournalItemKey } from '../../../agent-session/journal/agent-session-journal-item-key'
 import type { NativeChatMessage } from '../../native-chat-types'
 
@@ -88,18 +92,77 @@ export function withoutPullRequestEventRows(rows: {
   messages: readonly NativeChatMessage[]
   turnKeys: readonly (string | undefined)[]
 }): { messages: readonly NativeChatMessage[]; turnKeys: readonly (string | undefined)[] } {
+  const patched = withoutPullRequestEventRevision(rows)
+  if (patched) {
+    return patched
+  }
   if (!rows.messages.some(isPullRequestEventMessage)) {
+    filteredRows.set(rows.messages, { turnKeys: rows.turnKeys, filtered: rows, kept: null })
     return rows
   }
   const messages: NativeChatMessage[] = []
   const turnKeys: (string | undefined)[] = []
+  const kept: number[] = []
   rows.messages.forEach((message, index) => {
-    if (!isPullRequestEventMessage(message)) {
+    if (isPullRequestEventMessage(message)) {
+      kept.push(-1)
+    } else {
+      kept.push(messages.length)
       messages.push(message)
       turnKeys.push(rows.turnKeys[index])
     }
   })
-  return { messages, turnKeys }
+  const filtered = { messages, turnKeys }
+  filteredRows.set(rows.messages, { turnKeys: rows.turnKeys, filtered, kept })
+  return filtered
+}
+
+// Per filtered list: the turn keys it was filtered with, what it gave, and each row's place in it.
+const filteredRows = new WeakMap<
+  readonly NativeChatMessage[],
+  {
+    turnKeys: readonly (string | undefined)[]
+    filtered: { messages: readonly NativeChatMessage[]; turnKeys: readonly (string | undefined)[] }
+    /** Each row's index in the filtered rows, or -1 for a dropped CI line; null when none dropped. */
+    kept: readonly number[] | null
+  }
+>()
+
+/** A list revised in place from one already filtered, with the same turns, is filtered by
+ *  replacing only its revised rows, so a streaming reply costs no pass over history. */
+function withoutPullRequestEventRevision(rows: {
+  messages: readonly NativeChatMessage[]
+  turnKeys: readonly (string | undefined)[]
+}): { messages: readonly NativeChatMessage[]; turnKeys: readonly (string | undefined)[] } | null {
+  const revision = revisedInPlace(rows.messages)
+  const prior = revision && filteredRows.get(revision.from)
+  if (!revision || !prior || prior.turnKeys !== rows.turnKeys) {
+    return null
+  }
+  if (prior.kept === null) {
+    if (revision.at.some((index) => isPullRequestEventMessage(rows.messages[index]!))) {
+      return null
+    }
+    filteredRows.set(rows.messages, prior)
+    return rows
+  }
+  const messages = prior.filtered.messages.slice()
+  const positions: number[] = []
+  for (const index of revision.at) {
+    const at = prior.kept[index]!
+    const message = rows.messages[index]!
+    if (isPullRequestEventMessage(message) !== (at === -1)) {
+      return null
+    }
+    if (at !== -1) {
+      messages[at] = message
+      positions.push(at)
+    }
+  }
+  noteRevisedInPlace(messages, prior.filtered.messages, positions)
+  const filtered = { messages, turnKeys: prior.filtered.turnKeys }
+  filteredRows.set(rows.messages, { turnKeys: rows.turnKeys, filtered, kept: prior.kept })
+  return filtered
 }
 
 /** Messages without CI lines; the same array when there's nothing to drop, so identity checks hold. */

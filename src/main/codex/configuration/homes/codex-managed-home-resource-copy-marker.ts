@@ -1,6 +1,7 @@
 import { existsSync, lstatSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { parseWslUncPath, toLinuxPath } from '../../../../shared/file-access/wsl-paths'
 
 // Mark fallback copies so sync can refresh/remove them without touching user-created resources.
 function getResourceCopyMarkerPath(managedHomePath: string, entryName: string): string {
@@ -68,7 +69,8 @@ export function targetIsOwnedFallbackCopy(
   entryName: string,
   sourcePath: string
 ): boolean {
-  if (readCopiedResourceSourcePath(managedHomePath, entryName) !== sourcePath) {
+  const recorded = readCopiedResourceSourcePath(managedHomePath, entryName)
+  if (recorded === null || !isSameCopySource(recorded, sourcePath)) {
     return false
   }
   try {
@@ -76,4 +78,15 @@ export function targetIsOwnedFallbackCopy(
   } catch {
     return false
   }
+}
+
+// Copies a Windows-side pass made in a WSL home recorded the distro file by its \\wsl$ or drive spelling.
+function isSameCopySource(recorded: string, sourcePath: string): boolean {
+  if (recorded === sourcePath) {
+    return true
+  }
+  return (
+    process.platform !== 'win32' &&
+    (parseWslUncPath(recorded)?.linuxPath ?? toLinuxPath(recorded)) === sourcePath
+  )
 }

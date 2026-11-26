@@ -3,16 +3,19 @@
 // agent), and takes them back out when the server goes, is turned off for the agent, or the consent
 // is withdrawn. Entries another Orca or the user owns are never touched. With the switch off, nothing
 // is written; entries left from before answer as servers with no tools.
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { errnoCodeOrUnknown } from '../../../shared/errors/errno-code'
 import { MCP_FILE_AGENTS, type McpFileAgent } from '../../../shared/mcp-servers/mcp-servers'
-import { prependOrcaCliDirToChildPath } from '../../cli/launchers/orca-cli-child-path'
+import { thisAppOrcaCliLauncher } from '../../cli/launchers/this-app-orca-cli-launcher'
 import {
   readAgentConfigText,
-  writeAgentConfigIfUnchanged
+  removeAgentConfigIfUnchanged,
+  restoreHeldAgentConfig,
+  writeAgentConfigIfUnchanged,
+  type AgentConfigRemoval
 } from '../agent-configs/agent-config-file-write'
 import {
   agentMcpConfigLocations,
@@ -25,7 +28,9 @@ import { isMcpServersFeatureEnabled } from '../mcp-servers-feature'
 import {
   mcpAgentFileEntry,
   mcpAgentFileEntryName,
+  mcpAgentFileHeldPath,
   mcpAgentFileMarkers,
+  mcpHostServerNameOfEntry,
   type McpAgentFileEntry
 } from './mcp-agent-file-entry'
 import { McpAgentFileLedger } from './mcp-agent-file-ledger'
@@ -34,6 +39,7 @@ import {
   isEmptyMcpAgentFile,
   mcpAgentFileServerNames,
   mcpAgentFileValue,
+  otherOrcasServerNames,
   withOrcaEntries,
   withoutOrcaEntries,
   type McpAgentFileEdit
@@ -133,6 +139,11 @@ async function syncFileOnce(
   deps: McpAgentFileSyncDeps
 ): Promise<boolean> {
   const record = (await deps.ledger.read()).files[path] ?? null
+  const held = mcpAgentFileHeldPath(path, deps.userDataPath)
+  if (record) {
+    // A removal that stopped mid-way (a quit or crash) left the file held: it goes back first.
+    await restoreHeldAgentConfig(held, path)
+  }
   // Without a record a JSON entry can't be told from the user's; a TOML block's markers still can.
   const nothingToDo = !record && wanted.size === 0
   if (nothingToDo && edit.format === 'json') {
@@ -165,8 +176,18 @@ async function syncFileOnce(
           )
   const created = current === null || (record?.created ?? false)
   const taken = before === null ? new Set<string>() : mcpAgentFileServerNames(edit, before)
-  // A name the user (or another Orca) already uses stays theirs; the agent runs that one.
-  const adding = new Map([...wanted].filter(([name]) => !taken?.has(name)))
+  // A name the user (or another Orca) already uses stays theirs, and so does a server name the user
+  // keeps in the agent itself: that server runs from there, not twice. Another Orca's bridge entry
+  // under the bare name (an older build) doesn't count as the user's; a copy of this Orca's own entry
+  // the user renamed does.
+  const orcaNames =
+    before === null ? new Set<string>() : otherOrcasServerNames(edit, before, deps.userDataPath)
+  const adding = new Map(
+    [...wanted].filter(([name, entry]) => {
+      const serverName = mcpHostServerNameOfEntry(name, entry.env, deps.userDataPath) ?? name
+      return !taken?.has(name) && !(taken?.has(serverName) && !orcaNames.has(serverName))
+    })
+  )
   const added = adding.size > 0 ? withOrcaEntries(edit, before, adding) : before
   if (taken === null || (added !== null && mcpAgentFileServerNames(edit, added) === null)) {
     deps.log(`[mcp-servers] Orca's entries wouldn't fit ${path}, so it's left as it is`)
@@ -181,7 +202,10 @@ async function syncFileOnce(
     added !== null && adding.size === 0 && created && isEmptyMcpAgentFile(edit, added)
       ? null
       : added
-  if (next !== current && !(await publish(path, next, current))) {
+  if (
+    next !== current &&
+    !(await publish(path, next, current, { held, emptyText: edit.format === 'toml' ? '' : '{}\n' }))
+  ) {
     return false
   }
   await deps.ledger.set(
@@ -206,7 +230,8 @@ async function syncFileOnce(
 async function publish(
   path: string,
   next: string | null,
-  current: string | null
+  current: string | null,
+  removal: AgentConfigRemoval
 ): Promise<boolean> {
   if (current === null) {
     await mkdir(dirname(path), { recursive: true })
@@ -220,26 +245,9 @@ async function publish(
       throw error
     }
   }
-  if (next === null) {
-    if ((await readAgentConfigText(path)) !== current) {
-      return false
-    }
-    await rm(path, { force: true })
-    return true
-  }
-  return await writeAgentConfigIfUnchanged(path, next, current)
-}
-
-/** This app's CLI by absolute path, as its own terminals get it. */
-function thisAppLauncher(userDataPath: string): string | null {
-  return prependOrcaCliDirToChildPath(
-    {},
-    {
-      isPackaged: getAppEnvironment().isPackaged(),
-      userDataPath,
-      resourcesPath: process.resourcesPath ?? null
-    }
-  )
+  return next === null
+    ? await removeAgentConfigIfUnchanged(path, current, removal)
+    : await writeAgentConfigIfUnchanged(path, next, current)
 }
 
 /**
@@ -250,7 +258,7 @@ export function startMcpAgentFileSync(): () => void {
   const folder = mcpHostListFolder()
   const userDataPath = getAppEnvironment().getPath('userData')
   // Once: this run of Orca's launcher doesn't move.
-  const launcher = thisAppLauncher(userDataPath)
+  const launcher = thisAppOrcaCliLauncher(userDataPath)
   const deps = (): McpAgentFileSyncDeps => ({
     folder,
     userDataPath,

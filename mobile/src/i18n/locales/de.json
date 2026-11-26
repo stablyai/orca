@@ -4422,6 +4422,12 @@
                 "message": "Die Claude-Nutzung wird beim nächsten Start von Claude aktualisiert."
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "Wird aktualisiert, wenn Codex läuft",
+                "message": "Die Codex-Nutzung wird beim nächsten Start von Codex aktualisiert."
+              }
+            },
             "1804cd8c3f": "Anmeldung wird aktualisiert",
             "bf2e739f18": "Anmeldung nicht verfügbar",
             "f8f0f9d8cc": "Netzwerkproblem",
@@ -4621,7 +4627,9 @@
       "ask": {
         "replaced": "Der Agent hat eine neue Frage gestellt. Lies sie und antworte dann.",
         "replacedByNewer": "Durch eine neuere Frage ersetzt",
-        "skipped": "Übersprungen"
+        "skipped": "Übersprungen",
+        "heldImagesLimit": "Deine Antworten gehen als ein Kommentar, der höchstens {{max}} Fotos aufnimmt. Entferne einige und versuche es erneut.",
+        "heldSkillsLimit": "Deine Antworten gehen als ein Kommentar, der höchstens {{max}} Skills aufnimmt. Entferne einige und versuche es erneut."
       }
     },
     "needs": {
@@ -5184,5 +5192,8 @@
     "cardSlot": {
       "working": "In Arbeit"
     }
+  },
+  "mcpServers": {
+    "agentBlocked": "Durch die Claude-Einstellungen deiner Organisation blockiert"
   }
 }

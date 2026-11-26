@@ -160,7 +160,7 @@ export async function openAgentLaunch(
         : await resolveAgentLaunchModeOnHost(
             runtime,
             preflight,
-            placed.worktreeId,
+            { worktreeId: placed.worktreeId },
             intent.agent,
             vocabulary,
             settlement

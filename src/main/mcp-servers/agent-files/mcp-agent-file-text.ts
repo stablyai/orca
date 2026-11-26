@@ -4,14 +4,21 @@
 import { isDeepStrictEqual } from 'node:util'
 import type { McpFileAgent } from '../../../shared/mcp-servers/mcp-servers'
 import {
+  agentMcpConfigEntry,
+  isOrcaOwnedAgentMcpServer
+} from '../../../shared/mcp/agent-mcp-config-entry'
+import {
   findManagedTomlBlocks,
   stripManagedTomlRegions,
   type ManagedTomlMarkers
 } from '../../agent-hooks/installation/configuration/managed-toml-ownership'
 import { escapeTomlBasicString } from '../../codex/configuration/toml/config-toml-syntax'
 import { parseAgentMcpConfigText, valueAtKeyPath } from '../agent-configs/agent-mcp-config-read'
-import { insertJsonProperty } from '../agent-configs/json-property-insertion'
-import { removeJsonProperty } from '../agent-configs/json-property-removal'
+import { insertJsonProperties } from '../agent-configs/json-property-insertion'
+import {
+  removeEmptyJsonObjectProperty,
+  removeJsonProperties
+} from '../agent-configs/json-property-removal'
 import type { McpAgentFileEntry } from './mcp-agent-file-entry'
 
 export type McpAgentFileFormat = 'toml' | 'json'
@@ -51,10 +58,36 @@ export function mcpAgentFileServerNames(edit: McpAgentFileEdit, text: string): S
   )
 }
 
+/** The file's names that hold another Orca's bridge entry (one pinned to another data folder). */
+export function otherOrcasServerNames(
+  edit: McpAgentFileEdit,
+  text: string,
+  userDataPath: string
+): Set<string> {
+  const parsed = parseAgentMcpConfigText(text, edit.format)
+  const servers = valueAtKeyPath(parsed, [SERVERS_KEY[edit.agent]])
+  if (typeof servers !== 'object' || servers === null || Array.isArray(servers)) {
+    return new Set()
+  }
+  const dialect = edit.format === 'toml' ? 'grok-toml' : 'mcp-json'
+  return new Set(
+    Object.entries(servers).flatMap(([name, raw]) => {
+      const entry = agentMcpConfigEntry(name, raw, dialect)
+      const server = entry?.server
+      return server &&
+        isOrcaOwnedAgentMcpServer(server) &&
+        !('url' in server) &&
+        server.env?.ORCA_USER_DATA_PATH !== userDataPath
+        ? [name]
+        : []
+    })
+  )
+}
+
 /**
  * `text` without this Orca's entries: its marker block in TOML; in JSON each entry that still holds
  * what the ledger says Orca wrote (`owned`) or what it would write now (`recognized`), then the
- * servers' table when Orca added it (`addedTable`) and nothing else is left in it.
+ * servers' table when Orca added it (`addedTable`) and nothing else, not even a comment, is left in it.
  */
 export function withoutOrcaEntries(
   edit: McpAgentFileEdit,
@@ -73,19 +106,15 @@ export function withoutOrcaEntries(
   if (!parsed || typeof servers !== 'object' || servers === null || Array.isArray(servers)) {
     return text
   }
-  let next = text
-  for (const [name, value] of Object.entries(servers)) {
-    const ours =
-      (Object.hasOwn(owned, name) && isDeepStrictEqual(value, owned[name])) ||
-      (recognized.has(name) && isDeepStrictEqual(value, recognized.get(name)))
-    if (ours) {
-      next = removeJsonProperty(next, [key, name])
-    }
-  }
-  if (addedTable && mcpAgentFileServerNames(edit, next)?.size === 0) {
-    next = removeJsonProperty(next, [key])
-  }
-  return next
+  const ours = Object.entries(servers)
+    .filter(
+      ([name, value]) =>
+        (Object.hasOwn(owned, name) && isDeepStrictEqual(value, owned[name])) ||
+        (recognized.has(name) && isDeepStrictEqual(value, recognized.get(name)))
+    )
+    .map(([name]) => name)
+  const next = removeJsonProperties(text, [key], ours)
+  return addedTable ? removeEmptyJsonObjectProperty(next, [key]) : next
 }
 
 const tomlString = (value: string): string => `"${escapeTomlBasicString(value)}"`
@@ -128,14 +157,9 @@ export function withOrcaEntries(
   if (base === null) {
     return `${JSON.stringify({ [key]: Object.fromEntries(values) }, null, 2)}\n`
   }
-  if (!hasMcpServersTable(edit, base)) {
-    return insertJsonProperty(base, [], key, Object.fromEntries(values))
-  }
-  let next: string | null = base
-  for (const [name, value] of values) {
-    next = next === null ? null : insertJsonProperty(next, [key], name, value)
-  }
-  return next
+  return hasMcpServersTable(edit, base)
+    ? insertJsonProperties(base, [key], values)
+    : insertJsonProperties(base, [], [[key, Object.fromEntries(values)]])
 }
 
 /** Whether the file already has a servers' table (Orca's TOML block never adds one). */
@@ -146,11 +170,7 @@ export function hasMcpServersTable(edit: McpAgentFileEdit, text: string): boolea
   )
 }
 
-/** Nothing of the user's is in it: the file Orca made can go. */
+/** Nothing of the user's is in it, not even a comment: the file Orca made can go. */
 export function isEmptyMcpAgentFile(edit: McpAgentFileEdit, text: string): boolean {
-  if (edit.format === 'toml') {
-    return text.trim() === ''
-  }
-  const parsed = parseAgentMcpConfigText(text, 'json')
-  return parsed !== null && Object.keys(parsed).length === 0
+  return edit.format === 'toml' ? text.trim() === '' : /^\s*\{\s*\}\s*$/.test(text)
 }

@@ -1,18 +1,7 @@
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import {
-  BookOpen,
-  CalendarClock,
-  CircleHelp,
-  Files,
-  Layers,
-  List,
-  Settings,
-  Smartphone
-} from 'lucide-react'
+import { BookOpen, CalendarClock, Files, Layers, List, Smartphone } from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
-import { SettingsTooltipLabel } from '@/components/sidebar/chrome/SidebarSettingsHelpMenu'
-import { HelpMenuView } from '@/components/sidebar/chrome/HelpMenu'
 import { useHelpMenuController } from '@/components/sidebar/chrome/help-menu-controller'
 import { useSetupGuideProgressSnapshot } from '@/components/setup-guide/setup-guide-progress-snapshot'
 import { nextAppRailFocusIndex } from './app-rail-roving-focus'
@@ -33,6 +22,7 @@ import {
 } from './AppRailButton'
 import { AppRailMoreMenu, useAppRailSlotCapacity } from './AppRailMoreMenu'
 import { AppRailCustomizeMenu, type AppRailCustomizeRow } from './AppRailCustomizeMenu'
+import { AppRailAccountMenu } from './AppRailAccountMenu'
 import { partitionAppRail } from './app-rail-overflow'
 import { railItemOwningFocus } from './app-rail-focus-ownership'
 import { useWorkspaceListRegionPresent } from './workspace-list-region-presence'
@@ -63,16 +53,17 @@ export function AppRail({
   const listShowsWorkspaces = useAppStore((s) => (s.sidebarBody ?? 'workspaces') === 'workspaces')
   const listRegionPresent = useWorkspaceListRegionPresent()
   const setupProgress = useSetupGuideProgressSnapshot()
-  // Help's Milestones row reads the app-wide setup reading; the rail runs no setup checks of its own.
-  const helpMilestones = useMemo(
+  // The account menu's Milestones row and ring read the app-wide setup reading; the rail runs no setup checks itself.
+  const milestones = useMemo(
     () =>
       setupProgress?.ready && setupProgress.done < setupProgress.total
         ? { done: setupProgress.done, total: setupProgress.total }
         : null,
     [setupProgress]
   )
-  // One Help owner for the rail's lifetime, so Help moving into More never remounts an open feedback dialog.
-  const help = useHelpMenuController(helpMilestones)
+  // Milestones sits at the top of the account menu, so Help's own list leaves it out; the menu has its own groups, so
+  // Help's rows come grouped. The rail owns the controller so its feedback dialog outlives the account menu closing.
+  const help = useHelpMenuController(null, 'grouped')
 
   const toolbarRef = useRef<HTMLDivElement | null>(null)
   const [toolbar, setToolbar] = useState<HTMLDivElement | null>(null)
@@ -114,8 +105,7 @@ export function AppRail({
     'workspaces',
     ...railDestinations,
     partition.more ? 'more' : 'customize',
-    ...(partition.helpInMore ? [] : (['help'] as const)),
-    ...(partition.settingsInMore ? [] : (['settings'] as const))
+    'account'
   ]
   const shownCurrentDestination =
     currentDestination && shownDestinations.includes(currentDestination) ? currentDestination : null
@@ -126,9 +116,7 @@ export function AppRail({
         ? shownCurrentDestination
         : 'more'
       : settingsActive
-        ? partition.settingsInMore
-          ? 'more'
-          : 'settings'
+        ? 'account'
         : null
   const [lastFocusedItem, setLastFocusedItem] = useState<AppRailItemId | null>(null)
   const tabStopItem =
@@ -198,8 +186,6 @@ export function AppRail({
   // The toolbar inside the landmark gets its own name so screen readers don't hear "App navigation" twice.
   const toolsLabel = t('appRail.toolsLabel', 'App tools')
   const workspacesLabel = t('appRail.workspaces', 'Workspaces')
-  const settingsLabel = t('auto.components.sidebar.SidebarSettingsHelpMenu.a428c25998', 'Settings')
-  const helpLabel = t('auto.components.sidebar.SidebarSettingsHelpMenu.2991a0106c', 'Help')
   // The list rows' labels and icons, so the rail reads the same.
   const destinationLabel = (id: AppRailDestinationId): string => {
     switch (id) {
@@ -256,6 +242,13 @@ export function AppRail({
     if (index === -1) {
       return
     }
+    // The account button is last, so ArrowDown opens its menu (Radix's trigger key) instead of wrapping to the top.
+    if (
+      event.key === 'ArrowDown' &&
+      items[index].getAttribute(APP_RAIL_ITEM_ATTRIBUTE) === 'account'
+    ) {
+      return
+    }
     const next = nextAppRailFocusIndex(event.key, index, items.length)
     if (next === null) {
       return
@@ -280,7 +273,7 @@ export function AppRail({
       className="flex min-h-0 w-10 flex-1 shrink-0 flex-col border-r border-worktree-sidebar-border bg-worktree-sidebar"
       style={style}
     >
-      {/* Why pb-1: Help/Settings line up with the list footer icons and Settings' focus ring stays unclipped. */}
+      {/* Why pb-1: the account button lines up with the list footer icons and its focus ring stays unclipped. */}
       <div
         ref={attachToolbar}
         role="toolbar"
@@ -326,11 +319,6 @@ export function AppRail({
           ))}
           {partition.more ? (
             <AppRailMoreMenu
-              help={help}
-              includeHelp={partition.helpInMore}
-              includeSettings={partition.settingsInMore}
-              settingsActive={settingsActive}
-              onOpenSettings={openSettings}
               tabStop={tabStopItem === 'more'}
               customizeRows={customizeRows}
               destinations={foldedDestinations.map((id) => ({
@@ -348,47 +336,15 @@ export function AppRail({
           )}
         </div>
         <div className="flex flex-col items-center gap-2.5">
-          {partition.helpInMore ? null : (
-            <HelpMenuView
-              controller={help}
-              side="right"
-              align="end"
-              trigger={
-                <AppRailButton
-                  itemId="help"
-                  icon={
-                    <CircleHelp
-                      size={APP_RAIL_ICON_SIZE}
-                      strokeWidth={APP_RAIL_ICON_STROKE_WIDTH}
-                      aria-hidden
-                    />
-                  }
-                  label={helpLabel}
-                  tabStop={tabStopItem === 'help'}
-                />
-              }
-            />
-          )}
-          {partition.settingsInMore ? null : (
-            <RailItem tooltip={<SettingsTooltipLabel />}>
-              <AppRailButton
-                itemId="settings"
-                icon={
-                  <Settings
-                    size={APP_RAIL_ICON_SIZE}
-                    strokeWidth={APP_RAIL_ICON_STROKE_WIDTH}
-                    aria-hidden
-                  />
-                }
-                label={settingsLabel}
-                active={settingsActive}
-                tabStop={tabStopItem === 'settings'}
-                onClick={openSettings}
-              />
-            </RailItem>
-          )}
+          <AppRailAccountMenu
+            help={help}
+            milestones={milestones}
+            settingsActive={settingsActive}
+            onOpenSettings={openSettings}
+            tabStop={tabStopItem === 'account'}
+          />
         </div>
-        {/* Rendered once, outside both Help presentations, so folding Help keeps an open dialog. */}
+        {/* Rendered outside the account menu so Send Feedback's dialog survives the menu closing. */}
         {help.dialog}
       </div>
     </nav>

@@ -18,8 +18,9 @@ This discovery stub uses the legacy name `linear-tickets` for `orca-linear`; bot
 
 Choose the executable once and reuse it for every later command:
 
-- If the `ORCA_CLI_COMMAND` environment variable is set, use its value. Orca exports this
-  for managed WSL sessions.
+- If the `ORCA_CLI_COMMAND` environment variable is set, use its value. Orca exports it
+  in sessions it starts when it knows their executable, such as WSL terminals and agent
+  chats.
 - Otherwise, in a dev checkout whose session exposes `ORCA_DEV_REPO_ROOT`, use `orca-dev`.
 - Otherwise, on Linux outside an Orca-managed terminal, use `orca-ide`. Never run bare
   `orca` there — outside Orca's terminals it normally resolves to the
@@ -31,7 +32,11 @@ running anything; do not create a shell variable or run `ORCA` literally. This w
 same way in POSIX shells, PowerShell, and cmd.exe.
 
 If the selected executable cannot run, report its exact error and stop. Do not fall through
-to another executable, which could silently target a different Orca build.
+to another executable, which could silently target a different Orca build. Exception: on
+Windows, when `ORCA_CLI_COMMAND` or `ORCA_TERMINAL_HANDLE` is set (Orca supplied the
+executable), a sandboxed shell that reports it as not recognized or access denied before
+Orca itself runs cannot read Orca's install. Re-run that command, and later Orca commands,
+with escalated permissions before giving up.
 
 ## Load the version-matched guide before running Orca commands
 

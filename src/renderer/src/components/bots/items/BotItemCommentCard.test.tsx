@@ -6,7 +6,10 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
 import type { BotItem, BotItemEvent } from '../../../../../shared/bots/bot-items'
 import { fixtureCos } from '../../../component-fixtures/fixture-bot-panel'
-import { botItemHeldAnswersText } from '../../../../../shared/bots/bot-item-answer-lines'
+import {
+  botItemHeldAnswer,
+  writeBotItemHeldAnswers
+} from '../../../../../shared/bots/bot-item-held-answers'
 import { botItemQuestionShape } from '../../../../../shared/bots/bot-item-ask'
 import { writeNativeChatDraftCache } from '../../native-chat/drafts/native-chat-draft-views'
 import { BotItemActivityList } from './BotItemActivityList'
@@ -117,7 +120,12 @@ const askOf = (id: string, prompts: string[], at: number): BotItemEvent => ({
   },
   at
 })
-const NO_ACTIONS = { send: () => {}, edit: () => {}, recover: () => {}, type: () => {} }
+const NO_ACTIONS = {
+  send: () => {},
+  edit: () => {},
+  restore: () => true,
+  type: () => {}
+}
 const replacedLabel = (): HTMLElement[] =>
   screen.queryAllByRole('button', { name: 'Replaced by a newer question' })
 
@@ -128,7 +136,7 @@ it('a replaced ask with answers held on it still reads replaced, and leads to th
   const shape = botItemQuestionShape(old.data)
   writeNativeChatDraftCache(
     botItemHeldAnswersScope(fixtureCos, 'uid-1', 'q1'),
-    botItemHeldAnswersText(shape, ['Yes', 'No'])
+    writeBotItemHeldAnswers(shape, [botItemHeldAnswer('Yes'), botItemHeldAnswer('No')])
   )
   const item = makeTestBotItem(1, {
     status: 'needs_you',

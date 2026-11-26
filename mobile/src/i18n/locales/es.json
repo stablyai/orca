@@ -4528,6 +4528,12 @@
                 "message": "El uso de Claude se actualizará la próxima vez que ejecutes Claude."
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "Se actualiza cuando Codex se ejecuta",
+                "message": "El uso de Codex se actualizará la próxima vez que ejecutes Codex."
+              }
+            },
             "1804cd8c3f": "Actualizando inicio de sesión",
             "bf2e739f18": "Inicio de sesión no disponible",
             "f8f0f9d8cc": "Problema de red",
@@ -4730,7 +4736,9 @@
       "ask": {
         "replaced": "El agente ha hecho una nueva pregunta. Léela y luego responde.",
         "replacedByNewer": "Sustituida por una pregunta más reciente",
-        "skipped": "Omitidas"
+        "skipped": "Omitidas",
+        "heldImagesLimit": "Tus respuestas van en un solo comentario, que admite hasta {{max}} fotos. Quita algunas e inténtalo de nuevo.",
+        "heldSkillsLimit": "Tus respuestas van en un solo comentario, que admite hasta {{max}} habilidades. Quita algunas e inténtalo de nuevo."
       }
     },
     "needs": {
@@ -5296,5 +5304,8 @@
     "cardSlot": {
       "working": "Trabajando"
     }
+  },
+  "mcpServers": {
+    "agentBlocked": "Bloqueado por la configuración de Claude de tu organización"
   }
 }

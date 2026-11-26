@@ -1,4 +1,4 @@
-import { applyClaudeAgentViewEnv } from './claude-agent-view'
+import { applyClaudeAgentViewEnv, stripInheritedClaudePluginDir } from './claude-agent-view'
 import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import {
   detectExplicitPiAgentKindFromCommand,
@@ -33,6 +33,8 @@ import {
 } from './pi-agent'
 import { restoreOrStripOverlayEnv } from '../../../../shared/agent-launch/startup/agent-overlay-env'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from './spawn-env-keys'
+import { CLAUDE_HOOK_PLUGIN_DIR_ENV } from '../../../../shared/agent-hook-listener/providers/claude/claude-hook-plugin'
+import { getClaudeHookPluginDir } from '../../../claude/hooks/claude-hook-plugin'
 import { applyManagedDataAccountEnvironment } from '../../../managed-data-accounts/launch-environment'
 import { applyOpenCodeStatusPluginEnv, captureOpenCodeSourceConfig } from './opencode-config'
 import { applyRemoteViewerClipboardEnv } from './remote-viewer-clipboard-env'
@@ -117,11 +119,15 @@ export function buildPtyHostEnv(
   }
 
   // Remove inherited hook coordinates before injecting the owning pane's receiver.
+  stripInheritedClaudePluginDir(baseEnv, CLAUDE_HOOK_PLUGIN_DIR_ENV)
   for (const key of AGENT_HOOK_RUNTIME_ENV_KEYS) {
     delete baseEnv[key]
   }
   if (opts.agentStatusHooksEnabled) {
     Object.assign(baseEnv, agentHookServer.buildPtyEnv())
+    if (opts.isWsl !== true && isTuiAgentEnabled('claude', opts.disabledTuiAgents)) {
+      baseEnv[CLAUDE_HOOK_PLUGIN_DIR_ENV] = getClaudeHookPluginDir(opts.userDataPath)
+    }
     if (opts.isWsl === true) {
       // Windows loopback is outside WSL's NAT namespace; use the guest relay endpoint.
       const distro = opts.wslDistro ?? null
