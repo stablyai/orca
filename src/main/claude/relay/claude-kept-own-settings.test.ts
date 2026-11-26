@@ -70,7 +70,7 @@ describe('a kept Claude agent and "your Claude settings"', () => {
             const matches = choice === 'own' && permissionPick === undefined && current === settings
             expect(
               owed === true,
-              `${choice} ${settings} [${reports}] ${String(permissionPick)}`
+              `${choice} ${settings} [${reports.join(',')}] ${String(permissionPick)}`
             ).toBe(!matches)
           }
         }

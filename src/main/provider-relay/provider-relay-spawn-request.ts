@@ -12,7 +12,7 @@ export function providerRelaySpawnSpec(
   launch: ProviderProcessLaunch,
   client: DaemonClient,
   appVersion: ProviderRelaySpawnSpec['appVersion'],
-  inheritedEnv?: Record<string, string>
+  { inheritedEnv }: { inheritedEnv?: Record<string, string> } = {}
 ): ProviderRelaySpawnSpec | null {
   const identity = client.getDaemonIdentity()
   // A daemon kept from another bundle relays too, when it speaks the relay protocol.

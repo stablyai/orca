@@ -1,8 +1,5 @@
 import type { DaemonClient } from '../daemon/transport/client/daemon-client'
-import type {
-  ProviderRelayDetachPolicy,
-  ProviderRelayKeepSpec
-} from '../daemon/protocol/daemon-provider-relay-protocol'
+import type * as RelayProtocol from '../daemon/protocol/daemon-provider-relay-protocol'
 import type { ProviderRelayWorkMarkers } from './provider-relay-agent-markers'
 export {
   dropListedProviderRelay,
@@ -62,20 +59,8 @@ export type { ProviderRelayWorkMarkers } from './provider-relay-agent-markers'
 /** The provider's open work at detach, keyed as its markers key it. */
 export type ProviderRelayOpenWork = Record<string, string[][]>
 
-export type ProviderRelayLaunch = {
-  chatKey: string
-  markers: ProviderRelayWorkMarkers
-  /** Reattach only: lines this lets through while the rest wait for `releaseOutput()`. */
-  passWhileHeld?: (line: string) => boolean
-  /** The agent's whole environment, when its caller already scrubbed it (not merged over the app's). */
-  inheritedEnv?: Record<string, string>
-  /** `spawn`: a still-listed kept agent refuses the start (its reattach is the caller's own). */
-  only?: 'spawn' | 'reattach'
-  /** Session state the daemon keeps for the next attach; only a daemon that can keep it relays. */
-  keep?: ProviderRelayKeepSpec
-  /** A reattached agent closed during quit (its start given up) goes back to the daemon instead. */
-  handsOffOnQuit?: true
-}
+import type { ProviderRelayLaunch } from './provider-relay-launch'
+export type { ProviderRelayLaunch }
 
 export type RelayedProviderProcess = {
   managed: ManagedProviderProcess
@@ -119,7 +104,7 @@ export function installProviderRelayDurability(barrier: typeof durableFor): void
 function policyFor(
   markers: ProviderRelayWorkMarkers,
   open?: ProviderRelayOpenWork | null
-): ProviderRelayDetachPolicy {
+): RelayProtocol.ProviderRelayDetachPolicy {
   return {
     idleStopMs: route?.idleStopMs() ?? null,
     markers: [...markers.markers],
@@ -299,9 +284,7 @@ export async function launchRelayedProviderProcess(
     return kept
   }
   const client = await connected(await installed.current().catch(() => null))
-  const spec = client
-    ? providerRelaySpawnSpec(launch, client, installed.appVersion, relay.inheritedEnv)
-    : null
+  const spec = client ? providerRelaySpawnSpec(launch, client, installed.appVersion, relay) : null
   // Without kept state a reattach would have nothing to restore, so such a launch goes as today.
   const keeps = !relay.keep || client?.getDaemonIdentity()?.providerRelayKeep === true
   if (!client || !spec || !keeps || !(await daemonReadsFolder(client, spec.cwd))) {
