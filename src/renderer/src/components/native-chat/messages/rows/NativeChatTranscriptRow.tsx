@@ -1,3 +1,4 @@
+import { useNativeChatMessagingStyle } from '../../appearance/use-native-chat-messaging-style'
 import type { BotChatIdentity } from '../../../bots/use-bot-chat-identity'
 import { memo, useContext } from 'react'
 import { cn } from '@/lib/class-names'
@@ -117,7 +118,8 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   context,
   newRowsMarker,
   newRowsMarkerBelow = false,
-  joinsActivityAbove = false
+  joinsActivityAbove = false,
+  joinsMessageAbove = false
 }: {
   slot: NativeChatTranscriptSlot
   context: NativeChatTranscriptRowContext
@@ -127,7 +129,9 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   newRowsMarkerBelow?: boolean
   /** Opens 4 px below the row above's activity row (`nativeChatSlotJoinsActivityAbove`). */
   joinsActivityAbove?: boolean
+  joinsMessageAbove?: boolean
 }): React.JSX.Element {
+  const messaging = useNativeChatMessagingStyle()
   // Offered only on the conversation's own turn-opening prompts (`nativeChatRowOffersRewind`).
   const rewind = useContext(NativeChatRewindContext)
   const fork = useContext(NativeChatForkContext)
@@ -190,7 +194,8 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           '-mb-3',
         // Into the row gap (gap-5) all but the one-line rows' own gap (gap-1.5,
         // NATIVE_CHAT_ACTIVITY_ROW_GAP_PX).
-        joinsActivityAbove && '-mt-3.5'
+        joinsActivityAbove && '-mt-3.5',
+        messaging && joinsMessageAbove && !newRowsMarker && !joinsActivityAbove && '-mt-3'
       )}
     >
       {newRowsMarker?.place === 'above-row' ? marker : null}

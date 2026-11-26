@@ -23,6 +23,33 @@ import {
 } from '../../markdown/native-chat-reply-reveals'
 import { NativeChatImageGallery } from '../../media/images/gallery/NativeChatImageGallery'
 
+function joinsMessageAbove(
+  slot: NativeChatTranscriptSlot,
+  previous: NativeChatTranscriptSlot | undefined
+): boolean {
+  return !!(
+    slot.kind === 'message' &&
+    previous?.kind === 'message' &&
+    slot.drawsMessage &&
+    previous.drawsMessage &&
+    !(previous.continuesTurn && !(previous.endsResponse && !previous.activeTurnIsWorking)) &&
+    !slot.status &&
+    !previous.status &&
+    !slot.receipt &&
+    !previous.receipt &&
+    !slot.itemNotes &&
+    !previous.itemNotes &&
+    !previous.turnDiff &&
+    !previous.openedPullRequests &&
+    !slot.message.from &&
+    !previous.message.from &&
+    (slot.message.role === 'user' || slot.message.role === 'assistant') &&
+    slot.message.role === previous.message.role &&
+    slot.message.blocks.every((block) => block.type === 'text') &&
+    previous.message.blocks.every((block) => block.type === 'text')
+  )
+}
+
 /** Mounted rows own their height; only unloaded gaps use cached measurements. */
 export function NativeChatTranscriptItems({
   slots,
@@ -79,6 +106,7 @@ export function NativeChatTranscriptItems({
                       <NativeChatTranscriptRow
                         slot={slot}
                         context={rowContext}
+                        joinsMessageAbove={joinsMessageAbove(slot, slots[item.index - 1])}
                         newRowsMarker={
                           rowKeys[item.index] === newRowsMarker?.key ? newRowsMarker : undefined
                         }
@@ -138,6 +166,7 @@ export function NativeChatWaitingTranscriptItems({
           key={nativeChatSlotKey(slot)}
           slot={slot}
           context={context}
+          joinsMessageAbove={joinsMessageAbove(slot, slots[index - 1])}
           joinsActivityAbove={nativeChatSlotJoinsActivityAbove({
             slot,
             previous: slots[index - 1],
