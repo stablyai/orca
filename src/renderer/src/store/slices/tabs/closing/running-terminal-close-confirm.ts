@@ -10,6 +10,8 @@ export type RunningTerminalCloseConfirmRequest = {
   worktreeId?: string
   /** Sleeping this workspace keeps the busy agents resumable, so it is offered instead. */
   canSleepInstead?: boolean
+  /** An idle recheck's async probe opens this prompt after its callback returned; guard it on show. */
+  guardWhenVisible?: boolean
   onConfirm: () => void
   onCancel?: () => void
 }
@@ -18,9 +20,13 @@ export type RunningTerminalCloseConfirmState = {
   runningTerminalCloseConfirm: RunningTerminalCloseConfirmRequest | null
   requestRunningTerminalCloseConfirm: (request: RunningTerminalCloseConfirmRequest) => void
   confirmRunningTerminalClose: () => void
-  /** Opting out accepts visible and queued requests; no disabled confirmation may remain waiting. */
+  /** Opting out accepts visible and queued running-work requests; idle prompts stay queued. */
   confirmAllRunningTerminalCloses: () => void
   dismissRunningTerminalClose: () => boolean
+}
+
+function isIdleCopyKind(copyKind: CloseTerminalDialogCopyKind): boolean {
+  return copyKind === 'idle' || copyKind === 'idle-chat'
 }
 
 /** Merge duplicate tab requests so both initiating surfaces receive callbacks. */
@@ -28,11 +34,24 @@ function mergeRequests(
   pending: RunningTerminalCloseConfirmRequest,
   duplicate: RunningTerminalCloseConfirmRequest
 ): RunningTerminalCloseConfirmRequest {
+  // An idle prompt vouches for nothing that is running; a merged running close must own the copy.
+  const runningConsentFirst =
+    isIdleCopyKind(pending.copyKind) && !isIdleCopyKind(duplicate.copyKind)
+  const [first, second] = runningConsentFirst ? [duplicate, pending] : [pending, duplicate]
   return {
     ...pending,
+    // The running request owns the upgraded prompt, including its workspace and sleep offer.
+    ...(runningConsentFirst
+      ? {
+          copyKind: duplicate.copyKind,
+          ...(duplicate.worktreeId ? { worktreeId: duplicate.worktreeId } : {}),
+          ...(duplicate.canSleepInstead ? { canSleepInstead: duplicate.canSleepInstead } : {})
+        }
+      : {}),
+    // Run consented running work first so the idle re-check sees a closed tab instead of asking again.
     onConfirm: () => {
-      pending.onConfirm()
-      duplicate.onConfirm()
+      first.onConfirm()
+      second.onConfirm()
     },
     onCancel: () => {
       pending.onCancel?.()
@@ -50,6 +69,8 @@ export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseCo
   // Guard dialog replacement against held Enter/double-click closing an unseen second tab, like pin confirmation.
   const INTER_REQUEST_ACTION_GUARD_MS = 350
   let nextRequestActionAllowedAt = 0
+  // A prompt opened from onConfirm replaces the confirmed one while the dialog stays mounted.
+  let confirmCallbackRunning = false
 
   /** Reveals the next queued request, and reports whether one took the visible slot. */
   const advanceRequest = (): boolean => {
@@ -71,7 +92,12 @@ export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseCo
       const visible = get().runningTerminalCloseConfirm
       // Async process probes allow duplicate clicks before opening; share one prompt while resolving both closes.
       if (visible?.terminalTabId === request.terminalTabId) {
-        set({ runningTerminalCloseConfirm: mergeRequests(visible, request) })
+        const merged = mergeRequests(visible, request)
+        set({ runningTerminalCloseConfirm: merged })
+        // An in-place upgrade rewrites the copy under a held key/click; guard it like a revealed prompt.
+        if (isIdleCopyKind(visible.copyKind) && !isIdleCopyKind(merged.copyKind)) {
+          guardNextAction(true)
+        }
         return
       }
       const queuedIndex = queuedRequests.findIndex(
@@ -87,6 +113,11 @@ export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseCo
         return
       }
       set({ runningTerminalCloseConfirm: request })
+      // The key or click aimed at the confirmed prompt must not accept its in-place replacement;
+      // an idle recheck declares its prompt so the guard outlives the callback that scheduled it.
+      if (confirmCallbackRunning || request.guardWhenVisible === true) {
+        guardNextAction(true)
+      }
     },
 
     confirmRunningTerminalClose: () => {
@@ -96,18 +127,32 @@ export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseCo
       }
       // Advance before onConfirm so reentrant closes cannot see the stale request.
       guardNextAction(advanceRequest())
-      request.onConfirm()
+      confirmCallbackRunning = true
+      try {
+        request.onConfirm()
+      } finally {
+        confirmCallbackRunning = false
+      }
     },
 
     confirmAllRunningTerminalCloses: () => {
       if (Date.now() < nextRequestActionAllowedAt) {
         return
       }
-      const pending = [get().runningTerminalCloseConfirm, ...queuedRequests.splice(0)]
-      set({ runningTerminalCloseConfirm: null })
-      // No guard to arm: the queue is empty, so there is no next prompt to mis-click.
-      for (const request of pending) {
-        request?.onConfirm()
+      const pending = [get().runningTerminalCloseConfirm, ...queuedRequests.splice(0)].filter(
+        (request): request is RunningTerminalCloseConfirmRequest => request !== null
+      )
+      // Why: the opt-out covers running work; an idle prompt is a separate opt-in and must still ask.
+      const idle = pending.filter((request) => isIdleCopyKind(request.copyKind))
+      const running = pending.filter((request) => !isIdleCopyKind(request.copyKind))
+      set({ runningTerminalCloseConfirm: idle[0] ?? null })
+      if (idle.length > 1) {
+        queuedRequests.push(...idle.slice(1))
+      }
+      // A revealed idle prompt is a new dialog action target; arm the same inter-request guard.
+      guardNextAction(idle.length > 0)
+      for (const request of running) {
+        request.onConfirm()
       }
     },
 

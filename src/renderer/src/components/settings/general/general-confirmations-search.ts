@@ -48,6 +48,28 @@ export const getGeneralConfirmationSearchEntries = createLocalizedCatalog(() => 
       )
     ]
   },
+  idle: {
+    title: translate('settings.general.confirmations.idle', 'Closing an idle tab'),
+    description: translate(
+      'settings.general.confirmations.idleHelp',
+      'Ask before closing a terminal or chat tab that has nothing running.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.general.search.keywords.confirmations', 'confirmations'),
+      ...translateSearchKeyword('components.settings.terminal.clipboard.search.chat', 'chat'),
+      ...translateSearchKeyword('auto.components.settings.general.search.terminal', 'terminal'),
+      ...translateSearchKeyword('auto.components.settings.general.search.2a254b725e', 'tab'),
+      ...translateSearchKeyword('auto.components.settings.general.search.9f8558233a', 'confirm'),
+      ...translateSearchKeyword('auto.components.settings.general.search.afa37a34e1', 'close'),
+      ...translateSearchKeyword('settings.general.search.keywords.idle', 'idle'),
+      ...translateSearchKeyword('settings.general.search.keywords.empty', 'empty'),
+      ...translateSearchKeyword('settings.general.search.keywords.ask_before', 'ask before'),
+      translate(
+        'auto.components.settings.GeneralPane.confirm_idle_tab_close',
+        'Confirm before closing idle tabs'
+      )
+    ]
+  },
   workspace: {
     id: 'general-skip-delete-worktree-confirm',
     title: translate('settings.general.confirmations.workspace', 'Deleting a workspace'),

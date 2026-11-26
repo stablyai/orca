@@ -46,6 +46,10 @@ type CloseTerminalTabOptions = {
   lifecyclePtyId?: string
   /** Skip modals for unattended/bulk/CLI/RPC paths and confirmed re-entry. */
   skipRunningProcessConfirm?: boolean
+  /** A group/pane close is deliberate; it does not ask for each idle tab inside it. */
+  skipIdleCloseConfirm?: boolean
+  /** An idle recheck whose busy probe may open its prompt after the idle callback returned. */
+  guardNextPromptFromRecheck?: boolean
   captureRecentlyClosed?: boolean
   localPtyTeardownOwnedExternally?: boolean
   precomputedRetirementPlan?: TerminalTabRetirementPlan
@@ -126,8 +130,18 @@ export function closeTerminalTab(tabId: string, options: CloseTerminalTabOptions
       terminalTabId,
       worktreeId: owningWorktreeId,
       ...(options?.consentedPtyId ? { consentedPtyId: options.consentedPtyId } : {}),
+      ...(options?.skipIdleCloseConfirm ? { skipIdleCloseConfirm: true } : {}),
+      ...(options?.guardNextPromptFromRecheck ? { guardNextPromptFromRecheck: true } : {}),
       // Re-enter after consent to revalidate pinned, route, and precomputed state against the latest store.
       onClose: () => closeTerminalTab(tabId, { ...options, skipRunningProcessConfirm: true }),
+      // An idle confirm is not consent to stop work that started while the prompt waited.
+      // The busy recheck resolves after this callback returns; the store guards the prompt it opens.
+      onIdleConfirm: () =>
+        closeTerminalTab(tabId, {
+          ...options,
+          skipIdleCloseConfirm: true,
+          guardNextPromptFromRecheck: true
+        }),
       ...(options?.onCancel ? { onCancel: options.onCancel } : {})
     })
     return
