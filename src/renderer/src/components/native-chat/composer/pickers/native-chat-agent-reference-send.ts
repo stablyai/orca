@@ -58,7 +58,8 @@ export function serializeNativeChatAgentReferences(
       }
       const literal = agentReferenceToken(reference)
       if (isPublicOrchestrationAddress(address)) {
-        const key = JSON.stringify([hostKey, address])
+        // A crew chip and a terminal chip can name one terminal; each kind keeps its own note.
+        const key = JSON.stringify([hostKey, address, reference.kind])
         let target = selected.get(key)
         if (!target) {
           target = {

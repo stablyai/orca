@@ -30,8 +30,9 @@ function AgentReferencePill({ node, selected }: NodeViewProps): React.JSX.Elemen
       <NativeChatPromptPill
         icon={terminal ? SquareTerminal : Users}
         // The agent's logo where it was picked from a list that knows it; older drafts keep the generic icon.
+        // A terminal chip always shows the terminal icon.
         avatar={
-          agentType ? (
+          agentType && !terminal ? (
             <AgentTypeIcon agentType={agentType} size={12} className="size-3" />
           ) : undefined
         }
@@ -79,7 +80,7 @@ export const NativeChatAgentReference = Node.create({
   ]
 })
 
-/** A draft holds each agent once: references already in it, or repeated in the list, are skipped. */
+/** A draft holds each agent once per kind: references already in it, or repeated in the list, are skipped. */
 export function insertAgentReferences(
   editor: Editor,
   candidates: OrchestrationAgentReference[]
@@ -90,11 +91,11 @@ export function insertAgentReferences(
   const present = new Set<string>()
   editor.state.doc.descendants((node) => {
     if (node.type.name === NativeChatAgentReference.name) {
-      present.add(`${node.attrs.hostKey}\0${node.attrs.address}`)
+      present.add(`${node.attrs.hostKey}\0${node.attrs.address}\0${node.attrs.kind}`)
     }
   })
-  const references = candidates.filter(({ hostKey, address }) => {
-    const key = `${hostKey}\0${address}`
+  const references = candidates.filter(({ hostKey, address, kind }) => {
+    const key = `${hostKey}\0${address}\0${kind ?? ''}`
     return !present.has(key) && Boolean(present.add(key))
   })
   if (references.length === 0) {

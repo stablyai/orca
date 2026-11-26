@@ -81,4 +81,36 @@ describe('serializeNativeChatAgentReferences', () => {
       ].join('\n')
     )
   })
+
+  it('keeps a note for each kind when a crew chip and a terminal chip name one terminal', () => {
+    const picked = [chip('auth-tests', 'term_w1'), chip('zsh', 'term_w1', 'terminal')]
+    const text = `ask ${picked
+      .map(({ attrs: { label, address } }) =>
+        agentReferenceToken({ label, address, hostKey: 'local' })
+      )
+      .join(' and ')}`
+    const document = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'ask ' },
+            picked[0],
+            { type: 'text', text: ' and ' },
+            picked[1]
+          ]
+        }
+      ]
+    }
+
+    expect(serializeNativeChatAgentReferences(text, document)).toBe(
+      [
+        'ask @auth-tests and @zsh',
+        '',
+        '[Orca agent "auth-tests": term_w1 — message it with orca orchestration send --to term_w1 --subject "<topic>" --body "<message>"]',
+        '[Orca terminal "zsh": term_w1 — read it with orca terminal read --terminal term_w1, and type into it with orca terminal send --terminal term_w1 --text "<text>" --enter]'
+      ].join('\n')
+    )
+  })
 })
