@@ -1,4 +1,3 @@
-import { realpath } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { delimiter, isAbsolute, join, resolve } from 'node:path'
 import { readLaunchPosition } from '../../../../shared/agent-launch/startup/launch-position'
@@ -10,12 +9,13 @@ import { stripWindowsPathQuotes } from '../../../../shared/shell/command-resolut
 import {
   AgentInventoryDeadlineError,
   readLocalTerminalAgentProgram,
-  readPublishedLocalTerminalAgentProgram,
   type TerminalAgentProgram,
   withAgentInventoryDeadline
 } from '../../../preflight/agent-command-detection'
-import { isOrcaAgentRuntimePath } from '../../../managed-agent-cli/managed-agent-cli-path'
-import { isExecutableFile } from '../../../ipc/command-path/command-path-directory'
+import {
+  canonicalLocalAgentProgram,
+  isOrcaAgentRuntimePath
+} from '../../../managed-agent-cli/managed-agent-cli-path'
 import {
   readEnvCaseInsensitive,
   resolveCommandOnLocalPath
@@ -56,10 +56,6 @@ export async function resolveClaudeTeamsInvocation(
 }
 
 async function userClaude(caller: Caller): Promise<string> {
-  const published = directClaudePath(readPublishedLocalTerminalAgentProgram('claude', 'posix'))
-  if (published) {
-    return published
-  }
   return withAgentInventoryDeadline(async (signal) => {
     const lookup = new AbortController()
     const lookupSignal = AbortSignal.any([signal, lookup.signal])
@@ -72,8 +68,7 @@ async function userClaude(caller: Caller): Promise<string> {
     try {
       const first = await (callerResult ? Promise.race([hostResult, callerResult]) : hostResult)
       if (typeof first === 'string') {
-        // The inventory can publish before its waiting launch receives the result.
-        return directClaudePath(readPublishedLocalTerminalAgentProgram('claude', 'posix')) ?? first
+        return first
       }
       const selection = first ?? (await hostResult)
       const command = directClaudePath(selection) ?? (await callerResult)
@@ -140,11 +135,7 @@ function resolveClaudeOnCallerPath(
               return false
             }
             try {
-              if (!(await isExecutableFile(candidate, windows)) || lookup.waiterCount === 0) {
-                return false
-              }
-              const target = await realpath(candidate).catch(() => undefined)
-              return Boolean(target && !isOrcaAgentRuntimePath(target))
+              return Boolean(await canonicalLocalAgentProgram(candidate, controller.signal))
             } finally {
               // Let a new waiter join an issued probe, then stop before admitting another.
               if (lookup.waiterCount === 0) {

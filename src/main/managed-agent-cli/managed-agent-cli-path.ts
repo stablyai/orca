@@ -34,11 +34,11 @@ export function createAgentRuntimeTargetCheck(probes: InventoryFsProbes) {
   }
 }
 
-export async function canonicalLocalSetupProgram(
+export async function canonicalLocalAgentProgram(
   path: string,
   signal: AbortSignal
 ): Promise<string | undefined> {
-  if (!isAbsolute(path)) {
+  if (!isAbsolute(path) || isOrcaAgentRuntimePath(path)) {
     return undefined
   }
   const probes = new InventoryFsProbes(signal)

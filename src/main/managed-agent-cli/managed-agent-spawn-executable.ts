@@ -177,7 +177,7 @@ export async function rewriteLaunchExecutable(
     const verified = selection.result
     const selected: TerminalAgentProgram = setupGate
       ? 'path' in verified && verified.canonicalPath
-        ? { kind: 'full-path', path: verified.path }
+        ? { kind: 'full-path', path: verified.canonicalPath }
         : { kind: 'by-name', path: selection.program }
       : verified
     const program = selection.program

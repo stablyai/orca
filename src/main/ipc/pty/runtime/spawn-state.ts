@@ -150,7 +150,6 @@ export type RuntimePtySpawnArgs = {
   /** Planned command quoting determines the PTY runtime shell. */
   launchRuntime?: AgentLaunchRuntime
   preselectedAgentProgram?: PreselectedAgentProgram
-  refreshAgentProgram?: boolean
   isNewSession?: boolean
   /** No renderer view exists at spawn; main owns delivery and query replies until one mounts. */
   initiallyHidden?: boolean

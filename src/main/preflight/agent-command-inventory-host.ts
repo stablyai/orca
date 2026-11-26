@@ -13,7 +13,7 @@ import {
   waitForPromiseWithSignal
 } from '../../shared/concurrency/abort-signal-reason'
 import { invalidateExactLoginShellEnvironments } from '../startup/shell-environment/login-shell-environment'
-import { currentInventoryPublication, type InventorySlot } from './agent-command-inventory'
+import type { InventorySlot } from './agent-command-inventory'
 import { isOrcaAgentRuntimePath } from '../managed-agent-cli/managed-agent-cli-path'
 import type { AgentPathMatch } from '../ipc/command-path/command-path-batch'
 import type { AgentStartupShell } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
@@ -101,14 +101,4 @@ export function qualifyProgram(
   return winner && !isOrcaAgentRuntimePath(winner)
     ? { kind: 'by-name', path: winner }
     : { kind: 'full-path', path: match.user }
-}
-
-export function readPublishedLocalTerminalAgentProgram(
-  program: string,
-  shell: AgentStartupShell
-): TerminalAgentProgram {
-  const inventory = currentInventoryPublication(getLocalInventory())?.inventory
-  return inventory?.probed.has(program)
-    ? qualifyProgram(inventory.matches.get(program), shell)
-    : { kind: 'unknown' }
 }

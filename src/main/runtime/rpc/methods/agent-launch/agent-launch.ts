@@ -80,7 +80,7 @@ async function runAgentLaunch(
       replaySafe?.terminalSpawn,
       view
     ),
-    workspaces: agentLaunchWorkspaceFactory(context, intent.agent),
+    workspaces: agentLaunchWorkspaceFactory(context, intent.agent, intent.prompt?.text),
     // The tab is shown as it is published, not after a prompt that can take a minute to land.
     onSurfacePublished: async (surface) => {
       try {

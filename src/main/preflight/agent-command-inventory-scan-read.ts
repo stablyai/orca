@@ -2,11 +2,15 @@ import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-
 import type { AgentPathMatch } from '../ipc/command-path/command-path-batch'
 import type { InventoryScan } from './agent-command-inventory'
 import type { CommandInventory, InventoryPublication } from './agent-command-inventory-publication'
-import { waitForLocalInventoryCommands } from './local-agent-command-inventory'
+import {
+  partialLocalAgentCommandInventory,
+  waitForLocalInventoryCommands
+} from './local-agent-command-inventory'
 
 export type InventoryRead = {
   wait: (signal: AbortSignal) => Promise<InventoryPublication | null>
   snapshot: () => InventoryPublication | null
+  isCurrentMatch?: (command: string, match: AgentPathMatch | undefined) => boolean
 }
 
 export type InventoryReadOptions = {
@@ -25,14 +29,29 @@ export function readInventoryScan(
     requested,
     waitForCompletion,
     qualifiesEarly,
-    snapshot
+    wsl,
+    readPublished
   }: {
     requested: readonly string[]
     waitForCompletion: boolean
     qualifiesEarly?: (match: AgentPathMatch | undefined) => boolean
-    snapshot: (scan: InventoryScan, inventory?: CommandInventory) => InventoryPublication | null
+    wsl: boolean
+    readPublished: () => InventoryPublication | undefined
   }
 ): InventoryRead {
+  const snapshot = (inventory?: CommandInventory): InventoryPublication | null => {
+    const published = readPublished()
+    if (wsl) {
+      return published ?? null
+    }
+    return {
+      inventory:
+        inventory ?? partialLocalAgentCommandInventory(scan.progress, published?.inventory),
+      generation: scan.generation,
+      sequence: scan.partial?.sequence ?? published?.sequence ?? 0,
+      partial: true
+    }
+  }
   return {
     wait: async (signal) => {
       if (!waitForCompletion) {
@@ -44,11 +63,11 @@ export function readInventoryScan(
             scan,
             requested,
             qualifiesEarly,
-            () => snapshot(scan)?.inventory,
+            () => snapshot()?.inventory,
             signal
           )
           if (inventory) {
-            return snapshot(scan, inventory)
+            return snapshot(inventory)
           }
         }
         const publication = await waitForPromiseWithSignal(scan.complete.promise, signal)
@@ -59,6 +78,8 @@ export function readInventoryScan(
         scan = successor
       }
     },
-    snapshot: () => snapshot(scan)
+    snapshot: () => snapshot(),
+    isCurrentMatch: (command, match) =>
+      scan.progress.found.has(command) && scan.progress.matches.get(command) === match
   }
 }

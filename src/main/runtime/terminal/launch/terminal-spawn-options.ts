@@ -62,7 +62,6 @@ export function terminalSpawnOptions({
     ...(launchOpts.preselectedAgentProgram
       ? { preselectedAgentProgram: launchOpts.preselectedAgentProgram }
       : {}),
-    ...(launchOpts.refreshAgentProgram ? { refreshAgentProgram: true } : {}),
     ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
     ...launcherSpawnArgs,
     terminalKittyKeyboardProtocol: launchOpts.terminalKittyKeyboardProtocol,

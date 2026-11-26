@@ -1,3 +1,5 @@
+import type { AgentPathMatch } from '../ipc/command-path/command-path-batch'
+import { canonicalLocalAgentProgram } from '../managed-agent-cli/managed-agent-cli-path'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import type { WslPreflightTarget } from '../ipc/preflight/preflight-wsl-agent-detection'
 import {
@@ -22,10 +24,7 @@ import {
   qualifyProgram,
   type TerminalAgentProgram
 } from './agent-command-inventory-host'
-export {
-  readPublishedLocalTerminalAgentProgram,
-  type TerminalAgentProgram
-} from './agent-command-inventory-host'
+export type { TerminalAgentProgram } from './agent-command-inventory-host'
 import {
   completeInventoryAfter,
   isInventoryListCommandSettled
@@ -95,7 +94,6 @@ export async function selectTerminalAgentProgram(
     shellPath?: string
     refresh?: boolean
     revalidateUnavailable?: boolean
-    forceRefresh?: boolean
     pinForSetup?: boolean
     signal?: AbortSignal
     onWslDistroSelected?: (distro: string) => void
@@ -107,19 +105,14 @@ export async function selectTerminalAgentProgram(
     const slot = wsl ? await wslInventory(wsl, waitSignal) : getLocalInventory(shellPath)
     throwIfSignalAborted(waitSignal)
     const read = slot
-      ? readInventory(
-          slot,
-          programs,
-          options.forceRefresh ? 'refresh' : refresh ? 'revalidate' : 'read',
-          {
-            acceptAnyMatch: true,
-            qualifiesEarly: wsl
-              ? undefined
-              : (match) => qualifyProgram(match, shell).kind === 'by-name',
-            revalidateUnavailable: options.revalidateUnavailable,
-            waitForCompletion: true
-          }
-        )
+      ? readInventory(slot, programs, refresh ? 'revalidate' : wsl ? 'detect' : 'read', {
+          acceptAnyMatch: true,
+          qualifiesEarly: wsl
+            ? undefined
+            : (match) => qualifyProgram(match, shell).kind === 'by-name',
+          revalidateUnavailable: options.revalidateUnavailable,
+          waitForCompletion: true
+        })
       : undefined
     const publication = read
       ? await read.wait(waitSignal).catch((error: unknown) => {
@@ -144,28 +137,31 @@ export async function selectTerminalAgentProgram(
         continue
       }
       const match = inventory.matches.get(program)
-      if (wsl && options.pinForSetup && inventory.found.has(program)) {
-        if (!match?.first || !match.user) {
-          inconclusive = true
+      if (wsl) {
+        if (!inventory.found.has(program)) {
           continue
+        }
+        if (!match?.first || !match.user || !read?.isCurrentMatch?.(program, match)) {
+          return { program, result: { kind: 'unknown' } }
         }
         if (slot?.distro) {
           options.onWslDistroSelected?.(slot.distro)
         }
         return {
           program,
-          result: { kind: 'full-path', path: match.first, canonicalPath: match.user }
+          result: options.pinForSetup
+            ? { kind: 'full-path', path: match.first, canonicalPath: match.user }
+            : { kind: 'by-name', path: program }
         }
       }
-      const result: TerminalAgentProgram = wsl
-        ? inventory.found.has(program)
-          ? { kind: 'by-name', path: program }
-          : { kind: 'unavailable' }
-        : qualifyProgram(match, shell)
+      const result = qualifyProgram(match, shell)
+      if ('path' in result && !read?.isCurrentMatch?.(program, match)) {
+        const path = await canonicalLocalAgentProgram(result.path, waitSignal)
+        return path && slot === getLocalInventory(shellPath)
+          ? { program, result: { kind: 'full-path', path, canonicalPath: path } }
+          : { program, result: { kind: 'unknown' } }
+      }
       if (result.kind !== 'unavailable') {
-        if (slot?.distro) {
-          options.onWslDistroSelected?.(slot.distro)
-        }
         return { program, result }
       }
     }

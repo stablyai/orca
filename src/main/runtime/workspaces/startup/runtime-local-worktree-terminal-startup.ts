@@ -10,6 +10,7 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
+import { SETUP_AGENT_NOTICE_ENV } from '../../../../shared/agent-launch/startup/setup-agent-program'
 import { createSequencedSetupAgentCommands } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import {
   callerProvidesInitialSurface,
@@ -105,10 +106,22 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
       shell: setup.shell,
       ...(completionToken ? { completionToken } : {})
     })
+    const requestText =
+      startup.launchConfig?.commandProvenance === 'generated'
+        ? (args.draftPaste?.content ??
+          request.startupDraft ??
+          args.startupFollowup?.prompt ??
+          request.startupPrompt ??
+          request.startupRequestText)
+        : undefined
     sequencedStartup = {
       ...startup,
       command: sequenced.startupCommand,
-      ...(sequenced.startupEnv ? { env: { ...startup.env, ...sequenced.startupEnv } } : {})
+      env: {
+        ...startup.env,
+        ...sequenced.startupEnv,
+        ...(requestText ? { [SETUP_AGENT_NOTICE_ENV]: requestText } : {})
+      }
     }
     wrappedSetup = {
       command: sequenced.setupCommand,

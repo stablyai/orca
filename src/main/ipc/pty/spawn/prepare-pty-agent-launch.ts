@@ -22,13 +22,14 @@ import { withClaudeDirectLaunchCommand } from '../../../../shared/agent-launch/s
 import { prepareFreshOmpLaunch } from '../../../../shared/agent-launch/startup/omp-fresh-launch'
 import {
   buildSetupAgentRecheck,
+  setupAgentBlockedNotice,
   setupAgentProgramExpression,
   SETUP_AGENT_NOTICE_ENV,
   SETUP_AGENT_RECHECK_ENV,
   SETUP_AGENT_RUNTIME_ROOT_ENV,
   type SetupAgentProgram
 } from '../../../../shared/agent-launch/startup/setup-agent-program'
-import { translateMain } from '../../../i18n/main-i18n'
+import { getRuntimeDesktopSurface } from '../../../runtime/construction/runtime-desktop-surface'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { nativeWindowsPathToPosixShellPath } from '../../../../shared/agent-launch/startup/setup-runner-command'
 import {
@@ -153,6 +154,7 @@ export async function preparePtyAgentLaunch(
   let agentCommand = rootLaunch?.command ?? viewedCommand
   const images = inlineImagesEnabled && !input.envToDelete.includes('KITTY_WINDOW_ID')
   let prepared = agentCommand
+  const unsentRequest = env[SETUP_AGENT_NOTICE_ENV]
   if (sequenced) {
     delete env[SETUP_AGENT_NOTICE_ENV]
     delete env[SETUP_AGENT_RECHECK_ENV]
@@ -165,10 +167,10 @@ export async function preparePtyAgentLaunch(
         ? nativeWindowsPathToPosixShellPath(runtimeRoot)
         : (runtimeRoot ?? '')
     env[SETUP_AGENT_RECHECK_ENV] = buildSetupAgentRecheck(postSetupProgram.path, shell)
-    env[SETUP_AGENT_NOTICE_ENV] = translateMain(
-      'terminal.agentStartup.setupBlocked',
-      "Setup finished. Orca couldn't verify {{agent}} for this launch. Start it from the agent menu.",
-      { agent: TUI_AGENT_DISPLAY_NAMES[postSetupProgram.agent] }
+    env[SETUP_AGENT_NOTICE_ENV] = setupAgentBlockedNotice(
+      TUI_AGENT_DISPLAY_NAMES[postSetupProgram.agent],
+      unsentRequest,
+      getRuntimeDesktopSurface().translateNotification
     )
     if (input.codexRuntime === 'wsl') {
       addSetupAgentWslInteropEnv(env)

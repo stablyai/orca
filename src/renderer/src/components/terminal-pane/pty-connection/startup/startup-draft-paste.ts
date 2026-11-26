@@ -45,6 +45,7 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
     session.paneStartup?.env?.[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]
   )
   const setupWaitGate = createSetupWaitGate(awaitSetupGate)
+  let watchingSetup = awaitSetupGate
   let startupDraftReadinessArmed = false
   let startupDraftPasteSettled = !session.ownsStartupDraftPaste
   let startupDraftPasteInFlight = false
@@ -68,7 +69,12 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
     clearStartupDraftPasteTimers()
   }
   session.notifyBlockedStartup = (reason: AgentProgramBlockReason): void => {
-    notifyBlockedAgentStartup(reason, session.startupDraftPrompt ?? session.paneStartup?.command)
+    notifyBlockedAgentStartup(
+      reason,
+      session.startupDraftPrompt ??
+        session.paneStartup?.env?.[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV] ??
+        session.paneStartup?.command
+    )
   }
   const getStartupDraftPtyId = (): string | null => {
     const ptyId = session.transport.getPtyId()
@@ -195,10 +201,22 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
     armStartupDraftHardTimer()
   }
   session.observeStartupDraftPasteReadiness = (data: string): void => {
-    if (!startupDraftReadyScanner || !startupDraftReadinessArmed || startupDraftPasteSettled) {
+    const waitingForDraft = startupDraftReadinessArmed && !startupDraftPasteSettled
+    if (!watchingSetup && !waitingForDraft) {
       return
     }
     const gated = setupWaitGate.observe(data)
+    if (gated.phase === 'started' || gated.phase === 'failed') {
+      watchingSetup = false
+    }
+    if (gated.blocked) {
+      session.withholdStartupDraftPaste()
+      session.notifyBlockedStartup('unknown')
+      return
+    }
+    if (!startupDraftReadyScanner || !waitingForDraft) {
+      return
+    }
     if (gated.phase) {
       // Output before Setup ended was the wrapper's, so the scan and timers start over.
       startupDraftReadyScanner = createStartupDraftReadyScanner()

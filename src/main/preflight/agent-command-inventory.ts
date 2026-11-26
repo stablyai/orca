@@ -82,6 +82,8 @@ async function scanInventory(
     if (!probe) {
       return null
     }
+    scan.progress.found = probe.found
+    scan.progress.matches = probe.matches
     return {
       found: probe.found,
       matches: probe.matches,
@@ -94,7 +96,7 @@ async function scanInventory(
     commands,
     readLoginPath,
     slot.shellPath,
-    mode === 'refresh' && slot.shellPath !== undefined,
+    mode === 'refresh' || mode === 'revalidate',
     progress,
     () => notifyScanChange(scan),
     controller.signal
@@ -231,7 +233,11 @@ export function readInventory(
           ? current.probed.has(cmd)
           : isInventoryListCommandSettled(current, cmd, allowFallbackMisses)
       ))
-  const revalidateMiss = settled && revalidateUnavailable && !hasMatch
+  const revalidateMiss =
+    mode === 'read' &&
+    revalidateUnavailable &&
+    !hasMatch &&
+    (settled || requested.some((cmd) => current?.fallbackMisses?.has(cmd)))
   const readPublished = (): InventoryRead => ({
     wait: (signal) => waitForPromiseWithSignal(Promise.resolve(published ?? null), signal),
     snapshot: () => published ?? null
@@ -250,36 +256,29 @@ export function readInventory(
       requested,
       qualifiesEarly,
       waitForCompletion,
-      snapshot: (current, inventory) =>
-        slot.distro
-          ? (currentInventoryPublication(slot) ?? null)
-          : {
-              inventory:
-                inventory ??
-                partialLocalAgentCommandInventory(
-                  current.progress,
-                  currentInventoryPublication(slot)?.inventory
-                ),
-              generation,
-              sequence: current.partial?.sequence ?? slot.published?.sequence ?? 0,
-              partial: true
-            }
+      wsl: slot.distro !== undefined,
+      readPublished: () => currentInventoryPublication(slot)
     })
+  if (revalidateMiss && !slot.distro) {
+    mode = 'revalidate'
+  }
   const commands = targeted ? requested : [...slot.stockCommands, ...requested]
   const pending = slot.pending
   if (pending) {
     const { active } = pending
     if (!active.started) {
       addScanRequest(active, commands, mode, targeted)
+      active.revalidatesMiss ??= revalidateMiss ? requested : undefined
       return readScan(active)
     }
     if (
-      mode === 'refresh' ||
+      (mode === 'refresh' && slot.distro !== undefined) ||
       scanPriority[mode] > scanPriority[active.mode] ||
       !commands.every((cmd) => active.commands.has(cmd))
     ) {
       pending.queued ??= createScan(commands, mode, targeted, generation)
       addScanRequest(pending.queued, commands, mode, targeted)
+      pending.queued.revalidatesMiss ??= revalidateMiss ? requested : undefined
       if (active.partial) {
         active.controller.abort()
       }
@@ -289,6 +288,7 @@ export function readInventory(
   }
   const missRetry = slot.missRetry
   if (
+    settled &&
     revalidateMiss &&
     missRetry &&
     missRetry.generation === generation &&

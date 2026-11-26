@@ -24,7 +24,7 @@ import {
   type TerminalAgentProgramSelection
 } from '../preflight/agent-command-detection'
 import {
-  canonicalLocalSetupProgram,
+  canonicalLocalAgentProgram,
   createAgentRuntimeTargetCheck,
   isOrcaAgentRuntimePath
 } from './managed-agent-cli-path'
@@ -40,7 +40,6 @@ export type SpawnProgramContext = {
   shellPath?: string
   requirePinnedProgram?: boolean
   setupGate?: boolean
-  refreshAgentProgram?: boolean
   cwd?: string
   readCwd?: () => Promise<string | undefined>
   env?: NodeJS.ProcessEnv
@@ -67,7 +66,7 @@ export async function resolveSpawnAgentProgram(
     result: { kind: 'unknown' }
   }
   const preselected = spawn.preselectedAgentProgram
-  if (preselected && !spawn.setupGate && !spawn.refreshAgentProgram) {
+  if (preselected && !spawn.setupGate) {
     const sameRuntime =
       spawn.codexRuntime === 'wsl'
         ? preselected.wslDistro !== undefined &&
@@ -97,7 +96,9 @@ export async function resolveSpawnAgentProgram(
     if (!pinLocally || !('path' in selected.result)) {
       return selected
     }
-    const canonicalPath = await canonicalLocalSetupProgram(selected.result.path, signal)
+    const canonicalPath =
+      selected.result.canonicalPath ??
+      (await canonicalLocalAgentProgram(selected.result.path, signal))
     return canonicalPath
       ? { ...selected, result: { ...selected.result, canonicalPath } }
       : unknownSelection
@@ -131,7 +132,6 @@ async function selectSpawnAgentProgram(
     return selectTerminalAgentProgram(programs, shell, {
       wsl: { distro: spawn.expectedWslDistro ?? undefined },
       pinForSetup: spawn.setupGate,
-      forceRefresh: spawn.refreshAgentProgram,
       revalidateUnavailable: true,
       signal,
       onWslDistroSelected
@@ -186,7 +186,6 @@ async function selectSpawnAgentProgram(
   }
   selection ??= await selectTerminalAgentProgram(programs, shell, {
     refresh: Boolean(pinned),
-    forceRefresh: spawn.refreshAgentProgram,
     shellPath: spawn.shellPath,
     revalidateUnavailable: true,
     signal

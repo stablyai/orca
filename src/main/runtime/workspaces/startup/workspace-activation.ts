@@ -27,7 +27,9 @@ import {
   type StartupFollowupPromptOptions,
   type WorktreeStartupReadinessHost
 } from './runtime-worktree-startup-readiness'
-import { WorktreeSetupStartupRequests } from './worktree-setup-gate'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
+import { SETUP_AGENT_STARTED } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
+import { waitForWorktreeSetupGate } from './worktree-setup-gate'
 import {
   provisionWorktreeTerminals,
   type WorktreeTerminalProvisioningHost
@@ -219,21 +221,14 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     return recordCreatedWorktreeLineageState(this.store, worktree, lineageResolution)
   }
 
-  protected readonly setupStartup = new WorktreeSetupStartupRequests()
-
   protected pasteStartupDraftWhenReady(
     handle: string,
     draft: WorktreeStartupDraftPaste,
     awaitSetupGate?: boolean
   ): void {
-    const readiness = this.getWorktreeStartupReadinessHost()
-    const setup = this.setupStartup.forHandle(handle)
-    if (setup) {
-      setup.draft = draft
-    }
     pasteStartupDraftInCustody(
       {
-        readiness,
+        readiness: this.getWorktreeStartupReadinessHost(),
         waiters: this.terminalWaiters,
         readPty: (ptyId) => this.ptysById.get(ptyId),
         lifecycleSignal: (ptyId) => this.getPtyLifecycleSignal(ptyId),
@@ -293,17 +288,23 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     options?: StartupFollowupPromptOptions
   ): Promise<boolean> {
     const host = this.getWorktreeStartupReadinessHost()
-    const setup = this.setupStartup.forHandle(handle)
-    if (setup) {
-      setup.followup ??= followup
+    const gate = options?.terminalCreation?.[SETUP_AGENT_STARTED]
+    if (options?.awaitSetupGate || gate) {
+      const ptyId = host.getPtyId(handle)
+      if (!ptyId) {
+        return false
+      }
+      const lifecycle = this.getPtyLifecycleSignal(ptyId)
+      const signal = options?.signal ? AbortSignal.any([lifecycle, options.signal]) : lifecycle
+      const started = gate
+        ? await waitForPromiseWithSignal(gate, signal).catch(() => false)
+        : await waitForWorktreeSetupGate(host, ptyId, signal)
+      if (!started || signal.aborted) {
+        return false
+      }
+      return deliverStartupFollowupPrompt(this, host, handle, followup, { ...options, signal })
     }
-    return this.setupStartup.deliverFollowup(
-      host,
-      handle,
-      options,
-      (ptyId) => this.getPtyLifecycleSignal(ptyId),
-      (afterSetup) => deliverStartupFollowupPrompt(this, host, handle, followup, afterSetup)
-    )
+    return deliverStartupFollowupPrompt(this, host, handle, followup, options)
   }
 
   async provisionManagedWorktreeTerminals(

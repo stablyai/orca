@@ -25,7 +25,6 @@ export type PtySpawnLaunchOptionsInput = {
     rows: number
     launchAgent?: unknown
     preselectedAgentProgram?: PreselectedAgentProgram
-    refreshAgentProgram?: boolean
     nativeChatSignIn?: NativeChatSignInRequest
     resumeProviderSession?: unknown
     resumeOrigin?: unknown

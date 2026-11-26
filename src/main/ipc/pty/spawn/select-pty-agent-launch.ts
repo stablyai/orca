@@ -46,7 +46,6 @@ export async function selectPtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
       launchCommand: sequenced || input.launchCommand,
       launchAgent,
       shellPath: process.platform === 'win32' ? undefined : input.shellOverride,
-      refreshAgentProgram: args.refreshAgentProgram,
       preselectedAgentProgram:
         !sequenced || args.preselectedAgentProgram?.shell === shell
           ? args.preselectedAgentProgram
