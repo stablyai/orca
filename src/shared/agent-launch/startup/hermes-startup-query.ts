@@ -215,11 +215,9 @@ export function planHermesStartupQuery(args: {
     return null
   }
   const command = buildHermesQueryCommand(argv, args.shell)
-  const env = {
+  const env: Record<string, string> = {
     ...args.agentEnv,
-    [ORCA_HERMES_STARTUP_QUERY_ENV]: args.prompt,
-    // Older hosts still receive the shell wrapper. The spawning host can render it with its selected executable.
-    ...(args.generated ? { [ORCA_HERMES_STARTUP_QUERY_ARGV_ENV]: JSON.stringify(argv) } : {})
+    [ORCA_HERMES_STARTUP_QUERY_ENV]: args.prompt
   }
   const envSize = Object.entries(env).reduce((total, [key, value]) => {
     if (args.platform === 'win32') {
@@ -230,5 +228,12 @@ export function planHermesStartupQuery(args: {
   const commandSize =
     args.platform === 'win32' ? command.length : new TextEncoder().encode(command).byteLength
   // WSL executes Linux plans through the Windows environment block; use a conservative bound safe across transports.
-  return commandSize + envSize <= QUERY_ENV_LIMIT ? { command, env } : null
+  if (commandSize + envSize > QUERY_ENV_LIMIT) {
+    return null
+  }
+  // Rebuild metadata is stripped before pane spawn.
+  if (args.generated) {
+    env[ORCA_HERMES_STARTUP_QUERY_ARGV_ENV] = JSON.stringify(argv)
+  }
+  return { command, env }
 }
