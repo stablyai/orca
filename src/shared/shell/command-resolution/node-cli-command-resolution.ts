@@ -202,6 +202,17 @@ export function cliPathLookup(
   return firstRunnable(platform, splitPath(pathEnv, platform), executableNames)
 }
 
+export function cliInstallDirectoriesForCommand(
+  directories: string[],
+  platform: NodeJS.Platform,
+  homePath: string,
+  command: string
+): string[] {
+  return platform !== 'win32' && command === 'claude'
+    ? [...directories, join(homePath, '.claude', 'local')]
+    : directories
+}
+
 /** PATH entries first; install dirs are listed only once PATH misses. Run with cli-fs-reads. */
 export function* cliCommandLookup(
   commandName: string,
@@ -210,14 +221,18 @@ export function* cliCommandLookup(
   const platform = options.platform ?? process.platform
   const names = getExecutableNames(platform, commandName)
   const pathEnv = options.pathEnv ?? process.env.PATH ?? process.env.Path ?? null
+  const onPath = options.skipPathSearch ? null : yield* cliPathLookup(platform, pathEnv, names)
+  if (onPath) {
+    return onPath
+  }
+  const home = options.homePath ?? homedir()
+  const dirs = yield* cliInstallDirectories(platform, home)
   return (
-    (options.skipPathSearch ? null : yield* cliPathLookup(platform, pathEnv, names)) ??
     (yield* firstRunnable(
       platform,
-      yield* cliInstallDirectories(platform, options.homePath ?? homedir()),
+      cliInstallDirectoriesForCommand(dirs, platform, home, commandName),
       names
-    )) ??
-    commandName
+    )) ?? commandName
   )
 }
 

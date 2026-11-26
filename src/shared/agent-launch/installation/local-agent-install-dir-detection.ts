@@ -7,6 +7,7 @@ import {
 import type { InventoryFsProbes } from '../../shell/command-resolution/inventory-fs-probes'
 import {
   cliInstallDirectories,
+  cliInstallDirectoriesForCommand,
   firstRunnable,
   getExecutableNames
 } from '../../shell/command-resolution/node-cli-command-resolution'
@@ -16,16 +17,19 @@ export async function detectCommandsInInstallDirs(
   {
     probes,
     readDirectories,
+    acceptsExecutableTarget,
     complete
   }: {
     probes: InventoryFsProbes
     readDirectories: NonNullable<CliFsProbeOptions['readDirectories']>
+    acceptsExecutableTarget: (target: string) => Promise<boolean>
     complete: (command: string, user: string | null, uncertain: boolean) => void
   }
 ): Promise<void> {
   const platform = process.platform
   let unverifiedDirectories = false
-  const dirs = await runCliFsReadsAsync(cliInstallDirectories(platform, homedir()), {
+  const home = homedir()
+  const dirs = await runCliFsReadsAsync(cliInstallDirectories(platform, home), {
     probes,
     readDirectories,
     onUnverified: () => {
@@ -36,9 +40,14 @@ export async function detectCommandsInInstallDirs(
     commands.map(async (command) => {
       let uncertain = unverifiedDirectories
       const user = await runCliFsReadsAsync(
-        firstRunnable(platform, dirs, getExecutableNames(platform, command)),
+        firstRunnable(
+          platform,
+          cliInstallDirectoriesForCommand(dirs, platform, home, command),
+          getExecutableNames(platform, command)
+        ),
         {
           probes,
+          acceptsExecutableTarget,
           onUnverified: () => {
             uncertain = true
           }

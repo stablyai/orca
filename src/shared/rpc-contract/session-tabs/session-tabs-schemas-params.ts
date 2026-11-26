@@ -191,6 +191,7 @@ export const CreateTerminalTab = lazyZodSchema(() =>
     cwd: z.string().min(1).optional(),
     env: z.record(z.string(), z.string()).optional(),
     generatedAgentLaunch: z.string().optional(),
+    historyResume: z.literal(true).optional(),
     hermesStartupQueryArgv: z.string().optional(),
     envToDelete: z.array(z.string().min(1).max(256)).max(32).optional(),
     nativeChatSignIn: NativeChatSignIn.optional(),

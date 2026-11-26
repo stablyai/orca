@@ -115,10 +115,10 @@ export async function startRuntimeFolderWorktreeSetupTerminals(args: {
           )
         }
       : {}),
-    ...(started.didSpawnStartup && started.startupTerminalHandle
+    ...(started.startupTerminalHandle
       ? {
           startupTerminal: {
-            spawned: true,
+            spawned: started.didSpawnStartup,
             handle: started.startupTerminalHandle,
             ...(started.startupTerminalTabId ? { tabId: started.startupTerminalTabId } : {}),
             ...(started.startupTerminalPaneKey ? { paneKey: started.startupTerminalPaneKey } : {}),

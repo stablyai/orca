@@ -9,6 +9,15 @@ export type InventoryRead = {
   snapshot: () => InventoryPublication | null
 }
 
+export type InventoryReadOptions = {
+  targeted?: boolean
+  acceptAnyMatch?: boolean
+  qualifiesEarly?: (match: AgentPathMatch | undefined) => boolean
+  revalidateUnavailable?: boolean
+  afterPublication?: number
+  waitForCompletion?: boolean
+}
+
 export function readInventoryScan(
   scan: InventoryScan,
   {

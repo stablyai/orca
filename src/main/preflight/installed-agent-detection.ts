@@ -151,7 +151,9 @@ export async function detectInstalledAgentInventory(
         : { afterPublication: options.afterPublication }),
       waitForCompletion: options?.waitForCompletion,
       ...(runtime === 'wsl' ? {} : { outsidePath: foundOutsidePath }),
-      ...(options?.onlyTuiAgent ? { onlyRequested: true } : {}),
+      ...(options?.onlyTuiAgent || options?.disabledTuiAgents?.length
+        ? { onlyRequested: true }
+        : {}),
       ...(refresh ? { refresh: true } : {}),
       ...(signal ? { signal } : {}),
       ...(prepare ? { prepare } : {})

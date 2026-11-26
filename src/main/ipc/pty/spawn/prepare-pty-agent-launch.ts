@@ -4,18 +4,11 @@ import {
 } from '../../../../shared/agent-launch/startup/claude-agent-teams-tmux-compat'
 import { planClaudeRootLaunch } from '../../../../shared/agent-launch/permissions/claude-root-bypass-launch'
 import { withClaudeAgentViewPlugin } from '../../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view-launch'
-import {
-  resolveStartupShell,
-  type AgentStartupShell
-} from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
-import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/shell/launch/windows-terminal-shell'
-import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import type { AgentStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { recognizeAgentLaunchCommand } from '../../../../shared/agent-launch/startup/agent-command-line-intent'
 import { readLaunchPosition } from '../../../../shared/agent-launch/startup/launch-position'
-import { GENERATED_AGENT_LAUNCH_ENV } from '../../../../shared/agent-launch/startup/generated-agent-launch-inputs'
 import {
   hermesStartupQueryFits,
-  ORCA_HERMES_STARTUP_QUERY_ARGV_ENV,
   ORCA_HERMES_STARTUP_QUERY_ENV
 } from '../../../../shared/agent-launch/startup/hermes-startup-query'
 import { agentLaunchUnbuildableMessage } from '../../../../shared/agent-launch/startup/tui-agent-startup'
@@ -26,79 +19,17 @@ import {
 } from '../../../../shared/agent-launch/startup/codex-startup-image-command'
 import { withClaudeDirectLaunchCommand } from '../../../../shared/agent-launch/startup/claude-direct-launch-command'
 import {
+  SETUP_AGENT_SEQUENCE_BLOCKED_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
-  SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
+  SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV,
+  SETUP_WAIT_TIMEOUT_MESSAGE
 } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
-import { alignManagedAgentLaunchAtSpawn } from '../../../managed-agent-cli/managed-agent-spawn-program'
 import { withSpawnTerminalMcpServers } from '../../../mcp-servers/terminal/terminal-mcp-spawn-step'
 import { planCodexNoDaemonLaunch } from '../../../pty/shell-startup/codex-no-daemon-launch-command'
 import { promoteAgentTeamsShimPath } from '../host-env/path'
 import type { PtySpawnLaunchOptionsInput } from './spawn-options-assembly'
+import type { selectPtyAgentLaunch } from './select-pty-agent-launch'
 import { applyTerminalImageEnvironment } from './terminal-image-environment'
-
-export async function selectPtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
-  const { args } = input
-  const connectionId = args.connectionId ?? undefined
-  const launchAgent = isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
-  const platform = input.codexRuntime === 'wsl' ? 'linux' : process.platform
-  const paneShell = resolveStartupShell(
-    platform,
-    resolveLocalWindowsAgentStartupShell({
-      platform: process.platform,
-      isRemote: Boolean(connectionId) || input.codexRuntime === 'wsl',
-      terminalWindowsShell: input.shellOverride ?? input.getSettings?.()?.terminalWindowsShell
-    })
-  )
-  // The setup gate's existing carrier holds the actual launch, including any Agent Teams flags.
-  const sequenced = input.launchCommand && input.env?.[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]
-  const shell = sequenced
-    ? input.env?.[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]
-      ? 'posix'
-      : 'powershell'
-    : paneShell
-  const command = sequenced || input.launchCommand
-  const {
-    command: startupCommand,
-    launchConfig,
-    blocked: selectionBlocked,
-    rebuiltHermesQuery
-  } = await alignManagedAgentLaunchAtSpawn(
-    {
-      ...input,
-      launchCommand: command,
-      launchAgent,
-      preselectedAgentProgram: args.preselectedAgentProgram,
-      restoring: Boolean(args.resumeProviderSession) || args.resumeOrigin === 'saved',
-      nativeChatSignIn: args.nativeChatSignIn,
-      sshTarget: Boolean(connectionId),
-      ...(sequenced ? { sourceShell: paneShell } : {})
-    },
-    shell
-  )
-  let paneEnv = input.env
-  if (
-    paneEnv &&
-    (GENERATED_AGENT_LAUNCH_ENV in paneEnv || ORCA_HERMES_STARTUP_QUERY_ARGV_ENV in paneEnv)
-  ) {
-    paneEnv = { ...paneEnv }
-    delete paneEnv[GENERATED_AGENT_LAUNCH_ENV]
-    delete paneEnv[ORCA_HERMES_STARTUP_QUERY_ARGV_ENV]
-    if (selectionBlocked) {
-      delete paneEnv[ORCA_HERMES_STARTUP_QUERY_ENV]
-    }
-  }
-  return {
-    launchAgent,
-    shell,
-    platform,
-    sequenced,
-    startupCommand,
-    launchConfig,
-    selectionBlocked,
-    rebuiltHermesQuery,
-    paneEnv
-  }
-}
 
 export async function preparePtyAgentLaunch(
   input: PtySpawnLaunchOptionsInput,
@@ -114,6 +45,8 @@ export async function preparePtyAgentLaunch(
     sequenced,
     launchConfig,
     selectionBlocked,
+    setupExit,
+    waitForSetup,
     rebuiltHermesQuery
   } = selection
   const settings = input.getSettings?.()
@@ -230,9 +163,17 @@ export async function preparePtyAgentLaunch(
     agentCommand = undefined
     prepared = undefined
     delete env[ORCA_HERMES_STARTUP_QUERY_ENV]
-    delete env[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]
   }
+  const keepGate = sequenced && (!blocked || (waitForSetup && setupExit !== null))
   if (sequenced) {
+    if (!keepGate) {
+      delete env[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]
+    } else if (blocked) {
+      env[SETUP_AGENT_SEQUENCE_BLOCKED_ENV] =
+        blocked === 'unavailable'
+          ? 'The agent could not be found on this host.'
+          : 'Agent startup is blocked. Try again.'
+    }
     if (prepared === undefined) {
       delete env[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]
     } else {
@@ -245,11 +186,13 @@ export async function preparePtyAgentLaunch(
     launchConfig,
     blocked,
     launchCommand: sequenced && !blocked ? input.launchCommand : agentCommand,
-    startup: sequenced && !blocked ? input.launchCommand : prepared,
+    startup: keepGate ? input.launchCommand : prepared,
     settings,
     startupNotice: hermesQueryTooLarge
       ? `\r\n[orca] ${agentLaunchUnbuildableMessage('hermes')}\r\n`
-      : (authoredRootLaunch?.notice ?? rootLaunch?.notice),
+      : setupExit === null
+        ? `\r\n[orca] ${SETUP_WAIT_TIMEOUT_MESSAGE}\r\n`
+        : (authoredRootLaunch?.notice ?? rootLaunch?.notice),
     terminalMcp: mcp.pane
   }
 }

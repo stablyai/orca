@@ -81,11 +81,10 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
     assertMobileTerminalShellSupported(this.store, workspace, opts.shellOverride, cwd)
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
     // Older mobile clients optimistically append; match until they advertise grouped placement.
-    const requestedAfterTabId = opts.afterTabId
     const afterTabId =
       opts.clientNavigationId && opts.supportsSplitGroupPlacement === false
         ? undefined
-        : requestedAfterTabId
+        : opts.afterTabId
     if (opts.sourceChatFork) {
       return this.createMobileChatForkTerminal({
         workspace,
@@ -97,7 +96,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
     }
     const afterDesktopTabId = anchorTabOfCreate(
       this.mobileSessionTabsByWorktree.get(worktreeId)?.tabs,
-      requestedAfterTabId,
+      opts.afterTabId,
       afterTabId !== undefined
     )
     const startupCommand = applyRemoteViewerLaunchEnv(
@@ -108,7 +107,11 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
     if (opts.signal?.aborted) {
       throw new Error('client_disconnected')
     }
-    if (opts.clientMutationId && startupCommand.command && startupCommand.launchAgent === 'qoder') {
+    if (
+      opts.clientMutationId &&
+      startupCommand.command &&
+      (opts.historyResume || startupCommand.launchAgent === 'qoder')
+    ) {
       const clientIdentity = opts.clientNavigationId ?? 'local'
       const seed = `${clientIdentity}\0${worktreeId}\0${opts.clientMutationId}`
       // A command-bearing retry must reconcile the owning PTY before delivering the resume again.
@@ -120,6 +123,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           // The paired client's own create: its user's act.
           wslUserAct: true,
           ...startupCommand,
+          resumeProviderSession: opts.resumeProviderSession,
           ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
           cwd,
           identity: {
@@ -154,7 +158,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           viewMode: opts.viewMode,
           targetGroupId: opts.targetGroupId,
           ...mainPlacedAfter(
-            () => this.mainLayoutTabOfRow(worktreeId, requestedAfterTabId),
+            () => this.mainLayoutTabOfRow(worktreeId, opts.afterTabId),
             afterDesktopTabId
           ),
           supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,

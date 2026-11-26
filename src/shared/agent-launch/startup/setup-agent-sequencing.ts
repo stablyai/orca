@@ -20,6 +20,8 @@ export const SETUP_WAIT_TIMEOUT_MESSAGE = 'Timed out waiting for setup before st
 export const SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV = 'ORCA_SEQUENCED_STARTUP_COMMAND'
 export const SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV = 'ORCA_SEQUENCED_STARTUP_SCRIPT'
 export const SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV = 'ORCA_SEQUENCED_SETUP_SCRIPT'
+export const SETUP_AGENT_SEQUENCE_MARKER_ENV = 'ORCA_SEQUENCED_SETUP_MARKER'
+export const SETUP_AGENT_SEQUENCE_BLOCKED_ENV = 'ORCA_SEQUENCED_AGENT_BLOCKED'
 
 export type SequencedSetupAgentCommands = {
   setupCommand: string
@@ -60,6 +62,7 @@ export function createSequencedSetupAgentCommands(args: {
     : resolution.runnerScriptPathForShell
   // Use distinct markers for overlapping launches of one setup runner.
   const markerPath = `${markerBasePath}.${nonce}.done`
+  const hostMarker = `${args.runnerScriptPath}.${nonce}.done`
   const waitTimeoutSeconds = args.waitTimeoutSeconds ?? SETUP_AGENT_WAIT_TIMEOUT_SECONDS
 
   if (resolution.shell === 'windows' && !posixGateForWindowsRunner) {
@@ -72,7 +75,8 @@ export function createSequencedSetupAgentCommands(args: {
       ),
       startupCommand: buildWindowsStartupCommand(markerPath, nonce, waitTimeoutSeconds),
       startupEnv: {
-        [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: args.startupCommand
+        [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: args.startupCommand,
+        [SETUP_AGENT_SEQUENCE_MARKER_ENV]: hostMarker
       }
     }
   }
@@ -97,7 +101,8 @@ export function createSequencedSetupAgentCommands(args: {
     startupCommand: `bash -lc 'eval "$${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}"'`,
     startupEnv: {
       [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: args.startupCommand,
-      [SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]: startupScript
+      [SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]: startupScript,
+      [SETUP_AGENT_SEQUENCE_MARKER_ENV]: hostMarker
     }
   }
 }
@@ -149,7 +154,7 @@ function buildPosixStartupScript(
     `rm -f ${marker} ${tmp} 2>/dev/null;`,
     // Announce success so “Waiting for setup...” does not linger. Install launch functions only after setup
     // may have supplied codex; fresh bash -lc does not read Orca’s wrapper.
-    `if [ "$status" = "0" ]; then echo ${quotePosixShellUnlessPlainNoAt(SETUP_COMPLETE_MESSAGE)} >&2;\n${getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction()}if [ -n "\${${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}:-}" ]; then eval "\$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}"; exit "$?"; else ${startupSuccessCommand}; fi; fi;`,
+    `if [ "$status" = "0" ]; then if [ -n "$${SETUP_AGENT_SEQUENCE_BLOCKED_ENV}" ]; then printf '%s\\n' "$${SETUP_AGENT_SEQUENCE_BLOCKED_ENV}" >&2; exit 1; fi; echo ${quotePosixShellUnlessPlainNoAt(SETUP_COMPLETE_MESSAGE)} >&2;\n${getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction()}if [ -n "\${${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}:-}" ]; then eval "\$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}"; exit "$?"; else ${startupSuccessCommand}; fi; fi;`,
     `echo "${SETUP_FAILED_MESSAGE_PREFIX}\${status:-1}); skipping agent startup. See the Setup terminal for details." >&2;`,
     'exit "${status:-1}";',
     'fi;',
@@ -279,6 +284,7 @@ function buildWindowsStartupCommand(
     `        [Console]::Error.WriteLine("${SETUP_FAILED_MESSAGE_PREFIX}$setupStatus); skipping agent startup. See the Setup terminal for details.")`,
     '        exit $setupStatus',
     '      }',
+    `      if ($env:${SETUP_AGENT_SEQUENCE_BLOCKED_ENV}) { [Console]::Error.WriteLine($env:${SETUP_AGENT_SEQUENCE_BLOCKED_ENV}); exit 1 }`,
     `      $startup = $env:${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}`,
     '      if ([string]::IsNullOrWhiteSpace($startup)) {',
     '        [Console]::Error.WriteLine("Missing sequenced startup command.")',

@@ -51,7 +51,7 @@ export function windowStartupAfterCreate(
   agent: TuiAgent | null
   terminalOptions: CreationTerminalOptions
 } {
-  const backendSpawned = result.startupTerminal?.spawned === true
+  const backendSpawned = Boolean(result.startupTerminal?.spawned || result.startupTerminal?.handle)
   const plan = planWindowStartup(request, result, backendSpawned)
   return {
     ...plan,

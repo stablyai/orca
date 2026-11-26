@@ -92,6 +92,7 @@ async function isNativeExecutableAsync(path: string): Promise<boolean> {
 export type CliFsProbeOptions = {
   probes: InventoryFsProbes
   onUnverified: () => void
+  acceptsExecutableTarget?: (target: string) => Promise<boolean>
   readDirectories?: (
     path: string
   ) => Promise<InstallDirectoryListing | null | typeof UNVERIFIED_FS_PROBE>
@@ -142,7 +143,14 @@ async function readAsync(
           return await isRunnableCommandAsync(read.platform, read.path)
         }
         const result = await probes.executableFile(read.path, read.platform === 'win32')
-        return result === UNVERIFIED_FS_PROBE ? result : result === 'file'
+        const acceptsTarget = options?.acceptsExecutableTarget
+        if (result !== 'file' || !acceptsTarget) {
+          return result === UNVERIFIED_FS_PROBE ? result : result === 'file'
+        }
+        const target = await probes.realPath(read.path)
+        return target === UNVERIFIED_FS_PROBE
+          ? target
+          : target !== null && (await acceptsTarget(target))
       }
       case 'file': {
         const stats = await (probes

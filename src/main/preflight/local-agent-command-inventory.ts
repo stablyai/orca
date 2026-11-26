@@ -4,8 +4,14 @@ import {
   findCommandsOnLocalPath,
   type AgentPathMatch
 } from '../ipc/command-path/command-path-batch'
-import { isOrcaAgentRuntimePath } from '../managed-agent-cli/managed-agent-cli-path'
-import { resolveLoginShellEnvironment } from '../startup/shell-environment/login-shell-environment'
+import {
+  createAgentRuntimeTargetCheck,
+  isOrcaAgentRuntimePath
+} from '../managed-agent-cli/managed-agent-cli-path'
+import {
+  captureLoginShellEnvironment,
+  resolveLoginShellEnvironment
+} from '../startup/shell-environment/login-shell-environment'
 import {
   InventoryFsProbes,
   UNVERIFIED_FS_PROBE
@@ -13,7 +19,11 @@ import {
 import { readInstallDirectoriesViaWorker } from '../ipc/command-path/command-path-directory-worker-client'
 import { buildLocalPreflightEnvAsync } from '../ipc/preflight/preflight-local-env'
 import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-reason'
-import type { CommandInventory, InventoryPublication } from './agent-command-inventory-publication'
+import {
+  mergeInventory,
+  type CommandInventory,
+  type InventoryPublication
+} from './agent-command-inventory-publication'
 
 type LocalInventoryProgress = Omit<CommandInventory, 'probed'> & { probed: Set<string> }
 export type LocalInventoryScan = {
@@ -68,24 +78,45 @@ export async function waitForLocalInventoryCommands(
 }
 
 export function partialLocalAgentCommandInventory(
-  progress: LocalInventoryProgress
+  progress: LocalInventoryProgress,
+  previous?: CommandInventory
 ): CommandInventory {
-  return {
+  const snapshot = {
     found: new Set(progress.found),
     matches: new Map(progress.matches),
     probed: new Set([...progress.probed, ...progress.found]),
     incomplete: true
   }
+  return mergeInventory(snapshot, previous, snapshot.probed, true)
 }
 
 export async function scanLocalAgentCommandInventory(
   commands: ReadonlySet<string>,
   readLoginPath: boolean,
+  shellPath: string | undefined,
+  afterSetup: boolean,
   { matches, found, probed }: LocalInventoryProgress,
   onChange: () => void,
   signal: AbortSignal
 ): Promise<CommandInventory> {
+  const captured =
+    shellPath || (afterSetup && process.platform !== 'win32')
+      ? await waitForPromiseWithSignal(
+          captureLoginShellEnvironment({
+            shellOverride: shellPath,
+            exactPath: true,
+            ...(afterSetup
+              ? { startedAfter: Date.now() }
+              : { refreshAfterMs: 5_000, keepCaptured: true })
+          }),
+          signal
+        )
+      : undefined
+  if (captured?.status === 'fallback') {
+    return { matches, found, probed, incomplete: true }
+  }
   const env =
+    captured?.env ??
     (await waitForPromiseWithSignal(buildLocalPreflightEnvAsync(), signal)) ??
     (readLoginPath
       ? await waitForPromiseWithSignal(resolveLoginShellEnvironment(), signal)
@@ -120,11 +151,16 @@ export async function scanLocalAgentCommandInventory(
   const pathScan = new AbortController()
   const pathSignal = AbortSignal.any([signal, pathScan.signal])
   try {
+    const probes = new InventoryFsProbes(pathSignal)
     await findCommandsOnLocalPath(names, {
       env,
-      inventory: { isRuntimePath: isOrcaAgentRuntimePath, matches },
+      inventory: {
+        isRuntimePath: isOrcaAgentRuntimePath,
+        isRuntimeTarget: createAgentRuntimeTargetCheck(probes),
+        matches
+      },
       found,
-      probes: new InventoryFsProbes(pathSignal),
+      probes,
       signal: pathSignal,
       inventoryCommandCount: commands.size,
       onMatch: onChange,
@@ -142,8 +178,10 @@ export async function scanLocalAgentCommandInventory(
   }
   if (!signal.aborted && pathMisses.length) {
     const probes = new InventoryFsProbes(signal, 'installer')
+    const isRuntime = createAgentRuntimeTargetCheck(probes)
     await detectCommandsInInstallDirs(pathMisses, {
       probes,
+      acceptsExecutableTarget: async (target) => !(await isRuntime(target)),
       readDirectories: (dir) =>
         probes.read(
           dir,

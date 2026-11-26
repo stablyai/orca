@@ -1,5 +1,5 @@
 import type { Stats } from 'node:fs'
-import { access, constants, stat } from 'node:fs/promises'
+import { access, constants, realpath, stat } from 'node:fs/promises'
 import { waitForPromiseWithSignal } from '../../concurrency/abort-signal-reason'
 import { PrioritySemaphore } from '../../concurrency/priority-semaphore'
 
@@ -14,6 +14,7 @@ type ProbeValues = {
   dirs: InstallDirectoryListing
   listing: Map<string, string>
   file: string
+  realpath: string
 }
 type ProbeKind = keyof ProbeValues
 type ProbeValue = ProbeValues[ProbeKind] | null
@@ -121,6 +122,10 @@ export class InventoryFsProbes {
     return waitForPromiseWithSignal(result, this.signal).catch(
       (): typeof UNVERIFIED_FS_PROBE => UNVERIFIED_FS_PROBE
     )
+  }
+
+  realPath(path: string): Promise<string | null | typeof UNVERIFIED_FS_PROBE> {
+    return this.read(path, 'realpath', () => realpath(path))
   }
 
   executableFile(

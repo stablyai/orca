@@ -144,9 +144,9 @@ export async function prepareGroupFolderCreation(args: {
       started.setupTerminalHandle
     )
   }
-  if (started.didSpawnStartup) {
+  if (started.startupTerminalHandle) {
     result.startupTerminal = {
-      spawned: true,
+      spawned: started.didSpawnStartup,
       handle: started.startupTerminalHandle ?? undefined,
       tabId: started.startupTerminalTabId ?? undefined,
       paneKey: started.startupTerminalPaneKey,

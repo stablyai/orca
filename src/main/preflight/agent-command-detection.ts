@@ -108,26 +108,34 @@ export async function selectTerminalAgentProgram(
   shell: AgentStartupShell,
   options: {
     wsl?: WslPreflightTarget
+    shellPath?: string
     refresh?: boolean
+    afterSetup?: boolean
     revalidateUnavailable?: boolean
     signal?: AbortSignal
     onWslDistroSelected?: (distro: string) => void
   }
 ): Promise<TerminalAgentProgramSelection> {
-  const { wsl, refresh, signal } = options
+  const { wsl, refresh, signal, shellPath } = options
   const preferred = programs[0]
   return withAgentInventoryDeadline<TerminalAgentProgramSelection>(async (waitSignal) => {
-    const slot = wsl ? await wslInventory(wsl, waitSignal) : getLocalInventory()
+    const slot = wsl ? await wslInventory(wsl, waitSignal) : getLocalInventory(shellPath)
     throwIfSignalAborted(waitSignal)
     const read = slot
-      ? readInventory(slot, programs, refresh ? 'revalidate' : 'read', {
-          acceptAnyMatch: true,
-          qualifiesEarly: wsl
-            ? undefined
-            : (match) => qualifyProgram(match, shell).kind === 'by-name',
-          revalidateUnavailable: options.revalidateUnavailable,
-          waitForCompletion: true
-        })
+      ? readInventory(
+          slot,
+          programs,
+          options.afterSetup ? 'refresh' : refresh ? 'revalidate' : 'read',
+          {
+            targeted: options.afterSetup,
+            acceptAnyMatch: true,
+            qualifiesEarly: wsl
+              ? undefined
+              : (match) => qualifyProgram(match, shell).kind === 'by-name',
+            revalidateUnavailable: options.revalidateUnavailable,
+            waitForCompletion: true
+          }
+        )
       : undefined
     const publication = read
       ? await read.wait(waitSignal).catch((error: unknown) => {
@@ -142,7 +150,7 @@ export async function selectTerminalAgentProgram(
         })
       : null
     const inventory = publication?.inventory
-    if (!inventory || (!wsl && slot !== getLocalInventory())) {
+    if (!inventory || (!wsl && slot !== getLocalInventory(shellPath))) {
       return { program: preferred, result: { kind: 'unknown' } }
     }
     let inconclusive = false
@@ -242,6 +250,7 @@ export async function detectAgentCommandInventoryOnHost(
       }
       read = readInventory(slot, commands, options.refresh ? refreshMode : ordinaryMode, {
         targeted,
+        afterPublication: options.afterPublication,
         waitForCompletion:
           options.waitForCompletion || (!options.refresh && options.afterPublication !== undefined)
       })

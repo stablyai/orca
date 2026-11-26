@@ -1,7 +1,7 @@
 import path from 'node:path'
 import {
   UNVERIFIED_FS_PROBE,
-  type InventoryFsProbes
+  InventoryFsProbes
 } from '../../../shared/shell/command-resolution/inventory-fs-probes'
 import {
   getExecutableNames,
@@ -39,6 +39,7 @@ export type { AgentPathMatch } from './command-path-inventory-scan'
 
 type AgentPathInventory = {
   isRuntimePath: (entry: string) => boolean
+  isRuntimeTarget?: (entry: string) => Promise<boolean>
   matches: Map<string, AgentPathMatch>
 }
 
@@ -114,7 +115,9 @@ export async function findCommandsOnLocalPath(
   const isWin = (options.platform ?? process.platform) === 'win32'
   const env = options.env ?? process.env
   const inventory = options.inventory
-  const probes = options.probes
+  const probes =
+    options.probes ??
+    (inventory && new InventoryFsProbes(options.signal ?? new AbortController().signal))
   const direct = new Set<string>()
   for (const command of commands.filter(Boolean)) {
     if (command.includes('/') || (isWin && command.includes('\\'))) {
@@ -178,6 +181,7 @@ export async function findCommandsOnLocalPath(
     const names = listing === UNVERIFIED_FS_PROBE ? null : listing
     const checked = new Set<string>()
     let uncertain = false
+    let shadow = false
     for (const ext of extensions.get(command) ?? []) {
       const wanted = command + ext
       const listed = names?.get(directoryNameKey(wanted))
@@ -195,15 +199,26 @@ export async function findCommandsOnLocalPath(
       checked.add(key)
       const outcome = await checkExecutableFile(candidate, isWin, probes)
       if (outcome === 'executable') {
-        return {
-          hit: candidate,
-          uncertain,
-          byName: !isWin || shellExtensions.get(command)?.has(ext.toLowerCase())
+        const eligible = !isWin || shellExtensions.get(command)?.has(ext.toLowerCase())
+        if (inventory && probes && dir.user) {
+          const target = await probes.realPath(candidate)
+          if (target === UNVERIFIED_FS_PROBE) {
+            uncertain = true
+            continue
+          }
+          if (
+            target === null ||
+            (await (inventory.isRuntimeTarget?.(target) ?? inventory.isRuntimePath(target)))
+          ) {
+            shadow ||= Boolean(eligible)
+            continue
+          }
         }
+        return { hit: candidate, uncertain, byName: eligible && !shadow }
       }
       uncertain ||= outcome === 'unknown'
     }
-    return { uncertain }
+    return { uncertain, shadow }
   }
   const { inventoryCommandCount, signal } = options
   const concurrency =

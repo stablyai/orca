@@ -181,7 +181,6 @@ export async function createRuntimeFolderWorktree(args: {
   }
   const shouldActivate = request.activate === true || request.runHooks === true
   let warning: string | undefined = setupResult?.warning
-  let didSpawnStartup = false
   let startupTerminal: CreateWorktreeResult['startupTerminal']
   // Main owns failed agent startup too, so its pane can show the reason without a terminal service.
   if (args.startup && (deps.terminals.canSpawn || ORCA_LAYOUT_OWNER_IS_MAIN)) {
@@ -210,15 +209,14 @@ export async function createRuntimeFolderWorktree(args: {
         ...(shouldActivate ? {} : { surfaceOwner: false })
       })
       request.onStartupTerminalCreated?.(terminal)
-      if (args.draftPaste) {
+      if (!terminal.agentProgramBlocked && args.draftPaste) {
         deps.terminals.pasteDraft(terminal.handle, args.draftPaste)
       }
-      if (args.startupFollowup) {
+      if (!terminal.agentProgramBlocked && args.startupFollowup) {
         deps.terminals.sendFollowup(terminal.handle, args.startupFollowup, terminal)
       }
-      didSpawnStartup = true
       startupTerminal = {
-        spawned: true,
+        spawned: !terminal.agentProgramBlocked && !terminal.agentResumeRefused,
         handle: terminal.handle,
         ...(terminal.tabId ? { tabId: terminal.tabId } : {}),
         ...(terminal.paneKey ? { paneKey: terminal.paneKey } : {}),
@@ -241,7 +239,8 @@ export async function createRuntimeFolderWorktree(args: {
     deps.terminals.canSpawn &&
     shouldSeedWorktreePrimaryTerminal({
       // Failed agents retain their panes; do not seed a shell beside them.
-      hasPrimarySurface: didSpawnStartup || (ORCA_LAYOUT_OWNER_IS_MAIN && Boolean(args.startup)),
+      hasPrimarySurface:
+        Boolean(startupTerminal) || (ORCA_LAYOUT_OWNER_IS_MAIN && Boolean(args.startup)),
       // Background attribution-only creates have historically omitted the shell.
       callerProvidesSurface: args.promisedAgentChat === true || args.createdWithAgent !== undefined
     })
@@ -268,7 +267,7 @@ export async function createRuntimeFolderWorktree(args: {
       // Main retains failed startup presentation; the window must not take it over.
       ORCA_LAYOUT_OWNER_IS_MAIN
         ? undefined
-        : args.startup && !didSpawnStartup
+        : args.startup && !startupTerminal
           ? args.startup
           : undefined,
       ...(args.promisedAgentChat && !args.startup ? ([true] as const) : [])

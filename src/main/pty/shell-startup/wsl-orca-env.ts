@@ -9,6 +9,7 @@ import {
   ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV
 } from '../../../shared/orchestration/orchestration-compatibility-evidence'
 import {
+  SETUP_AGENT_SEQUENCE_BLOCKED_ENV,
   SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
@@ -100,6 +101,7 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     `${ORCA_SCRUB_SAFE_LAUNCH_ENV}/u`,
     // Select the pane-owning OpenCode variant when native and WSL installs coexist.
     'ORCA_OPENCODE_AGENT/u',
+    `${SETUP_AGENT_SEQUENCE_BLOCKED_ENV}/u`,
     `${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}/u`,
     `${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}/u`,
     `${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}/u`,

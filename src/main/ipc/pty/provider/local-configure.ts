@@ -30,6 +30,8 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/l
 import { awaitExplicitAgentPluginGuestReadiness } from '../../../agent-hooks/wsl-relay/wsl-agent-plugin-readiness'
 import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-account-launch'
 
+import { configureLocalInventoryShell } from '../../../preflight/agent-command-inventory-host'
+
 export function configureLocalPtyProvider(args: {
   runtime?: OrcaRuntimeService
   getSettings?: () => GlobalSettings
@@ -41,6 +43,7 @@ export function configureLocalPtyProvider(args: {
     return
   }
   const { runtime, getSettings, getSelectedCodexHomePath, trustedTerminalHandleEnv } = args
+  configureLocalInventoryShell(() => getSettings?.()?.terminalDefaultShell)
   const buildLocalSpawnEnv: NonNullable<LocalPtyProviderOptions['buildSpawnEnv']> = async (
     id,
     baseEnv,

@@ -4,15 +4,17 @@ import {
   invalidateWslGuestEnvironment
 } from '../wsl/execution/wsl-guest-environment'
 import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-reason'
-import type { AgentPathMatch } from '../ipc/command-path/command-path-batch'
 import {
-  mergeInventory,
   publishInventory,
   type CommandInventory,
   type InventoryPublication,
   type InventoryPublications
 } from './agent-command-inventory-publication'
-import { readInventoryScan, type InventoryRead } from './agent-command-inventory-scan-read'
+import {
+  readInventoryScan,
+  type InventoryRead,
+  type InventoryReadOptions
+} from './agent-command-inventory-scan-read'
 import {
   notifyScanChange,
   partialLocalAgentCommandInventory,
@@ -42,6 +44,7 @@ type PendingInventory = {
 export type InventorySlot = InventoryPublications & {
   stockCommands: readonly string[]
   distro?: string
+  shellPath?: string
   pending?: PendingInventory
   retry?: { after: number; generation: number | undefined }
   missRetry?: { after: number; generation: number | undefined }
@@ -85,23 +88,16 @@ async function scanInventory(
       incomplete: !probe.environmentResolved
     }
   }
-  const readLoginPath = !targeted && (mode === 'read' || mode === 'revalidate')
+  const afterSetup = mode === 'refresh' && targeted
+  const readLoginPath = (!targeted && (mode === 'read' || mode === 'revalidate')) || afterSetup
   return scanLocalAgentCommandInventory(
     commands,
     readLoginPath,
+    slot.shellPath,
+    afterSetup,
     progress,
     () => notifyScanChange(scan),
     controller.signal
-  )
-}
-
-function partialInventory(slot: InventorySlot, scan: InventoryScan): CommandInventory {
-  const progress = partialLocalAgentCommandInventory(scan.progress)
-  return mergeInventory(
-    progress,
-    currentInventoryPublication(slot)?.inventory,
-    progress.probed,
-    true
   )
 }
 
@@ -147,7 +143,13 @@ async function runInventoryScans(slot: InventorySlot, pending: PendingInventory)
     const timer = slot.distro
       ? undefined
       : setTimeout(() => {
-          scan.partial = publishInventory(slot, partialInventory(slot, scan), scan, true)
+          const previous = currentInventoryPublication(slot)?.inventory
+          scan.partial = publishInventory(
+            slot,
+            partialLocalAgentCommandInventory(scan.progress, previous),
+            scan,
+            true
+          )
           scan.publication.resolve(scan.partial)
           notifyScanChange(scan)
           if (pending.queued) {
@@ -208,23 +210,20 @@ export function readInventory(
     acceptAnyMatch = false,
     qualifiesEarly,
     revalidateUnavailable = false,
+    afterPublication,
     waitForCompletion = false
-  }: {
-    targeted?: boolean
-    acceptAnyMatch?: boolean
-    qualifiesEarly?: (match: AgentPathMatch | undefined) => boolean
-    revalidateUnavailable?: boolean
-    waitForCompletion?: boolean
-  } = {}
+  }: InventoryReadOptions = {}
 ): InventoryRead {
   const generation = inventoryGeneration(slot)
-  const published = currentInventoryPublication(slot)
+  const published = currentInventoryPublication(slot, mode === 'detect' ? 'complete' : 'latest')
   const current = published?.inventory
   const hasMatch =
     current && requested.some((cmd) => current.probed.has(cmd) && current.found.has(cmd))
   const settled =
-    mode === 'read' &&
+    (mode === 'read' || (mode === 'detect' && !slot.pending)) &&
+    published &&
     current &&
+    (afterPublication === undefined || published.sequence > afterPublication) &&
     ((acceptAnyMatch && hasMatch) ||
       requested.every(
         (cmd) =>
@@ -254,7 +253,14 @@ export function readInventory(
         slot.distro
           ? (currentInventoryPublication(slot) ?? null)
           : {
-              inventory: inventory ?? partialInventory(slot, current),
+              inventory:
+                inventory ??
+                partialLocalAgentCommandInventory(
+                  current.progress,
+                  mode === 'refresh' && targeted
+                    ? undefined
+                    : currentInventoryPublication(slot)?.inventory
+                ),
               generation,
               sequence: current.partial?.sequence ?? slot.published?.sequence ?? 0,
               partial: true

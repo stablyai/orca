@@ -1,4 +1,4 @@
-import { basename, isAbsolute, join, win32 } from 'node:path'
+import { basename, isAbsolute, win32 } from 'node:path'
 import {
   matchesStockLaunchProgram,
   renderCmdLaunchForPowerShell,
@@ -28,16 +28,11 @@ import {
 import type { AgentStartupShell } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../shared/agent-launch/catalog/tui-agent-config'
-import {
-  msysDrivePathToWindows,
-  normalizeRuntimePathForComparison,
-  relativePathInsideRoot
-} from '../../shared/file-access/cross-platform-path'
+import { msysDrivePathToWindows } from '../../shared/file-access/cross-platform-path'
 import { toWindowsWslDrivePath } from '../../shared/file-access/wsl-paths'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { NativeChatSignInRequest } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
-import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
-import { MANAGED_AGENT_CLI_IDS, managedAgentCli } from './managed-agent-cli-registry'
+import { managedPathAgent } from './managed-agent-legacy-runtime-path'
 import { prepareNativeChatSignIn } from './prepare-native-chat-sign-in'
 import {
   resolveSpawnAgentProgram,
@@ -69,28 +64,6 @@ type AlignedLaunch = {
   launchConfig?: SleepingAgentLaunchConfig
   blocked?: 'unknown' | 'unavailable'
   rebuiltHermesQuery?: true
-}
-
-function managedPathAgent(program: string): TuiAgent | undefined {
-  if (!isAbsolute(program) || !/[\\/]agent-runtimes[\\/]/i.test(program)) {
-    return undefined
-  }
-  const dataDirectory = getProfileUserDataPath()
-  return MANAGED_AGENT_CLI_IDS.find((agent) => {
-    const cli = managedAgentCli(agent)
-    const root = cli.runtime.root(dataDirectory)
-    const release = relativePathInsideRoot(root, program)?.split('/')[0]
-    if (!release || release === '.' || release === '..') {
-      return false
-    }
-    const folder = join(root, release)
-    const actual = normalizeRuntimePathForComparison(program)
-    return (
-      actual === normalizeRuntimePathForComparison(cli.executable(folder)) ||
-      (cli.launcher !== undefined &&
-        actual === normalizeRuntimePathForComparison(cli.launcher(folder)))
-    )
-  })
 }
 
 export async function alignManagedAgentLaunchAtSpawn(
@@ -191,6 +164,8 @@ async function rewriteLaunchExecutable(
     !recorded.bypassesShellFunction &&
     !recorded.hasCallOperator &&
     (!recorded.cwd || !config?.agentCommand)
+  const pin = config?.selectedExecutable
+  const pinName = pin ? basename(pin) : undefined
   const oldAgent = legacy
     ? ((sourceProgram ? managedPathAgent(sourceProgram) : undefined) ??
       (bare
@@ -205,7 +180,9 @@ async function rewriteLaunchExecutable(
         ? 'hermes'
         : stockAgents.find(
             (candidate) =>
-              nameFor(candidate, originalExecutable) || nameFor(candidate, recorded?.executable)
+              nameFor(candidate, originalExecutable) ||
+              nameFor(candidate, recorded?.executable) ||
+              nameFor(candidate, pinName)
           )))
     : oldAgent
   if (generated && (!agent || (!originalExecutable && !hermesArgv))) {
@@ -215,14 +192,16 @@ async function rewriteLaunchExecutable(
   let launchConfig = config
   if (agent) {
     const primary = stock(agent)
-    const recordedName = nameFor(agent, recorded?.executable)
+    const recordedName = nameFor(agent, recorded?.executable) ?? nameFor(agent, pinName)
     const preferred = nameFor(agent, executable) ?? recordedName ?? primary
     const alternatives =
       agent === 'qoder' ? namesFor(agent).filter((name) => name !== preferred) : []
-    const pinned = spawn.restoring ? config?.selectedExecutable : undefined
+    const modelPin =
+      !spawn.restoring && agent === 'opencode' && pin !== undefined && pin === recorded?.executable
+    const pinned = spawn.restoring || modelPin ? pin : undefined
     const receivingShell = hermesArgv && shell === 'cmd' ? 'powershell' : shell
     const { program, result: selected } = await resolveSpawnAgentProgram(
-      spawn,
+      modelPin ? { ...spawn, requirePinnedProgram: true } : spawn,
       receivingShell,
       [preferred, ...alternatives],
       cmd?.cwd || launch?.cwd,
@@ -246,6 +225,8 @@ async function rewriteLaunchExecutable(
     if (config) {
       const { selectedExecutable: _previous, ...recipe } = config
       const updateRecipe =
+        pinned ||
+        selected.kind === 'full-path' ||
         oldAgent ||
         program !== primary ||
         program !== preferred ||
@@ -254,7 +235,12 @@ async function rewriteLaunchExecutable(
         ...recipe,
         ...(updateRecipe && recorded && config.agentCommand
           ? {
-              agentCommand: replaceLaunchExecutable(config.agentCommand, source, recorded, program)
+              agentCommand: replaceLaunchExecutable(
+                config.agentCommand,
+                source,
+                recorded,
+                selected.kind === 'full-path' ? selected.path : program
+              )
             }
           : {}),
         commandProvenance: 'generated',

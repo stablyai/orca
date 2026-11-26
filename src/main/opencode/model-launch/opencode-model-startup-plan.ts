@@ -1,9 +1,13 @@
-import { readLocalTerminalAgentProgram } from '../../preflight/agent-command-detection'
+import { resolveSpawnAgentProgram } from '../../managed-agent-cli/spawn-agent-program-selection'
 import {
   launchCommandProvenance,
   launchProgramHead,
+  matchesStockLaunchProgram,
+  replaceLaunchExecutable,
   stockLaunchProgram
 } from '../../../shared/agent-launch/startup/managed-agent-launch-program'
+import { readLaunchPosition } from '../../../shared/agent-launch/startup/launch-position'
+import { resolveAgentLaunchCommand } from '../../../shared/agent-launch/startup/tui-agent-launch-command'
 import { resolveStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { AgentStartupPlanInputs } from '../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import {
@@ -35,6 +39,7 @@ type StartupScope = {
   inputs: AgentStartupPlanInputs
   cwd: string
   isWsl?: boolean
+  shellPath?: string
   hostIdentity?: string
   signal?: AbortSignal
 }
@@ -44,7 +49,7 @@ function refuseModel(message = OPENCODE_MODEL_TRANSPORT_REFUSAL): never {
 }
 
 export async function resolveOpenCodeModelLaunchRoute(
-  options: Pick<StartupScope, 'inputs' | 'cwd' | 'hostIdentity'>
+  options: Pick<StartupScope, 'inputs' | 'cwd' | 'hostIdentity' | 'shellPath'>
 ) {
   const { inputs } = options
   const stock = stockLaunchProgram('opencode', inputs.platform)
@@ -52,22 +57,36 @@ export async function resolveOpenCodeModelLaunchRoute(
   const commandProvenance = launchCommandProvenance(override, stock, inputs.platform)
   const command = commandProvenance === 'generated' ? stock : (override ?? stock)
   const shell = resolveStartupShell(inputs.platform, inputs.shell)
-  // Probe the same user installation as the PTY, even when it sits outside PATH.
+  const env: Record<string, string> = {}
+  for (const [key, value] of Object.entries({ ...process.env, ...inputs.agentEnv })) {
+    if (value !== undefined) {
+      env[process.platform === 'win32' && /^(path|pathext)$/i.test(key) ? key.toUpperCase() : key] =
+        value
+    }
+  }
+  applyManagedDataAccountEnvironment(env, { launchAgent: 'opencode' })
   const selected =
     commandProvenance === 'generated'
-      ? await readLocalTerminalAgentProgram(stock, shell)
+      ? (
+          await resolveSpawnAgentProgram(
+            {
+              env,
+              cwd: options.cwd,
+              shellPath: options.shellPath,
+              launchConfig: { agentEnv: inputs.agentEnv, agentArgs: '' }
+            },
+            shell,
+            [stock],
+            undefined,
+            undefined
+          )
+        ).result
       : undefined
   if (selected && !('path' in selected)) {
     refuseModel(OPENCODE_MODEL_VERSION_REFUSAL)
   }
-  const program = selected ? launchProgramHead(selected.path, shell) : command
-  const env: Record<string, string> = {}
-  for (const [key, value] of Object.entries({ ...process.env, ...inputs.agentEnv })) {
-    if (value !== undefined) {
-      env[key] = value
-    }
-  }
-  applyManagedDataAccountEnvironment(env, { launchAgent: 'opencode' })
+  const selectedExecutable = selected?.path
+  const program = selectedExecutable ? launchProgramHead(selectedExecutable, shell) : command
   const capabilities = await probeOpenCodeLaunchCapabilities({
     command: program,
     agent: 'opencode',
@@ -80,7 +99,7 @@ export async function resolveOpenCodeModelLaunchRoute(
   if (!legacy && !isVerifiedOpenCodeConfigModelVersion(capabilities?.version)) {
     refuseModel(OPENCODE_MODEL_VERSION_REFUSAL)
   }
-  return { command, program, env, legacy, commandProvenance }
+  return { command, program, env, legacy, commandProvenance, selectedExecutable }
 }
 
 export async function prepareOpenCodeModelStartupInputs(
@@ -108,20 +127,39 @@ export async function prepareOpenCodeModelStartupInputs(
   ) {
     refuseModel()
   }
-  const { command, program, env, legacy, commandProvenance } =
+  const { command, program, env, legacy, commandProvenance, selectedExecutable } =
     await resolveOpenCodeModelLaunchRoute(options)
+  const launchConfig = buildSleepingAgentLaunchConfig({
+    agentCommand: selectedExecutable ? program : command,
+    selectedExecutable,
+    commandProvenance,
+    agentArgs: inputs.agentArgs,
+    agentEnv: inputs.agentEnv
+  })
   if (legacy) {
-    return { inputs }
+    if (!selectedExecutable) {
+      return { inputs }
+    }
+    const shell = resolveStartupShell(inputs.platform, inputs.shell)
+    const legacyLaunch = resolveAgentLaunchCommand({ ...inputs, shell })
+    const recorded = legacyLaunch.ok ? legacyLaunch.resumeLaunch.agentCommand : undefined
+    const head = recorded ? readLaunchPosition(recorded, shell) : null
+    if (head && recorded && matchesStockLaunchProgram(head.executable, command, inputs.platform)) {
+      launchConfig.agentCommand = replaceLaunchExecutable(recorded, shell, head, selectedExecutable)
+    }
+    return { inputs, launchConfig }
   }
   if (inputs.agentArgs?.trim()) {
     refuseModel()
   }
-  const executable = await resolveOpenCodeDirectModelExecutable({
-    command: program,
-    shell: inputs.shell,
-    cwd: options.cwd,
-    env
-  }).catch(() => null)
+  const executable =
+    selectedExecutable ??
+    (await resolveOpenCodeDirectModelExecutable({
+      command: program,
+      shell: inputs.shell,
+      cwd: options.cwd,
+      env
+    }).catch(() => null))
   const context = executable
     ? await probeOpenCodeLaunchModelContext({
         executable,
@@ -145,12 +183,7 @@ export async function prepareOpenCodeModelStartupInputs(
       agentEnv: { ...inputs.agentEnv, OPENCODE_CONFIG_CONTENT: configContent },
       sessionOptions: undefined
     },
-    launchConfig: buildSleepingAgentLaunchConfig({
-      agentCommand: command,
-      commandProvenance,
-      agentArgs: inputs.agentArgs,
-      agentEnv: inputs.agentEnv
-    })
+    launchConfig
   }
 }
 
@@ -161,7 +194,11 @@ export async function buildExecutionHostAgentStartupPlan(
   }
 ) {
   const prepared = await prepareOpenCodeModelStartupInputs(options)
-  if (prepared.launchConfig && options.promptDelivery === 'draft') {
+  if (
+    prepared.launchConfig &&
+    !prepared.inputs.sessionOptions &&
+    options.promptDelivery === 'draft'
+  ) {
     refuseModel()
   }
   const plan =

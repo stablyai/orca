@@ -51,6 +51,7 @@ export const SESSION_TAB_CREATE_TERMINAL_METHOD = defineMethod({
         clientKind
       }),
       clientMutationId: params.clientMutationId,
+      historyResume: params.historyResume,
       ...(pairedDeviceId
         ? {
             supportsSplitGroupPlacement:

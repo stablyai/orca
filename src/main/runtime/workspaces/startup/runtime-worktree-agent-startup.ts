@@ -139,19 +139,20 @@ export async function buildWorktreeStartupForDraft(
   const prepared = await prepareWorktreeModelStartupInputs({
     inputs: resolvedInputs,
     cwd: repo.path,
+    shellPath: launchRuntime instanceof Error ? undefined : launchRuntime.pty.shellOverride,
     isWsl: !(launchRuntime instanceof Error) && isWslShellName(launchRuntime.pty.shellOverride)
   })
-  const launchArgs = prepared.inputs
   const telemetry = agentStartedTelemetry(agent, environment.launchSource)
-  const draftPlan = prepared.launchConfig
-    ? null
-    : buildAgentDraftLaunchPlan({ ...launchArgs, draft: content })
+  const draftPlan =
+    prepared.launchConfig && !prepared.inputs.sessionOptions
+      ? null
+      : buildAgentDraftLaunchPlan({ ...prepared.inputs, draft: content })
   if (draftPlan) {
     return {
       agent,
       startup: {
         command: draftPlan.launchCommand,
-        launchConfig: draftPlan.launchConfig,
+        launchConfig: prepared.launchConfig ?? draftPlan.launchConfig,
         ...(draftPlan.startupCommandDelivery
           ? { startupCommandDelivery: draftPlan.startupCommandDelivery }
           : {}),
@@ -162,7 +163,7 @@ export async function buildWorktreeStartupForDraft(
     }
   }
   const startupPlan = buildAgentStartupPlan({
-    ...launchArgs,
+    ...prepared.inputs,
     prompt: '',
     allowEmptyPromptLaunch: true
   })
@@ -222,6 +223,7 @@ export async function buildWorktreeStartupForAgent(
   const prepared = await prepareWorktreeModelStartupInputs({
     inputs: resolvedInputs,
     cwd: repo.path,
+    shellPath: launchRuntime instanceof Error ? undefined : launchRuntime.pty.shellOverride,
     isWsl: !(launchRuntime instanceof Error) && isWslShellName(launchRuntime.pty.shellOverride)
   })
   const planInputs = prepared.inputs

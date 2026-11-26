@@ -11,7 +11,12 @@ export type PathDirectory = {
   first?: boolean
   unquoted?: boolean
 }
-export type DirectoryCandidate = { hit?: string; uncertain: boolean; byName?: boolean }
+export type DirectoryCandidate = {
+  hit?: string
+  uncertain: boolean
+  byName?: boolean
+  shadow?: boolean
+}
 
 function trackPathCommand(
   directoryCount: number,
@@ -39,9 +44,9 @@ function trackPathCommand(
     let verified = false
     for (let entry = settled.get(next); entry; entry = settled.get(next)) {
       settled.delete(next++)
-      const { hit, uncertain: entryUncertain, byName } = entry.outcome
+      const { hit, uncertain: entryUncertain, byName, shadow } = entry.outcome
       uncertain ||= entryUncertain
-      const winner = entryUncertain || (hit && (!entry.dir.user || !byName)) ? null : hit
+      const winner = entryUncertain || shadow || (hit && (!entry.dir.user || !byName)) ? null : hit
       if (entry.dir.first && match.first === undefined) {
         match.first = winner
       }

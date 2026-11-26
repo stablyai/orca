@@ -101,6 +101,7 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
           launchAgent: resume.launchAgent,
           env: resume.env,
           cwd,
+          shellPath: launchRuntime.pty.shellOverride,
           codexRuntime,
           expectedWslDistro,
           restoring: true

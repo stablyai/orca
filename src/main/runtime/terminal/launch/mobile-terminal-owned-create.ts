@@ -71,7 +71,6 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
     const stableSessionId =
       opts.identity?.sessionId ??
       (workspace.connectionId ? undefined : mintServePtySessionId(workspace.id, randomUUID()))
-    const isNewSession = stableSessionId !== undefined && opts.identity?.sessionId === undefined
     const mutationHandle = opts.createMutation
       ? deriveRemoteRuntimeTerminalCreateHandle(
           opts.createMutation.clientIdentity,
@@ -137,7 +136,7 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
           : stableSessionId
             ? { sessionId: stableSessionId }
             : {}),
-        ...(isNewSession ? { isNewSession: true } : {}),
+        isNewSession: stableSessionId !== undefined && opts.identity?.sessionId === undefined,
         persistHostSessionBinding: true,
         // Publish only the authoritative snapshot below to avoid a temporary wrong-group placement.
         deferMobileSessionPublish: true,
@@ -183,7 +182,7 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
         // Missing original dispatch evidence cannot authorize a retry's captured recipe.
         throw new Error('runtime_unavailable')
       }
-      if (recipe) {
+      if (recipe && !terminal.agentProgramBlocked) {
         livePty.pty.launchAgent ??= recipe.launchAgent ?? null
         // A finished launch's recipe must not return to the shell left behind.
         if (
@@ -210,13 +209,12 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
     const parentTabId = recorded.tabId ?? `pty:${livePty.pty.ptyId}`
     const leafId = parsePaneKey(recorded.paneKey ?? '')?.leafId ?? randomUUID()
     const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
-    const existingSurface =
-      existing?.tabs.find(
-        (candidate): candidate is RuntimeMobileSessionTerminalTab =>
-          candidate.type === 'terminal' &&
-          candidate.parentTabId === parentTabId &&
-          candidate.leafId === leafId
-      ) ?? null
+    const existingSurface = existing?.tabs.find(
+      (candidate): candidate is RuntimeMobileSessionTerminalTab =>
+        candidate.type === 'terminal' &&
+        candidate.parentTabId === parentTabId &&
+        candidate.leafId === leafId
+    )
     const parentLayout = buildMaterializedHeadlessParentLayout(
       leafId,
       livePty.pty.ptyId,
@@ -241,7 +239,8 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
         ? { startupCwd: terminal.savedStartupCwd ?? cwd }
         : {}),
       ...(livePty.pty.launchAgent ? { launchAgent: livePty.pty.launchAgent } : {}),
-      ...(!terminal.agentResumeRefused && opts.viewMode ? { viewMode: opts.viewMode } : {}),
+      viewMode:
+        terminal.agentResumeRefused || terminal.agentProgramBlocked ? undefined : opts.viewMode,
       parentLayout,
       isActive: activate
     }
@@ -311,6 +310,7 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
       tab: created,
       publicationEpoch: result.publicationEpoch,
       snapshotVersion: result.snapshotVersion,
+      agentProgramBlocked: terminal.agentProgramBlocked,
       ...(terminal.startupCwdFallback ? { startupCwdFallback: 'workspace-root' as const } : {})
     }
   }

@@ -107,6 +107,7 @@ async function prepareForPty(
       sshTarget: ssh,
       cwd: launch.cwd,
       readCwd: pty.readCwd,
+      shellPath: process.platform === 'win32' ? undefined : shellPreference?.trim(),
       launchConfig: launch.launchConfig,
       launchAgent: launch.launchAgent,
       nativeChatSignIn: launch.nativeChatSignIn,

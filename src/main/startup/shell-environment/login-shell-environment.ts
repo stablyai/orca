@@ -38,6 +38,15 @@ export function loginShellEnvironmentRevision(): number {
   return cacheRevision
 }
 
+export function invalidateExactLoginShellEnvironments(): void {
+  for (const key of environmentCache.keys()) {
+    if (key.endsWith('\0true')) {
+      environmentCache.delete(key)
+      cacheRevision++
+    }
+  }
+}
+
 function cachedEnvironment(key: string): CachedEnvironment {
   const existing = environmentCache.get(key)
   if (existing) {
@@ -191,6 +200,7 @@ export type ResolveLoginShellEnvironmentOptions = {
   /** A captured env is kept for good; only a fallback is rerun after `refreshAfterMs`. */
   keepCaptured?: boolean
   shellOverride?: string | null
+  exactPath?: boolean
   env?: NodeJS.ProcessEnv
   /** Per-shell probe budget; defaults to 5 s. */
   timeoutMs?: number
@@ -217,10 +227,12 @@ export function captureLoginShellEnvironment(
       : createHash('sha256')
           .update(JSON.stringify(Object.entries(env).sort(([a], [b]) => a.localeCompare(b))))
           .digest('hex')
-  const entry = cachedEnvironment(`${shell}\0${fallback ?? ''}\0${envKey}`)
+  const entry = cachedEnvironment(
+    `${shell}\0${fallback ?? ''}\0${envKey}\0${options.exactPath ?? false}`
+  )
   const run = (): Promise<LoginShellEnvironmentCapture> => {
     const startedAt = Date.now()
-    const probeEnv = fromLaunchPath ? withLaunchPath(env) : env
+    const probeEnv = fromLaunchPath && !options.exactPath ? withLaunchPath(env) : env
     const spawner =
       options.spawner ??
       ((probeShell: string, probeEnv: NodeJS.ProcessEnv) =>
@@ -233,7 +245,7 @@ export function captureLoginShellEnvironment(
         }
         return {
           status: 'captured',
-          env: fromLaunchPath ? keepOrcaPathEntries(captured, env) : captured
+          env: fromLaunchPath && !options.exactPath ? keepOrcaPathEntries(captured, env) : captured
         }
       })
       .catch(() => fellBack)

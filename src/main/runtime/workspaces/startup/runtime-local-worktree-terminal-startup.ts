@@ -11,7 +11,11 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import { createSequencedSetupAgentCommands } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
-import { getSetupRunnerCommandPlatformForPath } from '../../../../shared/agent-launch/startup/setup-runner-command'
+import {
+  callerProvidesInitialSurface,
+  provisionArgs,
+  setupPlatform
+} from './worktree-startup-provisioning-scope'
 import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import type { TerminalCreateOptions } from '../../terminal/launch/terminal-create-options'
 import { ownerSurfacing } from '../../terminal/launch/terminal-presentation'
@@ -90,6 +94,8 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   let startupTerminalPtyId: string | null = null
   let sequencedStartup = startup
   let wrappedSetup: WorktreeTerminalProvisioningArgs['wrappedSetup']
+  const generatedSetupGate =
+    startup?.launchConfig?.commandProvenance === 'generated' && setup?.waitForAgentStartup === true
   if (startup && setup?.waitForAgentStartup === true) {
     const platform = setupPlatform(setup, process.platform === 'win32' ? 'windows' : 'posix')
     const completionToken = request.observeSetupCompletion ? randomUUID() : undefined
@@ -112,8 +118,22 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
     setup = { ...setup, envVars: { ...setup.envVars, ...sequenced.setupEnv } }
   }
 
+  if (generatedSetupGate && ports.canSpawn) {
+    const provisioned = await ports.provision({
+      ...provisionArgs({ ...args, setup, defaultTabs: undefined }, null, false, wrappedSetup),
+      setupOnly: true,
+      ...ownerSurfacing(shouldActivate && !ports.provisionInBackground?.())
+    })
+    didSpawnSetup = provisioned.setupSpawned
+    setupTerminalHandle = provisioned.setupTerminalHandle
+  }
+
   // Main owns failed agent startup too, keeping its reason visible without a terminal service.
-  if (sequencedStartup && (ports.canSpawn || ORCA_LAYOUT_OWNER_IS_MAIN)) {
+  if (
+    sequencedStartup &&
+    (!generatedSetupGate || didSpawnSetup || !ports.canSpawn) &&
+    (ports.canSpawn || ORCA_LAYOUT_OWNER_IS_MAIN)
+  ) {
     try {
       const launchRuntime = args.startupLaunchRuntime
       if (launchRuntime instanceof Error && !ORCA_LAYOUT_OWNER_IS_MAIN) {
@@ -141,13 +161,13 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         ...ownerSurfacing(shouldActivate)
       })
       request.onStartupTerminalCreated?.(terminal)
-      if (args.draftPaste) {
+      if (!terminal.agentProgramBlocked && args.draftPaste) {
         ports.pasteDraft(terminal.handle, args.draftPaste)
       }
-      if (args.startupFollowup) {
+      if (!terminal.agentProgramBlocked && args.startupFollowup) {
         ports.sendFollowup(terminal.handle, args.startupFollowup, terminal)
       }
-      didSpawnStartup = true
+      didSpawnStartup = !terminal.agentProgramBlocked && !terminal.agentResumeRefused
       startupTerminalHandle = terminal.handle
       startupTerminalTabId = terminal.tabId ?? null
       startupTerminalPaneKey = terminal.paneKey ?? null
@@ -159,7 +179,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
 
   // Failed agents retain their pane; do not seed an extra shell.
   const startupPaneHeld =
-    didSpawnStartup || (ORCA_LAYOUT_OWNER_IS_MAIN && Boolean(sequencedStartup))
+    startupTerminalHandle !== null || (ORCA_LAYOUT_OWNER_IS_MAIN && Boolean(sequencedStartup))
   if (shouldActivate) {
     // The host's activation window may be a different viewer from the caller of a plain create.
     const provisionInBackground =
@@ -169,7 +189,9 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         !defaultTabs &&
         request.terminalImageViewerSupported !== undefined)
     // Legacy failure hands provisioning to the window, which needs the agent tab first; main provisioning would consume that slot.
-    const agentStartFailed = Boolean(sequencedStartup && ports.canSpawn && !didSpawnStartup)
+    const agentStartFailed = Boolean(
+      sequencedStartup && ports.canSpawn && startupTerminalHandle === null
+    )
     // Main provisions even without an open window; no window takes over.
     if (!ORCA_LAYOUT_OWNER_IS_MAIN && agentStartFailed && !provisionInBackground) {
       ports.activate(repo.id, worktree.id, startup, setup, defaultTabs)
@@ -179,19 +201,19 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         ports.canSpawn &&
         (request.awaitTerminalProvisioning === true ||
           provisionInBackground ||
-          Boolean(setup || defaultTabs))
+          Boolean((setup && !didSpawnSetup) || defaultTabs))
       if (runtimeWillProvision) {
         const provisioned = await ports.provision({
           ...provisionArgs(
-            { ...args, setup },
+            { ...args, setup: didSpawnSetup ? undefined : setup },
             startupTerminalHandle,
             startupPaneHeld,
             wrappedSetup
           ),
           ...ownerSurfacing(!provisionInBackground)
         })
-        didSpawnSetup = provisioned.setupSpawned
-        setupTerminalHandle = provisioned.setupTerminalHandle
+        didSpawnSetup ||= provisioned.setupSpawned
+        setupTerminalHandle ??= provisioned.setupTerminalHandle
         if (setup && !didSpawnSetup) {
           failedSetup = {
             ...setup,
@@ -203,21 +225,33 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         repo.id,
         worktree.id,
         // Main retains failed startup presentation, not the window.
-        ORCA_LAYOUT_OWNER_IS_MAIN ? undefined : startup && !didSpawnStartup ? startup : undefined,
+        ORCA_LAYOUT_OWNER_IS_MAIN
+          ? undefined
+          : startup && startupTerminalHandle === null
+            ? startup
+            : undefined,
         ORCA_LAYOUT_OWNER_IS_MAIN ? undefined : failedSetup,
         undefined,
         ...(args.promisedAgentChat && !startup ? ([true] as const) : [])
       )
     }
-  } else if (ports.canSpawn && (setup || defaultTabs || didSpawnStartup)) {
+  } else if (
+    ports.canSpawn &&
+    ((setup && !didSpawnSetup) || defaultTabs || startupTerminalHandle)
+  ) {
     const provisioning = ports.provision({
-      ...provisionArgs({ ...args, setup }, startupTerminalHandle, startupPaneHeld, wrappedSetup),
+      ...provisionArgs(
+        { ...args, setup: didSpawnSetup ? undefined : setup },
+        startupTerminalHandle,
+        startupPaneHeld,
+        wrappedSetup
+      ),
       surfaceOwner: false
     })
     if (request.awaitTerminalProvisioning) {
       const provisioned = await provisioning
-      didSpawnSetup = provisioned.setupSpawned
-      setupTerminalHandle = provisioned.setupTerminalHandle
+      didSpawnSetup ||= provisioned.setupSpawned
+      setupTerminalHandle ??= provisioned.setupTerminalHandle
     } else {
       void provisioning
       if (setup) {
@@ -256,48 +290,6 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
     startupTerminalPaneKey,
     startupTerminalPtyId
   }
-}
-
-function provisionArgs(
-  args: Parameters<typeof startRuntimeLocalWorktreeTerminals>[0],
-  primaryTerminalHandle: string | null,
-  hasStartupTerminal: boolean,
-  wrappedSetup: WorktreeTerminalProvisioningArgs['wrappedSetup']
-): WorktreeTerminalProvisioningArgs {
-  return {
-    worktreeSelector: `id:${args.worktree.id}`,
-    worktreeId: args.worktree.id,
-    worktreePath: args.worktree.path,
-    ...(args.setup ? { setup: args.setup } : {}),
-    ...(args.defaultTabs ? { defaultTabs: args.defaultTabs } : {}),
-    primaryTerminalHandle,
-    hasStartupTerminal,
-    ...(args.request.setupOnly !== undefined ? { setupOnly: args.request.setupOnly } : {}),
-    callerProvidesSurface: callerProvidesInitialSurface(args),
-    startupNeedsTerminal: args.startup !== undefined,
-    setupCommandPlatform: setupPlatform(args.setup, 'posix'),
-    observeSetupCompletion: args.request.observeSetupCompletion,
-    ...(wrappedSetup ? { wrappedSetup } : {})
-  }
-}
-
-function callerProvidesInitialSurface(
-  args: Parameters<typeof startRuntimeLocalWorktreeTerminals>[0]
-): boolean {
-  // Background agent creates already leave their initial surface to the caller.
-  return (
-    args.promisedAgentChat === true ||
-    (args.createdWithAgent !== undefined &&
-      args.request.activate !== true &&
-      args.request.runHooks !== true)
-  )
-}
-
-function setupPlatform(
-  setup: CreateWorktreeResult['setup'],
-  fallback: 'windows' | 'posix'
-): 'windows' | 'posix' {
-  return getSetupRunnerCommandPlatformForPath(setup?.runnerScriptPath ?? '', fallback)
 }
 
 function appendFailure(

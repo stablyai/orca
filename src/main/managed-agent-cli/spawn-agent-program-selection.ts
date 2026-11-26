@@ -1,4 +1,3 @@
-import { realpath } from 'node:fs/promises'
 import { delimiter, isAbsolute, resolve } from 'node:path'
 import {
   abortSignalReason,
@@ -12,7 +11,11 @@ import type { AgentStartupShell } from '../../shared/agent-launch/startup/tui-ag
 import { normalizeRuntimePathForComparison } from '../../shared/file-access/cross-platform-path'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import { resolveCmdLaunchFolderProgram } from '../ipc/command-path/cmd-launch-folder-program'
-import { checkExecutableFile, isExecutableFile } from '../ipc/command-path/command-path-directory'
+import {
+  InventoryFsProbes,
+  UNVERIFIED_FS_PROBE
+} from '../../shared/shell/command-resolution/inventory-fs-probes'
+import { checkExecutableFile } from '../ipc/command-path/command-path-directory'
 import { resolveCommandOnLocalPath } from '../ipc/command-path/command-path-resolver'
 import {
   AgentInventoryDeadlineError,
@@ -20,7 +23,7 @@ import {
   withAgentInventoryDeadline,
   type TerminalAgentProgramSelection
 } from '../preflight/agent-command-detection'
-import { isOrcaAgentRuntimePath } from './managed-agent-cli-path'
+import { createAgentRuntimeTargetCheck, isOrcaAgentRuntimePath } from './managed-agent-cli-path'
 
 const pendingLookups = new Map<string, PromiseSettlementWaiters<string | null>>()
 
@@ -29,6 +32,9 @@ export type SpawnProgramContext = {
   codexRuntime?: 'host' | 'wsl'
   expectedWslDistro?: string | null
   sshTarget?: boolean
+  shellPath?: string
+  refreshAgentProgram?: boolean
+  requirePinnedProgram?: boolean
   cwd?: string
   readCwd?: () => Promise<string | undefined>
   env?: NodeJS.ProcessEnv
@@ -100,6 +106,7 @@ async function selectSpawnAgentProgram(
   }
   if (spawn.codexRuntime === 'wsl') {
     return selectTerminalAgentProgram(programs, shell, {
+      afterSetup: spawn.refreshAgentProgram,
       wsl: { distro: spawn.expectedWslDistro ?? undefined },
       revalidateUnavailable: true,
       signal,
@@ -107,16 +114,18 @@ async function selectSpawnAgentProgram(
     })
   }
   if (pinned && isAbsolute(pinned) && !isOrcaAgentRuntimePath(pinned)) {
-    const checked = await waitForPromiseWithSignal(
-      checkExecutableFile(pinned, process.platform === 'win32'),
-      signal
-    )
-    if (checked === 'executable') {
+    const probes = new InventoryFsProbes(signal)
+    const checked = await checkExecutableFile(pinned, process.platform === 'win32', probes)
+    const target = checked === 'executable' ? await probes.realPath(pinned) : null
+    if (typeof target === 'string' && !(await createAgentRuntimeTargetCheck(probes)(target))) {
       return { program: preferred, result: { kind: 'full-path', path: pinned } }
     }
-    if (checked === 'unknown') {
+    if (checked === 'unknown' || target === UNVERIFIED_FS_PROBE) {
       return { program: preferred, result: { kind: 'unknown' } }
     }
+  }
+  if (spawn.requirePinnedProgram) {
+    return { program: preferred, result: { kind: 'unavailable' } }
   }
   const readCwd = async (): Promise<string> =>
     isAbsolute(launchCwd)
@@ -149,6 +158,8 @@ async function selectSpawnAgentProgram(
   }
   selection ??= await selectTerminalAgentProgram(programs, shell, {
     refresh: Boolean(pinned),
+    afterSetup: spawn.refreshAgentProgram,
+    shellPath: spawn.shellPath,
     revalidateUnavailable: true,
     signal
   })
@@ -160,7 +171,7 @@ async function selectSpawnAgentProgram(
     return selection
   }
   // Pin the selection when the agent's PATH differs from the host inventory's.
-  if (configuredEnv) {
+  if (configuredEnv || spawn.refreshAgentProgram) {
     return { program, result: { kind: 'full-path', path: selected.path } }
   }
   if (process.platform === 'win32' && shell === 'cmd') {
@@ -228,6 +239,8 @@ async function resolveAgentOnConfiguredPath(
         if (lookup.waiterCount === 0) {
           return null
         }
+        const probes = new InventoryFsProbes(controller.signal)
+        const isRuntime = createAgentRuntimeTargetCheck(probes)
         return resolveCommandOnLocalPath(program, {
           env: { PATHEXT: pathExt },
           pathEntries,
@@ -236,13 +249,13 @@ async function resolveAgentOnConfiguredPath(
             try {
               if (
                 isOrcaAgentRuntimePath(candidate) ||
-                !(await isExecutableFile(candidate, windows)) ||
+                (await checkExecutableFile(candidate, windows, probes)) !== 'executable' ||
                 lookup.waiterCount === 0
               ) {
                 return false
               }
-              const target = await realpath(candidate).catch(() => undefined)
-              return Boolean(target && !isOrcaAgentRuntimePath(target))
+              const target = await probes.realPath(candidate)
+              return typeof target === 'string' && !(await isRuntime(target))
             } finally {
               // Let callers share an issued probe, then stop once no launch is waiting on it.
               if (lookup.waiterCount === 0) {

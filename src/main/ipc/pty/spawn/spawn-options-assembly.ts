@@ -4,7 +4,8 @@ import type {
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { NativeChatSignInRequest } from '../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { PreselectedAgentProgram } from '../../../managed-agent-cli/managed-agent-spawn-program'
-import { preparePtyAgentLaunch, selectPtyAgentLaunch } from './prepare-pty-agent-launch'
+import { preparePtyAgentLaunch } from './prepare-pty-agent-launch'
+import { selectPtyAgentLaunch } from './select-pty-agent-launch'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { applyAgentWorkspaceTrustToSpawn } from '../../../agent-launch/trust/agent-workspace-trust-spawn'
 import type { PtySpawnOptions } from '../../../providers/pty/provider-contract'
@@ -27,6 +28,7 @@ export type PtySpawnLaunchOptionsInput = {
     nativeChatSignIn?: NativeChatSignInRequest
     resumeProviderSession?: unknown
     resumeOrigin?: unknown
+    signal?: AbortSignal
     command?: string
     commandDelivery?: PtySpawnOptions['commandDelivery']
     startupCommandDelivery?: PtySpawnOptions['startupCommandDelivery']

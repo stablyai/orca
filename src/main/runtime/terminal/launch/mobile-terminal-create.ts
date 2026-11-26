@@ -46,6 +46,7 @@ export type MobileTerminalCreateOptions = {
   activate?: boolean
   clientNavigationId?: string
   clientMutationId?: string
+  historyResume?: true
   supportsSplitGroupPlacement?: boolean
   signal?: AbortSignal
 }
@@ -136,6 +137,7 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
       clientNavigationId?: string
       navigation?: RuntimeNavigationTarget
       clientMutationId?: string
+      historyResume?: true
       // Older mobile clients optimistically append; preserve that placement until they advertise
       // split-group ordering support.
       supportsSplitGroupPlacement?: boolean
@@ -197,7 +199,7 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
     created: RuntimeMobileSessionCreateTerminalResult,
     opts: { resumeProviderSession?: AgentProviderSessionMetadata; launchAgent?: TuiAgent }
   ): void {
-    if (!opts.resumeProviderSession || !created.tab.terminal) {
+    if (!opts.resumeProviderSession || !created.tab.terminal || created.agentProgramBlocked) {
       return
     }
     const pty = this.getLivePtyForHandle(created.tab.terminal)?.pty

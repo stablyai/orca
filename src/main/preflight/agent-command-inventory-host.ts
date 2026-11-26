@@ -12,6 +12,7 @@ import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
 } from '../../shared/concurrency/abort-signal-reason'
+import { invalidateExactLoginShellEnvironments } from '../startup/shell-environment/login-shell-environment'
 import type { InventorySlot } from './agent-command-inventory'
 
 function stockCommands(platform: NodeJS.Platform, runtime: NodeJS.Platform | 'wsl' = platform) {
@@ -28,15 +29,42 @@ const wslStockCommands = stockCommands('linux', 'wsl')
 
 let local: InventorySlot | undefined
 let profile: string | undefined
+let readDefaultShell: (() => string | undefined) | undefined
+const alternateShells = new Map<string, InventorySlot>()
 const wsl = new Map<string, InventorySlot>()
 
-export function getLocalInventory(): InventorySlot {
+export function configureLocalInventoryShell(readShell: () => string | undefined): void {
+  readDefaultShell = readShell
+}
+
+export function getLocalInventory(shellOverride?: string): InventorySlot {
   const key = hasAppEnvironment() ? getProfileUserDataPath() : undefined
-  if (!local || key !== profile) {
-    local = { stockCommands: localStockCommands }
+  const defaultShell =
+    process.platform === 'win32' ? undefined : readDefaultShell?.()?.trim() || undefined
+  if (!local || key !== profile || local.shellPath !== defaultShell) {
+    if (local) {
+      invalidateExactLoginShellEnvironments()
+    }
+    local = { stockCommands: localStockCommands, shellPath: defaultShell }
     profile = key
+    alternateShells.clear()
   }
-  return local
+  if (process.platform === 'win32' || !shellOverride || shellOverride === defaultShell) {
+    return local
+  }
+  const existing = alternateShells.get(shellOverride)
+  if (existing) {
+    return existing
+  }
+  if (alternateShells.size >= 8) {
+    const oldest = alternateShells.keys().next().value
+    if (oldest !== undefined) {
+      alternateShells.delete(oldest)
+    }
+  }
+  const slot = { stockCommands: localStockCommands, shellPath: shellOverride }
+  alternateShells.set(shellOverride, slot)
+  return slot
 }
 
 export async function wslInventory(

@@ -258,7 +258,7 @@ export async function submitFolderWorkspaceCreate({
           ? { startup }
           : {}),
         ...(result.setup ? { setup: result.setup } : {}),
-        backendStartupTerminalSpawned: result.startupTerminal?.spawned === true,
+        backendStartupTerminalSpawned: Boolean(result.startupTerminal),
         ...(!launchFailed && structuredLaunch ? { providesInitialSurface: true } : {}),
         runtimeEnvironmentId
       })

@@ -172,6 +172,7 @@ async function buildRuntimeAgentTerminalStartupOptions(
     ),
     prompt: opts.startupPrompt ?? '',
     cwd: resolveTerminalStartupCwd(workspace.path, opts.cwd) ?? workspace.path,
+    shellPath: runtime.pty.shellOverride,
     hostIdentity: host.hostIdentity,
     signal: opts.signal
   }
