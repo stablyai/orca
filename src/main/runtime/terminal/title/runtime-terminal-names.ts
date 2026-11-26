@@ -4,9 +4,11 @@ import type {
 } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { RuntimeWorkspaceArchive } from '../../workspaces/archive/runtime-workspace-archive'
+import { UnlandedWindowRenames } from './manual-title-admission'
 
 export abstract class RuntimeTerminalNames extends RuntimeWorkspaceArchive {
   protected abstract getTerminalManualTitle(handle: string): string | null
+  private readonly unlandedWindowRenames = new UnlandedWindowRenames()
 
   async renameTerminal(
     handle: string,
@@ -23,12 +25,16 @@ export abstract class RuntimeTerminalNames extends RuntimeWorkspaceArchive {
     if (mainRename) {
       return { ...mainRename, ...conditional }
     }
-    // Other paths write synchronously from here, so no other rename can land between this check and the write.
+    // The window saves a sent rename later, so one still in flight counts as a changed name.
+    const saved = this.getTerminalManualTitle(handle) ?? ''
     if (
       ifManualTitle !== undefined &&
-      (this.getTerminalManualTitle(handle) ?? '') !== ifManualTitle.trim()
+      (saved !== ifManualTitle.trim() || this.unlandedWindowRenames.inFlight(handle, saved))
     ) {
       throw new Error('terminal_title_changed')
+    }
+    if (this.notifier?.renameTerminal) {
+      this.unlandedWindowRenames.record(handle, saved, title)
     }
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import { manualTitleAdmission } from './manual-title-admission'
+import { manualTitleAdmission, UnlandedWindowRenames } from './manual-title-admission'
 
 const pane = { worktreeId: 'wt_1', tabId: 'tab_1' }
 
@@ -36,5 +36,26 @@ describe('manualTitleAdmission', () => {
   it('refuses as a missing tab when the partition no longer holds it', () => {
     expect(manualTitleAdmission([], pane, '')).toBe(false)
     expect(manualTitleAdmission(undefined, pane, '')).toBe(false)
+  })
+})
+
+describe('UnlandedWindowRenames', () => {
+  it('holds a sent rename in flight until the saved name changes', () => {
+    const renames = new UnlandedWindowRenames(() => 0)
+    renames.record('term_1', 'old', 'new')
+    expect(renames.inFlight('term_1', 'old')).toBe(true)
+    expect(renames.inFlight('term_2', 'old')).toBe(false)
+    expect(renames.inFlight('term_1', 'new')).toBe(false)
+    expect(renames.inFlight('term_1', 'old')).toBe(false)
+  })
+
+  it('ignores a rename to the saved name and stops blocking once the landing window passes', () => {
+    let now = 0
+    const renames = new UnlandedWindowRenames(() => now)
+    renames.record('term_1', 'same', ' same ')
+    expect(renames.inFlight('term_1', 'same')).toBe(false)
+    renames.record('term_1', 'old', 'new')
+    now = 5000
+    expect(renames.inFlight('term_1', 'old')).toBe(false)
   })
 })
