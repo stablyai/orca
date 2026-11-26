@@ -149,7 +149,7 @@ function LiveInputField({
     <TextField
       inputRef={bindLiveInputField}
       monospace
-      style={dockStyles.liveField}
+      style={[inputStyles.filledField, dockStyles.liveField]}
       trailing={trailing}
       value={text}
       onChange={(event) => {

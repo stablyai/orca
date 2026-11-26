@@ -1,7 +1,7 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
-import { TEXT_INPUT_FONT_SIZE } from '../../../platform/text-input/text-input-font-size'
+import { COMPOSER_TEXT_SIZE } from '../../../components/composer-input/composer-input-styles'
 
 export const prTabStyles = themedStyleSheet(() => ({
   container: { flex: 1, backgroundColor: colors.bgBase },
@@ -143,7 +143,7 @@ export const prSheetStyles = themedStyleSheet(() => ({
   state: { color: colors.textSecondary, fontSize: typography.metaSize },
   approved: { color: colors.statusGreen },
   field: {
-    fontSize: TEXT_INPUT_FONT_SIZE,
+    fontSize: COMPOSER_TEXT_SIZE,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md
   },

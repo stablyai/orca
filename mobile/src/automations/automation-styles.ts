@@ -1,5 +1,5 @@
 import { themedStyleSheet } from '../theme/themed-styles'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input/text-input-font-size'
+import { COMPOSER_TEXT_SIZE } from '../components/composer-input/composer-input-styles'
 import { LIST_ROW_PADDING } from '../components/list/ListGroup'
 import { colors, feedback, radii, spacing, typography } from '../theme/mobile-theme'
 
@@ -35,11 +35,13 @@ export const automationStyles = themedStyleSheet(() => ({
   text: { color: colors.textPrimary, fontSize: typography.bodySize, lineHeight: 21 },
   meta: { color: colors.textSecondary, fontSize: typography.metaSize, lineHeight: 18 },
   error: { color: colors.statusRed, fontSize: typography.bodySize, lineHeight: 21 },
-  // Text starts where row titles do: the row inset less the field's 1 pt edge.
+  // Text starts where row titles do: the row inset less the field's 1 pt edge. The filled grey reads on sheets and plain pages.
   input: {
     paddingVertical: spacing.md,
     paddingHorizontal: LIST_ROW_PADDING - 1,
-    fontSize: TEXT_INPUT_FONT_SIZE,
+    borderRadius: radii.control,
+    backgroundColor: colors.translucentFill,
+    fontSize: COMPOSER_TEXT_SIZE,
     minHeight: 44
   },
   multiline: { minHeight: 120, textAlignVertical: 'top' },
