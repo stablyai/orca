@@ -13,9 +13,12 @@ let directory: string
 
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'orca-antigravity-plugins-'))
+  vi.stubEnv('PI_CODING_AGENT_DIR', '')
+  vi.stubEnv('ORCA_PI_SOURCE_AGENT_DIR', '')
 })
 
 afterEach(async () => {
+  vi.unstubAllEnvs()
   route.runsInOrcaHome = false
   await rm(directory, { recursive: true, force: true })
 })

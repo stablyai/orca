@@ -104,7 +104,11 @@ async function scanRoot(
   rejectUnreadableRoot: boolean
 ): Promise<ScannedSkill[]> {
   const maxDepth = skillDirectoryMaxDepth(root.sourceKind)
-  const skillFiles = await findSkillFiles(root.path, maxDepth, signal, { rejectUnreadableRoot })
+  const skillFiles = await findSkillFiles(root.path, maxDepth, signal, {
+    rejectUnreadableRoot,
+    // Pi treats a SKILL.md folder as a leaf, so nested skills excluded by package filters stay hidden.
+    stopAtSkillDirectories: root.id.startsWith('pi-package-')
+  })
   // Bound per-package metadata fan-out so one large root cannot occupy every core.
   const skills = await runSkillCandidateTasks(
     skillFiles.map((skillFilePath) => async (): Promise<ScannedSkill | null> => {
