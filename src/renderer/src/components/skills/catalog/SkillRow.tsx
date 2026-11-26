@@ -174,7 +174,7 @@ export function SkillRow({
             onKeyDown(event)
           }}
           className={cn(
-            'group flex w-full cursor-pointer items-start gap-3 border-b border-border/50 px-2 py-2.5 text-left transition-colors last:border-b-0 hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+            'group flex w-full cursor-pointer items-start gap-3 border-b border-border/50 rail-page-row-gutter py-2.5 text-left transition-colors last:border-b-0 hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
             selected && 'bg-accent',
             selectionBlocked && 'opacity-60'
           )}
@@ -243,7 +243,7 @@ export function SkillRow({
             ) : null}
           </div>
           <div
-            className="shrink-0 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 group-focus-visible:opacity-100 has-[[data-state=open]]:opacity-100"
+            className="hidden shrink-0 group-hover:block group-focus-within:block has-[[data-state=open]]:block [@media(hover:none)]:block"
             onClick={(event) => event.stopPropagation()}
           >
             <DropdownMenu>

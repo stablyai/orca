@@ -6842,7 +6842,6 @@
           "c13b82793c": "Manage installs",
           "aee7b99cc6": "Install from link",
           "filterProvider": "Filter by agent",
-          "filterSource": "Filter by source",
           "allSources": "All",
           "clearFilters": "Clear filters",
           "closeSkills": "Close skills",
