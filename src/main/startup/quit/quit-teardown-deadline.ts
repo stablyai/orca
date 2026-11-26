@@ -1,5 +1,18 @@
 import { WILL_QUIT_TEARDOWN_DEADLINE_MS } from '../../../shared/app-lifecycle/shutdown/quit-teardown-deadline'
 
+// A Windows update exit must finish inside WINDOWS_UPDATE_INSTALL_EXIT_TIMEOUT_MS (8 s); this leaves
+// room for the final saves and the bounded telemetry and trace flushes that follow the teardown.
+export const WINDOWS_UPDATE_QUIT_TEARDOWN_DEADLINE_MS = 4_000
+
+export function quitTeardownDeadlineMs(
+  updateQuit: boolean,
+  platform: NodeJS.Platform = process.platform
+): number {
+  return updateQuit && platform === 'win32'
+    ? WINDOWS_UPDATE_QUIT_TEARDOWN_DEADLINE_MS
+    : WILL_QUIT_TEARDOWN_DEADLINE_MS
+}
+
 export type NamedQuitTeardown = {
   name: string
   promise: Promise<unknown>
@@ -25,6 +38,25 @@ export async function settleTeardownWithinDeadline(
   const outcome = await Promise.race([settled, deadline])
   clearTimeout(timer)
   return outcome === 'deadline' ? [...pendingNames] : []
+}
+
+/**
+ * Bounded teardown, then the final saves (unbounded, as their old synchronous will-quit saves
+ * were), then diagnostics. Saves run before diagnostics so an exit deadline cuts telemetry, not data.
+ */
+export async function finishQuitTeardown(input: {
+  teardowns: readonly NamedQuitTeardown[]
+  deadlineMs: number
+  closeDataStores: () => Promise<unknown>
+  shutdownDiagnostics: () => Promise<unknown>
+}): Promise<void> {
+  const pendingTeardowns = await settleTeardownWithinDeadline(input.teardowns, input.deadlineMs)
+  if (pendingTeardowns.length > 0) {
+    console.warn('[shutdown] Quit teardown deadline reached', { pendingTeardowns })
+  }
+  await input.closeDataStores().catch(() => {})
+  // Telemetry must never prevent app.quit().
+  await input.shutdownDiagnostics().catch(() => {})
 }
 
 export type SettledWithinMs<T> =
