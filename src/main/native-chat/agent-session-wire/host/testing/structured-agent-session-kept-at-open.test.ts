@@ -4,6 +4,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import type { DaemonClient } from '../../../../daemon/transport/client/daemon-client'
 import type { ProviderRelayInfo } from '../../../../daemon/protocol/daemon-provider-relay-protocol'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
+import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 
 // Only a run's placement and its own daemon start decide whether its agent may still run: a held
 // approval survives any late or partial listing, and nothing but that start's word (or both its
@@ -25,8 +26,11 @@ const relay = (relayId: string, exit: ProviderRelayInfo['exit'] = null): Provide
   pendingCount: 1
 })
 
-/** A daemon start whose listing answers what `relays()` returns, or never when it returns null. */
-function daemon(instance: string, relays: () => ProviderRelayInfo[] | null) {
+/**
+ * A daemon start whose listing answers what `relays()` returns; null never answers, and 'busy'
+ * refuses (an unanswered listing as its timeout ends it).
+ */
+function daemon(instance: string, relays: () => ProviderRelayInfo[] | null | 'busy') {
   const client = {
     getDaemonIdentity: () => ({
       providerRelay: true,
@@ -42,6 +46,9 @@ function daemon(instance: string, relays: () => ProviderRelayInfo[] | null) {
         return Promise.resolve({})
       }
       const listed = relays()
+      if (listed === 'busy') {
+        return Promise.reject(new Error('relayList timed out'))
+      }
       return listed
         ? Promise.resolve({ relays: listed, daemonInstance: instance })
         : new Promise(() => {})
@@ -85,6 +92,17 @@ const chat = (lastRunPlacement?: unknown) => ({
   location: { executionHostId: LOCAL_EXECUTION_HOST_ID },
   ...(lastRunPlacement ? { lastRunPlacement } : {})
 })
+
+/** A running agent that carries its spawn token, as a relayed agent does. */
+function liveAgent() {
+  const agent = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60_000)'], {
+    env: { ...process.env, [ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV]: 'kept-agent-token' }
+  })
+  if (agent.pid === undefined) {
+    throw new Error('no child pid')
+  }
+  return { pid: agent.pid, agent }
+}
 
 function exitedPid(): number {
   const pid = spawnSync(process.execPath, ['-e', '0']).pid
@@ -130,12 +148,15 @@ it.skipIf(process.platform === 'win32')(
   'an unanswered listing is unknown, and a later ask hears the answer instead of a cached timeout',
   async () => {
     let answers = false
-    const relays = await fresh([daemon(INSTANCE, () => (answers ? [relay('r-1')] : null))])
-    const record = chat(relayed(process.pid, process.pid))
-    expect(await relays.providerRelayRunLiveness(record, { waitMs: 20 })).toBe('unknown')
+    const relays = await fresh([daemon(INSTANCE, () => (answers ? [relay('r-1')] : 'busy'))])
+    // Its agent still runs, so a refused listing can't end the run.
+    const { pid, agent } = liveAgent()
+    const record = chat(relayed(process.pid, pid))
+    expect(await relays.providerRelayRunLiveness(record)).toBe('unknown')
     expect(relays.providerRelayKeptFromLastRun(SESSION)).toBe(true)
     answers = true
     expect(await relays.providerRelayRunLiveness(record, { fresh: true })).toBe('kept')
+    agent.kill('SIGKILL')
   }
 )
 
@@ -144,10 +165,10 @@ it.skipIf(process.platform === 'win32')(
   async () => {
     // No client speaks for this start: its endpoint may be gone while the daemon still runs.
     const relays = await fresh([daemon('daemon-start-b', () => [])])
-    // A live pid with no start time or token to check can't be proven gone: it may still write.
-    expect(await relays.providerRelayRunLiveness(chat(relayed(exitedPid(), process.pid)))).toBe(
-      'unknown'
-    )
+    const { pid, agent } = liveAgent()
+    // Its agent still runs (its own token reads back): it may still write.
+    expect(await relays.providerRelayRunLiveness(chat(relayed(exitedPid(), pid)))).toBe('unknown')
+    agent.kill('SIGKILL')
     expect(await relays.providerRelayRunLiveness(chat(relayed(process.pid, exitedPid())))).toBe(
       'unknown'
     )
@@ -199,11 +220,7 @@ it('owner release keeps the run placement; only the next run replaces it', async
 it.skipIf(process.platform === 'win32')(
   'a send to a chat held as unknown settles its gone run once, at the current fence, then starts fresh',
   async () => {
-    const agent = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60_000)'])
-    const pid = agent.pid
-    if (pid === undefined) {
-      throw new Error('no child pid')
-    }
+    const { pid, agent } = liveAgent()
     // No client speaks for the run's daemon start, which is gone; its agent outlives it a while.
     const relays = await fresh([daemon('daemon-start-b', () => [])])
     const record = chat(relayed(exitedPid(), pid))
