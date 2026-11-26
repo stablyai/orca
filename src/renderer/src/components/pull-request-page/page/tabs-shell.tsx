@@ -24,6 +24,7 @@ import {
   patchCachedPRReviewRequests,
   patchCachedWorkItemBody
 } from '@/components/github-item-dialog/load-item-details/work-item-details-cache'
+import { ChecksPanelLoadingAnnouncement } from '@/components/right-sidebar/checks-panel/presentation/checks-panel-loading-announcement'
 import { ConversationTab } from '../conversation/tab'
 import { ChecksTab } from '../checks/tab'
 import { PRFilesCombinedDiffViewer } from '../files/combined-diff-viewer'
@@ -91,6 +92,11 @@ export function PullRequestPageTabs({
       onValueChange={(value) => onTabChange(value as ItemDialogTab)}
       className="flex h-full min-h-0 flex-col gap-0"
     >
+      {/* Why: stays mounted across tabs so one polite status covers a sustained cold read. */}
+      <ChecksPanelLoadingAnnouncement
+        loading={loading && !detailsLoaded}
+        reviewKey={detailsCacheKey ?? ''}
+      />
       {/* Why: the line variant already underlines the active tab via ::after; a second border would box the trigger. */}
       <TabsList
         variant="line"

@@ -10,6 +10,7 @@ import { formatRelativeTime } from '@/components/github/work-item-state-presenta
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { MentionOption } from '../page-types'
 import { MentionTextarea } from '../mentions/textarea'
+import { DescriptionBodyLoading } from './conversation-loading'
 
 export function ConversationDescription({
   imageUploadAddress,
@@ -117,13 +118,14 @@ export function ConversationDescription({
               </TooltipContent>
             </Tooltip>
           )
+        ) : canEditBody && loading && !detailsLoaded ? (
+          // Why: holds the edit button's slot so the header does not reflow when the details land.
+          <span aria-hidden="true" className="ml-auto size-7 shrink-0" />
         ) : null}
       </div>
       <div className="px-4 py-4 text-[14px] leading-relaxed text-foreground">
         {loading && !detailsLoaded ? (
-          <div className="flex items-center justify-center py-5">
-            <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
-          </div>
+          <DescriptionBodyLoading />
         ) : bodyEditing ? (
           <MentionTextarea
             imageUpload={{
