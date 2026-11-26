@@ -1916,21 +1916,11 @@
     "updateDelay": {
       "description": "Wait this many days after a release is published before Orca offers it.",
       "none": "None",
-      "availableSoon": "Available to you {{relative}}",
-      "availableOn": "Available to you {{date}} ({{relative}})",
-      "clearedTitle": "Orca {{version}} is ready",
-      "heldTitle": "Orca {{version}} is on hold",
-      "released": "Released {{released}}",
-      "progress": "Time until Orca {{version}} is available",
       "skipDelayOnceHint": "Check for this release now. Your delay setting stays the same.",
-      "upToDateWithHeld": "You’re up to date. A newer release is on hold until {{date}}.",
-      "heldReleaseReady": "A newer release is ready. Check for updates to get it.",
       "keywordDelay": "delay",
       "keywordCooldown": "cooldown",
       "keywordSecurity": "security",
       "1b4d825e0e": "Update delay",
-      "ab7e864374": "About update delay",
-      "ee1d96f74a": "Skip delay once",
       "teamManaged": "Set by your team"
     },
     "editorFormatOnSave": {
@@ -2097,8 +2087,7 @@
     "automaticUpdates": {
       "saveFailed": "Could not save automatic updates.",
       "title": "Automatic updates",
-      "description": "On supported desktop installs, Orca downloads eligible updates on its regular check schedule and restarts to install them automatically.",
-      "info": "About automatic updates"
+      "description": "On supported desktop installs, Orca downloads eligible updates on its regular check schedule and restarts to install them automatically."
     },
     "cloudConsole": {
       "manageInBrowser": "Manage in browser",
@@ -2285,19 +2274,22 @@
         "readyCount": "{{value0}} ready",
         "updating": "Updating",
         "updateAll": "Update all",
-        "title": "Servers"
+        "title": "Servers",
+        "restartNote": "Updating restarts these servers."
       },
       "action": {
         "update": "Update",
         "check": "Check",
         "retry": "Retry",
         "skipDelay": "Skip delay",
-        "restart": "Restart"
+        "restart": "Restart",
+        "checkForUpdates": "Check for updates"
       },
       "channel": {
         "running": "Running",
         "title": "Channel",
-        "switch": "Switch"
+        "switch": "Switch",
+        "unvetted": "Unvetted builds can break; downgrades are allowed."
       },
       "status": {
         "checking": "Checking…",
@@ -4788,8 +4780,7 @@
           "statusDownloading": "Downloading update",
           "statusDownloaded": "Update ready to install",
           "statusError": "Update error"
-        },
-        "b3b02a9d84": "Try again"
+        }
       },
       "WorktreeJumpPalette": {
         "ac037cfac2": "Move",
@@ -9745,32 +9736,14 @@
           "5cb5475664": "Confirm before closing pinned tabs"
         },
         "GeneralSupportSection": {
-          "af7d9f4396": "Thanks for the support!",
           "6922c1fa2b": "Star Orca on GitHub",
-          "511782265b": "Support the project with a GitHub star.",
-          "55a87e5fd1": "Support Orca",
-          "964acc6bb4": "Star",
-          "397719bee5": "Starring...",
-          "cb65c75b11": "Opening...",
-          "f2d4f877b2": "Open GitHub"
+          "964acc6bb4": "Star"
         },
         "GeneralUpdateSettingsSection": {
-          "8a52ca1d02": "Release notes",
           "02dc082e70": "Could not start the update download.",
           "ceb579abaf": "Check for app updates and install a newer Orca version.",
-          "bd79d412f0": "Update check failed. {{value0}}",
-          "b9ad70c30d": "Update error. {{value0}}",
-          "f40d88390d": "You’re on the latest version.",
-          "31fd7150cf": "Checking for updates...",
-          "d69a09b672": "Updates are checked automatically on launch.",
           "6d27bd46e3": "Check for updates",
-          "downloadUpdate": "Download update",
-          "restartToUpdate": "Restart to update",
-          "versionAvailable": "Version {{version}} is available.",
-          "externallyManagedVersionAvailable": "Version {{version}} is available. Update Orca through your system package manager — Orca cannot install this release itself.",
-          "versionReadyToInstall": "Version {{version}} is ready to install.",
-          "versionInstalling": "Version {{version}} is being installed.",
-          "downloadingVersion": "Downloading version {{version}} ({{percent}}%)…"
+          "externallyManagedVersionAvailable": "Version {{version}} is available. Update Orca through your system package manager — Orca cannot install this release itself."
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "Choose apps available from a workspace's Open in menu.",
@@ -13582,15 +13555,12 @@
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",
-          "availableCount": "{{value0}} ready to update",
           "currentCount": "{{value0}} up to date",
           "manualCount": "{{value0}} manual",
           "offlineCount": "{{value0}} offline",
           "description": "Check and update paired Orca servers from this client.",
-          "updating": "Updating servers…",
           "serverCountOne": "1 paired server",
           "fdd271abf0": "Remote Orca servers",
-          "e4e5937469": "Check for updates",
           "newerCount": "{{value0}} newer than this app"
         },
         "RemoteServerUpdateDialog": {
@@ -13974,34 +13944,19 @@
         },
         "ReleaseChannelSection": {
           "switchFailed": "Could not switch to that build.",
-          "title": "Update channel",
-          "description": "Switch update channels or jump to any published build, including older ones. Downgrades are allowed and unvetted builds can be broken.",
-          "devOnly": "Dev only",
-          "adhocWarning": "Windows builds are unsigned. The author may stop maintaining a build, so keep a stable build handy.",
           "loadingBuilds": "Loading builds…",
           "noBuilds": "No builds found",
           "refresh": "Refresh build list",
-          "cacheHint": "Build lists are cached for 5 minutes. Refresh to check for new builds.",
-          "switchTo": "Switch to build",
-          "alreadyRunning": "This is the build you are running.",
           "willSwitch": "{{value0}} → {{value1}}",
           "webUnavailable": "Switching builds is only available in the desktop app.",
-          "devChannelUnsupportedAria": "{{value0}} ({{value1}} only)",
-          "devChannelUnsupported": "{{value0}} builds are produced only for {{value1}}. Linux stays on {{stable}} or {{rc}}.",
           "downloadInstaller": "Download installer",
           "manualInstallHint": "{{value0}} builds are unsigned on Windows, so the in-app updater cannot install one over a signed build. Run the downloaded installer once — Windows will warn about an unknown publisher — and every later switch, including back to {{stable}}, works from here.",
           "stableLabel": "Stable",
-          "stableDescription": "Stable releases for general use.",
           "rcLabel": "RC",
-          "rcDescription": "Release candidates published before a stable release.",
           "hourlyLabel": "Hourly",
-          "hourlyDescription": "Built every hour from main.",
           "dailyLabel": "Daily",
-          "dailyDescription": "Built once a day from main.",
           "adhocLabel": "Ad hoc",
-          "adhocDescription": "One-off builds from a branch for trying changes before they merge.",
-          "devChannelPlatforms": "macOS and Windows",
-          "scheduledWarning": "These builds ship with no test gate. Windows builds are unsigned. Keep a stable build handy."
+          "devChannelPlatforms": "macOS and Windows"
         },
         "VoiceMicrophoneSetting": {
           "systemDefault": "System default",

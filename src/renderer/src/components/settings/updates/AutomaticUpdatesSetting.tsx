@@ -13,6 +13,7 @@ export function AutomaticUpdatesSetting(): React.JSX.Element {
   const settingsLoaded = useAppStore((state) => state.settings !== null)
   const updateSettings = useAppStore((state) => state.updateSettingsOrThrow)
   const switchId = useId()
+  const descriptionId = useId()
   const [saving, setSaving] = useState(false)
   const { title, description } = getAutomaticUpdatesSettingCopy(t)
 
@@ -33,12 +34,16 @@ export function AutomaticUpdatesSetting(): React.JSX.Element {
         control={
           <Switch
             id={switchId}
+            aria-describedby={descriptionId}
             checked={enabled}
             onCheckedChange={toggleAutomaticUpdates}
             disabled={!settingsLoaded || saving}
           />
         }
       />
+      <span id={descriptionId} className="sr-only">
+        {description}
+      </span>
     </SearchableSetting>
   )
 }

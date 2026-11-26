@@ -1599,7 +1599,6 @@
     "automaticUpdates": {
       "title": "Mises à jour automatiques",
       "description": "Sur les installations de bureau compatibles, Orca télécharge les mises à jour éligibles lors de ses vérifications régulières et redémarre automatiquement pour les installer.",
-      "info": "À propos des mises à jour automatiques",
       "saveFailed": "Impossible d’enregistrer le réglage des mises à jour automatiques."
     },
     "cloudConsole": {
@@ -1754,20 +1753,10 @@
     },
     "updateDelay": {
       "1b4d825e0e": "Délai de mise à jour",
-      "ab7e864374": "À propos du délai de mise à jour",
-      "ee1d96f74a": "Ignorer le délai cette fois",
       "teamManaged": "Défini par votre équipe",
       "description": "Orca attend ce nombre de jours après la publication d’une version avant de la proposer.",
       "none": "Aucun",
-      "availableSoon": "Disponible pour vous {{relative}}",
-      "availableOn": "Disponible pour vous le {{date}} ({{relative}})",
-      "clearedTitle": "Orca {{version}} est disponible",
-      "heldTitle": "Orca {{version}} est en attente",
-      "released": "Publié le {{released}}",
-      "progress": "Temps restant avant la disponibilité d’Orca {{version}}",
       "skipDelayOnceHint": "Rechercher cette version maintenant. Votre réglage du délai reste le même.",
-      "upToDateWithHeld": "Vous êtes à jour. Une version plus récente est en attente jusqu’au {{date}}.",
-      "heldReleaseReady": "Une version plus récente est prête. Recherchez les mises à jour pour l’obtenir.",
       "keywordDelay": "délai",
       "keywordCooldown": "attente",
       "keywordSecurity": "sécurité"
@@ -4400,8 +4389,7 @@
           "statusDownloading": "Téléchargement de la mise à jour",
           "statusDownloaded": "Mise à jour prête à être installée",
           "statusError": "Erreur de mise à jour"
-        },
-        "b3b02a9d84": "Réessayer"
+        }
       },
       "WorktreeJumpPalette": {
         "ac037cfac2": "Déplacer",
@@ -9465,32 +9453,14 @@
           "confirm_running_work_close": "Confirmer avant de fermer des conversations ou terminaux actifs"
         },
         "GeneralSupportSection": {
-          "af7d9f4396": "Merci pour votre soutien !",
           "6922c1fa2b": "Ajouter une étoile à Orca sur GitHub",
-          "511782265b": "Soutenez le projet avec une étoile GitHub.",
-          "55a87e5fd1": "Soutenir Orca",
-          "964acc6bb4": "Ajouter une étoile",
-          "397719bee5": "Ajout de l'étoile...",
-          "cb65c75b11": "Ouverture...",
-          "f2d4f877b2": "Ouvrir GitHub"
+          "964acc6bb4": "Ajouter une étoile"
         },
         "GeneralUpdateSettingsSection": {
-          "8a52ca1d02": "Notes de version",
           "02dc082e70": "Impossible de démarrer le téléchargement de la mise à jour.",
           "ceb579abaf": "Recherche les mises à jour de l'application et installe une version plus récente d'Orca.",
-          "bd79d412f0": "Échec de la vérification des mises à jour. {{value0}}",
-          "b9ad70c30d": "Erreur de mise à jour. {{value0}}",
-          "f40d88390d": "Vous utilisez la dernière version.",
-          "31fd7150cf": "Recherche de mises à jour...",
-          "d69a09b672": "Les mises à jour sont vérifiées automatiquement au lancement.",
           "6d27bd46e3": "Rechercher des mises à jour",
-          "downloadUpdate": "Télécharger la mise à jour",
-          "restartToUpdate": "Redémarrer pour mettre à jour",
-          "versionAvailable": "La version {{version}} est disponible.",
-          "externallyManagedVersionAvailable": "La version {{version}} est disponible. Mettez Orca à jour avec le gestionnaire de paquets de votre système. Orca ne peut pas installer cette version lui-même.",
-          "versionReadyToInstall": "La version {{version}} est prête à être installée.",
-          "versionInstalling": "Installation de la version {{version}} en cours.",
-          "downloadingVersion": "Téléchargement de la version {{version}} ({{percent}} %)…"
+          "externallyManagedVersionAvailable": "La version {{version}} est disponible. Mettez Orca à jour avec le gestionnaire de paquets de votre système. Orca ne peut pas installer cette version lui-même."
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "Choisissez les applications proposées dans le menu « Ouvrir dans » d'un espace de travail.",
@@ -13300,15 +13270,12 @@
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} serveurs jumelés",
-          "availableCount": "{{value0}} prêts pour la mise à jour",
           "currentCount": "{{value0}} à jour",
           "manualCount": "{{value0}} manuels",
           "offlineCount": "{{value0}} hors ligne",
           "description": "Vérifiez et mettez à jour les serveurs Orca jumelés depuis ce client.",
-          "updating": "Mise à jour des serveurs…",
           "serverCountOne": "1 serveur jumelé",
           "fdd271abf0": "Serveurs Orca distants",
-          "e4e5937469": "Rechercher des mises à jour",
           "newerCount": "Serveurs plus récents que cette application : {{value0}}"
         },
         "RemoteServerUpdateDialog": {
@@ -13745,34 +13712,19 @@
         },
         "ReleaseChannelSection": {
           "switchFailed": "Impossible de passer à cette version.",
-          "title": "Canal de mise à jour",
-          "description": "Changez de canal de mise à jour ou passez à n’importe quelle version publiée, même ancienne. Vous pouvez revenir à une version antérieure ; les versions non vérifiées peuvent ne pas fonctionner correctement.",
-          "devOnly": "Dév. uniquement",
-          "adhocWarning": "Les versions pour Windows ne sont pas signées. Leur auteur peut cesser de les maintenir. Gardez une version stable à portée de main.",
           "loadingBuilds": "Chargement des versions…",
           "noBuilds": "Aucune version trouvée",
           "refresh": "Actualiser la liste des versions",
-          "switchTo": "Passer à cette version",
-          "alreadyRunning": "Vous utilisez actuellement cette version.",
           "willSwitch": "{{value0}} → {{value1}}",
           "webUnavailable": "Le changement de version est uniquement disponible dans l’application de bureau.",
-          "devChannelUnsupportedAria": "{{value0}} ({{value1}} uniquement)",
-          "devChannelUnsupported": "Les versions du canal « {{value0}} » sont uniquement disponibles pour {{value1}}. Sous Linux, utilisez {{stable}} ou {{rc}}.",
           "downloadInstaller": "Télécharger l’installateur",
           "manualInstallHint": "Les versions du canal « {{value0}} » ne sont pas signées sous Windows. La mise à jour intégrée ne peut donc pas les installer par-dessus une version signée. Exécutez une fois le programme d’installation téléchargé ; Windows affichera un avertissement concernant un éditeur inconnu. Vous pourrez ensuite changer de version depuis ici, y compris pour revenir au canal « {{stable}} ».",
-          "cacheHint": "La liste des versions est mise en cache pendant 5 minutes. Actualisez-la pour rechercher de nouvelles versions.",
           "stableLabel": "Stable",
-          "stableDescription": "Versions stables destinées à un usage courant.",
           "rcLabel": "RC",
-          "rcDescription": "Versions candidates publiées avant une version stable.",
           "hourlyLabel": "Horaire",
-          "hourlyDescription": "Une version générée chaque heure à partir de main.",
           "dailyLabel": "Quotidien",
-          "dailyDescription": "Une version générée chaque jour à partir de main.",
           "adhocLabel": "Ponctuel",
-          "adhocDescription": "Versions ponctuelles issues d’une branche pour essayer des changements avant leur fusion.",
-          "devChannelPlatforms": "macOS et Windows",
-          "scheduledWarning": "Ces versions sont publiées sans tests préalables. Les versions pour Windows ne sont pas signées. Gardez une version stable à portée de main."
+          "devChannelPlatforms": "macOS et Windows"
         },
         "VoiceMicrophoneSetting": {
           "systemDefault": "Valeur par défaut du système",

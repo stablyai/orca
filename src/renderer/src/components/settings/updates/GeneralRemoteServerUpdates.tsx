@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store/index'
@@ -97,7 +97,17 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   const running = useAppStore((state) => state.remoteServerUpdatesRunning)
   const refresh = useAppStore((state) => state.refreshRemoteServerUpdates)
   const start = useAppStore((state) => state.startRemoteServerUpdates)
+  const setDialogOpen = useAppStore((state) => state.setRemoteServerUpdateDialogOpen)
   const [open, setOpen] = useState(false)
+
+  // A modifier-click Check picks a one-off release track; closing the dialog clears it, and so
+  // does folding this list or leaving the page, so a later Update all can't inherit it.
+  const clearCheckOptions = useCallback((): void => {
+    if (!useAppStore.getState().remoteServerUpdateDialogOpen) {
+      setDialogOpen(false)
+    }
+  }, [setDialogOpen])
+  useEffect(() => clearCheckOptions, [clearCheckOptions])
 
   if (entries.length === 0) {
     return null
@@ -107,25 +117,27 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   const liveTabCount = eligible.reduce((total, entry) => total + entry.liveTabCount, 0)
   const liveLeafCount = eligible.reduce((total, entry) => total + entry.liveLeafCount, 0)
   const busy = checking || running
+  const updateLabel =
+    eligible.length === 1
+      ? t('settings.about.action.update', 'Update')
+      : t('settings.about.servers.updateAll', 'Update all')
+  const setOpenAndClear = (next: boolean): void => {
+    setOpen(next)
+    if (!next) {
+      clearCheckOptions()
+    }
+  }
 
+  // Folded, an update only unfolds the list: updating restarts servers, so the targets and the
+  // live-session warning show before the confirm, as the dialog did.
   const action = running ? (
     <Button type="button" variant="outline" size="sm" disabled>
       <Loader2 className="animate-spin" />
       {t('settings.about.servers.updating', 'Updating')}
     </Button>
-  ) : eligible.length > 0 && !checking ? (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      onClick={() => {
-        setOpen(true)
-        void start()
-      }}
-    >
-      {eligible.length === 1
-        ? t('settings.about.action.update', 'Update')
-        : t('settings.about.servers.updateAll', 'Update all')}
+  ) : eligible.length > 0 && !open && !checking ? (
+    <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
+      {updateLabel}
     </Button>
   ) : (
     <Button
@@ -160,49 +172,60 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
         label={t('settings.about.servers.title', 'Servers')}
         summary={<ServerSummary parts={serverSummaryParts(entries, t)} />}
         open={open}
-        onOpenChange={setOpen}
+        onOpenChange={setOpenAndClear}
         control={action}
       >
-        {eligible.length > 0 && (liveTabCount > 0 || liveLeafCount > 0) ? (
-          <p data-settings-row="" className="text-settings-detail text-muted-foreground">
-            {t(
-              'auto.components.settings.RemoteServerUpdateDialog.restartWarning',
-              'Updating restarts these servers. {{value0}} and {{value1}} may briefly disconnect.',
-              {
-                value0:
-                  liveTabCount === 1
+        {open ? (
+          <>
+            {entries.map((entry) => (
+              <RemoteServerAboutRow
+                key={entry.environmentId}
+                entry={entry}
+                disabled={busy}
+                onUpdate={() => void start([entry.environmentId])}
+              />
+            ))}
+            {eligible.length > 0 ? (
+              <div data-settings-row="" className="flex items-center gap-3">
+                <p className="min-w-0 flex-1 text-settings-detail text-muted-foreground">
+                  {liveTabCount > 0 || liveLeafCount > 0
                     ? t(
-                        'auto.components.settings.RemoteServerUpdateDialog.liveTabOne',
-                        '1 live tab'
+                        'auto.components.settings.RemoteServerUpdateDialog.restartWarning',
+                        'Updating restarts these servers. {{value0}} and {{value1}} may briefly disconnect.',
+                        {
+                          value0:
+                            liveTabCount === 1
+                              ? t(
+                                  'auto.components.settings.RemoteServerUpdateDialog.liveTabOne',
+                                  '1 live tab'
+                                )
+                              : t(
+                                  'auto.components.settings.RemoteServerUpdateDialog.liveTabs',
+                                  '{{value0}} live tabs',
+                                  { value0: liveTabCount }
+                                ),
+                          value1:
+                            liveLeafCount === 1
+                              ? t(
+                                  'auto.components.settings.RemoteServerUpdateDialog.livePaneOne',
+                                  '1 live pane'
+                                )
+                              : t(
+                                  'auto.components.settings.RemoteServerUpdateDialog.livePanes',
+                                  '{{value0}} live panes',
+                                  { value0: liveLeafCount }
+                                )
+                        }
                       )
-                    : t(
-                        'auto.components.settings.RemoteServerUpdateDialog.liveTabs',
-                        '{{value0}} live tabs',
-                        { value0: liveTabCount }
-                      ),
-                value1:
-                  liveLeafCount === 1
-                    ? t(
-                        'auto.components.settings.RemoteServerUpdateDialog.livePaneOne',
-                        '1 live pane'
-                      )
-                    : t(
-                        'auto.components.settings.RemoteServerUpdateDialog.livePanes',
-                        '{{value0}} live panes',
-                        { value0: liveLeafCount }
-                      )
-              }
-            )}
-          </p>
+                    : t('settings.about.servers.restartNote', 'Updating restarts these servers.')}
+                </p>
+                <Button type="button" size="sm" disabled={busy} onClick={() => void start()}>
+                  {updateLabel}
+                </Button>
+              </div>
+            ) : null}
+          </>
         ) : null}
-        {entries.map((entry) => (
-          <RemoteServerAboutRow
-            key={entry.environmentId}
-            entry={entry}
-            disabled={busy}
-            onUpdate={() => void start([entry.environmentId])}
-          />
-        ))}
       </AboutDisclosureRow>
     </SearchableSetting>
   )
@@ -245,7 +268,9 @@ function RemoteServerAboutRow({
 }): React.JSX.Element {
   const t = useTranslate()
   const help = getRemoteServerEntryHelp(entry, t)
-  const sub = help ?? getRemoteServerVersionDescription(entry, t)
+  const version = getRemoteServerVersionDescription(entry, t)
+  // Keep the version beside the help so a manual or failed server still says what it runs.
+  const sub = help ? `${version} · ${help}` : version
   const busy = BUSY_PHASES.has(entry.phase)
   const status =
     entry.phase === 'downloading' && entry.progress !== null

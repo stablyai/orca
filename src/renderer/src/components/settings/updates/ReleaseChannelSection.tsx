@@ -252,6 +252,23 @@ export function ReleaseChannelSection(): React.JSX.Element {
               }
             )}
           </p>
+        ) : selectedBuild && !isRunningBuild ? (
+          <p
+            data-settings-row=""
+            className="truncate text-settings-detail text-muted-foreground"
+            title={selectedBuild.version}
+          >
+            {t(
+              'auto.components.settings.ReleaseChannelSection.willSwitch',
+              '{{value0}} → {{value1}}',
+              { value0: appVersion ?? '…', value1: selectedBuild.version }
+            )}
+            {' · '}
+            {t(
+              'settings.about.channel.unvetted',
+              'Unvetted builds can break; downgrades are allowed.'
+            )}
+          </p>
         ) : null}
       </AboutDisclosureRow>
     </div>

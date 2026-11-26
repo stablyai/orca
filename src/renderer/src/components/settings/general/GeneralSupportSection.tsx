@@ -76,7 +76,7 @@ export function GeneralSupportStarAction(): React.JSX.Element | null {
       <span
         role="status"
         aria-live="polite"
-        className="inline-flex h-6 items-center gap-1 px-2 text-xs font-medium text-status-warning animate-in fade-in duration-300"
+        className="inline-flex h-6 items-center gap-1 px-2 text-xs font-medium text-status-warning-text animate-in fade-in duration-300"
       >
         <Star className="size-3 fill-current" aria-hidden="true" />
         {t('settings.about.star.starred', 'Starred')}

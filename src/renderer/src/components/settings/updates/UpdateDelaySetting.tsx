@@ -51,6 +51,7 @@ export function UpdateDelaySetting(): React.JSX.Element {
   const updateSettings = useAppStore((s) => s.updateSettings)
   const updateStatus = useAppStore((s) => s.updateStatus)
   const labelId = useId()
+  const descriptionId = useId()
   const title = getUpdateDelayTitle(t)
   const description = getUpdateDelayDescription(t)
   const options = UPDATE_DELAY_DAY_OPTIONS.includes(delayDays)
@@ -93,7 +94,7 @@ export function UpdateDelaySetting(): React.JSX.Element {
               value={String(delayDays)}
               onValueChange={(value) => setDelayDays(Number(value))}
             >
-              <SelectTrigger size="sm" aria-labelledby={labelId}>
+              <SelectTrigger size="sm" aria-labelledby={labelId} aria-describedby={descriptionId}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -113,6 +114,9 @@ export function UpdateDelaySetting(): React.JSX.Element {
           )
         }
       />
+      <span id={descriptionId} className="sr-only">
+        {description}
+      </span>
     </SearchableSetting>
   )
 }

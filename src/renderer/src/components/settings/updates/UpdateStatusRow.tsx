@@ -1,9 +1,11 @@
 import type React from 'react'
 import { useState } from 'react'
-import { Copy, Loader2 } from 'lucide-react'
+import { Copy, Loader2, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '../../ui/button'
 import { Progress } from '../../ui/progress'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
+import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { updaterMessageText } from '@/app-shell/updates/updater-message-copy'
 import {
@@ -17,6 +19,9 @@ import { getReleaseNotesUrlForVersion } from '../../../../../shared/updater/rele
 import type { UpdateStatus } from '../../../../../shared/updater/update-status-types'
 import { formatUpdateDelayDate } from './update-delay-copy'
 import type { UpdateStatusLine, UpdateStatusRowModel } from './update-status-row-model'
+
+// Intl formatter caches key on option identity, so this must be a module constant.
+const PERCENT_FORMAT: Intl.NumberFormatOptions = { style: 'percent', maximumFractionDigits: 0 }
 
 type UpdateStatusRowProps = {
   model: UpdateStatusRowModel
@@ -165,12 +170,10 @@ export function UpdateStatusRow({
             })}
           </div>
           {copy || details ? (
-            <div
-              role="status"
-              className="flex min-w-0 items-center whitespace-nowrap text-settings-detail text-muted-foreground"
-            >
+            <div className="flex min-w-0 items-center whitespace-nowrap text-settings-detail text-muted-foreground">
               {copy ? (
                 <span
+                  role="status"
                   className={cn(
                     'min-w-0 truncate',
                     copy.tone === 'destructive' && 'text-destructive'
@@ -230,9 +233,35 @@ export function UpdateStatusRow({
             </div>
           ) : null}
         </div>
+        {model.secondaryCheck ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost-muted"
+                size="icon-sm"
+                aria-label={t('settings.about.action.checkForUpdates', 'Check for updates')}
+                disabled={model.secondaryCheck.disabled}
+                // Modifier clicks pick a one-off release track, not a saved setting.
+                onClick={(event) =>
+                  void window.api.updater.check(getUpdateCheckClickOptions(event))
+                }
+              >
+                <RefreshCw />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {t('settings.about.action.checkForUpdates', 'Check for updates')}
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
         <UpdateStatusAction
           model={model}
-          percent={percent}
+          percent={
+            percent === null
+              ? null
+              : uiNumberFormat(PERCENT_FORMAT, intlLocale).format(percent / 100)
+          }
           onDownload={onDownload}
           onRestart={onRestart}
         />
@@ -283,7 +312,7 @@ function UpdateStatusAction({
   onRestart
 }: {
   model: UpdateStatusRowModel
-  percent: number | null
+  percent: string | null
   onDownload: () => void
   onRestart: () => void
 }): React.JSX.Element | null {
@@ -294,9 +323,7 @@ function UpdateStatusAction({
     case 'none':
       return null
     case 'progress':
-      return (
-        <span className="shrink-0 text-sm text-muted-foreground tabular-nums">{percent ?? 0}%</span>
-      )
+      return <span className="shrink-0 text-sm text-muted-foreground tabular-nums">{percent}</span>
     case 'check':
     case 'retry-check':
       return (

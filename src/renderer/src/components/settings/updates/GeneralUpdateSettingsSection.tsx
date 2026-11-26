@@ -110,7 +110,9 @@ export function GeneralUpdateSettingsSection({
         headerAction ? <div className="pe-2">{headerAction}</div> : undefined
       }
       onHeaderClick={(event) => {
-        if (event.altKey) {
+        // Only the title reveals channels; an Option-click on the header's Star must stay a star.
+        const onAction = event.target instanceof Element && event.target.closest('button')
+        if (event.altKey && !onAction) {
           setChannelSwitcherRevealed((revealed) => !revealed)
         }
       }}

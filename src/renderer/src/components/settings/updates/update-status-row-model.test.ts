@@ -130,6 +130,39 @@ describe('getUpdateStatusRowModel', () => {
     ).toEqual(['unsupported-system', 'check', false, 'unsupported-system'])
   })
 
+  it('keeps a modifier-aware Check beside every primary that is not Check', () => {
+    const secondary = (status: UpdateStatus, over: Partial<UpdateStatusRowContext> = {}) =>
+      getUpdateStatusRowModel(status, { ...ctx, ...over }).secondaryCheck
+    expect(secondary({ state: 'not-available' })).toBeNull()
+    expect(secondary({ state: 'checking' })).toBeNull()
+    expect(secondary({ state: 'downloading', version: '9.9.9', percent: 1 })).toBeNull()
+    expect(secondary({ state: 'downloaded', version: '9.9.9', installing: true })).toBeNull()
+    expect(secondary({ state: 'available', version: '9.9.9', changelog: null })).toEqual({
+      disabled: false
+    })
+    expect(secondary({ state: 'downloaded', version: '9.9.9' })).toEqual({ disabled: false })
+    expect(secondary({ state: 'error', message: 'x', retryAction: 'install' })).toEqual({
+      disabled: false
+    })
+    expect(
+      secondary({
+        state: 'not-available',
+        delayedUpdate: {
+          version: '9.9.9',
+          releasedAt: '2026-11-20T12:00:00Z',
+          availableAt: '2026-11-27T12:00:00Z',
+          delayDays: 7
+        }
+      })
+    ).toEqual({ disabled: false })
+    expect(
+      secondary(
+        { state: 'error', message: 'x', messageCode: 'macStagingTimeout', installOnQuit: true },
+        { showManualRestart: true }
+      )
+    ).toEqual({ disabled: true })
+  })
+
   it('hides release notes for local builds', () => {
     const status: UpdateStatus = { state: 'downloaded', version: '9.9.9' }
     expect(getUpdateStatusRowModel(status, ctx).notesVersion).toBe('9.9.9')

@@ -43,6 +43,8 @@ export type UpdateStatusRowModel = {
   details: UpdateStatusDetails
   /** Version whose release notes the line links to; null hides the link. */
   notesVersion: string | null
+  /** A quiet Check beside a primary that isn't Check, so modifier-click release checks stay reachable. */
+  secondaryCheck: { disabled: boolean } | null
 }
 
 export type UpdateStatusRowContext = {
@@ -65,11 +67,36 @@ function notesFor(status: UpdateStatus, version: string): string | null {
   return status.source === 'local' ? null : version
 }
 
-/** One status line and one action per updater state; the About status row renders exactly this. */
+const SECONDARY_CHECK_PRIMARIES = new Set<UpdateStatusActionKind>([
+  'skip-delay',
+  'download',
+  'restart',
+  'retry-install',
+  'quit'
+])
+
+/** One status line and one primary action per updater state; the About status row renders exactly this. */
 export function getUpdateStatusRowModel(
   status: UpdateStatus,
   ctx: UpdateStatusRowContext
 ): UpdateStatusRowModel {
+  const primary = getPrimaryModel(status, ctx)
+  const showSecondary = SECONDARY_CHECK_PRIMARIES.has(primary.action.kind) && !primary.action.busy
+  return {
+    ...primary,
+    secondaryCheck: showSecondary
+      ? {
+          // A stuck macOS staging can't be fixed by another check.
+          disabled: status.state === 'error' && status.messageCode === 'macStagingTimeout'
+        }
+      : null
+  }
+}
+
+function getPrimaryModel(
+  status: UpdateStatus,
+  ctx: UpdateStatusRowContext
+): Omit<UpdateStatusRowModel, 'secondaryCheck'> {
   if (ctx.showManualRestart) {
     return {
       line: { kind: 'install-on-quit' },
