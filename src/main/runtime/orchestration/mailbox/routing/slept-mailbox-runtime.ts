@@ -7,6 +7,7 @@ import { queueTerminalWorkspaceCommand } from '../../../workspaces/lifecycle/wor
 import { MailWakeInvocations } from './mail-wake-invocations'
 import { RuntimeMailWakeAdmission } from './runtime-mail-wake-admission'
 import { SleptMailboxWake } from './slept-mailbox-wake'
+import { SleptPaneHost } from './slept-pane-host'
 
 const NO_RECORDS: Readonly<Record<string, SleptMailRecord>> = Object.freeze({})
 
@@ -116,6 +117,10 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
     this.store?.getWorkspaceSession?.(host)?.sleepingAgentSessionsByPaneKey ?? NO_RECORDS
   private readonly reindexSleptPane = (pane: string) => this.sleptMailboxWake.refreshPane(pane)
 
+  private readonly sleptPaneHost = new SleptPaneHost(this.sleepingRecordIndex, (repoId) =>
+    this.store?.getRepo?.(repoId)
+  )
+
   private readonly sleepingMailCrewWatch = new SleepingMailCrewWatch(
     () => this.crewChanges,
     (scope) => this.publishSleepingMail(scope),
@@ -133,8 +138,7 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
     this.sleepingRecordIndex.finishInitialRead()
     retryOnHostConnect(
       (listener) => this.onClientEvent(listener, { consumesTerminalSideEffects: false }),
-      this.sleptMailboxWake,
-      (scope) => this.publishSleepingMail(scope, true)
+      (host) => this.retrySleptMailboxWakes(undefined, host)
     )
     this.subscribeAgentStatusRowChanges((paneKey) => this.watchMailWakeInvocations(paneKey))
     this.sleepingMailCrewWatch.sync(this.owesAnySleepingMail())
@@ -217,15 +221,17 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
   }
 
   /** A window (re)load re-announces the held set and re-checks every sleeper; a host coming back
-   *  can only unblock a wake that failed, so it re-checks just the tracked mailboxes. */
-  retrySleptMailboxWakes(paneKey?: string, hostEdge = false): void {
+   *  can only unblock a wake that failed, so it re-checks just the tracked mailboxes (a named
+   *  host's own, when the edge names one). */
+  retrySleptMailboxWakes(paneKey?: string, hostEdge: boolean | string = false): void {
     this.watchSleepingMail()
-    this.sleptMailboxWake.retryFailed(paneKey)
+    const onHost = typeof hostEdge === 'string' ? this.sleptPaneHost.on(hostEdge) : undefined
+    this.sleptMailboxWake.retryFailed(paneKey, onHost)
     if (paneKey === undefined && !hostEdge) {
       this.resetHeldWorktreesPublication()
     }
     this.getExistingOrchestrationDb()
-    const tracked = () => ({ mailboxes: this.sleptMailboxWake.trackedMailboxes(), panes: [] })
+    const tracked = () => ({ mailboxes: this.sleptMailboxWake.trackedMailboxes(onHost), panes: [] })
     const scope = paneKey !== undefined ? { panes: [paneKey] } : hostEdge ? tracked() : undefined
     this.publishSleepingMail(scope, true)
   }
