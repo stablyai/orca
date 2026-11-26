@@ -3394,7 +3394,8 @@
       "previewPosition": "{{current}} of {{total}}",
       "chosen": "Chosen",
       "chooseThis": "Choose this",
-      "viewPreview": "View"
+      "viewPreview": "View",
+      "ownWordsHint": "Opens a box to type your own answer"
     },
     "permission": {
       "reason": "Reason: ",

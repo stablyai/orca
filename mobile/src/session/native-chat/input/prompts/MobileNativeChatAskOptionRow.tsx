@@ -46,8 +46,15 @@ export function MobileNativeChatAskOptionRow({
     : nativeChatQuestionOptionLabel(label)
   const row = (
     <Pressable
-      accessibilityRole={multi ? 'checkbox' : 'radio'}
-      accessibilityState={{ checked: selected, disabled }}
+      // The card's own free-text action is a button that opens the box, never a choice, so a screen
+      // reader tells it from an option written in the same words.
+      accessibilityRole={action ? 'button' : multi ? 'checkbox' : 'radio'}
+      accessibilityState={
+        action ? { expanded: selected, disabled } : { checked: selected, disabled }
+      }
+      accessibilityHint={
+        action ? t('chat.ask.ownWordsHint', 'Opens a box to type your own answer') : undefined
+      }
       style={({ pressed }) => [
         styles.option,
         selected && styles.optionSelected,

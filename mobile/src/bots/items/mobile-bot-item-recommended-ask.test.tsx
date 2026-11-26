@@ -404,3 +404,44 @@ it("tells an authored option in the action's very words from the action itself",
     RECOMMENDED_ASK_ANSWERS.typeAnswerAuthored
   )
 })
+
+it('gives the free-text action its own role and purpose, apart from an option in the same words', async () => {
+  vi.useFakeTimers()
+  const { typeAnswerAuthored } = RECOMMENDED_ASKS
+  mount(typeAnswerAuthored.stored)
+  const pressable = (row: ReactTestInstance) => row.find((node) => isHost(node, 'Pressable'))
+  // Same words; to a screen reader the option is a choice and the action a button that opens the box.
+  expect(textOf(pressable(rows()[0]!))).toBe('Type your answer')
+  expect(pressable(rows()[0]!).props).toMatchObject({
+    accessibilityRole: 'radio',
+    accessibilityState: { checked: false, disabled: false }
+  })
+  expect(pressable(rows()[0]!).props.accessibilityHint).toBeUndefined()
+  expect(textOf(pressable(freeText()))).toBe('Type your answer')
+  expect(pressable(freeText()).props).toMatchObject({
+    accessibilityRole: 'button',
+    accessibilityState: { expanded: false, disabled: false },
+    accessibilityHint: 'Opens a box to type your own answer'
+  })
+  // The option, chosen, posts its words once, as the answer to this ask.
+  act(() => tree!.unmount())
+  tree = null
+  await queries?.end()
+  const chosen = mount(typeAnswerAuthored.stored)
+  await press('Type your answer')
+  expect(chosen).toEqual([
+    { text: RECOMMENDED_ASK_ANSWERS.typeAnswerAuthored, askId: 'e2', skipped: [] }
+  ])
+  // The action, on its own mount, opens the box and posts nothing, past the auto-advance too.
+  act(() => tree!.unmount())
+  tree = null
+  await queries?.end()
+  const typed = mount(typeAnswerAuthored.stored)
+  act(() => freeText().props.onPress())
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS * 2)
+  })
+  expect(tree!.root.findAll((node) => isHost(node, 'MessageBox'))).toHaveLength(1)
+  expect(pressable(freeText()).props.accessibilityState).toMatchObject({ expanded: true })
+  expect(typed).toEqual([])
+})
