@@ -45,4 +45,24 @@ describe('nativeChatTurnFold', () => {
       ])
     ).toEqual([1, 2, 3, 5, 6, 7])
   })
+
+  it('keeps pre-tool headings and links visible when a turn settles', () => {
+    expect(
+      foldedRows([
+        ['user', [text('Check the connection.')]],
+        ['assistant', [text('Sign in at https://example.invalid/device'), call, result]],
+        ['reasoning', [text('## Internal notes')]],
+        ['assistant', [text('## Verification\nThe command checks the connection.'), call, result]],
+        [
+          'assistant',
+          [
+            text('Checking status.'),
+            call,
+            { type: 'tool-result', output: 'https://example.invalid/log' }
+          ]
+        ],
+        ['assistant', [text('The connection is ready.')]]
+      ])
+    ).toEqual([2, 4])
+  })
 })
