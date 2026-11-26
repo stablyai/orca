@@ -171,6 +171,10 @@ describe('PR page conversation cold read', () => {
       'textarea[placeholder="Add a comment…"]'
     )
     expect(placeholder?.disabled).toBe(true)
+    expect(placeholder?.tabIndex).toBe(-1)
+    const send = placeholder?.closest('[aria-hidden="true"]')?.querySelector('button')
+    expect(send?.disabled).toBe(true)
+    expect(send?.tabIndex).toBe(-1)
     expect(container.textContent).toContain('Comments')
     expect(container.textContent).not.toContain('No comments yet.')
   })
