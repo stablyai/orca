@@ -286,6 +286,7 @@ export class ExternalConversationSeam {
   /** Which side began the chat's latest turn, as its host admitted the message. */
   messageAdmitted(message: AdmittedMessage): void {
     recordAdmittedTurn(this.deps, message)
+    this.chatDeliveries.savedDms.admitted(message.sessionId, message.body)
   }
 
   private unlinked(dropped: LinkedConversation): void {

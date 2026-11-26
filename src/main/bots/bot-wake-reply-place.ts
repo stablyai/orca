@@ -16,7 +16,7 @@ export type WakeReplyPlace = {
   to?: string
 }
 
-type SaveDm = (dm: { key: ConversationKey; openerDeliveryId: string; to: string }) => boolean
+type SaveDm = (dm: { key: ConversationKey; openerDeliveryId: string; url: string }) => string | null
 
 /** The place, when the running turn was opened by its conversation's delivery and its origin record
  *  names that same Slack channel; null for anything else. */
@@ -52,8 +52,7 @@ export async function wakeReplyPlace(
   if (target.bot.kind === 'bot') {
     return { place: target.place }
   }
-  const to = slackThreadUrl(target.key.externalId)
-  return to && saveDm({ key: target.key, openerDeliveryId: target.answerDeliveryId, to })
-    ? { place: target.place, to }
-    : null
+  const url = slackThreadUrl(target.key.externalId)
+  const to = url && saveDm({ key: target.key, openerDeliveryId: target.answerDeliveryId, url })
+  return to ? { place: target.place, to } : null
 }

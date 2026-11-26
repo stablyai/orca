@@ -36,14 +36,15 @@ type CloudReply = Parameters<
 async function sendReply(
   runtime: Pick<OrcaRuntimeService, 'getConnectorCloud'>,
   paneKey: string,
-  reply: CloudReply
+  reply: CloudReply,
+  proceed?: () => boolean
 ) {
   const refused = connectorPostAttempts.attempted(
     paneKey,
     reply.replyId,
     reply.conversation.externalId
   )
-  const sent = await runtime.getConnectorCloud()?.reply(reply)
+  const sent = await runtime.getConnectorCloud()?.reply(reply, proceed)
   // Never sent, or refused outright: nothing reached the thread. A lost answer may have posted.
   if (
     !sent ||
@@ -153,30 +154,38 @@ export const CONNECTOR_METHODS = [
       const verifiedSessionId = sessionCallerOf(context.orchestrationCaller)?.sessionId
       const paneKey = chatPaneKey(sessionId)
       const seam = requireSeam(runtime)
-      const target = seam.replyTarget(paneKey)
-      const saved =
-        bot &&
-        verifiedSessionId === sessionId &&
-        seam.chatDeliveries.savedDms.savedDm(sessionId, bot.id, to)
-      // The Chat is still linked to that DM: a link moves only when another conversation writes.
-      const conversation =
-        saved && target && conversationId(target.key) === conversationId(saved)
-          ? cloudConversation(saved)
-          : null
-      if (!target || !conversation) {
+      // Asked again before the post and before each retry: another DM may reach the Chat meanwhile.
+      const stillSaved = () => {
+        const target = seam.replyTarget(paneKey)
+        const saved =
+          bot &&
+          verifiedSessionId === sessionId &&
+          seam.chatDeliveries.savedDms.savedDm(sessionId, bot.id, to)
+        // The Chat is still linked to that DM: a link moves only when another conversation writes.
+        const conversation =
+          saved && target && conversationId(target.key) === conversationId(saved)
+            ? cloudConversation(saved)
+            : null
+        return target && conversation ? { target, conversation } : null
+      }
+      const first = stillSaved()
+      if (!first) {
         throw new Error('not_a_saved_dm')
       }
+      const { target, conversation } = first
       if (target.turnId === null) {
         throw new Error('no_current_turn')
       }
       const turnFor = await botTurnFor(runtime, sessionId, { verifiedSessionId })
-      const sent = await sendReply(runtime, paneKey, {
-        replyId,
-        conversation,
-        turnId: target.turnId,
-        text,
-        turnFor
-      })
+      if (!stillSaved()) {
+        throw new Error('not_a_saved_dm')
+      }
+      const sent = await sendReply(
+        runtime,
+        paneKey,
+        { replyId, conversation, turnId: target.turnId, text, turnFor },
+        () => stillSaved() !== null
+      )
       return { ...sent, place: target.place }
     }
   }),
@@ -200,7 +209,7 @@ export const CONNECTOR_METHODS = [
         target,
         delivered,
         () => readBotTurnOrigin(runtime, runtime.getOrchestrationDb(), sessionId).catch(() => null),
-        (dm) => seam?.chatDeliveries.savedDms.save(sessionId, bot.id, dm) ?? false
+        (dm) => seam?.chatDeliveries.savedDms.save(sessionId, bot.id, dm) ?? null
       )
       return placed ?? { place: null }
     }

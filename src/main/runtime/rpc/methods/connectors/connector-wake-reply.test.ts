@@ -1,11 +1,18 @@
 // A turn that starts on its own posts nothing, so the bot posts itself: a worker start names where
 // it came from, and the bot's Chat may answer that DM only while nothing from another conversation
 // has reached the Chat since (one person's words never reach another person's DM).
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { origin, reply } = vi.hoisted(() => ({ origin: vi.fn(), reply: vi.fn() }))
+const { origin, reply, turnFor } = vi.hoisted(() => ({
+  origin: vi.fn(),
+  reply: vi.fn(),
+  turnFor: vi.fn()
+}))
 vi.mock('../orchestration/messaging/bot-turn-origin', () => ({ readBotTurnOrigin: origin }))
-vi.mock('../../../../bots/bot-turn-for', () => ({ botTurnFor: async () => 'owner' }))
+vi.mock('../../../../bots/bot-turn-for', () => ({ botTurnFor: turnFor }))
 vi.mock('../../../../bots/bot-session-tabs', () => ({
   botOfSession: (_bots: unknown, sessionId: string) =>
     sessionId === CHAT ? { id: 'bot-a' } : sessionId === OTHER_CHAT ? { id: 'bot-b' } : null
@@ -13,6 +20,14 @@ vi.mock('../../../../bots/bot-session-tabs', () => ({
 
 import { CONNECTOR_METHODS } from './connector'
 import { ChatDeliveries } from '../../../../external-conversations/external-conversation-chat-delivery'
+import type { AgentJournalMessageItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import { ExternalConversationSeam } from '../../../../external-conversations/external-conversation-seam'
+import type { DeliveryReceipts } from '../../../../external-conversations/external-conversation-delivery-receipts'
+import {
+  closeTestStores,
+  createStore,
+  testState
+} from '../../../../persistence/persistence-test-harness'
 
 const CHAT = '55555555-5555-4555-8555-555555555555'
 const OTHER_CHAT = '66666666-6666-4666-8666-666666666666'
@@ -21,6 +36,11 @@ const DM = 'T1:D0X:D0X:UBOT'
 const OTHER_DM = 'T1:D0Y:D0Y:UBOT'
 const DM_THREAD = 'T1:D0X:1712.000200:UBOT'
 const DM_URL = 'https://app.slack.com/client/T1/D0X'
+const owner = (text: string): AgentJournalMessageItem => ({
+  kind: 'message',
+  role: 'user',
+  blocks: [{ type: 'text', text }]
+})
 
 let target: Record<string, unknown> | null = null
 // A connector message opened or joined the running turn, as the host's delivery mark records it.
@@ -71,13 +91,13 @@ const placeFor = (sessionId: string, caller = sessionId) =>
   handler('connector.wakeReplyPlace')({ sessionId }, context(caller))
 
 // The real delivery path: what reaches the Chat is recorded before it is sent, taken or not.
-const arrive = (externalId: string, deliveryId: string) =>
+const arrive = (externalId: string, deliveryId: string, sessionId = CHAT) =>
   deliveries.deliver(
     undefined,
     { source: 'slack', externalId },
     {
       worktreeId: 'folder:w',
-      sessionId: CHAT,
+      sessionId,
       agent: 'claude',
       bot: { kind: 'bot-chat', botId: 'bot-a' }
     },
@@ -93,7 +113,14 @@ const ownTurn = () => {
 const startFrom = async (deliveryId: string) => {
   delivered = true
   target = chatOn(DM, { kind: 'bot-chat', answers: deliveryId })
-  return placeFor(CHAT)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: connector.wakeReplyPlace's result shape.
+  return (await placeFor(CHAT)) as { place: string | null; to?: string }
+}
+/** A start that saved the DM: its own `--to`. */
+const savedFrom = async (deliveryId: string) => {
+  const { to } = await startFrom(deliveryId)
+  expect(to?.startsWith(`${DM_URL}#`)).toBe(true)
+  return to!
 }
 
 describe('a turn that started on its own can tell the thread its work came from', () => {
@@ -137,49 +164,88 @@ describe("the bot's Chat answers the DM a start came from, until anyone else wri
     origin.mockResolvedValue({ source: 'slack', placeId: 'D0X' })
     reply.mockReset()
     reply.mockResolvedValue({ ok: true, value: { status: 'posted' } })
+    turnFor.mockReset()
+    turnFor.mockResolvedValue('owner')
   })
 
   it('posts in the saved DM from a turn of its own, and again after that DM writes', async () => {
     await arrive(DM, 'd1')
-    expect(await startFrom('d1')).toEqual({ place: `the thread ${DM}`, to: DM_URL })
+    const to = await savedFrom('d1')
     ownTurn()
-    await expect(postTo(DM_URL)).resolves.toMatchObject({ status: 'posted' })
+    await expect(postTo(to)).resolves.toMatchObject({ status: 'posted' })
     expect(reply).toHaveBeenLastCalledWith(
-      expect.objectContaining({ conversation: expect.objectContaining({ externalId: DM }) })
+      expect.objectContaining({ conversation: expect.objectContaining({ externalId: DM }) }),
+      expect.any(Function)
     )
-    // The same DM writing again keeps it: only its own words are in the Chat.
+    // The same DM writing again, or the owner typing, keeps it.
     await arrive(DM, 'd2')
-    await expect(postTo(DM_URL)).resolves.toMatchObject({ status: 'posted' })
+    deliveries.savedDms.admitted(CHAT, owner('ship it'))
+    await expect(postTo(to)).resolves.toMatchObject({ status: 'posted' })
+    // The bare DM link was never saved: only the start's own --to works.
+    await expect(postTo(DM_URL)).rejects.toThrow('not_a_saved_dm')
   })
 
   it('voids the saved DM once another DM reaches the Chat, whichever turn it lands in', async () => {
     await arrive(DM, 'd1')
-    await startFrom('d1')
+    const to = await savedFrom('d1')
     // Another DM, queued behind the turn or joining it, then the first DM again so the Chat is
     // linked back to it and the next turn opens on it: still void.
     await arrive(OTHER_DM, 'd2')
     await arrive(DM, 'd3')
     ownTurn()
-    await expect(postTo(DM_URL)).rejects.toThrow('not_a_saved_dm')
-    expect(reply).not.toHaveBeenCalled()
+    await expect(postTo(to)).rejects.toThrow('not_a_saved_dm')
+    // A later start from the same DM saves anew; the voided note stays void.
+    const again = await savedFrom('d3')
+    ownTurn()
+    await expect(postTo(to)).rejects.toThrow('not_a_saved_dm')
+    await expect(postTo(again)).resolves.toMatchObject({ status: 'posted' })
+    expect(reply).toHaveBeenCalledTimes(1)
   })
 
-  it('voids it for an automation run adopted into the Chat, and when the account resets', async () => {
-    await arrive(DM, 'd1')
-    await startFrom('d1')
-    deliveries.adopt(
-      { source: 'slack', externalId: OTHER_DM },
-      { worktreeId: 'folder:w', sessionId: CHAT, agent: 'claude' },
-      'run'
-    )
-    ownTurn()
-    await expect(postTo(DM_URL)).rejects.toThrow('not_a_saved_dm')
+  it('voids it for words the Chat took any other way: an adopted run, an event, a resent card', async () => {
+    const others = [
+      () =>
+        deliveries.adopt(
+          { source: 'slack', externalId: OTHER_DM },
+          { worktreeId: 'folder:w', sessionId: CHAT, agent: 'claude' },
+          'run'
+        ),
+      () =>
+        deliveries.savedDms.admitted(CHAT, {
+          ...owner('deploy failed'),
+          origin: 'automation-run',
+          memorySource: 'Webhook deploys'
+        }),
+      () =>
+        deliveries.savedDms.admitted(CHAT, {
+          ...owner('from the other DM'),
+          origin: 'connector',
+          connectorConversation: { source: 'slack', externalId: OTHER_DM }
+        })
+    ]
+    let id = 0
+    for (const other of others) {
+      await arrive(DM, `d${++id}`)
+      const to = await savedFrom(`d${id}`)
+      other()
+      ownTurn()
+      await expect(postTo(to)).rejects.toThrow('not_a_saved_dm')
+    }
+  })
 
-    await arrive(DM, 'd4')
-    await startFrom('d4')
+  it("voids it on a reset, and drops what a bot's retired Chat kept", async () => {
+    await arrive(DM, 'd1')
+    const to = await savedFrom('d1')
     deliveries.clear()
     ownTurn()
-    await expect(postTo(DM_URL)).rejects.toThrow('not_a_saved_dm')
+    await expect(postTo(to)).rejects.toThrow('not_a_saved_dm')
+
+    await arrive(DM, 'd2')
+    const kept = await savedFrom('d2')
+    // The bot's new Chat takes its first message: the old Chat's saved DMs go.
+    await arrive(DM, 'd3', OTHER_CHAT)
+    ownTurn()
+    await expect(postTo(kept)).rejects.toThrow('not_a_saved_dm')
   })
 
   it("saves nothing when another DM's words already reached the starting turn", async () => {
@@ -197,24 +263,87 @@ describe("the bot's Chat answers the DM a start came from, until anyone else wri
     )
     await arrive(DM, 'd5')
     expect(await startFrom('d4')).toEqual({ place: null })
+    // An event's run the Chat took after the opener.
+    await arrive(DM, 'd6')
+    deliveries.savedDms.admitted(CHAT, { ...owner('event'), origin: 'automation-run' })
+    expect(await startFrom('d6')).toEqual({ place: null })
     // An opener Orca never saw arrive (a reset since, or an earlier Orca): unknown, nothing.
     expect(await startFrom('d9')).toEqual({ place: null })
+  })
+
+  it('stops a post another DM overtakes while it is on its way', async () => {
+    await arrive(DM, 'd1')
+    const to = await savedFrom('d1')
     ownTurn()
-    await expect(postTo(DM_URL)).rejects.toThrow('not_a_saved_dm')
+    // Another DM arrives while the post reads whom its turn acts for.
+    turnFor.mockImplementationOnce(async () => {
+      await arrive(OTHER_DM, 'd2')
+      return 'owner'
+    })
+    await expect(postTo(to)).rejects.toThrow('not_a_saved_dm')
+    expect(reply).not.toHaveBeenCalled()
+    // Or between the cloud's retries: the next retry is told not to go.
+    await arrive(DM, 'd3')
+    const again = await savedFrom('d3')
+    ownTurn()
+    await postTo(again)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reply's proceed check, as sendReply passes it.
+    const proceed = reply.mock.lastCall?.[1] as () => boolean
+    expect(proceed()).toBe(true)
+    await arrive(OTHER_DM, 'd4')
+    expect(proceed()).toBe(false)
   })
 
   it("refuses another bot's chat, another caller, and a Chat no longer linked to that DM", async () => {
     await arrive(DM, 'd1')
-    await startFrom('d1')
+    const to = await savedFrom('d1')
     ownTurn()
-    await expect(postTo(DM_URL, OTHER_CHAT)).rejects.toThrow('not_a_saved_dm')
-    await expect(postTo(DM_URL, CHAT, OTHER_CHAT)).rejects.toThrow('not_a_saved_dm')
+    await expect(postTo(to, OTHER_CHAT)).rejects.toThrow('not_a_saved_dm')
+    await expect(postTo(to, CHAT, OTHER_CHAT)).rejects.toThrow('not_a_saved_dm')
     target = chatOn(OTHER_DM, { kind: 'bot-chat', answers: null })
-    await expect(postTo(DM_URL)).rejects.toThrow('not_a_saved_dm')
+    await expect(postTo(to)).rejects.toThrow('not_a_saved_dm')
     // A deleted bot's saved DMs go with it.
     ownTurn()
     deliveries.savedDms.forgetBot('bot-a')
-    await expect(postTo(DM_URL)).rejects.toThrow('not_a_saved_dm')
+    await expect(postTo(to)).rejects.toThrow('not_a_saved_dm')
     expect(reply).not.toHaveBeenCalled()
+  })
+})
+
+describe("the seam voids a saved DM for any message its Chat admits with someone else's words", () => {
+  beforeEach(() => {
+    testState.dir = mkdtempSync(join(tmpdir(), 'orca-saved-dm-'))
+    delivered = true
+    origin.mockResolvedValue({ source: 'slack', placeId: 'D0X' })
+  })
+  afterEach(async () => {
+    await closeTestStores()
+    rmSync(testState.dir, { recursive: true, force: true })
+  })
+
+  it('such as an event run sent straight to the Chat, which no delivery or adoption names', async () => {
+    const seam = new ExternalConversationSeam({
+      store: createStore(),
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: admission never reads receipts.
+      receipts: {} as DeliveryReceipts,
+      onWorkspaceRemoved: () => () => {},
+      readHookRow: () => null,
+      onAgentPaneChange: () => () => {}
+    })
+    deliveries = seam.chatDeliveries
+    await arrive(DM, 'd1')
+    const to = await savedFrom('d1')
+    const admit = (body: AgentJournalMessageItem) =>
+      seam.messageAdmitted({
+        sessionId: CHAT,
+        workspaceId: 'folder:w',
+        clientMessageId: 'm1',
+        body,
+        joinsRunningTurn: false
+      })
+    admit(owner('ship it'))
+    expect(deliveries.savedDms.savedDm(CHAT, 'bot-a', to)).not.toBeNull()
+    admit({ ...owner('deploy failed'), origin: 'automation-run' })
+    expect(deliveries.savedDms.savedDm(CHAT, 'bot-a', to)).toBeNull()
   })
 })
