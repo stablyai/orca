@@ -390,6 +390,32 @@ describe('Worker Dock command dialog', () => {
     expect(document.activeElement).toBe(dialog.querySelector('[data-slot="dialog-close"]'))
   })
 
+  it('a revoke while the scroll area has focus, and the preview then fits, hands focus to Close', async () => {
+    // No layout here: only the exact text overflows, so only it makes the block a tab stop.
+    const scrollHeight = vi
+      .spyOn(HTMLElement.prototype, 'scrollHeight', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        return this.tagName === 'PRE' && this.textContent === EXACT ? 500 : 0
+      })
+    try {
+      credit()
+      renderStrip()
+      const dialog = await openRow()
+      await screen.findByRole('button', { name: 'Copy command' })
+      const block = dialog.querySelector('pre')!
+      await waitFor(() => expect(block.tabIndex).toBe(0))
+      act(() => block.focus())
+      expect(document.activeElement).toBe(block)
+      act(() => authority.observe(scope, frame(4), RUNTIME))
+      await waitFor(() => expect(pre()).toBe(PREVIEW))
+      await waitFor(() =>
+        expect(document.activeElement).toBe(dialog.querySelector('[data-slot="dialog-close"]'))
+      )
+    } finally {
+      scrollHeight.mockRestore()
+    }
+  })
+
   it('without output yet, says so in a short line', async () => {
     credit()
     renderStrip()

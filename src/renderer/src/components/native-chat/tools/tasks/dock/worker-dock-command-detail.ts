@@ -85,6 +85,8 @@ export function openWorkerDockCommandDetail(input: {
   tuple: AgentSessionCommandDetailTuple
   call?: typeof callRuntimeRpcResponse
   timeoutMs?: number
+  /** Monotonic clock for the read deadline; tests substitute one. */
+  now?: () => number
 }): WorkerDockCommandDetail | null {
   const { sessionId, target, tuple } = input
   const owner = findStructuredAgentSessionReadOwner(sessionId, target)
@@ -117,6 +119,7 @@ export function openWorkerDockCommandDetail(input: {
     : () => {}
   opening.onLost(stopStatusWatch)
   const timeoutMs = input.timeoutMs ?? WORKER_DOCK_COMMAND_DETAIL_TIMEOUT_MS
+  const now = input.now ?? (() => performance.now())
   /** The opening's one read gives up at this deadline; an unsent request may not leave after it. */
   let expired = false
   const call = input.call ?? callRuntimeRpcResponse
@@ -127,6 +130,10 @@ export function openWorkerDockCommandDetail(input: {
     if (!opening.check()) {
       return null
     }
+    // One original cutoff, taken before any compatibility wait: checked at the final send and
+    // again before a reply is admitted, whether or not the timer callback has run yet.
+    const cutoff = now() + timeoutMs
+    const elapsed = (): boolean => expired || now() >= cutoff
     let timer: ReturnType<typeof setTimeout> | undefined
     const deadline = new Promise<'timeout'>((resolve) => {
       timer = setTimeout(() => {
@@ -155,7 +162,7 @@ export function openWorkerDockCommandDetail(input: {
               : {}),
             // After any compatibility await, before the request leaves: never past the deadline.
             beforeSend: () => {
-              if (expired || !opening.check()) {
+              if (elapsed() || !opening.check()) {
                 throw new CommandDetailRefused()
               }
             }
@@ -172,7 +179,7 @@ export function openWorkerDockCommandDetail(input: {
         pinned.mismatch()
       }
       // A late, refused or stale reply is discarded, never shown.
-      if (reply === 'timeout' || !opening.check()) {
+      if (reply === 'timeout' || elapsed() || !opening.check()) {
         return null
       }
       const command = reply.result.command

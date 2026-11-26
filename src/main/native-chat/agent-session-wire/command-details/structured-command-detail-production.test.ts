@@ -25,6 +25,18 @@ import { runtimeBotGroups } from '../../../bots/bot-group-runtime'
 import { OrchestrationDb } from '../../../runtime/orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { BotGroup } from '../../../../shared/bots/bot-group'
+import {
+  emitSubscriberFrame,
+  type SubscriberFieldHooks
+} from '../publication/subscribers/agent-session-subscriber-frame-fields'
+import { republishSubscriberBackgroundTasks } from '../publication/subscribers/agent-session-live-publications'
+import type { Subscriber } from '../publication/subscribers/agent-session-subscribe-input'
+import type { SubscriberDeliveryPort } from '../publication/subscribers/agent-session-subscriber-catch-up'
+import type { AgentSessionSubscribeEvent } from '../../../../shared/agent-session/agent-session-wire'
+import { setStructuredAgentSessionHost } from '../host/structured-agent-session-registry'
+import { deleteBotGroup } from '../../../bots/bot-group-membership'
+import type { BotGroupRuntime } from '../../../bots/bot-group-runtime'
+import { createCommandDetailAuthority } from '../../../../shared/agent-session/view/live-read/command-detail-authority'
 
 // Production boundaries for the exact command: the hook server's canonical store and slots,
 // status ownership's landed parent and producer-fence stamping, a record settled by the real
@@ -86,7 +98,14 @@ function producerAt(fence: number) {
 }
 
 /** One host: ownership over the real server sink, conversations by id, and a channel over both. */
-function host(options: { membership?: (sessionId: string) => boolean } = {}) {
+function host(
+  options: {
+    membership?: (sessionId: string) => boolean
+    /** What the host's subscribers do when the channel asks them to republish. */
+    republish?: (sessionId: string, creditedOnly: boolean) => void
+  } = {}
+) {
+  const hooks: SubscriberFieldHooks = {}
   const conversations = new Map<string, ReturnType<typeof codexRecord>>()
   const ownership = new StructuredAgentSessionStatusOwnership(() => ({
     statusSink: () => ({
@@ -149,7 +168,11 @@ function host(options: { membership?: (sessionId: string) => boolean } = {}) {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; supplies only the fields this path reads
     { get: session } as never,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; supplies only the fields this path reads
-    { hooks: {}, republishBackgroundTasks: () => {} } as never,
+    {
+      hooks,
+      republishBackgroundTasks: (id: string, creditedOnly = false) =>
+        options.republish?.(id, creditedOnly)
+    } as never,
     async () => {
       throw new Error('unused')
     },
@@ -169,7 +192,7 @@ function host(options: { membership?: (sessionId: string) => boolean } = {}) {
         }
       : null
   }
-  return { ownership, conversations, deliver, channel, tuple }
+  return { ownership, conversations, deliver, channel, tuple, hooks }
 }
 
 describe('exact command through the production landed parent', () => {
@@ -300,5 +323,125 @@ describe('exact command and the real group membership store', () => {
     h.deliver(S_A, [evidence(EXACT)])
     expect(h.channel.commandDetail(S_A, h.tuple(S_A)!)).toBe(EXACT)
     expect(list).not.toHaveBeenCalled()
+  })
+})
+
+describe('a quiet, already-credited reader and a real membership writer', () => {
+  const MEMBER = 'bot-group-member-fixture-2'
+
+  it('deleting the group withdraws the command from the credited reader: its opening is lost, Copy refused, a fresh host read refused', async () => {
+    const orchestration = new OrchestrationDb(':memory:')
+    databases.push(orchestration)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: membership reads only the orchestration database
+    const runtime = { getOrchestrationDb: () => orchestration } as unknown as OrcaRuntimeService
+    const store = runtimeBotGroups(runtime).store
+    store.put({
+      id: 'group-2',
+      name: 'Fixture crew',
+      hostId: 'local',
+      revision: 1,
+      folder: 'group-fixture-2',
+      folderWorkspaceId: 'home-2',
+      createdAt: 1,
+      members: [{ botId: 'bot-0', sessionId: MEMBER }],
+      remoteMembers: [],
+      replyMode: { kind: 'mentions' }
+    })
+
+    // The host's subscriber side, reduced to its republish rule: credited readers only when asked,
+    // each through the real lane read and frame emission.
+    const sent: AgentSessionSubscribeEvent[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; the lane and frame code read only these fields
+    const reader = {
+      id: 'reader-1',
+      sessionId: MEMBER,
+      emit: (event: AgentSessionSubscribeEvent) => sent.push(event),
+      cursor: { epoch: 'e', sequence: 3 },
+      fence: 1,
+      boundedFrames: false
+    } as unknown as Subscriber
+    const lanes: Promise<void>[] = []
+    const h = host({
+      membership: (id) => botGroupSessionMembershipCurrent(runtime, id),
+      republish: (id, creditedOnly) => {
+        if (!creditedOnly || reader.detailCredit) {
+          lanes.push(republishSubscriberBackgroundTasks(port, reader, id, 1))
+        }
+      }
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; republish reads hooks and emit only
+    const port = {
+      hooks: h.hooks,
+      emit: (target: Subscriber, event: AgentSessionSubscribeEvent) =>
+        emitSubscriberFrame(h.hooks, target, event)
+    } as unknown as SubscriberDeliveryPort
+    h.conversations.set(MEMBER, codexRecord(MEMBER))
+    h.deliver(MEMBER, [evidence(EXACT)])
+    const tuple = h.tuple(MEMBER)!
+
+    // The reader is credited by an ordinary opening frame, and the dialog has fetched the text.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; an opening frame with the fields the lane and viewer read
+    const opening = {
+      type: 'snapshot',
+      sessionId: MEMBER,
+      fence: FENCE,
+      page: { epoch: 'e', liveCursor: { epoch: 'e', sequence: 3 }, window: { nextCursor: null } },
+      backgroundTasks: h.channel.read(MEMBER)
+    } as unknown as AgentSessionSubscribeEvent
+    await emitSubscriberFrame(h.hooks, reader, opening)
+    expect(reader.detailCredit).toBe(true)
+    const viewer = createCommandDetailAuthority()
+    const scope = { transport: {}, generation: 1 }
+    viewer.invalidate(scope)
+    viewer.observe(scope, opening, 'runtime-a')
+    const dialog = viewer.open(tuple, () => true)!
+    const fetched = h.channel.commandDetail(MEMBER, tuple)
+    expect(fetched).toBe(EXACT)
+    expect(dialog.check()).toBe(true)
+
+    // The real writer; the installed host forwards its revocation to the channel, as in production.
+    setStructuredAgentSessionHost(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; the revocation path calls only publishBackgroundTasks
+      {
+        publishBackgroundTasks: (id: string) => h.channel.publish(id, true)
+      } as never
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test double; deleteBotGroup reads only these fields, and its session closes are settled
+    const groups = {
+      store,
+      queues: new Map(),
+      changed: () => {},
+      runtime: {
+        ensureStructuredAgentSessionHost: async () => {
+          throw new Error('no host in this test')
+        },
+        getOrchestrationDb: () => orchestration,
+        bots: { list: () => [] },
+        deleteFolderWorkspace: async () => {}
+      }
+    } as unknown as BotGroupRuntime
+    try {
+      await deleteBotGroup(groups, 'group-2').catch(() => {})
+    } finally {
+      setStructuredAgentSessionHost(null)
+    }
+    await Promise.all(lanes)
+
+    // After the opening frame, exactly one publication to the credited reader: the row is still
+    // listed, its command is not.
+    expect(sent).toHaveLength(2)
+    expect(sent[0]).toMatchObject({ type: 'snapshot', sessionId: MEMBER })
+    const withdrawal = sent[1]!
+    expect(withdrawal.type).toBe('batch')
+    const roster = withdrawal.type === 'batch' ? withdrawal.backgroundTasks : undefined
+    expect(roster?.children?.map((child) => child.id)).toContain(tuple.childWorkId)
+    expect(roster?.commandDetailsAvailable).toBeUndefined()
+    // The viewer applies it: the open dialog's credit is gone, so Copy of the fetched text is refused.
+    viewer.observe(scope, withdrawal, 'runtime-a')
+    expect(dialog.lost).toBe(true)
+    expect(dialog.check()).toBe(false)
+    expect(viewer.open(tuple, () => true)).toBeNull()
+    // And a fresh read on the host is refused.
+    expect(h.channel.commandDetail(MEMBER, tuple)).toBeNull()
   })
 })

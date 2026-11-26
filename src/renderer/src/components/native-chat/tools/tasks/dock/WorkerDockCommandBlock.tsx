@@ -22,17 +22,24 @@ export function WorkerDockCommandBlock({
   const reset = useRef<number | null>(null)
   const root = useRef<HTMLDivElement>(null)
   const hadExact = useRef(exact)
-  // Copy withdrawn while it held focus leaves focus on the page or the bare dialog: hand it to
-  // Close, so focus stays visible. Focus anywhere else in the dialog stays where it is.
+  const hadOverflow = useRef(overflows)
+  // Copy withdrawn while it held focus, or the scroll area no longer scrolling (so no longer a
+  // tab stop) while it held focus, leaves focus on the page or the bare dialog: hand it to Close,
+  // so focus stays visible. Focus anywhere else in the dialog stays where it is. Runs after the
+  // re-measure, so a revoked preview that now fits is seen.
   useLayoutEffect(() => {
-    const withdrawn = hadExact.current && !exact
+    const lostStop = (hadExact.current && !exact) || (hadOverflow.current && !overflows)
     hadExact.current = exact
-    const dialog = withdrawn ? root.current?.closest<HTMLElement>('[role="dialog"]') : null
+    hadOverflow.current = overflows
+    const dialog = lostStop ? root.current?.closest<HTMLElement>('[role="dialog"]') : null
     const active = document.activeElement
-    if (dialog && (!active || active === document.body || active === dialog)) {
+    if (
+      dialog &&
+      (!active || active === document.body || active === dialog || active === scroller.current)
+    ) {
       dialog.querySelector<HTMLElement>('[data-slot="dialog-close"]')?.focus()
     }
-  }, [exact])
+  }, [exact, overflows])
   useLayoutEffect(() => {
     const element = scroller.current
     if (!element) {
