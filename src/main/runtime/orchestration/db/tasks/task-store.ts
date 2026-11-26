@@ -186,8 +186,6 @@ export function listTasksWithDispatch(
   const sql = `
     SELECT
       t.*,
-      COALESCE(d.progress_note, t.progress_note) AS progress_note,
-      COALESCE(d.progress_updated_at, t.progress_updated_at) AS progress_updated_at,
       d.assignee_handle AS assignee_handle,
       d.id              AS dispatch_id
     FROM tasks t

@@ -275,8 +275,6 @@ export type TaskRow = {
   status: TaskStatus
   deps: string
   result: string | null
-  progress_note: string | null
-  progress_updated_at: string | null
   created_at: string
   completed_at: string | null
 }

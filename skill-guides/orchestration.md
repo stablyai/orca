@@ -21,13 +21,7 @@ description: >-
 
 If your prompt has a preamble with Task and Dispatch IDs, you are a worker:
 follow the preamble. To ask your coordinator, run `ask`, then end your turn;
-Orca wakes you with the answer. `send` = always wakes the recipient; `task-update --note` = passive, never wakes.
-Use `ORCA orchestration send` only when the coordinator must act, answer, or change course,
-or for your final `worker_done` — never mail routine progress updates
-("committed fix, checks running", "round 2 running", play-by-play receipts) via `send`.
-Record passive live progress without waking anyone via
-`ORCA orchestration task-update --note "<status>"`. To hand work off with nothing
-back, use `orca-cli`.
+Orca wakes you with the answer. To hand work off with nothing back, use `orca-cli`.
 When you report your effort, take it from the dispatch's `--effort` or your process
 argv, not from a numeric `reasoning_effort`: that number is not on a 0–100 scale
 (claude-opus-5-5: low=5, medium=10, high=15, xhigh=40).
@@ -84,12 +78,9 @@ that the CLI is installed; a missing one fails as an `agent_readiness` timeout.
   `references/recovery-and-cleanup.md`.
 - To talk to a worker, use
   `ORCA orchestration send --to dispatch:<dispatch_id> --subject "<topic>" --body "<message>"`
-  in any state: `send` always wakes the recipient — use it only when the
-  recipient needs to act, answer, or change course, never for routine progress
-  updates. A working worker gets it when its current turn ends; a finished
+  in any state: a working worker gets it when its current turn ends; a finished
   or closed one gets it as a follow-up Task and reports with `worker_done` (do
-  not pass `--on` for a Dispatch follow-up). The receipt says which. Inspect a
-  worker's passive progress note with `ORCA orchestration worker-show --dispatch <dispatch_id>`.
+  not pass `--on` for a Dispatch follow-up). The receipt says which.
   If a legacy paired-server attachment refuses `send` with `dispatch_inactive`,
   start new work there with `worker-start --on <server>` (load
   `references/placement-and-remote.md` first).

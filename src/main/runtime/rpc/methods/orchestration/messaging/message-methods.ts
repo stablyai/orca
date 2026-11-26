@@ -1,8 +1,8 @@
 import { ORCHESTRATION_REPLY_METHOD } from './reply-method'
-import { ORCHESTRATION_TASK_UPDATE_METHOD } from './task-update-method'
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
-import { inspectedRunAccess, taskCreateAccess } from '../access/run-access-rules'
+import { inspectedRunAccess, taskCreateAccess, taskUpdateAccess } from '../access/run-access-rules'
 import type { TaskStatus } from '../../../../orchestration/db/orchestration-records'
+import { exposeUtcTimestamp } from '../../../../orchestration/db/utc-timestamp'
 import { abbreviateOrchestrationTasks } from '../../../../../../shared/orchestration/orchestration-task-summary'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
@@ -12,6 +12,7 @@ import {
   TaskCreateParams,
   TaskListParams
 } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
+import { TaskUpdateParams } from './task-update-params'
 
 export const ORCHESTRATION_MESSAGE_METHODS = [
   ORCHESTRATION_REPLY_METHOD,
@@ -125,5 +126,45 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
     }
   }),
 
-  ORCHESTRATION_TASK_UPDATE_METHOD
+  defineOrchestrationMethod({
+    name: 'orchestration.taskUpdate',
+    permission: 'workspace',
+    params: TaskUpdateParams,
+    access: {
+      kind: 'writes',
+      caller: 'callerTerminalHandle',
+      callerPane: 'senderPaneKey',
+      targets: { id: 'task', run: 'run' },
+      rule: taskUpdateAccess
+    },
+    handler: (params, { runtime, recordMutationReceipt }, grant) => {
+      const db = runtime.getOrchestrationDb()
+      if (grant.kind === 'note') {
+        const updated = db.recordWorkerProgress({
+          dispatchId: grant.dispatch.id,
+          note: params.note!
+        })
+        const task = db.getTask(updated.task_id)
+        if (!task) {
+          throw new Error(`Task not found: ${updated.task_id}`)
+        }
+        const receipt = {
+          task,
+          dispatchId: updated.id,
+          progressNote: updated.progress_note ?? params.note!,
+          progressUpdatedAt:
+            exposeUtcTimestamp(updated.progress_updated_at) ??
+            updated.progress_updated_at ??
+            undefined
+        }
+        recordMutationReceipt?.(receipt)
+        return receipt
+      }
+      const task = db.updateTaskStatus(params.id!, params.status!, params.result)
+      if (!task) {
+        throw new Error(`Task not found: ${params.id}`)
+      }
+      return { task }
+    }
+  })
 ]

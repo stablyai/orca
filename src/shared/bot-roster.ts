@@ -154,7 +154,7 @@ export function formatBotRosterEntry(entry: BotRosterEntry): string {
 export const BOT_ROSTER_COMMANDS = [
   'Hand work to a bot (it takes over; its answer appears in its own Chat): orca orchestration send --to bot:<name> --type handoff --subject "<the task>" --body "<what bounds it; what a good result is>"',
   'Ask a bot for input (its answer comes back to you as mail and wakes you; you finish the job): orca orchestration send --to bot:<name> --type question --subject "<the question>"',
-  'Tell a bot a one-way alert without giving it a job (wakes the bot, nothing comes back; never send routine progress updates): orca orchestration send --to bot:<name> --type status --subject "<the news>" --body "<what it means for its work>"',
+  'Tell a bot something without giving it a job (nothing comes back): orca orchestration send --to bot:<name> --type status --subject "<the news>" --body "<what it means for its work>"',
   'A bot on another computer: put its `--on <server>` before `--to`, as its "On:" line shows.'
 ].join('\n')
 

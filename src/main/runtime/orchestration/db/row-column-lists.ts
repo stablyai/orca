@@ -43,8 +43,6 @@ export const TASK_COLUMNS = [
   'status',
   'deps',
   'result',
-  'progress_note',
-  'progress_updated_at',
   'created_at',
   'completed_at'
 ] as const satisfies readonly (keyof TaskRow)[]

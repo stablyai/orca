@@ -10,13 +10,13 @@ import {
 import { getOptionalStringFlag, getRequiredStringFlag } from '../../arguments/flags'
 import { RuntimeClientError } from '../../runtime/connection/types'
 import { abbreviateOrchestrationTasks } from '../../../shared/orchestration/orchestration-task-summary'
-import { ORCHESTRATION_PROGRESS_NOTE_MAX } from '../../../shared/rpc-contract/orchestration/orchestration-params'
+import { ORCHESTRATION_TASK_UPDATE_NOTE_RUNTIME_CAPABILITY } from '../../../shared/orchestration/orchestration-runtime-capabilities'
+import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { readInjectedAgentSessionId } from '../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import { callOrchestrationMutation } from '../recovery/mutation-request'
 import { readTextOrFileFlag } from '../../arguments/command-body-input'
 import {
   resolveCoordinatorTerminalHandle,
-  resolveOrchestrationTerminalHandle,
   runScopedSessionCaller
 } from '../identity/terminal-identity'
 
@@ -93,11 +93,10 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
         .map((task) => {
           const label = task.display_name ?? task.task_title ?? task.spec
           const head = `${task.id} [${task.status}] ${label.slice(0, 60)}`
-          const noteSuffix = task.progress_note ? ` — ${task.progress_note}` : ''
           if (task.status === 'dispatched' && task.assignee_handle) {
-            return `${head} -> ${task.assignee_handle} (${task.dispatch_id ?? '?'})${noteSuffix}`
+            return `${head} -> ${task.assignee_handle} (${task.dispatch_id ?? '?'})`
           }
-          return `${head}${noteSuffix}`
+          return head
         })
         .join('\n')
       return r.legacyReadOnly ? `Legacy Run ${r.runId} (read-only)\n${tasks}` : tasks
@@ -107,67 +106,46 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
   'orchestration task-update': async ({ flags, client, cwd, json }) => {
     const hasStatus = flags.has('status')
     const hasNote = flags.has('note') || flags.has('note-file')
-    if (!hasStatus && !hasNote) {
+    if (hasStatus === hasNote) {
       throw new RuntimeClientError(
         'invalid_argument',
-        'Choose --status, --note (or --note-file), or both.'
+        hasStatus
+          ? '--note is for passive worker updates and cannot be combined with --status.'
+          : 'Choose --status or --note (or --note-file).'
       )
     }
-    if (!hasStatus && flags.has('result')) {
+    if (hasNote && flags.has('result')) {
       throw new RuntimeClientError('invalid_argument', '--result requires --status.')
     }
     let status: (typeof TASK_STATUS_VALUES)[number] | undefined
     if (hasStatus) {
-      const requestedStatus = getRequiredStringFlag(flags, 'status')
-      if (!isTaskStatusValue(requestedStatus)) {
+      const requested = getRequiredStringFlag(flags, 'status')
+      if (!isTaskStatusValue(requested)) {
         throw new RuntimeClientError(
           'invalid_argument',
-          `invalid status '${requestedStatus}', expected one of: ${TASK_STATUS_VALUES.join(', ')}`
+          `invalid status '${requested}', expected one of: ${TASK_STATUS_VALUES.join(', ')}`
         )
       }
-      status = requestedStatus
+      status = requested
     }
-
-    let note: string | undefined
     if (hasNote) {
-      const rawNote = await readTextOrFileFlag(flags, cwd, 'note', true)
-      const trimmed = rawNote?.trim() ?? ''
-      if (!trimmed) {
-        throw new RuntimeClientError('invalid_argument', '--note cannot be empty.')
-      }
-      if (trimmed.length > ORCHESTRATION_PROGRESS_NOTE_MAX) {
+      const runtimeStatus = await client.call<RuntimeStatus>('status.get')
+      if (
+        !runtimeStatus.result.capabilities?.includes(
+          ORCHESTRATION_TASK_UPDATE_NOTE_RUNTIME_CAPABILITY
+        )
+      ) {
         throw new RuntimeClientError(
-          'invalid_argument',
-          `--note must be at most ${ORCHESTRATION_PROGRESS_NOTE_MAX} characters (received ${trimmed.length}); put longer details in your final worker_done report.`
+          'unsupported_capability',
+          "This Orca doesn't support task-update --note yet."
         )
       }
-      note = trimmed
     }
-
-    const id = getOptionalStringFlag(flags, 'id')
-    if (
-      !id &&
-      !getOptionalStringFlag(flags, 'from') &&
-      !process.env.ORCA_TERMINAL_HANDLE &&
-      !readInjectedAgentSessionId()
-    ) {
-      throw new RuntimeClientError(
-        'dispatch_inactive',
-        'orchestration task-update without --id requires an active worker session or --from <worker_handle>; pass --id <task_id> to update a coordinated task. (send = always wakes the recipient; task-update --note = passive, never wakes.)'
-      )
-    }
-
-    const callerTerminalHandle = await resolveOrchestrationTerminalHandle(
-      flags,
-      cwd,
-      client,
-      'from',
-      {
-        validateEnvHandle: hasStatus
-      }
-    )
+    const id = hasStatus ? getRequiredStringFlag(flags, 'id') : getOptionalStringFlag(flags, 'id')
+    const note = hasNote ? await readTextOrFileFlag(flags, cwd, 'note', true) : undefined
+    const callerTerminalHandle = await resolveCoordinatorTerminalHandle(flags, cwd, client)
     const senderPaneKey =
-      callerTerminalHandle === undefined || readInjectedAgentSessionId()
+      !hasNote || callerTerminalHandle === undefined || readInjectedAgentSessionId()
         ? undefined
         : process.env.ORCA_PANE_KEY || undefined
     const dispatchCapability = getOptionalStringFlag(flags, 'dispatch-capability')
@@ -182,7 +160,7 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
         note,
         run: getOptionalStringFlag(flags, 'run'),
         callerTerminalHandle,
-        senderPaneKey
+        ...(senderPaneKey ? { senderPaneKey } : {})
       },
       dispatchCapability ? { orchestrationCapability: dispatchCapability } : undefined
     )
@@ -191,9 +169,9 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
       return
     }
     printResult(result, json, (r) =>
-      r.progressNote !== undefined && !hasStatus
-        ? `Recorded note on ${r.task.id} [${r.task.status}]: ${r.progressNote}`
-        : `Updated ${r.task.id} -> ${r.task.status}${r.progressNote ? ` (${r.progressNote})` : ''}`
+      r.progressNote !== undefined
+        ? `Recorded note on ${r.task.id}: ${r.progressNote}`
+        : `Updated ${r.task.id} -> ${r.task.status}`
     )
   }
 }

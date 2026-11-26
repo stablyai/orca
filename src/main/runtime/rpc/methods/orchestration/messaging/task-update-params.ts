@@ -3,22 +3,15 @@ import { lazyZodSchema } from '../../../../../../shared/schema/lazy-zod-schema'
 import { OptionalString } from '../../../../../../shared/rpc-contract/rpc-param-primitives'
 import { ORCHESTRATION_PROGRESS_NOTE_MAX } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 
-export const TASK_UPDATE_STATUSES = [
-  'pending',
-  'ready',
-  'dispatched',
-  'completed',
-  'failed',
-  'blocked'
-] as const
+const TASK_STATUSES = ['pending', 'ready', 'dispatched', 'completed', 'failed', 'blocked'] as const
 
 export const TaskUpdateParams = lazyZodSchema(() =>
   z
     .object({
       id: OptionalString,
       status: z
-        .enum(TASK_UPDATE_STATUSES, {
-          error: `Invalid --status; expected one of: ${TASK_UPDATE_STATUSES.join(', ')}`
+        .enum(TASK_STATUSES, {
+          error: `Invalid --status; expected one of: ${TASK_STATUSES.join(', ')}`
         })
         .optional(),
       result: OptionalString,
@@ -36,17 +29,22 @@ export const TaskUpdateParams = lazyZodSchema(() =>
       senderPaneKey: OptionalString
     })
     .superRefine((params, ctx) => {
-      if (params.status === undefined && params.note === undefined) {
+      const hasStatus = params.status !== undefined
+      const hasNote = params.note !== undefined
+      if (hasStatus === hasNote) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: 'Choose --status, --note, or both.'
+          message: hasStatus
+            ? '--note is for passive worker updates and cannot be combined with --status.'
+            : 'Choose --status or --note.'
         })
+        return
       }
-      if (params.status === undefined && params.result !== undefined) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: '--result requires --status.'
-        })
+      if (hasStatus && !params.id) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Missing --id' })
+      }
+      if (hasNote && params.result !== undefined) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: '--result requires --status.' })
       }
     })
 )

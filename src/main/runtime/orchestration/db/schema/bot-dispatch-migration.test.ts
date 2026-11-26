@@ -71,8 +71,6 @@ describe('v47-v48 bot dispatch migrations', () => {
     try {
       expect(db.db.pragma('user_version', { simple: true })).toBe(52)
       expect(db.hasColumn('dispatch_contexts', 'chat_lineage')).toBe(true)
-      expect(db.hasColumn('tasks', 'progress_note')).toBe(true)
-      expect(db.hasColumn('tasks', 'progress_updated_at')).toBe(true)
       expect(db.hasColumn('dispatch_contexts', 'progress_note')).toBe(true)
       expect(db.hasColumn('dispatch_contexts', 'progress_updated_at')).toBe(true)
       expect(TAKE_COLUMNS.filter(([table, column]) => !db.hasColumn(table, column))).toEqual([])
@@ -128,10 +126,8 @@ describe('v47-v48 bot dispatch migrations', () => {
     const path = dbPath()
     const taskId = seedWithDispatch(path)
     const raw = new Database(path)
-    for (const table of ['tasks', 'dispatch_contexts'] as const) {
-      for (const column of ['progress_note', 'progress_updated_at'] as const) {
-        raw.exec(`ALTER TABLE ${table} DROP COLUMN ${column}`)
-      }
+    for (const column of ['progress_note', 'progress_updated_at'] as const) {
+      raw.exec(`ALTER TABLE dispatch_contexts DROP COLUMN ${column}`)
     }
     raw.pragma('user_version = 51')
     raw.close()

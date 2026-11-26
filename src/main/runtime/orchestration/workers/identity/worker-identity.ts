@@ -32,18 +32,6 @@ export function workerTaskTitle(
   return display.taskTitle || display.displayName || null
 }
 
-/** Normalized Task title from a raw SQLite join row (`spec`, `task_title`, `display_name`). */
-export function workerRowTitle(row: Record<string, unknown>): string {
-  const spec = String(row.spec ?? '')
-  return (
-    workerTaskTitle({
-      spec,
-      task_title: typeof row.task_title === 'string' ? row.task_title : null,
-      display_name: typeof row.display_name === 'string' ? row.display_name : null
-    }) ?? spec
-  )
-}
-
 /** Local, server-owned and legacy relayed Dispatches all answer here; null when this Orca has none. */
 export function workerIdentity(db: OrchestrationDb, dispatchId: string): WorkerIdentity | null {
   const remote = getRemoteDispatch(db, dispatchId)
