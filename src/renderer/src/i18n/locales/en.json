@@ -25723,7 +25723,8 @@
     "filters": {
       "toggle": "Toggle search details",
       "active": "{{count}} active"
-    }
+    },
+    "unavailable": "Text search is not available here"
   },
   "workspaceDeletion": {
     "preferenceSaveFailed": "Could not save deletion preference",

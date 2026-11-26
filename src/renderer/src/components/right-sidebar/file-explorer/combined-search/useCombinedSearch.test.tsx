@@ -161,4 +161,44 @@ describe('combined search text state', () => {
     expect(mounted.renders.filter((keys) => keys.includes('no-results'))).toEqual([])
     expect(mounted.renders.at(-1)).toContain('match:/repo/cart.ts')
   })
+
+  it('admits a seeded one-character query only until it is edited away', async () => {
+    useAppStore.setState({ activeWorktreeId: 'wt-short' })
+    useAppStore.getState().showRightSidebarSearch({ query: 'x' })
+    render(<FieldHost worktreeId="wt-short" />)
+    await pause()
+    act(() => field().field.onQueryChange('xy'))
+    await pause()
+    act(() => field().field.onQueryChange('x'))
+    await pause(1000)
+    expect(pending.map((request) => request.query)).toEqual(['x', 'xy'])
+  })
+
+  it('never revives a draft after its workspace entry is purged or renamed away and back', () => {
+    const first = render(<FieldHost worktreeId="wt-a" />)
+    act(() => field().field.onQueryChange('cart'))
+    first.unmount()
+    const moveEntry = (from: string, to: string) =>
+      useAppStore.setState((state) => {
+        const { [from]: entry, ...rest } = state.fileSearchStateByWorktree
+        return { fileSearchStateByWorktree: entry ? { ...rest, [to]: entry } : rest }
+      })
+
+    moveEntry('wt-a', 'wt-b')
+    const renamed = render(<FieldHost worktreeId="wt-b" />)
+    expect(field().field.query).toBe('')
+    act(() => field().field.onQueryChange('zzz'))
+    renamed.unmount()
+    moveEntry('wt-b', 'wt-a')
+    const back = render(<FieldHost worktreeId="wt-a" />)
+    expect(field().field.query).toBe('')
+    back.unmount()
+
+    useAppStore.setState((state) => {
+      const { ['wt-a']: _purged, ...rest } = state.fileSearchStateByWorktree
+      return { fileSearchStateByWorktree: rest }
+    })
+    render(<FieldHost worktreeId="wt-a" />)
+    expect(field().field.query).toBe('')
+  })
 })

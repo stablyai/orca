@@ -99,12 +99,12 @@ export function useFileSearchRunner({
       // Why: typing shares this field with the name filter, so every store write waits for the pause.
       searchTimerRef.current = setTimeout(async () => {
         searchTimerRef.current = null
-        // Why: a skipped scan settles as empty so the field never spins on it as if a scan were pending.
+        // Why: a skipped scan settles with its reason, so the field neither spins nor claims "No results".
         if (!worktreePath || !activeWorktreeId || ownerIsTwin) {
           updateActiveSearchState({
             query,
-            error: null,
-            results: createEmptyRuntimeFileSearchResult(),
+            error: translate('fileSearch.unavailable', 'Text search is not available here'),
+            results: null,
             resultOwner: null,
             loading: false
           })
