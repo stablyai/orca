@@ -7,7 +7,7 @@ import {
 import { normalizeSearchResult } from './search-match-count'
 import { escapeRegex } from '../text/regex-escaping'
 import type { SearchFileResult, SearchOptions, SearchResult } from './code-search-types'
-import { pushSearchMatch } from './text-search-match-accumulator'
+import { pushSearchMatch, sortSearchFilesByPath } from './text-search-match-accumulator'
 import { splitSearchGlobPatterns, toGitGlobPathspecs } from './text-search-glob-patterns'
 import {
   joinSearchRoot,
@@ -324,7 +324,7 @@ export function ingestGitGrepLine(
 
 export function finalize(acc: SearchAccumulator): SearchResult {
   return normalizeSearchResult({
-    files: Array.from(acc.fileMap.values()),
+    files: sortSearchFilesByPath(Array.from(acc.fileMap.values())),
     totalMatches: acc.totalMatches,
     truncated: acc.truncated
   })

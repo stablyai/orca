@@ -89,3 +89,11 @@ export function pushSearchMatch(args: {
   }
   return 'continue'
 }
+
+// Why: ripgrep's parallel walk emits files in a different order each run. Code-unit order is
+// deterministic and stays under 1 ms at the 2000-match cap, unlike ICU numeric collation.
+export function sortSearchFilesByPath(files: SearchFileResult[]): SearchFileResult[] {
+  return files.sort((a, b) =>
+    a.relativePath < b.relativePath ? -1 : a.relativePath > b.relativePath ? 1 : 0
+  )
+}
