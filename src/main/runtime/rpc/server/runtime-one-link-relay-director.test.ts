@@ -6,6 +6,7 @@ import { RelayDirectorHttpError } from '../../../../shared/remote-runtime/relay/
 import type { MobileRelayEndpoint } from '../../../../shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { startHostOverRelay } from '../testing/relay-runtime-host.test-fixtures'
 import { clearRelayDialHolds } from '../../../ipc/runtime-environments/connections/runtime-environment-relay-link'
+import { RelayRuntimeDialMemory } from '../../../../shared/remote-runtime/control/remote-runtime-relay-dial-memory'
 
 const cleanups: (() => Promise<void> | void)[] = []
 afterEach(async () => {
@@ -124,6 +125,7 @@ describe('a desktop paired over Relay only, when its cell stops answering', () =
     'an explicit Connect lifts the hold: the host back online is dialed at once',
     async () => {
       vi.stubEnv('ORCA_TEST_REMOTE_RUNTIME_ONE_LINK', '1')
+      const parked = parkedRelayDials()
       const host = await startHostOverRelay(cleanups, { mainOpener: true })
       expect((await host.link.request('status.get', { probe: true }, 15_000)).ok).toBe(true)
       host.cellState.hostOffline = true
@@ -132,11 +134,15 @@ describe('a desktop paired over Relay only, when its cell stops answering', () =
         host.link.request('status.get', { probe: true }, 1_000).catch(() => {})
       }, 100)
       cleanups.push(() => clearInterval(asking))
-      // Four dials answered 4404, so none is in flight (it would connect once the host is back) and
-      // the next waits out a hold of at least 6 s.
-      await vi.waitFor(() => expect(host.cellState.offlineAnswers).toBeGreaterThanOrEqual(4), {
-        timeout: 15_000
-      })
+      // Four dials, and the client has taken the last one's 4404 and parked the next behind its hold:
+      // none is in flight (it would connect once the host is back) and none is still to be answered.
+      await vi.waitFor(
+        () => {
+          expect(host.cellState.dialedAt.length).toBeGreaterThanOrEqual(4)
+          expect(parked()).toBeGreaterThan(0)
+        },
+        { timeout: 15_000 }
+      )
       const dials = host.cellState.dialedAt.length
       host.cellState.hostOffline = false
       const connectAt = performance.now()
@@ -150,3 +156,37 @@ describe('a desktop paired over Relay only, when its cell stops answering', () =
     RELAY_CASE_TIMEOUT_MS
   )
 })
+
+/** How many dials wait out a hold now: each dial `afterHold` didn't run at once, until it runs or
+ *  is cancelled. */
+function parkedRelayDials(): () => number {
+  let parked = 0
+  const afterHold = RelayRuntimeDialMemory.prototype.afterHold
+  vi.spyOn(RelayRuntimeDialMemory.prototype, 'afterHold').mockImplementation(function (
+    this: RelayRuntimeDialMemory,
+    dial: () => void
+  ) {
+    let ran = false
+    let waiting = false
+    const leave = (): void => {
+      if (waiting) {
+        waiting = false
+        parked -= 1
+      }
+    }
+    const cancel = afterHold.call(this, () => {
+      ran = true
+      leave()
+      dial()
+    })
+    if (!ran) {
+      waiting = true
+      parked += 1
+    }
+    return () => {
+      leave()
+      cancel()
+    }
+  })
+  return () => parked
+}
