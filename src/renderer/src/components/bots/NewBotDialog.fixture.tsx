@@ -1,3 +1,4 @@
+import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { stubBots } from '../../component-fixtures/fixture-bots'
 import { BOT_TEMPLATES } from '../../../../shared/bots/bot-templates'
@@ -322,3 +323,69 @@ const fromLink = (width: 340 | 480) => ({
 // The link flow's New bot: the same dialog, prefilled from the link, beside longest340/480.
 export const link340 = defineFixture(fromLink(340))
 export const link480 = defineFixture(fromLink(480))
+
+// The shared link in the locales with the longest Use chat defaults: the footer stays on one row.
+const linkIn = (language: 'de' | 'es' | 'ru') => ({
+  ...fromLink(340),
+  interact: async (frame: HTMLElement) => {
+    fromLink(340).interact(frame)
+    await i18n.changeLanguage(await loadRendererUiLanguage(language))
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    const footer = document.querySelector<HTMLElement>('[data-slot="dialog-footer"]')
+    const start = footer?.querySelector<HTMLElement>('[data-slot="dialog-footer-start"]')
+    const actions = footer?.querySelector<HTMLElement>('[data-slot="dialog-footer-actions"]')
+    if (!start?.textContent || !actions) {
+      throw new Error('Use chat defaults must show for a link that keeps Ask')
+    }
+    if (Math.abs(start.getBoundingClientRect().top - actions.getBoundingClientRect().top) > 8) {
+      throw new Error('The footer must stay on one row')
+    }
+  }
+})
+export const linkDe340 = defineFixture(linkIn('de'))
+export const linkEs340 = defineFixture(linkIn('es'))
+export const linkRu340 = defineFixture(linkIn('ru'))
+
+// A model picked, so Use chat defaults shows on the footer's left.
+const pickModelOnly = async (): Promise<void> => {
+  const trigger = document.querySelector<HTMLElement>(
+    '[role="dialog"] [role="group"][aria-label="Agent"] button'
+  )
+  trigger?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+  await new Promise((resolve) => setTimeout(resolve, 400))
+  const label = [...document.querySelectorAll<HTMLElement>('[role="menu"] *')].find(
+    (node) => node.childElementCount === 0 && node.textContent?.trim() === 'Opus'
+  )
+  const opus = label?.closest<HTMLElement>('[role="option"]')
+  opus?.click()
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  document.activeElement?.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+  )
+  const focused = document.activeElement
+  if (focused instanceof HTMLElement) {
+    focused.blur()
+  }
+  await new Promise((resolve) => setTimeout(resolve, 300))
+}
+const pickModel = async (): Promise<void> => {
+  await FILLED()
+  await pickModelOnly()
+}
+export const chatDefaultsTemplate340 = defineFixture({
+  ...newBotFixture(340),
+  interact: pickModelOnly
+})
+export const chatDefaults340 = defineFixture({ ...newBotFixture(340), interact: pickModel })
+export const chatDefaults480 = defineFixture({ ...newBotFixture(480), interact: pickModel })
+export const chatDefaultsFocus340 = defineFixture({
+  ...newBotFixture(340),
+  interact: async () => {
+    await pickModel()
+    const link = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+      (button) => button.textContent === 'Use chat defaults'
+    )
+    link?.focus()
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+})

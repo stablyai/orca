@@ -25,6 +25,8 @@ class TerminalMcpPanes {
   private readonly recorded = new Map<string, TerminalMcpPaneLaunch>()
   private loaded: Promise<Map<string, TerminalMcpPaneLaunch>> | null = null
   private writes: Promise<void> = Promise.resolve()
+  /** A write is queued and hasn't read the records yet, so a newer record rides on it. */
+  private writeQueued = false
 
   private path(): string {
     return join(getAppEnvironment().getPath('userData'), FILE)
@@ -61,8 +63,13 @@ class TerminalMcpPanes {
       }
       this.recorded.delete(oldest)
     }
+    if (this.writeQueued) {
+      return
+    }
+    this.writeQueued = true
     this.writes = this.writes
       .then(async () => {
+        this.writeQueued = false
         const panes = [...(await this.all())]
         await writePluginFileAtomically(
           this.path(),

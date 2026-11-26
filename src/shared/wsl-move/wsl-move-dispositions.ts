@@ -98,7 +98,7 @@ export const PERSISTED_STATE_DISPOSITIONS = {
   migrationUnsupportedPtyEntries: { disposition: 'gate', item: 20 },
   legacyPaneKeyAliasEntries: { disposition: 'gate', item: 20 },
   automations: moveDisposition(18, {
-    note: "The host runs the moved copy; the desktop's stays unchanged, and its scheduler only advances it."
+    note: "The host runs the moved copy; the desktop's turns off after commit (local-automations), and undo gives it the host's state."
   }),
   automationRuns: moveDisposition(19, {
     note: "An in-flight run in scope blocks the move. The desktop's history stays as written, beside its automation."

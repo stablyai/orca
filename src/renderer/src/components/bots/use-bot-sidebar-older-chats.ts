@@ -16,14 +16,9 @@ import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-typ
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { selectLiveAgentStatusEntriesForWorktree } from '@/components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
-import {
-  selectWorktreeActivityStatus,
-  selectWorktreeTitleActivityStatus
-} from '@/components/sidebar/workspace-card/activity/use-worktree-activity-status'
-import type { WorktreeStatus } from '../../../../shared/worktree/row-display/worktree-status-rollup'
 import type { AppState } from '@/store/types'
 import { useShallow } from 'zustand/react/shallow'
+import { createWatchedAttentionReader } from './bot-sidebar-attention'
 
 /** How often fold times are compared with the clock; a chat folds up to this late. */
 const OLDER_CHATS_CLOCK_MS = 5 * 60_000
@@ -38,19 +33,6 @@ export function pruneBotSidebarOlderChats(liveKeys: ReadonlySet<string>): void {
     }
   }
 }
-
-const NO_IDS: string[] = []
-
-/** Card statuses that say nothing is going on in a workspace. */
-/** Title statuses that positively say an agent works or asks; an idle live shell reads `active`. */
-const TITLE_WORK: ReadonlySet<WorktreeStatus> = new Set(['working', 'monitoring', 'permission'])
-
-const IDLE_STATUSES: ReadonlySet<WorktreeStatus> = new Set([
-  'inactive',
-  'done',
-  'failed',
-  'interrupted'
-])
 
 /** A chat tab in the bot's home counts for the bot only when it is the bot host's, or names no host. */
 export function tabOfBotHost(tab: Tab, hostId: string): boolean {
@@ -192,7 +174,9 @@ export function useBotSidebarOlderChats(input: {
     },
     [dueTimes]
   )
-  const dueCount = useNowSnapshot(OLDER_CHATS_CLOCK_MS, countDue)
+  // Wait on the clock only while a fold time is still ahead: none (a Home-only list) or all passed
+  // leaves no tick that could change the count. A new time re-reads the count on that render.
+  const dueCount = useNowSnapshot(OLDER_CHATS_CLOCK_MS, countDue, countDue(0) < dueTimes.length)
   const now = dueCount === 0 ? Number.NEGATIVE_INFINITY : dueTimes[dueCount - 1]!
   // The workspaces whose attention can change a fold: every line under a chat already due, and every
   // line no chat claims (whose attention nobody can place). Fewer than two due: nothing can fold, so none.
@@ -224,23 +208,11 @@ export function useBotSidebarOlderChats(input: {
     return chatsByLine
   }, [dueCount, now, workspaces, input.workspaceChats, baseTimes, childrenOf])
   const watchedIds = useMemo(() => [...watched.keys()], [watched])
-  // Any sign a workspace is not idle: its card's status (titles and permission prompts included) or any
-  // agent pane not done, read per pane so a failed pane can't mask a working one; nothing is read while
-  // fewer than two chats are due.
+  // Nothing is read while fewer than two chats are due; a write re-reads only the workspaces it changed.
+  const [readAttention] = useState(createWatchedAttentionReader)
   const selectAttention = useCallback(
-    (state: AppState): string[] =>
-      watchedIds.length === 0
-        ? NO_IDS
-        : watchedIds.filter(
-            (id) =>
-              !IDLE_STATUSES.has(selectWorktreeActivityStatus(state, id)) ||
-              // A working or permission title counts even where the card's dot shows a failed hook.
-              TITLE_WORK.has(selectWorktreeTitleActivityStatus(state, id)) ||
-              selectLiveAgentStatusEntriesForWorktree(state, id).some(
-                (entry) => entry.state !== 'done'
-              )
-          ),
-    [watchedIds]
+    (state: AppState) => readAttention(state, watchedIds),
+    [readAttention, watchedIds]
   )
   // Compared item by item, so a write that changes none of them doesn't re-render (ids stay whole).
   const attentionIds = useAppStore(useShallow(selectAttention))

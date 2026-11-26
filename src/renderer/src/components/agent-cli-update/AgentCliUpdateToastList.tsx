@@ -1,9 +1,9 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, CircleAlert, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { workerDockScrollFade } from '@/components/native-chat/tools/tasks/dock/worker-dock-scroll-anchor'
-import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { agentCliProductName } from './agent-cli-product-name'
 import { copyAgentCliUpdateCommand } from '../status-bar/updates/AgentCliUpdateList'
@@ -23,21 +23,6 @@ export type AgentCliUpdateToastItem = {
   /** Set for a CLI Orca can't update: the command the user runs in a terminal. */
   manualCommand: string | null
   onOpenFailure?: () => void
-}
-
-/** Opens to its content's height; closed content is inert so focus can't land in it. */
-function Reveal({ open, children }: { open: boolean; children: ReactNode }): React.JSX.Element {
-  return (
-    <div
-      className={cn(
-        'grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none',
-        open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
-      )}
-      inert={!open}
-    >
-      <div className="min-h-0 overflow-hidden">{children}</div>
-    </div>
-  )
 }
 
 function Heading({ children }: { children: ReactNode }): React.JSX.Element {
@@ -166,14 +151,13 @@ function Rows({ items }: { items: readonly AgentCliUpdateToastItem[] }): React.J
 }
 
 /** Updatable CLIs first, then the ones the user updates by hand; scrolls inside the toast. */
-export function AgentCliUpdateToastList({
-  open,
-  items
+function ListBody({
+  items: buildItems
 }: {
-  open: boolean
-  items: readonly AgentCliUpdateToastItem[]
+  items: () => readonly AgentCliUpdateToastItem[]
 }): React.JSX.Element {
   const t = useTranslate()
+  const items = buildItems()
   const auto = items.filter((item) => !item.manualCommand)
   const manual = items.filter((item) => item.manualCommand)
   const [fade, setFade] = useState<string | undefined>(undefined)
@@ -182,9 +166,9 @@ export function AgentCliUpdateToastList({
     setFade(viewport.current ? workerDockScrollFade(viewport.current) : undefined)
   useLayoutEffect(() => {
     setFade(viewport.current ? workerDockScrollFade(viewport.current) : undefined)
-  }, [open, items.length])
+  }, [items.length])
   return (
-    <Reveal open={open}>
+    <>
       <div className="mx-2 mt-2 border-t border-border" />
       <div
         ref={viewport}
@@ -201,6 +185,24 @@ export function AgentCliUpdateToastList({
           </>
         ) : null}
       </div>
-    </Reveal>
+    </>
+  )
+}
+
+/** Mounts its rows only while open or closing; `items` is called then, so a collapsed list builds none. */
+export function AgentCliUpdateToastList({
+  open,
+  items
+}: {
+  open: boolean
+  items: () => readonly AgentCliUpdateToastItem[]
+}): React.JSX.Element {
+  return (
+    <Collapsible open={open}>
+      {/* Inert while closing so focus can't land in rows on their way out. */}
+      <CollapsibleContent animation="height" inert={!open}>
+        <ListBody items={items} />
+      </CollapsibleContent>
+    </Collapsible>
   )
 }
