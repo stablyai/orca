@@ -3,7 +3,7 @@ import { basename, dirname, join } from 'node:path'
 import { pathSegments } from './session-file-discovery'
 import { resolveAbsoluteDirOverride } from '../../../shared/file-access/absolute-dir-override'
 import type { AiVaultAgent } from '../../../shared/ai-vault/contracts/ai-vault-types'
-import type { AiVaultDeletableAgent } from '../../../shared/ai-vault/contracts/ai-vault-session-deletion'
+import type { AiVaultFileDeletableAgent } from '../../../shared/ai-vault/contracts/ai-vault-session-deletion'
 import { resolveGrokSessionsDir } from '../../../shared/agent-hook-listener/providers/grok/grok-session-paths'
 import { resolveKiroHomeDir } from '../../../shared/agent-launch/environment/kiro-home'
 import { uniqueCodexSessionsDirs } from '../scanners/codex/session-scanner-codex-paths'
@@ -85,7 +85,7 @@ export type AiVaultAgentSource = {
   dedupeRealRootDirs?: boolean
 }
 
-type AiVaultAgentSourceTable = Record<AiVaultDeletableAgent, AiVaultAgentSource> &
+type AiVaultAgentSourceTable = Record<AiVaultFileDeletableAgent, AiVaultAgentSource> &
   Partial<Record<AiVaultAgent, AiVaultAgentSource>>
 
 // OpenCode and Antigravity use dedicated discovery for their storage layouts.
@@ -296,7 +296,7 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
 
 // The Pi walk labels the OMP transcripts it reads, so an OMP row can sit under Pi's roots too.
 export function sessionRowRootDirs(
-  agent: AiVaultDeletableAgent,
+  agent: AiVaultFileDeletableAgent,
   options: AiVaultScanOptions,
   wslHomeDirs: readonly string[]
 ): string[] {

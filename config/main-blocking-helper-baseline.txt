@@ -33,6 +33,7 @@
 4 src/main/ai-vault-search/session-search-enablement.ts
 2 src/main/ai-vault-search/storage/session-search-schema.ts
 1 src/main/ai-vault-search/worker/session-search-worker-client.ts
+1 src/main/ai-vault/deletion/codex-session-delete.ts # user-confirmed delete resolves the owning Codex home; its managed-account marker read is sync, async follow-up owed
 3 src/main/ai-vault/discovery/ai-vault-scan-roots.ts
 1 src/main/ai-vault/discovery/session-scanner-agent-sources.ts
 3 src/main/ai-vault/discovery/session-scanner-roots.ts

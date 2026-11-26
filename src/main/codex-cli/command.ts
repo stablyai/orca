@@ -1,6 +1,10 @@
 import { resolveCliCommandAsync } from '../../shared/shell/command-resolution/node-cli-command-async-resolution'
 import { resolveCliCommand } from '../../shared/shell/command-resolution/node-cli-command-resolution'
-import { resolveGuestNativeProgram } from '../wsl/filesystem/wsl-guest-windows-drive-path'
+import {
+  readGuestWindowsDriveMountsAsync,
+  resolveGuestNativeProgram,
+  resolveGuestNativeProgramAsync
+} from '../wsl/filesystem/wsl-guest-windows-drive-path'
 import { WINDOWS_ONLY_AGENT_CLI_DIR } from './windows-only-agent-cli'
 import { isAbsolute } from 'node:path'
 import {
@@ -52,6 +56,16 @@ export async function resolveCodexCommandForSpawn(): Promise<string> {
   return process.platform === 'win32'
     ? orUseManagedCopy('codex', await resolveCliCommandAsync('codex'))
     : resolveCodexCommand()
+}
+
+/** Async on every platform, for work that must not block the Electron main thread. */
+export async function resolveCodexCommandForDelete(): Promise<string> {
+  const mounts = await readGuestWindowsDriveMountsAsync()
+  const resolved =
+    mounts.length > 0
+      ? await resolveGuestNativeProgramAsync('codex', {}, mounts)
+      : await resolveCliCommandAsync('codex')
+  return orUseManagedCopy('codex', resolved ?? `${WINDOWS_ONLY_AGENT_CLI_DIR}/codex`)
 }
 
 export function resolveClaudeCommand(options: ResolveCommandOptions = {}): string {

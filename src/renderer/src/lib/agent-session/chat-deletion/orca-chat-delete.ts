@@ -32,6 +32,8 @@ export type OrcaChatDeleteTarget = {
   sessionId: string
   /** The pairing that listed the chat (Session History's row); else the current one when asked. */
   pairingRevision?: number
+  /** Close the chat's tab after confirmation, before the host deletes the chat. */
+  onBeforeDelete?: () => void | Promise<void>
 }
 
 const SETTINGS_SECTION_ID = 'general-skip-delete-chat-confirm'
@@ -123,6 +125,7 @@ export function useDeleteOrcaChat(): (target: OrcaChatDeleteTarget) => Promise<b
           return false
         }
       }
+      await target.onBeforeDelete?.()
       try {
         const result = await callStructuredAgentSession<OrcaChatDeleteResult>(
           callTarget,

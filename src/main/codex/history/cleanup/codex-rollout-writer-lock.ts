@@ -35,3 +35,21 @@ export async function isOpenInCodex(homes: readonly string[], stem: string): Pro
   }
   return !keepsLocks
 }
+
+/** Positive proof that some home currently holds this thread's writer lock. */
+export async function hasCodexWriterLock(homes: readonly string[], stem: string): Promise<boolean> {
+  const ids = basename(stem).toLowerCase().match(UUID_PATTERN) ?? []
+  for (const home of homes) {
+    for (const id of ids) {
+      try {
+        await lstat(join(home, 'thread-writer-locks', `${id}.lock`))
+        return true
+      } catch (error) {
+        if (!isDefinitiveAbsence(error)) {
+          return false
+        }
+      }
+    }
+  }
+  return false
+}

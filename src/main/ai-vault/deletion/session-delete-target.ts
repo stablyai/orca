@@ -1,9 +1,9 @@
 import { basename, dirname, extname, join, resolve } from 'node:path'
 import type { AiVaultAgent } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import {
-  isAiVaultDeletableAgent,
+  isAiVaultFileDeletableAgent,
   isAiVaultSyntheticSessionPath,
-  type AiVaultDeletableAgent,
+  type AiVaultFileDeletableAgent,
   type AiVaultSessionDeleteRejectionCode,
   type AiVaultSessionDeleteRemoval,
   type AiVaultSessionDeleteValidationResult
@@ -23,7 +23,7 @@ import { subagentTranscriptsDirFor } from '../scanners/claude/session-scanner-su
 import type { AiVaultScanOptions } from '../session-scanner-types'
 
 // These sessions own their containing directory, including companion files.
-const AI_VAULT_WHOLE_DIRECTORY_DELETE_AGENTS = new Set<AiVaultDeletableAgent>([
+const AI_VAULT_WHOLE_DIRECTORY_DELETE_AGENTS = new Set<AiVaultFileDeletableAgent>([
   'rovo',
   'grok',
   'cline'
@@ -47,7 +47,8 @@ export function validateAiVaultSessionDeleteTarget(
   if (!filePath) {
     return rejected(agent, 'invalid-path')
   }
-  if (!isAiVaultDeletableAgent(agent)) {
+  // Codex rollouts and OpenCode rows are removed by their own stores, never as a single file.
+  if (!isAiVaultFileDeletableAgent(agent)) {
     return rejected(agent, 'unsupported-agent')
   }
   // Electron removal acts only on this host; remote paths require their own execution host.
@@ -85,7 +86,7 @@ export function validateAiVaultSessionDeleteTarget(
 
 // Remove companions before the transcript; preserve file-history rewind backups of the user's files.
 function sessionDeleteRemovals(args: {
-  agent: AiVaultDeletableAgent
+  agent: AiVaultFileDeletableAgent
   resolvedPath: string
   matchedRoot: string
   roots: readonly string[]

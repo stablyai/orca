@@ -11,6 +11,9 @@ import type {
   AiVaultDeleteSessionArgs,
   AiVaultDeleteSessionResult
 } from '../../../shared/ai-vault/contracts/ai-vault-session-deletion'
+import { isAiVaultDatabaseRowAgent } from '../../../shared/ai-vault/contracts/ai-vault-session-deletion'
+import { deleteHostCodexSession } from './codex-session-delete'
+import { deleteHostOpenCodeSession } from './opencode-session-delete'
 
 export type HostAiVaultSessionDeleteDeps = {
   removePath: AiVaultSessionPathRemover
@@ -48,17 +51,33 @@ export async function deleteHostAiVaultSession(
 ): Promise<AiVaultDeleteSessionResult> {
   // Default absent payload fields because the validator destructures its input.
   const wslHomeDirs = await getAiVaultWslHomeDirs()
-  const result = await deleteAiVaultSessionFile(
-    {
-      // SAFETY: the validator rejects any agent outside the deletable list.
-      agent: args?.agent as AiVaultAgent,
-      sessionId: args?.sessionId,
-      filePath: args?.filePath ?? '',
-      executionHostId: args?.executionHostId,
-      wslHomeDirs
-    },
-    deps.removePath
-  )
+  const agent = args?.agent as AiVaultAgent
+  const result =
+    agent === 'codex'
+      ? await deleteHostCodexSession({
+          filePath: args?.filePath ?? '',
+          sessionId: args?.sessionId,
+          executionHostId: args?.executionHostId,
+          wslHomeDirs
+        })
+      : isAiVaultDatabaseRowAgent(agent)
+        ? await deleteHostOpenCodeSession({
+            agent,
+            filePath: args?.filePath ?? '',
+            sessionId: args?.sessionId,
+            executionHostId: args?.executionHostId,
+            wslHomeDirs
+          })
+        : await deleteAiVaultSessionFile(
+            {
+              agent,
+              sessionId: args?.sessionId,
+              filePath: args?.filePath ?? '',
+              executionHostId: args?.executionHostId,
+              wslHomeDirs
+            },
+            deps.removePath
+          )
 
   if (result.outcome === 'deleted') {
     // Invalidate desktop, shared runtime/mobile and raw-path parse caches to prevent resurrection.
