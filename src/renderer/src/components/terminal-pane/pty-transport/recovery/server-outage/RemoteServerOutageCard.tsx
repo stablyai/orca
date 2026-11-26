@@ -4,6 +4,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { CopyTextButton } from '@/components/clipboard/CopyTextButton'
 import { cn } from '@/lib/class-names'
+import { useNow } from '@/lib/window-activity/use-now'
 import { useAppStore } from '@/store/index'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useCalmStatusReveal } from '@/runtime/hosts/connections/use-calm-status-reveal'
@@ -13,7 +14,6 @@ import {
   remoteRuntimeRecoveryCopy,
   remoteServerCantReachTitle
 } from '../../remote-runtime/recovery/remote-runtime-recovery-copy'
-import { useRecoveryClock } from '../../remote-runtime/recovery/use-recovery-clock'
 import {
   usePublishRemoteServerNoticeShowing,
   useRemoteServerOutageCardInputs
@@ -159,7 +159,7 @@ export function RemoteServerOutageCardLine({
     setDetailsOpen(false)
   }
   const detailsRef = useRef<HTMLDivElement>(null)
-  const now = useRecoveryClock(downSince !== null && !leaving)
+  const now = useNow(1_000, downSince !== null && !leaving)
   const copy = remoteRuntimeRecoveryCopy(cause, serverName, t)
   const titleTemplate = stopped
     ? remoteServerCantReachTitle(SERVER_SLOT, t)
