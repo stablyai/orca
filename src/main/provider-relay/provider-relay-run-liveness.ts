@@ -1,4 +1,5 @@
 import type { DaemonClient } from '../daemon/transport/client/daemon-client'
+import { PrioritySemaphore } from '../../shared/concurrency/priority-semaphore'
 import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host/execution-host'
 import {
@@ -14,6 +15,7 @@ import {
   forgetListedProviderRelayChat,
   keptProviderRelayOutstanding,
   listProviderRelayInstance,
+  beginProviderRelayRunAsk,
   noteProviderRelayRunVerdict,
   placeKeptProviderRelay,
   providerRelayMayKeep
@@ -46,9 +48,14 @@ export async function providerRelayRunLiveness(
   record: ProviderRelayRunRecord,
   options: { waitMs?: number; fresh?: boolean } = {}
 ): Promise<ProviderRelayRunLiveness> {
-  const verdict = await decide(record, options.waitMs ?? DEFAULT_WAIT_MS, options.fresh === true)
-  noteProviderRelayRunVerdict(record.sessionId, verdict)
-  return verdict
+  beginProviderRelayRunAsk(record.sessionId)
+  let verdict: ProviderRelayRunLiveness | null = null
+  try {
+    verdict = await decide(record, options.waitMs ?? DEFAULT_WAIT_MS, options.fresh === true)
+    return verdict
+  } finally {
+    noteProviderRelayRunVerdict(record.sessionId, verdict)
+  }
 }
 
 async function decide(
@@ -168,12 +175,25 @@ function daemonProvenGone(daemon: AgentSessionRunDaemon, hostId: string): Promis
   return gone
 }
 
+/** Agents outliving a dead daemon are probed a few at a time, however many chats ask at once. */
+const AGENT_PROBES_RUNNING = 4
+const agentProbes = new PrioritySemaphore(AGENT_PROBES_RUNNING)
+
+async function agentProvenGone(agent: AgentSessionProcessIdentity): Promise<boolean> {
+  const release = await agentProbes.acquire(0)
+  try {
+    return await provenGone(agent, true)
+  } finally {
+    release()
+  }
+}
+
 async function processesProvenGone(
   placement: Extract<AgentSessionRunPlacement, { kind: 'relayed' }>
 ): Promise<boolean> {
   const { daemon, agent } = placement
   // A live daemon decides alone; its agent is only probed once the daemon is proven gone.
-  return (await daemonProvenGone(daemon, agent.hostId)) && provenGone(agent, true)
+  return (await daemonProvenGone(daemon, agent.hostId)) && agentProvenGone(agent)
 }
 
 /**

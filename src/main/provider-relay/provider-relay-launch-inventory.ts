@@ -246,20 +246,39 @@ export function forgetListedProviderRelayChat(chatKey: string): void {
 
 /** Chats whose last run's daemon start couldn't say at their last ask; a close forgets one. */
 const unknownRuns = new Set<string>()
+/** Asks in flight per chat, and chats closed during one: a late `unknown` never outlives its close. */
+const asking = new Map<string, number>()
+const closedWhileAsking = new Set<string>()
 
+export function beginProviderRelayRunAsk(chatKey: string): void {
+  asking.set(chatKey, (asking.get(chatKey) ?? 0) + 1)
+  closedWhileAsking.delete(chatKey)
+}
+
+/** Ends one ask; a thrown ask (null) leaves the last verdict as it was. */
 export function noteProviderRelayRunVerdict(
   chatKey: string,
-  verdict: 'kept' | 'gone' | 'unknown'
+  verdict: 'kept' | 'gone' | 'unknown' | null
 ): void {
-  if (verdict === 'unknown') {
+  if (verdict === 'unknown' && !closedWhileAsking.has(chatKey)) {
     unknownRuns.add(chatKey)
-  } else {
+  } else if (verdict === 'kept' || verdict === 'gone') {
     unknownRuns.delete(chatKey)
+  }
+  const left = (asking.get(chatKey) ?? 1) - 1
+  if (left > 0) {
+    asking.set(chatKey, left)
+  } else {
+    asking.delete(chatKey)
+    closedWhileAsking.delete(chatKey)
   }
 }
 
 export function forgetProviderRelayRunVerdict(chatKey: string): void {
   unknownRuns.delete(chatKey)
+  if (asking.has(chatKey)) {
+    closedWhileAsking.add(chatKey)
+  }
 }
 
 /** Its daemon start couldn't say at the last ask; the host holds the chat until it can. */

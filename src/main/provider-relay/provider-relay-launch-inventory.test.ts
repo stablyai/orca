@@ -4,7 +4,11 @@ import type { ProviderRelayInfo } from '../daemon/protocol/daemon-provider-relay
 import {
   keptProviderRelayOutstanding,
   listKeptProviderRelays,
-  registerReattachableProviderRelayAgent
+  registerReattachableProviderRelayAgent,
+  beginProviderRelayRunAsk,
+  forgetProviderRelayRunVerdict,
+  noteProviderRelayRunVerdict,
+  providerRelayRunUnknown
 } from './provider-relay-launch-inventory'
 
 const ended = (chatKey: string, agent: string, unread: boolean): ProviderRelayInfo => ({
@@ -55,5 +59,27 @@ describe('kept relays whose agent ended while no app was attached', () => {
     await new Promise((resolve) => setImmediate(resolve))
     // Only the relay this build can't reattach is ended at launch; the rest wait for their chats.
     expect(closed).toEqual([{ relayId: 'r-f' }])
+  })
+})
+
+describe("a chat's unknown run verdict", () => {
+  it('is never written back by an ask that ends after its chat closed, while a reopened ask still records it', () => {
+    beginProviderRelayRunAsk('c')
+    forgetProviderRelayRunVerdict('c')
+    noteProviderRelayRunVerdict('c', 'unknown')
+    expect(providerRelayRunUnknown('c')).toBe(false)
+
+    beginProviderRelayRunAsk('c')
+    forgetProviderRelayRunVerdict('c')
+    beginProviderRelayRunAsk('c')
+    noteProviderRelayRunVerdict('c', 'unknown')
+    noteProviderRelayRunVerdict('c', 'unknown')
+    expect(providerRelayRunUnknown('c')).toBe(true)
+
+    beginProviderRelayRunAsk('c')
+    noteProviderRelayRunVerdict('c', null)
+    expect(providerRelayRunUnknown('c')).toBe(true)
+    forgetProviderRelayRunVerdict('c')
+    expect(providerRelayRunUnknown('c')).toBe(false)
   })
 })
