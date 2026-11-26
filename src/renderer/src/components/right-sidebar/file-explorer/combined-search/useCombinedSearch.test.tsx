@@ -9,6 +9,7 @@ import { useCombinedSearch } from './useCombinedSearch'
 
 const initial = useAppStore.getState()
 const pending: { query: string; resolve: (result: SearchResult) => void }[] = []
+const cancelSearch = vi.fn(async () => undefined)
 const noop = (): void => {}
 
 function resultFor(query: string): SearchResult {
@@ -28,13 +29,14 @@ function resultFor(query: string): SearchResult {
 beforeEach(() => {
   vi.useFakeTimers()
   pending.length = 0
+  cancelSearch.mockClear()
   Object.assign(window, {
     api: {
       ...window.api,
       fs: {
         search: (options: { query: string }) =>
           new Promise<SearchResult>((resolve) => pending.push({ query: options.query, resolve })),
-        cancelSearch: async () => undefined
+        cancelSearch
       }
     }
   })
@@ -80,10 +82,12 @@ const mounted: { field: FieldState | null; renders: string[]; announcements: str
 
 function FieldHost({
   worktreeId,
-  worktreePath = '/repo'
+  worktreePath = '/repo',
+  namesLoading = false
 }: {
   worktreeId: string
   worktreePath?: string | null
+  namesLoading?: boolean
 }): null {
   const [start] = useState(() => getInitialSearchDraft(worktreeId))
   const [query, setQuery] = useState(start.text)
@@ -92,8 +96,8 @@ function FieldHost({
     worktreePath,
     query,
     setQuery,
-    nameMatches: query.trim() ? { total: 0, matches: [] } : null,
-    namesLoading: false,
+    nameMatches: query.trim() && !namesLoading ? { total: 0, matches: [] } : null,
+    namesLoading,
     namesError: null,
     onOpenName: noop,
     onShowAllNames: noop,
@@ -239,5 +243,45 @@ describe('combined search text state', () => {
     expect(first).toBeGreaterThan(-1)
     // Each change of the live text is a new announcement; the notice must not drop between pauses.
     expect(mounted.announcements.slice(first)).not.toContain('')
+  })
+})
+
+describe('combined search names-first text scan', () => {
+  it('waits for the file-name listing before it starts the text scan', async () => {
+    const { rerender } = render(<FieldHost worktreeId="wt-gate" namesLoading />)
+    act(() => field().field.onQueryChange('cart'))
+    await advanceFakeClock(1000)
+    // On a large repo both are disk walks; names must not share the disk with text.
+    expect(pending).toEqual([])
+    // The Text header holds with no count while it waits, so nothing below it jumps.
+    expect(mounted.renders.at(-1)).toBe('section:text')
+    expect(field().field.loading).toBe(true)
+
+    rerender(<FieldHost worktreeId="wt-gate" />)
+    await advanceFakeClock()
+    expect(pending.map((request) => request.query)).toEqual(['cart'])
+  })
+
+  it('stops a running text scan as soon as the next keystroke arrives', async () => {
+    const { rerender } = render(<FieldHost worktreeId="wt-stop" />)
+    act(() => field().field.onQueryChange('cart'))
+    await advanceFakeClock()
+    expect(pending.map((request) => request.query)).toEqual(['cart'])
+
+    rerender(<FieldHost worktreeId="wt-stop" namesLoading />)
+    act(() => field().field.onQueryChange('cars'))
+    // Cancelled before any timer runs, so the old scan never overlaps the new listing.
+    expect(cancelSearch).toHaveBeenCalledTimes(1)
+    await advanceFakeClock(1000)
+    expect(pending).toHaveLength(1)
+  })
+
+  it('drops a text scan still waiting on names when the query is cleared', async () => {
+    const { rerender } = render(<FieldHost worktreeId="wt-drop" namesLoading />)
+    act(() => field().field.onQueryChange('cart'))
+    act(() => field().field.onQueryChange(''))
+    rerender(<FieldHost worktreeId="wt-drop" />)
+    await advanceFakeClock(1000)
+    expect(pending).toEqual([])
   })
 })

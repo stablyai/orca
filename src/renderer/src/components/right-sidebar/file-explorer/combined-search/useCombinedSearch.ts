@@ -15,6 +15,7 @@ import { useCombinedSearchNavigation } from './use-combined-search-navigation'
 import { useCombinedSearchSeed } from './use-combined-search-seed'
 import { useSearchDraftLifecycle, type InitialSearchDraft } from './use-search-draft-lifecycle'
 import { useCombinedTextResults } from './use-combined-text-results'
+import { useNamesFirstTextSearch } from './use-names-first-text-search'
 import { useOpenSearchMatch } from './use-open-search-match'
 import type { NameMatch, NameMatchResults } from './name-match-results'
 
@@ -83,18 +84,23 @@ export function useCombinedSearch({
     [activeWorktreeId, updateFileSearchState]
   )
 
-  const { executeSearch, cancelPendingSearch } = useFileSearchRunner({
+  const { executeSearch, cancelPendingSearch, stopSearch } = useFileSearchRunner({
     activeWorktreeId,
     worktreePath,
     updateActiveSearchState
+  })
+  const { requestTextSearch, dropQueuedTextSearch } = useNamesFirstTextSearch({
+    namesSettled: !namesLoading,
+    executeSearch,
+    stopSearch
   })
   // An explicit seed may search one character; typing never does.
   const [forcedShortQuery, setForcedShortQuery] = useState<string | null>(() =>
     initial.allowShort ? initial.text : null
   )
   const runTextSearch = useCallback(
-    (value: string) => executeSearch(value, { allowShortQuery: value === forcedShortQuery }),
-    [executeSearch, forcedShortQuery]
+    (value: string) => requestTextSearch(value, { allowShortQuery: value === forcedShortQuery }),
+    [requestTextSearch, forcedShortQuery]
   )
   const isCurrentOwner = useFileSearchScope({
     activeWorktreeId,
@@ -148,11 +154,12 @@ export function useCombinedSearch({
   const clearQuery = useCallback(() => {
     setQuery('')
     setForcedShortQuery(null)
+    dropQueuedTextSearch()
     cancelPendingSearch()
     if (activeWorktreeId) {
       clearFileSearch(activeWorktreeId)
     }
-  }, [activeWorktreeId, cancelPendingSearch, clearFileSearch, setQuery])
+  }, [activeWorktreeId, cancelPendingSearch, clearFileSearch, dropQueuedTextSearch, setQuery])
 
   // The latest draft for activation guards that run after the render that built the rows.
   const liveQueryRef = useRef(query)
@@ -218,9 +225,9 @@ export function useCombinedSearch({
     (seeded: string) => {
       setQuery(seeded)
       setForcedShortQuery(seeded)
-      executeSearch(seeded, { allowShortQuery: true })
+      requestTextSearch(seeded, { allowShortQuery: true })
     },
-    [executeSearch, setQuery]
+    [requestTextSearch, setQuery]
   )
   useCombinedSearchSeed({
     activeWorktreeId,

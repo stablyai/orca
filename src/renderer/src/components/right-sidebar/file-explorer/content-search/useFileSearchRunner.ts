@@ -55,6 +55,8 @@ export function useFileSearchRunner({
 }: UseFileSearchRunnerArgs): {
   executeSearch: (query: string, options?: ExecuteSearchOptions) => void
   cancelPendingSearch: () => void
+  /** Stops a debouncing or running scan without touching the store, for a caller that reruns soon. */
+  stopSearch: () => void
 } {
   const runtimeEnvironmentId = useAppStore((state) =>
     runtimeEnvironmentIdOrLocalUnlessTwin(state, activeWorktreeId)
@@ -69,8 +71,7 @@ export function useFileSearchRunner({
   const latestSearchIdRef = useRef(0)
   const searchControllerRef = useRef<AbortController | null>(null)
 
-  const cancelPendingSearch = useCallback(() => {
-    const interrupted = searchControllerRef.current !== null || searchTimerRef.current !== null
+  const stopSearch = useCallback(() => {
     searchControllerRef.current?.abort()
     searchControllerRef.current = null
     latestSearchIdRef.current += 1
@@ -78,24 +79,22 @@ export function useFileSearchRunner({
       clearTimeout(searchTimerRef.current)
       searchTimerRef.current = null
     }
+  }, [])
+
+  const cancelPendingSearch = useCallback(() => {
+    const interrupted = searchControllerRef.current !== null || searchTimerRef.current !== null
+    stopSearch()
     updateActiveSearchState({
       loading: false,
       // Why: an ownerless leftover error would read as a skipped-scan notice on the next mount.
       ...(interrupted ? { results: null, resultOwner: null, error: null } : {})
     })
-  }, [updateActiveSearchState])
+  }, [stopSearch, updateActiveSearchState])
 
   const executeSearch = useCallback(
     (query: string, options?: ExecuteSearchOptions) => {
-      searchControllerRef.current?.abort()
-      searchControllerRef.current = null
-      latestSearchIdRef.current += 1
+      stopSearch()
       const searchId = latestSearchIdRef.current
-
-      if (searchTimerRef.current) {
-        clearTimeout(searchTimerRef.current)
-        searchTimerRef.current = null
-      }
 
       // Why: typing shares this field with the name filter, so every store write waits for the pause.
       searchTimerRef.current = setTimeout(async () => {
@@ -226,6 +225,7 @@ export function useFileSearchRunner({
     },
     [
       activeWorktreeId,
+      stopSearch,
       updateActiveSearchState,
       worktreePath,
       executionHostId,
@@ -239,5 +239,5 @@ export function useFileSearchRunner({
     [cancelPendingSearch, worktreePath, executionHostId, runtimeEnvironmentId]
   )
 
-  return { executeSearch, cancelPendingSearch }
+  return { executeSearch, cancelPendingSearch, stopSearch }
 }
