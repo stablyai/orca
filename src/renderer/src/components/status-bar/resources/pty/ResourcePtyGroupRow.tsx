@@ -95,8 +95,8 @@ export const ResourcePtyGroupRow = memo(function ResourcePtyGroupRow({
         </span>
       )}
       <Button
-        variant="ghost"
-        size="xs"
+        variant="ghost-destructive"
+        size="xs-compact"
         disabled={!allowEndAll || !canEndAll}
         hidden={checking}
         onClick={(event) => onEndAll(group, event.currentTarget)}
@@ -104,7 +104,7 @@ export const ResourcePtyGroupRow = memo(function ResourcePtyGroupRow({
           group: name
         })}
         className={cn(
-          'hidden h-[22px] px-1.5 text-2xs hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/15',
+          'hidden',
           !checking && 'group-has-[:focus-visible]/line:inline-flex group-hover/line:inline-flex'
         )}
       >

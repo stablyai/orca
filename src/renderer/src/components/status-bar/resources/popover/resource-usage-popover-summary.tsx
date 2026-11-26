@@ -48,9 +48,8 @@ export function renderResourceUsagePopoverHeader(
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                variant="ghost"
+                variant="ghost-muted"
                 size="icon-xs"
-                className="text-muted-foreground hover:text-foreground"
                 onClick={onRefresh}
                 aria-label={t('resourceManager.refresh', 'Refresh')}
               >
@@ -67,9 +66,8 @@ export function renderResourceUsagePopoverHeader(
             <TooltipTrigger asChild>
               <DropdownMenuTrigger asChild>
                 <Button
-                  variant="ghost"
+                  variant="ghost-muted"
                   size="icon-xs"
-                  className="text-muted-foreground hover:text-foreground"
                   aria-label={t('resourceManager.moreActions', 'More actions')}
                 >
                   <MoreHorizontal />

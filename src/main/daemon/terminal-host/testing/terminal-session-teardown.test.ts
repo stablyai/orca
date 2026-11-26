@@ -20,7 +20,7 @@ function createPlainShellSession(overrides: Partial<Session> = {}): Session {
     isAlive: true,
     forceKillAndWaitForExit: vi.fn(async () => {}),
     beginTermination: vi.fn(() => true),
-    terminateOwnedTree: vi.fn(() => 'terminated' as const),
+    terminateOwnedTree: vi.fn<Session['terminateOwnedTree']>(() => 'terminated'),
     ...overrides
   } as unknown as Session
 }

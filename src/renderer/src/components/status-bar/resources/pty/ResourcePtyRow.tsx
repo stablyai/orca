@@ -172,9 +172,8 @@ export const ResourcePtyRow = memo(function ResourcePtyRow({
                   <TooltipTrigger asChild>
                     <span className="inline-flex" tabIndex={endUnavailable ? 0 : undefined}>
                       <Button
-                        variant="ghost"
-                        size="xs"
-                        className="h-5 px-1.5 text-2xs hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/15"
+                        variant="ghost-destructive"
+                        size="xs-compact"
                         disabled={!!endUnavailable}
                         aria-label={t('resourceManager.pty.endNamed', 'End {{terminal}}', {
                           terminal: title

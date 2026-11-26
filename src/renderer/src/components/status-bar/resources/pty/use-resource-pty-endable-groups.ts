@@ -3,81 +3,97 @@ import type { ResourcePtyGroup } from './resource-pty-view-model'
 import { canEndResourcePty } from './use-resource-pty-actions'
 import type { ResourcePtyEndingSource } from './resource-pty-action-status'
 
-type Endability = { total: number; remaining: number; onChange?: () => void }
+type Endability = { total: number; remaining: number }
 
-function indexGroupEndability(groups: readonly ResourcePtyGroup[]) {
-  const byKey = new Map<string, Endability>()
-  const byRow = new Map<string, Endability>()
-  for (const group of groups) {
-    const counts = { total: 0, remaining: 0 }
-    for (const row of group.rows) {
-      if (canEndResourcePty(row)) {
-        byRow.set(row.identity, counts)
-        counts.total += 1
+class ResourcePtyEndabilityStore {
+  private readonly byKey = new Map<string, Endability>()
+  private readonly byRow = new Map<string, Endability>()
+  private readonly listenersByKey = new Map<string, Set<() => void>>()
+
+  constructor(groups: readonly ResourcePtyGroup[]) {
+    for (const group of groups) {
+      const counts = { total: 0, remaining: 0 }
+      for (const row of group.rows) {
+        if (canEndResourcePty(row)) {
+          this.byRow.set(row.identity, counts)
+          counts.total += 1
+        }
+      }
+      counts.remaining = counts.total
+      this.byKey.set(group.key, counts)
+    }
+  }
+
+  rebase(ending: ResourcePtyEndingSource): void {
+    for (const counts of this.byKey.values()) {
+      counts.remaining = counts.total
+    }
+    for (const identity of ending.getKeys()) {
+      const counts = this.byRow.get(identity)
+      if (counts) {
+        counts.remaining -= 1
       }
     }
-    counts.remaining = counts.total
-    byKey.set(group.key, counts)
   }
-  return { byKey, byRow }
+
+  subscribe(key: string, listener: () => void): () => void {
+    let listeners = this.listenersByKey.get(key)
+    if (!listeners) {
+      listeners = new Set()
+      this.listenersByKey.set(key, listeners)
+    }
+    listeners.add(listener)
+    return () => listeners?.delete(listener)
+  }
+
+  canEnd(key: string): boolean {
+    return (this.byKey.get(key)?.remaining ?? 0) > 0
+  }
+
+  connect(ending: ResourcePtyEndingSource): () => void {
+    this.rebase(ending)
+    return ending.subscribe((identities, started) => {
+      const changed = new Set<string>()
+      for (const identity of identities) {
+        const counts = this.byRow.get(identity)
+        if (!counts) {
+          continue
+        }
+        const wasAvailable = counts.remaining > 0
+        counts.remaining += started ? -1 : 1
+        if (wasAvailable !== counts.remaining > 0) {
+          for (const [key, value] of this.byKey) {
+            if (value === counts) {
+              changed.add(key)
+              break
+            }
+          }
+        }
+      }
+      for (const key of changed) {
+        this.listenersByKey.get(key)?.forEach((listener) => listener())
+      }
+    })
+  }
 }
 
 export function useResourcePtyEndableGroups(
   groups: readonly ResourcePtyGroup[],
   ending: ResourcePtyEndingSource
 ) {
-  const index = useMemo(() => indexGroupEndability(groups), [groups])
-  useLayoutEffect(() => {
-    if (groups.length === 0) {
-      return
-    }
-    // Rebase the index on the queue before paint, including terminations started while it was hidden.
-    for (const counts of index.byKey.values()) {
-      counts.remaining = counts.total
-    }
-    for (const identity of ending.getKeys()) {
-      const counts = index.byRow.get(identity)
-      if (counts) {
-        counts.remaining -= 1
-      }
-    }
-    for (const counts of index.byKey.values()) {
-      counts.onChange?.()
-    }
-    return ending.subscribe((identities, started) => {
-      for (const identity of identities) {
-        const counts = index.byRow.get(identity)
-        if (counts) {
-          const wasAvailable = counts.remaining > 0
-          counts.remaining += started ? -1 : 1
-          if (wasAvailable !== counts.remaining > 0) {
-            counts.onChange?.()
-          }
-        }
-      }
-    })
-  }, [ending, groups.length, index])
-  return index.byKey
+  const store = useMemo(() => new ResourcePtyEndabilityStore(groups), [groups])
+  useLayoutEffect(() => store.connect(ending), [ending, store])
+  return store
 }
 
 export function useResourcePtyGroupCanEnd(
-  endableGroups: ReadonlyMap<string, Endability>,
+  endableGroups: ResourcePtyEndabilityStore,
   key: string
 ): boolean {
-  const counts = endableGroups.get(key)
   const subscribe = useCallback(
-    (onChange: () => void) => {
-      if (counts) {
-        counts.onChange = onChange
-      }
-      return () => {
-        if (counts?.onChange === onChange) {
-          delete counts.onChange
-        }
-      }
-    },
-    [counts]
+    (listener: () => void) => endableGroups.subscribe(key, listener),
+    [endableGroups, key]
   )
-  const getSnapshot = useCallback(() => !!counts && counts.remaining > 0, [counts])
+  const getSnapshot = useCallback(() => endableGroups.canEnd(key), [endableGroups, key])
   return useSyncExternalStore(subscribe, getSnapshot)
 }

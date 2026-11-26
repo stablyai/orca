@@ -139,7 +139,9 @@ export function ResourcePtyPanel({
   const findRow = useMemo(() => {
     let rowsByKey: Map<string, ResourcePtyRow> | undefined
     return (key: string) => {
-      rowsByKey ??= new Map(rows.map((row) => [row.identity, row]))
+      if (!rowsByKey) {
+        rowsByKey = new Map(rows.map((row) => [row.identity, row]))
+      }
       return rowsByKey.get(key)
     }
   }, [rows])
@@ -292,9 +294,8 @@ export function ResourcePtyPanel({
             )}
           </span>
           <Button
-            variant="link"
-            size="xs"
-            className="h-auto px-0 text-2xs text-foreground underline underline-offset-2"
+            variant="link-underlined"
+            size="inlineText"
             onClick={() => void inventory.refreshSessions()}
           >
             {t('resourceManager.pty.retry', 'Retry')}
