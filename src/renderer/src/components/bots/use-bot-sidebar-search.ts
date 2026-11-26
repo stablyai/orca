@@ -19,6 +19,8 @@ import { revealBotSidebarRow } from './reveal-bot-sidebar-row'
 
 export type BotSidebarSearchState = {
   open: boolean
+  /** Opened by the user, not restored at startup: only then does the field take focus. */
+  focusField: boolean
   toggleOpen: () => void
   buttonRef: React.RefObject<HTMLButtonElement | null>
   /** The search field, its results and the list: focus here leaves with the search. */
@@ -57,6 +59,10 @@ export function useBotSidebarSearch({
   onOpenBot: () => void
 }): BotSidebarSearchState {
   const [open, setOpen] = useState(false)
+  const [restored, setRestored] = useState(false)
+  const [restoreChecked, setRestoreChecked] = useState(false)
+  const [dropSavedQuery, setDropSavedQuery] = useState(false)
+  const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const regionRef = useRef<HTMLDivElement>(null)
   const generation = useRef(0)
@@ -77,8 +83,33 @@ export function useBotSidebarSearch({
     setHadBots(hasBots)
     if (!hasEntries || (hadBots && !hasBots)) {
       setOpen(false)
+      setDropSavedQuery(true)
     }
   }
+  // A search left open at quit comes back once the list can show it, so the filter is never unexplained.
+  useLayoutEffect(() => {
+    if (restoreChecked || !persistedUIReady || !hasEntries) {
+      return
+    }
+    setRestoreChecked(true)
+    // Read once, not subscribed: typing must not rerender the whole section.
+    if (useAppStore.getState().botSidebarSearchQuery.trim() !== '') {
+      setOpen(true)
+      setRestored(true)
+    }
+  }, [restoreChecked, persistedUIReady, hasEntries])
+  // A closed search saves no query; the store can't be written during render, so this waits for the commit.
+  useLayoutEffect(() => {
+    if (dropSavedQuery) {
+      setDropSavedQuery(false)
+      useAppStore.getState().setBotSidebarSearchQuery('')
+    }
+  }, [dropSavedQuery])
+  const close = useCallback((): void => {
+    setOpen(false)
+    setRestored(false)
+    useAppStore.getState().setBotSidebarSearchQuery('')
+  }, [])
   // In the same commit, so no result still opening can act once the search has gone.
   useLayoutEffect(() => {
     if (!hasEntries || !hasBots) {
@@ -96,7 +127,7 @@ export function useBotSidebarSearch({
         if (collapsedGroups.has(BOTS_GROUP_KEY)) {
           toggleCollapsedGroup(BOTS_GROUP_KEY)
         }
-        setOpen(false)
+        close()
       })
       if (!moveFocus) {
         return
@@ -111,7 +142,7 @@ export function useBotSidebarSearch({
         getList: () => listRef.current
       })
     },
-    [listRef]
+    [listRef, close]
   )
 
   const select = useCallback(
@@ -142,16 +173,16 @@ export function useBotSidebarSearch({
 
   const cancel = useCallback((): void => {
     endSession()
-    setOpen(false)
+    close()
     buttonRef.current?.focus()
-  }, [endSession])
+  }, [endSession, close])
 
   const endForFold = (): boolean => {
     endSession()
     if (!open) {
       return false
     }
-    setOpen(false)
+    close()
     // Search opens only from the unfolded header; a fold another writer saved mid-search just stays.
     return savedCollapsed
   }
@@ -160,9 +191,9 @@ export function useBotSidebarSearch({
   const endForReveal = useCallback((): void => {
     if (listRef.current?.closest('[data-bot-sidebar-list-under-results]')) {
       endSession()
-      setOpen(false)
+      close()
     }
-  }, [endSession, listRef])
+  }, [endSession, listRef, close])
 
   // Forget what removed bots last saw, so the auto-unfold memory doesn't grow.
   useEffect(() => {
@@ -181,9 +212,16 @@ export function useBotSidebarSearch({
 
   return {
     open,
+    focusField: !restored,
     toggleOpen: () => {
       endSession()
-      setOpen((value) => !value)
+      if (open) {
+        close()
+      } else {
+        // An open the user asked for always takes focus, whatever closed the last one.
+        setRestored(false)
+        setOpen(true)
+      }
     },
     buttonRef,
     regionRef,
