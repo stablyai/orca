@@ -217,7 +217,6 @@ export function CommitMessageAiPane({
     <SourceControlAiActionRecipeDefaults
       key="action-recipes"
       config={config}
-      defaultTuiAgent={settings.defaultTuiAgent}
       customPromptDiscardSignal={customPromptDiscardSignal}
       onCustomPromptDirtyChange={onCustomPromptDirtyChange}
       searchQuery={searchQuery}

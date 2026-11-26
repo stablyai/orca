@@ -27,6 +27,72 @@
   WriteRegStr SHELL_CONTEXT "Software\Classes\${PROGID}\shell\open\command" "" '"$appExe" "%1"'
 !macroend
 
+; keepShortcuts leaves the first install's .lnk untouched on update. If the shell resolved it while the
+; old uninstaller had moved Orca.exe to $PLUGINSDIR\old-install, link tracking retargeted it there.
+; Rewrite only shortcuts that still exist (a deleted one stays deleted), with the same args and AUMI
+; as electron-builder's addStartMenuLink/addDesktopLink, so pins and taskbar grouping are kept.
+!macro ORCA_REWRITE_SHORTCUT LINK
+  ${if} ${FileExists} "${LINK}"
+    CreateShortCut "${LINK}" "$appExe" "" "$appExe" 0 "" "" "${APP_DESCRIPTION}"
+    ClearErrors
+    WinShell::SetLnkAUMI "${LINK}" "${APP_ID}"
+  ${endIf}
+!macroend
+
+!define ORCA_CLSID_SHELL_LINK "{00021401-0000-0000-C000-000000000046}"
+!define ORCA_IID_SHELL_LINK_W "{000214F9-0000-0000-C000-000000000046}"
+!define ORCA_IID_PERSIST_FILE "{0000010b-0000-0000-C000-000000000046}"
+
+; OUT: the link's stored target path (read without resolving), or "" if it can't be read.
+!macro ORCA_READ_SHORTCUT_TARGET LINK OUT
+  StrCpy ${OUT} ""
+  System::Call 'ole32::CoCreateInstance(g "${ORCA_CLSID_SHELL_LINK}", p 0, i 1, g "${ORCA_IID_SHELL_LINK_W}", *p .R1) i .R0'
+  ${if} $R0 == 0
+    System::Call '$R1->0(g "${ORCA_IID_PERSIST_FILE}", *p .R2) i .R0'
+    ${if} $R0 == 0
+      ; IPersistFile::Load, then IShellLinkW::GetPath.
+      System::Call '$R2->5(w "${LINK}", i 0) i .R0'
+      ${if} $R0 == 0
+        System::Call '$R1->3(w .R3, i ${NSIS_MAX_STRLEN}, p 0, i 0) i .R0'
+        ${if} $R0 == 0
+          StrCpy ${OUT} $R3
+        ${endIf}
+      ${endIf}
+      System::Call '$R2->2()'
+    ${endIf}
+    System::Call '$R1->2()'
+  ${endIf}
+!macroend
+
+; The taskbar pin is shared by every Orca install for this user (per-user and per-machine use the
+; same name). Retarget it only if it starts this install or a moved old-install copy of it.
+!macro ORCA_REWRITE_TASKBAR_PIN
+  Push $R0
+  Push $R1
+  Push $R2
+  Push $R3
+  Push $R4
+  Push $R5
+  StrCpy $R5 "$QUICKLAUNCH\User Pinned\TaskBar\${SHORTCUT_NAME}.lnk"
+  ${if} ${FileExists} $R5
+    !insertmacro ORCA_READ_SHORTCUT_TARGET $R5 $R4
+    StrCpy $R1 "\old-install\${APP_EXECUTABLE_FILENAME}"
+    StrLen $R2 $R1
+    IntOp $R2 0 - $R2
+    StrCpy $R0 $R4 "" $R2
+    ${if} $R4 == $appExe
+    ${orIf} $R0 == $R1
+      !insertmacro ORCA_REWRITE_SHORTCUT $R5
+    ${endIf}
+  ${endIf}
+  Pop $R5
+  Pop $R4
+  Pop $R3
+  Pop $R2
+  Pop $R1
+  Pop $R0
+!macroend
+
 !macro customInstall
   !insertmacro ORCA_REGISTER_DOCUMENT_PROGID "${MARKDOWN_PROGID}" "Markdown Document"
   !insertmacro ORCA_REGISTER_DOCUMENT_PROGID "${TABULAR_PROGID}" "Tabular Document"
@@ -35,6 +101,9 @@
   !insertmacro ORCA_REGISTER_DOCUMENT_OPEN_WITH ".mdx" "${MARKDOWN_PROGID}"
   !insertmacro ORCA_REGISTER_DOCUMENT_OPEN_WITH ".csv" "${TABULAR_PROGID}"
   !insertmacro ORCA_REGISTER_DOCUMENT_OPEN_WITH ".tsv" "${TABULAR_PROGID}"
+  !insertmacro ORCA_REWRITE_SHORTCUT "$newStartMenuLink"
+  !insertmacro ORCA_REWRITE_SHORTCUT "$newDesktopLink"
+  !insertmacro ORCA_REWRITE_TASKBAR_PIN
   ; Why: Explorer caches the association list until told otherwise.
   System::Call "shell32::SHChangeNotify(i,i,i,i) (0x08000000, 0x1000, 0, 0)"
 !macroend

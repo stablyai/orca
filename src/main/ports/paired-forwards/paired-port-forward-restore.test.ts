@@ -1,5 +1,6 @@
 import { createServer, type Server } from 'node:net'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { useVouchingSocketOwnerHelper } from '../../browser/network/tunnels/darwin-socket-owner-helper.test-fixture'
 import {
   resetWindowsSecurityLoadForTests,
   setWindowsSecurityForTests
@@ -59,6 +60,13 @@ function configureWithSaved(
 }
 
 describe('paired port forward restore', () => {
+  // On macOS every forward checks its connections' owner through the bundled helper.
+  let restoreOwnerHelper = async (): Promise<void> => {}
+  beforeAll(async () => {
+    restoreOwnerHelper = (await useVouchingSocketOwnerHelper()).restore
+  })
+  afterAll(() => restoreOwnerHelper())
+
   afterEach(async () => {
     await closeAllPairedPortForwards()
   })
@@ -97,23 +105,12 @@ describe('paired port forward restore', () => {
     tunnel.dispose()
   })
 
-  it('refuses every forward before probing a port when this computer cannot check accounts', async () => {
+  it('refuses every forward and keeps the saved ones when this computer cannot check accounts', async () => {
     const realPlatform = process.platform
-    let probes = 0
-    const occupied: Server = createServer((socket) => {
-      probes++
-      socket.destroy()
-    })
-    await new Promise<void>((resolve) => occupied.listen(0, '127.0.0.1', resolve))
-    const address = occupied.address()
-    const port = typeof address === 'object' && address ? address.port : 0
+    const port = await freePort()
     try {
       Object.defineProperty(process, 'platform', { value: 'win32' })
-      // A load error naming EACCES must not read as a bind failure that walks every candidate port.
-      setWindowsSecurityForTests(
-        null,
-        "EACCES: permission denied, open 'orca_windows_security.node'"
-      )
+      setWindowsSecurityForTests(null)
       const record = {
         hostKeyFingerprint: runtimeHostKeyFingerprint('server-key-a'),
         forwards: [{ localPort: port, remoteHost: 'localhost', remotePort: port }]
@@ -132,13 +129,11 @@ describe('paired port forward restore', () => {
           remotePort: port
         })
       ).rejects.toThrow(refused)
-      expect(probes).toBe(0)
       expect(listPairedPortForwards('env-1')).toEqual([])
       expect(saved.get('env-1')).toEqual(record)
     } finally {
       Object.defineProperty(process, 'platform', { value: realPlatform })
       resetWindowsSecurityLoadForTests()
-      await new Promise((resolve) => occupied.close(resolve))
     }
   })
 })

@@ -11,7 +11,6 @@ export type AvatarGenerationCapability = { agents: AvatarImageAgentStatus[] }
 
 export type AvatarGenerationFailure =
   | 'unavailable'
-  | 'real-person'
   | 'signed-out'
   | 'usage-limit'
   | 'no-image'

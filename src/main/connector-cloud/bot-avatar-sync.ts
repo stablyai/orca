@@ -5,6 +5,7 @@
 // mascot id, unless the cloud already took a drawing: that one stays, since the id shows older art.
 import { createHash } from 'node:crypto'
 import { parseBotAvatar } from '../../shared/bot-avatar'
+import { botSlackIconLegacyLook } from '../../shared/bots/bot-slack-icon'
 import { type BotLookupIndex, createBotLookupIndex } from '../../shared/bots/bot-lookup-index'
 import type { Bot } from '../../shared/bot-types'
 import type { ConnectorBotAvatarRequest } from '../../shared/connector-bot-slack-contract'
@@ -356,7 +357,7 @@ export class BotAvatarSync {
     }
     const read = await this.deps.bots.slackIcons.read(bot.id)
     const icon =
-      read?.look === look
+      read && (read.look === look || read.look === botSlackIconLegacyLook(look))
         ? {
             version: createHash('sha256').update(read.png).digest('hex').slice(0, 16),
             png: read.png.toString('base64')

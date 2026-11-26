@@ -72,11 +72,7 @@ export class ServerRowSnapshots {
   constructor(readonly deltas: boolean) {}
 
   async read(client: RpcClient, hosts: readonly MobileRelayHost[]): Promise<(Worktree[] | null)[]> {
-    let byHost = this.byClient.get(client)
-    if (!byHost) {
-      byHost = new Map()
-      this.byClient.set(client, byHost)
-    }
+    const byHost = this.hostsOf(client)
     const listed = new Set<ExecutionHostId>(hosts.map((host) => host.hostId))
     for (const hostId of byHost.keys()) {
       if (!listed.has(hostId)) {
@@ -84,6 +80,20 @@ export class ServerRowSnapshots {
       }
     }
     return Promise.all(hosts.map((host) => this.readHost(client, byHost, host.hostId)))
+  }
+
+  /** One server's rows, leaving the other servers' snapshots alone. */
+  readOne(client: RpcClient, hostId: ExecutionHostId): Promise<Worktree[] | null> {
+    return this.readHost(client, this.hostsOf(client), hostId)
+  }
+
+  private hostsOf(client: RpcClient): Map<ExecutionHostId, WorktreeCatalogSnapshotClient> {
+    let byHost = this.byClient.get(client)
+    if (!byHost) {
+      byHost = new Map()
+      this.byClient.set(client, byHost)
+    }
+    return byHost
   }
 
   private async readHost(
