@@ -20,10 +20,21 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-/** An external rotation script (`~/.claude/rotate`) is on or has a swap in flight. */
+/** False only when the path is confirmed absent; an unreadable one may be there. */
+async function mayExist(path: string): Promise<boolean> {
+  try {
+    await access(path)
+    return true
+  } catch (error) {
+    const code = error instanceof Error && 'code' in error ? error.code : null
+    return code !== 'ENOENT' && code !== 'ENOTDIR'
+  }
+}
+
+/** An external rotation script (`~/.claude/rotate`) is on, has a swap in flight, or cannot be ruled out. */
 export async function externalRotatorActive(userHome: string): Promise<boolean> {
   const dir = join(userHome, '.claude', 'rotate')
-  return (await exists(join(dir, 'enabled'))) || (await exists(join(dir, 'journal.json')))
+  return (await mayExist(join(dir, 'enabled'))) || (await mayExist(join(dir, 'journal.json')))
 }
 
 /** The `.claude.json` Claude Code reads for a folder; a legacy `.config.json` wins. */

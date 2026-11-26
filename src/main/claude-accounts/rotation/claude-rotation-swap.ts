@@ -32,7 +32,8 @@ export type RotationSwapDeps = {
   /** Orca's records of the two folders' accounts, which follow the logins. */
   records?: {
     fingerprint: (accountId: string) => string | null
-    exchange: (a: string, b: string) => void
+    /** Resolves once the exchange is on disk; false when it could not be saved. */
+    exchange: (a: string, b: string) => Promise<boolean>
   }
 }
 
@@ -81,22 +82,28 @@ function backupOf(slot: ClaudeKeychainSlot, oauthAccount: unknown): ClaudeKeycha
 }
 
 /** Exchanges Orca's records only from the arrangement opposite to `want`, so repeats are harmless. */
-function placeRecords(
+async function placeRecords(
   journal: RotationJournal,
   want: 'swapped' | 'original',
   deps: RotationSwapDeps
-): void {
+): Promise<boolean> {
   const saved = journal.records
   if (!deps.records || !saved) {
-    return
+    return true
   }
   const a = deps.records.fingerprint(journal.a)
   const b = deps.records.fingerprint(journal.b)
   const original = a === saved.a && b === saved.b
   const swapped = a === saved.b && b === saved.a
   if (want === 'swapped' ? original && !swapped : swapped && !original) {
-    deps.records.exchange(journal.a, journal.b)
+    return deps.records.exchange(journal.a, journal.b)
   }
+  return true
+}
+
+/** The account details and records are in place, so the journal is no longer needed for them. */
+export function metaPlaced(meta: string | undefined): meta is string {
+  return meta === 'ok' || meta === 'skipped_no_file'
 }
 
 /** Gives each folder the account details of the login it holds: swapped, or back as they were. */
@@ -123,10 +130,10 @@ export async function placeLoginMeta(
     swapped ? backupB.oauthAccount : backupA.oauthAccount,
     swapped ? backupA.oauthAccount : backupB.oauthAccount
   )
-  if (meta === 'ok') {
-    placeRecords(journal, want, deps)
+  if (!metaPlaced(meta)) {
+    return meta
   }
-  return meta
+  return (await placeRecords(journal, want, deps)) ? meta : 'records_unsaved'
 }
 
 /** Gives `a` the login of `b` and `b` the login of `a`; only `claudeAiOauth` moves. */

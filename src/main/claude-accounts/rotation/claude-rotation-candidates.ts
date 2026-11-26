@@ -177,10 +177,12 @@ export async function rotationCandidates(args: {
       continue
     }
     let usage: RotationUsage | null = null
+    let fetched = false
     if (live) {
       const read = await deps.fetchUsage(token)
       if (read.status === 'ok') {
         usage = read.usage
+        fetched = true
         recordUsage(state, account, usage, deps.now())
       }
     }
@@ -197,7 +199,7 @@ export async function rotationCandidates(args: {
       accountId: folder.accountId,
       claudeAccount: account,
       known: usage !== null,
-      live: live && usage !== null,
+      live: fetched,
       usage
     })
   }

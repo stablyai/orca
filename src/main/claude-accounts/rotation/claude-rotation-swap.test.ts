@@ -1,10 +1,19 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  utimesSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { ClaudeAccountRotationSettings } from '../../../shared/agent-accounts/claude/claude-account-rotation'
 import type { RotationCheckDeps } from './claude-rotation-candidates'
 import { checkRotationFolder } from './claude-rotation-check'
+import { externalRotatorActive } from './claude-rotation-folders'
 import type { ClaudeKeychainSlot, RotationSlotStore } from './claude-rotation-keychain'
 import type { RotationFolder } from './claude-rotation-login-meta'
 import type { RotationUsage } from './claude-rotation-policy'
@@ -176,6 +185,24 @@ it('finishes or cancels a swap cut off mid-write without losing either login', a
   expect(raced.keychain.slots.get('svc-a')).toEqual(slotOf('a'))
   expect(raced.keychain.slots.get('svc-b')).toEqual(refreshedB)
   expect([...raced.keychain.slots.keys()].sort()).toEqual(['svc-a', 'svc-b'])
+
+  // Both writes landed but the journal still says a_written, and b has since refreshed the login
+  // of a it was given: the server names it as a's, so the swap counts as finished, not cancelled.
+  const late = setup(['a', 'b'])
+  await swapFolderLogins(folder(late.folders, 'a'), folder(late.folders, 'b'), request, late.deps)
+  const journal = await late.files.loadJournal()
+  if (!journal) {
+    throw new Error('missing journal')
+  }
+  await late.files.saveJournal({ ...journal, step: 'a_written', meta: undefined })
+  const refreshedA = {
+    ...slotOf('b'),
+    claudeAiOauth: { ...login('a'), refreshToken: 'refresh-a2' }
+  }
+  late.keychain.slots.set('svc-b', refreshedA)
+  expect(await recoverInterruptedSwap(late.deps)).toBe('already_finished')
+  expect(late.keychain.slots.get('svc-a')?.claudeAiOauth).toEqual(login('b'))
+  expect(late.keychain.slots.get('svc-b')).toEqual(refreshedA)
 })
 
 it('puts the old login of b back when the outgoing session writes its login back', async () => {
@@ -190,6 +217,73 @@ it('puts the old login of b back when the outgoing session writes its login back
   expect(JSON.parse(readFileSync(a.stateFile, 'utf8')).oauthAccount.emailAddress).toBe(
     'a@example.test'
   )
+})
+
+it('keeps the journal until a rollback has also put the account details back', async () => {
+  const { folders, keychain, deps, files } = setup(['a', 'b'])
+  let saves = 0
+  let swappedRecords = false
+  deps.records = {
+    fingerprint: (id) => (swappedRecords ? (id === 'a' ? 'rb' : 'ra') : `r${id}`),
+    exchange: async () => {
+      saves += 1
+      // The save after the rollback fails once, as on a full disk.
+      if (saves === 2) {
+        return false
+      }
+      swappedRecords = !swappedRecords
+      return true
+    }
+  }
+  const a = folder(folders, 'a')
+  expect((await swapFolderLogins(a, folder(folders, 'b'), request, deps)).ok).toBe(true)
+  keychain.slots.set('svc-a', slotOf('a'))
+  expect((await verifySwap(deps, true))?.outcome).toBe('waiting')
+  expect(keychain.slots.get('svc-b')).toEqual(slotOf('b'))
+  expect((await files.loadJournal())?.reverted).toBe(true)
+  // b refreshes its restored login before the retry; the rollback is not mistaken for a conflict.
+  const refreshedB = { ...slotOf('b'), claudeAiOauth: { ...login('b'), refreshToken: 'r-b2' } }
+  keychain.slots.set('svc-b', refreshedB)
+  expect((await verifySwap(deps, true))?.outcome).toBe('reverted')
+  expect(keychain.slots.get('svc-b')).toEqual(refreshedB)
+  expect(swappedRecords).toBe(false)
+  expect(await files.loadJournal()).toBeNull()
+})
+
+it('does not clear the backups when a writes its old login back during the account lookup', async () => {
+  const { folders, keychain, deps, files } = setup(['a', 'b'])
+  expect(
+    (await swapFolderLogins(folder(folders, 'a'), folder(folders, 'b'), request, deps)).ok
+  ).toBe(true)
+  const whoami = deps.whoami
+  deps.whoami = async (token) => {
+    keychain.slots.set('svc-a', slotOf('a'))
+    return whoami(token)
+  }
+  expect((await verifySwap(deps, true))?.outcome).toBe('waiting')
+  expect(await files.loadJournal()).not.toBeNull()
+  expect((await verifySwap(deps, true))?.outcome).toBe('reverted')
+  expect(keychain.slots.get('svc-b')).toEqual(slotOf('b'))
+})
+
+it('treats files it cannot read as present, not absent', async () => {
+  const { folders, keychain, deps } = setup(['a', 'b'])
+  const a = folder(folders, 'a')
+  chmodSync(a.stateFile, 0)
+  const result = await swapFolderLogins(a, folder(folders, 'b'), request, deps)
+  chmodSync(a.stateFile, 0o600)
+  expect(result).toEqual({ ok: false, detail: 'meta_unreadable' })
+  expect(keychain.slots.get('svc-a')).toEqual(slotOf('a'))
+
+  const home = mkdtempSync(join(tmpdir(), 'orca-claude-rotation-home-'))
+  roots.push(home)
+  const rotate = join(home, '.claude', 'rotate')
+  mkdirSync(rotate, { recursive: true })
+  expect(await externalRotatorActive(home)).toBe(false)
+  chmodSync(rotate, 0)
+  const unreadable = await externalRotatorActive(home)
+  chmodSync(rotate, 0o700)
+  expect(unreadable).toBe(true)
 })
 
 it('blocks a new swap while an unreadable journal is on disk', async () => {
@@ -209,10 +303,11 @@ it('sets account details and records once, however often the step repeats', asyn
   ])
   deps.records = {
     fingerprint: (id) => records.get(id) ?? null,
-    exchange: (x, y) => {
+    exchange: async (x, y) => {
       const first = records.get(x) ?? ''
       records.set(x, records.get(y) ?? '')
       records.set(y, first)
+      return true
     }
   }
   const a = folder(folders, 'a')

@@ -44,8 +44,12 @@ export async function oauthAccountForBackup(folder: RotationFolder): Promise<unk
   let text: string
   try {
     text = await readFile(folder.stateFile, 'utf8')
-  } catch {
-    return undefined
+  } catch (error) {
+    // Any other read error could hide an `oauthAccount` the backup must keep.
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      return undefined
+    }
+    throw error
   }
   const value: unknown = JSON.parse(text)
   if (!isRecord(value)) {

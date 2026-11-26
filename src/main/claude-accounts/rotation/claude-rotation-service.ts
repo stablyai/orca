@@ -36,7 +36,7 @@ import { verifySwap, type RotationVerifyOutcome } from './claude-rotation-verify
 import { rotationNotice, type RotationNotice } from './claude-rotation-notices'
 
 export type ClaudeAccountRotationServiceOptions = {
-  store: Pick<Store, 'getSettings' | 'updateSettings' | 'onSettingsChanged'>
+  store: Pick<Store, 'getSettings' | 'updateSettingsAndFlush' | 'onSettingsChanged'>
   router: RotationRouter
   rateLimits?: Pick<RateLimitService, 'evictInactiveClaudeCache' | 'refreshForClaudeAccountChange'>
   dataRoot: string

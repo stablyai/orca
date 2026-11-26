@@ -172,12 +172,14 @@ export async function checkRotationFolder(args: {
       aRefresh: tokenHash(oauth.refreshToken),
       bRefresh: sourceRefresh,
       beforeWrite: async () => {
-        if (args.stillAllowed && !(await args.stillAllowed())) {
-          return 'turned_off'
-        }
         // Usage reads take seconds; a session may have started in the chosen folder meanwhile.
         const fresh = await deps.readSessions()
-        return fresh === null || (fresh.get(source.home) ?? 0) > 0 ? 'candidate_busy' : null
+        if (fresh === null || (fresh.get(source.home) ?? 0) > 0) {
+          return 'candidate_busy'
+        }
+        // Last, so a change during the session read still stops the swap. The external tool takes
+        // the same refresh locks before it writes, so it cannot write these slots while they are held.
+        return args.stillAllowed && !(await args.stillAllowed()) ? 'turned_off' : null
       }
     }
   )

@@ -1,4 +1,6 @@
-import { mkdir, realpath, rmdir, stat, utimes } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import type { Stats } from 'node:fs'
+import { lstat, mkdir, realpath, rename, rmdir, stat, utimes } from 'node:fs/promises'
 import { join } from 'node:path'
 
 async function realpathOrSelf(path: string): Promise<string> {
@@ -27,14 +29,40 @@ const defaultSleep = (ms: number): Promise<void> =>
  */
 export const ABANDONED_LOCK_MS = 5 * 60_000
 
-/** Removes a lock left by a holder that quit. rmdir leaves a lock that holds files alone. */
+/**
+ * Removes a lock left by a holder that quit. rmdir on the path could remove a fresh lock taken
+ * since the check, so the lock is moved aside first and removed only if it is the one checked.
+ * A lock that changed, or holds files, goes back unless the path was taken again meanwhile.
+ */
 async function clearAbandoned(path: string, now: number): Promise<void> {
+  let seen: Stats
   try {
-    if (now - (await stat(path)).mtimeMs >= ABANDONED_LOCK_MS) {
-      await rmdir(path)
+    seen = await stat(path)
+  } catch {
+    return
+  }
+  if (now - seen.mtimeMs < ABANDONED_LOCK_MS) {
+    return
+  }
+  const aside = `${path}.abandoned-${randomUUID()}`
+  try {
+    await rename(path, aside)
+  } catch {
+    return
+  }
+  try {
+    const moved = await stat(aside)
+    if (moved.ino === seen.ino && moved.mtimeMs === seen.mtimeMs) {
+      await rmdir(aside)
+      return
     }
   } catch {
-    // Gone already, or not a lock this can remove.
+    // Not empty, so not a plain lock: put it back below.
+  }
+  try {
+    await lstat(path)
+  } catch {
+    await rename(aside, path).catch(() => {})
   }
 }
 

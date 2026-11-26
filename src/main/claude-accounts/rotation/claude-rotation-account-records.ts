@@ -85,14 +85,21 @@ export function swappedAccountRecords(
 
 /** Orca's account records as a swap sees them; they follow the logins between folders. */
 export function rotationAccountRecords(
-  store: Pick<Store, 'getSettings' | 'updateSettings'>
+  store: Pick<Store, 'getSettings' | 'updateSettingsAndFlush'>
 ): NonNullable<RotationSwapDeps['records']> {
   return {
     fingerprint: (id) => accountRecordFingerprint(store.getSettings(), id),
-    exchange: (a, b) => {
+    // Waits for the write: a journal marked done must not outlive records that never reached disk.
+    exchange: async (a, b) => {
       const patch = swappedAccountRecords(store.getSettings(), a, b)
-      if (patch) {
-        store.updateSettings(patch, { notifyListeners: true })
+      if (!patch) {
+        return true
+      }
+      try {
+        await store.updateSettingsAndFlush(patch, { notifyListeners: true })
+        return true
+      } catch {
+        return false
       }
     }
   }
