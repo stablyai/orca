@@ -287,11 +287,12 @@ export function MobileBotSettingsTab(props: {
             return null
           }
         }}
-        onSwitch={async (agent, consent) => {
+        onSwitch={async (agent, { consent, saveExplicitAsk }) => {
           const saved = await save({
             agent,
             launch: null,
-            ...(consent ? { agentSwitchConsent: consent } : {})
+            ...(consent ? { agentSwitchConsent: consent } : {}),
+            ...(saveExplicitAsk ? { agentSwitchSaveExplicitAsk: true } : {})
           })
           if (saved && props.client && !inPlaceSwitch) {
             const refusal = await ensureBotHomeChat(props.client, bot.id)

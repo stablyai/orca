@@ -1,5 +1,8 @@
 import { useState, type ReactNode } from 'react'
-import { botSwitchPermissionCopy } from '../../../src/shared/agent-session/options/permissions/provider-switch-permission-copy'
+import {
+  botSwitchExplicitAskCopy,
+  botSwitchPermissionCopy
+} from '../../../src/shared/agent-session/options/permissions/provider-switch-permission-copy'
 import { RotateCcw } from 'lucide-react-native'
 import { isBotAgent, type BotAgent } from '../../../src/shared/bot-types'
 import {
@@ -36,7 +39,7 @@ export function MobileBotAgentPage(props: {
   banner: ReactNode
   onBack: { label: string; onPress: () => void }
   /** Saves the new agent; its old launch belongs to the old agent, so it goes too. */
-  onSwitch: (agent: BotAgent, consent: BotAgentSwitchPreviewResult['consent']) => Promise<void>
+  onSwitch: (agent: BotAgent, preview: BotAgentSwitchPreviewResult) => Promise<void>
   previewSwitch: (agent: BotAgent) => Promise<BotAgentSwitchPreviewResult | null>
   /** Saves its model and options; null goes back to the chat defaults. */
   onLaunch: (launch: BotLaunch | null) => void
@@ -158,7 +161,8 @@ export function MobileBotAgentPage(props: {
                 'Slack threads already running stay on {{agent}} until they finish',
                 { agent: botAgentLabel(bot.agent) }
               ),
-          ...(switching.consent ? ['', ...botSwitchPermissionCopy(switching.consent, t)] : [])
+          ...(switching.consent ? ['', ...botSwitchPermissionCopy(switching.consent, t)] : []),
+          ...(switching.saveExplicitAsk ? ['', botSwitchExplicitAskCopy(t)] : [])
         ].join('\n')}
         confirmLabel={
           switching.consent
@@ -168,7 +172,7 @@ export function MobileBotAgentPage(props: {
         onCancel={() => setSwitching(null)}
         onConfirm={() => {
           setSwitching(null)
-          void props.onSwitch(switching.agent, switching.consent)
+          void props.onSwitch(switching.agent, switching)
         }}
       />
     )

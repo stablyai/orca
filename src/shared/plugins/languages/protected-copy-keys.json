@@ -693,6 +693,7 @@
     "bots.access.titleOne",
     "bots.agentSwitch.currentDefaultPermission",
     "bots.agentSwitch.currentHomePermission",
+    "bots.agentSwitch.saveExplicitAsk",
     "bots.apps.add",
     "bots.apps.addAppsTitle",
     "bots.apps.line.google",

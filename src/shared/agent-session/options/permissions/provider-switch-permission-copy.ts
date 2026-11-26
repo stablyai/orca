@@ -85,3 +85,10 @@ export function botSwitchPermissionCopy(
     ...targetPermissionCopy(agent, t)
   ]
 }
+
+export function botSwitchExplicitAskCopy(t: CopyTranslate): string {
+  return t(
+    'bots.agentSwitch.saveExplicitAsk',
+    'This bot will use Ask for approval instead of Same as chats. Giving chats more or less access later won’t change this bot’s setting. Switching back won’t restore Same as chats. You can turn it back on in Bot Settings.'
+  )
+}

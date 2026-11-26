@@ -59,23 +59,24 @@ export function BotAgentSettings({ bot, update }: { bot: Bot; update: Update }):
     try {
       if (!inPlace) {
         if (
-          (await confirmAgentSwitch(bot, agent, null, false)) &&
+          (await confirmAgentSwitch(bot, agent)) &&
           (await update({ agent, launch: launch ?? null }))
         ) {
           await openBotChat(bot)
         }
         return
       }
-      const { consent } = await callBotRpc<BotAgentSwitchPreviewResult>(
+      const preview = await callBotRpc<BotAgentSwitchPreviewResult>(
         bot,
         'bots.agentSwitchPreview',
         { botId: bot.id, agent }
       )
-      if (await confirmAgentSwitch(bot, agent, consent)) {
+      if (await confirmAgentSwitch(bot, agent, preview)) {
         await update({
           agent,
           launch: launch ?? null,
-          ...(consent ? { agentSwitchConsent: consent } : {})
+          ...(preview.consent ? { agentSwitchConsent: preview.consent } : {}),
+          ...(preview.saveExplicitAsk ? { agentSwitchSaveExplicitAsk: true } : {})
         })
       }
     } catch (error) {

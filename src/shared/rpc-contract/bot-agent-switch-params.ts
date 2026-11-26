@@ -22,6 +22,7 @@ export const BotAgentSwitchConsent = z.strictObject({
 })
 
 export const BotAgentSwitchPreviewResultSchema = z.strictObject({
-  consent: BotAgentSwitchConsent.nullable()
+  consent: BotAgentSwitchConsent.nullable(),
+  saveExplicitAsk: z.literal(true).optional()
 })
 export type BotAgentSwitchPreviewResult = z.infer<typeof BotAgentSwitchPreviewResultSchema>

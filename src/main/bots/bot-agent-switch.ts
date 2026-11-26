@@ -11,6 +11,26 @@ import type { BotAgentSwitchPreviewResult } from '../../shared/rpc-contract/bot-
 import { providerSwitchSourcePermission } from '../native-chat/agent-session-wire/delivery/structured-agent-session-provider-selection'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
+import { InvalidArgumentError } from '../runtime/rpc/core'
+
+function inheritedBotPermissionWouldBroaden(
+  bot: Bot,
+  agent: BotAgent,
+  settings: Parameters<typeof newChatPermissionModeForSettings>[1]
+): boolean {
+  if (bot.agent === agent || bot.permissionMode !== undefined) {
+    return false
+  }
+  const inherited = newChatPermissionModeForSettings(agent, settings)
+  const source =
+    bot.agent === 'pi' ? 'full-access' : newChatPermissionModeForSettings(bot.agent, settings)
+  const previous = providerSwitchPermission(source, agent)
+  return (
+    isAgentChatPermissionMode(inherited) &&
+    AGENT_CHAT_PERMISSION_MODES.indexOf(inherited) >
+      AGENT_CHAT_PERMISSION_MODES.indexOf(previous.permission)
+  )
+}
 
 export function previewBotAgentSwitch(
   runtime: OrcaRuntimeService,
@@ -18,9 +38,8 @@ export function previewBotAgentSwitch(
   bot: Bot,
   agent: BotAgent
 ): BotAgentSwitchPreviewResult {
-  const choice =
-    bot.permissionMode ??
-    newChatPermissionModeForSettings(bot.agent, runtime.requireStore().getSettings())
+  const settings = runtime.requireStore().getSettings()
+  const choice = bot.permissionMode ?? newChatPermissionModeForSettings(bot.agent, settings)
   const defaultPermission = isAgentChatPermissionChoice(choice) ? choice : 'ask'
   const record = bot.chatSessionId ? host.deps.store.getConversation(bot.chatSessionId) : null
   const home = record
@@ -36,7 +55,8 @@ export function previewBotAgentSwitch(
     bot.agent !== agent && providerSwitchPermission(defaultPermission, agent).requiresConsent
   return {
     consent:
-      broadensHome || broadensDefault ? { agent, from: bot.agent, defaultPermission, home } : null
+      broadensHome || broadensDefault ? { agent, from: bot.agent, defaultPermission, home } : null,
+    ...(inheritedBotPermissionWouldBroaden(bot, agent, settings) ? { saveExplicitAsk: true } : {})
   }
 }
 
@@ -45,7 +65,13 @@ export async function changeBotAgentInPlace(
   host: StructuredAgentSessionHost,
   bot: Bot,
   next: Bot,
-  consent: NonNullable<BotAgentSwitchPreviewResult['consent']> | undefined,
+  {
+    consent,
+    saveExplicitAsk
+  }: {
+    consent?: NonNullable<BotAgentSwitchPreviewResult['consent']>
+    saveExplicitAsk?: true
+  },
   save: () => Promise<void>
 ): Promise<void> {
   const expected = previewBotAgentSwitch(runtime, host, bot, next.agent).consent
@@ -61,12 +87,29 @@ export async function changeBotAgentInPlace(
     throw new Error('Confirm that the new agent may use tools without Orca approval.')
   }
   const settings = runtime.requireStore().getSettings()
+  const inherits = next.permissionMode === undefined
+  const approveFixedAsk = (settingsAtSave: typeof settings) => {
+    const expected = inherits && inheritedBotPermissionWouldBroaden(bot, next.agent, settingsAtSave)
+    if (expected !== (saveExplicitAsk === true)) {
+      throw new InvalidArgumentError(
+        'Review the bot’s permission setting and confirm the agent switch again.'
+      )
+    }
+  }
+  approveFixedAsk(settings)
+  const saveDefault = () => {
+    approveFixedAsk(runtime.requireStore().getSettings())
+    return save()
+  }
   const previousPermission =
     bot.permissionMode ?? newChatPermissionModeForSettings(bot.agent, settings)
   const nextPermission =
     next.permissionMode ?? newChatPermissionModeForSettings(next.agent, settings)
   const maximum = providerSwitchPermission(previousPermission, next.agent)
-  if (
+  if (saveExplicitAsk) {
+    next.permissionMode = 'ask'
+  } else if (
+    (!inherits || bot.permissionMode !== undefined) &&
     isAgentChatPermissionMode(nextPermission) &&
     AGENT_CHAT_PERMISSION_MODES.indexOf(nextPermission) >
       AGENT_CHAT_PERMISSION_MODES.indexOf(maximum.permission)
@@ -75,7 +118,7 @@ export async function changeBotAgentInPlace(
   }
   const sessionId = bot.chatSessionId
   if (!sessionId || !host.deps.store.getConversation(sessionId)) {
-    await save()
+    await saveDefault()
     return
   }
   const home = expected?.home
@@ -90,7 +133,7 @@ export async function changeBotAgentInPlace(
           }
         : {})
     },
-    { botId: bot.id, save }
+    { botId: bot.id, save: saveDefault }
   )
   if (result.status === 'consent-required') {
     throw new Error('Home Chat permissions changed. Review the agent switch again.')

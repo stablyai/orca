@@ -7054,6 +7054,7 @@
       "installRequired": "Install this agent on the bot’s computer first.",
       "currentHomePermission": "Home Chat currently uses {{mode}}.",
       "currentDefaultPermission": "New chats currently use {{mode}}.",
+      "saveExplicitAsk": "This bot will use Ask for approval instead of Same as chats. Giving chats more or less access later won’t change this bot’s setting. Switching back won’t restore Same as chats. You can turn it back on in Bot Settings.",
       "threads": "Slack threads already running stay on {{agent}} until they finish"
     },
     "tools": {

@@ -1,4 +1,7 @@
-import { botSwitchPermissionCopy } from '../../../../shared/agent-session/options/permissions/provider-switch-permission-copy'
+import {
+  botSwitchExplicitAskCopy,
+  botSwitchPermissionCopy
+} from '../../../../shared/agent-session/options/permissions/provider-switch-permission-copy'
 import type { BotAgentSwitchPreviewResult } from '../../../../shared/rpc-contract/bot-agent-switch-params'
 import { useCallback } from 'react'
 import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
@@ -47,19 +50,19 @@ export function useConfirmNewHomeChat(): (bot: Pick<Bot, 'name'>) => Promise<boo
 export function useConfirmBotAgentSwitch(): (
   bot: Pick<Bot, 'name' | 'agent'>,
   next: BotAgent,
-  consent?: BotAgentSwitchPreviewResult['consent'],
-  inPlace?: boolean
+  preview?: BotAgentSwitchPreviewResult
 ) => Promise<boolean> {
   const confirm = useConfirmationDialog()
   return useCallback(
-    (bot, next, consent, inPlace = true) => {
+    (bot, next, preview) => {
+      const consent = preview?.consent
       const agent = botAgentLabel(next)
       return confirm({
         title: translate('bots.agentSwitch.title', 'Switch {{name}} to {{agent}}?', {
           name: bot.name,
           agent
         }),
-        description: inPlace
+        description: preview
           ? translate(
               'bots.agentSwitch.continueDescription',
               'Home Chat and new chats use {{agent}}. Your other chats keep their agent. Change any of them from its own picker.',
@@ -70,7 +73,7 @@ export function useConfirmBotAgentSwitch(): (
               "{{name}}'s Home Chat starts fresh on {{agent}}. The current conversation stays in history.",
               { name: bot.name, agent }
             ),
-        details: inPlace ? (
+        details: preview ? (
           <ul className="list-disc space-y-1 pl-5 text-sm">
             <li>
               {translate(
@@ -96,6 +99,7 @@ export function useConfirmBotAgentSwitch(): (
               {translate('bots.agentSwitch.kept', 'Kept: soul, memory, automations, connectors')}
             </li>
             {consent ? <li>{botSwitchPermissionCopy(consent, translate).join(' ')}</li> : null}
+            {preview.saveExplicitAsk ? <li>{botSwitchExplicitAskCopy(translate)}</li> : null}
           </ul>
         ) : (
           <ul className="list-disc space-y-1 pl-5 text-sm">

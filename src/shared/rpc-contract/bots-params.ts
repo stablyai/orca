@@ -131,6 +131,7 @@ export const BotUpdate = z.object({
       name: BotNameSchema.optional(),
       agent: z.enum(BOT_AGENTS).optional(),
       agentSwitchConsent: BotAgentSwitchConsent.optional(),
+      agentSwitchSaveExplicitAsk: z.literal(true).optional(),
       avatar: SettableBotAvatar.optional(),
       /** The mascot revision visible when its color or outfit was picked. */
       lookAtEpoch: z.uuid().optional(),
@@ -310,6 +311,7 @@ export type BotChatResetParams = z.infer<typeof BotChatReset>
 export function applyBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
   const {
     agentSwitchConsent: _agentSwitchConsent,
+    agentSwitchSaveExplicitAsk: _agentSwitchSaveExplicitAsk,
     permissionMode,
     launch,
     removeMember,

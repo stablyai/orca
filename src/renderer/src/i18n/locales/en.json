@@ -28167,7 +28167,8 @@
       "newChats": "New Slack threads, automation runs and chats you open later start on {{agent}}",
       "allowAction": "Allow access and switch",
       "currentHomePermission": "Home Chat currently uses {{mode}}.",
-      "currentDefaultPermission": "New chats currently use {{mode}}."
+      "currentDefaultPermission": "New chats currently use {{mode}}.",
+      "saveExplicitAsk": "This bot will use Ask for approval instead of Same as chats. Giving chats more or less access later won’t change this bot’s setting. Switching back won’t restore Same as chats. You can turn it back on in Bot Settings."
     },
     "avatar": {
       "intake": {
