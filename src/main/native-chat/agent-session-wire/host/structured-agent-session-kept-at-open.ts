@@ -8,7 +8,6 @@ import {
   providerRelayListingSettled,
   providerRelayMayKeepChat
 } from '../../../provider-relay/app-provider-relays'
-import { providerOwnerHeldElsewhere } from '../../../provider-relay/provider-relay-owner-ancestry'
 import { probeAgentSessionProcessIdentity } from '../../../runtime/agent-session/ownership/agent-session-process-identity-probe'
 import { readEchoedAgentSessionSpawnToken } from '../../../runtime/agent-session/ownership/agent-session-spawn-token-readback'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
@@ -66,8 +65,8 @@ export async function structuredAgentSessionKeptAtOpen(
 
 /**
  * Once the late listing answers, a chat opened as kept whose agent wasn't kept settles as gone. While
- * no listing hears every daemon, process proof settles it (a gone owner, or one no terminal host
- * holds); otherwise it waits for whichever later listing does.
+ * no listing hears every daemon, only its owner proven gone settles it; otherwise it waits for
+ * whichever later listing does.
  */
 export function reconcileStructuredAgentSessionKeptAtOpen(
   sessionId: string,
@@ -94,11 +93,7 @@ async function reconcile(
   }
   if (!(await providerRelayListingSettled())) {
     const ownerNow = owner()
-    const proven =
-      ownerNow !== null &&
-      ((await ownerProvenGone(ownerNow)) ||
-        (await providerOwnerHeldElsewhere(ownerNow.pid).catch(() => null)) === false)
-    if (!proven) {
+    if (ownerNow === null || !(await ownerProvenGone(ownerNow))) {
       await providerRelayInventoryCompleted()
     }
   }
