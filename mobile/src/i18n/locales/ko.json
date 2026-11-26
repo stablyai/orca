@@ -116,7 +116,8 @@
       "scanCodeStep": "QR 코드를 스캔하세요",
       "title": "데스크톱과 페어링",
       "tryAgain": "다시 시도",
-      "codeNoLongerValid": "이 페어링 코드는 만료되었거나 이미 사용되었거나 교체되었습니다. 데스크톱에서 새 코드를 표시한 후 다시 스캔하세요."
+      "codeNoLongerValid": "이 페어링 코드는 만료되었거나 이미 사용되었거나 교체되었습니다. 데스크톱에서 새 코드를 표시한 후 다시 스캔하세요.",
+      "runtimeAccessLink": "이 링크는 다른 Orca 앱용입니다. 컴퓨터의 설정 → 모바일에서 코드를 스캔하거나, 서버에서 orca pair --mobile을 실행하세요."
     },
     "terminalSettings": {
       "keepPhoneSize": "휴대폰 크기로 유지(기본값)",
@@ -128,6 +129,31 @@
       "restoreAfterSeconds_one": "{{count}}초 후",
       "restoreAfterSeconds_other": "{{count}}초 후",
       "restoreHost": "{{name}} 복원",
+      "previewColumns_one": "{{count}}열",
+      "previewColumns_other": "{{count}}열",
+      "previewLabel": "터미널 미리보기",
+      "previewHeading": "미리보기",
+      "fontHeading": "글꼴",
+      "fontDescription": "터미널에서 두 손가락을 모으거나 벌려 크기를 바꿀 수 있습니다. 변경 내용은 여기에 저장됩니다. 데스크톱 터미널에는 적용되지 않고 이 기기에만 적용됩니다.",
+      "font": "글꼴",
+      "size": "크기",
+      "sizePoints": "{{size}}pt",
+      "smaller": "더 작게",
+      "larger": "더 크게",
+      "lineSpacing": "줄 간격",
+      "lineSpacingTight": "좁게",
+      "lineSpacingNormal": "보통",
+      "lineSpacingRoomy": "넓게",
+      "weight": "굵기",
+      "weightLight": "가늘게",
+      "weightRegular": "보통",
+      "weightMedium": "약간 굵게",
+      "fontPickerTitle": "터미널 글꼴",
+      "fontsOnDevice": "이 기기에 설치됨",
+      "fontsIncluded": "Orca에 포함됨",
+      "systemMono": "시스템 고정폭",
+      "defaultFont": "기본값",
+      "resetFont": "글꼴 설정 초기화",
       "title": "터미널"
     }
   },
@@ -159,6 +185,12 @@
     }
   },
   "browser": {
+    "clientHost": {
+      "openOnNamed": "{{device}}에서 열려 있습니다",
+      "openOn": "다른 컴퓨터에서 열려 있습니다",
+      "offlineNamed": "{{device}}이(가) 오프라인입니다",
+      "offline": "이 페이지를 표시하는 컴퓨터가 오프라인입니다"
+    },
     "addressField": {
       "urlPlaceholder": "URL"
     },
@@ -172,7 +204,9 @@
       "sendText": "브라우저로 텍스트 전송",
       "dialogTitleWithOrigin": "{{origin}} 내용:",
       "dialogTitleNoOrigin": "이 페이지 내용:",
-      "dialogAnswer": "답변"
+      "dialogAnswer": "답변",
+      "stop": "중지",
+      "reconnect": "다시 연결"
     },
     "pointerModifiers": {
       "clickModifier": "{{key}} 클릭 보조 키"
@@ -181,6 +215,14 @@
       "deliveryUnconfirmed": "전달 여부 미확인 — 다시 시도하기 전에 페이지를 확인하세요",
       "dialogAnswerFailed": "응답이 페이지에 전달되지 않았습니다.",
       "sent": "전송됨"
+    },
+    "stream": {
+      "updateApp": "여기에서 브라우저 탭을 스트리밍하려면 Orca 앱을 업데이트하세요.",
+      "hostCannotStream": "이 호스트는 브라우저 탭을 여기로 스트리밍할 수 없습니다.",
+      "checking": "데스크톱 브라우저의 스트리밍 지원 여부를 확인하는 중입니다.",
+      "pageUnavailable": "아직 브라우저 페이지를 사용할 수 없습니다.",
+      "timedOut": "브라우저 스트림 시간이 초과되었습니다.",
+      "stopped": "스트림이 중지되었습니다"
     },
     "viewModeSwitch": {
       "mobileView": "웹사이트를 모바일 화면으로 보기",
@@ -198,7 +240,43 @@
       "certificateChallengeExpired": "이 인증서 승인이 만료되었습니다. 페이지를 다시 시도해 새로 요청하세요.",
       "certificateChallengeChanged": "인증서 요청이 변경되었습니다. 페이지를 다시 시도하고 새 경고를 확인하세요.",
       "certificateProceedFailed": "Orca가 이 인증서 요청을 승인하지 못했습니다. 페이지를 다시 시도한 후 다시 요청하세요.",
-      "certificateChallengeUnavailable": "이 인증서 요청은 더 이상 사용할 수 없습니다. 페이지를 다시 시도해 새로 요청하세요."
+      "certificateChallengeUnavailable": "이 인증서 요청은 더 이상 사용할 수 없습니다. 페이지를 다시 시도해 새로 요청하세요.",
+      "certificateProceedNeedsHostUpdate": "휴대폰에서 인증서 경고를 무시하고 계속하려면 이 호스트의 Orca를 업데이트하세요."
+    },
+    "pagePrompt": {
+      "downloadStarted": "호스트의 {{path}}에 다운로드하는 중",
+      "downloadSaved": "호스트의 {{path}}에 저장되었습니다",
+      "downloadCanceled": "다운로드가 취소되었습니다.",
+      "downloadFailed": "다운로드를 완료할 수 없습니다.",
+      "answerFailed": "응답이 페이지에 전달되지 않았습니다.",
+      "openFailed": "이 {{scheme}} 링크를 처리할 앱을 열 수 없습니다.",
+      "localFiles": "로컬 파일",
+      "ask": {
+        "camera": "카메라 사용",
+        "microphone": "마이크 사용",
+        "location": "위치 정보 확인",
+        "notifications": "알림 표시",
+        "clipboard": "클립보드에 복사된 텍스트 및 이미지 보기",
+        "midi": "MIDI 기기 사용",
+        "windowManagement": "모든 디스플레이의 창 관리",
+        "idleDetection": "이 기기의 사용 여부 감지",
+        "localNetwork": "이 기기의 앱과 로컬 네트워크의 기기에 액세스"
+      },
+      "fileTitle": "이 파일에서 다음 권한을 요청합니다",
+      "permissionTitle": "{{site}}에서 다음 권한을 요청합니다",
+      "block": "차단",
+      "allow": "허용",
+      "signInTitle": "로그인",
+      "signInDescription": "{{origin}}이(가) 사용자 이름과 비밀번호를 요청하고 있습니다.",
+      "signInInsecure": "이 사이트와의 연결은 안전하지 않습니다.",
+      "signInRetry": "사용자 이름 또는 비밀번호가 올바르지 않습니다.",
+      "signIn": "로그인",
+      "openLinkTitle": "이 {{scheme}} 링크를 여시겠습니까?",
+      "openLinkDescription": "{{origin}}이(가) 다른 애플리케이션을 열려고 합니다.",
+      "openLinkAnonymous": "브라우저의 페이지에서 다른 애플리케이션을 열려고 합니다.",
+      "openLink": "링크 열기",
+      "username": "사용자 이름",
+      "password": "비밀번호"
     }
   },
   "chat": {
@@ -1557,6 +1635,7 @@
   "home": {
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Orca {{version}} 업데이트 알림 닫기",
+      "update": "업데이트",
       "title": "Orca {{version}} 업데이트 가능",
       "updateAccessibilityLabel": "Orca {{version}} 업데이트가 있습니다. 탭하여 업데이트하세요."
     },
@@ -1578,6 +1657,8 @@
       "connectedDescription": "데스크톱이 여기에 표시됩니다. 모든 데이터는 종단 간 암호화로 보호됩니다.",
       "connectedTitle": "연결 완료",
       "description": "컴퓨터의 Orca와 페어링하여 에이전트 상태를 확인하고, 원하는 터미널에 접속하고, 휴대폰으로 작업을 진행하세요.",
+      "pairDesktopButton": "데스크톱 페어링",
+      "scanCodeBelowDescription": "아래 데스크톱 페어링을 탭한 다음, 화면에 표시된 QR 코드를 카메라로 비추세요.",
       "openDesktopDescription": "설정 → 모바일에서 페어링 QR 코드를 생성하세요.",
       "openDesktopTitle": "Orca 데스크톱 앱 열기",
       "scanCodeTitle": "코드 스캔",
@@ -1596,6 +1677,17 @@
       "removeHostTitle": "호스트 제거",
       "tryAgain": "다시 시도하세요."
     },
+    "bottomBar": {
+      "connectFirst": "새 작업을 시작하려면 데스크톱을 연결하세요.",
+      "newWorkspace": "새 워크스페이스"
+    },
+    "desktops": {
+      "pairDesktop": "데스크톱 페어링"
+    },
+    "sections": {
+      "tasks": "작업",
+      "tasksSubtitle": "내 이슈와 리뷰 둘러보기"
+    },
     "stats": {
       "agentTime": "에이전트 시간",
       "agentsSpawned": "시작된 에이전트",
@@ -1609,7 +1701,8 @@
       "automations": "자동화",
       "chooseDesktop": "{{desktop}}, 다른 데스크톱 선택",
       "feed": "피드",
-      "usage": "사용량"
+      "usage": "사용량",
+      "agents": "에이전트"
     },
     "usage": {
       "active": "사용 중",
@@ -1622,6 +1715,10 @@
       "showUsageFor": "사용량을 볼 데스크톱",
       "updatedAgo": "{{time}} 전 업데이트됨",
       "updatedJustNow": "방금 업데이트됨"
+    },
+    "activeAgents": {
+      "heading": "활성",
+      "seeAll": "모든 에이전트 보기"
     }
   },
   "hooks": {
@@ -1672,7 +1769,24 @@
       "hideSidebar": "사이드바 숨기기",
       "reconnect": "다시 연결",
       "tasks": "작업",
-      "automations": "자동화"
+      "moreActions": "추가 작업",
+      "automations": "자동화",
+      "mcpServers": "MCP 서버"
+    },
+    "deleteConfirm": {
+      "changes_one": "커밋되지 않은 변경 사항 {{count}}개",
+      "changes_other": "커밋되지 않은 변경 사항 {{count}}개",
+      "changesAndIgnoredLost": "{{what}} 및 무시된 파일이 사라집니다",
+      "lost": "{{what}}가 사라집니다",
+      "ignoredLost": "무시된 파일이 사라집니다",
+      "checking": "변경 사항 확인 중…",
+      "unchecked": "변경 사항을 확인할 수 없습니다",
+      "ignoredNamesMore": "{{names}} 외",
+      "ignoredNamesCount": "{{names}} 외 {{value0}}개",
+      "ignoredUnchecked": "무시된 파일을 모두 확인하지 못했습니다",
+      "needsUpdate": "휴대폰에서 이 워크스페이스를 삭제하려면 컴퓨터의 Orca를 업데이트하세요.",
+      "removeTitle": "워크스페이스 제거",
+      "removeFolderMessage": "Orca에서 \"{{name}}\"을(를) 제거하시겠습니까? 디스크의 폴더는 그대로 유지됩니다."
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "\"{{name}}\" ({{branch}})을(를) 삭제하시겠습니까?",
@@ -1682,6 +1796,7 @@
       "primaryWorktreeDeleteHint": "기본 작업 트리는 삭제할 수 없습니다. 대신 프로젝트를 제거하세요.",
       "removeHost": "호스트 제거",
       "removeHostMessage": "\"{{name}}\"을(를) 제거하시겠습니까? 나중에 다시 페어링할 수 있습니다.",
+      "deleteFailed": "\"{{name}}\"을(를) 삭제하지 못했습니다",
       "sleep": "절전",
       "unpin": "고정 해제",
       "rename": "이름 변경",
@@ -1768,9 +1883,21 @@
       "showProperties": "속성 표시",
       "sortBy": "정렬 기준",
       "syncedAcrossDevices": "기기 간 동기화됨",
+      "done": "완료",
+      "reset": "재설정",
       "thisComputer": "이 컴퓨터",
       "waitingForDesktop": "아직 호스트 응답을 기다리는 중",
       "workspaceOptions": "워크스페이스 옵션"
+    },
+    "hostBottomBar": {
+      "workspaceOptions": "워크스페이스 옵션",
+      "activeFilters_one": "워크스페이스 옵션 (필터 {{count}}개 적용 중)",
+      "activeFilters_other": "워크스페이스 옵션 (필터 {{count}}개 적용 중)",
+      "search": "검색",
+      "newWorkspace": "새 워크스페이스"
+    },
+    "identity": {
+      "hostNotFound": "호스트를 찾을 수 없습니다"
     },
     "workspaceRenameSheet": {
       "title": "워크스페이스 이름 변경",
@@ -3092,6 +3219,12 @@
         "heading": "언어",
         "systemWithCurrent": "시스템 ({{language}})"
       },
+      "usage": {
+        "used": "사용한 양",
+        "remaining": "남은 양",
+        "heading": "사용량 백분율",
+        "description": "홈과 계정의 사용량 막대에 각 한도의 사용량 또는 남은 양이 표시됩니다. 이 설정은 이 휴대폰에 저장됩니다."
+      },
       "theme": {
         "dark": "다크",
         "description": "시스템을 선택하면 이 기기의 라이트 또는 다크 모드 설정을 따릅니다.",
@@ -3136,6 +3269,28 @@
       "on": "켜짐",
       "openInChatUi": "채팅 UI로 세션 열기",
       "title": "채팅 UI"
+    },
+    "nativeChatText": {
+      "heading": "텍스트",
+      "footer": "채팅에서 두 손가락을 모으거나 벌려 크기를 바꿀 수 있습니다. 변경 내용은 여기에 저장됩니다.",
+      "size": "텍스트 크기",
+      "sizeDefault": "기본값",
+      "sizePoints": "{{size}}pt",
+      "sizeSpoken": "{{size}}포인트",
+      "font": "글꼴",
+      "fontPickerTitle": "채팅 글꼴",
+      "fontSystem": "시스템",
+      "fontSerif": "세리프",
+      "fontMono": "고정폭",
+      "fontMonoSubtitle": "코드와 같은 글꼴",
+      "lineSpacing": "줄 간격",
+      "spacingCompact": "좁게",
+      "spacingDefault": "기본",
+      "spacingRelaxed": "넓게",
+      "reset": "텍스트 설정 초기화",
+      "previewQuestion": "재개 테스트가 왜 간헐적으로 실패하나요?",
+      "previewTools": "파일 3개 읽음 · pnpm test 실행",
+      "previewAnswer": "스트림이 아직 플러시되는 동안 테스트가 `setTimeout(0)`을 기다리므로, 플러시가 먼저 끝날 때만 통과합니다."
     },
     "nativeNotificationDeliverySettings": {
       "loadFailed": "알림 전송 설정을 불러오지 못했습니다. 다시 시도하려면 이 화면을 다시 여세요.",
@@ -3206,6 +3361,7 @@
       "noneSelected": "선택 안 됨",
       "selectModelFailed": "모델을 선택하지 못했습니다.",
       "speechModel": "음성 모델",
+      "loading": "음성 설정 불러오는 중…",
       "speechModelHeading": "음성 모델",
       "title": "음성",
       "toggleMode": "토글",
@@ -6073,6 +6229,95 @@
     }
   },
   "mcpServers": {
-    "agentBlocked": "조직의 Claude 설정에 의해 차단됨"
+    "category": {
+      "coding": "코딩",
+      "chat": "채팅",
+      "monitoring": "모니터링",
+      "docs": "문서 및 프로젝트",
+      "more": "기타"
+    },
+    "searchApps": "앱 검색",
+    "filterActive": "필터, {{filter}}",
+    "filter": "필터",
+    "allApps": "모든 앱",
+    "added": "추가됨",
+    "addTitle": "MCP 서버 추가",
+    "customServer": "사용자 지정 서버",
+    "customServerLine": "URL, 명령 또는 붙여넣은 설정",
+    "noMatch": "“{{query}}”와(과) 일치하는 앱이 없습니다.",
+    "apps": "앱",
+    "header": "헤더",
+    "headerName": "이름",
+    "headerValue": "값",
+    "removeHeader": "헤더 제거",
+    "headers": "헤더",
+    "headerEmpty": "비어 있음",
+    "addHeader": "헤더 추가",
+    "addButton": "추가",
+    "sourceLabel": "서버 URL 또는 시작 명령",
+    "sourcePlaceholder": "https://… 또는 npx …",
+    "sourceNote": "서버 URL, 시작 명령 또는 mcpServers 설정을 붙여넣으세요.",
+    "details": "세부 정보",
+    "trust": "신뢰할 수 있는 소프트웨어만 추가하세요.",
+    "serverType": "서버 유형",
+    "urlMode": "URL에 연결",
+    "commandMode": "명령 실행",
+    "serverName": "서버 이름",
+    "headersNone": "없음",
+    "yours": "내 서버",
+    "addServer": "서버 추가",
+    "fromPlugins": "플러그인 제공",
+    "inYourAgents": "내 에이전트에 있는 서버",
+    "needsSignIn": "로그인 필요",
+    "wontStart": "시작되지 않음",
+    "signIn": "로그인",
+    "projectsOnly": "{{projects}}에서만",
+    "moreFor": "{{name}} 작업 더 보기",
+    "moveToOrca": "Orca로 이동",
+    "copyToOrca": "Orca로 복사",
+    "signInAgain": "다시 로그인",
+    "signOut": "로그아웃",
+    "workspaces": "워크스페이스",
+    "account": "계정",
+    "signedIn": "로그인됨",
+    "agents": "에이전트",
+    "turnAllOn": "모두 켜기",
+    "agentsUnread": "이 컴퓨터의 에이전트 정보를 읽을 수 없습니다.",
+    "agentBlocked": "조직의 Claude 설정에 의해 차단됨",
+    "advanced": "고급",
+    "sharedProcess": "에이전트 간에 프로세스 하나를 공유",
+    "sharedProcessNote": "메모리를 덜 사용합니다. 워크스페이스 폴더 밖에서 실행됩니다.",
+    "removeServer": "서버 제거",
+    "url": "URL",
+    "command": "명령",
+    "arguments": "인수",
+    "title": "MCP 서버",
+    "reading": "MCP 서버 읽는 중…",
+    "unavailable": "{{host}}에서는 MCP 서버를 사용할 수 없습니다",
+    "signedInTo": "{{app}}에 로그인됨",
+    "allWorkspaces": "모든 워크스페이스",
+    "includingLater": "나중에 추가되는 워크스페이스 포함",
+    "appliesToNewNote": "변경 사항은 새 세션부터 적용됩니다.",
+    "allAgents": "모든 에이전트",
+    "agentsOf": "{{total}}개 중 {{on}}개",
+    "workspacesAll": "전체",
+    "workspacesAllBut": "{{names}} 제외 전체",
+    "workspacesNone": "없음",
+    "appliesToNew": "새 세션부터 적용됩니다",
+    "restartSessions": "세션 {{count}}개 다시 시작",
+    "restarted": "세션 {{count}}개를 다시 시작했습니다",
+    "agentFileTitle": "{{agent}}에서 {{server}}을(를) 켤까요?",
+    "agentFileMessage": "Orca가 {{agent}}의 설정 파일({{file}})에서 MCP 서버를 관리합니다. 직접 추가한 항목은 그대로 유지됩니다.",
+    "agentFilesMessage": "Orca가 각 에이전트의 설정 파일에서 MCP 서버를 관리합니다. 직접 추가한 항목은 그대로 유지됩니다.",
+    "allow": "허용",
+    "removeTitle": "{{name}}을(를) 제거할까요?",
+    "remove": "제거",
+    "moveTitle": "{{name}}을(를) Orca로 이동할까요?",
+    "moveMessage": "Orca가 {{agents}} 설정에서 이 서버를 제거하고 백업을 보관합니다.",
+    "move": "이동",
+    "workspacesCount": "워크스페이스 {{count}}개",
+    "workspacesAllButCount": "{{count}}개 제외 전체",
+    "headerMissing": "이 서버를 추가하려면 {{header}} 값을 입력하세요.",
+    "servers": "서버"
   }
 }
