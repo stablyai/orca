@@ -35,7 +35,7 @@ export function cronDateMatches(
   return cronWallDateMatches(rule, calendar.fields(timestamp))
 }
 
-function cronWallDateMatches(
+export function cronWallDateMatches(
   rule: ParsedCron,
   wall: { month: number; day: number; weekday: number }
 ): boolean {

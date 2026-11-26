@@ -5,7 +5,7 @@ import {
   type ParsedRrule,
   type ParsedSchedule
 } from './automation-schedule-parsing'
-import { cronDateMatches, cronMatches, floorToMinute } from './automation-cron-occurrence'
+import { cronDateMatches, cronWallDateMatches, floorToMinute } from './automation-cron-occurrence'
 import { automationScheduleCalendar, type ScheduleCalendar } from './automation-schedule-calendar'
 
 const MINUTE_MS = 60 * 1000
@@ -122,8 +122,9 @@ function matchingCronMinute(
   const end = first + direction * CRON_SCAN_MINUTES * MINUTE_MS
   let candidate = first
   while ((candidate - end) * direction < 0 && candidate >= dtstart) {
-    if (cronDateMatches(rule, candidate, calendar)) {
-      if (cronMatches(rule, candidate, calendar)) {
+    const wall = calendar.fields(candidate)
+    if (cronWallDateMatches(rule, wall)) {
+      if (rule.hours.has(wall.hour) && rule.minutes.has(wall.minute)) {
         return candidate
       }
       candidate += direction * MINUTE_MS
