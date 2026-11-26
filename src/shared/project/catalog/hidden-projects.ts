@@ -31,12 +31,11 @@ export function setProjectsHiddenHosts(hostIds: ReadonlySet<ExecutionHostId>): v
 }
 
 /** Whether a repo is on a host whose projects are never listed here; false for unstamped repos. */
-export function isRepoOnProjectsHiddenHost(repo: Pick<Repo, 'connectionId' | 'executionHostId'>) {
-  if (projectsHiddenHosts.size === 0) {
-    return false
-  }
-  const hostId = getRepoExecutionHostIdOrDefault(repo, LOCAL_EXECUTION_HOST_ID)
-  return projectsHiddenHosts.has(hostId)
+export function isRepoOnProjectsHiddenHost(
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'>,
+  hosts: ReadonlySet<ExecutionHostId> = projectsHiddenHosts
+) {
+  return hosts.size > 0 && hosts.has(getRepoExecutionHostIdOrDefault(repo, LOCAL_EXECUTION_HOST_ID))
 }
 
 /** The one "kept out of Projects" check: hidden by the user, or on a host whose projects aren't listed. */
@@ -46,11 +45,11 @@ export function isRepoHiddenFromProjects(repo: HostedRepoRow | null | undefined)
 
 /** The repos this user configures here: never a projects-hidden host's (its owner's to manage). */
 export function userManagedRepos<R extends Pick<Repo, 'connectionId' | 'executionHostId'>>(
-  repos: readonly R[]
+  repos: readonly R[],
+  hosts: ReadonlySet<ExecutionHostId> = projectsHiddenHosts
 ): readonly R[] {
-  return repos.some(isRepoOnProjectsHiddenHost)
-    ? repos.filter((repo) => !isRepoOnProjectsHiddenHost(repo))
-    : repos
+  const onHidden = (repo: R) => isRepoOnProjectsHiddenHost(repo, hosts)
+  return repos.some(onHidden) ? repos.filter((repo) => !onHidden(repo)) : repos
 }
 
 /** Hidden projects, host-qualified: hiding one host's copy leaves the others listed. */

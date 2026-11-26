@@ -37,6 +37,8 @@ export type RuntimeSessionMirrorTargetState = Omit<
 > & {
   runtimeEnvironments?: readonly RuntimeMirrorEnvironment[]
   runtimeStatusByEnvironmentId?: ReadonlyMap<string, RuntimeMirrorStatus>
+  /** Shared agents' hosts, which no paired-server row lists; absent, the share list is read. */
+  sharedHostEnvironmentIds?: ReadonlySet<string>
 }
 
 export function getReachableRuntimeSessionMirrorTargets(
@@ -56,9 +58,11 @@ export function getReachableRuntimeSessionMirrorTargets(
     if (!runtimeId) {
       continue
     }
+    const shared = state.sharedHostEnvironmentIds
     const pairingRevision = listedRuntimeEnvironmentRevision(
       environmentById.get(environmentId),
-      environmentId
+      environmentId,
+      shared && ((id) => shared.has(id))
     )
     if (pairingRevision === undefined) {
       continue

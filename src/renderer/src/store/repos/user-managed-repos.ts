@@ -4,12 +4,15 @@ import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { useSharedBotHosts } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import { userManagedRepos } from '../../../../shared/project/catalog/hidden-projects'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../shared/repository/repo-types'
 
 export function useUserManagedRepos(): readonly Repo[] {
   const repos = useAppStore((state) => state.repos)
-  // Followed so a share arriving or ending re-reads which hosts' repos are kept out.
   const shared = useSharedBotHosts()
-  // oxlint-disable-next-line react-hooks/exhaustive-deps -- `shared` re-runs the read it changes.
-  return useMemo(() => userManagedRepos(repos), [repos, shared])
+  const hosts = useMemo(
+    () => new Set(shared.map((host) => toRuntimeExecutionHostId(host.environmentId))),
+    [shared]
+  )
+  return useMemo(() => userManagedRepos(repos, hosts), [repos, hosts])
 }

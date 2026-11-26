@@ -47,7 +47,7 @@ export type RuntimeSessionMirrorEnvironmentKeys = {
 }
 
 export function buildRuntimeSessionMirrorEnvironmentKeys(
-  inputs: RuntimeSessionMirrorTargetInputs
+  inputs: RuntimeSessionMirrorTargetInputs & { sharedHostEnvironmentIds?: ReadonlySet<string> }
 ): RuntimeSessionMirrorEnvironmentKeys {
   const targets = getReachableRuntimeSessionMirrorTargets({
     settings: { activeRuntimeEnvironmentId: inputs.activeRuntimeEnvironmentId },
@@ -57,7 +57,10 @@ export function buildRuntimeSessionMirrorEnvironmentKeys(
     projectGroups: inputs.projectGroups,
     restoredRuntimeHostIdByWorkspaceSessionKey: inputs.restoredRuntimeHostIdByWorkspaceSessionKey,
     runtimeEnvironments: inputs.runtimeEnvironments,
-    runtimeStatusByEnvironmentId: inputs.runtimeStatusByEnvironmentId
+    runtimeStatusByEnvironmentId: inputs.runtimeStatusByEnvironmentId,
+    ...(inputs.sharedHostEnvironmentIds
+      ? { sharedHostEnvironmentIds: inputs.sharedHostEnvironmentIds }
+      : {})
   })
   return {
     environmentKey: targets
@@ -87,6 +90,10 @@ export function useRuntimeSessionMirrorEnvironmentKeys(): RuntimeSessionMirrorEn
   } = inputs
   // A shared host's revision comes from its share: a share arriving or ending re-reads the targets.
   const sharedHosts = useSharedBotHosts()
+  const sharedHostEnvironmentIds = useMemo(
+    () => new Set(sharedHosts.map((host) => host.environmentId)),
+    [sharedHosts]
+  )
   return useMemo(
     () =>
       buildRuntimeSessionMirrorEnvironmentKeys({
@@ -97,9 +104,9 @@ export function useRuntimeSessionMirrorEnvironmentKeys(): RuntimeSessionMirrorEn
         projectGroups,
         restoredRuntimeHostIdByWorkspaceSessionKey,
         runtimeEnvironments,
-        runtimeStatusByEnvironmentId
+        runtimeStatusByEnvironmentId,
+        sharedHostEnvironmentIds
       }),
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- `sharedHosts` re-runs the read it changes.
     [
       activeRuntimeEnvironmentId,
       repos,
@@ -109,7 +116,7 @@ export function useRuntimeSessionMirrorEnvironmentKeys(): RuntimeSessionMirrorEn
       restoredRuntimeHostIdByWorkspaceSessionKey,
       runtimeEnvironments,
       runtimeStatusByEnvironmentId,
-      sharedHosts
+      sharedHostEnvironmentIds
     ]
   )
 }

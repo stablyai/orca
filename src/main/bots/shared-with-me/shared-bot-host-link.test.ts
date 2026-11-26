@@ -3,13 +3,13 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../shared/remote-runtime/control/remote-runtime-shared-control-types'
 
-const edge = vi.hoisted(() => ({
-  state: null as string | null,
-  listener: null as
-    | ((event: { environmentId: string; diagnostics: { state: string } }) => void)
-    | null,
-  holdsCleared: 0
-}))
+type Edge = {
+  state: string | null
+  listener: ((event: { environmentId: string; diagnostics: { state: string } }) => void) | null
+  holdsCleared: number
+}
+
+const edge = vi.hoisted((): Edge => ({ state: null, listener: null, holdsCleared: 0 }))
 
 vi.mock(
   '../../ipc/runtime-environments/connections/runtime-environment-request-connections',
