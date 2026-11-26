@@ -53,7 +53,7 @@ import {
 import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
 import { getWorktreeReadFlags } from './worktree-unread-flag'
 import { getReviewTargetLinkFlags } from './worktree-review-link-flags'
-import { callWorktreeCreate } from './worktree-create-request-timeout'
+import { callWorktreeCreate, getWorktreeCreateCallOptions } from './worktree-create-request-timeout'
 import {
   getOptionalSetupDecision,
   withSetupDecisionRecovery
@@ -107,6 +107,8 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
   },
   'worktree create': async (context) => {
     const { flags, client, cwd, json, rawArgs } = context
+    // Reject a bad --timeout-ms before any runtime request.
+    getWorktreeCreateCallOptions(flags)
     const referenceInputs = getCreateReferenceInputs(flags)
     assertWorktreeParentFlagsCompatible(flags)
     assertWorkspaceTargetFlagsCompatible(flags)
