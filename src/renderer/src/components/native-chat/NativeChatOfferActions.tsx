@@ -1,14 +1,17 @@
-// Each card keeps its own answer; Not now still sends Dismiss to the agent.
+// Each card keeps its own answer; Not now still tells the agent Dismiss, as a card answer where the host takes one.
 import { useContext, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { updateBot, useCardBot } from '@/lib/bot-catalog'
+import { callBotRpc } from '@/lib/bot-hosts'
+import { BOTS_OFFER_DISMISS_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import {
   answerBotOffer,
   answerBotOfferAgain,
   type BotOfferAnswerUpdate
 } from '../../../../shared/bots/bot-offer-answers'
+import { botHostTakes } from '../bots/bot-host-capability'
 import { botErrorMessage } from '../bots/bot-presentation'
 import { NativeChatCardActions } from './NativeChatCardFrame'
 import { NativeChatBotKickoffContext } from './native-chat-bot-kickoff-view'
@@ -59,14 +62,20 @@ export function useNativeChatOffer(botId: string, cardId: string): NativeChatOff
     }
   }
   const typed = (text: string) => async (): Promise<boolean> => (await view?.send(text)) === true
+  // A typed Dismiss follows the follow-up setting, so it could steer the bot's running turn.
+  const tellDismissed = botHostTakes(ref, BOTS_OFFER_DISMISS_RUNTIME_CAPABILITY)
+    ? async (): Promise<boolean> =>
+        (
+          await callBotRpc<{ sent: boolean }>(ref, 'bots.offer.dismiss', {
+            botId,
+            ...(view?.sessionId ? { sessionId: view.sessionId } : {})
+          })
+        ).sent
+    : typed(t('components.native-chat.offerCard.dismiss', 'Dismiss'))
   return {
     dismissed: answer?.dismissed === true,
     sent: answer?.sent?.chosen ?? null,
-    dismiss: () =>
-      void answerOffer(
-        { cardId, dismissed: true },
-        typed(t('components.native-chat.offerCard.dismiss', 'Dismiss'))
-      ),
+    dismiss: () => void answerOffer({ cardId, dismissed: true }, tellDismissed),
     send: (text, chosen) =>
       void answerOffer({ cardId, sent: { chosen: [...chosen] } }, typed(text)),
     sendAgain: (text, chosen) =>

@@ -13,6 +13,13 @@ export const BotOfferAnswerSchema = z.object({
 
 export type BotOfferAnswer = z.infer<typeof BotOfferAnswerSchema>
 
+/** `bots.offer.dismiss`: Not now on an offer card, which the bot hears as a card answer queued behind its running turn. */
+export const BotOfferDismiss = z.object({
+  botId: z.string().min(1, 'Missing bot id'),
+  /** The chat the card sits in; the bot's Chat when absent. */
+  sessionId: z.string().min(1).optional()
+})
+
 const BOT_OFFER_ANSWER_FIELDS = ['dismissed', 'sent'] as const
 type BotOfferAnswerField = (typeof BOT_OFFER_ANSWER_FIELDS)[number]
 
