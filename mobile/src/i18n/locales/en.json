@@ -1688,9 +1688,9 @@
     },
     "native-chat": {
       "turnDiff": {
-        "changedFiles_one": "{{count}} changed file",
-        "changedFiles_other": "{{count}} changed files",
         "partial": "Partial diff",
+        "changed_one": "Changed {{count}} file",
+        "changed_other": "Changed {{count}} files",
         "showMoreFiles": "Show {{count}} more"
       },
       "composer": {
@@ -2757,11 +2757,10 @@
     },
     "nativeChatRenderData": {
       "notFoundTitle": "Can't find this conversation yet",
-      "notFoundSubtitle": "Send a message to start one, or open the terminal view to see what {{agent}} is doing.",
+      "notFoundMessage": "Send a message to start one.",
       "emptyTitle": "Start a chat with {{agent}}",
-      "emptySubtitle": "Ask {{agent}} to inspect code, explain output, or make a change.",
       "errorTitle": "Could not load conversation",
-      "errorSubtitle": "The transcript could not be read. Toggle back to the terminal to keep working.",
+      "errorMessage": "The conversation couldn’t be read. The terminal view still works.",
       "defaultAgentLabel": "the agent"
     },
     "nativeChatToggleAction": {
@@ -3525,8 +3524,7 @@
     "message": {
       "copyMessage": "Copy message",
       "forkFromResponse": "Fork from this response",
-      "scrollMessageToTop": "Scroll this message to top",
-      "forkFromResponseHint": "A new chat with this whole response, up to the end of its turn"
+      "moreActions": "More actions"
     },
     "messageActionsSheet": {
       "copyMessage": "Copy message",
@@ -3562,13 +3560,11 @@
       "openImageHint": "Opens the image full size"
     },
     "nativeChatToolLine": {
-      "durationMilliseconds": "{{milliseconds}}ms",
       "durationSeconds": "{{seconds}}s",
       "durationMinutes": "{{minutes}}m {{seconds}}s",
       "durationHours": "{{hours}}h {{minutes}}m {{seconds}}s",
       "result": "Result",
       "exitCode": "exit {{exitCode}}",
-      "copyCommand": "Copy command",
       "running": "Running",
       "ran": "Ran",
       "reading": "Reading",

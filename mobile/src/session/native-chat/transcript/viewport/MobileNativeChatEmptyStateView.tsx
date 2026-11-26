@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
-import { Text, View } from 'react-native'
 import type { NativeChatEmptyStateCopy } from '../../../../../../src/shared/native-chat/native-chat-empty-state'
-import { styles } from '../../mobile-native-chat-view-styles'
+import { MobileStateView } from '../../../../components/feedback/MobileStateView'
 
+/** The app's state view for a chat with nothing to show: a title, and one sentence when it helps. */
 export function MobileNativeChatEmptyStateView({
   copy,
   picture
@@ -12,10 +12,6 @@ export function MobileNativeChatEmptyStateView({
   picture?: ReactNode
 }) {
   return (
-    <View style={styles.center}>
-      {picture ? <View style={styles.emptyPicture}>{picture}</View> : null}
-      <Text style={styles.emptyTitle}>{copy.title}</Text>
-      <Text style={styles.emptySubtitle}>{copy.subtitle}</Text>
-    </View>
+    <MobileStateView iconElement={picture} title={copy.title} message={copy.subtitle || null} />
   )
 }

@@ -50,6 +50,8 @@ export function MobileNativeChatFloatingControls({
           disabled={!showJumpToTail}
           focusable={showJumpToTail}
           style={({ pressed }) => [styles.fab, pressed && { opacity: feedback.pressedOpacity }]}
+          // A 44 pt target around the 38 pt button.
+          hitSlop={3}
           onPress={onJumpToTail}
         >
           <ArrowDown size={18} color={colors.textPrimary} strokeWidth={2.2} />
