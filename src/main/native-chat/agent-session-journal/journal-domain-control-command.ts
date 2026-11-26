@@ -25,6 +25,7 @@ import { assertJournalFence } from './writing/journal-write-guards'
 import type { JournalDomainSubmissionCommit } from './journal-domain-submission-records'
 import type { JournalDomainInputCoordinate } from './journal-domain-input-commit'
 import { applyJournalDomainInputRecovery } from './journal-domain-input-recovery'
+import { withdrawStopTakenBackReplies } from './connector-replies/journal-connector-stop-withdrawal'
 import { applyJournalDomainItem } from './journal-domain-item'
 import { observeJournalDomainInputStop } from './journal-domain-input-ends'
 import { writeJournalDomainQueueReopenMark } from './journal-domain-queue-pauses'
@@ -177,7 +178,9 @@ function acceptStop(
   const mark = writeMark(db, target, operation.fence, savedAt, result, (sequence) =>
     writeStop(db, target, sequence, operation.fence, event)
   )
-  result.value = { mark, withdrawn: Array.isArray(settled.value) ? settled.value : [], turnId }
+  const withdrawn = Array.isArray(settled.value) ? settled.value : []
+  withdrawStopTakenBackReplies(db, target, withdrawn, savedAt)
+  result.value = { mark, withdrawn, turnId }
   return result
 }
 

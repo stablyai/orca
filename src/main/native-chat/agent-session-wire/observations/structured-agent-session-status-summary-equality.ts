@@ -47,6 +47,7 @@ export function structuredStatusSummariesEqual(
     a.lastAssistantMessage === b.lastAssistantMessage &&
     a.launchDirectory === b.launchDirectory &&
     a.hostProgram === b.hostProgram &&
+    a.ownLogin === b.ownLogin &&
     a.conversationName === b.conversationName &&
     a.conversationNameSource === b.conversationNameSource &&
     agentSessionForkNamingEqual(a.forkedFrom, b.forkedFrom) &&
@@ -61,6 +62,8 @@ export function structuredStatusSummariesEqual(
     a.asyncQuestionsSkippedThrough === b.asyncQuestionsSkippedThrough &&
     a.awaitsApproval?.tool === b.awaitsApproval?.tool &&
     a.awaitsApproval?.input === b.awaitsApproval?.input &&
+    a.awaitsBlockingQuestion?.text === b.awaitsBlockingQuestion?.text &&
+    a.attentionAsksOnlyQuestions === b.attentionAsksOnlyQuestions &&
     agentSessionBackgroundTasksEqual(a.backgroundTasks, b.backgroundTasks) &&
     structuredStatusChildrenEqual(a.children, b.children) &&
     agentProviderSessionsEqual(undefined, a.providerSession, b.providerSession)

@@ -27,7 +27,7 @@ export function isAgentChildWorkKind(kind: AgentChildWorkKind): boolean {
   return kind === 'agent'
 }
 
-function isAgentChildWork(child: AgentChildWorkLivenessCandidate): boolean {
+export function isAgentChildWork(child: AgentChildWorkLivenessCandidate): boolean {
   return (
     isAgentChildWorkKind(child.kind) || child.operation?.input === ORCA_ORCHESTRATION_WAIT_COMMAND
   )

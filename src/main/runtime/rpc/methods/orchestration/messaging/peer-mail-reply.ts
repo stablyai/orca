@@ -100,7 +100,8 @@ export async function replyOverPeerMail(args: {
     const client = listenerForClientEnvironment(
       runtime,
       clientParts.deviceId,
-      clientParts.installationId
+      clientParts.installationId,
+      conversation.peer_fingerprint
     )
     const current = client
       ? db.openHomePeerMailConversation({

@@ -83,7 +83,12 @@ export function NativeChatWorkingStatus({
   )
   const identity = bot ? (
     <span role="img" aria-label={bot.name} className="mr-1 shrink-0">
-      <BotAvatarTile src={bot.src} fallback={bot.fallback} className="size-6 text-xs" />
+      <BotAvatarTile
+        src={bot.src}
+        outfit={bot.outfit}
+        fallback={bot.fallback}
+        className="size-6 text-xs"
+      />
     </span>
   ) : null
   // `tabular-nums`: the live clock reflows its own label every second otherwise.

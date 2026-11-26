@@ -92,12 +92,7 @@ export function discoverNodeServerTests(root = ROOT) {
 export async function collectNodeServerInputs({ root = ROOT, entryPoints } = {}) {
   const [
     { build },
-    {
-      externalNativeAddons,
-      ORCAD_CHILD_ENTRY_POINTS,
-      ORCAD_ENTRY_POINT,
-      ORCAD_LAUNCHER_ENTRY_POINT
-    },
+    { externalNativeAddons, ORCAD_CHILD_ENTRY_POINTS, ORCAD_LAUNCHER_ENTRY_POINT },
     { createWorkspaceSourceResolver }
   ] = await Promise.all([
     import('esbuild'),
@@ -119,8 +114,9 @@ export async function collectNodeServerInputs({ root = ROOT, entryPoints } = {})
       })
     }
   }
+  // General src/main/ bundle/boot regressions are covered by pr.yml's orcad terminal smoke;
+  // trace the launcher, child workers, build scripts, and node-server test suites here.
   const entries = entryPoints ?? [
-    ORCAD_ENTRY_POINT,
     ORCAD_LAUNCHER_ENTRY_POINT,
     ...Object.values(ORCAD_CHILD_ENTRY_POINTS),
     ...BUILD_SCRIPTS,

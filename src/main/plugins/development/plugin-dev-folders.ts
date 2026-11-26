@@ -15,6 +15,7 @@ import {
   type PluginCliApprovalService
 } from '../cli/plugin-cli-approval'
 import { isInvalidDiscoveredPlugin, type DiscoveredPlugin } from '../discovery/plugin-discovery'
+import { assertTeamAllowsUncatalogedPlugin } from '../installation/plugin-team-install-policy'
 
 export type PluginDevFolderService = PluginCliApprovalService & {
   options: PluginCliApprovalService['options'] & {
@@ -123,6 +124,7 @@ export function discoveredAt(
 export async function loadPluginDevFolder(input: PluginDevLoadInput): Promise<PluginDevLoadResult> {
   const { service } = input
   assertPluginSystemEnabled(service)
+  assertTeamAllowsUncatalogedPlugin()
   const real = await resolveHostPluginFolder(input.path)
   const stored = service.options.getDevPluginPaths()
   const existing = await findStoredPath(stored, real)

@@ -37,12 +37,22 @@ export const ORCHESTRATION_ASK_RETURNS_AT_ONCE_RUNTIME_CAPABILITY =
 /** Paired windows and phones read a chat's worker approvals and answer them as the person. */
 export const ORCHESTRATION_PAIRED_WORKER_APPROVALS_RUNTIME_CAPABILITY =
   'orchestration.paired-worker-approvals.v1' as const
+/** A person on a paired window may Clear and Stop a chat's workers in its dock, as on this computer. */
+export const ORCHESTRATION_PAIRED_WORKER_DOCK_OWNER_RUNTIME_CAPABILITY =
+  'orchestration.paired-worker-dock-owner.v1' as const
 /** Sent by a paired window or phone, never by the orca CLI: its approvals are the person's. */
 export const ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY =
   'orchestration.person-approvals.v1' as const
 export const ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION = 2 as const
 export const ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION = 3 as const
 export const ORCHESTRATION_CONTRACT_VERSION = 1 as const
+/** Contract 1 admitted only as a replay or join of an existing receipt, for a worker_done retry after
+ *  a timeout that may have been delivered. Reserved: a future contract must not reuse this number. */
+export const ORCHESTRATION_REPLAY_ONLY_CONTRACT_VERSION = 2 as const
+/** This runtime enforces the replay-only contract. Releases without the contract fence ignore the
+ *  version and would run the retry anew, so a client sends one only to a runtime that advertises this. */
+export const ORCHESTRATION_REPLAY_ONLY_RETRY_RUNTIME_CAPABILITY =
+  'orchestration.replay-only-retry.v1' as const
 export const ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY = 'orchestration.contract.v1' as const
 /** Receives agent mail a paired Orca carries for its agents, and queues replies for it to pull. */
 export const ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY = 'orchestration.peer-mail.v1' as const
@@ -58,6 +68,9 @@ export const ORCHESTRATION_PEER_MAIL_FILES_RUNTIME_CAPABILITY =
 /** Runs the workers a paired Orca places here as its own, coordinated from that Orca (wire v1). */
 export const ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY =
   'orchestration.remote-owned-workers.v1' as const
+/** A paired Orca's chat-lineage start (`chatLineage`) starts here as a chat, and so do the workers it starts. */
+export const ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY =
+  'orchestration.chat-lineage.v1' as const
 /** Its agents can message agents on a paired computer that pulls with `clientAsks`
  *  (`send --on-client`); replies come back by `peerMailReturn`. */
 export const ORCHESTRATION_CLIENT_AGENT_ASKS_RUNTIME_CAPABILITY =
@@ -81,10 +94,13 @@ export const ORCHESTRATION_RUNTIME_CAPABILITIES = [
   ORCHESTRATION_WORKER_TURN_STOP_REPORTS_RUNTIME_CAPABILITY,
   ORCHESTRATION_ASK_RETURNS_AT_ONCE_RUNTIME_CAPABILITY,
   ORCHESTRATION_PAIRED_WORKER_APPROVALS_RUNTIME_CAPABILITY,
+  ORCHESTRATION_PAIRED_WORKER_DOCK_OWNER_RUNTIME_CAPABILITY,
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
+  ORCHESTRATION_REPLAY_ONLY_RETRY_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_BOT_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_FILES_RUNTIME_CAPABILITY,
-  ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY
+  ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY,
+  ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY
 ] as const

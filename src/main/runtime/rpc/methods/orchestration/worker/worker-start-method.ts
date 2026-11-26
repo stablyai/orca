@@ -7,10 +7,6 @@ import { startFederatedWorker } from '../../../../orchestration/legacy-remote-ho
 import { startLocalWorker } from './start/local-worker-start'
 import type { WorkerFollowUp } from './follow-up/worker-follow-up-placement'
 import { withWorkerStartNext } from '../receipt-next'
-import {
-  decideWorkerStartMode,
-  readWorkerStartModeSettings
-} from '../structured-workers/orchestration-worker-start-mode'
 import { resolveOrchestrationCaller } from '../runs/run-scope'
 import {
   assertHelperStartScope,
@@ -29,6 +25,9 @@ import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/agent-sess
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as SESSION_CODES } from '../../../../../../shared/orchestration/orchestration-session-caller-codes'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
 import { checkedWorkerOrigin } from '../../bots-items-worker-origin'
+import { decideStartMode, noteTerminalFallbackOnItem } from './start/worker-chat-lineage'
+import { withKeepOpenDefault } from './start/worker-keep-open-default'
+import { withTerminalUsage } from './start/worker-start-terminal-usage'
 import {
   linkWorkerToQuestion,
   openQuestionReminder,
@@ -75,13 +74,13 @@ export async function startWorker(
   if (startParams.origin !== undefined && startParams.on) {
     throw new OrchestrationError(
       'invalid_argument',
-      'worker-start --item starts workers on this computer, where the item is. No effects were applied.',
+      "--item can't be combined with --on: worker-start --item starts workers on this computer, where the item is. No effects were applied.",
       { effectsApplied: false }
     )
   }
   const checked =
     startParams.origin !== undefined
-      ? await checkedWorkerOrigin(startParams.origin, ctx)
+      ? await checkedWorkerOrigin(startParams.origin, ctx, startFollowUp?.of)
       : undefined
   const prepared = await prepareWorkerStart(
     checked ? { ...startParams, origin: checked.origin } : startParams,
@@ -101,10 +100,7 @@ export async function startWorker(
     params.forQuestion === undefined ? openQuestionReminder(db, coordinator) : undefined
   const withLink = <T>(started: T): T =>
     withOpenQuestion(reminder, withQuestionLink(questionLink, started))
-  const mode = decideWorkerStartMode({
-    params,
-    settings: readWorkerStartModeSettings(runtime)
-  })
+  const { mode, chatLineage } = decideStartMode(runtime, db, params, orchestrationCaller, followUp)
   if (params.on) {
     // Remote workers are terminal-only; carry the mode receipt to explain structured-preference fallback.
     const receipt = await startFederatedWorker({
@@ -118,9 +114,8 @@ export async function startWorker(
       callerSession: orchestrationCaller
     })
     await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
-    return withLink(
-      withRun(receipt && typeof receipt === 'object' ? { ...receipt, mode } : receipt)
-    )
+    const placed = receipt && typeof receipt === 'object' ? { ...receipt, mode } : receipt
+    return withLink(withRun(withKeepOpenDefault(runtime, params.worktree, placed)))
   }
   const receipt = await startLocalWorker({
     params: {
@@ -136,11 +131,15 @@ export async function startWorker(
     existingTask,
     orchestrationMutation,
     mode,
+    chatLineage,
     helperCreator,
     followUp
   })
   await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
-  const started = withLink(withRun(withWorkerStartNext(receipt)))
+  const note = { itemUid: checked?.itemUid, chatLineage, terminal: params.terminal }
+  void noteTerminalFallbackOnItem(runtime, note, receipt).catch(warnItemNote)
+  const next = withKeepOpenDefault(runtime, params.worktree, withWorkerStartNext(receipt))
+  const started = withTerminalUsage(runtime, withLink(withRun(next)))
   return checked && started && typeof started === 'object'
     ? { ...started, linkedItem: checked.linkedItem }
     : started
@@ -308,4 +307,8 @@ export async function prepareWorkerStart(
     existingTask,
     withRun
   }
+}
+
+function warnItemNote(error: unknown): void {
+  console.warn('[orchestration] item fallback note failed', error)
 }

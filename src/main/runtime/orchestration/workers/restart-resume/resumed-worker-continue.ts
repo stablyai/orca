@@ -22,12 +22,23 @@ export type ResumedWorker = {
 export async function continueResumedWorker(
   deps: Pick<
     TerminalWorkerRestartResumeDeps,
-    'getDb' | 'waitForAgentReady' | 'sendPrompt' | 'reportResting' | 'setTimer'
+    | 'getDb'
+    | 'waitForAgentReady'
+    | 'sendPrompt'
+    | 'reportResting'
+    | 'reportContinueWithheld'
+    | 'setTimer'
   >,
   worker: ResumedWorker
 ): Promise<void> {
   try {
-    if (!(await continueWhenReady(deps, worker))) {
+    const sent = await continueWhenReady(deps, worker)
+    if (typeof sent === 'object') {
+      // Enter would answer a dialog or submit someone's typing: the coordinator is told to clear it.
+      await deps.reportContinueWithheld(worker.dispatchId, worker.handle, sent.withheldFor)
+      return
+    }
+    if (!sent) {
       throw new Error('restart_resume_continue_not_taken')
     }
   } catch (error) {
@@ -44,7 +55,7 @@ export async function continueResumedWorker(
 async function continueWhenReady(
   deps: Parameters<typeof continueResumedWorker>[0],
   { dispatchId, handle, agent, agentReady }: ResumedWorker
-): Promise<boolean> {
+): ReturnType<typeof deps.sendPrompt> {
   const deadline = Date.now() + RESTART_CONTINUE_BUDGET_MS
   while (!agentReady && !(await deps.waitForAgentReady(handle, agent))) {
     if (Date.now() >= deadline) {

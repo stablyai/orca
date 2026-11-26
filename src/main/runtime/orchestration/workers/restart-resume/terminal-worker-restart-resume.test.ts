@@ -3,7 +3,7 @@ import { OrchestrationDb } from '../../db/orchestration-db'
 import { TerminalWorkerRestartResume } from './terminal-worker-restart-resume'
 import { TerminalWorkerRestartOffers } from './terminal-worker-restart-offers'
 import { observeWorker, reconsiderRestAfterWait } from '../turn-stops/worker-presence-report'
-import { resolveTerminalWorkerDispatch } from '../turn-stops/terminal-worker-turn-stops'
+import { resolveTerminalWorkerDispatch } from '../turn-stops/terminal-worker-dispatch'
 
 let db: OrchestrationDb | undefined
 afterEach(() => db?.close())
@@ -58,7 +58,7 @@ function owner(
   overrides: {
     reopen?: () => Promise<{ handle: string } | null>
     handleForPane?: () => string
-    sendPrompt?: () => Promise<boolean>
+    sendPrompt?: () => Promise<boolean | { withheldFor: 'terminal-input' }>
     reportResting?: () => Promise<void>
     waitForAgentReady?: () => Promise<boolean>
     closeTerminal?: () => Promise<undefined>
@@ -80,6 +80,7 @@ function owner(
     reopen: overrides.reopen ?? (async () => ({ handle: 'term_resumed' })),
     closeTerminal: overrides.closeTerminal ?? (async () => undefined),
     reportResting: overrides.reportResting ?? (async () => undefined),
+    reportContinueWithheld: async () => undefined,
     decideHeldRest: overrides.decideHeldRest ?? (() => {}),
     offersChanged: overrides.offersChanged ?? (() => {}),
     terminalAuthority: () => ({

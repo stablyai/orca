@@ -6,8 +6,8 @@ import {
 } from '../../../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../../../transport/rpc/rpc-operation-result-reader'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
-import type { ConnectionState } from '../../../../transport/connection/connection-state'
-import { subscribeRuntimeClientEvents } from '../../../../transport/runtime-client-event-subscription'
+import { subscribeSharedClientEvents } from '../../../../transport/connection/shared-client-events'
+import { toSafeDisplayLine } from '../../../../../../src/shared/text/display-text-safety'
 import { useOptionalHostProtocolGates } from '../../../../components/host-connection/host-protocol-gates-context'
 import { ORCHESTRATION_CLIENT_AGENT_ASKS_RUNTIME_CAPABILITY } from '../../../../../../src/shared/orchestration/orchestration-runtime-capabilities'
 import {
@@ -30,6 +30,11 @@ export type MobilePairedServerAsks = {
 
 const NONE: readonly PairedServerAskCard[] = []
 
+/** Who on the paired server asks: its agent's bot name, else its own name, else how it signs. */
+export function pairedServerAskerName(card: PairedServerAskCard): string {
+  return toSafeDisplayLine(card.from.sender?.bot?.name ?? card.from.sender?.name ?? card.from.label)
+}
+
 const listCards = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'paired-server-asks.list',
@@ -50,17 +55,19 @@ const decideCard = bindDeferredRpcOperation(
   })
 )
 
-/** The cards waiting on the person for this agent's Home chat, on the host that holds them, re-read
- *  with each of its chats notices; none on a host that takes no such asks. */
+/** The cards waiting on the person for one agent, by its Home chat or its id, on the host that holds
+ *  them, re-read with each of its chats notices; none on a host that takes no such asks. */
 export function useMobilePairedServerAsks({
   client,
-  connState,
-  sessionId,
+  connected,
+  sessionId = null,
+  botId = null,
   onAnswerError
 }: {
   client: RpcClient | null
-  connState: ConnectionState
-  sessionId: string | null
+  connected: boolean
+  sessionId?: string | null
+  botId?: string | null
   onAnswerError: (message: string) => void
 }): MobilePairedServerAsks {
   const supported =
@@ -71,17 +78,17 @@ export function useMobilePairedServerAsks({
 
   useEffect(() => {
     setCards(NONE)
-    if (!supported || !client || connState !== 'connected' || !sessionId) {
+    if (!supported || !client || !connected || (!sessionId && !botId)) {
       return
     }
     let live = true
     const read = (): void => {
       void listCards
-        .request(client, {})
+        .request(client, botId ? { botId } : {})
         .then((reply) => {
           const shown = listCards
             .interpret(reply)
-            .cards.filter((card) => card.botChatSessionId === sessionId)
+            .cards.filter((card) => !sessionId || card.botChatSessionId === sessionId)
           if (live) {
             setCards(shown.length > 0 ? shown : NONE)
           }
@@ -89,22 +96,23 @@ export function useMobilePairedServerAsks({
         // A failed read keeps the cards it showed.
         .catch(() => {})
     }
-    const stop = subscribeRuntimeClientEvents(client, {
-      onReady: read,
-      onEvent: (event) => {
-        if (
-          event.type === 'botsChanged' &&
-          botChangeConcerns(readBotChangeScope(event), { kinds: ['chats'] })
-        ) {
-          read()
-        }
+    const stop = subscribeSharedClientEvents(client, (event) => {
+      if (
+        event.type === 'ready' ||
+        (event.type === 'botsChanged' &&
+          botChangeConcerns(readBotChangeScope(event), {
+            ...(botId ? { botId } : {}),
+            kinds: ['chats']
+          }))
+      ) {
+        read()
       }
     })
     return () => {
       live = false
       stop()
     }
-  }, [client, connState, sessionId, supported])
+  }, [client, connected, sessionId, botId, supported])
 
   const answer = useCallback(
     async (card: PairedServerAskCard, decision: MobilePairedServerDecision): Promise<boolean> => {

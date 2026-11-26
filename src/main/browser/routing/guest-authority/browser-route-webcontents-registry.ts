@@ -78,6 +78,8 @@ export class BrowserRouteWebContentsRegistry {
         popupReleased: (opener) => this.dependencies.popupReleased?.(opener),
         openNewTabPopup: this.dependencies.openNewTabPopup,
         releaseAgentLead: this.dependencies.releaseAgentLead,
+        isAgentCommandShownHere: this.dependencies.isAgentCommandShownHere,
+        isPersonCommandRunning: this.dependencies.isPersonCommandRunning,
         isPopupNavigationAllowed: (url) => this.navigationAllowed(state, url, false)
       })
     } catch {

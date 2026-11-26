@@ -32,7 +32,11 @@ import {
 } from './orcad-managed-version-gc'
 
 import { clearOrcadUpdateFailedThisLaunch } from './orcad-managed-update-failure-memory'
-import { admitConfirmedIncumbent, admitOrcadRecordForIntent } from './orcad-managed-update-decision'
+import {
+  admitConfirmedIncumbent,
+  admitOrcadRecordForIntent,
+  managedOrcadUpdateForce
+} from './orcad-managed-update-decision'
 import { collectManagedTerminalCensus } from './orcad-terminal-census-client'
 import { updateTerminalCounts } from '../activation/orcad-fenced-stop'
 import { refreshMaintainedOrcadPairing } from './orcad-maintenance-pairing-refresh'
@@ -41,7 +45,11 @@ import { withManagedOrcadLifecycle, followLaunchedServerPort } from './orcad-man
 
 export async function updateManagedOrcadEnvironment(
   userDataPath: string,
-  args: LifecycleArgs & { force?: boolean; pastLiveTerminals?: OrcadManagedPastLiveTerminals }
+  args: LifecycleArgs & {
+    force?: boolean
+    pastLiveTerminals?: OrcadManagedPastLiveTerminals
+    endInProcessTerminals?: boolean
+  }
 ): Promise<OrcadManagedDeployResult> {
   const { pastLiveTerminals } = args
   // Update anyway keeps Update's version admission even if a caller also passed force.
@@ -53,11 +61,7 @@ export async function updateManagedOrcadEnvironment(
       ? admitConfirmedIncumbent(admitIntent, pastLiveTerminals.incumbentVersion)
       : admitIntent
     // A confirmed uncounted census needs full force, which still requires proof no daemon is running.
-    const force: OrcadUpdateForce | undefined = pastLiveTerminals
-      ? pastLiveTerminals.uncounted
-        ? true
-        : 'live-terminals'
-      : args.force
+    const force = managedOrcadUpdateForce(args)
     const result = await runManagedOrcadUpdate(
       userDataPath,
       managed,

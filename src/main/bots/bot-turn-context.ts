@@ -8,10 +8,12 @@ import {
   botMemoryTopicsUpdateText,
   botMemoryUpdateText,
   botMemoryKnown,
+  botSoulUpdateText,
   botTurnFingerprint as fingerprint,
   readBotMemoryTopics
 } from './bot-turn-memory-update'
 import type { BotRecentChatsSection } from './bot-recent-chats'
+import { type BotTurnNoteRead, withNoteGiven } from './bot-active-work'
 import {
   type BotTurnLinkedSkills,
   linkedProjectsKey,
@@ -19,7 +21,7 @@ import {
   NO_BOT_TURN_LINKED_SKILLS,
   relinkedSkills
 } from './bot-turn-linked-skills'
-import type { BotTurnContext, BotFirstRun } from './bot-turn-context-types'
+import type { BotTurnContext, BotFirstRun, Held } from './bot-turn-context-types'
 import type { StructuredAgentSessionTurnContextPlan as TurnPlan } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
 import { botLaunchedInstructions, withBotRulesUpdate } from './bot-turn-rules-update'
 import { type BotTurnGiven as Given, launchedBotTurnGiven } from './bot-turn-given'
@@ -41,14 +43,7 @@ import { writeBotTurnMemoryReceipt } from './bot-turn-memory-receipt'
 
 export { BOT_MEMORY_UPDATED_NOTE } from '../../shared/bots/bot-memory-updated-note'
 
-// Workflow only: how the bot should weigh the update, never how it should sound.
-const COPY = {
-  soul: "[Your SOUL.md was updated; this replaces your earlier standing instructions. They rank below the user's current request.]"
-}
-
 export type { BotTurnContext, BotFirstRun } from './bot-turn-context-types'
-
-type Held = string | null | undefined
 
 const NO_FIRST_RUN: BotFirstRun = { rules: () => null, ownerTurnEnded: () => {} }
 
@@ -73,11 +68,11 @@ export function createBotTurnContext(
   /** What the bot's other chats did lately, as this turn's message may hear of it. */
   recentChats: (
     botId: string,
-    sessionId: string,
-    message: AgentJournalMessageItem
+    sessionId: string
   ) => Promise<BotRecentChatsSection | null> = async () => null,
-  /** Every fifth turn of an owner chat, whoever started it: questions the owner left unanswered. */
-  unansweredQuestionNote: (sessionId: string) => Promise<string | null> = async () => null,
+  /** Every fifth turn of an owner chat, whoever started it: questions the owner left unanswered; and
+   *  In progress items nothing runs for, each said once until it changes. */
+  unansweredQuestionNote: BotTurnNoteRead = async () => null,
   /** Current metadata, so a rename also reaches an already-running chat. */
   currentBotName: (botId: string) => string | null = () => null
 ): BotTurnContext {
@@ -143,7 +138,7 @@ export function createBotTurnContext(
         relinked(sessionId, stored),
         fs.readText(join(stored.folder, 'MEMORY.md')),
         readTopics(stored.folder),
-        unansweredQuestionNote(sessionId).catch(() => null)
+        unansweredQuestionNote(sessionId, stored.botId).catch(() => null)
       ])
       update(sessionId, {
         memoryAtStart: fingerprint(memory),
@@ -153,8 +148,10 @@ export function createBotTurnContext(
       })
       const rules = firstRun.rules(stored.botId, sessionId)
       const skillsNow = skillsUpdate(entry)
-      const text = [rules, skillsNow?.text, unanswered].filter(Boolean)
-      const taken = () => (skillsNow ? update(sessionId, { skills: skillsNow.skills }) : undefined)
+      const text = [rules, skillsNow?.text, unanswered?.text].filter(Boolean)
+      const taken = withNoteGiven(unanswered, () =>
+        skillsNow ? update(sessionId, { skills: skillsNow.skills }) : undefined
+      )
       const plan = text.length === 0 ? null : { text: text.join('\n\n'), given: taken }
       return withOrcaRules(sessionId, entry, held, plan)
     },
@@ -169,8 +166,8 @@ export function createBotTurnContext(
         readBotHomeFiles(fs, stored.folder),
         workNote(sessionId, message).catch(() => null),
         readTopics(stored.folder),
-        recentChats(stored.botId, sessionId, message).catch(() => null),
-        unansweredQuestionNote(sessionId).catch(() => null)
+        recentChats(stored.botId, sessionId).catch(() => null),
+        unansweredQuestionNote(sessionId, stored.botId).catch(() => null)
       ])
       const soul = fingerprint(files.soul)
       const memory = fingerprint(files.memory)
@@ -197,18 +194,18 @@ export function createBotTurnContext(
       return withOrcaRules(sessionId, entry, held, {
         text: [
           ...(rules ? [rules] : []),
-          ...(soul !== entry.soul ? [`${COPY.soul}\n\n${files.soul?.trim() || '(empty)'}`] : []),
+          ...(soul !== entry.soul ? [botSoulUpdateText(files.soul)] : []),
           ...(memoryNow ? [memoryNow] : []),
           ...(topicsNow ? [topicsNow] : []),
           ...(skillsNow ? [skillsNow.text] : []),
           ...(others ? [others] : []),
           ...(work ? [work] : []),
-          ...(unanswered ? [unanswered] : [])
+          ...(unanswered ? [unanswered.text] : [])
         ].join('\n\n'),
         ...(changed.length > 0
           ? { note: botContextNoteBody({ botId: entry.botId, changed }) }
           : {}),
-        given: () =>
+        given: withNoteGiven(unanswered, () =>
           update(sessionId, {
             soul,
             memory,
@@ -218,6 +215,7 @@ export function createBotTurnContext(
             ...(recent ? { recentChats: recent.key } : {}),
             ...(skillsNow ? { skills: skillsNow.skills } : {})
           })
+        )
       })
     },
     handedOver: (sessionId) =>

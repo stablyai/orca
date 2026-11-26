@@ -10,7 +10,6 @@ import {
 import type { AgentSessionStartFailure } from '../startup/structured-agent-session-start-failure'
 // Open conversations at rest; never start agents for reads. Acquire serialization once because the queue is nonreentrant.
 
-import { closeStructuredAgentSessionHandovers } from '../delivery/structured-agent-session-handing-over'
 import {
   AgentSessionRefusalError,
   agentSessionRefusalError
@@ -118,7 +117,9 @@ export function createStructuredAgentSessionConversationLifetime(
   const closeForWorkspaceSleep = async (
     sessionId: string,
     workspaceId: string,
-    executionHostId: ExecutionHostId
+    executionHostId: ExecutionHostId,
+    // An automatic release's last word, judged in the session lane as its close is; refusal throws.
+    admit?: (work: StructuredAgentSessionCloseWork) => boolean
   ): Promise<WorkspaceSleepCloseResult | null> => {
     const matches = (): boolean => {
       const location = deps().store.getConversation(sessionId)?.location
@@ -126,17 +127,14 @@ export function createStructuredAgentSessionConversationLifetime(
     }
     const starts = workspaceSleepStartAborts(() => host.context().runtimeState, sessionId)
     // Pending creates have no record yet; their queued close waits for founding.
-    if (matches() && deps().store.getRecord(sessionId)) {
-      const journal = sessions.get(sessionId)?.journal
-      if (journal) {
-        closeStructuredAgentSessionHandovers(journal)
-      }
-      starts.abort()
+    if (!admit && matches() && deps().store.getRecord(sessionId)) {
+      starts.cut(sessions.get(sessionId)?.journal)
     }
     const closed = serialize(sessionId, async () => {
       if (!matches()) {
         return null
       }
+      await (admit && admitClosingStructuredAgentSession(host, sessionId, admit))
       readRefusals.forget(sessionId)
       const record = deps().store.getConversation(sessionId)
       if (!record) {

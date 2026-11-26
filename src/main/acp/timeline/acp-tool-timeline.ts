@@ -104,6 +104,12 @@ export class AcpToolTimeline {
     return { events, tasks }
   }
 
+  /** The call with its whole input; a running journal copy holds only a preview. */
+  wholeCall(toolCallId: string, body: AgentJournalToolCallItem): AgentJournalToolCallItem {
+    const input = this.whole.get(toolCallId)?.input
+    return input === undefined ? body : { ...body, input }
+  }
+
   /** Orca inferred this task from a call still running at its turn's end. */
   backgrounds(toolCallId: string): boolean {
     return this.backgrounded.has(toolCallId)

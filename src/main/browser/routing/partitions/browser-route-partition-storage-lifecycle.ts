@@ -13,6 +13,8 @@ export type BrowserRoutePartitionStorageDependencies = {
   isPartitionLive(partition: string): boolean
   clearPartitionStorage(partition: string): Promise<void>
   removePartitionDirectory(directory: string): Promise<void>
+  /** After the bindings go: partitions this release tried to clear may be restored again. */
+  releaseRetiredPartitions?(partitions: readonly string[]): void
 }
 
 export type BrowserRoutePartitionStorageRelease = {
@@ -45,12 +47,18 @@ export async function releaseBrowserRoutePartitionStorage(
       failures.push(error)
     }
   }
-  return {
-    clearedPartitions,
-    livePartitions,
-    removedBindings:
-      clearedPartitions.length > 0 ? dependencies.bindings.remove(clearedPartitions) : 0,
-    failures
+  try {
+    return {
+      clearedPartitions,
+      livePartitions,
+      removedBindings:
+        clearedPartitions.length > 0 ? dependencies.bindings.remove(clearedPartitions) : 0,
+      failures
+    }
+  } finally {
+    dependencies.releaseRetiredPartitions?.(
+      partitions.filter((partition) => !livePartitions.includes(partition))
+    )
   }
 }
 

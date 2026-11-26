@@ -176,7 +176,7 @@ patchedDependencies:
   '@radix-ui/react-menu@2.1.24': a21d18697be25b83f91656d94ba7a64aaaf9eead32e404dacc23297c3363083b
   '@tiptap/extension-list@3.31.3': afc553bf4f7cb888dfcdc30d52b7fed589176fd1987736fd72fd1f4f7173f299
   '@tiptap/markdown@3.31.3': 4fe6aebb0d868ea9e8977f371bd088e96d5018ea8cf83a7ae3f3f924b87ee7cf
-  '@vscode/windows-process-tree@0.8.0': a09f2e8b2b4e73ef20c317af91f9e06c09abf62fa2c891d99b16f53047f596fd
+  '@vscode/windows-process-tree@0.8.0': 7d691799d520346f89866112e8d1436e990058a5384d35b32acf86057c4f435d
   '@xterm/addon-image@0.10.0-beta.331': f088c9207dac42844a542b9da8078be52351cee60585725ef189b9fd30f33f34
   '@xterm/addon-ligatures@0.11.0-beta.330': 47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920
   '@xterm/addon-search@0.17.0-beta.330': eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0
@@ -191,13 +191,15 @@ patchedDependencies:
   minimatch@10.2.6: 4324868e550a69eee9addc4801001bee415e98339c9b2b88d6ab4fc6028741c6
   minimatch@9.0.9: c356feccb9147b4d6a1cc72b10270defcb95d14cb42ee74ddfe7219341417161
   monaco-editor@0.55.1: 53b71f7d8a7c00b76ffdb73ce83d18e31692f193f5fafa6a390e48f5b3fdd636
-  node-pty@1.1.0: 323de54927594a11e3e110e31d5350327ef0a9d527c25342ab9b770b89948c9b
+  node-pty@1.1.0: a5d433185680c215bb202e9778b140b8ff7a8d55d1a156cb075ca74db7989f73
   oxlint-plugin-anti-slop@0.1.2: c10c871702365a0c2c59e9f1c5fb92df97cae5755d534c0a3d83c6368f6feafe
   pdfjs-dist@6.3.289: 424fde648e16c965ce45c55bdda49ecb3a4aa992c856900714c841c3f13f8415
   picomatch@4.0.4: 76f93480db68f4e3e460f56ccd209911ee596325ff3ae5fcf356a454d36536f8
   picomatch@4.0.7: 7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c
   prosemirror-view@1.42.3: 3340ccbcc4e3302f3ae1c0eda3911015966add2e7e0df76abd89fbef4f3902f7
+  serve-sim@0.1.47: 35fbf11ff1b4c94f4b1253d9922fed45f9f170bd7f19d4a0999df7c8c2316bc0
   sprintf-js@1.1.3: 05316a8b01f155fe19a1e0cb4042c81d43d798a76755c407684e1199a18b1e08
+  ssh2@1.17.0: def1408158978a9387f38303972030c1962519b7ce563dbf4ca376deb3a308bf
   vitest@5.1.0: 957d1d635d13350266bce54094e8197e86da1931a62d0caf7d5339c72040d9d9
   ws@8.22.0: 9393e04dd9a90b01eb7aa35fcd5b1431b5038ce999fbbd82651136193ba51f14
 
@@ -206,8 +208,8 @@ importers:
   .:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
-        specifier: 0.3.319
-        version: 0.3.319(@anthropic-ai/sdk@0.122.0(zod@4.6.7))(@modelcontextprotocol/sdk@1.32.1(supports-color@7.2.0)(zod@4.6.7))(zod@4.6.7)
+        specifier: 0.3.330
+        version: 0.3.330(@anthropic-ai/sdk@0.122.0(zod@4.6.7))(@modelcontextprotocol/sdk@1.32.1(supports-color@7.2.0)(zod@4.6.7))(zod@4.6.7)
       '@floating-ui/dom':
         specifier: 1.8.0
         version: 1.8.0
@@ -231,7 +233,7 @@ importers:
         version: 0.43.0
       electron-updater:
         specifier: ^6.8.12
-        version: 6.8.12(electron@43.8.10(supports-color@7.2.0))(supports-color@7.2.0)
+        version: 6.8.12(electron@45.4.1(supports-color@7.2.0))(supports-color@7.2.0)
       fflate:
         specifier: 0.8.3
         version: 0.8.3
@@ -246,7 +248,7 @@ importers:
         version: 3.0.2
       node-pty:
         specifier: ^1.1.0
-        version: 1.1.0(patch_hash=323de54927594a11e3e110e31d5350327ef0a9d527c25342ab9b770b89948c9b)
+        version: 1.1.0(patch_hash=a5d433185680c215bb202e9778b140b8ff7a8d55d1a156cb075ca74db7989f73)
       posthog-node:
         specifier: ^5.52.5
         version: 5.52.5
@@ -259,15 +261,18 @@ importers:
       react-i18next:
         specifier: 17.0.19
         version: 17.0.19(@types/react@19.2.18)(i18next@26.7.2(typescript@7.0.2))(react-dom@19.2.9(@types/react@19.2.18)(react@19.2.9))(react@19.2.9)(typescript@7.0.2)
+      semver:
+        specifier: 7.8.6
+        version: 7.8.6
       serve-sim:
         specifier: 0.1.47
-        version: 0.1.47(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.9(@types/react@19.2.18)(react@19.2.9))(react@19.2.9)(typescript@7.0.2)
+        version: 0.1.47(patch_hash=35fbf11ff1b4c94f4b1253d9922fed45f9f170bd7f19d4a0999df7c8c2316bc0)(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.9(@types/react@19.2.18)(react@19.2.9))(react@19.2.9)(typescript@7.0.2)
       smol-toml:
         specifier: 1.9.1
         version: 1.9.1
       ssh2:
         specifier: ^1.17.0
-        version: 1.17.0
+        version: 1.17.0(patch_hash=def1408158978a9387f38303972030c1962519b7ce563dbf4ca376deb3a308bf)
       stream-chain:
         specifier: 4.2.6
         version: 4.2.6
@@ -325,7 +330,7 @@ importers:
         version: 1.94.0
       '@playwright/test':
         specifier: ^1.64.1
-        version: 1.64.1(electron@43.8.10(supports-color@7.2.0))
+        version: 1.64.1(electron@45.4.1(supports-color@7.2.0))
       '@sanity/diff-match-patch':
         specifier: ^3.2.1
         version: 3.2.1
@@ -334,7 +339,7 @@ importers:
         version: 0.2.5(eslint@10.10.0(@types/keyv@3.1.4)(jiti@2.7.0)(supports-color@7.2.0))
       '@stablyai/playwright-test':
         specifier: ^2.1.16
-        version: 2.1.16(@playwright/test@1.64.1(electron@43.8.10(supports-color@7.2.0)))(zod@4.6.7)
+        version: 2.1.16(@playwright/test@1.64.1(electron@45.4.1(supports-color@7.2.0)))(zod@4.6.7)
       '@tailwindcss/vite':
         specifier: ^4.3.5
         version: 4.3.5(vite@8.3.6(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
@@ -413,6 +418,9 @@ importers:
       '@types/react-dom':
         specifier: ~19.2.7
         version: 19.2.7(@types/react@19.2.18)
+      '@types/semver':
+        specifier: 7.7.1
+        version: 7.7.1
       '@types/ssh2':
         specifier: ^1.15.6
         version: 1.15.6
@@ -474,14 +482,14 @@ importers:
         specifier: 3.4.17
         version: 3.4.17
       electron:
-        specifier: 43.8.10
-        version: 43.8.10(supports-color@7.2.0)
+        specifier: 45.4.1
+        version: 45.4.1(supports-color@7.2.0)
       electron-builder:
         specifier: 26.15.3
         version: 26.15.3(electron-builder-squirrel-windows@26.15.3)(supports-color@7.2.0)
       electron-vite:
         specifier: ^6.0.0
-        version: 6.0.0(@swc/core@1.16.2)(electron@43.8.10(supports-color@7.2.0))(supports-color@7.2.0)(vite@8.3.6(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+        version: 6.0.0(@swc/core@1.16.2)(electron@45.4.1(supports-color@7.2.0))(supports-color@7.2.0)(vite@8.3.6(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
       emoji-picker-react:
         specifier: ^4.22.3
         version: 4.22.3(@types/react@19.2.18)(react@19.2.9)
@@ -574,7 +582,7 @@ importers:
         version: 6.3.289(patch_hash=424fde648e16c965ce45c55bdda49ecb3a4aa992c856900714c841c3f13f8415)
       playwright-core:
         specifier: 1.64.1
-        version: 1.64.1(electron@43.8.10(supports-color@7.2.0))
+        version: 1.64.1(electron@45.4.1(supports-color@7.2.0))
       pngjs:
         specifier: ^7.0.0
         version: 7.0.0
@@ -713,7 +721,7 @@ importers:
         version: 0.4.1
       '@vscode/windows-process-tree':
         specifier: 0.8.0
-        version: 0.8.0(patch_hash=a09f2e8b2b4e73ef20c317af91f9e06c09abf62fa2c891d99b16f53047f596fd)
+        version: 0.8.0(patch_hash=7d691799d520346f89866112e8d1436e990058a5384d35b32acf86057c4f435d)
       transcribe-cpp:
         specifier: 0.4.1
         version: 0.4.1
@@ -805,8 +813,8 @@ packages:
   '@antfu/install-pkg@1.1.0':
     resolution: {integrity: sha512-MGQsmw10ZyI+EJo45CdSER4zEb+p31LpDAFp2Z3gkSd1yqVZGi0Ebx++YTEMonJy4oChEMLsxZ64j8FH6sSqtQ==}
 
-  '@anthropic-ai/claude-agent-sdk@0.3.319':
-    resolution: {integrity: sha512-7X+sh4uZv/u4OL4I4cQvMr9N3NM6FDiuyk829hFylgbrnNwVyiGElWEDWGuO26zwMIxmgpKdPoDILoFIHh1uwA==}
+  '@anthropic-ai/claude-agent-sdk@0.3.330':
+    resolution: {integrity: sha512-7om9Xus6tfkeCUCfzg6ilJuN6Z7okkEvJ0mx+ukXa/Id5U/6BGtPkOYni+3ebedwa3b9SVF7A05+ln+/9EoU/w==}
     engines: {node: '>=18.14.0'}
     peerDependencies:
       '@anthropic-ai/sdk': '>=0.93.0'
@@ -4455,6 +4463,9 @@ packages:
   '@types/retry@0.12.0':
     resolution: {integrity: sha512-wWKOClTTiizcZhXnPY4wikVAwmdYHp8q6DmC+EJUzAMsycb7HB32Kh9RN4+0gExjmPmZSAQjgURXIGATPegAvA==}
 
+  '@types/semver@7.7.1':
+    resolution: {integrity: sha512-FmgJfu+MOcQ370SD0ev7EI8TlCAfKYU+B4m5T3yXc1CiRN94g/SZPtsCkk506aUDtlMnFZvasDwHHUcZUEaYuA==}
+
   '@types/set-cookie-parser@2.4.10':
     resolution: {integrity: sha512-GGmQVGpQWUe5qglJozEjZV/5dyxbOOZ0LHe/lqyWssB88Y4svNfst0uqBVscdDeIKl5Jy5+aPSvy7mI9tYRguw==}
 
@@ -5540,8 +5551,8 @@ packages:
     resolution: {integrity: sha512-bO3y10YikuUwUuDUQRM4KfwNkKhnpVO7IPdbsrejwN9/AABJzzTQ4GeHwyzNSrVO+tEH3/Np255a3sVZpZDjvg==}
     engines: {node: '>=8.0.0'}
 
-  electron@43.8.10:
-    resolution: {integrity: sha512-He/CVZxahZbDOS++eIwzU+XubARqz8s3d/eqPCmE/VcWc67yf8sei5vbKVZJE2jCmqqbbr5yWrWKmXJSyds8Ug==}
+  electron@45.4.1:
+    resolution: {integrity: sha512-DjsJ/eQhovkjf1vYFFyh5GB8NMx+L5bdYaonvGOlWselg3DQ0fwIF0N/+2hrPsoS4whmmNswh21ym/8dgt1y5Q==}
     engines: {node: '>= 22.12.0'}
     hasBin: true
 
@@ -6835,8 +6846,8 @@ packages:
     resolution: {integrity: sha512-8Ofs/AUQh8MaEcrlq5xOX0CQ9ypTF5dl78mjlMNfOK08fzpgTHQRQPBxcPlEtIw0yRpws+Zo/3r+5WRby7u3Gg==}
     engines: {node: '>= 0.6'}
 
-  node-abi@4.33.0:
-    resolution: {integrity: sha512-vLBWCKb+7LWsX+TbfzWOkw0W81m377tyx3hOweBTjO43CXZnRGS1/JPWs20fr0PgZyDXk6ROYrylsEycK8raDA==}
+  node-abi@4.40.0:
+    resolution: {integrity: sha512-GuvqvtrOk+AC27RidBxBsMzVNkwNl7PjHgc4NXbmdvSVLgIUjpaqcG1FjNRYnt2Yn9Ytq+Ln37XsBaglUcte/w==}
     engines: {node: '>=22.12.0'}
 
   node-addon-api@7.1.0:
@@ -7583,8 +7594,8 @@ packages:
     engines: {node: '>=10'}
     hasBin: true
 
-  semver@7.8.1:
-    resolution: {integrity: sha512-rkVq3IXh+4FDGch+KwzX3aV9W3kO54GyEgpvBzSyctDA6Xtd7RJQV1xmXbeQp5v7+VzLOfVqiutSE6GICgPFvg==}
+  semver@7.8.6:
+    resolution: {integrity: sha512-9lpSSU4Mly3mrtruwLs1eLK6+gzbzqeBFwRNjIjE+9LuDpWdYctrQlQ3ej1Ilgi7gknpsTRnPoLP8DpCHqHIJw==}
     engines: {node: '>=10'}
     hasBin: true
 
@@ -8447,7 +8458,7 @@ snapshots:
       package-manager-detector: 1.6.0
       tinyexec: 1.1.2
 
-  '@anthropic-ai/claude-agent-sdk@0.3.319(@anthropic-ai/sdk@0.122.0(zod@4.6.7))(@modelcontextprotocol/sdk@1.32.1(supports-color@7.2.0)(zod@4.6.7))(zod@4.6.7)':
+  '@anthropic-ai/claude-agent-sdk@0.3.330(@anthropic-ai/sdk@0.122.0(zod@4.6.7))(@modelcontextprotocol/sdk@1.32.1(supports-color@7.2.0)(zod@4.6.7))(zod@4.6.7)':
     dependencies:
       '@anthropic-ai/sdk': 0.122.0(zod@4.6.7)
       '@modelcontextprotocol/sdk': 1.32.1(supports-color@7.2.0)(zod@4.6.7)
@@ -8704,7 +8715,7 @@ snapshots:
       env-paths: 3.0.0
       graceful-fs: 4.2.11
       progress: 2.0.3
-      semver: 7.8.1
+      semver: 7.8.6
       sumchecker: 3.0.1(supports-color@7.2.0)
     optionalDependencies:
       undici: 7.30.1
@@ -8735,7 +8746,7 @@ snapshots:
       debug: 4.4.3(supports-color@7.2.0)
       isbinaryfile: 4.0.10
       plist: 3.1.0
-      semver: 7.8.1
+      semver: 7.8.6
     transitivePeerDependencies:
       - supports-color
 
@@ -8743,7 +8754,7 @@ snapshots:
     dependencies:
       '@malept/cross-spawn-promise': 2.0.0
       debug: 4.4.3(supports-color@7.2.0)
-      node-abi: 4.33.0
+      node-abi: 4.40.0
       node-api-version: 0.2.1
       node-gyp: 12.4.0
       read-binary-file-arch: 1.0.6(supports-color@7.2.0)
@@ -9707,9 +9718,9 @@ snapshots:
       tslib: 2.8.1
       webcrypto-core: 1.9.2
 
-  '@playwright/test@1.64.1(electron@43.8.10(supports-color@7.2.0))':
+  '@playwright/test@1.64.1(electron@45.4.1(supports-color@7.2.0))':
     dependencies:
-      playwright: 1.64.1(electron@43.8.10(supports-color@7.2.0))
+      playwright: 1.64.1(electron@45.4.1(supports-color@7.2.0))
     transitivePeerDependencies:
       - '@types/electron'
       - electron
@@ -10721,28 +10732,28 @@ snapshots:
 
   '@stablelib/base64@1.0.1': {}
 
-  '@stablyai/playwright-base@2.1.16(@playwright/test@1.64.1(electron@43.8.10(supports-color@7.2.0)))(zod@4.6.7)':
+  '@stablyai/playwright-base@2.1.16(@playwright/test@1.64.1(electron@45.4.1(supports-color@7.2.0)))(zod@4.6.7)':
     dependencies:
-      '@playwright/test': 1.64.1(electron@43.8.10(supports-color@7.2.0))
+      '@playwright/test': 1.64.1(electron@45.4.1(supports-color@7.2.0))
       jpeg-js: 0.4.4
       p-retry: 4.6.2
       pngjs: 7.0.0
     optionalDependencies:
       zod: 4.6.7
 
-  '@stablyai/playwright-test@2.1.16(@playwright/test@1.64.1(electron@43.8.10(supports-color@7.2.0)))(zod@4.6.7)':
+  '@stablyai/playwright-test@2.1.16(@playwright/test@1.64.1(electron@45.4.1(supports-color@7.2.0)))(zod@4.6.7)':
     dependencies:
-      '@playwright/test': 1.64.1(electron@43.8.10(supports-color@7.2.0))
-      '@stablyai/playwright': 2.1.16(@playwright/test@1.64.1(electron@43.8.10(supports-color@7.2.0)))(zod@4.6.7)
-      '@stablyai/playwright-base': 2.1.16(@playwright/test@1.64.1(electron@43.8.10(supports-color@7.2.0)))(zod@4.6.7)
+      '@playwright/test': 1.64.1(electron@45.4.1(supports-color@7.2.0))
+      '@stablyai/playwright': 2.1.16(@playwright/test@1.64.1(electron@45.4.1(supports-color@7.2.0)))(zod@4.6.7)
+      '@stablyai/playwright-base': 2.1.16(@playwright/test@1.64.1(electron@45.4.1(supports-color@7.2.0)))(zod@4.6.7)
     transitivePeerDependencies:
       - '@types/zod'
       - zod
 
-  '@stablyai/playwright@2.1.16(@playwright/test@1.64.1(electron@43.8.10(supports-color@7.2.0)))(zod@4.6.7)':
+  '@stablyai/playwright@2.1.16(@playwright/test@1.64.1(electron@45.4.1(supports-color@7.2.0)))(zod@4.6.7)':
     dependencies:
-      '@playwright/test': 1.64.1(electron@43.8.10(supports-color@7.2.0))
-      '@stablyai/playwright-base': 2.1.16(@playwright/test@1.64.1(electron@43.8.10(supports-color@7.2.0)))(zod@4.6.7)
+      '@playwright/test': 1.64.1(electron@45.4.1(supports-color@7.2.0))
+      '@stablyai/playwright-base': 2.1.16(@playwright/test@1.64.1(electron@45.4.1(supports-color@7.2.0)))(zod@4.6.7)
     transitivePeerDependencies:
       - '@types/zod'
       - zod
@@ -11406,6 +11417,8 @@ snapshots:
 
   '@types/retry@0.12.0': {}
 
+  '@types/semver@7.7.1': {}
+
   '@types/set-cookie-parser@2.4.10':
     dependencies:
       '@types/node': 24.19.2
@@ -11535,7 +11548,7 @@ snapshots:
 
   '@vscode/ripgrep-universal@1.18.0': {}
 
-  '@vscode/windows-process-tree@0.8.0(patch_hash=a09f2e8b2b4e73ef20c317af91f9e06c09abf62fa2c891d99b16f53047f596fd)':
+  '@vscode/windows-process-tree@0.8.0(patch_hash=7d691799d520346f89866112e8d1436e990058a5384d35b32acf86057c4f435d)':
     dependencies:
       node-addon-api: 7.1.0
     optional: true
@@ -12403,7 +12416,7 @@ snapshots:
 
   electron-to-chromium@1.5.422: {}
 
-  electron-updater@6.8.12(electron@43.8.10(supports-color@7.2.0))(supports-color@7.2.0):
+  electron-updater@6.8.12(electron@45.4.1(supports-color@7.2.0))(supports-color@7.2.0):
     dependencies:
       builder-util-runtime: 9.7.1(supports-color@7.2.0)
       fs-extra: 10.1.0
@@ -12414,16 +12427,16 @@ snapshots:
       semver: 7.7.4
       tiny-typed-emitter: 2.1.0
     optionalDependencies:
-      electron: 43.8.10(supports-color@7.2.0)
+      electron: 45.4.1(supports-color@7.2.0)
     transitivePeerDependencies:
       - supports-color
 
-  electron-vite@6.0.0(@swc/core@1.16.2)(electron@43.8.10(supports-color@7.2.0))(supports-color@7.2.0)(vite@8.3.6(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)):
+  electron-vite@6.0.0(@swc/core@1.16.2)(electron@45.4.1(supports-color@7.2.0))(supports-color@7.2.0)(vite@8.3.6(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)):
     dependencies:
       '@babel/core': 7.29.7(supports-color@7.2.0)
       '@babel/plugin-transform-arrow-functions': 7.29.7(@babel/core@7.29.7(supports-color@7.2.0))
       cac: 7.1.0
-      electron: 43.8.10(supports-color@7.2.0)
+      electron: 45.4.1(supports-color@7.2.0)
       magic-string: 1.4.2
       picocolors: 1.1.1
       rolldown: 1.2.16
@@ -12447,7 +12460,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  electron@43.8.10(supports-color@7.2.0):
+  electron@45.4.1(supports-color@7.2.0):
     dependencies:
       '@electron-internal/extract-zip': 1.0.4
       '@electron/get': 5.0.0(supports-color@7.2.0)
@@ -12916,7 +12929,7 @@ snapshots:
       es6-error: 4.1.1
       matcher: 3.0.0
       roarr: 2.15.4
-      semver: 7.7.4
+      semver: 7.8.6
       serialize-error: 7.0.1
     optional: true
 
@@ -14184,9 +14197,9 @@ snapshots:
 
   negotiator@1.0.0: {}
 
-  node-abi@4.33.0:
+  node-abi@4.40.0:
     dependencies:
-      semver: 7.8.1
+      semver: 7.8.6
 
   node-addon-api@7.1.0:
     optional: true
@@ -14197,7 +14210,7 @@ snapshots:
 
   node-api-version@0.2.1:
     dependencies:
-      semver: 7.8.1
+      semver: 7.8.6
 
   node-gyp@12.4.0:
     dependencies:
@@ -14206,7 +14219,7 @@ snapshots:
       graceful-fs: 4.2.11
       nopt: 9.0.0
       proc-log: 6.1.0
-      semver: 7.8.1
+      semver: 7.8.6
       tar: 7.5.22
       tinyglobby: 0.2.17
       undici: 6.29.1
@@ -14216,7 +14229,7 @@ snapshots:
 
   node-int64@0.4.0: {}
 
-  node-pty@1.1.0(patch_hash=323de54927594a11e3e110e31d5350327ef0a9d527c25342ab9b770b89948c9b):
+  node-pty@1.1.0(patch_hash=a5d433185680c215bb202e9778b140b8ff7a8d55d1a156cb075ca74db7989f73):
     dependencies:
       node-addon-api: 7.1.1
 
@@ -14515,13 +14528,13 @@ snapshots:
       pvutils: 1.1.5
       tslib: 2.8.1
 
-  playwright-core@1.64.1(electron@43.8.10(supports-color@7.2.0)):
+  playwright-core@1.64.1(electron@45.4.1(supports-color@7.2.0)):
     optionalDependencies:
-      electron: 43.8.10(supports-color@7.2.0)
+      electron: 45.4.1(supports-color@7.2.0)
 
-  playwright@1.64.1(electron@43.8.10(supports-color@7.2.0)):
+  playwright@1.64.1(electron@45.4.1(supports-color@7.2.0)):
     dependencies:
-      playwright-core: 1.64.1(electron@43.8.10(supports-color@7.2.0))
+      playwright-core: 1.64.1(electron@45.4.1(supports-color@7.2.0))
     transitivePeerDependencies:
       - '@types/electron'
       - electron
@@ -15117,7 +15130,7 @@ snapshots:
 
   semver@7.7.4: {}
 
-  semver@7.8.1: {}
+  semver@7.8.6: {}
 
   send@1.2.1(supports-color@7.2.0):
     dependencies:
@@ -15140,7 +15153,7 @@ snapshots:
       type-fest: 0.13.1
     optional: true
 
-  serve-sim@0.1.47(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.9(@types/react@19.2.18)(react@19.2.9))(react@19.2.9)(typescript@7.0.2):
+  serve-sim@0.1.47(patch_hash=35fbf11ff1b4c94f4b1253d9922fed45f9f170bd7f19d4a0999df7c8c2316bc0)(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.9(@types/react@19.2.18)(react@19.2.9))(react@19.2.9)(typescript@7.0.2):
     dependencies:
       inspect-webkit: 0.0.5(typescript@7.0.2)
       sonner: 2.0.8(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.9(@types/react@19.2.18)(react@19.2.9))(react@19.2.9)
@@ -15226,7 +15239,7 @@ snapshots:
 
   simple-update-notifier@2.0.0:
     dependencies:
-      semver: 7.8.1
+      semver: 7.8.6
 
   sisteransi@1.0.5: {}
 
@@ -15272,7 +15285,7 @@ snapshots:
   sprintf-js@1.1.3(patch_hash=05316a8b01f155fe19a1e0cb4042c81d43d798a76755c407684e1199a18b1e08):
     optional: true
 
-  ssh2@1.17.0:
+  ssh2@1.17.0(patch_hash=def1408158978a9387f38303972030c1962519b7ce563dbf4ca376deb3a308bf):
     dependencies:
       asn1: 0.2.6
       bcrypt-pbkdf: 1.0.2

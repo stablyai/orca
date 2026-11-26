@@ -13,6 +13,7 @@ import {
   openJournalDomainDatabase
 } from './database/journal-domain-database'
 import { JournalCheckpointOwner } from './database/journal-checkpoint-owner'
+import { journalWalWriterRelief } from './database/journal-wal-writer-relief'
 import { JournalSqlBatch, JournalSqlBatchError } from './journal-sql-batch'
 import { JournalSqlCommand } from './journal-sql-command'
 import {
@@ -88,7 +89,9 @@ async function open(): Promise<void> {
     forks = new JournalForkStages(db, stateDirectory)
     commands = new JournalSqlCommand(db, stateDirectory, forks)
     if (!readOnly) {
-      checkpoint = new JournalCheckpointOwner(db, workerData.filename)
+      checkpoint = new JournalCheckpointOwner(db, workerData.filename, {
+        relief: journalWalWriterRelief(db, workerData.filename)
+      })
       parking = new JournalSqlWalParking(checkpoint)
     }
     batch = new JournalSqlBatch(db, checkpoint && journalSqlTimedGate(checkpoint, gate))

@@ -11,10 +11,9 @@ import {
 } from 'node:fs'
 import { dirname, join, posix, resolve, win32 } from 'node:path'
 import { homedir } from 'node:os'
-import { lock } from 'proper-lockfile'
 import '../../filesystem/atomic-file-publication'
 import { renameFileWithWindowsRetry } from '../../../shared/file-write/windows-retry-file-operations'
-import { runKeyedSerializedOperation } from '../../../shared/concurrency/keyed-serialized-operations'
+import { lockClaudeConfig, runSerializedForClaudeConfig } from './claude-global-config-lock'
 import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { runWslProcess } from '../../wsl/execution/wsl-runner'
 import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
@@ -32,12 +31,6 @@ type ClaudeConfigEnv = {
   CLAUDE_CONFIG_DIR?: string
   CLAUDE_CODE_CUSTOM_OAUTH_URL?: string
 }
-
-// Defer held locks to Claude; keep the long stale window's refresh timer within setTimeout range.
-const NEVER_STALE_MS = 2 ** 30
-const LOCK_RETRIES = { retries: 4, factor: 2, minTimeout: 50, maxTimeout: 250 }
-// Serialize local updates to avoid exhausting file-lock retries during launch bursts.
-const updateQueueByConfigFile = new Map<string, Promise<void>>()
 
 function pathApi(style: ClaudeTrustPathStyle): typeof posix {
   return style === 'win32' ? win32 : posix
@@ -202,7 +195,7 @@ export function updateClaudeGlobalConfig(
   configFile: string,
   change: (config: Record<string, unknown>) => ClaudeGlobalConfigChange
 ): Promise<ClaudeGlobalConfigUpdateOutcome> {
-  return runKeyedSerializedOperation(updateQueueByConfigFile, configFile, () =>
+  return runSerializedForClaudeConfig(configFile, () =>
     updateClaudeGlobalConfigNow({ configFile, change })
   )
 }
@@ -225,14 +218,7 @@ async function updateClaudeGlobalConfigNow(args: {
   try {
     let release: () => Promise<void>
     try {
-      release = await lock(args.configFile, {
-        // Claude locks the literal path, even for symlinked configs.
-        lockfilePath: `${args.configFile}.lock`,
-        realpath: false,
-        stale: NEVER_STALE_MS,
-        retries: LOCK_RETRIES,
-        onCompromised: () => {}
-      })
+      release = await lockClaudeConfig(args.configFile)
     } catch {
       return 'locked'
     }

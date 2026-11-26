@@ -23,6 +23,9 @@ export type ClientAskListenerOwner = Pick<OrcaRuntimeService, 'getOrchestrationD
 const listenersByOwner = new WeakMap<ClientAskListenerOwner, Map<string, ClientAskListener>>()
 // The name each computer last pulled with, so a send while it's away can still name it.
 const namesByOwner = new WeakMap<ClientAskListenerOwner, Map<string, string>>()
+// Each pairing a re-pair replaced, by installation, to the pairing that replaced it; kept past the
+// pull that announced it, so a reply on the older conversation follows the computer.
+const replacementsByOwner = new WeakMap<ClientAskListenerOwner, Map<string, string>>()
 
 function listenersOf(owner: ClientAskListenerOwner): Map<string, ClientAskListener> {
   let listeners = listenersByOwner.get(owner)
@@ -66,6 +69,14 @@ export function clientAskPullStarted(
     namesByOwner.set(owner, names)
   }
   names.set(pull.installationId, pull.name)
+  if (pull.previousPairing !== undefined && pull.previousPairing !== caller.fingerprint) {
+    let replacements = replacementsByOwner.get(owner)
+    if (!replacements) {
+      replacements = new Map()
+      replacementsByOwner.set(owner, replacements)
+    }
+    replacements.set(keyOf(pull.previousPairing, pull.installationId), caller.fingerprint)
+  }
   listeners.set(key, {
     deviceId: caller.deviceId,
     installationId: pull.installationId,
@@ -144,19 +155,31 @@ export function requireListeningClient(
 }
 
 /** The listening computer a conversation's environment names: the same device first, so copies
- *  sharing an installation id stay apart; else the one installation that re-paired. */
+ *  sharing an installation id stay apart; else the one that re-paired from `pairing`. */
 export function listenerForClientEnvironment(
   owner: ClientAskListenerOwner,
   deviceId: string,
-  installationId: string
+  installationId: string,
+  pairing: string
 ): ClientAskListener | null {
   const listeners = listenersOf(owner)
   const same = listeners.get(keyOf(deviceId, installationId))
   if (same) {
     return same
   }
+  // The newest pairing that replaced this one, through every re-pair since.
+  const replacements = replacementsByOwner.get(owner)
+  const seen = new Set<string>()
+  let current = pairing
+  while (!seen.has(current) && replacements?.has(keyOf(current, installationId))) {
+    seen.add(current)
+    current = replacements.get(keyOf(current, installationId))!
+  }
   const repaired = [...listeners.values()].filter(
-    (listener) => listener.installationId === installationId
+    (listener) =>
+      listener.installationId === installationId &&
+      current !== pairing &&
+      listener.fingerprint === current
   )
   return repaired.length === 1 ? repaired[0]! : null
 }

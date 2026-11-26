@@ -10,12 +10,19 @@ export function structuredAgentSettingGates(
   getSettings: () => ReturnType<RuntimeStore['getSettings']>
 ): Pick<
   StructuredAgentSessionRuntimeDeps,
-  'resolveAgentFullAccess' | 'piManagedExtensionsEnabled' | 'nativeChatPromptSuggestions'
+  | 'resolveAgentFullAccess'
+  | 'piManagedExtensionsEnabled'
+  | 'nativeChatPromptSuggestions'
+  | 'sharedCodexServers'
 > {
   return {
     resolveAgentFullAccess: (agent) =>
       isTuiAgent(agent) && preModeChatGetsFullAccess(agent, getSettings(), process.platform),
     piManagedExtensionsEnabled: () => isAgentStatusHooksEnabledForAgent(getSettings(), 'pi'),
-    nativeChatPromptSuggestions: () => nativeChatShowsPromptSuggestions(getSettings())
+    nativeChatPromptSuggestions: () => nativeChatShowsPromptSuggestions(getSettings()),
+    // Offered for this computer's chats only: a remote or WSL server runs plain Node, not Electron.
+    sharedCodexServers: () =>
+      process.versions.electron !== undefined &&
+      getSettings().experimentalSharedCodexServers === true
   }
 }

@@ -8,6 +8,7 @@ import {
   pluginNameClashKeys,
   type PluginNameCandidate
 } from '../../../../../shared/plugins/plugin-name-clashes'
+import { pluginDisplayText } from '../../../../../shared/plugins/plugin-display-text'
 
 export function pluginNameWithPublisher(
   name: string,
@@ -26,9 +27,16 @@ export function disambiguatedPluginNames(
   items: readonly PluginNameCandidate[],
   t?: Translate
 ): Map<string, string> {
-  const clashing = pluginNameClashKeys(items)
+  // Orca's own plugin names read in the UI language; other plugins keep theirs.
+  const named = t
+    ? items.map((item) => ({
+        ...item,
+        name: pluginDisplayText(item.name, item.official, t)
+      }))
+    : items
+  const clashing = pluginNameClashKeys(named)
   return new Map(
-    items.map((item) => [
+    named.map((item) => [
       item.key,
       clashing.has(item.key) && item.publisher
         ? pluginNameWithPublisher(item.name, item.publisher, t)

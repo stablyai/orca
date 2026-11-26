@@ -1,4 +1,4 @@
-import { access } from 'node:fs/promises'
+import { stat } from 'node:fs/promises'
 import { isAbsolute, posix } from 'node:path'
 import {
   isWslUncPath,
@@ -81,7 +81,7 @@ export type HostReadableTranscriptPathDeps = {
 async function pathExistsAsync(path: string, signal?: AbortSignal): Promise<boolean> {
   signal?.throwIfAborted()
   if (!isWslUncPath(path)) {
-    return access(path).then(
+    return stat(path).then(
       () => true,
       () => false
     )

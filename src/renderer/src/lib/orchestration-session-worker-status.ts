@@ -19,10 +19,15 @@ export type SessionWorkerLook = {
   group: CrewStatusGroup
   /** Resting on its coordinator's answer: an idle worker with a reason, never one needing you. */
   asksCoordinator: boolean
+  /** Its turn is over and it waits on background tasks it started. */
+  waitsOnBackground: boolean
 }
 
 export function sessionWorkerLook(
-  worker: Pick<OrchestrationSessionWorker, 'state' | 'activity' | 'pendingQuestion'>
+  worker: Pick<
+    OrchestrationSessionWorker,
+    'state' | 'activity' | 'pendingQuestion' | 'backgroundWait'
+  >
 ): SessionWorkerLook {
   const open = sessionWorkerIsRunning(worker)
   const status = crewPartyStatus({
@@ -39,7 +44,8 @@ export function sessionWorkerLook(
   return {
     status,
     group: crewStatusGroup(status),
-    asksCoordinator: sessionWorkerAsksCoordinator(worker)
+    asksCoordinator: sessionWorkerAsksCoordinator(worker),
+    waitsOnBackground: open && worker.backgroundWait !== undefined
   }
 }
 
@@ -49,6 +55,9 @@ export function sessionWorkerRestingLabel(look: SessionWorkerLook, coordinator: 
     return translate('bots.activity.askedCoordinator', 'Asked {{name}} a question', {
       name: coordinator
     })
+  }
+  if (look.waitsOnBackground && look.group === 'idle') {
+    return translate('bots.activity.waitsOnBackground', 'Waiting on its background task')
   }
   switch (look.group) {
     case 'needsYou':

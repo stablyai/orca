@@ -18,7 +18,8 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import type { AgentSessionModelCatalogResult } from '../../../../../shared/agent-session/agent-session-wire'
 import {
   agentPickerEntryOptions,
-  agentPickerModels
+  agentPickerModels,
+  withComposedParts
 } from '../../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
 import { AgentChoiceMenu } from './AgentChoiceMenu'
 import { sourceControlActionRouteHint } from './agent-choice-route-hint'
@@ -113,6 +114,9 @@ export function AgentChoiceFields({
     selected?.model && !(live ? listedModels.some(({ id }) => id === selected.model) : model)
       ? selected.model
       : undefined
+  const listedRow = live
+    ? (menu?.rows ?? agentPickerModels(live)).find(({ id }) => id === selected?.model)
+    : undefined
   const liveEffort = live
     ? agentPickerEntryOptions(live, selected?.model, 'terminal').find(({ id }) => id === 'effort')
     : undefined
@@ -214,7 +218,14 @@ export function AgentChoiceFields({
                       option.kind,
                       option.kind.type === 'boolean' ? next === 'true' : next
                     )
-              onSelect({ options: { [option.id]: encoded } })
+              onSelect(
+                withComposedParts(
+                  listedRow,
+                  selected ?? {},
+                  model?.options ?? catalog?.unknownModelOptions ?? [],
+                  { options: { [option.id]: encoded } }
+                )
+              )
             }}
           />
         )

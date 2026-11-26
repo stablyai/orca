@@ -19,12 +19,14 @@ import type { MobileComposio } from '../../session/native-chat/transcript/bot-ca
 import { colors } from '../../theme/mobile-theme'
 import type { PhoneBot } from '../host-bots-operations'
 import { MobileBotTextButton } from '../MobileBotTextButton'
-import { MobileConnectorSourceIcon, MobileGoogleMark } from '../MobileConnectorSourceIcon'
+import { MobileConnectorLogo } from '../MobileConnectorSourceIcon'
 import { ToolRow } from '../tools/MobileBotToolsPage'
 import type { ConnectorPage } from './connector-pages'
 import { slackRowFace } from './mobile-slack-copy'
 import type { PhoneSlackView } from './use-phone-bot-slack'
 import type { PhoneLinearView } from './use-phone-connector-account'
+import { botMcpAppLine } from '../../../../src/shared/bots/bot-app-lines'
+import { AppLogoMark } from './MobileBotAddConnector'
 
 const ICON = 20
 
@@ -158,7 +160,7 @@ export function connectorRows(input: ConnectorRowsInput): ReactNode[] {
   const githubOrgs = githubOrgsOf(bot, input.githubState)
   const separator = t('bots.connector.titleSeparator', ' · ')
   const mark = (source: 'slack' | 'linear' | 'github') => (
-    <MobileConnectorSourceIcon source={source} size={ICON} />
+    <MobileConnectorLogo source={source} size={ICON} />
   )
   const composioFix = (problem: 'key' | 'unread') => {
     const fix =
@@ -244,7 +246,7 @@ export function connectorRows(input: ConnectorRowsInput): ReactNode[] {
         rows.push(
           <ListRow
             key={entry.key}
-            leading={<MobileGoogleMark size={ICON} />}
+            leading={<MobileConnectorLogo source="google" size={ICON} />}
             title={title}
             subtitle={input.googleEmails.length > 0 ? input.googleEmails.join(', ') : undefined}
             subtitleLines={1}
@@ -264,7 +266,7 @@ export function connectorRows(input: ConnectorRowsInput): ReactNode[] {
         rows.push(
           <ListRow
             key={entry.key}
-            leading={<Blocks size={ICON} color={colors.textSecondary} />}
+            leading={<AppLogoMark slug={connection.app} />}
             title={title}
             subtitle={
               problem
@@ -311,8 +313,11 @@ export function connectorRows(input: ConnectorRowsInput): ReactNode[] {
             line={
               entry.app?.signIn === 'browser' && !entry.problem && input.tools?.problems != null
                 ? t('bots.tools.face.signedIn', 'Signed in')
-                : entry.app?.line
+                : entry.app
+                  ? botMcpAppLine(entry.app, t)
+                  : undefined
             }
+            leading={entry.app ? <AppLogoMark slug={entry.app.id} /> : undefined}
             tool={entry.tool}
             problem={entry.problem}
             hostName={input.hostName}
@@ -342,7 +347,7 @@ function removedGitHubRows(input: ConnectorRowsInput): ReactNode[] {
     .map((org) => (
       <ListRow
         key={`github-removed:${org.installationId}`}
-        leading={<MobileConnectorSourceIcon source="github" size={ICON} />}
+        leading={<MobileConnectorLogo source="github" size={ICON} />}
         title={`${BOT_CONNECTOR_NAMES.github}${t('bots.connector.titleSeparator', ' · ')}${org.accountLogin}`}
         accessory={
           <MobileBotTextButton

@@ -8,7 +8,11 @@ import type { JournalWriterCommit } from '../../../native-chat/agent-session-jou
 import type { AgentSessionJournal } from '../../../native-chat/agent-session-journal/journal-store'
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { openAgentSessionRecordStoreOnce } from '../records/agent-session-record-store-slot'
+import {
+  openAgentSessionRecordStoreOnce,
+  peekOpenedAgentSessionRecordStore
+} from '../records/agent-session-record-store-slot'
+import { hasPersistedStructuredAgentSessionDatabaseFile } from '../records/persisted-agent-session-database-file'
 import { isHostShuttingDown } from '../../../startup/quit/host-shutdown-state'
 
 export type PRWatchRuntimeDeps = {
@@ -48,6 +52,16 @@ export function startPRWatchRuntime(
   admittedDeps = deps
   const startedIn = generation
   starting ??= (async () => {
+    // Skip opening the chat journal writer/reader workers when no structured chat DB exists yet.
+    if (
+      !peekOpenedAgentSessionRecordStore() &&
+      !(await hasPersistedStructuredAgentSessionDatabaseFile(deps.stateDirectory))
+    ) {
+      if (startedIn === generation) {
+        starting = null
+      }
+      return
+    }
     const { store, journalDatabase } = await openAgentSessionRecordStoreOnce(
       withPRWatchRecovery({
         stateDirectory: deps.stateDirectory,
@@ -124,6 +138,9 @@ export function observePRWatchCommittedRows(
   journal: AgentSessionJournal,
   rows: JournalWriterCommit | undefined
 ): void {
+  if (!running && !starting && admittedDeps) {
+    resumePRWatchRuntime()
+  }
   // Before watches start, captured obligations simply wait in their table for the first drain.
   running?.observeCommittedRows(sessionId, journal, rows)
 }

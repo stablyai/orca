@@ -68,3 +68,45 @@ describe('structured mail conversation routing', () => {
     expect(deliveredAfter('failed')).toBe(false)
   })
 })
+
+it("sends the owner's answer to an item question a thread asked back to that thread, and only Orca's item mail", () => {
+  const db = new OrchestrationDb(':memory:')
+  const asker = 'orca_session_id:11111111-1111-4111-8111-111111111111'
+  const other = 'orca_session_id:22222222-2222-4222-8222-222222222222'
+  try {
+    const answersThere = (
+      from: string,
+      askedInConversation: string | undefined,
+      sessionId = asker
+    ) => {
+      const message = db.insertMessage({
+        from,
+        ...(from === 'orca:items' ? { orcaAuthored: 'item-mail' as const } : {}),
+        to: sessionId,
+        subject: 'Item #4 answered',
+        type: 'status',
+        payload: JSON.stringify({
+          botItems: [],
+          ...(askedInConversation ? { askedInConversation } : {})
+        })
+      })
+      const source = structuredMailSource({
+        db,
+        mailboxHandle: sessionId,
+        dispatchId: null,
+        batch: [message],
+        senderSnapshot: () => ({ name: 'Items', agent: null }),
+        sessionId
+      })
+      return isConversationReport({ kind: 'message', role: 'user', blocks: [], from: source })
+    }
+
+    expect(answersThere('orca:items', asker)).toBe(true)
+    // Another chat reading it, item mail no thread asked, and anyone else's payload stay in Orca.
+    expect(answersThere('orca:items', asker, other)).toBe(false)
+    expect(answersThere('orca:items', undefined)).toBe(false)
+    expect(answersThere(other, asker)).toBe(false)
+  } finally {
+    db.close()
+  }
+})

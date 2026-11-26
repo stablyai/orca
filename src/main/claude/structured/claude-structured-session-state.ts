@@ -7,6 +7,7 @@ import type {
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalAnsweredTurnIdentity } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type {
   ClaudeStreamJsonConnection,
@@ -18,10 +19,8 @@ import type { ClaudeJournalTranslator } from './journal/claude-journal-translato
 import type { ClaudePromptRegistry } from './permissions/claude-prompt-registry'
 import { ClaudeJournalBoundDelivery } from './journal/claude-journal-bound-delivery'
 import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acquisition'
-import type {
-  AgentSessionFastModeState,
-  AgentSessionProviderUpdate
-} from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionFastModeState } from '../../../shared/agent-session/agent-session-wire'
+import type { ClaudeInstalledUpdateState } from '../cli-capabilities/claude-installed-update-state'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import type { ClaudeBackgroundTaskTracker } from '../background-tasks/claude-background-task-tracker'
 import type { ClaudeChildWorkDecoder } from '../child-work/claude-child-work-decoder'
@@ -52,6 +51,8 @@ export type ClaudeLateDispatchOutcome =
   | {
       clientMessageId: string
       providerIdentity: AgentJournalItemIdentity
+      /** The running turn it joined, which another send opened. */
+      answeredInTurn?: AgentJournalAnsweredTurnIdentity
     }
   /** `unrun`: the CLI reported it removed the send without running it. */
   | ({ clientMessageId: string; state: 'rejected'; unrun?: true } & AgentJournalDispatchRejection)
@@ -163,8 +164,6 @@ export type ClaudeSession = {
   /** What Orca put on this process's command line, and the mode it opened in; this process only. */
   launchIntent?: { permissionMode?: string; model?: string }
   firstRootInit?: { permissionMode: string | null }
-  /** The `claude_code_version` this process's root init frames report. */
-  runningVersion?: string
   /** Claude's own effective settings turn bypass off for this process (startup `get_settings`). */
   bypassDisabled?: boolean
   /** Claude accepted a bypass switch in this process, which overrules a start outside it. */
@@ -191,12 +190,6 @@ export type ClaudeSession = {
   fastModeAtStart: boolean
   /** Rechecks this child's CLI support; absent where the launch had no flag support to ask. */
   cliFlag?: ClaudeCliFlagCheck
-  /** Reads the launch command's version now; absent where the launch had no flag support to ask. */
-  cliVersion?: () => Promise<string | null>
-  /** The newer installed CLI last reported for this process; null once reported as current. */
-  installedUpdate?: AgentSessionProviderUpdate | null
-  /** Rechecks the installed CLI at most once a minute; set at this process's first turn end. */
-  installedUpdateCheck?: () => void
   /** Whether the CLI answers live effort and Fast changes; `unknown` ones are rechecked, then tried. */
   flagSettingsControl?: ClaudeCliFlagFact
   promptSuggestionPause?: ClaudePromptSuggestionPause
@@ -240,7 +233,7 @@ export type ClaudeSession = {
     onLateRefusal: (error: Error) => void
     startup: ClaudeStartupOutcome
   }
-}
+} & ClaudeInstalledUpdateState
 
 /** Retain observed exits until settlement so delayed acquisition cleanup can find their proof. */
 export type ClaudeSessionExit = {

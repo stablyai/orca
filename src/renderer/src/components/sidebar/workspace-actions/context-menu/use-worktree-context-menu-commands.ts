@@ -23,6 +23,12 @@ import {
 import type { useAppStore } from '@/store/index'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
+import type { WorktreeDeleteIdentity } from '../deletion/worktree-delete-request'
+
+export type OpenedWorktreeDeleteTarget = {
+  worktree: WorktreeDeleteIdentity
+  folderWorkspaceId: string | null
+}
 
 function resolveChildWorktreeRepository(repos: readonly Repo[], worktree: Worktree): Repo | null {
   return resolveReviewRepository(repos, {
@@ -44,6 +50,7 @@ export function useWorktreeContextMenuCommands(args: {
   isMultiContext: boolean
   moveProjectToGroup: ReturnType<typeof useAppStore.getState>['moveProjectToGroup']
   onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: string) => void
+  openedDeleteTarget: OpenedWorktreeDeleteTarget | null
   openModal: ReturnType<typeof useAppStore.getState>['openModal']
   repo: Repo | null | undefined
   scopeRef: React.RefObject<HTMLDivElement | null>
@@ -71,6 +78,21 @@ export function useWorktreeContextMenuCommands(args: {
   }, [args])
   const handleCopyName = useCallback(() => {
     window.api.ui.writeClipboardText(resolveWorktreeDisplayName(args.worktree))
+  }, [args])
+  const handleCopyRenameError = useCallback(() => {
+    const stored = args.worktree.firstAgentMessageRenameError
+    if (!stored) {
+      return
+    }
+    // Main keeps this app's fuller CLI output in memory; a paired server's row carries only the stored error.
+    const local = (args.worktree.hostId ?? 'local') === 'local'
+    void (
+      local
+        ? window.api.worktrees
+            .getBranchRenameFailureOutput({ worktreeId: args.worktree.id })
+            .catch(() => null)
+        : Promise.resolve(null)
+    ).then((full) => window.api.ui.writeClipboardText(full ?? stored))
   }, [args])
   const handleToggleRead = useCallback(() => {
     args.setWorkspaceUnreadByUser(
@@ -205,12 +227,16 @@ export function useWorktreeContextMenuCommands(args: {
     ])
   }, [args.worktree, args.subtreeSleepableWorktrees, sleepWorktreesAfterMenuClose])
   const handleDelete = useCallback(() => {
+    if (!args.openedDeleteTarget) {
+      return
+    }
+    const { worktree, folderWorkspaceId } = args.openedDeleteTarget
     const restoreSidebarPosition = preserveDeleteSiblingPosition(args.scopeRef.current)
     const intent = createWorktreeContextMenuDeleteIntent({
-      worktree: args.worktree,
+      worktree,
       batchDeleteWorktrees: args.batchDeleteWorktrees,
       isMultiContext: args.isMultiContext,
-      ...(args.folderWorkspaceId ? { folderWorkspaceId: args.folderWorkspaceId } : {})
+      ...(folderWorkspaceId ? { folderWorkspaceId } : {})
     })
     deferWorktreeContextMenuDeleteIntent(intent, restoreSidebarPosition)
     args.setMenuOpenState(false)
@@ -232,6 +258,7 @@ export function useWorktreeContextMenuCommands(args: {
     handleAssignWorkspaceStatus,
     handleCloseTerminals,
     handleCopyName,
+    handleCopyRenameError,
     handleCopyPath,
     handleCreateGroupDialogOpenChange,
     handleCreateGroupFromRepo,

@@ -5,13 +5,17 @@ import {
   CONNECTOR_REPLY_MAX_FILES,
   type ConnectorActionArgs
 } from '../../shared/connector-action-contract'
-import { CONNECTOR_REPLY_UNAVAILABLE } from '../../shared/rpc-contract/connectors/connector-params'
+import {
+  CONNECTOR_REPLY_HTML_PAGE_AS_FILE,
+  CONNECTOR_REPLY_UNAVAILABLE
+} from '../../shared/rpc-contract/connectors/connector-params'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { getOptionalStringFlag, getRepeatedStringFlag } from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { readReplyNotes } from './bot-reply-notes'
 import { readReplyChoices } from './bot-reply-choices'
+import { leaveThread } from './bot-reply-leave-thread'
 import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
   localFile,
@@ -22,12 +26,17 @@ import {
 } from '../slack/slack-action-files'
 import { readMessageText } from '../slack/slack-action-args'
 import type { ActionResult } from '../slack/slack-action-format'
+import { replyWithHtmlPages } from './bot-reply-html-pages'
+import {
+  formatAttached,
+  formatOffered,
+  formatReply,
+  type BotReplyResult,
+  type ConnectorReply
+} from './bot-reply-format'
 
 // The host retries an unavailable cloud itself, waiting out Retry-After, so the call can take a while.
 const REPLY_TIMEOUT_MS = 180_000
-
-// notices: why the reply can't wake an Orca bot it mentions.
-type ConnectorReply = { status: 'posted' | 'queued'; place?: string; notices?: string[] }
 
 // A host that can't post for anyone: connectors off or signed out.
 const REPLY_UNAVAILABLE_CODES = new Set(['connector_not_connected', 'connectors_disabled'])
@@ -40,33 +49,6 @@ const REPLY_REFUSALS: Readonly<Record<string, string>> = {
     'Nothing was posted: this is your Chat, which has no one conversation to post into. Your final message is posted when you finish.',
   not_this_bots_conversation:
     "Nothing was posted: this chat's conversation doesn't belong to this bot."
-}
-
-export function formatReply(reply: ConnectorReply): string {
-  const place = reply.place ?? 'the thread'
-  return [
-    reply.status === 'posted'
-      ? `Posted to ${place}.`
-      : `Sent; Orca Cloud will post it to ${place}.`,
-    ...(reply.notices ?? [])
-  ].join('\n')
-}
-
-function formatAttached(attached: NonNullable<BotReplyResult['attached']>): string {
-  const one = attached.files === 1
-  const what = one
-    ? 'The file'
-    : attached.posts > 1
-      ? `${attached.files} files, one message each,`
-      : `${attached.files} files`
-  const place = attached.place ?? attached.target?.label ?? 'the thread'
-  const queued = `${what} went to Orca Cloud, which posts ${one ? 'it' : 'them'} to ${place} shortly.`
-  const status = !attached.queued
-    ? `${what} posted to ${place}.`
-    : attached.unconfirmed
-      ? `${queued} Orca couldn't confirm they posted; read the thread before sending them again.`
-      : queued
-  return [status, ...(attached.notices ?? [])].join('\n')
 }
 
 type ReplyCaller = { paneKey: string } | { sessionId: string }
@@ -97,29 +79,6 @@ function refusalOf(error: unknown): never {
     throw new RuntimeClientError(error.code, refusal)
   }
   throw error
-}
-
-type BotReplyResult = {
-  reacted?: string
-  reply?: ConnectorReply
-  attached?: ActionResult & { files: number; posts: number; place?: string; unconfirmed?: true }
-  offered?: ActionResult & { choices: number; place?: string; unconfirmed?: true }
-}
-
-function formatOffered(offered: NonNullable<BotReplyResult['offered']>): string {
-  const place = offered.place ?? offered.target?.label ?? 'the thread'
-  // Slack took the words without their buttons: the cloud's note says so, and no press will come.
-  if (offered.note) {
-    return [`Posted to ${place}.`, offered.note, ...(offered.notices ?? [])].join('\n')
-  }
-  return [
-    offered.queued
-      ? `Sent with ${offered.choices} buttons; Orca Cloud will post it to ${place}.${offered.unconfirmed ? " Orca couldn't confirm it posted; read the thread before sending it again." : ''}`
-      : `Posted to ${place} with ${offered.choices} buttons.`,
-    // The agent waits on this, so it should know what a press looks like when it comes.
-    "A press comes back to you as that person's next message in this thread, with the button's label as its text.",
-    ...(offered.notices ?? [])
-  ].join('\n')
 }
 
 type ActResponse =
@@ -162,6 +121,27 @@ async function replyWithFiles(
 ): Promise<
   RuntimeRpcSuccess<ActionResult & { place?: string; posts: number; unconfirmed?: true }>
 > {
+  return postStaged(client, sessionId, await stageReplyFiles(client, sessionId, files), text)
+}
+
+/** One reply naming the staged files, with the words, as one post. */
+async function postStaged(
+  client: HandlerContext['client'],
+  sessionId: string,
+  staged: string[],
+  text: string | undefined
+) {
+  const args = { files: staged, ...withText(text), postId: newPostId() }
+  const posted = await settledReply(client, sessionId, args)
+  return { ...posted, result: { ...posted.result, posts: 1 } }
+}
+
+/** Each file takes a slot in the thread and goes there from disk; nothing is posted yet. */
+async function stageReplyFiles(
+  client: HandlerContext['client'],
+  sessionId: string,
+  files: readonly LocalFile[]
+): Promise<string[]> {
   const staged: string[] = []
   for (const file of files) {
     const postId = newPostId()
@@ -175,9 +155,7 @@ async function replyWithFiles(
     await uploadFile(slot.result.upload.url, file)
     staged.push(postId)
   }
-  const args = { files: staged, ...withText(text), postId: newPostId() }
-  const posted = await settledReply(client, sessionId, args)
-  return { ...posted, result: { ...posted.result, posts: 1 } }
+  return staged
 }
 
 /** A queued reply asked again under the same postId: the cloud posts nothing more and says how its
@@ -222,6 +200,9 @@ function refuseFlags(flags: HandlerContext['flags']): void {
 
 export const BOT_REPLY_HANDLERS: Record<string, CommandHandler> = {
   'bot reply': async ({ flags, client, json, cwd }) => {
+    if (flags.has('leave-thread')) {
+      return leaveThread({ client, flags, json })
+    }
     const choices = readReplyChoices(flags)
     refuseFlags(flags)
     const caller = replyCaller()
@@ -264,23 +245,43 @@ export const BOT_REPLY_HANDLERS: Record<string, CommandHandler> = {
       choices && text && sessionId
         ? await settledReply(client, sessionId, { text, choices, postId: newPostId() })
         : undefined
+    const reply = (pagesAsFiles: boolean) =>
+      client.call<ConnectorReply>(
+        'connector.reply',
+        // Minted once here, so Orca Cloud posts it once however often the host retries.
+        {
+          ...caller,
+          replyId: randomUUID(),
+          text,
+          ...(notes ? { review: notes } : {}),
+          ...(pagesAsFiles ? { pagesAsFiles: true } : {})
+        },
+        { timeoutMs: REPLY_TIMEOUT_MS }
+      )
+    let pages: { files: number; sent: Awaited<ReturnType<typeof replyWithFiles>> } | undefined
     const replied =
       text && files.length === 0 && !offered
-        ? await client
-            .call<ConnectorReply>(
-              'connector.reply',
-              // Minted once here, so Orca Cloud posts it once however often the host retries.
-              {
-                ...caller,
-                replyId: randomUUID(),
+        ? await reply(sessionId !== undefined).catch(async (error: unknown) => {
+            if (
+              !(
+                error instanceof RuntimeClientError &&
+                error.code === CONNECTOR_REPLY_HTML_PAGE_AS_FILE
+              ) ||
+              !sessionId
+            ) {
+              return refusalOf(error)
+            }
+            // Whole HTML pages go to Slack as files with the rest of the words, or inline as before.
+            pages =
+              (await replyWithHtmlPages(
                 text,
-                ...(notes ? { review: notes } : {})
-              },
-              { timeoutMs: REPLY_TIMEOUT_MS }
-            )
-            .catch(refusalOf)
+                (found) => stageReplyFiles(client, sessionId, found),
+                (ids, rest) => postStaged(client, sessionId, ids, rest)
+              )) ?? undefined
+            return pages ? undefined : reply(false).catch(refusalOf)
+          })
         : undefined
-    const envelope = replied ?? attached ?? offered ?? reacted
+    const envelope = replied ?? attached ?? pages?.sent ?? offered ?? reacted
     if (!envelope) {
       return
     }
@@ -288,6 +289,7 @@ export const BOT_REPLY_HANDLERS: Record<string, CommandHandler> = {
       ...(reacted && emoji ? { reacted: emoji } : {}),
       ...(replied ? { reply: replied.result } : {}),
       ...(attached ? { attached: { ...attached.result, files: files.length } } : {}),
+      ...(pages ? { attached: { ...pages.sent.result, files: pages.files } } : {}),
       ...(offered && choices ? { offered: { ...offered.result, choices: choices.length } } : {})
     }
     printResult({ ...envelope, result }, json, (value) =>

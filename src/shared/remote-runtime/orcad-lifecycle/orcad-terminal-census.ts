@@ -15,6 +15,8 @@ export const OrcadTerminalCensusSchema = z.object({
   daemonProtocolVersions: z.array(z.number().int().positive()).optional(),
   /** In-process fallback sessions end with orcad, unlike daemon sessions; absent on older hosts. */
   inProcessSessions: CountSchema.optional(),
+  /** Native chats with a live provider, which a stop ends; absent on older hosts, so unknown. */
+  chatSessions: CountSchema.optional(),
   /** Admission-fence expiry, epoch ms; 0 means reopened. Absence never proves older servers fenced admission. */
   admissionClosedUntil: z.number().finite().nonnegative().optional()
 })

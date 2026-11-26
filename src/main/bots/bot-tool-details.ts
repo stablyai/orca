@@ -1,3 +1,4 @@
+import { BotFailureError } from '../../shared/bots/bot-failure-copy'
 import {
   BotToolInputSchema,
   botToolInputError,
@@ -13,8 +14,17 @@ export async function readBotToolDetails(folder: string, name: string): Promise<
   const { servers, version } = await readBotToolsSnapshot(folder)
   const server = servers.find((entry) => entry.name === name)
   if (!server) {
-    throw new Error('This bot no longer has that tool.')
+    throw new BotFailureError('toolGone')
   }
+  return botToolDetailsOf(folder, server, version)
+}
+
+/** `server` for the editor, its saved values masked; `folder` holds its credential. */
+export function botToolDetailsOf(
+  folder: string,
+  server: BotToolServer,
+  version: string
+): BotToolDetails {
   const masked = (values: Record<string, string> | undefined) =>
     Object.keys(values ?? {}).map((key) => ({ key, configured: true }))
   return {
@@ -43,7 +53,7 @@ export function resolveBotToolInput(
 ): BotToolServer {
   const result = BotToolInputSchema.safeParse(input)
   if (!result.success) {
-    throw new Error('Tool details are invalid. Check the name, URL or executable and values.')
+    throw new BotFailureError('toolDetailsInvalid')
   }
   const draft = result.data
   const remote = 'url' in draft
@@ -70,17 +80,15 @@ export function resolveBotToolInput(
     let value = row.value
     if (row.keep) {
       if (!destinationUnchanged) {
-        throw new Error(
-          'The credential destination changed. Re-enter saved values or remove their rows.'
-        )
+        throw new BotFailureError('toolDestinationChanged')
       }
       value = saved?.[row.key]
       if (value === undefined) {
-        throw new Error('That saved value is no longer available. Re-enter it or remove its row.')
+        throw new BotFailureError('toolSavedValueGone')
       }
     }
     if (value === undefined || (!row.keep && value === '') || (remote && /[\r\n]/.test(value))) {
-      throw new Error('Enter a value for each row, or remove the row.')
+      throw new BotFailureError('toolValueMissing')
     }
     return [row.key, value]
   })

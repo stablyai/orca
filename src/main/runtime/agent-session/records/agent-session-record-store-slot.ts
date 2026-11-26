@@ -12,6 +12,7 @@ import { readDeletedChats } from './agent-session-record-forgets'
 import type { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
 import { openStructuredAgentSessionSqlJournalDatabase } from '../installation/structured-agent-session-journal-open'
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
+import { setAgentProcessChatReader } from '../../../memory/agent-process-registry'
 
 export type AgentSessionRecordStoreLocation = {
   stateDirectory: string
@@ -74,6 +75,14 @@ export function openAgentSessionRecordStoreOnce(
     stateDirectory: location.stateDirectory,
     opened: openRecordStore(location).then(
       (opened) => {
+        if (opened.journalDatabase.readOnly) {
+          location.logger.warn(
+            'old chat journal: not checked (store uses a newer schema; opened read-only)',
+            {
+              scope: 'old-chat-history-cleanup-open'
+            }
+          )
+        }
         slot.database = opened.journalDatabase
         if (!slot.retire) {
           slot.store = opened.store
@@ -107,6 +116,18 @@ export function openAgentSessionRecordStoreOnce(
 export function peekOpenedAgentSessionRecordStore(): AgentSessionRecordStore | null {
   return opening?.store ?? null
 }
+
+// The Resource Manager names a chat's row from its record, read only for chats with a live process.
+setAgentProcessChatReader((agentSessionId) => {
+  const record = peekOpenedAgentSessionRecordStore()?.getRecord(agentSessionId)
+  return record
+    ? {
+        worktreeId: record.location.workspaceId,
+        agent: record.provider,
+        name: record.conversationName ?? null
+      }
+    : null
+})
 
 async function openRecordStore(
   location: AgentSessionRecordStoreLocation

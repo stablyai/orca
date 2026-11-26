@@ -49,14 +49,17 @@ export const webhookCardRead = bindDeferredRpcOperation(
   })
 )
 
-/** The hook's key-bearing URL, fetched on the owner's tap and never shown. */
+/** The hook's key-bearing URL and its key, fetched on the owner's tap and never shown. */
 export const webhookKeyReveal = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'webhooks.reveal',
     method: 'webhooks.reveal',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcResultVariant('webhook-key', z.looseObject({ url: z.string() }))
+    read: rpcResultVariant(
+      'webhook-key',
+      z.looseObject({ url: z.string(), key: z.string().optional() })
+    )
   })
 )
 
@@ -73,6 +76,17 @@ export const googleSetupRead = bindDeferredRpcOperation(
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('google-setup', GoogleSetupReadingSchema)
+  })
+)
+
+/** Tells a bot an offer card's answer as a hidden card answer, queued behind its running turn. */
+export const botOfferAnswerSend = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bots.offer.answer',
+    method: 'bots.offer.answer',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('bot-offer-answered', z.looseObject({ sent: z.boolean() }))
   })
 )
 
@@ -98,13 +112,20 @@ export const googleStatusRead = bindDeferredRpcOperation(
     read: rpcResultVariant(
       'google-status',
       z.looseObject({
-        client: z.looseObject({ clientId: z.string() }).nullable().optional(),
+        client: z
+          .looseObject({ clientId: z.string(), projectId: z.string().optional() })
+          .nullable()
+          .optional(),
+        // Absent from a host too old to keep a default.
+        defaultAccount: z.string().nullable().optional(),
         accounts: z
           .array(
             z.looseObject({
               email: z.string(),
               // `reconnect`: Google ended this sign-in.
               status: z.string().optional(),
+              // Google's own words for why it ended the sign-in.
+              googleError: z.string().optional(),
               services: z.array(
                 z.looseObject({
                   service: z.string(),

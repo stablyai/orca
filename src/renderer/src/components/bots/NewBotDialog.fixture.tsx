@@ -1,12 +1,18 @@
-import { useState } from 'react'
+import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { stubBots } from '../../component-fixtures/fixture-bots'
-import { useAppStore } from '@/store'
-import { PortalContainerContext } from '../ui/portal-container-context'
 import { BOT_TEMPLATES } from '../../../../shared/bots/bot-templates'
 import { templateProposal, type BotProposal } from '../../../../shared/bots/bot-proposal'
 import type { BotShareReview } from '../../../../shared/bots/bot-share-received'
 import { NewBotDialog } from './NewBotDialog'
+import { refreshAvatarCapability } from './avatar-generation-capability-store'
+import {
+  LONG_FIXTURE_COMPUTER,
+  NewBotFixtureStage,
+  newBotFixture,
+  seedNewBotFixture,
+  typeInto
+} from './new-bot-stage-fixture'
 
 const dialog = () => (
   <div className="h-[720px] bg-background">
@@ -32,21 +38,6 @@ const proposed = (height: number, proposal: BotProposal, origin: string) => () =
   </div>
 )
 
-// Types into the controlled fields the way a person would, so React sees the change.
-const typeInto = (selector: string, text: string) => async (): Promise<void> => {
-  const field = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(selector)
-  if (!field) {
-    return
-  }
-  const proto =
-    field instanceof HTMLTextAreaElement
-      ? HTMLTextAreaElement.prototype
-      : HTMLInputElement.prototype
-  Reflect.getOwnPropertyDescriptor(proto, 'value')?.set?.call(field, text)
-  field.dispatchEvent(new Event('input', { bubbles: true }))
-  await new Promise((resolve) => setTimeout(resolve, 50))
-}
-
 const typed = (purpose: string) => async (): Promise<void> => {
   await typeInto('[role="dialog"] input[autocomplete="off"]', 'Pulse')()
   await typeInto('[role="dialog"] textarea', purpose)()
@@ -69,6 +60,20 @@ export const longPurpose = defineFixture({
   interact: typed(
     'Watch app startup time on macOS, Windows and Linux, compare each new PR against main, and tell me in #perf when cold start gets more than 5% slower. Post a short summary there every Friday.'
   )
+})
+
+// Over the limit, as a value set past the box's maxLength arrives: Create shows Too long and sends nothing.
+export const tooLongPurpose = defineFixture({
+  ...newBotFixture(480),
+  interact: async () => {
+    await typeInto('input[autocomplete="off"]', 'Pulse')()
+    await typeInto(
+      'textarea',
+      'Watch app startup time and catch regressions on every platform. '.repeat(17)
+    )()
+    document.querySelector<HTMLButtonElement>('button[type="submit"]')?.click()
+    await new Promise(requestAnimationFrame)
+  }
 })
 
 export const proposal = defineFixture({
@@ -98,65 +103,6 @@ export const proposalLongPurpose = defineFixture({
   )
 })
 
-// Review shots at a 340 and a 480 px dialog. The dialog is fixed, so it portals into a transformed box
-// that wide (plus its 1rem margins) instead of the page's wide viewport.
-function Stage({
-  width,
-  nudge,
-  proposal,
-  height = 620,
-  link
-}: {
-  width: 340 | 480
-  nudge?: boolean
-  proposal?: BotProposal
-  height?: number
-  /** Opened from a reviewed link, as the link flow opens it. */
-  link?: BotShareReview
-}): React.JSX.Element {
-  const [box, setBox] = useState<HTMLElement | null>(null)
-  return (
-    <div
-      ref={setBox}
-      className="relative translate-x-0 bg-background"
-      style={{ width: width + 32, height }}
-    >
-      {box ? (
-        <PortalContainerContext.Provider value={box}>
-          <NewBotDialog
-            open
-            onOpenChange={() => {}}
-            onImport={nudge ? () => {} : undefined}
-            proposal={proposal}
-            {...(link
-              ? { fromShare: { review: link, toolIds: [], onBack: () => {}, onMoved: () => {} } }
-              : {})}
-          />
-        </PortalContainerContext.Provider>
-      ) : null}
-    </div>
-  )
-}
-
-const LONG_COMPUTER = 'build-runner-02.eu-west.internal'
-
-const seeded = (computer?: string) => (): void => {
-  stubBots([])
-  useAppStore.setState((state) => ({
-    detectedAgentIds: ['claude', 'codex'],
-    localDetectedAgentIdsByContext: {
-      host: ['claude', 'codex'],
-      'host\u0000all-agents': ['claude', 'codex']
-    },
-    ensureDetectedAgents: async () => ['claude', 'codex'],
-    isDetectingAgents: false,
-    settings: state.settings && {
-      ...state.settings,
-      hostSettingOverrides: computer ? { local: { displayLabel: computer } } : {}
-    }
-  }))
-}
-
 // A Hermes bot on this computer, so the first-bot import nudge shows.
 const HERMES_SOURCES = [
   {
@@ -167,7 +113,7 @@ const HERMES_SOURCES = [
 ]
 
 const withNudge = (): void => {
-  seeded()()
+  seedNewBotFixture()()
   try {
     localStorage.removeItem('orca.bots.import-nudge-dismissed')
   } catch {
@@ -200,12 +146,6 @@ const openComputerMenu = async (): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, 300))
 }
 
-const review = (width: 340 | 480, computer?: string) => ({
-  width: width + 32,
-  setup: seeded(computer),
-  render: () => <Stage width={width} />
-})
-
 const FILLED = named('Atlas', 'Triage new bugs and post a daily summary in #eng.')
 const LONGEST = named(
   'Customer Escalations Concierge for the Platform Team',
@@ -221,27 +161,75 @@ const LONGEST = named(
 export const nudge340 = defineFixture({
   width: 372,
   setup: withNudge,
-  render: () => <Stage width={340} nudge />
+  render: () => <NewBotFixtureStage width={340} nudge />
 })
 export const nudge480 = defineFixture({
   width: 512,
   setup: withNudge,
-  render: () => <Stage width={480} nudge />
+  render: () => <NewBotFixtureStage width={480} nudge />
 })
-export const empty340 = defineFixture(review(340))
-export const empty480 = defineFixture(review(480))
-export const filled340 = defineFixture({ ...review(340), interact: FILLED })
-export const filled480 = defineFixture({ ...review(480), interact: FILLED })
-export const longest340 = defineFixture({ ...review(340, LONG_COMPUTER), interact: LONGEST })
-export const longest480 = defineFixture({ ...review(480, LONG_COMPUTER), interact: LONGEST })
-export const picker340 = defineFixture({ ...review(340), interact: openPicker })
-export const picker480 = defineFixture({ ...review(480), interact: openPicker })
+export const empty340 = defineFixture(newBotFixture(340))
+export const empty480 = defineFixture(newBotFixture(480))
+
+export const filled340 = defineFixture({ ...newBotFixture(340), interact: FILLED })
+export const filled480 = defineFixture({ ...newBotFixture(480), interact: FILLED })
+export const longest340 = defineFixture({
+  ...newBotFixture(340, LONG_FIXTURE_COMPUTER),
+  interact: LONGEST
+})
+export const longest480 = defineFixture({
+  ...newBotFixture(480, LONG_FIXTURE_COMPUTER),
+  interact: LONGEST
+})
+const pictureReview = (width: 340 | 480) => ({
+  width: width + 32,
+  setup: () => {
+    seedNewBotFixture('Demo computer')()
+    const avatarGeneration: typeof window.api.avatarGeneration = {
+      ...window.api.avatarGeneration,
+      capability: async () => ({ agents: [{ agent: 'codex', status: 'ready' }] })
+    }
+    Reflect.set(window.api, 'avatarGeneration', avatarGeneration)
+    refreshAvatarCapability()
+  },
+  render: () => (
+    <NewBotFixtureStage
+      width={width}
+      proposal={{ name: 'Pebble', purpose: 'Sort invented notes for the demo.', mascot: 'B1' }}
+    />
+  )
+})
+
+export const picker340 = defineFixture({ ...pictureReview(340), interact: openPicker })
+export const picker480 = defineFixture({ ...pictureReview(480), interact: openPicker })
+
+const reopenDraft = async (): Promise<void> => {
+  await openPicker()
+  document.querySelector<HTMLButtonElement>('button[aria-label="Previous picture"]')?.click()
+  await new Promise((resolve) => setTimeout(resolve, 400))
+  await typeInto('textarea[aria-label="Picture description"]', 'a tiny violet robot gardener')()
+  const popover = document.querySelector<HTMLElement>('[data-slot="popover-content"]')
+  popover?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  await openPicker()
+  document.querySelector<HTMLButtonElement>('button[aria-label="Previous picture"]')?.click()
+  await new Promise((resolve) => setTimeout(resolve, 400))
+}
+
+export const pictureDraft340 = defineFixture({
+  ...pictureReview(340),
+  interact: reopenDraft
+})
+export const pictureDraft480 = defineFixture({
+  ...pictureReview(480),
+  interact: reopenDraft
+})
 export const computerMenu340 = defineFixture({
-  ...review(340, LONG_COMPUTER),
+  ...newBotFixture(340, LONG_FIXTURE_COMPUTER),
   interact: openComputerMenu
 })
 export const computerMenu480 = defineFixture({
-  ...review(480, LONG_COMPUTER),
+  ...newBotFixture(480, LONG_FIXTURE_COMPUTER),
   interact: openComputerMenu
 })
 
@@ -252,8 +240,8 @@ const fromTemplate = (id: string, name?: string) => {
 }
 const templateReview = (width: 340 | 480, id: string, name?: string) => ({
   width: width + 32,
-  setup: seeded(),
-  render: () => <Stage width={width} height={1100} proposal={fromTemplate(id, name)} />
+  setup: seedNewBotFixture(),
+  render: () => <NewBotFixtureStage width={width} height={1100} proposal={fromTemplate(id, name)} />
 })
 const openChip = (label: RegExp) => async (): Promise<void> => {
   const chip = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
@@ -267,7 +255,7 @@ const skillOff = async (): Promise<void> => {
   document.querySelector<HTMLButtonElement>('[role="switch"]')?.click()
   await new Promise((resolve) => setTimeout(resolve, 100))
 }
-const LONG_TEMPLATE_NAME = 'Pull request review for the Platform Team monorepo'
+const LONG_TEMPLATE_NAME = 'Customer Escalations Concierge for the Platform Reliability Team'
 
 export const prReview340 = defineFixture(templateReview(340, 'pr-review'))
 export const prReview480 = defineFixture(templateReview(480, 'pr-review'))
@@ -297,7 +285,7 @@ const LONGEST_LINK: BotShareReview = {
   reviewId: 'review-1',
   shareId: 'share-1',
   versionId: 'version-1',
-  publisher: 'Alexandra Whitfield',
+  publisher: 'Example Studio',
   publishedAt: '2026-11-08T00:00:00.000Z',
   bot: {
     schemaVersion: 1,
@@ -320,10 +308,84 @@ const LONGEST_LINK: BotShareReview = {
 
 const fromLink = (width: 340 | 480) => ({
   width: width + 32,
-  setup: seeded(LONG_COMPUTER),
-  render: () => <Stage width={width} link={LONGEST_LINK} />
+  setup: seedNewBotFixture(LONG_FIXTURE_COMPUTER),
+  render: () => <NewBotFixtureStage width={width} link={LONGEST_LINK} />,
+  interact: (frame: HTMLElement) => {
+    const name = frame.querySelector<HTMLInputElement>('input[aria-label="Name"]')
+    if (!name || document.activeElement === name || frame.querySelector('textarea')) {
+      throw new Error(
+        'A reviewed link must open with a prefilled, unfocused name and no Identity input'
+      )
+    }
+  }
 })
 
 // The link flow's New bot: the same dialog, prefilled from the link, beside longest340/480.
 export const link340 = defineFixture(fromLink(340))
 export const link480 = defineFixture(fromLink(480))
+
+// The shared link in the locales with the longest Use chat defaults: the footer stays on one row.
+const linkIn = (language: 'de' | 'es' | 'ru') => ({
+  ...fromLink(340),
+  interact: async (frame: HTMLElement) => {
+    fromLink(340).interact(frame)
+    await i18n.changeLanguage(await loadRendererUiLanguage(language))
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    const footer = document.querySelector<HTMLElement>('[data-slot="dialog-footer"]')
+    const start = footer?.querySelector<HTMLElement>('[data-slot="dialog-footer-start"]')
+    const actions = footer?.querySelector<HTMLElement>('[data-slot="dialog-footer-actions"]')
+    if (!start?.textContent || !actions) {
+      throw new Error('Use chat defaults must show for a link that keeps Ask')
+    }
+    if (Math.abs(start.getBoundingClientRect().top - actions.getBoundingClientRect().top) > 8) {
+      throw new Error('The footer must stay on one row')
+    }
+  }
+})
+export const linkDe340 = defineFixture(linkIn('de'))
+export const linkEs340 = defineFixture(linkIn('es'))
+export const linkRu340 = defineFixture(linkIn('ru'))
+
+// A model picked, so Use chat defaults shows on the footer's left.
+const pickModelOnly = async (): Promise<void> => {
+  const trigger = document.querySelector<HTMLElement>(
+    '[role="dialog"] [role="group"][aria-label="Agent"] button'
+  )
+  trigger?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+  await new Promise((resolve) => setTimeout(resolve, 400))
+  const label = [...document.querySelectorAll<HTMLElement>('[role="menu"] *')].find(
+    (node) => node.childElementCount === 0 && node.textContent?.trim() === 'Opus'
+  )
+  const opus = label?.closest<HTMLElement>('[role="option"]')
+  opus?.click()
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  document.activeElement?.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+  )
+  const focused = document.activeElement
+  if (focused instanceof HTMLElement) {
+    focused.blur()
+  }
+  await new Promise((resolve) => setTimeout(resolve, 300))
+}
+const pickModel = async (): Promise<void> => {
+  await FILLED()
+  await pickModelOnly()
+}
+export const chatDefaultsTemplate340 = defineFixture({
+  ...newBotFixture(340),
+  interact: pickModelOnly
+})
+export const chatDefaults340 = defineFixture({ ...newBotFixture(340), interact: pickModel })
+export const chatDefaults480 = defineFixture({ ...newBotFixture(480), interact: pickModel })
+export const chatDefaultsFocus340 = defineFixture({
+  ...newBotFixture(340),
+  interact: async () => {
+    await pickModel()
+    const link = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+      (button) => button.textContent === 'Use chat defaults'
+    )
+    link?.focus()
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+})

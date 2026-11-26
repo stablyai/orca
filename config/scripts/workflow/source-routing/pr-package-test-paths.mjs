@@ -40,6 +40,7 @@ const SHARED_PACKAGE_PREFIXES = [
   'electron.vite.config.ts',
   'config/electron-builder',
   'config/packaged-runtime',
+  'config/scripts/runtime-verification/packaged-main/',
   'config/packaged-native-build-entries',
   'config/dark-build-switches.',
   'config/build-plugins/',
@@ -82,11 +83,12 @@ const SHARED_PACKAGE_PREFIXES = [
   'resources/onboarding/',
   'resources/plugins/',
   'resources/skills/',
-  // Packaged CLI startup, skills resolution, and Electron entry/native loading.
-  'src/cli/index.ts',
-  'src/cli/arguments/',
-  'src/cli/runtime/',
-  'src/cli/skills/',
+  // The packaged CLI ships tsc output beside node_modules, so any CLI module's imports can break it (#48778).
+  'src/cli/',
+  // The MCP SDK is a bundled devDependency here: `orca mcp connect`'s bridge and the shared server
+  // processes import it, and only the packaged app checks what that pulls in (#48770 shipped ajv).
+  'src/main/mcp-servers/',
+  // Packaged CLI launch and Electron entry/native loading.
   'src/main/cli/',
   'src/main/index.ts',
   'src/main/node-runtime/',
@@ -202,7 +204,9 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/cli/wsl/wsl-cli-powershell-boundary.test.ts',
   'src/main/orca-profiles/profile-index-store.test.ts',
   'src/shared/secure-storage/secure-path-windows-acl.win32.test.ts',
-  'src/main/runtime/rpc/server/pairing/unreadable-secret-store-preservation.win32.test.ts'
+  'src/main/runtime/rpc/server/pairing/unreadable-secret-store-preservation.win32.test.ts',
+  'src/main/browser/network/tunnels/remote-browser-socks-client-owner.test.ts',
+  'src/main/runtime/files/watch/windows-file-watch.win32.test.ts'
 ]
 
 const WINDOWS_BOUNDARY_PREFIXES = [
@@ -232,12 +236,15 @@ const WINDOWS_BOUNDARY_PREFIXES = [
   'native/windows-security/',
   ...NATIVE_RUNTIME_PREFIXES,
   'src/packages/process-host/',
+  'src/main/browser/network/tunnels/remote-browser-socks-client-owner',
   'src/main/cli/wsl/',
   'src/main/codex/hooks/',
   'src/main/orca-profiles/',
   'src/main/persistence/profile-state/',
+  'src/main/runtime/files/watch/windows-file-watch',
   'src/main/runtime/rpc/server/pairing/',
   'src/main/windows/',
+  'src/shared/file-watch/windows-',
   'src/shared/file-write/windows-',
   'src/shared/orca-profiles/',
   'src/shared/secure-storage/'

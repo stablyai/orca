@@ -8,7 +8,8 @@ import type {
   BotItemStatus
 } from '../../shared/bots/bot-items'
 
-const MIGRATIONS: readonly string[] = [
+/** Each step once, in order; exported so a test can build an older file. */
+export const BOT_ITEMS_MIGRATIONS: readonly string[] = [
   `
   CREATE TABLE items (
     uid TEXT PRIMARY KEY,
@@ -73,19 +74,71 @@ const MIGRATIONS: readonly string[] = [
   DROP INDEX idx_items_needs_you;
   CREATE INDEX idx_items_needs_you ON items(owner_bot_id, last_activity_at, snoozed_until)
     WHERE status = 'needs_you';
+  `,
+  // Waiting, which keeps the status event saying what it waits on, and links to automations (waits).
+  // SQLite changes a CHECK only by copying the table.
+  `
+  CREATE TABLE items_next (
+    uid TEXT PRIMARY KEY,
+    number INTEGER NOT NULL UNIQUE,
+    owner_bot_id TEXT NOT NULL,
+    chat_id TEXT NOT NULL,
+    source TEXT NOT NULL,
+    made_by TEXT,
+    title TEXT NOT NULL,
+    description TEXT,
+    done_means TEXT,
+    status TEXT NOT NULL
+      CHECK(status IN ('planned','working','waiting','needs_you','done','canceled')),
+    question_event INTEGER,
+    close_note TEXT,
+    version INTEGER NOT NULL,
+    last_event_id INTEGER NOT NULL,
+    last_activity_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    closed_at INTEGER,
+    others_last_event_id INTEGER NOT NULL DEFAULT 0,
+    snoozed_until INTEGER,
+    -- Waiting: the status event whose note says what it waits on.
+    wait_event INTEGER
+  );
+  INSERT INTO items_next (uid, number, owner_bot_id, chat_id, source, made_by, title, description,
+    done_means, status, question_event, close_note, version, last_event_id, last_activity_at,
+    created_at, updated_at, closed_at, others_last_event_id, snoozed_until)
+  SELECT uid, number, owner_bot_id, chat_id, source, made_by, title, description, done_means, status,
+    question_event, close_note, version, last_event_id, last_activity_at, created_at, updated_at,
+    closed_at, others_last_event_id, snoozed_until FROM items;
+  DROP TABLE items;
+  ALTER TABLE items_next RENAME TO items;
+  CREATE INDEX idx_items_owner_open ON items(owner_bot_id, status, last_activity_at DESC);
+  CREATE INDEX idx_items_needs_you ON items(owner_bot_id, last_activity_at, snoozed_until)
+    WHERE status = 'needs_you';
+
+  CREATE TABLE item_links_next (
+    item_uid TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK(kind IN ('dispatch','pr','url','file','automation')),
+    ref TEXT NOT NULL,
+    added_event INTEGER NOT NULL,
+    PRIMARY KEY (item_uid, kind, ref)
+  );
+  INSERT INTO item_links_next SELECT item_uid, kind, ref, added_event FROM item_links;
+  DROP TABLE item_links;
+  ALTER TABLE item_links_next RENAME TO item_links;
+  CREATE INDEX idx_item_links_ref ON item_links(kind, ref);
   `
 ]
 
 /** Runs the steps a file lacks; false when a newer Orca wrote it, so it must stay read-only. */
 export function migrateBotItems(db: SyncDatabase): boolean {
   const version = Number(db.pragma('user_version', { simple: true }) ?? 0)
-  if (version > MIGRATIONS.length) {
+  if (version > BOT_ITEMS_MIGRATIONS.length) {
     return false
   }
-  for (let step = version; step < MIGRATIONS.length; step++) {
+  for (let step = version; step < BOT_ITEMS_MIGRATIONS.length; step++) {
     db.exec('BEGIN IMMEDIATE')
     try {
-      db.exec(MIGRATIONS[step]!)
+      db.exec(BOT_ITEMS_MIGRATIONS[step]!)
       db.exec(`PRAGMA user_version = ${step + 1}`)
       db.exec('COMMIT')
     } catch (error) {
@@ -113,6 +166,8 @@ export type BotItemRecord = {
   doneMeans: string | null
   status: BotItemStatus
   questionEvent: number | null
+  /** Waiting: the status event that set it, whose note is what it waits on. */
+  waitEvent: number | null
   closeNote: string | null
   /** The owner snoozed it until then; a new question, a close or the owner's own move clears it. */
   snoozedUntil: number | null

@@ -164,17 +164,18 @@ export function structuredMailMessage(input: {
   conversationPlace?: (from: AgentMessageSource) => ChatMailPlace | null
 }): { body: AgentJournalMessageItem; whole: boolean } {
   const from = structuredMailSource({ ...input, batch: [input.message] })
-  const formatted = formatMessageBannerWithContent(input.message, {
+  const formatting = {
     cliCommand: input.cliCommand,
-    followUp: input.followUp
-  })
+    followUp: input.followUp,
+    peerMail: input.db
+  }
+  const formatted = formatMessageBannerWithContent(input.message, formatting)
   const whole = [{ type: 'text' as const, text: formatted.text }]
   // Whole or not is decided without the item line or note, as custody decides it; ones that won't fit are left off.
   if (!structuredAgentSessionBlocksTooLarge(whole)) {
     const guided = input.reportItem
       ? formatMessageBannerWithContent(input.message, {
-          cliCommand: input.cliCommand,
-          followUp: input.followUp,
+          ...formatting,
           reportItem: input.reportItem
         }).text
       : formatted.text
