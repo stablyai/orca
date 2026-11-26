@@ -1,180 +1,70 @@
 const { randomUUID } = require('node:crypto')
-const {
-  constants,
-  closeSync,
-  fstatSync,
-  lstatSync,
-  openSync,
-  readSync,
-  realpathSync
-} = require('node:fs')
-const { request } = require('node:http')
-const { basename, isAbsolute, join } = require('node:path')
+const { lstatSync, realpathSync } = require('node:fs')
+const { basename, isAbsolute } = require('node:path')
 const { createInterface } = require('node:readline')
 const { setTimeout: delay } = require('node:timers/promises')
+const {
+  DesktopControlError,
+  DesktopSignInRequired,
+  openDesktopConnection
+} = require('./desktop-connection.cjs')
 
-const protocol = 'qwenwork.desktop.v1'
-const maxResponseBytes = 1024 * 1024
-
-class DesktopControlError extends Error {}
-class DesktopSignInRequired extends DesktopControlError {}
-
-function readPrivateFile(path, limit) {
-  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
-  try {
-    const stat = fstatSync(fd)
-    if (!stat.isFile() || stat.uid !== process.getuid() || stat.size > limit) {
-      throw new DesktopControlError('Invalid QwenWork desktop control file.')
-    }
-    const buffer = Buffer.alloc(limit + 1)
-    const count = readSync(fd, buffer)
-    if (count > limit || count !== stat.size) {
-      throw new DesktopControlError('QwenWork desktop control file changed. Launch the chat again.')
-    }
-    return buffer.subarray(0, count).toString('utf8')
-  } finally {
-    closeSync(fd)
-  }
-}
-
-function readEndpoint(profile) {
-  const control = join(profile, 'cli-control')
-  function requirePrivateDirectory(path) {
-    const info = lstatSync(path)
-    if (!info.isDirectory() || info.uid !== process.getuid() || (info.mode & 0o077) !== 0) {
-      throw new DesktopControlError('Invalid QwenWork desktop control directory.')
-    }
-  }
-  let endpoint
-  try {
-    requirePrivateDirectory(control)
-    endpoint = JSON.parse(readPrivateFile(join(control, 'endpoint.json'), 4096))
-  } catch (error) {
-    if (error?.code === 'ENOENT') {
-      throw new DesktopControlError('Start QwenWork desktop with local control enabled.')
-    }
-    throw error
-  }
-  const { port, instance_id: instanceId } = endpoint
-  if (
-    endpoint.protocol !== protocol ||
-    !Number.isInteger(port) ||
-    port < 1 ||
-    port > 65535 ||
-    typeof instanceId !== 'string' ||
-    !/^[0-9a-f]{32}$/.test(instanceId)
-  ) {
-    throw new DesktopControlError('Incompatible QwenWork desktop control endpoint.')
-  }
-  const instance = join(control, instanceId)
-  requirePrivateDirectory(instance)
-  const authorization = readPrivateFile(join(instance, 'token'), 256).trim()
-  if (!/^[0-9a-f]{64}$/.test(authorization)) {
-    throw new DesktopControlError('Invalid QwenWork desktop control authorization.')
-  }
-  return { port, instanceId, authorization }
-}
-
-async function readResponse(response) {
-  const decoder = new TextDecoder('utf-8', { fatal: true })
-  let bytes = 0
-  let text = ''
-  for await (const chunk of response) {
-    bytes += chunk.byteLength
-    if (bytes > maxResponseBytes) {
-      throw new DesktopControlError('QwenWork desktop control response exceeded its limit.')
-    }
-    text += decoder.decode(chunk, { stream: true })
-  }
-  return JSON.parse(text + decoder.decode())
-}
-
-function openDesktopConnection(profile) {
-  const endpoint = readEndpoint(profile)
-  let account
-  async function call(method, params) {
-    const current = readEndpoint(profile)
-    if (
-      current.instanceId !== endpoint.instanceId ||
-      current.authorization !== endpoint.authorization ||
-      current.port !== endpoint.port
-    ) {
-      throw new DesktopControlError('QwenWork desktop restarted. Launch the chat again.')
-    }
-    const response = await new Promise((resolve, reject) => {
-      const body = JSON.stringify({ schema_version: 'qwenwork.desktop-request.v1', method, params })
-      const outgoing = request(
-        {
-          hostname: '127.0.0.1',
-          port: endpoint.port,
-          path: '/v1/control',
-          method: 'POST',
-          // The credential stays on loopback regardless of a user's proxy configuration.
-          agent: false,
-          headers: {
-            'content-type': 'application/json',
-            'content-length': Buffer.byteLength(body),
-            authorization: `Bearer ${endpoint.authorization}`
-          },
-          signal: AbortSignal.timeout(12000)
-        },
-        resolve
-      )
-      outgoing.on('error', reject)
-      outgoing.end(body)
-    })
-    if (response.headers['x-qwenwork-instance'] !== endpoint.instanceId) {
-      response.destroy()
-      throw new DesktopControlError('QwenWork desktop instance does not match.')
-    }
-    const result = await readResponse(response)
-    if (
-      response.statusCode !== 200 ||
-      result.schema_version !== 'qwenwork.response.v1' ||
-      result.ok !== true ||
-      !result.data ||
-      result.data.backend !== 'desktop'
-    ) {
-      const code = result.error?.code
-      const reason = typeof code === 'string' && /^[A-Z_]{3,60}$/.test(code) ? ` (${code})` : ''
-      throw new DesktopControlError(`QwenWork desktop rejected ${method}${reason}.`)
-    }
-    return result.data
-  }
-  async function status() {
-    const data = await call('desktop.status', {})
-    if (
-      data.authenticated !== true ||
-      typeof data.user?.user_id !== 'string' ||
-      !data.user.user_id
-    ) {
-      throw new DesktopSignInRequired('Sign in to QwenWork desktop before opening its Orca chat.')
-    }
-    if (
-      data.protocol !== protocol ||
-      data.features?.task_execution !== true ||
-      data.features?.session_history !== true
-    ) {
-      throw new DesktopControlError('This QwenWork desktop does not support chat control.')
-    }
-    if (account !== undefined && account !== data.user.user_id) {
-      throw new DesktopControlError(
-        'The signed-in QwenWork account changed. Launch the chat again.'
-      )
-    }
-    account = data.user.user_id
-    return data.app?.version
-  }
-  return { call, status, containsAuthorization: (text) => text.includes(endpoint.authorization) }
-}
-
-function serve(profile) {
+function serve(profile, windowsSecurityModule) {
   const send = (message) =>
     process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', ...message })}\n`)
   const input = createInterface({ input: process.stdin, crlfDelay: Infinity })
   let desktop
   let sessionId
   let active
+  let changingModel = false
+
+  async function modelOptions(ownedSession) {
+    if (!desktop.supportsModelSelection()) {
+      return []
+    }
+    const target = ownedSession
+      ? { scope: 'session', session_id: ownedSession }
+      : { scope: 'default' }
+    const [catalog, current] = await Promise.all([
+      desktop.call('model.list', {}),
+      desktop.call('model.get', target)
+    ])
+    if (
+      !Array.isArray(catalog.models) ||
+      current.scope !== target.scope ||
+      current.session_id !== (ownedSession ?? null) ||
+      typeof current.model !== 'string' ||
+      desktop.containsAuthorization(current.model)
+    ) {
+      throw new DesktopControlError('QwenWork desktop did not return the expected model settings.')
+    }
+    const options = catalog.models
+      .filter(
+        (model) =>
+          model?.enabled === true &&
+          typeof model.key === 'string' &&
+          model.key.length > 0 &&
+          model.key.length <= 512 &&
+          typeof model.display_name === 'string' &&
+          model.display_name.trim().length > 0 &&
+          !desktop.containsAuthorization(model.key) &&
+          !desktop.containsAuthorization(model.display_name)
+      )
+      .map((model) => ({ value: model.key, name: model.display_name }))
+    if (options.length === 0) {
+      return []
+    }
+    return [
+      {
+        id: 'model',
+        name: 'Model',
+        category: 'model',
+        type: 'select',
+        currentValue: current.model,
+        options
+      }
+    ]
+  }
 
   async function readTask(method, params, run) {
     await desktop.status()
@@ -186,7 +76,13 @@ function serve(profile) {
   }
 
   async function prompt(params, requestId) {
-    if (requestId == null || !sessionId || params.sessionId !== sessionId || active) {
+    if (
+      requestId == null ||
+      !sessionId ||
+      params.sessionId !== sessionId ||
+      active ||
+      changingModel
+    ) {
       throw new DesktopControlError('This QwenWork chat is not ready for another message.')
     }
     if (
@@ -261,7 +157,7 @@ function serve(profile) {
 
   async function handle(method, params, id) {
     if (method === 'initialize') {
-      desktop = openDesktopConnection(profile)
+      desktop = openDesktopConnection(profile, windowsSecurityModule)
       const version = await desktop.status()
       return {
         protocolVersion: 1,
@@ -271,6 +167,18 @@ function serve(profile) {
     }
     if (!desktop) {
       throw new DesktopControlError('Initialize the QwenWork desktop chat first.')
+    }
+    if (method === '_qwenwork/models') {
+      await desktop.status()
+      const [model] = await modelOptions()
+      return {
+        models: (model?.options ?? []).map((choice) => ({
+          id: choice.value,
+          label: choice.name,
+          isDefault: choice.value === model.currentValue,
+          efforts: []
+        }))
+      }
     }
     if (method === 'session/new') {
       if (typeof params.cwd !== 'string' || !isAbsolute(params.cwd)) {
@@ -287,7 +195,7 @@ function serve(profile) {
         working_directories: [workspace]
       })
       sessionId = readSessionId(data.session_id)
-      return { sessionId }
+      return { sessionId, configOptions: await modelOptions(sessionId) }
     }
     if (method === 'session/load') {
       const requested = readSessionId(params.sessionId)
@@ -297,7 +205,39 @@ function serve(profile) {
         throw new DesktopControlError('The QwenWork desktop session does not match this chat.')
       }
       sessionId = requested
-      return {}
+      return { configOptions: await modelOptions(sessionId) }
+    }
+    if (method === 'session/set_config_option') {
+      if (
+        active ||
+        changingModel ||
+        !sessionId ||
+        params.sessionId !== sessionId ||
+        params.configId !== 'model'
+      ) {
+        throw new DesktopControlError('QwenWork can change models only for this idle chat.')
+      }
+      changingModel = true
+      const ownedSession = sessionId
+      try {
+        await desktop.status()
+        const [model] = await modelOptions(ownedSession)
+        if (!model?.options.some((choice) => choice.value === params.value)) {
+          throw new DesktopControlError('This model is unavailable in QwenWork desktop.')
+        }
+        await desktop.call('model.set', {
+          scope: 'session',
+          session_id: ownedSession,
+          model: params.value
+        })
+        const configOptions = await modelOptions(ownedSession)
+        if (configOptions[0]?.currentValue !== params.value) {
+          throw new DesktopControlError('QwenWork desktop did not confirm the selected model.')
+        }
+        return { configOptions }
+      } finally {
+        changingModel = false
+      }
     }
     if (method === 'session/prompt') {
       return prompt(params, id)
@@ -366,4 +306,4 @@ function readSessionId(value) {
   return value
 }
 
-serve(process.argv[2])
+serve(process.argv[2], process.argv[3])

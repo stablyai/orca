@@ -201,6 +201,7 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/windows/windows-process-tree-command-line-patch.test.ts',
   'src/main/cli/wsl/wsl-cli-powershell-boundary.test.ts',
   'src/main/orca-profiles/profile-index-store.test.ts',
+  'src/main/qwenwork/qwenwork-models.test.ts',
   'src/shared/secure-storage/secure-path-windows-acl.win32.test.ts',
   'src/main/runtime/rpc/server/pairing/unreadable-secret-store-preservation.win32.test.ts',
   'src/main/browser/network/tunnels/remote-browser-socks-client-owner.test.ts'

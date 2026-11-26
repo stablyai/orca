@@ -1,4 +1,4 @@
-import { readFile, readdir, realpath, stat } from 'node:fs/promises'
+import { readdir, realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { isPathInsideOrEqual } from '../../shared/file-access/cross-platform-path'
@@ -7,31 +7,32 @@ import { loadWindowsNativeRegistry } from '../windows/windows-native-registry'
 const versionsByNumber = new Intl.Collator('en', { numeric: true })
 export const QWENWORK_DESKTOP_PROFILE = 'ORCA_QWENWORK_DESKTOP_PROFILE'
 
-export function defaultQwenWorkMacProfile(home: string): string {
-  return join(home, 'Library', 'Application Support', 'QwenWorkCN')
+export function defaultQwenWorkDesktopProfile(
+  home: string,
+  env: NodeJS.ProcessEnv,
+  platform = process.platform
+): string {
+  return platform === 'win32'
+    ? join(env.APPDATA || join(home, 'AppData', 'Roaming'), 'QwenWorkCN')
+    : join(home, 'Library', 'Application Support', 'QwenWorkCN')
 }
 
-async function findQwenWorkMacProgram(env: Readonly<Record<string, string>>) {
-  const profile = env[QWENWORK_DESKTOP_PROFILE] ?? defaultQwenWorkMacProfile(homedir())
-  if (!isAbsolute(profile)) {
-    return null
-  }
+async function findBridge() {
   const name = 'desktop-acp.cjs'
   const scripts = [
     process.resourcesPath && join(process.resourcesPath, 'qwenwork', name),
     resolve(__dirname, '../../../resources/qwenwork', name),
     resolve(__dirname, '../../resources/qwenwork', name)
   ]
-  let bridge
   for (const script of scripts) {
     if (script && (await stat(script).catch(() => null))?.isFile()) {
-      bridge = script
-      break
+      return script
     }
   }
-  if (!bridge) {
-    return null
-  }
+  return null
+}
+
+async function findQwenWorkMacExecutable(env: Readonly<Record<string, string>>) {
   const roots = env.ORCA_QWENWORK_INSTALL_DIR
     ? [env.ORCA_QWENWORK_INSTALL_DIR]
     : ['/Applications/QwenWorkCN.app', '/Applications/千问办公.app']
@@ -48,7 +49,7 @@ async function findQwenWorkMacProgram(env: Readonly<Record<string, string>>) {
       isPathInsideOrEqual(root, command) &&
       (await stat(command).catch(() => null))?.isFile()
     ) {
-      return { command, prefixArgs: [bridge, profile] }
+      return command
     }
   }
   return null
@@ -66,34 +67,16 @@ function windowsInstallRoot(): string | undefined {
   }
 }
 
-async function engineAt(folder: string) {
+async function windowsExecutableAt(folder: string) {
   try {
     const root = await realpath(folder)
-    const sdk = join(root, 'resources', 'agent-sdk')
-    const runtime = JSON.parse(await readFile(join(sdk, 'engine-runtime-manifest.json'), 'utf8'))
-      .engines?.opencode
-    if (
-      runtime?.runtime !== 'electron-node' ||
-      typeof runtime.entrypoint !== 'string' ||
-      !/^components\/flash-cli\/[\w.-]+\/runtime\/[\w.-]+\.mjs$/.test(runtime.entrypoint) ||
-      !Array.isArray(runtime.args) ||
-      runtime.args.length !== 0
-    ) {
-      return null
-    }
-    const entry = await realpath(resolve(sdk, runtime.entrypoint))
-    if (!isPathInsideOrEqual(sdk, entry) || !(await stat(entry)).isFile()) {
-      return null
-    }
-    const component = JSON.parse(
-      await readFile(join(dirname(dirname(entry)), 'engine-manifest.json'), 'utf8')
-    )
-    if (component.protocol !== 'acp-stdio' || component.engineId !== 'opencode') {
-      return null
-    }
     const command = await realpath(join(root, 'QwenWorkCN.exe'))
-    if (isPathInsideOrEqual(root, command) && (await stat(command)).isFile()) {
-      return { command, prefixArgs: [entry] }
+    if (
+      isPathInsideOrEqual(root, command) &&
+      (await stat(command)).isFile() &&
+      (await stat(join(root, 'resources', 'app.asar'))).isFile()
+    ) {
+      return command
     }
   } catch {
     // An incomplete desktop update can leave a version directory without its engine.
@@ -101,16 +84,7 @@ async function engineAt(folder: string) {
   return null
 }
 
-export async function findQwenWorkDesktopEngine(
-  env: Readonly<Record<string, string>>,
-  platform: NodeJS.Platform = process.platform
-) {
-  if (platform === 'darwin') {
-    return findQwenWorkMacProgram(env)
-  }
-  if (platform !== 'win32') {
-    return null
-  }
+async function findQwenWorkWindowsExecutable(env: Readonly<Record<string, string>>) {
   const selected = env.ORCA_QWENWORK_INSTALL_DIR
   const roots = selected
     ? [selected]
@@ -119,7 +93,7 @@ export async function findQwenWorkDesktopEngine(
     if (!root || !isAbsolute(root)) {
       continue
     }
-    const direct = await engineAt(root)
+    const direct = await windowsExecutableAt(root)
     if (direct) {
       return direct
     }
@@ -128,11 +102,30 @@ export async function findQwenWorkDesktopEngine(
       .filter((e) => e.isDirectory() && /^\d+\.\d+\.\d+(?:-\d+)?$/.test(e.name))
       .sort((a, b) => versionsByNumber.compare(b.name, a.name))
     for (const version of versions) {
-      const found = await engineAt(join(root, version.name))
+      const found = await windowsExecutableAt(join(root, version.name))
       if (found) {
         return found
       }
     }
   }
   return null
+}
+
+export async function findQwenWorkDesktopEngine(
+  env: Readonly<Record<string, string>>,
+  platform: NodeJS.Platform = process.platform
+) {
+  if (platform !== 'darwin' && platform !== 'win32') {
+    return null
+  }
+  const profile =
+    env[QWENWORK_DESKTOP_PROFILE] ?? defaultQwenWorkDesktopProfile(homedir(), env, platform)
+  if (!isAbsolute(profile)) {
+    return null
+  }
+  const [bridge, command] = await Promise.all([
+    findBridge(),
+    platform === 'darwin' ? findQwenWorkMacExecutable(env) : findQwenWorkWindowsExecutable(env)
+  ])
+  return bridge && command ? { command, prefixArgs: [bridge, profile] } : null
 }

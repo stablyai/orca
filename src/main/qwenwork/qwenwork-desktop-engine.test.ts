@@ -1,4 +1,4 @@
-import { chmod, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
@@ -9,32 +9,23 @@ afterEach(async () => {
   await Promise.all(folders.splice(0).map((folder) => rm(folder, { recursive: true, force: true })))
 })
 
-it('launches the executable with its own ACP entry and ignores incomplete desktop updates', async () => {
+it('uses the desktop bridge on Windows and ignores incomplete client updates', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'qwenwork-install-')))
   folders.push(root)
   const release = join(root, '2.1.0-10')
-  const sdk = join(release, 'resources', 'agent-sdk')
-  const relative = 'components/flash-cli/1.2/runtime/flash-cli-acp.mjs'
-  const entry = join(sdk, relative)
   const command = join(release, 'QwenWorkCN.exe')
-  await mkdir(dirname(entry), { recursive: true })
-  await mkdir(dirname(command), { recursive: true })
-  await mkdir(join(root, '2.1.0-11'))
+  const newerRelease = join(root, '2.1.0-11')
+  await mkdir(join(release, 'resources'), { recursive: true })
+  await mkdir(newerRelease)
+  await writeFile(join(newerRelease, 'QwenWorkCN.exe'), '')
   await writeFile(command, '')
-  await chmod(command, 0o755)
-  await writeFile(entry, '')
-  await writeFile(
-    join(sdk, 'engine-runtime-manifest.json'),
-    JSON.stringify({
-      engines: { opencode: { runtime: 'electron-node', entrypoint: relative, args: [] } }
-    })
-  )
-  const descriptor = join(sdk, 'components/flash-cli/1.2/engine-manifest.json')
-  const env = { ORCA_QWENWORK_INSTALL_DIR: root }
-  await writeFile(descriptor, '{"engineId":"opencode","protocol":"http"}')
+  const env = { ORCA_QWENWORK_INSTALL_DIR: root, APPDATA: join(root, 'roaming') }
   expect(await findQwenWorkDesktopEngine(env, 'win32')).toBeNull()
-  await writeFile(descriptor, '{"engineId":"opencode","protocol":"acp-stdio"}')
-  expect(await findQwenWorkDesktopEngine(env, 'win32')).toEqual({ command, prefixArgs: [entry] })
+  await writeFile(join(release, 'resources', 'app.asar'), '')
+  expect(await findQwenWorkDesktopEngine(env, 'win32')).toEqual({
+    command,
+    prefixArgs: [expect.stringMatching(/desktop-acp\.cjs$/), join(env.APPDATA, 'QwenWorkCN')]
+  })
 })
 
 it('finds the Mac desktop bridge before the local control service starts', async () => {

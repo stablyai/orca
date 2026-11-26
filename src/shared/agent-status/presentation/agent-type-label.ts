@@ -30,6 +30,7 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   ante: 'Ante',
   trae: 'Trae',
   kimi: 'Kimi',
+  qwenwork: 'QwenWork',
   muse: 'Muse',
   zcode: 'ZCode',
   dsh: 'DeepSeek Harness',
