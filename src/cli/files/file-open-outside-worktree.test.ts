@@ -453,6 +453,41 @@ it('opens a ./ path in a sibling worktree registered through a symlink', async (
       false
     )
     expect(missing).toEqual({ worktree: 'id:feature', relativePath: 'NEW.md' })
+    const nestedRoot = join(base, 'real', 'feature', 'nested')
+    mkdirSync(nestedRoot, { recursive: true })
+    writeFileSync(join(nestedRoot, 'a.md'), 'ok')
+    symlinkSync(join(base, 'real'), join(base, 'very-long-parent-alias'), 'junction')
+    const nestedCall = vi.fn(async (method: string) => {
+      if (method === 'worktree.show') {
+        return { result: { worktree: { path: currentRoot } } }
+      }
+      if (method === 'worktree.list') {
+        return {
+          result: {
+            worktrees: [
+              { id: 'current', path: currentRoot },
+              { id: 'parent', path: join(base, 'very-long-parent-alias') },
+              { id: 'nested', path: nestedRoot }
+            ]
+          }
+        }
+      }
+      throw new Error(`unexpected ${method}`)
+    })
+    const nested = await resolveFileOpenTarget(
+      {
+        flags: new Map(),
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: resolveFileOpenTarget only reads client.call, client.isRemote, and cwd.
+        client: { call: nestedCall, isRemote: false } as unknown as HandlerContext['client'],
+        cwd: join(base, 'real', 'current'),
+        json: false,
+        rawArgs: []
+      },
+      'id:current',
+      join(nestedRoot, 'a.md'),
+      false
+    )
+    expect(nested).toEqual({ worktree: 'id:nested', relativePath: 'a.md' })
   } finally {
     rmSync(base, { recursive: true, force: true })
   }

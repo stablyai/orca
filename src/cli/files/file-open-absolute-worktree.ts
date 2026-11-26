@@ -26,6 +26,7 @@ type ListedWorktree = {
 type ContainingWorktree = ListedWorktree & {
   relativePath: string
   rank: string
+  realRank: string
 }
 
 export type FileOpenTarget = {
@@ -132,16 +133,21 @@ function pickContainingWorktree(
     if (!relativePath) {
       continue
     }
+    const realRoot =
+      callerHostId === LOCAL_EXECUTION_HOST_ID ? resolveRealPathSync(candidate.path) : null
     matches.push({
       ...candidate,
       relativePath,
-      rank: normalizeRuntimePathForComparison(candidate.path)
+      rank: normalizeRuntimePathForComparison(candidate.path),
+      realRank: normalizeRuntimePathForComparison(realRoot ?? candidate.path)
     })
   }
-  const bestLength = Math.max(-1, ...matches.map((match) => match.rank.length))
+  const bestRealLength = Math.max(-1, ...matches.map((match) => match.realRank.length))
+  const specific = matches.filter((match) => match.realRank.length === bestRealLength)
+  const bestRegisteredLength = Math.max(-1, ...specific.map((match) => match.rank.length))
   const winners = new Map<string, ContainingWorktree>()
-  for (const match of matches) {
-    if (match.rank.length === bestLength && !winners.has(match.id)) {
+  for (const match of specific) {
+    if (match.rank.length === bestRegisteredLength && !winners.has(match.id)) {
       winners.set(match.id, match)
     }
   }
