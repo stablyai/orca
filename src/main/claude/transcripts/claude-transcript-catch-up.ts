@@ -4,6 +4,8 @@ import {
   type JournalHistoryOrigin
 } from '../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import { recoverClaudeTranscript } from './claude-transcript-recovery'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { StructuredAgentSessionHistoryJournal } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 import { join } from 'node:path'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
@@ -116,12 +118,17 @@ export async function catchUpClaudeTranscript(input: {
       if (!filePath) {
         return null
       }
-      let leafAbsent = input.leafUuid === '' && (!!planned.covered || afterFirstPrompt)
+      // A first turn imported before reads on from its newest row, so a later open repeats nothing.
+      const leaf = afterFirstPrompt
+        ? ((await newestClaudeRow(history.reads, input.providerSessionId)) ?? '')
+        : input.leafUuid
+      check()
+      let leafAbsent = leaf === '' && (!!planned.covered || afterFirstPrompt)
       const tail = leafAbsent
         ? null
         : await readClaudeTranscriptTail({
             filePath,
-            leafUuid: input.leafUuid,
+            leafUuid: leaf,
             check,
             onLeafAbsent: () => {
               leafAbsent = true
@@ -154,7 +161,8 @@ export async function catchUpClaudeTranscript(input: {
         check
       })
       try {
-        let prompted = !afterFirstPrompt
+        // A tail starts after the first prompt; a whole-chain scan finds it first.
+        let prompted = !afterFirstPrompt || tail !== null
         const restore = async (row: Record<string, unknown>) => {
           check()
           if (!prompted) {
@@ -181,4 +189,31 @@ export async function catchUpClaudeTranscript(input: {
     }
   })
   return complete && (outcome === 'committed' || outcome === 'checked')
+}
+
+/** The newest saved root row Claude's transcript names, as the chat holds it: its uuid. */
+async function newestClaudeRow(
+  reads: Pick<StructuredAgentSessionHistoryJournal['reads'], 'visitItems'>,
+  providerSessionId: string
+): Promise<string | undefined> {
+  let newest: { uuid: string; sequence: number; index: number } | undefined
+  await reads.visitItems({ kinds: ['message'] }, (key, sequence, _body, linkage, item) => {
+    const identity = parseAgentJournalItemKey(key)
+    if (
+      !isRootAgentJournalItem(linkage) ||
+      identity?.provider !== 'claude' ||
+      identity.sessionId !== providerSessionId
+    ) {
+      return
+    }
+    const index = item.sequenceIndex ?? 0
+    if (
+      !newest ||
+      sequence > newest.sequence ||
+      (sequence === newest.sequence && index > newest.index)
+    ) {
+      newest = { uuid: identity.uuid, sequence, index }
+    }
+  })
+  return newest?.uuid
 }
