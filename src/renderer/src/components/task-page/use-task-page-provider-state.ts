@@ -10,6 +10,10 @@ import type {
   GitLabWorkItem,
   GitLabTodo
 } from '../../../../shared/gitlab/gitlab-types'
+import {
+  getProjectIdentityKey,
+  isGitHubBackedRepo
+} from '../../../../shared/project/host-setup/project-host-setup-projection'
 import { getRepoBackedTaskEmptyState } from './task-page-empty-state'
 import { isGitLabIssueFilter, isGitLabMRFilter } from './task-page-source-context'
 export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel) {
@@ -65,6 +69,27 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
   // Like Linear, fetch GitLab directly for the primary repo without GitHub’s workItemsCache/aggregation path.
   const [gitlabFilter, setGitlabFilter] = useState<GitLabTaskFilter | GitLabIssueFilter>('opened')
   const [gitlabMRInvolvement, setGitlabMRInvolvement] = useState<GitLabMRInvolvement | null>(null)
+  const [gitlabSearchInput, setGitlabSearchInput] = useState('')
+  const [appliedGitlabSearch, setAppliedGitlabSearch] = useState('')
+  const [gitlabLabels, setGitlabLabels] = useState<string[]>([])
+  // Why: a mixed selection can start with a GitHub repo, which has no GitLab labels to offer.
+  const gitlabLabelScopeRepo =
+    selectedRepos.find((repo) => !isGitHubBackedRepo(repo)) ?? selectedRepos[0] ?? null
+  const gitlabLabelScopeProject = gitlabLabelScopeRepo
+    ? getProjectIdentityKey(gitlabLabelScopeRepo)
+    : null
+  const gitlabLabelScope = { repoId: gitlabLabelScopeRepo?.id, project: gitlabLabelScopeProject }
+  const [gitlabLabelsScope, setGitlabLabelsScope] = useState(gitlabLabelScope)
+  const gitlabLabelProjectChanged = gitlabLabelScopeProject !== gitlabLabelsScope.project
+  const gitlabLabelRepoChanged = gitlabLabelScope.repoId !== gitlabLabelsScope.repoId
+  if (gitlabLabelScopeProject && (gitlabLabelProjectChanged || gitlabLabelRepoChanged)) {
+    setGitlabLabelsScope(gitlabLabelScope)
+    // Why: another project's labels are missing from the option list, so they could not be unticked.
+    // A key change alone is the same repo getting its remote identity resolved.
+    if (gitlabLabels.length > 0 && gitlabLabelProjectChanged && gitlabLabelRepoChanged) {
+      setGitlabLabels([])
+    }
+  }
   const [gitlabItems, setGitlabItems] = useState<GitLabWorkItem[]>([])
   const [gitlabListQueryKey, setGitlabListQueryKey] = useState<string | null>(null)
   const [gitlabLoading, setGitlabLoading] = useState(false)
@@ -184,6 +209,14 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
   nextModel.gitlabFilterIsValid = gitlabFilterIsValid
   nextModel.activeGitlabFilter = activeGitlabFilter
   nextModel.displayedGitLabItems = displayedGitLabItems
-  return nextModel
+  return Object.assign(nextModel, {
+    gitlabSearchInput,
+    setGitlabSearchInput,
+    appliedGitlabSearch,
+    setAppliedGitlabSearch,
+    gitlabLabels,
+    setGitlabLabels,
+    gitlabLabelScopeRepo
+  })
 }
 export type TaskPageProviderStateModel = ReturnType<typeof useTaskPageProviderState>

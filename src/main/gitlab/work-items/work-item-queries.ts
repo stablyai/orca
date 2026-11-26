@@ -20,7 +20,7 @@ import { parseGlabJsonList } from '../requests/glab-api-response'
 import { resolveIssueSource } from '../issues/gitlab-issue-source-resolution'
 import type { ProjectRef } from '../projects/project-ref-parser'
 import { encodedProject } from '../projects/project-path-encoding'
-import type { IssueListState } from '../issues/gitlab-issue-queries'
+import { issueSearchParam, type IssueListState } from '../issues/gitlab-issue-queries'
 import { listMergeRequests } from '../merge-requests/merge-request-list'
 
 export async function getWorkItemByProjectRef(
@@ -143,16 +143,6 @@ export async function listWorkItems(
     totalPages: mrs.totalPages,
     ...(error ? { error } : {})
   }
-}
-
-function issueSearchParam(query?: string): string {
-  const trimmed = query?.trim()
-  if (!trimmed) {
-    return ''
-  }
-  // GitLab text search does not interpret issue-reference syntax; use the IID filter for #N.
-  const iid = /^#(\d+)$/.exec(trimmed)?.[1]
-  return iid ? `&iids[]=${iid}` : `&search=${encodeURIComponent(trimmed)}`
 }
 
 export async function fetchIssuesAsWorkItems(

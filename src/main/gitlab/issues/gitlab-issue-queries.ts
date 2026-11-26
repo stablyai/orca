@@ -16,6 +16,7 @@ import { glabRepoExecOptions, glabHostnameArgs } from '../projects/gitlab-projec
 import { parseGlabJsonList, parseGlabPaginationHeader } from '../requests/glab-api-response'
 import type { ProjectRef } from '../projects/project-ref-parser'
 import { encodedProject } from '../projects/project-path-encoding'
+import { gitLabLabelsParam } from '../requests/gitlab-preload-args'
 import { isTaskRepositoryIneligible } from '../../git/remotes/task-repository-eligibility'
 import {
   codeHostFailure,
@@ -65,6 +66,16 @@ export async function getIssue(
 // GitLab issues have no merged state; all omits the API state parameter.
 export type IssueListState = 'opened' | 'closed' | 'all'
 
+export function issueSearchParam(query?: string): string {
+  const trimmed = query?.trim()
+  if (!trimmed) {
+    return ''
+  }
+  // GitLab text search does not interpret issue-reference syntax; use the IID filter for #N.
+  const iid = /^#(\d+)$/.exec(trimmed)?.[1]
+  return iid ? `&iids[]=${iid}` : `&search=${encodeURIComponent(trimmed)}`
+}
+
 export async function listIssues(
   repoPath: string,
   limit = 20,
@@ -73,7 +84,9 @@ export async function listIssues(
   assignee?: string,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {},
-  page = 1
+  page = 1,
+  query?: string,
+  labels?: string[]
 ): Promise<IssueListResult> {
   const currentPage = Number.isFinite(page) ? Math.max(1, Math.trunc(page)) : 1
   const perPage = Number.isFinite(limit) ? Math.max(1, Math.trunc(limit)) : 20
@@ -103,10 +116,11 @@ export async function listIssues(
   try {
     const stateParam = state === 'all' ? '' : `&state=${state}`
     const scopeParam = assignee === '@me' ? '&scope=assigned_to_me' : ''
+    const searchParam = issueSearchParam(query)
     const { body, headers } = await glabApiWithHeaders(
       [
         ...glabHostnameArgs(projectRef, connectionId),
-        `projects/${encodedProject(projectRef.path)}/issues?page=${currentPage}&per_page=${perPage}&order_by=updated_at&sort=desc${stateParam}${scopeParam}`
+        `projects/${encodedProject(projectRef.path)}/issues?page=${currentPage}&per_page=${perPage}&order_by=updated_at&sort=desc${stateParam}${scopeParam}${searchParam}${gitLabLabelsParam(labels)}`
       ],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )

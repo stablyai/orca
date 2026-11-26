@@ -62,40 +62,12 @@ function StatusSection({
   onSelect: (change: PRFilterChange) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const states: { key: 'open' | 'closed' | 'merged' | 'all'; label: string }[] =
-    kind === 'prs'
-      ? [
-          {
-            key: 'open',
-            label: filterStateLabel('open', t)
-          },
-          {
-            key: 'closed',
-            label: filterStateLabel('closed', t)
-          },
-          {
-            key: 'merged',
-            label: filterStateLabel('merged', t)
-          },
-          {
-            key: 'all',
-            label: t('auto.components.github.PRFilterSections.2b2f019091', 'Any state')
-          }
-        ]
-      : [
-          {
-            key: 'open',
-            label: filterStateLabel('open', t)
-          },
-          {
-            key: 'closed',
-            label: filterStateLabel('closed', t)
-          },
-          {
-            key: 'all',
-            label: t('auto.components.github.PRFilterSections.2b2f019091', 'Any state')
-          }
-        ]
+  const states: { key: 'open' | 'closed' | 'merged' | 'all'; label: string }[] = [
+    { key: 'open', label: filterStateLabel('open', t) },
+    { key: 'closed', label: filterStateLabel('closed', t) },
+    ...(kind === 'prs' ? [{ key: 'merged' as const, label: filterStateLabel('merged', t) }] : []),
+    { key: 'all', label: t('auto.components.github.PRFilterSections.2b2f019091', 'Any state') }
+  ]
   return (
     <div className="py-1 text-xs">
       {states.map((s) => {
@@ -175,7 +147,9 @@ export function SectionMenu({
   reviewerActive,
   reviewerKind,
   onPick,
-  onClearAll
+  onClearAll,
+  sections,
+  heading
 }: {
   parsed: ParsedTaskQuery
   kind: 'prs' | 'issues'
@@ -183,10 +157,14 @@ export function SectionMenu({
   reviewerKind: 'requested' | 'reviewed-by'
   onPick: (s: SectionKey) => void
   onClearAll: (() => void) | null
+  /** Sections to offer; all of them when omitted. */
+  sections?: readonly SectionKey[]
+  /** Replaces the pull request / issue heading for providers that name them differently. */
+  heading?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const status = statusLabel(parsed, t)
-  const rows: { key: SectionKey; label: string; value: string | null }[] = [
+  const allRows: { key: SectionKey; label: string; value: string | null }[] = [
     {
       key: 'status',
       label: t('auto.components.github.PRFilterSections.764a0b4ce1', 'Status'),
@@ -220,12 +198,17 @@ export function SectionMenu({
       value: parsed.assignee
     }
   ]
+  const rows = sections ? allRows.filter((row) => sections.includes(row.key)) : allRows
   return (
     <div className="py-1 text-xs">
       <div className="px-3 py-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-        {kind === 'prs'
-          ? t('auto.components.github.PRFilterSections.filterPullRequests', 'Filter pull requests')
-          : t('auto.components.github.PRFilterSections.filterIssues', 'Filter issues')}
+        {heading ??
+          (kind === 'prs'
+            ? t(
+                'auto.components.github.PRFilterSections.filterPullRequests',
+                'Filter pull requests'
+              )
+            : t('auto.components.github.PRFilterSections.filterIssues', 'Filter issues'))}
       </div>
       {rows.map((row) => (
         <button

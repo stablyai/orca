@@ -1,4 +1,5 @@
 import type { GitLabMRInvolvement, MRListState } from '../../../shared/gitlab/gitlab-types'
+import { normalizeGitLabLabelNames } from '../../../shared/gitlab/gitlab-label-names'
 
 export type GitLabIssueListState = 'opened' | 'closed' | 'all'
 
@@ -39,6 +40,10 @@ export function normalizeGitLabSearchQuery(value: unknown): string | undefined {
   return Buffer.byteLength(trimmed, 'utf8') > GITLAB_SEARCH_QUERY_MAX_BYTES ? undefined : trimmed
 }
 
+export function gitLabLabelsParam(labels: string[] | undefined): string {
+  return labels?.length ? `&labels=${encodeURIComponent(labels.join(','))}` : ''
+}
+
 export function normalizeGitLabIssueAssignee(value: unknown): '@me' | undefined {
   // Accept only the renderer-supported assignment filter, not arbitrary CLI flags.
   return value === '@me' ? '@me' : undefined
@@ -49,17 +54,23 @@ export function normalizeGitLabIssueListArgs(args: {
   assignee?: unknown
   limit?: unknown
   page?: unknown
+  query?: unknown
+  labels?: unknown
 }): {
   state: GitLabIssueListState
   assignee: '@me' | undefined
   limit: number
   page: number
+  query: string | undefined
+  labels: string[]
 } {
   return {
     state: normalizeGitLabIssueListState(args.state),
     assignee: normalizeGitLabIssueAssignee(args.assignee),
     limit: normalizeGitLabPositiveInteger(args.limit, 20, 100),
     // GitLab pages are 1-based; the renderer translates its 0-based UI index.
-    page: normalizeGitLabPositiveInteger(args.page, 1, 10_000)
+    page: normalizeGitLabPositiveInteger(args.page, 1, 10_000),
+    query: normalizeGitLabSearchQuery(args.query),
+    labels: normalizeGitLabLabelNames(args.labels)
   }
 }

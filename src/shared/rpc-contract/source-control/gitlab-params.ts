@@ -31,14 +31,17 @@ export const WorkItemsList = RepoSelector.extend({
 })
 
 export const MergeRequestsList = WorkItemsList.extend({
-  involvement: z.enum(['authored', 'reviewing']).optional()
+  involvement: z.enum(['authored', 'reviewing']).optional(),
+  labels: z.array(z.string()).optional()
 })
 
 export const IssuesList = RepoSelector.extend({
   state: z.unknown().optional(),
   assignee: OptionalString,
   limit: OptionalFiniteNumber,
-  page: OptionalFiniteNumber
+  page: OptionalFiniteNumber,
+  query: OptionalString,
+  labels: z.array(z.string()).optional()
 })
 
 export const CreateIssue = RepoSelector.extend({

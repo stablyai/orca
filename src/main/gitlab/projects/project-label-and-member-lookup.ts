@@ -36,8 +36,6 @@ export async function listLabels(
       localGitOptions
     )
     return labels.flatMap((label) => (label?.name ? [label.name] : []))
-  } catch {
-    return []
   } finally {
     release()
   }
