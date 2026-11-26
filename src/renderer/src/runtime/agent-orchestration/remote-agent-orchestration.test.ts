@@ -12,6 +12,10 @@ import {
   structuredAgentSessionTabId
 } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
+import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import {
   canonicalOrchestrationForRow,
   selectVisibleAgentOrchestration
@@ -252,5 +256,42 @@ describe('this computer’s rows while a remote host has lineage', () => {
     expect(rows[localKey]).toBe(useAppStore.getState().runtimeAgentOrchestrationByPaneKey[localKey])
     expect(rows[localKey]?.parentPaneKey).toBe(ASSISTANT)
     expect(rows[WORKER]?.parentPaneKey).toBe(ORCHESTRATOR)
+  })
+})
+
+describe('a remote host’s terminal rows, mirrored here as web-terminal tabs', () => {
+  const LEAF = '11111111-1111-4111-8111-111111111111'
+  const HOST_TAB = 'a6729fc3-0000-4000-8000-00000000000a'
+  const MIRRORED_TAB = toWebTerminalSurfaceTabId(HOST_TAB)
+  const HOST_TERMINAL = makePaneKey(HOST_TAB, LEAF)
+  const MIRRORED_TERMINAL = makePaneKey(MIRRORED_TAB, LEAF)
+
+  it('nests a host terminal worker under the host chat coordinator by its mirrored key', () => {
+    useAppStore.setState({
+      runtimeAgentOrchestrationByPaneKey: {},
+      remoteAgentOrchestrationByHost: {},
+      unifiedTabsByWorktree: { 'wt-wsl': [remoteChat('assistant')] },
+      tabsByWorktree: { 'wt-wsl': [makeTab({ id: MIRRORED_TAB, worktreeId: 'wt-wsl' })] },
+      ptyIdsByTabId: { [MIRRORED_TAB]: [toRemoteRuntimePtyId('pty-1', ENVIRONMENT)] }
+    })
+    const store = useAppStore.getState()
+    store.setRuntimeAgentOrchestrationByPaneKey(
+      { [HOST_TERMINAL]: { taskId: 'task-t', dispatchId: 'dispatch-t', parentPaneKey: ASSISTANT } },
+      HOST
+    )
+    const rows = orchestrationForStatusRows(useAppStore.getState())
+    expect(rows[HOST_TERMINAL]).toBeUndefined()
+    expect(rows[MIRRORED_TERMINAL]?.parentPaneKey).toBe(ASSISTANT)
+    // A host chat worker names a host terminal coordinator by the host's own key.
+    store.setRuntimeAgentOrchestrationByPaneKey(
+      { [WORKER]: { taskId: 'task-w', dispatchId: 'dispatch-w', parentPaneKey: HOST_TERMINAL } },
+      HOST
+    )
+    useAppStore.setState({
+      unifiedTabsByWorktree: { 'wt-wsl': [remoteChat('worker')] }
+    })
+    expect(orchestrationForStatusRows(useAppStore.getState())[WORKER]?.parentPaneKey).toBe(
+      MIRRORED_TERMINAL
+    )
   })
 })

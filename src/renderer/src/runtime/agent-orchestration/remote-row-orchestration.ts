@@ -1,5 +1,7 @@
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { parseAgentStatusPaneIdentity } from '../../../../shared/agent-status/identity/agent-status-worktree-attribution'
+import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import { orchestrationContextsEqual } from '@/store/slices/agent-status/orchestration/agent-status-orchestration-context'
 import type { AppState } from '@/store/types'
 import { aliasKey, rowIdentities, type RowIdentities } from './orchestration-row-identities'
@@ -30,8 +32,22 @@ function rowOnHost(
     return chat
   }
   const tabId = parseAgentStatusPaneIdentity(key)?.tabId
-  const terminalHost = tabId ? (terminals.tabs.get(tabId) ?? terminals.ptys.get(tabId)) : undefined
-  return terminalHost === host ? key : undefined
+  if (tabId && terminalHostOf(tabId, terminals) === host) {
+    return key
+  }
+  // A runtime host's terminal is mirrored here as `web-terminal-<hostTab>`; the leaf is unchanged.
+  const pane = parsePaneKey(key)
+  if (!pane) {
+    return undefined
+  }
+  const mirroredTabId = toWebTerminalSurfaceTabId(pane.tabId)
+  return terminalHostOf(mirroredTabId, terminals) === host
+    ? makePaneKey(mirroredTabId, pane.leafId)
+    : undefined
+}
+
+function terminalHostOf(tabId: string, terminals: TerminalHosts): string | null | undefined {
+  return terminals.tabs.get(tabId) ?? terminals.ptys.get(tabId)
 }
 
 function withoutParent(context: AgentStatusOrchestrationContext): AgentStatusOrchestrationContext {
