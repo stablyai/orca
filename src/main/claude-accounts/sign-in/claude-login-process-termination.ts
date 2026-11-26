@@ -1,4 +1,5 @@
 import { childProcessHasExited } from '@orca/process-host/process-tree-termination'
+import type { TaskkillRoot } from '../../git/command-runner/process-capture/spawned-command-tree-kill'
 import type { ChildProcess } from 'node:child_process'
 import type { WindowsHostInteractiveLoginSpawn } from '../../providers/shell-launch/windows/windows-interactive-login-spawn'
 import { recordSelfInitiatedTreeKill } from '../../crash-reporting/process-exits/self-initiated-tree-kill-log'
@@ -8,7 +9,7 @@ import { runWindowsTaskkillTree } from '../../pty/process-retirement/windows-pro
 const WINDOWS_TASKKILL_TIMEOUT_MS = 5_000
 
 export function terminateClaudeProcess(
-  child: Pick<ChildProcess, 'pid' | 'kill' | 'exitCode' | 'signalCode'>,
+  child: Pick<ChildProcess, 'pid' | 'kill'> & TaskkillRoot,
   interactiveLogin: WindowsHostInteractiveLoginSpawn | null,
   afterKill: () => void
 ): void {
@@ -24,7 +25,9 @@ export function terminateClaudeProcess(
       afterKill()
       return
     }
-    void runWindowsTaskkillTree(windowsTerminationPid, WINDOWS_TASKKILL_TIMEOUT_MS).then(
+    // A relayed login pid has no handle here; the wrapper's own pid is bound to its exit.
+    const root = windowsTerminationPid === child.pid ? child : undefined
+    void runWindowsTaskkillTree(windowsTerminationPid, WINDOWS_TASKKILL_TIMEOUT_MS, root).then(
       (succeeded) => {
         if (!succeeded) {
           child.kill()

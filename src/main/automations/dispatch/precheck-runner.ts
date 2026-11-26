@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process'
+import type { TaskkillRoot } from '../../git/command-runner/process-capture/spawned-command-tree-kill'
 import { childProcessHasExited } from '@orca/process-host/process-tree-termination'
 import type { ClientChannel } from 'ssh2'
 import type { AutomationPrecheck } from '../../../shared/automations/automation-definition'
@@ -7,7 +8,10 @@ import { MAX_AUTOMATION_PRECHECK_OUTPUT_CHARS } from '../../../shared/automation
 import { getSshConnectionManager } from '../../ssh/targets/ssh-target-registry'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { admitSelfInitiatedTreeKill } from '../../pty/process-retirement/own-chromium-tree-kill-guard'
-import { runWindowsTaskkillTree } from '../../pty/process-retirement/windows-process-tree-kill'
+import {
+  runWindowsTaskkillTree,
+  WINDOWS_PROCESS_TREE_KILL_TIMEOUT_MS
+} from '../../pty/process-retirement/windows-process-tree-kill'
 import { errorMessage } from '../../../shared/errors/error-message'
 
 type AutomationPrecheckExecutionTarget =
@@ -79,7 +83,7 @@ export function failedPrecheckResult(
 }
 
 export function killLocalPrecheckProcessTree(
-  child: Pick<ChildProcess, 'pid' | 'kill' | 'exitCode' | 'signalCode'>
+  child: Pick<ChildProcess, 'pid' | 'kill'> & TaskkillRoot
 ): ReturnType<typeof setTimeout> | null {
   const pid = child.pid
   if (!pid) {
@@ -101,11 +105,13 @@ export function killLocalPrecheckProcessTree(
       return null
     }
     // Shell prechecks can leave descendants running after the root exits.
-    void runWindowsTaskkillTree(pid).then((treeEnded) => {
-      if (!treeEnded) {
-        child.kill()
+    void runWindowsTaskkillTree(pid, WINDOWS_PROCESS_TREE_KILL_TIMEOUT_MS, child).then(
+      (treeEnded) => {
+        if (!treeEnded) {
+          child.kill()
+        }
       }
-    })
+    )
     return null
   }
 

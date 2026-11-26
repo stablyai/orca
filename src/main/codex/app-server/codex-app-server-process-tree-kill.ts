@@ -1,9 +1,13 @@
 import { spawnProcess } from '@orca/process-host'
+import type { TaskkillRoot } from '../../git/command-runner/process-capture/spawned-command-tree-kill'
 import type { ChildProcess } from 'node:child_process'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { admitProcessTreeKill } from '@orca/process-host/process-tree-kill-gate'
 import { childProcessHasExited } from '@orca/process-host/process-tree-termination'
-import { runWindowsTaskkillTree } from '../../pty/process-retirement/windows-process-tree-kill'
+import {
+  runWindowsTaskkillTree,
+  WINDOWS_PROCESS_TREE_KILL_TIMEOUT_MS
+} from '../../pty/process-retirement/windows-process-tree-kill'
 
 /** Spawn seam for tests; production always goes through the hardened spawnProcess wrapper. */
 export type CodexAppServerSpawn = (
@@ -16,7 +20,7 @@ export const spawnCodexAppServerProcess: CodexAppServerSpawn = (program, args, o
   spawnProcess({ program, args, ...options } as ProcessSpec)
 
 export function killCodexAppServerProcessTree(
-  child: Pick<ChildProcess, 'pid' | 'kill' | 'exitCode' | 'signalCode'>,
+  child: Pick<ChildProcess, 'pid' | 'kill'> & TaskkillRoot,
   options: { platform?: NodeJS.Platform; spawnImpl?: CodexAppServerSpawn } = {}
 ): void {
   const platform = options.platform ?? process.platform
@@ -38,11 +42,13 @@ export function killCodexAppServerProcessTree(
       return
     }
     // npm launchers wrap Codex; killing only the wrapper leaves the app-server alive.
-    void runWindowsTaskkillTree(child.pid).then((treeTerminated) => {
-      if (!treeTerminated) {
-        child.kill('SIGKILL')
+    void runWindowsTaskkillTree(child.pid, WINDOWS_PROCESS_TREE_KILL_TIMEOUT_MS, child).then(
+      (treeTerminated) => {
+        if (!treeTerminated) {
+          child.kill('SIGKILL')
+        }
       }
-    })
+    )
     return
   }
   if (child.pid) {

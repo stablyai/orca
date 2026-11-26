@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
+import { childProcessHasExited } from '@orca/process-host/process-tree-termination'
 import { endAbandonedWorkerGroup } from './abandoned-worker-group-termination'
 import { admitSelfInitiatedTreeKill } from '../../../pty/process-retirement/own-chromium-tree-kill-guard'
 import {
@@ -13,21 +14,32 @@ const WINDOWS_TREE_KILL_WAIT_MS = 2_000
 const WORKER_PID_WAIT_MS = 5_000
 // One tree kill per worker child: a second could walk a reused PID after the first ended the tree. True once taskkill proved the tree ended.
 const workerTreeKills = new WeakMap<WorkerThreadChildProcess, Promise<boolean>>()
-// Tree kills a dying worker leaves in one turn share one taskkill per host, so main pays at most one launch.
-const taskkillBatches = new Map<boolean, { pids: Set<number>; ended: Promise<boolean> }>()
+// Tree kills a dying worker leaves in one turn share one taskkill per host and wait, so main pays at most one launch.
+const taskkillBatches = new Map<string, { pids: Set<number>; ended: Promise<boolean> }>()
 
-function batchTaskkill(pids: readonly number[], onWorker: boolean): Promise<boolean> {
-  let batch = taskkillBatches.get(onWorker)
+/** The root whose tree a taskkill ends; once it exits, its pid may name another process. */
+export type TaskkillRoot = Pick<ChildProcess, 'exitCode' | 'signalCode'> & {
+  once(event: 'exit', listener: () => void): unknown
+  off(event: 'exit', listener: () => void): unknown
+}
+
+function batchTaskkill(
+  pids: readonly number[],
+  onWorker: boolean,
+  waitMs = WINDOWS_TREE_KILL_WAIT_MS
+): Promise<boolean> {
+  const key = `${onWorker}:${waitMs}`
+  let batch = taskkillBatches.get(key)
   if (!batch) {
     const collected = new Set<number>()
     const ended = new Promise<boolean>((resolve) => {
       queueMicrotask(() => {
-        taskkillBatches.delete(onWorker)
-        void runTaskkill([...collected], onWorker).then(resolve)
+        taskkillBatches.delete(key)
+        void runTaskkill([...collected], onWorker, waitMs).then(resolve)
       })
     })
     batch = { pids: collected, ended }
-    taskkillBatches.set(onWorker, batch)
+    taskkillBatches.set(key, batch)
   }
   for (const pid of pids) {
     batch.pids.add(pid)
@@ -175,17 +187,26 @@ function startTreeKill(
 }
 
 /** Taskkill for live pid trees outside Git: on the process worker when it can run, rerun from main if the worker never created it. */
-export function runWindowsTaskkillOffMain(pids: number[], waitMs: number): Promise<boolean> {
-  return runTaskkill(pids, canSpawnOnWorkerThread(), waitMs)
+export function runWindowsTaskkillOffMain(
+  pids: number[],
+  waitMs: number,
+  root?: TaskkillRoot
+): Promise<boolean> {
+  return runTaskkill(pids, canSpawnOnWorkerThread(), waitMs, root)
 }
 
-/** True when taskkill reported every tree ended within its wait. */
+/** True when taskkill reported every tree ended within its wait. Never started once `root` has exited. */
 function runTaskkill(
   pids: number[],
   onWorker = canSpawnOnWorkerThread(),
-  waitMs = WINDOWS_TREE_KILL_WAIT_MS
+  waitMs = WINDOWS_TREE_KILL_WAIT_MS,
+  root?: TaskkillRoot
 ): Promise<boolean> {
   return new Promise((resolve) => {
+    if (root && childProcessHasExited(root)) {
+      resolve(false)
+      return
+    }
     const taskkill = windowsSystem32Binary('taskkill.exe')
     const args = [...pids.flatMap((pid) => ['/pid', String(pid)]), '/t', '/f']
     let killer: ChildProcess | WorkerThreadChildProcess
@@ -210,26 +231,39 @@ function runTaskkill(
     }
     let settled = false
     let timer: NodeJS.Timeout | null = null
-    const finish = (ended: boolean): void => {
-      if (settled) {
-        return
+    // A queued taskkill whose root exits is withdrawn: by its turn, the root's pid may name another process.
+    const withdraw = (): void => {
+      if (killer instanceof WorkerThreadChildProcess && killer.pid === undefined) {
+        killer.cancelPendingSpawn()
       }
-      settled = true
+    }
+    const detach = (): void => {
       if (timer) {
         clearTimeout(timer)
       }
+      root?.off('exit', withdraw)
       killer.removeAllListeners()
-      resolve(ended)
+    }
+    const finish = (ended: boolean): void => {
+      if (!settled) {
+        settled = true
+        detach()
+        resolve(ended)
+      }
+    }
+    if (onWorker) {
+      root?.once('exit', withdraw)
     }
     killer.once('error', (error) => {
       // Only a taskkill the worker never created restarts here; one that ran may have freed the PID for reuse.
       if (onWorker && isAbandonedWorkerChildError(error) && !killer.pid && !settled) {
-        settled = true
-        if (timer) {
-          clearTimeout(timer)
+        if (root && childProcessHasExited(root)) {
+          finish(false)
+          return
         }
-        killer.removeAllListeners()
-        resolve(batchTaskkill(pids, false))
+        settled = true
+        detach()
+        resolve(batchTaskkill(pids, false, waitMs))
         return
       }
       finish(false)

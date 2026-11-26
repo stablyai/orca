@@ -1,4 +1,7 @@
-import { runWindowsTaskkillOffMain } from '../../git/command-runner/process-capture/spawned-command-tree-kill'
+import {
+  runWindowsTaskkillOffMain,
+  type TaskkillRoot
+} from '../../git/command-runner/process-capture/spawned-command-tree-kill'
 import { admitSelfInitiatedTreeKill } from './own-chromium-tree-kill-guard'
 
 export type WindowsTreeKiller = (rootPid: number, deps?: { site?: string }) => Promise<void>
@@ -9,15 +12,16 @@ export const WINDOWS_PROCESS_TREE_KILL_TIMEOUT_MS = 5_000
 /** taskkill /t /f for one live tree, started off Electron main where it can be; true only when it ended the tree. Callers check the Chromium-PID guard first. */
 export function runWindowsTaskkillTree(
   pid: number,
-  timeoutMs: number = WINDOWS_PROCESS_TREE_KILL_TIMEOUT_MS
+  timeoutMs: number = WINDOWS_PROCESS_TREE_KILL_TIMEOUT_MS,
+  root?: TaskkillRoot
 ): Promise<boolean> {
-  return runWindowsTaskkillOffMain([pid], timeoutMs)
+  return runWindowsTaskkillOffMain([pid], timeoutMs, root)
 }
 
 /** Best-effort tree kill; resolves true only when taskkill exits successfully. */
 export function terminateWindowsProcessTree(
   rootPid: number,
-  deps: { site?: string } = {}
+  deps: { site?: string; root?: TaskkillRoot } = {}
 ): Promise<boolean> {
   if (!Number.isInteger(rootPid) || rootPid <= 0) {
     return Promise.resolve(false)
@@ -26,5 +30,5 @@ export function terminateWindowsProcessTree(
   if (!admitSelfInitiatedTreeKill({ pid: rootPid, site, scope: 'win-taskkill-tree' })) {
     return Promise.resolve(false)
   }
-  return runWindowsTaskkillTree(rootPid)
+  return runWindowsTaskkillTree(rootPid, WINDOWS_PROCESS_TREE_KILL_TIMEOUT_MS, deps.root)
 }

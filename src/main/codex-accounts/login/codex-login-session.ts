@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import type { TaskkillRoot } from '../../git/command-runner/process-capture/spawned-command-tree-kill'
 import type { WindowsHostInteractiveLoginSpawn } from '../../providers/shell-launch/windows/windows-interactive-login-spawn'
 import { buildWindowsHostInteractiveLoginSpawn } from '../../providers/shell-launch/windows/windows-interactive-login-spawn'
 import { withCliRuntimeOnPath } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
@@ -28,12 +29,10 @@ type LoginOutputStream = {
   off(event: 'data', listener: (chunk: Buffer) => void): unknown
 }
 
-export type CodexLoginChild = {
+export type CodexLoginChild = TaskkillRoot & {
   stdout: LoginOutputStream | null
   stderr: LoginOutputStream | null
   pid?: number
-  exitCode: number | null
-  signalCode: string | null
   kill(): boolean
   on(event: 'error', listener: (error: Error) => void): unknown
   on(event: 'close', listener: (code: number | null) => void): unknown
@@ -152,7 +151,8 @@ async function runCodexLoginProcess(
       let text = ''
       return (chunk) => {
         appendOutput(chunk)
-        if (publishedAuthUrl) {
+        // A cancelled or finished login never opens or offers its link.
+        if (publishedAuthUrl || settled) {
           return
         }
         text = `${text}${chunk.toString()}`.slice(-MAX_LOGIN_OUTPUT_CHARS)
@@ -177,7 +177,7 @@ async function runCodexLoginProcess(
     let timeout: ReturnType<typeof setTimeout> | null = null
     let authWatchInterval: ReturnType<typeof setInterval> | null = null
     let postAuthExitTimeout: ReturnType<typeof setTimeout> | null = null
-    let loginTreeKilledAfterAuth = false
+    let postAuthTreeKill: Promise<void> | null = null
     const authJsonPath = join(managedHomePath, 'auth.json')
     const cleanupListeners = (): void => {
       if (timeout) {
@@ -207,7 +207,7 @@ async function runCodexLoginProcess(
       settled = true
       const treeStopped = killTreeFirst
         ? dependencies.killProcessTree(child, spawnConfig.interactiveLogin)
-        : Promise.resolve()
+        : (postAuthTreeKill ?? Promise.resolve())
       void treeStopped.then(() => {
         cleanupListeners()
         callback()
@@ -241,8 +241,7 @@ async function runCodexLoginProcess(
           authWatchInterval = null
         }
         postAuthExitTimeout = setTimeout(() => {
-          loginTreeKilledAfterAuth = true
-          void dependencies.killProcessTree(child, spawnConfig.interactiveLogin)
+          postAuthTreeKill = dependencies.killProcessTree(child, spawnConfig.interactiveLogin)
         }, WINDOWS_LOGIN_POST_AUTH_EXIT_GRACE_MS)
       }, WINDOWS_LOGIN_AUTH_POLL_INTERVAL_MS)
     }
@@ -265,7 +264,7 @@ async function runCodexLoginProcess(
         // An unreadable snapshot cannot revoke success and trigger destructive rollback.
         if (
           code === 0 ||
-          (loginTreeKilledAfterAuth && readLoginAuthSnapshot(authJsonPath) !== null)
+          (postAuthTreeKill !== null && readLoginAuthSnapshot(authJsonPath) !== null)
         ) {
           resolvePromise()
           return

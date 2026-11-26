@@ -22,7 +22,8 @@ export function killLoginProcessTree(
     })
   ) {
     // Kill descendants too: their Windows file handles can block post-login home operations.
-    return runWindowsTaskkillTree(terminationPid, WINDOWS_LOGIN_TREE_KILL_TIMEOUT_MS).then(
+    const root = terminationPid === child.pid ? child : undefined
+    return runWindowsTaskkillTree(terminationPid, WINDOWS_LOGIN_TREE_KILL_TIMEOUT_MS, root).then(
       (treeEnded) => {
         if (!treeEnded) {
           child.kill()
