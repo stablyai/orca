@@ -132,10 +132,15 @@ export async function sendBotItemMail(
     }
     const uploadIds = agentSessionAttachmentReferences(store.rootDir, attachment)
     if (uploadIds.size > 0) {
-      const items = runtime.botItems.store()
+      // Never opens a store: a drain only runs on one already open.
+      const items = runtime.botItems.openedStore()
       // The outbox keeps the uploads until the actual recipient claims them.
       for (let attempt = 0; ; attempt++) {
-        if (attempt > 0 || !takeAdmittedCommentClaim(items, comment.id, { sessionId, uploadIds })) {
+        if (
+          attempt > 0 ||
+          !items ||
+          !takeAdmittedCommentClaim(items, comment.id, { sessionId, uploadIds })
+        ) {
           await claimItemMailUploads(claim, store.rootDir, sessionId, attachment, expired)
         }
         if (botMailSessionStillCurrent(runtime, bot.id, owed.chatId, sessionId)) {

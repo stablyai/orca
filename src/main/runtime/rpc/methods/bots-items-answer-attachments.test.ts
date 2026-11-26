@@ -142,7 +142,12 @@ it('claims an item answer for the chat it actually mails and replays the same an
       notifyMessageArrived: () => {},
       lookAround: { botOfLook: () => null, botOfTidyUp: () => null },
       bots: { list: () => [bot], assertEnabled: () => {} },
-      botItems: { store: () => items, changed: () => {}, sendOwedMail: async () => {} }
+      botItems: {
+        store: () => items,
+        openedStore: () => items,
+        changed: () => {},
+        sendOwedMail: async () => {}
+      }
     }
   } as unknown as RpcContext
   const upload = STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS.find(
