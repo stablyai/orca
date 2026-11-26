@@ -40,13 +40,15 @@ export type McpConfigInspection = {
   error?: string
 }
 
+export const WORKSPACE_MCP_CONFIG: McpConfigCandidate = {
+  format: 'workspace',
+  label: 'Workspace',
+  relativePath: '.mcp.json',
+  serversPath: ['mcpServers']
+}
+
 export const MCP_CONFIG_CANDIDATES: McpConfigCandidate[] = [
-  {
-    format: 'workspace',
-    label: 'Workspace',
-    relativePath: '.mcp.json',
-    serversPath: ['mcpServers']
-  },
+  WORKSPACE_MCP_CONFIG,
   {
     format: 'cursor',
     label: 'Cursor',

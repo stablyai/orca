@@ -59,6 +59,7 @@ export type ClaudeLateDispatchOutcome =
   | { clientMessageId: string; state: 'unknown'; reason: string }
 
 export type ClaudeStructuredSessionAdapterDeps = {
+  resolveWorkspacePath?: (workspaceId: string) => Promise<string>
   namingInputs?: (record: AgentSessionRecord) => Promise<ClaudeNamingInputs>
   namingRecord?: (sessionId: string) => AgentSessionRecord | null | undefined
   atRestCommands?: ClaudeAtRestCommandCatalog

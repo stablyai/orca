@@ -1,4 +1,5 @@
 import type { McpServerStatus } from '@anthropic-ai/claude-agent-sdk'
+import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentSessionMcpFailureMessage,
   agentSessionMcpWebUrl,
@@ -11,7 +12,11 @@ import {
   isClaudeQueryClosed,
   type ClaudeMcpControls
 } from '../../sdk-transport/claude-agent-sdk-control-requests'
-import type { ClaudeSession } from '../claude-structured-session-state'
+import type {
+  ClaudeSession,
+  ClaudeStructuredSessionAdapterDeps
+} from '../claude-structured-session-state'
+import { readClaudeProjectMcpServers } from './claude-project-mcp-servers'
 
 // The CLI refuses OAuth for stdio and sdk servers.
 const SIGN_IN_TRANSPORTS = new Set(['http', 'sse', 'claudeai-proxy'])
@@ -60,12 +65,20 @@ async function runClaudeMcpOperation(
 
 export async function manageClaudeMcp(
   sessions: ReadonlyMap<string, ClaudeSession>,
-  sessionId: string,
-  operation: AgentSessionMcpOperation
+  record: AgentSessionRecord,
+  operation: AgentSessionMcpOperation,
+  resolveWorkspacePath: ClaudeStructuredSessionAdapterDeps['resolveWorkspacePath']
 ): Promise<AgentSessionMcpResult> {
+  const { sessionId } = record
   const session = sessions.get(sessionId)
   const connection = session?.connection
   if (!session || !connection || connection.closed) {
+    if (operation.action === 'status') {
+      const servers = await readClaudeProjectMcpServers(record, resolveWorkspacePath)
+      if (servers.length > 0) {
+        return { status: 'ok', servers }
+      }
+    }
     return { status: 'not-running' }
   }
   const mcp = connection.mcp

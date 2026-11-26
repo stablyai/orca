@@ -211,7 +211,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   readCommands: NonNullable<StructuredAgentSessionAdapter['readCommands']> = (sessionId) =>
     this.sessions.get(sessionId)?.commands.commands
   manageMcp: NonNullable<StructuredAgentSessionAdapter['manageMcp']> = (record, operation) =>
-    manageClaudeMcp(this.sessions, record.sessionId, operation)
+    manageClaudeMcp(this.sessions, record, operation, this.deps.resolveWorkspacePath)
   readonly atRestCommands: ClaudeStructuredSessionAdapterDeps['atRestCommands']
   holdsDispatch = (sessionId: string): boolean => claudeHoldsDispatch(this.sessions.get(sessionId))
   requiresModelTransitionRestart = claudeOptions.claudeModelTransitionRestart(this.sessions)

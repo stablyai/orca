@@ -94,6 +94,7 @@ export function createStructuredClaudeRuntimeAdapter(
     })
   }
   return new ClaudeStructuredSessionAdapter({
+    resolveWorkspacePath: deps.resolveWorkspacePath,
     atRestCommands: new ClaudeAtRestCommandCatalog({
       resolveWorkspacePath: deps.resolveWorkspacePath,
       ...(deps.resolveAccountHome ? { resolveAccountHome: deps.resolveAccountHome } : {}),

@@ -22,7 +22,7 @@ export function NativeChatStructuredComposerTabStrips(props: {
   return (
     <>
       <NativeChatStructuredGoalStrip {...props} sessionId={props.transport.sessionId} />
-      {mcpPanel?.isOpen ? (
+      {mcpPanel?.isOpen && !props.transport.sessionPending ? (
         <NativeChatMcpTray
           sessionId={props.transport.sessionId}
           target={props.target}
