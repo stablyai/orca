@@ -22,9 +22,9 @@ import {
   ATTACHMENT_INPUT_KINDS,
   isAttachmentInputKind,
   parseWorkspaceAttachmentInput,
-  workspaceAttachmentLabel,
   type AttachmentInputKind
 } from '../metadata/worktree-attachment-editing'
+import { getWorkspaceAttachmentDisplayLabels } from './workspace-attachment-source-label'
 import {
   getWorkspaceAttachmentSourceContext,
   matchesWorkspaceAttachmentQuery,
@@ -115,7 +115,7 @@ export function WorkspaceAttachmentSearch({
     }
   }
   const rows = controller.rows
-  const parsedDirect = parseWorkspaceAttachmentInput(query, kind)
+  const parsedDirect = parseWorkspaceAttachmentInput(query, kind, props.repo)
   const resolvedDirectRow =
     !controller.isQueryStale && parsedDirect
       ? rows.find((row) => {
@@ -283,7 +283,7 @@ export function WorkspaceAttachmentSearch({
                     <Plus className="size-3.5" />
                     <span>
                       {t('workspace.links.addItem', 'Add {{label}}', {
-                        label: workspaceAttachmentLabel(direct)
+                        label: getWorkspaceAttachmentDisplayLabels(direct, props.repo).label
                       })}
                     </span>
                     {directLinked ? (

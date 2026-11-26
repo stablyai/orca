@@ -35,6 +35,7 @@ const COMMENT_MARKDOWN_CLASS_NAME =
 
 export function WorktreeCardDetailsHover({
   workspace,
+  repo,
   referenceDetails,
   onManageLinks,
   issue,
@@ -125,6 +126,23 @@ export function WorktreeCardDetailsHover({
   })
   const showIdentityHeader = Boolean(branchName || workspaceTitle)
   const attachments = getWorkspaceAttachments(workspace ?? {})
+  const [singleAttachment] = attachments
+  const linkedIssue =
+    attachments.length === 1 &&
+    singleAttachment?.provider === 'github' &&
+    singleAttachment.type === 'issue' &&
+    singleAttachment.number === issue?.number
+      ? singleAttachment
+      : undefined
+  // A saved other-repo issue URL outranks the URL the card derives from the project repo.
+  const taskIssue =
+    issue && linkedIssue?.url
+      ? {
+          ...issue,
+          url: linkedIssue.url,
+          title: issue.state ? issue.title : linkedIssue.title || issue.title
+        }
+      : issue
   const showAttachmentCollection =
     attachments.length > 1 ||
     (attachments.length === 1 && !issue && !linearIssue && !jiraIssue && !review)
@@ -206,7 +224,8 @@ export function WorktreeCardDetailsHover({
               />
 
               <WorktreeCardTaskDetailSection
-                issue={issue}
+                issue={taskIssue}
+                workspaceRepo={linkedIssue?.url ? repo : undefined}
                 linearIssue={linearIssue}
                 jiraIssue={jiraIssue}
                 actions={taskActions}
@@ -218,6 +237,7 @@ export function WorktreeCardDetailsHover({
           ) : null}
           <WorktreeCardLinkedItemsSection
             workspace={workspace}
+            repo={repo}
             referenceDetails={referenceDetails}
             review={review}
             issue={issue}

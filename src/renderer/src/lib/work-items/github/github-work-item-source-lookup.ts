@@ -47,6 +47,7 @@ type GitHubWorkItemByOwnerRepoLookupArgs = GitHubWorkItemLookupArgs & {
   type: 'issue' | 'pr'
   /** One light call for hover cards; older hosts ignore it. */
   preview?: boolean
+  allowSameHost?: boolean
   accepts?: () => boolean
   rpcOptions?: Parameters<typeof callRuntimeRpc>[3]
 }
@@ -161,7 +162,8 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
             ...(args.host ? { host: args.host } : {}),
             number: args.number,
             type: args.type,
-            ...(args.preview ? { preview: true } : {})
+            ...(args.preview ? { preview: true } : {}),
+            ...(args.allowSameHost ? { allowSameHost: true } : {})
           },
           {
             timeoutMs: 30_000,
@@ -188,7 +190,8 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
           ...(args.host ? { host: args.host } : {}),
           number: args.number,
           type: args.type,
-          ...(args.preview ? { preview: true } : {})
+          ...(args.preview ? { preview: true } : {}),
+          ...(args.allowSameHost ? { allowSameHost: true } : {})
         })
   if (args.accepts?.() === false) {
     return null

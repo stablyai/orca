@@ -73,6 +73,7 @@ export const ghPullRequestsAndWorkItemsApi = {
     number: number
     type: 'issue' | 'pr'
     preview?: boolean
+    allowSameHost?: boolean
   }) => ipcRenderer.invoke('gh:workItemByOwnerRepo', args),
   workItemDetails: (args: {
     expectedGhAccount?: GhAccountBinding | null

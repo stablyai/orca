@@ -9,6 +9,7 @@ import {
   type GhAccountBinding
 } from '../../../shared/github/accounts/account-binding'
 import { normalizeJiraProjectReference } from '../../../shared/jira/jira-project-reference'
+import { normalizeIssueRepository } from '../../../shared/github/repositories/github-issue-reference'
 
 import { sanitizeAgentWorkspaceTrustDecision } from '../../../shared/agent-launch/permissions/agent-workspace-trust-decision'
 import {
@@ -83,6 +84,7 @@ export function sanitizeRepoUpdatesForPersistence<
       | 'forkSyncMode'
       | 'agentWorkspaceTrust'
       | 'defaultJiraProject'
+      | 'defaultGitHubIssueRepository'
       | 'customWorktreeVisibilitySources'
       | 'worktreeVisibilitySourcePreferences'
     >
@@ -101,6 +103,14 @@ export function sanitizeRepoUpdatesForPersistence<
       delete sanitized.defaultJiraProject
     } else {
       sanitized.defaultJiraProject = reference
+    }
+  }
+  if ('defaultGitHubIssueRepository' in sanitized) {
+    const repository = normalizeIssueRepository(sanitized.defaultGitHubIssueRepository)
+    if (repository === undefined) {
+      delete sanitized.defaultGitHubIssueRepository
+    } else {
+      sanitized.defaultGitHubIssueRepository = repository
     }
   }
   if ('badgeColor' in sanitized) {

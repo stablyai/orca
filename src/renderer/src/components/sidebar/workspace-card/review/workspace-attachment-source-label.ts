@@ -1,9 +1,18 @@
 import type { WorkspaceAttachment } from '../../../../../../shared/worktree/types'
-import { parseGitHubIssueOrPRLink } from '../../../../../../shared/github/repositories/links'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import {
+  parseGitHubIssueOrPRLink,
+  type RepoSlug
+} from '../../../../../../shared/github/repositories/links'
+import { isDefaultGitHubHost } from '../../../../../../shared/github/repositories/repository-identity-key'
 import { parseGitLabIssueOrMRLink } from '../../../../../../shared/new-workspace/gitlab-links'
 import { parseLinearIssueInput } from '../../../../../../shared/linear/links'
 import { parseJiraIssueUrl } from '../../../../../../shared/jira/jira-issue-url'
 import { getWorkspaceAttachmentUrlScope } from '../../../../../../shared/workspace-attachments/workspace-attachment-normalization'
+import {
+  isWorkspaceRepositoryAttachment,
+  workspaceAttachmentLabel
+} from '../metadata/worktree-attachment-editing'
 
 function humanText(value: string | null | undefined): string | null {
   const text = value?.trim()
@@ -34,6 +43,24 @@ function urlLabel(value: string | null | undefined): string | null {
   } catch {
     return null
   }
+}
+
+function githubRepositoryLabel(repo: RepoSlug): string {
+  const host = isDefaultGitHubHost(repo.host) ? '' : `${repo.host}/`
+  return `${host}${repo.owner}/${repo.repo}`
+}
+
+export function getWorkspaceAttachmentDisplayLabels(
+  item: WorkspaceAttachment,
+  workspaceRepo: Repo | undefined
+): { label: string; source: string | null } {
+  if (workspaceRepo && item.provider === 'github' && item.type === 'issue' && item.url) {
+    const issue = parseGitHubIssueOrPRLink(item.url)
+    if (issue?.type === 'issue' && !isWorkspaceRepositoryAttachment(item, workspaceRepo)) {
+      return { label: `${githubRepositoryLabel(issue.slug)}#${item.number}`, source: null }
+    }
+  }
+  return { label: workspaceAttachmentLabel(item), source: getWorkspaceAttachmentSourceLabel(item) }
 }
 
 export function getWorkspaceAttachmentSourceLabel(item: WorkspaceAttachment): string | null {
@@ -67,8 +94,7 @@ export function getWorkspaceAttachmentSourceLabel(item: WorkspaceAttachment): st
       (item.url ? parseGitHubIssueOrPRLink(item.url)?.slug : null) ??
       (identity?.provider === 'github' ? identity : null)
     if (repo) {
-      const host = repo.host && repo.host.toLowerCase() !== 'github.com' ? `${repo.host}/` : ''
-      return `${host}${repo.owner}/${repo.repo}`
+      return githubRepositoryLabel(repo)
     }
   }
   if (item.provider === 'gitlab') {

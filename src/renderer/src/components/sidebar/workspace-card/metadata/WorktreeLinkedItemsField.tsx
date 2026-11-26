@@ -58,7 +58,7 @@ export function WorktreeLinkedItemsField({
     }
     if (
       !item.url ||
-      (item.type === 'issue' && item.provider !== 'github' && item.provider !== 'gitlab') ||
+      (item.type === 'issue' && item.provider !== 'gitlab') ||
       isFolderWorkspace ||
       isWorkspaceRepositoryAttachment(item, repo)
     ) {
@@ -158,6 +158,7 @@ export function WorktreeLinkedItemsField({
                     <WorktreeLinkedItemRow
                       key={key}
                       item={item}
+                      repo={repo}
                       workspace={workspace}
                       disabled={disabled}
                       onRemove={() => remove(key)}

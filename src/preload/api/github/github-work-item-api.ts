@@ -77,6 +77,7 @@ export type GithubWorkItemApi = {
     host?: string
     number: number
     type: 'issue' | 'pr'
+    allowSameHost?: boolean
   }) => Promise<Omit<GitHubWorkItem, 'repoId'> | null>
   workItemDetails: (
     args: GitHubRepoSelectorArgs & {

@@ -4,7 +4,11 @@ import type { ListWorkItemsResult } from '../../../../shared/github/work-items/w
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { LocalProjectGhExecOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { countWorkItems } from '../../../github/client/list/count-work-items'
-import { getWorkItem, getWorkItemByOwnerRepo } from '../../../github/client/fetch/get-work-item'
+import {
+  getWorkItem,
+  getWorkItemByOwnerRepo,
+  type WorkItemByOwnerRepoOptions
+} from '../../../github/client/fetch/get-work-item'
 import { listAssignableUsers, listLabels } from '../../../github/issues/issue-field-options'
 import { resolveIssueGitHubApiRepositorySource } from '../../../github/repositories/github-api-repository'
 import { listIssues } from '../../../github/issues/issues'
@@ -85,7 +89,7 @@ export class RuntimeGitHubRepositoryQueryCommands {
     ownerRepo: { owner: string; repo: string; host?: string },
     number: number,
     type: 'issue' | 'pr',
-    options: { preview?: boolean } = {}
+    options: WorkItemByOwnerRepoOptions = {}
   ): Promise<Awaited<ReturnType<typeof getWorkItemByOwnerRepo>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
     return getWorkItemByOwnerRepo(

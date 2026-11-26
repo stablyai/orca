@@ -63,6 +63,7 @@ export type RepoUpdate = Partial<
     | 'symlinkPaths'
     | 'dictationTerms'
     | 'issueSourcePreference'
+    | 'defaultGitHubIssueRepository'
     | 'defaultJiraProject'
     | 'forkSyncMode'
     | 'agentWorkspaceTrust'

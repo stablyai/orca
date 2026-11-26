@@ -4,17 +4,16 @@ import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/worktree/types'
 import { WorkspaceAttachmentOrigins } from '../review/WorkspaceAttachmentOrigins'
-import {
-  workspaceAttachmentLabel,
-  workspaceAttachmentProviderLabel
-} from './worktree-attachment-editing'
-import { getWorkspaceAttachmentSourceLabel } from '../review/workspace-attachment-source-label'
+import { workspaceAttachmentProviderLabel } from './worktree-attachment-editing'
+import { getWorkspaceAttachmentDisplayLabels } from '../review/workspace-attachment-source-label'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 type Props = {
   item: WorkspaceAttachment
+  repo?: Repo
   workspace?: Worktree
   disabled: boolean
   onRemove: () => void
@@ -22,13 +21,13 @@ type Props = {
 
 export function WorktreeLinkedItemRow({
   item,
+  repo,
   workspace,
   disabled,
   onRemove
 }: Props): React.JSX.Element {
   const t = useTranslate()
-  const label = workspaceAttachmentLabel(item)
-  const source = getWorkspaceAttachmentSourceLabel(item)
+  const { label, source } = getWorkspaceAttachmentDisplayLabels(item, repo)
   const provider = workspaceAttachmentProviderLabel(item)
   const observedCount = item.origins?.filter((origin) => origin.kind === 'observed').length ?? 0
   const sessionsLabel = t('workspace.links.sessions', 'Sessions & terminals')
@@ -50,7 +49,7 @@ export function WorktreeLinkedItemRow({
         <Tooltip>
           <TooltipTrigger asChild>
             <div className="flex min-w-0 flex-1 items-baseline gap-2 text-xs">
-              <span className="shrink-0 font-medium">{label}</span>
+              <span className="truncate font-medium">{label}</span>
               {item.title ? (
                 <span className="truncate text-muted-foreground">{item.title}</span>
               ) : null}

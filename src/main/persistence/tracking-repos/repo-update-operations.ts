@@ -107,6 +107,7 @@ export class RepoUpdatePersistenceOperations {
         | 'symlinkPaths'
         | 'dictationTerms'
         | 'issueSourcePreference'
+        | 'defaultGitHubIssueRepository'
         | 'defaultJiraProject'
         | 'forkSyncMode'
         | 'agentWorkspaceTrust'

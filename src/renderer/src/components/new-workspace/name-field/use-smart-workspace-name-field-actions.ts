@@ -148,7 +148,7 @@ export function useSmartWorkspaceNameFieldActions(
     [activeEmojiShortcode, applyEmojiReplacement, value]
   )
   const acceptGitHubLink = useCallback(
-    async (targetRepo: RepoOption): Promise<void> => {
+    async (targetRepo: RepoOption, allowSameHost = false): Promise<void> => {
       if (!crossRepoPrompt) {
         return
       }
@@ -164,11 +164,10 @@ export function useSmartWorkspaceNameFieldActions(
           repoPath: targetRepo.path,
           repoId: targetRepo.id,
           sourceContext,
-          owner: crossRepoPrompt.link.slug.owner,
-          repo: crossRepoPrompt.link.slug.repo,
-          ...(crossRepoPrompt.link.slug.host ? { host: crossRepoPrompt.link.slug.host } : {}),
+          ...crossRepoPrompt.link.slug,
           number: crossRepoPrompt.link.number,
-          type: crossRepoPrompt.link.type
+          type: crossRepoPrompt.link.type,
+          ...(allowSameHost ? { allowSameHost: true } : {})
         })
         if (!item) {
           return
@@ -197,7 +196,7 @@ export function useSmartWorkspaceNameFieldActions(
       return
     }
     setCrossRepoPrompt(null)
-    await acceptGitHubLink(selectedRepo)
+    await acceptGitHubLink(selectedRepo, true)
   }, [acceptGitHubLink, selectedRepo, setCrossRepoPrompt])
   const handleAddMatchingRepo = useCallback(async (): Promise<void> => {
     if (!crossRepoPrompt || !allowCrossRepoProjectAdd) {

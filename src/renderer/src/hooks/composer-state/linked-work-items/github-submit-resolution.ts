@@ -39,6 +39,7 @@ import { getRepoExecutionHostId } from '../../../../../shared/execution-host/exe
 import {
   getSmartGitHubSubmitResolution,
   getSmartGitHubSubmitIntent,
+  lookupSmartGitHubNumberItem,
   lookupSmartGitHubSubmitItem
 } from '@/lib/work-items/github/smart-github-submit'
 import { getForkPushWarning } from '../../../../../shared/new-workspace/fork-push-warning'
@@ -162,36 +163,45 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
 
       const submitSelection = { kind: 'github-submit-lookup', query: name } as const
       smartSourceSelectionRef.current = submitSelection
+      const lookup = {
+        sourceContext: selectedRepoGitHubSourceContext,
+        workItem: lookupGitHubWorkItemForSource,
+        workItemByOwnerRepo: lookupGitHubWorkItemByOwnerRepoForSource
+      }
       const item = isProjectGroupTarget
         ? (
             await Promise.all(
-              folderSourceRepos.filter(isGitRepoKind).map((repo) =>
-                lookupSmartGitHubSubmitItem({
-                  repoPath: repo.path,
-                  repoId: repo.id,
+              folderSourceRepos.filter(isGitRepoKind).map((repo) => {
+                const repoLookup = {
+                  ...lookup,
                   sourceContext: buildTaskSourceContextFromRepo({
                     provider: 'github',
                     projectId: repo.id,
                     repo
-                  }),
-                  intent,
-                  workItem: lookupGitHubWorkItemForSource,
-                  workItemByOwnerRepo: lookupGitHubWorkItemByOwnerRepoForSource
-                }).catch(() => null)
-              )
+                  })
+                }
+                return intent.kind === 'hash-number'
+                  ? lookupSmartGitHubNumberItem(repo, intent.number, repoLookup)
+                  : lookupSmartGitHubSubmitItem({
+                      ...repoLookup,
+                      repoPath: repo.path,
+                      repoId: repo.id,
+                      intent
+                    }).catch(() => null)
+              })
             )
           )
             .filter((candidate): candidate is GitHubWorkItem => candidate !== null)
             .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0]
         : selectedRepo && selectedRepoIsGit
-          ? await lookupSmartGitHubSubmitItem({
-              repoPath: selectedRepo.path,
-              repoId: selectedRepo.id,
-              sourceContext: selectedRepoGitHubSourceContext,
-              intent,
-              workItem: lookupGitHubWorkItemForSource,
-              workItemByOwnerRepo: lookupGitHubWorkItemByOwnerRepoForSource
-            })
+          ? intent.kind === 'hash-number' && selectedRepo.defaultGitHubIssueRepository
+            ? await lookupSmartGitHubNumberItem(selectedRepo, intent.number, lookup)
+            : await lookupSmartGitHubSubmitItem({
+                ...lookup,
+                repoPath: selectedRepo.path,
+                repoId: selectedRepo.id,
+                intent
+              })
           : null
       if (!item) {
         throw new Error(

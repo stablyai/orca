@@ -19,6 +19,7 @@ import {
 import { getRepositoryFormatterSearchEntry } from './RepositoryFormatterSection'
 import { getRepositoryAgentTrustSearchEntry } from './RepositoryAgentTrustSection'
 import { getRepositoryBrowserProfileSearchEntry } from './RepositoryBrowserProfileSection'
+import { getRepositoryGitHubIssueSearchEntry } from './RepositoryGitHubIssueSection'
 import { getRepositoryWorkspaceCleanupSearchEntry } from './workspace-cleanup/repository-workspace-cleanup-search'
 
 type RepositoryPaneSearchOptions = {
@@ -207,11 +208,14 @@ function getRepositorySearchParts(
         }
   const { removeProject, sidebarVisibility } = getRepositoryPresenceSearchEntries(repo, t)
   return {
-    agentTrust: getRepositoryAgentTrustSearchEntry(),
-    browserProfile: getRepositoryBrowserProfileSearchEntry(t),
-    jira,
-    displayName,
-    icon,
+    identity: [
+      getRepositoryAgentTrustSearchEntry(),
+      getRepositoryBrowserProfileSearchEntry(t),
+      jira,
+      displayName,
+      icon,
+      ...(isFolder ? [] : [getRepositoryGitHubIssueSearchEntry(repo, t)])
+    ],
     github,
     fork,
     projectRuntime,
@@ -229,14 +233,7 @@ export function getRepositoryPaneSearchEntries(
   t: Translate = translate
 ): SettingsSearchEntry[] {
   const parts = getRepositorySearchParts(repo, options, t)
-  const entries = [
-    getRepositoryFormatterSearchEntry(t),
-    parts.agentTrust,
-    parts.browserProfile,
-    parts.jira,
-    parts.displayName,
-    parts.icon
-  ]
+  const entries = [getRepositoryFormatterSearchEntry(t), ...parts.identity]
   if (parts.github) {
     entries.push(parts.github)
   }
@@ -270,13 +267,7 @@ export function getRepositoryPaneSearchMetadata(
 ) {
   const parts = getRepositorySearchParts(repo, options, t)
   const worktrees = isFolderRepo(repo) ? undefined : getRepositoryGitWorktreeSearchMetadata(repo, t)
-  const identity = [
-    parts.agentTrust,
-    parts.browserProfile,
-    parts.jira,
-    parts.displayName,
-    parts.icon
-  ]
+  const identity = parts.identity
   if (parts.github) {
     identity.push(parts.github)
   }

@@ -4,6 +4,7 @@ import {
   resolveGitHubApiRepository,
   resolveGitHubApiRepositoryCandidates
 } from './github-api-repository'
+import { isValidGitHubApiRepository } from './github-api-repository-validation'
 import type { LocalGitExecOptions } from './github-repository-identity'
 
 function githubHostKey(host?: string): string {
@@ -32,10 +33,11 @@ export async function resolveGitHubWorkItemLinkRepository(
   )
   const requestedKey = githubRepoIdentityKey(requestedRepository)
   const requestedHostKey = githubHostKey(requestedRepository.host)
-  // Link previews may read another repository on a host already configured for the workspace.
+  // Previews and addressed issues may read another repository on a host this checkout already uses.
   return (
     candidates.find((candidate) => githubRepoIdentityKey(candidate) === requestedKey) ??
     (allowSameHost &&
+    isValidGitHubApiRepository(requestedRepository) &&
     candidates.some((candidate) => githubHostKey(candidate.host) === requestedHostKey)
       ? requestedRepository
       : null)

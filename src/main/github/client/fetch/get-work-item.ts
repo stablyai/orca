@@ -155,6 +155,8 @@ export async function getWorkItemWithRepository(
   })
 }
 
+export type WorkItemByOwnerRepoOptions = { preview?: boolean; allowSameHost?: boolean }
+
 export async function getWorkItemByOwnerRepo(
   repoPath: string,
   ownerRepo: GitHubApiRepository,
@@ -162,8 +164,9 @@ export async function getWorkItemByOwnerRepo(
   type: 'issue' | 'pr',
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {},
-  options: { preview?: boolean } = {}
+  options: WorkItemByOwnerRepoOptions = {}
 ): Promise<MainWorkItem | null> {
+  const allowSameHost = type === 'issue' && options.allowSameHost === true
   const { item } = await getWorkItemWithExactRepository(
     repoPath,
     ownerRepo,
@@ -171,7 +174,7 @@ export async function getWorkItemByOwnerRepo(
     type,
     connectionId,
     localGitOptions,
-    options
+    { ...options, allowSameHost }
   )
   return item
 }
@@ -185,6 +188,7 @@ export async function getWorkItemWithExactRepository(
   localGitOptions: LocalGitExecOptions = {},
   options: {
     preview?: boolean
+    allowSameHost?: boolean
     issueDetails?: { fresh: boolean }
     includeChecksSummary?: boolean
   } = {}
@@ -193,7 +197,7 @@ export async function getWorkItemWithExactRepository(
     const matchedRepository = await resolveGitHubWorkItemLinkRepository(
       repoPath,
       ownerRepo,
-      { allowSameHost: options.preview },
+      { allowSameHost: options.preview || options.allowSameHost },
       connectionId,
       localGitOptions
     )

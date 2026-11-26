@@ -1,13 +1,14 @@
 import { useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { normalizeGitHubLinkQuery } from '../../../../../shared/new-workspace/github-links'
-import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/repositories/links'
 import {
   lookupGitHubWorkItemByOwnerRepoForSource,
   lookupGitHubWorkItemForSource
 } from '@/lib/work-items/github/github-work-item-source-lookup'
-import { lookupSmartGitHubSubmitItem } from '@/lib/work-items/github/smart-github-submit'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import {
+  lookupSmartGitHubNumberItems,
+  lookupSmartGitHubSubmitItem
+} from '@/lib/work-items/github/smart-github-submit'
 import { RESULT_LIMIT } from '../name-field/smart-workspace-name-field-model'
 import { resolveSmartWorkspaceGithubDirectLink } from './smart-workspace-github-direct-link'
 import type { useWorkItemSourceFoundation } from './use-work-item-source-foundation'
@@ -44,10 +45,6 @@ export function useSmartWorkspaceGithubSearch({
     () => normalizeGitHubLinkQuery(sourceQueryWithinLimit ? debouncedQuery : ''),
     [debouncedQuery, sourceQueryWithinLimit]
   )
-  const parsedGhLink = useMemo(
-    () => (sourceQueryWithinLimit ? parseGitHubIssueOrPRLink(debouncedQuery) : null),
-    [debouncedQuery, sourceQueryWithinLimit]
-  )
 
   useEffect(() => {
     if (disabled || !shouldQueryGithub) {
@@ -62,11 +59,18 @@ export function useSmartWorkspaceGithubSearch({
       setGithubItems([])
     }
     const directNumber = normalizedGhQuery.directNumber
-    const directLink = parsedGhLink
-    if (directLink !== null && handledCrossRepoUrlRef.current !== debouncedQuery.trim()) {
+    const { directLink, isIssueShorthand } = normalizedGhQuery
+    if (
+      directLink &&
+      (isIssueShorthand || handledCrossRepoUrlRef.current !== debouncedQuery.trim())
+    ) {
+      if (isIssueShorthand) {
+        setGithubItems([])
+      }
       setGithubLoading(true)
       void resolveSmartWorkspaceGithubDirectLink({
         directLink,
+        isIssueShorthand,
         crossRepoSwitchTarget,
         repoBackedSearchTargets,
         selectedRepo,
@@ -74,7 +78,8 @@ export function useSmartWorkspaceGithubSearch({
         repos,
         repoSlugCache: repoSlugCacheRef.current,
         handledCrossRepoUrlRef,
-        query: debouncedQuery.trim()
+        query: debouncedQuery.trim(),
+        isCurrent: () => !stale
       })
         .then((result) => {
           if (stale) {
@@ -101,31 +106,37 @@ export function useSmartWorkspaceGithubSearch({
     }
     if (directNumber !== null) {
       setGithubLoading(true)
-      const intent =
-        directLink !== null
-          ? {
-              kind: 'link' as const,
-              owner: directLink.slug.owner,
-              repo: directLink.slug.repo,
-              ...(directLink.slug.host ? { host: directLink.slug.host } : {}),
-              number: directLink.number,
-              type: directLink.type
-            }
-          : { kind: 'hash-number' as const, number: directNumber }
+      const intent = directLink
+        ? {
+            kind: 'link' as const,
+            owner: directLink.slug.owner,
+            repo: directLink.slug.repo,
+            ...(directLink.slug.host ? { host: directLink.slug.host } : {}),
+            number: directLink.number,
+            type: directLink.type
+          }
+        : { kind: 'hash-number' as const, number: directNumber }
       const request = Promise.all(
-        repoBackedSearchTargets.map((target) =>
-          lookupSmartGitHubSubmitItem({
-            repoPath: target.repo.path,
-            repoId: target.repo.id,
+        repoBackedSearchTargets.map(async (target) => {
+          const lookup = {
             sourceContext: target.githubSourceContext,
-            intent,
             workItem: lookupGitHubWorkItemForSource,
             workItemByOwnerRepo: lookupGitHubWorkItemByOwnerRepoForSource
+          }
+          if (intent.kind === 'hash-number') {
+            return lookupSmartGitHubNumberItems(target.repo, intent.number, lookup)
+          }
+          const item = await lookupSmartGitHubSubmitItem({
+            ...lookup,
+            repoPath: target.repo.path,
+            repoId: target.repo.id,
+            intent
           }).catch(() => null)
-        )
+          return item ? [item] : []
+        })
       ).then((items) =>
         items
-          .filter((item): item is GitHubWorkItem => item !== null)
+          .flat()
           .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
           .slice(0, RESULT_LIMIT)
       )
@@ -237,7 +248,6 @@ export function useSmartWorkspaceGithubSearch({
     fetchWorkItemsAcrossRepos,
     getCachedWorkItems,
     normalizedGhQuery,
-    parsedGhLink,
     repos,
     repoBackedSearchTargets,
     githubSourceContext,

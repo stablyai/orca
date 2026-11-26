@@ -2,16 +2,14 @@ import type { MouseEvent } from 'react'
 import { Copy, Globe, ListTodo, MonitorUp, Pencil } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorkspaceAttachment } from '../../../../../../shared/worktree/types'
 import { WorktreeCardDetailSection } from '../details/WorktreeCardDetailSection'
 import { DetailHeader } from '../metadata/WorktreeCardMetadataControls'
 import { WorktreeCardReferenceRow } from './WorktreeCardReferenceRow'
 import { WorktreeCardRowActionsMenu } from '../surface/WorktreeCardRowActionsMenu'
-import { getWorkspaceAttachmentSourceLabel } from './workspace-attachment-source-label'
-import {
-  workspaceAttachmentLabel,
-  workspaceAttachmentProviderLabel
-} from '../metadata/worktree-attachment-editing'
+import { getWorkspaceAttachmentDisplayLabels } from './workspace-attachment-source-label'
+import { workspaceAttachmentProviderLabel } from '../metadata/worktree-attachment-editing'
 import type { WorktreeCardTaskActionHandlers } from './worktree-card-task-actions'
 import {
   getIssueTaskState,
@@ -147,6 +145,7 @@ export function WorktreeCardTaskActions({
 
 export function WorktreeCardTaskDetailSection({
   issue,
+  workspaceRepo,
   linearIssue,
   jiraIssue,
   actions,
@@ -155,6 +154,7 @@ export function WorktreeCardTaskDetailSection({
   onManageLinks
 }: {
   issue?: WorktreeCardIssueDisplay | null
+  workspaceRepo?: Repo
   linearIssue?: WorktreeCardLinearIssueDisplay | null
   jiraIssue?: WorktreeCardJiraIssueDisplay | null
   actions: WorktreeCardTaskActionHandlers
@@ -175,32 +175,35 @@ export function WorktreeCardTaskDetailSection({
         onAddReference={onManageLinks}
       />
       <div className="divide-y divide-border">
-        {tasks.map(({ item, title, state, labels }) => (
-          <div key={item.provider} className="py-1.5">
-            <WorktreeCardReferenceRow
-              review={null}
-              kind="issue"
-              title={title}
-              label={workspaceAttachmentLabel(item)}
-              provider={workspaceAttachmentProviderLabel(item)}
-              source={getWorkspaceAttachmentSourceLabel(item)}
-              taskState={state}
-              labels={labels}
-              url={item.url}
-              onOpen={onOpenLink}
-              onManage={item.provider === 'github' ? actions.onEditIssue : undefined}
-              actions={
-                <WorktreeCardTaskActions
-                  item={item}
-                  url={item.url}
-                  isCardTask
-                  actions={actions}
-                  onOpenChange={onMenuOpenChange}
-                />
-              }
-            />
-          </div>
-        ))}
+        {tasks.map(({ item, title, state, labels }) => {
+          const { label, source } = getWorkspaceAttachmentDisplayLabels(item, workspaceRepo)
+          return (
+            <div key={item.provider} className="py-1.5">
+              <WorktreeCardReferenceRow
+                review={null}
+                kind="issue"
+                title={title}
+                label={label}
+                provider={workspaceAttachmentProviderLabel(item)}
+                source={source}
+                taskState={state}
+                labels={labels}
+                url={item.url}
+                onOpen={onOpenLink}
+                onManage={item.provider === 'github' ? actions.onEditIssue : undefined}
+                actions={
+                  <WorktreeCardTaskActions
+                    item={item}
+                    url={item.url}
+                    isCardTask
+                    actions={actions}
+                    onOpenChange={onMenuOpenChange}
+                  />
+                }
+              />
+            </div>
+          )
+        })}
       </div>
     </WorktreeCardDetailSection>
   )

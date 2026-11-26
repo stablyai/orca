@@ -4,6 +4,7 @@ import { normalizeRepoSourceControlAiOverrides } from '../../source-control/ai/s
 import { normalizeRepoBadgeColor } from '../../repository/appearance/repo-badge-color'
 import { sanitizeRepoIcon } from '../../repository/appearance/repo-icon'
 import { normalizeGhAccountBinding } from '../../github/accounts/account-binding'
+import { normalizeIssueRepository } from '../../github/repositories/github-issue-reference'
 import { normalizeJiraProjectReference } from '../../jira/jira-project-reference'
 import {
   normalizeCustomWorktreeVisibilitySources,
@@ -70,6 +71,7 @@ export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodTy
       symlinkPaths: z.array(z.string()).optional(),
       dictationTerms: z.unknown().transform(normalizeDictationTerms).optional(),
       issueSourcePreference: z.enum(['auto', 'upstream', 'origin']).optional(),
+      defaultGitHubIssueRepository: z.unknown().optional().transform(normalizeIssueRepository),
       defaultJiraProject: z.unknown().optional().transform(normalizeJiraProjectReference),
       ghAccount: z
         .unknown()

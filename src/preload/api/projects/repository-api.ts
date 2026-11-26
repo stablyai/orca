@@ -68,6 +68,7 @@ export type RepositoryApi = {
         | 'worktreeBasePath'
         | 'kind'
         | 'issueSourcePreference'
+        | 'defaultGitHubIssueRepository'
         | 'defaultJiraProject'
         | 'externalWorktreeVisibilityPromptDismissedAt'
         | 'externalWorktreeInboxBaselinePaths'

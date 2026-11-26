@@ -153,7 +153,7 @@ export function WorktreeCardReferenceRow({
               <ProviderMark className="size-3" />
             </span>
           ) : null}
-          <span className={cn('shrink-0', stale && STALE_REVIEW_SHIMMER)}>{label}</span>
+          <span className={cn('truncate', stale && STALE_REVIEW_SHIMMER)}>{label}</span>
           {review?.status ? (
             <ReviewChecksIndicator status={review.status} checksSummary={review.checksSummary} />
           ) : null}
