@@ -10,15 +10,15 @@ const status = vi.hoisted((): { capabilities: string[] } => ({ capabilities: [] 
 const readHosts = vi.hoisted(() => vi.fn(async () => []))
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' }, AppState: {} }))
-vi.mock('../query/host-status-query', () => ({ readHostStatusReply: async () => ({}) }))
-vi.mock('../transport/connection/host-status-probe-operations', () => ({
-  readProbedHostStatus: () => ({ status: { capabilities: status.capabilities } })
+vi.mock('../query/host-status-query', () => ({
+  readHostStatusReply: async () => ({}),
+  decodeHostStatusReply: () => ({ status: { capabilities: status.capabilities } })
 }))
 vi.mock('../worktree/execution-hosts/relay-hosts-feed', () => ({
   relayHostsFeed: () => ({ read: readHosts })
 }))
 
-const { homeRelayedServerRowsQuery, homeRelayedServersQuery, relayedServerRowsPollMs } =
+const { homeRelayedServerRowsQuery, homeRelayedServersQuery } =
   await import('./home-relayed-server-queries')
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fetch hands the client only to the mocked status and host reads.
@@ -40,11 +40,6 @@ describe('Home relayed server reads', () => {
     expect(signal?.matches?.(notice, { exec: 'runtime:b' })).toBe(false)
     // A host list change re-reads no server whose read is already mounted.
     expect(signal?.events).not.toContain('relayHostsChanged')
-    expect(relayedServerRowsPollMs({ rowChanges: true })).toBe(false)
-  })
-
-  it('backs up a server that publishes no row notices with the workspace list’s slow poll', () => {
-    expect(relayedServerRowsPollMs({})).toBe(60_000)
   })
 
   it('reads no relayed servers from a desktop that does not announce their changes', async () => {
