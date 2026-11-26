@@ -130,7 +130,7 @@ export async function createStructuredWorkerSession(args: {
   worktreeId: string
   agent: TuiAgent
   dispatchId: string
-  /** The dispatch's own `--model`/`--effort`, already narrowed to the seedable string subset. */
+  /** The dispatch's model, effort and inherited chat permission seeds. */
   options?: Readonly<Record<string, string>>
 }): Promise<{
   identity: StructuredWorkerIdentity

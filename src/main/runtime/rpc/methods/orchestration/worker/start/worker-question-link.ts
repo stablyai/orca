@@ -14,6 +14,7 @@ import {
 import { botRequestRecord } from '../../messaging/bot-request-record'
 import { getRemoteOwnedQuestion } from '../../../../../orchestration/db/remote-owned/remote-dispatch-records'
 import { botRequestSenderName } from '../../../../../../bots/bot-request-view'
+import type { WorkerStartInput } from './worker-start-input'
 
 export type WorkerQuestionLink =
   | {
@@ -23,6 +24,25 @@ export type WorkerQuestionLink =
       take?: (started: boolean) => WorkerQuestionLink
     }
   | { question: string; linked: false; why: string }
+
+export function prepareWorkerQuestionLink(
+  db: OrchestrationDb,
+  params: WorkerStartInput,
+  caller: OrchestrationCallerIdentity | null
+) {
+  const questionLink =
+    params.forQuestion !== undefined
+      ? linkWorkerToQuestion(db, params.forQuestion, caller, params.on !== undefined)
+      : undefined
+  const linkedParams =
+    questionLink && !questionLink.linked ? { ...params, forQuestion: undefined } : params
+  const reminder = params.forQuestion === undefined ? openQuestionReminder(db, caller) : undefined
+  return {
+    linkedParams,
+    withLink: <T>(started: T): T =>
+      withOpenQuestion(reminder, withQuestionLink(questionLink, started))
+  }
+}
 
 // A structured worker reads chat cards as its session and checks mail as its terminal.
 function ownTakerKeys(caller: OrchestrationCallerIdentity): string[] {

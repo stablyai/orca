@@ -2,6 +2,12 @@ import type { RuntimeTerminalCreate } from '../../../../../../../../shared/termi
 import type { AgentLaunchPreferences } from '../../../../../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import { narrowStructuredLaunchSeedOptions } from '../../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent'
+import type { AgentChatPermissionChoice } from '../../../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode-option-id'
+import {
+  agentChatPermissionModes,
+  savedChatPermissionMode
+} from '../../../../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../../orchestration/db/orchestration-db'
 import { createStructuredWorkerSession } from '../../../structured-workers/orchestration-structured-worker-session'
@@ -96,11 +102,23 @@ export async function createStructuredWorkerSessionForWorktree(args: {
   worktreeId: string
   agent: TuiAgent
   dispatchId: string
+  parentPermissionMode: AgentChatPermissionChoice | undefined
   /** `--model`/`--effort`, laid over the saved selection; a leveled Antigravity `--model` replaces it. */
   launchPreferences?: AgentLaunchPreferences
   effects: WorkerEffect[]
 }): Promise<Awaited<ReturnType<typeof createStructuredWorkerSession>>> {
-  const options = narrowStructuredLaunchSeedOptions(args.launchPreferences)
+  const selection = narrowStructuredLaunchSeedOptions(args.launchPreferences)
+  const support = agentChatPermissionModes(args.agent)
+  const options =
+    support && args.parentPermissionMode !== undefined
+      ? {
+          ...selection,
+          [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: savedChatPermissionMode(
+            support,
+            args.parentPermissionMode
+          )
+        }
+      : selection
   const created = await createStructuredWorkerSession({
     runtime: args.runtime,
     worktreeId: args.worktreeId,
