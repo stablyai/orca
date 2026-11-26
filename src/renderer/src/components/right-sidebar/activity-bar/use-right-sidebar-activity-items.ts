@@ -103,7 +103,6 @@ export function useRightSidebarActivityItems({
     s.rightSidebarOpen && !creatingWorktree ? getActiveChecksStatus(s) : null
   )
 
-  // A bot's page labels every tab (labeledTab): Home, Connectors, Chats, Files.
   const activityItems = useMemo<ActivityBarItem[]>(() => {
     const builtInItems = getDefaultRightSidebarActivityItems({
       t,
@@ -126,7 +125,7 @@ export function useRightSidebarActivityItems({
         builtInTabNames(builtInItems, t)
       ).map((item) => ({
         ...item,
-        labeledTab: isBot
+        labeledTab: showsHomeTab
       }))
     ]
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
@@ -179,6 +178,6 @@ export function useRightSidebarActivityItems({
     pluginSystemEnabled,
     pluginFetchStatus,
     installedPluginTabKeys,
-    isBotPage: isBot
+    isBotPage: showsHomeTab
   }
 }
