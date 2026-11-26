@@ -2,105 +2,140 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { useMarkupMode, type MarkupCaptureContext } from './useMarkupMode'
-import { useMarkupStartAfterPicker } from './use-markup-start-after-picker'
-import type { GrabModeHook } from '../grab/useGrabMode'
+import { useLocalPageDraw } from './use-local-page-draw'
+import { useGrabMode, type GrabModeState } from '../grab/useGrabMode'
+import type { BrowserGuestAnnotationViewportBridge } from '../use-browser-guest-annotate-tools'
+import type { BrowserGuestToolsTransport } from '../browser-guest-tools-transport'
+import type { BrowserSetGrabModeResult } from '../../../../../../shared/browser/element-grab/browser-grab-types'
 
-const captured = vi.hoisted(() => ({ count: 0 }))
-vi.mock('./markup-base-image', () => ({
-  captureMarkupBaseImage: async () => {
-    captured.count += 1
-    return { dataUrl: 'data:image/png;base64,', width: 1, height: 1 }
-  }
+const page = vi.hoisted(() => ({
+  captures: [] as { finish: (ok: boolean) => void }[],
+  errors: 0
 }))
+vi.mock('./markup-base-image', () => ({
+  captureMarkupBaseImage: () =>
+    new Promise((resolve, reject) =>
+      page.captures.push({
+        finish: (ok) =>
+          ok
+            ? resolve({ dataUrl: 'data:image/png;base64,', width: 1, height: 1 })
+            : reject(new Error('no capture'))
+      })
+    )
+}))
+vi.mock('sonner', () => ({ toast: { error: () => (page.errors += 1) } }))
 
 const captureContext = (): MarkupCaptureContext => ({
-  source: { kind: 'image', element: document.createElement('img') },
+  source: { kind: 'clean-page', browserPageId: 'page-1' },
   cssWidth: 1,
   cssHeight: 1,
   outputScale: 1
 })
+const useMarkup = (): ReturnType<typeof useMarkupMode> =>
+  useMarkupMode({ getCaptureContext: captureContext, onDeliver: () => {} })
+const finishCapture = (ok: boolean): Promise<void> =>
+  act(async () => {
+    page.captures.shift()!.finish(ok)
+  })
 
 beforeEach(() => {
-  captured.count = 0
+  page.captures.length = 0
+  page.errors = 0
 })
 
-it('captures only after prepare succeeds, and never for a Draw cancelled or failed while preparing', async () => {
-  const { result } = renderHook(() =>
-    useMarkupMode({ getCaptureContext: captureContext, onDeliver: () => {} })
-  )
+it('a capture its tab closed or its page replaced never opens or reports an error; a drawing survives abandon', async () => {
+  const closed = renderHook(useMarkup)
+  act(() => void closed.result.current.start())
+  closed.unmount()
+  await finishCapture(false)
+  expect(page.errors).toBe(0)
 
-  let finishPrepare: (ok: boolean) => void = () => {}
-  let started!: Promise<void>
-  act(() => {
-    started = result.current.start(() => new Promise((resolve) => (finishPrepare = resolve)))
-  })
-  expect(result.current.state).toBe('capturing')
-  act(() => result.current.cancel())
-  await act(async () => {
-    finishPrepare(true)
-    await started
-  })
-  expect(captured.count).toBe(0)
+  const { result } = renderHook(useMarkup)
+  act(() => void result.current.start())
+  act(() => result.current.abandonCapture())
+  await finishCapture(true)
   expect(result.current.state).toBe('idle')
 
-  await act(() => result.current.start(async () => false))
-  expect(captured.count).toBe(0)
-  expect(result.current.state).toBe('idle')
-
-  await act(() => result.current.start(async () => true))
-  expect(captured.count).toBe(1)
+  act(() => void result.current.start())
+  await finishCapture(true)
   expect(result.current.state).toBe('drawing')
+  act(() => result.current.abandonCapture())
+  expect(result.current.state).toBe('drawing')
+  expect(page.errors).toBe(0)
 })
 
-it('a Draw whose tab closes while preparing never captures', async () => {
-  const { result, unmount } = renderHook(() =>
-    useMarkupMode({ getCaptureContext: captureContext, onDeliver: () => {} })
+it('local Draw stops an armed picker first, and drops its capture on a reload or a hidden pane', async () => {
+  const order: string[] = []
+  const invalidateDocument = vi.fn()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the Draw path reads only invalidateDocument from the bridge.
+  const bridge = { invalidateDocument } as unknown as BrowserGuestAnnotationViewportBridge
+  const { result, rerender } = renderHook(
+    ({ grabState, isActive }: { grabState: GrabModeState; isActive: boolean }) => {
+      const markup = useMarkup()
+      const draw = useLocalPageDraw({
+        markup,
+        grabState,
+        stopPicker: () => order.push('stop'),
+        isActive,
+        viewportBridge: bridge
+      })
+      return { markup, draw }
+    },
+    { initialProps: { grabState: 'armed', isActive: true } }
   )
-  let finishPrepare: (ok: boolean) => void = () => {}
-  let started!: Promise<void>
-  act(() => {
-    started = result.current.start(() => new Promise((resolve) => (finishPrepare = resolve)))
-  })
-  unmount()
-  finishPrepare(true)
-  await started
-  expect(captured.count).toBe(0)
+
+  act(() => void result.current.draw.startMarkup().then(() => order.push('settled')))
+  expect(order).toEqual(['stop'])
+  act(() => result.current.draw.viewportBridge.invalidateDocument())
+  expect(invalidateDocument).toHaveBeenCalledOnce()
+  await finishCapture(false)
+  expect(result.current.markup.state).toBe('idle')
+
+  rerender({ grabState: 'idle', isActive: true })
+  act(() => void result.current.draw.startMarkup())
+  rerender({ grabState: 'idle', isActive: false })
+  await finishCapture(false)
+  expect(result.current.markup.state).toBe('idle')
+  expect(page.errors).toBe(0)
+
+  rerender({ grabState: 'idle', isActive: true })
+  act(() => void result.current.draw.startMarkup())
+  await finishCapture(true)
+  expect(result.current.markup.state).toBe('drawing')
+  expect(order).toEqual(['stop', 'settled'])
 })
 
-it('Draw waits for a picker teardown still in flight after the picker reads idle, and aborts if it was superseded', async () => {
-  let teardown: Promise<boolean> | null = null
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the Draw start path reads only state and pendingTeardown.
-  const grab = { state: 'idle', pendingTeardown: () => teardown } as unknown as GrabModeHook
-  const { result } = renderHook(() => {
-    const markup = useMarkupMode({ getCaptureContext: captureContext, onDeliver: () => {} })
-    const startDraw = useMarkupStartAfterPicker({
-      markup,
-      grab,
-      stopPicker: () => {},
-      webviewRef: { current: null }
-    })
-    return { markup, startDraw }
-  })
+it('a stale enable reply sends no second off, and a superseded enable never starts a pick', async () => {
+  const replies: ((result: BrowserSetGrabModeResult) => void)[] = []
+  const sent: string[] = []
+  const transport = {
+    setGrabMode: ({ enabled }: { enabled: boolean }) => {
+      sent.push(enabled ? 'on' : 'off')
+      return enabled
+        ? new Promise((resolve) => replies.push(resolve))
+        : Promise.resolve({ ok: true })
+    },
+    cancelGrab: async () => {
+      sent.push('cancel')
+      return true
+    },
+    awaitGrabSelection: () => {
+      sent.push('await')
+      return new Promise(() => {})
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: arming and cancelling use only these three calls.
+  } as unknown as BrowserGuestToolsTransport
+  vi.stubGlobal('api', { browser: { onGuestEscape: () => () => {} } })
+  const { result } = renderHook(() => useGrabMode('page-1', transport))
 
-  let finishTeardown: (clean: boolean) => void = () => {}
-  teardown = new Promise((resolve) => (finishTeardown = resolve))
-  let started!: Promise<void>
-  act(() => {
-    started = result.current.startDraw()
-  })
-  await act(async () => {
-    await Promise.resolve()
-  })
-  expect(captured.count).toBe(0)
-  await act(async () => {
-    finishTeardown(true)
-    await started
-  })
-  expect(captured.count).toBe(1)
+  act(() => result.current.toggle())
+  act(() => result.current.cancel())
+  await act(async () => replies.shift()!({ ok: true, superseded: true }))
+  expect(sent).toEqual(['on', 'off'])
 
-  act(() => result.current.markup.cancel())
-  teardown = Promise.resolve(false)
-  await act(() => result.current.startDraw())
-  expect(captured.count).toBe(1)
-  expect(result.current.markup.state).toBe('idle')
+  act(() => result.current.toggle())
+  await act(async () => replies.shift()!({ ok: true, superseded: true }))
+  expect(sent).toEqual(['on', 'off', 'on'])
+  expect(result.current.state).toBe('idle')
+  vi.unstubAllGlobals()
 })

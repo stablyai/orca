@@ -155,6 +155,8 @@ export const browserPageInteractionAndSessionsApi = {
   }) => ipcRenderer.invoke('browser:captureSelectionScreenshot', args),
   extractHoverPayload: (args: { browserPageId: string }) =>
     ipcRenderer.invoke('browser:extractHoverPayload', args),
+  captureCleanPage: (args: { browserPageId: string }) =>
+    ipcRenderer.invoke('browser:captureCleanPage', args),
   onGrabModeToggle: (
     callback: (browserPageId: string, intent: GrabIntent) => void
   ): (() => void) => {

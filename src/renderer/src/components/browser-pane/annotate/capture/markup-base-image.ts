@@ -1,3 +1,5 @@
+import { withTimeout } from '../../../../../../shared/concurrency/promise-timeout-fallback'
+
 // Capture in the renderer from local webviews or streamed images so local and remote panes share markup delivery.
 
 // Reuse the frozen image as both overlay backdrop and compositor base.
@@ -10,12 +12,20 @@ export type MarkupBaseImage = {
 export type MarkupCaptureSource =
   | { kind: 'webview'; webview: Electron.WebviewTag }
   | { kind: 'image'; element: HTMLImageElement }
+  /** Main removes the page's picker and captures it repainted without it, serialized with every viewer's arm. */
+  | { kind: 'clean-page'; browserPageId: string }
+
+// A page still loading delays the teardown; past this Draw reports a failed capture instead of hanging.
+const CLEAN_PAGE_CAPTURE_DEADLINE_MS = 10_000
 
 export async function captureMarkupBaseImage(
   source: MarkupCaptureSource
 ): Promise<MarkupBaseImage> {
   if (source.kind === 'webview') {
     return captureFromWebview(source.webview)
+  }
+  if (source.kind === 'clean-page') {
+    return captureCleanPage(source.browserPageId)
   }
   return captureFromImage(source.element)
 }
@@ -29,6 +39,23 @@ async function captureFromWebview(webview: Electron.WebviewTag): Promise<MarkupB
   // Flatten transparent capturePage regions onto browser-white so the live guest cannot show through the frozen backdrop.
   const image = await loadImage(native.toDataURL())
   return { dataUrl: flattenToOpaquePng(image, size.width, size.height), ...size }
+}
+
+async function captureCleanPage(browserPageId: string): Promise<MarkupBaseImage> {
+  const capture = await withTimeout(
+    window.api.browser.captureCleanPage({ browserPageId }),
+    CLEAN_PAGE_CAPTURE_DEADLINE_MS,
+    null
+  )
+  if (!capture) {
+    throw new Error('markup: the page could not be captured without the picker')
+  }
+  const image = await loadImage(capture.dataUrl)
+  return {
+    dataUrl: flattenToOpaquePng(image, capture.width, capture.height),
+    width: capture.width,
+    height: capture.height
+  }
 }
 
 function captureFromImage(element: HTMLImageElement): MarkupBaseImage {

@@ -120,6 +120,16 @@ export type BrowserSetGrabModeResult =
   | { ok: true; superseded?: true }
   | { ok: false; reason: BrowserGrabRejectReason }
 
+/** Draw's page image, captured in main after the picker was removed and the page repainted without it. */
+export type BrowserCleanPageCapture = { dataUrl: string; width: number; height: number }
+
+export type BrowserCaptureCleanPageArgs = { browserPageId: string }
+
+/** Turns the page's picker off and captures it repainted without it; null when that could not be proven. */
+export type BrowserCaptureCleanPage = (
+  args: BrowserCaptureCleanPageArgs
+) => Promise<BrowserCleanPageCapture | null>
+
 export type BrowserAwaitGrabSelectionArgs = {
   browserPageId: string
   opId: string

@@ -7,7 +7,9 @@ import {
 } from './useMarkupMode'
 
 export function useBrowserPageMarkupCapture(
-  webviewRef: MutableRefObject<Electron.WebviewTag | null>
+  webviewRef: MutableRefObject<Electron.WebviewTag | null>,
+  /** Set for local browser pages: main clears the picker before capturing, so Draw can start from Grab. */
+  cleanPageId?: string
 ): MarkupModeController {
   return useMarkupMode({
     getCaptureContext: useCallback((): MarkupCaptureContext | null => {
@@ -20,12 +22,14 @@ export function useBrowserPageMarkupCapture(
         return null
       }
       return {
-        source: { kind: 'webview', webview },
+        source: cleanPageId
+          ? { kind: 'clean-page', browserPageId: cleanPageId }
+          : { kind: 'webview', webview },
         cssWidth: rect.width,
         cssHeight: rect.height,
         outputScale: window.devicePixelRatio || 1
       }
-    }, [webviewRef]),
+    }, [cleanPageId, webviewRef]),
     onDeliver: deliverMarkupToClipboard
   })
 }

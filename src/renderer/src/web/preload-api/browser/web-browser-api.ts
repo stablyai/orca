@@ -86,6 +86,7 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
           'Hover extraction is unavailable in the web client.'
         )
       }),
+    captureCleanPage: () => Promise.resolve(null),
     onGrabModeToggle: () => noopUnsubscribe,
     onGrabActionShortcut: () => noopUnsubscribe,
     onGuestEscape: () => noopUnsubscribe,

@@ -1,5 +1,9 @@
 import { browserManager } from '../guest-lifecycle/manager/browser-manager'
-import type { BrowserSetGrabModeResult } from '../../../shared/browser/element-grab/browser-grab-types'
+import type {
+  BrowserCleanPageCapture,
+  BrowserSetGrabModeResult
+} from '../../../shared/browser/element-grab/browser-grab-types'
+import { captureCleanGuestPage } from './grab-clean-page-capture'
 
 const grabModeIntentByPageId = new Map<string, { generation: number; enabled: boolean }>()
 const grabModeOperationByPageId = new Map<string, Promise<void>>()
@@ -34,10 +38,7 @@ function waitUntilArmable(browserPageId: string, guest: Electron.WebContents): P
   })
 }
 
-function queueGrabModeOperation(
-  browserPageId: string,
-  operation: () => Promise<BrowserSetGrabModeResult>
-): Promise<BrowserSetGrabModeResult> {
+function queueGrabModeOperation<T>(browserPageId: string, operation: () => Promise<T>): Promise<T> {
   const previous = grabModeOperationByPageId.get(browserPageId) ?? Promise.resolve()
   const result = previous.then(operation)
   const completion = result.then(
@@ -68,6 +69,39 @@ export function disposeGrabModeStateForPage(browserPageId: string): void {
   grabModeOperationByPageId.delete(browserPageId)
 }
 
+function recordIntent(browserPageId: string, enabled: boolean): () => boolean {
+  const intent = {
+    generation: (grabModeIntentByPageId.get(browserPageId)?.generation ?? 0) + 1,
+    enabled
+  }
+  grabModeIntentByPageId.set(browserPageId, intent)
+  notifyIntentChange(browserPageId)
+  return () => grabModeIntentByPageId.get(browserPageId) === intent
+}
+
+/**
+ * Turns the picker off and captures the page in one queued step: a later arm from any viewer, local or streamed,
+ * waits behind it, so the image can never include a picker armed after the teardown.
+ */
+export function captureCleanBrowserPage(
+  browserPageId: string,
+  resolveGuest: () => Electron.WebContents | null
+): Promise<BrowserCleanPageCapture | null> {
+  recordIntent(browserPageId, false)
+  return queueGrabModeOperation(browserPageId, async () => {
+    const guest = resolveGuest()
+    if (!guest) {
+      return null
+    }
+    return captureCleanGuestPage({
+      guest,
+      resolveGuest,
+      teardown: () => browserManager.setGrabMode(browserPageId, false, guest),
+      holdPaint: () => browserManager.holdPaintForCapture(guest.id)
+    })
+  })
+}
+
 /** Arms or tears down a page's picker; the latest request wins, whoever hosts the viewer. */
 export async function setBrowserGrabMode(
   browserPageId: string,
@@ -75,13 +109,7 @@ export async function setBrowserGrabMode(
   resolveGuest: () => Electron.WebContents | null,
   waitForGuest?: () => Promise<void>
 ): Promise<BrowserSetGrabModeResult> {
-  const intent = {
-    generation: (grabModeIntentByPageId.get(browserPageId)?.generation ?? 0) + 1,
-    enabled
-  }
-  grabModeIntentByPageId.set(browserPageId, intent)
-  notifyIntentChange(browserPageId)
-  const isCurrentIntent = (): boolean => grabModeIntentByPageId.get(browserPageId) === intent
+  const isCurrentIntent = recordIntent(browserPageId, enabled)
   let guest = resolveGuest()
   if (!guest && enabled && waitForGuest) {
     await waitForGuest()
@@ -93,7 +121,7 @@ export async function setBrowserGrabMode(
   if (!guest) {
     return enabled ? { ok: false, reason: 'not-ready' } : { ok: true }
   }
-  return queueGrabModeOperation(browserPageId, async () => {
+  return queueGrabModeOperation<BrowserSetGrabModeResult>(browserPageId, async () => {
     if (!isCurrentIntent()) {
       return SUPERSEDED
     }

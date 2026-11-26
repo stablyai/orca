@@ -31,7 +31,7 @@ import { useBrowserPageFindShortcuts } from './find/use-browser-page-find-shortc
 import { useBrowserGuestAnnotateTools } from '../annotate/use-browser-guest-annotate-tools'
 import { useBrowserPageWebviewShortcuts } from '../host-guest/input/use-browser-page-webview-shortcuts'
 import { useBrowserPageMarkupCapture } from '../annotate/capture/use-browser-page-markup-capture'
-import { useMarkupStartAfterPicker } from '../annotate/capture/use-markup-start-after-picker'
+import { useLocalPageDraw } from '../annotate/capture/use-local-page-draw'
 import { useBrowserPageNavigationDownloads } from '../navigate/use-browser-page-navigation-downloads'
 import { useBrowserPageReloadActions } from '../navigate/use-browser-page-reload-actions'
 import { useBrowserPageResourceNotices } from '../navigate/use-browser-page-resource-notices'
@@ -155,7 +155,7 @@ export function BrowserPagePane({
     guestFocus,
     inputLocked
   })
-  const markup = useBrowserPageMarkupCapture(webviewRef)
+  const markup = useBrowserPageMarkupCapture(webviewRef, browserTab.id)
   // Why: a blank tab reads as 'about:blank' or the resolved data: URL, so match both to keep the "New Browser Tab" overlay visible.
   const isBlankTab = browserTab.url === 'about:blank' || browserTab.url === ORCA_BROWSER_BLANK_URL
   const {
@@ -180,11 +180,12 @@ export function BrowserPagePane({
     currentDocumentUrl: browserTab.url,
     shortcuts: { workspaceId, chromeShortcutScope }
   })
-  const startMarkup = useMarkupStartAfterPicker({
+  const { startMarkup, viewportBridge: drawAwareViewportBridge } = useLocalPageDraw({
     markup,
-    grab,
+    grabState: grab.state,
     stopPicker: grabAnnotations.cancelPendingBrowserCapture,
-    webviewRef
+    isActive,
+    viewportBridge
   })
   const nav = useBrowserPageNavigationDownloads({
     browserTabId: browserTab.id,
@@ -226,7 +227,7 @@ export function BrowserPagePane({
     onUpdatePageState,
     onSetUrl,
     setAddressBarValue: nav.setAddressBarValue,
-    annotationViewportBridge: viewportBridge,
+    annotationViewportBridge: drawAwareViewportBridge,
     setBrowserOverlayViewport,
     setFindOpen,
     focusAddressBarNow,

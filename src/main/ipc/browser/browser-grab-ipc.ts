@@ -4,6 +4,7 @@ import { onDocPreviewGrantRevoked } from '../../browser/document-preview/doc-pre
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import { waitForNextTabRegistration } from './browser-tab-registration-wait'
 import {
+  captureCleanBrowserPage,
   disposeGrabModeStateForPage,
   setBrowserGrabMode
 } from '../../browser/element-grab/browser-grab-mode-sequencer'
@@ -16,7 +17,9 @@ import type {
   BrowserCaptureSelectionScreenshotArgs,
   BrowserCaptureSelectionScreenshotResult,
   BrowserExtractHoverArgs,
-  BrowserExtractHoverResult
+  BrowserExtractHoverResult,
+  BrowserCaptureCleanPageArgs,
+  BrowserCleanPageCapture
 } from '../../../shared/browser/element-grab/browser-grab-types'
 
 const GRAB_REGISTRATION_WAIT_MS = 1_000
@@ -40,6 +43,7 @@ export function registerBrowserGrabHandlers(): void {
   ipcMain.removeHandler('browser:cancelGrab')
   ipcMain.removeHandler('browser:captureSelectionScreenshot')
   ipcMain.removeHandler('browser:extractHoverPayload')
+  ipcMain.removeHandler('browser:captureCleanPage')
 
   ipcMain.handle(
     'browser:setGrabMode',
@@ -54,6 +58,19 @@ export function registerBrowserGrabHandlers(): void {
         // Fast file pages can expose tools before guest registration reaches main.
         () =>
           waitForNextTabRegistration(args.browserPageId, GRAB_REGISTRATION_WAIT_MS).catch(() => {})
+      )
+    }
+  )
+
+  ipcMain.handle(
+    'browser:captureCleanPage',
+    async (event, args: BrowserCaptureCleanPageArgs): Promise<BrowserCleanPageCapture | null> => {
+      if (!isTrustedBrowserRenderer(event.sender)) {
+        return null
+      }
+      // Re-resolved at each step, so a viewer retired mid-capture gets nothing.
+      return captureCleanBrowserPage(args.browserPageId, () =>
+        browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
       )
     }
   )
