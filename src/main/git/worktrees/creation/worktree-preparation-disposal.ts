@@ -1,4 +1,4 @@
-import { sharedPromiseSettlementWaiters } from '../../../../shared/promise-settlement-waiters'
+import { sharedPromiseSettlementWaiters } from '../../../../shared/concurrency/promise-settlement-waiters'
 import { WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS } from '../worktree-operation-options'
 import type { PreparationRemovalOutcome } from './worktree-preparation-discard'
 

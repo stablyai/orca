@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
-import type { GitHubReactionContent } from '../../../shared/github/comment-types'
-import type { GitHubOwnerRepo } from '../../../shared/github/pull-request-types'
+import type { GitHubReactionContent } from '../../../shared/github/comments/comment-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../shared/github/repositories/repository-identity'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import { getPRCheckDetails } from '../../github/client/check/get-pr-check-details'
 import { getPRChecks } from '../../github/client/check/get-pr-checks'

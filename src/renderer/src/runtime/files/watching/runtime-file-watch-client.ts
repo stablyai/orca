@@ -1,5 +1,5 @@
 import type { FsChangedPayload } from '../../../../../shared/file-watch/filesystem-change-event'
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RuntimeFileOperationArgs } from '../runtime-file-client-types'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { unwrapRuntimeRpcResult } from '../../rpc/calls/runtime-rpc-result'

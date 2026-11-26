@@ -7,13 +7,15 @@ import { defineMethod, defineStreamingMethod } from '../../core'
 import {
   ClientEventsSubscribeParams,
   ClientEventsUnsubscribeParams
-} from '../../../../../shared/rpc-contract/client-events-params'
+} from '../../../../../shared/rpc-contract/client-ui/client-events-params'
 import { BROWSER_CLIENT_HOST_REQUEST_CAPABILITY } from '../../../../../shared/browser/client-hosting/browser-client-host-request-protocol'
 import { getBrowserHostRequestRegistry } from '../../../browser-host/leases/browser-host-request-registry'
+import { GOOGLE_SETUP_CARDS_CLIENT_CAPABILITY } from '../../../../../shared/google/google-connect-types'
+import { registerGoogleCardRenderer } from '../../../../google/google-card-reach'
 import {
   STRUCTURED_CHAT_START_TELEMETRY_CLIENT_CAPABILITY,
   STRUCTURED_CHAT_PROMPT_TELEMETRY_CLIENT_CAPABILITY
-} from '../../../../../shared/structured-chat-dispatch-telemetry'
+} from '../../../../../shared/agent-session/requests/structured-chat-dispatch-telemetry'
 import { subscribeStructuredChatTelemetry } from '../../../../telemetry/structured-chat-dispatch'
 import { structuredCallerFor } from '../structured-sessions/creation/structured-agent-session-gate'
 
@@ -30,6 +32,15 @@ export const CLIENT_EVENT_METHODS = [
         // Mobile discards terminalSideEffects; filter per-OSC batch frames before they cross the relay.
         const unsubscribe = runtime.onClientEvent(
           (event) => {
+            // Only a desktop keeps an agent CLI update list; a phone would search its query cache for nothing.
+            // Phones keep no desktop sidebar lineage either, so a Dispatch write is noise there.
+            if (
+              (event.type === 'agentCliUpdateFinished' ||
+                event.type === 'agentOrchestrationChanged') &&
+              clientKind === 'mobile'
+            ) {
+              return
+            }
             emit(event)
           },
           { consumesTerminalSideEffects: clientKind !== 'mobile' }
@@ -40,6 +51,11 @@ export const CLIENT_EVENT_METHODS = [
           pairedDeviceId &&
           clientCapabilities?.includes(BROWSER_CLIENT_HOST_REQUEST_CAPABILITY)
             ? getBrowserHostRequestRegistry(runtime).register({ pairedDeviceId, emit })
+            : undefined
+        const unregisterCardRenderer =
+          clientKind === 'runtime' &&
+          clientCapabilities?.includes(GOOGLE_SETUP_CARDS_CLIENT_CAPABILITY)
+            ? registerGoogleCardRenderer()
             : undefined
         const readsStarts = clientCapabilities?.includes(
           STRUCTURED_CHAT_START_TELEMETRY_CLIENT_CAPABILITY
@@ -67,6 +83,7 @@ export const CLIENT_EVENT_METHODS = [
           () => {
             unsubscribe()
             unregisterHostVolunteer?.()
+            unregisterCardRenderer?.()
             unsubscribeTelemetry?.()
             emit({ type: 'end' })
             resolve()

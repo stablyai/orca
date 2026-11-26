@@ -4,7 +4,7 @@ import type {
   RuntimeGitLocalBranches,
   RuntimeGitSwitchResult,
   RuntimeRepoSearchRefs
-} from '../../../../../shared/runtime-worktree-contracts'
+} from '../../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { RuntimeGitContext } from './runtime-git-client-context'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'

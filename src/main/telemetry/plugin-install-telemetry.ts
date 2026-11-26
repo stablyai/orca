@@ -7,7 +7,7 @@ import {
   isOfficialMarketplaceGitSource,
   isSameGitRepository
 } from '../../shared/plugins/catalog/plugin-marketplace'
-import type { EventProps } from '../../shared/telemetry-events'
+import type { EventProps } from '../../shared/telemetry/telemetry-event-classification'
 import { track } from './client'
 
 export type PluginInstallTelemetryProps = EventProps<'plugin_installed'>

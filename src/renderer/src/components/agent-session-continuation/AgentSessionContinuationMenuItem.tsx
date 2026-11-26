@@ -15,7 +15,7 @@ export function AgentSessionContinuationMenuItem({
   return (
     <DropdownMenuItem disabled={disabled} onSelect={onSelect}>
       <MessageSquarePlus />
-      {t('components.agentSessionContinuation.handOffToAnotherAgent', 'Hand Off to Another Agent')}
+      {t('components.agentSessionContinuation.handOffToAnotherAgent', 'Hand off to agent')}
     </DropdownMenuItem>
   )
 }

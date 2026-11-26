@@ -12,6 +12,7 @@ import {
 import {
   dispatchPageKeyEvent,
   isEmbeddedGuest,
+  pageInputRouteUnavailableError,
   routePageTextInsertion
 } from './guest-direct-key-input'
 import type { GuestSessionCdpSender } from './guest-frame-input-sessions'
@@ -84,10 +85,9 @@ export class CdpPageInputCommands {
                     'Input.insertText',
                     insertParams,
                     sessionId
-                  ),
-                release: () => {}
+                  )
               })
-            : routePageTextInsertion(this.webContents, params, this.sendRoot, this.guardFocus)
+            : routePageTextInsertion(this.webContents, this.sendRoot)
         )
       )
       return true
@@ -116,23 +116,26 @@ export class CdpPageInputCommands {
       return await dispatchPageKeyEvent(this.webContents, params, this.sendRoot, this.guardFocus)
     }
     if (!isEmbeddedGuest(this.webContents)) {
+      // Popup and serve pages never borrow native focus, so emulate it as the bridge does.
+      if (isFocusTakingCdpInput(method, params)) {
+        await enablePageFocusEmulation(this.sendRoot)
+      }
       return await this.debuggerChannel.sendDebuggerCommand(method, params, sessionId)
     }
     const send = (): Promise<unknown> =>
       withAgentInputInjection(this.webContents, () =>
         this.debuggerChannel.sendDebuggerCommand(method, params, sessionId)
       )
-    const routedByFocus = !sessionId && isFocusRoutedCdpInput(method)
-    if (!routedByFocus && !isFocusTakingCdpInput(method, params)) {
+    if (!sessionId && isFocusRoutedCdpInput(method)) {
+      throw pageInputRouteUnavailableError()
+    }
+    if (!isFocusTakingCdpInput(method, params)) {
       return await send()
     }
     // Emulate page focus while the pane guards and restores user focus.
     await enablePageFocusEmulation(this.sendRoot)
     const release = await this.guardFocus()
     try {
-      if (routedByFocus) {
-        this.webContents.focus()
-      }
       return await send()
     } finally {
       release()

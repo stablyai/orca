@@ -2,10 +2,10 @@ import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quo
 import type { SshConnectionManager } from '../connection/ssh-connection-manager'
 import type { SshExecOptions } from '../connection/ssh-exec-options'
 import { powerShellCommand } from '../remote-exec/ssh-remote-powershell'
-import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/powershell-native-argument'
+import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/shell/launch/powershell-native-argument'
 import type { FilesystemPathFlavor } from '../../../shared/file-access/filesystem-path-flavor'
 import { sortDirEntries } from '../../../shared/file-listing/file-name-sort'
-import { buildPosixStdoutFence } from '../../../shared/posix-stdout-fence'
+import { buildPosixStdoutFence } from '../../../shared/shell/launch/posix-stdout-fence'
 
 type RemoteDirEntry = {
   name: string
@@ -122,7 +122,7 @@ async function runBrowseCommand(
   // Fence startup stdout so login banners cannot become resolved paths.
   const fence = options?.wrapCommand === false ? null : buildPosixStdoutFence(command, 'SSH')
   const remoteCommand = fence?.command ?? command
-  const channel = options ? await conn.exec(remoteCommand, options) : await conn.exec(remoteCommand)
+  const channel = await conn.execWithClosedStdin(remoteCommand, options)
 
   return new Promise((resolve, reject) => {
     let stdout = ''

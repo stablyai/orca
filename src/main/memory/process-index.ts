@@ -1,8 +1,8 @@
-import type { ProcessMemoryMetric } from '../../shared/process-stats-types'
+import type { ProcessMemoryMetric } from '../../shared/diagnostics/process-stats-types'
 import {
   getProcessOutputFields,
   iterateProcessOutputLines
-} from '../../shared/process-output-field-scanner'
+} from '../../shared/process-observation/process-output-field-scanner'
 
 export type ProcRow = {
   pid: number
@@ -13,6 +13,10 @@ export type ProcRow = {
   memory: number
   /** Committed bytes, including paged-out memory; absent when unavailable. */
   privateMemory?: number
+  /** Executable basename; never a path or command line. */
+  name?: string
+  /** Creation time in 100 ns ticks (Windows CIM only); orders a parent before its children. */
+  startTicks?: bigint
 }
 
 export type ProcIndex = {
@@ -54,7 +58,7 @@ export function buildProcessIndex(
   }
 }
 
-export function parsePsOutput(stdout: string): ProcRow[] {
+export function parsePsOutput(stdout: string, withName = false): ProcRow[] {
   const rows: ProcRow[] = []
   for (const line of iterateProcessOutputLines(stdout)) {
     const fields = getProcessOutputFields(line, 4)
@@ -68,20 +72,39 @@ export function parsePsOutput(stdout: string): ProcRow[] {
     if (Number.isNaN(pid) || Number.isNaN(ppid)) {
       continue
     }
+    const name = withName ? executableBasename(PS_COMM_COLUMN.exec(line)?.[1]) : undefined
     rows.push({
       pid,
       ppid,
       cpu: Number.isFinite(cpu) && cpu > 0 ? cpu : 0,
-      memory: Number.isFinite(rssKb) && rssKb > 0 ? rssKb * 1024 : 0
+      memory: Number.isFinite(rssKb) && rssKb > 0 ? rssKb * 1024 : 0,
+      ...(name ? { name } : {})
     })
   }
   return rows
 }
 
+// The name column is last and may hold spaces.
+const PS_COMM_COLUMN = /^\s*\S+\s+\S+\s+\S+\s+\S+\s+(.+)$/
+
+const MAX_EXECUTABLE_NAME_CHARS = 64
+
+/** Basename only (paths can carry the user's home directory), without `.exe` so CIM and typeperf agree. */
+export function executableBasename(value: string | undefined): string | undefined {
+  const base = value
+    ?.trim()
+    .split(/[\\/]/)
+    .pop()
+    ?.replace(/\.exe$/i, '')
+  return base ? base.slice(0, MAX_EXECUTABLE_NAME_CHARS) : undefined
+}
+
 export function collectSubtree(
   index: Pick<ProcIndex, 'byPid' | 'childrenOf'>,
   root: number,
-  excludedPids?: ReadonlySet<number>
+  excludedPids?: ReadonlySet<number>,
+  /** Skip children created before their parent (a reused parent PID); needs Windows start times. */
+  checkStartOrder = false
 ): number[] {
   const result: number[] = []
   const seen = new Set<number>()
@@ -96,12 +119,32 @@ export function collectSubtree(
       continue
     }
     seen.add(pid)
-    if (index.byPid.has(pid)) {
+    if (!checkStartOrder) {
+      if (index.byPid.has(pid)) {
+        result.push(pid)
+      }
+      const kids = index.childrenOf.get(pid)
+      if (kids) {
+        for (const kid of kids) {
+          queue.push(kid)
+        }
+      }
+      continue
+    }
+    const row = index.byPid.get(pid)
+    if (row) {
       result.push(pid)
     }
     const kids = index.childrenOf.get(pid)
-    if (kids) {
-      for (const kid of kids) {
+    if (!kids) {
+      continue
+    }
+    const parentStart = row?.startTicks
+    // Only Windows reports start times; elsewhere children are taken without further lookups.
+    for (const kid of kids) {
+      const kidStart = parentStart === undefined ? undefined : index.byPid.get(kid)?.startTicks
+      // Created before its parent: the parent PID was reused, so this is an unrelated process.
+      if (parentStart === undefined || kidStart === undefined || kidStart >= parentStart) {
         queue.push(kid)
       }
     }

@@ -1,4 +1,4 @@
-import type { GitHubPRMergeMethodSettings } from '../../../../shared/github/pull-request-types'
+import type { GitHubPRMergeMethodSettings } from '../../../../shared/github/pull-requests/pull-request-types'
 import type { CoalescedProbes } from '../../../git/remotes/coalesced-probe'
 export const MERGE_QUEUE_CACHE_TTL_MS = 10 * 60 * 1000
 
@@ -69,15 +69,4 @@ export function cacheRepositoryMergeMetadata(
     expiresAt: now + ttlMs
   })
   pruneRepositoryMergeMetadataCache(now)
-}
-
-export function _resetMergeQueueCacheForTests(): void {
-  repositoryMergeMetadataCache.clear()
-  repositoryMergeMetadataReads.clear()
-  signaledReads = new WeakMap()
-  repositoryMergeMetadataWriters.clear()
-}
-
-export function _getMergeQueueCacheSizeForTests(): number {
-  return repositoryMergeMetadataCache.size
 }

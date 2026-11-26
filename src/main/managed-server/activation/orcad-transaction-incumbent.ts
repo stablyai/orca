@@ -10,7 +10,7 @@ import {
   type OrcadSlotOptions
 } from './orcad-recovery-slot'
 import { recoverOrcadIncumbent } from './orcad-incumbent-recovery'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 
 /** Return null on proven exit; otherwise retain the fence when a delivered stop may still change the host. */
 export async function stopTransactionIncumbent(

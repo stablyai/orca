@@ -1,8 +1,8 @@
-import { yieldToEventLoop } from '../../../../../../shared/event-loop-yield'
+import { yieldToEventLoop } from '../../../../../../shared/concurrency/event-loop-yield'
 import {
   getUtf8ByteLengthForCodePoint,
   readUtf8CodePointAt
-} from '../../../../../../shared/utf8-byte-limits'
+} from '../../../../../../shared/text/utf8-byte-limits'
 import '@/components/terminal-pane/input/paste/terminal-bracketed-paste'
 import {
   BRACKETED_PASTE_END,

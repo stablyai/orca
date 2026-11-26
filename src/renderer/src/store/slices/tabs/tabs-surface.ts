@@ -1,7 +1,7 @@
 import { workspaceEditorFiles } from '@/store/slices/editor/tabs/workspace-editor-files'
 import type { AppState } from '../../types'
-import { toVisibleTabType } from '../../../../../shared/tab-types'
-import type { WorkspaceVisibleTabType } from '../../../../../shared/tab-types'
+import { toVisibleTabType } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
+import type { WorkspaceVisibleTabType } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { isEditorTabContentType } from '../editor/tabs/editor-tab-content-type'
 
 export type ActiveSurfaceSourceState = Pick<

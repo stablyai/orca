@@ -1,16 +1,15 @@
-import type { isGeminiTerminalTitle } from '../../../../../shared/agent-status/title/agent-title-core'
 import type { isClaudeAgent } from '../../../../../shared/agent-status/title/agent-title-identity'
 import type { detectAgentStatusFromTitle } from '../../../../../shared/agent-status/title/agent-title-status'
 import type { TerminalLaunchInputAttemptOwner } from './startup/terminal-launch-input-attempt'
 import type { WorkspaceAttentionSlice } from '../../../store/slices/workspace-attention/workspace-attention-contract'
-import type { NotificationWorkspaceOwner } from '../../../../../shared/notification-source'
+import type { NotificationWorkspaceOwner } from '../../../../../shared/notifications/notification-source'
 import type { PtyTransport, PtyTransportRecoveryState } from '../pty-transport/pty-transport-types'
 import type { SessionRestoredBannerReason } from '../session-restore/session-restored-banner-pane-state'
 import type { ReplayingPanesRef } from '../snapshots/replay-guard'
 import type { RestoredViewportBlankingPanesRef } from '../viewport/terminal-restored-viewport'
 import type { AgentCompletionStatusSnapshot } from '../agent-completion/agent-completion-coordinator-types'
 import type { TerminalColorSchemeMode } from '../../../../../shared/terminal/protocol/queries/terminal-color-scheme-protocol'
-import type { TerminalPanePlacement } from '../../../../../shared/workspace-layout/terminal-pane-placement'
+import type { TerminalPanePlacement } from '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import type { PtyPreconnectInputEntry } from '../pty-transport/input/pty-preconnect-input-buffer'
 import type { PtyPaneStartup } from './startup/pty-pane-startup'
@@ -19,7 +18,6 @@ import type { PaneProcessExit } from '../process-exit/pane-process-exit'
 export type PtyConnectionDeps = {
   detectAgentStatusFromTitle?: typeof detectAgentStatusFromTitle
   isClaudeAgent?: typeof isClaudeAgent
-  isGeminiTerminalTitle?: typeof isGeminiTerminalTitle
   tabId: string
   worktreeId: string
   cwd?: string
@@ -36,10 +34,13 @@ export type PtyConnectionDeps = {
   startup?: PtyPaneStartup
   /** The pane's previous PTY; main stops it before this connection's first fresh spawn. */
   replacesPtyId?: string
+  /** Ownership acquired before clearing the old binding; released on spawn settlement or disposal. */
+  releaseResumeInPlace?: () => void
   restoredLeafId?: string | null
   restoredPtyIdByLeafId?: Record<string, string>
   /** Render-time park intent survives watcher disposal and is consumed once after layout replay. */
   mountFollowsTerminalPark: boolean
+  invalidateRetainedInlineScrollback: (leafId: string) => void
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
   paneMode2031Ref: React.RefObject<Map<number, boolean>>
   /** Mirror xterm’s negotiated Kitty flags for keyboard policy. */
@@ -64,7 +65,12 @@ export type PtyConnectionDeps = {
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   isPtyShutdownPending: (ptyId: string) => boolean
   updateTabTitle: (tabId: string, title: string) => void
-  setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
+  setRuntimePaneTitle: (
+    tabId: string,
+    paneId: number,
+    title: string,
+    options?: { alsoTabTitle?: boolean }
+  ) => void
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
   updateTabPtyId: (tabId: string, ptyId: string, replacedPtyId?: string) => void
   markTerminalBell: WorkspaceAttentionSlice['markTerminalBell']

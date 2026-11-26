@@ -2,7 +2,7 @@ import * as path from 'node:path'
 import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathForComparison
-} from '../../../../shared/cross-platform-path'
+} from '../../../../shared/file-access/cross-platform-path'
 
 function normalizeWatcherRootPath(rootPath: string): string {
   let resolved = isWindowsAbsolutePathLike(rootPath)

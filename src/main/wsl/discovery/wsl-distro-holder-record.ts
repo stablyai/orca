@@ -6,6 +6,7 @@ import {
   writeFileDurable
 } from '../../filesystem/durable-file-write'
 import { hasErrorCode } from '../../daemon/endpoint/identity/daemon-process-inspection'
+import { isPositiveSafeInteger } from '../../../shared/validation/positive-safe-integer'
 
 /** Per-distro record intentionally survives Orca quit so the next launch can re-adopt the surviving holder. */
 export type WslDistroHolderRecord = {
@@ -35,10 +36,6 @@ function recordPath(userDataPath: string, distro: string): string {
   )
 }
 
-function isPositiveInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
-}
-
 export function parseWslDistroHolderRecord(text: string): WslDistroHolderRecord | null {
   let parsed: unknown
   try {
@@ -59,9 +56,9 @@ export function parseWslDistroHolderRecord(text: string): WslDistroHolderRecord 
     version !== 1 ||
     typeof distro !== 'string' ||
     wslDistroHolderKey(distro) === '' ||
-    !isPositiveInteger(pid) ||
-    !(creationTimeMs === null || isPositiveInteger(creationTimeMs)) ||
-    !isPositiveInteger(startedAtMs)
+    !isPositiveSafeInteger(pid) ||
+    !(creationTimeMs === null || isPositiveSafeInteger(creationTimeMs)) ||
+    !isPositiveSafeInteger(startedAtMs)
   ) {
     return null
   }

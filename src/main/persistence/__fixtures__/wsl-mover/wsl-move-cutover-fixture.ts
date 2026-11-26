@@ -1,11 +1,12 @@
 import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../../../shared/orcad-migration/orcad-migration-manifest-validation'
 import type { OrcadMigrationDormantStatePayload } from '../../../../shared/orcad-migration/orcad-migration-manifest'
 import {
+  wslMoveCutoverVersionFor,
   wslMoveJournalKey,
   type WslMoveCutover,
   type WslMoveCutoverPhase
 } from '../../../../shared/wsl-move/wsl-move-cutover'
-import { computeOrcadMigrationManifestSha256 } from '../../../orcad/orcad-migration-manifest-digest'
+import { computeOrcadMigrationManifestSha256 } from '../../../orcad/migration/orcad-migration-manifest-digest'
 
 export function wslMoveCutoverFixture(
   migrationId = 'move-1',
@@ -58,7 +59,7 @@ export function wslMoveCutoverFixture(
   }
   const manifest = { ...unsigned, manifestSha256: computeOrcadMigrationManifestSha256(unsigned) }
   return {
-    version: 1,
+    version: wslMoveCutoverVersionFor(extra.mappedDrives),
     migrationId,
     phase,
     startedAt: '2026-10-13T00:00:00.000Z',

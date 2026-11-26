@@ -1,4 +1,7 @@
-import type { ProviderRateLimits, RateLimitRuntimeTarget } from '../../shared/rate-limit-types'
+import type {
+  ProviderRateLimits,
+  RateLimitRuntimeTarget
+} from '../../shared/agent-usage/rate-limits/rate-limit-types'
 import {
   isSameRuntimeTarget,
   type AntigravityUsageLogin

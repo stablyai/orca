@@ -1,16 +1,18 @@
-import { OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce } from '../../session-tabs/structured-session-tab-restoration'
-import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/runtime-terminal-contracts'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
+import { OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce } from '../../session-tabs/chat/structured-session-tab-restoration'
+import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type {
   WorkspaceSleepNotice,
   WorkspaceSleepOutcome,
   WorkspaceSleepRequest
-} from '../../../../shared/workspace-sleep'
+} from '../../../../shared/workspace/lifecycle/workspace-sleep'
 import { WorkspaceSleepCoordinator } from './workspace-sleep-runtime'
+import type { WorkspaceChatStopAdmission } from '../../../native-chat/agent-session-wire/termination/structured-agent-session-workspace-sleep'
 import type { RecipeVmOpening, RecipeVmState } from './recipe-vm-operations'
 import { dropStrandedSleepRecord } from '../../terminal/stop/worktree-sleep-resume-records'
 import type { RestoredPane } from '../../terminal/recovery/restored-pane-start'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { EphemeralVmRuntimeRecord } from '../../../../shared/ephemeral-vm-runtimes'
+import type { EphemeralVmRuntimeRecord } from '../../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import { WorkspaceLifecycleQueue } from '../lifecycle/workspace-lifecycle-queue'
 import {
   deleteLostContact,
@@ -18,13 +20,13 @@ import {
   workspaceLifecycleKey
 } from '../lifecycle/workspace-lifecycle-commands'
 import { getRuntimeWorktreeRemovalOptionsKey } from '../catalog/runtime-worktree-selection'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import type {
   RecipeWorkspaceRemoval,
   RecipeWorkspaceRemoveParams
 } from '../../../ephemeral-vm/workspace-removal'
-import type { RecipeEnvironmentDescription } from '../../../../shared/recipe-host-removal'
+import type { RecipeEnvironmentDescription } from '../../../../shared/remote-runtime/ephemeral-vm-recipes/recipe-host-removal'
 /** Desktop-only wiring: removal of a workspace whose recipe environment this host provisioned. */
 export type RecipeWorkspaceRemovalHooks = {
   owns: (params: RecipeWorkspaceRemoveParams) => boolean
@@ -71,9 +73,13 @@ export abstract class RuntimeWorkspaceSleepOperations extends OrcaRuntimeWithRes
     return this.workspaceSleepCoordinator
   }
 
-  /** Sleeps workspaces on their own hosts, each through its lifecycle queue; the window follows. */
-  sleepWorkspaces(request: WorkspaceSleepRequest): Promise<WorkspaceSleepOutcome[]> {
-    return this.workspaceSleep.sleep(request)
+  /** Sleeps workspaces on their own hosts, each through its lifecycle queue; the window follows.
+   *  `admit` gets the last word on each of this host's chats, in its session lane. */
+  sleepWorkspaces(
+    request: WorkspaceSleepRequest,
+    admit?: WorkspaceChatStopAdmission
+  ): Promise<WorkspaceSleepOutcome[]> {
+    return this.workspaceSleep.sleep(request, admit)
   }
 
   /** The window or a phone opened the workspace: a sleep still running leaves its VM up. */
@@ -89,6 +95,14 @@ export abstract class RuntimeWorkspaceSleepOperations extends OrcaRuntimeWithRes
     return Object.values(session?.sleepingAgentSessionsByPaneKey ?? {}).filter(
       (record) => record.worktreeId === worktreeId
     )
+  }
+
+  /** The tabs the window last saved for one of this host's workspaces, desktop-only ones included. */
+  savedTabsForWorktree(worktreeId: string): readonly Tab[] {
+    const session = this.store?.getWorkspaceSession?.(
+      this.getWorkspaceSessionHostIdForWorktree(worktreeId)
+    )
+    return session?.unifiedTabs?.[worktreeId] ?? []
   }
 
   /** `worktree.sleep` from a phone or the CLI: this host's own workspace, its chats included. */

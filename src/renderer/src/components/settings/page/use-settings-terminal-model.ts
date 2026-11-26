@@ -1,12 +1,12 @@
 import { useMemo } from 'react'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import {
   isWindowsTerminalCapabilityHost,
   useLocalWindowsTerminalCapabilities,
   useWindowsTerminalCapabilities
 } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
-import { useWindowsTerminalCapabilityOwnerKey } from '@/hooks/useWindowsTerminalCapabilityOwnerKey'
-import { getRepoHostIdentity } from '../../../../../shared/repo-host-identity'
+import { useWindowsTerminalCapabilityOwnerKey } from '@/runtime/hosts/capabilities/useWindowsTerminalCapabilityOwnerKey'
+import { getRepoHostIdentity } from '../../../../../shared/repository/repo-host-identity'
 import {
   getSettingsEntryHostSelection,
   getSettingsProjectHostRepo

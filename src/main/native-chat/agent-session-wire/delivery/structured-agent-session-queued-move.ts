@@ -25,6 +25,13 @@ export function moveQueuedStructuredAgentMessage(
     fields,
     conversationWrite: true,
     commandReceipt: {
+      binding: {
+        at: 'last',
+        answer: {
+          kind: 'no-op',
+          outcome: { kind: 'queue-move', messageId: params.messageId, status: 'moved' }
+        }
+      },
       result: () => ({
         kind: 'no-op',
         outcome: { kind: 'queue-move', messageId: params.messageId, status: 'moved' }

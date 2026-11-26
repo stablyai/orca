@@ -1,5 +1,5 @@
 import type { TextInputSelectionChangeEvent } from 'react-native'
-import { dictationSeparators } from '../../../src/shared/dictation-transcript-spacing'
+import { dictationSeparators } from '../../../src/shared/speech/dictation/dictation-transcript-spacing'
 
 // A field's selection, valid only while the field still holds the text it was read from.
 export type MobileDictationAnchor = {

@@ -6,8 +6,8 @@ import {
   EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE,
   scanTerminalReplyQuerySequences
 } from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-scan'
-import type { TerminalOutputMeta } from '../../terminal-output-frame-chunks'
-import { terminalStreamByteLength } from '../../terminal-stream-byte-length'
+import type { TerminalOutputMeta } from '../../terminal/terminal-output-frame-chunks'
+import { terminalStreamByteLength } from '../../terminal/terminal-stream-byte-length'
 import { getOutputAfterSnapshotSeq } from './terminal-stream-replay'
 import type { TerminalOutputChunk } from './terminal-stream-types'
 

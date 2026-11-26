@@ -1,4 +1,4 @@
-import type { PluginHostListEntry } from '../../../../../preload/api-types'
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import { isWorkspaceScopedPluginContext } from '../../../../../shared/plugins/contributions/plugin-command-contribution'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'

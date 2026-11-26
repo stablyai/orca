@@ -103,7 +103,7 @@ export async function runCodexHookTrustGrantSession(
   ) => spawnProcess({ program, args, ...options } as ProcessSpec)
 ): Promise<CodexHookTrustGrantSessionResult> {
   return runCodexAppServerSession(
-    request.invocation,
+    { ...request.invocation, allowHost: false },
     async (rpc) => {
       const expectedKeys = new Set(request.expectedTrustKeys)
       const matchManaged = (listing: CodexHookListing): boolean =>

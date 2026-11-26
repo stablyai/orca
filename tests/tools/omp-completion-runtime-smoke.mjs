@@ -38,7 +38,7 @@ async function waitForRequests(count) {
 try {
   const bundle = join(scratch, 'source.cjs')
   await build({
-    entryPoints: ['src/main/pi/agent-status-extension-source.ts'],
+    entryPoints: ['src/main/pi/managed-extensions/agent-status/agent-status-extension-source.ts'],
     bundle: true,
     platform: 'node',
     format: 'cjs',

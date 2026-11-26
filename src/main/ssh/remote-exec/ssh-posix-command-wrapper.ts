@@ -1,4 +1,4 @@
-import { encodePosixPrintfRecords } from '../../../shared/posix-printf-encoding'
+import { encodePosixPrintfRecords } from '../../../shared/shell/launch/posix-printf-encoding'
 import { gzipSync } from 'node:zlib'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 

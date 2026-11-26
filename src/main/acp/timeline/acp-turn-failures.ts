@@ -1,16 +1,22 @@
 import {
+  boundPayload,
+  PROVIDER_FRAME_PAYLOAD_LIMITS
+} from '../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
+import {
   agentSessionFailureFact,
   providerDiagnostic
 } from '../../../shared/agent-session/failures/agent-session-failure'
 
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
-import { BoundedMap } from '../../../shared/bounded-map'
+import { BoundedMap } from '../../../shared/collections/bounded-map'
 import type {
   ProviderTimelineEvent,
   ProviderTimelineJoin
 } from '../../native-chat/agent-session-timeline/provider-timeline-event'
 
 import type { AcpDialect, AcpDialectNotification, AcpTurnEnding } from '../acp-dialects/acp-dialect'
+import type { SessionUpdate } from '../generated/acp-protocol.generated'
+import { ACP_SUBSTANTIVE_UPDATES } from './acp-session-update'
 
 import {
   acpStopReasonFailed,
@@ -24,6 +30,9 @@ export class AcpTurnFailures {
   private readonly rows = new BoundedMap<string, AcpTurnFailureEvidence>({
     maxEntries: 128
   })
+  private retryRun?: { item: string; turn: string | undefined; attempt: number }
+  private retryRuns = 0
+  private lost?: Error
 
   constructor(
     private readonly sessionId: string,
@@ -35,10 +44,21 @@ export class AcpTurnFailures {
     return this.rows.has(turn)
   }
 
+  /** The agent's notice, once, that it dropped the session although its prompt then ended. */
+  takeSessionLoss(): Error | undefined {
+    const lost = this.lost
+    this.lost = undefined
+    return lost
+  }
+
   notification(
     turn: string | undefined,
     extension: AcpDialectNotification | undefined
   ): ProviderTimelineEvent[] {
+    const notice = extension?.disposition === 'map' ? extension.failure?.failureDetail : undefined
+    if (notice && this.dialect.sessionLostNotice?.(notice)) {
+      this.lost = new Error(notice)
+    }
     return turn &&
       extension?.disposition === 'map' &&
       (extension.failureDetail || extension.failure)
@@ -48,6 +68,54 @@ export class AcpTurnFailures {
           failureDetail: extension.failureDetail ?? extension.failure?.failureDetail
         })
       : []
+  }
+
+  /** Revise one retrying row per run of retry notices; any other turn content ends the run. */
+  retry(
+    update: SessionUpdate,
+    turn: string | undefined,
+    at: number,
+    join: ProviderTimelineJoin
+  ): ProviderTimelineEvent[] | undefined {
+    const retry = this.dialect.providerRetry?.(update)
+    if (!retry) {
+      if (retry === null || ACP_SUBSTANTIVE_UPDATES.includes(update.sessionUpdate)) {
+        this.retryRun = undefined
+      }
+      return undefined
+    }
+    if (!this.retryRun || this.retryRun.turn !== turn) {
+      // History gives each turn a fresh translator, often at one time, so the turn keeps keys apart.
+      this.retryRuns += 1
+      this.retryRun = {
+        item: `provider-retry:${JSON.stringify([turn ?? null, at, this.retryRuns])}`,
+        turn,
+        attempt: 0
+      }
+    }
+    this.retryRun.attempt = retry.attempt ?? this.retryRun.attempt + 1
+    const failure = agentSessionFailureFact('providerRetrying', {
+      retry: { ...retry, attempt: this.retryRun.attempt }
+    })
+    return [
+      {
+        type: 'item.update',
+        item: this.retryRun.item,
+        body: {
+          kind: 'status',
+          tone: 'warning',
+          ...agentSessionFailureWords(failure, { agentName: this.agentName, surface: 'row' })
+        },
+        join
+      }
+    ]
+  }
+
+  /** A failure reported mid-turn still fails a turn the agent closes with end_turn. */
+  ending(turn: string, reported: AcpTurnEnding): AcpTurnEnding {
+    return reported.stopReason === 'end_turn' && this.rows.has(turn)
+      ? { ...reported, stopReason: 'error' }
+      : reported
   }
 
   ended(turn: string, ending: AcpTurnEnding): ProviderTimelineEvent[] {
@@ -107,7 +175,15 @@ export class AcpTurnFailures {
                 text:
                   diagnostic?.text ??
                   this.dialect.failedTurnText?.(stopReason) ??
-                  `${this.agentName ?? 'The agent'} ended this turn with an error.`
+                  `${this.agentName ?? 'The agent'} ended this turn with an error.`,
+                // The agent's own line, under Details, behind the sentence drawn from it.
+                ...(evidence.frame && {
+                  providerFrame: {
+                    provider: this.agentName ?? 'agent',
+                    kind: 'failure-notice',
+                    payload: boundPayload(evidence.frame, PROVIDER_FRAME_PAYLOAD_LIMITS)
+                  }
+                })
               })
         },
         join

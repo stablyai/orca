@@ -1,7 +1,7 @@
 import {
   endedRunningAgentJournalToolCall,
   type AgentJournalRunningCallEnd
-} from '../../../../shared/agent-journal-tool-call-lifecycle'
+} from '../../../../shared/agent-session/journal/agent-journal-tool-call-lifecycle'
 import type {
   AgentJournalItemBody,
   AgentJournalMessageItem
@@ -10,7 +10,7 @@ import type { AgentJournalTurnScope } from '../../../../shared/agent-session/jou
 import {
   isRunningAgentJournalTurn,
   readAgentJournalTurn
-} from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+} from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { cancelledJournalPromptBody } from './journal-prompt-body-bounds'
 import { endedJournalReasoning } from './journal-reasoning-row'
 

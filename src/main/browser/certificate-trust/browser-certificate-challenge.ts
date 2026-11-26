@@ -1,4 +1,4 @@
-import type { BrowserCertificateFailure } from '../../../shared/browser-workspace-types'
+import type { BrowserCertificateFailure } from '../../../shared/browser/workspaces/browser-workspace-types'
 import { SUPPORTED_CERTIFICATE_ERROR_CODE } from './browser-certificate-identity'
 
 export const CERTIFICATE_CHALLENGE_TTL_MS = 5 * 60_000
@@ -43,7 +43,7 @@ export type PendingCertificateChallenge = {
 
 export type CertificateTrustGrant = Pick<
   PendingCertificateChallenge,
-  'guestWebContentsId' | 'secureEndpoint' | 'leafCertificateSha256' | 'error'
+  'secureEndpoint' | 'leafCertificateSha256' | 'error'
 >
 
 export function certificateChallengeIdentityMatches(

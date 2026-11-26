@@ -1,8 +1,10 @@
-import type { OrchestrationWorkerLaunchReceipt } from '../../rpc/methods/orchestration/worker/worker-launch-preferences'
+import type { OrchestrationWorkerLaunchReceipt } from '../../rpc/methods/orchestration/worker/start/launch/worker-launch-preferences'
 
 export function isKnownRemoteStartFailure(code: string): boolean {
   return [
     'invalid_argument',
+    // Refused before the remote attached anything: the worker start failed.
+    'selector_not_found',
     'agent_unconfigured',
     'worktree_not_found_on_server',
     'terminal_worktree_mismatch',

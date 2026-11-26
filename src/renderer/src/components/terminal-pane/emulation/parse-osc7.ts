@@ -1,5 +1,8 @@
 // xterm strips OSC 7 framing; the payload is a file:// URI reporting the shell’s current directory.
-import { escapeLiteralPercent, hasNulCharacter } from '../../../../../shared/osc7-path-text'
+import {
+  escapeLiteralPercent,
+  hasNulCharacter
+} from '../../../../../shared/terminal/output/osc7-path-text'
 
 // [\s\S]: a raw newline in a folder name is part of the path (nushell sends it unencoded).
 const OSC7_URI = /^file:\/\/([^/]*)(\/[\s\S]*)$/
@@ -27,6 +30,9 @@ export function parseOsc7(data: string, options: ParseOsc7Options = {}): string 
   }
   if (!path || hasNulCharacter(path)) {
     return null
+  }
+  if (path.startsWith('//')) {
+    return path
   }
   const isWindowsDrivePath = /^\/[A-Za-z]:/.test(path)
   if (options.uncHost && !isWindowsDrivePath) {

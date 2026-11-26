@@ -7,8 +7,8 @@ import {
   type SkillShareProgress,
   type SkillSharePublishInput,
   type SkillSharePublishOperation
-} from '../../../shared/skill-sharing-contract'
-import type { SkillCloudVersion } from '../../../shared/skill-cloud-contract'
+} from '../../../shared/skills/sharing/skill-sharing-contract'
+import type { SkillCloudVersion } from '../../../shared/skills/sharing/skill-cloud-contract'
 import {
   createSkillBundleArchive,
   type CreatedSkillBundle

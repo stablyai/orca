@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import type { AiVaultSearchHit } from '../../../../../../shared/ai-vault/search/ai-vault-search-types'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { withAiVaultSessionCwdAliases } from '../../../../../../shared/ai-vault/scanning/ai-vault-session-cwd-aliases'
 import type { AiVaultPanelListMode } from '../session-list/ai-vault-session-filters'
 
@@ -101,6 +101,7 @@ export function useAiVaultPanelSearchSessions(
     loading: boolean
     answered: boolean
     hits: readonly AiVaultSearchHit[]
+    replyEmpty: boolean
     sessions: AiVaultSession[]
   },
   history: readonly AiVaultSession[]
@@ -111,7 +112,8 @@ export function useAiVaultPanelSearchSessions(
   )
   // Until this query's first reply, older hits stay dimmed or, with none, title matches fill the wait.
   const waitingForHits = search.searching && search.loading && !search.answered
-  const searchTitles = waitingForHits && search.hits.length === 0
+  // An empty reply keeps those title matches (#47055); hits removed by a delete don't bring them back.
+  const searchTitles = search.hits.length === 0 && (waitingForHits || search.replyEmpty)
   const showHits = search.searching && !searchTitles
   const listMode: AiVaultPanelListMode = search.searching
     ? searchTitles

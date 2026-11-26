@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../shared/execution-host'
+import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
 import type { HostedReviewInfo } from '../../shared/source-control/hosted-review/hosted-review-contracts'
 
 export type CacheEntry = {
@@ -29,4 +29,6 @@ export type HostedReviewBranchCacheOptions = {
   active?: boolean
   force?: boolean
   userRefresh?: boolean
+  /** Creation preflight: a failed refresh must not serve an expired "no review" as proof of absence. */
+  requireFreshAbsence?: boolean
 }

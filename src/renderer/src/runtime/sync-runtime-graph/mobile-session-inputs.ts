@@ -1,12 +1,13 @@
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import {
   pendingTabRevision,
   pendingEntityWorkspaceIds
 } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { editorPlacementIndex } from '@/store/slices/editor/tabs/workspace-editor-files'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
-import { hostSessionTabIdsByLocalTabForWorktree } from '../web-session-tabs-sync/tracking-mappings'
+import { hostSessionTabIdsByLocalTabForWorktree } from '../web-session-tabs-sync/identity/tracking-mappings'
 import type { AppState } from '@/store/types'
-import { parsePaneKey, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { nativeChatLaunchAgentForLeaf } from '../../components/native-chat/pane/routing/native-chat-leaf-routing'
 import { getIndexedWorktreesById } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import {
@@ -20,7 +21,6 @@ import {
   graphState
 } from './graph-state'
 import type {
-  MobileSessionAgentStatusByWorktree,
   MobileSessionPublicationInputs,
   MobileSessionWorktreeInputs,
   OpenFileIndexes
@@ -112,37 +112,6 @@ export function excludeCrossPlacedEditorFiles(
   return result
 }
 
-export function buildMobileSessionAgentStatusByWorktree(
-  agentStatusByPaneKey: AppState['agentStatusByPaneKey'],
-  tabsByWorktree: AppState['tabsByWorktree']
-): MobileSessionAgentStatusByWorktree {
-  const byWorktreeId = new Map<string, Map<string, AppState['agentStatusByPaneKey'][string]>>()
-  const paneKeys = Object.keys(agentStatusByPaneKey)
-  if (paneKeys.length === 0) {
-    return byWorktreeId
-  }
-  const worktreeIdByTabId = new Map<string, string>()
-  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-    for (const tab of tabs) {
-      worktreeIdByTabId.set(tab.id, worktreeId)
-    }
-  }
-  for (const paneKey of paneKeys) {
-    const tabId = parsePaneKey(paneKey)?.tabId
-    const worktreeId = tabId === undefined ? undefined : worktreeIdByTabId.get(tabId)
-    if (worktreeId === undefined) {
-      continue
-    }
-    let bucket = byWorktreeId.get(worktreeId)
-    if (!bucket) {
-      bucket = new Map()
-      byWorktreeId.set(worktreeId, bucket)
-    }
-    bucket.set(paneKey, agentStatusByPaneKey[paneKey])
-  }
-  return byWorktreeId
-}
-
 // Bare IDs collide across hosts (STA-4343); ambiguous ownership omits identity so main uses generation fences rather than blanks mobile.
 function resolveWorktreeInstanceId(state: AppState, worktreeId: string): string | undefined {
   const rows = getIndexedWorktreesById(selectWorktreesByRepo(state) ?? {}, worktreeId)
@@ -170,9 +139,10 @@ export function buildMobileSessionWorktreeInputs(
   )
   const browserWorkspaces =
     publication.browserTabsByWorktree[worktreeId] ?? EMPTY_WORKTREE_BROWSER_WORKSPACES
+  const browserWorkspaceIds = browserWorkspaces.map((workspace) => workspace.id)
   const pagesByBrowserWorkspaceId = narrowRecordByKeys(
     state.browserPagesByWorkspace,
-    browserWorkspaces.map((workspace) => workspace.id)
+    browserWorkspaceIds
   )
   const browserPageIds: string[] = []
   for (const pages of pagesByBrowserWorkspaceId.values()) {
@@ -197,6 +167,10 @@ export function buildMobileSessionWorktreeInputs(
     worktreeInstanceId: resolveWorktreeInstanceId(state, worktreeId),
     terminalTabs,
     browserWorkspaces,
+    browserRuntimeEnvironmentId:
+      browserWorkspaces.length > 0
+        ? runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
+        : null,
     unifiedTabs: state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_WORKTREE_UNIFIED_TABS,
     groups: state.groupsByWorktree[worktreeId] ?? EMPTY_WORKTREE_TAB_GROUPS,
     tabBarOrder: state.tabBarOrderByWorktree[worktreeId],
@@ -212,8 +186,6 @@ export function buildMobileSessionWorktreeInputs(
       mountedSurfaceCaptureByTabId,
       launchDraftByTabId: narrowRecordByKeys(state.nativeChatLaunchDraftByTabId, terminalTabIds)
     }),
-    agentStatusByPaneKey:
-      publication.agentStatusByWorktreeId.get(worktreeId) ?? EMPTY_NARROWED_BY_KEY,
     editorDraftVersionByFileId: narrowMapByKeys(
       publication.editorDraftVersionByFileId,
       openFileIds
@@ -222,6 +194,11 @@ export function buildMobileSessionWorktreeInputs(
     certificateFailureByBrowserPageId: narrowRecordByKeys(
       state.browserCertificateFailuresByPageId,
       browserPageIds
+    ),
+    audibleBrowserPageIds: narrowRecordByKeys(state.browserAudiblePageIds, browserPageIds),
+    audioMutedBrowserWorkspaceIds: narrowRecordByKeys(
+      state.browserAudioMutedTabIds,
+      browserWorkspaceIds
     ),
     activeEditorFileId,
     activeEditorTabType: activeEditorFileId

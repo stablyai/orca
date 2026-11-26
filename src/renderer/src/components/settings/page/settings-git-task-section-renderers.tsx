@@ -15,7 +15,6 @@ export function renderGitSettingsSection(
   return (
     <SettingsSection
       id="git"
-      grouped
       title={t('auto.components.settings.Settings.d09b9d8f00', 'Git & source control')}
       description={t(
         'auto.components.settings.Settings.cfa34f4465',
@@ -31,6 +30,7 @@ export function renderGitSettingsSection(
             updateSettings={model.updateSettings}
             writeSourceControlAiSettings={interactions.writeSourceControlAiSettings}
             displayedGitUsername={navigation.displayedGitUsername}
+            hostScope={model.settingsHostScope}
             hasUnsavedBranchPromptChanges={model.hasUnsavedBranchPromptChanges}
             onBranchPromptDirtyChange={model.setHasUnsavedBranchPromptChanges}
             branchPromptDiscardSignal={model.sourceControlAiPromptDiscardSignal}
@@ -46,7 +46,9 @@ export function renderGitSettingsSection(
           />
           <GitProviderApiBudgetPane
             settingsSearchQuery={model.settingsSearchQuery}
-            target={model.settingsHostScope.target}
+            hostScope={model.settingsHostScope}
+            settings={model.settings}
+            updateSettings={model.updateSettings}
           />
         </>
       ) : null}
@@ -62,7 +64,6 @@ export function renderTasksSettingsSection(
   return (
     <SettingsSection
       id="tasks"
-      grouped
       title={t('auto.components.settings.Settings.c0900fa64a', 'Task sources')}
       description={t(
         'auto.components.settings.Settings.tasksDescription',

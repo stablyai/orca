@@ -24,6 +24,17 @@ export function showFileLinkUnverifiableToast(filePath: string, error: unknown):
   )
 }
 
+/** The path exists, but this computer has no route to it (e.g. a paired workspace folder no explorer owns). */
+export function showFileLinkFolderUnavailableToast(filePath: string): void {
+  toast.error(
+    translate(
+      'components.native-chat.fileLinks.folderUnavailable',
+      "This computer can't open the folder {{value0}}",
+      { value0: filePath }
+    )
+  )
+}
+
 /** e.g. `~/x` when the workspace gives no way to know the home folder. */
 export function showFileLinkUnresolvedToast(pathText: string): void {
   toast.error(

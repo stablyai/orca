@@ -10,17 +10,17 @@ import { worktreePreparationGit } from '../../../git/worktrees/creation/worktree
 import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
 import {
   WORKTREE_CREATE_PREPARATION_DIRECTORY,
   createWorktreePreparationLockReason
-} from '../../../../shared/worktree/create-preparation'
+} from '../../../../shared/worktree/creation/create-preparation'
 import type { AddWorktreeOptions } from '../../../git/worktrees/worktree-operation-options'
 import { prepareWorktreeCreateCheckout } from '../../../git/worktrees/creation/worktree-create-preparation'
 import { queuePreparedWorktreeTipRefresh } from './worktree-preparation-refresh-queue'
 import { toHostFilesystemPath } from '../../../filesystem/host-tree-removal'
 import { createPreparationActivity } from './worktree-create-preparation-activity'
-import { profileStateAccessMachineIdentity } from '../../../persistence/profile-state/profile-state-access-identity'
+import { profileStateAccessMachineIdentity } from '../../../persistence/profile-state/access/profile-state-access-identity'
 import type { PreparationActivity } from './worktree-create-preparation-activity'
 import {
   deferPreparationForClaim,
@@ -48,7 +48,7 @@ import {
 } from './worktree-preparation-discard-retry'
 
 import { WorktreePreparationOperation } from '../../../git/worktrees/creation/worktree-preparation-operation'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 export type { StartPreparationArgs } from './worktree-preparation-admission-intents'
 export { WORKTREE_CREATE_PREPARATION_TTL_MS } from '../../../git/worktrees/creation/worktree-preparation-operation'
 export const WORKTREE_CREATE_PREPARATION_LIMIT = 3

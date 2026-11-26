@@ -1,6 +1,7 @@
-import { BRIDGE_MAX_ROUTE_PARAM_CHARS } from '../mobile-web-shell/bridge/bridge-caps'
-import { BRIDGE_OPEN_ROUTE_PARAM } from '../mobile-web-shell/bridge/bridge-route-update'
-import { focusedIndex } from '../mobile-web-shell/native-stack-return'
+import { BRIDGE_MAX_ROUTE_PARAM_CHARS } from '../mobile-web-shell/bridge/protocol/bridge-caps'
+import { BRIDGE_OPEN_ROUTE_PARAM } from '../mobile-web-shell/bridge/page-lifecycle/bridge-route-update'
+import { focusedIndex } from '../mobile-web-shell/routing/native-stack-return'
+import { hostParamMatches, isSameScreen } from './host-stack-route-match'
 
 export type HostStackNavigationState = Readonly<{
   key?: string
@@ -11,7 +12,7 @@ export type HostStackNavigationState = Readonly<{
 export type HostStackNavigationRoute = Readonly<{
   key?: string
   name: string
-  params?: Readonly<{ hostId?: unknown; worktreeId?: unknown }>
+  params?: Readonly<{ hostId?: unknown; worktreeId?: unknown; groupId?: unknown }>
   state?: HostStackNavigationState
 }>
 
@@ -73,11 +74,32 @@ export type PendingHostStackNavigation = Readonly<{
 }>
 
 export const HOST_SESSION_ROUTE = '[hostId]/session/[worktreeId]'
+export const HOST_GROUP_ROUTE = '[hostId]/group/[groupId]'
 const HOST_INDEX_ROUTE = '[hostId]/index'
 
-// A session keeps its host's list beneath it so Back lands there; other targets take the list's place.
-function opensOverHostList(target: HostStackRouteTarget): boolean {
+// A session opened in its host list's place (Home's agent and bot rows), so Back leaves the host instead of showing the list.
+export const STANDALONE_SESSION_PARAM = 'standalone'
+
+export function isStandaloneSessionHref(href: string): boolean {
+  const [path = '', query = ''] = (href.split('#')[0] ?? '').split('?')
+  return (
+    /^\/h\/[^/]+\/session\//.test(path) &&
+    query.split('&').includes(`${STANDALONE_SESSION_PARAM}=1`)
+  )
+}
+
+function isSessionRoute(target: HostStackRouteTarget): boolean {
   return target.name === HOST_SESSION_ROUTE
+}
+
+// A session or group room opens inside its host's stack; other targets take the host list's place.
+function opensInHostStack(target: HostStackRouteTarget): boolean {
+  return isSessionRoute(target) || target.name === HOST_GROUP_ROUTE
+}
+
+// A session or group room keeps its host's list beneath it so Back lands there, unless the session is standalone.
+function opensOverHostList(target: HostStackRouteTarget): boolean {
+  return opensInHostStack(target) && target.params[STANDALONE_SESSION_PARAM] !== '1'
 }
 
 const SETTLED_NAVIGATION: HostStackNavigationController = {
@@ -106,21 +128,6 @@ function sessionOpenHref(target: HostStackRouteTarget): string | null {
 
 function focusedRouteOf(state: HostStackNavigationState): HostStackNavigationRoute | undefined {
   return state.routes[focusedIndex(state)]
-}
-
-// Match decoded and encoded ids so slash/hash/percent host ids recognize their own push.
-function hostParamMatches(param: unknown, expectedHostId: string): boolean {
-  if (typeof param !== 'string') {
-    return false
-  }
-  if (param === expectedHostId) {
-    return true
-  }
-  try {
-    return decodeURIComponent(param) === expectedHostId
-  } catch {
-    return false
-  }
 }
 
 // Find the focused h route through Expo’s internal root navigator as well as callers already inside the root stack.
@@ -172,18 +179,24 @@ export function navigateToHostStackRoute(
     focused?.key &&
     focused.name === target.name &&
     hostParamMatches(focused.params?.hostId, hostId) &&
-    hostParamMatches(focused.params?.worktreeId, target.params.worktreeId)
+    isSameScreen(focused, target)
   ) {
     navigation.dispatch({
       type: 'SET_PARAMS',
       target: hostState.key,
       source: focused.key,
-      payload: { params: target.params }
+      // A pane request names its whole item intent: without an item it ends an earlier one.
+      payload: {
+        params:
+          isSessionRoute(target) && target.params.paneKey
+            ? { botItem: '', ...target.params }
+            : target.params
+      }
     })
     return SETTLED_NAVIGATION
   }
   // The host screen opens the session inside its document when the page it activates can, else pushes it as before.
-  const href = openInHostDocument && opensOverHostList(target) ? sessionOpenHref(target) : null
+  const href = openInHostDocument && isSessionRoute(target) ? sessionOpenHref(target) : null
   // useLocalSearchParams decodes every value once more, which would undo the target's own escapes.
   const open = href === null ? null : encodeURIComponent(href)
   const inThisHost = hostState?.key && hostParamMatches(focused?.params?.hostId, hostId)
@@ -197,8 +210,17 @@ export function navigateToHostStackRoute(
     return SETTLED_NAVIGATION
   }
   // Already inside this host: pushing the host route again would stack a second list.
-  if (opensOverHostList(target) && inThisHost) {
-    navigation.dispatch({ type: 'PUSH', target: hostState.key, payload: target })
+  if (opensInHostStack(target) && inThisHost) {
+    if (!opensOverHostList(target) && focused?.key && focused.name === HOST_INDEX_ROUTE) {
+      navigation.dispatch({
+        type: 'REPLACE',
+        target: hostState.key,
+        source: focused.key,
+        payload: target
+      })
+    } else {
+      navigation.dispatch({ type: 'PUSH', target: hostState.key, payload: target })
+    }
     return SETTLED_NAVIGATION
   }
   return open === null
@@ -261,7 +283,7 @@ function openWhenHostStackCommits(
       return
     }
     dispose()
-    if (latest && opensOverHostList(latest[0])) {
+    if (latest && opensInHostStack(latest[0])) {
       navigateToHostStackRoute(navigation, router, hostId, ...latest)
     } else if (latest) {
       navigation.dispatch({

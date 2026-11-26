@@ -29,7 +29,7 @@ export function createAgentModelEffortDiscovery(input: {
     },
     due: (fingerprint: string, model: string | undefined): boolean =>
       !input.failed(fingerprint) &&
-      agentModelEffortProbeDue(input.entries.get(fingerprint), input.attempts, model, input.now()),
+      agentModelEffortProbeDue(input.entries.get(fingerprint), input.attempts, model),
     demand: (fingerprint: string, model: string | undefined): void =>
       demandAgentModelEfforts(input.refreshes.get(fingerprint), model, input.cap),
     attempted: (fingerprint: string, agent: string, model: string): void =>

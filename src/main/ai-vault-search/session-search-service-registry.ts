@@ -5,8 +5,8 @@ import {
   AiVaultSearchStatusSchema
 } from '../../shared/ai-vault/search/ai-vault-search-contract'
 import { unavailableSessionSearchStatus } from '../../shared/ai-vault/search/ai-vault-search-client'
-import { sessionSearchScopeCatalog } from './session-search-scope-catalog'
-import { resolveSessionSearchScope } from './session-search-scope-resolution'
+import { sessionSearchScopeCatalog } from './scope/session-search-scope-catalog'
+import { resolveSessionSearchScope } from './scope/session-search-scope-resolution'
 import type {
   AiVaultSearchResponse,
   AiVaultSearchStatus
@@ -53,8 +53,9 @@ export async function searchSessionService(
           supportsJcodeHistory
         }
   )
+  // Always name the agents: an index built before an agent was removed (Gemini CLI) still holds its hits.
   const compatibleRequest =
-    compatibleAgents.length === 0 || compatibleAgents.length === agents.length
+    compatibleAgents.length === 0
       ? request
       : {
           ...request,

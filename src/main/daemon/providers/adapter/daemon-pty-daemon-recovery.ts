@@ -10,7 +10,7 @@ import {
 import { DaemonPtyCheckpointPersistence } from '../checkpointing/daemon-pty-checkpoint-persistence'
 import type { DaemonRespawnReason } from './daemon-pty-adapter-options'
 import type { ListSessionsResult } from '../../protocol/daemon-rpc-contract'
-import type { PtyBackgroundStreamEvent } from '../../../providers/pty-provider-contract'
+import type { PtyBackgroundStreamEvent } from '../../../providers/pty/events'
 import type {
   TerminalLimitStatus,
   TerminalLimitUpdate

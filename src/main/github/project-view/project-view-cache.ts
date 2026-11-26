@@ -1,5 +1,5 @@
-import type { GitHubProjectOwnerType } from '../../../shared/github/project-types'
-import { githubProjectHost } from '../../../shared/github/project-identity'
+import type { GitHubProjectOwnerType } from '../../../shared/github/projects/project-types'
+import { githubProjectHost } from '../../../shared/github/projects/project-identity'
 
 export const PROJECT_VIEW_OWNER_CACHE_MAX_ENTRIES = 512
 
@@ -88,62 +88,4 @@ export function markParentFieldWarningLogged(scopeKey: string): void {
 
 export function hasParentFieldWarningLogged(scopeKey: string): boolean {
   return getProjectViewCacheEntry(parentFieldWarningLoggedByOwner, scopeKey) === true
-}
-
-export function _resetProjectViewCachesForTests(): void {
-  ownerTypeCache.clear()
-  unsupportedItemFieldsByOwner.clear()
-  parentFieldWarningLoggedByOwner.clear()
-  parentFieldProbeInFlight.clear()
-}
-
-export function _getProjectViewCacheSizesForTests(): {
-  ownerTypes: number
-  parentFieldRetries: number
-  parentFieldWarnings: number
-  parentFieldProbes: number
-} {
-  return {
-    ownerTypes: ownerTypeCache.size,
-    parentFieldRetries: unsupportedItemFieldsByOwner.size,
-    parentFieldWarnings: parentFieldWarningLoggedByOwner.size,
-    parentFieldProbes: parentFieldProbeInFlight.size
-  }
-}
-
-/** @internal - exposed for cache-bound tests only. */
-export function _rememberProjectViewOwnerTypeForTests(
-  owner: string,
-  ownerType: GitHubProjectOwnerType | null,
-  host?: string
-): void {
-  rememberOwnerType(owner, ownerType, host)
-}
-
-/** @internal - exposed for cache-bound tests only. */
-export function _getProjectViewOwnerTypeForTests(
-  owner: string,
-  host?: string
-): GitHubProjectOwnerType | null | undefined {
-  return getCachedOwnerType(owner, host)
-}
-
-/** @internal - exposed for cache-bound tests only. */
-export function _markProjectViewParentFieldRetriedForTests(scopeKey: string): void {
-  markItemFieldsUnsupported(scopeKey, ['parent'])
-}
-
-/** @internal - exposed for cache-bound tests only. */
-export function _hasProjectViewParentFieldRetriedForTests(scopeKey: string): boolean {
-  return getUnsupportedItemFields(scopeKey).has('parent')
-}
-
-/** @internal - exposed for cache-bound tests only. */
-export function _markProjectViewParentFieldWarningLoggedForTests(scopeKey: string): void {
-  markParentFieldWarningLogged(scopeKey)
-}
-
-/** @internal - exposed for cache-bound tests only. */
-export function _hasProjectViewParentFieldWarningLoggedForTests(scopeKey: string): boolean {
-  return hasParentFieldWarningLogged(scopeKey)
 }

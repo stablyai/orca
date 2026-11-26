@@ -21,7 +21,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { defaultTerminalFontWeight } from '../../../../../../shared/terminal/appearance/terminal-platform-defaults'
 import { isWindowsDesktopClient } from '@/lib/files/os-open/windows-path-access'
 import { getTerminalAdvancedTypographySearchEntries } from './terminal-typography-search'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 
 type TerminalAdvancedTypographyControlsProps = {
   settings: GlobalSettings
@@ -37,7 +37,7 @@ export function TerminalAdvancedTypographyControls({
   const searchEntries = getTerminalAdvancedTypographySearchEntries()
 
   return (
-    <div className="divide-y divide-border/40">
+    <>
       <SearchableSetting
         title={t('auto.components.settings.TerminalAppearanceSection.bb4ac88514', 'Font weight')}
         description={searchEntries[0]?.description}
@@ -190,6 +190,6 @@ export function TerminalAdvancedTypographyControls({
           .
         </p>
       </SearchableSetting>
-    </div>
+    </>
   )
 }

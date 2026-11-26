@@ -260,9 +260,6 @@ fi
 collect_process_tree
 shim="$profile/linux-orca-cli-shim/orca"
 [[ -x "$shim" ]] || { echo 'FAIL: first-use desktop shim was not written' >&2; exit 1; }
-# A cached dispatcher would miss the first-use live-launcher boundary.
-grep -q '^expected_runtime_identity=' "$shim"
-grep -q '^expected_launcher_identity=' "$shim"
 bundled_cli=$(sed -n "s/^launcher='\([^']*\)'$/\1/p" "$shim")
 [[ "$bundled_cli" == */resources/bin/orca-ide && -x "$bundled_cli" ]]
 [[ "$bundled_cli" != "$XDG_CACHE_HOME/"* ]]

@@ -4,8 +4,8 @@ import {
   TERMINAL_NERD_FONT_CSS,
   TERMINAL_SYMBOLS_FONT_CSS,
   XTERM_ENGINE_CSS
-} from '../terminal-webview-engine-css.generated'
-import { XTERM_ENGINE_JS } from '../terminal-webview-engine.generated'
+} from '../document/terminal-webview-engine-css.generated'
+import { XTERM_ENGINE_JS } from '../document/terminal-webview-engine.generated'
 
 export const TERMINAL_HTML_DOCUMENT_SHELL = `<!DOCTYPE html>
 <html>

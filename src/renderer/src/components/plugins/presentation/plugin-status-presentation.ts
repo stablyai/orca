@@ -1,4 +1,4 @@
-import type { PluginHostListEntry } from '../../../../../preload/api-types'
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 
@@ -104,7 +104,7 @@ export function installedPluginPresentation(
   t: Translate = translate
 ) {
   const kind = pluginStatusKind(plugin)
-  const removable = !plugin.bundled && !plugin.isDev
+  const removable = !plugin.bundled && !plugin.isDev && !plugin.requiredByTeam
   // First match wins: each earlier state blocks the later actions from doing anything useful.
   const primaryRules = [
     [busy, 'busy'],
@@ -139,7 +139,12 @@ export function installedPluginPresentation(
     removable,
     primary,
     enabled: isPluginEnabled(plugin),
-    switchable: !busy && kind !== 'review' && kind !== 'invalid' && kind !== 'blocked',
+    switchable:
+      !busy &&
+      kind !== 'review' &&
+      kind !== 'invalid' &&
+      kind !== 'blocked' &&
+      !(plugin.requiredByTeam && isPluginEnabled(plugin)),
     statusText: fact ? `${pluginStatusWord(kind)}, ${fact}` : pluginStatusWord(kind)
   }
 }

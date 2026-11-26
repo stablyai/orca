@@ -1,11 +1,15 @@
 import {
   planSemanticWorkerFollowUp,
   workerFollowUpArguments
-} from '../worker/worker-follow-up-admission'
+} from '../worker/follow-up/worker-follow-up-admission'
 /** A message to a worker that finished becomes its next Task: worker-start run for the sender, on that same worker.
  *  Open workers take it in place, closed ones reopen in their saved conversation, and agents that keep none start fresh. */
 
+import { dispatchItemUid } from '../../../../../bots/bot-item-dispatch-facts'
+import { resolveItem } from '../../bots-items-write-support'
+import { BOT_ITEM_ORIGIN_PREFIX } from '../../bots-items-worker-origin'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import { parseWorkerTerminalPriorOwnerIds } from '../../../../orchestration/db/pane-key-match'
 import {
   carryWorkerResumeSession,
   resolveWorkerLineage
@@ -17,11 +21,11 @@ import type {
 } from '../../../../orchestration/db/orchestration-records'
 import type { WorkerTerminalResourceRow } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import type { RpcContext } from '../../../core'
-import { startWorker } from '../worker/workers'
+import { startWorker } from '../worker/worker-start-method'
 import {
   chooseWorkerFollowUpPlacement,
   type WorkerFollowUpDelivery
-} from '../worker/worker-follow-up-choice'
+} from '../worker/follow-up/worker-follow-up-choice'
 
 export type WorkerFollowUpPlan =
   | { kind: 'steer'; dispatchId: string }
@@ -58,6 +62,98 @@ export function planWorkerFollowUp(
   )
 }
 
+/** `send --to dispatch:<id> --item <n>`: new work for that item, which only a follow-up can take, so
+ *  the item leaves the mail's params; item mail's `--file` never goes with it. */
+export function splitForItem<P extends { item?: string; files?: string[] }>(
+  to: string,
+  params: P
+): { forItem: string | undefined; params: P } {
+  const forItem = to.startsWith('dispatch:') ? params.item : undefined
+  if (forItem === undefined) {
+    return { forItem, params }
+  }
+  if (params.files?.length) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      "--file goes with --to bot:<name> --item <n>. A worker's new work names its files in --body. Nothing was sent.",
+      { effectsApplied: false }
+    )
+  }
+  return { forItem, params: { ...params, item: undefined } }
+}
+
+/** `send --to dispatch: --item`: only a finished worker's follow-up takes work for an item; a working
+ *  worker's report would answer for both. Refused before anything is sent. */
+export function assertFollowUpForItem(forItem: string | undefined, followsUp: boolean): void {
+  if (forItem !== undefined && !followsUp) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      "--item gives a finished worker on this computer a follow-up for that item, and this one can't take one now: it is still working, runs on another computer, or another send just gave it work. Wait for its report, or start one with `orchestration worker-start --item <n>`. Nothing was sent.",
+      { effectsApplied: false }
+    )
+  }
+}
+
+/** A worker on one item, by its start or a link to any of its steps, never takes another's: its
+ *  lineage would then speak for both items. */
+async function assertSameItem(
+  ctx: FollowUpContext,
+  db: OrchestrationDb,
+  plan: Extract<WorkerFollowUpPlan, { kind: 'start' }>,
+  forItem: string
+): Promise<void> {
+  const store = ctx.runtime.botItems.store()
+  const item = await resolveItem(store, forItem)
+  // The worker's steps: the addressed one's, its newest one's, then those of every earlier owner of
+  // its terminal, which a handed-over terminal parts, each read once. Past 200 it can't tell, so
+  // refuses. Their starts settle it without a lookup; else two items linking them are enough to tell.
+  const steps = new Set<string>()
+  let elsewhere = false
+  let unchecked = false
+  const walk = (start: string): void => {
+    let id: string | null = start
+    for (; id && !steps.has(id) && steps.size < 200 && !elsewhere;) {
+      steps.add(id)
+      elsewhere = (dispatchItemUid(db, id) ?? item.uid) !== item.uid
+      id = db.getDispatchContextById(id)?.follow_up_of_dispatch_id ?? null
+    }
+    unchecked ||= !elsewhere && id !== null && !steps.has(id)
+  }
+  walk(plan.addressed)
+  walk(plan.latest.id)
+  const savedOwners = plan.resource?.prior_owner_dispatch_ids ?? '[]'
+  // A saved list this long names more owners than the 200 steps checked, so it is never parsed.
+  unchecked ||= !elsewhere && savedOwners.length > 16_384
+  const owners = elsewhere || unchecked ? [] : parseWorkerTerminalPriorOwnerIds(savedOwners)
+  // An unreadable list, as the terminal's release treats it, can't be checked.
+  unchecked ||= owners === null
+  if (owners) {
+    for (const owner of owners) {
+      walk(owner)
+      if (elsewhere || unchecked) {
+        break
+      }
+    }
+  }
+  if (unchecked && !elsewhere) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      `This worker's history is too long to check that it worked only for item ${item.number}. Start one for it with \`orchestration worker-start --item ${item.number}\`. Nothing was sent.`,
+      { effectsApplied: false }
+    )
+  }
+  elsewhere ||= (await store.itemsLinking('dispatch', [...steps], 2)).some(
+    (uid) => uid !== item.uid
+  )
+  if (elsewhere) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      `This worker has worked for another item, so it can't take work for item ${item.number}. Start one for it with \`orchestration worker-start --item ${item.number}\`. Nothing was sent.`,
+      { effectsApplied: false }
+    )
+  }
+}
+
 export async function startWorkerFollowUp(args: {
   ctx: FollowUpContext
   db: OrchestrationDb
@@ -66,9 +162,14 @@ export async function startWorkerFollowUp(args: {
   message: { subject: string; body?: string | undefined }
   /** The Dispatch whose unread mail this follow-up's Task tells it to check. */
   takesMailOf?: string
+  /** `send --item <n>`: the follow-up is for that item, kept on its Dispatch as `worker-start --item`. */
+  forItem?: string
 }): Promise<WorkerFollowUpOutcome> {
   const { ctx, db } = args
   const { latest, resource } = args.plan
+  if (args.forItem !== undefined) {
+    await assertSameItem(ctx, db, args.plan, args.forItem)
+  }
   const { subject, body } = args.message
   let delivery: WorkerFollowUpDelivery = 'follow_up'
   let reopening = false
@@ -81,7 +182,10 @@ export async function startWorkerFollowUp(args: {
         from: args.from,
         run: latest.run_id,
         spec: body || subject,
-        taskTitle: subject
+        taskTitle: subject,
+        ...(args.forItem !== undefined
+          ? { origin: `${BOT_ITEM_ORIGIN_PREFIX}${args.forItem}` }
+          : {})
       },
       // The send's own receipt is already pending; the follow-up only names what it accepted.
       { ...ctx, orchestrationMutation: undefined },

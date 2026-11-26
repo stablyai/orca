@@ -1,4 +1,4 @@
-import type { PRCheckDetail } from '../../github/check-types'
+import type { PRCheckDetail } from '../../github/checks/check-types'
 
 // Neutral/skipped carry no signal and must sink below success. Map provider values to avoid prototype-name ranks
 // (e.g. constructor/toString resolving as functions on plain objects).

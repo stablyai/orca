@@ -1,7 +1,7 @@
 import {
   ANSI_INTRODUCER_PATTERN,
   stripAnsiEscapeSequences
-} from '../../../../../../shared/ansi-escape-sequences'
+} from '../../../../../../shared/terminal/protocol/escape/ansi-escape-sequences'
 
 /** 0-15 index the themed ANSI palette; strings are explicit CSS colors. */
 export type AnsiColor = number | string

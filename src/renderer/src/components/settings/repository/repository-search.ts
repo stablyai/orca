@@ -1,9 +1,10 @@
-import type { Repo } from '../../../../../shared/repo-types'
-import { isFolderRepo } from '../../../../../shared/repo-kind'
+import type { Repo } from '../../../../../shared/repository/repo-types'
+import { getRepositoryPresenceSearchEntries } from './repository-project-presence-search'
+import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -17,6 +18,8 @@ import {
 } from './worktrees/repository-git-worktree-search-entries'
 import { getRepositoryFormatterSearchEntry } from './RepositoryFormatterSection'
 import { getRepositoryAgentTrustSearchEntry } from './RepositoryAgentTrustSection'
+import { getRepositoryBrowserProfileSearchEntry } from './RepositoryBrowserProfileSection'
+import { getRepositoryWorkspaceCleanupSearchEntry } from './workspace-cleanup/repository-workspace-cleanup-search'
 
 type RepositoryPaneSearchOptions = {
   isLocalWindowsProject?: boolean
@@ -202,30 +205,17 @@ function getRepositorySearchParts(
             )
           ]
         }
-  const removeProject: SettingsSearchEntry = {
-    title: t('auto.components.settings.repository.search.bbbe994528', 'Remove project'),
-    description: t(
-      'auto.components.settings.repository.search.c86478c3d8',
-      'Remove this project from Orca.'
-    ),
-    keywords: [
-      repo.displayName,
-      ...translateSearchKeyword('auto.components.settings.repository.search.3067595d82', 'delete'),
-      ...translateSearchKeyword('auto.components.settings.repository.search.6469de5368', 'project'),
-      ...translateSearchKeyword(
-        'auto.components.settings.repository.search.cc876ca5f2',
-        'repository'
-      )
-    ]
-  }
+  const { removeProject, sidebarVisibility } = getRepositoryPresenceSearchEntries(repo, t)
   return {
     agentTrust: getRepositoryAgentTrustSearchEntry(),
+    browserProfile: getRepositoryBrowserProfileSearchEntry(t),
     jira,
     displayName,
     icon,
     github,
     fork,
     projectRuntime,
+    sidebarVisibility,
     removeProject,
     sourceControlAi: isFolder ? undefined : getRepositoryGitAuthorSearchEntries(repo, t),
     mcp: isFolder ? undefined : getRepositoryMcpConfigSearchEntries(repo, t),
@@ -242,6 +232,7 @@ export function getRepositoryPaneSearchEntries(
   const entries = [
     getRepositoryFormatterSearchEntry(t),
     parts.agentTrust,
+    parts.browserProfile,
     parts.jira,
     parts.displayName,
     parts.icon
@@ -257,8 +248,9 @@ export function getRepositoryPaneSearchEntries(
   }
   if (!isFolderRepo(repo)) {
     entries.push(...getRepositoryGitWorktreeSearchEntries(repo, t))
+    entries.push(getRepositoryWorkspaceCleanupSearchEntry(repo, t))
   }
-  entries.push(parts.removeProject)
+  entries.push(parts.sidebarVisibility, parts.removeProject)
   if (parts.sourceControlAi) {
     entries.push(...parts.sourceControlAi)
   }
@@ -278,7 +270,13 @@ export function getRepositoryPaneSearchMetadata(
 ) {
   const parts = getRepositorySearchParts(repo, options, t)
   const worktrees = isFolderRepo(repo) ? undefined : getRepositoryGitWorktreeSearchMetadata(repo, t)
-  const identity = [parts.agentTrust, parts.jira, parts.displayName, parts.icon]
+  const identity = [
+    parts.agentTrust,
+    parts.browserProfile,
+    parts.jira,
+    parts.displayName,
+    parts.icon
+  ]
   if (parts.github) {
     identity.push(parts.github)
   }
@@ -291,9 +289,10 @@ export function getRepositoryPaneSearchMetadata(
   if (worktrees) {
     identity.push(...worktrees.identity)
   }
-  identity.push(parts.removeProject)
   return {
     identity,
+    removeProject: parts.removeProject,
+    sidebarVisibility: parts.sidebarVisibility,
     projectRuntime: parts.projectRuntime ? [parts.projectRuntime] : [],
     sparsePresets: worktrees?.sparsePresets ?? [],
     sharedPaths: worktrees?.sharedPaths ?? [],

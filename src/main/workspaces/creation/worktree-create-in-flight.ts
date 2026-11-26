@@ -1,8 +1,11 @@
 import { realpath } from 'node:fs/promises'
 import { basename, dirname, resolve } from 'node:path'
-import { toWindowsWslPath } from '../../../shared/wsl-paths'
+import { toWindowsWslPath } from '../../../shared/file-access/wsl-paths'
 import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
-import { getRepoHostIdentity, type RepoHostTarget } from '../../../shared/repo-host-identity'
+import {
+  getRepoHostIdentity,
+  type RepoHostTarget
+} from '../../../shared/repository/repo-host-identity'
 
 type InFlightWorktreeCreate = { repoId: string; paths: string[] }
 

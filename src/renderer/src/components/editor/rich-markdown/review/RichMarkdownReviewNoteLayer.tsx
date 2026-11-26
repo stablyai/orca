@@ -3,7 +3,7 @@ import {
   type DiffCommentOwner
 } from '@/store/slices/diff-comments/diff-comment-owner'
 import { Check, Copy } from 'lucide-react'
-import type { DiffComment } from '../../../../../../shared/diff-comment-types'
+import type { DiffComment } from '../../../../../../shared/file-review/diff-comment-types'
 import { DiffCommentCard } from '../../../diff-comments/DiffCommentCard'
 import { NotesSendMenu } from '../../review-note-delivery/NotesSendMenu'
 import {

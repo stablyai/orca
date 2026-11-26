@@ -4,7 +4,7 @@ import path from 'node:path'
 import {
   FEATURE_WALL_TILES,
   isFeatureWallMediaTile
-} from '../../../../src/shared/feature-wall-tiles.ts'
+} from '../../../../src/shared/feature-education/explore/feature-wall-tiles.ts'
 
 const __dirname = import.meta.dirname
 const ROOT = path.join(__dirname, '../../..', '..')

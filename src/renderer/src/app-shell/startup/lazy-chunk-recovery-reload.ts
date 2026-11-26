@@ -1,9 +1,9 @@
-import { prepareRendererForAppRestart } from '../../../../shared/renderer-restart-preparation'
-import { ORCA_RENDERER_UNLOAD_PREVENTED_EVENT } from '../../../../shared/renderer-shutdown-events'
+import { prepareRendererForAppRestart } from '../../../../shared/app-lifecycle/shutdown/renderer-restart-preparation'
+import { ORCA_RENDERER_UNLOAD_PREVENTED_EVENT } from '../../../../shared/app-lifecycle/shutdown/renderer-shutdown-events'
 import {
   ORCA_APP_RESTART_ABORTED_EVENT,
   ORCA_APP_RESTART_STARTED_EVENT
-} from '../../../../shared/updater-renderer-events'
+} from '../../../../shared/updater/updater-renderer-events'
 
 // Bare reloads are vetoed by dirty tabs; restart preparation backs them up first.
 

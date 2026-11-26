@@ -2,21 +2,22 @@ import {
   isBundledSkillLeaveReason,
   type BundledSkillOutcome,
   type BundledSkillPlan
-} from '../../../../../shared/bundled-skill-plan'
+} from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import type {
   BundledSkillLocation,
   BundledSkillLocationState
-} from '../../../../../shared/bundled-skill-locations'
+} from '../../../../../shared/skills/bundled/bundled-skill-locations'
 import {
   bundledSkillInstallAgents,
   bundledSkillOutcomeText,
   summarizeBundledSkillPlan,
   type BundledSkillPlanState,
   type BundledSkillResultSummary
-} from '../../../../../shared/bundled-skill-summary'
-import { SKILL_INSTALL_PROVIDERS } from '../../../../../shared/skill-install-providers'
+} from '../../../../../shared/skills/bundled/bundled-skill-summary'
+import { SKILL_INSTALL_PROVIDERS } from '../../../../../shared/skills/installation/skill-install-providers'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
+import type { SkillBackupLocation } from './skill-backup-location'
 
 export function updatedSkillsLabel(
   summary: BundledSkillResultSummary,
@@ -37,6 +38,7 @@ export function updatedSkillsLabel(
     : updated
 }
 
+/** Translated reason Orca left a location alone; unknown reasons from newer hosts fall back. */
 export function leaveReasonText(
   reason: string | null | undefined,
   t: Translate = translate
@@ -46,7 +48,16 @@ export function leaveReasonText(
   }
   switch (reason) {
     case 'edited':
-      return t('auto.components.skills.skillPlanOpCopy.edited', 'Skill edited outside Orca')
+      // Why neutral: an older Orca release with extra files and a hand edit both land here.
+      return t(
+        'auto.components.skills.skillPlanOpCopy.differsFromOrca',
+        "This copy differs from Orca's"
+      )
+    case 'other-build':
+      return t(
+        'auto.components.skills.skillPlanOpCopy.otherBuild',
+        'Installed by another Orca version'
+      )
     case 'other':
       return t('auto.components.skills.skillPlanOpCopy.other', 'A different skill uses this name')
     case 'unwritable':
@@ -87,13 +98,19 @@ export function locationStateText(location: BundledSkillLocation): string {
     'keep-link': () =>
       translate('auto.components.skills.skillPlanOpCopy.keepLink', 'Link, no change'),
     leave: () =>
-      translate(
-        'auto.components.skills.skillPlanOpCopy.updateSkipped',
-        'Update skipped: {{value0}}',
-        {
-          value0: leaveReasonText(location.reason)
-        }
-      ),
+      // Another build's copy was never meant to update, so it is kept rather than skipped.
+      location.reason === 'other-build'
+        ? translate(
+            'auto.components.skills.skillPlanOpCopy.otherBuildKept',
+            'Kept: written by another Orca version'
+          )
+        : translate(
+            'auto.components.skills.skillPlanOpCopy.updateSkipped',
+            'Update skipped: {{value0}}',
+            {
+              value0: leaveReasonText(location.reason)
+            }
+          ),
     unknown: () =>
       translate('auto.components.skills.skillPlanOpCopy.needsAttention', 'Needs attention')
   }
@@ -137,6 +154,72 @@ export function skillOutcomeText(outcome: BundledSkillOutcome, t: Translate = tr
       return t('auto.components.skills.skillPlanOpCopy.keep', 'No change')
     case 'Needs attention':
       return t('auto.components.skills.skillPlanOpCopy.needsAttention', 'Needs attention')
+  }
+}
+
+/** What Replace moves and where, before it runs; a remote folder names its host. */
+export function replaceBackupText(
+  observedKind: BundledSkillLocation['observedKind'],
+  backup: SkillBackupLocation,
+  t: Translate = translate
+): string {
+  const folder = backup.folder
+  if (backup.host.kind === 'remote') {
+    const host = backup.host.name
+    switch (observedKind) {
+      case 'folder':
+        return t(
+          'auto.components.skills.skillPlanOpCopy.replaceMovesFolderOnHost',
+          'Replacing moves the whole folder, including any extra files, to {{folder}} on {{host}}.',
+          { folder, host }
+        )
+      case 'link':
+        return t(
+          'auto.components.skills.skillPlanOpCopy.replaceMovesLinkOnHost',
+          'Replacing moves this link to {{folder}} on {{host}}.',
+          { folder, host }
+        )
+      case 'file':
+        return t(
+          'auto.components.skills.skillPlanOpCopy.replaceMovesFileOnHost',
+          'Replacing moves this file to {{folder}} on {{host}}.',
+          { folder, host }
+        )
+      case 'absent':
+      case 'unreadable':
+        return t(
+          'auto.components.skills.skillPlanOpCopy.replaceMovesCopyOnHost',
+          'Replacing moves this copy to {{folder}} on {{host}}.',
+          { folder, host }
+        )
+    }
+  }
+  switch (observedKind) {
+    case 'folder':
+      return t(
+        'auto.components.skills.skillPlanOpCopy.replaceMovesFolder',
+        'Replacing moves the whole folder, including any extra files, to {{folder}}.',
+        { folder }
+      )
+    case 'link':
+      return t(
+        'auto.components.skills.skillPlanOpCopy.replaceMovesLink',
+        'Replacing moves this link to {{folder}}.',
+        { folder }
+      )
+    case 'file':
+      return t(
+        'auto.components.skills.skillPlanOpCopy.replaceMovesFile',
+        'Replacing moves this file to {{folder}}.',
+        { folder }
+      )
+    case 'absent':
+    case 'unreadable':
+      return t(
+        'auto.components.skills.skillPlanOpCopy.replaceMovesCopy',
+        'Replacing moves this copy to {{folder}}.',
+        { folder }
+      )
   }
 }
 

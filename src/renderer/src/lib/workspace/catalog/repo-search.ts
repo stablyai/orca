@@ -1,5 +1,5 @@
-import type { Repo } from '../../../../../shared/repo-types'
-import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard-text'
+import type { Repo } from '../../../../../shared/repository/repo-types'
+import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard/clipboard-text'
 
 // Path scores must exceed every display-name score; choose an offset above realistic display-name lengths.
 const PATH_SCORE_OFFSET = 1000

@@ -1,4 +1,4 @@
-import { getProcessOutputFields } from '../../process-output-field-scanner'
+import { getProcessOutputFields } from '../../process-observation/process-output-field-scanner'
 
 export type GitRevListAheadBehindCounts = {
   ahead: number

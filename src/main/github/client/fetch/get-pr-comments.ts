@@ -1,16 +1,22 @@
-import { GITHUB_BODY_MEDIA_TYPE } from '../../body-image-urls'
-import type { PRComment } from '../../../../shared/github/comment-types'
+import { GITHUB_BODY_MEDIA_TYPE } from '../../attachments/body-image-urls'
+import type { PRComment } from '../../../../shared/github/comments/comment-types'
 import { runCoalescedProbe, type CoalescedProbes } from '../../../git/remotes/coalesced-probe'
-import { extractExecError } from '../../../git/exec-error'
-import { githubReadExecutionScope } from '../../github-read-execution-scope'
-import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/github/work-item-ssh-error'
-import { ghExecFileAsync, acquire, release, type LocalGitExecOptions } from '../../gh-utils'
-import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
-import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from '../../rate-limit'
+import { extractExecError } from '../../../git/command-runner/process-capture/exec-error'
+import { codeHostReadExecutionScope as githubReadExecutionScope } from '../../../source-control/code-host-read-execution-scope'
+import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/github/work-items/work-item-ssh-error'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { acquire, release } from '../../execution/github-operation-slots'
+import type { LocalGitExecOptions } from '../../repositories/github-repository-identity'
+import { resolveGitHubRepoExecution } from '../../repositories/github-api-repository'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
+import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from '../../api/rate-limit'
 import { assertRateLimitBudget } from './../lookup/pr-lookup-rate-limit'
 import { REVIEW_THREADS_QUERY } from './pr-review-threads-query'
-import type { parsePRConversationResponse } from './pr-conversation-response'
-import { parseRestPRCommentPage } from './pr-conversation-response'
+
+import {
+  type parsePRConversationResponse,
+  parseRestPRCommentPage
+} from './pr-conversation-response'
 import {
   readCompletePRConversation,
   IncompletePRConversationError

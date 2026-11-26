@@ -1,18 +1,20 @@
 import { defineMethod } from '../../core'
-import { resolveWorktreeCatalogSnapshot } from '../../worktree-catalog-snapshot'
-import { coarsenWorktreePsActivity } from '../../worktree-ps-coarse-activity'
-import { markWorktreePsOtherClientRows } from '../../worktree-ps-other-client-marks'
-import { supportsWorktreeVisibilitySourceDefaults } from '../../worktree-visibility-client-capability'
+import { readCallerStoreInstallationId } from '../../../hosts/platform-probe/host-descriptor'
+import { getCanonicalUserDataPath } from '../../../../persistence/loading-store/user-data-path'
+import { resolveWorktreeCatalogSnapshot } from '../../workspace-client-views/worktree-catalog-snapshot'
+import { coarsenWorktreePsActivity } from '../../workspace-client-views/worktree-ps-coarse-activity'
+import { markWorktreePsOtherClientRows } from '../../workspace-client-views/worktree-ps-other-client-marks'
+import { supportsWorktreeVisibilitySourceDefaults } from '../../workspace-client-views/worktree-visibility-client-capability'
 import {
   projectWorktreeListRemovals,
   projectWorktreePsRemovals
-} from '../../worktree-removal-marker-projection'
+} from '../../workspace-client-views/worktree-removal-marker-projection'
 import { snapshotPendingWorktreeRemovals } from '../../../../workspaces/removal/worktree-removal-listing'
 import {
   WorktreeDetectedListParams,
   WorktreeListParams,
   WorktreePsParams
-} from '../../../../../shared/rpc-contract/worktree-params'
+} from '../../../../../shared/rpc-contract/workspaces/worktree-params'
 
 export const WORKTREE_CATALOG_METHODS = [
   defineMethod({
@@ -38,7 +40,17 @@ export const WORKTREE_CATALOG_METHODS = [
       )
       // Why: legacy callers keep exact activity; only snapshot pollers are coarsened.
       if (params.afterSnapshotId === undefined && params.acceptRowDelta !== true) {
-        return result
+        // A reader of several hosts joins their cross-machine parents by it (`worktree ps --since`).
+        // The id only decorates rows; a host that can't read it still lists them.
+        const installationId = await Promise.resolve()
+          .then(() =>
+            readCallerStoreInstallationId(
+              context.runtime.getRuntimeId(),
+              getCanonicalUserDataPath()
+            )
+          )
+          .catch(() => undefined)
+        return installationId ? { ...result, installationId } : result
       }
       // Why: pollers get activity at poll-friendly granularity so the id survives terminal output.
       return resolveWorktreeCatalogSnapshot(coarsenWorktreePsActivity(result), params)

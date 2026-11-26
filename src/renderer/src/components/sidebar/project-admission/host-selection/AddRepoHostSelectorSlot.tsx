@@ -9,8 +9,8 @@ import {
   openWslHostsExperimentalSetting,
   useWslHostsAcceptNewWork,
   useWslHostsPaused
-} from '../../use-wsl-hosts-enabled'
-import { getWslHostsPausedShortLabel } from '../../wsl-host-row-status'
+} from '../../../../runtime/hosts/wsl/use-wsl-hosts-enabled'
+import { getWslHostsPausedShortLabel } from '../../host-admission/wsl/wsl-host-row-status'
 import { useTranslate } from '../../../../i18n/use-translate'
 
 export function AddRepoHostSelectorSlot({

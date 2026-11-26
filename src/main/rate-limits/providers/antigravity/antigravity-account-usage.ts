@@ -2,7 +2,7 @@ import type {
   AntigravityAccountUsage,
   ProviderRateLimits,
   RateLimitRuntimeTarget
-} from '../../../../shared/rate-limit-types'
+} from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 export type AntigravityUsageLogin = {
   /** Stable across agy token refreshes; changes when a different login is stored. */

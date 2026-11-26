@@ -1,6 +1,6 @@
 import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react'
-import type { BundledSkillPlan } from '../../../../../shared/bundled-skill-plan'
-import { summarizeBundledSkillPlan } from '../../../../../shared/bundled-skill-summary'
+import type { BundledSkillPlan } from '../../../../../shared/skills/bundled/bundled-skill-plan'
+import { summarizeBundledSkillPlan } from '../../../../../shared/skills/bundled/bundled-skill-summary'
 import { useTranslate } from '@/i18n/use-translate'
 
 /** Pre-run headline, read from the live plan; once a run starts the dialog reports it. */

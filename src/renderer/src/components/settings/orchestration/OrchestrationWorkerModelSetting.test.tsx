@@ -255,10 +255,10 @@ describe('OrchestrationWorkerModelSetting', () => {
   })
 
   it('disables model and effort for a provider without launch-time model support', () => {
-    // gemini has no modelApply.launchArgs, so its dependent controls stay unavailable.
+    // goose has no modelApply.launchArgs, so its dependent controls stay unavailable.
     const markup = renderToStaticMarkup(
       <OrchestrationWorkerModelSetting
-        defaultAgent="gemini"
+        defaultAgent="goose"
         disabledAgents={[]}
         models={{}}
         efforts={{}}

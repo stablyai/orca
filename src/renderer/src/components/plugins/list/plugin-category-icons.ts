@@ -20,7 +20,8 @@ import { pluginFilterKinds } from './plugin-list-filter'
 
 /**
  * The one catalog category→icon table, mirrored by the marketing site. Filter kinds (themes,
- * languages, icons, editors, commands, machines) are keys too, so a chip reads its kind's row.
+ * languages, translations, icons, editors, commands, machines) are keys too, so a chip reads its
+ * kind's row.
  */
 export const PLUGIN_CATEGORY_ICONS: Readonly<Record<string, LucideIcon>> = {
   themes: Palette,
@@ -31,6 +32,8 @@ export const PLUGIN_CATEGORY_ICONS: Readonly<Record<string, LucideIcon>> = {
   syntaxes: Code,
   'language-packs': Languages,
   localization: Languages,
+  i18n: Languages,
+  translations: Languages,
   icons: Shapes,
   'icon-themes': Shapes,
   editors: FilePen,

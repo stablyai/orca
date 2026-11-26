@@ -2,7 +2,7 @@ import { summarizePartitionSkips } from '../browser-cookie-partition-summary'
 import type {
   BrowserCookieImportResult,
   BrowserCookieImportSummary
-} from '../../../../shared/browser-workspace-types'
+} from '../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   isGoogleSourceBoundCookie,
   isNonTransplantableCookieDomain

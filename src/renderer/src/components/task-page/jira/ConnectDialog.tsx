@@ -1,5 +1,5 @@
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
-import { JiraConnectDialog } from '@/components/jira-connect-dialog'
+import { JiraConnectDialog } from '@/components/integrations/task-trackers/jira-connect-dialog'
 export function TaskPageJiraConnectDialog({
   model
 }: {

@@ -7,7 +7,7 @@ import {
 } from '../contracts/agent-status-run'
 import { normalizeAgentStatusPayload } from '../contracts/agent-status-types'
 import { assertJsonTextStructureWithinLimits } from '../../json-stream/json-text-structure-limit'
-import { measureUtf8ByteLength } from '../../utf8-byte-limits'
+import { measureUtf8ByteLength } from '../../text/utf8-byte-limits'
 
 const MAX_STATUS_BYTES = 256 * 1024
 const MAX_ID_LENGTH = 4_096
@@ -109,7 +109,8 @@ function parseObservation(value: unknown): Record<string, unknown> | null {
   }
 }
 
-function parseOrchestration(value: unknown): Record<string, unknown> | null {
+/** A wire orchestration context, or null when its shape is not one. */
+export function parseOrchestration(value: unknown): Record<string, unknown> | null {
   if (!isRecord(value) || !isBoundedString(value.taskId) || !isBoundedString(value.dispatchId)) {
     return null
   }

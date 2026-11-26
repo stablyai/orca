@@ -1,16 +1,16 @@
 import { createStructuredAgentSessionReadHydrate } from './structured-agent-session-read-hydrate'
-import {
-  type AgentProviderSessionMetadata,
-  agentProviderSessionsEqual
-} from '../../../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { AgentProviderSessionMetadata } from '../../../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession,
   type StructuredAgentSessionAction
-} from '../../../../../../../shared/agent-session/structured-agent-session-reducer'
-import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
+} from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-reducer'
+import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { startStructuredAgentSessionReadTransport } from './structured-agent-session-read-transport'
+import { withDocumentSavesOnly } from './document-viewer-visibility'
 import { createStructuredAgentSessionPRLinkObserver } from './structured-agent-session-pr-link-observer'
+import { nativeChatShowsPromptSuggestions } from '../../../../../../../shared/native-chat/settings/native-chat-appearance-settings'
 
 import { createStructuredAgentSessionReadActivity } from './structured-agent-session-read-activity'
 import { createStructuredAgentSessionOlderPageLoader } from './structured-agent-session-older-page-loader'
@@ -143,6 +143,8 @@ export function createReadOwner(
       apply({ type: 'loading' })
     }
     const transport = startStructuredAgentSessionReadTransport({
+      showsPromptSuggestions: nativeChatShowsPromptSuggestions(effects.getState().settings),
+      replyText,
       subscribeRetryNow: effects.subscribeRetryNow,
       applyRequests: apply,
       applyEvent: (event, options) => {
@@ -180,10 +182,28 @@ export function createReadOwner(
     }
   }
 
+  // Tool-step and prompt readers share the read but draw no reply text, so they take no live text.
+  const replyTextListeners = new Set<() => void>()
+  const replyTextShown = (): boolean =>
+    [...activations.values()].some((effects) => effects.showsReplyText === true)
+  const replyText = withDocumentSavesOnly(sessionId, {
+    shown: replyTextShown,
+    subscribe: (changed: () => void) => {
+      replyTextListeners.add(changed)
+      return () => replyTextListeners.delete(changed)
+    }
+  })
+  const noteReaders = (before: boolean): void => {
+    if (replyTextShown() !== before) {
+      replyTextListeners.forEach((changed) => changed())
+    }
+  }
+
   let owner: StructuredAgentSessionReadOwner
+  let retained = 0
   const deleteIfUnused = (): void => {
     const subscriptions = activations.size + listeners.size + commandListeners.size
-    if (subscriptions === 0 && !activity.retained()) {
+    if (subscriptions === 0 && retained === 0 && !activity.retained()) {
       forgetStructuredReadOwner(key, owner)
     }
   }
@@ -199,6 +219,18 @@ export function createReadOwner(
     }
   }
   owner = {
+    retain: () => {
+      adoptStructuredReadOwner(key, owner)
+      retained++
+      let released = false
+      return () => {
+        if (!released) {
+          released = true
+          retained--
+          deleteIfUnused()
+        }
+      }
+    },
     trackSend: activity.trackSend,
     admit: activity.admit,
     publishCreated: (page) => {
@@ -213,12 +245,16 @@ export function createReadOwner(
       // Remounts and StrictMode re-run setup on an owner whose cleanup just forgot it.
       adoptStructuredReadOwner(key, owner)
       const token = Symbol(sessionId)
+      const before = replyTextShown()
       activations.set(token, effects)
       if (activations.size === 1) {
         start(effects)
       }
+      noteReaders(before)
       return () => {
+        const wasShown = replyTextShown()
         activations.delete(token)
+        noteReaders(wasShown)
         if (activations.size === 0) {
           stopActiveRun?.()
           deleteIfUnused()

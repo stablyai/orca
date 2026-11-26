@@ -1,18 +1,16 @@
 import { AlertTriangle, Loader2, Plus, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { selectCodexProviderAccount } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
-import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
-import { OpenAIIcon } from '../../../status-bar/icons'
+import { OpenAIIcon } from '../../../status-bar/accounts/provider-icons'
 import { CodexLoginLinkNotice } from './CodexLoginLinkNotice'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import { getAccountsCodexSearchEntries } from '../accounts-search'
-import { getCodexSystemDefaultSubtitle } from '../scope/accounts-pane-runtime'
+import { ACCOUNTS_SECTION_IDS, getAccountsCodexSearchEntries } from '../accounts-search'
+import { renderCodexSystemDefaultButton } from './accounts-pane-codex-system-default'
 import type { AccountsPaneSectionModel } from '../accounts-pane-types'
 import { renderCodexAccountRow } from './accounts-pane-codex-account-row'
-import { addCodexAccountOnHost } from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
+import { signInCodexAccountOnHost } from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
 import { HostAccountSignInPrompt } from '../sign-in/HostAccountSignInPrompt'
 import {
   accountAdditionShownInPrompt,
@@ -39,15 +37,12 @@ export function renderCodexAccountsSection(
     remoteAccountScopeNotice,
     runCodexAccountAction,
     accountOwner,
-    systemCodexActive,
-    systemCodexIdentity,
     systemCodexMissingSignIn,
-    systemCodexNeedsSignIn,
     visibleCodexAccounts,
     wslCapabilitiesLoading
   } = model
   return (
-    <div key="codex-accounts" id="accounts-codex" className="scroll-mt-6">
+    <div key="codex-accounts" id={ACCOUNTS_SECTION_IDS.codex} className="scroll-mt-6">
       <SettingsGroup
         title={
           <span className="flex items-center gap-2">
@@ -171,7 +166,7 @@ export function renderCodexAccountsSection(
                     trackAccountAddition('codex', accountOwner, () =>
                       // Run remote login on the account owner rather than this device.
                       accountOwner.kind === 'environment'
-                        ? addCodexAccountOnHost(accountOwner)
+                        ? signInCodexAccountOnHost(accountOwner)
                         : window.api.codexAccounts.add({
                             runtime: accountRuntime.runtime,
                             wslDistro: accountRuntime.wslDistro
@@ -222,73 +217,7 @@ export function renderCodexAccountsSection(
           )}
 
           <div className="space-y-2">
-            <button
-              type="button"
-              onClick={() =>
-                void runCodexAccountAction('select:system', () =>
-                  selectCodexProviderAccount(accountOwner, {
-                    accountId: null,
-                    runtime: accountRuntime.runtime,
-                    wslDistro: accountRuntime.wslDistro
-                  })
-                )
-              }
-              disabled={codexAction !== 'idle' || accountRuntimeUnavailable}
-              className={`flex w-full items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors ${
-                systemCodexNeedsSignIn
-                  ? 'border-destructive/50 bg-destructive/5'
-                  : systemCodexActive
-                    ? 'border-foreground/20 bg-accent/15'
-                    : 'border-border/70 hover:border-border hover:bg-accent/8'
-              } disabled:cursor-default disabled:opacity-100`}
-            >
-              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="truncate text-sm font-medium">
-                    {t('auto.components.settings.AccountsPane.f2a265f8c7', 'System default')}
-                  </span>
-                  {systemCodexActive ? (
-                    <Badge
-                      variant="outline"
-                      className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/80"
-                    >
-                      {t('auto.components.settings.AccountsPane.e74831fb6b', 'Active')}
-                    </Badge>
-                  ) : null}
-                  {systemCodexNeedsSignIn ? (
-                    <Badge
-                      variant="destructive"
-                      className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none"
-                    >
-                      {t('auto.components.settings.AccountsPane.93c47b333a', 'Needs sign-in')}
-                    </Badge>
-                  ) : null}
-                </div>
-                <span
-                  className={`truncate text-[11px] ${
-                    systemCodexNeedsSignIn ? 'text-destructive' : 'text-muted-foreground'
-                  }`}
-                >
-                  {systemCodexNeedsSignIn
-                    ? systemCodexMissingSignIn
-                      ? t(
-                          'auto.components.settings.AccountsPane.codexSystemDefaultNeedsSignIn',
-                          'No Codex sign-in was found for {{value0}}.',
-                          { value0: accountRuntimeSentenceLabel }
-                        )
-                      : t(
-                          'auto.components.settings.AccountsPane.fd62f37c24',
-                          'Codex reported this {{value0}} login is out of date.',
-                          { value0: accountRuntimeSentenceLabel }
-                        )
-                    : getCodexSystemDefaultSubtitle(
-                        systemCodexIdentity,
-                        accountRuntimeSentenceLabel,
-                        t
-                      )}
-                </span>
-              </div>
-            </button>
+            {renderCodexSystemDefaultButton(model, t)}
             {visibleCodexAccounts.length === 0 ? (
               <div className="rounded-md border border-dashed border-border/70 px-3 py-4 text-xs text-muted-foreground">
                 {isRemoteAccountScope

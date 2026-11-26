@@ -5,7 +5,7 @@ import { getCommitMessageAgentSpec } from '../../../../../shared/source-control/
 import type {
   AgentSessionOptionCatalog,
   CatalogModel
-} from '../../../../../shared/agent-session/options/agent-session-option-catalog-types'
+} from '../../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-types'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { runtimeTargetForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 import { discoverRuntimeCommitMessageModels } from '@/runtime/source-control/git/runtime-git-generation-client'

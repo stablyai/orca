@@ -20,7 +20,7 @@ import type { CodexStructuredItemStreams } from '../items/codex-structured-item-
 import type { CodexStructuredSessionEvent } from '../session-lifecycle/codex-structured-session-state'
 import { codexCommandOutlivesTurn } from '../items/codex-command-lifecycle'
 import { codexTurnLifecycleIdentity } from './codex-structured-journal-translation-turns'
-import { agentJournalTurnBody as codexTurnLifecycleBody } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { agentJournalTurnBody as codexTurnLifecycleBody } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { appendCodexLifecycleMutations } from './codex-structured-journal-sink'
 import { interruptedCodexItemBody } from '../items/codex-unfinished-item-body'
 import type { CodexRowAttribution } from '../background-work/codex-subagent-linkage'

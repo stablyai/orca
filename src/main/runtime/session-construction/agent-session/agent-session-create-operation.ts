@@ -1,4 +1,4 @@
-import type { RuntimeCreateAgentSessionResult } from '../../../../shared/agent-session/agent-session-host-authority'
+import type { RuntimeCreateAgentSessionResult } from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 
 /** Identity a fenced spawn can be re-found by in the execution host's own inventory. */
 export type AgentSessionCreateReclaimIdentity = {

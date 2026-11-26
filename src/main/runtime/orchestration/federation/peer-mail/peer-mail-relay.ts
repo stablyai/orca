@@ -1,59 +1,107 @@
 import { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import { PeerMailRelayPayload } from '../../../../../shared/rpc-contract/orchestration-peer-mail-params'
-import { resolveBareOrchestrationRecipient } from '../../../rpc/methods/orchestration/messaging/recipient-routing'
+import {
+  PeerMailItem,
+  PeerMailRelayPayload
+} from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { MessageRow } from '../../db/orchestration-records'
 import { federationRelayRetryDelayMs } from '../relay/federation-relay-scheduler'
+import { HeldPeerConversations } from './held-peer-conversations'
+import { storePeerReply } from './peer-reply-store'
 import type { OrchestrationEnvironmentTransport } from '../environment-transport'
-import { peerMailLocalRecipient } from './peer-mail-delivery'
+import { peerMailRelayEnvironments, peerMailRelayWants } from './peer-mail-relay-environments'
+import { importRemoteOwnedItem } from '../../db/remote-owned/remote-owned-import'
+import {
+  dueRemoteResendsNow,
+  getRemoteRunLink,
+  noteRemoteRunLinkError,
+  remoteServerPin
+} from '../../db/remote-owned/remote-run-links'
+import { resendOwedRemoteActions } from '../remote-owned/remote-owed-actions'
+import { remoteServerName } from '../remote-owned/remote-owned-reads'
+import { isRemoteServerUnreachable } from '../remote-owned/remote-server-unreachable'
+import { retryRemoteAskNotices } from '../../../rpc/methods/orchestration/messaging/remote-ask-notices'
+import { deletedCoordinatorChat } from '../../../rpc/methods/orchestration/messaging/deleted-coordinator-chat'
+import { settleRemovedPairedServer, settleRepairedServer } from './paired-server-changes'
+import * as asksLoop from '../paired-server-asks/paired-server-asks-loop'
 
 // Under the relay edge's idle cutoff, so an idle pull ends by itself instead of being dropped.
 const PULL_WAIT_MS = 20_000
 const PULL_TIMEOUT_MS = PULL_WAIT_MS + 15_000
 
-const PulledPeerMail = z.object({
-  items: z.array(
-    z.object({
-      conversationId: z.string(),
-      sequence: z.number().int().positive(),
-      messageId: z.string(),
-      payload: z.string()
-    })
-  )
-})
+const PulledPeerMail = z.object({ items: z.array(PeerMailItem) })
 
-type Loop = { db: OrchestrationDb; stopped: boolean }
+/** What this Orca's pull loop last heard from a paired server; nothing until its first pull settles. */
+export type PeerServerAnswerStatus = {
+  /** When the server last answered a pull (an idle pull answers after its wait). */
+  answeredAt?: number
+  /** Set while pulls get no answer at all; cleared by the next answer. */
+  unreachableSince?: number
+}
 
-/** One pull loop per paired server this Orca opened conversations with. The server never dials
- *  back: each pull waits there for a reply, stores it as local mail, then acknowledges it. */
+// Named on a server that sends this computer asks; `forceOnce` pulls once with no reason, to announce.
+type Loop = asksLoop.PairedServerAsksHolder & {
+  stopped: boolean
+  resending: boolean
+  held: HeldPeerConversations
+}
+
+/** One pull loop per paired server this Orca opened conversations with or coordinates Runs on. The
+ *  server never dials back: each pull waits there for queued items, imports them, then acknowledges
+ *  them. Stops and cancels this Orca owes the server go out on the same loop. */
 export class PeerMailRelay {
   private readonly loops = new Map<string, Loop>()
+  private readonly answers = new Map<string, PeerServerAnswerStatus>()
+  private unwatch: (() => void) | null = null
 
   constructor(
     private readonly runtime: OrcaRuntimeService,
     private readonly transport: () => OrchestrationEnvironmentTransport | null
   ) {}
 
-  ensure(): void {
-    if (!this.transport()) {
+  ensure(targetEnvironmentId?: string, options: { forceOnce?: boolean } = {}): void {
+    const transport = this.transport()
+    if (!transport) {
       return
     }
+    this.unwatch ??= asksLoop.watchPairedServers(this.runtime, transport, (id) =>
+      this.ensure(id, { forceOnce: true })
+    )
     const db = this.runtime.getOrchestrationDb()
-    for (const environmentId of db.listHomePeerMailEnvironments()) {
+    for (const environmentId of targetEnvironmentId === undefined
+      ? peerMailRelayEnvironments(db)
+      : [targetEnvironmentId]) {
       const current = this.loops.get(environmentId)
       if (current && !current.stopped && current.db === db) {
+        // A running loop announces on its next pull, under what the server says now.
+        current.forceOnce ||= options.forceOnce
+        current.asksStale ||= options.forceOnce
         continue
       }
-      const loop: Loop = { db, stopped: false }
+      const loop: Loop = {
+        db,
+        stopped: false,
+        resending: false,
+        held: new HeldPeerConversations(),
+        forceOnce: options.forceOnce
+      }
       this.loops.set(environmentId, loop)
       void this.run(environmentId, loop)
     }
   }
 
+  answerStatus(environmentId: string): PeerServerAnswerStatus | undefined {
+    return this.answers.get(environmentId)
+  }
+
   stop(): void {
+    this.unwatch?.()
+    this.unwatch = null
     for (const loop of this.loops.values()) {
       loop.stopped = true
+      // Told now: a stopped loop's pull may wait out its full timeout first.
+      asksLoop.endPairedServerAsks(this.runtime, loop.asks)
     }
     this.loops.clear()
   }
@@ -68,13 +116,36 @@ export class PeerMailRelay {
 
   private async run(environmentId: string, loop: Loop): Promise<void> {
     let failures = 0
-    while (this.isCurrent(environmentId, loop)) {
+    // Named while it is still paired, so a removal can say which server went.
+    const serverName = await remoteServerName(this.runtime, environmentId)
+    // Ends with its last reason to pull; a later conversation or link starts a new loop through ensure().
+    while (
+      this.isCurrent(environmentId, loop) &&
+      (loop.forceOnce || peerMailRelayWants(loop.db, environmentId))
+    ) {
       try {
         await this.pullOnce(environmentId, loop)
+        loop.forceOnce = false
+        asksLoop.afterPairedServerPull(this.runtime, loop.asks)
+        retryRemoteAskNotices(environmentId)
+        if (failures > 0) {
+          // The server answers again: what this Orca owes it goes out now, not after its backoff.
+          dueRemoteResendsNow(loop.db, environmentId)
+          this.resendOwed(environmentId, loop)
+          loop.asksStale = true
+        }
         failures = 0
       } catch {
-        if (this.isEnvironmentRemoved(environmentId)) {
-          // A removed server cannot answer; the next ensure re-arms it if it is added back.
+        if (await this.isEnvironmentRemoved(environmentId)) {
+          // A removed server cannot answer for its Runs' work again; their Tasks here fail with why.
+          try {
+            settleRemovedPairedServer(this.runtime, loop.db, environmentId, serverName)
+          } catch (error) {
+            console.warn(
+              `[orchestration] Settling the Runs on removed server ${environmentId} failed:`,
+              error
+            )
+          }
           break
         }
         failures += 1
@@ -83,57 +154,152 @@ export class PeerMailRelay {
         })
       }
     }
+    asksLoop.endPairedServerAsks(this.runtime, loop.asks)
     if (this.loops.get(environmentId) === loop) {
       this.loops.delete(environmentId)
     }
   }
 
   /** A store read error keeps the loop retrying rather than ending it. */
-  private isEnvironmentRemoved(environmentId: string): boolean {
+  private async isEnvironmentRemoved(environmentId: string): Promise<boolean> {
     try {
-      return this.transport()?.hasEnvironment?.(environmentId) === false
+      return (await this.transport()?.hasEnvironment?.(environmentId)) === false
     } catch {
       return false
     }
   }
 
   private async pullOnce(environmentId: string, loop: Loop): Promise<void> {
-    const response = await this.runtime.callOrchestrationWorkerServer(
-      environmentId,
-      'orchestration.peerMailPull',
-      { waitMs: PULL_WAIT_MS },
-      PULL_TIMEOUT_MS
-    )
+    // A re-pair is noticed here, not only by the next call through a link: its held Tasks fail now.
+    const server = await this.runtime.resolveOrchestrationWorkerServer(environmentId)
+    settleRepairedServer(this.runtime, loop.db, server)
+    await asksLoop.refreshPairedServerAsks(this.runtime, loop, server, this.transport())
+    this.resendOwed(environmentId, loop)
+    const { holdBack, waitMs } = loop.held.forPull(Date.now(), PULL_WAIT_MS)
+    const response = await this.runtime
+      .callOrchestrationWorkerServer(
+        environmentId,
+        'orchestration.peerMailPull',
+        {
+          waitMs,
+          ...(holdBack.length > 0 ? { holdBack } : {}),
+          ...asksLoop.pairedServerPullParams(loop.asks)
+        },
+        PULL_TIMEOUT_MS
+      )
+      .catch((error: unknown) => {
+        if (isRemoteServerUnreachable(error)) {
+          const known = this.answers.get(environmentId)
+          this.answers.set(environmentId, {
+            ...known,
+            unreachableSince: known?.unreachableSince ?? Date.now()
+          })
+        }
+        throw error
+      })
+    this.answers.set(environmentId, { answeredAt: Date.now() })
     if (!this.isCurrent(environmentId, loop)) {
       return
     }
+    asksLoop.notePairedServerAnswer(loop.db, loop.asks, response)
     const { items } = PulledPeerMail.parse(response)
     if (items.length === 0) {
       return
     }
     const through = new Map<string, number>()
+    const stuck = new Map<string, unknown>()
+    // One clock for the batch, and a held conversation stays skipped to its end: none of its later
+    // items is imported, so the ack never passes the item it is waiting to retry.
+    const now = Date.now()
+    const heldBack = new Set<string>()
+    let onlyHeldBack = true
     for (const item of items) {
-      const stored = this.importReply(loop.db, environmentId, item)
-      // Wake before the ack: a replay after a failed ack finds the row stored and stays quiet.
-      if (stored) {
-        this.runtime.notifyMessageArrived(stored.to_handle, stored.type)
+      // An item that cannot be read holds back its own conversation only; the others keep moving.
+      if (stuck.has(item.conversationId) || heldBack.has(item.conversationId)) {
+        continue
       }
+      if (loop.held.isWaiting(item.conversationId, now)) {
+        heldBack.add(item.conversationId)
+        continue
+      }
+      onlyHeldBack = false
+      try {
+        const stored = (await asksLoop.importAsk(this.runtime, loop.db, loop.asks, item))
+          ? undefined
+          : await this.importItem(loop.db, environmentId, item)
+        // Wake before the ack: a replay after a failed ack finds the row stored and stays quiet.
+        if (stored) {
+          this.runtime.notifyMessageArrived(stored.to, stored.type)
+        }
+      } catch (error) {
+        stuck.set(item.conversationId, error)
+        loop.held.failed(item.conversationId, now)
+        noteRemoteRunLinkError(loop.db, item.conversationId, error)
+        continue
+      }
+      loop.held.read(item.conversationId)
       through.set(
         item.conversationId,
         Math.max(through.get(item.conversationId) ?? 0, item.sequence)
       )
     }
-    await this.runtime.callOrchestrationWorkerServer(
-      environmentId,
-      'orchestration.peerMailAck',
-      {
-        acknowledgments: [...through].map(([conversationId, throughSequence]) => ({
-          conversationId,
-          throughSequence
-        }))
-      },
-      15_000
-    )
+    if (through.size > 0) {
+      await this.runtime.callOrchestrationWorkerServer(
+        environmentId,
+        'orchestration.peerMailAck',
+        {
+          acknowledgments: [...through].map(([conversationId, throughSequence]) => ({
+            conversationId,
+            throughSequence
+          }))
+        },
+        15_000
+      )
+    }
+    const [failure] = stuck.values()
+    if (failure !== undefined) {
+      console.warn(
+        `[orchestration] Holding back ${stuck.size} conversation(s) from ${environmentId}:`,
+        failure instanceof Error ? failure.message : failure
+      )
+    }
+    if (onlyHeldBack) {
+      // Only conversations still waiting came back (an older server, or past the cap): no hot re-pull.
+      await loop.held.untilFirstDue(heldBack, now, PULL_WAIT_MS)
+    }
+  }
+
+  /** Stops and cancels owed to the server go out beside the pull, one batch at a time, so a slow answer never holds mail back. */
+  private resendOwed(environmentId: string, loop: Loop): void {
+    if (loop.resending) {
+      return
+    }
+    loop.resending = true
+    void resendOwedRemoteActions(this.runtime, loop.db, environmentId)
+      .catch((error: unknown) => {
+        console.warn(`[orchestration] Owed actions for ${environmentId} failed:`, error)
+      })
+      .finally(() => {
+        loop.resending = false
+      })
+  }
+
+  /** A Run this Orca coordinates there owns its conversation's items; any other is a peer-mail reply. */
+  private async importItem(
+    db: OrchestrationDb,
+    environmentId: string,
+    item: z.infer<typeof PulledPeerMail>['items'][number]
+  ): Promise<{ to: string; type: MessageRow['type'] } | undefined> {
+    if (getRemoteRunLink(db, item.conversationId)) {
+      const server = await this.runtime.resolveOrchestrationWorkerServer(environmentId)
+      return importRemoteOwnedItem(db, remoteServerPin(server), item, {
+        name: server.name,
+        notify: (handle, type) => this.runtime.notifyMessageArrived(handle, type),
+        deletedChat: deletedCoordinatorChat
+      })
+    }
+    const stored = this.importReply(db, environmentId, item)
+    return stored ? { to: stored.to_handle, type: stored.type } : undefined
   }
 
   /** Stores a pulled reply once; a replay after a crash before the ack finds the stored row. */
@@ -155,22 +321,7 @@ export class PeerMailRelay {
       )
       return undefined
     }
-    const handle = peerMailLocalRecipient(this.runtime, conversation)
-    const recipient = resolveBareOrchestrationRecipient({ runtime: this.runtime, db, handle })
-    const stored = db.insertPeerMailMessage({
-      conversationId: conversation.conversation_id,
-      remoteParty: payload.data.fromAddress,
-      message: {
-        id: item.messageId,
-        from: payload.data.senderLabel,
-        to: recipient.ok ? recipient.to : handle,
-        subject: payload.data.subject,
-        body: payload.data.body,
-        threadId: payload.data.threadId ?? undefined,
-        runId: recipient.ok ? recipient.runId : undefined
-      }
-    })
-    return stored.duplicate ? undefined : stored.message
+    return storePeerReply(this.runtime, db, conversation, item.messageId, payload.data)
   }
 }
 

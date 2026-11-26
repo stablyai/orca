@@ -3,6 +3,8 @@ export type PosixHookEmptyPayloadPolicy = 'exit' | 'empty-object'
 // Use the default PATH to drain stdin on stripped-PATH/NixOS hosts and avoid repo-local cat.
 export const POSIX_HOOK_STDIN_READER = '{ command -p cat 2>/dev/null || cat; }'
 export const POSIX_HOOK_STDIN_DRAIN_COMMAND = `${POSIX_HOOK_STDIN_READER} >/dev/null 2>&1 || :`
+/** For writers that may hold stdin open: drain in the background so the hook still returns at once. */
+export const POSIX_HOOK_STDIN_BACKGROUND_DRAIN_COMMAND = `{ exec 3<&0; { ${POSIX_HOOK_STDIN_READER} <&3 || :; } >/dev/null 2>&1 & }`
 
 /** Leave startup headroom within Grok's 10-second hook budget. */
 export const POSIX_HOOK_JSON_STDIN_FIRST_BYTE_TIMEOUT_SECONDS = 5

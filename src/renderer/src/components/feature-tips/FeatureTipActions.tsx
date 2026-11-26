@@ -1,6 +1,9 @@
 import type { JSX, MouseEventHandler, Ref } from 'react'
 import { Loader2 } from 'lucide-react'
-import type { FeatureTip, FeatureTipAction } from '../../../../shared/feature-tips'
+import type {
+  FeatureTip,
+  FeatureTipAction
+} from '../../../../shared/feature-education/feature-tips'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'

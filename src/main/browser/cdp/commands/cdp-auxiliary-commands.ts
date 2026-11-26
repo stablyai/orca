@@ -16,6 +16,7 @@ import type {
   BrowserViewportResult
 } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type { CdpCommandSender } from '../debugger/cdp-command-sender'
+import { deleteCookieByName } from '../../cookies/browser-cookie-delete-by-name'
 
 type ActiveCdpContext = {
   guest: WebContents
@@ -85,24 +86,9 @@ export class CdpAuxiliaryCommands {
   }
 
   cookieDelete(name: string, domain?: string, url?: string): Promise<BrowserCookieDeleteResult> {
-    return this.host.run(async ({ sender }) => {
-      const params: Record<string, unknown> = { name }
-      if (domain) {
-        params.domain = domain
-      }
-      if (url) {
-        params.url = url
-      }
-      if (!domain && !url) {
-        const { result } = (await sender('Runtime.evaluate', {
-          expression: 'location.href',
-          returnByValue: true
-        })) as { result: { value: string } }
-        params.url = result.value
-      }
-      await sender('Network.deleteCookies', params)
-      return { deleted: true }
-    })
+    return this.host.run(({ guest, sender }) =>
+      deleteCookieByName(sender, name, { domain, url, pageUrl: guest.getURL() })
+    )
   }
 
   setViewport(

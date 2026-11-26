@@ -1,8 +1,7 @@
-import { randomUUID } from 'node:crypto'
 import WebSocket from 'ws'
-import { abortSignalReason, throwIfSignalAborted } from '../../abort-signal-reason'
+import { abortSignalReason, throwIfSignalAborted } from '../../concurrency/abort-signal-reason'
 import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
-import type { RuntimeCapability } from '../../protocol-version'
+import type { RuntimeCapability } from '../protocol/protocol-version'
 import { remoteRuntimeClientCapabilities } from '../remote-runtime-client-capabilities'
 import {
   formatRemoteRuntimeCloseMessage,
@@ -17,27 +16,26 @@ import {
   remoteRuntimeConnectFailureMessage,
   remoteRuntimeConnectOptions
 } from '../remote-runtime-connect-bound'
+import { REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES } from '../remote-runtime-memory-limits'
 import {
-  REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES,
-  serializeRemoteRuntimePayload,
-  serializeRemoteRuntimeRpcRequest
-} from '../remote-runtime-memory-limits'
-import {
-  prepareRemoteRuntimeRequest,
   releaseRemoteRuntimePreparedRequest,
   takeRemoteRuntimePreparedRequest
 } from './remote-runtime-prepared-request-admission'
 import { readSealedFrame } from '../remote-runtime-sealed-frame'
 import { RemoteRuntimeRequestResponseRouter } from './remote-runtime-request-response-router'
-import { serializePreparedRemoteRuntimeRequest } from './remote-runtime-request-preparation'
+import {
+  prepareRuntimeSocketRequest,
+  prepareCurrentRuntimeRequest
+} from './remote-runtime-request-preparation'
 import type {
   RuntimeRequestPreparation,
+  RuntimeRequestGuard,
   RuntimeRequestSelection,
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
-} from '../../runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../runtime-session-contracts'
-import { isSafeTimerDelayMs, MAX_TIMER_DELAY_MS } from '../../timer-delay'
+} from '../rpc/runtime-rpc-envelope'
+import type { RuntimeStatus } from '../session-graph/runtime-session-contracts'
+import { isSafeTimerDelayMs, MAX_TIMER_DELAY_MS } from '../../concurrency/timer-delay'
 
 export async function sendRemoteRuntimeRequestOnSocket<TResult>(
   connection: PairedRuntimeConnection,
@@ -51,52 +49,36 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
   requestSelection?: RuntimeRequestSelection,
   prepareRequest?: RuntimeRequestPreparation,
   // Internal: the framing fallback's legacy status check on a latched host uses exactly this dial.
-  latchedHostCheck?: RemoteRuntimeClientHandshake
+  latchedHostCheck?: RemoteRuntimeClientHandshake,
+  prepareGuard?: RuntimeRequestGuard,
+  /** Replaces timeoutMs once the host authenticates, so only a reachable host gets a long reply wait. */
+  responseTimeoutMs?: number
 ): Promise<RuntimeRpcResponse<TResult>> {
   throwIfSignalAborted(signal)
-  if (!isSafeTimerDelayMs(timeoutMs)) {
+  if (!isSafeTimerDelayMs(timeoutMs) || !isSafeTimerDelayMs(responseTimeoutMs ?? timeoutMs)) {
     throw new RemoteRuntimeClientError(
       'invalid_argument',
       `Runtime request timeout must be an integer between 0 and ${MAX_TIMER_DELAY_MS}ms.`
     )
   }
-  const requestId = randomUUID()
-  const statusRequestId = validateStatus ? randomUUID() : null
-  const serializedStatusRequest = statusRequestId
-    ? serializeRemoteRuntimePayload({
-        id: statusRequestId,
-        deviceToken: connection.credential.deviceToken,
-        method: 'status.get'
-      })
-    : null
-  const serialize = (
-    selectedParams: unknown,
-    selectedEnvelope: RuntimeOrchestrationEnvelope | undefined
-  ) =>
-    serializeRemoteRuntimeRpcRequest({
-      requestId,
-      deviceToken: connection.credential.deviceToken,
+  const { requestId, statusRequestId, serializedStatusRequest, prepare, pendingRequest } =
+    prepareRuntimeSocketRequest(
+      connection,
       method,
-      params: selectedParams,
-      envelope: selectedEnvelope
-    })
-  const prepare = (selectedParams: unknown) =>
-    prepareRemoteRuntimeRequest(new Map(), () =>
-      serializePreparedRemoteRuntimeRequest(serialize, selectedParams, envelope, prepareRequest)
+      params,
+      envelope,
+      prepareRequest,
+      Boolean(validateStatus),
+      Boolean(requestSelection)
     )
-  const pendingRequest: { preparedRequest: ReturnType<typeof prepare> | null } = {
-    // Reserve this connection before authentication; select mutation params only after status.
-    preparedRequest:
-      requestSelection && serializedStatusRequest
-        ? prepareRemoteRuntimeRequest(new Map(), () => serializedStatusRequest)
-        : prepare(params)
-  }
   // Why a redial is safe: nothing but the handshake is sent before the host authenticates us.
   const attempt = (handshake: RemoteRuntimeClientHandshake) =>
     new Promise<RuntimeRpcResponse<TResult>>((resolve, reject) => {
       let settled = false
       let ws: WebSocket | null = null
       let router: RemoteRuntimeRequestResponseRouter<TResult>
+      // Only the requested frame can put its keyed mutation in flight, not the status preflight.
+      let keyedRequestUnsent = Boolean(envelope?.orchestrationRequestId)
 
       const cleanupSocketListeners = (): void => {
         signal?.removeEventListener('abort', onAbort)
@@ -113,6 +95,8 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
         }
       }
 
+      let phaseTimeoutMs = timeoutMs
+      let deadline = performance.now() + timeoutMs
       let timeout = setTimeout(onTimeout, timeoutMs)
 
       function onTimeout(): void {
@@ -120,7 +104,10 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
           new RemoteRuntimeClientError(
             'runtime_timeout',
             'Timed out waiting for the remote Orca runtime to respond.',
-            { pairingStage: router.pairingStage }
+            {
+              pairingStage: router.pairingStage,
+              data: keyedRequestUnsent ? { requestSent: false } : undefined
+            }
           )
         )
       }
@@ -130,13 +117,24 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
       }
 
       function refreshTimeout(): void {
+        deadline = performance.now() + phaseTimeoutMs
         const refreshableTimeout = timeout as { refresh?: () => void }
         if (typeof refreshableTimeout.refresh === 'function') {
           refreshableTimeout.refresh()
           return
         }
         clearTimeout(timeout)
-        timeout = setTimeout(onTimeout, timeoutMs)
+        timeout = setTimeout(onTimeout, phaseTimeoutMs)
+      }
+
+      // Timeout.refresh() keeps the old delay, so a new phase budget needs a new timer.
+      function startResponseWait(): void {
+        if (responseTimeoutMs !== undefined) {
+          phaseTimeoutMs = responseTimeoutMs
+          deadline = performance.now() + phaseTimeoutMs
+          clearTimeout(timeout)
+          timeout = setTimeout(onTimeout, phaseTimeoutMs)
+        }
       }
 
       const finish = (
@@ -164,23 +162,43 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
       const finishResponse = (response: RuntimeRpcResponse<TResult>): void =>
         finish({ ok: true, response })
 
+      let preparingSend = false
       function sendRequestedRpc(status?: unknown): void {
+        if (settled || preparingSend) {
+          return
+        }
+        preparingSend = true
+        startResponseWait()
+        void sendPreparedRpc(status)
+      }
+
+      async function sendPreparedRpc(status?: unknown): Promise<void> {
         try {
           if (requestSelection) {
             const selectedParams = requestSelection.paramsForStatus(status)
             releaseRemoteRuntimePreparedRequest(pendingRequest)
             pendingRequest.preparedRequest = prepare(selectedParams)
           }
-          const request = takeRemoteRuntimePreparedRequest(pendingRequest)
-          if (request === null) {
-            throw new RemoteRuntimeClientError(
-              'remote_runtime_unavailable',
-              'Remote Orca runtime request was released before it could be sent.'
-            )
-          }
-          const frame = handshake.channel.sealText(request)
-          requestSelection?.onDispatch?.()
-          ws?.send(frame)
+          await prepareCurrentRuntimeRequest({
+            connection,
+            guard: prepareGuard,
+            current: () => !settled && !signal?.aborted && ws?.readyState === WebSocket.OPEN,
+            deadline,
+            expire: onTimeout,
+            consume: () => {
+              const request = takeRemoteRuntimePreparedRequest(pendingRequest)
+              if (request === null) {
+                throw new RemoteRuntimeClientError(
+                  'remote_runtime_unavailable',
+                  'Remote Orca runtime request was released before it could be sent.'
+                )
+              }
+              const frame = handshake.channel.sealText(request)
+              requestSelection?.onDispatch?.()
+              keyedRequestUnsent = false
+              ws?.send(frame)
+            }
+          })
         } catch (error) {
           finishError(error instanceof Error ? error : new Error(String(error)))
         }
@@ -211,17 +229,42 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
         return
       }
 
-      try {
-        const connectOptions = remoteRuntimeConnectOptions({
-          maxPayload: REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES
-        })
-        ws = new WebSocket(connection.endpoint, connectOptions)
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        finishError(
-          new RemoteRuntimeClientError('invalid_argument', `Invalid remote endpoint: ${message}`)
+      const dial = (): void => {
+        if (settled || signal?.aborted) {
+          return
+        }
+        try {
+          const connectOptions = remoteRuntimeConnectOptions({
+            maxPayload: REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES
+          })
+          ws = new WebSocket(connection.endpoint, connectOptions)
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          finishError(
+            new RemoteRuntimeClientError('invalid_argument', `Invalid remote endpoint: ${message}`)
+          )
+          return
+        }
+        ws!.once('open', onOpen)
+        ws!.once('error', onError)
+        ws!.on('close', onClose)
+        ws!.on('message', onMessage)
+      }
+      if (prepareGuard) {
+        const prepareDial = (): Promise<void> =>
+          prepareCurrentRuntimeRequest({
+            connection,
+            guard: prepareGuard,
+            current: () => !settled && !signal?.aborted,
+            deadline,
+            expire: onTimeout,
+            consume: dial
+          })
+        void prepareDial().catch((error: unknown) =>
+          finishError(error instanceof Error ? error : new Error(String(error)))
         )
-        return
+      } else {
+        dial()
       }
 
       function onOpen(): void {
@@ -256,11 +299,6 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
         }
         router.handleFrame(readSealedFrame(data, isBinary))
       }
-
-      ws.once('open', onOpen)
-      ws.once('error', onError)
-      ws.on('close', onClose)
-      ws.on('message', onMessage)
     })
   const dialed = latchedHostCheck
     ? attempt(latchedHostCheck)

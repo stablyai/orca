@@ -14,7 +14,9 @@ const before = (await load(readFileSync(0, 'utf8'))).parseScrcpyVideoFrames
 const after = (
   await load(readFileSync('src/main/emulator/android/scrcpy-video-frame-parser.ts', 'utf8'))
 ).parseScrcpyVideoFrames
-const { RelayFrameBuffer } = await load(readFileSync('src/shared/relay-frame-buffer.ts', 'utf8'))
+const { RelayFrameBuffer } = await load(
+  readFileSync('src/shared/remote-runtime/relay/relay-frame-buffer.ts', 'utf8')
+)
 
 function reader(arm) {
   if (arm === 'before') {

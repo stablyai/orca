@@ -22,17 +22,29 @@ export type PaletteExtraResult = {
   /** Source-defined order: empty-query order, and the typed tie-break after rank and activity. */
   order: number
   dimmed?: boolean
+  /** Dims only the picture and title, leaving the line readable (an unreachable server's bot). */
+  subdued?: boolean
+  /** Drawn in the row's 16px lead slot. */
   leading?: React.ReactNode
+  /** Inline after the title and age, truncated. */
   line?: React.ReactNode
+  /** Right side, where workspace rows show their host and repo chips. */
   trailing?: React.ReactNode
   onSelect: () => void
 }
 
+/** The Bots source's id: the @ scope lists it alone. */
+export const BOT_PALETTE_SOURCE_ID = 'bots'
+
 /** One section a source contributes, with its rows for the current query. */
 export type PaletteExtraSource = {
   id: string
+  /** Every row the source has, whatever the query; lets an empty scope say there are none yet. */
+  catalogSize?: number
   sectionLabel: (t: Translate) => string
   emptyQueryCap: number
+  /** Empty query: above Recent Chats & Terminals, or after Recent Workspaces (default). The default selection stays on the first row below a 'first' section. */
+  emptyQueryPlacement?: 'first' | 'last'
   /** Typed queries: where the section sits when it does not lead the list. */
   typedPlacement: 'before-workspaces' | 'after-workspaces'
   /** Lead the list when its best match equals the best workspace or tab match, not only when it beats it. */

@@ -3,7 +3,7 @@ import type { Translate } from '@/i18n/use-translate'
 import type {
   DeveloperPermissionId,
   DeveloperPermissionStatus
-} from '../../../../../shared/developer-permissions-types'
+} from '../../../../../shared/app-lifecycle/permissions/developer-permissions-types'
 
 export function developerPermissionStatusLabel(
   id: DeveloperPermissionId,

@@ -1,4 +1,4 @@
-import { acceptPRCheckObservation } from '../../../../../../shared/github/complete-pr-check-owner'
+import { acceptPRCheckObservation } from '../../../../../../shared/github/checks/complete-pr-check-owner'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { PRTriageStrip } from './triage-strip'
 import { ChecksList } from './checks-list'

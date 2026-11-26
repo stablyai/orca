@@ -1,7 +1,10 @@
 import { continueFolderLaunchDrafts } from '@/components/native-chat/drafts/native-chat-launch-draft-continuity'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { runtimeTargetForOwnerEnvironment } from '../../runtime/rpc/targets/runtime-client-target'
 
 import type { RepoSlice } from '../repos/repo-state'
@@ -21,6 +24,7 @@ import {
 } from './folder-workspace-catalog'
 import { reuseEqualRecordMap } from '../../lib/catalog-reconciliation/catalog-record-reconciliation'
 import { getFolderWorkspaceUpdateCoordinator } from './folder-workspace-mutations'
+import { structuralValuesEqualIgnoringUndefined } from '../../../../shared/collections/structural-value-equality'
 
 export function createFolderWorkspaceCatalogActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -53,13 +57,23 @@ export function createFolderWorkspaceCatalogActions(
         current.folderWorkspaces,
         current.projectGroups
       )
-      if (arrayElementsUnchanged(folderWorkspaces, current.folderWorkspaces)) {
-        return current
-      }
-      return {
-        folderWorkspaces,
-        folderWorkspacePathStatuses: {}
-      }
+      const { target, identity, sshStateGeneration } = fence
+      const catalogIdentity = { target, identity, sshStateGeneration }
+      const catalogPatch = structuralValuesEqualIgnoringUndefined(
+        current.folderWorkspaceCatalogByHost[catalog.hostId],
+        catalogIdentity
+      )
+        ? null
+        : {
+            folderWorkspaceCatalogByHost: {
+              ...current.folderWorkspaceCatalogByHost,
+              [catalog.hostId]: catalogIdentity
+            }
+          }
+      const workspacePatch = arrayElementsUnchanged(folderWorkspaces, current.folderWorkspaces)
+        ? null
+        : { folderWorkspaces, folderWorkspacePathStatuses: {} }
+      return catalogPatch || workspacePatch ? { ...catalogPatch, ...workspacePatch } : current
     })
     return applied
   }

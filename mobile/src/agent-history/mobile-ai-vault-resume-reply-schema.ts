@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { salvagedOptional } from '../../../src/shared/zod-salvage'
+import { salvagedOptional } from '../../../src/shared/validation/zod-salvage'
 
 // Older hosts may return no repin data; retain exact boolean/string guards and handle unsupported-method refusal before parsing.
 export const aiVaultResumePreparationSchema = z

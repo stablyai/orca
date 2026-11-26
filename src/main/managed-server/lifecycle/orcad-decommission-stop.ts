@@ -8,8 +8,8 @@ import type { OrcadSlotOptions } from '../activation/orcad-recovery-slot'
 import type {
   OrcadDaemonRetirementVerdict,
   OrcadManagedStopRequest
-} from '../../../shared/orcad-stop-request'
-import { errorMessage } from '../../../shared/error-message'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
+import { errorMessage } from '../../../shared/errors/error-message'
 
 type OrcadDecommissionStopSettlement =
   | { state: 'exited'; retirement: OrcadDaemonRetirementVerdict }

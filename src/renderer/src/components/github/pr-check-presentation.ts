@@ -1,11 +1,11 @@
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { getCheckConclusion } from '@/components/pr-check-counts'
+import { getCheckConclusion } from '@/components/github/pr-check-counts'
 import type {
   PRCheckAnnotation,
   PRCheckDetail,
   PRCheckJob
-} from '../../../../shared/github/check-types'
+} from '../../../../shared/github/checks/check-types'
 
 export function getCheckStatusLabel(check: PRCheckDetail, t: Translate = translate): string {
   if (check.gitlabAllowedFailure === true && check.conclusion === 'neutral') {

@@ -1,4 +1,4 @@
-import type { SkillSourceKind } from '../../../shared/skills'
+import type { SkillSourceKind } from '../../../shared/skills/discovery/skills'
 import type { SkillScanRoot } from './skill-discovery-sources'
 
 export function skillScanSourceKinds(

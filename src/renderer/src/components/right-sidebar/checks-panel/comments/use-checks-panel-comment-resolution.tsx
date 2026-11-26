@@ -1,5 +1,5 @@
-import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
-import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
+import { useAgentMenuObservation } from '@/components/agent/launch-menu/use-new-tab-agent-menu-rows'
+import { useAgentDetectionTargetForWorktree } from '@/lib/agent-session/launch/inventory/useAgentDetectionTarget'
 import { resolveChecksActionAgent } from '@/lib/source-control/ai/source-control-agent-picker'
 import type { SourceControlActionId } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'
@@ -9,21 +9,21 @@ import {
   markPRCommentThreadResolved,
   restorePRCommentThreadSnapshot
 } from '@/lib/source-control/review/comments/pr-comment-thread-resolution'
-import type { ChecksPanelControllerState } from '../use-checks-panel-controller-state'
-import type { ChecksPanelContextState } from '../use-checks-panel-context-state'
-import type { ChecksPanelReviewState } from '../use-checks-panel-review-state'
+import type { ChecksPanelControllerState } from '../panel/use-checks-panel-controller-state'
+import type { ChecksPanelContextState } from '../review-state/use-checks-panel-context-state'
+import type { ChecksPanelReviewState } from '../review-state/use-checks-panel-review-state'
 import { checksPanelAsyncResultKey } from '../refresh/checks-panel-async-result-key'
-import { resolveGitLabMRDiscussionForChecks } from '../gitlab-review-client'
+import { resolveGitLabMRDiscussionForChecks } from '../review-data/gitlab-review-client'
 import { checksPanelReviewStableKey, clearPendingPRCommentAiAck } from './pr-comments-ai-launch-ack'
-import type { PRComment } from '../../../../../../shared/github/comment-types'
+import type { PRComment } from '../../../../../../shared/github/comments/comment-types'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { isReviewThreadResolutionInFlight } from '@/store/github/review-threads/review-thread-resolution-in-flight'
 import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
-import { errorMessage } from '../../../../../../shared/error-message'
-import type { GitLabDiscussionResolveResult } from '../../../../../../shared/gitlab-types'
+import { errorMessage } from '../../../../../../shared/errors/error-message'
+import type { GitLabDiscussionResolveResult } from '../../../../../../shared/gitlab/gitlab-types'
 
 type ChecksPanelCommentResolutionInput = Pick<
   ChecksPanelControllerState,

@@ -3,12 +3,13 @@ import {
   runCoalescedProbe,
   type CoalescedProbes
 } from '../../../git/remotes/coalesced-probe'
-import type { GitHubApiRepository } from '../../github-api-repository'
-import { githubReadExecutionScope } from '../../github-read-execution-scope'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
+import { codeHostReadExecutionScope as githubReadExecutionScope } from '../../../source-control/code-host-read-execution-scope'
 import { readCompletePRCheckObservation } from '../check/complete-pr-check-observation'
 import type { GhExecOptions } from '../github-exec-scope'
 import type { PullRequestLookupData } from './pull-request-lookup-data'
 import { readPullRequestSidebarQuery } from './pull-request-sidebar-query'
+import { readBatchedPullRequestSidebarQuery } from './pull-request-sidebar-batch'
 
 // Only provider requests are shared: every checkout still derives containment, divergence and
 // hiding from its own HEAD over the shared response.
@@ -37,7 +38,11 @@ function sharedPRKey(
 }
 
 /** How a lookup reads its provider requests: a CI-line watch's page bound, a user's refresh. */
-export type PRProviderReadOptions = { checkPageLimit?: number; userRefresh?: boolean }
+export type PRProviderReadOptions = {
+  checkPageLimit?: number
+  userRefresh?: boolean
+  batchSidebar?: boolean
+}
 
 /** A bounded read may join an unbounded one in flight; never the reverse. A user's refresh joins
  *  nothing begun before the click: it starts the read later callers share. */
@@ -68,7 +73,16 @@ export function readSharedPullRequestSidebarQuery(
     sidebarReads,
     (limit) => JSON.stringify(sharedPRKey(repository, number, options, executionScope, limit)),
     reads,
-    () => readPullRequestSidebarQuery(repository, number, options, reads.checkPageLimit)
+    () =>
+      reads.batchSidebar && !reads.userRefresh
+        ? readBatchedPullRequestSidebarQuery(
+            repository,
+            number,
+            options,
+            executionScope,
+            reads.checkPageLimit
+          )
+        : readPullRequestSidebarQuery(repository, number, options, reads.checkPageLimit)
   )
 }
 

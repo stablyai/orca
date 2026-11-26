@@ -15,7 +15,7 @@ import type { BrowserExtensionProfileDocumentItems } from '../profile-storage/br
  * writer, so every change carries exact old values. A write returns its changes to the caller,
  * which fires its own listeners (a starting worker's write can reach main before its listen
  * does); onChanged goes to the extension's other pages and its worker in the session.
- * The preload installs it as chrome.storage.sync (src/preload/browser-extension-storage-sync.ts).
+ * The preload installs it as chrome.storage.sync (src/preload/browser/extensions/storage/browser-extension-storage-sync.ts).
  */
 const STORAGE_SYNC_NAMESPACE = 'orcaStorageSync'
 

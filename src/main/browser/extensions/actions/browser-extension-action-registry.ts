@@ -1,4 +1,8 @@
 import { getBrowserExtensionProfileIdForSession } from '../api-runtime/browser-extension-api-host'
+import {
+  isBrowserExtensionStateKeptWhileIdle,
+  onBrowserExtensionIdleStateDropped
+} from '../profile-sessions/browser-extension-idle-kept-state'
 import { forgetActionIconCache } from './browser-extension-action-icon'
 import {
   BrowserExtensionActionState,
@@ -57,11 +61,18 @@ export function observeBrowserExtensionActionSession(sess: Electron.Session): vo
   sess.extensions.on('extension-ready', changed)
   sess.extensions.on('extension-unloaded', (_event, extension) => {
     const profileId = getBrowserExtensionProfileIdForSession(sess)
-    stateByProfileId.get(profileId ?? '')?.delete(extension.id)
+    if (profileId && !isBrowserExtensionStateKeptWhileIdle(profileId, extension.id)) {
+      stateByProfileId.get(profileId)?.delete(extension.id)
+    }
     forgetActionIconCache(extension.path)
     changed()
   })
 }
+
+// Why no notice: the profile is idle (no toolbar shows it) or reattaching, whose loads repaint it.
+onBrowserExtensionIdleStateDropped((profileId, extensionId) => {
+  stateByProfileId.get(profileId)?.delete(extensionId)
+})
 
 export function getBrowserExtensionActionState(
   profileId: string,

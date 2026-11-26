@@ -39,7 +39,7 @@ export async function runLifecycleChecks(ctx: Ctx, main: Control, mainAck: Ack):
     mute.on('close', (c) => (muteClose = c))
     await new Promise((res) => mute.on('open', res))
     // Complete the handshake by hand with the shipped proof answerer, then never pong.
-    const { answerRelayHostChallenge } = await import('../../../../src/main/runtime/mobile-cloud-relay/relay-host-proof')
+    const { answerRelayHostChallenge } = await import('../../../../src/main/runtime/mobile-cloud-relay/control-channel/relay-host-proof')
     mute.send(JSON.stringify({ type: 'host-hello', v: 1, relayHostId: ctx.relayHostId, assignmentEpoch: 7,
       hostPublicKeyB64: ctx.keypair.publicKeyB64, appVersion: 'spike' }))
     mute.on('message', (raw) => {

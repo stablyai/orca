@@ -1,10 +1,13 @@
 import { randomUUID } from 'node:crypto'
 import { refuseWslHostWindowsDrivePath } from '../terminal/launch/wsl-host-windows-drive-guard'
 import { mkdir } from 'node:fs/promises'
-import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/repo-badge-color'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
-import type { Repo } from '../../../shared/repo-types'
-import { isFolderRepo } from '../../../shared/repo-kind'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/repository/appearance/repo-badge-color'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { getGitCloneFailureMessage } from '../../../shared/git/remotes/git-clone-failure-message'
 import {
   cleanupClaimedCloneTarget,
@@ -12,11 +15,11 @@ import {
   deriveValidatedClonePath,
   getClonePathComparisonKey,
   getSavedProjectPathKeys
-} from '../../git/repo-clone-path'
+} from '../../git/repositories/cloning/repo-clone-path'
 import { gitSpawnAfterWindowsEnvironmentReady } from '../../git/command-runner/git-spawn'
-import { promptGuardGitEnv } from '../../git/command-runner/git-process-env'
-import { reuseSavedCloneTarget } from '../../git/saved-clone-target'
-import { checkCloneTarget } from '../../git/clone-target-check'
+import { promptGuardGitEnv } from '../../git/command-runner/git-environment/git-process-env'
+import { reuseSavedCloneTarget } from '../../git/repositories/cloning/saved-clone-target'
+import { checkCloneTarget } from '../../git/repositories/cloning/clone-target-check'
 import type {
   CloneTargetArgs,
   CloneTargetCheck
@@ -24,8 +27,8 @@ import type {
 import { runWithGitReadCacheInvalidation } from '../../git/source-control/git-read-cache-invalidation'
 import { invalidateAuthorizedRootsCache } from '../../ipc/worktrees/removal/registered-worktree-roots-cache'
 import { detectRepoLocalMetadata } from '../../repository-icons/repo-icon-autodetect'
-import { getRepoName } from '../../git/repo'
-import { inspectGitRepoForRegistrationAsync } from '../../git/repo-detection'
+import { getRepoName } from '../../git/repositories/repository-name'
+import { inspectGitRepoForRegistrationAsync } from '../../git/repositories/discovery/repo-detection'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { runtimeRepoIsRegistrationCandidate } from '../workspaces/catalog/runtime-worktree-selection'

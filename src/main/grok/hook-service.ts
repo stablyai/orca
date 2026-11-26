@@ -5,7 +5,7 @@ import type {
   AgentHookInstallState,
   AgentHookInstallStatus
 } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
-import { resolveGrokHomeDir } from '../../shared/grok-session-paths'
+import { resolveGrokHomeDir } from '../../shared/agent-hook-listener/providers/grok/grok-session-paths'
 import {
   readHooksJson,
   readHooksJsonWithRaw
@@ -47,10 +47,6 @@ import {
 function getConfigPath(): string {
   // Use Grok's selected home and a dedicated managed file so unrelated user hook files stay untouched.
   return join(resolveGrokHomeDir(), 'hooks', 'orca-status.json')
-}
-
-export function getManagedCommandForTests(scriptPath: string): string {
-  return getGrokManagedCommand(scriptPath)
 }
 
 function isSymbolicLinkSync(configPath: string): boolean {

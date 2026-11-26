@@ -1,5 +1,5 @@
-import type { RuntimeTerminalInteractiveWait } from '../../../../shared/runtime-terminal-contracts'
-import type { RuntimeWorktreePsSummary } from '../../../../shared/runtime-worktree-contracts'
+import type { RuntimeTerminalInteractiveWait } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeWorktreePsSummary } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
 
 /** Gives each terminal-backed row on the page the same agentWait `terminal show` reports for its handle. */

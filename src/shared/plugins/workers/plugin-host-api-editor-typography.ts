@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { GlobalSettings } from '../../global-settings-types'
+import type { GlobalSettings } from '../../settings/global-settings-types'
 import {
   resolveEditorTypography,
   resolveFileEditorMinimapEnabled,
@@ -8,7 +8,7 @@ import {
 import { ALL_SURFACES, spec } from './plugin-host-method-spec'
 
 /** Provisional release floor for `editor.typography.changed`; not a stock-release claim. */
-export const PLUGIN_EDITOR_TYPOGRAPHY_SINCE = '1.4.256'
+export const PLUGIN_EDITOR_TYPOGRAPHY_SINCE = '1.4.257'
 const FONT_FAMILY_MAX = 8 * 1024
 
 /** What `editor.readTypography` answers and `editor.typography.changed` carries. */

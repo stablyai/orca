@@ -7,7 +7,7 @@ import { decodeTerminalHistoryLog, LOG_HEADER_BYTES } from '../storage/terminal-
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT as DAEMON_RESTORE_SCROLLBACK_ROWS } from '../../../../shared/terminal/replay/terminal-scrollback-policy'
 import { historyReplayWindowsPty } from '../../protocol/daemon-history-replay-pty'
 import { HeadlessEmulator } from '../../emulation/headless-emulator'
-import { PrioritySemaphore } from '../../../../shared/priority-semaphore'
+import { PrioritySemaphore } from '../../../../shared/concurrency/priority-semaphore'
 import { ColdRestoreReplayWriter } from './cold-restore-replay-writer'
 import { readTerminalHistoryBufferAsync } from '../storage/terminal-history-file-reader'
 import { detectColdRestoreFromLegacyScrollback } from './terminal-history-legacy-scrollback-restore'

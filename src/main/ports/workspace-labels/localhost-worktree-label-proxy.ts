@@ -6,12 +6,12 @@ import { URL } from 'node:url'
 import type {
   LocalhostWorktreeLabelResult,
   LocalhostWorktreeLabelRoute
-} from '../../../shared/localhost-worktree-labels'
+} from '../../../shared/workspace/ports/localhost-worktree-labels'
 import {
   connectableLoopbackHost,
   getLocalhostWorktreeHostLabel,
   getLocalhostWorktreeRouteKey
-} from '../../../shared/localhost-worktree-labels'
+} from '../../../shared/workspace/ports/localhost-worktree-labels'
 
 type RegisteredRoute = LocalhostWorktreeLabelRoute & {
   label: string

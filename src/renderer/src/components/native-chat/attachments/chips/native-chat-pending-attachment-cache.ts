@@ -10,7 +10,7 @@ import { useCallback, useSyncExternalStore } from 'react'
 import type { NativeChatComposerImageAttachment } from './native-chat-image-attachment'
 import type { NativeChatComposerDraftOwner } from '../../drafts/native-chat-composer-draft-storage'
 import { appendNativeChatAttachmentCache } from './native-chat-attachment-draft'
-import { formatNativeChatFileReference } from '../../../../../../shared/agent-image-paste'
+import { formatNativeChatFileReference } from '../../../../../../shared/native-chat/input/composer/agent-image-paste'
 import {
   appendToNativeChatComposerDraft,
   readNativeChatComposerDraft
@@ -285,10 +285,4 @@ export function dropNativeChatPendingAttachmentsOwnedBy(owner: NativeChatCompose
       pendingOwner?.workspaceId === owner.workspaceId &&
       pendingOwner.executionHostId === owner.executionHostId
   )
-}
-
-export function clearNativeChatPendingAttachmentsForTests(): void {
-  chipScopes.clear()
-  pendingCache.clear()
-  pendingOwners.clear()
 }

@@ -1,9 +1,9 @@
-import type { TerminalOutputMeta } from '../../terminal-output-frame-chunks'
+import type { TerminalOutputMeta } from '../../terminal/terminal-output-frame-chunks'
 import {
   TERMINAL_OUTPUT_BATCH_MAX_BYTES,
   type TerminalOutputCadence
 } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
-import { measureTerminalStreamByteLength } from '../../terminal-stream-byte-length'
+import { measureTerminalStreamByteLength } from '../../terminal/terminal-stream-byte-length'
 
 const TERMINAL_OUTPUT_FLUSH_MS: Record<TerminalOutputCadence, number> = {
   focused: 5,

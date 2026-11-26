@@ -1,5 +1,5 @@
 import type { PtyControllerTerminalIdentity } from './runtime-pty-controller-contract'
-import type { PtyProcessInfo } from '../../../providers/pty-process-info'
+import type { PtyProcessInfo } from '../../../providers/pty/process-info'
 
 export function buildControllerTerminalIdentities(sessions: PtyProcessInfo[]): {
   controllerIdentityByPtyId: Map<string, PtyControllerTerminalIdentity>

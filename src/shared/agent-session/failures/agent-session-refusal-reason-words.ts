@@ -121,6 +121,8 @@ const REASON_WORDS = {
     agentCommandNotRunnable: { fact: 'agentCommandNotRunnable', action: 'actFirst' },
     runtimeNotInstalled: { fact: 'runtimeNotInstalled', action: 'actFirst' },
     fullAccessAsRoot: { fact: 'fullAccessAsRoot', action: 'actFirst' },
+    botToolsNeedStatusHooks: { fact: 'botToolsNeedStatusHooks', action: 'actFirst' },
+    botToolsGatewayOutdated: { fact: 'botToolsGatewayOutdated', action: 'actFirst' },
     launchPreparationFailed: { fact: 'launchPreparationFailed', action: 'retry' },
     conversationOpenInTerminal: { fact: 'conversationOpenInTerminal', action: 'actFirst' },
     conversationOpenElsewhere: { fact: 'conversationOpenElsewhere', action: 'actFirst' },
@@ -188,6 +190,8 @@ const REASON_WORDS = {
     journalCorrupt: causeWords('historyUnusable', 'hostFinding'),
     // Says its step despite 'retry' unless a Retry stands beside it: the phone often has none.
     journalUnavailable: causeWords('historyUnavailable', 'retry', 'tryAgain'),
+    // The step stays beside a Retry: retrying before space is freed fails again.
+    journalStorageFull: causeWords('diskFull', 'actFirst', 'freeDiskSpace'),
     // Writes meet newer/read-only databases; reads meet this chat, opened only by an update.
     journalWrittenByNewerOrca: {
       ...causeWords('savedByNewerOrca', 'updateOrca', 'updateOrcaToKeepUsing'),
@@ -213,6 +217,8 @@ const HELD_IN_TERMINAL: AgentSessionRefusalReasonWords = {
   action: 'actFirst'
 }
 
+const SAVED_IN_OTHER_FOLDER = causeWords('savedInOtherFolder', 'goElsewhere')
+
 /** The chat a failed start's refusal named as holding the conversation, or null when it named
  *  none; absent where the refusal's owner was not kept, so who holds it is unknown. */
 export type AgentSessionRefusalHolder = { owner?: AgentSessionConversationOwner | null }
@@ -229,6 +235,9 @@ export function agentSessionRefusalReasonWords(
     failure.owner === null
   ) {
     return HELD_IN_TERMINAL
+  }
+  if (failure.code === 'agent_session_identity_required' && failure.details?.otherFolder) {
+    return SAVED_IN_OTHER_FOLDER
   }
   const byReason: Partial<Record<string, AgentSessionRefusalReasonWords>> | undefined =
     REASON_WORDS[failure.code]

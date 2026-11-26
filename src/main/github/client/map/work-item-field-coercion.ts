@@ -1,18 +1,25 @@
 import type {
   PRMergeableState,
   PRReviewDecision
-} from '../../../../shared/github/pull-request-types'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+} from '../../../../shared/github/pull-requests/pull-request-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import { summarizeProviderChecks } from '../../../../shared/source-control/checks/provider-check-summary'
 // The renderer supplies repoId after IPC; main knows only the repository path.
 export type MainWorkItem = Omit<GitHubWorkItem, 'repoId'>
 
 export const WORK_ITEM_PR_LIST_JSON_FIELDS =
-  'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRefOid,headRepositoryOwner,reviewRequests'
+  'number,title,state,url,labels,createdAt,updatedAt,author,isDraft,headRefName,baseRefName,headRefOid,headRepositoryOwner,reviewRequests'
 
 // Keep first-paint reviewers in list payloads; defer costly checks, review decisions and merge metadata.
 export const WORK_ITEM_PR_DETAIL_JSON_FIELDS =
   'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRefOid,headRepositoryOwner,additions,deletions,changedFiles,reviewDecision,reviewRequests,latestReviews,assignees,mergeable,mergeStateStatus,autoMergeRequest,maintainerCanModify'
+
+export function createdAtFromUnknown(
+  item: Record<string, unknown>
+): Pick<MainWorkItem, 'createdAt'> {
+  const createdAt = item.created_at ?? item.createdAt
+  return typeof createdAt === 'string' && createdAt ? { createdAt } : {}
+}
 
 /** Preserve API-provided avatars with logins; dotcom login-based URLs do not identify Enterprise avatars. */
 export function authorFieldsFromUnknown(

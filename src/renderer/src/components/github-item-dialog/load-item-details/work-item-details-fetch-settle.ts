@@ -1,24 +1,24 @@
-import type { PRComment } from '../../../../../shared/github/comment-types'
-import type { WorkItemDetailsCacheEntry } from './work-item-details-cache'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
 import {
   GitHubWorkItemTargetError,
   matchesGitHubWorkItemTarget,
   requireGitHubWorkItemTargetDetails,
   type GitHubWorkItemTarget
-} from '../../../../../shared/github/work-item-target'
-import type {
-  GitHubWorkItem,
-  GitHubWorkItemDetails
-} from '../../../../../shared/github/work-item-types'
-import type { GitHubTaskRecordCache } from '@/store/github/task-records/task-record-cache'
-import type { TaskBinding } from '@/store/github/task-records/task-record-model'
+} from '../../../../../shared/github/work-items/work-item-target'
 import {
   githubTaskRpcOptions,
   type GitHubTaskTarget
 } from '@/lib/work-items/github/github-task-target'
-import { useAppStore } from '@/store'
+import type {
+  GitHubWorkItem,
+  GitHubWorkItemDetails
+} from '../../../../../shared/github/work-items/work-item-types'
+import type { GitHubTaskRecordCache } from '@/store/github/task-records/task-record-cache'
+import type { TaskBinding } from '@/store/github/task-records/task-record-model'
 import { lookupGitHubWorkItemDetailsForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
 import {
+  type WorkItemDetailsCacheEntry,
   WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE,
   WORK_ITEM_DETAILS_FRESH_MS,
   markUserActionWorkItemDetailsRead,
@@ -46,7 +46,7 @@ export async function loadCanonicalGitHubTaskDetails(
       expectedGhAccount: target.expectedGhAccount,
       canonical: true,
       accepts: () => accepts() && owned(),
-      rpcOptions: githubTaskRpcOptions(useAppStore.getState, binding.observation.fence)
+      rpcOptions: githubTaskRpcOptions(readRuntimeStatuses, binding.observation.fence)
     }).catch(() => null)
     return loaded.details && accepts() && owned()
       ? { ...target.item, ...loaded.details.item }
@@ -73,7 +73,7 @@ export async function loadOrdinaryWorkItemDetails(
     type: item.type,
     canonical: false,
     ...(binding && {
-      rpcOptions: githubTaskRpcOptions(useAppStore.getState, binding.observation.fence)
+      rpcOptions: githubTaskRpcOptions(readRuntimeStatuses, binding.observation.fence)
     })
   })
   return result && binding

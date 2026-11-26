@@ -13,7 +13,7 @@ import {
   getAgentSessionOptionCatalog,
   mergeCatalogModels
 } from '../../../../../shared/agent-session/options/agent-session-option-catalog'
-import type { CatalogModel } from '../../../../../shared/agent-session/options/agent-session-option-catalog-types'
+import type { CatalogModel } from '../../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-types'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { isTuiAgentEnabled } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'

@@ -1,9 +1,9 @@
 import { useEffect } from 'react'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { dispatchZoomLevelChanged } from '@/app-shell/chrome/zoom-events'
-import '@/lib/pane-manager/pane-tree-ops'
-import { safeFit } from '@/lib/pane-manager/pane-fit'
-import { overridePendingPaneMetricOptions } from '@/lib/pane-manager/pane-metric-options-deferral'
+import '@/lib/pane-manager/pane-layout/pane-tree-ops'
+import { safeFit } from '@/lib/pane-manager/terminal-fit/pane-fit'
+import { overridePendingPaneMetricOptions } from '@/lib/pane-manager/terminal-fit/pane-metric-options-deferral'
 import { getPaneOwnedActiveHelperTextarea } from '../input/focus/regular-terminal-focus-ownership'
 import {
   clearTerminalFontSizeOverride,

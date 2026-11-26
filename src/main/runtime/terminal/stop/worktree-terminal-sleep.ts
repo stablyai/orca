@@ -3,7 +3,7 @@ import {
   includeTargetResolvedWorktree,
   type ResolvedWorktree
 } from '../../workspaces/catalog/runtime-worktree-path-identity'
-import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 import { teardownRpcDeadline } from '../../workspaces/removal/worktree-teardown-deadline'
 import { sleptNothing } from './worktree-terminal-sleep-result'
@@ -152,6 +152,8 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
       const stopAndWait = ptyController.stopAndWait.bind(ptyController)
 
       const orderedLivePtyIds = [...livePtyIds].sort()
+      // Before the stop: an exit wait settling on it must not take the pane for an Agent-slept one.
+      this.noteWorkspaceSleepStops(orderedLivePtyIds)
       for (const ptyId of orderedLivePtyIds) {
         settleReversibleStops.set(
           ptyId,

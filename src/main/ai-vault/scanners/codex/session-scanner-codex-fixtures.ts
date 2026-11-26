@@ -1,4 +1,4 @@
-import type { IncrementalAgentFixture } from '../../session-scanner-incremental-fixtures'
+import type { IncrementalAgentFixture } from '../../scanner-fixtures/session-scanner-incremental-fixtures'
 
 const CODEX_SESSION_ID = '019f0000-1111-7222-8333-444444444444'
 

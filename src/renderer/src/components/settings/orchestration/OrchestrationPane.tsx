@@ -1,4 +1,4 @@
-import type { BundledSkillPlan } from '../../../../../shared/bundled-skill-plan'
+import type { BundledSkillPlan } from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import { useCallback, useState } from 'react'
 import { OrchestrationSkillPromptDialog } from './OrchestrationSkillPromptDialog'
 import { buildSkillCommandForRuntime } from '../../../lib/skills/runtime/skill-runtime-command'
@@ -21,7 +21,7 @@ import { OrchestrationSkillAgentCoverage } from './OrchestrationSkillAgentCovera
 import { SkillUsageExamplesSection } from '../../skills/examples/SkillUsageExamplesSection'
 import { useTranslate } from '@/i18n/use-translate'
 import { OrchestrationWorkerModelSetting } from './OrchestrationWorkerModelSetting'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { resolveNestedWorkerMaxDepth } from '../../../../../shared/orchestration/workers/nested-worker-depth'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { NumberField } from '../form-controls/SettingsFormControls'
@@ -30,6 +30,7 @@ import {
   getNestedWorkerDepthTitle
 } from './nested-worker-depth-copy'
 import { OrchestrationWorkerAutoReleaseSetting } from './OrchestrationWorkerAutoReleaseSetting'
+import { OrchestrationCoordinatorApprovalsSetting } from './OrchestrationCoordinatorApprovalsSetting'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 const EXAMPLE_ICONS = {
@@ -182,6 +183,12 @@ export function OrchestrationPane({
         ) : null}
         {showLocalRuntimeSettings ? (
           <OrchestrationWorkerAutoReleaseSetting
+            settings={settings}
+            updateSettings={updateSettings}
+          />
+        ) : null}
+        {showLocalRuntimeSettings ? (
+          <OrchestrationCoordinatorApprovalsSetting
             settings={settings}
             updateSettings={updateSettings}
           />

@@ -17,10 +17,8 @@ export function chromeFrameDocument(frame: Electron.WebFrameMain, withDocument: 
   return {
     frameId: chromeFrameId(frame),
     parentFrameId: chromeParentFrameId(frame),
-    ...(withDocument ? { documentId: getBrowserExtensionDocumentId(frame.frameTreeNodeId) } : {}),
-    ...(frame.parent
-      ? { parentDocumentId: getBrowserExtensionDocumentId(frame.parent.frameTreeNodeId) }
-      : {}),
+    ...(withDocument ? { documentId: getBrowserExtensionDocumentId(frame) } : {}),
+    ...(frame.parent ? { parentDocumentId: getBrowserExtensionDocumentId(frame.parent) } : {}),
     frameType: frame.parent ? ('sub_frame' as const) : ('outermost_frame' as const),
     documentLifecycle: 'active' as const
   }

@@ -1,5 +1,5 @@
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import type { StructuredSessionSurfaceRuntime } from '../../../agent-session/structured-agent-session-close'
+import type { StructuredSessionSurfaceRuntime } from '../../../agent-session/lifecycle/structured-agent-session-close'
 
 export type WorkerTerminalReleaseRuntime = StructuredSessionSurfaceRuntime &
   Pick<
@@ -9,9 +9,11 @@ export type WorkerTerminalReleaseRuntime = StructuredSessionSurfaceRuntime &
     | 'callOrchestrationWorkerServer'
     | 'getOrchestrationFleetAgentStatusSnapshot'
     | 'getOrchestrationDb'
+    | 'getExistingOrchestrationDb'
     | 'showTerminal'
     | 'resolveTerminalHandleByProcessIncarnation'
     | 'getTerminalPaneKey'
+    | 'getTerminalHandleForPaneKey'
     | 'getTerminalProcessIncarnation'
     | 'getTerminalLivenessVerdict'
     | 'checkTerminalAgentPresence'
@@ -19,8 +21,17 @@ export type WorkerTerminalReleaseRuntime = StructuredSessionSurfaceRuntime &
     | 'ensureStructuredAgentSessionHost'
     | 'inspectTerminalProcessIncarnationLiveness'
     | 'closeTerminal'
+    | 'isSetupTerminalRunning'
     | 'getExactWorkerProviderSession'
     | 'readTerminal'
     | 'notifyMessageArrived'
     | 'isWorkerAgentInTurn'
+    | 'sleptAgentHandleForPane'
+  > &
+  // Lower runtime layers declare neither; without them a release closes its chat.
+  Partial<
+    Pick<
+      OrcaRuntimeService,
+      'sleepWorkspaces' | 'bots' | 'listMobileSessionTabs' | 'savedTabsForWorktree'
+    >
   >

@@ -1,4 +1,4 @@
-// Prove packaged Windows daemon/session behavior across real silent N→N+1 NSIS update; see README and windows-terminal-update-survival-plan.md.
+// Packaged Windows update proof; artifact selection and safety live in README.md.
 
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -354,7 +354,7 @@ function resolveScopedDaemon(userDataDir) {
   }
 }
 
-/** Print the daemon's lifecycle log (Phase 0) so its startup/session events are
+/** Print the daemon's lifecycle log so its startup/session events are
  *  visible in the CI log before teardown removes the userData dir. */
 function dumpDaemonLog(userDataDir) {
   const logPath = path.join(userDataDir, 'logs', 'daemon.log')

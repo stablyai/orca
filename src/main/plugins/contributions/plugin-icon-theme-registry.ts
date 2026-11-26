@@ -10,14 +10,14 @@ import {
   type PluginIconThemeMetadata,
   type PluginIconThemeRegistration
 } from '../../../shared/plugins/artifacts/plugin-icon-theme-artifact'
+import { PLUGIN_ICON_THEME_MAX_BYTES } from '../artifacts/plugin-artifact-validation'
 import {
-  PLUGIN_ICON_THEME_MAX_BYTES,
   readContainedPluginArtifactText,
   resolveContainedPluginArtifact
-} from '../plugin-artifact-validation'
+} from '../artifacts/plugin-contained-artifact'
 import { PluginArtifactPackRegistry } from './plugin-artifact-pack-registry'
-import type { PluginContentVerifier } from '../plugin-content-integrity'
-import type { DiscoveredPlugin, ValidDiscoveredPlugin } from '../plugin-discovery'
+import type { PluginContentVerifier } from '../artifacts/plugin-content-integrity'
+import type { DiscoveredPlugin, ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
 
 const ICON_THEME_TOTAL_SVG_MAX_BYTES = 4 * 1024 * 1024
 

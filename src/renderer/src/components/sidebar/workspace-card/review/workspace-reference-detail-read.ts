@@ -3,9 +3,11 @@ import '@/store/slices/linear/linear-issue-read'
 import { consumeLinearIssueRead } from '@/store/slices/linear/linear-issue-read-lifecycle'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { PrioritySemaphore } from '../../../../../../shared/priority-semaphore'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { PrioritySemaphore } from '../../../../../../shared/concurrency/priority-semaphore'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { getTaskSourceCacheScope } from '../../../../../../shared/work-items/task-source-context'
+import { getGitHubIssueUrlRepository } from '../../../../../../shared/worktree/github-issue-repository'
+import { issueCacheSuffix } from '@/store/github/cache/cache-identity'
 import { canReadWorkspaceReferenceReview } from './workspace-reference-review-source'
 import { isWorkspaceRepositoryAttachment } from '../metadata/worktree-attachment-editing'
 import {
@@ -63,6 +65,7 @@ export function getWorkspaceReferenceLookup(request: WorkspaceReferenceRequest, 
           repoId: repo.id,
           repoOwnerExecutionHostId: getRepoExecutionHostId(repo),
           admissionTier: request.admissionTier ?? 'interactive',
+          background: request.background,
           linkedGitHubPR: item.provider === 'github' ? item.number : null,
           linkedGitLabMR: item.provider === 'gitlab' ? item.number : null,
           linkedBitbucketPR: item.provider === 'bitbucket' ? item.number : null,
@@ -151,11 +154,12 @@ export function getWorkspaceReferenceLookup(request: WorkspaceReferenceRequest, 
     sourceContext.provider === 'github' &&
     isWorkspaceRepositoryAttachment(item, repo)
   ) {
-    const cacheKey = `${scope}::${repo.id}::${item.number}`
+    const ownerRepo = getGitHubIssueUrlRepository(item.url, item.number)
+    const cacheKey = `${scope}::${repo.id}::${issueCacheSuffix(item.number, ownerRepo)}`
     return lookup(
       state,
       cacheEntryReader('issueCache', cacheKey),
-      () => state.fetchIssue(repo.path, item.number, { repoId: repo.id, sourceContext }),
+      () => state.fetchIssue(repo.path, item.number, { repoId: repo.id, sourceContext, ownerRepo }),
       (issue) =>
         issue.number === item.number && matchesWorkspaceReferenceUrl(item, issue.url)
           ? { title: issue.title, url: issue.url, issueState: issue.state }

@@ -1,12 +1,12 @@
 import { win32 as pathWin32 } from 'node:path'
 import { recognizeAgentProcessFromCommandLine } from '../../../../shared/agent-status/process/agent-process-recognition'
-import { codexCommandLineJoinsSharedServer } from '../../../../shared/codex-shared-server-command'
+import { codexCommandLineJoinsSharedServer } from '../../../../shared/agent-launch/startup/codex-shared-server-command'
 import {
   collectDescendantsFromIndex,
   getProcessTableIndex,
   type ProcessIdentityRow
-} from '../../../../shared/process-table-index'
-import { getProcessTableSnapshot } from '../../../../shared/process-table-snapshot-reader'
+} from '../../../../shared/process-observation/tables/process-table-index'
+import { getProcessTableSnapshot } from '../../../../shared/process-observation/tables/process-table-snapshot-reader'
 import { readWindowsProcessTable } from '../../../windows/windows-process-table'
 import { fishArgsSkipConfig } from '../../../pty/shell-startup/fish-xdg-data-dirs-handoff'
 import { getSystemCodexHomePath } from '../homes/codex-home-paths'

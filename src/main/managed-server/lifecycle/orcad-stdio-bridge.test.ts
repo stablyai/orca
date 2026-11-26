@@ -5,7 +5,7 @@ import type { Server } from 'node:net'
 
 import { PassThrough } from 'node:stream'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import '../../orcad/orcad-host-unavailable'
+import '../../orcad/diagnostics/orcad-host-unavailable'
 import './orcad-stdio-bridge'
 import {
   orcadPosixStdioBridgeCommand,

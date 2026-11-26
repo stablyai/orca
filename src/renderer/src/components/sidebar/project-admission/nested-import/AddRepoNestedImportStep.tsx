@@ -6,9 +6,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { NestedRepoChecklist } from '@/components/repo/NestedRepoChecklist'
-import type { NestedRepoScanResult } from '../../../../../../shared/project-group-types'
+import type { NestedRepoScanResult } from '../../../../../../shared/project/groups/project-group-types'
 import { NestedRepoScanLimitNotice } from '../../../repo/NestedRepoScanLimitNotice'
-import { getRuntimePathBasename } from '../../../../../../shared/cross-platform-path'
+import { getRuntimePathBasename } from '../../../../../../shared/file-access/cross-platform-path'
 import { useTranslate } from '@/i18n/use-translate'
 
 type AddRepoNestedImportStepProps = {
@@ -165,10 +165,7 @@ export function AddRepoNestedImportStep({
             variant="outline"
           >
             {showSeparateSpinner ? <Loader2 className="size-3.5 animate-spin" /> : null}
-            {t(
-              'auto.components.sidebar.AddRepoNestedImportStep.aa0247680d',
-              'No, import separately'
-            )}
+            {t('auto.components.sidebar.AddRepoNestedImportStep.aa0247680d', 'Import separately')}
           </Button>
           <Button
             onClick={() => handleImport('group')}

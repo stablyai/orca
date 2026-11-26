@@ -1,4 +1,4 @@
-import { packagedClaudeChatScenario } from '../../../orcad/orcad-structured-chat-scenario'
+import { packagedClaudeChatScenario } from '../../../orcad/testing/structured-chat/orcad-structured-chat-scenario'
 
 /** The normal streamed reply stays open for an approval and the user's Stop. */
 export function wslClaudeChatScenario(providerSessionId: string, partialReplyAckPath: string) {

@@ -2,8 +2,8 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   toRuntimeExecutionHostId
-} from '../../../../../shared/execution-host'
-import type { Repo } from '../../../../../shared/repo-types'
+} from '../../../../../shared/execution-host/execution-host'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { AutomationHostTarget } from '../hosts/automation-host-client'
 
 /** Runtime creation uses that host’s repo catalog; desktop storage retains its SSH-capable catalog. */

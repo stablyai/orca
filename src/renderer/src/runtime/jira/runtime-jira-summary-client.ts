@@ -1,5 +1,5 @@
 import type { JiraConnectionStatus, JiraIssue } from '../../../../shared/jira/jira-types'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
 import { rowLessSourceTarget } from '../hosts/selection/default-creation-host'
 import type { RowLessSource as RuntimeJiraSettings } from '../hosts/selection/default-creation-host'

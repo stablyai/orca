@@ -1,7 +1,7 @@
 // Program Status Protocol (OSC 7501) wire grammar: a program reports idle/working/blocked/done/error
 // for itself (root record) or for ids beneath it. Spec: https://www.superlogical.com/rex/docs/build/program-status
 
-import { isUtf8ByteLengthWithinLimit } from '../utf8-byte-limits'
+import { isUtf8ByteLengthWithinLimit } from '../text/utf8-byte-limits'
 
 export const PROGRAM_STATUS_OSC_PREFIX = '\x1b]7501;'
 

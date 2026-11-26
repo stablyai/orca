@@ -1,17 +1,21 @@
 import { cn } from '../../../../lib/class-names'
 import { useTranslate } from '../../../../i18n/use-translate'
 import type { NativeChatBlock } from '../../../../../../shared/native-chat/native-chat-types'
-import { nativeChatProviderFrameSummary } from '../../../../../../shared/native-chat/native-chat-provider-frame-summary'
+import { nativeChatProviderFrameSummary } from '../../../../../../shared/native-chat/transcript/notices/native-chat-provider-frame-summary'
 
 export function ProviderFrameRow({
   block,
   summary,
-  detail
+  detail,
+  bodyClassName,
+  open,
+  onOpenChange
 }: {
   block: NativeChatBlock
   summary?: string
   detail?: string
-}): React.JSX.Element | null {
+  bodyClassName?: string
+} & DisclosureOpenProps): React.JSX.Element | null {
   const t = useTranslate()
   if (block.type !== 'text' || (!block.providerFrame && !detail)) {
     return null
@@ -19,6 +23,9 @@ export function ProviderFrameRow({
   const frame = block.providerFrame
   return (
     <NativeChatDetailsDisclosure
+      open={open}
+      onOpenChange={onOpenChange}
+      bodyClassName={bodyClassName}
       lead={
         frame ? (
           <span className="font-medium text-chat-foreground-strong">{frame.provider}</span>
@@ -45,12 +52,20 @@ export function ProviderFrameRow({
   )
 }
 
+type DisclosureOpenProps = {
+  /** Controlled open state; uncontrolled (starts collapsed) when omitted. */
+  open?: boolean
+  onOpenChange?: (open: boolean, details: HTMLDetailsElement) => void
+}
+
 /** A collapsed monospace body, for provider frames and the diagnostics behind a failure. */
 export function NativeChatDetailsDisclosure({
   summary,
   lead,
   trail,
   bodyClassName,
+  open,
+  onOpenChange,
   children
 }: {
   summary: string
@@ -58,9 +73,17 @@ export function NativeChatDetailsDisclosure({
   trail?: React.ReactNode
   bodyClassName?: string
   children: React.ReactNode
-}): React.JSX.Element {
+} & DisclosureOpenProps): React.JSX.Element {
   return (
-    <details className="group text-xs text-chat-foreground-faint">
+    <details
+      className="group text-xs text-chat-foreground-faint"
+      open={open}
+      onToggle={
+        onOpenChange
+          ? (event) => onOpenChange(event.currentTarget.open, event.currentTarget)
+          : undefined
+      }
+    >
       <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md px-2 py-1 font-mono hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <span className="transition-transform motion-reduce:transition-none group-open:rotate-90">
           ›

@@ -4,7 +4,7 @@ import type {
   TerminalLimitUpdate
 } from '../../../../shared/terminal/runtime-policy/terminal-limit-policy'
 import type { TerminalViewAttributes } from '../../../../shared/terminal/protocol/queries/terminal-view-attributes'
-import type { PtySpawnOutcome } from '../../../ipc/pty/spawn-outcome'
+import type { PtySpawnOutcome } from '../../../ipc/pty/spawn/spawn-outcome'
 import type { RuntimePaneCreateClaim } from '../../../ipc/pty/pane/spawn-reservation'
 import type { PaneSpawnOperation } from '../../../ipc/pty/pane/pane-spawn-operation'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
@@ -17,26 +17,31 @@ import type {
 import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
-} from '../../../../shared/agent-session/agent-session-host-authority'
+} from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
+import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import type { PtyBindingSourceExpectation } from '../../../persistence/loading-store/store'
-import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-pane-placement'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
-import type { PtyProcessInfo } from '../../../providers/pty-process-info'
-import type { PtySpawnResult } from '../../../providers/pty-spawn-result'
+import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type {
+  PtyProviderBufferSnapshot,
+  PtyProviderBufferSnapshotOptions
+} from '../../../providers/pty/provider-contract'
+import type { PtyProcessInfo } from '../../../providers/pty/process-info'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import type { TerminalProcessInspection as PtyProcessInspection } from '../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
-import type { StartupCwdFallback } from '../../../../shared/startup-cwd-fallback'
+import type { StartupCwdFallback } from '../../../../shared/shell/launch/startup-cwd-fallback'
 import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
-import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/workspace-layout-published'
+import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 
 export type PtyInventoryRefreshOptions = {
   includeForegroundProcessEvidence?: boolean
   refreshForegroundAgents?: boolean
+  /** false: accepting this answer leaves listings still in flight current, for a census others need not yield to. */
+  supersedesPendingListings?: boolean
 }
 
 export type RuntimePtyController = {
@@ -179,6 +184,8 @@ export type RuntimePtyController = {
   resetInputModes?(ptyId: string): Promise<void>
   reportFocusLost?(ptyId: string): Promise<void>
   resize?(ptyId: string, cols: number, rows: number): boolean
+  /** Asks the foreground program to redraw itself, sending it no input; resolves false when a later ask could still reach its host. */
+  requestRepaint?(ptyId: string): Promise<boolean>
   // Exact-id mobile polls must not enumerate every local/SSH PTY.
   hasPty?(ptyId: string): boolean | null
   getPtyAvailability?(ptyId: string): boolean | null
@@ -192,6 +199,11 @@ export type RuntimePtyController = {
       targetOwnerOnly?: boolean
     }
   ): Promise<PtyProcessInfo[]>
+  /** Local inventory from the provider that owns local PTYs, after startup; `inProcessOwner` marks this process's own provider. */
+  listLocalProcessesForExitProof?(): Promise<{
+    processes: PtyProcessInfo[]
+    inProcessOwner: boolean
+  }>
   listProcessesWithHostScope?(opts?: {
     deadlineMs?: number
     includeForegroundProcessEvidence?: boolean
@@ -214,8 +226,9 @@ export type RuntimePtyController = {
   /** Authoritative provider-owned snapshot for restored PTYs with no mounted renderer. */
   serializeProviderBuffer?(
     ptyId: string,
-    opts?: { scrollbackRows?: number }
+    opts?: PtyProviderBufferSnapshotOptions
   ): Promise<PtyProviderBufferSnapshot | null>
+  supportsVisibleProjectionSnapshot?(ptyId: string): boolean
   // Probe renderer authority before hydration (docs/mobile-prefer-renderer-scrollback.md).
   hasRendererSerializer?(ptyId: string): boolean
   getRendererSerializerGeneration?(ptyId: string): number

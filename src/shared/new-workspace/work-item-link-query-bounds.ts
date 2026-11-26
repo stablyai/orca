@@ -1,4 +1,4 @@
-import { isClipboardTextByteLengthOverLimit } from '../clipboard-text'
+import { isClipboardTextByteLengthOverLimit } from '../clipboard/clipboard-text'
 
 export const WORK_ITEM_LINK_QUERY_MAX_BYTES = 2 * 1024
 

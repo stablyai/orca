@@ -1,8 +1,8 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'
-import type { GitHubPRRefreshCandidate } from '../../../../../shared/github/pull-request-refresh-types'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import type { GitHubPRRefreshCandidate } from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { bypassesGitHubPRRefreshFreshness } from './pr-refresh-state'
 import {
   enqueueLocalGitHubPRRefresh,
@@ -20,6 +20,10 @@ import {
   shouldCoordinateVisibleGitHubReview
 } from '../../slices/hosted-review/refresh/visible-hosted-review-refresh-ownership'
 
+function sameIds(a: readonly string[] | undefined, b: readonly string[]): boolean {
+  return a?.length === b.length && b.every((id, index) => a[index] === id)
+}
+
 export const createRefreshRoutingActions = (
   set: Parameters<StateCreator<AppState>>[0],
   get: Parameters<StateCreator<AppState>>[1]
@@ -29,13 +33,18 @@ export const createRefreshRoutingActions = (
   | 'reportVisibleGitHubPRRefreshCandidates'
   | 'bumpGitHubPRVisibleRefreshGeneration'
   | 'setVisibleReviewCardWorktreeIds'
+  | 'setVisibleItemPageReviewWorktreeIds'
 > => ({
   setVisibleReviewCardWorktreeIds: (ids) => {
     set((s) =>
-      s.visibleReviewCardWorktreeIds?.length === ids.length &&
-      ids.every((id, index) => s.visibleReviewCardWorktreeIds[index] === id)
+      sameIds(s.visibleReviewCardWorktreeIds, ids) ? s : { visibleReviewCardWorktreeIds: ids }
+    )
+  },
+  setVisibleItemPageReviewWorktreeIds: (ids) => {
+    set((s) =>
+      sameIds(s.visibleItemPageReviewWorktreeIds, ids)
         ? s
-        : { visibleReviewCardWorktreeIds: ids }
+        : { visibleItemPageReviewWorktreeIds: ids }
     )
   },
   enqueueGitHubPRRefresh: (worktreeId, reason, priority = 0, executionHostId) => {
@@ -84,8 +93,7 @@ export const createRefreshRoutingActions = (
 
   reportVisibleGitHubPRRefreshCandidates: async (worktreeIds, generation) => {
     set((s) =>
-      s.visibleReviewWorktreeIds?.length === worktreeIds.length &&
-      worktreeIds.every((id, index) => s.visibleReviewWorktreeIds[index] === id)
+      sameIds(s.visibleReviewWorktreeIds, worktreeIds)
         ? s
         : { visibleReviewWorktreeIds: worktreeIds }
     )

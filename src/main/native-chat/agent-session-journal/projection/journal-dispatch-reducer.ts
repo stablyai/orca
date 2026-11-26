@@ -45,7 +45,11 @@ export function applyJournalDispatchRow(
   ) {
     submission.keptAsQueuedMessageId = row.keptAsQueuedMessageId
   }
-  if (row.state === 'rejected' && row.answeredInTurn !== undefined) {
+  // Accepted: the running turn it joined, kept only when named.
+  if (
+    (row.state === 'rejected' && row.answeredInTurn !== undefined) ||
+    (row.state === 'accepted' && row.answeredInTurn)
+  ) {
     submission.answeredInTurn = readAnsweredTurn(row.answeredInTurn)
   } else {
     delete submission.answeredInTurn
@@ -94,7 +98,7 @@ function foldStoppedHistoryCarried(
 }
 
 /** Malformed/unknown joins mean no answered turn, distinct from legacy rows lacking the field. */
-function readAnsweredTurn(value: unknown): AgentJournalAnsweredTurn | null {
+export function readAnsweredTurn(value: unknown): AgentJournalAnsweredTurn | null {
   if (typeof value !== 'object' || value === null) {
     return null
   }

@@ -1,10 +1,11 @@
 import type { AgentSessionMutationResult } from '../../../../../src/shared/agent-session/agent-session-wire'
+import { RpcRefusedError } from '../../../transport/rpc/rpc-refused-error'
 import type {
   AgentSessionWireRefusalCode,
   AgentSessionRefusalReference
 } from '../../../../../src/shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentJournalCursor } from '../../../../../src/shared/agent-session/journal/agent-session-journal-identity'
-import { structuredAgentSessionPayloadFingerprint } from '../../../../../src/shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { structuredAgentSessionPayloadFingerprint } from '../../../../../src/shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { agentSessionWriteNoticeParts } from '../../../../../src/shared/agent-session/failures/agent-session-refusal-notice'
 import {
   agentSessionRefusalFailure,
@@ -20,7 +21,7 @@ import { isRpcDeliveryUnknown } from '../../../transport/rpc/rpc-delivery-ambigu
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import '../../../transport/connection/stable-logical-rpc-client'
 import { isLogicalClientCutoverError } from '../../../transport/connection/logical-client-cutover-error'
-import { MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS } from '../composer/mobile-native-chat-send'
+import { MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS } from '../composer/delivery/mobile-native-chat-send'
 
 export const STRUCTURED_SEND_TIMEOUT_MS = 15_000
 
@@ -45,17 +46,6 @@ export type StructuredAgentSessionMutate = <TValue>(
   fingerprintMethod: string,
   fields: Record<string, unknown>
 ) => Promise<StructuredAgentSessionMutationResult<TValue>>
-
-class AgentSessionRpcResponseError extends Error {
-  constructor(
-    readonly code: string,
-    message: string,
-    /** A thrown refusal's reason rides here; its message is only the bare code. */
-    readonly data?: unknown
-  ) {
-    super(message)
-  }
-}
 
 export function agentSessionReadFailureRefusal(failure: unknown) {
   return readAgentSessionErrorRefusal(
@@ -98,11 +88,7 @@ export async function callAgentSession<TResult>(
     ...(options?.failWhenDisconnected ? { failWhenDisconnected: true } : {})
   })
   if (!response.ok) {
-    throw new AgentSessionRpcResponseError(
-      response.error.code,
-      response.error.message,
-      response.error.data
-    )
+    throw new RpcRefusedError(response.error.code, response.error.message, response.error.data)
   }
   return response.result as TResult
 }
@@ -187,9 +173,7 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
     }
   } catch (error) {
     const answered =
-      error instanceof AgentSessionRpcResponseError
-        ? agentSessionThrownFailure(error, error.code)
-        : null
+      error instanceof RpcRefusedError ? agentSessionThrownFailure(error, error.code) : null
     if (answered && answered.kind !== 'unconfirmed') {
       // The host turned the request away before running it; its text is written for a log.
       return {
@@ -203,7 +187,7 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
     if (
       isRpcDeliveryUnknown(error) ||
       isLogicalClientCutoverError(error) ||
-      error instanceof AgentSessionRpcResponseError
+      error instanceof RpcRefusedError
     ) {
       return { status: 'unknown' }
     }

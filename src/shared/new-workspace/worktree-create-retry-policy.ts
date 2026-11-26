@@ -2,7 +2,7 @@ import {
   CREATURE_POOL_NAMES,
   creatureNameAtTier,
   creatureNameTier
-} from '../worktree/retired-name-registry'
+} from '../worktree/naming/retired-name-registry'
 
 export const CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS = 25
 

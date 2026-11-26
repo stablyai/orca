@@ -5,13 +5,13 @@ import {
   type SkillBundleInstallRequest,
   type SkillBundleInstallResult,
   type SkillBundlePackageIdentity
-} from '../../../shared/skill-bundle-install-contract'
+} from '../../../shared/skills/installation/skill-bundle-install-contract'
 import { resolveSkillInstallDestination } from './skill-install-destinations'
 import type { SkillInstallDestinationAuthority } from './skill-install-destinations'
 import { installSkillBundle } from './skill-bundle-installation'
 import { downloadSkillPackageGrant } from '../package-download/skill-package-download'
 import { detectSkillProvidersInWsl } from '../providers/skill-wsl-provider-detection'
-import { selectedOrDetectedSkillProviders } from '../../../shared/skill-install-providers'
+import { selectedOrDetectedSkillProviders } from '../../../shared/skills/installation/skill-install-providers'
 import { createWslSkillInstallFilesystem } from '../filesystem/skill-wsl-install-filesystem'
 import { startSkillBundleInstallOperation } from '../observability/skill-operation-observability'
 import type { SkillProviderRootOverrides } from '../providers/skill-provider-destinations'

@@ -1,11 +1,11 @@
 import type { Session } from 'electron'
 import { randomUUID } from 'node:crypto'
-import type { NetworkProxySettings } from '../../../../shared/network-proxy'
+import type { NetworkProxySettings } from '../../../../shared/network/network-proxy'
 import type {
   ExtraUsageBalance,
   ProviderRateLimits,
   UsageRateLimitFailureKind
-} from '../../../../shared/rate-limit-types'
+} from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import {
   clearOpenCodeSessionCookies,
   createOpenCodeRequestSession,

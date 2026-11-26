@@ -1,5 +1,5 @@
 import { useEffect, useId, useSyncExternalStore } from 'react'
-import { CALM_STATUS_HEALTHY_HOLD_MS } from '../../../../../../../shared/calm-status-reveal'
+import { CALM_STATUS_HEALTHY_HOLD_MS } from '../../../../../../../shared/remote-runtime/connection-status/calm-status-reveal'
 
 /** Share one outage clock per server across mounted observers; one visible speaker shows the notice, and every pane stays quiet while any notice is speaking or held on screen. */
 type ServerOutage = {
@@ -138,13 +138,4 @@ export function usePublishRemoteServerNoticeShowing(
       environmentId === null || !showing ? undefined : join(environmentId, surface, 'showers'),
     [environmentId, showing, surface]
   )
-}
-
-export function resetRemoteServerNoticeClaimsForTests(): void {
-  for (const outage of outages.values()) {
-    if (outage.releaseTimer !== null) {
-      window.clearTimeout(outage.releaseTimer)
-    }
-  }
-  outages.clear()
 }

@@ -9,13 +9,13 @@ import { build } from 'esbuild'
 
 const ENTRY_PATH = resolve('out/main/parcel-watcher-process-entry.js')
 const POOL_SOURCE = resolve(
-  'src/main/ipc/filesystem/watcher-process/runtime-watcher-process-pool.ts'
+  'src/main/ipc/filesystem/watcher-process/runtime-pool/runtime-watcher-process-pool.ts'
 )
 const FAILURE_SOURCE = resolve(
   'src/main/ipc/filesystem/watcher-process/parcel-watcher-process-failure.ts'
 )
 const REGISTRY_SOURCE = resolve(
-  'src/main/ipc/filesystem/watcher-process/parcel-watcher-child-registry.ts'
+  'src/main/ipc/filesystem/watcher-process/child-lifecycle/parcel-watcher-child-registry.ts'
 )
 const MAX_CHILD_RSS_KIB = 128 * 1024
 const MAX_CHILD_CPU_PERCENT = 50

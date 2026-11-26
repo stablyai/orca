@@ -1,15 +1,20 @@
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   runtimeTargetForWorkspaceOwner,
   resolveOwner
 } from '../../workspace/ownership/resolve-owner'
 import type { WorktreeOperationRouteState } from '../../workspace/ownership/worktree-operation-route'
+import { translate } from '@/i18n/i18n'
 
 const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
 
-export const FILE_OWNER_UNRESOLVED_MESSAGE =
-  "Couldn't verify which host owns this file. Reopen the file and try again."
+export function fileOwnerUnresolvedMessage(): string {
+  return translate(
+    'auto.lib.fileOwnerRuntimeTarget.unresolved',
+    "Couldn't verify which host owns this file. Reopen the file and try again."
+  )
+}
 
 /**
  * Transport to the worktree's owner, from its rows alone. `null` when rows disagree, so the caller
@@ -49,7 +54,7 @@ export function requireRuntimeTargetForFileOwner(
 ): RuntimeClientTarget {
   const target = getRuntimeTargetForFileOwner(state, worktreeId, runtimeEnvironmentId)
   if (!target) {
-    throw new Error(FILE_OWNER_UNRESOLVED_MESSAGE)
+    throw new Error(fileOwnerUnresolvedMessage())
   }
   return target
 }

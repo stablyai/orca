@@ -1,5 +1,14 @@
-import type { CrewInvalidation } from './crew-changes'
+import { scopedCrewChange, type CrewInvalidation } from './crew-changes'
 import type { OrchestrationDb } from '../db/orchestration-db'
+import {
+  collectDispatchWrites,
+  createdDispatchParties,
+  dispatchMutations,
+  dispatchOf,
+  noticedMutations,
+  progressMutations,
+  runCoordinatorParties
+} from './crew-mutation-scopes'
 
 type CrewMutationPrototype = Partial<OrchestrationDb>
 type CrewMutationInvocation = (this: OrchestrationDb, ...args: unknown[]) => unknown
@@ -30,6 +39,7 @@ const mutations = [
   'prepareStartingWorkerAuthority',
   'markWorkerDispatchReady',
   'recordWorkerStage',
+  'retainWorkerLaunchObservation',
   'completeDispatch',
   'completeActiveDispatchesForTask',
   'failActiveDispatchForTask',
@@ -39,7 +49,6 @@ const mutations = [
   'reconcileFederatedWorkerStart',
   'reconcileMissingWorkerTerminal',
   'promoteReadyTasks',
-  'bindRun',
   'createRun',
   'createQuestion',
   'answerQuestion',
@@ -54,8 +63,8 @@ const mutations = [
   'markWorkerStartUnknown',
   'beginWorkerStop',
   'settleWorkerStop',
+  'settleDeadWorkerTerminalReleases',
   'markWorkerStopUnknown',
-  'unbindOtherRunsForCoordinator',
   'recordAttemptObservation',
   'resetAll',
   'resetTasks',
@@ -77,6 +86,48 @@ const trafficMutations: ReadonlySet<keyof OrchestrationDb> = new Set([
   'timeoutGate'
 ])
 
+type MailboxScope = (args: unknown[], result: unknown) => string[] | undefined
+
+const idOf = (value: unknown): string | undefined =>
+  typeof value === 'object' && value !== null && 'id' in value && typeof value.id === 'string'
+    ? value.id
+    : undefined
+const createdRun: MailboxScope = (_args, result) => {
+  const id = idOf(result)
+  return id ? [`run:${id}`] : undefined
+}
+const createdDispatch: MailboxScope = (_args, result) => {
+  const id = idOf(result)
+  return id ? [`dispatch:${id}`] : undefined
+}
+const namedDispatch: MailboxScope = ([id]) =>
+  typeof id === 'string' ? [`dispatch:${id}`] : undefined
+
+/** The mailboxes whose owner a mutation can change, named by the mutation itself; progress records
+ *  touch none. Mutations without an entry leave their scope unknown, which consumers treat as all. */
+const mailboxScopes: Partial<Record<(typeof mutations)[number], MailboxScope>> = {
+  createRun: createdRun,
+  createDispatchContext: createdDispatch,
+  markWorkerDispatchReady: namedDispatch,
+  completeDispatch: namedDispatch,
+  failDispatch: namedDispatch,
+  abandonWorkerDispatch: namedDispatch,
+  failWorkerStart: namedDispatch,
+  transitionLifecycle: ([params]) => {
+    if (typeof params !== 'object' || params === null) {
+      return undefined
+    }
+    const id = 'id' in params ? params.id : undefined
+    const entity = 'entity' in params ? params.entity : undefined
+    // A worker row is keyed by its dispatch id; a task's mailboxes are unknown here.
+    return typeof id === 'string' && (entity === 'dispatch' || entity === 'worker')
+      ? [`dispatch:${id}`]
+      : undefined
+  },
+  recordWorkerStage: () => [],
+  recordAttemptObservation: () => []
+}
+
 /** Wake after the synchronous outer mutation; nested writes coalesce and rolled-back reads compare equal. */
 export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationPrototype }): void {
   const prototype = ctor.prototype
@@ -88,9 +139,10 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
   }
   if (hasDomainMethod(prototype, 'settleWorkerTerminalRelease')) {
     const release = prototype.settleWorkerTerminalRelease
-    prototype.settleWorkerTerminalRelease = function (this: OrchestrationDb, resourceId) {
+    // Forward every argument: the owner fence is part of the settle, not of the notification.
+    prototype.settleWorkerTerminalRelease = function (this: OrchestrationDb, resourceId, owner) {
       const before = this.getWorkerTerminalResource(resourceId)?.release_state
-      const result = release.call(this, resourceId)
+      const result = release.call(this, resourceId, owner)
       if (before !== result.release_state) {
         this.crewChanges.notify(new Set(['topology']))
       }
@@ -130,6 +182,9 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
   const insert = prototype.insertMessage
   prototype.insertMessage = function (this: OrchestrationDb, message) {
     const result = insert.call(this, message)
+    if (result.type === 'worker_done' && result.to_handle.startsWith('orca_session_id:')) {
+      this.workerDockSources?.invalidate(result.to_handle.slice('orca_session_id:'.length))
+    }
     if (result.type !== 'heartbeat') {
       const notice: CrewInvalidation =
         result.delivery_contract === 'legacy_direct'
@@ -150,7 +205,13 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
       configurable: true,
       writable: true,
       value(this: OrchestrationDb, ...args: unknown[]) {
-        const result = original.apply(this, args)
+        const scoped =
+          (progressMutations.has(name) || dispatchMutations.has(name)) && dispatchOf(args[0])
+        const noticed = noticedMutations.has(name)
+        const [result, written] =
+          scoped || noticed
+            ? collectDispatchWrites(this, () => original.apply(this, args), !noticed)
+            : [original.apply(this, args), null]
         if (
           typeof result === 'object' &&
           result !== null &&
@@ -160,7 +221,67 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
         ) {
           return result
         }
-        this.crewChanges.notify(new Set([trafficMutations.has(name) ? 'traffic' : 'topology']))
+        if (
+          typeof result === 'object' &&
+          result !== null &&
+          'duplicate' in result &&
+          result.duplicate === true &&
+          name === 'recordAttemptObservation'
+        ) {
+          return result
+        }
+        if (name === 'recordAttemptObservation') {
+          const observation = args[0]
+          if (
+            observation &&
+            typeof observation === 'object' &&
+            'dispatchId' in observation &&
+            typeof observation.dispatchId === 'string'
+          ) {
+            this.workerDockSources?.changedDispatch(observation.dispatchId)
+          }
+        } else if (name === 'resetAll' || name === 'resetTasks') {
+          this.workerDockSources?.forgetWorkers()
+        } else if (name === 'resetMessages') {
+          this.workerDockSources?.changedHistory()
+        }
+        const mailboxes = mailboxScopes[name]?.(args, result)
+        const notify = (change: CrewInvalidation) =>
+          this.crewChanges.notify(
+            mailboxes ? Object.assign(change, { trafficAddresses: new Set(mailboxes) }) : change
+          )
+        const runParties = name === 'createRun' ? runCoordinatorParties(args[0]) : null
+        if (scoped && written) {
+          written.dispatchIds.add(scoped)
+          notify(
+            scopedCrewChange([progressMutations.has(name) ? 'assignments' : 'topology'], {
+              dispatchIds: written.dispatchIds
+            })
+          )
+        } else if (noticed && written) {
+          // Includes a Task's Dispatches when the Task changed: a completed Task hides its failures.
+          for (const id of written.dispatchIds) {
+            this.workerDockSources?.changedDispatch(id)
+          }
+          // Nothing noticed: the call wrote no row a crew shows.
+          if (written.dispatchIds.size > 0) {
+            notify(
+              scopedCrewChange(['topology'], {
+                dispatchIds: written.dispatchIds,
+                ...(written.created.size > 0
+                  ? { parties: createdDispatchParties(this, written.created) }
+                  : {})
+              })
+            )
+          }
+        } else if (runParties) {
+          notify(scopedCrewChange(['topology'], { parties: runParties }))
+        } else if (name === 'closeQuestionsForDispatch' && dispatchOf(args[0])) {
+          // One Dispatch's questions and helper mail: the crews showing that Dispatch read them.
+          notify(scopedCrewChange(['traffic'], { dispatchIds: new Set([dispatchOf(args[0])!]) }))
+        } else {
+          notify(new Set([trafficMutations.has(name) ? 'traffic' : 'topology']))
+        }
         return result
       }
     })

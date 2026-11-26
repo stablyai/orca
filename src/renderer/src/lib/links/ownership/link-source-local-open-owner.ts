@@ -1,8 +1,8 @@
 import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId
-} from '../../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { getResolvedExecutionHostIdForWorktree } from '../../workspace/ownership/resolved-worktree-execution-host'
 import type { HttpLinkSourceOwner } from '../../browser/navigation/http-link-routing'
 import type { WorktreeRuntimeOwnerState } from '../../workspace/ownership/worktree-runtime-owner-state'

@@ -2,7 +2,7 @@ import type {
   SkillDiscoveryResult,
   SkillDiscoverySource,
   SkillSourceKind
-} from '../../../shared/skills'
+} from '../../../shared/skills/discovery/skills'
 import {
   blockedWslDistroForPath,
   wslDistroForPath,

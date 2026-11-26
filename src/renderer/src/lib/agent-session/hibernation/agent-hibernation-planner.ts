@@ -1,5 +1,5 @@
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import {
   getEligiblePane,
@@ -76,7 +76,7 @@ function getAgentEntriesByTabId(
   agentStatusByPaneKey: AgentHibernationPlannerSnapshot['agentStatusByPaneKey']
 ): Map<string, AgentStatusEntry[]> {
   const entriesByTabId = new Map<string, AgentStatusEntry[]>()
-  for (const entry of Object.values(agentStatusByPaneKey)) {
+  for (const entry of Array.from(agentStatusByPaneKey.values())) {
     if (!entry) {
       continue
     }

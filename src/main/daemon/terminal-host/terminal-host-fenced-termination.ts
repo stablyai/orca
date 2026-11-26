@@ -3,7 +3,7 @@ import type {
   PtyFencedTerminationOutcome
 } from '../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import type { Session } from '../sessions/session'
-import type { ClaimedAgentPtyOwnerRegistry } from '../../../shared/claimed-agent-pty-owner'
+import type { ClaimedAgentPtyOwnerRegistry } from '../../../shared/agent-session/lifecycle/leases/claimed-agent-pty-owner'
 
 type FencedTermination =
   | { accepted: false; result: PtyFencedTerminationOutcome }

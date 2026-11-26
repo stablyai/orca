@@ -16,10 +16,15 @@ export class BrowserPopupCompatibilityManager extends BrowserManager {
     security: ReturnType<typeof contentSecurity>
     permission?: string
   }[] = []
-  protected override openLinkInOrcaTab(pageId: string, url: string, activate?: boolean): boolean {
+  protected override openLinkInOrcaTab(
+    pageId: string,
+    url: string,
+    activate?: boolean,
+    agentOpened?: boolean
+  ): boolean {
     this.tabOpens.push({ url, activate })
     this.writeStatus()
-    return super.openLinkInOrcaTab(pageId, url, activate)
+    return super.openLinkInOrcaTab(pageId, url, activate, agentOpened)
   }
   protected override createPopupChildWindowWithOriginBar(
     opener: WebContents,

@@ -9,12 +9,13 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { RefreshCw } from 'lucide-react'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import type { WslHostDistro } from '../../../../../../shared/wsl-host-types'
-import { getWslHostServerFilesMissingLabel } from '../../wsl-host-row-status'
-import { wslSetVersion2Command } from '../../../../../../shared/wsl-host-failure-copy'
+import type { WslHostDistro } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
+import { getWslHostServerFilesMissingLabel } from './wsl-host-row-status'
+import { wslSetVersion2Command } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-failure-copy'
+import { wslMoveAutoMovesBridgeProjects } from '../../../../../../shared/wsl-move/wsl-move-rollout-stage'
 
 export function wslDistroStateLabel(distro: WslHostDistro, t: Translate = translate): string {
   if (distro.version === 1) {
@@ -64,6 +65,7 @@ export function AddWslHostFormPanel({
   selectedDistro,
   error,
   adding,
+  addingDetail = null,
   serverFilesMissing,
   onSelectDistro,
   onRefresh,
@@ -76,6 +78,8 @@ export function AddWslHostFormPanel({
   selectedDistro: string
   error: string | null
   adding: boolean
+  /** What the Add waits for, in place of the generic setup hint. */
+  addingDetail?: string | null
   /** This build cannot run WSL hosts; nothing here may be chosen or submitted. */
   serverFilesMissing: boolean
   onSelectDistro: (name: string) => void
@@ -98,10 +102,15 @@ export function AddWslHostFormPanel({
           {t('auto.components.sidebar.AddWslHostFormPanel.title', 'Add WSL distro')}
         </DialogTitle>
         <DialogDescription>
-          {t(
-            'auto.components.sidebar.AddWslHostFormPanel.description',
-            'Orca runs its server inside the distro, so git, files and terminals run natively in Linux. Projects in this distro that you opened through \\\\wsl.localhost move to this host automatically once their terminals are idle; projects on a Windows drive (/mnt/…) stay on this computer. You can bring a moved project back from the sidebar.'
-          )}
+          {wslMoveAutoMovesBridgeProjects()
+            ? t(
+                'auto.components.sidebar.AddWslHostFormPanel.descriptionAutoMove',
+                'Git, files and terminals run natively in Linux. Your WSL projects move here once their terminals are idle.'
+              )
+            : t(
+                'auto.components.sidebar.AddWslHostFormPanel.descriptionMoveFromSidebar',
+                'Git, files and terminals run natively in Linux. Existing WSL projects stay on Windows until you choose Move to … host in their project menu.'
+              )}
         </DialogDescription>
       </DialogHeader>
 
@@ -204,10 +213,11 @@ export function AddWslHostFormPanel({
         ) : null}
         {adding ? (
           <p className="text-xs text-muted-foreground" aria-live="polite">
-            {t(
-              'auto.components.sidebar.AddWslHostFormPanel.addingHint',
-              'Installing and starting the Orca server in the distro. The first time can take a minute.'
-            )}
+            {addingDetail ??
+              t(
+                'auto.components.sidebar.AddWslHostFormPanel.addingHint',
+                'Installing and starting the Orca server in the distro. The first time can take a minute.'
+              )}
           </p>
         ) : null}
         {error ? (

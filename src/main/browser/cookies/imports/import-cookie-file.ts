@@ -1,5 +1,5 @@
-import { browserCookieImportFailure } from '../../../../shared/browser-cookie-import-failure-copy'
-import type { BrowserCookieImportResult } from '../../../../shared/browser-workspace-types'
+import { browserCookieImportFailure } from '../../../../shared/browser/cookies/browser-cookie-import-failure-copy'
+import type { BrowserCookieImportResult } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import { readFile } from 'node:fs/promises'
 import {
   validateCookieEntry,

@@ -1,0 +1,32 @@
+name: PR description
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-description-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  performance:
+    name: Performance section
+    runs-on: ubuntu-slim
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: .github/scripts/check-pr-performance-section.mjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Check Performance answer
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_EVENT_ACTION: ${{ github.event.action }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node .github/scripts/check-pr-performance-section.mjs

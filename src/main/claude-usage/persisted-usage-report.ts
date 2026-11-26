@@ -1,9 +1,10 @@
+import { readClaudeUsageJson } from './source-cache-compression'
 import type { ClaudeUsagePersistedState } from './types'
 import {
   hasClaudeUsageProtectedCheckpoint,
   initializePersistedClaudeUsageProjections
 } from './persisted-projection-validation'
-import { sealUsageCacheJson, verifyUsageCacheJson } from '../usage/usage-cache-json-integrity'
+import { sealUsageCacheJson, verifyUsageCacheJson } from '../usage/cache/usage-cache-json-integrity'
 
 const REPORT_DOMAIN = 'claude-usage-report-v1'
 
@@ -53,4 +54,16 @@ export function parseClaudeUsageReport(
   } catch {
     return invalidateReport(state)
   }
+}
+
+export async function readClaudeUsageReportFile(path: string): Promise<{
+  state: ClaudeUsagePersistedState
+  integrityVerified: boolean
+}> {
+  const { parsed, verified } = await readClaudeUsageJson<ClaudeUsagePersistedState>(
+    path,
+    REPORT_DOMAIN,
+    false
+  )
+  return { state: parsed, integrityVerified: verified }
 }

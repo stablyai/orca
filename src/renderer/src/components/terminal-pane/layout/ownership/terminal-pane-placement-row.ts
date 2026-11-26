@@ -1,4 +1,4 @@
-import type { TerminalPaneNewTabRow } from '../../../../../../shared/workspace-layout/terminal-pane-placement'
+import type { TerminalPaneNewTabRow } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 
 export function terminalPanePlacementRow(tab: TerminalTab): TerminalPaneNewTabRow {

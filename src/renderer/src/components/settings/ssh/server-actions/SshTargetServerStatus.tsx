@@ -1,4 +1,7 @@
-import type { SshConnectionState, SshTarget } from '../../../../../../shared/ssh-types'
+import type {
+  SshConnectionState,
+  SshTarget
+} from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { DropdownMenuItem, DropdownMenuSeparator } from '../../../ui/dropdown-menu'

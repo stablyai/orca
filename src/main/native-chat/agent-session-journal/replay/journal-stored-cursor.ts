@@ -5,13 +5,13 @@ import { decodeJournalOutcome, decodingOutcome } from '../outcomes/journal-outco
 import { JournalOutcomeDecodeError } from '../writing/journal-write-guards'
 import { outcomeFormat1StoredScalars } from '../outcomes/journal-outcome-format-1'
 import { journalOutcomeSource } from '../outcomes/journal-outcome-format'
-import { journalContextCursor } from '../context-epochs/journal-context-cursor'
+import { journalContextCursor } from '../context-epochs/journal-context-epoch'
 import { readJournalSessionEpoch } from '../durable-rows/journal-row-table'
 import {
   agentSessionExecutionLocationsEqual,
   type AgentSessionExecutionLocation
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { StructuredAttentionRead } from '../../../../shared/agent-session/agent-session-attention'
+import type { StructuredAttentionRead } from '../../../../shared/agent-session/view/agent-session-attention'
 
 export function readStoredWorkspaceAttention(
   database: JournalHostDatabase,

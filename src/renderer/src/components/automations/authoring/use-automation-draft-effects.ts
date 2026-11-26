@@ -41,8 +41,10 @@ export function useAutomationDraftEffects({
   const { dialogWorktrees } = destinationForm
   const { getDefaultTarget } = pageRefresh
 
+  const runsAsBot = draft.bot !== null
   useEffect(() => {
-    if (!draft.projectId && editingAutomationId === null) {
+    // A bot target has no project; the bot brings its own folder.
+    if (!draft.projectId && !runsAsBot && editingAutomationId === null) {
       const target = getDefaultTarget()
       if (!target.projectId) {
         return
@@ -53,7 +55,7 @@ export function useAutomationDraftEffects({
         workspaceId: target.workspaceId
       }))
     }
-  }, [draft.projectId, editingAutomationId, getDefaultTarget, setDraft])
+  }, [draft.projectId, editingAutomationId, getDefaultTarget, runsAsBot, setDraft])
   useEffect(() => {
     if (
       !draft.projectId ||
@@ -136,8 +138,9 @@ export function useAutomationDraftEffects({
         time: template.time ?? current.time,
         dayOfWeek: template.dayOfWeek ?? current.dayOfWeek,
         customSchedule: '',
-        agentId: template.agentId ?? current.agentId,
-        ...(template.agentId && template.agentId !== current.agentId
+        // A bot runs with its own agent.
+        agentId: current.bot ? current.agentId : (template.agentId ?? current.agentId),
+        ...(!current.bot && template.agentId && template.agentId !== current.agentId
           ? {
               launchPreferences: undefined,
               agentArgs: undefined,

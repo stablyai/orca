@@ -4,13 +4,13 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { isWslDistroNotRunningRefusal } from '../../../../shared/wsl-distro-not-running-refusal'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { isWslDistroNotRunningRefusal } from '../../../../shared/remote-runtime/wsl-hosts/wsl-distro-not-running-refusal'
 import type {
   GetGitLabRateLimitResult,
   GitLabRateLimitSnapshot
-} from '../../../../shared/gitlab-types'
-import { getProviderRateLimitScope } from '@/components/provider-accounts/provider-account-scope'
+} from '../../../../shared/gitlab/gitlab-types'
+import { useProviderRateLimitScope } from '@/components/provider-accounts/use-provider-host-scope'
 import { ProviderHostScopeControl } from '@/components/provider-accounts/ProviderHostScopeControl'
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
@@ -174,7 +174,7 @@ export function GitLabRateLimitPanel({
 }): React.JSX.Element {
   const t = useTranslate()
   const { snapshot, hasError, isFetching, refresh } = useGitLabRateLimitSnapshot(target)
-  const budgetScope = getProviderRateLimitScope(target, 'GitLab', t)
+  const budgetScope = useProviderRateLimitScope(target, 'GitLab')
 
   return (
     <div className={cn('space-y-3 rounded-md border border-border/60 p-3', className)}>

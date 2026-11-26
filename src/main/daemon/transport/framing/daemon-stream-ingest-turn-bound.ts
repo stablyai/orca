@@ -1,5 +1,5 @@
 import type { Socket } from 'node:net'
-import { yieldToEventLoop } from '../../../../shared/event-loop-yield'
+import { yieldToEventLoop } from '../../../../shared/concurrency/event-loop-yield'
 
 export const STREAM_INGEST_TURN_BYTES = 64 * 1024
 

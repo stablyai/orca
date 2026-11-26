@@ -1,5 +1,5 @@
 import { stat } from 'node:fs/promises'
-import { PetImportError } from '../../../shared/pet-import-failure-copy'
+import { PetImportError } from '../../../shared/pets/pet-import-failure-copy'
 import { isAbsolute, resolve, sep } from 'node:path'
 import { classifyFile } from './pet-image-formats'
 import { MAX_BYTES } from './pet-import-size-limits'

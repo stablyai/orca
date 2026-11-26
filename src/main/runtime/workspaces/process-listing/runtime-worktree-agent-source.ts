@@ -21,6 +21,7 @@ export type RuntimeWorktreeAgentSource = Pick<AgentStatusIpcPayload, 'subagents'
   agentType: string | null
   /** Names the provider session whose saved title the row may wear. */
   providerSessionId?: string
+  orcaSessionId?: string
   prompt: string
   lastAssistantMessage: string | null
   toolName: string | null

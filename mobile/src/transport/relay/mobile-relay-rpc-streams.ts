@@ -1,4 +1,4 @@
-import { decodeBrowserScreencastFrame } from '../../browser/browser-screencast-protocol'
+import { decodeBrowserScreencastFrame } from '../../browser/screencast/browser-screencast-protocol'
 import {
   handleTerminalBinaryFrame,
   type TerminalSnapshotState

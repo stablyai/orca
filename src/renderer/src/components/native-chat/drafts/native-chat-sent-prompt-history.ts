@@ -1,14 +1,14 @@
 // Derive recall from the visible conversation at keypress so reloads, remounts and other clients’ sends need no separate history.
 
-import { deriveNativeChatRowContent } from '../../../../../shared/native-chat/transcript/native-chat-row-content'
-import { stripSentImagePromptMarkers } from '../../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
+import { deriveNativeChatRowContent } from '../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
+import { stripSentImagePromptMarkers } from '../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import { projectNativeChatTranscriptMessages } from '../../../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatCommandMarker } from '../session/terminal/delivery/native-chat-command-marker'
 import {
   compareNativeChatDisplayMessages as compareMessages,
   orderNativeChatDisplayMessages as orderMessages
-} from '../../../../../shared/native-chat/transcript/native-chat-message-order'
+} from '../../../../../shared/native-chat/transcript/messages/native-chat-message-order'
 
 export type NativeChatRecallSource = {
   messages: readonly NativeChatMessage[]
@@ -63,8 +63,9 @@ export function nativeChatSentPrompts(source: NativeChatRecallSource): NativeCha
     compareMessages,
     orderMessages
   )) {
-    // `from` marks a prompt another agent sent; it was never typed here.
-    if (message.role !== 'user' || message.from) {
+    // `from`, `asker` and `automationRun` mark a prompt another agent, a connector or an automation
+    // sent; never typed here.
+    if (message.role !== 'user' || message.from || message.asker || message.automationRun) {
       continue
     }
     while (

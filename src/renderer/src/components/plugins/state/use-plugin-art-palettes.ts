@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { PluginMarketplaceHostListing } from '../../../../../preload/api-types'
+import type { PluginMarketplaceHostListing } from '../../../../../preload/api/plugins/plugin-host-api'
 import { usePluginTerminalThemes, usePluginThemes } from '@/store/plugins/appearance/plugin-themes'
 import type { PluginArtPalette } from '../list/PluginCardArt'
 

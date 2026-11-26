@@ -3,9 +3,12 @@ import {
   type PublicKnownRuntimeEnvironment,
   type RuntimePairingRepairRoute
 } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { resolveHostDisplay } from '../../../../../../shared/host-display-resolution'
-import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
+import { resolveHostDisplay } from '../../../../../../shared/execution-host/host-display-resolution'
+import {
+  lastVerifiedRuntimeStatus,
+  type RuntimeEnvironmentStatus
+} from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
+import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
@@ -13,7 +16,7 @@ import {
   isConnectedRuntimeHostState,
   type RuntimeHostConnectionState as RuntimeServerConnectionState
 } from '../../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
-import { useAppStore } from '@/store/index'
+import { useRuntimeHostStatusSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import {
   evaluateHostDetails,
   getHostDetailsDescription,
@@ -39,14 +42,14 @@ export type RuntimeServerRowState = {
   title: string
 }
 
+const selectEntry = (entry: RuntimeEnvironmentStatus | undefined) => entry
+
 export function useRuntimeServerRowState(
   environment: PublicKnownRuntimeEnvironment,
   details: RuntimeHostDetails | undefined
 ): RuntimeServerRowState {
   const t = useTranslate()
-  const runtimeStatusEntry = useAppStore((state) =>
-    state.runtimeStatusByEnvironmentId.get(environment.id)
-  )
+  const runtimeStatusEntry = useRuntimeHostStatusSelector(environment.id, selectEntry)
   // Share the host verdict across Settings surfaces: an unverifiable probe can leave transport connected, so raw entry.status would offer Connect while repository setup still reports reachability.
   const entryReachable =
     runtimeStatusEntry !== undefined &&

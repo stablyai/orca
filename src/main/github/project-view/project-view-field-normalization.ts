@@ -6,7 +6,7 @@ import type {
   GitHubProjectLabel,
   GitHubProjectSingleSelectOption,
   GitHubProjectUser
-} from '../../../shared/github/project-types'
+} from '../../../shared/github/projects/project-types'
 
 export type RawProjectV2Field = {
   __typename?: string

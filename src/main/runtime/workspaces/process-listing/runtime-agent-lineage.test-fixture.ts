@@ -3,12 +3,12 @@ import '../../orchestration/db/contract-constants'
 import '../../orchestration/db/messages/mailbox-routing-page'
 import '../../orchestration/db/dispatch-row-writer'
 import '../../orchestration/db/attempt-outcome-projection'
-import type { RuntimeAgentLineageTestModule } from '../../../../shared/runtime-agent-lineage-consumer.test-fixture'
+import type { RuntimeAgentLineageTestModule } from '../../../../shared/worktree/catalog/runtime-agent-lineage-consumer.test-fixture'
 import { RuntimeAgentOrchestrationProjection } from '../../orchestration/crew/runtime-agent-orchestration-projection'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
-import type { RuntimeWorktreePsSummary } from '../../../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreePsSummary } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
-import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
+import { testOrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId

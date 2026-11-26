@@ -1,6 +1,6 @@
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { resolveIndexedSshRepositoryHost } from './repository-owner-index'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type {
   WorktreeOperationOwnerRecord,
   WorktreeOperationRoute,

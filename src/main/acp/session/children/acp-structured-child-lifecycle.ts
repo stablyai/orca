@@ -12,6 +12,7 @@ import {
 } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { withProviderSpawnAbsence } from '../../../provider-process/provider-executable-missing'
 import { providerStartupFailureFact } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
+import { withLostProviderOutcome } from '../../../provider-process/provider-process-exit-status'
 import {
   ACP_STOP_GRACE_MS,
   type AcpStructuredSessionAdapterDeps
@@ -32,6 +33,9 @@ function acpStartupEndFailure(session: AcpStructuredChild): SubmissionRejectionF
     return agentSessionFailureFact('hostStopped', { detail: providerDiagnostic(stderr, 'person') })
   }
   const absence = session.connection.spawnAbsence
+  if (session.connection.exitStatus?.outcomeLost) {
+    return agentSessionFailureFact('hostFault')
+  }
   return absence
     ? providerStartupFailureFact(withProviderSpawnAbsence(new Error(stderr), absence))
     : agentSessionFailureFact('providerExited', { detail: providerDiagnostic(stderr, 'person') })
@@ -148,6 +152,7 @@ export class AcpStructuredChildren {
     }
     if (requested && session.journalClosed === null) {
       // Allow the running turn to settle before closing the process.
+      session.historyCatchUp?.abort()
       session.closeRequested = true
       await windDownAcpTurn(session, this.stopGraceMs())
       if (session.ended) {
@@ -207,6 +212,7 @@ export class AcpStructuredChildren {
       lost ?? new AcpAgentExitedError(detail, connection.stderrTail()),
       connection.spawnAbsence
     )
+    withLostProviderOutcome(exited, connection.exitStatus)
     this.endings.record(
       sessionId,
       generation,
@@ -230,6 +236,7 @@ export class AcpStructuredChildren {
     // Orca refusing what the agent wrote outranks the exit its cleanup then causes.
     this.recordEnding(session, error)
     if (!isAcpReadySession(session)) {
+      session.historyCatchUp?.abort()
       session.journalClosed = error.message || error.name
       return
     }

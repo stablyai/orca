@@ -1,15 +1,22 @@
-import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
-import type { ZcodePlanSite } from '../../../shared/zcode-plan-sites'
+import type {
+  ProviderRateLimits,
+  UsageReadingAccount
+} from '../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { ZcodePlanSite } from '../../../shared/agent-accounts/usage-credentials/zcode-plan-sites'
 import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
-import type { ClaudeAccountSelectionTarget } from '../../claude-accounts/runtime-selection'
+import type { ClaudeAccountSelectionTarget } from '../../claude-accounts/selection/runtime-selection'
 import type { KimiHomeResolution } from '../../kimi/kimi-runtime-home'
-import type { CodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
-import type { CodexRateLimitHomeResolution } from '../../codex-accounts/runtime-home-service-types'
+import type { CodexAccountSelectionTarget } from '../../../shared/agent-accounts/codex/codex-selection-lane'
+import type { CodexRateLimitHomeResolution } from '../../codex-accounts/runtime-home/runtime-home-service-types'
 
-export type InactiveCodexHome = { kind: 'ready'; managedHomePath: string } | { kind: 'skip' }
+export type InactiveCodexHome =
+  | { kind: 'ready'; managedHomePath: string; backendUsageOnly?: boolean }
+  | { kind: 'skip' }
 
 export type InactiveCodexAccountInfo = {
   id: string
+  /** Absent when the saved account cannot name its runtime slot, e.g. a WSL account without a distro. */
+  readingAccount?: UsageReadingAccount
   /** May be async: a WSL home is checked before a preview reads it. */
   resolveHome: () => InactiveCodexHome | Promise<InactiveCodexHome>
 }
@@ -59,9 +66,8 @@ export type ZcodePlanResolvedConfig = {
   error: string | null
 }
 
-export type GeminiCliOAuthEnabledResolver = () => boolean
-
 export type AntigravityUsageEnabledResolver = () => boolean
+export type ClaudeOAuthUsageEnabledResolver = () => boolean
 export type MuseUsageEnabledResolver = () => boolean
 export type ActiveRateLimitProvider = ProviderRateLimits['provider']
 export type ActiveProviderState = {
@@ -102,7 +108,6 @@ export const DEFERRED_STARTUP_ACTIVE_REFRESH_MS = 1000
 export type InternalRateLimitState = {
   claude: ProviderRateLimits | null
   codex: ProviderRateLimits | null
-  gemini: ProviderRateLimits | null
   opencodeGo: ProviderRateLimits | null
   kimi: ProviderRateLimits | null
   antigravity: ProviderRateLimits | null

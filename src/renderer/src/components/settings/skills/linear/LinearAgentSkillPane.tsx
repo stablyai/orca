@@ -8,14 +8,14 @@ import {
   type LucideIcon
 } from 'lucide-react'
 
-import { LinearApiKeyDialog } from '@/components/linear-api-key-dialog'
+import { LinearApiKeyDialog } from '@/components/integrations/task-trackers/linear-api-key-dialog'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store/index'
 import { ORCA_LINEAR_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
 import { getLinearUsageExamples } from '@/lib/work-items/linear/linear-usage-examples'
 import type { SkillUsageExample } from '@/lib/skills/examples/skill-usage-example'
-import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
+import { useLinearProviderConnected } from '@/lib/work-items/linear/useLinearProviderConnected'
 import { normalizeVisibleTaskProviders } from '../../../../../../shared/work-items/task-providers'
 import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { AgentSkillSetupPanel } from '../../../skills/setup/AgentSkillSetupPanel'

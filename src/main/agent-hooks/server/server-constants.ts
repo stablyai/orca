@@ -1,7 +1,16 @@
-import { AGENT_KIND_VALUES, type AgentKind } from '../../../shared/telemetry-events'
+import { AGENT_DONE_QUIET_MS } from '../../../shared/agent-status/lifecycle/agent-transitions'
+import {
+  AGENT_KIND_VALUES,
+  type AgentKind
+} from '../../../shared/telemetry/schemas/telemetry-property-schemas'
 
 export const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 export const ASSISTANT_MESSAGE_RETRY_MS = 50
+// Copilot can write a turn's reply well after agentStop (a Fusion answer up to ~370 ms later).
+// Retries end within the done quiet window, so a reply they find still reaches the banner and push.
+export const COPILOT_STOP_REPLY_RETRY_ATTEMPTS = Math.floor(
+  AGENT_DONE_QUIET_MS / ASSISTANT_MESSAGE_RETRY_MS
+)
 export const CODEX_SUBAGENT_POLL_MS = 1_000
 
 // Version 1 lacked ordering clocks; mismatched caches hydrate empty.
@@ -10,6 +19,8 @@ export const LAST_STATUS_FILE_VERSION = 2
 // Saved status only seeds the "restored, unconfirmed" view after a restart, so routine saves can
 // wait minutes; authority changes bypass the window and quit, hook-disable and stop flush now.
 export const STATUS_PERSIST_MIN_INTERVAL_MS = 3 * 60_000
+// Coalesces many agents' turn edges into one save; a crash loses at most this window of them.
+export const STATUS_TURN_EDGE_PERSIST_INTERVAL_MS = 1_000
 // A failed save (often another connection's lock) retries on its own short backoff.
 export const STATUS_PERSIST_RETRY_MIN_MS = 1_000
 export const STATUS_PERSIST_RETRY_MAX_MS = 30_000

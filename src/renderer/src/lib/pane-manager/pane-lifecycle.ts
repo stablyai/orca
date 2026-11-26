@@ -1,28 +1,33 @@
 import type { ManagedPaneInternal } from './pane-manager-types'
-import { safeFit } from './pane-tree-ops'
+import './pane-layout/pane-tree-ops'
+import { safeFit } from './terminal-fit/pane-fit'
 import {
   attachPaneFitResizeObserver,
   detachPaneFitResizeObserver
-} from './pane-fit-resize-observer'
-import { clearPendingSplitScrollRestore } from './pane-split-scroll'
-import { cancelDeferredScrollRestore } from './pane-scroll'
+} from './terminal-fit/pane-fit-resize-observer'
+import { clearPendingSplitScrollRestore } from './terminal-scroll/pane-split-scroll'
+import { cancelDeferredScrollRestore } from './terminal-scroll/pane-scroll'
 import { activateOrcaTerminalUnicodeProvider } from '../../../../shared/terminal/appearance/terminal-unicode-provider'
-import { attachTerminalMouseWheelMultiplier } from './pane-terminal-mouse-wheel'
-import { attachTerminalScrollIntentTracking } from './terminal-scroll-intent-dom-tracking'
+import { attachTerminalMouseWheelMultiplier } from './terminal-input/pane-terminal-mouse-wheel'
+import { attachTerminalScrollIntentTracking } from './terminal-scroll/terminal-scroll-intent-dom-tracking'
 import {
   installTerminalLinkifierHoverResetOnMouseLeave,
   installTerminalLinkifierHoverResetOnWindowBlur
-} from './terminal-linkifier-hover-reset-on-mouseleave'
-import { installTerminalLinkifierHoverResetOnWrite } from './terminal-linkifier-hover-reset-on-write'
-import { attachDomRendererFocusClassSync } from './pane-dom-focus-class-sync'
-import { attachDomBlockFill } from './terminal-dom-block-fill'
-import { attachWebgl, cancelPendingWebglRefresh, disposeWebgl } from './pane-webgl-renderer'
-import { rebuildAttachedWebgl } from './pane-webgl-reattach'
-import { configureLazyArabicShapingJoiner } from './terminal-arabic-shaping-joiner'
-import { TerminalLigaturesAddon } from './terminal-ligatures-addon'
-import { attachInlineImages, detachInlineImages } from './pane-inline-images'
-import { installTerminalImeCandidateAnchor } from './terminal-ime-candidate-anchor'
-import { cancelPendingTerminalViewportPresents } from './pane-viewport-present'
+} from './terminal-input/terminal-linkifier-hover-reset-on-mouseleave'
+import { installTerminalLinkifierHoverResetOnWrite } from './terminal-input/terminal-linkifier-hover-reset-on-write'
+import { attachDomRendererFocusClassSync } from './pane-focus/pane-dom-focus-class-sync'
+import { attachDomBlockFill } from './terminal-rendering/terminal-dom-block-fill'
+import {
+  attachWebgl,
+  cancelPendingWebglRefresh,
+  disposeWebgl
+} from './terminal-rendering/pane-webgl-renderer'
+import { rebuildAttachedWebgl } from './terminal-rendering/pane-webgl-reattach'
+import { configureLazyArabicShapingJoiner } from './terminal-rendering/terminal-arabic-shaping-joiner'
+import { TerminalLigaturesAddon } from './terminal-rendering/terminal-ligatures-addon'
+import { attachInlineImages, detachInlineImages } from './terminal-rendering/pane-inline-images'
+import { installTerminalImeCandidateAnchor } from './terminal-input/terminal-ime-candidate-anchor'
+import { cancelPendingTerminalViewportPresents } from './terminal-rendering/pane-viewport-present'
 import { releaseReplayGuardsForDisposedTerminal } from '@/components/terminal-pane/snapshots/replay-guard'
 
 import './pane-dom-creation'
@@ -84,7 +89,7 @@ export function openTerminal(
     () => pane.webglAddon != null
   )
 
-  pane.compositionHandler = installTerminalImeCandidateAnchor(terminal)
+  pane.imeCandidateAnchorCleanup = installTerminalImeCandidateAnchor(terminal)
 
   pane.focusClassSyncCleanup = attachDomRendererFocusClassSync(terminal.element)
   pane.domBlockFillCleanup = attachDomBlockFill(terminal)
@@ -191,11 +196,8 @@ export function disposePane(
     pane.arabicShapingJoinerCleanup?.()
   } catch {}
   pane.arabicShapingJoinerCleanup = null
-  if (pane.compositionHandler) {
-    pane.terminal.element?.removeEventListener('compositionstart', pane.compositionHandler)
-    pane.terminal.element?.removeEventListener('compositionupdate', pane.compositionHandler)
-    pane.compositionHandler = null
-  }
+  pane.imeCandidateAnchorCleanup?.()
+  pane.imeCandidateAnchorCleanup = null
   try {
     clearPendingSplitScrollRestore(pane)
   } catch {}

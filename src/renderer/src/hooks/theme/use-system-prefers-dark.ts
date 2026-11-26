@@ -68,12 +68,3 @@ export function useSystemPrefersDark(): boolean {
     () => true
   )
 }
-
-export function resetSystemPrefersDarkSubscriptionForTests(): void {
-  unsubscribeMediaQuery?.()
-  subscribers.clear()
-  mediaQueryList = null
-  unsubscribeMediaQuery = null
-  hasSnapshot = false
-  snapshot = true
-}

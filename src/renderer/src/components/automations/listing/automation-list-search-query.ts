@@ -1,4 +1,4 @@
-import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard-text'
+import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard/clipboard-text'
 
 /** Pasted queries above this are rejected so filtering never runs on unbounded input. */
 export const AUTOMATION_LIST_SEARCH_QUERY_MAX_BYTES = 2 * 1024

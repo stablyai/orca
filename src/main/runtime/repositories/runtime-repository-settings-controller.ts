@@ -1,12 +1,16 @@
-import { isFolderRepo } from '../../../shared/repo-kind'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
+import { isRepoHidden } from '../../../shared/project/catalog/hidden-projects'
 import { commitProvenRepoKindChange } from '../../workspaces/catalog/folder-repo-git-conversion'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
+import type { SetupAgentStartupPolicy } from '../../../shared/workspace-setup/orca-yaml-hook-types'
+import { buildSetupAgentStartupHookSettings } from '../../../shared/workspace-setup/repo-hook-settings-defaults'
 import type { RuntimeRepoSelector } from '../workspaces/catalog/runtime-repo-selector'
-import type { GhAccountBinding } from '../../../shared/github/account-binding'
+import type { GhAccountBinding } from '../../../shared/github/accounts/account-binding'
 import { invalidateAuthorizedRootsCache } from '../../ipc/worktrees/removal/registered-worktree-roots-cache'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
-import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { teardownStops } from '../workspaces/removal/owned-session-teardown-policy'
 import { assertNoProjectWorktreeCreate } from '../../workspaces/creation/worktree-create-in-flight'
 import { releaseWorktreeCreatePreparationsForRepo } from '../../workspaces/creation/preparation/worktree-create-preparation-project-removal'
@@ -56,9 +60,14 @@ type RepositoryUpdates = Partial<
 > & {
   projectGroupOrder?: number | null
   sourceControlAi?: Repo['sourceControlAi'] | null
+  workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
   externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
+  hiddenAt?: Repo['hiddenAt'] | null
   /** Only `null` clears; `omitUndefined` drops a stripped (undefined) field so it never unbinds. */
   ghAccount?: GhAccountBinding | null
+  browserProfileId?: string | null
+  /** Changes this one hook setting, keeping the rest of the saved row's. */
+  setupAgentStartupPolicy?: SetupAgentStartupPolicy
 }
 
 // Main computes each row's `visible` from these over cached raw Git scans, so re-list without rescanning.
@@ -100,11 +109,28 @@ export class RuntimeRepositorySettingsController {
     return updated
   }
 
+  /** View-only: hiding stops nothing, so terminals, agents and automations keep running. */
+  async setHidden(repoSelector: RuntimeRepoSelector, hidden: boolean): Promise<Repo> {
+    const store = this.requireStore()
+    const repo = await this.deps.resolveRepo(repoSelector)
+    if (isRepoHidden(repo) === hidden) {
+      return repo
+    }
+    assertWslMoveRepoWritable(store, repo)
+    const updated = store.updateRepo(repo, { hiddenAt: hidden ? Date.now() : null })
+    if (!updated) {
+      throw new Error('repo_not_found')
+    }
+    this.deps.notifyReposChanged()
+    return updated
+  }
+
   async update(repoSelector: string, updates: RepositoryUpdates): Promise<Repo> {
     const store = this.requireStore()
     const repo = await this.deps.resolveRepo(repoSelector)
     assertWslMoveRepoWritable(store, repo)
-    const sanitizedUpdates = omitUndefined(updates)
+    const { setupAgentStartupPolicy, ...rowUpdates } = updates
+    const sanitizedUpdates = omitUndefined(rowUpdates)
     if ('worktreeBasePath' in updates && updates.worktreeBasePath === undefined) {
       sanitizedUpdates.worktreeBasePath = undefined
     }
@@ -114,12 +140,25 @@ export class RuntimeRepositorySettingsController {
     ) {
       sanitizedUpdates.externalWorktreeDiscoverySuppressedAt = undefined
     }
+    if ('hiddenAt' in updates && updates.hiddenAt === null) {
+      sanitizedUpdates.hiddenAt = undefined
+    }
     if ('sourceControlAi' in updates && updates.sourceControlAi === null) {
       sanitizedUpdates.sourceControlAi = null
     }
     const write = (proven: Pick<Repo, 'folderUpgradeGitRootPath'>): Repo | null => {
       assertWslMoveRepoWritable(store, repo)
-      return store.updateRepo(repo, { ...sanitizedUpdates, ...proven })
+      // Why read here: the caller's copy of the row may predate a script another device just saved.
+      const saved = store.getRepoForHost?.(repo.id, getRepoExecutionHostId(repo)) ?? repo
+      const hookSettings = setupAgentStartupPolicy
+        ? {
+            hookSettings: buildSetupAgentStartupHookSettings(
+              sanitizedUpdates.hookSettings ?? saved.hookSettings,
+              setupAgentStartupPolicy
+            )
+          }
+        : {}
+      return store.updateRepo(repo, { ...sanitizedUpdates, ...hookSettings, ...proven })
     }
     const updated =
       sanitizedUpdates.kind === 'git' && isFolderRepo(repo)

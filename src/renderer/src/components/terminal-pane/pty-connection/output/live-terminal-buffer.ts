@@ -1,4 +1,4 @@
-import { installTerminalLiveScrollbackRestore } from '@/lib/pane-manager/terminal-live-scrollback-restore'
+import { installTerminalLiveScrollbackRestore } from '@/lib/pane-manager/terminal-scroll/terminal-live-scrollback-restore'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 export function bindLiveTerminalBuffer(session: ConnectPanePtySession): void {

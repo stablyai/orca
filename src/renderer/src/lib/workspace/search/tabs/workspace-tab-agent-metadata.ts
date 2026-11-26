@@ -1,4 +1,4 @@
-import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
+import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { SleepingAgentSessionRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentStatusEvidenceObservedAt } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
@@ -6,7 +6,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toSshExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { isExecutionHostAliasForWorktree } from '../../ownership/worktree-execution-host-alias'
 
 export type AgentMetadata = {
@@ -32,8 +32,7 @@ export function maxAgentActivityAt(metadata: readonly AgentMetadata[]): number |
 }
 
 export type WorkspaceTabAgentMetadataState = {
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>
-  retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
+  agentStatusByPaneKey: AcceptedAgentStatuses
   sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord>
 }
 
@@ -59,7 +58,7 @@ function addProviderSession(
   addText(target, providerSession.id)
 }
 
-function getPaneKeyTabId(paneKey: string): string | null {
+export function getPaneKeyTabId(paneKey: string): string | null {
   const separator = paneKey.indexOf(':')
   if (separator <= 0 || separator !== paneKey.lastIndexOf(':')) {
     return null
@@ -89,7 +88,7 @@ function agentRecordMatchesTab({
   return getPaneKeyTabId(paneKey) === terminalTabId
 }
 
-function collectLiveMetadata(
+export function collectLiveMetadata(
   entry: AgentStatusEntry
 ): Pick<AgentMetadata, 'snippetCandidates' | 'textParts' | 'lastActivityAt'> {
   const textParts: string[] = []
@@ -112,7 +111,7 @@ function collectLiveMetadata(
   return { textParts, snippetCandidates, lastActivityAt: agentStatusEvidenceObservedAt(entry) }
 }
 
-function collectSleepingMetadata(
+export function collectSleepingMetadata(
   record: SleepingAgentSessionRecord
 ): Pick<AgentMetadata, 'snippetCandidates' | 'textParts' | 'lastActivityAt'> {
   const textParts: string[] = []
@@ -131,7 +130,6 @@ export function collectAgentMetadataForTerminal({
   terminalTabId,
   worktreeId,
   agentStatusByPaneKey,
-  retainedAgentsByPaneKey,
   sleepingAgentSessionsByPaneKey
 }: WorkspaceTabAgentMetadataState & {
   terminalTabId: string
@@ -139,7 +137,7 @@ export function collectAgentMetadataForTerminal({
 }): AgentMetadata[] {
   const metadataByPaneKey = new Map<string, AgentMetadata>()
 
-  for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey)) {
+  for (const [paneKey, entry] of Array.from(agentStatusByPaneKey.entries())) {
     if (
       agentRecordMatchesTab({
         paneKey,
@@ -150,26 +148,6 @@ export function collectAgentMetadataForTerminal({
       })
     ) {
       metadataByPaneKey.set(paneKey, { paneKey, ...collectLiveMetadata(entry) })
-    }
-  }
-
-  for (const [paneKey, retained] of Object.entries(retainedAgentsByPaneKey)) {
-    if (metadataByPaneKey.has(paneKey)) {
-      continue
-    }
-    if (
-      agentRecordMatchesTab({
-        paneKey,
-        recordWorktreeId: retained.worktreeId,
-        recordTabId: retained.entry.tabId ?? retained.tab.id,
-        terminalTabId,
-        worktreeId
-      })
-    ) {
-      const metadata = collectLiveMetadata(retained.entry)
-      addText(metadata.textParts, retained.tab.title)
-      addText(metadata.snippetCandidates, retained.tab.title)
-      metadataByPaneKey.set(paneKey, { paneKey, ...metadata })
     }
   }
 
@@ -193,7 +171,7 @@ export function collectAgentMetadataForTerminal({
   return [...metadataByPaneKey.values()]
 }
 
-type IndexedAgentEntry = {
+export type IndexedAgentEntry = {
   paneKey: string
   worktreeId: string | null | undefined
   connectionId: string | null | undefined
@@ -221,7 +199,7 @@ export function buildAgentMetadataTabIndex(
   const index = new Map<string, IndexedAgentEntry[]>()
   const seenPaneKeys = new Set<string>()
 
-  for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
+  for (const [paneKey, entry] of Array.from(state.agentStatusByPaneKey.entries())) {
     const tabId = entry.tabId || getPaneKeyTabId(paneKey)
     if (!tabId) {
       continue
@@ -232,26 +210,6 @@ export function buildAgentMetadataTabIndex(
       worktreeId: entry.worktreeId,
       connectionId: entry.connectionId,
       metadata: { paneKey, ...collectLiveMetadata(entry) }
-    })
-  }
-
-  for (const [paneKey, retained] of Object.entries(state.retainedAgentsByPaneKey)) {
-    if (seenPaneKeys.has(paneKey)) {
-      continue
-    }
-    const tabId = retained.entry.tabId ?? retained.tab.id ?? getPaneKeyTabId(paneKey)
-    if (!tabId) {
-      continue
-    }
-    seenPaneKeys.add(paneKey)
-    const meta = collectLiveMetadata(retained.entry)
-    addText(meta.textParts, retained.tab.title)
-    addText(meta.snippetCandidates, retained.tab.title)
-    pushToIndex(index, tabId, {
-      paneKey,
-      worktreeId: retained.worktreeId,
-      connectionId: retained.entry.connectionId,
-      metadata: { paneKey, ...meta }
     })
   }
 

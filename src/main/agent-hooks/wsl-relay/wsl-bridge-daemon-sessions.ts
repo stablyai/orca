@@ -8,7 +8,7 @@ import {
   listLiveDaemonSessions
 } from '../../daemon/providers/lifecycle/daemon-provider-state'
 import type { SessionInfo } from '../../daemon/protocol/daemon-session-info'
-import { parseWslUncPath } from '../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { wslHookRelayStateKey } from './wsl-hook-relay-state-key'
 
 /** 'unverifiable' when any daemon generation couldn't answer: the relay then stays. */

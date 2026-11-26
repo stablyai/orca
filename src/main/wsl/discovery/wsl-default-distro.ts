@@ -98,8 +98,3 @@ export async function runWithWslDefaultDistro<T>(
     pin.active = false
   }
 }
-
-export function resetWslDefaultDistroForTests(): void {
-  cached = null
-  inFlight = null
-}

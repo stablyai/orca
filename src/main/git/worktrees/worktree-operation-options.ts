@@ -2,9 +2,9 @@ import { GIT_READ_TIMEOUT_MS } from '../../../shared/git/commands/git-command-ti
 import type {
   LocalBaseRefRefreshResult,
   LocalBaseRefUpdateSuggestion
-} from '../../../shared/worktree/base-ref-drift-types'
+} from '../../../shared/worktree/base-refs/base-ref-drift-types'
 import { readGitCommandFailureText } from '../../../shared/git/commands/git-command-failure-text'
-import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import type { WorktreeCheckoutProgressListener } from './creation/worktree-checkout-progress'
 
@@ -53,6 +53,10 @@ export type RemoveWorktreeOptions = GitWorktreeExecOptions & {
   knownRemovedWorktree?: Pick<GitWorktreeInfo, 'branch' | 'head' | 'locked' | 'lockReason'> | null
   /** Stops only `git worktree remove`; a killed branch cleanup could strand a ref lock. */
   checkoutDeleteSignal?: AbortSignal
+  /** Runs inside the acquired deletion slot, immediately before the checkout is deleted. */
+  beforeCheckoutDelete?: () => Promise<void>
+  expectedMarker?: string
+  forbidAnyMarker?: boolean
 }
 
 // Bound stalled checkouts; this default also sets the floor for ORCA_WORKTREE_ADD_TIMEOUT_MS.

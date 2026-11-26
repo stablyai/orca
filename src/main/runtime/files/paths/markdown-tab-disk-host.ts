@@ -1,7 +1,7 @@
 /** Local workspaces use local disk; runtime environments use their server's file RPCs/compare-write.
  * Raw SSH routes remain unsupported instead of falling back to client paths. */
 import { isBinaryBuffer } from '../../../../shared/file-preview/binary-buffer'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   compareDiskWritePrecondition,
   diskConflictFromReadFailure,
@@ -14,7 +14,7 @@ import {
   type FileWriteDiskPrecondition,
   type FileWriteResult
 } from '../../../../shared/file-write/file-write-disk-precondition'
-import { utf8ByteLength } from '../../../../shared/mobile-markdown-document'
+import { utf8ByteLength } from '../../../../shared/editor/markdown/mobile-markdown-document'
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
 import { assertFileMutationOwnershipCapability } from '../../../../shared/file-write/file-mutation-ownership'
 import type { PersistedOpenFile } from '../../../../shared/workspace-session/workspace-session-state-types'
@@ -45,7 +45,9 @@ export type MarkdownTabDiskRuntime = RuntimeLocalFileHost &
     resolveRuntimeFileTarget(selector: string): Promise<ResolvedRuntimeFileTarget>
     callEnvironment: EnvironmentCall
     /** Pin every save call to the pairing captured by its initial probe. */
-    environmentPairingRevision(environmentId: string): number | undefined
+    environmentPairingRevision(
+      environmentId: string
+    ): number | undefined | Promise<number | undefined>
   }
 
 type MarkdownFileRoute =
@@ -121,19 +123,19 @@ export function createMarkdownTabDiskHost(runtime: MarkdownTabDiskRuntime): Mark
       // A host move mid-save must not redirect the pinned write.
       const route: MarkdownFileRoute =
         found.environmentId !== null
-          ? { ...found, pairingRevision: pairingRevisionOf(runtime, found.environmentId) }
+          ? { ...found, pairingRevision: await pairingRevisionOf(runtime, found.environmentId) }
           : found
       return fileIo(async () => route)
     }
   }
 }
 
-function pairingRevisionOf(
+async function pairingRevisionOf(
   runtime: Pick<MarkdownTabDiskRuntime, 'environmentPairingRevision'>,
   environmentId: string
-): number | undefined {
+): Promise<number | undefined> {
   try {
-    return runtime.environmentPairingRevision(environmentId)
+    return await runtime.environmentPairingRevision(environmentId)
   } catch (error) {
     throw new RemoteRuntimeClientError(
       'remote_runtime_unavailable',

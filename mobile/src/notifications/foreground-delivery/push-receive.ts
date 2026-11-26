@@ -1,0 +1,161 @@
+import { wasPushDismissed } from '../dismissal/push-dismissal-watermarks'
+import { botAccessRequestIdOfNotice } from '../../../../src/shared/bots/bot-access-request'
+import { dismissPresentedPushNotification } from '../dismissal/push-tray-dismissal'
+import { shouldSuppressNotificationWhileViewing } from '../delivery-policy/notification-viewing-policy'
+import { loadPushNotificationsEnabled } from '../../storage/preferences'
+import { loadHostCatalog } from '../../host-catalog/host-store'
+import { resolveHostIdForFingerprint } from '../payload-identity/push-host-fingerprint'
+import { readOrcaPushPayload, type OrcaPushPayload } from '../payload-identity/push-payload'
+import type { NotificationBehavior } from 'expo-notifications'
+import { readNativeNotificationData } from '../payload-identity/native-notification-data'
+import {
+  loadNotificationDeliveryPreferences,
+  type NotificationDeliveryPreferences
+} from '../delivery-policy/notification-delivery-preferences'
+import { allowsMobilePushAlertKind } from '../../../../src/shared/notifications/mobile-push-alert'
+
+const RECENT_FOREGROUND_PUSH_CAP = 512
+const recentForegroundPushes = new Set<string>()
+
+function claimForegroundPush(payload: OrcaPushPayload): boolean {
+  const seq = payload.notificationSeq
+  if (
+    !payload.notificationEpoch ||
+    typeof seq !== 'number' ||
+    !Number.isSafeInteger(seq) ||
+    seq < 0
+  ) {
+    return true
+  }
+  const key = JSON.stringify([
+    payload.hostFingerprint,
+    payload.notificationEpoch,
+    payload.notificationId ?? null,
+    seq
+  ])
+  if (recentForegroundPushes.has(key)) {
+    return false
+  }
+  recentForegroundPushes.add(key)
+  if (recentForegroundPushes.size > RECENT_FOREGROUND_PUSH_CAP) {
+    const oldest = recentForegroundPushes.values().next().value
+    if (oldest !== undefined) {
+      recentForegroundPushes.delete(oldest)
+    }
+  }
+  return true
+}
+
+const BADGE_ONLY_BEHAVIOR: NotificationBehavior = {
+  shouldShowBanner: false,
+  shouldShowList: false,
+  shouldPlaySound: false,
+  shouldSetBadge: true
+}
+
+export async function foregroundNotificationBehavior(notification: {
+  request: Parameters<typeof readNativeNotificationData>[0] & {
+    content: { title?: string | null; body?: string | null }
+  }
+}): Promise<NotificationBehavior> {
+  const { request } = notification
+  // The gateway's icon-count update carries no text and nothing to present.
+  if (isRemotePushTrigger(request.trigger) && !request.content.title && !request.content.body) {
+    return BADGE_ONLY_BEHAVIOR
+  }
+  const data = readNativeNotificationData(request)
+  const payload = readOrcaPushPayload(data)
+  const preferences = await loadNotificationDeliveryPreferences()
+  // Preserve unknown notifications; recognized pushes fail closed when eligibility/dismissal checks cannot complete.
+  const ineligible = await shouldSuppressForegroundPush(payload, preferences).catch(
+    () => payload !== null
+  )
+  const suppressed = ineligible || (payload !== null && !claimForegroundPush(payload))
+  return {
+    shouldShowBanner: !suppressed,
+    shouldShowList: !suppressed,
+    shouldPlaySound: !suppressed && preferences.sound,
+    // The gateway puts the phone's total across hosts on each push.
+    shouldSetBadge: true
+  }
+}
+
+export async function canPresentForegroundPush(payload: OrcaPushPayload): Promise<boolean> {
+  const preferences = await loadNotificationDeliveryPreferences()
+  return !(await shouldSuppressForegroundPush(payload, preferences))
+}
+
+async function resolvePushHostId(payload: OrcaPushPayload): Promise<string | null> {
+  const hosts = await loadHostCatalog().catch(() => [])
+  return resolveHostIdForFingerprint(payload.hostFingerprint, hosts)
+}
+
+async function shouldSuppressForegroundPush(
+  payload: OrcaPushPayload | null,
+  preferences: NotificationDeliveryPreferences
+): Promise<boolean> {
+  if (!payload) {
+    return false
+  }
+  if (payload.kind === 'dismiss') {
+    if (payload.notificationId) {
+      await dismissPresentedPushNotification(
+        payload.notificationId,
+        payload.hostFingerprint,
+        payload
+      )
+    }
+    return true
+  }
+  // An older host ignores this registration filter, so its pushes are filtered here too.
+  if (!allowsMobilePushAlertKind(preferences, payload.source, payload.agentState)) {
+    return true
+  }
+  const hostId = await resolvePushHostId(payload)
+  // Suppress removed-host pushes: stale gateway registrations cannot route a useful tap and the phone can no longer disable them per host.
+  if (!hostId) {
+    return true
+  }
+  if (!(await loadPushNotificationsEnabled())) {
+    return true
+  }
+  if (shouldSuppressNotificationWhileViewing(payload, hostId, preferences.suppressWhileViewing)) {
+    return true
+  }
+  // Keep this last: a socket/native dismissal may land during any preference or host read.
+  return wasPushDismissed(payload)
+}
+
+export function isRemotePushTrigger(trigger: unknown): boolean {
+  return (
+    typeof trigger === 'object' &&
+    trigger !== null &&
+    (trigger as { readonly type?: unknown }).type === 'push'
+  )
+}
+
+// Resolve gateway fingerprints to this device’s host id; preserve locally scheduled data.
+// Unresolved/missing remote fingerprints must not fall back to raw hostId fields that the provider never authenticated as this push’s host.
+export function pushNotificationRouteData(
+  data: unknown,
+  hosts: readonly { readonly id: string; readonly publicKeyB64: string }[],
+  remote = false
+): unknown {
+  const payload = readOrcaPushPayload(data)
+  if (!payload) {
+    return remote ? null : data
+  }
+  const hostId = resolveHostIdForFingerprint(payload.hostFingerprint, hosts)
+  if (!hostId) {
+    return null
+  }
+  const accessRequestId = botAccessRequestIdOfNotice(payload.notificationId)
+  return {
+    hostId,
+    ...(payload.paneKey ? { paneKey: payload.paneKey } : {}),
+    ...(payload.worktreeId ? { worktreeId: payload.worktreeId } : {}),
+    ...(payload.executionHost ? { executionHost: payload.executionHost } : {}),
+    // The contract has no request field: an access request's notice names it in its id.
+    ...(accessRequestId ? { accessRequestId } : {})
+  }
+}

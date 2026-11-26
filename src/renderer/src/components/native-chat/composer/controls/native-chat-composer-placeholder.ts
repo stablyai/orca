@@ -4,7 +4,7 @@ import type { Translate } from '../../../../i18n/use-translate'
 import {
   NATIVE_CHAT_TURN_STATUS_COPY,
   NATIVE_CHAT_COMPOSER_PLACEHOLDER
-} from '../../../../../../shared/native-chat/transcript/native-chat-turn-status'
+} from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
 
 export function nativeChatComposerPlaceholder(
   hasPty: boolean,

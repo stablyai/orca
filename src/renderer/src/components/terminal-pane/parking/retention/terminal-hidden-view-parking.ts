@@ -2,7 +2,7 @@ import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/re
 import { isRemoteExecutionHostPtyId } from '../../../../../../shared/execution-host/remote-execution-host-pty-id'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/hosted-terminals/identity/remote-runtime-pty-owner'
 import { PTY_SESSION_ID_SEPARATOR } from '../../../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
-import { parseAppSshPtyId } from '../../../../../../shared/ssh-pty-id'
+import { parseAppSshPtyId } from '../../../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 
 // Hysteresis avoids quick-switch remounts; bounded hot-retain keeps recent worktrees warm. Reducing remount frequency matters more than replay size.
@@ -51,10 +51,17 @@ function getPendingActivationSpawnCount(value: boolean | number | undefined): nu
   return typeof value === 'number' && value > 0 ? value : 0
 }
 
-function hasPendingActivationSpawn(tab: ColdParkableTerminalTab): boolean {
+/** Settled tabs keep the flag only as sort metadata (see isTerminalActivationSpawnSettled). */
+export type ActivationSpawnSettled = (tabId: string) => boolean
+
+function hasPendingActivationSpawn(
+  tab: ColdParkableTerminalTab,
+  isActivationSpawnSettled?: ActivationSpawnSettled
+): boolean {
   return (
     getPendingActivationSpawnCount(tab.pendingActivationSpawn) > 0 &&
-    (!tab.ptyId || !isRemoteRuntimePtyId(tab.ptyId))
+    (!tab.ptyId || !isRemoteRuntimePtyId(tab.ptyId)) &&
+    isActivationSpawnSettled?.(tab.id) !== true
   )
 }
 
@@ -113,6 +120,7 @@ export function canParkTerminalWorktreeRenderers(args: {
   nowMs: number
   coldParkDelayMs?: number
   restorePolicy?: TerminalParkRestorePolicy
+  isActivationSpawnSettled?: ActivationSpawnSettled
 }): boolean {
   if (
     !args.parkingEnabled ||
@@ -134,7 +142,7 @@ export function canParkTerminalWorktreeRenderers(args: {
     if (args.pendingStartupByTabId[tab.id] !== undefined) {
       return false
     }
-    if (hasPendingActivationSpawn(tab)) {
+    if (hasPendingActivationSpawn(tab, args.isActivationSpawnSettled)) {
       return false
     }
     return isParkRestorableTerminalPty(tab.ptyId, args.worktreeId, args.restorePolicy)
@@ -151,6 +159,7 @@ export function canParkTerminalTabRenderer(args: {
   /** Worktree-scoped post-measure cool-down (measure windows are per-worktree). */
   parkCooldownUntilMs?: number | null
   restorePolicy?: TerminalParkRestorePolicy
+  isActivationSpawnSettled?: ActivationSpawnSettled
 }): boolean {
   const tab = args.terminalTab
   if (
@@ -168,7 +177,7 @@ export function canParkTerminalTabRenderer(args: {
   if (args.pendingStartupByTabId[tab.id] !== undefined) {
     return false
   }
-  if (hasPendingActivationSpawn(tab)) {
+  if (hasPendingActivationSpawn(tab, args.isActivationSpawnSettled)) {
     return false
   }
   return isParkRestorableTerminalPty(tab.ptyId, args.worktreeId, args.restorePolicy)
@@ -276,6 +285,7 @@ export function selectColdParkedTerminalTabs(
     nowMs: number
     parkCooldownUntilMs?: number | null
     restorePolicy?: TerminalParkRestorePolicy
+    isActivationSpawnSettled?: ActivationSpawnSettled
   } & TerminalColdParkPolicyOverrides
 ): Set<string> {
   if (!args.parkingEnabled) {
@@ -294,6 +304,7 @@ export function selectColdParkedTerminalTabs(
         nowMs: args.nowMs,
         coldParkDelayMs,
         parkCooldownUntilMs: args.parkCooldownUntilMs,
+        isActivationSpawnSettled: args.isActivationSpawnSettled,
         ...(args.restorePolicy ? { restorePolicy: args.restorePolicy } : {})
       })
     ) {

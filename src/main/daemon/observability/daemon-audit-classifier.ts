@@ -4,7 +4,7 @@ import type {
   DaemonEvidenceSource,
   DaemonAuditFailureTrigger,
   DaemonAuditGoneReason
-} from '../../../shared/daemon-audit-eligibility'
+} from '../../../shared/terminal/daemon/daemon-audit-eligibility'
 import type {
   DaemonEvidenceSources,
   DaemonProcessEvidence,

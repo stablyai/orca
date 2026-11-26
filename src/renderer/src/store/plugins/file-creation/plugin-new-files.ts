@@ -31,9 +31,7 @@ export function collectActivePluginNewFiles(
 }
 
 // Why gated: a client without the template reader (a paired web client) cannot create them.
-const collectCreatableNewFiles = (
-  plugins: readonly PluginHostListEntry[]
-): ActivePluginNewFile[] =>
+const collectCreatableNewFiles = (plugins: readonly PluginHostListEntry[]): ActivePluginNewFile[] =>
   window.api?.plugins?.readNewFileTemplate ? collectActivePluginNewFiles(plugins) : []
 
 /** New-file types of enabled plugins, sharing the plugin-list refresh. */

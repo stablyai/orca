@@ -1,5 +1,5 @@
 import type { NativeChatMessage } from '../native-chat/native-chat-types'
-import type { AgentMessageSource } from './agent-session-message-source'
+import type { AgentMessageSource } from './journal/agent-session-message-source'
 
 // Recorded current mail envelope keeps browser fixtures independent of server imports.
 export function orchestrationMailFixture({

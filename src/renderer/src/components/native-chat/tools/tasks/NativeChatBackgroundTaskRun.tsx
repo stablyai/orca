@@ -1,11 +1,11 @@
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { recomputeOn } from '@/lib/recompute-on'
-import { AgentStateDot } from '@/components/AgentStateDot'
+import { AgentStateDot } from '@/components/agent/status/AgentStateDot'
 import type { NativeChatBackgroundTaskBlock } from '../../../../../../shared/native-chat/native-chat-types'
-import { nativeChatBackgroundTaskRun } from '../../../../../../shared/native-chat/transcript/native-chat-background-task-run'
+import { nativeChatBackgroundTaskRun } from '../../../../../../shared/native-chat/transcript/turns/native-chat-background-task-run'
 import { sayBackgroundTaskTranslated } from './background-task-words-text'
-import { KIND_ICONS } from './NativeChatBackgroundTasksStatus'
+import { KIND_ICONS } from './background-task-kind-icons'
 
 export function NativeChatBackgroundTaskRun({
   block
@@ -22,7 +22,7 @@ export function NativeChatBackgroundTaskRun({
     <div className="min-w-0 py-0.5 font-sans text-sm leading-relaxed text-chat-foreground-faint">
       <div className="flex min-h-6 min-w-0 items-center gap-1.5">
         <Icon aria-hidden="true" className="size-3.5 shrink-0 text-chat-foreground-faint" />
-        <AgentStateDot state={row.state} size="sm" title={null} />
+        <AgentStateDot state={row.dotState} size="sm" title={null} />
         <span className="min-w-0 truncate text-chat-foreground" title={row.label}>
           {row.label}
         </span>
@@ -31,7 +31,12 @@ export function NativeChatBackgroundTaskRun({
         </span>
       </div>
       {row.sentence === null ? null : (
-        <p className={cn('mt-0.5 pl-7 text-xs', row.state === 'blocked' && 'text-destructive')}>
+        <p
+          className={cn(
+            'mt-0.5 pl-7 text-xs [overflow-wrap:anywhere]',
+            row.dotState === 'failed' && 'text-destructive'
+          )}
+        >
           {row.sentence}
         </p>
       )}

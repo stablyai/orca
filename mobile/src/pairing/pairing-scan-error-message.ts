@@ -7,6 +7,9 @@ function isOrcaInstallUrl(data: string): boolean {
     switch (url.origin) {
       case 'https://apps.apple.com':
         return /^\/(?:[a-z]{2}\/)?app\/(?:[^/]+\/)?id6766130217$/.test(path)
+      // onorca.dev: desktops released before the move to orca.dev show the old host.
+      case 'https://orca.dev':
+      case 'https://www.orca.dev':
       case 'https://www.onorca.dev':
       case 'https://onorca.dev':
         return path === '/download/android'

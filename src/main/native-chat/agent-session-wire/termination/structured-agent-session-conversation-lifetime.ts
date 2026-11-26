@@ -1,4 +1,8 @@
 import {
+  admitClosingStructuredAgentSession,
+  type StructuredAgentSessionCloseWork
+} from './structured-agent-session-close-work'
+import {
   createStructuredAgentSessionStopStartingChild,
   cutClosingStructuredAgentSession,
   type StructuredAgentSessionConversationLifetimeHost
@@ -6,7 +10,6 @@ import {
 import type { AgentSessionStartFailure } from '../startup/structured-agent-session-start-failure'
 // Open conversations at rest; never start agents for reads. Acquire serialization once because the queue is nonreentrant.
 
-import { closeStructuredAgentSessionHandovers } from '../delivery/structured-agent-session-handing-over'
 import {
   AgentSessionRefusalError,
   agentSessionRefusalError
@@ -17,10 +20,10 @@ import {
   beginFinalizedStructuredAgentSessionClose,
   holdClosedStructuredAgentSessionSends,
   closeStructuredAgentSessionConversationUnderSerialize,
-  stopStructuredAgentSessionAgentUnderSerialize
+  stopStructuredAgentSessionAgentUnderSerialize,
+  type StructuredAgentSessionCloseCause
 } from './structured-agent-session-host-lifetime'
 
-import type { StructuredAgentSessionCloseCause } from './structured-agent-session-host-lifetime'
 import type { StructuredAgentSessionStopEnding } from './structured-agent-session-host-stop-event'
 import type {
   StructuredAgentSessionHostSession,
@@ -31,7 +34,7 @@ import '../operations/structured-agent-session-mutation-admission'
 import { AGENT_SESSION_NOT_ATTACHED } from '../operations/structured-agent-session-mutation-refusals'
 import { deferredStructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 import { sameProviderChild } from '../host/structured-agent-session-provider-child'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   stopWorkspaceSleepChat,
   workspaceSleepStartAborts,
@@ -114,7 +117,9 @@ export function createStructuredAgentSessionConversationLifetime(
   const closeForWorkspaceSleep = async (
     sessionId: string,
     workspaceId: string,
-    executionHostId: ExecutionHostId
+    executionHostId: ExecutionHostId,
+    // An automatic release's last word, judged in the session lane as its close is; refusal throws.
+    admit?: (work: StructuredAgentSessionCloseWork) => boolean
   ): Promise<WorkspaceSleepCloseResult | null> => {
     const matches = (): boolean => {
       const location = deps().store.getConversation(sessionId)?.location
@@ -122,17 +127,14 @@ export function createStructuredAgentSessionConversationLifetime(
     }
     const starts = workspaceSleepStartAborts(() => host.context().runtimeState, sessionId)
     // Pending creates have no record yet; their queued close waits for founding.
-    if (matches() && deps().store.getRecord(sessionId)) {
-      const journal = sessions.get(sessionId)?.journal
-      if (journal) {
-        closeStructuredAgentSessionHandovers(journal)
-      }
-      starts.abort()
+    if (!admit && matches() && deps().store.getRecord(sessionId)) {
+      starts.cut(sessions.get(sessionId)?.journal)
     }
     const closed = serialize(sessionId, async () => {
       if (!matches()) {
         return null
       }
+      await (admit && admitClosingStructuredAgentSession(host, sessionId, admit))
       readRefusals.forget(sessionId)
       const record = deps().store.getConversation(sessionId)
       if (!record) {
@@ -183,6 +185,7 @@ export function createStructuredAgentSessionConversationLifetime(
     isDisposed: () => disposed,
     deliveryActive: host.deliveryActive,
     childWorkOpen: host.childWorkOpen,
+    viewed: host.viewed,
     store: {
       getConversation: (sessionId) => deps().store.getConversation(sessionId),
       replacedRuntime: (sessionId) => deps().store.replacedRuntime(sessionId)
@@ -193,10 +196,8 @@ export function createStructuredAgentSessionConversationLifetime(
     // Host eviction is reportable interruption, not personal cancellation.
     stopAgent: (sessionId) => stopAgent(sessionId, { cause: 'evict', resting: true }),
     // Word handed-over and queued startup failures from the same hostStopped fact.
-    stopStartingAgent: (sessionId) =>
-      stopStructuredAgentSessionAgentUnderSerialize(host.context(), sessionId, {
-        cause: 'host-stop'
-      }),
+    stopStartingAgent: (sessionId) => stopAgent(sessionId, { cause: 'host-stop' }),
+    startTimed: (id, child) => host.context().runtimeState.startupAttempts.onClock(id, child),
     closeConversation: (sessionId) => closeConversation(sessionId, true),
     logger: deps().logger,
     ...deps().idleSweep
@@ -252,7 +253,7 @@ export function createStructuredAgentSessionConversationLifetime(
               startKey: failed.generation,
               ...structuredAgentSessionStartFailure(cause, wording)
             },
-            oldestQueuedSubmission(session)?.clientMessageId ?? null
+            (await oldestQueuedSubmission(session))?.clientMessageId ?? null
           ).catch((writeError: unknown) =>
             deps().logger.warn('recording a failed provider open failed', {
               scope: 'provider-open-failure',
@@ -300,16 +301,18 @@ export function createStructuredAgentSessionConversationLifetime(
         return session
       })
     },
-    /** Close resources while retaining durable chat/history and personal unsent text for the next turn. */
-    /** `admit` decides in the session lane, after any send admitted first; false throws. A close
-     *  that may yet be refused cuts no handover or start before then. */
-    close: (sessionId: string, cause: StructuredAgentSessionCloseCause, admit?: () => boolean) => {
+    /** Retain history and unsent text; a refused close cuts no handover or start. */
+    close: (
+      sessionId: string,
+      cause: StructuredAgentSessionCloseCause,
+      admit?: (work: StructuredAgentSessionCloseWork) => boolean
+    ) => {
       if (!admit) {
         cutClosingStructuredAgentSession(host, sessionId)
       }
       return serialize(sessionId, async () => {
         if (admit) {
-          cutClosingStructuredAgentSession(host, sessionId, admit)
+          await admitClosingStructuredAgentSession(host, sessionId, admit)
         }
         readRefusals.forget(sessionId)
         if (deps().store.selectWritableRecord(sessionId).kind !== 'unreadable') {

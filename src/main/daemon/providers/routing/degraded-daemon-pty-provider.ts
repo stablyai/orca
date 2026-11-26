@@ -1,3 +1,4 @@
+import type { TerminalExitCause } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { shutdownRoutedDegradedSession } from './daemon-routed-session-shutdown'
 import { terminateResolvedDaemonSession } from '../../server/daemon-fenced-termination'
 import type { PtyFencedTerminationRequest } from '../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
@@ -5,16 +6,16 @@ import type { DaemonPtyAdapter } from '../adapter/daemon-pty-adapter'
 import { combineUnsubscribes } from './combine-unsubscribes'
 import { DegradedDaemonListeners } from './degraded-daemon-listeners'
 import { shutdownDegradedFallbackSessions } from './degraded-daemon-fallback-shutdown'
-import { inspectPtyProviderProcess } from '../../../providers/pty-process-inspection'
+import { inspectPtyProviderProcess } from '../../../providers/pty/process-inspection'
 import type {
   IPtyProvider,
-  PtyBackgroundStreamEvent,
-  PtyDataEvent,
-  PtyProcessInfo,
   PtyProviderBufferSnapshot,
-  PtySpawnOptions,
-  PtySpawnResult
-} from '../../../providers/pty-provider-contract'
+  PtyProviderBufferSnapshotOptions,
+  PtySpawnOptions
+} from '../../../providers/pty/provider-contract'
+import type { PtyBackgroundStreamEvent, PtyDataEvent } from '../../../providers/pty/events'
+import type { PtyProcessInfo } from '../../../providers/pty/process-info'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import {
   adoptOwningProvider,
   attachDaemonOwnedSession,
@@ -166,9 +167,13 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
 
   async getBufferSnapshot(
     id: string,
-    opts?: { scrollbackRows?: number }
+    opts?: PtyProviderBufferSnapshotOptions
   ): Promise<PtyProviderBufferSnapshot | null> {
     return (await this.providerFor(id).getBufferSnapshot?.(id, opts)) ?? null
+  }
+
+  supportsVisibleProjectionSnapshot(id: string): boolean {
+    return this.providerFor(id).supportsVisibleProjectionSnapshot?.(id) === true
   }
 
   clearBuffer = (id: string): Promise<void> => this.providerFor(id).clearBuffer(id)
@@ -176,6 +181,10 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
 
   async reportFocusLost(id: string): Promise<void> {
     await this.providerFor(id).reportFocusLost?.(id)
+  }
+
+  async requestRepaint(id: string): Promise<void> {
+    await this.providerFor(id).requestRepaint?.(id)
   }
 
   async closeStartupQueryAuthority(id: string): Promise<number> {
@@ -309,7 +318,10 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return listProviderSessionIds(this.sessionProviders, target)
   }
 
-  fanoutCurrentDaemonSyntheticExits(code: number, exit: { replacedByRestart?: true } = {}): void {
+  fanoutCurrentDaemonSyntheticExits(
+    code: number,
+    exit: { replacedByRestart?: true; cause?: TerminalExitCause } = {}
+  ): void {
     for (const id of this.getSessionIdsRoutedTo('current-daemon')) {
       this.ownerRecovery.forgetRoute(id)
       // Restart also kills listed sessions the adapter never tracked as active.

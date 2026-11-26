@@ -14,13 +14,16 @@ import { layoutViewAndFactsOfStore } from '@/store/workspace-layout/frames/works
 import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
 import { buildUnifiedTabSessionData } from '@/lib/workspace/persistence/workspace-session-unified-tabs'
 import { splitWorkspaceSessionByHost } from '@/lib/workspace/persistence/workspace-session-host-split'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import type {
   DesktopLayoutView,
   LayoutContentFacts
-} from '../../../../../shared/workspace-layout/workspace-layout-beside'
-import { loadWorkspaceLayoutWithoutReport } from '../../../../../shared/workspace-layout/workspace-layout-load'
-import { nameBasedLoadContext } from '../../../../../shared/workspace-layout/workspace-layout-minted-ids'
+} from '../../../../../shared/workspace-layout/persistence/workspace-layout-beside'
+import { loadWorkspaceLayoutWithoutReport } from '../../../../../shared/workspace-layout/persistence/workspace-layout-load'
+import { nameBasedLoadContext } from '../../../../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
 import { withPendingTabFacts } from '../intents/layout-owner-pending-tab-facts'
 
 /** What the window's own commands hold as drawn; see buildLayoutFrameStorePatch. */

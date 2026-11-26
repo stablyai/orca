@@ -1,4 +1,4 @@
-import type { SkillCloudVersion } from '../../../../../../shared/skill-cloud-contract'
+import type { SkillCloudVersion } from '../../../../../../shared/skills/sharing/skill-cloud-contract'
 import { translate } from '@/i18n/i18n'
 
 const DIGEST = 'a'.repeat(64)

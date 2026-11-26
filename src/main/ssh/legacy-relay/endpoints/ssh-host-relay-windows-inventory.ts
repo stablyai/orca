@@ -4,7 +4,7 @@ import { commandWithNodePath } from '../../remote-exec/ssh-remote-commands'
 import {
   quotePowerShellLiteral as powerShellLiteral,
   quotePowerShellNativeArgument as powerShellNativeArg
-} from '../../../../shared/powershell-native-argument'
+} from '../../../../shared/shell/launch/powershell-native-argument'
 import { windowsRelayPipePathsForSocketName } from './ssh-relay-endpoints'
 import {
   RELAY_INSTALL_MODEL,

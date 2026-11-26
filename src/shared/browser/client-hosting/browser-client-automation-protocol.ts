@@ -5,7 +5,14 @@ export const BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY = 'automation-v1' as cons
 // Older hosts re-parse params and would drop expectUrl, so commands carrying it need this.
 export const BROWSER_CLIENT_EXPECT_URL_HOST_CAPABILITY = 'expect-url-v1' as const
 export const BROWSER_CLIENT_AUTOMATION_PARAMS_MAX_BYTES = 256 * 1024
+// Why: sized to a host's 1 MiB inbound frame, which sealing inflates by 4/3.
 export const BROWSER_CLIENT_AUTOMATION_RESULT_MAX_BYTES = 768 * 1024
+// Larger results travel ahead of their settlement in chunks; base64 keeps each chunk inside one frame.
+export const BROWSER_CLIENT_AUTOMATION_RESULT_CHUNK_MAX_BYTES = 512 * 1024
+export const BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES = 64 * 1024 * 1024
+export const BROWSER_CLIENT_HOST_COMMAND_RESULT_CHUNK_METHOD =
+  'browser.clientHost.commandResultChunk' as const
+const BROWSER_CLIENT_AUTOMATION_ERROR_MESSAGE_MAX_LENGTH = 4096
 
 export const BROWSER_CLIENT_AUTOMATION_METHODS = [
   'browser.snapshot',
@@ -105,22 +112,42 @@ export const BrowserClientAutomationCommand = z.object({
   method: BrowserClientAutomationMethod,
   params: BrowserClientAutomationParams,
   /** The host's caller was an agent's CLI; older hosts omit it and every command counts as one. */
-  agent: z.boolean().optional()
+  agent: z.boolean().optional(),
+  /** The host assembles results sent as chunks; older hosts omit it and refuse results over one frame. */
+  stagedResults: z.literal(true).optional()
 })
 export type BrowserClientAutomationCommand = z.infer<typeof BrowserClientAutomationCommand>
 
 export const BrowserClientAutomationResult = z.discriminatedUnion('status', [
   z.object({
     status: z.literal('completed'),
-    value: BrowserClientAutomationResultValue.optional()
+    value: BrowserClientAutomationResultValue.optional(),
+    /** The value's JSON byte length, already sent as chunks; replaces `value`. */
+    stagedValueBytes: z
+      .number()
+      .int()
+      .positive()
+      .max(BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES)
+      .optional()
   }),
   z.object({
     status: z.literal('failed'),
     errorCode: z.string().min(1).max(256),
+    errorMessage: z
+      .string()
+      .min(1)
+      .max(BROWSER_CLIENT_AUTOMATION_ERROR_MESSAGE_MAX_LENGTH)
+      .optional(),
     expectedUrlMismatch: BrowserExpectedUrlMismatch.optional()
   })
 ])
 export type BrowserClientAutomationResult = z.infer<typeof BrowserClientAutomationResult>
+
+export function truncateBrowserClientAutomationErrorMessage(message: string): string | undefined {
+  return message.length > 0
+    ? message.slice(0, BROWSER_CLIENT_AUTOMATION_ERROR_MESSAGE_MAX_LENGTH)
+    : undefined
+}
 
 function enforceJsonByteBudget(
   value: unknown,

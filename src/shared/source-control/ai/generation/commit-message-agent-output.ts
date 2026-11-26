@@ -7,6 +7,11 @@ function isJcodeJsonResult(value: unknown): value is JcodeJsonResult {
 
 /** Remove surrounding whitespace, one enclosing fence, CLI progress preambles and leading reasoning from generated answers. */
 export function cleanGeneratedCommitMessage(raw: string): string {
+  return cleanGeneratedText(raw, 'git')
+}
+
+/** `prose` (dictated text) keeps a first line, a fence and list markers that Git text would drop. */
+export function cleanGeneratedText(raw: string, shape: 'git' | 'prose'): string {
   // Scan boundaries instead of allocating newline arrays for large generated bodies.
   let text = normalizeGeneratedCommitMessageLineFeeds(raw).trim()
 
@@ -26,6 +31,10 @@ export function cleanGeneratedCommitMessage(raw: string): string {
   const tokensUsageIndex = text.search(/\n\[Tokens\]\s/)
   if (tokensUsageIndex !== -1) {
     text = text.slice(0, tokensUsageIndex).trimEnd()
+  }
+
+  if (shape === 'prose') {
+    return stripLeadingReasoningBlock(text)
   }
 
   // Discard CLI progress preambles before the actual answer.

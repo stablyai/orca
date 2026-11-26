@@ -51,7 +51,7 @@ function computeProjectRuntimeSessionSummary(
   // Reuse the global tab index; project checks below reject unrelated worktree rows.
   const tabWorktreeIds = getTabIdToWorktreeId(state.tabsByWorktree)
   let activeTaskCount = 0
-  for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
+  for (const [paneKey, entry] of Array.from(state.agentStatusByPaneKey.entries())) {
     if (entry.state === 'done') {
       continue
     }

@@ -3,7 +3,7 @@ import {
   getOrcadSshDeployment
 } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 
-import type { SshTarget } from '../../../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'

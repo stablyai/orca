@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../../types'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { lineageStoreKeyOfTarget, withStoreCrossStoreLineage } from './cross-store-lineage-state'
 import { listWorktreeLineageForRuntime } from './worktree-lineage-refresh'
 import type { BackgroundRuntimeRefreshOptions } from '../listing/worktree-slice-types'

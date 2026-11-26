@@ -53,11 +53,7 @@ export async function installRemoteGrokHook(
     if (!config) {
       return status(configPath, 'Could not parse remote Grok hook config')
     }
-    buildInstalledGrokConfig(
-      config,
-      wrapPosixHookCommand(scriptPath, {}, { requiredEnvVar: 'ORCA_PANE_KEY' }),
-      'grok-hook.sh'
-    )
+    buildInstalledGrokConfig(config, wrapPosixHookCommand(scriptPath), 'grok-hook.sh')
     await writeManagedScriptRemote(sftp, scriptPath, script)
     await writeHooksJsonRemote(sftp, configPath, config)
     return {

@@ -2,12 +2,12 @@ import { join } from 'node:path'
 import {
   isSkillInstallProviderId,
   type SkillInstallProviderId
-} from '../../../shared/skill-install-providers'
+} from '../../../shared/skills/installation/skill-install-providers'
 import { detectInstalledAgentsWithShellPathHydration } from '../../preflight/installed-agent-detection'
 import {
   readUserClaudeConfigDir,
   resolveClaudeDefaultHome
-} from '../../claude-accounts/claude-profile-paths'
+} from '../../claude-accounts/profiles/claude-profile-paths'
 import {
   resolveEnvironmentSkillProviderRoots,
   withClaudeSkillProviderRoot

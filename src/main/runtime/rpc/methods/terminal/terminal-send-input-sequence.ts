@@ -4,8 +4,8 @@ import { TERMINAL_INPUT_MAX_BYTES } from '../../../../../shared/terminal/input/t
 import {
   TerminalOpenInputSession,
   type TerminalSend
-} from '../../../../../shared/rpc-contract/terminal-unary-params'
-import type { RuntimeTerminalSend } from '../../../../../shared/runtime-terminal-send-contract'
+} from '../../../../../shared/rpc-contract/terminal/terminal-unary-params'
+import type { RuntimeTerminalSend } from '../../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import {
   terminalOrderedInputControls,
   terminalOrderedInputByteLength,

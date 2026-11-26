@@ -1,5 +1,8 @@
 import { ipcMain } from 'electron'
-import type { GitLabMRInlineCommentInput, GitLabMRUpdate } from '../../../shared/gitlab-types'
+import type {
+  GitLabMRInlineCommentInput,
+  GitLabMRUpdate
+} from '../../../shared/gitlab/gitlab-types'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { Store } from '../../persistence/loading-store/store'
 import {
@@ -7,10 +10,14 @@ import {
   addMRInlineComment,
   resolveMRDiscussion,
   updateMRReviewers
-} from '../../gitlab/merge-request-review-mutations'
-import { closeMR, mergeMR, reopenMR } from '../../gitlab/merge-request-state-mutations'
-import { updateMR } from '../../gitlab/merge-request-update'
-import type { ProjectRef } from '../../gitlab/project-ref-parser'
+} from '../../gitlab/merge-requests/merge-request-review-mutations'
+import {
+  closeMR,
+  mergeMR,
+  reopenMR
+} from '../../gitlab/merge-requests/merge-request-state-mutations'
+import { updateMR } from '../../gitlab/merge-requests/merge-request-update'
+import type { ProjectRef } from '../../gitlab/projects/project-ref-parser'
 
 import {
   type GitLabRepoSelectorArgs,

@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import type { RegisterSshRequest } from '../../ssh/application/ssh-application-requests'
 import type {
   SshConfigHostListArgs,
   SshRepoReadoption,
@@ -6,12 +6,12 @@ import type {
   SshTargetAddResult,
   SshTargetCreateInput,
   SshTargetUpdateInput
-} from '../../../shared/ssh-types'
+} from '../../../shared/remote-runtime/ssh/ssh-types'
 import {
   listUserSshConfigHostSummaries,
   resolveUserSshConfigHost
 } from '../../ssh/config/ssh-config-host-picker'
-import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
+import { getManagedOrcadFenceEnvironmentId } from '../../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
 import { closeOrcadManagedTunnel } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { rotateSshProviderAuthority } from '../../ssh/connection/authority/ssh-provider-authority'
 import {
@@ -23,16 +23,16 @@ import {
   isManagedOrcadSshTarget,
   isRuntimeOwnedSshTarget
 } from '../../ssh/targets/ssh-target-runtime-ownership'
-import { connectionManager, getCurrentMainWindow } from './ssh-ipc-context'
+import { connectionManager } from './ssh-ipc-context'
+import { sshDesktopHost } from '../../ssh/application/ssh-desktop-host'
 import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
 import { fingerprintRuntimeSshTarget } from '../../ssh/runtime-access/runtime-ssh-target-fingerprint'
 import { removeRegisteredSshTarget } from './ssh-session-teardown'
-import { notifyReposChanged } from '../repos/repos-changed-notification'
 import {
   requestDesktopBrowserBridgeReconcile,
   setDesktopBrowserBridgeHostStopped
 } from '../browser/desktop-browser-bridge-reconcile'
-import { isRemoteCliControlAllowed } from '../../../shared/ssh-remote-cli-control'
+import { isRemoteCliControlAllowed } from '../../../shared/remote-runtime/ssh/ssh-remote-cli-control'
 
 // Add/import can re-adopt orphaned workspaces; report them so the renderer refreshes repo ownership.
 function takeRepoReadoptions(): SshRepoReadoption[] {
@@ -55,7 +55,7 @@ function publishRepoReadoptions(repoReadoptions: SshRepoReadoption[]): SshRepoRe
     rotateSshProviderAuthority(targetId)
   }
   // Paired clients refetch repositories only on this event.
-  notifyReposChanged(getCurrentMainWindow())
+  sshDesktopHost().reposChanged()
   return repoReadoptions
 }
 
@@ -160,38 +160,34 @@ async function removeSshTarget(id: string): Promise<void> {
   requestDesktopBrowserBridgeReconcile()
 }
 
-export function registerSshTargetCrudHandlers(): void {
+export function registerSshTargetCrudHandlers(handle: RegisterSshRequest): void {
   // Apply identical mutation rules to paired RPC and local Settings.
   setSshTargetMutations({ add: addSshTarget, update: updateSshTarget, remove: removeSshTarget })
 
-  ipcMain.handle('ssh:listTargets', () => {
+  handle('ssh:listTargets', () => {
     return getSshTargetRegistryStore()!.listTargets()
   })
 
-  ipcMain.handle('ssh:listRemovedTargetLabels', () => {
+  handle('ssh:listRemovedTargetLabels', () => {
     return getSshTargetRegistryStore()!.listRemovedTargetLabels()
   })
 
-  ipcMain.handle('ssh:addTarget', (_event, args: { target: SshTargetCreateInput }) =>
-    addSshTarget(args.target)
+  handle('ssh:addTarget', (args: { target: SshTargetCreateInput }) => addSshTarget(args.target))
+
+  handle('ssh:updateTarget', (args: { id: string; updates: SshTargetUpdateInput }) =>
+    updateSshTarget(args.id, args.updates)
   )
 
-  ipcMain.handle(
-    'ssh:updateTarget',
-    (_event, args: { id: string; updates: SshTargetUpdateInput }) =>
-      updateSshTarget(args.id, args.updates)
-  )
+  handle('ssh:removeTarget', (args: { id: string }) => removeSshTarget(args.id))
 
-  ipcMain.handle('ssh:removeTarget', (_event, args: { id: string }) => removeSshTarget(args.id))
-
-  ipcMain.handle('ssh:importConfig', async (_event, args?: { reAdopt?: boolean }) => {
+  handle('ssh:importConfig', async (args?: { reAdopt?: boolean }) => {
     const { targets, repoReadoptions } =
       await getSshTargetRegistryStore()!.importFromSshConfig(args)
     return { targets, repoReadoptions: publishRepoReadoptions(repoReadoptions) }
   })
 
   // Prefill the add-host form without importing targets; bulk sync belongs to Settings.
-  ipcMain.handle('ssh:listConfigHosts', (_event, args?: SshConfigHostListArgs) => {
+  handle('ssh:listConfigHosts', (args?: SshConfigHostListArgs) => {
     const store = getSshTargetRegistryStore()!
     // The import's own decision, read without waiting on ssh -G; until one exists the flags are alias-only.
     const snapshot = store.currentSshRouteSnapshot()
@@ -209,7 +205,7 @@ export function registerSshTargetCrudHandlers(): void {
     )
   })
 
-  ipcMain.handle('ssh:resolveConfigHost', (_event, args: { alias: string }) => {
+  handle('ssh:resolveConfigHost', (args: { alias: string }) => {
     return resolveUserSshConfigHost(args.alias)
   })
 }

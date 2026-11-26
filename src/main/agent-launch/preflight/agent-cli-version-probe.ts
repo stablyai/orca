@@ -1,5 +1,13 @@
-import { compareAppVersions, parseCliVersion } from '../../../shared/app-version'
+import {
+  assertStructuredAgentResolutionCurrent,
+  type StructuredAgentResolutionOperation
+} from '../../native-chat/agent-launch/structured-agent-command-resolution'
+import {
+  compareAppVersions,
+  parseCliVersion
+} from '../../../shared/app-lifecycle/identity/app-version'
 import { runProcess } from '@orca/process-host'
+import { agentCliMinimumVersion } from './agent-cli-minimum-version'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 
 function warnRefused(program: string, why: string, output = ''): void {
@@ -14,6 +22,8 @@ export type AgentCliVersionCheck =
   | { status: 'unknown' | 'missing'; version: null }
 
 export type AgentCliVersionInput = Pick<ProcessSpec, 'program' | 'cwd' | 'env'> & {
+  operation?: StructuredAgentResolutionOperation
+  timeoutMs?: number | null
   prefixArgs?: readonly string[]
 }
 
@@ -43,38 +53,38 @@ export function launchableRelease(check: AgentCliVersionCheck): boolean {
   return check.status === 'ready' || check.status === 'unknown'
 }
 
-/** Use the last floor at or below the release major, or the first floor for older majors. */
-export function agentCliMinimumVersion(
-  version: string,
-  minimumVersions: readonly string[]
-): string | null {
-  const major = (value: string): number => Number(value.split('.')[0])
-  return (
-    minimumVersions.findLast((minimum) => major(minimum) <= major(version)) ??
-    minimumVersions[0] ??
-    null
-  )
-}
-
 export async function readAgentCliVersion(
   input: AgentCliVersionInput,
   parseVersion: typeof parseCliVersion = parseCliVersion
 ): Promise<{ version: string | null; started?: false }> {
-  const { prefixArgs = [], ...launch } = input
+  const { prefixArgs = [], operation, timeoutMs = 5_000, ...launch } = input
+  assertStructuredAgentResolutionCurrent(operation)
   let result
   try {
     result = await runProcess({
       ...launch,
       args: [...prefixArgs, '--version'],
       terminationBarrier: true,
-      timeoutMs: 5_000,
+      signal: operation?.signal,
+      timeoutMs:
+        timeoutMs === null
+          ? null
+          : Math.max(
+              1,
+              Math.min(
+                timeoutMs,
+                operation?.deadline === undefined ? Infinity : operation.deadline - Date.now()
+              )
+            ),
       maxOutputBytes: 4_096,
       killOnOutputLimit: true
     })
   } catch (error) {
+    assertStructuredAgentResolutionCurrent(operation)
     warnRefused(input.program, `did not start (${String(error)})`)
     return { version: null, started: false }
   }
+  assertStructuredAgentResolutionCurrent(operation)
   const output = `${result.stdout}\n${result.stderr}`
   if (result.timedOut || result.outputTruncated || result.code !== 0) {
     const why = result.timedOut

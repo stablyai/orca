@@ -2,7 +2,7 @@
 import { getParkedTerminalWatcherPaneIdsByPtyId } from '@/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 import type { AppState } from '@/store/types'
-import type { RuntimeMountedLeaf } from '../../../../shared/runtime-types'
+import type { RuntimeMountedLeaf } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 /** True when main, not this window, lists the workspace's terminals. An unclear owner keeps the
  *  window's list: main drops it for a workspace it does own. */

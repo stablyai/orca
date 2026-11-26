@@ -13,7 +13,7 @@ import {
   wildcardForkFetchRefspec
 } from '../refs/fork-remotes/fork-remote-refspec'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import { iterateProcessOutputLines } from '../../../shared/process-output-field-scanner'
+import { iterateProcessOutputLines } from '../../../shared/process-observation/process-output-field-scanner'
 import type { GitRemoteExec, WorktreePushTargetStore } from './worktree-push-target-cleanup'
 
 const NEVER_MIGRATE_REMOTE_NAMES = new Set(['origin', 'upstream'])
@@ -144,10 +144,6 @@ const lastMigratedAtByRepoId = new Map<string, number>()
 function shouldMigrateNow(repoId: string): boolean {
   const last = lastMigratedAtByRepoId.get(repoId)
   return last === undefined || Date.now() - last >= MIGRATE_COOLDOWN_MS
-}
-
-export function _resetForkRemoteRefspecMigrationRateLimitForTests(): void {
-  lastMigratedAtByRepoId.clear()
 }
 
 /** Best-effort, rate-limited sweep; call sites fire this without awaiting it. */

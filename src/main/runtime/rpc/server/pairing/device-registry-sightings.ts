@@ -1,7 +1,7 @@
 import { withDeviceSighting, type DeviceSightingFraming } from './device-sighting'
 import { DeviceRegistryStore } from './device-registry-store'
 import type { DeviceEntry } from './device-entry'
-import type { NetworkSourceClass } from '../../network-source-class'
+import type { NetworkSourceClass } from '../../transports/websocket/source-admission/network-source-class'
 
 // Coalesce reconnect bookkeeping: each Windows save otherwise spawns synchronous ACL PowerShell twice.
 const LAST_SEEN_FLUSH_DELAY_MS = 250

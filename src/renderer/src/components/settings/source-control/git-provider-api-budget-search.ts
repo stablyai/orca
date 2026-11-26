@@ -1,8 +1,18 @@
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import {
+  getPRAutoRefreshDescription,
+  getPRAutoRefreshTitle,
+  PR_AUTO_REFRESH_KEYWORDS
+} from './pr-auto-refresh-search'
 
 export const getGitProviderApiBudgetSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: getPRAutoRefreshTitle(),
+    description: getPRAutoRefreshDescription(),
+    keywords: PR_AUTO_REFRESH_KEYWORDS
+  },
   {
     title: translate('auto.components.settings.git.search.52d52b099d', 'GitHub API budget'),
     description: translate(

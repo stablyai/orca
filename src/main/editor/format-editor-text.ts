@@ -5,12 +5,12 @@ import {
   editorFormatterArgv,
   editorFormatterSchema,
   type EditorFormatResult
-} from '../../shared/editor-formatter'
-import { getRepoExecutionHostId } from '../../shared/execution-host'
-import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
+} from '../../shared/editor/formatting/editor-formatter'
+import { getRepoExecutionHostId } from '../../shared/execution-host/execution-host'
+import { isPathInsideOrEqual } from '../../shared/file-access/cross-platform-path'
 import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 import type { RuntimeFileExplorerPath } from '../runtime/files/file-target'
-import { isENOENT } from '../ipc/filesystem/access/filesystem-path-containment'
+import { isENOENT } from '../filesystem/local-file-io/filesystem-path-containment'
 
 async function formatterFilePath(filePath: string): Promise<string> {
   try {

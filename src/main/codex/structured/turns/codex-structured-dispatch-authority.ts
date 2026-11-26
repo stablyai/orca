@@ -1,4 +1,4 @@
-import type { CodexTurnHost } from './codex-structured-turn-start'
+import type { CodexTurnHost } from './codex-structured-turn-contract'
 import { StructuredAgentSessionInputNotAdmitted } from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
 import { codexDispatchRejection } from './codex-structured-turn-end-settlement'
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'

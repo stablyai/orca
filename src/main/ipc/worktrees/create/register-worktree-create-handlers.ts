@@ -12,26 +12,28 @@ import {
   addWorktreeCreatePhaseAttributes,
   withWorktreeSpan
 } from '../../../observability/instrumentation'
-import { workspaceSourceSchema } from '../../../../shared/telemetry-events'
-import type { WorkspaceSource } from '../../../../shared/telemetry-events'
-import { isFolderRepo } from '../../../../shared/repo-kind'
-import { createLocalWorktree, notifyWorktreesChanged } from '../../worktree-remote'
+import { workspaceSourceSchema } from '../../../../shared/telemetry/schemas/telemetry-property-schemas'
+import type { WorkspaceSource } from '../../../../shared/workspace/creation/workspace-source'
+
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
+import { createLocalWorktree, notifyWorktreesChanged } from '../worktree-remote'
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
 import { track } from '../../../telemetry/client'
-import { classifyWorkspaceCreateError } from '../../workspace-create-error-classifier'
+import { classifyWorkspaceCreateError } from '../creation/workspace-create-error-classifier'
 import { getCohortAtEmit } from '../../../telemetry/cohort-classifier'
 import { adoptProvisionedRootSshCheckout } from '../../../workspaces/catalog/provisioned-root-ssh-adoption'
 import { normalizeLinkedWorkItemFields } from '../ipc-context-schemas'
 import { createFolderWorkspace } from './folder-workspace-creation'
 import { findExactRepoOwner, isCapturedRepoCurrent } from '../listing/worktree-host-ownership'
 import { requireWorktreeCreateRoute } from '../../../workspaces/creation/worktree-create-execution-host-route'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { workspaceLifecycleKey } from '../../../runtime/workspaces/lifecycle/workspace-lifecycle-commands'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { beginWorkspaceCreateTelemetry } from '../../../workspaces/creation/workspace-create-telemetry'
-import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { applyWorkspaceCreatePluginHook } from '../../../plugins/hooks/workspace-create-plugin-hook'
 import { withProjectWorktreeCreate } from '../../../workspaces/creation/worktree-create-in-flight'
+import { createdWorktreeLifecycleIdentity } from '../../../runtime/workspaces/lifecycle/worktree-lifecycle-event'
 
 export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): void {
   const { mainWindow, store, runtime, options } = context
@@ -107,7 +109,8 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
             kind: 'created',
             worktreeId: result.worktree.id,
             path: result.worktree.path,
-            branch: result.worktree.branch
+            branch: result.worktree.branch,
+            ...createdWorktreeLifecycleIdentity(result.worktree)
           })
 
           // Stamp after the create notification bumps generation so the reply names its resulting catalog.
@@ -165,7 +168,8 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           kind: 'created',
           worktreeId: result.worktree.id,
           path: result.worktree.path,
-          branch: result.worktree.branch
+          branch: result.worktree.branch,
+          ...createdWorktreeLifecycleIdentity(result.worktree)
         })
         return { ...result, catalogVersion: getLocalWorktreeCatalogVersion(repo.id) }
       })

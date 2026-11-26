@@ -1,11 +1,9 @@
 // Include unlisted current models without inferred capabilities, for both live and resting reads.
 
-import type {
-  AgentSessionModelCatalogResult,
-  AgentSessionModelOption
-} from '../../../../shared/agent-session/agent-session-wire'
-import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
-import { labelFromModelId } from '../../../../shared/model-id-label'
+import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionModelOption } from '../../../../shared/agent-session/options/model-catalog/agent-session-model-option'
+import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
+import { unlistedModelLabel } from '../../../../shared/agent-session/options/model-catalog/model-id-label'
 import type { AgentModelCatalogLiveListing } from '../../agent-model-catalog/agent-model-catalog-entry'
 
 export type StructuredAgentSessionOptionProjection = {
@@ -30,6 +28,7 @@ export type StructuredAgentSessionRestingOptions = Pick<
 }
 
 export function structuredAgentSessionOptionModels<TModel extends AgentSessionModelOption>(
+  agent: string,
   catalog: readonly TModel[],
   current: string | undefined,
   row: (unlisted: AgentSessionModelOption) => TModel
@@ -39,7 +38,7 @@ export function structuredAgentSessionOptionModels<TModel extends AgentSessionMo
     models.push(
       row({
         id: current,
-        label: labelFromModelId(current),
+        label: unlistedModelLabel(agent, current),
         description: current,
         isDefault: false,
         efforts: [],
@@ -52,6 +51,7 @@ export function structuredAgentSessionOptionModels<TModel extends AgentSessionMo
 
 /** Use seeds only for unknown listings; installed rows are authoritative. */
 export function structuredAgentSessionCapabilityView(
+  agent: string,
   installed:
     | {
         models: readonly AgentSessionModelOption[]
@@ -63,7 +63,7 @@ export function structuredAgentSessionCapabilityView(
   restriction?: AgentSessionOptionsResult['fastModeSupport']
 ) {
   const inventory = 'models' in installed ? installed : { models: fallback }
-  const models = structuredAgentSessionOptionModels(inventory.models, current, (row) => row)
+  const models = structuredAgentSessionOptionModels(agent, inventory.models, current, (row) => row)
   const support = models.find((row) => row.id === current)?.supportsFastMode
   return {
     models,

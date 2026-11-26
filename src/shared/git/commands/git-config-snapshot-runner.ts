@@ -99,4 +99,4 @@ export function createGitConfigSnapshotRunner(runGit: GitCommandRunner): GitComm
     return { stdout: values.at(-1) ?? '' }
   }
 }
-import { iterateNulDelimitedFields } from '../../nul-delimited-fields'
+import { iterateNulDelimitedFields } from './nul-delimited-fields'

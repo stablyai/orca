@@ -24,7 +24,7 @@ import {
 } from '../hosts/automation-row-action-dispatch'
 import {
   getAutomationAuthorityTarget,
-  getAutomationTargetFromHostId,
+  getAutomationListedTargetFromHostId,
   listAutomationRunsForTarget,
   type AutomationHostTarget
 } from '../hosts/automation-host-client'
@@ -79,6 +79,11 @@ function navigationHostId(
   return navigation?.automationId === automationId ? (navigation.hostId ?? null) : null
 }
 
+// Why module scope: a store read inside the hook body trips the React Compiler.
+function listedTargetForHost(hostId: string): AutomationHostTarget {
+  return getAutomationListedTargetFromHostId(hostId, useAppStore.getState())
+}
+
 export function useSelectedAutomationRunHistory(input: SelectedAutomationRunHistoryInput): void {
   const acquired = useRef<{
     selected: AutomationListRow
@@ -102,7 +107,7 @@ export function useSelectedAutomationRunHistory(input: SelectedAutomationRunHist
     const target = captured.owner
       ? getAutomationAuthorityTarget(captured.owner.authority)
       : navigationHost
-        ? getAutomationTargetFromHostId(navigationHost)
+        ? listedTargetForHost(navigationHost)
         : (input.legacyTarget(selected) ?? { kind: 'local' as const })
     const authority: AutomationAuthorityRef =
       captured.owner?.authority ??

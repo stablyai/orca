@@ -1,9 +1,12 @@
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
-import type { ManagedDataAccountProvider } from '../../shared/managed-account-types'
+import type { ManagedDataAccountProvider } from '../../shared/agent-accounts/managed-account-types'
 import { getManagedDataAccountService, type ManagedDataAccountService } from './service'
-import { MANAGED_DATA_ACCOUNT_BASELINE_ENV_KEYS } from '../../shared/managed-data-account-environment'
+import { MANAGED_DATA_ACCOUNT_BASELINE_ENV_KEYS } from '../../shared/agent-launch/environment/managed-data-account-environment'
 import { getAgentLaunchExecutableName } from '../../shared/agent-launch/startup/agent-command-line-intent'
-import { MANAGED_DATA_ACCOUNT_RESUME_ENV } from '../../shared/managed-data-account-resume'
+import {
+  MANAGED_DATA_ACCOUNT_RESUME_ENV,
+  SYSTEM_DATA_ACCOUNT_RESUME_ID
+} from '../../shared/agent-launch/environment/managed-data-account-resume'
 
 export function applyManagedDataAccountEnvironment(
   environment: Record<string, string>,
@@ -32,6 +35,10 @@ export function applyManagedDataAccountEnvironment(
   }
   const selected = managedAccountLaunchEnvironment(service, provider, requestedAccountId)
   if (!selected.XDG_DATA_HOME) {
+    if (provider === 'opencode' && requestedAccountId === SYSTEM_DATA_ACCOUNT_RESUME_ID) {
+      // Later launch checks can't see the consumed request; a bare marker means the System store.
+      environment.ORCA_DATA_ACCOUNT_PROVIDER = provider
+    }
     return
   }
   service.captureOriginalEnvironment(environment, selected)
@@ -46,12 +53,15 @@ export function applyManagedDataAccountEnvironment(
   }
 }
 
-/** A resumed session's owning account wins; a removed owner falls back to the active account. */
+/** A resumed session's owning store wins; a removed owner falls back to the active account. */
 export function managedAccountLaunchEnvironment(
   service: Pick<ManagedDataAccountService, 'environmentForAccount' | 'launchEnvironment'>,
   provider: ManagedDataAccountProvider,
   requestedAccountId: string | undefined
 ): Record<string, string> {
+  if (requestedAccountId === SYSTEM_DATA_ACCOUNT_RESUME_ID) {
+    return {}
+  }
   if (requestedAccountId) {
     try {
       return service.environmentForAccount(provider, requestedAccountId)

@@ -1,8 +1,8 @@
-import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session/agent-session-host-authority'
-import { agentSessionOwnerBindingsEqual } from '../../../../shared/claimed-agent-pty-owner'
+import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
+import { agentSessionOwnerBindingsEqual } from '../../../../shared/agent-session/lifecycle/leases/claimed-agent-pty-owner-snapshot'
 import { addNodePtyRecoveryHint } from '../../../daemon/pty-subprocess/node-pty-error-hints'
 import type { Store } from '../../../persistence/loading-store/store'
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import { isCurrentPtyExit, ptyIncarnationById, ptyOwnership } from './ownership-state'
 import { getRelayPtyId, tryGetProviderForPty } from './registry'
 import {
@@ -122,7 +122,7 @@ export function finishPtyShutdown(
     return null
   }
   const incarnationId = ptyIncarnationById.get(id)
-  clearProviderPtyState(id)
+  clearProviderPtyState(id, evidence instanceof PtyExitProof ? { exitProven: true } : {})
   if (connectionId) {
     // Keeps any relay-era undelivered stop on the lease: only host evidence may retire it.
     store?.markSshRemotePtyLease(connectionId, getRelayPtyId(connectionId, id), evidence)

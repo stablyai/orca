@@ -1,10 +1,11 @@
 import {
-  getExecutionHostLabel,
   isUnresolvedOwnerHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
-import { getHostSettingOverride } from '../../../../../shared/host-setting-overrides'
+} from '../../../../../shared/execution-host/execution-host'
+import { getHostSettingOverride } from '../../../../../shared/execution-host/host-setting-overrides'
+import { getTranslatedExecutionHostLabel } from '@/runtime/hosts/display/execution-host-label'
+import type { Translate } from '@/i18n/use-translate'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
 import { selectRuntimeAwareSshTargetLabel } from '@/store/slices/ssh/runtime-environment-ssh-selectors'
@@ -15,7 +16,7 @@ export function selectExecutionHostDisplayLabel(
   state: AppState,
   hostId: ExecutionHostId,
   // SSH labels are published per runtime environment when the target is reached through one.
-  options: { sshEnvironmentId?: string | null } = {}
+  options: { sshEnvironmentId?: string | null; t?: Translate } = {}
 ): string {
   const override = getHostSettingOverride(state.settings, hostId, 'displayLabel')
   if (override) {
@@ -37,7 +38,8 @@ export function selectExecutionHostDisplayLabel(
       parsed.targetId
     )
   }
-  return getExecutionHostLabel(hostId)
+  // Why: the unrenamed local label is English ("Local Mac"); renames above show as typed.
+  return getTranslatedExecutionHostLabel(hostId, options.t)
 }
 
 /** Return null for contested ownership; unresolved-owner is routing bookkeeping, never a user-visible machine name. */

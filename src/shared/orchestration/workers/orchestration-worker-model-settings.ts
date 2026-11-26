@@ -6,7 +6,7 @@ import {
 import type {
   CatalogModel,
   CatalogOption
-} from '../../agent-session/options/agent-session-option-catalog-types'
+} from '../../agent-session/options/catalog-providers/agent-session-option-catalog-types'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 
@@ -96,6 +96,25 @@ export function normalizeOrchestrationWorkerPreferenceUpdates(
     }
   }
   return normalized
+}
+
+/** The one sanitizer both the main and renderer settings paths apply to these three fields. */
+export function normalizeOrchestrationWorkerSettingsUpdates(
+  updates: OrchestrationWorkerPreferenceUpdateInput & { orchestrationDefaultWorkerAgent?: unknown },
+  current: CurrentOrchestrationWorkerPreferences | null | undefined
+): NormalizedOrchestrationWorkerPreferenceUpdates & {
+  orchestrationDefaultWorkerAgent?: TuiAgent | null
+} {
+  const normalized = normalizeOrchestrationWorkerPreferenceUpdates(updates, current)
+  if (!('orchestrationDefaultWorkerAgent' in updates)) {
+    return normalized
+  }
+  return {
+    ...normalized,
+    orchestrationDefaultWorkerAgent: normalizeOrchestrationDefaultWorkerAgent(
+      updates.orchestrationDefaultWorkerAgent
+    )
+  }
 }
 
 export function persistedOrchestrationWorkerPreferencesRepaired(

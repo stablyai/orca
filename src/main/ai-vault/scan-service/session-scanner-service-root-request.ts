@@ -1,4 +1,4 @@
-import type { SessionSearchScanRoots } from '../../ai-vault-search/session-search-scan-roots'
+import type { SessionSearchScanRoots } from '../../ai-vault-search/discovery/session-search-scan-roots'
 import type { AiVaultServiceParentMessage } from './session-scanner-service-protocol'
 
 let nextId = 1

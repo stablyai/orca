@@ -6,14 +6,18 @@ import {
 import { restoreStructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-intent'
 import type { StructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-intent'
 import { StructuredAgentSessionOwnerUnresolvedError } from './structured-agent-session-launch-errors'
-import { createStructuredLaunchCallerGroup } from './structured-agent-session-launch-callers'
-import type { StructuredLaunchCallerGroup } from './structured-agent-session-launch-callers'
 import {
-  getPersistedStructuredAgentLaunchRecord,
+  createStructuredLaunchCallerGroup,
+  type StructuredLaunchCallerGroup
+} from './structured-agent-session-launch-callers'
+
+import { structuredLaunchIdentity } from './structured-agent-session-launch-registry'
+import {
   setStructuredLaunchState,
-  structuredLaunchIdentity
-} from './structured-agent-session-launch-registry'
-import type { StructuredLaunchState } from './structured-agent-session-launch-registry'
+  type StructuredLaunchState
+} from './structured-agent-session-launch-state-store'
+import { readStructuredAgentLaunchRecord } from './structured-agent-session-launch-persistence'
+
 import {
   initialStructuredLaunchSelection,
   structuredLaunchSelectionController
@@ -23,7 +27,7 @@ export function restorePersistedStructuredLaunchState(
   worktreeId: string,
   sessionId: string
 ): StructuredLaunchState | undefined {
-  const record = getPersistedStructuredAgentLaunchRecord(sessionId)
+  const record = readStructuredAgentLaunchRecord(sessionId)
   if (!record) {
     return undefined
   }
@@ -39,6 +43,7 @@ export function restorePersistedStructuredLaunchState(
       expectedRuntimeFence: record.expectedRuntimeFence,
       ...(record.resumeFrom ? { resumeFrom: record.resumeFrom } : {}),
       ...(record.forkFrom ? { forkFrom: record.forkFrom } : {}),
+      ...(record.tabId ? { tabId: record.tabId } : {}),
       ...(record.seedOptions ? { seedOptions: record.seedOptions } : {}),
       ...(record.firstMessage ? { firstMessage: record.firstMessage } : {}),
       ...(record.optionsMode ? { optionsMode: record.optionsMode } : {}),

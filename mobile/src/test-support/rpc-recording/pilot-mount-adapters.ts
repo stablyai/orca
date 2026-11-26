@@ -1,9 +1,15 @@
 import { MOUNTED_OPERATION_MODULES } from './adapters/mounted-operation-modules'
-import { declaredDeviceSubstitutes, type DeclaredDeviceState } from './declared-device-state'
-import { operationModuleLoader, type OperationMutation } from './operation-module-loader'
-import { bindSalvageObserver } from './salvage-observation'
-import type { MountOptions } from './mounted-operation-module'
-import type { MountAdapter } from './recording-scenario'
+import {
+  declaredDeviceSubstitutes,
+  type DeclaredDeviceState
+} from './native-substitutes/declared-device-state'
+import {
+  operationModuleLoader,
+  type OperationMutation
+} from './module-mounting/operation-module-loader'
+import { bindSalvageObserver } from './module-mounting/salvage-observation'
+import type { MountOptions } from './module-mounting/mounted-operation-module'
+import type { MountAdapter } from './scenarios/recording-scenario'
 
 // Give each adapter module its own loader/exposures so unrelated domains cannot influence its golden.
 export function pilotMountAdapters(

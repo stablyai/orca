@@ -1,5 +1,5 @@
 import React from 'react'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getScreenSubmitModifierLabel } from '@/lib/keyboard/screen-submit-shortcut'
 import type { PrimaryAction } from './source-control-primary-action-types'

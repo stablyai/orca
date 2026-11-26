@@ -6,8 +6,16 @@ export function agentSendDisabledReasonLabel(reason: string, t: Translate = tran
   switch (reason) {
     case 'Agent needs permission':
       return t('agentSendTargets.disabledReason.needsPermission', 'Agent needs permission')
-    case 'Agent status is stale':
-      return t('agentSendTargets.disabledReason.statusStale', 'Agent status is stale')
+    case 'Agent may be waiting for approval':
+      return t(
+        'agentSendTargets.disabledReason.approvalUnseen',
+        'Agent may be waiting for approval'
+      )
+    case 'Update Orca on this host to send to this agent':
+      return t(
+        'agentSendTargets.disabledReason.hostUpdateRequired',
+        'Update Orca on this host to send to this agent'
+      )
     case 'Terminal is no longer available':
       return t(
         'auto.components.editor.ReviewNotesSendMenu.terminalGone',

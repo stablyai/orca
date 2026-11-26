@@ -1,4 +1,5 @@
-import { RelaySessionGenerations } from './server-relay-sessions'
+import { AgentHookServerStatusRowMutation } from './server-status-row-mutation'
+
 import { retainHookRootContext } from '../../../shared/agent-hook-listener/pane-provider-session'
 import { deriveCliWriterTopology } from './cli-writer-observation'
 import { previewHookPresence } from '../../../shared/agent-hook-listener/presence/agent-hook-presence-transition'
@@ -6,16 +7,16 @@ import {
   needsHookRootEvidence,
   readHookProcessVerdict
 } from '../../../shared/agent-hook-listener/presence/agent-hook-owner-presence'
-import { markCodexLeadTurnInterrupted } from '../../../shared/agent-hook-listener/providers/codex-state'
-import { reconcileCodexStatusEvent } from '../../../shared/agent-hook-listener/providers/codex-session-start'
+import { markCodexLeadTurnInterrupted } from '../../../shared/agent-hook-listener/providers/codex/codex-state'
+import { reconcileCodexStatusEvent } from '../../../shared/agent-hook-listener/providers/codex/codex-session-start'
 import {
   resolveAgentStatusIdentity,
   shouldSuppressInheritedTerminalStatus
 } from '../../../shared/agent-status/identity/agent-status-identity'
 import type { EnrichedAgentHookEventPayload, IncomingAgentHookEvent } from './server-types'
 import type { AgentStatusObservationOrigin } from '../../../shared/agent-status/contracts/agent-status-observation'
-import { ClaudeOwedNotificationExpiryTimers } from '../../../shared/agent-hook-listener/providers/claude-owed-notification-expiry-timers'
-import { setClaudeMainAgentTurnState } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
+
+import { setClaudeMainAgentTurnState } from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-roster-state'
 import {
   attachClaudePermissionToolUseId,
   pairedClaudeNonAgentWork,
@@ -24,31 +25,11 @@ import {
 } from './server-claude-status-rules'
 import { isForeignTurnHook } from './server-foreign-turn-hook'
 import { resolveCancelVerdictLatch } from '../../../shared/agent-hook-listener/state/agent-hook-cancel-verdict-latch'
-import { AgentHookServerStatusApplication } from './server-status-application'
+
 import { claimsPaneAfterExit } from './agent-exit-evidence'
+import { resolvedHookAgentType } from './pane-agent-turn-continuity'
 
-export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusApplication {
-  protected readonly claudeOwedNotificationExpiry = new ClaudeOwedNotificationExpiryTimers(
-    this.state
-  )
-  protected readonly relaySessions = new RelaySessionGenerations()
-
-  // Every row mutation passes here, including cancellation and pane moves.
-  protected override commitStatusRowMutation(
-    before: EnrichedAgentHookEventPayload | null | undefined,
-    after: EnrichedAgentHookEventPayload | null | undefined,
-    emit = true
-  ): boolean {
-    if (after) {
-      this.claudeOwedNotificationExpiry.arm(after.paneKey, (row) => {
-        if (this.server) {
-          this.applyRestatedStatus(row)
-        }
-      })
-    }
-    return super.commitStatusRowMutation(before, after, emit)
-  }
-
+export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusRowMutation {
   protected applyNormalizedStatus(
     incoming: IncomingAgentHookEvent,
     onAccepted?: () => void,
@@ -110,6 +91,24 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       | EnrichedAgentHookEventPayload
       | undefined
     const rowBefore = mutationBefore ?? previous
+    if (
+      previous?.paneSleep &&
+      !rootContext.acquired &&
+      !newRun &&
+      this.sameTerminalOwner(previous, payload) &&
+      previous.payload.agentType === payload.payload.agentType
+    ) {
+      return previous
+    }
+    if (
+      previous &&
+      payload.payload.sessionBoundary === true &&
+      !rootContext.acquired &&
+      this.sameTerminalOwner(previous, payload) &&
+      this.preservesStoppingAgent(previous.paneKey)
+    ) {
+      return previous
+    }
     const terminalHandle =
       payload.terminalHandle ??
       (previous?.terminalHandle && this.sameTerminalOwner(previous, payload)
@@ -197,6 +196,10 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     if (previous && stateReconciledPayload === previous) {
       return previous
     }
+    const resumed = this.preserveAcceptedTurn(previous, stateReconciledPayload, rowBefore, origin)
+    if (resumed !== null) {
+      return resumed
+    }
     // Relay restart loses root context; child hooks must not erase persisted resume/model identity.
     const rootContextPreservingPayload = retainHookRootContext(
       stateReconciledPayload,
@@ -205,13 +208,10 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       !!previous && this.sameTerminalOwner(previous, stateReconciledPayload),
       rootContext.returningProviderSession
     )
-    const identityResolvedPayload =
-      identity.agentType === rootContextPreservingPayload.payload.agentType
-        ? rootContextPreservingPayload
-        : {
-            ...rootContextPreservingPayload,
-            payload: { ...rootContextPreservingPayload.payload, agentType: identity.agentType }
-          }
+    const identityResolvedPayload = resolvedHookAgentType(
+      rootContextPreservingPayload,
+      identity.agentType
+    )
     const attachedPayload = attachClaudePermissionToolUseId(previous, identityResolvedPayload)
     // Resolve cancellation before permission holds adopt a replayed main-agent observation.
     const latch = resolveCancelVerdictLatch(previous, attachedPayload, Date.now())
@@ -304,7 +304,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     if (!this.writeLegacyStatusRow(enriched)) {
       return undefined
     }
-    this.commitStatusRowMutation(rowBefore, enriched)
+    this.commitAppliedStatusRow(rowBefore, enriched, origin === 'hook' && !restated)
     // Structured rows serialize nothing; skip the persistence walk for streaming chat updates.
     if (!enriched.structuredHost) {
       this.scheduleStatusPersist()

@@ -3,7 +3,7 @@ import type {
   ExchangePairingTicketResult
 } from '../../../../shared/remote-runtime/pairing/ticket-exchange-contract'
 import type { DeviceRegistry } from './pairing/device-registry'
-import type { AuthenticatedMobileSocket } from '../mobile-socket-wiring'
+import type { AuthenticatedMobileSocket } from '../mobile/mobile-socket-wiring'
 
 /** Only a socket that signed in with the pairing token itself may propose its replacement. */
 export function exchangeSocketPairingTicket(

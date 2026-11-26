@@ -1,5 +1,5 @@
 /** The WSL host statuses the UI reads, published as each changes, and who hears every change. */
-import type { WslHostStatus } from '../../../shared/wsl-host-types'
+import type { WslHostStatus } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 
 export class WslHostStatusBoard {
   private readonly statuses = new Map<string, WslHostStatus>()

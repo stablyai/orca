@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { BundledSkillPlan } from '../../../../../shared/bundled-skill-plan'
-import { BUNDLED_ORCA_SKILL_UPDATE_REQUIRED_MESSAGE } from '../../../../../shared/skill-install-capability'
+import type { BundledSkillPlan } from '../../../../../shared/skills/bundled/bundled-skill-plan'
+import { BUNDLED_ORCA_SKILL_UPDATE_REQUIRED_MESSAGE } from '../../../../../shared/skills/capabilities/skill-install-capability'
 import {
   bundledSkillTargetKey,
   type BundledSkillTarget

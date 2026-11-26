@@ -1,5 +1,5 @@
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal'
+import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal/removal'
 import type { WorktreeDeleteIdentity } from './worktree-delete-request'
 import './delete-worktree-flow'
 import { runWorktreeDeletesInParallel } from './worktree-delete-execution'

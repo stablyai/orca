@@ -4,6 +4,11 @@ import type { Worktree } from '../../../shared/worktree/types'
 import { resolveGitMetadataPath } from '../../../shared/git/metadata/git-metadata-path'
 import { getPersistedWorkspaceCleanupActivityAt } from '../../../shared/workspace-cleanup/workspace-cleanup'
 import type { WorkspaceCleanupGitRoute } from './workspace-cleanup-git-route'
+import {
+  WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,
+  WorkspaceCleanupScanCancelledError,
+  withWorkspaceCleanupTimeout
+} from './workspace-cleanup-scan-primitives'
 
 type StatPath = (targetPath: string) => Promise<{ mtimeMs: number }>
 type ReadTextFile = (targetPath: string, options?: { tailBytes?: number }) => Promise<string>
@@ -177,5 +182,36 @@ async function readMtime(targetPath: string, statPath: StatPath): Promise<number
     return Number.isFinite(stats.mtimeMs) ? stats.mtimeMs : 0
   } catch {
     return 0
+  }
+}
+
+export async function resolveWorkspaceCleanupActivityWithTimeout(
+  route: WorkspaceCleanupGitRoute,
+  worktree: Worktree,
+  onActivityStatsUnavailable: () => void,
+  signal?: AbortSignal,
+  fsActivityCache?: WorkspaceCleanupFsActivityCache
+): Promise<Worktree> {
+  try {
+    return await withWorkspaceCleanupTimeout(
+      () =>
+        resolveWorkspaceCleanupActivityWorktree(
+          route,
+          worktree,
+          undefined,
+          undefined,
+          fsActivityCache
+        ),
+      WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,
+      'Timed out reading worktree activity.',
+      signal
+    )
+  } catch (error) {
+    if (error instanceof WorkspaceCleanupScanCancelledError) {
+      throw error
+    }
+    onActivityStatsUnavailable()
+    console.warn('Workspace cleanup activity scan failed', error)
+    return resolvePersistedWorkspaceCleanupActivityWorktree(worktree)
   }
 }

@@ -6,15 +6,15 @@ import type {
   BrowserTabProfileShowResult,
   BrowserTabSetProfileResult
 } from '../../shared/browser/runtime/runtime-browser-contracts'
-import type { CommandHandler } from '../dispatch'
-import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
+import type { CommandHandler } from '../dispatch/dispatch'
+import { getOptionalStringFlag, getRequiredStringFlag } from '../arguments/flags'
 import {
   formatBrowserProfileList,
   formatTabProfileClone,
   formatTabProfileShow
 } from './browser-format'
-import { printResult } from '../format'
-import { RuntimeClientError } from '../runtime/types'
+import { printResult } from '../output/command-result-output'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { getBrowserCommandTarget } from './browser-command-target'
 
 function parseScopeFlag(flags: Map<string, string | boolean>): 'isolated' | 'imported' {

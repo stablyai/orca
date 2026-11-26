@@ -1,11 +1,11 @@
-import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
+import { resolveTerminalTabTitle } from '../../../../shared/workspace-layout/tab-groups/tab-title-resolution'
 import {
   readCanonicalPtyOwners,
   resolveCanonicalPtyClaim
-} from '../../../../shared/workspace-layout/legacy-terminal-row-claims'
+} from '../../../../shared/workspace-layout/terminal-topology/legacy-terminal-row-claims'
 import {
   cloneTerminalLayoutSnapshot,
   collectPersistedTerminalLeafIds,

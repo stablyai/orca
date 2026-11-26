@@ -1,7 +1,6 @@
 import { ORCHESTRATION_FLEET_PAGE_MAX } from '../../../../shared/orchestration/fleet/orchestration-fleet-projection'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import type { FederatedDispatchRow } from '../db/orchestration-records'
-import type { OrcaRuntimeService } from '../../orca-runtime'
 
 type HostGroup = {
   environmentId: string
@@ -10,15 +9,16 @@ type HostGroup = {
 }
 
 export function groupFederatedDispatches(args: {
-  runtime: OrcaRuntimeService
   db: OrchestrationDb
   dispatchIds: readonly string[]
+  rows?: readonly FederatedDispatchRow[]
 }): HostGroup[] {
   const groups = new Map<string, HostGroup>()
   const federatedByDispatchId = new Map(
-    args.db
-      .listFederatedDispatchesByIds(args.dispatchIds)
-      .map((dispatch) => [dispatch.dispatch_id, dispatch])
+    (args.rows ?? args.db.listFederatedDispatchesByIds(args.dispatchIds)).map((dispatch) => [
+      dispatch.dispatch_id,
+      dispatch
+    ])
   )
   for (const dispatchId of args.dispatchIds) {
     const dispatch = federatedByDispatchId.get(dispatchId)

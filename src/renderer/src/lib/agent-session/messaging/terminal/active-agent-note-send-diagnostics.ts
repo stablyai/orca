@@ -3,7 +3,7 @@ import type {
   ActiveAgentNotesSendFailureCode,
   ActiveAgentNotesSendResult
 } from './active-agent-note-send-result'
-import { hasRuntimeRpcErrorCode } from '../../../../../../shared/runtime-rpc-error-code'
+import { hasRuntimeRpcErrorCode } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 
 export const TERMINAL_RUNTIME_FAILURE_CODES = [
   'terminal_handle_stale',
@@ -70,6 +70,10 @@ function codeForStatus(
       return 'no-agent'
     case 'permission':
       return 'agent-permission'
+    case 'approval-unseen':
+      return 'terminal-send-approval-unseen'
+    case 'host-update-required':
+      return 'host-send-approval-guard-missing'
     case 'status-unavailable':
       return 'status-unavailable'
     case 'not-ready':

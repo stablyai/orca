@@ -57,7 +57,7 @@ export const KO_VALUE_OVERRIDES = {
     'MR, 이슈 및 파이프라인을 활성화하려면 GitLab CLI를 설치하세요.',
   'Install the GitHub CLI to enable pull requests, issues, and checks.':
     'PR, 이슈 및 검사를 활성화하려면 GitHub CLI를 설치하세요.',
-  'Pull requests, issues, and checks via the': 'PR, 이슈 및 검사는 다음을 통해 이루어집니다.',
+  'Pull requests, issues, and checks via the': 'PR, 이슈, 검사를 지원하는',
   'Merge requests, issues, todos, and pipelines via the':
     '다음을 통해 MR, 이슈, 할 일, 파이프라인을 병합합니다.',
   'Orca uses the GitHub CLI (gh) to show pull requests, issues, and checks.':

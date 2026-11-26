@@ -1,9 +1,9 @@
 import { UnsealedCredentialNotice } from '../../provider-accounts/UnsealedCredentialNotice'
-import type { SecretAtRestProtection } from '../../../../../shared/secret-at-rest-protection'
+import type { SecretAtRestProtection } from '../../../../../shared/secure-storage/secret-at-rest-protection'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { getDefaultVoiceSettings } from '../../../../../shared/constants'
-import type { SpeechModelManifest, VoiceSettings } from '../../../../../shared/speech-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import { getDefaultVoiceSettings } from '../../../../../shared/orca-profiles/constants'
+import type { SpeechModelManifest, VoiceSettings } from '../../../../../shared/speech/speech-types'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { OpenAiTranscriptionKeyDialog } from './OpenAiTranscriptionKeyDialog'
@@ -14,6 +14,8 @@ import {
   voiceDictationPermissionToasts
 } from './voice-dictation-toggle'
 import { VoiceWordsSettings } from './VoiceWordsSettings'
+import { VoiceCleanupSettings } from './VoiceCleanupSettings'
+import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { VoiceInputSettings } from './VoiceInputSettings'
 import { isSpeechModelDownloading } from './voice-speech-model-rows'
 import { VoiceDictationSettings } from './VoiceDictationSettings'
@@ -25,15 +27,20 @@ import { VoiceSpeechGpuSetting } from './VoiceSpeechGpuSetting'
 import { useTranslate } from '@/i18n/use-translate'
 import { readIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { useLanguageReadiness } from '@/i18n/language-readiness'
-import { speechModelRatingLanguage } from '../../../../../shared/speech-model-quality'
-import { suggestSpeechModel } from '../../../../../shared/speech-model-suggestion'
+import { speechModelRatingLanguage } from './speech-model-quality'
+import { suggestSpeechModel } from './speech-model-suggestion'
 
 type VoicePaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
+  writeSourceControlAiSettings: (patch: SourceControlAiSettingsPatch) => Promise<void>
 }
 
-export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.JSX.Element {
+export function VoicePane({
+  settings,
+  updateSettings,
+  writeSourceControlAiSettings
+}: VoicePaneProps): React.JSX.Element {
   const t = useTranslate()
   // Keep fallback identity stable so parent renders cannot repeat fetch effects.
   const [defaultVoiceSettings] = useState(getDefaultVoiceSettings)
@@ -293,7 +300,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
             <>
               {voiceSettings.openAiApiKeyConfigured ? (
                 <>
-                  <div data-settings-row="" className="px-5 py-3 empty:hidden">
+                  <div data-settings-row="" className="py-3 empty:hidden">
                     <UnsealedCredentialNotice
                       protection={openAiKeyProtection}
                       credentialName={t(
@@ -303,7 +310,6 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
                     />
                   </div>
                   <OpenAiTranscriptionSettingsRow
-                    className="px-5"
                     configured
                     disabled={openAiKeyPending}
                     onConfigure={() => openOpenAiDialog(null)}
@@ -313,7 +319,6 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
               ) : null}
               {compatibleConfigured ? (
                 <OpenAiTranscriptionSettingsRow
-                  className="px-5"
                   variant="compatible"
                   configured
                   disabled={false}
@@ -335,6 +340,13 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
       <VoiceWordsSettings
         voiceSettings={voiceSettings}
         onUpdateVoiceSettings={updateVoiceSettings}
+      />
+
+      <VoiceCleanupSettings
+        settings={settings}
+        voiceSettings={voiceSettings}
+        onUpdateVoiceSettings={updateVoiceSettings}
+        writeSourceControlAiSettings={writeSourceControlAiSettings}
       />
 
       <SettingsGroup title={t('components.settings.voice.advanced.title', 'Advanced')}>

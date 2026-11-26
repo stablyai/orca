@@ -1,5 +1,5 @@
 import { containsTerminalVerticalLineControl } from '../terminal-ansi-normalization'
-import { ownRetainedString } from '../../../../../shared/own-retained-string'
+import { ownRetainedString } from '../../../../../shared/text/own-retained-string'
 import { carryTerminalTailSentinelMatches } from './terminal-tail-sentinel-index'
 import {
   applyTerminalLineControls,

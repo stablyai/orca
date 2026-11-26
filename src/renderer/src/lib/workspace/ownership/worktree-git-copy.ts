@@ -1,10 +1,10 @@
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   parseRoutableExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { getKnownExecutionHostIdForWorktree } from './worktree-runtime-owner'
 import { getActiveWorkspaceExecutionHostId } from './active-workspace-host'
 import { selectWorkspaceByHostTarget } from '@/store/workspaces/selection/workspace-host-target'

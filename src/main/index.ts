@@ -1,72 +1,107 @@
 import { app, clipboard, dialog, type BrowserWindow } from 'electron'
-import { isRoutedOrcaDeepLink } from './startup/orca-deep-link-url'
-import { createMacAppActivationHandler } from './window/macos-app-activation'
-import { isBackgroundLaunch, isOrcadSidecarLaunch } from './window/foreground-activation-policy'
-import { createDesktopHandoff, desktopHandoffArguments } from './window/macos-desktop-handoff'
+import { isRoutedOrcaDeepLink } from './startup/open-routing/orca-deep-link-url'
+import { createMacAppActivationHandler } from './window/activation/macos-app-activation'
+import {
+  isBackgroundLaunch,
+  isOrcadSidecarLaunch
+} from './window/activation/foreground-activation-policy'
+import {
+  createDesktopHandoff,
+  desktopHandoffArguments
+} from './window/activation/macos-desktop-handoff'
 import {
   focusExistingWindow as focusExistingWindowAction,
   setMainWindowOpener
-} from './startup/main-window-actions'
-import { openMainWindow as openMainWindowController } from './startup/main-window-controller'
+} from './startup/main-window/main-window-actions'
+import { openMainWindow as openMainWindowController } from './startup/main-window/main-window-controller'
 import { mainProcessState as state } from './startup/main-process-state'
 import { runMainProcessPreflight } from './startup/main-process-preflight'
-import { runWslHolderUninstallPreflight } from './startup/wsl-holder-uninstall-preflight'
-import { runAgentHooksUninstallPreflight } from './startup/agent-hooks-uninstall-preflight'
-import { enableLinearRegexpFallback } from './startup/linear-regexp-fallback'
-import { ensureWindowsRendererRuntimeFiles } from './startup/windows-renderer-runtime-files'
+import { runWslHolderUninstallPreflight } from './startup/uninstall/wsl-holder-uninstall-preflight'
+import { runAgentHooksUninstallPreflight } from './startup/uninstall/agent-hooks-uninstall-preflight'
+import { enableLinearRegexpFallback } from './startup/chromium-policy/linear-regexp-fallback'
+import { ensureWindowsRendererRuntimeFiles } from './startup/windows-startup/windows-renderer-runtime-files'
 import { registerMainProcessIpcHandlers } from './startup/main-process-ipc-bootstrap'
 import { initializeMainProcessReady } from './startup/main-process-ready'
-import { installMainProcessQuitHandlers } from './startup/main-process-quit'
-import { shouldActivateDesktopForSecondInstance } from './startup/single-instance-lock'
-import { resolveOsOpenedDocuments } from './startup/os-opened-documents'
+import { installMainProcessQuitHandlers } from './startup/quit/main-process-quit'
+import { shouldActivateDesktopForSecondInstance } from './startup/profile-startup/single-instance-lock'
+import type { DeepLink } from './startup/deep-link-state'
+import { resolveOsOpenedDocuments } from './startup/open-routing/os-opened-documents'
 import {
   formatProfileStateStartupFailure,
   isDivergedProfileStateFailure,
   profileStateStartupFailureClass
-} from './persistence/profile-state/profile-state-startup-failure'
-import { recordDurableCrashBreadcrumb } from './crash-reporting/durable-crash-breadcrumb'
+} from './persistence/profile-state/startup/profile-state-startup-failure'
+import { recordDurableCrashBreadcrumb } from './crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import {
   chooseProfileStateCopy,
   chooseProfileStateRepair,
   presentProfileStateStartupRecoveryDialog,
   readProfileStateCopySavedTimes
-} from './persistence/profile-state/profile-state-startup-recovery-dialog'
-import { profileStateDesktopRecoveryArgs } from './startup/profile-state-recovery-preflight'
-import { profileStateRepairSectionApproval } from '../shared/profile-state-recovery-command'
+} from './persistence/profile-state/startup/profile-state-startup-recovery-dialog'
+import { profileStateDesktopRecoveryArgs } from './startup/profile-startup/profile-state-recovery-preflight'
+import { profileStateRepairSectionApproval } from '../shared/orca-profiles/profile-state-recovery-command'
 import { prepareEarlyMainUiLanguage, translateMain } from './i18n/main-i18n'
-import { ProfileStateRecoveryRequiredError } from './persistence/profile-state/profile-state-recovery-required'
+import { ProfileStateRecoveryRequiredError } from './persistence/profile-state/recovery/profile-state-recovery-required'
 import { getProfileUserDataPath } from './orca-profiles/profile-storage-paths'
-import { leaseAppImageGenerationForCurrentProcess } from './cli/appimage-generation-lease'
+import { leaseAppImageGenerationForCurrentProcess } from './cli/appimage/appimage-generation-lease'
 import { deleteLegacyWslHostWakeList } from './wsl/host-lifecycle/wsl-host-early-wake'
+import { readWslInstallation } from './wsl/discovery/wsl-installation'
 import { configureWslHostsGateFromDisk } from './wsl/host-lifecycle/wsl-host-gate-startup'
 import { configureRemoteRuntimeE2EEV2HostLatch } from '../shared/remote-runtime/e2ee/node/remote-runtime-e2ee-v2-host-latch'
-import { ignoreInheritedWslHostsGateState } from '../shared/wsl-host-internal-gate'
-import { registerOrcaProtocolClient } from './startup/orca-protocol-registration'
-import { clearWindowsStdHandleInheritance } from './startup/windows-std-handle-inheritance'
-import { installWindowsIsolatedSpawner } from './startup/windows-isolated-spawner'
-import { dropE2eSpawnLogOutsideE2e } from './startup/e2e-spawn-log-env'
+import { ignoreInheritedWslHostsGateState } from '../shared/remote-runtime/wsl-hosts/wsl-host-internal-gate'
+import { registerOrcaProtocolClient } from './startup/open-routing/orca-protocol-registration'
+import { clearWindowsStdHandleInheritance } from './startup/windows-startup/windows-std-handle-inheritance'
+import { installWindowsIsolatedSpawner } from './startup/windows-startup/windows-isolated-spawner'
+import { dropE2eSpawnLogOutsideE2e } from './startup/testing/e2e-spawn-log-env'
+import type { MainWindowOpenOptions } from './window/main-window/main-window-contracts'
+import type { DesktopActivationRequest } from './startup/serve-launch/serve-desktop-activation'
+import {
+  argvRequestsBackgroundOpen,
+  BACKGROUND_OPEN_ARG
+} from '../shared/app-lifecycle/launch/background-open-argv'
+import { setBackgroundWindowOpener } from './window/activation/background-window-open'
+import { installFatalSignalListenerGuard } from './crash-reporting/fatal-signal-listener-guard'
+import { installStdioWriteErrorSink } from './startup/process-failure/main-process-error-guards'
+import { installWorkerThreadDiagnostics } from './worker-threads/worker-thread-diagnostics'
 
 // Before anything spawns, so no daemon, PTY or agent inherits it outside e2e.
 dropE2eSpawnLogOutsideE2e()
+// A fatal OOM must crash with a report, never spin on its own trap.
+installFatalSignalListenerGuard()
+// A dead terminal or full log volume must not turn a console line into a modal crash dialog.
+installStdioWriteErrorSink()
+installWorkerThreadDiagnostics()
 
-function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
-  return openMainWindowController(options)
+async function openMainWindow(options: MainWindowOpenOptions = {}): Promise<BrowserWindow> {
+  return await openMainWindowController(options)
 }
 
 setMainWindowOpener(openMainWindow)
+setBackgroundWindowOpener(() => requestDesktopActivation([BACKGROUND_OPEN_ARG]))
 
-function focusExistingWindow(): void {
-  focusExistingWindowAction()
+function focusExistingWindow(request: DesktopActivationRequest = {}): void {
+  focusExistingWindowAction(request)
 }
 
 const requestDesktopHandoff = createDesktopHandoff({
   drainArguments: () => desktopHandoffArguments(state)
 })
 
+function publishDeepLink(link: DeepLink): void {
+  const window = state.mainWindow
+  if (!window || window.isDestroyed()) {
+    return
+  }
+  if (link.kind === 'skill-share') {
+    window.webContents.send('ui:openSkillShare', link.shareId)
+  } else {
+    // Only a doorbell: the renderer pulls the link, so it is delivered exactly once.
+    window.webContents.send('ui:botLinkPending')
+  }
+}
+
 function requestDesktopActivation(argv: readonly string[] = []): void {
-  state.skillShareDeepLinks.capture(argv, (shareId) => {
-    state.mainWindow?.webContents.send('ui:openSkillShare', shareId)
-  })
+  state.deepLinks.capture(argv, publishDeepLink)
   state.pluginInstallLinks.capture(argv, (link) => {
     state.mainWindow?.webContents.send('ui:openPluginInstallLink', link)
   })
@@ -80,7 +115,9 @@ function requestDesktopActivation(argv: readonly string[] = []): void {
     requestDesktopHandoff()
     return
   }
-  state.desktopActivationGate?.requestActivation()
+  state.desktopActivationGate?.requestActivation({
+    background: argvRequestsBackgroundOpen(argv)
+  })
 }
 
 /** Buffer documents until listener readiness; webContents.send silently drops unhandled messages. */
@@ -135,14 +172,16 @@ if (preflightReady) {
   enableLinearRegexpFallback()
   void leaseAppImageGenerationForCurrentProcess()
   // Before any gate check: saved WSL work keeps a closed gate serving it.
-  configureWslHostsGateFromDisk(app.getPath('userData'), app.getVersion())
+  const wslHostsGateReady = configureWslHostsGateFromDisk(app.getPath('userData'), app.getVersion())
   configureRemoteRuntimeE2EEV2HostLatch(app.getPath('userData'))
   // A launch restore is passive (E9): it never boots a WSL host's distro, so drop the old wake list.
   if (process.platform === 'win32') {
     deleteLegacyWslHostWakeList(app.getPath('userData'))
+    // Sync WSL readers wait on this verdict instead of spawning wsl.exe; answer it early.
+    void readWslInstallation()
   }
   app.on('open-url', (event, url) => {
-    if (!isRoutedOrcaDeepLink(url)) {
+    if (!state.deepLinks.accepts(url) && !isRoutedOrcaDeepLink(url)) {
       return
     }
     event.preventDefault()
@@ -163,7 +202,7 @@ if (preflightReady) {
     platform: process.platform,
     desktopLaunch: !state.isServeMode && !isBackgroundLaunch() && !isOrcadSidecarLaunch()
   })
-  state.skillShareDeepLinks.capture(process.argv)
+  state.deepLinks.capture(process.argv)
   state.pluginInstallLinks.capture(process.argv)
   // The first renderer pulls on mount; nothing listens this early.
   state.osOpenedDocuments.capture(process.argv)
@@ -171,6 +210,7 @@ if (preflightReady) {
   installMainProcessQuitHandlers()
   void app.whenReady().then(async () => {
     try {
+      await wslHostsGateReady
       await initializeMainProcessReady({
         openMainWindow,
         handleMacAppActivation

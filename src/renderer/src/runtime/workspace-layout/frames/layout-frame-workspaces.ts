@@ -1,6 +1,6 @@
 // Expose latest main-framed workspaces for reopen checks without importing frame sync.
 
-import type { PublishedWorkspaceLayout } from '../../../../../shared/workspace-layout/workspace-layout-published'
+import type { PublishedWorkspaceLayout } from '../../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 
 type WorkspaceReader = (worktreeId: string) => PublishedWorkspaceLayout | undefined
 

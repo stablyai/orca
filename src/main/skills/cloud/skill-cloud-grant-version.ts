@@ -1,4 +1,4 @@
-import type { SkillCloudDownloadGrant } from '../../../shared/skill-cloud-contract'
+import type { SkillCloudDownloadGrant } from '../../../shared/skills/sharing/skill-cloud-contract'
 
 export function assertSkillCloudGrantVersion(
   grant: SkillCloudDownloadGrant,

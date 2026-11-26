@@ -1,5 +1,5 @@
 import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '@/store'
 import {
   canLaunchSourceControlSectionAgentInPlace,
@@ -12,13 +12,14 @@ import {
 } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
-import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
-import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
+
+import { createNonSecureContextUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchChoice } from '@/lib/agent-session/launch/routing/agent-menu-selection'
-import type { LaunchSource } from '../../../../../../shared/telemetry-property-schemas'
+import type { LaunchSource } from '../../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import {
   normalizeSourceControlActionRecipe,
   type SourceControlActionRecipe,
@@ -233,8 +234,8 @@ export async function runSourceControlAgentActionStart({
       notifyLaunchAccepted()
     }
   } else if (worktreeId) {
-    const result = launchAgentInNewTab({
-      requestId: newAgentLaunchRequestId(),
+    const result = launchAgentInNewTabWithOutcome({
+      requestId: createNonSecureContextUuid(),
       ...(placementWorkspaceId && !inPlace ? { activate: false } : {}),
       agent: selectedAgent,
       worktreeId: inPlace ?? worktreeId,

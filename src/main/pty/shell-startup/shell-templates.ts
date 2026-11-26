@@ -1,3 +1,4 @@
+import { FISH_CWD_REPORT_BLOCK } from '../../../shared/shell/fish-cwd-report'
 import { SHELL_STARTUP_FEATURE_ENV } from './shell-startup-features'
 import { POSIX_SHELL_STARTUP_COMMAND_ENV } from './posix-shell-startup-command'
 
@@ -109,7 +110,8 @@ export function getFishShellReadyInitCommand(
     return $status
   end\n`
     : ''
-  return `function __orca_shell_ready_marker --on-event fish_prompt
+  return `${FISH_CWD_REPORT_BLOCK}
+function __orca_shell_ready_marker --on-event fish_prompt
 ${readyMarkerBlock}  functions -e __orca_shell_ready_marker
 ${startupCommandBlock}end`
 }

@@ -1,4 +1,4 @@
-import { ghExecFileWithScopeAsync } from '../../git/command-runner/gh-exec-file'
+import { ghExecFileWithScopeAsync } from '../../git/command-runner/hosted-cli/gh-exec-file'
 
 // Use ambient gh auth to avoid the shared per-IP quota; missing login falls back to unauthenticated.
 

@@ -1,5 +1,5 @@
 import type { SentinelEvidence } from './terminal-render-desync-sentinel'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 
 /** Persist before recovery; failed writes leave the live pane as the only evidence, so callers recover only with a returned capture directory. */
 export async function persistCorruptEvidence(entry: SentinelEvidence): Promise<string | null> {

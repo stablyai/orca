@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { EmulatorError } from './emulator-errors'
-import { emulatorFailureText } from '../../shared/emulator-failure-copy'
+import { emulatorFailureText } from '../../shared/emulator/emulator-failure-copy'
 import type { EmulatorSessionInfo } from './emulator-types'
 
 const MJPEG_STREAM_SUFFIX = '/stream.mjpeg'
@@ -17,6 +17,13 @@ export function deriveAxUrlFromStreamUrl(streamUrl: string | undefined): string 
     return undefined
   }
   return `${streamUrl.slice(0, -MJPEG_STREAM_SUFFIX.length)}/ax`
+}
+
+export function deriveAvccUrlFromStreamUrl(streamUrl: string): string | undefined {
+  if (!streamUrl.endsWith(MJPEG_STREAM_SUFFIX)) {
+    return undefined
+  }
+  return `${streamUrl.slice(0, -MJPEG_STREAM_SUFFIX.length)}/stream.avcc`
 }
 
 export function parseServeSimDetachedSession(raw: unknown, udid: string): EmulatorSessionInfo {

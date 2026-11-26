@@ -1,9 +1,0 @@
-]11;?]10;?
-freebuff found agent files in this repository it has not run before:
-
-  /private/tmp/orca-freebuff-trust/.agents
-    agents: demo.ts
-
-These run with your permissions and can read your environment. Only load them if you trust this repository.
-
-Load and run these? [y/N] 

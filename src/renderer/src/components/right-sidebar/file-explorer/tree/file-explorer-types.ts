@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { UserOpenedPathStat } from '@/lib/files/access/user-opened-local-path'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { DirEntryCursor } from '../../../../../../shared/file-listing/file-dir-page'
 
 export type FileExplorerOperationOwner =
@@ -42,6 +42,7 @@ export type DirCache = {
 
 /** Retry covered dir reads after supersession, but not unreadable roots, which would add one dead transport timeout per dir. */
 export type FileExplorerTreeRefreshOutcome = 'refreshed' | 'superseded' | 'root-unreadable'
+export type FileExplorerTreeRefreshOptions = { wakeWslDistro?: boolean; restoredSnapshot?: boolean }
 
 export type UseFileExplorerTreeResult = {
   dirCache: Record<string, DirCache>

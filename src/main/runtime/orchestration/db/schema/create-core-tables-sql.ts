@@ -230,6 +230,7 @@ CREATE TABLE IF NOT EXISTS structured_mail_sends (
   PRIMARY KEY (mailbox_handle, message_id)
 );
 CREATE INDEX IF NOT EXISTS idx_structured_mail_sends_session ON structured_mail_sends(session_id);
+CREATE INDEX IF NOT EXISTS idx_structured_mail_sends_message ON structured_mail_sends(message_id);
 
 CREATE TABLE IF NOT EXISTS worker_terminal_archives (
   dispatch_id   TEXT PRIMARY KEY,
@@ -237,6 +238,12 @@ CREATE TABLE IF NOT EXISTS worker_terminal_archives (
   kind          TEXT NOT NULL CHECK(kind IN ('transcript_pin', 'terminal_tail', 'structured_journal')),
   content       TEXT NOT NULL,
   created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- When maintenance last pruned settled history (epoch ms), so a restart waits out the interval.
+CREATE TABLE IF NOT EXISTS orchestration_maintenance (
+  id        INTEGER PRIMARY KEY CHECK(id = 1),
+  pruned_at INTEGER
 );
 
   `

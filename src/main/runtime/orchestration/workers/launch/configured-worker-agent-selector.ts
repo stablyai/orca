@@ -1,5 +1,5 @@
-import { extractLeadingEnvAssignments } from '../../../../../shared/command-environment'
-import { getCommandTokenPathBasename } from '../../../../../shared/command-token-scanner'
+import { extractLeadingEnvAssignments } from '../../../../../shared/shell/launch/command-environment'
+import { getCommandTokenPathBasename } from '../../../../../shared/shell/command-resolution/command-token-scanner'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import {

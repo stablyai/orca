@@ -48,7 +48,7 @@ export const persistedClientHostedBrowserPageSchema: z.ZodType<PersistedClientHo
     browserPageId: identity,
     workspaceId: identity,
     browserProfileId: identity,
-    url: z.string().max(8192),
+    url: z.string(),
     title: z.string().max(4096),
     pairedDeviceId: identity,
     savedAt: z.number().int().nonnegative()

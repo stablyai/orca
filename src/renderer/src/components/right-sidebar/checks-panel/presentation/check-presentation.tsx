@@ -1,5 +1,5 @@
 import React from 'react'
-import { getCheckConclusion } from '@/components/pr-check-counts'
+import { getCheckConclusion } from '@/components/github/pr-check-counts'
 import {
   AlertTriangle,
   CircleCheck,
@@ -9,8 +9,8 @@ import {
   CircleMinus,
   GitPullRequest
 } from 'lucide-react'
-import type { PRInfo } from '../../../../../../shared/github/pull-request-types'
-import type { PRCheckDetail } from '../../../../../../shared/github/check-types'
+import type { PRInfo } from '../../../../../../shared/github/pull-requests/pull-request-types'
+import type { PRCheckDetail } from '../../../../../../shared/github/checks/check-types'
 
 export const PullRequestIcon = GitPullRequest
 

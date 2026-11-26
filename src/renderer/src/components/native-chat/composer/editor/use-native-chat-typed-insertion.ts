@@ -5,7 +5,7 @@ import {
 } from './native-chat-composer-input'
 import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import { withQuoteAppended } from '../../drafts/native-chat-selection-quote-draft'
-import { dictationSeparators } from '../../../../../../shared/dictation-transcript-spacing'
+import { dictationSeparators } from '../../../../../../shared/speech/dictation/dictation-transcript-spacing'
 
 /** Insert/focus through the composer input for paste and imperative callers. */
 export function useNativeChatTypedInsertion(args: {
@@ -19,7 +19,7 @@ export function useNativeChatTypedInsertion(args: {
   appendText: (text: string) => void
   acceptsText: () => boolean
   insertPastedText: (text: string) => boolean
-  focus: () => boolean
+  focus: (options?: { caretAtEnd?: boolean }) => boolean
   contains: (node: Node | null) => boolean
 } {
   const { textareaRef, isComposing, setDraft, setCaret, setActiveSuggestion } = args
@@ -86,11 +86,19 @@ export function useNativeChatTypedInsertion(args: {
 
   const acceptsText = useCallback((): boolean => usableInput() !== null, [usableInput])
 
-  const focus = useCallback((): boolean => {
-    const textarea = usableInput()
-    textarea?.focus()
-    return textarea !== null
-  }, [usableInput])
+  const focus = useCallback(
+    (options?: { caretAtEnd?: boolean }): boolean => {
+      const textarea = usableInput()
+      if (textarea && options?.caretAtEnd) {
+        const end = textarea.value.length
+        textarea.setSelectionRange(end, end)
+        setCaret(end)
+      }
+      textarea?.focus()
+      return textarea !== null
+    },
+    [setCaret, usableInput]
+  )
 
   const contains = useCallback(
     (node: Node | null): boolean => textareaRef.current?.contains?.(node) === true,

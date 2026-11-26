@@ -1,7 +1,7 @@
 import {
   isRuntimeOwnedSshTargetId,
   parseExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { WorktreeOperationRoute } from '@/lib/workspace/ownership/worktree-operation-route'
 
 /** Choose normal deletion or forget-only from the route a removal would take. */

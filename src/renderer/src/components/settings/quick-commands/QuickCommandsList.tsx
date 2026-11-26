@@ -1,5 +1,5 @@
 import { Check, Copy, Pencil, TerminalSquare, Trash2 } from 'lucide-react'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type {
   TerminalQuickCommand,
   TerminalQuickCommandScope
@@ -18,11 +18,14 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Badge } from '../../ui/badge'
 import { Button } from '../../ui/button'
 import { RepoBadgeMark } from '../../repo/RepoBadgeLabel'
+import { RepoMark, type RepoMarkRepo } from '../../repo/RepoMark'
 import { getQuickCommandRepoLabel } from './QuickCommandsScopeFilter'
+
+type QuickCommandRepo = RepoMarkRepo & Pick<Repo, 'path'>
 
 function getScopeLabel(
   scope: TerminalQuickCommandScope,
-  repoById: Map<string, Pick<Repo, 'displayName' | 'path' | 'badgeColor'>>
+  repoById: Map<string, QuickCommandRepo>
 ): string {
   if (scope.type === 'global') {
     return 'Global'
@@ -47,7 +50,7 @@ function QuickCommandRow({
   onRemove
 }: {
   command: TerminalQuickCommand
-  repoById: Map<string, Pick<Repo, 'displayName' | 'path' | 'badgeColor'>>
+  repoById: Map<string, QuickCommandRepo>
   onEdit: (command: TerminalQuickCommand) => void
   onRemove: (command: TerminalQuickCommand) => void
 }): React.JSX.Element {
@@ -82,7 +85,11 @@ function QuickCommandRow({
           <Badge variant="outline" className="max-w-44 gap-1.5 text-[11px] font-normal">
             {scope.type === 'repo' ? (
               <>
-                <RepoBadgeMark color={repoById.get(scope.repoId)?.badgeColor} />
+                {repoById.get(scope.repoId) ? (
+                  <RepoMark repo={repoById.get(scope.repoId)!} />
+                ) : (
+                  <RepoBadgeMark color={undefined} />
+                )}
                 <span className="truncate">{getScopeLabel(scope, repoById)}</span>
               </>
             ) : (
@@ -206,7 +213,7 @@ export function QuickCommandsList({
   commands: TerminalQuickCommand[]
   visibleCommands: TerminalQuickCommand[]
   hasQuery: boolean
-  repoById: Map<string, Pick<Repo, 'displayName' | 'path' | 'badgeColor'>>
+  repoById: Map<string, QuickCommandRepo>
   onEdit: (command: TerminalQuickCommand) => void
   onRemove: (command: TerminalQuickCommand) => void
 }): React.JSX.Element {

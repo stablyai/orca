@@ -1,4 +1,4 @@
-import { errorMessage } from '../../shared/error-message'
+import { errorMessage } from '../../shared/errors/error-message'
 import {
   sttEngineUsers,
   type SttEngine,
@@ -7,7 +7,7 @@ import {
 } from './stt-session-state'
 import { waitForSttWorkerStop, type SttWorkerStopOutcome } from './stt-worker-stop'
 import { STT_WORKER_HUNG_ERROR } from './stt-worker-process'
-import { LOCAL_DICTATION_STOP_TIMEOUT_MS } from '../../shared/dictation-finish-deadlines'
+import { LOCAL_DICTATION_STOP_TIMEOUT_MS } from '../../shared/speech/dictation/dictation-finish-deadlines'
 
 // A cancel waits only this long behind a busy decode before giving up on it.
 const DISCARD_DICTATION_TIMEOUT_MS = 2_000

@@ -1,14 +1,14 @@
-import type { WslHostDeferredUpdate } from '../../../shared/wsl-host-types'
+import type { WslHostDeferredUpdate } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import type { WslOrcadLaunch, WslOrcadDeployOptions } from './wsl-orcad-launch-contract'
 /** D1/D2b/D8 reuse SSH installation, activation journals/fences and admission over wsl.exe. C5 pairs through the reported loopback port. */
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 
-import { ORCAD_MANAGED_REMOTE_PORT } from '../../../shared/orcad-managed-runtime'
+import { ORCAD_MANAGED_REMOTE_PORT } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import type { ServeReadiness } from '../../server/serve-readiness'
 
 import { recoverInterruptedOrcadActivation } from '../../managed-server/activation/orcad-activation-recovery'
 import { readOrcadActivationRecord } from '../../managed-server/activation/orcad-activation-record-store'
-import { materializeOrcadArtifact } from '../../orcad/orcad-artifact-materializer'
+import { materializeOrcadArtifact } from '../../orcad/artifact-slots/orcad-artifact-materializer'
 import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import { ORCAD_ACTIVATION_POLICY_REFUSED_CODE } from '../../managed-server/activation/orcad-installed-activation'
 import { orcadBoundPort } from '../../managed-server/lifecycle/orcad-managed-bound-port'
@@ -21,7 +21,7 @@ import { isWaitingOrcadUpdateDeferral } from '../../managed-server/lifecycle/orc
 import { clearOrcadUpdateFailedThisLaunch } from '../../managed-server/lifecycle/orcad-managed-update-failure-memory'
 import type { OrcadUpdateIntent } from '../../managed-server/lifecycle/orcad-managed-update-decision'
 import type { OrcadActivationRecord } from '../../managed-server/activation/orcad-activation-record'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 import { pruneWslOrcadVersionsUntilClean } from './wsl-orcad-version-gc-memo'
 import { pruneSupersededOrcadCandidates } from '../../managed-server/lifecycle/orcad-managed-version-gc'
 import { wakeAlreadyActiveOrcad } from '../../managed-server/lifecycle/orcad-already-active-wake'
@@ -31,18 +31,23 @@ import {
   deployOrcad,
   type OrcadDeployOptions
 } from '../../managed-server/install/orcad-remote-deploy'
-import { isWslMoveUnderwayOnHost } from '../../persistence/moving-wsl-projects/wsl-move-running-moves'
+import { isWslMoveUnderwayOnHost } from '../../persistence/moving-wsl-projects/orchestration/wsl-move-running-moves'
 import { readLocalFullVersion } from '../../managed-server/install/remote-versioned-install'
 import { createWslDistroHolder } from '../discovery/wsl-distro-holder'
 
-import { wslDistroHolderKey } from '../discovery/wsl-distro-holder-record'
+import { defaultWslOrcadEnvironmentId } from './wsl-orcad-environment-id'
 import { readWslDistroRegistryIdShared } from '../discovery/wsl-distro-registry-id'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
-import { createWslOrcadHostTransport, type WslOrcadHostTransport } from './wsl-orcad-host-transport'
+import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { holdWslDistroWithContext } from './wsl-orcad-held-context'
 import { deployWslOrcadWithOneFence } from './wsl-orcad-one-fence-deploy'
 import { removeFailedFreshWslOrcadInstall } from './wsl-orcad-failed-install-removal'
-import { probeWslActiveOrcad, readWslOrcadPid } from './wsl-orcad-active-probe'
+import {
+  probeWslActiveOrcad,
+  readWslOrcadPid,
+  type WslOrcadLaunchMode
+} from './wsl-orcad-active-probe'
+import { relaunchAsWslHost } from './wsl-orcad-host-relaunch'
 import { wslOrcadConnectStateHints } from './wsl-orcad-connect-state-snapshot'
 import { readWslOrcadIncumbent, type WslOrcadIncumbent } from './wsl-orcad-incumbent'
 import { adoptUnrecordedWslOrcad } from './wsl-orcad-instance-adoption'
@@ -57,9 +62,7 @@ import { withOwnBuildLaunchEnv } from './wsl-orcad-own-build-launch-env'
 import { WSL_NODE_RUNTIME_DOWNLOAD_BUDGET } from '../execution/wsl-node-runtime-download-budget'
 
 /** Until the persisted deployment record (C7) assigns one, the environment is keyed per distro. */
-export function defaultWslOrcadEnvironmentId(distro: string): string {
-  return `wsl:${wslDistroHolderKey(distro)}`
-}
+export { defaultWslOrcadEnvironmentId }
 
 export async function deployAndLaunchWslOrcad(
   distro: string,
@@ -75,7 +78,7 @@ export async function deployAndLaunchWslOrcad(
     distro: name,
     label: options.label ?? name
   }
-  const conn = (options.createTransport ?? defaultTransport)(target)
+  const conn = options.createTransport?.(target) ?? createWslOrcadHostTransport({ target })
   try {
     return await launchOverTransport(name, target, conn, options)
   } finally {
@@ -98,6 +101,7 @@ async function launchOverTransport(
   const holder = options.holder ?? createWslDistroHolder({ userDataPath: userDataPath() })
   // Read GUID alongside deploy; failure leaves the record without one.
   const distroId = (options.readRegistryId ?? readWslDistroRegistryIdShared)(name).catch(() => null)
+  options.onStage?.('starting-distro')
   const first = await holdWslDistroWithContext(name, target, conn, holder, signal)
   const { held, connectState } = first
   let context = first.context
@@ -120,6 +124,7 @@ async function launchOverTransport(
   if (adoption.outcome === 'adopted') {
     context = { ...context, activationRecord: adoption.record }
   }
+  options.onStage?.('installing-server')
   const localOrcadDir = await materializeOrcadArtifact(context.serverTarget, {
     signal,
     trustVerificationRecord: true,
@@ -165,7 +170,7 @@ async function launchOverTransport(
       conn,
       localOrcadDir,
       target: context.serverTarget,
-      ...managedOrcadDeployPolicy(context, appVersion, intent),
+      ...managedOrcadDeployPolicy(context, appVersion, intent, options.pastUncountedTerminals),
       ...(incumbent
         ? {
             census: incumbent.census,
@@ -173,10 +178,13 @@ async function launchOverTransport(
             releaseIncumbentAdmission: incumbent.releaseAdmission
           }
         : {}),
-      force: intent === 'force',
+      // Only a confirmed Update anyway passes an uncounted census; plain Force defers it back to that confirm.
+      force: options.pastUncountedTerminals ? true : intent === 'force' && 'live-terminals',
       appVersion,
       recordedNodeRuntimeProbe: true,
+      localWslHost: true,
       nodeRuntimeDownload: WSL_NODE_RUNTIME_DOWNLOAD_BUDGET,
+      onInstallLockWait: options.onInstallLockWait,
       ...extra
     }).catch((error: unknown) => {
       if (!signal?.aborted) {
@@ -209,9 +217,9 @@ async function launchOverTransport(
       candidateVersion: deployed.fullVersion,
       code: await wslOrcadDeferralCode(slot, deployed, appVersion),
       reason: deployed.reason,
+      incumbentVersion,
       forceable:
-        isForceableOrcadDeferral(deployed.code) ||
-        deployed.code === ORCAD_ACTIVATION_POLICY_REFUSED_CODE
+        isForceableOrcadDeferral(deployed) || deployed.code === ORCAD_ACTIVATION_POLICY_REFUSED_CODE
     }
     // Live-terminal deferrals keep the incumbent serving until Update/Force.
     if (
@@ -231,11 +239,16 @@ async function launchOverTransport(
     return { outcome: 'deferred', distro: name, ...deferredUpdate }
   }
   clearOrcadUpdateFailedThisLaunch(failureHost)
+  options.onStage?.('connecting')
+  // A holder, not a let: control flow would not see the probe closure set it.
+  const launch: { mode: WslOrcadLaunchMode } = { mode: 'unknown' }
   const probe = async () => {
     const answer = await probeWslActiveOrcad(context, localOrcadDir, deployed.fullVersion, signal)
     probed = { fullVersion: deployed.fullVersion, pid: answer.pid }
+    launch.mode = answer.launch
     return answer.readiness
   }
+  let notWslHost: WslHostDeferredUpdate | null = null
   let readiness: ServeReadiness
   if (deployed.outcome === 'already-active') {
     // A stopped distro ended the active slot with it; the one-fence deploy already woke it.
@@ -253,6 +266,24 @@ async function launchOverTransport(
       await wakeAlreadyActiveOrcad(slot)
       return probe()
     })
+    // Started without the WSL host marker (#43632): restart it as one when no terminal or chat runs.
+    if (launch.mode === 'other') {
+      const relaunch = await relaunchAsWslHost({
+        environmentId: target.id,
+        context,
+        slot,
+        fullVersion: deployed.fullVersion,
+        paired: options.pairedOffer ?? null,
+        moveRunning: isWslMoveUnderwayOnHost(userDataPath(), name),
+        readIncumbent: options.readIncumbent,
+        reprobe: async () => ({ readiness: await probe(), launch: launch.mode })
+      })
+      if (!relaunch.ready) {
+        return { outcome: 'deferred', distro: name, ...relaunch.deferredUpdate }
+      }
+      readiness = relaunch.readiness ?? readiness
+      notWslHost = relaunch.deferredUpdate
+    }
   } else {
     readiness = await probe()
   }
@@ -262,7 +293,8 @@ async function launchOverTransport(
     activeVersion: deployed.fullVersion,
     readiness
   })
-  return readyLaunch({ fullVersion: deployed.fullVersion, readiness })
+  const ready = await readyLaunch({ fullVersion: deployed.fullVersion, readiness })
+  return notWslHost ? { ...ready, deferredUpdate: notWslHost } : ready
 
   async function readyLaunch(serving: {
     fullVersion: string
@@ -287,10 +319,6 @@ async function launchOverTransport(
         : {})
     }
   }
-}
-
-function defaultTransport(target: WslOrcadHostTarget): WslOrcadHostTransport {
-  return createWslOrcadHostTransport({ target })
 }
 
 function userDataPath(): string {

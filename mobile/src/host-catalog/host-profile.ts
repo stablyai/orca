@@ -5,8 +5,8 @@ import {
   type MobileRelayEndpoint
 } from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { NODE_PLATFORM_NAMES } from '../transport/connection/mobile-runtime-host-platform'
-import { salvagedOptional } from '../../../src/shared/zod-salvage'
-import type { HostMachine } from '../../../src/shared/host-machine-line'
+import { salvagedOptional } from '../../../src/shared/validation/zod-salvage'
+import type { HostMachine } from '../../../src/shared/execution-host/host-machine-line'
 import { HostMachineSchema } from '../transport/hosts/host-status-reply-schema'
 
 export type HostProfile = {

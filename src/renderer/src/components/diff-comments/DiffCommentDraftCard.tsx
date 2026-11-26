@@ -12,7 +12,7 @@ import {
   hasBoundedCommentBodyText
 } from '@/lib/source-control/review/comments/comment-body-submit-state'
 import { toast } from 'sonner'
-import { installOpenDraftAddReviewNoteGuard } from '../editor/editor-shortcuts'
+import { installOpenDraftAddReviewNoteGuard } from '../editor/commands/editor-shortcuts'
 
 export type DiffCommentDraftCardProps = {
   lineNumber: number

@@ -12,7 +12,11 @@ export const NATIVE_MODULE_BUILD_PACKAGES = [
 ]
 // Only the release matters: it fixes the ABI and headers; its downloader closure does not.
 export const NATIVE_MODULE_TARGET_PACKAGES = ['electron']
-export const NATIVE_MODULE_WORKSPACES = ['native/windows-registry', 'native/windows-security']
+export const NATIVE_MODULE_WORKSPACES = [
+  'native/windows-notifications',
+  'native/windows-registry',
+  'native/windows-security'
+]
 // Resolution-only settings, plus patches, whose native effect already shows in snapshot ids.
 const RESOLUTION_ONLY_WORKSPACE_SETTINGS = new Set([
   'addMissingPeerTypes',
@@ -112,7 +116,9 @@ export function nativeWorkspaceSettings(contents, closure) {
     Object.entries(parse(contents) ?? {})
       .filter(([setting]) => !RESOLUTION_ONLY_WORKSPACE_SETTINGS.has(setting))
       .map(([setting, value]) =>
-        setting === 'allowBuilds' && value && typeof value === 'object'
+        (setting === 'allowBuilds' || setting === 'permissions') &&
+        value &&
+        typeof value === 'object'
           ? [setting, Object.fromEntries(Object.entries(value).filter(([name]) => names.has(name)))]
           : [setting, value]
       )

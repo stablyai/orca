@@ -1,13 +1,13 @@
 import type { FolderWorkspace } from './folder-workspace-types'
 import type { Worktree } from '../worktree/types'
-import { folderWorkspaceKey } from '../workspace-scope'
+import { folderWorkspaceKey } from '../workspace/identity/workspace-scope'
 import {
   getConnectionExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../execution-host'
+} from '../execution-host/execution-host'
 import { composeWorktreeHostIdentity } from '../worktree/host-qualified-identity'
-import { normalizeWorkspaceCreatorProvenance } from '../workspace-creator-provenance'
+import { normalizeWorkspaceCreatorProvenance } from '../workspace/identity/workspace-creator-provenance'
 import { getWorkspaceAttachments } from '../workspace-attachments/workspace-attachments'
 import { normalizeWorkspaceAttachment } from '../workspace-attachments/workspace-attachment-normalization'
 

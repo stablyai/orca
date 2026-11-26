@@ -1,4 +1,4 @@
-import { resolveLocalWindowsAgentStartupShell } from '../../windows-terminal-shell'
+import { resolveLocalWindowsAgentStartupShell } from '../../shell/launch/windows-terminal-shell'
 import { resolveStartupShell } from '../startup/tui-agent-startup-shell'
 import { agentLaunchChoiceUpdates } from './agent-launch-choice-updates'
 import {

@@ -46,7 +46,8 @@ export function AutomationListSearchField({
       <Input
         ref={inputRef}
         type="text"
-        autoFocus
+        // Why: the page focuses this on user navigation; a restored page must not move focus.
+        data-automations-page-search=""
         value={query}
         aria-label={t(
           'auto.components.automations.AutomationListSearchField.label',

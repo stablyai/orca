@@ -11,8 +11,8 @@ import {
   resolveAgentStartupTabId
 } from '@/lib/agent-session/launch/startup/agent-startup-delayed-delivery'
 import type { WorkspaceLinkedItem as FolderWorkspaceLinkedTask } from '../../../../../shared/worktree/types'
-import { slugifyForWorkspaceName } from '../../../../../shared/workspace-name'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { slugifyForWorkspaceName } from '../../../../../shared/workspace/naming/workspace-name'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 
 export const CLIENT_PLATFORM: NodeJS.Platform = navigator.userAgent.includes('Windows')
   ? 'win32'
@@ -149,7 +149,6 @@ async function deliverAgentStartupToTerminal(
     const delivered = await sendFollowupPromptWhenAgentReady({
       ptyId,
       agent: startup.agent,
-      expectedProcess: startup.expectedProcess,
       prompt: startup.followupPrompt
     })
     // Report dropped follow-ups so users know to open the workspace and paste manually.

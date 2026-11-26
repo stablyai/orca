@@ -5,7 +5,7 @@ import {
   ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT,
   type EditorRequestCmdSaveDetail
 } from '../../autosave/editor-autosave'
-import type { FileContent } from '../../editor-panel-content-types'
+import type { FileContent } from '../../loading/editor-panel-content-types'
 import { getEditorSaveTargetFile } from '../queue/editor-save-target'
 import { isCodeViewTab } from '../queue/editor-save-disk-precondition'
 import { isEditorWritableView } from '../queue/editor-save-writer-view'

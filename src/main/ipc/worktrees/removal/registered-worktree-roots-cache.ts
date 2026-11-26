@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import { findRegisteredWorktreeRoot } from './registered-worktree-root-match'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { RegisteredWorktreeRootStore as Store } from './registered-worktree-root-store'
 import {
   listWorktreeRootsWithConcurrency,
@@ -9,7 +9,7 @@ import {
 import {
   isDescendantOrEqual,
   normalizeExistingPath
-} from '../../filesystem/access/filesystem-path-containment'
+} from '../../../filesystem/local-file-io/filesystem-path-containment'
 import {
   findOwnersListedThroughAnotherGit,
   shouldRelistOwner
@@ -194,14 +194,6 @@ export function registerCreatedWorktreeRoot(
   advanceOwner(owner)
   refreshRegisteredWorktreeRoots()
   registeredWorktreeRootsDirty = true
-}
-
-export function __resetCreatedWorktreeRootsForTests(): void {
-  for (const owner of registeredOwners.values()) {
-    owner.recovered.clear()
-    advanceOwner(owner)
-  }
-  refreshRegisteredWorktreeRoots()
 }
 
 export function getRegisteredWorktreeRootsRevision(repoId: string): number {

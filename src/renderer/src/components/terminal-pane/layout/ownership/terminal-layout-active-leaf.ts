@@ -1,6 +1,6 @@
 import type { TerminalPaneLayoutNode } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import '../terminal-layout-leaf-traversal'
-import { collectLayoutLeafIdsInOrder } from '../../../../../../shared/workspace-layout/terminal-pane-tree'
+import { collectLayoutLeafIdsInOrder } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 
 function hasLeafPtyBinding(
   ptyIdsByLeafId: Record<string, string> | undefined,

@@ -20,3 +20,13 @@ export function flashFocusedPaneRim(paneElement: HTMLElement): void {
   }, FOCUSED_PANE_FLASH_MS)
   flashTimersByPane.set(paneElement, timer)
 }
+
+/** Flashes a chat tab's pane with the same rim a terminal pane gets; nothing when it isn't mounted. */
+export function flashChatPaneRim(tabId: string): void {
+  const pane = document.querySelector<HTMLElement>(
+    `[data-structured-agent-session-overlay-tab-id="${CSS.escape(tabId)}"]`
+  )
+  if (pane) {
+    flashFocusedPaneRim(pane)
+  }
+}

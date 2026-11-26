@@ -5,7 +5,7 @@ import type { Readable, Writable } from 'node:stream'
 import { Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { createGunzip } from 'node:zlib'
-import { SKILL_PACKAGE_MAX_COMPRESSED_BYTES } from '../../../shared/skill-package-manifest'
+import { SKILL_PACKAGE_MAX_COMPRESSED_BYTES } from '../../../shared/skills/packages/skill-package-manifest'
 import { createDeterministicGzipStore } from './skill-package-deterministic-gzip'
 import {
   buildUstarEntryHeader,

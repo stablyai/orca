@@ -1,13 +1,15 @@
 import type { ReactNode } from 'react'
 import { X } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
+import { BreadcrumbButton } from '../../ui/breadcrumb-button'
 import { Button } from '../../ui/button'
 
 type SettingsHeaderProps = {
   title: string
   subPageTitle?: string
   hostPicker?: ReactNode
-  onGeneral: () => void
+  /** The middle crumb: back from a sub-page to its section. */
+  onParent: () => void
   onClose: () => void
 }
 
@@ -15,7 +17,7 @@ export function SettingsHeader({
   title,
   subPageTitle,
   hostPicker,
-  onGeneral,
+  onParent,
   onClose
 }: SettingsHeaderProps): React.JSX.Element {
   const t = useTranslate()
@@ -33,13 +35,7 @@ export function SettingsHeader({
         </span>
         {subPageTitle ? (
           <>
-            <button
-              type="button"
-              onClick={onGeneral}
-              className="rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {title}
-            </button>
+            <BreadcrumbButton onClick={onParent}>{title}</BreadcrumbButton>
             <span aria-hidden="true" className="text-muted-foreground">
               /
             </span>

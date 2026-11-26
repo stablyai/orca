@@ -10,7 +10,7 @@ import {
 } from './orcad-migration-scrollback'
 import { requiredRecord } from './orcad-migration-dormant-value-validation'
 import { assertUniqueKeys } from './orcad-migration-manifest-fields'
-import { ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY } from '../orcad-runtime-capabilities'
+import { ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY } from '../remote-runtime/protocol/orcad-runtime-capabilities'
 
 export const ORCAD_MIGRATION_BLOB_KINDS = [
   'terminal-restore-hints',

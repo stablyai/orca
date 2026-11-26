@@ -1,5 +1,5 @@
 import type { PushConfig } from './config.js'
-import type { PushPruneSweep } from './durable-push-store.js'
+import type { PushPruneSweep } from './delivery/durable-push-store.js'
 import type { createPushServer } from './push-server.js'
 
 const CHALLENGE_PRUNE_INTERVAL_MS = 60_000
@@ -45,9 +45,10 @@ function prune(label: string, run: () => Promise<PushPruneSweep>, intervalMs: nu
 }
 
 // One DELETE under a statement timeout: there is no batch budget for it to exhaust.
-const unbatchedSweep =
-  (run: () => Promise<number>) =>
-  async (): Promise<PushPruneSweep> => ({ deleted: await run(), saturated: false })
+const unbatchedSweep = (run: () => Promise<number>) => async (): Promise<PushPruneSweep> => ({
+  deleted: await run(),
+  saturated: false
+})
 
 export function startPushBackground(
   config: Pick<PushConfig, 'mode'>,

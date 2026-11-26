@@ -24,6 +24,18 @@ export function chatProviderAgents(
   ]
 }
 
+/** The chat agents whose chat runs a program Orca downloads on that host, apart from their CLI. */
+export function managedRuntimeChatAgents(
+  executionHostId: string,
+  statuses: HostStructuredAgentsStatuses
+): Set<string> {
+  return new Set(
+    readHostStructuredAgents(executionHostId, statuses)
+      ?.filter((row) => row.managedRuntime)
+      .map((row) => row.agent)
+  )
+}
+
 export function useHostStructuredAgentsVersion(): number {
   return useAppViewExternalStore(
     subscribeHostStructuredAgents,

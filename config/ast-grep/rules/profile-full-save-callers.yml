@@ -1,0 +1,14 @@
+# Mutations save the domains they change; only startup load and maintenance resume rewrite the whole profile.
+id: profile-full-save-callers
+language: typescript
+severity: error
+message: Name the profile domains this mutation changed with scheduleSave(owner, [...domains]). scheduleFullProfileSave is for startup load and maintenance resume only.
+files:
+  - src/**
+ignores:
+  - '**/*.test.*'
+  - src/main/persistence/loading-store/profile-writing/write-scheduling.ts
+  - src/main/persistence/loading-store/store.ts
+  - src/main/persistence/loading-store/profile-writing/profile-state-maintenance.ts
+rule:
+  pattern: scheduleFullProfileSave($$$)

@@ -1,13 +1,25 @@
-import type { StructuredAgentResolutionOperation } from '../structured-agent-command-resolution'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { StructuredAgentResolutionOperation } from '../agent-launch/structured-agent-command-resolution'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AgentModelCatalogSuccess } from './agent-model-catalog-entry'
+
+export type AgentModelCatalogProgress = ((
+  success: AgentModelCatalogSuccess,
+  accountKnown?: boolean
+) => void) & {
+  /** Retain the latest accumulator; only real reads or settlement materialize it. */
+  defer?: (read: () => AgentModelCatalogSuccess, known: (model: string) => boolean) => void
+  demanded?: () => ReadonlySet<string>
+}
 
 export type AgentModelCatalogResolvedProbe = {
   identity: unknown
+  inputStamp?: string
   /** `operation` owns the run; it defaults to the one the invocation was resolved under. */
   run: (
     signal?: AbortSignal,
-    operation?: StructuredAgentResolutionOperation
+    operation?: StructuredAgentResolutionOperation,
+    selectedModels?: readonly string[],
+    publish?: AgentModelCatalogProgress
   ) => Promise<AgentModelCatalogSuccess>
 }
 
@@ -22,11 +34,13 @@ export type AgentModelCatalogProbe = ((
     cwd?: string
     selectedModels?: readonly string[]
     operation?: StructuredAgentResolutionOperation
+    publish?: AgentModelCatalogProgress
   }
 ) => Promise<AgentModelCatalogSuccess>) & {
   resolveLegacy?: (
     home: AgentSessionAccountHome,
-    operation?: StructuredAgentResolutionOperation
+    operation?: StructuredAgentResolutionOperation,
+    lookup?: AgentModelCatalogLookup
   ) => Promise<AgentModelCatalogResolvedProbe>
   resolve?: (
     home: AgentSessionAccountHome,
@@ -47,5 +61,7 @@ export type AgentModelCatalogDiscovery =
       listingNamesConfiguredModel: boolean
       /** Project-dependent catalogs require a chat folder and cannot be prewarmed. */
       listsInChatFolder?: true
+      /** Too heavy to start speculatively; lists only when asked. */
+      listsOnDemand?: true
     }
   | { kind: 'unavailable'; reason: string }

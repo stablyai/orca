@@ -4,7 +4,7 @@ import type {
   ExternalAutomationJob,
   ExternalAutomationManager
 } from '../../../../shared/automations/external/external-automation'
-import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
+import type { OrcaHooks } from '../../../../shared/workspace-setup/orca-yaml-hook-types'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import type { AutomationDraft } from './authoring/AutomationEditorDialog'
 import { AUTOMATION_DEFAULT_TIME } from './authoring/automation-draft-model'
@@ -19,6 +19,8 @@ import {
 } from './listing/automation-list-view'
 import type {
   AutomationPaneTab,
+  AutomationRunNotFound,
+  AutomationRunNowPendingByRow,
   AutomationRunPageOrigin,
   AutomationsPageView
 } from './automation-page-state'
@@ -74,6 +76,8 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
   const [relativeNow, setRelativeNow] = useState(() => Date.now())
   const [pageView, setPageView] = useState<AutomationsPageView>('automations')
   const [runPageOrigin, setRunPageOrigin] = useState<AutomationRunPageOrigin>('runs')
+  const [runNotFound, setRunNotFound] = useState<AutomationRunNotFound | null>(null)
+  const [runNowPending, setRunNowPending] = useState<AutomationRunNowPendingByRow>({})
   const [activePaneTab, setActivePaneTab] = useState<AutomationPaneTab>('overview')
   const [selectedAutomationRunPageId, setSelectedAutomationRunPageId] = useState<string | null>(
     null
@@ -131,6 +135,7 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
     prompt: '',
     agentId: defaultAgent,
     extraAgentArgs: '',
+    bot: null,
     projectId: '',
     workspaceMode: 'existing',
     workspaceId: '',
@@ -202,6 +207,10 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
     setPageView,
     runPageOrigin,
     setRunPageOrigin,
+    runNotFound,
+    setRunNotFound,
+    runNowPending,
+    setRunNowPending,
     activePaneTab,
     setActivePaneTab,
     selectedAutomationRunPageId,

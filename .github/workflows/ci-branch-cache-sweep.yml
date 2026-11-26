@@ -2,6 +2,8 @@ name: Sweep idle branch caches
 
 # Branch-scoped caches serve only their branch, and nothing else removes them before LRU eviction
 # reaches main's shared entries. PR merge refs belong to ci-closed-pr-caches.yml; tag refs to releases.
+# Main keeps only the newest entry per key family plus anything still in use, so superseded
+# lockfile stores and rebuilt artifacts stop evicting current ones at the 10 GB quota.
 on:
   schedule:
     - cron: '23 */3 * * *'
@@ -60,3 +62,53 @@ jobs:
             }
             core.info(`${dryRun ? 'Would remove' : 'Removed'} ${count} idle branch caches ` +
               `(${(bytes / 1e9).toFixed(2)} GB)`)
+
+            // A family is the key before its first content hash; exact-key lookups never reach older hashes.
+            const family = (key) => key.split(/-[0-9a-f]{16,}/)[0]
+            const families = new Map()
+            for (const cache of caches) {
+              if (cache.ref !== 'refs/heads/main') continue
+              const entries = families.get(family(cache.key)) ?? []
+              entries.push(cache)
+              families.set(family(cache.key), entries)
+            }
+            let superseded = 0
+            let supersededBytes = 0
+            for (const entries of families.values()) {
+              entries.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+              for (const cache of entries.slice(1)) {
+                const idle = now - Date.parse(cache.last_accessed_at)
+                if (!(idle > idleMs)) continue
+                core.info(`${dryRun ? 'Would delete' : 'Deleting'} superseded ${cache.key} ` +
+                  `(${cache.size_in_bytes} B, idle ${Math.round(idle / 3600000)} h)`)
+                superseded += 1
+                supersededBytes += cache.size_in_bytes ?? 0
+                if (dryRun) continue
+                try {
+                  await github.rest.actions.deleteActionsCacheById({
+                    ...context.repo, cache_id: cache.id
+                  })
+                } catch (error) {
+                  if (error.status !== 404) throw error
+                }
+              }
+            }
+            core.info(`${dryRun ? 'Would remove' : 'Removed'} ${superseded} superseded main caches ` +
+              `(${(supersededBytes / 1e9).toFixed(2)} GB)`)
+
+            // Fail visibly before the quota starts evicting main's current entries.
+            const total = caches.reduce((sum, cache) => sum + (cache.size_in_bytes ?? 0), 0)
+            const usedGb = (total - bytes - supersededBytes) / 1e9
+            for (const [name, entries] of families) {
+              const kept = entries.filter((cache, index) =>
+                index === 0 || !(now - Date.parse(cache.last_accessed_at) > idleMs))
+              const keptBytes = kept.reduce((sum, cache) => sum + (cache.size_in_bytes ?? 0), 0)
+              // Zero-byte verification markers are harmless; only many live sizable entries signal key churn.
+              if (kept.length > 6 && keptBytes > 100e6) {
+                core.warning(`${kept.length} live main caches (${(keptBytes / 1e9).toFixed(2)} GB) share family ${name}`)
+              }
+            }
+            core.info(`Cache usage after sweep: ${usedGb.toFixed(2)} GB`)
+            if (usedGb > 7) {
+              core.setFailed(`Actions cache usage ${usedGb.toFixed(2)} GB exceeds the 7 GB budget`)
+            }

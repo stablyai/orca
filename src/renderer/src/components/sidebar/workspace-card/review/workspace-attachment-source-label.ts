@@ -1,5 +1,5 @@
 import type { WorkspaceAttachment } from '../../../../../../shared/worktree/types'
-import { parseGitHubIssueOrPRLink } from '../../../../../../shared/github/links'
+import { parseGitHubIssueOrPRLink } from '../../../../../../shared/github/repositories/links'
 import { parseGitLabIssueOrMRLink } from '../../../../../../shared/new-workspace/gitlab-links'
 import { parseLinearIssueInput } from '../../../../../../shared/linear/links'
 import { parseJiraIssueUrl } from '../../../../../../shared/jira/jira-issue-url'

@@ -7,7 +7,7 @@ import type { StateCreator } from 'zustand'
 import type {
   PreflightRuntimeContext,
   PreflightStatus
-} from '../../../../../preload/api/preflight-api'
+} from '../../../../../preload/api/preflight/preflight-api'
 import type { AppState } from '../../types'
 import type { LocalPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context-cache'
 

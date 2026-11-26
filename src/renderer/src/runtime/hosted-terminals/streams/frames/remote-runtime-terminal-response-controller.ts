@@ -1,5 +1,5 @@
 import { parseTerminalAttachmentLaunchResult } from '../../../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
-import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { TERMINAL_MULTIPLEX_STREAM_LIMIT_ERROR } from '../../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { parseTerminalStreamEndVerdict } from '../../../../../../shared/terminal/stream/terminal-stream-end-verdict'
 import { shouldHoldE2eRemoteTerminalEnd } from '../diagnostics/remote-runtime-terminal-e2e-control'
@@ -13,6 +13,7 @@ import { disposeRemoteTerminalStreamState } from '../remote-terminal-stream-disp
 import { isTerminalDriverState } from './remote-terminal-multiplex-event'
 import type { TerminalMultiplexEvent } from './remote-terminal-multiplex-event'
 import { unwrapRuntimeRpcResult } from '../../../rpc/calls/runtime-rpc-result'
+import { translate } from '@/i18n/i18n'
 
 type SubscribedCapabilities = {
   ackOutputSourceRanges: boolean
@@ -113,7 +114,10 @@ export abstract class RemoteRuntimeTerminalResponseController extends RemoteRunt
         )
       }
     } else if (event.type === 'end') {
-      disposeRemoteTerminalStreamState(stream, 'Remote terminal stream ended.')
+      disposeRemoteTerminalStreamState(
+        stream,
+        translate('auto.runtime.remoteTerminal.streamEnded', 'Remote terminal stream ended.')
+      )
       this.streams.delete(event.streamId)
       if (stream.capacityRejected) {
         if (stream.callbacks.onTransportClose) {

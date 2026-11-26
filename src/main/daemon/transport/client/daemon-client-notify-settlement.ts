@@ -1,5 +1,5 @@
 import type { Socket } from 'node:net'
-import { encodeNdjson } from '../../../../shared/main-process-ndjson-framer'
+import { encodeNdjson } from '../../../../shared/json-stream/main-process-ndjson-framer'
 import { startResponsiveDeadline } from './daemon-responsive-deadline'
 import {
   WRITE_ACCEPTED,

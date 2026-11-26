@@ -11,6 +11,7 @@ export type MobileSyntaxTokenKind =
   | 'function'
   | 'variable'
   | 'meta'
+  | 'tag'
 
 export type MobileSyntaxSegment = {
   text: string
@@ -184,28 +185,35 @@ function tokenKindForClasses(className: unknown): MobileSyntaxTokenKind | null {
       : []
 
   const tokens = new Set(classes.map((value) => value.replace(/^hljs-/, '')))
+  // Buckets follow highlight.js's GitHub theme, except `attr` (JSON/YAML keys) is green as on github.com.
+  if (tokens.has('subst')) {
+    return 'plain'
+  }
   if (hasAny(tokens, ['comment', 'quote'])) {
     return 'comment'
   }
-  if (hasAny(tokens, ['keyword', 'selector-tag', 'tag', 'name'])) {
+  if (hasAny(tokens, ['keyword', 'doctag', 'template-tag', 'language_'])) {
     return 'keyword'
+  }
+  if (hasAny(tokens, ['name', 'selector-tag', 'selector-pseudo', 'attr'])) {
+    return 'tag'
   }
   if (hasAny(tokens, ['string', 'regexp', 'symbol', 'bullet'])) {
     return 'string'
   }
-  if (hasAny(tokens, ['number', 'literal'])) {
+  if (hasAny(tokens, ['number', 'literal', 'attribute', 'selector-class', 'selector-id'])) {
     return 'number'
   }
-  if (hasAny(tokens, ['type', 'built_in', 'class', 'title.class'])) {
+  if (hasAny(tokens, ['type', 'built_in'])) {
     return 'type'
   }
-  if (hasAny(tokens, ['title.function', 'function', 'title'])) {
+  if (hasAny(tokens, ['title', 'function'])) {
     return 'function'
   }
-  if (hasAny(tokens, ['attr', 'attribute', 'property', 'variable', 'params'])) {
+  if (hasAny(tokens, ['variable', 'template-variable'])) {
     return 'variable'
   }
-  if (hasAny(tokens, ['meta', 'doctag', 'subst', 'section'])) {
+  if (hasAny(tokens, ['meta', 'section'])) {
     return 'meta'
   }
   return null

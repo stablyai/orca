@@ -1,7 +1,7 @@
 import {
   formatAgentGenerationFailureOutputForDisplay,
   type AgentGenerationFailureOutput
-} from '../../text-generation/agent-failure-output'
+} from '../../text-generation/failures/agent-failure-output'
 
 // Keep full CLI diagnostics local and ephemeral; persist only the sanitized failure badge.
 const MAX_ENTRIES = 32
@@ -29,8 +29,4 @@ export function rememberBranchRenameFailureOutput(
 export function readBranchRenameFailureOutputForDisplay(worktreeId: string): string | null {
   const entry = entriesByWorktreeId.get(worktreeId)
   return entry ? formatAgentGenerationFailureOutputForDisplay(entry) : null
-}
-
-export function __resetBranchRenameFailureOutputForTests(): void {
-  entriesByWorktreeId.clear()
 }

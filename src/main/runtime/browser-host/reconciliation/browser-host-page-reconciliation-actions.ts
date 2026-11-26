@@ -10,7 +10,7 @@ import type {
   BrowserClientPagePlacementReservation,
   BrowserHostPagePlacementRegistry
 } from './browser-host-page-placement'
-import type { RuntimeBrowserPlacement } from '../../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 import type { BrowserHostPageReconciliationActions as ActionHandlers } from './browser-host-page-reconciliation-executor'
 import type {
   BrowserHostPageReconciliationPlan,
@@ -116,9 +116,10 @@ export class BrowserHostPageReconciliationActions {
     intent: BrowserHostRuntimePageIntent,
     signal: AbortSignal
   ): Promise<void> {
-    const url = this.plan.closeThenRestore.find(
-      (pair) => pair.intent.browserPageId === intent.browserPageId
-    )?.page.currentUrl
+    const url =
+      intent.url ??
+      this.plan.closeThenRestore.find((pair) => pair.intent.browserPageId === intent.browserPageId)
+        ?.page.currentUrl
     await this.issueCommand(
       intent.browserPageId,
       intent.pageHostGeneration,

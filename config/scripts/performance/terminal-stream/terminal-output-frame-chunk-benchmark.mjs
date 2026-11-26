@@ -50,12 +50,15 @@ if (ROUNDS % 2 !== 0) {
 }
 
 const CHUNK_SOURCE = readFileSync(
-  new URL('../../../../src/main/runtime/rpc/terminal-output-frame-chunks.ts', import.meta.url),
+  new URL(
+    '../../../../src/main/runtime/rpc/terminal/terminal-output-frame-chunks.ts',
+    import.meta.url
+  ),
   'utf8'
 )
 
 const UTF8_SOURCE = readFileSync(
-  new URL('../../../../src/shared/utf8-byte-limits.ts', import.meta.url),
+  new URL('../../../../src/shared/text/utf8-byte-limits.ts', import.meta.url),
   'utf8'
 )
 
@@ -94,14 +97,17 @@ const { TERMINAL_STREAM_CHUNK_BYTES } = await import(
   ).href
 )
 const { measureUtf8ByteLength } = await import(
-  new URL('../../../../src/shared/utf8-byte-limits.ts', import.meta.url).href
+  new URL('../../../../src/shared/text/utf8-byte-limits.ts', import.meta.url).href
 )
 const { TerminalStreamOpcode, encodeTerminalStreamJson, encodeTerminalStreamText } = await import(
   new URL('../../../../src/shared/terminal/stream/terminal-stream-protocol.ts', import.meta.url)
     .href
 )
 const { exceedsTerminalStreamChunkBytes, iterateTerminalOutputFrameChunks } = await import(
-  new URL('../../../../src/main/runtime/rpc/terminal-output-frame-chunks.ts', import.meta.url).href
+  new URL(
+    '../../../../src/main/runtime/rpc/terminal/terminal-output-frame-chunks.ts',
+    import.meta.url
+  ).href
 )
 
 function previousGate(data) {

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import {
   resolveFolderWorkspaceHost,
   type FolderHostCatalog

@@ -7,7 +7,7 @@ import {
   resolveFullLaneDropIndex
 } from './workspace-kanban-filtered-drop-index'
 import '../../workspace-status/presentation/workspace-status'
-import { getWorkspaceStatus } from '../../../../../../shared/workspace-statuses'
+import { getWorkspaceStatus } from '../../../../../../shared/workspace/status/workspace-statuses'
 import {
   collectDropWrites,
   uniqueDraggedKeys,

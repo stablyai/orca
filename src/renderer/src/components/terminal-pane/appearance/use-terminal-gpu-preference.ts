@@ -1,12 +1,15 @@
 import { useEffect } from 'react'
-import type { UseTerminalPaneLifecycleDeps } from '../mounting/terminal-pane-lifecycle-types'
+import type { MountedTerminalPaneLifecycleDeps } from '../mounting/terminal-pane-lifecycle-types'
 
 export function useTerminalGpuPreference(
-  deps: Pick<UseTerminalPaneLifecycleDeps, 'managerRef' | 'settings'>
+  deps: Pick<MountedTerminalPaneLifecycleDeps, 'mountedManager' | 'managerRef' | 'settings'>
 ): void {
   useEffect(() => {
-    deps.managerRef.current?.setTerminalGpuAcceleration(
+    if (!deps.mountedManager || deps.managerRef.current !== deps.mountedManager) {
+      return
+    }
+    deps.managerRef.current.setTerminalGpuAcceleration(
       deps.settings?.terminalGpuAcceleration ?? 'auto'
     )
-  }, [deps.settings?.terminalGpuAcceleration, deps.managerRef])
+  }, [deps.mountedManager, deps.settings?.terminalGpuAcceleration, deps.managerRef])
 }

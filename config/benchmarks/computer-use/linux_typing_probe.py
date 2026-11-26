@@ -137,7 +137,7 @@ def main():
                         raise AssertionError("cancellation fixture could not focus and select the field")
                 before = keymap()
                 operation = trial.directory / "cancel.json"
-                bench.write_json(operation, engine._req("type_text", field, True, text="éΩAa" * 150))
+                bench.write_json(operation, engine._req("type_text", None, True, text="éΩAa" * 150))
                 held_before = held_keys()
                 env = dict(os.environ)
                 ready = trial.directory / "held-ready"

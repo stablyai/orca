@@ -33,7 +33,7 @@ describe('orchestration worker model settings', () => {
       normalizeOrchestrationWorkerEfforts({
         codex: ' max ',
         claude: 'future-effort',
-        gemini: 'high',
+        goose: 'high',
         aider: 'high',
         grok: 'high'
       })
@@ -60,7 +60,7 @@ describe('orchestration worker model settings', () => {
     expect(supportsLaunchModel('codex')).toBe(true)
     expect(supportsLaunchModel('claude')).toBe(true)
     expect(supportsLaunchModel('cursor')).toBe(true)
-    expect(supportsLaunchModel('gemini')).toBe(false)
+    expect(supportsLaunchModel('goose')).toBe(false)
     expect(supportsLaunchModel('aider')).toBe(false)
   })
 
@@ -112,7 +112,7 @@ describe('orchestration worker model settings', () => {
     ).toBe(false)
     expect(
       persistedOrchestrationWorkerPreferencesRepaired(
-        { orchestrationWorkerEfforts: { codex: 'max', gemini: 'high' } },
+        { orchestrationWorkerEfforts: { codex: 'max', goose: 'high' } },
         normalized
       )
     ).toBe(true)

@@ -1,8 +1,15 @@
 // Shared HOME builds must freeze command bytes per form to avoid rewrite/trust loops.
 // Bump the form to change bytes; preserve entries from higher forms.
-export const CODEX_HOOK_COMMAND_FORM = 1
+export const CODEX_HOOK_COMMAND_FORM = 2
 
 const FORM_MARKER = /orca-agent-hook-form=(\d+)/
+const STATUS_MESSAGE_FORM = 2
+
+/** Unmarked commands (Windows, SSH, WSL) cannot tell older builds the entry changed, so they stay unnamed. */
+export function codexHookCommandCarriesStatusMessage(command: string): boolean {
+  const marker = FORM_MARKER.exec(command)
+  return marker !== null && Number(marker[1]) >= STATUS_MESSAGE_FORM
+}
 
 // Keep literals independent of shared hook constants to freeze these bytes.
 const POSIX_STDIN_DRAIN = '{ command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :'

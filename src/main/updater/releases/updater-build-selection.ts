@@ -7,13 +7,13 @@ import {
   requiresManualDevChannelInstall,
   type ReleaseBuild,
   type ReleaseChannel
-} from '../../../shared/release-channel'
+} from '../../../shared/updater/release-channel'
 import { compareVersions } from './updater-fallback'
-import { profileStateBuildCompatibilityError } from '../../../shared/profile-state-build-compatibility'
+import { profileStateBuildCompatibilityError } from '../../../shared/updater/profile-state-build-compatibility'
 import { listReleaseBuilds, resolveTargetBuild } from './updater-release-builds'
 import { ReleaseBuildListCache, type ReleaseBuildListOptions } from './updater-release-build-cache'
 import { UpdaterMenuChecks } from '../lifecycle/updater-menu-checks'
-import { updaterCodedMessage } from '../../../shared/updater-failure-copy'
+import { updaterCodedMessage } from '../../../shared/updater/updater-failure-copy'
 import { updaterErrorMessage } from '../lifecycle/updater-coded-error'
 
 export abstract class UpdaterBuildSelection extends UpdaterMenuChecks {
