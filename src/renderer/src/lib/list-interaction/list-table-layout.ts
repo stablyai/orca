@@ -1,8 +1,6 @@
 // Share list-table chrome to prevent drift; lists supply only column templates.
 // `--list-table-gutter` (default 12px) is the row's side padding and the sticky cells' offset; a rail page sets it
 // to its page gutter so rows, headers and hairlines share the page's edges without padding the scroller.
-export const LIST_TABLE_CONTAINER_CLASS = 'rounded-md border border-border/50 bg-muted/20'
-
 // Why: z-30 and opaque wash ensure scrolled rows cannot show through the sticky header.
 export const LIST_TABLE_HEADER_CLASS =
   'sticky top-0 z-30 h-8 items-center gap-3 border-b border-border/50 bg-[color-mix(in_srgb,var(--muted)_40%,var(--background))] ps-[var(--list-table-gutter,0.75rem)] pe-[var(--list-table-gutter-end,var(--list-table-gutter,0.75rem))] text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground'
@@ -20,7 +18,7 @@ const LIST_TABLE_STICKY_CELL_BASE_CLASS =
 export const LIST_TABLE_STICKY_HEADER_CELL_CLASS = `${LIST_TABLE_STICKY_CELL_BASE_CLASS} z-10 bg-[color-mix(in_srgb,var(--muted)_40%,var(--background))]`
 
 // Why: hover/selection ride variants, not props, so the frozen cell tracks the row's own wash.
-export const LIST_TABLE_STICKY_ROW_CELL_CLASS = `${LIST_TABLE_STICKY_CELL_BASE_CLASS} z-20 bg-[color-mix(in_srgb,var(--muted)_20%,var(--background))] transition-colors group-hover/list-table-row:bg-accent group-data-[current=true]/list-table-row:bg-accent`
+export const LIST_TABLE_STICKY_ROW_CELL_CLASS = `${LIST_TABLE_STICKY_CELL_BASE_CLASS} z-20 bg-background transition-colors group-hover/list-table-row:bg-accent group-data-[current=true]/list-table-row:bg-accent`
 
 // Absolute virtual rows need individual bottom separators; compositing over each row preserves its selection wash beneath the hairline.
 export const LIST_TABLE_ROW_DIVIDER_CLASS = 'border-b border-border/50'

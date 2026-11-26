@@ -18767,7 +18767,6 @@
           "failed": "실패",
           "succeeded": "성공",
           "neverRan": "실행 안 함",
-          "filters": "필터",
           "clear": "필터 지우기",
           "removeFilter": "{{value0}} 필터 제거"
         },

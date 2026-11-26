@@ -19428,7 +19428,6 @@
           "failed": "Fehlgeschlagen",
           "succeeded": "Erfolgreich",
           "neverRan": "Nie ausgeführt",
-          "filters": "Filter",
           "all": "Alle",
           "clear": "Filter zurücksetzen",
           "agent": "Agent",

@@ -19025,7 +19025,6 @@
           "failed": "Fallida",
           "succeeded": "Correcta",
           "neverRan": "Nunca se ejecutó",
-          "filters": "Filtros",
           "clear": "Limpiar filtros",
           "removeFilter": "Eliminar filtro de {{value0}}"
         },

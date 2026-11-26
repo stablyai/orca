@@ -18840,7 +18840,6 @@
           "failed": "失败",
           "succeeded": "成功",
           "neverRan": "从未运行",
-          "filters": "筛选器",
           "clear": "清除筛选器",
           "removeFilter": "移除 {{value0}} 筛选器"
         },
