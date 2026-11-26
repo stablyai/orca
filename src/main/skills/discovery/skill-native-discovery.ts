@@ -217,6 +217,7 @@ export async function discoverSkills(args: {
   cwd?: string
   includeCwd?: boolean
   providerRootOverrides?: SkillProviderRootOverrides
+  linkedSkillsFolder?: string
   refresh?: boolean
   names?: string[]
   sourceKinds?: SkillSourceKind[]

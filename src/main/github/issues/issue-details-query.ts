@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { GitHubAssignableUser } from '../../../shared/github/pull-requests/pull-request-types'
 
 export const ISSUE_DETAILS_QUERY = `query($owner: String!, $repo: String!, $number: Int!, $includeItem: Boolean!) {
@@ -42,22 +43,26 @@ export const ISSUE_DETAILS_QUERY = `query($owner: String!, $repo: String!, $numb
   }
 }`
 
-export const issueItemSchema = z.object({
-  number: z.number().int().positive(),
-  title: z.string(),
-  state: z.enum(['OPEN', 'CLOSED']),
-  url: z.string(),
-  updatedAt: z.string(),
-  author: z.object({ __typename: z.string(), login: z.string(), avatarUrl: z.string() }).nullable(),
-  assignees: z.object({
-    nodes: z.array(z.object({ login: z.string().min(1) })),
-    pageInfo: z.object({ hasNextPage: z.literal(false) })
-  }),
-  labels: z.object({
-    nodes: z.array(z.object({ name: z.string() })),
-    pageInfo: z.object({ hasNextPage: z.literal(false) })
+export const issueItemSchema = lazyZodSchema(() =>
+  z.object({
+    number: z.number().int().positive(),
+    title: z.string(),
+    state: z.enum(['OPEN', 'CLOSED']),
+    url: z.string(),
+    updatedAt: z.string(),
+    author: z
+      .object({ __typename: z.string(), login: z.string(), avatarUrl: z.string() })
+      .nullable(),
+    assignees: z.object({
+      nodes: z.array(z.object({ login: z.string().min(1) })),
+      pageInfo: z.object({ hasNextPage: z.literal(false) })
+    }),
+    labels: z.object({
+      nodes: z.array(z.object({ name: z.string() })),
+      pageInfo: z.object({ hasNextPage: z.literal(false) })
+    })
   })
-})
+)
 
 export type GraphQLIssueDetailsResponse = {
   data?: {

@@ -2,10 +2,9 @@ import { setTimeout, clearTimeout } from 'node:timers'
 import type Database from '../../../sqlite/sync-database'
 import type { WorkerRequestTransport } from '../../../worker-threads/worker-thread-transport'
 import {
-  JOURNAL_CHECKPOINT_FRAMES,
+  JournalCheckpointWorkerController,
   journalCheckpointWarning,
-  spawnJournalCheckpointWorker,
-  stopJournalCheckpointWorker
+  journalWalNeedsCheckpoint
 } from './journal-checkpoint-worker-thread'
 import type { JournalWalWriterRelief } from './journal-wal-writer-relief'
 import {
@@ -17,26 +16,15 @@ import {
 // SQLite's default, for the writer's own commits while no worker is answering; off while one is.
 const WRITER_ALONE_FRAMES = 1000
 const PARKED_RECHECK_MS = 100
-// Saves never wait on the worker: past this, an unanswered check lets writes past the WAL ceiling.
-const WORKER_STALL_MS = 5000
-const RESTART_DELAY_MS = 10_000
-const RESTART_MAX_DELAY_MS = 5 * 60_000
 
 /** The writer admits and measures; a worker thread runs PASSIVE checkpoints beside it and is replaced when it dies. */
 export class JournalCheckpointOwner {
-  private worker: WorkerRequestTransport | undefined
-  private asking = false
+  private readonly workers: JournalCheckpointWorkerController
   /** The writer's own checkpoint failed with no worker answering, e.g. on a full disk. */
   private checkpointFailed = false
   /** The writer's TRUNCATE at the ceiling failed; admission stays open until the log resets. */
   private truncateFailed = false
   private writerCheckpoints: boolean | undefined
-  private requestId = 0
-  private askedAt = 0
-  private askAgain: { force: boolean } | undefined
-  private exited: Promise<void> = Promise.resolve()
-  private restartTimer: ReturnType<typeof setTimeout> | undefined
-  private restartDelayMs: number
   private recheck: ReturnType<typeof setTimeout> | undefined
   private stopped = false
   private closing = false
@@ -51,16 +39,42 @@ export class JournalCheckpointOwner {
 
   constructor(
     private readonly writer: Database.Database,
-    private readonly filename: string,
+    filename: string,
     private readonly options: {
       factory?: () => WorkerRequestTransport
       restartDelayMs?: number
       stallMs?: number
+      idleTeardownMs?: number
       /** The SQL writer thread's own checkpoints while a write waits; without it the owner only measures. */
       relief?: JournalWalWriterRelief
     } = {}
   ) {
-    this.restartDelayMs = options.restartDelayMs ?? RESTART_DELAY_MS
+    this.workers = new JournalCheckpointWorkerController(filename, {
+      factory: options.factory,
+      restartDelayMs: options.restartDelayMs,
+      stallMs: options.stallMs,
+      idleTeardownMs: options.idleTeardownMs,
+      onWarn: this.warn,
+      onStateChange: () => this.syncWriterCheckpoints(),
+      canRetireIdle: () => {
+        // Measuring runs a NOOP checkpoint, which an open transaction on the writer must not see.
+        if (this.waiters.size > 0 || this.writer.isTransaction) {
+          return false
+        }
+        this.measure()
+        return !this.needsCheckpoint()
+      },
+      onChecked: () => {
+        // An answering worker checkpoints for the writer again.
+        this.checkpointFailed = false
+        this.syncWriterCheckpoints()
+        // Let a parked write in as soon as the copy it waited on lands, not at the next recheck.
+        if (this.waiters.size > 0) {
+          this.resetIfCopied()
+          this.wake()
+        }
+      }
+    })
     try {
       const version = String(writer.prepare('SELECT sqlite_version() AS version').get()?.version)
       const [major = 0, minor = 0] = version.split('.').map(Number)
@@ -72,7 +86,11 @@ export class JournalCheckpointOwner {
       }
       this.frames = writer.prepare('PRAGMA wal_checkpoint(NOOP)')
       this.measure()
-      this.spawn()
+      this.syncWriterCheckpoints()
+      // Only spawn eagerly when a prior run left behind a checkpointable WAL backlog.
+      if (this.needsCheckpoint()) {
+        this.workers.spawn()
+      }
     } catch (error) {
       this.stopped = true
       this.warn(error)
@@ -108,10 +126,8 @@ export class JournalCheckpointOwner {
     this.measure()
     this.truncateFailed &&= this.log >= JOURNAL_WAL_BACKPRESSURE_FRAMES
     // In a WAL file past its size limit even a few new frames must reach disk, as on main.
-    const behind = this.log - this.checkpointed
-    const oversized = () => behind > 0 && this.options.relief?.oversized() === true
-    if (behind >= JOURNAL_CHECKPOINT_FRAMES || oversized()) {
-      this.ask(false)
+    if (this.needsCheckpoint()) {
+      this.workers.ask(false)
     }
     this.syncWriterCheckpoints()
     this.wake()
@@ -136,12 +152,12 @@ export class JournalCheckpointOwner {
    */
   private degraded(): boolean {
     const failed = this.checkpointFailed || this.truncateFailed || this.unknown
-    return this.stalled() || failed
+    return this.workers.stalled() || failed
   }
 
-  /** The writer checkpoints its own commits exactly while no worker is attached and answering. */
+  /** The writer checkpoints its own commits only when off-thread checkpointing is degraded or unavailable. */
   private syncWriterCheckpoints(): void {
-    const alone = !this.worker || this.degraded()
+    const alone = this.stopped || this.workers.isSpawnFailed() || this.degraded()
     if (this.writerCheckpoints === alone || this.closing) {
       return
     }
@@ -153,20 +169,24 @@ export class JournalCheckpointOwner {
     }
   }
 
-  /** A worker inside a long checkpoint is not dead, but writes stop waiting on it, as on main. */
-  private stalled(): boolean {
-    const stallMs = this.options.stallMs ?? WORKER_STALL_MS
-    return this.asking && performance.now() - this.askedAt >= stallMs
+  private needsCheckpoint(): boolean {
+    return journalWalNeedsCheckpoint(
+      this.log,
+      this.checkpointed,
+      () => this.options.relief?.oversized() === true
+    )
   }
 
   private measure(): void {
     try {
       const state = this.frames!.get()
       if (!Number.isSafeInteger(state?.log) || !Number.isSafeInteger(state?.checkpointed)) {
-        throw new Error('invalid journal WAL frame counts')
+        this.unknown = true
+        return
       }
+      // busy=-1 means SQLite returned -1,-1 when a lock blocked the read; keep the last known frames.
       if (Number(state!.log) < 0) {
-        return // Busy while another connection checkpoints: keep the last counts.
+        return
       }
       this.log = Number(state!.log)
       this.checkpointed = Number(state!.checkpointed)
@@ -187,14 +207,14 @@ export class JournalCheckpointOwner {
       return
     }
     try {
-      if (this.worker) {
-        this.ask(true)
+      if (this.workers.hasWorker()) {
+        this.workers.ask(true)
       } else if (this.options.relief) {
         this.options.relief.checkpoint()
         this.checkpointFailed = false
       }
     } catch (error) {
-      this.checkpointFailed = !this.worker
+      this.checkpointFailed = !this.workers.hasWorker()
       this.warn(error)
     }
     this.resetIfCopied()
@@ -236,114 +256,13 @@ export class JournalCheckpointOwner {
     }, PARKED_RECHECK_MS)
   }
 
-  /** One request at a time: a slow checkpoint never queues more behind it. */
-  private ask(force: boolean): void {
-    if (!this.worker) {
-      return
-    }
-    if (this.asking) {
-      this.askAgain = { force: force || this.askAgain?.force === true }
-      return
-    }
-    try {
-      this.worker.postMessage({ type: 'check', force, id: ++this.requestId })
-      this.asking = true
-      this.askedAt = performance.now()
-    } catch (error) {
-      // A worker that can't take messages is exiting; its exit schedules the replacement.
-      this.warn(error)
-    }
-  }
-
-  private spawn(): void {
-    let worker: WorkerRequestTransport
-    try {
-      worker = this.options.factory?.() ?? spawnJournalCheckpointWorker(this.filename)
-    } catch (error) {
-      this.warn(error)
-      this.syncWriterCheckpoints()
-      this.scheduleRestart()
-      return
-    }
-    this.worker = worker
-    // The worker checks once at start, for a WAL a crash left behind.
-    this.requestId = 0
-    this.asking = true
-    this.askedAt = performance.now()
-    let failure: unknown
-    worker.on('message', (message: { type?: unknown; id?: unknown; ran?: unknown }) => {
-      if (message?.type !== 'checked' || this.worker !== worker) {
-        return
-      }
-      // An answering worker checkpoints for the writer again.
-      this.checkpointFailed = false
-      if (message.ran === true) {
-        this.restartDelayMs = this.options.restartDelayMs ?? RESTART_DELAY_MS
-      }
-      if (message.id === this.requestId && this.asking) {
-        this.asking = false
-        const again = this.askAgain
-        this.askAgain = undefined
-        if (again) {
-          this.ask(again.force)
-        }
-        this.syncWriterCheckpoints()
-      }
-      // Let a parked write in as soon as the copy it waited on lands, not at the next recheck.
-      if (this.waiters.size > 0) {
-        this.resetIfCopied()
-        this.wake()
-      }
-    })
-    worker.on('error', (error: Error) => {
-      failure = error
-    })
-    this.exited = new Promise((resolve) => {
-      worker.on('exit', (code: number) => {
-        if (this.worker === worker) {
-          this.worker = undefined
-          this.asking = false
-          this.askAgain = undefined
-        }
-        resolve()
-        if (this.closing) {
-          return
-        }
-        this.syncWriterCheckpoints()
-        this.warn(failure ?? new Error(`checkpoint worker exited with code ${code}`))
-        this.scheduleRestart()
-      })
-    })
-    worker.unref()
-    this.syncWriterCheckpoints()
-  }
-
-  /** Each restart that dies before a checkpoint succeeds waits twice as long, so a persistent failure settles. */
-  private scheduleRestart(): void {
-    if (this.closing) {
-      return
-    }
-    clearTimeout(this.restartTimer)
-    this.restartTimer = setTimeout(() => {
-      this.restartTimer = undefined
-      if (!this.closing) {
-        this.spawn()
-      }
-    }, this.restartDelayMs)
-    this.restartTimer.unref()
-    this.restartDelayMs = Math.min(this.restartDelayMs * 2, RESTART_MAX_DELAY_MS)
-  }
-
   private async finishClose(): Promise<void> {
     this.closing = true
     this.stopped = true
-    clearTimeout(this.restartTimer)
     clearTimeout(this.recheck)
     this.recheck = undefined
     // Hand admission back first: close can arrive while a drain is parked.
     this.wake()
-    if (this.worker) {
-      await stopJournalCheckpointWorker(this.worker, this.exited)
-    }
+    await this.workers.close()
   }
 }

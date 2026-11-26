@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import type { GitHubRepositoryIdentity } from '../../../../shared/github/repositories/repository-identity'
 import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
 import { extractExecError } from '../../../git/command-runner/process-capture/exec-error'
@@ -42,52 +43,58 @@ const NUMBER_PREVIEW_QUERY = `query($owner: String!, $repo: String!, $number: In
   }
 }`
 
-const actorSchema = z.object({ login: z.string(), avatarUrl: z.string() })
-const labeledActorSchema = actorSchema.extend({ __typename: z.string() })
+const actorSchema = lazyZodSchema(() => z.object({ login: z.string(), avatarUrl: z.string() }))
+const labeledActorSchema = lazyZodSchema(() => actorSchema.extend({ __typename: z.string() }))
 const connection = <T extends z.ZodType>(node: T) =>
   z.object({ nodes: z.array(node), pageInfo: z.object({ hasNextPage: z.literal(false) }) })
-const commonSchema = z.object({
-  number: z.number().int().positive(),
-  title: z.string(),
-  url: z.string(),
-  updatedAt: z.string(),
-  author: labeledActorSchema.nullable(),
-  labels: connection(z.object({ name: z.string() })),
-  assignees: connection(actorSchema)
-})
-const previewSchema = z.discriminatedUnion('__typename', [
-  commonSchema.extend({
-    __typename: z.literal('Issue'),
-    issueState: z.enum(['OPEN', 'CLOSED']),
-    comments: z.object({ totalCount: z.number().int().nonnegative() })
-  }),
-  commonSchema.extend({
-    __typename: z.literal('PullRequest'),
-    pullState: z.enum(['OPEN', 'CLOSED', 'MERGED']),
-    isDraft: z.boolean(),
-    headRefName: z.string(),
-    baseRefName: z.string(),
-    headRefOid: z.string(),
-    headRepositoryOwner: z.object({ login: z.string() }),
-    additions: z.number(),
-    deletions: z.number(),
-    changedFiles: z.number(),
-    mergeable: z.enum(['MERGEABLE', 'CONFLICTING', 'UNKNOWN']),
-    mergeStateStatus: z.string().nullable(),
-    autoMergeRequest: z.object({ enabledAt: z.string() }).nullable(),
-    reviewRequests: connection(
-      z.object({
-        requestedReviewer: z
-          .union([labeledActorSchema, z.object({ __typename: z.literal('Team') })])
-          .nullable()
-      })
-    )
+const commonSchema = lazyZodSchema(() =>
+  z.object({
+    number: z.number().int().positive(),
+    title: z.string(),
+    url: z.string(),
+    updatedAt: z.string(),
+    author: labeledActorSchema.nullable(),
+    labels: connection(z.object({ name: z.string() })),
+    assignees: connection(actorSchema)
   })
-])
-const previewResponseSchema = z.object({
-  data: z.object({ repository: z.object({ issueOrPullRequest: previewSchema }) }),
-  errors: z.array(z.unknown()).optional()
-})
+)
+const previewSchema = lazyZodSchema(() =>
+  z.discriminatedUnion('__typename', [
+    commonSchema.extend({
+      __typename: z.literal('Issue'),
+      issueState: z.enum(['OPEN', 'CLOSED']),
+      comments: z.object({ totalCount: z.number().int().nonnegative() })
+    }),
+    commonSchema.extend({
+      __typename: z.literal('PullRequest'),
+      pullState: z.enum(['OPEN', 'CLOSED', 'MERGED']),
+      isDraft: z.boolean(),
+      headRefName: z.string(),
+      baseRefName: z.string(),
+      headRefOid: z.string(),
+      headRepositoryOwner: z.object({ login: z.string() }),
+      additions: z.number(),
+      deletions: z.number(),
+      changedFiles: z.number(),
+      mergeable: z.enum(['MERGEABLE', 'CONFLICTING', 'UNKNOWN']),
+      mergeStateStatus: z.string().nullable(),
+      autoMergeRequest: z.object({ enabledAt: z.string() }).nullable(),
+      reviewRequests: connection(
+        z.object({
+          requestedReviewer: z
+            .union([labeledActorSchema, z.object({ __typename: z.literal('Team') })])
+            .nullable()
+        })
+      )
+    })
+  ])
+)
+const previewResponseSchema = lazyZodSchema(() =>
+  z.object({
+    data: z.object({ repository: z.object({ issueOrPullRequest: previewSchema }) }),
+    errors: z.array(z.unknown()).optional()
+  })
+)
 
 async function readNumberPreview(
   repository: GitHubRepositoryIdentity,

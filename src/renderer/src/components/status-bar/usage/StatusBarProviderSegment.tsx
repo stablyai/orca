@@ -64,7 +64,7 @@ function WindowLabel({
   display: UsagePercentageDisplay
   showLabel?: boolean
   labelFirst?: boolean
-  /** Compact bar: a bold bright number with a smaller, regular-weight muted unit. */
+  /** Compact bar: a regular-weight bright number with a smaller unit at 70% of its color. */
   compact?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
@@ -73,11 +73,7 @@ function WindowLabel({
     const value = String(getDisplayedUsagePercentage(w.usedPercent, display))
     const at = text.indexOf(value)
     const unit = (part: string) =>
-      part.trim() ? (
-        <span className="text-[0.82em] font-normal text-muted-foreground">{part}</span>
-      ) : (
-        part
-      )
+      part.trim() ? <span className="text-[0.82em] opacity-70">{part}</span> : part
     return (
       <span className="tabular-nums">
         {showLabel && labelFirst ? (
@@ -86,9 +82,9 @@ function WindowLabel({
           ''
         )}
         {at === -1 ? (
-          <span className="font-semibold text-foreground">{text}</span>
+          <span className="text-foreground">{text}</span>
         ) : (
-          <span className="font-semibold text-foreground">
+          <span className="text-foreground">
             {unit(text.slice(0, at))}
             {value}
             {unit(text.slice(at + value.length))}
@@ -250,6 +246,8 @@ type ProviderSegmentProps = {
   /** Remote host the readings come from; the chip tooltip would otherwise hide the row's. */
   hostLabel?: string
   countdownActive?: boolean
+  /** Off-layout copy read only for its width: tooltips can't change width, so it builds none. */
+  measuring?: boolean
 }
 
 /** A chip in the clipping status bar row: clipped chips stop their countdown wakes. */
@@ -269,7 +267,8 @@ export function ProviderSegment({
   mode = 'verbose',
   barMode = mode,
   hostLabel,
-  countdownActive = true
+  countdownActive = true,
+  measuring = false
 }: ProviderSegmentProps): React.JSX.Element {
   const t = useTranslate()
   const provider = p?.provider ?? 'claude'
@@ -324,7 +323,7 @@ export function ProviderSegment({
     return (
       <span
         className="inline-flex items-center gap-1 text-muted-foreground"
-        title={getProviderUsageErrorMessage(p, t)}
+        title={measuring ? undefined : getProviderUsageErrorMessage(p, t)}
       >
         <ProviderIcon provider={provider} />
         {/* Why "--" when compact: an icon alone would read as a healthy chip. */}
@@ -352,8 +351,8 @@ export function ProviderSegment({
 
   // Why the form, not barMode: a narrow Detailed chip is a bare percent too, so it needs the name.
   const compactTitle =
-    mode === 'compact' && tightest
-      ? [formatUsageChipTitle(p, display, t), hostLabel].filter(Boolean).join('\n')
+    mode === 'compact' && tightest && !measuring
+      ? [formatUsageChipTitle(p, sections[0], display, t), hostLabel].filter(Boolean).join('\n')
       : undefined
 
   return (

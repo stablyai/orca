@@ -1,13 +1,13 @@
-import { stat } from 'node:fs/promises'
 import { isAbsolute, normalize, win32 } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseRoutableExecutionHostId } from '../../../shared/execution-host/execution-host'
+import { statWithoutArchiveLock } from '../../filesystem/asar-transparent-fs'
 import type { ShellOpenLocalPathFailureReason } from '../../../shared/shell/opening/shell-open-types'
 import { resolveWindowsPathAccess } from '../../windows/windows-path-access-host'
 
 export async function pathExists(pathValue: string): Promise<boolean> {
   try {
-    await stat(pathValue)
+    await statWithoutArchiveLock(pathValue)
     return true
   } catch {
     return false

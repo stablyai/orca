@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../../shared/schema/lazy-zod-schema'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { projectWorkerListFleet } from './worker/fleet/worker-list-projection'
 import type { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
@@ -11,22 +12,28 @@ const AWAIT_WORKER_REPORTS =
   'Orca wakes you when a worker reports. Once every worker you need is started, end your turn. Do not poll.'
 export const WORKER_DONE_RECORDED_NEXT = 'Recorded. End your turn.'
 
-const ReadyWorkerStart = z.looseObject({
-  state: z.literal('ready'),
-  workerOutcome: z.never().optional()
-})
+const ReadyWorkerStart = lazyZodSchema(() =>
+  z.looseObject({
+    state: z.literal('ready'),
+    workerOutcome: z.never().optional()
+  })
+)
 
-const TakenRunCheck = z.looseObject({
-  runId: z.string(),
-  deliveryAcknowledged: z.literal(true)
-})
+const TakenRunCheck = lazyZodSchema(() =>
+  z.looseObject({
+    runId: z.string(),
+    deliveryAcknowledged: z.literal(true)
+  })
+)
 
-const EmptyRunCheck = z.looseObject({
-  runId: z.string(),
-  count: z.literal(0),
-  cancelled: z.literal(false).optional(),
-  waitInterrupted: z.never().optional()
-})
+const EmptyRunCheck = lazyZodSchema(() =>
+  z.looseObject({
+    runId: z.string(),
+    count: z.literal(0),
+    cancelled: z.literal(false).optional(),
+    waitInterrupted: z.never().optional()
+  })
+)
 
 export function withWorkerStartNext(
   receipt: unknown,

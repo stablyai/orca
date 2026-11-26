@@ -5,11 +5,16 @@ import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { translate } from '@/i18n/i18n'
 import type { TerminalClipboardPasteResult } from '../../clipboard/terminal-clipboard-paste'
 
+// Keyed by terminal: pane-manager returns a fresh ManagedPane wrapper per lookup. No expiry timer, so a
+// late native paste still consumes the token instead of re-requesting (unbounded retry); a stale token
+// costs at most one extra files read. WeakRef keeps it from pinning a disposed terminal.
+let pendingNativePasteTerminal: WeakRef<ManagedPane['terminal']> | null = null
+
 /** Main cannot read CF_HDROP-only Windows copies (e.g. Zoom); a native paste event lists their files for the pane's paste listener. */
 export function requestNativePasteForUnreadWindowsClipboard(
   result: TerminalClipboardPasteResult,
   pane: ManagedPane
-): void {
+): boolean {
   if (
     result.status === 'skipped' &&
     result.reason === 'empty' &&
@@ -18,8 +23,25 @@ export function requestNativePasteForUnreadWindowsClipboard(
     !isWebClientLocation() &&
     document.activeElement === pane.terminal.textarea
   ) {
-    window.api.ui.performNativePaste()
+    pendingNativePasteTerminal = new WeakRef(pane.terminal)
+    try {
+      window.api.ui.performNativePaste()
+    } catch (error) {
+      pendingNativePasteTerminal = null
+      throw error
+    }
+    return true
   }
+  return false
+}
+
+/** Consume the one-shot fallback armed after main's clipboard read returned empty on Windows. */
+export function consumeUnreadWindowsClipboardNativePaste(pane: ManagedPane): boolean {
+  if (pendingNativePasteTerminal?.deref() !== pane.terminal) {
+    return false
+  }
+  pendingNativePasteTerminal = null
+  return true
 }
 
 /** Snapshot during dispatch: clipboardData is unreadable once the paste event returns. */

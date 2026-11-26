@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { getChromeExtensionOrigin } from '../../../../shared/browser/extensions/browser-extension-url'
 import { iconFromImageData } from '../actions/browser-extension-action-icon'
 import {
@@ -28,9 +29,9 @@ import { getPinnedBrowserExtensionIds } from '../actions/browser-extension-toolb
 import { requestBrowserExtensionPopup } from '../actions/browser-extension-popup-request'
 import { findBrowserExtensionCallerAgentPage } from '../tabs-and-windows/browser-extension-agent-caller'
 
-const tabIdSchema = z.number().int().nonnegative()
-const tabDetailsSchema = z.object({ tabId: tabIdSchema.optional() }).loose()
-const colorSchema = z.union([z.string(), z.array(z.number())])
+const tabIdSchema = lazyZodSchema(() => z.number().int().nonnegative())
+const tabDetailsSchema = lazyZodSchema(() => z.object({ tabId: tabIdSchema.optional() }).loose())
+const colorSchema = lazyZodSchema(() => z.union([z.string(), z.array(z.number())]))
 const UNSET_COLOR: BrowserExtensionColor = [0, 0, 0, 0]
 
 /** A tabId must name a tab the caller can reach; omitted means the global value. */
