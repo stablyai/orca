@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { alignManagedAgentLaunchAtSpawn } from '../../../../managed-agent-cli/managed-agent-spawn-program'
 import { detectInstalledAgentInventory } from '../../../../preflight/installed-agent-detection'
-import { refreshShellPathAndDetectAgents } from '../../../../preflight/agent-detection'
+import { refreshAgentsOnHost } from '../../../../preflight/workspace-agent-detection'
 import { resolveClaudeTeamsInvocation } from '../../../terminal/launch/claude-teams-invocation'
 
 const fixture = vi.hoisted(() => ({
@@ -228,7 +228,7 @@ it('uses one inventory lookup for direct user sign-in and leaves prepared shell 
 it('keeps local install selection after a WSL inventory refresh', async () => {
   const user = await executable('.local', 'bin', claudeName)
   await detectInstalledAgentInventory()
-  await refreshShellPathAndDetectAgents({ wslDefault: true })
+  await refreshAgentsOnHost({ kind: 'local', context: { wslDefault: true } }, undefined, true)
   // The existing local snapshot, rather than a new scan, answers this later generated launch.
   const result = await alignManagedAgentLaunchAtSpawn(
     {

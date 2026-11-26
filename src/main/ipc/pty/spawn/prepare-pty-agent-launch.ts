@@ -112,7 +112,7 @@ export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
     command: viewedCommand,
     agent: launchAgent,
     shell,
-    isRoot: local && process.getuid?.() === 0,
+    isRoot: local && launchConfig?.commandProvenance !== 'authored' && process.getuid?.() === 0,
     env: [env, process.env]
   })
   const agentCommand = rootLaunch?.command ?? viewedCommand
