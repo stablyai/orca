@@ -420,7 +420,7 @@ describe('worker-start --retry-of launch preference rehydration', () => {
   })
 
   it('drops inherited opencode --model with a warning when unsupported', async () => {
-    const { db, runtime, callStart, startFailedAttempt, releaseWorker, nextWorkerHandle } =
+    const { db, runtime, callStart, startFailedAttempt, nextWorkerHandle } =
       createRetryStartFixture()
     activeDb = db
     vi.spyOn(runtime, 'resolveOrchestrationAgentLauncher').mockImplementation((selector) =>
@@ -499,10 +499,6 @@ describe('worker-start --retry-of launch preference rehydration', () => {
         'not carrying over model anthropic/claude-sonnet-4-5 from the retried worker: OpenCode model selection requires an existing worktree. Use --worktree current or an existing worktree selector, or omit --model.'
     })
     expect(createWorktree.mock.calls[0]?.[0]).not.toHaveProperty('startupLaunchPreferences')
-    if (!isStartReceipt(topLevelRetry)) {
-      throw new Error('expected top-level retry receipt')
-    }
-    await releaseWorker(topLevelRetry.dispatchId)
 
     const second = await startFailedAttempt({
       agent: 'opencode',
