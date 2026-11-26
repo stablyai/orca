@@ -1,4 +1,4 @@
-import { stat } from 'node:fs/promises'
+import { statWithoutArchiveLock } from '../../../filesystem/asar-transparent-fs'
 import type { Event as WatcherEvent } from '@parcel/watcher'
 import type {
   FsChangeEvent,
@@ -87,7 +87,7 @@ async function tryStatIsDirectory(
       if (root.listeners.size === 0) {
         return undefined
       }
-      return (await stat(filePath)).isDirectory()
+      return (await statWithoutArchiveLock(filePath)).isDirectory()
     } finally {
       release()
     }
