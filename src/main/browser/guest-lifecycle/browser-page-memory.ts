@@ -13,13 +13,15 @@ import {
   type Claim
 } from './browser-page-memory-state'
 import { forgetBrowserPageAttach, guestLoads } from './browser-page-attach'
+import { browserGuestShowsFormPost, canFreeBrowserGuest } from './browser-guest-freeing'
 export {
   prepareBrowserPageAttach,
   admitBrowserPageAttach,
   isBrowserPageAttachMarker,
   associateBrowserPageAttach,
   startBrowserPageAttach,
-  hasPendingBrowserPageAttach
+  hasPendingBrowserPageAttach,
+  claimBrowserPageFirstLoad
 } from './browser-page-attach'
 import { noteBrowserPageClosed } from './browser-page-partition-presence'
 
@@ -54,20 +56,22 @@ export function clearBrowserPageMemoryInvalidation(pageId: string, guestId: numb
   }
 }
 
+/** `freedByOwner`: a This-device guest, which its executor frees without a page-memory entry. */
 export function readBrowserMemoryPageDiscardProtection(
   pageId: string,
   guest: Electron.WebContents,
-  rendererId: number | undefined
+  rendererId: number | undefined,
+  freedByOwner = false
 ): ReturnType<typeof readBrowserGuestDiscardProtection> {
   const protection = readBrowserGuestDiscardProtection(guest)
   if (protection.protection !== 'discardable') {
     return protection
   }
   const page = pages.get(pageId)
-  if (!page || page.guest !== guest || page.rendererId !== rendererId) {
+  if (!freedByOwner && (!page || page.guest !== guest || page.rendererId !== rendererId)) {
     return { ...protection, protection: 'unknown', reason: 'observer' }
   }
-  if (page.claim.held) {
+  if (page?.claim.held) {
     return { ...protection, protection: 'protected', reason: 'held' }
   }
   try {
@@ -177,11 +181,7 @@ export function canReserveBrowserPageDiscard(pageId: string, guest: Electron.Web
     page.claim.operations ||
     page.restoring ||
     page.retired.size ||
-    guest.isDestroyed() ||
-    guest.isLoading() ||
-    guest.isDevToolsOpened() ||
-    guest.debugger.isAttached() ||
-    readBrowserGuestDiscardProtection(guest).protection !== 'discardable'
+    !canFreeBrowserGuest(guest)
   )
 }
 
@@ -192,6 +192,9 @@ export function reserveBrowserPageDiscard(pageId: string, guest: Electron.WebCon
   }
   let history: History
   try {
+    if (browserGuestShowsFormPost(guest)) {
+      return false
+    }
     // pageState restores scroll and form contents; it can hold typed secrets, so it stays in memory only.
     const entries = guest.navigationHistory
       .getAllEntries()

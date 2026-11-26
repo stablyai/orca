@@ -1,4 +1,5 @@
-import { setLocalPtyProvider } from '../../../ipc/pty/provider/registry'
+import { getLocalPtyProvider, setLocalPtyProvider } from '../../../ipc/pty/provider/registry'
+import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import {
   setKnownLocalDaemonPidReader,
   setLocalDaemonPidReader
@@ -158,6 +159,19 @@ export async function countInProcessFallbackTerminals(): Promise<number> {
   return adapter instanceof DegradedDaemonPtyProvider
     ? (await adapter.fallback.listProcesses()).length
     : 0
+}
+
+/** Every terminal that ends with this process: degraded fallback ones, or all of them when no daemon is installed. */
+export async function countInProcessTerminals(): Promise<number> {
+  if (adapter) {
+    return countInProcessFallbackTerminals()
+  }
+  const local = getLocalPtyProvider()
+  // A disconnected daemon provider stays installed as the local provider; it cannot be counted here.
+  if (!(local instanceof LocalPtyProvider)) {
+    throw new Error('No daemon is installed, and terminals do not run on the in-process provider')
+  }
+  return (await local.listProcesses()).length
 }
 
 /** Atomically fence new daemon terminals and retire only an idle, single-generation daemon. */

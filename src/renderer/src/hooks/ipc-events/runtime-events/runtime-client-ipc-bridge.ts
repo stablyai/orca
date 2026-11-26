@@ -4,14 +4,14 @@ import {
 } from '../../../lib/work-items/linear/linear-linked-issue-refresh'
 import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/pty-transport/output/terminal-side-effect-facts-handler'
 import { emitPairedBotsChanged, emitPairedBotsStreamCameBack } from '@/lib/bot-host-listing'
-import { readBotChangeScope } from '../../../../../shared/bots/bot-change-scope'
+import { readBotChangeScopeWithItems } from '../../../../../shared/bots/bot-change-scope'
 import { emitRuntimeClientWindowEvent } from './runtime-client-window-events'
 import { applyHostWorkspaceRowEvent } from '../workspace-catalog/worktree-metadata-set-events'
 import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat/launch-drafts/native-chat-launch-draft-runtime-resolution'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import {
   refreshRuntimeEnvironmentCatalog,
-  setRuntimeEnvironmentCatalogRefresher
+  setRuntimeEnvironmentCatalogSource
 } from '@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
 import {
   applyRuntimeEnvironmentSshStateChanged,
@@ -122,11 +122,15 @@ export function registerRuntimeClientIpcBridge(
       requestProjectRefresh(environmentId)
       return
     }
+    if (event.type === 'agentCliUpdateFinished') {
+      useAppStore.getState().recheckAgentCliUpdates({ kind: 'environment', environmentId })
+      return
+    }
     if (emitRuntimeClientWindowEvent(environmentId, event)) {
       return
     }
     if (event.type === 'botsChanged') {
-      emitPairedBotsChanged(environmentId, readBotChangeScope(event))
+      emitPairedBotsChanged(environmentId, readBotChangeScopeWithItems(event))
       return
     }
     if (event.type === 'orchestrationSessionWorkersChanged') {
@@ -209,10 +213,11 @@ export function registerRuntimeClientIpcBridge(
       })
   }
 
-  setRuntimeEnvironmentCatalogRefresher(async () => {
-    useAppStore.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
+  setRuntimeEnvironmentCatalogSource({
+    list: () => window.api.runtimeEnvironments.list(),
+    publish: (environments) => useAppStore.getState().setRuntimeEnvironments(environments)
   })
-  unsubs.push(() => setRuntimeEnvironmentCatalogRefresher(null))
+  unsubs.push(() => setRuntimeEnvironmentCatalogSource(null))
   // `orca environment add/rm` edits the registry without any renderer request (#25251).
   const stopCatalogChanged = window.api.runtimeEnvironments?.onCatalogChanged?.(() => {
     void refreshRuntimeEnvironmentCatalog()
@@ -256,6 +261,7 @@ export function registerRuntimeClientIpcBridge(
               requestProjectRefresh(environmentId)
               // Changes during the outage were lost, not queued: reads from before prove nothing now.
               emitPairedBotsStreamCameBack(environmentId)
+              useAppStore.getState().recheckAgentCliUpdates({ kind: 'environment', environmentId })
             },
             markEnvironmentSshStateStale: () =>
               useAppStore.getState().markEnvironmentSshStateStale(environmentId),

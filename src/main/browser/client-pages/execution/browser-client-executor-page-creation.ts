@@ -28,6 +28,8 @@ export class BrowserClientExecutorPageCreation {
     private readonly pages: Map<string, BrowserClientRetainedPage>,
     private readonly creatingPages: Map<string, BrowserClientHostedPageInventory>,
     private readonly failedPages: Map<string, BrowserClientHostedPageInventory>,
+    // Freed pages still count: the server sees them in the inventory.
+    private readonly freedPages: ReadonlyMap<string, unknown>,
     private readonly initializers: BrowserClientPageInitializations,
     private readonly maxPages: number,
     private readonly assertAvailable: () => void,
@@ -38,7 +40,7 @@ export class BrowserClientExecutorPageCreation {
       throw new BrowserClientPageCommandError('browser_client_page_command_invalid')
     }
     assertBrowserClientPageAdmission(
-      [this.pages, this.creatingPages, this.failedPages],
+      [this.pages, this.creatingPages, this.failedPages, this.freedPages],
       this.maxPages,
       event.browserPageId
     )

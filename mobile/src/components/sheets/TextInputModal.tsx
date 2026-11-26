@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ActivityIndicator, View, Text, Pressable, type KeyboardTypeOptions } from 'react-native'
+import { View, Text, Pressable, type KeyboardTypeOptions } from 'react-native'
 import type { LucideIcon } from 'lucide-react-native'
 import { colors, spacing, radii, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
@@ -7,6 +7,7 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { BottomDrawer } from '../bottom-drawer/BottomDrawer'
 import { TextField } from '../composer-input/TextField'
+import { MobilePendingButton } from '../controls/MobilePendingButton'
 
 type SheetProps = {
   title: string
@@ -97,7 +98,8 @@ export function TextInputSheetContent({
   useMobileColorScheme()
   const t = useMobileTranslation()
 
-  const canSubmit = !busy && !submitBlocked && (allowEmpty || value.trim().length > 0)
+  const filled = !submitBlocked && (allowEmpty || value.trim().length > 0)
+  const canSubmit = !busy && filled
   const NoticeIcon = notice?.icon
 
   function handleSubmit() {
@@ -142,20 +144,16 @@ export function TextInputSheetContent({
         >
           <Text style={styles.cancelText}>{cancelLabel ?? t('common.cancel', 'Cancel')}</Text>
         </Pressable>
-        <Pressable
-          style={({ pressed }) => [
-            styles.submitButton,
-            pressed && styles.buttonPressed,
-            !canSubmit && styles.submitButtonDisabled
-          ]}
-          disabled={!canSubmit}
+        <MobilePendingButton
+          label={submitLabel ?? t('common.save', 'Save')}
+          style={styles.submitButton}
+          labelStyle={styles.submitText}
+          disabledStyle={styles.submitButtonDisabled}
+          spinnerColor={colors.bgBase}
+          pending={busy}
+          disabled={!filled}
           onPress={handleSubmit}
-        >
-          {busy ? (
-            <ActivityIndicator size="small" color={colors.bgBase} style={styles.submitSpinner} />
-          ) : null}
-          <Text style={styles.submitText}>{submitLabel ?? t('common.save', 'Save')}</Text>
-        </Pressable>
+        />
       </View>
     </>
   )
@@ -219,12 +217,6 @@ const styles = themedStyleSheet(() => ({
   },
   buttonPressed: {
     opacity: 0.7
-  },
-  // Keeps the button's height while it spins.
-  submitSpinner: {
-    width: 14,
-    height: 14,
-    transform: [{ scale: 0.7 }]
   },
   submitButtonDisabled: {
     opacity: 0.4

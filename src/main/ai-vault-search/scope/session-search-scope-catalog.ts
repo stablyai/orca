@@ -32,7 +32,3 @@ export function installSessionSearchScopeCatalogSource(
 export function sessionSearchScopeCatalog(): SessionSearchScopeCatalog | null {
   return readCatalog?.() ?? null
 }
-
-export function resetSessionSearchScopeCatalogForTests(): void {
-  readCatalog = null
-}

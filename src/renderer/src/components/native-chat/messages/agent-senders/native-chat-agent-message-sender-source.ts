@@ -11,9 +11,6 @@ import {
 } from '../../../../../../shared/agent-session/view/messages/agent-message-presentation'
 
 const EMPTY_VIEW: AgentMessageSenderView = Object.freeze({})
-let rowBuilds = 0
-/** Counts addressed sender presentations built for owning render tests. */
-export const agentMessageSenderRowBuildsForTest = () => rowBuilds
 export type SenderLocation = {
   /** A fallback endpoint supplies its kind, never an earlier actor's activity. */
   activity?: false
@@ -56,7 +53,6 @@ export function readAgentMessageSenderRow(
       progress: presentation.progress
     }
     senderViews.set(row, view)
-    rowBuilds++
   }
   return view
 }
@@ -69,7 +65,8 @@ function senderRowView(
   return location.activity === false ? { agentType: row?.agentType ?? location.agentType } : row
 }
 
-/** Saved identity leads the live presentation; candidate rows also invalidate a vetoed sender. */
+/** Saved identity leads the live presentation; candidate rows also invalidate a vetoed sender.
+ *  A card draws only the sender's kind and dot, so its progress never redraws the card. */
 export function useAgentMessageSenderSource(
   locate: LocateSender,
   savedAgent?: AgentMessageSenderView['agentType'],
@@ -79,7 +76,7 @@ export function useAgentMessageSenderSource(
     let previous = EMPTY_VIEW
     return (state: AppState) => {
       const location = locate(state)
-      const next = agentMessageSenderView(
+      const { progress: _progress, ...next } = agentMessageSenderView(
         location ? senderRowView(state, location) : undefined,
         savedAgent ?? location?.agentType
       )

@@ -307,18 +307,6 @@ export function clearNativeChatSubscriptions(): void {
   pendingSubscriptions.clear()
 }
 
-export function _getNativeChatSenderCleanupCountForTest(): number {
-  return senderLifetimes.size
-}
-
-export function _getNativeChatPendingSubscriptionCountForTest(): number {
-  let count = 0
-  for (const bySubId of pendingSubscriptions.values()) {
-    count += bySubId.size
-  }
-  return count
-}
-
 export function registerNativeChatHandlers(): void {
   ipcMain.handle('nativeChat:readSession', (_event, args: NativeChatReadSessionArgs) =>
     readSession(args)

@@ -21,8 +21,6 @@ function createPlainShellSession(overrides: Partial<Session> = {}): Session {
     forceKillAndWaitForExit: vi.fn(async () => {}),
     beginTermination: vi.fn(() => true),
     terminateOwnedTree: vi.fn(() => 'terminated' as const),
-    scheduleForceDisposeFallback: vi.fn(),
-    signalTerminationRoot: vi.fn(),
     ...overrides
   } as unknown as Session
 }
@@ -40,73 +38,6 @@ describe('TerminalSessionTeardown plain-shell teardown', () => {
     if (platformDescriptor) {
       Object.defineProperty(process, 'platform', platformDescriptor)
     }
-  })
-
-  it('waits for a late immediate escalation after graceful descendant verification settles', async () => {
-    let finishDescendants = (): void => {}
-    let finishRoot = (): void => {}
-    const descendantVerification = new Promise<void>((resolve) => {
-      finishDescendants = resolve
-    })
-    const rootCompletion = new Promise<void>((resolve) => {
-      finishRoot = resolve
-    })
-    terminateShutdownDescendantsMock.mockReturnValueOnce(descendantVerification)
-    const snapshot: DescendantSnapshot = {
-      rootPgid: 4242,
-      descendants: [],
-      capturedAtMs: Date.now()
-    }
-    killWithDescendantSweepMock.mockImplementationOnce(
-      async (
-        _pid: number,
-        killRoot: () => void,
-        deps: {
-          terminateDescendants?: (value: DescendantSnapshot) => Promise<unknown>
-        }
-      ) => {
-        deps.terminateDescendants?.(snapshot)
-        killRoot()
-      }
-    )
-    const session = createPlainShellSession({
-      launchAgent: 'claude',
-      forceKillAndWaitForExit: vi.fn(() => rootCompletion)
-    })
-    const teardown = new TerminalSessionTeardown(new Map([['s1', session]]))
-
-    const graceful = teardown.killSession('s1', session, false)
-    await Promise.resolve()
-    const immediate = teardown.requestImmediate('s1')
-
-    expect(immediate).not.toBe(graceful)
-    let settled = false
-    void immediate?.then(() => {
-      settled = true
-    })
-    await Promise.resolve()
-    expect(settled).toBe(false)
-    finishDescendants()
-    await Promise.resolve()
-    expect(settled).toBe(false)
-    finishRoot()
-    await immediate
-    expect(settled).toBe(true)
-  })
-
-  it('returns a rejected promise instead of throwing synchronously when Windows graceful kill is refused', async () => {
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    const session = createPlainShellSession({
-      signalTerminationRoot: vi.fn(() => {
-        throw new Error('EPERM')
-      })
-    })
-    const teardown = new TerminalSessionTeardown(new Map([['s1', session]]))
-
-    const result = teardown.killSession('s1', session, false)
-
-    await expect(result).rejects.toThrow('EPERM')
-    expect(session.scheduleForceDisposeFallback).not.toHaveBeenCalled()
   })
 
   it('releases a guarded teardown when its existing ancestry scan finds detached work', async () => {

@@ -14,6 +14,7 @@ import {
   UpdateAvailableSimpleContent
 } from './UpdateAvailableCardContent'
 import { UpdateDownloadingContent, UpdateReadyToInstallContent } from './UpdateDownloadCardContent'
+import { RequiredUpdateRestartContent } from './RequiredUpdateRestartContent'
 
 export function UpdateCardStateContent({
   status,
@@ -114,13 +115,25 @@ export function UpdateCardStateContent({
         </div>
       )
     }
-    return hasStartedDownload && !status.automaticDownload ? (
+    if (status.teamRestart) {
+      return (
+        <RequiredUpdateRestartContent
+          version={status.version}
+          restart={status.teamRestart}
+          requiredByOrca={status.requiredByOrca}
+          onRestart={onInstallRetry}
+        />
+      )
+    }
+    return hasStartedDownload && !status.automaticDownload && !status.requiredByTeam ? (
       <div className="p-4">
         <p className="text-sm">{t('auto.components.UpdateCard.09a55c39b5', 'Installing...')}</p>
       </div>
     ) : (
       <UpdateReadyToInstallContent
         version={status.version}
+        requiredByTeam={status.requiredByTeam}
+        requiredByOrca={status.requiredByOrca}
         onRestart={onInstallRetry}
         onClose={onCollapse}
       />

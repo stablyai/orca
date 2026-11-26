@@ -8,9 +8,10 @@ import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal
 import type {
   StructuredAgentSessionEventTarget,
   StructuredAgentSessionSinkAdmission,
-  StructuredAgentSessionAppendOptions
+  StructuredAgentSessionAppendOptions,
+  LiveTextRead,
+  LiveTextReaders
 } from './structured-agent-session-event-sink'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 
 export type StructuredAgentSessionPublishOptions = Pick<
   StructuredAgentSessionAppendOptions,
@@ -28,19 +29,36 @@ export function createLiveTextPublication(
   submit: (
     operation: Omit<StructuredAgentSessionSinkOperation, 'sequence'>
   ) => StructuredAgentSessionSinkAdmission,
-  current: (bound: StructuredAgentSessionEventTarget) => boolean,
-  read: () => readonly AgentJournalRenderItem[]
+  target: () => StructuredAgentSessionEventTarget | null,
+  read: LiveTextRead
 ): () => StructuredAgentSessionSinkAdmission {
-  return () =>
-    submit({
-      bytes: 1,
-      publicationKey: 'live-text',
-      run: (bound) => {
-        if (current(bound)) {
-          bound.publishLiveText?.(read())
-        }
-      }
-    })
+  // Asked each window, so a viewer who arrives mid-stream gets the next one. A window with no row
+  // to deliver (a shortened reply, one past the live limit) is not admitted; the read it takes is
+  // the one the publication would take, kept by the sources until the text grows.
+  const nobodyTakes = (readers: LiveTextReaders | null | undefined): boolean =>
+    readers === null ||
+    (readers !== undefined &&
+      (readers.groups ?? [readers]).every((group) => read(group).length === 0))
+  // Streams flush together, so one decision serves every stream that grows in the same task.
+  let decided: StructuredAgentSessionSinkAdmission | undefined
+  return () => {
+    if (decided) {
+      return decided
+    }
+    decided = nobodyTakes(target()?.liveTextReaders?.())
+      ? { accepted: true }
+      : submit({
+          bytes: 1,
+          publicationKey: 'live-text',
+          run: (bound) => {
+            if (target() === bound) {
+              bound.publishLiveText?.(read)
+            }
+          }
+        })
+    queueMicrotask(() => (decided = undefined))
+    return decided
+  }
 }
 
 export function createChildWorkPublication(

@@ -11,6 +11,12 @@ import {
   retainCookieImportExecutionHost
 } from '../hosts/browser-host-state'
 import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
+import { importSshPageCookies } from './browser-ssh-page-cookie-import'
+import {
+  clientHostCookieImportTarget,
+  pageCookieImportHostId
+} from './browser-page-cookie-import-route'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 function remoteCookieImportUnavailable(): BrowserCookieImportResult {
   return {
@@ -30,11 +36,18 @@ export function createBrowserProfileImportActions(
   'importCookiesToProfile' | 'clearBrowserSessionImportState' | 'fetchDetectedBrowsers'
 > {
   return {
-    importCookiesToProfile: async (profileId) => {
+    importCookiesToProfile: async (profileId, pageRoute?) => {
+      if (pageRoute?.kind === 'ssh') {
+        return importSshPageCookies(get, pageRoute, () =>
+          window.api.browser.sessionImportCookies({ profileId, sshTargetId: pageRoute.sshTargetId })
+        )
+      }
       const initialState = get()
-      const hostId = getBrowserSettingsHostId(initialState)
+      const hostId = pageCookieImportHostId(pageRoute) ?? getBrowserSettingsHostId(initialState)
       const executionHostLabel = selectExecutionHostDisplayLabel(initialState, hostId)
-      const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(initialState)
+      const parsedHostId = parseExecutionHostId(hostId)
+      const runtimeEnvironmentId =
+        parsedHostId?.kind === 'runtime' ? parsedHostId.environmentId : null
       set((state) =>
         browserImportStateForHostUpdate(state, hostId, {
           profileId,
@@ -46,11 +59,13 @@ export function createBrowserProfileImportActions(
       try {
         // Under a remote runtime, only pages this desktop hosts can take a local cookie file.
         const result: BrowserCookieImportResult = runtimeEnvironmentId
-          ? ((await window.api.browser.sessionImportCookiesForClientHost({
-              environmentId: runtimeEnvironmentId,
-              profileId
-            })) ?? remoteCookieImportUnavailable())
-          : await window.api.browser.sessionImportCookies({ profileId })
+          ? ((await window.api.browser.sessionImportCookiesForClientHost(
+              clientHostCookieImportTarget(initialState, runtimeEnvironmentId, profileId, pageRoute)
+            )) ?? remoteCookieImportUnavailable())
+          : await window.api.browser.sessionImportCookies({
+              profileId,
+              ...(parsedHostId?.kind === 'ssh' ? { sshTargetId: parsedHostId.targetId } : {})
+            })
         if (result.ok) {
           get().recordFeatureInteraction?.('cookie-import')
           set((state) =>
@@ -61,11 +76,9 @@ export function createBrowserProfileImportActions(
               error: null
             })
           )
-          if (getBrowserSettingsHostId(get()) === hostId) {
-            await get()
-              .fetchBrowserSessionProfiles()
-              .catch(() => {})
-          }
+          await get()
+            .fetchBrowserSessionProfiles(hostId)
+            .catch(() => {})
         } else {
           set((state) =>
             browserImportStateForHostUpdate(state, hostId, {

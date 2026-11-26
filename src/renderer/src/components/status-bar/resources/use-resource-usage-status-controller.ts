@@ -83,6 +83,7 @@ export function useResourceUsageStatusController() {
     sessionInventory,
     observedAt: resourcesObservedAt,
     sessionsError,
+    rereading: sessionsRereading,
     refreshSessions,
     clearSessionsError,
     removeSession,
@@ -98,9 +99,9 @@ export function useResourceUsageStatusController() {
       lastSeenScannedAt: workspaceSpaceScannedAt
     })
   )
-  // Why: tab titles churn on every keystroke; subscribe to those maps only while open so closed badges don't rerender.
+  // Why: tab titles churn on every keystroke; only the PTYs tab reads the whole map. Resource rows watch their own title.
   const runtimePaneTitlesByTabId = useAppStore((s) =>
-    getResourceUsageRuntimePaneTitlesByTabId(s, viewActive)
+    getResourceUsageRuntimePaneTitlesByTabId(s, ptyViewActive)
   )
   const repos = useAppStore((s) => getResourceUsageRepos(s, viewActive))
   const gitWorktrees = useAppStore((s) => getResourceUsageAllWorktrees(s, viewActive))
@@ -234,7 +235,6 @@ export function useResourceUsageStatusController() {
     runtimeHostResources,
     sessions,
     resourceSessionBindings,
-    runtimePaneTitlesByTabId,
     repos,
     allWorktrees,
     projectGroups,
@@ -242,6 +242,7 @@ export function useResourceUsageStatusController() {
     workspaceSessionReady,
     sessionCount: resourcesObservedAt === null ? null : sessionInventory.count,
     sessionsError,
+    sessionsRereading,
     memorySnapshotError,
     snapshot,
     spaceScanReady
@@ -249,7 +250,6 @@ export function useResourceUsageStatusController() {
   const actions = useResourceUsageActions({
     setCollapsedRepos,
     setCollapsedWorktrees,
-    tabsByWorktree,
     setOpen,
     setActiveView,
     openModal,
@@ -260,6 +260,7 @@ export function useResourceUsageStatusController() {
     sessions,
     resourceSessionBindings,
     workspaceSessionReady,
+    sessionsRereading,
     killConfirm,
     setKillConfirm,
     setKilling,

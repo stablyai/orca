@@ -57,7 +57,8 @@ export function useResourcePtyActions(inventory: ReturnType<typeof useResourceSe
     active: 0
   })
   const mounted = useMountedRef()
-  const { removeSessions, invalidate, sessionsError, hasSession, subscribeRemoval } = inventory
+  const { removeSessions, invalidate, hasSession, subscribeRemoval } = inventory
+  const unverifiable = inventory.sessionsError || inventory.rereading
   useEffect(
     () => subscribeRemoval(status.retireError, status.hasRefusals),
     [status, subscribeRemoval]
@@ -154,7 +155,7 @@ export function useResourcePtyActions(inventory: ReturnType<typeof useResourceSe
   )
   const endMany = useCallback(
     async (rows: readonly ResourcePtyRow[], guard?: 'agent' | 'idle'): Promise<void> => {
-      if (sessionsError || !mounted.current) {
+      if (unverifiable || !mounted.current) {
         return
       }
       const targets: TerminationTarget[] = []
@@ -197,7 +198,7 @@ export function useResourcePtyActions(inventory: ReturnType<typeof useResourceSe
         drain()
       })
     },
-    [drain, mounted, sessionsError, status]
+    [drain, mounted, unverifiable, status]
   )
   const end = useCallback((row: ResourcePtyRow): void => void endMany([row]), [endMany])
   return { status, end, endMany }

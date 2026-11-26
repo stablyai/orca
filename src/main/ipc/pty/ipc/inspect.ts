@@ -161,6 +161,7 @@ export function installPtyInspectIpcHandlers(deps: {
         runningWorkCheckId?: string
         steadyState?: boolean
         jobMembershipOnly?: boolean
+        foregroundOnly?: boolean
       }
     ) => {
       // Another host's PTY remains unverifiable here.
@@ -168,6 +169,7 @@ export function installPtyInspectIpcHandlers(deps: {
         return clientOnlyUnverifiableInspection('terminal_gone')
       }
       const options = {
+        ...(args.foregroundOnly === true ? { foregroundOnly: true } : {}),
         ...(args.expectedIncarnationId
           ? { expectedIncarnationId: args.expectedIncarnationId }
           : {}),
@@ -193,6 +195,10 @@ export function installPtyInspectIpcHandlers(deps: {
           return clientOnlyUnverifiableInspection('terminal_gone')
         }
         const provider = getProviderForPty(args.id)
+        // Providers without fenced reads would answer with slower, unfenced evidence.
+        if (options.foregroundOnly && provider.supportsForegroundObservation?.(args.id) !== true) {
+          return clientOnlyUnverifiableInspection('old_host')
+        }
         return Object.keys(options).length > 0
           ? inspectPtyProviderProcessForRenderer(provider, args.id, { ...options, signal })
           : inspectPtyProviderProcessForRenderer(provider, args.id)

@@ -22,6 +22,7 @@ import {
   decodeStructuredAgentSessionOptionValue,
   encodeStructuredAgentSessionOptionValue
 } from '../../../agent-session/options/selection/structured-agent-session-option-codec'
+import { confirmsListedEffortAtSend } from '../../../agent-session/options/model-catalog/agent-model-catalog-ownership'
 
 export function resolveNativeChatSessionOptionDefaults(
   persisted: PersistedNativeChatSessionOptions | null | undefined,
@@ -37,7 +38,11 @@ export function resolveNativeChatSessionOptionDefaults(
   const storedValues = entry?.valuesByModel?.[modelId]
   if (storedValues && typeof storedValues === 'object') {
     for (const [id, value] of Object.entries(storedValues)) {
-      if (sessionOptionValueIsValid(value)) {
+      // A send may refuse a saved level for this agent, so each chat picks its own.
+      if (
+        sessionOptionValueIsValid(value) &&
+        !(id === 'effort' && confirmsListedEffortAtSend(agent))
+      ) {
         values[id] = value
       }
     }

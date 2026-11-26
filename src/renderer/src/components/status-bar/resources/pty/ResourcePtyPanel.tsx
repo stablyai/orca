@@ -60,7 +60,7 @@ export function ResourcePtyPanel({
   const getScope = useCallback(() => panelRef.current, [])
   const { sessions } = inventory.sessionInventory
   const { end: endPty, endMany, status } = actions
-  const { sessionsError } = inventory
+  const unverifiable = inventory.sessionsError || inventory.rereading
   const rows = useMemo(
     () =>
       active
@@ -121,7 +121,7 @@ export function ResourcePtyPanel({
     return list
   }, [groups, openGroups])
   const selectableRows = useMemo(() => {
-    if (sessionsError) {
+    if (unverifiable) {
       return EMPTY_PTY_ROWS
     }
     const selectable: ResourcePtyRow[] = []
@@ -131,7 +131,7 @@ export function ResourcePtyPanel({
       }
     }
     return selectable
-  }, [items, sessionsError])
+  }, [items, unverifiable])
   const canSelectKey = useSyncExternalStore(
     active ? status.subscribeSelection : subscribeInactive,
     status.getSelectionCheck
@@ -145,13 +145,13 @@ export function ResourcePtyPanel({
   }, [rows])
   const getRetainedItem = useCallback(
     (key: string) => {
-      if (sessionsError) {
+      if (unverifiable) {
         return undefined
       }
       const row = findRow(key)
       return row && canEndResourcePty(row) ? row : undefined
     },
-    [findRow, sessionsError]
+    [findRow, unverifiable]
   )
   const selection = useListMultiSelection({
     items: selectableRows,
@@ -234,7 +234,7 @@ export function ResourcePtyPanel({
       targets: readonly ResourcePtyRow[],
       observations: ReadonlyMap<string, PtyRunningWorkObservation>
     ) => {
-      if (!active || sessionsError) {
+      if (!active || unverifiable) {
         return
       }
       const rows = targets.filter((row) => {
@@ -260,7 +260,7 @@ export function ResourcePtyPanel({
   )
   const { checkingGroup, start } = useResourcePtyWorkspaceCheck(active, finishWorkspaceCheck)
   const endAll = useLatestHandler((group: ResourcePtyGroup, source: Element) => {
-    if (!active || sessionsError || (group.kind === 'workspace' && checkingGroup !== null)) {
+    if (!active || unverifiable || (group.kind === 'workspace' && checkingGroup !== null)) {
       return
     }
     focusBody(source.closest('[data-resource-pty-group]'))
@@ -321,7 +321,7 @@ export function ResourcePtyPanel({
           items={items}
           scrollElement={scrollElement}
           observedAt={inventory.observedAt}
-          unverifiable={inventory.sessionsError}
+          unverifiable={unverifiable}
           status={status}
           endableGroups={endableGroups}
           checkingGroup={checkingGroup}

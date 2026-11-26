@@ -22,7 +22,6 @@ import {
   journalLegacyChatRevisionKey,
   readJournalLegacyFailure,
   journalLegacyFailureKey,
-  openJournalLegacySource,
   recordJournalLegacyChatRevision,
   settleJournalLegacyCopy
 } from './journal-legacy-source'
@@ -41,6 +40,8 @@ import {
   holdsPendingCopy,
   deleteMeta,
   revisionHoldsHistory,
+  failuresWithoutOriginal,
+  clearUnreadRevisionFailure,
   writeMeta,
   type JournalLegacyFailure
 } from './journal-legacy-reconcile-marks'
@@ -48,6 +49,10 @@ import {
   JOURNAL_LEGACY_SOURCE_RECEIPT,
   sameJournalLegacySource
 } from './journal-legacy-source-receipt'
+import {
+  JOURNAL_LEGACY_SOURCE_DAMAGED,
+  openReconcilableJournalLegacySource
+} from './journal-legacy-source-damage'
 import { captureJournalLegacySourceReceipt } from './journal-legacy-source-capture'
 
 /** Set after a pass absorbed every original chat, so each chat here carries its revision. */
@@ -80,12 +85,14 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
   if (unchanged && kept && forced.size === 0) {
     return
   }
+  const source = openReconcilableJournalLegacySource(db, sourcePath, captured)
+  if (!source) {
+    return
+  }
   const receipt = JSON.stringify(captured)
   const pass: Pass = { kept, forced, baselines: [], compares: [] }
-  const source = openJournalLegacySource(sourcePath)
   let complete = true
-  let gone: string[] = []
-  const clearedClaims: string[] = []
+  let settled: { gone: string[]; clearedClaims: string[] } = { gone: [], clearedClaims: [] }
   try {
     if (unchanged) {
       // The original wrote nothing since the copy, so each chat is as shown here; once every
@@ -98,18 +105,7 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
       complete = absorbChats(source, db, pass, true)
     }
     if (!unchanged) {
-      const hasOriginal = source.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?')
-      const hasRecord = db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?')
-      for (const id of metaKeys(db, journalLegacyFailureKey(''))) {
-        const held = Boolean(hasRecord.get(id))
-        if ((!held || (pass.claimOwners && !pass.claimOwners.has(id))) && !hasOriginal.get(id)) {
-          if (held) {
-            clearedClaims.push(id)
-          } else {
-            gone.push(id)
-          }
-        }
-      }
+      settled = failuresWithoutOriginal(source, db, pass.claimOwners)
     }
   } finally {
     source.close()
@@ -123,10 +119,10 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
     return
   }
   runJournalTransaction(db, () => {
-    for (const id of gone) {
+    for (const id of settled.gone) {
       deleteMeta(db, journalLegacyFailureKey(id))
     }
-    for (const id of clearedClaims) {
+    for (const id of settled.clearedClaims) {
       clearJournalLegacyClaimFailure(db, id)
     }
     for (const [id, revision] of pass.baselines) {
@@ -139,6 +135,7 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
     if (complete) {
       writeMeta(db, JOURNAL_LEGACY_SOURCE_RECEIPT, receipt)
       writeMeta(db, JOURNAL_LEGACY_REVISIONS_KEPT, '1')
+      deleteMeta(db, JOURNAL_LEGACY_SOURCE_DAMAGED)
     }
   })
 }
@@ -295,6 +292,7 @@ function absorbChat(
     }
     // A refused adoption retries when its refused claims change; history-only failures stay held.
     if (!failure?.claims || !failure.adoption) {
+      clearUnreadRevisionFailure(db, id, failure)
       claimsOnly()
       return
     }

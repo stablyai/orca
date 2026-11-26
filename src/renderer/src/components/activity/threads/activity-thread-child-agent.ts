@@ -43,6 +43,25 @@ function firstReportedTerminalHandle(thread: ChildAgentClassifiableThread): stri
   return undefined
 }
 
+/** What one thread feeds child classification; threads with equal inputs classify the same. */
+export function childAgentLineageInputs(thread: ChildAgentClassifiableThread): {
+  terminalHandle: string | undefined
+  /** Serialized lineage of every entry that carries one; null when none does. */
+  orchestration: string | null
+} {
+  // Probes stop at the first lineage that resolves, so a repeat of an earlier one never decides.
+  const orchestrations = new Set<string>()
+  for (const entry of candidateEntries(thread)) {
+    if (entry.orchestration) {
+      orchestrations.add(JSON.stringify(entry.orchestration))
+    }
+  }
+  return {
+    terminalHandle: firstReportedTerminalHandle(thread),
+    orchestration: orchestrations.size > 0 ? [...orchestrations].join('\n') : null
+  }
+}
+
 /** Reuse dashboard lineage classification: the newest still-resolving parent wins across history. Orphans and cycles remain top-level rather than disappearing behind child filters. A live child is never hidden, whatever its ancestors are doing: a row's visibility depends only on that chat's own state. */
 export function collectHiddenChildAgentPaneKeys(
   threads: readonly ChildAgentClassifiableThread[]

@@ -3,17 +3,15 @@ import { posix, win32 } from 'node:path'
 import { isWindowsAbsolutePathLike } from '../../../shared/file-access/cross-platform-path'
 import { parseDocPreviewUrl } from '../../../shared/document-preview/doc-preview-scheme'
 
-export type DocPreviewOwner =
-  | { kind: 'ssh'; connectionId: string }
-  | {
-      kind: 'runtime'
-      environmentId: string
-      worktreeSelector: string
-      /** File reads are scoped to this root on the runtime host. */
-      worktreeRoot: string
-      /** Outside-workspace documents use the host's file grants instead of workspace reads. */
-      fileAccess?: 'terminal-artifact'
-    }
+export type DocPreviewOwner = {
+  kind: 'runtime'
+  environmentId: string
+  worktreeSelector: string
+  /** File reads are scoped to this root on the runtime host. */
+  worktreeRoot: string
+  /** Outside-workspace documents use the host's file grants instead of workspace reads. */
+  fileAccess?: 'terminal-artifact'
+}
 
 export type DocPreviewGrant = {
   id: string

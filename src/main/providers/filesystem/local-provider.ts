@@ -23,8 +23,8 @@ import type { resolveAuthorizedPath as ResolveAuthorizedPath } from '../../ipc/f
 import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
 import {
   assertNotExists,
-  rethrowWithUserMessage
-} from '../../filesystem/local-file-io/filesystem-create-path-guards'
+  createLocalFile
+} from '../../filesystem/local-file-io/filesystem-create-path'
 import { classifyFilesystemDirectoryEntries } from '../../filesystem/local-file-io/filesystem-symlink-directory-entries'
 import { getLocalGitOptionsForRegisteredWorktree } from '../../ipc/worktrees/local-worktree-runtime-options'
 import { listMarkdownDocuments } from '../../ipc/filesystem/search/markdown-documents'
@@ -154,15 +154,7 @@ export function createLocalFilesystemProvider(
     deletePath: async (targetPath, recursive) => {
       await rm(await authorizeLink(targetPath), { recursive: recursive === true, force: true })
     },
-    createFile: async (filePath) => {
-      const authorizedPath = await authorize(filePath)
-      await mkdir(dirname(authorizedPath), { recursive: true })
-      try {
-        await writeFile(authorizedPath, '', { encoding: 'utf-8', flag: 'wx' })
-      } catch (error) {
-        rethrowWithUserMessage(error, authorizedPath)
-      }
-    },
+    createFile: async (filePath) => createLocalFile(await authorize(filePath)),
     createDir: async (dirPath) => {
       const authorizedPath = await authorize(dirPath)
       await assertNotExists(authorizedPath)

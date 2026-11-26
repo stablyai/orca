@@ -1,32 +1,36 @@
 import { afterEach, expect, it, vi } from 'vitest'
+import { detectAgentCommandsOnHost } from './agent-command-detection'
+import { detectInstalledAgents } from './installed-agent-detection'
 
-const host = vi.hoisted(() => ({ wsl: false }))
-// Nothing on PATH: only Orca's own copies can make an agent installed.
-vi.mock('./agent-command-detection', () => ({ detectAgentCommandsOnHost: async () => new Set() }))
-vi.mock('../ipc/preflight/preflight-runtime-target', () => ({
-  getPreflightWslTarget: () => (host.wsl ? { distro: 'Ubuntu' } : null)
+vi.mock('./agent-command-detection', () => ({
+  detectAgentCommandsOnHost: vi.fn(async () => new Set(['claude', 'codex', 'gemini']))
+}))
+vi.mock('./managed-agent-detection', () => ({
+  readInstalledManagedAgents: vi.fn(async () => [])
 }))
 
-const { detectInstalledAgents } = await import('./installed-agent-detection')
-const { provideInstalledManagedAgents } = await import('./managed-agent-detection')
-
+const platform = process.platform
 afterEach(() => {
-  host.wsl = false
-  provideInstalledManagedAgents(async () => [])
+  Object.defineProperty(process, 'platform', { value: platform })
+  vi.mocked(detectAgentCommandsOnHost).mockClear()
 })
 
-it("counts Orca's installed copies as installed agents on this host", async () => {
-  provideInstalledManagedAgents(async () => ['antigravity', 'grok'])
+const probed = () => vi.mocked(detectAgentCommandsOnHost).mock.calls[0]?.[0]
 
-  expect((await detectInstalledAgents()).sort()).toEqual(['antigravity', 'grok'])
-})
-
-it('leaves out a disabled agent, and a WSL guest Orca installed nothing in', async () => {
-  provideInstalledManagedAgents(async () => ['antigravity', 'grok'])
-
-  expect(await detectInstalledAgents(undefined, { disabledTuiAgents: ['grok'] })).toEqual([
-    'antigravity'
+it("checks one agent by probing only that agent's commands", async () => {
+  await expect(detectInstalledAgents(undefined, { onlyTuiAgent: 'codex' })).resolves.toEqual([
+    'codex'
   ])
-  host.wsl = true
-  expect(await detectInstalledAgents()).toEqual([])
+  expect(probed()).toEqual(['codex'])
+})
+
+it("checks one agent in a WSL project by probing only that agent's commands in the guest", async () => {
+  Object.defineProperty(process, 'platform', { value: 'win32' })
+  await expect(
+    detectInstalledAgents({ wslDistro: 'Ubuntu' }, { onlyTuiAgent: 'claude' })
+  ).resolves.toEqual(['claude'])
+  expect(probed()).toEqual(['claude'])
+  expect(vi.mocked(detectAgentCommandsOnHost).mock.calls[0]?.[1]).toEqual({
+    context: { wslDistro: 'Ubuntu' }
+  })
 })

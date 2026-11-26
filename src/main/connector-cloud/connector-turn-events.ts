@@ -5,13 +5,14 @@ import {
   CONNECTOR_AUDIENCE_EVENTS_VERSION,
   CONNECTOR_CLOUD_PROMPTS_AUDIENCE_FEATURE,
   CONNECTOR_REPLIES_OUTBOX_FEATURE,
+  type ConnectorConversation,
   type ConnectorEvent
 } from '../../shared/connectors/connector-cloud-contract'
 import type {
   ConversationEvent,
   ConversationSnapshot
 } from '../external-conversations/external-conversation-events'
-import { SIGNED_OUT } from './connector-cloud-request'
+import { SIGNED_OUT, type ConnectorFailure } from './connector-cloud-request'
 import { ConnectorOutbox, type ConnectorOutboxHead, type ConnectorStamp } from './connector-outbox'
 import { ConnectorTurnEndFile } from './connector-turn-outbox-file'
 import { connectorSnapshot, jsonBytes } from './connector-snapshot'
@@ -22,10 +23,12 @@ import {
 import { ConnectorPromptPublications } from './connector-prompt-publications'
 import { answerFor, answerTextFor, toConnectorEvent } from './connector-event-wire'
 import { slackReplyBody } from './connector-slack-text'
+import { installedLeaveLines } from '../external-conversations/external-conversation-leave-lines'
 import type { ConnectorCallObserver } from './connector-transport'
 import {
   ConnectorReplyOutbox,
   isReplyEvent,
+  replyDeliveryIds,
   type ConnectorReplyClient,
   type ConnectorReplyJournal,
   type ConnectorReplyRoute
@@ -124,6 +127,8 @@ export class ConnectorTurnEvents {
   private replyFlush: (() => void) | null = null
   // Whether the current hello's answer listed replies.outbox; undefined before one.
   private repliesOutbox: boolean | undefined
+  // Delivery ids of replies refused as invalid under the current hello, held until the next one.
+  private readonly setAside = new Set<string>()
 
   constructor(
     userDataPath: string,
@@ -152,13 +157,25 @@ export class ConnectorTurnEvents {
       onStamped: (batch, stamp) => this.trace.stamped(batch, stamp),
       onAccepted: (batch, stamp) => {
         this.trace.accepted(batch, stamp)
-        void this.replies.accepted(batch)
+        // A leave's line follows its turn's answer, once the cloud took it and its rows are sent.
+        void this.replies.accepted(batch).then(() => installedLeaveLines()?.turnEndsTaken(batch))
       },
       onSplit: (batch) => this.trace.split(batch),
-      onDropped: (item, stamp) => {
+      onDropped: (item, stamp, failure) => {
         this.trace.dropped(item, stamp)
-        // Its row stays unsent until the cloud takes it: a later drain hands it over again.
-        this.replies.forget([item])
+        // A turn end the cloud won't take lets its leave's line go.
+        if (isTurnEnded(item)) {
+          installedLeaveLines()?.turnEndsTaken([item])
+        }
+        // A reply refused as invalid can't succeed as sent under this hello: it stays in flight
+        // until the next one (its row stays unsent). Any other refusal (a 413, or a 503 outcome
+        // that doesn't stand yet) goes again later.
+        if (failure?.status === 400) {
+          replyDeliveryIds([item]).forEach((id) => this.setAside.add(id))
+          return
+        }
+        // A sibling of a held reply (one answer split across events) leaves the held ids held.
+        this.replies.forget(replyDeliveryIds([item]).filter((id) => !this.setAside.has(id)))
         this.replies.retryLater()
       }
     })
@@ -276,7 +293,8 @@ export class ConnectorTurnEvents {
       }
       return kept
     })
-    this.replies.forget(released)
+    this.replies.forget([...this.setAside, ...replyDeliveryIds(released)])
+    this.setAside.clear()
   }
 
   /** True until the next snapshot once the caps dropped an event. */
@@ -326,14 +344,26 @@ export class ConnectorTurnEvents {
     this.outbox.accepted(stamp)
   }
 
-  refused(stamp: ConnectorStamp): ConnectorEvent | null {
-    return this.outbox.refused(stamp)
+  /** Whether `turnId`'s end in `conversation` still waits for the cloud to take it. */
+  turnEndPending(conversation: ConnectorConversation, turnId: number): boolean {
+    return this.outbox.holds(
+      (event) =>
+        isTurnEnded(event) &&
+        event.turnId === turnId &&
+        event.conversation.source === conversation.source &&
+        event.conversation.externalId === conversation.externalId
+    )
+  }
+
+  refused(stamp: ConnectorStamp, failure?: ConnectorFailure): ConnectorEvent | null {
+    return this.outbox.refused(stamp, failure)
   }
 
   /** Drops everything, file included: no other account can report these turns. */
   clear(): void {
     this.stored.clear()
     this.replies.retire()
+    this.setAside.clear()
     this.outbox.restart([], () => false)
     this.trace.flush()
   }

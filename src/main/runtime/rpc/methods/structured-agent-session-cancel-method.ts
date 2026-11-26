@@ -12,7 +12,7 @@ export const STRUCTURED_AGENT_SESSION_CANCEL_METHOD = defineMethod({
   permission: 'workspace',
   params: CancelParams,
   handler: async (params, ctx) => {
-    assertBotGroupSessionAccess(ctx.runtime, params.envelope.sessionId, ctx.caller)
+    assertBotGroupSessionAccess(ctx.runtime, params.envelope.sessionId)
     return requireStructuredCleanupHost(ctx).cancel(callerFor(ctx), params)
   }
 })

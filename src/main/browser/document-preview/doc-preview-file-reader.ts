@@ -9,7 +9,6 @@ import {
   type DocPreviewFileChunk
 } from '../../../shared/document-preview/doc-preview-file-access'
 import { callRuntimeEnvironment } from '../../ipc/runtime-environments/requests/runtime-environment-transport-routing'
-import { SSH_HOST_NOT_SERVED_MESSAGE } from '../../providers/ssh-host-not-served-error'
 import {
   getDocPreviewGrant,
   resolveDocPreviewAuthorityPaths,
@@ -136,7 +135,11 @@ async function readRuntimeDocPreviewFile(
     environmentId,
     'files.readDocPreview',
     params,
-    DOC_PREVIEW_READ_TIMEOUT_MS
+    DOC_PREVIEW_READ_TIMEOUT_MS,
+    undefined,
+    undefined,
+    // Opening a preview is the user's own act: it may wake an idle-stopped WSL host (#46567).
+    { wake: true }
   )
   if (!response.ok) {
     // Old hosts lack scoped reads; report the required update instead of method_not_found.
@@ -200,9 +203,6 @@ function runtimeWorkspaceReadParams(
   grant: DocPreviewGrant,
   absolutePath: string
 ): RuntimeDocPreviewReadParams | null {
-  if (grant.owner.kind !== 'runtime') {
-    return null
-  }
   const { worktreeRoot, worktreeSelector } = grant.owner
   const worktreeRelativePath = toRuntimeWorktreeRelativePath(worktreeRoot, absolutePath)
   const authority = resolveDocPreviewAuthorityPaths(grant)
@@ -249,9 +249,6 @@ export async function readDocPreviewFile(
   const contentType = docPreviewContentType(relativePath)
   const media = isDocPreviewMediaPath(relativePath)
   try {
-    if (grant.owner.kind === 'ssh') {
-      return notFoundOutcome(SSH_HOST_NOT_SERVED_MESSAGE)
-    }
     const runtimeOwner = grant.owner
     const terminalRead =
       runtimeOwner.fileAccess === 'terminal-artifact'

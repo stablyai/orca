@@ -189,12 +189,3 @@ export function startWindowsTerminalCapabilityReprobe(options: {
     detachFocusListenerWhenIdle()
   }
 }
-
-export function resetWindowsTerminalCapabilityReprobeForTests(): void {
-  for (const runner of runnersByOwnerKey.values()) {
-    clearRunnerTimer(runner)
-    runner.consumers = 0
-  }
-  runnersByOwnerKey.clear()
-  detachFocusListenerWhenIdle()
-}

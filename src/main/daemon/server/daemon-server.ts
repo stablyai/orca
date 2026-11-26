@@ -34,6 +34,7 @@ import {
   PROTOCOL_VERSION
 } from '../protocol/daemon-protocol-version'
 import type { DaemonRequest } from '../protocol/daemon-rpc-contract'
+import { sendDaemonTransientFact } from './daemon-transient-fact-delivery'
 import { answerDaemonControlRequest } from './daemon-control-request'
 
 export class DaemonServer {
@@ -79,20 +80,16 @@ export class DaemonServer {
         this.streamDataBatcher.refreshSessionDroppability(sessionId)
         options.onPtySessionExit?.(sessionId)
         this.lifecycle.reevaluateIdleShutdown()
-      }
+      },
+      onSessionForegroundChange: (sessionId) =>
+        sendDaemonTransientFact(this.attachments, this.streamDataBatcher, sessionId, {
+          kind: 'foreground-changed'
+        })
     })
     this.attachments = new DaemonSessionAttachments(this.host)
-    this.transientFactRelay = new BackgroundTransientFactRelay((sessionId, fact) => {
-      const clientId = this.attachments.clientIdForSession(sessionId)
-      if (clientId) {
-        this.streamDataBatcher.enqueueControlEvent(clientId, sessionId, {
-          type: 'event',
-          event: 'transientFact',
-          sessionId,
-          payload: fact
-        })
-      }
-    })
+    this.transientFactRelay = new BackgroundTransientFactRelay((sessionId, fact) =>
+      sendDaemonTransientFact(this.attachments, this.streamDataBatcher, sessionId, fact)
+    )
     this.streamDataBatcher = new DaemonStreamDataBatcher(
       (clientId) => this.connections.get(clientId),
       {
@@ -214,7 +211,8 @@ export class DaemonServer {
       log: this.log,
       isAcceptingWork: () => this.lifecycle.isAcceptingWork(),
       requestEndpointRetirement: () => this.endpoint.requestRetirementForLoss(),
-      reevaluateIdleShutdown: () => this.lifecycle.reevaluateIdleShutdown()
+      reevaluateIdleShutdown: () => this.lifecycle.reevaluateIdleShutdown(),
+      hostTerminalUsage: () => this.automaticWork.gate.hostTerminalUsage()
     })
     this.requestRouter = new DaemonRequestRouter({
       host: this.host,
@@ -259,13 +257,12 @@ export class DaemonServer {
   }
 
   private isIdle(): boolean {
-    if (this.admission.inFlight > 0 || this.host.hasLiveSessions()) {
-      return false
-    }
-    if (this.endpoint.lost) {
-      return true
-    }
-    return this.connections.transportCount === 0 && this.connections.size === 0
+    const noClients = this.connections.transportCount === 0 && this.connections.size === 0
+    return (
+      this.admission.inFlight === 0 &&
+      !this.host.hasLiveSessions() &&
+      (this.endpoint.lost || noClients)
+    )
   }
 
   private async disposeResources(): Promise<void> {

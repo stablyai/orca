@@ -37,7 +37,6 @@ export class TerminalShellRecoveryBarrier {
   private idleWaiters: (() => void)[] = []
   private readonly cleanExit: TerminalShellCleanExitConfirmation
   private disposed = false
-  lastInputAtMs = 0
 
   constructor(opts: TerminalShellRecoveryBarrierOptions) {
     this.confirmShellForeground = opts.confirmShellForeground
@@ -79,7 +78,6 @@ export class TerminalShellRecoveryBarrier {
   }
 
   forgetIdlePromptOnInput(): void {
-    this.lastInputAtMs = Date.now()
     if (this.scanner.isIdleAtPrompt) {
       this.scanner.forgetIdlePrompt()
     }

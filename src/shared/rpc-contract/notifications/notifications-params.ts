@@ -33,7 +33,8 @@ export const NotificationGetMissedSinceParams = z.object({
 export const NotificationPushFilterParams = z.object({
   onlyWhenDesktopAway: z.boolean().optional(),
   onlyWhenAgentNeedsInput: z.boolean().optional(),
-  sound: z.boolean().optional()
+  sound: z.boolean().optional(),
+  badge: z.boolean().optional()
 })
 
 export const NotificationRegisterPushParams = z

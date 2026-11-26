@@ -92,6 +92,7 @@ type DurableRefusalFacts = {
   /** A snapshot from when it was refused; see `agentSessionOwnerVerdictAllowsFreshOperationId`. */
   agent_session_ownership_unknown: { ownerVerdict?: AgentSessionOwnerVerdict }
   agent_session_identity_required: { otherFolder?: true }
+  structured_agent_session_unsupported: { agentInstallation?: AgentCliInstallationProblem }
 }
 
 const DURABLE_FACT_KEYS: Partial<Record<AgentSessionWireRefusalCode, readonly string[]>> = {
@@ -106,7 +107,8 @@ const DURABLE_FACT_KEYS: Partial<Record<AgentSessionWireRefusalCode, readonly st
   ],
   agent_session_operation_unknown: ['rewindReason'],
   agent_session_ownership_unknown: ['ownerVerdict'],
-  agent_session_identity_required: ['otherFolder']
+  agent_session_identity_required: ['otherFolder'],
+  structured_agent_session_unsupported: ['agentInstallation']
 } satisfies { [C in keyof DurableRefusalFacts]: readonly (keyof DurableRefusalFacts[C])[] }
 
 export type AgentSessionWriteRefusalDetails<C extends AgentSessionWireRefusalCode> = {
@@ -131,6 +133,26 @@ export type AgentSessionWriteFailure =
   /** The request failed where the host may already have run it (a timeout, a lost connection, an
    *  error inside the method). */
   | { kind: 'unconfirmed' }
+
+/** The too-old agent CLI a refusal names, under either code that carries one. */
+export function agentSessionRefusalAgentInstallation(
+  refusal: AgentSessionRefusalReference | AgentSessionWriteRefusal | undefined
+): AgentCliInstallationProblem | undefined {
+  return refusal?.code === 'agent_session_operation_invalid' ||
+    refusal?.code === 'structured_agent_session_unsupported'
+    ? refusal.details?.agentInstallation
+    : undefined
+}
+
+/** Whether a refusal says the agent CLI is too old, including Codex's pre-`agentInstallation` shape. */
+export function agentSessionRefusalNamesTooOldCli(
+  refusal: AgentSessionRefusalReference | AgentSessionWriteRefusal | undefined
+): boolean {
+  return Boolean(
+    agentSessionRefusalAgentInstallation(refusal) ??
+    (refusal?.code === 'agent_session_operation_invalid' && refusal.details?.codexInstallation)
+  )
+}
 
 /** Read saved details against code; drop newer reasons/verdicts and retain code wording. */
 function agentSessionWriteRefusal(

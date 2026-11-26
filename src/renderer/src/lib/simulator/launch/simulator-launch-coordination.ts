@@ -65,11 +65,6 @@ export function consumePrelaunchedSimulatorSession(worktreeId: string): Emulator
   return info
 }
 
-export function resetSimulatorLaunchCoordinationForTests(): void {
-  manualLaunchesByWorktree.clear()
-  prelaunchedSessionsByWorktree.clear()
-}
-
 export function dispatchManualSimulatorLaunchStarted(worktreeId: string): void {
   dispatchManualSimulatorLaunchEvent(EMULATOR_MANUAL_LAUNCH_STARTED_EVENT, { worktreeId })
 }

@@ -76,3 +76,17 @@ export function crewAgentMentions(
   }
   return { mentions, references }
 }
+
+export function rankNativeChatCrewMentions(
+  members: readonly { name: string; detail?: string; key?: string }[],
+  query: string
+): string[] {
+  const needle = query.toLocaleLowerCase()
+  const has = (text: string | undefined) => text?.toLocaleLowerCase().includes(needle) === true
+  const starts = members.filter((member) => member.name.toLocaleLowerCase().startsWith(needle))
+  const named = members.filter((member) => !starts.includes(member) && has(member.name))
+  const described = members.filter(
+    (member) => !starts.includes(member) && !named.includes(member) && has(member.detail)
+  )
+  return [...starts, ...named, ...described].map((member) => member.key ?? member.name)
+}

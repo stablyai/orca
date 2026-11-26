@@ -30,6 +30,8 @@ export type SessionShellReadyBarrierDeps = {
   installDeviceAttributesFilter(): void
   releaseDeviceAttributesFilter(): void
   acceptStartupIngress(data: string): void
+  /** A held startup command reached the shell: input the pane's idle proof must see. */
+  noteQueuedInputWritten?(): void
   /** Use an injected file-log sink because detached daemon stdio is ignored. */
   reportReadinessEvent?(event: string, details: Record<string, unknown>): void
 }
@@ -75,6 +77,11 @@ export class SessionShellReadyBarrier {
   /** Keep startup commands queued through the post-marker flush window. */
   get isGatingWrites(): boolean {
     return this._state === 'pending' || this.postReadyFlushGate.isPending
+  }
+
+  /** A startup command still waits for the shell; it may start an agent with no other event. */
+  get hasQueuedInput(): boolean {
+    return this.preReadyStdinQueue.length > 0
   }
 
   /** Queues `data` when the gate is closed; false means the caller must write it through. */
@@ -198,6 +205,7 @@ export class SessionShellReadyBarrier {
     }
     this.typedAhead = false
     for (const data of queued) {
+      this.deps.noteQueuedInputWritten?.()
       this.deps.subprocess.write(data)
     }
   }

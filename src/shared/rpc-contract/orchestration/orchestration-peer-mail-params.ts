@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../rpc-param-primitives'
 
 export const PeerMailMessageType = z.enum([
@@ -41,11 +41,39 @@ export const PeerMailDeliverParams = z.object({
   sender: PeerMailSender.optional()
 })
 
+/** A paired computer that takes asks from this Orca's agents, named on each of its pulls. Its
+ *  pulls in one `session` keep it listening until a pull's caller goes away or it leaves. */
+export const PeerMailClientAsksPull = z.object({
+  session: z.string().min(1).max(100),
+  /** Its persisted host installation id: what `--on-client` and a mention token name it by. */
+  installationId: z.string().min(1).max(100),
+  name: LINE,
+  /** The fingerprint this Orca saw for it under its last pairing, when that pairing was replaced. */
+  previousPairing: z.string().min(1).max(200).optional(),
+  /** Ends the session now; the pull answers at once. */
+  leave: z.boolean().optional()
+})
+
 /** The opening Orca pulls replies queued for its conversations; waits up to waitMs for one. */
 export const PeerMailPullParams = z.object({
   waitMs: OptionalFiniteNumber,
   /** Conversations it could not read and is waiting to retry: their items neither return nor end the wait. */
-  holdBack: z.array(z.string()).max(50).optional()
+  holdBack: z.array(z.string()).max(50).optional(),
+  clientAsks: PeerMailClientAsksPull.optional()
+})
+
+/** One queued item on the wire, pulled from or returned to a paired Orca. */
+export const PeerMailItem = z.object({
+  conversationId: z.string(),
+  sequence: z.number().int().positive(),
+  messageId: z.string(),
+  kind: z.string().optional(),
+  payload: z.string()
+})
+
+/** Replies and notices a paired computer owes asks from this Orca's agents, in the pull's item shape. */
+export const PeerMailReturnParams = z.object({
+  items: z.array(PeerMailItem).max(50)
 })
 
 export const PeerMailAckParams = z.object({
@@ -69,5 +97,28 @@ export const PeerMailRelayPayload = z.object({
   threadId: z.string().nullable(),
   sender: PeerMailSender.optional(),
   /** A bot's answer to a request the opening Orca sent, and what the asker does with it. */
-  botAnswer: z.object({ requestId: LINE, view: z.record(z.string(), LINE) }).optional()
+  botAnswer: z.object({ requestId: LINE, view: z.record(z.string(), LINE) }).optional(),
+  /** A notice that a request the opening Orca sent went unanswered; an older Orca ignores it. */
+  notice: z.object({ requestId: LINE }).optional()
+})
+
+/** An ask an agent here queued for a paired computer to pull: peer mail it delivers there, plus the
+ *  chat the asker acts for, which that computer checks its introductions against. */
+export const ClientAskPayload = PeerMailDeliverParams.omit({
+  conversationId: true,
+  messageId: true,
+  attachments: true
+}).extend({
+  rootSession: z.string().min(1).max(500)
+})
+
+/** A reply an agent here sent to mail a paired computer's agent sent it, on the same conversation. */
+export const ClientReplyPayload = z.object({
+  senderLabel: z.string().min(1),
+  /** The agent on that computer it answers. */
+  to: z.string().min(1),
+  subject: z.string(),
+  body: z.string(),
+  threadId: z.string().nullable(),
+  sender: PeerMailSender.optional()
 })

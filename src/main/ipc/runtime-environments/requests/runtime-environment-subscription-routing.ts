@@ -6,6 +6,7 @@ import {
 } from '../../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
 import { assertCrewSourceCurrent } from '../subscriptions/runtime-environment-subscription-setup'
 import { getPreferredPairedRuntimeConnection } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { desktopRuntimeClientCapabilities } from '../connections/runtime-environment-shared-control-policy'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
 import { resolveEnvironment } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
@@ -27,6 +28,12 @@ import {
 } from './runtime-environment-support-routing'
 
 const DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS = 15_000
+// A browser pane on a host's page or dev server is use the host's idle probes cannot see.
+const HOLDING_STREAMS: ReadonlySet<string> = new Set([
+  'browser.screencast',
+  'network.browserTunnel',
+  'browser.clientHost.attach'
+])
 
 export async function subscribeRuntimeEnvironment(
   userDataPath: string,
@@ -139,7 +146,15 @@ export async function subscribeRuntimeEnvironment(
         params,
         effectiveTimeoutMs,
         callbacksWithMarkUsed,
-        { clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES, signal }
+        {
+          // Passive like the control socket, except browser streams: no idle probe sees a page.
+          clientCapabilities:
+            HOLDING_STREAMS.has(method) && !preparation?.background
+              ? ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+              : desktopRuntimeClientCapabilities(environment.id),
+          idlePassive: preparation?.background,
+          signal
+        }
       )
       if (crewAttempt) {
         try {

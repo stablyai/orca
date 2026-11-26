@@ -21,6 +21,7 @@ import {
 import type { MobileBrowserTab } from '../../session/tabs/mobile-session-tabs'
 import {
   handleBrowserScreencastEvent,
+  readScreencastReady,
   type BrowserDialogState,
   type ScreencastEvent
 } from './mobile-browser-stream-events'
@@ -46,6 +47,11 @@ type MobileBrowserStreamArgs = {
   setAddressValue: Dispatch<SetStateAction<string>>
   setBusy: Dispatch<SetStateAction<boolean>>
   setDialog: Dispatch<SetStateAction<BrowserDialogState | null>>
+  /** The host streams page prompts and relays their answers (browser.page-prompts.v1). */
+  pagePromptsSupported: boolean
+  /** Takes the stream's prompt and download events; true when it handled one. */
+  handlePageEvent: (payload: unknown) => boolean
+  clearPagePrompt: () => void
   setError: Dispatch<SetStateAction<string | null>>
   setFrameMetadata: Dispatch<SetStateAction<BrowserScreencastFrameMetadata | null>>
   setZoom: Dispatch<SetStateAction<BrowserZoomState>>
@@ -74,6 +80,9 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
     setAddressValue,
     setBusy,
     setDialog,
+    pagePromptsSupported,
+    handlePageEvent,
+    clearPagePrompt,
     setError,
     setFrameMetadata,
     setZoom,
@@ -93,6 +102,9 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
   })
 
   const [frameUri, setFrameUri] = useState(initialFrameUri)
+  // A stopped stream sends nothing more, so the last frame stays until the person reconnects.
+  const [streamStopped, setStreamStopped] = useState<string | null>(null)
+  const [reconnectRequest, setReconnectRequest] = useState(0)
   const [framePacer] = useState(() =>
     createBrowserFramePacer({
       initialUri: initialFrameUri,
@@ -155,7 +167,10 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
       setFrameMetadata(cachedFrame?.metadata ?? null)
     }
     setDialog(null)
+    // The host replays prompts it still holds to the new stream.
+    clearPagePrompt()
     setError(null)
+    setStreamStopped(null)
     if (
       !client ||
       !binaryScreencastGranted ||
@@ -187,13 +202,16 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
     }
     busyRef.current = true
     setBusy(true)
+    // The subscription stays open after the timeout, so a late first frame clears the notice.
+    let timedOut = false
     let startupTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
       if (streamGenerationRef.current !== generation) {
         return
       }
+      timedOut = true
       busyRef.current = false
       setBusy(false)
-      setError(translate('browser.stream.timedOut', 'Browser stream timed out.'))
+      setStreamStopped(translate('browser.stream.timedOut', 'Browser stream timed out.'))
     }, 15_000)
     const clearStartupTimer = (): void => {
       if (startupTimer) {
@@ -210,7 +228,9 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
         worktree,
         page: tab.browserPageId,
         ...streamRequest,
-        frameAck: 1
+        frameAck: 1,
+        ...(pagePromptsSupported ? { pagePrompts: 1 } : {}),
+        downloads: 1
       },
       (payload) => {
         if (streamGenerationRef.current !== generation) {
@@ -219,6 +239,9 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
         const ready = readScreencastReady(payload)
         if (ready) {
           ackSubscriptionId = ready.frameAck === true ? ready.subscriptionId : null
+        }
+        if (handlePageEvent(payload)) {
+          return
         }
         handleBrowserScreencastEvent({
           busyRef,
@@ -229,7 +252,7 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
           setAddressValue,
           setBusy,
           setDialog,
-          setError
+          setStreamStopped
         })
       },
       {
@@ -238,6 +261,10 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
             return
           }
           clearStartupTimer()
+          if (timedOut) {
+            timedOut = false
+            setStreamStopped(null)
+          }
           if (ackSubscriptionId) {
             // Cumulative, so a frame the shell dropped is covered by the next one's ack.
             void client
@@ -261,9 +288,13 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
     }
   }, [
     binaryScreencastGranted,
+    clearPagePrompt,
     client,
     foregroundVisit,
+    handlePageEvent,
+    pagePromptsSupported,
     framePacer,
+    reconnectRequest,
     resetBrowserZoomState,
     screencastSupported,
     streamRequest,
@@ -279,26 +310,9 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
     frameGeometry,
     frameLayers: framePacer.layers,
     pageParams,
+    reconnectStream: () => setReconnectRequest((current) => current + 1),
     renderedFrameSource,
-    sendBrowserRequest
-  }
-}
-
-function readScreencastReady(
-  payload: unknown
-): { subscriptionId: string; frameAck: unknown } | null {
-  if (
-    typeof payload !== 'object' ||
-    payload === null ||
-    !('type' in payload) ||
-    payload.type !== 'ready' ||
-    !('subscriptionId' in payload) ||
-    typeof payload.subscriptionId !== 'string'
-  ) {
-    return null
-  }
-  return {
-    subscriptionId: payload.subscriptionId,
-    frameAck: 'frameAck' in payload ? payload.frameAck : undefined
+    sendBrowserRequest,
+    streamStopped
   }
 }

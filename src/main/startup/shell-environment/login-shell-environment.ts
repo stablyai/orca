@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto'
-import { win32 as pathWin32 } from 'node:path'
+import { delimiter, win32 as pathWin32 } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
 import { resolveWindowsShellStartupFamily } from '../../../shared/shell/launch/windows-terminal-shell'
 import {
   resolveProfileLoadingFallbackShell,
-  resolveProfileLoadingShell
+  resolveProfileLoadingShell,
+  withLaunchPath
 } from './hydrate-shell-path'
 import { shellProbeDetached } from './shell-path-probe'
 import { bindShellProbeLifetime } from './shell-probe-lifetime'
@@ -171,6 +172,15 @@ function spawnShellAndReadEnvironment(
   })
 }
 
+/** Shell PATH order first, then Orca's own entries the shell lacks, so nothing reachable before goes missing. */
+function keepOrcaPathEntries(
+  captured: NodeJS.ProcessEnv,
+  orcaEnv: NodeJS.ProcessEnv
+): NodeJS.ProcessEnv {
+  const segments = [captured.PATH, orcaEnv.PATH].flatMap((value) => value?.split(delimiter) ?? [])
+  return { ...captured, PATH: [...new Set(segments.filter(Boolean))].join(delimiter) }
+}
+
 export type ResolveLoginShellEnvironmentOptions = {
   /** Reads the last capture or process fallback without starting or awaiting shell work. */
   cachedOnly?: boolean
@@ -196,6 +206,8 @@ export function captureLoginShellEnvironment(
   const fallback = options.shellOverride === undefined ? resolveProfileLoadingFallbackShell() : null
   const env = processEnvironment(options.env)
   const fellBack: LoginShellEnvironmentCapture = { status: 'fallback', env }
+  // process.env PATH already holds the profile's entries (hydrateShellPath); rerunning rc files on it doubles them.
+  const fromLaunchPath = options.env === undefined && process.platform !== 'win32'
   if (!shell) {
     return Promise.resolve(fellBack)
   }
@@ -208,14 +220,21 @@ export function captureLoginShellEnvironment(
   const entry = cachedEnvironment(`${shell}\0${fallback ?? ''}\0${envKey}`)
   const run = (): Promise<LoginShellEnvironmentCapture> => {
     const startedAt = Date.now()
+    const probeEnv = fromLaunchPath ? withLaunchPath(env) : env
     const spawner =
       options.spawner ??
       ((probeShell: string, probeEnv: NodeJS.ProcessEnv) =>
         spawnShellAndReadEnvironment(probeShell, probeEnv, options.timeoutMs))
-    const capture = spawner(shell, env)
+    const capture = spawner(shell, probeEnv)
       .then(async (environment): Promise<LoginShellEnvironmentCapture> => {
-        const captured = environment ?? (fallback ? await spawner(fallback, env) : null)
-        return captured ? { status: 'captured', env: captured } : fellBack
+        const captured = environment ?? (fallback ? await spawner(fallback, probeEnv) : null)
+        if (!captured) {
+          return fellBack
+        }
+        return {
+          status: 'captured',
+          env: fromLaunchPath ? keepOrcaPathEntries(captured, env) : captured
+        }
       })
       .catch(() => fellBack)
     entry.running = { capture, startedAt }
@@ -263,9 +282,4 @@ export function resolveLoginShellEnvironment(
   options: ResolveLoginShellEnvironmentOptions = {}
 ): Promise<NodeJS.ProcessEnv> {
   return captureLoginShellEnvironment(options).then((capture) => capture.env)
-}
-
-export function resetLoginShellEnvironmentCacheForTests(): void {
-  environmentCache.clear()
-  cacheRevision++
 }

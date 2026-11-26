@@ -1,8 +1,14 @@
-import type { ChildProcessVerdictRead, SubprocessHandle } from './session-subprocess-handle'
+import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
+import type {
+  ChildProcessVerdictRead,
+  ForegroundAgentIdentity,
+  SubprocessHandle
+} from './session-subprocess-handle'
 import type { TerminalForegroundSample } from '../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
 import { SessionLaunchNote } from './session-launch-note'
 import { SessionRepaintNudge } from './session-repaint-nudge'
 import type { TerminalShellRecoveryBarrier } from '../shell-readiness/terminal-shell-recovery-barrier'
+import type { JobTerminationOutcome } from '../../windows/windows-pty-job'
 
 export abstract class SessionProcessInspection {
   /** Main's launch note for this process; Session feeds it the output that can retire it. */
@@ -15,6 +21,11 @@ export abstract class SessionProcessInspection {
   protected abstract readonly recoveryBarrier: TerminalShellRecoveryBarrier
   /** PTY output chunks seen, so idle-shell proofs can tell whether the pane printed since. */
   protected _outputChunks = 0
+  /** Input writes accepted, so a proof taken before a keystroke cannot vouch for what it started. */
+  protected _inputWrites = 0
+  private lastInputAt = 0
+  /** Wall-clock time of the latest output or input, so a capture older than it cannot vouch for the pane. */
+  protected _lastActivityAt = 0
 
   abstract get isAlive(): boolean
   abstract getAppliedSize(): { cols: number; rows: number } | null
@@ -24,9 +35,15 @@ export abstract class SessionProcessInspection {
     this.shellIsRootChild = subprocess.shellIsRootChild === true
   }
 
+  /** A PTY job result of unavailable does not prove child exit. */
+  terminateOwnedTree(): JobTerminationOutcome {
+    return this.subprocess.terminateOwnedTree()
+  }
+
   /** Redraws the program without input by moving only the PTY, never the grid attaches read. */
   requestRepaint(): void {
-    if (this.isAlive) {
+    // WinPTY redraws its own scraped screen on a resize, so its bytes would not be the program's paint.
+    if (this.isAlive && this.subprocess.resizeRedrawsOwnScreen !== true) {
       this.repaintNudge.request(
         () => this.getAppliedSize(),
         (cols, rows) => this.subprocess.resize(cols, rows),
@@ -69,9 +86,35 @@ export abstract class SessionProcessInspection {
     afterMs: number
   ): TerminalShellRecoveryBarrier['commandActivity'] | 'input_since_capture' {
     const phase = this.recoveryBarrier.commandActivity
-    return phase !== 'running' && this.recoveryBarrier.lastInputAtMs >= afterMs
+    return phase !== 'running' && (this.lastInputAt >= afterMs || this.startupInputQueued())
       ? 'input_since_capture'
       : phase
+  }
+
+  get inputWrites(): number {
+    return this._inputWrites
+  }
+
+  get lastActivityAt(): number {
+    return this._lastActivityAt
+  }
+
+  protected noteOutput(): void {
+    this._outputChunks += 1
+    this._lastActivityAt = Date.now()
+  }
+
+  protected writeInput(data: string): void {
+    this.noteInputWritten()
+    this.subprocess.write(data)
+  }
+
+  /** Set by the shell-ready barrier: a held startup command counts as pending input. */
+  startupInputQueued: () => boolean = () => false
+
+  noteInputWritten(): void {
+    this._inputWrites += 1
+    this.lastInputAt = this._lastActivityAt = Date.now()
   }
 
   /** The PTY's foreground process group (tcgetpgrp); undefined where the master cannot say. */
@@ -88,6 +131,21 @@ export abstract class SessionProcessInspection {
 
   getForegroundProcess(options?: { rawFallback?: boolean; cachedOnly?: boolean }): string | null {
     return this.subprocess.getForegroundProcess(options)
+  }
+
+  async settleForegroundRefresh(timeoutMs: number): Promise<void> {
+    const pending = this.pendingForegroundRefresh()
+    if (pending) {
+      await withTimeout(pending, timeoutMs, undefined)
+    }
+  }
+
+  pendingForegroundRefresh(): Promise<unknown> | null {
+    return this.subprocess.pendingForegroundRefresh?.() ?? null
+  }
+
+  foregroundAgent(): ForegroundAgentIdentity | null {
+    return this.subprocess.foregroundAgent?.() ?? null
   }
 
   async confirmForegroundProcess(context?: { decision?: boolean }): Promise<string | null> {

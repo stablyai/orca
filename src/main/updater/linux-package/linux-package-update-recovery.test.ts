@@ -62,7 +62,10 @@ async function writePackage(name: string, contents = PAYLOAD): Promise<string> {
 }
 
 function capture(overrides: Record<string, unknown> = {}): LinuxPackageArtifact | null {
-  const downloadedFile = (overrides.downloadedFile ?? path.join(downloadDir, 'orca.deb')) as string
+  const downloadedFile =
+    typeof overrides.downloadedFile === 'string'
+      ? overrides.downloadedFile
+      : path.join(downloadDir, 'orca.deb')
   return recovery.captureLinuxPackageArtifact({
     version: VERSION,
     files: [{ url: path.basename(downloadedFile), sha512: SHA512 }],

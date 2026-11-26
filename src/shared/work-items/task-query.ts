@@ -36,7 +36,10 @@ function tokenizeSearchQueryWithRaw(rawQuery: string): SearchQueryToken[] {
       continue
     }
     raw += char
-    if ((char === '"' || char === "'") && quote === null) {
+    // Why: an apostrophe inside a word (won't-fix, don't) is text, not an opening quote.
+    const opensQuote =
+      char === '"' || (char === "'" && !/[\p{L}\p{N}]/u.test(rawQuery[i - 1] ?? ''))
+    if (opensQuote && quote === null) {
       quote = char
       continue
     }

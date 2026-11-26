@@ -14,12 +14,6 @@ on:
         default: blacksmith-4vcpu-ubuntu-2404
         type: string
 
-      run_shards:
-        description: Run the planned root unit shards.
-        required: false
-        default: true
-        type: boolean
-
       shards:
         description: JSON array of shard assignments, produced by unit-plan.yml.
         required: true
@@ -59,7 +53,6 @@ permissions:
 
 jobs:
   test:
-    if: inputs.run_shards
     name: ${{ inputs.artifact_prefix != 'unit' && format('{0} ', inputs.artifact_prefix) || '' }}tests node ${{ matrix.node }} ${{ matrix.shard.index }}/${{ matrix.shard.count }}
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 60

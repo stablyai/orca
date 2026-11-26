@@ -118,17 +118,3 @@ export function mergePendingTerminalInputActivity<T extends Record<string, numbe
   }
   return (next as T | null) ?? stored
 }
-
-export function resetTerminalInputActivityCoalescingForTests(): void {
-  if (flushTimer !== null) {
-    clearTimeout(flushTimer)
-    flushTimer = null
-  }
-  pendingByPaneKey.clear()
-  lastWrittenByPaneKey.clear()
-  pendingCommit = null
-}
-
-export function getPendingTerminalInputActivityCountForTests(): number {
-  return pendingByPaneKey.size
-}

@@ -3,26 +3,21 @@ import { orcadRemoteBaseDir } from '../install/orcad-remote-windows-node'
 import { randomUUID } from 'node:crypto'
 import type { OrcadDeployOptions, OrcadDeployResult } from '../install/orcad-remote-deploy'
 import { isUnconfirmedSshCommandTermination } from '../../ssh/remote-exec/remote-exec-command'
-import {
-  withActivatedVersion,
-  type OrcadActivationRecord,
-  type OrcadStateSnapshot
-} from './orcad-activation-record'
+import { withActivatedVersion, type OrcadStateSnapshot } from './orcad-activation-record'
 import {
   readOrcadActivationRecord,
   writeOrcadActivationRecord
 } from './orcad-activation-record-store'
 import { launchAndJudgeOrcadSlot } from './orcad-candidate-launch-verdict'
-import { planOrcadUpdate } from './orcad-update-plan'
+import { recountLostInProcessCount } from './orcad-update-plan'
 import {
-  type OrcadTerminalCensus,
-  UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
-} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
+  asksCandidateForLiveDaemons,
+  censusForLockedRecord,
+  countedLockedRecord,
+  orcadUpdatePlanner,
+  type OrcadUpdatePlan
+} from './orcad-activation-census'
 import { runFencedStop } from './orcad-fenced-stop'
-import {
-  censusNeedsHostDaemonProtocols,
-  CURRENT_ORCAD_DAEMON_PROTOCOL
-} from './orcad-daemon-protocol-crossing'
 import { ORCAD_LOG_FILENAME } from '../install/orcad-remote-host-support'
 import { orcadSnapshotFailureReason } from '../host-state/orcad-state-snapshot-space'
 import {
@@ -72,21 +67,6 @@ type Outcome = Extract<OrcadDeployResult, { outcome: 'installed-not-activated' }
 
 export const ORCAD_ACTIVATION_POLICY_REFUSED_CODE = 'orcad_activation_policy_refused'
 
-function countedLockedRecord(options: OrcadDeployOptions, record: OrcadActivationRecord): boolean {
-  const counted = options.censusRecord
-  return (
-    !counted || (counted.active === record.active && counted.activatedAt === record.activatedAt)
-  )
-}
-
-/** A census of another incumbent cannot authorize stopping this one. */
-function censusForLockedRecord(
-  options: OrcadDeployOptions,
-  record: OrcadActivationRecord
-): OrcadTerminalCensus {
-  return countedLockedRecord(options, record) ? options.census : UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
-}
-
 export async function activateInstalledOrcad(
   options: OrcadDeployOptions & { localOrcadDir: string },
   fullVersion: string,
@@ -94,26 +74,15 @@ export async function activateInstalledOrcad(
   lock: OrcadActivationLockControl
 ): Promise<OrcadDeployResult> {
   const now = options.now ?? ((): Date => new Date())
-  const notActivated = (code: string, reason: string, startCheckFailed?: true): Outcome => ({
-    outcome: 'installed-not-activated',
-    fullVersion,
-    code,
-    reason,
-    ...(startCheckFailed ? { startCheckFailed } : {})
-  })
+  const notActivated = (
+    code: string,
+    reason: string,
+    extra: { startCheckFailed?: true; forceable?: true } = {}
+  ): Outcome => ({ outcome: 'installed-not-activated', fullVersion, code, reason, ...extra })
+  const deferred = (defer: Extract<OrcadUpdatePlan, { action: 'defer' }>): Outcome =>
+    notActivated(defer.code, defer.reason, defer.forceable ? { forceable: true } : {})
   const record = await readOrcadActivationRecord(options)
-  const planFor = (
-    census: OrcadTerminalCensus,
-    hostDaemonProtocols?: readonly number[]
-  ): ReturnType<typeof planOrcadUpdate> =>
-    planOrcadUpdate({
-      record,
-      candidateVersion: fullVersion,
-      census,
-      candidateDaemonProtocol: CURRENT_ORCAD_DAEMON_PROTOCOL,
-      ...(hostDaemonProtocols ? { hostDaemonProtocols } : {}),
-      ...(options.force !== undefined ? { force: options.force } : {})
-    })
+  const planFor = orcadUpdatePlanner(record, fullVersion, options.force)
   const census = censusForLockedRecord(options, record)
   let plan = planFor(census)
   if (plan.action === 'noop') {
@@ -123,25 +92,24 @@ export async function activateInstalledOrcad(
   if (refusal) {
     return notActivated(ORCAD_ACTIVATION_POLICY_REFUSED_CODE, refusal)
   }
-  // Hosts predating the census protocol set cannot name mixed generations; the candidate can.
-  const asksCandidate = censusNeedsHostDaemonProtocols(census)
+  const asksCandidate = asksCandidateForLiveDaemons(census, options.force)
   if (
     plan.action === 'defer' &&
     !(asksCandidate && plan.code === 'orcad_update_daemon_protocol_unverifiable')
   ) {
-    return notActivated(plan.code, plan.reason)
+    return deferred(plan)
   }
   const preflight = await preflightOrcadCandidate(
     { ...options, remoteInstallDir: remoteDir, fullVersion },
     asksCandidate
   )
   if ('failure' in preflight) {
-    return notActivated(preflight.code, preflight.failure, true)
+    return notActivated(preflight.code, preflight.failure, { startCheckFailed: true })
   }
   const { hostDaemonProtocols } = preflight
   plan = planFor(census, hostDaemonProtocols)
   if (plan.action === 'defer') {
-    return notActivated(plan.code, plan.reason)
+    return deferred(plan)
   }
 
   let incumbent: OrcadSlotIdentity | null = null
@@ -205,8 +173,9 @@ export async function activateInstalledOrcad(
       releaseIncumbentAdmission: options.releaseIncumbentAdmission,
       now: () => now().getTime(),
       refuse: (recounted) => {
-        const plan = planFor(recounted, hostDaemonProtocols)
-        return plan.action === 'defer' ? notActivated(plan.code, plan.reason) : null
+        const plan =
+          recountLostInProcessCount(census, recounted) ?? planFor(recounted, hostDaemonProtocols)
+        return plan.action === 'defer' ? deferred(plan) : null
       },
       prepare: () => writeOrcadActivationTransaction(options, transaction),
       stale: () =>
@@ -304,7 +273,9 @@ export async function activateInstalledOrcad(
     const located =
       `${reason} Candidate stderr is at ` +
       `${joinRemotePath(options.host, remoteDir, ORCAD_LOG_FILENAME)}. ${restored}`
-    return notActivated(code, await withOrcadLogTail(options, remoteDir, located), true)
+    return notActivated(code, await withOrcadLogTail(options, remoteDir, located), {
+      startCheckFailed: true
+    })
   }
 
   const recordAfter = withActivatedVersion(record, fullVersion, snapshot, now(), options.appVersion)

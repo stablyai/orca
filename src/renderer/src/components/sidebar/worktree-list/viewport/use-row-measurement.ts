@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo } from 'react'
 import type React from 'react'
 import { useAppStore } from '@/store'
+import { observeOffscreenRow } from '@/lib/window-activity/offscreen-animation-pause'
 import {
   useVirtualizedScrollAnchor,
   type VirtualizedScrollAnchor
@@ -74,12 +75,18 @@ export function useVirtualRowMeasurementSync(args: {
     (element: HTMLDivElement | null) => {
       if (!element) {
         virtualizer.measureElement(null)
-        return
+        return undefined
       }
       if (!isCurrentVirtualRowElement(element)) {
-        return
+        return undefined
       }
       virtualizer.measureElement(element)
+      // Overscan rows sit outside the scroller's clip; their loops would still draw every frame.
+      const stopObserving = observeOffscreenRow(element)
+      return () => {
+        stopObserving()
+        virtualizer.measureElement(null)
+      }
     },
     [isCurrentVirtualRowElement, virtualizer]
   )

@@ -127,7 +127,3 @@ export function bundledManagedOrcadVersion(target: OrcadTarget): Promise<string 
   }
   return version
 }
-
-export function resetBundledOrcadVersionsForTests(): void {
-  bundledVersions.clear()
-}

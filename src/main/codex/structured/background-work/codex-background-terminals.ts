@@ -1,9 +1,9 @@
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
-import { isCodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
 import {
-  CodexAppServerTimeoutError,
-  isCodexAppServerUnsupportedError
-} from '../../app-server/codex-app-server-session'
+  isCodexAppServerRequestError,
+  isCodexMethodRefusal
+} from '../../app-server/codex-app-server-request-error'
+import { CodexAppServerTimeoutError } from '../../app-server/codex-app-server-session'
 import type { CodexTerminalStopSupport } from './codex-background-task-tracker'
 import { readRecord } from '../../app-server/codex-item-field-readers'
 import type {
@@ -26,15 +26,6 @@ export function boundedTimeout(timeoutMs: number | undefined): number {
   )
 }
 
-function refusesMethod(error: unknown): boolean {
-  return (
-    isCodexAppServerUnsupportedError(error) ||
-    (isCodexAppServerRequestError(error) &&
-      error.code === -32600 &&
-      error.message.includes('unknown variant'))
-  )
-}
-
 /** Refusals/malformed lists mean unsupported; timeouts and dropped requests leave support unknown. */
 export async function probeCodexBackgroundTerminals(
   rpc: CodexTerminalRpc,
@@ -51,7 +42,7 @@ export async function probeCodexBackgroundTerminals(
     )
     return Array.isArray(reply.data) ? 'supported' : 'unsupported'
   } catch (error) {
-    return refusesMethod(error) ? 'unsupported' : 'unknown'
+    return isCodexMethodRefusal(error) ? 'unsupported' : 'unknown'
   }
 }
 
@@ -91,6 +82,27 @@ async function stillRunning(
     }
   }
   throw new Error('codex app-server listed more background terminals than Orca reads')
+}
+
+/** Every background terminal a thread still runs; none once the thread is unloaded (which ends
+ *  them); null when this Codex can't list them. Other failures throw. */
+export async function listCodexThreadBackgroundTerminals(
+  rpc: CodexTerminalRpc,
+  threadId: string,
+  timeoutMs: number | undefined
+): Promise<CodexBackgroundTerminal[] | null> {
+  try {
+    const running = await stillRunning(rpc, threadId, boundedTimeout(timeoutMs))
+    return [...running].map((processId) => ({ threadId, processId }))
+  } catch (error) {
+    if (terminalsAreGone(error)) {
+      return []
+    }
+    if (isCodexMethodRefusal(error)) {
+      return null
+    }
+    throw error
+  }
 }
 
 /** Confirm termination against each thread's list; request failures throw unless a survivor is confirmed. */

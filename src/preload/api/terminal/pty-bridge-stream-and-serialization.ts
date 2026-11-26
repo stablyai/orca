@@ -20,6 +20,7 @@ export const ptyStreamAndSerializationApi = {
       runningWorkCheckId?: string
       steadyState?: boolean
       jobMembershipOnly?: boolean
+      foregroundOnly?: boolean
     }
   ): Promise<TerminalProcessInspection> =>
     ipcRenderer.invoke('pty:inspectProcess', { id, ...options }),

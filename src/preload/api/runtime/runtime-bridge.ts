@@ -164,5 +164,15 @@ export const runtimeApi = {
       callback(data)
     ipcRenderer.on('runtime:orchestrationSessionWorkersChanged', listener)
     return () => ipcRenderer.removeListener('runtime:orchestrationSessionWorkersChanged', listener)
+  },
+  onPeerMailReturned: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('runtime:peerMailReturned', listener)
+    return () => ipcRenderer.removeListener('runtime:peerMailReturned', listener)
+  },
+  onMcpServersChanged: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('runtime:mcpServersChanged', listener)
+    return () => ipcRenderer.removeListener('runtime:mcpServersChanged', listener)
   }
 } satisfies PreloadApi['runtime']

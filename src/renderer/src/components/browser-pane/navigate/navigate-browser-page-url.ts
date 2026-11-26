@@ -83,6 +83,10 @@ export function navigateBrowserPageToUrl({
     recoveryNavigationValidationRef.current = recoveryLoadError
       ? { committed: false, started: false, targetUrl: normalizedBrowserModelUrl }
       : null
+    if (webview.dataset.orcaAttachWaiting) {
+      // No page yet: it opens with this once its profile's extensions are ready (unredacted).
+      webview.dataset.orcaAttachRequestedUrl = targetUrl
+    }
     issueBrowserGuestNavigation(webview, () => {
       webview.src = targetUrl
     })

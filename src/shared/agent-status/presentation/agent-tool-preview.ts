@@ -1,3 +1,5 @@
+import { CODEX_ASYNC_QUESTION_TOOL } from '../../native-chat/input/questions/codex-async-question-input'
+
 // Share the `tool: input` line across agent rows, child rows and activity threads.
 
 type AgentToolPreviewFields = { toolName?: string | null; toolInput?: string | null }
@@ -11,11 +13,17 @@ export function agentToolPreviewInput(
   return entry.toolName?.trim() || allowsBareInput ? toolInput : ''
 }
 
+/** Codex's question tool id would push the question out of a narrow row. */
+export function agentToolDisplayName(toolName: string | null | undefined): string {
+  const name = toolName?.trim() ?? ''
+  return name === CODEX_ASYNC_QUESTION_TOOL ? 'question' : name
+}
+
 export function formatAgentToolPreviewLine(
   entry: AgentToolPreviewFields,
   allowsBareInput: boolean
 ): string {
-  const toolName = entry.toolName?.trim() ?? ''
+  const toolName = agentToolDisplayName(entry.toolName)
   const toolInput = agentToolPreviewInput(entry, allowsBareInput)
   if (toolName && toolInput) {
     return `${toolName}: ${toolInput}`

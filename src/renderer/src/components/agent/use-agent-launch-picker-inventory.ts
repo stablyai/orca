@@ -38,7 +38,7 @@ import {
   readAgentPickerLaunchSupport
 } from './agent-launch-picker-host-reads'
 import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
-import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import {
   currentAgentPickerAcquisition,
   observeAgentPickerAcquisition
@@ -213,7 +213,7 @@ export function useAgentLaunchPickerInventorySource(
           model.rows,
           model.detection.detectedIds ?? [],
           (agent) => agentPickerChoiceSeeds(agent, defaults),
-          formatAgentTypeLabel,
+          getAgentLabel,
           model.defaultTuiAgent
         ).map((entry) => ({
           ...entry,

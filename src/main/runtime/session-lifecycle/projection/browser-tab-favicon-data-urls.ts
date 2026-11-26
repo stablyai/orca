@@ -6,9 +6,9 @@ import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote
 import { iconDataUrl, type IconPngEncoder } from '../../sidebar-inputs/repo-icons/icon-data-url'
 import {
   fetchRemoteRepoIcon,
-  runtimeIconFetch,
   type RepoIconFetch
 } from '../../sidebar-inputs/repo-icons/repo-icon-remote-fetch'
+import { isBlockedHost } from '../../../link-preview/link-preview-address-guard'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 
 const FAVICON_LIMITS = {
@@ -31,7 +31,8 @@ export class BrowserTabFaviconDataUrls {
 
   constructor(
     private readonly options: {
-      fetch: RepoIconFetch
+      /** The page's own route; null leaves its icon unfetched, since any other route exposes this host's network. */
+      fetchFor: (browserPageId: string) => RepoIconFetch | null
       encoder: () => IconPngEncoder | undefined
       onInlined: (worktreeId: string) => void
       now?: () => number
@@ -44,7 +45,7 @@ export class BrowserTabFaviconDataUrls {
       if (tab.type !== 'browser' || !tab.faviconUrl?.startsWith('https:')) {
         return tab
       }
-      const dataUrl = this.read(tab.faviconUrl, snapshot.worktree)
+      const dataUrl = this.read(tab.faviconUrl, snapshot.worktree, tab.browserPageId)
       if (!dataUrl) {
         return tab
       }
@@ -54,7 +55,7 @@ export class BrowserTabFaviconDataUrls {
     return changed ? { ...snapshot, tabs } : snapshot
   }
 
-  private read(url: string, worktreeId: string): string | null {
+  private read(url: string, worktreeId: string, browserPageId: string | null): string | null {
     const entry = this.inlined.get(url)
     if (entry && entry.expiresAt > this.now()) {
       this.inlined.delete(url)
@@ -66,9 +67,13 @@ export class BrowserTabFaviconDataUrls {
       waiting.add(worktreeId)
       return null
     }
+    const fetch = browserPageId ? this.options.fetchFor(browserPageId) : null
+    if (!fetch) {
+      return null
+    }
     const worktreeIds = new Set([worktreeId])
     this.waiting.set(url, worktreeIds)
-    void this.produce(url).then((dataUrl) => {
+    void this.produce(url, fetch).then((dataUrl) => {
       this.waiting.delete(url)
       this.remember(url, dataUrl)
       if (dataUrl) {
@@ -80,14 +85,14 @@ export class BrowserTabFaviconDataUrls {
     return null
   }
 
-  private async produce(url: string): Promise<string | null> {
+  private async produce(url: string, fetch: RepoIconFetch): Promise<string | null> {
     try {
-      // Every redirect hop meets the rule the published URL did, so none lands on this host's loopback.
+      // Every redirect hop meets the rule the published URL did, and none names a private network address.
       const image = await fetchRemoteRepoIcon(
         url,
-        this.options.fetch,
+        fetch,
         undefined,
-        (hop) => remoteTabFaviconUrl(hop.href) !== null
+        (hop) => remoteTabFaviconUrl(hop.href) !== null && !isBlockedHost(hop.hostname)
       )
       return image ? iconDataUrl(image, FAVICON_LIMITS, this.options.encoder()) : null
     } catch {
@@ -125,7 +130,8 @@ export function inlineRuntimeBrowserTabFavicons(
   let favicons = runtimeFavicons.get(runtime)
   if (!favicons) {
     favicons = new BrowserTabFaviconDataUrls({
-      fetch: runtimeIconFetch,
+      fetchFor: (browserPageId) =>
+        getRuntimeDesktopSurface().browserTabFaviconFetch?.(browserPageId) ?? null,
       encoder: () => getRuntimeDesktopSurface().encodeRepoIconPng,
       onInlined: (worktreeId) => runtime.touchMobileSessionTabsForWorktree(worktreeId)
     })

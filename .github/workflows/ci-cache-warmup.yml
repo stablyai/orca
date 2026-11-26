@@ -15,7 +15,6 @@ on:
       - '.github/actions/restore-pnpm-verification/**'
       - '.github/actions/prepare-native-runtime/**'
       - '.github/actions/prepare-windows-cli-launcher/**'
-      - '.github/actions/prepare-git-compatibility/**'
       - '.github/actions/prepare-headless-compiler/**'
       - 'config/scripts/runtime-verification/headless-detector/headless-detector-compiler-cache.mjs'
       - '.github/actions/prepare-linux-package-fixture/**'
@@ -103,8 +102,6 @@ jobs:
 
       - name: Populate shared Electron archive
         run: node config/scripts/electron-installation/platform-layout/install-electron-package-binary.mjs
-
-      - uses: ./.github/actions/prepare-git-compatibility
 
       - uses: ./.github/actions/prepare-wayland-clipboard
         with:

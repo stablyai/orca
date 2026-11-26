@@ -155,3 +155,20 @@ export function readRemoteClipboardCommandResult(
     return empty
   }
 }
+
+/** Runs an edit command in the focused document, reaching into same-origin frames like a native edit does. */
+export function buildRemoteExecCommandExpression(command: 'undo' | 'redo' | 'selectAll'): string {
+  return `(() => {
+    let doc = document;
+    while (doc.activeElement && doc.activeElement.contentDocument) {
+      doc = doc.activeElement.contentDocument;
+    }
+    const field = doc.activeElement;
+    // Why: a programmatically focused field may not hold the frame selection that execCommand selects in.
+    if (${JSON.stringify(command)} === 'selectAll' && field && typeof field.select === 'function') {
+      field.select();
+      return;
+    }
+    doc.execCommand(${JSON.stringify(command)});
+  })()`
+}

@@ -200,8 +200,9 @@ export async function reclaimWorktreeGeneratedFiles({
         try {
           await rm(path, { recursive: true, force: true })
         } catch (error) {
+          // A read-only directory makes rm reject with EACCES under Node but ENOTEMPTY under Bun on macOS.
           if (
-            !['EACCES', 'EPERM'].includes(error.code) ||
+            !['EACCES', 'EPERM', 'ENOTEMPTY'].includes(error.code) ||
             !(await descend(worktree, parts)) ||
             !sameDirectory(original, await info(path))
           ) {

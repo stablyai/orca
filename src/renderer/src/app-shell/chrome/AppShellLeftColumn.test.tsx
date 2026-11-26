@@ -1,107 +1,121 @@
 // @vitest-environment happy-dom
-
-import '@testing-library/jest-dom/vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { useState } from 'react'
-import { afterEach, expect, it } from 'vitest'
+import { useEffect } from 'react'
+import { act, cleanup, render } from '@testing-library/react'
+import { afterEach, beforeEach, expect, it } from 'vitest'
+import { useAppStore } from '@/store/index'
+import type { AppState } from '@/store/types'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
+import { showWorkspaceListThen } from '@/components/app-rail/app-rail-navigation'
 import { AppShellLeftColumn } from './AppShellLeftColumn'
+import { useAppChromeLayout } from './use-app-chrome-layout'
 
-// Stands in for the workspace list: an input with local state.
-function StubList(): React.JSX.Element {
-  const [query, setQuery] = useState('')
-  return (
-    <input
-      aria-label="Filter workspaces"
-      value={query}
-      onChange={(e) => setQuery(e.target.value)}
-    />
-  )
+// Invariant: with the rail on, the workspace list (which owns unsaved dialog drafts, dialog focus and the Workspace
+// Board) keeps its instance when views change, and across rail flag flips while the column header is mounted.
+// Accepted, not asserted: a flag flip with no header mounted (a rail page, or Landing with the list hidden) remounts
+// the list once, because the rail-off layout must stay exactly the plain one (see the component's comment).
+
+let mounts = 0
+
+function ListProbe(): React.JSX.Element {
+  useEffect(() => {
+    mounts += 1
+  }, [])
+  return <div data-list-probe="" />
 }
 
-// shouldMount=false is a page such as Tasks with the list collapsed: the list is hidden but still hosts its dialogs.
-function layout(appRailVisible: boolean, sidebarOpen = true, shouldMount = true) {
-  return {
-    appRailVisible,
-    showSidebar: true,
-    sidebarOpen,
-    leftTitlebarChromeLayout: { shouldMount, isFloating: shouldMount && !sidebarOpen },
-    leftSidebarStyle: {}
-  }
-}
-
-function column(
-  appRailVisible: boolean,
-  sidebarOpen = true,
-  shouldMount = true
-): React.JSX.Element {
+function Host(): React.JSX.Element {
+  const layout = useAppChromeLayout()
   return (
     <AppShellLeftColumn
-      layout={layout(appRailVisible, sidebarOpen, shouldMount)}
-      titlebarLeftControls={<button type="button">Toggle sidebar</button>}
-      rail={<button type="button">Workspaces</button>}
-      list={<StubList />}
+      layout={layout}
+      titlebarLeftControls={<div />}
+      rail={<div />}
+      list={<ListProbe />}
     />
   )
 }
 
+const initial = useAppStore.getState()
+
+function setRail(on: boolean): void {
+  useAppStore.setState({
+    settings: {
+      ...(initial.settings ?? getDefaultSettings('/fixture-home')),
+      experimentalAppRail: on
+    }
+  })
+}
+
+function start(state: Partial<AppState>, railOn = true): HTMLElement {
+  useAppStore.setState(state)
+  setRail(railOn)
+  const { container } = render(<Host />)
+  return container
+}
+
+function probeInColumn(container: HTMLElement): boolean {
+  return container.querySelector('[data-left-column-list] [data-list-probe]') !== null
+}
+
+beforeEach(() => {
+  mounts = 0
+  useAppStore.setState(initial, true)
+})
 afterEach(() => {
   cleanup()
+  useAppStore.setState(initial, true)
 })
 
-it('keeps the focused list, its node and its local state when the rail flag flips either way', () => {
-  const { rerender } = render(column(false))
-  const input = screen.getByLabelText('Filter workspaces')
-  fireEvent.change(input, { target: { value: 'acme' } })
-  input.focus()
+const ACTIVE_WORKSPACE: Partial<AppState> = { activeView: 'terminal', activeWorktreeId: 'wt-1' }
 
-  // A late Settings publish turns the rail on, then off again, while the user is in the list.
-  rerender(column(true))
-  rerender(column(false))
-
-  expect(screen.getByLabelText('Filter workspaces')).toBe(input)
-  expect(input).toHaveValue('acme')
-  expect(input).toHaveFocus()
+it('keeps the list instance from an active workspace to a rail page with the list saved closed', () => {
+  // Main moves the list from the column to a sibling here (the header unmounts), remounting it.
+  for (const open of [
+    (s: AppState) => s.openAutomationsPage(),
+    (s: AppState) => s.openTaskPage()
+  ]) {
+    mounts = 0
+    const container = start({ ...ACTIVE_WORKSPACE, sidebarOpen: false })
+    act(() => open(useAppStore.getState()))
+    expect(mounts).toBe(1)
+    expect(probeInColumn(container)).toBe(true)
+    cleanup()
+    useAppStore.setState(initial, true)
+  }
 })
 
-it('keeps the list when the flag flips with the list collapsed', () => {
-  const { rerender } = render(column(true, false))
-  const input = screen.getByLabelText('Filter workspaces')
-  rerender(column(false, false))
-  rerender(column(true, false))
-  expect(screen.getByLabelText('Filter workspaces')).toBe(input)
+it('keeps the list instance when a list command leaves a rail page with the list saved closed', () => {
+  // The Board-command case: main moves the list from a sibling into the column as the list opens.
+  const container = start({ activeView: 'terminal', sidebarOpen: false })
+  act(() => useAppStore.getState().openTaskPage())
+  act(() => {
+    showWorkspaceListThen(useAppStore)
+  })
+  expect(useAppStore.getState()).toMatchObject({ activeView: 'terminal', sidebarOpen: true })
+  expect(mounts).toBe(1)
+  expect(probeInColumn(container)).toBe(true)
 })
 
-it('puts the titlebar, then the rail, then the list in DOM order with the rail on', () => {
-  render(column(true))
-  const toggle = screen.getByRole('button', { name: 'Toggle sidebar' })
-  const rail = screen.getByRole('button', { name: 'Workspaces' })
-  const list = screen.getByLabelText('Filter workspaces')
-  expect(toggle.compareDocumentPosition(rail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-  expect(rail.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+it('keeps the list instance from an active workspace to a rail page with the list saved open', () => {
+  const container = start({ ...ACTIVE_WORKSPACE, sidebarOpen: true })
+  act(() => useAppStore.getState().openAutomationsPage())
+  expect(mounts).toBe(1)
+  expect(probeInColumn(container)).toBe(true)
 })
 
-it('keeps an unsaved draft in the hidden list on a collapsed page when the rail flag flips either way', () => {
-  // Rail on, Tasks with the list collapsed: a Workspace details draft lives in the list's subtree.
-  const { rerender } = render(column(true, false, false))
-  const input = screen.getByLabelText('Filter workspaces')
-  fireEvent.change(input, { target: { value: 'unsaved draft' } })
-
-  rerender(column(false, false, false))
-  rerender(column(true, false, false))
-
-  expect(screen.getByLabelText('Filter workspaces')).toBe(input)
-  expect(input).toHaveValue('unsaved draft')
-})
-
-it('keeps keyboard focus on the rail when a page switch moves the list in or out of the column', () => {
-  const { rerender } = render(column(true, true, true))
-  const railButton = screen.getByRole('button', { name: 'Workspaces' })
-  railButton.focus()
-
-  // Workspaces -> a page with the list collapsed -> back, as a rail click does.
-  rerender(column(true, false, false))
-  rerender(column(true, true, true))
-
-  expect(screen.getByRole('button', { name: 'Workspaces' })).toBe(railButton)
-  expect(railButton).toHaveFocus()
+it('keeps the list instance across rail flag flips while the header is mounted', () => {
+  for (const state of [
+    { ...ACTIVE_WORKSPACE, sidebarOpen: false },
+    { ...ACTIVE_WORKSPACE, sidebarOpen: true },
+    // The startup state: no workspace yet, the list at its default (open).
+    { activeView: 'terminal' as const, activeWorktreeId: null, sidebarOpen: true }
+  ]) {
+    mounts = 0
+    start(state, true)
+    act(() => setRail(false))
+    act(() => setRail(true))
+    expect(mounts).toBe(1)
+    cleanup()
+    useAppStore.setState(initial, true)
+  }
 })

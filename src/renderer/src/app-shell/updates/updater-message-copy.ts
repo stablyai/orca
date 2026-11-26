@@ -1,9 +1,25 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { LinuxPackageCommandUnavailableReason } from '../../../../shared/updater/update-status-types'
+import { isReleaseChannel, type ReleaseChannel } from '../../../../shared/updater/release-channel'
 import {
   UPDATER_FAILURE_COPY,
   type UpdaterFailureCode
 } from '../../../../shared/updater/updater-failure-copy'
+
+const CHANNEL_LABELS: Record<ReleaseChannel, (t: Translate) => string> = {
+  stable: (t) => t('auto.components.settings.ReleaseChannelSection.stableLabel', 'Stable'),
+  rc: (t) => t('auto.components.settings.ReleaseChannelSection.rcLabel', 'RC'),
+  hourly: (t) => t('auto.components.settings.ReleaseChannelSection.hourlyLabel', 'Hourly'),
+  daily: (t) => t('auto.components.settings.ReleaseChannelSection.dailyLabel', 'Daily'),
+  adhoc: (t) => t('auto.components.settings.ReleaseChannelSection.adhocLabel', 'Ad hoc')
+}
+
+export function getReleaseChannelLabel(channel: string, t: Translate = translate): string {
+  // Updater errors can carry an ID or its legacy English label.
+  const id = channel.toLowerCase()
+  return isReleaseChannel(id) ? CHANNEL_LABELS[id](t) : channel
+}
 
 type Param = (name: string) => string | null
 type CountParam = (name: string) => number | null
@@ -37,7 +53,7 @@ const COPY: Record<UpdaterFailureCode, (param: Param, count: CountParam) => stri
           'updates.failure.channelUnsupportedPlatform',
           UPDATER_FAILURE_COPY.channelUnsupportedPlatform,
           {
-            channel
+            channel: getReleaseChannelLabel(channel)
           }
         )
   },
@@ -46,7 +62,7 @@ const COPY: Record<UpdaterFailureCode, (param: Param, count: CountParam) => stri
     return channel === null
       ? null
       : translate('updates.failure.unsignedDevChannel', UPDATER_FAILURE_COPY.unsignedDevChannel, {
-          channel
+          channel: getReleaseChannelLabel(channel)
         })
   },
   linuxPackageMissing: () =>
@@ -98,6 +114,8 @@ const COPY: Record<UpdaterFailureCode, (param: Param, count: CountParam) => stri
       'updates.failure.linuxPackageMetadataUnusable',
       UPDATER_FAILURE_COPY.linuxPackageMetadataUnusable
     ),
+  teamUpdatePolicy: () =>
+    translate('updates.failure.teamUpdatePolicy', 'Your team manages Orca updates.'),
   unknownReleaseChannel: (param) => {
     const channel = param('channel')
     return channel === null
@@ -130,7 +148,7 @@ const COPY: Record<UpdaterFailureCode, (param: Param, count: CountParam) => stri
     return channel === null || status === null
       ? null
       : translate('updates.failure.releaseListFailed', UPDATER_FAILURE_COPY.releaseListFailed, {
-          channel,
+          channel: getReleaseChannelLabel(channel),
           status
         })
   },
@@ -141,7 +159,7 @@ const COPY: Record<UpdaterFailureCode, (param: Param, count: CountParam) => stri
       : translate(
           'updates.failure.releaseListUnreadable',
           UPDATER_FAILURE_COPY.releaseListUnreadable,
-          { channel }
+          { channel: getReleaseChannelLabel(channel) }
         )
   },
   rateLimitedSoon: () =>
