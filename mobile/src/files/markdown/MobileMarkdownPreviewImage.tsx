@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { useCallback, useEffect, useState } from 'react'
+import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native'
 import { colors, spacing, typography, pressedStyle } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -11,6 +11,7 @@ import type { MobileFilePreviewRpcSender } from '../preview/mobile-file-preview-
 import { loadMarkdownPreviewImage } from './mobile-markdown-image-source'
 import { translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { MobileMarkdownImageAsset } from './MobileMarkdownImageAsset'
 
 type Props = {
   client: MobileFilePreviewRpcSender | null
@@ -36,6 +37,12 @@ export function MobileMarkdownPreviewImage({
   const [load, setLoad] = useState<{ uri?: string; error?: string }>({})
   const [attempt, setAttempt] = useState(0)
   const [expanded, setExpanded] = useState(false)
+  const [availableWidth, setAvailableWidth] = useState(0)
+  const onImageError = useCallback(() => {
+    setLoad({
+      error: translate('files.markdownPreviewImage.loadFailed', 'Unable to load image')
+    })
+  }, [])
   useEffect(() => {
     let cancelled = false
     void loadMarkdownPreviewImage(client, worktreeId, documentPath, href).then(
@@ -63,7 +70,14 @@ export function MobileMarkdownPreviewImage({
   const label = alt || t('files.markdownPreviewImage.imageLabel', 'Markdown image')
   const fallbackLink = load.error ? onOpenLink : undefined
   return (
-    <View style={styles.frame}>
+    <View
+      style={styles.frame}
+      onLayout={
+        Platform.OS === 'web'
+          ? undefined
+          : ({ nativeEvent }) => setAvailableWidth(nativeEvent.layout.width)
+      }
+    >
       {load.error ? (
         <MobileLoadErrorState
           error={load.error}
@@ -85,16 +99,13 @@ export function MobileMarkdownPreviewImage({
                 : t('files.markdownPreviewImage.expandFallback', 'Expand image')
           }
         >
-          <img
-            src={load.uri}
-            alt={label}
+          <MobileMarkdownImageAsset
+            key={load.uri}
+            uri={load.uri}
+            label={label}
             width={width}
-            style={{ display: 'block', maxWidth: '100%', height: 'auto' }}
-            onError={() =>
-              setLoad({
-                error: translate('files.markdownPreviewImage.loadFailed', 'Unable to load image')
-              })
-            }
+            availableWidth={availableWidth}
+            onError={onImageError}
           />
         </Pressable>
       ) : (
