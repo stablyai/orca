@@ -1,17 +1,20 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { textGenerationFailure } from '../text-generation-failure-copy'
 
-const eventSchema = z.object({
-  type: z.string(),
-  part: z.object({ id: z.string().optional(), text: z.string().optional() }).optional(),
-  error: z
-    .object({
-      name: z.string().optional(),
-      message: z.string().optional(),
-      data: z.object({ message: z.string().optional() }).optional()
-    })
-    .optional()
-})
+const eventSchema = lazyZodSchema(() =>
+  z.object({
+    type: z.string(),
+    part: z.object({ id: z.string().optional(), text: z.string().optional() }).optional(),
+    error: z
+      .object({
+        name: z.string().optional(),
+        message: z.string().optional(),
+        data: z.object({ message: z.string().optional() }).optional()
+      })
+      .optional()
+  })
+)
 
 /** `errorCode` marks Orca's own parse failures; an uncoded `error` is the agent's text. */
 export type GenerationOutputParse =

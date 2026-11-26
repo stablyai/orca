@@ -1,3 +1,4 @@
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 // What the owner answered on a bot's offer cards, card by card. Kept on the bot, so a card reads its own answer
 // after a reload or on another device, and one card's answer never touches another's.
 import * as z from 'zod'
@@ -29,10 +30,12 @@ type BotOfferAnswerField = (typeof BOT_OFFER_ANSWER_FIELDS)[number]
 
 /** `bots.update`'s `offerAnswer`: an answer, written only while its fields are unanswered when `claim` is set, or
  *  `release`, which takes a field back off after its send was refused. */
-export const BotOfferAnswerUpdateSchema = BotOfferAnswerSchema.extend({
-  claim: z.literal(true).optional(),
-  release: z.enum(BOT_OFFER_ANSWER_FIELDS).optional()
-})
+export const BotOfferAnswerUpdateSchema = lazyZodSchema(() =>
+  BotOfferAnswerSchema.extend({
+    claim: z.literal(true).optional(),
+    release: z.enum(BOT_OFFER_ANSWER_FIELDS).optional()
+  })
+)
 
 export type BotOfferAnswerUpdate = z.infer<typeof BotOfferAnswerUpdateSchema>
 
