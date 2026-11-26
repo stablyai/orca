@@ -327,9 +327,19 @@ export const link480 = defineFixture(fromLink(480))
 // The shared link in the locales with the longest Use chat defaults: the footer stays on one row.
 const linkIn = (language: 'de' | 'es' | 'ru') => ({
   ...fromLink(340),
-  interact: async () => {
+  interact: async (frame: HTMLElement) => {
+    fromLink(340).interact(frame)
     await i18n.changeLanguage(await loadRendererUiLanguage(language))
     await new Promise((resolve) => setTimeout(resolve, 200))
+    const footer = document.querySelector<HTMLElement>('[data-slot="dialog-footer"]')
+    const start = footer?.querySelector<HTMLElement>('[data-slot="dialog-footer-start"]')
+    const actions = footer?.querySelector<HTMLElement>('[data-slot="dialog-footer-actions"]')
+    if (!start?.textContent || !actions) {
+      throw new Error('Use chat defaults must show for a link that keeps Ask')
+    }
+    if (Math.abs(start.getBoundingClientRect().top - actions.getBoundingClientRect().top) > 8) {
+      throw new Error('The footer must stay on one row')
+    }
   }
 })
 export const linkDe340 = defineFixture(linkIn('de'))

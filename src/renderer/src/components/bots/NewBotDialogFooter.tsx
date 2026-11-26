@@ -65,7 +65,9 @@ export function NewBotDialogFooter({
                 }
               }}
             >
-              <span className="truncate">{t('bots.new.useChatDefaults', 'Use chat defaults')}</span>
+              <span className="truncate py-0.5">
+                {t('bots.new.useChatDefaults', 'Use chat defaults')}
+              </span>
             </Button>
           </div>
         ) : null
