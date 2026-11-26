@@ -24,8 +24,10 @@ export class KimchiPrefillExtension {
     let installed: string | undefined
     try {
       installed = readFileSync(path, 'utf8')
-    } catch {
-      installed = undefined
+    } catch (error) {
+      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
+        return
+      }
     }
     if (installed !== undefined && !installed.includes(ORCA_MANAGED_EXTENSION_MARKER)) {
       return

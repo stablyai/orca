@@ -2,6 +2,7 @@ import { homedir } from 'node:os'
 import { realpath } from 'node:fs/promises'
 import {
   AGENT_TRUST_WRITE_DEADLINE_MS,
+  awaitValueWithinDeadline,
   SHORT_AGENT_TRUST_WRITE_DEADLINE_MS
 } from './agent-trust-write-deadline'
 import type { AgentTrustPreset } from './agent-trust-presets'
@@ -51,7 +52,11 @@ async function canonicalizeWslGuestWorkspacePath(
   workspacePath: string,
   guestPath: string
 ): Promise<string> {
-  const canonicalHostPath = await realpath(workspacePath).catch(() => null)
+  const canonicalHostPath = await awaitValueWithinDeadline(
+    realpath(workspacePath).catch(() => null),
+    SHORT_AGENT_TRUST_WRITE_DEADLINE_MS,
+    null
+  )
   if (!canonicalHostPath) {
     return guestPath
   }
