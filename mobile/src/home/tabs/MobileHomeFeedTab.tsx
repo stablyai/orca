@@ -28,6 +28,7 @@ export function MobileHomeFeedTab(props: {
   onOpenHost: (host: HostCatalogEntry) => void
   onOpenHostActions: (host: HostCatalogEntry) => void
   onPairDesktop: () => void
+  onPastePairingCode: (code: string) => void
   onOpenTasks: (hostId: string) => void
   onOpenSettings: () => void
 }) {
@@ -58,8 +59,8 @@ export function MobileHomeFeedTab(props: {
         <MobileHomeEmptyState
           contentMaxWidth={contentMaxWidth}
           isWideLayout={isWideLayout}
-          bottomInset={props.bottomInset}
-          onPairDesktop={props.onPairDesktop}
+          onScanCode={props.onPairDesktop}
+          onPasteCode={props.onPastePairingCode}
         />
       </>
     )
