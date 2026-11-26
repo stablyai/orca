@@ -7,6 +7,13 @@ export function withholdSafeStorage(reason: string): void {
   withheldReason ??= reason
 }
 
+/** Lift a withhold only if `reason` still owns it, so an unrelated fence stays in place. */
+export function releaseSafeStorageWithhold(reason: string): void {
+  if (withheldReason === reason) {
+    withheldReason = null
+  }
+}
+
 export function safeStorageWithheldReason(): string | null {
   return withheldReason
 }
