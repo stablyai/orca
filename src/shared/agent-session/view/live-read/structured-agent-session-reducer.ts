@@ -4,7 +4,9 @@ import {
   hostClockField,
   replacePage,
   mergeItems,
-  liveItemsWithinWindow
+  mergeLiveItems,
+  liveItemsWithinWindow,
+  hasOlderAfterMerge
 } from '../structured-agent-session-history-state'
 import {
   currentRequestsAfterEvent,
@@ -270,11 +272,10 @@ export function reduceStructuredAgentSession(
   ) {
     return state
   }
-  const merged = journalUnchanged
-    ? state.items
-    : mergeItems(state.items, liveItems, event.batch.removedItemIds)
-  // Retained items already fit the limits, which only grow, so an unchanged journal skips the scan.
-  const items = journalUnchanged
+  const { items: merged, rescan } = journalUnchanged
+    ? { items: state.items, rescan: false }
+    : mergeLiveItems(state.items, liveItems, event.batch.removedItemIds)
+  const items = !rescan
     ? merged
     : trimRetainedItems(
         merged,
@@ -296,8 +297,7 @@ export function reduceStructuredAgentSession(
     fence: event.fence ?? state.fence,
     items,
     subagentRoster,
-    // A trim leaves older items behind the cursor, so paging must stay offered.
-    hasOlder: agentSessionHasOlderTranscript(items, items.length < merged.length || state.hasOlder),
+    hasOlder: hasOlderAfterMerge(state.items, items, items.length < merged.length, state.hasOlder),
     submissions:
       event.batch.submissions.length === 0 && event.batch.removedItemIds.length === 0
         ? state.submissions

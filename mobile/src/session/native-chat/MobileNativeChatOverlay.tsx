@@ -5,9 +5,7 @@ import { Activity, useCallback, useLayoutEffect, useMemo, useRef, useState } fro
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
 import { useMobileNativeChatProjection } from './transcript/projection/use-mobile-native-chat-projection'
-import { nativeChatDockedTaskList } from '../../../../src/shared/native-chat/input/task-lists/native-chat-task-list-state'
-
-const docked = nativeChatDockedTaskList
+import { nativeChatDockedTaskList as docked } from '../../../../src/shared/native-chat/input/task-lists/native-chat-task-list-state'
 import type { MobileNativeChatImageAttachments } from './composer/attachments/use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 import { useMobileNativeChatFiles } from './links/use-mobile-native-chat-files'
@@ -350,6 +348,7 @@ function MobileNativeChatOverlayContent({
                       onLoadEarlier={session.loadEarlier}
                       onSend={images.sendNativeChat}
                       sendSurfaceId={sendSurfaceId}
+                      sessionId={sessionId}
                       getSendCompletionGeneration={getSendCompletionGeneration}
                       getComposerEditGeneration={controller.getChatComposerEditGeneration}
                       pending={controller.chatPending}

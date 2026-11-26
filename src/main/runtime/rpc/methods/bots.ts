@@ -11,6 +11,10 @@ import {
   type BotChatResetParams,
   type BotUpdateParams
 } from '../../../../shared/rpc-contract/bots-params'
+import {
+  BotSlackIconUpload,
+  BotSlackIconWanted
+} from '../../../../shared/rpc-contract/bot-avatar-params'
 import { googleSetupRuns } from '../../../google/google-setup-runs'
 import { readSharedBotActivity } from '../../../bots/bot-activity-host'
 import { runtimeBotChats, startBotSession, botOnAgent } from '../../../bots/bot-chat-session'
@@ -50,7 +54,8 @@ async function updateBot(params: BotUpdateParams, context: RpcContext) {
   }
   const bot = await context.runtime.bots.update(params.botId, params.updates)
   if (params.updates.skillProjects !== undefined) {
-    relinkBotSkills(bot, context.runtime.listRepos())
+    // Replies after the links and caches change, so a `/` menu opened next lists them.
+    await relinkBotSkills(bot, context.runtime.listRepos())
   }
   if (params.updates.agent !== undefined) {
     void linkBotOwnSkills(botHomeFolder(bot)).catch(() => {})
@@ -218,6 +223,24 @@ export const BOT_METHODS = [
       params.catalogRevision === undefined
         ? { png: (await runtime.bots.readAvatarImage(params.botId))?.toString('base64') ?? null }
         : runtime.bots.generationRevision(params.botId, params.catalogRevision, params.catalogEpoch)
+  }),
+  defineMethod({
+    name: 'bots.avatar.slackIcon.wanted',
+    permission: 'workspace',
+    params: BotSlackIconWanted,
+    handler: (params, { runtime }) => runtime.bots.slackIcons.wanted(params.botId, params.look)
+  }),
+  defineMethod({
+    name: 'bots.avatar.slackIcon.upload',
+    permission: 'workspace',
+    params: BotSlackIconUpload,
+    handler: async (params, { runtime }) => ({
+      stored: await runtime.bots.slackIcons.store(
+        params.botId,
+        params.look,
+        Buffer.from(params.png, 'base64')
+      )
+    })
   }),
   defineMethod({
     name: 'bots.activity',

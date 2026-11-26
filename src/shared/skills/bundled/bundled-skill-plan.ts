@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import {
   isSkillInstallProviderId,
   type SkillInstallProviderId
@@ -114,6 +115,16 @@ export type BundledSkillPlan = {
   planDigest: string
 }
 
+export type BundledSkillBackupRefusal = {
+  path: string
+  source: 'in-place' | 'leftover' | 'moved-aside'
+  /**
+   * Later plans may not mention this copy (a former agent root's, or a retired copy put back in
+   * place), so this result is its only notice.
+   */
+  onlyNotice?: true
+}
+
 export type BundledSkillOpOutcome = {
   path: string
   kind: BundledSkillOpKind
@@ -122,8 +133,19 @@ export type BundledSkillOpOutcome = {
   error?: string
   /** Where Replace or a non-released old copy was moved. */
   backupPath?: string
+  /** Every backup this op completed, in order; `backupPath` is the first, for older readers. */
+  backupPaths?: string[]
   /** The new copy is in, but edits saved during the swap could not be backed up and remain here. */
   strandedPath?: string
+  /** The op published its new copy or link before a later check or backup failed. */
+  contentApplied?: true
+  /**
+   * After a later step failed, the kept place was rechecked and still matches the plan: a folder's
+   * bytes, or a link's target (not the bytes it points to). Nothing was written there.
+   */
+  currentConfirmed?: true
+  /** The refused cross-drive backup's source, including copies moved aside before the attempt. */
+  backupRefusal?: BundledSkillBackupRefusal
 }
 
 export type BundledSkillOutcome = {
@@ -138,51 +160,61 @@ export type BundledSkillInstallResult = {
   skills: readonly BundledSkillOutcome[]
 }
 
-const BundledSkillForceSchema = z.array(z.string().min(1).max(4096)).max(256)
+const BundledSkillForceSchema = lazyZodSchema(() => z.array(z.string().min(1).max(4096)).max(256))
 
 /** Frozen strict skills.bundled-orca.v1 request for the host’s own global homes; adding fields requires a new capability because older hosts reject them. */
-export const BundledSkillPlanRequestSchema = z.strictObject({
-  force: BundledSkillForceSchema.optional(),
-  /** Install named host-shipped skills; absent means update installed skills only. Reject names the host does not ship. */
-  names: z
-    .array(z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/u))
-    .min(1)
-    .max(64)
-    .optional()
-})
+export const BundledSkillPlanRequestSchema = lazyZodSchema(() =>
+  z.strictObject({
+    force: BundledSkillForceSchema.optional(),
+    /** Install named host-shipped skills; absent means update installed skills only. Reject names the host does not ship. */
+    names: z
+      .array(z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/u))
+      .min(1)
+      .max(64)
+      .optional()
+  })
+)
 export type BundledSkillPlanRequest = z.infer<typeof BundledSkillPlanRequestSchema>
 
-const PlanDigestSchema = z.string().regex(/^[0-9a-f]{64}$/u)
+const PlanDigestSchema = lazyZodSchema(() => z.string().regex(/^[0-9a-f]{64}$/u))
 
 /** Runs the plan `request` produced, identified by its digest; the ops are never re-sent. */
-export const BundledSkillExecuteRequestSchema = z.strictObject({
-  planDigest: PlanDigestSchema,
-  request: BundledSkillPlanRequestSchema
-})
+export const BundledSkillExecuteRequestSchema = lazyZodSchema(() =>
+  z.strictObject({
+    planDigest: PlanDigestSchema,
+    request: BundledSkillPlanRequestSchema
+  })
+)
 export type BundledSkillExecuteRequest = z.infer<typeof BundledSkillExecuteRequestSchema>
 
 /** Silently updates only hash-verified Orca copies of the named installed skills; never writes elsewhere. */
-export const BundledSkillAutoUpdateRequestSchema = z.strictObject({
-  names: z
-    .array(z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/u))
-    .min(1)
-    .max(64),
-  /** Only record which copies already hold this build's bytes; never update any skill. Hosts
-   *  that predate it reject the request, so they write nothing either. */
-  recordOnly: z.literal(true).optional()
-})
+export const BundledSkillAutoUpdateRequestSchema = lazyZodSchema(() =>
+  z.strictObject({
+    names: z
+      .array(z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/u))
+      .min(1)
+      .max(64),
+    /** Only record which copies already hold this build's bytes; never update any skill. Hosts
+     *  that predate it reject the request, so they write nothing either. */
+    recordOnly: z.literal(true).optional()
+  })
+)
 export type BundledSkillAutoUpdateRequest = z.infer<typeof BundledSkillAutoUpdateRequestSchema>
 // Desktop IPC may target a chat provider without a CLI on PATH; the remote v1 schema stays frozen.
-export const LocalBundledSkillPlanRequestSchema = BundledSkillPlanRequestSchema.extend({
-  agent: z
-    .custom<SkillInstallProviderId>(
-      (value) => typeof value === 'string' && isSkillInstallProviderId(value)
-    )
-    .optional()
-})
+export const LocalBundledSkillPlanRequestSchema = lazyZodSchema(() =>
+  BundledSkillPlanRequestSchema.extend({
+    agent: z
+      .custom<SkillInstallProviderId>(
+        (value) => typeof value === 'string' && isSkillInstallProviderId(value)
+      )
+      .optional()
+  })
+)
 export type LocalBundledSkillPlanRequest = z.infer<typeof LocalBundledSkillPlanRequestSchema>
 
-export const LocalBundledSkillExecuteRequestSchema = BundledSkillExecuteRequestSchema.extend({
-  request: LocalBundledSkillPlanRequestSchema
-})
+export const LocalBundledSkillExecuteRequestSchema = lazyZodSchema(() =>
+  BundledSkillExecuteRequestSchema.extend({
+    request: LocalBundledSkillPlanRequestSchema
+  })
+)
 export type LocalBundledSkillExecuteRequest = z.infer<typeof LocalBundledSkillExecuteRequestSchema>

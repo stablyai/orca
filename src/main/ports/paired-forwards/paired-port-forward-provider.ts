@@ -2,7 +2,10 @@ import { createServer, type Server, type Socket } from 'node:net'
 import { BROWSER_NETWORK_TUNNEL_MAX_STREAMS } from '../../browser/network/tunnels/browser-network-tunnel-stream-state'
 import { reserveBrowserTunnelOrcaListenerPort } from '../../browser/network/tunnels/browser-network-tunnel-destination-policy'
 import { pipeUpstreamToClient } from '../../browser/network/tunnels/remote-browser-socks-upstream'
-import { createSocksClientAdmission } from '../../browser/network/tunnels/remote-browser-socks-client-owner'
+import {
+  createSocksClientAdmission,
+  holdSocksClientOwnerLookup
+} from '../../browser/network/tunnels/remote-browser-socks-client-owner'
 import { listenForPortForward } from '../../ssh/port-forwarding/ssh2-port-forward-provider'
 import type {
   PortForwardStartOptions,
@@ -33,7 +36,7 @@ export class PairedPortForwardProvider implements SshPortForwardProvider<PairedP
     let closed = false
     const target = { host: options.remoteHost, port: options.remotePort }
 
-    // Another OS account on this computer may not ride this desktop's pairing (uid on Linux, SID on Windows).
+    // Another OS account on this computer may not ride this desktop's pairing (uid on Linux, SID on Windows, own processes on macOS).
     const admitClient = createSocksClientAdmission('port forward')
     const forward = (socket: Socket): void => {
       tunnel.open(target).then(
@@ -75,7 +78,14 @@ export class PairedPortForwardProvider implements SshPortForwardProvider<PairedP
       return server
     }
 
-    const servers = [await listen(options.localHost, options.localPort)]
+    // Held before the first connection can arrive, so admission never finds the lookup stopped.
+    const releaseOwnerLookup = holdSocksClientOwnerLookup()
+    const servers = [
+      await listen(options.localHost, options.localPort).catch((error: unknown) => {
+        releaseOwnerLookup()
+        throw error
+      })
+    ]
     const address = servers[0]!.address()
     const localPort = typeof address === 'object' && address ? address.port : options.localPort
     // Browsers try [::1] first for localhost, so the forward holds that address too; a later local
@@ -93,6 +103,7 @@ export class PairedPortForwardProvider implements SshPortForwardProvider<PairedP
           socket.destroy()
         }
         await new Promise((resolve) => servers[0]!.close(resolve))
+        releaseOwnerLookup()
         throw error
       }
     }
@@ -105,6 +116,7 @@ export class PairedPortForwardProvider implements SshPortForwardProvider<PairedP
       }
       closed = true
       releaseReservation()
+      releaseOwnerLookup()
       for (const socket of activeSockets) {
         socket.destroy()
       }

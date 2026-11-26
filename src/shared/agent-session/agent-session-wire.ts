@@ -287,6 +287,9 @@ export type AgentSessionStatusSummary = {
   /** The chat runs a program the host already has, so it needs no Orca-installed runtime.
    *  Absent from older hosts. */
   hostProgram?: true
+  /** The chat runs on the host program's own login, which the sign-in method saved in Orca
+   *  doesn't change (an Antigravity chat on agy's own home). Absent from older hosts. */
+  ownLogin?: true
   /** Host-path directory the session is held to regardless of its workspace's current directory
    *  (a floating chat's pinned folder). Absent means resolve the workspace id; older hosts omit it. */
   launchDirectory?: string

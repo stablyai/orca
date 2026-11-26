@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
   readAntigravityMacOSCredential,
@@ -22,6 +22,12 @@ export {
   createAntigravityFileCredentialBackend,
   isAntigravityFileStorageHost
 } from './native-file-credentials'
+
+const markerPresent = (path: string): Promise<boolean> =>
+  stat(path).then(
+    () => true,
+    () => false
+  )
 
 const CONFLICT =
   'The native Antigravity credential changed during selection; refresh before retrying.'
@@ -56,7 +62,7 @@ export function createAntigravityHostCredentialBackend(home: string): Antigravit
   const keyring = hostKeyring()
   const marker = antigravityKeyringFallbackMarker(home)
   async function read() {
-    if (existsSync(marker)) {
+    if (await markerPresent(marker)) {
       throw new Error(
         'Antigravity has a keyring fallback marker; Orca cannot verify which credential store agy will use.'
       )
@@ -70,7 +76,7 @@ export function createAntigravityHostCredentialBackend(home: string): Antigravit
         throw new Error(CONFLICT)
       }
       const native = await keyring.read()
-      if (existsSync(marker)) {
+      if (await markerPresent(marker)) {
         throw new Error(CONFLICT)
       }
       if (native) {

@@ -6,7 +6,6 @@ import { join } from 'node:path'
 import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import type { StructuredAgentSessionAdapter } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { ProviderAcquisitionStarts } from '../../provider-process/provider-acquisition-starts'
-import { removeAntigravitySignInSessionFiles } from '../../antigravity/antigravity-sign-in-session-files'
 import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from '../../text-generation/execution/source-control-generation-limits'
 import { resolveAcpLaunchInvocation } from '../launch/acp-structured-launch-resolution'
 import { acpLaunchSpecForAccount } from '../launch/acp-launch-command'
@@ -24,6 +23,7 @@ import {
   TASK_ENV_TO_DELETE
 } from './acp-text-task-policy'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
+import { isAcpToolWork } from '../session/acp-tool-free-run'
 import type { AcpStructuredSessionAdapterDeps } from '../session/acp-structured-session-adapter-deps'
 import { grokTextTaskPreservesAccount, runGrokTextTask } from '../../grok/grok-text-task'
 
@@ -89,7 +89,6 @@ export class AcpTextTasks {
     }
     let connection: AcpStructuredConnection | undefined
     let cwd: string | undefined
-    let home = ''
     let sessionId = ''
     let modeConfigId = 'mode'
     let completed = false
@@ -104,9 +103,6 @@ export class AcpTextTasks {
       }
       disposed = true
       try {
-        if (spec.agent === 'antigravity') {
-          await removeAntigravitySignInSessionFiles(home, sessionId, cwd)
-        }
         await rm(cwd, { recursive: true, force: true })
       } catch (error) {
         this.deps.logger?.warn('Naming helper files could not be removed', {
@@ -132,7 +128,6 @@ export class AcpTextTasks {
         ),
         signal
       )
-      home = launch.env.GEMINI_HOME ?? ''
       cwd = await mkdtemp(join(tmpdir(), 'orca-chat-name-'))
       if (spec.agent === 'grok') {
         cwd = await realpath(cwd)
@@ -192,7 +187,7 @@ export class AcpTextTasks {
           return
         }
         const update = params.update
-        if (update.sessionUpdate === 'tool_call' || update.sessionUpdate === 'tool_call_update') {
+        if (isAcpToolWork(update)) {
           failed.abort(new Error('The naming agent attempted tool work'))
         }
         if (

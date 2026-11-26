@@ -1,6 +1,7 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import { clearClientHostedBrowserRowSelection } from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
 import { noteUserWorkspaceSwitch } from '@/lib/workspace/activation/workspace-switch-user-act'
+import { cancelPendingBotThreadOpen } from '@/lib/agent-session/open/bot-thread-open-lifecycle'
 import { useAppStore } from '@/store/index'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import type { TabBarItem } from './tab-bar-item-model'
@@ -65,6 +66,7 @@ export function useTabBarItemActions(source: TabBarItemActionSource): TabBarItem
   return useMemo(() => {
     // Clear client-hosted selection for every real-tab activation, including re-clicks that leave activeTabId unchanged.
     function activateRealTab(activate: () => void): void {
+      cancelPendingBotThreadOpen()
       clearClientHostedBrowserRowSelection()
       // Picking a tab is the user acting on its workspace: its restore may start a stopped distro.
       noteUserWorkspaceSwitch(useAppStore.getState().activeWorktreeId)

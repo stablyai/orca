@@ -133,12 +133,6 @@ export function primaryAgentCatalogEntries(): AgentCatalogEntry[] {
       homepageUrl: 'https://github.com/PrimeIntellect-ai/prime-agent'
     },
     {
-      id: 'gemini',
-      label: translate('auto.lib.agent.catalog.12e6baa4f7', 'Gemini'),
-      cmd: 'gemini',
-      homepageUrl: 'https://github.com/google-gemini/gemini-cli'
-    },
-    {
       id: 'antigravity',
       label: translate('auto.lib.agent.catalog.691dd11789', 'Antigravity'),
       cmd: 'agy',

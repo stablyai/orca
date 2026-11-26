@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import type { ParsedTaskQuery } from '../../../../shared/work-items/task-query'
 import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
 import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
@@ -9,7 +10,7 @@ import { buildWorkItemListRequest } from './work-item-list-request'
 import { searchWorkItemPage, usesGraphqlWorkItemSearch } from './work-item-search-page'
 
 const PR_NODE_SELECTION = `__typename ... on PullRequest {
-  number title state url updatedAt isDraft headRefName baseRefName headRefOid
+  number title state url createdAt updatedAt isDraft headRefName baseRefName headRefOid
   headRepositoryOwner { login }
   author { __typename login avatarUrl ... on User { name } }
   labels(first: 100) { nodes { name } pageInfo { hasNextPage } }
@@ -24,46 +25,51 @@ const PR_NODE_SELECTION = `__typename ... on PullRequest {
     pageInfo { hasNextPage }
   }
 }`
-const actorSchema = z.object({
-  __typename: z.string().optional(),
-  login: z.string(),
-  avatarUrl: z.string(),
-  name: z.string().nullish()
-})
-const prNodeSchema = z.object({
-  __typename: z.literal('PullRequest'),
-  number: z.number().int().positive(),
-  title: z.string(),
-  state: z.enum(['OPEN', 'CLOSED', 'MERGED']),
-  url: z.string(),
-  updatedAt: z.string(),
-  isDraft: z.boolean(),
-  headRefName: z.string(),
-  baseRefName: z.string(),
-  headRefOid: z.string(),
-  headRepositoryOwner: z.object({ login: z.string() }).nullable(),
-  author: actorSchema.nullable(),
-  labels: z.object({
-    nodes: z.array(z.object({ name: z.string() })),
-    pageInfo: z.object({ hasNextPage: z.literal(false) })
-  }),
-  reviewRequests: z.object({
-    nodes: z.array(
-      z
-        .object({
-          requestedReviewer: z
-            .object({
-              login: z.string().optional(),
-              avatarUrl: z.string().optional(),
-              name: z.string().nullish()
-            })
-            .nullable()
-        })
-        .nullable()
-    ),
-    pageInfo: z.object({ hasNextPage: z.literal(false) })
+const actorSchema = lazyZodSchema(() =>
+  z.object({
+    __typename: z.string().optional(),
+    login: z.string(),
+    avatarUrl: z.string(),
+    name: z.string().nullish()
   })
-})
+)
+const prNodeSchema = lazyZodSchema(() =>
+  z.object({
+    __typename: z.literal('PullRequest'),
+    number: z.number().int().positive(),
+    title: z.string(),
+    state: z.enum(['OPEN', 'CLOSED', 'MERGED']),
+    url: z.string(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+    isDraft: z.boolean(),
+    headRefName: z.string(),
+    baseRefName: z.string(),
+    headRefOid: z.string(),
+    headRepositoryOwner: z.object({ login: z.string() }).nullable(),
+    author: actorSchema.nullable(),
+    labels: z.object({
+      nodes: z.array(z.object({ name: z.string() })),
+      pageInfo: z.object({ hasNextPage: z.literal(false) })
+    }),
+    reviewRequests: z.object({
+      nodes: z.array(
+        z
+          .object({
+            requestedReviewer: z
+              .object({
+                login: z.string().optional(),
+                avatarUrl: z.string().optional(),
+                name: z.string().nullish()
+              })
+              .nullable()
+          })
+          .nullable()
+      ),
+      pageInfo: z.object({ hasNextPage: z.literal(false) })
+    })
+  })
+)
 
 export async function listPullRequestWorkItemPage(args: {
   ownerRepo: OwnerRepo
