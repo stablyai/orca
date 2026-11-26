@@ -257,6 +257,8 @@ export class MobileEndpointSupervisor {
     let retryAfterOperation = false
     // Only an operation that withdrew without dialing replays a queued race; a failed dial books its own retry.
     let withdrewWithoutDial = false
+    // A paused pending left nothing to dial; a lease retry before the pause ends would only reread the keychain.
+    let leaseRetryFloorMs = 5000
     try {
       const selection = await selectDialableRelayCredentials({
         bundle: this.bundle,
@@ -297,6 +299,12 @@ export class MobileEndpointSupervisor {
         // Withdrawal is not failure; booking cooldown would delay genuine later recovery.
         return
       }
+      if (dialed.error === null) {
+        leaseRetryFloorMs = Math.max(
+          leaseRetryFloorMs,
+          this.sessionEstablisher.pendingPauseRemainingMs()
+        )
+      }
       // Record a dial completing after cleanup without recreating foreground timers.
       const scheduleRetry = (!forceReplacement || ownsRecovery) && this.isActive()
       this.relayReconnect.registerFailure(dialed.error, scheduleRetry, dialed.unconfirmed)
@@ -307,7 +315,7 @@ export class MobileEndpointSupervisor {
     } finally {
       this.operationInFlight = false
       if (forceReplacement && this.relayRotationPending && this.isActive()) {
-        this.leaseRotation.armRetry(this.relayReconnect.retryDelayMs(5000))
+        this.leaseRotation.armRetry(this.relayReconnect.retryDelayMs(leaseRetryFloorMs))
       }
       // Why: an unforced operation that skipped its dial (direct redialing) or was aborted
       // schedules no retry, so a direct-grace race queued behind it would wait for the next state change.

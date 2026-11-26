@@ -78,6 +78,13 @@ export class MobileRelaySessionEstablisher {
     this.hostOfflineStreak = new RelayHostOfflineStreak(() => args.logical.getLastConnectedAt())
   }
 
+  // Time left before a paused pending may dial again; zero while it isn't paused.
+  pendingPauseRemainingMs(): number {
+    return this.pendingFailures >= PENDING_DIAL_BUDGET
+      ? Math.max(0, this.pendingPausedUntil - this.args.now())
+      : 0
+  }
+
   refillPendingBudget(): void {
     this.pendingFailures = 0
     this.pendingPauseMs = PENDING_PAUSE_MIN_MS
@@ -124,7 +131,13 @@ export class MobileRelaySessionEstablisher {
       return { outcome: 'failed', error: null, unconfirmed: true }
     }
     this.resolvedThisAttempt = false
+    let directorRefused = false
     for (const credential of ordered) {
+      // After a director 401 the rest only redial the cell that sent us there, which can know only the newer
+      // pending install; redialing current or grace would just repeat its wrong-assignment answer.
+      if (directorRefused && credential.token !== pendingToken) {
+        continue
+      }
       usedPending = credential.token === pendingToken
       // The director admits one resolve per host per window, so after any lookup the rest only dial the cell.
       const result = await this.dial(credential, !this.resolvedThisAttempt)
@@ -159,10 +172,11 @@ export class MobileRelaySessionEstablisher {
         continue
       }
       // A director 401 can be stale (it reads a store an edge-hosted host may have outgrown), so try
-      // the next credential without condemning this one.
+      // pending without condemning this one.
       if (!isDirectorRefusal(result.error)) {
         break
       }
+      directorRefused = true
     }
     return {
       outcome: 'failed',

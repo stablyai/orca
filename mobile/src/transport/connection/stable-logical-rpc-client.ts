@@ -208,7 +208,7 @@ export function createStableLogicalRpcClient(
         session: nextSession,
         snapshot: () => ({ state, suspended }),
         // Ignore late dial phases after close so they cannot revive the disconnected state, and while
-        // a refused or host-offline verdict stands: it outranks them, and each would re-project Home.
+        // a refused, offline or signed-out verdict stands: it outranks them, and each would re-project Home.
         publish: (next) => {
           if (!closed && !connectionPath.holdsSteadyVerdict()) {
             publishState(next)
