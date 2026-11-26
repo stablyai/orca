@@ -12326,9 +12326,6 @@
           "0f33af979b": "Checkout parcial. Arquivos fora desses caminhos não estão no disco.",
           "4f964d5e8c": "esparso",
           "7d517f82e2": "primária",
-          "4eba2ea99e": "Falha na renomeação automática. Clique para ver detalhes.",
-          "74522ee457": "falha ao renomear",
-          "02e19349f4": "Falha na renomeação automática: ver erro",
           "691ccfd622": "Excluindo…",
           "35ccfe2475": "Projeto {{value0}}",
           "57eaa61b55": "Ocultar espaços de trabalho filhos",
@@ -13031,9 +13028,7 @@
           "aed1623b1e": "Fechar",
           "eab8b45238": "Copiar erro",
           "a23b22d16f": "Copiado",
-          "74fc00776f": "Detalhes do erro",
-          "ca3b225195": "Falha na renomeação automática da branch",
-          "couldNotGenerateBranchName": "O Orca não conseguiu gerar um nome de branch para <name>{{name}}</name> a partir da primeira mensagem do agente."
+          "74fc00776f": "Detalhes do erro"
         },
         "CreateProjectLocationField": {
           "95548e33bf": "Escolher pasta pai...",

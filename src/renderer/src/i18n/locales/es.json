@@ -5730,9 +5730,7 @@
           "aed1623b1e": "Cerrar",
           "eab8b45238": "Error al copiar",
           "a23b22d16f": "Copiado",
-          "74fc00776f": "Detalles del error",
-          "ca3b225195": "Error en el nombre automático de rama",
-          "couldNotGenerateBranchName": "Orca no pudo generar un nombre de rama para <name>{{name}}</name> a partir del primer mensaje del agente."
+          "74fc00776f": "Detalles del error"
         },
         "CreateProjectLocationField": {
           "95548e33bf": "Elige carpeta padre...",
@@ -6165,9 +6163,6 @@
           "0f33af979b": "Checkout parcial. Los archivos fuera de estas rutas no están en disco.",
           "4f964d5e8c": "sparse",
           "7d517f82e2": "principal",
-          "4eba2ea99e": "Falló el nombre automático. Haz clic para ver detalles.",
-          "74522ee457": "falló el cambio de nombre",
-          "02e19349f4": "Error al cambiar el nombre automáticamente: ver error",
           "691ccfd622": "Eliminando…",
           "deleteFailed": "Error al eliminar",
           "35ccfe2475": "Proyecto {{value0}}",

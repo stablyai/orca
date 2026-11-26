@@ -6070,9 +6070,7 @@
           "aed1623b1e": "Fermer",
           "eab8b45238": "Copier l'erreur",
           "a23b22d16f": "Copied",
-          "74fc00776f": "Détails de l'erreur",
-          "ca3b225195": "Échec du nommage automatique de la branche",
-          "couldNotGenerateBranchName": "Orca n’a pas pu générer de nom de branche pour <name>{{name}}</name> à partir du premier message de l’agent."
+          "74fc00776f": "Détails de l'erreur"
         },
         "CreateProjectLocationField": {
           "95548e33bf": "Choisir un dossier parent...",
@@ -6512,9 +6510,6 @@
           "0f33af979b": "Checkout partiel. Les fichiers hors de ces chemins ne sont pas sur le disque.",
           "4f964d5e8c": "sparse",
           "7d517f82e2": "principal",
-          "4eba2ea99e": "Échec du nommage automatique. Cliquez pour voir les détails.",
-          "74522ee457": "échec du renommage",
-          "02e19349f4": "Échec du renommage auto : voir l'erreur",
           "691ccfd622": "Suppression…",
           "deleteFailed": "Échec de la suppression",
           "35ccfe2475": "Projet {{value0}}",

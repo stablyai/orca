@@ -19,6 +19,7 @@ import {
   BotGroupStop,
   BotGroupUpdate
 } from '../bots/bot-group'
+import { BotOfferAnswerParams } from '../bots/bot-offer-answers'
 import {
   BrowserClientFileChannelAbortParams,
   BrowserClientFileChannelBeginParams,
@@ -1079,6 +1080,8 @@ import { WorktreeCreate, WorktreePrefetchCreateBase } from './workspaces/worktre
 import {
   WorktreeActivate,
   WorktreeArchive,
+  WorktreeAutoNameParams,
+  WorktreeAutoNameWaitParams,
   WorktreeDetectedListParams,
   WorktreeForceDeleteBranch,
   WorktreeListParams,
@@ -1362,6 +1365,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.memory.forget': BotMemoryForget,
   'bots.memory.history': BotChat,
   'bots.memory.undo': BotMemoryUndo,
+  'bots.offer.answer': BotOfferAnswerParams,
   'bots.request.outcome': BotRequestOutcomeParams,
   'bots.roster': BotRoster,
   'bots.sendRunAgain': BotRunSendAgainParams,
@@ -2301,6 +2305,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.activate': WorktreeActivate,
   'worktree.adoptProvisionedRoot': WorktreeAdoptProvisionedRoot,
   'worktree.archive': WorktreeArchive,
+  'worktree.autoName.availability': WorktreeAutoNameParams,
+  'worktree.autoName.dismiss': WorktreeAutoNameParams,
+  'worktree.autoName.retry': WorktreeAutoNameParams,
+  'worktree.autoName.wait': WorktreeAutoNameWaitParams,
   'worktree.create': WorktreeCreate,
   'worktree.detectedList': WorktreeDetectedListParams,
   'worktree.forceDeleteBranch': WorktreeForceDeleteBranch,

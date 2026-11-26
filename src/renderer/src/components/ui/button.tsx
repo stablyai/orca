@@ -88,7 +88,7 @@ const buttonVariants = cva(
         // A quiet action on the notes panel.
         'media-paper-ghost':
           'text-media-paper-muted hover:bg-media-paper-hover hover:text-media-paper-foreground focus-visible:ring-media-note/50',
-        // The worktree card's "rename failed" chip, for a failure the user can open.
+        // A small red failure chip the user can open, e.g. a failed rebase.
         'destructive-chip':
           'border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive'
       },
