@@ -12,6 +12,10 @@ import type { BotHomeOf } from '../../shared/bots/bot-home-of'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { botShareChatFilter } from './team-share/bot-share-chats'
 import { botChatTreeForViewer } from './bot-chat-tree-viewer'
+import {
+  botSidebarListedChats,
+  withViewerChatTabs
+} from '../../shared/bots/bot-sidebar-chat-groups'
 
 const ALICE = 'acct-alice'
 const ALICE_TOO = 'acct-alice-2'
@@ -30,6 +34,7 @@ const ACTS_FOR: Record<string, ReturnType<typeof member>[] | [{ kind: 'owner' }]
   'alice-home': [member(ALICE)],
   'alice2-home': [member(ALICE_TOO)],
   'alice-side': [member(ALICE)],
+  'alice-new': [member(ALICE)],
   'owner-side': [{ kind: 'owner' }]
 }
 const sources = {
@@ -176,5 +181,47 @@ describe('two teammates both named Alice', () => {
         .map((e) => e.chatId)
         .sort()
     ).toEqual(['alice-home', 'alice2-home'])
+  })
+})
+
+describe('a teammate’s chats on their own sidebar', () => {
+  it('list by the tabs on their computer, never the host’s, which has none for them', () => {
+    // As the host builds it: the chats Alice started have no tab there; the owner's has one.
+    const chats = [
+      chat('owner-home', { origin: 'home', title: HOME_CHAT_TITLE, whoseHome: 'owner', tab: true }),
+      chat('alice-home', { title: 'Alice’s Home', whoseHome: { accountId: ALICE }, tab: false }),
+      chat('alice-new', { tab: false })
+    ]
+    const host = buildBotChatTree({
+      chats,
+      placed: placeBotChatDispatches(chats, [], homeOfChat),
+      workers: new Map()
+    })
+    const alice = botChatTreeForViewer(host, viewerAlice, { page: false })
+    expect(alice.chats.map((entry) => entry.tab)).toEqual([undefined, undefined])
+
+    const listed = botSidebarListedChats(
+      withViewerChatTabs(alice.chats, new Set(['alice-home', 'alice-new']))
+    )
+    expect(listed.map((entry) => [entry.chatId, entry.origin])).toEqual([
+      ['alice-home', 'home'],
+      ['alice-new', 'side']
+    ])
+    expect(
+      botSidebarListedChats(withViewerChatTabs(alice.chats, new Set(['alice-home']))).map(
+        (entry) => entry.chatId
+      )
+    ).toEqual(['alice-home'])
+  })
+
+  it('list Home always, owned or shared, made yet or not; other chats only with a tab', () => {
+    // Alice's Home not made yet (her placeholder row), and no tab of anything on her computer.
+    const { alice, owner } = trees(false)
+    expect(
+      botSidebarListedChats(withViewerChatTabs(alice.chats, new Set())).map((e) => e.chatId)
+    ).toEqual([NO_HOME_CHAT_ID])
+    // The owner's own agent: its Home lists with its tab closed, a side chat with no tab does not.
+    const ownerChats = owner.chats.map((entry) => ({ ...entry, tab: false }))
+    expect(botSidebarListedChats(ownerChats).map((e) => e.chatId)).toEqual(['owner-home'])
   })
 })

@@ -1,3 +1,4 @@
+import { fileExplorerOwnerReadOnly } from '../tree/file-explorer-types'
 import { preventSecondaryMenuSelection } from '@/components/ui/prevent-secondary-menu-selection'
 import React, { useCallback } from 'react'
 import {
@@ -119,7 +120,8 @@ export function FileExplorerRowContextMenu({
   )
   const revealBlocked = isRevealOrEditorOpenBlocked(revealOwner)
   // Why: only opened files save outside projects; main refuses tree edits under an outside folder link.
-  const writesBlocked = node.outsideProject === true
+  const writesBlocked =
+    node.outsideProject === true || fileExplorerOwnerReadOnly(node.operationOwner)
   const handleOpenInOrcaBrowser = useCallback(() => {
     if (!activeWorktreeId) {
       return

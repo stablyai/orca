@@ -1,5 +1,5 @@
 // What a teammate's invite shows of a shared agent besides its name and purpose: its mascot as its owner
-// dressed it, and the services it answers on besides Orca. It travels in the owner's hello and back on the
+// dressed it, and the services it uses besides Orca. It travels in the owner's hello and back on the
 // teammate's share list (the connector contract's AgentCardSchema; copied, since the CLI compiles src/shared
 // alone). Ids, not pictures: an uploaded picture stays on the owner's computer.
 import * as z from 'zod'
@@ -19,5 +19,5 @@ export const AgentCardSchema = z
 export type AgentCard = NonNullable<z.infer<typeof AgentCardSchema>>
 
 /** The services a card names, in the order the invite lists them. */
-export const AGENT_CARD_SERVICES = ['github', 'slack', 'linear'] as const
+export const AGENT_CARD_SERVICES = ['github', 'slack', 'linear', 'google'] as const
 export type AgentCardService = (typeof AGENT_CARD_SERVICES)[number]

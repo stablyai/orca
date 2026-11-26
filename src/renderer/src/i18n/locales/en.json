@@ -29861,7 +29861,6 @@
       "updating": "Updating…",
       "publishing": "Publishing…",
       "previewChanged": "The preview changed. Review it before publishing.",
-      "manageSharing": "Manage sharing…",
       "secretFoundTitle": "Secret found",
       "secretWhere": "{{flag}} in {{where}}, line {{line}}",
       "view": "View",
@@ -29902,10 +29901,8 @@
       "soul": "Soul",
       "add": "Add",
       "binaryFile": "Not text, so it isn’t shown.",
-      "isShared": "{{name}} is shared",
       "updatedJustNow": "Updated just now",
       "stopSharing": "Stop sharing",
-      "manageLinks": "Manage links",
       "done": "Done",
       "stopTitle": "Stop sharing {{name}}?",
       "stopDescription": "The link stops working.",
@@ -29971,9 +29968,9 @@
       },
       "notIncluded": "Not included",
       "copy": {
-        "sharedBy": "Shared by {{who}}",
         "viewOriginal": "View original",
-        "originalGone": "No longer available"
+        "originalGone": "No longer available",
+        "copiedFrom": "Copied from {{who}}"
       },
       "error": {
         "blocked": "A secret was found in what would be shared. Remove it, then try again.",
@@ -30968,7 +30965,6 @@
       "remove": "Remove",
       "removePerson": "Remove {{name}}",
       "resendInvite": "Resend invite",
-      "share": "Share…",
       "slackLine": "{{handle}} on Slack · {{workspace}}",
       "slackOnly": "Slack only",
       "slackPlace": "Slack · {{workspace}}",
@@ -30987,7 +30983,21 @@
       "discard": "Discard",
       "keepEditing": "Keep editing",
       "discardTitleOne": "Discard invite?",
-      "discardTitleMany": "Discard {{count}} invites?"
+      "discardTitleMany": "Discard {{count}} invites?",
+      "shareWithTeammates": "Share with teammates…"
+    },
+    "sharingPage": {
+      "teammates": "Teammates",
+      "teammatesFoot": "Runs on {{host}} with your accounts. You can see their chats with it, and each teammate sees only their own.",
+      "add": "Add",
+      "copyLink": "Copy link",
+      "createCopyLink": "Create copy link",
+      "anyoneCanCopy": "Anyone with the link can make a copy",
+      "linkActions": "Link actions",
+      "changeIncluded": "Change what’s included…",
+      "stopSharing": "Stop sharing…",
+      "allYourLinks": "All your links",
+      "alreadyUpToDate": "The link is already up to date"
     }
   },
   "plugins": {

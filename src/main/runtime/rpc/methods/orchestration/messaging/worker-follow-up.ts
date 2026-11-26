@@ -7,7 +7,6 @@ import {
 
 import { dispatchItemUid } from '../../../../../bots/bot-item-dispatch-facts'
 import { resolveItem } from '../../bots-items-write-support'
-import { itemsAccess } from '../../bots-items-caller'
 import { BOT_ITEM_ORIGIN_PREFIX } from '../../bots-items-worker-origin'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { parseWorkerTerminalPriorOwnerIds } from '../../../../orchestration/db/pane-key-match'
@@ -104,7 +103,7 @@ async function assertSameItem(
   forItem: string
 ): Promise<void> {
   const store = ctx.runtime.botItems.store()
-  const item = await resolveItem(store, forItem, itemsAccess(ctx))
+  const item = await resolveItem(store, forItem)
   // The worker's steps: the addressed one's, its newest one's, then those of every earlier owner of
   // its terminal, which a handed-over terminal parts, each read once. Past 200 it can't tell, so
   // refuses. Their starts settle it without a lookup; else two items linking them are enough to tell.

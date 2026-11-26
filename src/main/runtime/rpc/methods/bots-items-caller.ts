@@ -15,7 +15,6 @@ import { InvalidArgumentError, type RpcContext } from '../core'
 import { isBotOwnChat } from '../../../bots/bot-own-chat'
 import {
   botItemAccessOfCaller,
-  botItemAccessOfChat,
   botItemPeopleOfChat,
   type BotItemAccess
 } from '../../../bots/bot-item-access'
@@ -28,8 +27,6 @@ export type BotItemWriter = {
   /** The calling session itself (a /clear moves it on; the chat id is its lineage's root). */
   sessionId: string
   source: BotItemSource
-  /** The items this chat may read and change (`bot-item-access`). */
-  access: BotItemAccess
   /** Whom an item this chat adds acts for: its teammates' accounts, or null for the owner. */
   actsForAccounts: readonly string[] | null
 }
@@ -44,14 +41,22 @@ type CallerRuntime = Pick<
   | 'showAutomation'
 >
 
-/** The items a read may see, by the caller the host verified, never a claimed session. */
+/** The items a call may reach, by the caller the host verified (a chat's or worker's session, a
+ *  paired Orca), else the terminal its call names; never a claimed session id. */
 export function itemsAccess(
   context: Pick<RpcContext, 'runtime' | 'orchestrationCaller'> &
-    Partial<Pick<RpcContext, 'callerScope'>>
+    Partial<Pick<RpcContext, 'callerScope' | 'orchestrationCompatibilityEvidence'>>
 ): BotItemAccess {
+  const session = sessionCallerOf(context.orchestrationCaller)
+  const terminal = context.orchestrationCompatibilityEvidence
   return botItemAccessOfCaller(context.runtime, {
     share: botShareScopeOf(context),
-    sender: sessionCallerOf(context.orchestrationCaller) ?? null
+    peer: context.orchestrationCaller?.kind === 'peer',
+    identity: session
+      ? { handle: session.address, paneKey: session.paneKey, sessionId: session.sessionId }
+      : terminal?.terminalHandle || terminal?.paneKey
+        ? { handle: terminal.terminalHandle ?? '', paneKey: terminal.paneKey ?? null }
+        : null
   })
 }
 
@@ -121,7 +126,6 @@ export function itemsWriter(
     bot,
     actor: { kind: 'bot', botId: bot.id, chatId },
     sessionId,
-    access: botItemAccessOfChat(runtime, chatId),
     actsForAccounts: botItemPeopleOfChat(runtime, chatId),
     // Read only by writes that make an item or ask on one: it lists the bot's thread chats and runs.
     get source() {

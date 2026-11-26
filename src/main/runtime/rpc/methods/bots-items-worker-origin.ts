@@ -30,7 +30,7 @@ export async function checkedWorkerOrigin(
   // The caller's session comes from its credentials, not its say-so.
   const writer = itemsWriter(sessionId, { runtime: context.runtime, pairedDeviceId: undefined })
   const store = context.runtime.botItems.store()
-  const item = await resolveItem(store, origin.slice(BOT_ITEM_ORIGIN_PREFIX.length), writer.access)
+  const item = await resolveItem(store, origin.slice(BOT_ITEM_ORIGIN_PREFIX.length))
   if (!isOpenBotItemStatus(item.status)) {
     const closed = item.status === 'done' ? 'done' : 'canceled'
     throw new BotItemError(

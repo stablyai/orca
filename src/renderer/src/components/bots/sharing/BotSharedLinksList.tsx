@@ -1,6 +1,6 @@
 // Settings → Shared links → Bots: one row per live bot link, with the same actions as its dialog.
 import { useCallback, useEffect, useState } from 'react'
-import { ChevronRight, Clipboard, Link2Off, MoreHorizontal, RefreshCw } from 'lucide-react'
+import { ChevronRight, Link2Off, MoreHorizontal, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -20,6 +20,7 @@ import { listBotShares } from './bot-share-rpc'
 import { BotShareFlow } from './BotShareFlow'
 import type { BotShareStart } from './use-bot-share-link'
 import { BotShareStopDialog } from './BotShareStopDialog'
+import { ShareLinkCopyButton } from './ShareLinkCopyButton'
 
 const DATE: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }
 
@@ -53,15 +54,7 @@ function BotSharedLinkRow({
       <span className="shrink-0 text-[11px] text-muted-foreground">
         {Number.isNaN(created.getTime()) ? '' : uiDateTimeFormat(DATE, intlLocale).format(created)}
       </span>
-      <Button
-        type="button"
-        size="icon-sm"
-        variant="ghost"
-        aria-label={t('bots.share.copyLink', 'Copy link')}
-        onClick={() => void copy()}
-      >
-        <Clipboard />
-      </Button>
+      <ShareLinkCopyButton onCopy={() => void copy()} />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button

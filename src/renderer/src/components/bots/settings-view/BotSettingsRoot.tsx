@@ -1,5 +1,5 @@
 // The settings view's root: the bot's card, then Agent, Schedule, Soul and memory, Access and Notifications, then Delete.
-import { useContext, useState } from 'react'
+import { useContext } from 'react'
 import {
   Activity,
   BookOpen,
@@ -52,7 +52,6 @@ import {
 } from '../bot-settings-row-states'
 import { useBotTools } from '../bot-tool-checks'
 import { useDeleteBot } from '../use-delete-bot'
-import { BotShareFlow } from '../sharing/BotShareFlow'
 import { BotSharedFromLine } from './BotSharedFromLine'
 import { BotSharingGroup } from './BotSharingPage'
 import { useBotComputerName } from './BotComputerPage'
@@ -297,11 +296,9 @@ export function BotSettingsRoot({
   const deleteBot = useDeleteBot(bot)
   const controlsOff = useContext(SettingsControlsOffContext)
   const shareLabel = t('bots.settingsView.shareAction', 'Share')
-  const [sharing, setSharing] = useState(false)
   const picture = useBotPictureSetting(bot, update)
   return (
     <>
-      {sharing ? <BotShareFlow bot={bot} onClose={() => setSharing(false)} /> : null}
       <div className="rounded-[10px] bg-foreground/[0.035] p-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <fieldset disabled={controlsOff} className="contents">
@@ -333,7 +330,7 @@ export function BotSettingsRoot({
                     className="size-7"
                     aria-label={shareLabel}
                     disabled={controlsOff}
-                    onClick={() => setSharing(true)}
+                    onClick={() => open('sharing')}
                   >
                     <Share2 className="size-3.5" />
                   </Button>

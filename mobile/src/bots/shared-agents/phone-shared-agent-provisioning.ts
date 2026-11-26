@@ -67,7 +67,7 @@ export async function syncComputerShares(
   for (const share of shares) {
     const kept = store.get(share.shareId)
     if (kept && kept.pairedHostId === computer.pairedHostId && !needsKey(kept)) {
-      store.put({ ...kept, botName: share.botName, ownerName: share.ownerName })
+      store.put({ ...kept, ...listedFields(share) })
       continue
     }
     const provisioned = await provisionPhoneKey(computer, share, kept)
@@ -116,6 +116,7 @@ async function provisionPhoneKey(
     botId: grant.botId,
     botName: grant.botName,
     ownerName: grant.ownerName,
+    ...(share.accountId ? { accountId: share.accountId } : {}),
     environmentId: grant.environmentId,
     connectorOrigin: grant.connectorOrigin,
     hostKey: grant.hostKey,
@@ -124,6 +125,17 @@ async function provisionPhoneKey(
     deviceKey,
     credential,
     offer
+  }
+}
+
+/** What the computer's list says of a kept share: its names, and whose it is once a list names it. */
+function listedFields(
+  share: SharedBotPhoneShare
+): Pick<PhoneSharedAgent, 'botName' | 'ownerName' | 'accountId'> {
+  return {
+    botName: share.botName,
+    ownerName: share.ownerName,
+    ...(share.accountId ? { accountId: share.accountId } : {})
   }
 }
 

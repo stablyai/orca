@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
@@ -25,15 +25,25 @@ import {
   BOT_SHARE_SCOPED_METHODS,
   SHARE_BY_ATTACHMENT,
   SHARE_BY_BOT,
+  SHARE_BY_BOT_FOLDER,
   SHARE_BY_ENVELOPE_SESSION,
   SHARE_BY_SESSION
 } from '../../../../shared/bots/bot-share-rpc-methods'
+import { FileDirRead, FileTreePath } from '../../../../shared/rpc-contract/filesystem/files-params'
+import { confinedFolderRead, confinedFolderWatch } from '../methods/files/files-bot-folder-read'
+import { FileOpen } from '../../../../shared/rpc-contract/filesystem/files-target-params'
+import {
+  BotSlackBot,
+  BotSlackSetUp
+} from '../../../../shared/rpc-contract/bots-connector-setup-params'
 import { botShareMethodNames } from '../methods/rpc-method-share'
 import { defineMethod } from '../core'
 import { AgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store'
 import { setAgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import { RpcDispatcher } from '../dispatcher'
 import { ALL_RPC_METHODS } from '../methods/rpc-method-registry'
+import { STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS } from '../methods/structured-sessions/catalog/structured-agent-session-options-read'
+import { STRUCTURED_AGENT_SESSION_PROMPT_RESPONSE_METHODS } from '../methods/structured-sessions/conversation/structured-agent-session-prompt-response'
 import { BOT_METHODS } from '../methods/bots'
 import { STATUS_METHODS } from '../methods/host-management/status'
 import { STRUCTURED_AGENT_SESSION_STATUS_METHODS } from '../methods/structured-sessions/subscriptions/structured-agent-session-status-stream'
@@ -96,6 +106,7 @@ let directory: string
 let db: OrchestrationDb
 let dispatcher: RpcDispatcher
 let runtime: OrcaRuntimeService
+let homes: { shared: string; other: string }
 
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'bot-share-admission-'))
@@ -112,6 +123,27 @@ beforeEach(() => {
     })
   vi.spyOn(runtime, 'restoreStructuredAgentSessionTabs').mockResolvedValue(undefined)
   vi.spyOn(runtime.bots, 'list').mockReturnValue([linkedBot(SHARED), linkedBot(OTHER)])
+  // The shared bot's home, a file outside it, and a symlink in the home that points out.
+  homes = { shared: join(directory, 'home-shared'), other: join(directory, 'home-other') }
+  mkdirSync(join(homes.shared, 'notes'), { recursive: true })
+  writeFileSync(join(homes.shared, 'notes', 'a.md'), 'a')
+  mkdirSync(homes.other)
+  writeFileSync(join(homes.other, 'secret.md'), 'secret')
+  symlinkSync(homes.other, join(homes.shared, 'escape'), 'junction')
+  const homeOf = new Map<string, string>([
+    [folderWorkspaceKey(SHARED.folderWorkspaceId), homes.shared],
+    [folderWorkspaceKey(OTHER.folderWorkspaceId), homes.other]
+  ])
+  vi.spyOn(runtime, 'resolveRuntimeFileTarget').mockImplementation(async (selector) => {
+    const path = homeOf.get(selector.replace(/^id:/, ''))
+    if (!path) {
+      throw new Error('selector_not_found')
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the guard reads only the folder's path and host.
+    return { worktree: { path }, executionHostId: 'local' } as Awaited<
+      ReturnType<OrcaRuntimeService['resolveRuntimeFileTarget']>
+    >
+  })
   // What the owner's roster holds: where each bot is linked and what its SOUL.md says.
   vi.spyOn(runtime.bots, 'roster').mockResolvedValue(
     [SHARED, OTHER].map((bot) => ({
@@ -197,6 +229,47 @@ beforeEach(() => {
         handler: ran
       }),
       defineMethod({
+        name: 'files.readDir',
+        permission: 'workspace',
+        share: SHARE_BY_BOT_FOLDER,
+        params: FileDirRead,
+        // Answers with the params it ran with, as the read would use them.
+        handler: (params) => params
+      }),
+      defineMethod({
+        name: 'files.stat',
+        permission: 'workspace',
+        share: SHARE_BY_BOT_FOLDER,
+        params: FileTreePath,
+        // A part of the path swapped for a symlink out while the read runs.
+        handler: confinedFolderRead(async () => {
+          renameSync(join(homes.shared, 'notes'), join(homes.shared, 'notes-moved'))
+          symlinkSync(homes.other, join(homes.shared, 'notes'), 'junction')
+          return { ran: true }
+        })
+      }),
+      defineMethod({
+        name: 'files.read',
+        permission: 'workspace',
+        share: SHARE_BY_BOT_FOLDER,
+        params: FileOpen,
+        handler: ran
+      }),
+      defineMethod({
+        name: 'bots.slack.state',
+        permission: 'accounts-admin',
+        share: SHARE_BY_BOT,
+        params: BotSlackBot,
+        handler: ran
+      }),
+      defineMethod({
+        name: 'bots.slack.setUpApp',
+        permission: 'accounts-admin',
+        share: 'not-shared',
+        params: BotSlackSetUp,
+        handler: ran
+      }),
+      defineMethod({
         name: 'bots.chats.seen',
         permission: 'workspace',
         share: 'not-shared',
@@ -204,6 +277,13 @@ beforeEach(() => {
         handler: ran
       }),
       ...BOT_METHODS.filter((method) => method.name === 'bots.roster'),
+      // Their real share decisions: every call below is refused before its handler.
+      ...STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS.filter((method) =>
+        MODEL_PICKER_METHODS.has(method.name)
+      ),
+      ...STRUCTURED_AGENT_SESSION_PROMPT_RESPONSE_METHODS.filter((method) =>
+        MODEL_PICKER_METHODS.has(method.name)
+      ),
       ...STRUCTURED_AGENT_SESSION_STATUS_METHODS,
       ...STATUS_METHODS
     ]
@@ -216,6 +296,12 @@ afterEach(() => {
   db.close()
   rmSync(directory, { recursive: true, force: true })
 })
+
+const MODEL_PICKER_METHODS = new Set([
+  'agentSession.modelCatalog',
+  'agentSession.options',
+  'agentSession.setOption'
+])
 
 async function call(method: string, params: unknown) {
   return await dispatcher.dispatch(
@@ -293,6 +379,107 @@ describe('the share guard', () => {
       expect(errorCode(await history(refused))).toBe('not_found')
       expect(errorCode(await approve(refused))).toBe('not_found')
     }
+  })
+
+  it('reads and sets the model only on the teammate’s own chat, never the host’s catalog without one', async () => {
+    expect(errorCode(await call('agentSession.modelCatalog', { agent: 'claude' }))).toBe(
+      'not_found'
+    )
+    for (const refused of [ids.ownersChat, ids.bobsChat]) {
+      expect(
+        errorCode(await call('agentSession.modelCatalog', { agent: 'claude', sessionId: refused }))
+      ).toBe('not_found')
+      expect(errorCode(await call('agentSession.options', { sessionId: refused }))).toBe(
+        'not_found'
+      )
+      expect(
+        errorCode(
+          await call('agentSession.setOption', {
+            envelope: envelope(refused),
+            key: 'model',
+            value: 'opus'
+          })
+        )
+      ).toBe('not_found')
+    }
+  })
+
+  it('reads only inside the shared bot’s home folder, never through .. or a symlink out', async () => {
+    // As the Files panel names it.
+    const home = `id:${folderWorkspaceKey(SHARED.folderWorkspaceId)}`
+    const readDir = (worktree: string, relativePath: string, followSymlinks?: boolean) =>
+      call('files.readDir', {
+        worktree,
+        relativePath,
+        ...(followSymlinks ? { followSymlinks } : {})
+      })
+    const read = (relativePath: string) => call('files.read', { worktree: home, relativePath })
+    expect(errorCode(await readDir(home, ''))).toBeNull()
+    expect(errorCode(await readDir(home, 'notes'))).toBeNull()
+    expect(errorCode(await read('notes/a.md'))).toBeNull()
+    for (const escape of [
+      '../home-other/secret.md',
+      'notes/../../home-other/secret.md',
+      join(homes.other, 'secret.md'),
+      join(homes.shared, 'notes', 'a.md'),
+      'escape/secret.md',
+      'missing.md'
+    ]) {
+      expect(errorCode(await read(escape))).toBe('not_found')
+    }
+    expect(errorCode(await readDir(home, 'escape'))).toBe('not_found')
+    // The read runs with symlinks off whatever is asked or left to the host's setting, so a symlink
+    // out of the folder (escape) is listed by name and never followed; its path is the resolved one.
+    for (const followSymlinks of [undefined, true]) {
+      const listed = await readDir(home, '', followSymlinks)
+      expect(listed.ok ? listed.result : null).toMatchObject({
+        relativePath: '',
+        followSymlinks: false
+      })
+    }
+    symlinkSync(join(homes.shared, 'notes'), join(homes.shared, 'inner'), 'junction')
+    const viaLink = await readDir(home, 'inner')
+    expect(viaLink.ok ? viaLink.result : null).toMatchObject({
+      relativePath: 'notes',
+      followSymlinks: false
+    })
+    // Another bot's home, and a spelling of a selector other than the home's own.
+    expect(errorCode(await readDir(folderWorkspaceKey(OTHER.folderWorkspaceId), ''))).toBe(
+      'not_found'
+    )
+    expect(errorCode(await readDir(`path:${homes.shared}`, ''))).toBe('not_found')
+  })
+
+  it('answers nothing for a read whose path was swapped for a symlink out while it ran', async () => {
+    const home = `id:${folderWorkspaceKey(SHARED.folderWorkspaceId)}`
+    expect(
+      errorCode(await call('files.stat', { worktree: home, relativePath: 'notes/a.md' }))
+    ).not.toBeNull()
+  })
+
+  it('ends a teammate’s watch once its folder is moved, and passes nothing after', async () => {
+    const forwarded: unknown[] = []
+    const watch = await confinedFolderWatch(
+      { worktree: `id:${folderWorkspaceKey(SHARED.folderWorkspaceId)}` },
+      { runtime, callerScope: SCOPE },
+      (event) => forwarded.push(event)
+    )
+    watch.emit('before')
+    await vi.waitFor(() => expect(forwarded).toEqual(['before']))
+    renameSync(homes.shared, `${homes.shared}-moved`)
+    mkdirSync(homes.shared)
+    watch.emit('after')
+    await vi.waitFor(() => expect(watch.signal?.aborted).toBe(true))
+    expect(forwarded).toEqual(['before'])
+  })
+
+  it('reads the shared bot’s connectors only, and none of their setup', async () => {
+    expect(errorCode(await call('bots.slack.state', { botId: SHARED.id }))).toBeNull()
+    expect(errorCode(await call('bots.slack.state', { botId: OTHER.id }))).toBe('not_found')
+    expect(errorCode(await call('bots.slack.state', {}))).not.toBeNull()
+    expect(errorCode(await call('bots.slack.setUpApp', { botId: SHARED.id, teamId: 'T1' }))).toBe(
+      'forbidden'
+    )
   })
 
   it('stages an upload only for the teammate’s own chat, so it can’t probe other chats', async () => {
@@ -430,6 +617,8 @@ describe('the share guard', () => {
         'agentSession.currentRequests',
         'agentSession.history',
         'agentSession.item',
+        'agentSession.modelCatalog',
+        'agentSession.options',
         'agentSession.queuedMessageDelete',
         'agentSession.queuedMessageEditHold',
         'agentSession.queuedMessageMove',
@@ -440,6 +629,7 @@ describe('the share guard', () => {
         'agentSession.respondToApproval',
         'agentSession.respondToQuestion',
         'agentSession.send',
+        'agentSession.setOption',
         'agentSession.subscribe',
         'agentSession.subscribeStatus',
         'agentSession.unsubscribe',
@@ -463,7 +653,22 @@ describe('the share guard', () => {
         'botShare.revokePhone',
         'pairing.getEndpoints',
         'pairing.provisionRelay',
-        'status.get'
+        'status.get',
+        'bots.activity',
+        'bots.composio.status',
+        'bots.github.state',
+        'bots.linear.state',
+        'bots.slack.state',
+        'bots.tools.list',
+        'files.list',
+        'files.read',
+        'files.readChunk',
+        'files.readDir',
+        'files.readPreview',
+        'files.searchPaths',
+        'files.stat',
+        'files.watch',
+        'google.status'
       ].sort()
     )
     const scoped = ALL_RPC_METHODS.filter(

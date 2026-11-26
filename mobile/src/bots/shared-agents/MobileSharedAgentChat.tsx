@@ -31,6 +31,7 @@ import { sharedAgentChatInputLock, sharedAgentChatTranscriptHeld } from './share
 import { SHARED_AGENT_CHAT_CONNECTION, useSharedAgentChat } from './use-shared-agent-chat'
 import { useSharedAgentDictation } from './use-shared-agent-dictation'
 import { MobileSharedAgentChatMenu } from './MobileSharedAgentChatMenu'
+import { MobileChatViewerAccountContext } from '../../session/native-chat/transcript/messages/MobileNativeChatUserMessageMarks'
 import { MobileDictationSetupSheet } from '../../dictation/setup/MobileDictationSetupSheet'
 import { useSharedAgentPage } from './use-shared-agent-page'
 import { useSharedAgentSendAgain } from './use-shared-agent-views'
@@ -151,34 +152,36 @@ export function MobileSharedAgentChat() {
       <View style={styles.chat}>
         {page.client ? (
           <MobileNativeChatDeliveryContext.Provider value={delivery}>
-            <MobileNativeChatOverlay
-              controller={chat.controller}
-              imageSource={{ client: page.client, worktreeId: chat.worktreeId }}
-              worktreePath={null}
-              connState={SHARED_AGENT_CHAT_CONNECTION}
-              onOpenFile={noop}
-              images={chat.images}
-              structuredComposer={chat.structuredComposer}
-              {...dictation.mic}
-              inputLockReason={sharedAgentChatInputLock(page.live, view.holds)}
-              sendErrorMessage={chat.sendError.message}
-              onClearSendError={chat.sendError.clear}
-              sendSurfaceId={chat.scopeKey ?? ''}
-              sessionId={sessionId}
-              getSendCompletionGeneration={chat.getSendCompletionGeneration}
-              keyboardInset={keyboardLift}
-              hostName={null}
-              linkOpenMode={chat.linkOpenMode}
-              onRunInTerminal={noop}
-              hostOutage={
-                page.live
-                  ? null
-                  : {
-                      ...(view.holds ? { holdsSends: true as const } : {}),
-                      text: sharedAgentOfflineText(t, view)
-                    }
-              }
-            />
+            <MobileChatViewerAccountContext.Provider value={view.accountId ?? null}>
+              <MobileNativeChatOverlay
+                controller={chat.controller}
+                imageSource={{ client: page.client, worktreeId: chat.worktreeId }}
+                worktreePath={null}
+                connState={SHARED_AGENT_CHAT_CONNECTION}
+                onOpenFile={noop}
+                images={chat.images}
+                structuredComposer={chat.structuredComposer}
+                {...dictation.mic}
+                inputLockReason={sharedAgentChatInputLock(page.live, view.holds)}
+                sendErrorMessage={chat.sendError.message}
+                onClearSendError={chat.sendError.clear}
+                sendSurfaceId={chat.scopeKey ?? ''}
+                sessionId={sessionId}
+                getSendCompletionGeneration={chat.getSendCompletionGeneration}
+                keyboardInset={keyboardLift}
+                hostName={null}
+                linkOpenMode={chat.linkOpenMode}
+                onRunInTerminal={noop}
+                hostOutage={
+                  page.live
+                    ? null
+                    : {
+                        ...(view.holds ? { holdsSends: true as const } : {}),
+                        text: sharedAgentOfflineText(t, view)
+                      }
+                }
+              />
+            </MobileChatViewerAccountContext.Provider>
           </MobileNativeChatDeliveryContext.Provider>
         ) : null}
       </View>

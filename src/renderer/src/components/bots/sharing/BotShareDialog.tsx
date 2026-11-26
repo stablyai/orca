@@ -1,6 +1,6 @@
 // The Share dialog's parts: the bot as the link shows it, the live link, the secret notice and a
 // drill-in page. BotShareFlow decides which show, from the bot's link and the candidate.
-import { Check, CloudOff, Copy, Link2, TriangleAlert } from 'lucide-react'
+import { CloudOff, Link2, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
@@ -16,6 +16,7 @@ import { BotShareListPage } from './BotShareLists'
 import { pageTitle } from './BotShareOverview'
 import { BotSharePartFiles } from './BotSharePartView'
 import { BotShareBack } from './BotShareRows'
+import { ShareLinkCopyButton } from './ShareLinkCopyButton'
 
 const UPDATED_AT: Intl.DateTimeFormatOptions = {
   month: 'short',
@@ -72,7 +73,7 @@ export function BotShareHero({
   )
 }
 
-/** The live link with Copy link, and the line under it saying when it last changed. */
+/** The live link with its copy icon, and the line under it saying when it last changed. */
 export function BotShareLinkBlock({
   url,
   copied,
@@ -84,7 +85,6 @@ export function BotShareLinkBlock({
   meta: React.ReactNode
   onCopy: () => void
 }): React.JSX.Element {
-  const t = useTranslate()
   return (
     <div className="flex flex-col gap-2">
       <SettingsInsetGroup>
@@ -99,12 +99,7 @@ export function BotShareLinkBlock({
               <SkeletonBar width={200} />
             </span>
           )}
-          {url ? (
-            <Button type="button" variant="outline" size="sm" onClick={onCopy}>
-              {copied ? <Check /> : <Copy />}
-              {copied ? t('bots.share.copied', 'Copied') : t('bots.share.copyLink', 'Copy link')}
-            </Button>
-          ) : null}
+          {url ? <ShareLinkCopyButton onCopy={onCopy} copied={copied} /> : null}
         </div>
       </SettingsInsetGroup>
       {url && meta ? (
@@ -153,14 +148,17 @@ export function BotShareUpdatedLine({
 /** Orca Cloud didn't answer, so whether the bot has a link is unknown; Publish waits on Retry. */
 export function BotShareOfflineRow({
   error,
-  onRetry
+  onRetry,
+  title
 }: {
   error: string | null
   onRetry: () => void
+  /** The group's heading, on a settings page. */
+  title?: string
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <SettingsInsetGroup>
+    <SettingsInsetGroup title={title}>
       <div className="flex min-h-11 items-center gap-2.5 py-2 pr-2.5 pl-3 text-sm">
         <CloudOff className="size-4 shrink-0 text-muted-foreground" />
         <span className="min-w-0 flex-1 font-medium">

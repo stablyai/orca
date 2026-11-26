@@ -3,6 +3,9 @@ import { BotAvatarSync } from './bot-avatar-sync'
 import { withBotsCloudClient } from './bots-cloud-client'
 import { createConnectorCloud } from './connector-cloud-install'
 import { ConnectorGitHubInstallations } from './connector-github-installations'
+import { ConnectorBotGoogle } from './connector-bot-google'
+import { getGoogleConnect } from '../google/google-connect'
+import { onGoogleAccountWritten } from '../google/google-credential-store'
 import type { ConnectorRuntimeKind } from './connector-machine'
 import { connectorAccount, connectorAccountCloudCall } from './connector-token-mint'
 import { botAccessHost } from '../bots/bot-access-host'
@@ -61,6 +64,10 @@ export function installConnectorHost({
     fetchState: () =>
       withBotsCloudClient(runtime.getConnectorCloud(), (client) => client.githubState())
   })
+  const google = new ConnectorBotGoogle({
+    bots: () => store.getBots(),
+    accounts: () => getGoogleConnect()?.accounts() ?? null
+  })
   const warnDropped = (error: unknown) =>
     console.warn('[webhooks] could not drop a deleted hook from its automation', error)
   const botFolder = (botId: string): string | null => {
@@ -106,7 +113,8 @@ export function installConnectorHost({
       kind,
       isFenced,
       gitHubInstallations,
-      webhooks
+      webhooks,
+      google
     })
   )
   const stops: (() => void)[] = []
@@ -118,6 +126,8 @@ export function installConnectorHost({
     stops.push(
       () => webhooks.stop(),
       () => composio.stop(),
+      // A sign-in or sign-out writes an account; Google on, its accounts or a share is a bot write.
+      onGoogleAccountWritten(() => void google.refresh()),
       onTeamFeatureBlockChanged(ORCA_CLOUD_TEAM_POLICY_FLAGS.bots, () => {
         connector.helloInputsChanged()
         runtime.notifyBotsChanged({ kinds: ['settings', 'bot'] })

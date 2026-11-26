@@ -25983,6 +25983,9 @@
         "messagesWait": "Los mensajes esperan hasta que vuelva.",
         "leave": "Puedes salir cuando quieras.",
         "uses": "Usa"
+      },
+      "copy": {
+        "copiedFrom": "Copiado de {{who}}"
       }
     },
     "host": {
@@ -26161,6 +26164,22 @@
         "expired": "El inicio de sesión caducó. Inténtalo de nuevo.",
         "couldNotSignIn": "No se pudo iniciar sesión. Inténtalo de nuevo."
       }
+    },
+    "teamShare": {
+      "shareWithTeammates": "Compartir con compañeros…"
+    },
+    "sharingPage": {
+      "teammates": "Compañeros",
+      "teammatesFoot": "Se ejecuta en {{host}} con tus cuentas. Puedes ver sus chats con él, y cada compañero solo ve los suyos.",
+      "add": "Añadir",
+      "copyLink": "Enlace de copia",
+      "createCopyLink": "Crear enlace de copia",
+      "anyoneCanCopy": "Cualquiera con el enlace puede hacer una copia",
+      "linkActions": "Acciones del enlace",
+      "changeIncluded": "Cambiar lo que se incluye…",
+      "stopSharing": "Dejar de compartir…",
+      "allYourLinks": "Todos tus enlaces",
+      "alreadyUpToDate": "El enlace ya está actualizado"
     }
   },
   "plugins": {

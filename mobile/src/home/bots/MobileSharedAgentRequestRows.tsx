@@ -25,7 +25,7 @@ import { ListGroup, ListRow } from '../../components/list/ListGroup'
 import { ConfirmContent } from '../../components/sheets/ConfirmModal'
 import { mobileBotAvatarSource } from '../../bots/host-bot-row-facts'
 import { MobileBotAvatar } from '../../bots/MobileBotAvatar'
-import { MobileConnectorSourceIcon } from '../../bots/MobileConnectorSourceIcon'
+import { MobileConnectorSourceIcon, MobileGoogleMark } from '../../bots/MobileConnectorSourceIcon'
 import { phoneSharedAgents } from '../../bots/shared-agents/phone-shared-agents'
 import { watchPhoneSharedAgents } from '../../bots/shared-agents/phone-shared-agent-watch'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -136,7 +136,11 @@ function InviteSheetContent({
               <Text style={styles.usesLabel}>{t('bots.share.invite.uses', 'Uses')}</Text>
               {services.map((service) => (
                 <View key={service} style={styles.chip}>
-                  <MobileConnectorSourceIcon source={service} size={12} />
+                  {service === 'google' ? (
+                    <MobileGoogleMark size={12} />
+                  ) : (
+                    <MobileConnectorSourceIcon source={service} size={12} />
+                  )}
                   <Text style={styles.chipText}>{SERVICE_NAMES[service]}</Text>
                 </View>
               ))}
@@ -156,7 +160,8 @@ function InviteSheetContent({
 const SERVICE_NAMES: Record<AgentCardService, string> = {
   github: 'GitHub',
   slack: 'Slack',
-  linear: 'Linear'
+  linear: 'Linear',
+  google: 'Google'
 }
 
 function RequestRow({ pairedHostId, request, divider }: HostRequest & { divider: boolean }) {

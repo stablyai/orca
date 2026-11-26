@@ -24,8 +24,7 @@ import {
   writerOf,
   type BotItemWriteResult
 } from './bots-items-write-support'
-import { botItemAddedFor } from '../../../bots/bot-item-access'
-import { parseOrcaSessionAddress } from '../../../../shared/agent-session/identity/orca-session-address'
+import { botItemPeopleOfChat } from '../../../bots/bot-item-access'
 
 export async function addItem(
   params: BotItemsAddParams,
@@ -66,11 +65,6 @@ export async function addItem(
   const to = params.chat
     ? await botChatAddress(runtime, `bot:${target.name}`, params.chat)
     : `bot:${target.name}`
-  // A named chat's item acts for that chat's people, so the caller must reach them.
-  const named = parseOrcaSessionAddress(to)
-  if (named) {
-    botItemAddedFor(runtime, writer.access, named)
-  }
   const sent = await sendItemRequest(context, {
     type: 'handoff',
     to,
@@ -80,7 +74,7 @@ export async function addItem(
   try {
     const chatId = runtime.botItems.chatRootOf(sent.landed)
     const title = runtime.botItems.chatTitleOf(chatId)
-    const actsForAccounts = botItemAddedFor(runtime, writer.access, chatId)
+    const actsForAccounts = botItemPeopleOfChat(runtime, chatId)
     const outcome = await store.add(
       {
         ...fields,

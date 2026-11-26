@@ -8,9 +8,16 @@ import { subscribeRuntimeRpc } from '../../rpc/subscriptions/runtime-rpc-subscri
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '../../rpc/testing/runtime-compatibility-test-fixture'
 import {
   installSharedBotHostCatalog,
+  noteSharedBotHostListing,
   readSharedBotHosts,
   readTeamSharingOffered
 } from './shared-bot-host-catalog'
+import { readRuntimeDirectory } from '../../files/reads/runtime-directory-read'
+import { runtimeFileWorktreeSelector } from '../../files/runtime-file-routing'
+import {
+  getFileExplorerOperationOwnerFromState,
+  type FileExplorerOwnerState
+} from '@/components/right-sidebar/file-explorer/navigation/file-explorer-operation-owner'
 import { selectExecutionHostDisplayLabel } from '../display/execution-host-display-label'
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '@/store'
@@ -28,6 +35,8 @@ const HOST: SharedBotHostView = {
   held: []
 }
 const target = { kind: 'environment', environmentId: HOST.environmentId } as const
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a shared home resolves before any workspace row is read.
+const NO_WORKSPACES = {} as FileExplorerOwnerState
 
 let uninstall: () => void
 const environmentCall = vi.fn()
@@ -119,4 +128,48 @@ it('gives a shared agent’s host a pairing revision while it is shared, so its 
   })
   changed({ hosts: [], sharing: true })
   expect(resolveNativeChatRuntimeSessionAttachmentOwner(session)).toEqual({ kind: 'not-ready' })
+})
+
+describe('Files in this computer’s home of a shared agent', () => {
+  const home = 'folder:home-1'
+  const context = { target, worktreeId: home, worktreePath: '/local/shared-agents/share-1' }
+
+  it('reads the agent’s home folder on its host, by the host’s own key, read-only', async () => {
+    environmentCall.mockImplementation(
+      async (request: { method: string }) =>
+        createCompatibleRuntimeStatusResponseIfNeeded(request) ?? {
+          id: 'x',
+          ok: true,
+          result: [],
+          _meta: { runtimeId: 'r' }
+        }
+    )
+    await vi.waitFor(() => expect(readSharedBotHosts()).toHaveLength(1))
+    // Before the host lists the agent, nothing names its folder there: Files shows nothing.
+    expect(getFileExplorerOperationOwnerFromState(NO_WORKSPACES, home)).toEqual({
+      kind: 'unresolved'
+    })
+
+    noteSharedBotHostListing(toRuntimeExecutionHostId(HOST.environmentId), [
+      { id: HOST.botId, folderWorkspaceId: 'host-home' }
+    ])
+    expect(getFileExplorerOperationOwnerFromState(NO_WORKSPACES, home)).toEqual({
+      kind: 'runtime',
+      environmentId: HOST.environmentId,
+      executionHostId: toRuntimeExecutionHostId(HOST.environmentId),
+      readOnly: true
+    })
+    await readRuntimeDirectory(context, '/local/shared-agents/share-1/notes')
+    expect(environmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: HOST.environmentId,
+        method: 'files.readDir',
+        params: { worktree: 'id:folder:host-home', relativePath: 'notes' }
+      })
+    )
+    // Any other host is asked by the id this computer knows.
+    expect(
+      runtimeFileWorktreeSelector({ kind: 'environment', environmentId: 'other-env' }, home)
+    ).toBe('id:folder:home-1')
+  })
 })

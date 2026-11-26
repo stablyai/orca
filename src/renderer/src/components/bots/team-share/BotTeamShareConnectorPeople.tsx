@@ -1,6 +1,7 @@
 // Slack- and GitHub-only people in the Share dialog: each workspace's or org's own Who can ask (its
 // service and hook), so a share is confirmed and saved, and a removal made, exactly as Who can ask does.
-import { useEffect, useEffectEvent } from 'react'
+import { useContext, useEffect, useEffectEvent } from 'react'
+import { cn } from '@/lib/class-names'
 import { botMemberSource, type Bot, type BotMember } from '../../../../../shared/bot-types'
 import type { BotConnectorEntry } from '../../../../../shared/bots/bot-connector-entries'
 import { useBotConnectorEntries } from '../bot-connector-entries'
@@ -11,7 +12,7 @@ import { useSlackWhoCanAsk } from '../slack/use-slack-who-can-ask'
 import { useBotWhoCanAsk } from '../use-bot-who-can-ask'
 import type { TeamSharePerson, TeamShareSuggestion } from './bot-team-share-people'
 import type { TeamShareConnectorAdds } from './share-staged-people'
-import { TeamSharePersonRow } from './BotTeamShareRows'
+import { TeamSharePersonRow, TeamShareRowsInset } from './BotTeamShareRows'
 
 type PeopleEntry = Extract<BotConnectorEntry, { kind: 'slack' | 'github' }>
 
@@ -125,6 +126,7 @@ function ConnectorPeople({
   adds: TeamShareConnectorAdds
 }): React.JSX.Element {
   const { listed, add, remove, save, capped } = useBotWhoCanAsk(bot, service)
+  const inset = useContext(TeamShareRowsInset)
   // The latest add, so Share saves against the people listed now.
   useEffect(() => {
     adds.set(entry.key, add)
@@ -152,7 +154,7 @@ function ConnectorPeople({
         />
       ))}
       {save.kind === 'failed' ? (
-        <li className="px-6 py-1.5">
+        <li className={cn('py-1.5', inset ? 'pr-2.5 pl-3' : 'px-6')}>
           <BotWhoCanAskSaveFailed message={save.message} retry={save.retry} />
         </li>
       ) : null}

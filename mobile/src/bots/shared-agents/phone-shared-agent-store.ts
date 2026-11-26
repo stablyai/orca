@@ -34,6 +34,9 @@ const PhoneSharedAgentListing = z.object({
   botId: Text,
   botName: Text,
   ownerName: Text,
+  // The account it is shared with, whose the phone's messages are; absent in an entry from before,
+  // until the computer's next list fills it in.
+  accountId: Text.optional(),
   // That computer's id for the agent's host, which its pages route calls by.
   environmentId: Text,
   connectorOrigin: Text,

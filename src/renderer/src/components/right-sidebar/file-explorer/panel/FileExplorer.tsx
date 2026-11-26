@@ -35,6 +35,7 @@ import {
 import { useFileExplorerManualRefresh } from './useFileExplorerManualRefresh'
 import { useFileExplorerTree } from '../tree/useFileExplorerTree'
 import { getFileExplorerOperationOwnerFromState } from '../navigation/file-explorer-operation-owner'
+import { fileExplorerOwnerReadOnly } from '../tree/file-explorer-types'
 import { useFileExplorerSelection } from '../selection/useFileExplorerSelection'
 import { useFileExplorerVisibleRowProjection } from '../tree/useFileExplorerVisibleRowProjection'
 import { useFileExplorerBackgroundMenu } from './use-file-explorer-background-menu'
@@ -43,6 +44,7 @@ import { useFileExplorerTreePaneState } from '../tree/use-file-explorer-tree-pan
 import { useWslHostUnavailableReason } from '../../../../runtime/hosts/wsl/wsl-host-availability'
 import { useWslHostReadOutage } from '../../../wsl-host-stopped/use-stopped-wsl-host'
 import { useTranslate } from '@/i18n/use-translate'
+import { useSharedBotHomeOnHost } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 /** Coordinates scoped navigation while retaining the actual worktree root for file operations and runtime routing. */
@@ -53,6 +55,10 @@ function FileExplorerFiles(): React.JSX.Element {
   const setRightSidebarExplorerView = useAppStore((s) => s.setRightSidebarExplorerView)
   const searchPanel = useFileSearchPanel(explorerView)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  // An agent's folder shared with this account: browsed and opened here, never changed.
+  const readOnly = useAppStore((s) =>
+    fileExplorerOwnerReadOnly(getFileExplorerOperationOwnerFromState(s, activeWorktreeId))
+  )
   const runtimeEnvironmentId = useAppStore((s) =>
     runtimeEnvironmentIdOrLocalUnlessTwin(s, activeWorktreeId)
   )
@@ -213,7 +219,7 @@ function FileExplorerFiles(): React.JSX.Element {
     handleExplorerBackgroundContextMenuCapture,
     handleExplorerBackgroundDoubleClick
   } = useFileExplorerBackgroundMenu({
-    worktreePath: displayRootPath,
+    worktreePath: readOnly ? null : displayRootPath,
     displayDepth,
     inlineInput: inlineInputState.inlineInput,
     startNew: inlineInputState.startNew
@@ -255,6 +261,7 @@ function FileExplorerFiles(): React.JSX.Element {
           worktreePath={worktreePath}
           {...getRouteForLocalPathOpenOwner(openInOwner)}
           workspaceId={activeWorktreeId}
+          hostOnly={readOnly}
           refresh={manualRefresh}
           canRefresh={isFilesViewActive}
           canCollapseAll={canCollapseAll}
@@ -352,14 +359,16 @@ function FileExplorerFiles(): React.JSX.Element {
         </div>
       </div>
 
-      <FileExplorerBackgroundMenu
-        open={bgMenuOpen}
-        onOpenChange={setBgMenuOpen}
-        point={bgMenuPoint}
-        worktreePath={displayRootPath ?? worktreePath}
-        displayDepth={displayDepth}
-        onStartNew={inlineInputState.startNew}
-      />
+      {readOnly ? null : (
+        <FileExplorerBackgroundMenu
+          open={bgMenuOpen}
+          onOpenChange={setBgMenuOpen}
+          point={bgMenuPoint}
+          worktreePath={displayRootPath ?? worktreePath}
+          displayDepth={displayDepth}
+          onStartNew={inlineInputState.startNew}
+        />
+      )}
     </>
   )
 }
@@ -367,6 +376,8 @@ function FileExplorerFiles(): React.JSX.Element {
 const FileExplorerFilesMemo = React.memo(FileExplorerFiles)
 
 function FileExplorer(): React.JSX.Element {
+  // A shared agent's home reads on its host once that host lists it.
+  useSharedBotHomeOnHost(useAppStore((state) => state.activeWorktreeId))
   const ownerKey = useAppStore((state) =>
     JSON.stringify(getFileExplorerOperationOwnerFromState(state, state.activeWorktreeId))
   )

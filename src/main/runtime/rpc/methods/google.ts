@@ -1,5 +1,8 @@
 // google.*: this host's Google client, the accounts signed in on it, and which bots may use them.
 // Tokens stay on this host; clients see emails and per-service states only.
+import { SHARE_SCOPED } from '../../../../shared/bots/bot-share-rpc-methods'
+import { botShareScopedView } from '../../../bots/team-share/bot-share-scoped-view'
+import { readGoogleStatus } from './google-status-read'
 import { GOOGLE_OWNER_ONLY, readGoogleRefusal } from '../../../bots/bot-google-access'
 import { botOfToken } from '../../../bots/bot-of-caller'
 import { getGoogleConnect, type GoogleConnect } from '../../../google/google-connect'
@@ -22,19 +25,12 @@ import {
   GoogleSignInWaitParams,
   GoogleStatusParams
 } from '../../../../shared/rpc-contract/google-params'
-import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { Bot } from '../../../../shared/bot-types'
 import { BotFailureError } from '../../../../shared/bots/bot-failure-copy'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
 import { isAgentRpcCaller, rpcCallerOperationKey } from '../callers/rpc-caller-identity'
 import { googleCallerAccount } from '../google-caller-api'
-import { readGoogleDefaultAccount } from '../../../google/google-credential-store'
-import {
-  botGoogleAccess,
-  botGoogleAccountFilter,
-  botGoogleDefault,
-  type BotGoogleAccess
-} from '../../../../shared/google/google-bot-accounts'
+import { botGoogleAccess } from '../../../../shared/google/google-bot-accounts'
 import { runtimeBotChats } from '../../../bots/bot-chat-session'
 import { botOfSession } from '../../../bots/bot-session-tabs'
 
@@ -58,31 +54,6 @@ function refuseFromBot(botToken: string | undefined, context: RpcContext): void 
   if (botOfToken(context.runtime, botToken, context.pairedDeviceId).kind !== 'owner') {
     throw new InvalidArgumentError(GOOGLE_OWNER_ONLY)
   }
-}
-
-async function statusView(
-  runtime: OrcaRuntimeService,
-  connect: GoogleConnect
-): Promise<Omit<GoogleStatusView, 'accounts'>> {
-  return {
-    client: await connect.client(),
-    bots: runtime.bots.enabled()
-      ? runtime.bots
-          .list()
-          .filter((bot) => bot.google === true)
-          .map((bot) => ({
-            id: bot.id,
-            name: bot.name,
-            ...(bot.googleAccounts ? { accounts: bot.googleAccounts } : {})
-          }))
-      : []
-  }
-}
-
-/** The account a bot's calls without --account use, read once from this computer's default. */
-async function botDefaultAccount(access: BotGoogleAccess): Promise<string | null> {
-  const read = botGoogleDefault(access, await readGoogleDefaultAccount())
-  return 'email' in read ? read.email : null
 }
 
 async function pickAccount(connect: GoogleConnect, wanted: string | undefined): Promise<string> {
@@ -135,29 +106,25 @@ export const GOOGLE_METHODS = [
   defineMethod({
     name: 'google.status',
     permission: 'workspace',
-    share: 'not-shared',
+    share: SHARE_SCOPED,
     params: GoogleStatusParams,
-    handler: async (
-      { check, botToken },
-      { runtime, pairedDeviceId }
-    ): Promise<GoogleStatusView> => {
-      const connect = google()
-      // A bot without every account sees (and a check reads tokens of) only its own accounts, none
-      // while Google is off for it, and the default its own calls use; the owner sees them all.
-      const caller = botOfToken(runtime, botToken, pairedDeviceId)
-      const access = caller.kind === 'bot' ? botGoogleAccess(caller.bot) : null
-      const only = access ? botGoogleAccountFilter(access) : undefined
-      const [accounts, clientKey] = check
-        ? await Promise.all([connect.checkAccounts(only), connect.checkClient()])
-        : [await connect.accounts(), await connect.clientCheck()]
-      const defaultAccount =
-        access && only ? await botDefaultAccount(access) : await connect.defaultAccount()
-      return {
-        ...(await statusView(runtime, connect)),
-        accounts: only ? accounts.filter((account) => only(account.email)) : accounts,
-        defaultAccount,
-        ...(clientKey ? { clientKey } : {})
+    handler: async (params, context): Promise<GoogleStatusView> => {
+      const share = botShareScopedView(context)?.['google.status']
+      if (!share) {
+        return readGoogleStatus(
+          google(),
+          params,
+          context.runtime,
+          botOfToken(context.runtime, params.botToken, context.pairedDeviceId)
+        )
       }
+      // A teammate reads it as the shared bot does, without running a check of its tokens.
+      if (!share.bot) {
+        throw new InvalidArgumentError('bot_not_found')
+      }
+      return share.view(
+        await readGoogleStatus(google(), {}, context.runtime, { kind: 'bot', bot: share.bot })
+      )
     }
   }),
   defineMethod({

@@ -5,8 +5,16 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcMethodShare } from '../../../../shared/bots/bot-share-rpc-methods'
 import type { BotShareCallerScope } from '../callers/rpc-caller-scope'
 import { botShareOwnsSession } from '../../../bots/team-share/bot-share-chats'
+import {
+  confineBotShareFolderRead,
+  confinedFolderParams
+} from '../../../bots/team-share/bot-share-folder'
 
-export type BotShareRefusal = 'bot_not_found' | 'session_not_found' | 'method_not_found'
+export type BotShareRefusal =
+  | 'bot_not_found'
+  | 'session_not_found'
+  | 'method_not_found'
+  | 'path_not_found'
 
 export async function refuseBotShareCall(
   runtime: OrcaRuntimeService,
@@ -41,7 +49,29 @@ export async function refuseBotShareCall(
         ? null
         : 'session_not_found'
     }
+    case 'bot-folder':
+      return (await confineBotShareFolderRead(runtime, scope, access.read(params)))
+        ? null
+        : 'path_not_found'
     case undefined:
       return 'method_not_found'
   }
+}
+
+/** The guard's answer: a refusal, or the params the call runs with. A folder read runs confined: on
+ *  the path admission resolved, with symlinks off, whatever the caller sent or the host's setting. */
+export async function admitBotShareCall(
+  runtime: OrcaRuntimeService,
+  scope: BotShareCallerScope,
+  share: RpcMethodShare,
+  params: unknown
+): Promise<{ refusal: BotShareRefusal } | { params: unknown }> {
+  if (share !== 'not-shared' && share.kind === 'bot-folder') {
+    const confined = await confineBotShareFolderRead(runtime, scope, share.read(params))
+    return confined
+      ? { params: confinedFolderParams(params, confined) }
+      : { refusal: 'path_not_found' }
+  }
+  const refusal = await refuseBotShareCall(runtime, scope, share, params)
+  return refusal ? { refusal } : { params }
 }

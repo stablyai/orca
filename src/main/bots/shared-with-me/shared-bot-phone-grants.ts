@@ -8,6 +8,7 @@ import {
   SHARED_BOTS_PHONE_ERRORS,
   type SharedBotPhoneGrant,
   type SharedBotPhoneRequest,
+  type SharedBotPhoneShare,
   type SharedBotsPhoneList,
   type SharedBotsPhoneProvisionParams
 } from '../../../shared/bots/bot-share-phone'
@@ -27,6 +28,8 @@ export type SharedBotPhoneGrantsDeps = {
   /** The entry's link once any dial it can make has settled. */
   reach: (entry: SharedBotHostEntry) => Promise<SharedBotLink>
   request: (entry: SharedBotHostEntry, method: string, params: unknown) => Promise<RpcResponse>
+  /** The signed-in Orca account the shares are with; null signed out. */
+  account: () => string | null
   /** Orca Cloud's connector origin, which the phone holds messages at; null without a cloud. */
   origin: () => string | null
   /** The shares offered to the account, and its Accept or Decline of one, which phones show too. */
@@ -52,14 +55,21 @@ export class SharedBotPhoneGrants {
   /** The shared agents this computer has reached, which a phone can get a key to. */
   phoneShares(): SharedBotsPhoneList {
     return {
-      shares: this.paired().map((entry) => ({
-        shareId: entry.shareId,
-        botId: entry.botId,
-        botName: entry.botName,
-        ownerName: entry.ownerName,
-        environmentId: entry.environmentId
-      })),
+      shares: this.paired().map((entry) => this.phoneShare(entry)),
       requests: [...this.deps.requests()]
+    }
+  }
+
+  /** A share as its phone lists it: the agent, and the account it is shared with (this computer's). */
+  private phoneShare(entry: SharedBotHostEntry): SharedBotPhoneShare {
+    const accountId = this.deps.account()
+    return {
+      shareId: entry.shareId,
+      botId: entry.botId,
+      botName: entry.botName,
+      ownerName: entry.ownerName,
+      environmentId: entry.environmentId,
+      ...(accountId ? { accountId } : {})
     }
   }
 
@@ -113,11 +123,7 @@ export class SharedBotPhoneGrants {
     void this.endRemoved(entry.shareId)
     return {
       v: 1,
-      shareId: entry.shareId,
-      botId: entry.botId,
-      botName: entry.botName,
-      ownerName: entry.ownerName,
-      environmentId: entry.environmentId,
+      ...this.phoneShare(entry),
       connectorOrigin: origin,
       hostKey,
       sealedOffer: provisioned.sealedOffer

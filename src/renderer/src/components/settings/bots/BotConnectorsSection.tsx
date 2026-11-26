@@ -90,7 +90,7 @@ export function BotNoConnectors({ bot }: { bot: Bot }): React.JSX.Element {
   )
 }
 
-function NoConnectors({ bot, onAdd }: { bot: Bot; onAdd: () => void }): React.JSX.Element {
+function NoConnectors({ bot, onAdd }: { bot: Bot; onAdd: (() => void) | null }): React.JSX.Element {
   const t = useTranslate()
   return (
     <div className="flex flex-col items-center gap-3 px-4 py-8 text-center">
@@ -106,10 +106,12 @@ function NoConnectors({ bot, onAdd }: { bot: Bot; onAdd: () => void }): React.JS
           { name: bot.name }
         )}
       </p>
-      <Button size="sm" onClick={onAdd}>
-        <Plus />
-        {t('settings.bots.addConnector', 'Add a connector')}
-      </Button>
+      {onAdd ? (
+        <Button size="sm" onClick={onAdd}>
+          <Plus />
+          {t('settings.bots.addConnector', 'Add a connector')}
+        </Button>
+      ) : null}
     </div>
   )
 }
@@ -118,7 +120,14 @@ function NoConnectors({ bot, onAdd }: { bot: Bot; onAdd: () => void }): React.JS
  * The bot's connectors, one row per workspace, org or app, with Add in the list's header: the
  * bot page's Connectors tab and the Connectors page of its settings.
  */
-export function BotConnectorsSection({ bot }: { bot: Bot }): React.JSX.Element {
+export function BotConnectorsSection({
+  bot,
+  readOnly = false
+}: {
+  bot: Bot
+  /** A shared agent seen by a teammate: the list without Add. */
+  readOnly?: boolean
+}): React.JSX.Element {
   const t = useTranslate()
   const webhooks = useWebhooksConnector(bot)
   const inventory = useBotConnectorInventory(bot, 'apps')
@@ -154,7 +163,7 @@ export function BotConnectorsSection({ bot }: { bot: Bot }): React.JSX.Element {
         entries.length === 0 ? (
           <section className="flex flex-col gap-0.5">
             <BotConnectorsHostNotice bot={bot} />
-            <NoConnectors bot={bot} onAdd={open} />
+            <NoConnectors bot={bot} onAdd={readOnly ? null : open} />
           </section>
         ) : (
           <section className="flex flex-col gap-0.5" onKeyDown={onKeyDown}>
@@ -165,10 +174,12 @@ export function BotConnectorsSection({ bot }: { bot: Bot }): React.JSX.Element {
                   <h3 className="text-sm font-semibold">
                     {t('settings.bots.connectors', 'Connectors')}
                   </h3>
-                  <Button variant="ghost" size="xs" onClick={open}>
-                    <Plus />
-                    {t('bots.connectors.add', 'Add')}
-                  </Button>
+                  {readOnly ? null : (
+                    <Button variant="ghost" size="xs" onClick={open}>
+                      <Plus />
+                      {t('bots.connectors.add', 'Add')}
+                    </Button>
+                  )}
                 </div>
                 <BotCloudSignInNotice bot={bot} webhooks={webhooks === 'added'} />
                 <BotConnectorsHostNotice bot={bot} />

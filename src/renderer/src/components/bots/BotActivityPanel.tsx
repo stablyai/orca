@@ -77,10 +77,16 @@ export default function BotActivityPanel(): React.JSX.Element | null {
   return <BotActivityForBot key={bot.id} bot={bot} />
 }
 
-/** A shared agent's activity, items and settings are its owner's: none of them is shared, so the
- *  panel offers nothing for it rather than reads that fail and buttons that can't work. */
-function BotActivityForBot({ bot }: { bot: Bot }): React.JSX.Element | null {
-  return useSharedBotHostOf(bot.hostId) ? null : <BotActivityOrSettings bot={bot} />
+/** A shared agent shows a teammate their own Activity, read-only: its settings stay its owner's. */
+function BotActivityForBot({ bot }: { bot: Bot }): React.JSX.Element {
+  const readOnly = useSharedBotHostOf(bot.hostId) !== null
+  return readOnly ? (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <BotActivityTab bot={bot} readOnly />
+    </div>
+  ) : (
+    <BotActivityOrSettings bot={bot} />
+  )
 }
 
 function BotActivityOrSettings({ bot }: { bot: Bot }): React.JSX.Element {
@@ -112,7 +118,13 @@ function BotActivityOrSettings({ bot }: { bot: Bot }): React.JSX.Element {
   )
 }
 
-function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
+function BotActivityTab({
+  bot,
+  readOnly = false
+}: {
+  bot: Bot
+  readOnly?: boolean
+}): React.JSX.Element {
   const t = useTranslate()
   const activityRead = useBotActivityAuthorityRead(bot)
   // Its server is down: the panel shows the last read with its actions off until it's back.
@@ -250,6 +262,7 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
         quiet={quiet}
         picture={picture}
         offline={offline}
+        readOnly={readOnly}
         filter={
           read && (read.items.length > 0 || personPick) ? (
             <BotItemsFilterButton
@@ -261,7 +274,7 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
           ) : null
         }
       />
-      <fieldset disabled={offline} className="contents">
+      <fieldset disabled={offline || readOnly} className="contents">
         {read ? (
           <BotItemsFilterChips filter={filter} onFilter={setFilter} people={personPick} />
         ) : null}

@@ -14,7 +14,6 @@ import { BotItemError } from '../../../bots/bot-item-error'
 import type { BotItemLinkInput, BotItemWriteOutcome } from '../../../bots/bot-items-input'
 import type { BotItemsRemote } from '../../../bots/bot-items-ops'
 import type { BotItemRecord } from '../../../bots/bot-items-schema'
-import { botItemAccessible, type BotItemAccess } from '../../../bots/bot-item-access'
 import { noteBotItemWrite } from '../../../bots/bot-item-chat-notes'
 import { notifyBotItemQuestion } from '../../../bots/bot-item-question-notice'
 import { runtimeBotOwnerNotice } from '../../../bots/bot-could-not-finish'
@@ -49,18 +48,12 @@ export function writerOf(params: { callerSessionId?: string }, context: RpcConte
   return itemsWriter(sessionId, context)
 }
 
-/** The item a number (as the CLI shows it) or uid names on this host, when `access` reaches it; one
- *  it doesn't reads as missing, so its number tells nothing. */
-export async function resolveItem(
-  store: BotItemsRemote,
-  ref: string,
-  access: BotItemAccess
-): Promise<BotItemRecord> {
+/** The item a number (as the CLI shows it) or uid names on this host. */
+export async function resolveItem(store: BotItemsRemote, ref: string): Promise<BotItemRecord> {
   const trimmed = ref.trim()
-  const found = /^\d+$/.test(trimmed)
+  const item = /^\d+$/.test(trimmed)
     ? await store.byNumber(Number(trimmed))
     : await store.get(trimmed)
-  const item = found && botItemAccessible(access, found) ? found : null
   if (!item) {
     throw new BotItemError(
       'not_found',

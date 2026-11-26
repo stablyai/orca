@@ -17,6 +17,11 @@ function wireChat({ whoseHome: _internal, ...chat }: BotChatHostChat): BotChatTr
   return chat
 }
 
+/** A teammate's row: the host's tabs are the owner's, so none goes to them (`withViewerChatTabs`). */
+function teammateWireChat({ tab: _hostTab, ...chat }: BotChatHostChat): BotChatTreeChat {
+  return wireChat(chat)
+}
+
 function isPlaceholder(chat: BotChatHostChat): boolean {
   return botHomePlaceholderAccount(chat.chatId) !== null
 }
@@ -85,11 +90,11 @@ function teammateView(
       return []
     }
     if (!teammateHome(chat.whoseHome, viewer.accountId)) {
-      return [wireChat(chat)]
+      return [teammateWireChat(chat)]
     }
     return [
       {
-        ...wireChat(chat),
+        ...teammateWireChat(chat),
         chatId: asHome(chat.chatId),
         origin: 'home',
         title: HOME_CHAT_TITLE

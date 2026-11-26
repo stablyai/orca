@@ -5,6 +5,7 @@ import {
 } from '../../../../shared/file-access/cross-platform-path'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '../rpc/targets/runtime-worktree-selector'
+import { sharedBotHomeOnHost } from '../hosts/shared-bot-hosts/shared-bot-host-catalog'
 import type { RuntimeFileOperationArgs } from './runtime-file-client-types'
 import { chatScratchFileAddress } from './addressing/runtime-chat-scratch-file-address'
 import type { LocalFileAccess } from '../../../../shared/file-access/local-file-access'
@@ -71,14 +72,31 @@ export function canReadRelativeRuntimeFile(
   return Boolean(relativePath && relativePath.trim() && !isAbsolutePathLike(relativePath))
 }
 
+/** How `target` names the workspace in its `files.*` calls: its own id, except this computer's home
+ *  of an agent shared with it, which that agent's host names by its own home folder. */
+export function runtimeFileWorktreeSelector(
+  target: RuntimeClientTarget,
+  worktreeId: string
+): string {
+  const shared = sharedBotHomeOnHost(worktreeId)
+  return toRuntimeWorktreeSelector(
+    shared?.hostWorktreeId &&
+      target.kind === 'environment' &&
+      target.environmentId === shared.environmentId
+      ? shared.hostWorktreeId
+      : worktreeId
+  )
+}
+
 /** A workspace file by its relative path, else a chat's scratch file by its absolute path. */
 export function workspaceOrScratchFileAddress(
+  target: RuntimeClientTarget,
   worktreeId: string,
   relativePath: string | undefined,
   filePath: string
 ): { worktreeSelector: string; relativePath: string } | null {
   if (canReadRelativeRuntimeFile(relativePath)) {
-    return { worktreeSelector: toRuntimeWorktreeSelector(worktreeId), relativePath }
+    return { worktreeSelector: runtimeFileWorktreeSelector(target, worktreeId), relativePath }
   }
   return chatScratchFileAddress(filePath)
 }
@@ -105,7 +123,7 @@ export function getRemoteFileArgs(
   const address =
     relativePath === null
       ? chatScratchFileAddress(absolutePath)
-      : { worktreeSelector: toRuntimeWorktreeSelector(context.worktreeId), relativePath }
+      : { worktreeSelector: runtimeFileWorktreeSelector(target, context.worktreeId), relativePath }
   if (!address) {
     return null
   }

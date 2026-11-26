@@ -1,3 +1,6 @@
+import { botShareScopedView } from '../../../bots/team-share/bot-share-scoped-view'
+import { viewedAnswer } from '../../../bots/team-share/bot-share-connector-views'
+import { SHARE_BY_BOT } from '../../../../shared/bots/bot-share-rpc-methods'
 // `bots.slack.*`: a bot's Slack app and the account's Slack config grants, as this host's own Orca
 // account, for whichever of its clients asks (its own window, a paired desktop or the web client).
 import {
@@ -78,10 +81,13 @@ export const BOT_SLACK_METHODS = [
   defineMethod({
     name: 'bots.slack.state',
     permission: 'accounts-admin',
-    share: 'not-shared',
+    share: SHARE_BY_BOT,
     params: BotSlackBot,
     handler: async ({ botId, teamId }, context) =>
-      withHostCloudClient(context, (client) => client.slackState(botId, teamId))
+      viewedAnswer(
+        await withHostCloudClient(context, (client) => client.slackState(botId, teamId)),
+        botShareScopedView(context)?.['bots.slack.state']
+      )
   }),
   defineMethod({
     name: 'bots.slack.setUpApp',

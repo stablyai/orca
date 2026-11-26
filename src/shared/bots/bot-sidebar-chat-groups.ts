@@ -2,12 +2,27 @@ import { CHAT_TREE_CAPS, type BotChatTreeChat, type BotChatTreeWorker } from './
 
 export type BotSidebarChatGroup<T> = { chat: BotChatTreeChat; workspaces: T[] }
 
-/** The chats the sidebar lists: only those with an open tab; an older host doesn't say, so its open chats all list. */
-export function botSidebarListedChats(chats: readonly BotChatTreeChat[]): BotChatTreeChat[] {
-  return chats.filter((chat) => !chat.closed && chat.tab !== false)
+/** A shared agent's chats with `tab` as this computer has them: the host's tabs are its owner's, so
+ *  a chat has one here when a tab of it (or of its /clear successor) is open here. */
+export function withViewerChatTabs(
+  chats: readonly BotChatTreeChat[],
+  openSessionIds: ReadonlySet<string>
+): BotChatTreeChat[] {
+  return chats.map((chat) => ({
+    ...chat,
+    tab:
+      openSessionIds.has(chat.chatId) ||
+      (chat.liveSessionId !== undefined && openSessionIds.has(chat.liveSessionId))
+  }))
 }
 
-/** The sidebar's chats (those with an open tab) in the panel's order, each with the bot workspaces its
+/** The chats the sidebar lists: Home always, on any agent, owned or shared, made yet or not; the rest
+ *  only with an open tab (an older host doesn't say, so its open chats all list). */
+export function botSidebarListedChats(chats: readonly BotChatTreeChat[]): BotChatTreeChat[] {
+  return chats.filter((chat) => !chat.closed && (chat.origin === 'home' || chat.tab !== false))
+}
+
+/** The sidebar's chats (`botSidebarListedChats`) in the panel's order, each with the bot workspaces its
  *  workers have, live ones first. One no chat has goes under Home Chat; one whose chat has no tab is left out. */
 export function groupBotWorkspacesByChat<T extends { id: string }>(
   chats: readonly BotChatTreeChat[],

@@ -32,7 +32,10 @@ import { conversationRecordReader } from '../../../orchestration/addressing/sess
 import type { AgentSessionRecordStore } from '../../../agent-session/records/agent-session-record-store'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { structuredWorkerHostScope } from '../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
-import { BOT_ITEM_WRITE_METHOD_NAMES } from '../../../../../shared/bots/bot-items'
+import {
+  BOT_ITEM_READ_METHOD_NAMES,
+  BOT_ITEM_WRITE_METHOD_NAMES
+} from '../../../../../shared/bots/bot-items'
 import { CONNECTOR_POST_METHOD_NAMES } from '../../../../../shared/connector-action-contract'
 import type { RpcRequest } from '../../core'
 import type { OrchestrationCallerField } from '../../methods/orchestration/access/orchestration-method-access'
@@ -64,6 +67,7 @@ const SESSION_CALLER_METHODS: ReadonlySet<string> = new Set([
   'automation.create',
   'automation.update',
   ...BOT_ITEM_WRITE_METHOD_NAMES,
+  ...BOT_ITEM_READ_METHOD_NAMES,
   ...CONNECTOR_POST_METHOD_NAMES
 ])
 

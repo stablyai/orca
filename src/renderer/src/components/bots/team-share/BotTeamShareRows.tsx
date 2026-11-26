@@ -1,4 +1,6 @@
-// The Share dialog's rows: one per person with access, and the Add field's suggestions.
+// An agent's people list (the Share dialog's and Settings › Sharing's): a row per person with access,
+// and the Add field's suggestions.
+import { createContext, useContext } from 'react'
 import { Ellipsis, Mail, Search, Trash2, UserPlus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -24,6 +26,9 @@ import {
 
 export const LINK_ICONS = { slack: SlackIcon, github: GitHubIcon, linear: LinearIcon } as const
 const LINK_NAMES = { slack: 'Slack', github: 'GitHub', linear: 'Linear' } as const
+
+/** Where the person rows sit: in the Share dialog, or in a settings inset group. */
+export const TeamShareRowsInset = createContext(false)
 
 function LinkIcons({ links }: { links: readonly TeamShareLinkSource[] }): React.JSX.Element {
   return (
@@ -55,6 +60,7 @@ function PersonAvatar({
   badge?: 'slack' | 'github'
 }): React.JSX.Element {
   const BadgeIcon = badge ? LINK_ICONS[badge] : null
+  const inset = useContext(TeamShareRowsInset)
   return (
     <span className={cn('relative shrink-0', small ? 'size-7' : 'size-8')}>
       <BotOwnerAvatar iconClassName={small ? 'size-3.5' : 'size-4'} />
@@ -62,8 +68,12 @@ function PersonAvatar({
         <span
           className={cn(
             'absolute -right-0.5 -bottom-0.5 flex size-4 items-center justify-center rounded-full p-[3px]',
-            // Cut out of the surface it sits on: suggestions are on the popover, rows on the dialog.
-            small ? 'bg-popover' : 'bg-dialog-surface'
+            // Cut out of the surface it sits on: the popover, the dialog, or a settings inset group.
+            small
+              ? 'bg-popover'
+              : inset
+                ? 'bg-[color-mix(in_srgb,var(--foreground)_3.5%,var(--background))]'
+                : 'bg-dialog-surface'
           )}
         >
           <BadgeIcon className="size-full text-muted-foreground" />
@@ -126,7 +136,12 @@ function RowShell({
   muted?: boolean
 }): React.JSX.Element {
   return (
-    <li className="flex min-h-12 items-center gap-3 px-6 py-1.5">
+    <li
+      className={cn(
+        'flex min-h-12 items-center gap-3 py-1.5',
+        useContext(TeamShareRowsInset) ? 'pr-2.5 pl-3' : 'px-6'
+      )}
+    >
       <span className={cn('flex shrink-0', muted && 'opacity-50')}>{avatar}</span>
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-1.5">
@@ -257,6 +272,41 @@ export function TeamSharePersonRow({
       trailing={trailing}
       muted={isWaiting(person)}
     />
+  )
+}
+
+/** The owner, then everyone with access, then the caller's rows (Slack- and GitHub-only people). */
+export function TeamSharePeopleList({
+  owner,
+  people,
+  onRemove,
+  onResend,
+  onShareAgain,
+  className,
+  children
+}: {
+  owner: TeamShareOwner | null
+  people: readonly TeamSharePerson[]
+  onRemove: (person: TeamSharePerson) => void
+  onResend: (person: Extract<TeamSharePerson, { kind: 'invite' }>) => void
+  onShareAgain: (person: Extract<TeamSharePerson, { kind: 'account' }>) => void
+  className?: string
+  children?: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <ul className={className}>
+      {owner ? <TeamShareOwnerRow owner={owner} /> : null}
+      {people.map((person) => (
+        <TeamSharePersonRow
+          key={person.key}
+          person={person}
+          onRemove={onRemove}
+          onResend={onResend}
+          onShareAgain={onShareAgain}
+        />
+      ))}
+      {children}
+    </ul>
   )
 }
 
