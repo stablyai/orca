@@ -234,10 +234,11 @@ export function useMobileHomeData() {
   const sortedHostCatalog = useMemo(() => sortHostsByLastConnected(hostCatalog), [hostCatalog])
   // One clock for every agent count, so Feed, the Agents badge and each desktop agree.
   const now = useNow(30_000, homeFocused)
-  // A fresh read, not one already out: that one may predate the write it must carry. The cached rows stay
-  // its delta base, so the desktop answers with only what changed.
+  // A write's read is fresh, not one already out: that one may predate the write it must carry. The cached
+  // rows stay its delta base, so the desktop answers with only what changed. Pull to refresh joins a read
+  // already out instead, so it never cancels the one a write awaits.
   const refetchHostAgents = useCallback(
-    async (hostId: string): Promise<void> => {
+    async (hostId: string, cancelRefetch = true): Promise<void> => {
       const entry = allClientsRef.current.find((candidate) => candidate.hostId === hostId)
       if (entry?.client.getState() !== 'connected') {
         return
@@ -245,7 +246,7 @@ export function useMobileHomeData() {
       await queryClient
         .refetchQueries(
           { queryKey: homeWorktreeCountsKey(hostId), exact: true },
-          { cancelRefetch: true, throwOnError: false }
+          { cancelRefetch, throwOnError: false }
         )
         .catch(() => undefined)
       // Resolves once observers hold the answer, so the write's guess isn't dropped a frame early.
@@ -253,6 +254,9 @@ export function useMobileHomeData() {
     },
     [queryClient]
   )
+  const refreshAgents = useCallback(async (): Promise<void> => {
+    await Promise.all(allClientsRef.current.map((entry) => refetchHostAgents(entry.hostId, false)))
+  }, [refetchHostAgents])
   const agentActivity = useAgentActivityWrites(allClients, refetchHostAgents)
   const { pendingActivity } = agentActivity
   const agentList = useMemo<AgentListInput>(
@@ -322,6 +326,7 @@ export function useMobileHomeData() {
     hostConnections,
     hostsConnecting,
     needsYouByHost,
+    refreshAgents,
     router,
     setHostCatalog,
     sortedHostCatalog,
