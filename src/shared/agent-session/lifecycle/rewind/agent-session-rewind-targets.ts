@@ -2,6 +2,7 @@ import { AGENT_SESSION_FORKED_FROM_PRESENTATION } from '../records/agent-session
 import { isAgentSessionRewindTarget, savedRewindKeys } from './agent-session-rewind'
 import { readAgentJournalTurn } from '../records/agent-session-turn-record'
 import type { StructuredAgentSessionState } from '../../view/live-read/structured-agent-session-reducer'
+import type { AgentJournalRenderItem } from '../../journal/agent-session-journal-types'
 import type { AgentJournalCursor } from '../../journal/agent-session-journal-identity'
 import {
   agentJournalSubmissionKey,
@@ -15,7 +16,12 @@ import {
 
 /** User messages past `floor` the host can rewind to. */
 export function agentSessionRewindTargetIds(
-  { items, submissions }: Pick<StructuredAgentSessionState, 'items' | 'submissions'>,
+  {
+    items,
+    submissions
+  }: Pick<StructuredAgentSessionState, 'submissions'> & {
+    items: readonly AgentJournalRenderItem[]
+  },
   floor: number
 ): ReadonlySet<string> {
   const opener = turnOpeners(items)
@@ -36,7 +42,7 @@ export function agentSessionRewindTargetIds(
 }
 
 function acceptedProviderTurnOpeners(
-  items: StructuredAgentSessionState['items'],
+  items: readonly AgentJournalRenderItem[],
   submissions: StructuredAgentSessionState['submissions']
 ): ReadonlySet<string> {
   const accepted = new Set(
@@ -60,7 +66,7 @@ function acceptedProviderTurnOpeners(
   )
 }
 
-function turnOpeners(items: StructuredAgentSessionState['items']): Map<string, string> {
+function turnOpeners(items: readonly AgentJournalRenderItem[]): Map<string, string> {
   const openers = new Map<string, string>()
   for (const item of items) {
     const opener = readAgentJournalTurn(item.body)?.userItemId
@@ -73,7 +79,7 @@ function turnOpeners(items: StructuredAgentSessionState['items']): Map<string, s
 
 /** Rewind stays after inherited history, the latest /clear and the host's context floor. */
 export function agentSessionRewindContextFloor(
-  state: Pick<StructuredAgentSessionState, 'items' | 'epoch'>,
+  state: Pick<StructuredAgentSessionState, 'epoch'> & { items: readonly AgentJournalRenderItem[] },
   contextFloor: AgentJournalCursor | undefined
 ): number {
   let floor = agentSessionContextFloorSequence(contextFloor, state.epoch)

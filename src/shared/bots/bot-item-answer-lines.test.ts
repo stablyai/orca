@@ -9,7 +9,6 @@ import type { BotItemEvent } from './bot-items'
 import {
   botItemAnswerWords,
   botItemAnswersText,
-  botItemHeldAnswersText,
   botItemNamedAnswers,
   botItemUnsentAnswers
 } from './bot-item-answer-lines'
@@ -24,9 +23,7 @@ it('keeps each answer on its own line when two questions share a first line', ()
   }
   const answers = ['the internal ones', 'none yet']
   expect(botItemNamedAnswers(shape, botItemAnswersText(shape, answers))).toEqual(answers)
-  // Held with the first still open, the second stays on its own line.
   const later = [null, 'none yet']
-  expect(botItemNamedAnswers(shape, botItemHeldAnswersText(shape, later))).toEqual(later)
   // Posted with the first left out, the second keeps its place too; a place after the last answer
   // isn't written, and no answers write nothing.
   expect(botItemAnswersText(shape, later)).toBe('Target? →\nTarget? → none yet')
@@ -64,10 +61,8 @@ it('round-trips a typed answer that would otherwise make a longer question headi
     }
   })
   const answers = ['x? → No', null, null]
-  const held = botItemHeldAnswersText(shape, answers)
   const posted = botItemAnswersText(shape, answers)
-  expect(held).toBe('Keep →   x? → No')
-  expect(posted).toBe(held)
+  expect(posted).toBe('Keep →   x? → No')
   expect(botItemNamedAnswers(shape, posted)).toEqual(answers)
   expect(botItemNamedAnswers(shape, 'Keep → x? → No')).toEqual([null, 'No', null])
 })
@@ -151,8 +146,7 @@ it("keeps a line on the question it names when another's old line reads the same
       ]
     }
   })
-  const held = botItemHeldAnswersText(shape, [null, 'drop it'])
-  expect(botItemNamedAnswers(shape, held)).toEqual([null, 'drop it'])
+  expect(botItemNamedAnswers(shape, 'Keep private helper? → drop it')).toEqual([null, 'drop it'])
   expect(botItemPickedReplies(shape, { text: 'Keep private helper? → No' })).toEqual([
     [],
     [{ label: 'No', recommended: false }]

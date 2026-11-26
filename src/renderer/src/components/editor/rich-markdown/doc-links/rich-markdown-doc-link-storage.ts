@@ -1,13 +1,11 @@
 import type { MarkdownDocument } from '../../../../../../shared/file-listing/file-document'
 import {
-  createMarkdownDocumentIndex,
+  getMarkdownDocumentIndex,
   type MarkdownDocumentIndex
 } from '../../markdown/documents/markdown-doc-links'
 
 export type DocLinkStorage = {
   documents: MarkdownDocument[]
-  _cachedDocs: MarkdownDocument[] | null
-  _cachedIndex: MarkdownDocumentIndex | null
 }
 
 declare module '@tiptap/core' {
@@ -19,14 +17,7 @@ declare module '@tiptap/core' {
 
 export function getDocIndex(storage: DocLinkStorage): MarkdownDocumentIndex | null {
   if (storage.documents.length === 0) {
-    // Release cached document references when switching to an empty document list.
-    storage._cachedDocs = null
-    storage._cachedIndex = null
     return null
   }
-  if (storage._cachedDocs !== storage.documents) {
-    storage._cachedIndex = createMarkdownDocumentIndex(storage.documents)
-    storage._cachedDocs = storage.documents
-  }
-  return storage._cachedIndex
+  return getMarkdownDocumentIndex(storage.documents)
 }

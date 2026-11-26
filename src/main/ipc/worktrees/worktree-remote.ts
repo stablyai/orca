@@ -43,7 +43,7 @@ import {
   getBranchConflictKind,
   getBranchConflictKindStrict
 } from '../../git/refs/resolution/repo-branch-conflict'
-import { resolveDefaultBaseRefWithLocalGit } from '../../git/refs/resolution/repo-default-base-ref'
+import { readDefaultBaseRefWithLocalGit } from '../../git/refs/resolution/repo-default-base-ref'
 import { WorktreeCreateCollisionError } from '../../../shared/new-workspace/worktree-create-collision'
 import { resolveLocalGitUsername } from '../../git/repositories/git-username'
 import { hasLocalWorktreeBaseRef } from '../../git/worktrees/creation/worktree-base-ref-probe'
@@ -1093,7 +1093,7 @@ async function performLocalWorktreeCreate(
   const baseBranchPromise = resolveWorktreeCreateBase({
     requestedBaseBranch: args.baseBranch,
     repoWorktreeBaseRef: repo.worktreeBaseRef,
-    resolveDefaultBaseRef: () => resolveDefaultBaseRefWithLocalGit(localGitExecOptions),
+    resolveDefaultBaseRef: () => readDefaultBaseRefWithLocalGit(localGitExecOptions),
     isBaseUsable: async (baseBranchCandidate) => {
       if (runtime) {
         const remoteTrackingBase = await runtime.resolveRemoteTrackingBase(
