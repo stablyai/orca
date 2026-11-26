@@ -4,8 +4,8 @@ type NormalizedAbsolutePath = {
   rootKind: 'posix' | 'windows' | 'unc'
 }
 
-function normalizeSegments(pathValue: string): string[] {
-  const segments = pathValue.split(/[\\/]+/)
+function normalizeSegments(pathValue: string, windowsSeparators = true): string[] {
+  const segments = pathValue.split(windowsSeparators ? /[\\/]+/ : /\/+/)
   const stack: string[] = []
   for (const segment of segments) {
     if (!segment || segment === '.') {
@@ -51,7 +51,8 @@ export function normalizeAbsolutePath(pathValue: string): NormalizedAbsolutePath
   }
 
   if (pathValue.startsWith('/')) {
-    const normalized = `/${normalizeSegments(pathValue).join('/')}`.replace(/\/+$/, '') || '/'
+    const normalized =
+      `/${normalizeSegments(pathValue, false).join('/')}`.replace(/\/+$/, '') || '/'
     return {
       normalized,
       comparisonKey: normalized,
@@ -68,7 +69,7 @@ function inferHomePathFromCwd(cwd: string): string | null {
     return null
   }
 
-  const segments = normalizeSegments(normalizedCwd.normalized)
+  const segments = normalizeSegments(normalizedCwd.normalized, normalizedCwd.rootKind !== 'posix')
   if (normalizedCwd.rootKind === 'windows') {
     const [drive, usersSegment, userSegment] = segments
     if (!drive || !usersSegment || !userSegment || usersSegment.toLowerCase() !== 'users') {
@@ -124,7 +125,7 @@ export function joinAbsolutePath(basePath: string, relativePath: string): string
   }
 
   const base = normalizedBase.normalized.replace(/\/$/, '')
-  const suffix = relativePath.replace(/^[\\/]+/, '')
+  const suffix = relativePath.replace(normalizedBase.rootKind === 'posix' ? /^\/+/ : /^[\\/]+/, '')
   // Resolve parent segments against the base while its drive or UNC share remains the root.
   return normalizeAbsolutePath(`${base}/${suffix}`)?.normalized ?? null
 }
