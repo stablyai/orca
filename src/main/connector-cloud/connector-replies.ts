@@ -94,9 +94,11 @@ export async function postWithRetries<TSchema extends z.ZodType>(
         sent = compatible
       }
     }
-    const retryable =
-      !sent.ok && (sent.status === null || sent.status === 429 || sent.status >= 500)
-    if (!retryable || failures + 1 >= REPLY_ATTEMPTS) {
+    if (
+      sent.ok ||
+      (sent.status !== null && sent.status !== 429 && sent.status < 500) ||
+      failures + 1 >= REPLY_ATTEMPTS
+    ) {
       return sent
     }
     const waitMs = connectorRetryDelayMs(failures, sent, random)

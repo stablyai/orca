@@ -134,13 +134,14 @@ export class ConnectorTurnEvents {
           const ids = replyDeliveryIds([item])
           ids.forEach((id) => this.setAside.add(id))
           this.replies.released(ids, false)
-          return
+          return false
         }
         // A sibling of a held reply (one answer split across events) leaves the held ids held.
         this.replies.released(
           replyDeliveryIds([item]).filter((id) => !this.setAside.has(id)),
           true
         )
+        return false
       }
     })
   }
