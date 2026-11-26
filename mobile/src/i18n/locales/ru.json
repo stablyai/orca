@@ -7715,7 +7715,8 @@
       "needsYouCount": "Требуют внимания: {{count}}",
       "open": "Открыть",
       "delete": "Удалить чат",
-      "noMessages": "Сообщений пока нет"
+      "noMessages": "Сообщений пока нет",
+      "personHome": "Home ({{name}})"
     },
     "panel": {
       "backTo": "Назад к {{name}}",

@@ -179,6 +179,13 @@ describe('a teammate share stored before names', () => {
     )
     expect(withBotShareResolved(named, { ...again, name: 'Alice Kim' })).toBe(named)
     expect(withBotShareResolved(named, again)).toBe(named)
+    // The teammate's sign-in email changed since they accepted: still their share, by account.
+    const moved = withBotShareResolved(named, {
+      ...again,
+      email: 'alice@new.example',
+      name: 'Alice K'
+    })
+    expect(botSharePersonName({ shares: [...moved!] }, 'acct-alice')).toBe('Alice K')
     expect(BotSharesSchema.parse(JSON.parse(JSON.stringify(named)))).toEqual(named)
   })
 })

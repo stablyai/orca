@@ -30,7 +30,9 @@ import {
   isBotSideChatTab,
   isHostedBotChatTab
 } from '../../../../../shared/bots/bot-home-tab'
-import { botHomeOfSession, botSharePersonName } from '../../../../../shared/bots/bot-home-of'
+import { botHomeTitleOf } from '../../../../../shared/bots/bot-home-of'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
+import { useSharedBotHostOf } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import { useBotHomeRuleApplies } from '@/lib/bot-host-status'
 import { BotAvatar } from '../../bots/BotAvatar'
 import { BotGroupTabIcon, useBotGroupTabMembers } from '../../bots/BotGroupTabIcon'
@@ -98,23 +100,15 @@ function TabBarItemRow({
   )
   const isBotChat = item.type === 'agent-session' && isBotHomeTab(item.data, bot)
   const homeRule = useBotHomeRuleApplies(bot)
-  // The owner's view of a teammate's Home, named from their share row as it is now: the name the
-  // chat was given when it was made may predate the teammate's name.
-  const teammateHomeOf =
-    item.type === 'agent-session' && bot && !isBotChat
-      ? botHomeOfSession(bot, item.data.entityId)
-      : null
-  const teammateName =
-    bot && teammateHomeOf && teammateHomeOf !== 'owner'
-      ? botSharePersonName(bot, teammateHomeOf.accountId)
-      : null
-  // Why: the viewer's own Home slot (the owner's, or a teammate's on their computer) reads "Home" in
-  // the UI language, whatever name the host gave the chat.
-  const conversationName = isBotChat
-    ? t('bots.tabs.homeTitle', 'Home')
-    : teammateName !== null
-      ? t('bots.chats.personHome', '{{name}}’s Home', { name: teammateName })
-      : chatNaming.name
+  const homeTitle = item.type === 'agent-session' ? botHomeTitleOf(bot, item.data.entityId) : null
+  const teammateName = homeTitle?.kind === 'teammate' ? homeTitle.name : null
+  const sharedHost = useSharedBotHostOf(bot?.hostId ?? LOCAL_EXECUTION_HOST_ID)
+  const conversationName =
+    homeTitle?.kind === 'own'
+      ? t('bots.tabs.homeTitle', 'Home')
+      : teammateName !== null
+        ? t('bots.chats.personHome', '{{name}}’s Home', { name: teammateName })
+        : chatNaming.name
   const ruledHome = useAppStore(
     (state) =>
       state.workspaceSessionReady &&
@@ -238,7 +232,7 @@ function TabBarItemRow({
         }
         identityDetail={
           isBotChat
-            ? bot?.shareViewer
+            ? sharedHost !== null || bot?.shareViewer
               ? t(
                   'bots.tabs.teammateHomeDetail',
                   'Home: your main chat with this agent. Your requests and its replies to you land here.'

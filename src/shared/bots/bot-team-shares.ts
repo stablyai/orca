@@ -105,20 +105,21 @@ export function withBotSharesEmailed(
 /**
  * An invite signed in as an Orca account, applied to the list as the host has it now: null when
  * the share is gone or no longer that email's (removed while the cloud resolved it). An account
- * already on the list keeps its own share, and the invite goes. A repeat for the account share gives
- * it the name it carries. The same list back: nothing to write.
+ * already on the list keeps its own share, and the invite goes. A repeat for the account share, by
+ * its account, gives it the name it carries. The same list back: nothing to write.
  */
 export function withBotShareResolved(
   shares: readonly BotShare[],
   resolved: { shareId: string; email: string; accountId: string; name?: string }
 ): readonly BotShare[] | null {
   const share = shares.find((entry) => entry.shareId === resolved.shareId)
+  // A repeat names a share resolved before the cloud sent names. Matched by account, not email:
+  // the teammate's sign-in email may have changed since they accepted.
+  if (share?.kind === 'account') {
+    return share.accountId === resolved.accountId ? withBotShareNamed(shares, resolved) : null
+  }
   if (!share || share.email !== normalizeShareEmail(resolved.email)) {
     return null
-  }
-  if (share.kind === 'account') {
-    // A repeat names a share resolved before the cloud sent names.
-    return share.accountId === resolved.accountId ? withBotShareNamed(shares, resolved) : null
   }
   if (shares.some((entry) => entry.kind === 'account' && entry.accountId === resolved.accountId)) {
     return shares.filter((entry) => entry.shareId !== share.shareId)

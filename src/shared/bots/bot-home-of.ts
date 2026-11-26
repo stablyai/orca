@@ -142,6 +142,24 @@ export function botHomeName(bot: Pick<Bot, 'shares'>, of: BotHomeOf): string {
     : `${botSharePersonName(bot, of.accountId)}’s ${BOT_HOME_NAME}`
 }
 
+/** A chat's Home as its viewer titles it: their own Home slot ("Home", whatever the host named it),
+ *  a teammate's (named from their share row as it is now), or null for any other chat. The one rule
+ *  desktop and phone tabs both title by. */
+export type BotHomeTitle = { kind: 'own' } | { kind: 'teammate'; name: string } | null
+
+export function botHomeTitleOf(bot: HomeBot | null, sessionId: string): BotHomeTitle {
+  if (!bot) {
+    return null
+  }
+  if (bot.chatSessionId === sessionId) {
+    return { kind: 'own' }
+  }
+  const of = botHomeOfSession(bot, sessionId)
+  return of && of !== 'owner'
+    ? { kind: 'teammate', name: botSharePersonName(bot, of.accountId) }
+    : null
+}
+
 /** Whose Home this session is, compared by /clear root; null for any other chat. A renderer has no
  *  resolver and compares ids as they are, as its tab check does. */
 export function botHomeOfSession(

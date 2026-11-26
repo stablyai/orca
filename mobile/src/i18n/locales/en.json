@@ -6378,7 +6378,8 @@
       "needsYouCount": "{{count}} needs you",
       "open": "Open",
       "delete": "Delete chat",
-      "noMessages": "No messages yet"
+      "noMessages": "No messages yet",
+      "personHome": "{{name}}’s Home"
     },
     "row": {
       "replyingIn": "Replying in {{place}}",
