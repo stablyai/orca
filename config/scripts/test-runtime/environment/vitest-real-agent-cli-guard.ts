@@ -15,7 +15,6 @@ const AGENT_CLI_NAMES = [
   'crush',
   'cursor-agent',
   'droid',
-  'gemini',
   'goose',
   'grok',
   'kimi',

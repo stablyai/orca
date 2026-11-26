@@ -22,7 +22,9 @@ export const LOGO_TILES: {
     sentry: '#362d59',
     context7: '#007a55',
     neon: '#000000',
-    supabase: '#1c1c1c'
+    supabase: '#1c1c1c',
+    granola: '#b2c248',
+    intercom: DARK_TILE
   },
   composio: {
     composio: '#000000',

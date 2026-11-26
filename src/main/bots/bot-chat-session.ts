@@ -66,6 +66,8 @@ export type BotRunFields = {
   triggeredBy?: AutomationTriggeredBy
   automationRun?: AutomationRunMessage
   images?: readonly { path: string }[]
+  /** The prompt's message id; an automation run's is derived from the run so a restart finds its turn. */
+  messageId?: string
 }
 
 /** A message to a bot's session, as native chat sends it. */
@@ -179,7 +181,7 @@ export function botChatSessions(deps: BotChatDependencies) {
       turn: {
         body,
         ...(from ? {} : { personsMessage: true }),
-        operationId: mintAgentSessionOperationId(Date.now()),
+        operationId: run?.messageId ?? mintAgentSessionOperationId(Date.now()),
         expectedRuntimeFence: host.deps.store.requireWritableRecord(sessionId).lease.runtimeFence,
         delivery: 'queue'
       }

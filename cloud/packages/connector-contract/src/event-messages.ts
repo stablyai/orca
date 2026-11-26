@@ -133,7 +133,9 @@ export const ConnectorReplyEventSchema = z
     links: OptionalWorkLinksSchema,
     turnId: EpochMsSchema.optional(),
     // How long the answered turn ran, by the machine's clock; shown under the answer.
-    tookMs: z.number().int().positive().optional()
+    tookMs: z.number().int().positive().optional(),
+    // A turn done without an answer ran a tool call that may have acted; its line asks to check first.
+    toolsRan: z.literal(true).optional()
   })
   .refine((reply) => reply.deliveryIds.includes(reply.answerDeliveryId))
   .refine((reply) => (reply.outcome === 'answered') === (reply.prose !== undefined))

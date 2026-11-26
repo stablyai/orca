@@ -31,9 +31,9 @@ describe('isSameForegroundAgent on Windows', () => {
   })
 
   it('accepts the agent the lookup found, whatever image hosts it', async () => {
-    // Gemini runs as node.exe; its pid existed before the lookup that named it.
+    // Copilot runs as node.exe; its pid existed before the lookup that named it.
     host.creationTimes.set(40, 1_000)
-    expect(await isSameForegroundAgent(40, { processName: 'gemini', identifiedAt: 2_000 })).toBe(
+    expect(await isSameForegroundAgent(40, { processName: 'copilot', identifiedAt: 2_000 })).toBe(
       true
     )
   })

@@ -46,7 +46,7 @@ export function MobileBotAgentPage(props: {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { bot } = props
-  const choices = useNewBotAgentChoices(props.client)
+  const choices = useNewBotAgentChoices(props.client)?.agents ?? null
   const [switching, setSwitching] = useState<
     (BotAgentSwitchPreviewResult & { agent: BotAgent }) | null
   >(null)

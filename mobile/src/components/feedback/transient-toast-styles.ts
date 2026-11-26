@@ -21,5 +21,9 @@ export const transientToastStyles = themedStyleSheet(() => ({
     paddingVertical: spacing.sm,
     borderRadius: radii.surface,
     overflow: 'hidden'
-  }
+  },
+  withAction: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  message: { color: colors.textPrimary, fontSize: 13, fontWeight: '600' },
+  action: { color: colors.textSecondary, fontSize: 13, fontWeight: '600' },
+  actionPressed: { opacity: 0.6 }
 }))

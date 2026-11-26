@@ -166,7 +166,9 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
   const cliUpdateModels = cliUpdate?.update?.models
   const cliUpdateAgent = cliUpdateModels?.length ? cliUpdate?.update?.agent : undefined
   const cliUpdateRunnable = cliUpdate?.update?.runnable === true
-  const cliUpdatePhase = cliUpdate?.run?.phase ?? 'idle'
+  const cliUpdateRunPhase = cliUpdate?.run?.phase ?? 'idle'
+  // Waiting for an update slot reads as updating here.
+  const cliUpdatePhase = cliUpdateRunPhase === 'queued' ? 'running' : cliUpdateRunPhase
   const startCliUpdate = cliUpdate?.start
   const openCliUpdateFailure = cliUpdate?.openFailure
   const optionSurface = useMemo<SessionOptionsSurface>(

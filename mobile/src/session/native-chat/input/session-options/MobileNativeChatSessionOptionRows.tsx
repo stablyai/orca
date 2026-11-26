@@ -1,5 +1,3 @@
-import { ListGroup, SectionHeader } from '../../../../components/list/ListGroup'
-import { isReadOnlySessionOptionValue } from '../../../../../../src/shared/native-chat/input/native-chat-session-options'
 import {
   mobileDeferredPermissionSummary,
   mobileSessionOptionSummaryValue
@@ -12,8 +10,14 @@ import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import type { Translate } from '../../../../i18n/mobile-i18n'
-import { LIST_ROW_PADDING, ListRow } from '../../../../components/list/ListGroup'
 import {
+  LIST_ROW_PADDING,
+  ListGroup,
+  ListRow,
+  SectionHeader
+} from '../../../../components/list/ListGroup'
+import {
+  isReadOnlySessionOptionValue,
   sessionOptionValueMarker,
   type SessionOptionDescriptor,
   type SessionOptionValue

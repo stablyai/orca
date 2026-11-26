@@ -1,3 +1,4 @@
+import { MCP_SERVERS_RUNTIME_CAPABILITY } from '../../../../../src/shared/mcp-servers/mcp-servers'
 import {
   AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY,
   AGENT_SESSION_MODEL_EFFORT_DISCOVERY_CAPABILITY,
@@ -96,6 +97,8 @@ export type StructuredAgentSessionHostSupport = {
   sendUsageLimitContinuation: boolean
   /** The host saves Skip on an async question card for every device. */
   skipAsyncQuestions?: boolean
+  /** The host keeps its own MCP server list, which its chats' `/mcp` tray links to. */
+  mcpServers?: boolean
 }
 
 export function structuredAgentSessionHostSupport(
@@ -148,6 +151,9 @@ export function structuredAgentSessionHostSupport(
     sendUsageLimitContinuation: capabilities.includes(
       AGENT_SESSION_SEND_USAGE_LIMIT_CONTINUATION_RUNTIME_CAPABILITY
     ),
-    skipAsyncQuestions: capabilities.includes(AGENT_SESSION_SKIP_ASYNC_QUESTIONS_RUNTIME_CAPABILITY)
+    skipAsyncQuestions: capabilities.includes(
+      AGENT_SESSION_SKIP_ASYNC_QUESTIONS_RUNTIME_CAPABILITY
+    ),
+    mcpServers: capabilities.includes(MCP_SERVERS_RUNTIME_CAPABILITY)
   }
 }

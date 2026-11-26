@@ -81,7 +81,7 @@ export function NativeChatProviderPicker({
     : undefined
   const pick = async (next: AgentPickerEntry['agent'], draft?: AgentPickerDraft) => {
     const entry = entries.find((candidate) => candidate.agent === next)
-    if (selecting.current || !entry?.surfaces.includes('chat')) {
+    if (!entry?.surfaces.includes('chat')) {
       return
     }
     const choices =
@@ -90,7 +90,6 @@ export function NativeChatProviderPicker({
       ...choices?.options,
       ...(choices?.model ? { model: choices.model } : {})
     }
-    selecting.current = true
     try {
       if (next === active && next === agent) {
         for (const key of keys) {
@@ -125,6 +124,7 @@ export function NativeChatProviderPicker({
           description: chatSwitchPermissionCopy(result.from, result.fromPermission, next, t),
           confirmLabel: t('chat.providerSwitch.allow', 'Allow and switch'),
           initialFocus: 'cancel',
+          aboveMenus: true,
           ignoresOpeningGesture: true
         })
         if (allowed) {
@@ -152,8 +152,6 @@ export function NativeChatProviderPicker({
       }
     } catch {
       onError(t('chat.providerSwitch.failed', 'Couldn’t select this agent.'))
-    } finally {
-      selecting.current = false
     }
   }
   return (
@@ -166,7 +164,14 @@ export function NativeChatProviderPicker({
       selectAgentOnTab
       onOpenChange={setOpen}
       onCatalogOpen={setCatalogAgent}
-      onPick={(next, draft) => void pick(next, draft)}
+      onPick={(next, draft) => {
+        if (!selecting.current) {
+          selecting.current = true
+          void pick(next, draft).finally(() => {
+            selecting.current = false
+          })
+        }
+      }}
     />
   )
 }

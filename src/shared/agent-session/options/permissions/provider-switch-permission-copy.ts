@@ -1,3 +1,4 @@
+// @protected-copy scope=file
 import type { AgentChatPermissionChoice } from '../../../agent-launch/permissions/agent-chat-permission-mode'
 import { tuiAgentDisplayName } from '../../../agent-launch/catalog/tui-agent-display-names'
 import type { CopyTranslate } from '../../../i18n/english-translate'

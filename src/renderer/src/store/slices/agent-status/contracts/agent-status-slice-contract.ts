@@ -47,6 +47,8 @@ export type AgentStatusSlice = {
   updateAgentStatusState: (update: AgentStatusStateUpdate) => void
   /** Main-synced dispatch metadata for live panes that may only have title-derived status in the renderer. */
   runtimeAgentOrchestrationByPaneKey: Record<string, AgentStatusOrchestrationContext>
+  /** Remote hosts' Dispatch metadata, by host then that host's pane key; kept apart from this computer's. */
+  remoteAgentOrchestrationByHost: Record<string, Record<string, AgentStatusOrchestrationContext>>
   /** PTYs still reporting legacy numeric pane keys but with registry-backed UUID proof; stored separately from normal hook-reported status. */
   migrationUnsupportedByPtyId: Record<string, MigrationUnsupportedPtyEntry>
   /** Monotonic tick that advances when agent-status freshness boundaries pass. */

@@ -112,6 +112,7 @@ export class ConversationEvents {
     })
     this.chats = new ChatTurns({
       ...deps,
+      switchedAgentForLink: this.switchedAgentForLink,
       linkedFor: (paneKey) => this.linkedFor(paneKey),
       emit: (event) => this.emit(event),
       keepAdoptedTurn: ({ link, workspace }, adoptedTurn) => {
@@ -125,6 +126,9 @@ export class ConversationEvents {
       turnEnded: (paneKey) => this.shown.forgetPane(paneKey)
     })
   }
+
+  private switchedAgentForLink = (link: ExternalConversationLink): string | undefined =>
+    link.source === 'slack' ? this.deps.switchedAgentForTurn?.(link.sessionId) : undefined
 
   watch(listener: ConversationWatchListener): () => void {
     if (!this.release) {
@@ -140,6 +144,8 @@ export class ConversationEvents {
       }
     }
     this.listeners.add(listener)
+    // Chats closed or unlinked while nothing watched leave no turn dates behind.
+    this.chats.dates.retain(new Set([...allLinks(this.deps.store)].map(({ link }) => link.paneKey)))
     // Subscribe before reading the snapshot to avoid losing intervening changes.
     const snapshot = this.snapshot()
     this.answered.saw(snapshot)
@@ -166,6 +172,7 @@ export class ConversationEvents {
   /** A link dropped because its chat is gone. */
   unlinked({ workspace, link }: LinkedConversation): void {
     this.shown.forgetConversation(link)
+    this.chats.dates.forget(link.paneKey)
     this.emit({ kind: 'unlinked', ...conversationPane(link, workspace.worktreeId) })
   }
 
@@ -221,11 +228,8 @@ export class ConversationEvents {
               this.deps.promptStanding(link, promptId, cursor)
             )
         const prompt = live ?? restated?.prompt ?? null
-        const working = hears && conversationWorking(row)
-        const switchedAgent =
-          hears && link.source === 'slack'
-            ? this.deps.switchedAgentForTurn?.(link.sessionId)
-            : undefined
+        const working = hears && this.chats.dates.leadWorking(link.paneKey, row)
+        const switchedAgent = hears ? this.switchedAgentForLink(link) : undefined
         const entry: ConversationSnapshot['conversations'][number] = {
           ...conversationPane(link, workspace.worktreeId),
           agent: link.agent,

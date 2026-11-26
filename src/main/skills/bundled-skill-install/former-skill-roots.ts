@@ -17,7 +17,7 @@ import {
 
 /** Global roots Orca once installed into for agents that also read ~/.agents/skills. */
 const FORMER_GLOBAL_SKILL_ROOTS: readonly (readonly string[])[] = [
-  // Gemini CLI warns on every start when this repeats a ~/.agents/skills name.
+  // Orca once linked skills here for Gemini CLI; its copies still need retiring.
   ['.gemini', 'skills']
 ]
 

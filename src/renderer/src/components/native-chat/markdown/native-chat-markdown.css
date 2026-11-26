@@ -78,11 +78,21 @@
   color: inherit;
 }
 
-/* Fade new words/blocks with opacity only, preserving line geometry. */
+/* Fade new words/blocks in place, preserving line geometry. */
 @media (prefers-reduced-motion: no-preference) {
-  .native-chat-markdown[data-word-fade] :is([data-word], a, :not(pre) > code),
-  .native-chat-markdown[data-block-fade] > :is(pre, div, table, hr) {
+  /* A word fades its own color: an opacity transition would give every fading word a compositing
+     layer, and a smoothly streaming reply keeps hundreds of them alive in GPU memory. */
+  .native-chat-markdown[data-word-fade] [data-word] {
     /* WORD_FADE_MS in use-native-chat-paced-text.ts waits this long for the last words. */
+    transition: color 300ms ease-out;
+
+    @starting-style {
+      color: transparent;
+    }
+  }
+
+  .native-chat-markdown[data-word-fade] :is(a, :not(pre) > code),
+  .native-chat-markdown[data-block-fade] > :is(pre, div, table, hr) {
     transition: opacity 300ms ease-out;
 
     @starting-style {
