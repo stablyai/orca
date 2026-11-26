@@ -43,8 +43,11 @@ export function withAcpToolFreeFolder(
       const composed = await part({ ...basis, launchDirectory: async () => cwd }, identity)
       const { release } = composed.launch
       const releaseAll = async (): Promise<void> => {
-        await release?.()
-        await folder.remove()
+        try {
+          await release?.()
+        } finally {
+          await folder.remove()
+        }
       }
       return { ...composed, launch: { ...composed.launch, toolFree: { cwd }, release: releaseAll } }
     } catch (error) {

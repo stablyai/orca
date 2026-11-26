@@ -2,6 +2,7 @@ import { mkdtemp, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { z } from 'zod'
 import { KILO_LAUNCH_SPEC } from '../../kilo/kilo-acp-launch-spec'
 import { QWEN_CODE_LAUNCH_SPEC } from '../../qwen-code/qwen-code-acp-launch-spec'
 import { ACP_PROTOCOL_VERSION } from '../generated/acp-protocol.generated'
@@ -11,6 +12,8 @@ import { tick } from '../process/testing/acp-scripted-agent.test-support'
 import { acquireAcpStructuredSession } from './acp-structured-acquire'
 import { AcpStructuredChildren } from './children/acp-structured-child-lifecycle'
 
+const ConfigOption = z.object({ configId: z.string(), value: z.string() })
+const Settlement = z.object({ kind: z.literal('settlement'), resolution: z.unknown() })
 const folders: string[] = []
 afterEach(async () => {
   await Promise.all(folders.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
@@ -47,8 +50,10 @@ async function acquireRun(input: {
     connect: (spawn: never, options: never) => (child = new FakeAcpChild(spawn, options)),
     readProcessStartTime: async () => 1
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the scripted run reads only these deps
   const children = new AcpStructuredChildren(deps as never)
   let child: FakeAcpChild | undefined
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a scripted acquire reads only these fields
   const { session } = await acquireAcpStructuredSession({
     acquire: {
       identity: { sessionId: 'chat-1' },
@@ -80,7 +85,7 @@ async function acquireRun(input: {
   )
   agent.on('session/new', (frame) => agent.reply(frame, { sessionId: 'agent-1' }))
   agent.on('session/set_config_option', (frame) => {
-    const { configId, value } = frame.params as { configId: string; value: string }
+    const { configId, value } = ConfigOption.parse(frame.params)
     configured.push(value)
     agent.reply(frame, {
       configOptions: [
@@ -157,11 +162,11 @@ describe('a tool-free ACP run', () => {
     for (let i = 0; i < 5; i++) {
       await tick()
     }
-    const settlements = steps.filter(
-      (step): step is { kind: 'settlement'; resolution: unknown } =>
-        (step as { kind: string }).kind === 'settlement'
-    )
-    expect(settlements.map((step) => step.resolution)).toEqual([
+    const settlements = steps.flatMap((step) => {
+      const read = Settlement.safeParse(step)
+      return read.success ? [read.data.resolution] : []
+    })
+    expect(settlements).toEqual([
       expect.objectContaining({
         ending: expect.objectContaining({
           turns: 'running',
