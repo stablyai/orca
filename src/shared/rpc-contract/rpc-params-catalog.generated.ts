@@ -71,6 +71,7 @@ import { DelegatedMobileDeviceSyncParamsSchema } from '../remote-runtime/pairing
 import { RegisterDeviceKeyParamsSchema } from '../remote-runtime/pairing/device-key-registration-contract'
 import { DeclareOrcaAccountParamsSchema } from '../remote-runtime/pairing/paired-desktop-account-contract'
 import { PairingCreateOfferParamsSchema } from '../remote-runtime/pairing/pairing-create-offer-contract'
+import { PairingGetDirectEndpointsParamsSchema } from '../remote-runtime/pairing/pairing-direct-endpoints-contract'
 import { ExchangePairingTicketParamsSchema } from '../remote-runtime/pairing/ticket-exchange-contract'
 import {
   PairingGetEndpointsParamsSchema,
@@ -387,7 +388,8 @@ import {
   ConnectorReply,
   ConnectorSlackMirrorPost,
   ConnectorSlackMirrorSet,
-  ConnectorSlackMirrorStatus
+  ConnectorSlackMirrorStatus,
+  ConnectorWakeReplyPlace
 } from './connectors/connector-params'
 import {
   AttachParams as AttachParamsOfEmulatorParams,
@@ -1571,6 +1573,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'connector.slackMirror.post': ConnectorSlackMirrorPost,
   'connector.slackMirror.set': ConnectorSlackMirrorSet,
   'connector.slackMirror.status': ConnectorSlackMirrorStatus,
+  'connector.wakeReplyPlace': ConnectorWakeReplyPlace,
   'desktop.openWindowInBackground': null,
   'desktopBrowserBridge.attach': DesktopBrowserBridgeAttachParams,
   'desktopBrowserBridge.downloadAbort': DesktopBrowserBridgeDownloadAbortParams,
@@ -2054,6 +2057,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'pairing.createOffer': PairingCreateOfferParamsSchema,
   'pairing.delegatedMobileDevice.sync': DelegatedMobileDeviceSyncParamsSchema,
   'pairing.exchangeTicket': ExchangePairingTicketParamsSchema,
+  'pairing.getDirectEndpoints': PairingGetDirectEndpointsParamsSchema,
   'pairing.getEndpoints': PairingGetEndpointsParamsSchema,
   'pairing.provisionRelay': PairingProvisionRelayParamsSchema,
   'pairing.registerDeviceKey': RegisterDeviceKeyParamsSchema,

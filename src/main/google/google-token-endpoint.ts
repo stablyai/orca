@@ -1,6 +1,7 @@
 // Google's token endpoint, called from this host only: the code exchange (with the PKCE verifier
 // that never left the host) and revoke; refresh goes through the shared host login refresh. Fixed URLs; a client file's own URIs are ignored.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 
 export const GOOGLE_AUTHORIZE_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
 export const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
@@ -51,20 +52,26 @@ async function postForm(
   return { status: response.status, ok: response.ok, body }
 }
 
-const Text = z.string().min(1)
-const TokenResponse = z.object({
-  access_token: Text,
-  expires_in: z.number().positive(),
-  refresh_token: Text.optional(),
-  scope: Text.optional(),
-  id_token: Text.optional()
-})
-const TokenErrorResponse = z.object({ error: Text, error_description: z.string().optional() })
-const IdTokenClaims = z.object({
-  sub: Text,
-  email: Text,
-  email_verified: z.boolean().optional()
-})
+const Text = lazyZodSchema(() => z.string().min(1))
+const TokenResponse = lazyZodSchema(() =>
+  z.object({
+    access_token: Text,
+    expires_in: z.number().positive(),
+    refresh_token: Text.optional(),
+    scope: Text.optional(),
+    id_token: Text.optional()
+  })
+)
+const TokenErrorResponse = lazyZodSchema(() =>
+  z.object({ error: Text, error_description: z.string().optional() })
+)
+const IdTokenClaims = lazyZodSchema(() =>
+  z.object({
+    sub: Text,
+    email: Text,
+    email_verified: z.boolean().optional()
+  })
+)
 
 function readTokens(status: number, ok: boolean, body: unknown): GoogleTokens {
   const tokens = ok ? TokenResponse.safeParse(body).data : undefined
