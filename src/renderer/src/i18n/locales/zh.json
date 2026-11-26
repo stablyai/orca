@@ -21522,7 +21522,6 @@
         "loadingWorker": "正在加载工作者…",
         "resultUnavailable": "工作者结果不可用",
         "workersRegion": "工作者",
-        "doneResult": "已完成 · 打开结果",
         "clearName": "清除 {{name}}",
         "stopUnavailable": "无法停止 {{name}} · {{title}} · {{reason}}",
         "stopName": "停止 {{name}} · {{title}}",

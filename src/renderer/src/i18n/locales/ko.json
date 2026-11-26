@@ -22003,7 +22003,6 @@
         "loadingWorker": "워커 로드 중…",
         "resultUnavailable": "워커 결과를 확인할 수 없음",
         "workersRegion": "워커",
-        "doneResult": "완료 · 결과 열기",
         "clearName": "{{name}} 지우기",
         "stopUnavailable": "{{name}} · {{title}} 중지할 수 없음 · {{reason}}",
         "stopName": "{{name}} · {{title}} 중지",

@@ -22172,7 +22172,6 @@
         "loadingWorker": "Cargando trabajador…",
         "resultUnavailable": "Resultado del trabajador no disponible",
         "workersRegion": "Trabajadores",
-        "doneResult": "Terminado · abrir resultado",
         "clearName": "Borrar {{name}}",
         "stopUnavailable": "Detener {{name}} · {{title}} no disponible · {{reason}}",
         "stopName": "Detener {{name}} · {{title}}",

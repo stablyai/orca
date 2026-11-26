@@ -22290,7 +22290,6 @@
         "loadingWorker": "正在載入工作者…",
         "resultUnavailable": "無法取得工作者結果",
         "workersRegion": "工作者",
-        "doneResult": "完成 · 開啟結果",
         "clearName": "清除 {{name}}",
         "stopUnavailable": "停止 {{name}} · {{title}} 無法使用 · {{reason}}",
         "stopName": "停止 {{name}} · {{title}}",

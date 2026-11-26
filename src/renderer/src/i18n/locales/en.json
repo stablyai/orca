@@ -23048,7 +23048,6 @@
         "loadingWorker": "Loading worker…",
         "resultUnavailable": "Worker result unavailable",
         "workersRegion": "Workers",
-        "doneResult": "Done · open result",
         "clearName": "Clear {{name}}",
         "stopUnavailable": "Stop {{name}} · {{title}} unavailable · {{reason}}",
         "stopName": "Stop {{name}} · {{title}}",

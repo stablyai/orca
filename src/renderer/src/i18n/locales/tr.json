@@ -22926,7 +22926,6 @@
         "loadingWorker": "Çalışan yükleniyor…",
         "resultUnavailable": "Çalışan sonucu kullanılamıyor",
         "workersRegion": "Çalışanlar",
-        "doneResult": "Tamamlandı · sonucu aç",
         "clearName": "Temizle: {{name}}",
         "stopUnavailable": "Durdur: {{name}} · {{title}} kullanılamıyor · {{reason}}",
         "stopName": "Durdur: {{name}} · {{title}}",

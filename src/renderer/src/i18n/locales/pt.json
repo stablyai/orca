@@ -23745,7 +23745,6 @@
         "loadingWorker": "Carregando worker…",
         "resultUnavailable": "Resultado do worker indisponível",
         "workersRegion": "Workers",
-        "doneResult": "Concluído · abrir resultado",
         "clearName": "Limpar {{name}}",
         "stopUnavailable": "Parar {{name}} · {{title}} indisponível · {{reason}}",
         "stopName": "Parar {{name}} · {{title}}",

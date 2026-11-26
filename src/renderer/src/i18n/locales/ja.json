@@ -21403,7 +21403,6 @@
         "loadingWorker": "ワーカーを読み込み中…",
         "resultUnavailable": "ワーカーの結果を取得できません",
         "workersRegion": "ワーカー",
-        "doneResult": "完了 · 結果を開く",
         "clearName": "{{name}} をクリア",
         "stopUnavailable": "{{name}} · {{title}} を停止できません · {{reason}}",
         "stopName": "{{name}} · {{title}} を停止",

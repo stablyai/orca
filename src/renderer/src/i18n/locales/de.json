@@ -22594,7 +22594,6 @@
         "loadingWorker": "Worker wird geladen…",
         "resultUnavailable": "Worker-Ergebnis nicht verfügbar",
         "workersRegion": "Worker",
-        "doneResult": "Erledigt · Ergebnis öffnen",
         "clearName": "{{name}} entfernen",
         "stopUnavailable": "Stoppen von {{name}} · {{title}} nicht verfügbar · {{reason}}",
         "stopName": "{{name}} · {{title}} stoppen",

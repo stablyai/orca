@@ -21864,7 +21864,6 @@
         "loadingWorker": "Chargement du worker…",
         "resultUnavailable": "Résultat du worker indisponible",
         "workersRegion": "Workers",
-        "doneResult": "Terminé · ouvrir le résultat",
         "clearName": "Effacer {{name}}",
         "stopUnavailable": "Arrêter {{name}} · {{title}} indisponible · {{reason}}",
         "stopName": "Arrêter {{name}} · {{title}}",

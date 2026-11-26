@@ -22353,7 +22353,6 @@
         "loadingWorker": "Загрузка исполнителя…",
         "resultUnavailable": "Результат исполнителя недоступен",
         "workersRegion": "Исполнители",
-        "doneResult": "Готово · открыть результат",
         "clearName": "Очистить {{name}}",
         "stopUnavailable": "Остановить {{name}} · {{title}}: недоступно · {{reason}}",
         "stopName": "Остановить {{name}} · {{title}}",
