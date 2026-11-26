@@ -42,6 +42,9 @@ async function loadOsDateTimeRegion(): Promise<void> {
   }
 }
 
+// Asked at load, not after settings, so it usually lands before any date is drawn.
+const osDateTimeRegionLoad = isWebClientLocation() ? null : loadOsDateTimeRegion()
+
 export function initializeLanguageDetection(): Promise<UiLanguageDetection> {
   const currentDetection = useLanguageReadiness.getState().detection
   if (currentDetection) {
@@ -54,8 +57,6 @@ export function initializeLanguageDetection(): Promise<UiLanguageDetection> {
       browserClient ? 'browser' : 'browser-fallback'
     )
     if (!browserClient) {
-      // Formats read it synchronously, so it must land before the first render.
-      const osRegion = loadOsDateTimeRegion()
       try {
         const snapshot = window.api?.app?.getSystemLanguageDetection?.(
           browserDetection.detectedTag ? [browserDetection.detectedTag] : []
@@ -72,7 +73,7 @@ export function initializeLanguageDetection(): Promise<UiLanguageDetection> {
       } catch {
         // Older local bridges do not provide the optional snapshot.
       }
-      await osRegion
+      await osDateTimeRegionLoad
     }
     detection ??= useLanguageReadiness.getState().detection ?? browserDetection
     return publishLanguageDetection(detection)

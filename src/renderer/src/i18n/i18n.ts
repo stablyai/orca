@@ -24,6 +24,7 @@ import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallbac
 import { supportedIntlLocale } from './intl-locale-support'
 import {
   osDateTimeRegionKey,
+  regionalFormatsBuilt,
   setOsDateTimeRegion,
   type OsDateTimeRegion
 } from '../../../shared/i18n/regional-date-time-format'
@@ -118,10 +119,13 @@ export function getTranslationScope(): string {
   return `${i18n.isInitialized}\0${i18n.language}\0${activeResourceVersion}\0${osDateTimeRegionKey()}`
 }
 
-/** The OS region arrives after startup renders, so dated output repaints like a language change. */
+/** A region that lands after dates were shown repaints them once, like a language change. */
 export function setRendererOsDateTimeRegion(region: OsDateTimeRegion | null): void {
+  const before = osDateTimeRegionKey()
   setOsDateTimeRegion(region)
-  notifyTranslationScope()
+  if (osDateTimeRegionKey() !== before && regionalFormatsBuilt()) {
+    notifyTranslationScope()
+  }
 }
 
 export function subscribeTranslationScope(listener: () => void): () => void {

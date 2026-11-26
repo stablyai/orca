@@ -13,6 +13,7 @@ const SCRIPT = /^[A-Za-z]{4}$/
 const NO_OS_REGION: OsDateTimeRegion = { region: null, hourCycle: null }
 
 let osDateTimeRegion = NO_OS_REGION
+let formatsBuilt = false
 
 export function setOsDateTimeRegion(value: OsDateTimeRegion | null): void {
   const region = value?.region && REGION.test(value.region) ? value.region.toUpperCase() : null
@@ -23,6 +24,11 @@ export function setOsDateTimeRegion(value: OsDateTimeRegion | null): void {
 
 export function currentOsDateTimeRegion(): OsDateTimeRegion {
   return osDateTimeRegion
+}
+
+/** Whether any date was formatted yet, so a late region only repaints output that exists. */
+export function regionalFormatsBuilt(): boolean {
+  return formatsBuilt
 }
 
 /** Changes exactly when regional formats can change. */
@@ -85,6 +91,7 @@ export function createRegionalDateTimeFormat(
   options: Intl.DateTimeFormatOptions,
   locale?: string
 ): Intl.DateTimeFormat {
+  formatsBuilt = true
   const uiLocale = resolveLocale(locale)
   const { region, hourCycle } = osDateTimeRegion
   const regional =
@@ -105,8 +112,9 @@ export function createRegionalDateTimeFormat(
   }
 }
 
-type CachedFormat = { key: string; formatter: Intl.DateTimeFormat }
-const formats = new WeakMap<Intl.DateTimeFormatOptions, CachedFormat>()
+// Keyed by options identity, then language and OS region: the same constant serves the UI
+// language and the runtime default side by side without rebuilding. A handful of keys per options.
+const formats = new WeakMap<Intl.DateTimeFormatOptions, Map<string, Intl.DateTimeFormat>>()
 
 /** Cached per options object (pass module constants) and rebuilt when the language or OS region changes. */
 export function regionalDateTimeFormat(
@@ -114,12 +122,16 @@ export function regionalDateTimeFormat(
   locale?: string
 ): Intl.DateTimeFormat {
   const key = `${locale}|${osDateTimeRegionKey()}`
-  const cached = formats.get(options)
-  if (cached?.key === key) {
-    return cached.formatter
+  let byKey = formats.get(options)
+  if (!byKey) {
+    byKey = new Map()
+    formats.set(options, byKey)
   }
-  const formatter = createRegionalDateTimeFormat(options, locale)
-  formats.set(options, { key, formatter })
+  let formatter = byKey.get(key)
+  if (!formatter) {
+    formatter = createRegionalDateTimeFormat(options, locale)
+    byKey.set(key, formatter)
+  }
   return formatter
 }
 

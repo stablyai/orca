@@ -12,6 +12,7 @@ import type { RuntimePairingIntent } from './runtime-pairing-link-state'
 import type { RuntimePairingLinkExpiry } from './use-runtime-pairing-link-expiry'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { CLOCK_TIME } from '../../../../../../shared/i18n/regional-date-time-format'
 
 type RuntimePairingGeneratorFormProps = {
   intent: RuntimePairingIntent
@@ -365,9 +366,7 @@ export function RuntimePairingGeneratorForm({
                 'auto.components.settings.RuntimePairingUrlGenerator.unusedLinkExpires',
                 'Unused link expires at {{time}}',
                 {
-                  time: uiDateTimeFormat({ hour: 'numeric', minute: '2-digit' }, intlLocale).format(
-                    linkExpiry.at
-                  )
+                  time: uiDateTimeFormat(CLOCK_TIME, intlLocale).format(linkExpiry.at)
                 }
               )}
         </p>
