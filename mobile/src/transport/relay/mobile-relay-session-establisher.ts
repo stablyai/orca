@@ -18,7 +18,7 @@ import type { StableLogicalRpcClient } from '../connection/stable-logical-rpc-cl
 import type { MobileRelayEndpoint } from '../../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { RELAY_HOST_CLOSE_REASON } from '../../../../src/shared/remote-runtime/relay/relay-host-close-reason'
 
-const PENDING_REFUSAL_RETRIES = 3
+const PENDING_DIAL_BUDGET = 3
 
 function isDirectorRefusal(error: Error | null): boolean {
   return error instanceof RelayDirectorHttpError && error.status === 401
@@ -39,8 +39,9 @@ export class MobileRelaySessionEstablisher {
   // tried first; otherwise current takes every admission and the next token always gets a 503.
   private directorTried = new Map<string, number>()
   private directorTrySeq = 0
-  // A refused pending (cell or director) gets a few slow reprobes for a late commit, then counts as refused.
-  private pendingRefusals = 0
+  // Pending is speculative: it gets a few failed dials, then pauses until a resume or network change
+  // refills the budget, so failures behind an unchanged state cost a bounded number of dials.
+  private pendingFailures = 0
   private resolvedThisAttempt = false
 
   constructor(
@@ -69,6 +70,10 @@ export class MobileRelaySessionEstablisher {
   ) {
     this.relay = args.relay
     this.hostOfflineStreak = new RelayHostOfflineStreak(() => args.logical.getLastConnectedAt())
+  }
+
+  refillPendingBudget(): void {
+    this.pendingFailures = 0
   }
 
   async adoptRelay(relay: MobileRelayEndpoint): Promise<void> {
@@ -103,7 +108,14 @@ export class MobileRelaySessionEstablisher {
     }
     this.directorTried = kept
     const lastTried = (token: string) => this.directorTried.get(token) ?? -1
-    const ordered = [...credentials].sort((a, b) => lastTried(a.token) - lastTried(b.token))
+    const pendingPaused = this.pendingFailures >= PENDING_DIAL_BUDGET
+    const ordered = credentials
+      .filter((credential) => !(pendingPaused && credential.token === pending?.token))
+      .sort((a, b) => lastTried(a.token) - lastTried(b.token))
+    if (ordered.length === 0) {
+      // Only a paused pending is left: wait, undialed, for the next resume or network change.
+      return { outcome: 'failed', error: null, unconfirmed: true }
+    }
     this.resolvedThisAttempt = false
     for (const credential of ordered) {
       usedPending = credential.token === pending?.token
@@ -111,7 +123,7 @@ export class MobileRelaySessionEstablisher {
       const result = await this.dial(credential, !this.resolvedThisAttempt)
       if (result.ok) {
         this.directorTried.clear()
-        this.pendingRefusals = 0
+        this.pendingFailures = 0
         return { outcome: 'established' }
       }
       if (result.error instanceof RelayDialAbortedError) {
@@ -123,20 +135,12 @@ export class MobileRelaySessionEstablisher {
       if (isDirectorRefusal(result.error)) {
         this.directorTried.set(credential.token, ++this.directorTrySeq)
       }
-      // Pending's budget spends on refusals and on any failure under a standing refusal verdict, so it
-      // can't redial forever behind that verdict; a plain outage spends nothing.
-      if (
-        usedPending &&
-        (isExplicitCredentialRejection(result.error) ||
-          isDirectorRefusal(result.error) ||
-          this.args.logical.getRelayHostReachability() === 'credential-refused') &&
-        ++this.pendingRefusals >= PENDING_REFUSAL_RETRIES
-      ) {
-        this.args.controller.recordRejectedCredential(credential.version)
+      if (usedPending) {
+        this.pendingFailures++
       }
       if (isExplicitCredentialRejection(result.error)) {
-        // Why: a rejected version stays invalid; retry only the later credentials. Pending is spared
-        // (above): its install can still commit after this refusal, and the gated reprobe retries it.
+        // Why: a rejected version stays invalid; retry only the later credentials. Pending is spared:
+        // its install can still commit after this refusal, so it only spends its retry budget.
         if (!usedPending) {
           this.args.controller.recordRejectedCredential(credential.version)
         }

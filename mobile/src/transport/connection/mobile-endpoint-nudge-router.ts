@@ -25,6 +25,8 @@ export class MobileEndpointNudgeRouter {
       readLocalNetwork: () => Promise<string | null>
       now: () => number
       setTimer: ScheduleTimer
+      // A resume or network change is fresh evidence, so speculative credentials may be retried.
+      onExternalSignal: () => void
       clearTimer: typeof clearTimeout
       onLocalNetworkArrival: () => void
     }
@@ -58,6 +60,7 @@ export class MobileEndpointNudgeRouter {
       const liftGate = () => {
         this.cancelTrailingLift()
         this.lastGateLiftAt = args.now()
+        args.onExternalSignal()
         args.controller.handleActiveNudge(args.logical, reason)
       }
       const sinceLift = args.now() - this.lastGateLiftAt
@@ -75,6 +78,9 @@ export class MobileEndpointNudgeRouter {
         }
       }, GATED_NETWORK_NUDGE_WINDOW_MS - sinceLift)
       return
+    }
+    if (reason !== 'focus') {
+      args.onExternalSignal()
     }
     args.controller.handleActiveNudge(args.logical, reason)
     if (reason !== 'network-change') {

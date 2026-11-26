@@ -65,6 +65,7 @@ export class MobileEndpointSupervisor {
       now: dependencies.now,
       setTimer: dependencies.setTimer,
       clearTimer: dependencies.clearTimer,
+      onExternalSignal: () => this.sessionEstablisher.refillPendingBudget(),
       onLocalNetworkArrival: () => this.directProbe.arrive()
     })
     this.leaseRotation = new RelayLeaseRotationTimer(dependencies, () => {
