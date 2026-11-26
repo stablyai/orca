@@ -240,8 +240,8 @@ export function SourceControlChangeScopeBar({
               {/* Always available: the label may truncate and the count hides when narrow. */}
               <TooltipContent className="max-w-xs break-words">
                 {scopeLabel}
-                {commitMeta ? <div className="text-muted-foreground">{commitMeta}</div> : null}
-                {countTitle ? <div className="text-muted-foreground">{countTitle}</div> : null}
+                {commitMeta ? <div>{commitMeta}</div> : null}
+                {countTitle ? <div>{countTitle}</div> : null}
               </TooltipContent>
             </Tooltip>
             {/* Hidden when narrow: the scope menu's All changes item does the same, and the label needs the room. */}

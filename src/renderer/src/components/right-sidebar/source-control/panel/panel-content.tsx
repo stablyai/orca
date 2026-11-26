@@ -39,6 +39,7 @@ export function SourceControlPanelContent({
     expandedSubmoduleKeys,
     fileFilterState,
     fileListScrollElement,
+    filterExpanded,
     filterQuery,
     filteredBranchEntries,
     handleAbortOperationForConflict,
@@ -157,6 +158,8 @@ export function SourceControlPanelContent({
 
       {fileListHeader ? (
         <div
+          // Marks where the scroller's scroll-margin rule starts (see panel-ready).
+          data-file-list-header={embedded ? undefined : ''}
           className={cn(
             // Sticky in the selected panel so its tools stay in reach while the list scrolls;
             // -top-1 cancels the scroller's pt-1 so rows cannot show above it.
@@ -168,170 +171,170 @@ export function SourceControlPanelContent({
         </div>
       ) : null}
 
-      {/* Focus scrolling keeps controls below the sticky header instead of under it; contents keeps the layout. */}
-      <div className={cn('contents', fileListHeader && !embedded && '[&_*]:scroll-mt-[38px]')}>
-        {fileListHeader ? (
-          <SourceControlFilterFeedback
-            normalizedFilter={normalizedFilter}
-            filterTooLarge={fileFilterState.tooLarge}
-            hasFilteredUncommittedEntries={hasFilteredUncommittedEntries}
-            hasFilteredBranchEntries={hasFilteredBranchEntries || commitFilesPending}
-            filterQuery={filterQuery}
-          />
-        ) : null}
+      {fileListHeader ? (
+        <SourceControlFilterFeedback
+          normalizedFilter={normalizedFilter}
+          filterTooLarge={fileFilterState.tooLarge}
+          hasFilteredUncommittedEntries={hasFilteredUncommittedEntries}
+          hasFilteredBranchEntries={hasFilteredBranchEntries || commitFilesPending}
+          filterQuery={filterQuery}
+        />
+      ) : null}
 
-        {hasFilteredUncommittedEntries && (
-          <SourceControlUncommittedSections
-            displaySections={displaySections}
-            unfilteredDisplaySectionsById={unfilteredDisplaySectionsById}
-            normalizedFilter={normalizedFilter}
-            collapsedSections={collapsedSections}
-            toggleSection={toggleSection}
-            onViewSection={(sectionViewAction) => {
-              if (sectionViewAction.kind === 'conflict-review') {
-                openConflictReview(
-                  currentWorktreeId,
-                  worktreePath,
-                  sectionViewAction.entries,
-                  'live-summary'
-                )
-              } else {
-                openAllDiffs(
-                  currentWorktreeId,
-                  worktreePath,
-                  undefined,
-                  sectionViewAction.area,
-                  sectionViewAction.entries
-                )
+      {hasFilteredUncommittedEntries && (
+        <SourceControlUncommittedSections
+          displaySections={displaySections}
+          unfilteredDisplaySectionsById={unfilteredDisplaySectionsById}
+          normalizedFilter={normalizedFilter}
+          collapsedSections={collapsedSections}
+          toggleSection={toggleSection}
+          onViewSection={(sectionViewAction) => {
+            if (sectionViewAction.kind === 'conflict-review') {
+              openConflictReview(
+                currentWorktreeId,
+                worktreePath,
+                sectionViewAction.entries,
+                'live-summary'
+              )
+            } else {
+              openAllDiffs(
+                currentWorktreeId,
+                worktreePath,
+                undefined,
+                sectionViewAction.area,
+                sectionViewAction.entries
+              )
+            }
+          }}
+          isExecutingBulk={isExecutingBulk}
+          requestDiscardAllInArea={requestDiscardAllInArea}
+          handleStageAllPaths={handleStageAllPaths}
+          handleStageSectionPaths={handleStageSectionPaths}
+          handleUnstagePaths={handleUnstagePaths}
+          sourceControlViewMode={sourceControlViewMode}
+          visibleTreeRowsBySection={visibleTreeRowsBySection}
+          visibleListRowsBySection={visibleListRowsBySection}
+          fileListScrollElement={fileListScrollElement}
+          collapsedTreeDirs={collapsedTreeDirs}
+          toggleTreeDir={toggleTreeDir}
+          requestDiscardPaths={requestDiscardPaths}
+          expandedSubmoduleKeys={expandedSubmoduleKeys}
+          toggleSubmodule={toggleSubmodule}
+          currentWorktreeId={currentWorktreeId}
+          worktreePath={worktreePath}
+          selectedKeySet={selectedKeySet}
+          activeOpenRowKeys={activeOpenRowKeys}
+          handleSelect={handleSelect}
+          handleContextMenu={handleContextMenu}
+          revealInExplorer={revealInExplorer}
+          activeConnectionId={activeConnectionId}
+          handleOpenDiff={handleOpenDiff}
+          handleStage={handleStage}
+          handleResolveConflict={handleResolveConflict}
+          handleUnstage={handleUnstage}
+          requestDiscardEntry={requestDiscardEntry}
+          diffCommentCountByPath={diffCommentCountByPath}
+        />
+      )}
+
+      {scopeKind === 'uncommitted' &&
+      !hasUncommittedEntries &&
+      !normalizedFilter &&
+      statusReadError === undefined ? (
+        <div className="px-4 py-3 text-xs text-muted-foreground">
+          {t(
+            'auto.components.right.sidebar.SourceControl.scopeNoUncommitted',
+            'No uncommitted changes.'
+          )}
+        </div>
+      ) : null}
+
+      {scopeKind === 'all' &&
+      shouldShowSourceControlCompareUnavailableCard(
+        branchSummary,
+        hasUncommittedEntries,
+        branchEntries.length > 0,
+        Boolean(normalizedFilter)
+      ) &&
+      branchSummary ? (
+        <CompareUnavailable
+          summary={branchSummary}
+          onChangeBaseRef={() => setBaseRefDialogOpen(true)}
+          onRetry={() => void refreshBranchCompare()}
+        />
+      ) : null}
+
+      {scopeKind === 'all' && branchSummary?.status === 'ready' && hasFilteredBranchEntries && (
+        <SourceControlBranchSection
+          label={t('auto.components.right.sidebar.SourceControl.d7ae61269b', 'Committed on Branch')}
+          countTitle={branchSectionCountTitle(
+            t,
+            branchSummary,
+            filteredBranchEntries.length,
+            branchEntries.length
+          )}
+          sectionKey="branch"
+          onViewAll={() => openBranchAllDiffs(currentWorktreeId, worktreePath, branchSummary)}
+          activeOpenRowKeys={activeOpenRowKeys}
+          filteredBranchEntries={filteredBranchEntries}
+          collapsedSections={collapsedSections}
+          toggleSection={toggleSection}
+          sourceControlViewMode={sourceControlViewMode}
+          visibleBranchTreeRows={visibleBranchTreeRows}
+          fileListScrollElement={fileListScrollElement}
+          collapsedTreeDirs={collapsedTreeDirs}
+          toggleTreeDir={toggleTreeDir}
+          currentWorktreeId={currentWorktreeId}
+          worktreePath={worktreePath}
+          revealInExplorer={revealInExplorer}
+          activeConnectionId={activeConnectionId}
+          openEntry={openCommittedDiff}
+          diffCommentCountByPath={diffCommentCountByPath}
+        />
+      )}
+
+      {changeScope.kind === 'commit' ? (
+        <SourceControlBranchSection
+          label={t('auto.components.right.sidebar.SourceControl.scopeCommitFiles', 'Files')}
+          sectionKey="commit"
+          headerButtonRef={commitFilesHeaderRef}
+          activeOpenRowKeys={activeOpenRowKeys}
+          filteredBranchEntries={filteredBranchEntries}
+          collapsedSections={collapsedSections}
+          toggleSection={toggleSection}
+          sourceControlViewMode={sourceControlViewMode}
+          visibleBranchTreeRows={visibleBranchTreeRows}
+          fileListScrollElement={fileListScrollElement}
+          collapsedTreeDirs={collapsedTreeDirs}
+          toggleTreeDir={toggleTreeDir}
+          currentWorktreeId={currentWorktreeId}
+          worktreePath={worktreePath}
+          revealInExplorer={revealInExplorer}
+          activeConnectionId={activeConnectionId}
+          openEntry={(entry, event) => openCommitFile(changeScope.commit, entry, event)}
+          // Review notes belong to working-tree diffs, not to a past commit's rows.
+          diffCommentCountByPath={NO_COMMENT_COUNTS}
+        >
+          {commitFilesPending || (!hasFilteredBranchEntries && !normalizedFilter) ? (
+            <CommitScopeFilesStatus
+              files={currentCommitFiles}
+              onRetry={(button) =>
+                retryCommitScopeFiles(() => {
+                  if (button.ownerDocument.activeElement === button) {
+                    commitFilesHeaderRef.current?.focus({ preventScroll: true })
+                  }
+                })
               }
-            }}
-            isExecutingBulk={isExecutingBulk}
-            requestDiscardAllInArea={requestDiscardAllInArea}
-            handleStageAllPaths={handleStageAllPaths}
-            handleStageSectionPaths={handleStageSectionPaths}
-            handleUnstagePaths={handleUnstagePaths}
-            sourceControlViewMode={sourceControlViewMode}
-            visibleTreeRowsBySection={visibleTreeRowsBySection}
-            visibleListRowsBySection={visibleListRowsBySection}
-            fileListScrollElement={fileListScrollElement}
-            collapsedTreeDirs={collapsedTreeDirs}
-            toggleTreeDir={toggleTreeDir}
-            requestDiscardPaths={requestDiscardPaths}
-            expandedSubmoduleKeys={expandedSubmoduleKeys}
-            toggleSubmodule={toggleSubmodule}
-            currentWorktreeId={currentWorktreeId}
-            worktreePath={worktreePath}
-            selectedKeySet={selectedKeySet}
-            activeOpenRowKeys={activeOpenRowKeys}
-            handleSelect={handleSelect}
-            handleContextMenu={handleContextMenu}
-            revealInExplorer={revealInExplorer}
-            activeConnectionId={activeConnectionId}
-            handleOpenDiff={handleOpenDiff}
-            handleStage={handleStage}
-            handleResolveConflict={handleResolveConflict}
-            handleUnstage={handleUnstage}
-            requestDiscardEntry={requestDiscardEntry}
-            diffCommentCountByPath={diffCommentCountByPath}
-          />
-        )}
+            />
+          ) : null}
+        </SourceControlBranchSection>
+      ) : null}
 
-        {scopeKind === 'uncommitted' &&
-        !hasUncommittedEntries &&
-        !normalizedFilter &&
-        statusReadError === undefined ? (
-          <div className="px-4 py-3 text-xs text-muted-foreground">
-            {t(
-              'auto.components.right.sidebar.SourceControl.scopeNoUncommitted',
-              'No uncommitted changes.'
-            )}
-          </div>
-        ) : null}
-
-        {scopeKind === 'all' &&
-        shouldShowSourceControlCompareUnavailableCard(
-          branchSummary,
-          hasUncommittedEntries,
-          branchEntries.length > 0,
-          Boolean(normalizedFilter)
-        ) &&
-        branchSummary ? (
-          <CompareUnavailable
-            summary={branchSummary}
-            onChangeBaseRef={() => setBaseRefDialogOpen(true)}
-            onRetry={() => void refreshBranchCompare()}
-          />
-        ) : null}
-
-        {scopeKind === 'all' && branchSummary?.status === 'ready' && hasFilteredBranchEntries && (
-          <SourceControlBranchSection
-            label={t(
-              'auto.components.right.sidebar.SourceControl.d7ae61269b',
-              'Committed on Branch'
-            )}
-            countTitle={branchSectionCountTitle(
-              t,
-              branchSummary,
-              filteredBranchEntries.length,
-              branchEntries.length
-            )}
-            sectionKey="branch"
-            onViewAll={() => openBranchAllDiffs(currentWorktreeId, worktreePath, branchSummary)}
-            activeOpenRowKeys={activeOpenRowKeys}
-            filteredBranchEntries={filteredBranchEntries}
-            collapsedSections={collapsedSections}
-            toggleSection={toggleSection}
-            sourceControlViewMode={sourceControlViewMode}
-            visibleBranchTreeRows={visibleBranchTreeRows}
-            fileListScrollElement={fileListScrollElement}
-            collapsedTreeDirs={collapsedTreeDirs}
-            toggleTreeDir={toggleTreeDir}
-            currentWorktreeId={currentWorktreeId}
-            worktreePath={worktreePath}
-            revealInExplorer={revealInExplorer}
-            activeConnectionId={activeConnectionId}
-            openEntry={openCommittedDiff}
-            diffCommentCountByPath={diffCommentCountByPath}
-          />
-        )}
-
-        {changeScope.kind === 'commit' ? (
-          <SourceControlBranchSection
-            label={t('auto.components.right.sidebar.SourceControl.scopeCommitFiles', 'Files')}
-            sectionKey="commit"
-            headerButtonRef={commitFilesHeaderRef}
-            activeOpenRowKeys={activeOpenRowKeys}
-            filteredBranchEntries={filteredBranchEntries}
-            collapsedSections={collapsedSections}
-            toggleSection={toggleSection}
-            sourceControlViewMode={sourceControlViewMode}
-            visibleBranchTreeRows={visibleBranchTreeRows}
-            fileListScrollElement={fileListScrollElement}
-            collapsedTreeDirs={collapsedTreeDirs}
-            toggleTreeDir={toggleTreeDir}
-            currentWorktreeId={currentWorktreeId}
-            worktreePath={worktreePath}
-            revealInExplorer={revealInExplorer}
-            activeConnectionId={activeConnectionId}
-            openEntry={(entry, event) => openCommitFile(changeScope.commit, entry, event)}
-            // Review notes belong to working-tree diffs, not to a past commit's rows.
-            diffCommentCountByPath={NO_COMMENT_COUNTS}
-          >
-            {commitFilesPending || (!hasFilteredBranchEntries && !normalizedFilter) ? (
-              <CommitScopeFilesStatus
-                files={currentCommitFiles}
-                onRetry={(button) =>
-                  retryCommitScopeFiles(() => {
-                    if (button.ownerDocument.activeElement === button) {
-                      commitFilesHeaderRef.current?.focus({ preventScroll: true })
-                    }
-                  })
-                }
-              />
-            ) : null}
-          </SourceControlBranchSection>
-        ) : null}
-      </div>
+      {fileListHeader && !embedded && (normalizedFilter || filterExpanded) ? (
+        // While filtering, a viewport of room after the sticky header keeps a shrinking result
+        // list from clamping scrollTop, so the header and its input never move under the cursor.
+        <div aria-hidden="true" className="h-[calc(100%-35px)] shrink-0" />
+      ) : null}
     </>
   )
 }

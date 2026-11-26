@@ -128,8 +128,11 @@ export function SourceControlBranchContextRow({
       <div className="flex h-5 min-w-0 items-center" aria-busy="true">
         <Loader2 className="size-3 shrink-0 animate-spin" aria-hidden="true" />
         <span className="sr-only">
-          {t('auto.components.right.sidebar.SourceControl.11b5dd8e41', 'Comparing against')}{' '}
-          {baseLabel}
+          {t(
+            'auto.components.right.sidebar.SourceControl.compareLoadingAgainst',
+            'Comparing against {{base}}',
+            { base: baseLabel }
+          )}
         </span>
       </div>
     ) : failed ? (

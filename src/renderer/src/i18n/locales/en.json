@@ -15448,7 +15448,6 @@
             "476b77745b": "Change Base Ref",
             "ed34038d0d": "Refresh branch compare",
             "493f963029": "Change base ref",
-            "11b5dd8e41": "Comparing against",
             "a9bf7c171a": "Commit Failed",
             "011f9713fc": "Commit blocked",
             "cc199ccc5f": "More commit and remote actions",
@@ -15708,7 +15707,8 @@
             "scopeNoUncommitted": "No uncommitted changes.",
             "scopeCommitFiles": "Files",
             "gitGraphButton": "Graph",
-            "scopeDiffButton": "Diff"
+            "scopeDiffButton": "Diff",
+            "compareLoadingAgainst": "Comparing against {{base}}"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",

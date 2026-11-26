@@ -224,8 +224,7 @@ function Panel(scenario: Scenario) {
             <BranchPicker
               branch={branch}
               blocker={null}
-              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the picker reads its context only when opened.
-              context={{ target: { kind: 'local' }, worktreeId: 'w', worktreePath: '/w' } as never}
+              context={{ target: { kind: 'local' }, worktreeId: 'w', worktreePath: '/w' }}
               repoId="repo"
               hostId="local"
               hostLabel="This Mac"
