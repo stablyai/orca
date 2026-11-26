@@ -242,7 +242,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   /** The linked-project skills folder every chat of the bot homed at this workspace loads. */
   botLinkedSkillsFolderOfHome(workspaceId: string | null | undefined): string | null {
     const bot = this.wiredBotLookup.byHome(workspaceId)
-    return bot ? botLinkedSkillsFolder(bot.id) : null
+    // Unlinking every project hides its skills at once, before the folder's links are removed.
+    return bot?.skillProjects?.length ? botLinkedSkillsFolder(bot.id) : null
   }
 
   /** The bots on this host's store, read per call. */

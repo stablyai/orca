@@ -12,6 +12,7 @@ import {
 import { skillDirectoryMaxDepth } from '../../shared/skills/discovery/skill-discovery-depth'
 import { declaredSkillMetadata } from '../../shared/skills/discovery/skill-metadata'
 import { findSkillFiles } from '../skills/discovery/skill-root-file-walk'
+import { clearSkillDiscoveryCaches } from '../skills/discovery/skill-discovery-target'
 import type {
   LinkedProjectSkill,
   LinkedSkillListing,
@@ -239,14 +240,18 @@ export async function linkedSkillProjects(
 }
 
 /** The bot's links changed: its open chats load the skills before their next turn, and its resting
- *  chats' `/` menus reread them. */
+ *  chats' and item comments' `/` menus reread them. */
 export function relinkBotSkills(
   bot: Pick<Bot, 'id' | 'skillProjects' | 'folderWorkspaceId'>,
   repos: readonly Repo[]
-): void {
-  void linkedSkillProjects(bot, repos, botLinkedSkillsFolder(bot.id))
+): Promise<void> {
+  return linkedSkillProjects(bot, repos, botLinkedSkillsFolder(bot.id))
+    .then(() => {})
     .catch(() => {})
-    .finally(() => retireAtRestCommandContext(folderWorkspaceKey(bot.folderWorkspaceId)))
+    .finally(() => {
+      clearSkillDiscoveryCaches()
+      retireAtRestCommandContext(folderWorkspaceKey(bot.folderWorkspaceId))
+    })
 }
 
 /** Projects as Settings shows them, from the same scan a chat's launch uses. */
