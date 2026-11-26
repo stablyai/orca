@@ -16,6 +16,7 @@ import {
   listProviderRelayInstance,
   beginProviderRelayRunAsk,
   noteProviderRelayRunVerdict,
+  providerRelayRunAskCurrent,
   placeKeptProviderRelay,
   providerRelayMayKeep
 } from './provider-relay-launch-inventory'
@@ -51,12 +52,12 @@ export async function providerRelayRunLiveness(
   const waitMs = options.waitMs ?? DEFAULT_WAIT_MS
   const fresh = options.fresh === true
   if (options.observe === true) {
-    return decide(record, waitMs, fresh, false)
+    return decide(record, waitMs, fresh, null)
   }
   const ask = beginProviderRelayRunAsk(record.sessionId)
   let verdict: ProviderRelayRunLiveness | null = null
   try {
-    verdict = await decide(record, waitMs, fresh, true)
+    verdict = await decide(record, waitMs, fresh, ask)
     return verdict
   } finally {
     noteProviderRelayRunVerdict(record.sessionId, ask, verdict)
@@ -67,10 +68,11 @@ async function decide(
   record: ProviderRelayRunRecord,
   waitMs: number,
   fresh: boolean,
-  apply: boolean
+  /** The ask's number; null observes only. */
+  ask: number | null
 ): Promise<ProviderRelayRunLiveness> {
   const forget = (): void => {
-    if (apply) {
+    if (ask !== null && providerRelayRunAskCurrent(record.sessionId, ask)) {
       forgetListedProviderRelayChat(record.sessionId)
     }
   }
@@ -92,11 +94,12 @@ async function decide(
   if (client && listing) {
     const info = listing.get(placement.relayId)
     if (info && keptProviderRelayOutstanding(info)) {
-      if (!info.attached && apply) {
-        await placeKeptProviderRelay(record.sessionId, {
-          channel: providerRelayChannel(client),
-          info
-        })
+      if (!info.attached && ask !== null) {
+        await placeKeptProviderRelay(
+          record.sessionId,
+          { channel: providerRelayChannel(client), info },
+          ask
+        )
       }
       return 'kept'
     }
@@ -187,72 +190,77 @@ function daemonProvenGone(daemon: AgentSessionRunDaemon, hostId: string): Promis
 }
 
 /**
- * Agents outliving a dead daemon are probed four at a time in arrival order, one probe per agent
- * however many chats ask; a queued ask that passes its deadline leaves unproven.
+ * Agents outliving a dead daemon are probed four at a time in arrival order. Each agent has at most
+ * one probe queued or running, however many chats ask, so the queue holds at most the agents being
+ * asked about. A probe keeps its place when its callers stop waiting: each caller waits only its
+ * own deadline, and the next ask finds the probe's answer (a proof of exit is kept until it's read).
  */
 const AGENT_PROBES_RUNNING = 4
+const AGENT_PROOF_KEPT_MS = 5 * 60_000
 let agentProbesRunning = 0
-const agentProbeQueue: ({ admit: () => void } | null)[] = []
+const agentProbeQueue: (() => void)[] = []
 let agentProbeHead = 0
-const agentProbesInFlight = new Map<string, Promise<boolean>>()
+const agentProbes = new Map<string, Promise<boolean>>()
+/** Exits proven after their asker stopped waiting, by agent; read once, pruned on insert. */
+const agentExits = new Map<string, number>()
 
 function admitNextAgentProbe(): void {
   while (agentProbesRunning < AGENT_PROBES_RUNNING && agentProbeHead < agentProbeQueue.length) {
-    const waiter = agentProbeQueue[agentProbeHead]
-    agentProbeQueue[agentProbeHead] = null
+    const start = agentProbeQueue[agentProbeHead]
     agentProbeHead += 1
-    if (waiter) {
-      agentProbesRunning += 1
-      waiter.admit()
-    }
+    agentProbesRunning += 1
+    start()
   }
-  if (agentProbeHead === agentProbeQueue.length) {
-    agentProbeQueue.length = 0
+  if (agentProbeHead > 32 && agentProbeHead * 2 > agentProbeQueue.length) {
+    agentProbeQueue.splice(0, agentProbeHead)
     agentProbeHead = 0
   }
 }
 
-function agentProbeSlot(deadlineMs: number): Promise<boolean> {
-  if (agentProbesRunning < AGENT_PROBES_RUNNING) {
-    agentProbesRunning += 1
-    return Promise.resolve(true)
+function agentProbe(key: string, agent: AgentSessionProcessIdentity): Promise<boolean> {
+  const running = agentProbes.get(key)
+  if (running) {
+    return running
   }
-  return new Promise((resolve) => {
-    const index = agentProbeQueue.length
-    const timer = setTimeout(() => {
-      // An obsolete ask leaves its place; the slot goes to the next one in line.
-      agentProbeQueue[index] = null
-      resolve(false)
-    }, deadlineMs)
-    timer.unref?.()
-    agentProbeQueue.push({
-      admit: () => {
-        clearTimeout(timer)
-        resolve(true)
-      }
-    })
+  const probe = new Promise<void>((admit) => {
+    agentProbeQueue.push(admit)
+    admitNextAgentProbe()
   })
-}
-
-function agentProvenGone(agent: AgentSessionProcessIdentity, deadlineMs: number): Promise<boolean> {
-  const key = `${agent.hostId}:${agent.pid}:${agent.processStartTimeMs}:${agent.spawnToken}`
-  const shared = agentProbesInFlight.get(key)
-  if (shared) {
-    return shared
-  }
-  const probe = (async () => {
-    if (!(await agentProbeSlot(deadlineMs))) {
-      return false
-    }
-    try {
-      return await provenGone(agent, true)
-    } finally {
+    .then(() => provenGone(agent, true))
+    .then((gone) => {
+      if (gone) {
+        for (const [old, at] of agentExits) {
+          if (Date.now() - at >= AGENT_PROOF_KEPT_MS) {
+            agentExits.delete(old)
+          }
+        }
+        agentExits.set(key, Date.now())
+      }
+      return gone
+    })
+    .finally(() => {
+      agentProbes.delete(key)
       agentProbesRunning -= 1
       admitNextAgentProbe()
-    }
-  })().finally(() => agentProbesInFlight.delete(key))
-  agentProbesInFlight.set(key, probe)
+    })
+  agentProbes.set(key, probe)
   return probe
+}
+
+async function agentProvenGone(
+  agent: AgentSessionProcessIdentity,
+  deadlineMs: number
+): Promise<boolean> {
+  const key = `${agent.hostId}:${agent.pid}:${agent.processStartTimeMs}:${agent.spawnToken}`
+  if (agentExits.delete(key)) {
+    return true
+  }
+  const gone = await withTimeout(agentProbe(key, agent), deadlineMs, false)
+  // The answer reached this caller: it isn't kept for a later one.
+  if (gone) {
+    agentExits.delete(key)
+  }
+  return gone
 }
 
 async function processesProvenGone(

@@ -98,13 +98,24 @@ async function keep(channel: ProviderRelayChannel, relays: readonly ProviderRela
 }
 
 /** The chat's run placement named this relay and its daemon start listed it: reattach it. */
-export async function placeKeptProviderRelay(chatKey: string, relay: KeptProviderRelay) {
+/** `ask`: the liveness ask that found it; an ask fenced off by a close, deletion or new run writes nothing. */
+export async function placeKeptProviderRelay(
+  chatKey: string,
+  relay: KeptProviderRelay,
+  ask: number
+) {
+  if (!providerRelayRunAskCurrent(chatKey, ask)) {
+    return
+  }
   if (listed.get(chatKey)?.info.relayId === relay.info.relayId) {
     return
   }
   listed.set(chatKey, relay)
   const { pid, exit } = relay.info
   const token = pid !== null && exit === null ? await readSpawnToken(pid) : null
+  if (!providerRelayRunAskCurrent(chatKey, ask) || listed.get(chatKey) !== relay) {
+    return
+  }
   if (token) {
     spawnTokens.set(chatKey, token)
   } else {
@@ -284,6 +295,11 @@ export function noteProviderRelayRunVerdict(
   if (ask.inFlight <= 0) {
     asks.delete(chatKey)
   }
+}
+
+export function providerRelayRunAskCurrent(chatKey: string, seq: number): boolean {
+  const ask = asks.get(chatKey)
+  return ask !== undefined && seq > ask.floor
 }
 
 /** Its chat closed or was deleted, or a new run replaced the one asked about. */
