@@ -1,4 +1,5 @@
 import { WINDOWS_NATIVE_HOOK_EXECUTABLE_NAME } from './windows-native-hook-executable'
+import { isOrcaPosixCondition } from './posix-condition-clauses'
 import { HOOK_PARENT_CAPTURE } from '../scripts/hook-process-capture'
 import {
   POSIX_HOOK_STDIN_BACKGROUND_DRAIN_COMMAND,
@@ -10,7 +11,7 @@ import {
 const SHELL_METACHAR_PATTERN = /[;&|<>\r\n`]|(?:\$\()/
 const DIRECT_POSIX_SHELL_PREFIX = /^(?:\/bin\/sh|sh|bash)[ \t]+/
 const SIMPLE_ENV_ASSIGNMENT =
-  /^[A-Za-z_][A-Za-z0-9_]*=(?:'(?:[^'\\]|'\\''|\\.)*'|"[^"\r\n`$]*"|[^\s;&|<>\r\n`"'$]+)[ \t]+/
+  /^[A-Za-z_][A-Za-z0-9_]*=(?:'[^']*'(?:\\''[^']*')*|"[^"\r\n`$]*"|[^\s;&|<>\r\n`"'$]+)[ \t]+/
 const POWERSHELL_ENCODED_COMMAND =
   /^(?:"(?:[^"\r\n]*[\\/])?(?:powershell|pwsh)(?:\.exe)?"|'(?:[^'\r\n]*[\\/])?(?:powershell|pwsh)(?:\.exe)?'|(?:[^\s;&|<>\r\n"']*[\\/])?(?:powershell|pwsh)(?:\.exe)?)(?:\s+-[A-Za-z]+(?:\s+[A-Za-z]+)?)*\s+-EncodedCommand\s+([A-Za-z0-9+/=]+)$/i
 const POWERSHELL_PROGRESS_PREFIX = /^\$ProgressPreference\s*=\s*'SilentlyContinue';\s*/i
@@ -26,9 +27,6 @@ const POSIX_WRAPPER_LEADING_PREFIXES = [
   new RegExp(`^${escapeRegExp(HOOK_PARENT_CAPTURE)}`),
   /^\[ -n "\$\{ORCA_PANE_KEY-[^"\r\n]*" \]\s*\|\|\s*exit 0;\s*/
 ]
-// Pane and HOME guards Orca emits, e.g. [ -n "${ORCA_PANE_KEY-}${ORCA_AGENT_PANE-}" ].
-const POSIX_ENV_GUARD_CLAUSE = /^\[ -n "(?:\$\{(?:ORCA_PANE_KEY|ORCA_AGENT_PANE|HOME)-\})+" \]$/
-const POSIX_SCRIPT_FILE_TEST_PREFIX = /^\[ -[frx] /
 
 export const NATIVE_EXE_SUFFIX = new RegExp(
   `(?:^|/)agent-hooks/${escapeRegExp(WINDOWS_NATIVE_HOOK_EXECUTABLE_NAME)}$`
@@ -178,22 +176,9 @@ function isManagedPowerShellEncodedCommand(
   )
 }
 
-function isOrcaPosixCondition(condition: string, scriptNames: ReadonlySet<string>): boolean {
-  // A quoted script path is one token, so a `]` inside it does not end the test.
-  return condition.split(/[ \t]+&&[ \t]+/).every((raw) => {
-    const clause = raw.trim()
-    return (
-      POSIX_ENV_GUARD_CLAUSE.test(clause) ||
-      (POSIX_SCRIPT_FILE_TEST_PREFIX.test(clause) &&
-        clause.endsWith(' ]') &&
-        isManagedScriptPath(clause.slice(5, -2), scriptNames))
-    )
-  })
-}
-
 function isOrcaPosixFallback(fallback: string): boolean {
   let rest = fallback.trim()
-  rest = rest.replace(/^printf\s+'%s\\n'\s+'(?:[^'\\]|'\\''|\\.)*';\s*/, '')
+  rest = rest.replace(/^printf\s+'%s\\n'\s+'[^']*'(?:\\''[^']*')*;\s*/, '')
   rest = rest.replace(/^printf\s+'\{\}\\n';\s*/, '')
   if (rest.startsWith(WINDOWS_GIT_BASH_HOOK_ENVIRONMENT_GUARD)) {
     rest = rest.slice(WINDOWS_GIT_BASH_HOOK_ENVIRONMENT_GUARD.length).trimStart()
@@ -270,7 +255,7 @@ function isManagedPosixIfWrapper(command: string, scriptNames: ReadonlySet<strin
       nextElif !== -1 && (nextElse === -1 || nextElif < nextElse) ? nextElif : nextElse
     const body = nextIdx === -1 ? afterThen : afterThen.slice(0, nextIdx)
     if (
-      !isOrcaPosixCondition(condition, scriptNames) ||
+      !isOrcaPosixCondition(condition, (path) => isManagedScriptPath(path, scriptNames)) ||
       !isManagedDirectShellCommand(body, scriptNames)
     ) {
       return false
