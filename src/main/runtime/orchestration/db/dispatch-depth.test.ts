@@ -82,7 +82,7 @@ describe('creatorStartsChatWorkers', () => {
     ).toBe(false)
   })
 
-  it('persists bot lineage for an injected Dispatch preamble preview', () => {
+  it('persists a direct bot dispatch lineage', () => {
     const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
     const dispatch = db.createDispatchContext({
       taskId: task.id,

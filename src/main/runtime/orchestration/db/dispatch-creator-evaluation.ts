@@ -34,7 +34,13 @@ export class AmbiguousDispatchParentError extends Error {
 
 export type CreatorRole = Pick<
   DispatchContextRow,
-  'id' | 'depth' | 'creator_pane_key' | 'assignee_pane_key' | 'creator_handle' | 'assignee_handle'
+  | 'id'
+  | 'depth'
+  | 'creator_pane_key'
+  | 'assignee_pane_key'
+  | 'creator_handle'
+  | 'assignee_handle'
+  | 'chat_lineage'
 >
 export type RemoteCreatorRole = Pick<
   RemoteDispatchAttachmentRow,
@@ -112,6 +118,18 @@ export function createDispatchCreatorEvaluation(
             )
           }
         : { kind: 'admitted', value: depth }
+    },
+    startsChatWorkers(): OrchestrationAdmission<boolean> {
+      const result = roles()
+      if (result.kind === 'refused') {
+        return result
+      }
+      return {
+        kind: 'admitted',
+        value:
+          local?.chat_lineage === 1 ||
+          result.value.some((attachment) => attachment.chat_lineage === 1)
+      }
     }
   }
 }

@@ -5,7 +5,12 @@ import { ORCHESTRATION_CONTRACT_VERSION as CURRENT_CONTRACT_VERSION } from '../.
 import { generateId } from '../generated-id'
 import { paneKeyMatchSuffix } from '../pane-key-match'
 import { claimDispatchContextRow } from '../dispatch-row-writer'
-import { recordedCreatorIdentity, type DispatchCreator } from '../dispatch-depth'
+import {
+  liveDispatchCreatorEvaluation,
+  recordedCreatorIdentity,
+  type DispatchCreator
+} from '../dispatch-depth'
+import { requireOrchestrationAdmission } from '../../addressing/orchestration-admission'
 import type { OrchestrationDb } from '../orchestration-db'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
 import {
@@ -25,15 +30,15 @@ export function createDispatchContext(
     assigneePaneKey?: string
     launchTokenHash?: string
     processIncarnation?: string
-    /** The assignee's serialized host scope, matching its worker-terminal custody row. */
     hostScope?: string | null
-    /** Who is dispatching, for nesting depth. Required so a new caller must decide. */
     creator: DispatchCreator
+    chatLineage?: boolean
     maxDepth: number
   }
 ): DispatchContextRow {
   const { taskId, assigneeHandle, assigneePaneKey, launchTokenHash, processIncarnation } = params
-  const depth = this.resolveChildDispatchDepth(params.creator, params.maxDepth)
+  const creator = liveDispatchCreatorEvaluation(this, params.creator)
+  const depth = requireOrchestrationAdmission(creator.childDepth(params.maxDepth))
   const task = this.getTask(taskId)
   if (!task) {
     throw taskNotFoundError(`Task not found: ${taskId}`, { taskId })
@@ -46,12 +51,10 @@ export function createDispatchContext(
     )
   }
   assertTakesNewWork(this, params, taskId)
-
   const prior = this.db
     .prepare('SELECT MAX(failure_count) as max_failures FROM dispatch_contexts WHERE task_id = ?')
     .get(taskId) as { max_failures: number | null } | undefined
   const priorFailures = prior?.max_failures ?? 0
-
   const paneSuffix =
     assigneePaneKey && parsePaneKey(assigneePaneKey) ? paneKeyMatchSuffix(assigneePaneKey) : null
   const id = generateId('ctx')
@@ -68,9 +71,9 @@ export function createDispatchContext(
         processIncarnation
       }),
       processIncarnation: processIncarnation ?? null,
-      creatorDispatchId: this.resolveCreatorDispatchId(params.creator),
+      creatorDispatchId: requireOrchestrationAdmission(creator.creatorId()),
       ...recordedCreatorIdentity(params.creator),
-      chatLineage: this.creatorStartsChatWorkers(params.creator),
+      chatLineage: params.chatLineage ?? requireOrchestrationAdmission(creator.startsChatWorkers()),
       priorFailures,
       depth,
       taskId,
@@ -84,7 +87,6 @@ export function createDispatchContext(
           `Terminal ${assigneeHandle} already has an active dispatch (${occupied.id} for task ${occupied.task_id})`
         )
       }
-      // Return the same typed rejection for a lost atomic claim as for a failed precheck.
       const message = `Task ${taskId} is ${current?.status ?? 'missing'}; only ready tasks can be dispatched`
       throw current
         ? taskNotStartableError(this, message, current)
@@ -96,12 +98,11 @@ export function createDispatchContext(
       from: 'ready',
       to: 'dispatched'
     })
-    // The Task runs here now; an earlier attempt on a paired server no longer speaks for it.
     retireRemotePlacement(this, taskId)
     const row = this.db
       .prepare(`SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts WHERE id = ?`)
       .get(id)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation; the row was just claimed in this savepoint.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- The schema-pinned row was just inserted.
     const dispatch = row as DispatchContextRow
     this.db.exec('RELEASE create_dispatch_context')
     this.hasAnyDispatchContextsCache = true
@@ -115,10 +116,7 @@ export function createDispatchContext(
   }
 }
 
-export function getDispatchContext(
-  this: OrchestrationDb,
-  taskId: string
-): DispatchContextRow | undefined {
+export function getDispatchContext(this: OrchestrationDb, taskId: string) {
   const row = this.db
     .prepare('SELECT * FROM dispatch_contexts WHERE task_id = ? ORDER BY rowid DESC LIMIT 1')
     .get(taskId) as DispatchContextRow | undefined
@@ -126,10 +124,7 @@ export function getDispatchContext(
   return row
 }
 
-export function getDispatchContextById(
-  this: OrchestrationDb,
-  dispatchId: string
-): DispatchContextRow | undefined {
+export function getDispatchContextById(this: OrchestrationDb, dispatchId: string) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation.
   const row = this.db
     .prepare(`SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts WHERE id = ?`)
@@ -163,7 +158,6 @@ export type CreatedDispatch = {
   creatorPaneKey: string | null
 }
 
-// Each creator column is matched through its own index; ids arrive as one JSON array, so no variable limit.
 export const DISPATCHES_CREATED_BY_ANY_SQL = `
   WITH created AS (
     SELECT rowid AS seq, id, status, creator_orca_session_id, creator_pane_key FROM dispatch_contexts
@@ -236,7 +230,6 @@ export const DISPATCH_LINKS_CREATED_BY_ANY_SQL = `
   WHERE d.creator_pane_key IN (SELECT value FROM json_each(?2))`
 
 function sqliteUtcMs(value: unknown): number {
-  // Either datetime('now') (UTC, no zone) or an ISO string with its own zone.
   const ms = typeof value === 'string' ? Date.parse(exposeUtcTimestamp(value) ?? value) : Number.NaN
   return Number.isFinite(ms) ? ms : 0
 }

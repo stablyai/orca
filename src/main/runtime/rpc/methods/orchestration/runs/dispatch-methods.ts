@@ -25,6 +25,8 @@ import {
 import { sendChatTask } from '../chat-task-delivery'
 import { dispatchTaskSource } from '../../../../orchestration/coordinator/dispatch/dispatch-task-source'
 import { startsInChatLineage } from '../worker/start/worker-chat-lineage'
+import { isInBotHome } from '../../../../../../bots/bot-home-membership'
+import { sessionCallerOf } from '../../../../orchestration/addressing/orchestration-caller-identity'
 
 export function dispatchStartsChatWorkers(
   runtime: Parameters<typeof startsInChatLineage>[0],
@@ -53,7 +55,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
     ) => {
       const db = runtime.getOrchestrationDb()
       const creator = resolveDispatchCreator(runtime, params.from, orchestrationCaller)
-      const chatLineage = dispatchStartsChatWorkers(runtime, db, params.from, orchestrationCaller)
+      const directBotHome = isInBotHome(runtime.bots, sessionCallerOf(orchestrationCaller))
       const assigneeParty = params.to ? resolveDispatchAssigneeParty(params.to, db) : undefined
       const assignee = assigneeParty?.address
       // A chat has no pane, process or agent to probe: it is reached as mail to it is.
@@ -64,6 +66,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
 
       // Dry-run previews without state changes; skip readiness and use a placeholder Dispatch id.
       if (params.dryRun) {
+        const chatLineage = dispatchStartsChatWorkers(runtime, db, params.from, orchestrationCaller)
         const maxDepth = runtime.getNestedWorkerMaxDepth()
         const previewDepth = db.resolveChildDispatchDepth(creator, maxDepth)
         const preamble = buildDispatchPreamble({
@@ -155,6 +158,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           ? JSON.stringify(dispatchAuthority.hostScope)
           : null,
         creator,
+        ...(directBotHome ? { chatLineage: true } : {}),
         maxDepth: runtime.getNestedWorkerMaxDepth()
       })
 
@@ -167,7 +171,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         coordinatorHandle: orcaSessionIdOrHandle(params.from ?? 'coordinator', db),
         workerHandle: orcaSessionIdOrHandle(to, db),
         devMode: params.devMode,
-        preserveHumanCommitCredit: chatLineage,
+        preserveHumanCommitCredit: ctx.chat_lineage === 1,
         cliCommand: runtime.getTerminalOrchestrationCliCommand(to)
       })
 
