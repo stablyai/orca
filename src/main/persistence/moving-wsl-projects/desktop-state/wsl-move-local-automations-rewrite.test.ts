@@ -86,6 +86,9 @@ describe('the local copies of moved automations', () => {
     const local = profile()
     await disableLocalAutomationsOfEarlierWslMoves(userDataPath, local)
     expect(local.disableAutomations).toHaveBeenCalledWith(new Set(['auto-1', 'auto-2']))
+    // Once only: a copy the user turned back on after the catch-up stays on next launch.
+    await disableLocalAutomationsOfEarlierWslMoves(userDataPath, local)
+    expect(local.disableAutomations).toHaveBeenCalledTimes(1)
   })
 
   it('come back on at undo when the host no longer has them, with a fresh next run', async () => {

@@ -9,6 +9,7 @@
 import type { Automation } from '../../../../shared/automations/automation-definition'
 import type { WslMoveCutover } from '../../../../shared/wsl-move/wsl-move-cutover'
 import { listWslMoveCutovers, writeWslMoveCutover } from './wsl-move-cutover-journal'
+import { runWslMoveHostAutomationsExclusive } from './wsl-move-host-automations-lock'
 import { wslMoveAutomationsPending } from '../desktop-state/wsl-move-host-automations-rewrite'
 
 export type WslMoveHostAutomationStop =
@@ -31,18 +32,6 @@ export type WslMoveHostAutomationPorts = {
   setHere: (automationId: string, enabled: boolean) => void
   /** A copy turned back on: its next run moves past now, as a disabled one is never advanced. */
   advanceHere: (automationId: string) => void
-}
-
-let exclusive: Promise<unknown> = Promise.resolve()
-
-/**
- * Undo (stop, release) and the left-off retry take turns: a retry turning a host copy back on
- * while an undo releases the move would leave it on beside the copy here.
- */
-export function runWslMoveHostAutomationsExclusive<T>(run: () => Promise<T>): Promise<T> {
-  const next = exclusive.then(run, run)
-  exclusive = next.catch(() => {})
-  return next
 }
 
 /** Every automation the move carried, whatever its state here or on the host. */
