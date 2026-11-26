@@ -127,15 +127,33 @@ export function carriedMessages(
     askers: carried.map(({ card }) =>
       card.body.leaveEligible === true ? card.body.asker : undefined
     ),
-    askedBy: carried.flatMap(({ card: { body } }) => [
-      ...(body.asker
-        ? [body.asker]
-        : body.origin === 'connector' && !body.memorySource
-          ? [null]
-          : []),
-      ...(body.carriedAskers ?? [])
-    ])
+    askedBy: oncePerSender(
+      carried.flatMap(({ card: { body } }) => [
+        ...(body.asker
+          ? [body.asker]
+          : body.origin === 'connector' && !body.memorySource
+            ? [null]
+            : []),
+        ...(body.carriedAskers ?? [])
+      ])
+    )
   }
+}
+
+// A chain of failed starts carries its askers again each time; one stamp per sender keeps it linear.
+function oncePerSender(
+  askers: readonly (ConnectorMessageAsker | null)[]
+): (ConnectorMessageAsker | null)[] {
+  const seen = new Set<string>()
+  return askers.filter((asker) => {
+    // The authority key bot-acts-for's distinctAskers reads: another app is never a role.
+    const key = asker ? `${asker.source}:${asker.userId}:${asker.app ? 'app' : asker.role}` : ''
+    if (seen.has(key)) {
+      return false
+    }
+    seen.add(key)
+    return true
+  })
 }
 
 /** What the carrying message keeps beside its blocks: the cards its admission settles, and who asked

@@ -13,6 +13,7 @@ import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/pres
 import { cn } from '@/lib/class-names'
 import { viewClaudeAgentFromRow } from '@/lib/agent-session/navigation/claude-agent-row-view'
 import { useClaudeAgentRowView } from '@/components/dashboard/rows/use-claude-agent-row-view'
+import { useAgentSendTargetRow } from '@/components/dashboard/rows/use-agent-send-target-row'
 import './worktree-card-agent-summary'
 import { agentRowDisplayDotState as getAgentDotState } from '../../../../../../shared/agent-row-dot-state'
 import { getAgentRowPrimaryText } from '../../../../../../shared/agent-status/presentation/agent-row-primary-text'
@@ -183,26 +184,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     },
     [agent, onActivate]
   )
-  const handleSendTargetClickCapture = useCallback(
-    (e: React.MouseEvent) => {
-      if (!sendTargetStatus) {
-        return
-      }
-      const target = e.target
-      if (
-        target instanceof Element &&
-        target.closest('button, a, input, textarea, select, [role="button"]')
-      ) {
-        return
-      }
-      e.preventDefault()
-      e.stopPropagation()
-      if (sendTargetStatus === 'eligible') {
-        onSendTargetClick?.(agent.paneKey)
-      }
-    },
-    [agent.paneKey, onSendTargetClick, sendTargetStatus]
-  )
+  const sendTargetRow = useAgentSendTargetRow(agent.paneKey, sendTargetStatus, onSendTargetClick)
   const timestamp = shortTime ? (
     <span
       className={cn(
@@ -331,9 +313,12 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
         sendTargetStatus === 'sending' && 'cursor-progress opacity-75',
         sendTargetStatus === 'disabled' && 'cursor-default opacity-60'
       )}
-      onClickCapture={handleSendTargetClickCapture}
+      onClickCapture={sendTargetRow.onClickCapture}
       onClick={handleActivate}
-      onMouseDown={(e) => e.stopPropagation()}
+      onMouseDown={(e) => {
+        e.stopPropagation()
+        sendTargetRow.onMouseDown(e)
+      }}
       onPointerDown={(e) => e.stopPropagation()}
       onDragStart={(e) => e.stopPropagation()}
       data-workspace-agent-row=""

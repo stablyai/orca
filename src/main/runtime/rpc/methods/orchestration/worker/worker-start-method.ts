@@ -74,7 +74,7 @@ export async function startWorker(
   if (startParams.origin !== undefined && startParams.on) {
     throw new OrchestrationError(
       'invalid_argument',
-      'worker-start --item starts workers on this computer, where the item is. No effects were applied.',
+      "--item can't be combined with --on: worker-start --item starts workers on this computer, where the item is. No effects were applied.",
       { effectsApplied: false }
     )
   }

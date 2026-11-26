@@ -202,6 +202,14 @@ const FORMER_TITLE_KEYWORDS_BY_ID = new Map<string, () => string[]>([
         'keybindings.searchKeyword.worktreePaletteFormerTitle',
         'Switch worktree'
       )
+  ],
+  [
+    'tab.openQuickCommandsMenu',
+    () =>
+      translateSearchKeyword(
+        'keybindings.searchKeyword.quickCommandsMenuFormerTitle',
+        'Toggle Quick Commands menu'
+      )
   ]
 ])
 

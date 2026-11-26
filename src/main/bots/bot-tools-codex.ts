@@ -11,9 +11,9 @@ import { readMcpServerTomlOwnership } from '../codex/configuration/toml/config-t
 /** A bot url server that Codex would merge into the owner's stdio server of the same name. */
 export function isTakenByCodexStdio(
   server: BotToolServer,
-  ownerStdioNames: readonly string[]
+  ownerStdioNames: ReadonlySet<string>
 ): boolean {
-  return 'url' in server && ownerStdioNames.includes(server.name)
+  return 'url' in server && ownerStdioNames.has(server.name)
 }
 
 /**
@@ -23,7 +23,7 @@ export function isTakenByCodexStdio(
  */
 export function codexBotToolsThreadConfig(
   tools: SessionMcpTools,
-  ownerStdioNames: readonly string[]
+  ownerStdioNames: ReadonlySet<string>
 ): Record<string, unknown> {
   return Object.fromEntries(
     tools.servers.flatMap((server): [string, unknown][] => {
@@ -63,14 +63,14 @@ export async function readCodexInheritedToolNames(codexHome: string): Promise<st
 }
 
 /** The owner's stdio servers in that config.toml, which a bot's url server of the same name breaks. */
-export async function readCodexStdioToolNames(codexHome: string): Promise<string[]> {
-  return [...(await readCodexOwnerServers(codexHome)).commandNames]
+export async function readCodexStdioToolNames(codexHome: string): Promise<ReadonlySet<string>> {
+  return (await readCodexOwnerServers(codexHome)).commandNames
 }
 
 /** Each bot url server named like an owner's stdio server: its threads run the owner's server instead. */
 export function codexTakenToolProblems(
   servers: readonly BotToolServer[],
-  ownerStdioNames: readonly string[]
+  ownerStdioNames: ReadonlySet<string>
 ): Record<string, BotToolProblem> {
   return Object.fromEntries(
     servers
@@ -103,8 +103,9 @@ export function codexToolProblems(
   const problems = new Map<string, BotToolProblem>(
     names.map((name) => [name, { kind: 'unconfirmed' }])
   )
+  const wanted = new Set(names)
   for (const server of StatusList.safeParse(answer).data?.data ?? []) {
-    if (!names.includes(server.name)) {
+    if (!wanted.has(server.name)) {
       continue
     }
     if (server.runtimeStatus === 'connected') {

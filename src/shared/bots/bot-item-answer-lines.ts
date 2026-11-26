@@ -93,21 +93,6 @@ export function botItemAnswersText(
   )
 }
 
-/** Answers held on this device as their draft stores them: an open line whose first line another
- *  question shares keeps a bare "Question →", so the answers after it read back on their own lines. */
-export function botItemHeldAnswersText(
-  shape: BotItemQuestionShape,
-  answers: readonly (string | null)[]
-): string {
-  if (!answers.some((words) => words?.trim())) {
-    return ''
-  }
-  const leads = shape.decisions.map((decision) => botItemQuestionLine(decision.question))
-  return answerLines(shape, answers, (index) =>
-    leads.some((lead, at) => at !== index && lead === leads[index])
-  )
-}
-
 /** What an owner's comment answered on one question line, for its "Question → answer" look: the quick
  *  replies it picked, its words for that line, or all its words; null for a recorded answer's words. */
 export function botItemAnswerWords(
@@ -135,10 +120,10 @@ export function botItemAnswerWords(
 
 /** Answers held for an earlier ask, less the lines a comment answered meanwhile: what recovering them
  *  puts back in the box. */
-export function botItemUnsentAnswers(
-  held: readonly (string | null)[],
+export function botItemUnsentAnswers<T>(
+  held: readonly (T | null)[],
   answered: readonly (string | null)[]
-): (string | null)[] {
+): (T | null)[] {
   return held.map((words, index) => (answered[index] ? null : words))
 }
 

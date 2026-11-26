@@ -55,6 +55,7 @@ export async function deliverWorkerDispatchPreamble(args: {
   const chat = structuredSession
     ? null
     : chatAssigneeOf(resolveDispatchAssigneeParty(terminalHandle, args.db))
+  const cliTarget = runtime.getTerminalOrchestrationCliTarget(terminalHandle)
   const preamble = buildDispatchPreamble({
     // Only depth gates nesting; resolve structured callers' workspace so they can dispatch like PTY workers.
     canDispatchSubWorkers: args.dispatchDepth < runtime.getNestedWorkerMaxDepth(),
@@ -71,10 +72,10 @@ export async function deliverWorkerDispatchPreamble(args: {
           ? formatOrcaSessionAddress(chat)
           : terminalHandle,
     devMode: args.devMode,
-    cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle),
+    ...cliTarget,
     cliLauncher:
       args.launchedAgent === 'doubao' &&
-      process.platform === 'win32' &&
+      cliTarget.runsOnNativeWindows &&
       runtime.getOrchestrationDispatchAuthority(terminalHandle)?.hostScope.kind === 'local'
         ? getWindowsWorkerCliLauncher()
         : undefined,
