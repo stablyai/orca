@@ -22,10 +22,10 @@ export async function readClaudeTranscriptTail(input: {
   maxBytes?: number
   check: () => void
   onLeafAbsent?: () => void
-  /** The saved leaf's row, when it isn't the row whose uuid is `leafUuid` (a block of a message). */
-  isLeaf?: (row: Record<string, unknown>) => boolean
+  /** Instead of `leafUuid`: a message whose saved text may be partial (a streamed block's), so the
+   *  tail starts at its own rows, read again. */
+  throughMessage?: string
 }): Promise<ClaudeTranscriptTail | null> {
-  const isLeaf = input.isLeaf ?? ((row: Record<string, unknown>) => row.uuid === input.leafUuid)
   const maxBytes = input.maxBytes ?? CLAUDE_TRANSCRIPT_TAIL_MAX_BYTES
   const handle = await open(input.filePath, 'r')
   try {
@@ -33,6 +33,21 @@ export async function readClaudeTranscriptTail(input: {
     const { size } = await handle.stat()
     input.check()
     const newestFirst: Record<string, unknown>[] = []
+    // The newest row of `throughMessage` read so far going backward: its earliest, once past it.
+    const seen: { through?: Record<string, unknown> } = {}
+    /** The tail once `row` ends it; null to read on (`row` is then part of it). */
+    const ends = (row: Record<string, unknown>): ClaudeTranscriptTail | null => {
+      if (input.throughMessage === undefined) {
+        return row.uuid === input.leafUuid
+          ? mainChain(newestFirst.toReversed(), input.leafUuid)
+          : null
+      }
+      if (claudeRecord(row.message)?.id === input.throughMessage) {
+        seen.through = row
+        return null
+      }
+      return seen.through ? mainChain(newestFirst.toReversed(), parentOf(seen.through)) : null
+    }
     // Retain split-line chunks newest first while reading backward.
     let pieces: Buffer[] = []
     // A last line without its newline is a write still landing; it is left for the next read.
@@ -43,8 +58,6 @@ export async function readClaudeTranscriptTail(input: {
       complete = true
       return row
     }
-    const found = (leaf: Record<string, unknown>) =>
-      mainChain(newestFirst.toReversed(), String(leaf.uuid))
     let position = size
     while (position > 0) {
       input.check()
@@ -64,8 +77,9 @@ export async function readClaudeTranscriptTail(input: {
         pieces.push(chunk.subarray(index + 1, end))
         end = index
         const row = endLine()
-        if (row && isLeaf(row)) {
-          return found(row)
+        const tail = row && ends(row)
+        if (tail) {
+          return tail
         }
         if (row) {
           newestFirst.push(row)
@@ -74,14 +88,26 @@ export async function readClaudeTranscriptTail(input: {
       pieces.push(chunk.subarray(0, end))
     }
     const first = endLine()
-    if (first && isLeaf(first)) {
-      return found(first)
+    const tail = (first && ends(first)) ?? null
+    if (tail) {
+      return tail
+    }
+    if (first) {
+      newestFirst.push(first)
+    }
+    if (seen.through) {
+      return mainChain(newestFirst.toReversed(), parentOf(seen.through))
     }
     input.onLeafAbsent?.()
     return null
   } finally {
     await handle.close()
   }
+}
+
+function parentOf(row: Record<string, unknown>): string {
+  const parent = typeof row.parentUuid === 'string' ? row.parentUuid : row.logicalParentUuid
+  return typeof parent === 'string' ? parent : ''
 }
 
 function parseRow(bytes: Buffer): Record<string, unknown> | null {

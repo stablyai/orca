@@ -4,7 +4,6 @@ import {
   type JournalHistoryOrigin
 } from '../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import { recoverClaudeTranscript } from './claude-transcript-recovery'
-import { claudeRecord } from '../structured/journal/claude-structured-item-translation'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { StructuredAgentSessionHistoryJournal } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 import { stat } from 'node:fs/promises'
@@ -186,7 +185,7 @@ export async function catchUpClaudeTranscript(input: {
       : await readClaudeTranscriptTail({
           filePath,
           leafUuid: leaf,
-          isLeaf: claudeTranscriptRowIs(leaf),
+          ...claudeTranscriptLeaf(leaf),
           check,
           onLeafAbsent: () => {
             leafAbsent = true
@@ -276,11 +275,9 @@ async function newestClaudeRow(
   return newest?.uuid
 }
 
-/** A saved row's transcript row: by uuid, or a streamed block's by its message (newest first). */
-function claudeTranscriptRowIs(key: string): (row: Record<string, unknown>) => boolean {
-  if (!key.startsWith('block:')) {
-    return (row) => row.uuid === key
-  }
-  const messageId = key.slice('block:'.length, key.lastIndexOf(':'))
-  return (row) => claudeRecord(row.message)?.id === messageId
+/** A saved streamed block's message may have been cut short: its rows are read again. */
+function claudeTranscriptLeaf(key: string): { throughMessage?: string } {
+  return key.startsWith('block:')
+    ? { throughMessage: key.slice('block:'.length, key.lastIndexOf(':')) }
+    : {}
 }
