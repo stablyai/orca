@@ -83,6 +83,9 @@ export function isBotAgent(agent: string): agent is BotAgent {
   return BOT_AGENTS.some((entry) => entry === agent)
 }
 
+/** Memory upkeep runs tool-free, so every bot agent runs it; Look around is `lookAroundSupported`. */
+export const tidyUpSupported = (agent: string): boolean => isBotAgent(agent)
+
 export const BOT_NAME_MAX_LENGTH = 64
 export const BOT_HANDED_PAIRED_WORKSPACES_MAX = 50
 export const BOT_MAX_MEMBERS = 200

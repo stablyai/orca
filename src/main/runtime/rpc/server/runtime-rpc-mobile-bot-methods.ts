@@ -76,6 +76,7 @@ export const MOBILE_BOT_RPC_METHODS = [
   'bots.memory.forget',
   'bots.memory.history',
   'bots.memory.undo',
+  'bots.offer.answer',
   'bots.request.outcome',
   'bots.roster',
   'bots.sendRunAgain',

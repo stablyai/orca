@@ -279,6 +279,7 @@ export function StatusBarUsageArea({
                   mode={levelMode(index)}
                   barMode={statusBarUsageMode}
                   countdownActive={false}
+                  measuring
                 />
               </span>
             ))

@@ -26,6 +26,7 @@ import { readBotShareable } from '../bots/sharing/bot-share-sources'
 import { runtimeBotWork, type BotWorkRuntime } from '../bots/bot-work-runtime'
 import type { WorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import { createBotLookupIndex } from '../../shared/bots/bot-lookup-index'
+import { botLinkedSkillsFolder } from '../bots/bot-skill-projects'
 import type { WorkspaceLineage } from '../../shared/worktree/lineage-types'
 import { BotsDbWorkerClient } from '../bots/db-worker/bots-db-worker-client'
 import { profileAccountUserId } from '../orca-profiles/profile-account-user-id'
@@ -237,6 +238,13 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   protected assertStructuredQueuedMessageAllowed(_sessionId: string, _messageId: string): void {}
 
   private readonly wiredBotLookup = createBotLookupIndex(() => this.wiredBots())
+
+  /** The linked-project skills folder every chat of the bot homed at this workspace loads. */
+  botLinkedSkillsFolderOfHome(workspaceId: string | null | undefined): string | null {
+    const bot = this.wiredBotLookup.byHome(workspaceId)
+    // Unlinking every project hides its skills at once, before the folder's links are removed.
+    return bot?.skillProjects?.length ? botLinkedSkillsFolder(bot.id) : null
+  }
 
   /** The bots on this host's store, read per call. */
   protected wiredBots(): readonly WiredBot[] {

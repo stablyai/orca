@@ -2,6 +2,12 @@ import { rmSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { RuntimeNotifier } from '../../../client/events/runtime-notifier-contract'
+import {
+  TERMINAL_INPUT_MAX_BYTES,
+  TERMINAL_INPUT_TOO_LARGE_ERROR
+} from '../../../../../shared/terminal/input/terminal-input'
+import { RpcDispatcher } from '../../../rpc/dispatcher'
+import { TERMINAL_SEND_METHODS } from '../../../rpc/methods/terminal/terminal-send-method'
 import { registerBoundPty } from '../../../terminal/layout/bind-first-pane.test-fixture'
 import { waitForWorkerAgentReady } from '../../../terminal/wait/launched-agent-composer-readiness'
 import {
@@ -242,6 +248,62 @@ describe('Agent-slept window pane wake', () => {
     await expect(
       slept.runtime.sendTerminal(slept.handle, { text: '\x1b[1;1R' }, { inputKind: 'query-reply' })
     ).resolves.toMatchObject({ accepted: false, bytesWritten: 0 })
+    expect(resume).not.toHaveBeenCalled()
+    slept.db.close()
+  })
+
+  it('refuses terminal input it can never accept without cold-resuming the slept agent', async () => {
+    const slept = await sleptPane()
+    const resume = vi.fn(async () => true)
+    slept.runtime.setNotifier(wakeNotifier(resume))
+    const dispatcher = new RpcDispatcher({ runtime: slept.runtime, methods: TERMINAL_SEND_METHODS })
+    const send = (id: string, params: Record<string, unknown>, orchestrationRequestId?: string) =>
+      dispatcher.dispatch({
+        id,
+        authToken: 'test-auth-token',
+        method: 'terminal.send',
+        ...(orchestrationRequestId ? { orchestrationRequestId } : {}),
+        params: { terminal: slept.handle, ...params }
+      })
+
+    const guardedCombined = await send('guarded-combined', {
+      text: 'hi',
+      enter: true,
+      requireAgentStatus: 'sendable'
+    })
+    expect(guardedCombined).toMatchObject({
+      ok: true,
+      result: { send: { accepted: false, bytesWritten: 0 } }
+    })
+    const keyedGuardedCombined = await send(
+      'keyed-guarded-combined',
+      {
+        text: 'hi',
+        enter: true,
+        agentPrompt: true,
+        requireAgentStatus: 'sendable',
+        client: { id: 'desktop-1', type: 'desktop' }
+      },
+      'prompt-request-0'
+    )
+    expect(keyedGuardedCombined).toMatchObject({
+      ok: true,
+      result: { send: { accepted: false, bytesWritten: 0 } }
+    })
+    const oversizedPrompt = await send(
+      'oversized-prompt',
+      {
+        text: 'x'.repeat(TERMINAL_INPUT_MAX_BYTES + 1),
+        enter: true,
+        agentPrompt: true,
+        client: { id: 'desktop-1', type: 'desktop' }
+      },
+      'prompt-request-1'
+    )
+    expect(oversizedPrompt).toMatchObject({
+      ok: false,
+      error: { message: TERMINAL_INPUT_TOO_LARGE_ERROR }
+    })
     expect(resume).not.toHaveBeenCalled()
     slept.db.close()
   })

@@ -4,7 +4,12 @@ import { useAppStore } from '@/store'
 import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import { makeBrowserTab } from '@/store/slices/browser/browser-tab.test-fixture'
+import {
+  buildBrowserPage,
+  buildWorkspaceFromPage
+} from '@/store/slices/browser/pages/browser-page-records'
 import { makeStructuredChatTab } from '@/store/slices/tabs/tab-group.test-fixture'
+import { readRecordChanges } from '@/store/record-transitions/keyed-record-change-reads'
 import { createWatchedAttentionReader, workspaceHasAttention } from './bot-sidebar-attention'
 
 function report(paneKey: string, tabId: string, worktreeId: string, state: 'working' | 'done') {
@@ -93,4 +98,55 @@ it('agrees with a full read after every kind of write', () => {
   expect(expectFullRead()).toContain('wt-0')
   useAppStore.setState({ browserTabsByWorktree: {} })
   expect(expectFullRead()).not.toContain('wt-0')
+
+  // The browser writers a navigation runs (STA-18521), then the workspace closes.
+  watched = [...ids, 'wt-x']
+  const page = buildBrowserPage('ws-0', 'wt-0', 'https://example.com', 'Example')
+  const browserWorkspace = buildWorkspaceFromPage('ws-0', 'wt-0', page, [page.id])
+  useAppStore.setState({
+    browserPagesByWorkspace: { 'ws-0': [page] },
+    browserTabsByWorktree: { 'wt-0': [browserWorkspace] }
+  })
+  expect(expectFullRead()).toContain('wt-0')
+  const browser = useAppStore.getState()
+  // Attention sees only whether a browser bucket exists, so check the journal each write leaves.
+  const expectJournalNamesWt0 = (write: () => void): void => {
+    const before = useAppStore.getState().browserTabsByWorktree
+    write()
+    expect(readRecordChanges(useAppStore.getState().browserTabsByWorktree, before)).toEqual({
+      kind: 'addressed',
+      keys: new Set(['wt-0']),
+      added: [],
+      deleted: new Set()
+    })
+  }
+  expectJournalNamesWt0(() => browser.setBrowserPageUrl(page.id, 'https://example.com/next'))
+  expect(expectFullRead()).toContain('wt-0')
+  expectJournalNamesWt0(() =>
+    browser.updateBrowserPageState(page.id, { loading: false, title: 'Next' })
+  )
+  expect(expectFullRead()).toContain('wt-0')
+  // A workspace mirror that lags its page is repaired by an update that changes nothing else.
+  const lagging = useAppStore.getState().browserTabsByWorktree['wt-0']![0]!
+  useAppStore.setState({ browserTabsByWorktree: { 'wt-0': [{ ...lagging, title: 'Stale' }] } })
+  expectJournalNamesWt0(() => browser.updateBrowserPageState(page.id, {}))
+  expect(useAppStore.getState().browserTabsByWorktree['wt-0']![0]!.title).toBe('Next')
+  expect(expectFullRead()).toContain('wt-0')
+  useAppStore.setState({ browserTabsByWorktree: {}, browserPagesByWorkspace: {} })
+  expect(expectFullRead()).not.toContain('wt-0')
+
+  // Combined pane and tab title writes (STA-18523), including the tab that moved to wt-4.
+  const titles = useAppStore.getState()
+  titles.setRuntimePaneTitle('tab-wt-2', 1, '⠋ Claude Code', { alsoTabTitle: true })
+  expectFullRead()
+  titles.setRuntimePaneTitle('tab-wt-2', 1, '✳ Claude Code', { alsoTabTitle: true })
+  expectFullRead()
+  titles.setRuntimePaneTitle('tab-wt-3', 1, 'zsh', { alsoTabTitle: true })
+  expectFullRead()
+  titles.setRuntimePaneTitle('tab-wt-3', 1, '⠋ Claude Code', { alsoTabTitle: true })
+  expectFullRead()
+  titles.updateTabTitle('tab-wt-1', 'renamed')
+  expectFullRead()
+  titles.clearRuntimePaneTitle('tab-wt-3', 1)
+  expectFullRead()
 })
