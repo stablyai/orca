@@ -80,9 +80,9 @@ export class QuestionReconciler {
     }
   }
 
-  terminalChanged(party: string | null, working: boolean): void {
-    if (party && working) {
-      // An agent runs there now: its phase, not the pty, shows when it stops.
+  /** `agent`: an agent phase shows there now, so its phase, not the pty, shows when it stops. */
+  terminalChanged(party: string | null, working: boolean, agent = working): void {
+    if (party && agent) {
       this.agentless.delete(party)
     }
     if (party && this.watching()) {
@@ -134,19 +134,28 @@ export class QuestionReconciler {
         this.noteTake(edge.taker)
         this.request(edge.taker)
         return
-      case 'exit': {
-        // Its reader is gone, even when the pane starts again in place under the same pty id.
-        const party = `terminal:${edge.handle}`
-        this.agentless.delete(party)
-        return this.terminalChanged(party, false)
-      }
+      case 'exit':
+        // Its reader is gone, by whichever handle it took under, even if the pane starts again
+        // in place under the same pty id.
+        for (const [party, ptyId] of this.agentless) {
+          if (ptyId === edge.ptyId) {
+            this.agentless.delete(party)
+            this.terminalChanged(party, false)
+          }
+        }
+        return
       case 'dispatch':
         this.changed(`dispatch:${edge.id}`)
         if (this.awaiting.size > 0) {
           takersLinkedTo(this.db, edge.id).forEach((taker) => this.request(taker))
         }
-        return
+        // An agent-less reader holds only while it still works an open Dispatch or coordinates.
+        return this.agentless.forEach((_, party) => this.request(party))
       case 'mailbox':
+        if (/^(run|dispatch):/.test(edge.mailbox)) {
+          // A Run or Dispatch changed readers (or ended a pass): an agent-less reader may have lost it.
+          this.agentless.forEach((_, party) => this.request(party))
+        }
         return this.mailboxChanged(edge.mailbox)
       case 'pane':
         return this.terminalChanged(this.deps.terminalParty(edge.ptyId), false)
@@ -172,6 +181,17 @@ export class QuestionReconciler {
     if (terminal && !terminal.working && !terminal.takesInput) {
       this.agentless.set(taker, terminal.ptyId)
     } else {
+      this.agentless.delete(taker)
+    }
+  }
+
+  /** An agent that took input there since (even one never seen working) now shows its stop. */
+  private forgetAgentlessWithAgent(taker: string): void {
+    if (!this.agentless.has(taker)) {
+      return
+    }
+    const terminal = this.deps.reads.terminal(taker.slice('terminal:'.length))
+    if (terminal?.working || terminal?.takesInput) {
       this.agentless.delete(taker)
     }
   }
@@ -221,6 +241,7 @@ export class QuestionReconciler {
       this.agentless.delete(taker)
       return
     }
+    this.forgetAgentlessWithAgent(taker)
     const dispatches = questions.flatMap((id) => linkedDispatches(this.db, id))
     const workers = dispatches.flatMap((id) => dispatchParty(this.db, id) ?? [])
     const parties = [taker, ...workers]

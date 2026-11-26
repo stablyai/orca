@@ -80,6 +80,7 @@ describe('a terminal coordinator with no agent in it (#49550)', () => {
   let db: OrchestrationDb
   let live: boolean
   let working: boolean
+  let agentTakesInput: boolean
   let told: string[]
   let reconciler: QuestionReconciler
   let stop: () => void
@@ -88,13 +89,8 @@ describe('a terminal coordinator with no agent in it (#49550)', () => {
     db = new OrchestrationDb(':memory:')
     live = true
     working = false
+    agentTakesInput = false
     told = []
-    db.createRun({
-      objective: 'o',
-      coordinatorHandle: HANDLE,
-      coordinatorPaneKey: PANE,
-      coordinatorOrcaSessionId: null
-    })
     reconciler = new QuestionReconciler(db, {
       reads: {
         liveSession: (root) => root,
@@ -103,7 +99,13 @@ describe('a terminal coordinator with no agent in it (#49550)', () => {
         chatHandingOver: () => false,
         terminal: (handle) =>
           handle === HANDLE && live
-            ? { ptyId: 'pty-1', paneKeys: [PANE], asking: false, takesInput: false, working }
+            ? {
+                ptyId: 'pty-1',
+                paneKeys: [PANE],
+                asking: false,
+                takesInput: agentTakesInput,
+                working
+              }
             : null,
         terminalHandingOver: () => false
       },
@@ -121,6 +123,15 @@ describe('a terminal coordinator with no agent in it (#49550)', () => {
     stop()
     db.close()
   })
+
+  function coordinate(): string {
+    return db.createRun({
+      objective: 'o',
+      coordinatorHandle: HANDLE,
+      coordinatorPaneKey: PANE,
+      coordinatorOrcaSessionId: null
+    }).id
+  }
 
   async function settle(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 0))
@@ -143,16 +154,66 @@ describe('a terminal coordinator with no agent in it (#49550)', () => {
     return id
   }
 
-  it('holds a question it read while its terminal lives, and tells once the terminal exits', async () => {
+  it('holds a question while its pty lives, and tells once that pty ends or is replaced', async () => {
+    coordinate()
     const id = await take()
     expect(told).toEqual([])
-    live = false
-    noteQuestionEdge({ kind: 'exit', handle: HANDLE })
+    noteQuestionEdge({ kind: 'exit', ptyId: 'pty-other' })
+    await settle()
+    expect(told).toEqual([])
+    // Exit and in-place replacement both end by pty id, whatever handle the take came under.
+    noteQuestionEdge({ kind: 'exit', ptyId: 'pty-1' })
+    await settle()
+    expect(told).toEqual([id])
+  })
+
+  it('tells once it no longer coordinates the Run, though its terminal stays open', async () => {
+    coordinate()
+    const id = await take()
+    expect(told).toEqual([])
+    db.unbindOtherRunsForCoordinator(
+      { terminalHandle: HANDLE, paneKey: PANE, orcaSessionId: null },
+      'run_none'
+    )
+    await settle()
+    expect(told).toEqual([id])
+  })
+
+  it('tells once the Dispatch it works settles, though its terminal stays open', async () => {
+    const task = db.createTask({ runId: coordinate(), spec: 'work' })
+    db.unbindOtherRunsForCoordinator(
+      { terminalHandle: HANDLE, paneKey: PANE, orcaSessionId: null },
+      'run_none'
+    )
+    const dispatch = db.createDispatchContext({
+      taskId: task.id,
+      assigneeHandle: HANDLE,
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER
+    })
+    const id = await take()
+    expect(told).toEqual([])
+    db.completeDispatch(dispatch.id)
+    await settle()
+    expect(told).toEqual([id])
+  })
+
+  it('judges by the agent once one takes input there, even one never seen working', async () => {
+    coordinate()
+    const id = await take()
+    agentTakesInput = true
+    db.insertMessage({ from: 'term_worker', to: HANDLE, subject: 'status', body: 'b' })
+    noteQuestionEdge({ kind: 'pane', ptyId: 'pty-1' })
+    await settle()
+    expect(told).toEqual([])
+    agentTakesInput = false
+    noteQuestionEdge({ kind: 'pane', ptyId: 'pty-1' })
     await settle()
     expect(told).toEqual([id])
   })
 
   it('still tells when an agent coordinator stops at its shell', async () => {
+    coordinate()
     working = true
     const id = await take()
     expect(told).toEqual([])

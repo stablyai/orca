@@ -2,6 +2,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import { getQuestionTaker } from '../../orchestration/db/messages/mail-taker'
+import {
+  listenForQuestionEdges,
+  type QuestionEdge
+} from '../../orchestration/db/messages/question-edges'
 import { dropReaderlessRunQuestions } from '../../orchestration/db/questions/readerless-run-questions'
 import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
@@ -153,5 +157,33 @@ describe("a Run whose coordinator's terminal ended", () => {
 
   it('keeps a Run whose pane moved to another tab before its old tab closed', async () => {
     expect(getQuestionTaker(db, await closeSleptTab(true))).toBeNull()
+  })
+})
+
+describe('a terminal process ending, as agent questions hear it', () => {
+  it('is heard by pty id on exit and on an in-place replacement whose late exit is dropped', async () => {
+    const runtime = new OrcaRuntimeService(null)
+    runtime.registerPty('pty-q', 'wt', null, {
+      tabId: 'tab_q',
+      leafId: OTHER_LEAF,
+      incarnationId: 'inc-1',
+      terminalHandle: 'term_q'
+    })
+    const exits: QuestionEdge[] = []
+    const stop = listenForQuestionEdges((edge) => edge.kind === 'exit' && exits.push(edge))
+    try {
+      runtime.onPtySpawned('pty-q', 'inc-2')
+      await runtime.onPtyExit('pty-q', 0, 'inc-1')
+      await Promise.resolve()
+      expect(exits).toEqual([{ kind: 'exit', ptyId: 'pty-q' }])
+      await runtime.onPtyExit('pty-q', 0, 'inc-2')
+      await Promise.resolve()
+      expect(exits).toEqual([
+        { kind: 'exit', ptyId: 'pty-q' },
+        { kind: 'exit', ptyId: 'pty-q' }
+      ])
+    } finally {
+      stop()
+    }
   })
 })

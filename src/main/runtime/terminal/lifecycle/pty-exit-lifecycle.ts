@@ -309,9 +309,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimeTerminalWorkerMode
       })
     }
     // An agent-less reader holding a question has no agent phase to end, so its exit tells instead.
-    new Set(exitedSurfaces.map((surface) => surface.handle)).forEach((handle) =>
-      noteQuestionEdge({ kind: 'exit', handle })
-    )
+    noteQuestionEdge({ kind: 'exit', ptyId })
     for (const surface of preservesAbnormalSshSurface ? [] : exitedSurfaces) {
       this.failActiveDispatchOnExit(surface.handle, surface.paneKey, exitCause, lastOutput, {
         paneRespawning: options.paneRespawning === true && pty?.connectionId == null
