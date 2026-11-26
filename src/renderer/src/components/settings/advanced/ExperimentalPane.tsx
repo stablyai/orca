@@ -43,7 +43,8 @@ export function ExperimentalPane({
   const t = useTranslate()
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const showPet = matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().pet])
-  // Why latch: switching one off must not make its row vanish mid-click; it hides on next open.
+  // Why latch: switching one off must not make its row vanish mid-click. The pane unmounts when
+  // the user leaves the Experimental section, so the row is gone the next time they come back.
   const [optInOnlyOnAtOpen] = useState(() => getOptInOnlyExperimentVisibility(settings))
   const optInOnlyOnNow = getOptInOnlyExperimentVisibility(settings)
   const showAgentDashboard =

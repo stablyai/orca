@@ -48,7 +48,7 @@ describe('opt-in-only experiments in the Experimental pane', () => {
     expect(hasSwitch(ATTENTION_TOGGLE)).toBe(true)
   })
 
-  it('keeps a row on screen after the user switches it off, until the pane reopens', () => {
+  it('keeps a row on screen after the user switches it off, until the Experimental pane remounts', () => {
     const on = settingsWith({ experimentalTerminalAttention: true })
     const { rerender, unmount } = render(
       <ExperimentalPane settings={on} updateSettings={() => {}} />
