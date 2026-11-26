@@ -13,11 +13,18 @@ describe.skipIf(process.platform === 'win32')('macOS owner lookups for departed 
   const realPlatform = process.platform
   let helper: Awaited<ReturnType<typeof useVouchingSocketOwnerHelper>>
   const servers: Server[] = []
+  const sockets: Socket[] = []
+  let releaseLookup = (): void => {}
   beforeAll(async () => {
-    helper = await useVouchingSocketOwnerHelper(4_000)
+    helper = await useVouchingSocketOwnerHelper(true)
   })
   afterEach(async () => {
     Object.defineProperty(process, 'platform', { value: realPlatform })
+    // Stops the helper, held answer and all.
+    releaseLookup()
+    for (const socket of sockets.splice(0)) {
+      socket.destroy()
+    }
     await Promise.all(servers.splice(0).map((server) => new Promise((done) => server.close(done))))
   })
   afterAll(() => helper.restore())
@@ -32,6 +39,7 @@ describe.skipIf(process.platform === 'win32')('macOS owner lookups for departed 
     const admitted: Socket[] = []
     const server = createServer({ pauseOnConnect: true, allowHalfOpen: true }, (socket) => {
       accepted.push(socket)
+      sockets.push(socket)
       socket.on('error', () => socket.destroy())
       admission(socket, () => admitted.push(socket))
     })
@@ -44,6 +52,7 @@ describe.skipIf(process.platform === 'win32')('macOS owner lookups for departed 
   function connectClient(port: number): Promise<Socket> {
     return new Promise((resolve, reject) => {
       const client = connect(port, '127.0.0.1', () => resolve(client))
+      sockets.push(client)
       client.once('error', reject)
     })
   }
@@ -52,7 +61,7 @@ describe.skipIf(process.platform === 'win32')('macOS owner lookups for departed 
     'scans none of %i clients that reset while queued, and checks the live ones next',
     async (n) => {
       Object.defineProperty(process, 'platform', { value: 'darwin' })
-      const release = holdSocksClientOwnerLookup()
+      releaseLookup = holdSocksClientOwnerLookup()
       const { port, accepted, admitted } = await forwardListener()
       const before = (await helper.scans()).length
       const inFlight = isOwnDarwinConnection(
@@ -77,18 +86,13 @@ describe.skipIf(process.platform === 'win32')('macOS owner lookups for departed 
       const halfClosed = await connectClient(port)
       halfClosed.end()
       const live = await connectClient(port)
+      await helper.releaseFirstAnswer()
       await inFlight
       await expect.poll(() => admitted.length, { timeout: 5_000 }).toBe(2)
       expect((await helper.scans()).slice(before).slice(1)).toEqual([
         `127.0.0.1 ${halfClosed.localPort} 127.0.0.1 ${port}`,
         `127.0.0.1 ${live.localPort} 127.0.0.1 ${port}`
       ])
-      halfClosed.destroy()
-      live.destroy()
-      for (const socket of admitted) {
-        socket.destroy()
-      }
-      release()
     },
     30_000
   )
