@@ -4,6 +4,7 @@ import type {
   BranchAutoRenameOutcome,
   BranchAutoRenameRetryResult
 } from '../../../../../../shared/worktree/branch-auto-rename-attempt'
+import { getAutoNameRetryAvailability, retryAutoName } from './branch-auto-rename-actions'
 
 /**
  * How long the dialog waits on one attempt before handing its controls back. The attempt itself keeps
@@ -167,8 +168,7 @@ export function useBranchAutoRenameRetry(args: {
     if (!open) {
       return
     }
-    window.api.worktrees
-      .getBranchAutoRenameRetryAvailability({ worktreeId, executionHostId })
+    getAutoNameRetryAvailability({ worktreeId, executionHostId })
       .then((result) => {
         if (token !== session.current) {
           return
@@ -242,8 +242,7 @@ export function useBranchAutoRenameRetry(args: {
     const token = session.current
     const clickSeq = ++counters.current.click
     setFollow({ attemptId: null, clickSeq, observation: arm(token), stalled: false })
-    window.api.worktrees
-      .retryBranchAutoRename({ worktreeId, executionHostId })
+    retryAutoName({ worktreeId, executionHostId })
       .then((result) => settleClick(clickSeq, result, token))
       .catch(() =>
         settleClick(

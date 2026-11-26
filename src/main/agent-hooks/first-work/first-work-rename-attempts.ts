@@ -80,6 +80,12 @@ export function isFirstWorkRenameSettled(worktreeId: string, incarnation: string
   return settledIncarnation === incarnation
 }
 
+/** Stops automatic attempts for this incarnation, as a definitive verdict would. */
+export function settleFirstWorkRename(worktreeId: string, incarnation: string): void {
+  clearFirstWorkGenerationFailures(worktreeId)
+  rememberSettled(worktreeId, incarnation)
+}
+
 /** The running attempt a click may join: same incarnation and still able to generate. */
 export function runningFirstWorkAttempt(
   worktreeId: string,

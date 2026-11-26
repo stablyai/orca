@@ -4,13 +4,16 @@ import {
   parseExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
 import type {
+  BranchAutoRenameDismissResult,
   BranchAutoRenameRetryAvailability,
   BranchAutoRenameRetryResult
 } from '../../../../shared/worktree/branch-auto-rename-attempt'
 import {
+  firstWorkDismissDeps,
   firstWorkRenameDeps,
   firstWorkRetryDeps
 } from '../../../agent-hooks/first-work/first-work-rename-runtime'
+import { dismissFirstWorkRename } from '../../../agent-hooks/first-work/first-work-rename-dismiss'
 import {
   getFirstWorkRetryAvailability,
   retryFirstWorkRename
@@ -62,6 +65,15 @@ export function registerBranchAutoRenameRetryHandlers(context: WorktreeIpcContex
             outcome: { kind: 'ineligible', reason: 'unavailable' },
             finishedAt: Date.now()
           })
+    }
+  )
+  ipcMain.handle(
+    'worktrees:dismissBranchAutoRename',
+    (_event, args: RetryArgs): BranchAutoRenameDismissResult => {
+      const worktreeId = localWorktreeId(args)
+      return worktreeId
+        ? dismissFirstWorkRename(worktreeId, firstWorkDismissDeps(store, runtime))
+        : { dismissed: false }
     }
   )
 }

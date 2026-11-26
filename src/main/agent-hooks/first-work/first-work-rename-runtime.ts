@@ -4,6 +4,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/executio
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import type { FirstWorkBranchRenameDeps } from './first-work-branch-rename'
 import type { FirstWorkRetryDeps } from './first-work-rename-retry'
+import type { FirstWorkDismissDeps } from './first-work-rename-dismiss'
 import { rememberBranchRenameFailureOutput } from './branch-rename-failure-output'
 import { renameWorktreeFolderOnFirstWork } from './first-work-folder-rename'
 import { moveWorktree } from '../../git/worktrees/movement/worktree-move'
@@ -41,6 +42,12 @@ export function firstWorkRenameDeps(
   const localMeta = (worktreeId: string) =>
     store.getWorktreeMetaForHost?.(worktreeId, LOCAL_EXECUTION_HOST_ID) ??
     store.getWorktreeMeta(worktreeId)
+  const isAutoNameDismissed = (worktreeId: string): boolean => {
+    const scope = parseWorkspaceKey(worktreeId)
+    return scope?.type === 'folder'
+      ? store.getFolderWorkspace!(scope.folderWorkspaceId)?.pendingFirstAgentMessageRename === false
+      : localMeta(worktreeId)?.branchNameIsUserChosen === true
+  }
   return {
     readIncarnation: (worktreeId) => {
       const scope = parseWorkspaceKey(worktreeId)
@@ -137,6 +144,10 @@ export function firstWorkRenameDeps(
           })
       : undefined,
     setRenameError: (worktreeId, error, failureOutput) => {
+      // A dismissed workspace keeps its name; a late attempt must not bring the error back.
+      if (error !== null && isAutoNameDismissed(worktreeId)) {
+        return
+      }
       // Refresh diagnostics before deduping; repeated text can come from a new run.
       rememberBranchRenameFailureOutput(worktreeId, error === null ? null : failureOutput)
       const scope = parseWorkspaceKey(worktreeId)
@@ -171,6 +182,38 @@ export function firstWorkRenameDeps(
         return
       }
       runtime.notifyBranchRenamed(repoIdOrWorktreeId)
+    }
+  }
+}
+
+export function firstWorkDismissDeps(
+  store: Parameters<typeof firstWorkRenameDeps>[0],
+  runtime: Parameters<typeof firstWorkRenameDeps>[1]
+): FirstWorkDismissDeps {
+  return {
+    readIncarnation: firstWorkRenameDeps(store, runtime).readIncarnation,
+    keepCurrentName: (worktreeId) => {
+      rememberBranchRenameFailureOutput(worktreeId, null)
+      const scope = parseWorkspaceKey(worktreeId)
+      if (scope?.type === 'folder') {
+        store.updateFolderWorkspace!(scope.folderWorkspaceId, {
+          pendingFirstAgentMessageRename: false,
+          firstAgentMessageRenameError: null
+        })
+        runtime.notifyFolderWorkspaceChanged()
+        return
+      }
+      const target = resolveWorktreeMetaOwner(store, worktreeId)
+      if (!target) {
+        return
+      }
+      // The same mark an in-app branch switch leaves: first-work naming must not rename this branch.
+      store.setWorktreeMeta(target, {
+        branchNameIsUserChosen: true,
+        pendingFirstAgentMessageRename: false,
+        firstAgentMessageRenameError: null
+      })
+      runtime.notifyBranchRenamed(getRepoIdFromWorktreeId(worktreeId))
     }
   }
 }

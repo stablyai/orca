@@ -6307,10 +6307,7 @@
           "eab8b45238": "오류 복사",
           "a23b22d16f": "복사됨",
           "74fc00776f": "오류 세부정보",
-          "ca3b225195": "브랜치 자동 이름 지정에 실패했습니다.",
-          "couldNotGenerateBranchName": "Orca에서 첫 번째 에이전트 메시지를 바탕으로 <name>{{name}}</name>의 브랜치 이름을 생성하지 못했습니다.",
           "tryAgain": "다시 시도",
-          "namingBranch": "브랜치 이름 짓는 중…",
           "errorDetailsAt": "오류 상세 · {{time}}",
           "reasonNothingYet": "브랜치 이름을 지을 변경 사항이 아직 없습니다.",
           "reasonBranchChanged": "Orca가 이름을 짓는 동안 브랜치가 변경되었습니다.",
@@ -6324,8 +6321,7 @@
           "reasonNoDistinctName": "생성된 이름이 현재 이름과 같습니다.",
           "reasonFirstMessageUnavailable": "Orca가 이 워크스페이스의 첫 메시지를 찾을 수 없습니다.",
           "reasonAlreadyNamed": "이 워크스페이스는 이미 이름이 변경되었습니다.",
-          "reasonUnavailable": "Orca가 더 이상 이 브랜치의 이름을 지을 수 없습니다.",
-          "branchNameKept": "브랜치 이름 유지됨"
+          "reasonUnavailable": "Orca가 더 이상 이 브랜치의 이름을 지을 수 없습니다."
         },
         "CreateProjectLocationField": {
           "95548e33bf": "상위 폴더 선택...",
@@ -6752,9 +6748,6 @@
           "0f33af979b": "부분 체크아웃. 이 경로 외부의 파일은 디스크에 없습니다.",
           "4f964d5e8c": "스파스",
           "7d517f82e2": "기본",
-          "4eba2ea99e": "자동 이름을 지정하지 못했습니다. 자세한 내용을 보려면 클릭하세요.",
-          "74522ee457": "이름 바꾸기 실패",
-          "02e19349f4": "자동 이름 바꾸기 실패: 오류 보기",
           "691ccfd622": "삭제 중…",
           "deleteFailed": "삭제 실패",
           "35ccfe2475": "프로젝트 {{value0}}",

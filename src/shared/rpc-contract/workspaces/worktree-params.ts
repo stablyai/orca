@@ -123,6 +123,11 @@ export const WorktreeSleepParams = WorktreeSelector.extend({
   markChatsAsleep: z.boolean().optional()
 })
 
+/** The host's own workspace id (its local key), as its sidebar row carries it. */
+export const WorktreeAutoNameParams = z.object({
+  worktreeId: z.string().min(1, 'Missing worktree id')
+})
+
 export const WorktreeActivate = WorktreeSelector.extend({
   notifyClients: OptionalBoolean,
   navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional()
