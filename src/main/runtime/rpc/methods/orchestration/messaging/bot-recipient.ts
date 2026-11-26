@@ -278,7 +278,10 @@ export async function readBotTurn(
   actsFor: BotRequestAsker[]
   triggeredBy: AutomationTriggeredBy | null
 }> {
-  const key = runtime.getExternalConversationSeam()?.replyTarget(chatPaneKey(sessionId))?.key
+  // Index-only skips the reply target: finding it can walk every conversation link.
+  const key = indexedOnly
+    ? undefined
+    : runtime.getExternalConversationSeam()?.replyTarget(chatPaneKey(sessionId))?.key
   const conversation = key ? { source: key.source, externalId: key.externalId } : null
   const workspaceId = conversation ? workspaceOf(conversation.externalId) : null
   const host = await requireStructuredHost(runtime)
@@ -293,7 +296,10 @@ export async function readBotTurn(
     // says, and is kept as the record.
     const first = await readFirstMessageActsFor(db, host.journalReads(root), workspaceId)
     if (first) {
-      db.recordBotConversationActsFor(root, { actsFor: first })
+      // Not kept from an index-only read, which doesn't know the conversation's workspace.
+      if (!indexedOnly) {
+        db.recordBotConversationActsFor(root, { actsFor: first })
+      }
       recorded = { actsFor: first }
     }
   }
