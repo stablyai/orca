@@ -7,19 +7,8 @@ import {
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
 
-/** Ticks up to this count sit at the roomy pitch; past it they pack tight. */
-export const NATIVE_CHAT_RAIL_ROOMY_TICKS = 20
-/** The tight pitch as the rail draws it: a 3px tick inside `py-0.5`. */
-const RAIL_TIGHT_PITCH_PX = 7
-const RAIL_VIEWPORT_SHARE = 0.7
-
-/** Fit ticks within the viewport share before sampling; never shrink below roomy capacity. */
-export function nativeChatRailTickCapacity(viewportHeight: number): number {
-  return Math.max(
-    NATIVE_CHAT_RAIL_ROOMY_TICKS,
-    Math.floor((viewportHeight * RAIL_VIEWPORT_SHARE) / RAIL_TIGHT_PITCH_PX)
-  )
-}
+/** The rail never draws more ticks than this; a longer thread is sampled, and past it with loaded rows, listed. */
+export const NATIVE_CHAT_RAIL_MAX_TICKS = 20
 
 export type NativeChatRailItem = {
   id: string
@@ -28,6 +17,8 @@ export type NativeChatRailItem = {
   /** Preview prose, whitespace collapsed. Empty when the message is images only. */
   text: string
   hasImages: boolean
+  /** When it was sent; null for unloaded outline history or a transcript without times. */
+  timestamp: number | null
   /** The host's preview of the agent's reply, on an outline item only. */
   reply?: string
   /** On an outline item that did not open its turn: the message that did. */
@@ -93,9 +84,16 @@ export function buildNativeChatRailItems(
       prior?.id === slot.message.id &&
         prior.slotIndex === slotIndex &&
         prior.text === preview.text &&
-        prior.hasImages === hasImages
+        prior.hasImages === hasImages &&
+        prior.timestamp === slot.message.timestamp
         ? prior
-        : { id: slot.message.id, slotIndex, text: preview.text, hasImages }
+        : {
+            id: slot.message.id,
+            slotIndex,
+            text: preview.text,
+            hasImages,
+            timestamp: slot.message.timestamp
+          }
     )
   }
   return items.length === previous.length && items.every((item, index) => item === previous[index])
@@ -115,7 +113,7 @@ export function mergeNativeChatRailOutline(
   const unloaded: NativeChatRailItem[] = []
   for (const entry of outline) {
     if (!loadedIds.has(entry.id)) {
-      unloaded.push({ ...entry, slotIndex: null })
+      unloaded.push({ ...entry, slotIndex: null, timestamp: null })
     }
   }
   return unloaded.length === 0 ? loaded : [...unloaded, ...loaded]
@@ -125,7 +123,7 @@ export function mergeNativeChatRailOutline(
 export function selectNativeChatRailTicks({
   items,
   keepIds = [],
-  maxTicks = NATIVE_CHAT_RAIL_ROOMY_TICKS
+  maxTicks = NATIVE_CHAT_RAIL_MAX_TICKS
 }: {
   items: readonly NativeChatRailItem[]
   keepIds?: readonly (string | null)[]

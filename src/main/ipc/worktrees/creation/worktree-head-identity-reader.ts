@@ -2,6 +2,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join } from 'node:path'
 import type { WorktreeHeadIdentity } from '../../../../shared/worktree/types'
 import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
+import { ownRetainedString } from '../../../../shared/text/own-retained-string'
 import {
   FULL_HEAD_IDENTITY_SCOPE,
   headIdentityEntryKey,
@@ -90,8 +91,9 @@ function isSafeRefName(ref: string): boolean {
 // Only SHA-1/SHA-256 object IDs may leave this reader, bounding malformed-repo output.
 const OBJECT_ID_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/
 
+// Detach from large packed-refs buffers so cached OIDs do not pin megabytes in V8.
 function asObjectId(value: string | null | undefined): string | null {
-  return value != null && OBJECT_ID_PATTERN.test(value) ? value : null
+  return value != null && OBJECT_ID_PATTERN.test(value) ? ownRetainedString(value) : null
 }
 
 async function resolveRefToOid(

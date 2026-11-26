@@ -75,6 +75,16 @@ export class PushGatewayClient {
     })
   }
 
+  /** How far off this host's clock is, when the push service refuses sign-in for it; null otherwise. */
+  async currentClockSkewMs(): Promise<number | null> {
+    // Only a recorded refusal re-signs in, so a fixed clock clears it without a handshake per test.
+    if (this.session.clockSkewMs() === null) {
+      return null
+    }
+    const outcome = await this.session.ensure(null)
+    return outcome.ok ? null : (outcome.clockSkewMs ?? null)
+  }
+
   async registerDevice(input: {
     deviceId: string
     platform: MobilePushPlatform

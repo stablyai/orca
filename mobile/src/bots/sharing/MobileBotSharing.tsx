@@ -1,10 +1,10 @@
 // The bot's Settings › Sharing on the phone: the row, and the page it opens, from which Share bot,
 // Stop sharing and Manage links go. The desktop's BotSharingGroup and BotSharingPage.
 import { useState, type ReactNode } from 'react'
-import { Link, Link2, Share2 } from 'lucide-react-native'
+import { Link, Link2, RefreshCw, RotateCw, Share2 } from 'lucide-react-native'
 import type { BotOwnedShare } from '../../../../src/shared/bots/bot-share-status'
 import { LoadingSpinner } from '../../components/feedback/LoadingSpinner'
-import { ListRow } from '../../components/list/ListGroup'
+import { LIST_LEADING_INSET, ListRow } from '../../components/list/ListGroup'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { ConfirmContent } from '../../components/sheets/ConfirmModal'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -18,6 +18,7 @@ import { useHostBotsListing } from '../host-bot-store'
 import { mobileBotAvatarSource, type MobileBotAvatarSource } from '../host-bot-row-facts'
 import type { ListedBot } from '../host-bots-operations'
 import { MobileBotTextButton } from '../MobileBotTextButton'
+import type { SettingsFeature } from '../MobileBotSettingsRoot'
 import { botShareDate, botShareErrorMessage, botShareUrlText } from './bot-share-copy'
 import { stopPhoneBotShare } from './bot-share-operations'
 import { MobileBotShareFlow } from './MobileBotShareFlow'
@@ -43,7 +44,7 @@ type Step =
 export function useMobileBotSharingSettings(
   settings: SettingsContext,
   banner: ReactNode
-): { row: ReactNode; page: ReactNode } {
+): SettingsFeature {
   const t = useMobileTranslation()
   const { bot, avatar } = settings.routeBot
   const linkState = usePhoneBotShareLink(settings.client, bot.id)
@@ -67,29 +68,34 @@ export function useMobileBotSharingSettings(
   const { read } = linkState
   const link = read.kind === 'read' ? read.link : undefined
   const row = (
-    <SettingsSection>
-      <DrillRow
-        label={t('bots.settingsView.sharing', 'Sharing')}
-        value={
-          link === null
-            ? t('bots.settingsPage.off', 'Off')
-            : link
-              ? t('bots.settingsView.sharingOn', 'On')
+    <DrillRow
+      label={t('bots.settingsView.sharing', 'Sharing')}
+      value={
+        link === null
+          ? t('bots.settingsPage.off', 'Off')
+          : link
+            ? t('bots.settingsView.sharingOn', 'On')
+            : read.kind === 'offline'
+              ? t('bots.settings.readFailed', 'Couldn’t load')
               : ''
+      }
+      onPress={() => {
+        if (read.kind === 'offline') {
+          linkState.reread()
         }
-        onPress={() => push({ kind: 'sharing' })}
-      />
-    </SettingsSection>
+        push({ kind: 'sharing' })
+      }}
+    />
   )
   const step = steps.at(-1)
   if (!step) {
-    return { row, page: null }
+    return { rows: [{ key: 'sharing', group: 'sharing', node: row }], page: null }
   }
   const backTo = (label: string) => ({ label, onPress: back })
   switch (step.kind) {
     case 'sharing':
       return {
-        row: null,
+        rows: [],
         page: (
           <SharingPage
             botName={bot.name}
@@ -107,7 +113,7 @@ export function useMobileBotSharingSettings(
       }
     case 'share':
       return {
-        row: null,
+        rows: [],
         page: (
           <MobileBotShareFlow
             client={settings.client}
@@ -124,7 +130,7 @@ export function useMobileBotSharingSettings(
       }
     case 'stop':
       return {
-        row: null,
+        rows: [],
         page: (
           <StopConfirm
             client={settings.client}
@@ -143,7 +149,7 @@ export function useMobileBotSharingSettings(
       }
     case 'links':
       return {
-        row: null,
+        rows: [],
         page: (
           <SiblingSharedLinks
             botId={bot.id}
@@ -166,7 +172,7 @@ export function useMobileBotSharingSettings(
       }
     case 'link':
       return {
-        row: null,
+        rows: [],
         page: (
           <MobileLinkShareFlow
             {...settings}
@@ -230,58 +236,64 @@ function SharingPage(props: {
     </>
   )
   const manageLinks = (
-    <SettingsSection>
-      <ListRow
-        leading={<Link size={18} color={colors.textSecondary} />}
-        title={t('bots.share.manageLinks', 'Manage links')}
-        navigates
-        disabled={!props.online}
-        onPress={props.onManageLinks}
-      />
-    </SettingsSection>
+    <ListRow
+      key="links"
+      leading={<Link size={18} color={colors.textSecondary} />}
+      title={t('bots.share.manageLinks', 'Manage links')}
+      navigates
+      disabled={!props.online}
+      onPress={props.onManageLinks}
+    />
   )
   if (!link) {
     return (
       <>
         {header}
-        <SettingsSection first>
-          <ListRow
-            leading={<Share2 size={18} color={colors.textSecondary} />}
-            title={
-              read.kind === 'read'
-                ? t('bots.share.notShared', 'Not shared')
-                : t('bots.settingsView.sharing', 'Sharing')
-            }
-            subtitle={t('bots.share.description', 'Anyone with the link can make a copy.')}
-            accessory={
-              <MobileBotTextButton
-                label={t('bots.share.shareBot', 'Share bot…')}
-                disabled={!props.online || read.kind === 'loading'}
-                onPress={props.onShare}
-              />
-            }
-          />
-          {read.kind === 'loading' ? (
+        <SettingsSection
+          first
+          title={read.kind === 'read' ? t('bots.share.notShared', 'Not shared') : undefined}
+          separatorInset={LIST_LEADING_INSET}
+          footer={
+            read.kind === 'offline'
+              ? undefined
+              : t('bots.share.description', 'Anyone with the link can make a copy.')
+          }
+        >
+          {read.kind === 'offline' ? (
             <ListRow
-              leading={<LoadingSpinner size={18} color={colors.textMuted} />}
-              title={t('bots.share.loadingLinks', 'Loading shared links…')}
-            />
-          ) : read.kind === 'offline' ? (
-            <ListRow
-              title={
-                read.error ?? t('bots.share.linkStatusUnavailable', 'Couldn’t check the share link')
-              }
-              wrapTitle
-              accessory={
-                <MobileBotTextButton
-                  label={t('settings.bots.retry', 'Retry')}
-                  onPress={props.onRetry}
-                />
-              }
+              key="unread"
+              leading={<Share2 size={18} color={colors.textSecondary} />}
+              title={t('bots.settingsView.sharing', 'Sharing')}
+              value={t('bots.settings.readFailed', 'Couldn’t load')}
+              subtitle={read.error ?? undefined}
             />
           ) : null}
+          {read.kind === 'offline' ? (
+            <ListRow
+              key="retry"
+              leading={<RotateCw size={18} color={colors.accentBlue} />}
+              title={t('settings.bots.retry', 'Retry')}
+              accent
+              onPress={props.onRetry}
+            />
+          ) : (
+            <ListRow
+              key="share"
+              leading={
+                read.kind === 'loading' ? (
+                  <LoadingSpinner size={18} color={colors.textMuted} />
+                ) : (
+                  <Share2 size={18} color={colors.accentBlue} />
+                )
+              }
+              title={t('bots.share.shareBot', 'Share bot…')}
+              accent
+              disabled={!props.online || read.kind === 'loading'}
+              onPress={props.onShare}
+            />
+          )}
+          {read.kind === 'read' ? manageLinks : null}
         </SettingsSection>
-        {read.kind === 'read' ? manageLinks : null}
       </>
     )
   }
@@ -294,7 +306,9 @@ function SharingPage(props: {
     <>
       {header}
       <SettingsSection
+        first
         title={t('bots.share.isShared', '{{name}} is shared', { name: props.botName })}
+        separatorInset={LIST_LEADING_INSET}
       >
         <ListRow
           leading={<Link2 size={18} color={colors.textSecondary} />}
@@ -311,17 +325,15 @@ function SharingPage(props: {
           }
         />
         <ListRow
+          leading={<RefreshCw size={18} color={colors.textSecondary} />}
           title={t('bots.share.updateLink', 'Update link')}
-          subtitle={t(
-            'bots.share.sameLink',
-            'Goes to the same link. Copies already made stay as they are.'
-          )}
+          subtitle={t('bots.share.sameLinkShort', 'Copies already made stay as they are.')}
           navigates
           disabled={!props.online}
           onPress={props.onShare}
         />
+        {manageLinks}
       </SettingsSection>
-      {manageLinks}
       <SettingsSection>
         <ListRow
           title={t('bots.share.stopSharing', 'Stop sharing')}

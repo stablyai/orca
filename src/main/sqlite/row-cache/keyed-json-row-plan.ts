@@ -1,29 +1,46 @@
-import type { KeyedJsonRow } from './keyed-json-row-cache'
+import { createHash } from 'node:crypto'
+import type { RowCacheWalCheckpoints } from './row-cache-wal-checkpoints'
 
-export type StoredRow = { seq: number; json: string }
+export type KeyedJsonRow = { key: string; json: string }
 
-/** Rows read with BLOB keys, in seq order; malformed rows are skipped. */
-export function foldStoredRows(rows: readonly Record<string, unknown>[]): {
-  stored: Map<string, StoredRow>
-  maxSeq: number
-} {
-  const stored = new Map<string, StoredRow>()
-  let maxSeq = 0
-  for (const row of rows) {
-    const { seq, value } = row
-    const key = row.key instanceof Uint8Array ? Buffer.from(row.key).toString('utf8') : row.key
-    if (typeof key === 'string' && typeof seq === 'number' && typeof value === 'string') {
-      stored.set(key, { seq, json: value })
-      maxSeq = Math.max(maxSeq, seq)
-    }
-  }
-  return { stored, maxSeq }
+export type KeyedJsonRowCacheOptions = {
+  schemaVersion: number
+  /** Lock wait per call. Main-thread callers keep it short and retry later instead. */
+  busyTimeoutMs?: number
+  /** False opens and closes the database per call, so no handle outlives it (profile moves). */
+  holdConnection?: boolean
+  /** Sync committed recovery facts even when the host loses power before a WAL checkpoint. */
+  durable?: boolean
+  /** JSON file older builds wrote; see load(). */
+  legacyPath?: string
+  walCheckpoints?: Pick<
+    RowCacheWalCheckpoints,
+    'available' | 'attach' | 'detach' | 'request' | 'assertRemovable'
+  >
 }
 
+export type KeyedJsonRowLoad<T> =
+  | { kind: 'rows'; rows: KeyedJsonRow[] }
+  | { kind: 'import'; value: T; receipt: string; rows: KeyedJsonRow[] }
+  | { kind: 'unavailable'; error: unknown; legacy?: T }
+
+export type RowWriteOptions = {
+  importReceipt?: string
+  busyTimeoutMs?: number
+  reinsertKeys?: ReadonlySet<string>
+}
+
+export type StoredRow = { seq: number; hash: string }
+export type PlannedRowWrite = { seq: number; json: string; hash: string }
 type RowWritePlan = {
-  changes: Map<string, StoredRow | null>
+  changes: Map<string, PlannedRowWrite | null>
   maxSeq: number
   next?: Map<string, StoredRow>
+}
+
+// Retain a fixed-size digest instead of full JSON payloads so multi-megabyte caches do not sit in RAM.
+export function hashKeyedJsonRow(json: string): string {
+  return createHash('sha256').update(json).digest('base64')
 }
 
 export function planFullRows(
@@ -32,18 +49,18 @@ export function planFullRows(
   rows: readonly KeyedJsonRow[]
 ): RowWritePlan {
   const next = new Map<string, StoredRow>()
+  const changes = new Map<string, PlannedRowWrite | null>()
   let previous = 0
   for (const { key, json } of rows) {
     const old = baseline.get(key)
     const seq = old && old.seq > previous ? old.seq : ++maxSeq
     previous = seq
-    next.set(key, { seq, json })
-  }
-  const changes = new Map<string, StoredRow | null>()
-  for (const [key, row] of next) {
-    const old = baseline.get(key)
-    if (!old || old.seq !== row.seq || old.json !== row.json) {
-      changes.set(key, row)
+    const hash = hashKeyedJsonRow(json)
+    next.set(key, { seq, hash })
+    if (!old || old.seq !== seq || old.hash !== hash) {
+      changes.set(key, { seq, json, hash })
+    } else {
+      changes.delete(key)
     }
   }
   for (const key of baseline.keys()) {
@@ -60,7 +77,7 @@ export function planRowPatch(
   values: ReadonlyMap<string, string | null>,
   reinsertKeys?: ReadonlySet<string>
 ): RowWritePlan {
-  const changes = new Map<string, StoredRow | null>()
+  const changes = new Map<string, PlannedRowWrite | null>()
   for (const [key, json] of values) {
     const old = baseline.get(key)
     if (json === null) {
@@ -69,8 +86,9 @@ export function planRowPatch(
       }
     } else {
       const seq = reinsertKeys?.has(key) ? ++maxSeq : (old?.seq ?? ++maxSeq)
-      if (!old || old.json !== json || old.seq !== seq) {
-        changes.set(key, { seq, json })
+      const hash = hashKeyedJsonRow(json)
+      if (!old || old.hash !== hash || old.seq !== seq) {
+        changes.set(key, { seq, json, hash })
       }
     }
   }

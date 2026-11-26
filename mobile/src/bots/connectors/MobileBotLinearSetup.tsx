@@ -1,29 +1,29 @@
 // Connect Linear as a page inside the bot's settings: the desktop's BotLinearSetupFlow. Linear's sign-in
-// returns to 127.0.0.1 on the host, so it opens in Orca's browser there and the phone waits; the steps
-// after it (pick, admin install, turn on) are all here.
+// returns to 127.0.0.1 on the host, so it opens in Orca's browser there (shown here as that tab) and the
+// phone waits; the steps after it (pick, admin install, turn on) are all here.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { View } from 'react-native'
 import { ArrowUpRight } from 'lucide-react-native'
 import { botLinearWorkspaces, type BotLinearLink } from '../../../../src/shared/bot-types'
 import type { ConnectorLinearWorkspace } from '../../../../src/shared/connector-bot-linear-contract'
 import { BOT_LINEAR_OFF } from '../../../../src/shared/connector-bot-linear-contract'
+import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
 import { MobileStateView } from '../../components/feedback/MobileStateView'
 import { ListRow } from '../../components/list/ListGroup'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
-import { SheetPrimaryButton } from '../../components/sheets/SheetPrimaryButton'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { useClipboardWriter } from '../../platform/clipboard/clipboard'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
+import { colors } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { PhoneBot } from '../host-bots-operations'
-import { MobileConnectorSourceIcon } from '../MobileConnectorSourceIcon'
+import { MobileConnectorLogo } from '../MobileConnectorSourceIcon'
 import { ConnectorHandoff, useFollowHost } from './MobileConnectorAccountParts'
 import { connectorAccountErrorMessage, linearWorkspaceLabel } from './mobile-connector-account-copy'
+import { MobileConnectorTryIt } from './MobileConnectorTryIt'
+import type { ConnectorPage } from './connector-pages'
 import type { PhoneLinearView } from './use-phone-connector-account'
-import { usePhoneConnectTrip } from './use-phone-connect-trip'
+import { usePhoneConnectTrip, useSignInOnOpen } from './use-phone-connect-trip'
 
 // Linear never returns from its own error page, so after this long the wait says what it likely is.
 const STUCK_MS = 30_000
@@ -58,14 +58,18 @@ export function MobileBotLinearSetup(props: {
   bot: PhoneBot
   /** A row's own workspace; none from Add a connector, which picks another than the bot's. */
   workspaceId: string | undefined
+  /** Opens on Linear's sign-in with the account picker. */
+  signIn: boolean
   linear: { view: PhoneLinearView; refresh: () => Promise<void> }
   hostName: string
   online: boolean
   banner: ReactNode
   showToast: (message: string, durationMs?: number) => void
   save: (updates: { linearWorkspaces: BotLinearLink[] }) => Promise<boolean>
+  /** This page, reopened once a sign-in shown on the phone ends. */
+  page: ConnectorPage
   onClose: () => void
-  /** Turned on: the workspace's page takes over. */
+  /** Turned on, after Try it: the workspace's page takes over. */
   onDone: (workspaceId: string) => void
 }) {
   const t = useMobileTranslation()
@@ -73,15 +77,17 @@ export function MobileBotLinearSetup(props: {
   const clipboard = useClipboardWriter()
   const [picked, setPicked] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  /** The workspace it turned on in: Try it shows. */
+  const [done, setDone] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
-  const { trip, start, cancel } = usePhoneConnectTrip(
-    props.client,
-    'linear',
-    bot.folderWorkspaceId,
-    linear.refresh
-  )
+  const { trip, start, cancel, showSignIn } = usePhoneConnectTrip('linear', linear.refresh)
+  useSignInOnOpen(props.signIn, trip, start)
   useBackClaim(() => {
-    props.onClose()
+    if (done) {
+      props.onDone(done)
+    } else {
+      props.onClose()
+    }
     return true
   })
 
@@ -98,6 +104,10 @@ export function MobileBotLinearSetup(props: {
     }
     if (linear.view.status === 'failed') {
       return { kind: 'failed', code: linear.view.error }
+    }
+    // A sign-in this page opened for that failed shows its error, not the link it replaced.
+    if (props.signIn && trip.status === 'failed') {
+      return { kind: 'connect', error: trip.error }
     }
     const { workspaces, installUrl } = linear.view.value
     // The trip's workspace first, then the row's own, then the only one linked.
@@ -125,8 +135,7 @@ export function MobileBotLinearSetup(props: {
     })
     setSaving(false)
     if (saved) {
-      props.showToast(t('bots.linear.setup.isOn', '{{name}} is on Linear', { name: bot.name }))
-      props.onDone(workspace.workspaceId)
+      setDone(workspace.workspaceId)
     }
   }
   // The sign-in was for turning the bot on: once it links an installed workspace, it turns on there.
@@ -135,7 +144,12 @@ export function MobileBotLinearSetup(props: {
   useEffect(() => {
     if (linkedTurnOn && !resumed.current) {
       resumed.current = true
-      void turnOn(linkedTurnOn)
+      // Reconnect only links again, as the desktop's; the bot's workspaces stay as they are.
+      if (props.signIn) {
+        props.onClose()
+      } else {
+        void turnOn(linkedTurnOn)
+      }
     }
   })
 
@@ -151,24 +165,41 @@ export function MobileBotLinearSetup(props: {
   // An admin installs whenever they get to it, so the step follows the host while it shows.
   useFollowHost(step.kind === 'needs-admin', refresh)
 
+  if (done) {
+    const mention = `@Orca ${bot.folder}`
+    const label = `bot:${bot.folder}`
+    return (
+      <MobileConnectorTryIt
+        connector="linear"
+        subtitle={t('bots.linear.setup.isOn', '{{name}} is on Linear', { name: bot.name })}
+        heading={t('bots.linear.setup.tryIt', 'Try it on any Linear issue')}
+        prompt={{ text: mention, copy: mention }}
+        footer={t('bots.linear.setup.orLabelLine', 'Or add the label {{label}}.', { label })}
+        banner={props.banner}
+        showToast={props.showToast}
+        onDone={() => props.onDone(done)}
+      />
+    )
+  }
   const error = (code: string) => connectorAccountErrorMessage('linear', code, hostName, t)
   const another = (
     <ListRow
-      leading={<ArrowUpRight size={18} color={colors.textPrimary} />}
+      leading={<ArrowUpRight size={18} color={colors.accentBlue} />}
+      accent
       title={t('bots.linear.connect.another', 'Use another workspace')}
+      accessibilityRole="link"
       disabled={!props.online}
       onPress={() => start(true)}
     />
   )
-  const signedIn = (workspace: ConnectorLinearWorkspace) => (
-    <SettingsNote>
-      {t('bots.connect.signedInAs', 'Signed in as {{who}}', {
-        who: t('bots.linear.connect.who', '{{name}} in {{workspace}}', {
-          name: workspace.userName || workspace.userId,
-          workspace: linearWorkspaceLabel(workspace.name, workspace.urlKey)
-        })
+  const workspaceRow = (workspace: ConnectorLinearWorkspace) => (
+    <ListRow
+      leading={<MobileConnectorLogo source="linear" size={20} />}
+      title={workspace.name}
+      subtitle={t('bots.connect.signedInAs', 'Signed in as {{who}}', {
+        who: workspace.userName || workspace.userId
       })}
-    </SettingsNote>
+    />
   )
   const body = (() => {
     switch (step.kind) {
@@ -179,7 +210,7 @@ export function MobileBotLinearSetup(props: {
       case 'failed':
         return (
           <MobileStateView
-            iconElement={<MobileConnectorSourceIcon source="linear" size={28} />}
+            iconElement={<MobileConnectorLogo source="linear" size={28} />}
             title={error(step.code)}
             action={
               step.code === BOT_LINEAR_OFF || !props.online
@@ -193,42 +224,49 @@ export function MobileBotLinearSetup(props: {
         )
       case 'connect':
         return (
-          <MobileStateView
-            iconElement={<MobileConnectorSourceIcon source="linear" size={28} />}
-            title={t(
-              'bots.linear.connect.pickWorkspace',
-              'Sign in and pick the Linear workspace {{name}} works in.',
-              { name: bot.name }
-            )}
-            message={step.error ? error(step.error) : undefined}
-          >
-            <SheetPrimaryButton
-              label={t('bots.linear.connect.button', 'Connect Linear')}
-              icon={ArrowUpRight}
-              disabled={!props.online}
-              onPress={() => start()}
-            />
-            <SettingsNote>
-              {t('bots.connect.opensOnHost', 'Opens in Orca’s browser on {{host}}.', {
-                host: hostName
-              })}
-            </SettingsNote>
-          </MobileStateView>
+          <>
+            <SettingsSection
+              first
+              footer={
+                step.error
+                  ? undefined
+                  : t('bots.connect.opensOnHost', 'Opens in Orca’s browser on {{host}}.', {
+                      host: hostName
+                    })
+              }
+            >
+              <ListRow
+                leading={<MobileConnectorLogo source="linear" size={20} />}
+                title={BOT_CONNECTOR_NAMES.linear}
+                subtitle={t(
+                  'bots.linear.connect.pickSubtitle',
+                  'Pick the workspace {{name}} works in',
+                  { name: bot.name }
+                )}
+              />
+              <ListRow
+                leading={<ArrowUpRight size={18} color={colors.accentBlue} />}
+                accent
+                title={
+                  step.error
+                    ? t('bots.linear.setup.retry', 'Try again')
+                    : t('bots.linear.connect.signIn', 'Sign in to Linear')
+                }
+                accessibilityRole="link"
+                disabled={!props.online}
+                onPress={() => start(props.signIn)}
+              />
+            </SettingsSection>
+            {step.error ? <SettingsNote error>{error(step.error)}</SettingsNote> : null}
+          </>
         )
       case 'waiting':
         return (
           <ConnectorHandoff
             hostName={hostName}
             message={t(
-              'bots.linear.connect.handoff',
-              'Linear’s sign-in is open in Orca’s browser there. Pick the workspace and choose Authorize; this updates when you finish.'
-            )}
-            waiting={t(
-              'bots.linear.connect.waitingOn',
-              'Finish signing in to Linear on {{host}}…',
-              {
-                host: hostName
-              }
+              'bots.linear.connect.handoffPick',
+              'Pick the workspace and choose Authorize.'
             )}
             stuck={
               now - step.since > STUCK_MS
@@ -238,7 +276,7 @@ export function MobileBotLinearSetup(props: {
                   )
                 : null
             }
-            onCancel={cancel}
+            onOpenPage={showSignIn ? () => showSignIn(props.page) : null}
           />
         )
       case 'pick':
@@ -254,7 +292,7 @@ export function MobileBotLinearSetup(props: {
               {step.workspaces.map((entry) => (
                 <ListRow
                   key={entry.workspaceId}
-                  leading={<MobileConnectorSourceIcon source="linear" size={20} />}
+                  leading={<MobileConnectorLogo source="linear" size={20} />}
                   title={linearWorkspaceLabel(entry.name, entry.urlKey)}
                   navigates
                   onPress={() => setPicked(entry.workspaceId)}
@@ -266,43 +304,34 @@ export function MobileBotLinearSetup(props: {
         )
       case 'needs-admin':
         return (
-          <>
-            {signedIn(step.workspace)}
-            <SettingsNote>
-              {t(
-                'bots.linear.setup.install',
-                'Orca is not installed in {{workspace}} yet. A Linear admin installs it once for everyone.',
-                { workspace: linearWorkspaceLabel(step.workspace.name, step.workspace.urlKey) }
-              )}
-            </SettingsNote>
-            <SettingsSection>
-              <ListRow
-                title={t('bots.linear.setup.copyForAdmin', 'Copy admin link')}
-                value={t('bots.linear.setup.installing', 'Waiting for the install…')}
-                onPress={() =>
-                  void clipboard
-                    .writeText(step.installUrl)
-                    .then(() => props.showToast(t('bots.linear.setup.copied', 'Link copied.')))
-                }
-              />
-              {another}
-            </SettingsSection>
-          </>
+          <SettingsSection
+            first
+            footer={t(
+              'bots.linear.setup.install',
+              'Orca is not installed in {{workspace}} yet. A Linear admin installs it once for everyone.',
+              { workspace: linearWorkspaceLabel(step.workspace.name, step.workspace.urlKey) }
+            )}
+          >
+            {workspaceRow(step.workspace)}
+            <ListRow
+              title={t('bots.linear.setup.copyForAdmin', 'Copy admin link')}
+              accent
+              value={t('bots.linear.setup.installing', 'Waiting for the install…')}
+              onPress={() =>
+                void clipboard
+                  .writeText(step.installUrl)
+                  .then(() => props.showToast(t('bots.linear.setup.copied', 'Link copied.')))
+              }
+            />
+            {another}
+          </SettingsSection>
         )
       case 'turn-on':
         return (
-          <>
-            {signedIn(step.workspace)}
-            <SettingsSection>{another}</SettingsSection>
-            <View style={styles.action}>
-              <SheetPrimaryButton
-                label={t('bots.linear.connect.turnOn', 'Turn on {{name}}', { name: bot.name })}
-                busy={saving}
-                disabled={!props.online}
-                onPress={() => void turnOn(step.workspace)}
-              />
-            </View>
-          </>
+          <SettingsSection first>
+            {workspaceRow(step.workspace)}
+            {another}
+          </SettingsSection>
         )
     }
   })()
@@ -311,14 +340,24 @@ export function MobileBotLinearSetup(props: {
       <SheetHeader
         title={t('bots.linear.setup.connectTitle', 'Connect Linear')}
         subtitle={t('bots.setup.for', 'for {{name}}', { name: bot.name })}
-        leading={{ label: t('bots.linear.setup.close', 'Close'), onPress: props.onClose }}
+        leading={
+          waiting
+            ? { label: t('bots.connect.cancel', 'Cancel'), onPress: cancel }
+            : { label: t('bots.linear.setup.close', 'Close'), onPress: props.onClose }
+        }
+        trailing={
+          step.kind === 'turn-on'
+            ? {
+                label: t('bots.connect.turnOnShort', 'Turn on'),
+                busy: saving,
+                disabled: !props.online,
+                onPress: () => void turnOn(step.workspace)
+              }
+            : undefined
+        }
       />
       {props.banner}
       {body}
     </>
   )
 }
-
-const styles = themedStyleSheet(() => ({
-  action: { marginTop: spacing.lg }
-}))

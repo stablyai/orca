@@ -38,8 +38,10 @@ import {
   GOOGLE_REACH_COPY,
   type GoogleReachArea
 } from '../../../../shared/bots/bot-access-reach'
+import { finalSentenceStop, joinSentences } from '../../../../shared/text/sentence-joining'
 import { botAgentLabel, botErrorMessage } from './bot-presentation'
-import { setBotGoogle, useBotGoogleReach } from './google/google-connect-client'
+import { useBotGoogleReach } from './google/google-connect-client'
+import { setBotGoogle } from './google/set-bot-google'
 import { useTurnOnBotGoogle } from './google/use-turn-on-bot-google'
 import { NewBotDialog } from './NewBotDialog'
 import { useBotAccessPlace } from './use-bot-access-place'
@@ -145,11 +147,16 @@ function permissionWords(
     })
   )
   if (!mode) {
-    return { title: copy(t, 'reachPermissionUnknown'), detail: notes.join(' '), Icon: ShieldCheck }
+    return {
+      title: copy(t, 'reachPermissionUnknown'),
+      detail: joinSentences(notes),
+      Icon: ShieldCheck
+    }
   }
+  const description = nativeChatPermissionModeDescription(mode, bot.agent, t)
   return {
     title: copy(t, 'reachPermission', { mode: nativeChatPermissionModeLabel(mode, t) }),
-    detail: [`${nativeChatPermissionModeDescription(mode, bot.agent, t)}.`, ...notes].join(' '),
+    detail: joinSentences([`${description}${finalSentenceStop(description)}`, ...notes]),
     Icon: NATIVE_CHAT_PERMISSION_MODE_ICONS[mode]
   }
 }
@@ -256,9 +263,11 @@ function BotAccessAdvice({
       return
     }
     if (fix === 'google-off') {
+      // Undo gives back the same accounts it had, from off: a change made since is refused.
+      const undo = (): Promise<boolean> => turnOnGoogle(bot, bot.googleAccounts, { on: false })
       run(
         () => setBotGoogle(bot, false),
-        () => setApplied((all) => [...all, { fix, undo: () => turnOnGoogle(bot) }])
+        () => setApplied((all) => [...all, { fix, undo }])
       )
       return
     }

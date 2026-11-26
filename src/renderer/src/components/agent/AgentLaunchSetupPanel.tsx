@@ -7,6 +7,7 @@ import { useSetupModelHighlight } from './use-setup-model-highlight'
 import { AgentPickerLegacyModelsToggle } from './AgentPickerLegacyModelsToggle'
 import { useLegacyModelsExpanded } from './use-legacy-models-expanded'
 import { AgentLaunchInstallPrompt } from './AgentLaunchInstallPrompt'
+import { AgentPickerRefreshModelsButton } from './AgentPickerRefreshModelsButton'
 import { retryAgentPickerCatalog } from './agent-launch-picker-acquisition'
 import {
   AgentPickerChoiceRows,
@@ -230,14 +231,15 @@ export function AgentLaunchSetupPanel({
           enterPick.current = false
         }}
         onKeyDownCapture={(event) => {
-          enterPick.current =
-            mode === 'select' && event.key === 'Enter' && !isImeOwnedKeyboardEvent(event)
+          // A button in the search row (Refresh) owns its own Enter.
+          const enter = event.key === 'Enter' && !(event.target instanceof HTMLButtonElement)
+          enterPick.current = mode === 'select' && enter && !isImeOwnedKeyboardEvent(event)
           if (
             !disabled &&
             installed &&
             !searching &&
             !isImeOwnedKeyboardEvent(event) &&
-            event.key === 'Enter' &&
+            enter &&
             event.currentTarget.querySelector(
               '[cmdk-item][data-selected="true"][data-current="true"]'
             )
@@ -277,6 +279,7 @@ export function AgentLaunchSetupPanel({
           placeholder={t('agentPicker.searchAgentModels', 'Search {{agent}} models…', {
             agent: entry.label
           })}
+          trailing={searching ? null : <AgentPickerRefreshModelsButton {...{ entry, disabled }} />}
         />
         {!installed && !searching ? (
           <AgentLaunchInstallPrompt entry={entry} />

@@ -18,7 +18,7 @@ export function indexObservedAccountPlans(
   const plans = new Map<string, PlanReading & { updatedAt: number }>()
   const add = (reading: ProviderRateLimits | null | undefined, cacheId?: string): void => {
     const account = reading?.usageMetadata?.readingAccount
-    const label = formatPlanLabel(reading?.planType)
+    const label = formatPlanLabel(reading?.planType, reading?.provider)
     if (
       !reading ||
       !account ||

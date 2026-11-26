@@ -6,7 +6,11 @@ import { WorktreeHostContextBadge } from '@/components/sidebar/workspace-card/ho
 import { useTranslate } from '@/i18n/use-translate'
 import { openAgentMessageSender } from '@/lib/agent-session/open/open-agent-message-sender'
 import { useNativeChatVisualOwner } from '../../media/visuals/native-chat-visual-owner'
-import { NATIVE_CHAT_INLINE_CHIP, NATIVE_CHAT_INLINE_NAME } from '../events/native-chat-inline-chip'
+import {
+  NATIVE_CHAT_INLINE_CHIP,
+  NATIVE_CHAT_INLINE_NAME,
+  NATIVE_CHAT_READABLE_SHARE
+} from '../events/native-chat-inline-chip'
 import { agentMessageSendersShown } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import type {
   AgentMessageSender,
@@ -157,7 +161,7 @@ export function NativeChatAgentMessageSenderNames({
   return (
     <>
       {shown.length === 0 ? (
-        <span aria-hidden={!spoken || undefined} className="min-w-0 truncate">
+        <span aria-hidden={!spoken || undefined} className={NATIVE_CHAT_READABLE_SHARE}>
           {unnamedSenderLabel(t)}
         </span>
       ) : null}
@@ -205,7 +209,7 @@ function RowSenderName({
   const opens = useAgentMessageSenderOpens(sender, chatWorktreeId, target, dispatchId)
   if (!opens || !chatWorktreeId) {
     return (
-      <span aria-hidden={!spoken || undefined} className="min-w-0 truncate" title={label}>
+      <span aria-hidden={!spoken || undefined} className={NATIVE_CHAT_READABLE_SHARE} title={label}>
         {label}
       </span>
     )
@@ -215,7 +219,7 @@ function RowSenderName({
       type="button"
       aria-label={t('components.native-chat.agentMessage.open', 'Open {{name}}', { name: label })}
       title={label}
-      className="min-w-0 truncate rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className={`${NATIVE_CHAT_READABLE_SHARE} rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
       onClick={() =>
         void openAgentMessageSender(from, sender, chatWorktreeId, target, dispatchId, label)
       }

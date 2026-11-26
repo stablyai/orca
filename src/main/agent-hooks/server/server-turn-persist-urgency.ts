@@ -1,10 +1,11 @@
-import type { EnrichedAgentHookEventPayload } from './server-types'
+import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import { CLAUDE_LATE_PROMPT_SUBMIT_EVENT } from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-prompt-turn-order'
 
-/** Prompt, turn-opening and completion facts must not wait for the routine stream checkpoint. */
-export function turnFactsNeedUrgentPersist(
-  previous: EnrichedAgentHookEventPayload | undefined,
-  next: EnrichedAgentHookEventPayload
+/** Prompt, turn-opening and completion facts a restart restores even while the lead's turn
+ *  state stays put (a late Stop, a repeated prompt); they must not wait for the batched save. */
+export function turnFactsChanged(
+  previous: AgentHookEventPayload | undefined,
+  next: AgentHookEventPayload
 ): boolean {
   return (
     // Submitted prompts, even Claude's late ones, skip the checkpoint; terminal-derived prompt streams do not.

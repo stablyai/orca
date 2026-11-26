@@ -63,3 +63,34 @@ function Activity(): React.JSX.Element {
 
 export const narrow = defineFixture({ width: 340, render: () => <Activity /> })
 export const wide = defineFixture({ width: 700, render: () => <Activity /> })
+
+// A worker that stopped without a report shows the reason the chat's worker strip shows.
+const stoppedItem = makeTestBotItem(1391, {
+  title: 'Polish the workers strip',
+  owner: { botId: fixtureCos.id, name: 'Release helper' },
+  status: 'working',
+  links: [
+    {
+      kind: 'dispatch',
+      ref: 'ctx_4ef20e4e6a09',
+      latest: null,
+      title: 'Workers strip: scroll + legit rows, polish proposals',
+      state: 'failed',
+      host: null,
+      startedAt: minutes(2),
+      settledAt: minutes(30),
+      report: null,
+      reason: 'Agent process lost; its terminal host or session is gone',
+      pr: null
+    }
+  ]
+})
+
+export const stoppedWorker = defineFixture({
+  width: 420,
+  render: () => (
+    <div className="bg-sidebar px-3.5 py-3">
+      <BotItemActivityList bot={bot} item={stoppedItem} events={events.slice(0, 1)} />
+    </div>
+  )
+})

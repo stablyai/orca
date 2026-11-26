@@ -66,6 +66,13 @@ export abstract class RuntimeAgentStatusSources extends OrcaRuntimeWithTerminalD
     return statuses
   }
 
+  /** `getAgentStatusSnapshotFn`'s rows for these panes only, without copying every pane's. */
+  readAgentStatusOfPanes(paneKeys: readonly string[]): AgentStatusIpcPayload[] {
+    return this.paneAgentStatuses(
+      paneKeys.flatMap((paneKey) => this.getAgentStatusSnapshotForPaneFn?.(paneKey) ?? [])
+    )
+  }
+
   readonly getAgentStatusSnapshotFn!: HostBindings['getAgentStatusSnapshot'] | null
 
   protected readonly structuredAgentStatusSinkFn!: HostBindings['structuredAgentStatusSink'] | null

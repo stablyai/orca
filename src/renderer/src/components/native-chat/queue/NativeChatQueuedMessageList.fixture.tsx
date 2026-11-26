@@ -60,6 +60,11 @@ function controller(
   return {
     cards: list,
     queueCapable: true,
+    holds: () => false,
+    agentMail: [],
+    agentMailEditable: () => false,
+    mailLeads: false,
+    stopping: false,
     clearCapable: true,
     pause: paused ? { reason: 'user' } : null,
     resume: async () => true,

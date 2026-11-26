@@ -42,6 +42,8 @@ import {
 import { buildWorkflowSettingsSections } from './settings-navigation-workflow-sections'
 import { useWindowsTerminalCapabilityOwnerKey } from '../../../runtime/hosts/capabilities/useWindowsTerminalCapabilityOwnerKey'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { useMcpServersAvailable } from './use-mcp-servers-available'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsNavSection } from '@/components/settings/navigation/settings-navigation-types'
@@ -65,6 +67,7 @@ export function buildSettingsNavigationMetadata(
     mobileEmulatorCreationEnabled = !isWebClient,
     isDev = import.meta.env.DEV,
     isLinearConnected = false,
+    mcpServersAvailable = false,
     repos,
     bots = [],
     projectGroups,
@@ -82,6 +85,7 @@ export function buildSettingsNavigationMetadata(
     mobileEmulatorCreationEnabled?: boolean
     isDev?: boolean
     isLinearConnected?: boolean
+    mcpServersAvailable?: boolean
     projectGroups?: readonly ProjectGroupSettingsEntry[]
     repos: readonly Repo[]
     bots?: readonly Bot[]
@@ -119,6 +123,7 @@ export function buildSettingsNavigationMetadata(
     mobileEmulatorCreationEnabled,
     isDev,
     isLinearConnected,
+    mcpServersAvailable,
     repos,
     bots,
     projectGroups,
@@ -139,7 +144,10 @@ export function buildSettingsNavigationMetadata(
   ]
 }
 
-export function useSettingsNavigationMetadata(): SettingsNavSection[] {
+/** `pickedHost`: Settings' own host picker, which can show MCP servers on a host the default isn't. */
+export function useSettingsNavigationMetadata(
+  pickedHost?: RuntimeClientTarget
+): SettingsNavSection[] {
   const t = useTranslate()
   // The locale subscription must also invalidate the memo or labels retain the previous language.
   const languageRevision = useUiLanguageRevision()
@@ -168,6 +176,10 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   )
   // Why: navigation is shared with the palette, which has no host picker.
   const runtimeTarget = defaultScopeHost(settings)
+  const mcpServersAvailable = useMcpServersAvailable(
+    isWebClient ? { kind: 'local' } : runtimeTarget,
+    isWebClient ? undefined : pickedHost
+  )
   const capabilityLoadTarget = isWebClient ? { kind: 'local' as const } : runtimeTarget
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     isWindows || isWebClient || runtimeTarget.kind === 'environment',
@@ -207,6 +219,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
           mobileEmulatorCreationEnabled,
           isDev: import.meta.env.DEV,
           isLinearConnected,
+          mcpServersAvailable,
           repos,
           bots,
           projectGroups,
@@ -230,6 +243,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
       managedBrowserCreationEnabled,
       mobileEmulatorCreationEnabled,
       isLinearConnected,
+      mcpServersAvailable,
       repos,
       bots,
       projectGroups,

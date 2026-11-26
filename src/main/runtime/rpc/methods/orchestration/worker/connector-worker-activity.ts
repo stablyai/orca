@@ -19,10 +19,10 @@ import {
   projectDispatchFleet,
   readDispatchFleetEvidence,
   sessionWorkerActivity,
-  sessionWorkerState,
   withStructuredLiveness,
   type SessionWorkersRuntime
 } from './session-workers-method'
+import { sessionWorkerState } from './session-worker-state'
 
 /** What a connector conversation's activity needs of each worker that may still run. */
 export type SessionWorkerActivityFacts = Pick<

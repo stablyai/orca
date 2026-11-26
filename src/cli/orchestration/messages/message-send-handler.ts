@@ -116,6 +116,7 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       ...attachedFiles(flags, cwd),
       run: getOptionalStringFlag(flags, 'run'),
       on: getOptionalStringFlag(flags, 'on'),
+      onClient: getOptionalStringFlag(flags, 'on-client'),
       subject: getRequiredStringFlag(flags, 'subject'),
       body: await readTextOrFileFlag(flags, cwd, 'body', false),
       type,

@@ -194,6 +194,12 @@ export function readCodexAuthIdentity(contents: string): CodexAuthIdentity | nul
   }
 }
 
+/** A JWT's `exp` claim in epoch ms; null when the token is not a JWT or carries no expiry. */
+export function readCodexJwtExpiryMs(token: string): number | null {
+  const exp = readNumberClaim(parseJwtPayload(token), 'exp')
+  return exp === null ? null : exp * 1000
+}
+
 function readFreshnessFromAuthContents(contents: string): number | null {
   const raw = parseJsonRecord(contents)
   if (!raw) {

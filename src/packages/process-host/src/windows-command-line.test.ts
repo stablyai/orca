@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { buildWindowsCmdShimCommandLine, quoteWindowsArgument } from './windows-command-line'
+import {
+  buildWindowsCmdShimCommandLine,
+  quoteWindowsArgument,
+  quoteWindowsArgumentLikeLibuv,
+  quoteWindowsCmdArgument
+} from './windows-command-line'
 import { WINDOWS_ARGUMENT_CORPUS } from './__fixtures__/windows-argument-corpus'
 
 /** cmd tracks quote state by counting `"`; an odd count leaks operators. */
@@ -18,12 +23,57 @@ describe('quoteWindowsArgument', () => {
   })
 })
 
+describe('quoteWindowsArgumentLikeLibuv', () => {
+  // The expected outputs are the ones libuv's quote_cmd_arg documents.
+  it.each([
+    ['', '""'],
+    ['hello', 'hello'],
+    ['hello\\world', 'hello\\world'],
+    ['hello world', '"hello world"'],
+    ['hello"world', '"hello\\"world"'],
+    ['hello""world', '"hello\\"\\"world"'],
+    ['hello\\"world', '"hello\\\\\\"world"'],
+    ['hello\\\\"world', '"hello\\\\\\\\\\"world"'],
+    ['hello world\\', '"hello world\\\\"'],
+    ['C:\\Program Files\\x', '"C:\\Program Files\\x"']
+  ])('quotes %j as %s', (value, expected) => {
+    expect(quoteWindowsArgumentLikeLibuv(value)).toBe(expected)
+  })
+})
+
 describe('buildWindowsCmdShimCommandLine', () => {
-  it('keeps cmd quote parity even for every corpus entry', () => {
-    for (const { name, value } of WINDOWS_ARGUMENT_CORPUS) {
-      const line = buildWindowsCmdShimCommandLine('C:\\bin\\agent.cmd', [value])
-      expect(quoteParity(line), `${name} leaves cmd mid-quote`).toBe(0)
+  it('keeps cmd quote parity even and leaves cmd only inert characters unquoted', () => {
+    // One probe per character cmd acts on, wrapped in an even quote count like JSON.
+    const probes = [...'&|<>^%!(),;= \t\u0085é'].map((char) => ({
+      name: `probe ${JSON.stringify(char)}`,
+      value: `{"k":"a${char}b"}`
+    }))
+    for (const { name, value } of [...WINDOWS_ARGUMENT_CORPUS, ...probes]) {
+      const quoted = quoteWindowsCmdArgument(value)
+      expect(quoteParity(quoted), `${name} leaves cmd mid-quote`).toBe(0)
+      // Even split segments are what cmd reads unquoted; "^%" is the deliberate percent break-out.
+      const unquoted = quoted
+        .split('"')
+        .filter((_, index) => index % 2 === 0)
+        .join('')
+        .replaceAll('^%', '')
+      expect(unquoted, `${name} exposes cmd-active characters`).toMatch(
+        /^[\w\\{}:.[\]/@#$*?~'`+-]*$/
+      )
     }
+  })
+
+  it('spells cmd-inert quotes as \\" so CommandLineToArgvW shims keep the next flag separate', () => {
+    // Bun <= 1.3 ends a quoted run at `""`, so this JSON swallowed `--setting-sources user`.
+    const line = buildWindowsCmdShimCommandLine('C:\\bin\\claude.cmd', [
+      '--settings',
+      '{"disableAllHooks":true}',
+      '--setting-sources',
+      'user'
+    ])
+    expect(line).toBe(
+      '/d /v:off /s /c ""C:\\bin\\claude.cmd" "--settings" "{\\"disableAllHooks\\":true}" "--setting-sources" "user""'
+    )
   })
 
   it('breaks every percent out of the quoted run', () => {

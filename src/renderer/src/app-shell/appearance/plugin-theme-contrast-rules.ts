@@ -119,6 +119,8 @@ const CONTRAST_RULE_DEFINITIONS: readonly ContrastRule[] = [
     ['--chat-inline-code', '--chat-user-message']
   ].map((under) => chatPair('--chat-selection', '--chat-selection-foreground', undefined, under)),
   { ...textPair('--editor-surface', '--text-link'), drop: ['--text-link'] },
+  // The accent fill's label: derived from the accent when omitted, so only an explicit one can fail.
+  { ...textPair('--text-link', '--theme-accent-foreground'), drop: ['--theme-accent-foreground'] },
   {
     ...textPair('--editor-selection', '--foreground'),
     drop: ['--editor-selection'],

@@ -7,10 +7,7 @@ import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { BotAppBrandLogo, hasBotAppBrand } from '../apps/BotAppBrandLogo'
 import { BOT_CONNECTOR_NAMES, type BotTemplate } from '../../../../../shared/bots/bot-templates'
-import {
-  BOT_TEMPLATE_SKILL_LINES,
-  botTemplateEventParts
-} from '../../../../../shared/bots/bot-template-view'
+import { botTemplatePartWords } from '../../../../../shared/bots/bot-template-text'
 
 export function BotTemplateComesWithHeading(): React.JSX.Element {
   const t = useTranslate()
@@ -71,18 +68,20 @@ function Row({
 export function BotTemplateComesWith({ template }: { template: BotTemplate }): React.JSX.Element {
   const t = useTranslate()
   const muted = (text: string) => <span className="text-muted-foreground">{text}</span>
+  const words = botTemplatePartWords(template, t)
   return (
     <ul>
-      {template.skills.map((skill) => (
+      {words.skills.map(({ skill, name, line }) => (
         <Row
           key={skill}
-          mono
+          // The folder name reads as code; a translated name reads as words.
+          mono={name === skill}
           icon={<BookOpen className="size-4" />}
-          title={skill}
-          line={BOT_TEMPLATE_SKILL_LINES[skill]}
+          title={name}
+          line={line}
         />
       ))}
-      {template.schedules.map((schedule) => (
+      {words.schedules.map((schedule) => (
         <Row
           key={schedule.id}
           icon={<Clock className="size-4" />}
@@ -91,18 +90,15 @@ export function BotTemplateComesWith({ template }: { template: BotTemplate }): R
           state={muted(t('bots.templates.stateOff', 'Off'))}
         />
       ))}
-      {template.events.map((event) => {
-        const parts = botTemplateEventParts(event.name)
-        return (
-          <Row
-            key={event.id}
-            icon={<Zap className="size-4" />}
-            title={parts.trigger}
-            line={parts.action}
-            state={muted(t('bots.templates.stateFirstChat', 'First chat'))}
-          />
-        )
-      })}
+      {words.events.map((event) => (
+        <Row
+          key={event.id}
+          icon={<Zap className="size-4" />}
+          title={event.trigger}
+          line={event.action}
+          state={muted(t('bots.templates.stateFirstChat', 'First chat'))}
+        />
+      ))}
       {template.connectors.map((kind) => (
         <Row
           key={kind}

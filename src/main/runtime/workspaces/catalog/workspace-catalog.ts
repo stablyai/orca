@@ -15,7 +15,10 @@ import {
   type RepoWorktreeRowDeps
 } from './repo-worktree-row-resolution'
 import { WorktreeRowProjectionMemo } from './worktree-row-projection-memo'
-import { resolveScopedWorktreeIdRow } from './scoped-worktree-row-resolution'
+import {
+  resolveScopedWorktreeIdRow,
+  type ScopedWorktreeReads
+} from './scoped-worktree-row-resolution'
 import {
   joinResolvedWorktreeScans,
   platformsByRepoId,
@@ -218,7 +221,8 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
 
   protected async resolveExplicitWorktreeIdScoped(
     worktreeId: string,
-    requiredHostId?: ExecutionHostId
+    requiredHostId?: ExecutionHostId,
+    reads?: ScopedWorktreeReads
   ): Promise<ResolvedWorktree | null> {
     if (!this.store) {
       return null
@@ -227,7 +231,8 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     return await resolveScopedWorktreeIdRow(
       { ...this.repoWorktreeRowDeps(), rowMemo: undefined },
       worktreeId,
-      requiredHostId
+      requiredHostId,
+      reads
     )
   }
 

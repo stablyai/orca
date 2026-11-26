@@ -123,6 +123,10 @@ export class ProjectCollectionOperations {
     return getProjectHostOperations(this).setResolvedRepoGitUsername(target, username)
   }
 
+  getProjectGroup(id: string): ProjectGroup | undefined {
+    return getProjectGroupOperations(this).getProjectGroup(id)
+  }
+
   getProjectGroups(): ProjectGroup[] {
     return getProjectGroupOperations(this).getProjectGroups()
   }

@@ -49,6 +49,26 @@ function pruneImageCache(): void {
   }
 }
 
+/** Whether `cacheLocalImageBlob` would admit this many bytes now, evicting every unpinned entry if it
+ *  had to: lets a reader refuse a photo-sized payload before spending time decoding it. */
+export function localImageBlobFits(key: string, byteLength: number): boolean {
+  if (byteLength > BLOB_URL_CACHE_MAX_BYTES) {
+    return false
+  }
+  let pinnedBytes = 0
+  let pinnedEntries = 0
+  for (const candidate of blobUrlCache.keys()) {
+    if (candidate !== key && isLocalImageCacheKeyPinned(candidate)) {
+      pinnedBytes += blobUrlCacheBytes.get(candidate) ?? 0
+      pinnedEntries += 1
+    }
+  }
+  return (
+    pinnedBytes + byteLength <= BLOB_URL_CACHE_MAX_BYTES &&
+    (pinnedEntries + 1 <= BLOB_URL_CACHE_MAX_SIZE || isLocalImageCacheKeyPinned(key))
+  )
+}
+
 export function cacheLocalImageBlob(key: string, url: string, byteLength: number): boolean {
   if (byteLength > BLOB_URL_CACHE_MAX_BYTES) {
     URL.revokeObjectURL(url)

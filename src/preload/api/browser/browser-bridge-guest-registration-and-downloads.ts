@@ -91,6 +91,8 @@ export const browserGuestRegistrationAndDownloadsApi = {
   },
   respondPagePrompt: (response: BrowserPagePromptResponse): Promise<BrowserPagePromptResult> =>
     ipcRenderer.invoke('browser:respondPagePrompt', response),
+  openStreamedExternalAppLink: (url: string): Promise<boolean> =>
+    ipcRenderer.invoke('browser:openStreamedExternalAppLink', url),
   openDevTools: (args: {
     browserPageId: string
     inspectAt?: { x: number; y: number }
@@ -182,6 +184,14 @@ export const browserGuestRegistrationAndDownloadsApi = {
     ): void => callback(data)
     ipcRenderer.on('browser:audio-state-changed', listener)
     return () => ipcRenderer.removeListener('browser:audio-state-changed', listener)
+  },
+  onAudioMutedChanged: (callback): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: Parameters<typeof callback>[0]
+    ): void => callback(data)
+    ipcRenderer.on('browser:audio-muted-changed', listener)
+    return () => ipcRenderer.removeListener('browser:audio-muted-changed', listener)
   },
   proceedCertificate: (args) => ipcRenderer.invoke('browser:proceedCertificate', args),
   onPermissionDenied: (

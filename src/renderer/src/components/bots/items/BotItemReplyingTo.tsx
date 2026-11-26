@@ -110,6 +110,7 @@ export function BotItemReplyingTo({ mark }: { mark: BotItemReplyMark }): React.J
         type="button"
         aria-label={t('bots.items.comment.hideReplyingTo', 'Hide')}
         className="flex size-[18px] shrink-0 items-center justify-center rounded-sm hover:bg-foreground/[0.08] hover:text-foreground"
+        onMouseDown={(event) => event.preventDefault()}
         onClick={mark.hide}
       >
         <X className="size-3" />

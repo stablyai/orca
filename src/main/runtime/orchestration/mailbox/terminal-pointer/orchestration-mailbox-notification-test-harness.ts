@@ -136,7 +136,7 @@ export async function createRuntime(
     }
   )
   const write = vi.fn(() => true)
-  const requestRepaint = vi.fn()
+  const requestRepaint = vi.fn(async (_ptyId: string) => true)
   runtime.setOrchestrationDb(db)
   runtime.setPtyController({
     write,

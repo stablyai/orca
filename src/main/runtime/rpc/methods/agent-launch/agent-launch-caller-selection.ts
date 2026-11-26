@@ -1,11 +1,8 @@
-/** Paired launches move only the requesting connection's view.
- * Existing/folder targets select the tab; worktree creates provision setup/default tabs in the background.
+/** Paired launches move the requesting connection's view, whatever the target.
+ * A created workspace's Setup tab is the window's own active tab, so host-wide activation of the agent alone would not survive the window's republish.
  * In-process callers retain host navigation; folder creation activates nothing. */
 
-import type {
-  AgentLaunchTarget,
-  AgentLaunchResult as AgentLaunchPublishedSurface
-} from '../../../../../shared/agent-launch/contracts/agent-launch-intent'
+import type { AgentLaunchResult as AgentLaunchPublishedSurface } from '../../../../../shared/agent-launch/contracts/agent-launch-intent'
 
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
@@ -15,13 +12,8 @@ import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent
 import { agentLaunchTabViewerRule } from './agent-launch-tab-publication'
 
 /** The paired client whose view this launch should move, or null when it moves the host's. */
-export function agentLaunchCallerNavigationId(
-  target: AgentLaunchTarget,
-  context: Pick<RpcContext, 'caller'>
-): string | null {
-  return target.kind !== 'create-worktree' && context.caller?.kind === 'paired-device'
-    ? context.caller.deviceId
-    : null
+export function agentLaunchCallerNavigationId(context: Pick<RpcContext, 'caller'>): string | null {
+  return context.caller?.kind === 'paired-device' ? context.caller.deviceId : null
 }
 
 /** Bookkeeping, never a gate: the agent already runs, so a failure here only leaves the view as it was. */

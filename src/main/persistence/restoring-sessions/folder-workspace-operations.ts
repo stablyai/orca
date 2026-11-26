@@ -17,7 +17,7 @@ import { findRepoRowForHostScopedWrite } from '../tracking-repos/repo-update-ope
 import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachments/workspace-attachment-mutation'
 import { normalizeWorkspaceAttachmentUpdate } from '../../../shared/workspace-attachments/workspace-attachments'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-list/feed/sidebar-inputs-switch'
-import { workspaceLinkWriteOptions } from '../loading-store/profile-writing/write-scheduling'
+import { folderWorkspaceWriteOptions } from './folder-workspace-write-options'
 import type { StateWriteOptions } from '../loading-store/profile-writing/write-scheduling'
 import { findFolderWorkspace } from './folder-workspace-index'
 import type { DiffCommentBaseMutation } from '../../../shared/file-review/diff-comment-mutation'
@@ -151,6 +151,7 @@ export class FolderWorkspacePersistenceOperations {
     if (!workspace) {
       return null
     }
+    const { isUnread, isArchived, folderPath } = workspace
     const linkedUpdates = normalizeWorkspaceAttachmentUpdate(
       {
         linkedItems: workspace.linkedItems,
@@ -260,12 +261,7 @@ export class FolderWorkspacePersistenceOperations {
     workspace.updatedAt = Date.now()
     this.operations.scheduleSave(
       ['folderWorkspaces'],
-      workspaceLinkWriteOptions(
-        { worktreeId: folderWorkspaceKey(workspace.id), sshHostId: null },
-        'externalConversations' in updates,
-        workspace.externalConversations,
-        updates.sortOrder === undefined && updates.name === undefined
-      )
+      folderWorkspaceWriteOptions(workspace, updates, { isUnread, isArchived, folderPath })
     )
     return workspace
   }

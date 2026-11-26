@@ -1,13 +1,22 @@
 import { existsSync } from 'node:fs'
 import {
-  foldStoredRows,
+  hashKeyedJsonRow,
   planFullRows,
   planRowPatch,
   parseOrNull,
   receiptNames,
+  type KeyedJsonRow,
+  type KeyedJsonRowCacheOptions,
+  type KeyedJsonRowLoad,
+  type RowWriteOptions,
   type StoredRow
 } from './keyed-json-row-plan'
-export { parseKeyedJsonRows } from './keyed-json-row-plan'
+export {
+  parseKeyedJsonRows,
+  type KeyedJsonRow,
+  type KeyedJsonRowCacheOptions,
+  type KeyedJsonRowLoad
+} from './keyed-json-row-plan'
 import SyncDatabase from '../sync-database'
 import {
   openVersionedCacheDatabase,
@@ -16,43 +25,7 @@ import {
 import { hardenSqliteDatabaseFiles } from '../harden-database-files'
 import { classifyRowCacheFailure } from './row-cache-failure'
 import { readLegacyJsonSource, removeLegacyJsonSource } from './legacy-json-source'
-import { rowCacheWalCheckpoints, type RowCacheWalCheckpoints } from './row-cache-wal-checkpoints'
-
-export type KeyedJsonRow = { key: string; json: string }
-
-export type KeyedJsonRowCacheOptions = {
-  schemaVersion: number
-  /** Lock wait per call. Main-thread callers keep it short and retry later instead. */
-  busyTimeoutMs?: number
-  /** False opens and closes the database per call, so no handle outlives it (profile moves). */
-  holdConnection?: boolean
-  /** Sync committed recovery facts even when the host loses power before a WAL checkpoint. */
-  durable?: boolean
-  /** JSON file older builds wrote; see load(). */
-  legacyPath?: string
-  walCheckpoints?: Pick<
-    RowCacheWalCheckpoints,
-    'available' | 'attach' | 'detach' | 'request' | 'assertRemovable'
-  >
-}
-
-/**
- * What a store hydrates at startup.
- * - rows: the stored rows (no older-build file, or one already imported or rejected).
- * - import: an older build's file is newer than the rows; save `value` with `receipt`.
- * - unavailable: the rows or the file cannot be read now. The store must neither hydrate a
- *   replacement nor save over rows it never read; `legacy` is the file's value if it was read.
- */
-export type KeyedJsonRowLoad<T> =
-  | { kind: 'rows'; rows: KeyedJsonRow[] }
-  | { kind: 'import'; value: T; receipt: string; rows: KeyedJsonRow[] }
-  | { kind: 'unavailable'; error: unknown; legacy?: T }
-
-type RowWriteOptions = {
-  importReceipt?: string
-  busyTimeoutMs?: number
-  reinsertKeys?: ReadonlySet<string>
-}
+import { rowCacheWalCheckpoints } from './row-cache-wal-checkpoints'
 
 const RECEIPT_KEY = 'legacy_import_receipt'
 const DEFAULT_BUSY_TIMEOUT_MS = 25
@@ -220,7 +193,7 @@ export class KeyedJsonRowCache {
       } else {
         for (const [key, row] of plan.changes) {
           if (row) {
-            this.stored.set(key, row)
+            this.stored.set(key, { seq: row.seq, hash: row.hash })
           } else {
             this.stored.delete(key)
           }
@@ -255,7 +228,8 @@ export class KeyedJsonRowCache {
         if (version?.value !== String(this.options.schemaVersion)) {
           return { kind: 'rows' as const, rows: [], receipt: undefined }
         }
-        const rows = [...readRows(db).stored].map(([key, { json }]) => ({ key, json }))
+        const rows: KeyedJsonRow[] = []
+        forEachStoredRow(db, (key, _seq, json) => rows.push({ key, json }))
         const receipt = db.prepare('SELECT value FROM meta WHERE key = ?').get(RECEIPT_KEY)?.value
         return { kind: 'rows' as const, rows, receipt }
       } finally {
@@ -286,7 +260,10 @@ export class KeyedJsonRowCache {
   private readBaseline(db: SyncDatabase): void {
     this.dataVersion = undefined
     const version = db.pragma('data_version', { simple: true })
-    const { stored, maxSeq } = readRows(db)
+    const stored = new Map<string, StoredRow>()
+    const maxSeq = forEachStoredRow(db, (key, seq, json) =>
+      stored.set(key, { seq, hash: hashKeyedJsonRow(json) })
+    )
     this.stored = stored
     this.maxSeq = maxSeq
     this.dataVersion = version
@@ -349,14 +326,25 @@ export class KeyedJsonRowCache {
       // Closing a failed handle must not mask the original error.
     }
     this.db = null
+    this.dataVersion = undefined
+    this.stored = new Map()
+    this.maxSeq = 0
   }
 }
 
-function readRows(db: SyncDatabase): { stored: Map<string, StoredRow>; maxSeq: number } {
-  // node:sqlite TEXT reads truncate embedded NULs in composite keys; BLOB preserves their bytes.
-  return foldStoredRows(
-    db.prepare('SELECT CAST(key AS BLOB) AS key, seq, value FROM rows ORDER BY seq').all()
-  )
+function forEachStoredRow(
+  db: SyncDatabase,
+  visit: (key: string, seq: number, json: string) => void
+): number {
+  let maxSeq = 0
+  for (const row of db.prepare('SELECT key, seq, value FROM rows ORDER BY seq').all()) {
+    const { key, seq, value } = row
+    if (typeof key === 'string' && typeof seq === 'number' && typeof value === 'string') {
+      visit(key, seq, value)
+      maxSeq = Math.max(maxSeq, seq)
+    }
+  }
+  return maxSeq
 }
 
 function rollback(db: SyncDatabase): void {

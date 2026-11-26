@@ -51,26 +51,33 @@ export type GoogleAccountRecord = z.infer<typeof GoogleAccountRecordSchema>
 const googleDir = () => join(homedir(), '.orca', 'google')
 const clientPath = () => join(googleDir(), 'client.enc')
 const accountsDir = () => join(googleDir(), 'accounts')
+const defaultAccountPath = () => join(googleDir(), 'default-account.enc')
 const accountPath = (email: string) =>
   join(accountsDir(), `${Buffer.from(email.toLowerCase()).toString('base64url')}.enc`)
 
 type Read<T> = { value: T | null } | { unreadable: string }
 
-/** A file this host can't decrypt (Keychain denied, another secret store) is reported, not thrown. */
+const DAMAGED = 'The saved file is damaged.'
+
+/** Only a missing or empty file is none; one this host can't decrypt or parse is reported, not thrown. */
 async function readJson<T>(path: string, schema: z.ZodType<T>): Promise<Read<T>> {
   let raw: Buffer
   try {
     raw = await readFile(path)
-  } catch {
-    return { value: null }
+  } catch (error) {
+    return error instanceof Error && 'code' in error && error.code === 'ENOENT'
+      ? { value: null }
+      : { unreadable: DAMAGED }
   }
   try {
     const text = readStoredCredentialToken('Google', raw)
-    return { value: text === null ? null : (schema.safeParse(JSON.parse(text)).data ?? null) }
+    if (text === null) {
+      return { value: null }
+    }
+    const parsed = schema.safeParse(JSON.parse(text))
+    return parsed.success ? { value: parsed.data } : { unreadable: DAMAGED }
   } catch (error) {
-    return error instanceof CredentialDecryptionError
-      ? { unreadable: error.message }
-      : { value: null }
+    return { unreadable: error instanceof CredentialDecryptionError ? error.message : DAMAGED }
   }
 }
 
@@ -128,27 +135,29 @@ export type GoogleAccountEntry =
   | { email: string; unreadable: string }
 
 export async function listGoogleAccounts(): Promise<GoogleAccountEntry[]> {
-  return inCredentialFileOrder(`${accountsDir()}.mutation`, async () => {
-    let names: string[]
-    try {
-      names = await readdir(accountsDir())
-    } catch {
-      return []
-    }
-    const entries = await Promise.all(
-      names
-        .filter((name) => name.endsWith('.enc'))
-        .map(async (name): Promise<GoogleAccountEntry[]> => {
-          const email = Buffer.from(name.slice(0, -'.enc'.length), 'base64url').toString('utf-8')
-          const read = await readJson(join(accountsDir(), name), GoogleAccountRecordSchema)
-          if ('unreadable' in read) {
-            return [{ email, unreadable: read.unreadable }]
-          }
-          return read.value ? [{ email: read.value.email, record: read.value }] : []
-        })
-    )
-    return entries.flat().sort((a, b) => connectedAt(a) - connectedAt(b))
-  })
+  return inCredentialFileOrder(`${accountsDir()}.mutation`, listAccounts)
+}
+
+async function listAccounts(): Promise<GoogleAccountEntry[]> {
+  let names: string[]
+  try {
+    names = await readdir(accountsDir())
+  } catch {
+    return []
+  }
+  const entries = await Promise.all(
+    names
+      .filter((name) => name.endsWith('.enc'))
+      .map(async (name): Promise<GoogleAccountEntry[]> => {
+        const email = Buffer.from(name.slice(0, -'.enc'.length), 'base64url').toString('utf-8')
+        const read = await readJson(join(accountsDir(), name), GoogleAccountRecordSchema)
+        if ('unreadable' in read) {
+          return [{ email, unreadable: read.unreadable }]
+        }
+        return read.value ? [{ email: read.value.email, record: read.value }] : []
+      })
+  )
+  return entries.flat().sort((a, b) => connectedAt(a) - connectedAt(b))
 }
 
 const connectedAt = (entry: GoogleAccountEntry) =>
@@ -163,5 +172,63 @@ export async function hasGoogleAccount(email: string): Promise<boolean> {
 export async function removeGoogleAccount(email: string): Promise<void> {
   return inCredentialFileOrder(`${accountsDir()}.mutation`, async () => {
     await removeFile(accountPath(email))
+  })
+}
+
+const DefaultAccountSchema = z.object({ email: z.string().min(1) })
+
+export type GoogleDefaultAccount =
+  | { email: string | null }
+  | { unreadable: string; accounts: string[] }
+
+/**
+ * The account calls and triggers without `--account` use. A host without a saved pick (the first
+ * sign-in, an upgrade, or its default removed) takes the oldest and keeps it, so a later sign-in or
+ * reconnect never moves it. A pick this host can't read stands in for no account but the only one.
+ */
+export async function readGoogleDefaultAccount(): Promise<GoogleDefaultAccount> {
+  return inCredentialFileOrder(`${accountsDir()}.mutation`, async () => {
+    const emails = (await listAccounts()).map((entry) => entry.email)
+    const read = await readJson(defaultAccountPath(), DefaultAccountSchema)
+    if ('unreadable' in read) {
+      // Kept on disk for when this host can read it again (Keychain denied).
+      return emails.length > 1
+        ? { unreadable: read.unreadable, accounts: emails }
+        : { email: emails[0] ?? null }
+    }
+    const saved = read.value?.email.toLowerCase()
+    const picked = emails.find((email) => email.toLowerCase() === saved) ?? emails[0] ?? null
+    if (picked && picked.toLowerCase() !== saved) {
+      await writeEncryptedCredential(
+        'Google',
+        defaultAccountPath(),
+        JSON.stringify({ email: picked })
+      )
+    }
+    return { email: picked }
+  })
+}
+
+/** The default for status and rules: none while a saved pick can't be read and several accounts are here. */
+export async function resolveGoogleDefaultAccount(): Promise<string | null> {
+  const read = await readGoogleDefaultAccount()
+  return 'email' in read ? read.email : null
+}
+
+export async function saveGoogleDefaultAccount(email: string): Promise<string> {
+  return inCredentialFileOrder(`${accountsDir()}.mutation`, async () => {
+    const picked = (await listAccounts()).find(
+      (entry) => entry.email.toLowerCase() === email.toLowerCase()
+    )
+    if (!picked) {
+      throw new Error(`${email} isn't connected on this computer.`)
+    }
+    await mkdir(googleDir(), { recursive: true, mode: 0o700 })
+    await writeEncryptedCredential(
+      'Google',
+      defaultAccountPath(),
+      JSON.stringify({ email: picked.email })
+    )
+    return picked.email
   })
 }

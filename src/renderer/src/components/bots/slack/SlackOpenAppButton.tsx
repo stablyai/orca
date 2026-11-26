@@ -4,8 +4,10 @@ import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { openBotHostPageOrSay } from '@/lib/bot-host-page'
 import type { Bot } from '../../../../../shared/bot-types'
-import type { ConnectorBotSlackState } from '../../../../../shared/connector-bot-slack-contract'
-import { slackAppMessagesUrl } from './slack-install-link'
+import {
+  slackAppMessagesUrl,
+  type ConnectorBotSlackState
+} from '../../../../../shared/connector-bot-slack-contract'
 
 /** Opens the installed app's direct messages in Slack, so the first message is one click away.
  *  Nothing while the app isn't installed. */

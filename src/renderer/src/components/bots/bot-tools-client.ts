@@ -2,7 +2,7 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { callBotRpc, type BotRef } from '@/lib/bot-hosts'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
-import { botErrorMessage } from './bot-presentation'
+import { botErrorMessage, botFailureMessage } from './bot-presentation'
 import { changed, subscribe } from './bot-tools-revision'
 import type {
   BotOwnTool,
@@ -50,6 +50,10 @@ export { botToolHostName, signInOnHost, useBotToolHostSignIn } from './bot-tool-
 export function botToolErrorMessage(error: unknown): string {
   if (error instanceof BotToolPasteRefused) {
     return error.message
+  }
+  const coded = botFailureMessage(error)
+  if (coded) {
+    return coded
   }
   return error instanceof RuntimeRpcCallError && error.code === 'runtime_error' && error.message
     ? error.message

@@ -83,7 +83,7 @@ function normalizePopupPath(caller: BrowserExtensionCaller, popup: string): stri
   return url.pathname.slice(1) + url.search + url.hash
 }
 
-/** The calling page, or the worker script (Orca's wrapper sits beside the original). */
+/** The calling page, or the worker script at its declared path. */
 function callerBaseUrl(caller: BrowserExtensionCaller, origin: string): string {
   const background: { service_worker?: unknown } = caller.extension.manifest?.background ?? {}
   const worker = background.service_worker

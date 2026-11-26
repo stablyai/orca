@@ -1,4 +1,5 @@
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+import { resolveClaudeRuntimeSelection } from '../../../shared/claude-runtime-selection'
 import type {
   ClaudeManagedAccount,
   ClaudeManagedAccountRuntimeSelection,
@@ -47,25 +48,11 @@ export function getSelectedClaudeAccountIdForTarget(
   >,
   target?: ClaudeAccountSelectionTarget | null
 ): string | null {
-  const selection = normalizeClaudeRuntimeSelection(settings)
-  const normalizedTarget = normalizeClaudeAccountSelectionTarget(target)
-  if (normalizedTarget.runtime === 'host') {
-    return selection.host
-  }
-  if (normalizedTarget.wslDistro) {
-    // Exact spelling retains precedence for selections saved before alias support.
-    if (Object.hasOwn(selection.wsl, normalizedTarget.wslDistro)) {
-      return selection.wsl[normalizedTarget.wslDistro] ?? null
-    }
-    const matches = matchingWslSelectionKeys(selection.wsl, normalizedTarget.wslDistro)
-    const ids = new Set(matches.map((key) => selection.wsl[key]))
-    return ids.size === 1 ? (ids.values().next().value ?? null) : null
-  }
-  const selectedIds = Array.from(new Set(Object.values(selection.wsl).filter(Boolean)))
-  return (
-    selection.wsl[getClaudeWslSelectionKey(null)] ??
-    (selectedIds.length === 1 ? selectedIds[0] : null)
+  const result = resolveClaudeRuntimeSelection(
+    normalizeClaudeRuntimeSelection(settings),
+    normalizeClaudeAccountSelectionTarget(target)
   )
+  return result.kind === 'selected' ? result.accountId : null
 }
 
 export function setSelectedClaudeAccountIdForTarget(

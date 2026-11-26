@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
-export const BrowserClientHostPlacementPreference = z.enum(['auto', 'server'])
+// 'client' is the person moving one page here: it skips the global setting, never the server's capabilities.
+export const BrowserClientHostPlacementPreference = z.enum(['auto', 'server', 'client'])
 export type BrowserClientHostPlacementPreference = z.infer<
   typeof BrowserClientHostPlacementPreference
 >

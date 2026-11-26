@@ -29,10 +29,7 @@ import {
 } from './skill-discovery-stopped-wsl-roots'
 import { wslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 import { buildRemoteRepoSkillSources } from './skill-remote-repo-sources'
-import {
-  applyClaudePluginManifestNames,
-  discoverClaudePluginSkillInstalls
-} from './claude-plugin-skill-sources'
+import { discoverPluginSkillSources } from './plugin-skill-sources'
 import { findSkillFiles } from './skill-root-file-walk'
 import { skillRootExists } from './skill-root-unreadable'
 import { runSkillCandidateTasks } from '../filesystem/skill-candidate-concurrency'
@@ -52,7 +49,7 @@ import {
 
 // Share fixed home-root scans across workspace panes to bound repeated filesystem walks.
 export const SKILL_ROOT_SCAN_TTL_MS = 10_000
-// A scan builds 26 fixed roots (+1 per relocated home others read) + 15/repo + cwd/plugin roots; the cache must hold whole scans or evict itself. Beyond capacity LRU degrades to repeated repo walks.
+// A scan builds 26 fixed roots (+1 per relocated home others read) + 16/repo + cwd/plugin roots; the cache must hold whole scans or evict itself. Beyond capacity LRU degrades to repeated repo walks.
 const MAX_CACHED_SKILL_ROOTS = 1_024
 // Cap logged root ids as repos grow; hashed ids avoid exposing names and paths.
 export const MAX_LOGGED_ROOT_IDS = 12
@@ -253,9 +250,7 @@ export async function discoverSkills(args: {
     ...buildSkillDiscoverySources({ ...args, homeDir }),
     ...(pluginCwd && !pluginCwdStopped
       ? await waitForPromiseWithSignal(
-          discoverClaudePluginSkillInstalls({ homeDir, cwd: pluginCwd, signal: args.signal }).then(
-            (installs) => applyClaudePluginManifestNames(installs, args.signal)
-          ),
+          discoverPluginSkillSources({ homeDir, cwd: pluginCwd, signal: args.signal }),
           args.signal
         )
       : [])

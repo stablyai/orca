@@ -18,6 +18,8 @@ export type BotItemWorkerLinksDeps = {
   db: () => OrchestrationDb
   /** The chat that started a Dispatch: its live session and its chat id; null when unknown. */
   starter: (dispatchId: string) => { sessionId: string; chatId: string } | null
+  /** The agent whose chat started a Dispatch, live or not; null when unknown. */
+  starterBotId: (dispatchId: string) => string | null
   /** An item's links as the wire shows them, which name a write's new links. */
   linksOf: (item: BotItemRecord) => Promise<readonly BotItemLinkView[] | undefined>
   sendOwedMail: () => Promise<void>
@@ -86,7 +88,10 @@ export class BotItemWorkerLinks {
       return false
     }
     const starter = this.deps.starter(dispatchId)
-    const eventId = await store.linkStartedWorker(uid, dispatchId, starter?.chatId ?? null)
+    const eventId = await store.linkStartedWorker(uid, dispatchId, {
+      botId: this.deps.starterBotId(dispatchId),
+      chatId: starter?.chatId ?? null
+    })
     if (eventId === null) {
       return false
     }

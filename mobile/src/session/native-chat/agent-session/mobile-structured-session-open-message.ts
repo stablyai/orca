@@ -15,6 +15,12 @@ export function mobileStructuredSessionOpenMessage(
     )
   }
   if (reason === 'workspace-missing') {
+    if (workspaceKind === 'project') {
+      return translate(
+        'session.structuredOpen.projectRemoved',
+        'The project was removed from Orca.'
+      )
+    }
     return workspaceKind === 'folder'
       ? translate(
           'session.structuredOpen.folderWorkspaceRemoved',

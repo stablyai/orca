@@ -8,7 +8,6 @@ import type { SessionShellReadyBarrier } from './session-shell-ready-barrier'
 import type { TerminalShellRecoveryBarrier } from '../shell-readiness/terminal-shell-recovery-barrier'
 import { SessionTerminationController } from './session-termination-controller'
 import { SessionProcessInspection } from './session-process-inspection'
-import type { JobTerminationOutcome } from '../../windows/windows-pty-job'
 import type { SessionOptions } from './session-options'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { randomUUID } from 'node:crypto'
@@ -62,9 +61,7 @@ export class Session extends SessionProcessInspection {
       releaseProducerPause: (pauseOpts) => this.producerPause.release(pauseOpts)
     })
 
-    this.shellReady = createSessionShellReady(opts, this.output, (data) =>
-      this.startupIngress.accept(data)
-    )
+    this.shellReady = createSessionShellReady(opts, this.output, this)
 
     this.startupIngress = new PtyStartupIngress({
       ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
@@ -75,7 +72,7 @@ export class Session extends SessionProcessInspection {
     })
     try {
       this.subprocess.onData((data) => {
-        this._outputChunks += 1
+        this.noteOutput()
         if (!this._disposed) {
           this.shellReady.ingestSubprocessData(data)
         }
@@ -131,17 +128,12 @@ export class Session extends SessionProcessInspection {
     return this.subprocess.pid
   }
 
-  /** A PTY job result of unavailable does not prove child exit. */
-  terminateOwnedTree(): JobTerminationOutcome {
-    return this.subprocess.terminateOwnedTree()
-  }
-
   write(data: string): void {
     // Human input must reach rc-file readers while automatic startup commands wait for readiness.
     if (this.isAlive && !this._disposed && !this.startupIngress.answerLiveQueryReply(data)) {
       this.focusReport.observeInput(data, this.recoveryBarrier.focusReportingArming)
       this.shellReady.observeTypedInput(data)
-      this.subprocess.write(data)
+      this.writeInput(data)
     }
   }
 
@@ -159,7 +151,7 @@ export class Session extends SessionProcessInspection {
   /** Orca's own startup command: held by the shell-ready barrier until the shell can read it. */
   writeStartupCommand(data: string): void {
     if (this._state !== 'exited' && !this._disposed && !this.shellReady.tryEnqueue(data)) {
-      this.subprocess.write(data)
+      this.writeInput(data)
     }
   }
 
@@ -223,6 +215,11 @@ export class Session extends SessionProcessInspection {
   getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot | null {
     this.startupIngress.snapshotBarrier()
     return this.output.getSnapshot(opts)
+  }
+
+  getVisibleProjection() {
+    this.startupIngress.snapshotBarrier()
+    return this.output.getVisibleProjection()
   }
 
   getPartialEscapeTailAnsi(): string {

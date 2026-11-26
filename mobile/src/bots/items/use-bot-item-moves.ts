@@ -4,6 +4,8 @@
 import { useState } from 'react'
 import type { BotItem, BotItemStatus } from '../../../../src/shared/bots/bot-items'
 import { botItemStatusName } from '../../../../src/shared/bots/bot-item-status-name'
+import { BOTS_ITEM_CANCEL_NO_REASON_CAPABILITY } from '../../../../src/shared/bot-runtime-capabilities'
+import { useRouteCapability } from '../../worktree/execution-hosts/use-route-capability'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { triggerError } from '../../platform/haptics/haptics'
@@ -30,6 +32,7 @@ export function useBotItemMoves({
 }): BotItemMoves {
   const t = useMobileTranslation()
   const [busy, setBusy] = useState(false)
+  const cancelTakesNoReason = useRouteCapability(BOTS_ITEM_CANCEL_NO_REASON_CAPABILITY)
   const send = async (
     write: (client: RpcClient) => Promise<BotItemWriteOutcome>
   ): Promise<BotItemWriteOutcome> => {
@@ -47,7 +50,8 @@ export function useBotItemMoves({
         rpc,
         items.map((item) => item.uid),
         to,
-        reason
+        reason,
+        cancelTakesNoReason
       )
     )
     if (outcome.kind === 'done') {

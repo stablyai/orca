@@ -163,7 +163,7 @@ export abstract class AgentHookServerStateContract {
 
   protected abstract setClaudeBackgroundEvidence(
     paneKey: string,
-    hasRunningTask: boolean,
+    runningTasks: readonly string[] | undefined,
     hasActiveCron: boolean
   ): void
 

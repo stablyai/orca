@@ -18,10 +18,7 @@ import { openBotAutomation } from './bot-automation-open'
 import { botWorkerRowOpener } from './bot-worker-open'
 import { botActivityRowTitle } from './bot-activity-row-title'
 import { botErrorMessage } from './bot-presentation'
-import type { BotConnectorEntry } from './bot-connector-entries'
 import { botConnectorTitleText } from './bot-connector-titles'
-import { botToolSignInWords } from './bot-tool-sign-in-action'
-import { botToolSignInFace } from '../../../../shared/bots/bot-tool-sign-in-face'
 import { openBotSession } from './bot-session-open'
 import { useBotHostLabel } from './use-bot-host-label'
 import { useBotSessionPrompt } from './use-bot-session-prompt'
@@ -31,6 +28,8 @@ import { NEEDS_YOU_CAP, needsYouFold } from '../../../../shared/bots/needs-you-f
 import { useApprovalReports } from './use-approval-reports'
 import { NeedsYouRowCommit, useNeedsYouFocus, useNeedsYouRefocus } from './use-needs-you-focus'
 import { NeedRow, NeedRowBot, StoppedForSignInRow, type StoppedForSignIn } from './BotNeedRow'
+import { PairedAskNeedRow } from './BotPairedAskNeedRow'
+import { connectorNeed } from './bot-connector-need'
 import { BotGroupFacePicturesContext, BotItemFaceFolded } from './items/bot-group-face-pictures'
 import { botItemGroupName } from '../../../../shared/bots/bot-item-status-name'
 
@@ -188,21 +187,6 @@ function SessionRowNeed({
   )
 }
 
-/** What a connector needs, in words: an app's sign-in or Slack's update, else sign in again or fix it. */
-function connectorNeed(entry: BotConnectorEntry, name: string, t: Translate): string {
-  if (entry.kind === 'slack' && entry.updateNeeded) {
-    return t('settings.bots.slackStatus.updateNeeded', 'Update needed')
-  }
-  const signIn =
-    entry.kind === 'app'
-      ? botToolSignInWords(botToolSignInFace(entry.tool, entry.problem, false, undefined), t, name)
-          .need
-      : null
-  return (
-    signIn ?? t('bots.needs.connector', '{{name}} needs you to sign in again or fix it.', { name })
-  )
-}
-
 const NeedItem = memo(function NeedItem({
   bot,
   need,
@@ -289,6 +273,8 @@ const NeedItem = memo(function NeedItem({
         />
       )
     }
+    case 'paired-ask':
+      return <PairedAskNeedRow bot={bot} card={need.card} />
   }
 })
 
@@ -306,9 +292,13 @@ type GroupRow =
   | { key: string; approval: false; stopped: StoppedForSignIn }
   | { key: string; approval: false; item: BotItem }
 
-/** A worker's own dot says it waits on a permission; a chat's prompt says so once read. */
+/** A worker's own dot says it waits on a permission; a chat's prompt says so once read; a paired
+ *  server's card always asks for one. */
 function knownApproval(need: BotNeedView): boolean {
-  return need.kind === 'session' && need.row.kind === 'worker' && need.row.dot === 'permission'
+  return (
+    need.kind === 'paired-ask' ||
+    (need.kind === 'session' && need.row.kind === 'worker' && need.row.dot === 'permission')
+  )
 }
 
 const itemKey = (item: BotItem): string => `item:${item.uid}`

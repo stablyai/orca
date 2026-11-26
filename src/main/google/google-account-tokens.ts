@@ -102,7 +102,7 @@ export async function googleAccessToken(
   const record = await refreshGoogleAccount(email, deps)
   if (record.status !== 'connected' || !record.accessToken) {
     throw new GoogleAccountUnavailableError(
-      `${record.reason ?? 'Google access ended.'} Reconnect it in Orca.`
+      `${record.reason ?? 'Google access ended.'} Reconnect ${record.email} in Orca.`
     )
   }
   return record.accessToken

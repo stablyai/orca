@@ -64,7 +64,10 @@ export function GoogleSetupBlockerPanel({
     if (!signIn) {
       return
     }
-    const account = await signIn.connect(services ?? run.services ?? ['gmail'], email)
+    // A setup signs in through the app it made, even for a saved account.
+    const account = await signIn.connect(services ?? run.services ?? ['gmail'], email, {
+      currentApp: true
+    })
     if (account) {
       await answer(['resume'])
     }

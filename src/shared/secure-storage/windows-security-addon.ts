@@ -178,6 +178,8 @@ function prepare(raw: WindowsSecurityAddon): WindowsSecurity {
       spawnDetachedIsolated: (file, commandLine, cwd, environmentBlock, onExit) =>
         raw.spawnDetachedIsolated(file, commandLine, cwd, environmentBlock, onExit),
       isolatedSpawnBreaksAwayFromJob: () => raw.isolatedSpawnBreaksAwayFromJob(),
+      tcpClientOwnerAsync: (clientHost, clientPort, serverHost, serverPort) =>
+        raw.tcpClientOwnerAsync(clientHost, clientPort, serverHost, serverPort),
       hasNativeExport: (name) => raw.hasNativeExport(name)
     }
   }

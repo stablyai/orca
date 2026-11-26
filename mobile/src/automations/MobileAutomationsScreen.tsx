@@ -94,34 +94,50 @@ export function MobileAutomationsScreen() {
         executionHost={
           authority === 'paired' ? undefined : (normalizeExecutionHostId(authority) ?? undefined)
         }
-        renderHeader={(tabs) => (
-          <NavBar
-            leading={
-              <NavBarButton
-                icon={ChevronLeft}
-                accessibilityLabel={t('automations.mobile.back', 'Back')}
-                onPress={() => router.back()}
-              />
-            }
-            title={title}
-            subtitle={hostLabel}
-            center={
-              hostOptions.length > 1 ? (
-                <NavBarTitleButton
-                  title={title}
-                  subtitle={hostLabel}
-                  onPress={() => setPickingHost(true)}
-                  accessibilityLabel={t(
-                    'automations.mobile.chooseHost',
-                    'Automations on {{host}}, choose another host',
-                    { host: hostLabel }
-                  )}
+        renderHeader={(tabs, bar) =>
+          bar.page ? (
+            <NavBar
+              leading={
+                <NavBarButton
+                  icon={ChevronLeft}
+                  accessibilityLabel={t('automations.mobile.back', 'Back')}
+                  onPress={bar.page.onBack}
                 />
-              ) : undefined
-            }
-            accessory={tabs}
-          />
-        )}
+              }
+              title={bar.page.title}
+              subtitle={bar.page.subtitle}
+              trailing={bar.trailing}
+            />
+          ) : (
+            <NavBar
+              leading={
+                <NavBarButton
+                  icon={ChevronLeft}
+                  accessibilityLabel={t('automations.mobile.back', 'Back')}
+                  onPress={() => router.back()}
+                />
+              }
+              title={title}
+              subtitle={hostLabel}
+              center={
+                hostOptions.length > 1 ? (
+                  <NavBarTitleButton
+                    title={title}
+                    subtitle={hostLabel}
+                    onPress={() => setPickingHost(true)}
+                    accessibilityLabel={t(
+                      'automations.mobile.chooseHost',
+                      'Automations on {{host}}, choose another host',
+                      { host: hostLabel }
+                    )}
+                  />
+                ) : undefined
+              }
+              trailing={bar.trailing}
+              accessory={tabs}
+            />
+          )
+        }
       />
       <PickerModal
         visible={pickingHost}

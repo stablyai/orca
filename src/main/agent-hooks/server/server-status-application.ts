@@ -55,10 +55,6 @@ function resolveTurnStartedAt(
 }
 
 export abstract class AgentHookServerStatusApplication extends AgentHookServerStatusDisposition {
-  protected abstract scheduleTurnStatusPersist(
-    previous: EnrichedAgentHookEventPayload | undefined,
-    next: EnrichedAgentHookEventPayload
-  ): void
   protected refreshTerminalStatusEvidence(
     previous: EnrichedAgentHookEventPayload,
     mutationBefore?: EnrichedAgentHookEventPayload,

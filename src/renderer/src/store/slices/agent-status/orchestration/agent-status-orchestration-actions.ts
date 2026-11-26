@@ -19,6 +19,21 @@ import {
   orchestrationContextsEqual
 } from './agent-status-orchestration-context'
 
+const EMPTY_CONTEXTS: Record<string, AgentStatusOrchestrationContext> = {}
+
+/** A host with no contexts left drops out, as when it is removed or unpaired. */
+function withHost(
+  s: Pick<AgentStatusSlice, 'remoteAgentOrchestrationByHost'>,
+  host: string,
+  contexts: Record<string, AgentStatusOrchestrationContext>
+): AgentStatusSlice['remoteAgentOrchestrationByHost'] {
+  if (Object.keys(contexts).length > 0) {
+    return { ...s.remoteAgentOrchestrationByHost, [host]: contexts }
+  }
+  const { [host]: _removed, ...rest } = s.remoteAgentOrchestrationByHost
+  return rest
+}
+
 export function createAgentStatusOrchestrationActions(
   runtime: AgentStatusRuntime
 ): Pick<AgentStatusSlice, 'setRuntimeAgentOrchestrationByPaneKey'> {
@@ -30,7 +45,11 @@ export function createAgentStatusOrchestrationActions(
     ) => {
       const generatedTitleUpdates: AgentStatusEntry[] = []
       set((s, changedPaneKeys) => {
-        const previous = s.runtimeAgentOrchestrationByPaneKey
+        // Each host's contexts live apart, so one host's reply never overwrites another's same pane key.
+        const local = producerHost === LOCAL_EXECUTION_HOST_ID
+        const previous = local
+          ? s.runtimeAgentOrchestrationByPaneKey
+          : (s.remoteAgentOrchestrationByHost[producerHost] ?? EMPTY_CONTEXTS)
         const reconciled: Record<string, AgentStatusOrchestrationContext> = Object.fromEntries([])
         let runtimeMapChanged = Object.keys(previous).length !== Object.keys(entries).length
         for (const [key, context] of Object.entries(entries)) {
@@ -47,10 +66,13 @@ export function createAgentStatusOrchestrationActions(
             runtimeMapChanged = true
           }
         }
-        const canonicalState = {
-          ...s,
-          runtimeAgentOrchestrationByPaneKey: runtimeMapChanged ? reconciled : previous
-        }
+        const stored = runtimeMapChanged ? reconciled : previous
+        const remoteByHost = local
+          ? s.remoteAgentOrchestrationByHost
+          : withHost(s, producerHost, stored)
+        const canonicalState = local
+          ? { ...s, runtimeAgentOrchestrationByPaneKey: stored }
+          : { ...s, remoteAgentOrchestrationByHost: remoteByHost }
         let nextLive = s.agentStatusByPaneKey
         let liveChanged = false
 
@@ -89,7 +111,11 @@ export function createAgentStatusOrchestrationActions(
         }
 
         return {
-          ...(runtimeMapChanged ? { runtimeAgentOrchestrationByPaneKey: reconciled } : {}),
+          ...(runtimeMapChanged
+            ? local
+              ? { runtimeAgentOrchestrationByPaneKey: reconciled }
+              : { remoteAgentOrchestrationByHost: remoteByHost }
+            : {}),
           ...(liveChanged ? { agentStatusByPaneKey: nextLive } : {}),
           ...(liveChanged ? { agentStatusEpoch: s.agentStatusEpoch + 1 } : {})
         }

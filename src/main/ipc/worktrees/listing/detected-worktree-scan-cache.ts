@@ -38,7 +38,7 @@ import {
   worktreeCatalogHygienePlan
 } from './worktree-catalog-observation-hygiene'
 
-// The sidebar accepts an observation up to this old; fresher demand refreshes the shared owner.
+// The sidebar accepts an observation this long after its scan finished; fresher demand refreshes the shared owner.
 export const DETECTED_WORKTREE_SCAN_CACHE_TTL_MS = 5_000
 
 export type DetectedWorktreeSideEffectToken = Readonly<{

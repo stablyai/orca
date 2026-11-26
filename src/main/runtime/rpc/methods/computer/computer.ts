@@ -6,6 +6,7 @@ import {
   callComputerSidecarListWindows,
   callComputerSidecarSnapshot
 } from '../../../../computer/sidecar-transport/sidecar-client'
+import { assertTeamAllowsComputerUse } from '../../../../computer/computer-team-policy'
 import { defineMethod } from '../../core'
 import {
   Click,
@@ -50,6 +51,7 @@ export const COMPUTER_METHODS = [
     permission: 'desktop-control',
     params: ComputerPermissions,
     handler: async (params) => {
+      assertTeamAllowsComputerUse()
       const { openComputerUsePermissions } =
         await import('../../../../computer/macos-permissions/macos-computer-use-permissions')
       return openComputerUsePermissions(params.id, { skipGranted: params.skipGranted === true })

@@ -1,3 +1,4 @@
+import { findTeamPluginBlock } from '../installation/plugin-team-install-policy'
 import {
   PLUGIN_BLOCKED_CODE,
   PLUGIN_INSTALL_FAILED_CODE,
@@ -97,7 +98,7 @@ export function assertInstallAllowed(
   const blocked = host.blockedPluginReason(pluginKey)
   const reason = blocked
     ? `${pluginKey} is blocked by Orca's safety list: ${blocked}`
-    : pluginInstallTrustError(pluginKey, lockSource)
+    : (findTeamPluginBlock(pluginKey)?.reason ?? pluginInstallTrustError(pluginKey, lockSource))
   if (reason) {
     throw new PluginCliError(PLUGIN_BLOCKED_CODE, reason, {
       pluginKey,

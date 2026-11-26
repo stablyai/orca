@@ -1,4 +1,7 @@
-import type { MemorySnapshot } from '../../../../../../shared/diagnostics/process-stats-types'
+import type {
+  MemorySnapshot,
+  WorktreeMemory
+} from '../../../../../../shared/diagnostics/process-stats-types'
 import type { PtyListedSession } from '../../../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 import { isProgramStatusRow } from '../../../../../../shared/program-status/program-status-row'
 import { useAppStore } from '../../../../store/index'
@@ -21,7 +24,8 @@ export function splitSnapshotByOwner(
   agentPaneKeys: { has(paneKey: string): boolean }
 ): ResourceOwnerSplit {
   const daemonById = new Map(daemonSessions.map((session) => [session.id, session]))
-  const agents = { memory: 0 }
+  // Chat agents run outside terminals, so they have no session row of their own.
+  const agents = { memory: snapshot.agentProcesses?.memory ?? 0 }
   const yourProcesses = { memory: 0 }
   for (const worktree of snapshot.worktrees) {
     for (const session of worktree.sessions) {
@@ -35,6 +39,29 @@ export function splitSnapshotByOwner(
     }
   }
   return { orca: { memory: snapshot.app.memory }, agents, yourProcesses }
+}
+
+/** Agent processes no listed chat row accounts for, such as a server several chats share. */
+export function sharedAgentProcessUsage(
+  snapshot: MemorySnapshot,
+  isListed: (worktree: WorktreeMemory) => boolean
+): { cpu: number; memory: number } | null {
+  const total = snapshot.agentProcesses
+  if (!total || total.memory <= 0) {
+    return null
+  }
+  let cpu = total.cpu
+  let memory = total.memory
+  for (const worktree of snapshot.worktrees) {
+    if (!worktree.chats || !isListed(worktree)) {
+      continue
+    }
+    for (const chat of worktree.chats) {
+      cpu -= chat.cpu
+      memory -= chat.memory
+    }
+  }
+  return memory > 0 ? { cpu: Math.max(0, cpu), memory } : null
 }
 
 /** Panes with a real agent; a finished program's kept result row is not one. */

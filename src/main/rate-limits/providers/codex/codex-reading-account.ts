@@ -2,13 +2,23 @@ import type {
   ProviderRateLimits,
   UsageReadingAccount
 } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { isCodexUsageSignInRequired } from '../../../../shared/agent-accounts/codex/codex-auth-errors'
 
-/** Names the saved account on a successful reading of its own home; failures never carry it. */
 export function withCodexReadingAccount(
   limits: ProviderRateLimits,
   readingAccount: UsageReadingAccount | undefined
 ): ProviderRateLimits {
-  return readingAccount && limits.status === 'ok'
-    ? { ...limits, usageMetadata: { ...limits.usageMetadata, readingAccount } }
-    : limits
+  if (!readingAccount) {
+    return limits
+  }
+  if (limits.status === 'ok') {
+    return { ...limits, usageMetadata: { ...limits.usageMetadata, readingAccount } }
+  }
+  if (limits.status === 'error' && isCodexUsageSignInRequired(limits)) {
+    return {
+      ...limits,
+      usageMetadata: { ...limits.usageMetadata, authFailureAccount: readingAccount }
+    }
+  }
+  return limits
 }

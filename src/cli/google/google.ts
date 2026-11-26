@@ -4,23 +4,24 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createInterface } from 'node:readline'
 import type { GoogleClientView } from '../../shared/google/google-client-config'
-import type {
-  GoogleAccountView,
-  GoogleServiceReadiness,
-  GoogleSignInStatus,
-  GoogleStatusView
-} from '../../shared/google/google-connect-types'
+import { googleEmailKey } from '../../shared/google/google-bot-accounts'
+import { clientLine, formatGoogleAccount, formatGoogleStatus } from './google-status-format'
 import {
-  GOOGLE_SERVICE_CHOICES,
-  GOOGLE_SERVICE_INFO,
-  type GoogleServiceChoice
-} from '../../shared/google/google-scopes'
+  GOOGLE_BOT_ACCOUNTS_RUNTIME_CAPABILITY,
+  type GoogleSignInStatus,
+  type GoogleStatusView
+} from '../../shared/google/google-connect-types'
+import { GOOGLE_SERVICE_CHOICES, type GoogleServiceChoice } from '../../shared/google/google-scopes'
 import {
   readInjectedAgentSessionId,
   readInjectedBotToken
 } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
-import { getOptionalStringFlag, getRequiredStringFlag } from '../arguments/flags'
+import {
+  getOptionalStringFlag,
+  getOptionalStringFlagAllowingEmpty,
+  getRequiredStringFlag
+} from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
 import { rejectRemoteSelectionFlags } from '../dispatch/remote-selection-flag-rejection'
 import { RuntimeClientError } from '../runtime/connection/types'
@@ -28,65 +29,31 @@ import { type AuthInterruptSource, processInterrupts } from '../accounts/auth-in
 import { findBot } from '../bots/bot'
 import { driveHostSignIn } from '../accounts/host-sign-in-driver'
 
-const SERVICE_STATE: Record<GoogleServiceReadiness['state'], string> = {
-  ready: 'ready',
-  'needs-permission': 'needs permission: reconnect and allow it',
-  'api-disabled': 'API off in your Google project',
-  'blocked-by-admin': 'blocked by your company’s Google admin',
-  error: 'not working'
-}
-
-function prepare(ctx: HandlerContext, command: string): void {
+export function prepare(ctx: HandlerContext, command: string): void {
   rejectRemoteSelectionFlags(
     ctx.flags,
     `\`${command}\`. Run it in a terminal on the computer whose Google you are setting up.`
   )
 }
 
+/** An older host drops --accounts and grants every account, so the list never goes to one. */
+async function assertGoogleBotAccounts(ctx: HandlerContext): Promise<void> {
+  const status = await ctx.client.call<{ machineName?: string; capabilities?: string[] }>(
+    'status.get'
+  )
+  if (!status.result.capabilities?.includes(GOOGLE_BOT_ACCOUNTS_RUNTIME_CAPABILITY)) {
+    throw new RuntimeClientError(
+      'incompatible_runtime',
+      `Update Orca on ${status.result.machineName?.trim() || 'this computer'} to choose accounts.`
+    )
+  }
+}
+
 /** A bot run's token, which the host refuses owner-only changes from, and the chat it runs from. */
-const caller = () => {
+export const caller = () => {
   const botToken = readInjectedBotToken()
   const callerSessionId = readInjectedAgentSessionId()
   return { ...(botToken ? { botToken } : {}), ...(callerSessionId ? { callerSessionId } : {}) }
-}
-
-function serviceLines(account: GoogleAccountView): string[] {
-  return account.services.map((service) => {
-    const label = GOOGLE_SERVICE_INFO[service.service].label
-    const extra = service.enableUrl ?? (service.state === 'ready' ? undefined : service.detail)
-    return `    ${label}: ${SERVICE_STATE[service.state]}${extra ? ` (${extra})` : ''}`
-  })
-}
-
-export function formatGoogleAccount(account: GoogleAccountView): string[] {
-  if (account.status === 'reconnect') {
-    return [
-      `  ${account.email}: Reconnect. ${account.reason ?? 'Google access ended.'} Run \`orca google connect --account ${account.email}\`.`
-    ]
-  }
-  return [`  ${account.email}: connected`, ...serviceLines(account)]
-}
-
-function clientLine(client: GoogleClientView | null): string {
-  if (!client) {
-    return 'Google client: none yet. Add your team’s Desktop app client with `orca google client import <file>`.'
-  }
-  const project = client.projectId ? ` in project ${client.projectId}` : ''
-  return `Google client: ${client.clientId}${project}${client.source === 'team' ? ' (your team’s)' : ''}`
-}
-
-export function formatGoogleStatus(view: GoogleStatusView): string {
-  const bots = view.bots.map((bot) => bot.name)
-  return [
-    clientLine(view.client),
-    view.accounts.length > 0
-      ? 'Accounts on this computer:'
-      : 'No Google account is connected on this computer.',
-    ...view.accounts.flatMap(formatGoogleAccount),
-    bots.length > 0
-      ? `Bots that may use Google: ${bots.join(', ')}`
-      : 'No bot may use Google yet. Turn one on with `orca google bot <bot> --on`.'
-  ].join('\n')
 }
 
 /** `--services gmail,calendar,files`, each once; undefined when not given. */
@@ -106,6 +73,22 @@ export function readServices(value: string | undefined): GoogleServiceChoice[] |
     )
   }
   return GOOGLE_SERVICE_CHOICES.filter((choice) => names.includes(choice))
+}
+
+/** `--accounts a@x.com,b@y.com`, each once and lowercased; undefined when not given. */
+export function readAccounts(value: string | undefined): string[] | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  const emails = [...new Set(value.split(',').map(googleEmailKey))]
+  const invalid = emails.filter((email) => !/^[^\s@]+@[^\s@]+$/.test(email))
+  if (invalid.length > 0) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `--accounts takes Google account emails, comma-separated, not ${invalid.join(', ') || 'an empty one'}. \`orca google status\` lists the accounts here.`
+    )
+  }
+  return emails
 }
 
 /** Relays each pasted line until one is taken; a refused paste prints why and keeps listening. */
@@ -202,10 +185,10 @@ export async function runGoogleConnect(
 export const GOOGLE_HANDLERS: Record<string, CommandHandler> = {
   'google status': async (ctx) => {
     prepare(ctx, 'orca google status')
-    const status = await ctx.client.call<GoogleStatusView>(
-      'google.status',
-      ctx.flags.get('check') === true ? { check: true } : {}
-    )
+    const status = await ctx.client.call<GoogleStatusView>('google.status', {
+      ...caller(),
+      ...(ctx.flags.get('check') === true ? { check: true } : {})
+    })
     printResult(status, ctx.json, formatGoogleStatus)
   },
   'google client import': async (ctx) => {
@@ -242,33 +225,63 @@ export const GOOGLE_HANDLERS: Record<string, CommandHandler> = {
     prepare(ctx, 'orca google disconnect')
     const account = getOptionalStringFlag(ctx.flags, 'account')
     const revoke = ctx.flags.get('revoke') === true
-    const result = await ctx.client.call<{ removed: string; revoked: boolean | null }>(
-      'google.disconnect',
-      { ...caller(), ...(account ? { account } : {}), ...(revoke ? { revoke } : {}) }
-    )
-    printResult(result, ctx.json, ({ removed, revoked }) =>
-      revoked === null
-        ? `Removed ${removed} from this computer. It is still allowed at Google; add --revoke to cancel it there too.`
-        : revoked
-          ? `Removed ${removed} from this computer and revoked it at Google.`
-          : `Removed ${removed} from this computer, but Google didn't confirm the revoke. Remove Orca at https://myaccount.google.com/permissions.`
+    const result = await ctx.client.call<{
+      removed: string
+      revoked: boolean | null
+      defaultAccount?: string | null
+    }>('google.disconnect', {
+      ...caller(),
+      ...(account ? { account } : {}),
+      ...(revoke ? { revoke } : {})
+    })
+    printResult(result, ctx.json, ({ removed, revoked, defaultAccount }) =>
+      [
+        revoked === null
+          ? `Removed ${removed} from this computer. It is still allowed at Google; add --revoke to cancel it there too.`
+          : revoked
+            ? `Removed ${removed} from this computer and revoked it at Google.`
+            : `Removed ${removed} from this computer, but Google didn't confirm the revoke. Remove Orca at https://myaccount.google.com/permissions.`,
+        ...(defaultAccount ? [`Default account: ${defaultAccount}.`] : [])
+      ].join(' ')
     )
   },
   'google bot': async (ctx) => {
     prepare(ctx, 'orca google bot')
-    const on = ctx.flags.get('on') === true
-    if (on === (ctx.flags.get('off') === true)) {
-      throw new RuntimeClientError('invalid_argument', 'Pass one of --on or --off.')
+    // An empty --accounts is refused, never read as absent (which --on would make every account).
+    const accounts = readAccounts(getOptionalStringFlagAllowingEmpty(ctx.flags, 'accounts'))
+    const picked = [
+      ctx.flags.get('on') === true,
+      ctx.flags.get('off') === true,
+      accounts !== undefined
+    ]
+    if (picked.filter(Boolean).length !== 1) {
+      throw new RuntimeClientError('invalid_argument', 'Pass one of --on, --off or --accounts.')
     }
+    const on = ctx.flags.get('off') !== true
     const bot = await findBot(ctx.client, getRequiredStringFlag(ctx.flags, 'bot'))
+    if (accounts) {
+      await assertGoogleBotAccounts(ctx)
+    }
+    // --on is every account; without allAccounts the host keeps a list the bot already has.
     const result = await ctx.client.call<{
-      bot: { name: string; google: boolean }
+      bot: { name: string; google: boolean; accounts?: string[] }
       warning?: string
-    }>('google.bot.set', { ...caller(), botId: bot.id, on })
+    }>('google.bot.set', {
+      ...caller(),
+      botId: bot.id,
+      on,
+      ...(accounts ? { accounts } : on ? { allAccounts: true } : {})
+    })
+    if (accounts && result.result.bot.google && !result.result.bot.accounts) {
+      throw new RuntimeClientError(
+        'incompatible_runtime',
+        `This Orca didn't keep the account list: ${result.result.bot.name} now has every Google account. Run \`orca google bot --bot ${bot.id} --off\`, update Orca, then try again.`
+      )
+    }
     printResult(result, ctx.json, ({ bot: saved, warning }) =>
       saved.google
         ? [
-            `${saved.name} may now use Google as you, for whoever can ask it and its automations.`,
+            `${saved.name} may now use ${saved.accounts ? `Google as ${saved.accounts.join(', ')}` : 'Google as you, with every account on this computer'}, for whoever can ask it and its automations.`,
             ...(warning ? [`Note: ${warning} Change that in its Who can ask.`] : [])
           ].join('\n')
         : `${saved.name} can no longer use Google.`
