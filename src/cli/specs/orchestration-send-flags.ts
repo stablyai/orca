@@ -2,6 +2,8 @@
 export const ORCHESTRATION_SEND_FLAGS = [
   'to',
   'chat',
+  'model',
+  'effort',
   'item',
   'file',
   'on',

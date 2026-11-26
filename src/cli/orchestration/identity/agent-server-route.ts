@@ -1,6 +1,7 @@
 import type { HandlerContext } from '../../dispatch/dispatch'
 import { RuntimeClient } from '../../runtime/client'
 import { RuntimeClientError } from '../../runtime/connection/types'
+import { BOT_HANDOFF_LAUNCH_RELAY_REFUSAL } from '../../../shared/orchestration/bot-handoff-launch-options'
 import { readInjectedAgentSessionId } from '../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import type { OrchestrationCallerShowResult } from '../../../shared/orchestration/orchestration-caller-status'
 import { renderOrchestrationArgv } from '../agent-view'
@@ -11,6 +12,12 @@ import {
 } from '../../../shared/orchestration/orchestration-runtime-capabilities'
 
 type AgentServerRoutedCommand = 'send' | 'worker-start' | 'check'
+
+export function requireLocalBotHandoffLaunch(client: RuntimeClient): void {
+  if (client.isRemote) {
+    throw new RuntimeClientError('capability_unsupported', BOT_HANDOFF_LAUNCH_RELAY_REFUSAL)
+  }
+}
 
 /** The server a remote client was pointed at, as the caller spelled it. */
 function serverSelector(

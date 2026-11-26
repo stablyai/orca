@@ -2,7 +2,6 @@
 
 import { isBotGroupMemberSession } from '../../../../../../shared/bots/bot-group'
 import { runtimeBotGroups } from '../../../../../bots/bot-group-runtime'
-import { randomUUID } from 'node:crypto'
 import type { z } from 'zod'
 import { runtimeBotChats } from '../../../../../bots/bot-chat-session'
 import {
@@ -40,7 +39,12 @@ import {
 } from './bot-recipient'
 import { exposeMessage } from './mailbox-message-receipt'
 import { recordReceiptForPostCommitNudge } from './mutation-replay-nudge'
-import { botRequestChain, botRequestSendKey } from './bot-request-chain'
+import {
+  botRequestChain,
+  botRequestAdmissionKey,
+  botRequestDuplicateReceipt
+} from './bot-request-chain'
+import { resolveBotHandoffLaunchOptions } from './bot-handoff-launch-selection'
 import { answersRequest, askedInConversation, botRequestSender } from './bot-request-record'
 import type { PairedSender } from '../../../../../../shared/orchestration/mailbox/paired-sender-name'
 import { resolveBareOrchestrationRecipient } from './recipient-routing'
@@ -48,7 +52,7 @@ import { sessionCallerOf } from '../../../../orchestration/addressing/orchestrat
 
 type SendParamsInput = Pick<
   z.infer<typeof SendParams>,
-  'subject' | 'body' | 'type' | 'priority' | 'threadId'
+  'subject' | 'body' | 'type' | 'priority' | 'threadId' | 'model' | 'effort'
 >
 
 /** Whether an address could reach a bot; decided without waiting, so other mail is stored as before. */
@@ -86,6 +90,7 @@ export async function sendToBot(
     return null
   }
   const receiving = mail.newChat ? { ...found, newChat: true } : found
+  const launchOptions = resolveBotHandoffLaunchOptions(receiving.bot.agent, mail.params)
   const callerSessionId = sessionCallerOf(context.orchestrationCaller)?.sessionId
   if (mail.to.includes('bot-group-member-') && !isBotGroupMemberSession(callerSessionId)) {
     throw new Error(
@@ -102,6 +107,7 @@ export async function sendToBot(
     db,
     ...mail,
     receiving,
+    launchOptions,
     acting,
     senderRunId,
     senderPaneKey: mail.sender.paneKey ?? undefined,
@@ -118,6 +124,7 @@ type SendBotRequestArgs = {
   from: string
   to: string
   receiving: ReceivingBot
+  launchOptions?: Readonly<Record<string, string>>
   acting: ActingSender
   senderRunId: string | undefined
   senderPaneKey: string | undefined
@@ -170,6 +177,12 @@ async function admitBotRequestMail(
     if (refusal || !bot || !isBotRequestPurpose(params.type)) {
       return refuse(refusal ?? BOT_REQUEST_TYPE_REFUSAL)
     }
+    if (args.launchOptions && bot.agent !== receiving.bot.agent) {
+      throw new OrchestrationError(
+        'invalid_argument',
+        'The receiving bot changed agents. Send again with options for its current agent.'
+      )
+    }
     return { bot, purpose: params.type }
   }
   const { bot: target, purpose } = check()
@@ -210,28 +223,9 @@ async function admitBotRequestMail(
     ...asked,
     ...answersRequest(db, acting)
   }
-  // A worker's send is its own: another worker asking the same still gets an answer.
-  const sendTurn = acting.worker ? `dispatch:${acting.worker}` : chain.turnKey
-  const key = {
-    rootKey: chain.rootKey ?? `send:${randomUUID()}`,
-    // Only this same send again is a duplicate; a new request to a bot the chain reached is delivered.
-    ...(sendTurn ? { sendKey: botRequestSendKey(sendTurn, target.id, purpose, params) } : {}),
-    toBotId: target.id,
-    purpose
-  }
-  const blockedReceipt = (
-    blocked: Exclude<BotRequestAdmission, { kind: 'sent' }>
-  ): { sent: false; receipt: unknown } => {
-    const earlier = db.getMessageById(blocked.messageId)
-    return {
-      sent: false,
-      receipt: {
-        ...(earlier ? { message: exposeMessage(earlier) } : {}),
-        duplicate: true,
-        next: `${target.name} already has this request, so no second message was sent.`
-      }
-    }
-  }
+  const key = botRequestAdmissionKey(chain, acting.worker, target.id, purpose, params)
+  const blockedReceipt = (blocked: Exclude<BotRequestAdmission, { kind: 'sent' }>) =>
+    botRequestDuplicateReceipt(db, target.name, blocked)
   const messageId = args.messageId ?? generateId('msg')
   // Checked before a conversation is made for it; the store checks again as it stores.
   const blocked = db.botRequestBlocked(key)
@@ -261,7 +255,7 @@ async function admitBotRequestMail(
     if (!recipient.ok) {
       throw new OrchestrationError(recipient.code, recipient.message)
     }
-    // The bot may have been paused or removed while the Chat was found.
+    // The bot may have changed while the chat was being prepared.
     check()
     runtimeBotGroups(runtime).assertPeerScope(groupScope)
     const mail = {
@@ -307,7 +301,7 @@ async function admitBotRequestMail(
     if (reservation.kind !== 'reserved') {
       return Promise.resolve(blockedReceipt(reservation).receipt)
     }
-    return admitInNewChat(runtime, target, record, params.subject, {
+    return admitInNewChat(runtime, target, record, params.subject, args.launchOptions, {
       admit: (address) => admit(address, true),
       release: () => db.releaseBotRequest(messageId)
     })

@@ -6,6 +6,7 @@ import { OrchestrationError } from '../orchestration-error'
 import { waitForFederatedLifecycleSettlement } from './federation-lifecycle-settlement'
 import { bindCoordinatorMutationPayload } from '../workers/reports/dispatch-message-binding'
 import { ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
+import { BOT_HANDOFF_LAUNCH_RELAY_REFUSAL } from '../../../../shared/orchestration/bot-handoff-launch-options'
 import type { z } from 'zod'
 import { parseRemoteWorkerPayload } from '../../rpc/methods/orchestration/messaging/message-payload'
 import type { SendParams } from '../../rpc/methods/orchestration/messaging/send-params'
@@ -35,6 +36,9 @@ export async function sendRemoteMessage(args: {
   replyTo?: string
 }) {
   const { params, runtime, db, from, senderPaneKey, remoteAttachment } = args
+  if (params.model !== undefined) {
+    throw new OrchestrationError('capability_unsupported', BOT_HANDOFF_LAUNCH_RELAY_REFUSAL)
+  }
   rejectFederatedExplicitTarget(params, remoteAttachment.home_run_id)
   assertWorkerCanReport({
     dispatchId: remoteAttachment.dispatch_id,

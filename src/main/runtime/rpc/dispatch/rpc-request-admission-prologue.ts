@@ -25,6 +25,7 @@ import {
 } from '../orchestration/callers/orchestration-session-caller'
 import { admitOrchestrationPeerCall } from '../orchestration/callers/orchestration-peer-caller'
 import { waitForRestoredWorkerCallerIdentity } from '../orchestration/callers/worker-caller-identity-restore-wait'
+import { assertLocalBotHandoffLaunch } from '../methods/orchestration/messaging/send-params-checks'
 
 type RpcRequestAdmissionDeps = {
   runtime: OrcaRuntimeService
@@ -63,6 +64,10 @@ export function admitRpcRequest<M extends RpcMethod | RpcStreamingMethod>(
 
   let peer: ReturnType<typeof admitOrchestrationPeerCall>
   try {
+    // A paired coordinator can write its Run during caller admission.
+    if (rawRequest.method === 'orchestration.send') {
+      assertLocalBotHandoffLaunch(rawRequest.params, callerScope, options)
+    }
     peer = admitOrchestrationPeerCall(runtime, rawRequest, method, options)
   } catch (error) {
     return reject(mapDispatcherError(rawRequest, meta, error))

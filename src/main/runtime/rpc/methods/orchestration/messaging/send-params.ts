@@ -6,6 +6,8 @@ import {
 } from '../../../../../../shared/rpc-contract/rpc-param-primitives'
 import { isGroupAddress } from '../../../../orchestration/addressing/groups/group-addressing'
 import { MESSAGE_TYPES } from '../../../../orchestration/db/orchestration-records'
+import { botHandoffLaunchRouteError } from '../../../../../../shared/orchestration/bot-handoff-launch-options'
+import { OptionalWorkerLaunchPreference } from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-start-params'
 import {
   getLifecycleGroupRecipientError,
   isDispatchMutationMessageType
@@ -36,13 +38,15 @@ export const SendParams = z
     /** With `to: bot:<name>`, the one of that bot's chats the mail lands in instead of its Home Chat;
      *  `new` starts a new chat for it. */
     chat: OptionalString,
+    model: OptionalWorkerLaunchPreference,
+    effort: OptionalWorkerLaunchPreference,
     /** With `to: bot:<name>`, an item number: the mail lands in the chat that owns it. With
      *  `to: dispatch:<id>` of a finished worker, its follow-up is for that item, as `worker-start --item`. */
-    item: OptionalString,
+    item: z.unknown().optional(),
     /** With `item`: files on this computer, sent with the mail into the item's chat. */
     files: z.array(z.string().min(1).max(4096)).max(30).optional(),
     // A paired server: this Orca carries the mail there and the replies back (`send --on`).
-    on: OptionalString,
+    on: z.unknown().optional(),
     // A paired computer's agent: it pulls the mail while connected and decides there (`send --on-client`).
     // Supplied but empty is refused, never read as a local send.
     onClient: z.string().trim().min(1, 'Missing --on-client computer').optional(),
@@ -50,6 +54,10 @@ export const SendParams = z
     devMode: OptionalBoolean
   })
   .superRefine((params, ctx) => {
+    const routeError = botHandoffLaunchRouteError(params)
+    if (routeError) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: routeError })
+    }
     if (!isDispatchMutationMessageType(params.type) || !params.to || !isGroupAddress(params.to)) {
       return
     }
@@ -59,4 +67,13 @@ export const SendParams = z
       message: getLifecycleGroupRecipientError(params.type),
       path: ['to']
     })
+  })
+  .transform(({ on, item, ...params }) => {
+    const server = OptionalString.parse(on)
+    const itemNumber = OptionalString.parse(item)
+    return {
+      ...params,
+      ...(server === undefined ? {} : { on: server }),
+      ...(itemNumber === undefined ? {} : { item: itemNumber })
+    }
   })
