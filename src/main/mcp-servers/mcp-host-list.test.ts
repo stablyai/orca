@@ -3,12 +3,28 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { _resetSecretStoreForTests, setSecretStore } from '../../shared/secure-storage/secret-store'
-import { readBotToolCredential, useBotToolCredentialsRoot } from '../bots/bot-tool-credentials'
+import {
+  changeBotToolCredentials,
+  readBotToolCredential,
+  useBotToolCredentialsRoot
+} from '../bots/bot-tool-credentials'
 import { botToolsPath, changeBotToolServers } from '../bots/bot-tools-file'
+import {
+  BotToolRelay,
+  MCP_HOST_LIST_RELAY_OWNER,
+  relayToolUrl
+} from '../bots/tool-relay/bot-tool-relay'
+import {
+  call,
+  closeUpstreams,
+  json,
+  upstream
+} from '../bots/tool-relay/bot-tool-relay.test-fixtures'
 import {
   listMcpServers,
   mcpServerDetails,
   readMcpHostList,
+  removeMcpServer,
   setMcpAgentFileAllowed,
   setMcpServerAgentEnabled,
   setMcpServerWorkspaces,
@@ -35,6 +51,7 @@ beforeEach(() => {
   })
 })
 afterEach(() => {
+  closeUpstreams()
   useBotToolCredentialsRoot(null)
   _resetSecretStoreForTests()
   for (const dir of dirs.splice(0)) {
@@ -157,5 +174,63 @@ describe("a host's MCP server list", () => {
       { base: shown, folder }
     )
     expect(saved.workspaces).toEqual({ later: true, on: [], off: ['repo-x', 'repo-y'] })
+  })
+})
+
+// The phone's and desktop's Remove confirms say what goes; these hold the host to those words.
+describe('removing a server from the host list', () => {
+  /** A host list naming each server's credential, with fixture header values saved for each id. */
+  function hostWith(servers: { name: string; url: string; credential: string }[]): string {
+    const folder = tempDir('mcp-host-list-')
+    mkdirSync(join(folder, '.orca'), { recursive: true })
+    for (const { url, credential } of servers) {
+      changeBotToolCredentials(
+        folder,
+        new Map([[credential, { url, headers: { 'x-example-key': SECRET } }]])
+      )
+    }
+    writeFileSync(botToolsPath(folder), JSON.stringify({ servers }))
+    return folder
+  }
+
+  it('deletes the saved values only it names, keeping ones another server still names', async () => {
+    const url = 'https://mcp.example.test/mcp'
+    const folder = hostWith([
+      { name: 'example-a', url, credential: 'cred-shared' },
+      { name: 'example-b', url, credential: 'cred-shared' },
+      { name: 'example-c', url, credential: 'cred-own' }
+    ])
+    const [a, , c] = await listMcpServers(folder)
+
+    await removeMcpServer(a?.id ?? '', folder)
+    expect(readBotToolCredential(folder, 'cred-shared')?.headers).toEqual({
+      'x-example-key': SECRET
+    })
+    await removeMcpServer(c?.id ?? '', folder)
+    expect(readBotToolCredential(folder, 'cred-own')).toBeNull()
+  })
+
+  it('cuts a running session’s calls through the relay at once, not only new sessions', async () => {
+    const tool = await upstream((_seen, res) => res.end('{}'))
+    const folder = hostWith([{ name: 'example', url: tool.url, credential: 'cred-example' }])
+    const relay = new BotToolRelay((target, init) => fetch(target, init))
+    try {
+      const { origin, token } = await relay.grant(MCP_HOST_LIST_RELAY_OWNER, {
+        host: folder
+      })
+      const session = (): ReturnType<typeof call> =>
+        call(relayToolUrl(origin, 'host', 'cred-example'), {
+          headers: { ...json, authorization: `Bearer ${token}` },
+          body: '{}'
+        })
+      expect((await session()).status).toBe(200)
+
+      const [server] = await listMcpServers(folder)
+      await removeMcpServer(server?.id ?? '', folder)
+      expect((await session()).status).toBe(404)
+      expect(tool.seen).toHaveLength(1)
+    } finally {
+      relay.close()
+    }
   })
 })

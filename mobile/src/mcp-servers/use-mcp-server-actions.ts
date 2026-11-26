@@ -11,7 +11,8 @@ import { formatAgentTypeLabel } from '../../../src/shared/agent-status/presentat
 import type { Translate } from '../i18n/mobile-i18n'
 import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import { mcpServerTitle } from './mcp-server-words'
+import type { BotToolDetails } from '../../../src/shared/bot-tools'
+import { mcpServerRemoveMessage, mcpServerTitle } from './mcp-server-words'
 import {
   mcpServerAgentFilesAllow,
   mcpServerCopy,
@@ -224,13 +225,10 @@ export function useMcpServerActions(args: {
   )
 
   const remove = useCallback(
-    (server: PhoneMcpServer, onRemoved: () => void) =>
+    (server: PhoneMcpServer, details: BotToolDetails | null, onRemoved: () => void) =>
       setConfirm({
         title: t('mcpServers.removeTitle', 'Remove {{name}}?', { name: mcpServerTitle(server) }),
-        message: t(
-          'mcpServers.removeMessage',
-          'New sessions won’t have it. You can add it again any time.'
-        ),
+        message: mcpServerRemoveMessage(server, details, t),
         confirmLabel: t('mcpServers.remove', 'Remove'),
         destructive: true,
         onConfirm: () =>

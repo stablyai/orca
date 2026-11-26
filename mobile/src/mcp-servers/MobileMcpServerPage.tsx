@@ -211,7 +211,7 @@ export function MobileMcpServerPage(props: {
             title={t('mcpServers.removeServer', 'Remove server')}
             destructive
             disabled={locked}
-            onPress={() => actions.remove(server, props.onBack)}
+            onPress={() => actions.remove(server, details, props.onBack)}
           />
         </SettingsSection>
       )}

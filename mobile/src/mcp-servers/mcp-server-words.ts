@@ -1,5 +1,6 @@
 // How an MCP server reads on the phone: its address cut to what a row has room for, and the agents
 // and workspaces it's on for, in the mocks' words.
+import type { BotToolDetails } from '../../../src/shared/bot-tools'
 import { botToolSubtitle, botToolTitle } from '../../../src/shared/bots/bot-tool-labels'
 import {
   MCP_SERVER_CATALOG,
@@ -52,6 +53,50 @@ export function mcpCatalogEntryOf(
 /** "Linear" for a catalog app, else the server's own name with its first letter raised. */
 export const mcpServerTitle = (server: Pick<PhoneMcpServer, 'name' | 'detail'>): string =>
   mcpCatalogEntryOf(server)?.name ?? botToolTitle(server.name)
+
+/**
+ * The Remove confirm's line: what goes with the server, which the user can't get back. Orca's
+ * sign-in and saved headers reach sessions through its relay, which stops their calls the moment
+ * the server goes; a command server's line promises nothing about running sessions, since a shared
+ * one stops and a per-session one runs on. `details` is the server's saved names, null until read
+ * (and for a server Orca signs in to, which has none).
+ */
+export function mcpServerRemoveMessage(
+  server: Pick<PhoneMcpServer, 'signIn'>,
+  details: BotToolDetails | null,
+  t: Translate
+): string {
+  if (server.signIn) {
+    // Signed out, it holds no sign-in to delete; adding it back asks for one either way.
+    return server.signIn.state === 'signed-out'
+      ? t('mcpServers.removeMessage', 'New sessions won’t have it. You can add it again any time.')
+      : t(
+          'mcpServers.removeMessageSignIn',
+          'Sessions using it lose access now, and new sessions won’t have it. Orca deletes its sign-in, so you’ll need to sign in again if you add it back.'
+        )
+  }
+  if (!details) {
+    return t(
+      'mcpServers.removeMessageUnknown',
+      'New sessions won’t have it. Any values saved for it are deleted, so you’d need to enter them again if you add it back.'
+    )
+  }
+  const saved = details.server
+  if ('url' in saved) {
+    if (saved.headers.length > 0) {
+      return t(
+        'mcpServers.removeMessageHeaders',
+        'Sessions using it lose access now, and new sessions won’t have it. Its saved headers are deleted, so you’ll need to enter them again if you add it back.'
+      )
+    }
+  } else if (saved.env.length > 0) {
+    return t(
+      'mcpServers.removeMessageVariables',
+      'New sessions won’t have it. Its saved environment variables are deleted, so you’ll need to enter them again if you add it back.'
+    )
+  }
+  return t('mcpServers.removeMessage', 'New sessions won’t have it. You can add it again any time.')
+}
 
 /** "All agents" or "6 of 9", over the host's installed agents; null until they're read. */
 export function mcpAgentsValue(
