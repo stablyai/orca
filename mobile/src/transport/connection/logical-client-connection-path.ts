@@ -93,16 +93,11 @@ export class LogicalClientConnectionPath {
     apply()
     // A steady refused or host-offline verdict outranks path and attempt, so retries under it must not
     // refresh every listener (Home re-projects all hosts) when nothing visible changed.
-    const verdictHeld =
-      this.holdsSteadyVerdict() &&
-      previousReachability === this.relayHostReachability &&
-      previousRejected === this.pairingRejected
     if (
-      verdictHeld ||
-      (previousPath === this.pending() &&
-        previousAttempt === this.reconnectAttempt(0) &&
-        previousRejected === this.pairingRejected &&
-        previousReachability === this.relayHostReachability)
+      previousRejected === this.pairingRejected &&
+      previousReachability === this.relayHostReachability &&
+      (this.holdsSteadyVerdict() ||
+        (previousPath === this.pending() && previousAttempt === this.reconnectAttempt(0)))
     ) {
       return
     }

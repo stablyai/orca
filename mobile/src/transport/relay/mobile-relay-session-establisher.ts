@@ -7,13 +7,8 @@ import {
 import { RelayHostOfflineStreak } from './relay-host-offline-streak'
 import { RelayDirectorHttpError, RelayResolveTimeoutBudget } from './mobile-relay-resume-director'
 import { encodeBase64Url } from '../encryption/mobile-session-id-encoding'
-import {
-  pendingRelayCredentialLease,
-  persistResumeConfirmation
-} from './mobile-relay-credential-rotation'
-import { isExplicitCredentialRejection } from './relay-credential-eligibility'
-import { RelayOuterError } from '../encryption/mobile-relay-e2ee-link'
-import { MOBILE_RELAY_CLOSE_CODE } from '../../../../src/shared/remote-runtime/relay/mobile-relay-close-codes'
+import { persistResumeConfirmation } from './mobile-relay-credential-rotation'
+import { isExplicitCredentialRejection, isRelayHostOffline } from './relay-credential-eligibility'
 import type { MobileRelayCredentialBundle } from '../../host-credentials/mobile-relay-credential-bundle'
 import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import type { StableLogicalRpcClient } from '../connection/stable-logical-rpc-client'
@@ -25,10 +20,6 @@ const PENDING_DIAL_BUDGET = 3
 // is never stranded without a resume or network change.
 const PENDING_PAUSE_MIN_MS = 5 * 60_000
 const PENDING_PAUSE_MAX_MS = 60 * 60_000
-
-function isHostOffline(error: Error): boolean {
-  return error instanceof RelayOuterError && error.code === MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE
-}
 
 function isDirectorRefusal(error: Error | null): boolean {
   return error instanceof RelayDirectorHttpError && error.status === 401
@@ -47,7 +38,7 @@ export class MobileRelaySessionEstablisher {
   private readonly resolveTimeout = new RelayResolveTimeoutBudget()
   // The director admits one resolve per host per window, so tokens it answered dial least recently
   // tried first; otherwise current takes every admission and the next token always gets a 503.
-  private directorTried = new Map<string, number>()
+  private readonly directorTried = new Map<string, number>()
   private directorTrySeq = 0
   // Pending is speculative: it gets a few failed dials, then pauses until a resume or network change
   // refills the budget, so failures behind an unchanged state cost a bounded number of dials.
@@ -112,17 +103,13 @@ export class MobileRelaySessionEstablisher {
   > {
     let lastError: Error | null = null
     let usedPending = false
-    const bundle = this.args.bundle()
-    const pending = bundle ? pendingRelayCredentialLease(bundle) : null
+    const pendingToken = this.args.bundle()?.pending?.token
     // Keep only this bundle's tokens, so retention stays at three.
-    const kept = new Map<string, number>()
-    for (const credential of credentials) {
-      const seq = this.directorTried.get(credential.token)
-      if (seq !== undefined) {
-        kept.set(credential.token, seq)
+    for (const token of this.directorTried.keys()) {
+      if (!credentials.some((credential) => credential.token === token)) {
+        this.directorTried.delete(token)
       }
     }
-    this.directorTried = kept
     const lastTried = (token: string) => this.directorTried.get(token) ?? -1
     if (this.pendingFailures >= PENDING_DIAL_BUDGET && this.args.now() >= this.pendingPausedUntil) {
       // The window lapsed: one more try, and a failure pauses for twice as long.
@@ -130,7 +117,7 @@ export class MobileRelaySessionEstablisher {
     }
     const pendingPaused = this.pendingFailures >= PENDING_DIAL_BUDGET
     const ordered = credentials
-      .filter((credential) => !(pendingPaused && credential.token === pending?.token))
+      .filter((credential) => !(pendingPaused && credential.token === pendingToken))
       .sort((a, b) => lastTried(a.token) - lastTried(b.token))
     if (ordered.length === 0) {
       // Only a paused pending is left: wait, undialed, for the next resume or network change.
@@ -138,7 +125,7 @@ export class MobileRelaySessionEstablisher {
     }
     this.resolvedThisAttempt = false
     for (const credential of ordered) {
-      usedPending = credential.token === pending?.token
+      usedPending = credential.token === pendingToken
       // The director admits one resolve per host per window, so after any lookup the rest only dial the cell.
       const result = await this.dial(credential, !this.resolvedThisAttempt)
       if (result.ok) {
@@ -157,10 +144,8 @@ export class MobileRelaySessionEstablisher {
       }
       // A 4404 comes after the cell accepted the credential, so it proves pending rather than spends it.
       if (usedPending) {
-        this.pendingProven = isHostOffline(result.error)
-      }
-      if (usedPending && !this.pendingProven) {
-        if (++this.pendingFailures === PENDING_DIAL_BUDGET) {
+        this.pendingProven = isRelayHostOffline(result.error)
+        if (!this.pendingProven && ++this.pendingFailures === PENDING_DIAL_BUDGET) {
           this.pendingPausedUntil = this.args.now() + this.pendingPauseMs
           this.pendingPauseMs = Math.min(this.pendingPauseMs * 2, PENDING_PAUSE_MAX_MS)
         }

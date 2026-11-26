@@ -65,11 +65,10 @@ export class MobileEndpointNudgeRouter {
       const sinceLift = args.now() - this.lastGateLiftAt
       if (sinceLift >= GATED_NETWORK_NUDGE_WINDOW_MS) {
         liftGate()
-        void this.routeNetworkChange(args.onExternalSignal)
+        void this.routeNetworkChange()
         return
       }
       void this.routeNetworkChange(() => {
-        args.onExternalSignal()
         // The read can settle after the app backgrounds; background keeps its slow cadence.
         if (args.isForeground()) {
           liftGate()
@@ -94,7 +93,7 @@ export class MobileEndpointNudgeRouter {
     }
     // The phone usually joins home Wi-Fi in a pocket, so a resume can be the first sight of the new network.
     if (reason !== 'focus') {
-      void this.routeNetworkChange(args.onExternalSignal)
+      void this.routeNetworkChange()
     }
   }
 
@@ -127,6 +126,7 @@ export class MobileEndpointNudgeRouter {
       return
     }
     this.lastLocalNetwork = network
+    this.args.onExternalSignal()
     onMoved?.()
     if (network === null) {
       this.args.scheduleDirectProbe()

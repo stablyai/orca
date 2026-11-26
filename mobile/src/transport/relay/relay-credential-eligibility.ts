@@ -11,6 +11,11 @@ export function isExplicitCredentialRejection(error: unknown): boolean {
   )
 }
 
+// A 4404 comes after the cell accepted the credential: the desktop is offline, the token is fine.
+export function isRelayHostOffline(error: unknown): boolean {
+  return error instanceof RelayOuterError && error.code === MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE
+}
+
 type RelayCredentialLease = { expiresAt: number; version: number }
 
 export class RelayCredentialEligibility {

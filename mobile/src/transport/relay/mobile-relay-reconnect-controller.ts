@@ -1,11 +1,10 @@
-import { MOBILE_RELAY_CLOSE_CODE } from '../../../../src/shared/remote-runtime/relay/mobile-relay-close-codes'
 import type { MobileRelayRpcSession } from './mobile-relay-rpc-session-contract'
 import { MobileE2EEAuthenticationError } from '../encryption/mobile-e2ee-v2-physical-channel'
-import { RelayOuterError } from '../encryption/mobile-relay-e2ee-link'
 import { RELAY_STABLE_CONNECTION_MS, RelayRetryDelays } from './mobile-relay-retry-delays'
 import { relayDirectorRetryAfterMs } from './mobile-relay-resume-director'
 import {
   isExplicitCredentialRejection,
+  isRelayHostOffline,
   RelayCredentialEligibility
 } from './relay-credential-eligibility'
 import type { RelayHostReachability } from './relay-host-reachability'
@@ -241,8 +240,7 @@ export class RelayReconnectController {
     if (!this.activeSession) {
       this.evidence.record(error)
     }
-    const hostOffline =
-      error instanceof RelayOuterError && error.code === MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE
+    const hostOffline = isRelayHostOffline(error)
     const credentialRejected = isExplicitCredentialRejection(error)
     if (
       (this.recoveryGate === 'fresh-credential' && !hostOffline) ||
