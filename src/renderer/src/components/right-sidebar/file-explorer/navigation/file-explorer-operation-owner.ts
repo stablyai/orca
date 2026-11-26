@@ -27,6 +27,10 @@ import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtim
 import type { FileExplorerOperationOwner } from '../tree/file-explorer-types'
 import type { WorktreeOperationRoute } from '@/lib/workspace/ownership/worktree-operation-route'
 import { captureWorktreeOperationGenerationGuard } from '@/lib/workspace/ownership/worktree-operation-generation'
+import {
+  sharedBotHomeOnHost,
+  useSharedBotHomeOnHost
+} from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 
 const ownerUnresolved = (): Error => new Error(getFileExplorerOwnerUnresolvedMessage())
 
@@ -60,10 +64,24 @@ export function getFileExplorerOperationOwnerFromState(
   state: FileExplorerOwnerState,
   worktreeId: string | null | undefined,
   /** Names a twin's host when `state` omits the selection that would. */
-  hostId?: ExecutionHostId
+  hostId?: ExecutionHostId,
+  /** Where a shared agent's home here reads its files; a hook passes the one it follows. */
+  shared: ReturnType<typeof sharedBotHomeOnHost> = sharedBotHomeOnHost(worktreeId)
 ): FileExplorerOperationOwner {
   if (!worktreeId) {
     return { kind: 'local' }
+  }
+  // This computer's home of an agent shared with it shows that agent's folder on its host, never the
+  // folder kept here; until the host has listed it, there is nothing to show.
+  if (shared) {
+    return shared.hostWorktreeId
+      ? {
+          kind: 'runtime',
+          environmentId: shared.environmentId,
+          executionHostId: toRuntimeExecutionHostId(shared.environmentId),
+          readOnly: true
+        }
+      : { kind: 'unresolved' }
   }
   const match = resolveOwner(state, { workspaceId: worktreeId, ...(hostId ? { hostId } : {}) })
   if (match.kind === 'ambiguous') {
@@ -94,9 +112,10 @@ export function useFileListOperationOwner(worktreeId: string | null): FileExplor
     }))
   )
   const hostId = useAppStore((s) => getSelectedFolderTwinHostId(s, worktreeId))
+  const sharedHome = useSharedBotHomeOnHost(worktreeId)
   return useMemo(
-    () => getFileExplorerOperationOwnerFromState(state, worktreeId, hostId),
-    [hostId, state, worktreeId]
+    () => getFileExplorerOperationOwnerFromState(state, worktreeId, hostId, sharedHome),
+    [hostId, state, worktreeId, sharedHome]
   )
 }
 

@@ -222,10 +222,13 @@ export const BOT_METHODS = [
   }),
   defineMethod({
     name: 'bots.activity',
-    ...notShared('workspace'),
+    permission: 'workspace',
+    share: SHARE_BY_BOT,
     params: BotActivityRead,
-    handler: async (params, { runtime }) => ({
-      activity: await readSharedBotActivity(runtime, params.botId)
+    handler: async (params, context) => ({
+      activity:
+        (await botShareScopedView(context)?.['bots.activity']()) ??
+        (await readSharedBotActivity(context.runtime, params.botId))
     })
   }),
   defineMethod({

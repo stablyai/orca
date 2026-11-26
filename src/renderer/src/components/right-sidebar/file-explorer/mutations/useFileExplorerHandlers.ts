@@ -1,3 +1,4 @@
+import { fileExplorerOwnerReadOnly } from '../tree/file-explorer-types'
 import { useCallback } from 'react'
 import type React from 'react'
 import type { RefObject } from 'react'
@@ -24,6 +25,7 @@ type UseFileExplorerHandlersParams = {
       language: string
       mode: 'edit'
       runtimeEnvironmentId?: string | null
+      readOnly?: boolean
     },
     options?: {
       preview?: boolean
@@ -136,6 +138,7 @@ export async function activateFileExplorerNode(args: {
       relativePath: escapesWorktree ? node.path : fileExplorerNodeTabRelativePath(node),
       worktreeId: activeWorktreeId,
       runtimeEnvironmentId: fileRuntimeEnvironmentId ?? undefined,
+      ...(fileExplorerOwnerReadOnly(node.operationOwner) ? { readOnly: true } : {}),
       language: detectLanguage(node.name),
       mode: 'edit'
     },

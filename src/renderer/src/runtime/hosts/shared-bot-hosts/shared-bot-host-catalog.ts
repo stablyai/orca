@@ -12,6 +12,10 @@ import {
   type ExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
 import { setSharedBotHostLookup } from '../../../../../shared/bots/bot-home-host'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../../../shared/workspace/identity/workspace-scope'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 
 const NO_HOSTS: readonly SharedBotHostView[] = []
@@ -23,6 +27,9 @@ let sharing: boolean | null = null
 // Until main first answers, the list says nothing about which shares are gone.
 let hydrated = false
 const listeners = new Set<() => void>()
+// Each shared host's own id for the shared agent's home, as its listing names it (the catalog shows
+// this computer's home instead), so this computer's Files can read that folder there.
+const hostHomes = new Map<string, { botId: string; folderWorkspaceId: string }>()
 
 function setState(next: SharedBotHostsState): void {
   // A cloud that doesn't take shares has none to show, whatever was kept from before.
@@ -47,6 +54,8 @@ export function installSharedBotHostCatalog(): () => void {
     stopLookup()
     views = NO_HOSTS
     requests = NO_REQUESTS
+    hostHomes.clear()
+    lastRoutes.clear()
     sharing = null
     hydrated = false
     for (const listener of listeners) {
@@ -98,6 +107,69 @@ export function sharedBotHostOf(hostId: ExecutionHostId): SharedBotHostView | nu
 export function sharedBotHomeWorkspaceId(hostId: ExecutionHostId, botId: string): string | null {
   const host = sharedBotHostOf(hostId)
   return host?.botId === botId ? host.homeWorkspaceId : null
+}
+
+/** A host's own listing of its bots: a shared host's names the shared agent's home there. */
+export function noteSharedBotHostListing(
+  hostId: ExecutionHostId,
+  bots: readonly { id: string; folderWorkspaceId: string }[]
+): void {
+  const host = sharedBotHostOf(hostId)
+  const bot = host ? bots.find((entry) => entry.id === host.botId) : undefined
+  const known = host ? hostHomes.get(host.environmentId) : undefined
+  if (
+    !host ||
+    !bot ||
+    bot.folderWorkspaceId === host.homeWorkspaceId ||
+    (known?.botId === bot.id && known.folderWorkspaceId === bot.folderWorkspaceId)
+  ) {
+    return
+  }
+  hostHomes.set(host.environmentId, { botId: bot.id, folderWorkspaceId: bot.folderWorkspaceId })
+  for (const listener of listeners) {
+    listener()
+  }
+}
+
+type SharedBotHomeRoute = ReturnType<typeof sharedBotHomeOnHost>
+// The last answer per workspace, so a reader gets the same object while the answer is the same.
+const lastRoutes = new Map<string, { key: string; route: SharedBotHomeRoute }>()
+
+function stableSharedBotHomeOnHost(worktreeId: string | null | undefined): SharedBotHomeRoute {
+  const route = sharedBotHomeOnHost(worktreeId)
+  const key = JSON.stringify(route)
+  const last = lastRoutes.get(worktreeId ?? '')
+  if (last?.key === key) {
+    return last.route
+  }
+  lastRoutes.set(worktreeId ?? '', { key, route })
+  return route
+}
+
+/** `sharedBotHomeOnHost`, followed for its changes; the same object while its answer is the same. */
+export function useSharedBotHomeOnHost(worktreeId: string | null | undefined): SharedBotHomeRoute {
+  return useSyncExternalStore(subscribeSharedBotHosts, () => stableSharedBotHomeOnHost(worktreeId))
+}
+
+/** Where this computer's home of a shared agent reads its files: that agent's home folder on the
+ *  shared host, by the host's own workspace key (null until the host has listed the agent). Null for
+ *  every other workspace. */
+export function sharedBotHomeOnHost(
+  worktreeId: string | null | undefined
+): { environmentId: string; hostWorktreeId: string | null } | null {
+  const scope = worktreeId ? parseWorkspaceKey(worktreeId) : null
+  const host =
+    scope?.type === 'folder'
+      ? views.find((view) => view.homeWorkspaceId === scope.folderWorkspaceId)
+      : undefined
+  if (!host) {
+    return null
+  }
+  const home = hostHomes.get(host.environmentId)
+  return {
+    environmentId: host.environmentId,
+    hostWorktreeId: home?.botId === host.botId ? folderWorkspaceKey(home.folderWorkspaceId) : null
+  }
 }
 
 /** The one gate on every sharing entry: true only once this account's Orca Cloud answered its shares

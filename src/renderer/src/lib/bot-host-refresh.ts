@@ -1,3 +1,4 @@
+import { noteSharedBotHostListing } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 // Reads each bot host's list: one read out per host, a few paired servers at once, never a disconnected one.
 import type { Bot } from '../../../shared/bot-types'
 import type { BotListWaits } from '../../../shared/bots/bot-list-waits'
@@ -100,6 +101,8 @@ async function readBotHost(hostId: ExecutionHostId, state: HostRefresh): Promise
         timeoutMs: BOTS_LIST_TIMEOUT_MS
       })
     const result = await (hostId === LOCAL_EXECUTION_HOST_ID ? read() : withPairedReadSlot(read))
+    // A shared host names the agent's home by its own id, which this computer's Files reads by.
+    noteSharedBotHostListing(hostId, result.bots)
     // While an update is out the shown list is newer than any answer; the last one to land refreshes.
     // A read sent before the host went away answers for a host that may have changed: its re-read follows.
     if (

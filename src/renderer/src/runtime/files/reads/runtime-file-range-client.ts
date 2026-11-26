@@ -4,11 +4,11 @@ import { validateFileRangeRequest } from '../../../../../shared/file-content/fil
 import type { RuntimeFileReadArgs } from '../runtime-file-client-types'
 import {
   assertExternalSshReadOwnership,
+  runtimeFileWorktreeSelector,
   workspaceOrScratchFileAddress
 } from '../runtime-file-routing'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
-import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import { decodeBase64Bytes } from '@/lib/base64-bytes'
 import {
   remoteFileRequest,
@@ -33,7 +33,7 @@ export function rangeReadTarget(args: RuntimeFileReadArgs): RuntimeRemoteFileAdd
   if (!args.worktreeId) {
     throw new Error('Remote file has no owning runtime worktree')
   }
-  const worktree = toRuntimeWorktreeSelector(args.worktreeId)
+  const worktree = runtimeFileWorktreeSelector(target, args.worktreeId)
   // Why: a caller that pinned its pairing keeps every later call on that host.
   const pairing =
     args.expectedEnvironmentPairingRevision === undefined
@@ -48,7 +48,12 @@ export function rangeReadTarget(args: RuntimeFileReadArgs): RuntimeRemoteFileAdd
       ...pairing
     }
   }
-  const address = workspaceOrScratchFileAddress(args.worktreeId, args.relativePath, args.filePath)
+  const address = workspaceOrScratchFileAddress(
+    target,
+    args.worktreeId,
+    args.relativePath,
+    args.filePath
+  )
   if (!address) {
     throw new Error('Remote file is outside the owning runtime worktree')
   }
