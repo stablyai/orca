@@ -180,7 +180,7 @@ async function rewriteLaunchExecutable(
               nameFor(candidate, launch?.executable) || nameFor(candidate, recorded?.executable)
           )))
     : oldAgent
-  if (generated && !agent) {
+  if (generated && (!agent || (!launch && !hermesArgv))) {
     return { command: undefined, launchConfig: config, blocked: 'unknown' }
   }
   let executable = launch?.executable

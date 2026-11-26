@@ -1,10 +1,11 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { withOmpDraftCleanup } from '../../shared/agent-launch/startup/omp-draft-launch'
 import { withFreshOmpLaunch } from '../../shared/agent-launch/startup/omp-fresh-launch'
 import { buildAgentStartupPlan } from '../../shared/agent-launch/startup/tui-agent-startup'
+import { tokenizeStartupCommand } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { detectInstalledAgentInventory } from '../preflight/installed-agent-detection'
 import { selectTerminalAgentProgram } from '../preflight/agent-command-detection'
 import { alignManagedAgentLaunchAtSpawn } from './managed-agent-spawn-program'
@@ -68,8 +69,13 @@ it.each([
     expect(result.launchConfig?.selectedExecutable).toBe(executable)
     const command = result.command ?? ''
     if (shell === 'posix') {
-      expect(command).toMatch(/^sh -c /)
-      const bytes = Array.from(command.matchAll(/\\0([0-7]{3})/g), ([, octal]) =>
+      const wrapper = tokenizeStartupCommand(command, shell)
+      if (!wrapper.ok) {
+        throw new Error(wrapper.error)
+      }
+      const [program, mode, script = ''] = wrapper.tokens
+      expect([program, mode]).toEqual(['sh', '-c'])
+      const bytes = Array.from(script.matchAll(/\\0([0-7]{3})/g), ([, octal]) =>
         Number.parseInt(octal, 8)
       )
       expect(Buffer.from(bytes).toString('utf8')).toBe(
@@ -83,6 +89,38 @@ it.each([
       expect(Buffer.from(encoded ?? '', 'base64').toString('utf16le')).toMatch(
         /& 'C:\\Hermes User\\hermes\.exe' 'chat' "--query=\$orcaHermesNativeQuery" '--verbose' '--tui'$/
       )
+    }
+  }
+)
+
+it.runIf(process.platform === 'win32')(
+  'uses the configured cmd PATH install when the launch folder contains a shim',
+  async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orca codex path '))
+    const configured = join(dir, 'configured bin')
+    const executable = join(configured, 'codex.exe')
+    try {
+      await mkdir(configured)
+      await writeFile(executable, '')
+      await writeFile(join(dir, 'codex.cmd'), '')
+      const result = await alignManagedAgentLaunchAtSpawn(
+        {
+          launchCommand: 'codex resume abc',
+          launchAgent: 'codex',
+          cwd: dir,
+          launchConfig: {
+            agentCommand: 'codex',
+            agentArgs: '',
+            agentEnv: { PATH: configured, PATHEXT: '.exe;.cmd' },
+            commandProvenance: 'generated'
+          }
+        },
+        'cmd'
+      )
+      expect(result.command).toBe(`"${executable}" resume abc`)
+      expect(result.launchConfig?.selectedExecutable).toBe(executable)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
     }
   }
 )

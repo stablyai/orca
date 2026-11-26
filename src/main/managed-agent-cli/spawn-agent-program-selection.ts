@@ -73,42 +73,50 @@ export async function selectSpawnAgentProgram(
         )
   const agentEnv = spawn.launchConfig?.agentEnv
   const configuredEnv = agentEnv && hasConfiguredAgentPath(agentEnv) ? agentEnv : undefined
+  const effective = (key: string) =>
+    readPathEnv(spawn.env, key) ?? readPathEnv(configuredEnv, key) ?? readPathEnv(process.env, key)
+  let selection: TerminalAgentProgramSelection | undefined
   if (configuredEnv) {
     for (const program of programs) {
       const path = await resolveAgentOnConfiguredPath(
         program,
-        configuredEnv,
-        spawn.env,
-        shell,
+        effective('PATH'),
+        effective('PATHEXT'),
         readCwd,
         signal
       )
       if (path) {
-        return { program, result: { kind: 'full-path', path } }
+        selection = { program, result: { kind: 'by-name', path } }
+        break
       }
     }
   }
-  const selection = await selectTerminalAgentProgram(programs, shell, {
+  selection ??= await selectTerminalAgentProgram(programs, shell, {
     refresh: Boolean(pinned),
     revalidateUnavailable: true,
     signal
   })
   const { program, result: selected } = selection
   throwIfSignalAborted(signal)
-  if (selected.kind === 'by-name' && configuredEnv) {
-    return { program, result: { kind: 'full-path', path: selected.path } }
-  }
-  if (process.platform !== 'win32' || shell !== 'cmd' || selected.kind !== 'by-name') {
+  if (selected.kind !== 'by-name') {
     return selection
   }
-  const cwd = await readCwd()
-  throwIfSignalAborted(signal)
-  const pathExt = readPathEnv(spawn.env, 'PATHEXT') ?? process.env.PATHEXT
-  const first = await resolveCmdLaunchFolderProgram(program, cwd, pathExt, signal)
-  return first &&
-    normalizeRuntimePathForComparison(first) !== normalizeRuntimePathForComparison(selected.path)
-    ? { program, result: { kind: 'full-path', path: selected.path } }
-    : selection
+  if (process.platform === 'win32' && shell === 'cmd') {
+    const first = await resolveCmdLaunchFolderProgram(
+      program,
+      await readCwd(),
+      effective('PATHEXT'),
+      signal
+    )
+    if (
+      first &&
+      normalizeRuntimePathForComparison(first) !== normalizeRuntimePathForComparison(selected.path)
+    ) {
+      return { program, result: { kind: 'full-path', path: selected.path } }
+    }
+  }
+  // Pin the selection when the agent's PATH differs from the host inventory's.
+  return configuredEnv ? { program, result: { kind: 'full-path', path: selected.path } } : selection
 }
 
 function readPathEnv(env: NodeJS.ProcessEnv | undefined, key: string): string | undefined {
@@ -128,25 +136,20 @@ function hasConfiguredAgentPath(env: NodeJS.ProcessEnv): boolean {
 
 async function resolveAgentOnConfiguredPath(
   program: string,
-  configuredEnv: NodeJS.ProcessEnv,
-  env: NodeJS.ProcessEnv | undefined,
-  shell: AgentStartupShell,
+  pathEnv: string | undefined,
+  pathExt: string | undefined,
   readCwd: () => Promise<string>,
   signal: AbortSignal
 ): Promise<string | null> {
   const windows = process.platform === 'win32'
-  const effective = (key: string) =>
-    readPathEnv(env, key) ?? readPathEnv(configuredEnv, key) ?? readPathEnv(process.env, key)
-  const entries = (effective('PATH') ?? '').split(delimiter).filter(Boolean)
-  const dirs = windows ? entries.map(stripWindowsPathQuotes) : entries
-  const cwd = shell === 'cmd' || dirs.some((dir) => !isAbsolute(dir)) ? await readCwd() : ''
-  const pathExt = windows ? effective('PATHEXT') : undefined
+  const entries = pathEnv?.split(delimiter) ?? []
+  const dirs = windows ? entries.filter(Boolean).map(stripWindowsPathQuotes) : entries
+  const cwd = dirs.some((dir) => !isAbsolute(dir)) ? await readCwd() : ''
   const path = dirs
     .map((dir) => resolve(cwd, dir))
     .filter((dir) => !isOrcaAgentRuntimePath(dir))
     .join(delimiter)
-  const searchCwd = shell === 'cmd' ? cwd : ''
-  const key = JSON.stringify([program, path, pathExt, searchCwd])
+  const key = JSON.stringify([program, path, pathExt, cwd])
   throwIfSignalAborted(signal)
   let pending = pendingLookups.get(key)
   if (!pending) {
@@ -158,7 +161,7 @@ async function resolveAgentOnConfiguredPath(
         }
         return resolveCommandOnLocalPath(program, {
           env: { PATH: path, PATHEXT: pathExt },
-          cwd: searchCwd,
+          pathOnly: true,
           signal: controller.signal,
           probeCandidate: async (candidate) => {
             try {

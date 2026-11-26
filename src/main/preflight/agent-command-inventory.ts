@@ -1,4 +1,3 @@
-import { resolveLoginShellEnvironment } from '../startup/shell-environment/login-shell-environment'
 import {
   probeWslCommandsOnPath,
   type WslPreflightTarget
@@ -8,13 +7,7 @@ import {
   invalidateWslGuestEnvironment
 } from '../wsl/execution/wsl-guest-environment'
 import { resolveWslDefaultDistro } from '../wsl/discovery/wsl-default-distro'
-import { detectCommandsInInstallDirs } from '../../shared/agent-launch/installation/local-agent-install-dir-detection'
-import {
-  findCommandsOnLocalPath,
-  type AgentPathMatch
-} from '../ipc/command-path/command-path-batch'
-import { hasPathSeparatorToken } from '../../shared/agent-launch/installation/managed-agent-command-token'
-import { isOrcaAgentRuntimePath } from '../managed-agent-cli/managed-agent-cli-path'
+import type { AgentPathMatch } from '../ipc/command-path/command-path-batch'
 import {
   KNOWN_TUI_AGENT_DETECTION_COMMANDS,
   getTuiAgentDetectionProbeCommands
@@ -27,6 +20,7 @@ import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
 } from '../../shared/concurrency/abort-signal-reason'
+import { scanLocalAgentCommandInventory } from './local-agent-command-inventory'
 
 type CommandInventory = {
   found: Set<string>
@@ -36,7 +30,7 @@ type CommandInventory = {
   incomplete?: boolean
 }
 
-const WSL_INVENTORY_RETRY_MS = 5_000
+const INVENTORY_RETRY_MS = 5_000
 
 type InventoryMode = 'read' | 'detect' | 'revalidate' | 'refresh'
 type InventoryScan = {
@@ -46,6 +40,7 @@ type InventoryScan = {
   mode: InventoryMode
   targeted: boolean
   generation: number | undefined
+  revalidatesMiss?: boolean
 }
 type PendingInventory = {
   active: InventoryScan
@@ -62,6 +57,7 @@ export type InventorySlot = {
   pending?: PendingInventory
   published?: InventoryPublication
   retry?: { after: number; generation: number | undefined }
+  missRetry?: { after: number; generation: number | undefined }
 }
 const scanPriority: Record<InventoryMode, number> = {
   read: 0,
@@ -93,32 +89,6 @@ function stockCommands(platform: NodeJS.Platform, runtime: NodeJS.Platform | 'ws
 const localStockCommands = stockCommands(process.platform)
 const wslStockCommands = stockCommands('linux', 'wsl')
 
-async function scanLocalInventory(
-  probed: ReadonlySet<string>,
-  readLoginPath: boolean,
-  localEnv: NodeJS.ProcessEnv | undefined
-): Promise<CommandInventory> {
-  const env = localEnv ?? (readLoginPath ? await resolveLoginShellEnvironment() : process.env)
-  const pathEnv = env.PATH ?? Object.entries(env).find(([key]) => key.toLowerCase() === 'path')?.[1]
-  const matches = new Map<string, AgentPathMatch>()
-  const found = await findCommandsOnLocalPath([...probed], {
-    env,
-    inventory: { isRuntimePath: isOrcaAgentRuntimePath, matches }
-  })
-  const installs = await detectCommandsInInstallDirs(
-    [...probed].filter((cmd) => !found.has(cmd) && !hasPathSeparatorToken(cmd)),
-    pathEnv,
-    { skipPathSearch: true }
-  )
-  for (const [command, user] of installs) {
-    if (!isOrcaAgentRuntimePath(user)) {
-      matches.set(command, { ...matches.get(command), user })
-      found.add(command)
-    }
-  }
-  return { matches, found, probed }
-}
-
 function inventoryGeneration(slot: InventorySlot): number | undefined {
   return slot.distro ? getWslGuestEnvironmentGeneration(slot.distro) : undefined
 }
@@ -147,7 +117,7 @@ async function scanInventory(
     )
   }
   const readLoginPath = !scan.targeted && (scan.mode === 'read' || scan.mode === 'revalidate')
-  return scanLocalInventory(scan.commands, readLoginPath, slot.localEnv?.())
+  return scanLocalAgentCommandInventory(scan.commands, readLoginPath, slot.localEnv?.())
 }
 
 function publishInventory(
@@ -218,8 +188,11 @@ async function runInventoryScans(slot: InventorySlot, pending: PendingInventory)
     if (scan.generation !== inventoryGeneration(slot)) {
       continue
     }
+    if (scan.revalidatesMiss) {
+      slot.missRetry = { after: Date.now() + INVENTORY_RETRY_MS, generation: scan.generation }
+    }
     if (slot.distro && (!result || result.incomplete)) {
-      slot.retry = { after: Date.now() + WSL_INVENTORY_RETRY_MS, generation: scan.generation }
+      slot.retry = { after: Date.now() + INVENTORY_RETRY_MS, generation: scan.generation }
     } else {
       delete slot.retry
     }
@@ -258,16 +231,15 @@ export function readInventory(
   const current = currentInventoryPublication(slot)?.inventory
   const hasMatch =
     current && requested.some((cmd) => current.probed.has(cmd) && current.found.has(cmd))
-  // A launch bypasses a published miss and joins the normal shared scan.
-  if (
+  const settled =
     mode === 'read' &&
     current &&
-    (!revalidateUnavailable || hasMatch) &&
     ((acceptAnyMatch && hasMatch) ||
       requested.every(
         (cmd) => current.probed.has(cmd) && (!current.incomplete || current.found.has(cmd))
       ))
-  ) {
+  const revalidateMiss = settled && revalidateUnavailable && !hasMatch
+  if (settled && !revalidateMiss) {
     return Promise.resolve(current)
   }
 
@@ -290,6 +262,15 @@ export function readInventory(
     }
     return active.result.promise
   }
+  const missRetry = slot.missRetry
+  if (
+    revalidateMiss &&
+    missRetry &&
+    missRetry.generation === generation &&
+    Date.now() < missRetry.after
+  ) {
+    return Promise.resolve(current ?? null)
+  }
   const retry = slot.retry
   if (mode !== 'refresh' && retry && retry.generation === generation && Date.now() < retry.after) {
     return Promise.resolve(current ?? null)
@@ -297,6 +278,9 @@ export function readInventory(
 
   const batch: PendingInventory = {
     active: createScan(commands, mode, targeted, generation)
+  }
+  if (revalidateMiss) {
+    batch.active.revalidatesMiss = true
   }
   slot.pending = batch
   void Promise.resolve().then(() => runInventoryScans(slot, batch))

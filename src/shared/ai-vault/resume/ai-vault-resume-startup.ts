@@ -7,6 +7,7 @@ import {
   buildAiVaultResumeShellCommand,
   realHomeCodexResumeEnvDeletion
 } from './ai-vault-resume-command'
+import { withPinnedCmdCodexHome } from './ai-vault-resume-home-env'
 import {
   isResumableTuiAgent,
   type AgentProviderSessionMetadata,
@@ -144,6 +145,11 @@ export function buildAiVaultLocalResumeStartup(
 ): AiVaultResumeStartup {
   const { session, settings, embedCwd, clearEnvNames } = args
   const { platform, codexHome, liveShell } = args.host
+  // A spawned cmd pane gets the home before startup, so its resume head can be aligned.
+  const pinnedCmdHome =
+    !embedCwd && session.agent === 'codex' && platform === 'win32' && liveShell === 'cmd'
+      ? codexHome?.trim()
+      : undefined
   const resumeFilePath = normalizeAiVaultResumeFilePath(session.filePath, platform)
   // Why: Pi resumes by transcript path, spelled for the shell it runs in (#24408).
   const localProviderSession = getAiVaultAgentProviderSession({
@@ -151,6 +157,13 @@ export function buildAiVaultLocalResumeStartup(
     filePath: resumeFilePath
   })
   const cwd = embedCwd ? session.cwd : null
+  const shellOptions = {
+    cwd,
+    platform,
+    codexHome: pinnedCmdHome ? undefined : codexHome,
+    shell: liveShell,
+    clearEnvNames
+  }
   const startupCwd = !embedCwd && session.cwd ? { cwd: session.cwd } : {}
   if (isAntigravityReferenceSession(session)) {
     const reference = buildAntigravityReferenceStartup({
@@ -190,6 +203,7 @@ export function buildAiVaultLocalResumeStartup(
       ...(session.agent === 'omp' && resumeFilePath ? { ompResumeFilePath: resumeFilePath } : {})
     })
     if (startupPlan) {
+      const env = withPinnedCmdCodexHome(startupPlan.env, pinnedCmdHome)
       return {
         command:
           session.agent === 'omp'
@@ -197,27 +211,19 @@ export function buildAiVaultLocalResumeStartup(
                 agent: session.agent,
                 sessionId: session.sessionId,
                 resumeFilePath,
-                cwd,
-                platform,
                 commandOverride: ompResumeProgram(
                   startupPlan.launchConfig.agentCommand,
                   args,
                   platform,
                   liveShell
                 ),
-                codexHome,
-                shell: liveShell,
-                clearEnvNames
+                ...shellOptions
               })
             : buildAiVaultResumeShellCommand({
                 resumeCommand: startupPlan.launchCommand,
-                cwd,
-                platform,
-                codexHome,
-                shell: liveShell,
-                clearEnvNames
+                ...shellOptions
               }),
-        ...(startupPlan.env ? { env: startupPlan.env } : {}),
+        ...(env ? { env } : {}),
         ...realHomeCodexResumeEnvDeletion(session),
         ...startupCwd,
         launchConfig: startupPlan.launchConfig,
@@ -232,14 +238,11 @@ export function buildAiVaultLocalResumeStartup(
       sessionId: session.sessionId,
       // Forward OMP transcript paths during local rebuilds so custom/WSL stores cannot fall back to default-store ID lookup.
       resumeFilePath,
-      cwd,
-      platform,
       commandOverride: args.commandOverride,
-      codexHome,
       // Fallbacks also handle non-resumable agents; quote for the live Windows shell like startup plans.
-      shell: liveShell,
-      clearEnvNames
+      ...shellOptions
     }),
+    ...(pinnedCmdHome ? { env: withPinnedCmdCodexHome(undefined, pinnedCmdHome) } : {}),
     ...startupCwd,
     ...realHomeCodexResumeEnvDeletion(session)
   }
@@ -278,15 +281,20 @@ export function buildAiVaultForkStartup(
   if (!plan) {
     return null
   }
+  const pinnedCmdHome =
+    session.agent === 'codex' && platform === 'win32' && liveShell === 'cmd'
+      ? codexHome?.trim()
+      : undefined
+  const env = withPinnedCmdCodexHome(plan.env, pinnedCmdHome)
   return {
     command: buildAiVaultResumeShellCommand({
       resumeCommand: plan.launchCommand,
       cwd: null,
       platform,
-      codexHome,
+      codexHome: pinnedCmdHome ? undefined : codexHome,
       shell: liveShell
     }),
-    ...(plan.env ? { env: plan.env } : {}),
+    ...(env ? { env } : {}),
     ...realHomeCodexResumeEnvDeletion(session),
     ...(session.cwd ? { cwd: session.cwd } : {}),
     launchConfig: plan.launchConfig

@@ -1,4 +1,5 @@
 import { win32 as pathWin32 } from 'node:path'
+import { applyPinnedCmdCodexHome } from '../../../shared/ai-vault/resume/ai-vault-resume-home-env'
 import { shouldUseShellReadyStartupDelivery } from '../../../shared/agent-launch/startup/codex-startup-delivery'
 import { expandWindowsPathEnvironmentVariables } from '../../../shared/shell/launch/windows-environment-expansion'
 import { dropInheritedOrcaFishHistory } from '../../pty/history/fish-history-session'
@@ -49,6 +50,13 @@ export function finalizeLocalPtySpawnEnvironment(args: {
   }
   const requestedEnv = spawn.env
   expandWindowsPathEnvironmentVariables(env)
+  applyPinnedCmdCodexHome(
+    env,
+    requestedEnv,
+    process.platform === 'win32' &&
+      pathWin32.basename(plan.shellPath).toLowerCase() === 'cmd.exe' &&
+      Boolean(spawn.command)
+  )
   promoteAgentTeamsShimPath(
     env,
     requestedEnv ? requestedEnv[resolvePathEnvKey(requestedEnv, process.platform)] : undefined
