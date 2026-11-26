@@ -1,3 +1,8 @@
+import {
+  REMOTE_RUNTIME_MAX_INBOUND_FRAME_BYTES,
+  REMOTE_RUNTIME_MAX_SEALING_OVERHEAD_BYTES,
+  REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES
+} from '../remote-runtime-memory-limits'
 /**
  * Binary channels: several binary streams on one connection, each as if on its own socket.
  *
@@ -17,6 +22,17 @@ export const RUNTIME_BINARY_CHANNEL_REQUEST_FIELD = 'binaryChannel' as const
 const BINARY_CHANNEL_KIND = 0x6d
 const BINARY_CHANNEL_VERSION = 1
 export const BINARY_CHANNEL_HEADER_BYTES = 8
+
+// A channel frame must fit its receiver's maxPayload once sealed, or the receiver closes the whole
+// connection (1009) and every stream on it; too big a frame fails only its own send instead.
+export const MAX_CLIENT_CHANNEL_PAYLOAD_BYTES =
+  REMOTE_RUNTIME_MAX_INBOUND_FRAME_BYTES -
+  REMOTE_RUNTIME_MAX_SEALING_OVERHEAD_BYTES -
+  BINARY_CHANNEL_HEADER_BYTES
+export const MAX_HOST_CHANNEL_PAYLOAD_BYTES =
+  REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES -
+  REMOTE_RUNTIME_MAX_SEALING_OVERHEAD_BYTES -
+  BINARY_CHANNEL_HEADER_BYTES
 /** Channels open on one connection at once; a client releasing its channels never comes near it. */
 export const MAX_OPEN_BINARY_CHANNELS = 256
 

@@ -1,4 +1,3 @@
-import WebSocket from 'ws'
 import type { RuntimeRpcResponse } from '../rpc/runtime-rpc-envelope'
 import { remoteRuntimeUnavailableError } from '../requests/remote-runtime-request-frames'
 import { SharedControlAppHeartbeat } from './remote-runtime-shared-control-app-heartbeat'
@@ -16,13 +15,13 @@ const SHARED_CONTROL_READY_DEADLINE_MS = 30_000
 export function scheduleSharedControlStableReset(args: {
   delayMs: number
   getState: () => SharedControlConnectionState
-  getSocket: () => WebSocket | null
+  isOpen: () => boolean
   reset: () => void
   clearCurrent: () => void
 }): ReturnType<typeof setTimeout> {
   // Reset only after stable readiness so authenticate/close loops retain their accumulated backoff.
   const timer = setTimeout(() => {
-    if (args.getState() === 'ready' && args.getSocket()?.readyState === WebSocket.OPEN) {
+    if (args.getState() === 'ready' && args.isOpen()) {
       args.reset()
     }
     args.clearCurrent()
@@ -50,7 +49,7 @@ export class SharedControlReadinessTimer {
     >,
     private readonly args: {
       getState: () => SharedControlConnectionState
-      getSocket: () => WebSocket | null
+      isOpen: () => boolean
       resetAttempt: () => void
       retire: SharedControlSocketClosed
       probe?: (timeoutMs: number) => Promise<RuntimeRpcResponse<unknown>>
@@ -119,7 +118,7 @@ export class SharedControlReadinessTimer {
     this.timer = scheduleSharedControlStableReset({
       delayMs: this.options.reconnectStableResetMs ?? 30_000,
       getState: this.args.getState,
-      getSocket: this.args.getSocket,
+      isOpen: this.args.isOpen,
       // Why: a runtime that readies but never answers must keep its accumulated reconnect backoff.
       reset: () => {
         if (this.unresponsiveSince === null) {

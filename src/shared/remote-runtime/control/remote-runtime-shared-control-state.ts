@@ -132,7 +132,11 @@ export function handleSharedControlSubscriptionResponse(
     }
   }
   subscription.callbacks.onResponse(delivered)
-  if (response.ok && isEndResult(response.result)) {
+  // A channel stream's error ended it on the host, which released its channel.
+  if (
+    (response.ok && isEndResult(response.result)) ||
+    (!response.ok && subscription.binaryChannel !== undefined)
+  ) {
     finishSharedControlSubscription(subscriptions, subscription, false)
   }
 }
@@ -141,8 +145,7 @@ export function closeSharedControlSocketState(args: {
   readyWaiters: SharedControlReadyWaiter[]
   pendingRequests: Map<string, SharedControlPendingRequest<unknown>>
   subscriptions: Map<string, SharedControlLogicalSubscription<unknown>>
-  socketCleanup: (() => void) | null
-  ws: { close: () => void } | null
+  channel: { close: () => void } | null
   error?: Error
   preserveReadyWaitersAndPendingRequests?: boolean
 }): void {
@@ -155,8 +158,7 @@ export function closeSharedControlSocketState(args: {
   }
   markSharedControlSubscriptionsUnsent(args.subscriptions)
   try {
-    args.socketCleanup?.()
-    args.ws?.close()
+    args.channel?.close()
   } catch {
     // Best-effort cleanup of remote runtime control socket.
   }

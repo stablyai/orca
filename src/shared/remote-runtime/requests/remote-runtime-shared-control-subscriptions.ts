@@ -105,7 +105,9 @@ export function replaySharedControlSubscriptions(args: {
   tagReplayedResponses?: boolean
 }): void {
   for (const subscription of args.subscriptions.values()) {
-    if (subscription.closeAfterReady) {
+    // A channel stream never replays: one that ended with a socket is gone, and a new one is sent
+    // by its own start, after its abort check.
+    if (subscription.closeAfterReady || subscription.binaryChannel !== undefined) {
       continue
     }
     subscription.sent = false

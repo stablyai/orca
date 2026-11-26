@@ -9,7 +9,7 @@ export const REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES = 4 * 1024 * 1024
 // Why: a host refuses a larger client frame by closing the socket (1009), failing every call on it.
 export const REMOTE_RUNTIME_MAX_INBOUND_FRAME_BYTES = 1024 * 1024
 // Why: a sealed frame is base64 of nonce, MAC and (v2) a 42-byte header around the request JSON.
-const REMOTE_RUNTIME_MAX_SEALING_OVERHEAD_BYTES = 128
+export const REMOTE_RUNTIME_MAX_SEALING_OVERHEAD_BYTES = 128
 /** The largest request JSON that still fits a host's inbound frame once sealed. */
 export const REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES =
   Math.floor(REMOTE_RUNTIME_MAX_INBOUND_FRAME_BYTES / 4) * 3 -
@@ -83,11 +83,14 @@ export function serializeRemoteRuntimeRpcRequest(args: {
   maxBytes?: number
   /** Background traffic (a poll): a host whose control socket is passive doesn't count it as use. */
   idlePassive?: boolean
+  /** Runs the call on a stream's binary channel (runtime-binary-channel.ts). */
+  binaryChannel?: number
 }): string {
   return serializeRemoteRuntimePayload(
     {
       id: args.requestId,
       ...(args.idlePassive ? { idlePassive: true } : {}),
+      ...(args.binaryChannel === undefined ? {} : { binaryChannel: args.binaryChannel }),
       deviceToken: args.deviceToken,
       method: args.method,
       params: args.params,

@@ -1,5 +1,6 @@
 // One authenticated device's call, once its message is parsed and routed: shared by full pairings and
 // teammates' share devices, which get only what `dispatchForDevice` gives every device.
+import { parseRuntimeClientCapabilities } from '../callers/runtime-client-capabilities'
 import { randomUUID } from 'node:crypto'
 import type { WebSocket } from 'ws'
 import type {
@@ -213,8 +214,10 @@ export class RuntimeRpcDeviceDispatch extends RuntimeRpcMobileDevices {
         // Diet only mobile payloads; retain full web/desktop replies.
         clientKind: device.scope,
         callerScope,
-        clientCapabilities: authenticatedSocket?.clientCapabilities,
-        capabilitySource: authenticatedSocket?.capabilitySource,
+        // A stream on a channel reads by what its own socket would have declared.
+        clientCapabilities:
+          channel?.capabilities.current ?? authenticatedSocket?.clientCapabilities,
+        capabilitySource: channel?.capabilities ?? authenticatedSocket?.capabilitySource,
         pairing: pairingContext,
         ...paired,
         signal,
@@ -250,7 +253,16 @@ export class RuntimeRpcDeviceDispatch extends RuntimeRpcMobileDevices {
     if (!isBinaryChannelNumber(request.binaryChannel)) {
       return { error: 'Binary channel must be an integer from 1 to 2^32-1.' }
     }
-    return this.binaryChannels.open(socketConnectionId, request.binaryChannel, sendBinary)
+    // Its own socket declared the stream's capabilities; without them it reads by this socket's.
+    const capabilities = Array.isArray(request.binaryChannelCapabilities)
+      ? parseRuntimeClientCapabilities(request.binaryChannelCapabilities)
+      : authenticatedSocket.clientCapabilities
+    return this.binaryChannels.open(
+      socketConnectionId,
+      request.binaryChannel,
+      sendBinary,
+      capabilities
+    )
   }
 
   /** A teammate's message held while this host was away: see `deliverBotShareHeldMessage`. */

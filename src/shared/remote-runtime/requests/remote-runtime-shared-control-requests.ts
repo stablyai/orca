@@ -38,6 +38,7 @@ export function requestSharedControl<TResult>(args: {
   beforeSend?: () => void
   /** Tags a background request so an idle host doesn't count it as use. */
   idlePassive?: boolean
+  binaryChannel?: number
   prepareGuard?: () => Promise<() => boolean | void>
   captureSendGuard?: () => () => void
 }): Promise<RuntimeRpcResponse<TResult>> {
@@ -57,7 +58,8 @@ export function requestSharedControl<TResult>(args: {
             method: args.method,
             params,
             envelope,
-            idlePassive: args.idlePassive
+            idlePassive: args.idlePassive,
+            binaryChannel: args.binaryChannel
           }),
         args.params,
         args.envelope,

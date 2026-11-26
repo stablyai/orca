@@ -6,6 +6,8 @@ import { startSharedControlSubscription } from '../requests/remote-runtime-share
 import { sendSharedControlSubscription } from './remote-runtime-shared-control-send'
 import type { SharedControlRetiredRequestIds } from '../requests/remote-runtime-shared-control-retired-request-ids'
 import type * as SharedControlTypes from './remote-runtime-shared-control-types'
+import type { SharedControlBinaryChannels } from './remote-runtime-shared-control-binary-channels'
+import { remoteRuntimeUnavailableError } from '../requests/remote-runtime-request-frames'
 
 export class SharedControlRequests {
   constructor(
@@ -16,9 +18,10 @@ export class SharedControlRequests {
       retiredRequestIds: SharedControlRetiredRequestIds
       ensureReady: (timeoutMs: number, signal?: AbortSignal) => Promise<void>
       sendEncrypted: (payload: unknown) => boolean
-      wire: () => Pick<Parameters<typeof sendSharedControlRequest>[0], 'state' | 'ws' | 'handshake'>
+      wire: () => Pick<Parameters<typeof sendSharedControlRequest>[0], 'state' | 'channel'>
       closeSubscription: (requestId: string) => void
       captureSendGuard: () => () => void
+      binaryChannels: () => SharedControlBinaryChannels | null
     }
   ) {}
   request<TResult>(
@@ -29,7 +32,7 @@ export class SharedControlRequests {
     signal?: AbortSignal,
     send?: Pick<
       Parameters<typeof requestSharedControl>[0],
-      'beforeSend' | 'prepareRequest' | 'idlePassive'
+      'beforeSend' | 'prepareRequest' | 'idlePassive' | 'binaryChannel'
     > & {
       prepareGuard?: RuntimeRequestGuard
       /** Bounds the whole request while socket readiness keeps timeoutMs, so an unreachable host fails fast. */
@@ -65,8 +68,14 @@ export class SharedControlRequests {
     params: unknown,
     timeoutMs: number,
     callbacks: SharedControlTypes.SharedControlSubscriptionCallbacks<TResult>,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    /** A stream that would otherwise need a socket of its own: it gets a binary channel. */
+    stream?: Pick<
+      SharedControlTypes.SharedControlLogicalSubscription<unknown>,
+      'channelCapabilities' | 'idlePassive'
+    > & { binaryChannel: true }
   ): Promise<SharedControlTypes.RemoteRuntimeSharedSubscription> {
+    const binaryChannels = stream ? this.host.binaryChannels() : null
     return startSharedControlSubscription({
       subscriptions: this.host.subscriptions,
       deviceToken: this.host.connection().credential.deviceToken,
@@ -82,7 +91,29 @@ export class SharedControlRequests {
           deviceToken: this.host.connection().credential.deviceToken,
           send: (payload) => this.host.sendEncrypted(payload)
         }),
-      closeSubscription: (requestId) => this.host.closeSubscription(requestId)
+      closeSubscription: (requestId) => this.host.closeSubscription(requestId),
+      binaryChannel: binaryChannels
+        ? {
+            assign: (subscription) => binaryChannels.assign(subscription, stream!),
+            sendBinary: (subscription, bytes) => binaryChannels.sendData(subscription, bytes),
+            // A call on an ended stream would open its channel anew on the host; refuse it as the
+            // stream's own socket did once closed.
+            sendRequest: (subscription, method, params, timeoutMs) => {
+              const ended = (): boolean => subscription.closed || !subscription.sent
+              if (ended()) {
+                return Promise.reject(remoteRuntimeUnavailableError('The stream has ended.'))
+              }
+              return this.request(method, params, timeoutMs, undefined, undefined, {
+                binaryChannel: subscription.binaryChannel,
+                beforeSend: () => {
+                  if (ended()) {
+                    throw remoteRuntimeUnavailableError('The stream has ended.')
+                  }
+                }
+              })
+            }
+          }
+        : undefined
     })
   }
 }
