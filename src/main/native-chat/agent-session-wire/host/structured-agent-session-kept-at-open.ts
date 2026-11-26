@@ -2,12 +2,15 @@ import {
   keptRunningProviderRelayPid,
   listProviderRelaysAtLaunchWithin,
   noteProviderRelayKeptUnverified,
-  processProvenGone,
   providerRelayKeptFromLastRun,
-  providerRelayKeptUnverified,
   providerRelayListingSettled,
   providerRelayMayKeepChat
 } from '../../../provider-relay/app-provider-relays'
+import {
+  processProvenGone,
+  providerRelayKeptUnverified,
+  providerRelayProviderOpensEnded
+} from '../../../provider-relay/provider-relay-launch-inventory'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 
@@ -16,7 +19,8 @@ const KEPT_LISTING_OPEN_WAIT_MS = 1_500
 
 /**
  * Whether the last run's agent may still run under the terminal host, so its open settles nothing.
- * Only proof ends it: a complete listing without it, or its owner process gone. A late listing is
+ * Only proof ends it: a complete listing without it, or its owner process gone (unless its ended
+ * agent still opens, to replay what it left). A late listing is
  * unknown, so the chat opens as kept and reconciles once the listing answers.
  */
 export async function structuredAgentSessionKeptAtOpen(
@@ -38,7 +42,9 @@ export async function structuredAgentSessionKeptAtOpen(
   if (listed || keptRunningProviderRelayPid(sessionId) !== null) {
     return keptRunningProviderRelayPid(sessionId) !== null
   }
-  if (processProvenGone(owner.pid)) {
+  // An agent that ends while Orca is closed may leave output and its turn's end to replay; only
+  // the listing proves that one gone.
+  if (!providerRelayProviderOpensEnded(provider) && processProvenGone(owner.pid)) {
     return false
   }
   noteProviderRelayKeptUnverified(sessionId)

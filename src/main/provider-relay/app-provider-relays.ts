@@ -1,8 +1,5 @@
 import type { DaemonClient } from '../daemon/transport/client/daemon-client'
-import type {
-  ProviderRelayDetachPolicy,
-  ProviderRelayKeepSpec
-} from '../daemon/protocol/daemon-provider-relay-protocol'
+import type * as RelayProtocol from '../daemon/protocol/daemon-provider-relay-protocol'
 import type { ProviderRelayWorkMarkers } from './provider-relay-agent-markers'
 export {
   dropListedProviderRelay,
@@ -12,8 +9,6 @@ export {
   providerRelayChatsIdleStoppedThisRun,
   liveKeptProviderRelayChats as liveProviderRelayChats,
   noteProviderRelayKeptUnverified,
-  processProvenGone,
-  providerRelayKeptUnverified,
   registerReattachableProviderRelayAgent
 } from './provider-relay-launch-inventory'
 import {
@@ -68,7 +63,7 @@ export type ProviderRelayLaunch = {
   /** Reattach only: lines this lets through while the rest wait for `releaseOutput()`. */
   passWhileHeld?: (line: string) => boolean
   /** Session state the daemon keeps for the next attach; only a daemon that can keep it relays. */
-  keep?: ProviderRelayKeepSpec
+  keep?: RelayProtocol.ProviderRelayKeepSpec
   /** A reattached agent closed during quit (its start given up) goes back to the daemon instead. */
   handsOffOnQuit?: true
 }
@@ -113,7 +108,7 @@ export function installProviderRelayDurability(barrier: typeof durableFor): void
 function policyFor(
   markers: ProviderRelayWorkMarkers,
   open?: ProviderRelayOpenWork | null
-): ProviderRelayDetachPolicy {
+): RelayProtocol.ProviderRelayDetachPolicy {
   return {
     idleStopMs: route?.idleStopMs() ?? null,
     markers: [...markers.markers],

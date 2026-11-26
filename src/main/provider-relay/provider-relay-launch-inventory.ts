@@ -38,6 +38,8 @@ const opensEndedAgents = new Set<string>()
 
 /** Chat providers (record `provider`) whose agent can be kept: only their chats wait on a listing. */
 const keepableProviders = new Set<string>()
+/** Of those, providers whose ended agent still opens: an exited process leaves output to replay. */
+const opensEndedProviders = new Set<string>()
 
 /** Chats opened as kept on process evidence alone, while the listing was late: a send waits for it. */
 const keptUnverified = new Set<string>()
@@ -52,7 +54,15 @@ export function registerReattachableProviderRelayAgent(
   }
   if (options.opensEnded) {
     opensEndedAgents.add(agent)
+    if (options.provider) {
+      opensEndedProviders.add(options.provider)
+    }
   }
+}
+
+/** A chat of this provider whose agent exited may still have output and a turn end to replay. */
+export function providerRelayProviderOpensEnded(provider: string): boolean {
+  return opensEndedProviders.has(provider)
 }
 
 /** Output the agent printed that no app took. */

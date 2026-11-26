@@ -39,6 +39,11 @@ async function freshRelays(daemon: DaemonClient) {
   vi.resetModules()
   const relays = await import('../../../../provider-relay/app-provider-relays')
   relays.registerReattachableProviderRelayAgent('codex-test', { provider: 'codex' })
+  // An ACP agent: one that ended while Orca was closed still opens, to replay its output.
+  relays.registerReattachableProviderRelayAgent('acp:qwen-test', {
+    provider: 'qwen-code',
+    opensEnded: true
+  })
   relays.installProviderRelayRoute({
     current: async () => daemon,
     all: async () => [daemon],
@@ -49,9 +54,9 @@ async function freshRelays(daemon: DaemonClient) {
   return { relays, open }
 }
 
-const chat = (ownerPid: number) => ({
+const chat = (ownerPid: number, provider = 'codex') => ({
   sessionId: SESSION,
-  provider: 'codex',
+  provider,
   location: { executionHostId: LOCAL_EXECUTION_HOST_ID },
   ownerObservation: { ownerProcess: { pid: ownerPid } }
 })
@@ -116,5 +121,26 @@ it.skipIf(process.platform === 'win32')(
       typeof open.structuredAgentSessionKeptAtOpen
     >[0]
     expect(await open.structuredAgentSessionKeptAtOpen(record, 10)).toBe(false)
+  }
+)
+
+it.skipIf(process.platform === 'win32')(
+  'keeps a chat whose ended agent still opens until the late listing answers, though its process is gone',
+  async () => {
+    const late = lateDaemon()
+    const { open } = await freshRelays(late.client)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the verdict reads only these fields
+    const record = chat(exitedPid(), 'qwen-code') as unknown as Parameters<
+      typeof open.structuredAgentSessionKeptAtOpen
+    >[0]
+    expect(await open.structuredAgentSessionKeptAtOpen(record, 10)).toBe(true)
+
+    const settled = vi.fn(async () => {})
+    const reconciled = open.reconcileStructuredAgentSessionKeptAtOpen(SESSION, settled)
+    late.answer([
+      { ...keptRelay(SESSION), agent: 'acp:qwen-test', exit: { code: 0, signal: null } }
+    ])
+    await reconciled
+    expect(settled).not.toHaveBeenCalled()
   }
 )
