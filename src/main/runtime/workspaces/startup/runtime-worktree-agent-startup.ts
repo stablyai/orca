@@ -82,6 +82,7 @@ export async function resolveWorktreeStartupDraftAgent(
       {
         disabledTuiAgents: settings.disabledTuiAgents,
         afterPublication: environment.afterPublication,
+        waitForCompletion: false,
         ...agentCommandOverrideDetectionOptions(settings.agentCmdOverrides)
       }
     )

@@ -157,8 +157,9 @@ type CommandDetectionOptions = {
   onlyRequested?: boolean
   refresh?: boolean
   afterPublication?: number
+  waitForCompletion?: boolean
   signal?: AbortSignal
-  prepare?: (signal: AbortSignal) => Promise<void>
+  prepare?: (signal?: AbortSignal) => Promise<void>
 }
 
 export async function detectAgentCommandsOnHost(
@@ -193,56 +194,53 @@ export async function detectAgentCommandInventoryOnHost(
   const targeted = options.onlyRequested ?? false
   const ordinaryMode = targeted ? 'read' : 'detect'
   const refreshMode = targeted ? 'revalidate' : 'refresh'
-  const { slot, inventory, afterPublication } = await withAgentInventoryDeadline(
-    async (waitSignal) => {
-      let slot: InventorySlot | undefined
-      try {
-        slot = wslTarget ? await wslInventory(wslTarget, waitSignal) : getLocalInventory()
-        const before = slot?.published?.sequence ?? 0
-        throwIfSignalAborted(waitSignal)
-        if (slot && !options.refresh && options.afterPublication !== undefined) {
-          const completed = completeInventoryAfter(slot, options.afterPublication, commands)
-          if (completed) {
-            return { slot, inventory: completed }
-          }
+  const detect = async (waitSignal?: AbortSignal) => {
+    let slot: InventorySlot | undefined
+    try {
+      slot = wslTarget ? await wslInventory(wslTarget, waitSignal) : getLocalInventory()
+      const before = slot?.published?.sequence ?? 0
+      throwIfSignalAborted(waitSignal)
+      if (slot && !options.refresh && options.afterPublication !== undefined) {
+        const completed = completeInventoryAfter(slot, options.afterPublication, commands)
+        if (completed) {
+          return { slot, inventory: completed }
         }
-        if (options.prepare) {
-          await options.prepare(waitSignal)
-          throwIfSignalAborted(waitSignal)
-        }
-        if (!slot) {
-          return { slot, inventory: null }
-        }
-        const inventory =
-          (!options.refresh ? completeInventoryAfter(slot, before, commands) : undefined) ??
-          (await waitForPromiseWithSignal(
-            readInventory(slot, commands, options.refresh ? refreshMode : ordinaryMode, {
-              targeted
-            }),
-            waitSignal
-          ))
-        return { slot, inventory }
-      } catch (error) {
-        const latest = slot?.published?.inventory
-        if (
-          error instanceof AgentInventoryDeadlineError &&
-          isAbortSignalReason(waitSignal, error)
-        ) {
-          return {
-            slot,
-            afterPublication: slot?.published?.sequence ?? 0,
-            inventory: {
-              found: latest?.found ?? new Set<string>(),
-              matches: latest?.matches ?? new Map<string, AgentPathMatch>(),
-              incomplete: true
-            }
-          }
-        }
-        throw error
       }
-    },
-    options.signal
-  )
+      if (options.prepare) {
+        await options.prepare(waitSignal)
+        throwIfSignalAborted(waitSignal)
+      }
+      if (!slot) {
+        return { slot, inventory: null }
+      }
+      const inventory =
+        (!options.refresh ? completeInventoryAfter(slot, before, commands) : undefined) ??
+        (await waitForPromiseWithSignal(
+          readInventory(slot, commands, options.refresh ? refreshMode : ordinaryMode, {
+            targeted
+          }),
+          waitSignal
+        ))
+      return { slot, inventory }
+    } catch (error) {
+      const latest = slot?.published?.inventory
+      if (error instanceof AgentInventoryDeadlineError && isAbortSignalReason(waitSignal, error)) {
+        return {
+          slot,
+          afterPublication: slot?.published?.sequence ?? 0,
+          inventory: {
+            found: latest?.found ?? new Set<string>(),
+            matches: latest?.matches ?? new Map<string, AgentPathMatch>(),
+            incomplete: true
+          }
+        }
+      }
+      throw error
+    }
+  }
+  const { slot, inventory, afterPublication } = options.waitForCompletion
+    ? await detect(options.signal)
+    : await withAgentInventoryDeadline(detect, options.signal)
   if (!inventory || (!wslTarget && slot !== getLocalInventory())) {
     throw new Error(`Could not complete ${wslTarget ? 'WSL' : 'local'} agent inventory`)
   }

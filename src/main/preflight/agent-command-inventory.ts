@@ -291,7 +291,7 @@ const wsl = new Map<string, InventorySlot>()
 
 export async function wslInventory(
   target: WslPreflightTarget,
-  signal: AbortSignal
+  signal?: AbortSignal
 ): Promise<InventorySlot | undefined> {
   const distro =
     target.distro?.trim() || (await waitForPromiseWithSignal(resolveWslDefaultDistro(), signal))

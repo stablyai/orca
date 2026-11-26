@@ -206,11 +206,11 @@ export async function refreshAgentsOnHost(
     throw new SshHostNotServedError(host.connectionId)
   }
   const wsl = getPreflightWslTarget(host.context)
-  return withAgentInventoryDeadline(async (signal) => {
+  const refresh = async (signal?: AbortSignal): Promise<RefreshAgentsResult> => {
     let path: Awaited<ReturnType<typeof refreshAgentShellPath>> | undefined
     const inventory = await detectInstalledAgentInventory(
       host.context,
-      options,
+      { ...options, waitForCompletion: !signal },
       true,
       signal,
       async () => {
@@ -226,7 +226,7 @@ export async function refreshAgentsOnHost(
             )
       }
     )
-    if (!signal.aborted) {
+    if (!signal?.aborted) {
       notifyAgentsRefreshedOnHost(userInitiated && !wsl)
     }
     if (inventory.incomplete && !withManagedAgentCommands) {
@@ -241,7 +241,10 @@ export async function refreshAgentsOnHost(
         pathFailureReason: 'timeout'
       })
     }
-  })
+  }
+  return userInitiated || !withManagedAgentCommands
+    ? refresh()
+    : withAgentInventoryDeadline(refresh)
 }
 
 /** A prospective workspace uses the create route's resolved repo, never a client host guess. */

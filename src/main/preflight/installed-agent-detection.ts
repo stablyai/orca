@@ -39,6 +39,8 @@ export type InstalledAgentDetectionOptions = {
   onlyTuiAgent?: TuiAgent
   /** Publication sequence from this caller's incomplete detect reply. */
   afterPublication?: number
+  /** Skip the launch deadline while keeping any caller-provided cancellation. */
+  waitForCompletion?: boolean
 }
 
 function activeDetectionCommands(
@@ -125,7 +127,7 @@ export async function detectInstalledAgentInventory(
   options?: InstalledAgentDetectionOptions,
   refresh = false,
   signal?: AbortSignal,
-  prepare?: (signal: AbortSignal) => Promise<void>
+  prepare?: (signal?: AbortSignal) => Promise<void>
 ): Promise<InstalledAgentInventory> {
   const runtime = getPreflightWslTarget(context) ? 'wsl' : process.platform
   const commands = activeDetectionCommands(options)
@@ -143,6 +145,7 @@ export async function detectInstalledAgentInventory(
     {
       context,
       afterPublication: options?.afterPublication,
+      waitForCompletion: options?.waitForCompletion,
       ...(runtime === 'wsl' ? {} : { outsidePath: foundOutsidePath }),
       ...(options?.onlyTuiAgent ? { onlyRequested: true } : {}),
       ...(refresh ? { refresh: true } : {}),
@@ -184,7 +187,12 @@ export async function detectInstalledAgents(
   signal?: AbortSignal
 ): Promise<string[]> {
   return completeAgentList(
-    await detectInstalledAgentInventory(context, options, revalidate, signal)
+    await detectInstalledAgentInventory(
+      context,
+      { waitForCompletion: true, ...options },
+      revalidate,
+      signal
+    )
   )
 }
 
@@ -211,6 +219,10 @@ export async function detectInstalledAgentsWithShellPathHydration(
   signal?: AbortSignal
 ): Promise<string[]> {
   return completeAgentList(
-    await detectInstalledAgentInventoryWithShellPathHydration(context, options, signal)
+    await detectInstalledAgentInventoryWithShellPathHydration(
+      context,
+      { waitForCompletion: true, ...options },
+      signal
+    )
   )
 }

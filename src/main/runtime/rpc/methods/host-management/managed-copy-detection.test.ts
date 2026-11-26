@@ -531,9 +531,12 @@ it('returns the published agents as incomplete when a detect wait expires', asyn
   vi.useFakeTimers()
   const detect = detectInstalledAgentInventory().catch((error: unknown) => error)
   const plainLists = Promise.allSettled([
-    detectInstalledAgents(),
-    detectAgentsOnHost(HOST_DEFAULT_AGENT_DETECTION)
+    detectInstalledAgents(undefined, { waitForCompletion: false }),
+    detectAgentsOnHost(HOST_DEFAULT_AGENT_DETECTION, { waitForCompletion: false })
   ])
+  const completeList = detectAgentsOnHost(HOST_DEFAULT_AGENT_DETECTION).catch(
+    (error: unknown) => error
+  )
   try {
     await entered.promise
     await vi.advanceTimersByTimeAsync(10_000)
@@ -550,11 +553,13 @@ it('returns the published agents as incomplete when a detect wait expires', asyn
       })
     }
     expect(await plainLists).toEqual([incompleteList, incompleteList])
+    expect(await Promise.race([completeList, Promise.resolve('pending')])).toBe('pending')
   } finally {
-    const completion = detectInstalledAgentInventory()
     held.resolve()
-    await completion
+    await completeList
   }
+  expect(await completeList).toEqual(['claude'])
+  expect(fixture.enumerate).toHaveBeenCalledTimes(2)
 })
 
 it('allows workspace creation to retry its draft after an inventory timeout', async () => {
