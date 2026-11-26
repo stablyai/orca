@@ -55,8 +55,9 @@ describe('Needs you asks kept open --while', () => {
     worker: (ref: string) => BotItemAskWhileWorker,
     sendOwedMail: () => Promise<void> = async () => {}
   ): BotItemAskWithdrawals {
+    const wrapped = remote(store)
     return new BotItemAskWithdrawals({
-      store: () => remote(store),
+      store: () => wrapped,
       worker,
       workerTitle: async () => new Map(),
       changed: () => {},
@@ -244,5 +245,56 @@ describe('Needs you asks kept open --while', () => {
     withdrawals.tick(LATER + 60_000)
     await withdrawals.settled()
     expect(store.stillOwed([withdrawal])).toEqual([])
+  })
+
+  it('starts over for another profile, even after an idle minute in the first', async () => {
+    const idle = open()
+    const other = open()
+    const uid = asked(other, { kind: 'until', at: LATER })
+    const stores = [remote(idle), remote(other)]
+    let current = 0
+    const withdrawals = new BotItemAskWithdrawals({
+      store: () => stores[current]!,
+      worker: () => 'unknown',
+      workerTitle: async () => new Map(),
+      changed: () => {},
+      sendOwedMail: async () => {}
+    })
+    withdrawals.tick(LATER)
+    await withdrawals.settled()
+    current = 1
+    withdrawals.tick(LATER + 60_000)
+    await withdrawals.settled()
+    expect(other.get(uid)!.status).toBe('working')
+  })
+
+  it('tells the item lists of a withdrawal on the next minute when telling them failed', async () => {
+    const store = open()
+    const uid = asked(store, { kind: 'until', at: LATER })
+    const told: string[] = []
+    let reads = 0
+    const wrapped: BotItemAskWithdrawalStore = {
+      ...remote(store),
+      viewRows: async (uids) => {
+        reads++
+        if (reads === 1) {
+          throw new Error('busy')
+        }
+        return store.viewRows(uids)
+      }
+    }
+    const withdrawals = new BotItemAskWithdrawals({
+      store: () => wrapped,
+      worker: () => 'unknown',
+      workerTitle: async () => new Map(),
+      changed: (items) => told.push(...items.map((item) => item.uid)),
+      sendOwedMail: async () => {}
+    })
+    withdrawals.tick(LATER)
+    await withdrawals.settled()
+    expect(told).toEqual([])
+    withdrawals.tick(LATER + 60_000)
+    await withdrawals.settled()
+    expect(told).toEqual([uid])
   })
 })

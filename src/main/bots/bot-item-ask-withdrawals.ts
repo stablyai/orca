@@ -51,11 +51,23 @@ export class BotItemAskWithdrawals {
   private seeded = false
   /** Whether any `--while` ask was open at the last pass; none, and a minute costs nothing. */
   private armed = true
+  /** Items moved whose lists weren't told yet (a later write in the pass failed). */
+  private readonly untold = new Set<string>()
+  /** The profile's store all of the above belongs to; another profile starts over. */
+  private store: BotItemAskWithdrawalStore | null = null
 
   constructor(private readonly deps: BotItemAskWithdrawalDeps) {}
 
   tick(now = Date.now()): void {
-    if (!this.armed && this.unsent.size === 0 && this.seeded) {
+    const store = this.deps.store()
+    if (store !== this.store) {
+      this.store = store
+      this.unsent.clear()
+      this.untold.clear()
+      this.seeded = false
+      this.armed = true
+    }
+    if (!this.armed && this.unsent.size === 0 && this.untold.size === 0 && this.seeded) {
       return
     }
     this.latest = now
@@ -84,7 +96,7 @@ export class BotItemAskWithdrawals {
 
   private async pass(now: number): Promise<void> {
     // One store for the whole pass: a profile switch meanwhile leaves the new profile to its own pass.
-    const store = this.deps.store()
+    const store = this.store
     if (!store) {
       return
     }
@@ -103,7 +115,6 @@ export class BotItemAskWithdrawals {
       askWhile.kind === 'dispatch' ? [askWhile.ref] : []
     )
     const titles = refs.length > 0 ? await this.deps.workerTitle(refs) : new Map<string, string>()
-    const moved: string[] = []
     for (const { uid, questionEvent, askWhile } of candidates) {
       // Read again after the titles' wait, right before the write.
       const withdrawn = settledBy(askWhile, now, this.deps.worker)
@@ -114,12 +125,14 @@ export class BotItemAskWithdrawals {
       const named = withdrawn.kind === 'dispatch' && title ? { ...withdrawn, title } : withdrawn
       const eventId = await store.withdrawAsk(uid, questionEvent, named, now)
       if (eventId !== null) {
-        moved.push(uid)
+        this.untold.add(uid)
         this.unsent.set(eventId, MAIL_RETRIES)
       }
     }
-    if (moved.length > 0) {
+    if (this.untold.size > 0) {
+      const moved = [...this.untold]
       this.deps.changed((await store.viewRows(moved)).items)
+      moved.forEach((uid) => this.untold.delete(uid))
     }
     await this.sendMail(store)
   }
