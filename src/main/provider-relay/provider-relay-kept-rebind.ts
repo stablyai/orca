@@ -1,5 +1,11 @@
+import { providerDiagnostic } from '../../shared/agent-session/failures/agent-session-failure'
+const KEPT_UNREACHABLE_START_DETAIL =
+  "Orca can't reach this chat's agent, which may still be running, so it won't start a second one. Send again once Orca reconnects to it."
+
 /** A kept agent that may still run must never get a second writer beside it. */
 export class KeptProviderRelayUnreachableError extends Error {
+  readonly providerDiagnostic = providerDiagnostic(KEPT_UNREACHABLE_START_DETAIL, 'person')
+
   constructor(readonly chatKey: string) {
     super('agent_kept_running_unreachable')
     this.name = 'KeptProviderRelayUnreachableError'
