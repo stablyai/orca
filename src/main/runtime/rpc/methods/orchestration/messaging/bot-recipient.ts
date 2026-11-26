@@ -263,7 +263,14 @@ export async function readBotTurn(
    *  the conversation's record is taken as saved, a chat or /clear root at rest is not opened, and a
    *  turn only the whole chat could place throws `JournalWindowNotIndexed`, as does a chat at rest,
    *  so the read's cost never grows with the chat's history. */
-  { indexedOnly = false }: { indexedOnly?: boolean } = {}
+  {
+    indexedOnly = false,
+    root: knownRoot
+  }: {
+    indexedOnly?: boolean
+    /** The session's /clear root when the caller already resolved it, so it isn't walked again. */
+    root?: string
+  } = {}
 ): Promise<{
   turn: BotActingTurn
   conversation: BotRequestConversation | null
@@ -275,7 +282,8 @@ export async function readBotTurn(
   const conversation = key ? { source: key.source, externalId: key.externalId } : null
   const workspaceId = conversation ? workspaceOf(conversation.externalId) : null
   const host = await requireStructuredHost(runtime)
-  const root = isOrcaSessionId(sessionId) ? canonicalOrcaSessionId(sessionId) : sessionId
+  const root =
+    knownRoot ?? (isOrcaSessionId(sessionId) ? canonicalOrcaSessionId(sessionId) : sessionId)
   // Index-only takes the record as saved: an old automation run's repair looks through every run.
   let recorded = indexedOnly
     ? db.getBotConversationActsFor(root)

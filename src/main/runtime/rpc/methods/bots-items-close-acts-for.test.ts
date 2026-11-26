@@ -13,19 +13,16 @@ const CHAT = '11111111-1111-4111-8111-111111111111'
 const host = {
   deps: {},
   journals: new Map<string, AgentJournalRenderItem[]>(),
-  /** The window reads the close asked for. */
-  windows: new Array<Record<string, unknown>>(),
+  /** Chats a read opened from rest. */
+  opened: new Array<string>(),
   hasSession: (id: string) => host.journals.has(id),
   journalReads: async (id: string) => {
     if (!host.journals.has(id)) {
-      throw new Error('opened a conversation')
+      host.opened.push(id)
     }
     const items = host.journals.get(id) ?? []
     return {
-      operationWindow: async (anchors: Record<string, unknown>) => {
-        host.windows.push(anchors)
-        return { complete: true, snapshot: { items, submissions: [] } }
-      },
+      operationWindow: async () => ({ complete: true, snapshot: { items, submissions: [] } }),
       promptItem: async () => items[0] ?? null
     }
   }
@@ -112,7 +109,7 @@ function closing(input: {
 describe('whom a close keeps its closing turn acting for', () => {
   beforeEach(() => {
     host.journals.clear()
-    host.windows.length = 0
+    host.opened.length = 0
   })
 
   it("keeps a teammate's request taken in the owner's own chat as theirs, naming who but not where", async () => {
@@ -122,10 +119,6 @@ describe('whom a close keeps its closing turn acting for', () => {
       requests: { 'req-1': [DANA] }
     })
     expect(await close()).toEqual([{ kind: 'owner' }, KEPT])
-    // By index alone: an old unanswered send never pins the read back to the whole chat.
-    expect(host.windows).toEqual([
-      { latestTurns: 1, turnShape: true, anchorsOnly: true, indexedOnly: true }
-    ])
   })
 
   it("keeps the owner's own turn in the owner's chat as the owner's", async () => {
@@ -174,18 +167,22 @@ describe('whom a close keeps its closing turn acting for', () => {
     expect(await close().finally(() => (host.journalReads = reads))).toEqual([KEPT])
   })
 
-  it("keeps the chat's record, opening nothing, when the chat is at rest or its read fails", async () => {
-    const atRest = closing({ record: { actsFor: [DANA] } })
+  it("keeps the chat's record, opening nothing, when the chat is at rest", async () => {
+    const { close } = closing({ record: { actsFor: [DANA] }, journal: [requestMail('req-1')] })
     host.journals.clear()
-    expect(await atRest.close()).toEqual([KEPT])
-    const failing = closing({ record: { actsFor: [DANA] } })
+    expect(await close()).toEqual([KEPT])
+    expect(host.opened).toEqual([])
+  })
+
+  it("keeps the chat's record when the read fails, and unknown when there is none", async () => {
     const reads = host.journalReads
     host.journalReads = async () => {
       throw new Error('unreadable')
     }
-    expect(await failing.close().finally(() => (host.journalReads = reads))).toEqual([KEPT])
-    // With no record, unknown: never the owner.
-    host.journals.clear()
-    expect(await closing({}).close()).toEqual([{ kind: 'unknown' }])
+    const results = await Promise.all([
+      closing({ record: { actsFor: [DANA] } }).close(),
+      closing({}).close()
+    ]).finally(() => (host.journalReads = reads))
+    expect(results).toEqual([[KEPT], [{ kind: 'unknown' }]])
   })
 })

@@ -62,7 +62,9 @@ function chat(
   /** Every send in one family: a chain (each shares a provider id with one neighbour and a card with
    *  the other), one queued card they all carry, or one answering turn they all name (the newest).
    *  Or `unsettled`: every send before the newest ten handed over, and never known answered. */
-  family?: 'chain' | 'card' | 'answered' | 'unsettled'
+  family?: 'chain' | 'card' | 'answered' | 'unsettled',
+  /** What each message the last turn wrote says. */
+  lastTurnText = 'note'
 ): Database {
   const chained = family === 'chain'
   const directory = mkdtempSync(join(tmpdir(), 'orca-operation-window-'))
@@ -183,7 +185,11 @@ function chat(
       {
         kind: 'item',
         identity: { provider: 'orca', clientMessageId: `note-${message}` },
-        body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'note' }] },
+        body: {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'text', text: lastTurnText }]
+        },
         options: { turnScope: { kind: 'thread' }, fence: 1 }
       },
       now++
@@ -580,4 +586,30 @@ it("reads a closing turn's askers with the same work however long the chat ran, 
     { rows: 18, opener: true },
     { rows: 18, opener: true }
   ])
+})
+
+// #49889: whom a turn acts for is in its people's messages, so its read never decodes the agent's
+// prose: the bytes it decodes stay the same however much the newest turn wrote.
+it("reads a turn's askers without the agent's prose, however much it wrote", () => {
+  const decoded = (bytes: number) => {
+    const db = chat(10, () => true, undefined, 0, 0, 1, undefined, 'x'.repeat(bytes))
+    const scope = new JournalSqlScope(db, 'chat', 'epoch')
+    const { snapshot } = readJournalDomainOperationWindow(scope, {
+      latestTurns: 1,
+      turnShape: true,
+      anchorsOnly: true,
+      indexedOnly: true
+    })
+    db.close()
+    const prose = snapshot.items.find(
+      (item) => item.body.kind === 'message' && item.body.role === 'assistant'
+    )
+    return {
+      bytes: scope.work.decodedBytes,
+      prose: prose?.body.kind === 'message' && prose.body.blocks
+    }
+  }
+  const short = decoded(1024 * 1024)
+  expect(decoded(10 * 1024 * 1024)).toEqual(short)
+  expect(short.prose).toEqual([])
 })

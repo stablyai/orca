@@ -36,7 +36,8 @@ async function closingAskers(
   const db = runtime.getOrchestrationDb()
   try {
     const { turn } = await readBotTurn(runtime, db, writer.sessionId, undefined, {
-      indexedOnly: true
+      indexedOnly: true,
+      root: writer.actor.chatId
     })
     // A device Orca can't place as the owner typed in it: the owner's chat, but not known to be them.
     return turnActsForOwner(turn)

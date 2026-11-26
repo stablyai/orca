@@ -62,7 +62,8 @@ export type JournalOperationWindowAnchors = {
    *  its cost never grows with the chat after them. Unanswered sends outside it do not come along. */
   throughAnchoredTurns?: boolean
   /** Only the rows that say who opened and ran each turn: messages, turn and status rows, and any
-   *  row of no known turn (it ends a turn's reach); never tool calls or diffs. */
+   *  row of no known turn (it ends a turn's reach); never tool calls or diffs, and the agent's
+   *  prose and reasoning messages without their text. */
   turnShape?: boolean
 }
 
