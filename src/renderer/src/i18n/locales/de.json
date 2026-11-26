@@ -6260,9 +6260,7 @@
           "aed1623b1e": "Schließen",
           "eab8b45238": "Fehler kopieren",
           "a23b22d16f": "Kopiert",
-          "74fc00776f": "Fehlerdetails",
-          "ca3b225195": "Automatische Branch-Benennung fehlgeschlagen",
-          "couldNotGenerateBranchName": "Orca konnte aus der ersten Agentennachricht keinen Branch-Namen für <name>{{name}}</name> erzeugen."
+          "74fc00776f": "Fehlerdetails"
         },
         "CreateProjectLocationField": {
           "95548e33bf": "Übergeordneten Ordner auswählen…",
@@ -6681,9 +6679,6 @@
           "0f33af979b": "Teil-Checkout. Dateien außerhalb dieser Pfade befinden sich nicht auf dem Datenträger.",
           "4f964d5e8c": "Teil-Checkout",
           "7d517f82e2": "Primär",
-          "4eba2ea99e": "Automatische Namensvergabe fehlgeschlagen. Zum Anzeigen der Details klicken.",
-          "74522ee457": "Umbenennen fehlgeschlagen",
-          "02e19349f4": "Automatisches Umbenennen fehlgeschlagen: Fehler anzeigen",
           "691ccfd622": "Wird gelöscht…",
           "deleteFailed": "Löschen fehlgeschlagen",
           "35ccfe2475": "Projekt {{value0}}",

@@ -6642,10 +6642,7 @@
           "eab8b45238": "复制错误",
           "a23b22d16f": "已复制",
           "74fc00776f": "错误详情",
-          "ca3b225195": "分支自动命名失败",
-          "couldNotGenerateBranchName": "Orca 无法根据智能体的第一条消息为 <name>{{name}}</name> 生成分支名称",
           "tryAgain": "重试",
-          "namingBranch": "正在命名分支…",
           "errorDetailsAt": "错误详情 · {{time}}",
           "reasonNothingYet": "暂无可用于命名此分支的更改",
           "reasonBranchChanged": "在 Orca 命名期间，该分支发生了变化",
@@ -6659,8 +6656,7 @@
           "reasonNoDistinctName": "生成的名称与当前名称相同",
           "reasonFirstMessageUnavailable": "Orca 找不到此工作区的第一条消息",
           "reasonAlreadyNamed": "此工作区已被重命名",
-          "reasonUnavailable": "Orca 无法再为此分支命名",
-          "branchNameKept": "已保留分支名称"
+          "reasonUnavailable": "Orca 无法再为此分支命名"
         },
         "CreateProjectLocationField": {
           "95548e33bf": "选择父文件夹...",
@@ -7066,9 +7062,6 @@
           "0f33af979b": "部分检出，这些路径之外的文件不在磁盘上",
           "4f964d5e8c": "稀疏",
           "7d517f82e2": "主要",
-          "4eba2ea99e": "自动命名失败，点击查看详情",
-          "74522ee457": "重命名失败",
-          "02e19349f4": "自动重命名失败：查看错误",
           "691ccfd622": "正在删除...",
           "deleteFailed": "删除失败",
           "35ccfe2475": "项目{{value0}}",
