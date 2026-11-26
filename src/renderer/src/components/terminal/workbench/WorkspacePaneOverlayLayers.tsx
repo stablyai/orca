@@ -21,7 +21,8 @@ export function WorkspacePaneOverlayLayers({
   mountRetainedBrowserOverlay,
   mountEmulatorOverlay,
   surfaceReleased = false,
-  ownsNativeChatToggleShortcut = true
+  ownsNativeChatToggleShortcut = true,
+  tabAreaUnsplit = false
 }: {
   worktreeId: string
   worktreePath: string
@@ -39,6 +40,8 @@ export function WorkspacePaneOverlayLayers({
   surfaceReleased?: boolean
   /** Floating overlays leave the toggle chord to the active workspace; duplicate listeners would both toggle. */
   ownsNativeChatToggleShortcut?: boolean
+  /** True when the tab area shows one pane, so a lone terminal takes the single-pane cap. */
+  tabAreaUnsplit?: boolean
 }): React.JSX.Element {
   return (
     <>
@@ -54,6 +57,7 @@ export function WorkspacePaneOverlayLayers({
         backgroundMountTabIds={backgroundMountTabIds}
         activationDeferredMountTabIds={activationDeferredMountTabIds}
         ownsNativeChatToggleShortcut={ownsNativeChatToggleShortcut}
+        tabAreaUnsplit={tabAreaUnsplit}
       />
       <RetainedBrowserPaneOverlayLayer
         worktreeId={worktreeId}

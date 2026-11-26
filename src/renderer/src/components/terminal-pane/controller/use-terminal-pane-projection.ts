@@ -48,7 +48,8 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     paneTitleBackground,
     terminalContentVisible,
     hiddenStartupStyle,
-    terminalContainerStyle
+    terminalContainerStyle,
+    terminalDividerStyle
   } = resolveTerminalPaneAppearance({
     isVisible,
     settings,
@@ -124,6 +125,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     terminalContentVisible,
     hiddenStartupStyle,
     terminalContainerStyle,
+    terminalDividerStyle,
     activePane,
     activePaneRuntimeEnvironmentId,
     managedPanes,

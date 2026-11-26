@@ -78,7 +78,12 @@ export function createOpenHistoryDiff(
           ...contentOwner
         }
         if (isPreview) {
-          const replaceablePreviewId = getReplaceablePreviewFileId(s, placementId, targetGroupId)
+          const replaceablePreviewId = getReplaceablePreviewFileId(
+            s,
+            placementId,
+            targetGroupId,
+            'diff'
+          )
           const replaceablePreviewIndex = s.openFiles.findIndex(
             (file) => file.id === replaceablePreviewId
           )
@@ -166,7 +171,12 @@ export function createOpenHistoryDiff(
           ...contentOwner
         }
         if (isPreview) {
-          const replaceablePreviewId = getReplaceablePreviewFileId(s, placementId, targetGroupId)
+          const replaceablePreviewId = getReplaceablePreviewFileId(
+            s,
+            placementId,
+            targetGroupId,
+            'diff'
+          )
           const replaceablePreviewIndex = s.openFiles.findIndex(
             (file) => file.id === replaceablePreviewId
           )

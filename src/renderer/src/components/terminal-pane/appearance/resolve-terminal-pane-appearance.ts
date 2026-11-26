@@ -36,16 +36,21 @@ export function resolveTerminalPaneAppearance({
   const hiddenStartupStyle: CSSProperties = shouldMeasureHiddenStartup
     ? { opacity: 0, pointerEvents: 'none' }
     : {}
-  const terminalContainerStyle: CSSProperties = {
-    display: terminalContentVisible ? 'flex' : 'none',
-    overflow: 'hidden',
-    ...hiddenStartupStyle,
+  // Shared so sibling overlays, which do not inherit from the pane root, can paint
+  // the same divider line as a split.
+  const terminalDividerStyle: CSSProperties = {
     ['--orca-terminal-divider-color' as string]:
       effectiveAppearance?.dividerColor ?? DEFAULT_TERMINAL_DIVIDER_DARK,
     ['--orca-terminal-divider-color-strong' as string]: normalizeColor(
       effectiveAppearance?.dividerColor,
       DEFAULT_TERMINAL_DIVIDER_DARK
     )
+  }
+  const terminalContainerStyle: CSSProperties = {
+    display: terminalContentVisible ? 'flex' : 'none',
+    overflow: 'hidden',
+    ...hiddenStartupStyle,
+    ...terminalDividerStyle
   }
   return {
     effectiveAppearance,
@@ -54,6 +59,7 @@ export function resolveTerminalPaneAppearance({
     paneTitleBackground,
     terminalContentVisible,
     hiddenStartupStyle,
-    terminalContainerStyle
+    terminalContainerStyle,
+    terminalDividerStyle
   }
 }

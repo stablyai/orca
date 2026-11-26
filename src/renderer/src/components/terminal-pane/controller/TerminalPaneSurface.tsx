@@ -27,6 +27,7 @@ import { TerminalPaneMobileDriverPortals } from '../mobile-driver/TerminalPaneMo
 import { TerminalPaneProcessExitPortals } from '../process-exit/TerminalPaneProcessExitPortals'
 import { TerminalPaneSshReconnectPortals } from '../pty-transport/recovery/ssh/TerminalPaneSshReconnectPortals'
 import { TerminalPaneRecoveryPortals } from '../pty-transport/remote-runtime/recovery/TerminalPaneRecoveryPortals'
+import { LoneTerminalPaneWidthHandles } from './LoneTerminalPaneWidthHandles'
 import type { TerminalPaneController } from './use-terminal-pane-controller'
 // oxfmt-ignore
 import { canCloseTerminalPane, terminalPaneCloseLabel } from '../layout/close/terminal-pane-close-affordance'
@@ -343,6 +344,7 @@ export function TerminalPaneSurface({
           }}
         />
       ) : null}
+      <LoneTerminalPaneWidthHandles controller={controller} />
       <TerminalPaneHeaderOverlay
         tabId={tabId}
         worktreeId={worktreeId}

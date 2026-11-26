@@ -34,6 +34,7 @@ import type { ManagedAccountNameSettings } from '../agent-accounts/managed-accou
 import type { NewTabMenuSettings } from '../new-tab-menu/new-tab-menu-layout'
 import type { UiLanguageSettings } from '../i18n/ui-language-settings'
 import type { ChatDeleteSettings } from '../agent-session/chat-deletion/orca-chat-delete'
+import type { SinglePaneWidthSettings } from '../single-pane-width-settings'
 
 type DesktopWindowSettings = {
   /** Windows-only: close (X) hides to tray instead of quitting; the tray icon is always present regardless. */
@@ -65,6 +66,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   PluginUpdatePolicySettings &
   PluginSystemSettings &
   TerminalScrollSettings &
+  SinglePaneWidthSettings &
   TerminalColorOverrideGlobalSettings &
   WindowMaterialSettings &
   DesktopWindowSettings &
