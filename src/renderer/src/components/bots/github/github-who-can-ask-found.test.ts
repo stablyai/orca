@@ -107,7 +107,7 @@ describe('the GitHub picker’s reading of a search', () => {
       'Showing the first 100 members per org.'
     )
     expect(after(note({ cut: { ...noCut, repositories: true } }))).toBe(
-      'Only your 5 latest repos were read.'
+      'Showing the 5 latest repos per personal account.'
     )
     expect(after(note({ cut: { people: true, members: true, repositories: false } }))).toBe(
       'Some lists were only partly read.'
@@ -224,8 +224,10 @@ describe('the GitHub picker’s reading of a search', () => {
     expect(note(at(minutes(60 * 20), 'brennan'))).toBe(
       `Repo list from ${day(readAt)}. Restart Orca to refresh.`
     )
-    // A list read during this open is dated too, without restart advice.
-    expect(value(answer(read(), none)).note).toMatch(/^Repo list from [^.]+\.$/)
+    // A list read during this open is dated too, without restart advice: on a later local day,
+    // the whole note is its date in this computer's own format.
+    pinNow(readAt + 20 * 60 * 60_000)
+    expect(value(answer(read(), none)).note).toBe(`Repo list from ${day(readAt)}.`)
   })
 
   it('treats a list read for another scope or account as history, claiming nothing current', () => {
@@ -401,5 +403,66 @@ describe('GPS-C6-07: a loss or omission is named by the kind it hit', () => {
     expect(note.split('\n')[0]).toMatch(/^Org list from /)
     expect(note).toContain('Some orgs couldn’t be read.')
     expect(note).toContain('Orgs read as @other-reader.')
+  })
+})
+
+describe('GPS-C7-04, GPS-C7-05: a known lost kind, and the personal-account cap, in the note', () => {
+  const mixed = { repositories: ['acme/web'], owners: ['amy'], more: false }
+  const noteOf = (more: Partial<Read>) => {
+    pinNow(READ_AT + 20 * 60 * 60_000)
+    return (
+      value(
+        gitHubWhoCanAskAnswer(
+          {
+            roster: read({
+              readFor: { scope: mixed, owner: 'owner' },
+              searchedAs: 'reader-x',
+              ...more
+            }),
+            exact: none,
+            query: 'brennan',
+            ownerLogin: 'owner',
+            scope: mixed,
+            producer: 'local'
+          },
+          t
+        )
+      ).note ?? ''
+    ).split('\n')
+  }
+
+  it('an org that declared its kind but did not read, beside repos that did', () => {
+    expect(
+      noteOf({
+        complete: false,
+        lost: { repositories: false, organizations: true, unattributed: false }
+      })
+    ).toEqual([
+      `Repo list from ${day(READ_AT)}.`,
+      'Some orgs couldn’t be read.',
+      'Repos read as @reader-x.'
+    ])
+  })
+
+  it('a personal account that declared its kind but did not read, beside an org that did', () => {
+    expect(
+      noteOf({
+        from: { repositories: false, organizations: true },
+        complete: false,
+        lost: { repositories: true, organizations: false, unattributed: false }
+      })
+    ).toEqual([
+      `Org list from ${day(READ_AT)}.`,
+      'Some repos or members couldn’t be read.',
+      'Orgs read as @reader-x.'
+    ])
+  })
+
+  it('a direct repo read whole and a personal account capped: the cap is per account', () => {
+    expect(noteOf({ cut: { people: false, members: false, repositories: true } })).toEqual([
+      `Repo list from ${day(READ_AT)}.`,
+      'Showing the 5 latest repos per personal account.',
+      'Repos read as @reader-x.'
+    ])
   })
 })

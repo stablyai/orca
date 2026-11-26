@@ -28365,7 +28365,7 @@
         "keepTyping": "Keep typing to narrow.",
         "partlyRead": "Some lists were only partly read.",
         "firstPerOrg": "Showing the first {{count}} members per org.",
-        "recentRepos": "Only your {{count}} latest repos were read.",
+        "recentReposPerAccount": "Showing the {{count}} latest repos per personal account.",
         "omitted": "Not every connected repo was read.",
         "loadingTitle": "Still loading your repos",
         "noExactYet": "No exact username match. Repos still coming.",

@@ -169,6 +169,63 @@ describe('what a read covered', () => {
     })
   })
 
+  it('GPS-C7-04: keeps the kind an account declared when its own connection did not read', () => {
+    const mixed = targetOf({ repositories: ['a/b'], owners: ['acme', 'amy'], more: false }).target
+    const org = {
+      __typename: 'Organization',
+      membersWithRole: { totalCount: 1, nodes: [person(2, 'x')] }
+    }
+    const brokenOrg = { __typename: 'Organization', membersWithRole: { totalCount: 'many' } }
+    const brokenUser = { __typename: 'User', repositories: null }
+    const kinds = (data: Record<string, unknown>, errors?: unknown[]) =>
+      readRoster(json(data, errors), mixed)?.lost
+    // An org whose members didn't read, while the repo did: an org loss.
+    expect(kinds({ r0: users(person(3, 'y')), a0: brokenOrg, a1: org })).toEqual({
+      repositories: false,
+      organizations: true,
+      unattributed: false
+    })
+    // A person whose repositories didn't read, while an org did: a repo loss.
+    expect(kinds({ r0: users(person(3, 'y')), a0: org, a1: brokenUser })).toEqual({
+      repositories: true,
+      organizations: false,
+      unattributed: false
+    })
+    // An error pointing into that same connection names the same kind, not an unknown one.
+    expect(
+      kinds({ r0: users(person(3, 'y')), a0: brokenOrg, a1: org }, [
+        { message: 'x', path: ['a0', 'membersWithRole'] }
+      ])
+    ).toEqual({ repositories: false, organizations: true, unattributed: false })
+    // A repository's own error is a repository loss.
+    expect(
+      kinds({ r0: users(person(3, 'y')), a0: org, a1: org }, [{ message: 'x', path: ['r0'] }])
+    ).toEqual({ repositories: true, organizations: false, unattributed: false })
+    // Null, an unknown kind and an error with no path stay unattributed.
+    expect(kinds({ r0: users(person(3, 'y')), a0: null, a1: org })?.unattributed).toBe(true)
+    expect(
+      kinds({ r0: users(person(3, 'y')), a0: { __typename: 'Bot' }, a1: org })?.unattributed
+    ).toBe(true)
+    expect(kinds({ r0: users(person(3, 'y')), a0: org, a1: org }, [{ message: 'x' }])).toEqual({
+      repositories: false,
+      organizations: false,
+      unattributed: true
+    })
+  })
+
+  it('GPS-C7-05: a capped personal account beside a direct repo sets only the per-account cap', () => {
+    const mixed = targetOf({ repositories: ['a/b'], owners: ['amy'], more: false }).target
+    const personal = {
+      __typename: 'User',
+      repositories: { totalCount: 40, nodes: [users(person(4, 'z'))] }
+    }
+    expect(readRoster(json({ r0: users(person(3, 'y')), a0: personal }), mixed)?.cut).toEqual({
+      people: false,
+      members: false,
+      repositories: true
+    })
+  })
+
   it('passes names as variables and reads the viewer in the same call', () => {
     const built = rosterQuery({ repositories: [['acme', 'web']], owners: ['org'] })
     expect(built.vars).toEqual({ ro0: 'acme', rn0: 'web', a0: 'org' })

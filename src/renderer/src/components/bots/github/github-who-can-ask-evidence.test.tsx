@@ -4,6 +4,7 @@
 // alias, a chain of renames, a late check from a retired session) and Try again's publication,
 // through the confirmation and every grant write. Synthetic data only.
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   addButton,
@@ -13,6 +14,7 @@ import {
   optionTexts,
   pickRow,
   rosterOf,
+  searchBox,
   settle,
   typeQuery,
   usersOf,
@@ -424,5 +426,221 @@ describe('GPS-C6-06: an answer already on its way does not paint over Try again'
     expect(screen.queryByText('Still loading your repos')).toBeNull()
     expect(calls().people).toHaveBeenCalledOnce()
     expect(lookups()).toEqual(['zed', 'jordan', 'jordan'])
+  })
+})
+
+const isChecked = (text: string): boolean =>
+  screen
+    .getAllByRole('option')
+    .find((option) => option.textContent === text)
+    ?.getAttribute('aria-checked') === 'true'
+
+describe('GPS-C7-01: a displacement and a recovery settling in one batch', () => {
+  it.each([
+    ['displacement first: the tick is gone, picking again is deliberate', true],
+    ['recovery first: the renamed tick stays', false]
+  ])('%s', async (_c, displacementFirst) => {
+    calls().people.mockReturnValue(
+      read(
+        rosterOf([
+          { id: '2', login: 'sam', name: 'Sam Ito' },
+          { id: '41', login: 'maya-c', name: 'Maya C' }
+        ])
+      )
+    )
+    const displaced = deferred<Users>()
+    const recovered = deferred<Users>()
+    calls().users.mockImplementation(({ query }) =>
+      query === 'sam'
+        ? displaced.promise
+        : query === 'sami'
+          ? recovered.promise
+          : Promise.resolve(usersOf([]))
+    )
+    mountWhoCanAsk()
+    await typeQuery('sa')
+    pickRow('samSam Ito')
+    await typeQuery('maya')
+    pickRow('maya-cMaya C')
+    // Asked in this order every time: "sam" (gives the login to id 9), then "sami" (id 2 again).
+    await typeQuery('sam')
+    await typeQuery('sami')
+    await act(async () => {
+      const displace = () => displaced.resolve(usersOf([{ id: '9', name: 'sam' }]))
+      const recover = () => recovered.resolve(usersOf([{ id: '2', name: 'sami' }]))
+      if (displacementFirst) {
+        displace()
+        recover()
+      } else {
+        recover()
+        displace()
+      }
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(optionTexts()).toContain('samiSam Ito')
+    expect(isChecked('samiSam Ito')).toBe(!displacementFirst)
+    expect(screen.getByText(displacementFirst ? '1 selected' : '2 selected')).toBeTruthy()
+    const consent = await consentHeld()
+    expect(host.confirm.mock.calls[0]?.[0].people).toEqual(
+      displacementFirst
+        ? [{ id: '41', name: 'maya-c' }]
+        : [
+            { id: '2', name: 'sami' },
+            { id: '41', name: 'maya-c' }
+          ]
+    )
+    await consent.approve()
+    expect(written()).toEqual([
+      displacementFirst
+        ? [{ id: '41', name: 'maya-c', source: 'github' }]
+        : [
+            { id: '2', name: 'sami', source: 'github' },
+            { id: '41', name: 'maya-c', source: 'github' }
+          ]
+    ])
+  })
+})
+
+describe('GPS-C7-02: a real name the list gives after the pick', () => {
+  it('holds Add for a check matching it, then consents to and writes what that check found', async () => {
+    const roster = deferred<People>()
+    const lee = deferred<Users>()
+    calls().people.mockReturnValue(roster.promise)
+    calls().users.mockImplementation(({ query }) =>
+      query === 'jordan'
+        ? Promise.resolve(usersOf([{ id: '50', name: 'jordan' }]))
+        : query === 'lee'
+          ? lee.promise
+          : query === 'zed'
+            ? new Promise<Users>(() => {})
+            : Promise.resolve(usersOf([]))
+    )
+    mountWhoCanAsk()
+    await typeQuery('jordan', 300 + ROSTER_WAIT_MS)
+    pickRow('jordanRepos still loading')
+    // The list lands: the same id, with a real name.
+    await land(roster, {
+      ok: true,
+      value: rosterOf([{ id: '50', login: 'jordan', name: 'Jordan Lee' }])
+    })
+    // A check that can't be about this person leaves Add alone.
+    await typeQuery('zed')
+    expect(addButton()).toHaveProperty('disabled', false)
+    // One matching the real name holds it.
+    await typeQuery('lee')
+    await expectNoConsentFromHeldAdd()
+    expect(host.update).not.toHaveBeenCalled()
+    await land(lee, usersOf([{ id: '50', name: 'lee' }]))
+    // Released: Enter on the focused Add opens the confirmation; nothing is written yet.
+    const answer = deferred<boolean>()
+    host.confirm.mockReturnValueOnce(answer.promise)
+    const user = userEvent.setup({ advanceTimers: (ms) => vi.advanceTimersByTime(ms) })
+    addButton().focus()
+    await user.keyboard('{Enter}')
+    await settle()
+    expect(host.confirm).toHaveBeenCalledOnce()
+    expect(host.update).not.toHaveBeenCalled()
+    expect(host.confirm.mock.calls[0]?.[0].people).toEqual([{ id: '50', name: 'lee' }])
+    await land(answer, true)
+    expect(written()).toEqual([[{ id: '50', name: 'lee', source: 'github' }]])
+  })
+})
+
+describe('GPS-C7-03: a check landing while Try again composes its answer', () => {
+  const refresh = async (): Promise<void> => {
+    await act(async () => {
+      host.publish(
+        gitHubView(undefined, [{ installationId: '12', accountLogin: 'acme', repos: ['acme/api'] }])
+      )
+      await vi.advanceTimersByTimeAsync(300)
+    })
+  }
+  /** Sets up a fixed query held by Try again, with an earlier session's check still out. */
+  async function heldRetry(
+    people: { id: string; login: string; name: string | null }[],
+    late: string,
+    query: string
+  ) {
+    calls().people.mockReturnValue(read(rosterOf(people)))
+    const earlier = deferred<Users>()
+    const again = deferred<Users>()
+    let asked = 0
+    calls().users.mockImplementation(({ query: login }) => {
+      if (login === late) {
+        return earlier.promise
+      }
+      asked += 1
+      // This query's own checks fail until Try again, whose check is held.
+      return asked < 3 ? Promise.resolve({ ok: false, error: 'network' }) : again.promise
+    })
+    mountWhoCanAsk()
+    await typeQuery(late)
+    await typeQuery(query)
+    await refresh()
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    await settle()
+    return {
+      earlier,
+      again,
+      counts: () => ({ people: calls().people.mock.calls.length, users: lookups().length })
+    }
+  }
+
+  const pPeople = Array.from({ length: 31 }, (_, index) => ({
+    id: String(100 + index),
+    login: `p${String(index).padStart(2, '0')}`,
+    name: null
+  }))
+
+  it.each([
+    ['between composing and painting', 'between'],
+    ['before it composes', 'before'],
+    ['after it paints', 'after']
+  ])('refills the 30-row cut without a query edit: an earlier check lands %s', async (_c, when) => {
+    const { earlier, again, counts } = await heldRetry(pPeople, 'p00', 'p')
+    const asked = counts()
+    const displace = () => earlier.resolve(usersOf([{ id: '999', name: 'p00' }]))
+    const answer = () => again.resolve(usersOf([]))
+    await act(async () => {
+      if (when === 'between') {
+        answer()
+        displace()
+      } else if (when === 'before') {
+        displace()
+        answer()
+      } else {
+        answer()
+      }
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    if (when === 'after') {
+      await land(earlier, usersOf([{ id: '999', name: 'p00' }]))
+    }
+    await settle()
+    expect(optionTexts()).not.toContain('p00')
+    expect(optionTexts()).toContain('p30')
+    expect(counts()).toEqual(asked)
+    expect(searchBox()).toHaveProperty('value', 'p')
+  })
+
+  it('promotes a renamed person who now matches the held query, without a query edit', async () => {
+    const { earlier, again, counts } = await heldRetry(
+      [
+        { id: '23', login: 'jo', name: null },
+        { id: '24', login: 'kim', name: null }
+      ],
+      'kai',
+      'k'
+    )
+    const asked = counts()
+    expect(optionTexts()).not.toContain('kai')
+    await act(async () => {
+      again.resolve(usersOf([]))
+      earlier.resolve(usersOf([{ id: '23', name: 'kai' }]))
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    await settle()
+    expect(optionTexts()).toEqual(expect.arrayContaining(['kai', 'kim']))
+    expect(counts()).toEqual(asked)
   })
 })

@@ -79,11 +79,15 @@ export function useWhoCanAskSearch(
   // The generation an in-place retry was asked in, until its whole answer paints or the query
   // moves on: a second Try again meanwhile starts nothing.
   const retryOwner = useRef<number | null>(null)
+  // More of the search landed while a retry held the screen: once the retry paints, its answer
+  // (composed before that) is ranked again once from what the session holds, asking nothing new.
+  const stale = useRef(false)
 
   useEffect(() => {
     generation.current += 1
     const gen = generation.current
     retryOwner.current = null
+    stale.current = false
     setRetrying(false)
     setSearch({ status: 'loading' })
     let issued = false
@@ -91,9 +95,14 @@ export function useWhoCanAskSearch(
     // until the fuller answer replaces them. Not before this query's own first search (its
     // debounce), and not while a retry waits for its whole answer.
     const again = (): void => {
-      if (issued && retryOwner.current === null && generation.current === gen) {
-        ask(active, query, { generation, order, setSearch }, gen)
+      if (!issued || generation.current !== gen) {
+        return
       }
+      if (retryOwner.current !== null) {
+        stale.current = true
+        return
+      }
+      ask(active, query, { generation, order, setSearch }, gen)
     }
     const stopWatching = active.onUpdate?.(again) ?? (() => {})
     // A check settling anywhere this open (an earlier session's included) can change who this
@@ -130,9 +139,14 @@ export function useWhoCanAskSearch(
       // Answers asked before this Try again no longer paint: only its own whole answer does.
       order.current.shown = order.current.asked + 1
       active.retry()
+      stale.current = false
       ask(active, query, { generation, order, setSearch }, gen, () => {
         retryOwner.current = null
         setRetrying(false)
+        if (stale.current) {
+          stale.current = false
+          ask(active, query, { generation, order, setSearch }, gen)
+        }
       })
     }
   }

@@ -168,8 +168,11 @@ export function cutLine(
           count: GITHUB_PEOPLE_PER_SOURCE
         })
       : cut.repositories
-        ? t('bots.github.whoCanAsk.recentRepos', 'Only your {{count}} latest repos were read.', {
-            count: GITHUB_PERSONAL_REPOSITORIES
-          })
+        ? // A cap on each personal account, not on the whole read (direct repos are read whole).
+          t(
+            'bots.github.whoCanAsk.recentReposPerAccount',
+            'Showing the {{count}} latest repos per personal account.',
+            { count: GITHUB_PERSONAL_REPOSITORIES }
+          )
         : null
 }

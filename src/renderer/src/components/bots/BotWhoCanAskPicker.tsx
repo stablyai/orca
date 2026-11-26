@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useState, useSyncExternalStore } from 'react'
+import React, { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -85,6 +85,13 @@ export function BotWhoCanAskPicker({
   const t = useTranslate()
   const [query, setQuery] = useState('')
   const [ticked, setTicked] = useState<BotMember[]>([])
+  // The draft as of the last change, for a check settling between renders: it is judged against
+  // the ticks present at that moment, not against whatever the ledger says by the next render.
+  const draft = useRef<BotMember[]>([])
+  const setDraft = (next: BotMember[]): void => {
+    draft.current = next
+    setTicked(next)
+  }
   // A ticked person's real name, part of who they are: Selected shows it beside them, and a
   // search by it still finds them once they scroll off. A row's source tag is never kept.
   const [realNames, setRealNames] = useState<Readonly<Record<string, string>>>({})
@@ -92,19 +99,22 @@ export function BotWhoCanAskPicker({
   const [ledger] = useState(() => new WhoCanAskIdentityLedger())
   // Every read of the ledger below is keyed on its version, so none is served stale.
   const ledgerVersion = useSyncExternalStore(ledger.subscribe, ledger.version)
-  // A tick a check showed to be someone else's leaves the draft for good: a later check naming
-  // that account again makes it pickable, not silently picked.
+  // A tick a check shows to be someone else's leaves the draft at that settlement: a later check
+  // naming that account again makes it pickable, not silently picked. Decided right as each check
+  // settles, so a recovery settling in the same batch can't keep the earlier tick; a deliberate
+  // later tick is a new entry and stays.
   useEffect(
     () =>
-      ledger.onSettle(() =>
-        setTicked((current) => {
-          const kept = current.filter(
-            (member) =>
-              ledger.identity(member.id, member.name || member.id).status !== 'contradicted'
-          )
-          return kept.length === current.length ? current : kept
-        })
-      ),
+      ledger.onSettle(() => {
+        const current = draft.current
+        const kept = current.filter(
+          (member) => ledger.identity(member.id, member.name || member.id).status !== 'contradicted'
+        )
+        if (kept.length !== current.length) {
+          draft.current = kept
+          setTicked(kept)
+        }
+      }),
     [ledger]
   )
   const { search, retrying, retry } = useWhoCanAskSearch(service, query, ledger)
@@ -128,11 +138,8 @@ export function BotWhoCanAskPicker({
     if (realName && realNames[member.id] !== realName) {
       setRealNames((current) => ({ ...current, [member.id]: realName }))
     }
-    setTicked((current) =>
-      isPicked(member.id)
-        ? current.filter((entry) => entry.id !== member.id)
-        : [...current.filter((entry) => entry.id !== member.id), member]
-    )
+    const current = draft.current.filter((entry) => entry.id !== member.id)
+    setDraft(isPicked(member.id) ? current : [...current, { ...member }])
   }
 
   const found = recomputeOn([ledgerVersion], () =>
@@ -183,17 +190,22 @@ export function BotWhoCanAskPicker({
   // login and name (GitHub) keeps only those still matching the search; any other keeps them all,
   // so each pick can always be unticked.
   const byName = service.normalizeQuery !== undefined
+  // A pick's real name: as ticked, or as a list gave it after the tick.
+  const realNameOf = (id: string): string =>
+    recomputeOn([ledgerVersion], () => realNames[id] ?? ledger.realName(id) ?? '')
   const offScreen = picked.filter(
     (member) =>
       !addable.some((person) => person.id === member.id) &&
       (!byName ||
         matches(member.name || member.id, needle) ||
-        matches(realNames[member.id] ?? '', needle))
+        matches(realNameOf(member.id), needle))
   )
   const selectedGroup =
     offScreen.length > 0 ? (
       <CommandGroup heading={t('bots.whoCanAsk.selectedHeading', 'Selected')}>
-        {offScreen.map((member) => pickRow(member, realNames[member.id], realNames[member.id]))}
+        {offScreen.map((member) =>
+          pickRow(member, realNameOf(member.id) || undefined, realNameOf(member.id) || undefined)
+        )}
       </CommandGroup>
     ) : null
 
@@ -382,6 +394,8 @@ export function BotWhoCanAskPicker({
             disabled={held.length > 0}
             aria-describedby={held.length > 0 && service.checkingStatus ? checkingId : undefined}
             onClick={() => onPicked(picked)}
+            // Enter is the button's own, as for Try again (the list would pick its highlighted row).
+            onKeyDown={(event) => event.stopPropagation()}
           >
             {picked.length === 1
               ? t('bots.whoCanAsk.addOne', 'Add 1 person')

@@ -86,6 +86,37 @@ const PersonalSource = z.object({
 const Data = z.object({ data: z.record(z.string(), z.unknown()) })
 const NoErrors = z.object({ errors: z.array(z.never()).optional() })
 const Viewer = z.object({ login: z.string().regex(GITHUB_LOGIN_PATTERN) })
+// An owner's declared kind, read apart from its connection: a malformed connection keeps its kind.
+const OwnerKind = z.object({ __typename: z.enum(['Organization', 'User']) })
+const PathedErrors = z.object({
+  errors: z.array(z.object({ path: z.array(z.union([z.string(), z.number()])).optional() }))
+})
+
+/** Which kind a GraphQL error's path points into: a repository (`rN`), an owner of a known kind
+ *  (`aN`), or neither (no path, the viewer, an owner of unknown kind): then it can't be told. */
+function errorLoss(raw: unknown, data: Record<string, unknown>): GitHubRosterLoss {
+  const lost: GitHubRosterLoss = { repositories: false, organizations: false, unattributed: false }
+  if (NoErrors.safeParse(raw).success) {
+    return lost
+  }
+  const parsed = PathedErrors.safeParse(raw)
+  if (!parsed.success) {
+    return { ...lost, unattributed: true }
+  }
+  for (const error of parsed.data.errors) {
+    const head = error.path?.[0]
+    const kind =
+      typeof head === 'string' && /^a\d+$/.test(head) ? OwnerKind.safeParse(data[head]) : null
+    if (typeof head === 'string' && /^r\d+$/.test(head)) {
+      lost.repositories = true
+    } else if (kind?.success) {
+      lost[kind.data.__typename === 'Organization' ? 'organizations' : 'repositories'] = true
+    } else {
+      lost.unattributed = true
+    }
+  }
+  return lost
+}
 
 /** What one call returned, source by source. */
 export type RosterRead = {
@@ -123,11 +154,7 @@ export function readRoster(stdout: string, target: GitHubPeopleTarget): RosterRe
     from: { repositories: false, organizations: false },
     // Any errors entry, or an `errors` that isn't a list at all, means something was lost.
     lossy: !NoErrors.safeParse(raw).success,
-    lost: {
-      repositories: false,
-      organizations: false,
-      unattributed: !NoErrors.safeParse(raw).success
-    },
+    lost: errorLoss(raw, data),
     cut: { people: false, members: false, repositories: false },
     viewer: viewer.success ? viewer.data.login : null
   }
@@ -166,9 +193,15 @@ export function readRoster(stdout: string, target: GitHubPeopleTarget): RosterRe
       return
     }
     if (!personal.success) {
-      // Neither an organization nor a person's account: which kind was lost is unknown.
+      // A declared kind whose connection didn't read is a loss of that kind; with no readable
+      // kind at all (null, unknown), which kind was lost can't be told.
+      const kind = OwnerKind.safeParse(entry)
       read.lossy = true
-      read.lost.unattributed = true
+      if (kind.success) {
+        read.lost[kind.data.__typename === 'Organization' ? 'organizations' : 'repositories'] = true
+      } else {
+        read.lost.unattributed = true
+      }
       return
     }
     const repositories = personal.data.repositories

@@ -25,6 +25,8 @@ export class WhoCanAskIdentityLedger {
   // Every settled check of each login, and the newest check each id was seen in.
   private readonly byLogin = new Map<string, Observation[]>()
   private readonly byId = new Map<string, Observation>()
+  // Real names a list gave each id, kept for picks made before the list arrived.
+  private readonly realNames = new Map<string, string>()
   private readonly listeners = new Set<() => void>()
   private readonly settleListeners = new Set<() => void>()
   private revision = 0
@@ -55,6 +57,26 @@ export class WhoCanAskIdentityLedger {
     for (const listener of this.settleListeners) {
       listener()
     }
+  }
+
+  /** A read list's people: their real names become part of who each id is, for matching and for
+   *  what a check still out could change. */
+  learnNames(people: readonly { id: string; name: string | null }[]): void {
+    let learned = false
+    for (const person of people) {
+      if (person.name && this.realNames.get(person.id) !== person.name) {
+        this.realNames.set(person.id, person.name)
+        learned = true
+      }
+    }
+    if (learned) {
+      this.changed()
+    }
+  }
+
+  /** The real name a list gave `id`, if any. */
+  realName(id: string): string | undefined {
+    return this.realNames.get(id)
   }
 
   /** Logins whose check is still out (lowercase). */

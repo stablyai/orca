@@ -104,6 +104,9 @@ export function gitHubWhoCanAskSession(
             )
     ).then((state) => {
       settled = state
+      if (state.status === 'read') {
+        ledger.learnNames(state.people)
+      }
       // Each waiter removes itself as it runs; a Set allows that during iteration.
       for (const done of waiting) {
         done(state)

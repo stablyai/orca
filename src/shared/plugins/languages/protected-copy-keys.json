@@ -818,7 +818,7 @@
     "bots.github.whoCanAsk.partlyRead",
     "bots.github.whoCanAsk.readEarlier",
     "bots.github.whoCanAsk.readEarlierRemote",
-    "bots.github.whoCanAsk.recentRepos",
+    "bots.github.whoCanAsk.recentReposPerAccount",
     "bots.github.whoCanAsk.repos",
     "bots.github.whoCanAsk.reposLoading",
     "bots.github.whoCanAsk.reposNotChecked",
