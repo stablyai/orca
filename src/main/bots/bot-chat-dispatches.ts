@@ -152,7 +152,9 @@ function dispatchOf(link: DispatchCreatorLink, chatId: string | null): BotChatTr
     at: link.at,
     ...(settled && !link.completedAtKnown ? { undated: true as const } : {}),
     worktreeId: link.worktreeId,
-    ...(link.title ? { title: link.title } : {})
+    ...(link.title ? { title: link.title } : {}),
+    ...(link.serverEnvironmentId ? { serverEnvironmentId: link.serverEnvironmentId } : {}),
+    ...(link.serverAgent ? { agent: link.serverAgent } : {})
   }
 }
 

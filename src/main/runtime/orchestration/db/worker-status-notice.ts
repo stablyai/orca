@@ -61,6 +61,16 @@ export function installWorkerStatusNotice(
     CREATE TEMP TRIGGER IF NOT EXISTS orca_worker_resource_delete_notice
     AFTER DELETE ON main.worker_terminal_resources
     BEGIN SELECT ${NOTICE_FUNCTION}(OLD.owner_dispatch_id, 'deleted'); END;
+    -- A paired server's own Dispatch: its insert is 'written', as it creates no Dispatch here.
+    CREATE TEMP TRIGGER IF NOT EXISTS orca_remote_dispatch_insert_notice
+    AFTER INSERT ON main.remote_dispatches
+    BEGIN SELECT ${NOTICE_FUNCTION}(NEW.dispatch_id, 'written'); END;
+    CREATE TEMP TRIGGER IF NOT EXISTS orca_remote_dispatch_update_notice
+    AFTER UPDATE ON main.remote_dispatches
+    BEGIN SELECT ${NOTICE_FUNCTION}(NEW.dispatch_id, 'written'); END;
+    CREATE TEMP TRIGGER IF NOT EXISTS orca_remote_dispatch_delete_notice
+    AFTER DELETE ON main.remote_dispatches
+    BEGIN SELECT ${NOTICE_FUNCTION}(OLD.dispatch_id, 'deleted'); END;
     CREATE TEMP TRIGGER IF NOT EXISTS orca_task_update_notice
     AFTER UPDATE ON main.tasks
     BEGIN SELECT ${NOTICE_FUNCTION}(d.id, 'written') FROM main.dispatch_contexts d WHERE d.task_id = NEW.id; END;
