@@ -5,6 +5,10 @@ import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/ag
 import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import { createAcpStructuredLaunchResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import { ACP_LAUNCH_SPECS, acpLaunchSpecFor } from '../acp/launch/acp-launch-registry'
+import {
+  agentSessionHoldsProviderConversation,
+  agentSessionNeverStarted
+} from '../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { pickAgentSessionOption } from '../runtime/agent-session/records/agent-session-record-options'
 import { isAgentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
 import { modelNamesServingAgent } from '../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
@@ -211,7 +215,7 @@ describe('switching agent on an Ouro chat', () => {
   const SLUGGER = { id: 'slugger', label: 'Slugger', isDefault: false, efforts: [] }
   const OUROBOROS = { id: 'ouroboros', label: 'Ouroboros', isDefault: false, efforts: [] }
 
-  function picker(sessionNeverStarted: boolean) {
+  function picker(sessionNeverStarted: boolean, holdsProviderConversation: boolean) {
     const seed = structuredAgentSessionSeedCatalog('ouro')
     const state = applyStructuredAgentSessionOptions(
       createStructuredAgentSessionOptionState('ouro', seed),
@@ -220,7 +224,8 @@ describe('switching agent on an Ouro chat', () => {
         models: [SLUGGER, OUROBOROS],
         listedModelIds: ['slugger', 'ouroboros'],
         current: { model: 'slugger' },
-        sessionNeverStarted
+        sessionNeverStarted,
+        holdsProviderConversation
       }
     )
     const model = structuredAgentSessionOptionSnapshot(state).find((entry) => entry.id === 'model')
@@ -228,13 +233,20 @@ describe('switching agent on an Ouro chat', () => {
   }
 
   it('is offered before the chat starts', () => {
-    const { model, canSwitch } = picker(true)
+    const { model, canSwitch } = picker(true, false)
     expect(model).toMatchObject({ settable: true })
     expect(canSwitch).toBe(true)
   })
 
-  it('is shown read-only once the chat has started, naming the agent it started with', () => {
-    const { model, canSwitch } = picker(false)
+  // A launch can fail before session/new answers, say on a removed agent: switching is the way out.
+  it('stays open after a launch that no agent took up, as the host allows', () => {
+    const { model, canSwitch } = picker(false, false)
+    expect(model).toMatchObject({ settable: true })
+    expect(canSwitch).toBe(true)
+  })
+
+  it('is shown read-only once an agent holds the conversation, naming that agent', () => {
+    const { model, canSwitch } = picker(false, true)
     expect(model).toMatchObject({ settable: false, disabledReason: 'set-when-session-starts' })
     expect(model?.kind).toMatchObject({ currentValue: 'slugger' })
     expect(canSwitch).toBe(false)
@@ -285,8 +297,15 @@ describe('switching agent on an Ouro chat', () => {
     expect(pick(chat([...held]), 'slugger').options).toEqual({ model: 'slugger' })
   })
 
-  it('is saved by the host while no agent holds a conversation yet', () => {
+  it('is saved by the host while no agent holds a conversation yet, even after a launch', () => {
     expect(pick(chat([]), 'ouroboros').options).toEqual({ model: 'ouroboros' })
+    // The fixture's lease is live at fence 7: the chat launched, and no agent took it up.
+    expect(agentSessionNeverStarted(chat([]))).toBe(false)
+  })
+
+  it('reads the same fact on both sides: a minted handle', () => {
+    expect(agentSessionHoldsProviderConversation(chat([]))).toBe(false)
+    expect(agentSessionHoldsProviderConversation(chat([...held]))).toBe(true)
   })
 
   it('is left open for agents whose load restores the model', () => {

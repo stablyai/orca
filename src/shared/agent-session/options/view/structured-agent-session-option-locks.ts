@@ -2,12 +2,12 @@ import type { SessionOptionDescriptor } from '../../../native-chat/input/native-
 import { modelNamesServingAgent } from '../model-catalog/agent-model-catalog-ownership'
 import type { StructuredAgentSessionOptionState } from '../structured-agent-session-options'
 
-/** A started chat whose model names its agent stays with that agent. */
+/** Once an agent holds the conversation, a chat whose model names its agent stays with it. */
 function servingAgentLocked(state: StructuredAgentSessionOptionState): boolean {
-  return state.sessionNeverStarted === false && modelNamesServingAgent(state.record.agent)
+  return state.holdsProviderConversation === true && modelNamesServingAgent(state.record.agent)
 }
 
-/** The picker shows the serving agent read-only once the chat has started. */
+/** The picker shows the serving agent read-only once it holds the conversation, as the host does. */
 export function withServingAgentLock(
   state: StructuredAgentSessionOptionState,
   descriptors: readonly SessionOptionDescriptor[]
@@ -19,7 +19,7 @@ export function withServingAgentLock(
   )
 }
 
-/** Options this chat's state holds still: a restricted Fast mode, or a started chat's serving agent. */
+/** Options this chat's state holds still: a restricted Fast mode, or the agent holding the chat. */
 export function optionHeldByChat(state: StructuredAgentSessionOptionState, id: string): boolean {
   return (
     (id === 'fastMode' && state.fastModeRestricted === true) ||

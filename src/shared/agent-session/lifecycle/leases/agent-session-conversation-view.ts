@@ -24,6 +24,13 @@ export function agentSessionNeverStarted({
   )
 }
 
+/** A provider conversation exists once the agent minted a handle, whatever the lease did. */
+export function agentSessionHoldsProviderConversation({
+  providerHandleChain
+}: Pick<AgentSessionRecord, 'providerHandleChain'>): boolean {
+  return providerHandleChain.length > 0
+}
+
 export function agentSessionConversationView(record: ConversationFacts) {
   const { lease, acquiredAccount: _acquiredAccount, ...conversation } = record
   const {

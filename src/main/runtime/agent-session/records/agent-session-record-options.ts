@@ -2,6 +2,7 @@ import { agentSessionRefusalError } from '../../../../shared/agent-session/failu
 import type { AgentSessionOptionsReplacement } from '../../../../shared/agent-session/options/protocol/agent-session-options-replacement'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionModelOption } from '../../../../shared/agent-session/options/model-catalog/agent-session-model-option'
+import { agentSessionHoldsProviderConversation } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { modelNamesServingAgent } from '../../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 
 export function replaceAgentSessionRecordOptions(
@@ -19,7 +20,7 @@ export function replaceAgentSessionRecordOptions(
   if (
     'options' in replacement &&
     modelNamesServingAgent(record.provider) &&
-    record.providerHandleChain.length > 0 &&
+    agentSessionHoldsProviderConversation(record) &&
     servingAgent !== undefined &&
     replacement.options.model !== servingAgent
   ) {
