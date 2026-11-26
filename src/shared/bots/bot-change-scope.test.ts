@@ -67,6 +67,20 @@ it('keeps a saved-post notice local to transcript readers unless the room catalo
   expect(botChangeConcerns(notice(saved, { kinds: ['groups'] }), { kinds: ['groups'] })).toBe(true)
 })
 
+it('does not mark a coalesced bot edit as room-post-only', () => {
+  const changed = notice(
+    { botIds: ['bot-1'], kinds: ['bot'] },
+    {
+      kinds: ['groups'],
+      groupIds: ['room-a'],
+      groupPosts: { 'room-a': ['post-id'] },
+      scopedRoomPosts: true,
+      roomPostsOnly: true
+    }
+  )
+  expect(changed?.roomPostsOnly).toBeUndefined()
+})
+
 it('recovers an open transcript for an unscoped room change', () => {
   const changed = botGroupChangedPosts(
     readBotChangeScope({ kinds: ['groups'], groupIds: ['room-a'] }),

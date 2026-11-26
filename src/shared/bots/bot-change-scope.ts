@@ -275,7 +275,7 @@ export function botChangeNotice(pending: PendingBotChanges): BotChangeScope {
     ...(pending.overflowRoomPosts?.size
       ? { overflowRoomPosts: [...pending.overflowRoomPosts] }
       : {}),
-    ...(pending.kinds.has('groups') && !pending.groupCatalogChanged
+    ...(pending.kinds.size === 1 && pending.kinds.has('groups') && !pending.groupCatalogChanged
       ? { roomPostsOnly: true as const }
       : {})
   }

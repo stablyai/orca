@@ -265,7 +265,7 @@ export function MobileBotGroupTurn({
             <View style={styles.turn}>
               <MobileNativeChatTurnStatus
                 pendingLabel={
-                  turn.revoked && clock?.state !== 'completed'
+                  turn.revoked && !savedOutcome && clock?.state !== 'completed'
                     ? t('bots.groups.memberRemoved', 'Member removed')
                     : waiting
                       ? queued

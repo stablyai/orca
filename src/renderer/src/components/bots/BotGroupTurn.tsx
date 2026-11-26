@@ -291,7 +291,7 @@ export const BotGroupTurn = memo(function BotGroupTurn({
     actionablePromptIds: session?.hostWork?.actionablePromptIds
   }
   const waiting = !lifecycle && !rejection && !ended
-  const membershipEnded = turn.revoked && lifecycle?.state !== 'completed'
+  const membershipEnded = turn.revoked && !savedOutcome && lifecycle?.state !== 'completed'
   const pendingLabel = membershipEnded
     ? t('bots.groups.memberRemoved', 'Member removed')
     : waiting

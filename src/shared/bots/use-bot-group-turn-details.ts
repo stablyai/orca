@@ -54,7 +54,9 @@ export function createBotGroupTurnDetailsHook({
     useEffect(() => () => pending.current?.abort(), [read, visible])
     const page = storedPage?.read === read ? storedPage : null
     const loading = visible && request?.read === read && !request.controller.signal.aborted
-    const expanded = open && (!readOnOpen || page !== null || loading)
+    // A terminal update can make a previously live turn eligible for a detail read. Keep a disclosure
+    // the person already opened visible while that new eligibility takes effect.
+    const expanded = open && (!readOnOpen || page !== null || loading || !storedPage)
 
     const load = (before?: BotGroupTurnDetailCursor) => {
       if (!visible || (pending.current && !pending.current.signal.aborted)) {
