@@ -51,11 +51,11 @@ export function startMobileEndpointLifecycle(
   const directEndpoints = createHostDirectEndpointFollower({
     client: logical,
     hostId: initialHost.id,
-    saved: initialHost
+    saved: initialHost,
+    isForeground: () => foreground
   })
   const unsubscribeDirectEndpoints = logical.onStateChange((state) => {
-    // A background reconnect can wait: the resume nudge asks again.
-    if (state === 'connected' && foreground) {
+    if (state === 'connected') {
       directEndpoints.onConnected()
     }
   })
@@ -118,11 +118,10 @@ function createSupervisor(
 ): MobileEndpointSupervisor {
   return new MobileEndpointSupervisor(logical, host.id, relay, {
     openDirect: () =>
-      connect(directEndpoints.dialEndpoint(), host.deviceToken, host.publicKeyB64, {
-        onLog,
-        hostId: host.id
-      }),
-    // Getters: each return probe reads where the desktop says it listens now.
+      directEndpoints.dial((endpoint) =>
+        connect(endpoint, host.deviceToken, host.publicKeyB64, { onLog, hostId: host.id })
+      ),
+    // Getters: each return probe reads where the desktop says it listens now (same kind as the saved one).
     get directPath() {
       return directPathForEndpoint(directEndpoints.directEndpoint())
     },

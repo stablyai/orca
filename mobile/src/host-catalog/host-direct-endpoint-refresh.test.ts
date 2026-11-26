@@ -23,6 +23,8 @@ describe('following a desktop direct endpoint', () => {
   it('offers only a same-kind replacement for an address the desktop no longer lists', () => {
     const host = { endpoint: LAN, directEndpointOrigin: 'host' as const }
     expect(directEndpointCandidate(host, [TAILNET, MOVED_LAN])).toBe(MOVED_LAN)
+    // A VPN or second NIC listed first must not win over the address in the old subnet.
+    expect(directEndpointCandidate(host, ['ws://10.8.0.5:6768', MOVED_LAN])).toBe(MOVED_LAN)
     // Still listed: keep it even though the desktop now prefers Tailscale.
     expect(directEndpointCandidate(host, [TAILNET, LAN])).toBeNull()
     // Tailscale gone for a moment must not move a tailnet row onto LAN.
