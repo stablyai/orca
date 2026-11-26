@@ -27,6 +27,17 @@ export function remarkMarkdownClosingFence(this: Processor): void {
   data.fromMarkdownExtensions = [...(data.fromMarkdownExtensions ?? []), closingFenceTokens]
 }
 
+function endWithoutTrailingSpacing(text: string, start: number, end: number): number {
+  while (end > start) {
+    const code = text.charCodeAt(end - 1)
+    if (code !== 0x20 && code !== 0x09) {
+      break
+    }
+    end--
+  }
+  return end
+}
+
 export function createClosingFenceCheck(authored: string, drawn: string): ClosingFenceCheck {
   // Micromark drops an initial BOM before assigning offsets.
   const drawnBomLength = Number(drawn.startsWith('\uFEFF'))
@@ -66,10 +77,10 @@ export function createClosingFenceCheck(authored: string, drawn: string): Closin
         ? Number(authored.startsWith('\uFEFF'))
         : previousEnd + (authored.startsWith('\r\n', previousEnd) ? 2 : 1)
     const drawnStart = drawnEnd - position.end.column + 1
-    const trimSpacing = /[ \t]+$/
+    const authoredContentEnd = endWithoutTrailingSpacing(authored, authoredStart, authoredEnd)
+    const drawnContentEnd = endWithoutTrailingSpacing(drawn, drawnStart, drawnEnd)
     return (
-      authored.slice(authoredStart, authoredEnd).replace(trimSpacing, '') ===
-      drawn.slice(drawnStart, drawnEnd).replace(trimSpacing, '')
+      authored.slice(authoredStart, authoredContentEnd) === drawn.slice(drawnStart, drawnContentEnd)
     )
   }
 }
