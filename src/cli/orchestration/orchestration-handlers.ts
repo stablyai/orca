@@ -14,6 +14,7 @@ import { ORCHESTRATION_SEND_HANDLER } from './messages/message-send-handler'
 import { ORCHESTRATION_TASK_HANDLERS } from './tasks/task-handlers'
 import { ORCHESTRATION_WORKER_LAUNCH_HANDLER } from './workers/worker-launch-handler'
 import { ORCHESTRATION_WORKER_OBSERVATION_HANDLERS } from './workers/worker-observation-handlers'
+import { ORCHESTRATION_WORKER_PROGRESS_HANDLER } from './workers/worker-progress-handler'
 import { ORCHESTRATION_WORKER_TERMINAL_HANDLERS } from './workers/worker-terminal-handlers'
 
 export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
@@ -23,6 +24,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   ...ORCHESTRATION_INBOX_HANDLERS,
   ...ORCHESTRATION_TASK_HANDLERS,
   ...ORCHESTRATION_WORKER_LAUNCH_HANDLER,
+  ...ORCHESTRATION_WORKER_PROGRESS_HANDLER,
   ...ORCHESTRATION_WORKER_OBSERVATION_HANDLERS,
   ...ORCHESTRATION_WORKER_TERMINAL_HANDLERS,
   ...ORCHESTRATION_DISPATCH_HANDLER,

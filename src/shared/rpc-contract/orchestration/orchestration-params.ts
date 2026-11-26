@@ -86,6 +86,24 @@ export const InboxParams = lazyZodSchema(() =>
   })
 )
 
+export const ORCHESTRATION_PROGRESS_NOTE_MAX = 500
+
+export const ProgressParams = lazyZodSchema(() =>
+  z.object({
+    note: z
+      .string({ error: 'Missing --note' })
+      .trim()
+      .min(1, 'Missing --note')
+      .max(
+        ORCHESTRATION_PROGRESS_NOTE_MAX,
+        `Progress note must be at most ${ORCHESTRATION_PROGRESS_NOTE_MAX} characters.`
+      ),
+    from: OptionalString,
+    dispatchId: OptionalString,
+    senderPaneKey: OptionalString
+  })
+)
+
 export const TaskCreateParams = lazyZodSchema(() =>
   z.object({
     spec: requiredString('Missing --spec'),

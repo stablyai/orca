@@ -84,11 +84,27 @@ export const WorkerDockRow = memo(function WorkerDockRow({
     row.reason
       ? row.reason
       : ''
-  const label = [mixed && row ? workerDockKindLabel(t, row.kind) : '', title, state, reason, remote]
+  const progress =
+    row &&
+    !row.retired &&
+    row.state !== 'failed' &&
+    row.state !== 'unexpected' &&
+    row.state !== 'stopping' &&
+    row.progressNote
+      ? row.progressNote
+      : ''
+  const label = [
+    mixed && row ? workerDockKindLabel(t, row.kind) : '',
+    title,
+    state,
+    progress,
+    reason,
+    remote
+  ]
     .filter(Boolean)
     .join(' · ')
   const tooltip = row
-    ? [row.name, title === row.title ? '' : row.title, title, state, reason, remote]
+    ? [row.name, title === row.title ? '' : row.title, title, state, progress, reason, remote]
         .filter(Boolean)
         .join(' · ')
     : undefined
@@ -116,6 +132,9 @@ export const WorkerDockRow = memo(function WorkerDockRow({
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="line-clamp-3 break-words">{title}</span>
+          {progress ? (
+            <span className="truncate text-xs text-muted-foreground">{progress}</span>
+          ) : null}
           {row && (row.model || row.changedAt !== null) ? (
             <span className="truncate text-xs text-muted-foreground">
               {row.model}

@@ -109,15 +109,22 @@ export function buildDispatchPreamble(params: PreambleParams): string {
 ${dispatchIdentityLines(params)}
 
 The coordinator cannot see this ${surface}. Reach it with the \`${cli} orchestration\` commands
-below, and message it only to ask, report a blocker, or finish; it needs no progress updates
-unless the task asks.
+below. \`${cli} orchestration send\` always wakes its recipient: use it only when the coordinator
+must act, answer, or change course (a blocker or concern, a new rule, a lane to rerun, a PR or task
+ready, or your final worker_done). Never send routine progress updates ("committed fix, checks
+running", "round 2 running", play-by-play receipts) via \`send\`; record passive live progress with
+\`${cli} orchestration progress\` instead.
 ${windowsSandboxLine(cli, params.runsOnNativeWindows)}Do only this task, yourself: no subagents or helper workers unless the task asks.
 Terminals you open with \`${cli} terminal create\` or \`split\` close with this worker; add --keep-open to one the user keeps.
 
 === CLI COMMANDS ===
 
 \`\`\`sh
-${checkLines({ chat, unreadMail: params.unreadMail, cli, workerHandle: params.workerHandle })}  # Ask the coordinator, then end your turn; Orca wakes you with the answer.
+${checkLines({ chat, unreadMail: params.unreadMail, cli, workerHandle: params.workerHandle })}  # Optional passive progress note (<= 500 chars) visible in Orca's UI and
+  # worker-show; never mails or wakes the coordinator:
+  ${cli} orchestration progress --from ${params.workerHandle} --note "<concise live status>"
+
+  # Ask the coordinator, then end your turn; Orca wakes you with the answer.
   # Never use a local question prompt such as AskUserQuestion; the
   # coordinator cannot see or answer it.
   ${cli} orchestration ask --from ${params.workerHandle} --question "<your question>"

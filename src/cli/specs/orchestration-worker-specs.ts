@@ -64,12 +64,34 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['orchestration', 'progress'],
+    summary: 'Record a passive live progress note on this worker without mailing or waking anyone',
+    usage:
+      'orca orchestration progress (--note <text> | --note-file <path|->) [--from <handle>] [--dispatch-id <id>] [--retry-request <id>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'note',
+      'note-file',
+      'from',
+      'dispatch-id',
+      'dispatch-capability',
+      'retry-request'
+    ],
+    identityFlagRoles: { from: 'caller' },
+    notes: [
+      'Passive status only: records a concise progress note (<= 500 characters) on this active worker Dispatch for worker-show, bot work list, and Orca UI views.',
+      'Never inserts coordinator mail and never wakes a coordinator or primary bot; each call replaces the previous progress note.',
+      'Rejected outside an active worker Dispatch. When a recipient must act, answer, or change course, use `orca orchestration ask` or `orca orchestration send` instead.'
+    ]
+  },
+  {
     path: ['orchestration', 'worker-show'],
     summary: 'Inspect one supervised worker Dispatch',
     usage: 'orca orchestration worker-show --dispatch <dispatch_id> [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'dispatch'],
     notes: [
       'A Dispatch created by orchestration dispatch is shown as unsupervised and reports the exact adopted terminal when its identity is still provable.',
+      'Shows the worker Dispatch state, liveness, and any passive progress note recorded via `orca orchestration progress`.',
       'observation.agentWait names a worker parked on a prompt only a human can answer, with the evidence that proved it (hook, prompt-text, or title). Null means Orca looked and found no wait. An absent field means it never looked — an older host, an unverifiable worker identity, an unreadable pane, or an agent probe that did not answer in time — and never means the worker is not waiting. A waiting worker is healthy, not failed.'
     ]
   },
