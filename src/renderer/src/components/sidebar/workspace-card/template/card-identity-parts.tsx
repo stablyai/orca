@@ -123,23 +123,14 @@ export const CARD_IDENTITY_PARTS = {
     <CardTitle props={props} card={card} />
   )),
   TitleStatus: part([], () => <WorktreeCardTitleStatus />),
-  RepoChip: part(['hasHoverDetails'], (props, _children, card) =>
+  RepoChip: part(['hasHoverDetails', 'showName'], (props, _children, card) =>
     card.repo ? (
       <WorktreeCardRepoChip
         repo={card.repo}
         card={card}
         hasHoverDetails={props.hasHoverDetails === true}
+        showName={props.showName === true}
       />
-    ) : null
-  ),
-  ProjectName: part([], (_props, _children, card) =>
-    card.repo ? (
-      <span
-        className="min-w-0 max-w-[40%] truncate text-xs text-muted-foreground"
-        title={card.repo.displayName}
-      >
-        {card.repo.displayName}
-      </span>
     ) : null
   ),
   SshControl: part(['iconOnly'], (props, _children, card) => sshControl(props, card)),
