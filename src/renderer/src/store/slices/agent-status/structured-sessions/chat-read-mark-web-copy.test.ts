@@ -10,6 +10,7 @@ const OLD_TAB_KEY = `agent-chat-tab-v1-abc:${LEAF}`
 const OTHER_OLD_TAB_KEY = `structured-agent-session-old:${LEAF}`
 const CONVERSATION_KEY = `structured-agent-session-sess-2:${LEAF}`
 const completeInventory = (workspaceIds: string[]) => ({
+  workspaceIds,
   affirmedWorkspaceIds: workspaceIds,
   pendingWorkspaceIds: []
 })
@@ -108,6 +109,7 @@ it('completes a delayed first inventory workspace when its replacement arrives',
   state = {
     ...state,
     ...copyWebClientChatReadMarksForTabLists(state, () => tabs, ['w1'], {
+      workspaceIds: ['w1', 'w2'],
       affirmedWorkspaceIds: ['w1'],
       pendingWorkspaceIds: ['w2']
     })
@@ -134,12 +136,12 @@ it('discharges pending workspaces without reading unchanged tabs', () => {
       state,
       () => ({ w1: [{ contentType: 'terminal' }] }),
       ['w1'],
-      { affirmedWorkspaceIds: ['w1'], pendingWorkspaceIds: ['w2'] }
+      { workspaceIds: ['w1', 'w2'], affirmedWorkspaceIds: ['w1'], pendingWorkspaceIds: ['w2'] }
     )
   ).toBeNull()
-  expect(copyWebClientChatReadMarksForTabLists(state, undefined, ['w2'])).toEqual({
-    chatReadMarksCopiedHere: true
-  })
+  expect(
+    copyWebClientChatReadMarksForTabLists(state, undefined, ['w2'], undefined, [['w2', true]])
+  ).toEqual({ chatReadMarksCopiedHere: true })
 })
 
 it('remembers only copied chats and releases migration bookkeeping after completion', () => {
@@ -212,19 +214,62 @@ it('copies every affirmed workspace from the resulting full inventory tabs', () 
   })
 })
 
-it('leaves an unverifiable inventory pending', () => {
+it('completes when a newer affirmed workspace preceded an unverifiable census', () => {
   const state: Parameters<typeof copyWebClientChatReadMarksOnce>[0] = {
     activityClearedAtByPaneKey: {},
     manuallyUnreadTurnsByPaneKey: { [OLD_TAB_KEY]: 70 },
     chatReadMarksCopiedHere: false
   }
+  const tabs = {
+    w1: [{ contentType: 'terminal' }],
+    w2: [{ contentType: 'agent-session', entityId: 'sess-2' }]
+  }
+  const afterReplacement = {
+    ...state,
+    ...copyWebClientChatReadMarksForTabLists(state, () => tabs, ['w2'], undefined, [['w2', true]])
+  }
   expect(
-    copyWebClientChatReadMarksForTabLists(state, () => ({}), [], {
-      affirmedWorkspaceIds: [],
-      pendingWorkspaceIds: ['w1']
+    copyWebClientChatReadMarksForTabLists(afterReplacement, () => tabs, ['w1'], {
+      workspaceIds: ['w1', 'w2'],
+      affirmedWorkspaceIds: ['w1'],
+      pendingWorkspaceIds: ['w2']
     })
+  ).toEqual({ chatReadMarksCopiedHere: true })
+})
+
+it('leaves an unverifiable inventory pending', () => {
+  let state: Parameters<typeof copyWebClientChatReadMarksOnce>[0] = {
+    activityClearedAtByPaneKey: {},
+    manuallyUnreadTurnsByPaneKey: { [OLD_TAB_KEY]: 70 },
+    chatReadMarksCopiedHere: false
+  }
+  expect(
+    copyWebClientChatReadMarksForTabLists(
+      state,
+      () => ({
+        w1: [{ contentType: 'agent-session', entityId: 'sess-2' }]
+      }),
+      [],
+      {
+        workspaceIds: ['w1'],
+        affirmedWorkspaceIds: [],
+        pendingWorkspaceIds: ['w1']
+      }
+    )
   ).toBeNull()
-  expect(copyWebClientChatReadMarksForTabLists(state, () => ({}), ['w1'])).toEqual({
+  state = {
+    ...state,
+    ...copyWebClientChatReadMarksForTabLists(
+      state,
+      () => ({ w1: [{ contentType: 'agent-session', entityId: 'sess-2' }] }),
+      ['w1'],
+      undefined,
+      [['w1', true]]
+    )
+  }
+  expect(state).toEqual({
+    activityClearedAtByPaneKey: {},
+    manuallyUnreadTurnsByPaneKey: { [OLD_TAB_KEY]: 70, [CONVERSATION_KEY]: 70 },
     chatReadMarksCopiedHere: true
   })
 })

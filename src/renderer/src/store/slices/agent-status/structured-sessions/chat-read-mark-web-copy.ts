@@ -12,6 +12,7 @@ type ChatTabsByWorkspace = Readonly<
 >
 
 type FullInventory = {
+  workspaceIds: Iterable<string>
   affirmedWorkspaceIds: Iterable<string>
   pendingWorkspaceIds: Iterable<string>
 }
@@ -20,11 +21,22 @@ const copiedChatPaneKeys = new Set<string>()
 const pendingWorkspaceIds = new Set<string>()
 let receivedFullInventory = false
 const paneKeysByLeafByRecord = new WeakMap<object, Map<string, string[]>>()
+const agentSessionsAffirmedByWorkspace = new Map<string, boolean>()
 
 function clearMigrationBookkeeping(): void {
   copiedChatPaneKeys.clear()
   pendingWorkspaceIds.clear()
+  agentSessionsAffirmedByWorkspace.clear()
   receivedFullInventory = false
+}
+
+export function hasPendingWebChatReadMarkWorkspace(workspaceIds: Iterable<string>): boolean {
+  for (const workspaceId of workspaceIds) {
+    if (pendingWorkspaceIds.has(workspaceId)) {
+      return true
+    }
+  }
+  return false
 }
 
 function hasLegacyMark(state: WebCopyState, sessionId: string): boolean {
@@ -84,21 +96,37 @@ export function copyWebClientChatReadMarksForTabLists(
   state: WebCopyState,
   readTabsByWorkspace: (() => ChatTabsByWorkspace) | undefined,
   workspaceIds: Iterable<string>,
-  fullInventory?: FullInventory
+  fullInventory?: FullInventory,
+  appliedAgentSessionAffirmations: Iterable<readonly [string, boolean]> = []
 ): Partial<WebCopyState> | null {
   if (state.chatReadMarksCopiedHere) {
     return null
   }
-  const affectedWorkspaceIds = [...new Set(fullInventory?.affirmedWorkspaceIds ?? workspaceIds)]
+  for (const [workspaceId, affirmed] of appliedAgentSessionAffirmations) {
+    agentSessionsAffirmedByWorkspace.set(workspaceId, affirmed)
+  }
+  let affectedWorkspaceIds = [...new Set(workspaceIds)]
   if (fullInventory) {
     receivedFullInventory = true
     pendingWorkspaceIds.clear()
     for (const workspaceId of fullInventory.pendingWorkspaceIds) {
-      pendingWorkspaceIds.add(workspaceId)
+      if (!agentSessionsAffirmedByWorkspace.get(workspaceId)) {
+        pendingWorkspaceIds.add(workspaceId)
+      }
     }
+    for (const workspaceId of fullInventory.affirmedWorkspaceIds) {
+      if (!pendingWorkspaceIds.has(workspaceId)) {
+        agentSessionsAffirmedByWorkspace.set(workspaceId, true)
+      }
+    }
+    affectedWorkspaceIds = [...new Set(fullInventory.workspaceIds)].filter(
+      (workspaceId) => agentSessionsAffirmedByWorkspace.get(workspaceId) === true
+    )
   } else if (receivedFullInventory) {
     for (const workspaceId of affectedWorkspaceIds) {
-      pendingWorkspaceIds.delete(workspaceId)
+      if (agentSessionsAffirmedByWorkspace.get(workspaceId)) {
+        pendingWorkspaceIds.delete(workspaceId)
+      }
     }
   }
   const complete = receivedFullInventory && pendingWorkspaceIds.size === 0
