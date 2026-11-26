@@ -26,6 +26,8 @@ const MAX_MS_PER_LAUNCH = 3 * 60_000
 const DELETE_MS_PER_HOME = 60_000
 const GAP_BETWEEN_HOMES_MS = 1_000
 const STOP_WAIT_MS = 10_000
+// Codex gives up waiting on lock coordination after 30 s; a batch's deletes take milliseconds.
+const DELETE_CALL_TIMEOUT_MS = 10_000
 // One lock hold and one `lsof` per batch: Codex waits on coordination for well under a second,
 // and no process starts per file.
 const OPEN_CHECK_BATCH = 128
@@ -88,6 +90,7 @@ export async function cleanUpCodexAccountCopies(args: {
   /** Holds Codex's lock coordination in these folders; null when it can't be taken. */
   holdLocks?: typeof holdThreadLockFolders
   findAcl?: typeof findFilesWithAcl
+  deleteTimeoutMs?: number
   /** Called after any batch deleted a copy, so a stop midway still refreshes disk usage. */
   onDeleted?: () => void
   platform?: NodeJS.Platform
@@ -182,16 +185,30 @@ export async function cleanUpCodexAccountCopies(args: {
             ? batch.filter((copy) => !open.has(copy.copy) && !withAcl.has(copy.copy))
             : []
         total.open += batch.length - closed.length
+        const aclKept = withAcl ? batch.filter((copy) => withAcl.has(copy.copy)) : []
+        if (aclKept.length > 0) {
+          await args.worker.call({ op: 'remember-acl', accountHome, copies: aclKept })
+        }
         if (closed.length === 0) {
           continue
         }
-        const deleted = await args.worker.call({
-          op: 'delete',
-          accountHome,
-          storeHome: args.storeHome,
-          copies: closed,
-          lockFolders
-        })
+        const answer = await withTimeoutResult(
+          args.worker.call({
+            op: 'delete',
+            accountHome,
+            storeHome: args.storeHome,
+            copies: closed,
+            lockFolders
+          }),
+          args.deleteTimeoutMs ?? DELETE_CALL_TIMEOUT_MS
+        )
+        if (!answer.ok) {
+          // A delete stuck on a hung mount: the worker is retired before the hold goes (finally),
+          // so no unlink runs after Codex's locks are let go, and Codex waits no longer.
+          await args.worker.stop()
+          return null
+        }
+        const deleted = answer.value
         if (deleted.ok && deleted.op === 'delete') {
           addTally(total, deleted.tally)
           deletedHere += deleted.tally.deleted

@@ -44,6 +44,9 @@ function run(
     locks?: boolean
     /** Copies carrying an ACL entry. */
     acl?: (paths: string[]) => Set<string> | null
+    /** Delete requests never answer, as on a hung mount; `events` records the order of steps. */
+    hangDelete?: boolean
+    events?: string[]
   } = {}
 ) {
   return cleanUpCodexAccountCopies({
@@ -57,18 +60,31 @@ function run(
     findOpen: async (paths) => (options.open ? options.open(paths) : new Set()),
     findAcl: async (paths) => (options.acl ? options.acl([...paths]) : new Set()),
     holdLocks: async () =>
-      options.locks === false ? null : { stillHeld: () => true, release: async () => {} },
+      options.locks === false
+        ? null
+        : {
+            stillHeld: () => true,
+            release: async () => {
+              options.events?.push('release')
+            }
+          },
+    deleteTimeoutMs: 50,
     worker: {
       call: async (request) => {
         if (request.op === 'delete') {
           options.beforeDelete?.()
+          if (options.hangDelete) {
+            return new Promise<never>(() => {})
+          }
         }
         return runCodexAccountCopiesRequest(request).catch((error: unknown) => ({
           ok: false as const,
           message: String(error)
         }))
       },
-      stop: async () => {}
+      stop: async () => {
+        options.events?.push('stop')
+      }
     }
   })
 }
@@ -185,6 +201,36 @@ describe('cleanUpCodexAccountCopies', () => {
     await run({ acl: (paths) => new Set(paths) })
     expect(existsSync(copy)).toBe(true)
     await run({ acl: () => null })
+    expect(existsSync(copy)).toBe(true)
+  })
+
+  it('does not read or offer a copy kept for an ACL again until it changes', async () => {
+    put(storeFile(), LINE_1 + LINE_2)
+    const copy = put(conflictCopy(), LINE_1)
+    const asked: string[] = []
+    const acl = (paths: string[]) => {
+      asked.push(...paths)
+      return new Set(paths)
+    }
+
+    await run({ acl })
+    await run({ acl })
+    expect(asked).toEqual([copy])
+    appendFileSync(copy, LINE_2)
+    await run({ acl })
+
+    expect(asked).toEqual([copy, copy])
+    expect(existsSync(copy)).toBe(true)
+  })
+
+  it('retires a worker stuck in a delete before letting go of the locks', async () => {
+    put(storeFile(), LINE_1)
+    const copy = put(conflictCopy(), LINE_1)
+    const events: string[] = []
+
+    expect(await run({ hangDelete: true, events })).toBeNull()
+
+    expect(events).toEqual(['stop', 'release'])
     expect(existsSync(copy)).toBe(true)
   })
 
