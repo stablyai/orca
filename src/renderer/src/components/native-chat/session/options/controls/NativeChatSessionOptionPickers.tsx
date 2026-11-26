@@ -30,6 +30,7 @@ import { NativeChatModelCombobox } from './NativeChatModelCombobox'
 import { useNativeChatPickerFocusReturn } from '../../../composer/focus/native-chat-picker-focus-return'
 import { NativeChatSessionOptionRows } from './NativeChatSessionOptionRows'
 import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
+import { NativeChatAgentPicker } from './NativeChatAgentPicker'
 
 export type NativeChatSessionOptionPickersProps = {
   surface: SessionOptionsSurface | null
@@ -357,12 +358,15 @@ function NativeChatSessionOptionPickersInner({
   // Consume requests even without a usable picker so composer remounts cannot reopen them.
   useEffect(() => pickerRequest?.consume(), [pickerRequest])
   const reportedModel = snapshot.find((descriptor) => descriptor.category === 'model')
-  if (!surface || !reportedModel) {
+  const agent = snapshot.find((descriptor) => descriptor.id === 'agent')
+  if (!surface || (!reportedModel && !agent)) {
     return null
   }
-  const model = withPendingValue(reportedModel, pending.get(reportedModel.id) ?? null)
+  const model = reportedModel
+    ? withPendingValue(reportedModel, pending.get(reportedModel.id) ?? null)
+    : null
   const options = sortNativeChatSessionOptions(snapshot)
-    .filter((descriptor) => descriptor.id !== 'interactionMode')
+    .filter((descriptor) => descriptor.id !== 'interactionMode' && descriptor.id !== 'agent')
     .map((descriptor) => withPendingValue(descriptor, pending.get(descriptor.id) ?? null))
 
   const markPending = (id: string) => (pick: PendingPick | null) => {
@@ -379,28 +383,31 @@ function NativeChatSessionOptionPickersInner({
 
   return (
     <div className="flex min-w-0 items-center text-chat-foreground-faint">
-      <SessionOptionPopover
-        demandModelCatalog={surface.demandModelCatalog}
-        cliUpdate={surface.cliUpdate}
-        model={model}
-        options={options}
-        isWorking={isWorking}
-        pendingIds={new Set(pending.keys())}
-        request={pickerRequest ?? null}
-        onSet={(descriptor, value) =>
-          runSessionOptionSurfaceCall(
-            { id: descriptor.id, value },
-            markPending(descriptor.id),
-            () => surface.setOption(descriptor.id, value)
-          )
-        }
-        onAction={(descriptor) =>
-          runSessionOptionSurfaceCall({ id: descriptor.id }, markPending(descriptor.id), () =>
-            surface.invokeAction(descriptor.id)
-          )
-        }
-        focusComposer={focusComposer}
-      />
+      {agent ? <NativeChatAgentPicker descriptor={agent} surface={surface} /> : null}
+      {model ? (
+        <SessionOptionPopover
+          demandModelCatalog={surface.demandModelCatalog}
+          cliUpdate={surface.cliUpdate}
+          model={model}
+          options={options}
+          isWorking={isWorking}
+          pendingIds={new Set(pending.keys())}
+          request={pickerRequest ?? null}
+          onSet={(descriptor, value) =>
+            runSessionOptionSurfaceCall(
+              { id: descriptor.id, value },
+              markPending(descriptor.id),
+              () => surface.setOption(descriptor.id, value)
+            )
+          }
+          onAction={(descriptor) =>
+            runSessionOptionSurfaceCall({ id: descriptor.id }, markPending(descriptor.id), () =>
+              surface.invokeAction(descriptor.id)
+            )
+          }
+          focusComposer={focusComposer}
+        />
+      ) : null}
     </div>
   )
 }

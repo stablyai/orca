@@ -1,6 +1,7 @@
 import { abortSignalReason } from '../../../shared/concurrency/abort-signal-reason'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import type { AcpOptionWrite, AcpStructuredOptions } from './acp-structured-options'
+import { AgentSessionOptionRejectedError } from '../../native-chat/agent-session-wire/options/structured-agent-session-option-error'
 
 export type AcpOptionWriteBound = {
   agent: string
@@ -21,7 +22,17 @@ export function writeAcpSessionOption(
     write.method === 'config'
       ? connection
           .setConfigOption(write.configId, write.value, undefined, undefined, timeoutMs)
-          .then((result) => () => options.adoptConfigOptions(result.configOptions))
+          .then((result) => () => {
+            options.adoptConfigOptions(result.configOptions)
+            if (
+              bound.key === 'agent' &&
+              (!result.configOptions || options.read().current.agent !== write.value)
+            ) {
+              throw new AgentSessionOptionRejectedError(
+                `${bound.agent} did not select ${write.value}`
+              )
+            }
+          })
       : connection
           .setModel(write.modelId, undefined, timeoutMs)
           .then(() => () => options.adoptModel(write.modelId))

@@ -7,6 +7,8 @@ import type { AgentSessionOptionResult } from '../../../../shared/agent-session/
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { agentChatPermissionModes } from '../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
+import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionOptionPick } from '../../../runtime/agent-session/records/agent-session-record-options'
 import type { StructuredAgentRegistry } from '../providers/structured-agent-registry'
 import type {
   AgentSessionTurnContext,
@@ -55,9 +57,14 @@ export function structuredAgentSessionOptionOverridesRefusal(
 /** Records literal picks for registered keys; the native control owns value acceptance. */
 export async function recordStructuredAgentSessionOptionIntent(
   deps: {
-    store: Pick<AgentSessionRecordStore, 'getRecord' | 'replaceSessionOptions' | 'updateRecord'>
+    store: Pick<AgentSessionRecordStore, 'getRecord' | 'replaceSessionOptions'> & {
+      updateRecord: (
+        sessionId: string,
+        command: { kind: 'pick-option'; args: AgentSessionOptionPick }
+      ) => Promise<AgentSessionRecord>
+    }
     agents: Pick<StructuredAgentRegistry, 'definition'>
-    adapter?: Pick<StructuredAgentSessionAdapter, 'projectOptions'>
+    adapter?: Pick<StructuredAgentSessionAdapter, 'projectOptions' | 'readOptions'>
   } & Parameters<typeof savedAgentSessionCatalogModels>[0],
   ctx: Pick<AgentSessionTurnContext, 'sessionId' | 'fence' | 'publish' | 'now'>,
   input: { key: string; value: string },
@@ -78,12 +85,33 @@ export async function recordStructuredAgentSessionOptionIntent(
   if (!reader.readsWithoutModel && input.key === 'model' && input.value === '') {
     return { ok: true, value: { key: input.key, value: input.value, options: {} } }
   }
+  if (input.key === 'agent') {
+    const live = await deps.adapter?.readOptions?.({ sessionId, fence }).catch(() => undefined)
+    if (!live?.agents?.some((agent) => agent.id === input.value)) {
+      return {
+        ok: false,
+        refusal: refuse(
+          'agent_session_operation_invalid',
+          { reason: 'optionRejected' },
+          'This session does not advertise that agent.'
+        )
+      }
+    }
+  }
   let options: Readonly<Record<string, string>>
   if (input.key === AGENT_CHAT_PERMISSION_MODE_OPTION_ID) {
     const permissionMode = input.value
     await deps.store.replaceSessionOptions({ sessionId, fence, permissionMode, now: ctx.now() })
     // Preserve the wire’s permission mode within options.
     options = { ...record.options, [input.key]: input.value }
+  } else if (
+    input.key === 'interactionMode' &&
+    record.options?.agent &&
+    deps.agents.definition(record.provider)?.restingOptions.acceptsKey('agent')
+  ) {
+    const { agent: _agent, ...remaining } = record.options
+    options = { ...remaining, interactionMode: input.value }
+    await deps.store.replaceSessionOptions({ sessionId, fence, options, now: ctx.now() })
   } else {
     const picked = { sessionId, fence, ...input, models: undefined, now: ctx.now() }
     options =

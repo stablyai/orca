@@ -21,7 +21,7 @@ export async function applyAcpMessageOptions(
   session: AcpStructuredSession,
   requested: AgentSessionExecutionOptions | undefined,
   setOption: (
-    key: 'interactionMode' | 'model' | 'thinking' | 'effort' | 'fastMode',
+    key: 'interactionMode' | 'agent' | 'model' | 'thinking' | 'effort' | 'fastMode',
     value: string
   ) => Promise<unknown>,
   isCurrent: () => boolean,
@@ -34,7 +34,14 @@ export async function applyAcpMessageOptions(
   }
   const options = withListedModel(session, requested)
   // Thinking precedes effort, so a model's effort is set on the thinking mode it runs.
-  for (const key of ['interactionMode', 'model', 'thinking', 'effort', 'fastMode'] as const) {
+  for (const key of [
+    'interactionMode',
+    'agent',
+    'model',
+    'thinking',
+    'effort',
+    'fastMode'
+  ] as const) {
     const value = key === 'effort' ? offeredEffort(session, options.effort) : options[key]
     if (
       key === 'effort' &&
@@ -50,13 +57,19 @@ export async function applyAcpMessageOptions(
     }
     if (
       value === undefined ||
+      (key === 'interactionMode' &&
+        options.agent !== undefined &&
+        session.spec.dialect.modeSelectsAgent) ||
       (key === 'interactionMode'
         ? !session.options.needsInteractionMode(value)
-        : session.options.appliedInput.get(key) === value ||
-          (key === 'fastMode' || key === 'thinking'
-            ? !session.options.write(key, value)
-            : session.options.matchesNativeRestoredOption(key, value) ||
-              (key === 'effort' && !session.options.offersEffort(value))))
+        : (session.options.appliedInput.get(key) === value &&
+            (key !== 'agent' || session.options.read().current.agent === value)) ||
+          (key === 'agent'
+            ? false
+            : key === 'fastMode' || key === 'thinking'
+              ? !session.options.write(key, value)
+              : session.options.matchesNativeRestoredOption(key, value) ||
+                (key === 'effort' && !session.options.offersEffort(value))))
     ) {
       continue
     }
