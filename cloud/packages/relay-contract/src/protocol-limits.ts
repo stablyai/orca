@@ -4,7 +4,10 @@ export const RELAY_PROTOCOL_LIMITS = {
   // Opaque E2EE catalogs exceed 1MiB on large workspaces; oversized frames kill every reconnect.
   // 8MiB adds headroom until desktop catalog pagination bounds responses.
   maxFrameBytes: 8 * 1024 * 1024,
-  maxConnectionsPerHost: 8,
+  // Phones plus teammates' Orca clients on one computer. Hosts without the wide-connection-lists
+  // capability stay at legacyMaxConnectionsPerHost: their hello-ack parser rejects longer lists.
+  maxConnectionsPerHost: 32,
+  legacyMaxConnectionsPerHost: 8,
   idleTimeoutMs: 10 * 60 * 1000,
   inviteTtlMs: 10 * 60 * 1000,
   inviteMaxAttempts: 5,

@@ -30,7 +30,8 @@ const ConnectionKindSchema = z.enum(['invite', 'resume'])
 
 // Strict deployed cells reject new hello keys; mirror contract capabilities in upgrade headers.
 export const RELAY_HOST_CAPABILITY_HEADERS = {
-  'x-orca-host-capabilities': 'pending-conn-details,idle-regional-rehome-v1,client-keepalive-v1'
+  'x-orca-host-capabilities':
+    'pending-conn-details,idle-regional-rehome-v1,client-keepalive-v1,wide-connection-lists-v1'
 } as const
 
 // Mirror relay-contract RELAY_CLIENT_KEEPALIVE_*: sent only after a relay's keepalive-offer. The
@@ -39,6 +40,9 @@ export const RELAY_CLIENT_KEEPALIVE_FRAME = '{"type":"keepalive"}'
 
 // Mirror RELAY_PROTOCOL_LIMITS.hostAttachDeadlineMs, the phone's data-socket attach window.
 export const RELAY_HOST_ATTACH_DEADLINE_MS = 10_000
+
+// Mirror RELAY_PROTOCOL_LIMITS.maxConnectionsPerHost, granted for wide-connection-lists-v1.
+const RELAY_MAX_CONNECTIONS_PER_HOST = 32
 
 // Older cells send only ids; optional kind/device fields allow additive evolution.
 const PendingConnectionSchema = z
@@ -57,8 +61,8 @@ export const RelayHostHelloAckMessageSchema = z
     generation: GenerationSchema,
     controlResumeSecret: Base64Url32ByteSchema,
     leaseExpiresAt: EpochMsSchema,
-    activeConnIds: z.array(OpaqueIdSchema).max(8),
-    pendingConns: z.array(PendingConnectionSchema).max(8)
+    activeConnIds: z.array(OpaqueIdSchema).max(RELAY_MAX_CONNECTIONS_PER_HOST),
+    pendingConns: z.array(PendingConnectionSchema).max(RELAY_MAX_CONNECTIONS_PER_HOST)
   })
   .strict()
 
