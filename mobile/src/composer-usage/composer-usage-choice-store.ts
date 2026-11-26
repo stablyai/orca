@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { useShellStorage } from '../platform/shell-storage/shell-storage'
 import { persistMirrored } from '../storage/mirrored-storage-keys'
 
 export type ComposerUsageChoiceStore<T extends string> = {
@@ -64,6 +65,11 @@ export function createComposerUsageChoiceStore<T extends string>(
         .then(() => persistMirrored(key, next))
         .catch((error: unknown) => console.warn(`${name} could not be saved`, error))
     },
-    use: () => useSyncExternalStore(subscribe, read, read)
+    use: () => {
+      // A page reads the shell's copy. Settings republishes these keys into an open chat.
+      const shellStorage = useShellStorage()
+      const saved = useSyncExternalStore(subscribe, read, read)
+      return shellStorage === null ? saved : normalize(shellStorage[key])
+    }
   }
 }
