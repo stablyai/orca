@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { activeProviderContext } from '../../../../../shared/agent-session/conversation-context/agent-session-provider-context'
 import { agentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
 import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import { OPENCODE_ACP_DIALECT } from '../../../../acp/acp-dialects/opencode-dialect'
 import { AcpStructuredLane } from '../../../../acp/journal/acp-structured-lane'
@@ -134,6 +135,30 @@ async function startWorker({ unavailableErrorRead = false } = {}) {
   const reportExit = () => current.host.handleAdapterEvent(exit)
   const endTimeline = () =>
     timeline.apply([{ type: 'session.ended', verdict: { state: 'interrupted', completedAt: NOW } }])
+  const finishAtUsageLimit = async () => {
+    timeline.apply([
+      {
+        type: 'item.open',
+        item: 'usage-limit',
+        join: { turn: 'work' },
+        body: {
+          kind: 'status',
+          ...agentSessionFailureWords(
+            agentSessionFailureFact('usageLimitReached', { usageLimit: { resetsAt: NOW + 60_000 } }),
+            { surface: 'row' }
+          )
+        }
+      },
+      {
+        type: 'turn.end',
+        turn: 'work',
+        state: 'completed',
+        outcome: 'failure',
+        at: NOW - 1
+      }
+    ])
+    await sink.written?.()
+  }
   const writePartialReply = () => {
     timeline.apply([
       { type: 'text.delta', item: { id: 'reply' }, channel: 'assistant', text: 'Work in progress' }
@@ -183,6 +208,7 @@ async function startWorker({ unavailableErrorRead = false } = {}) {
     record,
     project,
     endTimeline,
+    finishAtUsageLimit,
     writePartialReply,
     readReports,
     reportExit,
@@ -224,6 +250,17 @@ it('reports the same interrupted request once and offers in-place resume after t
   worker.database.completeDispatch(worker.dispatch.id)
   await worker.current.host.handleAdapterEvent({ ...worker.exit, ...resumed })
   expect(await worker.readReports()).toHaveLength(1)
+})
+
+it('keeps inspection guidance when an idle provider exits behind a usage-limit mail hold', async () => {
+  const worker = await startWorker()
+  await worker.finishAtUsageLimit()
+  expect(await worker.journal.queuedMessages.failureHolds()).toBe(true)
+  await worker.reportExit()
+  expect(worker.project()).toMatchObject({
+    liveness: { verdict: 'exited' },
+    nextAction: { argv: ['orchestration', 'worker-read', '--dispatch', worker.dispatch.id] }
+  })
 })
 
 it('wakes on a proven exit when the journal detail read fails and leaves an explicit stop quiet', async () => {
