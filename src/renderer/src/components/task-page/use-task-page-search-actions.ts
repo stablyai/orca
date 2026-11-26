@@ -1,5 +1,5 @@
 import type { TaskPageGitHubQuietRefreshModel } from './github/refresh/use-task-page-github-quiet-refresh'
-import React, { useCallback, useEffect } from 'react'
+import React, { useCallback } from 'react'
 import type { PRFilterChange } from '@/components/github/PRFilterSections'
 import {
   scopeGitHubTaskSearch,
@@ -12,27 +12,17 @@ import { translate } from '@/i18n/i18n'
 import type { GitHubTaskKind } from '@/components/task-page/task-page-localized-options'
 import { getTaskPresetQuery } from '../../../../shared/work-items/task-preset-query'
 import { shouldSuppressEnterSubmit } from '@/lib/workspace/creation/new-workspace-enter-guard'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel) {
   const {
     setTaskResumeState,
-    activeModal,
     updateSettings,
-    taskSource,
-    githubMode,
     taskSearchInput,
     setTaskSearchInput,
     setAppliedTaskSearch,
-    taskSearchInputRef,
     setActiveTaskPreset,
     setTasksFiltering,
     setTaskRefreshNonce,
-    dialogWorkItem,
-    newIssueOpen,
-    newLinearProjectOpen,
-    newLinearIssueOpen,
-    activeGithubTaskKind,
-    newJiraIssueOpen
+    activeGithubTaskKind
   } = model
   const applyPRFilterChange = useCallback(
     (change: PRFilterChange): void => {
@@ -154,57 +144,6 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
     },
     [handleApplyTaskSearch]
   )
-  useEffect(() => {
-    if (
-      taskSource !== 'github' ||
-      githubMode !== 'items' ||
-      dialogWorkItem ||
-      newIssueOpen ||
-      newLinearProjectOpen ||
-      newLinearIssueOpen ||
-      newJiraIssueOpen ||
-      activeModal !== 'none'
-    ) {
-      return
-    }
-    const onKeyDown = (event: KeyboardEvent): void => {
-      const isMac = navigator.userAgent.includes('Mac')
-      const modifierPressed = isMac ? event.metaKey : event.ctrlKey
-      if (!modifierPressed || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'f') {
-        return
-      }
-      const input = taskSearchInputRef.current
-      if (!input) {
-        return
-      }
-      const target = event.target
-      if (
-        target instanceof HTMLElement &&
-        target !== input &&
-        (target instanceof HTMLInputElement ||
-          target instanceof HTMLTextAreaElement ||
-          target.isContentEditable)
-      ) {
-        return
-      }
-      event.preventDefault()
-      event.stopPropagation()
-      input.focus()
-      input.select()
-    }
-    addAppKeyListener('keydown', onKeyDown)
-    return () => removeAppKeyListener('keydown', onKeyDown)
-  }, [
-    activeModal,
-    dialogWorkItem,
-    githubMode,
-    newIssueOpen,
-    newLinearProjectOpen,
-    newLinearIssueOpen,
-    newJiraIssueOpen,
-    taskSource,
-    taskSearchInputRef
-  ])
   const nextModel = model as typeof model & {
     applyPRFilterChange: typeof applyPRFilterChange
     handleApplyTaskSearch: typeof handleApplyTaskSearch
