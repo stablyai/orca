@@ -69,7 +69,7 @@ export function ImportBotDialog({
   const [typedName, setTypedName] = useState<string | null>(null)
   const menu = useBotAgentMenu(hostId, open)
   const { choices } = menu
-  const agentSetup = useBotAgentSetup(choices, hostId)
+  const agentSetup = useBotAgentSetup(menu, hostId)
   const picture = useNewBotPicture(useNewBotHostLooks(hostId))
   const [creating, setCreating] = useState(false)
   // Kept by the dialog, not its hero, so a run outlives the popover and the hero swapping to a bot an

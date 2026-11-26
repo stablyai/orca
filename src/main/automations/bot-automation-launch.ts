@@ -4,6 +4,7 @@ import type {
 } from '../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../shared/automations/history/automation-run'
 import { automationRunMemoryLabel } from '../bots/bot-turn-source'
+import { automationRunOperationId } from './launch/automation-run-operation'
 import { LINEAR_ISSUE_KEY_PATTERN } from '../../shared/connector-bot-linear-contract'
 import type { LinkableChat } from '../external-conversations/external-conversation-chat-delivery'
 import type { ConversationKey } from '../external-conversations/external-conversation-types'
@@ -180,7 +181,8 @@ export function createBotAutomationDispatcher(
     const fields: BotRunFields = {
       memorySource: automationRunMemoryLabel(automation.name, run.event),
       ...(run.triggeredBy ? { triggeredBy: run.triggeredBy } : {}),
-      ...(automationRun ? { automationRun } : {})
+      ...(automationRun ? { automationRun } : {}),
+      messageId: automationRunOperationId(run, 'run-message')
     }
     const { runsIn } = target
     const chosenChat = automation.bot?.chat?.sessionId

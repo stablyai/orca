@@ -1966,7 +1966,7 @@
       "pairingInvalid": "Eşleştirme geçersiz — bilgisayarınızla yeniden eşleştirin",
       "rePairDetail": "Bilgisayarınızla yeniden eşleştirin",
       "reconnecting": "Yeniden bağlanılıyor…",
-      "relayAccessExpired": "{{host}} için Relay erişiminin süresi doldu",
+      "relayAccessRefused": "Relay, {{host}} için erişimi reddetti",
       "relayConnectFailed": "Relay üzerinden bağlanılamadı",
       "relayUnreachable": "Relay'e ulaşılamadı",
       "signInDetail": "Yeniden bağlanmak için bilgisayarınızda Orca'da oturum açın",
@@ -5868,6 +5868,12 @@
                 "message": "Claude kullanım bilgisi, Claude bir sonraki çalıştığında güncellenir."
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "Codex çalıştığında güncellenir",
+                "message": "Codex kullanım bilgisi, Codex bir sonraki çalıştığında güncellenir."
+              }
+            },
             "1804cd8c3f": "Oturum açma yenileniyor",
             "bf2e739f18": "Oturum açma kullanılamıyor",
             "f8f0f9d8cc": "Ağ sorunu",
@@ -5940,10 +5946,6 @@
           "grokBillingUsageMissing": "Grok faturalandırma yanıtında kredi kullanımı bilgisi yok",
           "grokUsageUnauthorizedHttp": "Grok kullanım isteği için yetki yok (HTTP {{status}})",
           "grokUsageFailedHttp": "Grok kullanım isteği başarısız oldu (HTTP {{status}})",
-          "geminiOauthDisabled": "Gemini CLI için OAuth ayarlarda kapalı",
-          "geminiCredentialsNotFound": "Gemini CLI kimlik bilgileri bulunamadı",
-          "geminiProjectIdNotFound": "Gemini proje kimliği bulunamadı",
-          "tokenRefreshFailed": "Erişim belirteci yenilenemedi",
           "codexNotSignedIn": "Codex’te oturum açılmamış",
           "codexHomeUnavailable": "Codex ana dizinine erişilemiyor",
           "wslCodexHomeUnavailable": "{{distro}} dağıtımında Codex ana dizinine erişilemiyor",
@@ -5962,9 +5964,6 @@
           "ptyUsageTimeout": "PTY zaman aşımına uğradı. /usage paneli açılmadı.",
           "cliExitedBeforeUsage": "CLI, /usage çıktısı görüntülenmeden kapandı",
           "cliExitedBeforeStatus": "CLI, durum bilgisi alınamadan kapandı",
-          "quotaFetchFailed": "Kota bilgisi alınamadı ({{status}})",
-          "geminiProjectIdLoadFailed": "Gemini proje kimliği yüklenemedi (HTTP {{status}})",
-          "geminiProjectIdMissingInResponse": "API yanıtında Gemini proje kimliği bulunamadı",
           "minimaxUsageFetchFailed": "MiniMax kullanım bilgisi alınamadı ({{status}})",
           "minimaxReturnedError": "MiniMax bir hata döndürdü",
           "minimaxInvalidUsageResponse": "MiniMax geçersiz bir kullanım yanıtı döndürdü",
@@ -7501,7 +7500,9 @@
         "replaced": "Ajan yeni bir soru sordu. Soruyu okuyup yanıtlayın.",
         "notNow": "Şimdi değil",
         "replacedByNewer": "Daha yeni bir soruyla değiştirildi",
-        "skipped": "Atlandı"
+        "skipped": "Atlandı",
+        "heldImagesLimit": "Yanıtların tek bir yorum olarak gider ve bir yorum en fazla {{max}} fotoğraf alır. Birkaçını kaldırıp yeniden dene.",
+        "heldSkillsLimit": "Yanıtların tek bir yorum olarak gider ve bir yorum en fazla {{max}} beceri alır. Birkaçını kaldırıp yeniden dene."
       }
     },
     "needs": {
@@ -8132,7 +8133,13 @@
         "github": "Sorunlar ve PR’lardaki bahsetmeler ve olaylar",
         "slack": "Mesajlar ve bahsetmeler",
         "linear": "Atanan sorunlar ve bahsetmeler",
-        "google": "Sizin adınıza Gmail, Takvim ve Drive"
+        "google": "Sizin adınıza Gmail, Takvim ve Drive",
+        "clickup": "Görevleri, listeleri ve belgeleri yönet",
+        "airtable": "Tabanları, tabloları ve kayıtları sorgula ve düzenle",
+        "todoist": "Görev ekle, sırala ve tamamla",
+        "zapier": "Zapier'da kurduğun uygulamalarda eylem çalıştır",
+        "granola": "Toplantı notlarında ve dökümlerinde ara",
+        "intercom": "Konuşmalarda, kişilerde ve makalelerde ara"
       },
       "composioLine": {
         "outlook": "Posta, takvim ve kişiler",
@@ -8430,6 +8437,7 @@
       "shuffle": "Başka bir görsel",
       "namePlaceholder": "Botunuza ad verin",
       "purposeLabel": "Kimlik",
+      "purposeTooLongForHost": "{{host}} üzerindeki Orca, amaç için en fazla 200 karakter kabul ediyor. Kısaltın veya {{host}} üzerindeki Orca'yı güncelleyin.",
       "purposePlaceholder": "Kim olduğu ve ne yaptığı",
       "create": "Oluştur",
       "fromTemplate": "Şablon kullan",
@@ -8562,5 +8570,8 @@
       "needsWindow": "Güncellenemedi. {{desktop}} üzerinde Orca’yı açın.",
       "failed": "Ajan listesi güncellenemedi."
     }
+  },
+  "mcpServers": {
+    "agentBlocked": "Kuruluşunuzun Claude ayarları tarafından engellendi"
   }
 }

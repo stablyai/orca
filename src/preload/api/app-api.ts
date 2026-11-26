@@ -21,6 +21,8 @@ export type AppApi = {
   getSystemLanguageDetection?: (
     browserPreferences?: readonly string[]
   ) => Promise<UiLanguageDetection | null>
+  isProfileStateSaveDelayed: () => Promise<boolean>
+  onProfileStateSaveDelayChanged: (callback: (delayed: boolean) => void) => () => void
   getIdentity: () => Promise<AppIdentity>
   /** Local Windows desktop elevation; null when unavailable. Does not describe remote hosts. */
   getWindowsAdministratorStatus: () => Promise<boolean | null>

@@ -180,6 +180,9 @@ export function MobileBotGooglePage(props: {
     : t('bots.google.headline.endedOnHost', 'Google access ended. Sign in again on {{host}}.', {
         host: hostName
       })
+  // Google's own reason, when it gave one, follows Orca's sentence.
+  const endedText = (account: GoogleAccount) =>
+    account.googleError ? `${ended}\n${account.googleError}` : ended
   // An ended sign-in's one fix, in the slot its services had.
   const reconnectGroup = (account: GoogleAccount, back: string | undefined) =>
     signsIn ? (
@@ -209,7 +212,7 @@ export function MobileBotGooglePage(props: {
         {props.banner}
         {opened.status === 'reconnect' ? (
           <>
-            <SettingsNote>{ended}</SettingsNote>
+            <SettingsNote>{endedText(opened)}</SettingsNote>
             {reconnectGroup(opened, opened.email)}
           </>
         ) : opened === shown ? null : (
@@ -259,7 +262,7 @@ export function MobileBotGooglePage(props: {
       ? t('bots.google.headline.noDefault', 'Choose a default account')
       : null
     : shown.status === 'reconnect'
-      ? ended
+      ? endedText(shown)
       : shownProblems === 0
         ? t('bots.google.headline.connected', 'Google is connected')
         : shownProblems === 1

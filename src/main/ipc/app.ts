@@ -35,6 +35,7 @@ import { registerRendererShutdownCheckpointHandler } from './renderer-shutdown-c
 import type { RendererShutdownCheckpointService } from '../core-desktop/renderer-shutdown-checkpoint-service'
 import { readMacKeyboardLayoutSnapshot } from './keyboard/macos-keyboard-layout-snapshot'
 import { registerMacKeyboardLayoutChangeNotifications } from './keyboard/macos-keyboard-layout-change-notifications'
+import { isProfileStateSaveDelayed } from '../startup/profile-startup/profile-state-save-delay'
 import {
   readCommandStdout,
   readKeyboardInputSourceId
@@ -126,6 +127,7 @@ function resolveDevFeatureWallAssetDir(): string {
 export function registerAppHandlers(store: Store, options: RegisterAppHandlersOptions): void {
   registerRendererShutdownCheckpointHandler(options.rendererCheckpoint)
   registerMacKeyboardLayoutChangeNotifications()
+  ipcMain.handle('app:isProfileStateSaveDelayed', isProfileStateSaveDelayed)
   ipcMain.handle('app:getSystemLanguageDetection', (_event, preferences: unknown) => {
     const previous = getSystemLanguageDetection()
     const detection = getSystemLanguageDetection(

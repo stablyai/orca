@@ -27,6 +27,7 @@ export type ProfileStateWriterConnectionOptions = {
   /** One diagnostic warning; delay alone never fails the request. */
   slowWarningMs?: number
   onFailure?: (error: Error) => void
+  onSaveDelayChanged?: (delayed: boolean) => void
   reportInitializationFailure?: boolean
   /** Monotonic clock; replace in tests to model stalled main loops. */
   clock?: () => number
@@ -42,6 +43,7 @@ export class ProfileStateWriterConnection {
   private draining = false
   private closePromise: Promise<void> | undefined
   private closeAcknowledged = false
+  private saveDelayed = false
   private readonly slowWarningMs: number
   private readonly initialRevision: number
   private latestRevision: number | undefined
@@ -209,8 +211,26 @@ export class ProfileStateWriterConnection {
   ): PendingProfileStateWriterRequest {
     return createProfileStateWriterRequest(id, command, this.slowWarningMs, {
       now: this.options.clock,
-      acknowledgedRevision: this.lastAcknowledgedRevision
+      acknowledgedRevision: this.lastAcknowledgedRevision,
+      onSlow: () => {
+        // Reads/exports share the worker and can delay later saves.
+        if (this.active?.id === id && command !== 'initialize' && command !== 'close') {
+          this.reportSaveDelay(true)
+        }
+      }
     })
+  }
+
+  private reportSaveDelay(delayed: boolean): void {
+    if (this.saveDelayed === delayed) {
+      return
+    }
+    this.saveDelayed = delayed
+    try {
+      this.options.onSaveDelayChanged?.(delayed)
+    } catch (error) {
+      console.error('[persistence] Could not report delayed saving:', error)
+    }
   }
 
   private receive(value: unknown): void {
@@ -255,6 +275,7 @@ export class ProfileStateWriterConnection {
       return
     }
     pending.clearSlowWarning()
+    this.reportSaveDelay(false)
     if (response) {
       pending.resolve(response)
     } else {

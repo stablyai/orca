@@ -66,7 +66,7 @@ export const pastedImage = defineFixture({
         worktreeId: folderWorkspaceKey(fixtureCos.folderWorkspaceId),
         runtimeEnvironmentId: null
       }}
-      onSend={() => {}}
+      onSend={() => null}
     />
   )
 })
@@ -106,7 +106,7 @@ function commentBox(
           worktreeId: folderWorkspaceKey(fixtureCos.folderWorkspaceId),
           runtimeEnvironmentId: null
         }}
-        onSend={() => {}}
+        onSend={() => null}
       />
     )
   }
