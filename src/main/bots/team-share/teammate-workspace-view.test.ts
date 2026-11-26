@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 import { OWNER_ACTS_FOR, type BotRequestAsker } from '../../../shared/bots/bot-acts-for'
 import { BOTS_SHARE_WORKSPACES_CAPABILITY } from '../../../shared/bot-runtime-capabilities'
 import type { RuntimeClientEvent } from '../../../shared/remote-runtime/session-graph/runtime-client-events'
@@ -38,7 +39,7 @@ const ALICES_CHAT = chat(1)
 const OWNERS_CHAT = chat(2)
 const OWNERS_WORKSPACE_CHAT = chat(3)
 
-const device = { botId: SHARED.id, accountId: 'acct-alice', name: 'Alice' } as BotShareDevice
+const device = fake<BotShareDevice>({ botId: SHARED.id, accountId: 'acct-alice', name: 'Alice' })
 const TEAMMATE = botShareCallerScopeOf(device, [BOTS_SHARE_WORKSPACES_CAPABILITY])
 const CHATS_ONLY = botShareCallerScopeOf(device, [])
 const OWNER: RpcCallerScope = { kind: 'owner' }
@@ -81,9 +82,10 @@ beforeEach(() => {
     }),
     getSettings: () => ({})
   }
-  runtime = new OrcaRuntimeService(store as never)
+  runtime = new OrcaRuntimeService(fake(store))
+  // The host's cached worktree scan, which the set reads.
   vi.spyOn(
-    runtime as unknown as { listResolvedWorktreeSnapshot: () => Promise<unknown> },
+    fake<{ listResolvedWorktreeSnapshot: () => Promise<unknown> }>(runtime),
     'listResolvedWorktreeSnapshot'
   ).mockResolvedValue({
     worktrees: [worktree(WORKER, 'repo-agent'), worktree(OWNERS, 'repo-owner')],
@@ -91,20 +93,26 @@ beforeEach(() => {
   })
   vi.spyOn(runtime, 'getOrchestrationDb').mockReturnValue(db)
   vi.spyOn(runtime.bots, 'list').mockReturnValue([SHARED])
-  vi.spyOn(runtime, 'listVisibleRepos').mockReturnValue(store.getRepos() as never)
+  vi.spyOn(runtime, 'listVisibleRepos').mockReturnValue(fake(store.getRepos()))
   vi.spyOn(runtime, 'listVisibleFolderWorkspaces').mockReturnValue(
-    store.getFolderWorkspaces() as never
+    fake(store.getFolderWorkspaces())
   )
-  vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
-    terminals: [HOME, WORKER, OWNERS].map((worktreeId) => ({ worktreeId, handle: worktreeId })),
-    totalCount: 3,
-    truncated: false
-  } as never)
-  vi.spyOn(runtime, 'getWorktreePs').mockResolvedValue({
-    worktrees: [HOME, WORKER, OWNERS, 'folder:owner-folder'].map((worktreeId) => ({ worktreeId })),
-    totalCount: 4,
-    truncated: false
-  } as never)
+  vi.spyOn(runtime, 'listTerminals').mockResolvedValue(
+    fake({
+      terminals: [HOME, WORKER, OWNERS].map((worktreeId) => ({ worktreeId, handle: worktreeId })),
+      totalCount: 3,
+      truncated: false
+    })
+  )
+  vi.spyOn(runtime, 'getWorktreePs').mockResolvedValue(
+    fake({
+      worktrees: [HOME, WORKER, OWNERS, 'folder:owner-folder'].map((worktreeId) => ({
+        worktreeId
+      })),
+      totalCount: 4,
+      truncated: false
+    })
+  )
   vi.spyOn(runtime, 'restoreStructuredAgentSessionTabs').mockResolvedValue(undefined)
   vi.spyOn(runtime, 'supportsAuthoritativeSessionTabsInventory').mockReturnValue(false)
   vi.spyOn(runtime, 'listAllMobileSessionTabs').mockResolvedValue([
@@ -120,15 +128,17 @@ beforeEach(() => {
     [OWNERS_CHAT, HOME],
     [OWNERS_WORKSPACE_CHAT, WORKER]
   ])
-  setStructuredAgentSessionHost({
-    deps: {
-      store: {
-        listConversations: () => [],
-        getConversation: (id: string) =>
-          workspaceOf.has(id) ? { location: { workspaceId: workspaceOf.get(id) } } : null
+  setStructuredAgentSessionHost(
+    fake<StructuredAgentSessionHost>({
+      deps: {
+        store: {
+          listConversations: () => [],
+          getConversation: (id: string) =>
+            workspaceOf.has(id) ? { location: { workspaceId: workspaceOf.get(id) } } : null
+        }
       }
-    }
-  } as unknown as StructuredAgentSessionHost)
+    })
+  )
   dispatcher = new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS })
 })
 
@@ -168,16 +178,43 @@ function options(scope: RpcCallerScope): RpcDispatchStreamingOptions {
   }
 }
 
+/** A partial fake: only the fields the code under test reads. */
+function fake<T>(value: unknown): T {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test fake carries only the fields the code under test reads.
+  return value as T
+}
+
 async function call(scope: RpcCallerScope, method: string, params?: unknown) {
   const response = await dispatcher.dispatch(
     { id: 'r1', authToken: '', method, params },
     options(scope)
   )
-  return response.ok ? { result: response.result as Record<string, unknown> } : response.error
+  return response.ok ? { result: response.result } : response.error
 }
 
-const ids = (rows: unknown, field = 'id') =>
-  (rows as Record<string, string>[]).map((row) => row[field])
+/** `field`'s rows of a call's answer, each by `key`. */
+async function listed(scope: RpcCallerScope, method: string, field: string, key = 'id') {
+  const answer = z
+    .object({ result: z.record(z.string(), z.unknown()) })
+    .parse(await call(scope, method, {}))
+  return z
+    .array(z.looseObject({ [key]: z.string() }))
+    .parse(answer.result[field])
+    .map((row) => row[key])
+}
+
+const Tabs = z.looseObject({
+  worktree: z.string(),
+  tabs: z.array(z.looseObject({ id: z.string() })),
+  tabGroups: z.array(z.looseObject({ tabOrder: z.array(z.string()) }))
+})
+const StreamedEvent = z.looseObject({
+  type: z.string(),
+  subscriptionId: z.string().optional(),
+  worktreeId: z.string().optional(),
+  repoId: z.string().optional(),
+  batch: z.looseObject({ worktreeId: z.string() }).optional()
+})
 
 describe('a workspace teammate on a shared agent', () => {
   it('is admitted to workspace methods only when its Orca works in workspaces, never to the owner’s own', async () => {
@@ -189,50 +226,40 @@ describe('a workspace teammate on a shared agent', () => {
   })
 
   it('lists only the agent’s home and its workers’ workspaces; the owner lists everything', async () => {
-    const repos = async (scope: RpcCallerScope) =>
-      ids(((await call(scope, 'repo.list', {})) as { result: { repos: unknown } }).result.repos)
-    expect(await repos(TEAMMATE)).toEqual(['repo-agent'])
-    expect(await repos(OWNER)).toEqual(['repo-agent', 'repo-owner'])
-
-    const folders = async (scope: RpcCallerScope) =>
-      ids(
-        ((await call(scope, 'folderWorkspace.list')) as { result: { folderWorkspaces: unknown } })
-          .result.folderWorkspaces
-      )
-    expect(await folders(TEAMMATE)).toEqual(['home-shared'])
-    expect(await folders(OWNER)).toEqual(['home-shared', 'owner-folder'])
-
-    const ps = async (scope: RpcCallerScope) =>
-      (
-        (await call(scope, 'worktree.ps', {})) as {
-          result: { worktrees: unknown; totalCount: number }
-        }
-      ).result
-    expect(await ps(TEAMMATE)).toMatchObject({ totalCount: 2 })
-    expect(ids((await ps(TEAMMATE)).worktrees, 'worktreeId')).toEqual([HOME, WORKER])
-    expect((await ps(OWNER)).totalCount).toBe(4)
-
-    const terminals = async (scope: RpcCallerScope) =>
-      ids(
-        ((await call(scope, 'terminal.list', {})) as { result: { terminals: unknown } }).result
-          .terminals,
-        'worktreeId'
-      )
-    expect(await terminals(TEAMMATE)).toEqual([HOME, WORKER])
-    expect(await terminals(OWNER)).toEqual([HOME, WORKER, OWNERS])
+    expect(await listed(TEAMMATE, 'repo.list', 'repos')).toEqual(['repo-agent'])
+    expect(await listed(OWNER, 'repo.list', 'repos')).toEqual(['repo-agent', 'repo-owner'])
+    expect(await listed(TEAMMATE, 'folderWorkspace.list', 'folderWorkspaces')).toEqual([
+      'home-shared'
+    ])
+    expect(await listed(OWNER, 'folderWorkspace.list', 'folderWorkspaces')).toEqual([
+      'home-shared',
+      'owner-folder'
+    ])
+    expect(await listed(TEAMMATE, 'worktree.ps', 'worktrees', 'worktreeId')).toEqual([HOME, WORKER])
+    expect(await call(TEAMMATE, 'worktree.ps', {})).toMatchObject({ result: { totalCount: 2 } })
+    expect(await listed(OWNER, 'worktree.ps', 'worktrees', 'worktreeId')).toHaveLength(4)
+    expect(await listed(TEAMMATE, 'terminal.list', 'terminals', 'worktreeId')).toEqual([
+      HOME,
+      WORKER
+    ])
+    expect(await listed(OWNER, 'terminal.list', 'terminals', 'worktreeId')).toEqual([
+      HOME,
+      WORKER,
+      OWNERS
+    ])
   })
 
   it('sees only its own tabs in the agent’s home and every tab in its workers’ workspaces', async () => {
-    const listAll = async (scope: RpcCallerScope) =>
-      (
-        (await call(scope, 'session.tabs.listAll')) as {
-          result: { snapshots: RuntimeMobileSessionTabsResult[] }
-        }
-      ).result.snapshots.map((snapshot) => ({
+    const listAll = async (scope: RpcCallerScope) => {
+      const answer = z
+        .object({ result: z.object({ snapshots: z.array(Tabs) }) })
+        .parse(await call(scope, 'session.tabs.listAll'))
+      return answer.result.snapshots.map((snapshot) => ({
         worktree: snapshot.worktree,
         tabs: snapshot.tabs.map((tab) => tab.id),
-        order: snapshot.tabGroups?.[0]?.tabOrder
+        order: snapshot.tabGroups[0]?.tabOrder
       }))
+    }
     expect(await listAll(TEAMMATE)).toEqual([
       { worktree: HOME, tabs: [ALICES_CHAT], order: [ALICES_CHAT] },
       { worktree: WORKER, tabs: [OWNERS_WORKSPACE_CHAT], order: [OWNERS_WORKSPACE_CHAT] }
@@ -246,21 +273,19 @@ describe('a workspace teammate on a shared agent', () => {
 
   it('streams only the agent’s workspaces’ events and none of the host’s own', async () => {
     const stream = async (scope: RpcCallerScope) => {
-      const received: RuntimeClientEvent[] = []
+      const received: z.infer<typeof StreamedEvent>[] = []
       let subscriptionId = ''
       let ready!: () => void
       const isReady = new Promise<void>((resolve) => (ready = resolve))
       const done = dispatcher.dispatchStreamingObjects(
         { id: 's1', authToken: '', method: 'runtime.clientEvents.subscribe', params: {} },
         (response) => {
-          const event = response.ok
-            ? (response.result as { type: string; subscriptionId?: string })
-            : null
+          const event = response.ok ? StreamedEvent.parse(response.result) : null
           if (event?.type === 'ready') {
             subscriptionId = event.subscriptionId ?? ''
             ready()
           } else if (event && event.type !== 'end') {
-            received.push(event as RuntimeClientEvent)
+            received.push(event)
           }
         },
         { ...options(scope), connectionId: `c-${scope.kind}` }
@@ -283,21 +308,16 @@ describe('a workspace teammate on a shared agent', () => {
         { type: 'settingsChanged', keys: ['theme'] },
         { type: 'botsChanged', botIds: ['bot-other'] }
       ]
-      const host = runtime as unknown as { emitClientEvent: (event: RuntimeClientEvent) => void }
+      // As the host's own producers publish them.
+      const host = fake<{ emitClientEvent: (event: RuntimeClientEvent) => void }>(runtime)
       for (const event of events) {
         host.emitClientEvent(event)
       }
       await new Promise((resolve) => setTimeout(resolve, 10))
       runtime.cleanupSubscription(subscriptionId)
       await done
-      return received.map((event) =>
-        event.type === 'terminalSideEffects'
-          ? `${event.type}:${event.batch.worktreeId}`
-          : 'worktreeId' in event
-            ? `${event.type}:${event.worktreeId}`
-            : 'repoId' in event
-              ? `${event.type}:${event.repoId}`
-              : event.type
+      return received.map(
+        (event) => `${event.type}:${event.batch?.worktreeId ?? event.worktreeId ?? event.repoId}`
       )
     }
     expect(await stream(TEAMMATE)).toEqual([

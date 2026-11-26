@@ -71,10 +71,6 @@ export function teammateClientEvent(
     case 'notificationAttentionAcknowledged':
     case 'nativeChatLaunchDraftResolved':
       return null
-    default: {
-      const unhandled: never = event
-      return unhandled
-    }
   }
 }
 
