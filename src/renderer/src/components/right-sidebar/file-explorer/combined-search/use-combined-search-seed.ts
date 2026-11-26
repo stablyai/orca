@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '@/store/index'
 
 /** Applies search-selection and Find in Folder seeds to the live draft, then focuses and selects the field. */
@@ -23,7 +23,9 @@ export function useCombinedSearchSeed({
   rerunDraft: (query: string) => void
 }): void {
   const liveQueryRef = useRef(query)
-  liveQueryRef.current = query
+  useLayoutEffect(() => {
+    liveQueryRef.current = query
+  })
   const selectionFrameRef = useRef<number | null>(null)
   useEffect(
     () => () => {

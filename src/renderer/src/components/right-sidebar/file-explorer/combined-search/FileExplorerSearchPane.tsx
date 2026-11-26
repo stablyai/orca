@@ -12,14 +12,13 @@ import { CombinedSearchStrip } from './CombinedSearchStrip'
 import { CombinedSearchResults } from './CombinedSearchResults'
 import { useCombinedSearch } from './useCombinedSearch'
 import { getInitialSearchDraft } from './use-search-draft-lifecycle'
-import {
-  NAME_MATCH_PREVIEW_LIMIT,
-  type NameMatch,
-  type NameMatchResults
-} from './name-match-results'
+import type { NameMatch, NameMatchResults } from './name-match-results'
 import type { NameMatchRowActions } from './use-name-match-row-actions'
 
 export type FileExplorerSearchControl = { clear: () => void }
+
+/** Show all can list thousands of names; only the first screenful is checked against .gitignore. */
+const IGNORE_CHECK_WINDOW = 50
 
 function toTreeNode(
   match: NameMatch,
@@ -60,7 +59,8 @@ export const FileExplorerSearchPane = React.memo(function FileExplorerSearchPane
   rowActions: NameMatchRowActions
   tree: React.ReactNode
 }): React.JSX.Element {
-  const [query, setQuery] = useState(() => getInitialSearchDraft(activeWorktreeId))
+  const [initial] = useState(() => getInitialSearchDraft(activeWorktreeId))
+  const [query, setQuery] = useState(initial.text)
   const hasQuery = query.trim().length > 0
 
   const { nameFilterFiles, nameMatches, showAllNameMatches } = useFileExplorerNameFilter({
@@ -73,14 +73,14 @@ export const FileExplorerSearchPane = React.memo(function FileExplorerSearchPane
   const operationOwner = nameFilterFiles.operationOwner
 
   // Check-ignore runs over the rendered rows only, never the whole match set.
-  // Bounded to the preview rows, and stable across pauses that keep the same rows.
+  // Bounded to the rows a user can reach soon, and stable across pauses that keep the same rows.
   const renderedNameKey =
     nameMatches?.matches
-      .slice(0, NAME_MATCH_PREVIEW_LIMIT)
+      .slice(0, IGNORE_CHECK_WINDOW)
       .map((match) => match.relativePath)
-      .join('\n') ?? ''
+      .join('\0') ?? ''
   const renderedNamePaths = useMemo(
-    () => (renderedNameKey ? renderedNameKey.split('\n') : []),
+    () => (renderedNameKey ? renderedNameKey.split('\0') : []),
     [renderedNameKey]
   )
   const ignoredPaths = useFileExplorerIgnoredPaths({
@@ -130,15 +130,29 @@ export const FileExplorerSearchPane = React.memo(function FileExplorerSearchPane
     namesLoading: nameFilterFiles.loading,
     namesError: nameFilterFiles.loadError,
     onOpenName: handleOpenName,
-    onShowAllNames: showAllNameMatches
+    onShowAllNames: showAllNameMatches,
+    initial
   })
-  const { clearQuery } = search
+  const { clearQuery, inputRef } = search
+  // The row menu keeps focus where it was (the tree relies on that), so hand it back to the field.
+  const restoreFieldFocus = useCallback(() => {
+    requestAnimationFrame(() => {
+      if (document.activeElement === document.body || document.activeElement === null) {
+        inputRef.current?.focus()
+      }
+    })
+  }, [inputRef])
   useImperativeHandle(controlRef, () => ({ clear: clearQuery }), [clearQuery])
   useClearNameFilterForReveal({ activeWorktreeId, hasQuery, clearQuery })
 
   return (
     <>
-      <CombinedSearchStrip field={search.field} filters={search.filters} scopeLabel={scopeLabel} />
+      <CombinedSearchStrip
+        inputRef={search.inputRef}
+        field={search.field}
+        filters={search.filters}
+        scopeLabel={scopeLabel}
+      />
       <div className="relative min-h-0 flex-1 overflow-hidden">
         {tree}
         {hasQuery ? (
@@ -152,6 +166,7 @@ export const FileExplorerSearchPane = React.memo(function FileExplorerSearchPane
               rowActions={rowActions}
               toNode={toNode}
               workspaceId={activeWorktreeId}
+              onMenuClosed={restoreFieldFocus}
             />
           </div>
         ) : null}

@@ -19,6 +19,9 @@ export function getSearchMatchPreviewParts(match: SearchMatch): SearchMatchPrevi
   if (before.length + len <= FULL_PREFIX_MAX_CHARS) {
     return { before, ...parts }
   }
+  if (before.length <= CONTEXT_MAX_CHARS) {
+    return { before, ...parts }
+  }
   const tail = before.slice(-CONTEXT_MAX_CHARS)
   // Start at a word boundary so context never opens on a word fragment.
   const boundary = tail.search(/[^\w$][\w$]/)

@@ -2,7 +2,6 @@ import type React from 'react'
 import type { CombinedSearchRow, CombinedSearchRowModel } from './combined-search-rows'
 
 export type CombinedSearchFieldState = {
-  inputRef: React.RefObject<HTMLInputElement | null>
   query: string
   loading: boolean
   caseSensitive: boolean

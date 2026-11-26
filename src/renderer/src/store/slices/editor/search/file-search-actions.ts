@@ -10,8 +10,6 @@ export function createFileSearchActions(
   EditorSlice,
   | 'fileSearchStateByWorktree'
   | 'updateFileSearchState'
-  | 'seedFileSearchQuery'
-  | 'seedFileSearchIncludePattern'
   | 'consumeFileSearchSeedRequest'
   | 'consumeFileSearchFocusRequest'
   | 'toggleFileSearchCollapsedFile'
@@ -22,53 +20,17 @@ export function createFileSearchActions(
     updateFileSearchState: (worktreeId, updates) =>
       set((s) => {
         const existing = s.fileSearchStateByWorktree[worktreeId]
-        const next = { ...(existing || defaultFileSearchState()), ...updates }
+        const base = existing || defaultFileSearchState()
+        const next = { ...base, ...updates }
         // Switching workspaces cancels the outgoing idle search; a no-op write would re-notify every subscriber.
-        if (existing && shallow(existing, next)) {
+        // Why: a cancel after a workspace is purged must not recreate its entry.
+        if (shallow(base, next)) {
           return s
         }
         return {
           fileSearchStateByWorktree: {
             ...s.fileSearchStateByWorktree,
             [worktreeId]: next
-          }
-        }
-      }),
-    seedFileSearchQuery: (worktreeId, query) =>
-      set((s) => {
-        const current = s.fileSearchStateByWorktree[worktreeId] || defaultFileSearchState()
-        return {
-          fileSearchStateByWorktree: {
-            ...s.fileSearchStateByWorktree,
-            [worktreeId]: {
-              ...current,
-              query,
-              results: null,
-              resultOwner: null,
-              loading: false,
-              error: null,
-              collapsedFiles: new Set(),
-              seedRequestId: (current.seedRequestId ?? 0) + 1
-            }
-          }
-        }
-      }),
-    seedFileSearchIncludePattern: (worktreeId, includePattern) =>
-      set((s) => {
-        const current = s.fileSearchStateByWorktree[worktreeId] || defaultFileSearchState()
-        return {
-          fileSearchStateByWorktree: {
-            ...s.fileSearchStateByWorktree,
-            [worktreeId]: {
-              ...current,
-              includePattern,
-              results: null,
-              resultOwner: null,
-              loading: false,
-              error: null,
-              collapsedFiles: new Set(),
-              seedRequestId: (current.seedRequestId ?? 0) + 1
-            }
           }
         }
       }),

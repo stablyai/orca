@@ -230,8 +230,8 @@ function CombinedSearchHarness({
   return (
     <div className="flex h-[460px] flex-col bg-sidebar text-foreground" data-opened={opened}>
       <CombinedSearchStrip
+        inputRef={inputRef}
         field={{
-          inputRef,
           query,
           loading: false,
           caseSensitive: options.caseSensitive,
@@ -268,6 +268,7 @@ function CombinedSearchHarness({
               rowActions={ROW_ACTIONS}
               toNode={toNode}
               workspaceId={null}
+              onMenuClosed={() => inputRef.current?.focus()}
             />
           </div>
         ) : null}

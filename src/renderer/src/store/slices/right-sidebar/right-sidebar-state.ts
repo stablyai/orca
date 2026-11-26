@@ -123,7 +123,11 @@ export function createRightSidebarState(set: EditorSet, _get: EditorGet): RightS
                 loading: false,
                 collapsedFiles: new Set<string>(),
                 seedRequestId: (current.seedRequestId ?? 0) + 1,
-                seedKind: query ? ('query' as const) : ('filters' as const),
+                // A filters-only seed must not demote a still-pending query seed.
+                seedKind:
+                  query || (current.seedRequestId !== undefined && current.seedKind === 'query')
+                    ? ('query' as const)
+                    : ('filters' as const),
                 // Why: results cover the tree from this commit, so the hidden tree never loads first.
                 active: true
               }

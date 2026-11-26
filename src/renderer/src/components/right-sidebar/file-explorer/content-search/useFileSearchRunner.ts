@@ -135,7 +135,14 @@ export function useFileSearchRunner({
           })
           return
         }
-        updateActiveSearchState({ query, error: null, loading: true })
+        // Why: publish the pending state without the previous query's rows so none stay activatable.
+        updateActiveSearchState({
+          query,
+          error: null,
+          loading: true,
+          results: null,
+          resultOwner: null
+        })
         // Results outlive navigation; clicks must retain the route that produced them.
         const resultOwner = createFileSearchResultOwner(activeWorktreeId, runtimeEnvironmentId, {
           rootPath: worktreePath,

@@ -1,3 +1,4 @@
+import type React from 'react'
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import type {
@@ -18,10 +19,12 @@ import {
 import type { CombinedSearchFieldState, CombinedSearchResultsState } from './combined-search-types'
 import { useCombinedSearchNavigation } from './use-combined-search-navigation'
 import { useCombinedSearchSeed } from './use-combined-search-seed'
-import { useSearchDraftLifecycle } from './use-search-draft-lifecycle'
+import { useSearchDraftLifecycle, type InitialSearchDraft } from './use-search-draft-lifecycle'
 import type { NameMatch, NameMatchResults } from './name-match-results'
 
 const EMPTY_COLLAPSED_FILES = new Set<string>()
+// Results computed under the previous options must not stay clickable while the rerun debounces.
+const STALE_RESULTS = { results: null, resultOwner: null } as const
 
 /** Drives one query into the name rows (immediate) and the text search (debounced), with shared keyboard navigation. */
 export function useCombinedSearch({
@@ -33,7 +36,8 @@ export function useCombinedSearch({
   namesLoading,
   namesError,
   onOpenName,
-  onShowAllNames
+  onShowAllNames,
+  initial
 }: {
   activeWorktreeId: string | null
   worktreePath: string | null
@@ -44,8 +48,10 @@ export function useCombinedSearch({
   namesError: string | null
   onOpenName: (match: NameMatch, permanent: boolean) => void
   onShowAllNames: () => void
+  initial: InitialSearchDraft
 }): {
   clearQuery: () => void
+  inputRef: React.RefObject<HTMLInputElement | null>
   field: CombinedSearchFieldState
   filters: SearchFiltersProps
   results: CombinedSearchResultsState
@@ -93,7 +99,9 @@ export function useCombinedSearch({
     updateActiveSearchState
   })
   // An explicit seed may search one character; typing never does.
-  const [forcedShortQuery, setForcedShortQuery] = useState<string | null>(null)
+  const [forcedShortQuery, setForcedShortQuery] = useState<string | null>(() =>
+    initial.allowShort ? initial.text : null
+  )
   const runTextSearch = useCallback(
     (value: string) => executeSearch(value, { allowShortQuery: value === forcedShortQuery }),
     [executeSearch, forcedShortQuery]
@@ -132,13 +140,17 @@ export function useCombinedSearch({
   )
   const textError = resultsAreCurrent ? (searchState?.error ?? null) : null
   const hasQuery = query.trim().length > 0
-  const textPending = textQueryActive && (committedQuery !== query || textLoading)
+  // Results are null only before a scan settles (a settled miss is an empty result), so that is pending too.
+  const textPending =
+    textQueryActive &&
+    (committedQuery !== query || textLoading || (storedResults === null && !searchState?.error))
 
   const model = useMemo(
     () =>
       createCombinedSearchRows({
         names: nameMatches,
-        textResult: textQueryActive ? deferredResults.results : null,
+        // Gate the deferred payload on the live generation so a cleared or replaced result never lingers a frame.
+        textResult: resultsAreCurrent ? deferredResults.results : null,
         textRows,
         textPending,
         namesError: hasQuery ? namesError : null,
@@ -151,7 +163,7 @@ export function useCombinedSearch({
       namesError,
       textError,
       textPending,
-      textQueryActive,
+      resultsAreCurrent,
       textRows
     ]
   )
@@ -243,12 +255,19 @@ export function useCombinedSearch({
     applySeededQuery,
     rerunDraft: runTextSearch
   })
-  useSearchDraftLifecycle({ activeWorktreeId, query, updateActiveSearchState, runTextSearch })
+  useSearchDraftLifecycle({
+    activeWorktreeId,
+    query,
+    allowShortQuery: forcedShortQuery === query,
+    initial,
+    updateActiveSearchState,
+    runTextSearch
+  })
 
   return {
     clearQuery,
+    inputRef,
     field: {
-      inputRef,
       query,
       loading: hasQuery && (namesLoading || textPending),
       caseSensitive,
@@ -260,15 +279,15 @@ export function useCombinedSearch({
       onKeyDown: handleKeyDown,
       onClear: clearQuery,
       onToggleCaseSensitive: () => {
-        updateActiveSearchState({ caseSensitive: !caseSensitive })
+        updateActiveSearchState({ caseSensitive: !caseSensitive, ...STALE_RESULTS })
         rerunTextSearch()
       },
       onToggleWholeWord: () => {
-        updateActiveSearchState({ wholeWord: !wholeWord })
+        updateActiveSearchState({ wholeWord: !wholeWord, ...STALE_RESULTS })
         rerunTextSearch()
       },
       onToggleRegex: () => {
-        updateActiveSearchState({ useRegex: !useRegex })
+        updateActiveSearchState({ useRegex: !useRegex, ...STALE_RESULTS })
         rerunTextSearch()
       }
     },
@@ -278,11 +297,11 @@ export function useCombinedSearch({
       includeInputRef,
       excludeInputRef,
       onIncludeChange: (value: string) => {
-        updateActiveSearchState({ includePattern: value })
+        updateActiveSearchState({ includePattern: value, ...STALE_RESULTS })
         rerunTextSearch()
       },
       onExcludeChange: (value: string) => {
-        updateActiveSearchState({ excludePattern: value })
+        updateActiveSearchState({ excludePattern: value, ...STALE_RESULTS })
         rerunTextSearch()
       }
     },

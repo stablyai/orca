@@ -12,10 +12,12 @@ import { COMBINED_SEARCH_LISTBOX_ID } from './combined-search-rows'
 import type { CombinedSearchFieldState } from './combined-search-types'
 
 export function CombinedSearchStrip({
+  inputRef,
   field,
   filters,
   scopeLabel
 }: {
+  inputRef: React.RefObject<HTMLInputElement | null>
   field: CombinedSearchFieldState
   filters: SearchFiltersProps
   scopeLabel?: string
@@ -55,7 +57,7 @@ export function CombinedSearchStrip({
       >
         <Search className="size-3.5 shrink-0 text-muted-foreground" />
         <ImeInput
-          ref={field.inputRef}
+          ref={inputRef}
           type="text"
           role="combobox"
           aria-expanded={hasQuery}

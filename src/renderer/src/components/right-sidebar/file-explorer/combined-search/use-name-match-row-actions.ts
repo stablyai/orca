@@ -31,7 +31,11 @@ export type NameMatchRowActions = {
   runtimeDownloadContext: RuntimeFileOperationArgs | null
 }
 
-type PendingTreeAction = { path: string; run: (row: TreeNode) => void }
+type PendingTreeAction = { worktreeId: string; path: string; run: (row: TreeNode) => void }
+
+function withoutTrailingSeparators(path: string): string {
+  return path.replace(/[\\/]+$/, '')
+}
 
 /** Tree actions for flat name rows; anything that edits inline first clears the query and reveals the row. */
 export function useNameMatchRowActions({
@@ -78,8 +82,10 @@ export function useNameMatchRowActions({
     wasSearchActiveRef.current = searchActive
     const pending = pendingTreeActionRef.current
     // A query typed after the reveal replaces it, so its inline edit must not start later.
-    if (startedNewSearch || !pending || searchActive) {
-      if (startedNewSearch) {
+    // Leaving the workspace retires the action too, so a later visit never starts a stale edit.
+    const leftWorkspace = pending !== null && pending.worktreeId !== activeWorktreeId
+    if (startedNewSearch || leftWorkspace || !pending || searchActive) {
+      if (startedNewSearch || leftWorkspace) {
         pendingTreeActionRef.current = null
       }
       return
@@ -89,7 +95,7 @@ export function useNameMatchRowActions({
       pendingTreeActionRef.current = null
       pending.run(row)
     }
-  }, [rowProjection, searchActive])
+  }, [activeWorktreeId, rowProjection, searchActive])
 
   const revealThen = useCallback(
     (path: string, run: (row: TreeNode) => void) => {
@@ -98,7 +104,7 @@ export function useNameMatchRowActions({
       }
       clearSearch()
       revealInExplorer(activeWorktreeId, path)
-      pendingTreeActionRef.current = { path, run }
+      pendingTreeActionRef.current = { worktreeId: activeWorktreeId, path, run }
     },
     [activeWorktreeId, clearSearch, revealInExplorer]
   )
@@ -124,7 +130,10 @@ export function useNameMatchRowActions({
   const startNew = useCallback(
     (type: 'file' | 'folder', dir: string, depth: number) => {
       // The display root has no row of its own, so its inline input starts as soon as the tree shows.
-      if (dir === displayRootPath) {
+      if (
+        displayRootPath !== null &&
+        withoutTrailingSeparators(dir) === withoutTrailingSeparators(displayRootPath)
+      ) {
         clearSearch()
         pendingTreeActionRef.current = null
         startNewInTree(type, dir, depth)

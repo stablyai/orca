@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
-import { defaultRangeExtractor, useVirtualizer, type Range } from '@tanstack/react-virtual'
+import { defaultRangeExtractor, type Range } from '@tanstack/react-virtual'
+import { useSidebarRowsVirtualizer } from '@/components/sidebar/worktree-list/viewport/use-virtualizer'
 import { Copy } from 'lucide-react'
 import { basename, dirname } from '@/lib/path'
 import { cn } from '@/lib/class-names'
@@ -53,15 +54,6 @@ function optionClassName(active: boolean): string {
   )
 }
 
-/** The row menu does not restore focus (the tree relies on that), so hand it back to the field. */
-function restoreFieldFocus(): void {
-  requestAnimationFrame(() => {
-    if (document.activeElement === document.body || document.activeElement === null) {
-      document.querySelector<HTMLInputElement>('[data-combined-search-field] input')?.focus()
-    }
-  })
-}
-
 /** Left mouse would move focus out of the field; opening hands focus to the editor instead. */
 function keepFieldFocus(event: React.MouseEvent): void {
   if (event.button === 0) {
@@ -71,18 +63,18 @@ function keepFieldFocus(event: React.MouseEvent): void {
 
 function CopyPathMenu({
   children,
-  text,
+  copyValue,
   label
 }: {
   children: React.ReactElement
-  text: string
+  copyValue: string
   label: string
 }): React.JSX.Element {
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
       <ContextMenuContent>
-        <ContextMenuItem onClick={() => window.api.ui.writeClipboardText(text)}>
+        <ContextMenuItem onClick={() => window.api.ui.writeClipboardText(copyValue)}>
           <Copy className="size-3.5" />
           {label}
         </ContextMenuItem>
@@ -119,7 +111,8 @@ const CombinedSearchRowView = React.memo(function CombinedSearchRowView({
   scopeLabel,
   rowActions,
   toNode,
-  workspaceId
+  workspaceId,
+  onMenuClosed
 }: {
   row: CombinedSearchRow
   index: number
@@ -129,6 +122,7 @@ const CombinedSearchRowView = React.memo(function CombinedSearchRowView({
   rowActions: NameMatchRowActions
   toNode: ToNode
   workspaceId: string | null
+  onMenuClosed: () => void
 }): React.JSX.Element | null {
   const t = useTranslate()
   const copyPathLabel = t('auto.components.right.sidebar.SearchResultItems.3596b9668d', 'Copy Path')
@@ -197,7 +191,7 @@ const CombinedSearchRowView = React.memo(function CombinedSearchRowView({
         return content
       }
       return (
-        <ContextMenu onOpenChange={(open) => !open && restoreFieldFocus()}>
+        <ContextMenu onOpenChange={(open) => !open && onMenuClosed()}>
           <ContextMenuTrigger asChild>{content}</ContextMenuTrigger>
           <FileExplorerRowContextMenu
             node={node}
@@ -263,7 +257,7 @@ const CombinedSearchRowView = React.memo(function CombinedSearchRowView({
       const parentDir = dirname(row.fileResult.relativePath)
       return (
         <div className="pt-1">
-          <CopyPathMenu text={row.fileResult.relativePath} label={copyPathLabel}>
+          <CopyPathMenu copyValue={row.fileResult.relativePath} label={copyPathLabel}>
             <div
               {...optionProps}
               aria-expanded={!row.collapsed}
@@ -292,7 +286,7 @@ const CombinedSearchRowView = React.memo(function CombinedSearchRowView({
       const parts = getSearchMatchPreviewParts(row.match)
       return (
         <CopyPathMenu
-          text={`${row.fileResult.relativePath}#L${row.match.line}`}
+          copyValue={`${row.fileResult.relativePath}#L${row.match.line}`}
           label={t('auto.components.right.sidebar.SearchResultItems.cc06595a3b', 'Copy Line Path')}
         >
           <div
@@ -327,15 +321,17 @@ export function CombinedSearchResults({
   scopeLabel,
   rowActions,
   toNode,
-  workspaceId
+  workspaceId,
+  onMenuClosed
 }: CombinedSearchResultsState & {
   scopeLabel?: string
   rowActions: NameMatchRowActions
   toNode: ToNode
   workspaceId: string | null
+  onMenuClosed: () => void
 }): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null)
-  const virtualizer = useVirtualizer({
+  const { virtualizer, totalSize, virtualRows } = useSidebarRowsVirtualizer<HTMLDivElement>({
     count: model.count,
     getScrollElement: () => scrollRef.current,
     estimateSize: (index) => getRowHeight(model.getRow(index), index),
@@ -379,13 +375,8 @@ export function CombinedSearchResults({
       className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek"
       data-combined-search-results=""
     >
-      <div
-        id={listboxId}
-        role="listbox"
-        className="relative w-full"
-        style={{ height: virtualizer.getTotalSize() }}
-      >
-        {virtualizer.getVirtualItems().map((item) => {
+      <div id={listboxId} role="listbox" className="relative w-full" style={{ height: totalSize }}>
+        {virtualRows.map((item) => {
           const row = model.getRow(item.index)
           if (!row) {
             return null
@@ -405,6 +396,7 @@ export function CombinedSearchResults({
                 rowActions={rowActions}
                 toNode={toNode}
                 workspaceId={workspaceId}
+                onMenuClosed={onMenuClosed}
               />
             </div>
           )
