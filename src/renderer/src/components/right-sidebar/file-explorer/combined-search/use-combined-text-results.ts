@@ -38,7 +38,10 @@ export function useCombinedTextResults({
   // Large result sets render at lower priority so the field and name rows stay responsive.
   const deferredResults = useDeferredValue(committedResults)
   // The deferred payload is shown and activated only when it is the live query's own generation.
-  const deferredIsLive = resultsAreCurrent && deferredResults.query === query
+  const deferredIsLive =
+    resultsAreCurrent &&
+    deferredResults.query === query &&
+    deferredResults.owner === storedResultOwner
   // While the deferred render still holds an older payload, the text half is pending, not a miss.
   const deferredLagging = resultsAreCurrent && deferredResults.results !== storedResults
   const textRows = useMemo(

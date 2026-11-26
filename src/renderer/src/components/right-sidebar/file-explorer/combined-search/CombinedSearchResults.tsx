@@ -389,6 +389,9 @@ export function CombinedSearchResults({
           return (
             <div
               key={item.key}
+              // A wrapped error must push later rows down, so rows are measured, not only estimated.
+              ref={virtualizer.measureElement}
+              data-index={item.index}
               className="absolute left-2 right-2 top-0"
               style={{ transform: `translateY(${item.start}px)` }}
             >

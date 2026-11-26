@@ -60,12 +60,12 @@ export function useFileExplorerTreeLoadEffects({
   const followSymlinks = useAppStore((s) => s.settings?.followSymlinkedDirectories ?? false)
   const lastFollowSymlinks = useRef(followSymlinks)
   useEffect(() => {
-    if (lastFollowSymlinks.current !== followSymlinks) {
-      lastFollowSymlinks.current = followSymlinks
-      if (visibleFilesWorktreePath) {
-        resetAndLoad()
-      }
+    // Why: keep a change pending while search hides the tree, so the restored tree reloads.
+    if (!visibleFilesWorktreePath || lastFollowSymlinks.current === followSymlinks) {
+      return
     }
+    lastFollowSymlinks.current = followSymlinks
+    resetAndLoad()
   }, [followSymlinks, visibleFilesWorktreePath, resetAndLoad])
   const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
 
