@@ -117,7 +117,13 @@ export class CdpPageInputCommands {
       await this.agentPointer?.show(params)
     }
     if (method === 'Input.dispatchKeyEvent' && !sessionId) {
-      return await dispatchPageKeyEvent(this.webContents, params, this.sendRoot, this.guardFocus)
+      return await dispatchPageKeyEvent(
+        this.webContents,
+        params,
+        this.sendRoot,
+        this.guardFocus,
+        this.agentPointer?.skipsInputWaits() === true
+      )
     }
     if (!isEmbeddedGuest(this.webContents)) {
       // Popup and serve pages never borrow native focus, so emulate it as the bridge does.

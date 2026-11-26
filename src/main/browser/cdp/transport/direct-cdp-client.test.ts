@@ -30,6 +30,7 @@ let proxy: CdpWsProxy | null = null
 let ws: WebSocket | null = null
 
 afterEach(async () => {
+  vi.useRealTimers()
   ws?.close()
   await proxy?.stop()
   proxy = null
@@ -81,4 +82,56 @@ it("keeps Orca's own helper drawing the cursor and waiting for the move ack", as
     ([method]) => method === 'Input.dispatchMouseEvent'
   )
   expect(mouse.map(([, params]) => params?.type)).toEqual(['mouseMoved'])
+})
+
+const KEY_A = {
+  id: 4,
+  method: 'Input.dispatchKeyEvent',
+  params: { type: 'keyDown', key: 'a', code: 'KeyA', text: 'a', windowsVirtualKeyCode: 65 }
+}
+
+// A focused field in the page, which never reports that it finished handling typed input.
+async function embeddedGuestNeverSettlingKeys(pointer: AgentPointer) {
+  const mock = createMockWebContents()
+  mock.webContents.getType.mockReturnValue('webview')
+  Object.assign(mock.webContents, { isOffscreen: () => false })
+  mock.webContents.debugger.sendCommand.mockImplementation(async (method, params) => {
+    const expression = typeof params?.expression === 'string' ? params.expression : ''
+    if (method === 'Runtime.evaluate' && expression.includes('MessageChannel')) {
+      return new Promise<Record<string, unknown>>(() => {})
+    }
+    if (method === 'Runtime.evaluate' && expression.includes('document.activeElement')) {
+      return { result: { type: 'boolean', value: true } }
+    }
+    return {}
+  })
+  proxy = new CdpWsProxy(mockAsWebContents(mock), () => () => {}, undefined, pointer)
+  ws = await connect(await proxy.start())
+  // Freeze the page probe's 500 ms fallback, so a key answered only by waiting never is.
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  return { mock, ws }
+}
+
+it('answers a direct client typed key once it is sent to the page', async () => {
+  const { mock, ws } = await embeddedGuestNeverSettlingKeys(DIRECT_CDP_CLIENT_POINTER)
+
+  expect(await sendAndReceive(ws, KEY_A)).toMatchObject({ id: 4, result: {} })
+  expect(mock.webContents.sendInputEvent).toHaveBeenCalled()
+})
+
+it("keeps Orca's own helper waiting for the page to handle a typed key", async () => {
+  const { mock, ws } = await embeddedGuestNeverSettlingKeys({
+    show: async () => {},
+    skipsInputWaits: () => false
+  })
+  const answered: unknown[] = []
+  ws.on('message', (data) => answered.push(JSON.parse(data.toString()).id))
+
+  ws.send(JSON.stringify(KEY_A))
+  await vi.waitFor(() => expect(mock.webContents.sendInputEvent).toHaveBeenCalled())
+  // A forwarded command's reply comes after the key reached the page; the key itself stays unanswered.
+  expect(
+    await sendAndReceive(ws, { id: 5, method: 'Runtime.evaluate', params: { expression: '1' } })
+  ).toMatchObject({ id: 5 })
+  expect(answered).not.toContain(4)
 })
