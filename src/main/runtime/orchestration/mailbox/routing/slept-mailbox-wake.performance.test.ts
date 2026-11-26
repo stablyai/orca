@@ -496,7 +496,10 @@ it.each([100, 500])(
       db.insertMessage({ runId: run.id, from: 'worker', to: `run:${run.id}`, subject: 'owed' })
     }
     const sessions = new Map([
-      ['local' as const, { ...getDefaultWorkspaceSession(), sleepingAgentSessionsByPaneKey: onLocal }],
+      [
+        'local' as const,
+        { ...getDefaultWorkspaceSession(), sleepingAgentSessionsByPaneKey: onLocal }
+      ],
       [hostA, { ...getDefaultWorkspaceSession(), sleepingAgentSessionsByPaneKey: onA }]
     ])
     const runtime = new OrcaRuntimeService(
