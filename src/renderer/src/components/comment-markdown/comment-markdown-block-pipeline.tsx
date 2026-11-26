@@ -5,6 +5,7 @@ import remarkParse from 'remark-parse'
 import type { CommentMarkdownExtension } from './CommentMarkdown'
 import { useChatMathRendering } from './chat-markdown-math-rendering'
 import { rehypeWordFade } from './comment-markdown-word-fade'
+import { CommentMarkdownBlockSourceContext } from './comment-markdown-code-fence'
 import {
   splitMarkdownTopLevelBlocks,
   type HtmlRendersAsText,
@@ -28,6 +29,7 @@ type MemoizedMarkdownProps = React.ComponentProps<typeof Markdown> & {
   /** Where this block starts in the whole content. */
   fadeBase?: number
   block?: MarkdownBlock
+  authoredCodeFenceSource?: string
 }
 
 /** Equal props, except that a settled block's moving fade point doesn't count until it renders plain. */
@@ -68,6 +70,7 @@ export const MemoizedMarkdown = React.memo(function DeferredMarkdown({
   fadeHoldTo,
   fadeBase = 0,
   block,
+  authoredCodeFenceSource,
   ...props
 }: MemoizedMarkdownProps) {
   const renderMath = useChatMathRendering(math)
@@ -108,7 +111,16 @@ export const MemoizedMarkdown = React.memo(function DeferredMarkdown({
     }
     return [...(props.remarkPlugins ?? []), reuseParsedBlock]
   }, [block, props.remarkPlugins])
-  return <Markdown {...props} remarkPlugins={parsedPlugins} rehypePlugins={plugins} />
+  const markdown = <Markdown {...props} remarkPlugins={parsedPlugins} rehypePlugins={plugins} />
+  return authoredCodeFenceSource === undefined ? (
+    markdown
+  ) : (
+    <CommentMarkdownBlockSourceContext.Provider
+      value={{ authored: authoredCodeFenceSource, drawn: props.children ?? '' }}
+    >
+      {markdown}
+    </CommentMarkdownBlockSourceContext.Provider>
+  )
 }, sameBlockRender)
 
 /** The content as the blocks to render. Cut into blocks from the first time it is growing, and
