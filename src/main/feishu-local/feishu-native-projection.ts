@@ -54,7 +54,7 @@ export class FeishuNativeProjection {
   project(
     account: string,
     external: string
-  ): { original: string; native: FeishuNativeResponse } | null {
+  ): { original: string; continuations: string[]; native: FeishuNativeResponse } | null {
     const latest = this.latest
     const user = latest?.turn.userItemId && this.items.get(latest.turn.userItemId)
     const delivery =
@@ -78,6 +78,7 @@ export class FeishuNativeProjection {
       messages: [],
       tools: []
     }
+    const continuations: string[] = []
     const ordered = [...this.items.values()].sort(
       (a, b) => a.sequence - b.sequence || (a.sequenceIndex ?? 0) - (b.sequenceIndex ?? 0)
     )
@@ -86,7 +87,17 @@ export class FeishuNativeProjection {
         continue
       }
       const body = item.body
-      if (body.kind === 'message' && body.role === 'assistant') {
+      if (body.kind === 'message' && body.role === 'user') {
+        const stamp = body.connectorDelivery
+        if (
+          stamp?.account === account &&
+          stamp.conversation.source === 'feishu-local' &&
+          stamp.conversation.externalId === external &&
+          stamp.deliveryId !== delivery.deliveryId
+        ) {
+          continuations.push(stamp.deliveryId)
+        }
+      } else if (body.kind === 'message' && body.role === 'assistant') {
         const text = body.blocks.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('\n')
         if (text.trim() && !'NO_REPLY'.startsWith(text.trim()) && text.trim() !== 'NO_REPLY') {
           native.messages.push({ id: item.itemId, text })
@@ -117,6 +128,6 @@ export class FeishuNativeProjection {
     }
     native.tools = native.tools.slice(-60)
     native.messages = native.messages.slice(-20)
-    return { original: delivery.deliveryId, native }
+    return { original: delivery.deliveryId, continuations, native }
   }
 }

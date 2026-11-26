@@ -85,6 +85,14 @@ export class FeishuNativeFeed {
         ) {
           return
         }
+        for (const original of value.continuations) {
+          await this.store.updateResponse(this.b.account, external, original, route.chat, {
+            kind: 'handoff',
+            from: value.original,
+            turnItemId: value.native.turnItemId,
+            at: Date.now()
+          })
+        }
         await this.store.updateResponse(this.b.account, external, value.original, route.chat, {
           kind: 'native',
           value: value.native

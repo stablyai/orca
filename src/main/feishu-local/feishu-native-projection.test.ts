@@ -117,6 +117,25 @@ it('projects only the stamped turn, revises calls and text in place, and exclude
   expect(projected.native.tools).toMatchObject([
     { id: 'call', status: 'success', durationMs: 1200 }
   ])
+  const followup = (deliveryId: string, externalId = 'lane'): AgentJournalRenderItem['body'] => ({
+    kind: 'message',
+    role: 'user',
+    blocks: [],
+    connectorDelivery: {
+      account: 'account',
+      conversation: { source: 'feishu-local', externalId },
+      deliveryId
+    }
+  })
+  apply(row('queued', followup('om_queued')))
+  expect(projection.project('account', 'lane')?.continuations).toEqual([])
+  apply(
+    row('queued', followup('om_queued'), 'turn', 1),
+    row('steered', followup('om_steered'), 'turn'),
+    row('foreign', followup('om_foreign', 'other-lane'), 'turn'),
+    row('old-steer', followup('om_old'), 'old-turn')
+  )
+  expect(projection.project('account', 'lane')?.continuations).toEqual(['om_queued', 'om_steered'])
   apply(
     row('other-user', {
       kind: 'message',
@@ -137,4 +156,5 @@ it('projects only the stamped turn, revises calls and text in place, and exclude
   )
   expect(projection.project('account', 'lane')?.native.tools).toEqual([])
   expect(projection.project('account', 'lane')?.native.messages).toEqual([])
+  expect(projection.project('account', 'lane')?.continuations).toEqual([])
 })
