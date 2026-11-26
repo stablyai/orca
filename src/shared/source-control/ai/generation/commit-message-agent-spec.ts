@@ -179,20 +179,24 @@ export function getCommitMessageAgentSpec(agentId: TuiAgent): CommitMessageAgent
   return COMMIT_MESSAGE_AGENT_SPECS[agentId]
 }
 
+// Orca no longer runs these headless; a saved or default choice of one picks as if unset.
+const RETIRED_TEXT_AGENT_IDS: ReadonlySet<unknown> = new Set(['antigravity'])
+
+export function isRetiredTextAgent(agentId: unknown): boolean {
+  return RETIRED_TEXT_AGENT_IDS.has(agentId)
+}
+
 export function resolveCommitMessageAgentChoice(
   configuredAgentId: CommitMessageAgentChoice | null | undefined,
   defaultTuiAgent: DefaultTuiAgentPreference,
   disabledTuiAgents?: Iterable<unknown> | null
 ): CommitMessageAgentChoice | null {
-  // A saved agent with no text mode, such as Antigravity, picks as if none were saved.
-  if (
-    configuredAgentId &&
-    (isCustomAgentId(configuredAgentId) || getCommitMessageAgentSpec(configuredAgentId))
-  ) {
+  if (configuredAgentId && !isRetiredTextAgent(configuredAgentId)) {
     return configuredAgentId
   }
   if (
     defaultTuiAgent &&
+    !isRetiredTextAgent(defaultTuiAgent) &&
     defaultTuiAgent !== 'blank' &&
     isTuiAgentEnabled(defaultTuiAgent, disabledTuiAgents)
   ) {
