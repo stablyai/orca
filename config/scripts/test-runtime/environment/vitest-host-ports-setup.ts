@@ -9,7 +9,7 @@ import {
 import { setSecretStore } from '../../../../src/shared/secure-storage/secret-store'
 
 // The harness owns its directory even when a suite replaces the fs module.
-const { mkdtempSync, rmSync } = process.getBuiltinModule('fs')
+const { mkdtempSync, promises: fs } = process.getBuiltinModule('fs')
 
 // Install benign host ports before tests; production correctly throws before entry installs them, while suites can override defaults afterward.
 
@@ -20,9 +20,9 @@ function userDataPath(): string {
   return (userData ??= mkdtempSync(join(tmpdir(), 'orca-vitest-userdata-')))
 }
 
-afterAll(() => {
+afterAll(async () => {
   if (userData) {
-    rmSync(userData, { recursive: true, force: true, maxRetries: 3 })
+    await fs.rm(userData, { recursive: true, force: true, maxRetries: 3 })
   }
 })
 

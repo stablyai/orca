@@ -19,6 +19,7 @@ import {
   selectImportingTests
 } from './check-changed-direct-tests.mjs'
 import { planChangedChecks } from './check-changed-selection.mjs'
+import { runChangedCheckTasks } from './changed-check-task-pool.mjs'
 import { resolveOxcCliInvocation } from '../../tool-invocation/oxc-cli-invocation.mjs'
 import { resolvePnpmCliInvocation } from '../../tool-invocation/pnpm-cli-invocation.mjs'
 
@@ -212,6 +213,7 @@ function buildTasks(
   if (plan.typecheckProjects.length > 0) {
     tasks.push({
       name: `typecheck (${plan.typecheckProjects.map((config) => path.basename(config, '.json')).join(', ')})`,
+      exclusive: true,
       steps: [
         step(node, [
           'config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs',
@@ -240,6 +242,7 @@ function buildTasks(
       ])
     tasks.push({
       name: useRelated ? 'unit tests (related)' : 'unit tests',
+      exclusive: true,
       steps: [
         step(node, [
           'config/scripts/native-build/node-addons/ensure-native-runtime.mjs',
@@ -371,19 +374,6 @@ async function runTask(task, { root, env, runProcess, stepTimeoutMs }) {
     }
   }
   return { task, ok: true, output, elapsed: seconds(startedAt) }
-}
-
-async function runPool(tasks, concurrency, run, signal) {
-  const results = []
-  let next = 0
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, tasks.length) }, async () => {
-      while (!signal?.aborted && next < tasks.length) {
-        results.push(await run(tasks[next++]))
-      }
-    })
-  )
-  return results
 }
 
 export async function main(root, argv) {
@@ -519,7 +509,7 @@ async function runChangedChecks(root, options, signal) {
     console.log(`… ${seconds(startedAt)} elapsed; running: ${active.join(', ')}`)
   }, HEARTBEAT_MS)
   heartbeat.unref()
-  const results = await runPool(
+  const results = await runChangedCheckTasks(
     tasks,
     concurrency,
     async (task) => {
@@ -538,7 +528,8 @@ async function runChangedChecks(root, options, signal) {
       }
       return result
     },
-    signal
+    signal,
+    { isolateResourceChecks: options.checkConcurrency !== undefined }
   ).finally(() => clearInterval(heartbeat))
   if (signal?.aborted) {
     return signal.reason
