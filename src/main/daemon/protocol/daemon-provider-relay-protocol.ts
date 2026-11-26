@@ -61,8 +61,11 @@ export type ProviderRelayRequest =
    * `ackedThrough` is how far the daemon released, which passes `keepFrom` after a file-cap release.
    * `truncatedThrough` is how far the spool let kept lines go on its own (at its memory or file cap,
    * on an ack or an append), so the client records each such release as a cut. Older daemons omit it.
-   * `cutKeys` (with `cut`, opaque to the daemon) name the items the cut split; each cut ack replaces
-   * them, and a later attach reports them next to `truncatedThrough`. Older daemons ignore them.
+   * `cutKeys` (opaque to the daemon) name the items the cut split, or, without `cut`, the items a
+   * replay from `keepFrom` would show without their start; each ack carrying them replaces them, and
+   * a later attach reports them with `savedThrough`, the furthest line the client said its journal
+   * holds (an ack's `seq` may pass unsaved text a kept span replays). Older daemons keep them only
+   * with `cut`.
    */
   | { id: string; type: 'relayAck'; payload: ProviderRelayAckPayload }
   /** Several relays' acks in one request; `results` answers each in order, `{ error }` for a refused one. */
@@ -95,6 +98,8 @@ export type ProviderRelayAckPayload = {
   cut?: true
   held?: true
   cutKeys?: string[]
+  /** Every line through here is in the client's journal. */
+  savedThrough?: number
 }
 
 /** More acks than this in one `relayAcks` is refused whole. */
@@ -121,6 +126,11 @@ export type ProviderRelayDetachPolicy = {
    * neither forwards nor spools them. Only a short line is checked.
    */
   quiet?: string[]
+  /**
+   * Agent request methods that ask to start an item: until such a request (naming `params.itemId`,
+   * with no `approvalId`) is answered, that item hasn't started, so it isn't running work.
+   */
+  startApprovals?: string[]
   /**
    * Work open when a detach was sent, as task keys per marker group. Only a detach carries it, and
    * only a detach that carries it can idle-stop: a stream that just dropped keeps the agent running.
@@ -159,6 +169,8 @@ export type ProviderRelayKeepSpec = {
   /** Agent request `method`s the daemon answers itself, with this result, while no app is attached:
    *  housekeeping whose answer never depends on the app (an attached app answers as usual). */
   replies?: Record<string, unknown>
+  /** The app's own note on this launch (opaque, short), handed back on each attach. */
+  note?: string
 }
 
 /** A kept line's seq and the name it was kept under (`a:<method>`, `q:<method>` or `l:<marker>`). */
@@ -225,6 +237,11 @@ export type ProviderRelayAttachResult = {
   outstanding?: ProviderRelayOutstandingRequest[]
   /** The items the client said its last cut split, when that cut is the one `truncatedThrough` names. */
   cutKeys?: string[]
+  /** With `cutKeys`: the furthest line the client's journal holds. A named item's lines through
+   *  it are saved already. */
+  savedThrough?: number
+  /** The keep spec's `note`, from the app that spawned this agent. */
+  launchNote?: string
 }
 
 export type ProviderRelayInfo = {
@@ -286,6 +303,8 @@ export const RELAY_WRITE_CHUNK_CHARS = 2 * 1024 * 1024
 /** A cut names at most this many items, each key at most this long; a larger list is refused. */
 export const RELAY_CUT_KEYS_MAX = 32
 export const RELAY_CUT_KEY_MAX_CHARS = 256
+/** A cut key saying the cut split more items than it names: a reattach moves every item it meets. */
+export const RELAY_CUT_KEYS_OVERFLOW = '*'
 
 /** Opaque item keys a cut ack names; anything past the bounds is refused, not trimmed. */
 export function readProviderRelayCutKeys(value: unknown): string[] {

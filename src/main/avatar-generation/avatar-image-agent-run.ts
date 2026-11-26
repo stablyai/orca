@@ -325,9 +325,8 @@ export async function runAvatarImageAgent(input: {
     if (exit.code !== 0) {
       return { ok: false, error: classifyAvatarAgentFailure(errorText) }
     }
-    // A clean exit with no image: the agent declined, often for a real person or a brand.
     if (/\bREFUSED\b/.test(agentReplyText(exit.stdout))) {
-      return { ok: false, error: 'real-person' }
+      return { ok: false, error: 'no-image' }
     }
     const failure = classifyAvatarAgentFailure(errorText)
     return { ok: false, error: failure === 'failed' ? 'no-image' : failure }

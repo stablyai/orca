@@ -5,7 +5,7 @@ import type {
 } from '../provider-process/managed-provider-process'
 import type { ProviderProcessCloseResult } from '../provider-process/provider-process-close'
 import type { ProviderRelayFailure } from '../daemon/protocol/daemon-provider-relay-protocol'
-import type { RelayedProviderChild } from './relayed-provider-child'
+import { RELAYED_CHILD_HANDED_OFF, type RelayedProviderChild } from './relayed-provider-child'
 
 /** Past the daemon's own stdin-end, SIGTERM and SIGKILL ladder. */
 const RELAY_CLOSE_WAIT_MS = 15_000
@@ -27,8 +27,14 @@ export function providerRelayFailureWords(error: ProviderRelayFailure | undefine
  * The managed-process surface over a relayed agent. The daemon runs the close ladder and the group
  * reap, so a close here is a request to it; exit proof is the daemon's `relayExit`.
  */
-export function relayedManagedProcess(child: RelayedProviderChild): ManagedProviderProcess {
+export function relayedManagedProcess(
+  child: RelayedProviderChild,
+  /** During quit, hands the agent to the daemon (true) rather than have a close stop it. */
+  handOffOnQuit?: () => Promise<boolean> | null
+): ManagedProviderProcess {
   let observed: ProviderProcessExit | null = null
+  /** Shared, so every close during quit waits for the one hand-off. */
+  let handingOff: Promise<boolean> | null = null
   let lastCloseResult: ProviderProcessCloseResult | null = null
   const listeners = new Set<(exit: ProviderProcessExit) => void>()
   const exited = Promise.withResolvers<void>()
@@ -56,6 +62,7 @@ export function relayedManagedProcess(child: RelayedProviderChild): ManagedProvi
     () => child.exited === null && !child.handedOff
   )
   child.once('close', releaseAgentMemory)
+  child.once(RELAYED_CHILD_HANDED_OFF, releaseAgentMemory)
   // An exit emitted before this was built (during the attach) is not emitted again.
   if (child.exited) {
     observe()
@@ -70,7 +77,8 @@ export function relayedManagedProcess(child: RelayedProviderChild): ManagedProvi
   }
 
   const close = async (): Promise<ProviderProcessCloseResult> => {
-    if (child.handedOff) {
+    handingOff ??= observed ? null : (handOffOnQuit?.() ?? null)
+    if (child.handedOff || (await handingOff)) {
       // Detached on quit: the agent is the daemon's now, and nothing of it is this app's to wait on.
       lastCloseResult = { root: 'exited', tree: 'exited' }
       return lastCloseResult

@@ -175,6 +175,9 @@ export async function installOnJournal(
       stateDirectory: deps.stateDirectory,
       store,
       journalDatabase,
+      retainedUploadIds: deps.owedItemAttachmentUploads
+        ? (root) => deps.owedItemAttachmentUploads!(deps.stateDirectory, root)
+        : undefined,
       logger: deps.logger
     })
     stopVisualsSweep = deps.nativeChatVisuals

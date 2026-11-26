@@ -50,7 +50,7 @@ export class CodexBackgroundTaskTracker {
   private terminalStops: CodexTerminalStopSupport | 'probing' = 'unknown'
 
   constructor(
-    private readonly primaryThreadId: string,
+    readonly primaryThreadId: string,
     private readonly executions = new CodexSubagentExecutions(),
     private readonly childWorkSink?: CodexChildWorkSink
   ) {

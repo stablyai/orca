@@ -262,17 +262,11 @@ export class AcpSessionRuntime {
     params: unknown,
     schema: z.ZodType<T>,
     received?: (response: T) => void,
-    timeoutMs: number | null = null
+    timeoutMs: number | null = null,
+    onId?: (id: number) => void
   ): Promise<T> {
-    return callAcpSession(
-      this.peer,
-      method,
-      params,
-      schema,
-      this.options.onAuthAnswered,
-      received,
-      timeoutMs
-    )
+    const answered = this.options.onAuthAnswered
+    return callAcpSession(this.peer, method, params, schema, answered, received, timeoutMs, onId)
   }
 
   private handleRequest(method: string, params: unknown, context: AcpRequestContext): unknown {

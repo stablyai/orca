@@ -1,6 +1,7 @@
 import { Readable } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import { RelayedProviderOutput } from './relayed-provider-output'
+import { cutHeldOutput } from './relayed-provider-held-output'
 import { jsonProperty } from '../../shared/json-stream/json-value-property'
 import { createProviderRecordReader } from '../provider-process/provider-record-reader'
 
@@ -394,5 +395,93 @@ describe('relayed provider output', () => {
     await output.flush()
     output.stop()
     expect(sent).toEqual(['1', '1 cut []'])
+  })
+
+  it('keeps unsaved streamed text spooled, never let go at the daemon memory cap', async () => {
+    const acks: unknown[][] = []
+    const output = new RelayedProviderOutput({
+      stdout: new Readable({ read() {} }),
+      durable: async () => false,
+      ackFloor: { observe: () => {}, floor: () => 2 },
+      ack: async (...args) => {
+        acks.push(args)
+      }
+    })
+    output.restartAt(0)
+    for (const seq of [1, 2, 3]) {
+      output.line('relayData', seq, `line-${seq}`)
+    }
+    await output.settle(true, 3)
+    expect(acks).toEqual([[3, 2, { held: true }]])
+  })
+
+  it('asks a held request again after a reconnect drops the hold, and only once', async () => {
+    const { output, seen } = rig(() => false)
+    output.restartAt(0)
+    output.line('relayPending', 2, 'ask')
+    output.line('relayData', 1, 'line-1')
+    // The stream drops before the chat was ready: the reattach replays from the cursor.
+    output.restartAt()
+    output.line('relayPending', 2, 'ask')
+    output.line('relayData', 1, 'line-1')
+    output.line('relayData', 2, 'ask')
+    await output.release()
+    await settle()
+    expect(seen).toEqual(['ask', 'line-1'])
+  })
+
+  it("runs one ack and keeps at most one waiting while the journal can't save, however often it is asked", async () => {
+    const { output, acks, durable, releaseDurable } = rig()
+    output.restartAt(0)
+    output.line('relayData', 1, 'line-1')
+    const first = output.settle(true, 1)
+    await settle()
+    await settle()
+    // Stalled on the journal; every ask meanwhile joins the one waiting behind it.
+    output.line('relayData', 2, 'line-2')
+    const asks = Array.from({ length: 1000 }, (_, at) => output.settle(true, at))
+    await settle()
+    expect(durable).toHaveBeenCalledTimes(1)
+    expect(new Set(asks).size).toBe(1)
+    await releaseDurable()
+    await releaseDurable()
+    await Promise.all([first, ...asks])
+    expect(durable).toHaveBeenCalledTimes(2)
+    // The waiting one ran after the stall, so the latest line is acked.
+    expect(acks.at(-1)).toBe(2)
+  })
+
+  it('forgets a request once an attach shows the daemon no longer holds it, keeping open ones', () => {
+    const { output } = rig()
+    output.restartAt(0)
+    for (let seq = 1; seq <= 100; seq += 1) {
+      output.line('relayPending', seq, `ask-${seq}`)
+    }
+    output.deliveredPending.forgetSettled(100, [7])
+    expect(output.deliveredPending.size).toBe(1)
+    // The one still open is never asked twice.
+    output.line('relayPending', 7, 'ask-7')
+    expect(output.deliveredPending.size).toBe(1)
+  })
+
+  it('keeps held output under its cap: the oldest goes behind one cursor entry, held requests stay', () => {
+    const held = [
+      { seq: 1, line: 'aaaa' },
+      { seq: null, line: 'request' },
+      { seq: 2, line: 'bbbb' },
+      { seq: 3, line: 'cccc' },
+      { seq: 4, line: 'dddd' }
+    ]
+    expect(cutHeldOutput(held, 16, 16)).toBeNull()
+    const cut = cutHeldOutput(held, 16, 12)
+    expect(cut).toEqual({
+      held: [
+        { seq: null, line: 'request' },
+        { seq: 3, line: '' },
+        { seq: 4, line: 'dddd' }
+      ],
+      chars: 4,
+      through: 3
+    })
   })
 })

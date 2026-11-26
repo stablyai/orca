@@ -6,10 +6,11 @@ import { createCodexRelayAckFloor } from './codex-relay-ack-floor'
 import { CODEX_RELAY_ITEM_CONTINUATION } from './codex-relay-item-continuation'
 import type { CodexAppServerConnection } from './codex-app-server-connection-types'
 import type { RelayedProviderChild } from '../../provider-relay/relayed-provider-child'
+import { CODEX_COMMAND_APPROVAL_METHOD } from '../structured/prompts/codex-prompt-registry'
 
 /** Recorded with each Codex relay; this build reattaches it. */
 export const CODEX_RELAY_AGENT = 'codex-app-server'
-registerReattachableProviderRelayAgent(CODEX_RELAY_AGENT)
+registerReattachableProviderRelayAgent(CODEX_RELAY_AGENT, { provider: 'codex' })
 
 const THREAD = [
   ['params', 'threadId'],
@@ -33,6 +34,8 @@ export const CODEX_RELAY_WORK_MARKERS: ProviderRelayWorkMarkers = {
   agent: CODEX_RELAY_AGENT,
   ackFloor: createCodexRelayAckFloor,
   continuation: CODEX_RELAY_ITEM_CONTINUATION,
+  // Codex opens a command's item before asking to run it.
+  startApprovals: [CODEX_COMMAND_APPROVAL_METHOD],
   markers: [
     { group: 'turn', name: 'turn/started', effect: 'start', key: [THREAD] },
     { group: 'turn', name: 'turn/completed', effect: 'end', key: [THREAD] },
@@ -63,8 +66,15 @@ export const CODEX_RELAY_WORK_MARKERS: ProviderRelayWorkMarkers = {
   ]
 }
 
-/** The kept agent's answer to the first app's `initialize`; callers only need it to resolve. */
-export function keptInitializeResult(line: string | null): unknown {
+/** The kept agent's answer to the first app's `initialize`; null when no app ever initialized it
+ *  (its spawn reply was lost), so this app initializes it as a new one. */
+export function keptInitializeResult(
+  child: Pick<RelayedProviderChild, 'attachResult' | 'initializeLine'>
+): unknown {
+  if (child.attachResult?.initializeResultSent !== true) {
+    return null
+  }
+  const line = child.initializeLine
   if (line === null) {
     return {}
   }
@@ -78,13 +88,18 @@ export function keptInitializeResult(line: string | null): unknown {
 
 /** What a Codex connection exposes of its relayed app-server. */
 export function codexConnectionRelay(
-  child: Pick<RelayedProviderChild, 'releaseOutput' | 'attachResult'>,
-  reattached: boolean
+  child: Pick<RelayedProviderChild, 'releaseOutput' | 'attachResult' | 'handedOff'>,
+  reattached: boolean,
+  keep?: () => Promise<void>,
+  ownServer = true
 ): NonNullable<CodexAppServerConnection['relay']> {
   return {
     reattached,
+    ownServer,
+    ...(keep ? { keep } : {}),
     releaseOutput: () => child.releaseOutput(),
     endedWork: () => child.attachResult?.endedWork,
-    openWork: () => child.attachResult?.openWork
+    openWork: () => child.attachResult?.openWork,
+    handedOff: () => child.handedOff
   }
 }

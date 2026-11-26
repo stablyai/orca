@@ -20,10 +20,12 @@ export class ProviderRelayCarriedWork {
     this.reader = new ProviderRelayWorkReader(markers)
   }
 
+  /** Only work a marker can end is followed; the session restates the rest itself. */
   take(open: OpenWork | undefined): void {
+    const readable = open && this.reader.endable(open)
     this.work =
-      open && Object.values(open).some((keys) => keys.length > 0)
-        ? new ProviderRelayOpenWork(open)
+      readable && Object.values(readable).some((keys) => keys.length > 0)
+        ? new ProviderRelayOpenWork(readable)
         : null
   }
 
@@ -64,7 +66,10 @@ export class ProviderRelayCarriedWork {
       floor: (through, released) => floor?.floor(through, released) ?? null,
       tookCut: () => floor?.tookCut?.() === true,
       released: (seq) => floor?.released?.(seq),
-      ...(floor?.cutKeys ? { cutKeys: (through?: number) => floor.cutKeys?.(through) ?? [] } : {})
+      ...(floor?.cutKeys ? { cutKeys: (through?: number) => floor.cutKeys?.(through) ?? [] } : {}),
+      ...(floor?.wake ? { wake: (ack: () => void) => floor.wake?.(ack) } : {}),
+      ...(floor?.namesEveryAck ? { namesEveryAck: true } : {}),
+      ...(floor?.keepsHeldReplay ? { keepsHeldReplay: true } : {})
     }
   }
 }

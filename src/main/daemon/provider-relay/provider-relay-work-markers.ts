@@ -139,6 +139,17 @@ export class ProviderRelayWorkReader {
     )
   }
 
+  /** Of `open`, the groups some marker can end or restate (`endable`), or the rest: work in
+   *  those never changes here, so reading lines for it is waste. */
+  endable(open: Record<string, string[][]>, endable = true): Record<string, string[][]> {
+    const groups = new Set(
+      this.markers.flatMap((marker) => (marker.effect === 'start' ? [] : [marker.group]))
+    )
+    return Object.fromEntries(
+      Object.entries(open).filter(([group]) => groups.has(group) === endable)
+    )
+  }
+
   read(line: string): ProviderRelayWorkChange[] {
     if (!this.mayMatch(line)) {
       return []
@@ -195,7 +206,27 @@ export class ProviderRelayOpenWork {
   }
 
   get busy(): boolean {
-    return this.overflowed || [...this.groups.values()].some((tasks) => tasks.size > 0)
+    return this.overflowed || this.knownBusy
+  }
+
+  /** Work it saw start and not end (overflow aside). */
+  get knownBusy(): boolean {
+    return [...this.groups.values()].some((tasks) => tasks.size > 0)
+  }
+
+  /** Open work in any group but `group`, leaving out tasks whose own id is still `awaitingStart`. */
+  openOutside(group: string, awaitingStart: (itemId: string) => boolean): boolean {
+    for (const [name, tasks] of this.groups) {
+      if (name === group) {
+        continue
+      }
+      for (const key of tasks) {
+        if (!awaitingStart(key.slice(key.lastIndexOf(KEY_SEPARATOR) + 1))) {
+          return true
+        }
+      }
+    }
+    return false
   }
 
   /**
@@ -220,6 +251,11 @@ export class ProviderRelayOpenWork {
       ended[group] = [...tasks].map((key) => key.split(KEY_SEPARATOR))
     }
     return this.ended.size > 0 ? ended : null
+  }
+
+  /** More work than it can count, or lines it never saw: the open work is unknown. */
+  get unaccounted(): boolean {
+    return this.overflowed
   }
 
   /** Work the daemon can't account for; the agent is never idle-stopped after it. */

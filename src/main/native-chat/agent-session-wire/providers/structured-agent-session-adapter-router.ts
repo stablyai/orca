@@ -100,11 +100,8 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
       input.record.provider
     )?.adapter.nameProviderConversation?.(input)
 
-  stopProviderNaming = (): void => {
-    for (const adapter of this.adapters()) {
-      adapter.stopProviderNaming?.()
-    }
-  }
+  stopProviderNaming = (): void =>
+    this.adapters().forEach((adapter) => adapter.stopProviderNaming?.())
 
   // Every adapter, so a session still starting hears it; only one that holds the session acts.
   promptSuggestionInterestChanged = (sessionId: string, wanted: boolean): void => {
@@ -180,6 +177,9 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
     this.adapters()
       .map((adapter) => adapter.startupEnding?.(sessionId, acquisitionGeneration))
       .find((ending) => ending !== undefined)
+
+  endedBeforeAcquire = (sessionId: string, generation: string): boolean =>
+    this.adapters().some((each) => each.endedBeforeAcquire?.(sessionId, generation))
 
   retireStartup = (sessionId: string, acquisitionGeneration: string): void =>
     this.adapters().forEach((adapter) => adapter.retireStartup?.(sessionId, acquisitionGeneration))

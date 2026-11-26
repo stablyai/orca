@@ -47,10 +47,12 @@ export function callAcpSession<T>(
   schema: z.ZodType<T>,
   answered: ((signedIn: boolean) => void) | undefined,
   received?: (response: T) => void,
-  timeoutMs: number | null = null
+  timeoutMs: number | null = null,
+  onId?: (id: number) => void
 ): Promise<T> {
   return peer.request(method, params, {
     timeoutMs,
+    ...(onId ? { onId } : {}),
     // A bounded session control fails only itself; the agent is asked to drop it.
     ...(timeoutMs === null ? {} : { onTimeout: 'cancel' as const }),
     settle: settleAcpSessionCall(method, schema, answered, received)

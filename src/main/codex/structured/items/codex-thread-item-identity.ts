@@ -35,10 +35,12 @@ export function codexItemIdentity(input: {
 }): AgentJournalItemIdentity {
   const { item, turnId } = input
   if (turnId && isCodexMessageItemType(item.type)) {
-    // A kept message still streaming isn't in Codex's history: its number comes before its continuation's.
+    // A kept message cut while streaming keeps its number; its continuation takes none of the
+    // sequence, so later messages number the same here as in Codex's history after a restart.
     const continued = codexRelayContinuedItemId(item.id)
     if (continued) {
       input.ordinals.ordinalFor(input.threadId, turnId, continued)
+      return codexNonMessageIdentity(input.threadId, turnId, item.id, input.historyImport)
     }
     return {
       provider: 'codex',

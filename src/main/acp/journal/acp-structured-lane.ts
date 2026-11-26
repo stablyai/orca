@@ -12,10 +12,8 @@ import type { ProviderTimelineSink } from '../../native-chat/agent-session-timel
 import type { StructuredAgentSessionCommandRun } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { AcpChildStops, AcpDialect } from '../acp-dialects/acp-dialect'
 import { AcpTimelineTranslator } from '../timeline/acp-timeline-translator'
-import {
-  acpBackgroundTaskChildWork,
-  isAcpBackgroundTaskChildWorkEvent
-} from '../timeline/acp-background-task-child-work'
+import { isAcpBackgroundTaskChildWorkEvent } from '../timeline/acp-background-task-child-work'
+import { AcpLiveChildWork } from './acp-live-child-work'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import {
   neverThrowingStructuredAgentSessionLogger,
@@ -49,6 +47,8 @@ export type AcpStructuredLaneDeps = {
   onChildWorkFailure?: (error: unknown) => void
   now?: () => number
   childStops?: () => AcpChildStops
+  /** An agent-started turn ended (quiet, Stop or a send): its messages stream no more. */
+  onAgentTurnEnded?: () => void
 }
 
 export class AcpStructuredLane {
@@ -59,6 +59,11 @@ export class AcpStructuredLane {
   private readonly requestIdentity: ReturnType<typeof createLegacyProviderTimelineIdentityScheme>
   private retryTimer: ReturnType<typeof setTimeout> | null = null
   readonly agentTurn = new AcpAgentTurnQuiet(this, () => this.deps.now?.() ?? Date.now())
+  readonly agentTurnEnded = (): void => this.deps.onAgentTurnEnded?.()
+  private readonly children = new AcpLiveChildWork(
+    () => this.deps.childStops?.(),
+    (taskId) => this.translator.isSyntheticBackgroundTask(taskId)
+  )
   private failed = false
   private ended = false
   private disposed = false
@@ -242,12 +247,17 @@ export class AcpStructuredLane {
 
   /** A background task's live state for the host's work view (also a restated one's, rowless). */
   publishChildWork(event: ProviderTimelineEvent): void {
-    const at = this.deps.now?.() ?? Date.now()
-    const stoppable = this.deps.childStops?.().backgroundTasks === true
-    const synthetic = this.translator.isSyntheticBackgroundTask
-    const evidence = acpBackgroundTaskChildWork(event, at, stoppable, synthetic)
+    const evidence = this.children.tasks(event, this.deps.now?.() ?? Date.now())
     if (evidence.length > 0) {
       this.publishEvidence(evidence)
+    }
+  }
+
+  /** Stop support learned after children were published (a kept agent's late probe). */
+  restateChildStops(): void {
+    const restated = this.children.restated(this.deps.now?.() ?? Date.now())
+    if (restated.length > 0 && !this.ended && !this.disposed) {
+      this.publishEvidence(restated)
     }
   }
 
@@ -284,14 +294,7 @@ export class AcpStructuredLane {
   }
 
   private publishSubagentWork(evidence: AgentChildWorkEvidence[]): void {
-    const stoppable = this.deps.childStops?.().subagents === true
-    this.publishEvidence(
-      evidence.map((edge) =>
-        edge.type === 'live'
-          ? { ...edge, child: { ...edge.child, stoppable: stoppable && edge.child.stoppable } }
-          : edge
-      )
-    )
+    this.publishEvidence(this.children.subagents(evidence))
   }
 
   private publishEvidence(evidence: AgentChildWorkEvidence[]): void {

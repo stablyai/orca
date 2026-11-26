@@ -10,7 +10,8 @@ import { readEchoedAgentSessionSpawnToken } from './agent-session-spawn-token-re
 import {
   keptRunningProviderRelayPid,
   listProviderRelaysAtLaunch,
-  providerRelayInventoryComplete
+  providerRelayInventoryComplete,
+  providerRelayMayKeepChat
 } from '../../../provider-relay/app-provider-relays'
 import {
   providerOwnerHeldElsewhere,
@@ -28,7 +29,7 @@ async function keptRunningProbe(
   rows?: ProviderOwnerProcessRows
 ): Promise<AgentSessionOwnerProbe | null> {
   const owner = record.lease.ownerProcess
-  if (!owner) {
+  if (!owner || !providerRelayMayKeepChat(record.provider, owner.hostId === hostId)) {
     return null
   }
   await listProviderRelaysAtLaunch()

@@ -1,10 +1,12 @@
 import { installBrowserInitializationPresentationLifetime } from '@/runtime/web-session-tabs-sync/tab-projection/browser-initialization-presentation'
+import { applySleepingMailWorktrees } from '@/attention/sleeping-mail-worktrees'
 import { observeJiraImageHostStatus } from '@/runtime/jira/runtime-jira-image-cache'
 import { observeRuntimeHostStatusForPendingRemovals } from '@/store/repos/pending-runtime-repo-removal-replay'
 import type { RuntimeHostStatusSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { emitBotsChangedWindowEvent } from '@/lib/bots-changed-window-event'
 import { emitPeerMailReturnedWindowEvent } from '@/lib/peer-mail-returned-window-event'
+import { emitMcpServersChangedWindowEvent } from '@/lib/mcp-servers-changed-window-event'
 import { installBotHostListing } from '@/lib/bot-host-listing'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { getTabIdsAwaitingHostHydrationRemount } from '@/components/terminal-pane/mounting/parked-terminal-host-hydration'
@@ -71,6 +73,11 @@ function remountTerminalTabsAwaitingHostHydration(): void {
 
 export function installAppLifetimeIpcEvents(): () => void {
   const unsubs: (() => void)[] = [installBrowserInitializationPresentationLifetime()]
+  if (window.api.ui.onSleepingMailChanged) {
+    unsubs.push(window.api.ui.onSleepingMailChanged(applySleepingMailWorktrees))
+    // Changes sent while no listener was attached were lost; start from the whole set.
+    window.api.ui.requestSleepingMailSnapshot?.()
+  }
   const backgroundWakeDispatcher = createBackgroundSleepingAgentWakeDispatcher()
   unsubs.push(backgroundWakeDispatcher.dispose)
   unsubs.push(
@@ -95,6 +102,12 @@ export function installAppLifetimeIpcEvents(): () => void {
   if (stopPeerMailReturns) {
     unsubs.push(stopPeerMailReturns)
   }
+  const stopMcpServerChanges = window.api.runtime.onMcpServersChanged?.(() =>
+    emitMcpServersChangedWindowEvent(LOCAL_EXECUTION_HOST_ID)
+  )
+  if (stopMcpServerChanges) {
+    unsubs.push(stopMcpServerChanges)
+  }
   unsubs.push(
     window.api.workspaceCleanup.onRunFinished((run) =>
       emitWorkspaceCleanupRunFinishedWindowEvent({ environmentId: null, run })
@@ -104,7 +117,16 @@ export function installAppLifetimeIpcEvents(): () => void {
   const worktreeRuntime = createWorktreeEventRuntime(unsubs, isRuntimeEnvironmentActive)
   const statusApi = window.api.runtimeEnvironments
   if (statusApi?.onStatusChanged) {
+    const availableHosts = new Set<string>()
     const apply = (snapshot: RuntimeHostStatusSnapshot): void => {
+      if (snapshot.transport === 'ready' && snapshot.verification === 'verified') {
+        if (!availableHosts.has(snapshot.environmentId)) {
+          availableHosts.add(snapshot.environmentId)
+          window.api.ui.notifySleepingMailAvailability?.()
+        }
+      } else {
+        availableHosts.delete(snapshot.environmentId)
+      }
       useAppStore.getState().applyRuntimeHostStatusSnapshot(snapshot)
       observeRuntimeHostStatusForPendingRemovals(snapshot)
       remoteRuntimeTerminalColorPush.observeStatusSnapshot(snapshot)

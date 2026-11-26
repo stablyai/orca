@@ -4,7 +4,7 @@ import {
   registerReattachableProviderRelayAgent,
   type ProviderRelayWorkMarkers
 } from '../../provider-relay/app-provider-relays'
-import { ACP_SESSION_UPDATE_METHODS } from './acp-relay-ack-floor'
+import { ACP_SESSION_UPDATE_METHODS } from './acp-session-update-fields'
 
 /**
  * These launch as today: a private temp folder is the launch's own and goes at its exit; a sign-in
@@ -22,7 +22,8 @@ const acpRelayAgent = (agent: string): string => `acp:${agent}`
 /** Each ACP agent this build relays reattaches; called as its adapter is registered. */
 export function registerAcpRelayAgent(spec: AcpLaunchSpec): void {
   if (acpSpecRelays(spec)) {
-    registerReattachableProviderRelayAgent(acpRelayAgent(spec.agent))
+    // An agent that ended while Orca was closed opens once, to show its unread output.
+    registerReattachableProviderRelayAgent(acpRelayAgent(spec.agent), { opensEnded: true })
   }
 }
 

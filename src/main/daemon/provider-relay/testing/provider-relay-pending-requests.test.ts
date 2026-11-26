@@ -438,7 +438,8 @@ describe('provider relay kept lines', () => {
     pending.kept.configure({ answers: [], lines: [], outstanding: [], replies })
     const written: string[] = []
     let attached = true
-    pending.toAgent = (line) => !attached && written.push(line) > 0
+    // An empty line is the daemon ending an app's cut-off line, a no-op when it ended.
+    pending.toAgent = (line) => !attached && (line === '' || written.push(line) > 0)
     // Both arrive while the app still holds the relay; the app is writing its answer to id 2.
     agent(pending, 1, { id: 1, method: 'craft/drainMidTurnQueue', params: {} })
     agent(pending, 2, { id: 2, method: 'craft/drainMidTurnQueue', params: {} })
@@ -501,5 +502,29 @@ describe('provider relay kept lines', () => {
     expect(pending.kept.records().map(({ seq, line }) => [seq, JSON.parse(line).params])).toEqual([
       [2, { modelId: 'picked' }]
     ])
+  })
+})
+
+describe('a request asking to start an item', () => {
+  it('marks only a whole-item approval as not started, until it is answered', () => {
+    const pending = new ProviderRelayPendingRequests()
+    const ask = (id: number, params: Record<string, unknown>) =>
+      pending.observeAgentLine({
+        seq: id,
+        line: JSON.stringify({ method: 'item/commandExecution/requestApproval', id, params })
+      })
+    ask(1, { itemId: 'cmd-new' })
+    expect(pending.awaitingStart('cmd-new')).toBe(false)
+    // A policy naming the start method later reclassifies the request already held.
+    pending.setStartMethods(['item/commandExecution/requestApproval'])
+    // Writing to a command that already runs names it too, with its own approval id.
+    ask(2, { itemId: 'cmd-running', approvalId: 'stdin-1' })
+    expect(pending.awaitingStart('cmd-new')).toBe(true)
+    expect(pending.awaitingStart('cmd-running')).toBe(false)
+    pending.observeAgentLine({
+      seq: 3,
+      line: JSON.stringify({ method: 'serverRequest/resolved', params: { requestId: 1 } })
+    })
+    expect(pending.awaitingStart('cmd-new')).toBe(false)
   })
 })

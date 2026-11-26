@@ -44,12 +44,18 @@ export type CodexAppServerConnection = {
   readonly relay?: {
     /** It kept running from before this app started; its thread is already loaded and live. */
     readonly reattached: boolean
+    /** The app-server runs for this chat alone, so every thread it loads is one of the chat's. */
+    readonly ownServer: boolean
     /** Lets the kept output through once the chat can route it. */
     releaseOutput: () => void
     /** Work the daemon saw end while no app was attached, keyed per marker group. */
     endedWork: () => Record<string, string[][]> | undefined
     /** Work the daemon carried open across the restart, keyed per marker group. */
     openWork: () => Record<string, string[][]> | undefined
+    /** Handed to the daemon at quit: the agent runs on, so its session ends without final rows. */
+    handedOff: () => boolean
+    /** Reattach only: gives the agent back to the daemon, unread output kept, for a later open. */
+    keep?: () => Promise<void>
   }
 }
 import type { ProviderProcessCloseResult } from '../../provider-process/provider-process-close'

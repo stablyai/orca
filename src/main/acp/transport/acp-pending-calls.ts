@@ -10,8 +10,11 @@ export class AcpPendingCalls {
 
   constructor(private readonly closedWith: () => Error | undefined) {}
 
-  nextId(): number {
-    return this.next++
+  /** `onId`: told the id before the request is written. */
+  nextId(onId?: (id: number) => void): number {
+    const id = this.next++
+    onId?.(id)
+    return id
   }
 
   startAbove(floor: number): void {

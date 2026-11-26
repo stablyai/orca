@@ -8,7 +8,7 @@ import { relayedManagedProcess } from '../../../provider-relay/relayed-managed-p
 import { createAcpAgentConnection } from '../acp-agent-connection'
 import type { AcpSessionEvent } from '../../protocol/acp-session-events'
 import { acpKeptAgent, restorableAcpSession } from '../acp-kept-agent'
-import { AcpRelayTurns } from '../acp-relay-ack-floor'
+import { AcpRelayTurns } from '../acp-relay-turns'
 
 const policy = () => ({ idleStopMs: null, markers: [] })
 const line = (message: Record<string, unknown>): string =>
@@ -21,6 +21,7 @@ const update = (sessionUpdate: string, rest: Record<string, unknown>): string =>
 
 /** A kept ACP agent as the daemon hands it back: what it kept, then its spool; `exits` ends it mid-attach. */
 function keptAgent(exits: boolean) {
+  const closes = vi.fn(async () => ({}))
   let sink: ProviderRelaySink | null = null
   const writes: string[] = []
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the relayed child calls only these channel members.
@@ -63,7 +64,7 @@ function keptAgent(exits: boolean) {
       const timer = setTimeout(run, 1_000)
       return () => clearTimeout(timer)
     },
-    close: async () => ({}),
+    close: closes,
     detach: async () => ({})
   } as unknown as ProviderRelayChannel
   const child = new RelayedProviderChild({
@@ -73,10 +74,39 @@ function keptAgent(exits: boolean) {
     policy,
     passWhileHeld: () => false
   })
-  return { child, writes }
+  return { child, writes, closes }
 }
 
 describe('kept ACP agent reattach', () => {
+  it('never closes a kept agent while quit hands it to the daemon', async () => {
+    const { child, closes } = keptAgent(false)
+    await child.start(1)
+    const managed = relayedManagedProcess(child)
+    // Quit's own detach is still saving and acking when an abandoned start closes the agent.
+    const detaching = child.detach(policy())
+    await managed.close()
+    await detaching
+    expect(child.handedOff).toBe(true)
+    expect(closes).not.toHaveBeenCalled()
+  })
+
+  it('hands a kept agent to the daemon on every close during quit, never closing it', async () => {
+    const { child, closes } = keptAgent(false)
+    await child.start(1)
+    // As quit's own detach does: it takes the chat's agent once, so a second caller gets false.
+    let taken = false
+    const handOff = () => {
+      const first = !taken
+      taken = true
+      return first ? child.detach(policy()).then(() => true) : Promise.resolve(false)
+    }
+    const managed = relayedManagedProcess(child, handOff)
+    // Both the abandoned launch and the connection's own close arrive while the hand-off settles.
+    await Promise.all([managed.close(), managed.close()])
+    expect(child.handedOff).toBe(true)
+    expect(closes).not.toHaveBeenCalled()
+  })
+
   it('answers initialize and the session start from what was kept, never reaching the agent', async () => {
     const { child, writes } = keptAgent(false)
     await child.start(1)

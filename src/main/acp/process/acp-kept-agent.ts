@@ -1,5 +1,6 @@
 import { takeAcpKeptVersionSkip } from '../launch/acp-launch-version'
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
+import { acpLaunchNote } from './acp-kept-launch-permission'
 import type { ProviderRelayKeepSpec } from '../../daemon/protocol/daemon-provider-relay-protocol'
 import {
   launchRelayedProviderProcess,
@@ -7,9 +8,8 @@ import {
   type RelayedProviderProcess
 } from '../../provider-relay/app-provider-relays'
 import { readProcessStartTimeMs } from '../../runtime/agent-session/ownership/agent-session-process-identity-probe'
-import { AcpRelayItemContinuation } from './acp-relay-item-continuation'
+import { acpRelayFloors, type AcpRelayTurns } from './acp-relay-turns'
 import { acpRelayWorkMarkers, acpSpecRelays } from './acp-relay-work-markers'
-import { AcpRelayTurns } from './acp-relay-ack-floor'
 import type { RelayedProviderChild } from '../../provider-relay/relayed-provider-child'
 import { isJsonRpcAnswerAbove, jsonRpcResultOf } from '../../provider-relay/relayed-json-rpc-lines'
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
@@ -221,7 +221,7 @@ export async function launchRelayedAcpAgent(
     abandoned: () => boolean
   },
   /** `resume`: the session the chat reopens; a kept agent running another one can't carry on. */
-  launch: Pick<AcpStructuredLaunch, 'resume' | 'release' | 'appBoundGrants'>,
+  launch: Pick<AcpStructuredLaunch, 'resume' | 'release' | 'appBoundGrants' | 'fullAccess'>,
   processLaunch: ProviderProcessLaunch
 ): Promise<AcpRelayedProcess | null> {
   const { spec } = input.deps
@@ -237,20 +237,13 @@ export async function launchRelayedAcpAgent(
   }
   // Answers to this app's own requests pass a reattach's hold; everything else waits for the chat.
   let floor = Number.POSITIVE_INFINITY
-  const turns = new AcpRelayTurns()
-  const continuation = new AcpRelayItemContinuation(Boolean(spec.dialect.childSessionStop))
+  const { turns, continuation, ackFloor } = acpRelayFloors(Boolean(spec.dialect.childSessionStop))
   const relay: ProviderRelayLaunch = {
     chatKey: input.acquire.identity.sessionId,
-    markers: {
-      ...acpRelayWorkMarkers(spec.agent),
-      ackFloor: () => {
-        continuation.reset()
-        return turns.ackFloor()
-      },
-      continuation
-    },
-    keep: acpRelayKeep(spec.dialect),
-    passWhileHeld: (line) => isJsonRpcAnswerAbove(line, floor)
+    markers: { ...acpRelayWorkMarkers(spec.agent), ackFloor, continuation },
+    keep: { ...acpRelayKeep(spec.dialect), note: acpLaunchNote(launch.fullAccess) },
+    passWhileHeld: (line) => isJsonRpcAnswerAbove(line, floor),
+    handsOffOnQuit: true
   }
   const relayed = await launchRelayedProviderProcess(processLaunch, relay).catch(refuse)
   floor = relayed?.child.attachResult?.maxClientRequestId ?? 0
@@ -283,7 +276,7 @@ export async function launchRelayedAcpAgent(
   if (relayed?.reattached) {
     await launch.release?.().catch(() => undefined)
   }
-  // The chat closed meanwhile: its agent ends here, before any connection owns it.
+  // The chat closed meanwhile: its agent ends here (during quit, a kept one goes back instead).
   if (relayed && input.abandoned()) {
     void relayed.managed.close().catch(() => undefined)
   }

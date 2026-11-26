@@ -8,12 +8,22 @@ import {
   ProviderRelayWorkReader
 } from './provider-relay-work-markers'
 
+import type { ProviderRelayStop } from './provider-relay-detached-cap'
+
 export { readProviderRelayDetachPolicy } from './provider-relay-detach-policy'
+
+/** The marker group of an agent's turns: one blocked on an approval is waiting, not busy. */
+export const PROVIDER_RELAY_TURN_GROUP = 'turn'
 
 type IdleStopHost = {
   attached: () => boolean
   live: () => boolean
   pendingCount: () => number
+  /** Of those, the agent's own requests waiting on the user (approvals). */
+  askingCount?: () => number
+  /** True while a waiting request asks to start this item: it hasn't started running. */
+  awaitingStart?: (itemId: string) => boolean
+  startApprovals?: (methods: readonly string[]) => void
   workRequests?: (methods: readonly string[]) => void
   /**
    * Lines after the last ack: the app may not have counted them in its open set yet. Null when some
@@ -23,6 +33,8 @@ type IdleStopHost = {
   stop: () => void
   /** Output no app has taken yet: the next launch shows it, so the agent isn't idle-stopped. */
   unread?: () => boolean
+  /** Idle but for output no app took, or with work it lost count of: the detached cap counts it. */
+  idleUnread?: () => void
   log?: (event: string, details?: Record<string, unknown>) => void
 }
 
@@ -56,11 +68,17 @@ export class ProviderRelayIdleStop {
         readonly size: number
         readonly working: { readonly size: number }
         workMethods: ReadonlySet<string>
+        setStartMethods: (methods: readonly string[]) => void
+        awaitingStart: (itemId: string) => boolean
       }
-      stoppedBy: 'idle' | 'cap' | null
+      stoppedBy: ProviderRelayStop
       close: () => Promise<unknown>
     },
-    options: { relayId: string; log?: (event: string, details?: Record<string, unknown>) => void },
+    options: {
+      relayId: string
+      log?: (event: string, details?: Record<string, unknown>) => void
+      onIdleUnread?: () => void
+    },
     unacked: () => readonly ProviderRelayRecord[] | null
   ): ProviderRelayIdleStop {
     return new ProviderRelayIdleStop({
@@ -68,6 +86,9 @@ export class ProviderRelayIdleStop {
       live: () => relay.live,
       // Held approvals, and the app's own work requests (an ACP turn) the agent hasn't answered.
       pendingCount: () => relay.pending.size + relay.pending.working.size,
+      askingCount: () => relay.pending.size,
+      awaitingStart: (itemId) => relay.pending.awaitingStart(itemId),
+      startApprovals: (methods) => relay.pending.setStartMethods(methods),
       workRequests: (methods) => {
         relay.pending.workMethods = new Set(methods)
       },
@@ -76,6 +97,7 @@ export class ProviderRelayIdleStop {
         const lines = unacked()
         return lines === null || lines.length > 0
       },
+      idleUnread: () => options.onIdleUnread?.(),
       stop: () => {
         relay.stoppedBy = 'idle'
         void relay.close().catch(() => {})
@@ -89,8 +111,46 @@ export class ProviderRelayIdleStop {
     return this.armed
   }
 
+  /**
+   * Tracked, but it lost count of the work (lines it never saw, or too many tasks), and nothing it
+   * does know of is open or waiting: the detached cap bounds it as it does unknown work.
+   */
+  get unaccounted(): boolean {
+    return (
+      this.armed &&
+      this.work?.unaccounted === true &&
+      !this.work.knownBusy &&
+      this.host.pendingCount() === 0
+    )
+  }
+
+  /**
+   * Tracked, and waiting on an approval with nothing else running: a turn blocked on it isn't busy,
+   * but a running command or background task, or a request of the app's own (a turn), is. The
+   * detached cap bounds it.
+   */
+  get onlyWaiting(): boolean {
+    const asking = this.host.askingCount?.() ?? 0
+    return (
+      asking > 0 &&
+      this.armed &&
+      this.work !== null &&
+      !this.work.unaccounted &&
+      this.host.pendingCount() === asking &&
+      !this.work.openOutside(
+        PROVIDER_RELAY_TURN_GROUP,
+        (itemId) => this.host.awaitingStart?.(itemId) === true
+      )
+    )
+  }
+
   get unread(): boolean {
     return this.host.unread?.() === true
+  }
+
+  /** Tracked, with no work open and no approval waiting: only unread output could have held it. */
+  get finished(): boolean {
+    return this.armed && this.work !== null && !this.work.busy && this.host.pendingCount() === 0
   }
 
   /** Learned at spawn or attach, for a stream that drops without a detach of its own. */
@@ -127,9 +187,13 @@ export class ProviderRelayIdleStop {
 
   disarm(): void {
     // A takeover or a dropped stream hands on what the last app was handed and hasn't ended since.
-    this.carried = this.work?.keys(true) ?? (this.carried && (this.handed?.keys() ?? {}))
-    const handed = this.carried && Object.values(this.carried).some((keys) => keys.length > 0)
-    this.handed = handed && this.carried ? new ProviderRelayOpenWork(this.carried) : null
+    const prior = this.carried
+    const unread = prior && this.reader ? this.reader.endable(prior, false) : {}
+    this.carried = this.work?.keys(true) ?? (prior && { ...unread, ...this.handed?.keys() })
+    // Only work a marker can end is followed; the rest stays carried as it is.
+    const readable = this.carried && (this.reader?.endable(this.carried) ?? this.carried)
+    const handed = readable && Object.values(readable).some((keys) => keys.length > 0)
+    this.handed = handed && readable ? new ProviderRelayOpenWork(readable) : null
     // Ends are handed to one app: a window that tracked nothing (a dropped stream, a takeover)
     // passes none on, since that app may have acked them already.
     this.ended = this.work?.endedKeys() ?? null
@@ -149,6 +213,12 @@ export class ProviderRelayIdleStop {
     this.lastActivityAt = Date.now()
     if (this.armed && this.work && this.reader) {
       this.reader.read(line).forEach((change) => this.work?.apply(change))
+      // Lost count of, or left only waiting on an approval, while detached: the cap counts it
+      // (from its detach) even with the idle stop off.
+      const waiting = (this.host.askingCount?.() ?? 0) > 0 && this.onlyWaiting
+      if ((this.work.unaccounted && this.unaccounted) || waiting) {
+        this.host.idleUnread?.()
+      }
     } else if (this.handed && this.reader) {
       // Only ends matter: the app's own view (replayed from its cursor) holds what started since.
       for (const change of this.reader.read(line)) {
@@ -174,6 +244,7 @@ export class ProviderRelayIdleStop {
     this.policy = policy
     this.quietNames = new Set(policy.quiet ?? [])
     this.host.workRequests?.(policy.workRequests ?? [])
+    this.host.startApprovals?.(policy.startApprovals ?? [])
   }
 
   private openWorkAtDetach(open: Record<string, string[][]>): ProviderRelayOpenWork {
@@ -221,11 +292,16 @@ export class ProviderRelayIdleStop {
     }
     if (this.work.busy || this.host.pendingCount() > 0) {
       this.waitingForLine = true
+      if (this.unaccounted || this.onlyWaiting) {
+        // Counted by the detached cap, as unknown work is; only running work isn't.
+        this.host.idleUnread?.()
+      }
       return
     }
     // Only an attach takes it; the detached cap bounds how long it waits.
     if (this.host.unread?.()) {
       this.host.log?.('relay-idle-unread', { quietMs: quietFor })
+      this.host.idleUnread?.()
       return
     }
     this.armed = false

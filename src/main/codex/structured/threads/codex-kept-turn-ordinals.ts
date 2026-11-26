@@ -1,105 +1,24 @@
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
-import { readCodexTurnStatus } from '../../app-server/codex-structured-thread-facts'
-import { readRecord } from '../../app-server/codex-item-field-readers'
 import type { CodexJournalTranslator } from '../journal/codex-structured-journal-contracts'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { StructuredAgentSessionHistoryJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
-import {
-  isCodexMessageItemType,
-  readCodexThreadItem,
-  type CodexThreadItem
-} from '../items/codex-thread-item-identity'
+import { jsonObject } from '../../../../shared/json-stream/json-value-property'
+import { codexNonMessageIdentity, type CodexThreadItem } from '../items/codex-thread-item-identity'
+import { codexChildMessageText } from '../background-work/codex-child-work-translation'
 import type { CodexBackgroundTaskTracker } from '../background-work/codex-background-task-tracker'
-import {
-  CODEX_COLLAB_AGENT_TOOL_CALL_ITEM_TYPE,
-  readReceiverThreadIds
-} from '../items/codex-collab-agent-tool-call'
+import { CODEX_COLLAB_AGENT_TOOL_CALL_ITEM_TYPE } from '../items/codex-collab-agent-tool-call'
 
-/** A chat with more subagents than this is past what one reattach looks up. */
-const MAX_SEEDED_THREADS = 16
+/** A subagent spawn as the tracker observes it. */
+export type KeptCodexSpawn = { threadId: string; turnId: string; item: CodexThreadItem }
 
-async function latestTurn(
-  connection: Pick<CodexAppServerConnection, 'request'>,
-  threadId: string,
-  timeoutMs: number
-): Promise<Record<string, unknown> | null> {
-  const page = readRecord(
-    await connection.request(
-      'thread/turns/list',
-      { threadId, sortDirection: 'desc', limit: 1, itemsView: 'full' },
-      { timeoutMs }
-    )
+/** Threads beside the chat's own whose turns the daemon carried (open or ended), after a crash too. */
+export function keptCodexThreadIds(
+  relay: Pick<NonNullable<CodexAppServerConnection['relay']>, 'openWork' | 'endedWork'> | undefined
+): string[] {
+  return [...(relay?.openWork()?.turn ?? []), ...(relay?.endedWork()?.turn ?? [])].flatMap(
+    ([threadId]) => threadId ?? []
   )
-  return Array.isArray(page.data) ? readRecord(page.data[0]) : null
-}
-
-/**
- * A reattached agent's latest turns replay or go on, but this app's message ordinals start empty,
- * so a turn's next message would take an earlier one's row. Each latest turn (the chat's and its
- * subagents') is numbered from Codex's own history first, as the live run numbered it.
- */
-export async function seedKeptCodexTurnOrdinals(input: {
-  connection: Pick<CodexAppServerConnection, 'request'>
-  translator: Pick<CodexJournalTranslator, 'seedTurnOrdinals' | 'seedRunningItems'>
-  threadId: string
-  timeoutMs: number
-  onError?: (threadId: string, error: unknown) => void
-}): Promise<KeptCodexTurn[]> {
-  const queue = [input.threadId]
-  const seen = new Set<string>()
-  const fetched: KeptCodexTurn[] = []
-  for (
-    let threadId = queue.shift();
-    threadId !== undefined && seen.size < MAX_SEEDED_THREADS;
-    threadId = queue.shift()
-  ) {
-    if (seen.has(threadId)) {
-      continue
-    }
-    seen.add(threadId)
-    // Unnumbered, the chat's replay would take its saved messages' rows, so its open fails instead.
-    const turn = await latestTurn(input.connection, threadId, input.timeoutMs).catch(
-      (error: unknown) => {
-        if (threadId === input.threadId) {
-          throw error
-        }
-        input.onError?.(threadId, error)
-        return null
-      }
-    )
-    if (!turn || typeof turn.id !== 'string') {
-      continue
-    }
-    const items = (Array.isArray(turn.items) ? turn.items : []).flatMap(
-      (value) => readCodexThreadItem(value) ?? []
-    )
-    const status = readCodexTurnStatus(turn)
-    const kept: KeptCodexTurn = { threadId, turnId: turn.id, status, items }
-    fetched.push(kept)
-    // A command still running (a background one outlives its turn) streams on after the reattach.
-    const running = items.filter(
-      (item) => item.type === 'commandExecution' && item.status === 'inProgress'
-    )
-    const identities = input.translator.seedRunningItems(threadId, turn.id, running)
-    kept.running = running.map((item, i) => ({
-      itemId: item.id,
-      identity: identities[i]!
-    }))
-    // A subagent spawned in a finished turn can still be running, so every spawn is followed.
-    for (const item of items) {
-      if (item.type === CODEX_COLLAB_AGENT_TOOL_CALL_ITEM_TYPE) {
-        queue.push(...readReceiverThreadIds(item))
-      }
-    }
-    // A turn that finished while detached still replays its last messages, numbered as live.
-    input.translator.seedTurnOrdinals(
-      threadId,
-      turn.id,
-      items.filter((item) => isCodexMessageItemType(item.type)).map((item) => item.id)
-    )
-  }
-  return fetched
 }
 
 /** Each thread's latest turn as Codex reported it at reattach. */
@@ -108,6 +27,9 @@ export type KeptCodexTurn = {
   turnId: string
   status: string | null
   items: CodexThreadItem[]
+  /** Codex's own times (seconds), when it reports them. */
+  startedAt?: number | null
+  completedAt?: number | null
   /** Its commands still running, seeded into the translator under these rows. */
   running?: { itemId: string; identity: AgentJournalItemIdentity }[]
 }
@@ -134,6 +56,50 @@ export async function seedKeptCodexCommandOutput(
 }
 
 /**
+ * Commands the daemon carried open that Codex's history doesn't list as running (it can leave an
+ * in-progress item out): their saved rows give back the command and output the replay continues.
+ */
+export async function seedCarriedKeptCodexCommands(
+  translator: Pick<CodexJournalTranslator, 'seedRunningItems' | 'seedRunningOutput'>,
+  journal: { reads: Pick<StructuredAgentSessionHistoryJournal['reads'], 'itemBody'> } | null,
+  turns: readonly KeptCodexTurn[],
+  open: readonly (readonly string[])[] = []
+): Promise<void> {
+  const seeded = new Set(
+    turns.flatMap(({ threadId, running = [] }) =>
+      running.map(({ itemId }) => `${threadId}\u0000${itemId}`)
+    )
+  )
+  for (const [threadId, itemId] of journal ? open : []) {
+    const turnId = turns.find((turn) => turn.threadId === threadId)?.turnId
+    if (!threadId || !itemId || !turnId || seeded.has(`${threadId}\u0000${itemId}`)) {
+      continue
+    }
+    const key = agentJournalItemKey(codexNonMessageIdentity(threadId, turnId, itemId))
+    const body = await journal!.reads.itemBody(key).catch(() => null)
+    if (body?.kind !== 'tool-call') {
+      continue
+    }
+    const input = jsonObject(body.input) ?? {}
+    const item = {
+      type: 'commandExecution',
+      id: itemId,
+      status: 'inProgress',
+      command: input.command ?? null,
+      cwd: input.cwd ?? null
+    }
+    translator.seedRunningItems(threadId, turnId, [item])
+    if (body.output) {
+      translator.seedRunningOutput(
+        threadId,
+        itemId,
+        body.output.truncated ? null : body.output.head
+      )
+    }
+  }
+}
+
+/**
  * Background commands and subagent turns that began before the reattach: the new session's tracker
  * never saw them start, so their rows would read "status unavailable". They are restated from the
  * same history, under the same task ids, without writing any chat row. `ended` ([threadId, itemId])
@@ -142,24 +108,53 @@ export async function seedKeptCodexCommandOutput(
  * daemon carried still running: restated even when history no longer reports them running.
  */
 export function restateKeptCodexBackgroundWork(
-  tracker: Pick<CodexBackgroundTaskTracker, 'observe' | 'publishChildWork'>,
+  tracker: Pick<CodexBackgroundTaskTracker, 'observe' | 'publishChildWork' | 'primaryThreadId'>,
   turns: readonly KeptCodexTurn[],
   ended: readonly (readonly string[])[] = [],
-  open: readonly (readonly string[])[] = []
+  open: readonly (readonly string[])[] = [],
+  spawns: readonly KeptCodexSpawn[] = []
 ): void {
-  if (turns.length === 0 && open.length === 0) {
+  if (turns.length === 0 && open.length === 0 && spawns.length === 0) {
     return
   }
+  // Spawns announced before the reattach register their subagents, so Stop still reaches them.
+  const announce = ({ threadId, turnId, item }: KeptCodexSpawn) =>
+    tracker.observe({
+      method: item.status === 'inProgress' ? 'item/started' : 'item/completed',
+      threadId,
+      params: { turnId, item }
+    })
+  spawns.forEach(announce)
   const restated = new Set<string>()
+  const primaryStartedAt = turns.find(
+    (turn) => turn.threadId === tracker.primaryThreadId
+  )?.startedAt
   const endedHere = new Set(ended.map(([threadId, itemId]) => `${threadId}\u0000${itemId}`))
-  for (const { threadId, turnId, status, items } of turns) {
+  const carriedHere = new Set(open.map(([threadId, itemId]) => `${threadId}\u0000${itemId}`))
+  for (const { threadId, turnId, status, items, completedAt } of turns) {
     const turn = { id: turnId, status: status ?? 'inProgress' }
-    if (status === 'inProgress') {
-      tracker.observe({ method: 'turn/started', threadId, params: { turn } })
+    // A child that finished during the chat's latest turn (while no app was attached, say) is seen
+    // working first, so its end settles its row and card as a live end does. One that finished
+    // earlier was retired with the turn it ran in and is left so.
+    const endedChild =
+      status !== 'inProgress' &&
+      threadId !== tracker.primaryThreadId &&
+      endedLately(primaryStartedAt, completedAt)
+    if (status === 'inProgress' || endedChild) {
+      const started = { id: turnId, status: 'inProgress' }
+      tracker.observe({ method: 'turn/started', threadId, params: { turn: started } })
+    }
+    // Its final message too (only that: each one is a store write), so its end carries it.
+    const final = endedChild ? items.findLast((item) => codexChildMessageText(item)) : undefined
+    if (final) {
+      tracker.observe({ method: 'item/completed', threadId, params: { turnId, item: final } })
     }
     for (const item of items) {
+      if (item.type === CODEX_COLLAB_AGENT_TOOL_CALL_ITEM_TYPE) {
+        announce({ threadId, turnId, item })
+      }
       const endedDetached = endedHere.has(`${threadId}\u0000${item.id}`)
-      const carried = openHere(open, threadId, item.id)
+      const carried = carriedHere.has(`${threadId}\u0000${item.id}`)
       if (
         item.type === 'commandExecution' &&
         (item.status === 'inProgress' || endedDetached || carried)
@@ -184,6 +179,10 @@ export function restateKeptCodexBackgroundWork(
   tracker.publishChildWork()
 }
 
-function openHere(open: readonly (readonly string[])[], threadId: string, itemId: string): boolean {
-  return open.some(([thread, item]) => thread === threadId && item === itemId)
+/** Ended at or after the chat's latest turn started; unknown times count as late. */
+function endedLately(
+  since: number | null | undefined,
+  completedAt: number | null | undefined
+): boolean {
+  return typeof completedAt !== 'number' || typeof since !== 'number' || completedAt >= since
 }

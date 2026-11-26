@@ -5,21 +5,13 @@ import {
 } from '../../../shared/json-stream/json-rpc-record-prefix'
 import type { ProviderRelayRecord } from '../protocol/daemon-provider-relay-protocol'
 import { ProviderRelayKeptState } from './provider-relay-kept-state'
+import {
+  isObject,
+  parseObject,
+  ProviderRelayStartApprovals
+} from './provider-relay-start-approvals'
 
 type JsonObject = Record<string, unknown>
-
-function isObject(value: unknown): value is JsonObject {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function parseObject(line: string): JsonObject | null {
-  try {
-    const value: unknown = JSON.parse(line)
-    return isObject(value) ? value : null
-  } catch {
-    return null
-  }
-}
 
 /**
  * Agent lines are gated by their leading envelope fields (`id`, `method`, `type`), which every
@@ -102,6 +94,17 @@ export class ProviderRelayPendingRequests {
     return this.pending.size
   }
 
+  private readonly starts = new ProviderRelayStartApprovals()
+
+  setStartMethods(methods: readonly string[]): void {
+    this.starts.setMethods(methods, this.pending)
+  }
+
+  /** True while a waiting request asks to start this item: it hasn't started running. */
+  awaitingStart(itemId: string): boolean {
+    return this.starts.awaits(itemId)
+  }
+
   /** Insertion order is seq order: a re-sent id is removed before it is added again. */
   records(): ProviderRelayRecord[] {
     return [...this.pending.values()]
@@ -110,6 +113,7 @@ export class ProviderRelayPendingRequests {
   clear(): void {
     this.working.clear()
     this.pending.clear()
+    this.starts.clear()
     this.pendingChars = 0
   }
 
@@ -120,10 +124,15 @@ export class ProviderRelayPendingRequests {
     return result !== undefined && this.toAgent?.(line) === true
   }
 
-  private hold(key: string, record: ProviderRelayRecord): void {
+  private hold(key: string, record: ProviderRelayRecord, method?: string, params?: unknown): void {
+    // Re-sent under its id: an answer once being written (maybe failed) is not this one's.
+    this.writing.delete(key)
     this.release(key)
     this.pending.set(key, record)
     this.pendingChars += record.line.length
+    if (method !== undefined) {
+      this.starts.hold(key, method, params)
+    }
   }
 
   /** The agent is owed this many answers that it should wait for before saying more. */
@@ -141,6 +150,7 @@ export class ProviderRelayPendingRequests {
       this.pendingChars -= held.line.length
       this.answered.add(held.seq)
     }
+    this.starts.release(key)
   }
 
   /**
@@ -169,7 +179,7 @@ export class ProviderRelayPendingRequests {
         // Answered already, so a replay never asks the app again.
         this.answered.add(record.seq)
       } else if (key) {
-        this.hold(key, record)
+        this.hold(key, record, method, message.params)
       }
     } else if (type === 'control_request' || type === 'control_cancel_request') {
       const key = controlId(message.request_id)
@@ -280,11 +290,17 @@ export class ProviderRelayPendingRequests {
     return answered
   }
 
-  /** Once no app is attached: held requests with a fixed reply are answered, but not one whose
-   *  answer from the app is still being written. */
+  /** Once no app is attached: an app's cut-off line is ended (for the agent and for this table),
+   *  and held requests with a fixed reply are answered, but not one whose answer from the app is
+   *  still being written. */
   answerHeld(): void {
-    for (const [key, record] of this.pending) {
-      const message = this.writing.has(key) ? null : parseObject(record.line)
+    this.clientLinePartial = ''
+    this.skippingClientLine = false
+    this.toAgent?.('')
+    const methods = this.kept.replyMethods
+    for (const [key, record] of methods.length > 0 ? this.pending : []) {
+      const named = methods.some((method) => record.line.includes(method))
+      const message = named && !this.writing.has(key) ? parseObject(record.line) : null
       if (
         message &&
         typeof message.method === 'string' &&

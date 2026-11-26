@@ -131,7 +131,7 @@ export class AcpJsonRpcPeer {
     } catch (error) {
       return Promise.reject(error)
     }
-    const id = this.calls.nextId()
+    const id = this.calls.nextId(options.onId)
     const controller = new AbortController()
     return new Promise((resolve, reject) => {
       const settle = (response: AcpResponse): void => {

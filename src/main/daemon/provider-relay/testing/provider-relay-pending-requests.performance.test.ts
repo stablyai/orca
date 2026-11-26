@@ -36,4 +36,27 @@ describe('provider relay pending requests while prompting', () => {
     expect(parsesWhilePrompting(100)).toBe(0)
     expect(parsesWhilePrompting(1000)).toBe(0)
   })
+
+  it('re-parses no held request when the app lets go and no fixed reply can match', () => {
+    for (const held of [10, 100]) {
+      const pending = new ProviderRelayPendingRequests()
+      pending.kept.configure({ answers: [], lines: [], outstanding: ['session/prompt'] })
+      pending.toAgent = () => true
+      for (let id = 1; id <= held; id += 1) {
+        const request = {
+          id,
+          method: 'session/request_permission',
+          params: { x: 'y'.repeat(1024) }
+        }
+        pending.observeAgentLine({ seq: id, line: JSON.stringify(request) })
+      }
+      const parse = vi.spyOn(JSON, 'parse')
+      for (let release = 0; release < 10; release += 1) {
+        pending.answerHeld()
+      }
+      expect(parse).not.toHaveBeenCalled()
+      parse.mockRestore()
+      expect(pending.size).toBe(held)
+    }
+  })
 })

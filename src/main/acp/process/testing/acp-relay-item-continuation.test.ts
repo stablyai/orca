@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { ProviderRelayAttachResult } from '../../../daemon/protocol/daemon-provider-relay-protocol'
+import {
+  RELAY_CUT_KEYS_OVERFLOW,
+  type ProviderRelayAttachResult
+} from '../../../daemon/protocol/daemon-provider-relay-protocol'
 import { attachContinuation } from '../../../provider-relay/relayed-provider-continuation'
 import { AcpRelayItemContinuation } from '../acp-relay-item-continuation'
 
@@ -132,6 +135,18 @@ describe('ACP relay item continuation', () => {
     expect(ids).toEqual([undefined, 'm2', 'relay:r1:13:m1'])
   })
 
+  it('moves every message a cut meets when it cut more than it could name', () => {
+    const hook = new AcpRelayItemContinuation()
+    const overflowing = {
+      ...attach([{ id: 7, method: 'session/prompt' }], 10),
+      cutKeys: [JSON.stringify(['s', 'm1']), RELAY_CUT_KEYS_OVERFLOW]
+    }
+    const cut = attachContinuation(hook, 'r1', 10, overflowing)
+    const replay = [chunk('m2', 'r'), chunk('m3', 'resumed tail')]
+    const ids = replay.map((line, at) => idOf(cut?.lines(11 + at, line, undefined)?.[0] ?? line))
+    expect(ids).toEqual(['relay:r1:11:m2', 'relay:r1:12:m3'])
+  })
+
   it('moves a named message that resumes only after the replay, until its prompt is answered', () => {
     const hook = new AcpRelayItemContinuation()
     const named = {
@@ -151,10 +166,12 @@ describe('ACP relay item continuation', () => {
       JSON.stringify({ jsonrpc: '2.0', id: 7, result: { stopReason: 'end_turn' } }),
       undefined
     )
+    // The app's turns end the prompt it adopted, so nothing running at the attach resumes.
+    hook.agentTurnEnded()
     expect(cut?.done).toBe(true)
   })
 
-  it("stops after the replay when a named message's prompt was answered, though a subagent runs on", () => {
+  it('stops after the replay once the turn running at attach ended, though a subagent runs on', () => {
     const hook = new AcpRelayItemContinuation(true)
     const named = {
       ...attach(undefined, 10),
@@ -165,6 +182,26 @@ describe('ACP relay item continuation', () => {
     for (let seq = 11; seq <= 16; seq += 1) {
       cut?.lines(seq, chunk('m2', `b${seq}`), undefined)
     }
+    // An agent-started turn may still be running: m1 could resume in it.
+    expect(cut?.done).toBe(false)
+    hook.agentTurnEnded()
     expect(cut?.done).toBe(true)
+  })
+
+  it('keeps moving after the replay while open work runs, when the cut named fewer than it split', () => {
+    const hook = new AcpRelayItemContinuation(true)
+    const overflowing = {
+      ...attach(undefined, 10),
+      cutKeys: [JSON.stringify(['s', 'm1']), RELAY_CUT_KEYS_OVERFLOW],
+      openWork: { subagent: [['child-1']] }
+    }
+    const cut = attachContinuation(hook, 'r1', 10, overflowing)
+    for (let seq = 11; seq <= 16; seq += 1) {
+      cut?.lines(seq, update({ sessionUpdate: 'available_commands_update' }), undefined)
+    }
+    // An unnamed message of the running subagent may still resume.
+    expect(cut?.done).toBe(false)
+    const [resumed = ''] = cut?.lines(20, chunk('m9', 'resumed'), undefined) ?? []
+    expect(idOf(resumed)).toBe('relay:r1:20:m9')
   })
 })

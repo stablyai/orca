@@ -39,11 +39,22 @@ export function readProviderRelayKeepSpec(value: unknown): ProviderRelayKeepSpec
   const outstanding = 'outstanding' in value ? value.outstanding : undefined
   const requests = 'requests' in value ? value.requests : []
   const replies = 'replies' in value ? readReplies(value.replies) : undefined
+  const note =
+    'note' in value && typeof value.note === 'string' && value.note.length <= MAX_KEEP_NAME_CHARS
+      ? value.note
+      : undefined
   if (!keepNames(answers) || !keepNames(lines) || !keepNames(outstanding) || !keepNames(requests)) {
     return null
   }
   const named = [answers, lines, outstanding, requests, Object.keys(replies ?? {})]
   return named.some((names) => names.length > 0)
-    ? { answers, lines, outstanding, requests, ...(replies ? { replies } : {}) }
+    ? {
+        answers,
+        lines,
+        outstanding,
+        requests,
+        ...(replies ? { replies } : {}),
+        ...(note === undefined ? {} : { note })
+      }
     : null
 }

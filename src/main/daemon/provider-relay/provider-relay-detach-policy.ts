@@ -117,7 +117,7 @@ export function readProviderRelayDetachPolicy(value: unknown): ProviderRelayDeta
   const { idleStopMs } = policy
   const markers = Array.isArray(policy.markers) ? policy.markers.map(readMarker) : null
   const open = readOpen(policy.open)
-  const { workRequests, quiet } = policy
+  const { workRequests, quiet, startApprovals } = policy
   const names = (value: unknown): value is string[] | undefined =>
     value === undefined ||
     (Array.isArray(value) && value.length <= MAX_MARKERS && value.every(isName))
@@ -128,7 +128,8 @@ export function readProviderRelayDetachPolicy(value: unknown): ProviderRelayDeta
     !markers.every((marker): marker is ProviderRelayWorkMarker => marker !== null) ||
     open === null ||
     !names(workRequests) ||
-    !names(quiet)
+    !names(quiet) ||
+    !names(startApprovals)
   ) {
     return null
   }
@@ -137,6 +138,7 @@ export function readProviderRelayDetachPolicy(value: unknown): ProviderRelayDeta
     markers,
     ...(workRequests ? { workRequests } : {}),
     ...(quiet ? { quiet } : {}),
+    ...(startApprovals ? { startApprovals } : {}),
     ...(open ? { open } : {})
   }
 }

@@ -1,10 +1,6 @@
 import { DEFAULT_CODEX_REQUEST_TIMEOUT_MS } from '../../app-server/codex-app-server-connection'
-import {
-  restateKeptCodexBackgroundWork,
-  seedKeptCodexCommandOutput,
-  seedKeptCodexTurnOrdinals,
-  type KeptCodexTurn
-} from '../threads/codex-kept-turn-ordinals'
+import { restateKeptCodexBackgroundWork } from '../threads/codex-kept-turn-ordinals'
+import { openKeptCodexState, type KeptCodexSnapshot } from '../threads/codex-kept-snapshot'
 import { withStructuredHistoryInvocation } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-invocation'
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
 import {
@@ -167,32 +163,30 @@ export async function openCodexStructuredSession(
     )
     current()
   }
-  let keptTurns: readonly KeptCodexTurn[] = []
-  if (keptRunning && translator) {
-    keptTurns = await waitForPromiseWithSignal(
-      seedKeptCodexTurnOrdinals({
-        connection,
-        translator,
-        threadId: opened.threadId,
-        timeoutMs: deps.requestTimeoutMs ?? DEFAULT_CODEX_REQUEST_TIMEOUT_MS,
-        onError: (threadId, error) =>
-          deps.logger?.warn('numbering a kept turn from history failed', {
-            scope: 'codex-kept-turn-ordinals',
-            sessionId,
-            threadId,
-            error
-          })
-      }),
-      openInput.signal
-    )
-    current()
-    const journal = input.events?.journalHistory?.() ?? null
-    await waitForPromiseWithSignal(
-      seedKeptCodexCommandOutput(translator, journal, keptTurns),
-      openInput.signal
-    )
-    current()
-  }
+  // The agent's own state first; the replay released after it only fills in content.
+  const kept: KeptCodexSnapshot =
+    keptRunning && translator
+      ? await waitForPromiseWithSignal(
+          openKeptCodexState({
+            connection,
+            translator,
+            chatKey: sessionId,
+            threadId: opened.threadId,
+            journal: input.events?.journalHistory?.() ?? null,
+            timeoutMs: deps.requestTimeoutMs ?? DEFAULT_CODEX_REQUEST_TIMEOUT_MS,
+            onError: (threadId, error) =>
+              deps.logger?.warn('reading a kept thread at reattach failed', {
+                scope: 'codex-kept-snapshot',
+                sessionId,
+                threadId,
+                error
+              })
+          }),
+          openInput.signal
+        )
+      : { turns: [], spawns: [] }
+  current()
+  const keptTurns = kept.turns
   const configured =
     opened.serviceTier === undefined
       ? await waitForPromiseWithSignal(
@@ -224,7 +218,12 @@ export async function openCodexStructuredSession(
       cwd: launch.cwd,
       ...(launch.visuals ? { visualsFolder: launch.visuals.folder } : {})
     },
-    activeTurnIds: new Set(),
+    // A kept turn still running is Stop's to interrupt, as when it started live.
+    activeTurnIds: new Set(
+      keptTurns.flatMap((turn) =>
+        turn.threadId === opened.threadId && turn.status === 'inProgress' ? [turn.turnId] : []
+      )
+    ),
     abortedTurnIds: new Set(),
     prompts: attempt.window.prompts,
     options: restoredCodexSessionOptions(input.options),
@@ -261,7 +260,8 @@ export async function openCodexStructuredSession(
     session.backgroundTasks,
     keptTurns,
     connection.relay?.endedWork()?.command,
-    connection.relay?.openWork()?.command
+    connection.relay?.openWork()?.command,
+    kept.spawns
   )
   connection.relay?.releaseOutput()
   current()

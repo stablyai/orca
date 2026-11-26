@@ -1,8 +1,7 @@
 import { useContext } from 'react'
+import { NativeChatInSubagentSheet } from '../../subagents/native-chat-subagent-sheet-context'
 import { cn } from '@/lib/class-names'
 import { quietBotAnswer } from '../../../../../../shared/bot-quiet-result'
-import { isRootAgentJournalItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-producer'
-import { NativeChatForkSlotContext } from '../actions/native-chat-fork-context'
 import { NativeChatBotAnswerContext } from './native-chat-bot-answer-context'
 import { nativeChatAgentRowWords } from './native-chat-message-row-words'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
@@ -80,18 +79,14 @@ export function NativeChatAssistantMessageRow({
   const shownWords = withLegacyNativeChatIdeasAsList(quiet.words)
   // Hide controls on system asides and the still-working frontier, where more content may arrive. In
   // a turn they belong to its holder, which may draw only images when folding hid its words.
+  // A subagent's sheet is read-only history: its rows offer no turn actions.
+  const inSheet = useContext(NativeChatInSubagentSheet)
   const showControls =
     !isSystem &&
+    !inSheet &&
     (endsResponse ?? (words.length > 0 && !continuesTurn)) &&
     (words.length > 0 || hasImages) &&
     activeTurnIsWorking !== true
-  // Fixed by the row's own kind, never by support or eligibility, so the row's actions never shift.
-  const holdsForkSlot =
-    useContext(NativeChatForkSlotContext) &&
-    message.role === 'assistant' &&
-    message.source === 'transcript' &&
-    !message.agentStart &&
-    isRootAgentJournalItem(message)
 
   return (
     <div
@@ -112,6 +107,7 @@ export function NativeChatAssistantMessageRow({
       {shownWords ? (
         <NativeChatPacedMarkdown
           rowKey={message.id}
+          savedRevision={message.journalRevision}
           content={shownWords}
           variant="document"
           className="text-sm"
@@ -139,13 +135,7 @@ export function NativeChatAssistantMessageRow({
           markdown={words}
           timestamp={message.timestamp}
           onScrollToTop={scrollToTop}
-          action={
-            fork ? (
-              <NativeChatForkAction itemId={message.id} fork={fork} />
-            ) : holdsForkSlot ? (
-              <span aria-hidden className="size-6 shrink-0" />
-            ) : null
-          }
+          action={fork ? <NativeChatForkAction itemId={message.id} fork={fork} /> : null}
           className={cn(
             'w-fit select-none',
             !latestResponse &&

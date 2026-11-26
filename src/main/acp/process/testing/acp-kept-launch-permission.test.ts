@@ -29,4 +29,18 @@ describe('kept ACP launch permission', () => {
     )
     expect(plain).toMatchObject({ permission: 'ask', launchArgsGrantFullAccess: false })
   })
+
+  it("reads the spawning app's note instead of the process table", async () => {
+    const noted = (note: string) => ({
+      reattached: true,
+      child: { pid: 42, attachResult: { launchNote: note } }
+    })
+    const read = async () => {
+      throw new Error('no command line read')
+    }
+    const granted = await keptAcpLaunchPermission(spec, noted('full-access'), chat, ask, read)
+    expect(granted).toMatchObject({ permission: 'full-access', launchArgsGrantFullAccess: true })
+    const asked = await keptAcpLaunchPermission(spec, noted('ask'), chat, ask, read)
+    expect(asked).toMatchObject({ permission: 'ask', launchArgsGrantFullAccess: false })
+  })
 })

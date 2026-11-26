@@ -177,6 +177,7 @@ export function createAcpModelCatalogProbe(
                   : null
               const sessionCwd = inPrivateFolder && folder ? folder.path : workspace
               const started: string[] = []
+              let listingProcess: ProviderAcquisitionConnection | undefined
               try {
                 assertStructuredAgentResolutionCurrent(operation)
                 const args = [
@@ -189,12 +190,12 @@ export function createAcpModelCatalogProbe(
                   Awaited<ReturnType<typeof readSessionModels>>
                 >(
                   () =>
-                    gate.retain(
+                    (listingProcess = gate.retain(
                       (deps.connectSession ?? createAcpAgentConnection)(
                         { ...launch, args },
                         connectionOptions
                       )
-                    ),
+                    )),
                   (connection, ready) =>
                     readSessionModels(
                       spec,
@@ -233,7 +234,7 @@ export function createAcpModelCatalogProbe(
               } finally {
                 const accountHomePath = agentSessionAccountHomePath(accountHome)
                 if (accountHomePath) {
-                  await discardAcpListingSessions(spec.agent, listing, started, {
+                  await discardAcpListingSessions(spec.agent, listing, started, listingProcess, {
                     cwd: sessionCwd,
                     accountHomePath,
                     // Unbounded by the listing's signal: a cancelled listing still discards its session.

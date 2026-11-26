@@ -5,9 +5,11 @@ import { readGoogleRefusal } from '../../bots/bot-google-access'
 import { botOfToken } from '../../bots/bot-of-caller'
 import { botOfSession } from '../../bots/bot-session-tabs'
 import { googleApi, type GoogleApi } from '../../google/google-api-client'
-import { readGoogleDefaultAccount } from '../../google/google-credential-store'
+import { listGoogleAccounts, readGoogleDefaultAccount } from '../../google/google-credential-store'
+import { gmailLinksAccount } from '../../google/google-gmail-ref'
 import {
   botGoogleAccess,
+  botGoogleAccountFilter,
   botGoogleDefault,
   botMayUseGoogleAccount,
   googleAccountNotAllowed
@@ -17,15 +19,34 @@ import { readBotWriteTurn } from './methods/bot-write-turn'
 
 type GoogleCaller = { botToken?: string; callerSessionId?: string }
 
+/** `gmailRefs`: the Gmail refs a command names; a web link's account stands in for --account. */
 export async function googleApiForCaller(
   params: GoogleCaller & { account?: string },
-  context: RpcContext
+  context: RpcContext,
+  gmailRefs: readonly (string | undefined)[] = []
 ): Promise<GoogleApi> {
   const refusal = readGoogleRefusal(context.runtime, params.botToken, context.pairedDeviceId)
   if (refusal) {
     throw new InvalidArgumentError(refusal)
   }
-  return googleApi(await googleCallerAccount(params, context))
+  const linked = params.account
+    ? undefined
+    : await gmailLinksAccount(
+        gmailRefs.filter((ref) => ref !== undefined),
+        () => callerGoogleAccounts(params, context)
+      )
+  return googleApi(
+    await googleCallerAccount(linked ? { ...params, account: linked } : params, context)
+  )
+}
+
+/** The connected accounts this caller may name: a bot limited to some sees only those. */
+async function callerGoogleAccounts(params: GoogleCaller, context: RpcContext): Promise<string[]> {
+  const caller = botOfToken(context.runtime, params.botToken, context.pairedDeviceId)
+  const mayUse =
+    caller.kind === 'bot' ? botGoogleAccountFilter(botGoogleAccess(caller.bot)) : undefined
+  const emails = (await listGoogleAccounts()).map((entry) => entry.email)
+  return mayUse ? emails.filter(mayUse) : emails
 }
 
 /**

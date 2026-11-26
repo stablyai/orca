@@ -1,7 +1,9 @@
 import { Readable } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
+import { ProviderRelayCarriedWork } from '../../../provider-relay/provider-relay-carried-work'
 import { RelayedProviderOutput } from '../../../provider-relay/relayed-provider-output'
-import { AcpRelayTurns } from '../acp-relay-ack-floor'
+import { RELAY_CUT_KEYS_OVERFLOW } from '../../../daemon/protocol/daemon-provider-relay-protocol'
+import { AcpRelayTurns } from '../acp-relay-turns'
 
 const update = (sessionUpdate: string, rest: Record<string, unknown> = {}): string =>
   JSON.stringify({
@@ -58,7 +60,7 @@ function rig(durable: (force: boolean) => Promise<boolean> = async () => true) {
   }
   /** The connection's parse of a line it was handed. */
   const parsed = (line: string) => turns.observeSessionUpdate(JSON.parse(line).params)
-  return { output, acks, cuts, cutKeys, send, prompt, parsed }
+  return { output, acks, cuts, cutKeys, send, prompt, parsed, turns }
 }
 
 describe('ACP relay ack floor', () => {
@@ -81,12 +83,11 @@ describe('ACP relay ack floor', () => {
     await send(done)
     parsed(done)
     expect(await send()).toEqual([])
-    // Another message ends it; that one holds until its prompt's answer.
-    expect(await send(chunk('c', 'm2'))).toEqual([5])
+    // Another message doesn't end it (one resumes its id after another's within a step): both
+    // hold until the prompt's answer.
+    expect(await send(chunk('c', 'm2'))).toEqual([])
     answer.resolve()
-    await vi.waitFor(async () =>
-      expect(await send(update('plan', { entries: [] }))).toEqual([5, 7])
-    )
+    await vi.waitFor(async () => expect(await send(update('plan', { entries: [] }))).toEqual([7]))
   })
 
   it("holds an unnumbered agent's prompt from its first line until it ends, even by failing", async () => {
@@ -141,16 +142,122 @@ describe('ACP relay ack floor', () => {
     expect(acks.at(-1)).toBe(3)
   })
 
-  it('never holds a cut message that resumes after another message, as OpenCode resumes ids', async () => {
-    const { output, acks, cutKeys, send, prompt } = rig()
+  it("holds a session's recent messages whole across each other, and cuts an old one that resumes", async () => {
+    const { acks, send, prompt } = rig()
     prompt()
-    await send(chunk('a', 'm1'))
+    const child = (messageId: string, text: string) =>
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'opencode/session/child_update',
+        params: {
+          rootSessionId: 's',
+          childSessionId: 'c',
+          type: 'update',
+          update: {
+            sessionUpdate: 'agent_message_chunk',
+            messageId,
+            content: { type: 'text', text }
+          }
+        }
+      })
+    // Text resumes after a reasoning block, with a child's message in between: held from line 1.
+    await send(chunk('a', 'm1'), chunk('r', 'm1:reasoning:0'), child('k1', 'x'), chunk('a2', 'm1'))
+    expect(acks).toEqual([])
+  })
+
+  it('cuts an old message that resumes once more than the held few came after it', async () => {
+    const { cuts, cutKeys, send, prompt } = rig()
+    prompt()
+    // Past the held few, the oldest is superseded and acks pass its start; resuming, it is cut.
+    await send(...Array.from({ length: 17 }, (_, at) => chunk('t', `n${at}`)))
+    await send(chunk('again', 'n0'))
+    expect(cuts.length).toBe(1)
+    // n0, and n1, whose start acks passed as it was superseded too: it may resume as well.
+    expect(cutKeys.at(-1)).toEqual([JSON.stringify(['s', 'n0']), JSON.stringify(['s', 'n1'])])
+  })
+
+  it('keeps a message that streams between many others held, by when it last streamed', async () => {
+    const { acks, send, prompt } = rig()
+    prompt()
+    // Text resumes between 16 reasoning blocks: it streamed last, so an older block goes first.
+    for (let at = 0; at < 16; at += 1) {
+      await send(chunk('t', 'm1'), chunk('r', `m1:reasoning:${at}`))
+    }
+    expect(acks).toEqual([])
+  })
+
+  it('names the latest-streamed cut messages within the cap, however many cuts a prompt takes', async () => {
+    const { output, cutKeys, send, prompt } = rig()
+    prompt()
+    for (let at = 0; at < 40; at += 1) {
+      await send(chunk('t', `n${at}`))
+      await output.settle(true)
+    }
+    const named = cutKeys.at(-1)
+    // A session's 16 latest-streamed, and the overflow key for the older ones it can't name.
+    expect(named).toHaveLength(17)
+    expect(named).toContain(RELAY_CUT_KEYS_OVERFLOW)
+    expect(named).toContain(JSON.stringify(['s', 'n39']))
+    expect(named).not.toContain(JSON.stringify(['s', 'n0']))
+  })
+
+  it("lets acks past an agent-started turn's messages once that turn ends, and drops a late chunk", async () => {
+    const { acks, send, turns } = rig()
+    // A finished background task's report turn, with no prompt: held while it streams.
+    await send(chunk('report', 'rep'), chunk(' done', 'rep'))
+    expect(acks).toEqual([])
+    // Its end asks for an ack itself, with no line after it.
+    turns.agentTurnEnded()
+    await vi.waitFor(() => expect(acks.at(-1)).toBe(2), { timeout: 3_000 })
+    // The app drops a late chunk of the ended turn's message, so the floor holds nothing for it.
+    await send(chunk(' late', 'rep'))
+    expect(acks.at(-1)).toBe(3)
+  })
+
+  it('asks for the ack through the floor every relay is given, and forgets an ended turn at a prompt', async () => {
+    const turns = new AcpRelayTurns()
+    const acks: number[] = []
+    const output = new RelayedProviderOutput({
+      stdout: new Readable({ read() {} }),
+      ackFloor: new ProviderRelayCarriedWork([]).withFloor(turns.ackFloor()),
+      durable: async () => true,
+      ack: async (seq, keepFrom) => void acks.push((keepFrom ?? seq + 1) - 1)
+    })
+    output.restartAt(0)
+    output.line('relayData', 1, chunk('report', 'rep'))
+    await output.settle()
+    turns.agentTurnEnded()
+    await vi.waitFor(() => expect(acks.at(-1)).toBe(1), { timeout: 3_000 })
+    // A prompt's end closes a later turn: a chunk of the old message is held again, as the app shows it.
+    let answer!: () => void
+    void turns.track(() => new Promise<void>((resolve) => (answer = resolve)))
+    answer()
+    await Promise.resolve()
+    output.line('relayData', 2, chunk(' again', 'rep'))
+    output.line('relayData', 3, update('available_commands_update', { availableCommands: [] }))
+    await output.settle()
+    expect(acks.at(-1)).toBe(1)
+  })
+
+  it('marks a cut that splits more messages than it can name', async () => {
+    const { output, cutKeys, send, prompt } = rig()
+    prompt()
+    const child = (session: string) =>
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'opencode/session/child_update',
+        params: {
+          rootSessionId: 's',
+          childSessionId: session,
+          type: 'update',
+          update: { sessionUpdate: 'agent_message_chunk', messageId: `m-${session}`, content: {} }
+        }
+      })
+    await send(...Array.from({ length: 33 }, (_, at) => child(`c${at}`)))
     await output.settle(true)
-    await send(chunk('b', 'm2'), chunk('a2', 'm1'))
-    expect(acks.at(-1)).toBeGreaterThanOrEqual(2)
-    await send(chunk('a3', 'm1'))
-    expect(acks.at(-1)).toBe(4)
-    expect(cutKeys.at(-1)).toContain(JSON.stringify(['s', 'm1']))
+    const named = cutKeys.at(-1)
+    expect(named).toHaveLength(32)
+    expect(named).toContain(RELAY_CUT_KEYS_OVERFLOW)
   })
 
   it('acks every line handed on at a hand-off, saving streamed text first', async () => {

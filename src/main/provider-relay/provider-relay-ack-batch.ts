@@ -1,5 +1,8 @@
 import type { DaemonClient } from '../daemon/transport/client/daemon-client'
-import type { ProviderRelayAckPayload } from '../daemon/protocol/daemon-provider-relay-protocol'
+import {
+  RELAY_ACKS_MAX,
+  type ProviderRelayAckPayload
+} from '../daemon/protocol/daemon-provider-relay-protocol'
 import { jsonProperty } from '../../shared/json-stream/json-value-property'
 
 /** How often streaming relays ack, together: one timer per daemon connection, not one per chat. */
@@ -62,6 +65,13 @@ export class ProviderRelayAckBatch {
       }
       return
     }
+    // The daemon refuses a whole request past its batch limit, so a large batch goes in parts.
+    for (let at = 0; at < batch.length; at += RELAY_ACKS_MAX) {
+      this.send(batch.slice(at, at + RELAY_ACKS_MAX))
+    }
+  }
+
+  private send(batch: QueuedAck[]): void {
     const acks = batch.map(({ payload }) => payload)
     this.client.request('relayAcks', { acks }, RELAY_REQUEST_TIMEOUT_MS).then(
       (reply) => {

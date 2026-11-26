@@ -43,14 +43,15 @@ export class StructuredAgentSessionSinkQueue {
 
   private liveEpoch = (): string | null =>
     !this.target || this.closed || this.failure !== null ? null : this.target.journal.cursor().epoch
-  liveText = (): readonly AgentJournalRenderItem[] => this.snapshots.readLiveText(this.liveEpoch())
+  liveText = (readers?: events.LiveTextReaders): readonly AgentJournalRenderItem[] =>
+    this.snapshots.readLiveText(this.liveEpoch(), readers)
   hasLiveText = (): boolean => this.snapshots.hasLiveText(this.liveEpoch())
 
   flushLiveText = (): void => this.snapshots.flushLiveText()
 
   publishLiveText = createLiveTextPublication(
     (operation) => this.submit(operation),
-    (bound) => this.target === bound,
+    () => this.target,
     this.liveText
   )
 
