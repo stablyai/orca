@@ -32,6 +32,16 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
   const newLaunch = launch?.kind === 'new'
   const launchSeedOptions = launch?.seedOptions
   const optionCatalog = useMemo(() => structuredAgentSessionSeedCatalog(agent), [agent])
+  // Full streams carry the catalog inline; native compaction support can change between turns.
+  const hostOptionStamp =
+    agent === 'antigravity'
+      ? JSON.stringify([
+          args.hostOptionStamp,
+          args.reportedCommands?.some(
+            ({ kind, name }) => kind === 'command' && name === 'compact'
+          ) === true
+        ])
+      : (args.hostOptionStamp ?? '')
   const {
     optionView,
     takesSendOptions,
@@ -58,7 +68,7 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     seedsModel: launchSeedOptions?.model !== undefined,
     providerVisible,
     providerStarting,
-    hostOptionStamp: args.hostOptionStamp ?? '',
+    hostOptionStamp,
     // Before start only resumed chats have recorded model evidence; new chats must wait instead of showing a guess.
     readsBeforeStart: launch?.kind !== 'new',
     turnId,

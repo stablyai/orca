@@ -128,7 +128,7 @@ export async function readStructuredAgentSessionOptions(
   // Earlier reads may have closed/reopened the handle.
   const session = await context.conversation(sessionId)
   const agent = session.params.provider
-  const capabilities = agents.capabilities(agent)
+  const capabilities = agents.capabilities(agent, sessionId)
   const restingOptions = await atRest()
   const recovery = await readStructuredSessionRecovery(session, context, sessionId)
   const [floor, goalSource, contextUsage] = await Promise.all([

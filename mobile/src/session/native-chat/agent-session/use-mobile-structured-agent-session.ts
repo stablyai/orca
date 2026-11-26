@@ -64,14 +64,14 @@ export function useMobileStructuredAgentSession(
     enabled,
     onActionResolved,
     onSendError,
-    hostSupport,
-    onCommandsChanged
+    hostSupport
   } = args
   // Gate queueing by capability while accepting published cards from every host.
   const queueCapable = hostSupport?.queuedMessages === true
   const queueFollowUps = useQueueFollowUps(client, connected && enabled, sessionId, paired, enabled)
   const sessionKey = structuredChatTranscriptIdentity(sourceIdentity, agent, sessionId)
   const commandPendingRef = useRef(false)
+  const { optionStamp, onCommandsChanged } = useMobileStructuredSessionOptionStamp(args)
   const stateArgs = { client, sessionId, sessionKey, enabled, connected, onCommandsChanged }
   const { state, stateRef, queuedMessages, queuePause, olderPages, loadEarlier, savedAt } =
     useMobileStructuredAgentState(stateArgs)
@@ -95,11 +95,7 @@ export function useMobileStructuredAgentSession(
     fence: state.fence,
     mutate,
     onOptionError: onSendError,
-    optionStamp: useMobileStructuredSessionOptionStamp({
-      client,
-      sessionId,
-      enabled: enabled && connected && hostSupport?.statusFeed === true
-    }),
+    optionStamp,
     turnId,
     hasTurn: state.latestTurn != null || state.submissions.length > 0,
     unloadedTurnRevisions: state.unloadedTurnRevisions,

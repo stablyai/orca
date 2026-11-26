@@ -12,6 +12,7 @@ export type StructuredAgentListedSelection = (
 
 export type StructuredAgentDefinition = AgentSessionStoredAgent & {
   capabilities: AgentSessionCapabilities
+  compactRequiresCommandReport?: true
   /** Every start gives the agent its session's current standing instructions, a reopened
    *  conversation included; otherwise a reopened one keeps those it began with. */
   instructionsEachStart: boolean
