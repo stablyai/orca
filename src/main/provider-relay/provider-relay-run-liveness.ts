@@ -14,6 +14,7 @@ import {
   listProviderRelayInstance,
   beginProviderRelayRunAsk,
   noteProviderRelayRunVerdict,
+  providerRelayRunAskAwaitsProof,
   providerRelayRunAskCurrent,
   placeKeptProviderRelay,
   providerRelayMayKeep
@@ -107,7 +108,18 @@ async function decide(
   }
   // Its daemon start can't answer: only both processes proven gone end the run. A daemon can lose
   // its endpoint and keep its agents, and a supervised agent may outlive its daemon for a grace.
-  if (await processesProvenGone(ask === null ? null : record.sessionId, placement, waitMs)) {
+  if (
+    await processesProvenGone(
+      ask === null
+        ? null
+        : {
+            chatKey: record.sessionId,
+            current: () => providerRelayRunAskAwaitsProof(record.sessionId, ask)
+          },
+      placement,
+      waitMs
+    )
+  ) {
     forget()
     return 'gone'
   }
@@ -181,15 +193,13 @@ function daemonProvenGone(daemon: AgentSessionRunDaemon, hostId: string): Promis
 }
 
 async function processesProvenGone(
-  chatKey: string | null,
+  asker: Parameters<typeof agentProvenGone>[0],
   placement: Extract<AgentSessionRunPlacement, { kind: 'relayed' }>,
   deadlineMs: number
 ): Promise<boolean> {
   const { daemon, agent } = placement
   // A live daemon decides alone; its agent is only probed once the daemon is proven gone.
-  return (
-    (await daemonProvenGone(daemon, agent.hostId)) && agentProvenGone(chatKey, agent, deadlineMs)
-  )
+  return (await daemonProvenGone(daemon, agent.hostId)) && agentProvenGone(asker, agent, deadlineMs)
 }
 
 /**

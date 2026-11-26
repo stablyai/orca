@@ -80,6 +80,16 @@ describe("a chat's unknown run verdict", () => {
     noteProviderRelayRunVerdict('c', thrown, null)
     expect(providerRelayRunUnknown('c')).toBe(true)
 
+    // A conclusive answer is never undone by an unknown from an ask already in flight.
+    const answer = beginProviderRelayRunAsk('c')
+    const slow = beginProviderRelayRunAsk('c')
+    noteProviderRelayRunVerdict('c', answer, 'kept')
+    noteProviderRelayRunVerdict('c', slow, 'unknown')
+    expect(providerRelayRunUnknown('c')).toBe(false)
+    const after = beginProviderRelayRunAsk('c')
+    noteProviderRelayRunVerdict('c', after, 'unknown')
+    expect(providerRelayRunUnknown('c')).toBe(true)
+
     const late = beginProviderRelayRunAsk('c')
     dropListedProviderRelay('c')
     noteProviderRelayRunVerdict('c', late, 'unknown')

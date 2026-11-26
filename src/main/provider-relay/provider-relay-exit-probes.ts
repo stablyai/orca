@@ -24,16 +24,19 @@ const AGENT_PROBES_RUNNING = 4
 const AGENT_PROBES_QUEUED = 256
 const AGENT_PROOF_KEPT_MS = 5 * 60_000
 type AgentProbe = {
+  key: string
   agent: AgentSessionProcessIdentity
+  state: 'overflow' | 'queued' | 'running' | 'dropped'
   /** Chats whose current run needs this agent's answer. */
   chats: Set<string>
   /** Each caller still waiting, with the chat it asks for (null: an observe-only ask). */
   waiters: Map<(gone: boolean) => void, string | null>
 }
 let agentProbesRunning = 0
-const agentProbeQueue: string[] = []
+let agentProbesQueued = 0
+const agentProbeQueue: AgentProbe[] = []
 let agentProbeHead = 0
-/** Probes waiting or running, by agent; the overflow waits for room in the queue, in order. */
+/** Probes queued or running, by agent; the overflow waits, in order, for room in the queue. */
 const agentProbes = new Map<string, AgentProbe>()
 const overflow = new Map<string, AgentProbe>()
 /** Which probes each chat's run is interested in, so a fence reaches them at once. */
@@ -41,30 +44,50 @@ const probesByChat = new Map<string, Set<string>>()
 /** Exits proven after their callers left, in proof order; read once, expired from the front. */
 const agentExits = new Map<string, number>()
 
-const unneeded = (probe: AgentProbe) => probe.waiters.size === 0 && probe.chats.size === 0
+/** A waiting probe nobody waits on and no run needs leaves at once, wherever it waits. */
+function dropIfUnneeded(probe: AgentProbe): void {
+  if (probe.waiters.size > 0 || probe.chats.size > 0) {
+    return
+  }
+  if (probe.state === 'overflow') {
+    overflow.delete(probe.key)
+  } else if (probe.state === 'queued') {
+    agentProbesQueued -= 1
+    agentProbes.delete(probe.key)
+  } else {
+    return
+  }
+  probe.state = 'dropped'
+}
 
-function admitNextAgentProbe(): void {
+function refillAgentProbeQueue(): void {
   for (const [key, probe] of overflow) {
-    if (agentProbeQueue.length - agentProbeHead >= AGENT_PROBES_QUEUED) {
-      break
+    if (agentProbesQueued >= AGENT_PROBES_QUEUED) {
+      return
     }
     overflow.delete(key)
+    probe.state = 'queued'
+    agentProbesQueued += 1
     agentProbes.set(key, probe)
-    agentProbeQueue.push(key)
+    agentProbeQueue.push(probe)
   }
-  while (agentProbesRunning < AGENT_PROBES_RUNNING && agentProbeHead < agentProbeQueue.length) {
-    const key = agentProbeQueue[agentProbeHead]
+}
+
+function admitNextAgentProbe(): void {
+  for (;;) {
+    refillAgentProbeQueue()
+    if (agentProbesRunning >= AGENT_PROBES_RUNNING || agentProbeHead >= agentProbeQueue.length) {
+      break
+    }
+    const probe = agentProbeQueue[agentProbeHead]
     agentProbeHead += 1
-    const probe = agentProbes.get(key)
-    if (!probe) {
+    if (probe.state !== 'queued') {
       continue
     }
-    if (unneeded(probe)) {
-      agentProbes.delete(key)
-      continue
-    }
+    agentProbesQueued -= 1
+    probe.state = 'running'
     agentProbesRunning += 1
-    void runAgentProbe(key, probe)
+    void runAgentProbe(probe)
   }
   if (agentProbeHead > 32 && agentProbeHead * 2 > agentProbeQueue.length) {
     agentProbeQueue.splice(0, agentProbeHead)
@@ -72,15 +95,16 @@ function admitNextAgentProbe(): void {
   }
 }
 
-async function runAgentProbe(key: string, probe: AgentProbe): Promise<void> {
+async function runAgentProbe(probe: AgentProbe): Promise<void> {
   const gone = await provenGone(probe.agent, true)
-  agentProbes.delete(key)
+  agentProbes.delete(probe.key)
+  probe.state = 'dropped'
   agentProbesRunning -= 1
   for (const chatKey of probe.chats) {
-    unindex(chatKey, key)
+    unindex(chatKey, probe.key)
   }
   if (gone && probe.waiters.size === 0 && probe.chats.size > 0) {
-    keepAgentExit(key)
+    keepAgentExit(probe.key)
   }
   for (const waiter of probe.waiters.keys()) {
     waiter(gone)
@@ -115,11 +139,9 @@ export function cancelProviderRelayExitProbes(chatKey: string): void {
         waiter(false)
       }
     }
-    if (unneeded(probe)) {
-      // A queued one is skipped when reached; an overflowed one never enters the queue.
-      overflow.delete(key)
-    }
+    dropIfUnneeded(probe)
   }
+  admitNextAgentProbe()
 }
 
 function keepAgentExit(key: string): void {
@@ -140,9 +162,12 @@ function takeAgentExit(key: string): boolean {
   return at !== undefined && Date.now() - at < AGENT_PROOF_KEPT_MS
 }
 
-/** `chatKey`: the run asking (null for an observe-only ask, which waits but holds no interest). */
+/**
+ * `asker`: the run asking and whether its ask is still current, checked right before it registers
+ * (null for an observe-only ask, which waits but holds no interest).
+ */
 export function agentProvenGone(
-  chatKey: string | null,
+  asker: { chatKey: string; current: () => boolean } | null,
   agent: AgentSessionProcessIdentity,
   deadlineMs: number
 ): Promise<boolean> {
@@ -150,11 +175,15 @@ export function agentProvenGone(
   if (takeAgentExit(key)) {
     return Promise.resolve(true)
   }
+  if (asker && !asker.current()) {
+    return Promise.resolve(false)
+  }
   let probe = agentProbes.get(key) ?? overflow.get(key)
   if (!probe) {
-    probe = { agent, chats: new Set(), waiters: new Map() }
+    probe = { key, agent, state: 'overflow', chats: new Set(), waiters: new Map() }
     overflow.set(key, probe)
   }
+  const chatKey = asker?.chatKey ?? null
   if (chatKey !== null) {
     probe.chats.add(chatKey)
     const keys = probesByChat.get(chatKey) ?? new Set<string>()
@@ -169,6 +198,7 @@ export function agentProvenGone(
     }
     const timer = setTimeout(() => {
       joined.waiters.delete(waiter)
+      dropIfUnneeded(joined)
       resolve(false)
     }, deadlineMs)
     timer.unref?.()

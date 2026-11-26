@@ -263,11 +263,11 @@ let askSeq = 0
  * Per chat with an ask in flight: how many, and the newest ask a later answer, close, deletion or
  * new run fenced off. An ask's verdict applies only when it started after that floor.
  */
-const asks = new Map<string, { inFlight: number; floor: number }>()
+const asks = new Map<string, { inFlight: number; floor: number; unknownFloor: number }>()
 
 /** Starts one ask; its number is passed back with its verdict. */
 export function beginProviderRelayRunAsk(chatKey: string): number {
-  const ask = asks.get(chatKey) ?? { inFlight: 0, floor: 0 }
+  const ask = asks.get(chatKey) ?? { inFlight: 0, floor: 0, unknownFloor: 0 }
   ask.inFlight += 1
   asks.set(chatKey, ask)
   askSeq += 1
@@ -284,19 +284,26 @@ export function noteProviderRelayRunVerdict(
   if (!ask) {
     return
   }
-  if (verdict !== null && seq > ask.floor) {
+  if (verdict === 'unknown' && seq > ask.floor && seq > ask.unknownFloor) {
     ask.floor = seq
-    if (verdict === 'unknown') {
-      unknownRuns.add(chatKey)
-    } else {
-      unknownRuns.delete(chatKey)
-      cancelProviderRelayExitProbes(chatKey)
-    }
+    unknownRuns.add(chatKey)
+  } else if ((verdict === 'kept' || verdict === 'gone') && seq > ask.floor) {
+    ask.floor = seq
+    // No ask already in flight can undo this answer with an unknown.
+    ask.unknownFloor = askSeq
+    unknownRuns.delete(chatKey)
+    cancelProviderRelayExitProbes(chatKey)
   }
   ask.inFlight -= 1
   if (ask.inFlight <= 0) {
     asks.delete(chatKey)
   }
+}
+
+/** The ask may still end as unknown: no fence and no conclusive answer since it started. */
+export function providerRelayRunAskAwaitsProof(chatKey: string, seq: number): boolean {
+  const ask = asks.get(chatKey)
+  return ask !== undefined && seq > ask.floor && seq > ask.unknownFloor
 }
 
 export function providerRelayRunAskCurrent(chatKey: string, seq: number): boolean {
