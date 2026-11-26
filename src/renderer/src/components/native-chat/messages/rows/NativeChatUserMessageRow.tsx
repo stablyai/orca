@@ -29,7 +29,12 @@ import {
 import { NativeChatConnectorNoAccessNote } from '../../NativeChatConnectorNoAccessNote'
 import { NativeChatDetailsDisclosure } from '../diagnostics/NativeChatProviderDetails'
 import { NativeChatImageAttachments } from '../../media/images/NativeChatImageAttachments'
-import type { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
+import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
+import { splitSentImagePromptMarkers } from '../../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
+import {
+  NativeChatUserInlineImageText,
+  type NativeChatSentImage
+} from './NativeChatUserInlineImageText'
 
 const USER_META_REVEAL =
   'transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100'
@@ -106,6 +111,7 @@ export function NativeChatUserMessageRow({
   if (folded) {
     return <div ref={rowRef} hidden />
   }
+  const inlineImages = from || drawn !== undefined ? null : inlineImagePlacement(message)
   return (
     <div
       ref={rowRef}
@@ -140,7 +146,7 @@ export function NativeChatUserMessageRow({
           {markdown ? (
             <>
               <NativeChatImageAttachments
-                blocks={prose}
+                blocks={inlineImages ? inlineImages.unplaced : prose}
                 runtimeContext={runtimeContext}
                 enablePreview={runtimeContext !== undefined}
               />
@@ -152,19 +158,31 @@ export function NativeChatUserMessageRow({
                 className="-mx-3.5 px-3.5"
               >
                 <NativeChatTextAttachments
-                  content={drawn ?? markdown}
+                  content={drawn ?? inlineImages?.text ?? markdown}
                   structured={structuredAttachments}
                   runtimeContext={runtimeContext}
-                  renderText={(text) => (
-                    <NativeChatMarkdown
-                      rowKey={message.id}
-                      content={text}
-                      variant="document"
-                      slackMentions={drawn !== undefined}
-                      className="text-sm"
-                      renderCodeBlock={NativeChatCodeBlock}
-                    />
-                  )}
+                  renderText={(text) => {
+                    const words = (content: string): React.JSX.Element => (
+                      <NativeChatMarkdown
+                        rowKey={message.id}
+                        content={content}
+                        variant="document"
+                        slackMentions={drawn !== undefined}
+                        className="text-sm"
+                        renderCodeBlock={NativeChatCodeBlock}
+                      />
+                    )
+                    return inlineImages ? (
+                      <NativeChatUserInlineImageText
+                        text={text}
+                        images={inlineImages.images}
+                        runtimeContext={runtimeContext}
+                        renderText={words}
+                      />
+                    ) : (
+                      words(text)
+                    )
+                  }}
                 />
               </NativeChatUserMessageFold>
             </>
@@ -229,6 +247,24 @@ export function NativeChatUserMessageRow({
       ) : null}
     </div>
   )
+}
+
+/** Where each sent image goes: its `[Image #k]` marker's place in the words. Images whose marker is
+ *  gone (sent without one, or typed inside code) stay above the text; null when no marker places one. */
+function inlineImagePlacement(
+  message: NativeChatMessage
+): { text: string; images: NativeChatSentImage[]; unplaced: NativeChatSentImage[] } | null {
+  const images = message.blocks.filter((block) => block.type === 'image-ref')
+  if (images.length === 0) {
+    return null
+  }
+  const text = deriveNativeChatRowContent(message.blocks).markdown
+  const placed = new Set(
+    splitSentImagePromptMarkers(text, images.length).filter((part) => typeof part === 'number')
+  )
+  return placed.size === 0
+    ? null
+    : { text, images, unplaced: images.filter((_, index) => !placed.has(index + 1)) }
 }
 
 /** A refused send's words, under its message. */

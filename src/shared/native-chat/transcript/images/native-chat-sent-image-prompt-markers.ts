@@ -15,6 +15,9 @@ const SENT_MARKER_OR_PROTECTED_TOKEN = new RegExp(
 const BACKTICKS = /`+/g
 const BLANK_LINE_BREAK = /\r?\n[ \t]*\r?\n/
 const FENCE_OPEN = /^ {0,3}(`{3,}(?=[^`]*$)|~{3,})/
+// Four spaces or a tab open an indented code block only after a blank line, outside a list item.
+const INDENTED_CODE_LINE = /^(?: {4}|\t)/
+const LIST_ITEM_LINE = /^[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]/
 const FENCE_CLOSE = /^ {0,3}(`{3,}|~{3,})[ \t]*$/
 const IMAGE_PROMPT_MARKER_AT_START = /^[^\S\r\n]*\[Image #\d+\]/
 const IMAGE_PROMPT_MARKER_AT_END = /\[Image #\d+\][^\S\r\n]*$/
@@ -85,6 +88,9 @@ function replaceSentImagePromptMarkers(
   const out: string[] = []
   let proseLines: string[] = []
   let fence: string | null = null
+  let afterBlankLine = true
+  let inIndentedCode = false
+  let inList = false
   const flushProse = (): void => {
     if (proseLines.length > 0) {
       out.push(replaceMarkersOutsideInlineCode(proseLines.join('\n'), replace))
@@ -101,6 +107,19 @@ function replaceSentImagePromptMarkers(
       }
       continue
     }
+    const blank = bare.trim() === ''
+    const indented = INDENTED_CODE_LINE.test(bare) && !blank
+    if (inIndentedCode ? indented || blank : afterBlankLine && !inList && indented) {
+      flushProse()
+      out.push(line)
+      inIndentedCode = true
+      continue
+    }
+    inIndentedCode = false
+    if (!blank) {
+      inList = LIST_ITEM_LINE.test(bare) || (inList && INDENTED_CODE_LINE.test(bare))
+    }
+    afterBlankLine = blank
     const opener = FENCE_OPEN.exec(bare)?.[1]
     if (opener) {
       flushProse()
@@ -112,6 +131,23 @@ function replaceSentImagePromptMarkers(
   }
   flushProse()
   return out.join('\n')
+}
+
+const SPLIT_SENTINEL = '\u0000'
+
+/** Text cut at this send's `[Image #k]` markers: each marker becomes its image number, in place.
+ *  Markers in code and out-of-range numbers stay literal text; text with NUL bytes is not cut. */
+export function splitSentImagePromptMarkers(text: string, imageCount: number): (string | number)[] {
+  if (imageCount === 0 || text.includes(SPLIT_SENTINEL) || !IMAGE_PROMPT_MARKER.test(text)) {
+    return [text]
+  }
+  const marked = replaceSentImagePromptMarkers(text, (number, marker) =>
+    number >= 1 && number <= imageCount ? `${SPLIT_SENTINEL}${number}${SPLIT_SENTINEL}` : marker
+  )
+  return marked
+    .split(SPLIT_SENTINEL)
+    .map((part, index) => (index % 2 === 1 ? Number(part) : part))
+    .filter((part) => part !== '')
 }
 
 /** Restore sent markers as image chips; leave out-of-range numbers literal. */
