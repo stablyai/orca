@@ -158,13 +158,19 @@ function connector(
       _host: unknown,
       key: ConnectorConversation,
       id: string,
-      input: { agent: string; prompt: string }
+      input: { agent: string; target: string; prompt: string }
     ) => ({
       conversation: key,
-      initial: receipts.run(key, id, 'connector.start', [input.agent, input.prompt], async () => {
-        starts.push(input.prompt)
-        return { outcome: 'accepted' }
-      })
+      initial: receipts.run(
+        key,
+        id,
+        'connector.start',
+        [input.agent, input.target, input.prompt],
+        async () => {
+          starts.push(input.prompt)
+          return { outcome: 'accepted' }
+        }
+      )
     })
   } as unknown as ExternalConversationSeam
   const deps = {
@@ -344,6 +350,36 @@ describe('a muted bot thread', () => {
     expect(turns).toEqual(['ordinary follow-up'])
     expect(starts).toEqual(['please return'])
     expect(readThreadMute(store, SECOND)).toMatchObject({ muted: true })
+  })
+
+  it('lets an explicit fresh start reopen when optional requester facts are unavailable', async () => {
+    const store = await botHome({ first: true })
+    const { deliver, starts } = connector(store)
+
+    expect(
+      await deliver(start(FIRST, 'please return', { mentioned: true, asker: undefined }))
+    ).toEqual({ outcome: 'accepted' })
+    expect(starts).toEqual(['please return'])
+    expect(readThreadMute(store, FIRST)).toMatchObject({ muted: false })
+  })
+
+  it('uses the normal start receipt identity when silencing a fresh start', async () => {
+    const store = await botHome({ first: true })
+    const { deliver, starts } = connector(store)
+    const quiet = start(FIRST, 'quiet', { deliveryId: 'same', mentioned: false })
+
+    expect(await deliver(quiet)).toEqual({ outcome: 'accepted' })
+    // The equivalent pre-repair start path sees the same receipt identity after a rollback, so it
+    // replays accepted instead of rejecting a legitimate retry or starting a chat.
+    expect(await deliver(quiet)).toEqual({ outcome: 'accepted' })
+    expect(
+      await deliver(start(FIRST, 'changed', { deliveryId: 'same', mentioned: false }))
+    ).toEqual({ outcome: 'refused', reason: 'delivery_id_reused' })
+    expect(await deliver(send(FIRST, 'quiet', { deliveryId: 'same' }))).toEqual({
+      outcome: 'refused',
+      reason: 'delivery_id_reused'
+    })
+    expect(starts).toEqual([])
   })
 
   it('admits no unmentioned reply, and one turn for a mention that unmutes it on disk', async () => {

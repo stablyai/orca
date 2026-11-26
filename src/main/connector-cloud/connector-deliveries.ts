@@ -194,9 +194,12 @@ export function dispatchDelivery(
     })
     return { deliveryId, received: false, done }
   }
-  // A request already taken replays its mute receipt with no turn or automations.
+  const startTarget = delivery.kind === 'start' ? placeLaunchTarget(delivery.placeId) : null
+  if (delivery.kind === 'start' && !startTarget) {
+    return refuse(deliveryId, { outcome: 'unsupported' })
+  }
   const heldByMute =
-    delivery.kind === 'start' || delivery.kind === 'send'
+    delivery.kind === 'send'
       ? seam.receipts.heldByMute(delivery.conversation, deliveryId, [requestText(delivery)])
       : null
   if (heldByMute) {
@@ -207,25 +210,30 @@ export function dispatchDelivery(
     (delivery.kind === 'start' || delivery.kind === 'send') &&
     !seam.receipts.known(delivery.conversation, deliveryId)
   ) {
-    // Before the seam: a muted reply never reaches the agent; later sends go on alone.
     const record = (handled: () => Promise<Delivery>) =>
-      seam.receipts.run(
-        delivery.conversation,
-        deliveryId,
-        'connector.mute',
-        [requestText(delivery)],
-        handled
-      )
+      delivery.kind === 'start'
+        ? seam.receipts.run(
+            delivery.conversation,
+            deliveryId,
+            'connector.start',
+            [delivery.agent, startTarget, delivery.prompt],
+            handled
+          )
+        : seam.receipts.run(
+            delivery.conversation,
+            deliveryId,
+            'connector.mute',
+            [requestText(delivery)],
+            handled
+          )
     const muted = machine.threadMute?.(delivery, record, carriedBefore)
     if (muted) {
-      // Held until decided; one that then goes on carries its batch's later sends, as it would have.
       const alone = { ...machine, threadMute: undefined }
       let carried = (_carries: boolean): void => {}
       const carriedLater = new Promise<boolean>((resolve) => (carried = resolve))
       const done = settle(async (): Promise<ConnectorDeliveryResult> => {
         try {
           const result = await muted.decided
-          // Carried in an earlier send's turn, whose outcome its batch reports for it.
           if (result === 'carried') {
             return { outcome: 'accepted' }
           }
@@ -242,16 +250,11 @@ export function dispatchDelivery(
       return { deliveryId, received: false, done, carriedLater }
     }
   }
-  // Every other kind belongs to a thread.
   const key = delivery.conversation
   let done: Promise<ConnectorDeliveryResult>
   switch (delivery.kind) {
     case 'start': {
-      // Only a bot's home takes a start.
-      const target = placeLaunchTarget(delivery.placeId)
-      if (!target) {
-        return refuse(deliveryId, { outcome: 'unsupported' })
-      }
+      const target = startTarget!
       const { agent, prompt, asker } = delivery
       const inTurn =
         machine.turnAutomations?.([...(delivery.automations ?? []), ...laterAutomations]) ?? null

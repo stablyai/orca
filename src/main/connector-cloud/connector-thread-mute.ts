@@ -3,7 +3,6 @@
 // @mentions it. The bot's own posts (a background run's result, an automation) still go out.
 import type {
   ConnectorConversation,
-  ConnectorDelivery,
   ConnectorDeliveryResult
 } from '../../shared/connectors/connector-cloud-contract'
 import type { RequestDelivery } from './connector-deliveries'
@@ -14,7 +13,7 @@ import { refused, type Delivery } from '../external-conversations/external-conve
  *  current explicit mention unmutes and goes on. */
 export type ThreadMuteStep = 'silence' | 'unmute_and_send' | 'send'
 
-type MuteFacts = Pick<RequestDelivery, 'bareMention' | 'mentioned'> & {
+type MuteFacts = Pick<RequestDelivery, 'kind' | 'bareMention' | 'mentioned'> & {
   resume?: unknown
   asker?: { app?: true; via?: unknown }
 }
@@ -34,7 +33,12 @@ export function threadMuteStep(muted: boolean, delivery: MuteFacts): ThreadMuteS
   if (!muted) {
     return 'send'
   }
-  return byPerson(delivery) && (delivery.mentioned || delivery.bareMention)
+  // A fresh start is the connector's direct admission of the current message. When an older
+  // desktop cannot read optional asker facts, keep that explicit wake rather than acknowledging
+  // it away. An asker we can read still has to be a person.
+  const explicitMention = delivery.mentioned || delivery.bareMention
+  const startWithoutAsker = delivery.kind === 'start' && delivery.asker === undefined
+  return explicitMention && (startWithoutAsker || byPerson(delivery))
     ? 'unmute_and_send'
     : 'silence'
 }
@@ -51,7 +55,7 @@ export function slackThreadBotUser(externalId: string): string | null {
 /** A request the thread's mute handled starts no turn, and so none of its automations: the cloud is told
  *  they were taken, so it never starts them on their own. */
 export function withoutAutomations(
-  delivery: ConnectorDelivery,
+  delivery: RequestDelivery,
   result: ConnectorDeliveryResult
 ): ConnectorDeliveryResult {
   return result.outcome === 'accepted' && delivery.automations?.length
