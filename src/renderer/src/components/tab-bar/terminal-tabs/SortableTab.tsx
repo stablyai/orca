@@ -11,7 +11,7 @@ import type { SortableTabProps } from './sortable-tab-props'
 
 import { useAppStore } from '../../../store/index'
 import {
-  ACTIVE_TAB_INDICATOR_CLASSES,
+  getActiveTabIndicatorClasses,
   getDropIndicatorClasses,
   getTabRootStateClasses,
   getTabStripBorderClasses
@@ -26,6 +26,7 @@ import { useSortableTabDrag } from './use-sortable-tab-drag'
 import { useTranslate } from '@/i18n/use-translate'
 import { TAB_LABEL_WIDTH_CLASSES } from '../strip/tab-width-rules'
 import { useTabStripSlotProps } from '../strip/use-tab-strip-slot-props'
+import { useTabStripOrientation } from '../strip/tab-strip-orientation'
 import { useTabStripPointerActivation } from '../strip/tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from '../strip/tab-context-menu-opening'
 import { TerminalTabLeadingIcon } from './TerminalTabLeadingIcon'
@@ -116,10 +117,11 @@ export default function SortableTab({
     tab.customTitle ?? (tabAgent ? stripLeadingAgentTitleDecoration(tab.title) : tab.title)
 
   // Why: carry the resolved agent into the drag overlay so dragged tabs keep the same glyph without another store lookup.
-  const { attributes, listeners, setNodeRef } = useSortableTabDrag(tab.id, {
-    ...dragData,
-    agent: tabAgent
-  })
+  const { attributes, listeners, setNodeRef } = useSortableTabDrag(
+    tab.id,
+    { ...dragData, agent: tabAgent },
+    isActive
+  )
 
   // Why: no transform/transition/opacity so tabs stay anchored during drag, only the insertion bar moves (see TabBar.tsx).
   const {
@@ -184,6 +186,7 @@ export default function SortableTab({
   })
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
   const slotProps = useTabStripSlotProps(tab.id, isActive, sizing)
+  const orientation = useTabStripOrientation()
   const tabTitle = tab.customTitle ?? tab.title
   const titleNode = fork ? <ForkMarkedName name={displayTitle} narrowIcon /> : displayTitle
   const tabRoot = (
@@ -200,8 +203,9 @@ export default function SortableTab({
       // The drag handle's describedby owns the description, so the names join the tab's name.
       aria-label={identityDetail ? `${tabTitle}, ${identityDetail}` : undefined}
       {...attributes}
+      aria-selected={orientation === 'vertical' ? isActive : undefined}
       {...dragListeners}
-      className={`${fork ? '@container/tab ' : ''}w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`${fork ? '@container/tab ' : ''}w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder, orientation })} ${getDropIndicatorClasses(dropIndicator ?? null, orientation)} ${getTabRootStateClasses(isActive, orientation)}`}
       onDoubleClick={(e) => {
         if (isEditing) {
           return
@@ -232,7 +236,7 @@ export default function SortableTab({
         }
       }}
     >
-      {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
+      {isActive && <span className={getActiveTabIndicatorClasses(orientation)} aria-hidden />}
       {isBotHome && <BotHomeTabAccent />}
       {showUnreadActivity && (
         // Why: a real DOM child keeps both drop-indicator pseudo-elements free and pointer events reaching the tab.

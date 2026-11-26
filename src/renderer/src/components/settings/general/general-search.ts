@@ -11,6 +11,7 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { getGeneralProjectRuntimeSearchEntries } from './project-runtime/general-project-runtime-search'
 import { getGeneralSupportSearchEntries } from './general-support-search'
 import { getUpdateDelayDescription, getUpdateDelayTitle } from '../updates/update-delay-copy'
+import { getTabStripPositionSearchEntry } from './tab-strip-position-search'
 
 export const getGeneralWorkspaceSearchDescriptors = createLocalizedCatalog(() => [
   generalSetting(GENERAL_SETTING_ANCHORS.folder, {
@@ -117,6 +118,7 @@ export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.fb84767421', 'switch')
     ]
   },
+  getTabStripPositionSearchEntry(),
   {
     title: translate('settings.general.previewTabs.title', 'Preview tabs'),
     description: translate(

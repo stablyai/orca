@@ -1,6 +1,5 @@
-import { Suspense, useCallback, useMemo, useRef } from 'react'
+import { Suspense, useMemo, useRef } from 'react'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
-import { useDroppable } from '@dnd-kit/core'
 import { useAppStore } from '../../store/index'
 import TabBar from '../tab-bar/TabBar'
 
@@ -9,11 +8,11 @@ import { TabGroupPaneActionsMenu } from './panel/TabGroupPaneActionsMenu'
 import { useTabGroupWorkspaceModel } from './workspace-model/useTabGroupWorkspaceModel'
 import { closeTerminalTab } from '../terminal/tab-lifecycle/terminal-tab-actions'
 import { resolveGroupTabFromVisibleId } from './workspace-model/tab-group-visible-id'
-import { getTabPaneBodyDroppableId } from './drag/useTabDragSplit'
 import type { HoveredTabInsertion } from './drag/tab-insertion'
 import { tabGroupBodyAnchorName } from './retained-pane/tab-group-body-anchor'
-import { registerTabGroupBody } from './retained-pane/tab-group-body-geometry'
-import { observeTabGroupBodyGridSize } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
+import { useTabGroupBodyRef } from './panel/use-tab-group-body-ref'
+import { TabStripPositionMenu, useTabStripPosition } from '../tab-bar/vertical/TabStripPositionMenu'
+import { TabGroupBodyRow } from './panel/TabGroupBodyRow'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   toVisibleTabType,
@@ -109,31 +108,9 @@ export default function TabGroupPanel({
   const clientHostedRows = ownsClientHostedRows
     ? worktreeClientHostedRows
     : EMPTY_CLIENT_HOSTED_ROWS
-  const { setNodeRef: setBodyDropRef } = useDroppable({
-    id: getTabPaneBodyDroppableId(groupId),
-    data: {
-      kind: 'pane-body',
-      groupId,
-      worktreeId
-    },
-    disabled: !isTabDragActive
-  })
-  const setBodyRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      setBodyDropRef(node)
-      if (!node) {
-        return undefined
-      }
-      const unregisterBody = registerTabGroupBody(groupId, node)
-      const stopGridSizeReport = observeTabGroupBodyGridSize(node)
-      return () => {
-        unregisterBody()
-        stopGridSizeReport()
-        setBodyDropRef(null)
-      }
-    },
-    [groupId, setBodyDropRef]
-  )
+  const setBodyRef = useTabGroupBodyRef({ groupId, worktreeId, isTabDragActive })
+  // The floating panel's external strip stays horizontal; only attached strips move to the left list.
+  const verticalTabs = useTabStripPosition() === 'left' && tabStrip === 'attached'
   const attachEditorFileDropOwner = useEditorGroupFileDropOwner({ worktreeId, groupId })
   const backdropActive = useWindowBackdropActive()
   // Why: per-group anchor-name lets the worktree-level overlay position panes via CSS anchor positioning, so moving a tab between groups re-targets the anchor instead of remounting xterm (loses alt-screen TUI state) or reloading `<webview>`.
@@ -247,6 +224,7 @@ export default function TabGroupPanel({
       }}
       tabBarOrder={tabBarOrder}
       hoveredTabInsertion={hoveredTabInsertion}
+      orientation={verticalTabs ? 'vertical' : 'horizontal'}
     />
   )
 
@@ -278,6 +256,7 @@ export default function TabGroupPanel({
           ? { opacity: UNFOCUSED_SPLIT_GROUP_OPACITY }
           : undefined
       }
+      data-tab-group-panel-id={groupId}
       onPointerDown={commands.focusGroup}
       // Why: keyboard/AT focus can enter a split group without a pointer event, so sync group focus to DOM focus for global shortcuts.
       onFocusCapture={commands.focusGroup}
@@ -306,7 +285,14 @@ export default function TabGroupPanel({
             ) : null}
             {/* Why: the tab-strip container excludes the reserved spacers, so width rules see only the room tabs and actions share. */}
             <div className="@container/tab-strip group/tab-strip-row flex min-w-0 flex-1 items-stretch">
-              <div className="min-w-10 flex-1 h-full">{tabBar}</div>
+              {verticalTabs ? (
+                // The tabs moved to the left list; the row keeps its actions and window-drag area.
+                <div className="min-w-10 flex-1" />
+              ) : (
+                <TabStripPositionMenu>
+                  <div className="min-w-10 flex-1 h-full">{tabBar}</div>
+                </TabStripPositionMenu>
+              )}
               {/* Why: overflowing tabs eat all strip whitespace; keep a window-drag handle while the right sidebar header is closed. It goes first in narrow strips: 203 = 40 gap + 163 for the tab floor and every control, so controls never clip behind it.
                   A pinned bot Home beside other tabs adds a second 40px floor, so that moves up to 243. */}
               {reserveRightTitlebarSpace ? (
@@ -360,63 +346,65 @@ export default function TabGroupPanel({
       )}
 
       {bot?.paused ? <BotPausedBanner bot={bot} /> : null}
-      <div
-        ref={setBodyRef}
-        data-tab-group-body-id={groupId}
-        // Why: the pane overlays paint terminals and chats above this body; only they show the backdrop.
-        data-translucent-tab-body={
-          activeTab?.contentType === 'terminal' ||
-          (activeTab && isStructuredTab(activeTab) && backdropActive)
-            ? ''
-            : undefined
-        }
-        data-worktree-id={worktreeId}
-        className="relative flex-1 min-h-0 overflow-hidden"
-        style={bodyAnchorStyle}
-      >
-        {/* Why: empty anchor so the agent-sessions tour reads as a terminal-area tip, not toolbar chrome. */}
-        {isFocused ? (
-          <div
-            className="pointer-events-none absolute inset-x-0 top-1/4 h-px"
-            data-contextual-tour-target="workspace-agent-terminal-tip"
-            // Picks the chat or terminal split step of the agent-sessions tour.
-            data-active-content-type={activeTab?.contentType}
-          />
-        ) : null}
-        {activeTab && toVisibleTabType(activeTab.contentType) === 'editor' && (
-          // Why: a capture-phase owner, so Monaco never sees the drop and the file opens as a tab here.
-          <div ref={attachEditorFileDropOwner} className="absolute inset-0 flex min-h-0 min-w-0">
-            {/* Why: split groups render editor content in a plain relative pane body, not the legacy Terminal.tsx flex column. */}
-            <Suspense
-              fallback={
-                <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-                  {t('auto.components.tab.group.TabGroupPanel.814fb04c43', 'Loading editor...')}
-                </div>
-              }
-            >
-              <EditorPanel
-                activeFileId={activeTab.entityId}
-                activeViewStateId={activeTab.id}
-                isVisible={isVisible}
-                isCmdSaveOwner={isFocused}
-                markdownAnnotationsEnabled={markdownAnnotationsEnabled}
-              />
-            </Suspense>
-            <EditorRevealFlash viewStateId={activeTab.id} />
-          </div>
-        )}
+      <TabGroupBodyRow tabList={verticalTabs ? tabBar : null}>
+        <div
+          ref={setBodyRef}
+          data-tab-group-body-id={groupId}
+          // Why: the pane overlays paint terminals and chats above this body; only they show the backdrop.
+          data-translucent-tab-body={
+            activeTab?.contentType === 'terminal' ||
+            (activeTab && isStructuredTab(activeTab) && backdropActive)
+              ? ''
+              : undefined
+          }
+          data-worktree-id={worktreeId}
+          className="relative flex-1 min-h-0 overflow-hidden"
+          style={bodyAnchorStyle}
+        >
+          {/* Why: empty anchor so the agent-sessions tour reads as a terminal-area tip, not toolbar chrome. */}
+          {isFocused ? (
+            <div
+              className="pointer-events-none absolute inset-x-0 top-1/4 h-px"
+              data-contextual-tour-target="workspace-agent-terminal-tip"
+              // Picks the chat or terminal split step of the agent-sessions tour.
+              data-active-content-type={activeTab?.contentType}
+            />
+          ) : null}
+          {activeTab && toVisibleTabType(activeTab.contentType) === 'editor' && (
+            // Why: a capture-phase owner, so Monaco never sees the drop and the file opens as a tab here.
+            <div ref={attachEditorFileDropOwner} className="absolute inset-0 flex min-h-0 min-w-0">
+              {/* Why: split groups render editor content in a plain relative pane body, not the legacy Terminal.tsx flex column. */}
+              <Suspense
+                fallback={
+                  <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+                    {t('auto.components.tab.group.TabGroupPanel.814fb04c43', 'Loading editor...')}
+                  </div>
+                }
+              >
+                <EditorPanel
+                  activeFileId={activeTab.entityId}
+                  activeViewStateId={activeTab.id}
+                  isVisible={isVisible}
+                  isCmdSaveOwner={isFocused}
+                  markdownAnnotationsEnabled={markdownAnnotationsEnabled}
+                />
+              </Suspense>
+              <EditorRevealFlash viewStateId={activeTab.id} />
+            </div>
+          )}
 
-        {showsSplitLanding ? (
-          <SplitPaneLanding
-            worktreeId={worktreeId}
-            groupId={groupId}
-            autoFocus={isFocused}
-            onClosePane={hasSplitGroups ? commands.closeGroup : undefined}
-          />
-        ) : null}
+          {showsSplitLanding ? (
+            <SplitPaneLanding
+              worktreeId={worktreeId}
+              groupId={groupId}
+              autoFocus={isFocused}
+              onClosePane={hasSplitGroups ? commands.closeGroup : undefined}
+            />
+          ) : null}
 
-        {/* Why: terminal/browser/simulator/structured-chat panes render at the worktree level; tab activation only changes overlay visibility and never remounts a live surface. */}
-      </div>
+          {/* Why: terminal/browser/simulator/structured-chat panes render at the worktree level; tab activation only changes overlay visibility and never remounts a live surface. */}
+        </div>
+      </TabGroupBodyRow>
     </div>
   )
 }

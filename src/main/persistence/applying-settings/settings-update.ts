@@ -25,6 +25,7 @@ import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings/eff
 import { normalizeSourceControlGroupOrder } from '../../../shared/source-control/listing/source-control-group-order'
 import { normalizeAppIconId } from '../../../shared/app-lifecycle/identity/app-icon'
 import { normalizeUiLanguage } from '../../../shared/i18n/ui-language'
+import { normalizeTabStripPosition } from '../../../shared/workspace-layout/tab-strip-position'
 import { normalizeWorktreeVisibilityDefaults } from '../../../shared/worktree/visibility/external-worktree-visibility'
 import { normalizePRBotAuthorOverrides } from '../../../shared/source-control/review-comments/pr-bot-author-overrides'
 import { normalizeMachineName } from '../../../shared/remote-runtime/host-metadata/machine-name'
@@ -86,6 +87,9 @@ export function updateSettings(
   }
   if ('agentSkillSharingEnabled' in updates) {
     sanitizedUpdates.agentSkillSharingEnabled = updates.agentSkillSharingEnabled === true
+  }
+  if ('tabStripPosition' in updates) {
+    sanitizedUpdates.tabStripPosition = normalizeTabStripPosition(updates.tabStripPosition)
   }
   if ('experimentalAppRail' in updates) {
     sanitizedUpdates.experimentalAppRail = updates.experimentalAppRail === true

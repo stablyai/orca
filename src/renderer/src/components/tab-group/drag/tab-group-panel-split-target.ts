@@ -42,6 +42,11 @@ function escapeCssAttrValue(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 }
 
+/** The panel around a group's body; with the vertical tab list the body sits in a row beside the list. */
+function getTabGroupPanelElement(body: HTMLElement): HTMLElement | null {
+  return body.closest<HTMLElement>('[data-tab-group-panel-id]') ?? body.parentElement
+}
+
 function getTabGroupBodyElement(groupId: string, worktreeId: string): HTMLElement | null {
   const escapedGroupId = escapeCssAttrValue(groupId)
   const escapedWorktreeId = escapeCssAttrValue(worktreeId)
@@ -51,7 +56,8 @@ function getTabGroupBodyElement(groupId: string, worktreeId: string): HTMLElemen
 }
 
 export function getTabGroupPanelRect(groupId: string, worktreeId: string): DOMRect | null {
-  return getTabGroupBodyElement(groupId, worktreeId)?.parentElement?.getBoundingClientRect() ?? null
+  const body = getTabGroupBodyElement(groupId, worktreeId)
+  return (body && getTabGroupPanelElement(body)?.getBoundingClientRect()) ?? null
 }
 
 export function getTabGroupBodyRect(groupId: string, worktreeId: string): DOMRect | null {
@@ -68,7 +74,7 @@ export function captureTabGroupPanelGeometrySnapshot(
   const entries: TabGroupPanelGeometryEntry[] = []
   for (const body of bodies) {
     const groupId = body.dataset.tabGroupBodyId
-    const panelElement = body.parentElement
+    const panelElement = getTabGroupPanelElement(body)
     if (!groupId || !panelElement) {
       continue
     }
@@ -241,7 +247,12 @@ export function resolveActivePaneColumnSplitTarget({
 
   if (isTabDragData(overData)) {
     // Reserve tab-strip hovers for insertion/reordering; create splits only on pane-body edges.
-    if (!panelHit || pointer.y < panelHit.panelRect.top + TAB_GROUP_TAB_STRIP_HEIGHT_PX) {
+    // The vertical tab list sits beside the body, so its rows always reorder.
+    if (
+      !panelHit ||
+      overData.stripOrientation === 'vertical' ||
+      pointer.y < panelHit.panelRect.top + TAB_GROUP_TAB_STRIP_HEIGHT_PX
+    ) {
       return null
     }
   }

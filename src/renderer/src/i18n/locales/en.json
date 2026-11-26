@@ -5871,6 +5871,24 @@
             "filePathsCannotContainEmptySegments": "File paths cannot contain empty segments.",
             "filePathsCannotContainDotSegments": "File paths cannot contain . or .. segments.",
             "filePathsCannotContainTildeSegments": "File paths cannot contain ~ segments."
+          },
+          "vertical": {
+            "TabStripPositionMenu": {
+              "54f7297602": "Show Tabs at the Top",
+              "97b6456a5d": "Expand Tab List",
+              "4f597a791a": "Collapse Tab List",
+              "bd0acddbce": "Show Tabs on the Left"
+            },
+            "VerticalTabBar": {
+              "114d8426d7": "Tabs"
+            },
+            "VerticalTabListHeader": {
+              "4214491c78": "Expand tab list",
+              "a08e96025f": "Collapse tab list"
+            },
+            "VerticalTabListResizeHandle": {
+              "f16318a254": "Resize tab list"
+            }
           }
         }
       },
@@ -11924,6 +11942,24 @@
             "aa1c06eb2c": "Default diff view",
             "8ad175042b": "Rich Markdown spellcheck",
             "da5c42780e": "Open in apps"
+          },
+          "TabStripPositionControl": {
+            "be0f9ce5f5": "Top",
+            "eb473e14e6": "Left"
+          },
+          "tab": {
+            "strip": {
+              "position": {
+                "search": {
+                  "3e515161c1": "Tab position",
+                  "2f44a02656": "vertical tabs",
+                  "69724f255a": "side",
+                  "ce60fea1b4": "left",
+                  "0b8635b33f": "top",
+                  "ced44863c5": "Show tabs in a strip above each split, or in a vertical list on its left."
+                }
+              }
+            }
           }
         },
         "git": {

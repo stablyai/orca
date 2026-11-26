@@ -17,6 +17,8 @@ export type TabDragItemData = {
   agent?: TuiAgent | null
   /** A bot's Home: first in its group, so it does not drag and nothing drops before it. */
   fixedFirst?: true
+  /** A row of the left vertical tab list: insertion follows the pointer's y, not its x. */
+  stripOrientation?: 'vertical'
 }
 
 export type TabPaneDropData = {

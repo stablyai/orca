@@ -9,6 +9,7 @@ import { normalizeOpenInApplications } from '../../../../shared/editor/launch/op
 
 import { normalizeTerminalShortcutPolicy } from '../../../../shared/keybindings/effective'
 import { normalizeAppIconId } from '../../../../shared/app-lifecycle/identity/app-icon'
+import { normalizeTabStripPosition } from '../../../../shared/workspace-layout/tab-strip-position'
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-themes/terminal-custom-themes'
 import { normalizePluginOwnedSettings } from '../../../../shared/plugins/capabilities/plugin-owned-settings'
 import {
@@ -174,6 +175,7 @@ export function normalizeLoadedGlobalSettings(
     // Default-on values round-trip off-platform; macOS consumers gate the actual effect.
     showMenuBarIcon: parsed.settings?.showMenuBarIcon !== false,
     linuxTilingWindowMode: parsed.settings?.linuxTilingWindowMode === true,
+    tabStripPosition: normalizeTabStripPosition(parsed.settings?.tabStripPosition),
     ...migratedPortugueseUiLanguage,
     nativeChatInheritShellEnvironment: parsed.settings?.nativeChatInheritShellEnvironment !== false,
     nativeChatShellEnvironmentVariables: normalizeNativeChatShellEnvironmentVariables(

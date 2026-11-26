@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode, type SyntheticEvent } from 'react'
 import { flushSync } from 'react-dom'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useTabStripOrientation } from './tab-strip-orientation'
+
+// A label the collapsed vertical list hides counts as clipped: the card is then the only title.
+function isLabelClipped(label: HTMLElement): boolean {
+  return label.getClientRects().length === 0 || label.scrollWidth > label.clientWidth
+}
 
 export function TabHoverCard({
   children,
@@ -27,13 +33,14 @@ export function TabHoverCard({
   programNameIsProse?: boolean
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
+  const orientation = useTabStripOrientation()
   const triggerRef = useRef<HTMLElement>(null)
   // Remove the portal before navigation can start rendering a slower destination.
   const dismiss = () => flushSync(() => setOpen(false))
   const interactive = alert !== undefined && alert !== null
   const canOpen = (): boolean => {
     const label = triggerRef.current?.querySelector<HTMLElement>('.tab-label')
-    return interactive || showWhenUnclipped || !!(label && label.scrollWidth > label.clientWidth)
+    return interactive || showWhenUnclipped || !!(label && isLabelClipped(label))
   }
 
   useEffect(() => {
@@ -45,7 +52,7 @@ export function TabHoverCard({
       return
     }
     const observer = new ResizeObserver(() => {
-      if (label.scrollWidth <= label.clientWidth) {
+      if (!isLabelClipped(label)) {
         setOpen(false)
       }
     })
@@ -76,7 +83,8 @@ export function TabHoverCard({
       <TooltipContent
         variant={interactive ? 'tab-preview-interactive' : 'tab-preview'}
         showArrow={false}
-        side="bottom"
+        // The vertical list's neighbours sit below a row, so its card opens beside the list.
+        side={orientation === 'vertical' ? 'right' : 'bottom'}
         align="start"
         sideOffset={0}
         data-tab-hover-card="true"

@@ -43,13 +43,15 @@ export function resolvePaneColumnEdgeZone(
     tabStripHeightPx?: number
   }
 ): Exclude<TabDropZone, 'center'> | null {
-  const localX = point.x - panelRect.left
-  const horizontalEdge = panelRect.width * 0.2
+  // Side edges belong to the body: a vertical tab list to its left would otherwise eat the left edge.
+  const horizontal = options?.bodyRect ?? panelRect
+  const localX = point.x - horizontal.left
+  const horizontalEdge = horizontal.width * 0.2
 
   if (localX < horizontalEdge) {
     return 'left'
   }
-  if (localX > panelRect.width - horizontalEdge) {
+  if (localX > horizontal.width - horizontalEdge) {
     return 'right'
   }
 

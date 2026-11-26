@@ -13,6 +13,7 @@ import { normalizeUsagePercentageDisplay } from '../../../shared/agent-usage/dis
 import { normalizeStatusBarUsageMode } from '../../../shared/status-bar/status-bar-usage-mode'
 import { normalizeStatusBarUsageFormat } from '../../../shared/status-bar/status-bar-usage-format'
 import { clampMarkdownTocPanelWidth } from '../../../shared/editor/markdown/markdown-toc-panel-width'
+import { clampVerticalTabListWidth } from '../../../shared/workspace-layout/tab-strip-position'
 import { normalizeSidebarBotsHeight } from '../../../shared/sidebar-bots-height'
 import { clampCombinedDiffFileTreeWidth } from '../../../shared/source-control/diff/combined-diff-file-tree-width'
 import {
@@ -68,6 +69,8 @@ export function getPersistedUI(
     trayMinimizeNoticeShown: state.ui?.trayMinimizeNoticeShown === true,
     osc52ClipboardDefaultOnNoticePending: state.ui?.osc52ClipboardDefaultOnNoticePending === true,
     markdownTocPanelWidth: clampMarkdownTocPanelWidth(state.ui?.markdownTocPanelWidth),
+    verticalTabListWidth: clampVerticalTabListWidth(state.ui?.verticalTabListWidth),
+    verticalTabListCollapsed: state.ui?.verticalTabListCollapsed === true,
     combinedDiffFileTreeWidth: clampCombinedDiffFileTreeWidth(state.ui?.combinedDiffFileTreeWidth),
     visibleWorkspaceHostIds: normalizeVisibleExecutionHostIds(state.ui?.visibleWorkspaceHostIds),
     agentsVisibleHostIds: normalizeVisibleExecutionHostIds(state.ui?.agentsVisibleHostIds),

@@ -3,6 +3,7 @@ import type { DragEndEvent, DragMoveEvent, DragOverEvent } from '@dnd-kit/core'
 import type { TabDragItemData } from './tab-drag-data'
 
 // Keep tabs anchored and draw the insertion bar on the hovered tab’s before/after edge.
+// `left` is before and `right` after the hovered tab, also in the vertical list (above/below).
 export type HoveredTabInsertion = {
   groupId: string
   visibleTabId: string
@@ -34,11 +35,14 @@ export function resolveTabInsertion(
   if (!center) {
     return null
   }
-  const midpoint = event.over.rect.left + event.over.rect.width / 2
+  const before =
+    overData.stripOrientation === 'vertical'
+      ? center.y < event.over.rect.top + event.over.rect.height / 2
+      : center.x < event.over.rect.left + event.over.rect.width / 2
   return {
     groupId: overData.groupId,
     visibleTabId: overData.visibleTabId,
-    side: center.x < midpoint && !overData.fixedFirst ? 'left' : 'right'
+    side: before && !overData.fixedFirst ? 'left' : 'right'
   }
 }
 

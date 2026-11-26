@@ -21,7 +21,7 @@ import { getUntitledFileRoot } from '@/components/editor/panel/untitled-rename/u
 import { preventMiddleButtonDefault } from '../strip/middle-button-default-guard'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import {
-  ACTIVE_TAB_INDICATOR_CLASSES,
+  getActiveTabIndicatorClasses,
   getDropIndicatorClasses,
   getTabRootStateClasses,
   getTabStripBorderClasses
@@ -32,6 +32,7 @@ import { getEditorFileTabModeIcon } from './editor-file-tab-mode-icon'
 import { useTranslate } from '@/i18n/use-translate'
 import { TAB_LABEL_WIDTH_CLASSES } from '../strip/tab-width-rules'
 import { useTabStripSlotProps } from '../strip/use-tab-strip-slot-props'
+import { useTabStripDragAttributes, useTabStripOrientation } from '../strip/tab-strip-orientation'
 import { EditorFileTabCloseButton } from './EditorFileTabCloseButton'
 import { useTabStripPointerActivation } from '../strip/tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from '../strip/tab-context-menu-opening'
@@ -75,7 +76,8 @@ export default function EditorFileTab({
   const { attributes, listeners, setNodeRef } = useSortable({
     // Split copies share a file entity; unified tab IDs keep each copy independently draggable.
     id: file.tabId ?? file.id,
-    data: dragData
+    data: dragData,
+    attributes: useTabStripDragAttributes(isActive)
   })
 
   const isConflictReview = file.mode === 'conflict-review'
@@ -219,6 +221,7 @@ export default function EditorFileTab({
   })
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
   const slotProps = useTabStripSlotProps(file.tabId ?? file.id, isActive)
+  const orientation = useTabStripOrientation()
 
   const tabRoot = (
     <div
@@ -227,8 +230,9 @@ export default function EditorFileTab({
       data-active={isActive ? 'true' : 'false'}
       data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
+      aria-selected={orientation === 'vertical' ? isActive : undefined}
       {...dragListeners}
-      className={`w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder, orientation })} ${getDropIndicatorClasses(dropIndicator ?? null, orientation)} ${getTabRootStateClasses(isActive, orientation)}`}
       style={tabStatusVariables}
       onPointerDown={(e) => {
         onPointerDown(
@@ -258,7 +262,7 @@ export default function EditorFileTab({
         }
       }}
     >
-      {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
+      {isActive && <span className={getActiveTabIndicatorClasses(orientation)} aria-hidden />}
       {isConflictReview ? (
         <ShieldAlert
           className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-orange-400' : 'text-orange-400/70'}`}

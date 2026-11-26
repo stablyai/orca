@@ -1,153 +1,25 @@
-import React, { useCallback, useMemo } from 'react'
+import React, { useMemo } from 'react'
 import { useTabStripOverflowNavigation } from './strip/tab-strip-overflow-navigation'
 import { useTabStripDragScrollHandlers } from './strip/tab-strip-drag-scroll'
 import type { TabBarProps } from './tab-bar-props'
-import type { TabBarItem } from './model/tab-bar-item-model'
-import { useTabBarRuntimeModel } from './model/use-tab-bar-runtime-model'
-import { useTabBarCreateMenuController } from './create-menu/use-tab-bar-create-menu-controller'
-import { usePluginNewFileMenuOptions } from './create-menu/use-plugin-new-file-menu-options'
-import { useTabBarItemProjection } from './model/use-tab-bar-item-projection'
 import { renderTabBarSurface } from './strip/tab-bar-surface'
-import { useTabBarItemActions } from './model/use-tab-bar-item-actions'
-import { useActiveClientHostedBrowserRowId } from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
-import { useEditorGroupFileDropOwner } from '../editor/file-drop/use-editor-group-file-drop-owner'
-import { findBotByWorkspace, useBotGroupForWorkspace } from '../bots/bot-workspace'
-import { homeBotLookupFor } from '../bots/bot-home-tab-order'
-import { useBots, useBotsEnabled } from '@/lib/bot-catalog'
-import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { useTranslate } from '@/i18n/use-translate'
 import { useTabStripScrollMemory } from './strip/tab-strip-scroll-memory'
-import type { ClientHostedBrowserRow } from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
-import { buildTabDropIndicators } from './model/tab-bar-item-model'
-import {
-  findPinnedHomeTabId,
-  stripSortableIdsWithoutPinnedHome,
-  withPinnedHomeFirst
-} from './model/pinned-home-tab'
 import { resolveRenderedTabStrip } from './strip/rendered-tab-strip'
+import { useTabBarModel } from './model/use-tab-bar-model'
+import VerticalTabBar from './vertical/VerticalTabBar'
 
-const EMPTY_ROWS: readonly ClientHostedBrowserRow[] = []
-const itemIdOf = (item: TabBarItem): string => item.id
-const idOf = (id: string): string => id
-
-function TabBarInner(props: TabBarProps): React.JSX.Element {
+function HorizontalTabBar(props: TabBarProps): React.JSX.Element {
   const t = useTranslate()
+  const { worktreeId, groupId } = props
+  const model = useTabBarModel(props)
   const {
-    worktreeId,
-    groupId,
-    terminalOnly = false,
-    onNewTerminalTab,
-    onNewTerminalWithShell,
-    onNewBrowserTab,
-    onNewSimulatorTab,
-    onNewFileTab,
-    onOpenFileTab,
-    onPinFile
-  } = props
-  const runtime = useTabBarRuntimeModel({ worktreeId, groupId })
-  const botGroup = useBotGroupForWorkspace(worktreeId)
-  const baseCreateMenu = useTabBarCreateMenuController({
-    worktreeId,
-    resolvedGroupId: runtime.resolvedGroupId,
-    showAgentLaunchItems: props.showAgentLaunchItems,
-    terminalOnly,
-    mobileEmulatorEnabled: runtime.mobileEmulatorEnabled,
-    managedBrowserCreationEnabled: runtime.managedBrowserCreationEnabled,
-    mobileEmulatorCreationEnabled: runtime.mobileEmulatorCreationEnabled,
-    workspaceHasSimulatorTab: runtime.workspaceHasSimulatorTab,
-    showWindowsShellMenu: runtime.showWindowsShellMenu,
-    projectRuntimeShellMenuMode: runtime.projectRuntimeShellMenuMode,
-    defaultWindowsShell: runtime.defaultWindowsShell,
-    defaultWindowsPowerShellImplementation: runtime.defaultWindowsPowerShellImplementation,
-    agentDetectionTarget: runtime.agentDetectionTarget,
-    windowsTerminalCapabilities: runtime.windowsTerminalCapabilities,
-    onNewTerminalTab,
-    onNewTerminalWithShell,
-    onNewBrowserTab,
-    onNewSimulatorTab,
-    onNewFileTab,
-    onOpenFileTab
-  })
-  const pluginCreateMenu = usePluginNewFileMenuOptions(
-    baseCreateMenu.createMenuOptions,
-    baseCreateMenu.handleSelectCreateMenuOption,
-    runtime.resolvedGroupId
-  )
-  const createMenu = {
-    ...baseCreateMenu,
-    createMenuOptions: pluginCreateMenu.menuOptions,
-    handleSelectCreateMenuOption: pluginCreateMenu.onSelectMenuOption
-  }
-  const projectedItems = useTabBarItemProjection({
-    props,
-    resolvedGroupId: runtime.resolvedGroupId,
-    unifiedTabs: runtime.unifiedTabs,
-    unifiedTabByVisibleId: runtime.unifiedTabByVisibleId,
-    generatedTabTitlesEnabled: runtime.generatedTabTitlesEnabled,
-    statusByRelativePath: runtime.statusByRelativePath
-  })
-  const botsEnabled = useBotsEnabled()
-  const bots = useBots(botsEnabled && parseWorkspaceKey(worktreeId)?.type === 'folder')
-  // One catalog subscription: the page's bot (as useBotForWorkspace finds it) and each chat's Home lookup.
-  const bot = findBotByWorkspace(bots, worktreeId)
-  // Each chat asks for the bot on its own host, as its row does, so a mixed-host group never borrows another's Home.
-  // Null on a strip no bot calls home (any Git worktree, bots off), which then skips the walk over its tabs.
-  const homeBotFor = useMemo(() => homeBotLookupFor(bots, worktreeId), [bots, worktreeId])
-  const pinnedHomeId = useMemo(
-    () => findPinnedHomeTabId(projectedItems.orderedItems, homeBotFor),
-    [projectedItems.orderedItems, homeBotFor]
-  )
-  // Why memoized: dnd-kit re-renders every tab in a context whose items array changes identity.
-  const orderedItems = useMemo(
-    () => withPinnedHomeFirst(projectedItems.orderedItems, pinnedHomeId, itemIdOf),
-    [projectedItems.orderedItems, pinnedHomeId]
-  )
-  const sortableIds = useMemo(
-    () => withPinnedHomeFirst(projectedItems.sortableIds, pinnedHomeId, idOf),
-    [projectedItems.sortableIds, pinnedHomeId]
-  )
-  const reorderedDropIndicators = useMemo(
-    () =>
-      orderedItems === projectedItems.orderedItems
-        ? null
-        : buildTabDropIndicators(orderedItems, projectedItems.hoveredInsertion),
-    [orderedItems, projectedItems.orderedItems, projectedItems.hoveredInsertion]
-  )
-  const itemProjection = {
-    ...projectedItems,
-    orderedItems,
-    sortableIds,
-    dropIndicatorByVisibleId: reorderedDropIndicators ?? projectedItems.dropIndicatorByVisibleId
-  }
-  const pinnedSortableIds = useMemo(() => (pinnedHomeId ? [pinnedHomeId] : []), [pinnedHomeId])
-  const stripSortableIds = useMemo(
-    () => stripSortableIdsWithoutPinnedHome(sortableIds, pinnedHomeId),
-    [sortableIds, pinnedHomeId]
-  )
-  const togglePinned = (item: TabBarItem): void => {
-    // pinTab/unpinTab mirror the change to the host for remote-server tabs.
-    if (item.isPinned) {
-      runtime.unpinTab(item.unifiedTabId)
-      return
-    }
-    if (item.type === 'editor' && onPinFile) {
-      onPinFile(item.data.id, item.unifiedTabId)
-      return
-    }
-    runtime.pinTab(item.unifiedTabId)
-  }
-  const itemActions = useTabBarItemActions({
-    props,
-    togglePinned,
-    toggleTabViewMode: runtime.toggleTabViewMode
-  })
-  // Read here, not just where the rows render: the real tabs have to know when a row took over.
-  const activeClientHostedBrowserRowId = useActiveClientHostedBrowserRowId({
-    worktreeId,
-    groupId: runtime.resolvedGroupId,
-    groupActiveTabId: props.groupActiveTabId ?? null
-  })
-  const clientHostedBrowserRows = props.clientHostedBrowserRows ?? EMPTY_ROWS
+    itemProjection,
+    pinnedSortableIds,
+    stripSortableIds,
+    clientHostedBrowserRows,
+    activeClientHostedBrowserRowId
+  } = model
   const slotIds = useMemo(
     () => [...stripSortableIds, ...clientHostedBrowserRows.map((row) => row.browserPageId)],
     [clientHostedBrowserRows, stripSortableIds]
@@ -174,15 +46,6 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     tabStripNavigation.tabStripRef,
     itemProjection.activeVisibleTabId
   )
-  const attachFileDropOwner = useEditorGroupFileDropOwner({ worktreeId, groupId })
-  const { clearPendingNewTabMenuFocusOnUnmount } = createMenu
-  const surfaceRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      clearPendingNewTabMenuFocusOnUnmount(node)
-      attachFileDropOwner(node)
-    },
-    [attachFileDropOwner, clearPendingNewTabMenuFocusOnUnmount]
-  )
   const tabStripDragScroll = useTabStripDragScrollHandlers(tabStripNavigation.scrollTabStrip, {
     start: tabStripNavigation.tabStripOverflowState.canScrollStart,
     end: tabStripNavigation.tabStripOverflowState.canScrollEnd
@@ -191,8 +54,8 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
   return renderTabBarSurface(
     {
       props,
-      runtime,
-      createMenu,
+      runtime: model.runtime,
+      createMenu: model.createMenu,
       itemProjection,
       strip: resolveRenderedTabStrip({
         itemProjection,
@@ -203,12 +66,21 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
       tabStripNavigation,
       tabStripDragScroll,
       activeClientHostedBrowserRowId,
-      itemActions,
-      surfaceRef,
-      bot,
-      botGroup
+      itemActions: model.itemActions,
+      surfaceRef: model.surfaceRef,
+      bot: model.bot,
+      botGroup: model.botGroup
     },
     t
+  )
+}
+
+function TabBarInner(props: TabBarProps): React.JSX.Element {
+  // Why two components: each orientation owns its scroller hooks, and switching remounts cleanly.
+  return props.orientation === 'vertical' ? (
+    <VerticalTabBar {...props} />
+  ) : (
+    <HorizontalTabBar {...props} />
   )
 }
 
