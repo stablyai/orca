@@ -28,7 +28,7 @@ import {
   wslMoveHostCopyOutcome
 } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-host-copy-stop'
 import { beginWslMoveUndoRun } from '../../persistence/moving-wsl-projects/orchestration/wsl-move-running-moves'
-import { runWslMoveHostAutomationsExclusive } from '../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-undo-host-automations'
+import { runWslMoveHostAutomationsExclusive } from '../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-host-automations-lock'
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { wasWslHostKeptForPeers } from '../../wsl/host-lifecycle/wsl-host-kept-for-peers'
 

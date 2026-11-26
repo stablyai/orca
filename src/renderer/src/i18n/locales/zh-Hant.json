@@ -1634,7 +1634,12 @@
         "workspaces": "{{name}}：{{workspaces}}",
         "added": "已新增 {{name}}",
         "newSessions": "將套用至新的工作階段",
-        "restart": "重新啟動 {{count}} 個工作階段",
+        "restart_other": "重新啟動 {{count}} 個工作階段",
+        "staleTerminals_other": "{{count}} 個代理程式終端機使用的是舊的 MCP 設定",
+        "staleTerminalsOnHost_other": "{{host}} 上有 {{count}} 個代理程式終端機使用的是舊的 MCP 設定",
+        "staleTerminalsRestart_other": "重新啟動它們以重新連線 Orca 的 MCP 伺服器。",
+        "staleTerminalsRestartManual_other": "請手動重新啟動它們以重新連線 Orca 的 MCP 伺服器。",
+        "staleTerminalsRestartSome_other": "其中 {{restartable}} 個可在此繼續，其餘 {{count}} 個請手動重新啟動。",
         "addedMany": "已新增 {{count}} 個伺服器",
         "repoOn": "已在 {{repo}} 中開啟 {{name}}",
         "repoOff": "已在 {{repo}} 中關閉 {{name}}"

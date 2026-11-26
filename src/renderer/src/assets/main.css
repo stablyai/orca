@@ -782,10 +782,15 @@ body[data-modal-overlay-open] [data-toasts-raised] [data-sonner-toaster] {
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button] {
-  /* Move Sonner actions below copy to avoid squeezing long notices; align footer text after the icon. */
+  /* Move Sonner actions below copy to avoid squeezing long notices, on the copy's left edge. */
   margin-top: 2px;
-  margin-left: 26px;
+  margin-left: 0;
   margin-right: 0;
+}
+
+/* A toast with an icon starts its copy after it, so its first action does too. */
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-icon] ~ [data-button] {
+  margin-left: 26px;
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button] ~ [data-button] {

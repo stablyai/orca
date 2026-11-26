@@ -86,6 +86,32 @@ describe('the local copies of moved automations', () => {
     const local = profile()
     await disableLocalAutomationsOfEarlierWslMoves(userDataPath, local)
     expect(local.disableAutomations).toHaveBeenCalledWith(new Set(['auto-1', 'auto-2']))
+    // Once only: a copy the user turned back on after the catch-up stays on next launch.
+    await disableLocalAutomationsOfEarlierWslMoves(userDataPath, local)
+    expect(local.disableAutomations).toHaveBeenCalledTimes(1)
+  })
+
+  it('turn off at startup for every earlier move, past one that fails', async () => {
+    seed('client-rewritten')
+    seedWslMoveCutover(
+      userDataPath,
+      wslMoveCutoverFixture(
+        'move-2',
+        'client-rewritten',
+        { automationsToReenable: ['auto-3'] },
+        { repoIds: ['repo-2'] },
+        undefined,
+        'Debian'
+      )
+    )
+    const local = profile()
+    local.disableAutomations.mockImplementationOnce(() => {
+      throw new Error('profile write failed')
+    })
+    await expect(disableLocalAutomationsOfEarlierWslMoves(userDataPath, local)).resolves.toBe(
+      undefined
+    )
+    expect(local.disableAutomations).toHaveBeenCalledTimes(2)
   })
 
   it('come back on at undo when the host no longer has them, with a fresh next run', async () => {

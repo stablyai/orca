@@ -9,6 +9,7 @@
 import type { Automation } from '../../../../shared/automations/automation-definition'
 import type { WslMoveCutover } from '../../../../shared/wsl-move/wsl-move-cutover'
 import { listWslMoveCutovers, writeWslMoveCutover } from './wsl-move-cutover-journal'
+import { runWslMoveHostAutomationsTurn } from './wsl-move-host-automations-lock'
 import { wslMoveAutomationsPending } from '../desktop-state/wsl-move-host-automations-rewrite'
 
 export type WslMoveHostAutomationStop =
@@ -31,18 +32,6 @@ export type WslMoveHostAutomationPorts = {
   setHere: (automationId: string, enabled: boolean) => void
   /** A copy turned back on: its next run moves past now, as a disabled one is never advanced. */
   advanceHere: (automationId: string) => void
-}
-
-let exclusive: Promise<unknown> = Promise.resolve()
-
-/**
- * Undo (stop, release) and the left-off retry take turns: a retry turning a host copy back on
- * while an undo releases the move would leave it on beside the copy here.
- */
-export function runWslMoveHostAutomationsExclusive<T>(run: () => Promise<T>): Promise<T> {
-  const next = exclusive.then(run, run)
-  exclusive = next.catch(() => {})
-  return next
 }
 
 /** Every automation the move carried, whatever its state here or on the host. */
@@ -249,8 +238,16 @@ export function settleInterruptedWslMoveUndos(userDataPath: string): void {
 }
 
 export type WslMoveHostAutomationRetryHost = {
-  restore: (environmentId: string, automationIds: readonly string[]) => Promise<void>
-  disable: (environmentId: string, automationIds: readonly string[]) => Promise<unknown>
+  restore: (
+    environmentId: string,
+    automationIds: readonly string[],
+    signal?: AbortSignal
+  ) => Promise<void>
+  disable: (
+    environmentId: string,
+    automationIds: readonly string[],
+    signal?: AbortSignal
+  ) => Promise<unknown>
 }
 
 /** Turns back on what refused undos left off; true while any is still left off. */
@@ -260,7 +257,7 @@ export async function retryWslMoveHostAutomationsLeftOff(
 ): Promise<boolean> {
   let remaining = false
   for (const { migrationId } of listWslMoveCutovers(userDataPath)) {
-    const left = await runWslMoveHostAutomationsExclusive(async () => {
+    const left = await runWslMoveHostAutomationsTurn(async (signal) => {
       // Fresh inside the turn: an undo may have released the move, or a pass advanced it.
       const cutover = readMove(userDataPath, migrationId)
       const ids = cutover?.hostAutomationsLeftOff ?? []
@@ -269,7 +266,8 @@ export async function retryWslMoveHostAutomationsLeftOff(
       }
       let stillOff: string[] = []
       try {
-        await host.restore(cutover.destinationEnvironmentId, ids)
+        // Unraced: restore ends each request at the deadline and its error names what stayed off.
+        await host.restore(cutover.destinationEnvironmentId, ids, signal)
       } catch (error) {
         stillOff = leftOffOf(error).length > 0 ? leftOffOf(error) : ids
       }
@@ -277,9 +275,11 @@ export async function retryWslMoveHostAutomationsLeftOff(
       const current = readMove(userDataPath, migrationId)
       if (!current) {
         // Released meanwhile: the project is local again, so what this turned on goes back off.
-        await host.disable(cutover.destinationEnvironmentId, [...turnedOn]).catch((error) => {
-          console.warn("[wsl-move] Could not turn a released move's host automations off:", error)
-        })
+        await host
+          .disable(cutover.destinationEnvironmentId, [...turnedOn], signal)
+          .catch((error) => {
+            console.warn("[wsl-move] Could not turn a released move's host automations off:", error)
+          })
         return 0
       }
       const leftOff = (current.hostAutomationsLeftOff ?? []).filter((id) => !turnedOn.has(id))

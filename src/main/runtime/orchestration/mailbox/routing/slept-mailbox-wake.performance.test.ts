@@ -418,3 +418,92 @@ it.each([100, 1_000])(
     }
   }
 )
+
+it.each([100, 1_000])(
+  'an unrelated host reconnect reads none of %i local sleepers’ held mail or failed wakes',
+  async (count) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] })
+    const db = new OrchestrationDb(':memory:')
+    const sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord> = {}
+    for (let index = 0; index < count; index += 1) {
+      const record = { ...sleeper(index, `repo-local::/w/${index}`), restoreOnTabOpenOnly: false }
+      sleepingAgentSessionsByPaneKey[record.paneKey] = record
+      const run = db.createRun({
+        objective: 'owed',
+        coordinatorHandle: null,
+        coordinatorPaneKey: record.paneKey
+      })
+      db.insertMessage({ runId: run.id, from: 'worker', to: `run:${run.id}`, subject: 'owed' })
+    }
+    const session = { ...getDefaultWorkspaceSession(), sleepingAgentSessionsByPaneKey }
+    const runtime = new OrcaRuntimeService(
+      partialRuntimeStore({
+        getWorkspaceSession: () => session,
+        getWorkspaceSessionHostIds: () => ['local'],
+        onWorkspaceSessionWritten: () => () => {},
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host check reads only the repo's host fields.
+        getRepo: (id: string) => ({ id, connectionId: null }) as never
+      })
+    )
+    const resumeSleepingAgents = vi.fn(async () => false)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pass under test calls only resumeSleepingAgents; every other member is a no-op.
+    const notifier = new Proxy(
+      {},
+      { get: (_target, key) => (key === 'resumeSleepingAgents' ? resumeSleepingAgents : vi.fn()) }
+    ) as RuntimeNotifier
+    try {
+      runtime.setOrchestrationDb(db)
+      runtime.setNotifier(notifier)
+      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      runtime.retrySleptMailboxWakes()
+      await vi.advanceTimersByTimeAsync(2_000)
+      const prepared = resumeSleepingAgents.mock.calls.length
+      expect(prepared).toBeGreaterThan(0)
+      const runReads = vi.spyOn(db, 'getRun')
+      runtime.retrySleptMailboxWakes(undefined, 'ssh:other-host')
+      runtime.retrySleptMailboxWakes(undefined, 'runtime:other-env')
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(runReads).not.toHaveBeenCalled()
+      expect(resumeSleepingAgents).toHaveBeenCalledTimes(prepared)
+      // The sleepers' own host coming back still retries their failed wakes.
+      runtime.retrySleptMailboxWakes(undefined, 'local')
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(resumeSleepingAgents.mock.calls.length).toBeGreaterThan(prepared)
+    } finally {
+      runtime.setNotifier(null)
+      db.close()
+    }
+  }
+)
+
+it('one mail wake with no waiter reservation reads its Run owner twice before prepare', () => {
+  const db = new OrchestrationDb(':memory:')
+  try {
+    const record = { ...sleeper(0, 'folder:0'), restoreOnTabOpenOnly: false }
+    const run = db.createRun({
+      objective: 'owed',
+      coordinatorHandle: null,
+      coordinatorPaneKey: record.paneKey
+    })
+    db.insertMessage({ runId: run.id, from: 'worker', to: `run:${run.id}`, subject: 'owed' })
+    const runReads = vi.spyOn(db, 'getRun')
+    const sequenceReads = vi.spyOn(db, 'getUndeliveredUnreadSequence')
+    const counts: number[] = []
+    const delivery = new SleptMailboxWake({
+      db: () => db,
+      record: (paneKey) => (paneKey === record.paneKey ? record : null),
+      waiters: () => undefined,
+      prepare: () => {
+        counts.push(runReads.mock.calls.length, sequenceReads.mock.calls.length)
+        return new Promise(() => {})
+      },
+      wake: async () => false
+    })
+    // The no-consumer delivery hands over the waiters' (empty) reservation set.
+    delivery.request(`run:${run.id}`, new Set())
+    // One read for the refresh, one for the wake it starts.
+    expect(counts).toEqual([2, 2])
+  } finally {
+    db.close()
+  }
+})
