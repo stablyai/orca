@@ -529,7 +529,7 @@ async function runChangedChecks(root, options, signal) {
       return result
     },
     signal,
-    { isolateResourceChecks: options.checkConcurrency !== undefined }
+    { isolateResourceChecks: options.checkConcurrency !== null }
   ).finally(() => clearInterval(heartbeat))
   if (signal?.aborted) {
     return signal.reason

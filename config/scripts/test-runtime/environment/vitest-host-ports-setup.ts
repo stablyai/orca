@@ -1,7 +1,7 @@
 import process from 'node:process'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, beforeEach } from 'vitest'
+import { beforeEach } from 'vitest'
 import {
   setAppEnvironment,
   type AppEnvironment
@@ -9,7 +9,7 @@ import {
 import { setSecretStore } from '../../../../src/shared/secure-storage/secret-store'
 
 // The harness owns its directory even when a suite replaces the fs module.
-const { mkdtempSync, promises: fs } = process.getBuiltinModule('fs')
+const { mkdtempSync } = process.getBuiltinModule('fs')
 
 // Install benign host ports before tests; production correctly throws before entry installs them, while suites can override defaults afterward.
 
@@ -20,11 +20,7 @@ function userDataPath(): string {
   return (userData ??= mkdtempSync(join(tmpdir(), 'orca-vitest-userdata-')))
 }
 
-afterAll(async () => {
-  if (userData) {
-    await fs.rm(userData, { recursive: true, force: true, maxRetries: 3 })
-  }
-})
+// run-vitest removes its temp tree after workers release Windows file handles.
 
 // Return ciphertext distinct from input so forgotten sealing cannot pass.
 const SEAL_PREFIX = 'vitest-sealed:'

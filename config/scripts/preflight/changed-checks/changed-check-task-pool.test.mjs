@@ -60,7 +60,9 @@ it('retains the default concurrent admission of resource checks', async () => {
     2,
     async (task) => {
       active.push(task.name)
-      if (active.length === 2) both.resolve()
+      if (active.length === 2) {
+        both.resolve()
+      }
       await release.promise
       return task.name
     }
