@@ -212,6 +212,7 @@ describe('fresh delivery mention state', () => {
   const start = {
     kind: 'start',
     deliveryId: 'd1',
+    seq: 1,
     expiresAt: 1_900_000_000_000,
     conversation: { source: 'slack', externalId: 'T:C:1.000:U0BOT' },
     agent: 'claude',
