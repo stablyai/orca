@@ -16,6 +16,26 @@ type DraftDestination = Pick<
   'sessionId' | 'worktreeId' | 'executionHostId'
 > & { params?: { tabId?: string } }
 
+/**
+ * Where the moved draft's selection lands in the merged one: inside the span the moved text itself
+ * occupies, which is the merged text's end whenever the move contributed text (an exact duplicate the
+ * receiver already ends with is that same text). A move with no span of its own there (empty,
+ * image-only, whitespace-only, or text the receiver holds only in another form, such as trimmed) puts
+ * the caret at the end, never at the start of the receiver's own text.
+ */
+function movedSelection(
+  merged: string,
+  moved: string,
+  selection?: { from: number; to: number }
+): { at: 'end' } | { at: 'selection'; from: number; to: number } {
+  if (!selection || moved.trim() === '' || !merged.endsWith(moved)) {
+    return { at: 'end' }
+  }
+  const offset = merged.length - moved.length
+  const within = (at: number): number => offset + Math.min(Math.max(at, 0), moved.length)
+  return { at: 'selection', from: within(selection.from), to: within(selection.to) }
+}
+
 export function moveStructuredAgentLaunchDraft(
   destination: DraftDestination,
   sourceScope: string,
@@ -28,11 +48,8 @@ export function moveStructuredAgentLaunchDraft(
     scopeKey,
     { workspaceId: destination.worktreeId, executionHostId: destination.executionHostId },
     (merged) => {
-      const offset = Math.max(0, merged.text.lastIndexOf(source.text))
       return {
-        ...(selection
-          ? { at: 'selection', from: offset + selection.from, to: offset + selection.to }
-          : { at: 'end' }),
+        ...movedSelection(merged.text, source.text, selection),
         target:
           findStructuredLaunchTab(destination)?.id ??
           destination.params?.tabId ??

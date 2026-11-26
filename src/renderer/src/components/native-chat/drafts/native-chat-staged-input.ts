@@ -1,11 +1,9 @@
 import { formatNativeChatFileReference } from '../../../../../shared/native-chat/input/composer/agent-image-paste'
 import { nativeChatTextAttachmentParts } from '../../../../../shared/native-chat/attachments/native-chat-text-attachment-references'
 import {
-  adoptNativeChatStagedFile,
   currentFiles,
   inputPaths,
   nativeChatStagedFileHeld,
-  nativeChatStagedFileOwners,
   pruneFiles,
   stagedNativeChatFiles,
   type NativeChatStagedInput
@@ -124,37 +122,4 @@ export function captureNativeChatStagedInput(scope: string, input?: NativeChatSt
       }
     }
   }
-}
-
-/**
- * A host refused uploads it no longer stores, for a message of conversation `sessionId` returning to
- * `scope`. The authority is the upload's own identity: an expired host path is restored only when
- * exactly one live upload record names it, that record was made for this same conversation, and its
- * original is still staged. Then only that cached upload is forgotten (a healthy or newer upload of the
- * same original stays), the original moves into `scope`'s own staging so this draft owns it from now on,
- * and the original is returned so the returned message offers it again. Anything else is left out.
- * Restoring happens only here, while Orca builds the returned message: nothing rewrites a draft later.
- */
-export function restoreNativeChatExpiredUploads(
-  scope: string,
-  sessionId: string,
-  expiredHostPaths: Iterable<string>
-): Map<string, string> {
-  const restored = new Map<string, string>()
-  for (const host of new Set(expiredHostPaths)) {
-    const owners = nativeChatStagedFileOwners().filter((owner) => owner.uploaded.has(host))
-    const owner = owners.length === 1 ? owners[0] : undefined
-    const origin = owner?.uploaded.get(host)
-    if (!owner || !origin || origin.sessionId !== sessionId || !owner.paths.has(origin.source)) {
-      continue
-    }
-    owner.uploaded.delete(host)
-    const cache = owner.uploads.get(origin.target)
-    if (cache?.get(origin.source) === origin.upload) {
-      cache.delete(origin.source)
-    }
-    adoptNativeChatStagedFile(owner, origin.source, scope)
-    restored.set(host, origin.source)
-  }
-  return restored
 }

@@ -1,10 +1,17 @@
 import { agentSessionAttachmentUploadIdOfPath } from '../../../../../../../shared/agent-session/agent-session-attachments'
 import { formatNativeChatFileReference } from '../../../../../../../shared/native-chat/input/composer/agent-image-paste'
 import { nativeChatTextAttachmentParts } from '../../../../../../../shared/native-chat/attachments/native-chat-text-attachment-references'
-import { restoreNativeChatExpiredUploads } from '../../../drafts/native-chat-staged-input'
+import {
+  commitNativeChatExpiredUploadRestore,
+  planNativeChatExpiredUploadRestore
+} from '../../../drafts/native-chat-expired-upload-restore'
 import type { AgentJournalMessageItem } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatComposerDraftImage } from '../../../drafts/native-chat-composer-draft-storage'
-import { appendToNativeChatComposerDraft } from '../../../drafts/native-chat-composer-draft-store'
+import {
+  appendToNativeChatComposerDraft,
+  readNativeChatComposerDraft
+} from '../../../drafts/native-chat-composer-draft-store'
+import { currentDraftScope } from '../../../drafts/native-chat-launch-draft-source'
 import { structuredAgentSessionDraftScopeKey } from '../../../drafts/native-chat-draft-scope'
 import { unavailableNativeChatComposerDraftImage } from '../../../drafts/native-chat-composer-draft-persistence'
 import { promptMarkersToImageReferences } from '../../../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
@@ -29,7 +36,9 @@ export function returnMessageToComposer(
   expiredUploadIds?: ReadonlySet<string>,
   skills?: AgentJournalMessageItem['skills'],
   /** The conversation the refused message was sent in: only its own uploads may be restored. */
-  uploadSessionId?: string
+  uploadSessionId?: string,
+  /** Receives the expired upload ids that came back as their originals. */
+  restoredUploadIds?: Set<string>
 ): boolean {
   // Its `[Image #k]` markers become chips for its k-th image, by the ids its images get below.
   const imageIds = blocks.flatMap((block, index) =>
@@ -41,12 +50,13 @@ export function returnMessageToComposer(
     return !!uploadId && !!expiredUploadIds?.has(uploadId)
   }
   const messageText = structuredAgentSessionMessageText({ kind: 'message', role: 'user', blocks })
-  // An expired upload this conversation made, whose original is still staged anywhere (here, or still
-  // at a pending worktree's source), comes back as that original and becomes this draft's: Send uploads
-  // it afresh. This is the only restore: the returned content is Orca's own here, so nothing rewrites
-  // the person's draft later. Any other expired upload asks to be attached again.
-  const restored = uploadSessionId
-    ? restoreNativeChatExpiredUploads(composerScopeKey, uploadSessionId, [
+  // An expired upload this conversation made, whose original is still staged and readable anywhere
+  // (here, or still at a pending worktree's source), comes back as that original. It becomes this
+  // draft's only once the installed draft holds it, so a draft that took nothing takes no ownership.
+  // This is the only restore: nothing rewrites the person's draft later. Any other expired upload asks
+  // to be attached again.
+  const plan = uploadSessionId
+    ? planNativeChatExpiredUploadRestore(uploadSessionId, [
         ...blocks.flatMap((block) =>
           block.type === 'image-ref' && block.path && expired(block.path) ? [block.path] : []
         ),
@@ -54,7 +64,8 @@ export function returnMessageToComposer(
           part.path ? [part.path] : []
         )
       ])
-    : new Map<string, string>()
+    : undefined
+  const restored = new Map([...(plan ?? [])].map(([host, { origin }]) => [host, origin.source]))
   // Not the attachment hook's helper: its imports reach the store, whose teardown imports this.
   const images = blocks.flatMap((block, index): NativeChatComposerDraftImage[] => {
     if (block.type !== 'image-ref') {
@@ -85,13 +96,33 @@ export function returnMessageToComposer(
     return true
   }
   // Stable image ids make repeated hand-back idempotent despite later typing.
-  return appendToNativeChatComposerDraft(composerScopeKey, {
+  const durable = appendToNativeChatComposerDraft(composerScopeKey, {
     text,
     images,
     ...(skills?.length
       ? { document: seedPromptSkillReferences(promptTextContent(text), skills) }
       : {})
   })
+  if (plan?.size) {
+    const installed = readNativeChatComposerDraft(composerScopeKey)
+    const held = (original: string): boolean =>
+      installed.images.some(({ path }) => path === original) ||
+      nativeChatTextAttachmentParts(installed.text, true, (path) => path === original).some(
+        (part) => part.path
+      )
+    const committed = commitNativeChatExpiredUploadRestore(
+      currentDraftScope(composerScopeKey),
+      plan,
+      held
+    )
+    for (const host of committed) {
+      const uploadId = agentSessionAttachmentUploadIdOfPath(host)
+      if (uploadId) {
+        restoredUploadIds?.add(uploadId)
+      }
+    }
+  }
+  return durable
 }
 
 /** Return unaccepted input to its conversation draft even when unmounted; true means durable. */
@@ -100,7 +131,8 @@ export function handBackStructuredAgentSessionMessage(
   clientMessageId: string,
   body: AgentJournalMessageItem,
   imageConnectionIds?: readonly (string | null)[],
-  expiredUploadIds?: ReadonlySet<string>
+  expiredUploadIds?: ReadonlySet<string>,
+  restoredUploadIds?: Set<string>
 ): boolean {
   return returnMessageToComposer(
     structuredAgentSessionDraftScopeKey(sessionId),
@@ -109,6 +141,7 @@ export function handBackStructuredAgentSessionMessage(
     imageConnectionIds,
     expiredUploadIds,
     body.skills,
-    sessionId
+    sessionId,
+    restoredUploadIds
   )
 }

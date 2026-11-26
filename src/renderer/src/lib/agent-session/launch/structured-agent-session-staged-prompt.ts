@@ -64,7 +64,10 @@ export type StagedStructuredLaunchPrompt = {
   createOwned?: true
   createSend?: StructuredAgentSessionCreateSend
   whenCreateSettled: Promise<StagedDelivery>
+  /** The first outcome wins; later calls are no-ops. */
   settleCreate: (outcome: StagedDelivery) => void
+  /** That first outcome, once there is one: whoever settled the prompt owns its input. */
+  settledResult: () => StagedDelivery | undefined
   /** Its launch was cancelled: never sent, never given back. */
   discarded?: true
   recipientDiscarded?: true
@@ -90,10 +93,17 @@ export function stageStructuredLaunchPrompt(
   const whenDiscarded = new Promise<void>((resolve) => {
     discard = resolve
   })
-  let settleCreate = (_outcome: StagedDelivery): void => {}
+  let resolveCreate = (_outcome: StagedDelivery): void => {}
   const whenCreateSettled = new Promise<StagedDelivery>((resolve) => {
-    settleCreate = resolve
+    resolveCreate = resolve
   })
+  let settled: StagedDelivery | undefined
+  const settleCreate = (outcome: StagedDelivery): void => {
+    if (!settled) {
+      settled = outcome
+      resolveCreate(outcome)
+    }
+  }
   // The send's host delivery mode, not the prompt's own `delivery` promise.
   const { delivery: _sendDelivery, ...promptOptions } = options
   const prompt: StagedStructuredLaunchPrompt = {
@@ -104,7 +114,8 @@ export function stageStructuredLaunchPrompt(
     whenDiscarded,
     discard,
     whenCreateSettled,
-    settleCreate
+    settleCreate,
+    settledResult: () => settled
   }
   const forSession = staged.get(sessionId) ?? new Set()
   forSession.add(prompt)
@@ -138,11 +149,26 @@ export function stagedDeliveryFromSlotOutcome(
  * `whenCreateSettled` synchronously, then the prompt is unstaged. Unstaging releases the reservation,
  * whose own generic "dropped" outcome arrives a microtask later and so can no longer win the public
  * race without the terminal signal.
+ *
+ * It acts only while it still owns the input: a prompt already settled (its reservation returned the
+ * input, or another path won) keeps that result and gets no second hand-back, and a reservation that
+ * already ended on its own contributes its actual outcome. Only a prompt whose input nothing has taken
+ * (no reservation, or one still held) is handed back here.
  */
 export function finishStagedLaunchPromptWithHandBack(
   prompt: StagedStructuredLaunchPrompt,
   extra: Partial<StagedDelivery> = {}
-): StagedDelivery {
+): StagedDelivery | Promise<StagedDelivery> {
+  const settled = prompt.settledResult()
+  if (settled) {
+    unstageStructuredLaunchPrompt(prompt)
+    return settled
+  }
+  const slot = prompt.slot
+  if (slot && !slot.active()) {
+    unstageStructuredLaunchPrompt(prompt)
+    return slot.outcome.then((outcome) => stagedDeliveryFromSlotOutcome(prompt, outcome))
+  }
   const result: StagedDelivery = {
     delivered: false,
     inComposer: handBackStagedLaunchPrompt(prompt),
@@ -192,7 +218,7 @@ export function takeBackLegacyStructuredLaunchPrompts(sessionId: string): void {
     }
     prompt.discarded = true
     // Settled before its reservation is released and before the discard is announced.
-    finishStagedLaunchPromptWithHandBack(prompt, { failureNotified: true })
+    void finishStagedLaunchPromptWithHandBack(prompt, { failureNotified: true })
     prompt.discard()
   }
 }

@@ -26,6 +26,7 @@ import { openBackgroundDeclinedTerminal } from '@/lib/workspace/creation/worktre
 import { settleAgentTabLaunch } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-host-agents'
 import { hasNativeChatStagedFiles } from '@/components/native-chat/drafts/native-chat-draft-attachment-staging'
 import { captureNativeChatStagedInput } from '@/components/native-chat/drafts/native-chat-staged-input'
+import { worktreeCreationFirstSend } from '@/lib/workspace/creation/worktree-creation-first-send'
 import { nativeChatComposerHasUserContent } from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
 
 const HANDOFF_READY_TIMEOUT_MS = 5000
@@ -79,16 +80,10 @@ export async function launchStructuredWorktreeSession(
         }
       : {})
   })
-  const promptAttachments = pending?.heldChatAttachments?.map(({ path, connectionId }) => ({
-    path,
-    previewUri: '',
-    ...(connectionId ? { connectionId } : {})
-  }))
   const sourceScope = pendingCreationChatDraftScopeKey(args.creationId)
-  const prepareInput = captureNativeChatStagedInput(sourceScope, {
-    text: request.launchDraftPrompt ?? request.quickPrompt,
-    attachments: promptAttachments
-  })
+  const firstSend = worktreeCreationFirstSend(sourceScope, request, pending)
+  const promptAttachments = firstSend.attachments
+  const prepareInput = captureNativeChatStagedInput(sourceScope, firstSend)
   // The composer's own input (typing, chips still saving, staged files), apart from the first send,
   // and a paste failure waiting for it: with no chat to show it, that may be the only feedback left.
   const sourceHoldsInput = (): boolean =>
@@ -121,7 +116,7 @@ export async function launchStructuredWorktreeSession(
     ...(request.launchInputs?.chatSessionOptions !== undefined
       ? { chatLaunchOptions: request.launchInputs.chatSessionOptions }
       : {}),
-    prompt: request.launchDraftPrompt ?? request.quickPrompt,
+    prompt: firstSend.text,
     promptAttachments,
     promptSkills: pending?.heldChatSkills,
     ...(hasNativeChatStagedFiles(sourceScope)
@@ -129,7 +124,7 @@ export async function launchStructuredWorktreeSession(
           preparePrompt: async (sessionId, target) =>
             prepareInput.prepare(
               {
-                text: request.launchDraftPrompt ?? request.quickPrompt,
+                text: firstSend.text,
                 attachments: promptAttachments,
                 skills: pending?.heldChatSkills
               },

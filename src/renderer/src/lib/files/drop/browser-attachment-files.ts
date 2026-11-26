@@ -19,6 +19,11 @@ export function takeBrowserAttachmentFile(token: string): File | null {
   return file
 }
 
+/** A renderer-only reference to a browser File: it means nothing outside this renderer. */
+export function isBrowserAttachmentToken(path: string): boolean {
+  return path.startsWith(TOKEN_PREFIX)
+}
+
 export function readBrowserAttachmentFile(token: string): File | null {
   return heldFiles.get(token) ?? null
 }

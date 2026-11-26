@@ -78,7 +78,8 @@ export function finish(
 
 function returnToComposer(
   entry: StructuredAgentSessionPendingSend,
-  expiredUploadIds?: ReadonlySet<string>
+  expiredUploadIds?: ReadonlySet<string>,
+  restoredUploadIds?: Set<string>
 ): boolean {
   try {
     handBackStructuredAgentSessionMessage(
@@ -86,7 +87,8 @@ function returnToComposer(
       entry.clientMessageId,
       entry.body,
       entry.imageConnectionIds,
-      expiredUploadIds
+      expiredUploadIds,
+      restoredUploadIds
     )
     return true
   } catch (error) {
@@ -95,21 +97,27 @@ function returnToComposer(
   }
 }
 
+type HandBackNotice =
+  | readonly AgentSessionWriteNoticePart[]
+  | null
+  /** Worded once the hand-back knows which expired uploads came back as their originals. */
+  | ((restoredUploadIds: ReadonlySet<string>) => readonly AgentSessionWriteNoticePart[] | null)
+
 export function handBack(
   entry: StructuredAgentSessionPendingSend,
-  notice: readonly AgentSessionWriteNoticePart[] | null,
+  notice: HandBackNotice,
   expiredUploadIds?: ReadonlySet<string>
 ): void {
   try {
     if (entry.callerKeepsText) {
       return
     }
-    const parts: readonly AgentSessionWriteNoticePart[] | null = returnToComposer(
-      entry,
-      expiredUploadIds
-    )
-      ? notice
-      : [...(notice ?? []), 'messageNotSaved']
+    const restored = new Set<string>()
+    const returned = returnToComposer(entry, expiredUploadIds, restored)
+    const words = typeof notice === 'function' ? notice(restored) : notice
+    const parts: readonly AgentSessionWriteNoticePart[] | null = returned
+      ? words
+      : [...(words ?? []), 'messageNotSaved']
     if (parts?.length) {
       publishStructuredAgentSessionSends(entry.sessionId, {
         notice: agentSessionWriteNoticeText(parts)
@@ -156,18 +164,34 @@ function refusedSendParts(failure: AgentSessionWriteFailure): AgentSessionWriteN
     : agentSessionWriteNoticeParts(failure, 'composer-send')
 }
 
-/** Return a refused message, marking any image the host said expired. */
+/**
+ * Return a refused message, marking any image the host said expired. The notice names only the expired
+ * attachments that did not come back as their originals; when all did, nothing is left to attach again
+ * and the message is simply not sent yet.
+ */
 export function handBackRefused(
   entry: StructuredAgentSessionPendingSend,
   failure: AgentSessionWriteFailure
 ): void {
-  const expired =
+  const invalid =
     failure.kind === 'refused' && failure.code === 'agent_session_operation_invalid'
-      ? failure.details?.expiredAttachments
+      ? failure
       : undefined
+  const expired = invalid?.details?.expiredAttachments
   handBack(
     entry,
-    refusedSendParts(failure),
+    (restored) => {
+      const unrecovered = expired?.filter(({ uploadId }) => !restored.has(uploadId)) ?? []
+      if (!invalid || !expired || unrecovered.length === expired.length) {
+        return refusedSendParts(failure)
+      }
+      return unrecovered.length
+        ? refusedSendParts({
+            ...invalid,
+            details: { ...invalid.details, expiredAttachments: unrecovered }
+          })
+        : agentSessionWriteNotDoneParts('composer-send')
+    },
     expired && new Set(expired.map(({ uploadId }) => uploadId))
   )
 }

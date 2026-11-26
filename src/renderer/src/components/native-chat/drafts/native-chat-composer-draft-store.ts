@@ -52,6 +52,7 @@ import {
   withNativeChatComposerDraftAddition
 } from './native-chat-composer-draft-addition'
 import { journalNativeChatComposerDraftAddition } from './native-chat-composer-draft-journal'
+import { isLoneStructuredAgentSessionConversationCommand } from '../../../../../shared/agent-session/view/structured-agent-session-composer'
 
 /** Edit scopes share input machinery but never enter draft persistence. */
 export function openNativeChatEditDraft(scopeKey: string, draft: NativeChatComposerDraft): void {
@@ -183,6 +184,37 @@ export function updateNativeChatComposerDraft(
   }
 }
 
+/**
+ * A still-pending placement survives an append that keeps the old text as its prefix: it stays where it
+ * was, within the old text (an end placement becomes a caret at the old text's end). An append that
+ * replaced the text, or a placement already applied or given up, carries nothing.
+ */
+function carriedNativeChatDraftPosition(
+  before: DraftRecord | undefined,
+  text: string
+): NativeChatDraftPosition | undefined {
+  const previous = before && nativeChatDraftPositions.get(before)
+  const kept = before?.text.trimEnd() ?? ''
+  if (
+    !previous?.pending ||
+    text === before?.text ||
+    kept === '' ||
+    isLoneStructuredAgentSessionConversationCommand(kept) ||
+    !text.startsWith(`${kept}\n\n`)
+  ) {
+    return undefined
+  }
+  const within = (at: number): number => Math.min(Math.max(at, 0), kept.length)
+  const { target } = previous
+  const carried =
+    previous.at === 'selection'
+      ? { at: 'selection' as const, from: within(previous.from), to: within(previous.to) }
+      : previous.at === 'end'
+        ? { at: 'selection' as const, from: kept.length, to: kept.length }
+        : { at: previous.at }
+  return { ...carried, ...(target === undefined ? {} : { target }), pending: true }
+}
+
 /** Replay additions over late hydration without duplicates; true means durable hand-back, allowing deletion of its source copy. */
 export function appendToNativeChatComposerDraft(
   scopeKey: string,
@@ -217,7 +249,8 @@ export function appendToNativeChatComposerDraft(
       }
       return merged
     },
-    position?.({ text, images, document, pastedTextFiles })
+    position?.({ text, images, document, pastedTextFiles }) ??
+      carriedNativeChatDraftPosition(before, text)
   )
   if (text !== current.text) {
     notifyDraftAppend(scopeKey, placed, current)

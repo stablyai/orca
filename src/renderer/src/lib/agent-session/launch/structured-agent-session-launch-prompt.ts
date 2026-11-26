@@ -55,7 +55,7 @@ function sendStagedPrompt(
         }
         // Preparation failed with the reservation still held (also after a paired create succeeded):
         // the terminal hand-back is published before the reservation is released.
-        const result = finishStagedLaunchPromptWithHandBack(prompt, { failureNotified: true })
+        const result = await finishStagedLaunchPromptWithHandBack(prompt, { failureNotified: true })
         publishStructuredAgentSessionSends(prompt.sessionId, {
           notice: error instanceof Error ? error.message : String(error)
         })
@@ -109,7 +109,7 @@ export function settleStructuredAgentLaunchPrompt(args: {
         return { delivered: false, failureNotified: true }
       }
       if (receipt.configurationFailure) {
-        const result = finishStagedLaunchPromptWithHandBack(prompt, { failureNotified: true })
+        const result = await finishStagedLaunchPromptWithHandBack(prompt, { failureNotified: true })
         prompt.discarded = true
         return promptDeliveryResult(result)
       }
@@ -139,9 +139,9 @@ export function settleStructuredAgentLaunchPrompt(args: {
       if (prompt && !prompt.discarded && !prompt.delivery) {
         prompt.discarded = true
         // The hand-back's durability is separate from its end: either way nothing later takes custody.
-        return promptDeliveryResult(
+        return Promise.resolve(
           finishStagedLaunchPromptWithHandBack(prompt, { failureNotified: true })
-        )
+        ).then(promptDeliveryResult)
       }
       // The reserved sender may already have returned/retained the input during create rejection.
       return prompt?.delivery
