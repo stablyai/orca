@@ -3,7 +3,6 @@ import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { registerNativeChatComposerDestination } from '../../composer/focus/native-chat-composer-destination'
 import type { NativeChatComposerHandle } from '../../composer/native-chat-composer-types'
 import { NativeChatMediaViewer } from './NativeChatMediaViewer'
-import { markNativeChatNotedImageEditing } from './native-chat-chip-notes'
 import type { NativeChatMediaNote } from './native-chat-media-notes'
 
 const card = (x: number, y: number, fill: string): string =>
@@ -83,12 +82,9 @@ const composerFor = (
 /** A chat with an empty message box, so Send is offered as it is in a real chat; `blocked` is what
  *  the box is doing instead of taking notes. */
 function InChat({
-  blocked = null,
-  reopened = false
+  blocked = null
 }: {
   blocked?: ReturnType<NonNullable<NativeChatComposerHandle['notesBlocked']>>
-  /** Reopened from its chip in the message box, so clearing every note would replace the chip. */
-  reopened?: boolean
 }): React.JSX.Element {
   const box = useRef<HTMLDivElement>(null)
   useLayoutEffect(
@@ -114,7 +110,6 @@ function InChat({
         source={{ path: '/tmp/dashboard.png' }}
         opener={box}
         initialNotes={NOTES}
-        {...(reopened ? { replacesAttachmentId: 'chip', onCleared: () => () => {} } : {})}
       />
     </div>
   )
@@ -163,32 +158,3 @@ export const goalHeldNarrow = defineFixture({
   width: 360,
   render: () => <InChat blocked="goal" />
 })
-
-/** Clear, then Close, on a chip another viewer still has open: the chip stays as it is, and the
- *  panel says why. */
-const clearRefused = (width: number) =>
-  defineFixture({
-    width,
-    setup: () => {
-      // This viewer and another one both have the chip open.
-      markNativeChatNotedImageEditing('fixture', 'chip')
-      markNativeChatNotedImageEditing('fixture', 'chip')
-    },
-    render: () => <InChat reopened />,
-    interact: async () => {
-      const button = (name: string): HTMLButtonElement | undefined =>
-        [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
-          (candidate) =>
-            candidate.textContent?.trim() === name || candidate.getAttribute('aria-label') === name
-        )
-      button('Clear')?.click()
-      await new Promise((resolve) => requestAnimationFrame(resolve))
-      button('Close')?.click()
-      await new Promise((resolve) => requestAnimationFrame(resolve))
-    }
-  })
-
-export const clearRefusedWhileEditing = clearRefused(1280)
-
-/** The same at the narrowest width, where the panel is a bottom sheet. */
-export const clearRefusedWhileEditingNarrow = clearRefused(360)

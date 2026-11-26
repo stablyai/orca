@@ -16,9 +16,11 @@ import {
 import { registerNativeChatComposerDestination } from '../../composer/focus/native-chat-composer-destination'
 import type { NativeChatComposerHandle } from '../../composer/native-chat-composer-types'
 import {
+  readNativeChatAttachmentNotes,
   resetNativeChatAttachmentNotesForTests,
   setNativeChatAttachmentNotes
 } from './native-chat-attachment-notes'
+import { useNativeChatNotesNotice } from './native-chat-notes-notice'
 import { readHeldNativeChatNotes, resetNativeChatHeldNotesForTests } from './native-chat-held-notes'
 import {
   markNativeChatNotedImageEditing,
@@ -242,7 +244,7 @@ it('a reopened chip whose marked copy can’t be attached keeps the chip and the
   end()
 })
 
-it('clearing every note of a chip another viewer still edits leaves the chip to that viewer', async () => {
+it('clearing every note of a chip another viewer still edits closes, leaving the chip to that viewer', async () => {
   const { handle, opener } = chat(async () => null)
   appendToNativeChatComposerDraft(SCOPE, { text: '', images: [{ id: 'chip', path: '/c.png' }] })
   setNativeChatAttachmentNotes(SCOPE, 'chip', {
@@ -275,13 +277,18 @@ it('clearing every note of a chip another viewer still edits leaves the chip to 
       onRestored: noop
     })
   })
+  const notice = renderHook(() => useNativeChatNotesNotice(SCOPE))
   await act(async () => {
     await view.result.current.close()
   })
+  // Close never traps the user in the viewer: it closes, and the chip keeps its notes.
+  expect(onOpenChange).toHaveBeenCalledWith(false)
   expect(onCleared).not.toHaveBeenCalled()
-  expect(onOpenChange).not.toHaveBeenCalled()
   expect(handle.attachGeneratedImage).not.toHaveBeenCalled()
   expect(readNativeChatComposerDraft(SCOPE).images.map(({ id }) => id)).toEqual(['chip'])
+  expect(readNativeChatAttachmentNotes(SCOPE, 'chip')?.notes).toHaveLength(1)
+  // The message box says why, as Remove does.
+  expect(notice.result.current?.text).toBe('Finish editing elsewhere first.')
   endFirst()
   endSecond()
 })

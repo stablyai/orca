@@ -21339,7 +21339,7 @@
         "undoUnsaved": "Rückgängig nicht möglich: Die früheren Notizen konnten nicht gespeichert werden. Diese bleiben in deiner Nachricht.",
         "alreadyAdded": "Diese Notizen wurden bereits aus einem anderen Fenster zu deiner Nachricht hinzugefügt.",
         "editedElsewhere": "Dieses Bild wird an anderer Stelle bearbeitet. Schließe es dort zuerst ab; deine Notizen sind noch hier.",
-        "removeWhileEditing": "Zuerst anderswo fertig bearbeiten."
+        "removeWhileEditing": "Bearbeite es zuerst anderswo fertig."
       }
     },
     "tab": {

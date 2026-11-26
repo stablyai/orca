@@ -121,7 +121,9 @@ export function NativeChatMediaNotesPanel({
           id={status.kind === 'error' ? NATIVE_CHAT_NOTES_ERROR_ID : undefined}
           tabIndex={status.kind === 'error' ? -1 : undefined}
           className={cn(
-            'flex shrink-0 items-center gap-2 border-t border-media-paper-border px-3.5 py-1.5 text-xs focus-visible:outline-2 focus-visible:outline-media-note',
+            // Focused only by code so it is heard (role alert): no outline, which would stick out of
+            // the card's rounded corners.
+            'flex shrink-0 items-center gap-2 border-t border-media-paper-border px-3.5 py-1.5 text-xs outline-none',
             status.kind === 'error' || status.kind === 'frame-limit' ? 'text-destructive' : ''
           )}
         >

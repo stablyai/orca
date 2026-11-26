@@ -264,12 +264,17 @@ export function useNativeChatNotesDelivery({
     }
     const scopeKey = composer?.scopeKey ?? nativeChatNotesScopeKey(opener.current)
     if (initialNotes?.length && notes.length === 0 && onCleared && scopeKey) {
-      // Clearing puts the clean image in the chip's place: not while another viewer edits it. The
-      // list here was just emptied, so the line doesn't say the notes are still here; the chip has them.
+      // Clearing puts the clean image in the chip's place: not while another viewer edits it. Close
+      // still closes, never trapping the user here; the chip keeps its notes, and the message box
+      // says why, as Remove does.
       if (!nativeChatNotesSoleEditor(scopeKey, replacesAttachmentId)) {
-        showError(
-          t('components.native-chat.notes.removeWhileEditing', 'Finish editing elsewhere first.')
-        )
+        showNativeChatNotesNotice(scopeKey, {
+          text: t(
+            'components.native-chat.notes.removeWhileEditing',
+            'Finish editing elsewhere first.'
+          )
+        })
+        finish()
         return
       }
       const putBack = onCleared()
