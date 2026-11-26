@@ -6,14 +6,21 @@ import { orchestrationCliName } from '../agent-view'
 
 type WakeReplyPlace = { place: string | null }
 
+const WAKE_NOTE_TIMEOUT_MS = 5_000
+
 /** Null outside a bot chat, from a host that predates it, or when Orca can't prove the place. */
 export async function readWorkerStartWakeNote(client: RuntimeClient): Promise<string | null> {
   const sessionId = readInjectedAgentSessionId()
   if (!sessionId) {
     return null
   }
+  // Optional, so a host slow to answer never holds the start back for long.
   const answer = await client
-    .call<WakeReplyPlace>('connector.wakeReplyPlace', { sessionId })
+    .call<WakeReplyPlace>(
+      'connector.wakeReplyPlace',
+      { sessionId },
+      { timeoutMs: WAKE_NOTE_TIMEOUT_MS }
+    )
     .catch(() => null)
   const found = answer?.result
   return found?.place ? formatWorkerStartWakeNote(found.place) : null
