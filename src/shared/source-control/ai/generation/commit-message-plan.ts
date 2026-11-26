@@ -9,14 +9,12 @@ import {
 } from '../../../text-generation/text-generation-failure-copy'
 import { findOptionOccurrence } from '../../../cli/command-option-occurrence'
 import { planAgentBinary } from '../../../agent-launch/startup/agent-command-plan'
-
-import type { CommandTemplateBackslash } from './commit-message-prompt'
 import {
   getCommitMessageAgentSpec,
   getCommitMessageModel,
   isCustomAgentId
 } from './commit-message-agent-spec'
-import { planCustomCommand } from './commit-message-prompt'
+import { planCustomCommand, type CommandTemplateBackslash } from './commit-message-prompt'
 import {
   KIMI_VALUE_OPTIONS,
   findRecipeOption,
@@ -35,6 +33,7 @@ import {
   mergeOpenCodeGenerationArgs
 } from '../../../text-generation/launch/opencode-generation-command'
 import { buildAntigravityGenerationInput } from '../../../text-generation/output/antigravity-generation-stream'
+import { withStartupUpdatePromptSuppressionEnv } from '../../../agent-launch/startup/agent-startup-update-prompt'
 
 // Share pure request/prompt-to-spawn validation and argv planning between local main and SSH JSON-RPC generators.
 
@@ -315,7 +314,7 @@ export function planCommitMessageGeneration(
       ...(input.agentId === 'antigravity'
         ? { outputFormat: 'antigravity-stream-json' as const }
         : {}),
-      ...(command.env ? { env: command.env } : {})
+      ...withStartupUpdatePromptSuppressionEnv(spec.id, command.env)
     }
   }
 }
