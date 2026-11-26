@@ -223,9 +223,37 @@ export function captureNativeChatHeldNotes(scopeKey: string): () => void {
   return captureNativeChatNotesEntries(storage, scopeKey)
 }
 
+// What hand-overs storage refused let go of once the moved notes are saved.
+const releaseWhenSaved: (() => void)[] = []
+
 /** Retries held-notes writes storage refused; true once storage holds them all. */
 export function saveNativeChatHeldNotes(): boolean {
-  return storage.save()
+  if (!storage.save()) {
+    return false
+  }
+  for (const release of releaseWhenSaved.splice(0)) {
+    release()
+  }
+  return true
+}
+
+/** Moves the notes held for `from`'s chat to `to`'s, keeping `from`'s saved copies until `to`'s are
+ *  saved: when storage refuses the move, the only saved words stay where they were, let go of at a
+ *  later save here, or handed over by a later run (see the moved-draft sweep). True once saved. */
+export function handOverNativeChatHeldNotes(from: string, to: string): boolean {
+  const release = captureNativeChatHeldNotes(from)
+  if (moveNativeChatHeldNotes(from, to, true)) {
+    release()
+    return true
+  }
+  releaseWhenSaved.push(release)
+  return false
+}
+
+/** Whether notes are held for any media in this chat. */
+export function nativeChatHoldsNotes(scopeKey: string): boolean {
+  const prefix = `${currentDraftScope(scopeKey)}\u0000`
+  return storage.keys().some((key) => key.startsWith(prefix))
 }
 
 /** Drops held notes whose chat draft is deleted, such as a closed chat or a removed workspace. */
@@ -294,5 +322,6 @@ export function useNativeChatHeldNotesCount(
 
 /** Test-only: forget held notes and reload from storage on next read. */
 export function resetNativeChatHeldNotesForTests(): void {
+  releaseWhenSaved.length = 0
   storage.resetForTests()
 }

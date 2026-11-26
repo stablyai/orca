@@ -25,8 +25,9 @@ import {
   moveNativeChatPendingAttachments,
   moveLaunchPendingAttachmentListeners
 } from '../attachments/chips/native-chat-pending-attachment-cache'
-import { moveNativeChatAttachmentNotes } from '../media/notes/native-chat-attachment-notes'
-import { moveNativeChatHeldNotes } from '../media/notes/native-chat-held-notes'
+import { handOverNativeChatAttachmentNotes } from '../media/notes/native-chat-attachment-notes'
+import { handOverNativeChatHeldNotes } from '../media/notes/native-chat-held-notes'
+import { recordMovedNativeChatDraftSource } from './native-chat-moved-draft-direction'
 /** One accepted application rebinds references directly and joins complete current memory. */
 export function transitionLaunchDrafts(
   destination: (source: LaunchDraftSource) => NativeChatComposerDraftOwner | undefined
@@ -79,9 +80,16 @@ export function transitionLaunchDrafts(
       reconcileRestoredImageChecks(to, merged.images)
     }
     moveNativeChatPendingAttachments(from, to)
-    // Notes on the draft's marked images, and notes held for its chat, go where the draft goes.
-    moveNativeChatAttachmentNotes(from, to)
-    moveNativeChatHeldNotes(from, to)
+    // Notes on the draft's marked images, and notes held for its chat, go where the draft goes. The
+    // source's saved copies stay until those at `to` are saved; refused, a note of the move lets the
+    // next run hand them over.
+    const notesSaved = [
+      handOverNativeChatAttachmentNotes(from, to),
+      handOverNativeChatHeldNotes(from, to)
+    ].every(Boolean)
+    if (!notesSaved) {
+      recordMovedNativeChatDraftSource(from, to)
+    }
     if (placed && records.get(to)?.text !== before.text) {
       targetAppends.forEach((listener) => listener(placed, before))
     }

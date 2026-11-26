@@ -14,6 +14,8 @@ export type NativeChatNotesStorage<T> = {
   update: (change: (entries: Map<string, T>) => boolean) => boolean
   /** Retries the changes storage refused; returns whether storage now holds them all. */
   save: () => boolean
+  /** Whether storage holds this entry as this window has it, not a change it refused. */
+  saved: (key: string) => boolean
   subscribe: (listener: () => void) => () => void
   /** Test-only: forget the in-memory copy and read storage again. */
   resetForTests: () => void
@@ -165,6 +167,7 @@ export function createNativeChatNotesStorage<T>(
 
   return {
     get: (key) => current().get(key),
+    saved: (key) => !unsaved.has(key),
     keys: () => [...current().keys()],
     update: (change) => {
       current()

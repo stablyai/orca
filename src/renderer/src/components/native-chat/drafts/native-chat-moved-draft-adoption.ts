@@ -3,14 +3,19 @@ import { deleteNativeChatComposerDraft } from './native-chat-composer-draft-remo
 import { keepsMovedNativeChatDraftNotes } from './native-chat-moved-draft-release'
 import {
   movedNativeChatDraftDestination,
+  movedNativeChatDraftSources,
   pruneMovedNativeChatDraftSources
 } from './native-chat-moved-draft-direction'
 import {
   clearNativeChatAttachmentNotes,
-  hasOwnNativeChatAttachmentNotes,
+  nativeChatAttachmentNotesSavedAt,
   setNativeChatAttachmentNotesAdoption
 } from '../media/notes/native-chat-attachment-notes'
-import { moveNativeChatHeldNotes } from '../media/notes/native-chat-held-notes'
+import {
+  handOverNativeChatHeldNotes,
+  moveNativeChatHeldNotes,
+  nativeChatHoldsNotes
+} from '../media/notes/native-chat-held-notes'
 
 // Notes left under a moved draft's source (their copy to the destination was refused, and a restart
 // ended the move's own retries) are adopted by the destination once storage takes them. Then the
@@ -19,7 +24,7 @@ import { moveNativeChatHeldNotes } from '../media/notes/native-chat-held-notes'
 
 /** Retires `from` when it is plainly an older copy of `to`: a move from `from` into `to` left it
  *  behind (so `to`, the draft its chat shows, is never the one retired), written before `to` was, its words are
- *  in `to` (or it has none), every image of it is in `to` with its notes saved there, and the notes
+ *  in `to` (or it has none), every image of it is in `to` with the same words saved there, and the notes
  *  held for its chat are saved in `to` too (copied now, joining any `to` holds; refused, the source
  *  stays). A source with words `to` doesn't have, or written since, is never retired: keeping it
  *  only leaves a copy behind, retiring it could lose words. Never a queued edit, which copies a
@@ -40,7 +45,7 @@ function retireMovedSource(from: string, to: string): boolean {
     !source.images.every(
       ({ id }) =>
         destination.images.some((image) => image.id === id) &&
-        hasOwnNativeChatAttachmentNotes(to, id) !== false
+        nativeChatAttachmentNotesSavedAt(from, to, id)
     ) ||
     !moveNativeChatHeldNotes(from, to, true)
   ) {
@@ -70,7 +75,14 @@ export function sweepLeftoverMovedNativeChatDrafts(): void {
     return
   }
   swept = true
-  pruneMovedNativeChatDraftSources((scope) => records.has(scope))
+  // A move that left only notes held for its chat (no draft of its own, or a queued edit's, which
+  // no later run reads): they go where the move went, the source's copies kept until that's saved.
+  for (const [from, to] of movedNativeChatDraftSources()) {
+    if ((!records.has(from) || isNativeChatEditDraft(from)) && nativeChatHoldsNotes(from)) {
+      handOverNativeChatHeldNotes(from, to)
+    }
+  }
+  pruneMovedNativeChatDraftSources((scope) => records.has(scope) || nativeChatHoldsNotes(scope))
   // A copy: retiring a draft deletes it from `records` mid-loop.
   for (const from of Array.from(records.keys())) {
     const to = movedNativeChatDraftDestination(from)

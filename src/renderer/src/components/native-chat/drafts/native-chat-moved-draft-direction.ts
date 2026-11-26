@@ -37,22 +37,31 @@ export function forgetMovedNativeChatDraftSource(sourceScope: string): void {
   }
 }
 
-/** Once per run: forgets the moves whose source draft is no longer saved. */
-export function pruneMovedNativeChatDraftSources(hasDraft: (scope: string) => boolean): void {
+/** Every saved move: the source each left behind, and where it went. */
+export function movedNativeChatDraftSources(): [source: string, destination: string][] {
   const storage = globalThis.localStorage
   const prefix = `${KEY}:`
+  const moves: [string, string][] = []
   try {
-    const sources: string[] = []
     for (let index = 0; storage && index < storage.length; index += 1) {
       const item = storage.key(index)
-      if (item?.startsWith(prefix)) {
-        sources.push(decodeURIComponent(item.slice(prefix.length)))
+      const destination = item?.startsWith(prefix) ? storage.getItem(item) : null
+      if (item && destination !== null) {
+        moves.push([decodeURIComponent(item.slice(prefix.length)), destination])
       }
-    }
-    for (const source of sources.filter((scope) => !hasDraft(scope))) {
-      forgetMovedNativeChatDraftSource(source)
     }
   } catch {
     // Unreadable storage: tried again next run.
+  }
+  return moves
+}
+
+/** Once per run: forgets the moves whose source no longer keeps anything (`keeps`): no saved draft,
+ *  and no notes held for its chat. */
+export function pruneMovedNativeChatDraftSources(keeps: (scope: string) => boolean): void {
+  for (const [source] of movedNativeChatDraftSources()) {
+    if (!keeps(source)) {
+      forgetMovedNativeChatDraftSource(source)
+    }
   }
 }

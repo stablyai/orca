@@ -179,3 +179,51 @@ it('a leftover saved after the session’s draft (a clock stepped back) never re
   expect(drafts.drafts.get(SESSION)?.text).toBe('look here')
   expect(readNativeChatComposerDraft(SESSION).images.map(({ id }) => id)).toEqual(['marked'])
 })
+
+it('while the session’s copy of the notes is refused, the sweep never retires the launch draft holding the only saved one', async () => {
+  // No held words in this case: they would keep the launch draft for their own reason.
+  localStorage.removeItem(`${HELD_KEY}:${encodeURIComponent(`${SOURCE}\u0000/tmp/plain.png`)}`)
+  resetNativeChatHeldNotesForTests()
+  // Storage takes no writes; removing an item still goes through, as it does when storage is full.
+  const full = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+    throw new DOMException('full', 'QuotaExceededError')
+  })
+  try {
+    // The session's marked image shows its words, and adopting them under the session is refused.
+    expect(readNativeChatAttachmentNotes(SESSION, 'marked')?.notes[0]?.text).toBe('the words')
+    await Promise.resolve()
+    // Any saved edit runs the once-per-run sweep of leftovers.
+    updateNativeChatComposerDraft('agent-session:elsewhere', { text: 'x' }, 'immediate')
+    await nativeChatComposerDraftSaved('agent-session:elsewhere')
+    await Promise.resolve()
+    // The launch draft keeps the only saved copy of the words.
+    expect(cold(SESSION)).toBeNull()
+    expect(cold(SOURCE)).not.toBeNull()
+    expect(drafts.drafts.has(SOURCE)).toBe(true)
+  } finally {
+    full.mockRestore()
+  }
+  // Reopened cold, the session's marked image still shows the exact words.
+  resetNativeChatAttachmentNotesForTests()
+  expect(readNativeChatAttachmentNotes(SESSION, 'marked')?.notes[0]?.text).toBe('the words')
+})
+
+it('a session entry with older words under the same image never lets the launch draft retire', async () => {
+  localStorage.removeItem(`${HELD_KEY}:${encodeURIComponent(`${SOURCE}\u0000/tmp/plain.png`)}`)
+  resetNativeChatHeldNotesForTests()
+  // The session saved older words for this image before; the launch draft holds the newer ones.
+  localStorage.setItem(
+    `${NOTES_KEY}:${encodeURIComponent(`${SESSION}\u0000marked`)}`,
+    JSON.stringify({ t: 0, v: { ...NOTES, notes: [{ ...NOTES.notes[0], text: 'older words' }] } })
+  )
+  resetNativeChatAttachmentNotesForTests()
+  updateNativeChatComposerDraft('agent-session:elsewhere', { text: 'x' }, 'immediate')
+  await nativeChatComposerDraftSaved('agent-session:elsewhere')
+  await Promise.resolve()
+  // The newer words stay saved with the launch draft that holds them.
+  expect(drafts.drafts.has(SOURCE)).toBe(true)
+  resetNativeChatAttachmentNotesForTests()
+  expect(
+    createNativeChatNotesStorage(NOTES_KEY, (value) => value).get(`${SOURCE}\u0000marked`)
+  ).toEqual(NOTES)
+})

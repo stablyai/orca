@@ -134,17 +134,25 @@ function leftElsewhere(
   return storage.get(left) ?? null
 }
 
-/** For an image whose notes were left under another scope: whether they are saved under this
- *  draft's own key yet. Undefined when the image has no notes anywhere. */
-export function hasOwnNativeChatAttachmentNotes(
-  scopeKey: string,
+/** Whether `to` has saved, under its own key, the very notes `from` holds for this image (true when
+ *  `from` holds none). A copy storage refused is in this window alone and goes with it, and an
+ *  older entry of `to` under the same image may hold other words: neither lets `from` let go. */
+export function nativeChatAttachmentNotesSavedAt(
+  from: string,
+  to: string,
   attachmentId: string
-): boolean | undefined {
-  const own = keyOf(scopeKey, attachmentId)
-  if (storage.get(own)) {
+): boolean {
+  const donor = storage.get(keyOf(from, attachmentId))
+  if (!donor) {
     return true
   }
-  return storage.keys().some((key) => key.endsWith(`\u0000${attachmentId}`)) ? false : undefined
+  const own = keyOf(to, attachmentId)
+  const copy = storage.get(own)
+  return (
+    copy !== undefined &&
+    storage.saved(own) &&
+    JSON.stringify(copy.notes) === JSON.stringify(donor.notes)
+  )
 }
 
 export function readNativeChatAttachmentNotes(
@@ -240,9 +248,31 @@ export function captureNativeChatAttachmentNotes(scopeKey: string): () => void {
   return captureNativeChatNotesEntries(storage, scopeKey)
 }
 
+// What hand-overs storage refused let go of once the moved notes are saved.
+const releaseWhenSaved: (() => void)[] = []
+
 /** Retries notes writes storage refused; true once storage holds them all. */
 export function saveNativeChatAttachmentNotes(): boolean {
-  return storage.save()
+  if (!storage.save()) {
+    return false
+  }
+  for (const release of releaseWhenSaved.splice(0)) {
+    release()
+  }
+  return true
+}
+
+/** Moves `from`'s notes to `to`, keeping `from`'s saved copies until `to`'s are saved: when storage
+ *  refuses the move, the only saved words stay where `to`'s images still find them (see
+ *  `readNativeChatAttachmentNotes`), let go of at a later save. True once the move is saved. */
+export function handOverNativeChatAttachmentNotes(from: string, to: string): boolean {
+  const release = captureNativeChatAttachmentNotes(from)
+  if (moveNativeChatAttachmentNotes(from, to, true)) {
+    release()
+    return true
+  }
+  releaseWhenSaved.push(release)
+  return false
 }
 
 /** A command takes no notes and none of their images: the draft's marked images, with their notes,
@@ -292,5 +322,6 @@ export function withNativeChatAttachmentNotes(
 
 /** Test-only. */
 export function resetNativeChatAttachmentNotesForTests(): void {
+  releaseWhenSaved.length = 0
   storage.resetForTests()
 }
