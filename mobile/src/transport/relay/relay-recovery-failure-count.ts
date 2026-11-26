@@ -1,8 +1,4 @@
-import {
-  MOBILE_RELAY_CLOSE_CODE,
-  MOBILE_RELAY_PHONE_CLOSE_REASON
-} from '../../../../src/shared/remote-runtime/relay/mobile-relay-close-codes'
-import { RelayOuterError } from '../../../../src/shared/remote-runtime/relay/client/relay-e2ee-link'
+import { isHostAttachTimeout } from '../../../../src/shared/remote-runtime/relay/client/relay-host-offline-streak'
 
 export class RelayRecoveryFailureCount {
   private count = 0
@@ -54,13 +50,4 @@ export class RelayRecoveryFailureCount {
     this.count = count
     this.reporter?.(count)
   }
-}
-
-// Attach timeout means desktop control was seated; retry the same cell rather than re-resolving its assignment.
-export function isHostAttachTimeout(error: Error | null): boolean {
-  return (
-    error instanceof RelayOuterError &&
-    error.code === MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE &&
-    error.closeReason === MOBILE_RELAY_PHONE_CLOSE_REASON.HOST_ATTACH_TIMEOUT
-  )
 }

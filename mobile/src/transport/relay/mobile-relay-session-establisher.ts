@@ -3,9 +3,10 @@ import {
   dialRelayThroughDirectorFallback,
   RelayDialAbortedError,
   toError
-} from './mobile-relay-director-fallback'
-import { RelayHostOfflineStreak } from './relay-host-offline-streak'
-import { RelayResolveTimeoutBudget } from './mobile-relay-resume-director'
+} from '../../../../src/shared/remote-runtime/relay/client/relay-director-fallback'
+import { isPhoneDirectorResolutionFailure } from './mobile-relay-director-fallback'
+import { RelayHostOfflineStreak } from '../../../../src/shared/remote-runtime/relay/client/relay-host-offline-streak'
+import { RelayResolveTimeoutBudget } from '../../../../src/shared/remote-runtime/relay/client/relay-director-resolve'
 import { encodeBase64Url } from '../encryption/mobile-session-id-encoding'
 import { persistResumeConfirmation } from './mobile-relay-credential-rotation'
 import { isExplicitCredentialRejection } from './relay-credential-eligibility'
@@ -97,7 +98,8 @@ export class MobileRelaySessionEstablisher {
       relay: () => this.relay,
       dial: () => this.establish(credential),
       resolveRelay: (input) => this.resolveRelay(input),
-      persistResolvedRelay: (resolved) => this.adoptRelay(resolved)
+      persistResolvedRelay: (resolved) => this.adoptRelay(resolved),
+      isResolutionFailure: isPhoneDirectorResolutionFailure
     })
   }
 
