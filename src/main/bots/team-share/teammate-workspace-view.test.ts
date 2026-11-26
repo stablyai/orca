@@ -24,6 +24,10 @@ import type { RpcContext, RpcMethod } from '../../runtime/rpc/core'
 import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import type { WorkspaceLayoutStreamEvent } from '../../../shared/workspace-layout/published-layout/workspace-layout-stream-frames'
 import { admitTeammateCall } from './teammate-call-admission'
+import { teammateTerminalAdmission } from './teammate-call-targets'
+import { installMultiplexSubscribeFrame } from '../../runtime/rpc/methods/terminal/terminal-multiplex-subscribe-frame'
+import type { TerminalMultiplexConnection } from '../../runtime/rpc/methods/terminal/terminal-multiplex-connection'
+import { encodeTerminalStreamJson } from '../../../shared/terminal/stream/terminal-stream-protocol'
 
 // The owner's host: a shared bot whose home parents one worker worktree, and the owner's own repo,
 // worktree and folder beside it.
@@ -471,6 +475,41 @@ describe('what a workspace teammate’s call may name', () => {
       false
     )
     expect(await admits('session.tabs.list', { worktree: `id:${WORKER}` })).toBe(true)
+  })
+
+  it('streams only the agent’s terminals, judged as the set is when each is subscribed', async () => {
+    vi.spyOn(runtime, 'getTerminalWorktreeIdForHandle').mockImplementation((handle) => handle)
+    // Past admission, a terminal with no live pane ends as no_connected_pty.
+    vi.spyOn(runtime, 'resolveLiveLeafForHandle').mockReturnValue(null)
+    const refusals: string[] = []
+    const connection = (scope: RpcCallerScope) => {
+      const state = fake<TerminalMultiplexConnection>({
+        runtime,
+        admitsTerminal: teammateTerminalAdmission(fake({ runtime, callerScope: scope })),
+        streams: new Map(),
+        closed: false,
+        sendStreamError: (_streamId: number, code: string) => void refusals.push(code),
+        emit: () => {},
+        detachStream: () => {},
+        cancelPendingPtyWaits: () => {}
+      })
+      installMultiplexSubscribeFrame(state)
+      return (terminal: string) =>
+        state.handleSubscribeFrame(encodeTerminalStreamJson({ streamId: 1, terminal }))
+    }
+    const teammate = connection(TEAMMATE)
+    await teammate(WORKER)
+    await teammate(OWNERS)
+    // The worker leaves the agent's workspaces: its terminal is no longer theirs.
+    scanned = scanned.filter((id) => id !== WORKER)
+    await teammate(WORKER)
+    await connection(OWNER)(OWNERS)
+    expect(refusals).toEqual([
+      'no_connected_pty',
+      'terminal_not_found',
+      'terminal_not_found',
+      'no_connected_pty'
+    ])
   })
 
   it('streams layouts of the agent’s workspaces in order, the home with only their own chats', async () => {
