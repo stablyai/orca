@@ -192,6 +192,7 @@ export type RpcContext = {
       reader?: RelayPhoneReader
     ): MobileRelayHostsListResult | Promise<MobileRelayHostsListResult>
     worktrees(hostId: string, reader?: RelayPhoneReader): Promise<MobileRelayHostWorktreesResult>
+    releaseRowHolds?(connectionId: string): void
   }
   // Authenticated runtime devices see which other desktops share this server.
   peerDesktops?: {

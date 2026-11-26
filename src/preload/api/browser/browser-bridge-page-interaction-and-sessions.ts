@@ -4,7 +4,10 @@ import type {
   BrowserCleanPageCapture
 } from '../../../shared/browser/element-grab/browser-grab-clean-capture'
 import { ipcRenderer } from 'electron'
-import type { BrowserServerDownloadCopyArgs } from '../../../shared/browser/downloads/browser-server-download-copy'
+import type {
+  BrowserServerDownloadCopyArgs,
+  BrowserServerDownloadCopyResult
+} from '../../../shared/browser/downloads/browser-server-download-copy'
 import {
   BROWSER_AGENT_ACTIVITY_CHANNEL,
   BROWSER_AGENT_CURSOR_ARRIVED_CHANNEL,
@@ -145,7 +148,9 @@ export const browserPageInteractionAndSessionsApi = {
   },
   cancelDownload: (args: { downloadId: string }): Promise<boolean> =>
     ipcRenderer.invoke('browser:cancelDownload', args),
-  copyServerDownload: (args: BrowserServerDownloadCopyArgs): Promise<{ destinationPath: string }> =>
+  copyServerDownload: (
+    args: BrowserServerDownloadCopyArgs
+  ): Promise<BrowserServerDownloadCopyResult> =>
     ipcRenderer.invoke('browser:copyServerDownload', args),
   cancelServerDownloadCopy: (args: { copyId: string }): Promise<boolean> =>
     ipcRenderer.invoke('browser:cancelServerDownloadCopy', args),
