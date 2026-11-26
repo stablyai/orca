@@ -68,4 +68,10 @@ describe('ouro-composer-prompt', () => {
       expect(scanner.observe(IDLE.slice(split)).ready).toBe(true)
     }
   })
+  it('fires on a long idle report split past its first 512 characters', () => {
+    const long = report(`state=idle:app=ouro:msg=${'a'.repeat(2700)}`)
+    const scanner = createDraftPasteReadyScanner('ouro-composer-prompt')
+    expect(scanner.observe(long.slice(0, 2000)).ready).toBe(false)
+    expect(scanner.observe(long.slice(2000)).ready).toBe(true)
+  })
 })

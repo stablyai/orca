@@ -1,8 +1,8 @@
 // `ouro chat` reports idle over OSC 7501 once its composer takes input, and clears its row on exit. Its agent
 // picker runs before the chat and reports nothing, and a shell never writes 7501, so the paste cannot answer the picker.
 const OURO_STATUS_REPORT = '\x1b]7501;'
-// Longest unterminated report carried into the next read; anything longer is noise, not a split.
-const MAX_CARRIED_REPORT_CHARS = 512
+// Longest unterminated report carried into the next read: OSC 7501 caps a whole sequence at 4096 bytes.
+const MAX_CARRIED_REPORT_CHARS = 4096
 /* oxlint-disable-next-line no-control-regex -- OSC terminators are BEL or ESC \ */
 const OSC_TERMINATOR_RE = /\x07|\x1b\\/g
 
