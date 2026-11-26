@@ -667,7 +667,12 @@ it('leaves a returned request retryable if its images would exceed the Pi turn b
       }
     },
     undefined,
-    { attached: new Map([['FONE', 1], ['FTWO', 2]]) }
+    {
+      attached: new Map([
+        ['FONE', 1],
+        ['FTWO', 2]
+      ])
+    }
   )
   failedStart('failed', asked('failed', prompt, THREAD, [path, path]), 'notSignedIn')
   const queue = readJournalDomainReturnedCards(db, target, NOW + 3)
