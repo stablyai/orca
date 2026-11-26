@@ -20724,7 +20724,6 @@
         "recommended": "推荐",
         "stepOf": "第 {{value0}} 个，共 {{value1}} 个",
         "answered": "已回答",
-        "title": "问题",
         "previous": "上一个问题",
         "nextQuestion": "下一个问题",
         "back": "返回",

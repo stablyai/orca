@@ -21371,7 +21371,6 @@
         "recommended": "推薦",
         "stepOf": "第 {{value0}} 個，共 {{value1}} 個",
         "answered": "已回答",
-        "title": "問題",
         "previous": "上一個問題",
         "nextQuestion": "下一個問題",
         "back": "返回",
