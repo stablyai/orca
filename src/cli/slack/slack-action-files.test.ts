@@ -7,7 +7,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { localFile, uploadFile } from './slack-action-files'
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0])
-const PAGE = Buffer.from('<!doctype html><html><head><title>Report</title></head></html>')
+const PAGE = Buffer.from(
+  '<!doctype html><html><head><meta charset="windows-1252"><title>Caf\xe9</title></head></html>',
+  'latin1'
+)
 
 let dir: string
 let url: string
