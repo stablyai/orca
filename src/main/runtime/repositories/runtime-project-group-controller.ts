@@ -17,6 +17,7 @@ import type {
   ProjectGroupUpdate
 } from '../../../shared/project/groups/project-group-types'
 import type { Repo } from '../../../shared/repository/repo-types'
+import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
@@ -208,7 +209,10 @@ export class RuntimeProjectGroupController {
             repo: projectGroupHookOwner(group) ?? {
               path: folderPath,
               connectionId,
-              executionHostId: input.executionHostId ?? group.executionHostId
+              executionHostId: getRepoExecutionHostId({
+                executionHostId: group.executionHostId,
+                connectionId
+              })
             },
             settings: store.getSettings(),
             requestedAgent: input.startupAgent ?? input.createdWithAgent,

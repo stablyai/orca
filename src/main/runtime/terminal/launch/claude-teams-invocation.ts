@@ -61,20 +61,22 @@ async function userClaude(caller: Caller): Promise<string> {
     return published
   }
   return withAgentInventoryDeadline(async (signal) => {
-    const callerWait = new AbortController()
-    const callerSignal = AbortSignal.any([signal, callerWait.signal])
+    const lookup = new AbortController()
+    const lookupSignal = AbortSignal.any([signal, lookup.signal])
+    const hostResult = readLocalTerminalAgentProgram('claude', 'posix', false, lookupSignal)
     const callerResult = caller.env
-      ? resolveClaudeOnCallerPath(caller.env, caller.cwd ?? caller.env.PWD, callerSignal).catch(
+      ? resolveClaudeOnCallerPath(caller.env, caller.cwd ?? caller.env.PWD, lookupSignal).catch(
           () => null
         )
       : null
     try {
-      const selection = await readLocalTerminalAgentProgram('claude', 'posix', false, signal)
-      const hostCommand = directClaudePath(selection)
-      if (hostCommand) {
-        return hostCommand
+      const first = await (callerResult ? Promise.race([hostResult, callerResult]) : hostResult)
+      if (typeof first === 'string') {
+        // The inventory can publish before its waiting launch receives the result.
+        return directClaudePath(readPublishedLocalTerminalAgentProgram('claude', 'posix')) ?? first
       }
-      const command = await callerResult
+      const selection = first ?? (await hostResult)
+      const command = directClaudePath(selection) ?? (await callerResult)
       if (command) {
         return command
       }
@@ -83,7 +85,7 @@ async function userClaude(caller: Caller): Promise<string> {
       }
       throw new Error('Your Claude installation could not be found.')
     } finally {
-      callerWait.abort()
+      lookup.abort()
     }
   })
 }
