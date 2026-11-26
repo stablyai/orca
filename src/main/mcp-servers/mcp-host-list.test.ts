@@ -4,8 +4,11 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { _resetSecretStoreForTests, setSecretStore } from '../../shared/secure-storage/secret-store'
 import {
+  botToolCredentialsPath,
   changeBotToolCredentials,
+  commitBotToolOAuth,
   readBotToolCredential,
+  readBotToolOAuth,
   useBotToolCredentialsRoot
 } from '../bots/bot-tool-credentials'
 import { botToolsPath, changeBotToolServers } from '../bots/bot-tools-file'
@@ -234,3 +237,117 @@ describe('removing a server from the host list', () => {
     }
   })
 })
+
+// Only a hand edit makes two rows name one credential; the phone can't see it, so its line
+// over-states what goes. This pins what really happens.
+describe('removing one of two rows a hand edit made share a credential', () => {
+  it('ends nothing: the other row keeps the values, and its sessions keep reaching the server', async () => {
+    const tool = await upstream((_seen, res) => res.end('{}'))
+    const folder = tempDir('mcp-host-list-')
+    mkdirSync(join(folder, '.orca'), { recursive: true })
+    changeBotToolCredentials(
+      folder,
+      new Map([['cred-shared', { url: tool.url, headers: { 'x-example-key': SECRET } }]])
+    )
+    writeFileSync(
+      botToolsPath(folder),
+      JSON.stringify({
+        servers: [
+          { name: 'example-a', url: tool.url, credential: 'cred-shared' },
+          { name: 'example-b', url: tool.url, credential: 'cred-shared' }
+        ]
+      })
+    )
+    const relay = new BotToolRelay((target, init) => fetch(target, init))
+    try {
+      const { origin, token } = await relay.grant(MCP_HOST_LIST_RELAY_OWNER, { host: folder })
+      const session = (): ReturnType<typeof call> =>
+        call(relayToolUrl(origin, 'host', 'cred-shared'), {
+          headers: { ...json, authorization: `Bearer ${token}` },
+          body: '{}'
+        })
+      const [a] = await listMcpServers(folder)
+      await removeMcpServer(a?.id ?? '', folder)
+      expect((await session()).status).toBe(200)
+      expect(tool.seen[0]?.headers['x-example-key']).toBe(SECRET)
+    } finally {
+      relay.close()
+    }
+  })
+})
+
+// Which Remove line the phone can pick depends on these: a sign-in never sits beside saved values,
+// and a credential this host can't open shows as nothing saved.
+describe('what a server can hold when the phone confirms its removal', () => {
+  const url = 'https://mcp.example.test/mcp'
+  const signInManaged = { data: { botFailure: { code: 'toolSignInManaged' } } }
+  const signedIn = (folder: string, credential: string) =>
+    commitBotToolOAuth(folder, credential, () => ({
+      url,
+      grant: 1,
+      record: { resource: url, tokens: { access_token: 'example-access', token_type: 'bearer' } }
+    }))
+  const hostFile = (folder: string, servers: Record<string, unknown>[]) => {
+    mkdirSync(join(folder, '.orca'), { recursive: true })
+    writeFileSync(botToolsPath(folder), JSON.stringify({ servers }))
+  }
+
+  it('refuses saved headers on a server Orca signs in to, keeping the sign-in alone', async () => {
+    const folder = tempDir('mcp-host-list-')
+    signedIn(folder, 'cred-sign-in')
+    hostFile(folder, [{ name: 'example', url, credential: 'cred-sign-in' }])
+    const [server] = await listMcpServers(folder)
+    expect(server?.signIn).toEqual({ state: 'signed-in', limited: true })
+    const details = await mcpServerDetails(server?.id ?? '', folder)
+    expect('url' in details.server && details.server.headers).toEqual([])
+
+    await expect(
+      updateMcpServer(
+        server?.id ?? '',
+        details.version,
+        {
+          name: 'example',
+          url,
+          transport: 'http',
+          headers: [{ key: 'x-example-key', value: SECRET }]
+        },
+        {},
+        folder
+      )
+    ).rejects.toMatchObject(signInManaged)
+    expect(readBotToolOAuth(folder, 'cred-sign-in')?.url).toBe(url)
+    expect(readBotToolCredential(folder, 'cred-sign-in')).toBeNull()
+  })
+
+  it('never reads a hand-edited row holding inline values beside its own sign-in', async () => {
+    const folder = tempDir('mcp-host-list-')
+    signedIn(folder, 'cred-sign-in')
+    hostFile(folder, [
+      { name: 'example', url, credential: 'cred-sign-in', headers: { 'x-example-key': SECRET } }
+    ])
+    await expect(listMcpServers(folder)).rejects.toMatchObject(signInManaged)
+    expect(readBotToolOAuth(folder, 'cred-sign-in')?.url).toBe(url)
+  })
+
+  it('shows a credential this host can’t open as no sign-in and no saved names', async () => {
+    const folder = tempDir('mcp-host-list-')
+    const other = tempDir('mcp-host-list-other-')
+    changeBotToolCredentials(
+      other,
+      new Map([['cred-unopened', { url, headers: { 'x-example-key': SECRET } }]])
+    )
+    // Sealed for another folder: it never opens here.
+    writeFileSync(botToolsCredentialsPathFor(folder), readFileSync(botToolCredentialsPath(other)))
+    hostFile(folder, [{ name: 'example', url, credential: 'cred-unopened' }])
+    const [server] = await listMcpServers(folder)
+    expect(server?.signIn).toBeUndefined()
+    const details = await mcpServerDetails(server?.id ?? '', folder)
+    expect('url' in details.server && details.server.headers).toEqual([])
+  })
+})
+
+function botToolsCredentialsPathFor(folder: string): string {
+  const path = botToolCredentialsPath(folder)
+  mkdirSync(join(path, '..'), { recursive: true })
+  return path
+}
