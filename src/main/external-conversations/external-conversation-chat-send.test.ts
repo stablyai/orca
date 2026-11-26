@@ -12,6 +12,7 @@ import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wi
 import { ChatDeliveries, type LinkableChat } from './external-conversation-chat-delivery'
 import type { ConversationChat, ConversationChatHost } from './external-conversation-chat'
 import { connectorAskerImages, type ConnectorImage } from './connector-asker-images'
+import { DeliveryPreparation } from './external-conversation-delivery-receipts'
 
 // The real chat host and journal: a connector message whose start failed, then the conversation's next.
 const KEY = { source: 'slack' as const, externalId: 'T1:C1:1.2:UBOT' }
@@ -108,13 +109,18 @@ it('carries the failed message into the next one through send admission, once', 
   expect(await (await journal()).queuedMessages.returned()).toEqual([])
 })
 
-async function holdImageDelivery(deliveries: ChatDeliveries, host: StructuredAgentSessionHost) {
+async function holdImageDelivery(
+  deliveries: ChatDeliveries,
+  host: StructuredAgentSessionHost,
+  preparation?: DeliveryPreparation
+) {
   const preparing = Promise.withResolvers<void>()
   const staged = Promise.withResolvers<ConnectorImage[]>()
   const result = deliveries.deliver(chatHost(host), KEY, CHAT, {
     deliveryId: 'd-slack',
     text: '@bot',
     signal: new AbortController().signal,
+    ...(preparation ? { preparation } : {}),
     asker: {
       userId: 'U1',
       role: 'owner',
@@ -143,6 +149,30 @@ it('a request preparing its attachments does not own a concurrent local turn', a
   expect(turnOrigin).toBe('local')
   expect(deliveries.pending(SESSION)).toBe(true)
 })
+
+it.each(['old poll stops', 'cloud lease expires'])(
+  'does not admit a prepared request after its %s',
+  async (ending) => {
+    rig = await createQueuedMessageTestRig({ starting: true })
+    const deliveries = new ChatDeliveries(vi.fn())
+    const poll = new AbortController()
+    let left = 30_000
+    const { result, finish } = await holdImageDelivery(
+      deliveries,
+      rig.host,
+      new DeliveryPreparation(poll.signal, () => left)
+    )
+    if (ending === 'old poll stops') {
+      poll.abort()
+    } else {
+      left = 0
+    }
+    finish()
+    await expect(result).resolves.toMatchObject({ outcome: 'refused' })
+    expect(await (await journal()).reads.sendFingerprints()).toEqual([])
+    expect(deliveries.pending(SESSION)).toBe(false)
+  }
+)
 
 it('returns chat gone when its destination is deleted during attachment preparation', async () => {
   rig = await createQueuedMessageTestRig({ starting: true })
