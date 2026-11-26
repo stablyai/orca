@@ -20,10 +20,8 @@ import {
 } from '../../parsing/session-scanner-accumulator'
 import { addSessionContent } from '../../parsing/session-scanner-messages'
 import { asRecord } from '../../parsing/session-record-fields'
-import {
-  extractContentText,
-  extractMessageText
-} from '../../parsing/session-scanner-text-normalization'
+import { extractContentText } from '../../parsing/session-scanner-text-normalization'
+import { extractGrokFirstUserPromptText } from '../grok/session-scanner-grok-user-text'
 import { extractString } from '../../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../parsing/session-json-object'
 
@@ -69,7 +67,10 @@ function consumeCursorRecordLine(accumulator: SessionAccumulator, line: string):
   if (role === 'user' || role === 'assistant') {
     accumulator.messageCount++
     if (role === 'user') {
-      accumulator.title ??= extractMessageText(record.message) ?? extractContentText(record.content)
+      // Unwrap Cursor's prompt envelope before the title limit can truncate away the ask.
+      accumulator.title ??=
+        extractContentText(extractGrokFirstUserPromptText(asRecord(record.message)?.content)) ??
+        extractContentText(extractGrokFirstUserPromptText(record.content))
     }
     addSessionContent(
       accumulator,

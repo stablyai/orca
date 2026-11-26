@@ -89,7 +89,9 @@ const FILES_REPAIR_SQL =
   // Grok transcripts indexed before the synthetic-turn filter.
   filesRepairSql('grok_files_version', 'grok') +
   // Pi transcripts indexed before session_info names became titles.
-  filesRepairSql('pi_title_files_version', 'pi')
+  filesRepairSql('pi_title_files_version', 'pi') +
+  // Cursor transcripts indexed before prompt envelopes were unwrapped for titles.
+  filesRepairSql('cursor_title_files_version', 'cursor')
 
 export function openSessionSearchDatabase(path: string): SyncDatabase {
   return openVersionedCacheDatabase(path, {

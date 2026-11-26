@@ -49,16 +49,18 @@ function flattenGrokUserContent(value: unknown): string | null {
   return parts.length > 0 ? parts.join('\n') : null
 }
 
+// Case-insensitive regex search avoids lowercasing a whole multi-MB prompt to find its tags.
+const USER_QUERY_OPENER = /<user_query>/i
+const USER_QUERY_CLOSER = /<\/user_query>/gi
+
 export function stripGrokUserQueryEnvelope(text: string): string {
-  const opener = '<user_query>'
-  const closer = '</user_query>'
-  const lower = text.toLowerCase()
-  const start = lower.indexOf(opener)
+  const start = text.search(USER_QUERY_OPENER)
   if (start === -1) {
     return text
   }
-  const bodyStart = start + opener.length
-  const end = lower.indexOf(closer, bodyStart)
+  const bodyStart = start + '<user_query>'.length
+  USER_QUERY_CLOSER.lastIndex = bodyStart
+  const end = USER_QUERY_CLOSER.exec(text)?.index ?? -1
   // A missing closer can reflect an incomplete write; retain the ask after the opener.
   if (end === -1) {
     return text.slice(bodyStart).trim()
@@ -67,10 +69,10 @@ export function stripGrokUserQueryEnvelope(text: string): string {
 }
 
 export function isGrokBootstrapContextText(text: string): boolean {
-  const normalized = text.trim().toLowerCase()
-  if (!normalized.startsWith('<user_info>')) {
+  if (!lowerHead(text, '<user_info>'.length).startsWith('<user_info>')) {
     return false
   }
+  const normalized = text.trim().toLowerCase()
   const userInfoEnd = normalized.indexOf('</user_info>')
   if (userInfoEnd === -1) {
     return !normalized.includes('<user_query>')
@@ -84,8 +86,13 @@ export function isGrokBootstrapContextText(text: string): boolean {
 }
 
 function startsWithIgnoreCaseTag(text: string, tagName: string): boolean {
-  const lower = text.trimStart().toLowerCase()
-  return lower.startsWith(`<${tagName}>`) || lower.startsWith(`<${tagName} `)
+  const head = lowerHead(text, tagName.length + 2)
+  return head.startsWith(`<${tagName}>`) || head.startsWith(`<${tagName} `)
+}
+
+// Lowercasing a whole multi-MB prompt (slow for sliced strings) only to test its prefix stalls the scan.
+function lowerHead(text: string, length: number): string {
+  return text.trimStart().slice(0, length).toLowerCase()
 }
 
 function containsIgnoreCaseTag(text: string, tagName: string): boolean {

@@ -63,7 +63,10 @@ const ROWS_REPAIR_SQL =
   // Grok rows (summary.json) cached before the synthetic-turn filter.
   rowsRepairSql('grok_rows_version', "rows.path GLOB '*[/\\]summary.json'") +
   // Pi rows cached before session_info names became titles.
-  rowsRepairSql('pi_title_rows_version', `instr(rows.session, '"agent":"pi"') > 0`)
+  rowsRepairSql('pi_title_rows_version', `instr(rows.session, '"agent":"pi"') > 0`) +
+  // Cursor transcript rows cached before prompt envelopes were unwrapped for titles. Matching the
+  // short path instead of the session JSON keeps this one-time scan cheap for large caches.
+  rowsRepairSql('cursor_title_rows_version', "rows.path GLOB '*[/\\]agent-transcripts[/\\]*'")
 // Rows hold transcript-derived preview text; keep the directory user-only.
 const PRIVATE_DIRECTORY_MODE = 0o700
 // A ~2.3 KB row fills most of a 4 KB page; 8 KB pages fit three.
