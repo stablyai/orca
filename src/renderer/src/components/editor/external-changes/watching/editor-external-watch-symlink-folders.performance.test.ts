@@ -32,6 +32,10 @@ let slowProbes = new Set<string>()
 let releaseSlowProbes: (() => void)[] = []
 /** Watch requests main hasn't answered yet; releasing one aborts it, as main does. */
 let stalledInstalls: Map<string, () => void> | undefined
+/** Paths where watchWorktree resolves false (unwatchable/unavailable). */
+let unavailableRoots = new Set<string>()
+/** Paths where watchWorktree rejects. */
+let rejectedRoots = new Set<string>()
 
 beforeEach(() => {
   watched = []
@@ -39,6 +43,8 @@ beforeEach(() => {
   slowProbes = new Set()
   releaseSlowProbes = []
   stalledInstalls = undefined
+  unavailableRoots = new Set()
+  rejectedRoots = new Set()
   vi.useFakeTimers()
   vi.stubGlobal('window', {
     api: {
@@ -54,9 +60,16 @@ beforeEach(() => {
         },
         watchWorktree: async ({ worktreePath }: { worktreePath: string }) => {
           watched.push(worktreePath)
+          if (rejectedRoots.has(worktreePath)) {
+            throw new Error(`watch failed: ${worktreePath}`)
+          }
+          if (unavailableRoots.has(worktreePath)) {
+            return false
+          }
           if (stalledInstalls && worktreePath !== '/ws/linked') {
             await new Promise<void>((resolve) => stalledInstalls?.set(worktreePath, resolve))
           }
+          return true
         },
         unwatchWorktree: async ({ worktreePath }: { worktreePath: string }) => {
           unwatched.push(worktreePath)
@@ -183,18 +196,84 @@ it('keeps a watch for folders the outer watch cannot see, and drops each watch o
   )
 })
 
-it('never releases a working watch when an outer folder opens later', async () => {
+it('drains and releases narrower watches once a newly opened outer watch installs, and keeps them if it fails', async () => {
   const folders = new SymlinkedTabFolderWatches(() => {})
   const held: HeldWatchRoots = new Map()
   folders.sync(tabsIn(['/ws/linked/a']), [target, linkedRoot], held)
   await settle()
+
+  unavailableRoots.add('/ws/linked')
+  folders.sync(tabsIn(['/ws/linked/a', '/ws/linked']), [target, linkedRoot], held)
+  await advance(1_000)
+  expect(unwatched).toEqual([])
+  expect(folders.targetsFor('/ws/linked/a', undefined)).toEqual([target])
+
+  unavailableRoots.delete('/ws/linked')
+  folders.sync(tabsIn(['/ws/linked/a']), [target, linkedRoot], held)
+  await settle()
   folders.sync(tabsIn(['/ws/linked/a', '/ws/linked']), [target, linkedRoot], held)
   await settle()
-  folders.sync(tabsIn(['/ws/linked/a', '/ws/linked', '/ws/linked/b']), [target, linkedRoot], held)
-  await settle()
-  expect(watched).toEqual(['/ws/linked/a', '/ws/linked'])
-  expect(unwatched).toEqual([])
+  // Child watch still routes during the drain before release.
+  expect(unwatched).toEqual(['/ws/linked'])
+  expect(folders.targetsFor('/ws/linked/a', undefined)).toEqual([target])
+  await advance(1_000)
+  expect([...held.keys()].map((key) => key.replace('local::', ''))).toEqual(['/ws/linked'])
   expect(folders.targetsFor('/ws/linked', undefined)).toEqual([target])
+})
+
+it('coalesces narrowed child watches back to one root when the outer folder reopens', async () => {
+  for (const n of [10, 100]) {
+    const folders = new SymlinkedTabFolderWatches(() => {})
+    const held: HeldWatchRoots = new Map()
+    const nested = Array.from({ length: n }, (_, i) => `/ws/linked/pkg-${i}/src`)
+    const pastSecondLink = '/ws/linked/deep/inner/x'
+    const ignored = '/ws/linked/node_modules/pkg'
+    folders.sync(
+      tabsIn(['/ws/linked', ...nested, pastSecondLink, ignored]),
+      [target, linkedRoot],
+      held
+    )
+    await settle()
+    folders.sync(tabsIn([...nested, pastSecondLink, ignored]), [target, linkedRoot], held)
+    await advance(31_000)
+    expect(held.size).toBe(n + 2)
+
+    folders.sync(
+      tabsIn(['/ws/linked', ...nested, pastSecondLink, ignored]),
+      [target, linkedRoot],
+      held
+    )
+    await advance(1_000)
+    expect([...held.keys()].map((key) => key.replace('local::', '')).sort()).toEqual(
+      ['/ws/linked', ignored, pastSecondLink].sort()
+    )
+  }
+})
+
+it('keeps the working outer watch when narrowing fails on an unavailable or rejected child', async () => {
+  for (const mode of ['unavailable', 'rejected'] as const) {
+    unavailableRoots = new Set()
+    rejectedRoots = new Set()
+    const folders = new SymlinkedTabFolderWatches(() => {})
+    const held: HeldWatchRoots = new Map()
+    folders.sync(tabsIn(['/ws/linked', '/ws/linked/a']), [target, linkedRoot], held)
+    await settle()
+
+    if (mode === 'unavailable') {
+      unavailableRoots.add('/ws/linked/a')
+    } else {
+      rejectedRoots.add('/ws/linked/a')
+    }
+    folders.sync(tabsIn(['/ws/linked/a']), [target, linkedRoot], held)
+    await advance(31_000)
+    expect([...held.keys()].map((key) => key.replace('local::', ''))).toEqual(['/ws/linked'])
+    expect(folders.targetsFor('/ws/linked', undefined)).toEqual([target])
+
+    // Closing the child still releases the retained outer watch cleanly.
+    folders.sync(tabsIn([]), [target, linkedRoot], held)
+    await settle()
+    expect(held.size).toBe(0)
+  }
 })
 
 it('releases every watch when all tabs close while the narrowed watches are still installing', async () => {

@@ -21,7 +21,7 @@ type WatchCallback = (err: Error | null, events: unknown[]) => void
 function createWatcherSender(id: number) {
   return { id, isDestroyed: () => false, send: vi.fn(), on: vi.fn(), removeListener: vi.fn() }
 }
-type WatchHandler = (event: unknown, args: unknown) => Promise<void>
+type WatchHandler = (event: unknown, args: unknown) => Promise<unknown>
 
 describe('local watcher after the crash fuse opens', () => {
   let watchWorktree: WatchHandler

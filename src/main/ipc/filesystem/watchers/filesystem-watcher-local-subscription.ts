@@ -31,17 +31,17 @@ export async function subscribeLocalWatcher(
   sender: WebContents,
   generation = watcherLifecycleState.localWatcherLifecycleGeneration,
   senderSignal = registerWatcherSenderCleanup(sender)
-): Promise<void> {
+): Promise<boolean> {
   if (
     !isCurrentWatcherSender(sender, senderSignal) ||
     watcherLifecycleState.localWatchersClosed ||
     generation !== watcherLifecycleState.localWatcherLifecycleGeneration
   ) {
-    return
+    return false
   }
   const finishInstall = beginWatcherInstall(worktreePath)
   try {
-    await subscribeWhileRemovalAllowed(worktreePath, sender, generation, senderSignal)
+    return await subscribeWhileRemovalAllowed(worktreePath, sender, generation, senderSignal)
   } finally {
     finishInstall()
   }
@@ -52,22 +52,22 @@ async function subscribeWhileRemovalAllowed(
   sender: WebContents,
   generation: number,
   senderSignal: AbortSignal
-): Promise<void> {
+): Promise<boolean> {
   if (
     !isCurrentWatcherSender(sender, senderSignal) ||
     watcherLifecycleState.localWatchersClosed ||
     generation !== watcherLifecycleState.localWatcherLifecycleGeneration
   ) {
-    return
+    return false
   }
   const { key: rootKey, path: rootPath } = getLocalWatcherRoot(worktreePath)
   if (sender.isDestroyed()) {
-    return
+    return false
   }
 
   if (watcherLifecycleState.unwatchableRoots.has(rootKey)) {
     rememberUnwatchableRoot(rootKey)
-    return
+    return false
   }
 
   const root = watcherLifecycleState.watchedRoots.get(rootKey)
@@ -87,7 +87,7 @@ async function subscribeWhileRemovalAllowed(
       addLocalWatchListener(rootKey, listener)
     }
     addLocalWatchListener(rootKey, sender)
-    return
+    return true
   }
 
   const pendingInstall = watcherLifecycleState.pendingLocalInstallPromises.get(rootKey)
@@ -128,17 +128,21 @@ async function subscribeWhileRemovalAllowed(
       if (senderIsCurrent) {
         retryListeners.set(sender.id, sender)
       }
+      let senderInstalled = false
       for (const listener of retryListeners.values()) {
         if (!listener.isDestroyed()) {
-          await subscribeWhileRemovalAllowed(
+          const installed = await subscribeWhileRemovalAllowed(
             worktreePath,
             listener,
             generation,
             listener === sender ? senderSignal : retrySignals.get(listener.id)!
           )
+          if (listener === sender) {
+            senderInstalled = installed
+          }
         }
       }
-      return
+      return senderInstalled
     }
     if (!inFlight) {
       if (result === 'installed') {
@@ -162,8 +166,9 @@ async function subscribeWhileRemovalAllowed(
       (!inFlight || inFlight.listeners.has(sender.id))
     ) {
       addLocalWatchListener(rootKey, sender)
+      return true
     }
-    return
+    return false
   }
 
   const cancelToken: LocalWatcherInstallToken = {
@@ -192,7 +197,7 @@ async function subscribeWhileRemovalAllowed(
   )
   watcherLifecycleState.pendingLocalInstallPromises.set(rootKey, installPromise)
   try {
-    await installPromise
+    return (await installPromise) === 'installed'
   } finally {
     if (watcherLifecycleState.pendingLocalInstallPromises.get(rootKey) === installPromise) {
       watcherLifecycleState.pendingLocalInstallPromises.delete(rootKey)

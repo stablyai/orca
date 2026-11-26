@@ -250,7 +250,7 @@ export type FilesystemApi = {
     uploadPathsToAgentSessionAttachments: (
       args: AgentSessionAttachmentUploadTarget & { paths: string[] }
     ) => Promise<AgentSessionAttachmentPathUploadResult>
-    watchWorktree: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
+    watchWorktree: (args: { worktreePath: string; connectionId?: string }) => Promise<boolean>
     unwatchWorktree: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
     onFsChanged: (callback: (payload: FsChangedPayload) => void) => () => void
   }

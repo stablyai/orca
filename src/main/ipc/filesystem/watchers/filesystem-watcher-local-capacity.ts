@@ -13,7 +13,7 @@ import { isWatcherRemovalInProgressError } from '../../../workspaces/removal/wat
 import type { FsChangedPayload } from '../../../../shared/file-watch/filesystem-change-event'
 import { CRASH_FUSE_COOLDOWN_INITIAL_MS } from '../watcher-process/supervision/parcel-watcher-crash-fuse'
 
-export type SubscribeLocalWatcher = (worktreePath: string, sender: WebContents) => Promise<void>
+export type SubscribeLocalWatcher = (worktreePath: string, sender: WebContents) => Promise<unknown>
 /** Calls `retry` when installing may succeed again; returns a cancel. */
 export type WaitForLocalWatcherRetry = (retry: () => Promise<void>) => () => void
 

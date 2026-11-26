@@ -8,14 +8,14 @@ import {
 export function registerFilesystemWatcherHandlers(): void {
   ipcMain.handle(
     'fs:watchWorktree',
-    async (event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
+    async (event, args: { worktreePath: string; connectionId?: string }): Promise<boolean> => {
       // Remote workspaces watch through runtime streams; local IPC has no SSH filesystem transport.
       if (args.connectionId) {
-        return
+        return true
       }
       // Reopen for post-shutdown attachment; older callers retain the retired generation.
       watcherLifecycleState.localWatchersClosed = false
-      await subscribeLocalWatcher(args.worktreePath, event.sender)
+      return await subscribeLocalWatcher(args.worktreePath, event.sender)
     }
   )
 

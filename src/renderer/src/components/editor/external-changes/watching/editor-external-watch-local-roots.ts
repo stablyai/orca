@@ -68,10 +68,17 @@ export function retryFailedWatchRoot(
 
 function requestWatch(root: HeldWatchRoot, onError: (error: unknown) => void): void {
   root.failed = false
-  root.installed = window.api.fs.watchWorktree(root.args).catch((error: unknown) => {
-    root.failed = true
-    onError(error)
-  })
+  root.installed = window.api.fs
+    .watchWorktree(root.args)
+    .then((installed) => {
+      if (installed === false) {
+        root.failed = true
+      }
+    })
+    .catch((error: unknown) => {
+      root.failed = true
+      onError(error)
+    })
 }
 
 export function releaseWatchRoot(roots: HeldWatchRoots, target: WatchRootArgs): void {
