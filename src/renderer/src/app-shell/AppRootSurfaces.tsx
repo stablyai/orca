@@ -11,7 +11,7 @@ import NewWorkspaceComposerModal from '../components/new-workspace/composer/NewW
 import { CrashReportDialog } from '../components/crash-report/CrashReportDialog'
 import { MarkdownTemplatePicker } from '../components/editor/markdown/documents/MarkdownTemplatePicker'
 import RecentTabSwitcher from '../components/tab-bar/recent-switcher/RecentTabSwitcher'
-import { SkillFreshnessUpdateDialog } from '../components/skills/freshness/SkillFreshnessUpdateDialog'
+import { SkillFreshnessUpdateDialogHost } from '../components/skills/freshness/SkillFreshnessUpdateDialogHost'
 import { StarNagAgentValueMomentObserver } from '../components/star-nag/StarNagAgentValueMomentObserver'
 import { NativeChatResumeToasts } from '../components/native-chat-recovery/toast/NativeChatResumeToastHost'
 import { McpStaleTerminalsStartupOffer } from '../components/settings/mcp-servers/McpStaleTerminalsStartupOffer'
@@ -396,7 +396,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
       </OverlayBoundary>
       {/* Its live terminal requires the link-routing preference context. */}
       <OverlayBoundary boundaryId="overlay.skill-freshness-update-dialog">
-        <SkillFreshnessUpdateDialog />
+        <SkillFreshnessUpdateDialogHost />
       </OverlayBoundary>
       <Suspense fallback={null}>
         <OverlayBoundary boundaryId="overlay.remote-server-update-dialog">
