@@ -157,8 +157,9 @@ export function SourceControlPanelContent({
       {fileListHeader ? (
         <div
           className={cn(
-            // Sticky in the selected panel so its tools stay in reach while the list scrolls.
-            !embedded && 'sticky top-0 z-10 bg-sidebar',
+            // Sticky in the selected panel so its tools stay in reach while the list scrolls;
+            // -top-1 cancels the scroller's pt-1 so rows cannot show above it.
+            !embedded && 'sticky -top-1 z-10 bg-sidebar',
             commitSurfaceShown && 'border-t border-border'
           )}
         >

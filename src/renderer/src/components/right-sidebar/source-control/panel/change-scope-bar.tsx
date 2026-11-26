@@ -176,7 +176,8 @@ export function SourceControlChangeScopeBar({
       variant="outline"
       size="xs"
       className={cn(
-        'aria-disabled:cursor-default',
+        // Tighter than xs's icon padding so Diff keeps its label at 240px beside a scrollbar.
+        'aria-disabled:cursor-default has-[>svg]:px-1',
         !(openDiffDisabled && !branchCompareLoading) && 'mx-0.5'
       )}
       disabled={openDiffDisabled && !branchCompareLoading}
@@ -214,7 +215,7 @@ export function SourceControlChangeScopeBar({
             />
           </div>
         ) : (
-          <div className="flex min-w-0 flex-1 items-center gap-1">
+          <div className="flex min-w-0 flex-1 items-center gap-0.5">
             <Tooltip>
               <TooltipTrigger asChild>
                 <DropdownMenuTrigger asChild>
@@ -224,7 +225,7 @@ export function SourceControlChangeScopeBar({
                     variant="ghost"
                     size="xs"
                     // Pull the label onto the panel's 12px edge; the hover fill uses the padding.
-                    className="-ml-1 min-w-0 shrink justify-start px-1 text-foreground"
+                    className="-ml-1 min-w-0 shrink justify-start gap-0.5 px-1 text-foreground"
                     data-testid="source-control-change-scope-trigger"
                   >
                     <span className="min-w-0 truncate">{scopeLabel}</span>
@@ -259,9 +260,10 @@ export function SourceControlChangeScopeBar({
                 <TooltipContent>{showAllLabel}</TooltipContent>
               </Tooltip>
             ) : null}
+            {/* Yields first when narrow (or a scrollbar takes width) so the scope label keeps its words. */}
             {scoped && countTitle ? (
               <span
-                className="shrink-0 text-2xs tabular-nums text-muted-foreground @max-[226px]/change-scope:hidden"
+                className="ml-0.5 shrink-0 text-2xs tabular-nums text-muted-foreground @max-[228px]/change-scope:hidden"
                 title={countTitle}
                 data-testid="source-control-change-scope-count"
               >
