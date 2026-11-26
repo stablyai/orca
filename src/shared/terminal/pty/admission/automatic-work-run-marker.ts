@@ -1,5 +1,6 @@
 // Use the prior terminal-host marker to admit automatic restores; the host owns persistence and clocks.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../schema/lazy-zod-schema'
 import type { AutomaticWorkMode } from './spawn-admission-contract'
 
 export type BootIdentity = {
@@ -47,19 +48,21 @@ export function decideStartupAutomaticWorkMode(
   return { kind: 'normal' }
 }
 
-const MarkerSchema = z.object({
-  schemaVersion: z.literal(1),
-  boot: z.object({ bootTimeMs: z.number().finite().nullable(), bootId: z.string().nullable() }),
-  state: z.enum(['running', 'clean-exit']),
-  mode: z.discriminatedUnion('kind', [
-    z.object({ kind: z.literal('normal') }),
-    z.object({
-      kind: z.literal('paused'),
-      reason: z.enum(['unclean_host_death', 'pressure', 'operator']),
-      since: z.number()
-    })
-  ])
-})
+const MarkerSchema = lazyZodSchema(() =>
+  z.object({
+    schemaVersion: z.literal(1),
+    boot: z.object({ bootTimeMs: z.number().finite().nullable(), bootId: z.string().nullable() }),
+    state: z.enum(['running', 'clean-exit']),
+    mode: z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('normal') }),
+      z.object({
+        kind: z.literal('paused'),
+        reason: z.enum(['unclean_host_death', 'pressure', 'operator']),
+        since: z.number()
+      })
+    ])
+  })
+)
 
 /** Unreadable or foreign content reads as "no previous run", never as a pause. */
 export function parseAutomaticWorkRunMarker(text: string): AutomaticWorkRunMarker | null {

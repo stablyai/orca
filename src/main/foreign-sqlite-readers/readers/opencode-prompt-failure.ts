@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { usageLimitResetsAt } from '../../../shared/agent-session/failures/agent-session-usage-limit'
 import { readOpenCodeDatabase } from '../../ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-open'
 import { columnExists, tableExists } from '../../opencode-usage/schema-helpers'
@@ -8,18 +9,22 @@ import {
   type OpenCodePromptFailureResult
 } from '../opencode-prompt-failure-result'
 
-const rowSchema = z.object({
-  inputId: z.string(),
-  type: z.string(),
-  message: z.string(),
-  status: z.number().nullable(),
-  createdAt: z.number().int(),
-  retryAfterMs: z.number().int().nonnegative().nullable().catch(null),
-  response: z.string().nullable()
-})
-const responseSchema = z.object({
-  error: z.object({ type: z.string().max(128), message: z.string().max(4096).optional() })
-})
+const rowSchema = lazyZodSchema(() =>
+  z.object({
+    inputId: z.string(),
+    type: z.string(),
+    message: z.string(),
+    status: z.number().nullable(),
+    createdAt: z.number().int(),
+    retryAfterMs: z.number().int().nonnegative().nullable().catch(null),
+    response: z.string().nullable()
+  })
+)
+const responseSchema = lazyZodSchema(() =>
+  z.object({
+    error: z.object({ type: z.string().max(128), message: z.string().max(4096).optional() })
+  })
+)
 
 export function readOpenCodePromptFailure(
   query: OpenCodePromptFailureQuery
