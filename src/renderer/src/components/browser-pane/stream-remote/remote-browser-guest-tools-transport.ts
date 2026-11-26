@@ -10,6 +10,7 @@ import type { BrowserGuestToolsTransport } from '../annotate/browser-guest-tools
 import type { RemoteBrowserInputQueue } from './remote-browser-input-queue'
 
 const GRAB_RPC_TIMEOUT_MS = 15_000
+const MAX_TRACKED_REQUEST_PAGES = 32
 
 /**
  * Runs the guest tools on the runtime that renders a streamed page; page IDs there are the
@@ -32,6 +33,10 @@ export function createRemoteBrowserGuestToolsTransport({
   // Enables still queued behind earlier input: the host has no record of them yet, so a cancel
   // retires them here and they never send.
   const unsentEnables = new Set<{ requestId?: string; retired: boolean }>()
+  // The page each request armed on: the streamed page can change before that request's cancel.
+  const requestPages = new Map<string, string>()
+  const pageForRequest = (requestId: string | undefined): string | null =>
+    (requestId === undefined ? undefined : requestPages.get(requestId)) ?? remotePage()
 
   const call = async <T>(
     method: string,
@@ -62,7 +67,17 @@ export function createRemoteBrowserGuestToolsTransport({
 
   return {
     setGrabMode: ({ enabled, requestId }) => {
-      const page = remotePage()
+      const page = enabled ? remotePage() : pageForRequest(requestId)
+      if (requestId !== undefined) {
+        requestPages.delete(requestId)
+        if (enabled && page) {
+          requestPages.set(requestId, page)
+          const oldest = requestPages.keys().next()
+          if (requestPages.size > MAX_TRACKED_REQUEST_PAGES && !oldest.done) {
+            requestPages.delete(oldest.value)
+          }
+        }
+      }
       const unsent = enabled ? { requestId, retired: false } : null
       if (unsent) {
         unsentEnables.add(unsent)
@@ -99,7 +114,7 @@ export function createRemoteBrowserGuestToolsTransport({
           (await call<BrowserGrabResult>(
             'browser.grab.await',
             { opId, requestId },
-            { signal: controller.signal }
+            { signal: controller.signal, page: pageForRequest(requestId) }
           )) ?? { opId, kind: 'error', reason: 'Guest not ready' }
         )
       } catch (error) {
@@ -115,7 +130,10 @@ export function createRemoteBrowserGuestToolsTransport({
       }
     },
     cancelGrab: async ({ requestId }): Promise<boolean> => {
-      const page = remotePage()
+      const page = pageForRequest(requestId)
+      if (requestId !== undefined) {
+        requestPages.delete(requestId)
+      }
       // A rearm during the round trip starts a new wait that this cancel must not end, and a
       // retired request's cancel must not end the wait of the request that replaced it.
       const cancelledSelections = [...awaitingSelections]

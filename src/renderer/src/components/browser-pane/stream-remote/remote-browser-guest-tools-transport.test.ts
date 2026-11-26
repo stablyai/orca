@@ -3,6 +3,7 @@ import { RemoteBrowserInputQueue } from './remote-browser-input-queue'
 
 const sent = vi.hoisted((): string[] => [])
 const sentEnables = vi.hoisted((): unknown[] => [])
+const sentPages = vi.hoisted((): string[] => [])
 
 // Waits end only when their call is aborted; the host refuses a cancel from a retired request; an
 // enable for 'waits-for-page' stays pending, like one held until its remote page loads.
@@ -14,6 +15,7 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
     options: { signal?: AbortSignal }
   ) => {
     sent.push(method)
+    sentPages.push(`${method}@${String(params.page)}`)
     if (method === 'browser.grab.setMode') {
       sentEnables.push(params.requestId)
       if (params.requestId === 'waits-for-page') {
@@ -35,11 +37,11 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
 const { createRemoteBrowserGuestToolsTransport } =
   await import('./remote-browser-guest-tools-transport')
 
-function transport(inputQueue = new RemoteBrowserInputQueue()) {
+function transport(inputQueue = new RemoteBrowserInputQueue(), remotePage = () => 'page') {
   return createRemoteBrowserGuestToolsTransport({
     target: () => ({ kind: 'environment', environmentId: 'env-1' }),
     worktree: 'wt',
-    remotePage: () => 'page',
+    remotePage,
     inputQueue
   })
 }
@@ -103,4 +105,19 @@ it('a cancel without a request still ends every wait', async () => {
   await tools.cancelGrab({ browserPageId: 'page' })
   await expect(first).resolves.toMatchObject({ kind: 'cancelled' })
   await expect(second).resolves.toMatchObject({ kind: 'cancelled' })
+})
+
+it('a request waits and cancels on the page it armed, even after the streamed page changes', async () => {
+  let page = 'page-1'
+  const tools = transport(new RemoteBrowserInputQueue(), () => page)
+  await tools.setGrabMode({ browserPageId: 'tab', enabled: true, requestId: 'r' })
+  page = 'page-2'
+  const wait = tools.awaitGrabSelection({ browserPageId: 'tab', opId: 'op', requestId: 'r' })
+  sentPages.length = 0
+  await tools.cancelGrab({ browserPageId: 'tab', requestId: 'r' })
+  await wait
+  expect(sentPages).toEqual(['browser.grab.cancel@page-1'])
+  sentPages.length = 0
+  await tools.cancelGrab({ browserPageId: 'tab' })
+  expect(sentPages).toEqual(['browser.grab.cancel@page-2'])
 })
