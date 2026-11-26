@@ -4,7 +4,7 @@ import {
   runStructuredConversationCommand,
   type ConversationCommandParams
 } from './structured-conversation-command'
-import { runStructuredCompaction } from './structured-conversation-compaction'
+import { runStructuredCommandTurn } from './structured-conversation-compaction'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-mutation-context'
 import type { StructuredAgentSessionCaller } from '../host/structured-agent-session-host-types'
 import type { StructuredAgentSessionHost } from '../host/structured-agent-session-host'
@@ -26,8 +26,8 @@ export class StructuredConversationCommandController {
     })
 
   run = (caller: StructuredAgentSessionCaller, params: ConversationCommandParams) => {
-    if (params.command === 'compact') {
-      return runStructuredCompaction(this.context(), this.host, caller, params, {
+    if (params.command === 'compact' || params.command === 'recap') {
+      return runStructuredCommandTurn(this.context(), this.host, caller, params, {
         clearInFlight: this.pending.has(params.envelope.sessionId)
       })
     }

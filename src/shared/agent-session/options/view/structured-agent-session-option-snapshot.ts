@@ -24,11 +24,13 @@ import {
   type StructuredAgentSessionOptionRecord
 } from '../reconciliation/structured-agent-session-option-state'
 import { withUnlistedEffort } from '../model-catalog/structured-agent-session-unlisted-effort'
-import { unlistedModelLabel } from '../model-catalog/model-id-label'
+import { withFallbackModel } from './structured-agent-session-option-descriptors'
+export { lockedStructuredAgentSessionOptionSnapshot } from './structured-agent-session-option-descriptors'
 import { listedModelDescribing } from '../model-catalog/structured-agent-session-listed-model'
 import { structuredAgentSessionPermissionDescriptor } from '../permissions/structured-agent-session-permission-option'
 import { structuredAgentSessionInteractionDescriptor } from '../permissions/agent-session-interaction-mode'
 import type { StructuredAgentSessionOptionState } from '../structured-agent-session-options'
+import { effectiveAgentContextMode } from '../model-catalog/agent-session-context-mode'
 import { modelPlaceholder } from './structured-agent-session-model-placeholder'
 
 /** A session that lists no models picks one itself; display-only, so Send never captures it. */
@@ -169,6 +171,16 @@ function drawnModelControls(state: StructuredAgentSessionOptionState) {
   let values = normalises
     ? valuesUnderControls(catalog, controls, record.values, state.olderHost === true)
     : record.values
+  const contextMode = values.contextMode
+  const effectiveContext = normalises
+    ? effectiveAgentContextMode(
+        typeof contextMode?.value === 'string' ? contextMode.value : undefined,
+        structuredAgentSessionDescribedModel(state, shown.shown.currentId!)?.supportsMaxMode
+      )
+    : undefined
+  if (contextMode && effectiveContext && contextMode.value !== effectiveContext) {
+    values = { ...values, contextMode: { value: effectiveContext, source: 'applied' } }
+  }
   if (record.agent === 'pi' && state.reportedEffort !== undefined) {
     values = { ...values, effort: { value: state.reportedEffort, source: 'reported' } }
   }
@@ -245,20 +257,6 @@ function modelOptionSnapshot(state: StructuredAgentSessionOptionState): SessionO
   return snapshot.length === 0 ? [AGENT_CHOSEN_MODEL, ...shownSnapshot] : shownSnapshot
 }
 
-/** The pill and the checked row name the fallback; an unlisted one is named like the agent's listed rows. */
-function withFallbackModel(
-  option: SessionOptionDescriptor,
-  model: string,
-  agent: string
-): SessionOptionDescriptor {
-  const { kind } = option
-  if (kind.type !== 'select' || kind.choices.some((choice) => choice.value === model)) {
-    return { ...option, fallbackModel: model }
-  }
-  const choice = { value: model, label: unlistedModelLabel(agent, model), description: model }
-  return { ...option, fallbackModel: model, kind: { ...kind, choices: [...kind.choices, choice] } }
-}
-
 export function structuredAgentSessionOptionSnapshot(
   state: StructuredAgentSessionOptionState
 ): SessionOptionDescriptor[] {
@@ -274,18 +272,6 @@ export function structuredAgentSessionOptionSnapshot(
   return [...options, ...(permission ? [permission] : []), ...(interaction ? [interaction] : [])]
 }
 
-/** Presentation only until a launch or fence can carry picks. */
-export function lockedStructuredAgentSessionOptionSnapshot(
-  snapshot: readonly SessionOptionDescriptor[],
-  capabilitiesOnly = false
-): SessionOptionDescriptor[] {
-  return snapshot.map((descriptor) =>
-    capabilitiesOnly && !['effort', 'serviceTier', 'fastMode'].includes(descriptor.id)
-      ? descriptor
-      : { ...descriptor, settable: false, disabledReason: 'available-after-session-start' }
-  )
-}
-
 export function canSetStructuredAgentSessionOption(
   state: StructuredAgentSessionOptionState,
   id: string,
@@ -297,12 +283,17 @@ export function canSetStructuredAgentSessionOption(
   if (!interactionReady || pending || (id === 'fastMode' && state.fastModeRestricted)) {
     return false
   }
-  if (id === 'permissionMode' || id === 'interactionMode') {
+  if (
+    id === 'permissionMode' ||
+    id === 'interactionMode' ||
+    id === 'contextMode' ||
+    (id === 'effort' && state.record.agent === 'trae')
+  ) {
     const descriptor = snapshot.find((entry) => entry.id === id)
     return (
       descriptor?.settable === true &&
       descriptor.kind.type === 'select' &&
-      (value === 'own'
+      (id === 'permissionMode' && value === 'own'
         ? state.permissionOwnSupported === true
         : descriptor.kind.choices.some((choice) => choice.value === value))
     )

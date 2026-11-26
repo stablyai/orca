@@ -14,7 +14,7 @@ export function withUnlistedEffort(
   snapshot: SessionOptionDescriptor[],
   agent: AgentType
 ): SessionOptionDescriptor[] {
-  if (!modelId || typeof effort?.value !== 'string') {
+  if (agent === 'trae' || !modelId || typeof effort?.value !== 'string') {
     return snapshot
   }
   if (

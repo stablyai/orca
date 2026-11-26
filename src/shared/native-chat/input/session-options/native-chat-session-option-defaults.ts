@@ -56,7 +56,8 @@ export const STRUCTURED_LAUNCH_SEED_OPTION_IDS = [
   'model',
   'effort',
   'fastMode',
-  'serviceTier'
+  'serviceTier',
+  'contextMode'
 ] as const
 
 /** What a launch may hold and a create may seed; the permission mode never rewrites the selection. */

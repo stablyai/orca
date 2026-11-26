@@ -3,6 +3,7 @@ import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-se
 import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/selection/structured-agent-session-option-codec'
 import { finishedListingIds } from '../../../../shared/agent-session/options/model-catalog/structured-agent-session-listing-verified-ids'
 import { savedEffectiveServiceTier } from '../../../../shared/agent-session/options/reconciliation/structured-agent-session-effective-tier'
+import { effectiveAgentContextMode } from '../../../../shared/agent-session/options/model-catalog/agent-session-context-mode'
 import {
   independentAgentModelCatalog,
   unpickedFastModeIsOff
@@ -129,6 +130,10 @@ export async function readStructuredAgentSessionOptionsAtRest(
   )
   // The tier the chat's own model runs; the record keeps the saved one for a model that offers it.
   const serviceTier = savedEffectiveServiceTier(saved, models)
+  const contextMode = effectiveAgentContextMode(
+    saved.contextMode,
+    models.find((entry) => entry.id === model)?.supportsMaxMode
+  )
   return {
     inventory: catalog,
     fallback: catalog.origin === 'unknown' ? models : [],
@@ -144,6 +149,7 @@ export async function readStructuredAgentSessionOptionsAtRest(
       ...(effort ? { effort } : {}),
       ...(typeof fastMode === 'boolean' ? { fastMode } : {}),
       ...(serviceTier ? { serviceTier } : {}),
+      ...(contextMode ? { contextMode } : {}),
       defaulted
     }
   }

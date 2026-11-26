@@ -18,7 +18,7 @@ import { structuredAgentSessionCommandRunning } from '../operations/structured-a
 import type { StructuredAgentSessionStartReadiness } from '../startup/structured-agent-session-start-readiness'
 import { holdRestartedStructuredAgentSessionSends } from '../termination/structured-agent-session-host-lifetime'
 import { structuredAgentSessionEndedChildFailure } from '../termination/structured-agent-session-ended-child-failure'
-import { waitsForCodexTurnOptions } from '../options/structured-agent-session-message-options'
+import { waitsForProviderTurnOptions } from '../options/structured-agent-session-message-options'
 import { sameProviderChild } from '../host/structured-agent-session-provider-child'
 import { DeliveryProgress } from './structured-agent-session-delivery-progress'
 import { selectableStructuredSubmission } from './structured-agent-session-input-selection'
@@ -267,7 +267,7 @@ export class StructuredAgentSessionDeliveryLoop {
       }
     }
     if (
-      await waitsForCodexTurnOptions(
+      await waitsForProviderTurnOptions(
         this.deps.record(sessionId),
         session.journal,
         next,

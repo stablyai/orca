@@ -34,6 +34,7 @@ const EDIT_ACCEPTING_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
 export const NATIVE_CHAT_AGENTS = [
   'claude',
   'codex',
+  'trae',
   'grok',
   'opencode',
   'opencode2',
@@ -64,6 +65,7 @@ const AGENT_CHAT_PERMISSION_MODES_BY_AGENT: Record<
 > = {
   claude: CLAUDE_CHAT_PERMISSION_MODES,
   codex: CODEX_CHAT_PERMISSION_MODES,
+  trae: CODEX_CHAT_PERMISSION_MODES,
   grok: ACP_CHAT_PERMISSION_MODES,
   opencode: ACP_CHAT_PERMISSION_MODES,
   opencode2: ACP_CHAT_PERMISSION_MODES,

@@ -1,3 +1,4 @@
+import { planProviderTimelineRewindCut } from './journal-domain-provider-rewind-cut'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { JournalSqlScope } from './journal-sql-scope'
 import {
@@ -43,6 +44,9 @@ export function planJournalDomainRewindCut(scope: JournalSqlScope, target: Journ
     return null
   }
   scope.examined(selected)
+  if (target.provider === 'trae') {
+    return planProviderTimelineRewindCut(scope, target, floor)
+  }
   const providerItemId = String(selected.provider_item_id)
   const key = parseAgentJournalItemKey(providerItemId)
   const claude = key?.provider === 'claude' && target.provider === 'claude'
@@ -56,7 +60,7 @@ export function planJournalDomainRewindCut(scope: JournalSqlScope, target: Journ
     floor,
     boundary: rewindPosition(selected),
     nativeId: target.nativeId,
-    claude
+    scope: claude ? 'claude' : 'codex'
   }
   if (claude && key?.provider === 'claude') {
     const cut: JournalRewindCut = {
@@ -85,7 +89,7 @@ export function planJournalDomainRewindCut(scope: JournalSqlScope, target: Journ
     SELECT item.sequence,item.sequence_index,item.ordinal FROM rewind_context context
     CROSS JOIN candidates CROSS JOIN journal_items item ${JOURNAL_REWIND_JOINS}
     WHERE item.session_id=context.session_id AND item.epoch=context.epoch AND item.item_id=candidates.item_id
-      AND item.hidden=0 AND item.sequence>context.floor AND (${rewindMember(false)})=?
+      AND item.hidden=0 AND item.sequence>context.floor AND (${rewindMember(membership.scope)})=?
     ORDER BY item.sequence,item.sequence_index,item.ordinal LIMIT 1`)
     .get(
       ...rewindContextBindings(scope, membership),
@@ -107,7 +111,7 @@ export function planJournalDomainRewindCut(scope: JournalSqlScope, target: Journ
   scope.examined(boundary)
   membership.boundary = rewindPosition(boundary)
   const last = db
-    .prepare(`${rewindRetainedTurns(false)}, candidates AS (
+    .prepare(`${rewindRetainedTurns(membership.scope)}, candidates AS (
     SELECT item_id FROM journal_items INDEXED BY journal_items_codex_turn
       WHERE session_id=? AND epoch=? AND hidden=0 AND codex_thread_id=? AND codex_turn_id IS NOT NULL
     UNION SELECT item_id FROM journal_submission_attempts INDEXED BY journal_submission_codex_turn
@@ -119,7 +123,7 @@ export function planJournalDomainRewindCut(scope: JournalSqlScope, target: Journ
       FROM rewind_context context CROSS JOIN candidates CROSS JOIN journal_items item ${JOURNAL_REWIND_JOINS}
       WHERE item.session_id=context.session_id AND item.epoch=context.epoch AND item.item_id=candidates.item_id
         AND item.hidden=0 AND (${JOURNAL_REWIND_THREAD})=context.native_id
-        AND (item.sequence<=context.floor OR (${rewindKept(false)})))
+        AND (item.sequence<=context.floor OR (${rewindKept(membership.scope)})))
     SELECT turn_id FROM first_occurrences WHERE occurrence=1
     ORDER BY sequence DESC,sequence_index DESC,ordinal DESC LIMIT 1`)
     .get(

@@ -1,5 +1,6 @@
 import type { AgentSessionExecutionOptions } from './protocol/agent-session-execution-options'
 import { decodeStructuredAgentSessionOptionValue } from './selection/structured-agent-session-option-codec'
+import { effectiveAgentContextMode } from './model-catalog/agent-session-context-mode'
 import {
   effectiveServiceTier,
   STANDARD_SERVICE_TIER
@@ -25,6 +26,12 @@ export type CodexMessageCompilerInputs = {
 
 export type StructuredMessageSteeringInputs =
   | { kind: 'other' }
+  | {
+      kind: 'trae'
+      active: AgentSessionExecutionOptions
+      defaults: AgentSessionExecutionOptions
+      models: readonly { id: string; model: string; supportsMaxMode?: boolean }[]
+    }
   | { kind: 'codex-unavailable' }
   | { kind: 'codex'; compiler: CodexMessageCompilerInputs }
 
@@ -101,6 +108,19 @@ export function structuredMessageSteeringOptionsDiffer(
   input: StructuredMessageSteeringInputs,
   options: AgentSessionExecutionOptions | undefined
 ): boolean {
+  if (input.kind === 'trae') {
+    const next = { ...input.active, ...(options ?? input.defaults) }
+    const model = input.models.find(
+      (entry) => entry.id === next.model || entry.model === next.model
+    )
+    if (model) {
+      next.model = model.id
+    }
+    next.contextMode = effectiveAgentContextMode(next.contextMode, model?.supportsMaxMode)
+    return (['model', 'effort', 'interactionMode', 'contextMode'] as const).some(
+      (key) => next[key] !== undefined && next[key] !== input.active[key]
+    )
+  }
   if (input.kind === 'other') {
     return false
   }

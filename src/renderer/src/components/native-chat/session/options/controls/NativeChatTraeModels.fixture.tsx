@@ -1,0 +1,173 @@
+import { defineFixture } from '../../../../../component-fixtures/component-fixture'
+import { NativeChatModelCombobox } from './NativeChatModelCombobox'
+import { useState } from 'react'
+import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
+import {
+  applyStructuredAgentSessionOptions,
+  commitStructuredAgentSessionOption,
+  createStructuredAgentSessionOptionState
+} from '../../../../../../../shared/agent-session/options/structured-agent-session-options'
+import { structuredAgentSessionOptionSnapshot } from '../../../../../../../shared/agent-session/options/view/structured-agent-session-option-snapshot'
+import type { AgentSessionContextMode } from '../../../../../../../shared/agent-session/options/model-catalog/agent-session-context-mode'
+
+const choices = [
+  {
+    value: 'GPT-6.1-Sol',
+    label: 'GPT-6.1-Sol',
+    description: 'Model load: 52%. Daily quota: 15% left (85% used); resets 06:00.'
+  },
+  {
+    value: 'GPT-6-Astra',
+    label: 'GPT-6-Astra',
+    description: 'Model load: 352%. Weekly quota: 70% left (30% used); resets 00:00.'
+  },
+  { value: 'Seed-Code', label: 'Seed-Code' }
+]
+
+export const models = defineFixture({
+  width: 520,
+  render: () => (
+    <div className="native-chat-appearance p-4">
+      <NativeChatModelCombobox
+        choices={choices}
+        currentValue="GPT-6.1-Sol"
+        readOnly={false}
+        readOnlyReason={null}
+        busy={false}
+        onSelect={() => {}}
+      />
+    </div>
+  )
+})
+
+export const narrow = defineFixture({ width: 320, render: models.render })
+
+function ContextPicker({
+  mode,
+  currentEffort = 'high',
+  initialModel = 'large'
+}: {
+  mode: AgentSessionContextMode
+  currentEffort?: string
+  initialModel?: 'large' | 'small' | 'single'
+}) {
+  const [state, setState] = useState(() => {
+    const seed = { models: [], modelApply: {} }
+    return applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('trae', seed),
+      seed,
+      {
+        models: [
+          {
+            id: 'large',
+            label: 'Large model',
+            isDefault: true,
+            defaultEffort: 'high',
+            efforts: [
+              { value: 'low', label: 'Low' },
+              { value: 'medium', label: 'Medium' },
+              { value: 'high', label: 'High' }
+            ],
+            supportsMaxMode: true
+          },
+          {
+            id: 'small',
+            label: 'Standard model',
+            isDefault: false,
+            efforts: [],
+            supportsMaxMode: false
+          },
+          {
+            id: 'single',
+            label: 'Fixed effort model',
+            isDefault: false,
+            efforts: [{ value: 'high', label: 'High' }],
+            supportsMaxMode: false
+          }
+        ],
+        current: {
+          model: initialModel,
+          effort: currentEffort,
+          contextMode: mode,
+          confirmed: ['contextMode']
+        }
+      }
+    )
+  })
+  const snapshot = structuredAgentSessionOptionSnapshot(state)
+  return (
+    <div className="native-chat-appearance p-4">
+      <NativeChatSessionOptionPickers
+        snapshot={snapshot}
+        isWorking={false}
+        surface={{
+          getSnapshot: () => snapshot,
+          subscribe: () => () => {},
+          invokeAction: async () => ({ snapshot }),
+          setOption: async (id, value) => {
+            const next = commitStructuredAgentSessionOption(state, id, String(value))
+            setState(next)
+            return { snapshot: structuredAgentSessionOptionSnapshot(next) }
+          }
+        }}
+      />
+    </div>
+  )
+}
+
+export const standardContext = defineFixture({
+  width: 520,
+  render: () => <ContextPicker mode="standard" />,
+  interact: (frame) => frame.querySelector<HTMLButtonElement>('button')?.click()
+})
+
+export const maxContext = defineFixture({
+  width: 520,
+  render: () => <ContextPicker mode="max" />,
+  interact: standardContext.interact
+})
+
+export const narrowContext = defineFixture({
+  width: 320,
+  render: maxContext.render,
+  interact: maxContext.interact
+})
+
+export const unlistedEffort = defineFixture({
+  width: 520,
+  render: () => <ContextPicker mode="standard" currentEffort="xhigh" />,
+  interact: standardContext.interact
+})
+
+export const fixedOptions = defineFixture({
+  width: 320,
+  render: () => <ContextPicker mode="standard" currentEffort="xhigh" initialModel="small" />,
+  interact: standardContext.interact
+})
+
+export const singleEffort = defineFixture({
+  width: 520,
+  render: () => <ContextPicker mode="standard" currentEffort="xhigh" initialModel="single" />,
+  interact: standardContext.interact
+})
+
+export const switchToFixed = defineFixture({
+  width: 520,
+  render: maxContext.render,
+  interact: async (frame) => {
+    frame.querySelector<HTMLButtonElement>('button')?.click()
+    const view = frame.ownerDocument.defaultView
+    if (!view) {
+      throw new Error('Fixture has no window')
+    }
+    await new Promise<void>((resolve) => view.requestAnimationFrame(() => resolve()))
+    const choice = [...frame.ownerDocument.querySelectorAll<HTMLElement>('[cmdk-item]')].find(
+      (item) => item.textContent?.includes('Standard model')
+    )
+    if (!choice) {
+      throw new Error('Standard model choice did not open')
+    }
+    choice.click()
+    await new Promise<void>((resolve) => view.requestAnimationFrame(() => resolve()))
+  }
+})

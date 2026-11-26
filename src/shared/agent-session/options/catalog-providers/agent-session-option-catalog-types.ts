@@ -59,6 +59,7 @@ export type CatalogModel = {
   contextWindowTokens?: number
   /** The listing says the model runs Approve for me; absent is unknown, which offers it nowhere. */
   supportsAutoMode?: boolean
+  supportsMaxMode?: boolean
   options: CatalogOption[]
 }
 

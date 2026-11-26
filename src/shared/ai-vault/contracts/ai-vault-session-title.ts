@@ -4,7 +4,7 @@ import type { ExecutionHostId } from '../../execution-host/execution-host'
 export const AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT = 64
 
 export type AiVaultSessionTitle = {
-  agent: Extract<AiVaultAgent, 'claude' | 'codex'>
+  agent: Extract<AiVaultAgent, 'claude' | 'codex' | 'trae'>
   sessionId: string
   title: string
   /** Absent from older hosts and saved tabs: unclassified, ranked like a fallback. */
@@ -38,7 +38,7 @@ export type AiVaultSessionTitlesResult = {
 export function isAiVaultTitleAgent(
   agent: string | null | undefined
 ): agent is AiVaultSessionTitle['agent'] {
-  return agent === 'claude' || agent === 'codex'
+  return agent === 'claude' || agent === 'codex' || agent === 'trae'
 }
 
 /** Kind is compared too, so a title whose text is unchanged can still become a known name. */

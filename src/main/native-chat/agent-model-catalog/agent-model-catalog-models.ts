@@ -80,6 +80,12 @@ export function mergedAgentModelCatalogModels(
       ...(model.defaultFastMode === undefined && olderModel?.defaultFastMode !== undefined
         ? { defaultFastMode: olderModel.defaultFastMode }
         : {}),
+      ...(model.supportsMaxMode === undefined && olderModel?.supportsMaxMode !== undefined
+        ? { supportsMaxMode: olderModel.supportsMaxMode }
+        : {}),
+      ...(model.defaultContextMode === undefined && olderModel?.defaultContextMode !== undefined
+        ? { defaultContextMode: olderModel.defaultContextMode }
+        : {}),
       ...(observation !== undefined
         ? {
             declaredDefaultEffort:

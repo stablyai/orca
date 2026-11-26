@@ -8,8 +8,8 @@ import {
 import { parseAgentSessionFileCached } from '../parse-cache/session-scanner-parse-cache'
 
 import {
-  codexHomeFromSessionFilePath,
-  readCodexSessionIndexTitles,
+  readSessionIndexTitles,
+  sessionIndexHomeFromSessionFilePath,
   withCodexSessionIndexTitles
 } from '../scanners/codex/session-scanner-codex-title-index'
 
@@ -46,9 +46,12 @@ async function readOneTitle(
       : title
   }
   try {
-    const home = request.agent === 'codex' ? codexHomeFromSessionFilePath(transcriptPath) : null
+    const home =
+      request.agent === 'codex' || request.agent === 'trae'
+        ? sessionIndexHomeFromSessionFilePath(transcriptPath)
+        : null
     if (home) {
-      const title = (await readCodexSessionIndexTitles(home)).get(request.sessionId)
+      const title = (await readSessionIndexTitles(home)).get(request.sessionId)
       if (signal?.aborted) {
         return null
       }

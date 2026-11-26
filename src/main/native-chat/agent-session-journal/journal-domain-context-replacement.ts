@@ -6,8 +6,7 @@ import type {
 } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   journalHistoryOrigin,
-  sameJournalConversation,
-  type JournalHistoryOrigin
+  sameJournalConversation
 } from './context-epochs/journal-history-origin'
 import { journalRowBase } from './writing/journal-row-builders'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -33,6 +32,10 @@ import { queueClearRestatement, writeJournalDomainQueueClear } from './journal-d
 import { restoreRetainedFailures, retainedFailures } from './journal-domain-retained-failures'
 import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
 import { readJournalStoredItem } from './journal-stored-output-rows'
+import {
+  readJournalDomainContextHead,
+  readRetainedJournalContextItems
+} from './journal-domain-context-state'
 
 type Target = { sessionId: string; epoch: string }
 
@@ -45,6 +48,7 @@ export type JournalDomainContextReplacement =
     }
   | {
       kind: 'epoch-replace'
+      preserveCurrentItems?: true
       historyOrigin?: JournalEpochRow['historyOrigin']
       reason: AgentJournalEpochReason
       providerHandle?: AgentSessionJournalProviderHandle
@@ -57,26 +61,6 @@ import type {
   JournalDomainContextCoordinate
 } from './journal-domain-context-command'
 export type { JournalDomainContextCommit } from './journal-domain-context-command'
-
-export function readJournalDomainContextHead(db: Database.Database, target: Target) {
-  const head = db
-    .prepare(`SELECT last_sequence, highest_fence, context_boundary, queue_clear_operation_id,
-      queue_failure_boundary, history_origin_json FROM journal_chat_state WHERE session_id=? AND epoch=? AND epoch IS NOT NULL`)
-    .get(target.sessionId, target.epoch)
-  if (!head) {
-    throw new Error('journal context command targets a retired chat epoch')
-  }
-  const historyOrigin: JournalHistoryOrigin | null =
-    head.history_origin_json === null ? null : JSON.parse(String(head.history_origin_json))
-  return {
-    lastSequence: Number(head.last_sequence),
-    highestFence: Number(head.highest_fence),
-    contextBoundary: Number(head.context_boundary),
-    cleared: head.queue_clear_operation_id !== null,
-    failureBoundary: Number(head.queue_failure_boundary),
-    historyOrigin
-  }
-}
 
 export function replaceJournalDomainContext(
   db: Database.Database,
@@ -96,7 +80,18 @@ export function replaceJournalDomainContext(
   }
   assertJournalFence(operation.fence, head.highestFence)
   const { fence } = operation
-  const itemIds = operation.items.map((item) => agentJournalItemKey(item.identity))
+  const retainedItems =
+    operation.kind === 'epoch-replace' && operation.preserveCurrentItems
+      ? readRetainedJournalContextItems(db, target)
+      : []
+  const retainedIds = new Set(retainedItems.map((item) => agentJournalItemKey(item.identity)))
+  const replacementItems = retainedItems.length
+    ? [
+        ...operation.items.filter((item) => !retainedIds.has(agentJournalItemKey(item.identity))),
+        ...retainedItems
+      ]
+    : operation.items
+  const itemIds = replacementItems.map((item) => agentJournalItemKey(item.identity))
   const current = db.prepare(`SELECT payload_json, ordinal, hidden, sequence, owner_fence,
     execution_owner FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?`)
   for (const itemId of itemIds) {
@@ -138,7 +133,7 @@ export function replaceJournalDomainContext(
     .all(...prefix, floor?.sequence ?? 0)
     .map((row) => String(row.item_id))
   for (const itemId of after) {
-    if (queuedJournalDomainSubmission(db, target, itemId)) {
+    if (retainedIds.has(itemId) || queuedJournalDomainSubmission(db, target, itemId)) {
       continue
     }
     const removal = removeJournalDomainItem(db, target, itemId, removalSequence, revisions)
@@ -196,7 +191,7 @@ export function replaceJournalDomainContext(
   let sequence = removalSequence
   const alias = db.prepare(`SELECT echo_declared FROM journal_item_aliases
     WHERE session_id=? AND epoch=? AND provider_item_id=?`)
-  for (const [index, item] of operation.items.entries()) {
+  for (const [index, item] of replacementItems.entries()) {
     sequence += 1
     const itemId = itemIds[index]!
     const stored = current.get(...prefix, itemId)
@@ -227,7 +222,10 @@ export function replaceJournalDomainContext(
       ...agentJournalLinkageFields(item)
     }
     const written = writeJournalDomainCurrentItem(db, target, {
-      item: previous ? journalItemRevisionValue(previous, rendered) : rendered,
+      item:
+        previous && !retainedIds.has(itemId)
+          ? journalItemRevisionValue(previous, rendered)
+          : rendered,
       ...(previous
         ? {
             previous: {

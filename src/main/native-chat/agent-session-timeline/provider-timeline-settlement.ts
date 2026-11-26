@@ -32,6 +32,7 @@ export type ProviderTimelineTurnEnd =
       completedAt?: number
       outcome?: AgentJournalTurnLifecycle['outcome']
       durationMs?: number
+      providerTurnId?: string
     }
   | { state: 'unverifiable' }
 
@@ -44,7 +45,8 @@ export function endedProviderTimelineTurn(
   const opened = {
     ...(userItemId !== undefined ? { userItemId } : {}),
     ...(startedAt !== undefined ? { startedAt } : {}),
-    ...(requestedAt !== undefined ? { requestedAt } : {})
+    ...(requestedAt !== undefined ? { requestedAt } : {}),
+    ...(running.providerTurnId !== undefined ? { providerTurnId: running.providerTurnId } : {})
   }
   if (end.state === 'unverifiable') {
     return { turnId, state: 'unverifiable', ...opened }
@@ -55,7 +57,8 @@ export function endedProviderTimelineTurn(
     ...(end.outcome !== undefined ? { outcome: end.outcome } : {}),
     ...opened,
     ...(end.completedAt !== undefined ? { completedAt: end.completedAt } : {}),
-    ...(end.durationMs !== undefined ? { durationMs: end.durationMs } : {})
+    ...(end.durationMs !== undefined ? { durationMs: end.durationMs } : {}),
+    ...(end.providerTurnId !== undefined ? { providerTurnId: end.providerTurnId } : {})
   }
 }
 

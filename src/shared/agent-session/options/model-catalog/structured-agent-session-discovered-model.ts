@@ -21,7 +21,11 @@ function effortOption(
 ): CatalogOption | null {
   const levels = structuredModelEfforts(model)
   // Pi menus are exact; other agents (OMP's recorded menus) still offer unconfirmed choices.
-  if ((agent === 'pi' && model.effortsKnown === false) || levels.length === 0) {
+  if (
+    (agent === 'pi' && model.effortsKnown === false) ||
+    levels.length === 0 ||
+    (agent === 'trae' && levels.length <= 1)
+  ) {
     return null
   }
   return {
@@ -46,6 +50,28 @@ function fastModeOption(defaultValue: boolean): CatalogOption {
     kind: { type: 'boolean', defaultValue },
     apply: {}
   }
+}
+
+function contextModeOption(
+  model: AgentSessionOptionsResult['models'][number]
+): CatalogOption | null {
+  return model.supportsMaxMode === true
+    ? {
+        id: 'contextMode',
+        label: 'Context',
+        category: 'model_config',
+        kind: {
+          type: 'select',
+          choices: [
+            { value: 'standard', label: 'Standard' },
+            { value: 'max', label: 'Max' }
+          ],
+          defaultValue: model.defaultContextMode ?? 'standard',
+          ...(model.defaultContextMode ? { defaultIsCliDefault: true as const } : {})
+        },
+        apply: {}
+      }
+    : null
 }
 
 /** The tier Codex names Fast, by label or id; the only one the single Fast toggle stands for. */
@@ -76,6 +102,7 @@ export function discoveredModel(
   agent: AgentType
 ): CatalogModel {
   const effort = effortOption(model, agent)
+  const contextMode = contextModeOption(model)
   const serviceTier = model.serviceTiers?.length ? serviceTierOption(model.serviceTiers) : null
   return {
     ...(usesModelSpecificAcpEfforts(agent) && model.effortsKnown === false
@@ -90,8 +117,10 @@ export function discoveredModel(
     ...(model.description ? { description: model.description } : {}),
     ...(model.isDefault ? { isDefault: true } : {}),
     ...(model.supportsAutoMode !== undefined ? { supportsAutoMode: model.supportsAutoMode } : {}),
+    ...(model.supportsMaxMode !== undefined ? { supportsMaxMode: model.supportsMaxMode } : {}),
     options: [
       ...(effort ? [effort] : []),
+      ...(contextMode ? [contextMode] : []),
       ...(serviceTier
         ? [serviceTier]
         : sessionSupportsFastMode && model.supportsFastMode === true

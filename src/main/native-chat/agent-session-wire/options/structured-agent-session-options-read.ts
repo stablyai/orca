@@ -15,10 +15,7 @@ import {
 import { structuredAgentSessionThreadGoalReport } from '../operations/structured-agent-session-thread-goal'
 // Saved choices, catalog defaults and actual execution reports remain separate facts.
 
-import type {
-  AgentSessionOptionsResult,
-  AgentSessionAcceptedInputSources
-} from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
+import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
 import { journalOpenReadRefusal } from '../../agent-session-journal/replay/journal-open-failure'
 import {
   confirmedCurrentOptions,
@@ -30,6 +27,8 @@ import { structuredAgentSessionImmediatePermission } from './structured-agent-se
 import type { StructuredAgentSessionMutationContext } from '../operations/structured-agent-session-mutation-context'
 import { readStructuredSessionRecovery } from '../recovery/structured-agent-session-recovery-read'
 import { fillUnknownModelEfforts } from '../../../../shared/agent-session/options/model-catalog/agent-session-model-efforts'
+import { effectiveAgentContextMode } from '../../../../shared/agent-session/options/model-catalog/agent-session-context-mode'
+import { structuredAgentSessionAcceptedInputSources } from './structured-agent-session-option-sources'
 
 /** A live child's own answer, or the answer at rest; the goal, usage and rewind either way. */
 export async function readStructuredAgentSessionOptions(
@@ -173,6 +172,10 @@ export async function readStructuredAgentSessionOptions(
     ...options.current,
     ...(model !== undefined ? { model } : {}),
     effort: saved.effort ?? options.current.effort,
+    contextMode: effectiveAgentContextMode(
+      saved.contextMode ?? options.current.contextMode,
+      options.models.find((entry) => entry.id === model)?.supportsMaxMode
+    ),
     // A running model's Fast says nothing about another selected model, which keeps its own default.
     fastMode:
       selected.current.fastMode ??
@@ -197,15 +200,11 @@ export async function readStructuredAgentSessionOptions(
   const defaulted = (['model', 'effort'] as const).filter(
     (key) => saved[key] === undefined && defaultedBy(key)
   )
-  const acceptedInputSources: AgentSessionAcceptedInputSources = {}
-  for (const key of ['model', 'effort', 'fastMode', 'serviceTier', 'interactionMode'] as const) {
-    if (current[key] !== undefined && saved[key] !== undefined) {
-      acceptedInputSources[key] = 'saved'
-    }
-  }
-  if (saved.fastMode === undefined && selected.current.fastMode === false) {
-    acceptedInputSources.fastMode = 'policy'
-  }
+  const acceptedInputSources = structuredAgentSessionAcceptedInputSources(
+    current,
+    saved,
+    selected.current.fastMode
+  )
   const confirmed = confirmedCurrentOptions(current, projected ?? options.current)
   if (independent) {
     const { inventory, fallback, listedModelIds } = restingOptions
@@ -282,7 +281,11 @@ export async function readStructuredAgentSessionOptions(
             supported: false,
             reason: 'unsupported'
           }),
-    conversationCommands: capabilities?.compact ? ['clear', 'compact'] : ['clear'],
+    conversationCommands: [
+      'clear',
+      ...(capabilities?.compact ? (['compact'] as const) : []),
+      ...(capabilities?.recap ? (['recap'] as const) : [])
+    ],
     ...(capabilities?.compact && capabilities.compactInstructions
       ? { compactInstructions: true }
       : {}),

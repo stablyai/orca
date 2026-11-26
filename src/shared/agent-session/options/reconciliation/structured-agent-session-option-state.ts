@@ -14,6 +14,7 @@ const ANSWERED_VALUE_IDS = [
   'effort',
   'fastMode',
   'serviceTier',
+  'contextMode',
   'interactionMode'
 ] as const
 
@@ -86,6 +87,7 @@ export function structuredAgentSessionOptionStamp(
         | 'fastMode'
         | 'serviceTier'
         | 'interactionMode'
+        | 'contextMode'
       >
     | undefined
 ): string {
@@ -96,6 +98,7 @@ export function structuredAgentSessionOptionStamp(
     summary?.effort,
     summary?.fastMode,
     summary?.serviceTier,
+    summary?.contextMode,
     summary?.interactionMode
   ]
     .map((value) => value ?? '')

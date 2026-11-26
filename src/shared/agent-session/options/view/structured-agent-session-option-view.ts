@@ -5,6 +5,7 @@ import {
 } from '../structured-agent-session-options'
 import {
   structuredAgentSessionOptionSnapshot,
+  structuredAgentSessionDrawnValues,
   structuredAgentSessionDescribedModel
 } from './structured-agent-session-option-snapshot'
 import type { SessionOptionDescriptor } from '../../../native-chat/input/native-chat-session-options'
@@ -171,7 +172,15 @@ export function structuredAgentSessionMessageSelection(
 ): Record<string, string> {
   const selection: Record<string, string> = {}
   const snapshot = structuredAgentSessionOptionSnapshot(view)
-  for (const id of ['model', 'effort', 'fastMode', 'serviceTier', 'interactionMode'] as const) {
+  const drawn = structuredAgentSessionDrawnValues(view)
+  for (const id of [
+    'model',
+    'effort',
+    'fastMode',
+    'serviceTier',
+    'interactionMode',
+    'contextMode'
+  ] as const) {
     const descriptor = snapshot.find((entry) => entry.id === id)
     if (view.acceptedInputSources !== undefined) {
       if (!view.acceptedInputSources[id]) {
@@ -194,7 +203,7 @@ export function structuredAgentSessionMessageSelection(
         ? raw
         : (raw ??
           descriptor?.kind.currentValue ??
-          (view.acceptedInputSources !== undefined ? view.record.values[id]?.value : undefined))
+          (view.acceptedInputSources !== undefined ? drawn[id]?.value : undefined))
     if (value !== undefined) {
       selection[id] = String(value)
     }

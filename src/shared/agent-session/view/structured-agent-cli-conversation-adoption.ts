@@ -5,6 +5,7 @@ export const CLI_CONVERSATION_ADOPTING_AGENTS = {
   antigravity: ['antigravity'],
   claude: ['claude'],
   codex: ['codex'],
+  trae: ['trae'],
   grok: ['grok'],
   hermes: ['hermes'],
   omp: ['omp'],

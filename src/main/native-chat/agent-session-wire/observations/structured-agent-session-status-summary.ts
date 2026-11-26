@@ -71,6 +71,7 @@ export function structuredAgentSessionStatusSummary({
   const fastMode = record?.options?.fastMode
   const serviceTier = record?.options?.serviceTier
   const interactionMode = record?.options?.interactionMode
+  const contextMode = record?.options?.contextMode
   const fallbackModel = session.child
     ? structuredAgentSessionRuntimeFallbackModel(session.child)
     : undefined
@@ -110,6 +111,7 @@ export function structuredAgentSessionStatusSummary({
     ...(effort ? { effort } : {}),
     ...(fastMode ? { fastMode } : {}),
     ...(serviceTier ? { serviceTier } : {}),
+    ...(contextMode === 'standard' || contextMode === 'max' ? { contextMode } : {}),
     ...(isAgentSessionInteractionMode(interactionMode) ? { interactionMode } : {}),
     ...childWork,
     ...(providerSession ? { providerSession } : {}),

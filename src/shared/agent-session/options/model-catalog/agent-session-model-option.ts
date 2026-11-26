@@ -1,4 +1,5 @@
 import type { AgentSessionOptionChoice } from '../../agent-session-wire'
+import type { AgentSessionContextMode } from './agent-session-context-mode'
 
 export type AgentSessionModelOption = {
   resolvedModel?: string | null
@@ -21,4 +22,6 @@ export type AgentSessionModelOption = {
   supportsAutoMode?: boolean
   /** Provider tier IDs beyond standard; capable clients replace Fast with one speed choice including default. Absence means unknown. */
   serviceTiers?: AgentSessionOptionChoice[]
+  supportsMaxMode?: boolean
+  defaultContextMode?: AgentSessionContextMode
 }

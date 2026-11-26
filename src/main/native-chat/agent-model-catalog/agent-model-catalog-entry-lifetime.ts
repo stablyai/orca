@@ -19,7 +19,12 @@ export function agentModelCatalogEntryIsStale(
   due: boolean,
   now: number
 ): boolean {
-  return due || !entry.discovered || now >= (entry.seen?.relistAfter ?? Infinity)
+  return (
+    due ||
+    !entry.discovered ||
+    now >= (entry.seen?.relistAfter ?? Infinity) ||
+    (entry.agent === 'trae' && now - entry.discovered.at >= 30_000)
+  )
 }
 
 export function recordAgentModelCatalogPartialAttempt(

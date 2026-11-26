@@ -23,6 +23,7 @@ export function captureStructuredExecutionOptions(
       : {
           ...(saved.personality ? { personality: saved.personality } : {}),
           ...(saved.interactionMode ? { interactionMode: saved.interactionMode } : {}),
+          ...(saved.contextMode ? { contextMode: saved.contextMode } : {}),
           ...selection
         }
   // A missing Fast pick has a definite baseline on hosts that offer it.
@@ -58,10 +59,11 @@ export function captureStructuredExecutionOptions(
 export function openingMessageOptions(options: Readonly<Record<string, string>> | undefined): {
   options?: AgentSessionExecutionOptions
 } {
-  const { model, effort, interactionMode } = options ?? {}
+  const { model, effort, interactionMode, contextMode } = options ?? {}
   const captured = readAgentSessionExecutionOptions({
     ...(model ? { model, ...(effort ? { effort } : {}) } : {}),
-    ...(interactionMode ? { interactionMode } : {})
+    ...(interactionMode ? { interactionMode } : {}),
+    ...(contextMode ? { contextMode } : {})
   })
   return captured && Object.keys(captured).length > 0 ? { options: captured } : {}
 }

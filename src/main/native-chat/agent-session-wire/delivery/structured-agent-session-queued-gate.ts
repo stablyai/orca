@@ -2,7 +2,7 @@ import type { JournalCurrentWorkAuthority } from '../../agent-session-journal/jo
 import type { StructuredAgentSessionProviderChild } from '../host/structured-agent-session-host-types'
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
 import { structuredAgentSessionChildAcceptsInput } from './structured-agent-session-input-readiness'
-import { codexTurnOptionsDiffer } from '../options/structured-agent-session-message-options'
+import { providerTurnOptionsDiffer } from '../options/structured-agent-session-message-options'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type { QueuedMessageRow } from '../../agent-session-journal/queued-messages/queued-message-table'
@@ -69,6 +69,6 @@ export function canSteerStructuredQueuedMessage(
     input.work &&
     input.child &&
     structuredAgentSessionChildAcceptsInput({ ...input, current: true }) &&
-    !codexTurnOptionsDiffer(input.record, card.options ?? undefined, input.child, input.adapter)
+    !providerTurnOptionsDiffer(input.record, card.options ?? undefined, input.child, input.adapter)
   )
 }

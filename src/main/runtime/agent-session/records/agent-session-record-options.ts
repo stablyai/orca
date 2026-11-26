@@ -32,11 +32,24 @@ export type AgentSessionOptionPick = {
 
 export function pickAgentSessionOption(
   record: AgentSessionRecord,
-  { key, value, models: _models, ...at }: AgentSessionOptionPick
+  { key, value, models, ...at }: AgentSessionOptionPick
 ): AgentSessionRecord {
+  const options = { ...record.options, [key]: value }
+  const model =
+    record.provider === 'trae' && key === 'model'
+      ? models?.find((entry) => entry.id === value)
+      : undefined
+  if (
+    model &&
+    model.effortsKnown !== false &&
+    options.effort !== undefined &&
+    !model.efforts.some((effort) => effort.value === options.effort)
+  ) {
+    delete options.effort
+  }
   return replaceAgentSessionRecordOptions(record, {
     ...at,
-    options: { ...record.options, [key]: value }
+    options
   })
 }
 

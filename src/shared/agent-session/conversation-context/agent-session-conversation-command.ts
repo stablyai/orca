@@ -2,7 +2,7 @@ import type { AgentSessionFailureFact } from '../failures/agent-session-failure'
 import type { AgentSessionFailureSentence } from '../failures/agent-session-failure-words'
 import type { AgentSessionQueuedSendReceipt } from '../agent-session-wire'
 
-export type AgentSessionConversationCommand = 'clear' | 'compact'
+export type AgentSessionConversationCommand = 'clear' | 'compact' | 'recap'
 
 /** What the user typed and what a text-driven agent receives; `command` is the agent's own name for it. */
 export function agentSessionCompactCommandText(
@@ -10,6 +10,10 @@ export function agentSessionCompactCommandText(
   command = '/compact'
 ): string {
   return instructions ? `${command} ${instructions}` : command
+}
+
+export function agentSessionRecapCommandText(): string {
+  return '/recap'
 }
 
 /** The fields a command's mutation is fingerprinted over: host and clients must build the same ones. */
@@ -52,7 +56,7 @@ export type AgentSessionConversationCommandRecord = AgentSessionConversationComm
 export function isAgentSessionConversationCommand(
   value: unknown
 ): value is AgentSessionConversationCommand {
-  return value === 'clear' || value === 'compact'
+  return value === 'clear' || value === 'compact' || value === 'recap'
 }
 
 export function isAgentSessionConversationCommandResult(

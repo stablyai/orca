@@ -27,6 +27,7 @@ import {
   sessionRootDirs,
   wslHomeSessionDirs
 } from './session-scanner-roots'
+import { TRAEX_AI_VAULT_SOURCE } from '../../traex/traex-session-discovery'
 import { isClaudeProjectBucketDirectory } from '../scanners/claude/claude-project-dir-encoding'
 import { SUBAGENT_DIR_NAME } from '../scanners/claude/session-scanner-subagent-transcripts'
 import type { AiVaultScanOptions } from '../session-scanner-types'
@@ -122,6 +123,7 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     // Nested subagent transcripts are not independent top-level conversations.
     directoryPredicate: (name) => name !== SUBAGENT_DIR_NAME
   },
+  trae: TRAEX_AI_VAULT_SOURCE,
   codex: {
     rootDirs: (options, wslHomeDirs) =>
       uniqueCodexSessionsDirs([

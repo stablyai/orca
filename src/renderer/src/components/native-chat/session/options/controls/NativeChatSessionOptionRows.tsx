@@ -47,7 +47,9 @@ function withEarlierRows(
   earlier: readonly SessionOptionDescriptor[],
   current: readonly SessionOptionDescriptor[]
 ): readonly SessionOptionDescriptor[] {
-  const gone = earlier.filter((row) => !current.some((option) => option.id === row.id))
+  const gone = earlier.filter(
+    (row) => !row.hideWhenUnavailable && !current.some((option) => option.id === row.id)
+  )
   return gone.length === 0 ? current : sortNativeChatSessionOptions([...current, ...gone])
 }
 

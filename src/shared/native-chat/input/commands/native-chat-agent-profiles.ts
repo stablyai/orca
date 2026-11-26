@@ -50,6 +50,7 @@ const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile
     // App-server has no slash parser; the model owns goal tools and receives /goal objectives as prose.
     textDrivenCommands: ['goal']
   },
+  trae: { skillPrefix: '/', skillSourceOwner: 'trae' },
   // Claude Code loads `.claude` skill folders and plugins only; OpenClaude also reads ~/.agents/skills.
   claude: {
     skillPrefix: '/',
