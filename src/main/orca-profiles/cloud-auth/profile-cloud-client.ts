@@ -10,18 +10,16 @@ import {
   orcaCloudTeamPolicySchema
 } from '../../../shared/orca-profiles/orca-cloud-team-policy'
 import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
+import type { OrcaCloudAuthorizationCode } from './profile-cloud-pkce'
 import type { OrcaCloudSession } from '../cloud-session/profile-cloud-session-store'
 import type { OrcaCloudSessionExchangeResponse } from '../cloud-session/profile-cloud-session-exchange'
 import { readWakeToken, wakeTokenRequest } from './profile-cloud-refresh-wake-token'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
 
-type ExchangeCodeArgs = {
-  code: string
-  codeVerifier: string
-  nonce: string
-  redirectUri: string
-  state: string
+type ExchangeCodeArgs = OrcaCloudAuthorizationCode & {
   localProfileId: string
+  /** Asks for a wake token beside the session (the invite wake). */
+  machineId?: string | null
 }
 
 type CreateCloudProfileArgs = {
@@ -236,7 +234,8 @@ export async function exchangeOrcaCloudAuthCode(
       nonce: args.nonce,
       redirectUri: args.redirectUri,
       state: args.state,
-      localProfileId: args.localProfileId
+      localProfileId: args.localProfileId,
+      ...wakeTokenRequest(args.machineId)
     })
   )
 }

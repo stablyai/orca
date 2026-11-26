@@ -99,7 +99,8 @@ export function sessionFromExchange(exchange: OrcaCloudSessionExchangeResponse):
     expiresAt: exchange.expiresAt,
     organizations: exchange.organizations,
     capabilities: exchange.capabilities,
-    identity: { userId: exchange.cloud.userId, cloudProfileId: exchange.cloud.cloudProfileId }
+    identity: { userId: exchange.cloud.userId, cloudProfileId: exchange.cloud.cloudProfileId },
+    wakeToken: exchange.wakeToken
   }
 }
 

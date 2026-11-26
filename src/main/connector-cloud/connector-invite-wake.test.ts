@@ -11,7 +11,13 @@ import type { OrcaCloudAuthConfig } from '../orca-profiles/cloud-auth/profile-cl
 import { linkOrcaProfileToCloud } from '../orca-profiles/cloud-auth/profile-cloud-index'
 import { signInCloudSession } from '../orca-profiles/cloud-session/profile-cloud-session-owner'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
-import { loadOrCreateHostInstallationId } from '../runtime/hosts/platform-probe/host-descriptor'
+import {
+  existingHostInstallationIdSync,
+  loadOrCreateHostInstallationId
+} from '../runtime/hosts/platform-probe/host-descriptor'
+import { exchangeOrcaCloudAuthCode } from '../orca-profiles/cloud-auth/profile-cloud-client'
+import { beginCloudConnectAttempt } from '../orca-profiles/cloud-auth/profile-cloud-connect-attempts'
+import { commitExchangedCloudSession } from '../orca-profiles/cloud-session/profile-cloud-session-commit'
 import { SharedBotHosts } from '../bots/shared-with-me/shared-bot-hosts'
 import { sharedBotsCloud } from '../bots/shared-with-me/shared-bots-cloud'
 import { memorySharedBotHomes } from '../bots/shared-with-me/shared-bot-home.test-fixture'
@@ -55,6 +61,7 @@ let wake: FakeWakeSockets
 let cloud: {
   issuesWakeTokens: boolean
   refreshes: Record<string, unknown>[]
+  signIns: Record<string, unknown>[]
   mineReads: { token: string | null; machineId: string | null }[]
 }
 
@@ -72,6 +79,20 @@ const fetchImpl: typeof globalThis.fetch = async (input, init) => {
       capabilities: { flags: {}, refreshedAt: 1 },
       ...(cloud.issuesWakeTokens && body.machineId
         ? { wakeToken: { token: `wake-${n}`, expiresAt: Date.now() + HOUR_MS + 15 * MINUTE_MS } }
+        : {})
+    })
+  }
+  if (url.origin === AUTH && url.pathname === '/session') {
+    const body = JSON.parse(String(init?.body)) as Record<string, unknown>
+    cloud.signIns.push(body)
+    return Response.json({
+      accessToken: 'access-signin',
+      refreshToken: 'refresh-signin',
+      expiresAt: Date.now() + HOUR_MS,
+      cloud: cloudSummary,
+      capabilities: { flags: {}, refreshedAt: 1 },
+      ...(cloud.issuesWakeTokens && body.machineId
+        ? { wakeToken: { token: 'wake-signin', expiresAt: Date.now() + HOUR_MS + 15 * MINUTE_MS } }
         : {})
     })
   }
@@ -149,7 +170,7 @@ beforeEach(() => {
   })
   fake = new FakeConnectorCloud()
   wake = new FakeWakeSockets()
-  cloud = { issuesWakeTokens: true, refreshes: [], mineReads: [] }
+  cloud = { issuesWakeTokens: true, refreshes: [], signIns: [], mineReads: [] }
   // Signed in before this build: a session with no wake token, about to expire.
   const profileId = ensureActiveOrcaProfile(userDataPath).profile.id
   signInCloudSession(profileId, userDataPath, {
@@ -211,6 +232,41 @@ describe('the invite wake on a desktop with no connector', () => {
     await vi.waitFor(() => expect(reads()).toBe(4))
     await settle(30 * MINUTE_MS)
     expect(reads()).toBe(4)
+    hosts.stop()
+  })
+
+  it('dials right after a sign-in with the wake token the sign-in returned, with no refresh', async () => {
+    const machineId = await loadOrCreateHostInstallationId(userDataPath)
+    const profileId = ensureActiveOrcaProfile(userDataPath).profile.id
+    const exchange = await exchangeOrcaCloudAuthCode(config, {
+      code: 'code-1',
+      codeVerifier: 'verifier-1',
+      nonce: 'nonce-1',
+      redirectUri: 'http://127.0.0.1/callback',
+      state: 'state-1',
+      localProfileId: profileId,
+      machineId: existingHostInstallationIdSync(userDataPath)
+    })
+    await expect(
+      commitExchangedCloudSession({
+        config,
+        profileId,
+        userDataPath,
+        attempt: beginCloudConnectAttempt(),
+        exchange,
+        guards: {}
+      })
+    ).resolves.toMatchObject({ status: 'committed' })
+    expect(cloud.signIns[0]).toMatchObject({ machineId })
+
+    // The sign-in hook reads the share list, as after a refresh.
+    const { hosts } = setUp({ connector: false })
+    hosts.start()
+    await vi.waitFor(() => expect(inviteSockets()).toHaveLength(1))
+    expect(inviteSockets()[0].headers.authorization).toBe('Bearer wake-signin')
+    expect(cloud.mineReads).toEqual([{ token: 'access-signin', machineId }])
+    expect(cloud.refreshes).toHaveLength(0)
+    expect(fake.mintAttempts).toBe(0)
     hosts.stop()
   })
 
