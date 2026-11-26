@@ -54,12 +54,15 @@ export async function startHostOverRelay(
     mainOpener?: boolean
     /** Stands in for the Relay director's lookup (the bare channel only; main's asks the real one). */
     resolveRelay?: Parameters<typeof relayRuntimeChannelOpener>[1]['resolveRelay']
+    /** The Relay device a dial lands on; the desktop's pairing unless a test names another. */
+    relayDeviceId?: () => string
+    runtime?: OrcaRuntimeService
   } = {}
 ) {
   vi.stubEnv('ORCA_TEST_RUNTIME_RELAY_PAIRING', '1')
   const userDataPath = mkdtempSync(join(tmpdir(), 'orca-relay-link-'))
   const server = new OrcaRuntimeRpcServer({
-    runtime: new OrcaRuntimeService(),
+    runtime: options.runtime ?? new OrcaRuntimeService(),
     userDataPath,
     enableWebSocket: true,
     wsPort: 0,
@@ -183,7 +186,7 @@ export async function startHostOverRelay(
           connId,
           connTicket: 'A'.repeat(43),
           kind,
-          relayDeviceId: offer.deviceId,
+          relayDeviceId: options.relayDeviceId?.() ?? offer.deviceId,
           attachDeadlineMs: 5_000
         })
         .catch(() => {})

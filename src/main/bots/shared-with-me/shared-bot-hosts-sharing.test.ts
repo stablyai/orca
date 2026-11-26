@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SharedBotHostsState } from '../../../shared/bots/shared-bot-hosts'
-import { NODE_RELAY_CLIENT_PLATFORM } from '../../../shared/remote-runtime/relay/client/node/node-relay-client-platform'
 import { ConnectorAccountTransport } from '../../connector-cloud/connector-transport'
 import { SharedBotHosts } from './shared-bot-hosts'
 import { sharedBotsCloud } from './shared-bots-cloud'
@@ -50,7 +49,6 @@ function sharingHosts(replies: Reply[], account: () => string | null = () => 'ad
         readShares: (path, schema, options) =>
           transport.call(path, undefined, schema, { ...options, method: 'GET' })
       }),
-    platform: NODE_RELAY_CLIENT_PLATFORM,
     publish: (state) => published.push(state),
     homes: memorySharedBotHomes(dir).homes,
     now: () => 0
@@ -139,7 +137,6 @@ describe('whether this account’s Orca Cloud takes shares', () => {
       userDataPath: dir,
       account: () => 'ada',
       cloud: () => null,
-      platform: NODE_RELAY_CLIENT_PLATFORM,
       publish: (state) => published.push(state),
       homes: memorySharedBotHomes(dir).homes,
       now: () => 0
@@ -195,7 +192,6 @@ describe('an account switch while a shares read is out', () => {
         decline: async () => ({ ok: true, value: { status: 'declined' } }),
         hold: async () => ({ ok: true, value: { status: 'held' } })
       }),
-      platform: NODE_RELAY_CLIENT_PLATFORM,
       publish: () => {},
       homes,
       now: () => 0

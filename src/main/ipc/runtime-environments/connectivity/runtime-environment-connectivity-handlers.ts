@@ -1,7 +1,6 @@
 import { withTestRelayReach } from '../../../../shared/remote-runtime/pairing/runtime-relay-endpoint'
 import { clearRelayDialHolds } from '../connections/runtime-environment-relay-link'
-import { handleRuntimeEnvironmentChannel } from '../runtime-environment-channel-handling'
-import { sharedHostStatusSnapshots } from '../requests/runtime-environment-shared-hosts'
+import { ipcMain } from 'electron'
 import {
   manuallyDisconnectedResponse,
   runtimeEnvironmentCallFailure
@@ -62,21 +61,20 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
   getUserDataPath,
   invalidateTransport
 }: ConnectivityHandlerOptions): void {
-  handleRuntimeEnvironmentChannel('runtimeEnvironments:desktopCreatedChatIds', () =>
+  ipcMain.handle('runtimeEnvironments:desktopCreatedChatIds', () =>
     desktopChatCreationHistory(getUserDataPath()).sessionIds()
   )
-  handleRuntimeEnvironmentChannel('runtimeEnvironments:getStatusSnapshots', () => [
-    ...getRuntimeEnvironmentStatusSnapshots(),
-    ...sharedHostStatusSnapshots()
-  ])
-  handleRuntimeEnvironmentChannel('runtimeEnvironments:list', async () => {
+  ipcMain.handle('runtimeEnvironments:getStatusSnapshots', () =>
+    getRuntimeEnvironmentStatusSnapshots()
+  )
+  ipcMain.handle('runtimeEnvironments:list', async () => {
     const environments = (await listEnvironments(getUserDataPath())).filter(
       (environment) => !isGatedOffWslHost(environment)
     )
     await readSettingsWithRuntimeEnvironmentPreference(store, getUserDataPath())
     return environments.map(publicRuntimeEnvironmentWithHostKey)
   })
-  handleRuntimeEnvironmentChannel(
+  ipcMain.handle(
     'runtimeEnvironments:addFromPairingCode',
     async (
       _event,
@@ -91,7 +89,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       return { environment: redactRuntimeEnvironment(environment) }
     }
   )
-  handleRuntimeEnvironmentChannel(
+  ipcMain.handle(
     'runtimeEnvironments:verifyAndAddFromPairingCode',
     async (_event, args: { name: string; pairingCode: string; allowLoopback?: boolean }) => {
       const result = await verifyAndAddRuntimeEnvironmentFromPairingCode(getUserDataPath(), args)
@@ -105,13 +103,11 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       return result
     }
   )
-  handleRuntimeEnvironmentChannel(
-    'runtimeEnvironments:resolve',
-    async (_event, args: { selector: string }) =>
-      redactRuntimeEnvironment(await resolveEnvironment(getUserDataPath(), args.selector))
+  ipcMain.handle('runtimeEnvironments:resolve', async (_event, args: { selector: string }) =>
+    redactRuntimeEnvironment(await resolveEnvironment(getUserDataPath(), args.selector))
   )
   registerRuntimeEnvironmentRemoveHandler({ store, getUserDataPath, invalidateTransport })
-  handleRuntimeEnvironmentChannel(
+  ipcMain.handle(
     'runtimeEnvironments:disconnect',
     async (
       _event,
@@ -126,7 +122,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       return { disconnected: redactRuntimeEnvironment(environment) }
     }
   )
-  handleRuntimeEnvironmentChannel(
+  ipcMain.handle(
     'runtimeEnvironments:connect',
     async (
       _event,
@@ -156,7 +152,7 @@ export function registerRuntimeEnvironmentPassiveHandlers(
 }
 
 function registerPassiveStatusHandler(getUserDataPath: () => string): void {
-  handleRuntimeEnvironmentChannel(
+  ipcMain.handle(
     'runtimeEnvironments:getStatus',
     async (
       _event,
@@ -190,7 +186,7 @@ function registerPassiveCallHandler(
   getUserDataPath: () => string,
   recordAnswer?: RecordRuntimeEnvironmentAnswer
 ): void {
-  handleRuntimeEnvironmentChannel(
+  ipcMain.handle(
     'runtimeEnvironments:call',
     async (
       _event,

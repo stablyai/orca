@@ -1,4 +1,4 @@
-import { handleRuntimeEnvironmentChannel } from '../runtime-environment-channel-handling'
+import { ipcMain } from 'electron'
 import type {
   OrcadManagedConversionResult,
   OrcadManagedPendingMigrationRow
@@ -9,7 +9,7 @@ import { conversionCollaborators } from '../../../managed-server/lifecycle/orcad
 import { requiredString } from './orcad-runtime-lifecycle-handlers'
 
 export function registerOrcadRuntimeConversionHandlers(getUserDataPath: () => string): void {
-  handleRuntimeEnvironmentChannel(
+  ipcMain.handle(
     'runtimeEnvironments:convertSshHostToManagedOrcad',
     (
       _event,
@@ -22,7 +22,7 @@ export function registerOrcadRuntimeConversionHandlers(getUserDataPath: () => st
       })
     }
   )
-  handleRuntimeEnvironmentChannel(
+  ipcMain.handle(
     'runtimeEnvironments:listPendingOrcadMigrations',
     (): OrcadManagedPendingMigrationRow[] => listPendingManagedOrcadMigrations(getUserDataPath())
   )

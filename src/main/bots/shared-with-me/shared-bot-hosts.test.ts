@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import nacl from 'tweetnacl'
 import { z } from 'zod'
 import { afterEach, describe, expect, it } from 'vitest'
-import { NODE_RELAY_CLIENT_PLATFORM } from '../../../shared/remote-runtime/relay/client/node/node-relay-client-platform'
 import { SharedBotHosts } from './shared-bot-hosts'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { UNREADABLE_ANSWER } from '../../connector-cloud/connector-cloud-request'
@@ -36,6 +35,21 @@ import type {
 
 // Held sends are off while SHARED_HOSTS_HOLD_WHILE_AWAY is: their tests run again when it is on.
 const heldIt = it.skipIf(!SHARED_HOSTS_HOLD_WHILE_AWAY)
+
+/** The share's own answer while held sends are on; nothing it sends on reaches a host here. */
+async function callHere(
+  service: SharedBotHosts,
+  environmentId: string,
+  method: string,
+  params: unknown
+) {
+  const noHost = () => Promise.reject(new Error('no host here'))
+  const answer = await service.answerHere(environmentId, method, params, noHost)
+  if (!answer) {
+    throw new Error(`${method} was sent on to the host`)
+  }
+  return answer
+}
 
 const HOST = nacl.box.keyPair()
 const HOST_KEY = Buffer.from(HOST.publicKey).toString('base64')
@@ -148,7 +162,6 @@ function hosts(
     userDataPath: dir,
     account: () => 'ada',
     cloud: () => cloud,
-    platform: NODE_RELAY_CLIENT_PLATFORM,
     // As the desktop's publish does (ipc/shared-bot-hosts.ts).
     publish: (state) => {
       published.push(state.hosts.map((view) => view.shareId))
@@ -311,7 +324,8 @@ describe('the key a held message is sealed to', () => {
     // The cloud knows the seal key, so it can name its own key and seal an offer under it too.
     current = { ...current, hostOnline: false, hostKey: cloudKey, offers: offered(cloudKey) }
     await service.refresh()
-    const sent = await service.call(
+    const sent = await callHere(
+      service,
       service.views()[0]!.environmentId,
       'agentSession.send',
       sendParams('chat-0001', 'm1')
@@ -356,7 +370,8 @@ describe('the held queue’s order', () => {
       const reading = service.refresh()
       await new Promise((resolve) => setTimeout(resolve, 0))
       now = 2_000
-      const sent = await service.call(
+      const sent = await callHere(
+        service,
         service.views()[0]!.environmentId,
         'agentSession.send',
         sendParams('chat-0001', 'm1')
@@ -482,7 +497,6 @@ describe('a held message and a cloud read that cross', () => {
         decline: async () => ({ ok: true, value: { status: 'declined' } }),
         hold: async () => ({ ok: true, value: { status: 'held' } })
       }),
-      platform: NODE_RELAY_CLIENT_PLATFORM,
       publish: () => {},
       homes: memorySharedBotHomes(dir).homes,
       now: () => 0
@@ -511,7 +525,6 @@ describe('a shared agent’s home on this computer', () => {
         decline: async () => ({ ok: true, value: { status: 'declined' } }),
         hold: async () => ({ ok: true, value: { status: 'held' } })
       }),
-      platform: NODE_RELAY_CLIENT_PLATFORM,
       publish: (next) => views.push(next.hosts),
       homes: memory.homes,
       now: () => 0
@@ -617,13 +630,16 @@ describe('a teammate’s messages while the shared agent’s computer is away', 
       )
       await service.refresh()
       const environmentId = service.views()[0]!.environmentId
-      const started = await service.call(environmentId, 'bots.session.start', { botId: 'bot-1' })
+      const started = await callHere(service, environmentId, 'bots.session.start', {
+        botId: 'bot-1'
+      })
       const sessionId = StartedChat.parse(started.ok ? started.result : null).sessionId
       expect(isSharedBotNewChatId(sessionId)).toBe(true)
       // The host doesn't know the placeholder: nothing of it is read there.
-      const read = await service.call(environmentId, 'agentSession.history', { sessionId })
+      const read = await callHere(service, environmentId, 'agentSession.history', { sessionId })
       expect(read.ok ? null : read.error.code).toBe(SHARED_BOT_HOST_ERRORS.offline)
-      const sent = await service.call(
+      const sent = await callHere(
+        service,
         environmentId,
         'agentSession.send',
         send(sessionId, 'm1', 'Hi')
@@ -658,29 +674,15 @@ describe('a teammate’s messages while the shared agent’s computer is away', 
     await service.refresh()
     const view = service.views()[0]!
     expect(view).toMatchObject({ holds: false, held: [] })
-    const started = await service.call(view.environmentId, 'bots.session.start', { botId: 'bot-1' })
-    const sent = await service.call(
-      view.environmentId,
-      'agentSession.send',
-      send('chat-1', 'm1', 'Hi')
-    )
+    const sentOn = (method: string, params: unknown) =>
+      service.answerHere(view.environmentId, method, params, () =>
+        Promise.reject(new Error('no host here'))
+      )
+    // Not answered here: the paired path sends both, and hears the host is away as a paired server's.
+    expect(await sentOn('bots.session.start', { botId: 'bot-1' })).toBeNull()
+    expect(await sentOn('agentSession.send', send('chat-1', 'm1', 'Hi'))).toBeNull()
     service.stop()
-    expect(started.ok ? null : started.error.code).toBe(SHARED_BOT_HOST_ERRORS.offline)
-    expect(sent.ok ? null : sent.error.code).toBe(SHARED_BOT_HOST_ERRORS.offline)
     expect(holds).toEqual([])
-  })
-
-  it('starts no placeholder for a host that holds nothing', async () => {
-    const { service } = hosts(
-      () => [share({ hostOnline: false })],
-      () => 0
-    )
-    await service.refresh()
-    const started = await service.call(service.views()[0]!.environmentId, 'bots.session.start', {
-      botId: 'bot-1'
-    })
-    service.stop()
-    expect(started.ok ? null : started.error.code).toBe(SHARED_BOT_HOST_ERRORS.offline)
   })
 
   heldIt(
@@ -692,9 +694,11 @@ describe('a teammate’s messages while the shared agent’s computer is away', 
       )
       await service.refresh()
       const environmentId = service.views()[0]!.environmentId
-      const started = await service.call(environmentId, 'bots.session.start', { botId: 'bot-1' })
+      const started = await callHere(service, environmentId, 'bots.session.start', {
+        botId: 'bot-1'
+      })
       const placeholder = StartedChat.parse(started.ok ? started.result : null).sessionId
-      const swap = await service.call(environmentId, 'bots.session.start', {
+      const swap = await callHere(service, environmentId, 'bots.session.start', {
         botId: 'bot-1',
         newChatId: placeholder
       })
@@ -711,7 +715,12 @@ describe('a teammate’s messages while the shared agent’s computer is away', 
     )
     await service.refresh()
     const environmentId = service.views()[0]!.environmentId
-    await service.call(environmentId, 'agentSession.send', send('chat-0001', 'm1', 'Check #40189'))
+    await callHere(
+      service,
+      environmentId,
+      'agentSession.send',
+      send('chat-0001', 'm1', 'Check #40189')
+    )
     expect(await service.sendAgain(environmentId, 'm1')).toBe(false)
     held = [{ clientMessageId: 'm1', state: 'not_sent' }]
     await service.refresh()

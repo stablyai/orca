@@ -7,7 +7,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { setSecretStore } from '../../shared/secure-storage/secret-store'
 import { CONNECTOR_PATHS } from '../../shared/connectors/connector-cloud-contract'
-import { NODE_RELAY_CLIENT_PLATFORM } from '../../shared/remote-runtime/relay/client/node/node-relay-client-platform'
 import type { OrcaCloudAuthConfig } from '../orca-profiles/cloud-auth/profile-cloud-auth-config'
 import { linkOrcaProfileToCloud } from '../orca-profiles/cloud-auth/profile-cloud-index'
 import { signInCloudSession } from '../orca-profiles/cloud-session/profile-cloud-session-owner'
@@ -146,7 +145,6 @@ function setUp(options: { connector: boolean; connectNow?: boolean }) {
     userDataPath,
     cloud: () => sharedBotsCloud(connector),
     account: () => connector.signedInAccount(),
-    platform: NODE_RELAY_CLIENT_PLATFORM,
     publish: () => {},
     homes: memorySharedBotHomes(userDataPath).homes,
     invites: connector.invites,

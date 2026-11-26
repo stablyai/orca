@@ -4,7 +4,6 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { NODE_RELAY_CLIENT_PLATFORM } from '../../../shared/remote-runtime/relay/client/node/node-relay-client-platform'
 import { ConnectorSharesMineSchema } from '../../../shared/connector-share-contract'
 import { agentCardAvatar } from '../../../shared/bots/shared-agent-card'
 import { SharedBotHosts } from './shared-bot-hosts'
@@ -67,7 +66,6 @@ function hosts(
     userDataPath: dir,
     account: () => 'ada',
     cloud: () => cloud,
-    platform: NODE_RELAY_CLIENT_PLATFORM,
     publish: () => {},
     homes: memorySharedBotHomes(dir).homes,
     now: options.now ?? (() => 1_000)
@@ -222,7 +220,6 @@ describe('a share offered to this account', () => {
         userDataPath: dir,
         account: () => 'ada',
         cloud: () => cloud,
-        platform: NODE_RELAY_CLIENT_PLATFORM,
         publish: () => {},
         homes: memorySharedBotHomes(dir).homes,
         now: () => Date.now()

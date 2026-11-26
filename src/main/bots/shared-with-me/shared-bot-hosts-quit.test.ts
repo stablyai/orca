@@ -5,7 +5,6 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { NODE_RELAY_CLIENT_PLATFORM } from '../../../shared/remote-runtime/relay/client/node/node-relay-client-platform'
 import { SharedBotHosts } from './shared-bot-hosts'
 import {
   newSharedBotHostEntry,
@@ -65,7 +64,6 @@ async function kept(mine: () => Promise<MineAnswer>, account: () => string | nul
     userDataPath: dir,
     account,
     cloud: () => cloud,
-    platform: NODE_RELAY_CLIENT_PLATFORM,
     publish: () => {},
     homes: memorySharedBotHomes(dir).homes,
     now: () => 1_000

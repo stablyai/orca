@@ -25,6 +25,10 @@ export function remoteRuntimeOneLinkAllowed(
   if (remoteRuntimeOneLinkLocallyDisabled()) {
     return false
   }
+  // A shared agent's host (signed in by key) has only its share's Relay link: sharing gates it.
+  if (connection.credential.kind === 'device-key') {
+    return true
+  }
   if (isRuntimeRelayEndpoint(connection.endpoint)) {
     return isActiveCloudFlagOn(ORCA_CLOUD_RELAY_ONE_LINK_FLAG) || remoteRuntimeOneLinkTestSwitchOn()
   }

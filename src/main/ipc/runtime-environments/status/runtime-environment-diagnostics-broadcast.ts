@@ -8,8 +8,21 @@ export type RuntimeEnvironmentDiagnosticsEvent = {
   diagnostics: RemoteRuntimeSharedConnectionDiagnostics
 }
 
+const listeners = new Set<(event: RuntimeEnvironmentDiagnosticsEvent) => void>()
+
+/** Main's own readers of a host's connection state, beside the windows'. */
+export function onRuntimeEnvironmentDiagnostics(
+  listener: (event: RuntimeEnvironmentDiagnosticsEvent) => void
+): () => void {
+  listeners.add(listener)
+  return () => void listeners.delete(listener)
+}
+
 export function publishRuntimeEnvironmentDiagnostics(
   event: RuntimeEnvironmentDiagnosticsEvent
 ): void {
   getRuntimeDesktopSurface().sendToRenderers?.(RUNTIME_ENVIRONMENT_DIAGNOSTICS_CHANNEL, event)
+  for (const listener of listeners) {
+    listener(event)
+  }
 }
