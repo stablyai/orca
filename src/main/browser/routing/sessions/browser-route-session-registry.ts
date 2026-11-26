@@ -164,12 +164,7 @@ export class BrowserRouteSessionRegistry {
       throw new Error('browser_route_partition_capacity')
     }
     persistBrowserRouteSessionBinding(this.dependencies, derived, input.storageScope)
-    const promise = this.preparePartition(
-      derived,
-      input.identity.browserProfileId,
-      input.proxyEndpoint,
-      metadata
-    )
+    const promise = this.preparePartition(derived, input, metadata)
     const pendingState = {
       partition: derived.partition,
       bindingFingerprint: derived.bindingFingerprint,
@@ -248,15 +243,16 @@ export class BrowserRouteSessionRegistry {
 
   private async preparePartition(
     derived: DerivedBrowserRoutePartition,
-    browserProfileId: string,
-    proxyEndpoint: ProxyEndpoint,
+    { identity, proxyEndpoint, viewer }: BrowserRoutePreparePageInput,
     profileMetadata?: BrowserClientProfileMetadata
   ): Promise<PreparedPartition> {
+    const { browserProfileId } = identity
     const session = await prepareBrowserRouteSessionPolicy({
       ...(profileMetadata ? { profileMetadata } : {}),
       partition: derived.partition,
       browserProfileId,
       proxyEndpoint,
+      ...(viewer ? { viewer } : {}),
       dependencies: this.dependencies
     })
     return {

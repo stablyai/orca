@@ -88,7 +88,8 @@ export async function createReservedBrowserClientPage(
       browserPageId: event.browserPageId,
       pageHostGeneration: event.pageHostGeneration,
       rendererWebContentsId: renderer.rendererWebContentsId,
-      proxyEndpoint: route.proxyEndpoint
+      proxyEndpoint: route.proxyEndpoint,
+      viewer: route.viewer
     })
     assertBrowserClientPageCommandNotAborted(signal)
     assertAvailable()

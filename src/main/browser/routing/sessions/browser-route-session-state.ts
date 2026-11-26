@@ -4,7 +4,8 @@ import type { BrowserRoutePreparedPageLedger } from './browser-route-prepared-pa
 import type { BrowserRoutePageAuthority } from '../guest-authority/browser-route-page-authority'
 import type {
   BrowserRouteElectronSession,
-  BrowserRouteProxyEndpoint
+  BrowserRouteProxyEndpoint,
+  BrowserRouteViewer
 } from './browser-route-session-policy'
 
 export type BrowserRouteSessionHandle = Readonly<{
@@ -23,6 +24,8 @@ export type BrowserRoutePreparePageInput = Readonly<{
   pageHostGeneration: number
   rendererWebContentsId: number
   proxyEndpoint: BrowserRouteProxyEndpoint
+  /** Whose computer the page browses for; absent, one of this user's own. */
+  viewer?: BrowserRouteViewer
 }>
 
 export type BrowserRouteSessionRekey = Readonly<{

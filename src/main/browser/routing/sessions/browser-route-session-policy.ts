@@ -1,5 +1,19 @@
 import type { BrowserClientProfileMetadata } from '../../../../shared/browser/client-hosting/browser-client-profile-switch-protocol'
 const PROXY_PROBE_URL = 'http://browser-route-probe.invalid/'
+const LOOPBACK_PROBE_URL = 'http://127.0.0.1/'
+
+/** Whose computer a client-hosted page browses for: one of this user's own, or a teammate's host. */
+export type BrowserRouteViewer = 'own-computer' | 'teammate'
+
+/**
+ * The one choice of what a client-hosted page sends through its host. Your own computer: everything,
+ * as before. A teammate: only loopback and link-local (the host's dev servers), the rest direct from
+ * this machine. `*` bypasses everything and the later `<-loopback>` takes loopback back out of that
+ * bypass, with link-local, as in t3code's LoopbackTunnel.ts:586-599.
+ */
+export function browserRouteProxyBypassRules(viewer: BrowserRouteViewer): string {
+  return viewer === 'teammate' ? '*,<-loopback>,169.254.0.0/16,fe80::/10' : '<-loopback>'
+}
 
 export type BrowserRouteElectronSession = {
   setProxy(config: {
@@ -29,15 +43,18 @@ export async function prepareBrowserRouteSessionPolicy(input: {
   partition: string
   browserProfileId: string
   proxyEndpoint: BrowserRouteProxyEndpoint
+  /** Absent: one of this user's own computers. */
+  viewer?: BrowserRouteViewer
   dependencies: BrowserRouteSessionPolicyDependencies
 }): Promise<BrowserRouteElectronSession> {
   const session = input.dependencies.getSession(input.partition)
+  const viewer = input.viewer ?? 'own-computer'
   let proxySetup: Promise<void> | null = null
   try {
     proxySetup = session.setProxy({
       mode: 'fixed_servers',
       proxyRules: `socks5://${input.proxyEndpoint.host}:${input.proxyEndpoint.port}`,
-      proxyBypassRules: '<-loopback>'
+      proxyBypassRules: browserRouteProxyBypassRules(viewer)
     })
     await input.dependencies.setupPolicies({
       ...(input.profileMetadata ? { profileMetadata: input.profileMetadata } : {}),
@@ -47,8 +64,12 @@ export async function prepareBrowserRouteSessionPolicy(input: {
     })
     await proxySetup
     await session.closeAllConnections()
-    const resolved = await session.resolveProxy(PROXY_PROBE_URL)
-    if (resolved.trim() !== `SOCKS5 ${input.proxyEndpoint.host}:${input.proxyEndpoint.port}`) {
+    const socks = `SOCKS5 ${input.proxyEndpoint.host}:${input.proxyEndpoint.port}`
+    const [loopback, other] = await Promise.all([
+      session.resolveProxy(LOOPBACK_PROBE_URL),
+      session.resolveProxy(PROXY_PROBE_URL)
+    ])
+    if (loopback.trim() !== socks || other.trim() !== (viewer === 'teammate' ? 'DIRECT' : socks)) {
       throw new Error('browser_route_partition_proxy_verification_failed')
     }
   } catch (error) {

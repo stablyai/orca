@@ -1,4 +1,5 @@
 import { BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY } from '../../../../shared/browser/client-hosting/browser-client-profile-switch-protocol'
+import { sharedHostKey } from '../../../../shared/remote-runtime/pairing/shared-host-keys'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { app } from 'electron'
@@ -273,6 +274,8 @@ function createNetworkRoutes(
   return new BrowserClientNetworkRouteRegistry({
     authority,
     authorityStorageKey,
+    // A shared agent's host is a teammate's computer; any other paired host is one of the user's own.
+    viewer: sharedHostKey(environmentId) ? 'teammate' : 'own-computer',
     createRoute: (executionHost) =>
       new PairedRuntimeBrowserNetworkRoute({
         connection,
