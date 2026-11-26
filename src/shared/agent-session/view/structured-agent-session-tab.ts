@@ -33,6 +33,7 @@ export function findTabByIdOrChatAlias<
     (isStructuredAgentSessionHostTabId(id)
       ? id.slice(structuredAgentSessionHostTabId('').length)
       : null)
+  let chat: T | undefined
   for (const tab of tabs ?? []) {
     if (tab.id === id) {
       return tab
