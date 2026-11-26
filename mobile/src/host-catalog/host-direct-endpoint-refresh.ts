@@ -1,27 +1,30 @@
 import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime/remote-runtime-tailscale-hint'
 import type { StoredHostProfile } from './host-profile'
 
-/**
- * Apply the desktop's current direct endpoints to a saved row. Only the desktop can say an address is
- * no longer its own, so a stored endpoint it still lists is kept even when it prefers another one.
- */
-export function withHostDirectEndpoints(
-  host: StoredHostProfile,
+export type HostDirectEndpointFields = Pick<StoredHostProfile, 'endpoint' | 'directEndpointOrigin'>
+
+/** A saved endpoint becomes the desktop's to move once the desktop lists it as one of its own addresses. */
+export function directEndpointListedByHost(
+  row: HostDirectEndpointFields,
   endpoints: readonly string[]
-): StoredHostProfile {
-  if (endpoints.length === 0 || host.directEndpointOrigin === 'manual') {
-    return host
+): boolean {
+  return row.directEndpointOrigin === undefined && endpoints.includes(row.endpoint)
+}
+
+/**
+ * Where to try the desktop when it no longer lists a saved endpoint it once listed. Only the desktop can
+ * say an address is no longer its own; a still-listed endpoint is kept even when it prefers another.
+ * The candidate is dialed, never saved, until the phone authenticates there: an address that left
+ * for a moment (Wi-Fi reconnect, Tailscale restart) must not strand the row elsewhere.
+ */
+export function directEndpointCandidate(
+  row: HostDirectEndpointFields,
+  endpoints: readonly string[]
+): string | null {
+  if (row.directEndpointOrigin !== 'host' || endpoints.includes(row.endpoint)) {
+    return null
   }
-  if (endpoints.includes(host.endpoint)) {
-    return host.directEndpointOrigin === 'host' ? host : { ...host, directEndpointOrigin: 'host' }
-  }
-  // An unknown origin may be a tunnel or a value typed before origins were recorded.
-  if (host.directEndpointOrigin !== 'host') {
-    return host
-  }
-  // Prefer the kind of network this phone reached it on: a Tailscale address the phone lacks would strand it.
-  const tailscale = isTailscaleEndpoint(host.endpoint)
-  const endpoint =
-    endpoints.find((candidate) => isTailscaleEndpoint(candidate) === tailscale) ?? endpoints[0]!
-  return { ...host, endpoint }
+  // Never cross LAN and Tailscale: one can be unreachable from wherever the phone goes next.
+  const tailscale = isTailscaleEndpoint(row.endpoint)
+  return endpoints.find((candidate) => isTailscaleEndpoint(candidate) === tailscale) ?? null
 }

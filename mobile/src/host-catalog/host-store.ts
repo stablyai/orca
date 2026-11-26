@@ -304,10 +304,10 @@ export async function updateHostNameAndEndpoint(
     }
     const current = hosts[index]!
     let updated: StoredHostProfile =
-      updates.endpoint !== undefined && updates.endpoint !== current.endpoint
-        ? // A typed endpoint is the user's; the desktop's address list never rewrites it.
+      updates.endpoint === undefined
+        ? current
+        : // A typed endpoint is the user's, even if it matches the saved one; the desktop never rewrites it.
           { ...current, endpoint: updates.endpoint, directEndpointOrigin: 'manual' }
-        : current
     if (updates.personalName !== undefined) {
       updated = withPersonalName(updated, updates.personalName, hosts)
     }

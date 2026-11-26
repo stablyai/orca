@@ -2,11 +2,19 @@ import {
   PAIRING_GET_DIRECT_ENDPOINTS_METHOD,
   PairingGetDirectEndpointsResultSchema
 } from '../../../../src/shared/remote-runtime/pairing/pairing-direct-endpoints-contract'
-import { recordHostDirectEndpoints } from '../../host-catalog/host-direct-endpoint-persistence'
+import {
+  directEndpointCandidate,
+  directEndpointListedByHost,
+  type HostDirectEndpointFields
+} from '../../host-catalog/host-direct-endpoint-refresh'
+import {
+  adoptHostDirectEndpoint,
+  markHostDirectEndpointListed
+} from '../../host-catalog/host-direct-endpoint-persistence'
 import { isPairingRelayRpcUnavailable } from '../../pairing/pairing-relay-rpc-unavailable'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../rpc/rpc-operation'
 import { rpcResultVariant } from '../rpc/rpc-operation-result-reader'
-import type { RpcClient } from '../rpc/rpc-client-contract'
+import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 
 const pairingDirectEndpointsRead = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -18,43 +26,99 @@ const pairingDirectEndpointsRead = bindDeferredRpcOperation(
   })
 )
 
-export type HostDirectEndpointFollower = { refresh(): void }
+export type HostDirectEndpointFollower = {
+  /** Where the desktop should answer now: an unverified replacement, else the saved endpoint. */
+  directEndpoint(): string
+  /** `directEndpoint()`, remembered so a direct win there proves the replacement. */
+  dialEndpoint(): string
+  onConnected(): void
+  refresh(): void
+}
 
-/** Asks the connected desktop where it listens now, so a saved direct endpoint can follow a moved address. */
+/** Follows a desktop's moved direct address: dial the desktop's replacement, save it once it answers. */
 export function createHostDirectEndpointFollower(args: {
-  client: RpcClient
+  client: StableLogicalRpcClient
   hostId: string
-  /** The saved row's direct endpoint after applying the desktop's list; it may differ from a primed copy. */
-  onEndpoint: (endpoint: string) => void
+  saved: HostDirectEndpointFields
 }): HostDirectEndpointFollower {
+  const { client, hostId } = args
+  let saved: HostDirectEndpointFields = args.saved
+  // The opener may hand over a primed copy older than storage; the first answer re-reads the row.
+  let syncedWithStorage = false
+  let candidate: string | null = null
+  let lastDialed: string | null = null
   let unsupported = false
   let inFlight = false
+  // A cutover can publish the new session's connected edge while the old session's read is pending.
+  let requestedWhileInFlight = false
+
+  const adoptSaved = (fields: HostDirectEndpointFields | null): void => {
+    if (fields) {
+      saved = fields
+    }
+  }
   const read = async (): Promise<void> => {
-    const reply = await pairingDirectEndpointsRead.request(args.client, {})
+    const reply = await pairingDirectEndpointsRead.request(client, {})
     if (isPairingRelayRpcUnavailable(reply)) {
-      // Older desktops never learn this method; asking again on every connect only adds refusals.
+      // Older desktops lack the method; ask again only after the next connection.
       unsupported = true
       return
     }
     const { endpoints } = pairingDirectEndpointsRead.interpret(reply)
-    const endpoint = await recordHostDirectEndpoints(args.hostId, endpoints)
-    if (endpoint) {
-      args.onEndpoint(endpoint)
+    if (!syncedWithStorage || directEndpointListedByHost(saved, endpoints)) {
+      adoptSaved(await markHostDirectEndpointListed(hostId, endpoints))
+      syncedWithStorage = true
     }
+    candidate = directEndpointCandidate(saved, endpoints)
   }
-  return {
-    refresh() {
-      if (unsupported || inFlight || args.client.getState() !== 'connected') {
-        return
-      }
-      inFlight = true
-      void read()
-        .catch(() => {
-          // Best effort: the next connect or foreground asks again.
-        })
-        .finally(() => {
-          inFlight = false
-        })
+  const refresh = (): void => {
+    if (inFlight) {
+      requestedWhileInFlight = true
+      return
     }
+    if (unsupported || client.getState() !== 'connected') {
+      return
+    }
+    inFlight = true
+    void read()
+      .catch(() => {
+        // Best effort: the next connect or foreground asks again.
+      })
+      .finally(() => {
+        inFlight = false
+        if (requestedWhileInFlight) {
+          requestedWhileInFlight = false
+          refresh()
+        }
+      })
+  }
+  const saveVerifiedCandidate = (): void => {
+    const verified = candidate
+    if (verified === null || lastDialed !== verified || client.getActivePath() === 'relay') {
+      return
+    }
+    // This connection authenticated at the replacement, so it is reachable from here: keep it.
+    void adoptHostDirectEndpoint(hostId, saved.endpoint, verified)
+      .then((fields) => {
+        adoptSaved(fields)
+        if (candidate === verified && saved.endpoint === verified) {
+          candidate = null
+        }
+      })
+      .catch(() => {})
+  }
+  const directEndpoint = (): string => candidate ?? saved.endpoint
+  return {
+    directEndpoint,
+    dialEndpoint() {
+      lastDialed = directEndpoint()
+      return lastDialed
+    },
+    onConnected() {
+      unsupported = false
+      saveVerifiedCandidate()
+      refresh()
+    },
+    refresh
   }
 }

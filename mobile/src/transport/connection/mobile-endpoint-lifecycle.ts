@@ -24,7 +24,10 @@ import { MobileRelayDirectUpgradeController } from '../relay/mobile-relay-direct
 import { defaultCancelTimer, defaultScheduleTimer } from '../../platform/timer-scheduler'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import { skipsDirectEndpoint } from './undialable-direct-endpoint'
-import { createHostDirectEndpointFollower } from './host-direct-endpoint-follower'
+import {
+  createHostDirectEndpointFollower,
+  type HostDirectEndpointFollower
+} from './host-direct-endpoint-follower'
 
 type EndpointLifecycle = {
   setForeground(foreground: boolean): void
@@ -44,21 +47,15 @@ export function startMobileEndpointLifecycle(
   let stopped = false
   let foreground = true
   let owner: EndpointOwner
-  // The desktop may move its direct address mid-session; later direct dials follow the saved row.
-  let host = initialHost
-  const readHost = (): HostProfile => host
+  // The desktop may move its direct address mid-session; return probes dial where it says it is now.
   const directEndpoints = createHostDirectEndpointFollower({
     client: logical,
     hostId: initialHost.id,
-    onEndpoint: (endpoint) => {
-      if (endpoint !== host.endpoint) {
-        host = { ...host, endpoint }
-      }
-    }
+    saved: initialHost
   })
   const unsubscribeDirectEndpoints = logical.onStateChange((state) => {
     if (state === 'connected') {
-      directEndpoints.refresh()
+      directEndpoints.onConnected()
     }
   })
 
@@ -66,7 +63,7 @@ export function startMobileEndpointLifecycle(
     if (stopped) {
       return
     }
-    const supervisor = createSupervisor(logical, readHost, relay, onLog)
+    const supervisor = createSupervisor(logical, initialHost, directEndpoints, relay, onLog)
     owner.stop()
     owner = supervisor
     supervisor.setForeground(foreground)
@@ -74,7 +71,7 @@ export function startMobileEndpointLifecycle(
   }
 
   if (initialHost.relay) {
-    owner = createSupervisor(logical, readHost, initialHost.relay, onLog)
+    owner = createSupervisor(logical, initialHost, directEndpoints, initialHost.relay, onLog)
     void owner.start()
   } else {
     owner = new MobileRelayDirectUpgradeController(logical, initialHost, {
@@ -113,23 +110,26 @@ export function startMobileEndpointLifecycle(
 
 function createSupervisor(
   logical: StableLogicalRpcClient,
-  readHost: () => HostProfile,
+  host: HostProfile,
+  directEndpoints: HostDirectEndpointFollower,
   relay: MobileRelayEndpoint,
   onLog: ConnectionLogSink
 ): MobileEndpointSupervisor {
-  const host = readHost()
   return new MobileEndpointSupervisor(logical, host.id, relay, {
     openDirect: () =>
-      connect(readHost().endpoint, host.deviceToken, host.publicKeyB64, { onLog, hostId: host.id }),
-    // Getters: each return probe reads the endpoint the desktop last moved this row to.
+      connect(directEndpoints.dialEndpoint(), host.deviceToken, host.publicKeyB64, {
+        onLog,
+        hostId: host.id
+      }),
+    // Getters: each return probe reads where the desktop says it listens now.
     get directPath() {
-      return directPathForEndpoint(readHost().endpoint)
+      return directPathForEndpoint(directEndpoints.directEndpoint())
     },
     get directProbeTimeoutMs() {
-      return directProbeTimeoutMsForEndpoint(readHost().endpoint)
+      return directProbeTimeoutMsForEndpoint(directEndpoints.directEndpoint())
     },
     get directUnavailable() {
-      return skipsDirectEndpoint(readHost())
+      return skipsDirectEndpoint({ ...host, endpoint: directEndpoints.directEndpoint() })
     },
     openRelay: (relay, credential, confirmReqId, onHostCloseReason) =>
       connectMobileRelayRpcSession({
