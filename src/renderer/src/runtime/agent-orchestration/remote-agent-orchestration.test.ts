@@ -223,6 +223,53 @@ describe('remote host worker lineage', () => {
     expect(parseRemoteAgentOrchestration({ contexts: [] })).toEqual({})
     expect(parseRemoteAgentOrchestration(null)).toEqual({})
   })
+
+  it('sends sinceRevision on subsequent reads, preserves state on unchanged, and resets on reconnect', async () => {
+    const hostId = toRuntimeExecutionHostId('rev-host')
+    callRuntimeRpc
+      .mockResolvedValueOnce({ revision: 3, contexts: structuredClone(HOST_CONTEXTS) })
+      .mockResolvedValueOnce({ revision: 3, unchanged: true })
+      .mockResolvedValueOnce({ revision: 1, contexts: {} })
+
+    refreshRemoteAgentOrchestration('rev-host')
+    await settle()
+    expect(callRuntimeRpc).toHaveBeenNthCalledWith(
+      1,
+      { kind: 'environment', environmentId: 'rev-host' },
+      'agentActivity.orchestration',
+      undefined,
+      expect.objectContaining({ background: true })
+    )
+    expect(
+      useAppStore.getState().remoteAgentOrchestrationByHost[hostId]?.[WORKER]?.dispatchId
+    ).toBe('dispatch-w')
+
+    refreshRemoteAgentOrchestration('rev-host')
+    await settle()
+    expect(callRuntimeRpc).toHaveBeenNthCalledWith(
+      2,
+      { kind: 'environment', environmentId: 'rev-host' },
+      'agentActivity.orchestration',
+      { sinceRevision: 3 },
+      expect.objectContaining({ background: true })
+    )
+    expect(
+      useAppStore.getState().remoteAgentOrchestrationByHost[hostId]?.[WORKER]?.dispatchId
+    ).toBe('dispatch-w')
+
+    // Reconnecting to a restarted host resets sinceRevision so revision 1 is not mistaken for unchanged.
+    advanceRuntimeEnvironmentConnectionGeneration('rev-host')
+    refreshRemoteAgentOrchestration('rev-host')
+    await settle()
+    expect(callRuntimeRpc).toHaveBeenNthCalledWith(
+      3,
+      { kind: 'environment', environmentId: 'rev-host' },
+      'agentActivity.orchestration',
+      undefined,
+      expect.objectContaining({ background: true })
+    )
+    expect(useAppStore.getState().remoteAgentOrchestrationByHost[hostId]).toBeUndefined()
+  })
 })
 
 describe('this computer’s rows while a remote host has lineage', () => {
