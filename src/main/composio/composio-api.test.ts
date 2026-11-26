@@ -25,16 +25,16 @@ describe('Composio 403s', () => {
     expect(health.rejected).toBe(false)
   })
 
-  it('names other areas, and still offers a key change when Composio names none', async () => {
-    const accounts = new ComposioApi(
+  it('names other access needs, and still offers a key change when Composio names none', async () => {
+    const sessionRead = new ComposioApi(
       'key',
       forbidden(
         'APIKey_InsufficientPermissions',
-        'This route requires "connected_accounts" write access, but the key has read access.'
+        'This route requires "session_management" read access, but the key has write access.'
       )
     )
-    await expect(accounts.disconnect('ca_1')).rejects.toThrow(
-      'This Composio key is missing a permission. It needs Connected accounts: Read and write.'
+    await expect(sessionRead.disconnect('ca_1')).rejects.toThrow(
+      'This Composio key is missing a permission. It needs Session management: Read.'
     )
     const unnamed = new ComposioApi('key', forbidden('APIKey_InsufficientPermissions', 'Denied.'))
     await expect(unnamed.app('notion')).rejects.toThrow(

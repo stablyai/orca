@@ -34,7 +34,7 @@ export class ComposioKeyScopeError extends BotFailureError {
     const label = area.charAt(0).toUpperCase() + area.slice(1).replace(/_/g, ' ')
     const permission = `${label}: ${access === 'write' ? 'Read and write' : 'Read'}`
     super(
-      area === 'session_management'
+      area === 'session_management' && access === 'write'
         ? 'composioKeyCantCreateSessions'
         : 'composioKeyNeedsPermission',
       { permission }

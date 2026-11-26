@@ -210,13 +210,13 @@ export function BotAppsCatalog({
         replacing={step.replacing}
         onBack={back}
         onClose={close}
-        onSaved={() => {
+        onSaved={async () => {
           if (app) {
-            startComposio(app, true)
-          } else {
-            setStep(null)
-            setView('catalog')
+            await addComposio(app, true)
+            return
           }
+          setStep(null)
+          setView('catalog')
         }}
       />
     )

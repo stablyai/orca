@@ -74,7 +74,8 @@ export function ComposioAccountStep({
   replacing?: ComposioKeyScope
   onBack: () => void
   onClose: () => void
-  onSaved: () => void
+  /** A failure here shows on the form, so the step never stays on Checking…. */
+  onSaved: () => Promise<void> | void
 }): React.JSX.Element {
   const t = useTranslate()
   const host = useBotHostLabel(bot.hostId)
