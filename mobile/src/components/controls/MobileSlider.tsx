@@ -171,9 +171,10 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.translucentFill,
     overflow: 'hidden'
   },
+  // Monochrome like MobileSwitch's on state, so a page's controls share one ink.
   fill: {
     height: TRACK_HEIGHT,
-    backgroundColor: colors.accentBlue
+    backgroundColor: colors.textPrimary
   },
   thumb: {
     position: 'absolute',
