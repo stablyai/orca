@@ -95,22 +95,25 @@ describe("the Items tab's person pick", () => {
     expect(names(entries)).toEqual(['owner:Jinwoo', 'person:Alice Park', 'person:Bo Chen'])
     const pick = botItemsPersonPick(entries, null)
     expect(pick).toEqual({ kind: 'owner' })
-    expect(botItemsWhoseOfPick(pick, true)).toBe('owner')
+    expect(botItemsWhoseOfPick(pick, OWNERS_COPY)).toBe('owner')
+    // Everyone is the owner's default list: one read, not a second of the same rows.
+    expect(botItemsWhoseOfPick({ kind: 'everyone' }, OWNERS_COPY)).toBe('default')
   })
 
   it("opens a teammate's copy on their own items: 'you' is the teammate, then the owner and the rest", () => {
     const entries = botPeoplePicker(ALICES_COPY, null)
     expect(names(entries)).toEqual(['person:Alice Park', 'owner:Jinwoo', 'person:Bo Chen'])
     const pick = botItemsPersonPick(entries, null)
-    expect(botItemsWhoseOfPick(pick, true)).toBe('person:acct-a')
-    expect(botItemsWhoseOfPick({ kind: 'everyone' }, true)).toBe('everyone')
-    expect(botItemsWhoseOfPick({ kind: 'owner' }, true)).toBe('owner')
+    // Her own is her default list: one read, not a second of the same rows.
+    expect(botItemsWhoseOfPick(pick, ALICES_COPY)).toBe('default')
+    expect(botItemsWhoseOfPick({ kind: 'everyone' }, ALICES_COPY)).toBe('everyone')
+    expect(botItemsWhoseOfPick({ kind: 'owner' }, ALICES_COPY)).toBe('owner')
   })
 
   it('reads an agent shared with no one as its default list, with no pick', () => {
     expect(botPeoplePicker({}, 'Jinwoo')).toBeNull()
     expect(botItemsPersonPick(null, { kind: 'owner' })).toEqual({ kind: 'everyone' })
-    expect(botItemsWhoseOfPick({ kind: 'everyone' }, false)).toBe('default')
+    expect(botItemsWhoseOfPick({ kind: 'everyone' }, {})).toBe('default')
   })
 
   it("keeps a picked person while they share it, then falls back to the viewer's own", () => {
@@ -118,7 +121,7 @@ describe("the Items tab's person pick", () => {
     const bo = { kind: 'person', person: { accountId: 'acct-b', name: 'Bo Chen' } } as const
     expect(botItemsPersonPick(entries, bo)).toEqual(bo)
     const gone = { kind: 'person', person: { accountId: 'acct-z', name: 'Zed' } } as const
-    expect(botItemsWhoseOfPick(botItemsPersonPick(entries, gone), true)).toBe('person:acct-a')
+    expect(botItemsWhoseOfPick(botItemsPersonPick(entries, gone), ALICES_COPY)).toBe('default')
   })
 })
 

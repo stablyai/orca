@@ -99,9 +99,18 @@ export function botItemsPersonPick(
  *  or one teammate's. */
 export type BotItemsWhose = 'default' | 'everyone' | 'owner' | `person:${string}`
 
-/** A pick's read: an agent shared with no one reads its default list. */
-export function botItemsWhoseOfPick(pick: BotChatPersonPick, shared: boolean): BotItemsWhose {
-  if (!shared) {
+/** A pick's read. The pick the host's default already lists reads as `default`, the bot's one whole
+ *  read with no second read of the same rows: everyone's on the owner's copy (and on an agent shared
+ *  with no one), the viewer's own on a teammate's copy (`shareViewer`). */
+export function botItemsWhoseOfPick(
+  pick: BotChatPersonPick,
+  bot: Pick<Bot, 'shares' | 'shareViewer'>
+): BotItemsWhose {
+  const viewer = bot.shareViewer
+  const asDefault = viewer
+    ? pick.kind === 'person' && pick.person.accountId === viewer.accountId
+    : pick.kind === 'everyone'
+  if (asDefault) {
     return 'default'
   }
   return pick.kind === 'person' ? `person:${pick.person.accountId}` : pick.kind

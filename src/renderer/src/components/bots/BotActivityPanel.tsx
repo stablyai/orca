@@ -176,7 +176,7 @@ function BotActivityTab({
   // Read above the list/item switch: an open item walks this list, and Back finds its row in it. One
   // source for the list: its own read (the person's or chats' when scoped) gives its rows, seen mark,
   // failures and filter controls.
-  const shown = useBotItemsShownRead(bot, read, filter, botItemsWhoseOfPick(pick, entries !== null))
+  const shown = useBotItemsShownRead(bot, read, filter, botItemsWhoseOfPick(pick, bot))
   const shownRead = botItemsShownReadState(shown, items)
   const seenAtOpen = useBotItemsSeenAtOpen(bot, shown.read, shownRead.landed)
   const list = useBotItemsShownGroups(bot, shown, filter, clock, seenAtOpen ?? '')
