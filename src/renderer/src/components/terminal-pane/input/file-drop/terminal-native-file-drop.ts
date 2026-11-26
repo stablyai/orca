@@ -163,6 +163,8 @@ async function uploadRuntimeDropPaths(
     if (progress.signal.aborted) {
       return
     }
+    // The upload is over, so Cancel can no longer apply mid-paste.
+    progress.close()
     await pasteResolvedDropPaths({
       ...args,
       paths: staged.map(({ hostPath }) => hostPath),

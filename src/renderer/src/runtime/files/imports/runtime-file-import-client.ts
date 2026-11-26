@@ -115,6 +115,8 @@ export async function importExternalPathsToRuntime(
       continue
     }
     let createdDirectoryImportRoot: string | null = null
+    // Bytes the runtime acknowledged for the file in flight, kept if it fails so progress never moves back.
+    let entrySentBytes = 0
     try {
       const finalName = await deconflictCopyName(source.name, async (n) => {
         importSession.assertCurrent()
@@ -168,10 +170,14 @@ export async function importExternalPathsToRuntime(
               : 'local'),
           transfer && {
             signal: transfer.signal,
-            onProgress: (sentBytes) => transfer.onProgress(uploadedBytes + sentBytes)
+            onProgress: (sentBytes) => {
+              entrySentBytes = sentBytes
+              transfer.onProgress(uploadedBytes + sentBytes)
+            }
           }
         )
         uploadedBytes += entry.byteLength
+        entrySentBytes = 0
         transfer?.onProgress(uploadedBytes)
       }
       reservedNames.add(finalName)
@@ -183,6 +189,7 @@ export async function importExternalPathsToRuntime(
         renamed: finalName !== source.name
       })
     } catch (error) {
+      uploadedBytes += entrySentBytes
       if (createdDirectoryImportRoot) {
         // Match local directory rollback: remove the no-clobber root after partial nested runtime upload failure.
         await callRuntimeFileImportMutation(
@@ -208,5 +215,7 @@ export async function importExternalPathsToRuntime(
     }
   }
 
+  // A Cancel that lands during the last commit still rejects the import.
+  transfer?.signal.throwIfAborted()
   return { results }
 }
