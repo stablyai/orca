@@ -1,10 +1,13 @@
 import { SharedControlRequests } from './remote-runtime-shared-control-requests'
-import type { PairedE2EEClientHandshake } from '../e2ee/paired-e2ee-client-handshake'
-import type WebSocket from 'ws'
 import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
-import { remoteRuntimeClientCapabilities } from '../remote-runtime-client-capabilities'
 import { schedulePreparedControlRetry } from './remote-runtime-shared-control-hold'
-import { openPreparedSharedControlSocket } from './remote-runtime-shared-control-open'
+import { openPreparedSharedControlChannel } from './remote-runtime-shared-control-open'
+import type { AuthenticatedRuntimeChannel } from './remote-runtime-authenticated-channel'
+import { controlChannelOpener } from './remote-runtime-direct-authenticated-channel'
+import type { SharedControlBinaryChannels } from './remote-runtime-shared-control-binary-channels'
+import { resolveSharedControlReadyWaiters } from './remote-runtime-shared-control-state'
+import { readSharedControlChannelFrame } from './remote-runtime-shared-control-frame-dispatch'
+import { controlBinaryChannels, releaseControlOneLink } from './remote-runtime-one-link'
 import { closeSharedControlAfterError } from './remote-runtime-shared-control-refusal'
 import * as sharedControlReady from './remote-runtime-shared-control-ready'
 import * as sharedControlProtocol from './remote-runtime-shared-control-protocol'
@@ -17,7 +20,6 @@ import { SharedControlSocketGeneration } from './remote-runtime-shared-control-s
 import { refreshRemoteRuntimeSharedControl } from './remote-runtime-shared-control-refresh'
 import { SharedControlDiagnosticsTracker } from './remote-runtime-shared-control-diagnostics'
 import { ensureSharedControlReady } from './remote-runtime-shared-control-ready-wait'
-import { handleRuntimeControlFrame } from './remote-runtime-shared-control-connection-frame'
 import * as sharedControlActions from './remote-runtime-shared-control-connection-actions'
 import type * as SharedControlTypes from './remote-runtime-shared-control-types'
 import { closeSharedControlConnectionSubscription } from '../requests/remote-runtime-shared-control-subscription-close'
@@ -26,9 +28,7 @@ type LogicalSubscription = SharedControlTypes.SharedControlLogicalSubscription<u
 
 export class RemoteRuntimeSharedControlConnection {
   private state: SharedControlTypes.SharedControlConnectionState = 'closed'
-  private ws: WebSocket | null = null
-  private handshake: PairedE2EEClientHandshake | null = null
-  private socketCleanup: (() => void) | null = null
+  private channel: AuthenticatedRuntimeChannel | null = null
   private readonly reconnect = new SharedControlReconnectScheduler()
   private readonly readiness: SharedControlReadinessTimer
   private intentionallyClosed = false
@@ -52,8 +52,11 @@ export class RemoteRuntimeSharedControlConnection {
     sendEncrypted: (payload) => this.sendEncrypted(payload),
     closeSubscription: (id) => this.closeSubscription(id),
     captureSendGuard: () => this.socketGeneration.captureReady(() => this.isReady()),
-    wire: () => ({ state: this.state, ws: this.ws, handshake: this.handshake })
+    wire: () => ({ state: this.state, channel: this.channel }),
+    binaryChannels: () => this.binaryChannels
   })
+  /** Binary streams sharing this one connection; null keeps them on sockets of their own. */
+  private readonly binaryChannels: SharedControlBinaryChannels | null
 
   constructor(
     private readonly connection: PairedRuntimeConnection,
@@ -69,11 +72,17 @@ export class RemoteRuntimeSharedControlConnection {
     }))
     this.readiness = new SharedControlReadinessTimer(options, {
       getState: () => this.state,
-      getSocket: () => this.ws,
+      isOpen: () => this.channel?.state() === 'open',
       resetAttempt: () => this.reconnect.resetAttempt(),
       retire: this.handleSocketClosed,
       probe: (timeoutMs) => this.request('status.get', { probe: true }, timeoutMs),
       onHealthChanged: this.publishDiagnostics
+    })
+    this.binaryChannels = controlBinaryChannels(this, {
+      connection,
+      enabled: options.binaryChannels,
+      subscriptions: this.subscriptions,
+      send: (frame) => this.isReady() && this.channel!.sendBinary(frame)
     })
   }
   request<TResult>(...args: Parameters<SharedControlRequests['request']>) {
@@ -84,11 +93,14 @@ export class RemoteRuntimeSharedControlConnection {
     params: unknown,
     timeoutMs: number,
     callbacks: SharedControlTypes.SharedControlSubscriptionCallbacks<TResult>,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    /** A stream that would otherwise need a socket of its own: it gets a binary channel. */
+    stream?: { binaryChannel: boolean }
   ) {
-    return this.requests.subscribe<TResult>(method, params, timeoutMs, callbacks, signal)
+    return this.requests.subscribe<TResult>(method, params, timeoutMs, callbacks, signal, stream)
   }
   close(error?: Error): void {
+    releaseControlOneLink(this)
     this.intentionallyClosed = true
     this.opening = null
     this.retryEpoch += 1
@@ -111,8 +123,7 @@ export class RemoteRuntimeSharedControlConnection {
 
   private readonly publishDiagnostics = (): void => this.diagnostics.publish()
   isReady(): boolean {
-    const { state, ws, handshake } = this
-    return sharedControlReady.isSharedControlReady({ state, ws, handshake })
+    return sharedControlReady.isSharedControlReady({ state: this.state, channel: this.channel })
   }
   getDiagnostics = (): SharedControlTypes.RemoteRuntimeSharedConnectionDiagnostics =>
     this.diagnostics.get()
@@ -127,12 +138,11 @@ export class RemoteRuntimeSharedControlConnection {
   private ensureReadyWithTimeout(timeoutMs: number, signal?: AbortSignal): Promise<void> {
     return ensureSharedControlReady({
       state: this.state,
-      ws: this.ws,
-      handshake: this.handshake,
+      channel: this.channel,
       readyWaiters: this.readyWaiters,
       timeoutMs,
       signal,
-      open: () => sharedControlReady.openIfSocketClosed(this.ws, () => this.open())
+      open: () => sharedControlReady.openIfChannelClosed(this.channel, () => this.open())
     })
   }
 
@@ -144,28 +154,47 @@ export class RemoteRuntimeSharedControlConnection {
     const generation = this.socketGeneration.begin()
     this.opening = generation
     const demand = this.readyWaiters.length > 0
-    void openPreparedSharedControlSocket(this.connection, this.options, {
-      current: () => this.socketGeneration.isCurrent(generation) && !this.intentionallyClosed,
+    const current = (): boolean => this.socketGeneration.isCurrent(generation)
+    const read = (frame: string | Uint8Array<ArrayBufferLike>): false | void =>
+      current() &&
+      readSharedControlChannelFrame(frame, {
+        environmentId: this.options.environmentId,
+        pendingRequests: this.pendingRequests,
+        subscriptions: this.subscriptions,
+        retiredRequestIds: this.retiredRequestIds,
+        deviceToken: this.connection.credential.deviceToken,
+        send: (payload) => this.sendEncrypted(payload),
+        binaryChannels: this.binaryChannels,
+        fail: (error) => this.handleSocketClosed(error, generation, 'protocol_error')
+      })
+    void openPreparedSharedControlChannel(this.options, {
+      current: () => current() && !this.intentionallyClosed,
       prepared: () => {
         this.opening = null
       },
       hasDemand: () => !demand || this.readyWaiters.length > 0 || this.subscriptions.size > 0,
       refuse: (error) =>
         sharedControlState.rejectSharedControlReadyWaiters(this.readyWaiters, error),
-      callbacks: {
-        getCurrentSocket: () => this.ws,
-        onSocketClosed: (error, cause, close) => {
-          if (close && this.socketGeneration.isCurrent(generation)) {
+      opener: controlChannelOpener(this.connection, this.options, this.binaryChannels !== null),
+      events: {
+        onTransportOpen: () => current() && this.readiness.armReadyDeadline(generation),
+        onAuthenticating: () => {
+          if (current()) {
+            this.state = 'awaiting_authenticated'
+            this.publishDiagnostics()
+          }
+        },
+        onAuthenticated: () => current() && this.markAuthenticated(generation),
+        onText: read,
+        onBinary: read,
+        onAnswer: () => current() && this.readiness.noteAnswer(),
+        onActivity: () => current() && this.options.onAnswered?.(),
+        onRoundTrip: (rttMs) => current() && this.diagnostics.markRoundTrip(rttMs),
+        onClosed: (error, cause, close) => {
+          if (close && current()) {
             this.diagnostics.markClose(close)
           }
           this.handleSocketClosed(error, generation, cause)
-        },
-        onOpened: () => this.readiness.armReadyDeadline(generation),
-        onFrame: (frame) => this.handleFrame(frame, generation),
-        onActivity: this.options.onAnswered,
-        liveness: {
-          options: this.options.liveness,
-          onRoundTrip: (rttMs) => this.diagnostics.markRoundTrip(rttMs)
         }
       },
       accept: (opened) => {
@@ -174,9 +203,7 @@ export class RemoteRuntimeSharedControlConnection {
           return
         }
         this.diagnostics.markSocketOpened()
-        this.ws = opened.socket.ws
-        this.handshake = opened.socket.handshake
-        this.socketCleanup = opened.socket.cleanup
+        this.channel = opened.channel
         this.state = 'awaiting_ready'
         this.publishDiagnostics()
       }
@@ -192,37 +219,15 @@ export class RemoteRuntimeSharedControlConnection {
     })
   }
 
-  private handleFrame(frame: SharedControlTypes.SharedControlFrame, generation: number): void {
-    this.readiness.noteAnswer()
-    handleRuntimeControlFrame({
-      frame,
-      socketGeneration: generation,
-      isCurrent: (current) => this.socketGeneration.isCurrent(current),
-      getState: () => this.state,
-      getHandshake: () => this.handshake,
-      environmentId: this.options.environmentId,
-      deviceToken: this.connection.credential.deviceToken,
-      pendingRequests: this.pendingRequests,
-      subscriptions: this.subscriptions,
-      retiredRequestIds: this.retiredRequestIds,
-      readyWaiters: this.readyWaiters,
-      setState: (state) => {
-        this.state = state
-      },
-      handleSocketClosed: (e) => this.handleSocketClosed(e, generation, 'protocol_error'),
-      sendEncrypted: (payload) => this.sendEncrypted(payload),
-      clientCapabilities: remoteRuntimeClientCapabilities(this.options.clientCapabilities),
-      getSocket: () => this.ws,
-      markReady: () => {
-        this.diagnostics.markReady()
-        this.options.onReady?.()
-        // Clear predecessor-attempt diagnostics on recovery so Connected cannot retain stale failure details.
-        this.publishDiagnostics()
-        this.readiness.scheduleStableReset(generation)
-      },
-      replaySubscriptions: () => this.replaySubscriptions(),
-      publishDiagnostics: () => this.publishDiagnostics()
-    })
+  private markAuthenticated(generation: number): void {
+    this.state = 'ready'
+    this.diagnostics.markReady()
+    this.options.onReady?.()
+    // Clear predecessor-attempt diagnostics on recovery so Connected cannot retain stale failure details.
+    this.publishDiagnostics()
+    this.readiness.scheduleStableReset(generation)
+    resolveSharedControlReadyWaiters(this.readyWaiters)
+    this.replaySubscriptions()
   }
 
   private replaySubscriptions(): void {
@@ -235,6 +240,7 @@ export class RemoteRuntimeSharedControlConnection {
   }
 
   private closeSubscription(requestId: string): void {
+    this.binaryChannels?.close(this.subscriptions.get(requestId))
     closeSharedControlConnectionSubscription({
       subscriptions: this.subscriptions,
       retiredRequestIds: this.retiredRequestIds,
@@ -247,8 +253,7 @@ export class RemoteRuntimeSharedControlConnection {
   private readonly sendEncrypted = (payload: unknown): boolean =>
     sharedControlProtocol.sendSharedControlEncrypted({
       state: this.state,
-      ws: this.ws,
-      handshake: this.handshake,
+      channel: this.channel,
       payload
     })
 
@@ -299,14 +304,12 @@ export class RemoteRuntimeSharedControlConnection {
       subscriptions: this.subscriptions,
       readyWaiters: this.readyWaiters,
       lastClose: this.getDiagnostics().lastClose,
-      socketCleanup: this.socketCleanup,
-      ws: this.ws,
+      channel: this.channel,
       error,
       preserveReadyWaitersAndPendingRequests: options.preserveReadyWaitersAndPendingRequests,
       clearReadinessTimer: () => this.readiness.clear()
     })
-    this.ws = this.handshake = null
-    this.socketCleanup = null
+    this.channel = null
     this.state = 'closed'
     this.publishDiagnostics()
   }

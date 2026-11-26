@@ -141,8 +141,7 @@ export function closeSharedControlSocketState(args: {
   readyWaiters: SharedControlReadyWaiter[]
   pendingRequests: Map<string, SharedControlPendingRequest<unknown>>
   subscriptions: Map<string, SharedControlLogicalSubscription<unknown>>
-  socketCleanup: (() => void) | null
-  ws: { close: () => void } | null
+  channel: { close: () => void } | null
   error?: Error
   preserveReadyWaitersAndPendingRequests?: boolean
 }): void {
@@ -155,8 +154,7 @@ export function closeSharedControlSocketState(args: {
   }
   markSharedControlSubscriptionsUnsent(args.subscriptions)
   try {
-    args.socketCleanup?.()
-    args.ws?.close()
+    args.channel?.close()
   } catch {
     // Best-effort cleanup of remote runtime control socket.
   }

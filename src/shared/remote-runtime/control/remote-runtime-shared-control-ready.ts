@@ -1,5 +1,4 @@
-import type { PairedE2EEClientHandshake } from '../e2ee/paired-e2ee-client-handshake'
-import WebSocket from 'ws'
+import type { AuthenticatedRuntimeChannel } from './remote-runtime-authenticated-channel'
 import { abortSignalReason } from '../../concurrency/abort-signal-reason'
 import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { REMOTE_RUNTIME_MAX_READY_WAITERS } from '../remote-runtime-memory-limits'
@@ -11,14 +10,16 @@ import type {
 
 export function isSharedControlReady(args: {
   state: SharedControlConnectionState
-  ws: WebSocket | null
-  handshake: PairedE2EEClientHandshake | null
+  channel: AuthenticatedRuntimeChannel | null
 }): boolean {
-  return args.state === 'ready' && args.ws?.readyState === WebSocket.OPEN && !!args.handshake
+  return args.state === 'ready' && args.channel?.state() === 'open'
 }
 
-export function openIfSocketClosed(ws: WebSocket | null, open: () => void): void {
-  if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+export function openIfChannelClosed(
+  channel: AuthenticatedRuntimeChannel | null,
+  open: () => void
+): void {
+  if (!channel || channel.state() === 'closed') {
     open()
   }
 }

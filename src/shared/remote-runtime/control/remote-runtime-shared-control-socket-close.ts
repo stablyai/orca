@@ -1,4 +1,4 @@
-import type WebSocket from 'ws'
+import type { AuthenticatedRuntimeChannel } from './remote-runtime-authenticated-channel'
 import { logSharedControlSocketClose } from './remote-runtime-shared-control-diagnostics-log'
 import { closeSharedControlSocketState } from './remote-runtime-shared-control-state'
 import { finishCloseAfterReadySubscriptions } from '../requests/remote-runtime-shared-control-subscriptions'
@@ -17,8 +17,7 @@ export function closeSharedControlSocket(args: {
   reportClose: () => void
   environmentId?: string
   state: SharedControlConnectionState
-  ws: WebSocket | null
-  socketCleanup: (() => void) | null
+  channel: AuthenticatedRuntimeChannel | null
   pendingRequests: Map<string, SharedControlPendingRequest<unknown>>
   subscriptions: Map<string, SharedControlLogicalSubscription<unknown>>
   readyWaiters: SharedControlReadyWaiter[]
@@ -27,7 +26,7 @@ export function closeSharedControlSocket(args: {
   preserveReadyWaitersAndPendingRequests?: boolean
   clearReadinessTimer: () => void
 }): void {
-  if (args.ws || args.socketCleanup) {
+  if (args.channel) {
     args.reportClose()
     logSharedControlSocketClose({
       environmentId: args.environmentId ?? 'unknown',
@@ -44,8 +43,7 @@ export function closeSharedControlSocket(args: {
     readyWaiters: args.readyWaiters,
     pendingRequests: args.pendingRequests,
     subscriptions: args.subscriptions,
-    socketCleanup: args.socketCleanup,
-    ws: args.ws,
+    channel: args.channel,
     error: args.error,
     preserveReadyWaitersAndPendingRequests: args.preserveReadyWaitersAndPendingRequests
   })

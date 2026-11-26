@@ -6,6 +6,7 @@ import { startSharedControlSubscription } from '../requests/remote-runtime-share
 import { sendSharedControlSubscription } from './remote-runtime-shared-control-send'
 import type { SharedControlRetiredRequestIds } from '../requests/remote-runtime-shared-control-retired-request-ids'
 import type * as SharedControlTypes from './remote-runtime-shared-control-types'
+import type { SharedControlBinaryChannels } from './remote-runtime-shared-control-binary-channels'
 
 export class SharedControlRequests {
   constructor(
@@ -16,9 +17,10 @@ export class SharedControlRequests {
       retiredRequestIds: SharedControlRetiredRequestIds
       ensureReady: (timeoutMs: number, signal?: AbortSignal) => Promise<void>
       sendEncrypted: (payload: unknown) => boolean
-      wire: () => Pick<Parameters<typeof sendSharedControlRequest>[0], 'state' | 'ws' | 'handshake'>
+      wire: () => Pick<Parameters<typeof sendSharedControlRequest>[0], 'state' | 'channel'>
       closeSubscription: (requestId: string) => void
       captureSendGuard: () => () => void
+      binaryChannels: () => SharedControlBinaryChannels | null
     }
   ) {}
   request<TResult>(
@@ -29,7 +31,7 @@ export class SharedControlRequests {
     signal?: AbortSignal,
     send?: Pick<
       Parameters<typeof requestSharedControl>[0],
-      'beforeSend' | 'prepareRequest' | 'idlePassive'
+      'beforeSend' | 'prepareRequest' | 'idlePassive' | 'binaryChannel'
     > & {
       prepareGuard?: RuntimeRequestGuard
       /** Bounds the whole request while socket readiness keeps timeoutMs, so an unreachable host fails fast. */
@@ -65,8 +67,10 @@ export class SharedControlRequests {
     params: unknown,
     timeoutMs: number,
     callbacks: SharedControlTypes.SharedControlSubscriptionCallbacks<TResult>,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    stream?: { binaryChannel: boolean }
   ): Promise<SharedControlTypes.RemoteRuntimeSharedSubscription> {
+    const binaryChannels = stream?.binaryChannel ? this.host.binaryChannels() : null
     return startSharedControlSubscription({
       subscriptions: this.host.subscriptions,
       deviceToken: this.host.connection().credential.deviceToken,
@@ -82,7 +86,17 @@ export class SharedControlRequests {
           deviceToken: this.host.connection().credential.deviceToken,
           send: (payload) => this.host.sendEncrypted(payload)
         }),
-      closeSubscription: (requestId) => this.host.closeSubscription(requestId)
+      closeSubscription: (requestId) => this.host.closeSubscription(requestId),
+      binaryChannel: binaryChannels
+        ? {
+            assign: (subscription) => binaryChannels.assign(subscription),
+            sendBinary: (subscription, bytes) => binaryChannels.sendData(subscription, bytes),
+            sendRequest: (subscription, method, params, timeoutMs) =>
+              this.request(method, params, timeoutMs, undefined, undefined, {
+                binaryChannel: subscription.binaryChannel
+              })
+          }
+        : undefined
     })
   }
 }

@@ -83,11 +83,14 @@ export function serializeRemoteRuntimeRpcRequest(args: {
   maxBytes?: number
   /** Background traffic (a poll): a host whose control socket is passive doesn't count it as use. */
   idlePassive?: boolean
+  /** Runs the call on a stream's binary channel (runtime-binary-channel.ts). */
+  binaryChannel?: number
 }): string {
   return serializeRemoteRuntimePayload(
     {
       id: args.requestId,
       ...(args.idlePassive ? { idlePassive: true } : {}),
+      ...(args.binaryChannel === undefined ? {} : { binaryChannel: args.binaryChannel }),
       deviceToken: args.deviceToken,
       method: args.method,
       params: args.params,

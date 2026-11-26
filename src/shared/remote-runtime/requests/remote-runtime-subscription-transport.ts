@@ -31,6 +31,7 @@ import type {
   RemoteRuntimeTransportSubscription,
   RemoteRuntimeTransportSubscriptionCallbacks
 } from './remote-runtime-subscription-contract'
+import { remoteRuntimeOneLinkFor } from '../control/remote-runtime-one-link'
 
 export async function subscribeRemoteRuntimeTransport<TResult>(
   connection: PairedRuntimeConnection,
@@ -41,6 +42,12 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
   options?: RemoteRuntimeSubscriptionOptions
 ): Promise<RemoteRuntimeTransportSubscription> {
   throwIfSignalAborted(options?.signal)
+  const oneLink = remoteRuntimeOneLinkFor(connection)
+  if (oneLink) {
+    return await oneLink.subscribe(method, params, timeoutMs, callbacks, options?.signal, {
+      binaryChannel: true
+    })
+  }
   const requestId = randomUUID()
   const serializedRequest = serializeRemoteRuntimeRpcRequest({
     requestId,

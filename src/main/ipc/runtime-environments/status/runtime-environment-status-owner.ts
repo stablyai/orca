@@ -77,6 +77,7 @@ export function createRuntimeEnvironmentStatusOwner(
     request: (signal: AbortSignal) => Promise<RuntimeHostStatusResponse>
     establish: () => void
     pause: () => void
+    noteHostCapabilities: (capabilities: readonly string[] | undefined) => void
   }
 ): RuntimeHostStatusOwner {
   const connection = getPreferredPairedRuntimeConnection(environment)
@@ -164,6 +165,9 @@ export function createRuntimeEnvironmentStatusOwner(
     verified: (response, active) => {
       const capable =
         response.result.capabilities?.includes(REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY) ?? false
+      if (capable && active) {
+        transport.noteHostCapabilities(response.result.capabilities)
+      }
       const accepted = applyRuntimeEnvironmentCapabilityVerdict({
         evidence,
         verdict: capable ? 'capable' : 'absent',

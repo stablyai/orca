@@ -1,48 +1,10 @@
-import type { PairedE2EEClientHandshake } from '../e2ee/paired-e2ee-client-handshake'
-import type WebSocket from 'ws'
 import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { serializeRemoteRuntimePayload } from '../remote-runtime-memory-limits'
-import { openSealedText, type RemoteRuntimeSealedFrame } from '../remote-runtime-sealed-frame'
-import {
-  invalidRemoteRuntimeResponseError,
-  parseRemoteRuntimeRpcFrame
-} from '../requests/remote-runtime-request-frames'
+import type { AuthenticatedRuntimeChannel } from './remote-runtime-authenticated-channel'
 import type {
   SharedControlConnectionState,
   SharedControlLogicalSubscription
 } from './remote-runtime-shared-control-types'
-
-export function parseSharedControlFrame(
-  frame: RemoteRuntimeSealedFrame,
-  handshake: PairedE2EEClientHandshake | null,
-  state: SharedControlConnectionState
-):
-  | { type: 'auth'; plaintext: string }
-  | {
-      type: 'frame'
-      frame: Exclude<ReturnType<typeof parseRemoteRuntimeRpcFrame>, { type: 'error' }>
-    }
-  | { type: 'error'; error: RemoteRuntimeClientError } {
-  if (!handshake) {
-    return {
-      type: 'error',
-      error: invalidRemoteRuntimeResponseError('Remote Orca runtime returned a frame before E2EE.')
-    }
-  }
-  const opened = openSealedText(handshake, frame)
-  if (opened.kind === 'failed') {
-    return { type: 'error', error: invalidRemoteRuntimeResponseError(opened.message) }
-  }
-  const plaintext = opened.text
-  if (state === 'awaiting_authenticated') {
-    return { type: 'auth', plaintext }
-  }
-  const parsed = parseRemoteRuntimeRpcFrame(plaintext)
-  if (parsed.type === 'error') {
-    return parsed
-  }
-  return { type: 'frame', frame: parsed }
-}
 
 export function getSubscriptionId(result: unknown): string | null {
   if (typeof result !== 'object' || result === null) {
@@ -114,14 +76,10 @@ export function formatSharedControlCloseMessage(code: number, reason: Buffer): s
 
 export function sendSharedControlEncrypted(args: {
   state: SharedControlConnectionState
-  ws: WebSocket | null
-  handshake: PairedE2EEClientHandshake | null
+  channel: AuthenticatedRuntimeChannel | null
   payload: unknown
 }): boolean {
-  if (args.state !== 'ready' && args.state !== 'awaiting_authenticated') {
-    return false
-  }
-  if (!args.ws || args.ws.readyState !== 1 || !args.handshake) {
+  if (!canSendSharedControl(args)) {
     return false
   }
   let serialized: string
@@ -135,24 +93,20 @@ export function sendSharedControlEncrypted(args: {
 
 export function sendSharedControlEncryptedSerialized(args: {
   state: SharedControlConnectionState
-  ws: WebSocket | null
-  handshake: PairedE2EEClientHandshake | null
+  channel: AuthenticatedRuntimeChannel | null
   serialized: string
 }): boolean {
-  if (
-    (args.state !== 'ready' && args.state !== 'awaiting_authenticated') ||
-    !args.ws ||
-    args.ws.readyState !== 1 ||
-    !args.handshake
-  ) {
-    return false
-  }
-  try {
-    args.ws.send(args.handshake.channel.sealText(args.serialized))
-    return true
-  } catch {
-    return false
-  }
+  return canSendSharedControl(args) && args.channel.sendText(args.serialized)
+}
+
+function canSendSharedControl(args: {
+  state: SharedControlConnectionState
+  channel: AuthenticatedRuntimeChannel | null
+}): args is { state: SharedControlConnectionState; channel: AuthenticatedRuntimeChannel } {
+  return (
+    (args.state === 'ready' || args.state === 'awaiting_authenticated') &&
+    args.channel?.state() === 'open'
+  )
 }
 
 export function toRemoteRuntimeClientError(error: unknown): RemoteRuntimeClientError {

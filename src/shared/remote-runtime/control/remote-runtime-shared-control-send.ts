@@ -36,7 +36,10 @@ export function sendSharedControlSubscription(args: {
       id: args.subscription.requestId,
       deviceToken: args.deviceToken,
       method: args.subscription.method,
-      params: args.subscription.params
+      params: args.subscription.params,
+      ...(args.subscription.binaryChannel === undefined
+        ? {}
+        : { binaryChannel: args.subscription.binaryChannel })
     })
   ) {
     args.subscription.sent = true
