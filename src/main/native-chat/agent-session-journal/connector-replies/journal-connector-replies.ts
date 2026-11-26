@@ -118,7 +118,9 @@ export function fillJournalConnectorReplies(
 ): number {
   const fillWhere = (expect: string) =>
     db.prepare(`UPDATE journal_connector_replies SET outcome=?,answer_delivery_id=?,
-    turn_item_id=?,prose=?,has_presentation=?,failure_json=?,links_json=?,took_ms=?,turn_started_at=?,
+    turn_item_id=?,prose=CASE WHEN source='slack' AND ? THEN ? ELSE ? END,
+    has_presentation=CASE WHEN source='slack' AND ? THEN 1 END,
+    failure_json=?,links_json=?,took_ms=?,turn_started_at=?,
     tools_ran=COALESCE(?,tools_ran),filled_at=? WHERE account=? AND delivery_id=? AND outcome IS NULL AND ${expect}`)
   const open = fillWhere(EXPECT_OPEN)
   const claimed = fillWhere(EXPECT_CLAIMED)
@@ -155,8 +157,10 @@ export function fillJournalConnectorReplies(
         row.outcome,
         row.answerDeliveryId,
         row.turnItemId ?? null,
-        hasPresentation ? SLACK_PRESENTATION_UNCONFIRMED : (prose ?? null),
-        hasPresentation ? 1 : null,
+        hasPresentation ? 1 : 0,
+        SLACK_PRESENTATION_UNCONFIRMED,
+        prose ?? null,
+        hasPresentation ? 1 : 0,
         failureJson(row.failure),
         row.links?.length ? JSON.stringify(row.links) : null,
         row.tookMs ?? null,

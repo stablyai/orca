@@ -51,7 +51,7 @@ export type ConnectorReplyRoute = {
   client: ConnectorReplyClient | null
   outbox: boolean | undefined
   presentations?: boolean
-  setAside?: ReadonlySet<string>
+  setAside?: Pick<ReadonlySet<string>, 'has'>
 }
 
 /** How the running client sends what the journal holds; null while none runs. */

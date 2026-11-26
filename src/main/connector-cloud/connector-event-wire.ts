@@ -18,6 +18,7 @@ import { capAnswer, jsonBytes, unsupported } from './connector-snapshot'
 import { redactLocalPaths } from '../../shared/connectors/slack-local-paths'
 import { isSlackConversation } from './connector-slack-text'
 import {
+  CONNECTOR_SLACK_PRESENTATION_TURN_END_FEATURE,
   takesSlackAnswerPresentation,
   SLACK_PRESENTATION_UNCONFIRMED,
   slackAnswerText
@@ -156,7 +157,10 @@ export function answerFor(
   // One already within the cap goes as the same object: what binds to a sent event still finds it.
   if (event.kind === 'turn-ended' && event.lastAssistantMessage !== undefined) {
     if (event.presentation) {
-      if (takesSlackAnswerPresentation(cloudFeatures)) {
+      if (
+        takesSlackAnswerPresentation(cloudFeatures) &&
+        cloudFeatures.has(CONNECTOR_SLACK_PRESENTATION_TURN_END_FEATURE)
+      ) {
         const text = slackAnswerText(event.presentation)
         if (answerTextFor(redactLocalPaths(text), cloudFeatures) === text) {
           return { ...event, lastAssistantMessage: text }

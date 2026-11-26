@@ -9,7 +9,12 @@ import {
   type ConnectorConversation,
   type ConnectorEvent
 } from '../../shared/connectors/connector-cloud-contract'
-import { takesSlackAnswerPresentation } from '../../shared/connectors/slack-answer-presentation'
+import {
+  CONNECTOR_SLACK_PRESENTATION_FEATURE,
+  CONNECTOR_SLACK_PRESENTATION_TEXT_FEATURE,
+  CONNECTOR_SLACK_PRESENTATION_TURN_END_FEATURE,
+  takesSlackAnswerPresentation
+} from '../../shared/connectors/slack-answer-presentation'
 import type {
   ConversationEvent,
   ConversationSnapshot
@@ -65,6 +70,8 @@ export class ConnectorTurnEvents {
   private warnedTrimmed = false
   // From the current hello's answer; empty before one.
   private cloudFeatures = NO_CLOUD_FEATURES
+  presentationGeneration = 0
+  private readonly heldPresentations = new Set<string>()
   private readonly requestVersions = new Map<number, 1 | 2>()
   private readonly replies: ConnectorReplyOutbox
   // Flushes the running client's events; null while none runs.
@@ -105,14 +112,14 @@ export class ConnectorTurnEvents {
         void this.replies.accepted(batch).then(() => installedLeaveLines()?.turnEndsTaken(batch))
       },
       onSplit: (batch) => this.trace.split(batch),
+      replaceRefused: (event, failure) =>
+        failure?.status === 400 && isTurnEnded(event) && event.presentation
+          ? answerFor(event, NO_CLOUD_FEATURES)
+          : undefined,
       onDropped: (item, stamp, failure) => {
         this.trace.dropped(item, stamp)
         // A turn end the cloud won't take lets its leave's line go.
         if (isTurnEnded(item)) {
-          if (failure?.status === 400 && item.presentation) {
-            this.outbox.push(answerFor(item, NO_CLOUD_FEATURES))
-            return
-          }
           installedLeaveLines()?.turnEndsTaken([item])
         }
         // A reply refused as invalid can't succeed as sent under this hello: it stays in flight
@@ -120,11 +127,9 @@ export class ConnectorTurnEvents {
         // that doesn't stand yet) goes again later.
         if (failure?.status === 400) {
           const ids = replyDeliveryIds([item])
-          if (isReplyEvent(item) && item.presentation) {
-            this.replies.released(ids, true)
-            return
-          }
-          ids.forEach((id) => this.setAside.add(id))
+          const held =
+            isReplyEvent(item) && item.presentation ? this.heldPresentations : this.setAside
+          ids.forEach((id) => held.add(id))
           this.replies.released(ids, false)
           return
         }
@@ -166,6 +171,17 @@ export class ConnectorTurnEvents {
 
   /** Set before the hello's watch starts, so its events match what that cloud reads. */
   useCloudFeatures(features: ReadonlySet<string>, helloRev?: number): void {
+    if (
+      [
+        CONNECTOR_SLACK_PRESENTATION_FEATURE,
+        CONNECTOR_SLACK_PRESENTATION_TEXT_FEATURE,
+        CONNECTOR_SLACK_PRESENTATION_TURN_END_FEATURE,
+        CONNECTOR_REPLIES_OUTBOX_FEATURE
+      ].some((feature) => this.cloudFeatures.has(feature) !== features.has(feature))
+    ) {
+      this.presentationGeneration++
+      this.heldPresentations.clear()
+    }
     this.cloudFeatures = features
     // Under a hello without it (the kill switch), this hello's snapshot lets replies in transit go,
     // and they drain through /replies instead.
@@ -234,7 +250,7 @@ export class ConnectorTurnEvents {
       },
       outbox: this.repliesOutbox,
       presentations: takesSlackAnswerPresentation(this.cloudFeatures),
-      setAside: this.setAside
+      setAside: { has: (id) => this.setAside.has(id) || this.heldPresentations.has(id) }
     }
   }
 
@@ -323,6 +339,7 @@ export class ConnectorTurnEvents {
     this.stored.clear()
     this.replies.retire()
     this.setAside.clear()
+    this.heldPresentations.clear()
     this.outbox.restart([], () => false)
     this.trace.flush()
   }

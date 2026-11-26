@@ -62,7 +62,7 @@ export type BotAutomationSessions = {
 
 /** How a bot run ends: watch its turn from before the prompt is sent, then deliver its result. */
 export type BotRunResults = {
-  watch(slackRunId?: string): Promise<BotTurnWatch>
+  watch(slackRunId?: string, linkedThread?: boolean): Promise<BotTurnWatch>
   deliver(result: BotRunResult): Promise<BotRunCompletion>
   /** Its session refused the prompt or couldn't open, so no turn began. With `notStarted`, the chat
    *  the run was meant for (else the bot's Chat) shows the card. */
@@ -202,7 +202,10 @@ export function createBotAutomationDispatcher(
         : runsIn === 'chat' && chosenChat
           ? { kind: 'bot-chat', chatId: chosenChat }
           : { kind: 'chat' }
-    const turns = await results.watch(slackAnswer ? run.id : undefined)
+    const turns = await results.watch(
+      slackAnswer ? run.id : undefined,
+      saved === 'thread' && route.kind === 'take'
+    )
     let send: BotRunSend
     try {
       send =

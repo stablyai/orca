@@ -71,6 +71,7 @@ export type JournalSqlDatabaseRead =
       includePresentations?: boolean
     }
   | { kind: 'slack-answer-presentation'; turn: JournalSlackAnswerTurn }
+  | { kind: 'slack-answer-presence' }
   | {
       kind: 'connector-reply-unsent'
       sessionId: string
@@ -96,7 +97,12 @@ export type JournalSqlDatabaseReadResult =
   | { kind: 'deleted-chats'; chats: DeletedChat[] }
   | { kind: 'connector-replies'; rows: JournalConnectorReplyRow[] }
   | { kind: 'connector-reply-unsent'; unsent: boolean }
-  | { kind: 'slack-answer-presentation'; presentation: SlackAnswerPresentation | undefined }
+  | {
+      kind: 'slack-answer-presentation'
+      presentation: SlackAnswerPresentation | undefined
+      any: boolean
+    }
+  | { kind: 'slack-answer-presence'; any: boolean }
 
 /** Profile metadata has no chat projection prerequisite; all reads still share one WAL snapshot. */
 export function readJournalSqlDatabase(
@@ -142,10 +148,21 @@ function read(
         kind: 'connector-replies',
         rows: readJournalConnectorReplies(db, operation.sessionId)
       }
-    case 'slack-answer-presentation':
+    case 'slack-answer-presentation': {
+      const presentation = journalSlackAnswerPresentation(db, operation.turn)
       return {
         kind: 'slack-answer-presentation',
-        presentation: journalSlackAnswerPresentation(db, operation.turn)
+        presentation,
+        any:
+          presentation !== undefined ||
+          db.prepare('SELECT 1 FROM journal_slack_answer_presentations LIMIT 1').get() !== undefined
+      }
+    }
+    case 'slack-answer-presence':
+      return {
+        kind: 'slack-answer-presence',
+        any:
+          db.prepare('SELECT 1 FROM journal_slack_answer_presentations LIMIT 1').get() !== undefined
       }
     case 'connector-reply-unsent':
       return {

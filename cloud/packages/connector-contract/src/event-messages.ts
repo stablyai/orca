@@ -11,6 +11,7 @@ import { OptionalConnectorFailureSchema } from './failure-messages.js'
 import {
   SLACK_PRESENTATION_EVENT_VERSION,
   SLACK_PRESENTATION_POST_VERSION,
+  SLACK_PRESENTATION_TURN_END_VERSION,
   SlackAnswerPresentationSchema,
   slackAnswerText
 } from './slack-answer-presentation.js'
@@ -287,6 +288,11 @@ const ConnectorTextEventSchema = z.discriminatedUnion('kind', [
   ConnectorTurnEndedEventSchema.safeExtend({ presentation: z.never().optional() }),
   ConnectorReplyEventSchema.safeExtend({ presentation: z.never().optional() })
 ])
+const ConnectorReplyPresentationEventSchema = z.discriminatedUnion('kind', [
+  ...ConnectorNonReplyEvents,
+  ConnectorTurnEndedEventSchema.safeExtend({ presentation: z.never().optional() }),
+  ConnectorReplyEventSchema
+])
 
 const fitsOneEvent = (event: unknown) =>
   utf8Bytes(JSON.stringify(event)) <= CONNECTOR_LIMITS.maxEventBytes
@@ -317,17 +323,26 @@ const TextEvents = z
     { message: 'Private prompts require audience-aware event requests' }
   )
 
-const PresentationEvents = z
+const ReplyPresentationEvents = z
   .object({
     ...EventBatch,
     v: z.literal(SLACK_PRESENTATION_EVENT_VERSION),
+    events: z.array(ConnectorReplyPresentationEventSchema.refine(fitsOneEvent)).min(1)
+  })
+  .refine(({ events }) => events.some((event) => event.kind === 'reply' && event.presentation))
+
+const TurnEndPresentationEvents = z
+  .object({
+    ...EventBatch,
+    v: z.literal(SLACK_PRESENTATION_TURN_END_VERSION),
     events: z.array(ConnectorEventSchema.refine(fitsOneEvent)).min(1)
   })
-  .refine(({ events }) => events.some((event) => (event.kind === 'reply' || event.kind === 'turn-ended') && event.presentation))
+  .refine(({ events }) => events.some((event) => event.kind === 'turn-ended' && event.presentation))
 
 export const ConnectorEventsRequestSchema = z.discriminatedUnion('v', [
   TextEvents,
-  PresentationEvents
+  ReplyPresentationEvents,
+  TurnEndPresentationEvents
 ])
 
 // One inline note on a pull request's diff: a file, a line in its new version (LEFT: the old one),

@@ -14,7 +14,10 @@ import { runtimeBotRunNotStarted, showBotRunNotStarted } from './bot-run-not-sta
 import { runtimeNoteToChat } from './bot-run-result-note'
 import { deliverBotRunResult } from './bot-run-results'
 import { keepSlackRunAnswer } from './bot-slack-answer-guidance'
-import { CONNECTOR_SLACK_PRESENTATION_FEATURE } from '../../shared/connectors/slack-answer-presentation'
+import {
+  CONNECTOR_SLACK_PRESENTATION_FEATURE,
+  CONNECTOR_SLACK_PRESENTATION_TURN_END_FEATURE
+} from '../../shared/connectors/slack-answer-presentation'
 import { watchBotTurnEnds } from './bot-run-turn-watch'
 import { botTurnFor } from './bot-turn-for'
 import { orcaSignInServer } from './orca-sign-in-server'
@@ -28,17 +31,20 @@ export function runtimeBotRunRefusals(
 export function runtimeBotRunResults(runtime: OrcaRuntimeService): BotRunResults {
   const chats = runtimeBotChats(runtime)
   return {
-    watch: async (slackRunId) => {
+    watch: async (slackRunId, linkedThread) => {
       const host = await requireStructuredHost(runtime)
+      const features = runtime.getConnectorCloud()?.cloudFeatures()
       if (
         !slackRunId ||
-        !runtime.getConnectorCloud()?.cloudFeatures()?.has(CONNECTOR_SLACK_PRESENTATION_FEATURE)
+        !features?.has(CONNECTOR_SLACK_PRESENTATION_FEATURE) ||
+        (linkedThread && !features.has(CONNECTOR_SLACK_PRESENTATION_TURN_END_FEATURE))
       ) {
         return watchBotTurnEnds(host)
       }
       const journal = host.deps.store.connectorReplies()
-      const watched = watchBotTurnEnds(host, (turn, prose) =>
-        journal.answerPresentation(turn, prose)
+      const watched = watchBotTurnEnds(
+        host,
+        linkedThread ? undefined : (turn, prose) => journal.answerPresentation(turn, prose)
       )
       const release = keepSlackRunAnswer(slackRunId)
       return {

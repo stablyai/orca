@@ -190,7 +190,11 @@ export function conversationReplyFill(
       })
       const answerDeliveryId = answers.get(conversation) ?? row.deliveryId
       const presentationTurn =
-        turn.bot && outcome === 'answered' && prose === turn.prose && turn.journalEpoch
+        row.conversation.source === 'slack' &&
+        turn.bot &&
+        outcome === 'answered' &&
+        prose === turn.prose &&
+        turn.journalEpoch
           ? { sessionId: turn.sessionId, epoch: turn.journalEpoch, turnItemId: turn.turnItemId }
           : undefined
       fills.push({

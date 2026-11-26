@@ -47,6 +47,8 @@ export class ConnectorOutbox<T> {
       onStamped?: (batch: readonly T[], stamp: ConnectorStamp) => void
       /** A refused head was halved, keeping its number. */
       onSplit?: (batch: readonly T[], from: ConnectorStamp, to: ConnectorStamp) => void
+      /** A definitely refused item may have a replacement at the same queue position. */
+      replaceRefused?: (item: T, failure?: ConnectorFailure) => T | undefined
       /** A single refused item was dropped, with why the cloud refused it. */
       onDropped?: (item: T, stamp: ConnectorStamp, failure?: ConnectorFailure) => void
     }
@@ -115,6 +117,14 @@ export class ConnectorOutbox<T> {
     if (stamp.size > 1) {
       const halved = (this.stamp = { ...stamp, size: Math.ceil(stamp.size / 2) })
       this.options.onSplit?.(this.items.slice(0, stamp.size), stamp, halved)
+      return null
+    }
+    const head = this.items[0]
+    const replacement =
+      head === undefined ? undefined : this.options.replaceRefused?.(head, failure)
+    if (replacement !== undefined) {
+      this.items[0] = replacement
+      this.notify()
       return null
     }
     const [dropped] = this.items.splice(0, 1)

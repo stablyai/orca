@@ -5,6 +5,7 @@ import { capAnswer } from './connector-snapshot'
 import {
   CONNECTOR_SLACK_PRESENTATION_FEATURE,
   CONNECTOR_SLACK_PRESENTATION_TEXT_FEATURE,
+  CONNECTOR_SLACK_PRESENTATION_TURN_END_FEATURE,
   SlackAnswerPresentationSchema,
   SLACK_PRESENTATION_UNCONFIRMED,
   slackAnswerText
@@ -106,7 +107,18 @@ describe('answerFor', () => {
       lastAssistantMessage: SLACK_PRESENTATION_UNCONFIRMED,
       presentation
     })
-    expect(answerFor(ended!, new Set([CONNECTOR_SLACK_PRESENTATION_TEXT_FEATURE]))).toMatchObject({
+    expect(
+      answerFor(ended!, new Set([CONNECTOR_SLACK_PRESENTATION_TEXT_FEATURE]))
+    ).not.toHaveProperty('presentation')
+    expect(
+      answerFor(
+        ended!,
+        new Set([
+          CONNECTOR_SLACK_PRESENTATION_TEXT_FEATURE,
+          CONNECTOR_SLACK_PRESENTATION_TURN_END_FEATURE
+        ])
+      )
+    ).toMatchObject({
       turnId: 1,
       lastAssistantMessage: slackAnswerText(presentation),
       presentation

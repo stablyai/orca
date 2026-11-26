@@ -1,17 +1,18 @@
 import type { ConnectorEvent } from '../../shared/connectors/connector-cloud-contract'
 import { CONNECTOR_AUDIENCE_EVENTS_VERSION } from '../../shared/connectors/connector-cloud-contract'
-import { SLACK_PRESENTATION_EVENT_VERSION } from '../../shared/connectors/slack-answer-presentation'
+import {
+  SLACK_PRESENTATION_EVENT_VERSION,
+  SLACK_PRESENTATION_TURN_END_VERSION
+} from '../../shared/connectors/slack-answer-presentation'
 import type { ConversationWatchListener } from '../external-conversations/external-conversation-events'
 import type { ConnectorFailure } from './connector-cloud-request'
 import type { ConnectorTurnEvents } from './connector-turn-events'
-
-const PRESENTATION_REHELLO_INTERVAL_MS = 30_000
 
 /** A hello's event watch and protocol fence; rejected audience batches are rebuilt, never downgraded. */
 export class ConnectorEventRequests {
   private release: (() => void) | null = null
   private pause: Promise<null> | null = null
-  private presentationRehelloAt = 0
+  private presentationRehelloGeneration: number | undefined
 
   constructor(
     private readonly deps: {
@@ -57,19 +58,31 @@ export class ConnectorEventRequests {
     seq: number
   ): Promise<ConnectorFailure | null> {
     const v = this.deps.events.requestVersion(helloRev)
-    const presented = events.some(
-      (event) => (event.kind === 'reply' || event.kind === 'turn-ended') && event.presentation
+    const presentedTurnEnd = events.some(
+      (event) => event.kind === 'turn-ended' && event.presentation
     )
+    const presentedReply =
+      !presentedTurnEnd && events.some((event) => event.kind === 'reply' && event.presentation)
+    const presented = presentedTurnEnd || presentedReply
+    const generation = this.deps.events.presentationGeneration
     const failure = await this.deps.post(
-      { v: presented ? SLACK_PRESENTATION_EVENT_VERSION : v, helloRev, seq, events },
+      {
+        v: presentedTurnEnd
+          ? SLACK_PRESENTATION_TURN_END_VERSION
+          : presentedReply
+            ? SLACK_PRESENTATION_EVENT_VERSION
+            : v,
+        helloRev,
+        seq,
+        events
+      },
       helloRev,
       events
     )
     if (failure?.status === 400) {
       // An older receiver rejects the version before it can apply any event.
-      const now = Date.now()
-      if (presented && now >= this.presentationRehelloAt) {
-        this.presentationRehelloAt = now + PRESENTATION_REHELLO_INTERVAL_MS
+      if (presented && this.presentationRehelloGeneration !== generation) {
+        this.presentationRehelloGeneration = generation
         this.rehello(helloRev, failure)
       } else if (
         !presented &&

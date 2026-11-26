@@ -2,6 +2,7 @@ import * as z from 'zod'
 
 export const CONNECTOR_SLACK_PRESENTATION_FEATURE = 'slack.answerPresentation'
 export const CONNECTOR_SLACK_PRESENTATION_TEXT_FEATURE = 'slack.answerPresentation.text'
+export const CONNECTOR_SLACK_PRESENTATION_TURN_END_FEATURE = 'slack.answerPresentation.turnEnd'
 /** A rollback can still verify and deliver a prepared answer as text. */
 export function takesSlackAnswerPresentation(features: ReadonlySet<string> | null): boolean {
   return (
@@ -12,6 +13,7 @@ export function takesSlackAnswerPresentation(features: ReadonlySet<string> | nul
 
 export const SLACK_PRESENTATION_POST_VERSION = 2
 export const SLACK_PRESENTATION_EVENT_VERSION = 3
+export const SLACK_PRESENTATION_TURN_END_VERSION = 4
 export const SLACK_PRESENTATION_UNCONFIRMED =
   'I couldn’t confirm that the details of this answer can be shared here.'
 export const SLACK_ANSWER_MAX_BYTES = 12 * 1024
