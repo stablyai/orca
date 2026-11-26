@@ -183,7 +183,7 @@ type NativeChatHostSetupInput = {
 }
 
 /** The shell family a new terminal on the chat's host opens; null when it isn't known. */
-function useNativeChatHostShell(target: RuntimeClientTarget): AgentStartupShell | null {
+export function useNativeChatHostShell(target: RuntimeClientTarget): AgentStartupShell | null {
   return useAppStoreWithHostStatuses((s, statuses) => {
     const status =
       target.kind === 'environment'
