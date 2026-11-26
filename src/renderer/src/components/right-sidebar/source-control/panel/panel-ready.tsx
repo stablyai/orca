@@ -9,6 +9,7 @@ import { GitGraphOpenButton, useGitGraphSupport } from '../sync/git-graph-open-b
 import type { SourceControlRowOpenEvent } from '../listing/split-open'
 import { openGitGraph } from '@/lib/source-control/graph/git-graph-tab'
 import type { SourceControlPanelReadyProps } from './panel-props'
+import { cn } from '@/lib/class-names'
 import { SourceControlHeaderOverflowMenu } from './header-overflow-menu'
 import { useSourceControlScope } from './worktree-scope'
 
@@ -192,7 +193,11 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
 
         <div
           ref={setFileListScrollElement}
-          className="relative flex flex-1 flex-col overflow-auto scrollbar-sleek pt-1"
+          className={cn(
+            'relative flex flex-1 flex-col overflow-auto scrollbar-sleek pt-1',
+            // Focus scrolling keeps rows clear of the sticky file-list header.
+            fileListHeader && !embedded && 'scroll-pt-[34px]'
+          )}
           style={{ paddingBottom: selectedKeys.size > 0 ? 50 : undefined }}
         >
           <SourceControlPanelContent {...props} fileListHeader={fileListHeader} />
