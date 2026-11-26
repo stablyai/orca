@@ -36,8 +36,8 @@ export function startWslMoveStartup(userDataPath: string, store: Store): Promise
     profile: store,
     orchestrationDatabasePath: orchestrationDbFile(userDataPath),
     hostAutomations: {
-      enable: (environmentId, ids, signal) =>
-        enableWslHostAutomations(userDataPath, environmentId, ids, signal)
+      enable: (environmentId, ids, signal, onSettled) =>
+        enableWslHostAutomations(userDataPath, environmentId, ids, signal, onSettled)
     },
     browserCookies: productionWslMoveBrowserCookieCopyDependencies(userDataPath)
   })

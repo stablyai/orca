@@ -212,6 +212,15 @@ function assertWslMoveLedgerUpdate(existing: WslMoveCutover, next: WslMoveCutove
   ) {
     throw new Error('wsl_move_ledger_changed')
   }
+  const reenabledBefore = existing.reenabledAutomationIds ?? []
+  const reenabledAfter = new Set(next.reenabledAutomationIds ?? [])
+  if (
+    !reenabledBefore.every((id) => reenabledAfter.has(id)) ||
+    (reenabledAfter.size > reenabledBefore.length &&
+      (existing.phase !== 'destination-committed' || next.phase !== 'destination-committed'))
+  ) {
+    throw new Error('wsl_move_ledger_changed')
+  }
   if (
     existing.phase === 'destination-committed' &&
     next.phase === 'client-rewritten' &&
