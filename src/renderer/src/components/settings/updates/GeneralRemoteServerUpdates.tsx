@@ -1,8 +1,7 @@
 import type React from 'react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useAppStore } from '@/store/index'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -12,6 +11,8 @@ import {
 } from '@/app-shell/updates/update-check-click-options'
 import { getRemoteServerNewerThanClientVersion } from '@/runtime/hosts/updates/remote-server-version-skew'
 import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
+import type { RemoteServerUpdateCheck } from '@/store/slices/runtime-host-updates/remote-server-updates'
+import type { UpdateCheckOptions } from '../../../../../shared/updater/update-status-types'
 import { getRemoteServerUpdatePhaseLabel } from '../runtime-environments/updates/RemoteServerUpdateStatus'
 import {
   getRemoteServerEntryHelp,
@@ -19,9 +20,15 @@ import {
 } from '../runtime-environments/updates/remote-server-update-entry-copy'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { AboutDisclosureRow } from './AboutDisclosureRow'
+import { ServerRestartConfirm } from './ServerRestartConfirm'
 
 const isEligible = (entry: RemoteServerUpdateEntry): boolean =>
   entry.phase === 'available' || entry.phase === 'failed'
+
+type Snapshot =
+  | { phase: 'owed' | 'failed' }
+  | { phase: 'running'; request: Promise<RemoteServerUpdateCheck | undefined> }
+  | { phase: 'ready'; check: RemoteServerUpdateCheck }
 
 type SummaryPart = { text: string; count: number }
 
@@ -123,32 +130,43 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   const entries = [...entryMap.values()]
   const checking = useAppStore((state) => state.remoteServerUpdatesChecking)
   const running = useAppStore((state) => state.remoteServerUpdatesRunning)
+  const revision = useAppStore((state) => state.remoteServerUpdatesCheckRevision)
   const refresh = useAppStore((state) => state.refreshRemoteServerUpdates)
   const start = useAppStore((state) => state.startRemoteServerUpdates)
   const setDialogOpen = useAppStore((state) => state.setRemoteServerUpdateDialogOpen)
   const [open, setOpen] = useState(false)
-  // Opening owes a default-track re-check; it waits for any in-flight (possibly modifier) check,
-  // and updates stay off until one succeeds, so a confirm never acts on a stale or one-off
-  // snapshot. A failed re-check keeps updates off; the header Check retries.
-  const [snapshot, setSnapshot] = useState<'owed' | 'running' | 'ready' | 'failed'>('owed')
-  const settleRefresh = useCallback((run: Promise<void>): void => {
-    setSnapshot('running')
-    run.then(
-      () => setSnapshot('ready'),
-      () => setSnapshot('failed')
-    )
-  }, [])
+  const toggleRef = useRef<HTMLButtonElement>(null)
+  const [snapshot, setSnapshot] = useState<Snapshot>({ phase: 'owed' })
+  const refreshSnapshot = useCallback(
+    (options?: UpdateCheckOptions): void => {
+      const request = refresh(options, { preserveFailureDetails: options === undefined })
+      setSnapshot({ phase: 'running', request })
+      const settle = (next: Snapshot): void => {
+        // Folding or another Check disowns this result, even if it settles during a reopen.
+        setSnapshot((current) =>
+          current.phase === 'running' && current.request === request ? next : current
+        )
+      }
+      void request.then(
+        (check) => settle(check ? { phase: 'ready', check } : { phase: 'owed' }),
+        () => settle({ phase: 'failed' })
+      )
+    },
+    [refresh]
+  )
+  const needsSnapshot =
+    snapshot.phase === 'owed' ||
+    (snapshot.phase === 'ready' && snapshot.check.revision !== revision)
   useEffect(() => {
-    if (!open || snapshot !== 'owed' || checking || running) {
+    if (!open || !needsSnapshot || checking || running) {
       return
     }
-    // refresh() returns early while another check or batch holds the store; leave it owed then.
     const store = useAppStore.getState()
     if (store.remoteServerUpdatesChecking || store.remoteServerUpdatesRunning) {
       return
     }
-    settleRefresh(refresh())
-  }, [open, snapshot, checking, running, refresh, settleRefresh])
+    refreshSnapshot()
+  }, [open, needsSnapshot, checking, running, refreshSnapshot])
 
   // A modifier-click Check picks a one-off release track; closing the dialog clears it, and so
   // does folding this list or leaving the page, so a later Update all can't inherit it.
@@ -165,7 +183,17 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
 
   const eligible = entries.filter(isEligible)
   const busy = checking || running
-  const updatesBlocked = busy || snapshot !== 'ready'
+  const authorizedCheck =
+    snapshot.phase === 'ready' && snapshot.check.revision === revision ? snapshot.check : null
+  const updatesBlocked = busy || !authorizedCheck
+  const startConfirmed = (ids: string[]): void => {
+    if (busy || !authorizedCheck) {
+      return
+    }
+    // The confirmed action's trigger can disappear as soon as its servers become queued.
+    toggleRef.current?.focus()
+    void start(ids, authorizedCheck)
+  }
   const updateLabel =
     eligible.length === 1
       ? t('settings.about.action.update', 'Update')
@@ -174,7 +202,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   // counts are never a stale snapshot from an earlier (possibly modifier) check.
   const setOpenAndRefresh = (next: boolean): void => {
     setOpen(next)
-    setSnapshot('owed')
+    setSnapshot({ phase: 'owed' })
     if (!next) {
       clearCheckOptions()
     }
@@ -201,7 +229,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
       onClick={(event) => {
         setOpen(true)
         // An explicit Check is its own snapshot, including a modifier one the user asked for.
-        settleRefresh(refresh(getUpdateCheckClickOptions(event)))
+        refreshSnapshot(getUpdateCheckClickOptions(event))
       }}
     >
       {checking ? <Loader2 className="animate-spin" /> : null}
@@ -223,6 +251,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
     >
       <AboutDisclosureRow
         label={t('settings.about.servers.title', 'Servers')}
+        toggleRef={toggleRef}
         summary={<ServerSummary parts={serverSummaryParts(entries, t)} />}
         open={open}
         onOpenChange={setOpenAndRefresh}
@@ -235,7 +264,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
                 key={entry.environmentId}
                 entry={entry}
                 disabled={updatesBlocked}
-                onUpdate={(ids) => void start(ids)}
+                onUpdate={startConfirmed}
               />
             ))}
             {eligible.length > 0 ? (
@@ -245,7 +274,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
                   label={updateLabel}
                   variant="default"
                   disabled={updatesBlocked}
-                  onConfirm={(ids) => void start(ids)}
+                  onConfirm={startConfirmed}
                 />
               </div>
             ) : null}
@@ -253,83 +282,6 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
         ) : null}
       </AboutDisclosureRow>
     </SearchableSetting>
-  )
-}
-
-/** Updating restarts servers, so every update asks once, naming what restarts and whether live sessions drop. */
-function ServerRestartConfirm({
-  servers,
-  label,
-  variant,
-  disabled,
-  onConfirm
-}: {
-  servers: RemoteServerUpdateEntry[]
-  label: string
-  variant: 'default' | 'outline'
-  disabled: boolean
-  /** Receives exactly the servers the question named. */
-  onConfirm: (environmentIds: string[]) => void
-}): React.JSX.Element {
-  const t = useTranslate()
-  const ids = servers.map((entry) => entry.environmentId)
-  const key = ids.join('\n')
-  // Bound to the servers it named: if the set changes while open, the question closes unanswered.
-  const [openKey, setOpenKey] = useState<string | null>(null)
-  // Invalidation is durable: once the set changes or updates block, the question is dropped and
-  // never reopens by itself.
-  if (openKey !== null && (openKey !== key || disabled)) {
-    setOpenKey(null)
-  }
-  const open = openKey === key && !disabled
-  const live = servers.some((entry) => entry.liveTabCount > 0 || entry.liveLeafCount > 0)
-  const question =
-    servers.length === 1
-      ? t('settings.about.servers.confirmOne', 'Restart {{name}}?', { name: servers[0].name })
-      : t('settings.about.servers.confirmMany', 'Restart {{count}} servers?', {
-          count: servers.length
-        })
-  return (
-    <Popover open={open} onOpenChange={(next) => setOpenKey(next ? key : null)}>
-      <PopoverTrigger asChild>
-        <Button type="button" variant={variant} size="sm" disabled={disabled}>
-          {label}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        align="end"
-        aria-label={question}
-        className="w-auto max-w-[min(30rem,calc(100vw-1rem))]"
-      >
-        <div className="flex items-center gap-3 p-1.5 ps-3">
-          <p className="min-w-0 text-sm">
-            {question}
-            {live ? ` ${t('settings.about.servers.liveMayDrop', 'Live sessions may drop.')}` : null}
-          </p>
-          {/* Focus starts on Cancel so a repeated or held Enter can't restart servers. */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            autoFocus
-            onClick={() => setOpenKey(null)}
-          >
-            {t('settings.about.servers.cancel', 'Cancel')}
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            disabled={disabled}
-            onClick={() => {
-              setOpenKey(null)
-              onConfirm(ids)
-            }}
-          >
-            {t('settings.about.action.update', 'Update')}
-          </Button>
-        </div>
-      </PopoverContent>
-    </Popover>
   )
 }
 

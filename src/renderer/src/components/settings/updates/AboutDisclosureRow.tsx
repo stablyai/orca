@@ -9,6 +9,7 @@ type AboutDisclosureRowProps = {
   summary?: React.ReactNode
   open: boolean
   onOpenChange: (open: boolean) => void
+  toggleRef?: React.Ref<HTMLButtonElement>
   /** The row's one trailing control; it stays outside the toggle so it never folds the row. */
   control?: React.ReactNode
   children: React.ReactNode
@@ -20,6 +21,7 @@ export function AboutDisclosureRow({
   summary,
   open,
   onOpenChange,
+  toggleRef,
   control,
   children
 }: AboutDisclosureRowProps): React.JSX.Element {
@@ -27,6 +29,7 @@ export function AboutDisclosureRow({
     <>
       <div data-settings-row="" className="@container/about-row flex items-center gap-3">
         <button
+          ref={toggleRef}
           type="button"
           aria-expanded={open}
           onClick={() => onOpenChange(!open)}

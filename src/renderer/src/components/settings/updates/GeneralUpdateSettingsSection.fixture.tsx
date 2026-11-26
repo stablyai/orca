@@ -100,7 +100,7 @@ function about(
       updateStatus,
       remoteServerUpdates: SERVERS,
       // Opening the list re-checks; fixtures have no paired runtimes, so keep the seeded rows.
-      refreshRemoteServerUpdates: async () => {}
+      refreshRemoteServerUpdates: async () => ({ revision: 0 })
     },
     render: () => (
       <div className="settings-view-shell bg-background p-8 text-foreground">

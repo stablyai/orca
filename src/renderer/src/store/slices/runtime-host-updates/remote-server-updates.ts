@@ -50,16 +50,28 @@ const transport: RemoteServerUpdateTransport = {
   describeError: remoteServerUpdateErrorMessage
 }
 
+export type RemoteServerUpdateCheck = {
+  revision: number
+  options?: UpdateCheckOptions
+}
+
 export type RemoteServerUpdatesSlice = {
   remoteServerUpdates: Map<string, RemoteServerUpdateEntry>
   remoteServerUpdateCheckOptions: UpdateCheckOptions | null
+  remoteServerUpdatesCheckRevision: number
   remoteServerUpdatesChecking: boolean
   remoteServerUpdatesRunning: boolean
   remoteServerUpdateDialogOpen: boolean
   remoteServerUpdatesLastCheckedAt: number | null
   setRemoteServerUpdateDialogOpen: (open: boolean) => void
-  refreshRemoteServerUpdates: (options?: UpdateCheckOptions) => Promise<void>
-  startRemoteServerUpdates: (environmentIds?: readonly string[]) => Promise<void>
+  refreshRemoteServerUpdates: (
+    options?: UpdateCheckOptions,
+    behavior?: { preserveFailureDetails: boolean }
+  ) => Promise<RemoteServerUpdateCheck | undefined>
+  startRemoteServerUpdates: (
+    environmentIds?: readonly string[],
+    expectedCheck?: RemoteServerUpdateCheck
+  ) => Promise<void>
 }
 
 export const createRemoteServerUpdatesSlice: StateCreator<
@@ -70,6 +82,7 @@ export const createRemoteServerUpdatesSlice: StateCreator<
 > = (set, get) => ({
   remoteServerUpdates: new Map(),
   remoteServerUpdateCheckOptions: null,
+  remoteServerUpdatesCheckRevision: 0,
   remoteServerUpdatesChecking: false,
   remoteServerUpdatesRunning: false,
   remoteServerUpdateDialogOpen: false,
@@ -81,7 +94,7 @@ export const createRemoteServerUpdatesSlice: StateCreator<
       ...(open ? {} : { remoteServerUpdateCheckOptions: null })
     }),
 
-  refreshRemoteServerUpdates: async (options) => {
+  refreshRemoteServerUpdates: async (options, behavior) => {
     if (get().remoteServerUpdatesChecking || get().remoteServerUpdatesRunning) {
       return
     }
@@ -91,8 +104,11 @@ export const createRemoteServerUpdatesSlice: StateCreator<
           includePerfPrerelease: Boolean(options.includePerfPrerelease)
         }
       : undefined
+    // Even a failed re-check invalidates the last successful check's targets.
+    const revision = get().remoteServerUpdatesCheckRevision + 1
     set({
       remoteServerUpdatesChecking: true,
+      remoteServerUpdatesCheckRevision: revision,
       ...(checkOptions ? { remoteServerUpdateCheckOptions: checkOptions } : {})
     })
     try {
@@ -121,27 +137,44 @@ export const createRemoteServerUpdatesSlice: StateCreator<
             transport,
             checkOptions
           )
+          const previousEntry = previous.get(environment.id)
+          const keepFailure =
+            behavior?.preserveFailureDetails &&
+            entry.phase === 'available' &&
+            previousEntry?.phase === 'failed' &&
+            previousEntry.targetVersion === entry.targetVersion
           set((state) => {
             const next = new Map(state.remoteServerUpdates)
-            next.set(environment.id, entry)
+            next.set(
+              environment.id,
+              keepFailure ? { ...entry, phase: 'failed', error: previousEntry.error } : entry
+            )
             return { remoteServerUpdates: next }
           })
         })
       )
       set({ remoteServerUpdatesLastCheckedAt: Date.now() })
+      return { revision, options: checkOptions }
     } finally {
       set({ remoteServerUpdatesChecking: false })
     }
   },
 
-  startRemoteServerUpdates: async (environmentIds) => {
+  startRemoteServerUpdates: async (environmentIds, expectedCheck) => {
     // A check in flight is about to replace the targets; starting now would act on a stale cohort.
-    if (get().remoteServerUpdatesRunning || get().remoteServerUpdatesChecking) {
+    const state = get()
+    if (
+      state.remoteServerUpdatesRunning ||
+      state.remoteServerUpdatesChecking ||
+      (expectedCheck && expectedCheck.revision !== state.remoteServerUpdatesCheckRevision)
+    ) {
       return
     }
     const selected = new Set(environmentIds ?? [])
-    const checkOptions = get().remoteServerUpdateCheckOptions
-    const entries = [...get().remoteServerUpdates.values()].filter(
+    const checkOptions = expectedCheck
+      ? expectedCheck.options
+      : state.remoteServerUpdateCheckOptions
+    const entries = [...state.remoteServerUpdates.values()].filter(
       (entry) =>
         (entry.phase === 'available' || entry.phase === 'failed') &&
         (selected.size === 0 || selected.has(entry.environmentId))
