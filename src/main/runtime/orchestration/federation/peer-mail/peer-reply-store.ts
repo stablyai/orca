@@ -22,35 +22,22 @@ export function storePeerReply(
   // Peer-mail replies come home to this Orca's own sender handle, never a terminal agent's id.
   const recipient = resolveBareOrchestrationRecipient({ runtime, db, handle })
   const { from, body, ...carried } = presentImportedPeerItem({ kind: 'peer_mail', ...payload })
-  // Settled with the store, once: a replay of a reply naming only its thread must not settle another.
-  db.db.exec('SAVEPOINT peer_reply_settle')
-  try {
-    if (!db.getPeerMailMessage(messageId)) {
-      settlePeerQuestionsOut(db, conversation.conversation_id, payload)
-    }
-    const stored = storeReply()
-    db.db.exec('RELEASE peer_reply_settle')
-    return stored.duplicate ? undefined : stored.message
-  } catch (error) {
-    db.db.exec('ROLLBACK TO peer_reply_settle')
-    db.db.exec('RELEASE peer_reply_settle')
-    throw error
-  }
-
-  function storeReply() {
-    return db.insertPeerMailMessage({
-      conversationId: conversation.conversation_id,
-      remoteParty: payload.fromAddress,
-      message: {
-        id: messageId,
-        from,
-        to: recipient.ok ? recipient.to : handle,
-        subject: payload.subject,
-        body,
-        threadId: payload.threadId ?? undefined,
-        runId: recipient.ok ? recipient.runId : undefined,
-        ...carried
-      }
-    })
-  }
+  const stored = db.insertPeerMailMessage({
+    conversationId: conversation.conversation_id,
+    remoteParty: payload.fromAddress,
+    message: {
+      id: messageId,
+      from,
+      to: recipient.ok ? recipient.to : handle,
+      subject: payload.subject,
+      body,
+      threadId: payload.threadId ?? undefined,
+      replyTo: payload.replyTo,
+      runId: recipient.ok ? recipient.runId : undefined,
+      ...carried
+    },
+    // The reply and the question it settles commit together, so a replay finds both done.
+    onFirstStore: () => settlePeerQuestionsOut(db, conversation.conversation_id, payload)
+  })
+  return stored.duplicate ? undefined : stored.message
 }

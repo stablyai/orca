@@ -39,7 +39,9 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
           )
         : db.getInbox(params.limit, params.run)
       return {
-        messages: messages.map(({ answer_sender_snapshot: _answer, ...message }) => message),
+        messages: messages.map(
+          ({ answer_sender_snapshot: _answer, reply_to: _replyTo, ...message }) => message
+        ),
         count: messages.length
       }
     }

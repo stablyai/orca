@@ -16,7 +16,7 @@ import type { CommentMarkdownLinkClickHandler } from '@/components/comment-markd
 import { createDocumentCommentMarkdownComponents } from '@/components/comment-markdown/comment-markdown-element-renderers'
 import { cn } from '@/lib/class-names'
 import { withoutPendingNativeChatVisualDirectiveTail } from '../../../../../shared/native-chat/visuals/native-chat-visual-directive'
-import { NativeChatMarkdownRowKeyContext } from './native-chat-markdown-row-identity'
+import { NativeChatMarkdownCodeBlockContext } from './native-chat-markdown-code-block-context'
 import { useNativeChatVisualMarkdownExtension } from '../media/visuals/native-chat-visual-markdown-extension'
 import { useNativeChatFileLinkExists } from '../links/actions/use-native-chat-file-link-existence'
 import { NativeChatMarkdownImageLinkContext } from '../media/images/NativeChatMarkdownImage'
@@ -226,12 +226,17 @@ export function NativeChatMarkdown({
     streaming
   )
   const { githubRepo } = useContext(NativeChatLinkPeekContext)
+  const contentGrowing = growing || streaming
+  const codeBlockContext = useMemo(
+    () => ({ rowKey, growing: contentGrowing }),
+    [rowKey, contentGrowing]
+  )
   return (
-    <NativeChatMarkdownRowKeyContext.Provider value={rowKey}>
+    <NativeChatMarkdownCodeBlockContext.Provider value={codeBlockContext}>
       <CommentMarkdown
         {...props}
         variant={variant}
-        growing={growing || streaming}
+        growing={contentGrowing}
         // Only the document variant's links can peek; bare #123 links follow it.
         githubRepo={variant === 'document' ? githubRepo?.referenceRepo : undefined}
         onLinkClick={onLinkClick}
@@ -253,6 +258,6 @@ export function NativeChatMarkdown({
         data-block-fade={wordFadeArmed && streaming ? '' : undefined}
         className={cn('native-chat-markdown', className)}
       />
-    </NativeChatMarkdownRowKeyContext.Provider>
+    </NativeChatMarkdownCodeBlockContext.Provider>
   )
 }

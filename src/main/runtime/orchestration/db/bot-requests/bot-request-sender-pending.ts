@@ -5,35 +5,21 @@
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/agent-session/identity/orca-session-address-prefix'
 import type { OrchestrationDb } from '../orchestration-db'
 
-/** Each part is an indexed lookup: idx_messages_bot_request_sender (then idx_thread for a reply),
+/** Each part is an indexed lookup: idx_messages_bot_request_sender (then idx_messages_reply_to),
  *  idx_peer_questions_out_asker_awaiting, idx_peer_handoffs_out_asker, idx_messages_native_direct_work,
  *  idx_dispatch_creator_orca_session_id, and idx_runs_coordinator_orca_session_id with
- *  idx_messages_native_account_work or idx_remote_placements_run. Seven lists of `count` addresses,
+ *  idx_messages_native_account_work or idx_remote_placements_run (under an open link only). Four lists of `count` addresses,
  *  then three of `count` ids. */
 export function sessionAwaitsMailSql(count: number): string {
   const list = Array.from({ length: count }, () => '?').join(',')
-  // A bot request is owed until its outcome. An ask of any other chat is owed until that chat replies
-  // to this one in its thread, one reply for each, oldest first (mail it sends on to anyone else is no
-  // answer): from the newest back, any ask that outnumbers the replies after it. One ordered pass.
-  return `SELECT 1 FROM messages m JOIN bot_requests b ON b.message_id = m.id
+  // A bot request is owed until its outcome; an ask of any other chat until a reply names it (a
+  // notice that none will come names it too), wherever that reply was routed.
+  return `SELECT 1 FROM messages m
     WHERE m.from_handle IN (${list}) AND m.type IN ('question', 'handoff')
-      AND NOT EXISTS (SELECT 1 FROM bot_request_outcomes o WHERE o.message_id = m.id)
-    UNION ALL
-    SELECT 1 FROM (
-      SELECT ask, SUM(CASE WHEN ask = 1 THEN 1 ELSE -1 END) OVER (
-        PARTITION BY thread, peer ORDER BY sequence DESC ROWS UNBOUNDED PRECEDING) AS owed
-      FROM (
-        SELECT COALESCE(a.thread_id, a.id) AS thread, a.to_handle AS peer, a.sequence, 1 AS ask
-        FROM messages a
-        WHERE a.from_handle IN (${list}) AND a.type IN ('question', 'handoff')
-          AND NOT EXISTS (SELECT 1 FROM bot_requests b WHERE b.message_id = a.id)
-        UNION ALL
-        SELECT r.thread_id, r.from_handle, r.sequence, 0 FROM messages r
-        WHERE r.to_handle IN (${list}) AND r.thread_id IN (
-          SELECT COALESCE(t.thread_id, t.id) FROM messages t
-          WHERE t.from_handle IN (${list}) AND t.type IN ('question', 'handoff'))
-      )
-    ) WHERE ask = 1 AND owed > 0
+      AND CASE WHEN EXISTS (SELECT 1 FROM bot_requests b WHERE b.message_id = m.id)
+        THEN NOT EXISTS (SELECT 1 FROM bot_request_outcomes o WHERE o.message_id = m.id)
+        ELSE NOT EXISTS (SELECT 1 FROM messages r WHERE r.reply_to = m.id)
+      END
     UNION ALL
     SELECT 1 FROM peer_questions_out WHERE awaiting = 1 AND asker IN (${list})
     UNION ALL
@@ -52,6 +38,8 @@ export function sessionAwaitsMailSql(count: number): string {
       AND mail.delivered_at IS NULL AND mail.delivery_contract <> 'audit_only'
     UNION ALL
     SELECT 1 FROM runs run JOIN remote_placements placement ON placement.run_id = run.id
+      JOIN remote_run_links link
+        ON link.conversation_id = placement.conversation_id AND link.state = 'open'
       JOIN tasks task ON task.id = placement.task_id
     WHERE run.coordinator_orca_session_id IN (${list})
       AND (placement.state = 'reserved' OR task.status = 'dispatched')
@@ -64,7 +52,7 @@ export function sessionAwaitsMail(db: OrchestrationDb, sessionIds: readonly stri
   return (
     db.db
       .prepare(sessionAwaitsMailSql(ids.length))
-      .get(...[1, 2, 3, 4, 5, 6, 7].flatMap(() => addresses), ...ids, ...ids, ...ids) !== undefined
+      .get(...[1, 2, 3, 4].flatMap(() => addresses), ...ids, ...ids, ...ids) !== undefined
   )
 }
 

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { textGenerationFailure } from '../text-generation-failure-copy'
 import type { GenerationOutputParse } from './opencode-generation-output'
 
@@ -9,13 +10,15 @@ export function buildAntigravityGenerationInput(prompt: string): string {
   })}\n`
 }
 
-const eventSchema = z.object({ event: z.string() })
-const resultSchema = z.object({
-  status: z.string(),
-  response: z.string(),
-  error: z.string().optional()
-})
-const resultEventSchema = eventSchema.extend({ result: resultSchema })
+const eventSchema = lazyZodSchema(() => z.object({ event: z.string() }))
+const resultSchema = lazyZodSchema(() =>
+  z.object({
+    status: z.string(),
+    response: z.string(),
+    error: z.string().optional()
+  })
+)
+const resultEventSchema = lazyZodSchema(() => eventSchema.extend({ result: resultSchema }))
 
 export function parseAntigravityGenerationOutput(stdout: string): GenerationOutputParse {
   let result: z.infer<typeof resultSchema> | undefined

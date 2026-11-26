@@ -1,47 +1,62 @@
 // Grok's subagent IDs also name their child sessions (1.0.46 recordings).
 
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { AgentJournalToolCallItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatSubagentState } from '../../../shared/native-chat/native-chat-types'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpSubagentUpdate } from './acp-dialect'
 import { grokTaskResults, isGrokSubagentTask } from './grok-background-tasks'
 
-const tokenCount = z.number().int().nonnegative()
-const idSchema = z.string().trim().min(1)
-const spawnedSchema = z.looseObject({
-  sessionUpdate: z.literal('subagent_spawned'),
-  subagent_id: idSchema,
-  parent_prompt_id: z.string().optional(),
-  description: z.string().nullish(),
-  subagent_type: z.string().nullish()
-})
-const progressSchema = z.looseObject({
-  sessionUpdate: z.literal('subagent_progress'),
-  subagent_id: idSchema,
-  tokens_used: tokenCount.optional()
-})
-const finishedSchema = z.looseObject({
-  sessionUpdate: z.literal('subagent_finished'),
-  subagent_id: idSchema,
-  status: z.string(),
-  output: z.string().nullish(),
-  tokens_used: tokenCount.optional()
-})
-const spawnInputSchema = z.looseObject({
-  description: z.string().optional(),
-  prompt: z.string().optional()
-})
-const completedSpawnSchema = z.looseObject({
-  type: z.literal('SubagentCompleted'),
-  subagent_id: idSchema,
-  output: z.string().nullish()
-})
-const spawnAckSchema = z.looseObject({ type: z.literal('Text'), text: z.string() })
-const killInputSchema = z.object({
-  task_id: idSchema.optional(),
-  task_ids: z.array(idSchema).optional()
-})
+const tokenCount = lazyZodSchema(() => z.number().int().nonnegative())
+const idSchema = lazyZodSchema(() => z.string().trim().min(1))
+const spawnedSchema = lazyZodSchema(() =>
+  z.looseObject({
+    sessionUpdate: z.literal('subagent_spawned'),
+    subagent_id: idSchema,
+    parent_prompt_id: z.string().optional(),
+    description: z.string().nullish(),
+    subagent_type: z.string().nullish()
+  })
+)
+const progressSchema = lazyZodSchema(() =>
+  z.looseObject({
+    sessionUpdate: z.literal('subagent_progress'),
+    subagent_id: idSchema,
+    tokens_used: tokenCount.optional()
+  })
+)
+const finishedSchema = lazyZodSchema(() =>
+  z.looseObject({
+    sessionUpdate: z.literal('subagent_finished'),
+    subagent_id: idSchema,
+    status: z.string(),
+    output: z.string().nullish(),
+    tokens_used: tokenCount.optional()
+  })
+)
+const spawnInputSchema = lazyZodSchema(() =>
+  z.looseObject({
+    description: z.string().optional(),
+    prompt: z.string().optional()
+  })
+)
+const completedSpawnSchema = lazyZodSchema(() =>
+  z.looseObject({
+    type: z.literal('SubagentCompleted'),
+    subagent_id: idSchema,
+    output: z.string().nullish()
+  })
+)
+const spawnAckSchema = lazyZodSchema(() =>
+  z.looseObject({ type: z.literal('Text'), text: z.string() })
+)
+const killInputSchema = lazyZodSchema(() =>
+  z.object({
+    task_id: idSchema.optional(),
+    task_ids: z.array(idSchema).optional()
+  })
+)
 const SPAWN_ACK_ID = /^subagent_id:\s*(\S+)\s*$/m
 const MACHINE_BLOCKS = /<subagent_(meta|result)>[\s\S]*?<\/subagent_\1>/g
 const MAX_PROMPT_LABEL_CHARS = 80

@@ -19,13 +19,13 @@ export class WslHostAutomationsLeftOffError extends Error {
   }
 }
 
-/** Each one's state on the host, the user's latest choice; one deleted there reads as off. */
+/** Each one's state on the host, the user's latest choice; one deleted there reads `deleted`. */
 export async function readWslHostAutomationStates(
   userDataPath: string,
   environmentId: string,
   automationIds: readonly string[]
-): Promise<Record<string, boolean>> {
-  const states: Record<string, boolean> = {}
+): Promise<Record<string, boolean | 'deleted'>> {
+  const states: Record<string, boolean | 'deleted'> = {}
   if (automationIds.length === 0) {
     return states
   }
@@ -36,7 +36,8 @@ export async function readWslHostAutomationStates(
       if (!shown.error.message.includes(AUTOMATION_NOT_FOUND)) {
         throw new Error(`wsl_move_automation_read_failed:${shown.error.message}`)
       }
-      states[id] = false
+      // Deleted on the host: undo keeps the local copy off, even over an earlier attempt's choice.
+      states[id] = 'deleted'
       continue
     }
     states[id] = ShownAutomationSchema.parse(shown.result).automation.enabled
@@ -51,12 +52,13 @@ export async function readWslHostAutomationStates(
 export async function disableWslHostAutomations(
   userDataPath: string,
   environmentId: string,
-  automationIds: readonly string[]
+  automationIds: readonly string[],
+  signal?: AbortSignal
 ): Promise<string[]> {
   if (automationIds.length === 0) {
     return []
   }
-  const request = await openWslHostAutomationApi(userDataPath, environmentId)
+  const request = await openWslHostAutomationApi(userDataPath, environmentId, signal)
   const turnedOff: string[] = []
   try {
     for (const id of automationIds) {
@@ -79,12 +81,13 @@ export async function disableWslHostAutomations(
 export async function restoreWslHostAutomations(
   userDataPath: string,
   environmentId: string,
-  automationIds: readonly string[]
+  automationIds: readonly string[],
+  signal?: AbortSignal
 ): Promise<void> {
   if (automationIds.length === 0) {
     return
   }
-  const request = await openWslHostAutomationApi(userDataPath, environmentId)
+  const request = await openWslHostAutomationApi(userDataPath, environmentId, signal)
   const leftOff = await turnOnEach(request, automationIds)
   if (leftOff.length > 0) {
     throw new WslHostAutomationsLeftOffError('wsl_move_automation_enable_failed', leftOff)

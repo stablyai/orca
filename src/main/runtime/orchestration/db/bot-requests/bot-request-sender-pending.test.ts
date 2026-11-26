@@ -72,17 +72,23 @@ it('a chat waits on mail from its open requests, paired asks and undelivered mai
   db.db.prepare('UPDATE peer_questions_out SET awaiting = NULL').run()
   expect(sessionAwaitsMail(db, ['live', 'paired'])).toBe(false)
 
-  // Two questions in one thread to a paired computer: a reply naming only the thread answers one.
-  for (const messageId of ['msg_pq_1', 'msg_pq_2']) {
-    recordPeerQuestionOut(db, {
-      messageId,
-      conversationId: 'conversation',
-      environmentId: 'server',
-      peerFingerprint: 'fingerprint',
-      asker: 'orca_session_id:questioning',
-      threadId: 'msg_pq_1'
-    })
+  // A question and a handoff in one thread to a paired computer: a reply naming one settles that
+  // one; an older paired Orca's reply, naming none, settles one ask, the oldest question first.
+  const paired = {
+    conversationId: 'conversation',
+    environmentId: 'server',
+    peerFingerprint: 'fingerprint',
+    asker: 'orca_session_id:questioning',
+    threadId: 'msg_pq_1'
   }
+  recordPeerQuestionOut(db, { ...paired, messageId: 'msg_pq_1' })
+  recordPeerHandoffOut(db, { ...paired, messageId: 'msg_ph_1' })
+  settlePeerQuestionsOut(db, 'conversation', { threadId: 'msg_pq_1', replyTo: 'msg_ph_1' })
+  expect(sessionAwaitsMail(db, ['questioning'])).toBe(true)
+  settlePeerQuestionsOut(db, 'conversation', { threadId: 'msg_pq_1', replyTo: 'msg_pq_1' })
+  expect(sessionAwaitsMail(db, ['questioning'])).toBe(false)
+  recordPeerQuestionOut(db, { ...paired, messageId: 'msg_pq_2' })
+  recordPeerHandoffOut(db, { ...paired, messageId: 'msg_ph_2' })
   for (const expected of [true, false]) {
     settlePeerQuestionsOut(db, 'conversation', { threadId: 'msg_pq_1' })
     expect(sessionAwaitsMail(db, ['questioning'])).toBe(expected)
@@ -129,92 +135,61 @@ it('a chat waits on mail from its open requests, paired asks and undelivered mai
   db.db.prepare("UPDATE messages SET delivered_at = datetime('now') WHERE id = ?").run(answer.id)
   expect(sessionAwaitsMail(db, ['live'])).toBe(false)
 
-  // A question to an ordinary chat is owed until a reply lands in its thread.
-  const asked = db.insertMessage({
+  // An ask of an ordinary chat is owed until a reply names it, wherever that reply is routed.
+  const delivered = (id: string) =>
+    db.db.prepare("UPDATE messages SET delivered_at = datetime('now') WHERE id = ?").run(id)
+  const send = (fields: Parameters<typeof db.insertMessage>[0]) => {
+    const message = db.insertMessage(fields)
+    delivered(message.id)
+    return message
+  }
+  const asked = send({
     from: 'orca_session_id:asking',
     to: 'orca_session_id:other',
     subject: 'Which branch?',
     type: 'question'
   })
-  db.db.prepare("UPDATE messages SET delivered_at = datetime('now') WHERE id = ?").run(asked.id)
-  expect(sessionAwaitsMail(db, ['asking'])).toBe(true)
-  // Mail it sends on in the thread to someone else is no answer.
-  const forwarded = db.insertMessage({
-    from: 'orca_session_id:other',
-    to: 'orca_session_id:third',
-    subject: 'Which branch?',
-    type: 'question',
-    threadId: asked.id
-  })
-  db.db.prepare("UPDATE messages SET delivered_at = datetime('now') WHERE id = ?").run(forwarded.id)
-  expect(sessionAwaitsMail(db, ['asking'])).toBe(true)
-  // A second ask of the same chat in the thread needs its own reply.
-  const again = db.insertMessage({
+  const again = send({
     from: 'orca_session_id:asking',
     to: 'orca_session_id:other',
     subject: 'And the tag?',
     type: 'handoff',
     threadId: asked.id
   })
-  db.db.prepare("UPDATE messages SET delivered_at = datetime('now') WHERE id = ?").run(again.id)
-  for (const expected of [true, false]) {
-    const reply = db.insertMessage({
-      from: 'orca_session_id:other',
-      to: 'orca_session_id:asking',
-      subject: 'Re: Which branch?',
-      threadId: asked.id
-    })
-    db.db.prepare("UPDATE messages SET delivered_at = datetime('now') WHERE id = ?").run(reply.id)
-    expect(sessionAwaitsMail(db, ['asking'])).toBe(expected)
-  }
-
-  // A handoff to one chat and a question to another in the same thread: each is owed by its own
-  // recipient, so one reply settles only its own.
-  const delivered = (id: string) =>
-    db.db.prepare("UPDATE messages SET delivered_at = datetime('now') WHERE id = ?").run(id)
-  for (const [to, type] of [
-    ['orca_session_id:a', 'handoff'],
-    ['orca_session_id:b', 'question']
-  ] as const) {
-    delivered(
-      db.insertMessage({ from: 'orca_session_id:two', to, subject: 'Job', type, threadId: 'job' })
-        .id
-    )
-  }
-  delivered(
-    db.insertMessage({
-      from: 'orca_session_id:a',
-      to: 'orca_session_id:two',
-      subject: 'Done',
-      threadId: 'job'
-    }).id
-  )
-  expect(sessionAwaitsMail(db, ['two'])).toBe(true)
-  delivered(
-    db.insertMessage({
-      from: 'orca_session_id:b',
-      to: 'orca_session_id:two',
-      subject: 'Yes',
-      threadId: 'job'
-    }).id
-  )
-  expect(sessionAwaitsMail(db, ['two'])).toBe(false)
-
-  // A follow-up in the same thread, sent the same second the first answer came: that earlier answer
-  // doesn't settle it.
-  delivered(
-    db.insertMessage({
-      from: 'orca_session_id:two',
-      to: 'orca_session_id:b',
-      subject: 'And?',
-      type: 'question',
-      threadId: 'job'
-    }).id
-  )
-  db.db
-    .prepare("UPDATE messages SET created_at = '2026-01-01 00:00:00' WHERE thread_id = 'job'")
-    .run()
-  expect(sessionAwaitsMail(db, ['two'])).toBe(true)
+  expect(sessionAwaitsMail(db, ['asking'])).toBe(true)
+  // Mail sent on in the thread, or a reply naming nothing, answers neither.
+  send({
+    from: 'orca_session_id:other',
+    to: 'orca_session_id:third',
+    subject: 'Which branch?',
+    type: 'question',
+    threadId: asked.id
+  })
+  send({
+    from: 'orca_session_id:other',
+    to: 'orca_session_id:asking',
+    subject: 'Hm',
+    threadId: asked.id
+  })
+  expect(sessionAwaitsMail(db, ['asking'])).toBe(true)
+  // One reply settles the ask it names, and only that one.
+  send({
+    from: 'orca_session_id:other',
+    to: 'orca_session_id:asking',
+    subject: 'Re: Which branch?',
+    threadId: asked.id,
+    replyTo: asked.id
+  })
+  expect(sessionAwaitsMail(db, ['asking'])).toBe(true)
+  // A reply routed to the Run the asker coordinates still names its ask.
+  send({
+    from: 'orca_session_id:other',
+    to: 'run:run_asking',
+    subject: 'Re: And the tag?',
+    threadId: asked.id,
+    replyTo: again.id
+  })
+  expect(sessionAwaitsMail(db, ['asking'])).toBe(false)
 
   // A report waiting in the Run the chat coordinates.
   const coordinator = testOrcaSessionId('00000000-0000-4000-8000-0000000c0de0')
@@ -242,8 +217,16 @@ it('a chat waits on mail from its open requests, paired asks and undelivered mai
          request_key, prior_task_status) VALUES (?, ?, 'server', 'conversation', 'reserved', 'key', 'ready')`
     )
     .run(remoteTask.id, run)
+  // Only while its link is open: under a closed link (a removed or re-made pairing) nothing answers.
+  expect(sessionAwaitsMail(db, [coordinator])).toBe(false)
+  db.db
+    .prepare(
+      `INSERT INTO remote_run_links (conversation_id, run_id, environment_id, peer_fingerprint,
+         home_fingerprint) VALUES ('conversation', ?, 'server', 'fingerprint', 'home')`
+    )
+    .run(run)
   expect(sessionAwaitsMail(db, [coordinator])).toBe(true)
-  db.db.prepare('DELETE FROM remote_placements WHERE task_id = ?').run(remoteTask.id)
+  db.db.prepare("UPDATE remote_run_links SET state = 'closed'").run()
   expect(sessionAwaitsMail(db, [coordinator])).toBe(false)
 
   // A worker the chat started reports back to it.
@@ -264,12 +247,9 @@ it('a chat waits on mail from its open requests, paired asks and undelivered mai
   // Looked up by sender and recipient, never by scanning the mail.
   const plan = db.db
     .prepare(`EXPLAIN QUERY PLAN ${sessionAwaitsMailSql(2)}`)
-    .all(...Array.from({ length: 10 }, () => ['x', 'y']).flat())
+    .all(...Array.from({ length: 7 }, () => ['x', 'y']).flat())
     .map((row) => String(row.detail))
-  // Only the asks and replies already found by index are read in order, never a table.
-  expect(
-    plan.filter((detail) => detail.startsWith('SCAN') && !detail.includes('subquery'))
-  ).toEqual([])
+  expect(plan.filter((detail) => detail.startsWith('SCAN'))).toEqual([])
 })
 
 it('a replayed reply naming only its thread settles one paired handoff, not the next', () => {

@@ -79,7 +79,7 @@ function Avatar({
 
 type CommentEntry = Pick<
   Extract<BotItemActivityEntry, { kind: 'comment' }>,
-  'event' | 'replyTo' | 'answers' | 'byOrder' | 'ended'
+  'event' | 'replyTo' | 'answers' | 'byOrder' | 'ended' | 'beside'
 > & { waiting?: boolean }
 
 export function BotItemCommentCard({
@@ -115,7 +115,9 @@ export function BotItemCommentCard({
   const shape = botItemQuestionShape(event.data)
   // Its images show after the words, so the [Image #N] its send wrote go, as in chat's sent messages.
   // Its files show as links after them, so their `@path`s go from the words.
-  const { words } = botItemCommentFiles(stripSentImagePromptMarkers(shape.body, images.length))
+  const { words } = botItemCommentFiles(
+    stripSentImagePromptMarkers(entry.beside ?? shape.body, images.length)
+  )
   const { files } = botItemCommentFiles(typeof event.data.text === 'string' ? event.data.text : '')
   const name = botItemActorName(event, item, t)
   const fullTime = useNativeChatMessageTimeLabel(event.at)

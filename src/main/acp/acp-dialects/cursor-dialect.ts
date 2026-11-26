@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import {
   isValidAgentSessionQuestionAnswers,
   legacyAgentSessionQuestionAnswers
@@ -25,20 +26,24 @@ const SKILL_SCOPE_TAG = /\s*\((?:project |user |builtin )?skill\)$/
 // A refused question comes back as a permission request whose answers are all allow_once.
 const QUESTION_FALLBACK_SKIP = '__ask_question_skip__'
 
-const questionRequestSchema = z.object({
-  title: z.string().nullish(),
-  questions: z
-    .array(
-      z.object({
-        id: z.string(),
-        prompt: z.string(),
-        allowMultiple: z.boolean().nullish(),
-        options: z.array(z.object({ id: z.string(), label: z.string() })).min(1)
-      })
-    )
-    .min(1)
-})
-const planRequestSchema = z.object({ plan: z.string().nullish(), overview: z.string().nullish() })
+const questionRequestSchema = lazyZodSchema(() =>
+  z.object({
+    title: z.string().nullish(),
+    questions: z
+      .array(
+        z.object({
+          id: z.string(),
+          prompt: z.string(),
+          allowMultiple: z.boolean().nullish(),
+          options: z.array(z.object({ id: z.string(), label: z.string() })).min(1)
+        })
+      )
+      .min(1)
+  })
+)
+const planRequestSchema = lazyZodSchema(() =>
+  z.object({ plan: z.string().nullish(), overview: z.string().nullish() })
+)
 
 function questionRequest(params: unknown): AcpRequestPresentation {
   const parsed = questionRequestSchema.safeParse(params)

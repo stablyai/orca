@@ -58,6 +58,7 @@ class OrchestrationDbCore {
   private closed = false
   private readonly closeListeners = new Set<() => void>()
   private changedDispatchIds: Set<string> | null = null
+  private workerStatusNoticeSuppressedDepth = 0
   /** The user's auto-close switch; this runtime's choice also governs the remote workers it coordinates. */
   workerAutoReleaseEnabled: (() => boolean) | undefined
   /** PTYs whose pointers were released this session; title edges skip the release write for them. */
@@ -85,7 +86,8 @@ class OrchestrationDbCore {
     refreshOutstandingDeliveryTrigger(this.db)
     installWorkerTerminalPriorOwnerIndex(this)
     for (const [table, columns] of [
-      ['messages', ['answer_sender_snapshot']],
+      // reply_to: the message a reply answers, when its sender named one.
+      ['messages', ['answer_sender_snapshot', 'reply_to']],
       ['federation_relay_items', ['answer_sender_report']],
       ['message_dispatch_provenance', ['sender_snapshot']]
     ] as const) {
@@ -119,6 +121,8 @@ class OrchestrationDbCore {
         ON attempt_observation_facts(task_id);
       CREATE INDEX IF NOT EXISTS idx_message_dispatch_provenance_dispatch
         ON message_dispatch_provenance(dispatch_id);
+      CREATE INDEX IF NOT EXISTS idx_peer_questions_out_thread
+        ON peer_questions_out(conversation_id, COALESCE(thread_id, message_id), awaiting);
       CREATE INDEX IF NOT EXISTS idx_remote_run_links_run ON remote_run_links(run_id);
       CREATE INDEX IF NOT EXISTS idx_remote_placements_run ON remote_placements(run_id);
       CREATE INDEX IF NOT EXISTS idx_worker_dispatches_agent_terminal_handle
@@ -151,6 +155,9 @@ class OrchestrationDbCore {
         thread_id         TEXT
       );
       CREATE INDEX IF NOT EXISTS idx_peer_handoffs_out_asker ON peer_handoffs_out(asker);
+      CREATE INDEX IF NOT EXISTS idx_peer_handoffs_out_thread
+        ON peer_handoffs_out(conversation_id, COALESCE(thread_id, message_id));
+      CREATE INDEX IF NOT EXISTS idx_messages_reply_to ON messages(reply_to) WHERE reply_to IS NOT NULL;
       CREATE INDEX IF NOT EXISTS idx_peer_questions_out_asker_awaiting
         ON peer_questions_out(asker) WHERE awaiting = 1;
       CREATE INDEX IF NOT EXISTS idx_messages_stop_reports
@@ -160,6 +167,9 @@ class OrchestrationDbCore {
     createCoordinatorMailRoutingTrigger.call(this as unknown as OrchestrationDb)
     rememberCurrentRunCoordinatorHandles.call(this as unknown as OrchestrationDb)
     installWorkerStatusNotice(this.db, (dispatchId, change) => {
+      if (this.workerStatusNoticeSuppressedDepth > 0) {
+        return
+      }
       if (dispatchId) {
         revokeAgentSessionPublicationFences([JSON.stringify(['worker', dispatchId])])
       }
@@ -170,6 +180,16 @@ class OrchestrationDbCore {
       }
     })
     hardenOrchestrationDatabaseFiles(dbPath)
+  }
+
+  /** Runs a write without firing worker-status triggers (used for heartbeat-only timestamp updates). */
+  withoutWorkerStatusNotice<T>(operation: () => T): T {
+    this.workerStatusNoticeSuppressedDepth += 1
+    try {
+      return operation()
+    } finally {
+      this.workerStatusNoticeSuppressedDepth -= 1
+    }
   }
 
   /** After the writes that fired it, so the read sees committed rows and never runs inside a trigger;
