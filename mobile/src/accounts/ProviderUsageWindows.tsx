@@ -76,7 +76,7 @@ export function ProviderUsageWindows({
   const sections = (limits ? getUsageWindowSections(limits) : EMPTY_SECTIONS).filter(
     (section) => showEmptyWindows || section.window !== null
   )
-  // Pool names can repeat when agy leaves a window unnamed, so count each name's occurrences.
+  // Pool names can repeat when a provider leaves a window unnamed, so count each name's occurrences.
   const seen = new Map<string, number>()
   return (
     <View style={styles.windows}>

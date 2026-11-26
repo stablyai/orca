@@ -811,7 +811,6 @@
         "sshToggleDescription": "當有可用且已設定的 SSH 和遠端 Orca 主機時，顯示這些主機。",
         "resourceUsageToggleDescription": "顯示資源管理員。點選可檢視 CPU、記憶體、工作階段、常駐程式控制和工作區磁碟掃描。",
         "portsToggleDescription": "顯示即時工作區連接埠。點選可檢視工作區範圍的連接埠和外部監聽器。",
-        "antigravityToggleDescription": "顯示目前工作區的 Antigravity 訂閱用量。",
         "grokToggleDescription": "透過 Grok CLI 登入後顯示 Grok 訂閱額度用量。",
         "cursorToggleDescription": "透過 cursor-agent 或 Cursor IDE 登入後顯示 Cursor 方案用量。",
         "zcodeToggleDescription": "顯示 ZCode Coding Plan 配額用量。",
@@ -5681,7 +5680,6 @@
             "c0e972d726": "取消",
             "3bbf140864": "MiniMax 用量",
             "remoteServerLabel": "遠端伺服器",
-            "antigravityUsage": "Antigravity 用量",
             "grokUsageMenu": "Grok 用量",
             "floatingTerminalNewActivity": "{{label}}，有新活動",
             "4fba7dc1e7": "餘額 {{value0}}",
@@ -6115,16 +6113,9 @@
             "mainWorktree": "主工作樹",
             "detached": "分離狀態"
           },
-          "antigravity": {
-            "unknownAccount": "Google 帳戶",
-            "accounts": "已儲存的 Antigravity 帳戶",
-            "readAgo": "讀取於 {{time}}",
-            "notRead": "用量未知：尚未讀取"
-          },
           "AccountSwitchList": {
             "used": "已用",
             "left": "剩餘",
-            "reset": "重設",
             "accounts": "帳戶"
           },
           "InlineUsageBars": {
@@ -10893,7 +10884,6 @@
             "d77537b580": "opencode-go",
             "a9d56852eb": "opencode",
             "7f72de7cbe": "在狀態列中顯示 OpenCode Go 的 token 用量和成本。",
-            "51b0ccd6a2": "Google",
             "97957e374e": "openai",
             "8dfd676c28": "codex",
             "e9e4412545": "在狀態列中顯示 Codex 的 token 用量和成本。",
@@ -10935,8 +10925,6 @@
               "pr": "PR",
               "duplicate": "複製"
             },
-            "antigravityUsageDescription": "在狀態列中顯示 Antigravity 訂閱用量。",
-            "antigravityKeyword": "antigravity",
             "e7d1b0f3a5": "顯示透過 Grok CLI OAuth 取得的 Grok 每週額度用量。",
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
@@ -10990,8 +10978,7 @@
             "c29089716e": "Kimi 用量",
             "96e32c1118": "MiniMax 用量",
             "e8d2710689": "Muse 用量",
-            "aff6e6afdf": "IDE 字型",
-            "ba1f9d39a6": "Antigravity 用量"
+            "aff6e6afdf": "IDE 字型"
           }
         },
         "auto": {
@@ -14717,8 +14704,7 @@
             "windows": "用量週期百分比",
             "reset": "距離重設的時間，例如 3h 15m",
             "resetAt": "重設的時刻，例如 20:50",
-            "optional": "其中任一預留位置為空時，整段省略",
-            "usagePools": "具名用量池，例如 Antigravity 模型"
+            "optional": "其中任一預留位置為空時，整段省略"
           }
         },
         "RepositoryRemoveProjectSection": {
@@ -24859,9 +24845,6 @@
       "retry": "重試",
       "changed": "原生帳戶已變更。請在啟動 agy 前重新選擇已儲存的帳戶。",
       "refresh": "重新整理帳戶",
-      "usage": "重新整理用量",
-      "usageWithReading": "重新整理用量（{{reading}}）",
-      "usageReading": "工作階段：{{session}} · 每週：{{weekly}}",
       "saved": "已儲存的 Google 帳戶",
       "remove": "移除",
       "searchDescription": "在執行主機上儲存並選擇 agy 的原生 Google 帳戶。",
@@ -24882,8 +24865,6 @@
       "settingsIncomplete": "請選擇 Antigravity 帳戶類型並輸入其 Google Cloud 專案和位置。",
       "settingsLoadFailed": "Orca 無法載入 Antigravity 登入設定。請再試一次。",
       "settingsSaveFailed": "Orca 無法儲存 Antigravity 登入設定。請再試一次。",
-      "lastReading": "{{reading}} · 讀取於 {{time}}",
-      "noReading": "用量未知：尚未讀取",
       "fd47b5a5dd": "Antigravity 帳戶",
       "personalOption": "你的個人 Google AI 方案",
       "enterpriseOption": "你所屬組織的授權",
@@ -24914,7 +24895,6 @@
       "currentNotSaved": "目前的 agy 登入帳戶 · 尚未儲存",
       "noEmailNotSaved": "agy 未提供電子郵件地址 · 尚未儲存",
       "saveShort": "儲存",
-      "readAt": "讀取於 {{time}}",
       "active": "使用中",
       "runtime": "執行環境",
       "chatTitle": "Antigravity 聊天",

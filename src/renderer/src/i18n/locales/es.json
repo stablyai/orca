@@ -170,7 +170,6 @@
         "sshToggleDescription": "Muestra hosts SSH configurados y hosts remotos de Orca cuando haya alguno disponible.",
         "resourceUsageToggleDescription": "Muestra el Administrador de recursos. Haz clic para ver CPU, memoria, sesiones, controles del daemon y análisis de disco de los espacios de trabajo.",
         "portsToggleDescription": "Muestra los puertos activos de los espacios de trabajo. Haz clic para ver los puertos de cada espacio de trabajo y los puertos externos.",
-        "antigravityToggleDescription": "Muestra el uso de suscripción de Antigravity para el espacio de trabajo activo.",
         "grokToggleDescription": "Muestra el uso de créditos de suscripción de Grok cuando has iniciado sesión con Grok CLI.",
         "cursorToggleDescription": "Muestra el uso del plan de Cursor cuando inicias sesión con cursor-agent o el IDE de Cursor.",
         "zcodeToggleDescription": "Mostrar el uso de la cuota del plan de codificación ZCode.",
@@ -5130,7 +5129,6 @@
             "c0e972d726": "Cancelar",
             "3bbf140864": "Uso de MiniMax",
             "remoteServerLabel": "Servidor remoto",
-            "antigravityUsage": "Uso de Antigravity",
             "grokUsageMenu": "Uso de Grok",
             "floatingTerminalNewActivity": "{{label}}, nueva actividad",
             "4fba7dc1e7": "saldo {{value0}}",
@@ -5609,16 +5607,9 @@
             "mainWorktree": "worktree principal",
             "detached": "desacoplado"
           },
-          "antigravity": {
-            "unknownAccount": "Cuenta de Google",
-            "accounts": "Cuentas de Antigravity guardadas",
-            "readAgo": "Consultado {{time}}",
-            "notRead": "Uso desconocido: aún no consultado"
-          },
           "AccountSwitchList": {
             "used": "Usado",
             "left": "Restante",
-            "reset": "Restablecimiento",
             "accounts": "Cuentas"
           },
           "InlineUsageBars": {
@@ -10480,7 +10471,6 @@
             "d77537b580": "opencode-go",
             "a9d56852eb": "opencode",
             "7f72de7cbe": "Muestra el consumo de tokens y el costo de OpenCode Go en la barra de estado.",
-            "51b0ccd6a2": "Google",
             "97957e374e": "openai",
             "8dfd676c28": "codex",
             "e9e4412545": "Muestra el consumo de tokens y el costo de Codex en la barra de estado.",
@@ -10523,8 +10513,6 @@
               "pr": "pr",
               "duplicate": "duplicado"
             },
-            "antigravityUsageDescription": "Muestra el uso de suscripción de Antigravity en la barra de estado.",
-            "antigravityKeyword": "antigravity",
             "e7d1b0f3a5": "Muestra el uso semanal de créditos de Grok desde OAuth de Grok CLI.",
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
@@ -10578,8 +10566,7 @@
             "c29089716e": "Uso de Kimi",
             "96e32c1118": "Uso de MiniMax",
             "e8d2710689": "Uso de Muse",
-            "aff6e6afdf": "Fuente IDE",
-            "ba1f9d39a6": "Uso de Antigravity"
+            "aff6e6afdf": "Fuente IDE"
           }
         },
         "auto": {
@@ -14364,8 +14351,7 @@
             "windows": "porcentaje de la ventana",
             "reset": "tiempo hasta el restablecimiento, p. ej. 3h 15m",
             "resetAt": "hora del restablecimiento, p. ej. 20:50",
-            "optional": "se omite cuando un marcador interior está vacío",
-            "usagePools": "grupos de uso con nombre, p. ej. modelos de Antigravity"
+            "optional": "se omite cuando un marcador interior está vacío"
           }
         },
         "RepositoryRemoveProjectSection": {
@@ -24671,11 +24657,8 @@
       "chatReadFailed": "No se pudo comprobar el inicio de sesión en {{host}}.",
       "retry": "Reintentar",
       "remove": "Eliminar",
-      "usage": "Actualizar uso",
-      "usageWithReading": "Actualizar uso ({{reading}})",
       "changed": "La cuenta nativa cambió. Selecciona de nuevo una cuenta guardada antes de iniciar agy.",
       "refresh": "Actualizar cuentas",
-      "usageReading": "Sesión: {{session}} · Semanal: {{weekly}}",
       "saved": "Cuenta de Google guardada",
       "searchDescription": "Guarda y selecciona cuentas nativas de Google de agy en el host de ejecución.",
       "title": "Antigravity",
@@ -24695,8 +24678,6 @@
       "settingsIncomplete": "Elige un tipo de cuenta de Antigravity e introduce su proyecto y ubicación de Google Cloud.",
       "settingsLoadFailed": "Orca no pudo cargar tus ajustes de inicio de sesión de Antigravity. Inténtalo de nuevo.",
       "settingsSaveFailed": "Orca no pudo guardar tus ajustes de inicio de sesión de Antigravity. Inténtalo de nuevo.",
-      "lastReading": "{{reading}} · Consultado {{time}}",
-      "noReading": "Uso desconocido: aún no consultado",
       "fd47b5a5dd": "Cuentas de Antigravity",
       "personalOption": "Tu plan personal de Google AI",
       "enterpriseOption": "La licencia de tu organización",
@@ -24727,7 +24708,6 @@
       "currentNotSaved": "Inicio de sesión actual de agy · sin guardar",
       "noEmailNotSaved": "agy no indicó ningún correo electrónico · sin guardar",
       "saveShort": "Guardar",
-      "readAt": "Consultado {{time}}",
       "active": "Activa",
       "runtime": "Runtime",
       "chatTitle": "Chat de Antigravity",

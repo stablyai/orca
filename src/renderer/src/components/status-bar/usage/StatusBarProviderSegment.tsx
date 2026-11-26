@@ -158,8 +158,6 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
       return 'O'
     case 'kimi':
       return 'K'
-    case 'antigravity':
-      return 'A'
     case 'minimax':
       return 'M'
     case 'grok':
