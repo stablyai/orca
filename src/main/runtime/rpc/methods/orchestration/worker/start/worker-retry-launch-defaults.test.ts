@@ -343,7 +343,7 @@ describe('worker-start --retry-of launch preference rehydration', () => {
   })
 
   it('runs OpenCode model launch probing when --retry-of rehydrates an opencode model', async () => {
-    const { db, runtime, callStart, startFailedAttempt } = createRetryStartFixture()
+    const { db, runtime, activeRunId, callStart, releaseWorker } = createRetryStartFixture()
     activeDb = db
     vi.spyOn(runtime, 'resolveOrchestrationAgentLauncher').mockImplementation((selector) =>
       selector === 'opencode' ? 'opencode' : undefined
@@ -353,14 +353,22 @@ describe('worker-start --retry-of launch preference rehydration', () => {
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(false)
 
-    const first = await startFailedAttempt({
+    const task = db.createTask({ spec: 'opencode retry task', runId: activeRunId })
+    const first = await callStart({
+      task: task.id,
+      from: 'term_coord',
       agent: 'opencode',
       model: 'anthropic/claude-sonnet-4-5'
     })
+    if (!isStartReceipt(first)) {
+      throw new Error('expected initial opencode start receipt')
+    }
+    expect(first.state).toBe('failed')
+    await releaseWorker(first.dispatchId)
 
     await expect(
       callStart({
-        task: first.taskId,
+        task: task.id,
         from: 'term_coord',
         retryOf: first.dispatchId
       })
