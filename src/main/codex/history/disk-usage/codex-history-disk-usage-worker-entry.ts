@@ -19,8 +19,14 @@ import type {
 
 // `.orca-legacy-copy.<attempt>`: an old session copy's own bytes, kept once its name points at the source.
 const ROLLOUT_FILE = /^rollout-.*\.jsonl(?:\.zst|\.orca-legacy-copy\.\d+)?$/
-// Live, archived, twins set aside when history was shared, and `<folder>[.<ms>].orca-profile-merge` conflicts.
-const HISTORY_FOLDERS = ['sessions', 'archived_sessions', '.orca-set-aside-rollouts']
+// Live, archived, twins set aside when history was shared, old copies held while their deletion is
+// checked, and `<folder>[.<ms>].orca-profile-merge` conflicts.
+const HISTORY_FOLDERS = [
+  'sessions',
+  'archived_sessions',
+  '.orca-set-aside-rollouts',
+  '.orca-copies-deleting'
+]
 const MERGE_PENDING_FOLDER = /\.orca-profile-merge$/
 
 type Walk = { usage: CodexHistoryDiskUsage; entries: number; maxEntries: number; deadline: number }

@@ -21,6 +21,7 @@ import {
   PRE_SHARE_DATABASES_DIR,
   SET_ASIDE_ROLLOUTS_DIR
 } from '../../codex/history/shared-store/codex-account-history-cleanup-manifest'
+import { HELD_COPIES_DIR } from '../../codex/history/shared-store/codex-account-copies-hold'
 import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
 import type { CodexManagedHomePath } from './codex-managed-home-path'
 
@@ -37,6 +38,7 @@ const KEPT_HISTORY = [
   'sessions',
   'archived_sessions',
   SET_ASIDE_ROLLOUTS_DIR,
+  HELD_COPIES_DIR,
   HISTORY_CLEANUP_MANIFEST,
   PRE_SHARE_DATABASES_DIR
 ]

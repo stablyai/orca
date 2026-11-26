@@ -86,7 +86,19 @@ async function* contentChunks(path: string): AsyncGenerator<Buffer> {
  * `.zst` files must be identical (a compressed prefix is a damaged file), and a `.zst` original
  * must decode to its end, so a damaged tail never stands in for a readable copy.
  */
-export async function originalHoldsCopy(copy: string, original: string): Promise<boolean> {
+/** Thrown when a comparison outlasts its launch's deadline; the copy waits for a later launch. */
+export class OutOfTime extends Error {}
+
+export async function originalHoldsCopy(
+  copy: string,
+  original: string,
+  deadline = Infinity
+): Promise<boolean> {
+  const inTime = (): void => {
+    if (Date.now() > deadline) {
+      throw new OutOfTime()
+    }
+  }
   const sameForm =
     copy.endsWith(COMPRESSED_ROLLOUT_SUFFIX) === original.endsWith(COMPRESSED_ROLLOUT_SUFFIX)
   const read = sameForm ? plainChunks : contentChunks
@@ -96,6 +108,7 @@ export async function originalHoldsCopy(copy: string, original: string): Promise
     let consumed = 0
     let lastByte: number | undefined
     for await (const mine of read(copy)) {
+      inTime()
       let offset = 0
       while (offset < mine.length) {
         if (pending.length === 0) {
@@ -125,6 +138,7 @@ export async function originalHoldsCopy(copy: string, original: string): Promise
       let total = BigInt(consumed + pending.length)
       let last = pending.at(-1) ?? lastByte
       for (let next = await theirs.next(); !next.done; next = await theirs.next()) {
+        inTime()
         total += BigInt(next.value.length)
         last = next.value.at(-1) ?? last
       }

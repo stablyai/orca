@@ -54,11 +54,24 @@ export function isInsideHome(accountHome: string, path: string): boolean {
   }
 }
 
-// A new name for the inode, then the old name dropped: never replaces a file, never loses one.
-function moveWithoutReplacing(from: string, to: string): void {
+// The bytes as checked; ctime and the link count change with the move itself.
+function contentKey(stats: BigIntStats): string {
+  return `${stats.dev}:${stats.ino}:${stats.size}:${stats.mtimeNs}`
+}
+
+/**
+ * A new name for the inode, then the old name dropped only while it still names that inode:
+ * never replaces a file, never loses one. False leaves both names.
+ */
+function moveWithoutReplacing(from: string, to: string): boolean {
   mkdirSync(dirname(to), { recursive: true })
   linkSync(from, to)
+  const [source, target] = [lstatOrNull(from), lstatSync(to, { bigint: true })]
+  if (!source || source.ino !== target.ino || source.dev !== target.dev) {
+    return false
+  }
   unlinkSync(from)
+  return true
 }
 
 function sameFile(path: string, key: string): boolean {
@@ -86,8 +99,16 @@ export function holdVerifiedCopies(
         continue
       }
       const target = join(accountHome, HELD_COPIES_DIR, relative(accountHome, copy.copy))
-      moveWithoutReplacing(copy.copy, target)
+      if (!moveWithoutReplacing(copy.copy, target)) {
+        tally.changed += 1
+        continue
+      }
       const stats = lstatSync(target, { bigint: true })
+      // Written to between the check and the move: what's held is not what was verified.
+      if (!copy.copyKey.startsWith(`${contentKey(stats)}:`)) {
+        release({ held: target, copy: copy.copy }, tally, 'changed')
+        continue
+      }
       held.push({
         held: target,
         copy: copy.copy,
@@ -108,7 +129,14 @@ function release(
   reason: 'open' | 'changed'
 ): void {
   try {
-    moveWithoutReplacing(copy.held, copy.copy)
+    const current = lstatOrNull(copy.copy)
+    const held = lstatSync(copy.held, { bigint: true })
+    // A move cut short between its link and unlink left both names on one inode.
+    if (current && current.ino === held.ino && current.dev === held.dev) {
+      unlinkSync(copy.held)
+    } else if (!moveWithoutReplacing(copy.held, copy.copy)) {
+      throw new Error('held copy was replaced')
+    }
     tally[reason] += 1
   } catch {
     // Its name was taken meanwhile: it waits held, and a later launch puts it back.

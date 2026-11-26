@@ -7,7 +7,7 @@ import {
   COMPRESSED_ROLLOUT_SUFFIX,
   rolloutTwinPath
 } from '../rollouts/codex-rollout-compressed-twin'
-import { originalHoldsCopy } from './codex-account-copy-content'
+import { OutOfTime, originalHoldsCopy } from './codex-account-copy-content'
 import { readKeptCopies, writeKeptCopies, type KeptCopies } from './codex-account-copies-kept'
 import { emptyTally, type CopiesTally } from './codex-account-copies-tally'
 import {
@@ -124,10 +124,19 @@ export async function verifyCodexAccountCopies(args: {
   releaseLeftoverHeldCopies(args.accountHome)
   const kept = readKeptCopies(args.accountHome)
   const nextKept: KeptCopies = {}
+  const visited = new Set<string>()
   let bytesRead = 0
-  for (const root of listCopyRoots(args.accountHome, args.storeHome)) {
+  let outOfTime = false
+  scan: for (const root of listCopyRoots(args.accountHome, args.storeHome)) {
     for (const copy of rolloutFiles(root.root)) {
       const name = relative(args.accountHome, copy).split(/[\\/]/).join('/')
+      if (Date.now() > args.budget.deadline) {
+        // The rest waits for a later launch, unvisited: its cost stays within the deadline.
+        outOfTime = true
+        tally.deferred += 1
+        break scan
+      }
+      visited.add(name)
       try {
         const copyStats = lstatOrNull(copy)
         if (!copyStats?.isFile()) {
@@ -161,7 +170,8 @@ export async function verifyCodexAccountCopies(args: {
           continue
         }
         const size = Number(copyStats.size)
-        if (bytesRead + size > args.budget.maxBytes || Date.now() > args.budget.deadline) {
+        // A copy larger than the whole budget goes first in its launch rather than never.
+        if (bytesRead > 0 && bytesRead + size > args.budget.maxBytes) {
           tally.deferred += 1
           if (kept[name]) {
             nextKept[name] = kept[name]
@@ -171,8 +181,12 @@ export async function verifyCodexAccountCopies(args: {
         bytesRead += size
         let holds: boolean
         try {
-          holds = await originalHoldsCopy(copy, original.path)
+          holds = await originalHoldsCopy(copy, original.path, args.budget.deadline)
         } catch (error) {
+          if (error instanceof OutOfTime) {
+            tally.deferred += 1
+            continue
+          }
           // A corrupt `.zst` never matches; anything else is tried again next launch.
           const code =
             typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : ''
@@ -203,6 +217,13 @@ export async function verifyCodexAccountCopies(args: {
         }
       } catch {
         tally.error += 1
+      }
+    }
+  }
+  if (outOfTime) {
+    for (const [name, key] of Object.entries(kept)) {
+      if (!visited.has(name)) {
+        nextKept[name] = key
       }
     }
   }
