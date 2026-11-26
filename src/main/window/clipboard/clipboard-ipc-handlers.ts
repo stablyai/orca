@@ -1,5 +1,5 @@
 import {
-  clipboardFormatReader,
+  clipboardFormatSnapshot,
   readClipboardHtml,
   writeClipboardBuffer,
   writeClipboardPng
@@ -48,7 +48,7 @@ import { readClipboardCopiedFilePaths } from './clipboard-copied-file-paths'
 import { readClipboardPlainText } from './clipboard-plain-text-read'
 import { buildClipboardImageThumbnail } from './clipboard-image-thumbnail'
 import { readClipboardNativeImage } from './clipboard-native-image'
-import { encodeClipboardNativeImagePng } from './clipboard-image-png-encode'
+import { clipboardImagePngBytes, encodeClipboardNativeImagePng } from './clipboard-image-png-encode'
 import {
   ClipboardPublisherBusyError,
   publishClipboardOperation,
@@ -133,7 +133,7 @@ export function registerClipboardHandlers(
     assertTrustedClipboardTextSender(event)
     return assertClipboardTextWithinLimitWithYield(
       await readClipboardPlainText({
-        ...clipboardFormatReader,
+        ...clipboardFormatSnapshot(),
         readText: () => clipboard.readText()
       }),
       options
@@ -165,7 +165,9 @@ export function registerClipboardHandlers(
     async (event): Promise<ClipboardImageThumbnail | null> => {
       assertTrustedClipboardSender(event)
       try {
-        return buildClipboardImageThumbnail(await readClipboardNativeImage())
+        return buildClipboardImageThumbnail(
+          await readClipboardNativeImage(clipboardFormatSnapshot())
+        )
       } catch {
         // The save call reports rejected source data; the preview is best effort.
         return null
@@ -174,23 +176,24 @@ export function registerClipboardHandlers(
   )
   ipcMain.handle('clipboard:hasImage', async (event): Promise<boolean> => {
     assertTrustedClipboardSender(event)
-    return (await readClipboardImageSource(clipboardFormatReader)) !== null
+    return (await readClipboardImageSource(clipboardFormatSnapshot())) !== null
   })
   // File-manager copies include text labels that paste must not type.
   ipcMain.handle('clipboard:readFilePaths', async (event): Promise<string[]> => {
     assertTrustedClipboardSender(event)
-    return readClipboardCopiedFilePaths(clipboardFormatReader)
+    return readClipboardCopiedFilePaths(clipboardFormatSnapshot())
   })
   // Give image-aware terminal tools a saved image path, or null when no image exists.
   ipcMain.handle(
     'clipboard:saveImageAsTempFile',
     async (event, args?: SaveClipboardImageAsTempFileArgs) => {
       assertTrustedClipboardSender(event)
-      const source = await readClipboardImageSource(clipboardFormatReader)
+      const reader = clipboardFormatSnapshot()
+      const source = await readClipboardImageSource(reader)
       if (!source) {
         return null
       }
-      const image = await readClipboardNativeImage()
+      const image = await readClipboardNativeImage(reader)
       let png: Buffer | null = null
       if (!image.isEmpty()) {
         png = await encodeClipboardNativeImagePng(image)
@@ -294,7 +297,7 @@ export function registerClipboardHandlers(
         throw new Error('Clipboard image could not be decoded')
       }
       assertClipboardImageDimensionsWithinLimit(image.getSize())
-      await writeClipboardPng(image.toPNG())
+      await writeClipboardPng(clipboardImagePngBytes(buffer, image))
     })
   })
 }

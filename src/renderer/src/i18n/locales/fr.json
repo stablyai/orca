@@ -13653,8 +13653,7 @@
             "741ff8a0d2": "Pusher & créer {{value0}}"
           },
           "FileExplorer": {
-            "79b1537dd3": "Sélectionnez un espace de travail pour parcourir les fichiers",
-            "2f4483d6c4": "Aucun fichier ne correspond à ce filtre"
+            "79b1537dd3": "Sélectionnez un espace de travail pour parcourir les fichiers"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "Nouveau dossier",
@@ -13697,7 +13696,6 @@
             "31b4c3195d": "Plus d'actions de l'explorateur",
             "d95e30fe28": "Actualiser l'explorateur",
             "6026b16950": "Tout réduire",
-            "c1f3f3ec70": "Rechercher dans le contenu des fichiers",
             "openInApp": "Ouvrir dans {{app}}"
           },
           "FileExplorerTreeStatus": {
@@ -13810,19 +13808,6 @@
             "localPortInUse": "Le port {{port}} est déjà utilisé. Choisissez un autre port local.",
             "localPortRequiresPrivileges": "Le port {{port}} nécessite des privilèges élevés. Utilisez un port local ≥ 1024."
           },
-          "Search": {
-            "1abfb25a66": "Saisissez pour rechercher dans les fichiers",
-            "d56d140747": "Appuyez sur Entrée pour rechercher",
-            "98c8435e36": "Sélectionnez un espace de travail pour rechercher",
-            "dcc294f28d": "(résultats tronqués)",
-            "resultsInFiles": "{{results}} dans {{files}}",
-            "resultCount_one": "{{count}} résultat",
-            "resultCount_other": "{{count}} résultats",
-            "resultCount_many": "{{count}} résultats",
-            "fileCount_one": "{{count}} fichier",
-            "fileCount_other": "{{count}} fichiers",
-            "fileCount_many": "{{count}} fichiers"
-          },
           "SearchFilters": {
             "01e4671ccf": "fichiers à exclure (ex. *.min.js, dist/**)",
             "0a6412a895": "Fichiers à exclure",
@@ -13832,11 +13817,9 @@
           "SearchHeader": {
             "6234a5ef85": "Utiliser une expression régulière",
             "4567e6e0b6": "Mot entier uniquement",
-            "464ae3974f": "Respecter la casse",
-            "693cbeadd0": "Recherche"
+            "464ae3974f": "Respecter la casse"
           },
           "SearchQueryRow": {
-            "queryLabel": "Rechercher dans les fichiers",
             "clearLabel": "Effacer la recherche"
           },
           "SearchResultItems": {
@@ -15009,16 +14992,6 @@
             "description": "« {{value0}} » sera supprimée. Une fois supprimée, elle ne pourra plus être reprise depuis la ligne de commande de {{value1}} non plus.",
             "remoteDescription": "« {{value0}} » sera supprimée de {{value2}}. Une fois supprimée, elle ne pourra plus être reprise depuis la ligne de commande de {{value1}} non plus.",
             "confirm": "Supprimer"
-          },
-          "FileExplorerNameFilter": {
-            "26fb73c6e3": "Rechercher des fichiers",
-            "4d5a6b2a49": "Effacer le filtre de fichiers",
-            "7a9fb1e6aa": "Contenu"
-          },
-          "FileExplorerViewSwitch": {
-            "c4e9a2b713": "Noms",
-            "b3c8f1a902": "Filtrer les fichiers par nom",
-            "f8a2c4d1e0": "Mode de recherche de l'explorateur"
           },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "Aucune modification de fichier dans ce commit"
@@ -23356,13 +23329,10 @@
       "label": "Racine de l’explorateur",
       "full": "Racine du dépôt",
       "back": "Revenir à {{path}}",
-      "searchScope": "Portée : fichiers de l’espace de travail",
       "retry": "Réessayer",
       "sparseStatus": "Extraction partielle",
       "scopeDetails": "À propos de la portée de l’extraction partielle",
       "scopeExplanation": "Le sélecteur de dossiers change l’affichage, pas les fichiers extraits. La racine du dépôt inclut les fichiers extraits à la racine et dans les dossiers parents.",
-      "searchExplanation": "Noms filtre le dossier affiché. Contenu recherche dans tout l’espace de travail. Les fichiers exclus de l’extraction partielle ne sont pas recherchés.",
-      "findInFolder": "Rechercher dans {{path}}",
       "folderLoadError": "Impossible de charger ce dossier :",
       "emptyFolder": "Aucun fichier dans ce dossier"
     },
@@ -23705,8 +23675,7 @@
     "filters": {
       "toggle": "Afficher ou masquer les détails de la recherche",
       "active": "{{count}} actifs"
-    },
-    "noResults": "Aucun résultat. Essayez une autre recherche ou ajustez vos filtres."
+    }
   },
   "resourceManager": {
     "pty": {

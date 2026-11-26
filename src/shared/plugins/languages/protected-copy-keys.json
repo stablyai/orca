@@ -1241,6 +1241,7 @@
     "components.native-chat.htmlView",
     "components.native-chat.htmlViewCode",
     "components.native-chat.htmlViewPreview",
+    "components.native-chat.htmlViewPreviewWaiting",
     "components.native-chat.notices.details",
     "components.native-chat.prompt.collapse",
     "components.native-chat.prompt.expand",

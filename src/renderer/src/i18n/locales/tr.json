@@ -15038,8 +15038,7 @@
             "741ff8a0d2": "Push Yap ve {{value0}} Oluştur"
           },
           "FileExplorer": {
-            "79b1537dd3": "Dosyalara göz atmak için bir çalışma alanı seçin",
-            "2f4483d6c4": "Bu filtreyle eşleşen dosya yok"
+            "79b1537dd3": "Dosyalara göz atmak için bir çalışma alanı seçin"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "Yeni Klasör",
@@ -15082,7 +15081,6 @@
             "31b4c3195d": "Diğer Gezgin İşlemleri",
             "d95e30fe28": "Gezgini Yenile",
             "6026b16950": "Tümünü Daralt",
-            "c1f3f3ec70": "Dosya içeriğinde ara",
             "openInApp": "{{app}} ile aç"
           },
           "FileExplorerTreeStatus": {
@@ -15195,17 +15193,6 @@
             "localPortInUse": "{{port}} portu zaten kullanımda. Farklı bir yerel port seçin.",
             "localPortRequiresPrivileges": "{{port}} portu yükseltilmiş ayrıcalıklar gerektirir. 1024 veya daha büyük bir yerel port kullanın."
           },
-          "Search": {
-            "1abfb25a66": "Dosyalarda aramak için yazın",
-            "d56d140747": "Aramak için Enter'a basın",
-            "98c8435e36": "Aramak için bir çalışma alanı seçin",
-            "dcc294f28d": "(sonuçlar kısaltıldı)",
-            "resultsInFiles": "{{files}} içinde {{results}}",
-            "resultCount_one": "{{count}} sonuç",
-            "resultCount_other": "{{count}} sonuç",
-            "fileCount_one": "{{count}} dosya",
-            "fileCount_other": "{{count}} dosya"
-          },
           "SearchFilters": {
             "01e4671ccf": "ör. *.min.js, dist/**",
             "0a6412a895": "Hariç tutulacak dosyalar",
@@ -15215,11 +15202,9 @@
           "SearchHeader": {
             "6234a5ef85": "Düzenli İfade Kullan",
             "4567e6e0b6": "Tam Kelime Eşleştir",
-            "464ae3974f": "Büyük/Küçük Harf Eşleştir",
-            "693cbeadd0": "Ara"
+            "464ae3974f": "Büyük/Küçük Harf Eşleştir"
           },
           "SearchQueryRow": {
-            "queryLabel": "Dosyalarda ara",
             "clearLabel": "Aramayı temizle"
           },
           "SearchResultItems": {
@@ -16376,16 +16361,6 @@
             "description": "\"{{value0}}\" silinecek. Silindikten sonra artık {{value1}} aracının kendi komut satırından da devam ettirilemez.",
             "remoteDescription": "\"{{value0}}\", {{value2}} konumundan silinecek. Silindikten sonra artık {{value1}} aracının kendi komut satırından da devam ettirilemeyecek.",
             "confirm": "Sil"
-          },
-          "FileExplorerNameFilter": {
-            "26fb73c6e3": "Dosya bul",
-            "4d5a6b2a49": "Dosya filtresini temizle",
-            "7a9fb1e6aa": "İçerik"
-          },
-          "FileExplorerViewSwitch": {
-            "c4e9a2b713": "Adlar",
-            "b3c8f1a902": "Dosyaları ada göre filtrele",
-            "f8a2c4d1e0": "Gezgin arama modu"
           },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "Bu commit'te dosya değişikliği yok"
@@ -25265,13 +25240,10 @@
       "label": "Dosya Gezgini kökü",
       "full": "Repo kökü",
       "back": "{{path}} yoluna dön",
-      "searchScope": "Arama kapsamı: çalışma alanı dosyaları",
       "retry": "Tekrar dene",
       "sparseStatus": "Sparse checkout",
       "scopeDetails": "Sparse checkout kapsamı hakkında",
       "scopeExplanation": "Klasör seçici, çalışma alanına alınan dosyaları değil, gördüklerinizi değiştirir. Repo kökü, çalışma alanına alınan kök ve üst klasörlerdeki dosyaları içerir.",
-      "searchExplanation": "Adlar, görüntülediğiniz klasörü filtreler. İçerik, tüm çalışma alanında arama yapar. Sparse checkout dışında bırakılan dosyalar aranmaz.",
-      "findInFolder": "{{path}} içinde bul",
       "folderLoadError": "Bu klasör yüklenemedi:",
       "emptyFolder": "Bu klasörde dosya yok"
     },
@@ -25532,8 +25504,7 @@
     "filters": {
       "toggle": "Arama ayrıntılarını aç/kapat",
       "active": "{{count}} etkin"
-    },
-    "noResults": "Sonuç yok. Farklı bir arama yapın veya filtrelerinizi ayarlayın."
+    }
   },
   "workspaceDeletion": {
     "preferenceSaveFailed": "Silme tercihi kaydedilemedi",

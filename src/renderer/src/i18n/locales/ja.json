@@ -13718,8 +13718,7 @@
             "741ff8a0d2": "プッシュして{{value0}}を作成"
           },
           "FileExplorer": {
-            "79b1537dd3": "ファイルを参照するワークスペースを選択",
-            "2f4483d6c4": "このフィルターに一致するファイルはありません"
+            "79b1537dd3": "ファイルを参照するワークスペースを選択"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "新規フォルダー",
@@ -13762,7 +13761,6 @@
             "31b4c3195d": "エクスプローラーのその他の操作",
             "d95e30fe28": "エクスプローラーを更新する",
             "6026b16950": "すべて折りたたむ",
-            "c1f3f3ec70": "ファイル内容を検索",
             "openInApp": "{{app}} で開く"
           },
           "FileExplorerTreeStatus": {
@@ -13875,17 +13873,6 @@
             "localPortInUse": "ポート {{port}} は使用中です。別のローカルポートを選択してください。",
             "localPortRequiresPrivileges": "ポート {{port}} には管理者権限が必要です。1024 以上のローカルポートを使用してください。"
           },
-          "Search": {
-            "1abfb25a66": "ファイル内を検索するために入力します",
-            "d56d140747": "Enterを押して検索します",
-            "98c8435e36": "検索するワークスペースを選択",
-            "dcc294f28d": "(結果は切り捨てられています)",
-            "resultsInFiles": "{{files}}に {{results}}",
-            "resultCount_one": "{{count}} 件の結果",
-            "resultCount_other": "{{count}} 件の結果",
-            "fileCount_one": "{{count}} 個のファイル",
-            "fileCount_other": "{{count}} 個のファイル"
-          },
           "SearchFilters": {
             "01e4671ccf": "除外するファイル (例: *.min.js、dist/**)",
             "0a6412a895": "除外するファイル",
@@ -13895,11 +13882,9 @@
           "SearchHeader": {
             "6234a5ef85": "正規表現を使用する",
             "4567e6e0b6": "単語全体に一致",
-            "464ae3974f": "大文字と小文字を区別する",
-            "693cbeadd0": "検索"
+            "464ae3974f": "大文字と小文字を区別する"
           },
           "SearchQueryRow": {
-            "queryLabel": "ファイルを検索",
             "clearLabel": "検索をクリア"
           },
           "SearchResultItems": {
@@ -15032,16 +15017,6 @@
             "description": "「{{value0}}」を削除します。削除すると、{{value1}} 自体のコマンドラインからも再開できなくなります。",
             "remoteDescription": "「{{value0}}」は {{value2}} から削除されます。削除後は {{value1}} 自身のコマンドラインからも再開できなくなります。",
             "confirm": "削除"
-          },
-          "FileExplorerNameFilter": {
-            "26fb73c6e3": "ファイルを検索",
-            "4d5a6b2a49": "ファイルフィルターをクリア",
-            "7a9fb1e6aa": "内容"
-          },
-          "FileExplorerViewSwitch": {
-            "c4e9a2b713": "名前",
-            "b3c8f1a902": "ファイル名でフィルター",
-            "f8a2c4d1e0": "エクスプローラー検索モード"
           },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "このコミットにはファイルの変更がありません"
@@ -23782,13 +23757,10 @@
       "label": "エクスプローラーのルート",
       "full": "リポジトリのルート",
       "back": "{{path}} に戻る",
-      "searchScope": "検索範囲: ワークスペースのファイル",
       "retry": "再試行",
       "sparseStatus": "スパースチェックアウト",
       "scopeDetails": "スパースチェックアウトの範囲について",
       "scopeExplanation": "フォルダーの選択で変わるのは表示範囲です。チェックアウトされるファイルは変わりません。リポジトリルートには、ルートと親フォルダーにチェックアウトされたファイルも表示されます。",
-      "searchExplanation": "「名前」は表示中のフォルダーを絞り込みます。「内容」はワークスペース全体を検索します。スパースチェックアウトで除外されたファイルは検索されません。",
-      "findInFolder": "{{path}} 内を検索",
       "folderLoadError": "このフォルダーを読み込めませんでした：",
       "emptyFolder": "このフォルダーにはファイルがありません"
     },
@@ -24141,8 +24113,7 @@
     "filters": {
       "toggle": "検索の詳細を切り替える",
       "active": "{{count}} 件が有効"
-    },
-    "noResults": "結果がありません。別の検索を試すか、フィルターを調整してください。"
+    }
   },
   "csv": {
     "detectingDelimiter": "デリミタを検出中…",

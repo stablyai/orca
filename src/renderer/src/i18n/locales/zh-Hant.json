@@ -14787,8 +14787,7 @@
             "741ff8a0d2": "推送並建立 {{value0}}"
           },
           "FileExplorer": {
-            "79b1537dd3": "選擇一個工作區來瀏覽檔案",
-            "2f4483d6c4": "沒有檔案符合此篩選條件"
+            "79b1537dd3": "選擇一個工作區來瀏覽檔案"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "新增資料夾",
@@ -14831,7 +14830,6 @@
             "31b4c3195d": "更多檔案管理員操作",
             "d95e30fe28": "重新整理檔案管理員",
             "6026b16950": "全部收合",
-            "c1f3f3ec70": "搜尋檔案內容",
             "openInApp": "在 {{app}} 中開啟"
           },
           "FileExplorerTreeStatus": {
@@ -14944,17 +14942,6 @@
             "localPortInUse": "連接埠 {{port}} 已被使用。請選擇其他本機連接埠。",
             "localPortRequiresPrivileges": "連接埠 {{port}} 需要提升權限。請使用本機連接埠 ≥ 1024。"
           },
-          "Search": {
-            "1abfb25a66": "輸入要在檔案中搜尋的內容",
-            "d56d140747": "按 Enter 進行搜尋",
-            "98c8435e36": "選擇要搜尋的工作區",
-            "dcc294f28d": "（結果被截斷）",
-            "resultsInFiles": "{{files}} 中有 {{results}}",
-            "resultCount_one": "{{count}} 筆結果",
-            "resultCount_other": "{{count}} 筆結果",
-            "fileCount_one": "{{count}} 個檔案",
-            "fileCount_other": "{{count}} 個檔案"
-          },
           "SearchFilters": {
             "01e4671ccf": "例如 *.min.js、dist/**",
             "0a6412a895": "要排除的檔案",
@@ -14964,11 +14951,9 @@
           "SearchHeader": {
             "6234a5ef85": "使用正規表示式",
             "4567e6e0b6": "符合整個字詞",
-            "464ae3974f": "區分大小寫",
-            "693cbeadd0": "搜尋"
+            "464ae3974f": "區分大小寫"
           },
           "SearchQueryRow": {
-            "queryLabel": "搜尋檔案",
             "clearLabel": "清除搜尋"
           },
           "SearchResultItems": {
@@ -16101,16 +16086,6 @@
             "description": "「{{value0}}」將被刪除。刪除後，也將無法透過 {{value1}} 自身的命令列恢復。",
             "remoteDescription": "「{{value0}}」將從 {{value2}} 刪除。刪除後，也將無法透過 {{value1}} 自身的命令列恢復。",
             "confirm": "刪除"
-          },
-          "FileExplorerNameFilter": {
-            "26fb73c6e3": "查詢檔案",
-            "4d5a6b2a49": "清除檔案篩選器",
-            "7a9fb1e6aa": "內容"
-          },
-          "FileExplorerViewSwitch": {
-            "c4e9a2b713": "名稱",
-            "b3c8f1a902": "按名稱篩選檔案",
-            "f8a2c4d1e0": "檔案總管搜尋模式"
           },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "此提交沒有檔案變更"
@@ -24770,13 +24745,10 @@
       "label": "檔案瀏覽器根目錄",
       "full": "存放庫根目錄",
       "back": "返回 {{path}}",
-      "searchScope": "搜尋範圍：工作區檔案",
       "retry": "重試",
       "sparseStatus": "稀疏檢出",
       "scopeDetails": "關於稀疏檢出範圍",
       "scopeExplanation": "資料夾選擇器只改變顯示範圍，不會改變檢出的檔案。存放庫根目錄檢視也會顯示根目錄和上層資料夾中已檢出的檔案。",
-      "searchExplanation": "「名稱」篩選目前檢視的資料夾。「內容」搜尋整個工作區。稀疏檢出排除的檔案不會被搜尋。",
-      "findInFolder": "在 {{path}} 中查詢",
       "folderLoadError": "無法載入此資料夾：",
       "emptyFolder": "此資料夾中沒有檔案"
     },
@@ -25053,8 +25025,7 @@
     "filters": {
       "toggle": "顯示或隱藏搜尋詳細設定",
       "active": "已啟用 {{count}} 個"
-    },
-    "noResults": "沒有結果。請嘗試其他搜尋內容或調整篩選條件。"
+    }
   },
   "workspaceDeletion": {
     "preferenceSaveFailed": "無法儲存刪除偏好設定",
