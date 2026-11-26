@@ -6,6 +6,7 @@ import {
   isPathPermissionError,
   probeExecutableFile,
   UNVERIFIED_FS_PROBE,
+  type InstallDirectoryListing,
   type InventoryFsProbes
 } from '../../../shared/shell/command-resolution/inventory-fs-probes'
 import type { DetectionDirectoryListing } from './command-path-directory-worker-protocol'
@@ -100,23 +101,25 @@ export async function readDetectionDirectory(
   }
 }
 
-function isDirentLookupError(error: unknown): boolean {
+function isDirentLookupError(error: unknown): error is { syscall: 'lstat'; code?: unknown } {
   return !!error && typeof error === 'object' && 'syscall' in error && error.syscall === 'lstat'
 }
 
-export function readInstallSubdirectories(dir: string): DetectionDirectoryListing {
-  const names = new Map<string, string>()
+export function readInstallSubdirectories(dir: string): InstallDirectoryListing {
+  const names: string[] = []
+  let uncertain = false
   try {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       if (entry.isDirectory()) {
-        names.set(entry.name, entry.name)
+        names.push(entry.name)
       }
     }
-    return names
+    return { names, uncertain }
   } catch (error) {
     if (!isDirentLookupError(error)) {
-      return isMissingPathError(error) || isPathPermissionError(error) ? names : 'unverified'
+      return { names, uncertain: !isMissingPathError(error) && !isPathPermissionError(error) }
     }
+    uncertain = error.code !== 'ENOENT'
   }
   try {
     // Read one entry at a time so a DT_UNKNOWN lookup error only drops that entry.
@@ -125,20 +128,22 @@ export function readInstallSubdirectories(dir: string): DetectionDirectoryListin
       try {
         const entry = directory.readSync()
         if (!entry) {
-          return names
+          return { names, uncertain }
         }
         if (entry.isDirectory()) {
-          names.set(entry.name, entry.name)
+          names.push(entry.name)
         }
       } catch (error) {
         if (!isDirentLookupError(error)) {
           throw error
         }
+        uncertain ||= error.code !== 'ENOENT'
       }
     }
   } catch (error) {
-    return names.size || isMissingPathError(error) || isPathPermissionError(error)
-      ? names
-      : 'unverified'
+    return {
+      names,
+      uncertain: uncertain || (!isMissingPathError(error) && !isPathPermissionError(error))
+    }
   }
 }

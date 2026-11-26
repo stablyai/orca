@@ -14,9 +14,10 @@ if (!parentPort) {
 const port = parentPort
 
 port.on('message', async (request: DetectionDirectoryRequest) => {
-  const names = request.subdirectories
-    ? readInstallSubdirectories(request.dir)
-    : await readDetectionDirectory(request.dir, request.inventory)
-  const response: DetectionDirectoryResponse = { id: request.id, names }
+  const listing =
+    request.mode === 'install'
+      ? readInstallSubdirectories(request.dir)
+      : await readDetectionDirectory(request.dir, request.mode === 'inventory')
+  const response: DetectionDirectoryResponse = { id: request.id, listing }
   port.postMessage(response)
 })

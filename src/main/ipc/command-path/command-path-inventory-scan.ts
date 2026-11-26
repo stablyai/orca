@@ -72,7 +72,6 @@ export async function scanInventoryPathCommands(
   directories: readonly PathDirectory[],
   commands: ReadonlySet<string>,
   concurrency: number,
-  partialBudget: Promise<unknown>,
   scan: (command: string, dir: PathDirectory) => Promise<DirectoryCandidate>,
   publish: (command: string, match: AgentPathMatch) => void,
   complete: (command: string, uncertain: boolean) => void,
@@ -121,14 +120,9 @@ export async function scanInventoryPathCommands(
       await scanDirectory()
     }
   }
-  const first = scanDirectory()
-  // Keep the head's walk slot until its reads settle, even after the partial publication.
+  await scanDirectory()
   await Promise.race([
     allCommandsDecided.promise,
-    concurrency === 1 ? first : Promise.race([first, partialBudget])
-  ])
-  await Promise.race([
-    allCommandsDecided.promise,
-    Promise.all([first.then(run), ...Array.from({ length: concurrency - 1 }, run)])
+    Promise.all(Array.from({ length: concurrency }, run))
   ])
 }

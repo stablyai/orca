@@ -83,8 +83,7 @@ export async function scanLocalAgentCommandInventory(
   readLoginPath: boolean,
   { matches, found, probed }: LocalInventoryProgress,
   onChange: () => void,
-  signal: AbortSignal,
-  partialBudget: Promise<unknown>
+  signal: AbortSignal
 ): Promise<CommandInventory> {
   const env =
     buildLocalPreflightEnv() ??
@@ -105,72 +104,68 @@ export async function scanLocalAgentCommandInventory(
       onChange()
     }
   }
+  const overrideProbes = new InventoryFsProbes(signal, 'override')
+  for (const command of direct) {
+    await findCommandsOnLocalPath([command], {
+      env,
+      found,
+      probes: overrideProbes,
+      signal,
+      onCommandComplete: resolveCommand
+    })
+  }
   const pathMisses = new Map(names.map((command) => [command, Promise.withResolvers<boolean>()]))
   const unverifiedPath = new Set<string>()
   const installerProbes = new InventoryFsProbes(signal, 'installer')
   let installs: Promise<void> | undefined
-  const scanPath = async (): Promise<void> => {
-    const pathScan = new AbortController()
-    const pathSignal = AbortSignal.any([signal, pathScan.signal])
-    try {
-      await findCommandsOnLocalPath(names, {
-        env,
-        inventory: { isRuntimePath: isOrcaAgentRuntimePath, matches },
-        found,
-        probes: new InventoryFsProbes(pathSignal),
-        signal: pathSignal,
-        inventoryScan: { partialBudget, commandCount: commands.size },
-        onMatch: onChange,
-        onCommandComplete: (command, uncertain) => {
-          const needsInstall = !found.has(command) && !hasPathSeparatorToken(command)
-          pathMisses.get(command)?.resolve(needsInstall)
-          if (!needsInstall) {
-            resolveCommand(command, uncertain)
-            return
-          }
-          installs ??= detectCommandsInInstallDirs(names, {
-            probes: installerProbes,
-            readDirectories: (dir) =>
-              installerProbes.read(dir, 'dirs', async () => {
-                const names = await readInstallDirectoriesViaWorker(dir)
-                return names === 'unverified' ? UNVERIFIED_FS_PROBE : [...(names?.values() ?? [])]
-              }),
-            needsLookup: (name) => pathMisses.get(name)?.promise ?? Promise.resolve(false),
-            complete: (name, user, installerUncertain) => {
-              if (signal.aborted) {
-                return
-              }
-              if (user && !isOrcaAgentRuntimePath(user)) {
-                matches.set(name, { ...matches.get(name), user })
-                found.add(name)
-              }
-              resolveCommand(name, installerUncertain || unverifiedPath.has(name))
+  const pathScan = new AbortController()
+  const pathSignal = AbortSignal.any([signal, pathScan.signal])
+  try {
+    await findCommandsOnLocalPath(names, {
+      env,
+      inventory: { isRuntimePath: isOrcaAgentRuntimePath, matches },
+      found,
+      probes: new InventoryFsProbes(pathSignal),
+      signal: pathSignal,
+      inventoryCommandCount: commands.size,
+      onMatch: onChange,
+      onCommandComplete: (command, uncertain) => {
+        const needsInstall = !found.has(command) && !hasPathSeparatorToken(command)
+        pathMisses.get(command)?.resolve(needsInstall)
+        if (!needsInstall) {
+          resolveCommand(command, uncertain)
+          return
+        }
+        installs ??= detectCommandsInInstallDirs(names, {
+          probes: installerProbes,
+          readDirectories: (dir) =>
+            installerProbes.read(
+              dir,
+              'dirs',
+              async () => (await readInstallDirectoriesViaWorker(dir)) ?? UNVERIFIED_FS_PROBE
+            ),
+          needsLookup: (name) => pathMisses.get(name)?.promise ?? Promise.resolve(false),
+          complete: (name, user, installerUncertain) => {
+            if (signal.aborted) {
+              return
             }
-          })
-          void installs.catch(() => {})
-        },
-        unverified: unverifiedPath
-      })
-    } finally {
-      pathScan.abort()
-      for (const miss of pathMisses.values()) {
-        miss.resolve(false)
-      }
-    }
-    await installs
-  }
-  const scanOverrides = async (): Promise<void> => {
-    const probes = new InventoryFsProbes(signal, 'override')
-    for (const command of direct) {
-      await findCommandsOnLocalPath([command], {
-        env,
-        found,
-        probes,
-        signal,
-        onCommandComplete: resolveCommand
-      })
+            if (user && !isOrcaAgentRuntimePath(user)) {
+              matches.set(name, { ...matches.get(name), user })
+              found.add(name)
+            }
+            resolveCommand(name, installerUncertain || unverifiedPath.has(name))
+          }
+        })
+        void installs.catch(() => {})
+      },
+      unverified: unverifiedPath
+    })
+  } finally {
+    pathScan.abort()
+    for (const miss of pathMisses.values()) {
+      miss.resolve(false)
     }
   }
-  await Promise.all([scanOverrides(), scanPath()])
+  await installs
   return { matches, found, probed }
 }

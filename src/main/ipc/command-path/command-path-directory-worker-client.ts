@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
 import type { Worker } from 'node:worker_threads'
+import type { InstallDirectoryListing } from '../../../shared/shell/command-resolution/inventory-fs-probes'
 import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
 import { LazyWorkerThreadHost } from '../../worker-threads/lazy-worker-thread-host'
 import type { WorkerThreadFactory } from '../../worker-threads/worker-thread-transport'
@@ -10,7 +11,8 @@ import {
 import type {
   DetectionDirectoryListing,
   DetectionDirectoryRequest,
-  DetectionDirectoryResponse
+  DetectionDirectoryResponse,
+  DirectoryWorkerListing
 } from './command-path-directory-worker-protocol'
 
 const IDLE_TEARDOWN_MS = 60_000
@@ -33,19 +35,19 @@ export class DetectionDirectoryWorkerClient {
   private readonly host: LazyWorkerThreadHost<DetectionDirectoryResponse>
   private readonly pending = new Map<
     number,
-    { resolve: (names: DetectionDirectoryListing) => void; timer?: NodeJS.Timeout }
+    { resolve: (listing: DirectoryWorkerListing) => void; timer?: NodeJS.Timeout }
   >()
   private nextId = 1
 
   constructor(
     workerFactory: WorkerThreadFactory = createWorker,
-    private readonly retainPending = false
+    private readonly mode: DetectionDirectoryRequest['mode'] = 'path'
   ) {
     this.host = new LazyWorkerThreadHost({
       factory: workerFactory,
       idleTeardownMs: IDLE_TEARDOWN_MS,
       awaitRetirement: true,
-      strictRetirement: this.retainPending,
+      strictRetirement: this.mode !== 'path',
       isIdle: () => this.pending.size === 0,
       onMessage: (response) => {
         const call = this.pending.get(response.id)
@@ -54,7 +56,7 @@ export class DetectionDirectoryWorkerClient {
         }
         clearTimeout(call.timer)
         this.pending.delete(response.id)
-        call.resolve(response.names)
+        call.resolve(response.listing)
         if (this.pending.size === 0) {
           this.host.current?.unref()
           this.host.scheduleIdleTeardown()
@@ -66,8 +68,8 @@ export class DetectionDirectoryWorkerClient {
     })
   }
 
-  read(dir: string, subdirectories = false): Promise<DetectionDirectoryListing> {
-    if (!this.retainPending && this.pending.size >= MAX_PENDING_LISTINGS) {
+  read(dir: string): Promise<DirectoryWorkerListing> {
+    if (this.mode === 'path' && this.pending.size >= MAX_PENDING_LISTINGS) {
       return Promise.resolve(null)
     }
     const worker = this.host.ensure()
@@ -77,20 +79,13 @@ export class DetectionDirectoryWorkerClient {
     this.host.clearIdleTimer()
     const id = this.nextId++
     return new Promise((resolve) => {
-      // Inventory owns the deadline and keeps its worker request until the native read settles.
-      const timer = this.retainPending
-        ? undefined
-        : setTimeout(() => this.dispose(), REQUEST_TIMEOUT_MS)
-      if (this.retainPending && 'ref' in worker && typeof worker.ref === 'function') {
+      const timer =
+        this.mode === 'install' ? undefined : setTimeout(() => this.dispose(), REQUEST_TIMEOUT_MS)
+      if (this.mode !== 'path' && 'ref' in worker && typeof worker.ref === 'function') {
         worker.ref()
       }
       this.pending.set(id, { resolve, timer })
-      const request: DetectionDirectoryRequest = {
-        id,
-        dir,
-        inventory: this.retainPending,
-        subdirectories
-      }
+      const request: DetectionDirectoryRequest = { id, dir, mode: this.mode }
       try {
         worker.postMessage(request)
       } catch {
@@ -100,20 +95,13 @@ export class DetectionDirectoryWorkerClient {
   }
 
   dispose(): void {
+    // Keep ownership through retirement while releasing waiters.
     this.host.destroy()
-    const pending = [...this.pending.values()]
+    for (const { resolve, timer } of this.pending.values()) {
+      clearTimeout(timer)
+      resolve(null)
+    }
     this.pending.clear()
-    const settle = (): void => {
-      for (const { resolve, timer } of pending) {
-        clearTimeout(timer)
-        resolve(null)
-      }
-    }
-    if (this.retainPending) {
-      void this.host.retired().then(settle, () => {})
-      return
-    }
-    settle()
   }
 }
 
@@ -121,19 +109,21 @@ let client: DetectionDirectoryWorkerClient | undefined
 let inventoryClient: DetectionDirectoryWorkerClient | undefined
 let installClient: DetectionDirectoryWorkerClient | undefined
 
-export function readInstallDirectoriesViaWorker(dir: string): Promise<DetectionDirectoryListing> {
-  installClient ??= new DetectionDirectoryWorkerClient(createWorker, true)
-  return installClient.read(dir, true)
+export async function readInstallDirectoriesViaWorker(
+  dir: string
+): Promise<InstallDirectoryListing | null> {
+  installClient ??= new DetectionDirectoryWorkerClient(createWorker, 'install')
+  const listing = await installClient.read(dir)
+  return listing && typeof listing === 'object' && 'names' in listing ? listing : null
 }
 
-export function readDetectionDirectoryViaWorker(
+export async function readDetectionDirectoryViaWorker(
   dir: string,
-  retainPending = false
+  inventory = false
 ): Promise<DetectionDirectoryListing> {
-  if (retainPending) {
-    inventoryClient ??= new DetectionDirectoryWorkerClient(createWorker, true)
-    return inventoryClient.read(dir)
-  }
-  client ??= new DetectionDirectoryWorkerClient()
-  return client.read(dir)
+  const workerClient = inventory
+    ? (inventoryClient ??= new DetectionDirectoryWorkerClient(createWorker, 'inventory'))
+    : (client ??= new DetectionDirectoryWorkerClient())
+  const listing = await workerClient.read(dir)
+  return listing instanceof Map || listing === 'unverified' ? listing : null
 }

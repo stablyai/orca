@@ -5,6 +5,7 @@ import {
   isMissingPathError,
   isPathPermissionError,
   UNVERIFIED_FS_PROBE,
+  type InstallDirectoryListing,
   type InventoryFsProbes
 } from './inventory-fs-probes'
 import {
@@ -91,7 +92,9 @@ async function isNativeExecutableAsync(path: string): Promise<boolean> {
 export type CliFsProbeOptions = {
   probes: InventoryFsProbes
   onUnverified: () => void
-  readDirectories?: (path: string) => Promise<string[] | null | typeof UNVERIFIED_FS_PROBE>
+  readDirectories?: (
+    path: string
+  ) => Promise<InstallDirectoryListing | null | typeof UNVERIFIED_FS_PROBE>
 }
 
 async function readInstallDirectoryNames(path: string): Promise<string[]> {
@@ -152,8 +155,19 @@ async function readAsync(
           ? probes.read(read.path, 'file', () => readFile(read.path, 'utf8'))
           : readFile(read.path, 'utf8'))
       }
-      case 'dirs':
-        return await (options?.readDirectories?.(read.path) ?? readInstallDirectories(read.path))
+      case 'dirs': {
+        if (!options?.readDirectories) {
+          return await readInstallDirectories(read.path)
+        }
+        const listing = await options.readDirectories(read.path)
+        if (listing === UNVERIFIED_FS_PROBE) {
+          return listing
+        }
+        if (listing?.uncertain) {
+          options.onUnverified()
+        }
+        return listing?.names ?? null
+      }
       case 'native':
         return await isNativeExecutableAsync(read.path)
     }

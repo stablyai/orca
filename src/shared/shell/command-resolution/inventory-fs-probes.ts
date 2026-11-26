@@ -4,13 +4,14 @@ import { waitForPromiseWithSignal } from '../../concurrency/abort-signal-reason'
 import { PrioritySemaphore } from '../../concurrency/priority-semaphore'
 
 export const UNVERIFIED_FS_PROBE = Symbol('unverified filesystem probe')
+export type InstallDirectoryListing = { names: string[]; uncertain: boolean }
 type ExecutableFile = 'file' | 'other'
 
 type ProbeValues = {
   stat: Stats
   posixExecutable: ExecutableFile
   windowsExecutable: ExecutableFile
-  dirs: string[]
+  dirs: InstallDirectoryListing
   listing: Map<string, string>
   file: string
   realpath: string

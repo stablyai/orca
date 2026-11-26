@@ -91,8 +91,7 @@ async function scanInventory(
     readLoginPath,
     progress,
     () => notifyScanChange(scan),
-    controller.signal,
-    scan.publication.promise
+    controller.signal
   )
 }
 

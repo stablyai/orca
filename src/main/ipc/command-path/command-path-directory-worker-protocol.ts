@@ -1,13 +1,15 @@
+import type { InstallDirectoryListing } from '../../../shared/shell/command-resolution/inventory-fs-probes'
+
 export type DetectionDirectoryRequest = {
   id: number
   dir: string
-  inventory: boolean
-  subdirectories: boolean
+  mode: 'path' | 'inventory' | 'install'
 }
 
 export type DetectionDirectoryListing = Map<string, string> | null | 'unverified'
+export type DirectoryWorkerListing = DetectionDirectoryListing | InstallDirectoryListing
 
 export type DetectionDirectoryResponse = {
   id: number
-  names: DetectionDirectoryListing
+  listing: DirectoryWorkerListing
 }
