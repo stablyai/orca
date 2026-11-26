@@ -22,6 +22,7 @@ import {
 import { resolveEnvironmentFromStore } from './runtime-environment-store-operations'
 import { findCollidingEnvironmentName } from '../host-catalog/runtime-environment-name-collision'
 import { findEnvironmentWithHostKey } from '../host-catalog/runtime-environment-host-key-match'
+import { assertRuntimeEnvironmentNotReconciling } from '../host-catalog/runtime-environment-reconciliation-record'
 
 /** Registers a server Orca deployed over SSH, paired through its own loopback tunnel. */
 export function addManagedOrcadEnvironment(
@@ -47,6 +48,7 @@ export function addManagedOrcadEnvironment(
       )
     : undefined
   if (saved) {
+    assertRuntimeEnvironmentNotReconciling(saved)
     return moveManagedOrcadSshRoute(userDataPath, saved.id, args.orcadDeployment)
   }
   if (known.some((entry) => entry.id === args.id)) {
