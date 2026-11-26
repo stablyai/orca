@@ -12,11 +12,18 @@ const MESSAGE_IDS_PER_QUERY = 500
 
 type OpenCode2MessageRow = { id?: unknown; type?: unknown; data?: unknown }
 
+// Readers open one read-only connection per request, so the schema cannot change under one.
+const sessionPartsByDb = new WeakMap<SyncDatabase, boolean>()
+
 function hasSessionParts(db: SyncDatabase): boolean {
-  return (
-    tableExists(db, 'session_part') &&
-    PART_COLUMNS.every((column) => columnExists(db, 'session_part', column))
-  )
+  let known = sessionPartsByDb.get(db)
+  if (known === undefined) {
+    known =
+      tableExists(db, 'session_part') &&
+      PART_COLUMNS.every((column) => columnExists(db, 'session_part', column))
+    sessionPartsByDb.set(db, known)
+  }
+  return known
 }
 
 /** Rows with each assistant message's session_part rows as its `content`, in ordinal order.
@@ -52,7 +59,7 @@ export function withOpenCode2SessionParts<T extends OpenCode2MessageRow | null>(
     const statement = db.prepare(`SELECT message_id, ${partData} FROM session_part
       WHERE session_id = ? AND message_id IN (${batch.map(() => '?').join(',')})
       ORDER BY message_id, ordinal`)
-    for (const value of statement.all(sessionId, ...batch)) {
+    for (const value of statement.iterate(sessionId, ...batch)) {
       const row = asRecord(value)
       const messageId = row?.message_id
       const data = row?.data
