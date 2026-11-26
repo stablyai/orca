@@ -1,6 +1,7 @@
 // Bot items: what a bot is doing for its owner and what it needs from them. One list per host; each
 // item belongs to one bot and one of its chats. The host's store is the truth; this is the wire shape.
 import type { BotItemDecision } from './bot-item-ask'
+import type { BotChatPerson } from './bot-chat-tree'
 
 /** Waiting: its work waits on something outside the bot and its owner; Needs you waits on the owner. */
 export const BOT_ITEM_STATUSES = [
@@ -166,7 +167,9 @@ export function botItemLinksOnePerChain(links: readonly BotItemLinkView[]): BotI
 
 export type BotItemActor =
   | { kind: 'bot'; botId: string; chatId: string }
-  | { kind: 'owner'; device?: string }
+  /** The owner, or with `person` a teammate on a shared agent acting from their own panel as the owner
+   *  does. Events from before teammates name no one: the owner's. */
+  | { kind: 'owner'; device?: string; person?: BotChatPerson }
   | { kind: 'orca'; why: string }
 
 export const BOT_ITEM_EVENT_KINDS = [
@@ -241,6 +244,8 @@ export type BotItem = {
   /** `gone`: the host read its chats and this one's record is deleted, so its comments take no attachments. */
   chat: { id: string; kind: BotItemChatKind; title: string | null; gone?: true }
   madeBy: { botId: string; name: string | null; chatId: string } | null
+  /** The teammates it is for, on the owner's list; absent for the owner's own and from older hosts. */
+  people?: BotChatPerson[]
   /** Needs you: the agent's comment asking the owner. `gist`: its body's first line; `decisions`: its
    *  question lines (`--ask`) and their quick replies (`--option`). */
   question: { eventId: string; text: string; gist?: string; decisions?: BotItemDecision[] } | null

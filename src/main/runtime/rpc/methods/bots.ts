@@ -39,7 +39,7 @@ import { defineMethod, type RpcContext, notShared } from '../core'
 import { botSkillProjectViews } from '../../../bots/bot-skill-projects'
 import { botOwnSkillsView } from '../../../bots/bot-own-skills'
 import { botHomeFolder } from '../../../bots/bot-home'
-import { listedBotsFacts } from './bots-list-facts'
+import { listedBotsFacts, listedNeedsYouFacts } from './bots-list-facts'
 import { normalizeBotSidebarView } from '../../../../shared/bots/bot-sidebar-view'
 import { OWNER_ACTS_FOR } from '../../../../shared/bots/bot-acts-for'
 import { orcaSignInServer } from '../../../bots/orca-sign-in-server'
@@ -87,9 +87,14 @@ export const BOT_METHODS = [
       const { runtime } = context
       const listing = runtime.bots.listing()
       const share = botShareScopedView(context)
-      if (share) {
-        // None of this host's own state.
-        return { bots: share['bots.list'](listing.bots), botsEnabled: listing.botsEnabled }
+      const scope = botShareScopeOf(context)
+      if (share && scope) {
+        // None of this host's own state; the teammate's own Needs you count.
+        return {
+          bots: share['bots.list'](listing.bots),
+          botsEnabled: listing.botsEnabled,
+          ...(await listedNeedsYouFacts(runtime, scope))
+        }
       }
       const webhooks = runtime.getWebhooks()
       const signInServer = orcaSignInServer(runtime)

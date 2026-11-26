@@ -1,6 +1,7 @@
 // What a teammate's share connection sees through each method that names nothing, and through the reads
 // of the shared bot that show less to them: the one place that decides it, so no handler hides details
 // its own way.
+import { getOrcaServerSignIn } from '../../orca-profiles/orca-server-sign-in'
 import type { Bot } from '../../../shared/bot-types'
 import { botRosterFields, type BotRosterEntry } from '../../../shared/bot-roster'
 import type { BotShareScopedMethod } from '../../../shared/bots/bot-share-rpc-methods'
@@ -57,6 +58,12 @@ export type BotShareScopedView = EveryScopedMethod<{
   'bots.tools.list': (tools: BotTools) => BotTools
 }>
 
+/** The owner as this host's Orca sign-in names them; null signed out. */
+function hostOwnerName(): string | null {
+  const account = getOrcaServerSignIn()?.status()
+  return account?.state === 'signed-in' ? (account.displayName ?? account.email ?? null) : null
+}
+
 /** The teammate's view, or null for any other caller (who sees the handler's full answer). */
 export function botShareScopedView(
   context: Pick<RpcContext, 'callerScope' | 'runtime'>
@@ -67,7 +74,7 @@ export function botShareScopedView(
   }
   const { runtime } = context
   return {
-    'bots.list': (bots) => botShareListedBots(bots, scope),
+    'bots.list': (bots) => botShareListedBots(bots, scope, hostOwnerName()),
     // Built from the listed bot, so it links nowhere and reads no SOUL.md, chats or other computers.
     'bots.roster': () =>
       botShareListedBots(runtime.bots.list(), scope).map((bot) => ({

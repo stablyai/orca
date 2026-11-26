@@ -1,47 +1,18 @@
 // The Chats tab's person filter, at the search field's end: everyone, the owner's own chats, or one teammate's.
-import { Check, ListFilter, Users } from 'lucide-react'
+import { ListFilter } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { useBotHostOrcaAccount } from '@/lib/bot-host-orca-account'
 import { cn } from '@/lib/class-names'
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotChatPerson } from '../../../../shared/bots/bot-chat-tree'
 import type { BotChatPersonPick } from '../../../../shared/bots/bot-chat-people'
-import { BotOwnerAvatar } from './bot-connector-people'
-
-function PickItem({
-  checked,
-  lead,
-  label,
-  onSelect
-}: {
-  checked: boolean
-  lead: React.ReactNode
-  label: string
-  onSelect: () => void
-}): React.JSX.Element {
-  return (
-    <DropdownMenuItem onSelect={onSelect}>
-      {lead}
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      {checked ? <Check className="ml-auto" /> : <span className="size-4 shrink-0" />}
-    </DropdownMenuItem>
-  )
-}
-
-const personLead = (
-  <span className="size-4 shrink-0">
-    <BotOwnerAvatar iconClassName="size-2.5" />
-  </span>
-)
+import { BotPersonPickItems, botPersonPickName, useBotOwnPersonLabel } from './BotPersonPickItems'
 
 export function BotChatsPersonFilter({
   bot,
@@ -55,15 +26,14 @@ export function BotChatsPersonFilter({
   onPick: (pick: BotChatPersonPick) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const account = useBotHostOrcaAccount(bot.hostId)
-  const ownName =
-    account?.state === 'signed-in' ? (account.displayName ?? account.email ?? null) : null
-  const you = ownName
-    ? t('bots.teamShare.you', '{{name}} (you)', { name: ownName })
-    : t('bots.chats.filter.you', 'You')
+  const you = useBotOwnPersonLabel(bot)
   const on = pick.kind !== 'everyone'
   const label = t('bots.chats.filter.label', 'Filter by person')
-  const named = pick.kind === 'person' ? pick.person.name : pick.kind === 'owner' ? you : null
+  const entries = [
+    { pick: { kind: 'owner' } as const, label: you },
+    ...people.map((person) => ({ pick: { kind: 'person' as const, person }, label: person.name }))
+  ]
+  const named = botPersonPickName(pick, entries)
   const fullLabel = named ? `${label} · ${named}` : label
   return (
     <DropdownMenu>
@@ -91,30 +61,7 @@ export function BotChatsPersonFilter({
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="min-w-52">
-        <PickItem
-          checked={pick.kind === 'everyone'}
-          lead={<Users />}
-          label={t('bots.chats.filter.everyone', 'Everyone')}
-          onSelect={() => onPick({ kind: 'everyone' })}
-        />
-        <DropdownMenuSeparator />
-        <div className="scrollbar-sleek max-h-[15rem] overflow-y-auto">
-          <PickItem
-            checked={pick.kind === 'owner'}
-            lead={personLead}
-            label={you}
-            onSelect={() => onPick({ kind: 'owner' })}
-          />
-          {people.map((person) => (
-            <PickItem
-              key={person.accountId}
-              checked={pick.kind === 'person' && pick.person.accountId === person.accountId}
-              lead={personLead}
-              label={person.name}
-              onSelect={() => onPick({ kind: 'person', person })}
-            />
-          ))}
-        </div>
+        <BotPersonPickItems entries={entries} pick={pick} onPick={onPick} />
       </DropdownMenuContent>
     </DropdownMenu>
   )

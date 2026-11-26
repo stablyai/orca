@@ -12,7 +12,7 @@ import { BotOfferAnswerSchema } from './bots/bot-offer-answers'
 import { BotCancelledWaitSchema } from './bots/bot-cancelled-waits'
 import { BotAvatarColorSchema } from './bots/bot-avatar-color'
 import { BotStoredOutfitSchema } from './bots/bot-avatar-outfit'
-import { BotSharesSchema } from './bots/bot-team-shares'
+import { BotSharePeopleFields, BotSharesSchema } from './bots/bot-team-shares'
 import {
   BOT_AGENT_SUCCESSORS,
   BOT_RETIRED_AGENTS,
@@ -240,6 +240,7 @@ export const BotSchema = z.object({
   itemsStale: BotItemsStaleSchema.optional().catch(undefined),
   /** The newest item event its owner has seen in its Items tab; absent is none. Older hosts drop it. */
   itemsSeen: z.number().int().nonnegative().optional().catch(undefined),
+  ...BotSharePeopleFields,
   /** Set at create: the Chat runs first-run setup until SOUL.md is written. Older bots never have it. */
   firstRun: z.literal(true).optional(),
   /** New bots its owner created from this bot's bot-create cards, by card, so each card stays Created

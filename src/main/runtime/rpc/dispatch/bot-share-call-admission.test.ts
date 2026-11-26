@@ -49,6 +49,10 @@ import { STATUS_METHODS } from '../methods/host-management/status'
 import { STRUCTURED_AGENT_SESSION_STATUS_METHODS } from '../methods/structured-sessions/subscriptions/structured-agent-session-status-stream'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import { makeTestBot } from '../../../bots/bot.test-fixture'
+import { BotItemsStore } from '../../../bots/bot-items-store'
+import type { BotItemRecord } from '../../../bots/bot-items-schema'
+import { BOT_ITEMS_OWNER_METHODS } from '../methods/bots-items-owner-methods'
+import { botPeoplePicker } from '../../../../shared/bots/bot-chat-people'
 
 const SHARED = { id: 'bot-shared', folderWorkspaceId: 'home-shared' }
 const OTHER = { id: 'bot-other', folderWorkspaceId: 'home-other' }
@@ -277,6 +281,8 @@ beforeEach(() => {
         handler: ran
       }),
       ...BOT_METHODS.filter((method) => method.name === 'bots.roster'),
+      ...BOT_ITEMS_OWNER_METHODS,
+      ...BOT_METHODS.filter((method) => method.name === 'bots.list'),
       // Their real share decisions: every call below is refused before its handler.
       ...STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS.filter((method) =>
         MODEL_PICKER_METHODS.has(method.name)
@@ -354,6 +360,132 @@ const errorCode = (response: Awaited<ReturnType<typeof call>>) =>
   response.ok ? null : response.error.code
 
 describe('the share guard', () => {
+  it('lists a teammate their own items by default and everyone’s when they ask, on the shared bot only', async () => {
+    const store = BotItemsStore.open(':memory:')
+    try {
+      const add = (botId: string, title: string, actsForAccounts: string[] | null): string =>
+        store.add(
+          {
+            ownerBotId: botId,
+            chatId: ids.alicesChat,
+            source: { kind: 'home', title: null },
+            actsForAccounts,
+            title,
+            status: 'working',
+            links: []
+          },
+          { kind: 'bot', botId, chatId: ids.alicesChat }
+        ).uid
+      add(SHARED.id, 'Alice’s', ['acct-alice'])
+      const ownersUid = add(SHARED.id, 'The owner’s', null)
+      add(SHARED.id, 'Bob’s', ['acct-bob'])
+      const otherBotsUid = add(OTHER.id, 'Another bot’s', ['acct-alice'])
+      vi.spyOn(runtime.bots, 'assertEnabled').mockReturnValue(undefined)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the list and show handlers read only these two
+      vi.spyOn(runtime, 'botItems', 'get').mockReturnValue({
+        store: () => store,
+        views: async (records: readonly BotItemRecord[]) =>
+          records.map((record) => ({
+            uid: record.uid,
+            title: record.title,
+            status: record.status
+          })),
+        events: async () => [],
+        changed: () => {},
+        sendOwedMail: async () => {}
+      } as never)
+      const titles = async (params: Record<string, unknown>) => {
+        const response = await call('bots.items.owner.list', params)
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the list's answer
+        const result = (response.ok ? response.result : null) as {
+          items: { title: string }[]
+        } | null
+        return result?.items.map((item) => item.title).sort() ?? null
+      }
+      expect(await titles({ botId: SHARED.id })).toEqual(['Alice’s'])
+      expect(await titles({ botId: SHARED.id, everyone: true })).toEqual([
+        'Alice’s',
+        'Bob’s',
+        'The owner’s'
+      ])
+      expect(await titles({ botId: SHARED.id, person: 'acct-bob' })).toEqual(['Bob’s'])
+      expect(errorCode(await call('bots.items.owner.list', { botId: OTHER.id }))).toBe('not_found')
+      // Any of the shared bot's items opens by number or uid; another bot's does not.
+      expect(
+        errorCode(await call('bots.items.owner.show', { botId: SHARED.id, item: ownersUid }))
+      ).toBeNull()
+      expect(
+        errorCode(await call('bots.items.owner.show', { botId: SHARED.id, item: otherBotsUid }))
+      ).toBe('not_found')
+      // She acts on any of its items as the owner does, as herself.
+      expect(
+        errorCode(
+          await call('bots.items.owner.comment', {
+            botId: SHARED.id,
+            item: ownersUid,
+            text: 'On it'
+          })
+        )
+      ).toBeNull()
+      expect(store.events(ownersUid, 0, 50).at(-1)?.actor).toEqual({
+        kind: 'owner',
+        device: 'share-device',
+        person: { accountId: 'acct-alice', name: 'Alice' }
+      })
+      expect(
+        errorCode(
+          await call('bots.items.owner.status', {
+            botId: SHARED.id,
+            items: [otherBotsUid],
+            status: 'done',
+            note: 'x'
+          })
+        )
+      ).toBe('not_found')
+      // Her seen mark is her own; the owner's stays.
+      const update = vi.spyOn(runtime.bots, 'update').mockImplementation(async (_id, change) => {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mark's update is a function of the bot
+        const next = (change as (bot: Bot) => Partial<Bot>)(makeTestBot(SHARED))
+        return { ...makeTestBot(SHARED), ...next }
+      })
+      expect(errorCode(await call('bots.items.owner.opened', { botId: SHARED.id }))).toBeNull()
+      const written = await update.mock.results[0]?.value
+      expect(written?.itemsSeenBy?.['acct-alice']).toBeGreaterThan(0)
+      expect(written?.itemsSeen).toBeUndefined()
+    } finally {
+      store.dispose()
+    }
+  })
+
+  it('lists her the shared agent’s people, with her as the one looking, for the Items filter', async () => {
+    const share = (accountId: string, name: string) => ({
+      kind: 'account' as const,
+      shareId: `s-${accountId}`,
+      accountId,
+      name,
+      email: `${accountId}@example.com`,
+      addedAt: 1,
+      acceptedAt: 2
+    })
+    const shared = makeTestBot({
+      ...SHARED,
+      shares: [share('acct-alice', 'Alice'), share('acct-bob', 'Bob')]
+    })
+    const listing = { bots: [shared], botsEnabled: true }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the share branch of bots.list reads only bots and botsEnabled
+    vi.spyOn(runtime.bots, 'listing').mockReturnValue(listing as never)
+    const response = await call('bots.list', undefined)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the list's answer
+    const listed = (response.ok ? response.result : null) as { bots: Bot[] } | null
+    const entries = botPeoplePicker(listed!.bots[0]!, null)
+    expect(entries?.map((entry) => `${entry.pick.kind}:${entry.name}`)).toEqual([
+      'person:Alice',
+      'owner:null',
+      'person:Bob'
+    ])
+    expect(listed!.bots[0]!.shares).toBeUndefined()
+  })
+
   it('admits reads and actions only in the teammate’s own chats on the shared bot', async () => {
     const history = (sessionId: string) =>
       call('agentSession.history', { sessionId, direction: 'tail' })
@@ -646,6 +778,12 @@ describe('the share guard', () => {
         'bots.chatTree',
         'bots.chats',
         'bots.chats.own',
+        'bots.items.owner.comment',
+        'bots.items.owner.list',
+        'bots.items.owner.opened',
+        'bots.items.owner.show',
+        'bots.items.owner.snooze',
+        'bots.items.owner.status',
         'bots.list',
         'bots.roster',
         'bots.session.start',

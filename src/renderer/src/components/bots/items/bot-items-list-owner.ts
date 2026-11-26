@@ -22,11 +22,20 @@ export type ListOwner = Omit<BotItemsListMembers, 'needBot'> & {
   needBot: Bot | BotItemsListMembers['needBot']
   /** Rows show their bot's face: the list is a group's. */
   faces: boolean
+  /** The teammates a row names before its age; null for the owner's own and when the list marks none. */
+  personOf: (item: BotItem) => string | null
 }
 
-export function listOwner(bot: Bot | BotItemsListMembers, seenEventId: string): ListOwner {
+const noPerson = (): null => null
+
+export function listOwner(
+  bot: Bot | BotItemsListMembers,
+  seenEventId: string,
+  personMark: ((item: BotItem) => string | null) | null = null
+): ListOwner {
+  const personOf = personMark ?? noPerson
   if ('botOf' in bot) {
-    return { ...bot, faces: true }
+    return { ...bot, faces: true, personOf }
   }
   return {
     foldKey: bot.id,
@@ -34,6 +43,7 @@ export function listOwner(bot: Bot | BotItemsListMembers, seenEventId: string): 
     seenOf: () => seenEventId,
     needBot: bot,
     placeOf: () => null,
-    faces: false
+    faces: false,
+    personOf
   }
 }

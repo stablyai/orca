@@ -42,3 +42,34 @@ const interact = (frame: HTMLElement) => {
 }
 export const regular = defineFixture({ width: 400, render, interact })
 export const narrow = defineFixture({ width: 240, render, interact })
+
+const people = [
+  { accountId: 'a', name: 'Alice Park' },
+  { accountId: 'b', name: 'Bo Chen' },
+  { accountId: 'd', name: 'Dana Reyes' }
+]
+// A shared agent's menu: whose items, the owner's own picked by default, then Needs you only.
+export const people_default = defineFixture({
+  width: 400,
+  render: () => (
+    <div className="flex h-80 justify-end bg-background p-4">
+      <BotItemsFilterButton
+        items={[]}
+        filter={{ chatIds: null, botIds: null, needsYou: false }}
+        onFilter={() => {}}
+        people={{
+          entries: [
+            { pick: { kind: 'owner' }, label: 'Jinwoo (you)' },
+            ...people.map((person) => ({
+              pick: { kind: 'person' as const, person },
+              label: person.name
+            }))
+          ],
+          pick: { kind: 'owner' },
+          onPick: () => {}
+        }}
+      />
+    </div>
+  ),
+  interact
+})

@@ -27920,6 +27920,12 @@
         "placeholder": "기다리는 대상",
         "keep": "취소",
         "confirm": "대기 중으로 설정"
+      },
+      "empty": {
+        "person": "{{name}}님의 항목이 없습니다."
+      },
+      "filter": {
+        "owner": "소유자"
       }
     },
     "hover": {

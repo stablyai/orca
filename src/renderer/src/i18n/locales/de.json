@@ -25237,7 +25237,13 @@
         "heldImagesLimit": "Deine Antworten gehen als ein Kommentar, der höchstens {{max}} Bilder aufnimmt. Sende zuerst die bisher gehaltenen Antworten oder entferne einige.",
         "heldSkillsLimit": "Deine Antworten gehen als ein Kommentar, der höchstens {{max}} Skills aufnimmt. Sende zuerst die bisher gehaltenen Antworten oder entferne einige."
       },
-      "readMoreClosedFailed": "Weitere geschlossene Einträge konnten nicht gelesen werden"
+      "readMoreClosedFailed": "Weitere geschlossene Einträge konnten nicht gelesen werden",
+      "empty": {
+        "person": "Keine Einträge von {{name}}."
+      },
+      "filter": {
+        "owner": "Inhaber"
+      }
     },
     "hover": {
       "asksQuestion": "Wartet auf Antwort",

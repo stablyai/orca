@@ -28357,7 +28357,8 @@
         "filtered": "Eşleşen öğe yok.",
         "needsYou": "İlginizi bekleyen bir şey yok.",
         "title": "Henüz öğe yok",
-        "short": "Henüz öğe yok. {{bot}} bir iş üstlendiğinde burada görünür."
+        "short": "Henüz öğe yok. {{bot}} bir iş üstlendiğinde burada görünür.",
+        "person": "{{name}} kişisinden öğe yok."
       },
       "field": {
         "chat": "Sohbet",
@@ -28370,7 +28371,8 @@
         "clearAll": "Filtreleri temizle",
         "label": "Öğeleri filtrele",
         "needsYou": "Yalnızca sizi bekleyenler",
-        "remove": "{{name}} filtresini kaldır"
+        "remove": "{{name}} filtresini kaldır",
+        "owner": "Sahip"
       },
       "homeChat": "Ana sohbet",
       "link": {

@@ -68,13 +68,15 @@ export type BotItemsListProps = {
   focusFallback?: React.RefObject<HTMLElement | null>
   /** The panel's scroller, which a long group windows its rows against. */
   scroller?: React.RefObject<HTMLDivElement | null>
+  /** Each row's person before its age (`botItemPersonMark`): the list shows everyone's. */
+  personMark?: ((item: BotItem) => string | null) | null
 }
 
 const NO_ASKS: BotNeedsYouAsks = { needs: [], stoppedForSignIn: [], itemOf: () => null }
 
 export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
   const { groups, onOpen, scroller: panelScroller } = props
-  const owner = listOwner(props.bot, props.seenEventId)
+  const owner = listOwner(props.bot, props.seenEventId, props.personMark)
   const { botOf } = owner
   const t = useTranslate()
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
@@ -290,6 +292,7 @@ function BotItemGroup({
       onAction={onAction}
       face={owner.faces ? owner.botOf(item) : null}
       place={owner.placeOf(item)}
+      person={owner.personOf(item)}
       // In a window, the window's slot is the list item and the Tab stop is chosen there.
       tabbable={tabbable}
       listItem={tabbable === undefined}

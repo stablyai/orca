@@ -112,7 +112,11 @@ export const BotItemsShow = z.object({
   limit: OptionalPositiveInt
 })
 
-const Owner = { requestId: OptionalString }
+const Owner = {
+  requestId: OptionalString,
+  /** The bot whose items they are; a teammate's call names its shared bot. */
+  botId: OptionalString
+}
 
 /** The owner's panel: one bot's own items, open ones all, closed ones by page. */
 export const BotItemsOwnerList = z.object({
@@ -121,6 +125,10 @@ export const BotItemsOwnerList = z.object({
   chatId: OptionalString,
   /** Only these chats' items, counts included; a host before it ignores it, so one chat goes as `chatId`. */
   chatIds: z.array(z.string().min(1)).max(BOT_ITEM_LIST_CHATS_MAX).optional(),
+  /** Only one person's items, counts included: a teammate's account, or null for the owner's own. */
+  person: z.string().min(1).nullable().optional(),
+  /** Without `person`: everyone's, not the caller's default (a teammate's own), as `item list --everyone`. */
+  everyone: OptionalBoolean,
   closedCursor: OptionalString,
   /** Each item without its description, done means and close note; its own read has them. A host
    *  before it ignores these three and answers whole. */
@@ -136,6 +144,8 @@ export const BotItemsOwnerList = z.object({
 /** Events after `after`, oldest first; or with `newest`, the newest page before `before`. */
 export const BotItemsOwnerShow = z.object({
   item: Item,
+  /** The bot whose item it is; a teammate's call names its shared bot. */
+  botId: OptionalString,
   after: OptionalString,
   newest: z.boolean().optional(),
   before: OptionalString

@@ -85,7 +85,14 @@ function actorOf(value: unknown): BotItemActor {
   }
   if (fields?.kind === 'owner') {
     const device = str(fields.device)
-    return device ? { kind: 'owner', device } : { kind: 'owner' }
+    const person = record(fields.person)
+    const accountId = str(person?.accountId)
+    const name = str(person?.name)
+    return {
+      kind: 'owner',
+      ...(device ? { device } : {}),
+      ...(accountId && name ? { person: { accountId, name } } : {})
+    }
   }
   return { kind: 'orca', why: str(fields?.why) ?? 'orca' }
 }

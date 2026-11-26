@@ -13,6 +13,7 @@ import type {
   BotItemEvent,
   BotItemStatus
 } from '../../../../../shared/bots/bot-items'
+import { botItemsWhoseParams, type BotItemsWhose } from '../../../../../shared/bots/bot-chat-people'
 import type { BotItemsListRead } from '../../../../../shared/bots/bot-item-schema'
 import { BOT_ITEM_LIMITS } from '../../../../../shared/bots/bot-items'
 import {
@@ -44,12 +45,17 @@ export const KEPT_ITEM_LISTS = 20
 /** Rows need no description, done means or close note: the opened item reads its own. */
 const SUMMARY = { summary: true }
 
-/** The list call for a bot (or some of its chats), every read a summary. */
-function listCall(bot: BotRef, chatIds: readonly string[] | null): BotItemsListCall {
+/** The list call for a bot (or some of its chats, or one person's), every read a summary. */
+function listCall(
+  bot: BotRef,
+  chatIds: readonly string[] | null,
+  whose: BotItemsWhose
+): BotItemsListCall {
   return (params) =>
     callBotRpc<BotItemsRead>(bot, 'bots.items.owner.list', {
       botId: bot.id,
       ...chatScope(chatIds),
+      ...botItemsWhoseParams(whose),
       ...SUMMARY,
       ...params
     })
@@ -70,7 +76,7 @@ const itemsRead: BotHostRead<BotItemsRead> = createBotHostRead<BotItemsRead>(
     // The first read after a reopen builds on the kept list, whose deeper pages missed the notices while
     // it was closed: it reads every loaded page again, not only once the first page moves.
     load: (bot, previous, ask, show, live, waiting) =>
-      loadBotItemsList(listCall(bot, null), previous, ask, {
+      loadBotItemsList(listCall(bot, null, 'default'), previous, ask, {
         show,
         live,
         waiting,
@@ -115,33 +121,65 @@ export function useStableBotItemChats(chatIds: readonly string[] | null): readon
   return useMemo(() => (key === null ? null : key === '' ? [] : key.split('\n')), [key])
 }
 
-/** These chats' items while the filter shows them, with their own counts and Closed pages; re-read on
- *  change, one read at a time. */
+// Each scope's last list, so reopening a scoped tab (a shared bot's own items, say) shows it at once
+// while it re-reads, as the bot's whole list does.
+const keptScopedReads = new Map<string, BotItemsRead>()
+
+function scopedReadKey(bot: BotRef, chats: readonly string[] | null, whose: BotItemsWhose): string {
+  return JSON.stringify([botRefKey(bot), chats, whose])
+}
+
+function keepScopedRead(key: string, value: BotItemsRead): void {
+  keptScopedReads.delete(key)
+  keptScopedReads.set(key, value)
+  for (const oldest of keptScopedReads.keys()) {
+    if (keptScopedReads.size <= KEPT_ITEM_LISTS) {
+      break
+    }
+    keptScopedReads.delete(oldest)
+  }
+}
+
+/** These chats' items, or one person's, while the filter shows them, with their own counts and Closed
+ *  pages; re-read on change, one read at a time. */
 export function useBotChatItems(
   bot: BotRef,
-  chatIds: readonly string[] | null
+  chatIds: readonly string[] | null,
+  whose: BotItemsWhose = 'default'
 ): {
   read: BotItemsRead | null
   failed: boolean
+  /** A read of this scope landed since it was asked for here; until then `read` may be a kept list. */
+  landed: boolean
   retry: () => void
   /** Their next Closed page; the list as it lands, or null when that read failed. */
   readMore: () => Promise<BotItemsRead | null>
 } {
   const { hostId, id } = bot
   const chats = useStableBotItemChats(chatIds)
-  const [read, setRead] = useState<{ chats: readonly string[]; value: BotItemsRead } | null>(null)
-  const [failed, setFailed] = useState(false)
+  type Scoped = { chats: readonly string[] | null; whose: BotItemsWhose; value: BotItemsRead }
+  const [read, setRead] = useState<Scoped | null>(null)
+  // Keyed by scope, like `landed`: a failure is the scope's that failed, never the next pick's.
+  const [failedKey, setFailedKey] = useState<string | null>(null)
+  const [landedKey, setLandedKey] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
   const moreRef = useRef<() => Promise<BotItemsRead | null>>(async () => null)
-  // The last read of these chats outlives a Retry, so it keeps its loaded Closed depth.
-  const kept = useRef<{ chats: readonly string[]; value: BotItemsRead } | null>(null)
+  // The last read of this scope outlives a Retry, so it keeps its loaded Closed depth.
+  const kept = useRef<Scoped | null>(null)
   useEffect(() => {
-    if (chats === null) {
+    if (chats === null && whose === 'default') {
       return
     }
-    const call = listCall({ hostId, id }, chats)
+    const call = listCall({ hostId, id }, chats, whose)
+    const key = scopedReadKey({ hostId, id }, chats, whose)
     let live = true
-    let last: BotItemsRead | null = kept.current?.chats === chats ? kept.current.value : null
+    let last: BotItemsRead | null =
+      kept.current?.chats === chats && kept.current.whose === whose
+        ? kept.current.value
+        : (keptScopedReads.get(key) ?? null)
+    if (last) {
+      setRead({ chats, whose, value: last })
+    }
     let missed = false
     // One read out at a time; asks during it share one more after it, so the last to land is newest.
     let reading = false
@@ -161,8 +199,9 @@ export function useBotChatItems(
       const land = (value: BotItemsRead): void => {
         if (live && value !== last) {
           last = value
-          kept.current = { chats, value }
-          setRead({ chats, value })
+          kept.current = { chats, whose, value }
+          keepScopedRead(key, value)
+          setRead({ chats, whose, value })
         }
       }
       loadBotItemsList(call, last, ask, { show: land, live: () => live, pageUnmoved: true })
@@ -170,8 +209,9 @@ export function useBotChatItems(
           if (live) {
             landed = value
             land(value)
+            setLandedKey(key)
             missed = false
-            setFailed(false)
+            setFailedKey((failed) => (failed === key ? null : failed))
           }
         })
         .catch((error: unknown) => {
@@ -181,12 +221,12 @@ export function useBotChatItems(
             if (live) {
               land(error.landed)
               missed = false
-              setFailed(false)
+              setFailedKey((failed) => (failed === key ? null : failed))
             }
           } else if (ask.whole || ask.parts.length > 0) {
             missed = true
             if (live) {
-              setFailed(true)
+              setFailedKey(key)
             }
           }
         })
@@ -217,10 +257,16 @@ export function useBotChatItems(
       stop()
       more.splice(0).forEach((told) => told(null))
     }
-  }, [hostId, id, chats, attempt])
+  }, [hostId, id, chats, whose, attempt])
   const retry = useCallback(() => setAttempt((value) => value + 1), [])
   const readMore = useCallback(() => moreRef.current(), [])
-  return { read: read && read.chats === chats ? read.value : null, failed, retry, readMore }
+  return {
+    read: read && read.chats === chats && read.whose === whose ? read.value : null,
+    failed: failedKey === scopedReadKey({ hostId, id }, chats, whose),
+    landed: landedKey === scopedReadKey({ hostId, id }, chats, whose),
+    retry,
+    readMore
+  }
 }
 
 export type BotItemShow = {
@@ -236,7 +282,7 @@ export function showBotItem(
   uid: string,
   page: { after: string } | { newest: true; before?: string }
 ): Promise<BotItemShow> {
-  return callBotRpc(bot, 'bots.items.owner.show', { item: uid, ...page })
+  return callBotRpc(bot, 'bots.items.owner.show', { botId: bot.id, item: uid, ...page })
 }
 
 /** `images`: chat-attachment paths on the bot's host; files ride in `text` as `@path`. `requestId`:
@@ -253,6 +299,7 @@ export function commentOnBotItem(
   skipped: readonly number[] = []
 ): Promise<unknown> {
   return callBotRpc(bot, 'bots.items.owner.comment', {
+    botId: bot.id,
     item: uid,
     text,
     // An older host refuses these fields, so a comment without them leaves them off.
@@ -291,6 +338,7 @@ export function setBotItemsStatus(
   note?: string
 ): Promise<unknown> {
   return callBotRpc(bot, 'bots.items.owner.status', {
+    botId: bot.id,
     items: uids,
     ...botItemStatusFields(status, note, botHostTakes(bot, BOTS_ITEM_CANCEL_NO_REASON_CAPABILITY))
   })
@@ -304,6 +352,7 @@ export function snoozeBotItems(
   until: number | null
 ): Promise<unknown> {
   return callBotRpc(bot, 'bots.items.owner.snooze', {
+    botId: bot.id,
     items: items.map((item) => ({ item: item.uid, othersLastEventId: item.othersLastEventId })),
     until
   })

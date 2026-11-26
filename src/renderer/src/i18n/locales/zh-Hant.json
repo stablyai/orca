@@ -27236,6 +27236,12 @@
         "placeholder": "等待的事項",
         "keep": "取消",
         "confirm": "設為等待中"
+      },
+      "empty": {
+        "person": "沒有來自 {{name}} 的事項。"
+      },
+      "filter": {
+        "owner": "擁有者"
       }
     },
     "hover": {

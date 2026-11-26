@@ -25827,7 +25827,13 @@
         "heldImagesLimit": "Vos réponses partent en un seul commentaire, qui accepte au plus {{max}} images. Envoyez d’abord les réponses gardées jusqu’ici, ou retirez-en quelques-unes.",
         "heldSkillsLimit": "Vos réponses partent en un seul commentaire, qui accepte au plus {{max}} skills. Envoyez d’abord les réponses gardées jusqu’ici, ou retirez-en quelques-uns."
       },
-      "readMoreClosedFailed": "Impossible de lire plus d’éléments fermés"
+      "readMoreClosedFailed": "Impossible de lire plus d’éléments fermés",
+      "empty": {
+        "person": "Aucun élément de {{name}}."
+      },
+      "filter": {
+        "owner": "Propriétaire"
+      }
     },
     "hover": {
       "asksQuestion": "Attend votre réponse",

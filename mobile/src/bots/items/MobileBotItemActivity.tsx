@@ -23,6 +23,7 @@ import {
   type BotItemActivityEntry
 } from '../../../../src/shared/bots/bot-item-activity'
 import { botItemActorName } from '../../../../src/shared/bots/bot-item-actor-name'
+import type { Bot } from '../../../../src/shared/bot-types'
 import { botItemStatusName } from '../../../../src/shared/bots/bot-item-status-name'
 import {
   BOT_ITEM_STATUSES,
@@ -103,9 +104,10 @@ function FieldChange({ by, field, change }: { by: string; field: string; change:
   )
 }
 
-function EventLine({ event, item }: { event: BotItemEvent; item: BotItem }) {
+type EventLineProps = { event: BotItemEvent; item: BotItem; viewer: Pick<Bot, 'shareViewer'> }
+function EventLine({ event, item, viewer }: EventLineProps) {
   const t = useMobileTranslation()
-  const by = botItemActorName(event, item, t)
+  const by = botItemActorName(event, item, t, viewer)
   const { data } = event
   switch (event.kind) {
     case 'commented':
@@ -253,6 +255,7 @@ function EntryIcon({ entry }: { entry: LineEntry }) {
 }
 
 export function MobileBotItemActivity({
+  viewer,
   item,
   events,
   attachments,
@@ -262,6 +265,8 @@ export function MobileBotItemActivity({
   asking,
   onQuote
 }: {
+  /** The bot as this phone has it: a teammate's copy names who is looking. */
+  viewer: Pick<Bot, 'shareViewer'>
   item: BotItem
   events: readonly BotItemEvent[]
   /** Comments sent from the box that the item's read doesn't show yet: last, as sent. */
@@ -310,6 +315,7 @@ export function MobileBotItemActivity({
         entry.key === waitKey ? null : entry.kind === 'comment' ? (
           entry.onAsk ? null : (
             <MobileBotItemCommentCard
+              viewer={viewer}
               key={entry.key}
               item={item}
               // A reply already sent for this question answers it, before the host's read says so.
@@ -349,7 +355,7 @@ export function MobileBotItemActivity({
               {entry.kind === 'worker' ? (
                 <WorkerLine entry={entry} />
               ) : (
-                <EventLine event={entry.event} item={item} />
+                <EventLine event={entry.event} item={item} viewer={viewer} />
               )}
             </View>
             <Text style={styles.meta} accessibilityLabel={time.full(entry.at)}>
@@ -363,6 +369,7 @@ export function MobileBotItemActivity({
         isBotItemSentComment({ failed, intent }, sent) ? null : (
           <MobileBotItemCommentCard
             key={event.id}
+            viewer={viewer}
             item={item}
             entry={{ event, waiting: false }}
             attachments={attachments}

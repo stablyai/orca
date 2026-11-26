@@ -26306,7 +26306,13 @@
         "cancelAll": "Cancelar todos"
       },
       "tab": "Início",
-      "readMoreClosedFailed": "Não foi possível ler mais itens fechados"
+      "readMoreClosedFailed": "Não foi possível ler mais itens fechados",
+      "empty": {
+        "person": "Nenhum item de {{name}}."
+      },
+      "filter": {
+        "owner": "Proprietário"
+      }
     },
     "hover": {
       "asksQuestion": "Aguardando sua resposta",

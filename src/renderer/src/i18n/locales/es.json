@@ -25803,7 +25803,13 @@
         "heldImagesLimit": "Tus respuestas van en un solo comentario, que admite hasta {{max}} imágenes. Envía primero las respuestas guardadas hasta ahora o quita algunas.",
         "heldSkillsLimit": "Tus respuestas van en un solo comentario, que admite hasta {{max}} habilidades. Envía primero las respuestas guardadas hasta ahora o quita algunas."
       },
-      "readMoreClosedFailed": "No se pudieron leer más elementos cerrados"
+      "readMoreClosedFailed": "No se pudieron leer más elementos cerrados",
+      "empty": {
+        "person": "No hay elementos de {{name}}."
+      },
+      "filter": {
+        "owner": "Propietario"
+      }
     },
     "hover": {
       "asksQuestion": "Espera tu respuesta",
