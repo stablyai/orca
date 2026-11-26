@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, rm, rmdir, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { delimiter, dirname, join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { buildAgentStartupPlan } from '../../../../../shared/agent-launch/startup/tui-agent-startup'
 import type { AgentStartupShell } from '../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
@@ -9,6 +9,7 @@ import { readHostManagedAgentCommands } from './managed-copy-detection'
 import { alignManagedAgentLaunchAtSpawn } from '../../../../managed-agent-cli/managed-agent-spawn-program'
 import { prepareNativeChatSignIn } from '../../../../managed-agent-cli/prepare-native-chat-sign-in'
 import { detectInstalledAgentInventory } from '../../../../preflight/installed-agent-detection'
+import { notifyAgentsRefreshedOnHost } from '../../../../preflight/agents-refreshed-on-host'
 import { launchProgramHead } from '../../../../../shared/agent-launch/startup/managed-agent-launch-program'
 import { mayResolveQueuedAgentLaunch } from '../../../../../shared/agent-launch/startup/queued-agent-launch'
 import { readLaunchPosition } from '../../../../../shared/agent-launch/startup/launch-position'
@@ -17,7 +18,7 @@ import {
   rememberManagedAgentRelease
 } from '../../../../managed-agent-cli/managed-agent-cli-registry'
 
-const profile = vi.hoisted(() => ({ path: '' }))
+const profile = vi.hoisted(() => ({ path: '', detectionPath: '' }))
 vi.mock('../../../../orca-profiles/profile-storage-paths', () => ({
   getProfileUserDataPath: () => profile.path
 }))
@@ -26,7 +27,7 @@ vi.mock('../../../../startup/shell-environment/login-shell-environment', () => (
   resolveLoginShellEnvironment: async () => ({ PATH: profile.path })
 }))
 vi.mock('../../../../ipc/preflight/preflight-local-env', () => ({
-  buildLocalPreflightEnv: () => ({ PATH: profile.path })
+  buildLocalPreflightEnv: () => ({ PATH: profile.detectionPath || profile.path })
 }))
 vi.mock('../../../../../shared/shell/command-resolution/system-cli-install-dirs', () => ({
   getSystemCliInstallDirectories: () => []
@@ -45,18 +46,21 @@ it.each(['claude', 'codex'] as const)(
     const pathEnv = dirname(bin)
     const prepare = (launchCommand: string | undefined) =>
       alignManagedAgentLaunchAtSpawn({ launchCommand, queuedPath: pathEnv }, shell)
-    const plannedProgram = (managedAgentCommands: Partial<Record<typeof agent, string>>) => {
-      const plan = buildAgentStartupPlan({
+    const plannedCommand = (
+      managedAgentCommands: Partial<Record<typeof agent, string>>,
+      cmdOverrides = {}
+    ) =>
+      buildAgentStartupPlan({
         agent,
         platform: process.platform,
         shell,
         prompt: '',
         allowEmptyPromptLaunch: true,
-        cmdOverrides: {},
+        cmdOverrides,
         managedAgentCommands
-      })
-      return plan && readLaunchPosition(plan.launchCommand ?? '', shell)?.executable
-    }
+      })?.launchCommand
+    const plannedProgram = (managedAgentCommands: Partial<Record<typeof agent, string>>) =>
+      readLaunchPosition(plannedCommand(managedAgentCommands) ?? '', shell)?.executable
     try {
       await mkdir(pathEnv, { recursive: true })
       await writeFile(bin, '', { mode: 0o755 })
@@ -105,9 +109,32 @@ it.each(['claude', 'codex'] as const)(
         const ownBin = join(ownDir, windows ? 'claude.exe' : 'claude')
         await mkdir(ownDir, { recursive: true })
         await writeFile(ownBin, '', { mode: 0o755 })
-        expect(await prepare(saved)).toBe(
-          windows ? `& '${ownBin}' --version` : `'${ownBin}' --version`
+        notifyAgentsRefreshedOnHost(true)
+        const stockOverride = { agentCmdOverrides: { claude: 'claude --verbose' } }
+        const ownProgram = windows ? `& '${ownBin}'` : `'${ownBin}'`
+        const outsidePath = await readHostManagedAgentCommands(stockOverride, ['claude'], {
+          pathEnv: dir,
+          shell
+        })
+        expect(outsidePath).toEqual({ claude: ownBin })
+        expect(plannedCommand(outsidePath, stockOverride.agentCmdOverrides)).toContain(
+          `${ownProgram} --verbose`
         )
+        const restored = await alignManagedAgentLaunchAtSpawn(
+          { launchCommand: saved, queuedPath: dir, getSettings: () => stockOverride },
+          shell
+        )
+        expect(restored).toBe(`${ownProgram} --version`)
+
+        const shadowedPath = [pathEnv, ownDir, dir].join(delimiter)
+        profile.detectionPath = shadowedPath
+        expect((await detectInstalledAgentInventory()).outsidePath?.claude).toBe(ownBin)
+        expect(
+          await alignManagedAgentLaunchAtSpawn(
+            { launchCommand: saved, queuedPath: shadowedPath },
+            shell
+          )
+        ).toBe(`${ownProgram} --version`)
       } else {
         const signIn = await prepareNativeChatSignIn(
           { kind: 'local' },
@@ -120,6 +147,7 @@ it.each(['claude', 'codex'] as const)(
       }
     } finally {
       rememberManagedAgentRelease(agent, null)
+      profile.detectionPath = ''
       vi.unstubAllEnvs()
       await rm(dir, { recursive: true, force: true })
     }

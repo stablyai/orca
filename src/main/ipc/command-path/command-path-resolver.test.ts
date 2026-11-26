@@ -1,4 +1,5 @@
-import { chmod, mkdir, mkdtemp, readdir, rm, symlink, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readdir, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import type * as FileSystem from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -9,6 +10,10 @@ vi.mock('./command-path-directory-worker-client', async () => ({
     (await import('./command-path-directory')).readDetectionDirectory
   )
 }))
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const fs = await importOriginal<typeof FileSystem>()
+  return { ...fs, stat: vi.fn(fs.stat) }
+})
 import {
   findCommandsOnLocalPath,
   isCommandOnLocalPath,
@@ -70,6 +75,7 @@ describe('win32 PATH lookup', () => {
     await Promise.all([
       writeFile(path.join(quotedBin, 'tool'), '#!/bin/sh\n'),
       writeFile(path.join(quotedBin, 'tool.cmd'), '@echo off\r\n'),
+      writeFile(path.join(dotBin, 'tool.cmd'), '@echo off\r\n'),
       writeFile(path.join(quotedBin, 'format.v1'), '#!/bin/sh\n'),
       writeFile(path.join(quotedBin, 'format.v1.cmd'), '@echo off\r\n'),
       writeFile(path.join(dotBin, 'prettier'), '#!/bin/sh\n'),
@@ -100,6 +106,35 @@ describe('win32 PATH lookup', () => {
     }
     await expect(resolveCommandOnLocalPath('tool', options)).resolves.toBeNull()
     await expect(findCommandsOnLocalPath(['tool'], options)).resolves.toEqual(new Set())
+  })
+
+  it('selects the first Windows PATH hit when a later stat finishes first', async () => {
+    const earlier = path.join(quotedBin, 'tool.cmd')
+    const later = path.join(dotBin, 'tool.cmd')
+    const laterChecked = Promise.withResolvers<void>()
+    const { stat: realStat } = await vi.importActual<typeof FileSystem>('node:fs/promises')
+    vi.mocked(stat).mockImplementation(async (candidate) => {
+      if (candidate === earlier) {
+        await laterChecked.promise
+      }
+      const result = await realStat(candidate)
+      if (candidate === later) {
+        setImmediate(laterChecked.resolve)
+      }
+      return result
+    })
+    try {
+      const matches = new Map<string, string>()
+      await findCommandsOnLocalPath(['tool', 'absent-a', 'absent-b', 'absent-c', 'absent-d'], {
+        platform: 'win32',
+        cwd: '',
+        env: { PATH: `"${emptyCwd}";"${quotedBin}";"${dotBin}"`, PATHEXT: '.cmd' },
+        matches
+      })
+      expect(matches.get('tool')).toBe(earlier)
+    } finally {
+      vi.mocked(stat).mockReset()
+    }
   })
 
   it('ignores dots in parent directories so path-qualified lookups do not match POSIX siblings', async () => {

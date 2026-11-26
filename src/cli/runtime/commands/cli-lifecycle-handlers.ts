@@ -70,7 +70,13 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     }
     const inheritedEnv = envRecord()
     const response = await client.call<{
-      launch: { env: Record<string, string>; envToDelete?: string[]; outsidePath?: string }
+      launch: {
+        env: Record<string, string>
+        envToDelete?: string[]
+        outsidePath?: string
+        command?: string
+        args?: string[]
+      }
     }>('agentTeams.prepareLaunch', {
       paneKey,
       env: inheritedEnv,
@@ -84,8 +90,8 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
         ...inheritedEnv,
         ...response.result.launch.env
       },
-      rawArgs ?? [],
-      response.result.launch.outsidePath
+      [...(response.result.launch.args ?? []), ...(rawArgs ?? [])],
+      response.result.launch.outsidePath ?? response.result.launch.command
     )
   },
   open: async ({ client, json }) => {

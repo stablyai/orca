@@ -1,13 +1,17 @@
-import { access, constants as fsConstants, stat } from 'node:fs/promises'
 import { statSync, type Stats } from 'node:fs'
+import { stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import {
   getExecutableNames,
   stripWindowsPathQuotes
 } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
-import { forEachWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
-import { directoryNameKey } from './command-path-directory'
+import {
+  directoryNameKey,
+  isExecutableFile,
+  scanDetectionDirectories,
+  uniqueDetectionDirectories
+} from './command-path-directory'
 import { readDetectionDirectoryViaWorker } from './command-path-directory-worker-client'
 
 export type ResolveCommandOptions = {
@@ -167,25 +171,6 @@ export function resolveSelectedLocalCommand(
   return command
 }
 
-async function isExecutableFile(candidate: string, isWin: boolean): Promise<boolean> {
-  try {
-    // Follow symlinked CLIs to their real targets.
-    const stats = await stat(candidate)
-    if (stats.isDirectory()) {
-      // PATH directories are not executable files despite their search bit.
-      return false
-    }
-    if (isWin) {
-      // Extension membership already enforced by the PATHEXT permutation.
-      return stats.isFile()
-    }
-    await access(candidate, fsConstants.X_OK)
-    return true
-  } catch {
-    return false
-  }
-}
-
 /** Filesystem-only PATH lookup preserving the preflight absolute-path filter; use listLocalCommandPaths for shadowed candidates. */
 export async function isCommandOnLocalPath(
   command: string,
@@ -204,7 +189,10 @@ const joinCandidatePath = (isWin: boolean, dir: string, name: string): string =>
 /** Bounded, lazy PATH detection; listings eliminate repeated probes for absence-heavy inventories. */
 export async function findCommandsOnLocalPath(
   commands: readonly string[],
-  options: ResolveCommandOptions & { matches?: Map<string, string> } = {}
+  options: ResolveCommandOptions & {
+    matches?: Map<string, string>
+    searchedDirectories?: Set<string>
+  } = {}
 ): Promise<Set<string>> {
   const found = new Set<string>()
   const bareCommands = new Set<string>()
@@ -223,14 +211,17 @@ export async function findCommandsOnLocalPath(
   }
 
   const env = options.env ?? process.env
-  const isAbsolute = isWin ? path.win32.isAbsolute : path.posix.isAbsolute
   const pathDirs = (readEnvCaseInsensitive(env, 'PATH') ?? '')
     .split(isWin ? ';' : ':')
     // The install-dir fallback also searches trimmed PATH entries.
     .flatMap((dir) => [dir, dir.trim()])
     .map((dir) => (isWin ? stripWindowsPathQuotes(dir) : dir))
   const cwd = options.cwd ?? process.cwd()
-  const searchDirs = [...new Set((isWin ? [cwd, ...pathDirs] : pathDirs).filter(isAbsolute))]
+  const searchDirs = uniqueDetectionDirectories(
+    isWin ? [cwd, ...pathDirs] : pathDirs,
+    isWin,
+    options.searchedDirectories
+  )
   const extensions = new Map(
     [...bareCommands].map((command) => [
       command,
@@ -239,7 +230,10 @@ export async function findCommandsOnLocalPath(
   )
 
   const allFound = Promise.withResolvers<void>()
-  const scanDirectory = async (dir: string): Promise<void> => {
+  const scanDirectory = async (
+    dir: string,
+    record: (command: string, candidate: string) => void
+  ): Promise<void> => {
     if (bareCommands.size === 0) {
       return
     }
@@ -264,30 +258,31 @@ export async function findCommandsOnLocalPath(
           }
           seenCandidates.add(candidateKey)
           if (await isExecutableFile(candidate, isWin)) {
-            found.add(command)
-            options.matches?.set(command, options.matches.get(command) ?? candidate)
-            bareCommands.delete(command)
-            if (bareCommands.size === 0) {
-              allFound.resolve()
-            }
+            record(command, candidate)
             break
           }
         }
       })
     )
   }
-  // Preserve first-directory hits; overlap later absence scans without waiting on unrelated ones.
-  if (searchDirs.length > 0) {
-    await scanDirectory(searchDirs[0])
-    await Promise.race([
-      allFound.promise,
-      forEachWithConcurrency(
-        searchDirs.slice(1),
-        commands.length <= DIRECT_DETECTION_COMMAND_LIMIT ? 1 : 4,
-        scanDirectory
-      )
-    ])
+  const recordHit = (command: string, candidate: string): void => {
+    if (!bareCommands.delete(command)) {
+      return
+    }
+    found.add(command)
+    options.matches?.set(command, candidate)
+    if (bareCommands.size === 0) {
+      allFound.resolve()
+    }
   }
+  await scanDetectionDirectories(searchDirs, {
+    concurrency: commands.length <= DIRECT_DETECTION_COMMAND_LIMIT ? 1 : 4,
+    ordered: options.matches !== undefined,
+    scan: scanDirectory,
+    record: recordHit,
+    allFound: allFound.promise,
+    isDone: () => bareCommands.size === 0
+  })
   return found
 }
 

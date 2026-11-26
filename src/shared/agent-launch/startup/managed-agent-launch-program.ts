@@ -84,6 +84,14 @@ export function stockProgramKey(program: string, platform: NodeJS.Platform): str
   return platform === 'win32' ? program.toLowerCase().replace(/\.(exe|cmd|bat)$/, '') : program
 }
 
+export function matchesStockLaunchProgram(
+  program: string | undefined,
+  stock: string,
+  platform: NodeJS.Platform
+): boolean {
+  return platform === 'win32' ? program?.toLowerCase() === stock.toLowerCase() : program === stock
+}
+
 export function withManagedAgentProgram(
   command: string,
   args: {
@@ -96,17 +104,24 @@ export function withManagedAgentProgram(
   }
 ): string {
   const path = args.managedAgentCommands?.[args.agent]
-  const override = args.cmdOverrides?.[args.agent]?.trim()
   const stock = stockLaunchProgram(args.agent, args.platform, args.isRemote)
-  if (!path || (override && override !== stock)) {
+  if (!path) {
+    return command
+  }
+  const override = args.cmdOverrides?.[args.agent]?.trim()
+  if (
+    override &&
+    !matchesStockLaunchProgram(
+      readLaunchPosition(override, args.shell)?.executable,
+      stock,
+      args.platform
+    )
+  ) {
     return command
   }
   const launch = readLaunchPosition(command, args.shell)
   // A result for the bare stock program can't answer a lookup for an explicit executable.
-  return launch &&
-    (args.platform === 'win32'
-      ? launch.executable.toLowerCase() === stock.toLowerCase()
-      : launch.executable === stock)
+  return launch && matchesStockLaunchProgram(launch.executable, stock, args.platform)
     ? replaceLaunchExecutable(command, args.shell, launch, path)
     : command
 }

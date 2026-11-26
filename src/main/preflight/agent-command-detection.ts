@@ -12,6 +12,7 @@ import { hasPathSeparatorToken } from '../../shared/agent-launch/installation/ma
 import { isQuotedWindowsPathEntry } from '../../shared/shell/command-resolution/node-cli-command-resolution'
 import {
   isOrcaAgentRuntimePath,
+  terminalPathReachesUserProgram,
   withoutOrcaAgentRuntimeDirectories
 } from '../managed-agent-cli/managed-agent-cli-path'
 
@@ -41,12 +42,16 @@ export async function detectAgentCommandsOnHost(
     process.platform === 'win32' && env.PATH === undefined
       ? (Object.keys(env).find((key) => key.toLowerCase() === 'path') ?? 'PATH')
       : 'PATH'
-  const pathEnv = withoutOrcaAgentRuntimeDirectories(env[pathKey] ?? '')
+  const originalPath = env[pathKey] ?? ''
+  const pathEnv = withoutOrcaAgentRuntimeDirectories(originalPath)
   const userCommands = commands.filter(
     (cmd) => options.overrideCommands?.has(cmd) || !isOrcaAgentRuntimePath(cmd)
   )
   const entries = process.platform === 'win32' ? pathEnv.split(';') : []
   const quoted = entries.filter(isQuotedWindowsPathEntry)
+  const searchedDirectories = quoted.length ? new Set<string>() : undefined
+  const matches =
+    originalPath !== pathEnv && options.outsidePath ? new Map<string, string>() : undefined
   const onPathCommands = await findCommandsOnLocalPath(userCommands, {
     env: {
       ...env,
@@ -55,8 +60,19 @@ export async function detectAgentCommandsOnHost(
         : pathEnv
     },
     // The app's cwd cannot establish that a PowerShell tab can launch the command by name.
-    ...(quoted.length ? { cwd: '' } : {})
+    ...(quoted.length ? { cwd: '' } : {}),
+    searchedDirectories,
+    matches
   })
+  if (matches) {
+    await Promise.all(
+      [...matches].map(async ([command, path]) => {
+        if (!(await terminalPathReachesUserProgram(command, path, originalPath, false))) {
+          options.outsidePath?.set(command, path)
+        }
+      })
+    )
+  }
   // A path was already checked directly; the install-dir fallback would count any absolute path as found.
   const missedCommands = userCommands.filter(
     (cmd) => !onPathCommands.has(cmd) && !hasPathSeparatorToken(cmd)
@@ -66,6 +82,7 @@ export async function detectAgentCommandsOnHost(
     const onQuotedPath = await findCommandsOnLocalPath(missedCommands, {
       env: { ...env, [pathKey]: quoted.join(';') },
       cwd: '',
+      searchedDirectories,
       matches: options.outsidePath
     })
     onQuotedPath.forEach((command) => onPathCommands.add(command))

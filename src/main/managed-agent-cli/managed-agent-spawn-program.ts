@@ -283,7 +283,8 @@ async function rewriteLaunchExecutable(
       if (!remote) {
         const paths = await readHostManagedAgentCommands(settings, [managedAgent], {
           pathEnv: await effectiveSearchPath(spawn, shell, launch),
-          shell
+          shell,
+          restoring: true
         })
         executable = paths[managedAgent] ?? executable
       }

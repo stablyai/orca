@@ -208,7 +208,7 @@ export function* cliCommandLookup(
   const names = getExecutableNames(platform, commandName)
   const pathEnv = options.pathEnv ?? process.env.PATH ?? process.env.Path ?? null
   return (
-    (yield* cliPathLookup(platform, pathEnv, names)) ??
+    (options.skipPathSearch ? null : yield* cliPathLookup(platform, pathEnv, names)) ??
     (yield* firstRunnable(
       platform,
       yield* cliInstallDirectories(platform, options.homePath ?? homedir()),

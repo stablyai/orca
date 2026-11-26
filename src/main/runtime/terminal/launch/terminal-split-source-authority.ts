@@ -16,6 +16,10 @@ import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { splitPanePendingError } from './terminal-split-retry'
 import { readHostManagedAgentCommands } from '../../rpc/methods/host-management/managed-copy-detection'
 import {
+  readLaunchArguments,
+  readLaunchPosition
+} from '../../../../shared/agent-launch/startup/launch-position'
+import {
   SPLIT_PANE_APPEAR_TIMEOUT_MS,
   SPLIT_PANE_START_TIMEOUT_MS
 } from './terminal-split-wait-timeout'
@@ -143,7 +147,13 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
     paneKey: string
     baseEnv?: Record<string, string>
     prepareAuth?: boolean
-  }): Promise<{ env: Record<string, string>; envToDelete?: string[]; outsidePath?: string }> {
+  }): Promise<{
+    env: Record<string, string>
+    envToDelete?: string[]
+    outsidePath?: string
+    command?: string
+    args?: string[]
+  }> {
     const handle = this.getTerminalHandleForPaneKey(args.paneKey)
     if (!handle) {
       throw new Error('claude_agent_teams_requires_orca_terminal')
@@ -154,17 +164,31 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
       prepareAuth: args.prepareAuth
     })
     const pty = this.getLivePtyForHandle(handle)?.pty
+    if (!pty || pty.connectionId || pty.isWsl) {
+      return launch
+    }
     const pathEnv = launch.env.PATH ?? args.baseEnv?.PATH
+    const settings = this.requireStore().getSettings()
+    const override = settings.agentCmdOverrides?.claude?.trim()
+    const position = override && readLaunchPosition(override, 'posix')
+    const overrideArgs =
+      override && position && position.start === 0
+        ? readLaunchArguments(override, 'posix', position)
+        : null
     const outsidePath =
-      pty && !pty.connectionId && !pty.isWsl && pathEnv !== undefined
+      pathEnv !== undefined
         ? (
-            await readHostManagedAgentCommands(this.requireStore().getSettings(), ['claude'], {
+            await readHostManagedAgentCommands(settings, ['claude'], {
               pathEnv,
               shell: 'posix'
             })
           ).claude
         : undefined
-    return { ...launch, ...(outsidePath ? { outsidePath } : {}) }
+    return {
+      ...launch,
+      ...(outsidePath ? { outsidePath } : {}),
+      ...(position && overrideArgs ? { command: position.executable, args: overrideArgs } : {})
+    }
   }
 
   async prepareClaudeAgentTeamsLeaderForHandle(args: {

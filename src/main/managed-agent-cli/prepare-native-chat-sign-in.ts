@@ -59,6 +59,8 @@ export async function prepareNativeChatSignIn(
     case 'cmd':
       return `if 1==1 ${login}`
     case 'posix':
-      return `sh -c ${quoteStartupArg(`exec ${login}`, shell)}`
+      return claudeSystemSignIn
+        ? agentSessionSignInCommand(agent, { ...options, prepared: true })
+        : `sh -c ${quoteStartupArg(`exec ${login}`, shell)}`
   }
 }
