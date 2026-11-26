@@ -41,17 +41,15 @@ export async function structuredAgentSessionKeptAtOpen(
 ): Promise<boolean> {
   const { sessionId, provider, location } = record
   const owner = record.ownerObservation.ownerProcess
-  if (
-    !owner ||
-    !providerRelayMayKeepChat(provider, location.executionHostId === LOCAL_EXECUTION_HOST_ID)
-  ) {
+  if (!providerRelayMayKeepChat(provider, location.executionHostId === LOCAL_EXECUTION_HOST_ID)) {
     return false
   }
   const listed = await listProviderRelaysAtLaunchWithin(waitMs)
-  if (listed || keptRunningProviderRelayPid(sessionId) !== null) {
-    return keptRunningProviderRelayPid(sessionId) !== null
+  // A listed kept relay is proof enough, even after launch recovery released the recorded owner.
+  if (keptRunningProviderRelayPid(sessionId) !== null) {
+    return true
   }
-  if (await ownerProvenGone(owner)) {
+  if (listed || !owner || (await ownerProvenGone(owner))) {
     return false
   }
   noteProviderRelayKeptUnverified(sessionId)

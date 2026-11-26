@@ -155,6 +155,23 @@ it.skipIf(process.platform === 'win32')(
   }
 )
 
+// QA r20: launch recovery had released the S1 chat's recorded owner, so its open settled the run
+// the relay still held, 45 ms before the reattach.
+it.skipIf(process.platform === 'win32')(
+  'keeps a chat the listing shows kept even when its recorded owner was released',
+  async () => {
+    const late = lateDaemon()
+    const fresh = await freshRelays(late.client)
+    late.answer([keptRelay(SESSION)])
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the verdict reads only these fields
+    const record = {
+      ...chat(owner(process.pid)),
+      ownerObservation: { ownerProcess: null }
+    } as unknown as Parameters<typeof fresh.open.structuredAgentSessionKeptAtOpen>[0]
+    expect(await fresh.open.structuredAgentSessionKeptAtOpen(record, 5_000)).toBe(true)
+  }
+)
+
 it.skipIf(process.platform === 'win32')(
   'settles at open when the owner process is proven gone, even while the listing is late',
   async () => {
