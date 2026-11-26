@@ -2,8 +2,10 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { durableWriteTempPath, writeFileDurableSync } from '../../../filesystem/durable-file-write'
+import { isPermissionError } from '../../../filesystem/permission-errors'
 import {
   MAX_ORCAD_MIGRATION_TERMINAL_RESTORE_HINTS,
   isOrcadMigrationTerminalRestoreHintCwd,
@@ -40,6 +42,10 @@ type TerminalRestoreHintStoreDocument = {
 
 const MIGRATION_KEY = /^[a-f0-9]{32}$/
 
+const NewerStoreVersionSchema = lazyZodSchema(() =>
+  z.object({ version: z.number().gt(STORE_VERSION) })
+)
+
 const StoreDocumentSchema = lazyZodSchema(() =>
   z.object({
     version: z.literal(STORE_VERSION),
@@ -61,6 +67,7 @@ export class OrcadTerminalRestoreHintStore {
   private readonly directory: string
   private readonly path: string
   private document: TerminalRestoreHintStoreDocument | null = null
+  private writtenByNewerBuild = false
 
   constructor(blobRoot: string) {
     this.directory = join(blobRoot, INSTALLED_DIRECTORY)
@@ -131,6 +138,9 @@ export class OrcadTerminalRestoreHintStore {
   }
 
   private write(next: TerminalRestoreHintStoreDocument, now: number): void {
+    if (this.writtenByNewerBuild) {
+      throw new Error('terminal restore hint store was written by a newer Orca build')
+    }
     const document = {
       ...next,
       hints: next.hints.filter(
@@ -151,7 +161,9 @@ export class OrcadTerminalRestoreHintStore {
     if (this.document) {
       return this.document
     }
-    this.document = readStoreDocument(this.path)
+    const read = readStoreDocument(this.path)
+    this.writtenByNewerBuild = read === 'newer-build'
+    this.document = read === 'newer-build' ? emptyDocument() : read
     return this.document
   }
 }
@@ -172,25 +184,44 @@ function emptyDocument(): TerminalRestoreHintStoreDocument {
   return { version: STORE_VERSION, hints: [], installedMigrationKeys: [] }
 }
 
-function readStoreDocument(path: string): TerminalRestoreHintStoreDocument {
+/** A newer build's file is never replaced; a damaged one only loses old cwd restoration. */
+function readStoreDocument(path: string): TerminalRestoreHintStoreDocument | 'newer-build' {
   let text: string
   try {
     text = readFileSync(path, 'utf8')
-  } catch {
-    return emptyDocument()
-  }
-  try {
-    const parsed = StoreDocumentSchema.safeParse(JSON.parse(text))
-    if (parsed.success) {
-      return {
-        version: parsed.data.version,
-        hints: parsed.data.hints,
-        installedMigrationKeys: parsed.data.installedMigrationKeys
-      }
+  } catch (error) {
+    if (isDefinitiveAbsence(error)) {
+      return emptyDocument()
     }
-  } catch {
-    // Corrupt hints only lose old cwd restoration.
+    // Rethrow transient failures uncached so no write replaces hints this read never saw.
+    // Windows sharing locks surface as EPERM/EACCES, so they are transient there too.
+    if (process.platform === 'win32' || !isPermissionError(error)) {
+      throw error
+    }
+    return unreadableStore()
   }
+  let value: unknown
+  try {
+    value = JSON.parse(text)
+  } catch {
+    return unreadableStore()
+  }
+  const parsed = StoreDocumentSchema.safeParse(value)
+  if (parsed.success) {
+    return {
+      version: parsed.data.version,
+      hints: parsed.data.hints,
+      installedMigrationKeys: parsed.data.installedMigrationKeys
+    }
+  }
+  if (NewerStoreVersionSchema.safeParse(value).success) {
+    console.warn('[orcad-migration] keeping a terminal restore hint store from a newer Orca build')
+    return 'newer-build'
+  }
+  return unreadableStore()
+}
+
+function unreadableStore(): TerminalRestoreHintStoreDocument {
   console.warn('[orcad-migration] ignoring an unreadable terminal restore hint store')
   return emptyDocument()
 }
