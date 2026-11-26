@@ -98,6 +98,17 @@ export const AutomationEventTriggers = lazyZodSchema(() =>
             minutesBefore: z.number().int().nonnegative()
           })
           .strict(),
+        z
+          .object({
+            id: FilterText,
+            source: z.literal('ngit'),
+            event: z.enum(AUTOMATION_EVENT_KINDS.ngit),
+            in: z.array(FilterText),
+            textContains: FilterText.optional(),
+            subject: FilterText.optional(),
+            from: z.array(FilterText).optional()
+          })
+          .strict(),
         // id '' and rev 0 ask the host to make the hook; the store checks paths and sizes.
         z
           .object({

@@ -22884,7 +22884,16 @@
           "calendar": {
             "starting_soon": "Meeting starting soon"
           },
-          "other": "Event"
+          "other": "Event",
+          "ngit": {
+            "comment": "Comment",
+            "issue_closed": "Issue closed",
+            "issue_opened": "Issue opened",
+            "pr_closed": "Pull request closed",
+            "pr_merged": "Pull request merged",
+            "pr_opened": "Pull request opened",
+            "pr_pushed": "Pull request updated"
+          }
         },
         "afterThirtyDays": "After 30 days",
         "cancel": "Cancel",
@@ -22906,7 +22915,8 @@
         "until": "Until {{time}}",
         "updatedAutomation": "Updated automation",
         "waiting": "Waiting",
-        "waitsFor": "Waits for"
+        "waitsFor": "Waits for",
+        "ngit": "ngit"
       },
       "slackMirror": {
         "ownDm": "Also posts to your DM with {{bot}}",
@@ -24150,6 +24160,9 @@
       },
       "git": {
         "branchPrefixHostGitUsername": "Git username on {{host}}"
+      },
+      "TasksPane": {
+        "ngitDescription": "Browse Nostr (NIP-34) issues and pull requests and start workspaces from them."
       }
     },
     "agentChildRow": {
@@ -24509,6 +24522,67 @@
         "disconnectedHostLine": "{{host}} isn’t connected. Its files stay on the host.",
         "filesStayLine": "Its files stay on {{host}}.",
         "removing": "Removing…"
+      },
+      "openNgitTasks": "Open ngit tasks"
+    },
+    "taskPage": {
+      "ngit": {
+        "viewIssues": "Issues",
+        "viewPrs": "PRs & patches",
+        "stateOpen": "Open",
+        "stateMerged": "Merged",
+        "stateClosed": "Closed",
+        "stateAll": "All",
+        "refreshList": "Refresh ngit work items",
+        "newIssue": "New issue",
+        "noRepoTitle": "No ngit repository selected",
+        "emptyTitle": "Nothing matches this filter",
+        "noRepoDescription": "Select a project with a nostr:// remote or a maintainers.yaml file.",
+        "emptyDescription": "Try another state or refresh.",
+        "startWorkspace": "Start workspace",
+        "openInBrowser": "Open on gitworkshop.dev",
+        "columnId": "ID",
+        "columnTitle": "Title",
+        "columnAuthor": "Author",
+        "columnType": "Type / State",
+        "columnUpdated": "Updated",
+        "detailDescription": "ngit work item detail",
+        "refresh": "Refresh",
+        "close": "Close",
+        "noDescription": "No description.",
+        "noComments": "No comments yet.",
+        "reply": "reply",
+        "signInToWrite": "Run ngit account login on this machine to comment or change status.",
+        "installToWrite": "Install the ngit CLI on this machine to comment or change status.",
+        "commentAs": "Comment publicly as {{name}}…",
+        "commentPlaceholder": "Comment…",
+        "comment": "Comment",
+        "createWorkspace": "Create workspace",
+        "newIssueWarning": "ngit signs this issue with your Nostr identity and publishes it to public relays.",
+        "description": "Description",
+        "cancel": "Cancel",
+        "publishIssue": "Publish issue",
+        "actionResolved": "Mark resolved",
+        "actionReopen": "Reopen",
+        "actionReady": "Ready for review",
+        "actionDraft": "Convert to draft",
+        "stateDraft": "Draft",
+        "typeIssue": "Issue",
+        "typePatch": "Patch",
+        "typePr": "PR",
+        "publishFailed": "ngit could not publish: {{error}}",
+        "fetchingPr": "Fetching the pull request…",
+        "actionCloseIssue": "Close issue",
+        "actionClosePr": "Close PR",
+        "source": "ngit",
+        "maintainersMerge": "Only maintainers can merge.",
+        "mergePr": "Merge pull request",
+        "mergeWarning": "Creates a merge commit on {{branch}} and pushes it, publishing “{{title}}” as merged. This cannot be undone.",
+        "defaultBranch": "the default branch",
+        "confirmMerge": "Merge and push",
+        "actionAppliedElsewhere": "Mark merged elsewhere",
+        "openWorkspace": "Open workspace",
+        "openWorkspaceFailed": "Unable to open the workspace."
       }
     }
   },
@@ -28449,7 +28523,14 @@
         "linearIssueMoved": "When a Linear issue moves",
         "webhookCall": "When its webhook is called",
         "gmailNewEmail": "On a new email",
-        "calendarStartingSoon": "Before a meeting starts"
+        "calendarStartingSoon": "Before a meeting starts",
+        "ngitIssueOpened": "When an ngit issue is opened",
+        "ngitPrOpened": "When an ngit PR is opened",
+        "ngitPrPushed": "When an ngit PR is updated",
+        "ngitPrMerged": "When an ngit PR is merged",
+        "ngitPrClosed": "When an ngit PR is closed",
+        "ngitIssueClosed": "When an ngit issue is closed",
+        "ngitComment": "On an ngit comment"
       },
       "google": {
         "minutesBefore": "{{count}} min before",

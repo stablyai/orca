@@ -63,6 +63,8 @@ function getLinkedReviewNumberForProvider(
       return worktree.linkedAzureDevOpsPR ?? null
     case 'gitea':
       return worktree.linkedGiteaPR ?? null
+    // No number is stored for ngit; its review follows the branch.
+    case 'ngit':
     case 'unsupported':
       return null
   }

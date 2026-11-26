@@ -5,7 +5,8 @@ import {
   GitBranch,
   GitBranchPlus,
   GitMerge,
-  GitPullRequest
+  GitPullRequest,
+  Waypoints
 } from 'lucide-react'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
@@ -68,6 +69,9 @@ export function SelectionIcon({
   }
   if (kind === 'jira') {
     return <JiraIcon className="size-3.5 shrink-0 text-muted-foreground" />
+  }
+  if (kind === 'ngit') {
+    return <Waypoints className="size-3.5 shrink-0 text-muted-foreground" />
   }
   return <LinearIcon className="size-3.5 shrink-0 text-muted-foreground" />
 }

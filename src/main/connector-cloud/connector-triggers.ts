@@ -13,6 +13,7 @@ import {
   type AutomationRunEvent
 } from '../../shared/automation-event-triggers'
 import { isGoogleTrigger } from '../../shared/automation-google-triggers'
+import { isNgitTrigger } from '../../shared/automation-ngit-triggers'
 import { hookIdOfRule, webhookActorId } from '../../shared/connector-webhook-contract'
 
 type CloudRule = AutomationConnectorEventTrigger | AutomationWebhookTrigger
@@ -30,8 +31,8 @@ function withoutNames(trigger: CloudRule): CloudRule {
 }
 
 /**
- * Enabled bot automations' rules; a paused one lists none, so nothing is queued for it. Google rules
- * are checked on this host and never sent. Its webhook
+ * Enabled bot automations' rules; a paused one lists none, so nothing is queued for it. Google and
+ * ngit rules are checked on this host and never sent. Its webhook
  * rule stays only until the cloud confirms the hook's own pause, so the pause, not the hello, stops it.
  */
 export function connectorTriggers(
@@ -44,7 +45,9 @@ export function connectorTriggers(
   return automations.flatMap(({ id, enabled, bot, on, missedRunGraceMinutes }) =>
     bot
       ? (on ?? [])
-          .filter((trigger): trigger is CloudRule => !isGoogleTrigger(trigger))
+          .filter(
+            (trigger): trigger is CloudRule => !isGoogleTrigger(trigger) && !isNgitTrigger(trigger)
+          )
           .filter((trigger) => enabled || pausing(hookIdOfRule(trigger.id) ?? ''))
           .map((trigger) => ({
             ...withoutNames(trigger),
@@ -96,8 +99,8 @@ export function triggerRunEvent(
     bot && automation?.bot?.botId === bot.id
       ? automation.on?.find((rule) => rule.id === delivery.triggerId)
       : undefined
-  // The cloud never has a Google rule, so it can't deliver one.
-  if (!trigger || !bot || isGoogleTrigger(trigger)) {
+  // The cloud never has a host-checked rule, so it can't deliver one.
+  if (!trigger || !bot || isGoogleTrigger(trigger) || isNgitTrigger(trigger)) {
     return null
   }
   const hookId = hookIdOfRule(trigger.id)

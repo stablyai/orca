@@ -87,7 +87,7 @@ export function buildLocalBlockerHostedReviewCreationEligibility(
   if (status.hasUncommittedChanges) {
     return { ...base, blockedReason: 'dirty', nextAction: 'commit' }
   }
-  if (status.hasUpstream === false) {
+  if (status.hasUpstream === false && provider !== 'ngit') {
     return { ...base, blockedReason: 'no_upstream', nextAction: 'publish' }
   }
   // Unknown upstream remains retryable, matching main.

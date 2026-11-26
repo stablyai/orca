@@ -130,11 +130,14 @@ export function prepareLoadedProfileSettings(
   })
   const visibleTaskProvidersDefaultedForJira =
     parsed.settings?.visibleTaskProvidersDefaultedForJira === true
-  const migratedVisibleTaskProviders = visibleTaskProvidersDefaultedForJira
-    ? rawTaskProviderSettings.visibleTaskProviders
-    : rawTaskProviderSettings.visibleTaskProviders.includes('jira')
-      ? rawTaskProviderSettings.visibleTaskProviders
-      : [...rawTaskProviderSettings.visibleTaskProviders, 'jira' as const]
+  const ngitDefaulted = parsed.settings?.visibleTaskProvidersDefaultedForNgit === true
+  const migratedVisibleTaskProviders = [
+    ...new Set([
+      ...rawTaskProviderSettings.visibleTaskProviders,
+      ...(visibleTaskProvidersDefaultedForJira ? [] : ['jira' as const]),
+      ...(ngitDefaulted ? [] : ['ngit' as const])
+    ])
+  ]
   const taskProviderSettings = normalizeTaskProviderSettings({
     visibleTaskProviders: migratedVisibleTaskProviders,
     defaultTaskSource: rawTaskProviderSettings.defaultTaskSource
@@ -155,7 +158,7 @@ export function prepareLoadedProfileSettings(
   if (migratePrimarySelectionPlatformDefault || stampPrimarySelectionTerminalDefaults) {
     markNeedsSave()
   }
-  if (!visibleTaskProvidersDefaultedForJira) {
+  if (!visibleTaskProvidersDefaultedForJira || !ngitDefaulted) {
     markNeedsSave()
   }
   const claudeAgentTeamsDefaultDisabledMigrated =

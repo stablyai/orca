@@ -91,6 +91,12 @@ export function useTaskSourceProviderReadiness(
         connected: jiraConnected,
         checking: jiraChecking,
         visible: visible.has('jira')
+      },
+      // Reads need no sign-in; the ngit CLI is only asked for when publishing.
+      ngit: {
+        connected: true,
+        checking: false,
+        visible: visible.has('ngit')
       }
     }
   }, [

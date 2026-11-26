@@ -25,7 +25,8 @@ const SOURCE_LABELS = {
   linear: 'linear',
   webhook: 'webhook',
   gmail: 'gmail',
-  calendar: 'calendar'
+  calendar: 'calendar',
+  ngit: 'ngit'
 } as const satisfies Record<AutomationRunMessageEvent['source'], AutomationRunCopyKey>
 
 function isLabeledSource(source: string): source is keyof typeof SOURCE_LABELS {

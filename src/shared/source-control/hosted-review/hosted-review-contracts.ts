@@ -14,6 +14,7 @@ export type HostedReviewProvider =
   | 'bitbucket'
   | 'azure-devops'
   | 'gitea'
+  | 'ngit'
   | 'unsupported'
 
 export type HostedReviewState = 'open' | 'closed' | 'merged' | 'draft'

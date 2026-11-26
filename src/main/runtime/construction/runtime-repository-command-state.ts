@@ -3,6 +3,7 @@ import { RuntimeGitCommands } from '../integrations/git/orca-runtime-git'
 import { RuntimeHostedReviewCommands } from '../integrations/reviews/runtime-hosted-review-commands'
 import { RuntimeGitHubRepositoryQueryCommands } from '../integrations/github/runtime-github-repository-query-commands'
 import { RuntimeGitLabQueryCommands } from '../integrations/gitlab/runtime-gitlab-query-commands'
+import { RuntimeNgitCommands } from '../integrations/ngit/runtime-ngit-commands'
 import { recordGitLabProjectRecent } from '../../gitlab/projects/gitlab-project-recents'
 import { RuntimeGitLabMutationCommands } from '../integrations/gitlab/runtime-gitlab-mutation-commands'
 import { RuntimeGitHubReviewQueryCommands } from '../integrations/github/runtime-github-review-query-commands'
@@ -135,6 +136,11 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
   })
 
   protected readonly gitLabMutationCommands = new RuntimeGitLabMutationCommands({
+    resolveRepo: (selector) => this.resolveRepoSelector(selector),
+    getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
+  })
+
+  readonly ngit = new RuntimeNgitCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
   })

@@ -243,6 +243,7 @@
     "jsonc-parser": "^3.3.1",
     "mime-types": "3.0.2",
     "node-pty": "^1.1.0",
+    "nostr-tools": "2.26.1",
     "posthog-node": "^5.52.5",
     "proper-lockfile": "4.1.2",
     "qrcode": "^1.5.4",

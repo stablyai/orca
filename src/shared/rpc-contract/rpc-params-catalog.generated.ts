@@ -916,6 +916,14 @@ import {
   HostedReviewForBranch
 } from './source-control/hosted-review-params'
 import {
+  NgitCommentAdd,
+  NgitIssueCreate,
+  NgitRepoSelector,
+  NgitStatusChange,
+  NgitWorkItemSelector,
+  NgitWorkItemsList
+} from './source-control/ngit-params'
+import {
   DictationChunk,
   DictationHandle,
   DictationSetup,
@@ -1958,6 +1966,14 @@ export const RPC_PARAMS_BY_METHOD = {
   'nativeChat.unsubscribe': NativeChatUnsubscribe,
   'network.browserTunnel': BrowserNetworkTunnelAttachParams,
   'network.portForward': NetworkPortForwardAttachParams,
+  'ngit.addComment': NgitCommentAdd,
+  'ngit.createIssue': NgitIssueCreate,
+  'ngit.listWorkItems': NgitWorkItemsList,
+  'ngit.mergePr': NgitWorkItemSelector,
+  'ngit.resolvePrBase': NgitWorkItemSelector,
+  'ngit.setStatus': NgitStatusChange,
+  'ngit.viewer': NgitRepoSelector,
+  'ngit.workItemDetails': NgitWorkItemSelector,
   'notifications.getMissedSince': NotificationGetMissedSinceParams,
   'notifications.pushCoverage': NotificationPushCoverageParams,
   'notifications.registerPush': NotificationRegisterPushParams,

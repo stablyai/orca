@@ -19,5 +19,11 @@ export const BUNDLED_MAIN_DEPENDENCIES = new Set([
   'hast-util-from-html-isomorphic',
   // Windows NSIS copies app.asar before external resources; bootstrap must not race resources/node_modules.
   'zod',
-  'semver'
+  'semver',
+  // ESM-only with ESM-only dependencies; bundled so the CommonJS main process can load it.
+  'nostr-tools',
+  '@noble/curves',
+  '@noble/ciphers',
+  '@noble/hashes',
+  '@scure/base'
 ])

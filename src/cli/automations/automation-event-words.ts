@@ -15,6 +15,15 @@ type EventWords = {
 
 // "You" is the bot's owner; anyone in the place may set one off, unless from= names people.
 export const EVENT_WORDS: EventWords = {
+  ngit: {
+    issue_opened: 'an issue is opened',
+    pr_opened: 'a pull request or patch series is opened',
+    pr_pushed: 'a pull request gets new commits or a new revision',
+    pr_merged: 'a pull request is merged',
+    pr_closed: 'a pull request is closed without merging',
+    issue_closed: 'an issue is resolved or closed',
+    comment: 'someone comments on an issue or pull request'
+  },
   slack: {
     mentioned: 'your owner is mentioned in a channel the bot is in',
     message: 'a new message is posted in a channel the bot is in',

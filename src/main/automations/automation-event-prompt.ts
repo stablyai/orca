@@ -12,7 +12,8 @@ export const AUTOMATION_EVENT_SOURCE_NAMES: Record<AutomationRunEvent['source'],
   linear: 'Linear',
   webhook: 'Webhook',
   gmail: 'Gmail',
-  calendar: 'Google Calendar'
+  calendar: 'Google Calendar',
+  ngit: 'ngit'
 }
 
 /** The Google account and Orca's ref for the mail or event, so the run reads it as the owner. */

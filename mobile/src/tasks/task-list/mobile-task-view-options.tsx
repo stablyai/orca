@@ -8,7 +8,8 @@ export const PROVIDER_LABELS: Record<TaskProvider, string> = {
   github: 'GitHub',
   gitlab: 'GitLab',
   linear: 'Linear',
-  jira: 'Jira'
+  jira: 'Jira',
+  ngit: 'ngit'
 }
 
 export const PROVIDER_EMPTY_LABELS: Record<TaskProvider, string> = {
@@ -23,7 +24,9 @@ export const PROVIDER_EMPTY_LABELS: Record<TaskProvider, string> = {
   },
   get jira() {
     return translate('tasks.taskViewOptions.noJiraTasks', 'No Jira tasks')
-  }
+  },
+  // Never offered on the phone (see filterAvailableTaskProviders).
+  ngit: ''
 }
 
 export const JIRA_FILTER_OPTIONS: PickerOption<JiraIssueFilter>[] = [

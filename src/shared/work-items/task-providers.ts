@@ -1,6 +1,12 @@
-export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'jira'
+export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'jira' | 'ngit'
 
-export const TASK_PROVIDERS: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira']
+export const TASK_PROVIDERS: readonly TaskProvider[] = [
+  'github',
+  'gitlab',
+  'linear',
+  'jira',
+  'ngit'
+]
 
 const TASK_PROVIDER_SET = new Set<TaskProvider>(TASK_PROVIDERS)
 
@@ -52,6 +58,8 @@ export function normalizeVisibleTaskProviders(value: unknown): TaskProvider[] {
 export type TaskProviderAvailability = {
   gitlabInstalled: boolean
   linearConnected: boolean
+  /** Set by clients that can show ngit work; the phone cannot yet. */
+  ngitSupported?: boolean
 }
 
 export function filterAvailableTaskProviders(
@@ -99,6 +107,10 @@ function isTaskProviderAvailable(
   // Disconnected Jira must remain visible as its own first-time setup entry point.
   if (provider === 'jira') {
     return true
+  }
+  // Reading ngit needs no CLI or sign-in.
+  if (provider === 'ngit') {
+    return availability.ngitSupported === true
   }
   return availability.linearConnected
 }

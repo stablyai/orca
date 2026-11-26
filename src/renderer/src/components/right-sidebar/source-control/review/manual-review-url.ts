@@ -154,7 +154,9 @@ export function buildSourceControlManualReviewUrl(input: ManualReviewUrlInput): 
       : localBranch)
 
   switch (provider) {
+    // A null provider is unknown; ngit opens pull requests with `ngit send`, not a web form.
     case null:
+    case 'ngit':
       return null
     case 'github':
       return `${baseRepo.webBaseUrl}/compare/${encodeCompareRef(baseBranch)}...${encodeCompareRef(

@@ -42,7 +42,8 @@ const PROVIDER_LABELS: Record<WorkspaceDetailLink['provider'], string> = {
   jira: 'Jira',
   bitbucket: 'Bitbucket',
   'azure-devops': 'Azure DevOps',
-  gitea: 'Gitea'
+  gitea: 'Gitea',
+  ngit: 'ngit'
 }
 function stateLabels(t: Translate): Record<string, string> {
   return {

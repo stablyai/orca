@@ -95,7 +95,7 @@ export function useMobileTasksRouteAndItemState() {
     })
   const [provider, setProvider] = useState<TaskProvider>('github')
   const [visibleProviders, setVisibleProviders] = useState<TaskProvider[]>(() =>
-    normalizeVisibleTaskProviders(undefined)
+    normalizeVisibleTaskProviders(undefined).filter((source) => source !== 'ngit')
   )
   const [linearConnected, setLinearConnected] = useState(false)
   const [jiraConnection, setJiraConnection] = useMobileJiraConnectionState(client, connState)

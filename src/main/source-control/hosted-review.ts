@@ -37,6 +37,9 @@ function reviewLinkForProvider(
       return { linkedReviewNumber: input.linkedAzureDevOpsPR ?? null }
     case 'gitea':
       return { linkedReviewNumber: input.linkedGiteaPR ?? null }
+    // ngit reviews follow the branch name and tip; no number is stored on the worktree.
+    case 'ngit':
+      return {}
   }
 }
 
@@ -116,6 +119,7 @@ export async function readHostedReviewForBranch(
         const provider = await getForgeProviderForRepository({
           repoPath: input.repoPath,
           executionHostId: input.executionHostId,
+          branch: branchName,
           ...(input.localGitExecOptions ? { localGitExecOptions: input.localGitExecOptions } : {})
         })
         if (!provider) {

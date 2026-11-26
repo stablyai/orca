@@ -1,5 +1,5 @@
 import React from 'react'
-import { EyeOff, Github, Gitlab, List } from 'lucide-react'
+import { EyeOff, Github, Gitlab, List, Waypoints } from 'lucide-react'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import {
@@ -91,7 +91,8 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
         preferredVisibleTaskProviders,
         {
           gitlabInstalled: preflightStatusCurrent && preflightStatus?.glab?.installed === true,
-          linearConnected: linearStatus.connected === true
+          linearConnected: linearStatus.connected === true,
+          ngitSupported: true
         },
         defaultTaskSource
       ),
@@ -191,6 +192,14 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
                 onOpen={() => openTaskPage({ taskSource: 'github' })}
               >
                 <Github className="size-3.5" aria-hidden />
+              </TaskProviderShortcut>
+            ) : null}
+            {visibleTaskProviders.includes('ngit') ? (
+              <TaskProviderShortcut
+                label={t('components.sidebar.openNgitTasks', 'Open ngit tasks')}
+                onOpen={() => openTaskPage({ taskSource: 'ngit' })}
+              >
+                <Waypoints className="size-3.5" aria-hidden />
               </TaskProviderShortcut>
             ) : null}
             {visibleTaskProviders.includes('gitlab') ? (

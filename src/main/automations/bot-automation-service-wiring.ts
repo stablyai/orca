@@ -5,6 +5,7 @@ import { createBotAutomationDispatcher } from './bot-automation-launch'
 import { runtimeBotAutomationSessions } from '../bots/bot-automation-sessions'
 import { bindLookAroundToAutomations } from '../bots/bot-look-around-runtime'
 import { bindGoogleTriggersToAutomations } from '../google/google-trigger-runtime'
+import { bindNgitTriggersToAutomations } from '../ngit/trigger-runtime'
 import { runtimeBotRunRefusals, runtimeBotRunResults } from '../bots/bot-run-results'
 import { runtimeBotWaits } from '../bots/bot-waits'
 import { runtimeChatHost } from '../external-conversations/external-conversation-chat'
@@ -51,4 +52,5 @@ export function bindBotAutomations(
     service.runInAutomationLane(automationId, operation)
   bindLookAroundToAutomations(service, runtime)
   bindGoogleTriggersToAutomations(service, store, runtime)
+  bindNgitTriggersToAutomations(service, store, runtime)
 }

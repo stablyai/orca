@@ -4,6 +4,7 @@ import { useChecksPanelContextState } from './review-state/use-checks-panel-cont
 import { useChecksPanelReviewState } from './review-state/use-checks-panel-review-state'
 import { useChecksPanelGeneration } from './review-actions/use-checks-panel-generation'
 import { useChecksPanelComposerState } from './review-actions/use-checks-panel-composer-state'
+import { useChecksPanelNgitReview } from './refresh/use-checks-panel-ngit-review'
 import { useChecksPanelForegroundEffects } from './refresh/use-checks-panel-foreground-effects'
 import { useChecksPanelGitStatusEffects } from './refresh/use-checks-panel-git-status-effects'
 import { useChecksPanelConflictRefresh } from './refresh/use-checks-panel-conflict-refresh'
@@ -23,6 +24,7 @@ import { ChecksPanelActiveContent } from './presentation/active-content'
 import { ChecksPanelLoadingAnnouncement } from './presentation/checks-panel-loading-announcement'
 import { getChecksPanelRefreshErrorBannerLine } from '../hosted-review/provider-actions/github-refresh-error-copy'
 import { useTranslate } from '@/i18n/use-translate'
+import { NgitBranchReview } from '@/components/task-page/ngit/ngit-branch-review'
 
 export default function ChecksPanel(): React.JSX.Element {
   const t = useTranslate()
@@ -32,6 +34,7 @@ export default function ChecksPanel(): React.JSX.Element {
   const generationModel = Object.assign(reviewModel, useChecksPanelGeneration(reviewModel))
   const composerModel = Object.assign(generationModel, useChecksPanelComposerState(generationModel))
   useChecksPanelForegroundEffects(composerModel)
+  useChecksPanelNgitReview(composerModel)
   useChecksPanelGitStatusEffects(composerModel)
   useChecksPanelConflictRefresh(composerModel)
   const pollingModel = Object.assign(composerModel, useChecksPanelPolling(composerModel))
@@ -91,7 +94,10 @@ export default function ChecksPanel(): React.JSX.Element {
         loading={coldChecks || coldComments}
         reviewKey={model.stateRequestKey}
       />
-      {showActive ? (
+      {model.repo && !model.isFolder && model.hostedReview?.provider === 'ngit' ? (
+        // The panel's check, comment and merge machinery is GitHub's and GitLab's alone.
+        <NgitBranchReview repo={model.repo} review={model.hostedReview} />
+      ) : showActive ? (
         <ChecksPanelActiveContent
           model={model}
           refreshError={refreshError}

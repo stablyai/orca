@@ -50,6 +50,7 @@ export type WorkspaceSourceSelectionKind =
   | 'branch'
   | 'linear'
   | 'jira'
+  | 'ngit'
 
 export type WorkspaceSourceSelection = {
   kind: WorkspaceSourceSelectionKind
@@ -198,8 +199,8 @@ export function buildWorkspaceSourceSelection(args: {
   const kind: WorkspaceSourceSelectionKind =
     provider === 'linear'
       ? 'linear'
-      : provider === 'jira'
-        ? 'jira'
+      : provider === 'jira' || provider === 'ngit'
+        ? provider
         : provider === 'gitlab'
           ? linkedWorkItem.type === 'mr'
             ? 'gitlab-mr'
@@ -210,7 +211,11 @@ export function buildWorkspaceSourceSelection(args: {
   return {
     kind,
     label:
-      provider === 'linear' || provider === 'jira' || linkedWorkItem.number === 0
+      // An ngit number is derived from its event id and means nothing to a reader.
+      provider === 'linear' ||
+      provider === 'jira' ||
+      provider === 'ngit' ||
+      linkedWorkItem.number === 0
         ? linkedWorkItem.title
         : `#${linkedWorkItem.number} ${linkedWorkItem.title}`,
     url: linkedWorkItem.url

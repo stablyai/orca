@@ -59,7 +59,7 @@ export function automationWontFire<B extends ListedBot>(
       sources.flatMap((source) =>
         isConnectorSource(source)
           ? [CONNECTOR_SOURCE_NAMES[source]]
-          : source === 'webhook'
+          : source === 'webhook' || source === 'ngit'
             ? []
             : ['Google']
       )

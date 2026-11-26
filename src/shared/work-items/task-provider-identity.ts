@@ -29,11 +29,18 @@ export type JiraTaskProviderIdentity = {
   projectKey?: string | null
 }
 
+export type NgitTaskProviderIdentity = {
+  provider: 'ngit'
+  /** `30617:<pubkey>:<identifier>` */
+  coordinate?: string | null
+}
+
 export type TaskProviderIdentity =
   | GitHubTaskProviderIdentity
   | GitLabTaskProviderIdentity
   | LinearTaskProviderIdentity
   | JiraTaskProviderIdentity
+  | NgitTaskProviderIdentity
 
 export function normalizeTaskProviderIdentity(
   provider: TaskProvider,
@@ -79,6 +86,8 @@ export function normalizeTaskProviderIdentity(
         siteUrl: normalizeNonEmptyString(raw.siteUrl),
         projectKey: normalizeNonEmptyString(raw.projectKey)
       }
+    case 'ngit':
+      return { provider, coordinate: normalizeNonEmptyString(raw.coordinate) }
   }
 }
 
@@ -112,6 +121,8 @@ export function isStoredTaskProviderIdentity(provider: TaskProvider, identity: u
       )
     case 'jira':
       return ['siteId', 'siteUrl', 'projectKey'].every((key) => isNullableOptionalString(raw[key]))
+    case 'ngit':
+      return isNullableOptionalString(raw.coordinate)
   }
 }
 
@@ -119,7 +130,8 @@ const TASK_PROVIDER_IDENTITY_FIELDS: Record<TaskProvider, readonly string[]> = {
   github: ['owner', 'repo', 'host'],
   gitlab: ['projectId', 'namespace', 'project', 'webUrl'],
   linear: ['workspaceId', 'workspaceName', 'teamId', 'teamKey'],
-  jira: ['siteId', 'siteUrl', 'projectKey']
+  jira: ['siteId', 'siteUrl', 'projectKey'],
+  ngit: ['coordinate']
 }
 
 export function areTaskProviderIdentitiesEqual(
@@ -157,6 +169,8 @@ export function taskProviderIdentityCachePart(
       return [identity.workspaceId, identity.teamId ?? identity.teamKey].filter(Boolean).join('/')
     case 'jira':
       return [identity.siteId ?? identity.siteUrl, identity.projectKey].filter(Boolean).join('/')
+    case 'ngit':
+      return identity.coordinate ?? ''
   }
 }
 

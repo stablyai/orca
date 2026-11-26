@@ -2526,6 +2526,7 @@
         "instructions": "Instructions",
         "linear": "Linear",
         "memberAccess": "{{name}} was on Who can ask when this ran.",
+        "ngit": "ngit",
         "noDeadline": "No deadline",
         "noReplyBy": "No reply by {{time}}",
         "nothingBy": "Nothing by {{time}}",
@@ -2601,6 +2602,15 @@
             "issue_created": "Issue created",
             "issue_moved": "Issue moved",
             "mentioned": "Mention"
+          },
+          "ngit": {
+            "comment": "Comment",
+            "issue_closed": "Issue closed",
+            "issue_opened": "Issue opened",
+            "pr_closed": "Pull request closed",
+            "pr_merged": "Pull request merged",
+            "pr_opened": "Pull request opened",
+            "pr_pushed": "Pull request updated"
           },
           "other": "Event",
           "slack": {

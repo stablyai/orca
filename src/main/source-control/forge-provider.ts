@@ -23,6 +23,7 @@ import {
   getGiteaRepoSlug
 } from '../gitea/client'
 import { createGiteaPullRequest } from '../gitea/pull-request-creation'
+import { ngitForgeProvider } from '../ngit/ngit-forge-provider'
 import { createGitHubPullRequest } from '../github/client/create/create-github-pull-request'
 import { getGitHubPRLookupRateLimitBlock } from '../github/client/lookup/pr-lookup-rate-limit'
 import { getPRForBranchOutcome } from '../github/client/lookup/pr-for-branch-outcome'
@@ -53,6 +54,8 @@ export type ForgeProviderRepositoryContext = HostedReviewExecutionOptions & {
   repoPath: string
   /** Resolved, never null: `local` and "unresolved" are no longer the same value. */
   executionHostId: ExecutionHostId
+  /** The branch being asked about; a repository with several forges answers per branch. */
+  branch?: string
 }
 
 export type ForgeReviewForBranchInput = ForgeProviderRepositoryContext & {
@@ -302,6 +305,8 @@ const giteaForgeProvider = {
 
 // Preserve precedence when multiple providers can interpret a remote.
 export const FORGE_PROVIDERS = [
+  // First: a nostr or GRASP remote is unambiguous, and Gitea would claim a GRASP URL.
+  ngitForgeProvider,
   gitLabForgeProvider,
   gitHubForgeProvider,
   bitbucketForgeProvider,
