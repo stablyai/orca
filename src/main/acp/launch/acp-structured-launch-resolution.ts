@@ -69,6 +69,8 @@ export type AcpStructuredLaunch = StructuredAgentCommand & {
   env: Record<string, string>
   envToDelete: string[]
   fullAccess: boolean
+  /** See `StructuredAgentLaunchBasis.toolFree`. */
+  toolFree?: true
   /** See `AcpInstructionsLaunch`. */
   sessionMeta?: Record<string, unknown>
   sessionMetaOnReopen?: true
@@ -288,6 +290,7 @@ export function acpStructuredLaunchPart(
         prefixArgs,
         args: [...prefixArgs, ...args],
         fullAccess,
+        ...(basis.toolFree ? { toolFree: true as const } : {}),
         ...(instructions?.sessionMeta
           ? {
               sessionMeta: instructions.sessionMeta,

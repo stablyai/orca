@@ -5,9 +5,8 @@ import { OWNER_ACTS_FOR } from '../../shared/bots/bot-acts-for'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { botMemoryDate } from '../../shared/bot-memory-lines'
-import type { Bot } from '../../shared/bot-types'
+import { tidyUpSupported, type Bot } from '../../shared/bot-types'
 import { botTidyUp, tidyUpChangeCount, type TidyNowRefusal } from '../../shared/bots/bot-tidy-up'
-import { lookAroundSupported } from '../../shared/bots/bot-look-around'
 import {
   type BackgroundRunWatch,
   awaitRunEnd,
@@ -64,7 +63,7 @@ export class BotTidyUpRunner {
 
   /** None of the bot's conversations is running a turn, and it may tidy at all. */
   private idle(bot: Bot): boolean {
-    return !bot.paused && lookAroundSupported(bot.agent) && !this.deps.busy(bot)
+    return !bot.paused && tidyUpSupported(bot.agent) && !this.deps.busy(bot)
   }
 
   /** Settings' and the phone's Tidy now: a run now, on whatever chats are new, even none. */

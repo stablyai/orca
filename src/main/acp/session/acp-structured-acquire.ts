@@ -26,7 +26,7 @@ import { SharedToolProcessSession } from '../../runtime/agent-session/environmen
 import { AcpStructuredOptions } from '../options/acp-structured-options'
 import { acpLaunchPermission } from '../launch/acp-launch-permission-modes'
 import { AcpStructuredPrompts } from '../requests/acp-structured-prompts'
-import { acpStructuredPermissionHandler } from '../requests/acp-structured-permission-handler'
+import { acpRunRequests, acpToolFreeLaunch } from './acp-tool-free-run'
 import { withAcpUrlElicitation } from '../requests/acp-url-elicitation'
 import { AcpLoadHistory } from '../history/acp-history-replay'
 import { asReattachHistory } from '../history/acp-reattach-history'
@@ -69,7 +69,10 @@ export async function acquireAcpStructuredSession(input: {
     }
   }
   closedBeforeSpawn()
-  const launch = await prepareAcpStructuredLaunch(deps, acquire, closedBeforeSpawn)
+  const { launch, guard } = await acpToolFreeLaunch(
+    await prepareAcpStructuredLaunch(deps, acquire, closedBeforeSpawn),
+    deps
+  )
   // The chat's account home pins its backend.
   const { spec } = launch
   let session: childState.AcpStructuredChild | null = null
@@ -109,8 +112,7 @@ export async function acquireAcpStructuredSession(input: {
       clientCapabilities: withAcpUrlElicitation(spec.dialect.clientCapabilities),
       retryBusyPrompts: spec.agent === 'omp',
       ...(spec.signIn ? { signIn: spec.signIn } : {}),
-      onPermission: acpStructuredPermissionHandler(() => session, spec, prompts),
-      onRequest: (method, params, context) => prompts.handle(method, params, context),
+      ...acpRunRequests(launch, () => session, prompts),
       onExtensionNotification: (method, params) =>
         whenLane(() => {
           if (slot.reattaching) {
@@ -150,6 +152,7 @@ export async function acquireAcpStructuredSession(input: {
   }
   // From here, cancellation closes this connection even before exit is proven.
   input.track(connection)
+  guard(connection, (reason) => input.forceClose(sessionId, reason))
   connection.subscribe((event: AcpSessionEvent) =>
     whenLane(() => {
       if (slot.lane) {
