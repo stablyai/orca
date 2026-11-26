@@ -24,7 +24,7 @@ type ProjectGroupOwnerRecord = Pick<ProjectGroup, 'id' | 'connectionId' | 'execu
 type WorktreeOwnerIndex = {
   owners: ReadonlyMap<string, IndexedWorktreeOwnerEntry>
   locationsById: ReadonlyMap<string, ResolvedWorktreeOwnerEntry | ResolvedWorktreeOwnerEntry[]>
-  matches?: ReadonlyMap<string, readonly WorktreeOwnerRecord[]>
+  matchesByKey?: Map<string, readonly WorktreeOwnerRecord[]>
 }
 
 // Immutable-slice indexes avoid rescans on unrelated writes inside retained selectors and interaction paths.
@@ -280,19 +280,27 @@ export function findIndexedWorktrees(
   }
   resolveIndexedWorktreeOwner(worktreesByRepo, worktreeId)
   const index = worktreeOwnerIndexCache.get(worktreesByRepo)
-  if (!index) {
+  const locations = index?.locationsById.get(worktreeId)
+  if (!index || !locations) {
     return NO_DETECTED_WORKTREES
   }
-  if (!index.matches) {
-    const matches = new Map<string, WorktreeOwnerRecord[]>()
-    for (const worktrees of Object.values(worktreesByRepo)) {
-      for (const worktree of worktrees) {
-        addMatchingWorktree(matches, worktree.id, worktree)
-      }
-    }
-    index.matches = matches
+  const key = catalogOwnerKey(worktreeId, executionHostId)
+  const cached = index.matchesByKey?.get(key)
+  if (cached) {
+    return cached
   }
-  return index.matches.get(catalogOwnerKey(worktreeId, executionHostId)) ?? NO_DETECTED_WORKTREES
+  const owners = Array.isArray(locations)
+    ? locations.map((entry) => entry.owner)
+    : [locations.owner]
+  const result = executionHostId
+    ? owners.filter((owner) => parseExecutionHostId(owner.hostId)?.id === executionHostId)
+    : owners
+  if (result.length === 0) {
+    return NO_DETECTED_WORKTREES
+  }
+  index.matchesByKey ??= new Map()
+  index.matchesByKey.set(key, result)
+  return result
 }
 
 /** Directory lookups retain first-publication precedence even when owner evidence is ambiguous. */
