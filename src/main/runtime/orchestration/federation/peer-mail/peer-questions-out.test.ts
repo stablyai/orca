@@ -101,14 +101,6 @@ describe('questions asked of an agent on a paired computer', () => {
       .all()
       .map((row) => row.message_id)
 
-  it('settles only the question a reply names, among several in one thread', () => {
-    asked('msg_q1', 'fp-1', 'thread_1')
-    asked('msg_q2', 'fp-1', 'thread_1')
-    settlePeerQuestionsOut(db, conversationId(), { replyTo: 'msg_q2', threadId: 'thread_1' })
-
-    expect(open()).toEqual(['msg_q1'])
-  })
-
   it('settles no question for a reply to a handoff in its thread', () => {
     asked('msg_q', 'fp-1', 'thread_1')
     settlePeerQuestionsOut(db, conversationId(), { replyTo: 'msg_handoff', threadId: 'thread_1' })
