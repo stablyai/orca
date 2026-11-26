@@ -27,7 +27,9 @@ export const ORCHESTRATION_WORKER_KEEP_OPEN_METHODS = [
     handler: (params, { runtime }) => {
       const paneKey = resolveWorkerPaneKey(runtime, params)
       return {
-        autoClose: paneKey ? paneAutoCloseState(runtime.getOrchestrationDb(), paneKey) : null
+        autoClose: paneKey
+          ? paneAutoCloseState(runtime.getOrchestrationDb(), runtime, paneKey)
+          : null
       }
     }
   }),
@@ -52,7 +54,7 @@ export const ORCHESTRATION_WORKER_KEEP_OPEN_METHODS = [
           runtime.isWorkerAgentInTurn(resource) ? null : Date.now()
         )
       }
-      return { autoClose: paneAutoCloseState(db, paneKey) }
+      return { autoClose: paneAutoCloseState(db, runtime, paneKey) }
     }
   }),
   defineOrchestrationMethod({

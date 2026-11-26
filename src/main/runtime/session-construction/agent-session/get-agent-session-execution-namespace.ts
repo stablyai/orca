@@ -210,6 +210,8 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
       terminalImageViewerSupported: _caller.terminalImageViewerSupported,
       launchRuntime,
       terminalKittyKeyboardProtocol: request.terminalKittyKeyboardProtocol,
+      terminalColorQueryReplies: request.terminalColorQueryReplies,
+      terminalViewAttributes: request.terminalViewAttributes,
       presentation: request.presentation ?? 'background',
       tabId: request.placement?.tabId,
       leafId: request.placement?.leafId,

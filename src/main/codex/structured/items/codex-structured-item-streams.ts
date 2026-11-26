@@ -3,17 +3,19 @@ import {
   type AgentJournalRowAttribution
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { createAgentSessionDeltaCoalescer } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
+import { StructuredAgentSessionLiveTextRows } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-live-text-rows'
 import { CodexItemStreamRetention } from './codex-item-stream-retention'
+import { bindCodexCheckpointLiveText, seedCodexKeptStreamText } from './codex-kept-item-stream-text'
 import { appendCodexItemAndPublish } from '../journal/codex-structured-journal-sink'
-import { codexJournalItem, codexStreamingJournalItem } from './codex-structured-item-translation'
-import { withJournalReasoningLifecycle } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-reasoning-row'
+import { codexJournalItem } from './codex-structured-item-translation'
+import { codexRunningStreamBody, codexShowsLiveText } from './codex-streamed-item-body'
 import {
   codexStructuredItemKey,
-  MAX_CODEX_ITEM_STREAM_PENDING_PATCHES,
   MAX_CODEX_ITEM_STREAM_PENDING_PATCH_BYTES,
   MAX_CODEX_ITEM_STREAM_RETAINED_BYTES,
   codexItemStreamState,
-  pendingPatchBytes
+  pendingPatchBytes,
+  trimCodexPendingPatches
 } from './codex-structured-item-stream-bounds'
 import {
   CODEX_ITEM_STREAM_TYPES,
@@ -53,6 +55,7 @@ export function createCodexStructuredItemStreams(
   let retainedPatchBytes = 0
 
   const forgetState = (key: string): void => {
+    live.forget(key)
     coalescer.forget(key)
     states.forget(key)
     checkpointLengths.delete(key)
@@ -82,30 +85,20 @@ export function createCodexStructuredItemStreams(
   }
 
   const trimPendingPatches = (): void => {
-    while (pendingPatches.size > MAX_CODEX_ITEM_STREAM_PENDING_PATCHES) {
-      const oldest = pendingPatches.keys().next().value
-      if (typeof oldest !== 'string') {
-        break
-      }
-      const pending = pendingPatches.get(oldest)
-      if (pending) {
-        retainedPatchBytes = Math.max(0, retainedPatchBytes - pendingPatchBytes(pending))
-      }
-      pendingPatches.delete(oldest)
-    }
+    retainedPatchBytes = Math.max(0, retainedPatchBytes - trimCodexPendingPatches(pendingPatches))
   }
 
   const append = (key: string, state: CodexItemStreamState, text: string): boolean => {
-    const translated = codexStreamingJournalItem(state.item, text)
-    if (!translated.body) {
-      return true
-    }
-    const body = withJournalReasoningLifecycle(translated.body, { state: 'running' })
-    return appendCodexItemAndPublish(deps.sink, state.identity, body, {
-      ...attributionOf(key),
-      ...(state.startedAt === undefined ? {} : { observedAt: state.startedAt })
-    }).accepted
+    const body = codexRunningStreamBody(state.item, text)
+    const observed = state.startedAt === undefined ? {} : { observedAt: state.startedAt }
+    const committed = codexShowsLiveText(state.item) ? live.committed(key) : undefined
+    const options = { ...attributionOf(key), ...observed }
+    return (
+      !body ||
+      appendCodexItemAndPublish(deps.sink, state.identity, body, options, committed).accepted
+    )
   }
+  const isText = (key: string): boolean => codexShowsLiveText(states.get(key)?.item)
 
   const shouldPersist = (key: string, textLength: number): boolean => {
     const checkpointLength = checkpointLengths.get(key) ?? 0
@@ -132,19 +125,26 @@ export function createCodexStructuredItemStreams(
     maxTotalRetainedBytes: deps.maxTotalRetainedBytes,
     isProtected: (key) => states.isPersistent(key),
     schedule: deps.schedule,
-    shouldEmit: shouldPersist,
-    emit: (key, text) => {
-      return persist(key, text, false)
-    }
+    // Below the gate only a live publication is due, which reads text only for a viewer.
+    shouldEmit: (key, textLength) => {
+      const save = shouldPersist(key, textLength)
+      if (!save && isText(key)) {
+        live.publish()
+      }
+      return save
+    },
+    emit: (key, text) => persist(key, text, false)
   })
 
-  // Text past its last checkpoint is saved before a hand-off's last ack and on the daemon's ask.
-  const releaseLiveText = deps.sink.bindLiveText?.({
-    read: () => [],
-    has: () => coalescer.someLength((key, length) => length !== (checkpointLengths.get(key) ?? 0)),
-    flush: () => void flush(),
-    deferrable: true
-  })
+  const releaseLiveText = bindCodexCheckpointLiveText(deps.sink, coalescer, checkpointLengths, () =>
+    flush()
+  )
+  const live = new StructuredAgentSessionLiveTextRows(
+    deps.sink,
+    (key, maxLength) => (isText(key) ? coalescer.textWithin(key, maxLength) : undefined),
+    (key, text) => codexRunningStreamBody(states.get(key)?.item, text),
+    coalescer.streamOf
+  )
 
   const ensureState = (
     threadId: string,
@@ -289,14 +289,8 @@ export function createCodexStructuredItemStreams(
     },
     seedText: (threadId, itemId, text) => {
       const key = codexStructuredItemKey(threadId, itemId)
-      if (text === null) {
-        heldUntilEnd.add(key)
-        return
-      }
-      // The row already holds this text: it is where the stream resumes, not a change to save.
-      if (states.get(key) && !coalescer.snapshot(key) && coalescer.append(key, text)) {
-        checkpointLengths.set(key, text.length)
-      }
+      const known = states.get(key) !== undefined
+      seedCodexKeptStreamText(key, text, known, coalescer, checkpointLengths, heldUntilEnd)
     },
     forget: (threadId, itemId) => {
       const key = codexStructuredItemKey(threadId, itemId)
@@ -305,6 +299,7 @@ export function createCodexStructuredItemStreams(
     flush,
     dispose: () => {
       releaseLiveText?.()
+      live.dispose()
       coalescer.dispose()
       states.clear()
       checkpointLengths.clear()

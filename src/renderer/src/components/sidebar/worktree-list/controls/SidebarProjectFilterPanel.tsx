@@ -170,6 +170,7 @@ export function SidebarProjectFilterPanel({
               <RepoBadgeLabel
                 name={repo.displayName}
                 color={repo.badgeColor}
+                repo={repo}
                 className="max-w-full"
               />
               {repo.connectionId && (
@@ -209,8 +210,8 @@ function SelectedProjectPills({
           <RepoBadgeLabel
             name={repo.displayName}
             color={repo.badgeColor}
+            repo={repo}
             className="max-w-[8rem]"
-            badgeClassName="size-1.5"
           />
           <Button
             type="button"
