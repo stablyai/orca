@@ -5,11 +5,24 @@ import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { translate } from '@/i18n/i18n'
 import type { TerminalClipboardPasteResult } from '../../clipboard/terminal-clipboard-paste'
 
+const PENDING_NATIVE_PASTE_TIMEOUT_MS = 1000
+
+let pendingNativePastePane: ManagedPane | null = null
+let pendingNativePasteTimerId: number | null = null
+
+function clearPendingUnreadWindowsClipboardNativePaste(): void {
+  pendingNativePastePane = null
+  if (pendingNativePasteTimerId !== null) {
+    window.clearTimeout(pendingNativePasteTimerId)
+    pendingNativePasteTimerId = null
+  }
+}
+
 /** Main cannot read CF_HDROP-only Windows copies (e.g. Zoom); a native paste event lists their files for the pane's paste listener. */
 export function requestNativePasteForUnreadWindowsClipboard(
   result: TerminalClipboardPasteResult,
   pane: ManagedPane
-): void {
+): boolean {
   if (
     result.status === 'skipped' &&
     result.reason === 'empty' &&
@@ -18,8 +31,30 @@ export function requestNativePasteForUnreadWindowsClipboard(
     !isWebClientLocation() &&
     document.activeElement === pane.terminal.textarea
   ) {
-    window.api.ui.performNativePaste()
+    clearPendingUnreadWindowsClipboardNativePaste()
+    pendingNativePastePane = pane
+    pendingNativePasteTimerId = window.setTimeout(
+      clearPendingUnreadWindowsClipboardNativePaste,
+      PENDING_NATIVE_PASTE_TIMEOUT_MS
+    )
+    try {
+      window.api.ui.performNativePaste()
+    } catch (error) {
+      clearPendingUnreadWindowsClipboardNativePaste()
+      throw error
+    }
+    return true
   }
+  return false
+}
+
+/** Consume the one-shot fallback armed after main's clipboard read returned empty on Windows. */
+export function consumeUnreadWindowsClipboardNativePaste(pane: ManagedPane): boolean {
+  if (pendingNativePastePane !== pane) {
+    return false
+  }
+  clearPendingUnreadWindowsClipboardNativePaste()
+  return true
 }
 
 /** Snapshot during dispatch: clipboardData is unreadable once the paste event returns. */
