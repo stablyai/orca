@@ -38,6 +38,8 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.currentRequests',
   'agentSession.subscribe',
   'agentSession.unsubscribe',
+  // Whether the phone's chat is on screen; gated on agent-session.live-text-viewer.v1.
+  'agentSession.liveTextShown',
   // Every session's status on one stream: the phone's chat reads the host's "Stopping…" from it.
   'agentSession.subscribeStatus',
   // One visual from the chat's own scratch folder, for the transcript's `::orca-visual` lines.

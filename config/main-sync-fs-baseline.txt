@@ -111,7 +111,7 @@
 36 src/main/codex-accounts/legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain-script-harness.ts
 6 src/main/codex-accounts/legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain-script-interference-shims.ts
 1 src/main/codex-accounts/login/codex-login-auth-snapshot.ts
-4 src/main/codex-accounts/managed-homes/codex-config-mirror.ts
+2 src/main/codex-accounts/managed-homes/codex-config-mirror.ts
 5 src/main/codex-accounts/managed-homes/codex-managed-home-lifecycle.ts
 6 src/main/codex-accounts/managed-homes/codex-managed-home-path.ts
 1 src/main/codex-accounts/managed-homes/guest-codex-account-homes.ts
@@ -291,7 +291,6 @@
 2 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts
 1 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
 2 src/main/native-chat/transcript-filesystem/process/wsl-transcript-fs-process-spawn.ts
-2 src/main/native-chat/transcript-hermes-sqlite.ts # why: page and signal reads stat the sqlite file once per read, from the opencode sqlite worker handler
 2 src/main/node-runtime/managed-runtime-release-install.ts
 7 src/main/node-runtime/managed-runtime-release.ts
 11 src/main/notebook/python-environments.ts

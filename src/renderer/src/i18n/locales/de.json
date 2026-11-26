@@ -1239,6 +1239,11 @@
       "keywordDelay": "Verzögerung",
       "keywordCooldown": "Wartezeit",
       "keywordSecurity": "Sicherheit"
+    },
+    "mcpServers": {
+      "agents": {
+        "blocked": "Durch die Claude-Einstellungen deiner Organisation blockiert"
+      }
     }
   },
   "menu": {
@@ -6255,9 +6260,7 @@
           "aed1623b1e": "Schließen",
           "eab8b45238": "Fehler kopieren",
           "a23b22d16f": "Kopiert",
-          "74fc00776f": "Fehlerdetails",
-          "ca3b225195": "Automatische Branch-Benennung fehlgeschlagen",
-          "couldNotGenerateBranchName": "Orca konnte aus der ersten Agentennachricht keinen Branch-Namen für <name>{{name}}</name> erzeugen."
+          "74fc00776f": "Fehlerdetails"
         },
         "CreateProjectLocationField": {
           "95548e33bf": "Übergeordneten Ordner auswählen…",
@@ -6676,9 +6679,6 @@
           "0f33af979b": "Teil-Checkout. Dateien außerhalb dieser Pfade befinden sich nicht auf dem Datenträger.",
           "4f964d5e8c": "Teil-Checkout",
           "7d517f82e2": "Primär",
-          "4eba2ea99e": "Automatische Namensvergabe fehlgeschlagen. Zum Anzeigen der Details klicken.",
-          "74522ee457": "Umbenennen fehlgeschlagen",
-          "02e19349f4": "Automatisches Umbenennen fehlgeschlagen: Fehler anzeigen",
           "691ccfd622": "Wird gelöscht…",
           "deleteFailed": "Löschen fehlgeschlagen",
           "35ccfe2475": "Projekt {{value0}}",
@@ -12853,6 +12853,8 @@
             "unverifiable": "Nicht abgeschlossen: Orca konnte nicht feststellen, was auf diesem Server läuft. Erneut versuchen, sobald der Host erreichbar ist.",
             "migration": "Nicht abgeschlossen: Eine Verschiebung auf diesen Server ist noch nicht abgeschlossen. Diese zuerst fortsetzen.",
             "deferred": "Noch nicht abgeschlossen: Der Server ist dafür noch nicht bereit. Später erneut versuchen.",
+            "stopIncomplete": "Nicht abgeschlossen: Orca konnte nicht bestätigen, dass der aktuelle Server beendet wurde, und hat das Update daher nicht gestartet. Vor einem erneuten Versuch orcad.log im Installationsordner des Servers unter ~/.orca-remote auf dem Host prüfen.",
+            "rollbackStopIncomplete": "Nicht abgeschlossen: Orca konnte nicht bestätigen, dass der aktuelle Server beendet wurde, und hat daher nicht zurückgesetzt. Vor einem erneuten Versuch orcad.log im Installationsordner des Servers unter ~/.orca-remote auf dem Host prüfen.",
             "failed": "Orca konnte diesen Vorgang auf dem Server nicht abschließen. Erneut versuchen.",
             "defaultServer": "Nicht abgeschlossen: Dieser Server ist der Standard-Host für neue Projekte. Vor dem Stoppen unter „Neue Projekte öffnen auf“ einen anderen Host auswählen.",
             "wslMoveRunning": "Nicht abgeschlossen: Ein Projekt wird auf diesen Server verschoben. Orca aktualisiert ihn, sobald der Vorgang abgeschlossen ist."
@@ -25189,10 +25191,7 @@
         "lastItem": "Letztes Element",
         "previous": "Vorheriges Element",
         "next": "Nächstes Element",
-        "linkCount": "{{count}} Links",
-        "reply": "Antworten",
-        "replyAbove": "Antworten, weiter oben",
-        "replyBelow": "Antworten, weiter unten"
+        "subWhere": "Element {{number}} · {{chat}}"
       },
       "activity": {
         "linked": "hat {{links}} verknüpft",

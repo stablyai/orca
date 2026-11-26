@@ -1,6 +1,7 @@
 import type { CrashReportDetailValue } from '../../../shared/crash-reporting/crash-reporting'
 import { readSwapVolumeFreeSpace } from './swap-volume-free-space'
 import { notePreGoneHostMemorySample } from './pre-gone-pty-tree-memory'
+import { sampleMainMemoryFootprint } from '../../memory/main-memory-spike-capture'
 import {
   getSystemMemoryDetails,
   SYSTEM_MEMORY_KEY_PREFIX,
@@ -90,6 +91,7 @@ async function mergeSwapVolumeFreeSpace(issuedOnTick: number): Promise<void> {
 export async function samplePreGoneSystemMemory(nowMs: number = Date.now()): Promise<void> {
   // Commit host memory before statfs, which may stall under paging pressure.
   const tick = ++sampleTick
+  void sampleMainMemoryFootprint()
   if (!commitHostMemorySample(nowMs)) {
     return
   }

@@ -952,6 +952,11 @@
       "keywordDelay": "délai",
       "keywordCooldown": "attente",
       "keywordSecurity": "sécurité"
+    },
+    "mcpServers": {
+      "agents": {
+        "blocked": "Bloqué par les paramètres Claude de votre organisation"
+      }
     }
   },
   "menu": {
@@ -6065,9 +6070,7 @@
           "aed1623b1e": "Fermer",
           "eab8b45238": "Copier l'erreur",
           "a23b22d16f": "Copied",
-          "74fc00776f": "Détails de l'erreur",
-          "ca3b225195": "Échec du nommage automatique de la branche",
-          "couldNotGenerateBranchName": "Orca n’a pas pu générer de nom de branche pour <name>{{name}}</name> à partir du premier message de l’agent."
+          "74fc00776f": "Détails de l'erreur"
         },
         "CreateProjectLocationField": {
           "95548e33bf": "Choisir un dossier parent...",
@@ -6507,9 +6510,6 @@
           "0f33af979b": "Checkout partiel. Les fichiers hors de ces chemins ne sont pas sur le disque.",
           "4f964d5e8c": "sparse",
           "7d517f82e2": "principal",
-          "4eba2ea99e": "Échec du nommage automatique. Cliquez pour voir les détails.",
-          "74522ee457": "échec du renommage",
-          "02e19349f4": "Échec du renommage auto : voir l'erreur",
           "691ccfd622": "Suppression…",
           "deleteFailed": "Échec de la suppression",
           "35ccfe2475": "Projet {{value0}}",
@@ -12823,6 +12823,8 @@
             "unverifiable": "Non effectué : Orca n'a pas pu confirmer ce qui tourne sur ce serveur. Réessayez lorsque l'hôte est joignable.",
             "migration": "Non effectué : un déplacement vers ce serveur est inachevé. Reprenez-le d'abord.",
             "deferred": "Pas encore effectué : le serveur n'est pas prêt pour cela. Réessayez plus tard.",
+            "stopIncomplete": "Non effectué : Orca n'a pas pu confirmer l'arrêt du serveur actuel et n'a donc pas lancé la mise à jour. Consultez orcad.log dans le dossier d'installation du serveur, sous ~/.orca-remote sur l'hôte, avant de réessayer.",
+            "rollbackStopIncomplete": "Non effectué : Orca n'a pas pu confirmer l'arrêt du serveur actuel et n'est donc pas revenu en arrière. Consultez orcad.log dans le dossier d'installation du serveur, sous ~/.orca-remote sur l'hôte, avant de réessayer.",
             "failed": "Orca n'a pas pu terminer cette action sur le serveur. Réessayez.",
             "defaultServer": "Non effectué : ce serveur est l’hôte par défaut des nouveaux projets. Choisissez-en un autre dans « Les nouveaux projets s’ouvrent sur » avant de l’arrêter.",
             "wslMoveRunning": "Non effectué : un projet est en cours de déplacement vers ce serveur. Orca le mettra à jour une fois le déplacement terminé."
@@ -25779,10 +25781,7 @@
         "lastItem": "Dernier élément",
         "previous": "Élément précédent",
         "next": "Élément suivant",
-        "linkCount": "{{count}} liens",
-        "reply": "Répondre",
-        "replyAbove": "Répondre, plus haut",
-        "replyBelow": "Répondre, plus bas"
+        "subWhere": "Élément {{number}} · {{chat}}"
       },
       "activity": {
         "linked": "a lié {{links}}",

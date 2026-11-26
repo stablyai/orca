@@ -253,6 +253,9 @@ function subagentRowBlock(
   const operation = state === 'working' ? child.operation : undefined
   // A new run's silence must not repeat the previous run's result.
   const lastMessage = child.lastMessage ?? (saved?.run === run ? saved.lastMessage : undefined)
+  // A foreground child written outside any turn (a Claude forked command) gets its own group; the shared
+  // one would fold a later run into an earlier run's row.
+  const turnlessGroup = child.residency === 'foreground' ? (parent ?? id) : THREAD_GROUP
   return {
     type: 'subagent',
     id,
@@ -273,7 +276,7 @@ function subagentRowBlock(
         }
       : {}),
     ...(lastMessage !== undefined ? { lastMessage } : {}),
-    groupId: saved?.groupId ?? (scope.kind === 'turn' ? scope.turnItemId : THREAD_GROUP),
+    groupId: saved?.groupId ?? (scope.kind === 'turn' ? scope.turnItemId : turnlessGroup),
     ...(parent !== undefined ? { parentId: parent } : {}),
     run,
     ...(!running && child.outcomeBasis !== undefined ? { outcomeBasis: child.outcomeBasis } : {}),

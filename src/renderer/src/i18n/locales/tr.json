@@ -1080,7 +1080,7 @@
         "importInvalid": "{{count}} satır okunamadı",
         "importUndecryptable": "{{count}} kayıt tarayıcı tarafından korunuyor. Bu kayıtları tarayıcıdan CSV olarak dışa aktarın.",
         "imported": "{{count}} parola içe aktarıldı",
-        "deleteAllConfirmDescription": "{{profile}} profilinde kayıtlı tüm parolalar kalıcı olarak silinecek. Bu işlem geri alınamaz.",
+        "deleteAllConfirmDescription": "{{profile}} profilindeki tüm kayıtlı parolalar, notlar ve parolası hiç kaydedilmeyecek siteler kalıcı olarak silinecek. Bu işlem geri alınamaz.",
         "deletedAll": "Parola verileri silindi",
         "form": {
           "invalidSite": "example.com gibi bir web sitesi adresi girin.",
@@ -2034,6 +2034,11 @@
       "results": "Ayar arama sonuçları",
       "noResults": "“{{value0}}” ile eşleşen ayar yok",
       "moreResults": "{{value0}} sonuç daha var · daraltmak için yazmaya devam edin"
+    },
+    "mcpServers": {
+      "agents": {
+        "blocked": "Kuruluşunuzun Claude ayarları tarafından engellendi"
+      }
     }
   },
   "menu": {
@@ -7287,10 +7292,7 @@
           "eab8b45238": "Hatayı kopyala",
           "a23b22d16f": "Kopyalandı",
           "74fc00776f": "Hata ayrıntıları",
-          "ca3b225195": "Branch otomatik adlandırması başarısız oldu",
-          "couldNotGenerateBranchName": "Orca'da <name>{{name}}</name> için ilk ajan mesajından bir branch adı oluşturulamadı.",
           "tryAgain": "Yeniden deneyin",
-          "namingBranch": "Branch adlandırılıyor…",
           "errorDetailsAt": "Hata ayrıntıları · {{time}}",
           "reasonNothingYet": "Henüz branch'e ad vermek için kullanılabilecek değişiklik yok.",
           "reasonBranchChanged": "Orca branch'i adlandırırken branch değişti.",
@@ -7304,8 +7306,7 @@
           "reasonNoDistinctName": "Oluşturulan ad mevcut adla aynı.",
           "reasonFirstMessageUnavailable": "Orca bu çalışma alanındaki ilk mesajı bulamadı.",
           "reasonAlreadyNamed": "Bu çalışma alanı zaten yeniden adlandırılmış.",
-          "reasonUnavailable": "Orca artık bu branch'i adlandıramıyor.",
-          "branchNameKept": "Branch adı korundu"
+          "reasonUnavailable": "Orca artık bu branch'i adlandıramıyor."
         },
         "CreateProjectLocationField": {
           "95548e33bf": "Üst klasör seçin...",
@@ -7733,9 +7734,6 @@
           "0f33af979b": "Kısmi checkout. Bu yolların dışındaki dosyalar diskte bulunmaz.",
           "4f964d5e8c": "sparse",
           "7d517f82e2": "birincil",
-          "4eba2ea99e": "Otomatik adlandırma başarısız oldu. Ayrıntıları görmek için tıklayın.",
-          "74522ee457": "yeniden adlandırma başarısız oldu",
-          "02e19349f4": "Otomatik yeniden adlandırma başarısız oldu: hatayı görüntüle",
           "691ccfd622": "Siliniyor…",
           "deleteFailed": "Silme başarısız",
           "35ccfe2475": "Proje {{value0}}",
@@ -14049,6 +14047,8 @@
             "unverifiable": "Tamamlanamadı: Orca bu sunucuda nelerin çalıştığını doğrulayamadı. Ana makineye erişilebildiğinde yeniden deneyin.",
             "migration": "Tamamlanamadı: bu sunucuya taşıma işlemi henüz bitmedi. Önce bu işlemi sürdürün.",
             "deferred": "Henüz tamamlanamadı: sunucu bu işleme hazır değil. Daha sonra yeniden deneyin.",
+            "stopIncomplete": "Tamamlanamadı: Orca mevcut sunucunun kapandığını doğrulayamadığı için güncellemeyi başlatmadı. Yeniden denemeden önce ana makinede ~/.orca-remote altındaki sunucu kurulum klasöründe bulunan orcad.log dosyasını kontrol edin.",
+            "rollbackStopIncomplete": "Tamamlanamadı: Orca mevcut sunucunun kapandığını doğrulayamadığı için önceki sürüme dönmedi. Yeniden denemeden önce ana makinede ~/.orca-remote altındaki sunucu kurulum klasöründe bulunan orcad.log dosyasını kontrol edin.",
             "failed": "Orca bu işlemi sunucuda tamamlayamadı. Yeniden deneyin.",
             "defaultServer": "Tamamlanamadı: bu sunucu yeni projeler için varsayılan ana makine. Durdurmadan önce Yeni projelerin açılacağı yer bölümünden başka bir ana makine seçin.",
             "wslMoveRunning": "Tamamlanamadı: bu sunucuya bir proje taşınıyor. Taşıma bittiğinde Orca sunucuyu günceller."
@@ -28203,10 +28203,7 @@
         "place": "{{index}} / {{total}}",
         "deleted": "Bu öğe silindi.",
         "loading": "Öğe yükleniyor…",
-        "linkCount": "{{count}} bağlantı",
-        "reply": "Yanıtla",
-        "replyAbove": "Yukarıdaki soruyu yanıtla",
-        "replyBelow": "Aşağıdaki soruyu yanıtla"
+        "subWhere": "Öğe {{number}} · {{chat}}"
       },
       "activity": {
         "linked": "{{links}} bağlantılarını bağladı",
@@ -30004,7 +30001,6 @@
         "cancel": "İptal",
         "cancelRunning": "Oluşturmayı iptal et",
         "edit": "Açıklamayı düzenle",
-        "realPerson": "Avatarlar gerçek kişileri gösteremez. Bunun yerine bir karakter tarif edin.",
         "signedOut": "{{agent}} oturumu açık değil. Oturum açıp yeniden deneyin.",
         "usageLimit": "{{agent}} kullanım sınırına ulaştı. Daha sonra yeniden deneyin.",
         "noImage": "{{agent}} bir görsel oluşturmadı. Açıklamanızı farklı sözcüklerle yazmayı deneyin.",
