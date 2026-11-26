@@ -25685,7 +25685,41 @@
         "about": "About Claude usage polling"
       },
       "organizationSuffix": "Organization ···{{suffix}}",
-      "personalOrganization": "Personal"
+      "personalOrganization": "Personal",
+      "rotation": {
+        "preferredTitle": "Preferred accounts",
+        "preferredDescription": "Used first, in the order you check them. Orca also switches back to one once its 5-hour use is under half.",
+        "title": "Switch accounts automatically near limits",
+        "description": "When the selected account nears its 5-hour or weekly limit, Orca gives its folder the login of an account with no running Claude sessions. Running sessions continue on the new login. Accounts on this Mac only.",
+        "externalRotator": "Another rotation tool on this Mac (~/.claude/rotate) is on, so Orca leaves the logins alone. Turn that tool off to let Orca switch accounts.",
+        "fiveHour": "Switch at 5-hour use",
+        "weekly": "Switch at weekly use",
+        "orderTitle": "Switch to",
+        "orderPrefer": "Preferred accounts first",
+        "orderReset": "Soonest weekly reset",
+        "status": {
+          "unnamed": "an unnamed account",
+          "noAccounts": "Add at least two Claude accounts on this Mac to switch between them.",
+          "pending": "Checking the last switch. New switches wait until it is confirmed.",
+          "noCandidate": "The selected account is at its limit and no other account is free. Close sessions on another account or wait for a reset.",
+          "lastSwitch": "Last switch {{when}}: {{from}} to {{to}}.",
+          "next": "Next account to switch to: {{account}}.",
+          "checked": "Last checked {{when}}."
+        },
+        "notice": {
+          "fiveHourLimit": "5-hour {{percent}}%",
+          "weeklyLimit": "weekly {{percent}}%",
+          "title": "Claude account rotation",
+          "unnamed": "another account",
+          "switchedOver": "{{from}} reached {{limits}}. Claude now uses {{to}}.",
+          "switchedPreferred": "Claude moved from {{from}} back to the preferred account {{to}}.",
+          "switchedSoonerReset": "Claude moved from {{from}} to {{to}}, whose weekly limit resets sooner.",
+          "noCandidate": "Reached {{limits}}, but no other account is free to switch to. Close sessions on another account or wait for a reset.",
+          "reverted": "A running Claude session kept the old login, so the last switch was undone.",
+          "revertFailed": "Could not undo a switch that a running session overwrote. Check the account folders in Settings.",
+          "unexpectedAccount": "After a switch, a folder signed in to an account Orca did not expect. Check the account folders in Settings."
+        }
+      }
     },
     "codex": {
       "usageSignInLabel": "Signed out",

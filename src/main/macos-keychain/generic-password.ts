@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { runProcess } from '@orca/process-host'
 
 const KEYCHAIN_COMMAND_TIMEOUT_MS = 3_000
 
@@ -100,5 +101,72 @@ export async function readKeychainPassword(
       return null
     }
     throw error
+  }
+}
+
+// security -i reads one command per line and cuts lines past this length.
+const SECURITY_INTERACTIVE_LINE_LIMIT = 4032
+
+function securityTargetIsSafe(...values: string[]): boolean {
+  return values.every((value) => value !== '' && !/[\r\n"\\]/.test(value))
+}
+
+export function keychainPasswordFitsInteractiveWrite(
+  service: string,
+  account: string,
+  value: string
+): boolean {
+  return securityWriteLine(service, account, value).length <= SECURITY_INTERACTIVE_LINE_LIMIT
+}
+
+function securityWriteLine(service: string, account: string, value: string): string {
+  const hex = Buffer.from(value, 'utf8').toString('hex')
+  return `add-generic-password -U -a "${account}" -s "${service}" -X "${hex}"\n`
+}
+
+/** Writes through stdin so the value never appears in argv; errors never carry security output. */
+export async function writeKeychainPassword(
+  service: string,
+  account: string,
+  value: string
+): Promise<void> {
+  if (process.platform !== 'darwin') {
+    throw new Error('The macOS Keychain is unavailable on this host.')
+  }
+  if (!securityTargetIsSafe(service, account)) {
+    throw new Error('The macOS Keychain item name is invalid.')
+  }
+  const line = securityWriteLine(service, account, value)
+  if (line.length > SECURITY_INTERACTIVE_LINE_LIMIT) {
+    throw new Error('The value exceeds the macOS Keychain command limit.')
+  }
+  let ok = false
+  try {
+    const result = await runProcess({
+      program: '/usr/bin/security',
+      args: ['-i'],
+      input: line,
+      timeoutMs: KEYCHAIN_COMMAND_TIMEOUT_MS,
+      maxOutputBytes: 64 * 1024
+    })
+    ok = result.code === 0 && !result.timedOut && !result.signal
+  } catch {
+    ok = false
+  }
+  if (!ok) {
+    throw new Error(`Could not update macOS Keychain item ${service}.`)
+  }
+}
+
+export async function deleteKeychainPassword(service: string, account: string): Promise<void> {
+  if (process.platform !== 'darwin') {
+    return
+  }
+  try {
+    await execSecurityCommand(['delete-generic-password', '-s', service, '-a', account])
+  } catch (error) {
+    if (!isKeychainNotFoundError(error)) {
+      throw new Error(`Could not delete macOS Keychain item ${service}.`)
+    }
   }
 }
