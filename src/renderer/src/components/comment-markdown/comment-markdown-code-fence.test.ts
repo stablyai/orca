@@ -3,7 +3,7 @@ import { unified } from 'unified'
 import { visit } from 'unist-util-visit'
 import { describe, expect, it } from 'vitest'
 import {
-  isConfirmedClosingFence,
+  createClosingFenceCheck,
   MARKDOWN_CLOSING_FENCE,
   remarkMarkdownClosingFence
 } from './comment-markdown-code-fence'
@@ -12,10 +12,10 @@ const parser = unified().use(remarkParse).use(remarkMarkdownClosingFence)
 
 function confirmed(authored: string, drawn = authored): boolean[] {
   const result: boolean[] = []
+  const isConfirmed = createClosingFenceCheck(authored, drawn)
   visit(parser.parse(drawn), 'code', (node) => {
     result.push(
-      node.data?.hProperties?.[MARKDOWN_CLOSING_FENCE] === 'true' &&
-        isConfirmedClosingFence({ authored, drawn }, node.position)
+      node.data?.hProperties?.[MARKDOWN_CLOSING_FENCE] === 'true' && isConfirmed(node.position)
     )
   })
   return result

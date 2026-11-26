@@ -5,7 +5,10 @@ import remarkParse from 'remark-parse'
 import type { CommentMarkdownExtension } from './CommentMarkdown'
 import { useChatMathRendering } from './chat-markdown-math-rendering'
 import { rehypeWordFade } from './comment-markdown-word-fade'
-import { CommentMarkdownBlockSourceContext } from './comment-markdown-code-fence'
+import {
+  CommentMarkdownClosingFenceContext,
+  createClosingFenceCheck
+} from './comment-markdown-code-fence'
 import {
   splitMarkdownTopLevelBlocks,
   type HtmlRendersAsText,
@@ -115,11 +118,11 @@ export const MemoizedMarkdown = React.memo(function DeferredMarkdown({
   return authoredCodeFenceSource === undefined ? (
     markdown
   ) : (
-    <CommentMarkdownBlockSourceContext.Provider
-      value={{ authored: authoredCodeFenceSource, drawn: props.children ?? '' }}
+    <CommentMarkdownClosingFenceContext.Provider
+      value={createClosingFenceCheck(authoredCodeFenceSource, props.children ?? '')}
     >
       {markdown}
-    </CommentMarkdownBlockSourceContext.Provider>
+    </CommentMarkdownClosingFenceContext.Provider>
   )
 }, sameBlockRender)
 

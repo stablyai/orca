@@ -3,8 +3,7 @@ import type { Element } from 'hast'
 import { isMermaidFence, isMermaidPre, renderMermaidFence } from './comment-mermaid-fence'
 import type { DocumentCodeBlockRenderer } from './comment-markdown-element-renderers'
 import {
-  CommentMarkdownBlockSourceContext,
-  isConfirmedClosingFence,
+  CommentMarkdownClosingFenceContext,
   MARKDOWN_CLOSING_FENCE
 } from './comment-markdown-code-fence'
 
@@ -50,7 +49,7 @@ export function CommentMarkdownDocumentPre({
   const renderMermaid = useContext(CommentMarkdownMermaidContext)
   const keepSource = useContext(CommentMarkdownMermaidSourceContext)
   const blockStartLine = useContext(CommentMarkdownBlockLineContext)
-  const source = useContext(CommentMarkdownBlockSourceContext)
+  const isConfirmed = useContext(CommentMarkdownClosingFenceContext)
   if (renderMermaid && !keepSource && isMermaidPre(children)) {
     return <>{children}</>
   }
@@ -61,10 +60,10 @@ export function CommentMarkdownDocumentPre({
   const blockLine = node?.position?.start.line
   const parsedCode = node?.children[0]
   const fenceClosed =
-    source !== null &&
+    isConfirmed !== null &&
     parsedCode?.type === 'element' &&
     parsedCode.properties[MARKDOWN_CLOSING_FENCE] === 'true' &&
-    isConfirmedClosingFence(source, node?.position)
+    isConfirmed(node?.position)
   // Render as a component so its hooks cannot join this early-returning component’s hook order.
   const CodeBlock = renderCodeBlock
   const code = CodeBlock ? (

@@ -268,7 +268,7 @@ const CommentMarkdown = React.memo(
                       fadeFrom={blockFadeFrom}
                       fadeSettled={!held && index < blocks.length - 1}
                       fadeBase={block.start}
-                      authoredCodeFenceSource={trackCodeFences ? authored : undefined}
+                      authoredCodeFenceSource={trackCodeFences ? block.text : undefined}
                       {...(held
                         ? {
                             fadeHoldFrom: fadeHold.from - block.start,

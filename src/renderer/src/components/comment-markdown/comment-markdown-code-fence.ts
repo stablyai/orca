@@ -5,12 +5,9 @@ import type { Processor } from 'unified'
 
 export const MARKDOWN_CLOSING_FENCE = 'dataMarkdownClosingFence'
 
-type MarkdownBlockSource = {
-  authored: string
-  drawn: string
-}
+type ClosingFenceCheck = (position: Position | undefined) => boolean
 
-export const CommentMarkdownBlockSourceContext = createContext<MarkdownBlockSource | null>(null)
+export const CommentMarkdownClosingFenceContext = createContext<ClosingFenceCheck | null>(null)
 
 const closingFenceTokens: Extension = {
   exit: {
@@ -30,37 +27,49 @@ export function remarkMarkdownClosingFence(this: Processor): void {
   data.fromMarkdownExtensions = [...(data.fromMarkdownExtensions ?? []), closingFenceTokens]
 }
 
-export function isConfirmedClosingFence(
-  source: MarkdownBlockSource,
-  position: Position | undefined
-): boolean {
-  if (position?.start.offset === undefined || position.end.offset === undefined) {
-    return false
-  }
-
+export function createClosingFenceCheck(authored: string, drawn: string): ClosingFenceCheck {
   // Micromark drops an initial BOM before assigning offsets.
-  const bomLength = Number(source.drawn.startsWith('\uFEFF'))
-  const marker = source.drawn[position.start.offset + bomLength]
-  if (marker !== '`' && marker !== '~') {
-    return false
-  }
-  const drawnEnd = position.end.offset + bomLength
-  if (source.authored === source.drawn) {
-    return source.authored[drawnEnd] === '\n' || source.authored[drawnEnd] === '\r'
-  }
-
-  // Streaming Markdown repairs can change offsets or trim the break after the authored closer.
-  const trimSpacing = /[ \t]+$/
-  const drawnStart = drawnEnd - position.end.column + 1
-  const line = source.drawn.slice(drawnStart, drawnEnd).replace(trimSpacing, '')
-  let authoredStart = Number(source.authored.startsWith('\uFEFF'))
-  let lineNumber = 1
-  for (const lineBreak of source.authored.matchAll(/\r\n?|\n/g)) {
-    if (lineNumber === position.end.line) {
-      return source.authored.slice(authoredStart, lineBreak.index).replace(trimSpacing, '') === line
+  const drawnBomLength = Number(drawn.startsWith('\uFEFF'))
+  let unchanged: boolean | undefined
+  let lineEnds: number[] | undefined
+  let lineBreaks: ReturnType<string['matchAll']> | undefined
+  return (position) => {
+    if (position?.start.offset === undefined || position.end.offset === undefined) {
+      return false
     }
-    authoredStart = lineBreak.index + lineBreak[0].length
-    lineNumber += 1
+    const marker = drawn[position.start.offset + drawnBomLength]
+    if (marker !== '`' && marker !== '~') {
+      return false
+    }
+
+    const drawnEnd = position.end.offset + drawnBomLength
+    unchanged ??= authored === drawn
+    if (unchanged) {
+      return authored[drawnEnd] === '\n' || authored[drawnEnd] === '\r'
+    }
+
+    // Repairs can change offsets or trim a break. Share one forward scan across this block.
+    lineEnds ??= []
+    lineBreaks ??= authored.matchAll(/\r\n?|\n/g)
+    const line = position.end.line
+    while (lineEnds.length < line) {
+      const match = lineBreaks.next()
+      if (match.done) {
+        return false
+      }
+      lineEnds.push(match.value.index)
+    }
+    const authoredEnd = lineEnds[line - 1]
+    const previousEnd = lineEnds[line - 2]
+    const authoredStart =
+      previousEnd === undefined
+        ? Number(authored.startsWith('\uFEFF'))
+        : previousEnd + (authored.startsWith('\r\n', previousEnd) ? 2 : 1)
+    const drawnStart = drawnEnd - position.end.column + 1
+    const trimSpacing = /[ \t]+$/
+    return (
+      authored.slice(authoredStart, authoredEnd).replace(trimSpacing, '') ===
+      drawn.slice(drawnStart, drawnEnd).replace(trimSpacing, '')
+    )
   }
-  return false
 }
