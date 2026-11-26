@@ -272,21 +272,27 @@ function recheckListing(channel: KeptProviderRelay['channel']): Promise<RelayLis
   return entry.listing
 }
 
-/** Asks the relay's daemon again: still running (keep it), or proven ended or gone. */
+/**
+ * Asks the relay's daemon again: still running (keep it), or proven ended or gone. `daemons`: every
+ * daemon the app still has; one no longer among them took the relay with it.
+ */
 export async function recheckKeptProviderRelay(
   chatKey: string,
-  relay: KeptProviderRelay
+  relay: KeptProviderRelay,
+  daemons?: () => Promise<readonly DaemonClient[]>
 ): Promise<'live' | 'gone' | 'unknown'> {
   const result = await recheckListing(relay.channel)
   if (!result) {
     // An unreachable daemon with a dead agent is as gone as a daemon that says so, unless the
-    // ended agent still has output there to open.
-    if (
-      relay.info.pid === null ||
-      providerRelayAgentOpensEnded(relay.info.agent) ||
-      !processProvenGone(relay.info.pid)
-    ) {
+    // ended agent may still have output there to open: then only the daemon's own end proves it.
+    if (relay.info.pid === null || !processProvenGone(relay.info.pid)) {
       return 'unknown'
+    }
+    if (providerRelayAgentOpensEnded(relay.info.agent)) {
+      const all = await daemons?.().catch(() => null)
+      if (!all || all.includes(relay.channel.client)) {
+        return 'unknown'
+      }
     }
     forgetKeptProviderRelay(chatKey, relay)
     return 'gone'

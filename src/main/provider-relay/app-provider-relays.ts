@@ -245,7 +245,7 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
   }
   const verdict =
     info.exit === null && !endedSince
-      ? await recheckKeptProviderRelay(launch.chatKey, relay)
+      ? await recheckKeptProviderRelay(launch.chatKey, relay, route?.all)
       : 'gone'
   if (verdict !== 'gone') {
     throw new KeptProviderRelayUnreachableError(launch.chatKey)
