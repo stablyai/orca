@@ -186,16 +186,17 @@ function connector(
       carriedBefore?: Promise<boolean>
     ) => handleThreadMute(deps, delivery, record, carriedBefore)
   }
-  const deliver = async (raw: unknown) =>
-    await dispatchDelivery(
+  const dispatch = (raw: unknown) =>
+    dispatchDelivery(
       seam,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stand-in seam never reads its host.
       {} as ExternalConversationHost,
       machine,
       raw,
       () => 60_000
-    )?.done
-  return { deliver, turns, starts }
+    )
+  const deliver = async (raw: unknown) => await dispatch(raw)?.done
+  return { dispatch, deliver, turns, starts }
 }
 
 const TURN_ID = 1_800_000_000_300
@@ -295,14 +296,16 @@ function leaver(
 describe('a muted bot thread', () => {
   it('settles both observed post-leave fresh starts without a turn, card admission, or replay', async () => {
     const store = await botHome({ first: true })
-    const { deliver, turns, starts } = connector(store)
+    const { dispatch, deliver, turns, starts } = connector(store)
 
     // These model the two reported roots: their plain follower posts arrived after the previous
     // turn ended, so the connector chose fresh `start` rather than `send`.
     const first = start(FIRST, 'hi', { mentioned: false })
     const second = start(ELSEWHERE, 'test', { mentioned: false })
     await threadMuteSaves(store)(ELSEWHERE, true)
-    expect(await deliver(first)).toEqual({ outcome: 'accepted' })
+    const mutedFirst = dispatch(first)
+    expect(mutedFirst?.received).toBe(false)
+    expect(await mutedFirst?.done).toEqual({ outcome: 'accepted' })
     expect(await deliver(second)).toEqual({ outcome: 'accepted' })
     expect(await deliver(first)).toEqual({ outcome: 'accepted' })
     expect(await deliver(second)).toEqual({ outcome: 'accepted' })
