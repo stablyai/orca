@@ -14,7 +14,7 @@ import type {
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { cloneTerminalLayoutSnapshot } from '../../terminal/surface/mobile-session-layout-projection'
 import {
-  sameStringRecord,
+  sameLeafRecord,
   terminalLayoutNodeEqual
 } from '../../../../shared/workspace-layout/terminal-topology/terminal-layout-equality'
 
@@ -35,7 +35,7 @@ function paneLayoutEditIsNoOp(
     terminalLayoutNodeEqual(edit.root ?? layout.root, layout.root) &&
     (layout.expandedLeafId ?? null) === edit.expandedLeafId &&
     (edit.chatLeafId === undefined || (layout.chatLeafId ?? null) === (edit.chatLeafId ?? null)) &&
-    (!edit.titlesByLeafId || sameStringRecord(layout.titlesByLeafId, edit.titlesByLeafId))
+    (!edit.titlesByLeafId || sameLeafRecord(layout.titlesByLeafId, edit.titlesByLeafId))
   )
 }
 

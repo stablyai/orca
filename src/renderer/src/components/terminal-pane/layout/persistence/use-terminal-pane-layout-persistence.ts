@@ -45,100 +45,104 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
   useLayoutEffect(() => {
     chatOwnerRef.current = { chatLeafId, isChatViewMode }
   }, [chatLeafId, isChatViewMode])
-  const persistLayoutSnapshot = useCallback((): void => {
-    const manager = managerRef.current
-    const container = containerRef.current
-    if (!manager || !container) {
-      return
-    }
-    const activePaneId = manager.getActivePane()?.id ?? manager.getPanes()[0]?.id ?? null
-    const leafIdByPaneId = manager.getLeafIdMap()
-    let layout = serializeTerminalLayout(
-      container,
-      activePaneId,
-      expandedPaneIdRef.current,
-      leafIdByPaneId
-    )
-    const existing = useAppStore.getState().terminalLayoutsByTabId[tabId]
-    const currentPanes = manager.getPanes()
-    const currentLeafIds = new Set(currentPanes.map((pane) => pane.leafId))
-    // PaneManager retains this callback for its entire mount.
-    const { chatLeafId, isChatViewMode } = chatOwnerRef.current
-    if (isChatViewMode && chatLeafId && currentPanes.some((pane) => pane.leafId === chatLeafId)) {
-      layout.chatLeafId = chatLeafId
-    }
-    const clearedScrollbackLeafIds = clearedScrollbackLeafIdsRef.current
-    const scrollbackPreserveLeafIds = new Set(
-      [...currentLeafIds].filter((leafId) => !clearedScrollbackLeafIds.has(leafId))
-    )
-    retainLayoutScrollback(layout, existing, scrollbackPreserveLeafIds)
-    const livePtyEntries = currentPanes
-      .map(
-        (pane) => [pane.leafId, paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null] as const
+  const persistLayoutSnapshot = useCallback(
+    (renamedLeafId?: string) => {
+      const manager = managerRef.current
+      const container = containerRef.current
+      if (!manager || !container) {
+        return
+      }
+      const activePaneId = manager.getActivePane()?.id ?? manager.getPanes()[0]?.id ?? null
+      const leafIdByPaneId = manager.getLeafIdMap()
+      let layout = serializeTerminalLayout(
+        container,
+        activePaneId,
+        expandedPaneIdRef.current,
+        leafIdByPaneId
       )
-      .filter(
-        (entry): entry is readonly [(typeof currentPanes)[number]['leafId'], string] =>
-          entry[1] !== null
+      const existing = useAppStore.getState().terminalLayoutsByTabId[tabId]
+      const currentPanes = manager.getPanes()
+      const currentLeafIds = new Set(currentPanes.map((pane) => pane.leafId))
+      // PaneManager retains this callback for its entire mount.
+      const { chatLeafId, isChatViewMode } = chatOwnerRef.current
+      if (isChatViewMode && chatLeafId && currentPanes.some((pane) => pane.leafId === chatLeafId)) {
+        layout.chatLeafId = chatLeafId
+      }
+      const clearedScrollbackLeafIds = clearedScrollbackLeafIdsRef.current
+      const scrollbackPreserveLeafIds = new Set(
+        [...currentLeafIds].filter((leafId) => !clearedScrollbackLeafIds.has(leafId))
       )
-    const mergedPtyIds = mergeCapturedLeafState({
-      prior: existing?.ptyIdsByLeafId,
-      fresh: Object.fromEntries(livePtyEntries),
-      currentLeafIds
-    })
-    if (Object.keys(mergedPtyIds).length > 0) {
-      layout.ptyIdsByLeafId = mergedPtyIds
-    }
-    layout.activeLeafId = resolveTerminalLayoutActiveLeafId({
-      root: layout.root,
-      activeLeafId: layout.activeLeafId,
-      ptyIdsByLeafId: mergedPtyIds
-    })
-    const removedTitleLeafIds = removedTitleLeafIdsRef.current
-    const titlesByLeafId = mergeLayoutTitlesByLeafId(
-      currentPanes,
-      existing?.titlesByLeafId,
-      paneTitlesRef.current,
-      removedTitleLeafIds
-    )
-    if (Object.keys(titlesByLeafId).length > 0) {
-      layout.titlesByLeafId = titlesByLeafId
-    }
-    const hostRetiredLeafIds = hostRetiredLeafIdsRef.current
-    if (hostRetiredLeafIds.size > 0) {
-      // Why: never retire the last pane here; the host drops a whole tab by itself.
-      layout = retireLeavesFromTerminalLayout(layout, hostRetiredLeafIds) ?? layout
-    }
-    setTabLayout(tabId, layout)
-    const hasRemotePane = Object.values(mergedPtyIds).some(
-      (ptyId) => typeof ptyId === 'string' && isRemoteRuntimePtyId(ptyId)
-    )
-    if (hasRemotePane) {
-      // Why: a host keeps its titles when the field is absent, so clearing the last one sends {}.
-      const clearedEveryTitle =
-        !layout.titlesByLeafId &&
-        [...currentLeafIds].some((leafId) => removedTitleLeafIds.has(leafId))
-      remotePaneLayoutPusherRef.current?.push({
-        worktreeId,
-        tabId,
-        layout: clearedEveryTitle ? { ...layout, titlesByLeafId: {} } : layout
+      retainLayoutScrollback(layout, existing, scrollbackPreserveLeafIds)
+      const livePtyEntries = currentPanes
+        .map(
+          (pane) =>
+            [pane.leafId, paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null] as const
+        )
+        .filter(
+          (entry): entry is readonly [(typeof currentPanes)[number]['leafId'], string] =>
+            entry[1] !== null
+        )
+      const mergedPtyIds = mergeCapturedLeafState({
+        prior: existing?.ptyIdsByLeafId,
+        fresh: Object.fromEntries(livePtyEntries),
+        currentLeafIds
       })
-    }
-    for (const leafId of currentLeafIds) {
-      clearedScrollbackLeafIds.delete(leafId)
-    }
-  }, [
-    tabId,
-    setTabLayout,
-    worktreeId,
-    clearedScrollbackLeafIdsRef,
-    containerRef,
-    expandedPaneIdRef,
-    managerRef,
-    paneTitlesRef,
-    paneTransportsRef,
-    remotePaneLayoutPusherRef,
-    removedTitleLeafIdsRef
-  ])
+      if (Object.keys(mergedPtyIds).length > 0) {
+        layout.ptyIdsByLeafId = mergedPtyIds
+      }
+      layout.activeLeafId = resolveTerminalLayoutActiveLeafId({
+        root: layout.root,
+        activeLeafId: layout.activeLeafId,
+        ptyIdsByLeafId: mergedPtyIds
+      })
+      const removedTitleLeafIds = removedTitleLeafIdsRef.current
+      const titlesByLeafId = mergeLayoutTitlesByLeafId(
+        currentPanes,
+        existing?.titlesByLeafId,
+        paneTitlesRef.current,
+        removedTitleLeafIds
+      )
+      if (Object.keys(titlesByLeafId).length > 0) {
+        layout.titlesByLeafId = titlesByLeafId
+      }
+      const hostRetiredLeafIds = hostRetiredLeafIdsRef.current
+      if (hostRetiredLeafIds.size > 0) {
+        // Why: never retire the last pane here; the host drops a whole tab by itself.
+        layout = retireLeavesFromTerminalLayout(layout, hostRetiredLeafIds) ?? layout
+      }
+      setTabLayout(tabId, layout, renamedLeafId)
+      const hasRemotePane = Object.values(mergedPtyIds).some(
+        (ptyId) => typeof ptyId === 'string' && isRemoteRuntimePtyId(ptyId)
+      )
+      if (hasRemotePane) {
+        // Why: a host keeps its titles when the field is absent, so clearing the last one sends {}.
+        const clearedEveryTitle =
+          !layout.titlesByLeafId &&
+          [...currentLeafIds].some((leafId) => removedTitleLeafIds.has(leafId))
+        remotePaneLayoutPusherRef.current?.push({
+          worktreeId,
+          tabId,
+          layout: clearedEveryTitle ? { ...layout, titlesByLeafId: {} } : layout
+        })
+      }
+      for (const leafId of currentLeafIds) {
+        clearedScrollbackLeafIds.delete(leafId)
+      }
+    },
+    [
+      tabId,
+      setTabLayout,
+      worktreeId,
+      clearedScrollbackLeafIdsRef,
+      containerRef,
+      expandedPaneIdRef,
+      managerRef,
+      paneTitlesRef,
+      paneTransportsRef,
+      remotePaneLayoutPusherRef,
+      removedTitleLeafIdsRef
+    ]
+  )
 
   useEffect(() => {
     persistLayoutSnapshot()

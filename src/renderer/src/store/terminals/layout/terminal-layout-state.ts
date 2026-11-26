@@ -2,6 +2,11 @@ import { replaceRecordEntries } from '@/store/record-transitions/keyed-record-tr
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { terminalLayoutEqual } from '../../../../../shared/workspace-layout/terminal-topology/terminal-layout-equality'
+import type { TerminalLayoutSnapshot } from '../../../../../shared/workspace-layout/terminal-tab-types'
+import {
+  collectLayoutLeafIdsInOrder,
+  resolveRootlessTerminalLayoutLeafId
+} from '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import {
   normalizeTerminalLayoutPtyOwnership,
   resolveTerminalLayoutPtyOwnershipTransfers
@@ -14,6 +19,41 @@ import {
 } from '../pty/terminal-pty-identities'
 import { transferNormalizedTerminalLayoutPtyOwnership } from '../hydration/workspace-terminal-hydration-patch'
 import { recordChatPaneInLayoutOwner } from './terminal-chat-pane-layout-owner'
+
+function withPaneTitleRevisions(
+  layout: TerminalLayoutSnapshot,
+  previous: TerminalLayoutSnapshot | undefined,
+  renamedLeafId: string | undefined
+): TerminalLayoutSnapshot {
+  if (!renamedLeafId && !previous?.paneTitleRevisionByLeafId && !layout.paneTitleRevisionByLeafId) {
+    return layout
+  }
+  const leafIds = layout.root
+    ? collectLayoutLeafIdsInOrder(layout.root)
+    : [resolveRootlessTerminalLayoutLeafId(layout)]
+  const revisions: Record<string, number> = {}
+  for (const leafId of leafIds) {
+    if (!leafId) {
+      continue
+    }
+    const previousRevision = Math.max(
+      previous?.paneTitleRevisionByLeafId?.[leafId] ?? 0,
+      layout.paneTitleRevisionByLeafId?.[leafId] ?? 0
+    )
+    if (
+      leafId === renamedLeafId &&
+      layout.titlesByLeafId?.[leafId] !== previous?.titlesByLeafId?.[leafId]
+    ) {
+      revisions[leafId] = Math.max(Date.now(), previousRevision + 1)
+    } else if (previousRevision > 0) {
+      revisions[leafId] = previousRevision
+    }
+  }
+  const { paneTitleRevisionByLeafId: _oldRevisions, ...rest } = layout
+  return Object.keys(revisions).length > 0
+    ? { ...rest, paneTitleRevisionByLeafId: revisions }
+    : rest
+}
 
 export function createTerminalLayoutActions(
   set: TerminalStoreSet,
@@ -79,7 +119,7 @@ export function createTerminalLayoutActions(
           : { canExpandPaneByTabId: { ...s.canExpandPaneByTabId, [tabId]: canExpand } }
       )
     },
-    setTabLayout: (tabId, layout) => {
+    setTabLayout: (tabId, layout, renamedLeafId) => {
       let ownershipTransfers: ReturnType<typeof resolveTerminalLayoutPtyOwnershipTransfers> = []
       const before = ORCA_LAYOUT_OWNER_IS_MAIN ? get().terminalLayoutsByTabId[tabId] : undefined
       set((s) => {
@@ -103,13 +143,14 @@ export function createTerminalLayoutActions(
         }
         // Why: pane-title churn re-persists structurally identical snapshots; bailing keeps every pane selector asleep.
         const existing = s.terminalLayoutsByTabId[tabId]
-        if (existing && terminalLayoutEqual(existing, normalized.snapshot)) {
+        const snapshot = withPaneTitleRevisions(normalized.snapshot, existing, renamedLeafId)
+        if (existing && terminalLayoutEqual(existing, snapshot)) {
           return s
         }
         return {
           terminalLayoutsByTabId: replaceRecordEntries<
             TerminalSlice['terminalLayoutsByTabId'][string]
-          >(s.terminalLayoutsByTabId, [[tabId, normalized.snapshot]])
+          >(s.terminalLayoutsByTabId, [[tabId, snapshot]])
         }
       })
       transferNormalizedTerminalLayoutPtyOwnership(get(), tabId, ownershipTransfers)

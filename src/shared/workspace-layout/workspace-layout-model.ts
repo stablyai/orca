@@ -86,6 +86,7 @@ export type LayoutLeaf = {
   ptyGeneration?: number
   incarnationId?: string
   title?: string
+  titleRevision?: number
   /** Last grid used to size the terminal at startup. */
   lastGrid?: TerminalGrid
   /** Slept pane record; mutually exclusive with resume. */

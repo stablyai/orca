@@ -88,6 +88,9 @@ function loadLeaf(
     ...(stored.titlesByLeafId?.[leafId] !== undefined
       ? { title: stored.titlesByLeafId[leafId] }
       : {}),
+    ...(stored.paneTitleRevisionByLeafId?.[leafId] !== undefined
+      ? { titleRevision: stored.paneTitleRevisionByLeafId[leafId] }
+      : {}),
     ...(stored.lastGridsByLeafId?.[leafId] !== undefined
       ? { lastGrid: stored.lastGridsByLeafId[leafId] }
       : {}),

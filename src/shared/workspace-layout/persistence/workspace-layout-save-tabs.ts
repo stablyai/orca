@@ -141,6 +141,7 @@ export function saveTerminalLayout(
     buffersByLeafId: byLeaf(leafIds, (leafId) => facts.scrollback[leafId]?.buffer),
     scrollbackRefsByLeafId: byLeaf(leafIds, (leafId) => facts.scrollback[leafId]?.scrollbackRef),
     titlesByLeafId: byLeaf(leafIds, (leafId) => leaves[leafId]?.title),
+    paneTitleRevisionByLeafId: byLeaf(leafIds, (leafId) => leaves[leafId]?.titleRevision),
     lastGridsByLeafId: byLeaf(leafIds, (leafId) => leaves[leafId]?.lastGrid)
   }
   // Today's writers always write the bindings, even empty, and the other maps only when filled.
@@ -148,6 +149,7 @@ export function saveTerminalLayout(
     'buffersByLeafId',
     'scrollbackRefsByLeafId',
     'titlesByLeafId',
+    'paneTitleRevisionByLeafId',
     'lastGridsByLeafId'
   ] as const) {
     if (Object.keys(layout[field] ?? {}).length === 0) {

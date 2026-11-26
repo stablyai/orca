@@ -37,6 +37,10 @@ export const terminalLayoutSnapshotSchema = z.object({
   buffersByLeafId: salvagedOptional('buffersByLeafId', leafStringsSchema),
   scrollbackRefsByLeafId: salvagedOptional('scrollbackRefsByLeafId', leafStringsSchema),
   titlesByLeafId: salvagedOptional('titlesByLeafId', leafStringsSchema),
+  paneTitleRevisionByLeafId: salvagedOptional(
+    'paneTitleRevisionByLeafId',
+    salvagingRecord(z.string(), z.int().positive())
+  ),
   lastGridsByLeafId: salvagedOptional(
     'lastGridsByLeafId',
     salvagingRecord(z.string(), terminalGridSchema)

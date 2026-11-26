@@ -187,7 +187,13 @@ export function preserveMissingWorkspaceSessionTerminalBindings(
     const titlesByLeafId = preserveMissingLeafRecordEntries(
       priorLayout.titlesByLeafId,
       layout.titlesByLeafId,
-      liveLeafIds
+      new Set(
+        [...liveLeafIds].filter(
+          (leafId) =>
+            (layout.paneTitleRevisionByLeafId?.[leafId] ?? 0) <=
+            (priorLayout.paneTitleRevisionByLeafId?.[leafId] ?? 0)
+        )
+      )
     )
     if (buffersByLeafId) {
       restoredLayout.buffersByLeafId = buffersByLeafId

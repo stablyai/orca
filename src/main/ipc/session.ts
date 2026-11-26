@@ -10,6 +10,7 @@ import { windowViewPatchForMain, windowViewSaveForMain } from '../persistence/wi
 import { windowWrittenWorkspaces } from '../persistence/window-session-written-workspaces'
 import { reportWindowSaveDrift } from '../persistence/window-save-divergence'
 import { windowSaveKeepingMainSleepRecords } from '../persistence/window-save-sleep-records'
+import { windowSaveKeepingPaneTitles } from '../persistence/window-save-pane-titles'
 import {
   windowSaveKeepingRelayOwnership,
   type WindowSessionSetOptions
@@ -98,7 +99,11 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
       const save = windowSaveKeepingRelayOwnership(stored, args, 'set', options)
       const next = ORCA_LAYOUT_OWNER_IS_MAIN
         ? sessionForMain(save, hostId)
-        : windowSaveKeepingMainSleepRecords(stored, save, 'set')
+        : windowSaveKeepingPaneTitles(
+            stored,
+            windowSaveKeepingMainSleepRecords(stored, save, 'set'),
+            hostId
+          )
       // Main-owned layout recomputes relay ids itself; the window never sends them separately there.
       const relays = ORCA_LAYOUT_OWNER_IS_MAIN
         ? null
@@ -127,7 +132,14 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
     const args = windowSaveKeepingRelayOwnership(stored, toPatch(stored), 'patch')
     const { save, written } = ORCA_LAYOUT_OWNER_IS_MAIN
       ? patchForMain(args, hostId, entries)
-      : { save: windowSaveKeepingMainSleepRecords(stored, args, 'patch'), written: undefined }
+      : {
+          save: windowSaveKeepingPaneTitles(
+            stored,
+            windowSaveKeepingMainSleepRecords(stored, args, 'patch'),
+            hostId
+          ),
+          written: undefined
+        }
     // Main-owned layout recomputes relay ids itself; the window never sends them separately there.
     const relayHostId = normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID
     const applied =

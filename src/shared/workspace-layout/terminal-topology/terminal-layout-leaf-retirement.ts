@@ -58,6 +58,7 @@ export function retireLeavesFromTerminalLayout(
     ptyIdsByLeafId: omitLeafRecords(layout.ptyIdsByLeafId, retiredLeafIds),
     buffersByLeafId: omitLeafRecords(layout.buffersByLeafId, retiredLeafIds),
     scrollbackRefsByLeafId: omitLeafRecords(layout.scrollbackRefsByLeafId, retiredLeafIds),
-    titlesByLeafId: omitLeafRecords(layout.titlesByLeafId, retiredLeafIds)
+    titlesByLeafId: omitLeafRecords(layout.titlesByLeafId, retiredLeafIds),
+    paneTitleRevisionByLeafId: omitLeafRecords(layout.paneTitleRevisionByLeafId, retiredLeafIds)
   }
 }

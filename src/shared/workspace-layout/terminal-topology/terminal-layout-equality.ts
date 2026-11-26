@@ -1,9 +1,9 @@
 import type { TerminalLayoutSnapshot, TerminalPaneLayoutNode } from '../terminal-tab-types'
 
 /** Exported so pty-topology gates can reuse the leaf-map comparison this equality already defines. */
-export function sameStringRecord(
-  a: Readonly<Record<string, string>> | undefined,
-  b: Readonly<Record<string, string>> | undefined
+export function sameLeafRecord<T>(
+  a: Readonly<Record<string, T>> | undefined,
+  b: Readonly<Record<string, T>> | undefined
 ): boolean {
   const left = a ?? {}
   const right = b ?? {}
@@ -47,9 +47,10 @@ export function terminalLayoutEqual(
     (a?.activeLeafId ?? null) === b.activeLeafId &&
     (a?.expandedLeafId ?? null) === b.expandedLeafId &&
     (a?.chatLeafId ?? null) === (b.chatLeafId ?? null) &&
-    sameStringRecord(a?.ptyIdsByLeafId, b.ptyIdsByLeafId) &&
-    sameStringRecord(a?.buffersByLeafId, b.buffersByLeafId) &&
-    sameStringRecord(a?.scrollbackRefsByLeafId, b.scrollbackRefsByLeafId) &&
-    sameStringRecord(a?.titlesByLeafId, b.titlesByLeafId)
+    sameLeafRecord(a?.ptyIdsByLeafId, b.ptyIdsByLeafId) &&
+    sameLeafRecord(a?.buffersByLeafId, b.buffersByLeafId) &&
+    sameLeafRecord(a?.scrollbackRefsByLeafId, b.scrollbackRefsByLeafId) &&
+    sameLeafRecord(a?.titlesByLeafId, b.titlesByLeafId) &&
+    sameLeafRecord(a?.paneTitleRevisionByLeafId, b.paneTitleRevisionByLeafId)
   )
 }
