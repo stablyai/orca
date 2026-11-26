@@ -9,6 +9,7 @@ import {
   STRUCTURED_CHAT_PROMPT_TELEMETRY_CLIENT_CAPABILITY
 } from '../../agent-session/requests/structured-chat-dispatch-telemetry'
 import { NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from './protocol-version'
+import { GOOGLE_SETUP_CARDS_CLIENT_CAPABILITY } from '../../google/google-connect-types'
 import {
   AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,
   SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY,
@@ -47,5 +48,7 @@ export const ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
   // The renderer shows a restored, unconfirmed agent row as identity only.
   AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,
   // A person answers worker approvals in this window.
-  ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY
+  ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY,
+  // The renderer draws an agent's Google setup cards, Connect included.
+  GOOGLE_SETUP_CARDS_CLIENT_CAPABILITY
 ] as const

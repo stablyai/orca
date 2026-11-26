@@ -32,7 +32,7 @@ export function MobileBotGroupChat() {
   const router = useRouteHandoff()
   const insets = useSafeAreaInsets()
   const forceReconnect = useForceReconnect()
-  const params = useLocalSearchParams<{ hostId: string; groupId: string }>()
+  const params = useLocalSearchParams<{ hostId: string; groupId: string; threadId?: string }>()
   const { client, state } = useHostClient(params.hostId)
   const connected = client !== null && state === 'connected'
   // Once open, the room outlasts an outage and Reconnect's new client, keeping its transcript as a chat does.
@@ -75,7 +75,9 @@ export function MobileBotGroupChat() {
         connected={connected}
         outage={outage}
         groupId={params.groupId}
+        initialThreadId={params.threadId}
         hostId={params.hostId}
+        hostName={hostName}
         visible={focused}
       />
     )

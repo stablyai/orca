@@ -4,7 +4,8 @@ import {
   normalizeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
-import type { Store } from '../../../persistence/loading-store/store'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import type { WorkspaceSessionWriteListener } from '../../../persistence/loading-store/workspace-sessions/workspace-session-write-listeners'
 import type {
   BrowserPage,
   BrowserWorkspace
@@ -30,10 +31,12 @@ import {
  * host partition) and names each with a synthetic tab id until its guest loads (tabs.onReplaced).
  */
 
-export type SavedBrowserTabsSource = Pick<
-  Store,
-  'getWorkspaceSessionHostIds' | 'getWorkspaceSession' | 'onWorkspaceSessionWritten'
->
+/** Saved-session reads the core answers for main's extension tab listing. */
+export type SavedBrowserTabsSource = {
+  getWorkspaceSessionHostIds(): ExecutionHostId[]
+  getWorkspaceSession(hostId?: string | null): WorkspaceSessionState
+  onWorkspaceSessionWritten(listener: WorkspaceSessionWriteListener): () => void
+}
 
 export type DiscardedBrowserTab = {
   tabId: number

@@ -4,7 +4,7 @@ import {
 } from '../../../shared/execution-host/execution-host'
 import {
   botChangeConcerns,
-  readBotChangeScope,
+  readBotChangeScopeWithItems,
   type BotChangeInterest,
   type BotChangeScope
 } from '../../../shared/bots/bot-change-scope'
@@ -21,6 +21,20 @@ export function emitBotsChangedWindowEvent(hostId: ExecutionHostId, scope?: BotC
       detail: { hostId, ...(scope ? { scope } : {}) }
     })
   )
+}
+
+// One read per notice, shared by every listener the window event reaches.
+type ReceivedDetail = { readonly scope?: unknown }
+const readScopes = new WeakMap<ReceivedDetail, BotChangeScope | undefined>()
+
+function readDetailScope(detail: ReceivedDetail): BotChangeScope | undefined {
+  if (!readScopes.has(detail)) {
+    readScopes.set(
+      detail,
+      'scope' in detail ? readBotChangeScopeWithItems(detail.scope) : undefined
+    )
+  }
+  return readScopes.get(detail)
 }
 
 /**
@@ -46,10 +60,7 @@ export function onBotsChanged(
     if (!changed || (hostId !== undefined && changed !== hostId)) {
       return
     }
-    const scope =
-      detail && typeof detail === 'object' && 'scope' in detail
-        ? readBotChangeScope(detail.scope)
-        : undefined
+    const scope = detail && typeof detail === 'object' ? readDetailScope(detail) : undefined
     if (!interest || botChangeConcerns(scope, interest)) {
       listener(changed, scope)
     }

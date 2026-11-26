@@ -1,9 +1,10 @@
+import { RuntimePtyForegroundAgent } from './runtime-pty-foreground-agent'
 import type {
   TerminalIdentityRawInputs,
   TerminalIdentityReadContext
 } from '../query/terminal-identity-read-context'
 import type { CrewRuntimeReaders } from '../../orchestration/crew/crew-runtime-watch'
-import { TerminalIdentitySource } from '../identity/terminal-identity-source'
+import { createCrewNotifiedTerminalIdentity } from '../identity/terminal-identity-crew-notice'
 import type { WaitBlockedCheckState } from '../wait/wait-blocked-check-state'
 import { OrcaRuntimeWithStopRequestedPtyIds } from '../../construction/runtime-service-state'
 import { RuntimeSubscriptionRegistry } from '../../client/runtime-subscription-registry'
@@ -20,15 +21,21 @@ import type { createAgentStatusOscProcessor } from '../../../../shared/agent-sta
 import { RuntimeTerminalViewSubscribers } from '../view/runtime-terminal-view-subscribers'
 import { MainDaemonAttachments } from './main-daemon-attachments'
 import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
+import type { HostTerminalUsage } from '../../../../shared/terminal/runtime-policy/terminal-limit-policy'
 
 export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWithStopRequestedPtyIds {
-  protected readonly terminalIdentity = new TerminalIdentitySource(this.crewChanges.notify)
+  protected readonly terminalIdentity = createCrewNotifiedTerminalIdentity(this.crewChanges)
   protected readonly ptysById = this.terminalIdentity.ptys
   readonly handles = this.terminalIdentity.handles
   protected readonly handleByLeafKey = this.terminalIdentity.leafHandles
   protected readonly handleByPtyId = this.terminalIdentity.reverse
   protected readonly handleByPtyIncarnation = this.terminalIdentity.incarnations
   protected readonly syntheticTerminalHandles = this.terminalIdentity.synthetic
+  /** What a terminal's own spawn reported of its host's terminals; asks no host. */
+  getSpawnHostTerminalUsage(handle: string): HostTerminalUsage | undefined {
+    const ptyId = this.handles.get(handle)?.ptyId
+    return ptyId ? this.ptysById.get(ptyId)?.spawnHostTerminalUsage : undefined
+  }
   protected get leaves() {
     return this.terminalIdentity.leaves
   }
@@ -112,10 +119,13 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
 
   protected providerModeSnapshotScansByPtyId = new Map<
     string,
-    Set<TerminalKittyKeyboardModeTracker>
+    { tracker: TerminalKittyKeyboardModeTracker; pendingCaptures: number }
   >()
 
-  protected providerBufferAcquisitionsByPtyId = new Map<string, ProviderBufferAcquisition>()
+  protected providerBufferAcquisitionsByPtyId = new Map<
+    string,
+    { ansi?: ProviderBufferAcquisition; visible?: ProviderBufferAcquisition }
+  >()
 
   protected providerVisibleStateByPtyId = new Map<string, RuntimeVisibleTerminalState>()
 
@@ -218,6 +228,21 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
     hasMainTerminalState: (ptyId) =>
       this.headlessTerminals.has(ptyId) || this.providerSnapshotPreferredPtys.has(ptyId),
     attachProvider: (ptyId) => this.ptyController?.attach?.(ptyId) ?? null
+  })
+
+  protected readonly ptyForegroundAgent = new RuntimePtyForegroundAgent({
+    getController: () => this.ptyController,
+    getPty: (ptyId) => this.ptysById.get(ptyId) ?? null,
+    touchSnapshot: (ptyId) => this.touchMobileSessionSnapshotsForPty(ptyId),
+    pendingAttach: (ptyId) => this.mainDaemonAttachments.pending(ptyId),
+    finishDelayedSnapshot: (ptyId, changed) => {
+      if (this.mobileSessionTabListeners.size > 0) {
+        this.mobileSessionTabsAgentStatusHeartbeat.observeSemanticTitle(ptyId)
+      }
+      if (!changed) {
+        this.touchMobileSessionSnapshotsForPty(ptyId)
+      }
+    }
   })
 
   // Remote xterms own query replies; ref-count streams and retain suppression through mobile soft-leave grace (terminal-query-authority.md).

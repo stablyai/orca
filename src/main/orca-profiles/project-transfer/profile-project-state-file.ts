@@ -121,6 +121,7 @@ export function normalizeProfileProjectState(parsed: Partial<PersistedState>): P
   const {
     uiLanguagePortugueseMigrationApplied: _migrationApplied,
     nestedWorkerMaxDepthDefaultedToFour: _depthMigrated,
+    nativeChatAutoContinueAfterUsageLimitDefaultedOn: _autoContinueMigrated,
     artifactSharingEnabled: _artifactSharingEnabled,
     ...settingsDefaults
   } = defaults.settings

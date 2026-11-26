@@ -10,7 +10,7 @@ export type RemoteNameListingGitOptions = {
 }
 
 const SIGNED_REMOTE_NAME_LISTING_TTL_MS = 5 * 60_000
-const UNSIGNED_REMOTE_NAME_LISTING_TTL_MS = 30_000
+export const UNSIGNED_REMOTE_NAME_LISTING_TTL_MS = 30_000
 const REMOTE_NAME_LISTING_CACHE_MAX_ENTRIES = 512
 
 type CachedRemoteNames = {

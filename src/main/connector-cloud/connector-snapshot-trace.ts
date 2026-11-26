@@ -18,6 +18,7 @@ export type ConnectorSnapshotReason =
   | 'inputs-changed'
   | 'features-changed'
   | 'poll-409'
+  | 'poll-409-features'
   | 'poll-failed'
   | 'post-409'
   | 'silence'

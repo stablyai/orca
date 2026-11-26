@@ -197,6 +197,10 @@ export async function activateBackendRuntime(
   profileShutdown.paneGrids = runtime
   profileShutdown.paintLedger = runtime
   runtime.beginStructuredAgentSessionStartupOpen(chatJournal.maintenanceAfter, chatJournal.open)
+  // Agent detection answers RPC before release reclaim below, and must count Orca's copies then too.
+  const { provideManagedAgentDetection } =
+    await import('../runtime/rpc/methods/host-management/managed-copy-detection')
+  provideManagedAgentDetection(runtime)
 
   const { installFirstWorkRenameHookSubscription } =
     await import('../agent-hooks/first-work/first-work-rename-hook-subscription')
@@ -205,6 +209,9 @@ export async function activateBackendRuntime(
   registerCleanup(
     installFirstWorkRenameHookSubscription(firstWorkRenameDeps(profileStore, runtime))
   )
+  const { installAgentTurnWorktreeActivity } =
+    await import('../agent-hooks/runtime/agent-turn-worktree-activity')
+  registerCleanup(installAgentTurnWorktreeActivity())
 
   accountLaunch?.attachToRuntime(runtime)
   const { wireGitHubIssueLinkTitleFill } =
@@ -213,6 +220,9 @@ export async function activateBackendRuntime(
   const { installOrcadEmulatorBridge } = await import('../orcad/host-runtime/orcad-emulator-bridge')
   installOrcadEmulatorBridge(runtime, registerCleanup)
   const relay = await installOrcadRelayAndAccount(runtime, registerCleanup)
+  // Agents here set Google up through a paired desktop's browser; their key and secret stay here.
+  const { installGoogleSetupHostWatch } = await import('../google/google-setup-host-watch')
+  registerCleanup(installGoogleSetupHostWatch(runtime))
 
   // Restore prior desktop-pushed account selection before automations or CLI launches.
   const { restoreOrcadHostAccountLaunchEnv } =
@@ -324,8 +334,7 @@ export async function activateBackendRuntime(
 
   await new ServeReadinessPublisher().publish(readiness, servePublishMode(options))
   // Background chat-journal maintenance, CI-line watches and runtime release reclaim start once this host is serving.
-  chatJournal.serving()
-  runtime.startPullRequestWatches({ admit: true })
+  chatJournal.serving(runtime)
   const { reclaimManagedRuntimeReleasesAtLaunch, startManagedRuntimeAutoUpdates } =
     await import('../runtime/rpc/methods/host-management/managed-runtime-install')
   reclaimManagedRuntimeReleasesAtLaunch(runtime)

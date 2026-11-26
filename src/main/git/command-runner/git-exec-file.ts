@@ -228,7 +228,8 @@ export function gitExecFileAsync(args: string[], callerOptions: GitExecOptions) 
             command.cwd,
             options.signal,
             () => gitExecFileAsyncUnlocked(args, options, terminationState),
-            command.gitDir
+            command.gitDir,
+            process.platform === 'win32' ? () => terminationState.current : undefined
           )
         : gitExecFileAsyncUnlocked(args, options, terminationState)
     )

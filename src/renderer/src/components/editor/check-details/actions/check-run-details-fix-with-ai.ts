@@ -14,6 +14,7 @@ import { startFixChecksAgent } from '@/lib/source-control/checks/fix-checks-agen
 import { readSourceControlLaunchRecipeAgentId } from '../../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import { resolveRepoWorktreeLaunchPlatform } from '@/runtime/hosts/platform/execution-host-facts'
 import { useAppStore } from '@/store/index'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { resolveSourceControlActionRecipe } from '../../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import {
@@ -150,6 +151,7 @@ export function useCheckRunDetailsFixWithAI(args: {
     args.worktreeId && repo
       ? resolveRepoWorktreeLaunchPlatform(
           useAppStore.getState(),
+          readRuntimeStatuses(),
           repo,
           worktree ?? { id: args.worktreeId }
         )

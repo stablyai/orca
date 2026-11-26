@@ -9,7 +9,10 @@ export function useMobileNativeChatWorkspaceCatalog(
     hostId: string
     client: RpcClient | null
     worktreeId: string
-    agentSessionHostSupport?: StructuredAgentSessionHostSupport | null
+    agentSessionHostSupport?: Pick<
+      StructuredAgentSessionHostSupport,
+      'discoverWorkspaceSkills'
+    > | null
   },
   agent: string | null
 ): ReturnType<typeof useMobileNativeChatFileSearch> & ReturnType<typeof useMobileNativeChatSkills> {

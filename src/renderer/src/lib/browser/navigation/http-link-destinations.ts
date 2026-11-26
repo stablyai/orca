@@ -1,4 +1,4 @@
-import { showOpenInGroupRefusedToast } from '@/components/terminal-pane/links/files/terminal-file-open-in-group-toast'
+import { showLinkOpenInGroupRefusedToast } from '@/components/terminal-pane/links/files/terminal-file-open-in-group-toast'
 import { beginLinkOpenRequest } from '../../links/link-open-request'
 import { translate } from '@/i18n/i18n'
 import {
@@ -78,12 +78,13 @@ export function httpLinkActionDestinationsFor(
   settings: { openLinksInApp?: boolean } | null | undefined,
   sourceOwner: HttpLinkSourceOwner,
   canOpenOwnedBrowser: boolean,
-  url?: string
+  url?: string,
+  worktreeId?: string | null
 ): HttpLinkActionDestinations {
   if (!canSourceOwnerOpenInOrca(sourceOwner, canOpenOwnedBrowser)) {
     return { primary: 'system' }
   }
-  return settings?.openLinksInApp === true || isRemoteLoopbackHttpLink(url, sourceOwner)
+  return settings?.openLinksInApp === true || isRemoteLoopbackHttpLink(url, sourceOwner, worktreeId)
     ? { primary: 'orca', alternate: 'system' }
     : { primary: 'system', alternate: 'orca' }
 }
@@ -181,7 +182,7 @@ export function openRoutedHttpLink(url: string, deps: RoutedHttpLinkOptions): vo
     deps.openInSourceGroup
   )
   if (deps.openInSourceGroup && !linkIntent) {
-    showOpenInGroupRefusedToast(url)
+    showLinkOpenInGroupRefusedToast()
     return
   }
   const linkContext = deps.sourceTabId ? { linkIntent, isCurrentRequest } : undefined

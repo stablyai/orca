@@ -286,7 +286,7 @@ function DictationPill({ captureLive, anchor, failure, queued, cleanup }: Dictat
     ? `${status} ${t('auto.components.dictation.DictationIndicator.oneMinuteLeft', 'One minute left.')}`
     : (queuedStatus ?? status)
   const cancelLabel = cleaning
-    ? t('components.dictation.DictationIndicator.skipCleanup', 'Skip cleanup and insert as heard')
+    ? t('components.dictation.DictationIndicator.skipCleanup', 'Skip cleanup')
     : t('auto.components.dictation.DictationIndicator.cancel', 'Cancel')
   const finishLabel = t('auto.components.dictation.DictationIndicator.finish', 'Finish')
 

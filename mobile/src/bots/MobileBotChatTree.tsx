@@ -1,8 +1,7 @@
 // Activity's Chats on the phone: the desktop's tree, each chat with its workers one level down.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ChevronDown, CircleX } from 'lucide-react-native'
-import { AGENT_ATTENTION_COLOR, AgentStateDot } from '../agents/presentation/AgentStateDot'
+import { ChevronDown } from 'lucide-react-native'
 import { DisclosureChevron } from '../components/list/DisclosureChevron'
 import { MobileSearchField } from '../components/controls/MobileSearchField'
 import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
@@ -15,6 +14,7 @@ import { formatTimeAgo } from '../worktree/agent-lineage/agent-row-display'
 import {
   CHAT_TREE_CAPS,
   botOwnChatTree,
+  chatFoldCounts,
   chatFoldSummary,
   type BotChatTreeChat,
   type BotChatTreeWorker
@@ -30,21 +30,24 @@ import {
   type BotChatSearchHit,
   type BotChatTreeShown
 } from '../../../src/shared/bots/bot-chat-tree-view'
-import { formatNativeChatDuration } from '../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
 import { setBotChatFold, useBotChatFold } from './bot-chat-fold-store'
 import {
   createBotChatSearchHook,
   type BotChatSearchAsk
 } from '../../../src/shared/bots/use-bot-chat-search'
 import { MobileBotTextButton } from './MobileBotTextButton'
+import { MobileBotWorkerRow } from './MobileBotWorkerRow'
 import { ChatLeading, useMobileBotChatLabel } from './MobileBotChatLeading'
 import { MobileBotChatSearchNotes } from './MobileBotChatSearchNotes'
+import { MobileBotChatMenu } from './MobileBotChatDelete'
 
 const useBotChatSearch = createBotChatSearchHook({ useCallback, useEffect, useMemo, useState })
 
 export type BotChatTreeActions = {
   openChat: (chat: BotChatTreeChat) => void
   openWorker: (worker: BotChatTreeWorker) => void
+  /** Asks, then deletes the chat; absent where the host can't. */
+  deleteChat?: (chat: BotChatTreeChat) => void
 }
 
 type TreeBot = { id: string; name: string }
@@ -59,9 +62,9 @@ function useChatLine(bot: TreeBot, chat: BotChatTreeChat, folded: boolean): stri
     const waiting = t('bots.chats.waiting', 'Waiting for you')
     return place ? `${place} · ${waiting}` : waiting
   }
-  const summary = folded ? chatFoldSummary(chat) : null
-  if (summary) {
-    return summary
+  const counts = folded ? chatFoldCounts(chat) : null
+  if (counts) {
+    return chatFoldSummary(t, counts)
   }
   const preview =
     chat.preview ??
@@ -71,75 +74,6 @@ function useChatLine(bot: TreeBot, chat: BotChatTreeChat, folded: boolean): stri
   return [place, chat.closed ? t('bots.chats.closedShort', 'closed') : null, preview]
     .filter(Boolean)
     .join(' · ')
-}
-
-function WorkerIcon({ state }: { state: BotChatTreeWorker['state'] }) {
-  switch (state) {
-    case 'running':
-    case 'asking-bot':
-      return <AgentStateDot state="working" />
-    case 'unreachable':
-      return <AgentStateDot state="unverifiable" />
-    case 'needs-you':
-      return <AgentStateDot state="permission" />
-    case 'done':
-      return <AgentStateDot state="done" />
-    case 'failed':
-      // Unlike a worker waiting on the owner, which shares the red dot.
-      return <CircleX size={13} color={AGENT_ATTENTION_COLOR} />
-  }
-}
-
-/** A worker's row, as a chat lists it and an item's Links list it (`nested: false`). */
-export function MobileBotWorkerRow({
-  bot,
-  worker,
-  onOpen,
-  onLongPress,
-  nested = true
-}: {
-  bot: TreeBot
-  worker: BotChatTreeWorker
-  onOpen: (() => void) | undefined
-  onLongPress?: () => void
-  nested?: boolean
-}) {
-  const t = useMobileTranslation()
-  const counting = worker.state === 'running'
-  const now = useNow(1_000, counting)
-  const end = counting ? now : worker.settledAt
-  const value =
-    worker.state === 'needs-you'
-      ? t('bots.chats.needsYou', 'Needs you')
-      : worker.state === 'asking-bot'
-        ? t('bots.chats.askingBot', 'Asking {{name}}', { name: bot.name })
-        : worker.state === 'unreachable'
-          ? t('bots.chats.statusUnknown', 'Status unknown')
-          : end === undefined
-            ? undefined
-            : formatNativeChatDuration(Math.max(0, (end - worker.startedAt) / 1000))
-  const note =
-    worker.note === 'handed-over'
-      ? t('bots.chats.handedOver', 'Handed over')
-      : worker.note === 'from-closed-chat'
-        ? t('bots.chats.fromClosedChat', 'From closed chat')
-        : worker.note === 'automation-terminal'
-          ? t('bots.chats.automationTerminal', 'Automation run · terminal')
-          : null
-  const line2 = [note, worker.branch].filter(Boolean).join(' · ')
-  return (
-    <View style={nested ? styles.nested : undefined}>
-      <ListRow
-        title={worker.title || t('bots.chats.untitledWorker', 'Worker')}
-        subtitle={line2 || undefined}
-        leading={<WorkerIcon state={worker.state} />}
-        value={value}
-        onPress={onOpen}
-        onLongPress={onLongPress}
-        disabled={!onOpen}
-      />
-    </View>
-  )
 }
 
 function StepLink({ label, onPress }: { label: string; onPress: () => void }) {
@@ -202,43 +136,51 @@ function ChatGroup({
       onOpen={each.worktreeId ? () => actions.openWorker(each) : undefined}
     />
   )
+  const openRow = () => openChat(chat, actions)
   return (
     <>
-      <ListRow
-        title={title}
-        subtitle={line || undefined}
-        leading={<ChatLeading chat={chat} />}
-        strong={chat.unread}
-        value={chat.lastActiveAt > 0 ? formatTimeAgo(chat.lastActiveAt, now) : undefined}
-        accessory={
-          <>
-            {chat.unseen ? (
-              <Text style={styles.newTag}>{t('bots.chats.newTag', 'New')}</Text>
-            ) : null}
-            {hasWorkers && !matches ? (
-              <Pressable
-                hitSlop={10}
-                accessibilityRole="button"
-                accessibilityState={{ expanded: open }}
-                accessibilityLabel={
-                  open
-                    ? t('bots.chats.fold', 'Fold {{name}}', { name: title })
-                    : t('bots.chats.unfold', 'Unfold {{name}}', { name: title })
-                }
-                onPress={() =>
-                  setBotChatFold(hostKey, bot.id, chat.chatId, open ? 'folded' : 'open')
-                }
-              >
-                <DisclosureChevron expanded={open} collapsedDeg={-90} expandedDeg={0}>
-                  <ChevronDown size={16} color={colors.textMuted} />
-                </DisclosureChevron>
-              </Pressable>
-            ) : null}
-          </>
-        }
-        onPress={unopenable ? undefined : () => openChat(chat, actions)}
-        accessibilityLabel={chat.unread ? `${label}, ${t('bots.chats.unread', 'Unread')}` : label}
-      />
+      <MobileBotChatMenu chat={chat} onOpen={openRow} onDelete={actions.deleteChat}>
+        {(onLongPress) => (
+          <ListRow
+            title={title}
+            subtitle={line || undefined}
+            leading={<ChatLeading chat={chat} />}
+            strong={chat.unread}
+            value={chat.lastActiveAt > 0 ? formatTimeAgo(chat.lastActiveAt, now) : undefined}
+            accessory={
+              <>
+                {chat.unseen ? (
+                  <Text style={styles.newTag}>{t('bots.chats.newTag', 'New')}</Text>
+                ) : null}
+                {hasWorkers && !matches ? (
+                  <Pressable
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: open }}
+                    accessibilityLabel={
+                      open
+                        ? t('bots.chats.fold', 'Fold {{name}}', { name: title })
+                        : t('bots.chats.unfold', 'Unfold {{name}}', { name: title })
+                    }
+                    onPress={() =>
+                      setBotChatFold(hostKey, bot.id, chat.chatId, open ? 'folded' : 'open')
+                    }
+                  >
+                    <DisclosureChevron expanded={open} collapsedDeg={-90} expandedDeg={0}>
+                      <ChevronDown size={16} color={colors.textMuted} />
+                    </DisclosureChevron>
+                  </Pressable>
+                ) : null}
+              </>
+            }
+            onPress={unopenable ? undefined : openRow}
+            onLongPress={onLongPress}
+            accessibilityLabel={
+              chat.unread ? `${label}, ${t('bots.chats.unread', 'Unread')}` : label
+            }
+          />
+        )}
+      </MobileBotChatMenu>
       {open ? slice.running.map(worker) : null}
       {open && slice.moreRunning > 0 ? (
         <StepLink
@@ -386,8 +328,6 @@ export function MobileBotChatTree({
 }
 
 const styles = themedStyleSheet(() => ({
-  // Indent only, no guide line: a worker sits one step under its chat.
-  nested: { paddingLeft: spacing.xl },
   step: { paddingLeft: spacing.xl + spacing.md, paddingVertical: 2 },
   count: { fontSize: 13, color: colors.textMuted },
   search: { marginBottom: spacing.sm },

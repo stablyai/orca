@@ -1,9 +1,12 @@
+import type { ConnectorFailure } from '../../../shared/connectors/connector-cloud-contract'
+import { prepareJournalLegacyClaimsInsert } from './database/journal-legacy-claims'
 import { createHash } from 'node:crypto'
 import type { LegacyDestinationIdentity } from './journal-legacy-retirement-files'
 import type { LegacyClaim } from './journal-legacy-content-proof'
 import {
   JOURNAL_LEGACY_ORIGINAL,
   JOURNAL_LEGACY_RETIREMENT,
+  JOURNAL_LEGACY_RETIREMENT_REPORTED,
   type JournalLegacyRetirementState
 } from './journal-legacy-retirement-state'
 import { JOURNAL_LEGACY_SOURCE_RECEIPT } from './database/journal-legacy-source-receipt'
@@ -41,10 +44,17 @@ import type { JournalSqlStoredRecords } from './journal-sql-database-read'
 import { settleJournalLegacyCompare } from './database/journal-legacy-compare'
 import { recordJournalLegacyCopyFailure } from './database/journal-legacy-copies'
 import {
+  cutJournalConnectorReplies,
   fillJournalConnectorReplies,
+  recutJournalConnectorReplies,
+  holdJournalConnectorRepliesForRetry,
+  releaseJournalConnectorClaim,
   sentJournalConnectorReplies
 } from './connector-replies/journal-connector-replies'
 import type {
+  JournalConnectorReplyCut,
+  JournalConnectorReplyCutRows,
+  JournalConnectorReplyRetryRows,
   JournalConnectorReplyFill,
   JournalConnectorReplyKey
 } from '../../../shared/agent-session/journal/journal-connector-reply'
@@ -59,6 +69,7 @@ export type JournalPagedMaintenanceKind =
 
 export type JournalSqlMaintenance =
   | { kind: 'legacy-retirement-state' }
+  | { kind: 'legacy-retirement-reported'; value: string }
   | { kind: 'legacy-claims-absorb'; claims: readonly LegacyClaim[] }
   | {
       kind: 'legacy-originals-keep'
@@ -90,6 +101,15 @@ export type JournalSqlMaintenance =
   // The reply outbox's rows outside any chat's lane: filled with outcomes, and sent.
   | { kind: 'connector-replies-fill'; fills: readonly JournalConnectorReplyFill[]; now: number }
   | { kind: 'connector-replies-sent'; keys: readonly JournalConnectorReplyKey[]; now: number }
+  | { kind: 'connector-replies-cut'; rows: JournalConnectorReplyCutRows }
+  | {
+      kind: 'connector-replies-recut'
+      claimMessageId: string
+      cut: JournalConnectorReplyCut
+      failure?: ConnectorFailure
+    }
+  | { kind: 'connector-replies-release'; claimMessageId: string }
+  | { kind: 'connector-replies-retry-hold'; rows: JournalConnectorReplyRetryRows }
 
 export type JournalSqlProjectionState = JournalDomainImportState
 
@@ -122,13 +142,13 @@ export function applyJournalSqlMaintenance(
         receipt: value(JOURNAL_LEGACY_SOURCE_RECEIPT),
         kept: value(JOURNAL_LEGACY_REVISIONS_KEPT) !== null,
         convertedBy: value(JOURNAL_LEGACY_CONVERTED_BY),
-        retirement: value(JOURNAL_LEGACY_RETIREMENT)
+        retirement: value(JOURNAL_LEGACY_RETIREMENT),
+        reported: value(JOURNAL_LEGACY_RETIREMENT_REPORTED)
       }
     }
     case 'legacy-claims-absorb': {
       // Keeps the uploads an original claimed for chats this store keeps before it retires.
-      const insert = db.prepare(`INSERT INTO agent_session_attachment_claims(upload_id,session_id,
-        claimed_at) VALUES(?,?,?) ON CONFLICT DO NOTHING`)
+      const insert = prepareJournalLegacyClaimsInsert(db)
       for (const claim of operation.claims) {
         insert.run(claim.uploadId, claim.sessionId, claim.claimedAt)
       }
@@ -147,6 +167,12 @@ export function applyJournalSqlMaintenance(
       }
       return true
     }
+    case 'legacy-retirement-reported':
+      db.prepare('INSERT OR REPLACE INTO agent_session_store_meta(key,value) VALUES(?,?)').run(
+        JOURNAL_LEGACY_RETIREMENT_REPORTED,
+        operation.value
+      )
+      return true
     case 'legacy-retirement-save':
       db.prepare('INSERT OR REPLACE INTO agent_session_store_meta(key,value) VALUES(?,?)').run(
         JOURNAL_LEGACY_RETIREMENT,
@@ -186,6 +212,21 @@ export function applyJournalSqlMaintenance(
     case 'connector-replies-sent':
       sentJournalConnectorReplies(db, operation.keys, operation.now)
       return true
+    case 'connector-replies-cut':
+      return cutJournalConnectorReplies(db, operation.rows) > 0
+    case 'connector-replies-recut':
+      return (
+        recutJournalConnectorReplies(
+          db,
+          operation.claimMessageId,
+          operation.cut,
+          operation.failure
+        ) > 0
+      )
+    case 'connector-replies-release':
+      return releaseJournalConnectorClaim(db, operation.claimMessageId) > 0
+    case 'connector-replies-retry-hold':
+      return holdJournalConnectorRepliesForRetry(db, operation.rows) > 0
     case 'import-page':
       return insertJournalDomainImportPage(db, operation.target, operation.page)
     case 'import-finish':

@@ -11,11 +11,8 @@ import {
 import { listWorkerTerminalResources } from '../worker-terminal/worker-terminal-listing'
 import { listFederatedDispatchesByIds } from '../../legacy-remote-home/federated-dispatch-store'
 import type { FederatedDispatchRow } from '../orchestration-records'
-import { getWorkerTerminalResourceByProcessIncarnation } from '../worker-terminal/worker-terminal-resource-store'
-import { hasRecordedStructuredWorkerSession } from '../dispatch-context/dispatch-lookup'
+import { readSessionPartyRows, type SessionPartyRows } from '../worker-terminal/session-party-rows'
 import { parseOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
-import { structuredWorkerProcessIncarnation } from '../../terminal-authority/structured-sessions/structured-worker-incarnation'
-import type { WorkerTerminalResourceRow } from '../../terminal-authority/release/worker-terminal-ownership'
 
 export type ConnectorWorkerRow = ReturnType<typeof listWorkerTerminalResources>[number]
 
@@ -26,13 +23,7 @@ export type ConnectorWorkerCandidates = {
   candidates: ConnectorWorkerCandidate[]
   federated: FederatedDispatchRow[]
   /** For each chat a candidate is assigned to, the two rows that name its party. */
-  chatParties: ChatPartyRows[]
-}
-
-export type ChatPartyRows = {
-  sessionId: string
-  resource: WorkerTerminalResourceRow | null
-  recordedWorker: boolean
+  chatParties: SessionPartyRows[]
 }
 
 /** A worker that may still run, with what its live projection needs from the database. */
@@ -114,21 +105,14 @@ export function readConnectorWorkerCandidates(
 function readChatParties(
   connection: OrchestrationDbConnection,
   candidates: readonly ConnectorWorkerCandidate[]
-): ChatPartyRows[] {
-  const sessions = new Set(
+): SessionPartyRows[] {
+  return readSessionPartyRows.call(
+    connection,
     candidates.flatMap(({ row }) => {
       const chat = row.agentTerminalHandle ? parseOrcaSessionAddress(row.agentTerminalHandle) : null
       return chat ? [chat] : []
     })
   )
-  return [...sessions].map((sessionId) => {
-    const process = structuredWorkerProcessIncarnation(sessionId)
-    return {
-      sessionId,
-      resource: getWorkerTerminalResourceByProcessIncarnation.call(connection, process) ?? null,
-      recordedWorker: hasRecordedStructuredWorkerSession.call(connection, sessionId, process)
-    }
-  })
 }
 
 // The settled half of sessionWorkerState, which no liveness verdict overrides.

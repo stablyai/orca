@@ -175,7 +175,7 @@ function CloseTerminalDialogBody({
             <Button type="button" variant="ghost" size="sm" onClick={onSleepInstead}>
               {t(
                 'components.terminal.pane.CloseTerminalDialog.sleepWorkspaceInstead',
-                'Sleep workspace instead'
+                'Sleep workspace'
               )}
             </Button>
           ) : (

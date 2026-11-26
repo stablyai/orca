@@ -17,6 +17,8 @@ const FORWARDED_REQUEST_HEADERS = [
   'accept',
   'mcp-session-id',
   'mcp-protocol-version',
+  'mcp-method',
+  'mcp-name',
   'last-event-id'
 ]
 const FORWARDED_RESPONSE_HEADERS = [
@@ -36,7 +38,12 @@ export async function sendUpstream(
   signal: AbortSignal
 ): Promise<Response> {
   const headers: Record<string, string> = {}
-  for (const name of FORWARDED_REQUEST_HEADERS) {
+  // Mcp-Param-* mirror annotated tool arguments; strict servers reject a call missing them.
+  const names = [
+    ...FORWARDED_REQUEST_HEADERS,
+    ...Object.keys(req.headers).filter((name) => name.startsWith('mcp-param-'))
+  ]
+  for (const name of names) {
     const value = header(req, name)
     if (value !== undefined) {
       headers[name] = value

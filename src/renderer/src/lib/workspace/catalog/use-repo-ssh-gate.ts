@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
-import { useAppStore } from '@/store/index'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import {
   getRepoSshConnection,
   selectRepoSshGateInput
@@ -13,18 +14,16 @@ const NO_GATE: Gate = { connectionId: null, status: null }
 function createRepoSshGateSelector(repo: Pick<Repo, 'connectionId' | 'executionHostId'>) {
   const connection = getRepoSshConnection(repo)
   let initialized = false
-  let owner: ReturnType<AppState['runtimeStatusByEnvironmentId']['get']>
+  let owner: ReturnType<RuntimeStatuses['get']>
   let entry: ReturnType<AppState['sshConnectionStates']['get']>
   let hydrated: boolean | undefined
   let result = NO_GATE
-  return (state: AppState): Gate => {
+  return (state: AppState, statuses: RuntimeStatuses): Gate => {
     if (!connection) {
       return NO_GATE
     }
     const nextOwner =
-      connection.environmentId === null
-        ? undefined
-        : state.runtimeStatusByEnvironmentId.get(connection.environmentId)
+      connection.environmentId === null ? undefined : statuses.get(connection.environmentId)
     const bucket =
       connection.environmentId === null
         ? undefined
@@ -41,7 +40,14 @@ function createRepoSshGateSelector(repo: Pick<Repo, 'connectionId' | 'executionH
     owner = nextOwner
     hydrated = nextHydrated
     entry = nextEntry
-    const next = selectRepoSshGateInput(state, repo)
+    const next = selectRepoSshGateInput(
+      {
+        sshConnectionStates: state.sshConnectionStates,
+        sshStateByEnvironment: state.sshStateByEnvironment
+      },
+      statuses,
+      repo
+    )
     if (result.connectionId !== next.connectionId || result.status !== next.status) {
       result = next
     }
@@ -55,5 +61,5 @@ export function useRepoSshGate(repo: Pick<Repo, 'connectionId' | 'executionHostI
     () => createRepoSshGateSelector({ connectionId, executionHostId }),
     [connectionId, executionHostId]
   )
-  return useAppStore(select)
+  return useAppStoreWithHostStatuses(select)
 }

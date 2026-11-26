@@ -1,16 +1,10 @@
-// The bot panel's head: the bot's name and "agent · computer", the filter (on Items) and the gear for
-// settings, then the tabs with Items' Needs you count; and the Items filter sheet.
+// The bot panel's head: the Needs you only toggle (on Items), the bot's name and "agent · computer",
+// the gear for settings, then the tabs with Items' Needs you count.
 import { Text, View } from 'react-native'
 import { ListFilter, Settings } from 'lucide-react-native'
-import {
-  botItemFilterChat,
-  type BotItemChatChoice,
-  type BotItemFilter
-} from '../../../src/shared/bots/bot-item-groups'
 import { MobileSegmentedControl } from '../components/controls/MobileSegmentedControl'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
-import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
@@ -25,8 +19,9 @@ export function MobileBotPanelHeader(props: {
   tab: PanelTab
   onTab: (tab: PanelTab) => void
   needsYou: number
-  filterActive: boolean
-  onFilter: () => void
+  /** Items show only what needs you. */
+  needsYouOnly: boolean
+  onNeedsYouOnly: () => void
   onSettings: () => void
 }) {
   useMobileColorScheme()
@@ -58,22 +53,22 @@ export function MobileBotPanelHeader(props: {
       <SheetHeader
         title={props.name}
         subtitle={props.sub}
-        trailingButtons={
-          <>
-            {props.tab === 'items' ? (
-              <NavBarButton
-                icon={ListFilter}
-                accessibilityLabel={t('bots.items.filter.label', 'Filter items')}
-                active={props.filterActive}
-                onPress={props.onFilter}
-              />
-            ) : null}
+        leadingButton={
+          props.tab === 'items' ? (
             <NavBarButton
-              icon={Settings}
-              accessibilityLabel={t('bots.sheet.settings', 'Settings')}
-              onPress={props.onSettings}
+              icon={ListFilter}
+              accessibilityLabel={t('bots.items.filter.needsYou', 'Needs you only')}
+              active={props.needsYouOnly}
+              onPress={props.onNeedsYouOnly}
             />
-          </>
+          ) : undefined
+        }
+        trailingButtons={
+          <NavBarButton
+            icon={Settings}
+            accessibilityLabel={t('bots.sheet.settings', 'Settings')}
+            onPress={props.onSettings}
+          />
         }
       />
       <MobileSegmentedControl
@@ -81,55 +76,12 @@ export function MobileBotPanelHeader(props: {
         selected={props.tab}
         onSelect={props.onTab}
         scrollWhenCrowded
+        onSheet
         tabs
         style={styles.segmented}
         testIDPrefix="bot-panel-tab-"
       />
     </>
-  )
-}
-
-/** The desktop's two filters: one chat, and Needs you only. */
-export function MobileBotItemsFilterSheet(props: {
-  visible: boolean
-  onClose: () => void
-  chats: readonly BotItemChatChoice[]
-  filter: BotItemFilter
-  onFilter: (filter: BotItemFilter) => void
-}) {
-  const t = useMobileTranslation()
-  const { filter, onFilter } = props
-  return (
-    <ActionSheetModal
-      visible={props.visible}
-      title={t('bots.items.filter.label', 'Filter items')}
-      onClose={props.onClose}
-      actions={[
-        {
-          id: 'all',
-          label: t('bots.items.filter.all', 'All chats'),
-          checked: filter.chatIds === null,
-          onPress: () => onFilter({ ...filter, chatIds: null })
-        },
-        ...props.chats.map((chat) => ({
-          id: chat.chatId,
-          label:
-            chat.kind === 'home'
-              ? t('bots.items.homeChat', 'Home Chat')
-              : (chat.title ?? t('bots.items.chatFallback', 'Chat')),
-          ...(chat.count > 0 ? { status: String(chat.count) } : {}),
-          checked: botItemFilterChat(filter) === chat.chatId,
-          onPress: () => onFilter({ ...filter, chatIds: [chat.chatId] })
-        })),
-        {
-          id: 'needsYou',
-          label: t('bots.items.filter.needsYou', 'Needs you only'),
-          renderIcon: () => <MobileBotItemStatusIcon status="needs_you" />,
-          checked: filter.needsYou,
-          onPress: () => onFilter({ ...filter, needsYou: !filter.needsYou })
-        }
-      ]}
-    />
   )
 }
 

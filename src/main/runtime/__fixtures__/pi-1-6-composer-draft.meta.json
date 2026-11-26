@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-11-20T20:44:41.324Z",
+  "platform": "darwin",
+  "command": ["<pi-1.6.0>", "--no-session", "--no-extensions", "--no-skills", "--offline"],
+  "cols": 100,
+  "rows": 30,
+  "note": "pi 1.6.0, macOS, isolated HOME, no credentials, --no-extensions; typed a one-line draft without Enter",
+  "exitCode": 0
+}

@@ -15,7 +15,10 @@ export const BROWSER_EXTENSION_API_EVENTS_URL = `${BROWSER_EXTENSION_API_SCHEME}
 
 // Files Orca writes into its own copy of an extension. Chromium reserves names starting with "_".
 export const BROWSER_EXTENSION_WORKER_SHIM_FILE = 'orca-extension-api.js'
-export const BROWSER_EXTENSION_WORKER_WRAPPER_FILE = 'orca-background.js'
+/** A classic worker's own script, moved beside its declared path, which Orca's wrapper takes. */
+export const BROWSER_EXTENSION_ORIGINAL_WORKER_FILE = 'orca-original-worker.js'
+/** Older builds' worker wrapper, left in the folders they prepared; this build never loads it. */
+export const BROWSER_EXTENSION_LEGACY_WORKER_WRAPPER_FILE = 'orca-background.js'
 export const BROWSER_EXTENSION_WORKER_TOKEN_FILE = 'orca-extension-api-token.json'
 /** Orca's content script, listed first in each of the extension's isolated-world content scripts. */
 export const BROWSER_EXTENSION_CONTENT_SCRIPT_FILE = 'orca-content-script-api.js'

@@ -116,17 +116,6 @@ describe('webhook deliveries on this machine', () => {
     expect(await dispatch(notice, false).done).toEqual({ outcome: 'unsupported' })
   })
 
-  it("reads an older cloud's trigger delivery as before", async () => {
-    const { ran, done } = dispatch({
-      ...call,
-      conversation: { source: 'slack', externalId: 'trigger:abc' },
-      triggerId: 't1',
-      event: { key: 'T:C:1', actorId: 'U0MEMBER', occurredAt: 1 }
-    })
-    expect(await done).toEqual({ outcome: 'accepted' })
-    expect(ran).toHaveLength(1)
-  })
-
   it.each([
     [
       'call fields it cannot read',

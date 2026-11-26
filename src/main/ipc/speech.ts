@@ -81,22 +81,25 @@ export function registerSpeechHandlers(
   })
 
   ipcMain.handle('speech:getOpenAiApiKeyStatus', async () => {
-    return { configured: hasOpenAiSpeechApiKey(), protection: getOpenAiSpeechApiKeyProtection() }
+    return {
+      configured: await hasOpenAiSpeechApiKey(),
+      protection: await getOpenAiSpeechApiKeyProtection()
+    }
   })
 
   ipcMain.handle('speech:saveOpenAiApiKey', async (_event, apiKey: string) => {
     await saveVerifiedOpenAiSpeechApiKey(apiKey)
-    return { configured: true, protection: getOpenAiSpeechApiKeyProtection() }
+    return { configured: true, protection: await getOpenAiSpeechApiKeyProtection() }
   })
 
   ipcMain.handle('speech:clearOpenAiApiKey', async () => {
-    clearOpenAiSpeechApiKey()
+    await clearOpenAiSpeechApiKey()
     return { configured: false, protection: null }
   })
 
-  ipcMain.handle('speech:getOpenAiCompatibleProvider', () => {
+  ipcMain.handle('speech:getOpenAiCompatibleProvider', async () => {
     try {
-      return summarizeOpenAiCompatibleSpeechProvider()
+      return await summarizeOpenAiCompatibleSpeechProvider()
     } catch {
       return null
     }
@@ -109,8 +112,8 @@ export function registerSpeechHandlers(
     }
   )
 
-  ipcMain.handle('speech:clearOpenAiCompatibleProvider', () => {
-    clearOpenAiCompatibleSpeechProvider()
+  ipcMain.handle('speech:clearOpenAiCompatibleProvider', async () => {
+    await clearOpenAiCompatibleSpeechProvider()
   })
 
   ipcMain.handle('speech:downloadModel', async (event, modelId: string) => {
@@ -297,8 +300,8 @@ export function registerSpeechHandlers(
 
   ipcMain.handle(
     'speech:feedAudio',
-    async (_event, buffer: Buffer, sampleRate: number, sessionId = 'desktop') => {
-      // Preload uses Buffer because contextBridge/IPC can zero Float32Array data.
+    async (_event, buffer: Uint8Array, sampleRate: number, sessionId = 'desktop') => {
+      // Preload sends bytes because contextBridge/IPC can zero Float32Array data.
       const samples = new Float32Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / 4)
       return getSpeechSttService(store).feedAudio(
         samples,

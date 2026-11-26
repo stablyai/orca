@@ -1,4 +1,8 @@
-import type { ClaudeManagedAccount, ClaudeRateLimitAccountsState } from '../managed-account-types'
+import type {
+  ClaudeAccountSelectionChange,
+  ClaudeManagedAccount,
+  ClaudeRateLimitAccountsState
+} from '../managed-account-types'
 
 function normalizeFolder(path: string, platform: NodeJS.Platform): string {
   const slashed = path.replace(/\\/g, '/').replace(/\/+$/, '')
@@ -19,6 +23,12 @@ export type ClaudeHostFolders = Pick<
   ClaudeRateLimitAccountsState,
   'accounts' | 'systemDefaultHome' | 'systemDefaultEmail' | 'systemDefaultOrganizationUuid'
 >
+
+/** A Claude selection as a host's mover reads it: only the host's folders and logins on each side. */
+export type ClaudeHostSelectionChange = Omit<ClaudeAccountSelectionChange, 'before' | 'after'> & {
+  before: { state: ClaudeHostFolders; accountId: string | null }
+  after: { state: ClaudeHostFolders; accountId: string | null }
+}
 
 /** Where a pane's Claude keeps its config, read from its transcript path. */
 export type ClaudePaneFolder =

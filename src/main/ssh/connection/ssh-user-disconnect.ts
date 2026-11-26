@@ -39,11 +39,6 @@ export function clearSshUserDisconnectedForEnvironment(
   }
 }
 
-export function resetSshUserDisconnectsForTests(): void {
-  userDisconnectedTargets.clear()
-  userDisconnectCounts.clear()
-}
-
 /** Not an auth or transient failure: callers neither ask for a sign-in nor retry it. */
 export function createSshUserDisconnectedError(label: string): Error {
   return Object.assign(new Error(formatSshUserDisconnectedMessage(label)), {

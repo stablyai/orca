@@ -1,5 +1,9 @@
+import { scopedCrewChange } from '../../orchestration/crew/crew-changes'
 import { RuntimeWorkspaceRepoScanRefresh } from '../../workspaces/catalog/workspace-repo-scan-refresh'
-import { awaitReattachedTerminalPaint, vouchTerminalSpawn } from '../input/terminal-command-paint'
+import {
+  awaitReattachedTerminalPaint,
+  vouchTerminalSpawn
+} from '../input/terminal-command-paint-record'
 import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
@@ -261,7 +265,12 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
       noteMainPaneRecordChange(this, prior, pty)
     }
     if (previousTitle !== pty.title) {
-      this.crewChanges.notify(new Set(['names']))
+      // Agent CLIs retitle about once a second; only a crew showing this pane rereads names.
+      this.crewChanges.notify(
+        pty.paneKey
+          ? scopedCrewChange(['names'], { paneKeys: new Set([pty.paneKey]) })
+          : new Set(['names'])
+      )
     }
     return pty
   }

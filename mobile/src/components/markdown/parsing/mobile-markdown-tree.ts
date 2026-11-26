@@ -6,7 +6,7 @@ import remend from 'remend'
 import { forEachGitHubCallout } from '../../../../../src/shared/github/markdown/github-callouts'
 import { codeNode, type Token } from '../blocks/mobile-markdown-code-nodes'
 import { inlineTagNode, inlineTagPairs } from './mobile-markdown-inline-html'
-import { readTaskMarker } from './mobile-markdown-task-items'
+import { numberChatListItem, readTaskMarker } from './mobile-markdown-list-item-markers'
 import { plainText } from './mobile-markdown-plain-text'
 import { appendHtmlBlock, noteInlineHtml, popContainer } from '../blocks/mobile-markdown-details'
 import { mobileMarkdownMath, type MathEnv } from '../math/mobile-markdown-math'
@@ -178,6 +178,7 @@ function toTree(tokens: readonly Token[], source: string, env: MathEnv): Root {
         break
       case 'list_item_open':
         open({ type: 'listItem', checked: null, children: [] })
+        numberChatListItem(parent, token, env)
         break
       case 'table_open':
         table = { type: 'table', align: [], children: [] }

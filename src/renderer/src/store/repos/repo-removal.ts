@@ -9,7 +9,7 @@ import {
 } from '@/lib/workspace/activation/worktree-visit-recency'
 import { omitSparsePresetsForRepos } from '../slices/worktrees/create/sparse-presets'
 import { repoMatchesHostIdentity, worktreeBelongsToHost } from './repo-host-identity'
-import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
+import { removeRepoOnOwner } from './repo-owner-removal'
 import { hasRuntimeRpcErrorCode } from '../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import { ipcOrRuntimeTargetForHostId } from '../../runtime/rpc/targets/runtime-client-target'
 // oxfmt-ignore
@@ -152,9 +152,7 @@ export function createRepoRemovalActions(
           // Why: destroying the VM took its server, and the catalog holding this row, with it.
           if (!vmServerDestroyed && !hostGone) {
             // Why: always host-scoped; this catalog may be stale and miss a same-id row on another host (#13071).
-            await (target.kind === 'local'
-              ? window.api.repos.removeForHost({ repoId: projectId, hostId: ownerHostId })
-              : callRuntimeRpc(target, 'repo.rm', { repo: projectId }, { timeoutMs: 15_000 }))
+            await removeRepoOnOwner(target, projectId, ownerHostId)
           }
         } catch (err) {
           // Why: the owner already dropped this project, so purge the local ghost row instead of aborting (#11994).

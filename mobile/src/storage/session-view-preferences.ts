@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { persistMirrored } from './mirrored-storage-keys'
 import type { AgentLaunchSurface } from '../../../src/shared/agent-launch/contracts/agent-launch-surface'
+import { isNativeChatSupportedAgent } from '../../../src/shared/native-chat/native-chat-agent-support'
 
 export type MobileSessionView = 'terminal' | 'chat'
 
@@ -45,6 +46,16 @@ export async function readDefaultSessionViewPreference(): Promise<DefaultSession
 
 export async function loadDefaultSessionView(): Promise<MobileSessionView> {
   return (await readDefaultSessionViewPreference()).value ?? DEFAULT_SESSION_VIEW
+}
+
+/** The view to ask the host for on an agent tab this phone starts, so a chat here opens as a chat on the desktop too. */
+export async function hostViewModeForNewAgentTab(
+  agent: string | null | undefined
+): Promise<'chat' | undefined> {
+  if (!isNativeChatSupportedAgent(agent)) {
+    return undefined
+  }
+  return (await loadDefaultSessionView()) === 'chat' ? 'chat' : undefined
 }
 
 export function saveDefaultSessionView(view: MobileSessionView): Promise<void> {

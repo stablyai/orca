@@ -20,10 +20,25 @@ import { botToolSignInProgress, connectBotToolSignIn } from './bot-tool-sign-in-
  * in under (`signIn`, the credential to add with it). One with saved values, or that answers without a sign-in, is added as given.
  * Throws, in the host's words, when the address can't be used.
  */
-async function classifyAddedBotTool(
+export async function classifyAddedBotTool(
   server: BotToolServer,
   signal?: AbortSignal
 ): Promise<{ server: BotToolServer; signIn?: ReadonlyMap<string, BotToolNewCredential> }> {
+  const sorted = await sortAddedBotTool(server, signal)
+  if ('failure' in sorted) {
+    throw new Error(botToolSignInMessage(sorted.failure))
+  }
+  return sorted
+}
+
+/** As `classifyAddedBotTool`, answering why an address can't be used instead of throwing. */
+export async function sortAddedBotTool(
+  server: BotToolServer,
+  signal?: AbortSignal
+): Promise<
+  | { server: BotToolServer; signIn?: ReadonlyMap<string, BotToolNewCredential> }
+  | { failure: 'unsupported' | 'unavailable' }
+> {
   if (!('url' in server) || server.credential || Object.keys(server.headers ?? {}).length > 0) {
     return { server }
   }
@@ -39,7 +54,7 @@ async function classifyAddedBotTool(
       signIn: new Map([[id, { url: server.url, signIn: true }]])
     }
   }
-  throw new Error(botToolSignInMessage(need.kind))
+  return { failure: need.kind }
 }
 
 /** Adds `given` to the bot, as Orca's own sign-in tool when its address needs a sign-in. */

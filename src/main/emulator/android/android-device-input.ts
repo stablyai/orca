@@ -6,12 +6,8 @@ import type { AndroidCommandRunner } from './android-command-runner'
 import { androidButton, androidSwipe, androidTap, androidTypeText } from './android-input-commands'
 import type { DeviceScreenSize } from './android-input-mapping'
 import type { AndroidSdkPaths } from './android-sdk-discovery'
-import {
-  sendScrcpyButton,
-  sendScrcpyGesture,
-  sendScrcpyTap,
-  sendScrcpyText
-} from './scrcpy-control-input'
+import { sendScrcpyGesture, sendScrcpyTap } from './scrcpy-control-input'
+import { sendScrcpyKey, sendScrcpyText } from './scrcpy-input-queue'
 import type { ScrcpyControlTarget } from './scrcpy-stream-session'
 
 export type AndroidDeviceInputDeps = {
@@ -49,10 +45,10 @@ export class AndroidDeviceInput {
     )
   }
 
-  async type(deviceId: string, text: string): Promise<void> {
+  async type(deviceId: string, text: string, paste = false): Promise<void> {
     await this.route(
       deviceId,
-      (control) => sendScrcpyText(control, text),
+      (control) => sendScrcpyText(control, text, { paste }),
       (sdk, serial) => androidTypeText(this.deps.runner, sdk, serial, text)
     )
   }
@@ -60,7 +56,7 @@ export class AndroidDeviceInput {
   async button(deviceId: string, name: string): Promise<void> {
     await this.route(
       deviceId,
-      (control) => sendScrcpyButton(control, name),
+      (control) => sendScrcpyKey(control, name),
       (sdk, serial) => androidButton(this.deps.runner, sdk, serial, name)
     )
   }

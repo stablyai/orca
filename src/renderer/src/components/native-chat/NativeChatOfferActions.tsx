@@ -1,13 +1,16 @@
-// Every offer card a bot shows answers one way: its action stays until it's done, and Dismiss hides only once
-// the owner presses it. Each card's answer is its own, kept on the bot by card, so no card answers another.
+// Each card keeps its own answer; Not now still sends Dismiss to the agent.
 import { useContext, type ReactNode } from 'react'
-import { Check } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { updateBot, useCardBot } from '@/lib/bot-catalog'
-import { answerBotOffer } from '../../../../shared/bots/bot-offer-answers'
+import {
+  answerBotOffer,
+  answerBotOfferAgain,
+  type BotOfferAnswerUpdate
+} from '../../../../shared/bots/bot-offer-answers'
 import { botErrorMessage } from '../bots/bot-presentation'
+import { NativeChatCardActions } from './NativeChatCardFrame'
 import { NativeChatBotKickoffContext } from './native-chat-bot-kickoff-view'
 
 export type NativeChatOffer = {
@@ -17,6 +20,11 @@ export type NativeChatOffer = {
   dismiss: () => void
   /** Tells the bot `text`, as if typed, and keeps `chosen` as this card's answer. */
   send: (text: string, chosen: readonly string[]) => void
+  /** Like `send`, for a further action on a card already answered: replaces its answer. */
+  sendAgain: (text: string, chosen: readonly string[]) => void
+  /** Like `send` (`again`: `sendAgain`), told by `tell` instead of a typed message, such as a hidden
+   *  card answer; `tell` resolves false when it was refused. */
+  answer: (tell: () => Promise<boolean>, chosen: readonly string[], again?: boolean) => void
 }
 
 export function useNativeChatOffer(botId: string, cardId: string): NativeChatOffer {
@@ -28,12 +36,18 @@ export function useNativeChatOffer(botId: string, cardId: string): NativeChatOff
   // the claim back and leaves the card to press again.
   const answerOffer = async (
     update: Parameters<typeof answerBotOffer>[0],
-    text: string
+    tell: () => Promise<boolean>,
+    again = false
   ): Promise<void> => {
-    const outcome = await answerBotOffer(update, {
-      update: (offerAnswer) => updateBot(ref, { offerAnswer }),
-      send: async () => (await view?.send(text)) === true
-    }).catch((error: unknown) => {
+    const ops = {
+      update: (offerAnswer: BotOfferAnswerUpdate) => updateBot(ref, { offerAnswer }),
+      send: tell
+    }
+    const outcome = await (
+      again && update.sent
+        ? answerBotOfferAgain({ cardId, sent: update.sent }, answer?.sent, ops)
+        : answerBotOffer(update, ops)
+    ).catch((error: unknown) => {
       toast.error(botErrorMessage(error))
       return null
     })
@@ -44,48 +58,45 @@ export function useNativeChatOffer(botId: string, cardId: string): NativeChatOff
       )
     }
   }
+  const typed = (text: string) => async (): Promise<boolean> => (await view?.send(text)) === true
   return {
     dismissed: answer?.dismissed === true,
     sent: answer?.sent?.chosen ?? null,
     dismiss: () =>
       void answerOffer(
         { cardId, dismissed: true },
-        t('components.native-chat.offerCard.dismiss', 'Dismiss')
+        typed(t('components.native-chat.offerCard.dismiss', 'Dismiss'))
       ),
-    send: (text, chosen) => void answerOffer({ cardId, sent: { chosen: [...chosen] } }, text)
+    send: (text, chosen) =>
+      void answerOffer({ cardId, sent: { chosen: [...chosen] } }, typed(text)),
+    sendAgain: (text, chosen) =>
+      void answerOffer({ cardId, sent: { chosen: [...chosen] } }, typed(text), true),
+    answer: (tell, chosen, again) =>
+      void answerOffer({ cardId, sent: { chosen: [...chosen] } }, tell, again)
   }
 }
 
-/** The card's buttons: Dismiss until pressed, then its own action until it's done. */
+/** The card's action bar: Not now until pressed, then its own action until it's done. A done card has
+ *  no bar; it says so in its state. */
 export function NativeChatOfferActions({
   offer,
-  done,
-  doneLabel,
+  start,
   children
 }: {
   offer: Pick<NativeChatOffer, 'dismissed' | 'dismiss'>
-  done: boolean
-  /** In place of the buttons once done; absent where the card says so itself. */
-  doneLabel?: string
+  /** Quiet controls on the left, such as Edit. */
+  start?: ReactNode
   children: ReactNode
-}): React.JSX.Element | null {
+}): React.JSX.Element {
   const t = useTranslate()
-  if (done) {
-    return doneLabel ? (
-      <p className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
-        <Check className="size-3" aria-hidden />
-        {doneLabel}
-      </p>
-    ) : null
-  }
   return (
-    <div className="flex shrink-0 items-center gap-1.5">
+    <NativeChatCardActions start={start}>
       {offer.dismissed ? null : (
-        <Button type="button" variant="ghost" size="xs" onClick={offer.dismiss}>
-          {t('components.native-chat.offerCard.dismiss', 'Dismiss')}
+        <Button type="button" variant="outline" size="sm" onClick={offer.dismiss}>
+          {t('components.native-chat.offerCard.notNow', 'Not now')}
         </Button>
       )}
       {children}
-    </div>
+    </NativeChatCardActions>
   )
 }

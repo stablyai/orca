@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store'
 import { openBotHome, readBots } from '@/lib/bot-catalog'
+import { botConnectorRowKey, openBotConnectorPage } from './bot-connector-page'
 import type { Bot } from '../../../../shared/bot-types'
 import {
   type BotSettingsHost,
@@ -55,10 +56,11 @@ export function openBotSettings(botId: string, place?: BotSettingsPlace): void {
 }
 
 /** The bot's page with its Connectors tab showing; false when its page can't open. */
-export function openBotConnectorsTab(bot: Bot): boolean {
+export function openBotConnectorsTab(bot: Bot, entryKey?: string): boolean {
   if (!openBotHome(bot)) {
     return false
   }
+  openBotConnectorPage(entryKey === undefined ? null : botConnectorRowKey(bot, entryKey))
   const { setRightSidebarTab, setRightSidebarOpen } = useAppStore.getState()
   setRightSidebarTab('bot-connectors')
   setRightSidebarOpen(true)

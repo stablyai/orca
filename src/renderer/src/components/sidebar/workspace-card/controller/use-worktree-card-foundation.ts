@@ -11,7 +11,10 @@ import { getHostDisplayLabelOverrides } from '../../../../../../shared/execution
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-ports/workspace-port-groups'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
 import { hydrateRuntimeEnvironmentSshState } from '@/runtime/hosts/ssh/runtime-environment-ssh-state'
-import { useRuntimeHostDisconnected } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import {
+  useAppStoreWithHostStatuses,
+  useRuntimeHostDisconnected
+} from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store'
 import {
   selectRuntimeAwareSshStatus,
@@ -166,12 +169,12 @@ export function useWorktreeCardFoundation({
   const sshOwnerEnvironmentId = useAppStore((s) =>
     repo?.connectionId ? runtimeEnvironmentIdUnlessTwin(s, worktree.id) : null
   )
-  const sshStatus = useAppStore((s) => {
+  const sshStatus = useAppStoreWithHostStatuses((s, statuses) => {
     // Why: runtime-owned SSH targets suppress their ssh:state-changed broadcasts, so don't show a false "disconnected" chip for them.
     if (!repo?.connectionId || isRuntimeOwnedSshTargetId(repo.connectionId)) {
       return null
     }
-    return selectRuntimeAwareSshStatus(s, sshOwnerEnvironmentId, repo.connectionId)
+    return selectRuntimeAwareSshStatus(s, statuses, sshOwnerEnvironmentId, repo.connectionId)
   })
   useEffect(() => {
     if (sshOwnerEnvironmentId) {
@@ -180,9 +183,9 @@ export function useWorktreeCardFoundation({
   }, [sshOwnerEnvironmentId])
   const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
   // Require positive removal evidence; runtime-owned targets are absent from listTargets by design.
-  const sshTargetRemoved = useAppStore((s) =>
+  const sshTargetRemoved = useAppStoreWithHostStatuses((s, statuses) =>
     repo?.connectionId && !isRuntimeOwnedSshTargetId(repo.connectionId)
-      ? selectRuntimeAwareSshTargetRemoved(s, sshOwnerEnvironmentId, repo.connectionId)
+      ? selectRuntimeAwareSshTargetRemoved(s, statuses, sshOwnerEnvironmentId, repo.connectionId)
       : false
   )
 

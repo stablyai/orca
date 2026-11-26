@@ -20,11 +20,13 @@ export function fillUnknownModelEfforts(
       effortsKnown: _unknown,
       defaultEffort: _default,
       declaredDefaultEffort: _declared,
+      chatEfforts: _unconfirmed,
       ...rest
     } = row
     return {
       ...rest,
       efforts: discovered.efforts,
+      ...(discovered.chatEfforts ? { chatEfforts: discovered.chatEfforts } : {}),
       ...(discovered.defaultEffort !== undefined
         ? { defaultEffort: discovered.defaultEffort }
         : {}),

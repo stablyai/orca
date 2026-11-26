@@ -63,12 +63,13 @@ function Fixture({ count, baseline = false, offset = 0, paired = false }: Fixtur
 }
 
 const root = createRoot(document.getElementById('root')!)
-let generation = 0
 Object.assign(window, {
   spinnerBenchmark: {
     zoomExtremes: [1.2 ** UI_ZOOM_MIN, 1.2 ** UI_ZOOM_MAX],
     render(options: FixtureOptions) {
-      flushSync(() => root.render(<Fixture key={++generation} {...options} />))
+      // Unmount first so every render starts fresh mounts.
+      flushSync(() => root.render(null))
+      flushSync(() => root.render(<Fixture {...options} />))
     }
   }
 })

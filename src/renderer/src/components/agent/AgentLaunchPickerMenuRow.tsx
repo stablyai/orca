@@ -11,7 +11,7 @@ import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { AgentDefaultContextMenu } from './agent-combobox-items'
 import { AgentLaunchSetupButton, type AgentPickerSetupIdentity } from './AgentLaunchSetupButton'
 import { applyAgentPickerEdit } from '../../../../shared/agent-launch/picker/agent-launch-picker-edits'
-import { chatUnavailableLabel } from './launch-menu/agent-menu-row-presentation'
+import { chatUnavailableLabel, entrySetupLabel } from './launch-menu/agent-menu-row-presentation'
 import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import {
   agentPickerDraft,
@@ -133,6 +133,9 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
               <span className="truncate text-xs text-muted-foreground">{entry.description}</span>
             ) : null}
           </span>
+          {(selected?.surface ?? entry.defaultSurface) === 'chat' && entrySetupLabel(entry) ? (
+            <span className="text-xs text-muted-foreground">{entrySetupLabel(entry)}</span>
+          ) : null}
           {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
         </DropdownMenuItem>
       </AgentDefaultContextMenu>
@@ -220,6 +223,8 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
                 <span className="text-xs text-muted-foreground">
                   {chatUnavailableLabel(unavailable.reason)}
                 </span>
+              ) : surface === 'chat' && entrySetupLabel(entry) ? (
+                <span className="text-xs text-muted-foreground">{entrySetupLabel(entry)}</span>
               ) : null}
             </Button>
           </AgentDefaultContextMenu>

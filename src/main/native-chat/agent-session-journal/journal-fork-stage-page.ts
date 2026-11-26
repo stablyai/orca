@@ -176,7 +176,7 @@ export function applyJournalForkStagePage(
       rendered.sequence
     )
     const claims =
-      item.body.kind === 'message'
+      item.body.kind === 'message' || item.body.kind === 'tool-call'
         ? [
             ...agentSessionAttachmentReferences(
               agentSessionAttachmentStoreRoot(stateDirectory),

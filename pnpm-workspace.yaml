@@ -119,7 +119,7 @@ patchedDependencies:
   sprintf-js@1.1.3: config/patches/sprintf-js@1.1.3.patch
   '@tiptap/extension-list@3.31.3': config/patches/@tiptap__extension-list@3.31.3.patch
   '@tiptap/markdown@3.31.3': config/patches/@tiptap__markdown@3.31.3.patch
-  vitest@5.0.5: config/patches/vitest@5.0.5.patch
+  vitest@5.1.0: config/patches/vitest@5.1.0.patch
   pdfjs-dist@6.3.289: config/patches/pdfjs-dist@6.3.289.patch
   prosemirror-view@1.42.3: config/patches/prosemirror-view@1.42.3.patch
   glob@13.0.6: config/patches/glob@13.0.6.patch
@@ -129,6 +129,8 @@ patchedDependencies:
   picomatch@4.0.4: config/patches/picomatch@4.0.4.patch
   picomatch@4.0.7: config/patches/picomatch@4.0.7.patch
   '@radix-ui/react-menu@2.1.24': config/patches/@radix-ui__react-menu@2.1.24.patch
+  mermaid@11.17.2: config/patches/mermaid@11.17.2.patch
+  serve-sim@0.1.47: config/patches/serve-sim@0.1.47.patch
 permissions:
   agent-browser:
     skills: false

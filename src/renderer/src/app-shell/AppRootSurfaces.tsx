@@ -31,6 +31,9 @@ import {
   usePreloadWorktreeJumpPalette,
   WorktreeJumpPalette
 } from '../components/worktree-jump/worktree-jump-palette-preload'
+import { AiVaultSessionHistoryDialog } from '../components/right-sidebar/ai-vault/session-list/agent-session-history-dialog-preload'
+import { usePrefetchAvatarCapability } from '../components/bots/avatar-generation-capability-store'
+import { useLocalAgentCliUpdateCheck } from '../components/agent-cli-update/use-local-agent-cli-update-check'
 import {
   selectAppRootSurfacePetEnabled,
   selectAppRootSurfaceTelemetryOptedIn,
@@ -64,9 +67,6 @@ const ProjectAddedDialog = lazy(
 )
 const NodeDistMirrorDialog = lazy(
   () => import('../components/ssh-host-recovery/NodeDistMirrorDialog')
-)
-const AiVaultSessionHistoryDialog = lazy(
-  () => import('../components/right-sidebar/ai-vault/session-list/AiVaultSessionHistoryDialog')
 )
 const NativeChatAccountUsageDialog = lazy(
   () => import('../components/native-chat/usage/NativeChatAccountUsageDialog')
@@ -122,6 +122,8 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
   const languageReady = useLanguageReadiness((state) => state.ready)
   const { mountedLazyModalIds, shouldMountAddRepoDialog } = useLazyModalMounts()
   usePreloadWorktreeJumpPalette()
+  usePrefetchAvatarCapability()
+  useLocalAgentCliUpdateCheck()
   const activeView = useAppStore((s) => s.activeView)
   const activeModal = useAppStore((s) => s.activeModal)
   // Subscribe only to consumed settings so unrelated preferences cannot rerender every overlay.

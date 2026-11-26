@@ -1,6 +1,8 @@
 // Every way a picture comes in (file chooser, paste, drop) ends as one Blob cropped to a 512 px PNG.
 import { BOT_AVATAR_SOURCE_TYPES, MAX_BOT_AVATAR_SOURCE_BYTES } from '../../../../shared/bot-avatar'
-import { BOT_AVATAR_TOO_SMALL, squareAvatarPng } from './bot-avatar-upload'
+import { BOT_AVATAR_TOO_SMALL } from '../../../../shared/bots/bot-avatar-square'
+import { avatarPngFromIcns, hasIcnsMagic } from './bot-avatar-icns'
+import { squareAvatarPng } from './bot-avatar-upload'
 
 /** Why a pasted or dropped picture was not used. */
 export type BotAvatarIntakeError = 'too_big' | 'type' | 'too_small'
@@ -12,7 +14,7 @@ export class BotAvatarIntakeFailure extends Error {
 }
 
 /** The file chooser offers what the intake reads. */
-export const BOT_AVATAR_ACCEPT = [...BOT_AVATAR_SOURCE_TYPES].join(',')
+export const BOT_AVATAR_ACCEPT = [...BOT_AVATAR_SOURCE_TYPES, '.icns'].join(',')
 
 /** Image data is the picture; any other paste (a link, text) is left alone. */
 export function pastedAvatarSource(data: DataTransfer | null): Blob | null {
@@ -35,14 +37,27 @@ export async function avatarPngFromBlob(blob: Blob): Promise<string> {
   if (blob.size > MAX_BOT_AVATAR_SOURCE_BYTES) {
     throw new BotAvatarIntakeFailure('too_big')
   }
-  // Some drags carry no type; the decode decides for those.
-  if (blob.type && !BOT_AVATAR_SOURCE_TYPES.has(blob.type)) {
-    throw new BotAvatarIntakeFailure('type')
-  }
   try {
-    return await squareAvatarPng(blob)
+    const source = BOT_AVATAR_SOURCE_TYPES.has(blob.type) ? blob : await icnsPngSource(blob)
+    // Some drags carry no type; the decode decides for those.
+    if (source.type && !BOT_AVATAR_SOURCE_TYPES.has(source.type)) {
+      throw new Error('bot_avatar_type')
+    }
+    return await squareAvatarPng(source)
   } catch (error) {
     const tooSmall = error instanceof Error && error.message === BOT_AVATAR_TOO_SMALL
     throw new BotAvatarIntakeFailure(tooSmall ? 'too_small' : 'type')
   }
+}
+
+// Browsers type .icns as image/icns, image/x-icns or nothing, so its bytes decide.
+async function icnsPngSource(blob: Blob): Promise<Blob> {
+  if (!hasIcnsMagic(new Uint8Array(await blob.slice(0, 4).arrayBuffer()))) {
+    return blob
+  }
+  const png = avatarPngFromIcns(new Uint8Array(await blob.arrayBuffer()))
+  if (!png) {
+    throw new Error('bot_avatar_invalid')
+  }
+  return new Blob([png], { type: 'image/png' })
 }

@@ -1,7 +1,9 @@
 import type { WebContents } from 'electron'
 
+export type MainRendererSender = Pick<WebContents, 'id' | 'isDestroyed' | 'getType' | 'getURL'>
+
 export function isTrustedMainRendererSender(
-  sender: WebContents,
+  sender: MainRendererSender,
   pinnedWebContentsId: number | null
 ): boolean {
   if (sender.isDestroyed() || sender.getType() !== 'window') {

@@ -41,7 +41,7 @@ function focuses(control: HTMLElement): boolean {
 }
 
 /** Focus a removed or moved node had goes to the page itself. */
-function focusFellToNothing(): boolean {
+export function focusFellToNothing(): boolean {
   return document.activeElement === null || document.activeElement === document.body
 }
 

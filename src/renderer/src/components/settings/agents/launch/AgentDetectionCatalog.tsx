@@ -99,11 +99,6 @@ export function AgentDetectionCatalog({
             key={installed ? 'installed' : 'available'}
             bodyRef={installed ? installedBody : availableBody}
             className="has-[[data-settings-group-body]:empty]:hidden"
-            scrollLabel={
-              installed
-                ? t('settings.agents.installedRegion', 'Installed agents')
-                : t('settings.agents.availableRegion', 'Agents available to install')
-            }
             title={
               installed ? (
                 <span className="flex flex-wrap items-center gap-2">

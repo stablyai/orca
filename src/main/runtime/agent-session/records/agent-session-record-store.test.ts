@@ -450,3 +450,30 @@ describe('host and workspace isolation', () => {
     ).rejects.toThrow('agent_session_conflict')
   })
 })
+
+describe('chat delete', () => {
+  it("never reuses a deleted chat's id, even after the store reopens", async () => {
+    const store = await open()
+    const owned = await establishOwner(store)
+    await store.evictProvenDeadOwner({
+      sessionId: 'session-alpha',
+      expectedFence: 1,
+      probe: { outcome: 'pid-absent' },
+      now: owned.lease.leaseDeadlineAt + 60 * 60 * 1000
+    })
+
+    expect(
+      await store.forgetChat({
+        chatId: 'session-alpha',
+        sessionIds: ['session-alpha'],
+        conversations: []
+      })
+    ).toBe(true)
+    expect(store.getRecord('session-alpha')).toBeNull()
+    await closeTestAgentSessionDatabase(directory)
+    const reopened = await open()
+
+    await expect(reopened.reserveOwner(reserveRequest())).rejects.toThrow('agent_session_deleted')
+    expect(reopened.getRecord('session-alpha')).toBeNull()
+  })
+})

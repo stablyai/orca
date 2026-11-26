@@ -11,8 +11,12 @@ export type WslDistroHolderEnsureResult =
   /** The recorded holder could not be checked; kept rather than doubled (it may be live). */
   | { outcome: 'unverifiable'; record: WslDistroHolderRecord }
 
-/** Minimal child lifecycle: spawn/error/exit, PID and unref. */
-export type WslDistroHolderChild = EventEmitter & { readonly pid?: number; unref(): void }
+/** Minimal child lifecycle: spawn/error/exit, PID, unref, and a kill that refuses after exit. */
+export type WslDistroHolderChild = EventEmitter & {
+  readonly pid?: number
+  unref(): void
+  kill(): boolean
+}
 
 export type WslDistroHolderAdoption = { distro: string; state: WslDistroHolderState }
 

@@ -58,9 +58,11 @@ function BotHomeFileBody({
 
 export function BotSoulBody({
   home,
+  onOpenAsFile,
   footer
 }: {
   home: BotHome
+  onOpenAsFile?: () => void
   /** Under the editor, such as Open as file. */
   footer?: React.ReactNode
 }): React.ReactNode {
@@ -70,7 +72,11 @@ export function BotSoulBody({
     <BotHomeFileBody home={home} file={soul} name="SOUL.md">
       {(file) => (
         <>
-          <BotSoulEditor file={file} label={t('settings.bots.soul', 'Soul')} />
+          <BotSoulEditor
+            file={file}
+            label={t('settings.bots.soul', 'Soul')}
+            onOpenAsFile={onOpenAsFile}
+          />
           {footer}
         </>
       )}
@@ -82,11 +88,13 @@ export function BotMemoryBody({
   bot,
   home,
   defaultTab,
+  onOpenAsFile,
   children
 }: {
   bot: BotRef
   home: BotHome
   defaultTab?: 'facts' | 'history'
+  onOpenAsFile?: () => void
   /** After the facts: the topic files. */
   children?: React.ReactNode
 }): React.ReactNode {
@@ -94,7 +102,7 @@ export function BotMemoryBody({
   return (
     <BotHomeFileBody home={home} file={memory} name="MEMORY.md">
       {(file) => (
-        <BotMemoryPanel bot={bot} file={file} defaultTab={defaultTab}>
+        <BotMemoryPanel bot={bot} file={file} defaultTab={defaultTab} onOpenAsFile={onOpenAsFile}>
           {children}
         </BotMemoryPanel>
       )}

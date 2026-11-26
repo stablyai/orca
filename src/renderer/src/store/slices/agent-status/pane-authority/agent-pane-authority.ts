@@ -125,7 +125,3 @@ export function forgetAgentPaneAuthorityAliasesByTabIds(tabIds: Iterable<string>
     }
   }
 }
-
-export function resetAgentPaneAuthorityAliasesForTests(): void {
-  aliasesByPhysicalPaneKey.clear()
-}

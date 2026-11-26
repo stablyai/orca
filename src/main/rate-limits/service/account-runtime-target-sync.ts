@@ -48,7 +48,7 @@ export function createAccountRuntimeTargetSettingsSync(
     if (usageTargetChanged) {
       rateLimits.setAntigravityFetchTarget(nextSettingsTargets.usage)
     }
-    const current = rateLimits.getState()
+    const current = await rateLimits.getState()
     const refreshes: Promise<RateLimitState>[] = []
     if (claudePolicyChanged && !isSameTarget(current.claudeTarget, nextSettingsTargets.claude)) {
       refreshes.push(rateLimits.refreshClaudeForTarget(nextSettingsTargets.claude))

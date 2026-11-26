@@ -35,7 +35,7 @@ function Transcript({ settings }: { settings?: Partial<GlobalSettings> }): React
 
 export const overTranscript = defineFixture({ width: 640, render: () => <Transcript /> })
 
-export const narrow = defineFixture({ width: 360, render: () => <Transcript /> })
+export const narrow = defineFixture({ width: 300, render: () => <Transcript /> })
 
 // Chat-only Match Terminal derives its own surfaces from a dim terminal palette, outside the theme check.
 export const matchTerminal = defineFixture({
@@ -45,6 +45,18 @@ export const matchTerminal = defineFixture({
       settings={{
         nativeChatAppearance: resolveNativeChatAppearanceSettings({ matchTerminalInterface: true }),
         terminalColorOverrides: { background: '#333333', foreground: '#a1a1a1' }
+      }}
+    />
+  )
+})
+
+export const matchTerminalLight = defineFixture({
+  width: 640,
+  render: () => (
+    <Transcript
+      settings={{
+        nativeChatAppearance: resolveNativeChatAppearanceSettings({ matchTerminalInterface: true }),
+        terminalColorOverrides: { background: '#fdf6e3', foreground: '#657b83' }
       }}
     />
   )

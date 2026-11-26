@@ -196,6 +196,13 @@ export function projectRuntimeMobileSessionTabs(
       ? resolvedHostProjection.agentStatus
         ? {
             ...resolvedHostProjection.agentStatus,
+            // The hook-built projection passes a null handle and omits orchestration; paired clients nest workers by the renderer row's.
+            ...(tab.agentStatus?.terminalHandle
+              ? { terminalHandle: tab.agentStatus.terminalHandle }
+              : {}),
+            ...(tab.agentStatus?.orchestration
+              ? { orchestration: tab.agentStatus.orchestration }
+              : {}),
             updatedAt: Math.max(
               resolvedHostProjection.agentStatus.updatedAt,
               tab.agentStatus?.updatedAt ?? 0
@@ -272,6 +279,8 @@ export function projectRuntimeMobileSessionTabs(
       typeof rawTurnCompletedAt === 'number' && Number.isFinite(rawTurnCompletedAt)
         ? rawTurnCompletedAt
         : undefined
+    // A window themes its rows; without one (a server), the host's own palette does.
+    const terminalTheme = tab.terminalTheme ?? host.hostTerminalTheme?.()
     tabs.push({
       type: 'terminal',
       id: tab.id,
@@ -284,7 +293,7 @@ export function projectRuntimeMobileSessionTabs(
       ...(tab.ptyId ? { ptyId: tab.ptyId } : {}),
       // Bind identity to the handle's live owner, never a stale persisted surface.
       ...(terminalPty?.incarnationId ? { incarnationId: terminalPty.incarnationId } : {}),
-      ...(tab.terminalTheme ? { terminalTheme: tab.terminalTheme } : {}),
+      ...(terminalTheme ? { terminalTheme } : {}),
       ...(launchAgent ? { launchAgent } : {}),
       ...clientAgentStatus,
       ...(turnCompletedAt !== undefined ? { turnCompletedAt } : {}),

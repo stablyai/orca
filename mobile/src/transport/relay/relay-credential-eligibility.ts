@@ -13,14 +13,6 @@ export function isExplicitCredentialRejection(error: unknown): boolean {
 
 type RelayCredentialLease = { expiresAt: number; version: number }
 
-// Why: only a rejected outer credential can be repaired by the grace token;
-// retrying session/capacity close codes immediately recreates relay churn.
-export function relayFailureAllowsGraceRetry(error: Error): boolean {
-  return (
-    error instanceof RelayOuterError && error.code === MOBILE_RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL
-  )
-}
-
 export class RelayCredentialEligibility {
   private readonly rejectedVersions = new Set<number>()
 

@@ -39,7 +39,10 @@ type SendBrowserRequest = (
 type MobileBrowserInteractionArgs = {
   clearLongPressTimer: () => void
   client: RpcClient | null
-  dialogRef: { current: { dialogType: string; message: string } | null }
+  /** True while a dialog or prompt card covers the page, so touches never reach the page under it. */
+  pageCoveredRef: { current: boolean }
+  /** Set when a card covered the page mid-touch; the rest of that touch never reaches the page. */
+  gestureCancelledRef: { current: boolean }
   frameGeometry: BrowserFrameGeometry | null
   frameMetadataRef: { current: BrowserScreencastFrameMetadata | null }
   keyboardValue: string
@@ -65,7 +68,8 @@ export function useMobileBrowserInteractions(args: MobileBrowserInteractionArgs)
   const {
     clearLongPressTimer,
     client,
-    dialogRef,
+    pageCoveredRef,
+    gestureCancelledRef,
     frameGeometry,
     frameMetadataRef,
     keyboardValue,
@@ -115,6 +119,7 @@ export function useMobileBrowserInteractions(args: MobileBrowserInteractionArgs)
 
   const handleResponderGrant = useCallback(
     (event: GestureResponderEvent) => {
+      gestureCancelledRef.current = false
       const pinch = createPinchGesture(event, frameGeometry, zoomRef.current)
       if (pinch) {
         clearLongPressTimer()
@@ -161,6 +166,9 @@ export function useMobileBrowserInteractions(args: MobileBrowserInteractionArgs)
 
   const handleResponderMove = useCallback(
     (event: GestureResponderEvent, gesture: PanResponderGestureState) => {
+      if (gestureCancelledRef.current) {
+        return
+      }
       const startedPinch = pinchRef.current
         ? null
         : createPinchGesture(event, frameGeometry, zoomRef.current)
@@ -268,8 +276,8 @@ export function useMobileBrowserInteractions(args: MobileBrowserInteractionArgs)
   const panResponder = useMemo(
     () =>
       PanResponder.create({
-        onStartShouldSetPanResponder: () => dialogRef.current === null,
-        onMoveShouldSetPanResponder: () => dialogRef.current === null,
+        onStartShouldSetPanResponder: () => !pageCoveredRef.current,
+        onMoveShouldSetPanResponder: () => !pageCoveredRef.current,
         onPanResponderGrant: handleResponderGrant,
         onPanResponderMove: handleResponderMove,
         onPanResponderRelease: handleResponderRelease,

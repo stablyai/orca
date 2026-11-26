@@ -76,7 +76,7 @@ export type SectionHeader = { id: string; type: 'section-header'; label: string 
 export type BotScopeActionItem = {
   id: string
   type: 'bot-scope-action'
-  action: 'show-everything' | 'search-bots' | 'browse-templates'
+  action: 'show-everything' | 'browse-templates'
   label: string
 }
 export type HintRow = {

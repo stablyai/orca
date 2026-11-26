@@ -1,13 +1,26 @@
-import { defineMethod } from '../../core'
+import { defineMethod, InvalidArgumentError, type RpcContext } from '../../core'
+import { isAgentRpcCaller } from '../../callers/rpc-caller-identity'
+import { isBrowserEngineSidecarLaunch } from '../../callers/browser-engine-sidecar-launch'
 import { ProfileCreate } from '../../../../../shared/rpc-contract/browser/browser-identity-params'
 import {
   ProfileDelete,
+  ProfileClearCookies,
   ProfileClearGoogleCookies,
   ProfileImportFromBrowser,
   TabProfileClone,
   TabSetProfile,
   TabShow
 } from '../../../../../shared/rpc-contract/browser/browser-params'
+
+/** Clearing a profile's cookies signs the person out everywhere; only their own click in Settings may. */
+export function refuseAgentCookieClear(context: Pick<RpcContext, 'caller'>): void {
+  // An orcad's browser engine hears only from that orcad, which refused agents before forwarding.
+  if (isAgentRpcCaller(context.caller) && !isBrowserEngineSidecarLaunch()) {
+    throw new InvalidArgumentError(
+      "Agents can't clear a browser profile's cookies. Clear them from Settings › Browser in Orca."
+    )
+  }
+}
 
 export const BROWSER_PROFILE_METHODS = [
   defineMethod({
@@ -68,6 +81,18 @@ export const BROWSER_PROFILE_METHODS = [
     name: 'browser.profileClearDefaultCookies',
     permission: 'workspace',
     params: null,
-    handler: async (_params, { runtime }) => runtime.browserProfileClearDefaultCookies()
+    handler: async (_params, context) => {
+      refuseAgentCookieClear(context)
+      return context.runtime.browserProfileClearDefaultCookies()
+    }
+  }),
+  defineMethod({
+    name: 'browser.profileClearCookies',
+    permission: 'workspace',
+    params: ProfileClearCookies,
+    handler: async (params, context) => {
+      refuseAgentCookieClear(context)
+      return context.runtime.browserProfileClearCookies(params)
+    }
   })
 ]

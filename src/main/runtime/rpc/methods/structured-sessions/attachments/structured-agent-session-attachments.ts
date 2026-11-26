@@ -16,6 +16,8 @@ import {
 import { remoteFileContentBudget } from '../../files/files-remote-content-budget'
 import type { AgentSessionAttachmentStore } from '../../../../../native-chat/agent-session-attachments/agent-session-attachment-store'
 import { getAgentSessionAttachmentStore } from '../../../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
+import { botItemOwnerActor } from '../../bots-caller-gates'
+import { resolveItem } from '../../bots-items-write-support'
 
 async function requireStore(
   ctx: RpcContext
@@ -43,6 +45,16 @@ export const STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS = [
     permission: 'workspace',
     params: AttachmentUploadStartParams,
     handler: async (params, ctx) => {
+      if ('item' in params) {
+        botItemOwnerActor(ctx)
+        const { runtime } = ctx
+        const item = await resolveItem(runtime.botItems.store(), params.item)
+        if (!runtime.bots.list().some((bot) => bot.id === item.ownerBotId)) {
+          throw new Error('The bot that owns this item is gone')
+        }
+        const { store, callerKey } = await requireStore(ctx)
+        return store.stageUpload({ callerKey, name: params.name, byteLength: params.byteLength })
+      }
       const { store, callerKey } = await requireStore(ctx)
       return store.startUpload({ callerKey, ...params })
     }

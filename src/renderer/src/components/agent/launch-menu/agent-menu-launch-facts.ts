@@ -1,6 +1,12 @@
 import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
+import { useAppStateValueWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { shallow } from 'zustand/shallow'
 import type { AgentSessionLaunchRequest } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
-import { resolveAgentLaunchHost } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import {
+  hostCapabilitiesFrom,
+  resolveAgentLaunchOwner
+} from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import {
   executionHostTerminalPending,
   resolveRepoExecutionHostTarget,
@@ -30,24 +36,22 @@ import { runtimeHostPlatform } from '@/components/terminal-pane/pty-transport/ho
 /** Identity facts for the picker's owner and acquisition keys; readiness stays out of them. */
 export function readAgentMenuLaunchFacts(
   state: AppState,
+  statuses: RuntimeStatuses,
   workspace: AgentSessionLaunchRequest['workspace']
 ) {
   // Only the host and its capabilities are read, so skip building the full route input.
-  const input = resolveAgentLaunchHost(state, workspace)
-  const host = parseExecutionHostId(input.executionHostId)
-  const status =
-    host?.kind === 'runtime'
-      ? state.runtimeStatusByEnvironmentId.get(host.environmentId)
-      : undefined
+  const { owner, executionHostId } = resolveAgentLaunchOwner(state, workspace)
+  const host = parseExecutionHostId(executionHostId)
+  const status = host?.kind === 'runtime' ? statuses.get(host.environmentId) : undefined
   const contact = runtimeHostContactForEntry(status)
   return {
-    executionHostId: input.executionHostId,
+    executionHostId,
     runtimeId: host?.kind === 'runtime' ? lastVerifiedRuntimeStatus(status)?.runtimeId : null,
     hostPlatform:
       host?.kind === 'local'
         ? getRendererAppPlatform()
         : host?.kind === 'runtime'
-          ? runtimeHostPlatform(state, host.environmentId)
+          ? runtimeHostPlatform(statuses, host.environmentId)
           : null,
     pairingRevision:
       host?.kind === 'runtime' ? getRuntimeEnvironmentRevision(host.environmentId) : undefined,
@@ -55,8 +59,17 @@ export function readAgentMenuLaunchFacts(
     checking:
       contact.verdict === 'unverifiable' &&
       ['checking', 'transport-connecting'].includes(contact.reason),
-    capabilities: input.hostCapabilities?.join(',')
+    capabilities:
+      owner === null ? undefined : hostCapabilitiesFrom(statuses, executionHostId)?.join(',')
   }
+}
+
+/** The view's launch facts, reading host statuses through their owner. */
+export function useAgentMenuLaunchFacts(workspace: AgentSessionLaunchRequest['workspace']) {
+  return useAppStateValueWithHostStatuses(
+    (state, statuses) => readAgentMenuLaunchFacts(state, statuses, workspace),
+    shallow
+  )
 }
 
 type TerminalTargetWorkspace = Pick<
@@ -92,10 +105,11 @@ function resolveAgentMenuTerminalTarget(
  */
 export function readAgentMenuTerminalPending(
   state: AppState,
+  statuses: RuntimeStatuses,
   workspace: TerminalTargetWorkspace
 ): boolean {
   const target = resolveAgentMenuTerminalTarget(state, workspace)
-  return target ? executionHostTerminalPending(state, target) : false
+  return target ? executionHostTerminalPending(state, statuses, target) : false
 }
 
 // Every resource-owner input the target resolver reads; the build fails if WorktreeRuntimeOwnerState
@@ -125,15 +139,15 @@ const OWNERSHIP_INPUTS = Object.values({
  */
 export function createAgentMenuTerminalPendingSelector(
   workspace: TerminalTargetWorkspace
-): (state: AppState) => boolean {
+): (state: AppState, statuses: RuntimeStatuses) => boolean {
   let inputs: readonly unknown[] | null = null
   let target: ExecutionHostTarget | null = null
-  return (state) => {
+  return (state, statuses) => {
     const next = OWNERSHIP_INPUTS.map((read) => read(state))
     if (!inputs || next.some((value, i) => value !== inputs?.[i])) {
       inputs = next
       target = resolveAgentMenuTerminalTarget(state, workspace)
     }
-    return target ? executionHostTerminalPending(state, target) : false
+    return target ? executionHostTerminalPending(state, statuses, target) : false
   }
 }

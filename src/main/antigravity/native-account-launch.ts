@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { credentialFileExists } from '../credentials/credential-file-io'
 import { resolve } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-status/process/agent-process-recognition'
@@ -27,10 +27,10 @@ export async function prepareAntigravityAccountForLaunch(args: {
     return
   }
   const path = getAntigravityAccountVaultPath()
-  if (!existsSync(path)) {
+  if (!(await credentialFileExists(path))) {
     return
   }
-  if (!createEncryptedAntigravityAccountStore(path).read().selectedAccountId) {
+  if (!(await createEncryptedAntigravityAccountStore(path).read()).selectedAccountId) {
     return
   }
   const env = args.envIsComplete ? { ...args.env } : { ...process.env, ...args.env }

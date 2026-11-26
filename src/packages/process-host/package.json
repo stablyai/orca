@@ -136,7 +136,7 @@
     "proper-lockfile": "4.1.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
-    "vitest": "5.0.5"
+    "vitest": "5.1.0"
   },
   "engines": {
     "node": ">=18"

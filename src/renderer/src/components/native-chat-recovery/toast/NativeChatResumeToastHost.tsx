@@ -2,12 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'r
 import { toast } from 'sonner'
 import { useAppStore } from '../../../store/index'
 import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
-import { useLocalStructuredChatsInUse } from '../../../runtime/native-chat/local-sessions/local-structured-chats'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import { structuredChatShownName } from '@/runtime/native-chat/naming/structured-chat-shown-name'
 import { NATIVE_CHAT_RESUME_SETTING_SECTION_ID } from '../../settings/chat/native-chat-resume-setting-target'
 import {
   localNativeChatRestartStore,
+  useLocalRestartOffersEnabled,
   useNativeChatRestartOffer,
   useNativeChatRestartRun
 } from '../offers/native-chat-resume-on-restart-store'
@@ -17,12 +17,10 @@ import type { ResumeFailureAction } from '../failures/native-chat-resume-failure
 import { resumeRunFailures } from '../runs/native-chat-resume-run-view'
 import { resumeToastView } from './native-chat-resume-toast-view'
 import { NativeChatResumeToast } from './NativeChatResumeToast'
-
-/** How long an all-resumed report stays; anything needing the person stays until closed. */
-const RESUMED_TOAST_MS = 8000
+import { useResumeToastAutoDismiss } from './use-resume-toast-auto-dismiss'
 
 export function NativeChatResumeToasts(): React.JSX.Element {
-  const enabled = useLocalStructuredChatsInUse()
+  const enabled = useLocalRestartOffersEnabled()
   const runtimes = useNativeChatRestartRuntimes()
   return (
     <>
@@ -59,18 +57,20 @@ function NativeChatResumeToastHost({
     if (!visible) {
       return
     }
-    // Only the person's own dismissal snoozes; this effect's cleanup must not consume a later request.
+    // Only the person's own dismissal or the report's own timeout snoozes; this effect's cleanup must not consume a later request.
     let owned = true
+    const snooze = (): void => {
+      if (owned) {
+        snoozeResumeToast(store)
+      }
+    }
+    // The report owns its timer so window visibility recovery can resume it.
     toast.custom(() => <ConnectedResumeToast store={store} toastId={id} />, {
       id,
       duration: Infinity,
       closeButton: false,
       unstyled: true,
-      onDismiss: () => {
-        if (owned) {
-          snoozeResumeToast(store)
-        }
-      }
+      onDismiss: snooze
     })
     return () => {
       owned = false
@@ -87,8 +87,14 @@ function snoozeResumeToast(store: NativeChatRestartStore): void {
 }
 
 /** The toaster measures a toast only when it is issued; re-issuing in place keeps its state. */
-function remeasureResumeToast(store: NativeChatRestartStore, toastId: string): void {
-  toast.custom(() => <ConnectedResumeToast store={store} toastId={toastId} />, { id: toastId })
+function reissueResumeToast(store: NativeChatRestartStore, toastId: string): void {
+  // Issuing a closed id would bring it back; a report that already left stays gone.
+  if (!toast.getToasts().some((entry) => entry.id === toastId)) {
+    return
+  }
+  toast.custom(() => <ConnectedResumeToast store={store} toastId={toastId} />, {
+    id: toastId
+  })
 }
 
 function ConnectedResumeToast({
@@ -124,8 +130,6 @@ function ConnectedResumeToast({
     }
   }, [finishedRun, store])
 
-  // A clean report leaves on its own unless the person reached for it.
-  const touched = useRef(false)
   // Details and row changes resize it; without a fresh measure it would grow off the screen.
   const root = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -138,24 +142,17 @@ function ConnectedResumeToast({
       const next = node.getBoundingClientRect().height
       if (Math.abs(next - height) > 0.5) {
         height = next
-        remeasureResumeToast(store, toastId)
+        reissueResumeToast(store, toastId)
       }
     })
     observer.observe(node)
     return () => observer.disconnect()
   }, [store, toastId])
-  const transient = view.phase === 'finished' && view.counts.needsYou === 0
-  useEffect(() => {
-    if (!transient) {
-      return
-    }
-    const timer = window.setTimeout(() => {
-      if (!touched.current) {
-        close()
-      }
-    }, RESUMED_TOAST_MS)
-    return () => window.clearTimeout(timer)
-  }, [transient, close])
+  const { onDetailsOpened } = useResumeToastAutoDismiss(
+    view.phase === 'finished' && view.counts.needsYou === 0,
+    close,
+    root
+  )
 
   const feed = getStructuredAgentSessionStatusFeed(store.target)
   const nameFor = (sessionId: string, fallback: string) =>
@@ -191,8 +188,6 @@ function ConnectedResumeToast({
       ref={root}
       // Unstyled toasts aren't given the toaster's width; fill it rather than shrink to the text.
       className="w-[var(--width,100%)] max-w-full"
-      onPointerEnter={() => (touched.current = true)}
-      onFocusCapture={() => (touched.current = true)}
     >
       {view.rows.length > 0 && (
         <NativeChatResumeToast
@@ -202,6 +197,7 @@ function ConnectedResumeToast({
           nameFor={nameFor}
           onResume={(ids) => void store.continueNativeChatRestartOffer(ids)}
           onRowAction={onRowAction}
+          onDetailsOpened={onDetailsOpened}
           onDismissAll={
             remote
               ? undefined

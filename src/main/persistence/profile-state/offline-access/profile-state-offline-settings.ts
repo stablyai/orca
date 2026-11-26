@@ -86,6 +86,7 @@ export function updateAgentHookSettingsInProfileState(
     const {
       uiLanguagePortugueseMigrationApplied: _migrationApplied,
       nestedWorkerMaxDepthDefaultedToFour: _depthMigrated,
+      nativeChatAutoContinueAfterUsageLimitDefaultedOn: _autoContinueMigrated,
       agentLaunchChoices: _launchChoices,
       artifactSharingEnabled: _artifactSharingEnabled,
       ...settingsDefaults

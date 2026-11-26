@@ -1,3 +1,4 @@
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { AttachedWorktreeCards } from '@/components/sidebar/AttachedWorktreeCards'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
@@ -12,7 +13,9 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorkspaceKey = useAppStore((s) => s.activeWorkspaceKey)
   const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
-  const childrenByParentIdentity = useAppStore(selectSidebarChildrenByParentIdentity)
+  const childrenByParentIdentity = useAppStoreWithHostStatuses(
+    selectSidebarChildrenByParentIdentity
+  )
 
   const { folderWorkspace, childWorktrees, lineageChildrenByParentIdentity } =
     getAttachedWorktreesForFolderWorkspace({

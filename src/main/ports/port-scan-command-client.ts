@@ -68,10 +68,17 @@ export class PortScanCommandClient {
   async run(
     command: string,
     args: string[],
-    darwinOperation?: DarwinPortScanOperation
+    darwinOperation?: DarwinPortScanOperation,
+    linuxSocketInodes?: number[]
   ): Promise<PortScanCommandResult> {
     const response = await this.requests.dispatch(
-      (id) => ({ id, command, args, ...(darwinOperation ? { darwinOperation } : {}) }),
+      (id) => ({
+        id,
+        command,
+        args,
+        ...(darwinOperation ? { darwinOperation } : {}),
+        ...(linuxSocketInodes ? { linuxSocketInodes } : {})
+      }),
       CALL_DEADLINE_MS
     )
     if (response.ok) {
@@ -109,8 +116,9 @@ let sharedClient: PortScanCommandClient | null = null
 export function runPortScanCommand(
   command: string,
   args: string[],
-  darwinOperation?: DarwinPortScanOperation
+  darwinOperation?: DarwinPortScanOperation,
+  linuxSocketInodes?: number[]
 ): Promise<PortScanCommandResult> {
   sharedClient ??= new PortScanCommandClient({ workerFactory: defaultWorkerFactory })
-  return sharedClient.run(command, args, darwinOperation)
+  return sharedClient.run(command, args, darwinOperation, linuxSocketInodes)
 }

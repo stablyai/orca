@@ -6,10 +6,7 @@ import {
   CLAUDE_SESSION_OPTION_CATALOG,
   CODEX_SESSION_OPTION_CATALOG
 } from './catalog-providers/agent-session-option-catalog-claude-codex'
-import {
-  CURSOR_SESSION_OPTION_CATALOG,
-  GEMINI_SESSION_OPTION_CATALOG
-} from './catalog-providers/agent-session-option-catalog-gemini-cursor'
+import { CURSOR_SESSION_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-cursor'
 import { GROK_SESSION_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-grok'
 import { MUSE_SESSION_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-muse'
 import { OMP_SESSION_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-omp'
@@ -27,7 +24,6 @@ const CATALOGS: AgentSessionOptionCatalogMap = {
   claude: CLAUDE_SESSION_OPTION_CATALOG,
   codebuddy: CODEBUDDY_SESSION_OPTION_CATALOG,
   codex: CODEX_SESSION_OPTION_CATALOG,
-  gemini: GEMINI_SESSION_OPTION_CATALOG,
   cursor: CURSOR_SESSION_OPTION_CATALOG,
   grok: GROK_SESSION_OPTION_CATALOG,
   muse: MUSE_SESSION_OPTION_CATALOG,

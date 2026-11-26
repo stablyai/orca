@@ -23,6 +23,10 @@ declare module 'monaco-editor/esm/vs/basic-languages/cpp/cpp.js' {
   export const language: languages.IMonarchLanguage
 }
 
+declare module 'monaco-editor/esm/vs/basic-languages/swift/swift.js' {
+  export const language: languages.IMonarchLanguage
+}
+
 // Orca wraps the TypeScript definition provider to follow imports; declare only that surface.
 declare module 'monaco-editor/esm/vs/language/typescript/languageFeatures.js' {
   type WorkerAccessor = (...uris: Uri[]) => Promise<unknown>

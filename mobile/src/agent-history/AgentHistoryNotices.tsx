@@ -1,12 +1,16 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
-import { TriangleAlert, X } from 'lucide-react-native'
+import { TriangleAlert } from 'lucide-react-native'
 import { colors, radii, spacing, typography, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { AgentHistoryRestartOffer } from './use-agent-history-restart-offer'
-import { AutoHeight } from '../components/motion/AutoHeight'
+import type { AgentHistoryHandoffLaunchNotice } from './use-agent-history-handoff'
+import { useLaunchedAgentOpener } from '../session/agent-launch/launched-agent-opener'
+import { useClipboardWriter } from '../platform/clipboard/clipboard'
+import { AutoHeight, Presence } from '../components/motion/AutoHeight'
+import { HostRouteNoticeBanner } from '../components/host-connection/HostRouteNoticeBanner'
 import type { AiVaultScanIssue } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import {
   aiVaultScanIssueKey,
@@ -110,35 +114,73 @@ export function AgentHistoryResumeNotice({
   message,
   onDismiss
 }: {
-  message: string
+  message: string | null
   onDismiss: () => void
 }) {
-  useMobileColorScheme()
-  const t = useMobileTranslation()
   return (
-    <View style={[styles.notice, styles.noticeRow]}>
-      <Text style={styles.noticeText}>{message}</Text>
-      <Pressable
-        style={({ pressed }) => pressed && pressedStyle}
-        onPress={onDismiss}
-        hitSlop={12}
-        accessibilityRole="button"
-        accessibilityLabel={t('agentHistory.panel.dismissNotice', 'Dismiss')}
-      >
-        <X size={14} color={colors.textMuted} strokeWidth={2.2} />
-      </Pressable>
-    </View>
+    <Presence>
+      {message ? <HostRouteNoticeBanner message={message} onDismiss={onDismiss} /> : null}
+    </Presence>
   )
 }
 
-/** Desktop's resume-after-restart offer: the host restarted while these chats were working. */
+/** A handed-off agent the user should look at: its host's note, or the context it did not get to copy in. */
+export function AgentHistoryHandoffNotice({
+  notice,
+  onDismiss
+}: {
+  notice: AgentHistoryHandoffLaunchNotice | null
+  onDismiss: () => void
+}) {
+  const t = useMobileTranslation()
+  const clipboard = useClipboardWriter()
+  const openAgent = useLaunchedAgentOpener(notice?.opens ?? null)
+  const [copied, setCopied] = useState<{ prompt: string; ok: boolean } | null>(null)
+  const prompt = notice?.prompt
+  const state = prompt && copied?.prompt === prompt ? copied : null
+  const message = !prompt
+    ? (notice?.warning ?? '')
+    : !state
+      ? t(
+          'session.prAiTriageLaunch.promptNotSent',
+          "The agent started, but the prompt wasn't sent."
+        )
+      : state.ok
+        ? t('agentHistory.handoff.promptCopied', 'Prompt copied. Open the agent to paste it.')
+        : t('components.agentLaunchNotice.copyFailed', "Couldn't copy")
+  const open = openAgent
+    ? { label: t('automations.mobile.openAgent', 'Open agent'), onPress: openAgent }
+    : undefined
+  return (
+    <Presence>
+      {notice ? (
+        <HostRouteNoticeBanner
+          message={message}
+          action={
+            prompt && !state?.ok
+              ? {
+                  label: t('components.agentLaunchNotice.copyPrompt', 'Copy prompt'),
+                  onPress: () => {
+                    clipboard.writeText(prompt).then(
+                      () => setCopied({ prompt, ok: true }),
+                      () => setCopied({ prompt, ok: false })
+                    )
+                  }
+                }
+              : open
+          }
+          onDismiss={onDismiss}
+        />
+      ) : null}
+    </Presence>
+  )
+}
+
+/** Desktop's resume-after-restart offer, as the phone's notice strip: "3 chats were interrupted · Resume all". */
 export function AgentHistoryInterruptedNotice({ offer }: { offer: AgentHistoryRestartOffer }) {
-  useMobileColorScheme()
   const t = useMobileTranslation()
   const { count, failedCount, requestFailed, resuming } = offer
-  if (count === 0 && failedCount === 0 && !requestFailed) {
-    return null
-  }
+  const shown = count > 0 || failedCount > 0 || requestFailed
   const message = requestFailed
     ? t('agentHistory.interrupted.failed', "Couldn't resume the interrupted chats.")
     : count > 0
@@ -152,35 +194,28 @@ export function AgentHistoryInterruptedNotice({ offer }: { offer: AgentHistoryRe
         : t('agentHistory.interrupted.failedCount_other', "{{count}} chats couldn't resume", {
             count: failedCount
           })
+  const action =
+    !resuming && (count > 0 || requestFailed)
+      ? {
+          label: requestFailed
+            ? t('common.retry', 'Retry')
+            : t('agentHistory.interrupted.resumeAll', 'Resume all'),
+          onPress: offer.resumeAll
+        }
+      : undefined
   return (
-    <View style={[styles.notice, styles.noticeRow]}>
-      <Text style={styles.noticeText}>{message}</Text>
-      {resuming ? (
-        <ActivityIndicator size="small" color={colors.textSecondary} />
-      ) : count > 0 || requestFailed ? (
-        <Pressable
-          style={({ pressed }) => pressed && pressedStyle}
-          onPress={offer.resumeAll}
-          hitSlop={10}
-          accessibilityRole="button"
-        >
-          <Text style={styles.noticeAction}>
-            {requestFailed
-              ? t('common.retry', 'Retry')
-              : t('agentHistory.interrupted.resumeAll', 'Resume all')}
-          </Text>
-        </Pressable>
+    <Presence>
+      {shown ? (
+        <HostRouteNoticeBanner
+          message={message}
+          leading={
+            resuming ? <ActivityIndicator size="small" color={colors.textSecondary} /> : undefined
+          }
+          action={action}
+          onDismiss={offer.dismiss}
+        />
       ) : null}
-      <Pressable
-        style={({ pressed }) => pressed && pressedStyle}
-        onPress={offer.dismiss}
-        hitSlop={12}
-        accessibilityRole="button"
-        accessibilityLabel={t('agentHistory.panel.dismissNotice', 'Dismiss')}
-      >
-        <X size={14} color={colors.textMuted} strokeWidth={2.2} />
-      </Pressable>
-    </View>
+    </Presence>
   )
 }
 

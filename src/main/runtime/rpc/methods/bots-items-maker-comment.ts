@@ -6,6 +6,7 @@ import { BotItemError } from '../../../bots/bot-item-error'
 import { assertBotItemText, type BotItemWriteOutcome } from '../../../bots/bot-items-input'
 import { botItemMakerCommentMail } from '../../../bots/bot-items-mail-text'
 import type { BotItemRecord } from '../../../bots/bot-items-schema'
+import type { BotItemCommentImage } from '../../../../shared/bots/bot-items'
 import type { RpcContext } from '../core'
 import { sendItemRequest } from './bots-items-add'
 import type { BotItemWriter } from './bots-items-caller'
@@ -15,12 +16,13 @@ export async function commentAsMaker(
   context: RpcContext,
   writer: BotItemWriter,
   item: BotItemRecord,
-  text: string
+  text: string,
+  images: readonly BotItemCommentImage[] = []
 ): Promise<BotItemWriteOutcome> {
   const { runtime } = context
   // Checked before the request goes, so a comment the store refuses is never sent.
   assertBotItemText('text', text)
-  if (!text.trim()) {
+  if (!text.trim() && images.length === 0) {
     throw new BotItemError('invalid_argument', 'A comment needs its text.')
   }
   const target = runtime.bots.list().find((bot) => bot.id === item.ownerBotId)
@@ -36,11 +38,10 @@ export async function commentAsMaker(
     type: 'status',
     to: `orca_session_id:${chat.sessionId}`,
     messageId: `msg_item_${randomUUID().replaceAll('-', '')}`,
-    keepChat: true,
-    ...botItemMakerCommentMail(item, writer.bot.name, text)
+    ...botItemMakerCommentMail(item, writer.bot.name, text, images)
   })
   try {
-    return await runtime.botItems.store().comment(item.uid, text, writer.actor)
+    return await runtime.botItems.store().comment(item.uid, text, writer.actor, images)
   } finally {
     sent.nudge()
   }

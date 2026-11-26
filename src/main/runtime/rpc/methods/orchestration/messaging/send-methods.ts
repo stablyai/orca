@@ -27,7 +27,13 @@ import { sendGroupMessage } from './send-group'
 import { sendFederatedControlMail } from '../../../../orchestration/legacy-remote-home/send-control-mail'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
-import { planWorkerFollowUp, startWorkerFollowUp } from './worker-follow-up'
+import { resolveWorkerReporterIdentity } from '../../../../orchestration/workers/reports/reminted-worker-reporter'
+import {
+  assertFollowUpForItem,
+  planWorkerFollowUp,
+  splitForItem,
+  startWorkerFollowUp
+} from './worker-follow-up'
 import { finishedWorkerSend, refuseFinishedRemoteWorker } from './finished-worker-mail'
 import { relayedDeliveryUnknownWarning, withDeliveryHoldWarning } from './send-delivery-hold'
 import {
@@ -65,15 +71,16 @@ export const ORCHESTRATION_SEND_METHODS = [
       } = context
       const db = runtime.getOrchestrationDb()
       const from = params.from ?? 'unknown'
-      const attestedCaller =
-        orchestrationCompatibilityCallerAuthority?.terminalHandle === from
-          ? orchestrationCompatibilityCallerAuthority
-          : undefined
-      // Why: attested hook identity survives graph remount; caller params never supply lifecycle authority.
+      const reporter = resolveWorkerReporterIdentity(runtime, db, {
+        from,
+        authority: orchestrationCompatibilityCallerAuthority,
+        hasSessionCaller: Boolean(orchestrationCaller),
+        evidence: orchestrationCompatibilityEvidence
+      })
       const sender = orchestrationCallerIdentity(runtime, {
         handle: from,
         session: orchestrationCaller,
-        paneKey: attestedCaller?.paneKey ?? runtime.getTerminalPaneKey(from)
+        paneKey: reporter.paneKey
       })
       const senderPaneKey = sender.paneKey ?? undefined
       // Why: a session caller was already bound to its own identity at the dispatch entry.
@@ -84,10 +91,7 @@ export const ORCHESTRATION_SEND_METHODS = [
           evidence: orchestrationCompatibilityEvidence
         })
       }
-      const processIncarnation = () =>
-        attestedCaller?.processIncarnation ??
-        runtime.getTerminalProcessIncarnation(from) ??
-        undefined
+      const processIncarnation = () => reporter.processIncarnation() ?? undefined
       const remoteAttachment = senderPaneKey
         ? db.findActiveRemoteAttachmentForPane(senderPaneKey)
         : undefined
@@ -104,7 +108,7 @@ export const ORCHESTRATION_SEND_METHODS = [
         })
       }
 
-      refuseFinishedRemoteWorker(db, senderPaneKey, params.to)
+      refuseFinishedRemoteWorker(db, { address: from, paneKey: senderPaneKey }, params.to)
       const runGroup =
         params.to && isGroupAddress(params.to) && !params.to.toLowerCase().startsWith('@worktree:')
       // Run groups validate their own audience; message scope cannot select a parent Dispatch.
@@ -141,11 +145,17 @@ export const ORCHESTRATION_SEND_METHODS = [
         )
       }
 
+      // `--to dispatch:<id> --item <n>`: new work for that item, which only a follow-up can take.
+      const { forItem, params: forParams } = splitForItem(to, params)
+      params = forParams
       const botRoute = await routeBotMail(context, { params, from, to, sender, routing })
       if ('receipt' in botRoute) {
         return botRoute.receipt
       }
       to = botRoute.to
+      if (botRoute.body !== undefined) {
+        params = { ...params, body: botRoute.body }
+      }
 
       const sendWarnings: SendRecipientWarning[] = []
       let messageRunId = routing.run?.id
@@ -192,9 +202,11 @@ export const ORCHESTRATION_SEND_METHODS = [
           addressedDispatchId && to === `dispatch:${addressedDispatchId}`
             ? db.getFederatedDispatch(addressedDispatchId)
             : undefined
+        assertFollowUpForItem(forItem, !federatedTarget)
         // Federated targets perform their own liveness check before relaying.
         if (addressedDispatchId && !federatedTarget) {
           const plan = planWorkerFollowUp(db, addressedDispatchId, params.type ?? 'status')
+          assertFollowUpForItem(forItem, plan?.kind === 'start')
           // Only a settled worker awaits; mail to a working one stays synchronous until it is inserted.
           const followUp =
             plan?.kind === 'start'
@@ -208,9 +220,11 @@ export const ORCHESTRATION_SEND_METHODS = [
                   db,
                   plan,
                   from,
-                  message: params
+                  message: params,
+                  forItem
                 })
               : plan
+          assertFollowUpForItem(forItem, followUp?.kind === 'started')
           // The mail started the worker's next turn itself, so nothing holds it; `next` stays last.
           if (followUp?.kind === 'started') {
             if (typeof followUp.receipt.dispatchId === 'string') {

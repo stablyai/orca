@@ -1,36 +1,42 @@
 // What a bot's chats tree is built from on its host, apart from live status, tabs and read state: the
 // chats its records name and the Dispatches they started. The index keeps one per bot between reads;
 // a full build from every record is the same function, and the index's oracle.
+import { botChatPreviewText } from '../../shared/bots/bot-chat-preview-text'
 import type { AgentSessionConversationView } from '../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { defaultAgentChatLabel } from '../../shared/agent-session/conversation-naming/agent-session-chat-label'
 import { structuredAgentSessionStatusPaneKey } from '../../shared/agent-session/view/structured-agent-session-tab'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { AgentListVerdict } from '../../shared/agent-status/presentation/agent-list-status'
 import type { Automation } from '../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../shared/automations/history/automation-run'
 import type { Bot } from '../../shared/bot-types'
 import { botOfHomeWorkspace } from '../../shared/bots/bot-homes'
-import type { BotChatOrigin } from '../../shared/bots/bot-chat-tree'
-import {
-  HOME_CHAT_TITLE,
-  type BotChatFacts,
-  type BotChatTreeDispatch
-} from '../../shared/bots/bot-chat-tree-model'
+import type { BotChatOrigin, BotChatTreeChat } from '../../shared/bots/bot-chat-tree'
+import { HOME_CHAT_TITLE } from '../../shared/bots/bot-chat-tree-model'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
-import { isOrcaSessionId } from '../../shared/agent-session/identity/orca-session-address'
+import {
+  isOrcaSessionId,
+  type OrcaSessionId
+} from '../../shared/agent-session/identity/orca-session-address'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import { createCanonicalOrcaSessionResolver } from '../runtime/orchestration/addressing/session-lineage/canonical-orca-session-id'
 import {
-  lineageLiveSession,
-  type AgentSessionRecordReader
+  resolveLineageRunningSession,
+  type AgentSessionRecordReader,
+  type LineageRunningSession
 } from '../runtime/orchestration/addressing/session-lineage/structured-session-lineage'
-import { structuredSessionMailReach } from '../runtime/orchestration/mailbox/routing/structured-session-mail-address'
+import {
+  addressableSessionParty,
+  structuredSessionMailReachWith
+} from '../runtime/orchestration/mailbox/routing/structured-session-mail-address'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
+import {
+  readSessionParties,
+  type SessionPartyReader
+} from '../runtime/orchestration/addressing/session-party-reader'
 import { botChatRecordEmpty, botChatRecordRow } from '../runtime/rpc/methods/bots-chats'
 import { automationRuns, type BotActivityHost } from './bot-activity-host'
 import { isBotBackgroundRun, type BotBackgroundRuns } from './bot-background-run-records'
 import { BotDispatchPlacement } from './bot-chat-dispatches'
-import { chatLive, chatReadUnread, terminalRunChatId, terminalRunChats } from './bot-chat-tree-rows'
+import { terminalRunChatId } from './bot-chat-tree-rows'
 
 // As the chat tabs name an unnamed chat; a host string, like the tab titles it stands beside.
 const NEW_CHAT_TITLE = 'New chat'
@@ -84,35 +90,17 @@ export function botChatInputsKey(inputs: BotChatInputs): string {
   ])
 }
 
-/** What of a record its chat row shows; a commit that leaves this as it was (a lease renewal, say)
- *  changes no chat. */
-export function botChatRecordShown(record: AgentSessionConversationView): string {
-  return JSON.stringify([
-    record.location.workspaceId,
-    record.conversationName ?? null,
-    record.conversationNameSource ?? null,
-    record.conversationCommand ?? null,
-    record.lastTurn ?? null,
-    record.provider,
-    record.providerHandleChain.length > 0,
-    // An unturned chat lists by when its record last changed.
-    record.lastTurn ? null : record.updatedAt
-  ])
-}
-
 /** A chat as its records say it, before live status, tabs and read state. */
-export type BotChatBaseChat = {
-  chatId: string
+// `liveSessionId`: the lineage's live session, when a /clear moved the chat past its own.
+export type BotChatBaseChat = Pick<
+  BotChatTreeChat,
+  'chatId' | 'origin' | 'originLabel' | 'lastActiveAt' | 'preview' | 'liveSessionId' | 'closed'
+> & {
   home: boolean
   /** Its own name, else its origin's, else the provider's default; a tab's title wins over it. */
   title: string
-  origin: BotChatOrigin
-  originLabel?: string
-  lastActiveAt: number
-  preview?: string
   /** The pane whose status is this chat's: its lineage's live session. */
   paneKey: string
-  closed: boolean
   /** A side chat nobody has written in yet; it lists only while its tab is open. */
   empty: boolean
 }
@@ -131,31 +119,63 @@ export type BotChatBaseBuild = {
   originBySessionId: ReadonlyMap<string, { origin: BotChatOrigin; label?: string; title?: string }>
 }
 
-/** The chat a record is, or null for none of the bot's (another home, cleared into a successor, a
+type BotChatRecordRow = NonNullable<ReturnType<typeof botChatRecordRow>>
+type BotChatBasePartial = Pick<BotChatBaseBuild, 'rootOf' | 'homeRoot' | 'originBySessionId'>
+
+/** The row a record lists as, or null for none of the bot's (another home, cleared into a successor, a
  *  background run). */
+function botChatBaseRow(
+  ctx: BotChatBaseContext,
+  bot: Pick<Bot, 'folderWorkspaceId'>,
+  record: AgentSessionConversationView,
+  build: BotChatBasePartial
+): BotChatRecordRow | null {
+  return botOfHomeWorkspace([bot], record.location.workspaceId) &&
+    !isBotBackgroundRun(ctx.backgroundRuns, record)
+    ? botChatRecordRow(record, build.rootOf, build.homeRoot)
+    : null
+}
+
+/** The chat a record is, or null for none of the bot's. */
 export function botChatBaseChat(
   ctx: BotChatBaseContext,
   store: AgentSessionRecordReader,
   bot: Pick<Bot, 'folderWorkspaceId'>,
   record: AgentSessionConversationView,
-  build: Pick<BotChatBaseBuild, 'rootOf' | 'homeRoot' | 'originBySessionId'>
+  build: BotChatBasePartial
 ): BotChatBaseChat | null {
-  if (
-    !botOfHomeWorkspace([bot], record.location.workspaceId) ||
-    isBotBackgroundRun(ctx.backgroundRuns, record)
-  ) {
-    return null
-  }
-  const row = botChatRecordRow(record, build.rootOf, build.homeRoot)
-  if (!row) {
-    return null
-  }
-  const live = lineageLiveSession(store, row.id)
+  const row = botChatBaseRow(ctx, bot, record, build)
+  return row
+    ? botChatBaseChatOfRow(
+        ctx.db,
+        store,
+        record,
+        row,
+        resolveLineageRunningSession(store, row.id),
+        build
+      )
+    : null
+}
+
+function botChatBaseChatOfRow(
+  parties: SessionPartyReader,
+  store: AgentSessionRecordReader,
+  record: AgentSessionConversationView,
+  row: BotChatRecordRow,
+  /** The chat's lineage walked once, for its live session and its end. */
+  running: LineageRunningSession,
+  build: BotChatBasePartial
+): BotChatBaseChat {
+  const live = running.kind === 'unverifiable' ? null : running.record
   // Only a chat that truly ended is closed: one on another host or behind an unverifiable /clear is not.
   const root = store.getRecord(row.id)
-  const closed = root ? structuredSessionMailReach(store, root, ctx.db).kind === 'ended' : false
+  const reach = {
+    running: () => running,
+    addressable: (id: OrcaSessionId) => Boolean(addressableSessionParty(id, parties))
+  }
+  const closed = root ? structuredSessionMailReachWith(reach, store, root).kind === 'ended' : false
   const origin = row.home ? { origin: 'home' as const } : build.originBySessionId.get(row.id)
-  const preview = row.lastSaid ?? row.lastAsked
+  const preview = botChatPreviewText(row.lastSaid ?? row.lastAsked ?? '')
   return {
     chatId: row.id,
     home: row.home,
@@ -170,6 +190,7 @@ export function botChatBaseChat(
     lastActiveAt: row.lastActivityAt,
     ...(preview ? { preview } : {}),
     paneKey: structuredAgentSessionStatusPaneKey(live?.sessionId ?? row.id),
+    ...(live && live.sessionId !== row.id ? { liveSessionId: live.sessionId } : {}),
     closed,
     empty: !origin && record.sessionId === row.id && botChatRecordEmpty(record)
   }
@@ -218,12 +239,22 @@ export function buildBotChatBase(
   const sessionOfChat = new Map<string, string>()
   const partial = { rootOf, homeRoot, originBySessionId }
   if (store) {
-    for (const record of homeRecords) {
-      const chat = botChatBaseChat(ctx, store, inputs.bot, record, partial)
-      if (chat) {
-        chats.set(chat.chatId, chat)
-        sessionOfChat.set(chat.chatId, record.sessionId)
-      }
+    const rows = homeRecords.flatMap((record) => {
+      const row = botChatBaseRow(ctx, inputs.bot, record, partial)
+      return row ? [{ record, row, running: resolveLineageRunningSession(store, row.id) }] : []
+    })
+    // One party read for the chats whose end the base checks; another host's chat, or a lineage that
+    // can't be verified, is judged without this host's rows.
+    const parties = readSessionParties(
+      ctx.db,
+      rows.flatMap(({ row, running }) =>
+        running.kind === 'here' && isOrcaSessionId(running.sessionId) ? [row.id] : []
+      )
+    )
+    for (const { record, row, running } of rows) {
+      const chat = botChatBaseChatOfRow(parties, store, record, row, running, partial)
+      chats.set(chat.chatId, chat)
+      sessionOfChat.set(chat.chatId, record.sessionId)
     }
   }
   const terminalChats = new Set(
@@ -290,47 +321,6 @@ export function orderedBaseChats(chats: Iterable<BotChatBaseChat>): BotChatBaseC
   )
 }
 
-/** The base's chats as a read shows them: each with its live status, tab, read state and seen mark,
- *  then the automation runs that have no chat of their own. */
-export function overlayBotChats(
-  chats: readonly BotChatBaseChat[],
-  inputs: BotChatInputs,
-  live: {
-    rowByPaneKey: ReadonlyMap<string, AgentStatusIpcPayload>
-    readVerdicts: Readonly<Record<string, AgentListVerdict>> | undefined
-    /** Each chat's tab title, by chat. */
-    tabTitles: ReadonlyMap<string, string>
-    tabbed: ReadonlySet<string>
-    unseen: ReadonlySet<string>
-  }
-): BotChatFacts[] {
-  const shown = chats.filter((chat) => !chat.empty || live.tabbed.has(chat.chatId))
-  return [
-    ...shown.map((chat): BotChatFacts => {
-      const status = live.rowByPaneKey.get(chat.paneKey)
-      return {
-        chatId: chat.chatId,
-        title: chat.home ? chat.title : live.tabTitles.get(chat.chatId) || chat.title,
-        origin: chat.origin,
-        ...(chat.originLabel ? { originLabel: chat.originLabel } : {}),
-        live: chatLive(status),
-        lastActiveAt: chat.lastActiveAt,
-        // The desktop window's read verdict, so the phone shows what it shows; a desktop re-reads against its own acks.
-        unread: chatReadUnread(live.readVerdicts?.[chat.paneKey]),
-        ...(status?.state === 'done' && status.stateStartedAt
-          ? { turnDone: { paneKey: chat.paneKey, at: status.stateStartedAt } }
-          : {}),
-        closed: chat.closed,
-        ...(chat.closed ? { closedAt: chat.lastActiveAt } : {}),
-        ...(chat.preview ? { preview: chat.preview } : {}),
-        tab: live.tabbed.has(chat.chatId),
-        ...(live.unseen.has(chat.chatId) ? { unseen: true } : {})
-      }
-    }),
-    ...terminalRunChats(inputs.runs, inputs.automationById, live.rowByPaneKey)
-  ]
-}
-
 /** A base as the oracle compares it: chats and Dispatches in one order, whatever order they were found. */
 export function comparableBotChatBase(build: BotChatBaseBuild): string {
   return JSON.stringify({
@@ -338,6 +328,3 @@ export function comparableBotChatBase(build: BotChatBaseBuild): string {
     dispatches: build.placement.dispatches().toSorted((a, b) => (a.id < b.id ? -1 : 1))
   })
 }
-
-/** Every session id the base was read from, and the lineage root each lists under. */
-export type BotChatBaseDispatches = readonly BotChatTreeDispatch[]

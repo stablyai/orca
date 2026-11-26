@@ -198,7 +198,7 @@ export function useMobileNativeChatTurnDisclosure({
       },
     [expandedReasoning, line]
   )
-  const { fold, trailingRunIndex, workRuns, itemNoteJoins } = useMobileNativeChatTranscriptRows({
+  const { fold, trailingRunIndex, workRuns, activityJoins } = useMobileNativeChatTranscriptRows({
     enabled,
     rows,
     turnKeys,
@@ -206,7 +206,8 @@ export function useMobileNativeChatTurnDisclosure({
     completedByTurn,
     expandedTurnKeys: expandedTurnIds,
     liveReasoningId,
-    turnDiffs: summaries
+    turnDiffs: summaries,
+    turnBars: { bars, quiet, active, activeTurnKey }
   })
   const presentation = useMemo(
     () => ({ rows, workRuns, turnKeys, receipts }),
@@ -253,7 +254,7 @@ export function useMobileNativeChatTurnDisclosure({
           ? { workRun: workRuns.heads.get(index), openReasoning: expandedReasoning }
           : {}),
         ...(workRuns.joined.has(index) ? { joinsWorkRun: true } : {}),
-        ...(itemNoteJoins.has(index) ? { itemNoteJoin: itemNoteJoins.get(index) } : {}),
+        ...(activityJoins.has(index) ? { activityJoin: activityJoins.get(index) } : {}),
         mayStillGrow: !lineYields && message.id === latestAssistantId,
         reasoningIsLive: message.id === liveReasoningId,
         reasoningExpanded:
@@ -280,7 +281,7 @@ export function useMobileNativeChatTurnDisclosure({
       inLiveWorkingTurn,
       trailingRunIndex,
       workRuns,
-      itemNoteJoins,
+      activityJoins,
       fold,
       rows,
       latestAssistantId,

@@ -1,48 +1,32 @@
-import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { JournalWriterStep } from './writing/journal-writer-step'
 import type { JournalSqlRequest } from './journal-sql-protocol'
 
 const MAX_STEPS = 64
-const MAX_BYTES = 1024 * 1024
+/** A sending chat's write waits for the bulk transaction in progress, so none outgrows one large tool output. */
+const MAX_BYTES = 256 * 1024
 
-/** Sender work only: classification never opens a saved projection. */
+/** Sender work only: sizing reads each step's admission reservation, never its body. */
 export function prepareJournalSqlRequest(
   id: number,
   command: JournalSqlRequest['command']
 ): JournalSqlRequest {
   let batch: JournalSqlRequest['batch']
-  if (command.type === 'write' && !command.command.effects) {
+  // Receipts and fork installs keep their own transaction (a fork install raises it to FULL sync).
+  if (command.type === 'write' && !command.command.effects && !command.command.forkInstall) {
     const { operation } = command.command
     if (
       operation.kind === 'steps' &&
       operation.steps.length > 0 &&
-      operation.steps.every(
-        (step) =>
-          step.kind === 'resolved-item' &&
-          step.resolution.kind === 'text-snapshot' &&
-          streamingText(step.resolution.body)
-      )
+      operation.steps.every(itemStep)
     ) {
       batch = {
         sessionId: command.command.target.sessionId,
         steps: operation.steps.length,
-        // Admission already reserved identity/body bytes; only size the remaining envelope.
+        // Bodies are reserved at admission; only the envelope (target, host facts) is measured.
         bytes:
           operation.steps.reduce((total, step) => total + step.reservedBytes, 0) +
           Buffer.byteLength(
-            JSON.stringify({
-              ...command.command,
-              operation: {
-                ...operation,
-                steps: operation.steps.map((step) =>
-                  step.kind === 'resolved-item' && step.resolution.kind === 'text-snapshot'
-                    ? {
-                        ...step,
-                        resolution: { ...step.resolution, body: null, identity: null }
-                      }
-                    : step
-                )
-              }
-            }),
+            JSON.stringify({ ...command.command, operation: { ...operation, steps: [] } }),
             'utf8'
           )
       }
@@ -86,11 +70,7 @@ export function takeJournalSqlReadyBatch(queue: JournalSqlRequest[]): JournalSql
   return queue.splice(0, count)
 }
 
-function streamingText(body: AgentJournalMessageItem): boolean {
-  return (
-    (body.role === 'assistant' || body.role === 'reasoning') &&
-    body.completedAt === undefined &&
-    body.state === undefined &&
-    body.blocks.every((block) => block.type === 'text')
-  )
+/** Settlements check their permit before COMMIT and lifecycle steps settle turns, so both commit alone. */
+function itemStep(step: JournalWriterStep): boolean {
+  return step.kind === 'item' || step.kind === 'creation-fact' || step.kind === 'resolved-item'
 }

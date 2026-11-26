@@ -44,6 +44,9 @@ import { KeyedChangeJournal } from '../../../../../../shared/collections/keyed-c
 export class AgentStatusProjection {
   private data = new AgentStatusProjectionState()
   private changes = new KeyedChangeJournal()
+  private worktreeJournal = new KeyedChangeJournal()
+  /** Workspaces whose rows, arrangement or summary moved, by commit; null when any may have. */
+  readonly worktreeChanges: Pick<KeyedChangeJournal, 'cursor' | 'since'> = this.worktreeJournal
   changeCursor(): number {
     return this.changes.cursor()
   }
@@ -160,6 +163,12 @@ export class AgentStatusProjection {
   }
   row(key: string): DashboardAgentRow | undefined {
     return this.data.rows.get(key)
+  }
+  rowOwnersRevision(): number {
+    return this.data.rowOwnersRevision
+  }
+  rowWorktree(key: string): string | undefined {
+    return this.data.ownerForSource.get(key) ?? this.data.rows.get(key)?.tab.worktreeId
   }
   keys(worktreeId: string): readonly string[] {
     return this.data.worktrees.get(worktreeId)?.arrangement ?? EMPTY_KEYS
@@ -287,6 +296,11 @@ export class AgentStatusProjection {
           ? null
           : changed
       )
+      // Cleared only once published, so a commit that threw part-way hands its workspaces to the next.
+      if (fullResync || data.touchedWorktrees.size) {
+        this.worktreeJournal.publish(fullResync ? null : new Set(data.touchedWorktrees))
+        data.touchedWorktrees.clear()
+      }
     }
   }
 }

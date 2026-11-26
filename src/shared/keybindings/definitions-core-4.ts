@@ -182,5 +182,24 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
       linux: ['Alt+ArrowLeft'],
       win32: ['Alt+ArrowLeft']
     }
+  },
+  {
+    id: 'botItem.previous',
+    title: 'Previous item',
+    group: 'Bots',
+    scope: 'botItem',
+    // Why: global and tab chords run first wherever focus is, so a rebind there would shadow this.
+    conflictGroups: ['global', 'tabs', 'botItem'],
+    searchKeywords: ['shortcut', 'bot', 'item', 'items', 'previous', 'up'],
+    defaultBindings: platformBindings(['Mod+Alt+ArrowUp'])
+  },
+  {
+    id: 'botItem.next',
+    title: 'Next item',
+    group: 'Bots',
+    scope: 'botItem',
+    conflictGroups: ['global', 'tabs', 'botItem'],
+    searchKeywords: ['shortcut', 'bot', 'item', 'items', 'next', 'down'],
+    defaultBindings: platformBindings(['Mod+Alt+ArrowDown'])
   }
 ]

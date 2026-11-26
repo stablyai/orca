@@ -248,6 +248,8 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       emit: (session, event) => this.emit(session, event),
       promptSuggestionsWanted: (sessionId) => this.suggestionReaders.has(sessionId)
     })
+  noteModelPick = (input: { sessionId: string; fence: number }) =>
+    claudeOptions.noteClaudeModelPick(this.sessions, input, this.emit.bind(this))
   readOptions = (input: { sessionId: string; fence: number }) =>
     readClaudeStructuredSessionOptions(this.session(input.sessionId))
   releaseAcquisition = (input: ClaudeReleaseRequest): Promise<boolean> => {

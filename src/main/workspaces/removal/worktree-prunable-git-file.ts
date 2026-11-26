@@ -23,7 +23,7 @@ export async function isPrunableGitFileWorktree(
   ) {
     return false
   }
-  const access = getLocalWorktreePathAccess(options)
+  const access = getLocalWorktreePathAccess(options, worktree.path)
   const entry = await access.statPath(worktree.path).catch((error: unknown) => {
     // A vanished marker leaves missing-path recovery to its existing stricter gate.
     if (isENOENT(error)) {

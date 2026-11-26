@@ -38,6 +38,11 @@ import type { NativeLocalWorktreeMetadataScanExpectation } from '../../tracking-
 
 import { type WriteSchedulingOperations, scheduleSave } from '../profile-writing/write-scheduling'
 import {
+  membershipRewritesFor,
+  withStoreRewrites,
+  type WrittenWorkspaceScope
+} from './workspace-session-write-listeners'
+import {
   preserveMissingWorkspaceSessionTerminalBindings,
   sshTargetIdForWorkspaceSessionHost
 } from './workspace-session-terminal-binding-replay'
@@ -88,6 +93,11 @@ export class SessionHostPartitionOperations {
         resolved
       ] ?? getDefaultWorkspaceSession()
     )
+  }
+
+  /** Whether a partition is saved for this host (local always is), without listing them all. */
+  hasWorkspaceSessionHost(hostId?: string | null): boolean {
+    return hasPersistedWorkspaceSession(this, resolveHostId(hostId))
   }
 
   getWorkspaceSessionHostIds(): ExecutionHostId[] {
@@ -261,52 +271,53 @@ export function partitionHasOtherRepoWorktreeTabs(
 export function setHostWorkspaceSession(
   owner: SessionHostPartitionOperations,
   hostId: ExecutionHostId,
-  session: WorkspaceSessionState
+  session: WorkspaceSessionState,
+  written?: WrittenWorkspaceScope
 ): void {
-  const persisted =
-    owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId?.[hostId]
+  const { runtime, bindingRecovery, scheduling } = owner[sessionHostPartitionOperationsContext]
+  const persisted = runtime.state.workspaceSessionsByHostId?.[hostId]
   const prior = persisted ? withRequiredWorkspaceSessionMaps(persisted) : undefined
+  const rewrites = membershipRewritesFor(written)
   // Empty host slices omit maps that retirement/rebase checks iterate.
   session = withRequiredWorkspaceSessionMaps(session)
   // Enforce at this shared boundary: quit staging bypasses per-caller normalization.
-  session = dropClosedTerminalTabs(preserveRuntimeAuthoredWorkspaceSessionFields(session, prior))
-  const { runtime } = owner[sessionHostPartitionOperationsContext]
+  session = dropClosedTerminalTabs(
+    preserveRuntimeAuthoredWorkspaceSessionFields(session, prior),
+    undefined,
+    rewrites?.worktreeIds
+  )
   // Each host owns its topology fence; stale renderer snapshots rebase against that host only.
   session = keepRuntimePartitionRevisions(
     hostId,
     sanitizeWorkspaceSessionTerminalRetirements(
       session,
-      runtimePartitionFencePrior(runtime, hostId, session, prior)
+      runtimePartitionFencePrior(runtime, hostId, session, prior),
+      rewrites
     ),
     prior
   )
-  session = preserveMissingWorkspaceSessionTerminalBindings(
-    session,
-    prior,
-    owner[sessionHostPartitionOperationsContext].bindingRecovery,
-    {
-      targetIdForWorktree: sshTargetIdForWorkspaceSessionHost(hostId),
-      executionHostId: hostId
-    }
-  )
+  session = preserveMissingWorkspaceSessionTerminalBindings(session, prior, bindingRecovery, {
+    targetIdForWorktree: sshTargetIdForWorkspaceSessionHost(hostId),
+    executionHostId: hostId
+  })
+  const scrollbackKept = pruneLocalTerminalScrollbackBuffers(session, runtime.state.repos)
   // Strip redundant globals on every write so stale snapshots cannot reinject local-owned data.
   const pruned = withoutRedundantGlobalFields(
-    pruneWorkspaceSessionBrowserHistory(
-      pruneLocalTerminalScrollbackBuffers(
-        session,
-        owner[sessionHostPartitionOperationsContext].runtime.state.repos
-      )
-    ),
-    owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSession
+    pruneWorkspaceSessionBrowserHistory(scrollbackKept),
+    runtime.state.workspaceSession
   )
-  owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId = {
-    ...owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId,
-    [hostId]: withRequiredWorkspaceSessionMaps(orderTerminalRowsByTabGroups(pruned))
+  runtime.state.workspaceSessionsByHostId = {
+    ...runtime.state.workspaceSessionsByHostId,
+    [hostId]: withRequiredWorkspaceSessionMaps(
+      orderTerminalRowsByTabGroups(pruned, rewrites?.worktreeIds)
+    )
   }
   scheduleSave(
-    owner[sessionHostPartitionOperationsContext].scheduling,
+    scheduling,
     ['workspaceSessionsByHostId'],
-    hostId
+    hostId,
+    // A prune can strip scrollback from workspaces the caller never named.
+    scrollbackKept === session ? withStoreRewrites(written, rewrites) : undefined
   )
 }
 

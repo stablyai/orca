@@ -4,6 +4,7 @@ import { AgentVariantIcon } from '@/components/agent/icons/AgentVariantIcon'
 import { CommandItem } from '@/components/ui/command'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { AgentDefaultContextMenu } from './agent-combobox-items'
+import { entrySetupLabel } from './launch-menu/agent-menu-row-presentation'
 import type { AgentPickerSetup } from '../../../../shared/agent-launch/picker/agent-launch-picker-search'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
@@ -78,6 +79,9 @@ export function AgentPickerSearchResults({
         >
           <AgentVariantIcon agent={candidate.agent} size={14} />
           <span className="min-w-0 flex-1 truncate">{candidate.label}</span>
+          {candidate.defaultSurface === 'chat' && entrySetupLabel(candidate) ? (
+            <span className="text-xs text-muted-foreground">{entrySetupLabel(candidate)}</span>
+          ) : null}
         </CommandItem>
       ))}
       {results.map((setup) => {
@@ -101,6 +105,9 @@ export function AgentPickerSearchResults({
             <span className="min-w-0 flex-1 truncate">
               {[setup.model.label, effort?.label].filter(Boolean).join(' · ')}
             </span>
+            {setup.entry.defaultSurface === 'chat' && entrySetupLabel(setup.entry) ? (
+              <span className="text-xs text-muted-foreground">{entrySetupLabel(setup.entry)}</span>
+            ) : null}
             <span className="flex size-3.5 shrink-0 items-center justify-center">
               {checked ? <Check className="size-3.5 text-muted-foreground" /> : null}
             </span>

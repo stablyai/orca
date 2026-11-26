@@ -39,11 +39,24 @@ export function detectLibcFromReportHeader(
   return { libc: 'musl', glibcVersion: null }
 }
 
+// Network handles make getReport() reverse-resolve every open socket on this thread, which can block for minutes.
+export function readProcessReportHeader(): unknown {
+  const reporter = process.report
+  const previousExcludeNetwork = 'excludeNetwork' in reporter ? reporter.excludeNetwork : undefined
+  Object.assign(reporter, { excludeNetwork: true })
+  try {
+    const report = reporter.getReport()
+    return 'header' in report ? report.header : undefined
+  } finally {
+    Object.assign(reporter, { excludeNetwork: previousExcludeNetwork })
+  }
+}
+
 export function detectNativeHostAbi(): NativeHostAbi {
   let header: unknown
   if (process.platform === 'linux') {
     try {
-      header = (process.report?.getReport?.() as { header?: unknown } | undefined)?.header
+      header = readProcessReportHeader()
     } catch {
       header = undefined
     }

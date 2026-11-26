@@ -54,7 +54,7 @@ export const ORCHESTRATION_CREW_METHODS = [
     access: { kind: 'localOnly', targets: { party: 'party' } },
     permission: 'workspace',
     params: CrewSubscribeParams,
-    handler: ({ party }, context, emit) =>
+    handler: ({ party, view, deltas }, context, emit) =>
       streamUntilClosed(
         'crew',
         context,
@@ -62,8 +62,10 @@ export const ORCHESTRATION_CREW_METHODS = [
         () =>
           subscribeCrew(
             () => context.runtime.getOrchestrationCrewSnapshot(party),
-            context.runtime.watchOrchestrationCrew,
-            emit
+            context.runtime.watchOrchestrationCrew(party),
+            emit,
+            view,
+            deltas
           )
       )
   }),

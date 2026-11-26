@@ -2,33 +2,18 @@ import { useCallback, useRef, useState } from 'react'
 import type { PersistedTrustedOrcaHooks } from '../../../../src/shared/workspace-setup/orca-yaml-hook-types'
 import { ARCHIVE_HOOK_FAILED_REMOVAL_CODE } from '../../../../src/shared/worktree/removal/archive-hook-removal-gate'
 import type { OrcaHookTrustPrompt } from '../../components/hook-trust/OrcaHookTrustDrawer'
-import { newWorkspaceUiStateRead } from '../../new-workspace/creation/runtime/new-workspace-operations'
-import {
-  isOrcaHookTrusted,
-  persistOrcaHookTrustApproval,
-  usesVersionedOrcaHookTrust,
-  wasOrcaHookPreviouslyApproved
-} from '../../new-workspace/creation/setup-hook-trust'
+import { persistOrcaHookTrustApproval } from '../../new-workspace/creation/setup-hook-trust'
 import { triggerError, triggerSuccess } from '../../platform/haptics/haptics'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { folderIdOfSelector } from '../../../../src/shared/workspace/identity/workspace-scope'
 import { requestWorktreeRemove } from './worktree-remove-request'
 import { removeWorktreeRow } from '../../worktree/row-presentation/worktree-host-row-identity'
 import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
-import { worktreeArchiveHookTrustRead } from '../host-screen-operations'
 import type { HostScreenState } from '../use-host-screen-state'
-
-type ArchiveHookDecision =
-  | { kind: 'run' | 'skip' }
-  | {
-      kind: 'ask'
-      prompt: OrcaHookTrustPrompt
-      trust: PersistedTrustedOrcaHooks
-      repos: readonly { id: string }[] | null
-    }
+import { useWorktreeDeleteFailure } from './use-worktree-delete-failure'
+import { decideArchiveHookRun } from './archive-hook-run-decision'
 
 // Keep the clients the delete started on, so a host switch cannot redirect a pending approval.
-type RowClients = { rowClient: RpcClient; desktopClient: RpcClient }
+export type RowClients = { rowClient: RpcClient; desktopClient: RpcClient }
 
 // Delete Anyway's explicit waiver for a failed hook, carried through the trust prompt.
 type ArchiveHookWaiver = { allowFailedArchiveHook?: true }
@@ -48,63 +33,6 @@ export type ArchiveHookFailure = RowClients & {
   approvedArchiveHash?: string
 }
 
-// Desktop's ensureHooksConfirmed('archive'): a script that cannot be inspected or checked against trust does not run.
-async function decideArchiveHookRun(
-  args: RowClients & {
-    repos: readonly { id: string }[] | null
-    item: Worktree
-    approvedArchiveHash?: string
-  }
-): Promise<ArchiveHookDecision> {
-  const { repoId } = args.item
-  // A folder's Archive script belongs to its project group, which repo.hooks cannot read.
-  if (folderIdOfSelector(args.item.worktreeId) !== undefined) {
-    return { kind: 'skip' }
-  }
-  try {
-    const hooks = worktreeArchiveHookTrustRead.interpret(
-      await worktreeArchiveHookTrustRead.request(args.rowClient, { repo: `id:${repoId}` })
-    )
-    if (!hooks.accepted || hooks.value === undefined) {
-      return { kind: 'skip' }
-    }
-    const archiveTrust = hooks.value
-    if (archiveTrust === null) {
-      return { kind: 'run' }
-    }
-    // Trust lives on the paired desktop, whichever host owns the workspace.
-    const ui = newWorkspaceUiStateRead.interpret(
-      await newWorkspaceUiStateRead.request(args.desktopClient)
-    )
-    if (!ui.accepted) {
-      return { kind: 'skip' }
-    }
-    const trust = ui.value?.trustedOrcaHooks ?? {}
-    if (
-      archiveTrust.contentHash === args.approvedArchiveHash ||
-      isOrcaHookTrusted(trust, args.repos, repoId, 'archive', archiveTrust.contentHash)
-    ) {
-      return { kind: 'run' }
-    }
-    return {
-      kind: 'ask',
-      trust,
-      repos: args.repos,
-      prompt: {
-        kind: 'archive',
-        repoId,
-        repoName: args.item.repo,
-        scriptContent: archiveTrust.scriptContent,
-        contentHash: archiveTrust.contentHash,
-        previouslyApproved: wasOrcaHookPreviouslyApproved(trust, repoId, 'archive'),
-        versionOnly: usesVersionedOrcaHookTrust(args.repos, repoId)
-      }
-    }
-  } catch {
-    return { kind: 'skip' }
-  }
-}
-
 export function useHostWorktreeDelete(args: {
   client: RpcClient | null
   clientForRow: (item: Worktree) => RpcClient | null
@@ -112,6 +40,7 @@ export function useHostWorktreeDelete(args: {
   state: HostScreenState
 }) {
   const { client, clientForRow, fetchWorktrees, state } = args
+  const { reportDeleteFailure, ...deleteFailure } = useWorktreeDeleteFailure(client)
   const { desktopRepos, serverWorkspaces, setActionError, setLastKnownWorktrees, setWorktrees } =
     state
   const [archiveTrustRequest, setArchiveTrustRequestState] =
@@ -157,29 +86,34 @@ export function useHostWorktreeDelete(args: {
         const result = await requestWorktreeRemove(clients.rowClient, item, hooks)
         if (result.accepted) {
           triggerSuccess()
-        } else {
-          triggerError()
-          restoreRow(item)
-          if (result.refusal?.code === ARCHIVE_HOOK_FAILED_REMOVAL_CODE) {
-            setArchiveHookFailure({
-              rowClient: clients.rowClient,
-              desktopClient: clients.desktopClient,
-              item,
-              message: result.refusal.message,
-              ...(approvedArchiveHash ? { approvedArchiveHash } : {})
-            })
-          } else if (result.refusal && item.recipeEnvironment) {
-            // Say why: the desktop may have removed the checkout but not destroyed the environment.
-            setActionError(result.refusal.message)
-          }
+          return
         }
-        void fetchWorktrees()
-      } catch {
         triggerError()
         restoreRow(item)
+        if (result.refusal?.code === ARCHIVE_HOOK_FAILED_REMOVAL_CODE) {
+          setArchiveHookFailure({
+            rowClient: clients.rowClient,
+            desktopClient: clients.desktopClient,
+            item,
+            message: result.refusal.message,
+            ...(approvedArchiveHash ? { approvedArchiveHash } : {})
+          })
+        } else {
+          reportDeleteFailure(clients.desktopClient, item, result.refusal)
+        }
+      } catch (error) {
+        triggerError()
+        restoreRow(item)
+        reportDeleteFailure(
+          clients.desktopClient,
+          item,
+          error instanceof Error ? error : new Error(String(error))
+        )
+      } finally {
+        void fetchWorktrees()
       }
     },
-    [fetchWorktrees, hideRow, restoreRow, setActionError]
+    [fetchWorktrees, hideRow, reportDeleteFailure, restoreRow]
   )
 
   // Every attempt, Delete Anyway included, re-reads the script: it may have changed since approval.
@@ -319,6 +253,7 @@ export function useHostWorktreeDelete(args: {
   const dismissArchiveHookFailure = useCallback(() => setArchiveHookFailure(null), [])
 
   return {
+    ...deleteFailure,
     archiveHookFailure: visibleFailure,
     archiveTrustRequest: onThisDesktop(archiveTrustRequest),
     approveArchiveTrust,

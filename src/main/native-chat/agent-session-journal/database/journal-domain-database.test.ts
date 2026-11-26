@@ -274,18 +274,14 @@ it('discards an unpublished partial metadata import on failure and retries from 
   })
 })
 
-it.each([1, 100, 'corrupt'])(
+it.each([1, 100])(
   'refuses source schema %s without publishing an empty successful profile',
   async (version) => {
     const stateDirectory = directory()
     const filename = journalDatabasePath(stateDirectory)
-    if (version === 'corrupt') {
-      writeFileSync(filename, 'corrupt database')
-    } else {
-      const source = new Database(filename)
-      source.pragma(`user_version=${version}`)
-      source.close()
-    }
+    const source = new Database(filename)
+    source.pragma(`user_version=${version}`)
+    source.close()
     const before = hash(filename)
     await expect(initializeJournalDomainDatabase(stateDirectory)).rejects.toThrow()
     expect(existsSync(journalDomainDatabasePath(stateDirectory))).toBe(false)

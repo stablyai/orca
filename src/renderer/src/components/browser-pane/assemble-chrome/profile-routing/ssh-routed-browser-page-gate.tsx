@@ -95,7 +95,7 @@ export function SshRoutedBrowserPageGate({
                 </Button>
               ) : null}
               <Button type="button" variant="ghost" size="sm" onClick={browseFromThisDevice}>
-                {t('browser.sshRoute.browseLocally', 'Browse from this device instead')}
+                {t('browser.sshRoute.browseLocally', 'Browse locally')}
               </Button>
             </div>
           </>

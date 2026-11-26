@@ -114,6 +114,7 @@ function FileExplorerFiles(): React.JSX.Element {
     nameFilterCollapsedPaths,
     setNameFilterCollapsedPaths,
     hasNameFilter,
+    hasNameFilterQuery,
     nameFilterFiles,
     nameFilterSource,
     handleClearNameFilter
@@ -193,6 +194,7 @@ function FileExplorerFiles(): React.JSX.Element {
     activeFileId,
     openFiles,
     hasNameFilter,
+    hasNameFilterQuery,
     setNameFilterQuery,
     handleToggleNameFilterDir,
     tree,

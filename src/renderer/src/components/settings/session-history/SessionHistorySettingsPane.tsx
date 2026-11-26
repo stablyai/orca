@@ -204,7 +204,7 @@ export function SessionHistorySettingsPane({
             disabled={busy}
             onClick={() => void enableOnAllComputers()}
           >
-            {t('sessionHistory.settings.enableOnAll', 'Enable on all computers')}
+            {t('sessionHistory.settings.enableOnAll', 'Enable everywhere')}
           </Button>
         </div>
       )}

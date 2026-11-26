@@ -30,9 +30,9 @@ export type SwipeRowAction = {
 }
 
 /**
- * A row that slides to uncover an action: `leading` behind a right swipe, `trailing` behind a left
- * one. Tapping the uncovered action runs it. Rows without either action render as they are;
- * gaining or losing both remounts the row.
+ * A row that slides to uncover an action: `leading` behind a right swipe, `trailing` (one, or a few
+ * side by side) behind a left one. Tapping the uncovered action runs it. Rows without either action
+ * render as they are; gaining or losing both remounts the row.
  */
 export function SwipeRowActions({
   leading,
@@ -41,7 +41,7 @@ export function SwipeRowActions({
   children
 }: {
   leading?: SwipeRowAction
-  trailing?: SwipeRowAction
+  trailing?: SwipeRowAction | readonly SwipeRowAction[]
   enabled?: boolean
   /** Gets a wrapper for the row's press: a tap on a swiped row closes it instead. */
   children: (guardPress: (onPress: () => void) => () => void) => ReactNode
@@ -52,8 +52,9 @@ export function SwipeRowActions({
   const start = useSharedValue(0)
   // When the last drag ended: on the web, releasing a mouse drag also clicks the row.
   const dragEndedAt = useSharedValue(0)
+  const trailingActions = trailing === undefined ? [] : [trailing].flat()
   const maxRight = leading ? ACTION_WIDTH : 0
-  const maxLeft = trailing ? -ACTION_WIDTH : 0
+  const maxLeft = -ACTION_WIDTH * trailingActions.length
   // Built per render: a module-level easing would run before a test's Reanimated mock can serve it.
   const settle = (to: number) => {
     'worklet'
@@ -98,16 +99,18 @@ export function SwipeRowActions({
     }
     onPress()
   }
-  if (!leading && !trailing) {
+  if (!leading && trailingActions.length === 0) {
     return children((onPress) => onPress)
   }
-  const renderAction = (action: SwipeRowAction, side: 'leading' | 'trailing') => {
+  // `fromRight` counts trailing actions in from the row's right edge.
+  const renderAction = (action: SwipeRowAction, fromRight: number | null) => {
     const Icon = action.icon
     return (
       <Pressable
+        key={action.label}
         style={({ pressed }) => [
           styles.action,
-          side === 'leading' ? styles.leading : styles.trailing,
+          fromRight === null ? styles.leading : { right: fromRight * ACTION_WIDTH },
           { backgroundColor: action.background },
           pressed && styles.actionPressed
         ]}
@@ -127,8 +130,10 @@ export function SwipeRowActions({
   return (
     <View>
       <Animated.View pointerEvents="box-none" style={[styles.actions, actionsStyle]}>
-        {leading ? renderAction(leading, 'leading') : null}
-        {trailing ? renderAction(trailing, 'trailing') : null}
+        {leading ? renderAction(leading, null) : null}
+        {trailingActions.map((action, index) =>
+          renderAction(action, trailingActions.length - 1 - index)
+        )}
       </Animated.View>
       {/* pan-y keeps the page scrolling vertically over the row on the web. */}
       <GestureDetector gesture={pan} touchAction="pan-y">
@@ -150,7 +155,6 @@ const styles = themedStyleSheet(() => ({
   },
   actions: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   leading: { left: 0 },
-  trailing: { right: 0 },
   actionPressed: { opacity: feedback.pressedOpacity },
   actionText: { fontSize: typography.metaSize, fontWeight: '600' }
 }))

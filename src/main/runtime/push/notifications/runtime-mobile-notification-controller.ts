@@ -20,6 +20,8 @@ import type {
   MobilePushRegisterResult
 } from '../../../../shared/notifications/mobile-push-contract'
 import { MobileNotificationReplayBuffer } from './mobile-notification-replay'
+// Shared contract, not the dispatcher: phones typecheck this file and must not pull in Node timers.
+import type { NotificationPushCoverageRequest as PushCoverageRequest } from '../../../../shared/rpc-contract/notifications/notifications-params'
 import { notifyRuntimeListeners } from '../../events/runtime-listener-delivery'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 import { MobileNotificationDismissalStore } from './mobile-notification-dismissal-store'
@@ -68,6 +70,7 @@ export type MobilePushRegistrar = {
   test(deviceId: string): Promise<MobilePushTestResult>
   register(input: MobilePushRegisterInput): Promise<MobilePushRegisterResult>
   unregister(deviceId: string): Promise<{ unregistered: boolean }>
+  coveredTokenDigests(request: PushCoverageRequest): Promise<string[]>
 }
 
 /** Host news for its owner with no agent turn behind it; `id` keys its cooldown and its phone notice. */
@@ -132,6 +135,11 @@ export class RuntimeMobileNotificationController {
 
   async unregisterPushDevice(deviceId: string): Promise<{ unregistered: boolean }> {
     return (await this.pushRegistrar?.unregister(deviceId)) ?? { unregistered: false }
+  }
+
+  /** The subset of these phones this host pushes itself; empty when it pushes none. */
+  async coveredPushTokenDigests(request: PushCoverageRequest): Promise<string[]> {
+    return (await this.pushRegistrar?.coveredTokenDigests(request)) ?? []
   }
 
   /** `bindForget` runs for a connection without a live report, before it is recorded. */
