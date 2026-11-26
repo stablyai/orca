@@ -142,7 +142,7 @@ export class ProviderRelay {
 
   get idleStopPolicy(): Pick<
     ProviderRelayIdleStop,
-    'configure' | 'tracking' | 'unaccounted' | 'waiting' | 'unread' | 'finished'
+    'configure' | 'tracking' | 'unaccounted' | 'unread' | 'finished'
   > {
     return this.idleStop
   }

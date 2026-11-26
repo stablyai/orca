@@ -25,7 +25,6 @@ export type CappableRelay = {
   readonly idleStopPolicy: {
     readonly tracking: boolean
     readonly unaccounted: boolean
-    readonly waiting: boolean
     readonly unread: boolean
     readonly finished: boolean
   }
@@ -135,11 +134,6 @@ export class ProviderRelayDetachedCap {
         continue
       }
       const policy = relay.idleStopPolicy
-      // An approval waiting is work, tracked or not: never stopped, and not counted again.
-      if (policy.waiting) {
-        this.counted.delete(relay)
-        continue
-      }
       // Busy again since it counted: not stopped, and not counted until it is idle with unread again.
       if (policy.tracking && !policy.unaccounted && !(policy.unread && policy.finished)) {
         this.counted.delete(relay)
