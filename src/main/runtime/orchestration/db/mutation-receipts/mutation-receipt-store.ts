@@ -41,6 +41,7 @@ export function beginMutationReceipt(
     requestId: string
     method: string
     payloadHash: string
+    pendingReceipt?: string
   },
   /** The caller may already have committed this key; never admit it as new work. */
   { requireExisting = false }: { requireExisting?: boolean } = {}
@@ -68,10 +69,16 @@ export function beginMutationReceipt(
     this.db
       .prepare(
         `INSERT INTO mutation_receipts (
-           caller_fingerprint, request_id, method, payload_hash, state
-         ) VALUES (?, ?, ?, ?, 'pending')`
+           caller_fingerprint, request_id, method, payload_hash, state, receipt
+         ) VALUES (?, ?, ?, ?, 'pending', ?)`
       )
-      .run(params.callerFingerprint, params.requestId, params.method, params.payloadHash)
+      .run(
+        params.callerFingerprint,
+        params.requestId,
+        params.method,
+        params.payloadHash,
+        params.pendingReceipt ?? null
+      )
     const row = this.getMutationReceipt(params.callerFingerprint, params.requestId)
     this.db.exec('COMMIT')
     return { disposition: 'started', row: row as MutationReceiptRow }
@@ -149,6 +156,21 @@ export function checkpointPendingMutationReceipt(
   return row
 }
 
+export function admitPreparedMutationReceipts(
+  this: OrchestrationDb,
+  callerFingerprint: string,
+  requestIds: readonly string[],
+  pendingReceipt: string
+): void {
+  this.db
+    .prepare(
+      `UPDATE mutation_receipts SET receipt = NULL
+       WHERE caller_fingerprint = ? AND request_id IN (SELECT value FROM json_each(?))
+         AND state = 'pending' AND receipt = ?`
+    )
+    .run(callerFingerprint, JSON.stringify(requestIds), pendingReceipt)
+}
+
 export function discardPendingMutationReceipt(
   this: OrchestrationDb,
   callerFingerprint: string,
@@ -179,8 +201,18 @@ export function countPendingMutationReceipts(
 export function settlePendingMutationReceipts(
   this: OrchestrationDb,
   callerFingerprints: readonly string[],
-  receipt: string
+  receipt: string,
+  retryableReceipt?: string
 ): void {
+  if (retryableReceipt !== undefined) {
+    this.db
+      .prepare(
+        `DELETE FROM mutation_receipts
+         WHERE caller_fingerprint IN (SELECT value FROM json_each(?))
+           AND state = 'pending' AND receipt = ?`
+      )
+      .run(JSON.stringify(callerFingerprints), retryableReceipt)
+  }
   this.db
     .prepare(
       `UPDATE mutation_receipts
@@ -209,6 +241,7 @@ export type MutationReceiptStoreMethods = {
   beginMutationReceipt: typeof beginMutationReceipt
   completeMutationReceipt: typeof completeMutationReceipt
   checkpointPendingMutationReceipt: typeof checkpointPendingMutationReceipt
+  admitPreparedMutationReceipts: typeof admitPreparedMutationReceipts
   discardPendingMutationReceipt: typeof discardPendingMutationReceipt
   countPendingMutationReceipts: typeof countPendingMutationReceipts
   settlePendingMutationReceipts: typeof settlePendingMutationReceipts
@@ -221,6 +254,7 @@ export function attachMutationReceiptStore(ctor: { prototype: object }): void {
     beginMutationReceipt,
     completeMutationReceipt,
     checkpointPendingMutationReceipt,
+    admitPreparedMutationReceipts,
     discardPendingMutationReceipt,
     countPendingMutationReceipts,
     settlePendingMutationReceipts,

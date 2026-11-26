@@ -89,7 +89,7 @@ describe('connectorAskerImages', () => {
             text: 'Use this screenshot.',
             at: 0,
             messageRef: 'slack:T1:C1:1.0:1.0',
-            files: [{ id: 'F0IMAGE', name: 'image.png', type: 'image/png', size: PNG.length }]
+            files: [{ id: 'F0IMAGE', name: 'image.png', type: 'IMAGE/PNG', size: PNG.length }]
           }
         ]
       }
@@ -97,7 +97,7 @@ describe('connectorAskerImages', () => {
 
     await expect(
       get({ botId: 'bot-1', conversation, asker, signal: new AbortController().signal })
-    ).resolves.toEqual(['/attachments/image.png'])
+    ).resolves.toEqual([{ path: '/attachments/image.png', fileId: 'F0IMAGE', bytes: PNG.length }])
     expect(read).toHaveBeenCalledWith(
       {
         botId: 'bot-1',
@@ -130,7 +130,7 @@ describe('connectorAskerImages', () => {
       store: async (name) => `/attachments/${name}`,
       fetch: async () => new Response(new Uint8Array(PNG))
     })
-    await get({
+    const staged = await get({
       botId: 'bot-1',
       conversation,
       signal: new AbortController().signal,
@@ -142,15 +142,25 @@ describe('connectorAskerImages', () => {
         context: [],
         messageRef: 'slack:T1:C1:5.0:5.0',
         earlierOwn: {
-          messages: Array.from({ length: 4 }, (_, at) => ({
+          messages: Array.from({ length: 10 }, (_, at) => ({
             text: 'Same screenshot.',
             at,
             messageRef: `slack:T1:C1:${at}.0:${at}.0`,
-            files: [{ id: 'FSAME', name: 'image.png', type: 'image/png' }]
+            files: [
+              { id: 'FSAME', name: 'image.png', type: 'image/png' },
+              { id: `FDISTINCT${at}`, name: 'image.png', type: 'image/png' },
+              { id: 'INVALID ID', name: 'image.png', type: 'image/png' }
+            ]
           }))
         }
       }
     })
-    expect(read).toHaveBeenCalledTimes(1)
+    expect(staged.map(({ fileId }) => fileId)).toEqual([
+      'FSAME',
+      'FDISTINCT9',
+      'FDISTINCT8',
+      'FDISTINCT7'
+    ])
+    expect(read).toHaveBeenCalledTimes(4)
   })
 })

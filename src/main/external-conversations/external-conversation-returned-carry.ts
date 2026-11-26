@@ -5,10 +5,14 @@
 // admission settles them (journal-domain-carried-cards).
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import type { NativeChatBlock } from '../../shared/native-chat/native-chat-types'
+import { stat } from 'node:fs/promises'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalCarriedCard } from '../../shared/agent-session/journal/agent-journal-bot-message-fields'
 import type { ConnectorMessageAsker } from '../../shared/connector-message-asker'
-import { AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT } from '../../shared/agent-session/agent-session-attachments'
+import {
+  AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT,
+  AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES
+} from '../../shared/agent-session/agent-session-attachments'
 import { connectorSentLine } from '../../shared/connector-asker-prompt'
 import {
   readAgentSessionFailureFact,
@@ -16,6 +20,7 @@ import {
 } from '../../shared/agent-session/failures/agent-session-failure'
 import type { JournalReturnedCard } from '../native-chat/agent-session-journal/journal-domain-queue-reads'
 import type { ConversationChat } from './external-conversation-chat'
+import type { EarlierImageBudget, ConnectorImage } from './connector-asker-images'
 
 // What a later send can get past: the agent itself couldn't take the message. A refusal of the
 // message's own content (too large, too many images, empty) would fail again, so it stays a card.
@@ -40,6 +45,7 @@ export type CarriedMessages = {
   askers: (ConnectorMessageAsker | undefined)[]
   /** Everyone who asked a carried message, nested carries included; null for one Orca can't name. */
   askedBy: (ConnectorMessageAsker | null)[]
+  earlierBudget: EarlierImageBudget
 }
 
 export const NOTHING_CARRIED: CarriedMessages = {
@@ -47,7 +53,12 @@ export const NOTHING_CARRIED: CarriedMessages = {
   cards: [],
   deliveryIds: [],
   askers: [],
-  askedBy: []
+  askedBy: [],
+  earlierBudget: {
+    count: AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT,
+    bytes: AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES,
+    fileIds: new Set()
+  }
 }
 
 /** Whether a returned card is one this conversation's next message carries. */
@@ -72,13 +83,13 @@ export function carriesReturnedCard(
 
 /** The carried cards as the turn takes them, ahead of its own message; `account` is the outbox
  *  account the turn answers through, if any, and `ownImages` the images the message brings. */
-export function carriedMessages(
+export async function carriedMessages(
   link: Pick<ExternalConversationLink, 'source' | 'externalId'>,
   returned: readonly JournalReturnedCard[],
   account: string | undefined,
   now: number,
-  ownImages = 0
-): CarriedMessages {
+  direct: readonly ConnectorImage[] = []
+): Promise<CarriedMessages> {
   // Oldest first: a failed start's card goes ahead of the queue, so queue order is newest first. A
   // card whose send time is gone came from an earlier Orca, so it is the older.
   const sentAt = (each: JournalReturnedCard) => each.submittedAt ?? Number.NEGATIVE_INFINITY
@@ -86,35 +97,56 @@ export function carriedMessages(
     .filter((each) => carriesReturnedCard(link, each))
     .toReversed()
     .sort((a, b) => (sentAt(a) === sentAt(b) ? 0 : sentAt(a) < sentAt(b) ? -1 : 1))
-  // Oldest first while the images fit one message; the rest stay returned for the next message.
-  let images = ownImages
-  const over = eligible.findIndex(({ card }) => {
-    images += card.body.blocks.filter((block) => block.type === 'image-ref').length
-    return images > AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT
-  })
-  const carried = over === -1 ? eligible : eligible.slice(0, over)
-  if (carried.length === 0) {
-    return NOTHING_CARRIED
+  let count = AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT - direct.length
+  let bytes =
+    AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES -
+    direct.reduce((total, image) => total + image.bytes, 0)
+  let fileIds = new Set(direct.map((image) => image.fileId))
+  const carried: JournalReturnedCard[] = []
+  const blocks: NativeChatBlock[] = []
+  // Keep the oldest whole requests whose images fit; each remaining card can still be retried.
+  for (const each of eligible) {
+    const cardFileIds = new Set(fileIds)
+    const ownBlocks = each.card.body.blocks.filter((block) => {
+      if (block.type !== 'image-ref' || !block.connectorFileId) {
+        return true
+      }
+      if (cardFileIds.has(block.connectorFileId)) {
+        return false
+      }
+      cardFileIds.add(block.connectorFileId)
+      return true
+    })
+    const images = ownBlocks.filter((block) => block.type === 'image-ref')
+    if (images.length > count) {
+      break
+    }
+    let cardBytes = 0
+    for (const image of images) {
+      if (image.url || !image.path) {
+        continue
+      }
+      const size = await stat(image.path).then(
+        (info) => (info.isFile() ? info.size : Infinity),
+        () => Infinity
+      )
+      cardBytes += size
+      if (cardBytes > bytes) {
+        break
+      }
+    }
+    if (cardBytes > bytes) {
+      break
+    }
+    count -= images.length
+    bytes -= cardBytes
+    fileIds = cardFileIds
+    carried.push(each)
+    blocks.push(...withSentLine(ownBlocks, each.submittedAt, now))
   }
   return {
-    blocks: carried.flatMap(({ card, submittedAt }) => {
-      const sent =
-        submittedAt === undefined
-          ? null
-          : connectorSentLine({ askedAt: submittedAt, waitedMs: now - submittedAt }, true)
-      // On its own words: a card that carried earlier ones holds their lines before its last text.
-      const own = card.body.blocks.findLastIndex((block) => block.type === 'text')
-      if (!sent) {
-        return card.body.blocks
-      }
-      return own === -1
-        ? [{ type: 'text' as const, text: sent }, ...card.body.blocks]
-        : card.body.blocks.map((block, index) =>
-            index === own && block.type === 'text'
-              ? { ...block, text: `${sent}\n${block.text}` }
-              : block
-          )
-    }),
+    blocks,
+    earlierBudget: { count, bytes, fileIds },
     cards: carried.map(({ card }) => ({
       messageId: card.messageId,
       fingerprint: card.fingerprint
@@ -138,6 +170,25 @@ export function carriedMessages(
       ])
     )
   }
+}
+
+function withSentLine(blocks: NativeChatBlock[], submittedAt: number | undefined, now: number) {
+  const sent =
+    submittedAt === undefined
+      ? null
+      : connectorSentLine({ askedAt: submittedAt, waitedMs: now - submittedAt }, true)
+  if (!sent) {
+    return blocks
+  }
+  // A card that carried earlier ones holds their lines before its last text.
+  const own = blocks.findLastIndex((block) => block.type === 'text')
+  return own === -1
+    ? [{ type: 'text' as const, text: sent }, ...blocks]
+    : blocks.map((block, index) =>
+        index === own && block.type === 'text'
+          ? { ...block, text: `${sent}\n${block.text}` }
+          : block
+      )
 }
 
 // A chain of failed starts carries its askers again each time; one stamp per sender keeps it linear.
@@ -173,13 +224,13 @@ export async function readCarriedMessages(
   chat: ConversationChat,
   link: Pick<ExternalConversationLink, 'sessionId' | 'source' | 'externalId'>,
   account: string | undefined,
-  ownImages: number
+  direct: readonly ConnectorImage[]
 ): Promise<CarriedMessages> {
   try {
     const returned = await (
       await chat.conversation(link.sessionId)
     ).journal.queuedMessages.returned()
-    return carriedMessages(link, returned, account, Date.now(), ownImages)
+    return await carriedMessages(link, returned, account, Date.now(), direct)
   } catch (error) {
     console.warn('[connectors] could not read the chat’s unsent messages', error)
     return NOTHING_CARRIED

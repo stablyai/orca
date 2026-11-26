@@ -1,6 +1,6 @@
 import type { AgentJournalRenderItem } from '../journal/agent-session-journal-types'
 import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
-import { connectorMessageShownBlocks } from '../../connector-asker-prompt'
+import { connectorMessageShownBlocks } from '../../connector-asker-message-display'
 import { isStructuredAgentSessionCommandEntry } from './structured-agent-session-command-entry'
 import { sliceAtCodeUnitLimit } from '../../text/surrogate-safe-text-slice'
 import { splitBotMentions } from '../../bots/bot-mention-context'

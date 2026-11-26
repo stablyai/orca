@@ -7,6 +7,7 @@ import { MUTATION_RECEIPT_MAX_ROWS } from '../runtime/orchestration/db/mutation-
 import {
   CONNECTOR_CANCEL_RECEIPT_RESERVE,
   CONNECTOR_PENDING_RECEIPT_LIMIT,
+  DeliveryPreparation,
   DeliveryReceipts
 } from './external-conversation-delivery-receipts'
 import type { ConversationKey, Delivery } from './external-conversation-types'
@@ -122,6 +123,41 @@ describe('DeliveryReceipts ledger capacity', () => {
 })
 
 describe('DeliveryReceipts.recorded', () => {
+  it('can retry a batch interrupted before image preparation finished', async () => {
+    const { path, db } = fileDb()
+    const before = new DeliveryReceipts(() => db)
+    const stalled = new DeliveryPreparation()
+    const sent = new DeliveryPreparation()
+    for (const [id, phase] of [
+      ['stalled', stalled],
+      ['sent', sent]
+    ] as const) {
+      const head = before.run(KEY, id, 'connector.start', ['hi'], never, phase)
+      void before.carried(KEY, `${id}-later`, 'and this', head, phase)
+    }
+    sent.ready()
+    db.close()
+
+    const reopened = new OrchestrationDb(path)
+    const after = new DeliveryReceipts(() => reopened)
+    const execute = async (): Promise<Delivery> => ({ outcome: 'accepted' })
+    await expect(after.run(KEY, 'stalled', 'connector.start', ['hi'], execute)).resolves.toEqual({
+      outcome: 'accepted'
+    })
+    await expect(
+      after.run(KEY, 'stalled-later', 'connector.send', ['and this'], execute)
+    ).resolves.toEqual({
+      outcome: 'accepted'
+    })
+    for (const id of ['sent', 'sent-later']) {
+      await expect(after.recorded(KEY, id)).resolves.toEqual({
+        outcome: 'unknown',
+        reason: 'replayed_after_restart'
+      })
+    }
+    reopened.close()
+  })
+
   it('replays a result, reads an interrupted delivery as unknown, and runs nothing', async () => {
     const { path, db } = fileDb()
     const receipts = new DeliveryReceipts(() => db)

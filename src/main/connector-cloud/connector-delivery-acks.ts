@@ -129,13 +129,12 @@ export class ConnectorDeliveryAcks {
     return this.deps.outbox?.() ?? null
   }
 
-  private track({ deliveryId, received, done, viaOutbox }: DispatchedDelivery): void {
+  private track({ deliveryId, received, done, viaOutbox, preparation }: DispatchedDelivery): void {
     this.active.add(deliveryId)
     if (!received) {
       this.onlyDone.add(deliveryId)
-    } else if (viaOutbox) {
-      // Its outbox row commits with its admission: until then the cloud keeps it leased, so a crash
-      // before the commit hands it out again rather than leaving it received and never answered.
+    } else if (viaOutbox || preparation) {
+      // Keep the cloud's lease until admission, so it can resend work interrupted during preparation.
       this.unadmitted.add(deliveryId)
     } else {
       this.push({ deliveryId, step: 'received' })

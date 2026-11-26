@@ -138,6 +138,8 @@ export type NativeChatImageRefBlock = {
   path?: string
   url?: string
   alt?: string
+  /** The Slack file already staged in this conversation, for failed-request recovery. */
+  connectorFileId?: string
 }
 
 /** Collapse in-flight provider states to working. idle means existing but inactive; unverifiable means contact lost without proof of exit

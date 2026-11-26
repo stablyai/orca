@@ -18,6 +18,8 @@ import {
 } from './external-conversation-returned-carry'
 import { callerFor, type ConversationChat } from './external-conversation-chat'
 import { refused, type ConnectorMessage, type Delivery } from './external-conversation-types'
+import type { AskerImages, ConnectorImage } from './connector-asker-images'
+import type { DeliveryPreparation } from './external-conversation-delivery-receipts'
 
 /** Sent as a person's message would be: a busy chat takes it into the running turn. A bot's is
  *  labelled with who asked, where and what came before; the chat shows the message alone. Its
@@ -32,7 +34,8 @@ export async function deliverToChat(
     signal: AbortSignal
     admitted?: () => (() => void) | void
     deliveryId?: string
-    images?: readonly string[]
+    askerImages?: AskerImages
+    preparation?: DeliveryPreparation
   }
 ): Promise<Delivery> {
   if (!chat) {
@@ -52,18 +55,40 @@ export async function deliverToChat(
     }
   }
   try {
+    const readCarry = (direct: readonly ConnectorImage[]) =>
+      readCarriedMessages(chat, link, delivery.reply?.account, direct)
+    let carried: CarriedMessages | undefined
+    let directCount: number | undefined
+    const images =
+      link.bot && delivery.asker && delivery.askerImages
+        ? await delivery
+            .askerImages({
+              botId: link.bot.botId,
+              conversation: { source: link.source, externalId: link.externalId },
+              asker: delivery.asker,
+              signal: delivery.signal,
+              earlierBudget: async (direct) => {
+                directCount = direct.length
+                carried = await readCarry(direct)
+                return carried.earlierBudget
+              }
+            })
+            .catch(() => [])
+        : []
+    const direct = images.slice(0, directCount)
+    const earlier = directCount === undefined ? [] : images.slice(directCount)
     // A carried card that changed since it was read (a Retry, an edit) refuses the send: read again.
     for (let attempt = 1; ; attempt += 1) {
-      const carried =
-        link.bot && attempt <= CARRY_READS
-          ? await readCarriedMessages(
-              chat,
-              link,
-              delivery.reply?.account,
-              delivery.images?.length ?? 0
-            )
-          : NOTHING_CARRIED
-      const outcome = await sendConnectorTurn(chat, link, delivery, carried, admit)
+      carried ??= link.bot && attempt <= CARRY_READS ? await readCarry(direct) : NOTHING_CARRIED
+      const fitting = earlierImagesThatFit(earlier, carried)
+      const outcome = await sendConnectorTurn(
+        chat,
+        link,
+        delivery,
+        carried,
+        [...direct, ...fitting],
+        admit
+      )
       if (
         outcome.kind === 'refused' &&
         carried.cards.length > 0 &&
@@ -73,6 +98,7 @@ export async function deliverToChat(
         taken.back?.()
         taken.back = undefined
         admitted = false
+        carried = undefined
         continue
       }
       if (outcome.kind === 'refused') {
@@ -102,16 +128,36 @@ export async function deliverToChat(
 // Reads of the carried cards before the message goes alone: each retry follows a person's change.
 const CARRY_READS = 3
 
+function earlierImagesThatFit(
+  images: readonly ConnectorImage[],
+  { earlierBudget }: CarriedMessages
+) {
+  let { count, bytes } = earlierBudget
+  return images.filter((image) => {
+    if (count <= 0 || image.bytes > bytes || earlierBudget.fileIds.has(image.fileId)) {
+      return false
+    }
+    count -= 1
+    bytes -= image.bytes
+    return true
+  })
+}
+
 function sendConnectorTurn(
   chat: ConversationChat,
   link: ExternalConversationLink,
   delivery: Parameters<typeof deliverToChat>[2],
   carried: CarriedMessages,
+  images: readonly ConnectorImage[],
   admit: () => void
 ) {
   const { asker, note, signal } = delivery
+  const attached = new Set([
+    ...carried.earlierBudget.fileIds,
+    ...images.map((image) => image.fileId)
+  ])
   const text = asker
-    ? connectorAskerPrompt(link.source, asker, note, delivery)
+    ? connectorAskerPrompt(link.source, asker, note, { ...delivery, attached })
     : connectorPlainMessages([delivery, ...(delivery.later ?? [])], note)
   // Kept beside the message for the chat's tag, with only the links a tag may open or fetch.
   const stored = asker ? storedConnectorAsker(link.source, asker) : undefined
@@ -132,7 +178,11 @@ function sendConnectorTurn(
         blocks: [
           ...carried.blocks,
           { type: 'text', text },
-          ...(delivery.images ?? []).map((path) => ({ type: 'image-ref' as const, path }))
+          ...images.map(({ path, fileId }) => ({
+            type: 'image-ref' as const,
+            path,
+            ...(link.source === 'slack' ? { connectorFileId: fileId } : {})
+          }))
         ],
         // An event no one asked through is the connector's too, so the turn finds its conversation;
         // a bot's message whose asker didn't parse is someone unknown's, never the owner's.
@@ -169,6 +219,7 @@ function sendConnectorTurn(
         if (signal.aborted) {
           throw new Error(refusalOf(signal))
         }
+        delivery.preparation?.ready()
         admit()
       }
     }

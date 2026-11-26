@@ -19,6 +19,35 @@ const RecordedDelivery = z.discriminatedUnion('outcome', [
 ])
 
 const LOST: Delivery = { outcome: 'unknown', reason: 'replayed_after_restart' }
+const PREPARING = JSON.stringify({ phase: 'preparing_attachments' })
+
+/** Receipts for a turn and its batch can be retried until the turn is ready for admission. */
+export class DeliveryPreparation {
+  private pending: Set<string> | null = new Set()
+  private ledger: { db: DeliveryReceiptDb; fingerprint: string } | undefined
+
+  track(db: DeliveryReceiptDb, fingerprint: string, requestId: string): () => void {
+    const pending = this.pending
+    if (!pending) {
+      db.admitPreparedMutationReceipts(fingerprint, [requestId], PREPARING)
+      return () => {}
+    }
+    this.ledger ??= { db, fingerprint }
+    pending.add(requestId)
+    return () => {
+      pending.delete(requestId)
+    }
+  }
+
+  ready(): void {
+    if (this.pending?.size && this.ledger) {
+      const { db, fingerprint } = this.ledger
+      db.admitPreparedMutationReceipts(fingerprint, [...this.pending], PREPARING)
+    }
+    this.pending = null
+    this.ledger = undefined
+  }
+}
 
 // Reserve only part of the shared ledger for unsettled connector deliveries.
 export const CONNECTOR_PENDING_RECEIPT_LIMIT = 1_000
@@ -42,7 +71,8 @@ export class DeliveryReceipts {
     // connector.mute: a send a thread's mute held before the agent, which started no turn.
     method: 'connector.start' | 'connector.send' | 'connector.cancel' | 'connector.mute',
     payload: unknown,
-    execute: () => Promise<Delivery>
+    execute: () => Promise<Delivery>,
+    preparation?: DeliveryPreparation
   ): Promise<Delivery> {
     const identity = {
       callerFingerprint: callerFingerprint(key.source),
@@ -57,7 +87,10 @@ export class DeliveryReceipts {
     }
     let begun: ReturnType<DeliveryReceiptDb['beginMutationReceipt']>
     try {
-      begun = db.beginMutationReceipt(identity)
+      begun = db.beginMutationReceipt({
+        ...identity,
+        ...(preparation ? { pendingReceipt: PREPARING } : {})
+      })
     } catch (error) {
       if (error instanceof OrchestrationError && error.code === 'request_mismatch') {
         return Promise.resolve(refused('delivery_id_reused'))
@@ -71,6 +104,7 @@ export class DeliveryReceipts {
     if (begun.disposition === 'pending') {
       return this.inFlight.get(flightKey) ?? Promise.resolve(LOST)
     }
+    const untrack = preparation?.track(db, identity.callerFingerprint, identity.requestId)
     const delivery = execute().then(
       (result) => {
         if (result.outcome === 'refused') {
@@ -87,6 +121,7 @@ export class DeliveryReceipts {
     )
     this.inFlight.set(flightKey, delivery)
     const forget = (): void => {
+      untrack?.()
       this.inFlight.delete(flightKey)
     }
     delivery.then(forget, forget)
@@ -120,15 +155,23 @@ export class DeliveryReceipts {
     key: ConversationKey,
     deliveryId: string,
     text: string,
-    done: Promise<Result>
+    done: Promise<Result>,
+    preparation?: DeliveryPreparation
   ): Promise<Result> {
-    await this.run(key, deliveryId, 'connector.send', [text], async () => {
-      const result = await done
-      // Only an accepted turn leaves a receipt; any other outcome is the carrying delivery's to say.
-      return result.outcome === 'accepted'
-        ? { outcome: 'accepted' }
-        : refused('conversation_cancelled')
-    })
+    await this.run(
+      key,
+      deliveryId,
+      'connector.send',
+      [text],
+      async () => {
+        const result = await done
+        // Only an accepted turn leaves a receipt; any other outcome is the carrying delivery's to say.
+        return result.outcome === 'accepted'
+          ? { outcome: 'accepted' }
+          : refused('conversation_cancelled')
+      },
+      preparation
+    )
     return await done
   }
 
@@ -175,7 +218,7 @@ export class DeliveryReceipts {
     const db = this.db()
     if (!this.leftoversSettled) {
       // Settle old pending rows as unknown; deleting them could repeat effects they already wrote.
-      db.settlePendingMutationReceipts(CONNECTOR_FINGERPRINTS, JSON.stringify(LOST))
+      db.settlePendingMutationReceipts(CONNECTOR_FINGERPRINTS, JSON.stringify(LOST), PREPARING)
       this.leftoversSettled = true
     }
     return db

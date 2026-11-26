@@ -1,7 +1,7 @@
 import type { AgentJournalRenderItem } from '../journal/agent-session-journal-types'
 import type { NativeChatBlock, NativeChatMessage } from '../../native-chat/native-chat-types'
 import { agentJournalToolCallLifecycle } from '../journal/agent-journal-tool-call-lifecycle'
-import { connectorMessageShown } from '../../connector-asker-prompt'
+import { connectorMessageShown } from '../../connector-asker-message-display'
 import { structuredAgentSessionStatusBlock } from './structured-agent-session-status-block'
 import {
   isStructuredAgentSessionToolAction,

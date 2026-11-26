@@ -12,6 +12,8 @@ import { chatPaneKey, watchChatNews, type ConversationChatHost } from './externa
 import { deliverToChat } from './external-conversation-chat-send'
 import { HOST_CLOCK } from './external-conversation-host'
 import type { ConnectorMessage, ConversationKey, Delivery } from './external-conversation-types'
+import type { AskerImages } from './connector-asker-images'
+import type { DeliveryPreparation } from './external-conversation-delivery-receipts'
 
 /** A native chat a conversation links to; chats run only on this host. */
 export type LinkableChat = {
@@ -19,6 +21,13 @@ export type LinkableChat = {
   sessionId: string
   agent: NativeChatAgent
   bot?: ExternalConversationBot
+}
+
+export type ConnectorChatDelivery = ConnectorMessage & {
+  deliveryId: string
+  signal: AbortSignal
+  askerImages?: AskerImages
+  preparation?: DeliveryPreparation
 }
 
 export function chatLink(key: ConversationKey, chat: LinkableChat): ExternalConversationLink {
@@ -180,12 +189,7 @@ export class ChatDeliveries {
     chats: ConversationChatHost | undefined,
     key: ConversationKey,
     chat: LinkableChat,
-    delivery: ConnectorMessage & {
-      deliveryId: string
-      signal: AbortSignal
-      /** Images saved on this machine for the turn to see, beside its words. */
-      images?: readonly string[]
-    }
+    delivery: ConnectorChatDelivery
   ): Promise<Delivery> {
     // A send starts the chat's agent, so the host is installed for it as any send would.
     const generation = this.generations.get(chat.sessionId) ?? {}
