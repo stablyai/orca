@@ -142,8 +142,36 @@ describe('wake alerts', () => {
       if (url.endsWith('/__health/object')) { return Response.json({ ok: false }, { status: 503 }) }
       return new Response('no', { status: 500 })
     })
-    const fired = await evaluate(env, Date.UTC(2026, 10, 22, 10, 17))
-    expect(fired).toEqual(['FIRING object-probe: object health check got 503, expected 200', 'alerts cannot read metrics: analytics query failed: 500'])
+    const fired = await evaluate(env, Date.UTC(2026, 10, 22, 10, 17), async () => {})
+    expect(fired).toEqual([
+      'FIRING object-probe: object health check got 503, expected 200 (retried after 10 s; first try: object health check got 503, expected 200)',
+      'alerts cannot read metrics: analytics query failed: 500'
+    ])
+  })
+
+  it('retries one canary miss after 10 s and stays quiet when the retry answers', async () => {
+    let objectCalls = 0
+    const waits: number[] = []
+    const posts: string[] = []
+    vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
+      const url = String(input)
+      if (url === env.ALERT_WEBHOOK_URL) {
+        posts.push(JSON.parse(String(init?.body)).text)
+        return new Response('ok')
+      }
+      if (url.endsWith('/v1/connector/wake')) { return new Response(null, { status: 401 }) }
+      if (url.endsWith('/__health/object')) {
+        objectCalls++
+        return objectCalls === 1 ? Response.json({ ok: false }, { status: 503 }) : Response.json({ ok: true })
+      }
+      if (url.endsWith('/graphql')) { return Response.json({ data: { viewer: { accounts: [{ w0: [], w1: [] }] } } }) }
+      return sqlAnswer(minutes({}, {}))
+    })
+    const fired = await evaluate(env, Date.UTC(2026, 10, 22, 10, 17), async (ms) => { waits.push(ms) })
+    expect(fired).toEqual([])
+    expect(posts).toEqual([])
+    expect(objectCalls).toBe(2)
+    expect(waits).toEqual([10_000])
   })
 
   it('alerts when the wake upgrade is not refused 401', async () => {

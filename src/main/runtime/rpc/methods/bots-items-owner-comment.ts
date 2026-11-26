@@ -3,6 +3,7 @@ import { AGENT_SESSION_ATTACHMENTS_DIR_NAME } from '../../../../shared/agent-ses
 import { botItemEventId, parseBotItemEventId } from '../../../../shared/bots/bot-items'
 import { BotItemsOwnerComment } from '../../../../shared/rpc-contract/bots-items-params'
 import { admitBotItemCommentAttachments } from '../../../bots/bot-item-comment-attachments'
+import { rememberAdmittedCommentClaim } from '../../../bots/bot-item-comment-admitted-claims'
 import type { BotItemOwnerActor } from '../../../bots/bot-items-input'
 import type { BotItemsRemote } from '../../../bots/bot-items-ops'
 import type { BotItemRecord } from '../../../bots/bot-items-schema'
@@ -90,5 +91,8 @@ async function postOwnerComment(
     params.skills,
     params.skipped
   )
+  if (attached.claimed && outcome.eventId !== null) {
+    rememberAdmittedCommentClaim(store, outcome.eventId, attached.claimed)
+  }
   return outcome.eventId
 }

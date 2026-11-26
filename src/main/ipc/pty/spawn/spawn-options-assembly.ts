@@ -3,7 +3,7 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { NativeChatSignInRequest } from '../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
-import { preparePtyAgentLaunch } from './prepare-pty-agent-launch'
+import { preparePtyAgentLaunch, selectPtyAgentLaunch } from './prepare-pty-agent-launch'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { applyAgentWorkspaceTrustToSpawn } from '../../../agent-launch/trust/agent-workspace-trust-spawn'
 import type { PtySpawnOptions } from '../../../providers/pty/provider-contract'
@@ -13,6 +13,7 @@ import { resolveConfiguredTerminalShellArgs } from '../host-env/configured-termi
 import { ptySizes } from '../delivery/visibility-state'
 import { shouldSeedPreAttachPtySize } from '../delivery/attached-pty-size'
 import type { TerminalMcpPaneLaunch } from '../../../mcp-servers/terminal/terminal-mcp-launch'
+import { prepareOpenCodePtyLaunch } from '../../../opencode/opencode-pty-launch'
 
 type TrustInput = Parameters<typeof applyAgentWorkspaceTrustToSpawn>[0]
 
@@ -73,6 +74,20 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
 }> {
   const { args } = input
   const connectionId = args.connectionId ?? undefined
+  const selection = await selectPtyAgentLaunch(input)
+  const openCodeLaunch = await prepareOpenCodePtyLaunch({
+    command: selection.startupCommand,
+    agent: selection.launchAgent,
+    env: selection.paneEnv,
+    envToDelete: input.envToDelete,
+    cwd: input.cwd,
+    connectionId,
+    isFreshLaunch: !input.preAdoptedStablePane && selection.startupCommand !== undefined,
+    shell: selection.shell,
+    ...(input.codexRuntime === 'wsl'
+      ? { wsl: { distro: input.expectedWslDistro ?? undefined } }
+      : {})
+  })
   const {
     env,
     launchAgent,
@@ -83,7 +98,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
     launchConfig,
     blocked,
     startupNotice
-  } = await preparePtyAgentLaunch(input)
+  } = await preparePtyAgentLaunch(input, selection, openCodeLaunch)
   const spawnOptions: PtySpawnOptions = {
     cols: args.cols,
     rows: args.rows,

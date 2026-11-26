@@ -4,6 +4,11 @@ import type {
   BranchAutoRenameOutcome,
   BranchAutoRenameRetryResult
 } from '../../../../../../shared/worktree/branch-auto-rename-attempt'
+import {
+  getAutoNameRetryAvailability,
+  retryAutoName,
+  waitForAutoNameAttempt
+} from './branch-auto-rename-actions'
 
 /**
  * How long the dialog waits on one attempt before handing its controls back. The attempt itself keeps
@@ -156,6 +161,23 @@ export function useBranchAutoRenameRetry(args: {
     [apply]
   )
 
+  const settleAdopted = useCallback(
+    (attemptId: number, result: BranchAutoRenameRetryResult | null, token: number) => {
+      if (token !== session.current || follow.current?.attemptId !== attemptId) {
+        return
+      }
+      if (result) {
+        apply(result)
+        return
+      }
+      // It finished before the wait began; its effects arrive with the workspace's own refresh.
+      clearTimer()
+      setFollow(null)
+      latestFinished.current = Math.max(latestFinished.current, attemptId)
+    },
+    [apply, clearTimer, setFollow]
+  )
+
   useEffect(() => {
     const token = ++session.current
     follow.current = null
@@ -167,8 +189,7 @@ export function useBranchAutoRenameRetry(args: {
     if (!open) {
       return
     }
-    window.api.worktrees
-      .getBranchAutoRenameRetryAvailability({ worktreeId, executionHostId })
+    getAutoNameRetryAvailability({ worktreeId, executionHostId })
       .then((result) => {
         if (token !== session.current) {
           return
@@ -182,7 +203,12 @@ export function useBranchAutoRenameRetry(args: {
           result.runningAttemptId > latestFinished.current &&
           follow.current === null
         ) {
-          adopt(result.runningAttemptId, token)
+          const attemptId = result.runningAttemptId
+          adopt(attemptId, token)
+          // The host that runs the attempt reports its end; remote hosts send no attempt events.
+          void waitForAutoNameAttempt({ worktreeId, executionHostId }, attemptId)
+            .then((finished) => settleAdopted(attemptId, finished, token))
+            .catch(() => {})
         }
       })
       .catch(() => {
@@ -233,7 +259,17 @@ export function useBranchAutoRenameRetry(args: {
       endSession()
       unsubscribe()
     }
-  }, [adopt, apply, clearTimer, endSession, executionHostId, open, showOutcome, worktreeId])
+  }, [
+    adopt,
+    apply,
+    clearTimer,
+    endSession,
+    executionHostId,
+    open,
+    settleAdopted,
+    showOutcome,
+    worktreeId
+  ])
 
   const tryAgain = useCallback(() => {
     if (follow.current !== null && !follow.current.stalled) {
@@ -242,8 +278,7 @@ export function useBranchAutoRenameRetry(args: {
     const token = session.current
     const clickSeq = ++counters.current.click
     setFollow({ attemptId: null, clickSeq, observation: arm(token), stalled: false })
-    window.api.worktrees
-      .retryBranchAutoRename({ worktreeId, executionHostId })
+    retryAutoName({ worktreeId, executionHostId })
       .then((result) => settleClick(clickSeq, result, token))
       .catch(() =>
         settleClick(

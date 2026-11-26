@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 
 import { eventSchemas } from './telemetry-event-registry'
 import type { cohortSchema } from './schemas/telemetry-onboarding-foundation-schemas'
@@ -120,31 +121,33 @@ export function isOnboardingEvent(name: EventName): boolean {
 }
 
 // Only official CI builds transmit; contributor/dev builds console-mirror, so no env discriminator is needed.
-export const commonPropsSchema = z
-  .object({
-    app_version: z.string().max(64),
-    platform: z.string().max(64),
-    arch: z.string().max(64),
-    os_release: z.string().max(64),
-    // Empty IDs merge unrelated users/sessions in analytics.
-    install_id: z.string().min(1).max(64),
-    session_id: z.string().min(1).max(64),
-    orca_channel: z.enum(['stable', 'rc']),
-    onboarding_language_v1: z.enum(['control', 'treatment']).optional(),
-    chat_ui_launch_tip_v1: z
-      .enum([
-        'control',
-        'treatment',
-        'treatment-live-switch',
-        'treatment-swapped-buttons',
-        'treatment-center'
-      ])
-      .optional(),
-    chat_ui_launch_tip_button_emphasis_v1: z.enum(['normal', 'swapped']).optional(),
-    chat_ui_launch_tip_rollout_v1: z.enum(['control', 'treatment']).optional(),
-    chat_ui_launch_tip_targeting_v1: z
-      .enum(['all', 'eligible-harnesses', 'not-switched'])
-      .optional()
-  })
-  .strict()
+export const commonPropsSchema = lazyZodSchema(() =>
+  z
+    .object({
+      app_version: z.string().max(64),
+      platform: z.string().max(64),
+      arch: z.string().max(64),
+      os_release: z.string().max(64),
+      // Empty IDs merge unrelated users/sessions in analytics.
+      install_id: z.string().min(1).max(64),
+      session_id: z.string().min(1).max(64),
+      orca_channel: z.enum(['stable', 'rc']),
+      onboarding_language_v1: z.enum(['control', 'treatment']).optional(),
+      chat_ui_launch_tip_v1: z
+        .enum([
+          'control',
+          'treatment',
+          'treatment-live-switch',
+          'treatment-swapped-buttons',
+          'treatment-center'
+        ])
+        .optional(),
+      chat_ui_launch_tip_button_emphasis_v1: z.enum(['normal', 'swapped']).optional(),
+      chat_ui_launch_tip_rollout_v1: z.enum(['control', 'treatment']).optional(),
+      chat_ui_launch_tip_targeting_v1: z
+        .enum(['all', 'eligible-harnesses', 'not-switched'])
+        .optional()
+    })
+    .strict()
+)
 export type CommonProps = z.infer<typeof commonPropsSchema>

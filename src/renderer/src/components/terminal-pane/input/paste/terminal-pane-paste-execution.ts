@@ -153,11 +153,13 @@ export function createTerminalPanePasteExecution(
     {
       readClipboardText = window.api.ui.readClipboardText,
       eventCopiedFilePaths,
-      eventCarriedFiles = false
+      eventCarriedFiles = false,
+      isUnreadWindowsClipboardFallback = false
     }: {
       readClipboardText?: (options?: ReadClipboardTextOptions) => Promise<string>
       eventCopiedFilePaths?: string[]
       eventCarriedFiles?: boolean
+      isUnreadWindowsClipboardFallback?: boolean
     } = {}
   ): void => {
     const connectionId = getConnectionId(worktreeId) ?? null
@@ -186,7 +188,11 @@ export function createTerminalPanePasteExecution(
         // The paste event this may trigger must not fall back again.
         if (source === 'keyboard') {
           requestNativePasteForUnreadWindowsClipboard(result, pane)
-        } else {
+        } else if (
+          isUnreadWindowsClipboardFallback ||
+          !eventCarriedFiles ||
+          !requestNativePasteForUnreadWindowsClipboard(result, pane)
+        ) {
           reportUnpastedClipboardEventFiles(result, eventCarriedFiles)
         }
       })

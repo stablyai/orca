@@ -3,11 +3,9 @@ import {
   MOBILE_RELAY_HOST_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY,
   MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY
 } from '../../../src/shared/remote-runtime/relay/mobile-desktop-relay-contract'
-import type { MobileRelayHost } from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import type { NO_HOST_LIST_INPUT } from '../host-screen/catalog/host-list-queries'
 import { defineHostQuery } from '../query/host-query'
-import { readHostStatusReply } from '../query/host-status-query'
-import { readProbedHostStatus } from '../transport/connection/host-status-probe-operations'
+import { decodeHostStatusReply, readHostStatusReply } from '../query/host-status-query'
 import { relaysToServers } from '../worktree/execution-hosts/execution-host-scoped-rpc-client'
 import { relayHostsFeed } from '../worktree/execution-hosts/relay-hosts-feed'
 import { ServerRowSnapshots } from '../worktree/execution-hosts/server-workspaces'
@@ -15,14 +13,13 @@ import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import type { HomeRelayedServers } from './home-relayed-servers'
 
 // Same pace as the workspace list's poll; a busy agent's notices can arrive many times a second.
-const HOME_RELAYED_REFRESH_FLOOR_MS = 3000
-// The workspace list's backstop pace, for a server whose desktop can't tell Home its rows changed.
-const HOME_RELAYED_BACKSTOP_POLL_MS = 60_000
+export const HOME_RELAYED_REFRESH_FLOOR_MS = 3000
 
-/** Only a server that publishes row notices is left to them; others re-read while Home is focused. */
-export const relayedServerRowsPollMs = (
-  server: Pick<MobileRelayHost, 'rowChanges'>
-): number | false => (server.rowChanges ? false : HOME_RELAYED_BACKSTOP_POLL_MS)
+// Home's own snapshots, so its single-server reads never prune the workspace list's.
+const homeServerRowSnapshots = {
+  deltas: new ServerRowSnapshots(true),
+  full: new ServerRowSnapshots(false)
+}
 
 /** A desktop's relayed servers, read on open, foreground and relayHostsChanged; never on a timer. */
 export const homeRelayedServersQuery = defineHostQuery<
@@ -32,7 +29,7 @@ export const homeRelayedServersQuery = defineHostQuery<
   family: 'relayHosts.homeServers',
   fetch: async (client, _target, _input, previous) => {
     const status = await readHostStatusReply(client)
-      .then((reply) => readProbedHostStatus(reply)?.status ?? null)
+      .then((reply) => decodeHostStatusReply(reply)?.status ?? null)
       .catch(() => null)
     const capabilities = status?.capabilities ?? []
     const installationId = status?.hostDescriptor?.installationId
@@ -41,9 +38,14 @@ export const homeRelayedServersQuery = defineHostQuery<
       relaysToServers(client, capabilities) &&
       capabilities.includes(MOBILE_RELAY_HOST_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY)
     const hosts = announces ? await relayHostsFeed(client).read() : []
+    const deltas = capabilities.includes(MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY)
+    if (hosts !== null) {
+      homeServerRowSnapshots.deltas.retain(client, deltas ? hosts : [])
+      homeServerRowSnapshots.full.retain(client, deltas ? [] : hosts)
+    }
     return {
       ...(installationId ? { installationId } : {}),
-      deltas: capabilities.includes(MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY),
+      deltas,
       hosts: hosts ? [...hosts] : (previous?.hosts ?? [])
     }
   },
@@ -66,12 +68,6 @@ export const homeRelayedServersQuery = defineHostQuery<
     })
   }
 })
-
-// Home's own snapshots, so its single-server reads never prune the workspace list's.
-const homeServerRowSnapshots = {
-  deltas: new ServerRowSnapshots(true),
-  full: new ServerRowSnapshots(false)
-}
 
 /**
  * One relayed server's rows through one desktop; re-read only when that server's rows change. `rowChanges`

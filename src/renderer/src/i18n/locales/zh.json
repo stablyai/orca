@@ -175,6 +175,7 @@
         "cursorToggleDescription": "通过 cursor-agent 或 Cursor IDE 登录后显示 Cursor 套餐用量",
         "zcodeToggleDescription": "显示 ZCode 编码计划配额使用情况",
         "museToggleDescription": "显示 Muse CLI 提供的 Muse 订阅配额",
+        "gitBlameTitle": "Git blame",
         "gitBlameDescription": "在状态栏中显示光标所在行的最后修改者",
         "gitBlameKeywordBlame": "追溯",
         "gitBlameKeywordAuthor": "作者",
@@ -220,7 +221,8 @@
         "softer": "更柔和",
         "sharper": "更清晰",
         "terminalControlledHint": "由终端界面设置",
-        "terminalControlledTooltip": "正在匹配终端外观，要更改此项，请关闭“匹配终端外观”"
+        "terminalControlledTooltip": "正在匹配终端外观，要更改此项，请关闭“匹配终端外观”",
+        "resetKeyword": "重置"
       },
       "editorTheme": {
         "light": "浅色编辑器主题",
@@ -646,7 +648,9 @@
       "invalidServer": "无效的服务器",
       "serverCount_one": "{{count}} 个服务器",
       "serverCount_other": "{{count}} 个服务器",
-      "claudeWorkspace": "Claude 工作区"
+      "claudeWorkspace": "Claude 工作区",
+      "inspectConfigsFailed": "无法检查 MCP 配置。",
+      "createConfigFailed": "无法创建 MCP 配置。"
     },
     "shortcuts": {
       "parseFailed": "无法解析快捷键",
@@ -747,7 +751,9 @@
       "title": "换行符",
       "description": "新文件以及尚无换行的文件所用的换行符。“自动”取决于运行该文件所在工作区的系统：Linux、macOS 和 WSL 使用 LF，Windows 使用 CRLF。已有换行的文件保留其原有换行符",
       "keywordLineEnding": "行尾符",
-      "auto": "自动"
+      "auto": "自动",
+      "lf": "LF",
+      "crlf": "CRLF"
     },
     "repositoryFormatter": {
       "description": "保存时格式化使用此项目的格式化程序。",
@@ -828,6 +834,7 @@
         "appData": "Orca 应用数据"
       },
       "host": {
+        "ssh": "SSH",
         "connected": "已连接",
         "notConnected": "未连接",
         "notConnectedRetry": "未连接。请连接此主机，然后点击“重试”"
@@ -984,6 +991,7 @@
       "inlineBlameTitle": "行内 Git blame",
       "inlineBlameDescription": "在行尾显示光标所在行的最后修改者和修改时间",
       "inlineBlameKeywordBlame": "追溯",
+      "inlineBlameKeywordGit": "git",
       "inlineBlameKeywordAuthor": "作者",
       "inlineBlameKeywordAnnotation": "批注"
     },
@@ -1392,7 +1400,12 @@
         "workspaces": "{{name}}：{{workspaces}}",
         "added": "已添加 {{name}}",
         "newSessions": "对新会话生效",
-        "restart": "重启 {{count}} 个会话",
+        "restart_other": "重启 {{count}} 个会话",
+        "staleTerminals_other": "{{count}} 个智能体终端使用的是旧的 MCP 设置",
+        "staleTerminalsOnHost_other": "{{host}} 上有 {{count}} 个智能体终端使用的是旧的 MCP 设置",
+        "staleTerminalsRestart_other": "重启它们以重新连接 Orca 的 MCP 服务器。",
+        "staleTerminalsRestartManual_other": "请手动重启它们以重新连接 Orca 的 MCP 服务器。",
+        "staleTerminalsRestartSome_other": "其中 {{restartable}} 个可在此恢复，其余 {{count}} 个请手动重启。",
         "addedMany": "已添加 {{count}} 个服务器",
         "repoOn": "已在 {{repo}} 中开启 {{name}}",
         "repoOff": "已在 {{repo}} 中关闭 {{name}}"
@@ -6634,10 +6647,7 @@
           "eab8b45238": "复制错误",
           "a23b22d16f": "已复制",
           "74fc00776f": "错误详情",
-          "ca3b225195": "分支自动命名失败",
-          "couldNotGenerateBranchName": "Orca 无法根据智能体的第一条消息为 <name>{{name}}</name> 生成分支名称",
           "tryAgain": "重试",
-          "namingBranch": "正在命名分支…",
           "errorDetailsAt": "错误详情 · {{time}}",
           "reasonNothingYet": "暂无可用于命名此分支的更改",
           "reasonBranchChanged": "在 Orca 命名期间，该分支发生了变化",
@@ -6651,8 +6661,7 @@
           "reasonNoDistinctName": "生成的名称与当前名称相同",
           "reasonFirstMessageUnavailable": "Orca 找不到此工作区的第一条消息",
           "reasonAlreadyNamed": "此工作区已被重命名",
-          "reasonUnavailable": "Orca 无法再为此分支命名",
-          "branchNameKept": "已保留分支名称"
+          "reasonUnavailable": "Orca 无法再为此分支命名"
         },
         "CreateProjectLocationField": {
           "95548e33bf": "选择父文件夹...",
@@ -7058,9 +7067,6 @@
           "0f33af979b": "部分检出，这些路径之外的文件不在磁盘上",
           "4f964d5e8c": "稀疏",
           "7d517f82e2": "主要",
-          "4eba2ea99e": "自动命名失败，点击查看详情",
-          "74522ee457": "重命名失败",
-          "02e19349f4": "自动重命名失败：查看错误",
           "691ccfd622": "正在删除...",
           "deleteFailed": "删除失败",
           "35ccfe2475": "项目{{value0}}",
@@ -7169,7 +7175,8 @@
           "projectGroupSubmenu": "项目组",
           "newChildWorktree": "新建子工作树...",
           "muteNotifications": "静音通知",
-          "unmuteNotifications": "取消静音通知"
+          "unmuteNotifications": "取消静音通知",
+          "copyAutoNameError": "自动命名错误"
         },
         "WorktreeList": {
           "d880ea0744": "创建一个组并将该项目移入其中",
@@ -7997,6 +8004,26 @@
           "browseFolder": "浏览文件夹…",
           "cloneFromUrl": "从 URL 克隆…",
           "createNewProject": "创建新项目…"
+        },
+        "AutoNameFailed": {
+          "naming": "正在为此工作区命名…",
+          "title": "无法自动命名",
+          "dismiss": "关闭",
+          "modelUnavailableOnAccount": "{{model}} 在此 {{agent}} 账户上不可用",
+          "modelUnavailableForAgent": "{{model}} 不可用于 {{agent}}",
+          "modelUnavailable": "{{model}} 不可用",
+          "timedOut": "{{seconds}} 秒后超时",
+          "agentMissing": "{{agent}} 未安装",
+          "usageLimitAgent": "{{agent}} 已达到使用上限",
+          "usageLimit": "命名智能体已达到使用上限",
+          "signedOutAgent": "{{agent}} 未登录",
+          "signedOut": "命名智能体未登录",
+          "agentFailed": "{{agent}} 因错误退出",
+          "noAgent": "未设置命名智能体",
+          "publishCheck": "无法检查分支是否已推送",
+          "environment": "无法启动命名智能体",
+          "emptyName": "智能体未返回可用的名称",
+          "unknown": "命名智能体出错"
         },
         "SetupScriptCodeBlock": {
           "showLess": "收起",
@@ -14384,8 +14411,7 @@
             "741ff8a0d2": "推送并创建 {{value0}}"
           },
           "FileExplorer": {
-            "79b1537dd3": "选择一个工作区来浏览文件",
-            "2f4483d6c4": "没有文件匹配此筛选条件"
+            "79b1537dd3": "选择一个工作区来浏览文件"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "新建文件夹",
@@ -14428,7 +14454,6 @@
             "31b4c3195d": "更多文件管理器操作",
             "d95e30fe28": "刷新文件管理器",
             "6026b16950": "全部折叠",
-            "c1f3f3ec70": "搜索文件内容",
             "openInApp": "在 {{app}} 中打开"
           },
           "FileExplorerTreeStatus": {
@@ -14541,17 +14566,6 @@
             "localPortInUse": "端口 {{port}} 已被占用。请选择其他本地端口",
             "localPortRequiresPrivileges": "端口 {{port}} 需要提升权限。请使用本地端口 ≥ 1024"
           },
-          "Search": {
-            "1abfb25a66": "输入要在文件中搜索的内容",
-            "d56d140747": "按 Enter 进行搜索",
-            "98c8435e36": "选择要搜索的工作区",
-            "dcc294f28d": "(结果被截断)",
-            "resultsInFiles": "{{files}}中共 {{results}}",
-            "resultCount_one": "{{count}} 个结果",
-            "resultCount_other": "{{count}} 个结果",
-            "fileCount_one": "{{count}} 个文件",
-            "fileCount_other": "{{count}} 个文件"
-          },
           "SearchFilters": {
             "01e4671ccf": "例如 *.min.js、dist/**",
             "0a6412a895": "要排除的文件",
@@ -14561,11 +14575,9 @@
           "SearchHeader": {
             "6234a5ef85": "使用正则表达式",
             "4567e6e0b6": "匹配整个单词",
-            "464ae3974f": "区分大小写",
-            "693cbeadd0": "搜索"
+            "464ae3974f": "区分大小写"
           },
           "SearchQueryRow": {
-            "queryLabel": "搜索文件",
             "clearLabel": "清除搜索"
           },
           "SearchResultItems": {
@@ -15699,16 +15711,6 @@
             "remoteDescription": "“{{value0}}”将从 {{value2}} 删除。删除后，也无法再从 {{value1}} 自己的命令行恢复",
             "confirm": "删除"
           },
-          "FileExplorerNameFilter": {
-            "26fb73c6e3": "查找文件",
-            "4d5a6b2a49": "清除文件筛选器",
-            "7a9fb1e6aa": "内容"
-          },
-          "FileExplorerViewSwitch": {
-            "c4e9a2b713": "名称",
-            "b3c8f1a902": "按名称筛选文件",
-            "f8a2c4d1e0": "资源管理器搜索模式"
-          },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "此提交没有文件更改"
           },
@@ -16339,6 +16341,7 @@
             "609517273b": "工作中",
             "005afbad3d": "刚刚",
             "04a94cadee": "40 个工作树 · 5 个活跃",
+            "b5308d5e2c": "M1 Mini",
             "aefd110ea5": "配对桌面设备",
             "d08ee9c466": "新工作区",
             "aa44b4a6b2": "浏览议题和评审",
@@ -22010,7 +22013,11 @@
         "removed": "已移除",
         "remove": "移除",
         "added": "已添加"
-      }
+      },
+      "htmlPreview": "HTML 预览",
+      "htmlView": "HTML 视图",
+      "htmlViewCode": "代码",
+      "htmlViewPreview": "预览"
     },
     "tab": {
       "bar": {
@@ -22425,6 +22432,9 @@
       },
       "hostFile": {
         "updateHostForOutsideFiles": "更新 {{value0}} 上的 Orca 以打开其工作区之外的文件"
+      },
+      "paste": {
+        "clipboardUnpastable": "无法粘贴复制的文件。请把它拖进终端试试。"
       }
     },
     "onboarding": {
@@ -24229,7 +24239,8 @@
       "uncommitted": "未提交的更改",
       "openCommitFailed": "无法加载提交差异",
       "statusAriaLabel": "Git blame：{{summary}}",
-      "openCommitHint": "点击打开该提交"
+      "openCommitHint": "点击打开该提交",
+      "statusBarItem": "Git Blame"
     },
     "diffTooLarge": {
       "title": "文件过大，无法显示差异",
@@ -24901,13 +24912,10 @@
       "label": "文件浏览器根目录",
       "full": "仓库根目录",
       "back": "返回 {{path}}",
-      "searchScope": "搜索范围：工作区文件",
       "retry": "重试",
       "sparseStatus": "稀疏检出",
       "scopeDetails": "关于稀疏检出范围",
       "scopeExplanation": "文件夹选择器只改变显示范围，不会改变检出的文件，仓库根目录视图也会显示根目录和上级文件夹中已检出的文件",
-      "searchExplanation": "“名称”筛选当前查看的文件夹，“内容”搜索整个工作区，稀疏检出排除的文件不会被搜索",
-      "findInFolder": "在 {{path}} 中查找",
       "folderLoadError": "无法加载此文件夹：",
       "emptyFolder": "此文件夹中没有文件"
     },
@@ -25318,8 +25326,7 @@
     "filters": {
       "toggle": "切换搜索详情",
       "active": "{{count}} 个已启用"
-    },
-    "noResults": "没有结果。请尝试其他搜索或调整筛选条件"
+    }
   },
   "csv": {
     "detectingDelimiter": "正在检测分隔符…",
@@ -25622,6 +25629,17 @@
       "showLinked_other": "显示 {{count}} 个关联的审查和任务",
       "linkedCount_other": "已关联 {{count}} 项",
       "labels": "标签：{{labels}}",
+      "peek": {
+        "closed": "已关闭",
+        "open": "开放",
+        "merged": "已合并",
+        "draft": "草稿",
+        "failing": "失败",
+        "running": "待处理",
+        "cancelled": "已取消",
+        "passing": "通过",
+        "more": "另有 {{count}} 项"
+      },
       "addEmoji": "添加表情符号",
       "addEmojiTooltip": "添加表情符号（或输入 :）",
       "noEmojiFound": "未找到表情符号"
@@ -25957,6 +25975,7 @@
     "killAllLocal": "结束所有本地会话",
     "killFailed": "无法结束终端。将保留上次观察到的会话",
     "owner": {
+      "orca": "Orca",
       "agents": "智能体",
       "otherTerminals": "其他终端",
       "privateBytes": "Orca 和终端已提交的内存"
@@ -26220,7 +26239,8 @@
       "bots": "Bots"
     },
     "searchKeyword": {
-      "worktreePaletteFormerTitle": "切换工作树"
+      "worktreePaletteFormerTitle": "切换工作树",
+      "quickCommandsMenuFormerTitle": "切换快捷命令菜单"
     }
   },
   "gpuFallback": {
@@ -27918,6 +27938,7 @@
       "computerHint": "bot 运行的位置",
       "computerAccountHint": "bot 运行的位置，以 {{account}} 身份登录 Orca",
       "useChatDefaults": "使用聊天默认设置",
+      "chatDefault": "聊天默认",
       "usingChatDefault": "正在使用你的聊天默认设置。后台运行使用你的“智能体”设置",
       "agent": "智能体",
       "folder": "文件夹：{{path}}",
@@ -27994,6 +28015,7 @@
         "body": "安装在 Windows 上的智能体无法在 WSL 中运行。请在发行版中安装一个智能体并登录，它就会显示在这里。",
         "copied": "已复制",
         "copy": "复制",
+        "checkAgain": "重新检查",
         "checking": "正在重新检查…"
       },
       "hostSleeping": "休眠中 · 使用时唤醒",
@@ -28125,7 +28147,12 @@
         "keyStored": "存储在此电脑上，bots 永远看不到它。你的应用登录信息由 Composio 保管",
         "addKey": "添加密钥并继续",
         "keyStoredOnHost": "存储在 {{host}} 上，bots 永远看不到它。你的应用登录信息由 Composio 保管",
-        "signsIn": "通过你的 Composio 账户登录。"
+        "signsIn": "通过你的 Composio 账户登录。",
+        "changeKeyTitle": "更换你的 Composio 密钥",
+        "replacesKeyEnding": "会替换以 {{hint}} 结尾的密钥，对你的所有 bots 生效。",
+        "replacesKey": "会替换你已保存的密钥，对你的所有 bots 生效。",
+        "newKeyNeeds": "新密钥需要 <permission/>。",
+        "replaceKey": "替换密钥并继续"
       },
       "closeKeepsSigningIn": "登录会在浏览器中继续进行",
       "openPageAgain": "再次打开页面",
@@ -28255,12 +28282,14 @@
       "addedCount": "已添加 {{count}} 个",
       "chip": {
         "all": "全部",
+        "composio": "Composio",
         "more": "更多"
       },
       "filters": "按应用筛选",
       "searchAdded": "搜索已添加的应用",
       "setUp": "设置",
-      "setUpNamed": "设置 {{name}}"
+      "setUpNamed": "设置 {{name}}",
+      "couldNotConnect": "无法连接 {{app}}"
     },
     "row": {
       "paused": "已暂停",
@@ -28481,7 +28510,7 @@
         "showLess": "收起",
         "submit": "评论",
         "thisServer": "此服务器",
-        "replyOrPick": "用你自己的话回复，或选择一个选项",
+        "replyOrPick": "回复或选择一个选项",
         "replyingTo": "回复：",
         "hideReplyingTo": "隐藏",
         "replyingToShow": "回复：{{question}}。显示问题",
@@ -30001,7 +30030,8 @@
         "purpose": "你的 Composio 项目密钥可让你的 bots 使用你在 Composio 中连接的应用。密钥保存在此电脑上；bots 永远看不到它",
         "getKey": "获取密钥",
         "change": "更改",
-        "purposeOnHost": "你的 Composio 项目密钥可让 {{host}} 上的 bots 使用你在 Composio 中连接的应用。密钥保存在 {{host}} 上；bots 永远看不到它"
+        "purposeOnHost": "你的 Composio 项目密钥可让 {{host}} 上的 bots 使用你在 Composio 中连接的应用。密钥保存在 {{host}} 上；bots 永远看不到它",
+        "changeKey": "更换密钥"
       },
       "card": {
         "heading": "Composio",
@@ -30516,7 +30546,10 @@
       "groupMailNeverStarted": "这封邮件从未开始一轮对话。",
       "groupRemoteUnreachable": "无法连接 {{host}}。{{detail}}",
       "groupRemoteUnreachableRetry": "无法连接 {{host}}。{{detail}} 重新发布即可重试。",
-      "googleAccountsChanged": "这个 bot 的 Google 账户在你打开后有变化，请重新检查并保存。"
+      "googleAccountsChanged": "这个 bot 的 Google 账户在你打开后有变化，请重新检查并保存。",
+      "composioKeyCantCreateSessions": "这个 Composio 密钥无法创建会话。它需要 {{permission}}。",
+      "composioKeyNeedsPermission": "这个 Composio 密钥缺少一项权限。它需要 {{permission}}。",
+      "composioKeyMissingPermission": "这个 Composio 密钥缺少 Orca 需要的一项权限。"
     },
     "notices": {
       "couldNotFinish": "{{bot}} 未能完成",
@@ -30810,9 +30843,26 @@
     "updating": "正在更新…",
     "tryAgain": "重试",
     "update": "更新",
+    "versions": "{{installed}} → {{latest}}",
     "modelRequiresClaude": "需要 Claude Code CLI {{version}} 或更高版本",
     "modelRequiresCodex": "需要 Codex CLI {{version}} 或更高版本",
     "modelRequires": "需要 {{product}} {{version}} 或更高版本",
+    "claudeProduct": "Claude Code",
+    "codexProduct": "Codex CLI",
+    "grokProduct": "Grok Build",
+    "opencodeProduct": "OpenCode",
+    "opencode2Product": "OpenCode 2",
+    "ompProduct": "OMP",
+    "copilotProduct": "GitHub Copilot CLI",
+    "copilotShortProduct": "Copilot CLI",
+    "kimiProduct": "Kimi Code",
+    "cursorProduct": "Cursor CLI",
+    "hermesProduct": "Hermes Agent",
+    "gooseProduct": "Goose CLI",
+    "auggieProduct": "Auggie",
+    "kiloProduct": "Kilo CLI",
+    "mimoCodeProduct": "MiMo Code",
+    "qwenCodeProduct": "Qwen Code",
     "devinProduct": "Devin CLI",
     "codebuddyProduct": "CodeBuddy Code",
     "commandCopied": "命令已复制",

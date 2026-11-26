@@ -1257,6 +1257,8 @@
       "claudeWorkspace": "Claude 工作區",
       "httpServer": "HTTP 伺服器",
       "inspectFailed": "無法檢查 {{directory}}。",
+      "inspectConfigsFailed": "無法檢查 MCP 設定檔。",
+      "createConfigFailed": "建立 MCP 設定檔失敗。",
       "invalidJson": "JSON 無效",
       "invalidServer": "伺服器無效",
       "noServers": "沒有伺服器",
@@ -1634,7 +1636,12 @@
         "workspaces": "{{name}}：{{workspaces}}",
         "added": "已新增 {{name}}",
         "newSessions": "將套用至新的工作階段",
-        "restart": "重新啟動 {{count}} 個工作階段",
+        "restart_other": "重新啟動 {{count}} 個工作階段",
+        "staleTerminals_other": "{{count}} 個代理程式終端機使用的是舊的 MCP 設定",
+        "staleTerminalsOnHost_other": "{{host}} 上有 {{count}} 個代理程式終端機使用的是舊的 MCP 設定",
+        "staleTerminalsRestart_other": "重新啟動它們以重新連線 Orca 的 MCP 伺服器。",
+        "staleTerminalsRestartManual_other": "請手動重新啟動它們以重新連線 Orca 的 MCP 伺服器。",
+        "staleTerminalsRestartSome_other": "其中 {{restartable}} 個可在此繼續，其餘 {{count}} 個請手動重新啟動。",
         "addedMany": "已新增 {{count}} 個伺服器",
         "repoOn": "已在 {{repo}} 中開啟 {{name}}",
         "repoOff": "已在 {{repo}} 中關閉 {{name}}"
@@ -7067,10 +7074,7 @@
           "eab8b45238": "複製錯誤",
           "a23b22d16f": "已複製",
           "74fc00776f": "錯誤詳情",
-          "ca3b225195": "分支自動命名失敗",
-          "couldNotGenerateBranchName": "Orca 無法根據代理程式的第一則訊息為 <name>{{name}}</name> 產生分支名稱。",
           "tryAgain": "再試一次",
-          "namingBranch": "正在為分支命名…",
           "errorDetailsAt": "錯誤詳情 · {{time}}",
           "reasonNothingYet": "目前還沒有可用來為此分支命名的變更。",
           "reasonBranchChanged": "Orca 為分支命名時，分支已變更。",
@@ -7084,8 +7088,7 @@
           "reasonNoDistinctName": "產生的名稱與目前名稱相同。",
           "reasonFirstMessageUnavailable": "Orca 找不到此工作區的第一則訊息。",
           "reasonAlreadyNamed": "此工作區已重新命名過。",
-          "reasonUnavailable": "Orca 已無法為此分支命名。",
-          "branchNameKept": "已保留分支名稱"
+          "reasonUnavailable": "Orca 已無法為此分支命名。"
         },
         "CreateProjectLocationField": {
           "95548e33bf": "選擇父資料夾...",
@@ -7500,9 +7503,6 @@
           "0f33af979b": "部分檢出。這些路徑之外的檔案不在磁碟上。",
           "4f964d5e8c": "稀疏",
           "7d517f82e2": "主要",
-          "4eba2ea99e": "自動命名失敗。點選檢視詳情。",
-          "74522ee457": "重新命名失敗",
-          "02e19349f4": "自動重新命名失敗：檢視錯誤",
           "691ccfd622": "正在刪除…",
           "deleteFailed": "刪除失敗",
           "35ccfe2475": "專案 {{value0}}",
@@ -7611,7 +7611,8 @@
           "lineageSubmenu": "父層與子層",
           "projectGroupSubmenu": "專案群組",
           "muteNotifications": "將通知靜音",
-          "unmuteNotifications": "取消通知靜音"
+          "unmuteNotifications": "取消通知靜音",
+          "copyAutoNameError": "自動命名錯誤"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "需要更新",
@@ -8404,6 +8405,26 @@
           "browseFolder": "瀏覽資料夾…",
           "cloneFromUrl": "從 URL 複製…",
           "createNewProject": "建立新專案…"
+        },
+        "AutoNameFailed": {
+          "naming": "正在為此工作區命名…",
+          "title": "無法自動命名",
+          "dismiss": "關閉",
+          "modelUnavailableOnAccount": "此 {{agent}} 帳戶無法使用 {{model}}",
+          "modelUnavailableForAgent": "{{agent}} 無法使用 {{model}}",
+          "modelUnavailable": "無法使用 {{model}}",
+          "timedOut": "{{seconds}} 秒後逾時",
+          "agentMissing": "尚未安裝 {{agent}}",
+          "usageLimitAgent": "{{agent}} 已達用量上限",
+          "usageLimit": "命名代理程式已達用量上限",
+          "signedOutAgent": "尚未登入 {{agent}}",
+          "signedOut": "命名代理程式尚未登入",
+          "agentFailed": "{{agent}} 因錯誤而結束",
+          "noAgent": "尚未設定命名代理程式",
+          "publishCheck": "無法確認分支是否已推送",
+          "environment": "無法啟動命名代理程式",
+          "emptyName": "代理程式未傳回可用的名稱",
+          "unknown": "命名代理程式發生錯誤"
         }
       },
       "shared": {
@@ -14789,8 +14810,7 @@
             "741ff8a0d2": "推送並建立 {{value0}}"
           },
           "FileExplorer": {
-            "79b1537dd3": "選擇一個工作區來瀏覽檔案",
-            "2f4483d6c4": "沒有檔案符合此篩選條件"
+            "79b1537dd3": "選擇一個工作區來瀏覽檔案"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "新增資料夾",
@@ -14833,7 +14853,6 @@
             "31b4c3195d": "更多檔案管理員操作",
             "d95e30fe28": "重新整理檔案管理員",
             "6026b16950": "全部收合",
-            "c1f3f3ec70": "搜尋檔案內容",
             "openInApp": "在 {{app}} 中開啟"
           },
           "FileExplorerTreeStatus": {
@@ -14946,17 +14965,6 @@
             "localPortInUse": "連接埠 {{port}} 已被使用。請選擇其他本機連接埠。",
             "localPortRequiresPrivileges": "連接埠 {{port}} 需要提升權限。請使用本機連接埠 ≥ 1024。"
           },
-          "Search": {
-            "1abfb25a66": "輸入要在檔案中搜尋的內容",
-            "d56d140747": "按 Enter 進行搜尋",
-            "98c8435e36": "選擇要搜尋的工作區",
-            "dcc294f28d": "（結果被截斷）",
-            "resultsInFiles": "{{files}} 中有 {{results}}",
-            "resultCount_one": "{{count}} 筆結果",
-            "resultCount_other": "{{count}} 筆結果",
-            "fileCount_one": "{{count}} 個檔案",
-            "fileCount_other": "{{count}} 個檔案"
-          },
           "SearchFilters": {
             "01e4671ccf": "例如 *.min.js、dist/**",
             "0a6412a895": "要排除的檔案",
@@ -14966,11 +14974,9 @@
           "SearchHeader": {
             "6234a5ef85": "使用正規表示式",
             "4567e6e0b6": "符合整個字詞",
-            "464ae3974f": "區分大小寫",
-            "693cbeadd0": "搜尋"
+            "464ae3974f": "區分大小寫"
           },
           "SearchQueryRow": {
-            "queryLabel": "搜尋檔案",
             "clearLabel": "清除搜尋"
           },
           "SearchResultItems": {
@@ -16103,16 +16109,6 @@
             "description": "「{{value0}}」將被刪除。刪除後，也將無法透過 {{value1}} 自身的命令列恢復。",
             "remoteDescription": "「{{value0}}」將從 {{value2}} 刪除。刪除後，也將無法透過 {{value1}} 自身的命令列恢復。",
             "confirm": "刪除"
-          },
-          "FileExplorerNameFilter": {
-            "26fb73c6e3": "查詢檔案",
-            "4d5a6b2a49": "清除檔案篩選器",
-            "7a9fb1e6aa": "內容"
-          },
-          "FileExplorerViewSwitch": {
-            "c4e9a2b713": "名稱",
-            "b3c8f1a902": "按名稱篩選檔案",
-            "f8a2c4d1e0": "檔案總管搜尋模式"
           },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "此提交沒有檔案變更"
@@ -21517,6 +21513,10 @@
       "copyCode": "複製程式碼",
       "wrapLines": "自動換行",
       "disableLineWrap": "停用自動換行",
+      "htmlPreview": "HTML 預覽",
+      "htmlView": "HTML 檢視",
+      "htmlViewCode": "程式碼",
+      "htmlViewPreview": "預覽",
       "context": {
         "unavailable": "上下文用量暫時未知，將在代理程式下次回應後提供。",
         "summary": "上下文：{{used}}/{{window}} token（{{percent}}%），根據上一次回應的估算值。",
@@ -22905,6 +22905,9 @@
       },
       "hostFile": {
         "updateHostForOutsideFiles": "更新 {{value0}} 上的 Orca，以開啟其工作區以外的檔案"
+      },
+      "paste": {
+        "clipboardUnpastable": "無法貼上複製的檔案。請試著將它拖曳到終端機中。"
       }
     },
     "settings": {
@@ -24772,13 +24775,10 @@
       "label": "檔案瀏覽器根目錄",
       "full": "存放庫根目錄",
       "back": "返回 {{path}}",
-      "searchScope": "搜尋範圍：工作區檔案",
       "retry": "重試",
       "sparseStatus": "稀疏檢出",
       "scopeDetails": "關於稀疏檢出範圍",
       "scopeExplanation": "資料夾選擇器只改變顯示範圍，不會改變檢出的檔案。存放庫根目錄檢視也會顯示根目錄和上層資料夾中已檢出的檔案。",
-      "searchExplanation": "「名稱」篩選目前檢視的資料夾。「內容」搜尋整個工作區。稀疏檢出排除的檔案不會被搜尋。",
-      "findInFolder": "在 {{path}} 中查詢",
       "folderLoadError": "無法載入此資料夾：",
       "emptyFolder": "此資料夾中沒有檔案"
     },
@@ -25055,8 +25055,7 @@
     "filters": {
       "toggle": "顯示或隱藏搜尋詳細設定",
       "active": "已啟用 {{count}} 個"
-    },
-    "noResults": "沒有結果。請嘗試其他搜尋內容或調整篩選條件。"
+    }
   },
   "workspaceDeletion": {
     "preferenceSaveFailed": "無法儲存刪除偏好設定",
@@ -25303,7 +25302,18 @@
       "addEmoji": "新增表情符號",
       "addEmojiTooltip": "新增表情符號（或輸入 :）",
       "noEmojiFound": "找不到表情符號",
-      "labels": "標籤：{{labels}}"
+      "labels": "標籤：{{labels}}",
+      "peek": {
+        "closed": "已關閉",
+        "open": "開啟中",
+        "merged": "已合併",
+        "draft": "草稿",
+        "failing": "失敗",
+        "running": "待處理",
+        "cancelled": "已取消",
+        "passing": "通過",
+        "more": "另有 {{count}} 個"
+      }
     },
     "attachments": {
       "updateRuntime": "更新遠端執行環境以更改工作區連結",
@@ -26990,6 +27000,7 @@
       "computerHint": "機器人執行的位置。",
       "computerAccountHint": "機器人執行的位置，以 {{account}} 身分登入 Orca。",
       "useChatDefaults": "使用聊天預設設定",
+      "chatDefault": "聊天預設",
       "agent": "代理程式",
       "folder": "資料夾：{{path}}",
       "name": "名稱",
@@ -27030,6 +27041,7 @@
         "body": "安裝在 Windows 上的代理程式無法在 WSL 內執行。請在發行版中安裝一個並登入，它就會出現在這裡。",
         "copied": "已複製",
         "copy": "複製",
+        "checkAgain": "重新檢查",
         "checking": "正在重新檢查…"
       },
       "hostSleeping": "休眠中 · 使用時喚醒",
@@ -27044,7 +27056,12 @@
       "filters": "應用程式篩選器",
       "composio": {
         "withComposio": "透過 Composio",
-        "signsIn": "透過你的 Composio 帳戶登入。"
+        "signsIn": "透過你的 Composio 帳戶登入。",
+        "changeKeyTitle": "更換你的 Composio 金鑰",
+        "replacesKeyEnding": "取代末尾為 {{hint}} 的金鑰，適用於你所有的機器人。",
+        "replacesKey": "取代你已儲存的金鑰，適用於你所有的機器人。",
+        "newKeyNeeds": "新金鑰需要 <permission/>。",
+        "replaceKey": "更換金鑰並繼續"
       },
       "mcp": {
         "addTitle": "新增 {{app}}",
@@ -27135,6 +27152,7 @@
       },
       "setUpNamed": "設定 {{name}}",
       "setUp": "設定",
+      "couldNotConnect": "無法連線到 {{app}}",
       "webhooks": {
         "line": "來自任何工具或指令碼的事件"
       },
@@ -27482,6 +27500,11 @@
       "nudgeDismiss": "不再顯示",
       "menu": "從其他應用程式匯入…"
     },
+    "composio": {
+      "key": {
+        "changeKey": "更換金鑰"
+      }
+    },
     "share": {
       "linkStatusUnavailable": "無法檢查分享連結",
       "linkNoLongerAvailable": "此分享連結已無法使用。",
@@ -27634,7 +27657,10 @@
       "groupReplierNotMember": "請在「聊天室回覆」中選擇一位目前的聊天室成員。",
       "groupMailNeverStarted": "這封郵件從未開始一輪對話。",
       "groupRemoteUnreachable": "無法連線到 {{host}}。{{detail}}",
-      "groupRemoteUnreachableRetry": "無法連線到 {{host}}。{{detail}} 重新發布即可重試。"
+      "groupRemoteUnreachableRetry": "無法連線到 {{host}}。{{detail}} 重新發布即可重試。",
+      "composioKeyCantCreateSessions": "此 Composio 金鑰無法建立工作階段。所需權限：{{permission}}。",
+      "composioKeyNeedsPermission": "此 Composio 金鑰缺少下列權限：{{permission}}。",
+      "composioKeyMissingPermission": "此 Composio 金鑰缺少 Orca 所需的權限。"
     },
     "lookAroundEvery": {
       "every4h": "上午 8 點到晚上 8 點，每 4 小時",

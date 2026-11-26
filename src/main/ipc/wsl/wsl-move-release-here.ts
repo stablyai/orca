@@ -220,7 +220,7 @@ async function releaseOneMoveHere(
   const automations = (await ports.stopHostAutomations?.(move)) ?? {
     outcome: 'stopped',
     restore: async () => {},
-    applyHere: () => () => {}
+    applyHere: async () => async () => {}
   }
   if (automations.outcome !== 'stopped') {
     if (
@@ -258,12 +258,19 @@ async function releaseOneMoveHere(
       ...asleep
     }
   }
-  // Written here just before the release (the record keeps the choice), and undone if it refuses.
-  const revertHere = automations.applyHere()
+  // Written and flushed here before the release (the record keeps the choice), and undone if either refuses.
+  let revertHere: () => Promise<void>
+  try {
+    revertHere = await automations.applyHere()
+  } catch (error) {
+    console.warn('[wsl-move] Could not persist local automation states for undo:', error)
+    await automations.restore()
+    return { released: false, reason: 'failed', detail: 'local-automations', ...asleep }
+  }
   const release = releaseWslMove(userDataPath, move)
   if (!release.released) {
     try {
-      revertHere()
+      await revertHere()
     } finally {
       // The host's copies go back on even if putting the copies here back failed.
       await automations.restore()

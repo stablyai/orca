@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../workspace/identity/floating-workspace-id'
 import { parseRoutableExecutionHostId } from '../../execution-host/execution-host'
 import { OptionalExecutionHostId } from '../workspaces/worktree-params'
@@ -10,82 +11,96 @@ import type { ProjectExecutionRuntimeResolution } from '../../execution-host/pro
 import { TERMINAL_INPUT_MAX_BYTES } from '../../terminal/input/terminal-input'
 import { NativeChatSignIn } from '../terminal/native-chat-sign-in-params'
 
-export const PreflightQueuedAgentLaunch = z.object({
-  terminal: z.string().min(1).max(4096),
-  command: z.string().min(1).max(TERMINAL_INPUT_MAX_BYTES),
-  shell: z.enum(['posix', 'powershell', 'cmd']),
-  shellOverride: z.string().max(4096).optional(),
-  cwd: z.string().max(4096).optional(),
-  launchConfig: z
-    .object({
-      agentCommand: z.string().optional(),
-      agentArgs: z.string(),
-      agentEnv: z.record(z.string(), z.string()),
-      commandProvenance: z.enum(['authored', 'generated']).optional(),
-      authoredCommand: z.string().optional(),
-      selectedExecutable: z.string().optional(),
-      ompResumeFilePath: z.string().optional()
-    })
-    .optional(),
-  launchAgent: z.custom<TuiAgent>(isTuiAgent).optional(),
-  restoring: z.boolean().optional(),
-  nativeChatSignIn: NativeChatSignIn.optional(),
-  images: z.boolean().optional()
-})
+export const PreflightQueuedAgentLaunch = lazyZodSchema(() =>
+  z.object({
+    terminal: z.string().min(1).max(4096),
+    command: z.string().min(1).max(TERMINAL_INPUT_MAX_BYTES),
+    shell: z.enum(['posix', 'powershell', 'cmd']),
+    shellOverride: z.string().max(4096).optional(),
+    cwd: z.string().max(4096).optional(),
+    launchConfig: z
+      .object({
+        agentCommand: z.string().optional(),
+        agentArgs: z.string(),
+        agentEnv: z.record(z.string(), z.string()),
+        commandProvenance: z.enum(['authored', 'generated']).optional(),
+        authoredCommand: z.string().optional(),
+        selectedExecutable: z.string().optional(),
+        ompResumeFilePath: z.string().optional()
+      })
+      .optional(),
+    launchAgent: z.custom<TuiAgent>(isTuiAgent).optional(),
+    restoring: z.boolean().optional(),
+    nativeChatSignIn: NativeChatSignIn.optional(),
+    images: z.boolean().optional()
+  })
+)
 
-export const PreflightCheck = z.object({
-  force: z.boolean().optional()
-})
+export const PreflightCheck = lazyZodSchema(() =>
+  z.object({
+    force: z.boolean().optional()
+  })
+)
 
-export const PreflightDetectRemoteAgents = z.object({
-  connectionId: z.string().min(1)
-})
+export const PreflightDetectRemoteAgents = lazyZodSchema(() =>
+  z.object({
+    connectionId: z.string().min(1)
+  })
+)
 
-export const PreflightDetectRemoteWindowsTerminalCapabilities = z.object({
-  connectionId: z.string().min(1)
-})
+export const PreflightDetectRemoteWindowsTerminalCapabilities = lazyZodSchema(() =>
+  z.object({
+    connectionId: z.string().min(1)
+  })
+)
 
 /** Why optional: a client that predates it sends nothing and keeps the host-default probe. */
-export const PreflightAgentDetection = z
-  .object({
-    worktreeId: z.string().min(1).optional(),
-    repoId: z.string().min(1).optional(),
-    worktreeHostId: OptionalExecutionHostId
-  })
-  .superRefine((params, ctx) => {
-    if (
-      params.worktreeHostId !== undefined &&
-      (!parseRoutableExecutionHostId(params.worktreeHostId) ||
-        !params.worktreeId ||
-        params.worktreeId === FLOATING_TERMINAL_WORKTREE_ID)
-    ) {
-      ctx.addIssue({ code: 'custom', message: 'A routable host requires an existing workspace.' })
-    }
-  })
+export const PreflightAgentDetection = lazyZodSchema(() =>
+  z
+    .object({
+      worktreeId: z.string().min(1).optional(),
+      repoId: z.string().min(1).optional(),
+      worktreeHostId: OptionalExecutionHostId
+    })
+    .superRefine((params, ctx) => {
+      if (
+        params.worktreeHostId !== undefined &&
+        (!parseRoutableExecutionHostId(params.worktreeHostId) ||
+          !params.worktreeId ||
+          params.worktreeId === FLOATING_TERMINAL_WORKTREE_ID)
+      ) {
+        ctx.addIssue({ code: 'custom', message: 'A routable host requires an existing workspace.' })
+      }
+    })
+)
 
-export const PreflightAgentRefresh = PreflightAgentDetection.safeExtend({
-  userInitiated: z.boolean().optional(),
-  withManagedAgentCommands: z.boolean().optional()
-})
+export const PreflightAgentRefresh = lazyZodSchema(() =>
+  PreflightAgentDetection.safeExtend({
+    userInitiated: z.boolean().optional(),
+    withManagedAgentCommands: z.boolean().optional()
+  })
+)
 
-export const PreflightProjectAgentDetection = PreflightAgentDetection.safeExtend({
-  /** Answer `{ agents, managedAgentCommands }`; older hosts drop it and answer the list alone. */
-  withManagedAgentCommands: z.boolean().optional(),
-  afterPublication: z.number().int().nonnegative().optional(),
-  launch: PreflightQueuedAgentLaunch.optional(),
-  nativeChatSignIn: NativeChatSignIn.optional(),
-  project: RepoSelector.extend({ repo: RepoSelector.shape.repo.pipe(z.string().max(4096)) })
-    .strict()
-    .optional()
-}).refine(
-  (value) =>
-    !value.project ||
-    (!value.worktreeId &&
-      !value.repoId &&
-      !value.worktreeHostId &&
-      !value.launch &&
-      !value.nativeChatSignIn),
-  'Choose project, repository or worktree'
+export const PreflightProjectAgentDetection = lazyZodSchema(() =>
+  PreflightAgentDetection.safeExtend({
+    /** Answer `{ agents, managedAgentCommands }`; older hosts drop it and answer the list alone. */
+    withManagedAgentCommands: z.boolean().optional(),
+    afterPublication: z.number().int().nonnegative().optional(),
+    launch: PreflightQueuedAgentLaunch.optional(),
+    nativeChatSignIn: NativeChatSignIn.optional(),
+    project: RepoSelector.extend({ repo: RepoSelector.shape.repo.pipe(z.string().max(4096)) })
+      .strict()
+      .optional()
+  }).refine(
+    (value) =>
+      !value.project ||
+      (!value.worktreeId &&
+        !value.repoId &&
+        !value.worktreeHostId &&
+        !value.launch &&
+        !value.nativeChatSignIn),
+    'Choose project, repository or worktree'
+  )
 )
 
 /** Facts resolved by the same project owner that creates the workspace. */

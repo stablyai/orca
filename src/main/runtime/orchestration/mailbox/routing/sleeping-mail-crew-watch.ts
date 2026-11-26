@@ -5,7 +5,7 @@ import {
   type CrewInvalidation
 } from '../../crew/crew-changes'
 import { sleepingMailChangeScope } from './sleeping-mail-change-scope'
-import type { SleptMailboxWake } from './slept-mailbox-wake'
+import { toSshExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 type SleepingMailScope = { mailboxes: Iterable<string>; panes: Iterable<string> }
 
@@ -68,13 +68,12 @@ export class SleepingMailCrewWatch {
   }
 }
 
-/** When a host becomes connected, retries failed wakes and re-checks the mail already owed to
- *  sleepers: its status is broadcast many times while it stays up, and a host edge can unblock
- *  only a wake that failed, never a sleeper with nothing owed. */
+/** When an SSH host becomes connected, retries that host's failed wakes and re-checks the mail
+ *  already owed to its sleepers: its status is broadcast many times while it stays up, and a host
+ *  edge can unblock only a wake that failed there, never a sleeper with nothing owed. */
 export function retryOnHostConnect(
   subscribe: (listener: (event: RuntimeClientEvent) => void) => unknown,
-  wake: Pick<SleptMailboxWake, 'retryFailed' | 'trackedMailboxes'>,
-  publish: (scope: SleepingMailScope) => void
+  retry: (host: ReturnType<typeof toSshExecutionHostId>) => void
 ): ReadonlySet<string> {
   // Only hosts up now: a disconnected or removed target leaves nothing behind.
   const connected = new Set<string>()
@@ -88,8 +87,7 @@ export function retryOnHostConnect(
     }
     if (!connected.has(event.targetId)) {
       connected.add(event.targetId)
-      wake.retryFailed()
-      publish({ mailboxes: wake.trackedMailboxes(), panes: [] })
+      retry(toSshExecutionHostId(event.targetId))
     }
   })
   return connected

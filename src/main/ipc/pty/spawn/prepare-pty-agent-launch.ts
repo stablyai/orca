@@ -31,13 +31,12 @@ import {
 } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { alignManagedAgentLaunchAtSpawn } from '../../../managed-agent-cli/managed-agent-spawn-program'
 import { withSpawnTerminalMcpServers } from '../../../mcp-servers/terminal/terminal-mcp-spawn-step'
-import { prepareOpenCodePtyLaunch } from '../../../opencode/opencode-pty-launch'
 import { planCodexNoDaemonLaunch } from '../../../pty/shell-startup/codex-no-daemon-launch-command'
 import { promoteAgentTeamsShimPath } from '../host-env/path'
 import type { PtySpawnLaunchOptionsInput } from './spawn-options-assembly'
 import { applyTerminalImageEnvironment } from './terminal-image-environment'
 
-export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
+export async function selectPtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
   const { args } = input
   const connectionId = args.connectionId ?? undefined
   const launchAgent = isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
@@ -87,19 +86,35 @@ export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
       delete paneEnv[ORCA_HERMES_STARTUP_QUERY_ENV]
     }
   }
-  const openCodeLaunch = await prepareOpenCodePtyLaunch({
-    command: startupCommand,
-    agent: launchAgent,
-    env: paneEnv,
-    envToDelete: input.envToDelete,
-    cwd: input.cwd,
-    connectionId,
-    isFreshLaunch: !input.preAdoptedStablePane && startupCommand !== undefined,
+  return {
+    launchAgent,
     shell,
-    ...(input.codexRuntime === 'wsl'
-      ? { wsl: { distro: input.expectedWslDistro ?? undefined } }
-      : {})
-  })
+    platform,
+    sequenced,
+    startupCommand,
+    launchConfig,
+    selectionBlocked,
+    rebuiltHermesQuery,
+    paneEnv
+  }
+}
+
+export async function preparePtyAgentLaunch(
+  input: PtySpawnLaunchOptionsInput,
+  selection: Awaited<ReturnType<typeof selectPtyAgentLaunch>>,
+  openCodeLaunch: { command: string | undefined; env: Record<string, string> | undefined }
+) {
+  const { args } = input
+  const connectionId = args.connectionId ?? undefined
+  const {
+    launchAgent,
+    shell,
+    platform,
+    sequenced,
+    launchConfig,
+    selectionBlocked,
+    rebuiltHermesQuery
+  } = selection
   const settings = input.getSettings?.()
   const env = { ...openCodeLaunch.env }
   const local = !connectionId && input.codexRuntime !== 'wsl'

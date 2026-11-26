@@ -23,10 +23,12 @@ export type WslCodexConfigSyncHome = {
 }
 
 // One pass at a time per distro, so a launch and a background pass never race on the same files.
-const queues = new Map<string, CodexHistoryPassQueue>()
+// A distro's queue is dropped once its last pass ends, so removed distros leave nothing behind.
+const queues = new Map<string, { queue: CodexHistoryPassQueue; passes: number }>()
+type WaitingPass = { forLaunch: boolean; pass?: Promise<void>; replacedBy?: WaitingPass }
 // Passes queued but not started, by distro and home set: a request joins one, since it will read
 // the files after the request was made. A pass that started needs a new run for later requests.
-const waiting = new Map<string, { forLaunch: boolean; pass?: Promise<void> }>()
+const waiting = new Map<string, WaitingPass>()
 
 /**
  * Runs the settings sync inside the distro, where every read and rename stays on its own file
@@ -53,20 +55,38 @@ export function syncWslCodexConfigInDistro(args: {
   if (queuedPass?.pass && (queuedPass.forLaunch || !args.forLaunch)) {
     return queuedPass.pass
   }
-  const queue = queues.get(distroKey) ?? new CodexHistoryPassQueue()
-  queues.set(distroKey, queue)
+  const distroQueue = queues.get(distroKey) ?? { queue: new CodexHistoryPassQueue(), passes: 0 }
+  queues.set(distroKey, distroQueue)
+  distroQueue.passes++
   // Registered before queueing: an idle queue starts the job at once.
-  const entry: { forLaunch: boolean; pass?: Promise<void> } = { forLaunch: args.forLaunch }
+  const entry: WaitingPass = { forLaunch: args.forLaunch }
   waiting.set(homeSetKey, entry)
-  entry.pass = queue.add(
+  if (queuedPass) {
+    // The launch pass runs first and reads the files later, so it serves this one's waiters too.
+    queuedPass.replacedBy = entry
+  }
+  const ran = distroQueue.queue.add(
     async () => {
+      if (entry.replacedBy) {
+        return false
+      }
       if (waiting.get(homeSetKey) === entry) {
         waiting.delete(homeSetKey)
       }
       await runPass(args)
+      return true
     },
     { forLaunch: args.forLaunch }
   )
+  void ran
+    .finally(() => {
+      if (--distroQueue.passes === 0 && queues.get(distroKey) === distroQueue) {
+        queues.delete(distroKey)
+      }
+    })
+    .catch(() => {})
+  // Chained outside the queue: a replaced pass waiting inside it would hold up the distro.
+  entry.pass = ran.then((done) => (done ? undefined : entry.replacedBy?.pass))
   return entry.pass
 }
 
@@ -107,8 +127,14 @@ async function runPass({
     console.warn(`[codex-config] Codex settings sync in WSL ${distro} gave no result`)
     return
   }
+  const resultsByHome = new Map<string, CodexConfigSyncWslHomeResult>()
+  for (const result of results) {
+    if (!resultsByHome.has(result.runtimeHome)) {
+      resultsByHome.set(result.runtimeHome, result)
+    }
+  }
   for (const home of homes) {
-    const result = results.find((candidate) => candidate.runtimeHome === home.linuxRuntimeHome)
+    const result = resultsByHome.get(home.linuxRuntimeHome)
     if (!result) {
       continue
     }

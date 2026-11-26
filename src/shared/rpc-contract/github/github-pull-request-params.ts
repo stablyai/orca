@@ -1,20 +1,23 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import type { GitHubPRRefreshReason } from '../../github/pull-requests/refresh/pull-request-refresh-types'
 import { OptionalGhAccountExpectation, RepoSelector, SlugRepo } from './github-repo-target-params'
 import { OptionalString, requiredString } from '../rpc-param-primitives'
 
-export const OptionalPRRefreshReason = z
-  .unknown()
-  .optional()
-  .transform((value): GitHubPRRefreshReason | undefined => {
-    return value === 'visible' ||
-      value === 'active' ||
-      value === 'post-push' ||
-      value === 'manual' ||
-      value === 'swr'
-      ? value
-      : undefined
-  })
+export const OptionalPRRefreshReason = lazyZodSchema(() =>
+  z
+    .unknown()
+    .optional()
+    .transform((value): GitHubPRRefreshReason | undefined => {
+      return value === 'visible' ||
+        value === 'active' ||
+        value === 'post-push' ||
+        value === 'manual' ||
+        value === 'swr'
+        ? value
+        : undefined
+    })
+)
 
 export const PrForBranch = RepoSelector.extend({
   branch: requiredString('Missing branch'),

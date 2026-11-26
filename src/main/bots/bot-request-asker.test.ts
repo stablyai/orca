@@ -5,6 +5,7 @@ import type {
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { actsForOwner, OWNER_ACTS_FOR, type BotRequestAsker } from '../../shared/bots/bot-acts-for'
 import { askedByLine } from './bot-owner-writes'
+import { journalSubmission } from './bot-journal-submission.test-fixture'
 import { requestAskersOf } from './bot-request-askers-of'
 import { botRequestAskerLabel, botRequestView } from './bot-request-view'
 import { connectorAskerHeader } from '../../shared/connector-asker-prompt'
@@ -206,7 +207,14 @@ function requestTurn(record: BotRequestActsFor, steered: boolean, ownerOpened = 
       isBotRequest: (id) => id === 'req-1',
       botRequestActsFor: () => record
     },
-    ownerOpened ? [sent] : []
+    [
+      ...(ownerOpened ? [sent] : []),
+      // The device's message as the journal reads a person's send: only its stamp keeps it from
+      // being the owner's.
+      ...(steered
+        ? [journalSubmission({ clientMessageId: 'c2', providerItemId: 's1', ...OWNER_SEND })]
+        : [])
+    ]
   )
 }
 
