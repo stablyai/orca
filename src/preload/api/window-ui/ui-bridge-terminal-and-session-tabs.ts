@@ -246,6 +246,7 @@ export const uiTerminalAndSessionTabsApi = {
       runtimeEnvironmentId?: string | null
       navigation?: RuntimeNavigationTarget
       position?: RuntimeFileOpenPosition
+      preview?: boolean
     }) => void
   ): (() => void) => {
     const listener = (
@@ -257,6 +258,7 @@ export const uiTerminalAndSessionTabsApi = {
         runtimeEnvironmentId?: string | null
         navigation?: RuntimeNavigationTarget
         position?: RuntimeFileOpenPosition
+        preview?: boolean
       }
     ) => callback(data)
     ipcRenderer.on('ui:openFileFromMobile', listener)
