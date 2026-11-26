@@ -1,8 +1,10 @@
+import { z } from 'zod'
 import type { AgentLaunchPreferences } from '../../../../../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import { checkAgentLaunchModelPreferences } from '../../../../../../../../shared/agent-launch/choices/agent-launch-model-preferences'
 import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent-config'
+import { lazyZodSchema } from '../../../../../../../../shared/schema/lazy-zod-schema'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import type { AgentMessageSender } from '../../../../../../../../shared/agent-session/journal/agent-session-message-source'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
@@ -142,4 +144,54 @@ export function resolveFederatedWorkerLaunchReceipt(
   return remoteReady
     ? { requested: requested.requested, effective: { ...requested.requested } }
     : requested
+}
+
+const RecordedStartOptions = lazyZodSchema(() =>
+  z.looseObject({
+    agent: z.string().nullish(),
+    launch: z
+      .looseObject({
+        requested: z
+          .looseObject({
+            agent: z.string().nullish(),
+            model: z.string().nullish(),
+            effort: z.string().nullish()
+          })
+          .nullish()
+      })
+      .nullish()
+  })
+)
+
+export type RecordedWorkerLaunchOptions = {
+  agent?: string
+  requestedAgent?: string
+  model?: string
+  effort?: string
+}
+
+function nonEmptyOption(value: string | null | undefined): string | undefined {
+  const trimmed = value?.trim()
+  return trimmed ? trimmed : undefined
+}
+
+export function parseRecordedWorkerLaunchOptions(raw: string): RecordedWorkerLaunchOptions {
+  let decoded: unknown
+  try {
+    decoded = JSON.parse(raw)
+  } catch {
+    return {}
+  }
+  const parsed = RecordedStartOptions.safeParse(decoded)
+  if (!parsed.success) {
+    return {}
+  }
+  const requested = parsed.data.launch?.requested
+  const requestedAgent = nonEmptyOption(requested?.agent)
+  return {
+    agent: nonEmptyOption(parsed.data.agent) ?? requestedAgent,
+    requestedAgent,
+    model: nonEmptyOption(requested?.model),
+    effort: nonEmptyOption(requested?.effort)
+  }
 }
