@@ -49,11 +49,9 @@ export function MobileNativeChatAskOptionRow({
       // The card's own free-text action is a button that opens the box, never a choice, so a screen
       // reader tells it from an option written in the same words.
       accessibilityRole={action ? 'button' : multi ? 'checkbox' : 'radio'}
-      accessibilityState={
-        action ? { expanded: selected, disabled } : { checked: selected, disabled }
-      }
+      accessibilityState={{ [action ? 'expanded' : 'checked']: selected, disabled }}
       accessibilityHint={
-        action ? t('chat.ask.ownWordsHint', 'Opens a box to type your own answer') : undefined
+        action ? t('chat.ask.ownWordsHint', 'Opens a box for your answer') : undefined
       }
       style={({ pressed }) => [
         styles.option,
@@ -77,7 +75,7 @@ export function MobileNativeChatAskOptionRow({
       <View style={styles.optionBody}>
         {action ? (
           <View style={styles.actionRow}>
-            <Pencil size={13} color={colors.textMuted} strokeWidth={2} />
+            <Pencil size={13} color={colors.textMuted} />
             <Text style={[styles.optionLabel, styles.actionLabel]}>{shown.shown}</Text>
           </View>
         ) : (

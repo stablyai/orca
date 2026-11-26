@@ -421,7 +421,7 @@ it('gives the free-text action its own role and purpose, apart from an option in
   expect(pressable(freeText()).props).toMatchObject({
     accessibilityRole: 'button',
     accessibilityState: { expanded: false, disabled: false },
-    accessibilityHint: 'Opens a box to type your own answer'
+    accessibilityHint: 'Opens a box for your answer'
   })
   // The option, chosen, posts its words once, as the answer to this ask.
   act(() => tree!.unmount())
