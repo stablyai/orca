@@ -25,8 +25,8 @@ import {
 import { sendChatTask } from '../chat-task-delivery'
 import { dispatchTaskSource } from '../../../../orchestration/coordinator/dispatch/dispatch-task-source'
 import { startsInChatLineage } from '../worker/start/worker-chat-lineage'
-import { isInBotHome } from '../../../../../bots/bot-home-membership'
-import { sessionCallerOf } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import { workerStartedByBot } from '../worker/start/worker-keep-open-default'
+import { botOfSession } from '../../../../../bots/bot-session-tabs'
 
 export function dispatchStartsChatWorkers(
   runtime: Parameters<typeof startsInChatLineage>[0],
@@ -55,7 +55,6 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
     ) => {
       const db = runtime.getOrchestrationDb()
       const creator = resolveDispatchCreator(runtime, params.from, orchestrationCaller)
-      const directBotHome = isInBotHome(runtime.bots, sessionCallerOf(orchestrationCaller))
       const assigneeParty = params.to ? resolveDispatchAssigneeParty(params.to, db) : undefined
       const assignee = assigneeParty?.address
       // A chat has no pane, process or agent to probe: it is reached as mail to it is.
@@ -158,7 +157,6 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           ? JSON.stringify(dispatchAuthority.hostScope)
           : null,
         creator,
-        ...(directBotHome ? { chatLineage: true } : {}),
         maxDepth: runtime.getNestedWorkerMaxDepth()
       })
 
@@ -171,7 +169,11 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         coordinatorHandle: orcaSessionIdOrHandle(params.from ?? 'coordinator', db),
         workerHandle: orcaSessionIdOrHandle(to, db),
         devMode: params.devMode,
-        preserveHumanCommitCredit: ctx.chat_lineage === 1,
+        preserveHumanCommitCredit: workerStartedByBot(
+          db,
+          ctx.id,
+          (sessionId) => botOfSession(runtime.bots, sessionId) !== null
+        ),
         cliCommand: runtime.getTerminalOrchestrationCliCommand(to)
       })
 
@@ -255,7 +257,13 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           coordinatorHandle,
           workerHandle: orcaSessionIdOrHandle(workerHandle, db),
           devMode: params.devMode,
-          preserveHumanCommitCredit: ctx?.chat_lineage === 1,
+          preserveHumanCommitCredit:
+            ctx !== undefined &&
+            workerStartedByBot(
+              db,
+              ctx.id,
+              (sessionId) => botOfSession(runtime.bots, sessionId) !== null
+            ),
           ...(ctx ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(workerHandle) } : {})
         })
         return { dispatch: ctx ?? null, preamble }

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from './orchestration-db'
 
-describe('creatorStartsChatWorkers', () => {
+describe('creator lineage', () => {
   let db: OrchestrationDb
 
   beforeEach(() => {
@@ -10,7 +10,7 @@ describe('creatorStartsChatWorkers', () => {
 
   afterEach(() => db.close())
 
-  it('inherits a paired bot worker lineage for its local helper', () => {
+  it('keeps a paired bot worker lineage for guidance without changing the helper surface', () => {
     db.createRemoteDispatchAttachment({
       dispatchId: 'ctx_remote',
       runId: 'run_remote',
@@ -36,14 +36,14 @@ describe('creatorStartsChatWorkers', () => {
       effects: []
     })
 
-    expect(
-      db.creatorStartsChatWorkers({
-        kind: 'terminal',
-        handle: 'term_worker',
-        paneKey: 'pane:worker',
-        processIncarnation: 'worker:1'
-      })
-    ).toBe(true)
+    const creator = {
+      kind: 'terminal',
+      handle: 'term_worker',
+      paneKey: 'pane:worker',
+      processIncarnation: 'worker:1'
+    } as const
+    expect(db.creatorStartsChatWorkers(creator)).toBe(false)
+    expect(db.creatorHasBotLineage(creator)).toBe(true)
   })
 
   it('does not inherit a matching incarnation from another pane', () => {

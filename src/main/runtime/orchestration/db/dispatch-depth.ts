@@ -117,6 +117,14 @@ export function creatorStartsChatWorkers(this: OrchestrationDb, creator: Dispatc
   )
 }
 
+/** Remote bot lineage carries task guidance, but does not override this host's worker-surface setting. */
+export function creatorHasBotLineage(this: OrchestrationDb, creator: DispatchCreator): boolean {
+  return (
+    creator.kind !== 'system' &&
+    requireOrchestrationAdmission(liveDispatchCreatorEvaluation(this, creator).hasBotLineage())
+  )
+}
+
 export function resolveCreatorDepth(this: OrchestrationDb, creator: DispatchCreator): number {
   return (
     requireOrchestrationAdmission(
@@ -150,6 +158,7 @@ export function liveDispatchCreatorEvaluation(db: OrchestrationDb, creator: Disp
 
 export type DispatchDepthMethods = {
   creatorStartsChatWorkers: typeof creatorStartsChatWorkers
+  creatorHasBotLineage: typeof creatorHasBotLineage
   resolveCreatorDepth: typeof resolveCreatorDepth
   resolveCreatorDispatchId: typeof resolveCreatorDispatchId
   resolveChildDispatchDepth: typeof resolveChildDispatchDepth
@@ -158,6 +167,7 @@ export type DispatchDepthMethods = {
 export function attachDispatchDepth(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     creatorStartsChatWorkers,
+    creatorHasBotLineage,
     resolveCreatorDepth,
     resolveCreatorDispatchId,
     resolveChildDispatchDepth

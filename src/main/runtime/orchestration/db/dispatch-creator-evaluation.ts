@@ -120,6 +120,16 @@ export function createDispatchCreatorEvaluation(
       }
       return {
         kind: 'admitted',
+        value: local?.chat_lineage === 1
+      }
+    },
+    hasBotLineage(): OrchestrationAdmission<boolean> {
+      const result = roles()
+      if (result.kind === 'refused') {
+        return result
+      }
+      return {
+        kind: 'admitted',
         value:
           local?.chat_lineage === 1 ||
           result.value.some((attachment) => attachment.chat_lineage === 1)

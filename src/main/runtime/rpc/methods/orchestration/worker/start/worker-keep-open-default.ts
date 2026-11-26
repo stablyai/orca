@@ -47,7 +47,7 @@ export function workerStartedByBot(
     seen.add(id)
     const context = db.getDispatchContextById(id)
     if (!context) {
-      return false
+      return db.getRemoteDispatchAttachment(id)?.chat_lineage === 1
     }
     // A paired host receives this trusted stamp from a bot home; it has no local bot record to consult.
     if (context.chat_lineage === 1) {
