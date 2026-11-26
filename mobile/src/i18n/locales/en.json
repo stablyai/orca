@@ -7978,7 +7978,10 @@
       "groupReplierNotMember": "Choose a current room member in Room replies.",
       "groupMailNeverStarted": "This mail never started a turn.",
       "groupRemoteUnreachable": "Couldn't reach {{host}}. {{detail}}",
-      "groupRemoteUnreachableRetry": "Couldn't reach {{host}}. {{detail}} Post again to retry."
+      "groupRemoteUnreachableRetry": "Couldn't reach {{host}}. {{detail}} Post again to retry.",
+      "composioKeyCantCreateSessions": "This Composio key can’t create sessions. It needs {{permission}}.",
+      "composioKeyNeedsPermission": "This Composio key is missing a permission. It needs {{permission}}.",
+      "composioKeyMissingPermission": "This Composio key is missing a permission Orca needs."
     },
     "pairedServers": {
       "heading": "Paired servers",

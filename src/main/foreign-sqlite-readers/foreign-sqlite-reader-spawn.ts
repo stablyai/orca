@@ -37,23 +37,68 @@ export function readOpenCodePromptFailure(
   return getSharedClient().readOpenCodePromptFailure(query)
 }
 
-/** Return oldest-first rows after cursor; unreadable or unavailable readers answer []. */
-export async function readOpenCodeBinderSessions(
-  dbPath: string,
-  cursor: OpenCodeSessionCursor
-): Promise<BinderSessionRow[]> {
+const lastEmptyOpenCodeBinderStampByPath = new Map<string, string>()
+// A write landing in the same coarse mtime tick as the stat (WAL reset rewriting in
+// place at the same size, journal-mode page overwrites, FAT's 2s resolution, or
+// ino === 0 platforms) can leave an identical stamp, so a stamp is only trusted once
+// every file has been quiet for longer than the coarsest timestamp granularity.
+const STAMP_SETTLE_MS = 3_000
+
+type StatStamp = { token: string; newestMs: number } | 'missing' | null
+
+async function statStamp(path: string): Promise<StatStamp> {
   try {
-    // Skip absent stores before waking a worker on every binder poll.
-    await stat(dbPath)
+    const info = await stat(path)
+    return {
+      token: `${info.ino}:${info.size}:${info.mtimeMs}:${info.ctimeMs}`,
+      newestMs: Math.max(info.mtimeMs, info.ctimeMs)
+    }
   } catch (error) {
     if (
       error instanceof Error &&
       'code' in error &&
       (error.code === 'ENOENT' || error.code === 'ENOTDIR')
     ) {
-      return []
+      return 'missing'
     }
-    // Other stat failures still go through worker error reporting and its fresh open.
+    return null
   }
-  return getSharedClient().readOpenCodeBinderSessions(dbPath, cursor)
+}
+
+/** Return oldest-first rows after cursor; unreadable or unavailable readers answer []. */
+export async function readOpenCodeBinderSessions(
+  dbPath: string,
+  cursor: OpenCodeSessionCursor
+): Promise<BinderSessionRow[]> {
+  // Skip absent or unchanged stores before waking a worker on every binder poll.
+  const settledBeforeMs = Date.now() - STAMP_SETTLE_MS
+  const dbStamp = await statStamp(dbPath)
+  if (dbStamp === 'missing') {
+    lastEmptyOpenCodeBinderStampByPath.delete(dbPath)
+    return []
+  }
+  let stamp: string | null = null
+  let settled = false
+  if (dbStamp !== null) {
+    const [walStamp, journalStamp] = await Promise.all([
+      statStamp(`${dbPath}-wal`),
+      statStamp(`${dbPath}-journal`)
+    ])
+    if (walStamp !== null && journalStamp !== null) {
+      const stamps = [dbStamp, walStamp, journalStamp]
+      const tokens = stamps.map((entry) => (entry === 'missing' ? 'missing' : entry.token))
+      stamp = `${tokens.join('|')}|${cursor.ms}|${cursor.id}`
+      settled = stamps.every((entry) => entry === 'missing' || entry.newestMs < settledBeforeMs)
+      if (lastEmptyOpenCodeBinderStampByPath.get(dbPath) === stamp) {
+        return []
+      }
+    }
+  }
+  const result = await getSharedClient().readOpenCodeBinderSessionsWithStatus(dbPath, cursor)
+  if (result.ok && result.value.length === 0 && stamp !== null && settled) {
+    lastEmptyOpenCodeBinderStampByPath.set(dbPath, stamp)
+  } else {
+    lastEmptyOpenCodeBinderStampByPath.delete(dbPath)
+  }
+  return result.value
 }

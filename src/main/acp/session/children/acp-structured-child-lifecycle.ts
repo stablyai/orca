@@ -82,6 +82,18 @@ export class AcpStructuredChildren {
     })
   }
 
+  /** Orca ends the run itself: its turn ends interrupted now, so a reply the agent still sends
+   *  before it exits can't settle it, then the child stops. */
+  interrupt(sessionId: string, reason: string): void {
+    const session = this.sessions.get(sessionId)
+    if (session && isAcpReadySession(session) && !session.closeRequested) {
+      session.failureClose ??= reason
+      const interrupted = { state: 'interrupted' as const, completedAt: this.now() }
+      closeAcpSessionJournal(session, reason, new Error(reason), interrupted)
+    }
+    this.stopAfterFailure(sessionId, reason)
+  }
+
   /** Requires root exit; reports unproven descendant cleanup separately. */
   async close(sessionId: string, requested = true): Promise<boolean> {
     const connection = this.sessions.get(sessionId)?.connection
