@@ -28614,6 +28614,7 @@
       "continuesTip": "将于 {{time}} 自动继续",
       "hitTip": "{{agent}} 已达到使用上限 · {{time}} 重置",
       "continuesShort": "{{time}} 继续",
+      "rowLine": "使用上限 · {{time}}",
       "hitShort": "已达上限",
       "stoppedCount": "{{count}} 个已停止"
     },

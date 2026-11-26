@@ -26867,6 +26867,7 @@
     "usageLimit": {
       "continuesAt": "Продолжит в {{time}}",
       "continuesShort": "Продолжит {{time}}",
+      "rowLine": "Лимит использования · {{time}}",
       "continuesTip": "Автоматически продолжит в {{time}}",
       "hitLimit": "Лимит исчерпан · сброс в {{time}}",
       "hitShort": "Лимит исчерпан",

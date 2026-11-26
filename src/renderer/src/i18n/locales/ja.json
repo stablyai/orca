@@ -27474,6 +27474,7 @@
     "usageLimit": {
       "continuesAt": "{{time}} に再開",
       "continuesShort": "{{time}} に再開",
+      "rowLine": "使用上限 · {{time}}",
       "continuesTip": "{{time}} に自動的に再開",
       "hitLimit": "上限に到達 · {{time}} にリセット",
       "hitShort": "上限に到達",

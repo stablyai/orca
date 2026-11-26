@@ -30709,6 +30709,7 @@
       "continuesTip": "Continues automatically at {{time}}",
       "hitTip": "{{agent}} hit its usage limit · resets {{time}}",
       "continuesShort": "Continues {{time}}",
+      "rowLine": "Usage limit · {{time}}",
       "hitShort": "Hit limit",
       "stoppedCount": "{{count}} stopped"
     },

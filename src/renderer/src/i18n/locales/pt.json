@@ -28190,6 +28190,7 @@
     "usageLimit": {
       "continuesAt": "Continua às {{time}}",
       "continuesShort": "Continua {{time}}",
+      "rowLine": "Limite de uso · {{time}}",
       "continuesTip": "Continua automaticamente às {{time}}",
       "hitLimit": "Limite atingido · reinicia às {{time}}",
       "hitShort": "Limite atingido",
