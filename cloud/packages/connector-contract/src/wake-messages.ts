@@ -14,6 +14,8 @@ export const CONNECTOR_WAKE_TOKEN_PURPOSE = 'connector-wake'
 // Exact frames, so the server can answer a keepalive without waking the host's object. They match
 // the relay's client keepalive frames. The machine sends a keepalive every interval.
 export const CONNECTOR_WAKE_FRAME = '{"type":"wake"}'
+// Sent instead of the wake frame for an admin call with kind `shares_changed`.
+export const CONNECTOR_SHARES_CHANGED_FRAME = '{"type":"shares_changed"}'
 export const CONNECTOR_WAKE_KEEPALIVE_FRAME = '{"type":"keepalive"}'
 export const CONNECTOR_WAKE_KEEPALIVE_ACK_FRAME = '{"type":"keepalive-ack"}'
 export const CONNECTOR_WAKE_KEEPALIVE_INTERVAL_MS = 25_000
@@ -93,11 +95,19 @@ export const ConnectorWakeHostIdSchema = z
   .max(256)
   .regex(/^[^:].*:[A-Za-z0-9_-]{16,64}$/)
 
+// Without a kind the hosts get the plain wake frame.
+export const ConnectorWakeKindSchema = z.enum(['shares_changed'])
+
 export const ConnectorWakeAdminRequestSchema = z
   .object({
-    hosts: z.array(ConnectorWakeHostIdSchema).min(1).max(CONNECTOR_WAKE_ADMIN_MAX_HOSTS)
+    hosts: z.array(ConnectorWakeHostIdSchema).min(1).max(CONNECTOR_WAKE_ADMIN_MAX_HOSTS),
+    kind: ConnectorWakeKindSchema.optional()
   })
   .strict()
+
+export function connectorWakeFrame(kind: ConnectorWakeKind | undefined): string {
+  return kind === 'shares_changed' ? CONNECTOR_SHARES_CHANGED_FRAME : CONNECTOR_WAKE_FRAME
+}
 
 // Counts only, never host ids.
 export const ConnectorWakeAdminResponseSchema = z.object({
@@ -107,5 +117,6 @@ export const ConnectorWakeAdminResponseSchema = z.object({
 })
 
 export type ConnectorWakeOffer = z.infer<typeof ConnectorWakeOfferSchema>
+export type ConnectorWakeKind = z.infer<typeof ConnectorWakeKindSchema>
 export type ConnectorWakeAdminRequest = z.infer<typeof ConnectorWakeAdminRequestSchema>
 export type ConnectorWakeAdminResponse = z.infer<typeof ConnectorWakeAdminResponseSchema>

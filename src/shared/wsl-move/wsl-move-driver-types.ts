@@ -96,8 +96,12 @@ export type WslMovePreview =
       browserLoginsNotCarried?: WslMoveBrowserCookieFreshPartitionReason
       /** Drive letters mapped into the distro that this preview read; the start sends them back. */
       mappedDrives?: WslMappedDrive[]
+      /** What the move would carry, counted from the export the move itself sends. */
+      counts?: WslMoveScopeCounts
     }
   | WslMoveRefusal
+
+export type WslMoveScopeCounts = { workspaces: number; terminals: number; chats: number }
 
 export type WslMoveRefusal = {
   outcome: 'refused'

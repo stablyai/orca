@@ -58,7 +58,7 @@ export function listWorkerCreatedWorktrees(
   for (const row of rows) {
     const use = uses.get(row.worktree_id) ?? { startedAt: null, held: false }
     const startedAt = terminals.startedAtByOrigin.get(row.dispatch_id)
-    if (startedAt !== undefined && createdWorktree(row.effects, row.worktree_id)) {
+    if (startedAt !== undefined && workerEffectsCreatedWorktree(row.effects, row.worktree_id)) {
       use.startedAt = Math.max(use.startedAt ?? 0, startedAt)
     }
     // A terminal row speaks for its owner; a dispatch whose terminal moved on, or never existed, holds nothing once settled.
@@ -126,7 +126,8 @@ function readWorkerTerminals(db: OrchestrationDb): {
   return terminals
 }
 
-function createdWorktree(effectsJson: string, worktreeId: string): boolean {
+/** Whether a worker start's recorded effects created this workspace. */
+export function workerEffectsCreatedWorktree(effectsJson: string, worktreeId: string): boolean {
   try {
     const effects: unknown = JSON.parse(effectsJson)
     return (

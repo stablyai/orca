@@ -32,6 +32,10 @@ export const BOTS_ITEMS_RUNTIME_CAPABILITY = 'bots.items.v1' as const
 export const BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY =
   'bots.item-comment-attachments.v1' as const
 
+// Item uploads can start independently of the lifetime of the conversation that filed the item.
+export const BOTS_ITEM_ATTACHMENT_STAGING_RUNTIME_CAPABILITY =
+  'bots.item-attachment-staging.v1' as const
+
 // Host dedupes the owner's item comments by `requestId` (bots.items.owner.comment): a repeat returns the
 // comment already made. An older host refuses the field, so a client sends it only where advertised.
 export const BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY =
@@ -60,6 +64,10 @@ export const BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY = 'bots.avatar-color.v1' as co
 
 // Host stores what a picture wears (bots.update and bots.create `avatarOutfit`); offered only where advertised, as colors are.
 export const BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY = 'bots.avatar-outfit.v1' as const
+
+// Host keeps a window's drawing of a mascot's look as the bot's Slack icon (bots.avatar.slackIcon.wanted, .upload);
+// an older host sends Slack the plain mascot, so a window draws one only where this is advertised.
+export const BOTS_SLACK_ICON_RUNTIME_CAPABILITY = 'bots.slack-icon.v1' as const
 
 // Host takes chat image attachments on group room posts (bots.groups.send `images`, store `@path`s in text)
 // and delivers them as image blocks to addressed members; an older host takes text only.
@@ -94,6 +102,7 @@ export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_GROUPS_RUNTIME_CAPABILITY,
   BOTS_GROUP_ATTACHMENTS_RUNTIME_CAPABILITY,
   BOTS_MOBILE_RUNTIME_CAPABILITY,
+  BOTS_SLACK_ICON_RUNTIME_CAPABILITY,
   BOTS_CREATE_RUNTIME_CAPABILITY,
   BOTS_TOOLS_OWNED_SIGN_IN_RUNTIME_CAPABILITY,
   BOTS_CONNECTORS_RUNTIME_CAPABILITY,
@@ -101,6 +110,7 @@ export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_CHAT_MENTIONS_RUNTIME_CAPABILITY,
   BOTS_ITEMS_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY,
+  BOTS_ITEM_ATTACHMENT_STAGING_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_QUESTION_ID_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_PLAIN_RUNTIME_CAPABILITY,

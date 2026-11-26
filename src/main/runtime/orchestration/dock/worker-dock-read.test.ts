@@ -429,17 +429,13 @@ describe('worker dock lifecycle projection', () => {
     expect(read().identities).toEqual([])
   })
 
-  it('does not equate an unproven stop with user intent or accept another session acknowledgment', () => {
+  it('shows a requested stop as stopping, then drops it once it stopped', () => {
     const id = worker()
-    db.db.prepare("UPDATE worker_dispatches SET state = 'stopped' WHERE dispatch_id = ?").run(id)
-    const settled = read().rows[0]
-    expect(settled.state).toBe('unexpected')
-    acknowledgeWorkerDock(db, {
-      party: 'orca_session_id:22222222-2222-4222-8222-222222222222',
-      settlements: [{ dispatchId: id, settlement: settled.settlement! }],
-      acknowledged: true
-    })
-    expect(read().rows[0].dispatchId).toBe(id)
+    db.db.prepare("UPDATE worker_dispatches SET state = 'ready' WHERE dispatch_id = ?").run(id)
+    db.beginWorkerStop(id, 'epoch_1')
+    expect(read().rows[0]?.state).toBe('stopping')
+    db.settleWorkerStop(id)
+    expect(read().rows).toEqual([])
   })
 
   it('rolls projection changes back with lifecycle writes, and keeps status age stable on stage updates', () => {

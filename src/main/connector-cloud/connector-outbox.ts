@@ -58,6 +58,11 @@ export class ConnectorOutbox<T> {
     return this.items.length
   }
 
+  /** Whether an item still owed matches. */
+  holds(match: (item: T) => boolean): boolean {
+    return this.items.some(match)
+  }
+
   push(...items: T[]): void {
     this.replace([...this.items, ...items])
   }

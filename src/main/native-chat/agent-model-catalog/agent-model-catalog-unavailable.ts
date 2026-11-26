@@ -5,7 +5,9 @@ export class AgentModelCatalogUnavailableError extends Error {
     super(
       unavailable.reason === 'cliMissing'
         ? 'the agent CLI is not installed'
-        : 'the agent is not signed in for this account'
+        : unavailable.reason === 'agentCommandNotRunnable'
+          ? 'the agent Command setting is not a runnable program'
+          : 'the agent is not signed in for this account'
     )
     this.name = 'AgentModelCatalogUnavailableError'
   }

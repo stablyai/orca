@@ -89,6 +89,9 @@ const WslMoveCutoverSchema = z.object({
     .record(z.string().min(1).max(1_024), z.boolean())
     .optional()
     .catch(undefined),
+  // Startup turned off this move's copies here, for a move whose ledger closed before that step
+  // existed; set once, so a copy the user turns back on stays on. Lenient: malformed reads absent.
+  localAutomationsCaughtUp: z.literal(true).optional().catch(undefined),
   // Drive letters mapped into the distro when the move was planned; every recovery reads these,
   // never the drive. Strict: a malformed list fails closed.
   mappedDrives: WslMappedDrivesSchema.optional(),

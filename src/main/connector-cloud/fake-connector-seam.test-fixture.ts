@@ -48,7 +48,8 @@ export function fakeSeam() {
       receipts: {
         recorded: seam.recorded,
         carried: seam.carried,
-        known: (_key: unknown, id: string) => recorded.has(id)
+        known: (_key: unknown, id: string) => recorded.has(id),
+        heldByMute: () => null
       }
     } as unknown as ExternalConversationSeam,
     calls: seam,
