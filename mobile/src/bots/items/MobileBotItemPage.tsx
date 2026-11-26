@@ -5,7 +5,11 @@
 import { useRef } from 'react'
 import { ScrollView, Text, View, type TextInputInstance } from 'react-native'
 import { House, MessageSquare } from 'lucide-react-native'
-import { BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY } from '../../../../src/shared/bot-runtime-capabilities'
+import {
+  BOTS_ITEM_ATTACHMENT_STAGING_RUNTIME_CAPABILITY,
+  BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY
+} from '../../../../src/shared/bot-runtime-capabilities'
+import { botItemAttachmentTarget } from '../../../../src/shared/agent-session/agent-session-attachments'
 import {
   formatBotItemNumber,
   isBotItemLive,
@@ -29,6 +33,7 @@ import type { BotItemQuestionStepsSend } from '../../../../src/shared/bots/use-b
 import { MobileBotItemActivity } from './MobileBotItemActivity'
 import { MobileBotItemCommentBox } from './MobileBotItemCommentBox'
 import { botItemOpenAsk, useMobileBotItemAskSlot } from './MobileBotItemAskCard'
+import { botItemAskCardKey } from './bot-item-ask-card-drafts'
 import { MobileNativeChatPromptStrip } from '../../session/native-chat/input/prompts/MobileNativeChatPromptStrip'
 import { MobileBotItemLinks } from './MobileBotItemLinks'
 import { botItemChatName, type BotItemSheet } from './MobileBotItemSheets'
@@ -95,8 +100,9 @@ export function MobileBotItemPage({
   const now = useNow(60_000)
   const lastEventId = view.events.at(-1)?.id ?? ''
   const takesImages = useRouteCapability(BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY)
+  const stagesImages = useRouteCapability(BOTS_ITEM_ATTACHMENT_STAGING_RUNTIME_CAPABILITY)
   // One item on one host: its pending comments and its asks' held answers.
-  const itemKey = `${hostKey}\0${bot.id}\0${uid}`
+  const itemKey = botItemAskCardKey(hostKey, bot.id, uid)
   const pending = usePhoneBotItemPendingComments({
     client,
     key: itemKey,
@@ -345,7 +351,13 @@ export function MobileBotItemPage({
                   ? { ...waitingLine, asker: item.owner.name ?? bot.name }
                   : null
               }
-              attachTo={takesImages && !item.chat.gone ? item.chat.id : null}
+              attachTo={
+                stagesImages
+                  ? botItemAttachmentTarget(item.uid)
+                  : takesImages && !item.chat.gone
+                    ? item.chat.id
+                    : null
+              }
               hostId={hostId}
               bot={bot}
               fieldRef={commentField}

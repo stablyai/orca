@@ -42,3 +42,17 @@ export function queueGeneratedNoteImageSave<T>(work: () => Promise<T>): Promise<
   saves = run.catch(() => undefined)
   return run
 }
+
+/** Checks a drawn notes image and saves it with `save`, one at a time across every window; refuses
+ *  anything but a whole notes PNG. */
+export function saveGeneratedNoteImage<T>(
+  png: unknown,
+  save: (bytes: Buffer) => Promise<T>
+): Promise<T> {
+  return queueGeneratedNoteImageSave(async () => {
+    if (!(png instanceof Uint8Array) || !(await isAdmissibleGeneratedNoteImage(png))) {
+      throw new Error('Notes image is not a PNG Orca can save.')
+    }
+    return save(Buffer.from(png))
+  })
+}

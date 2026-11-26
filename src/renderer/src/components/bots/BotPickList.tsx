@@ -151,9 +151,13 @@ export function BotPickRow({
         ) : null}
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-[13px] leading-5">{name}</span>
+        <span className="truncate text-[13px] leading-5" title={name}>
+          {name}
+        </span>
         {detail ? (
-          <span className="truncate text-xs leading-4 text-muted-foreground">{detail}</span>
+          <span className="truncate text-xs leading-4 text-muted-foreground" title={detail}>
+            {detail}
+          </span>
         ) : null}
       </span>
       {trailing}
