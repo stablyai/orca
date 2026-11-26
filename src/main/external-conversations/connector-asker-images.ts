@@ -51,13 +51,20 @@ const FILE_LINE = /^\[(?:image|file): .+, file [A-Za-z0-9]{1,64}\]$|^\[file Slac
 /** The ids of the images a request lists, in order, up to the most a turn takes. Only the lines at
  *  its very end are a list: the same words typed higher up are the person's own. */
 export function askerImageIds(text: string): string[] {
-  const lines = text.trimEnd().split('\n')
   const ids: string[] = []
-  for (let index = lines.length - 1; index >= 0 && FILE_LINE.test(lines[index]!); index -= 1) {
-    const id = IMAGE_LINE.exec(lines[index]!)?.[1]
+  const trimmed = text.trimEnd()
+  let end = trimmed.length
+  while (end > 0) {
+    const start = trimmed.lastIndexOf('\n', end - 1)
+    const line = trimmed.slice(start + 1, end)
+    if (!FILE_LINE.test(line)) {
+      break
+    }
+    const id = IMAGE_LINE.exec(line)?.[1]
     if (id) {
       ids.push(id)
     }
+    end = start
   }
   return [...new Set(ids.reverse())].slice(0, MAX_ASKER_IMAGES)
 }

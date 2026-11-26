@@ -1,4 +1,4 @@
-import { connectorMessageShownText } from './connector-asker-prompt'
+import { CONNECTOR_SENT_LINE, connectorMessageShownText } from './connector-asker-prompt-display'
 import { slackMarkupShownText } from './connectors/slack-message-markup'
 import type { NativeChatBlock } from './native-chat/native-chat-types'
 
@@ -9,7 +9,6 @@ type ShownMessage = {
   asker?: { source?: string }
 }
 
-const SENT_LINE = /^\[Orca: sent [^\n\]]+\]\n/
 const ASKED_BY =
   /^\[Orca: [^\n]*? · from ([^\n]+?)(?: \(your owner\)|, who has access \(not your owner\)|, another app your owner lets ask you)/
 
@@ -38,7 +37,7 @@ export function connectorMessageShown(
       changed = true
       return []
     }
-    const text = block.text.replace(SENT_LINE, '')
+    const text = block.text.replace(CONNECTOR_SENT_LINE, '')
     const shown = connectorMessageShownText(text, remaining, asker?.source === 'slack')
     if (shown === null) {
       if (textLimit === Infinity) {

@@ -184,7 +184,7 @@ it.each(['accepted', 'unknown', 'rejected'] as const)(
   }
 )
 
-it('cleans up a retired thread after its retry expires without delivering', async () => {
+it('cleans up an unused thread when its poll retires without a resend', async () => {
   const db = new OrchestrationDb(':memory:')
   const forget = vi.fn(async () => {})
   const poll = new AbortController()
@@ -221,7 +221,8 @@ it('cleans up a retired thread after its retry expires without delivering', asyn
   try {
     const retired = await startConnectorConversation(deps, host, KEY, ID, INPUT, retiredPoll)
     expect(retired.initial.outcome).toBe('refused')
-    expect(forget).not.toHaveBeenCalled()
+    expect(forget).toHaveBeenCalledExactlyOnceWith(deliveryChatId(KEY, TARGET, ID))
+    forget.mockClear()
     const expired = await startConnectorConversation(
       deps,
       host,

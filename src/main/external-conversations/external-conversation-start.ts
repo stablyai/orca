@@ -54,7 +54,7 @@ export async function startConnectorConversation(
         const deliverySignal = preparation?.signal(signal) ?? signal
         const stopped = preparation?.stopped(deliverySignal)
         if (stopped) {
-          if (preparedThread && !preparation?.pollRetired()) {
+          if (preparedThread) {
             await host.bots?.forgetUnusedStart?.(preparedThread)
           }
           return stopped
@@ -112,7 +112,7 @@ export async function startConnectorConversation(
           }
           throw error
         } finally {
-          if (preparedThread && abandoned && !preparation?.pollRetired()) {
+          if (preparedThread && abandoned) {
             await host.bots?.forgetUnusedStart?.(preparedThread)
           }
         }

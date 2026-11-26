@@ -12,6 +12,10 @@ import {
   AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT,
   AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES
 } from '../../shared/agent-session/agent-session-attachments'
+import {
+  hasConnectorImagePositions,
+  rewriteConnectorImagePositions
+} from '../../shared/connector-asker-prompt-display'
 import { connectorSentLine } from '../../shared/connector-asker-prompt'
 import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-reason'
 import {
@@ -122,13 +126,18 @@ export async function carriedMessages(
     const ownBlocks: NativeChatBlock[] = []
     let cardBytes = 0
     let cardImages = 0
+    let positioned = false
     for (const block of each.card.body.blocks) {
       if (block.type !== 'image-ref') {
+        positioned ||= block.type === 'text' && hasConnectorImagePositions(block.text)
         ownBlocks.push(block)
         continue
       }
       const path = block.url ? undefined : block.path
-      const stored = path && inspection ? await inspection.image(path) : undefined
+      const stored =
+        path && inspection && (positioned || inspection.allPaths)
+          ? await inspection.image(path)
+          : undefined
       if (stored === 'limit') {
         break cards
       }
@@ -196,6 +205,19 @@ export async function carriedMessages(
       ])
     )
   }
+}
+
+export function reconcileCarriedImageLabels(
+  blocks: readonly NativeChatBlock[],
+  attached: ReadonlyMap<string, number>
+): NativeChatBlock[] {
+  return blocks.map((block) => {
+    if (block.type !== 'text') {
+      return block
+    }
+    const text = rewriteConnectorImagePositions(block.text, attached)
+    return text === block.text ? block : { ...block, text }
+  })
 }
 
 function withSentLine(blocks: NativeChatBlock[], submittedAt: number | undefined, now: number) {

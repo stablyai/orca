@@ -26,7 +26,12 @@ import { readJournalConnectorReplies } from '../native-chat/agent-session-journa
 import type { ConnectorMessageAsker } from '../../shared/connector-message-asker'
 import { actsForOwner, OWNER_ACTS_FOR } from '../../shared/bots/bot-acts-for'
 import { readBotActingTurn } from '../bots/bot-request-asker'
-import { carriedFields, carriedMessages } from './external-conversation-returned-carry'
+import { connectorAskerPrompt } from '../../shared/connector-asker-prompt'
+import {
+  carriedFields,
+  carriedMessages,
+  reconcileCarriedImageLabels
+} from './external-conversation-returned-carry'
 import { connectorAskerImages } from './connector-asker-images'
 import {
   connectorImageInspection,
@@ -545,6 +550,65 @@ it('keeps a failed request and stages only new earlier images that fit the byte 
   expect(carried.cards.map(({ messageId }) => messageId)).toEqual(['failed'])
   expect(staged.map(({ fileId }) => fileId)).toEqual(['F4', 'F5', 'F6'])
   expect(reads).toEqual(['F4', 'F5', 'F6', 'F7'])
+})
+
+it('updates screenshot positions when two failed requests are carried together', async () => {
+  const store = new AgentSessionAttachmentStore(join(dir, 'agent-session-attachments'), {
+    hasSession: () => true
+  })
+  const signal = new AbortController().signal
+  const image = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+  const quoted = '[Orca: file FAFTER: quoted.png; attached to this turn as image 1]'
+  for (const [index, fileId] of ['FBEFORE', 'FAFTER'].entries()) {
+    const path = await storeConnectorImage(store, `${fileId}.png`, image, fileId, signal)
+    const text = connectorAskerPrompt(
+      'slack',
+      {
+        userId: 'U1',
+        role: 'owner',
+        place: { kind: 'public_channel', id: 'C1' },
+        text: quoted,
+        context: [],
+        earlierOwn: {
+          messages: [
+            {
+              at: NOW,
+              text: 'Compare this screenshot.',
+              messageRef: 'slack:T1:C1:1.2:1.2',
+              files: [{ id: fileId, name: `${fileId}.png`, type: 'image/png' }]
+            }
+          ]
+        }
+      },
+      undefined,
+      { attached: new Map([[fileId, 1]]) }
+    )
+    failedStart(fileId, asked(fileId, text, THREAD, [path]), 'notSignedIn', NOW + index)
+  }
+  const returned = readJournalDomainReturnedCards(db, target, NOW + 3)
+  const carried = await carriedMessages(
+    THREAD,
+    returned,
+    ACCOUNT,
+    NOW + 3,
+    [],
+    connectorImageInspection(store.rootDir, signal)
+  )
+  const blocks = reconcileCarriedImageLabels(carried.blocks, carried.imagePositions)
+  expect(carried.cards.map((card) => card.messageId)).toEqual(['FBEFORE', 'FAFTER'])
+  expect(blocks).toMatchObject([
+    {
+      type: 'text',
+      text: expect.stringContaining('FBEFORE.png, image/png; attached to this turn as image 1')
+    },
+    { type: 'image-ref' },
+    {
+      type: 'text',
+      text: expect.stringContaining('FAFTER.png, image/png; attached to this turn as image 2')
+    },
+    { type: 'image-ref' }
+  ])
+  expect(blocks[2]).toMatchObject({ type: 'text', text: expect.stringContaining(quoted) })
 })
 
 /** Who each message of a chain of 20 failed starts carries, the senders taking turns. */

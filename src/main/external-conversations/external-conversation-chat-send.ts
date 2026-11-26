@@ -14,7 +14,8 @@ import {
   carriedFields,
   NOTHING_CARRIED,
   readCarriedMessages,
-  type CarriedMessages
+  type CarriedMessages,
+  reconcileCarriedImageLabels
 } from './external-conversation-returned-carry'
 import type { ReturnedImageProgress } from './external-conversation-returned-image-progress'
 import { callerFor, type ConversationChat } from './external-conversation-chat'
@@ -85,17 +86,17 @@ export async function deliverToChat(
   }
   try {
     // The download timeout only limits new image staging. Returned requests use the delivery lease.
+    const earlierImageContext =
+      !delivery.stagedImages && hasEarlierImages(link.source, delivery.asker)
     const inspection: ConnectorImageInspection | undefined =
-      link.bot &&
-      !delivery.stagedImages &&
-      delivery.askerImages &&
-      hasEarlierImages(link.source, delivery.asker)
+      link.bot && link.source === 'slack'
         ? connectorImageInspection(
             getAgentSessionAttachmentStore()?.rootDir,
             delivery.preparation
               ? signal
               : AbortSignal.any([signal, AbortSignal.timeout(ASKER_IMAGES_BUDGET_MS)]),
-            delivery.missingImages
+            delivery.missingImages,
+            Boolean(delivery.askerImages && earlierImageContext)
           )
         : undefined
     let firstCarry: Promise<CarriedMessages> | undefined
@@ -236,7 +237,7 @@ function sendConnectorTurn(
         role: 'user',
         // Its images ride as a person's attached ones would; the chat shows them with the message.
         blocks: [
-          ...carried.blocks,
+          ...reconcileCarriedImageLabels(carried.blocks, attached),
           { type: 'text', text },
           ...images.map(({ path }) => ({ type: 'image-ref' as const, path }))
         ],

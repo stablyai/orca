@@ -67,12 +67,14 @@ export function connectorMissingImages(): CapabilityProbeCache<string> {
 export function connectorImageInspection(
   root: string | undefined,
   signal: AbortSignal,
-  missing = connectorMissingImages()
+  missing = connectorMissingImages(),
+  allPaths = true
 ) {
   // A card edit may require another read of the queue, but the same immutable upload needs one probe.
   const images = new Map<string, Promise<StoredImage | null>>()
   return {
     signal,
+    allPaths,
     image(path: string): Promise<StoredImage | null | 'limit'> {
       if (!missing.shouldTry(path)) {
         return Promise.resolve(null)
