@@ -8,6 +8,7 @@ import { CLAUDE_MANAGED_RUNTIME } from '../claude/managed-runtime/claude-managed
 export type AgentCliReleaseSource =
   | { kind: 'claude' }
   | { kind: 'npm'; package: string }
+  | { kind: 'homebrew'; formula: string }
   | { kind: 'github'; repo: string; tagPrefix: string }
   | { kind: 'acp-registry'; id: string }
 
@@ -18,6 +19,9 @@ export const RELEASE_LOOKUP_TIMEOUT_MS = 10_000
 const VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/
 
 const npmLatestSchema = z.object({ version: z.string().regex(VERSION) })
+const homebrewFormulaSchema = z.object({
+  versions: z.object({ stable: z.string().regex(VERSION) })
+})
 const githubReleaseSchema = z.object({ tag_name: z.string() })
 // Other entries may change shape; only the agents Orca reads must parse.
 const acpRegistrySchema = z.object({
@@ -76,6 +80,11 @@ async function npmLatest(pkg: string): Promise<string> {
   return npmLatestSchema.parse(await fetchJson(url)).version
 }
 
+async function homebrewLatest(formula: string): Promise<string> {
+  const url = `https://formulae.brew.sh/api/formula/${encodeURIComponent(formula)}.json`
+  return homebrewFormulaSchema.parse(await fetchJson(url)).versions.stable
+}
+
 async function githubLatest(repo: string, tagPrefix: string): Promise<string> {
   const url = `https://api.github.com/repos/${repo}/releases/latest`
   const tag = githubReleaseSchema.parse(
@@ -117,6 +126,8 @@ export async function latestAgentCliRelease(source: AgentCliReleaseSource): Prom
       return refreshClaudeLatest()
     case 'npm':
       return lookUpVersion(`npm ${source.package}`, () => npmLatest(source.package))
+    case 'homebrew':
+      return lookUpVersion(`Homebrew ${source.formula}`, () => homebrewLatest(source.formula))
     case 'github':
       return lookUpVersion(`GitHub ${source.repo}`, () =>
         githubLatest(source.repo, source.tagPrefix)

@@ -8,6 +8,8 @@ import {
 import { parseCodexCliVersion } from '../../shared/agent-launch/startup/codex-cli-installation'
 import { agentSessionInstallCommand } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { AgentCliReleaseSource } from './agent-cli-latest-release'
+import type { OwnAgentCli } from './agent-cli-own-install'
+import { homebrewInstallTap } from './homebrew-install-tap'
 
 /** Runs `args` on the found CLI, or names a command the user runs themselves. */
 export type AgentCliUpdatePlan =
@@ -18,7 +20,10 @@ type AgentCliUpdateDefinition = {
   parseVersion?: typeof parseCliVersion
   /** Its launcher runs a newer copy from elsewhere, so an unchanged file doesn't mean an unchanged version. */
   updatesOutsideLauncher?: true
-  latest: (installed: string) => AgentCliReleaseSource
+  latest: (
+    installed: string,
+    install: Pick<OwnAgentCli, 'realPath'>
+  ) => AgentCliReleaseSource | Promise<AgentCliReleaseSource>
   plan: (installed: string, realPath: string) => AgentCliUpdatePlan
 }
 
@@ -35,12 +40,15 @@ const QWEN_UPDATE_COMMAND_SINCE = '0.20.0'
 // Below 2.0.0 is the archived Python CLI, which Kimi Code replaces rather than updates.
 const KIMI_CODE_SINCE = '2.0.0'
 
+function homebrewOwner(realPath: string): { cask: boolean; keg: string } | null {
+  const owner = /\/(Caskroom|Cellar)\/([^/]+)\//.exec(realPath.replaceAll('\\', '/'))
+  return owner ? { cask: owner[1] === 'Caskroom', keg: owner[2] } : null
+}
+
 // Only the agent's own keg counts: a mise or Volta shim on PATH resolves into that manager's keg.
 function homebrewUpgradeCommand(keg: string, realPath: string): string | null {
-  const owner = /\/(Caskroom|Cellar)\/([^/]+)\//.exec(realPath.replaceAll('\\', '/'))
-  return owner?.[2] === keg
-    ? `brew upgrade ${owner[1] === 'Caskroom' ? '--cask ' : ''}${keg}`
-    : null
+  const owner = homebrewOwner(realPath)
+  return owner?.keg === keg ? `brew upgrade ${owner.cask ? '--cask ' : ''}${keg}` : null
 }
 
 // The CLI's own update only prints the package manager's command for an install it owns.
@@ -84,9 +92,19 @@ const AGENT_CLI_UPDATE_DEFINITIONS: Record<AgentCliUpdateAgent, AgentCliUpdateDe
   // `grok update` follows the stable channel, which npm's latest tag carries.
   grok: { latest: () => npm('@xai-official/grok'), plan: selfUpdate('update') },
   // `opencode upgrade` stays on the installed major: 1.x ships as opencode-ai, 2.x as @opencode/cli.
+  // A homebrew/core install only gets what the formula carries, which trails npm by hours to days.
   opencode: {
-    latest: (installed) =>
-      npm(compareAppVersions(installed, '2.0.0') >= 0 ? '@opencode/cli' : 'opencode-ai'),
+    latest: async (installed, { realPath }) => {
+      const owner = homebrewOwner(realPath)
+      if (
+        owner?.keg === 'opencode' &&
+        !owner.cask &&
+        (await homebrewInstallTap(realPath)) === 'homebrew/core'
+      ) {
+        return { kind: 'homebrew', formula: 'opencode' }
+      }
+      return npm(compareAppVersions(installed, '2.0.0') >= 0 ? '@opencode/cli' : 'opencode-ai')
+    },
     plan: selfUpdate('upgrade')
   },
   opencode2: { latest: () => npm('@opencode/cli'), plan: selfUpdate('upgrade') },
