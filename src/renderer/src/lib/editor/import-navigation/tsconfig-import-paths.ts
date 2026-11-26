@@ -1,5 +1,6 @@
 import { parse } from 'jsonc-parser'
 import { dirname, getRelativePathInsideRoot } from '@/lib/path'
+import { escapeRegex } from '../../../../../shared/text/regex-escaping'
 import type { ImportNavigationFileAccess } from './import-navigation-file-access'
 import {
   NO_IMPORT_PATH_MAPPINGS,
@@ -152,17 +153,46 @@ function toMappings(config: ConfigMappings): ImportPathMappings | null {
   }
 }
 
-/** Whether a project's `include`/`files` (TypeScript's defaults when absent) can contain `filePath`. */
+/** TypeScript's wildcards: `**` spans directories, while `*` and `?` stay within one segment. */
+function wildcardSegmentsPattern(segments: string[]): RegExp {
+  const source = segments.map((segment, index) => {
+    if (segment === '**') {
+      return '(?:[^/]+/)*'
+    }
+    const literal = segment
+      .split(/([*?])/)
+      .map((part) => (part === '*' ? '[^/]*' : part === '?' ? '[^/]' : escapeRegex(part)))
+      .join('')
+    return index < segments.length - 1 ? `${literal}/` : literal
+  })
+  return new RegExp(`^${source.join('')}$`)
+}
+
+/** Whether an `include` entry, already resolved against its config, names `filePath`. */
+function includeSpecMatches(spec: string, filePath: string): boolean {
+  const lastSegment = spec.slice(Math.max(spec.lastIndexOf('/'), spec.lastIndexOf('\\')) + 1)
+  // Why: TypeScript reads a last segment without `.`, `*` or `?` as a directory (`src` → `src/**/*`).
+  if (!/[.*?]/.test(lastSegment)) {
+    return getRelativePathInsideRoot(filePath, spec) !== null
+  }
+  const wildcardAt = spec.search(/[^\\/]*[*?]/)
+  if (wildcardAt === -1) {
+    return getRelativePathInsideRoot(filePath, spec) === ''
+  }
+  const relative = getRelativePathInsideRoot(filePath, spec.slice(0, wildcardAt))
+  return (
+    relative !== null &&
+    wildcardSegmentsPattern(spec.slice(wildcardAt).split(/[\\/]+/)).test(relative)
+  )
+}
+
+/** Whether a project's `files` or `include` (TypeScript's defaults when absent) list `filePath`. */
 function sourcesCover({ include, files, configDir }: ConfigSources, filePath: string): boolean {
   if (files?.some((file) => resolveModulePath(configDir, file) === filePath)) {
     return true
   }
-  const patterns = include ?? (files ? [] : ['**/*'])
-  return patterns.some((pattern) => {
-    const staticPrefix = pattern.split(/[*?{[]/)[0].replace(/[\\/]+$/, '')
-    const base = staticPrefix ? resolveModulePath(configDir, staticPrefix) : configDir
-    return getRelativePathInsideRoot(filePath, base) !== null
-  })
+  const specs = include ?? (files ? [] : ['**/*'])
+  return specs.some((spec) => includeSpecMatches(resolveModulePath(configDir, spec), filePath))
 }
 
 /** Alias rules from the nearest tsconfig/jsconfig at or above `filePath`, inside `rootPath`. */

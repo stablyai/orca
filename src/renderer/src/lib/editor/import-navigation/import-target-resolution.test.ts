@@ -106,7 +106,8 @@ describe('resolveImportNavigationTarget', () => {
       'const doc = "export const title = 0"',
       'function helper() {',
       '  const title = 1',
-      '  return title',
+      "  const Card = 'nested'",
+      '  return [title, Card]',
       '}',
       'const title = 2',
       'export { title }',
@@ -130,15 +131,16 @@ describe('resolveImportNavigationTarget', () => {
     })
   })
 
-  it('uses the referenced project that includes the file and its effective baseUrl', async () => {
+  it('uses the referenced project whose include matches the file, and its effective baseUrl', async () => {
     const files = memoryFiles({
       '/repo/tsconfig.json':
-        '{ "files": [], "references": [{ "path": "./tsconfig.node.json" }, { "path": "./tsconfig.app.json" }] }',
-      '/repo/tsconfig.node.json':
-        '{ "include": ["vite.config.ts"], "compilerOptions": { "paths": { "@node/*": ["./tools/*"] } } }',
+        '{ "files": [], "references": [{ "path": "./tsconfig.test.json" }, { "path": "./tsconfig.app.json" }] }',
+      '/repo/tsconfig.test.json':
+        '{ "include": ["src/**/*.test.ts"], "compilerOptions": { "paths": { "@/*": ["./test-support/*"] } } }',
       '/repo/tsconfig.app.json':
         '{ "extends": "./config/tsconfig.base.json", "include": ["src"], "compilerOptions": { "baseUrl": "." } }',
       '/repo/config/tsconfig.base.json': '{ "compilerOptions": { "paths": { "@/*": ["src/*"] } } }',
+      '/repo/test-support/button.ts': 'export const button = 0\n',
       '/repo/src/button.ts': 'export const button = 1\n'
     })
     const target = await resolveImportNavigationTarget(files, {
