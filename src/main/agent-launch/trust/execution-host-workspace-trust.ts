@@ -9,6 +9,7 @@ import {
   markCodexProjectTrusted,
   markCopilotFolderTrusted,
   markCursorWorkspaceTrusted,
+  markKimchiWorkspaceTrusted,
   markKimiWorkspaceTrusted
 } from './agent-trust-presets'
 import { awaitAgentTrustWriteWithinDeadline } from './agent-trust-write-deadline'
@@ -56,6 +57,7 @@ export const AGENT_TRUST_INHERITS_FROM_A_HOME: Record<AgentTrustPreset, boolean>
   'qoder-cn': true,
   'qwen-code': true,
   antigravity: false,
+  kimchi: true,
   kimi: false
 }
 
@@ -72,6 +74,7 @@ export const AGENT_TRUST_KEYED_BY_START_FOLDER: Record<AgentTrustPreset, boolean
   'qoder-cn': false,
   'qwen-code': false,
   antigravity: false,
+  kimchi: false,
   kimi: true
 }
 
@@ -117,6 +120,8 @@ async function writePreset(
       return markQwenWorkspaceTrusted(storedPath, host.agentEnv ?? {}, host.agentHome)
     case 'antigravity':
       return markAntigravityWorkspaceTrusted(storedPath, host.agentHome, host.guestWorkspacePath)
+    case 'kimchi':
+      return markKimchiWorkspaceTrusted(storedPath, host.agentHome, host.guestWorkspacePath)
     case 'kimi':
       return markKimiWorkspaceTrusted(
         storedPath,

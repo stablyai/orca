@@ -244,7 +244,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     ctrlEnterEncoding: 'csi-u'
   },
   // prettier-ignore
-  kimchi: { detectCmd: 'kimchi', promptInjectionMode: 'stdin-after-start' },
+  kimchi: { detectCmd: 'kimchi', promptInjectionMode: 'stdin-after-start', preflightTrust: 'kimchi' },
   kimi: {
     preflightTrust: 'kimi',
     // The kimi launcher runs as kimi-code; recognize the alias for reuse and dispatch --inject.

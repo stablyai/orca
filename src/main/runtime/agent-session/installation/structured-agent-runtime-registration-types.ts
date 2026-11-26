@@ -88,6 +88,7 @@ export type StructuredAgentModelCatalogDeps = Pick<
   | 'runCodexCatalogSession'
   | 'prepareCodexCatalogProbeHome'
   | 'resolveAgentCommandSettings'
+  | 'preTrustWorkspace'
   | 'resolveEnvironment'
   | 'resolveShellEnvironmentPolicy'
   | 'resolveAgentLaunchEnv'

@@ -25,6 +25,8 @@ import {
   hostShellEnvironmentRevision
 } from '../environment/structured-agent-shell-environment'
 import { usageLimitAccountSources } from './usage-limit-account-usage'
+import { agentWorkspaceTrustDecisionForWorkspace } from '../../../agent-launch/trust/agent-workspace-trust-spawn'
+import { shouldPreTrustAgentWorkspace } from '../../../../shared/agent-launch/permissions/agent-workspace-trust-decision'
 
 export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTuiIdleVisibleReadProbe {
   /** Apply the host-owning desktop's account overlay to configured agent environment. */
@@ -56,6 +58,13 @@ export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTui
           ? this.structuredAgentLaunchEnv(agent, this.requireStore().getSettings())
           : {},
       resolveAgentCommandSettings: () => this.requireStore().getSettings(),
+      preTrustWorkspace: (location) =>
+        shouldPreTrustAgentWorkspace(
+          this.requireStore().getSettings().agentWorkspaceTrustEnabled,
+          location.workspaceKind === 'folder'
+            ? undefined
+            : agentWorkspaceTrustDecisionForWorkspace(location.workspaceId, this.requireStore())
+        ),
       resolveCodexAccountKind: (home) =>
         resolveStructuredCodexAccountKind(home, this.requireStore().getSettings()),
       resolveAgentAccountHome: (agent) => this.resolveStructuredAgentAccountHome(agent, 'catalog'),

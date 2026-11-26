@@ -36,6 +36,7 @@ describe('standing instructions on every start', () => {
       goose: true,
       aug: true,
       kilo: true,
+      kimchi: true,
       'mimo-code': true,
       droid: true,
       'qwen-code': true,

@@ -22,7 +22,12 @@ const KIMCHI_SESSION_HISTORY: StructuredAgentSessionHistory = {
 export const KIMCHI_LAUNCH_SPEC: AcpLaunchSpec = {
   agent: 'kimchi',
   command: 'kimchi',
-  args: () => ['--mode', 'acp', '--no-auto-update'],
+  args: ({ preTrustWorkspace }) => [
+    '--mode',
+    'acp',
+    '--no-auto-update',
+    ...(preTrustWorkspace ? ['--approve'] : [])
+  ],
   env: {},
   dialect: KIMCHI_ACP_DIALECT,
   loginCommand: agentSessionSetupFor('kimchi')?.loginCommand ?? [],
