@@ -62,6 +62,13 @@ vi.mock('../../minimax/minimax-cookie-store', () => ({
 vi.mock('../../minimax/minimax-api-key-store', () => ({ hasMiniMaxApiKey: async () => false }))
 vi.mock('../../zcode/zcode-plan-api-key-store', () => ({ hasZcodePlanApiKey: async () => false }))
 
+class TestRateLimitService extends RateLimitService {
+  async refreshAutomatically(): Promise<RateLimitState> {
+    await this.fetchAll()
+    return this.getState()
+  }
+}
+
 beforeEach(() => {
   vi.mocked(readKimchiUsageAuth).mockReset()
   vi.mocked(readKimchiUsageAuth).mockResolvedValue({
@@ -181,6 +188,81 @@ it('waits out Kimchi Retry-After in automatic full cycles but allows manual refr
 
     await service.refresh()
     expect(vi.mocked(fetchKimchiRateLimits)).toHaveBeenCalledTimes(2)
+  } finally {
+    service.stop()
+  }
+})
+
+it('bypasses Kimchi Retry-After when the signed-in account changes', async () => {
+  vi.useFakeTimers()
+  const now = Date.parse('2026-11-26T12:00:00Z')
+  vi.setSystemTime(now)
+  vi.mocked(fetchKimiRateLimits).mockImplementation(unavailable('kimi'))
+  vi.mocked(readKimchiUsageAuth).mockResolvedValue({
+    status: 'ok',
+    auth: {
+      apiKey: 'old-key',
+      apiBaseUrl: 'https://api.cast.ai',
+      credentialSource: 'config',
+      authProvenance: 'old-account'
+    }
+  })
+  const limited: ProviderRateLimits = {
+    provider: 'kimchi',
+    session: null,
+    weekly: null,
+    monthly: null,
+    updatedAt: now,
+    error: 'Limited',
+    status: 'error',
+    usageMetadata: {
+      source: 'cli',
+      authProvenance: 'old-account',
+      failureKind: 'rate-limited',
+      retryAtMs: now + 600_000
+    }
+  }
+  vi.mocked(fetchKimchiRateLimits).mockResolvedValue(limited)
+  const service = new TestRateLimitService()
+
+  try {
+    expect((await service.refresh()).kimchi).toEqual(limited)
+    await service.refreshAutomatically()
+    expect(fetchKimchiRateLimits).toHaveBeenCalledTimes(1)
+
+    vi.mocked(readKimchiUsageAuth).mockResolvedValue({
+      status: 'ok',
+      auth: {
+        apiKey: 'new-key',
+        apiBaseUrl: 'https://api.cast.ai',
+        credentialSource: 'config',
+        authProvenance: 'new-account'
+      }
+    })
+    vi.mocked(fetchKimchiRateLimits).mockResolvedValue({
+      provider: 'kimchi',
+      session: null,
+      weekly: null,
+      monthly: {
+        usedPercent: 12,
+        windowMinutes: 43_200,
+        resetsAt: null,
+        resetDescription: null
+      },
+      updatedAt: now,
+      error: null,
+      status: 'ok',
+      usageMetadata: { source: 'cli', authProvenance: 'new-account' }
+    })
+
+    await expect(service.refreshAutomatically()).resolves.toMatchObject({
+      kimchi: {
+        status: 'ok',
+        monthly: { usedPercent: 12 },
+        usageMetadata: { authProvenance: 'new-account' }
+      }
+    })
+    expect(fetchKimchiRateLimits).toHaveBeenCalledTimes(2)
   } finally {
     service.stop()
   }

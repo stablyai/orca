@@ -3,6 +3,7 @@ import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
 import { fetchGrokRateLimits } from '../providers/grok/grok-fetcher'
 import { readGrokAuthSession } from '../providers/grok/grok-auth'
 import { fetchKimchiRateLimits } from '../providers/kimchi/kimchi-fetcher'
+import { isKimchiUsageCredentialCurrent } from '../providers/kimchi/kimchi-usage-credentials'
 import { fetchCursorRateLimits } from '../providers/cursor/cursor-fetcher'
 import { readCursorAuthSession } from '../providers/cursor/cursor-auth'
 import { fetchZcodeRateLimits } from '../providers/zcode/zcode-usage-fetcher'
@@ -132,7 +133,10 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
           baseUrl: ZCODE_PLAN_SITE_BASE_URLS[zcodePlanConfigResult.config.site]
         }
       : null
-    const kimchiFetchGated = !options?.force && this.isRetryAfterActive(previousState.kimchi)
+    const kimchiFetchGated =
+      !options?.force &&
+      this.isRetryAfterActive(previousState.kimchi) &&
+      (await isKimchiUsageCredentialCurrent(previousState.kimchi))
     this.updateState({
       ...previousState,
       claude: this.claudeStateAtCycleStart(previousState.claude),

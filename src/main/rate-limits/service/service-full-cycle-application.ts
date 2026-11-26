@@ -211,9 +211,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     const grok = settleSiblingProviderResult('grok', grokSettled)
     const cursor = settleSiblingProviderResult('cursor', cursorSettled)
     const settledKimchi = settleSiblingProviderResult('kimchi', kimchiSettled)
-    const kimchi = kimchiFetchGated
-      ? settledKimchi
-      : await ensureKimchiUsageCredentialCurrent(settledKimchi)
+    const kimchi = await ensureKimchiUsageCredentialCurrent(settledKimchi)
     if (signal.aborted) {
       return
     }
@@ -255,11 +253,12 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok),
       cursor: cursorAccountChanged ? cursor : this.applyStalePolicy(cursor, previousState.cursor),
-      kimchi: kimchiFetchGated
-        ? previousState.kimchi
-        : kimchiAccountChanged
-          ? kimchi
-          : this.applyStalePolicy(kimchi, previousState.kimchi),
+      kimchi:
+        kimchiFetchGated && !kimchiAccountChanged
+          ? previousState.kimchi
+          : kimchiAccountChanged
+            ? kimchi
+            : this.applyStalePolicy(kimchi, previousState.kimchi),
       zcode: !shouldApplyZcode
         ? this.state.zcode
         : zcodeConfigChanged

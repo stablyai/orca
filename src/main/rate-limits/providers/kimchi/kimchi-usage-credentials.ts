@@ -3,6 +3,20 @@ import { readKimchiUsageAuth } from './kimchi-auth'
 
 const UNAUTHENTICATED_PROVENANCE = 'unauthenticated'
 
+async function currentKimchiUsageProvenance(): Promise<string> {
+  const latestAuth = await readKimchiUsageAuth()
+  return latestAuth.status === 'ok' ? latestAuth.auth.authProvenance : UNAUTHENTICATED_PROVENANCE
+}
+
+export async function isKimchiUsageCredentialCurrent(
+  settled: ProviderRateLimits | null
+): Promise<boolean> {
+  const settledProvenance = settled?.usageMetadata?.authProvenance
+  return (
+    settledProvenance === undefined || settledProvenance === (await currentKimchiUsageProvenance())
+  )
+}
+
 export async function ensureKimchiUsageCredentialCurrent(
   settled: ProviderRateLimits
 ): Promise<ProviderRateLimits> {
@@ -10,9 +24,7 @@ export async function ensureKimchiUsageCredentialCurrent(
   if (settledProvenance === undefined) {
     return settled
   }
-  const latestAuth = await readKimchiUsageAuth()
-  const latestProvenance =
-    latestAuth.status === 'ok' ? latestAuth.auth.authProvenance : UNAUTHENTICATED_PROVENANCE
+  const latestProvenance = await currentKimchiUsageProvenance()
   if (settledProvenance === latestProvenance) {
     return settled
   }
