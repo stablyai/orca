@@ -80,8 +80,9 @@ export type ChatNews =
       outcome: AgentJournalTurnOutcome
       /** Read in full from the journal, only for linked chats; the status row keeps a short preview. */
       readTurn: () => Promise<EndedChatTurn>
-      /** Only whom the turn acts for (its opener and the deliveries it answered), read by index. */
-      readAttribution?: () => Promise<Pick<EndedChatTurn, 'opener' | 'stamps'>>
+      /** Only whom the turn acts for (its opener, the deliveries it answered and who typed what it
+       *  took), read by index. */
+      readAttribution?: () => Promise<Pick<EndedChatTurn, 'opener' | 'stamps' | 'typedByAnother'>>
       at: number
     }
 
