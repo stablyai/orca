@@ -198,16 +198,25 @@ export function getAllWorktreeMetaForHost(
 ): Record<string, WorktreeMeta> {
   const state = runtime.state
   const projected: Record<string, WorktreeMeta> = {}
-  for (const [worktreeId, meta] of Object.entries(state.worktreeMeta)) {
-    if (isOtherHostsLocalOnlyRow(worktreeId, executionHostId)) {
+  const worktreeMeta = state.worktreeMeta
+  for (const worktreeId in worktreeMeta) {
+    if (
+      !Object.hasOwn(worktreeMeta, worktreeId) ||
+      isOtherHostsLocalOnlyRow(worktreeId, executionHostId)
+    ) {
       continue
     }
+    const meta = worktreeMeta[worktreeId]!
     if (!meta.hostId || meta.hostId === executionHostId) {
       projected[worktreeId] = meta
     }
   }
-  for (const alias of Object.keys(state.worktreeIdentityAliases ?? {})) {
-    if (getExecutionHostIdFromWorktreeHostIdentity(alias) !== executionHostId) {
+  const aliases = state.worktreeIdentityAliases
+  for (const alias in aliases) {
+    if (
+      !Object.hasOwn(aliases, alias) ||
+      getExecutionHostIdFromWorktreeHostIdentity(alias) !== executionHostId
+    ) {
       continue
     }
     const worktreeId = getWorktreeIdFromHostIdentity(alias)
