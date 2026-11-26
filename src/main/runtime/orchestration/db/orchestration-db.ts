@@ -158,6 +158,8 @@ class OrchestrationDbCore {
       CREATE INDEX IF NOT EXISTS idx_peer_handoffs_out_thread
         ON peer_handoffs_out(conversation_id, COALESCE(thread_id, message_id));
       CREATE INDEX IF NOT EXISTS idx_messages_reply_to ON messages(reply_to) WHERE reply_to IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_remote_dispatches_creator
+        ON remote_dispatches(creator_orca_session_id) WHERE creator_orca_session_id IS NOT NULL;
       CREATE INDEX IF NOT EXISTS idx_peer_questions_out_asker_awaiting
         ON peer_questions_out(asker) WHERE awaiting = 1;
       CREATE INDEX IF NOT EXISTS idx_messages_stop_reports

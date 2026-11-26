@@ -228,7 +228,9 @@ export class PeerMailRelay {
           ? undefined
           : await this.importItem(loop.db, environmentId, item)
         // Wake before the ack: a replay after a failed ack finds the row stored and stays quiet.
-        if (stored) {
+        if (stored && 'workerChat' in stored) {
+          loop.db.sessionWorkersListener?.(stored.workerChat)
+        } else if (stored) {
           this.runtime.notifyMessageArrived(stored.to, stored.type)
         }
       } catch (error) {
@@ -289,7 +291,7 @@ export class PeerMailRelay {
     db: OrchestrationDb,
     environmentId: string,
     item: z.infer<typeof PulledPeerMail>['items'][number]
-  ): Promise<{ to: string; type: MessageRow['type'] } | undefined> {
+  ): Promise<{ to: string; type: MessageRow['type'] } | { workerChat: string } | undefined> {
     if (getRemoteRunLink(db, item.conversationId)) {
       const server = await this.runtime.resolveOrchestrationWorkerServer(environmentId)
       return importRemoteOwnedItem(db, remoteServerPin(server), item, {

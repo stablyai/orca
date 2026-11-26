@@ -229,6 +229,35 @@ it('a chat waits on mail from its open requests, paired asks and undelivered mai
   db.db.prepare("UPDATE remote_run_links SET state = 'closed'").run()
   expect(sessionAwaitsMail(db, [coordinator])).toBe(false)
 
+  // A worker the chat started on a paired server, or a helper that worker started there, holds it
+  // while it runs there and its link is open; a settled one, or one settled here, does not.
+  db.db
+    .prepare(
+      `INSERT INTO remote_run_links (conversation_id, run_id, environment_id, peer_fingerprint,
+         home_fingerprint) VALUES ('helper_link', 'run_helper', 'server', 'fingerprint', 'home')`
+    )
+    .run()
+  db.db
+    .prepare(
+      `INSERT INTO remote_dispatches (dispatch_id, conversation_id, run_id, environment_id, task_id,
+         status, worker_state, creator_orca_session_id)
+       VALUES ('ctx_helper', 'helper_link', 'run_helper', 'server', 'task_helper', 'dispatched',
+         'running', 'helping')`
+    )
+    .run()
+  const helperHolds = (set: string) => {
+    db.db.prepare(`UPDATE remote_dispatches SET ${set} WHERE dispatch_id = 'ctx_helper'`).run()
+    return sessionAwaitsMail(db, ['helping'])
+  }
+  expect(helperHolds("worker_state = 'running'")).toBe(true)
+  expect(helperHolds("worker_state = NULL, status = 'pending'")).toBe(true)
+  expect(helperHolds("status = 'failed'")).toBe(false)
+  expect(helperHolds("worker_state = 'succeeded'")).toBe(false)
+  expect(helperHolds("worker_state = 'running', task_settled_here = 2")).toBe(false)
+  expect(helperHolds('task_settled_here = 0')).toBe(true)
+  db.db.prepare("UPDATE remote_run_links SET state = 'closed'").run()
+  expect(sessionAwaitsMail(db, ['helping'])).toBe(false)
+
   // A worker the chat started reports back to it.
   const task = db.createTask({ runId: 'run_legacy_local', spec: 'Check the build' })
   const { dispatch } = db.createStartingWorkerDispatch({
@@ -247,7 +276,7 @@ it('a chat waits on mail from its open requests, paired asks and undelivered mai
   // Looked up by sender and recipient, never by scanning the mail.
   const plan = db.db
     .prepare(`EXPLAIN QUERY PLAN ${sessionAwaitsMailSql(2)}`)
-    .all(...Array.from({ length: 7 }, () => ['x', 'y']).flat())
+    .all(...Array.from({ length: 8 }, () => ['x', 'y']).flat())
     .map((row) => String(row.detail))
   expect(plan.filter((detail) => detail.startsWith('SCAN'))).toEqual([])
 })
