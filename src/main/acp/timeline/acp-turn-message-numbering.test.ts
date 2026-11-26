@@ -46,8 +46,7 @@ describe('relayed ACP messages without ids', () => {
     [
       'Grok, which tags each update with the prompt it runs',
       GROK_ACP_DIALECT,
-      [TAG, TAG, TAG, TAG],
-      2
+      [TAG, TAG, TAG, TAG]
     ],
     // A background report, or a Grok build that leaves the tag off.
     ['Grok updates without the prompt tag', GROK_ACP_DIALECT, []],
