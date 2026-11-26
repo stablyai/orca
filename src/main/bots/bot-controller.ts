@@ -68,6 +68,8 @@ export type BotControllerDependencies = {
   accountUserId?: () => string | null
   /** Drops what this host keeps for a bot outside its record (its Look around), once it is deleted. */
   forgetBot?: (botId: string) => void
+  /** A bot's record saved with a change, as it was and is now. */
+  botWritten?: (before: Bot, after: Bot) => void
 }
 
 export class BotController {
@@ -252,6 +254,7 @@ export class BotController {
       }
       store.saveBot(next)
       this.deps.notifyBotsWritten(next.name !== bot.name)
+      this.deps.botWritten?.(bot, next)
       if (next.agent !== bot.agent) {
         this.deps.botAgentChanged?.(next)
       }

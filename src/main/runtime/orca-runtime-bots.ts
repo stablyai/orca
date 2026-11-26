@@ -101,6 +101,12 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
       this.servedOrcaProfileId
         ? profileAccountUserId(this.servedOrcaProfileId, getProfileUserDataPath())
         : null,
+    // Items linking a bot's items show its name.
+    botWritten: (before, after) => {
+      if (before.name !== after.name) {
+        this.botItems.notifyLinking({ botId: after.id })
+      }
+    },
     forgetBot: (botId) => {
       void this.botSharePicks()
         .forget(botId)
