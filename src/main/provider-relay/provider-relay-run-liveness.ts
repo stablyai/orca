@@ -159,6 +159,11 @@ function daemonProvenGone(daemon: AgentSessionRunDaemon, hostId: string): Promis
     { hostId, pid: daemon.pid, processStartTimeMs: Math.round(daemon.startedAtMs), spawnToken: '' },
     false
   )
+  for (const [key, old] of daemonProofs) {
+    if (Date.now() - old.at >= DAEMON_PROOF_FRESH_MS) {
+      daemonProofs.delete(key)
+    }
+  }
   daemonProofs.set(daemon.instance, { at: Date.now(), gone })
   return gone
 }

@@ -176,6 +176,12 @@ export function listProviderRelayInstance(
     .finally(() => {
       entry.settledAt = Date.now()
     })
+  // Only a settled answer within its 2 s is ever reused: older ones (a restarted daemon's) go.
+  for (const [key, old] of instanceListings) {
+    if (Date.now() - old.settledAt >= INSTANCE_LISTING_FRESH_MS) {
+      instanceListings.delete(key)
+    }
+  }
   instanceListings.set(instance, entry)
   return entry.listing
 }
@@ -238,7 +244,7 @@ export function forgetListedProviderRelayChat(chatKey: string): void {
   spawnTokens.delete(chatKey)
 }
 
-/** Chats whose last run's daemon start couldn't say yet; they may still run. */
+/** Chats whose last run's daemon start couldn't say at their last ask; a close forgets one. */
 const unknownRuns = new Set<string>()
 
 export function noteProviderRelayRunVerdict(
@@ -250,6 +256,10 @@ export function noteProviderRelayRunVerdict(
   } else {
     unknownRuns.delete(chatKey)
   }
+}
+
+export function forgetProviderRelayRunVerdict(chatKey: string): void {
+  unknownRuns.delete(chatKey)
 }
 
 /** Its daemon start couldn't say at the last ask; the host holds the chat until it can. */

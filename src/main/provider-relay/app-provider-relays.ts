@@ -7,6 +7,7 @@ export {
   keptRunningProviderRelayPid,
   providerRelayKeptFromLastRun,
   providerRelayChatsIdleStoppedThisRun,
+  forgetProviderRelayRunVerdict,
   providerRelayRunMayContinue,
   providerRelayRunUnknown,
   registerReattachableProviderRelayAgent
@@ -26,8 +27,7 @@ import { providerRelayRoute } from './provider-relay-route'
 import { providerRelayRunGate } from './provider-relay-run-liveness'
 import {
   forgetProviderRelayRunPlacement,
-  noteProviderRelayRunPlacement,
-  providerRelayRunIsRelayed
+  noteProviderRelayRunPlacement
 } from './provider-relay-run-placements'
 export { installProviderRelayRoute, type ProviderRelayRoute } from './provider-relay-route'
 export {
@@ -297,11 +297,12 @@ export function providerRelayQuitting(): boolean {
 }
 
 /**
- * At quit, a relayed run goes on under its daemon, so the app writes no turn end for it; only a
- * run that started in this app ends with the quit. Every provider reads this, not a flag of its own.
+ * At quit, a relayed run (its connection rides a relay) goes on under its daemon, so the app writes
+ * no turn end for it; only a run that started in this app ends with the quit. Every provider reads
+ * this with where its run started, not a flag of its own.
  */
-export function providerRelayRunOutlivesQuit(chatKey: string): boolean {
-  return quitting && providerRelayRunIsRelayed(chatKey)
+export function providerRelayRunOutlivesQuit(placement: 'direct' | 'relayed'): boolean {
+  return quitting && placement === 'relayed'
 }
 
 /** Resolves when chat shutdown finished its detaches, at once when no chat is relayed. */
