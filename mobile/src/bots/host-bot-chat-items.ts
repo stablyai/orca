@@ -135,20 +135,18 @@ export function hostBotChatItems(args: {
   }
   const flatSteps = args.steps[keyOf(FLAT_LINES_KEY)] ?? 0
   const ranks = botLiveWorkspaceRanks(tree.chats)
-  const liveBranches = new Set(
-    rest
-      .filter((branch) => branch.lines.some((line) => ranks.has(line.row.worktreeId)))
-      .map(({ id }) => id)
-  )
+  const live: HostBotWorkerBranch[] = []
+  const idle: HostBotWorkerBranch[] = []
+  for (const branch of rest) {
+    if (branch.lines.some((line) => ranks.has(line.row.worktreeId))) {
+      live.push(branch)
+    } else {
+      idle.push(branch)
+    }
+  }
   // Idle ones keep the list's order; only live ones rank, those waiting on the owner first.
-  const flat = [
-    ...sortBotWorkspacesByLiveRank(
-      rest.filter(({ id }) => liveBranches.has(id)),
-      ranks
-    ),
-    ...rest.filter(({ id }) => !liveBranches.has(id))
-  ]
-  const page = pageChatLines(flat, liveBranches, flatSteps)
+  const flat = live.length > 0 ? [...sortBotWorkspacesByLiveRank(live, ranks), ...idle] : idle
+  const page = pageChatLines(flat, new Set(live.map(({ id }) => id)), flatSteps)
   const leading = flat
     .filter((branch, index) => index < page.shown || branch.lines.some((line) => line.row.isActive))
     .flatMap((branch) => lineItems(branch, view.notes.get(branch.id)))
