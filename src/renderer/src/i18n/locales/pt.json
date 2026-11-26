@@ -2059,6 +2059,8 @@
     "mcp": {
       "workspace": "Espaço de Trabalho",
       "inspectFailed": "Não foi possível inspecionar {{directory}}.",
+      "inspectConfigsFailed": "Não foi possível inspecionar as configurações de MCP.",
+      "createConfigFailed": "Falha ao criar a configuração de MCP.",
       "unreadable": "Não foi possível ler",
       "notFound": "Não encontrado",
       "invalidJson": "JSON inválido",
@@ -2257,8 +2259,158 @@
       "teamDisabled": "O compartilhamento de Artefatos foi desativado pela sua equipe."
     },
     "mcpServers": {
+      "custom": {
+        "noneChecked": "Marque um servidor para adicionar.",
+        "addMany": "Adicionar ({{count}})",
+        "found": "{{count}} servidores encontrados",
+        "foundUrl": "URL · {{line}}",
+        "foundCommand": "Comando · {{line}}",
+        "title": "Servidor personalizado",
+        "sourceLabel": "URL do servidor, comando de inicialização ou configuração",
+        "sourceHint": "Cole a URL do servidor, o comando de inicialização ou a configuração, ou insira os detalhes você mesmo.",
+        "nameTaken": "Já existe um servidor chamado {{name}}. Escolha outro nome.",
+        "line": "Uma URL, um comando de inicialização ou uma configuração",
+        "foundTaken": "Já adicionado"
+      },
+      "empty": {
+        "copied": "Servidores copiados de {{host}}: {{count}}",
+        "title": "Nenhum servidor MCP em {{host}}",
+        "copyFrom": "Copiar de {{host}}"
+      },
+      "addServer": "Adicionar um servidor",
+      "toast": {
+        "allOn": "{{name}} ativado para todos os agentes",
+        "allOff": "{{name}} desativado para todos os agentes",
+        "agentOn": "{{name}} ativado para {{agent}}",
+        "agentOff": "{{name}} desativado para {{agent}}",
+        "saved": "{{name}} salvo",
+        "sharedOn": "{{name}} compartilha um único processo",
+        "sharedOff": "{{name}} é executado uma vez por sessão",
+        "signedOut": "Você saiu de {{name}}",
+        "removed": "{{name}} removido",
+        "workspaces": "{{name}}: {{workspaces}}",
+        "added": "{{name}} adicionado",
+        "newSessions": "Vale para novas sessões",
+        "restart_one": "Reiniciar {{count}} sessão",
+        "restart_other": "Reiniciar {{count}} sessões",
+        "restart_many": "Reiniciar {{count}} sessões",
+        "staleTerminals_one": "{{count}} terminal de agente usa uma configuração de MCP mais antiga",
+        "staleTerminals_other": "{{count}} terminais de agente usam uma configuração de MCP mais antiga",
+        "staleTerminals_many": "{{count}} terminais de agente usam uma configuração de MCP mais antiga",
+        "staleTerminalsOnHost_one": "{{count}} terminal de agente em {{host}} usa uma configuração de MCP mais antiga",
+        "staleTerminalsOnHost_other": "{{count}} terminais de agente em {{host}} usam uma configuração de MCP mais antiga",
+        "staleTerminalsOnHost_many": "{{count}} terminais de agente em {{host}} usam uma configuração de MCP mais antiga",
+        "staleTerminalsRestart_one": "Reinicie-o para reconectar os servidores MCP do Orca.",
+        "staleTerminalsRestart_other": "Reinicie-os para reconectar os servidores MCP do Orca.",
+        "staleTerminalsRestart_many": "Reinicie-os para reconectar os servidores MCP do Orca.",
+        "staleTerminalsRestartManual_one": "Reinicie-o você mesmo para reconectar os servidores MCP do Orca.",
+        "staleTerminalsRestartManual_other": "Reinicie-os você mesmo para reconectar os servidores MCP do Orca.",
+        "staleTerminalsRestartManual_many": "Reinicie-os você mesmo para reconectar os servidores MCP do Orca.",
+        "staleTerminalsRestartSome_one": "É possível retomar {{restartable}} aqui. Reinicie manualmente o terminal restante.",
+        "staleTerminalsRestartSome_other": "É possível retomar {{restartable}} aqui. Reinicie manualmente os {{count}} terminais restantes.",
+        "staleTerminalsRestartSome_many": "É possível retomar {{restartable}} aqui. Reinicie manualmente os {{count}} terminais restantes.",
+        "addedMany": "{{count}} servidores adicionados",
+        "repoOn": "{{name}} ativado em {{repo}}",
+        "repoOff": "{{name}} desativado em {{repo}}"
+      },
+      "fileAgent": {
+        "title": "Permitir que o Orca edite o arquivo de MCP de {{agent}}?",
+        "line": "O Orca vai manter seus servidores MCP no arquivo de configurações de {{agent}} ({{file}}). Suas próprias entradas ficam como estão.",
+        "allow": "Permitir"
+      },
       "agents": {
+        "title": "Agentes",
+        "allOff": "Desativar todos",
+        "allOn": "Ativar todos",
+        "all": "Todos os agentes",
+        "someOff": "Agentes desativados: {{count}}",
+        "none": "Nenhum agente",
+        "some": "{{on}} de {{total}} agentes",
         "blocked": "Bloqueado pelas configurações do Claude da sua organização"
+      },
+      "stale": "Este servidor foi alterado em outro lugar. Mostrando-o como está agora.",
+      "launch": {
+        "title": "Inicialização",
+        "command": "Comando",
+        "args": "Argumentos",
+        "env": "Ambiente"
+      },
+      "connection": {
+        "title": "Conexão",
+        "url": "URL",
+        "headers": "Cabeçalhos"
+      },
+      "shared": {
+        "title": "Compartilhar um único processo entre agentes",
+        "line": "Usa menos memória. O servidor é executado fora da pasta do espaço de trabalho."
+      },
+      "status": {
+        "needsSignIn": "Login necessário",
+        "signedIn": "Conectado",
+        "commandFailed": "Comando não encontrado em {{host}}",
+        "unreachable": "Não é possível alcançar {{host}}"
+      },
+      "signIn": "Entrar",
+      "signInActions": "Ações de login",
+      "signInAgain": "Entrar novamente",
+      "signOut": "Sair",
+      "loading": "Lendo servidores MCP…",
+      "remove": {
+        "title": "Remover {{name}}?",
+        "line": "As novas sessões em {{host}} não vão tê-lo. Os valores salvos e o login dele são excluídos.",
+        "confirm": "Remover",
+        "button": "Remover servidor"
+      },
+      "found": {
+        "onlyIn": "{{agents}} · somente {{projects}}",
+        "move": "Mover para o Orca",
+        "actions": "Ações de {{name}}",
+        "copy": "Copiar para o Orca",
+        "open": "Abrir",
+        "copied": "{{name}} copiado para o Orca",
+        "title": "Nos seus agentes",
+        "summary": "Servidores encontrados em {{agents}}: {{count}}",
+        "moveAll": "Mover todos para o Orca"
+      },
+      "signedInToast": "Conectado a {{name}}",
+      "pasteRefused": "Esse endereço não é deste login.",
+      "workspaces": {
+        "title": "Espaços de Trabalho",
+        "later": "Espaços de trabalho adicionados depois",
+        "all": "Todos os espaços de trabalho",
+        "none": "Nenhum espaço de trabalho",
+        "allBut": "Todos, exceto {{names}}",
+        "only": "Somente {{names}}"
+      },
+      "catalog": {
+        "noMatch": "Nenhum servidor corresponde a “{{query}}”.",
+        "search": "Pesquisar servidores",
+        "caption": "Servidores"
+      },
+      "add": {
+        "title": "Adicionar um servidor MCP"
+      },
+      "catalogLine": {
+        "github": "Issues, pull requests e pesquisa de código",
+        "linear": "Ler e atualizar issues e projetos"
+      },
+      "move": {
+        "title": "Mover {{name}} para o Orca?",
+        "allTitle": "Mover {{count}} servidores para o Orca?",
+        "line": "O Orca o remove das configurações de {{agents}} e mantém um backup.",
+        "allLine": "O Orca os remove das configurações de {{agents}} e mantém um backup.",
+        "confirm": "Mover"
+      },
+      "yours": "Seus",
+      "fromPlugins": "De plugins",
+      "unsupported": "Os servidores MCP não estão disponíveis em {{host}}.",
+      "title": "Servidores MCP",
+      "description": "Servidores que seus agentes podem usar. As alterações valem para novas sessões.",
+      "repo": {
+        "on": "Ativado neste repositório",
+        "add": "Adicionar um servidor para este repositório",
+        "files": "Dos arquivos deste repositório",
+        "open": "Abrir {{file}}"
       }
     }
   },
@@ -7077,6 +7229,7 @@
         "PluginConsentDialog": {
           "reconsent": "Mudou desde que você aprovou",
           "instructionalWarning": "Os comandos podem agir por você ou seus agentes",
+          "mcpServersWarning": "Dá aos seus agentes os servidores MCP dele, que podem iniciar programas e agir em nome deles",
           "declarativeWarning": "Somente conteúdo. Nenhum código é executado.",
           "enable": "Ativar plugin",
           "capability": {
@@ -8741,7 +8894,8 @@
           "installedManifestUnloadable": "Esta versão não pode ser carregada neste Orca. Atualize-a ou reinstale-a.",
           "invalidArtifact": "Um arquivo de worker ou painel declarado está ausente ou é inseguro. Corrija os arquivos do plugin e depois atualize.",
           "consentChanged": "O plugin mudou enquanto você o revisava. Feche esta caixa de diálogo e revise as permissões atualizadas.",
-          "installGitMoved": "O repositório mudou depois que o Orca o verificou. Tente novamente."
+          "installGitMoved": "O repositório mudou depois que o Orca o verificou. Tente novamente.",
+          "installReservedIdentity": "Este plugin usa um nome reservado para plugins oficiais do Orca, que só são instalados pelo catálogo do Orca. Para sua própria cópia ou fork, altere \"id\" em orca-plugin.json para que não comece com \"orca-\" e defina \"publisher\" com o seu próprio nome."
         },
         "TaskSourceProviderCard": {
           "statusChecking": "Verificando…",
@@ -9947,6 +10101,7 @@
           "customEditor": "Editor",
           "panel": "Painel da barra lateral",
           "recipe": "Receita de máquina",
+          "mcpServer": "Servidor MCP",
           "logs": "Logs",
           "copyLogs": "Copiar"
         },
@@ -10008,6 +10163,7 @@
           "newEvents": "Reage a mais eventos do Orca",
           "newPanels": "Adiciona painéis",
           "newRecipes": "Receitas de máquina",
+          "newMcpServers": "Servidores MCP",
           "newShortcuts": "Atalhos de teclado",
           "previewError": "Não foi possível ler esta atualização",
           "update": "Atualizar",
@@ -10214,6 +10370,7 @@
           "contentOnly": "Somente conteúdo",
           "fullAccess": "Acesso total",
           "addsVmRecipes": "Adiciona receitas de VM",
+          "addsMcpServers": "Adiciona servidores MCP",
           "opensAndEditsFiles": "Abre e edita arquivos",
           "runsPluginCode": "Executa código do plugin"
         },
@@ -10270,7 +10427,8 @@
           "newFileMenu": "Adiciona ao menu +",
           "editorReplacesViewer": "Abre {{value0}} em vez do visualizador do Orca",
           "editorMayReplaceViewer": "Pode abrir {{value0}} em vez do visualizador do Orca",
-          "statusBar": "Barra de status"
+          "statusBar": "Barra de status",
+          "font": "Fonte para o terminal, o editor ou a interface"
         },
         "PluginPageHero": {
           "screenshots": "Capturas de tela",
@@ -10284,7 +10442,8 @@
           "worktreeRemoved": "Quando um espaço de trabalho é removido",
           "agentStatusChanged": "Quando o status de um agente muda",
           "detail": "Código em segundo plano é executado",
-          "workspaceChanged": "Quando você muda de espaço de trabalho ou seus terminais mudam"
+          "workspaceChanged": "Quando você muda de espaço de trabalho ou seus terminais mudam",
+          "editorTypographyChanged": "Quando a fonte ou o zoom do editor muda"
         },
         "PluginChips": {
           "updateNeedsReview": "Atualização precisa de revisão",
@@ -11955,7 +12114,9 @@
             "8adb953095": "Falha na operação"
           },
           "activityBar": {
-            "error": "Erro"
+            "error": "Erro",
+            "disablePlugin": "Desativar Plugin",
+            "disableFailed": "Não foi possível desativar o plugin."
           },
           "AiVaultScanProgressStrip": {
             "fileCount_one": "{{value0}} arquivo",
@@ -20652,6 +20813,14 @@
         "pluginNameDisambiguation": {
           "nameWithPublisher": "{{value0}} ({{value1}})"
         },
+        "PluginCatalogHighlights": {
+          "justNow": "agora mesmo",
+          "added": "Adicionado {{value0}}",
+          "featured": "Destaques",
+          "featuredDetail": "os mais instalados, um por categoria",
+          "newlyAdded": "Adicionados recentemente",
+          "newlyAddedDetail": "em todos os seus catálogos"
+        },
         "declarative": {
           "PluginDeclarativeView": {
             "unsupported": "{{value0}} não está disponível nesta versão do Orca"
@@ -27080,5 +27249,14 @@
     "moveLeft": "Mover para a esquerda",
     "moveRight": "Mover para a direita",
     "reset": "Restaurar ordem das abas"
+  },
+  "mcpServers": {
+    "paste": {
+      "badCommand": "Coloque os próprios valores no comando mcp add: o Orca não consegue preencher $VARIABLES nem outras expressões do shell.",
+      "unsupported": "O Orca não consegue adicionar este servidor como está escrito: ele usa SSE, um cliente OAuth próprio ou um valor lido do ambiente.",
+      "badAddCommand": "Verifique o comando mcp add: um nome e uma URL ou um comando.",
+      "badJson": "Verifique o JSON colado: ele não pode ser analisado.",
+      "none": "O Orca não encontrou nenhum servidor que possa adicionar. Servidores SSE, servidores com cliente OAuth próprio ou filtros de ferramentas e valores lidos do ambiente (${VAR}) não são suportados."
+    }
   }
 }
