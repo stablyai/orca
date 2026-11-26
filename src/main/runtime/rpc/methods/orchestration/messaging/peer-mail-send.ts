@@ -76,7 +76,8 @@ export async function sendPeerMail(args: {
   // An Orca from before files keeps the words and drops the files, so they go only where they're taken.
   const files = server.takesFiles ? params.files : undefined
   const attachments = await uploadPeerMailFiles(runtime, server, { ...params, files })
-  const localPaths = await localPathWarning(params.body, to, server.name)
+  // Files it carries reach the server, so naming them in the body needs no warning.
+  const localPaths = await localPathWarning(params.body, to, server.name, { attached: files })
   const warnings: SendRecipientWarning[] = [
     ...(params.files?.length && !server.takesFiles
       ? [

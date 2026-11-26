@@ -54,7 +54,7 @@ describe('local paths in mail to another computer', () => {
     for (const tail of [1, 10, 100]) {
       read.length = 0
       const body = `${filler} ${file}${' /tmp/x'.repeat(tail * 1000)}`
-      expect(await localPathWarning(body, 'bot:Docs', 'm4', statPath)).toBeNull()
+      expect(await localPathWarning(body, 'bot:Docs', 'm4', { statPath })).toBeNull()
       expect(read).toEqual([])
     }
   })
@@ -68,13 +68,31 @@ describe('local paths in mail to another computer', () => {
     const statPath = () => new Promise<void>((done) => held.push(done))
     const body = Array.from({ length: 30 }, (_, n) => `${join(dir, `f${n}.md`)} a b c d`).join('\n')
 
-    const warning = localPathWarning(body, 'bot:Docs', 'm4', statPath)
+    const warning = localPathWarning(body, 'bot:Docs', 'm4', { statPath })
     await vi.advanceTimersByTimeAsync(2000)
     expect(await warning).toBeNull()
     // At most 10 path starts, each read at most 5 ways.
     expect(held.length).toBeLessThanOrEqual(50)
     expect(held.length).toBeGreaterThan(0)
     held.forEach((release) => release())
+  })
+
+  it('names no file the send attaches, only the ones it leaves behind', async () => {
+    const shot = join(dir, 'shot.png')
+    const notes = join(dir, 'notes.md')
+    writeFileSync(shot, '')
+    writeFileSync(notes, '')
+    const body = `See ${shot} and ${notes}.`
+    expect(
+      await localPathWarning(`See ${shot}.`, 'bot:Docs', 'm4', { attached: [shot] })
+    ).toBeNull()
+    const warned = (await localPathWarning(body, 'bot:Docs', 'm4', { attached: [shot] }))?.message
+    expect(warned).toContain(`names ${notes} on this computer`)
+    expect(warned).not.toContain(shot)
+    // Without the file attached (an Orca that takes none), it is warned as before.
+    expect((await localPathWarning(`See ${shot}.`, 'bot:Docs', 'm4'))?.message).toContain(
+      `names ${shot} on this computer`
+    )
   })
 
   it('names several files as a list, and counts the rest', async () => {
@@ -126,7 +144,8 @@ describe('local paths in mail to another computer', () => {
         }
       }
     const warned = async (body: string, ...exists: string[]) =>
-      (await localPathWarning(body, 'bot:Docs', 'm4', onlyFile(...exists)))?.message ?? null
+      (await localPathWarning(body, 'bot:Docs', 'm4', { statPath: onlyFile(...exists) }))
+        ?.message ?? null
     /** A multi-folder path under this host's temp folder, in its own separators, exactly as long as
      *  the line cap. Its lookups are stubbed, so it needn't exist (or fit the OS's path limit). */
     const capLongPath = () => {
@@ -184,6 +203,19 @@ describe('local paths in mail to another computer', () => {
         expect(await warned(atEof, short)).toContain(`names ${short} on`)
         expect(await warned(`${atEof}more.md"`, short)).toBeNull()
       }
+      // The body ends one ordinary character past the cap: the line ends, but its last word was
+      // cut, so the earlier complete path is read and the cut one never is.
+      const pad = 'x'.repeat(LOCAL_PATH_LINE_MAX - short.length - 1)
+      const cutAtEof = `"${short} ${pad}z`
+      expect(cutAtEof.length - 1).toBe(LOCAL_PATH_LINE_MAX + 1)
+      expect(await warned(cutAtEof, short)).toContain(`names ${short} on`)
+      expect(await warned(cutAtEof, `${short} ${pad}`)).toBeNull()
+      expect(await warned(`${cutAtEof}more.md"`, short)).toBeNull()
+      // The quote closes just past the cap: the whole quoted text is the path, not a shorter one.
+      expect(await warned(`"${short} ${pad}"`, short)).toBeNull()
+      expect(await warned(`"${short} ${pad}"`, `${short} ${pad}`)).toContain(
+        `names ${short} ${pad} on`
+      )
       expect(await warned(`See "${short}`, short)).toContain(`names ${short} on`)
       expect(await warned(`See "${short}\nnext"`, short)).toContain(`names ${short} on`)
       expect(await warned(`See "${short}".`, short)).toContain(`names ${short} on`)
@@ -199,7 +231,8 @@ describe('local paths in mail to another computer', () => {
         }
       }
     const warned = async (body: string, ...exists: string[]) =>
-      (await localPathWarning(body, 'bot:Docs', 'm4', onlyFile(...exists)))?.message ?? null
+      (await localPathWarning(body, 'bot:Docs', 'm4', { statPath: onlyFile(...exists) }))
+        ?.message ?? null
 
     it('owns its text: no path inside it is read on its own', async () => {
       const inner = join(dir, 'report')

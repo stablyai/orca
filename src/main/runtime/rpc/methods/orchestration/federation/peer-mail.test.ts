@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ORCHESTRATION_CONTRACT_VERSION,
@@ -41,6 +41,13 @@ vi.mock(
     federationRelayRetryDelayMs: () => 0
   })
 )
+
+// The upload to the server's attachment store is stubbed: a send that carries --file gets the stored
+// paths back as a server that takes files returns them; the mail itself still goes over the pairing.
+vi.mock('../messaging/peer-mail-files', () => ({
+  uploadPeerMailFiles: async (_runtime: unknown, _server: unknown, params: { files?: string[] }) =>
+    params.files?.length ? params.files.map((file) => `/store/${basename(file)}`) : undefined
+}))
 
 const A_PANE = 'tab_a:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const B_PANE = 'tab_b:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -409,6 +416,36 @@ describe('agent mail between paired Orca servers', () => {
         ]
       }
     })
+    expect(mailFor(b, 'term_b').map((message) => message.body)).toEqual([body])
+  })
+
+  it('warns of no file the send carries with --file, only those it leaves behind', async () => {
+    const shot = join(dir, 'shot.png')
+    const notes = join(dir, 'notes.md')
+    writeFileSync(shot, 'png')
+    writeFileSync(notes, '# notes')
+    const body = `See ${shot} and ${notes}.`
+
+    const sent = await mutation(a, 'orchestration.send', {
+      from: 'term_a',
+      on: 'devB',
+      to: 'term_b',
+      subject: 'The shot',
+      body,
+      files: [shot]
+    })
+    expect(sent).toMatchObject({
+      ok: true,
+      result: {
+        warnings: [
+          {
+            code: 'local_paths_unreadable',
+            message: expect.stringContaining(`names ${notes} on this computer`)
+          }
+        ]
+      }
+    })
+    expect(JSON.stringify(sent)).not.toContain(shot)
     expect(mailFor(b, 'term_b').map((message) => message.body)).toEqual([body])
   })
 

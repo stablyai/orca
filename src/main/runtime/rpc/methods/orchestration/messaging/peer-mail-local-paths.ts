@@ -56,21 +56,21 @@ function candidates(body: string): string[][] {
     const rest = body.slice(from, from + LOCAL_PATH_LINE_MAX + 1)
     const newline = rest.indexOf('\n')
     const lookahead = rest.charAt(LOCAL_PATH_LINE_MAX)
-    // The body ends within the read: right at the cap, or one space, tab or CR past it.
-    const atEnd =
-      from + rest.length === body.length &&
-      (rest.length <= LOCAL_PATH_LINE_MAX || /[ \t\r]/.test(lookahead))
-    // The line itself ends here (a newline or the body's end), or only its last word does (a space,
-    // tab or CR just past the cap): a quote still open at the cap may close later on the line.
+    const atEnd = from + rest.length === body.length
+    // Two facts, kept apart. The line ends within the read (a newline, or the body's end, even
+    // one past the cap), so a quote still open there never closes. And the parsed line's last word
+    // is whole: the line ends at the cap, or a space, tab or CR follows it; an ordinary character
+    // past the cap continues it.
     const lineEnded = newline !== -1 || atEnd
-    const wordEnded = lineEnded || /[ \t\r]/.test(lookahead)
+    const wordEnded =
+      newline !== -1 || (atEnd && rest.length <= LOCAL_PATH_LINE_MAX) || /[ \t\r]/.test(lookahead)
     // A CRLF body's line ends in "\r", which no file name does.
     const line = (
       newline !== -1 ? rest.slice(0, newline) : rest.slice(0, LOCAL_PATH_LINE_MAX)
     ).replace(/\r$/, '')
     const { readings: raws, quoteClose } = lineReadings(
       line,
-      { lineEnded, wordEnded },
+      { lineEnded, wordEnded, lookahead: newline === -1 ? lookahead : '' },
       match[0].charAt(0)
     )
     if (quoteClose !== null) {
@@ -99,16 +99,25 @@ function candidates(body: string): string[][] {
 /** What the path starting `line` may be, shortest first, each cut from the line's own text (so a
  *  folder name keeps its spaces, "My  Project"): through its first word, then each word after it.
  *  A quoted path is only its whole quoted text, and `quoteClose` is where its quote closes.
- *  `lineEnded`: the line truly ends where `line` does; `wordEnded`: at least its last word does. */
+ *  `lineEnded`: the line truly ends within the read; `wordEnded`: `line`'s last word is whole;
+ *  `lookahead`: the one character read past a line the cap cut. */
 function lineReadings(
   line: string,
-  { lineEnded, wordEnded }: { lineEnded: boolean; wordEnded: boolean },
+  {
+    lineEnded,
+    wordEnded,
+    lookahead
+  }: { lineEnded: boolean; wordEnded: boolean; lookahead: string },
   opener: string
 ): { readings: string[]; quoteClose: number | null } {
   if (QUOTES.includes(opener)) {
     const close = line.indexOf(opener)
     if (close !== -1) {
       return { readings: [line.slice(0, close)], quoteClose: close }
+    }
+    // It closes just past the cap: the whole line is the quoted path.
+    if (lookahead === opener) {
+      return { readings: [line], quoteClose: line.length }
     }
     // The quote may close past the cap, so where the path ends is unknown. A quote never closed on
     // its line is no quoting: read the path as if unquoted.
@@ -139,9 +148,17 @@ export async function localPathWarning(
   body: string | undefined,
   recipient: string,
   serverName: string,
-  /** How a path is looked up; tests hold it to stand in for a stalled disk. */
-  statPath: PathStat = stat
+  {
+    attached = [],
+    statPath = stat
+  }: {
+    /** Files this send carries to the server (--file): it gets those, so they need no warning. */
+    attached?: readonly string[]
+    /** How a path is looked up; tests hold it to stand in for a stalled disk. */
+    statPath?: PathStat
+  } = {}
 ): Promise<SendRecipientWarning | null> {
+  const sent = new Set(attached.map((path) => resolve(path)))
   const starts = body ? candidates(body) : []
   if (starts.length === 0) {
     return null
@@ -168,7 +185,7 @@ export async function localPathWarning(
     })
   ]).finally(() => clearTimeout(timer))
   // Too slow to wait on: the send goes without the warning, and the stat calls finish on their own.
-  const local = [...new Set((found ?? []).filter((path) => path !== null))]
+  const local = [...new Set((found ?? []).filter((path) => path !== null && !sent.has(path)))]
   if (local.length === 0) {
     return null
   }
