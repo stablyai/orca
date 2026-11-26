@@ -27,3 +27,20 @@ export async function unprotectWindowsDpapiCurrentUser(blobBase64: string): Prom
   }
   return result.code === 0 ? Buffer.from(result.stdout.trim(), 'base64') : null
 }
+
+/** Shares one PowerShell run per distinct latest blob; a run that never finished is dropped so the next call retries. */
+export function createLatestBlobDpapiUnprotect(): (blobBase64: string) => Promise<Buffer | null> {
+  let latest: { blobBase64: string; result: Promise<Buffer | null> } | null = null
+  return (blobBase64) => {
+    if (latest?.blobBase64 !== blobBase64) {
+      const entry = { blobBase64, result: unprotectWindowsDpapiCurrentUser(blobBase64) }
+      void entry.result.catch(() => {
+        if (latest === entry) {
+          latest = null
+        }
+      })
+      latest = entry
+    }
+    return latest.result
+  }
+}

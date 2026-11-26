@@ -54,7 +54,8 @@ const DEV_SWIFT_CLI_HELPERS = [
     'shifted Option composition stays conservative'
   ],
   ['screen-geometry-macos', 'orca-screen-geometry', 'agent status uses a capsule'],
-  ['process-footprint-macos', 'orca-process-footprint', 'memory panel falls back to top']
+  ['process-footprint-macos', 'orca-process-footprint', 'memory panel falls back to top'],
+  ['socket-owner-macos', 'orca-socket-owner', 'paired port forwards refuse to start']
 ]
 
 /** Dev bundles build each helper for the host arch; a missing swiftc only degrades that helper's feature. */

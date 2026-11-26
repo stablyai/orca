@@ -100,10 +100,11 @@ function useTeamsMetadataList<T extends { id: string }>(
   ) => Promise<T[]>,
   errorFallback: string
 ): MetadataListState<T> {
-  const [state, setState] = useState<MetadataListState<T>>({
+  const [state, setState] = useState<MetadataListState<T> & { stateKey: string | null }>({
     data: [],
     loading: false,
-    error: null
+    error: null,
+    stateKey: null
   })
   const activeKeyRef = useRef<string | null>(null)
   const settingsRef = useRef(settings)
@@ -126,7 +127,7 @@ function useTeamsMetadataList<T extends { id: string }>(
   useEffect(() => {
     if (!requestKey || stableTeamIds.length === 0) {
       activeKeyRef.current = null
-      setState({ data: [], loading: false, error: null })
+      setState({ data: [], loading: false, error: null, stateKey: null })
       return
     }
 
@@ -137,7 +138,12 @@ function useTeamsMetadataList<T extends { id: string }>(
           ?.data
     )
     if (cachedGroups.every((group): group is T[] => group !== undefined)) {
-      setState({ data: unionLinearMetadataById(cachedGroups), loading: false, error: null })
+      setState({
+        data: unionLinearMetadataById(cachedGroups),
+        loading: false,
+        error: null,
+        stateKey: requestKey
+      })
       return
     }
 
@@ -145,7 +151,8 @@ function useTeamsMetadataList<T extends { id: string }>(
       ...s,
       data: s.data.length ? ([] as typeof s.data) : s.data,
       loading: true,
-      error: null
+      error: null,
+      stateKey: requestKey
     }))
 
     void Promise.all(
@@ -163,7 +170,8 @@ function useTeamsMetadataList<T extends { id: string }>(
         setState({
           data: unionLinearMetadataById(groups),
           loading: false,
-          error: null
+          error: null,
+          stateKey: requestKey
         })
       })
       .catch((err) => {
@@ -179,6 +187,10 @@ function useTeamsMetadataList<T extends { id: string }>(
       })
   }, [requestKey, stableTeamIds, workspaceId, store, loadTeam, errorFallback])
 
+  // Until the effect runs, state belongs to the previous team set; report it as loading so the prune cannot use it.
+  if (state.stateKey !== requestKey) {
+    return { data: [], loading: requestKey !== null, error: null }
+  }
   return state
 }
 

@@ -233,7 +233,7 @@
   inherits: false;
 }
 
-/* Why: only the workspace board sheet reads its right edge; don't restyle the board subtree on every resize. */
+/* Why: only the docked board sheets read their right edge; don't restyle their subtrees on every resize. */
 @property --workspace-board-right-edge {
   syntax: '*';
   inherits: false;
@@ -782,10 +782,15 @@ body[data-modal-overlay-open] [data-toasts-raised] [data-sonner-toaster] {
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button] {
-  /* Move Sonner actions below copy to avoid squeezing long notices; align footer text after the icon. */
+  /* Move Sonner actions below copy to avoid squeezing long notices, on the copy's left edge. */
   margin-top: 2px;
-  margin-left: 26px;
+  margin-left: 0;
   margin-right: 0;
+}
+
+/* A toast with an icon starts its copy after it, so its first action does too. */
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-icon] ~ [data-button] {
+  margin-left: 26px;
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button] ~ [data-button] {
@@ -4379,28 +4384,12 @@ body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
   color: var(--muted-foreground);
 }
 
-.workspace-reference-stack-front,
-.workspace-reference-stack-ghost {
+.workspace-reference-stack-front {
   position: absolute;
   inset: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-}
-
-.workspace-reference-stack-front {
-  z-index: 2;
-}
-
-.workspace-reference-stack-ghost[data-depth='1'] {
-  transform: translate(-1.5px, 2px);
-  opacity: 0.45;
-  z-index: 1;
-}
-
-.workspace-reference-stack-ghost[data-depth='2'] {
-  transform: translate(-3px, 4px);
-  opacity: 0.25;
 }
 
 .workspace-reference-stack svg {
