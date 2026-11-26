@@ -94,12 +94,22 @@ export function useWorktreeDiffFileNavigation({
     const signature = buildActiveOpenFileSignature(activeFile.diffSource, activeFile.relativePath)
     return buildActiveOpenRowKeys(signature, shownRowKeys).values().next().value ?? null
   }, [activeFile, shownRowKeys])
+  const workingTreeRowKey = useMemo(
+    () =>
+      activeFile
+        ? (buildActiveOpenRowKeys(`unstaged::${activeFile.relativePath}`, shownRowKeys)
+            .values()
+            .next().value ?? null)
+        : null,
+    [activeFile, shownRowKeys]
+  )
   // Kept so a hop still knows where the active file's row sat once the panel drops it.
   const [retainedRow, setRetainedRow] = useState<RetainedRow | null>(null)
-  // Scoped to the file so a retained row can never place another file's hop. It wins over the shown key:
-  // once staging removes a file's working-tree row, its edit tab would otherwise match the staged row instead.
+  // Scoped to the file so a retained row can never place another file's hop. A working-tree row shown again
+  // wins; otherwise the retained row wins, because once staging removes that row an edit tab would
+  // match the staged row instead.
   const retainedActiveRow = activeFile && retainedRow?.fileId === activeFile.id ? retainedRow : null
-  const activeRowKey = retainedActiveRow?.rowKey ?? shownRowKey
+  const activeRowKey = workingTreeRowKey ?? retainedActiveRow?.rowKey ?? shownRowKey
   useEffect(() => {
     if (!activeFile || !navigationRows?.some((row) => row.key === activeRowKey)) {
       return
