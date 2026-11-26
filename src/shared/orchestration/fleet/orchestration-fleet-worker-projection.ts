@@ -24,6 +24,7 @@ type FleetLivenessSubject = {
   dispatchStatus?: string | null
   terminationReason?: FleetDurableWorker['terminationReason']
   resource: { releaseState?: string | null; hostScope: string | null } | null
+  handedOn?: { resource: { releaseState: string } | null } | null
 }
 
 /** Durable facts that prove a supervised process ended; the removed-work record reads the same proof. */
@@ -70,6 +71,12 @@ export function projectLiveness(
   // Operator-close settlement also proves exit; it must not fall through to missing_status.
   if (hasCertifiedExit(worker)) {
     return { verdict: 'exited', source: 'execution_host' }
+  }
+  // A settled Dispatch's handed-on terminal is its follow-up's; only that shared row's release proves exit.
+  if (worker.handedOn && worker.workerState && SETTLED_WORKER_STATES.has(worker.workerState)) {
+    return worker.handedOn.resource?.releaseState === DURABLE_EXIT_PROOF.resourceReleaseState
+      ? { verdict: 'exited', source: 'resource_release' }
+      : { verdict: 'unverifiable', reason: 'handed_on' }
   }
   // Chat-mode workers have no hook stream; the structured host's own verdict is their liveness.
   if (session) {
@@ -122,6 +129,16 @@ export function sessionActivityEvidence(
 
 function projectResource(worker: FleetDurableWorker): FleetResourceProjection {
   const resource = worker.resource
+  const handedOn = worker.handedOn
+  if (!resource && handedOn?.resource) {
+    return {
+      state: 'transferred',
+      id: handedOn.resource.id,
+      ownerDispatchId: handedOn.resource.ownerDispatchId,
+      releaseState: handedOn.resource.releaseState,
+      terminalState: worker.terminalState
+    }
+  }
   if (!resource) {
     return {
       state: 'absent',

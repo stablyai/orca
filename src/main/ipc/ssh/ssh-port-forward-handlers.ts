@@ -8,7 +8,6 @@ import { persistPortForwards } from './ssh-port-forward-persistence'
 import { serializePortForwardChange } from './ssh-managed-port-forward-restore'
 import { clearForwardFailure, listUnrestoredPortForwards } from './ssh-port-forward-unrestored'
 import { PortForwardTornDownError } from '../../ssh/port-forwarding/ssh-port-forward'
-import { assertIpv6LoopbackPortFree } from '../../ssh/port-forwarding/local-forward-ipv6-loopback-probe'
 import { addForwardOnFreeLocalPort } from '../../ssh/port-forwarding/forward-local-port-choice'
 import { savedForwardLocalPorts } from '../../ports/paired-forwards/paired-port-forward-saved'
 import { loopbackPortForwardDialHost } from '../../../shared/workspace/ports/port-forward-loopback-host'
@@ -32,7 +31,6 @@ export function registerSshPortForwardHandlers(handle: RegisterSshRequest): void
         if (!conn) {
           throw new Error(`SSH connection "${args.targetId}" not found`)
         }
-        await assertIpv6LoopbackPortFree(args.localPort)
         const entry = await portForwardManager!.addForward(
           args.targetId,
           conn,
@@ -114,8 +112,6 @@ export function registerSshPortForwardHandlers(handle: RegisterSshRequest): void
         const previous = portForwardManager!
           .listForwards(args.targetId)
           .find((forward) => forward.id === args.id)
-        // The forward being edited listens on 127.0.0.1 only, so it never answers this probe.
-        await assertIpv6LoopbackPortFree(args.localPort)
         try {
           const entry = await portForwardManager!.updateForward(
             args.id,

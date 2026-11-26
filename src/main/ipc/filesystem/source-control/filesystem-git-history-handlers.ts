@@ -41,6 +41,7 @@ export function registerFilesystemGitHistoryHandlers({ store }: FilesystemHandle
         limit: args.limit,
         baseRef: args.baseRef,
         branchOnly: args.branchOnly,
+        branchListOnly: args.branchListOnly,
         refs: args.refs,
         historyToken: args.historyToken,
         skip: args.skip

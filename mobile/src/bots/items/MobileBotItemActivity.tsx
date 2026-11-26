@@ -30,7 +30,12 @@ import {
   type BotItemEvent
 } from '../../../../src/shared/bots/bot-items'
 import type { BotItemPendingComments } from '../../../../src/shared/bots/bot-item-pending-comments'
-import type { BotItemSentAnswers } from '../../../../src/shared/bots/use-bot-item-question-steps'
+import { botItemRepliedAsks } from '../../../../src/shared/bots/bot-item-replying'
+import { botItemPendingWordsBesideAnswers } from '../../../../src/shared/bots/bot-item-sent-answers'
+import {
+  isBotItemSentComment,
+  type BotItemSentAnswers
+} from '../../../../src/shared/bots/use-bot-item-question-steps'
 import {
   mobileBotItemCommentWords,
   type MobileBotItemAttachmentSource
@@ -297,8 +302,8 @@ export function MobileBotItemActivity({
           })
         }
       : null
-  // A reply already sent answers the question, before the host's read says so.
-  const answered = pending.shown.some(({ failed }) => !failed)
+  // The questions replies on their way answer, read once rather than per row.
+  const replied = botItemRepliedAsks(pending.shown)
   return (
     <View>
       {entries.map((entry) =>
@@ -308,7 +313,12 @@ export function MobileBotItemActivity({
             <MobileBotItemCommentCard
               key={entry.key}
               item={item}
-              entry={answered ? { ...entry, waiting: false } : entry}
+              // A reply already sent for this question answers it, before the host's read says so.
+              entry={
+                entry.waiting && (replied.unknown || replied.asks.has(entry.event.id))
+                  ? { ...entry, waiting: false }
+                  : entry
+              }
               attachments={attachments}
               ref={(node) => {
                 if (node) {
@@ -349,13 +359,16 @@ export function MobileBotItemActivity({
           </View>
         )
       )}
-      {pending.shown.map(({ event, failed, mayHaveArrived }) =>
-        // Answers posted as one comment show on their lines already.
-        !failed && event.data.text === sent?.text ? null : (
+      {pending.shown.map((sending) => {
+        const { event, failed, mayHaveArrived, intent } = sending
+        // Answers posted as one comment show on their lines already: only the owner's words beside them.
+        const onLines = isBotItemSentComment({ failed, intent }, sent)
+        const beside = onLines ? botItemPendingWordsBesideAnswers(sending) : null
+        return onLines && beside === null ? null : (
           <MobileBotItemCommentCard
             key={event.id}
             item={item}
-            entry={{ event, waiting: false }}
+            entry={beside === null ? { event, waiting: false } : { event, waiting: false, beside }}
             attachments={attachments}
             failed={
               failed
@@ -368,7 +381,7 @@ export function MobileBotItemActivity({
             onQuote={failed ? undefined : onQuote}
           />
         )
-      )}
+      })}
       {entries.length > 0 || pending.shown.length > 0 ? null : (
         <Text style={[styles.line, styles.none]}>
           {t('bots.items.activity.noComments', 'No comments yet.')}

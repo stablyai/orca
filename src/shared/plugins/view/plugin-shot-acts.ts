@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 /**
  * `orca plugin shot --act`: input run against the live components panel before the capture, in
@@ -14,23 +15,25 @@ const TYPE_TEXT_MAX = 500
 // A Table's `selectRows`; well above a person's multi-select.
 const PLUGIN_SHOT_MAX_ROW_KEYS = 200
 
-const queryText = z.string().min(1).max(QUERY_TEXT_MAX)
+const queryText = lazyZodSchema(() => z.string().min(1).max(QUERY_TEXT_MAX))
 
-export const pluginShotQuerySchema = z
-  .strictObject({
-    type: queryText.optional(),
-    role: queryText.optional(),
-    text: queryText.optional(),
-    label: queryText.optional(),
-    testId: queryText.optional()
-  })
-  .refine((query) => Object.values(query).some((value) => value !== undefined), {
-    message: 'a query needs at least one of type, role, text, label or testId'
-  })
+export const pluginShotQuerySchema = lazyZodSchema(() =>
+  z
+    .strictObject({
+      type: queryText.optional(),
+      role: queryText.optional(),
+      text: queryText.optional(),
+      label: queryText.optional(),
+      testId: queryText.optional()
+    })
+    .refine((query) => Object.values(query).some((value) => value !== undefined), {
+      message: 'a query needs at least one of type, role, text, label or testId'
+    })
+)
 
 export type PluginShotQuery = z.infer<typeof pluginShotQuerySchema>
 
-const keyText = z.string().min(1).max(QUERY_TEXT_MAX)
+const keyText = lazyZodSchema(() => z.string().min(1).max(QUERY_TEXT_MAX))
 
 const ACT_SCHEMAS = {
   press: z.strictObject({ press: pluginShotQuerySchema }),
@@ -56,33 +59,39 @@ const ACT_SCHEMAS = {
   activateItem: z.strictObject({ activateItem: pluginShotQuerySchema, key: keyText })
 }
 
-export const pluginShotActSchema = z.union([
-  ACT_SCHEMAS.press,
-  ACT_SCHEMAS.type,
-  ACT_SCHEMAS.select,
-  ACT_SCHEMAS.toggle,
-  ACT_SCHEMAS.slide,
-  ACT_SCHEMAS.sort,
-  ACT_SCHEMAS.selectRows,
-  ACT_SCHEMAS.activateRow,
-  ACT_SCHEMAS.loadMore,
-  ACT_SCHEMAS.expand,
-  ACT_SCHEMAS.collapse,
-  ACT_SCHEMAS.selectItem,
-  ACT_SCHEMAS.activateItem
-])
+export const pluginShotActSchema = lazyZodSchema(() =>
+  z.union([
+    ACT_SCHEMAS.press,
+    ACT_SCHEMAS.type,
+    ACT_SCHEMAS.select,
+    ACT_SCHEMAS.toggle,
+    ACT_SCHEMAS.slide,
+    ACT_SCHEMAS.sort,
+    ACT_SCHEMAS.selectRows,
+    ACT_SCHEMAS.activateRow,
+    ACT_SCHEMAS.loadMore,
+    ACT_SCHEMAS.expand,
+    ACT_SCHEMAS.collapse,
+    ACT_SCHEMAS.selectItem,
+    ACT_SCHEMAS.activateItem
+  ])
+)
 
 export type PluginShotAct = z.infer<typeof pluginShotActSchema>
 
-export const pluginShotActsSchema = z.array(pluginShotActSchema).min(1).max(PLUGIN_SHOT_MAX_ACTS)
+export const pluginShotActsSchema = lazyZodSchema(() =>
+  z.array(pluginShotActSchema).min(1).max(PLUGIN_SHOT_MAX_ACTS)
+)
 
 /** One act's outcome, in order; acts after a failed one are not run. */
 export type PluginShotActResult = { ok: true } | { ok: false; error: string }
 
-export const pluginShotActResultSchema: z.ZodType<PluginShotActResult> = z.union([
-  z.object({ ok: z.literal(true) }),
-  z.object({ ok: z.literal(false), error: z.string().max(2000) })
-])
+export const pluginShotActResultSchema: z.ZodType<PluginShotActResult> = lazyZodSchema(() =>
+  z.union([
+    z.object({ ok: z.literal(true) }),
+    z.object({ ok: z.literal(false), error: z.string().max(2000) })
+  ])
+)
 
 const VERBS = [
   'press',

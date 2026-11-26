@@ -208,7 +208,6 @@ export function useWorktreeCardFoundation({
   // Missing runtime probe data means unknown, not disconnected.
   const isRuntimeDisconnected = useRuntimeHostDisconnected(runtimeOwnerEnvironmentId || null)
   const [titleRenaming, setTitleRenaming] = useState(false)
-  const [showRenameErrorDialog, setShowRenameErrorDialog] = useState(false)
   // Why: read the target label from its owning host's store instead of exposing HUB-private SSH metadata as client-local state.
   const sshTargetLabel = useAppStore((s) =>
     repo?.connectionId
@@ -254,8 +253,6 @@ export function useWorktreeCardFoundation({
     isRuntimeDisconnected,
     titleRenaming,
     setTitleRenaming,
-    showRenameErrorDialog,
-    setShowRenameErrorDialog,
     sshTargetLabel
   }
 }

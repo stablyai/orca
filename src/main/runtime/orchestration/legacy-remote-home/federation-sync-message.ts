@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import {
   MESSAGE_TYPES,
   type MessagePriority,
@@ -105,20 +106,22 @@ export function parseFederatedLifecycle(
 }
 
 // Decode untrusted peer pages before import to report malformed input as an orchestration error.
-export const PulledRelayPage = z
-  .object({
-    runtimeEpoch: z.string().min(1),
-    items: z.array(
-      z
-        .object({
-          dispatch_id: z.string(),
-          direction: z.literal('to_home'),
-          sequence: z.number(),
-          message_id: z.string(),
-          kind: z.string(),
-          payload: z.string()
-        })
-        .passthrough()
-    )
-  })
-  .passthrough()
+export const PulledRelayPage = lazyZodSchema(() =>
+  z
+    .object({
+      runtimeEpoch: z.string().min(1),
+      items: z.array(
+        z
+          .object({
+            dispatch_id: z.string(),
+            direction: z.literal('to_home'),
+            sequence: z.number(),
+            message_id: z.string(),
+            kind: z.string(),
+            payload: z.string()
+          })
+          .passthrough()
+      )
+    })
+    .passthrough()
+)

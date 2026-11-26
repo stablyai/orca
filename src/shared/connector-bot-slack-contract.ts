@@ -1,3 +1,4 @@
+import { lazyZodSchema } from './schema/lazy-zod-schema'
 // Mirror of cloud/packages/connector-contract/src/slack-{grant,bot}-messages.ts for the desktop's reads.
 import * as z from 'zod'
 import { optionalConnectorAvatarUrl } from './connector-message-asker'
@@ -91,8 +92,8 @@ export type ConnectorBotSlackState = z.infer<typeof ConnectorBotSlackState>
 
 // GET `?team=`: that workspace's state, or with none the bot's first. `teams` lists every workspace's,
 // from a cloud with `slack.teams`.
-export const ConnectorBotSlackStateResponse = ConnectorBotSlackState.and(
-  z.object({ teams: z.array(ConnectorBotSlackState).optional() })
+export const ConnectorBotSlackStateResponse = lazyZodSchema(() =>
+  ConnectorBotSlackState.and(z.object({ teams: z.array(ConnectorBotSlackState).optional() }))
 )
 export type ConnectorBotSlackStateResponse = z.infer<typeof ConnectorBotSlackStateResponse>
 
@@ -147,6 +148,9 @@ export type ConnectorBotSlackMembersResponse = z.infer<typeof ConnectorBotSlackM
 
 /** A bot-Slack call's answer as the renderer sees it: the cloud's error code, or one of the desktop's. */
 export type BotSlackResult<T> = { ok: true; value: T } | { ok: false; error: string }
+
+/** A bare 404 on `${slack}/connect`: a cloud from before Sign in with Slack. */
+export const BOT_SLACK_SIGN_IN_OFF = 'slack_sign_in_off'
 
 /** The desktop's own codes, beside the cloud's (grant_expired, unknown_bot, wrong_workspace, …). */
 export const BOT_SLACK_DESKTOP_ERRORS = {

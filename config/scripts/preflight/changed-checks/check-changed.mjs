@@ -38,6 +38,7 @@ function parseArgs(argv) {
     related: false,
     base: null,
     maxWorkers: null,
+    checkConcurrency: null,
     typecheckCompiler: null,
     stepTimeoutMs: DEFAULT_STEP_TIMEOUT_MINUTES * 60_000
   }
@@ -52,13 +53,19 @@ function parseArgs(argv) {
       options.base = argument.slice('--base='.length)
     } else if (/^--max-?workers=\d+$/i.test(argument)) {
       options.maxWorkers = argument.split('=')[1]
+    } else if (/^--check-concurrency=[1-9]\d*$/.test(argument)) {
+      const concurrency = Number(argument.split('=')[1])
+      if (!Number.isSafeInteger(concurrency)) {
+        throw new Error('Check concurrency must be a positive safe integer')
+      }
+      options.checkConcurrency = concurrency
     } else if (/^--timeout=\d+$/.test(argument)) {
       options.stepTimeoutMs = Number(argument.split('=')[1]) * 60_000
     } else if (/^--typecheck-compiler=(auto|tsrs|bun|native)$/.test(argument)) {
       options.typecheckCompiler = argument.split('=')[1]
     } else {
       throw new Error(
-        `Unknown option ${argument}. Use --force, --related, --base=<ref>, --maxWorkers=<n>, --timeout=<minutes>, --typecheck-compiler=auto|tsrs|bun|native.`
+        `Unknown option ${argument}. Use --force, --related, --base=<ref>, --maxWorkers=<n>, --check-concurrency=<n>, --timeout=<minutes>, --typecheck-compiler=auto|tsrs|bun|native.`
       )
     }
   }
@@ -503,7 +510,8 @@ async function runChangedChecks(root, options, signal) {
   )
 
   // Typecheck and tests lead the queue: they take longest, so the short checks fill in around them.
-  const concurrency = Math.max(3, Math.floor(availableParallelism() / 3))
+  const concurrency =
+    options.checkConcurrency ?? Math.max(3, Math.floor(availableParallelism() / 3))
   const running = new Map()
   // Why: output is buffered until a task ends, so long test runs would otherwise look hung.
   const heartbeat = setInterval(() => {

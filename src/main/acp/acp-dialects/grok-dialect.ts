@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { acpNotificationEnvelopeSchema } from '../protocol/acp-session-events'
 import type { AcpDialect, AcpDialectNotification, AcpHookBlock } from './acp-dialect'
 import type { AvailableCommand } from '../generated/acp-protocol.generated'
@@ -10,35 +11,47 @@ import { grokSubagentStop } from './grok-subagent-stop'
 import { grokThreadGoalReport } from './grok-goal-updates'
 import { grokBackgroundTaskStop } from './grok-background-task-stop'
 
-const tokenCount = z.number().int().nonnegative()
-const toolMetaSchema = z.object({ 'x.ai/tool': z.object({ name: z.string().min(1) }) })
-const turnMetaSchema = z.looseObject({
-  promptId: z.string().optional(),
-  turnStartMs: tokenCount.optional()
-})
-const completionSchema = z.looseObject({
-  sessionUpdate: z.literal('turn_completed'),
-  prompt_id: z.string(),
-  stop_reason: z.string(),
-  agent_result: z.string().nullish(),
-  elapsed_ms: tokenCount.optional()
-})
-const retrySchema = z.looseObject({
-  sessionUpdate: z.literal('retry_state'),
-  type: z.string(),
-  message: z.string().optional()
-})
-const promptCompleteSchema = z.looseObject({
-  sessionId: z.string(),
-  promptId: z.string(),
-  stopReason: z.string(),
-  agentResult: z.string().nullish()
-})
-const hookDeniedSchema = z.looseObject({
-  cancellationCategory: z.literal('HookDenied'),
-  cancellationContext: z.looseObject({ reason: z.string().optional() }).nullish()
-})
-const promptErrorDataSchema = z.looseObject({ message: z.string() })
+const tokenCount = lazyZodSchema(() => z.number().int().nonnegative())
+const toolMetaSchema = lazyZodSchema(() =>
+  z.object({ 'x.ai/tool': z.object({ name: z.string().min(1) }) })
+)
+const turnMetaSchema = lazyZodSchema(() =>
+  z.looseObject({
+    promptId: z.string().optional(),
+    turnStartMs: tokenCount.optional()
+  })
+)
+const completionSchema = lazyZodSchema(() =>
+  z.looseObject({
+    sessionUpdate: z.literal('turn_completed'),
+    prompt_id: z.string(),
+    stop_reason: z.string(),
+    agent_result: z.string().nullish(),
+    elapsed_ms: tokenCount.optional()
+  })
+)
+const retrySchema = lazyZodSchema(() =>
+  z.looseObject({
+    sessionUpdate: z.literal('retry_state'),
+    type: z.string(),
+    message: z.string().optional()
+  })
+)
+const promptCompleteSchema = lazyZodSchema(() =>
+  z.looseObject({
+    sessionId: z.string(),
+    promptId: z.string(),
+    stopReason: z.string(),
+    agentResult: z.string().nullish()
+  })
+)
+const hookDeniedSchema = lazyZodSchema(() =>
+  z.looseObject({
+    cancellationCategory: z.literal('HookDenied'),
+    cancellationContext: z.looseObject({ reason: z.string().optional() }).nullish()
+  })
+)
+const promptErrorDataSchema = lazyZodSchema(() => z.looseObject({ message: z.string() }))
 // Grok's code for an HTTP 429; /compact keeps it when it wraps the error.
 const RATE_LIMITED_ERROR_CODE = -32003
 const FAILED_STOP_REASONS = ['error', 'rate_limit']
@@ -47,27 +60,33 @@ const SESSION_NOTIFICATIONS = ['x.ai/session_notification', 'x.ai/session/update
 function failureDetail(stopReason: string, result: string | null | undefined): string | undefined {
   return FAILED_STOP_REASONS.includes(stopReason) && result?.trim() ? result : undefined
 }
-const responseSchema = z.object({
-  sessionUpdate: z.literal('response_completed'),
-  usage: z.object({
-    input_tokens: tokenCount,
-    output_tokens: tokenCount.default(0),
-    cache_read_input_tokens: tokenCount.default(0),
-    cache_creation_input_tokens: tokenCount.default(0)
+const responseSchema = lazyZodSchema(() =>
+  z.object({
+    sessionUpdate: z.literal('response_completed'),
+    usage: z.object({
+      input_tokens: tokenCount,
+      output_tokens: tokenCount.default(0),
+      cache_read_input_tokens: tokenCount.default(0),
+      cache_creation_input_tokens: tokenCount.default(0)
+    })
   })
-})
-const queueSchema = z.object({ sessionId: z.string(), runningPromptId: z.string().nullish() })
-const modelsSchema = z.object({
-  currentModelId: z.string().optional(),
-  availableModels: z
-    .array(
-      z.object({
-        modelId: z.string(),
-        _meta: z.object({ totalContextTokens: z.number().int().positive() }).optional()
-      })
-    )
-    .optional()
-})
+)
+const queueSchema = lazyZodSchema(() =>
+  z.object({ sessionId: z.string(), runningPromptId: z.string().nullish() })
+)
+const modelsSchema = lazyZodSchema(() =>
+  z.object({
+    currentModelId: z.string().optional(),
+    availableModels: z
+      .array(
+        z.object({
+          modelId: z.string(),
+          _meta: z.object({ totalContextTokens: z.number().int().positive() }).optional()
+        })
+      )
+      .optional()
+  })
+)
 
 function contextWindow(models: unknown): number | undefined {
   const parsed = modelsSchema.safeParse(models)
@@ -225,12 +244,14 @@ function notification(
   }
 }
 
-const initializeCommandsSchema = z.looseObject({
-  _meta: z.looseObject({
-    grokShell: z.literal(true),
-    availableCommands: z.array(z.looseObject({ name: z.string() }))
+const initializeCommandsSchema = lazyZodSchema(() =>
+  z.looseObject({
+    _meta: z.looseObject({
+      grokShell: z.literal(true),
+      availableCommands: z.array(z.looseObject({ name: z.string() }))
+    })
   })
-})
+)
 // Initialize lists only built-ins; a skill or workflow that takes a session-gated built-in's name carries these.
 const OTHER_ORIGIN_META = ['path', 'scope', 'workflowSource']
 

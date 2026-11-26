@@ -575,7 +575,8 @@
             "newFiles",
             "settings",
             "statusBarItems",
-            "pipelineProfiles"
+            "pipelineProfiles",
+            "mcpServers"
           ],
           "description": "Contribution point.",
           "x-orca-since": "1.4.245",

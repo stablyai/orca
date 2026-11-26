@@ -13,7 +13,7 @@ import {
 } from '../../../../src/shared/bots/bot-item-question-answers'
 import type { BotItemEvent } from '../../../../src/shared/bots/bot-items'
 import type { BotItemSentAnswers } from '../../../../src/shared/bots/use-bot-item-question-steps'
-import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
+import { MobileNativeChatMarkdown } from '../../session/native-chat/transcript/message-content/MobileNativeChatMarkdown'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { INLINE_TEXT_SELECTION } from '../../platform/text-selection/inline-text-selection'
 import { colors, pressedStyle, spacing } from '../../theme/mobile-theme'
@@ -76,7 +76,7 @@ export function MobileBotItemQuestionLines({
           </Text>
         ) : (
           // A decision's question is unique within its ask.
-          <MobileMarkdown
+          <MobileNativeChatMarkdown
             key={decision.question}
             content={decision.question}
             tone={waiting && !answers[index] ? 'strong' : 'muted'}

@@ -6,6 +6,7 @@ import {
   type PluginContributionPoint
 } from '../../../../../shared/plugins/contributions/plugin-contribution-points'
 import type { PluginManifest } from '../../../../../shared/plugins/manifest/plugin-manifest'
+import { pluginMcpServerListing } from '../../../../../shared/plugins/contributions/plugin-mcp-server-contribution'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { languageDisplayName } from '@/i18n/ui-intl-formatters'
@@ -14,7 +15,9 @@ import { fileList } from './plugin-contribution-file-list'
 import {
   fontContributionRows,
   pipelineContributionRows,
+  mcpServerContributionRows,
   statusBarContributionRows,
+  vmRecipeContributionRows,
   statusBarItemTitles,
   withMode
 } from './plugin-contribution-row-labels'
@@ -63,6 +66,8 @@ export type PluginContributionSource = {
   vmRecipes: readonly string[]
   newFiles: readonly { title: string; extension: string }[]
   statusBarItems: readonly string[]
+  /** Each server's name with its URL or the command line that starts it. */
+  mcpServers: readonly { name: string; detail: string }[]
 }
 
 export const EMPTY_CONTRIBUTION_SOURCE: PluginContributionSource = {
@@ -76,7 +81,8 @@ export const EMPTY_CONTRIBUTION_SOURCE: PluginContributionSource = {
   customEditors: [],
   vmRecipes: [],
   newFiles: [],
-  statusBarItems: []
+  statusBarItems: [],
+  mcpServers: []
 }
 
 /** "recipes/ubuntu-dev.json" → "Ubuntu dev"; manifests name these files by path only. */
@@ -112,7 +118,8 @@ export function manifestContributionSource(manifest: PluginManifest): PluginCont
     })),
     vmRecipes: contributes.vmRecipes.map((recipe) => nameFromContributionPath(recipe.path)),
     newFiles: contributes.newFiles,
-    statusBarItems: statusBarItemTitles(contributes.statusBarItems)
+    statusBarItems: statusBarItemTitles(contributes.statusBarItems),
+    mcpServers: contributes.mcpServers.map(pluginMcpServerListing)
   }
 }
 
@@ -153,7 +160,10 @@ export function summaryContributionSource(
     })),
     vmRecipes: of('vmRecipes').map((item) => nameFromContributionPath(item.name)),
     newFiles: of('newFiles').map((item) => ({ title: item.name, extension: item.detail ?? '' })),
-    statusBarItems: of('statusBarItems').map((item) => item.name)
+    statusBarItems: of('statusBarItems').map((item) => item.name),
+    // Why no detail: install checks a summary's names, not its details, so a catalog's address or
+    // command line could differ from what runs.
+    mcpServers: of('mcpServers').map((item) => ({ name: item.name, detail: '' }))
   }
 }
 
@@ -296,15 +306,8 @@ export function describePluginContributions(
     })
   }
   rows.push(...statusBarContributionRows(source.statusBarItems, t))
-  for (const [index, title] of source.vmRecipes.entries()) {
-    rows.push({
-      key: `vmRecipes:${index}`,
-      kind: 'vmRecipes',
-      title,
-      detail: t('auto.components.settings.PluginDetailSections.recipe', 'Machine recipe'),
-      tone: 'default'
-    })
-  }
+  rows.push(...mcpServerContributionRows(source.mcpServers, t))
+  rows.push(...vmRecipeContributionRows(source.vmRecipes, t))
   return rows
 }
 

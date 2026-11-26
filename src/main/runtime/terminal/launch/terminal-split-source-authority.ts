@@ -179,6 +179,10 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
     return { env }
   }
 
+  shareClaudeAgentTeamsLeadMcpEnv(leadEnv: Readonly<Record<string, string>>): void {
+    this.claudeAgentTeams.shareLeadMcpRelayEnv(leadEnv)
+  }
+
   // Why: a leader handle that never binds to a PTY (lost pane race) has no exit
   // or close path to evict its team, so the abandoning caller must release it.
   releaseClaudeAgentTeamsLeaderForHandle(handle: string): void {

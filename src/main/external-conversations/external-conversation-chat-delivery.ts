@@ -8,12 +8,8 @@ import type {
   ExternalConversationBot,
   ExternalConversationLink
 } from '../../shared/connectors/external-conversation-link'
-import {
-  chatPaneKey,
-  deliverToChat,
-  watchChatNews,
-  type ConversationChatHost
-} from './external-conversation-chat'
+import { chatPaneKey, watchChatNews, type ConversationChatHost } from './external-conversation-chat'
+import { deliverToChat } from './external-conversation-chat-send'
 import { HOST_CLOCK } from './external-conversation-host'
 import type { ConnectorMessage, ConversationKey, Delivery } from './external-conversation-types'
 
@@ -103,6 +99,16 @@ export class ChatDeliveries {
     const sent = { deliveryId, sentAt: HOST_CLOCK.now() }
     this.unstarted.set(sessionId, [...(this.unstarted.get(sessionId) ?? []), sent])
     return sent
+  }
+
+  /** A delivery the chat didn't take after all: no turn is its. */
+  private unadmit(sessionId: string, sent: { deliveryId: string; sentAt: number }): void {
+    const left = this.unstarted.get(sessionId)?.filter((entry) => entry !== sent)
+    if (left?.length) {
+      this.unstarted.set(sessionId, left)
+    } else {
+      this.unstarted.delete(sessionId)
+    }
   }
 
   /** Whether a delivery the chat took waits for a turn to name it. */
@@ -195,6 +201,12 @@ export class ChatDeliveries {
       if (current()) {
         sent = this.admit(chat.sessionId, delivery.deliveryId)
       }
+      return () => {
+        if (sent && current()) {
+          this.unadmit(chat.sessionId, sent)
+        }
+        sent = undefined
+      }
     }
     const outcome = await deliverToChat((await chats?.ensure()) ?? null, chatLink(key, chat), {
       ...delivery,
@@ -210,11 +222,8 @@ export class ChatDeliveries {
     }
     // Only a committed send's turn is the delivery's. A bot's title reads what its asker wrote.
     if (outcome.outcome === 'refused') {
-      const left = this.unstarted.get(chat.sessionId)?.filter((entry) => entry !== sent)
-      if (left?.length) {
-        this.unstarted.set(chat.sessionId, left)
-      } else {
-        this.unstarted.delete(chat.sessionId)
+      if (sent) {
+        this.unadmit(chat.sessionId, sent)
       }
     } else {
       // Marked first, so a turn the link joins is the delivery's.

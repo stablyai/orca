@@ -56,8 +56,8 @@ export async function deliverWorkerDispatchPreamble(args: {
   const chat = structuredSession
     ? null
     : chatAssigneeOf(resolveDispatchAssigneeParty(terminalHandle, args.db))
-  const cliCommand = runtime.getTerminalOrchestrationCliCommand(terminalHandle)
-  const taskSpec = args.decorateTask?.(args.taskSpec, cliCommand) ?? args.taskSpec
+  const cliTarget = runtime.getTerminalOrchestrationCliTarget(terminalHandle)
+  const taskSpec = args.decorateTask?.(args.taskSpec, cliTarget.cliCommand) ?? args.taskSpec
   const preamble = args.taskOnly
     ? taskSpec
     : buildDispatchPreamble({
@@ -76,7 +76,7 @@ export async function deliverWorkerDispatchPreamble(args: {
               ? formatOrcaSessionAddress(chat)
               : terminalHandle,
         devMode: args.devMode,
-        cliCommand,
+        ...cliTarget,
         unreadMail:
           args.db.getLatestUnreadMessageSequence(`dispatch:${args.dispatchId}`) !== undefined
       })
@@ -102,6 +102,10 @@ export async function deliverWorkerDispatchPreamble(args: {
     return { structuredTurnStart: { ...chatTaskTurnStart(delivery), clientMessageId } }
   }
   if (structuredSession) {
+    // A stop that landed after the start's last wait hands the worker back, as the terminal path does.
+    if (args.db.getWorkerDispatch(args.dispatchId)?.state !== 'starting') {
+      throw new Error('request_aborted')
+    }
     let clientMessageId: string | undefined
     const delivery = await sendStructuredWorkerPreamble({
       host: structuredSession.host,

@@ -143,8 +143,9 @@ it('refuses a terminal model which the native launch transport cannot apply', as
   if (stage.kind !== 'agent') {
     throw new Error('Expected agent stage')
   }
-  stage.executor = { ...stage.executor, agent: 'gemini', surface: 'terminal', effort: undefined }
-  await expect(resolvePipelineV2Launch(environment(), stage, workspace)).rejects.toThrow(
+  stage.executor = { ...stage.executor, agent: 'opencode', surface: 'terminal', effort: undefined }
+  const host = { ...environment(), terminalModelSupport: async () => false }
+  await expect(resolvePipelineV2Launch(host, stage, workspace)).rejects.toThrow(
     'pipeline_model_transport_unavailable'
   )
 })
@@ -231,7 +232,7 @@ it('existing_chat_dispatch_does_not_require_new_chat_launch_support', async () =
         })
       },
       mode,
-      workspace.id,
+      { worktreeId: workspace.id },
       undefined,
       true
     )

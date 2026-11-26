@@ -9,7 +9,7 @@ import {
   refuseUnmatchedWorkerSelector,
   workerStartTargetLabel
 } from './worker-start-selector-refusal'
-import { resolveWorkerStartModeOnHost } from '../../structured-workers/orchestration-worker-start-mode'
+import { preflightWorkerAgentOnHost } from './launch/worker-agent-host-preflight'
 import { lineageModeForResolvedAgent } from './worker-chat-lineage'
 import { EXISTING_WORKTREE_SETUP, placeWorkerAgent } from './placement/worker-start-agent-placement'
 import { resolveExistingWorkerWorkspace } from './placement/folder-worktree-placement'
@@ -33,7 +33,7 @@ import {
 import { requireWorkerAuthority, type WorkerEffect } from './placement/worker-placement-topology'
 import { prepareLocalWorkerStart } from './launch/worker-start-validation'
 import { deliverAndSettleWorkerStartReadiness } from './readiness/worker-start-readiness-settlement'
-import { handOverWhenReady } from './readiness/placed-worker-readiness'
+import { handOverWhenReady, wakeReusedSleptAgent } from './readiness/placed-worker-readiness'
 import {
   prepareWorkerStartCard,
   recordWorkerStartOutcome
@@ -110,14 +110,15 @@ export async function startLocalWorker(args: LocalWorkerStartArgs): Promise<unkn
     })
   }
   const decided = lineageModeForResolvedAgent(runtime, args.mode, { ...args, params, agent })
-  const hostMode = resolveWorkerStartModeOnHost(
+  const host = {
     runtime,
-    decided,
-    resolvedWorktree?.id,
     agent,
-    Boolean(chat)
-  )
-  let mode = chatWorkerMode(await hostMode, chat)
+    resolvedWorktree,
+    creationTarget,
+    terminal: params.terminal,
+    existingChat: Boolean(chat)
+  }
+  let mode = chatWorkerMode(await preflightWorkerAgentOnHost({ ...host, mode: decided }), chat)
   system.assertSystemWorkerMode(args.systemCoordinator, mode.mode)
 
   // Synchronous through the Dispatch insert, so nothing else claims the terminal in between.
@@ -224,10 +225,10 @@ export async function startLocalWorker(args: LocalWorkerStartArgs): Promise<unkn
       reusesTerminal: Boolean(params.terminal),
       creation: placed.terminalCreation
     }
+    const sleptIncarnation = await wakeReusedSleptAgent(runtime, placed, workerChat, timeoutMs)
     // Fixed now: the hand-over may run later, from the background wait.
     const placement = placed
     const handle = terminalHandle
-    const worktreeId = resolvedWorktree.id
     // A hand-over from the background wait gets a fresh delivery budget; one in time keeps the shared one.
     const bindTerminal = async (): Promise<void> => {
       const terminalAuthority = authority ?? requireWorkerAuthority(runtime, handle)
@@ -235,10 +236,11 @@ export async function startLocalWorker(args: LocalWorkerStartArgs): Promise<unkn
         dispatchId: started.dispatch.id,
         handle,
         ...terminalAuthority,
-        worktreeId,
+        worktreeId: placement.worktree.id,
         effects,
         setupState: setupReceipt.state,
-        terminalOwnership: external ? 'external' : 'created'
+        terminalOwnership: external ? 'external' : 'created',
+        sleptProcessIncarnation: sleptIncarnation
       })
       await system.bindSystemWorkerCoordinator(
         args.systemCoordinator,

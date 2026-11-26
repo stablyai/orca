@@ -16,7 +16,7 @@ import type { CommentMarkdownLinkClickHandler } from '@/components/comment-markd
 import { createDocumentCommentMarkdownComponents } from '@/components/comment-markdown/comment-markdown-element-renderers'
 import { cn } from '@/lib/class-names'
 import { withoutPendingNativeChatVisualDirectiveTail } from '../../../../../shared/native-chat/visuals/native-chat-visual-directive'
-import { NativeChatMarkdownRowKeyContext } from './native-chat-markdown-row-identity'
+import { NativeChatMarkdownCodeBlockContext } from './native-chat-markdown-code-block-context'
 import { useNativeChatVisualMarkdownExtension } from '../media/visuals/native-chat-visual-markdown-extension'
 import { useNativeChatFileLinkExists } from '../links/actions/use-native-chat-file-link-existence'
 import { NativeChatMarkdownImageLinkContext } from '../media/images/NativeChatMarkdownImage'
@@ -37,17 +37,17 @@ import { useNativeChatLinkClick } from '../links/actions/native-chat-link-click-
 import './native-chat-markdown.css'
 
 /** Existing words stay opaque when a reply first starts growing. */
-function useWordFadeArmed(fadeWords: boolean): boolean {
+function useWordFadeArmed(fading: boolean): boolean {
   const [armed, setArmed] = useState(false)
   useEffect(() => {
-    if (!fadeWords) {
+    if (!fading) {
       setArmed(false)
       return
     }
     const frame = requestAnimationFrame(() => setArmed(true))
     return () => cancelAnimationFrame(frame)
-  }, [fadeWords])
-  return armed && fadeWords
+  }, [fading])
+  return armed && fading
 }
 
 type NativeChatMarkdownProps = Omit<
@@ -63,6 +63,8 @@ type NativeChatMarkdownProps = Omit<
   rowKey?: string
   /** The content is a Slack message's drawn form: its mention links draw as mentions. */
   slackMentions?: boolean
+  /** False keeps the fade's word elements (a held selection's) but animates nothing. */
+  fadeAnimates?: boolean
 }
 
 const NO_NAMES: readonly string[] = []
@@ -186,7 +188,7 @@ function createNativeChatImageExtension(
 export function NativeChatMarkdown({
   className,
   linkifyFilePaths = false,
-  fadeWords = false,
+  fadeFrom,
   visualMessageId,
   streaming = false,
   growing = false,
@@ -194,10 +196,11 @@ export function NativeChatMarkdown({
   content,
   variant,
   slackMentions = false,
+  fadeAnimates = true,
   ...props
 }: NativeChatMarkdownProps): React.JSX.Element {
   const onLinkClick = useNativeChatLinkClick()
-  const wordFadeArmed = useWordFadeArmed(fadeWords)
+  const wordFadeArmed = useWordFadeArmed(fadeFrom !== undefined && fadeAnimates)
   const visualExtension = useNativeChatVisualMarkdownExtension(visualMessageId)
   const mentionNames = withBoundBotMentions(useContext(NativeChatMentionNamesContext), content)
   const everyone = useContext(NativeChatMentionEveryoneContext)
@@ -223,12 +226,17 @@ export function NativeChatMarkdown({
     streaming
   )
   const { githubRepo } = useContext(NativeChatLinkPeekContext)
+  const contentGrowing = growing || streaming
+  const codeBlockContext = useMemo(
+    () => ({ rowKey, growing: contentGrowing }),
+    [rowKey, contentGrowing]
+  )
   return (
-    <NativeChatMarkdownRowKeyContext.Provider value={rowKey}>
+    <NativeChatMarkdownCodeBlockContext.Provider value={codeBlockContext}>
       <CommentMarkdown
         {...props}
         variant={variant}
-        growing={growing || streaming}
+        growing={contentGrowing}
         // Only the document variant's links can peek; bare #123 links follow it.
         githubRepo={variant === 'document' ? githubRepo?.referenceRepo : undefined}
         onLinkClick={onLinkClick}
@@ -241,7 +249,7 @@ export function NativeChatMarkdown({
         math
         extension={extension}
         fileLinkExists={fileLinkExists}
-        fadeWords={fadeWords}
+        fadeFrom={fadeFrom}
         renderMermaid={!streaming}
         keepMermaidSourceWhilePending
         unknownHtmlAsText
@@ -250,6 +258,6 @@ export function NativeChatMarkdown({
         data-block-fade={wordFadeArmed && streaming ? '' : undefined}
         className={cn('native-chat-markdown', className)}
       />
-    </NativeChatMarkdownRowKeyContext.Provider>
+    </NativeChatMarkdownCodeBlockContext.Provider>
   )
 }

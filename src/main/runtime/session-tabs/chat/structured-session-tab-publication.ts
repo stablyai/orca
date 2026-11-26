@@ -135,7 +135,10 @@ export type StructuredSessionRawPublicationInput = Pick<
 > & { eligible?: () => boolean; savedOrder?: MainSessionTabRows }
 
 export function projectStructuredSessionTab(
-  runtime: Pick<OrcaRuntimeService, 'mobileSessionTabsByWorktree' | 'storeMobileSessionSnapshot'>,
+  runtime: Pick<
+    OrcaRuntimeService,
+    'mobileSessionTabsByWorktree' | 'storeMobileSessionSnapshot' | 'reopenClosedMobileSessionTab'
+  >,
   input: StructuredSessionRawPublicationInput,
   emit: (snapshot: RuntimeMobileSessionTabsSnapshot) => void
 ): void {
@@ -246,6 +249,8 @@ export function projectStructuredSessionTab(
   if (input.eligible?.() === false) {
     throw new Error('Chat tab publication was superseded')
   }
+  // A reopened chat returns under its old id; clients that missed its close would otherwise keep hiding it.
+  runtime.reopenClosedMobileSessionTab(input.workspaceId, id)
   const selected = input.savedOrder
     ? withMainTabOrder(snapshot, input.savedOrder, input.activate ? tab : undefined)
     : input.activate
