@@ -13,6 +13,7 @@ import { ConfirmModal } from '../components/sheets/ConfirmModal'
 import { CustomKeyModal } from '../terminal/shortcuts/settings/CustomKeyModal'
 import { MobileDictationSetupSheet } from '../dictation/setup/MobileDictationSetupSheet'
 import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
+import { MobileFileTabActionSheet } from './MobileFileTabActionSheet'
 import { MobileSessionBrowserTabSheet } from './MobileSessionBrowserTabSheet'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { MobileAgentSessionTabActionSheet } from './tabs/MobileAgentSessionTabActionSheet'
@@ -226,27 +227,12 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         ]}
         onClose={() => setMarkdownActionTarget(null)}
       />
-      <ActionSheetModal
-        visible={fileActionTarget != null}
-        {...mobileSessionTabMenuHeader(fileActionTarget, [])}
-        groupDestructive
-        title={fileActionTarget?.title || t('session.sheets.file', 'File')}
-        actions={[
-          {
-            id: 'refresh',
-            label: t('common.refresh', 'Refresh'),
-            icon: RefreshCw,
-            onPress: () => {
-              const target = fileActionTarget
-              setFileActionTarget(null)
-              if (target) {
-                void readFileTab(target)
-              }
-            }
-          },
-          ...closeWithBulkActions(fileActionTarget, () => setFileActionTarget(null))
-        ]}
+      <MobileFileTabActionSheet
+        target={fileActionTarget}
         onClose={() => setFileActionTarget(null)}
+        onRefresh={(target) => void readFileTab(target)}
+        onToast={showToast}
+        closeWithBulkActions={closeWithBulkActions}
       />
       <MobileSessionBrowserTabSheet
         controller={controller}

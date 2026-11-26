@@ -8,6 +8,8 @@ import {
   UserRound,
   X
 } from 'lucide-react-native'
+import { useClipboardWriter } from '../../platform/clipboard'
+import { triggerError } from '../../platform/haptics'
 import type { MobileSessionTab } from './mobile-session-tabs'
 import { ActionSheetModal, type ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { getMobileSessionTabTitle } from './mobile-terminal-tab-agent'
@@ -30,6 +32,7 @@ export function MobileBrowserTabActionSheet(props: {
     options?: MobileBrowserNavigationOptions
   ) => void
   onCloseTab: (target: BrowserTab) => void
+  onToast?: (message: string, durationMs?: number) => void
   onCopyLink: (url: string) => void
   /** Older hosts drop ignoreCache and reload normally, so Hard reload stays hidden there. */
   hardReloadSupported: boolean
@@ -45,11 +48,13 @@ export function MobileBrowserTabActionSheet(props: {
     onClose,
     onNavigate,
     onCloseTab,
+    onToast,
     onCopyLink,
     hardReloadSupported,
     profileLabel,
     bulkCloseActions
   } = props
+  const clipboard = useClipboardWriter()
   const url = target && !isBlankBrowserUrl(target.url) ? target.url : null
   const externalUrl = url ? phoneOpenableBrowserUrl(url) : null
   return (
@@ -118,6 +123,27 @@ export function MobileBrowserTabActionSheet(props: {
                   onClose()
                   if (current) {
                     onNavigate(current, 'browser.reload', { ignoreCache: true })
+                  }
+                }
+              }
+            ]
+          : []),
+        ...(target?.url
+          ? [
+              {
+                label: 'Copy URL',
+                icon: Copy,
+                onPress: () => {
+                  const current = target
+                  onClose()
+                  if (current?.url) {
+                    void clipboard
+                      .writeText(current.url)
+                      .then(() => onToast?.('URL copied'))
+                      .catch(() => {
+                        triggerError()
+                        onToast?.("Couldn't copy URL", 1500)
+                      })
                   }
                 }
               }
