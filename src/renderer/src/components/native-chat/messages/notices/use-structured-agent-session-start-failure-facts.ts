@@ -5,6 +5,7 @@ import {
   sameAgentSessionFailureFact,
   agentSessionVisibleFailureFacts
 } from '../../../../../../shared/agent-session/failures/agent-session-visible-failures'
+import { rowsBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 
 const NO_FACTS: readonly AgentSessionFailureFact[] = []
 
@@ -13,9 +14,11 @@ export function useStructuredAgentSessionStartFailureFacts(
   items: readonly AgentJournalRenderItem[],
   enabled: boolean
 ): readonly AgentSessionFailureFact[] {
+  // Failures are status rows, so a streamed reply's text revision keeps the last scan.
+  const rows = rowsBesideStreamedText(items)
   const facts = useMemo(
-    () => (enabled ? agentSessionVisibleFailureFacts(items) : NO_FACTS),
-    [enabled, items]
+    () => (enabled ? agentSessionVisibleFailureFacts(rows) : NO_FACTS),
+    [enabled, rows]
   )
   const previousRef = useRef<readonly AgentSessionFailureFact[]>(NO_FACTS)
   const previous = previousRef.current

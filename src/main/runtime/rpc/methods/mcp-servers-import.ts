@@ -22,12 +22,7 @@ import {
 import { AgentMcpConfigEditError } from '../../../mcp-servers/agent-configs/agent-mcp-config-removal'
 import { hasMcpAgentProblem } from '../../../mcp-servers/mcp-agent-problems'
 import { terminalMcpAdapterFor } from '../../../mcp-servers/terminal/terminal-mcp-adapters'
-import {
-  addMcpServer,
-  removeMcpServer,
-  setMcpServerAgentEnabled,
-  setMcpServerWorkspaces
-} from '../../../mcp-servers/mcp-host-list'
+import { addMcpServers } from '../../../mcp-servers/mcp-host-list-add'
 import { findOwnMcpServer, readMcpAgentFiles } from '../../../mcp-servers/mcp-host-list-file-reads'
 import { McpServersError } from '../../../mcp-servers/mcp-servers-error'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -43,12 +38,14 @@ const isLocal = (executionHostId: string | null | undefined): boolean =>
  * Orca into their own file, the others when their terminal takes the servers and no launch learned
  * otherwise. Orca launches no other agent (Gemini CLI) with the list.
  */
-async function hostListReaches(): Promise<AgentMcpReach> {
-  const agentFiles = await readMcpAgentFiles()
+async function hostListReaches(agents: readonly string[]): Promise<AgentMcpReach> {
+  // The consent is read only when a file-based agent is asked about.
+  const asksFiles = agents.some((agent) => MCP_FILE_AGENTS.some((fileAgent) => fileAgent === agent))
+  const agentFiles = asksFiles ? await readMcpAgentFiles() : null
   return (agent) => {
     const fileAgent = MCP_FILE_AGENTS.find((candidate) => candidate === agent)
     if (fileAgent) {
-      return agentFiles[fileAgent]
+      return agentFiles?.[fileAgent] === true
     }
     return isTuiAgent(agent) && terminalMcpAdapterFor(agent) !== null && !hasMcpAgentProblem(agent)
   }
@@ -93,13 +90,17 @@ function editFailure(error: AgentMcpConfigEditError): string {
 type AgentMcpImport = (
   host: AgentMcpImportHost,
   key: string,
-  add: AddImportedMcpServer<McpServer>
+  add: AddImportedMcpServer<McpServer>,
+  confirmed?: readonly string[]
 ) => Promise<McpServer>
 
-/** Adds the discovered server to the host list (scoped like its agent copy) by `importer`. */
+/**
+ * Adds the discovered server to the host list (scoped like its agent copy) by `importer`. `agents`:
+ * the ones a Move's confirm named, which bound the copies it takes out.
+ */
 export async function importAgentMcpServer(
   context: RpcContext,
-  key: string,
+  { key, agents }: { key: string; agents?: readonly string[] },
   importer: AgentMcpImport
 ): Promise<{ server: McpServer }> {
   let added = false
@@ -117,24 +118,18 @@ export async function importAgentMcpServer(
     if (existing) {
       return existing
     }
-    let saved = await addMcpServer(server, { nameGiven: false, signal: context.signal })
-    try {
-      if (workspaces) {
-        saved = await setMcpServerWorkspaces(saved.id, workspaces)
-      }
-      for (const agent of agentsOff) {
-        saved = await setMcpServerAgentEnabled(saved.id, agent, false)
-      }
-    } catch (error) {
-      // Never leave it on wider than its agent copy was: take the half-made row back out.
-      await removeMcpServer(saved.id).catch(() => {})
-      throw error
-    }
+    // Its scope goes in with it, so it's never on wider than its agent copy was.
+    const [saved] = await addMcpServers([server], {
+      nameGiven: false,
+      signal: context.signal,
+      ...(workspaces ? { workspaces } : {}),
+      agentsOff
+    })
     added = true
-    return saved
+    return saved!
   }
   try {
-    return { server: await importer(agentMcpImportHost(context.runtime), key, add) }
+    return { server: await importer(agentMcpImportHost(context.runtime), key, add, agents) }
   } catch (error) {
     if (error instanceof AgentMcpServerImportError) {
       throw error.reason === 'gone' ? new McpServersError('mcp_server_gone', error.message) : error

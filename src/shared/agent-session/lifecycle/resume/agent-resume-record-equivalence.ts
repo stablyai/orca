@@ -40,6 +40,7 @@ export function sleepingRecordsEquivalentIgnoringCaptureTime(
     existing.state === next.state &&
     existing.updatedAt === next.updatedAt &&
     existing.terminalTitle === next.terminalTitle &&
+    existing.terminalHandle === next.terminalHandle &&
     existing.lastAssistantMessage === next.lastAssistantMessage &&
     agentMainAgentVerdict(existing) === agentMainAgentVerdict(next) &&
     existing.origin === next.origin &&

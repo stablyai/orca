@@ -10,6 +10,7 @@ import {
   type TypeCyclableTab
 } from '@/lib/workspace/tabs/tab-type-cycle'
 import { activateCycledTabOnOwner } from '@/lib/workspace/tabs/cycled-tab-owner-activation'
+import { cancelPendingBotThreadOpen } from '@/lib/agent-session/open/bot-thread-open-lifecycle'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
@@ -46,6 +47,7 @@ function resolveCycleContext(): CycleContext | null {
 
 /** Activate by unified tab ID after file/browser updates so duplicate entities focus the correct split instance. */
 export function activateCyclableTab(store: AppStoreState, next: TypeCyclableTab): void {
+  cancelPendingBotThreadOpen()
   const worktreeId = store.activeWorktreeId
   if (next.type === 'terminal') {
     store.setActiveTab(next.id)

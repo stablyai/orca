@@ -29,26 +29,10 @@ import {
 } from './managed-agent-launch-program'
 import { withAgentTerminalInputArgs } from './codex-startup-delivery'
 import { antigravityModelArgs } from './antigravity-resume-model-args'
-
-// Why: Enter on Codex's "Update available" screen picks "Update now", which installs and exits.
-const STARTUP_UPDATE_PROMPT_SUPPRESSION_ARGS: Partial<Record<TuiAgent, readonly string[]>> = {
-  codex: ['-c', 'check_for_update_on_startup=false'],
-  aider: ['--no-check-update', '--no-show-release-notes'],
-  cursor: ['--disable-auto-update']
-}
-
-const STARTUP_UPDATE_PROMPT_SUPPRESSION_ENV: Partial<
-  Record<TuiAgent, Readonly<Record<string, string>>>
-> = {
-  claude: { DISABLE_AUTOUPDATER: '1' },
-  'claude-agent-teams': { DISABLE_AUTOUPDATER: '1' },
-  opencode: { OPENCODE_DISABLE_AUTOUPDATE: 'true' },
-  opencode2: { OPENCODE_DISABLE_AUTOUPDATE: 'true' },
-  antigravity: { AGY_CLI_DISABLE_AUTO_UPDATE: 'true' },
-  grok: { GROK_DISABLE_AUTOUPDATER: '1' },
-  pi: { PI_SKIP_VERSION_CHECK: '1' },
-  kimi: { KIMI_CODE_NO_AUTO_UPDATE: '1', KIMI_CLI_NO_AUTO_UPDATE: '1' }
-}
+import {
+  STARTUP_UPDATE_PROMPT_SUPPRESSION_ARGS,
+  STARTUP_UPDATE_PROMPT_SUPPRESSION_ENV
+} from './agent-startup-update-prompt'
 
 export type ResolvedAgentLaunchCommand =
   | {

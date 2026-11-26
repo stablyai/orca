@@ -1,3 +1,4 @@
+import { planClaudeRootLaunch } from '../../../../shared/agent-launch/permissions/claude-root-bypass-launch'
 import { withClaudeAgentViewPlugin } from '../../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view-launch'
 import {
   resolveStartupShell,
@@ -87,11 +88,19 @@ export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
     connectionId
   })
   const pluginDir = !connectionId ? env.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR : undefined
-  const agentCommand =
+  const viewedCommand =
     pluginDir && mcp.command
       ? withClaudeAgentViewPlugin(mcp.command, pluginDir, shell)
       : mcp.command
   const local = !connectionId && input.codexRuntime !== 'wsl'
+  const rootLaunch = planClaudeRootLaunch({
+    command: viewedCommand,
+    agent: launchAgent,
+    shell,
+    isRoot: local && process.getuid?.() === 0,
+    env: [env, process.env]
+  })
+  const agentCommand = rootLaunch?.command ?? viewedCommand
   const images = inlineImagesEnabled && !input.envToDelete.includes('KITTY_WINDOW_ID')
   const prepared =
     connectionId ||
@@ -115,6 +124,7 @@ export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
     launchCommand: sequenced && !blocked ? input.launchCommand : agentCommand,
     startup: sequenced && !blocked ? input.launchCommand : prepared,
     settings,
+    startupNotice: rootLaunch?.notice,
     terminalMcp: mcp.pane
   }
 }

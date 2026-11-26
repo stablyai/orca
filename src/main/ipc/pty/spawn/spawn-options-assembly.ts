@@ -71,8 +71,17 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
 }> {
   const { args } = input
   const connectionId = args.connectionId ?? undefined
-  const { env, launchAgent, launchCommand, startup, settings, terminalMcp, launchConfig, blocked } =
-    await preparePtyAgentLaunch(input)
+  const {
+    env,
+    launchAgent,
+    launchCommand,
+    startup,
+    settings,
+    terminalMcp,
+    launchConfig,
+    blocked,
+    startupNotice
+  } = await preparePtyAgentLaunch(input)
   promoteAgentTeamsShimPath(env, input.requestedAgentTeamsPath)
   const spawnOptions: PtySpawnOptions = {
     cols: args.cols,
@@ -92,6 +101,9 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   }
   if (startup !== undefined) {
     spawnOptions.command = startup
+  }
+  if (startupNotice) {
+    spawnOptions.startupNotice = startupNotice
   }
   if (args.commandDelivery !== undefined) {
     spawnOptions.commandDelivery = args.commandDelivery
