@@ -27030,6 +27030,7 @@
         "body": "安裝在 Windows 上的代理程式無法在 WSL 內執行。請在發行版中安裝一個並登入，它就會出現在這裡。",
         "copied": "已複製",
         "copy": "複製",
+        "checkAgain": "重新檢查",
         "checking": "正在重新檢查…"
       },
       "hostSleeping": "休眠中 · 使用時喚醒",
