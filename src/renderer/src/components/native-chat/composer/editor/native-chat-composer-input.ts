@@ -60,6 +60,8 @@ export type NativeChatPromptEditorProps = Omit<
   placeholder: string
   /** This chat opens side chats: `/btw ` and `/side ` become the side-chat pill. */
   sideChat?: boolean
+  /** A Claude chat: `ultrathink`, `ultraplan` and `ultracode` are colored as in Claude Code. */
+  claudeKeywords?: boolean
   onChange: (input: NativeChatComposerInput) => void
   onSelect: (input: NativeChatComposerInput) => void
 }
