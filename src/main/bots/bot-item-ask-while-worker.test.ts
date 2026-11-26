@@ -112,6 +112,21 @@ describe('botItemAskWhileWorker', () => {
     expect(botItemAskWhileWorker(db, first.id)).toBe('completed')
   })
 
+  it('stays running while a follow-up of a middle retry runs, though a later retry reported', () => {
+    const db = openDb()
+    const first = attempt(db, { status: 'failed', lastFailure: 'stopped', worker: 'stopped' })
+    const middle = attempt(db, {
+      task: first.task,
+      status: 'failed',
+      lastFailure: 'stopped',
+      worker: 'stopped',
+      retryOf: first.id
+    })
+    attempt(db, { status: 'dispatched', followUpOf: middle.id })
+    attempt(db, { task: first.task, status: 'completed', retryOf: middle.id })
+    expect(botItemAskWhileWorker(db, first.id)).toBe('running')
+  })
+
   it('reads a fresh start on the same Task, with no retry edge, as the worker now', () => {
     const db = openDb()
     const first = attempt(db, { status: 'failed', lastFailure: 'boom', worker: 'failed' })

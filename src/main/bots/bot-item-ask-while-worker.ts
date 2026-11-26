@@ -38,13 +38,14 @@ function attempt(db: OrchestrationDb, id: string): Attempt | undefined {
   )
 }
 
-/** The Task's newest attempt after this one: a retry, or a fresh start after recovery readied it. */
+/** The Task's next attempt after this one (a retry, or a fresh start after recovery readied it), so
+ *  every attempt is visited and each one's follow-up read. */
 function laterAttempt(db: OrchestrationDb, row: Attempt): Attempt | undefined {
   return attemptOf(
     db.db
       .prepare(
         `SELECT rowid AS at, ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts
-          WHERE task_id = ? AND rowid > ? ORDER BY rowid DESC LIMIT 1`
+          WHERE task_id = ? AND rowid > ? ORDER BY rowid ASC LIMIT 1`
       )
       .get(row.task_id, row.at)
   )

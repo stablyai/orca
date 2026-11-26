@@ -434,6 +434,10 @@
     "count": 1
   },
   {
+    "filePath": "src/shared/bots/bot-item-ask-while.ts",
+    "reason": "CLI and agent text for orca bot item set --while; the owner's Activity text is localized in the renderer."
+  },
+  {
     "filePath": "src/shared/bots/bot-connector-offer.ts",
     "reason": "Agent-facing: the RPC result the bot reads after offering a card."
   },
