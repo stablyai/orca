@@ -6,6 +6,7 @@ import { dedupeTabOrder } from '../../../../shared/workspace-layout/tab-groups/t
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { activateWebRuntimeSessionTab } from '@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle'
 import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
+import { cancelPendingBotThreadOpen } from '@/lib/agent-session/open/bot-thread-open-lifecycle'
 import { displayedTabOrder } from '@/components/bots/bot-home-tab-order'
 import type { HomeBotLookup } from '@/components/tab-bar/model/pinned-home-tab'
 
@@ -25,7 +26,7 @@ export function resolveTabNumberShortcutTarget(
   state: TabNumberShortcutState,
   index: number,
   /** Defaults to the bot catalog, as the tab bar reads it. */
-  homeBotFor?: HomeBotLookup
+  homeBotFor?: HomeBotLookup | null
 ): Tab | null {
   if (state.activeView !== 'terminal' || state.activeWorktreeId === null || index < 0) {
     return null
@@ -63,6 +64,7 @@ export function activateTabNumberShortcut(index: number): boolean {
     return false
   }
 
+  cancelPendingBotThreadOpen()
   const worktreeId = target.worktreeId
   const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(store, worktreeId)
   store.focusGroup(worktreeId, target.groupId)

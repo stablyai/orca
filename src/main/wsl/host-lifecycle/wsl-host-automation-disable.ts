@@ -19,7 +19,7 @@ export class WslHostAutomationsLeftOffError extends Error {
   }
 }
 
-/** Each one's state on the host, the user's latest choice; one deleted there reads as off. */
+/** Each one's state on the host, the user's latest choice; one deleted there has no entry. */
 export async function readWslHostAutomationStates(
   userDataPath: string,
   environmentId: string,
@@ -36,7 +36,7 @@ export async function readWslHostAutomationStates(
       if (!shown.error.message.includes(AUTOMATION_NOT_FOUND)) {
         throw new Error(`wsl_move_automation_read_failed:${shown.error.message}`)
       }
-      states[id] = false
+      // Absent, not off: undo then gives the copy here its state from before the move.
       continue
     }
     states[id] = ShownAutomationSchema.parse(shown.result).automation.enabled
