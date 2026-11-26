@@ -259,13 +259,12 @@ export class RelayReconnectController {
       ? this.delays.hostOfflineDelayMs(this.failureCount.claimAttachTimeoutRedial(error))
       : this.delays.transportDelayMs(failureCount, relayDirectorRetryAfterMs(error))
     this.nextAttemptAt = now + delay
-    // A 4404 follows the cell's credential check, so it keeps the host-offline cadence even when unconfirmed.
     if (
       error instanceof MobileE2EEAuthenticationError ||
       (unconfirmed && !credentialRejected && !hostOffline)
     ) {
-      // E2EE rejection can be transient during credential commit, and an unconfirmed token may be dead;
-      // gate slow reprobes (and one retry per network change or resume) instead of fast retries.
+      // E2EE rejection can be transient during credential commit, and an unconfirmed token may be dead (a 4404 passed
+      // the cell's credential check); gate slow reprobes plus one retry per network change or resume.
       this.holdGate(scheduleRetry, 'external-signal')
       return
     }
