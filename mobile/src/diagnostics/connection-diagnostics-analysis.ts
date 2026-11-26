@@ -180,7 +180,7 @@ const RELAY_DIAL_ADVICE: Record<
     likelyCause: (code) =>
       `Relay refused this device’s relay credential (close code ${code}), so it could not check whether the desktop is online.`,
     nextStep:
-      'Connect this phone once on the same network as the desktop to refresh Relay access, or re-pair it.'
+      'Connect this phone once on the same network as the desktop to refresh Relay access. If Relay still refuses it, re-pair it.'
   },
   unreachable: {
     likelyCause: (code) => `The phone could not reach the Relay cell (transport close ${code}).`,

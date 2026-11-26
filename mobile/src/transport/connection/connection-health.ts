@@ -68,7 +68,7 @@ function relayHostCopy(directRefreshUnavailable: boolean): Record<
           ? translate('connection.connectionHealth.rePairDetail', 'Re-pair with your desktop')
           : translate(
               'connection.connectionHealth.relayAccessRefreshDetail',
-              'Connect once on the same network as {{host}} to refresh Relay access, or re-pair',
+              'Connect once on the same network as {{host}} to refresh Relay access. If Relay still refuses, re-pair',
               { host }
             )
     },

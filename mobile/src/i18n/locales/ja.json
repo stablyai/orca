@@ -1208,7 +1208,7 @@
       "hostOfflineDetail": "コンピュータがスリープしていないこと、Orca が起動していること、サインイン済みであることを確認してください。",
       "labelWithHint": "{{label}}（{{hint}}）",
       "pairingInvalid": "ペアリングが無効です。デスクトップと再度ペアリングしてください。",
-      "relayAccessRefreshDetail": "{{host}} と同じネットワークで一度接続して Relay アクセスを更新するか、再度ペアリングしてください",
+      "relayAccessRefreshDetail": "{{host}} と同じネットワークで一度接続して Relay アクセスを更新してください。それでも拒否される場合は再度ペアリングしてください",
       "rePairDetail": "デスクトップと再度ペアリングしてください。",
       "reconnecting": "再接続中…",
       "relayAccessRefused": "{{host}} へのリレーアクセスが拒否されました",

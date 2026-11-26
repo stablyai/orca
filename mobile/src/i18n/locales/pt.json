@@ -1372,7 +1372,7 @@
       "hostOfflineDetail": "Verifique se o computador não está suspenso, se o Orca está em execução e se você entrou na sua conta",
       "labelWithHint": "{{label}} — {{hint}}",
       "pairingInvalid": "Pareamento inválido — pareie novamente com seu desktop",
-      "relayAccessRefreshDetail": "Conecte-se uma vez na mesma rede que {{host}} para renovar o acesso ao Relay, ou pareie novamente",
+      "relayAccessRefreshDetail": "Conecte-se uma vez na mesma rede que {{host}} para renovar o acesso ao Relay. Se o Relay continuar recusando, pareie novamente",
       "rePairDetail": "Pareie novamente com seu desktop",
       "reconnecting": "Reconectando…",
       "relayAccessRefused": "O Relay recusou o acesso para {{host}}",

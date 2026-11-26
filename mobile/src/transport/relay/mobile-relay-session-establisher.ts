@@ -33,8 +33,10 @@ export class MobileRelaySessionEstablisher {
   private relay: MobileRelayEndpoint
   private readonly hostOfflineStreak: RelayHostOfflineStreak
   private readonly resolveTimeout = new RelayResolveTimeoutBudget()
-  // Director-refused tokens dial last next time: the director admits one resolve per host per window.
-  private readonly directorRefused = new Set<string>()
+  // The director admits one resolve per host per window, so tokens it answered dial least recently
+  // tried first; otherwise current takes every admission and the next token always gets a 503.
+  private directorTried = new Map<string, number>()
+  private directorTrySeq = 0
 
   constructor(
     private readonly args: {
@@ -86,15 +88,22 @@ export class MobileRelaySessionEstablisher {
     let usedPending = false
     const bundle = this.args.bundle()
     const pending = bundle ? pendingRelayCredentialLease(bundle) : null
-    const ordered = [
-      ...credentials.filter((credential) => !this.directorRefused.has(credential.token)),
-      ...credentials.filter((credential) => this.directorRefused.has(credential.token))
-    ]
+    // Keep only this bundle's tokens, so retention stays at three.
+    const kept = new Map<string, number>()
+    for (const credential of credentials) {
+      const seq = this.directorTried.get(credential.token)
+      if (seq !== undefined) {
+        kept.set(credential.token, seq)
+      }
+    }
+    this.directorTried = kept
+    const lastTried = (token: string) => this.directorTried.get(token) ?? -1
+    const ordered = [...credentials].sort((a, b) => lastTried(a.token) - lastTried(b.token))
     for (const credential of ordered) {
       usedPending = credential.token === pending?.token
       const result = await this.dial(credential)
       if (result.ok) {
-        this.directorRefused.clear()
+        this.directorTried.clear()
         return { outcome: 'established' }
       }
       if (result.error instanceof RelayDialAbortedError) {
@@ -102,6 +111,9 @@ export class MobileRelaySessionEstablisher {
       }
       lastError = result.error
       this.args.onDialFailure(result.error)
+      if (result.error instanceof RelayDirectorHttpError) {
+        this.directorTried.set(credential.token, ++this.directorTrySeq)
+      }
       if (isExplicitCredentialRejection(result.error)) {
         // Why: a rejected version stays invalid; retry only the later credentials. Pending is spared:
         // its install can still commit after this refusal, and the gated reprobe retries it slowly.
@@ -115,7 +127,6 @@ export class MobileRelaySessionEstablisher {
       if (!isDirectorRefusal(result.error)) {
         break
       }
-      this.directorRefused.add(credential.token)
     }
     return {
       outcome: 'failed',
