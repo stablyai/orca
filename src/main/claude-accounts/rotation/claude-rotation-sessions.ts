@@ -36,22 +36,23 @@ export function claudeSessionKey(commandWithEnv: string, profilesRoot: string): 
   return DEFAULT_SESSION_KEY
 }
 
+/** Null when a Claude process has no environment line, as when it started between the reads. */
 export function countClaudeSessions(
   commText: string,
   envText: string,
   profilesRoot: string
-): Map<string, number> {
+): Map<string, number> | null {
   const pids = claudeProcessIds(commText)
   const counts = new Map<string, number>()
   for (const line of envText.split('\n')) {
     const match = /^\s*(\d+)\s+(.*)$/.exec(line)
-    if (!match || !pids.has(match[1])) {
+    if (!match || !pids.delete(match[1])) {
       continue
     }
     const key = claudeSessionKey(match[2], profilesRoot)
     counts.set(key, (counts.get(key) ?? 0) + 1)
   }
-  return counts
+  return pids.size === 0 ? counts : null
 }
 
 async function readPs(args: string[]): Promise<string | null> {
@@ -72,11 +73,13 @@ async function readPs(args: string[]): Promise<string | null> {
 export async function readClaudeSessionsByHome(
   profilesRoot: string
 ): Promise<Map<string, number> | null> {
-  const comm = await readPs(['-axo', 'pid=,comm='])
-  if (comm === null) {
+  // Environments first: a Claude process that starts after this read is then missing from
+  // them, which reads as uncounted instead of as no session. They stay in memory; only
+  // per-folder counts leave this function.
+  const env = await readPs(['-axEww', '-o', 'pid=,command='])
+  if (env === null) {
     return null
   }
-  // Process environments stay in memory; only per-folder counts leave this function.
-  const env = await readPs(['-axEww', '-o', 'pid=,command='])
-  return env === null ? null : countClaudeSessions(comm, env, profilesRoot)
+  const comm = await readPs(['-axo', 'pid=,comm='])
+  return comm === null ? null : countClaudeSessions(comm, env, profilesRoot)
 }

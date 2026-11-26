@@ -39,8 +39,31 @@ export async function readOauthAccount(folder: RotationFolder): Promise<Record<s
   }
 }
 
-/** Swaps `oauthAccount` so each folder's account details follow its login. */
-export async function swapLoginMeta(a: RotationFolder, b: RotationFolder): Promise<string> {
+/** A folder's `oauthAccount`, undefined without one or without a `.claude.json`. Throws when unparsable. */
+export async function oauthAccountForBackup(folder: RotationFolder): Promise<unknown> {
+  let text: string
+  try {
+    text = await readFile(folder.stateFile, 'utf8')
+  } catch {
+    return undefined
+  }
+  const value: unknown = JSON.parse(text)
+  if (!isRecord(value)) {
+    throw new Error('bad_shape')
+  }
+  return value.oauthAccount
+}
+
+/**
+ * Sets each folder's `oauthAccount` (undefined removes it) so the account details follow the
+ * login. Setting values, instead of trading them, makes a repeat after an interruption harmless.
+ */
+export async function setLoginMeta(
+  a: RotationFolder,
+  b: RotationFolder,
+  accountA: unknown,
+  accountB: unknown
+): Promise<string> {
   const modeA = await fileMode(a.stateFile)
   const modeB = await fileMode(b.stateFile)
   if (modeA === null || modeB === null) {
@@ -59,11 +82,9 @@ export async function swapLoginMeta(a: RotationFolder, b: RotationFolder): Promi
     if (!stateA || !stateB) {
       return 'bad_shape'
     }
-    const accountA = stateA.oauthAccount
-    const accountB = stateB.oauthAccount
     for (const [state, account] of [
-      [stateA, accountB],
-      [stateB, accountA]
+      [stateA, accountA],
+      [stateB, accountB]
     ] as const) {
       if (account === undefined) {
         delete state.oauthAccount

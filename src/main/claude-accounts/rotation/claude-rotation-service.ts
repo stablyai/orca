@@ -7,7 +7,7 @@ import {
   type ClaudeAccountRotationStatus
 } from '../../../shared/agent-accounts/claude/claude-account-rotation'
 import { getSelectedClaudeAccountIdForTarget } from '../selection/runtime-selection'
-import { claudeAccountLabel, swappedAccountRecords } from './claude-rotation-account-records'
+import { claudeAccountLabel, rotationAccountRecords } from './claude-rotation-account-records'
 import { fetchClaudeAccountOfToken, fetchRotationUsage } from './claude-rotation-api'
 import type { RotationCheckDeps } from './claude-rotation-candidates'
 import {
@@ -31,7 +31,7 @@ import {
   snapshotRotationFolders,
   type RotationFolderSnapshot
 } from './claude-rotation-status'
-import { recoverInterruptedSwap } from './claude-rotation-swap'
+import { recoverInterruptedSwap } from './claude-rotation-recover'
 import { verifySwap, type RotationVerifyOutcome } from './claude-rotation-verify'
 import { rotationNotice, type RotationNotice } from './claude-rotation-notices'
 
@@ -71,7 +71,7 @@ export class ClaudeAccountRotationService {
       readSessions: () => readClaudeSessionsByHome(this.profilesRoot),
       now: Date.now,
       ...options.deps,
-      onMetaSwapped: (a, b) => this.swapAccountRecords(a, b)
+      records: rotationAccountRecords(options.store)
     }
     this.timer = new RotationTimer(() => this.runCycle(), SETTINGS_SETTLE_MS)
   }
@@ -136,7 +136,7 @@ export class ClaudeAccountRotationService {
       label: (id) => claudeAccountLabel(settings, id),
       snapshot: this.snapshot,
       state: await this.files.loadState(),
-      pendingSwitch: (await this.files.loadJournal()) !== null,
+      pendingSwitch: await this.files.journalExists(),
       now: this.deps.now()
     })
   }
@@ -174,22 +174,25 @@ export class ClaudeAccountRotationService {
       // Nothing says when the other tool stops, so look again now and then while the setting is on.
       return enabled ? ROTATION_TIMING.idleMaxMs : null
     }
-    const folders = await this.folders()
-    const byId = new Map(folders.map((folder) => [folder.accountId, folder]))
     // A swap in flight is finished or checked even after the feature is turned off.
-    if (await this.files.loadJournal()) {
-      const recovered = await recoverInterruptedSwap(byId, this.deps)
+    if (await this.files.journalExists()) {
+      const recovered = await recoverInterruptedSwap(this.deps)
       if (recovered) {
         this.files.log('recover_cycle', { result: recovered })
       }
-      const verified = await verifySwap(byId, this.deps)
+      const verified = await verifySwap(this.deps)
       if (verified) {
         this.afterVerify(verified.outcome, verified.journal)
       }
-      if (await this.files.loadJournal()) {
+      if (await this.files.journalExists()) {
+        if (!(await this.files.loadJournal())) {
+          // Its backups may hold the only copy of a login, so it blocks swaps until removed.
+          this.files.log('journal_unreadable')
+        }
         return ROTATION_TIMING.cycleMs
       }
     }
+    const folders = await this.folders()
     if (this.pauseReason(folders, false) !== null) {
       return null
     }
@@ -212,7 +215,10 @@ export class ClaudeAccountRotationService {
         sessions,
         state,
         settings: rotation,
-        deps: this.deps
+        deps: this.deps,
+        stillAllowed: async () =>
+          resolveClaudeAccountRotationSettings(this.options.store.getSettings()).enabled &&
+          !(await externalRotatorActive(this.options.router.userHome))
       })
       if (result?.note === 'swapped' && 'journal' in result) {
         this.afterSwap(result, labels, state)
@@ -272,13 +278,6 @@ export class ClaudeAccountRotationService {
     }
     if (outcome === 'reverted' || outcome === 'revert_failed' || outcome === 'unexpected_account') {
       this.options.notify(rotationNotice({ type: outcome }))
-    }
-  }
-
-  private swapAccountRecords(a: string, b: string): void {
-    const patch = swappedAccountRecords(this.options.store.getSettings(), a, b)
-    if (patch) {
-      this.options.store.updateSettings(patch, { notifyListeners: true })
     }
   }
 

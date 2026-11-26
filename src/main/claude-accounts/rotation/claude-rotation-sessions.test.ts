@@ -27,3 +27,10 @@ it('counts each Claude process under the folder whose keychain slot it uses', ()
     ])
   )
 })
+
+it('reports sessions as uncounted when a Claude process has no environment line', () => {
+  // Process 202 started after the environments were read.
+  const comm = ['  201 claude', '  202 claude'].join('\n')
+  const env = `  201 claude CLAUDE_CONFIG_DIR=${ROOT}/a1/home`
+  expect(countClaudeSessions(comm, env, ROOT)).toBeNull()
+})

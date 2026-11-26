@@ -10,6 +10,7 @@ import {
   accessTokenOf,
   accessUsable,
   oauthOf,
+  tokenHash,
   type ClaudeKeychainSlot
 } from './claude-rotation-keychain'
 import type { RotationFolder } from './claude-rotation-login-meta'
@@ -53,6 +54,8 @@ export async function checkRotationFolder(args: {
   state: RotationState
   settings: ClaudeAccountRotationSettings
   deps: RotationCheckDeps
+  /** Asked again right before the first write: the setting may be turned off mid-check. */
+  stillAllowed?: () => Promise<boolean>
 }): Promise<RotationCheckResult | null> {
   const { target, state, settings, deps } = args
   const now = deps.now()
@@ -88,7 +91,11 @@ export async function checkRotationFolder(args: {
     return done({ note: read.status === 'rate-limited' ? 'usage_rate_limited' : 'usage_failed' })
   }
   const usage = read.usage
-  const account = await claudeAccountOf(state, target, oauth, deps)
+  const { account, confirmed } = await claudeAccountOf(state, target, oauth, deps)
+  if (!confirmed) {
+    // The reading would be filed under the folder's own claim, which may be stale; try again later.
+    return done({ note: 'account_unconfirmed' })
+  }
   recordUsage(state, account, usage, now)
   const over = overReasons(usage, settings)
   const sinceSwap = now - (state.lastSwapAt ?? 0)
@@ -106,6 +113,7 @@ export async function checkRotationFolder(args: {
   let kind: RotationSwapKind = 'over'
   let reason: string
   let picked: RotationCandidate | null
+  let refreshOf: Map<string, string>
   if (over.length === 0) {
     const rule = returnRule(settings, { claudeAccount: account, usage }, now)
     const due = sinceSwap >= ROTATION_TIMING.minSwapGapMs && now >= (folderState.nextPreferAt ?? 0)
@@ -113,8 +121,9 @@ export async function checkRotationFolder(args: {
       return done({ note: 'ok' })
     }
     folderState.nextPreferAt = now + ROTATION_TIMING.preferCheckGapMs
-    const { candidates } = await rotationCandidates({ ...shared, only: rule.wants })
-    picked = rule.choose(candidates)
+    const found = await rotationCandidates({ ...shared, only: rule.wants })
+    refreshOf = found.refreshOf
+    picked = rule.choose(found.candidates)
     if (!picked) {
       return done({ note: 'ok' })
     }
@@ -134,8 +143,10 @@ export async function checkRotationFolder(args: {
     ) {
       return done({ note: 'over_wait_gap' })
     }
-    const { candidates, skipped } = await rotationCandidates(shared)
-    picked = candidates[0] ?? null
+    const found = await rotationCandidates(shared)
+    const skipped = found.skipped
+    refreshOf = found.refreshOf
+    picked = found.candidates[0] ?? null
     if (!picked) {
       const alert = now - (state.lastAlertAt ?? 0) > ROTATION_TIMING.alertGapMs
       if (alert) {
@@ -148,20 +159,31 @@ export async function checkRotationFolder(args: {
 
   const chosen = picked
   const source = args.folders.find((folder) => folder.accountId === chosen.accountId)
-  // Usage reads take seconds; a session may have started in the chosen folder meanwhile.
-  const fresh = await deps.readSessions()
-  if (!source || fresh === null || (fresh.get(source.home) ?? 0) > 0) {
-    return done({ note: 'candidate_busy' })
+  const sourceRefresh = refreshOf.get(chosen.accountId)
+  if (!source || sourceRefresh === undefined) {
+    return done({ note: 'swap_failed' })
   }
   const result = await swapFolderLogins(
     target,
     source,
     { reason, kind, fromAccount: account, toAccount: chosen.claudeAccount },
-    deps
+    deps,
+    {
+      aRefresh: tokenHash(oauth.refreshToken),
+      bRefresh: sourceRefresh,
+      beforeWrite: async () => {
+        if (args.stillAllowed && !(await args.stillAllowed())) {
+          return 'turned_off'
+        }
+        // Usage reads take seconds; a session may have started in the chosen folder meanwhile.
+        const fresh = await deps.readSessions()
+        return fresh === null || (fresh.get(source.home) ?? 0) > 0 ? 'candidate_busy' : null
+      }
+    }
   )
   if (!result.ok) {
     deps.files.log('swap_skipped', { folder: target.accountId, detail: result.detail })
-    return done({ note: 'swap_failed' })
+    return done({ note: result.detail === 'candidate_busy' ? 'candidate_busy' : 'swap_failed' })
   }
   state.lastSwapAt = deps.now()
   state.lastSwapKind = kind

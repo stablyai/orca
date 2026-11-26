@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path'
 import { durableWriteTempPath, writeFileDurable } from '../../filesystem/durable-file-write'
 import type { ClaudeAccountRotationSwitch } from '../../../shared/agent-accounts/claude/claude-account-rotation'
 import { isRecord } from './claude-rotation-keychain'
+import type { RotationFolder } from './claude-rotation-login-meta'
 import type { RotationUsageRecord } from './claude-rotation-policy'
 
 export type RotationSwapKind = 'over' | 'prefer' | 'reset'
@@ -33,6 +34,9 @@ export type RotationJournal = {
   at: number
   a: string
   b: string
+  /** Kept here so a pending swap still finishes after Orca stops listing one of the folders. */
+  aFolder: RotationFolder
+  bFolder: RotationFolder
   step: RotationJournalStep
   reason: string
   kind: RotationSwapKind
@@ -40,6 +44,8 @@ export type RotationJournal = {
   toAccount: string | null
   aOldRefresh: string
   bOldRefresh: string
+  /** Orca's account records before the swap, as fingerprints. */
+  records?: { a: string | null; b: string | null }
   meta?: string
 }
 
@@ -81,6 +87,7 @@ function isUsageRecord(value: unknown): value is RotationUsageRecord {
     isRecord(value) &&
     typeof value.five === 'number' &&
     typeof value.week === 'number' &&
+    typeof value.weekNext === 'number' &&
     typeof value.checkedAt === 'number'
   )
 }
@@ -112,12 +119,24 @@ function isSwitch(value: unknown): value is ClaudeAccountRotationSwitch {
   )
 }
 
+function isFolder(value: unknown, accountId: unknown): value is RotationFolder {
+  return (
+    isRecord(value) &&
+    value.accountId === accountId &&
+    typeof value.home === 'string' &&
+    typeof value.service === 'string' &&
+    typeof value.stateFile === 'string'
+  )
+}
+
 function isJournal(value: unknown): value is RotationJournal {
   return (
     isRecord(value) &&
     typeof value.at === 'number' &&
     typeof value.a === 'string' &&
     typeof value.b === 'string' &&
+    isFolder(value.aFolder, value.a) &&
+    isFolder(value.bFolder, value.b) &&
     (value.step === 'begin' || value.step === 'a_written' || value.step === 'b_written') &&
     typeof value.aOldRefresh === 'string' &&
     typeof value.bOldRefresh === 'string'
@@ -156,9 +175,20 @@ export class RotationStateFiles {
     return writeOwnerOnly(this.statePath, `${JSON.stringify(state, null, 2)}\n`)
   }
 
+  /** Null when there is no journal, or one that cannot be read; see `journalExists`. */
   async loadJournal(): Promise<RotationJournal | null> {
     const raw = await readJson(this.journalPath)
     return isJournal(raw) ? raw : null
+  }
+
+  /** True for an unreadable journal too: its backups may hold the only copy of a login. */
+  async journalExists(): Promise<boolean> {
+    try {
+      await stat(this.journalPath)
+      return true
+    } catch (error) {
+      return !(error instanceof Error && 'code' in error && error.code === 'ENOENT')
+    }
   }
 
   saveJournal(journal: RotationJournal): Promise<void> {

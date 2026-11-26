@@ -36,15 +36,25 @@ function accountPrefix(value: unknown): string | null {
   return typeof value === 'string' && value ? value.slice(0, 8) : null
 }
 
+export type ClaudeAccountGuess = {
+  account: string | null
+  /** The server named the account (now or in the token cache); otherwise the folder's own claim. */
+  confirmed: boolean
+}
+
 /** The account a folder holds: the server's answer for a live token, else what the folder says. */
 export async function claudeAccountOf(
   state: RotationState,
   folder: RotationFolder,
   oauth: ClaudeAiOauth,
   deps: RotationCheckDeps
-): Promise<string | null> {
-  const guess =
-    accountPrefix(oauth.accountUuid) ?? accountPrefix((await readOauthAccount(folder)).accountUuid)
+): Promise<ClaudeAccountGuess> {
+  const guess = {
+    account:
+      accountPrefix(oauth.accountUuid) ??
+      accountPrefix((await readOauthAccount(folder)).accountUuid),
+    confirmed: false
+  }
   const token = accessTokenOf(oauth)
   const now = deps.now()
   if (!token || !accessUsable(oauth, now)) {
@@ -53,7 +63,7 @@ export async function claudeAccountOf(
   const key = tokenHash(token)
   const hit = state.tokens[key]
   if (hit?.account) {
-    return hit.account
+    return { account: hit.account, confirmed: true }
   }
   const who = await deps.whoami(token)
   if (!who) {
@@ -65,10 +75,14 @@ export async function claudeAccountOf(
     }
   }
   state.tokens[key] = { account: who, at: now }
-  if (guess && guess !== who) {
-    deps.files.log('account_mismatch', { folder: folder.accountId, written: guess, actual: who })
+  if (guess.account && guess.account !== who) {
+    deps.files.log('account_mismatch', {
+      folder: folder.accountId,
+      written: guess.account,
+      actual: who
+    })
   }
-  return who
+  return { account: who, confirmed: true }
 }
 
 export function recordUsage(
@@ -93,10 +107,16 @@ export async function rotationCandidates(args: {
   settings: ClaudeAccountRotationSettings
   deps: RotationCheckDeps
   only?: (account: string, stored: RotationUsageRecord | undefined) => boolean
-}): Promise<{ candidates: RotationCandidate[]; skipped: RotationSkip[] }> {
+}): Promise<{
+  candidates: RotationCandidate[]
+  skipped: RotationSkip[]
+  /** Refresh-token hash each candidate held when read, so a swap can tell if it changed since. */
+  refreshOf: Map<string, string>
+}> {
   const { target, sessions, state, settings, deps } = args
   const candidates: RotationCandidate[] = []
   const skipped: RotationSkip[] = []
+  const refreshOf = new Map<string, string>()
   for (const folder of args.folders) {
     if (folder.accountId === target.accountId) {
       continue
@@ -129,9 +149,17 @@ export async function rotationCandidates(args: {
       skip('login_expired')
       continue
     }
-    const account = await claudeAccountOf(state, folder, oauth, deps)
+    const { account, confirmed } = await claudeAccountOf(state, folder, oauth, deps)
     if (!account) {
       skip('account_unknown')
+      continue
+    }
+    const token = accessTokenOf(oauth)
+    const live = token !== null && accessUsable(oauth, now)
+    // A live token the server could not name may hold another account than the folder claims;
+    // its usage would be filed under the wrong one.
+    if (live && !confirmed) {
+      skip('account_unconfirmed')
       continue
     }
     if (account === args.targetAccount) {
@@ -149,13 +177,10 @@ export async function rotationCandidates(args: {
       continue
     }
     let usage: RotationUsage | null = null
-    let live = false
-    const token = accessTokenOf(oauth)
-    if (token && accessUsable(oauth, now)) {
+    if (live) {
       const read = await deps.fetchUsage(token)
       if (read.status === 'ok') {
         usage = read.usage
-        live = true
         recordUsage(state, account, usage, deps.now())
       }
     }
@@ -167,13 +192,14 @@ export async function rotationCandidates(args: {
       skip('also_near_limit')
       continue
     }
+    refreshOf.set(folder.accountId, tokenHash(oauth.refreshToken))
     candidates.push({
       accountId: folder.accountId,
       claudeAccount: account,
       known: usage !== null,
-      live,
+      live: live && usage !== null,
       usage
     })
   }
-  return { candidates: sortCandidates(candidates, settings, deps.now()), skipped }
+  return { candidates: sortCandidates(candidates, settings, deps.now()), skipped, refreshOf }
 }

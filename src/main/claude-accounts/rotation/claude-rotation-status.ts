@@ -10,7 +10,6 @@ import { readOauthAccount, type RotationFolder } from './claude-rotation-login-m
 import {
   effectiveUsage,
   overReasons,
-  preferRank,
   sortCandidates,
   type RotationCandidate
 } from './claude-rotation-policy'
@@ -41,7 +40,8 @@ export async function snapshotRotationFolders(
             ? 'active'
             : 'resting'
       snapshot.set(folder.accountId, {
-        claudeAccount: login === 'none' ? null : await claudeAccountOf(state, folder, oauth, deps),
+        claudeAccount:
+          login === 'none' ? null : (await claudeAccountOf(state, folder, oauth, deps)).account,
         login,
         sessions: count
       })
@@ -92,10 +92,7 @@ export async function buildRotationStatus(args: {
               weeklyResetsAt: usage.weekResetsAt,
               checkedAt: record.checkedAt
             }
-          : null,
-      preferred:
-        claudeAccount !== null &&
-        preferRank(rotation.preferredAccounts, claudeAccount) < rotation.preferredAccounts.length
+          : null
     })
   }
   const selected = folders.find((folder) => folder.selected)

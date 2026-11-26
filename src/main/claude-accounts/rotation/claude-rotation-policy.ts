@@ -31,21 +31,38 @@ export type RotationUsage = {
   /** The highest weekly window, model-scoped ones included. */
   week: number
   weekResetsAt: number | null
+  /** The other weekly window, which counts once the highest one resets. */
+  weekNext: number
+  weekNextResetsAt: number | null
   /** The all-models weekly reset, which orders accounts in 'reset' mode. */
   weekAllResetsAt: number | null
 }
 
 export type RotationUsageRecord = RotationUsage & { checkedAt: number }
 
+type WeekReading = { used: number; at: number | null }
+
+function byUseDescending(readings: WeekReading[]): [WeekReading, WeekReading] {
+  const [top = { used: 0, at: null }, next = { used: 0, at: null }] = [...readings].sort(
+    (a, b) => b.used - a.used
+  )
+  return [top, next]
+}
+
 export function rotationUsageFromRateLimits(limits: ProviderRateLimits): RotationUsage {
   const weekly = limits.weekly
-  const fable = limits.fableWeekly
-  const top = fable && (!weekly || fable.usedPercent > weekly.usedPercent) ? fable : weekly
+  const [top, next] = byUseDescending(
+    [weekly, limits.fableWeekly].flatMap((w) =>
+      w ? [{ used: w.usedPercent, at: w.resetsAt }] : []
+    )
+  )
   return {
     five: limits.session?.usedPercent ?? 0,
     fiveResetsAt: limits.session?.resetsAt ?? null,
-    week: top?.usedPercent ?? 0,
-    weekResetsAt: top?.resetsAt ?? null,
+    week: top.used,
+    weekResetsAt: top.at,
+    weekNext: next.used,
+    weekNextResetsAt: next.at,
     weekAllResetsAt: weekly?.resetsAt ?? null
   }
 }
@@ -72,16 +89,26 @@ export function describeOverReasons(reasons: RotationOverReason[]): string {
     .join(', ')
 }
 
-/** A stored reading counts as zero once its window has reset. */
+/** A stored reading counts as zero once its window has reset; each weekly window resets alone. */
 export function effectiveUsage(record: RotationUsageRecord, now: number): RotationUsage {
   const age = now - record.checkedAt
-  const fiveReset = record.fiveResetsAt !== null ? record.fiveResetsAt <= now : age > 5 * 3_600_000
-  const weekReset = record.weekResetsAt !== null ? record.weekResetsAt <= now : age > 7 * 86_400_000
+  const passed = (at: number | null, spanMs: number): boolean =>
+    at !== null ? at <= now : age > spanMs
+  const week = (used: number, at: number | null): WeekReading => ({
+    used: passed(at, 7 * 86_400_000) ? 0 : used,
+    at
+  })
+  const [top, next] = byUseDescending([
+    week(record.week, record.weekResetsAt),
+    week(record.weekNext, record.weekNextResetsAt)
+  ])
   return {
-    five: fiveReset ? 0 : record.five,
+    five: passed(record.fiveResetsAt, 5 * 3_600_000) ? 0 : record.five,
     fiveResetsAt: record.fiveResetsAt,
-    week: weekReset ? 0 : record.week,
-    weekResetsAt: record.weekResetsAt,
+    week: top.used,
+    weekResetsAt: top.at,
+    weekNext: next.used,
+    weekNextResetsAt: next.at,
     weekAllResetsAt: record.weekAllResetsAt
   }
 }
@@ -175,10 +202,11 @@ export function returnRule(
     const sooner = (at: number | null): boolean =>
       at !== null && (mine === null || at <= mine - RESET_MIN_LEAD_MS)
     return {
+      // An account never read yet may reset sooner, so it is asked about too.
       wants: (_, stored) =>
-        stored !== undefined &&
-        sooner(upcomingWeekReset(stored, now)) &&
-        overReasons(effectiveUsage(stored, now), settings).length === 0,
+        stored === undefined ||
+        (sooner(upcomingWeekReset(stored, now)) &&
+          overReasons(effectiveUsage(stored, now), settings).length === 0),
       choose: (sorted) =>
         sorted.find(
           (candidate) =>

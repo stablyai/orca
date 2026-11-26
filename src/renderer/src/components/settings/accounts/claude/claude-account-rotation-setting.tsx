@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   resolveClaudeAccountRotationSettings,
   type ClaudeAccountRotationSettings,
@@ -110,7 +110,10 @@ function PreferredAccountsRow({
               <div key={folder.accountId} className="flex items-center gap-2">
                 <Checkbox
                   id={id}
-                  checked={folder.preferred}
+                  // From the saved list, not the polled status, so a click shows at once.
+                  checked={rotation.preferredAccounts.some((entry) =>
+                    matchesAccount(entry, account)
+                  )}
                   onCheckedChange={(checked) => {
                     const rest = rotation.preferredAccounts.filter(
                       (entry) => !matchesAccount(entry, account)
@@ -139,11 +142,20 @@ export function ClaudeAccountRotationSetting({
   const status = useClaudeAccountRotationStatus(
     `${JSON.stringify(settings.claudeAccountRotation ?? null)}\0${settings.claudeManagedAccounts.length}`
   )
+  // The value of a save still in flight. Settings arrive back only once it lands, so a second
+  // change made before then (a threshold blur, then the switch) builds on this instead.
+  const pending = useRef<Partial<ClaudeAccountRotationSettings> | null>(null)
   if (!status?.supported) {
     return null
   }
   const save = (patch: Partial<ClaudeAccountRotationSettings>): void => {
-    void updateSettings({ claudeAccountRotation: { ...settings.claudeAccountRotation, ...patch } })
+    const next = { ...(pending.current ?? settings.claudeAccountRotation), ...patch }
+    pending.current = next
+    void Promise.resolve(updateSettings({ claudeAccountRotation: next })).finally(() => {
+      if (pending.current === next) {
+        pending.current = null
+      }
+    })
   }
   const title = t('accounts.claude.rotation.title', 'Switch accounts automatically near limits')
   const description = t(

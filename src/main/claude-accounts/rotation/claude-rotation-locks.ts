@@ -1,4 +1,4 @@
-import { mkdir, realpath, rmdir, utimes } from 'node:fs/promises'
+import { mkdir, realpath, rmdir, stat, utimes } from 'node:fs/promises'
 import { join } from 'node:path'
 
 async function realpathOrSelf(path: string): Promise<string> {
@@ -21,7 +21,24 @@ export async function claudeFileLockPath(file: string): Promise<string> {
 const defaultSleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms))
 
-/** Takes every lock or none; locks held by others are never removed. */
+/**
+ * A refresh holds the lock for seconds, and proper-lockfile holders also touch it every few
+ * seconds, so a lock untouched this long was left by a holder that quit.
+ */
+export const ABANDONED_LOCK_MS = 5 * 60_000
+
+/** Removes a lock left by a holder that quit. rmdir leaves a lock that holds files alone. */
+async function clearAbandoned(path: string, now: number): Promise<void> {
+  try {
+    if (now - (await stat(path)).mtimeMs >= ABANDONED_LOCK_MS) {
+      await rmdir(path)
+    }
+  } catch {
+    // Gone already, or not a lock this can remove.
+  }
+}
+
+/** Takes every lock or none; another holder's lock is removed only once abandoned. */
 export class RotationDirLock {
   private held: string[] = []
 
@@ -39,6 +56,8 @@ export class RotationDirLock {
           await mkdir(path)
           got.push(path)
         } catch {
+          // A removed lock is taken on the next try, like any free one, so a racing taker can win.
+          await clearAbandoned(path, Date.now())
           break
         }
       }

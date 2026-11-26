@@ -1,18 +1,18 @@
 import {
-  accessTokenOf,
-  accessUsable,
   hasRefreshToken,
   oauthOf,
   ROTATION_JOURNAL_SERVICE_A,
   ROTATION_JOURNAL_SERVICE_B,
   tokenHash,
   withOauth,
+  type ClaudeKeychainSlot,
   type RotationSlotStore
 } from './claude-rotation-keychain'
 import { claudeRefreshLockPaths, RotationDirLock } from './claude-rotation-locks'
 import {
   nudgeRunningSessions,
-  swapLoginMeta,
+  oauthAccountForBackup,
+  setLoginMeta,
   type RotationFolder
 } from './claude-rotation-login-meta'
 import { ROTATION_TIMING } from './claude-rotation-policy'
@@ -29,8 +29,11 @@ export type RotationSwapDeps = {
   whoami: (accessToken: string) => Promise<string | null>
   now: () => number
   sleep?: (ms: number) => Promise<void>
-  /** Called whenever two folders' account details trade places, so Orca's records can follow. */
-  onMetaSwapped?: (a: string, b: string) => void
+  /** Orca's records of the two folders' accounts, which follow the logins. */
+  records?: {
+    fingerprint: (accountId: string) => string | null
+    exchange: (a: string, b: string) => void
+  }
 }
 
 export type RotationSwapRequest = {
@@ -38,6 +41,15 @@ export type RotationSwapRequest = {
   kind: RotationSwapKind
   fromAccount: string | null
   toAccount: string | null
+}
+
+/** What the decision to swap was based on, checked again once the locks are held. */
+export type RotationSwapGuard = {
+  /** Hashes of the refresh tokens the decision saw in `a` and `b`. */
+  aRefresh: string
+  bRefresh: string
+  /** A reason to stop, or null to go on; runs under the locks, right before the first write. */
+  beforeWrite: () => Promise<string | null>
 }
 
 export type RotationSwapResult =
@@ -55,22 +67,66 @@ export async function refreshLock(
   return new RotationDirLock(paths, deps.sleep)
 }
 
-export async function swapMeta(
-  a: RotationFolder,
-  b: RotationFolder,
-  deps: RotationSwapDeps
-): Promise<string> {
-  const meta = await swapLoginMeta(a, b)
-  if (meta === 'ok') {
-    deps.onMetaSwapped?.(a.accountId, b.accountId)
-  }
-  return meta
-}
-
 export async function clearRotationJournal(deps: RotationSwapDeps): Promise<void> {
   await deps.slots.remove(ROTATION_JOURNAL_SERVICE_A)
   await deps.slots.remove(ROTATION_JOURNAL_SERVICE_B)
   await deps.files.removeJournal()
+}
+
+function backupOf(slot: ClaudeKeychainSlot, oauthAccount: unknown): ClaudeKeychainSlot {
+  return {
+    claudeAiOauth: oauthOf(slot),
+    ...(oauthAccount === undefined ? {} : { oauthAccount })
+  }
+}
+
+/** Exchanges Orca's records only from the arrangement opposite to `want`, so repeats are harmless. */
+function placeRecords(
+  journal: RotationJournal,
+  want: 'swapped' | 'original',
+  deps: RotationSwapDeps
+): void {
+  const saved = journal.records
+  if (!deps.records || !saved) {
+    return
+  }
+  const a = deps.records.fingerprint(journal.a)
+  const b = deps.records.fingerprint(journal.b)
+  const original = a === saved.a && b === saved.b
+  const swapped = a === saved.b && b === saved.a
+  if (want === 'swapped' ? original && !swapped : swapped && !original) {
+    deps.records.exchange(journal.a, journal.b)
+  }
+}
+
+/** Gives each folder the account details of the login it holds: swapped, or back as they were. */
+export async function placeLoginMeta(
+  journal: RotationJournal,
+  want: 'swapped' | 'original',
+  deps: RotationSwapDeps
+): Promise<string> {
+  let backupA: ClaudeKeychainSlot | null
+  let backupB: ClaudeKeychainSlot | null
+  try {
+    backupA = await deps.slots.read(ROTATION_JOURNAL_SERVICE_A)
+    backupB = await deps.slots.read(ROTATION_JOURNAL_SERVICE_B)
+  } catch {
+    return 'keychain_unavailable'
+  }
+  if (!backupA || !backupB) {
+    return 'backup_missing'
+  }
+  const swapped = want === 'swapped'
+  const meta = await setLoginMeta(
+    journal.aFolder,
+    journal.bFolder,
+    swapped ? backupB.oauthAccount : backupA.oauthAccount,
+    swapped ? backupA.oauthAccount : backupB.oauthAccount
+  )
+  if (meta === 'ok') {
+    placeRecords(journal, want, deps)
+  }
+  return meta
 }
 
 /** Gives `a` the login of `b` and `b` the login of `a`; only `claudeAiOauth` moves. */
@@ -78,9 +134,11 @@ export async function swapFolderLogins(
   a: RotationFolder,
   b: RotationFolder,
   request: RotationSwapRequest,
-  deps: RotationSwapDeps
+  deps: RotationSwapDeps,
+  guard?: RotationSwapGuard
 ): Promise<RotationSwapResult> {
-  if (await deps.files.loadJournal()) {
+  // An unreadable journal blocks too: overwriting it would drop the only copy of a login.
+  if (await deps.files.journalExists()) {
     return { ok: false, detail: 'previous_swap_unverified' }
   }
   const lock = await refreshLock(deps, a, b)
@@ -97,14 +155,36 @@ export async function swapFolderLogins(
     if (!slotA || !slotB || !hasRefreshToken(oauthA) || !hasRefreshToken(oauthB)) {
       return { ok: false, detail: 'missing_login' }
     }
+    const aOldRefresh = tokenHash(oauthA.refreshToken)
+    const bOldRefresh = tokenHash(oauthB.refreshToken)
+    if (guard && (aOldRefresh !== guard.aRefresh || bOldRefresh !== guard.bRefresh)) {
+      return { ok: false, detail: 'login_changed' }
+    }
     const nextA = withOauth(slotA, oauthB)
     const nextB = withOauth(slotB, oauthA)
-    if (!deps.slots.fits(a.service, nextA) || !deps.slots.fits(b.service, nextB)) {
+    let backupA: ClaudeKeychainSlot
+    let backupB: ClaudeKeychainSlot
+    try {
+      backupA = backupOf(slotA, await oauthAccountForBackup(a))
+      backupB = backupOf(slotB, await oauthAccountForBackup(b))
+    } catch {
+      return { ok: false, detail: 'meta_unreadable' }
+    }
+    const fits =
+      deps.slots.fits(a.service, nextA) &&
+      deps.slots.fits(b.service, nextB) &&
+      deps.slots.fits(ROTATION_JOURNAL_SERVICE_A, backupA) &&
+      deps.slots.fits(ROTATION_JOURNAL_SERVICE_B, backupB)
+    if (!fits) {
       return { ok: false, detail: 'slot_too_large' }
     }
+    const blocked = await guard?.beforeWrite()
+    if (blocked) {
+      return { ok: false, detail: blocked }
+    }
     const backedUp =
-      (await deps.slots.write(ROTATION_JOURNAL_SERVICE_A, { claudeAiOauth: oauthA })) &&
-      (await deps.slots.write(ROTATION_JOURNAL_SERVICE_B, { claudeAiOauth: oauthB }))
+      (await deps.slots.write(ROTATION_JOURNAL_SERVICE_A, backupA)) &&
+      (await deps.slots.write(ROTATION_JOURNAL_SERVICE_B, backupB))
     if (!backedUp) {
       await clearRotationJournal(deps)
       return { ok: false, detail: 'backup_failed' }
@@ -113,10 +193,16 @@ export async function swapFolderLogins(
       at: deps.now(),
       a: a.accountId,
       b: b.accountId,
+      aFolder: a,
+      bFolder: b,
       step: 'begin',
       ...request,
-      aOldRefresh: tokenHash(oauthA.refreshToken),
-      bOldRefresh: tokenHash(oauthB.refreshToken)
+      aOldRefresh,
+      bOldRefresh,
+      records: deps.records && {
+        a: deps.records.fingerprint(a.accountId),
+        b: deps.records.fingerprint(b.accountId)
+      }
     }
     await deps.files.saveJournal(journal)
     wrote = true
@@ -157,77 +243,7 @@ export async function swapFolderLogins(
       await nudgeRunningSessions(a, b)
     }
   }
-  journal.meta = await swapMeta(a, b, deps)
+  journal.meta = await placeLoginMeta(journal, 'swapped', deps)
   await deps.files.saveJournal(journal)
   return { ok: true, journal }
-}
-
-/** Finishes or cancels a swap cut off between its two writes. Null when none is pending. */
-export async function recoverInterruptedSwap(
-  folders: Map<string, RotationFolder>,
-  deps: RotationSwapDeps
-): Promise<string | null> {
-  const journal = await deps.files.loadJournal()
-  if (!journal || (journal.step !== 'begin' && journal.step !== 'a_written')) {
-    return null
-  }
-  const a = folders.get(journal.a)
-  const b = folders.get(journal.b)
-  if (!a || !b) {
-    return 'folder_missing'
-  }
-  const lock = await refreshLock(deps, a, b)
-  if (!(await lock.acquire(ROTATION_TIMING.lockWaitMs))) {
-    return 'refresh_in_progress'
-  }
-  let result: string
-  try {
-    const slotB = await deps.slots.read(b.service)
-    const oauthA = oauthOf(await deps.slots.read(a.service))
-    const hashA = tokenHash(oauthA.refreshToken)
-    if (tokenHash(oauthOf(slotB).refreshToken) !== journal.bOldRefresh) {
-      result = 'already_finished'
-    } else if (hashA === journal.aOldRefresh) {
-      await clearRotationJournal(deps)
-      deps.files.log('recover', { result: 'nothing_written' })
-      return 'nothing_written'
-    } else {
-      // Slot a changed: either the swap wrote it, or Claude refreshed the original login.
-      let written = hashA === journal.bOldRefresh
-      const token = accessTokenOf(oauthA)
-      if (!written && token && accessUsable(oauthA, deps.now())) {
-        const who = await deps.whoami(token)
-        if (who !== null && who === journal.fromAccount) {
-          await clearRotationJournal(deps)
-          deps.files.log('recover', { result: 'original_refreshed' })
-          return 'original_refreshed'
-        }
-        written = who !== null && who === journal.toAccount
-      }
-      if (!written) {
-        return 'undecided'
-      }
-      const saved = oauthOf(await deps.slots.read(ROTATION_JOURNAL_SERVICE_A))
-      if (!hasRefreshToken(saved)) {
-        return 'backup_missing'
-      }
-      if (!(await deps.slots.write(b.service, withOauth(slotB, saved)))) {
-        return 'second_write_failed'
-      }
-      result = 'finished'
-    }
-    journal.step = 'b_written'
-    await deps.files.saveJournal(journal)
-  } catch {
-    return 'keychain_unavailable'
-  } finally {
-    await lock.release()
-  }
-  if (journal.meta === undefined) {
-    journal.meta = await swapMeta(a, b, deps)
-    await deps.files.saveJournal(journal)
-  }
-  await nudgeRunningSessions(a, b)
-  deps.files.log('recover', { result })
-  return result
 }

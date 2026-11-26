@@ -18,8 +18,7 @@ const folders: ClaudeAccountRotationFolder[] = [
     selected: true,
     sessions: 3,
     login: 'active',
-    usage: { fiveHourPercent: 12, weeklyPercent: 61, weeklyResetsAt: null, checkedAt: SWITCHED_AT },
-    preferred: true
+    usage: { fiveHourPercent: 12, weeklyPercent: 61, weeklyResetsAt: null, checkedAt: SWITCHED_AT }
   },
   {
     accountId: 'dev',
@@ -28,8 +27,7 @@ const folders: ClaudeAccountRotationFolder[] = [
     selected: false,
     sessions: 0,
     login: 'resting',
-    usage: { fiveHourPercent: 4, weeklyPercent: 22, weeklyResetsAt: null, checkedAt: SWITCHED_AT },
-    preferred: false
+    usage: { fiveHourPercent: 4, weeklyPercent: 22, weeklyResetsAt: null, checkedAt: SWITCHED_AT }
   },
   {
     accountId: 'side',
@@ -38,8 +36,7 @@ const folders: ClaudeAccountRotationFolder[] = [
     selected: false,
     sessions: 1,
     login: 'active',
-    usage: { fiveHourPercent: 97, weeklyPercent: 88, weeklyResetsAt: null, checkedAt: SWITCHED_AT },
-    preferred: false
+    usage: { fiveHourPercent: 97, weeklyPercent: 88, weeklyResetsAt: null, checkedAt: SWITCHED_AT }
   }
 ]
 

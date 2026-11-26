@@ -72,7 +72,6 @@ export type ClaudeAccountRotationFolder = {
   /** 'resting': the access token expired and waits for a Claude session to refresh it. */
   login: 'none' | 'active' | 'resting' | 'unknown'
   usage: ClaudeAccountRotationUsage | null
-  preferred: boolean
 }
 
 export type ClaudeAccountRotationLimit = { window: 'five-hour' | 'weekly'; percent: number }
