@@ -1,3 +1,7 @@
+import {
+  getAppEnvironment,
+  hasAppEnvironment
+} from '../../../../shared/app-lifecycle/app-environment'
 import { removeChromiumDisabledSessionBus } from '../../../pty/shell-startup/chromium-session-bus-env'
 
 // Allowlist worker environment to exclude shell/CI credentials from third-party code.
@@ -31,12 +35,17 @@ const WORKER_ENV_ALLOWLIST = [
   'NUMBER_OF_PROCESSORS',
   // Windows profile folders (paths, not credentials): the `orca` CLI finds the running app under %APPDATA%.
   'APPDATA',
-  'LOCALAPPDATA'
+  'LOCALAPPDATA',
+  // The profile Orca runs from (a path, not a credential), so a worker's `orca` CLI reaches this app.
+  'ORCA_USER_DATA_PATH'
 ] as const
 
 export function buildPluginWorkerEnv(
   baseEnv: NodeJS.ProcessEnv = process.env,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  userDataPath: string | undefined = hasAppEnvironment()
+    ? getAppEnvironment().getPath('userData')
+    : undefined
 ): Record<string, string> {
   const env: Record<string, string> = {}
   const windowsLookup = new Map<string, string>()
@@ -53,6 +62,9 @@ export function buildPluginWorkerEnv(
     if (value !== undefined) {
       env[key === 'SYSTEMROOT' ? 'SystemRoot' : key] = value
     }
+  }
+  if (userDataPath) {
+    env.ORCA_USER_DATA_PATH = userDataPath
   }
   removeChromiumDisabledSessionBus(env)
   // Workers have no terminal; a git credential prompt would hang or grab the launching terminal.

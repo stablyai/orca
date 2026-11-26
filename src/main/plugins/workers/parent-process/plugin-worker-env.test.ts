@@ -85,4 +85,14 @@ describe('buildPluginWorkerEnv', () => {
     expect(env.APPDATA).toBe('C:\\Users\\ada\\AppData\\Roaming')
     expect(env.LOCALAPPDATA).toBe('C:\\Users\\ada\\AppData\\Local')
   })
+
+  it("points a worker's orca CLI at the profile Orca runs from", () => {
+    expect(buildPluginWorkerEnv(sessionEnv, 'linux', '/home/ada/.config/orca-dev')).toMatchObject({
+      ORCA_USER_DATA_PATH: '/home/ada/.config/orca-dev'
+    })
+    expect(
+      buildPluginWorkerEnv({ ...sessionEnv, ORCA_USER_DATA_PATH: '/tmp/profile' }, 'linux')
+        .ORCA_USER_DATA_PATH
+    ).toBe('/tmp/profile')
+  })
 })
