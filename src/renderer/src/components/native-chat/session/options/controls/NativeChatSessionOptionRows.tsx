@@ -216,7 +216,10 @@ function OptionRow(props: {
         id={labelId}
         className={cn(
           'text-xs text-muted-foreground',
-          layout === 'inline' && descriptor.category === 'thought_level' && 'sr-only'
+          // Inline, levels and sizes name themselves; the label stays for screen readers.
+          layout === 'inline' &&
+            (descriptor.category === 'thought_level' || descriptor.category === 'model_config') &&
+            'sr-only'
         )}
       >
         {label}

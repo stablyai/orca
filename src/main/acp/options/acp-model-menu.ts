@@ -4,6 +4,7 @@ import type { AgentSessionOptionChoice } from '../../../shared/agent-session/age
 import type { AgentSessionModelOption } from '../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import type { AgentSessionOptionsResult } from '../../../shared/agent-session/options/protocol/agent-session-options-result'
 import type { SessionConfigOption, SessionModelState } from '../generated/acp-protocol.generated'
+import type { AcpOptionWrite } from './acp-structured-options'
 
 type SelectOption = Extract<SessionConfigOption, { type: 'select' }>
 
@@ -70,6 +71,40 @@ export function withFastModeOption<T extends Pick<AgentSessionOptionsResult, 'mo
       ...menu.current,
       fastMode: fast.currentValue === 'true',
       confirmed: [...(menu.current.confirmed ?? []), 'fastMode']
+    }
+  }
+}
+
+/** Only a size the running model lists; another model's pick is never sent. */
+export function acpContextWindowWrite(
+  option: SelectOption | null,
+  value: string
+): AcpOptionWrite | null {
+  return option && acpSelectChoices(option).some((choice) => choice.value === value)
+    ? { method: 'config', configId: option.id, value }
+    : null
+}
+
+/** The agent's context-window select as Orca's choice, for the running model only. */
+export function withContextWindowOption<
+  T extends Pick<AgentSessionOptionsResult, 'models' | 'current'>
+>(menu: T, option: SelectOption | null): T {
+  if (!option) {
+    return menu
+  }
+  const contextWindows = acpSelectChoices(option).map((choice) => ({
+    value: choice.value,
+    label: choice.name
+  }))
+  return {
+    ...menu,
+    models: menu.models.map((model) =>
+      model.id === menu.current.model ? { ...model, contextWindows } : model
+    ),
+    current: {
+      ...menu.current,
+      contextWindow: option.currentValue,
+      confirmed: [...(menu.current.confirmed ?? []), 'contextWindow']
     }
   }
 }

@@ -84,8 +84,27 @@ export function confirmedCurrentOptions(
   confirmed = reported.confirmed
 ): AgentSessionOptionsResult['current']['confirmed'] {
   return confirmed?.filter((key) =>
-    key === 'model' || key === 'effort' || key === 'fastMode' || key === 'serviceTier'
+    key === 'model' ||
+    key === 'effort' ||
+    key === 'fastMode' ||
+    key === 'contextWindow' ||
+    key === 'serviceTier'
       ? current[key] === reported[key]
       : false
   )
+}
+
+/** A saved size stays unless the model's listed sizes leave it out; then the model runs its own. */
+export function currentContextWindow(
+  saved: string | undefined,
+  options: Pick<AgentSessionOptionsResult, 'models' | 'current'>,
+  model: string | undefined
+): string | undefined {
+  const row = options.models.find((entry) => entry.id === model)
+  return saved !== undefined &&
+    (row === undefined || row.contextWindows?.some((size) => size.value === saved))
+    ? saved
+    : model === options.current.model
+      ? options.current.contextWindow
+      : undefined
 }

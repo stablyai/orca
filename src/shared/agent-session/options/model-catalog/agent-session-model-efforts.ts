@@ -38,6 +38,14 @@ export function fillUnknownModelEfforts(
         : {}),
       ...(rest.defaultFastMode === undefined && discovered.defaultFastMode !== undefined
         ? { defaultFastMode: discovered.defaultFastMode }
+        : {}),
+      ...(rest.contextWindows === undefined && discovered.contextWindows
+        ? {
+            contextWindows: discovered.contextWindows,
+            ...(discovered.defaultContextWindow !== undefined
+              ? { defaultContextWindow: discovered.defaultContextWindow }
+              : {})
+          }
         : {})
     }
   })

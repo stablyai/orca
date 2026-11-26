@@ -56,6 +56,7 @@ export const STRUCTURED_LAUNCH_SEED_OPTION_IDS = [
   'model',
   'effort',
   'fastMode',
+  'contextWindow',
   'serviceTier'
 ] as const
 

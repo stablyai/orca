@@ -50,6 +50,9 @@ export function mergedAgentModelCatalogModels(
     const defaultEffort = [configuredEffort, listed?.defaultEffort, reported?.defaultEffort].find(
       (effort) => effort !== undefined && efforts.some((choice) => choice.value === effort)
     )
+    // A live menu lists sizes for its running model only; the listing's default must still be offered.
+    const contextWindows = model.contextWindows ?? olderModel?.contextWindows
+    const defaultContextWindow = model.defaultContextWindow ?? olderModel?.defaultContextWindow
     const observation = [model, olderModel].find(
       (row) => row?.declaredDefaultEffort !== undefined
     )?.declaredDefaultEffort
@@ -58,6 +61,7 @@ export function mergedAgentModelCatalogModels(
       declaredDefaultEffort: _declaration,
       effortsKnown: _known,
       chatEfforts: _newerChatEfforts,
+      defaultContextWindow: _ownSize,
       ...rest
     } = model
     return {
@@ -79,6 +83,11 @@ export function mergedAgentModelCatalogModels(
         : {}),
       ...(model.defaultFastMode === undefined && olderModel?.defaultFastMode !== undefined
         ? { defaultFastMode: olderModel.defaultFastMode }
+        : {}),
+      ...(contextWindows ? { contextWindows } : {}),
+      ...(defaultContextWindow &&
+      contextWindows?.some((size) => size.value === defaultContextWindow)
+        ? { defaultContextWindow }
         : {}),
       ...(observation !== undefined
         ? {

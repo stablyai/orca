@@ -190,6 +190,7 @@ export function applyStructuredAgentSessionOptions(
       ...(current.model ? { model: current.model } : {}),
       ...(!policyEffort && current.effort ? { effort: current.effort } : {}),
       ...(current.fastMode !== undefined ? { fastMode: current.fastMode } : {}),
+      ...(current.contextWindow ? { contextWindow: current.contextWindow } : {}),
       ...(current.serviceTier ? { serviceTier: current.serviceTier } : {}),
       ...(current.interactionMode ? { interactionMode: current.interactionMode } : {})
     },

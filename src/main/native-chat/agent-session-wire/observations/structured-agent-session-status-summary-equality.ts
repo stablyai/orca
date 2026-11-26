@@ -38,6 +38,7 @@ export function structuredStatusSummariesEqual(
     (a.runtimePermission === undefined) === (b.runtimePermission === undefined) &&
     a.effort === b.effort &&
     a.fastMode === b.fastMode &&
+    a.contextWindow === b.contextWindow &&
     a.serviceTier === b.serviceTier &&
     a.interactionMode === b.interactionMode &&
     a.toolName === b.toolName &&

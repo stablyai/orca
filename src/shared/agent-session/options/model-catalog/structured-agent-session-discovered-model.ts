@@ -38,6 +38,27 @@ function effortOption(
   }
 }
 
+function contextWindowOption(
+  model: AgentSessionOptionsResult['models'][number]
+): CatalogOption | null {
+  const sizes = model.contextWindows
+  if (!sizes?.length) {
+    return null
+  }
+  return {
+    id: 'contextWindow',
+    label: 'Context window',
+    category: 'model_config',
+    kind: {
+      type: 'select',
+      choices: sizes,
+      defaultValue: model.defaultContextWindow ?? sizes[0]!.value,
+      ...(model.defaultContextWindow ? { defaultIsCliDefault: true as const } : {})
+    },
+    apply: {}
+  }
+}
+
 function fastModeOption(defaultValue: boolean): CatalogOption {
   return {
     id: 'fastMode',
@@ -76,6 +97,7 @@ export function discoveredModel(
   agent: AgentType
 ): CatalogModel {
   const effort = effortOption(model, agent)
+  const contextWindow = contextWindowOption(model)
   const serviceTier = model.serviceTiers?.length ? serviceTierOption(model.serviceTiers) : null
   return {
     ...(usesModelSpecificAcpEfforts(agent) && model.effortsKnown === false
@@ -92,6 +114,7 @@ export function discoveredModel(
     ...(model.supportsAutoMode !== undefined ? { supportsAutoMode: model.supportsAutoMode } : {}),
     options: [
       ...(effort ? [effort] : []),
+      ...(contextWindow ? [contextWindow] : []),
       ...(serviceTier
         ? [serviceTier]
         : sessionSupportsFastMode && model.supportsFastMode === true

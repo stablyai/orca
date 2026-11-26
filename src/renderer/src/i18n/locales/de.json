@@ -19804,6 +19804,7 @@
         "model": "Modell",
         "effort": "Denkaufwand",
         "fastMode": "Schnellmodus",
+        "contextWindow": "Kontextfenster",
         "speed": "Geschwindigkeit",
         "thinking": "Nachdenken",
         "sessionOptions": "Sitzungsoptionen",

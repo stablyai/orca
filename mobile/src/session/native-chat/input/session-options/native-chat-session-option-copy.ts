@@ -9,6 +9,8 @@ export const sayMobileNativeChatSessionOption: NativeChatSessionOptionSay = (id,
       return translate('chat.sessionOptionCopy.effort', 'Effort')
     case 'fastMode':
       return translate('chat.sessionOptionCopy.fastMode', 'Fast mode')
+    case 'contextWindow':
+      return translate('chat.sessionOptionCopy.contextWindow', 'Context window')
     case 'speed':
       return translate('chat.sessionOptionCopy.speed', 'Speed')
     case 'thinking':
