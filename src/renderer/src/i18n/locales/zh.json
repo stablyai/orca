@@ -14594,7 +14594,6 @@
             "476b77745b": "更改基础参考",
             "ed34038d0d": "刷新分支比较",
             "493f963029": "更改基本参考",
-            "11b5dd8e41": "比较",
             "a9bf7c171a": "提交失败",
             "011f9713fc": "提交被阻止",
             "cc199ccc5f": "更多提交和远程操作",
@@ -14738,7 +14737,6 @@
             "c8e4a1f902": "筛选器：{{value0}}",
             "b3c8f1a902": "按文件名筛选",
             "d4f8c2a901": "清除并关闭筛选器",
-            "e8a1c4b203": "vs",
             "4b4a7de138": "在浏览器中打开审查页面",
             "createPrIntentCommitBlockedSummary": "提交被阻止：{{value0}} 修复问题后重试创建 PR",
             "pushRecovery": {
@@ -14759,7 +14757,6 @@
             "97e7124eac": "无法刷新源代码管理，请重试！",
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "当前分支：{{value0}}",
-            "c7d4e2f801": "更改基引用：{{value0}}",
             "createPrIntentGenerateDetailsFailed": "无法生成评审详情，请重试创建 PR",
             "entryStageFailed": "暂存“{{value0}}”失败",
             "entryUnstageFailed": "取消暂存“{{value0}}”失败",
@@ -14798,9 +14795,6 @@
             "keepDeletion": "保留删除",
             "refreshAll": "全部刷新",
             "statusReadFailed": "Git 无法读取此工作区，显示的更改可能不是最新的",
-            "baseUpToDate": "已是最新",
-            "rebaseOperationInProgress": "请等待当前 Git 操作完成",
-            "rebaseButton": "变基",
             "rebaseConflictCount_other": "{{count}} 个冲突",
             "rebasePaused": "变基已暂停",
             "rebaseResolveConflictsFirst": "请先解决冲突",
@@ -14829,9 +14823,7 @@
             "scopeUncommitted": "未提交",
             "scopeAllChanges": "所有更改",
             "scopeNone": "无",
-            "scopeOpenDiff": "打开差异",
             "scopeShowAll": "显示所有更改",
-            "scopeLoadingBranchChanges": "正在加载分支更改…",
             "scopeBranchCommits": "此分支上的提交",
             "scopeRecentCommits": "最近提交",
             "scopeCompareTo": "与 {{ref}} 比较",
@@ -14848,7 +14840,8 @@
             "scopeOlderHistory": "在 Git Graph 中查看更早的历史",
             "scopeNoUncommitted": "没有未提交的更改。",
             "scopeCommitFiles": "文件",
-            "gitGraphButton": "图谱"
+            "gitGraphButton": "图谱",
+            "compareLoadingAgainst": "正在与 {{base}} 比较"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的代理",

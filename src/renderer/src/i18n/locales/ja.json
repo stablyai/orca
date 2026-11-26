@@ -13933,7 +13933,6 @@
             "476b77745b": "ベース参照の変更",
             "ed34038d0d": "ブランチ比較をリフレッシュ",
             "493f963029": "ベース参照を変更する",
-            "11b5dd8e41": "と比較する",
             "a9bf7c171a": "コミット失敗",
             "011f9713fc": "コミットがブロックされました",
             "cc199ccc5f": "コミットおよびリモート操作",
@@ -14077,7 +14076,6 @@
             "c8e4a1f902": "フィルター: {{value0}}",
             "b3c8f1a902": "ファイル名でフィルター",
             "d4f8c2a901": "フィルターをクリアして閉じる",
-            "e8a1c4b203": "vs",
             "4b4a7de138": "ブラウザでレビューページを開く",
             "createPrIntentCommitBlockedSummary": "コミットがブロックされました：{{value0}} Issue を修正して、PR 作成を再試行してください。",
             "pushRecovery": {
@@ -14098,7 +14096,6 @@
             "97e7124eac": "ソース管理を更新できませんでした。もう一度お試しください。",
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "現在のブランチ: {{value0}}",
-            "c7d4e2f801": "ベース ref を変更: {{value0}}",
             "createPrIntentGenerateDetailsFailed": "レビューの詳細を生成できませんでした。PR の作成を再試行してください。",
             "entryStageFailed": "「{{value0}}」のステージに失敗しました",
             "entryUnstageFailed": "「{{value0}}」のステージを解除できませんでした",
@@ -14137,9 +14134,6 @@
             "keepFile": "ファイルを残す",
             "keepDeletion": "削除を維持",
             "refreshAll": "すべて更新",
-            "baseUpToDate": "最新です",
-            "rebaseOperationInProgress": "現在の Git 操作が終わるまでお待ちください",
-            "rebaseButton": "リベース",
             "rebaseConflictCount_other": "{{count}} 件の競合",
             "rebasePaused": "リベースを一時停止中",
             "rebaseResolveConflictsFirst": "先に競合を解決してください",
@@ -14168,9 +14162,7 @@
             "scopeUncommitted": "未コミット",
             "scopeAllChanges": "すべての変更",
             "scopeNone": "なし",
-            "scopeOpenDiff": "差分を開く",
             "scopeShowAll": "すべての変更を表示",
-            "scopeLoadingBranchChanges": "ブランチの変更を読み込み中…",
             "scopeBranchCommits": "このブランチのコミット",
             "scopeRecentCommits": "最近のコミット",
             "scopeCompareTo": "{{ref}} と比較",
@@ -14187,7 +14179,8 @@
             "scopeOlderHistory": "Git Graph で以前の履歴を表示",
             "scopeNoUncommitted": "未コミットの変更はありません。",
             "scopeCommitFiles": "ファイル",
-            "gitGraphButton": "グラフ"
+            "gitGraphButton": "グラフ",
+            "compareLoadingAgainst": "{{base}} と比較中"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した Agent を開始できませんでした。",

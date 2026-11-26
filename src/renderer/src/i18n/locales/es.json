@@ -13545,7 +13545,6 @@
             "476b77745b": "Cambiar referencia base",
             "ed34038d0d": "Actualizar comparación de ramas",
             "493f963029": "Cambiar ref base",
-            "11b5dd8e41": "Comparando contra",
             "a9bf7c171a": "Falló el commit",
             "011f9713fc": "Commit bloqueado",
             "cc199ccc5f": "Más commits y acciones remotas",
@@ -13689,7 +13688,6 @@
             "c8e4a1f902": "Filtro: {{value0}}",
             "b3c8f1a902": "Filtrar archivos por nombre",
             "d4f8c2a901": "Limpiar y cerrar filtro",
-            "e8a1c4b203": "vs",
             "4b4a7de138": "Abrir página de revisión en el navegador",
             "createPrIntentCommitBlockedSummary": "Commit bloqueado: {{value0}} Corrige el issue y reintenta crear PR.",
             "pushRecovery": {
@@ -13710,7 +13708,6 @@
             "97e7124eac": "No se pudo actualizar el control de código fuente. Vuelve a intentarlo.",
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "Rama actual: {{value0}}",
-            "c7d4e2f801": "Cambiar ref base: {{value0}}",
             "createPrIntentGenerateDetailsFailed": "No se pudieron generar los detalles de revisión. Reintentar Crear PR.",
             "entryStageFailed": "No se pudo preparar \"{{value0}}\"",
             "entryUnstageFailed": "No se pudo eliminar la etapa \"{{value0}}\"",
@@ -13767,9 +13764,6 @@
             "keepFile": "Conservar archivo",
             "keepDeletion": "Mantener eliminación",
             "refreshAll": "Actualizar todo",
-            "baseUpToDate": "Actualizado",
-            "rebaseOperationInProgress": "Espera a que termine la operación de Git actual",
-            "rebaseButton": "Rebase",
             "rebaseConflictCount_one": "{{count}} conflicto",
             "rebaseConflictCount_other": "{{count}} conflictos",
             "rebaseConflictCount_many": "{{count}} conflictos",
@@ -13802,9 +13796,7 @@
             "scopeUncommitted": "Sin confirmar",
             "scopeAllChanges": "Todos los cambios",
             "scopeNone": "Ninguno",
-            "scopeOpenDiff": "Abrir diff",
             "scopeShowAll": "Mostrar todos los cambios",
-            "scopeLoadingBranchChanges": "Cargando cambios de la rama…",
             "scopeBranchCommits": "Commits de esta rama",
             "scopeRecentCommits": "Commits recientes",
             "scopeCompareTo": "Comparar con {{ref}}",
@@ -13821,7 +13813,8 @@
             "scopeOlderHistory": "Historial anterior en Git Graph",
             "scopeNoUncommitted": "No hay cambios sin confirmar.",
             "scopeCommitFiles": "Archivos",
-            "gitGraphButton": "Grafo"
+            "gitGraphButton": "Grafo",
+            "compareLoadingAgainst": "Comparando con {{base}}"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "No se pudo iniciar el agente seleccionado.",
