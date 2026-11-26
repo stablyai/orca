@@ -3,6 +3,7 @@ import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-se
 import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { AgentSessionProcessIdentity } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { readProcessStartTimeMs } from '../../../runtime/agent-session/ownership/agent-session-process-identity-probe'
+import type { ClaudeSession } from '../claude-structured-session-state'
 
 export function claudeProviderHandleLink(input: {
   sessionId: string
@@ -25,6 +26,18 @@ export function claudeProviderHandleLink(input: {
     observedAt: input.observedAt,
     ...(input.forkedFromKey ? { forkedFromKey: input.forkedFromKey } : {})
   }
+}
+
+/** This acquisition's root is alive, which proves its lease without a PID probe. */
+export function claudeHoldsLiveProcess(
+  session: Pick<ClaudeSession, 'acquisitionGeneration' | 'connection'> | undefined,
+  acquisitionGeneration: string
+): boolean {
+  return (
+    session?.acquisitionGeneration === acquisitionGeneration &&
+    session.connection.pid !== undefined &&
+    session.connection.exitVerdict.root === 'live'
+  )
 }
 
 const START_TIME_READ_ATTEMPTS = 3

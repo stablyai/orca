@@ -123,7 +123,12 @@ export async function resolveClaudeAcquisitionLaunch(args: {
     return {
       ...launch,
       options: sdkOptions,
-      savedOptions: { ...savedOptions, cliFlag: launch.cliFlag, flagSettingsControl }
+      savedOptions: {
+        ...savedOptions,
+        cliFlag: launch.cliFlag,
+        cliVersion: launch.cliVersion,
+        flagSettingsControl
+      }
     }
   })
 }

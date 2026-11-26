@@ -3,6 +3,7 @@
 
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
 import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
+import type { AgentSessionProviderUpdate } from '../../../../shared/agent-session/agent-session-wire'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession,
@@ -31,6 +32,7 @@ const childRuns = new WeakMap<
     owed?: StructuredAgentSessionHandedOptions
     permission?: string | null
     fallbackModel?: string
+    providerUpdate?: AgentSessionProviderUpdate | null
   }
 >()
 
@@ -44,6 +46,22 @@ export function structuredAgentSessionRuntimeFallbackModel(
   child: StructuredAgentSessionProviderChild
 ): string | undefined {
   return child.phase === 'ready' ? childRuns.get(child)?.fallbackModel : undefined
+}
+
+/** Scoped to the child, so a restart into the installed agent clears it. */
+export function structuredAgentSessionRuntimeProviderUpdate(
+  child: StructuredAgentSessionProviderChild
+): AgentSessionProviderUpdate | undefined {
+  return (child.phase === 'ready' && childRuns.get(child)?.providerUpdate) || undefined
+}
+
+export function noteStructuredAgentSessionProviderUpdate(
+  child: StructuredAgentSessionProviderChild,
+  update: AgentSessionProviderUpdate | null | undefined
+): void {
+  if (update !== undefined) {
+    childRuns.set(child, { ...childRuns.get(child), providerUpdate: update })
+  }
 }
 
 /** The current child's startup report or applied evidence; never saved intent or send authority. */

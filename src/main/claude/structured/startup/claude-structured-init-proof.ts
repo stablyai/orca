@@ -9,6 +9,8 @@ export type ClaudeInitObservation = {
   uuid: string | null
   /** Only `system/init` reports the running model. */
   model: string | null
+  /** The running CLI's own version, from `system/init`. */
+  version: string | null
   message: Record<string, unknown>
 }
 
@@ -37,6 +39,7 @@ export function readClaudeInit(message: Record<string, unknown>): ClaudeInitObse
         providerSessionId,
         uuid: isInit ? readClaudeFrameString(message, 'uuid') : null,
         model: isInit ? readClaudeFrameString(message, 'model') : null,
+        version: isInit ? readClaudeFrameString(message, 'claude_code_version') : null,
         message
       }
     : null
@@ -179,6 +182,8 @@ export type ClaudeInitProof = {
   refuse: () => void
   /** The proof seen so far, or null; throws when it was refused or the child failed first. */
   seen: () => ClaudeInitObservation | null
+  /** The newest CLI version any init frame reported, including frames before the session exists. */
+  version: () => string | undefined
   /** Refusals after startup must end the published session. */
   onRefusal: ((error: Error) => void) | null
   /** The first refusal recorded, or null. */
@@ -195,6 +200,7 @@ export function createClaudeInitProof(): ClaudeInitProof {
   void promise.catch(() => {})
   let outcome: { init: ClaudeInitObservation } | { error: Error } | null = null
   let refused: Error | null = null
+  let version: string | undefined
   const reject = (error: Error): void => {
     outcome ??= { error }
     rejectPromise(error)
@@ -203,6 +209,7 @@ export function createClaudeInitProof(): ClaudeInitProof {
     promise,
     resolve: (init) => {
       outcome ??= { init }
+      version = init.version ?? version
       resolvePromise(init)
     },
     reject,
@@ -221,6 +228,7 @@ export function createClaudeInitProof(): ClaudeInitProof {
       }
       return outcome?.init ?? null
     },
+    version: () => version,
     onRefusal: null,
     refusal: () => refused
   }

@@ -20,6 +20,7 @@ import type { ClaudePromptRegistry } from './permissions/claude-prompt-registry'
 import { ClaudeJournalBoundDelivery } from './journal/claude-journal-bound-delivery'
 import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acquisition'
 import type { AgentSessionFastModeState } from '../../../shared/agent-session/agent-session-wire'
+import type { ClaudeInstalledUpdateState } from '../cli-capabilities/claude-installed-update-state'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import type { ClaudeBackgroundTaskTracker } from '../background-tasks/claude-background-task-tracker'
 import type { ClaudeChildWorkDecoder } from '../child-work/claude-child-work-decoder'
@@ -232,7 +233,7 @@ export type ClaudeSession = {
     onLateRefusal: (error: Error) => void
     startup: ClaudeStartupOutcome
   }
-}
+} & ClaudeInstalledUpdateState
 
 /** Retain observed exits until settlement so delayed acquisition cleanup can find their proof. */
 export type ClaudeSessionExit = {

@@ -33,7 +33,10 @@ import type {
   AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionAtRestCommands } from '../options/structured-agent-session-at-rest-commands'
-import type { AgentSessionSlashCommand } from '../../../../shared/agent-session/agent-session-wire'
+import type {
+  AgentSessionProviderUpdate,
+  AgentSessionSlashCommand
+} from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-session/thread-goals/agent-session-thread-goal-wire'
 import type { SubmissionRejectionFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type {
@@ -142,6 +145,8 @@ export type StructuredAgentSessionOptionsReportedEvent =
     sessionId: string
     fence: number
     acquisitionGeneration: string
+    /** A newer agent is installed than this child runs; null says that no longer holds. */
+    providerUpdate?: AgentSessionProviderUpdate | null
   }
 
 export type StructuredAgentSessionLifecycleEvent =
@@ -273,6 +278,8 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
   holdsDispatch?(sessionId: string): boolean
   /** Fresh answer before an idle stop: provider-declared work keeps the child; undefined has none to ask. */
   confirmIdle?(sessionId: string): Promise<AgentSessionIdleConfirmation> | undefined
+  /** On the idle sweep's tick: look again for a newer installed agent than the live child runs. */
+  recheckProviderUpdate?(sessionId: string): void
   /** The root turn the live child is running, null when idle; absent when the agent cannot say. */
   liveTurnId?(sessionId: string): string | null | undefined
   /** The live child opened in another approval mode than requested and this input picks another model. */

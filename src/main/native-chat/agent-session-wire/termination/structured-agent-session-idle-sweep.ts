@@ -4,11 +4,12 @@
 import { DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES } from '../../../../shared/native-chat/settings/native-chat-idle-stop'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { StructuredAgentSessionHostSession } from '../host/structured-agent-session-host-types'
-import type { AgentSessionIdleConfirmation } from '../providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 import type { StructuredAgentSessionCurrentWorkHost } from '../observations/structured-agent-session-host-current-work'
 import { readHostStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
 import type { JournalWorkAnswer } from '../../agent-session-journal/journal-work-read'
+import type { RestartAgentOutcome } from '../../../../shared/rpc-contract/structured-agent-session/restart-agent-params'
 
 type RunningChild = NonNullable<StructuredAgentSessionHostSession['child']>
 
@@ -29,8 +30,9 @@ export type StructuredAgentSessionIdleSweepDeps = {
   hasOpenDispatch: (sessionId: string) => boolean
   /** Provider-retained, unanswered sends. */
   providerHoldsDispatch: (sessionId: string) => boolean
-  /** Provider-declared background work, asked fresh before a running child's idle stop. */
-  confirmIdle: (sessionId: string) => Promise<AgentSessionIdleConfirmation> | undefined
+  /** Asked fresh for provider-declared work before a running child's idle stop, and each tick
+   *  to look again for an agent update installed while a ready child waits. */
+  adapter: () => Pick<StructuredAgentSessionAdapter, 'confirmIdle' | 'recheckProviderUpdate'>
   store: StructuredAgentSessionCurrentWorkHost['store']
   /** Already inside nonreentrant session serialization. */
   stopAgent: (sessionId: string) => Promise<void>
@@ -100,13 +102,16 @@ export class StructuredAgentSessionIdleSweep {
       const agentIdleMs = this.idleWindow()
       await Promise.allSettled(
         [...this.deps.sessions.keys()].map((sessionId) =>
-          this.sweepSession(sessionId, agentIdleMs).catch((error: unknown) =>
-            this.deps.logger.warn('an idle sweep step failed', {
-              scope: 'idle-sweep',
-              sessionId,
-              error
-            })
-          )
+          this.sweepSession(sessionId, agentIdleMs)
+            // After the stop decision, so a stopped agent isn't asked and a throw stays this chat's.
+            .then(() => this.recheckProviderUpdate(sessionId))
+            .catch((error: unknown) =>
+              this.deps.logger.warn('an idle sweep step failed', {
+                scope: 'idle-sweep',
+                sessionId,
+                error
+              })
+            )
         )
       )
     } finally {
@@ -116,10 +121,22 @@ export class StructuredAgentSessionIdleSweep {
 
   /** Stop now what a sweep past the window would, for a finished run nobody watches; Never keeps
    *  it. `anyway` also stops a viewed or Never chat's idle agent, e.g. after an account switch. */
-  async release(sessionId: string, anyway = false): Promise<void> {
+  async release(sessionId: string, anyway = false): Promise<RestartAgentOutcome> {
+    const running = this.deps.sessions.get(sessionId)?.child
     const window = (): 0 | null => (anyway ? 0 : this.releaseWindow(sessionId))
     if (!this.deps.isDisposed() && window() === 0) {
       await this.sweepSession(sessionId, 0, window)
+    }
+    if (!running) {
+      return 'not-running'
+    }
+    // A send meanwhile may already hold a new child; only the one asked about counts.
+    return this.deps.sessions.get(sessionId)?.child === running ? 'busy' : 'stopped'
+  }
+
+  private recheckProviderUpdate(sessionId: string): void {
+    if (this.deps.sessions.get(sessionId)?.child?.phase === 'ready') {
+      this.deps.adapter().recheckProviderUpdate?.(sessionId)
     }
   }
 
@@ -143,7 +160,7 @@ export class StructuredAgentSessionIdleSweep {
     if (!unconfirmed) {
       return
     }
-    const answer = (await this.deps.confirmIdle(sessionId)) ?? 'idle'
+    const answer = (await this.deps.adapter().confirmIdle?.(sessionId)) ?? 'idle'
     if (answer === 'unknown') {
       return
     }

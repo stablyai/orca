@@ -28,7 +28,7 @@ export type ClaudeStructuredSpawnOptions = {
   options: Map<string, string>
   /** Saved Fast must be applied before input when launch settings cannot carry it. */
   fastModeAtStart: boolean
-} & Partial<Pick<ClaudeSession, 'cliFlag' | 'flagSettingsControl'>>
+} & Partial<Pick<ClaudeSession, 'cliFlag' | 'cliVersion' | 'flagSettingsControl'>>
 
 /** Pass SDK-valid saved choices through; let the installed CLI reject unsupported values. */
 export function claudeStructuredSpawnOptions(input: {
@@ -90,6 +90,7 @@ export function adoptClaudeStructuredSpawnOptions(
     | 'fastModeAtStart'
     | 'appliedInputOptions'
     | 'cliFlag'
+    | 'cliVersion'
     | 'flagSettingsControl'
     | 'promptSuggestionPause'
   >,
@@ -106,6 +107,7 @@ export function adoptClaudeStructuredSpawnOptions(
   }
   session.fastModeAtStart = spawn.fastModeAtStart
   session.cliFlag = spawn.cliFlag
+  session.cliVersion = spawn.cliVersion
   session.flagSettingsControl = spawn.flagSettingsControl
   session.promptSuggestionPause = spawn.sdkOptions.promptSuggestions
     ? claudePromptSuggestionPause()
