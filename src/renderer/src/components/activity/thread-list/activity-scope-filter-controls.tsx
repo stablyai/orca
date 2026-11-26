@@ -1,14 +1,18 @@
 import React from 'react'
 import { useAppStore } from '@/store'
 import { DropdownMenuCheckboxItem, DropdownMenuItem } from '@/components/ui/dropdown-menu'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { getAgentCatalog, getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { useTranslate } from '@/i18n/use-translate'
 import SidebarRepositoryFilterSection from '@/components/sidebar/worktree-list/controls/SidebarRepositoryFilterSection'
+import { SidebarScopeFilterMenu } from '@/components/sidebar/worktree-list/controls/SidebarScopeFilterMenu'
 import { SidebarHostScopeMenuSection } from '@/components/sidebar/worktree-list/controls/SidebarHostScopeMenuSection'
 import {
   getSidebarHostVisibilityLabel,
   shouldShowHostScopeControls
 } from '@/components/sidebar/worktree-list/controls/sidebar-host-options'
 import { useSidebarHostScopeOptions } from '@/components/sidebar/worktree-list/controls/use-sidebar-host-scope-options'
+import { useAllAgentPaneThreads } from '../threads/use-agent-pane-threads'
 
 /** Persisted Agents scope is separate from workspace navigation filters; the parent owns the Filters label/separator. */
 export function ActivityScopeFilterMenuItems(): React.JSX.Element {
@@ -91,6 +95,7 @@ export function ActivityScopeFilterMenuItems(): React.JSX.Element {
         // Hidden projects' agents still list here, so their projects stay filterable.
         includeHidden
       />
+      <ActivityAgentFilterMenu />
       {hasScopeFilter ? (
         <DropdownMenuItem
           onSelect={() => {
@@ -108,12 +113,69 @@ export function ActivityScopeFilterMenuItems(): React.JSX.Element {
   )
 }
 
+function ActivityAgentFilterMenu(): React.JSX.Element {
+  const t = useTranslate()
+  const agentTypes = useAppStore((s) => s.agentsFilterAgentTypes)
+  const setAgentTypes = useAppStore((s) => s.setAgentsFilterAgentTypes)
+  const { allThreads } = useAllAgentPaneThreads()
+  const availableTypes = new Set<string>(agentTypes)
+  for (const thread of allThreads) {
+    availableTypes.add(thread.agentType)
+  }
+  const activityAgents = getAgentCatalog().filter((agent) => availableTypes.has(agent.id))
+  const allAgentsLabel = t('auto.components.skills.filter.allAgents', 'All agents')
+  const visibilityLabel =
+    agentTypes.length === 0
+      ? allAgentsLabel
+      : agentTypes.length === 1
+        ? getAgentLabel(agentTypes[0])
+        : t('sidebar.agentSummary.agentCount', '{{count}} agents', {
+            count: agentTypes.length,
+            defaultValue_one: '{{count}} agent'
+          })
+
+  return (
+    <SidebarScopeFilterMenu
+      title={t('auto.components.activity.ActivityScopeFilterControls.agents', 'Agents')}
+      visibilityLabel={visibilityLabel}
+      options={activityAgents}
+      selectedIds={agentTypes}
+      onChange={setAgentTypes}
+      placeholders={{
+        filter: t(
+          'auto.components.activity.ActivityScopeFilterControls.filterAgents',
+          'Filter agents...'
+        ),
+        add: t('auto.components.activity.ActivityScopeFilterControls.addAgent', 'Add agent...')
+      }}
+      emptyMessages={{
+        unfiltered: t(
+          'auto.components.activity.ActivityScopeFilterControls.noAgentsMatch',
+          'No agents match'
+        ),
+        filtered: t(
+          'auto.components.activity.ActivityScopeFilterControls.noUnselectedAgentsMatch',
+          'No unselected agents match'
+        )
+      }}
+      getLabel={(agent) => agent.label}
+      renderOption={({ id, label }) => (
+        <span className="inline-flex min-w-0 items-center gap-1.5">
+          <AgentIcon agent={id} size={13} />
+          <span className="truncate">{label}</span>
+        </span>
+      )}
+    />
+  )
+}
+
 /** Count persisted filters, including stale repo IDs, so hidden agents stay discoverable and resettable. */
 export function useActivityScopeFilterCount(): number {
   return useAppStore(
     (state) =>
       (state.agentsVisibleHostIds !== null ? 1 : 0) +
       state.agentsFilterRepoIds.length +
+      state.agentsFilterAgentTypes.length +
       (state.agentsHideWorkspacesFromOtherDevices ? 1 : 0) +
       (state.agentsHideAutomationGeneratedWorkspaces ? 1 : 0) +
       (state.agentsHideCliCreatedWorkspaces ? 1 : 0)

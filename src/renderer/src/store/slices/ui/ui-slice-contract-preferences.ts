@@ -1,4 +1,5 @@
 import type { RetainedUpdateTarget } from './retained-update-target'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { StatusBarUsageFormat } from '../../../../../shared/status-bar/status-bar-usage-format'
 import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
 import type { BrowserDevToolsDockLayout } from '../../../../../shared/browser/devtools/browser-devtools-dock'
@@ -91,6 +92,8 @@ export type UISlicePreferences = {
   setAgentsVisibleHostIds: (ids: VisibleWorkspaceHostIds) => void
   agentsFilterRepoIds: readonly string[]
   setAgentsFilterRepoIds: (ids: readonly string[]) => void
+  agentsFilterAgentTypes: readonly TuiAgent[]
+  setAgentsFilterAgentTypes: (types: readonly TuiAgent[]) => void
   agentsHideWorkspacesFromOtherDevices: boolean
   setAgentsHideWorkspacesFromOtherDevices: (v: boolean) => void
   agentsHideAutomationGeneratedWorkspaces: boolean

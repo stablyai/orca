@@ -80,6 +80,7 @@ export function useAgentPaneThreads(args: {
   } = args
   const agentsVisibleHostIds = useAppStore((s) => s.agentsVisibleHostIds)
   const agentsFilterRepoIds = useAppStore((s) => s.agentsFilterRepoIds)
+  const agentsFilterAgentTypes = useAppStore((s) => s.agentsFilterAgentTypes)
   const hideWorkspacesFromOtherDevices = useAppStore((s) => s.agentsHideWorkspacesFromOtherDevices)
   const hideAutomationGeneratedWorkspaces = useAppStore(
     (s) => s.agentsHideAutomationGeneratedWorkspaces
@@ -157,6 +158,13 @@ export function useAgentPaneThreads(args: {
     const matchesSearchQuery =
       normalizedQuery === null ? null : createActivityThreadSearchMatcher(normalizedQuery)
     return scopeVisibleThreads.filter((thread) => {
+      if (
+        agentsFilterAgentTypes.length > 0 &&
+        thread.paneKey !== effectiveSelectedPaneKey &&
+        !agentsFilterAgentTypes.some((type) => type === thread.agentType)
+      ) {
+        return false
+      }
       // Keep live agents and the selected row visible after marking read; migration blocks are unavailable.
       if (
         readFilter === 'unread' &&
@@ -179,6 +187,7 @@ export function useAgentPaneThreads(args: {
     })
   }, [
     scopeVisibleThreads,
+    agentsFilterAgentTypes,
     readFilter,
     deferredQuery,
     effectiveSelectedPaneKey,

@@ -33,6 +33,7 @@ export type PersistedUIWriteBaseline = {
   showDotfilesByWorktree: Record<string, boolean>
   notificationsMutedByWorktree: Record<string, boolean>
   filterRepoIds: readonly string[]
+  agentsFilterAgentTypes: Readonly<NonNullable<PersistedUIState['agentsFilterAgentTypes']>>
   acknowledgedAgentsByPaneKey: Record<string, number>
   activityClearedAtByPaneKey: Record<string, number>
   manuallyUnreadTurnsByPaneKey: Record<string, number>
@@ -69,6 +70,7 @@ const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
   showDotfilesByWorktree: true,
   notificationsMutedByWorktree: true,
   filterRepoIds: true,
+  agentsFilterAgentTypes: true,
   acknowledgedAgentsByPaneKey: true,
   activityClearedAtByPaneKey: true,
   manuallyUnreadTurnsByPaneKey: true
@@ -115,6 +117,7 @@ function writeFieldEqual(field: keyof PersistedUIWriteBaseline, a: unknown, b: u
   }
   if (
     field === 'filterRepoIds' ||
+    field === 'agentsFilterAgentTypes' ||
     field === 'activityBarOrder' ||
     field === 'activityBarBotOrder' ||
     field === 'activityBarHidden'
@@ -169,6 +172,8 @@ export function persistedUIWriteFieldsToWireUpdate(
     } else if (field === 'filterRepoIds') {
       // Copy readonly store arrays at mutable main wire boundary; keep selector identity guarantees local.
       update.filterRepoIds = [...(fields.filterRepoIds ?? [])]
+    } else if (field === 'agentsFilterAgentTypes') {
+      update.agentsFilterAgentTypes = [...(fields.agentsFilterAgentTypes ?? [])]
     } else {
       assignSameNameWireField(
         update,
@@ -182,7 +187,7 @@ export function persistedUIWriteFieldsToWireUpdate(
 
 type SameNameWriteField = Exclude<
   keyof PersistedUIWriteBaseline,
-  'showSleepingWorkspaces' | 'filterRepoIds'
+  'showSleepingWorkspaces' | 'filterRepoIds' | 'agentsFilterAgentTypes'
 >
 
 // Compile-check nonspecial mirror fields against wire names/types so renames or drift cannot silently break persistence.

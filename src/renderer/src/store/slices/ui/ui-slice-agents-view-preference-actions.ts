@@ -1,11 +1,50 @@
 import type { UISlice, UISliceSet } from './ui-slice-contract'
+import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
 import {
   DEFAULT_AGENTS_GROUP_BY,
-  DEFAULT_AGENTS_READ_FILTER
+  DEFAULT_AGENTS_READ_FILTER,
+  normalizeActivityAgentTypes,
+  normalizeActivityGroupBy,
+  normalizeThreadReadFilter
 } from '../../../../../shared/agent-status/presentation/agents-view-thread-filters'
 import { normalizeVisibleExecutionHostIds } from '../../../../../shared/execution-host/execution-host'
+import {
+  preserveStringArrayIdentity,
+  sanitizePersistedRepoIds
+} from './ui-slice-hydration-sanitizers'
 
-/** Agents-view preferences; each setter persists immediately and stays separate from workspace-nav state. */
+export function hydrateAgentsViewPreferences(
+  current: UISlice,
+  ui: PersistedUIState,
+  validRepoIds: ReadonlySet<string>
+) {
+  const repoIds = sanitizePersistedRepoIds(ui.agentsFilterRepoIds)
+  return {
+    agentsVisibleHostIds: preserveStringArrayIdentity(
+      current.agentsVisibleHostIds,
+      normalizeVisibleExecutionHostIds(ui.agentsVisibleHostIds)
+    ),
+    agentsFilterRepoIds: preserveStringArrayIdentity(
+      current.agentsFilterRepoIds,
+      validRepoIds.size === 0 ? repoIds : repoIds.filter((repoId) => validRepoIds.has(repoId))
+    ),
+    agentsFilterAgentTypes:
+      preserveStringArrayIdentity(
+        current.agentsFilterAgentTypes,
+        normalizeActivityAgentTypes(ui.agentsFilterAgentTypes)
+      ) ?? [],
+    agentsHideWorkspacesFromOtherDevices: ui.agentsHideWorkspacesFromOtherDevices === true,
+    agentsHideAutomationGeneratedWorkspaces: ui.agentsHideAutomationGeneratedWorkspaces === true,
+    agentsHideCliCreatedWorkspaces: ui.agentsHideCliCreatedWorkspaces === true,
+    agentsShowChildAgents: ui.agentsShowChildAgents === true,
+    agentsCompactMode: ui.agentsCompactMode !== false,
+    agentsShowSearch: ui.agentsShowSearch !== false,
+    agentsReadFilter: normalizeThreadReadFilter(ui.agentsReadFilter),
+    agentsGroupBy: normalizeActivityGroupBy(ui.agentsGroupBy)
+  }
+}
+
+/** Agents-view preferences stay separate from workspace-nav state. */
 export function createAgentsViewPreferenceActions(set: UISliceSet): Partial<UISlice> {
   return {
     agentsVisibleHostIds: null,
@@ -19,6 +58,9 @@ export function createAgentsViewPreferenceActions(set: UISliceSet): Partial<UISl
       set({ agentsFilterRepoIds: ids })
       window.api.ui.set({ agentsFilterRepoIds: [...ids] }).catch(console.error)
     },
+    agentsFilterAgentTypes: [],
+    setAgentsFilterAgentTypes: (types) =>
+      set({ agentsFilterAgentTypes: normalizeActivityAgentTypes(types) }),
     agentsHideWorkspacesFromOtherDevices: false,
     setAgentsHideWorkspacesFromOtherDevices: (v) => {
       set({ agentsHideWorkspacesFromOtherDevices: v })
