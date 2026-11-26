@@ -31,7 +31,8 @@ const SQLITE_PROBE = `const sqlite=require('node:sqlite');if(!(${NODE_SQLITE_REA
 
 /** Prepare running distros without letting a slow first install block local history. */
 export async function prepareOpenCodeWslReaders(
-  roots: readonly string[]
+  roots: readonly string[],
+  extraDatabasePaths: readonly string[] = []
 ): Promise<OpenCodeWslRuntime[]> {
   if (process.platform !== 'win32') {
     return []
@@ -63,7 +64,11 @@ export async function prepareOpenCodeWslReaders(
           }
     }
     preparation.set(key, entry)
-    void prepare(distro).then(
+    const extraGuestPaths = extraDatabasePaths.flatMap((path) => {
+      const wsl = parseWslUncPath(path)
+      return wsl?.distro.toLowerCase() === key ? [wsl.linuxPath] : []
+    })
+    void prepare(distro, extraGuestPaths).then(
       (runtime) => {
         entry.expires = Date.now() + (runtime.executable ? 10 * 60_000 : 30_000)
         entry.value = runtime
@@ -77,7 +82,10 @@ export async function prepareOpenCodeWslReaders(
   })
 }
 
-async function prepare(distro: string): Promise<OpenCodeWslRuntime> {
+async function prepare(
+  distro: string,
+  extraGuestPaths: readonly string[]
+): Promise<OpenCodeWslRuntime> {
   const deadline = Date.now() + PREPARATION_TIMEOUT_MS
   const signal = AbortSignal.timeout(PREPARATION_TIMEOUT_MS)
   const run = async (spec: WslSpec, timeoutMs = 15_000): Promise<string> => {
@@ -105,8 +113,9 @@ async function prepare(distro: string): Promise<OpenCodeWslRuntime> {
   }
   const hasDatabase = await run({
     script: [
+      'for db in "$@"; do if [ -f "$db" ]; then printf present; exit 0; fi; done',
       'data="${XDG_DATA_HOME:-$HOME/.local/share}/opencode"',
-      'if [ -f "$HOME/.zcode/cli/db/db.sqlite" ]; then printf present; exit 0; fi',
+      'if [ -f "$HOME/.zcode/cli/db/db.sqlite" ] || [ -f "$HOME/.local/share/devin/cli/sessions.db" ]; then printf present; exit 0; fi',
       // Hermes scans the distro's ~/.hermes root and its named profiles.
       'for db in "$HOME/.hermes/state.db" "$HOME"/.hermes/profiles/*/state.db; do if [ -f "$db" ]; then printf present; exit 0; fi; done',
       // WSL discovery still enumerates the default data root independently of guest overrides.
@@ -118,10 +127,14 @@ async function prepare(distro: string): Promise<OpenCodeWslRuntime> {
       '  *) [ ! -f "$data/$OPENCODE_DB" ] || printf present ;;',
       'esac'
     ].join('\n'),
+    args: extraGuestPaths,
     loginPath: 'none'
   })
   if (hasDatabase !== 'present') {
-    return { distro, error: 'No OpenCode, ZCode or Hermes database is present in this WSL distro.' }
+    return {
+      distro,
+      error: 'No OpenCode, ZCode, Hermes or Devin database is present in this WSL distro.'
+    }
   }
   const readerPath = await run({
     program: 'wslpath',

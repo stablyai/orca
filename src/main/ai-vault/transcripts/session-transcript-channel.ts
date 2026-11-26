@@ -102,6 +102,10 @@ export class TranscriptMessageChannel implements TranscriptMessageSink {
     }
   }
 
+  markIncomplete(): void {
+    this.finishRead({ session: null, byteOffset: 0, incomplete: true })
+  }
+
   finishRead(outcome: TranscriptReadOutcome): void {
     const readers = this.readers
     this.readers = []

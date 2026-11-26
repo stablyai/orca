@@ -6,6 +6,7 @@ import type {
 import { discoverFiles } from './session-scanner-discovery'
 import { opencodeDiscoveries } from '../scanners/opencode/session-scanner-opencode-sources'
 import { zcodeDiscoveries } from '../scanners/zcode/session-scanner-zcode-sources'
+import { devinDatabaseDiscoveries } from '../scanners/devin/session-scanner-devin-sources'
 import { hermesDiscoveries } from '../scanners/hermes/session-scanner-hermes-sources'
 import { antigravityDiscoveries } from '../scanners/antigravity/session-scanner-antigravity-sources'
 import { cursorAcpDiscoveries } from '../scanners/cursor/session-scanner-cursor-acp-sessions'
@@ -31,6 +32,7 @@ export async function discoverAiVaultSessionSources(args: {
       ...opencodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
       ...zcodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
       ...hermesDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
+      ...devinDatabaseDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
       ...antigravityDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
       ...cursorAcpDiscoveries(options, wslHomeDirs, limitPerAgent, issues)
     ]),

@@ -1,3 +1,8 @@
+import {
+  listDevinSqliteSessions,
+  parseDevinSqliteSession,
+  captureDevinSqliteSession
+} from '../../devin/session-scanner-devin-sqlite'
 import { readOpenCode2ForkCoverage } from '../../../../native-chat/transcript-history/opencode/transcript-opencode2-fork-coverage'
 import { readOpenCodeDatabase } from '../sqlite/session-scanner-opencode-sqlite-open'
 import {
@@ -29,6 +34,29 @@ import type {
 
 import { withFullFirstUserPromptCapture } from '../../../prompts/session-scanner-first-user-prompt-capture'
 
+const historyReaders = {
+  opencode: {
+    list: listOpenCodeSqliteSessions,
+    parse: parseOpenCodeSqliteSession,
+    capture: captureOpenCodeSqliteSession
+  },
+  opencode2: {
+    list: listOpenCode2SqliteSessions,
+    parse: parseOpenCode2SqliteSession,
+    capture: captureOpenCode2SqliteSession
+  },
+  hermes: {
+    list: listHermesSqliteSessions,
+    parse: parseHermesSqliteSession,
+    capture: captureHermesSqliteSession
+  },
+  devin: {
+    list: listDevinSqliteSessions,
+    parse: parseDevinSqliteSession,
+    capture: captureDevinSqliteSession
+  }
+}
+
 export async function handleOpenCodeSqliteRequest(
   request: OpenCodeSqliteWorkerRequest
 ): Promise<OpenCodeSqliteWorkerResponse> {
@@ -53,62 +81,27 @@ export async function handleOpenCodeSqliteRequest(
           : readOpenCodeTranscriptPage({ ...request, limit: request.limit ?? 50 })
       return { id: request.id, ok: true, value }
     }
+    const agent = request.agent === 'zcode' ? 'zcode' : 'opencode'
+    const reader =
+      historyReaders[request.agent && request.agent !== 'zcode' ? request.agent : 'opencode']
     if (request.kind === 'list') {
       const issues: AiVaultScanIssue[] = []
-      const candidates =
-        request.agent === 'hermes'
-          ? listHermesSqliteSessions({
-              dbPaths: request.dbPaths,
-              limit: request.limit ?? Infinity,
-              issues,
-              scopePaths: request.scopePaths
-            })
-          : request.agent === 'opencode2'
-            ? await listOpenCode2SqliteSessions({
-                dbPaths: request.dbPaths,
-                limit: request.limit ?? Infinity,
-                issues,
-                scopePaths: request.scopePaths
-              })
-            : await listOpenCodeSqliteSessions({
-                dbPaths: request.dbPaths,
-                limit: request.limit ?? Infinity,
-                issues,
-                agent: request.agent === 'zcode' ? 'zcode' : 'opencode',
-                scopePaths: request.scopePaths
-              })
+      const candidates = await reader.list({
+        ...request,
+        agent,
+        limit: request.limit ?? Infinity,
+        issues
+      })
       return { id: request.id, ok: true, value: { candidates, issues } }
     }
     if (request.kind === 'capture') {
-      const capture =
-        request.agent === 'hermes'
-          ? captureHermesSqliteSession(request)
-          : request.agent === 'opencode2'
-            ? await captureOpenCode2SqliteSession(request)
-            : await captureOpenCodeSqliteSession({
-                ...request,
-                agent: request.agent === 'zcode' ? 'zcode' : 'opencode'
-              })
-      return { id: request.id, ok: true, value: capture }
+      const value = await reader.capture({ ...request, agent })
+      return { id: request.id, ok: true, value }
     }
     if (request.kind !== 'parse') {
       throw new Error('Unsupported OpenCode SQLite request')
     }
-    const parse = async () =>
-      request.agent === 'hermes'
-        ? parseHermesSqliteSession(request)
-        : request.agent === 'opencode2'
-          ? await parseOpenCode2SqliteSession({
-              dbPath: request.dbPath,
-              sessionId: request.sessionId,
-              platform: request.platform
-            })
-          : await parseOpenCodeSqliteSession({
-              dbPath: request.dbPath,
-              sessionId: request.sessionId,
-              platform: request.platform,
-              agent: request.agent === 'zcode' ? 'zcode' : 'opencode'
-            })
+    const parse = async () => reader.parse({ ...request, agent })
     const session = request.fullFirstUserPrompt
       ? await withFullFirstUserPromptCapture(parse)
       : await parse()

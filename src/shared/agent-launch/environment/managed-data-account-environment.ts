@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 const originalEnvironment = z.object({
+  APPDATA: z.string().nullable().optional(),
   XDG_DATA_HOME: z.string().nullable(),
   XDG_STATE_HOME: z.string().nullable(),
   OPENCODE_AUTH_CONTENT: z.string().nullable(),
@@ -9,6 +10,7 @@ const originalEnvironment = z.object({
 })
 const ORIGINAL_ENV = 'ORCA_DATA_ACCOUNT_ORIGINAL_ENV'
 export const MANAGED_DATA_ACCOUNT_BASELINE_ENV_KEYS = [
+  'APPDATA',
   'XDG_DATA_HOME',
   'XDG_STATE_HOME',
   'OPENCODE_AUTH_CONTENT',
@@ -79,6 +81,9 @@ export function restoreManagedDataAccountEnvironment(
   }
   restore('XDG_DATA_HOME', dataHome)
   restore('XDG_STATE_HOME', environment.ORCA_DATA_ACCOUNT_STATE_HOME)
+  if (provider === 'devin' && original?.APPDATA !== undefined) {
+    restore('APPDATA', dataHome)
+  }
   if (ownsOpenCode) {
     restore('OPENCODE_AUTH_CONTENT', '')
     restore('OPENCODE_DB', 'opencode.db')

@@ -166,8 +166,7 @@ function proveSyntheticSource(
     return containerProof
   }
   const ids = enumerated?.get(synthetic.container)
-  // Unknown schemas can enumerate empty; require nonempty evidence before retiring container entries.
-  if (!ids || ids.size === 0) {
+  if (!ids) {
     return {
       verdict: 'unverifiable',
       reason: `${synthetic.container} was not enumerated in full this pass.`

@@ -41,34 +41,6 @@ export const listOpenCode2SqliteSessionsViaWorker = (
   args: SqliteListArgs
 ): Promise<SessionFileCandidate[]> => listForHost({ ...args, agent: 'opencode2' })
 
-export const listZcodeSqliteSessionsViaWorker = (
-  args: SqliteListArgs
-): Promise<SessionFileCandidate[]> => listForHost({ ...args, agent: 'zcode' })
-
-export const parseOpenCodeSqliteSessionViaWorker = (
-  args: SqliteParseArgs
-): Promise<AiVault.AiVaultSession | null> => parseForHost(args)
-
-export const parseOpenCode2SqliteSessionViaWorker = (
-  args: SqliteParseArgs
-): Promise<AiVault.AiVaultSession | null> => parseForHost({ ...args, agent: 'opencode2' })
-
-export const parseZcodeSqliteSessionViaWorker = (
-  args: SqliteParseArgs
-): Promise<AiVault.AiVaultSession | null> => parseForHost({ ...args, agent: 'zcode' })
-
-export const captureOpenCodeSqliteSessionViaWorker = (
-  args: SqliteCaptureArgs
-): Promise<OpenCodeSqliteCaptureValue> => captureForHost(args)
-
-export const captureOpenCode2SqliteSessionViaWorker = (
-  args: SqliteCaptureArgs
-): Promise<OpenCodeSqliteCaptureValue> => captureForHost({ ...args, agent: 'opencode2' })
-
-export const captureZcodeSqliteSessionViaWorker = (
-  args: SqliteCaptureArgs
-): Promise<OpenCodeSqliteCaptureValue> => captureForHost({ ...args, agent: 'zcode' })
-
 export async function listForHost(
   args: Parameters<OpenCodeSqliteWorkerClient['list']>[0]
 ): Promise<SessionFileCandidate[]> {
@@ -212,7 +184,7 @@ export async function parseForHost(
     },
     args.agent
   )
-  return mapOpenCodeWslSession(session, args.dbPath)
+  return mapOpenCodeWslSession(session, wslResultPath(args))
 }
 
 export async function captureForHost(
@@ -237,8 +209,14 @@ export async function captureForHost(
   )
   return {
     ...capture,
-    session: mapOpenCodeWslSession(capture.session, args.dbPath)
+    session: mapOpenCodeWslSession(capture.session, wslResultPath(args))
   }
+}
+
+function wslResultPath(args: Parameters<OpenCodeSqliteWorkerClient['parse']>[0]): string {
+  return args.agent === 'devin'
+    ? buildOpenCodeSqliteCandidatePath(args.dbPath, args.sessionId)
+    : args.dbPath
 }
 
 /** A native chat read, on WSL through the distro's own reader. */

@@ -46,6 +46,9 @@ export function applyManagedDataAccountEnvironment(
   environment.ORCA_DATA_ACCOUNT_DATA_HOME = selected.XDG_DATA_HOME
   environment.ORCA_DATA_ACCOUNT_STATE_HOME = selected.XDG_STATE_HOME
   environment.ORCA_DATA_ACCOUNT_PROVIDER = provider
+  if (provider === 'devin' && process.platform === 'win32') {
+    environment.APPDATA = selected.XDG_DATA_HOME
+  }
   if (provider === 'opencode') {
     // Clear overrides that could bypass the selected profile's credentials.
     environment.OPENCODE_AUTH_CONTENT = ''

@@ -24,7 +24,6 @@ const RECHECK_BATCH_ROWS = 1_000
 // Never stat WSL rows: stopped distros can boot or hang; expire unused rows after 180 days instead.
 const WSL_PATH_GLOB = '[\\/][\\/][wW][sS][lL][.$]*'
 const WSL_EXPIRE_AFTER_MS = 180 * 24 * 60 * 60_000
-const SQLITE_SESSION_AGENTS = ['opencode', 'opencode2', 'zcode', 'hermes'] as const
 
 export type SessionParseCachePersistenceOptions = {
   // The legacy JSON file; the database sits beside it.
@@ -143,9 +142,7 @@ async function dropRowsForMissingTranscripts(db: SessionParseCacheDatabase): Pro
 
 // Synthetic db#session keys use the database file as the transcript for existence checks.
 async function transcriptMissing(path: string): Promise<boolean> {
-  const sqliteSession = SQLITE_SESSION_AGENTS.map((agent) =>
-    splitOpenCodeSqliteCandidate(path, agent)
-  ).find((split) => split !== null)
+  const sqliteSession = splitOpenCodeSqliteCandidate(path, 'any')
   return (await pathMissing(path)) && (!sqliteSession || (await pathMissing(sqliteSession.dbPath)))
 }
 

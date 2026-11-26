@@ -46,6 +46,7 @@ export type AiVaultScanOptions = {
   zcodeDbPath?: string
   grokSessionsDir?: string
   devinTranscriptsDir?: string
+  devinAccountCliDirs?: readonly string[]
   /** Hermes home whose state.db and profiles/<name>/state.db are scanned. */
   hermesHome?: string
   rovoSessionsDir?: string
@@ -114,6 +115,7 @@ export type SessionFileDiscovery = {
   agent: AiVaultAgent
   rootDir: string
   files: FileWithMtime[]
+  sqliteContainer?: { path: string; fullyEnumerated: boolean }
   // Discovered beyond `files`, kept only for a scoped scan's in-scope walk.
   scopeFiles?: FileWithMtime[]
   // Conversation folder -> one top-level artifact file, seen while walking Antigravity brains.

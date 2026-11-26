@@ -6,22 +6,20 @@ import type { SessionFileCandidate } from '../../ai-vault/session-scanner-types'
 export type SessionSearchSyntheticSource = { container: string; id: string }
 
 export function splitSyntheticSessionSource(path: string): SessionSearchSyntheticSource | null {
-  const sqlite =
-    splitOpenCodeSqliteCandidate(path) ??
-    splitOpenCodeSqliteCandidate(path, 'zcode') ??
-    splitOpenCodeSqliteCandidate(path, 'hermes')
+  const sqlite = splitOpenCodeSqliteCandidate(path, 'any')
   return sqlite ? { container: sqlite.dbPath, id: sqlite.sessionId } : null
 }
 
 /**
  * Call only with an exhaustive sweep: limited discovery cannot prove deletions.
- * Exclude failed containers; empty results may mean an unrecognized schema.
+ * Exclude failed containers; empty results require explicit enumeration evidence.
  */
 export function sessionSearchEnumeratedContainers(
   candidates: readonly SessionFileCandidate[],
-  issues: readonly AiVaultScanIssue[]
+  issues: readonly AiVaultScanIssue[],
+  completeContainers: readonly string[] = []
 ): Map<string, Set<string>> {
-  const containers = new Map<string, Set<string>>()
+  const containers = new Map(completeContainers.map((path) => [path, new Set<string>()]))
   for (const candidate of candidates) {
     const synthetic = splitSyntheticSessionSource(candidate.file.path)
     if (!synthetic) {

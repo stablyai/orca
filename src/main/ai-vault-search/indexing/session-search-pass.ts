@@ -124,7 +124,10 @@ export async function runSessionSearchPass(
           enumeratedContainers: args.full
             ? sessionSearchEnumeratedContainers(
                 swept.candidates.flatMap(physicalSessionCandidates),
-                issues
+                issues,
+                swept.discoveries.flatMap(({ sqliteContainer }) =>
+                  sqliteContainer?.fullyEnumerated ? [sqliteContainer.path] : []
+                )
               )
             : undefined,
           emptiedRoots: previousRootsWithFiles
