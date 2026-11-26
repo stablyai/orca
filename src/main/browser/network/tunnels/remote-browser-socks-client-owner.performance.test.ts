@@ -23,17 +23,23 @@ describe.skipIf(process.platform === 'win32')('macOS owner lookups for departed 
   })
   afterAll(() => helper.restore())
 
-  async function forwardListener(): Promise<{ port: number; admitted: Socket[] }> {
+  async function forwardListener(): Promise<{
+    port: number
+    accepted: Socket[]
+    admitted: Socket[]
+  }> {
     const admission = createSocksClientAdmission('port forward')
+    const accepted: Socket[] = []
     const admitted: Socket[] = []
     const server = createServer({ pauseOnConnect: true, allowHalfOpen: true }, (socket) => {
+      accepted.push(socket)
       socket.on('error', () => socket.destroy())
       admission(socket, () => admitted.push(socket))
     })
     servers.push(server)
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
     const address = server.address()
-    return { port: typeof address === 'object' && address ? address.port : 0, admitted }
+    return { port: typeof address === 'object' && address ? address.port : 0, accepted, admitted }
   }
 
   function connectClient(port: number): Promise<Socket> {
@@ -48,7 +54,7 @@ describe.skipIf(process.platform === 'win32')('macOS owner lookups for departed 
     async (n) => {
       Object.defineProperty(process, 'platform', { value: 'darwin' })
       const release = holdSocksClientOwnerLookup()
-      const { port, admitted } = await forwardListener()
+      const { port, accepted, admitted } = await forwardListener()
       const before = (await helper.scans()).length
       const inFlight = isOwnDarwinConnection(
         { host: '127.0.0.1', port: 1 },
@@ -59,13 +65,16 @@ describe.skipIf(process.platform === 'win32')('macOS owner lookups for departed 
         const batch = await Promise.all(
           Array.from({ length: Math.min(50, n - index) }, () => connectClient(port))
         )
+        await expect.poll(() => accepted.length).toBe(index + batch.length)
         // Half close politely, half reset: neither is a connection anyone will answer.
         batch.forEach((client, offset) =>
           offset % 2 === 0 ? client.end() : client.resetAndDestroy()
         )
-        await new Promise((resolve) => setTimeout(resolve, 5))
       }
-      await new Promise((resolve) => setTimeout(resolve, 100))
+      // Each departed connection is dropped, and its server side destroyed, while the first lookup is held.
+      await expect
+        .poll(() => accepted.filter((socket) => socket.destroyed).length, { timeout: 2_500 })
+        .toBe(n)
       const live = await connectClient(port)
       await inFlight
       await expect.poll(() => admitted.length, { timeout: 5_000 }).toBe(1)
