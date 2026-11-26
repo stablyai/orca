@@ -15,6 +15,14 @@ import { selectExecutionHostDisplayLabel } from '../display/execution-host-displ
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '@/store'
 import { resolveNativeChatRuntimeSessionAttachmentOwner } from '@/components/native-chat/attachments/uploads/native-chat-attachment-owner'
+import {
+  indexHiddenProjects,
+  isRepoHidden,
+  isRepoHiddenFromProjects,
+  pickerRepos,
+  userManagedRepos
+} from '../../../../../shared/project/catalog/hidden-projects'
+import { setProjectHidden } from '@/components/sidebar/hidden-projects/set-project-hidden'
 import { loadRuntimeHostCatalogs } from '@/store/host-catalog/host-catalog-fence'
 import { getRuntimeClientEventEnvironmentIds } from '@/hooks/ipc-events/runtime-events/runtime-environment-subscription-selection'
 import { getReachableRuntimeSessionMirrorTargets } from '../../web-session-tabs-sync/subscriptions/runtime-session-mirror-targets'
@@ -199,22 +207,35 @@ describe('a shared agent’s chats in this window', () => {
     )
   })
 
-  it('keeps its host’s projects out of this window’s, however that host is reached', async () => {
-    environmentCall.mockImplementation(
-      async (request: { method: string }) =>
-        createCompatibleRuntimeStatusResponseIfNeeded(request) ?? {
-          id: 'x',
-          ok: true,
-          result: { repos: [] },
-          _meta: { runtimeId: 'r' }
-        }
-    )
-    await expect(
-      useAppStore.getState().fetchRuntimeEnvironmentRepos(HOST.environmentId)
-    ).resolves.toEqual([])
-    expect(environmentCall).not.toHaveBeenCalledWith(
-      expect.objectContaining({ method: 'repo.list' })
-    )
+  it('keeps its host’s repos out of every Projects list and the user’s own settings, while the share lasts', async () => {
+    const shared = {
+      id: 'repo-1',
+      hiddenAt: undefined,
+      connectionId: null,
+      executionHostId: toRuntimeExecutionHostId(HOST.environmentId)
+    }
+    const local = { ...shared, id: 'repo-2', executionHostId: 'local' as const }
+    const repos = [shared, local]
+    // The one selector: on a shared host, not by the user's own Hide toggle.
+    expect(isRepoHiddenFromProjects(shared)).toBe(true)
+    expect(isRepoHidden(shared)).toBe(false)
+    expect(isRepoHiddenFromProjects(local)).toBe(false)
+    // Projects lists and pickers read it.
+    const hidden = indexHiddenProjects(repos, 'local')
+    expect(hidden.isRowHidden({ repoId: 'repo-1', hostId: shared.executionHostId })).toBe(true)
+    expect(hidden.isRowHidden({ repoId: 'repo-2', hostId: 'local' })).toBe(false)
+    expect(pickerRepos(repos)).toEqual([local])
+    // Settings lists and pickers: the repos this user manages.
+    expect(userManagedRepos(repos)).toEqual([local])
+    // Hide/Show never writes to the owner's repo.
+    const updateRepo = vi.spyOn(useAppStore.getState(), 'updateRepo')
+    useAppStore.setState({ updateRepo })
+    await setProjectHidden([shared], false, 'shared')
+    expect(updateRepo).not.toHaveBeenCalled()
+    // The share ends: nothing of the host is kept out any more.
+    changed({ hosts: [], sharing: true })
+    expect(isRepoHiddenFromProjects(shared)).toBe(false)
+    expect(indexHiddenProjects(repos, 'local').any).toBe(false)
   })
 })
 

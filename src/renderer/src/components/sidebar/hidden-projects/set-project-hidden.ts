@@ -4,6 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
+import { userManagedRepos } from '../../../../../shared/project/catalog/hidden-projects'
 
 type HiddenTarget = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
 
@@ -19,12 +20,14 @@ async function writeHidden(
   hiddenAt: number | null
 ): Promise<HiddenTarget[]> {
   const { updateRepo } = useAppStore.getState()
+  // A shared agent's host's projects are its owner's: this window never hides or shows them there.
+  const managed = userManagedRepos(targets)
   const results = await Promise.all(
-    targets.map((target) =>
+    managed.map((target) =>
       updateRepo(target.id, { hiddenAt }, { hostId: getRepoExecutionHostId(target) })
     )
   )
-  return targets.filter((_, index) => results[index])
+  return managed.filter((_, index) => results[index])
 }
 
 /** Undoes only this toast's hide: a copy shown since, or hidden again by a newer hide, is left alone. */

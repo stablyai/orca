@@ -1,4 +1,5 @@
 import { useSupportedGroupHookSettings } from '@/components/settings/repository/hooks/use-supported-group-hook-settings'
+import { useUserManagedRepos } from '@/store/repos/user-managed-repos'
 import type { GeneralSubPage } from '../general/general-sub-pages'
 import type { McpServerSubPage } from '../mcp-servers/mcp-server-sub-page'
 import { useCallback, useMemo, useState } from 'react'
@@ -59,7 +60,7 @@ export function useSettingsStoreModel() {
   const fetchSettings = useAppStore((s) => s.fetchSettings)
   const fetchKeybindings = useAppStore((s) => s.fetchKeybindings)
   const closeSettingsPage = useAppStore((s) => s.closeSettingsPage)
-  const repos = useAppStore((s) => s.repos)
+  const repos = useUserManagedRepos()
   const projects = useAppStore((s) => s.projects)
   const projectHostSetups = useAppStore((s) => s.projectHostSetups)
   const updateProject = useAppStore((s) => s.updateProject)

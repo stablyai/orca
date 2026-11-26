@@ -10,7 +10,7 @@ import {
   isEphemeralVmRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
 } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { isRepoHidden } from '../../../../../shared/project/catalog/hidden-projects'
+import { isRepoHiddenFromProjects } from '../../../../../shared/project/catalog/hidden-projects'
 
 type RuntimeEnvironmentSource = Pick<PublicKnownRuntimeEnvironment, 'id' | 'source'>
 
@@ -62,7 +62,7 @@ export function resolveComposerSeedRepoId(
 ): string | null {
   const everyLoadedCopyHidden = (id: string | null | undefined): boolean => {
     const rows = repos.filter((repo) => repo.id === id)
-    return rows.length > 0 && rows.every(isRepoHidden)
+    return rows.length > 0 && rows.every(isRepoHiddenFromProjects)
   }
   if (everyLoadedCopyHidden(activeRepoId)) {
     return null
@@ -70,7 +70,7 @@ export function resolveComposerSeedRepoId(
   // A per-workspace runtime repo remaps to a sibling checkout; that sibling must be listed too.
   const seed = resolveComposerActiveRepoId(
     repos,
-    eligibleRepos.filter((repo) => !isRepoHidden(repo)),
+    eligibleRepos.filter((repo) => !isRepoHiddenFromProjects(repo)),
     activeRepoId,
     runtimeEnvironments
   )

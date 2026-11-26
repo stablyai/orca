@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
+import { useUserManagedRepos } from '@/store/repos/user-managed-repos'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '../../../store/index'
@@ -80,7 +81,7 @@ export function BrowserPane({
   const browserDefaultZoomLevel = useAppStore((s) => s.browserDefaultZoomLevel)
   const setBrowserDefaultZoomLevel = useAppStore((s) => s.setBrowserDefaultZoomLevel)
   const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
-  const repos = useAppStore((s) => s.repos)
+  const repos = useUserManagedRepos()
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)

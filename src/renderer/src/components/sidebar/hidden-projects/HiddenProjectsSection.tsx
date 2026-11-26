@@ -12,13 +12,16 @@ import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
 } from '../../../../../shared/execution-host/execution-host'
-import { isRepoHidden } from '../../../../../shared/project/catalog/hidden-projects'
+import {
+  isRepoHidden,
+  userManagedRepos
+} from '../../../../../shared/project/catalog/hidden-projects'
 import { getRepoRowIdentity } from '@/store/repos/repo-host-identity'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import { setProjectHidden } from './set-project-hidden'
 
 function selectHiddenRepos(repos: readonly Repo[]): Repo[] {
-  return repos
+  return userManagedRepos(repos)
     .filter(isRepoHidden)
     .sort(
       (a, b) => (b.hiddenAt ?? 0) - (a.hiddenAt ?? 0) || a.displayName.localeCompare(b.displayName)

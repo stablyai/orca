@@ -9,8 +9,10 @@ import type {
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   parseExecutionHostId,
+  toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
+import { setProjectsHiddenHosts } from '../../../../../shared/project/catalog/hidden-projects'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 
 const NO_HOSTS: readonly SharedBotHostView[] = []
@@ -31,6 +33,7 @@ function setState(next: SharedBotHostsState): void {
   requests = next.sharing === false ? NO_REQUESTS : (next.requests ?? NO_REQUESTS)
   sharing = next.sharing
   hydrated = true
+  setProjectsHiddenHosts(new Set(views.map((view) => toRuntimeExecutionHostId(view.environmentId))))
   for (const listener of listeners) {
     listener()
   }
@@ -47,6 +50,7 @@ export function installSharedBotHostCatalog(): () => void {
     requests = NO_REQUESTS
     sharing = null
     hydrated = false
+    setProjectsHiddenHosts(new Set())
     for (const listener of listeners) {
       listener()
     }

@@ -1,4 +1,5 @@
 import {
+  LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostIdOrDefault,
   normalizeExecutionHostId,
   type ExecutionHostId
@@ -12,8 +13,44 @@ type HiddenRepoRow = Pick<Repo, 'id' | 'hiddenAt' | 'connectionId' | 'executionH
 /** A workspace row as the hidden-project check reads it; `hostId` is its own stamp, if any. */
 export type HiddenProjectRowRef = { repoId: string; hostId?: string | null }
 
+/** The user's own Hide project toggle. Projects lists read `isRepoHiddenFromProjects`. */
 export function isRepoHidden(repo: Pick<Repo, 'hiddenAt'> | null | undefined): boolean {
   return typeof repo?.hiddenAt === 'number'
+}
+
+type HostedRepoRow = Pick<Repo, 'hiddenAt' | 'connectionId' | 'executionHostId'>
+
+// Hosts whose projects this window reaches but never lists: a shared agent's host, whose repos load
+// only for its workers' workspace pages (design G8). Set by the window that knows them.
+let projectsHiddenHosts: ReadonlySet<ExecutionHostId> = new Set()
+let projectsHiddenRevision = 0
+
+export function setProjectsHiddenHosts(hostIds: ReadonlySet<ExecutionHostId>): void {
+  projectsHiddenHosts = hostIds
+  projectsHiddenRevision += 1
+}
+
+/** Whether a repo is on a host whose projects are never listed here; false for unstamped repos. */
+export function isRepoOnProjectsHiddenHost(repo: Pick<Repo, 'connectionId' | 'executionHostId'>) {
+  if (projectsHiddenHosts.size === 0) {
+    return false
+  }
+  const hostId = getRepoExecutionHostIdOrDefault(repo, LOCAL_EXECUTION_HOST_ID)
+  return projectsHiddenHosts.has(hostId)
+}
+
+/** The one "kept out of Projects" check: hidden by the user, or on a host whose projects aren't listed. */
+export function isRepoHiddenFromProjects(repo: HostedRepoRow | null | undefined): boolean {
+  return !!repo && (isRepoHidden(repo) || isRepoOnProjectsHiddenHost(repo))
+}
+
+/** The repos this user configures here: never a projects-hidden host's (its owner's to manage). */
+export function userManagedRepos<R extends Pick<Repo, 'connectionId' | 'executionHostId'>>(
+  repos: readonly R[]
+): readonly R[] {
+  return repos.some(isRepoOnProjectsHiddenHost)
+    ? repos.filter((repo) => !isRepoOnProjectsHiddenHost(repo))
+    : repos
 }
 
 /** Hidden projects, host-qualified: hiding one host's copy leaves the others listed. */
@@ -33,7 +70,7 @@ export const NO_HIDDEN_PROJECTS: HiddenProjects = {
 
 const cache = new WeakMap<
   readonly HiddenRepoRow[],
-  { defaultHostId: ExecutionHostId; hidden: HiddenProjects }
+  { defaultHostId: ExecutionHostId; revision: number; hidden: HiddenProjects }
 >()
 
 const rowKey = (repoId: string, hostId: ExecutionHostId): string => `${hostId}\0${repoId}`
@@ -48,7 +85,7 @@ export function indexHiddenProjects(
   defaultHostId: ExecutionHostId
 ): HiddenProjects {
   const cached = cache.get(repos)
-  if (cached?.defaultHostId === defaultHostId) {
+  if (cached?.defaultHostId === defaultHostId && cached.revision === projectsHiddenRevision) {
     return cached.hidden
   }
   const hiddenKeys = new Set<string>()
@@ -62,7 +99,7 @@ export function indexHiddenProjects(
     } else {
       hostsByRepoId.set(repo.id, [hostId])
     }
-    if (isRepoHidden(repo)) {
+    if (isRepoHidden(repo) || projectsHiddenHosts.has(hostId)) {
       hiddenKeys.add(rowKey(repo.id, hostId))
     } else {
       listedRepoIds.add(repo.id)
@@ -82,7 +119,7 @@ export function indexHiddenProjects(
           },
           isProjectHidden: (repoId) => hostsByRepoId.has(repoId) && !listedRepoIds.has(repoId)
         }
-  cache.set(repos, { defaultHostId, hidden })
+  cache.set(repos, { defaultHostId, revision: projectsHiddenRevision, hidden })
   return hidden
 }
 
@@ -106,10 +143,10 @@ export function isListedByFolderWorkspace(
 }
 
 /** Drops hidden rows; returns the same array when nothing is hidden so memoized readers stay stable. */
-export function withoutHiddenRepos<R extends Pick<Repo, 'hiddenAt'>>(
-  repos: readonly R[]
-): readonly R[] {
-  return repos.some(isRepoHidden) ? repos.filter((repo) => !isRepoHidden(repo)) : repos
+export function withoutHiddenRepos<R extends HostedRepoRow>(repos: readonly R[]): readonly R[] {
+  return repos.some(isRepoHiddenFromProjects)
+    ? repos.filter((repo) => !isRepoHiddenFromProjects(repo))
+    : repos
 }
 
 /** Filter ids whose every copy is hidden select nothing visible; drop them rather than show an empty list. */
@@ -131,19 +168,19 @@ export function hiddenProjectRowFacts(hidden: HiddenProjects): {
 }
 
 /** A picker's list: hidden projects drop out, except the one already chosen, so an explicit target still shows. */
-export function pickerRepos<R extends Pick<Repo, 'id' | 'hiddenAt'>>(
+export function pickerRepos<R extends Pick<Repo, 'id'> & HostedRepoRow>(
   repos: R[],
   chosenRepoId?: string | null
 ): R[]
-export function pickerRepos<R extends Pick<Repo, 'id' | 'hiddenAt'>>(
+export function pickerRepos<R extends Pick<Repo, 'id'> & HostedRepoRow>(
   repos: readonly R[],
   chosenRepoId?: string | null
 ): readonly R[]
-export function pickerRepos<R extends Pick<Repo, 'id' | 'hiddenAt'>>(
+export function pickerRepos<R extends Pick<Repo, 'id'> & HostedRepoRow>(
   repos: readonly R[],
   chosenRepoId?: string | null
 ): readonly R[] {
-  return repos.some(isRepoHidden)
-    ? repos.filter((repo) => !isRepoHidden(repo) || repo.id === chosenRepoId)
+  return repos.some(isRepoHiddenFromProjects)
+    ? repos.filter((repo) => !isRepoHiddenFromProjects(repo) || repo.id === chosenRepoId)
     : repos
 }

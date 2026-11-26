@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useSharedBotHosts } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import { shallow } from 'zustand/shallow'
 import { getReachableRuntimeSessionMirrorTargets } from '@/runtime/web-session-tabs-sync/subscriptions/runtime-session-mirror-targets'
 import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
@@ -84,6 +85,8 @@ export function useRuntimeSessionMirrorEnvironmentKeys(): RuntimeSessionMirrorEn
     runtimeEnvironments,
     runtimeStatusByEnvironmentId
   } = inputs
+  // A shared host's revision comes from its share: a share arriving or ending re-reads the targets.
+  const sharedHosts = useSharedBotHosts()
   return useMemo(
     () =>
       buildRuntimeSessionMirrorEnvironmentKeys({
@@ -96,6 +99,7 @@ export function useRuntimeSessionMirrorEnvironmentKeys(): RuntimeSessionMirrorEn
         runtimeEnvironments,
         runtimeStatusByEnvironmentId
       }),
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- `sharedHosts` re-runs the read it changes.
     [
       activeRuntimeEnvironmentId,
       repos,
@@ -104,7 +108,8 @@ export function useRuntimeSessionMirrorEnvironmentKeys(): RuntimeSessionMirrorEn
       projectGroups,
       restoredRuntimeHostIdByWorkspaceSessionKey,
       runtimeEnvironments,
-      runtimeStatusByEnvironmentId
+      runtimeStatusByEnvironmentId,
+      sharedHosts
     ]
   )
 }

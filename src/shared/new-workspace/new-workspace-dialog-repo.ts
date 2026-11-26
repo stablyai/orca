@@ -5,7 +5,7 @@ import {
   type ExecutionHostScope
 } from '../execution-host/execution-host'
 import { isGitRepoKind } from '../repository/repo-kind'
-import { isRepoHidden } from '../project/catalog/hidden-projects'
+import { isRepoHiddenFromProjects } from '../project/catalog/hidden-projects'
 import type { Repo } from '../repository/repo-types'
 
 type NewWorkspaceDialogRepo = Pick<
@@ -35,7 +35,7 @@ export function resolveNewWorkspaceDialogRepoId({
 }): string {
   // Share repo seeding across the desktop dialogs and mobile.
   // Explicit draft/initial targets may name a hidden project; implicit defaults never pick one.
-  const listedRepos = eligibleRepos.filter((repo) => !isRepoHidden(repo))
+  const listedRepos = eligibleRepos.filter((repo) => !isRepoHiddenFromProjects(repo))
   const focusedHostRepo =
     focusedHostScope && focusedHostScope !== ALL_EXECUTION_HOSTS_SCOPE
       ? listedRepos.find((repo) => getRepoExecutionHostId(repo) === focusedHostScope)
