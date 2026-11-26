@@ -8,7 +8,11 @@ import type {
 } from '../agent-session/journal/agent-session-journal-types'
 
 /** Only these agents have a place where Orca can hold a run to replies with no tools. */
-export const TIDY_UP_AGENTS = ['claude', 'codex'] as const satisfies readonly BotAgent[]
+export const TIDY_UP_AGENTS = [
+  'claude',
+  'codex',
+  'antigravity'
+] as const satisfies readonly BotAgent[]
 
 export function tidyUpSupported(agent: string): boolean {
   return TIDY_UP_AGENTS.some((entry) => entry === agent)

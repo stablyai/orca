@@ -25,8 +25,11 @@ function makeBot(agent: Bot['agent']): Bot {
 }
 
 describe('botUpcomingRows', () => {
-  it('shows both routines for Claude/Codex and neither for unsupported agents', () => {
+  it('shows only Tidy memory for Antigravity, both routines for Claude/Codex, and neither for unsupported agents', () => {
     const empty = { automations: [], waits: [] }
+    expect(botUpcomingRows(makeBot('antigravity'), empty).map((row) => row.kind)).toEqual([
+      'tidy-up'
+    ])
     expect(botUpcomingRows(makeBot('claude'), empty).map((row) => row.kind)).toEqual([
       'tidy-up',
       'look-around'

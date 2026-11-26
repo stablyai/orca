@@ -46,6 +46,7 @@ import {
   antigravityHostAccountHome,
   isAntigravityHostAccountHome
 } from './antigravity-host-acp'
+import { prepareAntigravityReplyOnlyLaunch } from './antigravity-reply-only-home'
 
 // Chats and terminals share agy's conversation store when a chat runs the host's `agy acp`. A bare
 // `-c` is not refused: managed chats live elsewhere, so it would block agy for every Chat user.
@@ -109,6 +110,7 @@ const ANTIGRAVITY_AGY_LAUNCH_SPEC = {
   // without one they get launch's cliMissing refusal.
   managedCopyAllowed: (settings) => settings.antigravityManagedAgyEnabled !== false,
   args: ({ fullAccess }) => ['acp', ...(fullAccess ? [AGY_SKIP_PERMISSIONS_FLAG] : [])],
+  prepareReadOnlyLaunch: prepareAntigravityReplyOnlyLaunch,
   clientInfo: agyClientInfo,
   // Match terminal and quota launches: a background updater steals focus on Windows (#27390)
   // and can replace agy mid-probe.

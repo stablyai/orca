@@ -8,42 +8,42 @@ import { tidyNowRefusal } from './bot-memory-tidy-up'
 import { BotTidyUpRunner } from './bot-memory-tidy-up-runner'
 
 describe('tidyUpSupported vs lookAroundSupported', () => {
-  it('supports Claude and Codex while refusing unconfigured agents', () => {
+  it('enables Tidy-up for Antigravity while keeping Look around restricted to Claude and Codex', () => {
+    expect(tidyUpSupported('antigravity')).toBe(true)
     expect(tidyUpSupported('claude')).toBe(true)
     expect(tidyUpSupported('codex')).toBe(true)
-    expect(tidyUpSupported('antigravity')).toBe(false)
     expect(tidyUpSupported('cursor')).toBe(false)
 
+    expect(lookAroundSupported('antigravity')).toBe(false)
     expect(lookAroundSupported('claude')).toBe(true)
     expect(lookAroundSupported('codex')).toBe(true)
-    expect(lookAroundSupported('antigravity')).toBe(false)
   })
 
-  it('allows tidyNowRefusal for active idle supported bots and refuses unsupported agents', () => {
+  it('allows tidyNowRefusal for an active idle Antigravity bot and refuses unsupported agents', () => {
     expect(
-      tidyNowRefusal(makeTestBot({ agent: 'claude' }), { running: false, busy: false })
+      tidyNowRefusal(makeTestBot({ agent: 'antigravity' }), { running: false, busy: false })
     ).toBeNull()
     expect(tidyNowRefusal(makeTestBot({ agent: 'cursor' }), { running: false, busy: false })).toBe(
       'unsupported'
     )
     expect(
-      tidyNowRefusal(makeTestBot({ agent: 'claude', paused: true }), {
+      tidyNowRefusal(makeTestBot({ agent: 'antigravity', paused: true }), {
         running: false,
         busy: false
       })
     ).toBe('paused')
-    expect(tidyNowRefusal(makeTestBot({ agent: 'claude' }), { running: true, busy: false })).toBe(
-      'running'
-    )
-    expect(tidyNowRefusal(makeTestBot({ agent: 'claude' }), { running: false, busy: true })).toBe(
-      'busy'
-    )
+    expect(
+      tidyNowRefusal(makeTestBot({ agent: 'antigravity' }), { running: true, busy: false })
+    ).toBe('running')
+    expect(
+      tidyNowRefusal(makeTestBot({ agent: 'antigravity' }), { running: false, busy: true })
+    ).toBe('busy')
   })
 })
 
-describe('BotTidyUpRunner', () => {
+describe('BotTidyUpRunner for Antigravity bots', () => {
   it('starts a Tidy now run and applies the returned MEMORY.md draft', async () => {
-    const bot = makeTestBot({ id: 'tidy-bot', agent: 'claude' })
+    const bot = makeTestBot({ id: 'agy-bot', agent: 'antigravity' })
     let state: BotLookState = { suggestions: [], dismissals: [], seenAt: 0, runs: [] }
     let currentMemory = '- 2026-11-20 Existing fact\n'
     const startedConversations: { sessionId?: string; text: string }[] = []
@@ -133,6 +133,6 @@ describe('BotTidyUpRunner', () => {
     expect(startedConversations).toHaveLength(1)
     expect(currentMemory).toContain(`- ${today} Always reply in concise bullets.`)
     expect(state.tidyUp?.last?.learned).toEqual(['Always reply in concise bullets.'])
-    expect(noted).toEqual([{ botId: 'tidy-bot', changes: 1 }])
+    expect(noted).toEqual([{ botId: 'agy-bot', changes: 1 }])
   })
 })
