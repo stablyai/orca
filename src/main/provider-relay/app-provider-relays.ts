@@ -203,7 +203,10 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
         rememberKeptProviderRelay(launch.chatKey, relay)
         handedBack.add(launch.chatKey)
       }
-      return { managed: relayedManagedProcess(child), child, reattached: true, keep }
+      // A reattached agent is relayed before its placement commits: quit hands it back even then.
+      const handOff = () => (quitting ? detachProviderRelayForQuit(launch.chatKey, null) : null)
+      const managed = relayedManagedProcess(child, handOff)
+      return { managed, child, reattached: true, keep }
     }
   }
   // A failed attach asks the run's daemon start again; only its word (or proof) ends the run.
