@@ -8,6 +8,7 @@ import type { WorkerFollowUp } from './follow-up/worker-follow-up-placement'
 import { withWorkerStartNext } from '../receipt-next'
 import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-start-params'
 import { prepareWorkerStart, type WorkerStartContext } from './start/worker-start-admission'
+import { applyWorkerStartSettingsDefaults } from './start/launch/worker-launch-preferences'
 import { resolveWorkerStartReadinessTimeoutMs } from '../../../../../../shared/orchestration/orchestration-timing-budgets'
 import { checkedWorkerOrigin } from '../../bots-items-worker-origin'
 import { decideStartMode, noteTerminalFallbackOnItem } from './start/worker-chat-lineage'
@@ -68,8 +69,7 @@ export async function startWorker(
     startFollowUp
   )
   const {
-    params,
-    defaultsApplied,
+    params: admittedParams,
     followUp,
     coordinator,
     bindRun,
@@ -78,6 +78,8 @@ export async function startWorker(
     existingTask,
     withRun
   } = prepared
+  // Why: follow-up placement has already spoken, so Settings only fills what no one named.
+  const { params, defaultsApplied } = applyWorkerStartSettingsDefaults(runtime, admittedParams)
   const db = runtime.getOrchestrationDb()
   const questionLink =
     params.forQuestion !== undefined

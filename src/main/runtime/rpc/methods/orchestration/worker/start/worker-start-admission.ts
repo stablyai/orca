@@ -1,5 +1,4 @@
 import type { RpcContext } from '../../../../core'
-import { applyWorkerStartSettingsDefaults } from './launch/worker-launch-preferences'
 import { OrchestrationError } from '../../../../../orchestration/orchestration-error'
 import type { z } from 'zod'
 import type { WorkerFollowUp } from '../follow-up/worker-follow-up-placement'
@@ -176,7 +175,7 @@ export async function prepareWorkerStart(
     await assertWorkerStartTaskSpecWithinPromptBudget(spec)
   }
   return {
-    ...applyWorkerStartSettingsDefaults(runtime, params),
+    params,
     followUp,
     coordinator,
     bindRun,
