@@ -26,6 +26,7 @@ import {
   nameLocalTypedLineShell
 } from '../../terminal/launch/agent-launch-typed-line-shell'
 import { detectAgentsOnHost } from '../../../preflight/workspace-agent-detection'
+import { AgentInventoryDeadlineError } from '../../../preflight/agent-command-detection'
 import { agentCommandOverrideDetectionOptions } from '../../../preflight/installed-agent-detection'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { RuntimeManagedWorktreeCreateArgs } from '../creation/runtime-managed-worktree-create-types'
@@ -80,8 +81,10 @@ export async function resolveWorktreeStartupDraftAgent(
         ...agentCommandOverrideDetectionOptions(settings.agentCmdOverrides)
       }
     )
-  } catch {
-    detected = []
+  } catch (error) {
+    if (error instanceof AgentInventoryDeadlineError) {
+      throw error
+    }
   }
   return pickTuiAgent(null, detected.filter(isTuiAgent), settings.disabledTuiAgents)
 }

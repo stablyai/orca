@@ -4,11 +4,13 @@ import type * as NodeOs from 'node:os'
 import type * as AppEnvironment from '../../../../../shared/app-lifecycle/app-environment'
 import type * as WslDefaultDistro from '../../../../wsl/discovery/wsl-default-distro'
 import type * as WslRunner from '../../../../wsl/execution/wsl-runner'
+import type { SleepingAgentLaunchConfig } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { alignManagedAgentLaunchAtSpawn } from '../../../../managed-agent-cli/managed-agent-spawn-program'
+import { createWorktreeWithStartupAgent } from '../../../../agent-launch/startup-agent-worktree-create'
 import {
   detectInstalledAgentInventory,
   detectInstalledAgents
@@ -27,7 +29,9 @@ import {
   refreshAgentsOnHost
 } from '../../../../preflight/workspace-agent-detection'
 import { resolveClaudeTeamsInvocation } from '../../../terminal/launch/claude-teams-invocation'
-import { resolveQoderTerminalCommand } from '../../../terminal/launch/qoder-terminal-command-resolution'
+import { partialRuntimeStore } from '../../../construction/test-context/runtime-store-partial-fixture'
+import { resolveAgentTerminalCreateOptions } from '../../../terminal/launch/runtime-agent-terminal-startup'
+import { resolveWorktreeStartupDraftAgent } from '../../../workspaces/startup/runtime-worktree-agent-startup'
 
 const fixture = vi.hoisted(() => {
   const pending: { installs?: Promise<void>; onScan?: () => void } = {}
@@ -107,7 +111,12 @@ const windows = process.platform === 'win32'
 const shell = windows ? 'powershell' : 'posix'
 const claudeName = windows ? 'claude.exe' : 'claude'
 const quoted = (file: string) => (windows ? `& '${file}'` : `'${file}'`)
-const legacy = (agentCommand: string) => ({ agentCommand, agentArgs: '--verbose', agentEnv: {} })
+const legacy = (agentCommand: string) =>
+  ({
+    agentCommand,
+    agentArgs: '--verbose',
+    agentEnv: {}
+  }) satisfies SleepingAgentLaunchConfig
 
 beforeEach(async () => {
   fixture.root = await mkdtemp(join(tmpdir(), 'orca-terminal-inventory-'))
@@ -130,26 +139,85 @@ async function executable(...parts: string[]): Promise<string> {
   return file
 }
 
-it('starts and records Qoder when only the qoder alias is installed', async () => {
-  await executable('path', windows ? 'qoder.exe' : 'qoder')
-  const launch = await resolveQoderTerminalCommand(
-    {
-      launchAgent: 'qoder' as const,
-      command: 'qodercli --verbose',
-      launchConfig: {
-        commandProvenance: 'generated' as const,
-        agentCommand: 'qodercli --verbose',
-        agentEnv: {}
-      }
-    },
-    { shell }
-  )
+it.each([
+  {
+    installed: 'qoder',
+    saved: 'qodercli --verbose',
+    command: 'qodercli --verbose',
+    restoring: false,
+    expected: 'qoder --verbose',
+    recipe: 'qoder --verbose'
+  },
+  {
+    installed: 'qodercli',
+    saved: 'qoder --verbose',
+    command: 'qoder --verbose --resume session',
+    restoring: true,
+    expected: 'qodercli --verbose --resume session',
+    recipe: 'qodercli --verbose'
+  }
+])('launches and records $installed when it is the only Qoder spelling installed', async (test) => {
+  await executable('path', windows ? `${test.installed}.exe` : test.installed)
   await expect(
-    alignManagedAgentLaunchAtSpawn({ ...launch, launchCommand: launch.command }, shell)
-  ).resolves.toMatchObject({
-    command: 'qoder --verbose',
-    launchConfig: { agentCommand: 'qoder --verbose', commandProvenance: 'generated' }
+    alignManagedAgentLaunchAtSpawn(
+      {
+        launchAgent: 'qoder',
+        launchCommand: test.command,
+        launchConfig: { ...legacy(test.saved), commandProvenance: 'generated' },
+        restoring: test.restoring
+      },
+      shell
+    )
+  ).resolves.toEqual({
+    command: test.expected,
+    launchConfig: { ...legacy(test.recipe), commandProvenance: 'generated' }
   })
+  expect(fixture.enumerate).toHaveBeenCalledTimes(1)
+})
+
+it('opens a usable shell after one Qoder inventory deadline from terminal create', async () => {
+  await executable('path', windows ? 'qodercli.exe' : 'qodercli')
+  const entered = Promise.withResolvers<void>()
+  const held = Promise.withResolvers<void>()
+  fixture.onScan = entered.resolve
+  fixture.installs = held.promise
+  vi.useFakeTimers()
+  const launchConfig: SleepingAgentLaunchConfig = {
+    ...legacy('qodercli --verbose'),
+    commandProvenance: 'generated'
+  }
+  const launch = resolveAgentTerminalCreateOptions(
+    { id: 'workspace', path: fixture.root, connectionId: null, repo: null, folderWorkspace: null },
+    {
+      command: 'qodercli --verbose',
+      launchAgent: 'qoder',
+      launchConfig,
+      launchRuntime: { platform: process.platform, pty: {} }
+    },
+    { store: partialRuntimeStore(), hostIdentity: 'test', toSessionOptions: () => undefined }
+  ).then((options) =>
+    alignManagedAgentLaunchAtSpawn(
+      {
+        launchCommand: options.command,
+        launchAgent: options.launchAgent,
+        launchConfig: options.launchConfig
+      },
+      shell
+    )
+  )
+  try {
+    await entered.promise
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(await Promise.race([launch, Promise.resolve('pending')])).toEqual({
+      command: undefined,
+      launchConfig,
+      blocked: 'unknown'
+    })
+  } finally {
+    const completion = readLocalTerminalAgentProgram('qodercli', shell)
+    held.resolve()
+    await Promise.all([completion, launch])
+  }
 })
 
 it('migrates saved Orca and bare Claude heads through the same inventory', async () => {
@@ -473,6 +541,57 @@ it('returns the published agents as incomplete when a detect wait expires', asyn
     held.resolve()
     await completion
   }
+})
+
+it('allows workspace creation to retry its draft after an inventory timeout', async () => {
+  await executable('path', claudeName)
+  const entered = Promise.withResolvers<void>()
+  const held = Promise.withResolvers<void>()
+  fixture.onScan = entered.resolve
+  fixture.installs = held.promise
+  vi.useFakeTimers()
+  const repo = { id: 'repo', path: fixture.root, displayName: 'Repo', badgeColor: '', addedAt: 0 }
+  const store = partialRuntimeStore()
+  type CreateRuntime = Parameters<typeof createWorktreeWithStartupAgent>[0]
+  const reachedCreate = new Error('Reached workspace creation')
+  const runtime: CreateRuntime = {
+    showRepo: async () => repo,
+    resolveStartupDraftAgent: (resolvedRepo, requestedAgent) =>
+      resolveWorktreeStartupDraftAgent({
+        repo: resolvedRepo,
+        settings: store.getSettings(),
+        requestedAgent
+      }),
+    createManagedWorktree: vi
+      .fn<CreateRuntime['createManagedWorktree']>()
+      .mockRejectedValue(reachedCreate),
+    requireStore: () => store,
+    getStructuredAgentSessionCreateSupport:
+      vi.fn<CreateRuntime['getStructuredAgentSessionCreateSupport']>()
+  }
+  const args = {
+    repoSelector: 'repo',
+    name: 'draft-workspace',
+    startupDraft: 'Review these changes'
+  }
+  const first = createWorktreeWithStartupAgent(runtime, args).catch((error: unknown) => error)
+  try {
+    await entered.promise
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(await first).toEqual(new Error('Agent inventory is still running. Try again.'))
+    expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
+  } finally {
+    const completion = readLocalTerminalAgentProgram('claude', shell)
+    held.resolve()
+    await completion
+  }
+  await expect(createWorktreeWithStartupAgent(runtime, args)).rejects.toBe(reachedCreate)
+  expect(runtime.createManagedWorktree).toHaveBeenCalledExactlyOnceWith({
+    repoSelector: 'repo',
+    name: 'draft-workspace',
+    startupDraft: 'Review these changes',
+    startupDraftAgent: 'claude'
+  })
 })
 
 it('uses WSL fallback hits and retries inconclusive misses after cooldown', async () => {

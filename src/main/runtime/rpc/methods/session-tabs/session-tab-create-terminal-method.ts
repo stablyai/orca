@@ -6,7 +6,6 @@ import { CreateTerminalTab } from '../../../../../shared/rpc-contract/session-ta
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/structured-sessions/structured-session-ownership'
 import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
-import { legacyNativeChatSignInRequest } from '../../../../managed-agent-cli/prepare-native-chat-sign-in'
 
 export const SESSION_TAB_CREATE_TERMINAL_METHOD = defineMethod({
   name: 'session.tabs.createTerminal',
@@ -30,15 +29,7 @@ export const SESSION_TAB_CREATE_TERMINAL_METHOD = defineMethod({
       cwd: params.cwd,
       ...(params.env ? { env: params.env } : {}),
       ...(params.envToDelete ? { envToDelete: params.envToDelete } : {}),
-      nativeChatSignIn:
-        params.nativeChatSignIn ??
-        (clientKind === 'mobile' &&
-        params.startupCommandDelivery === 'shell-ready' &&
-        !params.agent &&
-        !params.launchAgent &&
-        !params.launchConfig
-          ? legacyNativeChatSignInRequest(params.command)
-          : undefined),
+      nativeChatSignIn: params.nativeChatSignIn,
       startupCommandDelivery: params.startupCommandDelivery,
       agent: params.agent,
       ...(params.agentPrompt !== undefined ? { agentPrompt: params.agentPrompt } : {}),

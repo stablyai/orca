@@ -5,14 +5,24 @@ import { readLaunchPosition } from '../../../../shared/agent-launch/startup/laun
 import { structuredAgentCommandPlan } from '../../../../shared/agent-launch/startup/tui-agent-launch-command-override'
 import { launchCommandProvenance } from '../../../../shared/agent-launch/startup/managed-agent-launch-program'
 import {
+  throwIfSignalAborted,
+  waitForPromiseWithSignal
+} from '../../../../shared/concurrency/abort-signal-reason'
+import { stripWindowsPathQuotes } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
+import {
   AgentInventoryDeadlineError,
-  readLocalTerminalAgentProgram
+  readLocalTerminalAgentProgram,
+  withAgentInventoryDeadline
 } from '../../../preflight/agent-command-detection'
 import { isOrcaAgentRuntimePath } from '../../../managed-agent-cli/managed-agent-cli-path'
 import { isExecutableFile } from '../../../ipc/command-path/command-path-directory'
-import { resolveCommandOnLocalPath } from '../../../ipc/command-path/command-path-resolver'
+import {
+  readEnvCaseInsensitive,
+  resolveCommandOnLocalPath
+} from '../../../ipc/command-path/command-path-resolver'
 
 type Caller = { env?: Record<string, string>; cwd?: string }
+const pendingCallerClaudeLookups = new Map<string, Promise<string | null>>()
 
 export async function resolveClaudeTeamsInvocation(
   override: string | undefined,
@@ -45,33 +55,60 @@ export async function resolveClaudeTeamsInvocation(
 }
 
 async function userClaude(caller: Caller): Promise<string> {
-  const selection = await readLocalTerminalAgentProgram('claude', 'posix')
-  if ('path' in selection) {
-    return selection.path
-  }
-  if (caller.env) {
-    const cwd = caller.cwd ?? caller.env.PWD
-    const directories = (caller.env.PATH ?? '/usr/bin:/bin').split(delimiter)
-    const path = directories
-      .map((dir) => (cwd && isAbsolute(cwd) ? resolve(cwd, dir) : dir))
-      .filter((dir) => isAbsolute(dir) && !isOrcaAgentRuntimePath(dir))
-      .join(delimiter)
-    const command = await resolveCommandOnLocalPath('claude', {
-      env: { ...caller.env, PATH: path },
+  return withAgentInventoryDeadline(async (signal) => {
+    const selection = await readLocalTerminalAgentProgram('claude', 'posix', false, signal)
+    throwIfSignalAborted(signal)
+    if ('path' in selection) {
+      return selection.path
+    }
+    if (caller.env) {
+      const command = await waitForPromiseWithSignal(
+        resolveClaudeOnCallerPath(caller.env, caller.cwd ?? caller.env.PWD),
+        signal
+      )
+      if (command) {
+        return command
+      }
+    }
+    if (selection.kind === 'unknown') {
+      throw new AgentInventoryDeadlineError()
+    }
+    throw new Error('Your Claude installation could not be found.')
+  })
+}
+
+function resolveClaudeOnCallerPath(
+  env: Record<string, string>,
+  cwd: string | undefined
+): Promise<string | null> {
+  const windows = process.platform === 'win32'
+  const callerPath = windows
+    ? (readEnvCaseInsensitive(env, 'PATH') ?? '')
+    : (env.PATH ?? '/usr/bin:/bin')
+  const path = callerPath
+    .split(delimiter)
+    .map((dir) => (windows ? stripWindowsPathQuotes(dir) : dir))
+    .map((dir) => (cwd && isAbsolute(cwd) ? resolve(cwd, dir) : dir))
+    .filter((dir) => isAbsolute(dir) && !isOrcaAgentRuntimePath(dir))
+    .join(delimiter)
+  const pathExt = windows ? readEnvCaseInsensitive(env, 'PATHEXT') : undefined
+  const key = JSON.stringify([path, cwd, pathExt])
+  let pending = pendingCallerClaudeLookups.get(key)
+  if (!pending) {
+    pending = resolveCommandOnLocalPath('claude', {
+      env: { PATH: path, PATHEXT: pathExt },
       cwd,
       probeCandidate: async (candidate) => {
+        if (isOrcaAgentRuntimePath(candidate) || !(await isExecutableFile(candidate, windows))) {
+          return false
+        }
         const target = await realpath(candidate).catch(() => undefined)
-        return Boolean(
-          target && !isOrcaAgentRuntimePath(target) && (await isExecutableFile(candidate, false))
-        )
+        return Boolean(target && !isOrcaAgentRuntimePath(target))
       }
+    }).finally(() => {
+      pendingCallerClaudeLookups.delete(key)
     })
-    if (command) {
-      return command
-    }
+    pendingCallerClaudeLookups.set(key, pending)
   }
-  if (selection.kind === 'unknown') {
-    throw new AgentInventoryDeadlineError()
-  }
-  throw new Error('Your Claude installation could not be found.')
+  return pending
 }

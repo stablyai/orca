@@ -35,10 +35,9 @@ import { isOrcaAgentRuntimePath } from './managed-agent-cli-path'
 import { resolveCmdLaunchFolderProgram } from '../ipc/command-path/cmd-launch-folder-program'
 import { checkExecutableFile } from '../ipc/command-path/command-path-directory'
 import {
-  readLocalTerminalAgentProgram,
-  readWslTerminalAgentProgram,
+  selectTerminalAgentProgram,
   withAgentInventoryDeadline,
-  type TerminalAgentProgram
+  type TerminalAgentProgramSelection
 } from '../preflight/agent-command-detection'
 import { prepareNativeChatSignIn } from './prepare-native-chat-sign-in'
 
@@ -97,21 +96,21 @@ function managedPathAgent(program: string): TuiAgent | undefined {
 async function selectProgram(
   spawn: SpawnLaunch,
   shell: AgentStartupShell,
-  program: string,
+  programs: readonly [string, ...string[]],
   launch: LaunchPosition,
   pinned: string | undefined,
   signal: AbortSignal
-): Promise<TerminalAgentProgram> {
+): Promise<TerminalAgentProgramSelection> {
+  const preferred = programs[0]
   if (spawn.codexRuntime === 'wsl') {
-    return readWslTerminalAgentProgram(
-      { distro: spawn.expectedWslDistro ?? undefined },
-      program,
+    return selectTerminalAgentProgram(programs, shell, {
+      wsl: { distro: spawn.expectedWslDistro ?? undefined },
       signal
-    )
+    })
   }
   if (spawn.sshTarget) {
     // SSH panes execute the name in the guest shell, with no desktop runtime paths.
-    return { kind: 'by-name', path: program }
+    return { program: preferred, result: { kind: 'by-name', path: preferred } }
   }
   if (pinned && isAbsolute(pinned) && !isOrcaAgentRuntimePath(pinned)) {
     const checked = await waitForPromiseWithSignal(
@@ -119,13 +118,17 @@ async function selectProgram(
       signal
     )
     if (checked === 'executable') {
-      return { kind: 'full-path', path: pinned }
+      return { program: preferred, result: { kind: 'full-path', path: pinned } }
     }
     if (checked === 'unknown') {
-      return { kind: 'unknown' }
+      return { program: preferred, result: { kind: 'unknown' } }
     }
   }
-  const selected = await readLocalTerminalAgentProgram(program, shell, Boolean(pinned), signal)
+  const selection = await selectTerminalAgentProgram(programs, shell, {
+    refresh: Boolean(pinned),
+    signal
+  })
+  const { program, result: selected } = selection
   throwIfSignalAborted(signal)
   if (
     selected.kind === 'by-name' &&
@@ -133,10 +136,10 @@ async function selectProgram(
       process.platform === 'win32' ? /^(path|pathext)$/i.test(key) : key === 'PATH'
     )
   ) {
-    return { kind: 'full-path', path: selected.path }
+    return { program, result: { kind: 'full-path', path: selected.path } }
   }
   if (process.platform !== 'win32' || shell !== 'cmd' || selected.kind !== 'by-name') {
-    return selected
+    return selection
   }
   const launchCwd = launch.cwd ?? '.'
   const cwd = isAbsolute(launchCwd)
@@ -154,8 +157,8 @@ async function selectProgram(
   const first = await resolveCmdLaunchFolderProgram(program, cwd, pathExt, signal)
   return first &&
     normalizeRuntimePathForComparison(first) !== normalizeRuntimePathForComparison(selected.path)
-    ? { kind: 'full-path', path: selected.path }
-    : selected
+    ? { program, result: { kind: 'full-path', path: selected.path } }
+    : selection
 }
 
 export async function alignManagedAgentLaunchAtSpawn(
@@ -219,13 +222,12 @@ async function rewriteLaunchExecutable(
   const guest = spawn.sshTarget || spawn.codexRuntime === 'wsl'
   const platform = guest ? 'linux' : process.platform
   const stock = (agent: TuiAgent) => stockLaunchProgram(agent, platform, guest)
-  const alias = (agent: TuiAgent, program: string) =>
-    TUI_AGENT_CONFIG[agent].detectCmdAliases?.find((name) =>
-      matchesStockLaunchProgram(program, name, platform)
-    )
-  const matchesAgent = (agent: TuiAgent, program: string) =>
-    matchesStockLaunchProgram(program, stock(agent), platform) ||
-    alias(agent, program) !== undefined
+  const namesFor = (agent: TuiAgent) => [
+    stock(agent),
+    ...(TUI_AGENT_CONFIG[agent].detectCmdAliases ?? [])
+  ]
+  const nameFor = (agent: TuiAgent, program: string | undefined) =>
+    namesFor(agent).find((name) => matchesStockLaunchProgram(program, name, platform))
   const sourceProgram =
     spawn.codexRuntime === 'wsl'
       ? (toWindowsWslDrivePath(launch.executable) ?? launch.executable)
@@ -243,13 +245,12 @@ async function rewriteLaunchExecutable(
     ? (managedPathAgent(sourceProgram) ??
       (bare
         ? [spawn.launchAgent, ...stockAgents].find(
-            (agent) => agent && matchesAgent(agent, recorded.executable)
+            (agent) => agent && nameFor(agent, recorded.executable)
           )
         : undefined))
     : undefined
   const agent = generated
-    ? (spawn.launchAgent ??
-      stockAgents.find((candidate) => matchesAgent(candidate, launch.executable)))
+    ? (spawn.launchAgent ?? stockAgents.find((candidate) => nameFor(candidate, launch.executable)))
     : oldAgent
   if (generated && !agent) {
     return { command: undefined, launchConfig: config, blocked: 'unknown' }
@@ -257,14 +258,15 @@ async function rewriteLaunchExecutable(
   let executable = launch.executable
   let launchConfig = config
   if (agent) {
-    const program =
-      alias(agent, launch.executable) ??
-      (recorded && alias(agent, recorded.executable)) ??
-      stock(agent)
+    const primary = stock(agent)
+    const recordedName = nameFor(agent, recorded?.executable)
+    const preferred = nameFor(agent, launch.executable) ?? recordedName ?? primary
+    const alternatives =
+      agent === 'qoder' ? namesFor(agent).filter((name) => name !== preferred) : []
     const pinned = spawn.restoring ? config?.selectedExecutable : undefined
-    const selected = await withAgentInventoryDeadline((signal) =>
-      selectProgram(spawn, shell, program, launch, pinned, signal)
-    ).catch(() => ({ kind: 'unknown' as const }))
+    const { program, result: selected } = await withAgentInventoryDeadline((signal) =>
+      selectProgram(spawn, shell, [preferred, ...alternatives], launch, pinned, signal)
+    ).catch(() => ({ program: preferred, result: { kind: 'unknown' as const } }))
     if (!('path' in selected)) {
       return { command: undefined, launchConfig: config, blocked: selected.kind }
     }
@@ -276,9 +278,14 @@ async function rewriteLaunchExecutable(
           : program
     if (config) {
       const { selectedExecutable: _previous, ...recipe } = config
+      const updateRecipe =
+        oldAgent ||
+        program !== primary ||
+        program !== preferred ||
+        (recordedName && recordedName !== program)
       launchConfig = {
         ...recipe,
-        ...((oldAgent || program !== stock(agent)) && recorded && config.agentCommand
+        ...(updateRecipe && recorded && config.agentCommand
           ? {
               agentCommand: replaceLaunchExecutable(config.agentCommand, source, recorded, program)
             }

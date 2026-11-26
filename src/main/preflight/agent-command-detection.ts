@@ -56,6 +56,8 @@ export type TerminalAgentProgram =
   | { kind: 'by-name' | 'full-path'; path: string }
   | { kind: 'unavailable' | 'unknown' }
 
+export type TerminalAgentProgramSelection = { program: string; result: TerminalAgentProgram }
+
 function qualifyProgram(
   match: AgentPathMatch | undefined,
   shell: AgentStartupShell
@@ -75,16 +77,7 @@ export async function readLocalTerminalAgentProgram(
   refresh = false,
   signal?: AbortSignal
 ): Promise<TerminalAgentProgram> {
-  return withAgentInventoryDeadline<TerminalAgentProgram>(async (waitSignal) => {
-    const slot = getLocalInventory()
-    const inventory = await waitForPromiseWithSignal(
-      readInventory(slot, [program], refresh ? 'revalidate' : 'read'),
-      waitSignal
-    )
-    return slot === getLocalInventory() && inventory?.probed.has(program)
-      ? qualifyProgram(inventory.matches.get(program), shell)
-      : { kind: 'unknown' }
-  }, signal).catch((): TerminalAgentProgram => ({ kind: 'unknown' }))
+  return (await selectTerminalAgentProgram([program], shell, { refresh, signal })).result
 }
 
 export async function readWslTerminalAgentProgram(
@@ -92,19 +85,44 @@ export async function readWslTerminalAgentProgram(
   program: string,
   signal?: AbortSignal
 ): Promise<TerminalAgentProgram> {
-  return withAgentInventoryDeadline<TerminalAgentProgram>(async (waitSignal) => {
-    const slot = await wslInventory(target, waitSignal)
+  return (await selectTerminalAgentProgram([program], 'posix', { wsl: target, signal })).result
+}
+
+/** Select the first available spelling from one inventory read in the receiving shell. */
+export async function selectTerminalAgentProgram(
+  programs: readonly [string, ...string[]],
+  shell: AgentStartupShell,
+  options: { wsl?: WslPreflightTarget; refresh?: boolean; signal?: AbortSignal }
+): Promise<TerminalAgentProgramSelection> {
+  const { wsl, refresh, signal } = options
+  const preferred = programs[0]
+  return withAgentInventoryDeadline<TerminalAgentProgramSelection>(async (waitSignal) => {
+    const slot = wsl ? await wslInventory(wsl, waitSignal) : getLocalInventory()
     throwIfSignalAborted(waitSignal)
     const inventory = slot
-      ? await waitForPromiseWithSignal(readInventory(slot, [program], 'read'), waitSignal)
+      ? await waitForPromiseWithSignal(
+          readInventory(slot, programs, refresh ? 'revalidate' : 'read'),
+          waitSignal
+        )
       : null
-    if (!inventory?.probed.has(program)) {
-      return { kind: 'unknown' }
+    if (!inventory || (!wsl && slot !== getLocalInventory())) {
+      return { program: preferred, result: { kind: 'unknown' } }
     }
-    return inventory.found.has(program)
-      ? { kind: 'by-name', path: program }
-      : { kind: 'unavailable' }
-  }, signal).catch((): TerminalAgentProgram => ({ kind: 'unknown' }))
+    for (const program of programs) {
+      if (!inventory.probed.has(program)) {
+        return { program, result: { kind: 'unknown' } }
+      }
+      const result: TerminalAgentProgram = wsl
+        ? inventory.found.has(program)
+          ? { kind: 'by-name', path: program }
+          : { kind: 'unavailable' }
+        : qualifyProgram(inventory.matches.get(program), shell)
+      if (result.kind !== 'unavailable') {
+        return { program, result }
+      }
+    }
+    return { program: preferred, result: { kind: 'unavailable' } }
+  }, signal).catch(() => ({ program: preferred, result: { kind: 'unknown' as const } }))
 }
 
 type CommandDetectionOptions = {

@@ -1,5 +1,4 @@
 import {
-  AGENT_SESSION_SETUP_COMMANDS,
   agentSessionSignInCommand,
   agentSessionSetupFor,
   type NativeChatSignInRequest
@@ -11,33 +10,6 @@ import { getPreflightWslTarget } from '../ipc/preflight/preflight-runtime-target
 import type { AgentDetectionHost } from '../preflight/workspace-agent-detection'
 import { resolveNativeChatSignInProgram } from '../runtime/rpc/methods/host-management/managed-copy-detection'
 import { isManagedAgentCli } from './managed-agent-cli-registry'
-
-export function legacyNativeChatSignInRequest(
-  command: string | undefined
-): NativeChatSignInRequest | undefined {
-  if (!command) {
-    return undefined
-  }
-  const shells: AgentStartupShell[] =
-    process.platform === 'win32' ? ['posix', 'powershell', 'cmd'] : ['posix']
-  for (const { agent } of AGENT_SESSION_SETUP_COMMANDS) {
-    if (!isManagedAgentCli(agent)) {
-      continue
-    }
-    for (const account of [undefined, 'system', 'managed'] as const) {
-      for (const remote of [true, false]) {
-        if (
-          shells.some(
-            (shell) => agentSessionSignInCommand(agent, { account, remote, shell }) === command
-          )
-        ) {
-          return { agent, account, remote }
-        }
-      }
-    }
-  }
-  return undefined
-}
 
 export async function prepareNativeChatSignIn(
   host: AgentDetectionHost,

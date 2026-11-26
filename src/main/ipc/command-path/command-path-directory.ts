@@ -1,4 +1,4 @@
-import type { Dir } from 'node:fs'
+import type { Dir, Stats } from 'node:fs'
 import { access, constants as fsConstants, opendir, stat } from 'node:fs/promises'
 import path from 'node:path'
 
@@ -16,30 +16,37 @@ export async function checkExecutableFile(
   candidate: string,
   isWin: boolean
 ): Promise<'executable' | 'missing' | 'unknown'> {
+  let stats: Stats
   try {
     // Follow symlinked CLIs to their real targets.
-    const stats = await stat(candidate)
-    if (stats.isDirectory()) {
-      // PATH directories are not executable files despite their search bit.
-      return 'missing'
-    }
-    if (isWin) {
-      // Extension membership already enforced by the PATHEXT permutation.
-      return stats.isFile() ? 'executable' : 'missing'
-    }
-    await access(candidate, fsConstants.X_OK)
-    return 'executable'
+    stats = await stat(candidate)
   } catch (error) {
     return isMissingPathError(error) ? 'missing' : 'unknown'
   }
+  if (stats.isDirectory()) {
+    // PATH directories are not executable files despite their search bit.
+    return 'missing'
+  }
+  if (isWin) {
+    // Extension membership already enforced by the PATHEXT permutation.
+    return stats.isFile() ? 'executable' : 'missing'
+  }
+  try {
+    await access(candidate, fsConstants.X_OK)
+    return 'executable'
+  } catch (error) {
+    return isMissingPathError(error, true) ? 'missing' : 'unknown'
+  }
 }
 
-function isMissingPathError(error: unknown): boolean {
+function isMissingPathError(error: unknown, checkedFile = false): boolean {
   return (
     !!error &&
     typeof error === 'object' &&
     'code' in error &&
-    (error.code === 'ENOENT' || error.code === 'ENOTDIR')
+    (error.code === 'ENOENT' ||
+      error.code === 'ENOTDIR' ||
+      (checkedFile && (error.code === 'EACCES' || error.code === 'EPERM')))
   )
 }
 
