@@ -84,6 +84,7 @@ export function measurePluginPanelContentHeight(tabKey: string): number | undefi
   const top = surface.getBoundingClientRect().top
   return Math.round(
     Math.max(
+      0,
       ...outer.map((element) => element.getBoundingClientRect().top - top + element.scrollHeight)
     )
   )
