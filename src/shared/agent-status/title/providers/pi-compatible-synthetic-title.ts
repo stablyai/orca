@@ -1,19 +1,19 @@
 import { getPiStateTitleStatus } from './pi-state-title-marker'
 
-export type PiCompatibleSyntheticAgentLabel = 'Pi' | 'OMP'
+export type PiCompatibleSyntheticAgentLabel = 'Pi' | 'OMP' | 'Kimchi'
 export type PiCompatibleSyntheticAgentStatus = 'working' | 'permission' | 'idle'
 
 const PI_COMPATIBLE_SYNTHETIC_TITLE_RE =
-  /^\s*(?:[\u2800-\u28ff]\s+)?(pi|omp)(?:\s+-\s+action required|\s+(?:ready|idle|done))?\s*$/i
+  /^\s*(?:[\u2800-\u28ff]\s+)?(pi|omp|kimchi)(?:\s+-\s+action required|\s+(?:ready|idle|done))?\s*$/i
 // Why: legacy Pi/OMP-compatible shells can emit the delimiter before cwd text exists.
 const LEGACY_PI_COMPATIBLE_TITLE_RE = /^\s*(?:[\u2800-\u28ff]\s+)?\u03C0(?:\s*[-:]|\s)\s*.*$/u
 // State follows the brand (π ! label, OMP > label); accept owner-rewritten brands only in exact profile casing.
 // Require a delimited separator so ordinary pi prose and omp-harness do not become state titles.
 // A leading spinner needs Orca's ` - ` working frame, so Claude tasks like `⠂ OMP: fix` stay Claude's.
 const PI_COMPATIBLE_SEPARATOR_RE =
-  /^\s*(?:[\u2800-\u28ff]\s+(?=\S+\s+-(?:\s|$)))?(\u03C0|Pi|OMP)(?::|\s+([!>:\-\u2800-\u28ff]))(?=\s|$)/u
+  /^\s*(?:[\u2800-\u28ff]\s+(?=\S+\s+-(?:\s|$)))?(\u03C0|Pi|OMP|Kimchi)(?::|\s+([!>:\-\u2800-\u28ff]))(?=\s|$)/u
 
-const PI_COMPATIBLE_LEADING_BRAND_RE = /^(\s*(?:[\u2800-\u28ff]\s+)?)(?:\u03C0|Pi|OMP)/u
+const PI_COMPATIBLE_LEADING_BRAND_RE = /^(\s*(?:[\u2800-\u28ff]\s+)?)(?:\u03C0|Pi|OMP|Kimchi)/u
 
 function containsBrailleSpinner(title: string): boolean {
   for (const char of title) {
@@ -32,7 +32,10 @@ export function getPiCompatibleSyntheticAgentLabel(
   if (!match) {
     return null
   }
-  return match[1].toLowerCase() === 'omp' ? 'OMP' : 'Pi'
+  if (match[1].toLowerCase() === 'omp') {
+    return 'OMP'
+  }
+  return match[1].toLowerCase() === 'kimchi' ? 'Kimchi' : 'Pi'
 }
 
 export function getPiCompatibleSyntheticAgentStatus(
@@ -89,7 +92,10 @@ export function getPiCompatibleTitleBrand(title: string): PiCompatibleSyntheticA
   if (!brand) {
     return null
   }
-  return brand === 'OMP' ? 'OMP' : 'Pi'
+  if (brand === 'OMP') {
+    return 'OMP'
+  }
+  return brand === 'Kimchi' ? 'Kimchi' : 'Pi'
 }
 
 /** Replace the leading brand of a π/Pi/OMP title in place, or null when the title has none. */

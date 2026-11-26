@@ -1,0 +1,15 @@
+{
+  "id": "kimchi",
+  "engineVersion": 1,
+  "profile": { "hooks": "authoritative" },
+  "anchors": [],
+  "rules": [
+    {
+      "id": "idle_title",
+      "why": "Kimchi uses Pi's `π - <session>` rest title. A shell auto-title can name Kimchi mid-turn, so a bare name counts only once quiet.",
+      "priority": 100,
+      "when": { "region": "title", "status": "idle" },
+      "answer": { "state": "idle", "strength": "weak", "requiresQuiet": true }
+    }
+  ]
+}

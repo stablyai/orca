@@ -21,6 +21,7 @@ export const RESUMABLE_TUI_AGENTS = [
   'opencode',
   'opencode2',
   'pi',
+  'kimchi',
   'mimo-code',
   'droid',
   'grok',
@@ -246,6 +247,7 @@ export function extractAgentProviderSession(
       return id ? { key: 'session_id', id } : null
     }
     case 'pi':
+    case 'kimchi':
     case 'prime-agent': {
       const id = readSessionId(payload, ['session_id'])
       const providerSession = id

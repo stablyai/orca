@@ -166,7 +166,8 @@ export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
     opencodePluginSource: getOpenCodePluginSource(),
     opencode2PluginSource: getOpenCode2PluginSource(),
     piExtensionSource: getPiAgentStatusExtensionSource('pi'),
-    ompExtensionSource: getPiAgentStatusExtensionSource('omp')
+    ompExtensionSource: getPiAgentStatusExtensionSource('omp'),
+    kimchiExtensionSource: getPiAgentStatusExtensionSource('kimchi')
   }),
   warn: (message) => console.warn(message),
   transientRetryDelayMs: WSL_RELAY_TRANSIENT_RETRY_DELAY_MS

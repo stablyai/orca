@@ -14,6 +14,7 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/mimo-code': 'mimo-code',
   '/hook/cursor': 'cursor',
   '/hook/pi': 'pi',
+  '/hook/kimchi': 'kimchi',
   '/hook/omp': 'omp',
   '/hook/prime-agent': 'prime-agent',
   '/hook/droid': 'droid',

@@ -81,7 +81,7 @@ export async function resolveWslDefaultDistro(
 type WslRelayEnsure = (
   distro: string,
   codexHomePath?: string,
-  launchKind?: 'pi' | 'omp'
+  launchKind?: 'pi' | 'omp' | 'kimchi'
 ) => Promise<void>
 
 export function captureWslRelaySetup(state: WslRelayDistroState): WslRelayRestartSetup {
@@ -93,6 +93,7 @@ export function captureWslRelaySetup(state: WslRelayDistroState): WslRelayRestar
     opencode2OverlayDir: state.opencode2OverlayDir,
     piAgentDir: state.piAgentDir,
     ompStatusExtension: state.ompStatusExtension,
+    kimchiAgentDir: state.kimchiAgentDir,
     launchKinds: [...state.launchKinds]
   }
 }

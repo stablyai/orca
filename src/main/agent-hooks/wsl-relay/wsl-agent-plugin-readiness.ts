@@ -38,7 +38,7 @@ export async function awaitExplicitAgentPluginGuestReadiness(args: {
     isAgentStatusHooksEnabledForAgent(args.settings, 'claude') &&
     (args.launchAgent === 'claude' ||
       (!args.launchAgent && getAgentLaunchExecutableName(args.launchCommand) === 'claude'))
-  if (kind !== 'pi' && kind !== 'omp' && !claude) {
+  if (kind !== 'pi' && kind !== 'omp' && kind !== 'kimchi' && !claude) {
     return true
   }
   const distro = args.distro ?? null
@@ -54,14 +54,15 @@ export async function awaitExplicitAgentPluginGuestReadiness(args: {
         .ensureForDistro(
           distro,
           args.codexHomePath,
-          kind === 'pi' || kind === 'omp' ? kind : undefined
+          kind === 'pi' || kind === 'omp' || kind === 'kimchi' ? kind : undefined
         )
         .then(() =>
           Boolean(
             manager.getGuestEndpointFilePath(distro) &&
             (claude
               ? manager.getClaudeAgentView?.(distro)
-              : (kind === 'pi' || kind === 'omp') && manager.getGuestAgentPath(distro, kind))
+              : (kind === 'pi' || kind === 'omp' || kind === 'kimchi') &&
+                manager.getGuestAgentPath(distro, kind))
           )
         ),
       new Promise<boolean>((resolve) => {

@@ -11,6 +11,8 @@ export type PluginSources = {
   ompExtensionSource?: string
   /** Source body of Prime Agent's `orca-agent-status.ts` to install in its real agent dir. */
   primeAgentExtensionSource?: string
+  /** Source body of Kimchi's `orca-agent-status.ts` to install in its harness dir. */
+  kimchiExtensionSource?: string
 }
 /** Result of installing Pi-compatible status into a real agent home or OMP fallback path. */
 export type MaterializePiResult = {

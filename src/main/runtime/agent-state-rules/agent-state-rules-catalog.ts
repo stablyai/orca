@@ -6,6 +6,7 @@ import codex from './codex.json'
 import cursor from './cursor.json'
 import dsh from './dsh.json'
 import hermes from './hermes.json'
+import kimchi from './kimchi.json'
 import omp from './omp.json'
 import opencode from './opencode.json'
 import opencode2 from './opencode2.json'
@@ -40,6 +41,7 @@ export const RAW_BUNDLED_AGENT_STATE_RULE_FILES: readonly unknown[] = [
   cursor,
   dsh,
   hermes,
+  kimchi,
   omp,
   opencode,
   opencode2,

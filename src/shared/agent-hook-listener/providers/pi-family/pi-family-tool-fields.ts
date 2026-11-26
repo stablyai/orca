@@ -8,6 +8,7 @@ import {
 } from '../../tool-input-preview'
 import { clearActiveToolFieldsUpdate, deriveInteractivePrompt } from '../../interactive-tool'
 import { serializeOmpPlanReviewPrompt } from '../../../native-chat/input/questions/omp-plan-review-prompt'
+import type { PiAgentKind } from '../../../agent-launch/catalog/pi-agent-kind'
 
 /** OMP's `ask` carries the same questions/options payload as Pi's question tool. */
 function serializeQuestionPrompt(toolInput: unknown): string | undefined {
@@ -29,19 +30,16 @@ function serializePlanReviewPrompt(hookPayload: Record<string, unknown>): string
     : undefined
 }
 
-function isPiCompatibleAskTool(
-  agentKind: 'pi' | 'omp' | 'prime-agent',
-  toolName: string | undefined
-): boolean {
+function isPiCompatibleAskTool(agentKind: PiAgentKind, toolName: string | undefined): boolean {
   return agentKind === 'omp'
     ? toolName === 'ask'
-    : agentKind === 'pi' && isAskUserQuestionTool(toolName)
+    : (agentKind === 'pi' || agentKind === 'kimchi') && isAskUserQuestionTool(toolName)
 }
 
 export function extractPiToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>,
-  agentKind: 'pi' | 'omp' | 'prime-agent'
+  agentKind: PiAgentKind
 ): ToolSnapshot {
   // Custom modals carry neither approvals nor structured questions.
   if (

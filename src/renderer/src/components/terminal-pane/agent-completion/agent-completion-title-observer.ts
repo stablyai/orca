@@ -54,6 +54,9 @@ export function createAgentCompletionTitleObserver({
     if (/\baider\b/.test(normalized)) {
       return 'aider'
     }
+    if (/\bkimchi\b/.test(normalized)) {
+      return 'kimchi'
+    }
     if (/\bpi\b/.test(normalized) || normalized.includes('\u03c0')) {
       return 'pi'
     }

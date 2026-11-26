@@ -16,6 +16,7 @@ export const SYNTHETIC_AGENT_TITLE_AGENTS = [
   'cursor',
   'opencode',
   'pi',
+  'kimchi',
   'omp',
   'droid',
   'hermes',
@@ -51,6 +52,14 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
     idleLabel: 'Pi ready',
     titleIdentityGroup: 'pi-compatible',
     // Pi and Orca's titlebar extension own session titles, including idle and permission states.
+    synthesizeTerminalTitle: false
+  },
+  kimchi: {
+    workingLabel: 'Kimchi',
+    permissionLabel: 'Kimchi - action required',
+    idleLabel: 'Kimchi ready',
+    titleIdentityGroup: 'pi-compatible',
+    // Kimchi and Orca's titlebar extension own session titles, as for Pi.
     synthesizeTerminalTitle: false
   },
   omp: {

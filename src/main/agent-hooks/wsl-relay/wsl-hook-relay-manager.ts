@@ -57,7 +57,7 @@ export class WslHookRelayManager {
   async ensureForDistro(
     distro: string | null,
     codexHomePath?: string | null,
-    launchKind?: 'pi' | 'omp'
+    launchKind?: 'pi' | 'omp' | 'kimchi'
   ): Promise<void> {
     if (this.disposed || !isWslHookRelayAllowed(this.deps)) {
       return
@@ -90,9 +90,13 @@ export class WslHookRelayManager {
       ? (state?.opencode2OverlayDir ?? null)
       : (state?.opencodeOverlayDir ?? null)
   }
-  getGuestAgentPath(distro: string | null, kind: 'pi' | 'omp'): string | null {
+  getGuestAgentPath(distro: string | null, kind: 'pi' | 'omp' | 'kimchi'): string | null {
     const state = this.stateFor(distro)
-    return kind === 'pi' ? (state?.piAgentDir ?? null) : (state?.ompStatusExtension ?? null)
+    return kind === 'pi'
+      ? (state?.piAgentDir ?? null)
+      : kind === 'omp'
+        ? (state?.ompStatusExtension ?? null)
+        : (state?.kimchiAgentDir ?? null)
   }
   /** Nonpermanent disposal allows relays to restart when hooks are re-enabled. */
   disposeAll({ permanent = true }: { permanent?: boolean } = {}): void {
@@ -117,7 +121,7 @@ export class WslHookRelayManager {
   private async ensureInternal(
     requestedDistro: string | null,
     requestedCodexHomePath?: string,
-    launchKind?: 'pi' | 'omp'
+    launchKind?: 'pi' | 'omp' | 'kimchi'
   ): Promise<void> {
     const distro = requestedDistro ?? (await this.resolveDefaultDistro())
     if (!distro || this.disposed) {
@@ -183,6 +187,7 @@ export class WslHookRelayManager {
       opencode2OverlayDir: existing?.opencode2OverlayDir,
       piAgentDir: existing?.piAgentDir,
       ompStatusExtension: existing?.ompStatusExtension,
+      kimchiAgentDir: existing?.kimchiAgentDir,
       launchKinds: new Set(existing?.launchKinds ?? (launchKind ? [launchKind] : [])),
       codexHomePath: requestedCodexHomePath ?? existing?.codexHomePath,
       cooldownUntil: 0
