@@ -142,7 +142,9 @@ export async function openKeptClaudeAgentConnection(
     chatKey,
     markers: CLAUDE_RELAY_WORK_MARKERS,
     // Answers to this app's own requests pass; everything else waits for the chat to open.
-    passWhileHeld: (line) => query?.answers(line) === true
+    passWhileHeld: (line) => query?.answers(line) === true,
+    // A quit that gives up this start hands the agent back to the daemon instead of ending it.
+    handsOffOnQuit: true
   })
   if (!relayed) {
     return null

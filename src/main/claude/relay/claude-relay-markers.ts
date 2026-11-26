@@ -11,7 +11,7 @@ import {
 
 /** Recorded with each Claude relay; this build reattaches it. */
 export const CLAUDE_RELAY_AGENT = 'claude-code'
-registerReattachableProviderRelayAgent(CLAUDE_RELAY_AGENT)
+registerReattachableProviderRelayAgent(CLAUDE_RELAY_AGENT, { provider: 'claude' })
 
 const SESSION = [['session_id']]
 const TASK = [['task_id']]
