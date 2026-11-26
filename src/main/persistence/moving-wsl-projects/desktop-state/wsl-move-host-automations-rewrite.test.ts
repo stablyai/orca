@@ -53,7 +53,7 @@ describe('the host-automations rewrite step', () => {
     expect(enable).not.toHaveBeenCalled()
   })
 
-  it('gives up its turn at the deadline on a hung host, and stays unrecorded', async () => {
+  it('gives up its turn at the deadline on a hung host, failing so the pass retries it', async () => {
     vi.useFakeTimers()
     try {
       const cutover = wslMoveCutoverFixture('move-1', 'destination-committed', {

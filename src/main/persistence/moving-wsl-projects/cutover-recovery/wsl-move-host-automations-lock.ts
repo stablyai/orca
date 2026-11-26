@@ -33,6 +33,8 @@ export function runWslMoveHostAutomationsTurn<T>(
 /** Rejects once `signal` aborts; a step that ignores aborts still frees the turn. */
 export function untilWslMoveTurnAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
   if (signal.aborted) {
+    // Abandoned, so its own later rejection must not go unhandled.
+    work.catch(() => {})
     return Promise.reject(signal.reason)
   }
   return new Promise<T>((resolve, reject) => {

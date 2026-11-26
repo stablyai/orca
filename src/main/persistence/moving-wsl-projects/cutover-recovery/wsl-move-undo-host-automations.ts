@@ -9,10 +9,7 @@
 import type { Automation } from '../../../../shared/automations/automation-definition'
 import type { WslMoveCutover } from '../../../../shared/wsl-move/wsl-move-cutover'
 import { listWslMoveCutovers, writeWslMoveCutover } from './wsl-move-cutover-journal'
-import {
-  runWslMoveHostAutomationsTurn,
-  untilWslMoveTurnAborted
-} from './wsl-move-host-automations-lock'
+import { runWslMoveHostAutomationsTurn } from './wsl-move-host-automations-lock'
 import { wslMoveAutomationsPending } from '../desktop-state/wsl-move-host-automations-rewrite'
 
 export type WslMoveHostAutomationStop =
@@ -269,10 +266,8 @@ export async function retryWslMoveHostAutomationsLeftOff(
       }
       let stillOff: string[] = []
       try {
-        await untilWslMoveTurnAborted(
-          host.restore(cutover.destinationEnvironmentId, ids, signal),
-          signal
-        )
+        // Unraced: restore ends each request at the deadline and its error names what stayed off.
+        await host.restore(cutover.destinationEnvironmentId, ids, signal)
       } catch (error) {
         stillOff = leftOffOf(error).length > 0 ? leftOffOf(error) : ids
       }
@@ -280,9 +275,11 @@ export async function retryWslMoveHostAutomationsLeftOff(
       const current = readMove(userDataPath, migrationId)
       if (!current) {
         // Released meanwhile: the project is local again, so what this turned on goes back off.
-        await host.disable(cutover.destinationEnvironmentId, [...turnedOn]).catch((error) => {
-          console.warn("[wsl-move] Could not turn a released move's host automations off:", error)
-        })
+        await host
+          .disable(cutover.destinationEnvironmentId, [...turnedOn], signal)
+          .catch((error) => {
+            console.warn("[wsl-move] Could not turn a released move's host automations off:", error)
+          })
         return 0
       }
       const leftOff = (current.hostAutomationsLeftOff ?? []).filter((id) => !turnedOn.has(id))
