@@ -270,7 +270,13 @@ export function useMcpServerActions(args: {
         onConfirm: () =>
           void run(async (live) => {
             applyServer(
-              mcpServerMove.interpret(await mcpServerMove.request(live, { key: entry.key })).server
+              mcpServerMove.interpret(
+                await mcpServerMove.request(live, {
+                  key: entry.key,
+                  // The agents this confirm named: the host takes it out of no other.
+                  ...(entry.removesFrom ? { agents: entry.removesFrom } : {})
+                })
+              ).server
             )
           })
       }),

@@ -14,7 +14,12 @@ function bypassCoalescing(event: AgentSessionSubscribeEvent): boolean {
     event.queuedMessages !== undefined ||
     event.currentRequests !== undefined ||
     event.batch.removedItemIds.length > 0 ||
-    event.batch.items.some((item) => item.body.kind !== 'message' || item.body.role !== 'assistant')
+    // Replies and reasoning are what stream; every other row applies at once.
+    event.batch.items.some(
+      (item) =>
+        item.body.kind !== 'message' ||
+        (item.body.role !== 'assistant' && item.body.role !== 'reasoning')
+    )
   )
 }
 
@@ -24,7 +29,10 @@ function mergeBatch(
 ): Extract<AgentSessionSubscribeEvent, { type: 'batch' }> {
   const items = new Map(left.batch.items.map((item) => [item.itemId, item]))
   for (const item of right.batch.items) {
-    items.set(item.itemId, item)
+    // A live snapshot read before a save can arrive after it; the older revision must not win.
+    if ((items.get(item.itemId)?.revision ?? -Infinity) <= item.revision) {
+      items.set(item.itemId, item)
+    }
   }
   const submissions = new Map(
     left.batch.submissions.map((submission) => [submission.clientMessageId, submission])
@@ -82,9 +90,33 @@ function mergeBatch(
   }
 }
 
+/** Whether the viewer is hidden (a minimized window, a backgrounded phone), and when it shows. */
+export type StructuredAgentSessionViewerVisibility = {
+  hidden: () => boolean
+  subscribeShown: (shown: () => void) => () => void
+  /** Called just before text held while hidden is drawn. */
+  heldDrawn?: () => void
+  /** Whether the host sends this viewer its newest text when it says it is shown; the held text
+   *  then waits for it, so the first frame after showing has it. */
+  sendsShownTail?: () => boolean
+}
+
+/** How long a shown viewer's held text waits for the host's newest text before drawing alone. */
+const SHOWN_TAIL_WAIT_MS = 300
+
+export type StructuredAgentSessionCoalescing = {
+  /** How long streamed text batches wait to merge. */
+  ms?: number
+  /** While hidden, batches keep merging instead of applying, and apply at once when shown. */
+  visibility?: StructuredAgentSessionViewerVisibility
+}
+
 export function createStructuredAgentSessionEventCoalescer(
   emit: (event: AgentSessionSubscribeEvent) => void,
-  delayMs = STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS
+  {
+    ms: delayMs = STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS,
+    visibility
+  }: StructuredAgentSessionCoalescing = {}
 ): {
   push: (event: AgentSessionSubscribeEvent) => void
   flush: () => void
@@ -92,10 +124,15 @@ export function createStructuredAgentSessionEventCoalescer(
 } {
   let pending: Extract<AgentSessionSubscribeEvent, { type: 'batch' }> | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
+  let awaitingTail: ReturnType<typeof setTimeout> | null = null
   const flush = (): void => {
     if (timer) {
       clearTimeout(timer)
       timer = null
+    }
+    if (awaitingTail) {
+      clearTimeout(awaitingTail)
+      awaitingTail = null
     }
     if (pending) {
       const event = pending
@@ -103,9 +140,26 @@ export function createStructuredAgentSessionEventCoalescer(
       emit(event)
     }
   }
+  const drawHeld = (): void => {
+    visibility?.heldDrawn?.()
+    flush()
+  }
+  const stopShownWatch = visibility?.subscribeShown(() => {
+    if (visibility.sendsShownTail?.() === true) {
+      awaitingTail ??= setTimeout(() => (pending ? drawHeld() : flush()), SHOWN_TAIL_WAIT_MS)
+      return
+    }
+    if (pending) {
+      visibility.heldDrawn?.()
+    }
+    flush()
+  })
   return {
     push(event) {
       if (bypassCoalescing(event)) {
+        if (awaitingTail && pending) {
+          visibility?.heldDrawn?.()
+        }
         flush()
         emit(event)
         return
@@ -114,14 +168,24 @@ export function createStructuredAgentSessionEventCoalescer(
         return
       }
       pending = pending ? mergeBatch(pending, event) : event
-      timer ??= setTimeout(flush, delayMs)
+      // The host's newest text for a viewer that just showed: drawn at once, with what was held.
+      if (awaitingTail) {
+        drawHeld()
+        return
+      }
+      timer ??= setTimeout(() => (visibility?.hidden() ? (timer = null) : flush()), delayMs)
     },
     flush,
     dispose() {
+      stopShownWatch?.()
       if (timer) {
         clearTimeout(timer)
       }
+      if (awaitingTail) {
+        clearTimeout(awaitingTail)
+      }
       timer = null
+      awaitingTail = null
       pending = null
     }
   }

@@ -29,6 +29,7 @@ import type { BotItemQuestionStepsSend } from '../../../../src/shared/bots/use-b
 import { MobileBotItemActivity } from './MobileBotItemActivity'
 import { MobileBotItemCommentBox } from './MobileBotItemCommentBox'
 import { botItemOpenAsk, useMobileBotItemAskSlot } from './MobileBotItemAskCard'
+import { botItemAskCardKey } from './bot-item-ask-card-drafts'
 import { MobileNativeChatPromptStrip } from '../../session/native-chat/input/prompts/MobileNativeChatPromptStrip'
 import { MobileBotItemLinks } from './MobileBotItemLinks'
 import { botItemChatName, type BotItemSheet } from './MobileBotItemSheets'
@@ -96,7 +97,7 @@ export function MobileBotItemPage({
   const lastEventId = view.events.at(-1)?.id ?? ''
   const takesImages = useRouteCapability(BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY)
   // One item on one host: its pending comments and its asks' held answers.
-  const itemKey = `${hostKey}\0${bot.id}\0${uid}`
+  const itemKey = botItemAskCardKey(hostKey, bot.id, uid)
   const pending = usePhoneBotItemPendingComments({
     client,
     key: itemKey,

@@ -20,6 +20,8 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
   ): void
 
   protected abstract scheduleRestoredMessageRepoints(): void
+  protected abstract publishSleepingMail(scope?: { mailboxes?: Iterable<string> }): void
+  protected abstract owesAnySleepingMail(): boolean
 
   abstract hasLiveTerminalForPaneKey(
     paneKey: string,
@@ -88,6 +90,14 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
   }
 
   private bindMailHandBack(db: OrchestrationDb): void {
+    db.mailReadListener = (mailboxes) =>
+      queueMicrotask(() => {
+        if (this._orchestrationDb === db) {
+          this.publishSleepingMail({ mailboxes })
+        }
+      })
+    // Nobody asleep: a read can release no sleeping-mail hold, so it costs nothing extra.
+    db.mailReadWanted = () => this.owesAnySleepingMail()
     db.mailHandBackListener = (handBack) => this.offerHandedBackMail(db, handBack)
   }
 
