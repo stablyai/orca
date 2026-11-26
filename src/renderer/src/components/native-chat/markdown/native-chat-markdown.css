@@ -5,6 +5,11 @@
   text-align: start;
 }
 
+/* Reference labels keep their own direction without choosing the surrounding prose direction. */
+.native-chat-markdown p:not([data-native-chat-link-only]) a:not([href^='#orca-native-chat-file']) {
+  unicode-bidi: plaintext;
+}
+
 /* Literal runs must not reorder punctuation or determine the surrounding paragraph's direction. */
 .native-chat-markdown
   :is(pre, code, a[href^='#orca-native-chat-file='], a[href^='#orca-native-chat-file-path=']) {
