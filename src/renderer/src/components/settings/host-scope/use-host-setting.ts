@@ -90,7 +90,7 @@ export function useServerSettingValue<T>(args: {
           console.error('Failed to load host settings:', error)
           if (loaded === generation.current && mounted?.current !== false) {
             setRemote((current) =>
-              current?.setting.state === 'ready'
+              current?.environmentId === owner && current.setting.state === 'ready'
                 ? current
                 : { environmentId: owner, setting: { state: 'error' } }
             )
