@@ -24,11 +24,12 @@ import { CloudSharesSupport, type SharedBotsCloud } from './shared-bots-cloud'
 import { SharedBotOfferWaits } from './shared-bot-offer-waits'
 import type { SharedBotHomes } from './shared-bot-home'
 import { SharedBotPhoneGrants } from './shared-bot-phone-grants'
+import { SharedBotReadPace, type SharedBotReadPaceDeps } from './shared-bot-read-pace'
 
 // How long a call on a dropped link waits for the share list to say whether it was a revoke.
 const SHARES_LIST_WAIT_MS = 5000
 
-export type SharedBotHostsDeps = {
+export type SharedBotHostsDeps = Partial<Pick<SharedBotReadPaceDeps, 'invites' | 'random'>> & {
   userDataPath: string
   cloud: () => SharedBotsCloud | null
   /** The signed-in Orca account the cloud is read as; null signed out. */
@@ -49,7 +50,7 @@ export class SharedBotHosts {
   private shares: Map<string, MineShare> | null = null
   private readonly held: SharedBotHeldSends
   private readonly reads = new SerialRerun((applied) => this.readMine(applied), SHARES_LIST_WAIT_MS)
-  private timer: ReturnType<typeof setTimeout> | null = null
+  private readonly pace: SharedBotReadPace
   private readonly offerWaits = new SharedBotOfferWaits()
   private readonly now: () => number
   private loaded: Promise<void> | null = null
@@ -80,7 +81,19 @@ export class SharedBotHosts {
       requests: () => sharedBotRequests(this.store, this.shares),
       answer: (shareId, accept) => (accept ? this.accept(shareId) : this.decline(shareId))
     })
+    this.pace = new SharedBotReadPace({
+      ...deps,
+      now: this.now,
+      read: () => void this.refresh(),
+      nextReadMs: (woken) => this.offerWaits.nextReadMs(this.store.list(), this.readState, woken)
+    })
   }
+
+  // What sets the read pace for one entry: pairing, away or holding a message reads sooner.
+  private readonly readState = (entry: SharedBotHostEntry) => ({
+    link: this.linkFor(entry).current(),
+    waiting: entry.held.some((held) => this.held.isWaiting(held))
+  })
 
   /** The kept shares are loaded, so `views` lists them. */
   ready(): Promise<void> {
@@ -89,6 +102,7 @@ export class SharedBotHosts {
 
   start(): void {
     this.stopped = false
+    this.pace.start()
     void this.refresh()
   }
 
@@ -96,10 +110,7 @@ export class SharedBotHosts {
    *  must never change the kept shares. */
   stop(): void {
     this.stopped = true
-    if (this.timer) {
-      clearTimeout(this.timer)
-      this.timer = null
-    }
+    this.pace.stop()
     for (const link of this.links.values()) {
       link.close()
     }
@@ -153,10 +164,7 @@ export class SharedBotHosts {
 
   private async readMine(applied: () => void): Promise<void> {
     await this.ready()
-    if (this.timer) {
-      clearTimeout(this.timer)
-      this.timer = null
-    }
+    this.pace.began()
     const read = this.held.beginRead()
     const wait = this.offerWaits.take()
     const answer = this.stopped
@@ -176,14 +184,7 @@ export class SharedBotHosts {
     }
     this.offerWaits.settled(wait)
     this.publish()
-    if (!this.stopped) {
-      const waitMs = this.offerWaits.nextReadMs(this.store.list(), (entry) => ({
-        link: this.linkFor(entry).current(),
-        waiting: entry.held.some((held) => this.held.isWaiting(held))
-      }))
-      this.timer = setTimeout(() => void this.refresh(), waitMs)
-      this.timer.unref?.()
-    }
+    this.pace.schedule()
   }
 
   async call(

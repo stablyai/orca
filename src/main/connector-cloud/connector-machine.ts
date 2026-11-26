@@ -88,6 +88,8 @@ export type ConnectorPollClientOptions = {
   random?: () => number
   /** Opens wake sockets; tests pass a fake. */
   wakeSocketFactory?: ConnectorWakeSocketFactory
+  /** The wake socket said the account's shares changed. */
+  onSharesChanged?: () => void
   /** The cloud stopped this client, for good. */
   onHalt?: (reason: string) => void
 }

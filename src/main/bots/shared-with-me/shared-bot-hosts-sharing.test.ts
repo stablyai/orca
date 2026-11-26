@@ -44,7 +44,12 @@ function sharingHosts(replies: Reply[], account: () => string | null = () => 'ad
   const hosts = new SharedBotHosts({
     userDataPath: dir,
     account,
-    cloud: () => sharedBotsCloud(transport),
+    cloud: () =>
+      sharedBotsCloud({
+        call: (...args) => transport.call(...args),
+        readShares: (path, schema, options) =>
+          transport.call(path, undefined, schema, { ...options, method: 'GET' })
+      }),
     platform: NODE_RELAY_CLIENT_PLATFORM,
     publish: (state) => published.push(state),
     homes: memorySharedBotHomes(dir).homes,

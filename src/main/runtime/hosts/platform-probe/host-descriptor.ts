@@ -1,5 +1,5 @@
 import { createHmac, randomUUID } from 'node:crypto'
-import { renameSync, rmSync, writeFileSync } from 'node:fs'
+import { readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import {
@@ -57,6 +57,32 @@ export async function readExistingHostInstallationId(
   } catch {
     return undefined
   }
+}
+
+// An identity never changes once valid, so one read serves every later caller.
+const knownInstallationIds = new Map<string, string>()
+
+/** The profile's existing identity without awaiting the disk (for a request whose timing must not
+ *  shift); never created or repaired; undefined when absent or unreadable. */
+export function existingHostInstallationIdSync(userDataPath: string): string | undefined {
+  const known = knownInstallationIds.get(userDataPath)
+  if (known) {
+    return known
+  }
+  try {
+    const raw = readFileSync(join(userDataPath, HOST_INSTALLATION_FILENAME), 'utf8')
+    const parsed =
+      raw.length <= MAX_INSTALLATION_FILE_BYTES
+        ? InstallationFileSchema.safeParse(JSON.parse(raw))
+        : null
+    if (parsed?.success) {
+      knownInstallationIds.set(userDataPath, parsed.data.installationId)
+      return parsed.data.installationId
+    }
+  } catch {
+    // Absent or unreadable: no identity to send.
+  }
+  return undefined
 }
 
 export async function loadOrCreateHostInstallationId(userDataPath: string): Promise<string> {

@@ -12,6 +12,7 @@ import {
 import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
 import type { OrcaCloudSession } from '../cloud-session/profile-cloud-session-store'
 import type { OrcaCloudSessionExchangeResponse } from '../cloud-session/profile-cloud-session-exchange'
+import { readWakeToken, wakeTokenRequest } from './profile-cloud-refresh-wake-token'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
 
 type ExchangeCodeArgs = {
@@ -161,7 +162,9 @@ function normalizeSessionResponse(value: unknown): OrcaCloudSessionExchangeRespo
     throw new Error('invalid_orca_cloud_session')
   }
   const record = value as Record<string, unknown>
+  const wakeToken = readWakeToken(record.wakeToken)
   return {
+    ...(wakeToken ? { wakeToken } : {}),
     accessToken: assertString(record.accessToken, 'access_token'),
     refreshToken: assertString(record.refreshToken, 'refresh_token'),
     expiresAt: assertNumber(record.expiresAt, 'expires_at'),
@@ -269,14 +272,16 @@ export async function uploadDesktopReportAfterCapabilityRefresh(
   }
 }
 
+/** `machineId` asks for a wake token beside the session (the invite wake). */
 export async function refreshOrcaCloudSession(
   config: OrcaCloudAuthConfig,
-  session: OrcaCloudSession
+  session: OrcaCloudSession,
+  machineId?: string | null
 ): Promise<OrcaCloudSessionExchangeResponse> {
   return normalizeSessionResponse(
     await postJson(
       config.refreshEndpoint,
-      { refreshToken: session.refreshToken },
+      { refreshToken: session.refreshToken, ...wakeTokenRequest(machineId) },
       { timeoutMs: CLOUD_REFRESH_TIMEOUT_MS }
     )
   )

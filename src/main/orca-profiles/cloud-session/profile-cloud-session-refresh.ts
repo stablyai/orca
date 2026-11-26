@@ -17,6 +17,7 @@ import {
   wasRefreshTokenAmbiguouslyAttempted
 } from './profile-cloud-refresh-replay-guard'
 import { emitOrcaCloudSessionInvalidated } from './profile-cloud-session-invalidation'
+import { existingHostInstallationIdSync } from '../../runtime/hosts/platform-probe/host-descriptor'
 import {
   commitCloudSessionRotation,
   readCloudSession,
@@ -117,9 +118,11 @@ async function attemptCloudSessionRefresh(
   userDataPath: string,
   session: OrcaCloudSession
 ): Promise<CloudSessionRefreshAttempt> {
+  // The same per-install id the connector token is minted for; without one there is no wake token.
+  const machineId = existingHostInstallationIdSync(userDataPath)
   for (let attempt = 0; ; attempt++) {
     try {
-      const response = await refreshOrcaCloudSession(config, session)
+      const response = await refreshOrcaCloudSession(config, session, machineId)
       forgetAmbiguousRefreshAttempt(key)
       return { status: 'refreshed', response }
     } catch (error) {

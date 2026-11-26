@@ -11,7 +11,14 @@ import { resolveConnectorOrigin } from './connector-origin'
 import type { ConnectorGitHubInstallations } from './connector-github-installations'
 import type { ConnectorRuntimeKind } from './connector-machine'
 import { connectorBots, displayText, type ConnectorPlacesStore } from './connector-places'
-import { connectorAccount, desktopConnectorTokenMint } from './connector-token-mint'
+import {
+  connectorAccount,
+  connectorAccountCloudCall,
+  desktopConnectorTokenMint,
+  freshSignInWakeToken,
+  storedSignInWakeToken
+} from './connector-token-mint'
+import { loadOrCreateHostInstallationId } from '../runtime/hosts/platform-probe/host-descriptor'
 import {
   acceptBotShare,
   answerBotShare,
@@ -124,6 +131,12 @@ export function createConnectorCloud({
     isFenced,
     account: () => connectorAccount(userDataPath),
     mintFor: (account) => desktopConnectorTokenMint(auth.config, userDataPath, account),
+    signIn: {
+      call: connectorAccountCloudCall(auth.config, userDataPath),
+      machineId: () => loadOrCreateHostInstallationId(userDataPath),
+      storedWakeToken: () => storedSignInWakeToken(userDataPath),
+      freshWakeToken: () => freshSignInWakeToken(auth.config, userDataPath)
+    },
     onStatusChanged: () => runtime.notifyBotsChanged({ kinds: ['settings'] }),
     onAccountSwitched: cancelConnectorConnectsForAccountChange,
     replyJournal: () => getStructuredAgentSessionHost()?.deps.store.connectorReplies() ?? null,

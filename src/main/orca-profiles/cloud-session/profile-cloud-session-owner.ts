@@ -189,7 +189,9 @@ export function commitCloudSessionRotation(
   const tokens = {
     accessToken: rotated.accessToken,
     refreshToken: rotated.refreshToken,
-    expiresAt: rotated.expiresAt
+    expiresAt: rotated.expiresAt,
+    // Replaced on every rotation: an older token's object may no longer be this sign-in's.
+    wakeToken: rotated.wakeToken
   }
   const linkUnmoved = owner.linkVersion === ticket.linkVersion
   const next = linkUnmoved

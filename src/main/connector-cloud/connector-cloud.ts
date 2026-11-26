@@ -23,6 +23,9 @@ import type {
   ConnectorCloudFeature,
   ConnectorConversation
 } from '../../shared/connectors/connector-cloud-contract'
+import { InviteWake, type InviteWakeSignIn } from './connector-invite-wake'
+import { connectorBotListFacts, type ConnectorBotListFacts } from './connector-bot-list-facts'
+import type { ConnectorWakeSocketFactory } from './connector-wake-socket'
 
 // Past this, a held call goes ahead without the hello and gets the cloud's own refusal.
 const HOLD_HELLO_WAIT_MS = 10_000
@@ -44,6 +47,11 @@ export type ConnectorCloudOptions = {
   fetchImpl?: typeof globalThis.fetch
   /** The journal's reply outbox (design item 125); null while no journal is open. */
   replyJournal?: () => ConnectorReplyJournal | null
+  /** The sign-in's own way to the share list and the invite wake; without it shares are read as a
+   *  connector. */
+  signIn?: InviteWakeSignIn
+  /** Opens wake sockets; tests pass a fake. */
+  wakeSocketFactory?: ConnectorWakeSocketFactory
 }
 
 export class ConnectorCloud {
@@ -65,9 +73,18 @@ export class ConnectorCloud {
 
   // The account the last sign-in hook saw, so a refresh of the same one is not a switch.
   private lastAccount: string | null
+  /** The share list's wake: this desktop's own socket while no connector runs, else the connector's. */
+  readonly invites: InviteWake
 
   constructor(private readonly options: ConnectorCloudOptions) {
     this.lastAccount = options.account()
+    this.invites = new InviteWake({
+      ...options,
+      connectorRead: (path, schema, read) =>
+        this.call(path, undefined, schema, { ...read, method: 'GET' }),
+      account: () => this.activeAccount(),
+      connectorRuns: () => this.client !== null
+    })
   }
 
   /** The signed-in Orca account the connector acts as, or null. */
@@ -82,6 +99,7 @@ export class ConnectorCloud {
     const account = this.signingOut ? null : this.options.account()
     if (account !== this.lastAccount) {
       this.lastAccount = account
+      this.invites.stop()
       this.options.onAccountSwitched?.()
       if (account) {
         this.reach.accountSwitched()
@@ -149,34 +167,8 @@ export class ConnectorCloud {
   }
 
   /** What `bots.list` says of this connection. */
-  botListFacts(): {
-    threadReplies: boolean
-    githubEvents2: boolean
-    githubWorkflows: boolean
-    githubCiFinished: boolean
-    connectorStatus: ConnectorCloudStatus
-    connectorMessage?: string
-    connectorNeedsSignIn?: true
-  } {
-    const connectorStatus = this.status()
-    const features = this.cloudFeatures()
-    const needsSignIn = this.needsSignIn() || connectorStatus === 'needs-sign-in'
-    return {
-      threadReplies: this.takesThreadReplies(),
-      // Whether it sends GitHub's newer events and label=, so trigger-options offers only those it does.
-      githubEvents2: features?.has('triggers.github2' satisfies ConnectorCloudFeature) === true,
-      // Whether it sends github.workflow_finished, so trigger-options offers it only where it does.
-      githubWorkflows: features?.has('triggers.workflows' satisfies ConnectorCloudFeature) === true,
-      // Whether it sends github.ci_finished, so trigger-options and watch-pr use it only where it does.
-      githubCiFinished:
-        features?.has('triggers.ci_finished' satisfies ConnectorCloudFeature) === true,
-      connectorStatus,
-      ...((connectorStatus === 'refused' || connectorStatus === 'needs-sign-in') &&
-      this.reach.refusal
-        ? { connectorMessage: this.reach.refusal }
-        : {}),
-      ...(needsSignIn ? { connectorNeedsSignIn: true } : {})
-    }
+  botListFacts(): ConnectorBotListFacts {
+    return connectorBotListFacts(this, this.reach.refusal)
   }
 
   /**
@@ -240,6 +232,9 @@ export class ConnectorCloud {
     return account ? await this.transportFor(account).call(path, body, schema, options) : SIGNED_OUT
   }
 
+  /** Reads a shares route as the signed-in account: see `InviteWake.readShares`. */
+  readonly readShares: InviteWake['readShares'] = (...args) => this.invites.readShares(...args)
+
   private activeAccount(): string | null {
     return this.signingOut || this.options.isFenced() ? null : this.options.account()
   }
@@ -294,6 +289,8 @@ export class ConnectorCloud {
         events,
         seam,
         machine: this.options.machine,
+        onSharesChanged: () => this.invites.sharesChanged(),
+        wakeSocketFactory: this.options.wakeSocketFactory,
         onHalt: (reason) => {
           if (this.client === client) {
             this.clientStop = reason

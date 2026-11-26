@@ -94,20 +94,22 @@ export function sendsHeld(
   return sendsHeldTo(sharedBotHostKey(entry), entry.held, link, chat, heldStates)
 }
 
-// New shares and invites resolve within this; pairing and held messages are read sooner.
+// Without the invite wake, new shares and invites resolve within this; pairing and held messages are
+// read sooner, wake or not.
 const IDLE_POLL_MS = 10 * 60 * 1000
 const BUSY_POLL_MS = 30 * 1000
 
 /** How long until the next read of the share list: soon while one is pairing, has a held message or
- *  its host is away, so each settles without a click. */
+ *  its host is away, so each settles without a click; else none while `woken` (the invite wake is
+ *  up and says when the list changed). */
 export function sharedBotsPollMs<E extends { resume?: unknown }>(
   entries: readonly E[],
-  state: (entry: E) => { link: string; waiting: boolean }
-): number {
-  return entries.some((entry) => {
+  state: (entry: E) => { link: string; waiting: boolean },
+  woken = false
+): number | null {
+  const busy = entries.some((entry) => {
     const { link, waiting } = state(entry)
     return !entry.resume || link !== 'live' || waiting
   })
-    ? BUSY_POLL_MS
-    : IDLE_POLL_MS
+  return busy ? BUSY_POLL_MS : woken ? null : IDLE_POLL_MS
 }

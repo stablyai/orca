@@ -8,6 +8,9 @@ import {
   runWithFreshOrcaCloudSession
 } from '../orca-profiles/cloud-session/profile-cloud-session-refresh'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
+import { readCloudSession } from '../orca-profiles/cloud-session/profile-cloud-session-owner'
+import { sessionBelongsToProfile } from '../orca-profiles/cloud-session/profile-cloud-session-identity'
+import type { OrcaCloudWakeToken } from '../orca-profiles/cloud-session/profile-cloud-session-exchange'
 import { loadOrCreateHostInstallationId } from '../runtime/hosts/platform-probe/host-descriptor'
 import {
   requestConnector,
@@ -118,6 +121,33 @@ export function connectorAccountCloudCall(
       userDataPath,
       (session) => operation(session.accessToken, authConfig.apiBaseUrl)
     )
+}
+
+function wakeTokenOf(session: OrcaCloudSession): OrcaCloudWakeToken | null {
+  const token = session.wakeToken
+  return typeof token?.token === 'string' && typeof token.expiresAt === 'number' ? token : null
+}
+
+/** The active sign-in's wake token from its last refresh, expired or not; null when it has none. */
+export function storedSignInWakeToken(userDataPath: string): OrcaCloudWakeToken | null {
+  const active = ensureActiveOrcaProfile(userDataPath)
+  const stored = readCloudSession(active.profile.id, userDataPath)
+  return stored.status === 'found' && sessionBelongsToProfile(stored.session, active.profile.cloud)
+    ? wakeTokenOf(stored.session)
+    : null
+}
+
+/** The same once the session's usual refresh ran, if its access token was about to expire. */
+export async function freshSignInWakeToken(
+  authConfig: OrcaCloudAuthConfig,
+  userDataPath: string
+): Promise<OrcaCloudWakeToken | null> {
+  const fresh = await readFreshOrcaCloudSession(
+    authConfig,
+    ensureActiveOrcaProfile(userDataPath),
+    userDataPath
+  )
+  return fresh.status === 'found' ? wakeTokenOf(fresh.session) : null
 }
 
 /** The account the connector serves, read like the relay's: the active profile's cloud user. */
