@@ -124,6 +124,21 @@ describe('v47-v48 bot dispatch migrations', () => {
     expectCurrentSchema(path, taskId)
   })
 
+  it('adds passive progress columns when reopening a v51 database and preserves seeded rows', () => {
+    const path = dbPath()
+    const taskId = seedWithDispatch(path)
+    const raw = new Database(path)
+    for (const table of ['tasks', 'dispatch_contexts'] as const) {
+      for (const column of ['progress_note', 'progress_updated_at'] as const) {
+        raw.exec(`ALTER TABLE ${table} DROP COLUMN ${column}`)
+      }
+    }
+    raw.pragma('user_version = 51')
+    raw.close()
+
+    expectCurrentSchema(path, taskId)
+  })
+
   it('opens a fresh database at v48, and again unchanged', () => {
     const path = dbPath()
     expectCurrentSchema(path)

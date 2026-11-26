@@ -259,6 +259,24 @@ describe('orchestration.taskUpdate passive --note and ownership contract', () =>
       message: expect.stringContaining('pass --id <task_id>')
     })
 
+    // A coordinator holding a self-created Dispatch in its Run retains task-update access to sibling tasks.
+    const selfTask = db.createTask({ spec: 'Coordinator self task' })
+    await harness.call(
+      'orchestration.dispatch',
+      { task: selfTask.id, to: 'term_coord', from: 'term_coord' },
+      ctx
+    )
+    const siblingTask = db.createTask({ spec: 'Sibling task in same Run' })
+    await expect(
+      harness.call(
+        'orchestration.taskUpdate',
+        { id: siblingTask.id, status: 'ready', callerTerminalHandle: 'term_coord' },
+        ctx
+      )
+    ).resolves.toMatchObject({
+      task: { id: siblingTask.id, status: 'ready' }
+    })
+
     // Worker A cannot target Worker B's task via --id.
     await expect(
       harness.call(

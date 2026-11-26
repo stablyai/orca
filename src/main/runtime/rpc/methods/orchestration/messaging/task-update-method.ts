@@ -23,14 +23,13 @@ export type TaskUpdateGrant =
   | { kind: 'worker'; task: TaskRow; dispatch: DispatchContextRow }
   | { kind: 'coordinator'; run: RunRow; task: TaskRow }
 
-function tryCoordinatedChildRunTask(
+function tryCoordinatedRunTask(
   input: OrchestrationAccessRuleInput<TaskUpdateInput>,
-  taskId: string,
-  workerRunId: string
+  taskId: string
 ): TaskUpdateGrant | null {
   const db = input.ctx.runtime.getOrchestrationDb()
   const target = db.getTask(taskId)
-  if (!target || target.run_id === workerRunId) {
+  if (!target) {
     return null
   }
   try {
@@ -95,9 +94,9 @@ export function resolveTaskUpdateAccess(
   const workingDispatch = db.getActiveDispatchForIdentity(from, paneKey)
   if (workingDispatch) {
     if (params.id !== undefined && params.id !== workingDispatch.task_id) {
-      const childGrant = tryCoordinatedChildRunTask(input, params.id, workingDispatch.run_id)
-      if (childGrant) {
-        return childGrant
+      const coordinatedGrant = tryCoordinatedRunTask(input, params.id)
+      if (coordinatedGrant) {
+        return coordinatedGrant
       }
       throw new OrchestrationError(
         'sender_not_assignee',
