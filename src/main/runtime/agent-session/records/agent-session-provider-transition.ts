@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util'
 import { agentSessionLeaseIsReleased } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -33,11 +34,13 @@ export function applyAgentSessionProviderCommand(
 ): AgentSessionRecord {
   switch (command.kind) {
     case 'select-provider': {
-      const { selectedProvider: previous, ...rest } = record
       if (!command.selection || command.selection.agent === record.provider) {
+        const { selectedProvider: previous, ...rest } = record
         return previous ? { ...rest, updatedAt: command.now } : record
       }
-      return { ...rest, selectedProvider: command.selection, updatedAt: command.now }
+      return isDeepStrictEqual(record.selectedProvider, command.selection)
+        ? record
+        : { ...record, selectedProvider: command.selection, updatedAt: command.now }
     }
     case 'begin-provider-switch':
       return beginProviderSwitch(record, command)

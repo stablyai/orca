@@ -1,4 +1,5 @@
 import { closeSync, openSync, writeSync } from 'node:fs'
+import { setImmediate } from 'node:timers/promises'
 import type Database from '../../sqlite/sync-database'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
@@ -64,53 +65,67 @@ type JournalContinuationPage = Omit<JournalContinuationContext, 'cursor'> & {
 }
 
 export type JournalContinuationRead =
-  | { kind: 'continuation-context'; after?: AgentJournalCursor }
+  | { kind: 'continuation-context'; after?: AgentJournalCursor; through?: AgentJournalCursor }
   | { kind: 'continuation-spill'; spill: JournalContinuationSpill }
 
 export type JournalContinuationReadResult =
   | { kind: 'continuation-context'; context: JournalContinuationContext }
   | { kind: 'continuation-spill'; bytes: number | null }
 
-export function readJournalDomainContinuation(
+export async function readJournalDomainContinuation(
   db: Database.Database,
   target: { sessionId: string; epoch: string },
-  operation: JournalContinuationRead
-): JournalContinuationReadResult {
+  operation: JournalContinuationRead,
+  signal?: AbortSignal
+): Promise<JournalContinuationReadResult> {
+  const checkpoint = async () => {
+    // Let cancellation reach readers hosted in another process.
+    if (signal) {
+      await setImmediate()
+      signal.throwIfAborted()
+    }
+  }
+  signal?.throwIfAborted()
   return operation.kind === 'continuation-context'
     ? {
         kind: 'continuation-context',
-        context: readJournalDomainContinuationContext(db, target, operation.after)
+        context: await readJournalDomainContinuationContext(db, target, operation, checkpoint)
       }
-    : spillJournalDomainContinuation(db, target, operation.spill)
+    : spillJournalDomainContinuation(db, target, operation.spill, checkpoint)
 }
 
 /**
  * An explicit export, one reader snapshot answered in one reply, so the reply limit bounds the
  * whole context; a large tool output or patch counts only as its excerpt.
  */
-function readJournalDomainContinuationContext(
+async function readJournalDomainContinuationContext(
   db: Database.Database,
   target: { sessionId: string; epoch: string },
-  after?: AgentJournalCursor
-): JournalContinuationContext {
+  { after, through }: Extract<JournalContinuationRead, { kind: 'continuation-context' }>,
+  checkpoint: () => Promise<void>
+): Promise<JournalContinuationContext> {
   const items: AgentJournalRenderItem[] = []
   const submissions: JournalContinuationContext['submissions'][number][] = []
   const continued: JournalContinuedPayload[] = []
   // One snapshot: the head and clear boundary hold for every page.
   const cursor = journalDomainContextHead(db, target)
+  if (through && (through.epoch !== cursor.epoch || through.sequence > cursor.sequence)) {
+    return { cursor, items, submissions, continued }
+  }
+  const ceiling = through?.sequence ?? cursor.sequence
   const clear = Number(
     db
       .prepare(`SELECT MAX(sequence) AS sequence FROM journal_items INDEXED BY journal_items_context_clear
-      WHERE session_id=? AND epoch=? AND hidden=0 AND context_clear=1`)
-      .get(target.sessionId, target.epoch)?.sequence ?? 0
+      WHERE session_id=? AND epoch=? AND hidden=0 AND context_clear=1 AND sequence<=?`)
+      .get(target.sessionId, target.epoch, ceiling)?.sequence ?? 0
   )
   const floor =
-    after?.epoch === cursor.epoch && after.sequence <= cursor.sequence
+    after?.epoch === cursor.epoch && after.sequence <= ceiling
       ? Math.max(clear, after.sequence)
       : clear
   const read = (from?: JournalContinuationFrom) =>
-    readJournalDomainContinuationPage(db, target, floor, from)
-  let page = read()
+    readJournalDomainContinuationPage(db, target, floor, through?.sequence, checkpoint, from)
+  let page = await read()
   for (;;) {
     for (const part of page.continued) {
       continued.push({ ...part, index: part.index + items.length })
@@ -120,17 +135,20 @@ function readJournalDomainContinuationContext(
     if (!page.next) {
       return { cursor, items, submissions, continued }
     }
-    page = read(page.next)
+    await checkpoint()
+    page = await read(page.next)
   }
 }
 
 /** One query page of an export, in visible order and then the chat's sends. */
-function readJournalDomainContinuationPage(
+async function readJournalDomainContinuationPage(
   db: Database.Database,
   target: { sessionId: string; epoch: string },
   clear: number,
+  through: number | undefined,
+  checkpoint: () => Promise<void>,
   from: JournalContinuationFrom = { part: 'items', after: [] }
-): JournalContinuationPage {
+): Promise<JournalContinuationPage> {
   const prefix = [target.sessionId, target.epoch] as const
   const continued: JournalContinuedPayload[] = []
   const page = { items: [], submissions: [], continued, next: null }
@@ -138,11 +156,20 @@ function readJournalDomainContinuationPage(
   if (from.part === 'items') {
     const rows = db
       .prepare(`SELECT ${EXPORT_PAYLOAD} AS payload_json, output_blob, sequence, sequence_index, ordinal
-      FROM journal_items INDEXED BY journal_items_visible_position
+      FROM journal_items AS item INDEXED BY journal_items_visible_position
       WHERE session_id=? AND epoch=? AND hidden=0 AND sequence>?
+        ${
+          through === undefined
+            ? ''
+            : `AND sequence<=? AND NOT EXISTS (
+          SELECT 1 FROM journal_submission_attempts AS send INDEXED BY journal_submission_item
+          WHERE send.session_id=item.session_id AND send.epoch=item.epoch
+          AND send.item_id=item.item_id AND send.current=1
+          AND (send.dispatch_state<>'accepted' OR send.accepted_sequence IS NULL OR send.accepted_sequence>?))`
+        }
         ${after.length ? 'AND (sequence, sequence_index, ordinal)>(?, ?, ?)' : ''}
       ORDER BY sequence, sequence_index, ordinal LIMIT ?`)
-      .all(...prefix, clear, ...after, PAGE)
+      .all(...prefix, clear, ...(through === undefined ? [] : [through, through]), ...after, PAGE)
     const items: AgentJournalRenderItem[] = []
     for (const row of rows) {
       const item = readJournalStoredRow(db, prefix, row)
@@ -161,16 +188,20 @@ function readJournalDomainContinuationPage(
     return { ...page, items, next: { part: next.length ? 'items' : 'sends', after: next } }
   }
   // Unaccepted sends belong only to an uncleared context, matching the saved-prompt policy.
-  if (clear > 0) {
+  if (clear > 0 || through !== undefined) {
     const submissions: JournalContinuationPage['submissions'][number][] = []
     // Seek by acceptance, then sort only the suffix into the same order as a full export.
     for (const row of db
       .prepare(`SELECT payload_json FROM journal_submission_attempts
         INDEXED BY journal_submission_accepted_position
         WHERE session_id=? AND epoch=? AND current=1 AND accepted_sequence>?
+        ${through === undefined ? '' : 'AND accepted_sequence<=?'}
         ORDER BY submitted_at, ordinal, message_id`)
-      .iterate(...prefix, clear)) {
+      .iterate(...prefix, clear, ...(through === undefined ? [] : [through]))) {
       submissions.push(JSON.parse(String(row.payload_json)))
+      if (submissions.length % PAGE === 0) {
+        await checkpoint()
+      }
     }
     return { ...page, submissions }
   }
@@ -206,11 +237,12 @@ function takeContinuedField(
  * Writes one continued text's stored UTF-8 bytes to a new private file, extracting it once; the
  * reply carries only the size, so the text never crosses to main. Null once it is gone or revised.
  */
-function spillJournalDomainContinuation(
+async function spillJournalDomainContinuation(
   db: Database.Database,
   target: { sessionId: string; epoch: string },
-  spill: JournalContinuationSpill
-): { kind: 'continuation-spill'; bytes: number | null } {
+  spill: JournalContinuationSpill,
+  checkpoint: () => Promise<void>
+): Promise<{ kind: 'continuation-spill'; bytes: number | null }> {
   // A blob passes NUL, which text functions stop at.
   const row = db
     .prepare(`SELECT CAST(json_extract(payload_json,?) AS BLOB) AS bytes
@@ -220,10 +252,12 @@ function spillJournalDomainContinuation(
   if (!(bytes instanceof Uint8Array)) {
     return { kind: 'continuation-spill', bytes: null }
   }
+  await checkpoint()
   const fd = openSync(spill.path, 'wx', 0o600)
   try {
     for (let offset = 0; offset < bytes.length;) {
       offset += writeSync(fd, bytes, offset, Math.min(SPILL_WRITE_BYTES, bytes.length - offset))
+      await checkpoint()
     }
   } finally {
     closeSync(fd)

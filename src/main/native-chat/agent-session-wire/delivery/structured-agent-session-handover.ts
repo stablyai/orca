@@ -8,13 +8,8 @@ import {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { StructuredAgentSessionInputNotAdmitted } from './structured-agent-session-input-admission'
 import type { AgentSessionHandoverContext } from '../host/structured-agent-session-host-types'
-import {
-  agentSessionFailureFact,
-  providerDiagnosticOf
-} from '../../../../shared/agent-session/failures/agent-session-failure'
-import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
-import { isAbortSignalReason } from '../../../../shared/concurrency/abort-signal-reason'
-import { isAgentSessionOptionRejectedError } from '../options/structured-agent-session-option-error'
+import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
+import { cancelledDispatch, dispatchSafely } from './structured-agent-session-dispatch-input'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import { resolveHandover } from '../operations/structured-agent-session-operation-settlement'
 import { readContextStructuredAgentSessionTurnScope } from '../observations/structured-agent-session-read-work'
@@ -35,7 +30,7 @@ import {
 
 /** One input operation runs provider work outside ordering and commits its result inside it. */
 export type StructuredAgentSessionPendingHandover = {
-  run: (commit: (resolve: () => Promise<void>) => Promise<void>) => Promise<void>
+  run: (commit: <T>(resolve: () => Promise<T>) => Promise<T>) => Promise<void>
 }
 
 /** Register abort before pending-row commit so Stop cannot fall between them.
@@ -69,11 +64,12 @@ export async function beginSubmissionHandover(
   // Join only current turns; persist stopped-history carry before writing to the provider.
   const turnScope = await readContextStructuredAgentSessionTurnScope(ctx)
   let carried: StoppedHistoryDelivery | null = null
+  let contextHandoff: string | null = null
   const rideAlong = structuredAgentSessionRideAlong(ctx, submission, body)
   const outgoing = (): AgentJournalMessageItem => {
     const message = rideAlong.outgoing(carried ? withStoppedHistory(body, carried.messages) : body)
-    return ctx.contextHandoff
-      ? { ...message, blocks: [{ type: 'text', text: ctx.contextHandoff }, ...message.blocks] }
+    return contextHandoff
+      ? { ...message, blocks: [{ type: 'text', text: contextHandoff }, ...message.blocks] }
       : message
   }
   let ownsChild = stillCurrent
@@ -133,6 +129,14 @@ export async function beginSubmissionHandover(
       try {
         let outcome: AgentSessionDispatchOutcome | null
         try {
+          let contextFailed = false
+          if (ctx.prepareContextHandoff && !attempt?.signal.aborted && ownsChild()) {
+            try {
+              contextHandoff = await ctx.prepareContextHandoff(commit, attempt?.signal)
+            } catch {
+              contextFailed = !attempt?.signal.aborted
+            }
+          }
           for (;;) {
             try {
               markStructuredAgentSessionInputUnadmitted(
@@ -141,10 +145,19 @@ export async function beginSubmissionHandover(
                 released,
                 false
               )
-              unwritten = attempt?.signal.aborted === true
-              outcome = unwritten
-                ? cancelledDispatch(queued)
-                : ownsChild()
+              unwritten = contextFailed || attempt?.signal.aborted === true
+              if (contextFailed) {
+                outcome = {
+                  state: 'rejected',
+                  ...agentSessionFailureWords(agentSessionFailureFact('hostFault'), {
+                    ...ctx.failureTextContext,
+                    surface: 'rejection'
+                  })
+                }
+              } else if (unwritten) {
+                outcome = cancelledDispatch(queued)
+              } else {
+                outcome = ownsChild()
                   ? await dispatchSafely(
                       ctx,
                       clientMessageId,
@@ -157,6 +170,7 @@ export async function beginSubmissionHandover(
                       attempt?.signal
                     )
                   : null
+              }
               break
             } catch (error) {
               if (!(error instanceof StructuredAgentSessionInputNotAdmitted)) {
@@ -239,73 +253,5 @@ export async function beginSubmissionHandover(
         released()
       }
     }
-  }
-}
-
-/** Adapter throws may be lost replies; never resend. Only explicit rejection proves non-delivery. */
-async function dispatchSafely(
-  ctx: AgentSessionHandoverContext,
-  clientMessageId: string,
-  body: AgentJournalMessageItem,
-  requestedAt: number,
-  executionOptions: AgentSessionExecutionOptions | undefined,
-  queued: boolean,
-  isCurrent: () => boolean,
-  prepare: (fence: number) => Promise<AgentJournalMessageItem>,
-  signal?: AbortSignal
-): Promise<AgentSessionDispatchOutcome> {
-  const { admitFreshInput } = ctx
-  try {
-    const outcome = await ctx.adapter.dispatch({
-      sessionId: ctx.sessionId,
-      clientMessageId,
-      body,
-      ...(executionOptions ? { executionOptions } : {}),
-      ...(signal ? { signal } : {}),
-      ...(admitFreshInput
-        ? {
-            admitFreshInput: (enqueue, _signal, kind) =>
-              admitFreshInput(enqueue, signal, prepare, kind)
-          }
-        : {}),
-      isCurrent,
-      fence: ctx.fence,
-      requestedAt,
-      onInputPreparation: ctx.recordRanOptions?.prepareInput,
-      onExecutionSnapshot: ctx.recordRanOptions?.checkpoint
-    })
-    return outcome
-  } catch (error) {
-    if (error instanceof StructuredAgentSessionInputNotAdmitted) {
-      throw error
-    }
-    // This signal affects preparation only; its original reason proves no provider write.
-    if (isAbortSignalReason(signal, error)) {
-      throw new StructuredAgentSessionInputNotAdmitted(cancelledDispatch(queued))
-    }
-    if (isAgentSessionOptionRejectedError(error)) {
-      return {
-        state: 'rejected',
-        ...agentSessionFailureWords(
-          error.rejection ??
-            agentSessionFailureFact('providerRejected', { detail: providerDiagnosticOf(error) }),
-          { ...ctx.failureTextContext, surface: 'rejection' }
-        )
-      }
-    }
-    return { state: 'unknown', reason: error instanceof Error ? error.message : String(error) }
-  }
-}
-
-/** Non-delivery proof applies only to queued handoffs; direct sends still owe stopped-history handling. */
-function cancelledDispatch(
-  neverReachedAgent: boolean
-): Extract<AgentSessionDispatchOutcome, { state: 'rejected' }> {
-  return {
-    state: 'rejected',
-    ...agentSessionFailureWords(
-      agentSessionFailureFact('cancelled', neverReachedAgent ? { neverReachedAgent } : {}),
-      { surface: 'rejection' }
-    )
   }
 }

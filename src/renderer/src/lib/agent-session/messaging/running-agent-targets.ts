@@ -177,7 +177,7 @@ function deriveStructuredAgentSendTargets(
       paneKey,
       tabId: tab.id,
       sessionId: tab.entityId,
-      agentType: tab.agentSessionAgent,
+      agentType: entry?.agentType ?? tab.agentSessionAgent,
       title: tab.customLabel?.trim() || tab.label,
       entry,
       status: disabledReason ? 'disabled' : 'eligible',

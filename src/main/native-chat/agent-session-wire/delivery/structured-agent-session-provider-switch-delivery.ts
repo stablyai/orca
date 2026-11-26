@@ -3,7 +3,7 @@ import { agentJournalSubmissionKey } from '../../../../shared/agent-session/jour
 import type { StructuredAgentSessionDeliveryLoopDeps } from './structured-agent-session-delivery-loop-deps'
 import {
   isNativeProviderCommand,
-  readStructuredChatProviderSwitchPrompt
+  prepareStructuredChatProviderSwitchPrompt
 } from './structured-agent-session-provider-handover'
 import {
   isCurrentProviderSwitch,
@@ -24,7 +24,7 @@ export function wireStructuredChatProviderSwitch(
   StructuredAgentSessionDeliveryLoopDeps,
   | 'prepareProviderSwitch'
   | 'settleProviderSwitch'
-  | 'providerSwitchPrompt'
+  | 'prepareProviderSwitchPrompt'
   | 'reconcileProviderSwitch'
 > {
   const settleProviderSwitch: NonNullable<
@@ -93,7 +93,7 @@ export function wireStructuredChatProviderSwitch(
       )
     },
     settleProviderSwitch,
-    providerSwitchPrompt: (session, clientMessageId) =>
-      readStructuredChatProviderSwitchPrompt(host.deps, session, clientMessageId)
+    prepareProviderSwitchPrompt: (session, clientMessageId) =>
+      prepareStructuredChatProviderSwitchPrompt(host.deps, session, clientMessageId)
   }
 }

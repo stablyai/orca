@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { readdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { runKeyedSerializedOperation } from '../../../../shared/concurrency/keyed-serialized-operations'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import { projectSavedChatContextItems } from '../../conversation-context/agent-session-saved-prompt-text'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionContinuationContext } from '../../../../shared/agent-session/agent-session-wire'
@@ -34,7 +35,11 @@ export function continuationContextReader(
     workspaceId: string
     expectedCursor: AgentJournalCursor
     inPlace?: { after?: AgentJournalCursor }
+    signal?: AbortSignal
+    publish?: (write: () => Promise<boolean>) => Promise<boolean>
   }): Promise<AgentSessionContinuationContext> => {
+    const { signal } = input
+    signal?.throwIfAborted()
     const sourceConversation = () => {
       const record = deps.store.getConversation(input.sessionId)
       return record?.location.workspaceId === input.workspaceId &&
@@ -46,7 +51,15 @@ export function continuationContextReader(
       return { status: 'superseded' }
     }
     const session = await conversation(input.sessionId)
-    const context = await session.journal.reads.continuationContext(input.inPlace?.after)
+    const context = await waitForPromiseWithSignal(
+      session.journal.reads.continuationContext(
+        input.inPlace?.after,
+        input.inPlace ? input.expectedCursor : undefined,
+        signal
+      ),
+      signal
+    )
+    signal?.throwIfAborted()
     const record = sourceConversation()
     if (
       !record ||
@@ -91,6 +104,7 @@ export function continuationContextReader(
     const spillRoot = join(snapshotRoot, 'spills')
     // One extraction per text, written by the reader to a private file main then streams.
     const spill = async (part: JournalContinuedPayload, trimEnd: boolean) => {
+      signal?.throwIfAborted()
       // Checked and swept once per export, before its first spill.
       prepared ??= (async () => {
         if (
@@ -108,8 +122,9 @@ export function continuationContextReader(
       const { itemId, revision, field } = part
       // One extraction at a time across exports: each can hold a whole stored text in the reader.
       const bytes = await runKeyedSerializedOperation(spillQueue, 'spill', () =>
-        session.journal.reads.continuationSpill({ itemId, revision, field, path })
+        session.journal.reads.continuationSpill({ itemId, revision, field, path }, signal)
       )
+      signal?.throwIfAborted()
       if (bytes === null) {
         throw new ContinuedPayloadSuperseded()
       }
@@ -130,7 +145,8 @@ export function continuationContextReader(
           ? markers.transcript(formatted, (index, trimEnd) =>
               spill(context.continued[index], trimEnd)
             )
-          : text
+          : text,
+        { signal, publish: input.publish }
       )
     } catch (error) {
       if (error instanceof ContinuedPayloadSuperseded) {

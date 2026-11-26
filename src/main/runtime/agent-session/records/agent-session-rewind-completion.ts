@@ -21,7 +21,9 @@ function rewindProviderChain(
 ) {
   const fork = rewind.providerFork
   // Only the active agent rewound its saved conversation.
-  const chain = record.providerHandleChain.filter(({ handle }) => handle.agent === record.provider)
+  const chain = record.providerHandleChain
+    .filter(({ handle }) => handle.agent === record.provider)
+    .map(({ switchedFrom: _removed, ...link }) => link)
   const head = agentSessionProviderHandleChainHead(chain)?.handle
   if (!fork?.materialized || head?.nativeId === fork.sessionId) {
     return chain

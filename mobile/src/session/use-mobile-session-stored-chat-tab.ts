@@ -6,7 +6,7 @@ import { activeSessionTabOf } from './tabs/active-session-tab'
 import {
   peekStoredChatTranscript,
   readStoredChatTranscript,
-  storedTabChatTranscriptIdentity
+  storedTabChatTranscriptKeys
 } from './native-chat/transcript/persistence/mobile-native-chat-transcript-store'
 import type { MobileSessionKeyboardStateModel } from '../terminal/session/input-controls/use-mobile-session-keyboard-state'
 
@@ -38,16 +38,18 @@ export function useMobileSessionStoredChatTab(scope: MobileSessionKeyboardStateM
     activeSessionTabId === null && sessionViewReady && !opensPane
       ? activeSessionTabOf(sessionTabs)
       : null
-  const storedChat =
+  const storedChatKeys =
     storedActiveTab &&
     (storedActiveTab.type === 'agent-session' || isTabChatView(storedActiveTab.id))
-      ? storedTabChatTranscriptIdentity(
+      ? storedTabChatTranscriptKeys(
           hostId,
           worktreeId,
           storedActiveTab,
           nativeChatTranscriptIsLocalReadable
         )
       : null
+  const storedChat = storedChatKeys?.identity
+  const legacyIdentity = storedChatKeys?.legacyIdentity
   const storedChatTabId = storedChat ? storedActiveTab?.id : undefined
   const storedChatTabType = storedChat ? storedActiveTab?.type : undefined
   useEffect(() => {
@@ -69,7 +71,7 @@ export function useMobileSessionStoredChatTab(scope: MobileSessionKeyboardStateM
     }
     const held = peekStoredChatTranscript(storedChat)
     if (held === undefined) {
-      void readStoredChatTranscript(storedChat).then(open)
+      void readStoredChatTranscript(storedChat, legacyIdentity).then(open)
     } else {
       open(held)
     }
@@ -82,6 +84,7 @@ export function useMobileSessionStoredChatTab(scope: MobileSessionKeyboardStateM
     appliedSnapshotMarkerRef,
     pendingSelectionRef,
     setActiveSessionTabId,
+    legacyIdentity,
     storedChat,
     storedChatTabId,
     storedChatTabType

@@ -1,5 +1,8 @@
 import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
+import { agentTypeToIconAgent } from '../../../../../../shared/agent-status/presentation/agent-type-icon-agent'
+import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { SleepingAgentSessionRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentStatusEvidenceObservedAt } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { Worktree } from '../../../../../../shared/worktree/types'
@@ -34,6 +37,11 @@ export function maxAgentActivityAt(metadata: readonly AgentMetadata[]): number |
 export type WorkspaceTabAgentMetadataState = {
   agentStatusByPaneKey: AcceptedAgentStatuses
   sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord>
+}
+
+export function structuredTabOccupantAgent(tab: Tab, statuses: AcceptedAgentStatuses) {
+  const live = statuses.get(structuredAgentSessionPaneKey(tab.id, tab.entityId))
+  return agentTypeToIconAgent(live?.agentType ?? tab.agentSessionAgent)
 }
 
 function normalizeText(value: string | null | undefined): string {

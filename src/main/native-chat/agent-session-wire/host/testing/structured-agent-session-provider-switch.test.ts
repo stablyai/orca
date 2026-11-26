@@ -1,4 +1,6 @@
-import { afterEach, expect, it } from 'vitest'
+import { createHash } from 'node:crypto'
+import { readdir, rm } from 'node:fs/promises'
+import { afterEach, expect, it, vi } from 'vitest'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
@@ -21,6 +23,13 @@ import { PI_RPC_AGENT } from '../../../../pi/rpc-agent-definition'
 import { CODEX_STRUCTURED_AGENT } from '../../../../codex/structured/launch/codex-structured-agent-definition'
 import { structuredAgentsDeclaringNothing } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
 import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import { agentSessionContextSnapshotRoot } from '../../../conversation-context/agent-session-context-snapshots'
+import { completeTestJournalRewind } from '../../rewind/structured-rewind-completion.test-support'
+import {
+  claudeProviderHandle,
+  codexProviderHandle
+} from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import type { AgentSessionProviderHandleLink } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 
 const piSelection = {
   sessionId: SESSION,
@@ -38,6 +47,181 @@ const piHost = {
 
 let rig: QueuedMessageTestRig | undefined
 afterEach(() => rig?.dispose())
+
+it.each(['first Codex', 'return to Codex', 'return to Claude'])(
+  'recovers a native rewind with switch history (%s)',
+  async (scenario) => {
+    const returns = scenario !== 'first Codex'
+    const forks = scenario === 'return to Claude'
+    const chat = await createQueuedMessageTestRig(forks ? { agent: 'claude' } : {})
+    rig = chat
+    const { journal } = await chat.host.conversation(SESSION)
+    const user = forks
+      ? { provider: 'claude' as const, sessionId: THREAD, uuid: 'discarded' }
+      : { provider: 'codex' as const, threadId: THREAD, turnId: 'discarded', ordinal: 0 }
+    await journal.appendItem(user, hostTestMessage('Discard this work'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    const itemId = agentJournalItemKey(user)
+    const before = await journal.reads.cursor()
+    const initial: AgentSessionProviderHandleLink = {
+      linkId: 'first',
+      handle: forks ? claudeProviderHandle(THREAD, null) : codexProviderHandle(THREAD),
+      origin: 'created',
+      mintedAtFence: 0,
+      observedAt: 0
+    }
+    const inactive: AgentSessionProviderHandleLink = {
+      linkId: 'inactive',
+      handle: forks ? codexProviderHandle('retained') : claudeProviderHandle('retained', null),
+      origin: 'created',
+      mintedAtFence: returns ? 1 : 0,
+      observedAt: 1,
+      ...(returns ? { switchedFrom: initial.linkId } : {})
+    }
+    const active: AgentSessionProviderHandleLink = {
+      ...initial,
+      linkId: 'current',
+      origin: returns ? 'resumed' : 'created',
+      mintedAtFence: returns ? 2 : 1,
+      observedAt: 2,
+      switchedFrom: inactive.linkId,
+      switchedBy: 'handoff-send'
+    }
+    const chain = [...(returns ? [initial] : []), inactive, active]
+    const { record, outcome } = await completeTestJournalRewind(
+      chat.root,
+      journal,
+      itemId,
+      active.mintedAtFence,
+      chain
+    )
+    expect(record?.rewind?.phase).toBe('completed')
+    expect(
+      record?.providerHandleChain.map(({ linkId, switchedFrom }) => [linkId, switchedFrom])
+    ).toEqual([
+      ...(returns ? [['first', undefined]] : []),
+      ['current', undefined],
+      ...(forks ? [['rewind-fixture-fork', undefined]] : [])
+    ])
+    expect(await journal.reads.itemBody(itemId)).toBeNull()
+    const { epoch } = await journal.reads.cursor()
+    expect(epoch).not.toBe(before.epoch)
+    expect(outcome).toMatchObject({ status: 'succeeded', rewind: { itemId, epoch } })
+  }
+)
+
+it('keeps an identical pending provider option from publishing another record', async () => {
+  let now = HOST_TEST_NOW
+  const chat = await createQueuedMessageTestRig({
+    now: () => now,
+    hostDeps: {
+      resolveProviderSwitchAccount: async () => ({
+        variable: 'CLAUDE_CONFIG_DIR',
+        path: '/test/claude'
+      })
+    }
+  })
+  rig = chat
+  const choose = (effort: string) =>
+    chat.host.selectProvider({ sessionId: SESSION, agent: 'claude', options: { effort } })
+  expect(await choose('low')).toEqual({ status: 'selected' })
+  const previous = chat.store.recordStamp(SESSION)
+  const changes: string[] = []
+  const release = chat.store.onRecordsChanged((ids) => changes.push(...ids))
+  try {
+    now++
+    expect(await choose('low')).toEqual({ status: 'selected' })
+    expect(chat.store.recordStamp(SESSION)).toBe(previous)
+    expect(changes).toEqual([])
+    expect(await choose('high')).toEqual({ status: 'selected' })
+    expect(chat.store.getRecord(SESSION)?.selectedProvider?.options).toEqual({ effort: 'high' })
+    expect(changes).toEqual([SESSION])
+  } finally {
+    release()
+  }
+})
+
+it('accepts Stop while a switched send is extracting a spill and never dispatches that send', async () => {
+  const chat = await createQueuedMessageTestRig({
+    agent: 'claude',
+    restartable: true,
+    hostDeps: {
+      resolveProviderSwitchAccount: async () => ({
+        variable: 'CODEX_HOME',
+        path: '/test/codex'
+      })
+    }
+  })
+  rig = chat
+  const { journal } = await chat.host.conversation(SESSION)
+  const stateDirectory = chat.host.deps.journalDatabase.stateDirectory
+  const root = agentSessionContextSnapshotRoot(stateDirectory)
+  const output = 'saved tool output '.repeat(8_192)
+  await journal.appendItem(
+    { provider: 'orca', clientMessageId: 'large-tool-output' },
+    {
+      kind: 'tool-call',
+      name: 'shell',
+      input: {},
+      state: 'completed',
+      output: {
+        head: output,
+        byteLength: output.length,
+        truncated: false,
+        digest: createHash('sha256').update(output).digest('hex')
+      }
+    },
+    {
+      fence: chat.store.getRecord(SESSION)!.lease.runtimeFence,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    }
+  )
+  const entered = Promise.withResolvers<AbortSignal | undefined>()
+  const releaseSpill = Promise.withResolvers<void>()
+  const extract = journal.reads.continuationSpill
+  const spill = vi
+    .spyOn(journal.reads, 'continuationSpill')
+    .mockImplementation(async (part, signal) => {
+      entered.resolve(signal)
+      await releaseSpill.promise
+      return extract(part, signal)
+    })
+  try {
+    expect(await chat.host.selectProvider({ sessionId: SESSION, agent: 'codex' })).toEqual({
+      status: 'selected'
+    })
+    const send = chat.send('Use the saved output')
+    expect(await send.result).toMatchObject({ ok: true })
+    const signal = await entered.promise
+    expect(signal?.aborted).toBe(false)
+    const fence = chat.store.getRecord(SESSION)!.lease.runtimeFence
+    const later = chat.send('Follow up', 'queue-if-active', { fence })
+    expect(await later.result).toMatchObject({ ok: true })
+    const operationId = hostTestOperationId()
+    const stop = chat.host.cancel(QUEUED_RIG_CALLER, {
+      envelope: {
+        ...chat.envelope({}, 'agentSession.cancel', operationId),
+        expectedRuntimeFence: fence
+      }
+    })
+    expect(await stop).toMatchObject({ ok: true })
+    expect(signal?.aborted).toBe(true)
+    releaseSpill.resolve()
+    await eventually(async () => {
+      expect(chat.store.getRecord(SESSION)?.providerSwitch).toBeUndefined()
+      expect((await chat.submission(send.id))?.dispatchState).toBe('rejected')
+    })
+    expect(chat.dispatch.mock.calls.map(([input]) => input.clientMessageId)).not.toContain(send.id)
+    expect((await readdir(root)).filter((file) => file !== 'spills')).toEqual([])
+  } finally {
+    releaseSpill.resolve()
+    spill.mockRestore()
+    await chat.host.flushAllStreamedEvents()
+    await rm(root, { recursive: true, force: true })
+  }
+})
 
 it('finishes the current reply before carrying its history into the next agent on the same chat', async () => {
   const chat = await createQueuedMessageTestRig({
@@ -122,6 +306,12 @@ it('finishes the current reply before carrying its history into the next agent o
     { type: 'text', text: expect.stringContaining('The existing shortcut is Control+Shift+N.') },
     { type: 'text', text: 'Add the shortcut to the note' }
   ])
+  const context = sent?.blocks[0]
+  if (context?.type !== 'text') {
+    throw new Error('Expected the prior chat context')
+  }
+  expect(context.text).not.toContain('Add the shortcut to the note')
+  expect(context.text).not.toContain('Now update the changelog')
   const handoffId = await chat.handoffId(queued)
   const saved = await journal.reads.itemBody(agentJournalSubmissionKey(handoffId))
   expect(saved).toMatchObject({ blocks: [{ type: 'text', text: 'Add the shortcut to the note' }] })

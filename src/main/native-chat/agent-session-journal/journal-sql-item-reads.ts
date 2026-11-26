@@ -27,7 +27,6 @@ import {
 import type { JournalMessageOptions, JournalNamedTurn } from './journal-reads'
 import {
   journalDomainContextHead,
-  readJournalDomainContinuation,
   type JournalContinuationRead,
   type JournalContinuationReadResult
 } from './journal-sql-continuation-context'
@@ -78,10 +77,13 @@ export type JournalSqlItemReadResult =
   | { kind: 'restart-cut'; cut: JournalRestartCut }
   | JournalSqlLifecycleReadResult
 
-export type JournalDomainItemRead = Exclude<JournalSqlItemRead, JournalSqlLifecycleRead>
+export type JournalDomainItemRead = Exclude<
+  JournalSqlItemRead,
+  JournalSqlLifecycleRead | JournalContinuationRead
+>
 export type JournalDomainItemReadResult = Exclude<
   JournalSqlItemReadResult,
-  JournalSqlLifecycleReadResult
+  JournalSqlLifecycleReadResult | JournalContinuationReadResult
 >
 
 export type JournalDomainItemTarget = { sessionId: string; epoch: string }
@@ -140,9 +142,6 @@ export function readJournalDomainItems(
       }
     case 'restart-cut':
       return { kind: 'restart-cut', cut: readJournalDomainRestartCut(db, target) }
-    case 'continuation-context':
-    case 'continuation-spill':
-      return readJournalDomainContinuation(db, target, operation)
     case 'message-options': {
       const body = journalVisibleItem(
         db,

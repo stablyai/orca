@@ -13,7 +13,10 @@ import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
 } from '../../display/worktree-default-display-name'
-import { collectAgentMetadataFromIndex } from './workspace-tab-agent-metadata'
+import {
+  collectAgentMetadataFromIndex,
+  structuredTabOccupantAgent
+} from './workspace-tab-agent-metadata'
 import {
   findDuplicateIds,
   getUnifiedTabPaletteExecutionHostId,
@@ -24,7 +27,6 @@ import {
 import { isWorkspaceTabContentType } from './workspace-tab-palette-content-type'
 import { getActiveUnifiedTabId, isCurrentWorkspaceTab } from './workspace-tab-palette-current-tab'
 import { projectedStructuredChatTabName } from '@/runtime/native-chat/naming/structured-chat-tab-name'
-import { agentTypeToIconAgent } from '../../../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type {
   BuildSearchableWorkspaceTabsOptions,
@@ -212,8 +214,7 @@ export function buildWorktreeTabEntries(
           typeAliases: ['chat']
         }),
         agentMetadata: [],
-        // Why: a chat records its provider, as the tab strip's icon does.
-        occupantAgent: agentTypeToIconAgent(tab.agentSessionAgent)
+        occupantAgent: structuredTabOccupantAgent(tab, agentStatusByPaneKey)
       })
       continue
     }

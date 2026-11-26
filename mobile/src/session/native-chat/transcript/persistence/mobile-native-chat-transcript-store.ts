@@ -47,35 +47,46 @@ export function terminalChatTranscriptIdentity(
   return encodeNativeChatTranscriptIdentity([sourceIdentity, agent, sessionId, transcriptPath])
 }
 
-export function structuredChatTranscriptIdentity(
-  sourceIdentity: string,
-  agent: string | null,
+export function structuredChatTranscriptKeys({
+  sourceIdentity = '',
+  agent,
+  sessionId
+}: {
+  sourceIdentity?: string
+  agent: string | null
   sessionId: string | null
-): string {
-  return encodeNativeChatTranscriptIdentity([sourceIdentity, agent, sessionId])
+}): { identity: string; legacyIdentity: string } {
+  return {
+    identity: encodeNativeChatTranscriptIdentity([sourceIdentity, sessionId]),
+    legacyIdentity: encodeNativeChatTranscriptIdentity([sourceIdentity, agent, sessionId])
+  }
 }
 
+type StoredChatTranscriptKeys = { identity: string; legacyIdentity?: string }
+
 /** The identity a stored tab's chat reads under, or null when the tab names no chat. */
-export function storedTabChatTranscriptIdentity(
+export function storedTabChatTranscriptKeys(
   hostId: string,
   worktreeId: string,
   tab: MobileNativeChatTab,
   // The boot read assumes readable: priming a copy for a chat that can't open yet costs one key.
   transcriptReadable = true
-): string | null {
+): StoredChatTranscriptKeys | null {
   const resolution = resolveMobileNativeChat(tab, transcriptReadable)
   if (!resolution) {
     return null
   }
   const source = encodeNativeChatTranscriptIdentity([hostId, worktreeId])
   return tab.type === 'agent-session'
-    ? structuredChatTranscriptIdentity(source, resolution.agent, resolution.sessionId)
-    : terminalChatTranscriptIdentity(
-        source,
-        resolution.agent,
-        resolution.sessionId,
-        resolution.transcriptPath
-      )
+    ? structuredChatTranscriptKeys({ ...resolution, sourceIdentity: source })
+    : {
+        identity: terminalChatTranscriptIdentity(
+          source,
+          resolution.agent,
+          resolution.sessionId,
+          resolution.transcriptPath
+        )
+      }
 }
 
 // Identities carry worktree paths and transcript paths, so the key is a hash; the store already fences hosts.
@@ -129,20 +140,34 @@ function storeAvailable(): boolean {
 }
 
 /** Reads several chats in one store call, as the first paint does for the active tab. */
-export function primeStoredChatTranscripts(identities: readonly string[]): Promise<void> {
+export function primeStoredChatTranscripts(
+  keys: readonly StoredChatTranscriptKeys[]
+): Promise<void> {
   const store = readPageDeviceStore()
-  const unread = identities.filter((identity) => !known.has(identity))
+  const unread = keys.filter(({ identity }) => !known.has(identity))
   if (!store?.available() || unread.length === 0) {
     return Promise.resolve()
   }
-  const read = store.read('cache', unread.map(chatTranscriptStoreKey)).then(
-    (result) => (result.status === 'ok' ? result.values : unread.map(() => null)),
-    () => unread.map(() => null)
-  )
-  unread.forEach((identity, at) => {
+  const identities = [
+    ...new Set(
+      unread.flatMap(({ identity, legacyIdentity }) =>
+        legacyIdentity ? [identity, legacyIdentity] : [identity]
+      )
+    )
+  ]
+  const read = store
+    .read('cache', identities.map(chatTranscriptStoreKey))
+    .then(
+      (result) => (result.status === 'ok' ? result.values : []),
+      () => []
+    )
+    .then((values) => new Map(identities.map((identity, at) => [identity, values[at]])))
+  unread.forEach(({ identity, legacyIdentity }) => {
     const value = read.then((values) => {
-      const raw = values[at]
-      const stored = raw ? readStoredValue(raw) : null
+      const raw = values.get(identity)
+      const legacy = legacyIdentity ? values.get(legacyIdentity) : null
+      const stored =
+        (raw ? readStoredValue(raw) : null) ?? (legacy ? readStoredValue(legacy) : null)
       // A write that landed meanwhile is newer than this read.
       if (!settled.has(identity)) {
         rememberStoredChatTranscript(identity, stored)
@@ -165,12 +190,15 @@ export function peekStoredChatTranscript(
 }
 
 /** The stored copy, reading the store once per identity. */
-export function readStoredChatTranscript(identity: string): Promise<StoredChatTranscript | null> {
+export function readStoredChatTranscript(
+  identity: string,
+  legacyIdentity?: string
+): Promise<StoredChatTranscript | null> {
   if (!storeAvailable()) {
     return Promise.resolve(null)
   }
   if (!known.has(identity)) {
-    void primeStoredChatTranscripts([identity])
+    void primeStoredChatTranscripts([{ identity, legacyIdentity }])
   }
   return known.get(identity) ?? Promise.resolve(null)
 }

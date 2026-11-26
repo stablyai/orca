@@ -7,12 +7,11 @@ import { readAgentSessionErrorRefusal } from '../../../../shared/agent-session/f
 import { useAppStore } from '@/store'
 import { isBotHomeTab, isLocalBotChatTab } from '../../../../shared/bots/bot-home-tab'
 
-/** A bot's page always has its Home tab; the runtime keeps the Chat or makes a new one, e.g. after an agent change. */
+/** A bot's page always has the Home Chat its saved pointer names. */
 export function BotHomeChat({ workspaceId }: { workspaceId: string }): null {
   const bot = useBotForWorkspace(workspaceId)
   const botId = bot?.id ?? null
   const hostId = bot?.hostId ?? null
-  const agent = bot?.agent ?? null
   const local = hostId === 'local'
   const sessionId = local ? (bot?.chatSessionId ?? null) : null
   const ready = useAppStore((state) => !local || state.workspaceSessionReady)
@@ -20,8 +19,7 @@ export function BotHomeChat({ workspaceId }: { workspaceId: string }): null {
     (state) =>
       local &&
       (state.unifiedTabsByWorktree[workspaceId] ?? []).some(
-        (tab) =>
-          isLocalBotChatTab(tab, bot) && isBotHomeTab(tab, bot) && tab.agentSessionAgent === agent
+        (tab) => isLocalBotChatTab(tab, bot) && isBotHomeTab(tab, bot)
       )
   )
   useEffect(() => {
@@ -34,6 +32,6 @@ export function BotHomeChat({ workspaceId }: { workspaceId: string }): null {
         }
       })
     }
-  }, [botId, hostId, agent, sessionId, ready, shown])
+  }, [botId, hostId, sessionId, ready, shown])
   return null
 }

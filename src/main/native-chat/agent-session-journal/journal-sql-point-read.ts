@@ -17,7 +17,11 @@ import { readJournalDomainLifecycle } from './journal-sql-lifecycle-reads'
 import type Database from '../../sqlite/sync-database'
 import { readJournalSqlObserver } from './journal-sql-observer-read'
 import { readJournalSqlWork } from './journal-sql-work-read'
-import { readJournalSqlProjection } from './journal-sql-read-transaction'
+import { readJournalSqlExport, readJournalSqlProjection } from './journal-sql-read-transaction'
+import {
+  readJournalDomainContinuation,
+  type JournalContinuationRead
+} from './journal-sql-continuation-context'
 import type { JournalSqlScope } from './journal-sql-scope'
 import { readJournalSqlInput } from './journal-sql-input-reads'
 import { JournalSqlStatusContext } from './journal-sql-status-context'
@@ -38,14 +42,20 @@ import type { JournalSqlPointRead, JournalSqlPointReadResult } from './journal-s
 /** Point procedures decode only the named entity and its captured incarnations. */
 export function readJournalSqlPoint(
   db: Database.Database,
-  request: JournalSqlPointRead
-): JournalSqlPointReadResult {
-  return readJournalSqlProjection(db, request.sessionId, (scope) => read(scope, request.operation))
+  { sessionId, operation }: JournalSqlPointRead,
+  signal?: AbortSignal
+): JournalSqlPointReadResult | Promise<JournalSqlPointReadResult> {
+  if (operation.kind === 'continuation-context' || operation.kind === 'continuation-spill') {
+    return readJournalSqlExport(db, sessionId, (scope) =>
+      readJournalDomainContinuation(db, scope, operation, signal)
+    )
+  }
+  return readJournalSqlProjection(db, sessionId, (scope) => read(scope, operation))
 }
 
 function read(
   scope: JournalSqlScope,
-  operation: JournalSqlPointRead['operation']
+  operation: Exclude<JournalSqlPointRead['operation'], JournalContinuationRead>
 ): JournalSqlPointReadResult {
   switch (operation.kind) {
     case 'mail-observation':
@@ -170,8 +180,6 @@ function read(
     case 'claude-snapshot':
     case 'named-turn':
     case 'message-options':
-    case 'continuation-context':
-    case 'continuation-spill':
     case 'restart-cut':
     case 'history-items':
     case 'claude-history-prompts':

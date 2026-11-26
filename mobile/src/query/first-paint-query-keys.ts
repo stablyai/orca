@@ -16,7 +16,7 @@ import { hostProjectSectionsQuery } from '../host-screen/catalog/use-host-projec
 import { sessionTabsFamily, sessionTabsKey } from '../session/tabs/mobile-session-last-tabs'
 import type { MobileSessionTab } from '../session/tabs/mobile-session-tabs'
 import { activeSessionTabOf } from '../session/tabs/active-session-tab'
-import { storedTabChatTranscriptIdentity } from '../session/native-chat/transcript/persistence/mobile-native-chat-transcript-store'
+import { storedTabChatTranscriptKeys } from '../session/native-chat/transcript/persistence/mobile-native-chat-transcript-store'
 import { gitStatusQuery } from '../source-control/changes/mobile-git-status-query'
 import { firstPaintTaskKeys } from '../tasks/screen-state/task-query-storage'
 import { hostQueryKey } from './host-query-key'
@@ -129,7 +129,7 @@ export function firstPaintChatTranscriptIdentity(
   queryClient: QueryClient,
   hostId: string,
   route: URL
-): string | null {
+): ReturnType<typeof storedTabChatTranscriptKeys> {
   const [root, routeHost, screen, worktreeSegment] = route.pathname.split('/').filter(Boolean)
   const worktreeId = routeSegment(worktreeSegment)
   if (root !== 'h' || routeSegment(routeHost) !== hostId || screen !== 'session' || !worktreeId) {
@@ -140,5 +140,5 @@ export function firstPaintChatTranscriptIdentity(
     sessionTabsKey(hostId, exec, worktreeId)
   )
   const active = tabs ? activeSessionTabOf(tabs) : null
-  return active ? storedTabChatTranscriptIdentity(hostId, worktreeId, active) : null
+  return active ? storedTabChatTranscriptKeys(hostId, worktreeId, active) : null
 }

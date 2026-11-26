@@ -1,4 +1,5 @@
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { AgentSessionProviderHandleChain } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { agentSessionRecordFixture } from '../../testing/agent-session-record-test-fixture'
 import { openTestAgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { seedTestAgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
@@ -10,8 +11,9 @@ export async function completeTestJournalRewind(
   root: string,
   journal: AgentSessionJournal,
   itemId: string,
-  fence = 1
-): Promise<void> {
+  fence = 1,
+  providerHandleChain?: AgentSessionProviderHandleChain
+) {
   const { sessionId, agent: provider, providerHandle } = journal.identity
   if (!providerHandle || (provider !== 'claude' && provider !== 'codex')) {
     throw new Error('rewind fixture requires a native provider handle')
@@ -19,7 +21,7 @@ export async function completeTestJournalRewind(
   const record = agentSessionRecordFixture({
     sessionId,
     provider,
-    providerHandleChain: [
+    providerHandleChain: providerHandleChain ?? [
       {
         linkId: 'head',
         handle: providerHandle,
@@ -33,9 +35,18 @@ export async function completeTestJournalRewind(
     records: [{ ...record, lease: { ...record.lease, runtimeFence: fence } }]
   })
   const store = await openTestAgentSessionRecordStore(root)
-  const operationId = '1700000000000-00000000000000000000000000000001'
+  const now = Date.now()
+  const operationId = `${now}-00000000000000000000000000000001`
   const callerKey = 'rewind-fixture'
-  await store.admitOperation({ callerKey, operationId, fingerprint: 'rewind', now: 1_000 })
+  const admission = await store.admitOperation({
+    callerKey,
+    operationId,
+    fingerprint: 'rewind',
+    now
+  })
+  if (admission.decision !== 'admit') {
+    throw new Error('rewind fixture could not admit its operation')
+  }
   await store.updateRecord(sessionId, {
     kind: 'rewind',
     fence,
@@ -57,10 +68,15 @@ export async function completeTestJournalRewind(
         : {})
     }
   })
+  const recoveredStore = await openTestAgentSessionRecordStore(root, { mode: 'observe' })
   await recoverStructuredRewind(
-    { store, logger: testEventSinkLogging().logger },
+    { store: recoveredStore, logger: testEventSinkLogging().logger },
     sessionId,
     journal,
     fence
   )
+  return {
+    record: recoveredStore.getRecord(sessionId),
+    outcome: recoveredStore.getOperationRow(callerKey, operationId)?.outcome
+  }
 }

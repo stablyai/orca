@@ -91,6 +91,7 @@ export function useMobileStructuredAgentState(args: {
   client: RpcClient | null
   sessionId: string | null
   sessionKey: string | null
+  legacyIdentity?: string
   enabled: boolean
   // Reacquire holds after transport loss while keeping the transcript visible through the outage.
   connected: boolean
@@ -128,6 +129,7 @@ export function useMobileStructuredAgentState(args: {
   }, [client, liveRead, sessionKey, state])
   const readingStore = useStoredChatTranscript({
     identity: enabled && sessionId ? sessionKey : null,
+    legacyIdentity: args.legacyIdentity,
     read: !retained,
     turnSettled: liveRead && !mobileStructuredAgentSessionWorking(state)
   })

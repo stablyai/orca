@@ -310,7 +310,10 @@ export type StructuredAgentSessionConversationNaming = {
 }
 
 export type AgentSessionHandoverContext = StructuredAgentSessionCommandHandoverContext & {
-  contextHandoff?: string
+  prepareContextHandoff?: (
+    commit: <T>(apply: () => Promise<T>) => Promise<T>,
+    signal?: AbortSignal
+  ) => Promise<string | null>
   settleProviderSwitch?: (outcome: 'delivered' | 'failed') => Promise<void> | undefined
   admitFreshInput?: StructuredAgentSessionAdmitHostInput
   continueInput?: StructuredAgentSessionContinueInput

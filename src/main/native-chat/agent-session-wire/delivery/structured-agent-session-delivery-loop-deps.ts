@@ -17,6 +17,7 @@ import type { StructuredAgentSessionAcquireAborts } from '../startup/structured-
 import type { StructuredAgentSessionStartClaim } from '../startup/structured-agent-session-agent-start'
 import type { StructuredAgentSessionStartReadiness } from '../startup/structured-agent-session-start-readiness'
 import type {
+  AgentSessionHandoverContext,
   StructuredAgentSessionHostSession,
   StructuredAgentSessionProviderChildIdentity
 } from '../host/structured-agent-session-host-types'
@@ -56,10 +57,10 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
     clientMessageId: string,
     outcome: 'delivered' | 'failed'
   ) => Promise<void>
-  providerSwitchPrompt?: (
+  prepareProviderSwitchPrompt?: (
     session: StructuredAgentSessionHostSession,
     clientMessageId: string
-  ) => Promise<string | null>
+  ) => Promise<AgentSessionHandoverContext['prepareContextHandoff']>
   retainedWork?: (sessionId: string, continuingId: string) => Promise<boolean>
   /** Orca changed this chat's tools since its child launched and it owes no work (see
    *  `launchToolsRefreshDue`): the input needs a child that has them. */

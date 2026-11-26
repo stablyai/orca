@@ -122,9 +122,10 @@ export function journalSqlReads(
   sessionId: string
 ): JournalSqlReads {
   const read = async <K extends PointKind>(
-    operation: JournalSqlPointRead['operation'] & { kind: K }
+    operation: JournalSqlPointRead['operation'] & { kind: K },
+    signal?: AbortSignal
   ): Promise<Extract<JournalSqlPointReadResult, { kind: K }>> => {
-    const result = await readers.point({ sessionId, operation })
+    const result = await readers.point({ sessionId, operation }, signal)
     if (!answered(result, operation.kind)) {
       throw new Error(`journal reader answered ${result.kind} for ${operation.kind}`)
     }
@@ -233,9 +234,10 @@ export function journalSqlReads(
     namedTurn: async (turnId) => (await read({ kind: 'named-turn', turnId })).turn,
     messageOptions: async (clientMessageId) =>
       (await read({ kind: 'message-options', clientMessageId })).options,
-    continuationContext: async (after) =>
-      (await read({ kind: 'continuation-context', after })).context,
-    continuationSpill: async (spill) => (await read({ kind: 'continuation-spill', spill })).bytes,
+    continuationContext: async (after, through, signal) =>
+      (await read({ kind: 'continuation-context', after, through }, signal)).context,
+    continuationSpill: async (spill, signal) =>
+      (await read({ kind: 'continuation-spill', spill }, signal)).bytes,
     restartCut: async () => (await read({ kind: 'restart-cut' })).cut,
     latestPrompt: async () => (await read({ kind: 'latest-prompt' })).prompt,
     restartProgress: async (cursor) => (await read({ kind: 'restart-progress', cursor })).progress,

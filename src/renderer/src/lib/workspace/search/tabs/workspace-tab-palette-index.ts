@@ -1,7 +1,12 @@
 import { shallow } from 'zustand/shallow'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { readRecordChanges } from '@/store/record-transitions/keyed-record-change-reads'
-import { collectAgentMetadataFromIndex, getPaneKeyTabId } from './workspace-tab-agent-metadata'
+import {
+  collectAgentMetadataFromIndex,
+  getPaneKeyTabId,
+  structuredTabOccupantAgent
+} from './workspace-tab-agent-metadata'
+import { structuredAgentSessionAddressTabId } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   buildPaletteTabDocument,
   type PaletteTabDocumentInput
@@ -86,8 +91,8 @@ export function createWorkspaceTabPaletteIndex() {
   let segments: SearchableWorkspaceTab[][] = []
   // Each segment entry's position in `entries`, or -1 when an earlier segment listed the same tab.
   let flatPositions: number[][] = []
-  // Every segment entry of a terminal, listed or not, so a status update keeps a hidden copy current too.
-  let terminalEntries = new Map<string, [segment: number, offset: number][]>()
+  // Include hidden copies so status updates keep every projection of the addressed chat current.
+  let statusEntries = new Map<string, [segment: number, offset: number][]>()
   let documents: PaletteDocumentCache = new Map()
   let terminalTabs = new Map<string, Map<string, TerminalTab>>()
   // Built by the last full pass; the workspace-scoped pass runs only while its inputs are unchanged.
@@ -117,13 +122,18 @@ export function createWorkspaceTabPaletteIndex() {
   const flatten = (): SearchableWorkspaceTab[] => {
     const next: SearchableWorkspaceTab[] = []
     const seen = new Set<string>()
-    terminalEntries = new Map()
+    statusEntries = new Map()
     flatPositions = segments.map((segment, segmentIndex) =>
       segment.map((entry, offset) => {
-        if (entry.tab.contentType === 'terminal') {
-          const located = terminalEntries.get(entry.tab.entityId) ?? []
+        const { tab } = entry
+        if (tab.contentType === 'terminal' || tab.contentType === 'agent-session') {
+          const address =
+            tab.contentType === 'terminal'
+              ? tab.entityId
+              : structuredAgentSessionAddressTabId(tab.id, tab.entityId)
+          const located = statusEntries.get(address) ?? []
           located.push([segmentIndex, offset])
-          terminalEntries.set(entry.tab.entityId, located)
+          statusEntries.set(address, located)
         }
         const identity = entryIdentity(entry)
         if (seen.has(identity)) {
@@ -209,28 +219,34 @@ export function createWorkspaceTabPaletteIndex() {
         }
       }
       for (const tabId of dirtyTabs) {
-        for (const [segmentIndex, offset] of terminalEntries.get(tabId) ?? []) {
+        for (const [segmentIndex, offset] of statusEntries.get(tabId) ?? []) {
           const entry = segments[segmentIndex][offset]
           const terminal = terminalTabs.get(entry.worktree.id)?.get(tabId)
-          const updated = {
-            ...entry,
-            agentMetadata: collectAgentMetadataFromIndex(
-              agents.index,
-              tabId,
-              entry.worktree,
-              scope.ambiguousWorktreeIds
-            ),
-            occupantAgent: resolveOpenTabOccupantAgent({
-              tabId,
-              title: entry.title,
-              defaultTitle: terminal?.defaultTitle,
-              launchAgent: terminal?.launchAgent,
-              layout: options.terminalLayoutsByTabId?.[tabId],
-              agentStatusByPaneKey: options.agentStatusByPaneKey,
-              sleepingAgentSessionsByPaneKey: options.sleepingAgentSessionsByPaneKey,
-              paneForegroundAgentByPaneKey: options.paneForegroundAgentByPaneKey
-            })
-          }
+          const updated =
+            entry.tab.contentType === 'agent-session'
+              ? {
+                  ...entry,
+                  occupantAgent: structuredTabOccupantAgent(entry.tab, options.agentStatusByPaneKey)
+                }
+              : {
+                  ...entry,
+                  agentMetadata: collectAgentMetadataFromIndex(
+                    agents.index,
+                    tabId,
+                    entry.worktree,
+                    scope.ambiguousWorktreeIds
+                  ),
+                  occupantAgent: resolveOpenTabOccupantAgent({
+                    tabId,
+                    title: entry.title,
+                    defaultTitle: terminal?.defaultTitle,
+                    launchAgent: terminal?.launchAgent,
+                    layout: options.terminalLayoutsByTabId?.[tabId],
+                    agentStatusByPaneKey: options.agentStatusByPaneKey,
+                    sleepingAgentSessionsByPaneKey: options.sleepingAgentSessionsByPaneKey,
+                    paneForegroundAgentByPaneKey: options.paneForegroundAgentByPaneKey
+                  })
+                }
           if (sameEntry(entry, updated)) {
             continue
           }

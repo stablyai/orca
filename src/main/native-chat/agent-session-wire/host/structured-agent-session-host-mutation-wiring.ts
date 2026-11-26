@@ -138,7 +138,9 @@ export function sessionMutations(
             })
             throw error
           }
-          mutations.afterProviderSelection?.(params.sessionId, session.journal)
+          if (mutations.deps.store.getRecord(params.sessionId)?.selectedProvider !== previous) {
+            mutations.afterProviderSelection?.(params.sessionId, session.journal)
+          }
         }
         return result
       })

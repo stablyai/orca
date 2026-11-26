@@ -20,7 +20,7 @@ export async function structuredChatSwitchInput(
   session: StructuredAgentSessionHostSession,
   next: AgentJournalSubmission
 ): Promise<
-  Pick<AgentSessionHandoverContext, 'contextHandoff' | 'settleProviderSwitch'> & {
+  Pick<AgentSessionHandoverContext, 'prepareContextHandoff' | 'settleProviderSwitch'> & {
     submission: AgentJournalSubmission
   }
 > {
@@ -29,10 +29,13 @@ export async function structuredChatSwitchInput(
   if (!switching && !record?.deferredProviderContext) {
     return { submission: next }
   }
-  const contextHandoff = await deps.providerSwitchPrompt?.(session, next.clientMessageId)
+  const prepareContextHandoff = await deps.prepareProviderSwitchPrompt?.(
+    session,
+    next.clientMessageId
+  )
   return {
     submission: next,
-    ...(contextHandoff ? { contextHandoff } : {}),
+    ...(prepareContextHandoff ? { prepareContextHandoff } : {}),
     ...(switching
       ? {
           settleProviderSwitch: (outcome: 'delivered' | 'failed') =>
@@ -65,11 +68,11 @@ export function isNativeProviderCommand(
   )
 }
 
-export async function readStructuredChatProviderSwitchPrompt(
+export async function prepareStructuredChatProviderSwitchPrompt(
   deps: StructuredAgentSessionHostDeps,
   session: StructuredAgentSessionHostSession,
   clientMessageId: string
-): Promise<string | null> {
+): Promise<AgentSessionHandoverContext['prepareContextHandoff']> {
   const sessionId = session.params.envelope.sessionId
   const record = deps.store.getRecord(sessionId)
   const switching =
@@ -79,7 +82,7 @@ export async function readStructuredChatProviderSwitchPrompt(
     ? { from: switching.from.provider, through: switching.through }
     : deferred
   if (!record || !handoff) {
-    return null
+    return
   }
   const body = await session.journal.reads.itemBody(agentJournalSubmissionKey(clientMessageId))
   if (
@@ -87,7 +90,7 @@ export async function readStructuredChatProviderSwitchPrompt(
     body.command ||
     isNativeProviderCommand(body, record.provider, deps.adapter.readCommands?.(sessionId))
   ) {
-    return null
+    return
   }
   if (deferred) {
     const marker = deferred.marker
@@ -105,10 +108,10 @@ export async function readStructuredChatProviderSwitchPrompt(
         kind: 'deliver-deferred-provider-context',
         marker
       })
-      return null
+      return
     }
     if (prior?.dispatchState === 'pending' && prior.handedOverAt !== undefined) {
-      return null
+      return
     }
     await deps.store.updateRecord(sessionId, {
       kind: 'deliver-deferred-provider-context',
@@ -120,23 +123,46 @@ export async function readStructuredChatProviderSwitchPrompt(
     ({ handle, seenThrough }) => handle.agent === record.provider && seenThrough !== undefined
   )
   const read = continuationContextReader(deps, () => Promise.resolve(session))
-  const context = await read({
-    sessionId,
-    workspaceId: record.location.workspaceId,
-    expectedCursor: handoff.through,
-    inPlace: previous?.seenThrough ? { after: previous.seenThrough } : {}
-  })
-  if (context.status !== 'current') {
-    throw new Error('agent_session_provider_switch_context_superseded')
+  return async (commit, signal) => {
+    const context = await read({
+      sessionId,
+      workspaceId: record.location.workspaceId,
+      expectedCursor: handoff.through,
+      inPlace: previous?.seenThrough ? { after: previous.seenThrough } : {},
+      signal,
+      publish: (write) =>
+        commit(() => {
+          signal?.throwIfAborted()
+          const live = deps.store.getRecord(sessionId)
+          const owned = switching
+            ? live?.providerSwitch?.clientMessageId === clientMessageId &&
+              live.providerSwitch.hostRunId === switching.hostRunId
+            : live?.deferredProviderContext?.marker === deferred?.marker &&
+              live?.deferredProviderContext?.attachedTo === clientMessageId
+          if (
+            !owned ||
+            live?.provider !== record.provider ||
+            live.lease.runtimeFence !== record.lease.runtimeFence ||
+            live.providerContextBoundary?.operationId !==
+              record.providerContextBoundary?.operationId
+          ) {
+            throw new Error('agent_session_provider_switch_context_superseded')
+          }
+          return write()
+        })
+    })
+    if (context.status !== 'current') {
+      throw new Error('agent_session_provider_switch_context_superseded')
+    }
+    return buildAgentSessionContinuationPrompt(
+      {
+        sourceAgent: isTuiAgent(handoff.from) ? handoff.from : null,
+        sourceKind: 'chat',
+        capturedText: context.capturedText ?? '',
+        sourceTitle: record.conversationName,
+        transcriptPath: context.transcriptPath
+      },
+      'in-place'
+    )
   }
-  return buildAgentSessionContinuationPrompt(
-    {
-      sourceAgent: isTuiAgent(handoff.from) ? handoff.from : null,
-      sourceKind: 'chat',
-      capturedText: context.capturedText ?? '',
-      sourceTitle: record.conversationName,
-      transcriptPath: context.transcriptPath
-    },
-    'in-place'
-  )
 }

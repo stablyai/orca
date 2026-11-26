@@ -1,6 +1,6 @@
 import { useMobileStructuredAsyncQuestions } from './use-mobile-structured-async-questions'
 import { useMobileUnresolvedFailureRows } from '../status/use-mobile-unresolved-failure-rows'
-import { structuredChatTranscriptIdentity } from '../transcript/persistence/mobile-native-chat-transcript-store'
+import { structuredChatTranscriptKeys } from '../transcript/persistence/mobile-native-chat-transcript-store'
 import { useMemo, useRef } from 'react'
 import { tuiAgentDisplayName } from '../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { mobileStructuredAgentSessionWorking } from './mobile-structured-agent-session-working'
@@ -60,7 +60,6 @@ export function useMobileStructuredAgentSession(
     pairedHostClient: paired,
     connected,
     sessionId,
-    sourceIdentity = '',
     enabled,
     onSendError,
     hostSupport,
@@ -70,11 +69,11 @@ export function useMobileStructuredAgentSession(
   // Gate queueing by capability while accepting published cards from every host.
   const queueCapable = hostSupport?.queuedMessages === true
   const queueFollowUps = useQueueFollowUps(client, connected && enabled, sessionId, paired, enabled)
-  const sessionKey = structuredChatTranscriptIdentity(sourceIdentity, tabAgent, sessionId)
+  const { identity: sessionKey, legacyIdentity } = structuredChatTranscriptKeys(args)
   const commandPendingRef = useRef(false)
   const stateArgs = { client, sessionId, sessionKey, enabled, connected, onCommandsChanged }
   const { state, stateRef, queuedMessages, queuePause, olderPages, loadEarlier, savedAt } =
-    useMobileStructuredAgentState(stateArgs)
+    useMobileStructuredAgentState({ ...stateArgs, legacyIdentity })
 
   const mutate = useMobileStructuredAgentMutate({
     client,

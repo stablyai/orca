@@ -40,7 +40,12 @@ export type JournalSqlReaderOperation =
   | { kind: 'legacy-compare'; sessionId: string }
   | { kind: 'conversion-storage'; sessionId?: string; sizedAt?: string }
 
-export type JournalSqlReaderRequest = { id: number; operation: JournalSqlReaderOperation }
+export type JournalSqlReaderRequest = {
+  id: number
+  operation: JournalSqlReaderOperation
+  cancellable?: true
+}
+export type JournalSqlReaderCancellation = { cancel: number }
 /** A charged reply's bytes, which main releases once the caller has taken it. */
 type JournalSqlReaderReplyCharge = { bytes?: number; creditWaitExpired?: true }
 export type JournalSqlReaderReply = (

@@ -15,6 +15,7 @@ import {
 } from './journal-sql-reader-requests'
 
 import type {
+  JournalSqlReaderCancellation,
   JournalSqlReaderOperation,
   JournalSqlReaderReply,
   JournalSqlReaderRequest,
@@ -207,12 +208,22 @@ export class ReaderSlot {
     // A request rejected by slot failure or close leaves the admission queue at once.
     const settled = new AbortController()
     const admissionSignal = signal ? AbortSignal.any([signal, settled.signal]) : settled.signal
+    const cancel = () => {
+      if (this.pending.has(id)) {
+        try {
+          this.worker.postMessage({ cancel: id } satisfies JournalSqlReaderCancellation)
+        } catch {
+          // A closed transport settles the outstanding request through its failure handler.
+        }
+      }
+    }
     const result = new Promise<JournalSqlReaderResult>((resolve, reject) => {
       let ticket: JournalReaderTicket | undefined
       this.pending.set(id, {
         operation,
         chat,
         resolve: (reply, release) => {
+          signal?.removeEventListener('abort', cancel)
           const bytes = reply.bytes ?? 0
           ticket?.received(bytes)
           resolve(reply)
@@ -226,6 +237,7 @@ export class ReaderSlot {
           })
         },
         reject: (error) => {
+          signal?.removeEventListener('abort', cancel)
           ticket?.consumed()
           settled.abort(error)
           reject(error)
@@ -247,7 +259,13 @@ export class ReaderSlot {
         })
         .then(() => {
           if (this.pending.has(id)) {
-            this.worker.postMessage({ id, operation } satisfies JournalSqlReaderRequest)
+            signal?.throwIfAborted()
+            this.worker.postMessage({
+              id,
+              operation,
+              ...(signal ? { cancellable: true } : {})
+            } satisfies JournalSqlReaderRequest)
+            signal?.addEventListener('abort', cancel, { once: true })
           }
         })
         .catch((error: unknown) => {

@@ -15,11 +15,12 @@ const STORE_READ_WAIT_MS = 150
  */
 export function useStoredChatTranscript(args: {
   identity: string | null
+  legacyIdentity?: string
   // False when this page already holds the chat, so there is nothing to read.
   read: boolean
   turnSettled: boolean
 }): boolean {
-  const { identity, turnSettled } = args
+  const { identity, legacyIdentity, turnSettled } = args
   // A store that doesn't answer in time never holds the live read back; its late answer still fills the copy.
   const [gaveUpOn, setGaveUpOn] = useState<string | null>(null)
   const reading =
@@ -34,12 +35,12 @@ export function useStoredChatTranscript(args: {
     }
     let current = true
     const wait = setTimeout(() => current && setGaveUpOn(identity), STORE_READ_WAIT_MS)
-    void readStoredChatTranscript(identity).then(() => current && answered())
+    void readStoredChatTranscript(identity, legacyIdentity).then(() => current && answered())
     return () => {
       current = false
       clearTimeout(wait)
     }
-  }, [identity, reading])
+  }, [identity, legacyIdentity, reading])
   useEffect(() => {
     if (turnSettled && identity !== null) {
       flushChatTranscript(identity)

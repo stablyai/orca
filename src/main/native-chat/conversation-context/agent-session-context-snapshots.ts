@@ -35,13 +35,15 @@ export function agentSessionContextSnapshotRoot(stateDirectory: string): string 
 export async function writeAgentSessionContextSnapshot(
   stateDirectory: string,
   sessionId: string,
-  text: string | AsyncIterable<string>
+  text: string | AsyncIterable<string>,
+  options?: { signal?: AbortSignal; publish?: (write: () => Promise<boolean>) => Promise<boolean> }
 ): Promise<string> {
   const root = agentSessionContextSnapshotRoot(stateDirectory)
   const name = createHash('sha256').update(sessionId).digest('hex')
   const path = join(root, `${name}.txt`)
   const temporary = `${path}.${randomUUID()}.part`
   const claim = {}
+  const signal = options?.signal
   staging.add(temporary)
   claims.set(path, claim)
   const isCurrent = () => claims.get(path) === claim
@@ -51,24 +53,39 @@ export async function writeAgentSessionContextSnapshot(
       if (!(await ensureOwnedTempStagingRoot(root))) {
         throw new Error('Chat context snapshot folder is not private')
       }
-      await writeFile(temporary, text, { flag: 'wx', mode: 0o600 })
-      // Staging can finish out of order; only publication holds the shared path queue.
-      published = await runKeyedSerializedOperation(publications, path, async () => {
-        if (!(await renameFileWithWindowsRetryAsync(temporary, path, isCurrent))) {
+      await writeFile(temporary, text, { flag: 'wx', mode: 0o600, signal })
+      const publish = async () => {
+        if (
+          !(await renameFileWithWindowsRetryAsync(
+            temporary,
+            path,
+            () => isCurrent() && !signal?.aborted
+          ))
+        ) {
           return false
         }
         // Rename keeps the last write's time, which a paused capture can leave old; the sweep ages
         // by it. Dated inside the queue, so no sweep's delete of this path can run in between.
         const now = new Date()
         await utimes(path, now, now).catch(() => undefined)
+        if (signal?.aborted && isCurrent()) {
+          await rm(path, { force: true })
+          publishedAt.delete(path)
+          return false
+        }
         publishedAt.set(path, Date.now())
         return true
-      })
+      }
+      // Staging can finish out of order; only publication holds the shared path queue.
+      published = await runKeyedSerializedOperation(publications, path, () =>
+        options?.publish ? options.publish(publish) : publish()
+      )
     } finally {
       await rm(temporary, { force: true }).catch(() => undefined)
       staging.delete(temporary)
     }
     // Cleanup can yield to a newer capture after this attempt's rename completed.
+    signal?.throwIfAborted()
     if (!published || !isCurrent()) {
       throw new Error('Chat context snapshot publication was replaced')
     }
