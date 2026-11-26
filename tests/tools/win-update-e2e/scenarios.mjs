@@ -6,7 +6,15 @@
 
 import { spawn, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+  existsSync,
+  readFileSync,
+  renameSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { assertWin32 } from './platform-guard.mjs'
@@ -126,8 +134,11 @@ function startOutsideHolder() {
       '-ReadyFile',
       ready
     ],
-    { detached: true, stdio: 'ignore', windowsHide: true }
+    { detached: true, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }
   )
+  let output = ''
+  child.stdout.on('data', (chunk) => (output += chunk))
+  child.stderr.on('data', (chunk) => (output += chunk))
   child.unref()
   owned.add(child.pid)
   for (let i = 0; i < 60 && !existsSync(ready); i++) {
@@ -135,7 +146,10 @@ function startOutsideHolder() {
   }
   log(`outside holder pid ${child.pid} holding=${existsSync(ready)}`)
   if (!existsSync(ready)) {
-    throw new Error('outside holder never opened app.asar')
+    const error = existsSync(`${ready}.err`) ? readFileSync(`${ready}.err`, 'utf8') : ''
+    throw new Error(
+      `outside holder never opened app.asar (alive=${isPidAlive(child.pid)}): ${error}${output}`.trim()
+    )
   }
   return child.pid
 }
@@ -154,6 +168,76 @@ function runDeelevated(exe, args) {
     `${path.basename(exe)} ${args.join(' ')} (Basic User token) -> exit ${result.exit} in ${seconds}s`
   )
   return { exit: result.exit, seconds }
+}
+
+const ASAR = path.join(INSTALL_DIR, 'resources', 'app.asar')
+
+// Whether app.asar can be moved right now, as the old uninstaller's atomicRMDir does first.
+function asarMovable() {
+  try {
+    renameSync(ASAR, `${ASAR}.move-probe`)
+    renameSync(`${ASAR}.move-probe`, ASAR)
+    return 'movable'
+  } catch (error) {
+    return `not movable (${error.code})`
+  }
+}
+
+function installFolderProcesses() {
+  const prefix = `${INSTALL_DIR}${path.sep}`.toLowerCase().replaceAll("'", "''")
+  const { stdout } = runCommandSync(
+    `@(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.ToLowerInvariant().StartsWith('${prefix}') } | ` +
+      'ForEach-Object { [pscustomobject]@{ pid = $_.ProcessId; parent = $_.ParentProcessId; cmd = $_.CommandLine } }) | ConvertTo-Json -Compress -Depth 3'
+  )
+  const parsed = stdout.trim() ? JSON.parse(stdout.trim()) : []
+  return Array.isArray(parsed) ? parsed : [parsed]
+}
+
+// One leftover that holds app.asar the way Orca itself does: the installed Orca.exe in Electron
+// mode (it has loaded its main code from app.asar), reduced to that one main process. GPU and
+// network service run inside it so there are no children to restart; any other child is ended.
+let appLeftoverNote = null
+function startAppLeftover() {
+  const { ELECTRON_RUN_AS_NODE: _drop, CODEX_HOME: _codex, ...env } = process.env
+  void _drop
+  void _codex
+  const child = spawn(
+    path.join(INSTALL_DIR, 'Orca.exe'),
+    ['--in-process-gpu', '--disable-gpu', '--enable-features=NetworkServiceInProcess'],
+    {
+      env: {
+        ...env,
+        ORCA_E2E_USER_DATA_DIR: mkdtempSync(path.join(work, 'leftover-profile-')),
+        ORCA_BACKGROUND_LAUNCH: '1'
+      },
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true
+    }
+  )
+  child.unref()
+  owned.add(child.pid)
+  sleep(20_000)
+  const ended = []
+  for (let round = 0; round < 3; round++) {
+    for (const p of installFolderProcesses()) {
+      if (p.pid !== child.pid) {
+        spawnSync('taskkill.exe', ['/F', '/PID', String(p.pid)])
+        ended.push(`${p.pid} ${String(p.cmd ?? '').match(/--type=\S+/)?.[0] ?? 'helper'}`)
+      }
+    }
+    sleep(5000)
+  }
+  const remaining = installFolderProcesses()
+  appLeftoverNote =
+    `Electron-mode Orca.exe pid ${child.pid} alive=${isPidAlive(child.pid)}; ` +
+    `install-folder processes now ${remaining.length}; app.asar ${asarMovable()}; ` +
+    `children ended: ${ended.join(', ') || 'none'}`
+  log(`app leftover: ${appLeftoverNote}`)
+  if (!isPidAlive(child.pid)) {
+    throw new Error(`Electron-mode leftover exited: ${appLeftoverNote}`)
+  }
+  return child.pid
 }
 
 // One leftover the installer can find but not end: its DACL denies PROCESS_TERMINATE, which stands
@@ -231,6 +315,8 @@ async function step(scenario, label, exe, args, { leftover, expect, extraEnv, du
   const leftoverAlive = leftover ? isPidAlive(leftover) : null
   const launched = after.present ? await launches() : false
   const ctx = { result, before, after, leftoverAlive, launched, dialog: pending?.dialog ?? null }
+  const leftoverNote = leftover ? appLeftoverNote : null
+  appLeftoverNote = null
   const failures = expect ? expect(ctx) : []
   const row = {
     scenario,
@@ -245,6 +331,7 @@ async function step(scenario, label, exe, args, { leftover, expect, extraEnv, du
     leftoverAliveAfter: leftoverAlive,
     launches: launched,
     dialog: ctx.dialog,
+    leftoverNote,
     verdict: failures.length === 0 ? 'pass' : `FAIL: ${failures.join('; ')}`
   }
   rows.push(row)
@@ -268,7 +355,15 @@ const checks = {
   failed: ({ result }) => (result.exit !== 0 ? [] : ['exit 0']),
   leftoverEnded: ({ leftoverAlive }) => (leftoverAlive === false ? [] : ['leftover still alive']),
   leftoverAlive: ({ leftoverAlive }) => (leftoverAlive === true ? [] : ['leftover ended']),
-  launches: ({ launched }) => (launched ? [] : ['app does not launch'])
+  launches: ({ launched }) => (launched ? [] : ['app does not launch']),
+  // Every build has its own app.asar, so a real update must change its hash.
+  replaced: ({ before, after }) =>
+    after.asarSha && after.asarSha !== before.asarSha ? [] : ['app.asar not replaced'],
+  // Main's check must show the reported failure: a failed install or the old app.asar left in place.
+  reproduced: ({ result, before, after }) =>
+    result.exit !== 0 || after.asarSha === before.asarSha
+      ? []
+      : ["main's check did not reproduce the failure (exit 0, app.asar replaced)"]
 }
 
 function all(...fns) {
@@ -281,7 +376,7 @@ const scenarios = {
   async '1-transitional'() {
     freshInstall(installers.release)
     await step('1 transitional (released → PR)', 'update', installers.prN, UPDATE, {
-      expect: all(checks.ok, checks.version('1.4.900'), checks.launches)
+      expect: all(checks.ok, checks.version('1.4.900'), checks.replaced, checks.launches)
     })
     freshInstall(installers.release)
     const leftover = startLeftover()
@@ -292,7 +387,13 @@ const scenarios = {
       UPDATE,
       {
         leftover,
-        expect: all(checks.ok, checks.version('1.4.900'), checks.leftoverEnded, checks.launches)
+        expect: all(
+          checks.ok,
+          checks.version('1.4.900'),
+          checks.replaced,
+          checks.leftoverEnded,
+          checks.launches
+        )
       }
     )
   },
@@ -305,7 +406,33 @@ const scenarios = {
     leftover = startLeftover()
     await step('2 one leftover', "this PR's check", installers.prN1, UPDATE, {
       leftover,
-      expect: all(checks.ok, checks.version('1.4.901'), checks.leftoverEnded, checks.launches)
+      expect: all(
+        checks.ok,
+        checks.version('1.4.901'),
+        checks.replaced,
+        checks.leftoverEnded,
+        checks.launches
+      )
+    })
+  },
+  async '3-asar-holder'() {
+    freshInstall(installers.mainN)
+    let leftover = startAppLeftover()
+    await step('3 one leftover holding app.asar', "main's check", installers.mainN1, UPDATE, {
+      leftover,
+      expect: checks.reproduced
+    })
+    freshInstall(installers.prN)
+    leftover = startAppLeftover()
+    await step('3 one leftover holding app.asar', "this PR's check", installers.prN1, UPDATE, {
+      leftover,
+      expect: all(
+        checks.ok,
+        checks.version('1.4.901'),
+        checks.replaced,
+        checks.leftoverEnded,
+        checks.launches
+      )
     })
   },
   async '5-cannot-end'() {
@@ -338,12 +465,18 @@ const scenarios = {
   async '6-two-updates'() {
     freshInstall(installers.prN)
     await step('6 two updates in a row', 'N → N+1', installers.prN1, UPDATE, {
-      expect: all(checks.ok, checks.version('1.4.901'), checks.launches)
+      expect: all(checks.ok, checks.version('1.4.901'), checks.replaced, checks.launches)
     })
     const leftover = startLeftover()
     await step('6 two updates in a row', 'N+1 → N+2 with one leftover', installers.prN2, UPDATE, {
       leftover,
-      expect: all(checks.ok, checks.version('1.4.902'), checks.leftoverEnded, checks.launches)
+      expect: all(
+        checks.ok,
+        checks.version('1.4.902'),
+        checks.replaced,
+        checks.leftoverEnded,
+        checks.launches
+      )
     })
   },
   async '7-manual'() {
@@ -449,7 +582,8 @@ function table() {
           r.step +
             (r.dialog
               ? ` (prompt seen: ${r.dialog.found}, leftover alive at prompt: ${r.dialog.leftoverAliveAtPrompt})`
-              : ''),
+              : '') +
+            (r.leftoverNote ? ` (${r.leftoverNote})` : ''),
           `\`${r.command}\``,
           `${r.exit} (${r.seconds}s)`,
           r.before,
@@ -490,6 +624,7 @@ async function main() {
         leftoverAliveAfter: null,
         launches: false,
         dialog: null,
+        leftoverNote: null,
         verdict: `FAIL: ${error.message}`
       })
       log(`${name} errored: ${error.stack}`)

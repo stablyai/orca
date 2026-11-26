@@ -207,11 +207,19 @@ jobs:
           pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never '-c.extraMetadata.version=1.4.900'
           if ($LASTEXITCODE) { throw 'build failed' }
           Copy-Item dist/orca-windows-setup.exe installers/pr-n.exe
+          $asar = 'dist/win-unpacked/resources/app.asar'
+          Copy-Item $asar "$asar.orig"
           function Repack($version, $marker, $dest) {
+            # Each build gets its own app.asar (version stamped inside), so an update must replace it.
+            Copy-Item "$asar.orig" $asar -Force
+            if ($version -ne '1.4.900') { node tests/tools/win-update-e2e/stamp-asar.mjs $asar 1.4.900 $version; if ($LASTEXITCODE) { throw 'stamp failed' } }
             Set-Content -NoNewline dist/win-unpacked/resources/e2e-build.txt $marker
+            # A same-version archive would otherwise be updated in place rather than rebuilt.
+            Remove-Item dist/*.nsis.7z -ErrorAction SilentlyContinue
             pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never --prepackaged dist/win-unpacked "-c.extraMetadata.version=$version"
             if ($LASTEXITCODE) { throw "repack $marker failed" }
             Copy-Item dist/orca-windows-setup.exe $dest
+            "$marker asar sha256: $((Get-FileHash $asar).Hash)"
           }
           Repack 1.4.901 n1 installers/pr-n1.exe
           Repack 1.4.902 n2 installers/pr-n2.exe

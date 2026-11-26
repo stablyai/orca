@@ -4,7 +4,12 @@ param(
   [Parameter(Mandatory = $true)][string]$Path,
   [Parameter(Mandatory = $true)][string]$ReadyFile
 )
-$stream = [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+try {
+  $stream = [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+} catch {
+  Set-Content -LiteralPath "$ReadyFile.err" -Value $_.Exception.ToString()
+  exit 1
+}
 Set-Content -LiteralPath $ReadyFile -Value 'holding'
 Start-Sleep -Seconds 3600
 $stream.Dispose()
