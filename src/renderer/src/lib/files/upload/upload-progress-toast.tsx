@@ -1,9 +1,9 @@
-import { Clock, Upload, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/class-names'
+import { translate } from '@/i18n/i18n'
 import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatBytes } from '../../../../../shared/text/format-bytes'
@@ -25,104 +25,177 @@ const DURATION_UNIT_FORMATS: Record<'minute' | 'hour' | 'day', Intl.NumberFormat
 
 let nextUploadToastId = 0
 
+export type UploadRow = {
+  sourcePath: string
+  name: string
+  byteLength: number
+  sent: number
+  status: 'waiting' | 'uploading' | 'uploaded' | 'failed' | 'cancelled'
+}
+
+/** Method names match the import's transfer, so the caller passes this handle straight through. */
 export type UploadProgressToast = {
   signal: AbortSignal
-  setTotal: (totalBytes: number) => void
-  update: (sentBytes: number) => void
+  onStart: (sources: { sourcePath: string; name: string; byteLength: number }[]) => void
+  sourceSignal: (index: number) => AbortSignal
+  onProgress: (index: number, sentBytes: number) => void
+  onDone: (index: number, outcome: 'uploaded' | 'failed') => void
   close: () => void
 }
 
-/** One toast per upload, updated in place: bytes, percent, time left, and a Cancel that aborts it. */
+/** One loading toast per drop, updated in place: a row per file when several upload, each with its own cancel. */
 export function showUploadProgressToast(title: string): UploadProgressToast {
   const id = `runtime-file-upload:${nextUploadToastId++}`
   const controller = new AbortController()
+  const sourceControllers: AbortController[] = []
   const estimateTimeLeft = createTimeLeftEstimate()
-  let total = 0
-  let sent = 0
+  let rows: UploadRow[] = []
   let renderedAt = 0
   let closed = false
 
-  // Hiding only removes the toast; the upload keeps going and still pastes when done.
+  const isPending = (row: UploadRow | undefined): row is UploadRow =>
+    row?.status === 'waiting' || row?.status === 'uploading'
+  const updateRow = (index: number, patch: Partial<UploadRow>): void => {
+    rows = rows.map((row, i) => (i === index ? { ...row, ...patch } : row))
+  }
   const close = (): void => {
     closed = true
     toast.dismiss(id)
   }
-  const cancel = (): void => {
-    // Sonner keeps the card clickable while it animates out; once closed, the paste may already be running.
+  const cancelAll = (): void => {
+    // Sonner keeps Cancel clickable while the toast animates out; once closed, the paste may already be running.
     if (closed) {
       return
     }
     controller.abort()
     close()
   }
+  const cancelFile = (index: number): void => {
+    // onDone settles a row before any later click, so a stale X never cancels a committed file.
+    if (closed || !isPending(rows[index])) {
+      return
+    }
+    updateRow(index, { status: 'cancelled' })
+    sourceControllers[index]?.abort()
+    render()
+  }
   const render = (): void => {
-    // A late progress event must not reopen a toast that Cancel, hiding or completion closed.
+    // A late progress event must not reopen a toast that Cancel or completion closed.
     if (closed) {
       return
     }
     renderedAt = Date.now()
-    const view = { sent, total, remainingMs: estimateTimeLeft(sent, total, renderedAt) }
-    toast.custom(
-      () => <UploadProgressCard title={title} {...view} onHide={close} onCancel={cancel} />,
-      {
-        id,
-        duration: Number.POSITIVE_INFINITY,
-        closeButton: false,
-        unstyled: true,
-        onDismiss: () => {
-          closed = true
-        }
+    const remainingMs =
+      rows.length > 0
+        ? estimateTimeLeft(
+            rows.reduce((sum, row) => sum + row.sent, 0),
+            rows.reduce(
+              (sum, row) => (isPending(row) ? sum + Math.max(0, row.byteLength - row.sent) : sum),
+              0
+            ),
+            renderedAt
+          )
+        : null
+    showUploadProgressView(id, title, rows, remainingMs, {
+      onCancelFile: cancelFile,
+      onCancelAll: cancelAll,
+      onDismiss: () => {
+        closed = true
       }
-    )
+    })
   }
 
   render()
   return {
     signal: controller.signal,
-    setTotal: (totalBytes) => {
-      total = totalBytes
+    onStart: (sources) => {
+      rows = sources.map((source) => ({ ...source, sent: 0, status: 'waiting' }))
       render()
     },
-    update: (sentBytes) => {
-      sent = sentBytes
-      if (Date.now() - renderedAt >= PROGRESS_RENDER_INTERVAL_MS) {
+    sourceSignal: (index) => (sourceControllers[index] ??= new AbortController()).signal,
+    onProgress: (index, sentBytes) => {
+      const row = rows[index]
+      if (!isPending(row)) {
+        return
+      }
+      updateRow(index, { sent: sentBytes, status: 'uploading' })
+      if (row.status === 'waiting' || Date.now() - renderedAt >= PROGRESS_RENDER_INTERVAL_MS) {
         render()
       }
+    },
+    onDone: (index, outcome) => {
+      if (!isPending(rows[index])) {
+        return
+      }
+      updateRow(index, { status: outcome })
+      render()
     },
     close
   }
 }
 
-/** Milliseconds left at the smoothed upload rate; null while the total or a steady rate is unknown. */
-function createTimeLeftEstimate(): (sent: number, total: number, now: number) => number | null {
+/** Raises or updates the loading toast for one drop's rows; empty rows while the drop is still staging. */
+export function showUploadProgressView(
+  id: string,
+  title: string,
+  rows: UploadRow[],
+  remainingMs: number | null,
+  actions: { onCancelFile: (index: number) => void; onCancelAll: () => void; onDismiss: () => void }
+): void {
+  toast.loading(title, {
+    id,
+    description:
+      rows.length > 0 ? (
+        <UploadProgressDetail
+          rows={rows}
+          remainingMs={remainingMs}
+          onCancelFile={actions.onCancelFile}
+        />
+      ) : undefined,
+    cancel: {
+      label:
+        rows.length > 1
+          ? translate('files.uploadProgress.cancelAll', 'Cancel all')
+          : translate('common.cancel', 'Cancel'),
+      onClick: actions.onCancelAll
+    },
+    duration: Number.POSITIVE_INFINITY,
+    onDismiss: actions.onDismiss
+  })
+}
+
+/** Milliseconds left at the smoothed rate; null until a steady rate is known. Transferred bytes include
+ *  cancelled and failed files' partial bytes so the rate never dips when one stops. */
+function createTimeLeftEstimate(): (
+  transferredBytes: number,
+  remainingBytes: number,
+  now: number
+) => number | null {
   let startedAt: number | null = null
-  let startSent = 0
+  let startTransferred = 0
   let lastAt = 0
-  let lastSent = 0
+  let lastTransferred = 0
   let bytesPerMs: number | null = null
   let remainingMs: number | null = null
-  return (sent, total, now) => {
-    if (total <= 0) {
-      return null
-    }
+  return (transferred, remaining, now) => {
     if (startedAt === null) {
       startedAt = lastAt = now
-      startSent = lastSent = sent
+      startTransferred = lastTransferred = transferred
       return null
     }
     const elapsed = now - lastAt
     if (elapsed <= 0 || now - startedAt < TIME_LEFT_WARMUP_MS) {
       return remainingMs
     }
-    const recent = (sent - lastSent) / elapsed
+    const recent = (transferred - lastTransferred) / elapsed
     lastAt = now
-    lastSent = sent
+    lastTransferred = transferred
     // Seed with the warm-up average, then follow the recent rate.
     bytesPerMs =
       bytesPerMs === null
-        ? (sent - startSent) / (now - startedAt)
+        ? (transferred - startTransferred) / (now - startedAt)
         : bytesPerMs + (1 - Math.exp(-elapsed / RATE_SMOOTHING_MS)) * (recent - bytesPerMs)
-    remainingMs = bytesPerMs > 0 ? Math.max(0, total - sent) / bytesPerMs : null
+    remainingMs = bytesPerMs > 0 ? remaining / bytesPerMs : null
     return remainingMs
   }
 }
@@ -138,80 +211,116 @@ function timeLeftText(t: Translate, remainingMs: number): string {
   return t('files.uploadProgress.timeLeft', 'About {{duration}} remaining', { duration })
 }
 
-export function UploadProgressCard({
-  title,
-  sent,
-  total,
+// Floor so a row never says 100% while its bytes are still in flight.
+function rowPercent(row: UploadRow): number {
+  if (row.status === 'uploaded') {
+    return 100
+  }
+  // A stopped file's bar empties; its label says why.
+  if (row.status === 'cancelled' || row.status === 'failed') {
+    return 0
+  }
+  return row.byteLength > 0
+    ? Math.floor((Math.min(row.sent, row.byteLength) / row.byteLength) * 100)
+    : 0
+}
+
+function UploadProgressDetail({
+  rows,
   remainingMs,
-  onHide,
-  onCancel
+  onCancelFile
 }: {
-  title: string
-  sent: number
-  total: number
+  rows: UploadRow[]
   remainingMs: number | null
-  onHide: () => void
-  onCancel: () => void
+  onCancelFile: (index: number) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const shown = Math.min(sent, total)
-  // Floor so the toast never says 100% while bytes are still in flight.
-  const percent = total > 0 ? Math.floor((shown / total) * 100) : 0
-  return (
-    <Card size="notice" role="group" aria-label={title} className="w-full">
-      <div className="flex flex-col gap-3 p-3.5">
-        <div className="flex items-center gap-3">
-          <span
-            className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground"
-            aria-hidden
-          >
-            <Upload className="size-4" />
-          </span>
-          <p className="min-w-0 flex-1 text-sm leading-snug font-semibold">{title}</p>
-          <Button
-            variant="ghost-muted"
-            size="icon-xs"
-            className="self-start"
-            aria-label={t('files.uploadProgress.hide', 'Hide')}
-            onClick={onHide}
-          >
-            <X className="size-3.5" />
-          </Button>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          {/* Kept in the layout before the total is known, so the toast doesn't grow mid-upload. */}
-          <div
-            className={cn(
-              'flex items-baseline justify-between gap-3 text-xs tabular-nums',
-              total === 0 && 'invisible'
-            )}
-          >
-            <span className="min-w-0 truncate text-muted-foreground">
-              {t('files.uploadProgress.sentOfTotal', '{{sent}} of {{total}} uploaded', {
-                sent: formatBytes(shown),
-                total: formatBytes(total)
-              })}
-            </span>
-            <span className="shrink-0 font-semibold">
-              {uiNumberFormat(PERCENT_FORMAT).format(percent / 100)}
-            </span>
-          </div>
-          <Progress value={percent} aria-label={title} className="h-1.5" />
-        </div>
-        <div className="flex items-center justify-between gap-3">
-          <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-            {remainingMs === null ? null : (
-              <>
-                <Clock className="size-3.5 shrink-0" aria-hidden />
-                <span className="truncate">{timeLeftText(t, remainingMs)}</span>
-              </>
-            )}
-          </span>
-          <Button variant="outline" size="sm" onClick={onCancel}>
-            {t('common.cancel', 'Cancel')}
-          </Button>
-        </div>
+  const timeLeft = (
+    // Kept in the layout during the warm-up, so the toast doesn't grow when the estimate appears.
+    <span className={cn('text-xs', remainingMs === null && 'invisible')}>
+      {remainingMs === null ? '\u00a0' : timeLeftText(t, remainingMs)}
+    </span>
+  )
+  if (rows.length === 1) {
+    const percent = rowPercent(rows[0])
+    return (
+      <div className="flex w-full flex-col gap-1.5">
+        <RowStatusLine t={t} row={rows[0]} percent={percent} />
+        <Progress value={percent} aria-label={rows[0].name} className="h-1.5" />
+        {timeLeft}
       </div>
-    </Card>
+    )
+  }
+  return (
+    <div className="flex w-full flex-col gap-2.5">
+      <ul className="scrollbar-sleek flex max-h-56 flex-col gap-2.5 overflow-y-auto">
+        {rows.map((row, index) => {
+          const percent = rowPercent(row)
+          const pending = row.status === 'waiting' || row.status === 'uploading'
+          return (
+            <li key={row.sourcePath} className="flex flex-col gap-1">
+              {/* min-h holds the row's height when its cancel button goes away. */}
+              <div className="flex min-h-6 items-center gap-2">
+                <span className="min-w-0 flex-1 truncate text-popover-foreground">{row.name}</span>
+                {pending ? (
+                  <Button
+                    variant="ghost-muted"
+                    size="icon-xs"
+                    aria-label={t('files.uploadProgress.cancelFile', 'Cancel {{name}}', {
+                      name: row.name
+                    })}
+                    onClick={() => onCancelFile(index)}
+                  >
+                    <X className="size-3.5" />
+                  </Button>
+                ) : null}
+              </div>
+              <RowStatusLine t={t} row={row} percent={percent} inList />
+              <Progress value={percent} aria-label={row.name} className="h-1" />
+            </li>
+          )
+        })}
+      </ul>
+      {timeLeft}
+    </div>
+  )
+}
+
+function RowStatusLine({
+  t,
+  row,
+  percent,
+  inList = false
+}: {
+  t: Translate
+  row: UploadRow
+  percent: number
+  /** Only a file in a list waits behind others; a lone file shows its bytes from the start. */
+  inList?: boolean
+}): React.JSX.Element {
+  const label =
+    row.status === 'waiting' && inList
+      ? t('files.uploadProgress.waiting', 'Waiting')
+      : row.status === 'cancelled'
+        ? t('files.uploadProgress.cancelled', 'Cancelled')
+        : row.status === 'failed'
+          ? t('files.uploadProgress.failed', 'Failed')
+          : t('files.uploadProgress.sentOfTotal', '{{sent}} of {{total}}', {
+              sent: formatBytes(Math.min(row.sent, row.byteLength)),
+              total: formatBytes(row.byteLength)
+            })
+  const showPercent =
+    row.status === 'uploading' || row.status === 'uploaded' || (row.status === 'waiting' && !inList)
+  return (
+    <div
+      className={cn('flex items-baseline justify-between gap-3 tabular-nums', inList && 'text-xs')}
+    >
+      <span className="min-w-0 truncate">{label}</span>
+      {showPercent ? (
+        <span className="shrink-0 text-popover-foreground">
+          {uiNumberFormat(PERCENT_FORMAT).format(percent / 100)}
+        </span>
+      ) : null}
+    </div>
   )
 }

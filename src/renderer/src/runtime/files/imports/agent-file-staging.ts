@@ -69,7 +69,13 @@ export async function stageClientFilesForAgent(
   sourcePaths: string[],
   assertCurrent?: () => void,
   // A page's upload keeps the files' own names: each file gets its own folder and no image is renamed.
-  { keepNames = false, transfer }: { keepNames?: boolean; transfer?: RuntimeImportTransfer } = {}
+  // That imports one source per call, restarting a transfer's source indexes, so the two exclude.
+  {
+    keepNames = false,
+    transfer
+  }:
+    | { keepNames: true; transfer?: never }
+    | { keepNames?: false; transfer?: RuntimeImportTransfer } = {}
 ): Promise<AgentFileStagingResult> {
   const { worktreePath } = target
   const windowsHost = isTerminalDropWindowsPathLike(worktreePath)

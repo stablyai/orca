@@ -31364,8 +31364,12 @@
     "uploadProgress": {
       "lessThanMinuteLeft": "Less than a minute remaining",
       "timeLeft": "About {{duration}} remaining",
-      "hide": "Hide",
-      "sentOfTotal": "{{sent}} of {{total}} uploaded"
+      "sentOfTotal": "{{sent}} of {{total}}",
+      "waiting": "Waiting",
+      "cancelled": "Cancelled",
+      "failed": "Failed",
+      "cancelFile": "Cancel {{name}}",
+      "cancelAll": "Cancel all"
     }
   }
 }

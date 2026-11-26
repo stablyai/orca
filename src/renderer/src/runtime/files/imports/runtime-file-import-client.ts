@@ -26,11 +26,16 @@ import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-se
 import type { LocalFileAccess } from '../../../../../shared/file-access/local-file-access'
 import { stagedRuntimeUploadByteLength } from '../../../../../shared/file-import/runtime-upload-staging-contract'
 
-/** Byte progress across one runtime import; aborting stops it and rejects the whole import. */
+/** Per-source progress and cancel for one runtime import; aborting `signal` rejects the whole import. */
 export type RuntimeImportTransfer = {
   signal: AbortSignal
-  onTotal: (totalBytes: number) => void
-  onProgress: (sentBytes: number) => void
+  /** The staged sources in upload order; the other callbacks index into this list. */
+  onStart: (sources: { sourcePath: string; name: string; byteLength: number }[]) => void
+  /** Aborting it skips or stops just that source; the import goes on with the rest. */
+  sourceSignal: (index: number) => AbortSignal
+  /** That source's bytes the runtime acknowledged; 0 when its upload begins. */
+  onProgress: (index: number, sentBytes: number) => void
+  onDone: (index: number, outcome: 'uploaded' | 'failed') => void
 }
 
 export async function importExternalPathsToRuntime(
@@ -97,10 +102,20 @@ export async function importExternalPathsToRuntime(
   importSession.assertCurrent()
   const transfer = options?.transfer
   transfer?.signal.throwIfAborted()
-  transfer?.onTotal(
-    staged.sources.reduce((total, source) => total + stagedRuntimeUploadByteLength(source), 0)
+  transfer?.onStart(
+    staged.sources.flatMap((source) =>
+      source.status === 'staged'
+        ? [
+            {
+              sourcePath: source.sourcePath,
+              name: source.name,
+              byteLength: stagedRuntimeUploadByteLength(source)
+            }
+          ]
+        : []
+    )
   )
-  let uploadedBytes = 0
+  let stagedIndex = -1
   const results: ImportItemResult[] = []
   const reservedNames = new Set<string>()
 
@@ -114,9 +129,18 @@ export async function importExternalPathsToRuntime(
       results.push(source)
       continue
     }
+    const index = ++stagedIndex
+    transfer?.signal.throwIfAborted()
+    const sourceSignal = transfer?.sourceSignal(index)
+    // Cancelled while it waited: neither pasted nor reported as failed.
+    if (sourceSignal?.aborted) {
+      continue
+    }
+    const uploadSignal =
+      transfer && sourceSignal && AbortSignal.any([transfer.signal, sourceSignal])
     let createdDirectoryImportRoot: string | null = null
-    // Bytes the runtime acknowledged for the file in flight, kept if it fails so progress never moves back.
-    let entrySentBytes = 0
+    let finishedEntryBytes = 0
+    transfer?.onProgress(index, 0)
     try {
       const finalName = await deconflictCopyName(source.name, async (n) => {
         importSession.assertCurrent()
@@ -131,7 +155,7 @@ export async function importExternalPathsToRuntime(
       const destPath = joinPath(destinationDir, finalName)
       const destRelativePath = joinRuntimeRelativePath(destinationArgs.relativePath, finalName)
       for (const entry of source.entries) {
-        transfer?.signal.throwIfAborted()
+        uploadSignal?.throwIfAborted()
         const entryRelativePath = joinRuntimeRelativePath(destRelativePath, entry.relativePath)
         if (entry.kind === 'directory') {
           await callRuntimeFileImportMutation(
@@ -168,18 +192,17 @@ export async function importExternalPathsToRuntime(
             (context.expectedSshTargetId
               ? `ssh:${encodeURIComponent(context.expectedSshTargetId)}`
               : 'local'),
-          transfer && {
-            signal: transfer.signal,
-            onProgress: (sentBytes) => {
-              entrySentBytes = sentBytes
-              transfer.onProgress(uploadedBytes + sentBytes)
+          transfer &&
+            uploadSignal && {
+              signal: uploadSignal,
+              onProgress: (sentBytes) => transfer.onProgress(index, finishedEntryBytes + sentBytes)
             }
-          }
         )
-        uploadedBytes += entry.byteLength
-        entrySentBytes = 0
-        transfer?.onProgress(uploadedBytes)
+        finishedEntryBytes += entry.byteLength
+        transfer?.onProgress(index, finishedEntryBytes)
       }
+      // No await from here to onDone, so a cancel either lands above or finds the source done.
+      uploadSignal?.throwIfAborted()
       reservedNames.add(finalName)
       results.push({
         sourcePath: source.sourcePath,
@@ -188,8 +211,8 @@ export async function importExternalPathsToRuntime(
         kind: source.kind,
         renamed: finalName !== source.name
       })
+      transfer?.onDone(index, 'uploaded')
     } catch (error) {
-      uploadedBytes += entrySentBytes
       if (createdDirectoryImportRoot) {
         // Match local directory rollback: remove the no-clobber root after partial nested runtime upload failure.
         await callRuntimeFileImportMutation(
@@ -203,15 +226,19 @@ export async function importExternalPathsToRuntime(
           15_000
         ).catch(() => {})
       }
-      // Cancel ends the whole import, not just this source.
+      // Cancel all ends the whole import; cancelling one source leaves it out and goes on.
       if (transfer?.signal.aborted) {
         throw error
+      }
+      if (sourceSignal?.aborted) {
+        continue
       }
       results.push({
         sourcePath: source.sourcePath,
         status: 'failed',
         reason: error instanceof Error ? error.message : String(error)
       })
+      transfer?.onDone(index, 'failed')
     }
   }
 

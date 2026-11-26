@@ -151,13 +151,7 @@ async function uploadRuntimeDropPaths(
       },
       args.dataPaths,
       args.assertCurrent,
-      {
-        transfer: {
-          signal: progress.signal,
-          onTotal: progress.setTotal,
-          onProgress: progress.update
-        }
-      }
+      { transfer: progress }
     )
     // Cancel puts nothing in the terminal, even when it lands after the last file finished.
     if (progress.signal.aborted) {
