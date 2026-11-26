@@ -784,9 +784,33 @@
         "manualAdministratorSteps": "Manuelle Schritte",
         "restartOrca": "Neu starten"
       },
+      "limit": {
+        "label": "Höchstzahl laufender Terminals",
+        "description": "Begrenzt deine laufenden Terminals projektübergreifend auf diesem Host.",
+        "system": "PTY-Limit des Systems: {{value}}",
+        "unknown": "Nicht verfügbar",
+        "shared": "Wird mit anderen Terminal-Apps geteilt. Dies ist die Gesamtkapazität, keine freien Plätze.",
+        "disconnected": "Dieser Host ist getrennt. Verbinde dich erneut, um sein Terminal-Limit anzuzeigen oder zu ändern.",
+        "unsupported": "Der Terminaldienst dieses Hosts unterstützt das Ändern dieses Limits noch nicht.",
+        "environment": "Für diese Orca-Instanz ist ein Terminal-Limit über ihre Umgebung festgelegt. Entferne die Überschreibung auf diesem Host, um es hier zu bearbeiten.",
+        "savedUnreadable": "Das gespeicherte Terminal-Limit dieses Hosts konnte nicht gelesen werden. {{value}} wird verwendet. Gib einen Wert ein und drücke Enter, um es zu ersetzen.",
+        "failed": "Das Terminal-Limit konnte nicht bestätigt werden. Versuche es erneut.",
+        "retry": "Erneut versuchen",
+        "unit": "Terminals",
+        "search": {
+          "limit": "Limit",
+          "maximum": "Maximum",
+          "pty": "pty",
+          "capacity": "Kapazität"
+        }
+      },
       "wordSeparators": {
         "description": "Zeichen, die bei der Auswahl per Doppelklick als Wortgrenzen gelten, einschließlich Leerzeichen.",
         "noSpaceHint": "Kein Leerzeichen enthalten – per Doppelklick wird über Leerzeichen hinweg ausgewählt."
+      },
+      "fontSize": {
+        "decrease": "Schrift verkleinern",
+        "increase": "Schrift vergrößern"
       }
     },
     "appearance": {
@@ -818,7 +842,14 @@
         "antigravityToggleDescription": "Nutzung des Antigravity-Abonnements für den aktiven Arbeitsbereich anzeigen.",
         "grokToggleDescription": "Credit-Verbrauch des Grok-Abonnements bei Anmeldung über Grok CLI anzeigen.",
         "cursorToggleDescription": "Nutzung des Cursor-Tarifs bei Anmeldung über cursor-agent oder Cursor IDE anzeigen.",
-        "zcodeToggleDescription": "Kontingentnutzung des ZCode Coding Plan anzeigen."
+        "zcodeToggleDescription": "Kontingentnutzung des ZCode Coding Plan anzeigen.",
+        "museToggleDescription": "Muse-Abonnementkontingent aus der Muse CLI anzeigen.",
+        "gitBlameTitle": "Git Blame",
+        "gitBlameDescription": "Zeigt in der Statusleiste, wer die Zeile am Cursor zuletzt geändert hat.",
+        "gitBlameKeywordBlame": "blame",
+        "gitBlameKeywordAuthor": "Autor",
+        "gitBlameKeywordCommit": "Commit",
+        "gitBlameToggleDescription": "Autor und Alter der Zeile am Cursor anzeigen. Klicke darauf, um den Commit zu öffnen."
       },
       "menuBarIcon": {
         "description": "Eine Orca-Verknüpfung und eine Aktivitätsanzeige in der macOS-Menüleiste anzeigen.",
@@ -847,6 +878,7 @@
         "widthDescription": "Maximale Breite von Nachrichten und Nachrichtenfeld in einem breiten Bereich.",
         "resetAppearance": "Chat-Darstellung zurücksetzen",
         "resetDescription": "Die obigen Standardwerte wiederherstellen.",
+        "resetKeyword": "zurücksetzen",
         "comfortable": "Komfortabel",
         "wide": "Breit",
         "full": "Volle Breite",
@@ -875,6 +907,42 @@
           "monaco": "monaco",
           "syntax": "Syntax"
         }
+      },
+      "tilingWindowMode": {
+        "title": "Modus für Tiling-Fenstermanager",
+        "description": "Blendet die Schaltflächen zum Minimieren und Maximieren aus und verschiebt die Arbeitsbereich-Tabs an den oberen Rand. Verschiebe und skaliere das Fenster mit deinem Fenstermanager."
+      },
+      "reduceVisualEffects": {
+        "description": "Schaltet die Unschärfe hinter Dialogen und Menüs sowie nach einem Neustart die Fenstertransparenz aus. Hilft bei Remote-Desktops und Computern ohne GPU.",
+        "keywords": {
+          "blur": "Unschärfe",
+          "transparency": "Transparenz",
+          "performance": "Leistung",
+          "remote": "Remote",
+          "gpu": "GPU"
+        },
+        "08c854149e": "Visuelle Effekte reduzieren"
+      },
+      "appIcon": {
+        "importCustom": "Benutzerdefiniert…",
+        "replaceCustom": "Eigenes Symbol ersetzen…",
+        "removeCustom": "Eigenes Symbol entfernen",
+        "customKeyword": "benutzerdefiniert",
+        "importKeyword": "importieren",
+        "importErrors": {
+          "unsupportedFormat": "Nicht unterstütztes Bild. Wähle eine PNG- oder JPEG-Datei.",
+          "unreadable": "Die ausgewählte Datei konnte nicht gelesen werden.",
+          "tooLarge": "Das Bild ist größer als {{max}} MB.",
+          "notSquare": "App-Symbole müssen quadratisch sein.",
+          "tooSmall": "Das Bild muss mindestens {{min}}×{{min}} Pixel groß sein.",
+          "tooBig": "Das Bild darf höchstens {{max}}×{{max}} Pixel groß sein.",
+          "undecodable": "Das ausgewählte Bild konnte nicht dekodiert werden.",
+          "saveFailed": "Das eigene Symbol konnte nicht gespeichert werden."
+        }
+      },
+      "uiZoom": {
+        "zoomOut": "Verkleinern",
+        "zoomIn": "Vergrößern"
       }
     },
     "browser": {
@@ -930,7 +998,8 @@
           "location": "Standort",
           "notifications": "Benachrichtigungen",
           "clipboard": "Zwischenablage",
-          "localNetwork": "lokales Netzwerk"
+          "localNetwork": "lokales Netzwerk",
+          "apps": "Apps"
         }
       },
       "profileScope": {
@@ -978,6 +1047,99 @@
           "added": "{{name}} hinzugefügt",
           "browse": "Chrome Web Store",
           "openFailed": "Einen Arbeitsbereich öffnen, um den Chrome Web Store zu durchsuchen."
+        },
+        "enabledToggleLabel": "Browser-Erweiterungen ein- oder ausschalten"
+      },
+      "passwords": {
+        "searchKeywords": {
+          "passwords": "Passwörter",
+          "autofill": "automatisch ausfüllen",
+          "vault": "Tresor",
+          "logins": "Anmeldungen",
+          "import": "importieren",
+          "csv": "CSV",
+          "touchId": "Touch ID"
+        },
+        "authFailed": "Deine Identität konnte nicht bestätigt werden",
+        "copied": "Passwort kopiert. Orca entfernt es in 2 Minuten aus der Zwischenablage.",
+        "search": "{{count}} Passwörter durchsuchen",
+        "add": "Hinzufügen",
+        "noMatches": "Keine gespeicherten Passwörter gefunden.",
+        "noUsername": "(kein Benutzername)",
+        "edit": "Bearbeiten",
+        "copy": "Passwort kopieren",
+        "delete": "Löschen…",
+        "neverHeading": "Für {{count}} Websites nie gespeichert",
+        "removeNever": "Entfernen",
+        "importFailed": "Passwörter konnten nicht importiert werden",
+        "importDuplicates": "{{count}} bereits gespeichert",
+        "importConflicts": "{{count}} beibehalten, weil ein anderes Passwort gespeichert ist",
+        "importInvalid": "{{count}} nicht lesbare Zeilen",
+        "importUndecryptable": "{{count}} vom Browser geschützt; exportiere stattdessen eine CSV-Datei daraus",
+        "imported": "{{count}} Passwörter importiert",
+        "deleteAllConfirmDescription": "Alle gespeicherten Passwörter, Notizen und Websites, für die nie gespeichert wird, im Profil {{profile}} werden dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.",
+        "deletedAll": "Passwortdaten gelöscht",
+        "form": {
+          "invalidSite": "Gib eine Website-Adresse ein, z. B. example.com.",
+          "invalidPassword": "Gib ein Passwort ein.",
+          "duplicate": "Für diesen Benutzernamen ist auf dieser Website bereits ein Passwort gespeichert.",
+          "unavailable": "Dieses Passwort konnte nicht gespeichert werden.",
+          "editTitle": "Passwort bearbeiten",
+          "addTitle": "Passwort hinzufügen",
+          "site": "Website",
+          "sitePlaceholder": "example.com",
+          "username": "Benutzername",
+          "password": "Passwort",
+          "currentHint": "Speichere das Passwort, das du derzeit auf dieser Website verwendest.",
+          "note": "Notiz",
+          "cancel": "Abbrechen",
+          "save": "Speichern",
+          "description": "Orca füllt es aus, wenn du es unter einem Anmeldefeld auf dieser Website auswählst.",
+          "usernamePlaceholder": "E-Mail oder Benutzername",
+          "addNote": "Notiz hinzufügen"
+        },
+        "hide": "Passwort ausblenden",
+        "show": "Passwort anzeigen",
+        "offerToSave": "Speichern von Passwörtern anbieten",
+        "offerToSaveDescription": "Nach der Anmeldung auf einer Website in Orcas Browser anbieten, die Anmeldedaten zu speichern.",
+        "fillReauth": "Vor dem Ausfüllen nach Touch ID fragen",
+        "fillReauthDescription": "Für einen gemeinsam genutzten Computer. Beim Anzeigen oder Kopieren eines Passworts wird bereits gefragt.",
+        "noReauth": "Dieser Computer kann deine Identität nicht mit Touch ID bestätigen, daher werden Passwörter ohne Prüfung angezeigt und ausgefüllt.",
+        "reauthUnavailable": "Touch ID kann gerade nicht verwendet werden, daher zeigt, kopiert oder füllt Orca kein Passwort aus, das Touch ID erfordert.",
+        "import": "Importieren",
+        "importCsv": "Aus einer CSV-Datei…",
+        "deleteAllTitle": "Alle Passwortdaten löschen",
+        "deleteAllDescription": "Alle gespeicherten Passwörter, Notizen und Websites, für die nie gespeichert wird, im Profil {{profile}}.",
+        "empty": "Orca bietet nach deiner Anmeldung an, die Anmeldedaten zu speichern. Du kannst sie auch aus einem anderen Browser oder einer CSV-Datei übernehmen.",
+        "account": "{{username}} auf {{site}}",
+        "lastUsed": "Verwendet {{when}}",
+        "copyFor": "Passwort für {{account}} kopieren",
+        "editFor": "{{account}} bearbeiten",
+        "moreActions": "Weitere Aktionen für {{account}}",
+        "accountCount": "{{count}} Konten",
+        "deleteConfirmDescription": "Orca füllt es nicht mehr aus. Dies kann nicht rückgängig gemacht werden.",
+        "deleteConfirm": "Löschen",
+        "profileDescription": "Gespeicherte Anmeldedaten für das Profil {{profile}}. Orca füllt sie nur aus, wenn du sie unter einem Anmeldefeld auswählst.",
+        "unavailableTitle": "Gespeicherte Passwörter sind auf diesem Computer deaktiviert",
+        "emptyTitle": "Noch keine gespeicherten Passwörter",
+        "searchLabel": "Passwörter durchsuchen",
+        "deleteAllAction": "Löschen…",
+        "title": "Passwörter",
+        "description": "Gespeicherte Anmeldedaten für Orcas Browser: hinzufügen, importieren, bearbeiten und löschen.",
+        "httpSuffix": " · http"
+      },
+      "memorySaver": {
+        "unviewedForLabel": "Nicht angesehen seit",
+        "unviewedForDescription": "Wie lange ein Tab nicht angesehen werden muss, bevor er freigegeben wird.",
+        "hoursSuffix": "Stunden",
+        "title": "Speichersparmodus",
+        "description": "Gibt Arbeitsspeicher von Tabs frei, die du nicht angesehen hast. Sie werden neu geladen, wenn du sie öffnest.",
+        "searchKeywords": {
+          "memory": "Arbeitsspeicher",
+          "tabs": "Tabs",
+          "idle": "idle",
+          "sleep": "Ruhezustand",
+          "performance": "Leistung"
         }
       },
       "sessionHost": {
@@ -1108,6 +1270,7 @@
         "on": "Ein",
         "off": "Aus",
         "model": "Modell",
+        "effort": "Denkaufwand",
         "agentDefault": "Standard des Agenten",
         "effortDefault": "Standard",
         "savedModel": "Modell aus den Einstellungen: {{value0}}",
@@ -1127,10 +1290,113 @@
           "antigravity": "antigravity"
         }
       },
+      "confirmations": {
+        "artifactHelp": "Alle mit dem öffentlichen Link verlieren den Zugriff.",
+        "pinned": "Schließen eines angehefteten Tabs",
+        "workspace": "Löschen eines Arbeitsbereichs",
+        "runningHelp": "Vor dem Stoppen eines Agenten oder Befehls nachfragen, der noch läuft.",
+        "artifact": "Löschen eines Artefakts",
+        "automationHelp": "Der Ausführungsverlauf wird ebenfalls gelöscht.",
+        "automation": "Löschen einer Automatisierung",
+        "title": "Bestätigungen",
+        "running": "Schließen eines laufenden Chats oder Terminals",
+        "chat": "Löschen eines Chats"
+      },
+      "pages": {
+        "folder": "Arbeitsbereichsordner",
+        "editor": "Editor und Diffs",
+        "openIn": "Öffnen in",
+        "worktrees": "Worktrees aus anderen Tools"
+      },
+      "folder": {
+        "oneFolder": "Ein Ordner",
+        "perProject": "Ordner pro Projekt"
+      },
+      "search": {
+        "keywords": {
+          "claude": "Claude",
+          "auto_save": "automatisch speichern",
+          "source": "Quelle",
+          "share": "teilen",
+          "star": "Stern",
+          "gsd": "GSD",
+          "update": "Update",
+          "markdown": "markdown",
+          "diff": "Diff",
+          "whitespace": "Leerzeichen",
+          "ask_before": "vorher fragen",
+          "confirmations": "Bestätigungen",
+          "command_line": "Befehlszeile",
+          "artifact": "Artefakt",
+          "version": "Version",
+          "spaces": "Leerzeichen",
+          "link": "Link",
+          "tabs": "Tabs",
+          "tab_characters": "Tabulatorzeichen",
+          "trim": "kürzen",
+          "root": "Stammverzeichnis",
+          "word_wrap": "Zeilenumbruch",
+          "wrap": "Umbruch",
+          "location": "Speicherort",
+          "custom": "benutzerdefiniert",
+          "indentation": "Einrückung",
+          "long_lines": "lange Zeilen",
+          "about": "über"
+        }
+      },
+      "cli": {
+        "title": "Befehlszeile",
+        "otherTerminals": "{{command}} in anderen Terminals",
+        "skillTitle": "Orca-Skill für Agenten",
+        "description": "Orcas eigene Terminals haben es bereits."
+      },
+      "previewTabs": {
+        "title": "Vorschau-Tabs",
+        "description": "Ein Einfachklick auf eine Datei verwendet einen einzigen Vorschau-Tab wieder, bis du ihn bearbeitest oder anheftest."
+      },
+      "autoSave": {
+        "title": "Automatisch speichern",
+        "description": "Änderungen nach einer kurzen Pause speichern."
+      },
+      "editorGroups": {
+        "saving": "Speichern",
+        "markdown": "Markdown",
+        "editor": "Editor",
+        "diffs": "Diffs"
+      },
+      "editor": {
+        "sideBySide": "Diffs nebeneinander",
+        "inline": "Inline-Diffs",
+        "description": "Optionen für Speichern, Editor, Diffs und Markdown"
+      },
+      "workspaces": {
+        "title": "Arbeitsbereiche"
+      },
+      "worktrees": {
+        "addFolder": "Ordner hinzufügen…",
+        "customRules": "Benutzerdefinierte Regeln",
+        "cancelAdd": "Abbrechen",
+        "hidden": "Alle ausgeblendet",
+        "description": "Claude Code, GSD und andere Speicherorte",
+        "shown": "Standardmäßig angezeigt"
+      },
+      "openIn": {
+        "none": "Keine Apps hinzugefügt",
+        "description": "Apps im Menü „Öffnen in“ eines Arbeitsbereichs"
+      },
+      "tabs": {
+        "title": "Tabs"
+      },
       "about": {
         "title": "Info",
         "version": "Orca {{version}}"
-      }
+      },
+      "inlineBlameTitle": "Inline-Git-Blame",
+      "inlineBlameDescription": "Am Ende der Zeile anzeigen, wer die Zeile am Cursor zuletzt geändert hat und wann.",
+      "inlineBlameKeywordBlame": "blame",
+      "inlineBlameKeywordGit": "git",
+      "inlineBlameKeywordAuthor": "Autor",
+      "inlineBlameKeywordAnnotation": "Anmerkung"
     },
     "openInApp": {
       "preset": {
@@ -1164,7 +1430,12 @@
         "modifierOnly": "Eine Taste drücken, nicht nur eine Modifikatortaste.",
         "invalidBindingValue": "Eine Zeichenfolge, ein Array aus Zeichenfolgen, null oder false verwenden.",
         "stringArrayRequired": "Ein Array aus Zeichenfolgen verwenden.",
-        "fileNotObject": "Die Tastenbelegungsdatei muss ein JSON-Objekt enthalten."
+        "fileNotObject": "Die Tastenbelegungsdatei muss ein JSON-Objekt enthalten.",
+        "digitIndex": "Wähle eine Zifferntaste 1–9 mit einer Modifikatortaste, z. B. Cmd+1 oder Ctrl+1.",
+        "exampleChord": "Verwende ein Tastenkürzel wie Ctrl+Shift+P oder Cmd+K.",
+        "modOrPlatform": "Verwende entweder Mod oder eine plattformspezifische Modifikatortaste, nicht beides.",
+        "needModifier": "Mindestens eine Modifikatortaste verwenden.",
+        "needNonModifier": "Eine Taste drücken, nicht nur eine Modifikatortaste."
       },
       "diagnostics": {
         "sectionNotObject": "{{section}} muss ein Objekt sein.",
@@ -1175,7 +1446,30 @@
         "conflictingOverrides": "Benutzerdefinierte Tastenkürzel mit Konflikten wurden ignoriert: {{actions}}.",
         "readFailed": "Tastenbelegungsdatei konnte nicht gelesen werden: {{reason}}"
       },
+      "actions": {
+        "tab": {
+          "newAgentNamed": "Neuer {{agent}}-Tab",
+          "newAgent": "Neuer Agenten-Tab (Standardagent)"
+        }
+      },
+      "filters": {
+        "all": "Alle",
+        "modified": "Geändert",
+        "conflicts": "Konflikte"
+      },
+      "conflict": "{{binding}} steht in Konflikt mit {{titles}}.",
       "groups": {
+        "agents": "Agenten",
+        "browser": "Browser",
+        "chat": "Chat",
+        "editors": "Editoren",
+        "fileExplorer": "Datei-Explorer",
+        "global": "Global",
+        "quickCommands": "Schnellbefehle",
+        "settings": "Einstellungen",
+        "tabNavigation": "Tab-Navigation",
+        "tabs": "Tabs",
+        "terminalPanes": "Terminal-Bereiche",
         "bots": "Bots"
       }
     },
@@ -1245,6 +1539,14 @@
       "keywordEndOfFile": "Dateiende",
       "62aa3336d9": "Abschließenden Zeilenumbruch einfügen"
     },
+    "editorEndOfLine": {
+      "title": "Zeilenende",
+      "description": "Zeilenende für neue Dateien und Dateien ohne Zeilenumbrüche. „Automatisch“ folgt dem System, auf dem der Arbeitsbereich der Datei läuft: LF für Linux, macOS und WSL, CRLF für Windows. Dateien mit Zeilenumbrüchen behalten ihr bisheriges Zeilenende.",
+      "keywordLineEnding": "Zeilenende",
+      "auto": "Automatisch",
+      "lf": "LF",
+      "crlf": "CRLF"
+    },
     "repositoryFormatter": {
       "description": "Den Formatierer dieses Projekts für „Beim Speichern formatieren“ verwenden.",
       "saveFailed": "Formatierungseinstellungen konnten nicht gespeichert werden.",
@@ -1254,11 +1556,135 @@
       "includeHelp": "Pfade relativ zum Stammverzeichnis des Arbeitsbereichs abgleichen. Ohne passendes Glob-Muster erfolgt keine Formatierung. * und ** überspringen Namen, die mit einem Punkt beginnen; führe diese explizit auf, z. B. .github/**/*.yml. Aktiviere „Beim Speichern formatieren“ unter Allgemein > Editor, um diesen Befehl zu verwenden.",
       "saving": "Wird gespeichert…",
       "save": "Formatierer speichern",
+      "placeholder": "npx --no-install prettier --stdin-filepath \"${file}\"",
       "710343e374": "Formatierungsbefehl"
+    },
+    "sharedLinks": {
+      "title": "Geteilte Links",
+      "description": "Links, die du veröffentlicht hast.",
+      "keywordBots": "Bots",
+      "keywordSkills": "Skills",
+      "keywordShare": "teilen"
+    },
+    "breadcrumb": {
+      "settings": "Einstellungen",
+      "label": "Breadcrumb der Einstellungen",
+      "close": "Einstellungen schließen"
+    },
+    "search": {
+      "clear": "Suche leeren",
+      "results": "Suchergebnisse in den Einstellungen",
+      "noResults": "Keine Einstellungen entsprechen „{{value0}}“",
+      "moreResults": "{{value0}} weitere · weitertippen zum Eingrenzen"
     },
     "voice": {
       "cleanup": {
         "recipeDescription": "Diktierten Text vor dem Einfügen nachbearbeiten."
+      }
+    },
+    "groupHooks": {
+      "title": "Projekteinstellungen > {{name}}",
+      "example": "Beispiel: in jedem Repo einen Worktree erstellen (nur auf diesem Computer)",
+      "useExample": "Dieses Beispiel verwenden",
+      "description": "Skripte, die in diesem Ordner ausgeführt werden, wenn ein Arbeitsbereich erstellt wird. Alle Arbeitsbereiche teilen sich den Ordner. Lokale Skripte werden auf diesem Computer gespeichert; `orca.yaml`-Skripte werden mit deinem Team geteilt.",
+      "invalidSetup": "Die Datei ist vorhanden, aber Orca konnte kein gültiges Einrichtungsskript finden.",
+      "supportedKeys": "Definiere nur die unterstützten Schlüssel: `scripts` und `setup`.",
+      "supportedArchiveKeys": "Definiere nur die unterstützten Schlüssel: `scripts`, `setup` und `archive`.",
+      "invalidArchive": "Die Datei ist vorhanden, aber Orca konnte kein gültiges Einrichtungs- oder Archivierungsskript finden."
+    },
+    "uninstall": {
+      "groupTitle": "Deinstallieren",
+      "title": "Orca deinstallieren",
+      "searchDescription": "Agenten-Hooks, den Befehl orca, den Server orca serve und Hooks auf SSH-Hosts entfernen.",
+      "keywords": {
+        "uninstall": "deinstallieren",
+        "remove": "entfernen",
+        "delete": "löschen",
+        "cleanup": "Bereinigung",
+        "hooks": "Hooks"
+      },
+      "copyCommand": "Befehl kopieren",
+      "quit": "Orca beenden",
+      "next": {
+        "unknown": "Beende Orca und lösche dann die App.",
+        "macApp": "Beende Orca und ziehe es dann aus „Programme“ in den Papierkorb.",
+        "homebrew": "Orca wurde mit Homebrew installiert. Führe dies aus, um die App zu entfernen:",
+        "linuxPackage": "Führe dies aus, um das Paket zu entfernen:",
+        "windows": "Schließe den Vorgang im Windows-Deinstallationsprogramm ab. Orca wird beendet, sobald das Deinstallationsprogramm geöffnet wird.",
+        "appImage": "Beende Orca und lösche dann <path>{{path}}</path>."
+      },
+      "openUninstaller": "Deinstallationsprogramm öffnen",
+      "agentStatusOff": "Der Agentenstatus ist aus. Orca fügt keine Hooks mehr hinzu, es sei denn, du aktivierst ihn unter Einstellungen → Agenten.",
+      "loadFailed": "Orca konnte nicht prüfen, was es installiert hat.",
+      "tryAgain": "Erneut versuchen",
+      "keeps": "Projekte, Worktrees und Orca-Einstellungen bleiben erhalten.",
+      "keepsShared": "{{name}} ist ebenfalls installiert, daher bleiben gemeinsam genutzte Hooks erhalten.",
+      "closesTerminals": "Geöffnete Terminals werden geschlossen.",
+      "removing": "Wird entfernt…",
+      "button": "Deinstallieren",
+      "uninstalling": "Wird deinstalliert…",
+      "rows": {
+        "hooksIn": "Hooks in {{targets}}",
+        "cliCommand": "<cmd>{{name}}</cmd>-CLI in deinem PATH",
+        "service": "Server <cmd>orca serve</cmd>",
+        "hookScripts": "Hook-Skripte",
+        "terminalDaemon": "Terminal-Hintergrundprozess"
+      },
+      "retry": "Erneut versuchen",
+      "hookTargets": {
+        "agents_one": "1 Agent",
+        "agents_other": "{{count}} Agenten",
+        "sshHosts_one": "1 SSH-Host",
+        "sshHosts_other": "{{count}} SSH-Hosts"
+      },
+      "path": {
+        "codexAccount": "Von Orca verwaltetes Codex-Konto",
+        "appData": "Orca-App-Daten"
+      },
+      "host": {
+        "ssh": "SSH",
+        "connected": "Verbunden",
+        "notConnected": "Nicht verbunden.",
+        "notConnectedRetry": "Nicht verbunden. Verbinde diesen Host und wähle dann „Erneut versuchen“."
+      },
+      "summary": {
+        "hooksIn": "Hooks in {{targets}}",
+        "cliCommand": "die <cmd>{{name}}</cmd>-CLI",
+        "service": "der Server <cmd>orca serve</cmd>",
+        "terminalDaemon": "der Terminal-Hintergrundprozess",
+        "hookScripts": "Hook-Skripte",
+        "nothing": "Außerhalb der App gibt es nichts zu entfernen.",
+        "loading": "Es wird geprüft, was Orca installiert hat…",
+        "done": "Entfernt. Lösche die App, um den Vorgang abzuschließen.",
+        "problems_one": "Kläre noch 1 offenen Punkt, bevor du die App löschst.",
+        "problems_other": "Kläre noch {{count}} offene Punkte, bevor du die App löschst.",
+        "stillInUse": "Einige Orca-Dateien werden noch verwendet und bleiben daher vorerst erhalten."
+      },
+      "status": {
+        "running": "Wird entfernt",
+        "done": "Erledigt",
+        "problem": "Erfordert Aufmerksamkeit",
+        "kept": "Beibehalten"
+      },
+      "stepFailed": "Orca konnte diesen Schritt nicht abschließen.",
+      "finishFailed": "Orca konnte das nicht ausführen."
+    },
+    "notifications": {
+      "perfNotices": {
+        "disk": {
+          "label": "Festplatte fast voll",
+          "description": "Vorschlagen, Arbeitsbereiche zu bereinigen, wenn deine Festplatte fast voll ist."
+        },
+        "hiddenTabs": {
+          "label": "Ausgeblendete Browser-Tabs",
+          "description": "Den Speichersparmodus vorschlagen, wenn viele ausgeblendete Browser-Tabs geladen bleiben."
+        },
+        "search": {
+          "disk": "Festplatte",
+          "warning": "Warnung",
+          "tabs": "Tabs",
+          "memory": "Arbeitsspeicher"
+        }
       }
     },
     "bots": {
@@ -1279,6 +1705,22 @@
         "showMore": "{{count}} weitere anzeigen",
         "notLoaded": "Kein Agent lädt ihn"
       }
+    },
+    "windowMaterial": {
+      "description": "Was hinter durchscheinenden Terminals angezeigt wird. Erfordert einen Neustart.",
+      "off": "Deckend",
+      "translucent": "Durchscheinend",
+      "acrylic": "Acryl-Unschärfe",
+      "blur": "Unscharf",
+      "reducedEffects": "Deaktiviert, solange „Visuelle Effekte reduzieren“ oder die Systemeinstellung „Transparenz reduzieren“ aktiv ist.",
+      "needsOpacity": "Senke die Hintergrunddeckkraft unter 1, um den Desktop durch die Terminals zu sehen.",
+      "linuxCompositor": "Dein Compositor entscheidet, ob er es unscharf darstellt. Erfordert einen Neustart.",
+      "restartDescription": "Starte Orca neu, um die Änderung des Fenstermaterials anzuwenden.",
+      "keywords": {
+        "acrylic": "Acryl"
+      },
+      "windowsUnsupported": "Erfordert Windows 11 Version 22H2 oder neuer.",
+      "fc2ba9b528": "Fenstermaterial"
     },
     "automaticUpdates": {
       "title": "Automatische Updates",
@@ -1304,6 +1746,11 @@
     },
     "artifacts": {
       "teamDisabled": "Das Teilen von Artefakten ist vom Team ausgeschaltet."
+    },
+    "navigation": {
+      "accounts": {
+        "description": "Optionaler Kontowechsel und Nutzungseinrichtung für Claude, Codex, Antigravity, OpenCode Go, MiniMax und Grok."
+      }
     },
     "updateDelay": {
       "1b4d825e0e": "Update-Verzögerung",
@@ -1507,7 +1954,18 @@
     "copy": "Kopieren",
     "selectAll": "Alles auswählen",
     "quitAndStopAllSessions": "Vollständig beenden…",
-    "quitAndStopAllSessionsTooltip": "Beendet auch alle Terminal-Sitzungen einschließlich laufender Agenten. Beim einfachen Beenden laufen sie weiter, sodass Orca beim nächsten Start die Verbindung wiederherstellt."
+    "quitAndStopAllSessionsTooltip": "Beendet auch alle Terminal-Sitzungen einschließlich laufender Agenten. Beim einfachen Beenden laufen sie weiter, sodass Orca beim nächsten Start die Verbindung wiederherstellt.",
+    "about": "Über Orca",
+    "cut": "Ausschneiden",
+    "hide": "Orca ausblenden",
+    "hideOthers": "Andere ausblenden",
+    "minimize": "Minimieren",
+    "redo": "Wiederholen",
+    "services": "Dienste",
+    "toggleFullScreen": "Vollbildmodus ein/aus",
+    "undo": "Rückgängig",
+    "unhide": "Alle einblenden",
+    "zoom": "Zoomen"
   },
   "tray": {
     "openOrca": "Orca öffnen",
@@ -8763,7 +9221,17 @@
             "modePopout": "Separates Fenster"
           },
           "worktreeCardStyle": {
-            "title": "Kartenstil"
+            "title": "Kartenstil",
+            "copy": "Lege fest, wie Arbeitsbereichskarten in der Seitenleiste aussehen.",
+            "ariaLabel": "Kartenstil",
+            "classic": "Klassisch",
+            "experimental": "Experimentell"
+          },
+          "appRail": {
+            "title": "App-Leiste",
+            "description": "Symbolleiste am linken Rand zum Wechseln zwischen Arbeitsbereichen und anderen Seiten.",
+            "copy": "Fügt links neben der Liste der Arbeitsbereiche eine Symbolleiste hinzu. Arbeitsbereiche, Einstellungen und Hilfe wandern dorthin, und sie bleibt sichtbar, wenn die Liste eingeklappt ist.",
+            "toggleLabel": "App-Leiste ein-/ausblenden"
           },
           "sharedCodexServers": {
             "title": "Gemeinsame Codex-Server",
@@ -8820,12 +9288,14 @@
           "5195f0b9ef": "Rechtschreibmarkierungen und Vorschläge des Browsers beim Bearbeiten von formatiertem Markdown anzeigen.",
           "9b18de6eea": "Lange Zeilen in Datei-Editoren umbrechen, um horizontales Scrollen zu vermeiden.",
           "collapseUnchangedDescription": "In einem Datei-Diff nur geänderte Zeilen und etwas umgebenden Kontext anzeigen und den Rest hinter aufklappbaren Leisten ausblenden. Die Diff-Ansicht „Alle Änderungen anzeigen“ wird immer so eingeklappt.",
+          "markdownDefaultViewDesc": "Die Ansicht, in der Markdown-Dateien geöffnet werden. Klicke in einem Markdown-Tab mit der rechten Maustaste auf den Ansichtsumschalter, um sie dort zu ändern.",
           "a37865966c": "Dateien automatisch speichern",
           "8b3f8e6b83": "Markdown-Review-Notizen",
           "89ba15b474": "Verzögerung beim automatischen Speichern",
           "75e326278e": "Zeilenumbruch im Editor",
           "a0361dfb05": "Rechtschreibprüfung für formatiertes Markdown",
           "3f63d16992": "Standardanzeige des Diff-Dateibaums",
+          "1dd79964bf": "Standardansicht für Markdown",
           "b11d620d45": "Standard-Diff-Ansicht",
           "0971ef5c63": "Leerraum in Diffs anzeigen",
           "916c5582f2": "Unveränderte Bereiche einklappen",
@@ -8905,6 +9375,9 @@
           "d2f33670a9": "Aus Ghostty importieren",
           "273e7e81fe": "Konfigurationen",
           "1f744a72f4": "Konfiguration",
+          "not_found_choose_file": "Auf diesem Computer wurde keine Ghostty-Konfiguration gefunden. Wähle eine Konfigurationsdatei, um sie von einem anderen Ort zu importieren.",
+          "cleared": "Geleert",
+          "80e9b42a86": "Konfigurationsdatei auswählen",
           "9759d2dfa2": "Änderungen anwenden"
         },
         "WarpThemeImportModal": {
@@ -8931,7 +9404,9 @@
           "import_theme_other": "{{value0}} Designs importieren",
           "1bceb1553d": "Designs importieren",
           "00aaf588da": "Ordner auswählen",
-          "77f3e3d390": "Datei auswählen"
+          "import_theme": "{{value0}} Designs importieren",
+          "77f3e3d390": "Datei auswählen",
+          "found_theme": "{{value0}} Designs gefunden"
         },
         "useWarpThemeImport": {
           "unknown_error": "Unbekannter Fehler",
@@ -8984,7 +9459,19 @@
           "f2765fbbf6": "GitLab-API-Kontingent",
           "8cdbaf4b03": "Groß-/Kleinschreibung von Jira-Schlüsseln",
           "fdbcd676b0": "GitHub-API-Kontingent",
-          "074f7aa0d6": "Standardvergleichsbasis"
+          "074f7aa0d6": "Standardvergleichsbasis",
+          "prAutoRefreshUpdateFailed": "Die automatische PR-Aktualisierung konnte auf diesem Host nicht geändert werden.",
+          "prAutoRefreshDefault": "Automatisch",
+          "prAutoRefreshReduced": "Seltener",
+          "prAutoRefreshOff": "Manuell",
+          "prAutoRefreshAbout": "Über PR-Updates",
+          "prAutoRefreshHintAutomatic": "Hält Pull Requests und Checks auf dem neuesten Stand.",
+          "prAutoRefreshHintLessOften": "Fragt GitHub seltener ab. Nützlich, wenn du an GitHub-Ratenlimits stößt.",
+          "prAutoRefreshTitle": "PR-Updates",
+          "prAutoRefreshDescription": "Wie oft Orca GitHub auf Änderungen an Pull Requests und CI prüft.",
+          "prAutoRefreshHintOff": "Aktualisiert, wenn du pushst oder auf „Aktualisieren“ klickst.",
+          "prAutoRefreshUnsupportedHost": "Aktualisiere Orca auf {{host}}, um dies zu ändern",
+          "prAutoRefreshUnknownHost": "dem ausgewählten Server"
         },
         "HiddenExperimentalGroup": {
           "7c4e18d2f6": "Aktiviert die Erfassungsaktionen für den Fettschriftfehler auf diesem Rechner: {{samplingShortcut}} startet eine Messserie; {{captureShortcut}} speichert Diagnosedaten des Bereichs auf dem Datenträger.",
@@ -9166,6 +9653,7 @@
           "7f45542625": "Testbenachrichtigung angefordert",
           "98d70fb261": "Benutzerdefinierter Benachrichtigungston konnte nicht abgespielt werden",
           "c83b05a055": "Benachrichtigungen werden auf diesem System nicht unterstützt",
+          "e1b1724793": "Ein Coding-Agent bittet um eine Berechtigung oder hat eine Frage.",
           "6bc7bd7b6e": "Terminal-Signalton",
           "0acae1066d": "Agentenaufgabe abgeschlossen",
           "3b77513cd0": "Über ausgeblendete Arbeitsbereiche benachrichtigen",
@@ -9174,7 +9662,8 @@
           "9c41a0d367": "Benachrichtigungen aktivieren",
           "f5b0498e1f": "Testbenachrichtigung senden",
           "b3c7207c8f": "Benachrichtigungston",
-          "38e3bbeb25": "Benutzerdefinierte Datei auswählen"
+          "38e3bbeb25": "Benutzerdefinierte Datei auswählen",
+          "05f5c5ab50": "Agent benötigt Eingabe"
         },
         "OpenAiTranscriptionKeyDialog": {
           "d246b2bdb3": "Schlüssel der lokalen Laufzeitumgebung werden in ~/.orca gespeichert, sofern verfügbar mit der verschlüsselten Speicherung von Electron.",
@@ -9391,7 +9880,11 @@
           "da00f141c2": "Benutzerdefinierter Befehl für GitHub-Issues",
           "88c6d1e54a": "Befehlsquelle",
           "01bdba296f": "Worktree-Hooks",
-          "1ecf0b115a": "Einrichtungsskript"
+          "1ecf0b115a": "Einrichtungsskript",
+          "yamlDetected": "<yaml>orca.yaml</yaml> erkannt",
+          "yamlNotDetected": "Keine <yaml>orca.yaml</yaml> erkannt",
+          "yamlNotDetectedDescription": "Füge eine hinzu, um Skripte mit deinem Team zu teilen.",
+          "copyTemplate": "Vorlage kopieren"
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "Repository-Farbe {{value0}} verwenden",
@@ -9416,8 +9909,16 @@
           "emojiTooLongForRepoIcon": "Dieses Emoji kann nicht als Repository-Symbol verwendet werden.",
           "currentEmojiSelection": "Aktuell: {{value0}}",
           "searchEmojiPlaceholder": "Emoji suchen",
+          "custom": "Benutzerdefiniert",
+          "githubAvatar": "GitHub-Avatar",
+          "customImage": "Eigenes Bild",
+          "emojiDescription": "Emoji {{emoji}}",
+          "lucideDescription": "Symbol {{label}} in Repo-Farbe",
+          "defaultIcon": "Standard",
           "cc76342291": "GitHub-Avatar verwenden",
-          "43bf3709dd": "Repository-Symbol"
+          "43bf3709dd": "Repository-Symbol",
+          "autoColor": "Automatische Farbe (unterscheidet sich von anderen Projekten)",
+          "lettersDescription": "Buchstaben „{{text}}“"
         },
         "RepositoryPane": {
           "15a99d9b9f": "Relative Pfade werden ausgehend von diesem Projektstammverzeichnis aufgelöst.",
@@ -9735,7 +10236,8 @@
           "ceefb9d7f1": "Keine Designs gefunden.",
           "imported_themes": "Importiert",
           "search_terminal_themes": "Terminal-Designs suchen",
-          "plugin_themes": "Plugins"
+          "plugin_themes": "Plugins",
+          "delete_imported_theme": "{{value0}} löschen"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",
@@ -9744,7 +10246,8 @@
           "60f8a673a7": "Zur App zurückkehren",
           "6503182299": "Checkliste für den Einstieg",
           "82db1b7de4": "Einrichtungscheckliste, {{value0}} von {{value1}} erledigt. Einrichtungsanleitung anzeigen.",
-          "df38d612b7": "Noch keine Projekte hinzugefügt."
+          "df38d612b7": "Noch keine Projekte hinzugefügt.",
+          "progressComplete": "{{value0}}/{{value1}} abgeschlossen"
         },
         "ShortcutFilterRail": {
           "28b63545bf": "Status",
@@ -9984,6 +10487,7 @@
           "4415beb958": "deaktiviert",
           "4e7d41a9f0": "aktiviert",
           "dimUnfocusedPanes": "Bereiche ohne Fokus abdunkeln.",
+          "kitty_import": "Aus Kitty importieren",
           "4adb9364f4": "Cursor-Form",
           "4d8b35c479": "Deckkraft inaktiver Bereiche",
           "55c3f22e7c": "Cursor-Deckkraft",
@@ -10125,6 +10629,8 @@
           "match_dark_mode_description": "Terminal-Design und Trennlinienfarbe des dunklen Modus auch im hellen Modus verwenden.",
           "light_preview_description": "Zeigt das tatsächlich verwendete Erscheinungsbild des Terminals im hellen Modus.",
           "dark_preview_description": "Zeigt das tatsächlich verwendete Erscheinungsbild des Terminals im dunklen Modus.",
+          "deleted_imported_theme": "„{{value0}}“ gelöscht",
+          "undo": "Rückgängig",
           "3ebb499929": "Vorschau des dunklen Modus",
           "43afde3df7": "Trennlinienfarbe im hellen Modus",
           "2a11e028ff": "Vorschau des hellen Modus",
@@ -10623,6 +11129,7 @@
             "9bc701a4d1": "Schaltfläche „Aufgaben“ anzeigen",
             "c29089716e": "Kimi-Nutzung",
             "96e32c1118": "MiniMax-Nutzung",
+            "e8d2710689": "Muse-Nutzung",
             "aff6e6afdf": "IDE-Schriftart",
             "ba1f9d39a6": "Antigravity-Nutzung"
           }
@@ -10934,6 +11441,18 @@
               "worktrees": "Worktrees",
               "eaf17a7214": "Agenten-Dashboard"
             },
+            "worktreeCardStyle": {
+              "title": "Kartenstil",
+              "description": "Lege fest, wie Arbeitsbereichskarten in der Seitenleiste aussehen."
+            },
+            "appRail": {
+              "title": "App-Leiste",
+              "description": "Symbolleiste am linken Rand zum Wechseln zwischen Arbeitsbereichen und anderen Seiten.",
+              "rail": "Leiste",
+              "navigation": "Navigation",
+              "sidebar": "Seitenleiste",
+              "icons": "Symbole"
+            },
             "sharedCodexServers": {
               "title": "Gemeinsame Codex-Server",
               "description": "Codex-Chats mit derselben Einrichtung teilen sich einen Hintergrundprozess, statt pro Chat einen zu starten.",
@@ -11104,6 +11623,9 @@
             "confirm": "Bestätigen",
             "close": "Schließen",
             "omp": "OMP",
+            "markdownDefaultViewDesc": "Die Ansicht, in der Markdown-Dateien geöffnet werden. Klicke in einem Markdown-Tab mit der rechten Maustaste auf den Ansichtsumschalter, um sie dort zu ändern.",
+            "markdownSourceKw": "Quelltext",
+            "markdownRichKw": "formatiert",
             "d9168badd2": "Verzögerung beim automatischen Speichern",
             "34cda90656": "Prompt-Cache-Timer",
             "b8e1e1ac68": "Standardanzeige des Diff-Dateibaums",
@@ -11115,6 +11637,7 @@
             "b180c1041b": "Tab-Reihenfolge",
             "0504f69ba0": "Nach Updates suchen",
             "728a309ce1": "Markdown-Review-Notizen",
+            "0f9304f821": "Standardansicht für Markdown",
             "66395fb7ff": "Editor-Schriftfamilie",
             "aa1c06eb2c": "Standard-Diff-Ansicht",
             "8ad175042b": "Rechtschreibprüfung für formatiertes Markdown",
@@ -11416,6 +11939,11 @@
             "remote": "entfernt",
             "ssh": "ssh",
             "mute": "Stummschalten",
+            "c9b2b656e0": "Benachrichtigen, wenn ein Coding-Agent um eine Berechtigung bittet oder eine Frage hat.",
+            "b8bf5471d1": "Berechtigung",
+            "5b9dafd570": "Frage",
+            "009548060d": "Eingabe",
+            "32f70cca40": "Agent benötigt Eingabe",
             "55ecae5b7e": "Testbenachrichtigung senden",
             "25f58f061f": "Benachrichtigungen aktivieren",
             "fe11c91724": "Benachrichtigungslautstärke",
@@ -11951,6 +12479,8 @@
             "ddd5efe113": "Shell",
             "3de504994c": "Shell und Argumente für neue lokale interaktive Terminal-Bereiche",
             "1733ccd3e9": "Terminal-Shell",
+            "kitty_import": "Aus Kitty importieren",
+            "kitty_import_description": "Einmaliger Import unterstützter Einstellungen aus kitty.conf.",
             "10344a316c": "Worttrennzeichen",
             "b1061a2826": "GPU-Beschleunigung",
             "8afdce471f": "Schriftgröße",
@@ -14161,12 +14691,63 @@
           "addFolder": "Ordner hinzufügen",
           "install": "Installieren"
         },
+        "editorTypography": {
+          "fontSizeUnit": "px",
+          "lineHeightAuto": "Auto",
+          "ligaturesAutoEnabled": "Automatisch – aktiviert für „{{value0}}“.",
+          "ligaturesAutoDisabled": "Automatisch – deaktiviert für „{{value0}}“.",
+          "ligaturesOff": "Aus",
+          "ligaturesAuto": "Automatisch",
+          "ligaturesOn": "Ein",
+          "fontSmoothingGrayscale": "Graustufen",
+          "fontSmoothingNative": "Nativ",
+          "typographyKw": "Typografie",
+          "fontSizeDesc": "Grundgröße für Datei-Editoren und Diff-Ansichten. Leer lassen, um der Schriftgröße des Terminals zu folgen.",
+          "sizeKw": "Größe",
+          "fontWeightDesc": "Schriftstärke für Datei-Editoren und Diff-Ansichten. Leer lassen für normale Stärke (400).",
+          "weightKw": "Stärke",
+          "boldKw": "fett",
+          "lineHeightDesc": "Zeilenabstand als Vielfaches der Editor-Schriftgröße; Werte ab 8 werden als Pixel interpretiert. Leer lassen oder 0 für automatischen Abstand.",
+          "lineHeightKw": "Zeilenhöhe",
+          "spacingKw": "Abstand",
+          "ligaturesDesc": "Ligaturen wie => und !== in Datei-Editoren und Diff-Ansichten darstellen.",
+          "ligaturesKw": "Ligaturen",
+          "ligatureKw": "Ligatur",
+          "fontFeaturesKw": "Schriftmerkmale",
+          "fontSmoothingDesc": "Wie Terminals und Code-Editoren Text glätten. „Nativ“ zeichnet kräftigere Glyphen, näher an anderen macOS-Terminals.",
+          "smoothingKw": "Glättung",
+          "antialiasingKw": "Kantenglättung",
+          "thinKw": "dünner Text",
+          "d4b7264499": "Schriftglättung",
+          "8e8a87f9ed": "Zeilenhöhe im Editor",
+          "83db4f82b0": "Schriftligaturen im Editor",
+          "09d72edc6f": "Schriftstärke im Editor",
+          "253fc29ebb": "Schriftgröße im Editor"
+        },
+        "PluginSettingsSection": {
+          "reset": "Zurücksetzen",
+          "title": "Einstellungen"
+        },
+        "FontAutocomplete": {
+          "installedFontsUnavailable": "Installierte Schriftarten konnten nicht aufgelistet werden. Gib den Namen einer installierten Schriftart ein, um sie zu verwenden."
+        },
+        "TerminalConfigImportModal": {
+          "kitty_title": "Aus Kitty importieren",
+          "kitty_description": "Prüfe die Einstellungen, die aus deiner kitty.conf und den darin eingebundenen Dateien importiert werden.",
+          "kitty_not_found": "Auf diesem Computer wurde keine kitty.conf gefunden. Wähle eine Konfigurationsdatei, um sie von einem anderen Ort zu importieren."
+        },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
             "title": "Symboldesign",
             "description": "Datei- und Ordnersymbole aus einem aktivierten Plugin.",
             "builtIn": "Integriert",
             "search": "Icon-Themes suchen…"
+          },
+          "lightTheme": "Helles Design",
+          "darkTheme": "Dunkles Design",
+          "languageUnavailable": "{{value0}} (nicht verfügbar)",
+          "themeSlot": {
+            "description": "App-Farben für diesen Modus."
           }
         },
         "PluginAddMenu": {
@@ -14247,13 +14828,20 @@
           "create": "Erstellen"
         },
         "AppearanceThemeControl": {
+          "useTerminalTheme": "Designfarben verwenden",
           "dynamic": "dynamisch",
+          "browseThemes": "Designs durchsuchen",
+          "moreThemes": "Weitere Designs",
+          "moreThemesLoading": "Designs werden geladen…",
+          "installingTheme": "{{value0}} wird installiert…",
           "searchThemes": "Themes suchen…",
           "noThemes": "Keine Themes entsprechen deiner Suche.",
           "7ad388ec82": "An Terminal anpassen"
         },
         "SettingsSearchableSelect": {
-          "noMatches": "Keine Treffer."
+          "noMatches": "Keine Treffer.",
+          "searchHosts": "Hosts suchen…",
+          "searchLanguages": "Sprachen suchen…"
         },
         "accountsPaneActionErrors": {
           "codexSignInTimedOut": "Die Codex-Anmeldung hat zu lange gedauert. Bitte versuche es erneut.",
@@ -18229,8 +18817,13 @@
                 "removeWorktree": "Worktree entfernen",
                 "trashWorktree": "Worktree in den Papierkorb verschieben",
                 "addQuickCommand": "Schnellbefehl hinzufügen",
-                "newQuickCommand": "Neuen Schnellbefehl erstellen"
-              }
+                "newQuickCommand": "Neuen Schnellbefehl erstellen",
+                "browserRight": "Browser rechts",
+                "splitBrowser": "Browser teilen",
+                "browserSplit": "Browser-Teilung"
+              },
+              "newBrowserTabSplitRight": "Neuer Browser-Tab in rechter Teilung",
+              "newBrowserTabSplitRightDescription": "Einen Browser-Tab in einer neuen Teilung rechts öffnen."
             }
           },
           "palette": {
@@ -22628,6 +23221,11 @@
           "scrollback": "scrollback",
           "snap": "einrasten",
           "position": "position"
+        },
+        "claudeCodeThemeSync": {
+          "description": "Claude Code auf diesem Computer verwendet deine Terminalfarben und folgt Designänderungen live, auch außerhalb von Orca. Beim Ausschalten wird dein vorheriges Claude-Code-Design wiederhergestellt. Wählst du in Claude Code ein Design, endet die Synchronisierung.",
+          "claude": "claude",
+          "9353305ea6": "Claude Code an das Terminal-Design anpassen"
         }
       },
       "nativeChat": {
@@ -22985,6 +23583,18 @@
       "keywordJira": "Jira",
       "keywordDefaultProject": "Standardprojekt",
       "keywordIssuePicker": "Issue-Auswahl"
+    },
+    "RepositoryBrowserProfileSection": {
+      "title": "Browser-Profil",
+      "description": "Neue Browser-Tabs in diesem Projekt, auch die von Agenten geöffneten, verwenden dieses Profil. Weise mehreren Projekten ein Profil zu, um eine Anmeldung zu teilen.",
+      "keywordProfile": "Browser-Profil",
+      "keywordCookies": "Cookies",
+      "keywordSignIn": "anmelden",
+      "selectLabel": "Profil für neue Tabs",
+      "inherit": "Browser-Einstellung ({{scope}})",
+      "deletedOption": "Gelöschtes Profil",
+      "deleted": "Das für dieses Projekt gewählte Profil wurde gelöscht, daher folgen neue Tabs der Browser-Einstellung.",
+      "saveFailed": "Das Browser-Profil konnte nicht gespeichert werden. Orca auf dem Host dieses Projekts muss möglicherweise aktualisiert werden."
     },
     "managed-runtime": {
       "cancelled": "Installation abgebrochen.",
@@ -23984,6 +24594,7 @@
       "description": "Alles durchsuchen, was Agenten auf diesem Computer und auf gekoppelten Orca-Servern gesagt und getan haben.",
       "searchDescription": "Die Sitzungssuche für diesen Computer und gekoppelte Server aktivieren oder Suchdaten löschen.",
       "indexComputers": "Innerhalb von Sitzungen suchen",
+      "computersConsent": "Jeder Computer führt einen eigenen durchsuchbaren Index der Agentenunterhaltungen. Authentifizierte gekoppelte Clients können Suchergebnisse erhalten.",
       "serverVersion": "Orca v{{version}}",
       "rowSwitchLabel": "Sitzungen auf {{host}} durchsuchen",
       "serverOffline": "Offline",
@@ -24170,7 +24781,22 @@
       "count": "{{count}} laufende Terminals"
     },
     "restartedInputNotSent": "Das Terminal wurde während der Eingabe neu gestartet. Daher hat es möglicherweise einen Teil der Eingabe nicht erhalten. Die neue Shell prüfen, bevor die Eingabe wiederholt wird.",
-    "typingBeforeStartNotSent": "Einige Tasteneingaben während des Terminalstarts wurden nicht gesendet."
+    "typingBeforeStartNotSent": "Einige Tasteneingaben während des Terminalstarts wurden nicht gesendet.",
+    "windowsFontWeight": {
+      "title": "Terminaltext unter Windows ist jetzt dünner",
+      "okay": "OK",
+      "lighterText": "Dünnerer Terminaltext"
+    },
+    "claudeThemeSyncOffer": {
+      "title": "Claude Code an dein Orca-Design anpassen?",
+      "description": "Claude Code auf diesem Computer würde deine Terminalfarben verwenden und Designänderungen folgen, auch außerhalb von Orca. Du kannst das in den Einstellungen ändern.",
+      "accept": "Design anpassen",
+      "accepted": "Claude-Code-Designsynchronisierung ist aktiv",
+      "acceptedDescription": "Neue Claude-Code-Sitzungen auf diesem Computer verwenden dein Orca-Design.",
+      "decline": "Nein danke",
+      "failed": "Claude-Code-Designsynchronisierung konnte nicht aktiviert werden",
+      "failedDescription": "Aktiviere sie in den Einstellungen."
+    }
   },
   "fileExplorer": {
     "root": {
@@ -25411,6 +26037,7 @@
       "terminalSplitDown": "Terminal nach unten teilen",
       "terminalSwitchInputSource": "Eingabequelle / Sprache wechseln (nativ)",
       "newAgentTab": "Neuen Tab für {{agent}} öffnen",
+      "tabNewBrowserSplitRight": "Neuer Browser-Tab in rechter Teilung",
       "eca3c9fdd7": "Tab 1–9 auswählen",
       "53ae577e44": "Im Browser vorwärtsgehen",
       "324e886c0f": "Zur vorherigen Änderung wechseln",
@@ -25418,6 +26045,7 @@
       "82c1bf448c": "Agenten-Dashboard ein-/ausblenden",
       "9cb1023d40": "Review-Notiz hinzufügen",
       "57c4fb0edd": "Im Worktree-Verlauf vorwärtsgehen",
+      "5468defe61": "Alle Projekte zu-/aufklappen",
       "02dd0f77a0": "Im Worktree-Verlauf zurückgehen",
       "bb3beaeef6": "Größe zurücksetzen",
       "258e7f75ec": "Kontext kopieren",
@@ -25475,7 +26103,8 @@
       "bots": "Bots"
     },
     "searchKeyword": {
-      "worktreePaletteFormerTitle": "Worktree wechseln"
+      "worktreePaletteFormerTitle": "Worktree wechseln",
+      "quickCommandsMenuFormerTitle": "Schnellbefehlsmenü ein-/ausblenden"
     }
   },
   "gpuFallback": {
@@ -25660,6 +26289,10 @@
     "dialog": {
       "allFiles": "Alle Dateien",
       "audio": "Audio",
+      "importGhosttyConfig": "Ghostty-Konfiguration importieren",
+      "importKittyConfig": "Kitty-Konfiguration importieren",
+      "pickAppIcon": "App-Symbol auswählen",
+      "appIconImage": "App-Symbolbild",
       "cookieFiles": "Cookie-Dateien",
       "dashboardTitle": "Orca-Agenten-Dashboard",
       "images": "Bilder",
@@ -27094,6 +27727,89 @@
     "dontSend": "Nicht senden",
     "sending": "Wird gesendet…",
     "sendReport": "Bericht senden"
+  },
+  "tabBar": {
+    "createRow": {
+      "label": "Aktionen für neue Tabs. Links und Rechts wählen aus; die letzte passt diese Zeile an.",
+      "shownLabel": "Im Menü +",
+      "hiddenHint": "Ausgeblendete Elemente lassen sich weiterhin über die Suche und ihre Tastenkürzel öffnen.",
+      "reset": "Reihenfolge zurücksetzen",
+      "allShortcuts": "Alle Tastenkürzel…",
+      "hiddenLabel": "Ausgeblendet",
+      "hiddenEmpty": "Elemente hierher ziehen, um sie auszublenden",
+      "locked": "Immer angezeigt",
+      "hide": "Ausblenden",
+      "show": "Anzeigen",
+      "customize": "Anpassen",
+      "featureOff": "Aus",
+      "turnOn": "Deaktiviert. Blende es ein, um es wieder zu aktivieren.",
+      "moreOptions": "Weitere Optionen"
+    }
+  },
+  "emulatorPane": {
+    "tabIntro": {
+      "hiddenFromMenu": "Mobilgeräte-Emulator aus dem Menü + entfernt",
+      "hiddenFromMenuHint": "Hol ihn über das Zahnrad am Ende der Symbolzeile zurück.",
+      "undoHide": "Rückgängig",
+      "saveFailed": "Das Menü + konnte nicht aktualisiert werden."
+    }
+  },
+  "languages": {
+    "search": "Sprachen suchen",
+    "searchPlaceholder": "Sprachen suchen",
+    "pluginsDisabled": "Community-Übersetzungen erfordern aktivierte Plugins.",
+    "community": "Community-Übersetzungen",
+    "loadingPacks": "Suche nach Community-Übersetzungen…",
+    "catalogFailed": "Community-Übersetzungen konnten nicht geladen werden.",
+    "noPacks": "Noch keine Community-Übersetzungen.",
+    "refresh": "Nach neuen Übersetzungen suchen",
+    "noMatches": "Keine Sprache entspricht „{{query}}“.",
+    "managePacks": "In Plugins durchsuchen",
+    "builtIn": "Integriert",
+    "coverage": "{{percent}} % übersetzt",
+    "installing": "Wird installiert…",
+    "changing": "Wird geändert…",
+    "current": "Aktuell",
+    "incomplete": "Unvollständig",
+    "description": "Integrierte Sprachen und Community-Übersetzungen. Nicht übersetzter Text bleibt auf Englisch.",
+    "continue": "Fortfahren",
+    "done": "Fertig",
+    "requestRecorded": "Sprachwunsch erfasst.",
+    "nowUsing": "Jetzt auf {{language}}",
+    "switchBack": "Zurückwechseln",
+    "changeFailed": "Die Sprache konnte nicht geändert werden. Versuche es erneut.",
+    "installedUnavailable": "Installiert, aber diese Übersetzung kann noch nicht geladen werden.",
+    "installedSwitchFailed": "Installiert, aber die Sprache konnte nicht gewechselt werden. Versuche es erneut unter Einstellungen → Sprache.",
+    "suggestionClose": "Schließen",
+    "moreLanguages": "Weitere Sprachen…",
+    "retry": "Erneut versuchen",
+    "request": "Sprache anfragen",
+    "byPublisher": "von {{publisher}}",
+    "deviceTag": "dein Gerät",
+    "get": "Laden",
+    "didNotLoad": "Nicht geladen",
+    "requestQuery": "„{{query}}“ anfragen",
+    "requestPlaceholder": "z. B. Polski, Tiếng Việt",
+    "requestDescription": "Sag uns, welche Sprache hinzukommen soll. Jeder kann außerdem eine Community-Übersetzung veröffentlichen.",
+    "turnOnPlugins": "In Plugins aktivieren",
+    "languageDidNotLoad": "{{language}} wurde nicht geladen.",
+    "yourLanguage": "Deine Sprache",
+    "offerSentence": "Community-Übersetzung verfügbar: {{language}}",
+    "offerInstall": "<lang>{{language}}</lang> installieren…",
+    "offerUse": "<lang>{{language}}</lang> verwenden",
+    "offerInstalling": "<lang>{{language}}</lang> wird installiert…",
+    "offerSwitching": "Wechsel zu <lang>{{language}}</lang>…",
+    "pluginsDisabledCount_one": "{{count}} Community-Übersetzung erfordert aktivierte Plugins.",
+    "pluginsDisabledCount_other": "{{count}} Community-Übersetzungen erfordern aktivierte Plugins.",
+    "preparing": "Wird vorbereitet…",
+    "offerConfirming": "Warten auf Bestätigung…",
+    "offerRetry": "Erneut versuchen",
+    "suggestionTitle": "Orca auf <lang>{{language}}</lang>",
+    "systemResolved": "{{system}} ({{language}})",
+    "suggestionInstall": "Installieren",
+    "suggestionUse": "Verwenden",
+    "browseOnline": "Durchsuchen",
+    "browseOnlineLabel": "Community-Übersetzungen auf orca.dev durchsuchen (öffnet sich im Browser)"
   },
   "agentCliUpdate": {
     "updating": "Wird aktualisiert…",
