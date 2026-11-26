@@ -10,6 +10,7 @@ import {
 } from '../../../src/shared/bots/bot-chat-tree'
 import {
   botLiveWorkspaceIds,
+  botSidebarListedChats,
   pageChatLines,
   rankBotWorkspacesByLive
 } from '../../../src/shared/bots/bot-sidebar-chat-groups'
@@ -52,9 +53,18 @@ export function hostBotChatItems(args: {
   }
   const dim = args.dimmed ? { dimmed: true as const } : {}
   const keyOf = (chatId: string) => botChatFoldKey(hostKey, botId, chatId)
+  // Each workspace lists once: under a chat the list shows, else flat under the bot.
+  const shownChats = new Set(
+    botSidebarListedChats(tree.chats)
+      .filter(listsUnderBot)
+      .map(({ chatId }) => chatId)
+  )
+  const underChat = (branch: HostBotWorkerBranch) =>
+    shownChats.has(tree.workspaceChats[branch.id] ?? '')
+  const rest = args.branches.filter((branch) => !underChat(branch))
   const view = buildBotSidebarTree({
     chats: tree.chats,
-    workspaces: args.branches,
+    workspaces: args.branches.filter(underChat),
     workspaceChats: tree.workspaceChats,
     foldOf: (chatId) => args.folds[keyOf(chatId)],
     stepsOf: (chatId) => args.steps[keyOf(chatId)] ?? 0,
@@ -88,13 +98,11 @@ export function hostBotChatItems(args: {
     }
   })
   const items: WorkspaceListItem[] = []
-  const listed = new Set<string>()
   for (const chatView of view.chats) {
     const { chat } = chatView
-    if (!listsUnderBot(chat)) {
+    if (!shownChats.has(chat.chatId)) {
       continue
     }
-    listed.add(chat.chatId)
     items.push({
       row: home.row,
       view: {
@@ -120,25 +128,28 @@ export function hostBotChatItems(args: {
       items.push(pagingItem(chatView.chat.chatId, chatView.steps, chatView.paging))
     }
   }
-  // Every workspace no listed chat has (Home Chat's, a quiet or closed chat's) leads, flat, so none
+  // Every workspace no shown chat has (Home Chat's, a quiet or closed chat's) leads, flat, so none
   // reads as a listed chat's: live ones and the open one always, the rest paged as a chat's lines.
-  const liveIds = botLiveWorkspaceIds(tree.chats)
-  const liveBranches = new Set<string>()
-  const rest = args.branches.filter((branch) => {
-    if (listed.has(tree.workspaceChats[branch.id] ?? '')) {
-      return false
-    }
-    if (branch.lines.some((line) => liveIds.has(line.row.worktreeId))) {
-      liveBranches.add(branch.id)
-    }
-    return true
-  })
-  const ranked = rankBotWorkspacesByLive(tree.chats, rest)
-  const flat = [
-    ...ranked.filter(({ id }) => liveBranches.has(id)),
-    ...ranked.filter(({ id }) => !liveBranches.has(id))
-  ]
   const flatSteps = args.steps[keyOf(FLAT_LINES_KEY)] ?? 0
+  if (rest.length === 0 && flatSteps === 0) {
+    return items
+  }
+  const liveIds = botLiveWorkspaceIds(tree.chats)
+  const liveBranches = new Set(
+    rest
+      .filter((branch) => branch.lines.some((line) => liveIds.has(line.row.worktreeId)))
+      .map(({ id }) => id)
+  )
+  // Idle ones keep the list's order; only live ones rank, those waiting on the owner first.
+  const flat = [
+    ...(liveBranches.size > 0
+      ? rankBotWorkspacesByLive(
+          tree.chats,
+          rest.filter(({ id }) => liveBranches.has(id))
+        )
+      : []),
+    ...rest.filter(({ id }) => !liveBranches.has(id))
+  ]
   const page = pageChatLines(flat, liveBranches, flatSteps)
   const leading = flat
     .filter((branch, index) => index < page.shown || branch.lines.some((line) => line.row.isActive))
