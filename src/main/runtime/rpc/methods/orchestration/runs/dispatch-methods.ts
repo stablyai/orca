@@ -24,6 +24,16 @@ import {
 } from '../chat-assignee-admission'
 import { sendChatTask } from '../chat-task-delivery'
 import { dispatchTaskSource } from '../../../../orchestration/coordinator/dispatch/dispatch-task-source'
+import { startsInChatLineage } from '../worker/start/worker-chat-lineage'
+
+export function dispatchStartsChatWorkers(
+  runtime: Parameters<typeof startsInChatLineage>[0],
+  db: Parameters<typeof startsInChatLineage>[1],
+  from: string | undefined,
+  caller: Parameters<typeof startsInChatLineage>[3]
+): boolean {
+  return startsInChatLineage(runtime, db, { from }, caller)
+}
 
 export const ORCHESTRATION_DISPATCH_METHODS = [
   defineOrchestrationMethod({
@@ -43,7 +53,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
     ) => {
       const db = runtime.getOrchestrationDb()
       const creator = resolveDispatchCreator(runtime, params.from, orchestrationCaller)
-      const chatLineage = db.creatorStartsChatWorkers(creator)
+      const chatLineage = dispatchStartsChatWorkers(runtime, db, params.from, orchestrationCaller)
       const assigneeParty = params.to ? resolveDispatchAssigneeParty(params.to, db) : undefined
       const assignee = assigneeParty?.address
       // A chat has no pane, process or agent to probe: it is reached as mail to it is.
