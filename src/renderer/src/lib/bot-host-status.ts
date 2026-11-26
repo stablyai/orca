@@ -19,8 +19,6 @@ import { normalizeMachineName } from '../../../shared/remote-runtime/host-metada
 import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { BOTS_HOME_PIN_RUNTIME_CAPABILITY } from '../../../shared/bot-runtime-capabilities'
 import { botHostHasCapability, pairedBotHostStatus } from './bot-host-capability'
-import { useSharedBotHostOf } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
-import { botHomeHostId } from '../../../shared/bots/bot-home-host'
 
 function pairedStatus(
   hostId: ExecutionHostId,
@@ -98,10 +96,8 @@ export function useBotHostHas(hostId: ExecutionHostId, capability: string): bool
 
 /** Whether `bot`'s host keeps its Home pinned first, kept current as the server's status changes. */
 export function useBotHomeRuleApplies(bot: { hostId: ExecutionHostId } | null): boolean {
-  // Followed so a share arriving moves its home's tabs here.
-  useSharedBotHostOf(bot?.hostId ?? LOCAL_EXECUTION_HOST_ID)
   const has = useBotHostHas(
-    bot ? botHomeHostId(bot) : LOCAL_EXECUTION_HOST_ID,
+    bot ? bot.hostId : LOCAL_EXECUTION_HOST_ID,
     BOTS_HOME_PIN_RUNTIME_CAPABILITY
   )
   return bot !== null && has

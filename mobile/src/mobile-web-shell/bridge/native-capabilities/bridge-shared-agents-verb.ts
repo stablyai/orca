@@ -28,7 +28,6 @@ export const sharedAgentViewSchema = z.object({
   botId: z.string(),
   botName: z.string(),
   ownerName: z.string(),
-  homeWorkspaceId: z.string().nullable(),
   link: z.enum(['live', 'connecting', 'offline', 'unpaired']),
   holds: z.boolean(),
   held: z.array(heldSchema)

@@ -14,6 +14,7 @@ import {
 } from './subscriptions/global-session-subscription'
 import { installActiveSessionTabsSubscription } from './subscriptions/active-session-subscription'
 import { mirroredRuntimeEnvironmentIdForWorkspace } from './workspace-selection/mirrored-workspace-owner'
+import { listedRuntimeEnvironmentRevision } from '../rpc/environment-revisions/runtime-environment-revision'
 import {
   createWarmWorktreeSessionSubscriptions,
   type WarmWorktreeSessionSubscriptions
@@ -74,7 +75,7 @@ export function useWebSessionTabsSync(): void {
     const environment = state.runtimeEnvironments.find(
       (candidate) => candidate.id === environmentId
     )
-    return environment ? (environment.pairingRevision ?? environment.createdAt) : undefined
+    return environmentId ? listedRuntimeEnvironmentRevision(environment, environmentId) : undefined
   })
 
   useLayoutEffect(() => {

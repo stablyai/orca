@@ -37,7 +37,6 @@ import { useBotWorkerWorkspaces } from './use-bot-worker-statuses'
 import { useBotUsageLimitStops } from './use-bot-usage-limit-stops'
 import { UsageLimitStopMark } from './BotUsageLimitMark'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
-import { botHomeHostId } from '../../../../shared/bots/bot-home-host'
 
 type BotNowCounts = Pick<BotNow, 'needsYou' | 'working'>
 
@@ -172,7 +171,7 @@ export function BotPanelHeader({
 }): React.JSX.Element {
   const t = useTranslate()
   const home = useAppStore((state) =>
-    selectFolderWorkspaceOnHost(state, bot.folderWorkspaceId, botHomeHostId(bot))
+    selectFolderWorkspaceOnHost(state, bot.folderWorkspaceId, bot.hostId)
   )
   const folderPath = home?.folderPath ?? null
   const settingsLabel = t('bots.row.settings', 'Bot settings…')

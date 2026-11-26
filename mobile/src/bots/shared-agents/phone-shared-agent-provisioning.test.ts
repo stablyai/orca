@@ -137,7 +137,6 @@ describe('a phone’s key to a shared agent', () => {
     })
     const viewer = (store: PhoneSharedAgentStore) =>
       sharedBotHostView(store.get(share.shareId)!, {
-        homeWorkspaceId: null,
         link: 'offline',
         holds: false,
         held: []

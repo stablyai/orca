@@ -7,7 +7,6 @@ import {
 import { lastVerifiedRuntimeStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { BOTS_HOME_PIN_RUNTIME_CAPABILITY } from '../../../shared/bot-runtime-capabilities'
-import { botHomeHostId } from '../../../shared/bots/bot-home-host'
 
 /** A paired server's last verified status; null for this app's own runtime, or before it is known. */
 export function pairedBotHostStatus(
@@ -34,13 +33,12 @@ export function botHostHasCapability(
 }
 
 /** Whether `bot`'s host keeps its Home pinned first; an older paired server leaves its pages as they
- *  were. Asked of the host its home's tabs live on: a shared agent's are this build's. */
+ *  were. */
 export function botHomeRuleApplies(
   bot: { hostId: ExecutionHostId } | null,
   statuses: RuntimeStatuses
 ): boolean {
   return (
-    bot !== null &&
-    botHostHasCapability(botHomeHostId(bot), BOTS_HOME_PIN_RUNTIME_CAPABILITY, statuses)
+    bot !== null && botHostHasCapability(bot.hostId, BOTS_HOME_PIN_RUNTIME_CAPABILITY, statuses)
   )
 }

@@ -29,7 +29,6 @@ export function awaitingKeyView(share: SharedBotPhoneShare): SharedBotHostView {
     botId: share.botId,
     botName: share.botName,
     ownerName: share.ownerName,
-    homeWorkspaceId: null,
     link: 'unpaired',
     holds: false,
     held: []

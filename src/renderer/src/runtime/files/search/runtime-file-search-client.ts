@@ -1,3 +1,4 @@
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   throwIfSignalAborted,
@@ -24,7 +25,6 @@ import {
 } from './runtime-legacy-quick-open-inventory'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
-import { runtimeFileWorktreeSelector } from '../runtime-file-routing'
 
 const QUICK_OPEN_REMOTE_UPDATE_REQUIRED_MESSAGE =
   'Quick Open search requires a newer paired Orca host. Update the remote host and reconnect.'
@@ -64,7 +64,7 @@ export async function searchRuntimeFiles(
     target,
     'files.search',
     {
-      worktree: runtimeFileWorktreeSelector(context.target, context.worktreeId),
+      worktree: toRuntimeWorktreeSelector(context.worktreeId),
       ...runtimeOptions
     },
     { timeoutMs: 15_000, signal }
@@ -109,7 +109,7 @@ export async function listRuntimeFiles(
       target,
       'files.searchPaths',
       {
-        worktree: runtimeFileWorktreeSelector(context.target, context.worktreeId),
+        worktree: toRuntimeWorktreeSelector(context.worktreeId),
         query: '',
         limit: 1,
         mode: 'quick-open'
@@ -137,7 +137,7 @@ export async function listRuntimeFiles(
       if (args.candidatePaths !== undefined && includeIgnored !== false && !args.followSymlinks) {
         return validateLegacyQuickOpenRecentCandidates({
           target,
-          worktreeSelector: runtimeFileWorktreeSelector(context.target, context.worktreeId),
+          worktreeSelector: toRuntimeWorktreeSelector(context.worktreeId),
           worktreePath: context.worktreePath,
           excludePaths: args.excludePaths,
           candidatePaths: args.candidatePaths,
@@ -153,7 +153,7 @@ export async function listRuntimeFiles(
     target,
     'files.listAll',
     {
-      worktree: runtimeFileWorktreeSelector(context.target, context.worktreeId),
+      worktree: toRuntimeWorktreeSelector(context.worktreeId),
       ...(args.candidatePaths === undefined ? {} : { candidatePaths: args.candidatePaths }),
       ...(includeIgnored === undefined ? {} : { includeIgnored }),
       ...(args.followSymlinks === undefined ? {} : { followSymlinks: args.followSymlinks }),
@@ -200,7 +200,7 @@ export async function searchRuntimeFilePaths(
   if (!context.worktreeId) {
     return { files: [], truncated: false }
   }
-  const worktreeSelector = runtimeFileWorktreeSelector(context.target, context.worktreeId)
+  const worktreeSelector = toRuntimeWorktreeSelector(context.worktreeId)
   const limit = args.limit ?? 32
   const searchLegacy = () =>
     searchLegacyQuickOpenInventory({

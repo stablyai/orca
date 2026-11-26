@@ -10,7 +10,6 @@ import { browserManager } from '../../browser/guest-lifecycle/manager/browser-ma
 import { installGoogleSetupHostWatch } from '../../google/google-setup-host-watch'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import { mainProcessState as state } from '../main-process-state'
-import { botsRootFolder } from '../../bots/bot-home'
 import type { SharedBotHosts } from '../../bots/shared-with-me/shared-bot-hosts'
 
 let sharedBotHosts: SharedBotHosts | null = null
@@ -48,12 +47,9 @@ export function installMainProcessConnectorCloud(serve: boolean): void {
   sharedBotHosts = registerSharedBotHostsHandlers({
     userDataPath,
     cloud: () => runtime.getConnectorCloud(),
-    // Through the runtime's own create and delete, as a bot home is.
+    // Old homes go through the runtime's own delete, as a bot home's do.
     homes: {
-      botsRoot: () => botsRootFolder(),
-      store,
-      createFolderWorkspace: async (input) =>
-        (await runtime.createFolderWorkspace(input)).folderWorkspace,
+      folderWorkspaceIds: () => store.getFolderWorkspaces().map((home) => home.id),
       deleteFolderWorkspace: (id) =>
         runtime.deleteFolderWorkspace(id, { discardUnsavedDrafts: true })
     },

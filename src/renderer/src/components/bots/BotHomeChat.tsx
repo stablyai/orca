@@ -6,9 +6,8 @@ import { botErrorMessage } from './bot-presentation'
 import { readAgentSessionErrorRefusal } from '../../../../shared/agent-session/failures/agent-session-write-failure'
 import { useAppStore } from '@/store'
 import { isBotHomeTab, isLocalBotChatTab } from '../../../../shared/bots/bot-home-tab'
-import { botHomeHostId } from '../../../../shared/bots/bot-home-host'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
-import { openSharedBotChat } from '@/lib/agent-session/open/shared-bot-chat-open'
+import { revealSharedBotChat } from '@/lib/agent-session/open/shared-bot-chat-open'
 import { useBotHostDown } from '@/lib/bot-host-views'
 
 /** A bot's page always has its Home tab, this account's own on a shared agent; the runtime keeps the
@@ -18,8 +17,8 @@ export function BotHomeChat({ workspaceId }: { workspaceId: string }): null {
   const botId = bot?.id ?? null
   const hostId = bot?.hostId ?? null
   const agent = bot?.agent ?? null
-  // Its tabs live here: this computer's agent, or one shared with this account.
-  const local = bot !== null && botHomeHostId(bot) === LOCAL_EXECUTION_HOST_ID
+  // This computer's agent; another host's Home tab arrives from that host.
+  const local = bot !== null && bot.hostId === LOCAL_EXECUTION_HOST_ID
   const sessionId = local ? (bot?.chatSessionId ?? null) : null
   const ready = useAppStore((state) => !local || state.workspaceSessionReady)
   const shown = useAppStore(
@@ -39,10 +38,9 @@ export function BotHomeChat({ workspaceId }: { workspaceId: string }): null {
     // Left the page meanwhile: its tab must not pull the user back.
     let left = false
     openBotChat({ hostId, id: botId })
-      // A shared agent's host keeps no tabs for this account: its Home's tab is kept here.
       .then((opened) => {
         if (!left) {
-          openSharedBotChat({ workspaceId, sessionId: opened })
+          revealSharedBotChat({ hostId }, workspaceId, opened)
         }
       })
       .catch((error: unknown) => {

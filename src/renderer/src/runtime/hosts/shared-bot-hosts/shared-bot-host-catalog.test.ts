@@ -8,20 +8,19 @@ import { subscribeRuntimeRpc } from '../../rpc/subscriptions/runtime-rpc-subscri
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '../../rpc/testing/runtime-compatibility-test-fixture'
 import {
   installSharedBotHostCatalog,
-  noteSharedBotHostListing,
   readSharedBotHosts,
   readTeamSharingOffered
 } from './shared-bot-host-catalog'
-import { readRuntimeDirectory } from '../../files/reads/runtime-directory-read'
-import { runtimeFileWorktreeSelector } from '../../files/runtime-file-routing'
-import {
-  getFileExplorerOperationOwnerFromState,
-  type FileExplorerOwnerState
-} from '@/components/right-sidebar/file-explorer/navigation/file-explorer-operation-owner'
 import { selectExecutionHostDisplayLabel } from '../display/execution-host-display-label'
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '@/store'
 import { resolveNativeChatRuntimeSessionAttachmentOwner } from '@/components/native-chat/attachments/uploads/native-chat-attachment-owner'
+import { loadRuntimeHostCatalogs } from '@/store/host-catalog/host-catalog-fence'
+import { getRuntimeClientEventEnvironmentIds } from '@/hooks/ipc-events/runtime-events/runtime-environment-subscription-selection'
+import { getReachableRuntimeSessionMirrorTargets } from '../../web-session-tabs-sync/subscriptions/runtime-session-mirror-targets'
+import { runtimeEnvironmentStatusFromSnapshot } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { revealSharedBotChat } from '@/lib/agent-session/open/shared-bot-chat-open'
 
 const HOST: SharedBotHostView = {
   environmentId: 'shared-env',
@@ -29,14 +28,11 @@ const HOST: SharedBotHostView = {
   botId: 'bot-1',
   botName: 'Ivy',
   ownerName: 'Jinwoo Hong',
-  homeWorkspaceId: 'home-1',
   link: 'live',
   holds: true,
   held: []
 }
 const target = { kind: 'environment', environmentId: HOST.environmentId } as const
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a shared home resolves before any workspace row is read.
-const NO_WORKSPACES = {} as FileExplorerOwnerState
 
 let uninstall: () => void
 const environmentCall = vi.fn()
@@ -130,46 +126,125 @@ it('gives a shared agent’s host a pairing revision while it is shared, so its 
   expect(resolveNativeChatRuntimeSessionAttachmentOwner(session)).toEqual({ kind: 'not-ready' })
 })
 
-describe('Files in this computer’s home of a shared agent', () => {
-  const home = 'folder:home-1'
-  const context = { target, worktreeId: home, worktreePath: '/local/shared-agents/share-1' }
+describe('a shared agent’s chats in this window', () => {
+  const connected = runtimeEnvironmentStatusFromSnapshot({
+    environmentId: HOST.environmentId,
+    pairingRevision: 0,
+    sequence: 1,
+    checkedAt: 1,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mirror reads only the runtime id.
+    status: { runtimeId: 'host-runtime' } as RuntimeStatus,
+    verification: 'verified',
+    transport: 'ready',
+    sharedHost: true
+  })
 
-  it('reads the agent’s home folder on its host, by the host’s own key, read-only', async () => {
+  it('follows its tabs and events like a paired server’s, though no paired-server row lists it', () => {
+    const targets = getReachableRuntimeSessionMirrorTargets({
+      runtimeEnvironments: [],
+      runtimeStatusByEnvironmentId: new Map([[HOST.environmentId, connected]]),
+      projectGroups: [
+        {
+          id: 'bots',
+          connectionId: null,
+          executionHostId: toRuntimeExecutionHostId(HOST.environmentId)
+        }
+      ]
+    })
+    expect(targets).toEqual([
+      expect.objectContaining({ environmentId: HOST.environmentId, pairingRevision: 0 })
+    ])
+    expect(
+      getRuntimeClientEventEnvironmentIds({
+        runtimeEnvironments: [],
+        settings: null,
+        sshStateByEnvironment: new Map(),
+        runtimeStatusByEnvironmentId: new Map([[HOST.environmentId, connected]])
+      })
+    ).toEqual([HOST.environmentId])
+  })
+
+  it('opens a chat its host runs in the background by revealing it, never by activating a host tab', async () => {
     environmentCall.mockImplementation(
       async (request: { method: string }) =>
         createCompatibleRuntimeStatusResponseIfNeeded(request) ?? {
           id: 'x',
           ok: true,
-          result: [],
+          result:
+            request.method === 'orchestration.partyLocation'
+              ? { location: { kind: 'chat', sessionId: 'chat-1', worktreeId: 'home' } }
+              : { ok: true, sessionId: 'chat-1', workspaceId: 'home', agent: 'claude' },
           _meta: { runtimeId: 'r' }
         }
     )
-    await vi.waitFor(() => expect(readSharedBotHosts()).toHaveLength(1))
-    // Before the host lists the agent, nothing names its folder there: Files shows nothing.
-    expect(getFileExplorerOperationOwnerFromState(NO_WORKSPACES, home)).toEqual({
-      kind: 'unresolved'
-    })
-
-    noteSharedBotHostListing(toRuntimeExecutionHostId(HOST.environmentId), [
-      { id: HOST.botId, folderWorkspaceId: 'host-home' }
-    ])
-    expect(getFileExplorerOperationOwnerFromState(NO_WORKSPACES, home)).toEqual({
-      kind: 'runtime',
-      environmentId: HOST.environmentId,
-      executionHostId: toRuntimeExecutionHostId(HOST.environmentId),
-      readOnly: true
-    })
-    await readRuntimeDirectory(context, '/local/shared-agents/share-1/notes')
-    expect(environmentCall).toHaveBeenCalledWith(
-      expect.objectContaining({
-        selector: HOST.environmentId,
-        method: 'files.readDir',
-        params: { worktree: 'id:folder:host-home', relativePath: 'notes' }
-      })
-    )
-    // Any other host is asked by the id this computer knows.
     expect(
-      runtimeFileWorktreeSelector({ kind: 'environment', environmentId: 'other-env' }, home)
-    ).toBe('id:folder:home-1')
+      revealSharedBotChat(
+        { hostId: toRuntimeExecutionHostId(HOST.environmentId) },
+        'home',
+        'chat-1'
+      )
+    ).toBe(true)
+    await vi.waitFor(() =>
+      expect(environmentCall).toHaveBeenCalledWith(
+        // For this window alone, as the host requires of a teammate.
+        expect.objectContaining({
+          selector: HOST.environmentId,
+          method: 'agentSession.reveal',
+          params: { sessionId: 'chat-1', navigation: 'caller' }
+        })
+      )
+    )
+    expect(environmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'session.tabs.activate' })
+    )
   })
+
+  it('keeps its host’s projects out of this window’s, however that host is reached', async () => {
+    environmentCall.mockImplementation(
+      async (request: { method: string }) =>
+        createCompatibleRuntimeStatusResponseIfNeeded(request) ?? {
+          id: 'x',
+          ok: true,
+          result: { repos: [] },
+          _meta: { runtimeId: 'r' }
+        }
+    )
+    await expect(
+      useAppStore.getState().fetchRuntimeEnvironmentRepos(HOST.environmentId)
+    ).resolves.toEqual([])
+    expect(environmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'repo.list' })
+    )
+  })
+})
+
+it('lists its home with every host’s folders even when that load starts before its shares arrive', async () => {
+  uninstall()
+  let answer: (state: SharedBotHostsState) => void = () => {}
+  vi.stubGlobal('window', {
+    api: {
+      sharedBotHosts: {
+        list: () => new Promise<SharedBotHostsState>((resolve) => (answer = resolve)),
+        onChanged: () => () => {}
+      },
+      runtimeEnvironments: { list: async () => [] }
+    }
+  })
+  uninstall = installSharedBotHostCatalog()
+  const loaded: string[] = []
+  let listed: readonly string[] = []
+  const loading = loadRuntimeHostCatalogs(
+    useAppStore.getState,
+    'folder-workspaces',
+    async (environment) => void loaded.push(environment.environmentId),
+    () => true,
+    (ids) => (listed = ids)
+  )
+  // Main answers after the paired-server list does.
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  answer({ hosts: [HOST], sharing: true })
+  await loading
+  // Listed, so a restored chat on its home keeps its owner.
+  expect(listed).toEqual([HOST.environmentId])
+  expect(loaded).toEqual([HOST.environmentId])
 })

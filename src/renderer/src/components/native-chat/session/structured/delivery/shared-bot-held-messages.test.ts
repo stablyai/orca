@@ -26,7 +26,6 @@ const host = (messages: SharedBotHeldView[]): SharedBotHostView => ({
   botId: 'bot-1',
   botName: 'Ivy',
   ownerName: 'Jinwoo Hong',
-  homeWorkspaceId: null,
   link: 'offline',
   holds: true,
   held: messages
@@ -83,7 +82,7 @@ describe('a teammate’s held messages in their chat', () => {
 })
 
 describe('a new chat’s placeholder while the owner’s computer is away', () => {
-  // As `openSharedBotChat` opens it: no launch record, its transport on.
+  // As a new chat opens while its host is away: no launch record, its transport on.
   const launch = { lifecycle: null, transportEnabled: true }
   const phase = (messages: SharedBotHeldView[], sessionId: string) => {
     const { readable } = sharedBotHeldMessages(host(messages), sessionId, WORDS, () => {})

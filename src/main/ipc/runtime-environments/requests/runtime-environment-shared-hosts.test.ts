@@ -13,7 +13,6 @@ import {
 } from '../../../../shared/remote-runtime/pairing/shared-host-keys'
 import { parseRuntimeRelayEndpoint } from '../../../../shared/remote-runtime/pairing/runtime-relay-endpoint'
 import { SharedBotHosts } from '../../../bots/shared-with-me/shared-bot-hosts'
-import { memorySharedBotHomes } from '../../../bots/shared-with-me/shared-bot-home.test-fixture'
 import {
   RELAY_TEST_INVITE,
   startHostOverRelay
@@ -129,8 +128,7 @@ it(
         decline: async () => ({ ok: true, value: { status: 'declined' } }),
         hold: async () => ({ ok: true, value: { status: 'held' } })
       }),
-      publish: () => {},
-      homes: memorySharedBotHomes(userDataPath).homes
+      publish: () => {}
     })
     await hosts.ready()
     const reach = parseRuntimeRelayEndpoint(host.connection.endpoint)!
@@ -175,6 +173,14 @@ it(
     ).resolves.toMatchObject({ id: expect.any(String) })
     const status = await callRuntimeEnvironment(userDataPath, ENVIRONMENT_ID, 'status.get', {})
     expect(status).toMatchObject({ ok: true })
+    // Its environment names the runtime that answered, as a paired server's does: the window's tab
+    // streams are fenced on it.
+    expect(sharedHostEnvironment(ENVIRONMENT_ID)?.runtimeId).toBe(runtime.getRuntimeId())
+    // It works in the agent's workspaces, so the host admits the list of the agent's home (this
+    // stand-in host has no folder lists, so the call gets past the teammate gate to the lookup).
+    await expect(
+      callRuntimeEnvironment(userDataPath, ENVIRONMENT_ID, 'folderWorkspace.list', {})
+    ).resolves.toMatchObject({ ok: false, error: { code: 'method_not_found' } })
     // Listed with no paired server's, its status is marked as a shared host's, so the window keeps it.
     expect(getRuntimeEnvironmentStatusSnapshot(ENVIRONMENT_ID)?.sharedHost).toBe(true)
     // The share, not the endpoint's first invite, holds the credential the host installed.

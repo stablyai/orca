@@ -1,10 +1,10 @@
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import type { MarkdownDocument } from '../../../../../shared/file-listing/file-document'
 import type { RuntimeFileOperationArgs } from '../runtime-file-client-types'
 import {
   assertLocalFilesystemFallbackAllowed,
   getRemoteFileArgs,
-  localAccess,
-  runtimeFileWorktreeSelector
+  localAccess
 } from '../runtime-file-routing'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import type { LocalFileAccess } from '../../../../../shared/file-access/local-file-access'
@@ -23,7 +23,7 @@ export async function listRuntimeMarkdownDocuments(
   return callRuntimeRpc<MarkdownDocument[]>(
     target,
     'files.listMarkdownDocuments',
-    { worktree: runtimeFileWorktreeSelector(target, context.worktreeId) },
+    { worktree: toRuntimeWorktreeSelector(context.worktreeId) },
     { timeoutMs: 15_000 }
   )
 }

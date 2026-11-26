@@ -9,7 +9,6 @@ import { keepBotHostList, readKeptBotHostList } from './bot-host-kept-lists'
 import { reuseEqualJson } from '../../../shared/reuse-equal-json'
 import type { BotNeedsYouCounts } from '../../../shared/bots/bot-change-scope'
 import type { ConnectorCloudStatus } from '../../../shared/bots/connector-cloud-status'
-import { sharedBotHomeWorkspaceId } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 
 /** What a host's bots.list says of its link to Orca Cloud. */
 export type BotHostConnectorStatus = ConnectorCloudStatus
@@ -104,15 +103,12 @@ function reflatten(): void {
       : hostIds.flatMap((id) => entryOf(id)?.bots ?? [])
 }
 
-/** Every bot names the host that listed it; a host stores `local` for its own bots. A shared
- *  agent's home is the one this computer keeps for it, never its owner's. */
+/** Every bot names the host that listed it; a host stores `local` for its own bots. */
 function stamp(hostId: ExecutionHostId, bots: readonly Bot[]): readonly Bot[] {
-  const home = (bot: Bot): string =>
-    sharedBotHomeWorkspaceId(hostId, bot.id) ?? bot.folderWorkspaceId
-  return bots.every((bot) => bot.hostId === hostId && bot.folderWorkspaceId === home(bot))
+  return bots.every((bot) => bot.hostId === hostId)
     ? bots
     : // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stored type names only the host's own `local`; the listing host is the truth here.
-      bots.map((bot) => ({ ...bot, hostId, folderWorkspaceId: home(bot) }) as Bot)
+      bots.map((bot) => ({ ...bot, hostId }) as Bot)
 }
 
 /** A bot a host answered with, stamped with that host, as its listing would. */

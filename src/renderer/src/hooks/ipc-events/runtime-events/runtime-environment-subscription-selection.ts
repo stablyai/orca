@@ -68,6 +68,12 @@ export function getRuntimeClientEventEnvironmentIds(
       ids.add(environment.id)
     }
   }
+  // A shared agent's host is in no paired-server row; its status says it is one.
+  for (const [environmentId, entry] of state.runtimeStatusByEnvironmentId ?? []) {
+    if (entry.snapshot?.sharedHost && isRuntimeHostStillInContact(state, environmentId)) {
+      ids.add(environmentId)
+    }
+  }
   return [...ids]
 }
 

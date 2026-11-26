@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SharedBotHosts } from '../../bots/shared-with-me/shared-bot-hosts'
-import { memorySharedBotHomes } from '../../bots/shared-with-me/shared-bot-home.test-fixture'
 import { setSharedHostsOwner } from '../runtime-environments/requests/runtime-environment-shared-hosts'
 import nacl from 'tweetnacl'
 import { openBotTeamShareHeldMessage } from '../../../shared/bots/bot-team-share-seal'
@@ -40,7 +39,6 @@ async function awayHost(hostKey?: string) {
   const hosts = new SharedBotHosts({
     userDataPath,
     account: () => 'ada',
-    homes: memorySharedBotHomes(userDataPath).homes,
     cloud: () => ({
       mine: async () => ({
         ok: true,

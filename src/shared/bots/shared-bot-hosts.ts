@@ -34,8 +34,6 @@ export type SharedBotHostView = {
   /** The account it is shared with (the viewer's own), as a phone keeps it; absent until a list from
    *  a computer that names it. */
   accountId?: string
-  /** This computer's folder workspace the agent's chats open in; null until main has made it. */
-  homeWorkspaceId: string | null
   link: SharedBotHostLink
   /** Accepted here and not live yet, while its one share-list read that waits for the host's offer,
    *  and that offer's dial, are out: it reads as connecting rather than away. Absent from an older main. */
@@ -53,7 +51,7 @@ export function sharedBotHostView(
     SharedBotHostView,
     'environmentId' | 'shareId' | 'botId' | 'botName' | 'ownerName' | 'accountId'
   >,
-  reach: Pick<SharedBotHostView, 'homeWorkspaceId' | 'link' | 'accepting' | 'holds' | 'held'>
+  reach: Pick<SharedBotHostView, 'link' | 'accepting' | 'holds' | 'held'>
 ): SharedBotHostView {
   const { environmentId, shareId, botId, botName, ownerName, accountId } = share
   const holds = SHARED_HOSTS_HOLD_WHILE_AWAY && reach.holds
