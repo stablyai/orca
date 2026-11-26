@@ -118,7 +118,9 @@ export function WorktreeAgentList({
         const text = mobileAgentChildRowText(child.childRow, now)
         return [
           {
-            key: child.key,
+            // Legacy sub-agent ids are provider-assigned and only unique among siblings; scope them to
+            // their parent so the flattened list stays uniquely keyed.
+            key: `${node.row.paneKey}:${child.key}`,
             title: text.lead,
             detail: text.trail || undefined,
             dotState: child.dotState,
@@ -212,6 +214,8 @@ export function WorktreeAgentList({
           agents={roots.map((node) => ({
             agent: node.row,
             childCount: childItemsOf(node).length,
+            childSignalState: collapsedChildrenSignalState(descendantItemsOf(node)),
+            childUnread: hidesUnread(descendantItemsOf(node)),
             nested: nestedOf(node)
           }))}
           now={now}

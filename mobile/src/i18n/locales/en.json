@@ -1194,7 +1194,8 @@
       "workspaceActions": "Workspace actions",
       "showDetails": "Show details",
       "subAgentCount": "Sub-agents: {{count}}",
-      "subAgents": "Sub-agents"
+      "subAgents": "Sub-agents",
+      "subAgentState": "A sub-agent is {{state}}"
     }
   },
   "components": {
