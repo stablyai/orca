@@ -138,6 +138,8 @@ export async function createWorkerWorktree(args: {
   promisedAgentChat?: boolean
   onWorkspaceCreated?: (worktreeId: string) => void
   launchPreferences?: AgentLaunchPreferences
+  /** Merged over the startup agent's env, such as a per-worker proxy. */
+  launchEnv?: Record<string, string>
   effects: WorkerEffect[]
 }): Promise<{
   worktree: Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>
@@ -175,7 +177,8 @@ export async function createWorkerWorktree(args: {
           startupAgent: args.agent,
           startupLaunchSource: 'orchestration',
           startupSuppressUpdatePrompt: true,
-          ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {})
+          ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {}),
+          ...(args.launchEnv ? { startupAccountEnv: args.launchEnv } : {})
         }
       : {}),
     activate: false,

@@ -74,6 +74,8 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       agent: getOptionalStringFlag(flags, 'agent'),
       model,
       effort,
+      proxy: getOptionalStringFlag(flags, 'proxy'),
+      proxyBypass: getOptionalStringFlag(flags, 'proxy-bypass'),
       terminal,
       retryOf: getOptionalStringFlag(flags, 'retry-of'),
       timeoutMs: getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms'),

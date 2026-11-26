@@ -61,6 +61,10 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   mode: '--mode <mode>          Mode such as edit, diff, or both',
   model: '--model <id>          Provider model id for a new agent launch',
   effort: '--effort <level>      Reasoning effort for the selected model',
+  proxy:
+    '--proxy <url>          Outbound proxy for the new worker only (http, https, socks5, socks5h)',
+  'proxy-bypass':
+    '--proxy-bypass <hosts> Hosts the worker reaches without --proxy, comma separated',
   'mouse-button': '--mouse-button <btn>   Mouse button: left, right, or middle',
   modifiers: '--modifiers <chord>  Modifier keys held only for this click',
   name: '--name <name>          Name for the new worktree or automation',
