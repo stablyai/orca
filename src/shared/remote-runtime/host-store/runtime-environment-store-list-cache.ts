@@ -20,7 +20,7 @@ export const ENVIRONMENT_STORE_READ_OPERATIONS = new Set<EnvironmentStoreCommand
 ])
 import { getEnvironmentStorePath } from './runtime-environment-store-records'
 import { getRuntimeEnvironmentSidecarPath } from './runtime-environment-sidecar'
-import { getWslHostDeploymentStorePath } from './wsl-host-deployment-store'
+import { getWslHostDeploymentStorePath, type WslHostDeployments } from './wsl-host-deployment-store'
 
 // Same racy-stamp guard as foreign-sqlite-reader: only cache when all files are settled >3s.
 const STAMP_SETTLE_MS = 3_000
@@ -34,6 +34,7 @@ export type EnvironmentStoreListStamp = {
 }
 
 const listCache = new Map<string, { token: string; value: KnownRuntimeEnvironment[] }>()
+const wslDeploymentsCache = new Map<string, { token: string; value: WslHostDeployments }>()
 
 async function lstatRegularFileStamp(path: string): Promise<FileStamp> {
   try {
@@ -103,11 +104,19 @@ export function setCachedEnvironmentList(
 
 export function clearEnvironmentListCache(): void {
   listCache.clear()
+  wslDeploymentsCache.clear()
 }
 
 export type CacheableEnvironmentStoreRead = Extract<
   EnvironmentStoreCommand,
-  { operation: 'listEnvironments' | 'resolveEnvironment' | 'resolveEnvironmentPairingOffer' }
+  {
+    operation:
+      | 'listEnvironments'
+      | 'resolveEnvironment'
+      | 'resolveEnvironmentPairingOffer'
+      | 'readWslHostDeployments'
+      | 'findWslHostDeployment'
+  }
 >
 
 export function isCacheableEnvironmentStoreRead(
@@ -118,12 +127,17 @@ export function isCacheableEnvironmentStoreRead(
   }
   return (
     command.operation === 'resolveEnvironment' ||
-    command.operation === 'resolveEnvironmentPairingOffer'
+    command.operation === 'resolveEnvironmentPairingOffer' ||
+    command.operation === 'readWslHostDeployments' ||
+    command.operation === 'findWslHostDeployment'
   )
 }
 
 function answerFromCachedEnvironments(
-  command: CacheableEnvironmentStoreRead,
+  command: Extract<
+    CacheableEnvironmentStoreRead,
+    { operation: 'listEnvironments' | 'resolveEnvironment' | 'resolveEnvironmentPairingOffer' }
+  >,
   environments: KnownRuntimeEnvironment[]
 ): EnvironmentStoreSuccess {
   if (command.operation === 'listEnvironments') {
@@ -139,6 +153,66 @@ function answerFromCachedEnvironments(
   }
 }
 
+async function runCachedWslDeploymentsRead(args: {
+  command: Extract<
+    CacheableEnvironmentStoreRead,
+    { operation: 'readWslHostDeployments' | 'findWslHostDeployment' }
+  >
+  observe?: (generation: number) => void
+  readWrites: () => number
+  isClosing: () => boolean
+  isIdle: () => boolean
+  enqueue: () => Promise<EnvironmentStoreSuccess>
+}): Promise<EnvironmentStoreSuccess> {
+  const userDataPath = args.command.args[0]
+  const startWrites = args.readWrites()
+  const settledBeforeMs = Date.now() - STAMP_SETTLE_MS
+  const stamp = await lstatRegularFileStamp(getWslHostDeploymentStorePath(userDataPath))
+  if (args.isClosing()) {
+    throw new Error('Environment store is closing')
+  }
+  if (stamp !== null && args.readWrites() === startWrites && args.isIdle()) {
+    const cached =
+      stamp === 'missing'
+        ? { deployments: [], unreadableEnvironmentIds: new Set<string>() }
+        : (() => {
+            const entry = wslDeploymentsCache.get(userDataPath)
+            return entry && entry.token === stamp.token ? structuredClone(entry.value) : null
+          })()
+    if (cached !== null) {
+      args.observe?.(startWrites)
+      if (args.command.operation === 'readWslHostDeployments') {
+        return { operation: 'readWslHostDeployments', value: cached }
+      }
+      const selector = args.command.args[1]
+      return {
+        operation: 'findWslHostDeployment',
+        value: cached.deployments.find((record) => record.environmentId === selector) ?? null
+      }
+    }
+  }
+  const reply = await args.enqueue()
+  if (
+    reply.operation === 'readWslHostDeployments' &&
+    stamp !== null &&
+    stamp !== 'missing' &&
+    stamp.newestMs < settledBeforeMs &&
+    args.readWrites() === startWrites
+  ) {
+    if (wslDeploymentsCache.size >= MAX_CACHE_ENTRIES && !wslDeploymentsCache.has(userDataPath)) {
+      const oldest = wslDeploymentsCache.keys().next().value
+      if (oldest !== undefined) {
+        wslDeploymentsCache.delete(oldest)
+      }
+    }
+    wslDeploymentsCache.set(userDataPath, {
+      token: stamp.token,
+      value: structuredClone(reply.value)
+    })
+  }
+  return reply
+}
+
 export async function runCachedEnvironmentStoreRead(args: {
   command: CacheableEnvironmentStoreRead
   servingWsl: boolean
@@ -148,6 +222,12 @@ export async function runCachedEnvironmentStoreRead(args: {
   isIdle: () => boolean
   enqueue: () => Promise<EnvironmentStoreSuccess>
 }): Promise<EnvironmentStoreSuccess> {
+  if (
+    args.command.operation === 'readWslHostDeployments' ||
+    args.command.operation === 'findWslHostDeployment'
+  ) {
+    return runCachedWslDeploymentsRead({ ...args, command: args.command })
+  }
   const userDataPath = args.command.args[0]
   const startWrites = args.readWrites()
   const stamp = await readEnvironmentStoreListStamp(userDataPath, args.servingWsl)
