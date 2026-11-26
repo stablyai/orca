@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { agentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
+import { CHAT_GONE_REFUSAL } from '../../shared/connectors/connector-cloud-contract'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   createQueuedMessageTestRig,
@@ -107,12 +108,10 @@ it('carries the failed message into the next one through send admission, once', 
   expect(await (await journal()).queuedMessages.returned()).toEqual([])
 })
 
-it('a request preparing its attachments does not own a concurrent local turn', async () => {
-  rig = await createQueuedMessageTestRig({ starting: true })
-  const deliveries = new ChatDeliveries(vi.fn())
+async function holdImageDelivery(deliveries: ChatDeliveries, host: StructuredAgentSessionHost) {
   const preparing = Promise.withResolvers<void>()
   const staged = Promise.withResolvers<ConnectorImage[]>()
-  const result = deliveries.deliver(chatHost(rig.host), KEY, CHAT, {
+  const result = deliveries.deliver(chatHost(host), KEY, CHAT, {
     deliveryId: 'd-slack',
     text: '@bot',
     signal: new AbortController().signal,
@@ -129,13 +128,46 @@ it('a request preparing its attachments does not own a concurrent local turn', a
     }
   })
   await preparing.promise
+  return { result, finish: () => staged.resolve([]) }
+}
+
+it('a request preparing its attachments does not own a concurrent local turn', async () => {
+  rig = await createQueuedMessageTestRig({ starting: true })
+  const deliveries = new ChatDeliveries(vi.fn())
+  const { result, finish } = await holdImageDelivery(deliveries, rig.host)
   const pendingDuringPreparation = deliveries.pending(SESSION)
   const turnOrigin = deliveries.origin(SESSION, null)
-  staged.resolve([])
+  finish()
   await expect(result).resolves.toEqual({ outcome: 'accepted' })
   expect(pendingDuringPreparation).toBe(false)
   expect(turnOrigin).toBe('local')
   expect(deliveries.pending(SESSION)).toBe(true)
+})
+
+it('returns chat gone when its destination is deleted during attachment preparation', async () => {
+  rig = await createQueuedMessageTestRig({ starting: true })
+  const deliveries = new ChatDeliveries(vi.fn())
+  const { result, finish } = await holdImageDelivery(deliveries, rig.host)
+  const record = rig.store.getRecord(SESSION)!
+  const lease = record.lease
+  let forgotten: boolean
+  try {
+    await rig.store.evictProvenDeadOwner({
+      sessionId: SESSION,
+      expectedFence: lease.runtimeFence,
+      probe: { outcome: 'pid-absent' },
+      now: lease.leaseDeadlineAt + 60_000
+    })
+    forgotten = await rig.store.forgetChat({
+      chatId: SESSION,
+      sessionIds: [SESSION],
+      conversations: []
+    })
+  } finally {
+    finish()
+  }
+  expect(forgotten).toBe(true)
+  await expect(result).resolves.toEqual({ outcome: 'refused', reason: CHAT_GONE_REFUSAL })
 })
 
 it('a Retry racing the send leaves the delivery its own turn, not the Retry’s', async () => {

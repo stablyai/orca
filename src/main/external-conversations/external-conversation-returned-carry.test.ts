@@ -27,7 +27,11 @@ import { actsForOwner, OWNER_ACTS_FOR } from '../../shared/bots/bot-acts-for'
 import { readBotActingTurn } from '../bots/bot-request-asker'
 import { carriedFields, carriedMessages } from './external-conversation-returned-carry'
 import { connectorAskerImages } from './connector-asker-images'
-import { connectorImageInspection, storeConnectorImage } from './connector-asker-stored-image'
+import {
+  connectorImageInspection,
+  connectorMissingImages,
+  storeConnectorImage
+} from './connector-asker-stored-image'
 import { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
 
 // The real journal writer: a Slack message whose start failed, then the conversation's next message.
@@ -453,36 +457,50 @@ it('keeps a failed request and stages only new earlier images that fit the byte 
     const path = await storeConnectorImage(attachmentStore, `${fileId}.png`, fixture, fileId)
     failed.blocks.push({ type: 'image-ref', path })
   }
-  failedStart('missing', asked('d-missing', 'missing upload', THREAD, [join(dir, 'missing.png')]))
-  failedStart('failed', failed, 'notSignedIn', NOW + 1)
-  const carried = await carriedMessages(
-    THREAD,
-    readJournalDomainReturnedCards(db, target, NOW),
-    ACCOUNT,
-    NOW,
-    [],
-    connectorImageInspection(attachmentStore.rootDir, new AbortController().signal)
-  )
+  for (let index = 0; index < 20; index += 1) {
+    const id = `missing-${index}`
+    failedStart(
+      id,
+      asked(id, 'missing upload', THREAD, [join(dir, `${id}.png`)]),
+      'notSignedIn',
+      NOW + index
+    )
+  }
+  failedStart('failed', failed, 'notSignedIn', NOW + 20)
+  const missing = connectorMissingImages()
+  const carry = () =>
+    carriedMessages(
+      THREAD,
+      readJournalDomainReturnedCards(db, target, NOW + 30),
+      ACCOUNT,
+      NOW + 30,
+      [],
+      connectorImageInspection(attachmentStore.rootDir, new AbortController().signal, missing)
+    )
+  expect((await carry()).cards).toEqual([])
+  const carried = await carry()
 
   const reads: string[] = []
   const stage = connectorAskerImages({
-    read: async ({ fileId }) => {
-      reads.push(fileId)
-      return {
-        ok: true,
-        value: {
+    reader:
+      () =>
+      async ({ fileId }) => {
+        reads.push(fileId)
+        return {
           ok: true,
-          result: {
-            download: {
-              name: `${fileId}.png`,
-              size: byteLength,
-              url: 'https://fixture.invalid/image',
-              ticket: 'fixture'
+          value: {
+            ok: true,
+            result: {
+              download: {
+                name: `${fileId}.png`,
+                size: byteLength,
+                url: 'https://fixture.invalid/image',
+                ticket: 'fixture'
+              }
             }
           }
         }
-      }
-    },
+      },
     store: async (name, image) => stagedImage(name, image.byteLength),
     fetch: async () => new Response(new Uint8Array(fixture))
   })

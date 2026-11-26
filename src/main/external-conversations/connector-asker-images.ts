@@ -142,29 +142,31 @@ async function imageBytes(
 }
 
 /** Fetches a request's images through Orca Cloud, as the bot's own `read --download` would. */
+export type ReadConnectorImage = (
+  request: {
+    botId: string
+    ref: string
+    fileId: string
+    conversation: { source: string; externalId: string }
+  },
+  signal: AbortSignal
+) => Promise<ConnectorResult<ConnectorActionResponse> | null>
+
 export function connectorAskerImages(deps: {
-  enabled?: () => boolean
-  /** A read of one file on the request's message, answered with where to stream it from. */
-  read: (
-    request: {
-      botId: string
-      ref: string
-      fileId: string
-      conversation: { source: string; externalId: string }
-    },
-    signal: AbortSignal
-  ) => Promise<ConnectorResult<ConnectorActionResponse> | null>
+  /** Binds the reads in one delivery to the poll connection that supplied it. */
+  reader: () => ReadConnectorImage | null
   store: (name: string, bytes: Buffer, slackFileId?: string) => Promise<string>
   fetch?: typeof fetch
   budgetMs?: number
 }): AskerImages {
   return async ({ botId, conversation, asker, signal, earlierBudget }) => {
-    if (deps.enabled?.() === false) {
-      return []
-    }
     const current = asker.messageRef ? askerImageIds(asker.text) : []
     const earlier = hasEarlierImages(conversation.source, asker)
     if (current.length === 0 && !earlier) {
+      return []
+    }
+    const read = deps.reader()
+    if (!read) {
       return []
     }
     const bounded = AbortSignal.any([
@@ -176,7 +178,7 @@ export function connectorAskerImages(deps: {
     const stage = async ({ ref, fileId }: ImageTarget, maxBytes: number): Promise<number> => {
       try {
         const answer = await waitForPromiseWithSignal(
-          deps.read({ botId, ref, fileId, conversation }, bounded),
+          read({ botId, ref, fileId, conversation }, bounded),
           bounded
         )
         const told = answer?.ok && answer.value.ok ? answer.value.result.download : undefined

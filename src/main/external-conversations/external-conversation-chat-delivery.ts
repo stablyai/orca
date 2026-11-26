@@ -14,6 +14,7 @@ import { HOST_CLOCK } from './external-conversation-host'
 import type { ConnectorMessage, ConversationKey, Delivery } from './external-conversation-types'
 import type { AskerImages } from './connector-asker-images'
 import type { DeliveryPreparation } from './external-conversation-delivery-receipts'
+import { connectorMissingImages } from './connector-asker-stored-image'
 
 /** A native chat a conversation links to; chats run only on this host. */
 export type LinkableChat = {
@@ -48,6 +49,7 @@ export function linkedChat(worktreeId: string, link: ExternalConversationLink): 
 }
 
 export class ChatDeliveries {
+  private readonly missingImages = connectorMissingImages()
   // Chats sent a delivery since their last turn ended; that turn is the delivery's, not Orca-typed.
   private readonly delivered = new Set<string>()
   // Chats a delivery is being sent to; their turn may start before the send returns.
@@ -70,6 +72,7 @@ export class ChatDeliveries {
 
   /** A watch gap leaves no proof these deliveries still belong to the current turn. */
   clear(): void {
+    this.missingImages.clear()
     this.generations.clear()
     this.sending.clear()
     this.delivered.clear()
@@ -227,6 +230,7 @@ export class ChatDeliveries {
     }
     const outcome = await deliverToChat((await chats?.ensure()) ?? null, chatLink(key, chat), {
       ...delivery,
+      missingImages: this.missingImages,
       admitted
     }).finally(stopSending)
     if (!current()) {

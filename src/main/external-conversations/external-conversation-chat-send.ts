@@ -25,6 +25,7 @@ import {
 } from './connector-asker-stored-image'
 import { getAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import type { DeliveryPreparation } from './external-conversation-delivery-receipts'
+import type { CapabilityProbeCache } from '../../shared/concurrency/capability-probe-cache'
 
 /** Sent as a person's message would be: a busy chat takes it into the running turn. A bot's is
  *  labelled with who asked, where and what came before; the chat shows the message alone. Its
@@ -41,6 +42,7 @@ export async function deliverToChat(
     deliveryId?: string
     askerImages?: AskerImages
     preparation?: DeliveryPreparation
+    missingImages?: CapabilityProbeCache<string>
   }
 ): Promise<Delivery> {
   if (!chat) {
@@ -61,8 +63,9 @@ export async function deliverToChat(
   }
   try {
     let inspection: ConnectorImageInspection | undefined
+    let firstCarry: Promise<CarriedMessages> | undefined
     const readCarry = (direct: readonly ConnectorImage[]) =>
-      readCarriedMessages(chat, link, delivery.reply?.account, direct, inspection)
+      readCarriedMessages(chat, link, delivery.reply?.account, direct, delivery.signal, inspection)
     let carried: CarriedMessages | undefined
     let directCount: number | undefined
     const images =
@@ -77,10 +80,11 @@ export async function deliverToChat(
                 directCount = direct.length
                 inspection = connectorImageInspection(
                   getAgentSessionAttachmentStore()?.rootDir,
-                  signal
+                  signal,
+                  delivery.missingImages
                 )
-                carried = await readCarry(direct)
-                return carried.earlierBudget
+                firstCarry = readCarry(direct)
+                return (await firstCarry).earlierBudget
               }
             })
             .catch(() => [])
@@ -89,7 +93,13 @@ export async function deliverToChat(
     const earlier = directCount === undefined ? [] : images.slice(directCount)
     // A carried card that changed since it was read (a Retry, an edit) refuses the send: read again.
     for (let attempt = 1; ; attempt += 1) {
-      carried ??= link.bot && attempt <= CARRY_READS ? await readCarry(direct) : NOTHING_CARRIED
+      carried =
+        link.bot && attempt <= CARRY_READS
+          ? await (attempt === 1 && firstCarry ? firstCarry : readCarry(direct))
+          : NOTHING_CARRIED
+      if (!chat.deps.store.getConversation(link.sessionId)) {
+        return refused(CHAT_GONE_REFUSAL)
+      }
       const fitting = earlierImagesThatFit(earlier, carried)
       const outcome = await sendConnectorTurn(
         chat,
@@ -108,7 +118,6 @@ export async function deliverToChat(
         taken.back?.()
         taken.back = undefined
         admitted = false
-        carried = undefined
         continue
       }
       if (outcome.kind === 'refused') {

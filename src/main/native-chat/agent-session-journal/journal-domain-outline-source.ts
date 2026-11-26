@@ -79,7 +79,9 @@ export function journalDomainOutlineSource(item: AgentJournalRenderItem): string
           ? { kind: 'status', text: '', contextClear: body.contextClear }
           : { kind: 'status', text: '' }
   }
-  const projected = isRootAgentJournalItem(item) ? projectStructuredItemToNativeChat(item) : null
+  const projected = isRootAgentJournalItem(item)
+    ? projectStructuredItemToNativeChat(item, false)
+    : null
   let message: JournalOutlineSource['message'] = null
   let preview: NativeChatUserMessagePreview | null = null
   if (projected && nativeChatToolFoldKind(projected) !== 'pass') {

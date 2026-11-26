@@ -17,8 +17,8 @@ import {
 import { SlackMirror } from './slack-mirror'
 import { connectorAskerImages } from './connector-asker-images'
 import { storeConnectorImage } from './connector-asker-stored-image'
-import { postConnectorAction } from '../connector-cloud/connector-actions'
-import { cloudConversation } from '../../shared/connectors/connector-cloud-contract'
+import { connectorImageReader } from './connector-asker-image-reader'
+import type { ConnectorCloud } from '../connector-cloud/connector-cloud'
 import { getAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import type { SlackMirrorCloud } from './slack-mirror-cloud'
 import { DeliveryReceipts, type DeliveryReceiptDb } from './external-conversation-delivery-receipts'
@@ -72,12 +72,13 @@ export function installExternalConversations(
       continued: Promise<{ cutByLastRun: ReadonlySet<string> }>
     }
     getConnectorCloud?: () =>
-      | (SlackMirrorCloud & {
-          refResolver(): ConnectorRefResolver | null
-          orcaAccountName(): string
-          repliesFilled(): void
-          reply: LeaveLinesCloud['reply']
-        })
+      | (SlackMirrorCloud &
+          Pick<ConnectorCloud, 'fileActionTransport'> & {
+            refResolver(): ConnectorRefResolver | null
+            orcaAccountName(): string
+            repliesFilled(): void
+            reply: LeaveLinesCloud['reply']
+          })
       | null
   }
 ): {
@@ -154,26 +155,7 @@ export function installExternalConversations(
       onLinked: () => runtime.onConversationLinked?.(),
       // Through the cloud a bot's own `read --download` goes through, into the attachment store.
       askerImages: connectorAskerImages({
-        enabled: () => runtime.getConnectorCloud?.()?.cloudFeatures()?.has('files.direct') === true,
-        read: async ({ botId, ref, fileId, conversation }, imageSignal) => {
-          const cloud = runtime.getConnectorCloud?.()
-          const about = cloudConversation(conversation)
-          // A cloud that can't stream a file leaves it to the agent's own download.
-          if (!cloud?.cloudFeatures()?.has('files.direct' satisfies ConnectorCloudFeature)) {
-            return null
-          }
-          return await postConnectorAction(
-            cloud,
-            {
-              botId,
-              verb: 'read',
-              ref,
-              args: { download: fileId, stream: true },
-              ...(about ? { conversation: about } : {})
-            },
-            imageSignal
-          )
-        },
+        reader: () => connectorImageReader(runtime.getConnectorCloud?.()?.fileActionTransport()),
         store: async (name, bytes, fileId) => {
           const attachments = getAgentSessionAttachmentStore()
           if (!attachments) {

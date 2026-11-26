@@ -104,7 +104,6 @@ export async function carriedMessages(
     AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES -
     direct.reduce((total, image) => total + image.bytes, 0)
   let fileIds = new Set(direct.map((image) => image.fileId))
-  let inspections = AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT
   const carried: JournalReturnedCard[] = []
   const blocks: NativeChatBlock[] = []
   // Keep the oldest whole requests whose images fit; each remaining card can still be retried.
@@ -117,9 +116,6 @@ export async function carriedMessages(
       if (block.type !== 'image-ref') {
         ownBlocks.push(block)
         continue
-      }
-      if (inspections-- <= 0) {
-        break cards
       }
       const path = block.url ? undefined : block.path
       const stored = path && inspection ? await inspection.image(path) : undefined
@@ -233,19 +229,33 @@ export async function readCarriedMessages(
   link: Pick<ExternalConversationLink, 'sessionId' | 'source' | 'externalId'>,
   account: string | undefined,
   direct: readonly ConnectorImage[],
+  signal: AbortSignal,
   inspection?: ConnectorImageInspection
 ): Promise<CarriedMessages> {
-  if (inspection?.signal.aborted) {
-    return NOTHING_CARRIED
-  }
   try {
     const returned = await waitForPromiseWithSignal(
       chat.conversation(link.sessionId).then(({ journal }) => journal.queuedMessages.returned()),
-      inspection?.signal
+      signal
     )
-    return await carriedMessages(link, returned, account, Date.now(), direct, inspection)
+    const now = Date.now()
+    if (!inspection) {
+      return await carriedMessages(link, returned, account, now, direct)
+    }
+    if (!inspection.signal.aborted) {
+      try {
+        return await carriedMessages(link, returned, account, now, direct, inspection)
+      } catch (error) {
+        if (!inspection.signal.aborted) {
+          throw error
+        }
+      }
+    }
+    // The image deadline may expire. Preserve normal returned requests and omit new earlier images
+    // when their remaining byte budget could not be measured.
+    const carried = await carriedMessages(link, returned, account, now, direct)
+    return { ...carried, earlierBudget: { ...carried.earlierBudget, bytes: 0 } }
   } catch (error) {
-    if (!inspection?.signal.aborted) {
+    if (!signal.aborted) {
       console.warn('[connectors] could not read the chat’s unsent messages', error)
     }
     return NOTHING_CARRIED

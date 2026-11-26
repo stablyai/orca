@@ -3,6 +3,8 @@ import { dirname, join } from 'node:path'
 import { isConnectorFileId } from '../../shared/connector-asker-file-validation'
 import { AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT } from '../../shared/agent-session/agent-session-attachments'
 import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-reason'
+import { CapabilityProbeCache } from '../../shared/concurrency/capability-probe-cache'
+import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import { parseAgentSessionAttachmentStorePath } from '../native-chat/agent-session-attachments/agent-session-attachment-references'
 import type { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
 
@@ -48,18 +50,29 @@ async function storedConnectorImageId(
 
 type StoredImage = { bytes: number; fileId: string | undefined }
 
-export function connectorImageInspection(root: string | undefined, signal: AbortSignal) {
+export function connectorMissingImages(): CapabilityProbeCache<string> {
+  return new CapabilityProbeCache(5 * 60_000, 4096)
+}
+
+export function connectorImageInspection(
+  root: string | undefined,
+  signal: AbortSignal,
+  missing = connectorMissingImages()
+) {
   // A card edit may require another read of the queue, but the same immutable upload needs one probe.
   const images = new Map<string, Promise<StoredImage | null>>()
   return {
     signal,
     image(path: string): Promise<StoredImage | null | 'limit'> {
+      if (!missing.shouldTry(path)) {
+        return Promise.resolve(null)
+      }
       let lookup = images.get(path)
       if (!lookup) {
         if (signal.aborted || images.size >= AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT) {
           return Promise.resolve('limit')
         }
-        lookup = inspectConnectorImage(root, path, signal)
+        lookup = inspectConnectorImage(root, path, signal, missing)
         images.set(path, lookup)
       }
       return waitForPromiseWithSignal(lookup, signal)
@@ -70,9 +83,15 @@ export function connectorImageInspection(root: string | undefined, signal: Abort
 async function inspectConnectorImage(
   root: string | undefined,
   path: string,
-  signal: AbortSignal
+  signal: AbortSignal,
+  missing: CapabilityProbeCache<string>
 ): Promise<StoredImage | null> {
-  const info = await stat(path).catch(() => null)
+  const info = await stat(path).catch((error) => {
+    if (!signal.aborted && isDefinitiveAbsence(error)) {
+      missing.rememberUnsupported(path)
+    }
+    return null
+  })
   if (signal.aborted || !info?.isFile() || info.size === 0) {
     return null
   }

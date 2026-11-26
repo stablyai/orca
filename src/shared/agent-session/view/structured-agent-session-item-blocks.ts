@@ -22,14 +22,17 @@ function toolResult(
   }
 }
 
-export function itemBlocks(item: AgentJournalRenderItem): {
+export function itemBlocks(
+  item: AgentJournalRenderItem,
+  drawMarkdown: boolean
+): {
   role: NativeChatMessage['role']
   blocks: NativeChatBlock[]
   drawnMarkdown?: string
 } | null {
   const body = item.body
   if (body.kind === 'message') {
-    return { role: body.role, ...connectorMessageShown(body) }
+    return { role: body.role, ...connectorMessageShown(body, drawMarkdown) }
   }
   if (isStructuredAgentSessionToolAction(body)) {
     const call = structuredAgentSessionToolCallBlock(body, item.itemId)

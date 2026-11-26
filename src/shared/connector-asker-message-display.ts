@@ -1,7 +1,6 @@
 import { connectorMessageShownText } from './connector-asker-prompt'
 import { slackMarkupShownText } from './connectors/slack-message-markup'
 import type { NativeChatBlock } from './native-chat/native-chat-types'
-import { nativeChatProseToMarkdown } from './native-chat/transcript/row-content/native-chat-prose'
 
 type ShownMessage = {
   role: string
@@ -26,8 +25,9 @@ export function connectorMessageShown(
     return { blocks }
   }
   let changed = false
-  const markdown = drawMarkdown ? new Map<NativeChatBlock, NativeChatBlock>() : undefined
+  let drawnMarkdown: string | undefined
   const own = blocks.findLastIndex((block) => block.type === 'text')
+  const singleText = own === blocks.findIndex((block) => block.type === 'text')
   const projected = blocks.map((block, index) => {
     if (block.type !== 'text') {
       return block
@@ -43,8 +43,8 @@ export function connectorMessageShown(
     const words = author ? `${author}\n\n${shown}` : shown
     const slack = asker?.source === 'slack' ? slackMarkupShownText(words) : null
     const shownBlock = { ...block, text: slack?.text ?? words }
-    if (markdown && slack) {
-      markdown.set(shownBlock, { ...block, text: slack.markdown })
+    if (drawMarkdown && singleText && slack) {
+      drawnMarkdown = slack.markdown
     }
     return shownBlock
   })
@@ -53,13 +53,7 @@ export function connectorMessageShown(
   }
   return {
     blocks: projected,
-    ...(markdown?.size
-      ? {
-          drawnMarkdown: nativeChatProseToMarkdown(
-            projected.map((block) => markdown.get(block) ?? block)
-          )
-        }
-      : {})
+    ...(drawnMarkdown === undefined ? {} : { drawnMarkdown })
   }
 }
 

@@ -40,7 +40,7 @@ describe('connectorAskerImages', () => {
       }
     }))
     const get = connectorAskerImages({
-      read,
+      reader: () => read,
       store: async (name) => `/attachments/${name}`,
       fetch: async () => new Response(new Uint8Array(PNG))
     })
@@ -89,7 +89,7 @@ describe('connectorAskerImages', () => {
       }
     }))
     const get = connectorAskerImages({
-      read,
+      reader: () => read,
       store: async (name) => `/attachments/${name}`,
       fetch: async () => new Response(new Uint8Array(PNG))
     })
@@ -143,7 +143,7 @@ describe('connectorAskerImages', () => {
       }
     }))
     const get = connectorAskerImages({
-      read,
+      reader: () => read,
       store: async (name) => `/attachments/${name}`,
       fetch: async () => new Response(new Uint8Array(PNG))
     })
@@ -186,7 +186,7 @@ describe('connectorAskerImages', () => {
     let cancelled = false
     const store = vi.fn(async () => '/attachments/image.png')
     const get = connectorAskerImages({
-      read: async () => ({
+      reader: () => async () => ({
         ok: true,
         value: {
           ok: true,
@@ -229,7 +229,10 @@ describe('connectorAskerImages', () => {
     const readingBudget = Promise.withResolvers<void>()
     const abort = new AbortController()
     const read = vi.fn(async () => null)
-    const get = connectorAskerImages({ read, store: async () => '/attachments/image.png' })
+    const get = connectorAskerImages({
+      reader: () => read,
+      store: async () => '/attachments/image.png'
+    })
     const staged = get({
       botId: 'bot-1',
       conversation,
