@@ -37,19 +37,29 @@ function copyWebClientChatReadMarksForPatch(
   verdict: HostSessionMirrorPatchVerdict,
   affectedWorkspaces: readonly string[]
 ): AppState | Partial<AppState> {
-  const complete =
-    verdict.fullInventory !== undefined &&
-    verdict.frames.filter(
-      ({ source, worktreeId }) => source !== undefined && isHostMirroredWorktree(worktreeId)
-    ).length === verdict.fullInventory.publishedSnapshotCount
-  const workspaceIds = complete
-    ? verdict.frames.map(({ worktreeId }) => worktreeId)
+  const fullInventoryWorkspaceIds = verdict.fullInventory?.mirroredWorkspaceIds
+  const workspaceIds = fullInventoryWorkspaceIds
+    ? verdict.frames
+        .filter(
+          ({ decision, source, worktreeId }) =>
+            decision.apply && source !== undefined && isHostMirroredWorktree(worktreeId)
+        )
+        .map(({ worktreeId }) => worktreeId)
     : affectedWorkspaces
+  const nextTabs = patch.unifiedTabsByWorktree ?? state.unifiedTabsByWorktree
+  if (
+    fullInventoryWorkspaceIds === undefined &&
+    workspaceIds.every(
+      (workspaceId) => nextTabs[workspaceId] === state.unifiedTabsByWorktree[workspaceId]
+    )
+  ) {
+    return patch
+  }
   const copied = copyWebClientChatReadMarksForTabLists(
     state,
-    () => patch.unifiedTabsByWorktree ?? state.unifiedTabsByWorktree,
+    () => nextTabs,
     workspaceIds,
-    complete
+    fullInventoryWorkspaceIds
   )
   return copied ? { ...(patch === state ? {} : patch), ...copied } : patch
 }

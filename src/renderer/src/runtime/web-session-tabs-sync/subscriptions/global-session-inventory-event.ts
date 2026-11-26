@@ -160,7 +160,10 @@ export function handleGlobalSessionInventoryEvent({
             expectedTrackingGeneration,
             publishedSnapshotCount: event.snapshots.filter((snapshot) =>
               isHostMirroredWorktree(snapshot.worktree)
-            ).length
+            ).length,
+            mirroredWorkspaceIds: event.snapshots
+              .filter((snapshot) => isHostMirroredWorktree(snapshot.worktree))
+              .map((snapshot) => snapshot.worktree)
           }
         },
         freshSnapshots

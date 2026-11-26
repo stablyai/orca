@@ -168,7 +168,10 @@ export function loadInitialWebSessionTabs({
                   // Workspaces the mirror never writes contribute no evidence to the environment-wide verdict.
                   publishedSnapshotCount: result.snapshots.filter((snapshot) =>
                     isHostMirroredWorktree(snapshot.worktree)
-                  ).length
+                  ).length,
+                  mirroredWorkspaceIds: result.snapshots
+                    .filter((snapshot) => isHostMirroredWorktree(snapshot.worktree))
+                    .map((snapshot) => snapshot.worktree)
                 }
               }
             : {})

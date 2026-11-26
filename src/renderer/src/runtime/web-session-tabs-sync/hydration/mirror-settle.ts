@@ -27,6 +27,7 @@ export type HostSessionMirrorPatchVerdict = {
   fullInventory?: {
     environmentId: string
     publishedSnapshotCount: number
+    mirroredWorkspaceIds?: readonly string[]
     authoritative?: boolean
     expectedEnvironmentConnectionGeneration?: number
     expectedEnvironmentPairingRevision?: number
