@@ -77,7 +77,3 @@ export async function getCanonicalRepoKey(
   }
   return remember(cacheKey, { key: cacheKey })
 }
-
-export function _resetCanonicalRepoKeyCacheForTests(): void {
-  cache.clear()
-}

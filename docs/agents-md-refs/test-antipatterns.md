@@ -1,5 +1,7 @@
 # Test anti-patterns
 
+Default to no test: prove a change by running it. The suite is deliberately small (security, wire formats, data integrity, concurrency invariants, a few golden E2E journeys); keep it that way.
+
 Keep a test only if it fails when your change is reverted, its expected values are hardcoded (not computed by production code), it lives at the one cheapest layer that owns the behavior, and its size matches the change (a one-line fix gets about one case).
 
 Tests that:

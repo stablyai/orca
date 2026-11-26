@@ -19,6 +19,7 @@ import { recomputeOn } from './recompute-on'
 import { openBotHostPageOrSay } from './bot-host-page'
 import { refreshBotHost } from './bot-host-refresh'
 import { onBotsChanged } from './bots-changed-window-event'
+import { botHostGeneration, onBotHostCameBack } from './bot-host-link-read'
 
 /** The host's sign-in from this window: none, its page waiting on approval, or why it stopped. */
 export type BotHostSignInView =
@@ -69,25 +70,52 @@ function subscribe(listener: () => void): () => void {
 /** Reads the host's sign-in again; an older Orca without `orcaAccount.status` reads as unknown. */
 export function refreshBotHostOrcaAccount(hostId: ExecutionHostId): Promise<void> {
   const entry = entryOf(hostId)
-  entry.reading ??= callRuntimeRpc<OrcaAccountServerStatus>(
+  if (entry.reading) {
+    return entry.reading
+  }
+  // A read sent before the host came back answers for a host that may have changed: dropped.
+  const generation = botHostGeneration(hostId)
+  const current = (): boolean => botHostGeneration(hostId) === generation
+  const reading: Promise<void> = callRuntimeRpc<OrcaAccountServerStatus>(
     botHostTarget(hostId),
     'orcaAccount.status'
   )
     .then(
       (status) => {
-        entry.status = status
+        if (current()) {
+          entry.status = status
+        }
       },
       () => {
-        entry.status = null
+        if (current()) {
+          entry.status = null
+        }
       }
     )
     .finally(() => {
+      if (!current()) {
+        return
+      }
       entry.reading = null
       entry.settled = true
       notify()
     })
+  entry.reading = reading
+  // A view that must not act on the last read waits for this one.
+  notify()
   return entry.reading
 }
+
+// Back from away: its last read is unproven until one sent since lands, and one still out is dropped.
+onBotHostCameBack((hostId) => {
+  const entry = hosts.get(hostId)
+  if (!entry) {
+    return
+  }
+  entry.reading = null
+  entry.settled = false
+  notify()
+})
 
 /** The host's Orca sign-in, read when shown and again when its bots change (a sign-in change re-lists them). */
 export function useBotHostOrcaAccount(hostId: ExecutionHostId): OrcaAccountServerStatus | null {
@@ -99,6 +127,11 @@ export function useBotHostOrcaAccount(hostId: ExecutionHostId): OrcaAccountServe
     })
   }, [hostId])
   return status
+}
+
+/** Whether a read of the host's sign-in is under way: until it lands, the last read may be stale. */
+export function useBotHostOrcaAccountReading(hostId: ExecutionHostId): boolean {
+  return useSyncExternalStore(subscribe, () => hosts.get(hostId)?.reading != null)
 }
 
 /** Whether the host's sign-in has been read at least once; before that its status is null for want of a read. */
@@ -136,16 +169,19 @@ function setSignIn(hostId: ExecutionHostId, view: BotHostSignInView): void {
 /**
  * "Sign <server> in to Orca" / "Sign <server> in again": any account; Orca Cloud's page warns
  * before it moves the host to another one. `bot` lends its workspace for the host's page.
+ * A host that is still signed in locally is re-authenticated with switch. A plain start is
+ * refused while one is signed in.
  */
 export async function startBotHostSignIn(hostId: ExecutionHostId, bot?: BotRef): Promise<void> {
   const entry = entryOf(hostId)
+  const switchAccount = entry.status?.state === 'signed-in'
   setSignIn(hostId, { phase: 'starting' })
   let flow: OrcaAccountSignInStatus
   try {
     flow = await callRuntimeRpc<OrcaAccountSignInStatus>(
       botHostTarget(hostId),
       'orcaAccount.signIn.start',
-      { approveInBrowser: true, switchAccount: false }
+      { approveInBrowser: true, switchAccount }
     )
   } catch (error) {
     setSignIn(hostId, { phase: 'failed', error: messageOf(error) })

@@ -55,3 +55,23 @@ export function sessionTabUnreadMarks(
         .join('\n')
     : ''
 }
+
+const paneKeysBySnapshot = new WeakMap<RuntimeMobileSessionTabsResult, ReadonlySet<string>>()
+
+/** Whether a frame shows any of these panes; verdict changes elsewhere cannot move its marks. */
+export function sessionTabsShowAnyPane(
+  snapshot: RuntimeMobileSessionTabsResult,
+  paneKeys: ReadonlySet<string>
+): boolean {
+  let shown = paneKeysBySnapshot.get(snapshot)
+  if (!shown) {
+    shown = new Set(snapshot.tabs.flatMap((tab) => sessionTabPaneKey(tab) ?? []))
+    paneKeysBySnapshot.set(snapshot, shown)
+  }
+  for (const paneKey of paneKeys) {
+    if (shown.has(paneKey)) {
+      return true
+    }
+  }
+  return false
+}

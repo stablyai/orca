@@ -35,6 +35,7 @@ export type DaemonHelloOutcome = {
   streamFraming: DaemonStreamFraming
   /** Null for a daemon that predates reporting it, whose emulators resize as xterm does. */
   resizeModel: string | null
+  visibleProjectionSnapshots: boolean
   /** Preserve bytes after hello for the next reader, including partial binary frames. */
   remainder: Buffer
 }
@@ -114,7 +115,14 @@ export function sendDaemonHello(request: DaemonHelloRequest): Promise<DaemonHell
             typeof response.resizeModel === 'string' && response.resizeModel.length > 0
               ? response.resizeModel
               : null
-          finish(undefined, { identity, streamFraming, resizeModel, remainder })
+          finish(undefined, {
+            identity,
+            streamFraming,
+            resizeModel,
+            visibleProjectionSnapshots:
+              role === 'control' && response.visibleProjectionSnapshots === true,
+            remainder
+          })
         } else {
           finish(
             new DaemonProtocolError(addNodePtyRecoveryHint(response.error ?? 'Hello rejected'))

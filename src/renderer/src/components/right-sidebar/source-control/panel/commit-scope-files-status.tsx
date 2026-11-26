@@ -1,0 +1,56 @@
+import type React from 'react'
+import { Button } from '@/components/ui/button'
+import { useTranslate } from '@/i18n/use-translate'
+import type { SourceControlCommitScopeFiles } from './change-scope'
+
+export function CommitScopeFilesStatus({
+  files,
+  onRetry
+}: {
+  files: SourceControlCommitScopeFiles | null
+  onRetry: (button: HTMLButtonElement) => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  if (!files || files.status === 'loading') {
+    return <div className="h-6" aria-busy="true" />
+  }
+  if (files.status === 'error' || files.status === 'retrying') {
+    const retrying = files.status === 'retrying'
+    return (
+      <div
+        className="flex items-center justify-between gap-2 px-4 py-2 text-xs text-muted-foreground"
+        aria-busy={retrying || undefined}
+      >
+        <span title={files.status === 'error' ? files.error : undefined}>
+          {retrying
+            ? t('auto.components.right.sidebar.SourceControl.scopeLoadingFiles', 'Loading files…')
+            : t(
+                'auto.components.right.sidebar.SourceControl.scopeFilesFailed',
+                "Couldn't load files."
+              )}
+        </span>
+        <Button
+          type="button"
+          variant="link"
+          size="inlineText"
+          aria-disabled={retrying || undefined}
+          onClick={(event) => {
+            if (!retrying) {
+              onRetry(event.currentTarget)
+            }
+          }}
+        >
+          {t('auto.components.right.sidebar.SourceControl.scopeRetryCommits', 'Retry')}
+        </Button>
+      </div>
+    )
+  }
+  return (
+    <div className="px-4 py-2 text-xs text-muted-foreground">
+      {t(
+        'auto.components.right.sidebar.GitHistoryCommitFiles.b2c3d4e5f6',
+        'No file changes in this commit'
+      )}
+    </div>
+  )
+}

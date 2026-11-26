@@ -39,6 +39,7 @@ export function codexSessionCapabilities(
   model = session.appliedTurnOptions?.model
 ): ReturnType<typeof structuredAgentSessionCapabilityView> {
   return structuredAgentSessionCapabilityView(
+    'codex',
     codexAcquireCatalogListing(session.catalogAccess) ?? { origin: 'unknown' },
     model
   )

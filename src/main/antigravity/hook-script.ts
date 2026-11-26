@@ -6,6 +6,10 @@ import {
   buildPosixHookSpoolLines,
   buildWindowsHookEnvironmentGuardLines
 } from '../agent-hooks/installation/scripts/hook-stdin-contract'
+import { WINDOWS_NATIVE_HOOK_EXECUTABLE_NAME } from '../agent-hooks/installation/commands/windows-native-hook-executable'
+
+// Matches ANTIGRAVITY_HANDLED_EXIT_CODE in native/windows-agent-hook/src/main.rs.
+const ANTIGRAVITY_NATIVE_HANDLED_EXIT_CODE = 17
 
 export function getManagedScript(
   target: 'local' | 'posix' = 'local',
@@ -23,6 +27,15 @@ export function getManagedScript(
       ')',
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
+      // The native reader skips an Electron start, whose cost under load hit agy's 10 s kill (#41298).
+      // Drop its stdout: an older copy prints {}, which agy reads as deny. Only the handled code
+      // proves this build read stdin; an older copy (0) or a failed start falls back to Node, and a
+      // crash (negative NTSTATUS) may have consumed stdin, so it skips a duplicate post.
+      `if exist "%~dp0${WINDOWS_NATIVE_HOOK_EXECUTABLE_NAME}" (`,
+      `  "%~dp0${WINDOWS_NATIVE_HOOK_EXECUTABLE_NAME}" antigravity >nul 2>nul`,
+      `  if errorlevel ${ANTIGRAVITY_NATIVE_HANDLED_EXIT_CODE} if not errorlevel ${ANTIGRAVITY_NATIVE_HANDLED_EXIT_CODE + 1} exit /b 0`,
+      '  if not errorlevel 0 exit /b 0',
+      ')',
       'set "ELECTRON_RUN_AS_NODE=1"',
       `if not defined ORCA_AGENT_HOOK_NODE set "ORCA_AGENT_HOOK_NODE=${windowsRuntimePath.replaceAll('%', '%%')}"`,
       '"%ORCA_AGENT_HOOK_NODE%" "%~dp0antigravity-hook-post.cjs" >nul 2>nul',

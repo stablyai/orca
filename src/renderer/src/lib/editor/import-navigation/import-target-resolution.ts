@@ -19,10 +19,10 @@ export type ImportNavigationTarget = {
 
 type ModuleFile = { filePath: string; content: string }
 
-type ExportSearch = { remainingFiles: number; visited: Set<string> }
+type ExportSearch = { remainingLookups: number; visited: Set<string> }
 
-// Bounds barrel chains so a cyclic or huge re-export graph cannot stall a click.
-const MAX_FOLLOWED_FILES = 24
+// Bounds barrel chains so a cyclic, huge or broken re-export graph cannot stall a click.
+const MAX_MODULE_LOOKUPS = 24
 
 async function resolveModuleFile(
   access: ImportNavigationFileAccess,
@@ -30,8 +30,8 @@ async function resolveModuleFile(
   rootPath: string,
   rawSpecifier: string
 ): Promise<ModuleFile | null> {
-  // Why: bundler suffixes such as `?raw` or `?worker` name the same file.
-  const specifier = rawSpecifier.replace(/[?#].*$/, '')
+  // Why: bundler suffixes such as `?raw` or `?worker` name the same file; a leading `#` is an alias.
+  const specifier = rawSpecifier.replace(/(?!^)[?#].*$/, '')
   const modulePaths = isRelativeModuleSpecifier(specifier)
     ? [resolveModulePath(dirname(fromFilePath), specifier)]
     : mappedModulePaths(specifier, await loadImportPathMappings(access, fromFilePath, rootPath))
@@ -55,6 +55,21 @@ async function resolveModuleFile(
   return null
 }
 
+function resolveReexportTarget(
+  access: ImportNavigationFileAccess,
+  rootPath: string,
+  module: ModuleFile,
+  specifier: string,
+  search: ExportSearch
+): Promise<ModuleFile | null> {
+  // Why: every lookup is a host round trip, so a missing barrel target spends the budget too.
+  if (search.remainingLookups <= 0) {
+    return Promise.resolve(null)
+  }
+  search.remainingLookups -= 1
+  return resolveModuleFile(access, module.filePath, rootPath, specifier)
+}
+
 async function followExport(
   access: ImportNavigationFileAccess,
   rootPath: string,
@@ -63,20 +78,16 @@ async function followExport(
   search: ExportSearch
 ): Promise<ImportNavigationTarget | null> {
   const key = `${module.filePath}\0${name}`
-  if (search.visited.has(key) || search.remainingFiles <= 0) {
+  if (search.visited.has(key)) {
     return null
   }
   search.visited.add(key)
-  search.remainingFiles -= 1
   const location = locateExportedName(module.content, name)
   if (location?.kind === 'declaration') {
     return { ...module, offset: location.offset }
   }
   if (location?.kind === 'reexport') {
-    const next =
-      search.remainingFiles > 0
-        ? await resolveModuleFile(access, module.filePath, rootPath, location.specifier)
-        : null
+    const next = await resolveReexportTarget(access, rootPath, module, location.specifier, search)
     if (!next) {
       return null
     }
@@ -85,11 +96,7 @@ async function followExport(
       : followExport(access, rootPath, next, location.name, search)
   }
   for (const specifier of starExportSpecifiers(module.content)) {
-    // Why: stop before reading another barrel target once the file budget is spent.
-    if (search.remainingFiles <= 0) {
-      return null
-    }
-    const next = await resolveModuleFile(access, module.filePath, rootPath, specifier)
+    const next = await resolveReexportTarget(access, rootPath, module, specifier, search)
     const found = next ? await followExport(access, rootPath, next, name, search) : null
     if (found) {
       return found
@@ -116,7 +123,7 @@ export async function resolveImportNavigationTarget(
     return { ...module, offset: 0 }
   }
   const found = await followExport(access, params.rootPath, module, params.importedName, {
-    remainingFiles: MAX_FOLLOWED_FILES,
+    remainingLookups: MAX_MODULE_LOOKUPS,
     visited: new Set()
   })
   // Why: an export the scanner cannot see still opens the module the import names.

@@ -239,8 +239,5 @@ export const queuedMessageStyles = themedStyleSheet(() => ({
   },
   litActionLabel: {
     color: colors.bgBase
-  },
-  disabled: {
-    opacity: 0.5
   }
 }))

@@ -3,7 +3,7 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { chmod, lstat, mkdir, rename, rm, statfs } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import {
   excerptAgentFailureOutput,
   sanitizeAgentFailureDetail,
@@ -43,6 +43,9 @@ export type RuntimeReleaseInstall = {
   root: string
   pin: ManagedRuntimePin
   fetcher?: MainHttpClient['fetch']
+  /** An install nobody asked for: it keeps this much free instead of the usual margin, and doesn't
+   *  start when free space can't be read. */
+  automaticFreeSpaceMarginBytes?: number
   signal: AbortSignal
   publish: (patch: Partial<ManagedRuntimeOperation>) => void
   /** Mark committed immediately after publication, before fallible cleanup. */
@@ -87,15 +90,13 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
     console.warn(`[managed-runtime] ${agent} free space unknown; not checked:`, error)
   })
   // A single-file release is renamed into place, so it never needs room for two copies.
-  const needed = !('members' in pin)
-    ? pin.archiveBytes * (1 + UNPACKED_RATIO)
-    : pin.format === 'file'
+  const needed =
+    pin.format === 'file'
       ? pin.archiveBytes
-      : pin.members.reduce((sum, m) => sum + m.bytes, pin.archiveBytes)
-  if (space && space.bavail * space.bsize < needed + FREE_SPACE_MARGIN_BYTES) {
-    const megabytes = Math.ceil((needed + FREE_SPACE_MARGIN_BYTES) / 1024 ** 2)
-    throw new Error(`${label} needs ${megabytes} MB of free disk space to install.`)
-  }
+      : !('members' in pin)
+        ? pin.archiveBytes * (1 + UNPACKED_RATIO)
+        : pin.members.reduce((sum, m) => sum + m.bytes, pin.archiveBytes)
+  assertFreeSpace(label, space ? space.bavail * space.bsize : null, needed, input)
   const staging = join(root, `.download-${process.pid}-${randomUUID()}`)
   const release = join(staging, 'release')
   try {
@@ -106,7 +107,9 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
       {
         label,
         url: pin.url,
-        archiveSha256: pin.archiveSha256,
+        ...('archiveSha512' in pin
+          ? { archiveSha512: pin.archiveSha512 }
+          : { archiveSha256: pin.archiveSha256 }),
         maxArchiveBytes: pin.archiveBytes
       },
       archive,
@@ -119,22 +122,32 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
           publish({ downloadedBytes: bytes })
         }
       }
-    ).catch((error: unknown) => {
+    ).catch(async (error: unknown) => {
       if (signal.aborted) {
         throw error
       }
       console.warn(`[managed-runtime] ${agent} download failed:`, error)
-      throw new Error(downloadFailureMessage(label, error), { cause: error })
+      // Only a whole archive whose hash differs shows the release itself isn't the pinned one; a
+      // portal page, a proxy's error or a cut-off body is another size and may pass next time.
+      const whole =
+        isChecksumMismatch(error) &&
+        (await lstat(archive).then(
+          (file) => file.size === pin.archiveBytes,
+          () => false
+        ))
+      const Failure = whole ? ArchiveHashMismatchError : Error
+      throw new Failure(downloadFailureMessage(label, error), { cause: error })
     })
     publish({ phase: 'extracting', downloadedBytes: pin.archiveBytes })
-    await (!('members' in pin)
-      ? extractWholeArchive(archive, release, label, signal)
-      : pin.format === 'file'
-        ? rename(archive, join(release, onlyMember(pin.members).path))
+    await (pin.format === 'file'
+      ? placeOnlyFile(archive, release, 'members' in pin ? pin.members : pin.executables)
+      : !('members' in pin)
+        ? extractWholeArchive(archive, release, label, signal)
         : extractPinnedZipMembers(archive, release, pin.members, label, signal))
     publish({ phase: 'verifying' })
-    await verifyMembers(release, pin, label, signal)
+    // Before the check, so a command prepare unpacks is checked like a downloaded one.
     await input.runtime.prepare?.(release, pin)
+    await verifyMembers(release, pin, label, signal)
     await validate(input, release)
     await writeRuntimeReleaseReceipt(release, pin)
     signal.throwIfAborted()
@@ -148,14 +161,19 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
   }
 }
 
-function onlyMember(members: readonly ManagedRuntimeMember[]): ManagedRuntimeMember {
-  const [member, ...rest] = members
-  if (!member || rest.length > 0 || member.path.includes('/')) {
-    throw new Error(
-      `A single-file release needs exactly one top-level member, not ${members.length}.`
-    )
+async function placeOnlyFile(
+  archive: string,
+  release: string,
+  files: readonly (ManagedRuntimeMember | string)[]
+): Promise<void> {
+  const [file, ...rest] = files
+  const segments = (typeof file === 'string' ? file : file?.path)?.split('/') ?? []
+  if (!file || rest.length > 0 || segments.some((s) => !s || s === '.' || s === '..')) {
+    throw new Error(`A single-file release needs exactly one member, not ${files.length}.`)
   }
-  return member
+  const path = join(release, ...segments)
+  await mkdir(dirname(path), { recursive: true })
+  await rename(archive, path)
 }
 
 async function extractWholeArchive(
@@ -180,6 +198,57 @@ async function extractWholeArchive(
   await rm(archive, { force: true })
 }
 
+const megabytes = (bytes: number): number => Math.ceil(bytes / 1024 ** 2)
+
+function assertFreeSpace(
+  label: string,
+  available: number | null,
+  needed: number,
+  { automaticFreeSpaceMarginBytes: automaticMargin }: RuntimeReleaseInstall
+): void {
+  const manual = needed + FREE_SPACE_MARGIN_BYTES
+  if (automaticMargin === undefined) {
+    if (available !== null && available < manual) {
+      throw new Error(`${label} needs ${megabytes(manual)} MB of free disk space to install.`)
+    }
+    return
+  }
+  if (available === null) {
+    throw new Error(
+      `Orca couldn't read this host's free disk space, so it didn't update ${label} by itself. Update installs it.`
+    )
+  }
+  const automatic = needed + automaticMargin
+  if (available < automatic) {
+    throw new Error(
+      `Orca updates ${label} by itself only with ${megabytes(automatic)} MB free, and this host has ${megabytes(available)} MB. Update needs ${megabytes(manual)} MB.`
+    )
+  }
+}
+
+/** The whole archive downloaded and its hash isn't the pinned one: the release itself differs. */
+class ArchiveHashMismatchError extends Error {}
+
+/** The downloaded release ran in its check and refused to start, or answered as another version. */
+class RuntimeStartRefusedError extends Error {
+  constructor(
+    message: string,
+    options: ErrorOptions,
+    readonly ranAndRefused: boolean
+  ) {
+    super(message, options)
+  }
+}
+
+/** A failure that recurs on every attempt: the whole archive isn't the pinned one, or the release
+ *  ran and refused to start on this host. Timeouts, disk, network, HTTP and odd-sized bodies may pass. */
+export function isFinalInstallFailure(error: unknown): boolean {
+  return (
+    error instanceof ArchiveHashMismatchError ||
+    (error instanceof RuntimeStartRefusedError && error.ranAndRefused)
+  )
+}
+
 export function installFailureText(label: string, error: unknown, deadline: AbortSignal): string {
   const message = error instanceof Error ? error.message : String(error)
   if (deadline.aborted) {
@@ -200,9 +269,12 @@ async function validate(input: RuntimeReleaseInstall, folder: string): Promise<v
     signal.throwIfAborted()
     console.warn(`[managed-runtime] ${input.agent} did not start from ${folder}:`, error)
     const observed = error instanceof ManagedRuntimeStartError ? error.failure : null
-    throw new Error(
+    throw new RuntimeStartRefusedError(
       `${runtime.label} couldn't start on this host, so it wasn't installed. This host may not support it.${observed ? ` ${startFailureText(observed)}` : ''}`,
-      { cause: error }
+      { cause: error },
+      // It ran: it answered as another version, or a process started and exited on its own.
+      observed?.kind === 'version' ||
+        (observed?.kind === 'exit' && !observed.exit.processless && !observed.exit.outcomeLost)
     )
   })
 }

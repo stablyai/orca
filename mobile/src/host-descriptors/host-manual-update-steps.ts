@@ -17,17 +17,11 @@ export function hostManualUpdateSteps(
   if (support.reason === 'manual-service-update-required') {
     return t(
       'host.edit.updateStepsServiceManager',
-      "This server can't update itself. Update Orca on it with its package manager if it came from a .deb or .rpm, otherwise through the service manager that starts it."
+      'Update it with its package manager or service manager.'
     )
   }
   if (support.reason === 'unpackaged-build') {
-    return t(
-      'host.edit.updateStepsSourceCheckout',
-      'This is a development build. Update it from its source checkout.'
-    )
+    return t('host.edit.updateStepsSourceCheckout', 'Update it from its source checkout.')
   }
-  return t(
-    'host.edit.updateStepsServer',
-    "This server can't update itself. Update Orca on the server computer, then restart the server."
-  )
+  return t('host.edit.updateStepsServer', 'Update Orca on the server, then restart it.')
 }

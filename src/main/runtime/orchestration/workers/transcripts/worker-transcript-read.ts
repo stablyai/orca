@@ -10,6 +10,7 @@ import {
 import { decodeClaudeTranscriptLine } from '../../../../native-chat/transcript-decoding/transcript-line-decoders-claude'
 import {
   boundWorkerTranscriptMessages,
+  boundWorkerTranscriptNewest,
   clampWorkerTranscriptLimit
 } from './worker-transcript-payload'
 import {
@@ -106,6 +107,8 @@ async function readResolvedWorkerTranscript(
   >
 ): Promise<WorkerTranscriptReadResult> {
   try {
+    // The bound that decided where a forward page stops is the page's own: computed once.
+    let forwardBound: ReturnType<typeof boundWorkerTranscriptMessages> | undefined
     const page =
       args.offset === undefined
         ? await readInitialLocalWorkerTranscriptPage(
@@ -119,7 +122,9 @@ async function readResolvedWorkerTranscript(
             args.offset,
             limit,
             decode,
-            args.expectedBoundaryCheckpoint
+            args.expectedBoundaryCheckpoint,
+            (messages) =>
+              (forwardBound = boundWorkerTranscriptMessages(messages, filePath)).messages.length
           )
     if (!page.ok) {
       return page
@@ -130,10 +135,18 @@ async function readResolvedWorkerTranscript(
     ) {
       return { ok: false, reason: 'source_changed', warnings: [] }
     }
-    const bounded = boundWorkerTranscriptMessages(page.messages, filePath)
+    const bounded =
+      args.offset === undefined
+        ? boundWorkerTranscriptNewest(page.messages, filePath)
+        : (forwardBound ?? boundWorkerTranscriptMessages(page.messages, filePath))
+    // A newest-first bound drops the page's oldest messages, which shifts the reply's index.
+    const dropped = page.messages.length - bounded.messages.length
+    const replyIndex = (page.turn?.replyIndex ?? -1) - dropped
     const turn =
-      page.turn?.state === 'completed' && !bounded.messages[page.turn.replyIndex ?? -1]
-        ? undefined
+      page.turn?.state === 'completed'
+        ? replyIndex >= 0
+          ? { ...page.turn, replyIndex }
+          : undefined
         : page.turn
     return {
       ok: true,

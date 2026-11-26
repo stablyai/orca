@@ -185,7 +185,7 @@ const terminalReadResult = z.object({
   truncated: z.boolean()
 })
 
-/** An agent Orca knows: `claude`, `codex`, `gemini`, ... */
+/** An agent Orca knows: `claude`, `codex`, `antigravity`, ... */
 export const pluginAgentSchema = z.string().min(1).max(64).refine(isTuiAgent, 'unknown agent')
 
 const agentLaunchParams = z.strictObject({

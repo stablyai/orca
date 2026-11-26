@@ -1,7 +1,8 @@
 import { parseAgentHookJson } from './request-body'
 import {
   readLastAssistantFromTranscriptOnce,
-  readLastTextFromTranscriptOnce
+  readLastTextFromTranscriptOnce,
+  type AssistantTranscriptFormat
 } from './transcript-reader'
 
 export function extractAntigravityUserRequest(content: string): string | undefined {
@@ -57,18 +58,24 @@ export function withStopTranscriptReadsSkipped<T>(normalize: () => T): {
 }
 
 /** Stop-text fallback when the hook carries none; skipped inside withStopTranscriptReadsSkipped. */
-export function readLastAssistantFromTranscript(transcriptPath: unknown): string | undefined {
+export function readLastAssistantFromTranscript(
+  transcriptPath: unknown,
+  format: AssistantTranscriptFormat = 'shared'
+): string | undefined {
   if (skippedStopTranscripts && typeof transcriptPath === 'string' && transcriptPath.length > 0) {
     skippedStopTranscripts.push(transcriptPath)
     return undefined
   }
-  return readLastAssistantFromTranscriptInline(transcriptPath)
+  return readLastAssistantFromTranscriptInline(transcriptPath, format)
 }
 
 /** Always reads now; for fallbacks whose order against other sources must not change. */
-export function readLastAssistantFromTranscriptInline(transcriptPath: unknown): string | undefined {
+export function readLastAssistantFromTranscriptInline(
+  transcriptPath: unknown,
+  format: AssistantTranscriptFormat = 'shared'
+): string | undefined {
   return typeof transcriptPath === 'string' && transcriptPath.length > 0
-    ? readLastAssistantFromTranscriptOnce(transcriptPath)
+    ? readLastAssistantFromTranscriptOnce(transcriptPath, format)
     : undefined
 }
 

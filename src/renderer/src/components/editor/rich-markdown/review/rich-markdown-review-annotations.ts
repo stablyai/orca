@@ -17,10 +17,6 @@ import {
 const RICH_MARKDOWN_ANNOTATION_BUTTON_SIZE_PX = 24
 const RICH_MARKDOWN_ANNOTATION_EDGE_PADDING_PX = 8
 const RICH_MARKDOWN_ANNOTATION_SELECTION_GAP_PX = 8
-const RICH_MARKDOWN_ANNOTATION_MIN_LEFT_PX = 56
-const RICH_MARKDOWN_ANNOTATION_RIGHT_OFFSET_PX = 42
-const RICH_MARKDOWN_ANNOTATION_POPOVER_WIDTH_PX = 420
-const RICH_MARKDOWN_ANNOTATION_POPOVER_RIGHT_OFFSET_PX = 24
 const RICH_MARKDOWN_ANNOTATION_POPOVER_MIN_HEIGHT_PX = 220
 
 export type RichMarkdownComposerState = {
@@ -33,9 +29,7 @@ export type RichMarkdownAnnotationTarget = RichMarkdownComposerState & {
   to: number
   selectedText: string
   top: number
-  left?: number
   buttonTop: number
-  buttonLeft: number
 }
 
 export function clampRichMarkdownAnnotationTarget(
@@ -212,18 +206,6 @@ export function getRichMarkdownAnnotationButtonTop(
   return Math.max(RICH_MARKDOWN_ANNOTATION_EDGE_PADDING_PX, Math.min(preferredTop, maxTop))
 }
 
-export function getRichMarkdownAnnotationButtonLeft(rootWidth: number): number {
-  const preferredLeft = Math.max(
-    RICH_MARKDOWN_ANNOTATION_MIN_LEFT_PX,
-    rootWidth - RICH_MARKDOWN_ANNOTATION_RIGHT_OFFSET_PX
-  )
-  const maxLeft = Math.max(
-    RICH_MARKDOWN_ANNOTATION_EDGE_PADDING_PX,
-    rootWidth - RICH_MARKDOWN_ANNOTATION_BUTTON_SIZE_PX - RICH_MARKDOWN_ANNOTATION_EDGE_PADDING_PX
-  )
-  return Math.min(preferredLeft, maxLeft)
-}
-
 export function getRichMarkdownAnnotationTarget(
   editor: Editor,
   root: HTMLElement
@@ -242,16 +224,11 @@ export function getRichMarkdownAnnotationTarget(
   const rootRect = root.getBoundingClientRect()
   // Clamp the add-note button to the visible shell when long selections extend below it.
   const buttonTop = getRichMarkdownAnnotationButtonTop(rect.bottom - rootRect.top, rootRect.height)
-  const left = Math.max(
-    RICH_MARKDOWN_ANNOTATION_MIN_LEFT_PX,
-    rootRect.width -
-      RICH_MARKDOWN_ANNOTATION_POPOVER_WIDTH_PX -
-      RICH_MARKDOWN_ANNOTATION_POPOVER_RIGHT_OFFSET_PX
-  )
   const popoverTop = Math.max(
     RICH_MARKDOWN_ANNOTATION_EDGE_PADDING_PX,
     Math.min(
-      buttonTop + RICH_MARKDOWN_ANNOTATION_BUTTON_SIZE_PX + 6,
+      // Why: the draft sits in the rail beside the text, so align it with the selection's first line.
+      rect.top - rootRect.top,
       rootRect.height - RICH_MARKDOWN_ANNOTATION_POPOVER_MIN_HEIGHT_PX
     )
   )
@@ -261,8 +238,6 @@ export function getRichMarkdownAnnotationTarget(
     to: editor.state.selection.to,
     selectedText,
     top: popoverTop,
-    left,
-    buttonTop,
-    buttonLeft: getRichMarkdownAnnotationButtonLeft(rootRect.width)
+    buttonTop
   }
 }

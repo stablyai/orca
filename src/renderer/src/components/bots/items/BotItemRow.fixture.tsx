@@ -83,7 +83,7 @@ export const statusGlyphs = defineFixture({
   )
 })
 
-// A long title with its row focused: ✓ Done and ⋯ cover the title's end, which fades out under them.
+// A long title with its row focused: the actions fade over the title's end.
 export const actionsOverLongTitle = defineFixture({
   width: 420,
   render: () => (

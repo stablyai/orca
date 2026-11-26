@@ -1,6 +1,5 @@
-import { useTranslation } from 'react-i18next'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useIntlLocale } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useNowSnapshot } from '@/lib/window-activity/use-now'
 import { cn } from '@/lib/class-names'
 import {
@@ -11,7 +10,8 @@ import {
 /** The full spoken time a timestamp shows, for a control that names its row by words and time. */
 export function useNativeChatMessageTimeLabel(timestamp: number | null | undefined): string | null {
   const intlLocale = useIntlLocale()
-  const today = useNowSnapshot(30_000, getNativeChatMessageDay)
+  // A row with no time, such as waiting agent mail, keeps no clock running.
+  const today = useNowSnapshot(30_000, getNativeChatMessageDay, timestamp != null)
   if (timestamp === null || timestamp === undefined) {
     return null
   }
@@ -32,7 +32,7 @@ export function NativeChatMessageTimestamp({
 }): React.JSX.Element | null {
   const intlLocale = useIntlLocale()
   const today = useNowSnapshot(30_000, getNativeChatMessageDay)
-  useTranslation()
+  const t = useTranslate()
   if (timestamp === null) {
     return null
   }
@@ -56,7 +56,9 @@ export function NativeChatMessageTimestamp({
             className
           )}
         >
-          {formatter.format(date, today.date)}
+          {formatter.format(date, today.date, (time) =>
+            t('nativeChat.messageTime.yesterday', 'Yesterday {{time}}', { time })
+          )}
         </time>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>

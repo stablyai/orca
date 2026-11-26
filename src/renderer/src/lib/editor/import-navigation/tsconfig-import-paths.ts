@@ -1,5 +1,6 @@
 import { parse } from 'jsonc-parser'
 import { dirname, getRelativePathInsideRoot } from '@/lib/path'
+import { escapeRegex } from '../../../../../shared/text/regex-escaping'
 import type { ImportNavigationFileAccess } from './import-navigation-file-access'
 import {
   NO_IMPORT_PATH_MAPPINGS,
@@ -14,7 +15,13 @@ const MAX_EXTENDS_DEPTH = 4
 const MAX_REFERENCES = 8
 
 type ConfigPaths = { entries: Record<string, string[]>; originDir: string }
-type ConfigSources = { include: string[] | null; files: string[] | null; configDir: string }
+type ConfigSpecs = { specs: string[]; originDir: string }
+type ConfigSources = {
+  include: ConfigSpecs | null
+  exclude: ConfigSpecs | null
+  files: ConfigSpecs | null
+  configDir: string
+}
 
 type ConfigMappings = {
   baseUrl: string | null
@@ -28,6 +35,7 @@ type RawConfig = {
   baseUrl?: string
   paths?: Record<string, string[]>
   include?: string[]
+  exclude?: string[]
   files?: string[]
   references: string[]
 }
@@ -59,6 +67,7 @@ function parseConfig(text: string): RawConfig | null {
     baseUrl: typeof options.baseUrl === 'string' ? options.baseUrl : undefined,
     paths,
     include: Array.isArray(config.include) ? stringArray(config.include) : undefined,
+    exclude: Array.isArray(config.exclude) ? stringArray(config.exclude) : undefined,
     files: Array.isArray(config.files) ? stringArray(config.files) : undefined,
     references: references.flatMap((reference) =>
       isRecord(reference) && typeof reference.path === 'string' ? [reference.path] : []
@@ -87,7 +96,9 @@ async function loadConfigMappings(
   const configDir = dirname(configPath)
   let inheritedBaseUrl: string | null = null
   let inheritedPaths: ConfigPaths | null = null
-  let inheritedSources: ConfigSources | null = null
+  let inheritedInclude: ConfigSpecs | null = null
+  let inheritedExclude: ConfigSpecs | null = null
+  let inheritedFiles: ConfigSpecs | null = null
   if (depth < MAX_EXTENDS_DEPTH) {
     // Why: package-name bases (e.g. @tsconfig/node20) never define project aliases.
     for (const base of config.extends.filter(isPathLikeReference)) {
@@ -95,22 +106,26 @@ async function loadConfigMappings(
       const parent = await loadConfigMappings(access, basePath, depth + 1)
       inheritedBaseUrl = parent?.baseUrl ?? inheritedBaseUrl
       inheritedPaths = parent?.paths ?? inheritedPaths
-      inheritedSources =
-        parent && (parent.sources.include || parent.sources.files)
-          ? parent.sources
-          : inheritedSources
+      inheritedInclude = parent?.sources.include ?? inheritedInclude
+      inheritedExclude = parent?.sources.exclude ?? inheritedExclude
+      inheritedFiles = parent?.sources.files ?? inheritedFiles
     }
   }
-  const ownSources = config.include || config.files
+  // Why: TypeScript inherits `include`, `exclude` and `files` one by one, each relative to its config.
+  const ownSpecs = (specs: string[] | undefined): ConfigSpecs | null =>
+    specs ? { specs, originDir: configDir } : null
   return {
     baseUrl:
       config.baseUrl === undefined
         ? inheritedBaseUrl
         : resolveModulePath(configDir, config.baseUrl),
     paths: config.paths ? { entries: config.paths, originDir: configDir } : inheritedPaths,
-    sources: ownSources
-      ? { include: config.include ?? null, files: config.files ?? null, configDir }
-      : (inheritedSources ?? { include: null, files: null, configDir }),
+    sources: {
+      include: ownSpecs(config.include) ?? inheritedInclude,
+      exclude: ownSpecs(config.exclude) ?? inheritedExclude,
+      files: ownSpecs(config.files) ?? inheritedFiles,
+      configDir
+    },
     references: config.references.map((reference) => {
       const referencePath = resolveModulePath(configDir, reference)
       return referencePath.endsWith('.json')
@@ -152,17 +167,63 @@ function toMappings(config: ConfigMappings): ImportPathMappings | null {
   }
 }
 
-/** Whether a project's `include`/`files` (TypeScript's defaults when absent) can contain `filePath`. */
-function sourcesCover({ include, files, configDir }: ConfigSources, filePath: string): boolean {
-  if (files?.some((file) => resolveModulePath(configDir, file) === filePath)) {
+type SpecUsage = 'include' | 'exclude'
+
+/** TypeScript's wildcards: `**` spans directories, while `*` and `?` stay within one segment. */
+function wildcardSegmentsPattern(segments: string[], usage: SpecUsage): RegExp {
+  const source = segments.map((segment, index) => {
+    if (segment === '**') {
+      return '(?:[^/]+/)*'
+    }
+    const literal = segment
+      .split(/([*?])/)
+      .map((part) => (part === '*' ? '[^/]*' : part === '?' ? '[^/]' : escapeRegex(part)))
+      .join('')
+    return index < segments.length - 1 ? `${literal}/` : literal
+  })
+  // Why: an `exclude` entry also drops everything beneath the path it matches.
+  return new RegExp(`^${source.join('')}${usage === 'exclude' ? '(?:$|/)' : '$'}`)
+}
+
+/** Whether an `include` or `exclude` entry, already resolved against its config, names `filePath`. */
+function specMatches(resolvedSpec: string, filePath: string, usage: SpecUsage): boolean {
+  const trimmed = usage === 'exclude' ? resolvedSpec.replace(/[\\/]\*\*$/, '') : resolvedSpec
+  const lastSegment = trimmed.slice(
+    Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\')) + 1
+  )
+  // Why: TypeScript reads a last segment without `.`, `*` or `?` as a directory (`src` → `src/**/*`).
+  const spec = /[.*?]/.test(lastSegment) ? trimmed : `${trimmed}/**/*`
+  const wildcardAt = spec.search(/[^\\/]*[*?]/)
+  if (wildcardAt === -1) {
+    const relative = getRelativePathInsideRoot(filePath, spec)
+    return usage === 'exclude' ? relative !== null : relative === ''
+  }
+  const relative = getRelativePathInsideRoot(filePath, spec.slice(0, wildcardAt))
+  return (
+    relative !== null &&
+    wildcardSegmentsPattern(spec.slice(wildcardAt).split(/[\\/]+/), usage).test(relative)
+  )
+}
+
+function specsMatch(specs: ConfigSpecs | null, filePath: string, usage: SpecUsage): boolean {
+  return (
+    specs?.specs.some((spec) =>
+      specMatches(resolveModulePath(specs.originDir, spec), filePath, usage)
+    ) ?? false
+  )
+}
+
+/** Whether a project owns `filePath`: listed in `files`, or matched by `include` and not `exclude`. */
+function sourcesCover(
+  { include, exclude, files, configDir }: ConfigSources,
+  filePath: string
+): boolean {
+  if (files?.specs.some((file) => resolveModulePath(files.originDir, file) === filePath)) {
     return true
   }
-  const patterns = include ?? (files ? [] : ['**/*'])
-  return patterns.some((pattern) => {
-    const staticPrefix = pattern.split(/[*?{[]/)[0].replace(/[\\/]+$/, '')
-    const base = staticPrefix ? resolveModulePath(configDir, staticPrefix) : configDir
-    return getRelativePathInsideRoot(filePath, base) !== null
-  })
+  // Why: with neither `files` nor `include` set, TypeScript includes everything under the config.
+  const includes = include ?? (files ? null : { specs: ['**/*'], originDir: configDir })
+  return specsMatch(includes, filePath, 'include') && !specsMatch(exclude, filePath, 'exclude')
 }
 
 /** Alias rules from the nearest tsconfig/jsconfig at or above `filePath`, inside `rootPath`. */
@@ -184,11 +245,12 @@ export async function loadImportPathMappings(
     return NO_IMPORT_PATH_MAPPINGS
   }
   const own = toMappings(config)
-  if (own) {
+  if (own && (config.references.length === 0 || sourcesCover(config.sources, filePath))) {
     return own
   }
-  // Why: solution-style roots (Vite's tsconfig.json) keep aliases in referenced project configs.
-  let fallback: ImportPathMappings | null = null
+  // Why: a solution-style root (Vite's tsconfig.json) owns no sources; the referenced project that
+  // includes the file supplies its aliases, even when the root sets a `baseUrl` of its own.
+  let fallback = own
   for (const reference of config.references.slice(0, MAX_REFERENCES)) {
     const referenced = await loadConfigMappings(access, reference, 0)
     const mappings = referenced ? toMappings(referenced) : null

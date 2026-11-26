@@ -1,58 +1,48 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, expect, it } from 'vitest'
 import { OrchestrationDb } from '../db/orchestration-db'
-import { createRootDispatch } from '../db/root-dispatch-test-fixture'
+import '../db/contract-constants'
+import '../db/messages/mailbox-routing-page'
+import '../db/dispatch-row-writer'
+import '../db/attempt-outcome-projection'
 import { locateOrchestrationParty } from './orchestration-party-location'
 
-let db: OrchestrationDb | null = null
+const dirs: string[] = []
 afterEach(() => {
-  db?.close()
-  db = null
+  for (const dir of dirs.splice(0)) {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
 
-function dispatchWithNoAssignee(): { db: OrchestrationDb; dispatchId: string } {
-  db = new OrchestrationDb(':memory:')
-  const run = db.createRun({
-    objective: 'Triage',
-    coordinatorHandle: 'term-coordinator',
-    coordinatorPaneKey: 'tab-coordinator:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+it('locates a starting worker at its placed terminal before hand-over binds its assignee', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'orca-party-location-'))
+  dirs.push(dir)
+  const db = new OrchestrationDb(join(dir, 'orchestration.db'))
+  const task = db.createTask({ runId: 'run_legacy_local', spec: 'slow start' })
+  const { dispatch } = db.createStartingWorkerDispatch({
+    creator: { kind: 'system' },
+    maxDepth: Number.MAX_SAFE_INTEGER,
+    taskId: task.id,
+    startOptions: {}
   })
-  const task = db.createTask({ spec: 'Investigate on the Windows box', runId: run.id })
-  const dispatch = createRootDispatch(db, task.id, 'term_unused')
-  // A worker started on a paired server leaves this machine's assignee empty.
-  db.db
-    .prepare(
-      'UPDATE dispatch_contexts SET assignee_handle = NULL, assignee_pane_key = NULL WHERE id = ?'
-    )
-    .run(dispatch.id)
-  return { db, dispatchId: dispatch.id }
-}
-
-function locate(database: OrchestrationDb, dispatchId: string) {
-  return locateOrchestrationParty(`dispatch:${dispatchId}`, {
-    db: database,
-    records: null,
-    terminalPaneKey: () => null,
-    terminalHandleForPaneKey: () => null
+  db.recordWorkerStage({
+    dispatchId: dispatch.id,
+    stage: 'terminal_readying',
+    worktreeId: 'repo::worker',
+    terminalHandle: 'term_starting'
   })
-}
-
-describe('locating a Dispatch', () => {
-  it("finds a paired server's worker by the terminal that server issued", () => {
-    const { db: database, dispatchId } = dispatchWithNoAssignee()
-    database.db
-      .prepare(
-        `INSERT INTO federated_dispatches (dispatch_id, environment_id, environment_name, peer_fingerprint, protocol_version, remote_terminal_handle)
-         VALUES (?, 'env-win', 'windows 2', 'peer-win', 3, 'term_remote')`
-      )
-      .run(dispatchId)
-
-    expect(locate(database, dispatchId)).toEqual({
-      location: { kind: 'terminal', handle: 'term_remote', environmentId: 'env-win' }
+  const locate = () =>
+    locateOrchestrationParty(`dispatch:${dispatch.id}`, {
+      db,
+      records: null,
+      terminalPaneKey: (handle) => (handle === 'term_starting' ? 'tab_1:pane' : null),
+      terminalHandleForPaneKey: () => null
     })
-  })
-
-  it('finds nothing, without claiming it gone, when no host recorded a terminal', () => {
-    const { db: database, dispatchId } = dispatchWithNoAssignee()
-    expect(locate(database, dispatchId)).toEqual({ location: null })
-  })
+  expect(locate()).toEqual({ location: { kind: 'terminal', handle: 'term_starting' } })
+  // A start that failed before hand-over never ran there, so the placed terminal no longer names it.
+  db.failWorkerStart(dispatch.id, 'agent_readiness', 'never ready')
+  expect(locate()).toEqual({ location: null })
+  db.close()
 })

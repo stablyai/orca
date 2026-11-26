@@ -17,8 +17,7 @@ import { getLayoutEntries, getFollowSymlinkedDirectoriesEntry } from './appearan
 import {
   getSidebarEntries,
   getLeftSidebarAppearanceEntry,
-  getShowPinnedWorktreesInGroupsEntry,
-  getWorkspaceCardLayoutEntry
+  getShowPinnedWorktreesInGroupsEntry
 } from './appearance-sidebar-search'
 import { getStatusBarToggles } from './appearance-status-bar-search'
 import {
@@ -31,11 +30,18 @@ import { getStatusBarUsageFormatEntry } from './appearance-status-bar-usage-form
 import { StatusBarUsageFormatSetting } from './StatusBarUsageFormatSetting'
 
 import { useTranslate } from '@/i18n/use-translate'
-import { matchesSettingsSearch, normalizeSettingsSearchQuery } from '../search/settings-search'
+import {
+  matchesSettingsSearch,
+  normalizeSettingsSearchQuery,
+  type SettingsSearchEntry
+} from '../search/settings-search'
 
 type AppearanceWindowSidebarSectionProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
+  tilingWindowModeEntry?: SettingsSearchEntry
+  /** Absent when the drawn cards ignore the layout. */
+  workspaceCardLayoutEntry?: SettingsSearchEntry
   forceVisiblePrimary?: boolean
 }
 
@@ -52,7 +58,6 @@ function recordStatusBarToggleInteraction(
   } else if (
     id === 'claude' ||
     id === 'codex' ||
-    id === 'gemini' ||
     id === 'opencode-go' ||
     id === 'kimi' ||
     id === 'antigravity' ||
@@ -69,6 +74,8 @@ function recordStatusBarToggleInteraction(
 export function AppearanceWindowSidebarSection({
   settings,
   updateSettings,
+  tilingWindowModeEntry,
+  workspaceCardLayoutEntry,
   forceVisiblePrimary = false
 }: AppearanceWindowSidebarSectionProps): React.JSX.Element {
   const t = useTranslate()
@@ -87,7 +94,6 @@ export function AppearanceWindowSidebarSection({
   const setStatusBarUsageFormat = useAppStore((state) => state.setStatusBarUsageFormat)
   const leftSidebarAppearanceEntry = getLeftSidebarAppearanceEntry()
   const sidebarEntries = getSidebarEntries()
-  const workspaceCardLayoutEntry = getWorkspaceCardLayoutEntry()
   const layoutEntries = getLayoutEntries()
   const followSymlinkEntry = getFollowSymlinkedDirectoriesEntry(t)
   const statusBarTitle = t('auto.components.settings.AppearancePane.3a5d06686d', 'Status bar')
@@ -112,7 +118,7 @@ export function AppearanceWindowSidebarSection({
       })
     )
   const sidebarAdvancedMatches = matchesSettingsSearch(searchQuery, [
-    workspaceCardLayoutEntry,
+    ...(workspaceCardLayoutEntry ? [workspaceCardLayoutEntry] : []),
     ...sidebarEntries
   ])
   const fileExplorerAdvancedMatches = matchesSettingsSearch(searchQuery, layoutEntries)
@@ -123,6 +129,18 @@ export function AppearanceWindowSidebarSection({
 
   return (
     <>
+      {tilingWindowModeEntry && (
+        <SearchableSetting {...tilingWindowModeEntry} forceVisible={forceVisiblePrimary}>
+          <SettingsSwitchRow
+            label={tilingWindowModeEntry.title}
+            description={tilingWindowModeEntry.description}
+            checked={settings.linuxTilingWindowMode === true}
+            onChange={() =>
+              updateSettings({ linuxTilingWindowMode: settings.linuxTilingWindowMode !== true })
+            }
+          />
+        </SearchableSetting>
+      )}
       <SearchableSetting
         title={leftSidebarAppearanceEntry.title}
         description={leftSidebarAppearanceEntry.description}
@@ -220,41 +238,43 @@ export function AppearanceWindowSidebarSection({
             <SettingsGroupSubsection
               title={t('auto.components.settings.AppearancePane.dc29f3cc0d', 'Sidebar')}
             >
-              <SearchableSetting
-                title={workspaceCardLayoutEntry.title}
-                description={workspaceCardLayoutEntry.description}
-                keywords={workspaceCardLayoutEntry.keywords}
-              >
-                <SettingsRow
-                  label={workspaceCardLayoutEntry.title}
+              {workspaceCardLayoutEntry ? (
+                <SearchableSetting
+                  title={workspaceCardLayoutEntry.title}
                   description={workspaceCardLayoutEntry.description}
-                  control={
-                    <SettingsSegmentedControl
-                      value={settings.compactWorktreeCards ? 'compact' : 'detailed'}
-                      onChange={(value) =>
-                        setWorktreeCardMode(value === 'compact' ? 'Compact' : 'Default')
-                      }
-                      ariaLabel={workspaceCardLayoutEntry.title}
-                      options={[
-                        {
-                          value: 'detailed',
-                          label: t(
-                            'auto.components.sidebar.SidebarWorkspaceOptionsMenu.cc17bd443b',
-                            'Detailed'
-                          )
-                        },
-                        {
-                          value: 'compact',
-                          label: t(
-                            'auto.components.sidebar.SidebarWorkspaceOptionsMenu.25105b28cb',
-                            'Compact'
-                          )
+                  keywords={workspaceCardLayoutEntry.keywords}
+                >
+                  <SettingsRow
+                    label={workspaceCardLayoutEntry.title}
+                    description={workspaceCardLayoutEntry.description}
+                    control={
+                      <SettingsSegmentedControl
+                        value={settings.compactWorktreeCards ? 'compact' : 'detailed'}
+                        onChange={(value) =>
+                          setWorktreeCardMode(value === 'compact' ? 'Compact' : 'Default')
                         }
-                      ]}
-                    />
-                  }
-                />
-              </SearchableSetting>
+                        ariaLabel={workspaceCardLayoutEntry.title}
+                        options={[
+                          {
+                            value: 'detailed',
+                            label: t(
+                              'auto.components.sidebar.SidebarWorkspaceOptionsMenu.cc17bd443b',
+                              'Detailed'
+                            )
+                          },
+                          {
+                            value: 'compact',
+                            label: t(
+                              'auto.components.sidebar.SidebarWorkspaceOptionsMenu.25105b28cb',
+                              'Compact'
+                            )
+                          }
+                        ]}
+                      />
+                    }
+                  />
+                </SearchableSetting>
+              ) : null}
 
               <SearchableSetting
                 title={t('auto.components.settings.AppearancePane.e0f9902e18', 'Show tasks button')}

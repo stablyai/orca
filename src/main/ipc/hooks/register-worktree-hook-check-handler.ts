@@ -4,11 +4,9 @@ import {
   isRepoOnCatalogHost,
   type ExecutionHostId
 } from '../../../shared/execution-host/execution-host'
-import { scopeHooksToRepoKind } from '../../../shared/folder-workspaces/folder-workspace-hooks'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
-import { hasHooksFile, loadHooks, hasUnrecognizedOrcaYamlKeys } from '../../workspace-hooks/hooks'
+import { inspectWorkspaceHooks } from '../../workspace-hooks/workspace-hook-inspection'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
-import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'
 import type { SetupHooksCreateSource } from '../../../shared/worktree/setup-hooks-create-source'
 import { readCreateSourceSetupHooks } from '../../workspace-hooks/create-source-setup-hooks'
@@ -53,22 +51,6 @@ export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): v
         }
       }
 
-      // A render-driven check must not open a stopped distro's `\\wsl.localhost` paths (E9).
-      const blocked = args.background ? await blockedWslDistroForPath(repo.path) : null
-      if (blocked) {
-        return {
-          status: 'error',
-          hasHooks: false,
-          hooks: null,
-          mayNeedUpdate: false,
-          // A stopped distro answers once it runs again; an unverifiable one is worth a retry.
-          unavailable:
-            blocked.state === 'stopped'
-              ? ('wsl-distro-stopped' as const)
-              : ('wsl-distro-unverifiable' as const)
-        }
-      }
-
       if (args.createSource && !args.background) {
         const created = await readCreateSourceSetupHooks({
           repo,
@@ -86,16 +68,7 @@ export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): v
         }
       }
 
-      const has = hasHooksFile(repo.path)
-      const hooks = scopeHooksToRepoKind(repo, has ? loadHooks(repo.path) : null)
-      // Well-formed unknown keys may come from a newer Orca; suggest updating instead of parse repair.
-      const mayNeedUpdate = has && !hooks && hasUnrecognizedOrcaYamlKeys(repo.path)
-      return {
-        status: 'ok',
-        hasHooks: has,
-        hooks,
-        mayNeedUpdate
-      }
+      return inspectWorkspaceHooks(repo, args.background)
     }
   )
 }

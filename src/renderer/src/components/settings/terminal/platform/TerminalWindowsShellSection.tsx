@@ -14,7 +14,7 @@ type TerminalWindowsShellSectionProps = {
 
 function windowsShellLabel(shell: string, label: string): React.JSX.Element {
   return (
-    <span className="inline-flex items-center justify-center gap-1.5">
+    <span className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap">
       <ShellIcon shell={shell} size={12} />
       <span>{label}</span>
     </span>

@@ -22,8 +22,3 @@ export function reportWindowsCommandLineRecoveryHealth(rows: CommandLineRow[]): 
     { processes: rows.length, withCommandLine: recovered }
   )
 }
-
-/** Reset the once-per-session warning between tests. */
-export function resetWindowsCommandLineRecoveryHealthForTests(): void {
-  warned = false
-}

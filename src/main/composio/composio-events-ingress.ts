@@ -144,3 +144,9 @@ export function routeComposioCall(
   )
   return target ? { kind: 'automation', automationId: target.id } : { kind: 'none' }
 }
+
+/** `<base>/hooks/<hook id>/<key>`: the hook id, when the address is one of Orca's hooks. */
+export function composioHookIdOf(url: string): string | null {
+  const parts = url.split('/')
+  return parts.at(-3) === 'hooks' ? (parts.at(-2) ?? null) : null
+}

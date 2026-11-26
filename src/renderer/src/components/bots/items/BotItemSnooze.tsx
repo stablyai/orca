@@ -1,6 +1,6 @@
 // Snoozing items from a menu: a Snooze submenu with Later today, Tomorrow, Monday and Pick a time…,
 // Unsnooze while snoozed, and the Snooze until dialog. The item keeps its status; the bot isn't mailed.
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { AlarmClock, AlarmClockOff, CalendarDays } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
 import type { BotRef } from '@/lib/bot-hosts'
+import { useLatestHandler } from '@/lib/use-latest-handler'
 import { isBotItemSnoozed, type BotItem } from '../../../../../shared/bots/bot-items'
 import {
   botItemSnoozePresetName,
@@ -38,38 +39,43 @@ export function useBotItemSnoozing(
   done?: () => void
 ): BotItemSnoozing {
   const [picking, setPicking] = useState<readonly BotItem[] | null>(null)
-  const snooze = (items: readonly BotItem[], until: number | null): void => {
+  // Stable across renders, so the rows it's handed to stay memoized.
+  const snooze = useLatestHandler((items: readonly BotItem[], until: number | null): void => {
     void Promise.all(
       botItemsByBot(items, bot).map(([ref, mine]) => snoozeBotItems(ref, mine, until))
     )
       .then(() => done?.())
       .catch((error: unknown) => toast.error(botErrorMessage(error)))
-  }
-  return {
-    snooze,
-    pick: setPicking,
-    dialog: (
-      <BotItemSnoozeDialog
-        open={picking !== null}
-        onSnooze={(until) => {
-          if (picking) {
-            snooze(picking, until)
-          }
-          setPicking(null)
-        }}
-        onClose={() => setPicking(null)}
-      />
-    )
-  }
+  })
+  return useMemo(
+    () => ({
+      snooze,
+      pick: setPicking,
+      dialog: (
+        <BotItemSnoozeDialog
+          open={picking !== null}
+          onSnooze={(until) => {
+            if (picking) {
+              snooze(picking, until)
+            }
+            setPicking(null)
+          }}
+          onClose={() => setPicking(null)}
+        />
+      )
+    }),
+    [snooze, picking]
+  )
 }
 
-/** Snooze ▸ for an open item, or the open items of a selection; Unsnooze under it once one is snoozed. */
 export function BotItemSnoozeMenuItems({
   items,
-  snoozing
+  snoozing,
+  inSubmenu = true
 }: {
   items: readonly BotItem[]
   snoozing: BotItemSnoozing
+  inSubmenu?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   // Read as the menu opens; the presets resolve against it.
@@ -77,31 +83,38 @@ export function BotItemSnoozeMenuItems({
   const only = items.length === 1 ? items[0] : undefined
   const snoozedUntil = only && isBotItemSnoozed(only, now) ? only.snoozedUntil : null
   const anySnoozed = items.some((item) => isBotItemSnoozed(item, now))
+  const options = (
+    <>
+      {botItemSnoozePresets(now).map((preset) => (
+        <DropdownMenuItem key={preset.id} onSelect={() => snoozing.snooze(items, preset.at)}>
+          {botItemSnoozePresetName(preset, t)}
+          <DropdownMenuShortcut>{formatBotItemSnoozeTime(preset.at, now)}</DropdownMenuShortcut>
+        </DropdownMenuItem>
+      ))}
+      <DropdownMenuSeparator />
+      <DropdownMenuItem onSelect={() => snoozing.pick(items)}>
+        <CalendarDays />
+        {t('bots.items.snooze.pick', 'Pick a time…')}
+      </DropdownMenuItem>
+    </>
+  )
   return (
     <>
-      <DropdownMenuSub>
-        <DropdownMenuSubTrigger>
-          <AlarmClock />
-          {snoozedUntil !== null
-            ? t('bots.items.snooze.until', 'Snoozed until {{when}}', {
-                when: formatBotItemSnoozeTime(snoozedUntil, now)
-              })
-            : t('bots.items.snooze.menu', 'Snooze')}
-        </DropdownMenuSubTrigger>
-        <DropdownMenuSubContent>
-          {botItemSnoozePresets(now).map((preset) => (
-            <DropdownMenuItem key={preset.id} onSelect={() => snoozing.snooze(items, preset.at)}>
-              {botItemSnoozePresetName(preset, t)}
-              <DropdownMenuShortcut>{formatBotItemSnoozeTime(preset.at, now)}</DropdownMenuShortcut>
-            </DropdownMenuItem>
-          ))}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => snoozing.pick(items)}>
-            <CalendarDays />
-            {t('bots.items.snooze.pick', 'Pick a time…')}
-          </DropdownMenuItem>
-        </DropdownMenuSubContent>
-      </DropdownMenuSub>
+      {inSubmenu ? (
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <AlarmClock />
+            {snoozedUntil !== null
+              ? t('bots.items.snooze.until', 'Snoozed until {{when}}', {
+                  when: formatBotItemSnoozeTime(snoozedUntil, now)
+                })
+              : t('bots.items.snooze.menu', 'Snooze')}
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>{options}</DropdownMenuSubContent>
+        </DropdownMenuSub>
+      ) : (
+        options
+      )}
       {anySnoozed ? (
         <DropdownMenuItem onSelect={() => snoozing.snooze(items, null)}>
           <AlarmClockOff />

@@ -7,6 +7,9 @@ export type FleetAttemptOutcome =
   | 'outcome_unknown'
   | 'finished_unverified'
 
+/** `stopped`: someone asked for the stop, so it is no failure even though the stop fails the Dispatch. */
+export type FleetWorkerOutcome = FleetAttemptOutcome | 'stopped'
+
 export type FleetSettlementSubject = {
   /** `unsupervised` from the list query's COALESCE, `null` from the attention-fact query. */
   workerState?: string | null
@@ -33,11 +36,15 @@ export function isUnsupervisedSettledDispatch(subject: FleetSettlementSubject): 
  * Anything it settled on wins, and the durable dispatch/worker rows answer the rest.
  */
 export function resolveFleetWorkerOutcome(args: {
-  attemptOutcome?: FleetAttemptOutcome
+  attemptOutcome?: FleetWorkerOutcome
   workerState?: string | null
   dispatchStatus?: string | null
-}): FleetAttemptOutcome {
+}): FleetWorkerOutcome {
   const { attemptOutcome, workerState, dispatchStatus } = args
+  // Only a worker stop settles `stopped`; it fails a still-active Dispatch with `last_failure: 'stopped'`, rows written before this included.
+  if (workerState === 'stopped' && attemptOutcome !== 'succeeded' && attemptOutcome !== 'failed') {
+    return 'stopped'
+  }
   if (attemptOutcome && attemptOutcome !== 'outcome_unknown') {
     return attemptOutcome
   }

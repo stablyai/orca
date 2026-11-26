@@ -1,18 +1,19 @@
 import React, { useEffect, useRef } from 'react'
-import { ChevronDown, ChevronUp, ExternalLink, KeyRound, RefreshCw } from 'lucide-react'
+import { ArrowUpRight, ChevronLeft, ChevronRight, KeyRound, Monitor } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
 import { cn } from '@/lib/class-names'
 import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
+import { isRowActivationKey } from '@/lib/list-interaction/list-row-interaction'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { Automation } from '../../../../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
+import { automationRunEventSourceKey } from '../../../../../shared/automations/automation-run-row-words'
+import { sayAutomationRun } from '../../native-chat/automation-run/automation-run-wording'
 import { getAgentLabel } from '../authoring/automation-draft-model'
 import { getAutomationRunContent } from './automation-run-content'
 import { automationRunErrorText } from './automation-run-error-copy'
-import type { AutomationRunViewState } from './automation-run-view-state'
-import type { AutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
 import { useFullAutomationRun } from './use-full-automation-run'
 import { pendingAutomationSetupReview } from '../authoring/automation-setup-review'
 import type { SetupTrustMismatch } from '../../../../../shared/worktree/create-types'
@@ -25,6 +26,7 @@ import {
   formatAutomationDateTimeWithRelative
 } from '../automation-page-parts'
 import { AutomationRunStatusLabel } from './AutomationRunStatusDot'
+import { AutomationRunRerunButton } from './AutomationRunRerunButton'
 import { formatAutomationCost, formatAutomationTokens } from './automation-usage-model'
 import {
   RUN_START_DRIFT_LABEL_MS,
@@ -36,30 +38,6 @@ import {
 import { AutomationsPageFrame, AutomationsPageTitle } from '../AutomationsPageFrame'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
-function RunSection({
-  title,
-  children,
-  className
-}: {
-  title: string
-  children: React.ReactNode
-  className?: string
-}): React.JSX.Element {
-  return (
-    <section className={cn('min-w-0 rounded-lg border border-border/60', className)}>
-      <h3
-        className={cn(
-          'border-b border-border/60 px-4 py-2.5 text-muted-foreground',
-          AUTOMATION_EDITOR_SECTION_LABEL_CLASS
-        )}
-      >
-        {title}
-      </h3>
-      <div className="px-4 py-3">{children}</div>
-    </section>
-  )
-}
-
 export function AutomationRunDetailsPage({
   nav,
   automation,
@@ -68,8 +46,8 @@ export function AutomationRunDetailsPage({
   history,
   relativeNow,
   hostLabel,
-  workspaceDisplay,
-  viewState,
+  workspaceName,
+  workspaceActionLabel,
   canRerun,
   isRerunPending,
   onRerun,
@@ -87,8 +65,8 @@ export function AutomationRunDetailsPage({
   history: SelectedAutomationRunHistoryOutcome
   relativeNow: number
   hostLabel: string
-  workspaceDisplay: AutomationRunWorkspaceDisplay | null
-  viewState: AutomationRunViewState | null
+  workspaceName: string | null
+  workspaceActionLabel: string | null
   canRerun: boolean
   isRerunPending: boolean
   onRerun: () => void
@@ -108,7 +86,16 @@ export function AutomationRunDetailsPage({
   const startedLate =
     startedAt !== null && Math.abs(startedAt - run.scheduledFor) >= RUN_START_DRIFT_LABEL_MS
   const agentLabel = automation ? getAgentLabel(automation.agentId) : undefined
-  const errorText = automationRunErrorText(run, agentLabel)
+  const savedError = automationRunErrorText(run, agentLabel)
+  const errorText =
+    run.status === 'dispatch_failed' &&
+    run.sessionKind === 'chat' &&
+    savedError === "The bot's turn ended without finishing (failure)."
+      ? t(
+          'automations.runFailures.botProviderErrorNotSaved',
+          "The bot's turn failed, but this run did not save the provider's error. The original Chat may contain more details."
+        )
+      : savedError
   // Why: a failed run's reason has its own banner; Output shows only what the agent printed.
   const content = getAutomationRunContent(failed ? { ...run, error: null } : run, t)
   // Without the automation, the run can't be checked against its approval.
@@ -142,45 +129,19 @@ export function AutomationRunDetailsPage({
     return () => removeAppKeyListener('keydown', onKeyDown)
   }, [])
 
-  const usageKnown = run.usage?.status === 'known'
-  const details: { key: string; label: string; value: string; muted?: boolean }[] = [
-    {
-      key: 'workspace',
-      label: t('auto.components.automations.AutomationRunHistory.149c0b49c7', 'Workspace'),
-      value:
-        workspaceDisplay?.rowLabel ??
-        t('auto.components.automations.AutomationsPage.noWorkspace', 'No workspace'),
-      muted: workspaceDisplay?.muted ?? true
-    },
-    {
-      key: 'host',
-      label: t('auto.components.automations.AutomationDetail.host', 'Host'),
-      value: hostLabel
-    },
-    {
-      key: 'spend',
-      label: t('auto.components.automations.AutomationRunHistory.86a248187e', 'Spend'),
-      value: formatAutomationCost(run.usage?.estimatedCostUsd, t),
-      muted: !usageKnown
-    },
-    {
-      key: 'tokens',
-      label: t('auto.components.automations.AutomationRunHistory.13988187b3', 'Tokens'),
-      value:
-        usageKnown && run.usage
-          ? formatAutomationTokens(run.usage.totalTokens, intlLocale)
-          : t('auto.components.automations.AutomationRunHistory.a00e38d1a3', '—'),
-      muted: !usageKnown
-    },
-    {
-      key: 'trigger',
-      label: t('auto.components.automations.AutomationRunsDashboard.trigger', 'Trigger'),
-      value:
-        run.trigger === 'manual'
-          ? t('auto.components.automations.runIdentity.triggerManual', 'Run now')
-          : t('auto.components.automations.runIdentity.triggerScheduled', 'Scheduled')
-    }
-  ]
+  const usage = run.usage?.status === 'known' ? run.usage : null
+  const cost = usage?.estimatedCostUsd
+  const tokens = usage?.totalTokens
+  const hasCost = cost != null
+  const hasTokens = tokens != null
+  const triggerLabel =
+    run.trigger === 'manual'
+      ? t('auto.components.automations.runIdentity.triggerManual', 'Run now')
+      : run.trigger === 'event'
+        ? sayAutomationRun(t)(automationRunEventSourceKey(run))
+        : t('auto.components.automations.runIdentity.triggerScheduled', 'Scheduled')
+  // The nonbreaking space keeps each separator with the preceding item.
+  const dot = <span aria-hidden="true">{'\u00a0· '}</span>
   const stepLabel = {
     newer: t('auto.components.automations.runIdentity.newerRun', 'Newer run'),
     older: t('auto.components.automations.runIdentity.olderRun', 'Older run')
@@ -189,16 +150,20 @@ export function AutomationRunDetailsPage({
   return (
     <AutomationsPageFrame nav={nav}>
       <div className="flex flex-col gap-4 pt-5">
-        <header className="min-w-0">
+        <header className="@container/run-header min-w-0">
           <div className="flex min-w-0 items-center gap-2.5">
             <AutomationsPageTitle>
               {formatAutomationRunLabel(run, t, intlLocale)}
             </AutomationsPageTitle>
             <AutomationRunStatusLabel status={run.status} pill />
             <span className="flex-1" />
-            {(['newer', 'older'] as const).map((step) => {
+            {canRerun && automation ? (
+              <AutomationRunRerunButton pending={isRerunPending} onRerun={onRerun} />
+            ) : null}
+            {/* Why: left reads as back in time, so Older sits left and Newer right. */}
+            {(['older', 'newer'] as const).map((step) => {
               const target = step === 'newer' ? newer : older
-              const Icon = step === 'newer' ? ChevronUp : ChevronDown
+              const Icon = step === 'newer' ? ChevronRight : ChevronLeft
               return (
                 <Tooltip key={step}>
                   <TooltipTrigger asChild>
@@ -223,15 +188,15 @@ export function AutomationRunDetailsPage({
               )
             })}
           </div>
-          <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+          <p className="mt-1 min-w-0 text-sm text-muted-foreground">
             {startedLate ? (
               <>
                 <span>
                   {t('auto.components.automations.runIdentity.scheduledAt', 'Scheduled {{time}}', {
                     time: formatAutomationDateTime(run.scheduledFor, t, intlLocale)
                   })}
+                  {dot}
                 </span>
-                <span aria-hidden="true">·</span>
                 <span>
                   {t('auto.components.automations.runIdentity.startedAt', 'Started {{time}}', {
                     time: formatAutomationDateTimeWithRelative(
@@ -241,29 +206,96 @@ export function AutomationRunDetailsPage({
                       intlLocale
                     )
                   })}
+                  {dot}
                 </span>
               </>
             ) : (
               <span>
                 {formatAutomationDateTimeWithRelative(run.scheduledFor, relativeNow, t, intlLocale)}
+                {dot}
               </span>
             )}
-            {automation ? (
-              <>
-                <span aria-hidden="true">·</span>
-                <span>{getAgentLabel(automation.agentId)}</span>
-              </>
+            {agentLabel ? (
+              <span>
+                {agentLabel}
+                {dot}
+              </span>
             ) : null}
             {run.outputSnapshot?.truncated ? (
+              <span>
+                {t(
+                  'auto.components.automations.AutomationsPage.latestSavedOutput',
+                  'Latest saved output'
+                )}
+                {dot}
+              </span>
+            ) : null}
+            {triggerLabel}
+            {workspaceName ? <span aria-hidden="true">{'\u00a0·\u00a0'}</span> : dot}
+            {workspaceName ? (
               <>
-                <span aria-hidden="true">·</span>
-                <span>
-                  {t(
-                    'auto.components.automations.AutomationsPage.latestSavedOutput',
-                    'Latest saved output'
-                  )}
-                </span>
+                {workspaceActionLabel ? (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    aria-label={
+                      workspaceName === workspaceActionLabel
+                        ? workspaceActionLabel
+                        : `${workspaceName}, ${workspaceActionLabel}`
+                    }
+                    className="cursor-pointer rounded-sm box-decoration-clone wrap-anywhere text-foreground outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    onClick={onOpenWorkspace}
+                    onKeyDown={(event) => {
+                      if (isRowActivationKey(event)) {
+                        event.preventDefault()
+                        if (!event.repeat) {
+                          onOpenWorkspace()
+                        }
+                      }
+                    }}
+                  >
+                    {workspaceName}
+                    {'\u2060'}
+                    <ArrowUpRight
+                      aria-hidden="true"
+                      className="ml-0.5 inline size-3 align-[-0.125em] text-muted-foreground"
+                    />
+                    {'\u2060'}
+                  </span>
+                ) : (
+                  <span className="wrap-anywhere">{workspaceName}</span>
+                )}
+                {dot}
               </>
+            ) : null}
+            <span className="inline-block max-w-full wrap-anywhere">
+              <Monitor aria-hidden="true" className="mr-1 inline size-3.5 align-[-0.15em]" />
+              {'\u2060'}
+              {hostLabel}
+              {hasCost || hasTokens ? (
+                <span aria-hidden="true" className="whitespace-pre">
+                  {'\u00a0· '}
+                </span>
+              ) : null}
+            </span>
+            {hasCost ? (
+              <>
+                <span className="whitespace-nowrap">
+                  {t('auto.components.automations.usage.spent', '{{spend}} spent', {
+                    spend: formatAutomationCost(cost, t)
+                  })}
+                </span>
+                {hasTokens ? dot : null}
+              </>
+            ) : null}
+            {hasTokens ? (
+              <span className="whitespace-nowrap">
+                {t('auto.components.automations.usage.tokens', '{{tokens}} tokens', {
+                  count: tokens,
+                  tokens: formatAutomationTokens(tokens, intlLocale),
+                  defaultValue_one: '{{tokens}} token'
+                })}
+              </span>
             ) : null}
           </p>
         </header>
@@ -309,77 +341,38 @@ export function AutomationRunDetailsPage({
           />
         ) : null}
 
-        {viewState?.canOpen || (canRerun && automation) ? (
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Why: a disabled button with nothing to open reads as broken; Details says the workspace is gone. */}
-            {viewState?.canOpen ? (
-              <Button type="button" size="sm" onClick={onOpenWorkspace}>
-                <ExternalLink className="size-3.5" />
-                {t('auto.components.automations.runViewState.openWorkspace', 'Open workspace')}
-              </Button>
-            ) : null}
-            {canRerun && automation ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={isRerunPending}
-                onClick={onRerun}
+        <section className="min-w-0 rounded-lg border border-border/60">
+          <h3
+            className={cn(
+              'border-b border-border/60 px-4 py-2.5 text-muted-foreground',
+              AUTOMATION_EDITOR_SECTION_LABEL_CLASS
+            )}
+          >
+            {t('auto.components.automations.runIdentity.output', 'Output')}
+          </h3>
+          <div className="px-4 py-3">
+            {full.failed ? (
+              <div
+                role="alert"
+                className="mb-3 flex items-center gap-2 text-sm text-muted-foreground"
               >
-                <RefreshCw className={cn('size-3.5', isRerunPending && 'animate-spin')} />
-                {t('auto.components.automations.AutomationsPage.295698292f', 'Rerun')}
-              </Button>
+                {t(
+                  'auto.components.automations.AutomationsPage.fullOutputUnavailable',
+                  "Couldn't load the full output."
+                )}
+                <Button type="button" variant="outline" size="xs" onClick={full.retry}>
+                  {t('auto.components.automations.AutomationsPage.retryFullOutput', 'Retry')}
+                </Button>
+              </div>
             ) : null}
+            <CommentMarkdown
+              variant="document"
+              content={content}
+              singleTildeStrikethrough={false}
+              className="text-sm leading-relaxed text-foreground"
+            />
           </div>
-        ) : null}
-
-        <div className="@container">
-          <div className="grid grid-cols-1 gap-4 @3xl:grid-cols-[minmax(0,1fr)_16rem]">
-            <RunSection title={t('auto.components.automations.runIdentity.output', 'Output')}>
-              {full.failed ? (
-                <div
-                  role="alert"
-                  className="mb-3 flex items-center gap-2 text-sm text-muted-foreground"
-                >
-                  {t(
-                    'auto.components.automations.AutomationsPage.fullOutputUnavailable',
-                    "Couldn't load the full output."
-                  )}
-                  <Button type="button" variant="outline" size="xs" onClick={full.retry}>
-                    {t('auto.components.automations.AutomationsPage.retryFullOutput', 'Retry')}
-                  </Button>
-                </div>
-              ) : null}
-              <CommentMarkdown
-                variant="document"
-                content={content}
-                singleTildeStrikethrough={false}
-                className="text-sm leading-relaxed text-foreground"
-              />
-            </RunSection>
-            <RunSection
-              className="self-start"
-              title={t('auto.components.automations.runIdentity.details', 'Details')}
-            >
-              <dl className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-x-3 gap-y-2 text-[13px]">
-                {details.map((detail) => (
-                  <React.Fragment key={detail.key}>
-                    <dt className="text-muted-foreground">{detail.label}</dt>
-                    <dd
-                      className={cn(
-                        'min-w-0 truncate',
-                        detail.muted ? 'text-muted-foreground' : 'text-foreground'
-                      )}
-                      title={detail.value}
-                    >
-                      {detail.value}
-                    </dd>
-                  </React.Fragment>
-                ))}
-              </dl>
-            </RunSection>
-          </div>
-        </div>
+        </section>
       </div>
     </AutomationsPageFrame>
   )

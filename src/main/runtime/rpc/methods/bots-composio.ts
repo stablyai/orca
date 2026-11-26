@@ -169,16 +169,16 @@ export const BOT_COMPOSIO_METHODS = [
       if (botId) {
         await instanceOf(context.runtime).setup.keyAdded(botId, app)
       }
-      return { key: composioBotsOf(context.runtime).keyState() }
+      return { key: await composioBotsOf(context.runtime).keyState() }
     }
   }),
   defineMethod({
     name: 'bots.composio.key',
     permission: 'workspace',
     params: null,
-    handler: (_params, context) => ({
-      ...composio(context).key(),
-      events: instanceOf(context.runtime).events.eventsPlace()
+    handler: async (_params, context) => ({
+      ...(await composio(context).key()),
+      events: await instanceOf(context.runtime).events.eventsPlace()
     })
   }),
   defineMethod({
@@ -196,7 +196,7 @@ export const BOT_COMPOSIO_METHODS = [
         }
         await bots.removeKey()
       })
-      return { key: composioBotsOf(context.runtime).keyState() }
+      return { key: await composioBotsOf(context.runtime).keyState() }
     }
   }),
   defineMethod({

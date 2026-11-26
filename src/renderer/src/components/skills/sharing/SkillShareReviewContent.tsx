@@ -184,7 +184,7 @@ export function SkillSharePublishedLink({
         className="h-auto p-0 text-xs font-normal text-muted-foreground"
         onClick={onManageLinks}
       >
-        {t('auto.components.skills.share.manageLinks', 'Manage or revoke this link in Settings')}
+        {t('auto.components.skills.share.manageLinks', 'Manage link')}
       </Button>
     </div>
   )

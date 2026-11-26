@@ -1,0 +1,18 @@
+{
+  "threads": [
+    {
+      "link": "https://app.slack.com/client/T0123ABCD/C0456EFGH/thread/C0456EFGH-1795415167.287389",
+      "ref": "slack:T0123ABCD:C0456EFGH:1795415167.287389",
+      "workspaceId": "T0123ABCD",
+      "containerId": "C0456EFGH",
+      "threadId": "1795415167.287389"
+    },
+    {
+      "link": "https://app.slack.com/client/T0123ABCD/G0789IJKL/thread/G0789IJKL-1712000000.000100",
+      "ref": "slack:T0123ABCD:G0789IJKL:1712000000.000100",
+      "workspaceId": "T0123ABCD",
+      "containerId": "G0789IJKL",
+      "threadId": "1712000000.000100"
+    }
+  ]
+}

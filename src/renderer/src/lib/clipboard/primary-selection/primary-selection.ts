@@ -111,9 +111,3 @@ export async function readPrimarySelectionText(): Promise<string> {
     return primarySelectionText
   }
 }
-
-export function resetPrimarySelectionForTests(): void {
-  enabled = false
-  primarySelectionText = ''
-  nativePasteSuppressionUntil = 0
-}

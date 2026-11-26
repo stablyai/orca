@@ -3,13 +3,14 @@ import { useAppStore } from '@/store'
 import { BotConnectorsSection } from '../settings/bots/BotConnectorsSection'
 import { useBotForWorkspace } from './bot-workspace'
 import { useBotHostOffline } from '@/lib/bot-host-views'
+import { botRefKey } from '@/lib/bot-hosts'
 import type { Bot } from '../../../../shared/bot-types'
 
 /** The bot page's Connectors tab: the same list as Settings › Bots › Connectors. */
 export default function BotConnectorsPanel(): React.JSX.Element | null {
   const workspaceId = useAppStore((s) => s.activeWorktreeId)
   const bot = useBotForWorkspace(workspaceId)
-  return bot ? <BotConnectorsPanelBody bot={bot} /> : null
+  return bot ? <BotConnectorsPanelBody key={botRefKey(bot)} bot={bot} /> : null
 }
 
 function BotConnectorsPanelBody({ bot }: { bot: Bot }): React.JSX.Element {

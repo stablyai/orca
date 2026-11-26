@@ -80,7 +80,3 @@ export async function replayClientHostedBrowserCloseIntents(
     replayingEnvironmentIds.delete(trimmed)
   }
 }
-
-export function resetClientHostedBrowserCloseIntentReplayForTests(): void {
-  replayingEnvironmentIds.clear()
-}

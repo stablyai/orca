@@ -23,19 +23,31 @@ function decodedScript(args: string[]): string {
   return Buffer.from(payload, 'base64').toString('utf16le')
 }
 
-function pidFilePathFromSpawnArgs(args: string[]): string {
-  const script = decodedScript(args)
-  const encodedPath = script.match(
-    /WriteAllText\(\(Read-OrcaValue '([^']+)'\), \[string\]\$PID\)/
+function relayFilePathFromSpawnArgs(args: string[], variableName: 'PID' | 'OrcaExitCode'): string {
+  const encodedPath = decodedScript(args).match(
+    new RegExp(`WriteAllText\\(\\(Read-OrcaValue '([^']+)'\\), \\[string\\]\\$${variableName}\\)`)
   )?.[1]
   if (!encodedPath) {
-    throw new Error('PID relay path is missing')
+    throw new Error(`${variableName} relay path is missing`)
   }
   return Buffer.from(encodedPath, 'base64').toString('utf8')
 }
 
 describe('buildWindowsHostInteractiveLoginSpawn', () => {
-  it('relays a batch login through a visible, PID-addressable console', () => {
+  it("relays the login's exit code past start /wait, which always exits 0", async () => {
+    const spawn = withWindows(() =>
+      buildWindowsHostInteractiveLoginSpawn('C:\\Tools\\claude.cmd', ['auth', 'login'])
+    )
+    const exitCodeFilePath = relayFilePathFromSpawnArgs(spawn.args, 'OrcaExitCode')
+
+    await expect(spawn.readExitCode()).resolves.toBeNull()
+    writeFileSync(exitCodeFilePath, '1')
+    await expect(spawn.readExitCode()).resolves.toBe(1)
+    await spawn.cleanup()
+    expect(existsSync(exitCodeFilePath)).toBe(false)
+  })
+
+  it('relays a batch login through a visible, PID-addressable console', async () => {
     const spawn = withWindows(() =>
       buildWindowsHostInteractiveLoginSpawn('C:\\Tools\\claude.cmd', [
         'auth',
@@ -56,15 +68,29 @@ describe('buildWindowsHostInteractiveLoginSpawn', () => {
     expect(script).toContain(encodedValue(getCmdExePath()))
     expect(script).toContain(encodedValue('C:\\Tools\\claude.cmd'))
     expect(script).toContain(encodedValue('--claudeai'))
-    const pidFilePath = pidFilePathFromSpawnArgs(spawn.args)
+    const pidFilePath = relayFilePathFromSpawnArgs(spawn.args, 'PID')
 
     expect(spawn.stdio).toBe('ignore')
     expect(spawn.windowsHide).toBe(true)
     expect(spawn.getTerminationPid()).toBeNull()
     writeFileSync(pidFilePath, '2468')
     expect(spawn.getTerminationPid()).toBe(2468)
-    spawn.cleanup()
+    await spawn.cleanup()
     expect(existsSync(pidFilePath)).toBe(false)
+  })
+
+  it('builds an absolute relay PowerShell path when SystemRoot is blank', async () => {
+    vi.stubEnv('SystemRoot', '')
+    vi.stubEnv('windir', '')
+    const spawn = withWindows(() =>
+      buildWindowsHostInteractiveLoginSpawn('C:\\Tools\\claude.exe', ['auth', 'login'])
+    )
+    try {
+      expect(spawn.args[5]).toBe('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')
+    } finally {
+      vi.unstubAllEnvs()
+      await spawn.cleanup()
+    }
   })
 
   it('waits for the relay PID when cancellation races console startup', async () => {
@@ -77,13 +103,13 @@ describe('buildWindowsHostInteractiveLoginSpawn', () => {
       expect(spawn.getTerminationPid()).toBeNull()
 
       await vi.advanceTimersByTimeAsync(100)
-      const pidFilePath = pidFilePathFromSpawnArgs(spawn.args)
+      const pidFilePath = relayFilePathFromSpawnArgs(spawn.args, 'PID')
       writeFileSync(pidFilePath, '8642')
       await vi.advanceTimersByTimeAsync(25)
 
       await expect(pendingPid).resolves.toBe(8642)
     } finally {
-      spawn.cleanup()
+      await spawn.cleanup()
       vi.useRealTimers()
     }
   })

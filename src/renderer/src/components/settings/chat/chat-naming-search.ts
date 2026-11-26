@@ -16,3 +16,6 @@ export const getChatNamingSearchEntry = createLocalizedCatalog((): SettingsSearc
     ...translateSearchKeyword('settings.chat.names.searchTemplate', 'command template')
   ]
 }))
+
+/** The chat-name recipe row inside the Advanced disclosure, where the naming agent is chosen. */
+export const CHAT_NAME_AGENT_SECTION_ID = 'chat-names-agent'

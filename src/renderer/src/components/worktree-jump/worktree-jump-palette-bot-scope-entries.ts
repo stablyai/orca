@@ -11,13 +11,9 @@ import { botScopeRecoveryText } from './use-worktree-jump-palette-bot-scope'
 export type WorktreeJumpPaletteBotScopeEntries = {
   /** The whole list while showing only bots; null otherwise. */
   botScopeEntries: PaletteListEntry[] | null
-  /** Rows after everything else: the offer to search bots a filter hides. */
-  botScopeTrailingEntries: readonly PaletteListEntry[]
   /** Muted text above the scoped list saying why it's empty; never a row you can select. */
   botScopeNote: string | null
 }
-
-const NO_ENTRIES: readonly PaletteListEntry[] = []
 
 /** What the @ scope adds to the list, for whichever mode the palette is in. */
 export function useWorktreeJumpPaletteBotScopeEntries({
@@ -25,14 +21,12 @@ export function useWorktreeJumpPaletteBotScopeEntries({
   query,
   visibleExtraSections,
   botCatalogSize,
-  filterHiddenBotMatches,
   handleExpandSection
 }: {
   scoped: boolean
   query: string
   visibleExtraSections: readonly VisiblePaletteExtraSection[]
   botCatalogSize: number
-  filterHiddenBotMatches: number
   handleExpandSection: (sectionKey: string) => void
 }): WorktreeJumpPaletteBotScopeEntries {
   const t = useTranslate()
@@ -49,25 +43,9 @@ export function useWorktreeJumpPaletteBotScopeEntries({
         : null,
     [botCatalogSize, handleExpandSection, query, scoped, t, visibleExtraSections]
   )
-  const text = query.trim()
-  const botScopeTrailingEntries = useMemo(
-    (): readonly PaletteListEntry[] =>
-      !scoped && filterHiddenBotMatches > 0 && text
-        ? [
-            {
-              id: '__bot_scope_search_bots__',
-              type: 'bot-scope-action',
-              action: 'search-bots',
-              label: t('bots.palette.searchBotsFor', 'Search bots for "{{text}}"', { text })
-            }
-          ]
-        : NO_ENTRIES,
-    [filterHiddenBotMatches, scoped, t, text]
-  )
   return {
     botScopeEntries: scopedList?.entries ?? null,
-    botScopeNote: scopedList?.note ?? null,
-    botScopeTrailingEntries
+    botScopeNote: scopedList?.note ?? null
   }
 }
 

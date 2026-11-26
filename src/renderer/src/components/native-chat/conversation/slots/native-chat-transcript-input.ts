@@ -36,6 +36,8 @@ export type NativeChatTranscriptSlotsInput = {
   subagentHeads?: readonly NativeChatSubagentHead[]
   /** The chat's own workers, which tell back-to-back worker rows about one Dispatch. */
   workers?: readonly OrchestrationSessionWorker[]
+  /** Quiet turns that just settled here: still drawn, marked to fade out, until they go. */
+  leavingTurnKeys?: ReadonlySet<string>
   /** The open reasoning block the live activity line discloses: its row takes no slot meanwhile. */
   liveReasoningId?: string | null
 }

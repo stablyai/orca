@@ -9,8 +9,13 @@ import { journalDomainQueueRow } from './journal-domain-queue-rows'
 import { nextJournalDomainQueueCard } from './journal-domain-submission-consume'
 import { readJournalDomainQueuePauseContext } from './journal-domain-queue-pauses'
 import { readJournalSqlUsageLimitCut } from './journal-sql-status-cuts'
+import { failureHoldsMail } from './queued-messages/queued-message-pause'
 import { applyJournalDomainSubmission } from './journal-domain-submission-admission'
 import { applyJournalDomainQueueCommand } from './journal-domain-queue-command'
+import {
+  journalDomainCarriedCards,
+  settleJournalDomainCarriedCards
+} from './journal-domain-carried-cards'
 import { finishJournalSqlCommand, journalSqlInputCoordinates } from './journal-sql-command-result'
 import {
   queuedMessagePublishedBytesRefusal,
@@ -97,6 +102,24 @@ export function applyJournalSqlSendAdmission(
       : empty({ kind: 'admitted', value: { clientMessageId: id, submission: existing } })
   }
   const eligibility = journalDomainInputEligibility(scope, facts.send)
+  const superseded = () =>
+    empty({
+      kind: 'refused',
+      refusal: refuse(
+        'agent_session_operation_invalid',
+        { reason: 'continuationSuperseded' },
+        'This chat has moved on. Check the latest messages before continuing.'
+      )
+    })
+  const launch = operation.expectedContinuationLaunch
+  // Provider startup may prove a launch while this send waits for the writer.
+  if (
+    launch &&
+    (eligibility.record?.lease.runtimeFence !== launch.runtimeFence ||
+      eligibility.record?.launchedAccount?.fence !== launch.launchFence)
+  ) {
+    return superseded()
+  }
   if (eligibility.blocked) {
     return empty({
       kind: 'refused',
@@ -107,6 +130,13 @@ export function applyJournalSqlSendAdmission(
       )
     })
   }
+  // A connector message's carried cards: read again here, so a Retry or edit since never sends twice.
+  const carried = journalDomainCarriedCards(db, scope, input.body, savedAt)
+  if (!carried) {
+    return superseded()
+  }
+  const settleCarried = () =>
+    settleJournalDomainCarriedCards(db, scope, id, carried, { fence: input.fence, savedAt })
   let queue = false
   if (operation.fromAgent || !pendingPromptsAllUnanswerableHere(eligibility.prompts)) {
     queue = eligibility.prompts.length > 0 || eligibility.work.working() || !!eligibility.pending
@@ -116,7 +146,7 @@ export function applyJournalSqlSendAdmission(
         scope,
         facts.reopenFloor ?? null,
         []
-      ).pauses.some((pause) => pause.reason === 'failed')
+      ).pauses.some(failureHoldsMail)
     }
     if (!queue) {
       const next = nextJournalDomainQueueCard(db, scope, {
@@ -138,21 +168,17 @@ export function applyJournalSqlSendAdmission(
       readJournalSqlUsageLimitCut(eligibility.context)?.turnItemId !==
         operation.continuationOfTurnItemId)
   ) {
-    return empty({
-      kind: 'refused',
-      refusal: refuse(
-        'agent_session_operation_invalid',
-        { reason: 'continuationSuperseded' },
-        'This chat has moved on. Check the latest messages before continuing.'
-      )
-    })
+    return superseded()
   }
   if (queue) {
+    // Cards this message carries leave the queue with it; its own body already holds their text.
+    const carriedIds = carried.map((row) => row.card.messageId)
     const queuedBytes = Number(
       db
         .prepare(`SELECT COALESCE(SUM(length(CAST(json_extract(payload_json,'$.body') AS BLOB))),0) AS bytes
-      FROM journal_queue_cards WHERE session_id=? AND epoch=? AND state IN ('waiting','returned')`)
-        .get(...scope.prefix)!.bytes
+      FROM journal_queue_cards WHERE session_id=? AND epoch=? AND state IN ('waiting','returned')
+        AND message_id NOT IN (SELECT value FROM json_each(?))`)
+        .get(...scope.prefix, JSON.stringify(carriedIds))!.bytes
     )
     const refusal = queuedMessagePublishedBytesRefusal(
       queuedBytes + publishedQueuedBodyBytes(input.body),
@@ -161,6 +187,7 @@ export function applyJournalSqlSendAdmission(
     if (refusal) {
       return empty({ kind: 'refused', refusal })
     }
+    const settled = settleCarried()
     const result = applyJournalDomainQueueCommand(
       db,
       stateDirectory,
@@ -186,7 +213,7 @@ export function applyJournalSqlSendAdmission(
       db,
       stateDirectory,
       command,
-      { ...result, items: [], receipts: [] },
+      { ...result, cards: [...settled.cards, ...result.cards], items: [], receipts: [] },
       {
         kind: 'admitted',
         value: {
@@ -194,12 +221,13 @@ export function applyJournalSqlSendAdmission(
           queued: { messageId: id, position: card.position, state: card.state }
         }
       } satisfies JournalSendAdmissionResult,
-      [{ kind: 'queue', epoch: target.epoch, seq: result.cursor.sequence }]
+      [...settled.coordinates, { kind: 'queue', epoch: target.epoch, seq: result.cursor.sequence }]
     )
   }
   if (operation.queueOnly) {
     return empty({ kind: 'immediate' })
   }
+  const settled = settleCarried()
   const result = applyJournalDomainSubmission(
     db,
     stateDirectory,
@@ -216,12 +244,12 @@ export function applyJournalSqlSendAdmission(
     db,
     stateDirectory,
     command,
-    result,
+    { ...result, cards: [...settled.cards, ...result.cards] },
     {
       kind: 'admitted',
       value: { clientMessageId: id, submission }
     } satisfies JournalSendAdmissionResult,
-    journalSqlInputCoordinates(target.epoch, result.coordinates),
+    [...settled.coordinates, ...journalSqlInputCoordinates(target.epoch, result.coordinates)],
     result.items.map((item) => item.itemId)
   )
 }

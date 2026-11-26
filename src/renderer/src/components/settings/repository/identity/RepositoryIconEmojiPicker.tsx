@@ -4,16 +4,20 @@ import type { RepoIcon } from '../../../../../../shared/repository/appearance/re
 import { sanitizeRepoIcon } from '../../../../../../shared/repository/appearance/repo-icon'
 import { useDocumentDarkTheme } from '@/hooks/theme/use-document-dark-theme'
 import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 
 type RepositoryIconEmojiPickerProps = {
   selectedEmoji: string
   onSetIcon: (repoIcon: RepoIcon | null) => void
+  /** Hover-card layout: shorter, no preview strip or "Current" line. */
+  compact?: boolean
 }
 
 /** Lazy-load the roughly 500KB emoji-picker chunk only when the Emoji tab renders. */
 export function RepositoryIconEmojiPicker({
   selectedEmoji,
-  onSetIcon
+  onSetIcon,
+  compact = false
 }: RepositoryIconEmojiPickerProps): React.JSX.Element {
   const t = useTranslate()
   // Theme.AUTO only follows the OS setting, which can disagree with Orca's painted theme.
@@ -36,16 +40,23 @@ export function RepositoryIconEmojiPicker({
 
   return (
     <>
-      <div className="repo-icon-emoji-picker overflow-hidden rounded-md border border-border">
+      <div
+        className={cn(
+          'repo-icon-emoji-picker overflow-hidden rounded-md',
+          !compact && 'border border-border'
+        )}
+        data-compact={compact || undefined}
+      >
         <EmojiPicker
           // Inline emoji tabs can mount with Settings; autofocus would steal the search field.
           autoFocusSearch={false}
           emojiStyle={EmojiStyle.NATIVE}
-          height={340}
+          height={compact ? 220 : 340}
+          skinTonesDisabled={compact}
           width="100%"
           lazyLoadEmojis
           onEmojiClick={handleEmojiClick}
-          previewConfig={{ showPreview: true }}
+          previewConfig={{ showPreview: !compact }}
           searchPlaceholder={t(
             'auto.components.settings.RepositoryIconPicker.searchEmojiPlaceholder',
             'Search emoji'
@@ -53,7 +64,7 @@ export function RepositoryIconEmojiPicker({
           theme={isDarkTheme ? Theme.DARK : Theme.LIGHT}
         />
       </div>
-      {selectedEmoji ? (
+      {selectedEmoji && !compact ? (
         <p className="mt-2 text-[11px] text-muted-foreground">
           {t(
             'auto.components.settings.RepositoryIconPicker.currentEmojiSelection',

@@ -49,5 +49,14 @@ export function getCodexAccountAuthWarning(args: {
   if (args.limits?.status !== 'error' || !isCodexAuthError(args.limits.error)) {
     return null
   }
+  // WSL system defaults have no resolved authKind; the fetcher marks a home it proved has no ChatGPT login instead.
+  if (
+    args.accountId === null &&
+    args.authKind === undefined &&
+    args.runtime.runtime === 'wsl' &&
+    args.limits.usageMetadata?.failureKind === 'usage-unavailable'
+  ) {
+    return null
+  }
   return 'stale-sign-in'
 }

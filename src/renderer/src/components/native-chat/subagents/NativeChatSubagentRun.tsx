@@ -1,7 +1,10 @@
 import { Bot } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useNow } from '@/lib/window-activity/use-now'
-import { formatSubagentTokens } from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-group-header'
+import {
+  formatSubagentTokens,
+  nativeChatSubagentGroupHeader
+} from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-group-header'
 import { normalizeSubagentState } from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-summary'
 import {
   subagentEntryDetail,
@@ -17,7 +20,10 @@ import { NativeChatMarkdown } from '../markdown/NativeChatMarkdown'
 import { NativeChatCodeBlock } from '../markdown/code/NativeChatCodeBlock'
 import { NativeChatEventRow } from '../messages/events/NativeChatEventRow'
 import { NativeChatEventOpenButton } from '../messages/events/NativeChatEventOpenButton'
-import { sayNativeChatSubagentGroupTranslated as say } from './native-chat-subagent-group-words-text'
+import {
+  sayNativeChatSubagentGroupTranslated as say,
+  sayNativeChatSubagentGroupWith
+} from './native-chat-subagent-group-words-text'
 import { sayNativeChatSessionOptionTranslated as sayOption } from '../session/options/controls/native-chat-session-option-labels-text'
 
 /** Leaf so the shared 1s clock re-renders only the digits, never the roster. */
@@ -109,8 +115,9 @@ function NativeChatSubagentRow({
   )
 }
 
-/** A turn's subagents, one row each. Trust journal child states: children outlive their spawning
- *  turn, and only host/provider settlement proves lost contact. */
+/** A turn's subagents under one summary row, one row each once opened; a lone subagent is its own row.
+ *  Trust journal child states: children outlive their spawning turn, and only host/provider
+ *  settlement proves lost contact. */
 export function NativeChatSubagentRun({
   block,
   disclosureId,
@@ -121,9 +128,64 @@ export function NativeChatSubagentRun({
   disclosureId?: string
   onOpenSubagent?: (agentId: string) => void
 }): React.JSX.Element | null {
-  if (block.agents.length === 0) {
+  // `t` changes with the UI language and its catalogs, so the derived words follow them.
+  const t = useTranslate()
+  const header = nativeChatSubagentGroupHeader(block.agents, sayNativeChatSubagentGroupWith(t))
+  if (header.total === 0) {
     return null
   }
+  if (header.total === 1) {
+    // One row either way, and its name says more than "1 subagent".
+    return (
+      <NativeChatSubagentRows block={block} disclosureId={disclosureId} onOpen={onOpenSubagent} />
+    )
+  }
+  const { working, headline, verdict, alertState, alert, clockStartedAt } = header
+  const summary = alert === null ? verdict : `${verdict} +${alert}`
+  return (
+    // Closed until the reader opens it: a turn can start many subagents, and the reply matters more.
+    <NativeChatEventRow
+      icon={<Bot aria-hidden className="size-3.5" />}
+      badge={
+        working ? 'running' : (alertState ?? header.verdictState) === 'failed' ? 'failed' : null
+      }
+      label={[headline, summary, header.tokens].filter(Boolean).join(', ')}
+      disclosureKey={
+        disclosureId === undefined ? undefined : `subagent-roster:${disclosureId}:${block.groupId}`
+      }
+      detailsAreRows
+      details={
+        <NativeChatSubagentRows block={block} disclosureId={disclosureId} onOpen={onOpenSubagent} />
+      }
+    >
+      <span className="text-chat-foreground">{headline}</span>
+      <span className="tabular-nums">
+        {` · ${summary}`}
+        {clockStartedAt !== null ? (
+          <>
+            {' · '}
+            <SubagentElapsed
+              startedAt={clockStartedAt}
+              settledAt={header.settledAt}
+              counting={working}
+            />
+          </>
+        ) : null}
+        {header.tokens !== null ? ` · ${header.tokens}` : null}
+      </span>
+    </NativeChatEventRow>
+  )
+}
+
+function NativeChatSubagentRows({
+  block,
+  disclosureId,
+  onOpen
+}: {
+  block: NativeChatSubagentGroupBlock
+  disclosureId?: string
+  onOpen?: (agentId: string) => void
+}): React.JSX.Element {
   return (
     <div className="flex flex-col gap-1">
       {block.agents.map((agent) => (
@@ -135,7 +197,7 @@ export function NativeChatSubagentRun({
               ? undefined
               : `subagent:${disclosureId}:${block.groupId}:${agent.id}`
           }
-          onOpen={onOpenSubagent}
+          onOpen={onOpen}
         />
       ))}
     </div>

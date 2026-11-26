@@ -21,7 +21,6 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { lookedWhen } from './bot-up-next-copy'
 import type { SheetBot } from './bot-sheet-operations'
 import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
-import { MobileBotTextButton } from './MobileBotTextButton'
 
 export type TidyUpPage = 'every' | 'summary'
 type Run = NonNullable<BotTidyUpView['last']>
@@ -46,11 +45,8 @@ export function MobileTidyUpSection(props: {
   const last = props.view?.last ?? null
   return (
     <SettingsSection
-      title={t('bots.tidyUp.title', 'Memory upkeep')}
-      footer={t(
-        'bots.tidyUp.footer',
-        'Changes memory files only. Uses your agent plan, like a short chat. Orca must be running on your computer.'
-      )}
+      first
+      footer={t('bots.tidyUp.footerShort', 'Changes memory files only. Uses your agent plan.')}
     >
       <SwitchRow
         label={t('bots.tidyUp.on', 'Tidy memory overnight')}
@@ -86,6 +82,7 @@ export function MobileTidyUpSection(props: {
                   ? t('bots.tidyUp.tidying', 'Tidying…')
                   : t('bots.tidyUp.now', 'Tidy now')
               }
+              accent
               disabled={props.disabled || props.view?.running === true || props.bot.paused}
               onPress={props.onTidyNow}
               accessibilityRole="button"
@@ -138,8 +135,8 @@ function Summary(props: { run: Run; busy: boolean; onUndo: (rowId: string) => vo
       <SummaryGroup title={t('bots.tidyUp.tidied', 'Tidied')} lines={tidied} />
       <SettingsSection
         footer={t(
-          'bots.tidyUp.undoNote',
-          'Undo puts MEMORY.md back as it was before this tidy-up, all at once. Full history and memory editing are on your computer, in Settings → Memory.'
+          'bots.tidyUp.undoNoteShort',
+          'Puts MEMORY.md back as it was before this tidy-up.'
         )}
       >
         <ListRow
@@ -148,23 +145,17 @@ function Summary(props: { run: Run; busy: boolean; onUndo: (rowId: string) => vo
               ? t('bots.tidyUp.undone', 'Undone')
               : t('bots.tidyUp.undoAll', 'Undo this tidy-up')
           }
-          disabled={run.undone || run.rowId === null || props.busy}
-          accessory={
-            run.undone ? undefined : (
-              <MobileBotTextButton
-                label={t('bots.tidyUp.undo', 'Undo')}
-                disabled={run.rowId === null || props.busy}
-                onPress={() => run.rowId && props.onUndo(run.rowId)}
-              />
-            )
-          }
+          accent={!run.undone}
+          disabled={!run.undone && (run.rowId === null || props.busy)}
+          onPress={run.undone ? undefined : () => run.rowId && props.onUndo(run.rowId)}
+          accessibilityRole="button"
         />
       </SettingsSection>
     </>
   )
 }
 
-/** How often, or the last run's changes, drilled into from the section. */
+/** How often, or the last run's changes, drilled into from Memory upkeep. */
 export function MobileTidyUpPage(props: {
   page: TidyUpPage
   bot: SheetBot
@@ -192,7 +183,10 @@ export function MobileTidyUpPage(props: {
             ? t('bots.tidyUp.every', 'How often')
             : t('bots.tidyUp.summaryTitle', 'Last tidy-up')
         }
-        onBack={{ label: t('bots.lookAround.back', 'Back to Settings'), onPress: props.onBack }}
+        onBack={{
+          label: t('bots.tidyUp.backToTidyUp', 'Back to Memory upkeep'),
+          onPress: props.onBack
+        }}
       />
       {props.banner}
       {props.page === 'every' ? (

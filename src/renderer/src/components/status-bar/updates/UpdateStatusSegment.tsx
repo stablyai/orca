@@ -6,12 +6,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { getUpdateInstallBlockGuidance } from '../../maintenance/update-card/update-install-block-guidance'
 
 // Always expose the collapsed update card so pending downloads and installs remain reachable.
-export function UpdateStatusSegment({
-  iconOnly
-}: {
-  compact: boolean
-  iconOnly: boolean
-}): React.JSX.Element | null {
+export function UpdateStatusSegment(): React.JSX.Element | null {
   const t = useTranslate()
   const status = useAppStore((s) => s.updateStatus)
   const collapsed = useAppStore((s) => s.updateCardCollapsed)
@@ -69,7 +64,9 @@ export function UpdateStatusSegment({
       }
     }
     const readyVersion =
-      status.state === 'downloaded' ? status.version : linuxPackageRecovery?.version
+      status.state === 'downloaded' || status.installOnQuit
+        ? status.version
+        : linuxPackageRecovery?.version
     if (readyVersion !== undefined) {
       return {
         icon: <CheckCircle2 className="size-3 text-emerald-500" />,
@@ -114,7 +111,7 @@ export function UpdateStatusSegment({
           aria-expanded={!collapsed}
         >
           {segment.icon}
-          {!iconOnly && <span className="text-[11px] tabular-nums">{segment.label}</span>}
+          <span className="text-[11px] tabular-nums">{segment.label}</span>
         </button>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={6}>

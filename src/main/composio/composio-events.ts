@@ -12,6 +12,7 @@ import { stopComposioEvents } from './composio-api-events'
 import type { ComposioBots } from './composio-bots'
 import {
   ComposioIngressStore,
+  composioHookIdOf,
   composioTriggersOfRule,
   composioUserOfRule,
   type ComposioIngress,
@@ -46,12 +47,6 @@ export type ComposioEventsHost = {
   deleteAutomation: (id: string) => Promise<void>
 }
 
-/** `<base>/hooks/<hook id>/<key>`: the hook id, when the address is one of Orca's hooks. */
-function hookIdOf(url: string): string | null {
-  const parts = url.split('/')
-  return parts.at(-3) === 'hooks' ? (parts.at(-2) ?? null) : null
-}
-
 export class ComposioEvents {
   private lane: Promise<unknown> = Promise.resolve()
   private place: ComposioEventsPlace | null = null
@@ -70,8 +65,8 @@ export class ComposioEvents {
   }
 
   /** Where the saved key's project sends its events, from the last upkeep; null before one ran. */
-  eventsPlace(): ComposioEventsPlace | null {
-    return this.place?.project === this.composio.project() ? this.place : null
+  async eventsPlace(): Promise<ComposioEventsPlace | null> {
+    return this.place?.project === (await this.composio.project()) ? this.place : null
   }
 
   /** A regenerated key reached `from`'s project: its hook is `to`'s. */
@@ -80,12 +75,10 @@ export class ComposioEvents {
   }
 
   /** Runs with the key saved now, and its project for every read and write. */
-  private withProject<T>(work: (api: ComposioApi, project: string) => Promise<T>): Promise<T> {
-    const project = this.composio.project()
-    if (!project) {
-      return Promise.reject(new Error('Add your Composio key first.'))
-    }
-    return this.composio.withKey((api) => work(api, project))
+  private async withProject<T>(
+    work: (api: ComposioApi, project: string) => Promise<T>
+  ): Promise<T> {
+    return this.composio.withKey((api, credential) => work(api, credential.project))
   }
 
   private ownHook(botId: string, hookId: string): void {
@@ -100,7 +93,7 @@ export class ComposioEvents {
    * regenerated), so that record is this project's.
    */
   private liveIngress(project: string, current?: { url: string }): ComposioSavedIngress | null {
-    const hookId = current ? hookIdOf(current.url) : null
+    const hookId = current ? composioHookIdOf(current.url) : null
     const earlier = hookId ? this.store.projectOfHook(hookId) : null
     if (!this.store.read(project) && earlier && earlier !== project) {
       this.store.relabel(earlier, project)
@@ -112,15 +105,11 @@ export class ComposioEvents {
   }
 
   /** Saved under the operation's project; a key changed meanwhile abandons the operation. */
-  private save(project: string, ingress: ComposioSavedIngress | null): void {
-    if (this.composio.project() !== project) {
+  private async save(project: string, ingress: ComposioSavedIngress | null): Promise<void> {
+    if ((await this.composio.project()) !== project) {
       throw new Error('The Composio key changed while this ran. Try again.')
     }
     this.store.write(project, ingress)
-  }
-
-  private listening(): Automation[] {
-    return this.host.automations().filter((entry) => composioUserOfRule(entry))
   }
 
   private async pointsAt(ingress: ComposioIngress | null, url: string | undefined) {
@@ -237,7 +226,7 @@ export class ComposioEvents {
       ...(await this.host.createIngress(botId)),
       signed: false
     }
-    this.save(project, ingress)
+    await this.save(project, ingress)
     return ingress
   }
 
@@ -248,7 +237,7 @@ export class ComposioEvents {
     replacing?: string
   ) {
     // Unsigned until the new secret is on the hook, so a failure here is finished on the next try.
-    this.save(project, { ...ingress, signed: false })
+    await this.save(project, { ...ingress, signed: false })
     const subscription = await api.sendEventsTo(await this.host.url(ingress.hookId), replacing)
     await this.sign(api, project, ingress, subscription.id, subscription.secret)
   }
@@ -265,9 +254,9 @@ export class ComposioEvents {
       throw new Error('Composio didn’t give a signing secret. Try again in a moment.')
     }
     // Checked before the hook takes the secret, so a key changed meanwhile can't overwrite it.
-    this.save(project, { ...ingress, signed: false })
+    await this.save(project, { ...ingress, signed: false })
     await this.host.setSecret(ingress.hookId, value)
-    this.save(project, { ...ingress, signed: true })
+    await this.save(project, { ...ingress, signed: true })
   }
 
   /**
@@ -275,9 +264,9 @@ export class ComposioEvents {
    * the owner set up working: signed, made again under another bot when its bot went, or stopped
    * and removed when no bot listens any more. It never makes the first one.
    */
-  reconcile(botIds: readonly string[]): Promise<void> {
-    if (this.composio.keyState() !== 'ok') {
-      return Promise.resolve()
+  async reconcile(botIds: readonly string[]): Promise<void> {
+    if ((await this.composio.keyState()) !== 'ok') {
+      return
     }
     return this.exclusive(() =>
       this.withProject(async (api, project) => {
@@ -293,7 +282,9 @@ export class ComposioEvents {
     const user = composioUserOfBot(botId)
     const triggers = await api.triggers(user)
     // Read after the list, so a listener made meanwhile keeps its trigger.
-    const slugs = this.listening()
+    const slugs = this.host
+      .automations()
+      .filter((entry) => composioUserOfRule(entry))
       .filter((entry) => composioUserOfRule(entry) === user)
       .map(composioTriggersOfRule)
     // An automation without a trigger filter takes every trigger the bot has.
@@ -316,8 +307,8 @@ export class ComposioEvents {
       this.place = null
       return
     }
-    const toSaved = Boolean(current && hookIdOf(current.url) === saved.hookId)
-    const listening = this.listening()
+    const toSaved = Boolean(current && composioHookIdOf(current.url) === saved.hookId)
+    const listening = this.host.automations().filter((entry) => composioUserOfRule(entry))
     const elsewhere = listening.length > 0 && Boolean(current) && !toSaved
     this.place = { project, here: toSaved, elsewhere }
     if (listening.length === 0) {
@@ -327,7 +318,7 @@ export class ComposioEvents {
       if (live) {
         await this.host.deleteAutomation(live.automationId)
       }
-      this.save(project, null)
+      await this.save(project, null)
       return
     }
     // Another address took the project's events since: that's the owner's or another host's.
@@ -346,14 +337,14 @@ export class ComposioEvents {
   /** Stops the project's events only if they still come to `ingress`, read just before. */
   private async stopIfStillOurs(api: ComposioApi, ingress: ComposioIngress): Promise<void> {
     const current = (await api.webhookSubscriptions())[0]
-    if (current && hookIdOf(current.url) === ingress.hookId) {
+    if (current && composioHookIdOf(current.url) === ingress.hookId) {
       await stopComposioEvents(api, current.id)
     }
   }
 
   /** The Remove-key choice, run in the lane before the key goes: every bot's triggers off, and the
    *  project's events stopped. */
-  turnOffNow(botIds: readonly string[]): Promise<void> {
+  async turnOffNow(botIds: readonly string[]): Promise<void> {
     return this.withProject(async (api, project) => {
       for (const botId of botIds) {
         for (const trigger of await api.triggers(composioUserOfBot(botId))) {
@@ -369,7 +360,7 @@ export class ComposioEvents {
       if (live) {
         await this.host.deleteAutomation(live.automationId)
       }
-      this.save(project, null)
+      await this.save(project, null)
     })
   }
 

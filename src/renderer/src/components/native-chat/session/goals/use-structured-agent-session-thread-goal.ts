@@ -1,8 +1,6 @@
+import type { AgentSessionGoalDisplay } from '../../../../../../shared/agent-session/thread-goals/agent-session-goal-check-display'
 import { useCallback, useMemo, useState } from 'react'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalThreadGoal
-} from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentOwnedThreadGoalCommand,
   agentSessionThreadGoalReport
@@ -14,9 +12,10 @@ import type {
 } from '../../../../../../shared/agent-session/thread-goals/agent-session-thread-goal-wire'
 import { getNativeChatAgentProfile } from '../../../../../../shared/native-chat/input/commands/native-chat-agent-profiles'
 import type { StructuredAgentSessionMutate } from '../structured/writes/use-structured-agent-session-mutate'
+import { rowsBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 
 export type StructuredAgentSessionThreadGoal = {
-  goal: AgentJournalThreadGoal | null
+  goal: AgentSessionGoalDisplay | null
   pending: boolean
   /** False for agent-owned /goal: clear uses a command and pause is unavailable. */
   hostChanges: boolean
@@ -40,9 +39,11 @@ export function useStructuredAgentSessionThreadGoal(args: {
   const { journalItems, mutate, support, reported, journalEpoch, send } = args
   const agentResumes = getNativeChatAgentProfile(args.agent)?.resumesOwnGoal === true
   const [pendingCount, setPendingCount] = useState(0)
+  const goalRows = rowsBesideStreamedText(journalItems)
   const report = useMemo(
-    () => agentSessionThreadGoalReport({ journalItems, support, reported, journalEpoch }),
-    [journalItems, support, reported, journalEpoch]
+    // Goal rows never carry reply text, so a streaming reply keeps the memo.
+    () => agentSessionThreadGoalReport({ journalItems: goalRows, support, reported, journalEpoch }),
+    [goalRows, support, reported, journalEpoch]
   )
   const hostChanges = support !== undefined
   const change = useCallback(

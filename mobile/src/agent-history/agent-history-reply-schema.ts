@@ -26,3 +26,9 @@ export const resumeMetadataListSchema = z.looseObject({})
 export const agentHistoryProjectSetupsSchema = z.looseObject({
   setups: salvagingArray(z.object({ projectId: z.string(), repoId: z.string(), path: z.string() }))
 })
+
+// Either prompt may be missing: no text to hand over, or no saved transcript for Full transcript.
+export const aiVaultSessionHandoffPromptSchema = z.looseObject({
+  focused: salvagedOptional('focused', z.string()),
+  full: salvagedOptional('full', z.string())
+})

@@ -108,8 +108,12 @@ export function getWorkerTerminalResourceByOwner(
   this: OrchestrationDb,
   dispatchId: string
 ): WorkerTerminalResourceRow | undefined {
+  // Explicit projection so SyncDatabase caches this per-lineage-step statement; `SELECT *` never is.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation.
   return this.db
-    .prepare('SELECT * FROM worker_terminal_resources WHERE owner_dispatch_id = ?')
+    .prepare(
+      `SELECT ${WORKER_TERMINAL_RESOURCE_COLUMN_LIST} FROM worker_terminal_resources WHERE owner_dispatch_id = ?`
+    )
     .get(dispatchId) as WorkerTerminalResourceRow | undefined
 }
 
@@ -136,7 +140,7 @@ export function getWorkerTerminalResourceByProcessIncarnation(
         WHERE process_incarnation = ? ORDER BY updated_at DESC LIMIT 1`
     )
     .get(processIncarnation)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of WorkerTerminalResourceRow, a missing one fails compilation, and projected-row-getters.test.ts pins it to the migrated schema.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list is checked against WorkerTerminalResourceRow, and projected-row-getters.test.ts verifies the returned row.
   return row as WorkerTerminalResourceRow | undefined
 }
 
@@ -146,26 +150,31 @@ export function getWorkerTerminalResourceFormerlyOwnedBy(
 ): WorkerTerminalResourceRow | undefined {
   const row = this.db
     .prepare(
-      `SELECT * FROM worker_terminal_resources WHERE id = ${formerlyOwnedResourceIdSql('?')}`
+      `SELECT ${WORKER_TERMINAL_RESOURCE_COLUMN_LIST} FROM worker_terminal_resources
+        WHERE id = ${formerlyOwnedResourceIdSql('?')}`
     )
     .get(dispatchId)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns the row shape its schema and row type define, like every row cast in db/.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation.
   return row as WorkerTerminalResourceRow | undefined
 }
 
-/** Records bounded recovery bookkeeping without changing ownership or release intent. */
+/**
+ * Records bounded recovery bookkeeping without changing ownership or release intent. `owner`, when given,
+ * charges the attempt only to that dispatch's custody: a row transferred meanwhile is left alone.
+ */
 export function recordWorkerTerminalRecoveryAttempt(
   this: OrchestrationDb,
-  resourceId: string
+  resourceId: string,
+  owner?: string
 ): WorkerTerminalResourceRow | undefined {
   this.db
     .prepare(
       `UPDATE worker_terminal_resources
           SET recovery_attempt_count = MIN(recovery_attempt_count + 1, 32),
               last_recovery_at = datetime('now'), updated_at = datetime('now')
-        WHERE id = ?`
+        WHERE id = ? AND (? IS NULL OR owner_dispatch_id = ?)`
     )
-    .run(resourceId)
+    .run(resourceId, owner ?? null, owner ?? null)
   return this.getWorkerTerminalResource(resourceId)
 }
 

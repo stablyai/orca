@@ -10,7 +10,10 @@ import { sourceFileOpenRun } from '../files/session-documents/mobile-source-file
 import { sessionBrowserTabCreate } from '../browser/tab-navigation/mobile-session-browser-operations'
 import { sessionMarkdownNoteCreate } from '../files/session-documents/mobile-markdown-tab-operations'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-message'
-import type { MobileBrowserNavigationMethod } from './tabs/MobileBrowserTabActionSheet'
+import type {
+  MobileBrowserNavigationMethod,
+  MobileBrowserNavigationOptions
+} from './tabs/MobileBrowserTabActionSheet'
 import { isFileExistsErrorMessage } from '../files/mutation-ownership/file-exists-error'
 import type { MobileSessionTab } from './tabs/mobile-session-tabs'
 import type { MobileSessionTerminalCreateActionsModel } from '../terminal/session/creation/use-mobile-session-terminal-create-actions'
@@ -169,7 +172,8 @@ export function useMobileSessionContentCreateActions(
 
   async function handleBrowserNavigationCommand(
     tab: Extract<MobileSessionTab, { type: 'browser' }>,
-    method: MobileBrowserNavigationMethod
+    method: MobileBrowserNavigationMethod,
+    options?: MobileBrowserNavigationOptions
   ) {
     if (!client || !tab.browserPageId) {
       showToast(
@@ -187,7 +191,8 @@ export function useMobileSessionContentCreateActions(
         client,
         {
           worktree: `id:${worktreeId}`,
-          page: tab.browserPageId
+          page: tab.browserPageId,
+          ...(options?.ignoreCache ? { ignoreCache: true } : {})
         },
         { timeoutMs: 15_000 }
       )

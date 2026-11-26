@@ -288,10 +288,8 @@ function resolveMenuTargetRenderer(targetWindow?: BrowserWindow | null): WebCont
   if (!mainWindow || mainWindow.isDestroyed()) {
     return undefined
   }
-  // Companion renderers do not mount the Help dialogs.
-  if (isCompanion) {
-    safelyRevealWindow(mainWindow)
-  }
+  // Why: companion windows, browser popups, and windowless menu clicks need the main window.
+  safelyRevealWindow(mainWindow)
   return mainWindow.webContents
 }
 
@@ -305,6 +303,10 @@ export function sendOpenSetupGuide(targetWindow?: BrowserWindow | null): void {
 
 export function sendOpenCrashReport(targetWindow?: BrowserWindow | null): void {
   resolveMenuTargetRenderer(targetWindow)?.send('ui:openCrashReport')
+}
+
+export function sendOpenWorktreePalette(targetWindow?: BrowserWindow | null): void {
+  resolveMenuTargetRenderer(targetWindow)?.send('ui:toggleWorktreePalette', { openOnly: true })
 }
 
 // After automatic recovery stops, only main-process dialogs can offer retry/quit on a blank window.

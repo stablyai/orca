@@ -30,7 +30,7 @@ function toUserFieldValue(site: JiraSite, value: unknown): unknown {
 
 /** Shape customFields named by userFieldKeys into user references. */
 export async function createIssue(args: JiraCreateIssueArgs): Promise<JiraCreateIssueResult> {
-  const entry = getClients(args.siteId)[0]
+  const entry = (await getClients(args.siteId))[0]
   if (!entry) {
     return taskProviderFailure('jira.notConnected', 'Not connected to Jira.')
   }
@@ -67,7 +67,7 @@ export async function createIssue(args: JiraCreateIssueArgs): Promise<JiraCreate
     return { ok: true, id: created.id, key: created.key, url: issueUrl(entry.site, created.key) }
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken(entry.site.id)
+      await clearToken(entry)
       throw error
     }
     return error instanceof Error
@@ -83,7 +83,7 @@ export async function updateIssue(
   updates: JiraIssueUpdate,
   siteId?: string | null
 ): Promise<JiraMutationResult> {
-  const entry = getClients(siteId)[0]
+  const entry = (await getClients(siteId))[0]
   if (!entry) {
     return taskProviderFailure('jira.notConnected', 'Not connected to Jira.')
   }
@@ -143,7 +143,7 @@ export async function updateIssue(
     return { ok: true }
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken(entry.site.id)
+      await clearToken(entry)
       throw error
     }
     return error instanceof Error
@@ -159,7 +159,7 @@ export async function addIssueComment(
   body: string,
   siteId?: string | null
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
-  const entry = getClients(siteId)[0]
+  const entry = (await getClients(siteId))[0]
   if (!entry) {
     return taskProviderFailure('jira.notConnected', 'Not connected to Jira.')
   }
@@ -176,7 +176,7 @@ export async function addIssueComment(
     return { ok: true, id: comment.id }
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken(entry.site.id)
+      await clearToken(entry)
       throw error
     }
     return error instanceof Error

@@ -2,33 +2,60 @@ import { publishBots } from '@/lib/bot-catalog-snapshot'
 import type { Bot } from '../../../shared/bot-types'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 
+/** `bots.roster`'s answer when a fixture gives purposes (by bot id); absent, it stays unanswered. */
+function rosterResult(bots: Bot[], purposes?: Record<string, string>): Record<string, unknown> {
+  return purposes
+    ? {
+        'bots.roster': {
+          bots: bots.map((bot) => ({ id: bot.id, specialty: purposes[bot.id] ?? null }))
+        }
+      }
+    : {}
+}
+
+/** A fixture's view of the bot RPCs it stubs: more methods to answer, and each call as it arrives. */
+export type StubBotCalls = {
+  results?: Record<string, unknown>
+  record?: (call: { method: string; params?: unknown }) => void
+}
+
 // The bot reads a mounted bot list makes, answered without a runtime: these bots, no groups, nothing new.
-export function stubBots(bots: Bot[]): void {
+// `purposes`, by bot id, is what each bot is for, as its SOUL.md says.
+export function stubBots(
+  bots: Bot[],
+  purposes?: Record<string, string>,
+  calls: StubBotCalls = {}
+): void {
   publishBots(bots)
   const results: Record<string, unknown> = {
+    ...rosterResult(bots, purposes),
     'bots.list': { bots },
     'bots.groups.list': { groups: [] },
     'bots.upNext.unseen': { unseen: {} },
-    'bots.chatTree': { chats: [], workspaceChats: {} }
+    'bots.chatTree': { chats: [], workspaceChats: {} },
+    ...calls.results
   }
   const runtime: unknown = window.api.runtime
   Reflect.set(window.api, 'runtime', {
     ...(typeof runtime === 'object' ? runtime : {}),
-    call: async ({ method }: { method: string }) =>
-      method in results
+    call: async ({ method, params }: { method: string; params?: unknown }) => {
+      calls.record?.({ method, params })
+      return method in results
         ? { ok: true, result: results[method] }
         : { ok: false, error: { code: 'runtime_error', message: method } }
+    }
   })
 }
 
 /**
  * Paired servers' bot reads, answered without a runtime: each server lists its bots, and every
  * server is as new as this app. A server left out of `byServer` answers as unreachable. `souls`,
- * by bot id, is each server bot's SOUL.md as its own server reads it.
+ * by bot id, is each server bot's SOUL.md as its own server reads it; `purposes` as in `stubBots`.
  */
 export function stubServerBots(
   byServer: Record<string, Bot[]>,
-  souls: Record<string, string> = {}
+  souls: Record<string, string> = {},
+  purposes?: Record<string, string>
 ): void {
   const environments: unknown = window.api.runtimeEnvironments
   Reflect.set(window.api, 'runtimeEnvironments', {
@@ -53,6 +80,7 @@ export function stubServerBots(
         return { ok: true, result: { content: souls[soulOf.id], isBinary: false } }
       }
       const results: Record<string, unknown> = {
+        ...rosterResult(bots, purposes),
         'status.get': createCompatibleRuntimeStatusResponse(selector).result,
         'bots.list': { bots },
         'bots.groups.list': { groups: [] },

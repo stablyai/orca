@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/class-names'
+import { SpinnerFrame } from '@/components/ui/LoadingSpinner'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 export function ChecksTabActions({
@@ -174,13 +175,13 @@ export function ChecksTabCompactHeader({
     <div className="border-b border-border/50 px-3 py-2">
       <div className="flex min-w-0 items-start gap-2">
         <div className="flex min-w-0 flex-1 items-start gap-2">
-          <SummaryIcon
-            className={cn(
-              'mt-0.5 size-3.5 shrink-0',
-              summaryColor,
-              counts.pending > 0 && counts.failing === 0 && 'animate-spin'
-            )}
-          />
+          {counts.pending > 0 && counts.failing === 0 ? (
+            <SpinnerFrame className="mt-0.5">
+              <SummaryIcon className={cn('block size-3.5', summaryColor)} />
+            </SpinnerFrame>
+          ) : (
+            <SummaryIcon className={cn('mt-0.5 size-3.5 shrink-0', summaryColor)} />
+          )}
           <div className="min-w-0 flex-1">
             <div className="text-[13px] font-medium leading-5 text-foreground">
               {t('auto.components.GitHubItemDialog.4bd1f5b055', 'Checks')}

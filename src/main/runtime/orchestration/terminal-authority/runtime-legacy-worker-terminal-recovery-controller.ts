@@ -19,13 +19,6 @@ type RecoveryRetry = {
 // Retain controllers only while timers need cancellation during test teardown.
 const controllersWithArmedRetries = new Set<RuntimeLegacyWorkerTerminalRecoveryController>()
 
-/** Stop every armed recovery retry. Test-only: a retry loop must not outlive the test that armed it. */
-export function __cancelLegacyWorkerTerminalRecoveryRetriesForTests(): void {
-  for (const controller of Array.from(controllersWithArmedRetries)) {
-    controller.cancelAllRetries()
-  }
-}
-
 export class RuntimeLegacyWorkerTerminalRecoveryController {
   private queue: Promise<void> = Promise.resolve()
   private readonly retries = new Map<string, RecoveryRetry>()

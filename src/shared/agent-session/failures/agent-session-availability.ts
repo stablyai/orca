@@ -6,14 +6,15 @@ export type AgentSessionAccountKind = 'managed' | 'system'
 export type AgentSessionUnavailable =
   | { reason: 'notSignedIn'; account?: AgentSessionAccountKind }
   | { reason: 'cliMissing' }
+  | { reason: 'agentCommandNotRunnable' }
 
 /** A reason this build does not know reads as unknown, never as a different reason. */
 export function readAgentSessionUnavailable(value: unknown): AgentSessionUnavailable | null {
   if (typeof value !== 'object' || value === null || !('reason' in value)) {
     return null
   }
-  if (value.reason === 'cliMissing') {
-    return { reason: 'cliMissing' }
+  if (value.reason === 'cliMissing' || value.reason === 'agentCommandNotRunnable') {
+    return { reason: value.reason }
   }
   if (value.reason !== 'notSignedIn') {
     return null

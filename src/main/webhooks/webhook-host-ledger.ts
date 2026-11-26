@@ -8,11 +8,8 @@ import {
   WEBHOOK_CALL_STATES,
   WEBHOOK_HOOK_ID_PATTERN
 } from '../../shared/connector-webhook-contract'
-import {
-  writeDurableSecureJsonFile,
-  writeSecureJsonFile
-} from '../../shared/secure-storage/secure-file'
 import { isMissingFileError } from '../runtime/rpc/server/pairing/device-registry-corruption'
+import { NewerAgentHooks } from './webhook-host-newer-agent-hooks'
 
 const LEDGER_FILE = 'webhook-host.json'
 // Kept as long as the cloud keeps call rows.
@@ -97,11 +94,15 @@ export class WebhookHostLedger {
   private stored: StoredLedger | null = null
   // The last write failed: memory holds what disk lacks, so the next save writes even if unchanged.
   private unsaved = false
+  private readonly newerAgentHooks: NewerAgentHooks<LedgerHook>
 
   constructor(
     private readonly userDataPath: string,
-    private readonly account: () => string | null
-  ) {}
+    private readonly account: () => string | null,
+    newerAgentBotIds: () => ReadonlySet<string>
+  ) {
+    this.newerAgentHooks = new NewerAgentHooks(userDataPath, newerAgentBotIds, LedgerHook)
+  }
 
   private get path(): string {
     return join(this.userDataPath, LEDGER_FILE)
@@ -115,9 +116,19 @@ export class WebhookHostLedger {
     }
     if (this.stored?.account !== account) {
       const loaded = this.read()
-      this.stored = loaded?.account === account ? loaded : emptyLedger(account)
+      const ledger = loaded?.account === account ? loaded : emptyLedger(account)
+      ledger.hooks = this.newerAgentHooks.load(account, ledger.hooks)
+      this.stored = ledger
     }
     return this.stored
+  }
+
+  /** Bots were written: a hook whose bot changed agents moves into the file older builds read, or out of it. */
+  refile(): void {
+    const ledger = this.ledger()
+    if (ledger && this.newerAgentHooks.unfiled(ledger.hooks)) {
+      this.write()
+    }
   }
 
   private read(): StoredLedger | null {
@@ -138,7 +149,7 @@ export class WebhookHostLedger {
       return
     }
     try {
-      writeSecureJsonFile(this.path, this.stored)
+      this.newerAgentHooks.save(this.path, this.stored, false)
       this.unsaved = false
     } catch (error) {
       this.unsaved = true
@@ -154,7 +165,7 @@ export class WebhookHostLedger {
     }
     const next = structuredClone(ledger)
     change(next)
-    writeDurableSecureJsonFile(this.path, next)
+    this.newerAgentHooks.save(this.path, next, true)
     this.stored = next
     return true
   }

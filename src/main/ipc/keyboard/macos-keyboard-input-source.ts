@@ -142,11 +142,14 @@ export async function readKeyboardInputSourceId(): Promise<string | null> {
     return selectedInputSource.id
   }
   // An IME can use ABC underneath; the backing layout alone cannot identify the selected source.
-  return selectedInputSource?.kind === 'keyboardLayout'
-    ? readCommandStdout(
-        '/usr/bin/defaults',
-        ['read', MAC_HITOOLBOX_DOMAIN, 'AppleCurrentKeyboardLayoutInputSourceID'],
-        'Keyboard layout input source probe timed out'
-      )
-    : null
+  return selectedInputSource?.kind === 'keyboardLayout' ? readCurrentKeyboardLayoutSourceId() : null
+}
+
+/** The layout physical keys map through, which is an IME's backing layout while an IME is selected. */
+export function readCurrentKeyboardLayoutSourceId(): Promise<string> {
+  return readCommandStdout(
+    '/usr/bin/defaults',
+    ['read', MAC_HITOOLBOX_DOMAIN, 'AppleCurrentKeyboardLayoutInputSourceID'],
+    'Keyboard layout input source probe timed out'
+  )
 }

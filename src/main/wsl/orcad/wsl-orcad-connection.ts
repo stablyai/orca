@@ -9,7 +9,7 @@ import {
   WslOrcadConnectionSupersededError,
   WslOrcadLaunchDeferredError
 } from './wsl-orcad-connection-errors'
-import type { WslHostConnectIntent } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
+import type { WslHostUpdateIntent } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { errorMessage } from '../../../shared/errors/error-message'
 import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
 import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
@@ -17,12 +17,12 @@ import type { OrcadHostTransport } from '../../managed-server/install/orcad-host
 import type { StartedPortForward } from '../../ssh/port-forwarding/ssh-port-forward-provider'
 import {
   wslConnectFailedStatus,
-  wslConnectingStatus,
+  wslAddProgressReporter,
   type WslOrcadConnectionStatus
 } from './wsl-orcad-connection-status'
 import { wslDistroHolderKey } from '../discovery/wsl-distro-holder-record'
 import { defaultWslOrcadEnvironmentId, deployAndLaunchWslOrcad } from './wsl-orcad-deploy'
-import type { WslOrcadLaunch } from './wsl-orcad-launch-contract'
+import type { WslOrcadDeployOptions, WslOrcadLaunch } from './wsl-orcad-launch-contract'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { resolveWslOrcadPairing } from './wsl-orcad-pairing-identity'
@@ -30,12 +30,12 @@ import { trackWslOrcadHostEnvironment } from './wsl-orcad-host-environments'
 import { listenWslOrcadStdioBridgeOnPreferredPort } from './wsl-orcad-stdio-bridge'
 import { wslConnectDeploySpawns } from './wsl-orcad-connect-stop-fence'
 
-export type WslOrcadConnectOptions = {
+export type WslOrcadConnectOptions = Pick<WslOrcadDeployOptions, 'pastUncountedTerminals'> & {
   environmentId?: string
   label?: string
   /** Rebinds a port a persisted pairing offer already names; 0 or absent picks a free one. */
   localPort?: number
-  intent?: WslHostConnectIntent
+  intent?: WslHostUpdateIntent
   signal?: AbortSignal
   /** What `onChange` reports while this connect runs and once it is ready (liveness recovery). */
   status?: WslOrcadConnectStatus
@@ -200,14 +200,15 @@ export class WslOrcadConnectionManager {
       environmentId,
       label,
       intent: options.intent,
+      pastUncountedTerminals: options.pastUncountedTerminals,
       pairedOffer: await this.enrolledOffer(key, environmentId),
       signal: options.signal,
-      // Only a connect that showed "Connecting" says what it waits for; null (lock taken) clears it.
-      onInstallLockWait: (wait) => {
+      // Only a connect that showed "Connecting" says what it waits for and which step it is on.
+      ...wslAddProgressReporter((pending) => {
         if (!options.status && !options.requireRunning && !this.active.has(key) && stillCurrent()) {
-          this.dependencies.onChange?.(distro, null, wslConnectingStatus(wait))
+          this.dependencies.onChange?.(distro, null, pending)
         }
-      },
+      }),
       ...spawns.options
     }).finally(spawns.dispose)
     if (launch.outcome === 'deferred') {

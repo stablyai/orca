@@ -61,6 +61,14 @@ export function createGatedCallCollector(families, ratchetName) {
       families.flatMap((family) => family.modules.map((module) => path.posix.basename(module)))
     )
   ]
+  // Why: helper propagation yields thousands of markers; one alternation scans each file once.
+  const markerPattern = markers.length
+    ? new RegExp(
+        [...new Set(markers)]
+          .map((marker) => marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+          .join('|')
+      )
+    : null
 
   const familiesByModule = new Map()
   for (const family of families) {
@@ -104,12 +112,13 @@ export function createGatedCallCollector(families, ratchetName) {
 
   // Count each gated value reference, alias use and re-export; imports and plain alias bindings alone do not count.
   // File-wide, not scope-aware: computed specifiers/members and non-const holder flows are unresolved; local wrappers are not traced.
-  function collectUses(file, contents) {
+  function collectUses(file, contents, parsedSource = undefined) {
     // Escaped spellings and relative imports inside gated modules still need the full analysis.
     const analyze =
       contents.includes('\\') ||
-      markers.some((marker) => contents.includes(marker) || file.includes(marker))
-    const source = ts.createSourceFile(file, contents, ts.ScriptTarget.Latest, analyze)
+      (markerPattern !== null && (markerPattern.test(contents) || markerPattern.test(file)))
+    const source =
+      parsedSource ?? ts.createSourceFile(file, contents, ts.ScriptTarget.Latest, analyze)
     if (source.parseDiagnostics.length > 0) {
       throw new Error(`Cannot parse ${file}; the ${ratchetName} ratchet must not skip it.`)
     }

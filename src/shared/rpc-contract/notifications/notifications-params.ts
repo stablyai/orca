@@ -1,7 +1,8 @@
 import { z } from 'zod'
 import {
   MOBILE_PUSH_APNS_ENVIRONMENTS,
-  MOBILE_PUSH_PLATFORMS
+  MOBILE_PUSH_PLATFORMS,
+  MOBILE_PUSH_TOKEN_DIGEST_MAX_CHARS
 } from '../../notifications/mobile-push-contract'
 
 export const NotificationUnsubscribeParams = z.object({
@@ -32,7 +33,8 @@ export const NotificationGetMissedSinceParams = z.object({
 export const NotificationPushFilterParams = z.object({
   onlyWhenDesktopAway: z.boolean().optional(),
   onlyWhenAgentNeedsInput: z.boolean().optional(),
-  sound: z.boolean().optional()
+  sound: z.boolean().optional(),
+  badge: z.boolean().optional()
 })
 
 export const NotificationRegisterPushParams = z
@@ -54,3 +56,15 @@ export const NotificationsSubscribeParams = z
   .optional()
 
 export const NotificationReportDesktopPresenceParams = z.object({ away: z.boolean() })
+
+export const NOTIFICATION_PUSH_COVERAGE_MAX_DIGESTS = 64
+
+export const NotificationPushCoverageParams = z.object({
+  tokenDigests: z
+    .array(z.string().min(1).max(MOBILE_PUSH_TOKEN_DIGEST_MAX_CHARS))
+    .max(NOTIFICATION_PUSH_COVERAGE_MAX_DIGESTS),
+  /** The alert's burst-cooldown subject on the host: its attention key, else its workspace id. */
+  subject: z.string().min(1).max(4096)
+})
+
+export type NotificationPushCoverageRequest = z.infer<typeof NotificationPushCoverageParams>

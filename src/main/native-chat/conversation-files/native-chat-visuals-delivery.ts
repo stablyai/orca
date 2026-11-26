@@ -1,9 +1,11 @@
 // Best-effort visual setup must never prevent chat startup.
 
 import { mkdir } from 'node:fs/promises'
+import { join } from 'node:path'
 import type { StructuredAgentSessionLogger } from '../agent-session-wire/host/structured-agent-session-logger'
 import { nativeChatScratchFolderFor } from './native-chat-scratch-folder'
 import {
+  NATIVE_CHAT_VISUALS_SKILL_NAME,
   resolveNativeChatVisualsSkillLocation,
   type NativeChatVisualsSkillLocation
 } from './native-chat-visuals-skill-location'
@@ -84,4 +86,14 @@ export function withNativeChatVisualsEnv(
     ...rest
   } = env
   return visuals ? { ...rest, [NATIVE_CHAT_SCRATCH_DIR_ENV]: visuals.folder } : rest
+}
+
+/** Standing instructions that point an agent which cannot load skills at the visuals skill. */
+export function nativeChatVisualsSection(skill: NativeChatVisualsSkillLocation): string {
+  const file = join(skill.skillsRoot, NATIVE_CHAT_VISUALS_SKILL_NAME, 'SKILL.md')
+  return [
+    '## Inline visuals',
+    '',
+    `Orca can show a chart, diagram, table, report or mockup inline in this chat as an HTML page. When a visual would help, read ${file} first and follow it.`
+  ].join('\n')
 }

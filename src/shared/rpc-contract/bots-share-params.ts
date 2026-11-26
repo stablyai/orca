@@ -1,8 +1,11 @@
 // Sharing a bot by link: the candidate the owner reviews, publishing it, moving or stopping the link.
 import * as z from 'zod'
+import { BotShareOutsidePickSchema } from '../bots/bot-share-skill-picks'
 import { requiredString } from './rpc-param-primitives'
 
-const Names = z.array(z.string().min(1).max(200)).max(64).optional()
+/** The most names one part's pick may carry; the picker never sends more. */
+export const BOT_SHARE_MAX_PICKS = 64
+const Names = z.array(z.string().min(1).max(200)).max(BOT_SHARE_MAX_PICKS).optional()
 const BotId = requiredString('Missing bot')
 
 /** The owner's picks; an absent list shares all of that part, except memory, which is off unless named. */
@@ -13,13 +16,21 @@ export const BotSharePrepare = z.object({
   schedules: Names,
   eventSuggestions: Names,
   memory: Names,
+  /** The owner's ticks on skills linked into a project from outside it. */
+  outsideSkills: z.array(BotShareOutsidePickSchema).max(BOT_SHARE_MAX_PICKS).optional(),
   purpose: z.string().max(200).optional(),
   /** Built in, so the candidate digests as a version published with this note would. */
   setupNote: z.string().max(2000).optional(),
   /** Build from the picks and note the bot was last published with, and return them. */
   last: z.boolean().optional(),
   /** Build a review without waiting for the cloud package lookup. */
-  localOnly: z.boolean().optional()
+  localOnly: z.boolean().optional(),
+  /** The open dialog this build is for: its skill listing is kept for its picks, and its newer
+   *  fresh build replaces its older one. A host that predates this ignores it. */
+  skillsSession: z.string().min(1).max(100).optional(),
+  /** Only the picks changed in `skillsSession`: list the skills it last listed, unwalked. A host
+   *  that predates this ignores it and reads them again. */
+  reuseSkills: z.boolean().optional()
 })
 
 export const BotShareCandidate = z.object({

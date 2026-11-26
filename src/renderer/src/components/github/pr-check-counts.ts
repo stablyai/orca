@@ -1,8 +1,4 @@
-import { normalizePRCheckHeadSha } from '../../../../shared/github/checks/pr-check-head'
-import {
-  isCompletePRCheckOwner,
-  samePRCheckObservation
-} from '../../../../shared/github/checks/complete-pr-check-owner'
+import { isCompletePRCheckOwner } from '../../../../shared/github/checks/complete-pr-check-owner'
 import type { ProviderCheckSummary } from '../../../../shared/github/pull-requests/pull-request-types'
 import { translate } from '../../i18n/i18n'
 import type { Translate } from '../../i18n/use-translate'
@@ -25,60 +21,31 @@ export function getCheckConclusion(check: PRCheckDetail): NonNullable<PRCheckDet
   return check.status === 'completed' ? 'neutral' : 'pending'
 }
 
+function countsFromSummary(summary: ProviderCheckSummary | undefined): PRCheckCounts {
+  const cancelled = summary?.cancelled ?? 0
+  const needsAction = summary?.actionRequired ?? 0
+  return {
+    passing: summary?.passed ?? 0,
+    failing: (summary?.failed ?? 0) - cancelled,
+    cancelled,
+    needsAction,
+    pending: (summary?.pending ?? 0) - needsAction,
+    neutral: summary?.neutral ?? 0
+  }
+}
+
 /** Use one check breakdown across PR page/dialog and the sidebar header. */
 export function getCheckCounts(checks: readonly PRCheckDetail[]): PRCheckCounts {
-  // Use the shared rollup; split action_required back out because it blocks like failure but reads amber.
-  const summary = summarizeProviderChecks(checks)
-  const needsAction = checks.filter(
-    (check) => getCheckConclusion(check) === 'action_required'
-  ).length
-  return {
-    passing: summary.passed,
-    failing: summary.failed - needsAction - (summary.cancelled ?? 0),
-    cancelled: summary.cancelled ?? 0,
-    needsAction,
-    pending: summary.pending,
-    neutral: summary.neutral
-  }
+  return countsFromSummary(summarizeProviderChecks(checks))
 }
 
 export function getOverallCheckCounts(
   checks: readonly PRCheckDetail[],
-  owner?: { headSha?: string; checksSummary?: ProviderCheckSummary },
-  rowsOwner?: { checksSummary?: ProviderCheckSummary }
+  owner?: { headSha?: string; checksSummary?: ProviderCheckSummary }
 ): PRCheckCounts {
-  if (!owner || !isCompletePRCheckOwner(owner)) {
-    return getCheckCounts(checks)
-  }
-  const summary = owner.checksSummary
-  const failed = (summary?.failed ?? 0) - (summary?.cancelled ?? 0)
-  const rows = getCheckCounts(checks)
-  const distinctApprovals = new Set(
-    checks
-      .filter((check) => getCheckConclusion(check) === 'action_required')
-      .map((check) => check.checkRunId ?? check.workflowRunId ?? check.url ?? check.name)
-  ).size
-  const explained =
-    rowsOwner &&
-    samePRCheckObservation(owner, rowsOwner) &&
-    checks.length > 0 &&
-    checks.every(
-      (check) =>
-        normalizePRCheckHeadSha(check.observedHeadSha) !== undefined &&
-        normalizePRCheckHeadSha(check.observedHeadSha) === normalizePRCheckHeadSha(owner.headSha)
-    ) &&
-    failed > 0 &&
-    distinctApprovals === failed &&
-    rows.needsAction === distinctApprovals &&
-    rows.failing === 0
-  return {
-    passing: summary?.passed ?? 0,
-    failing: explained ? 0 : failed,
-    cancelled: summary?.cancelled ?? 0,
-    needsAction: explained ? failed : 0,
-    pending: summary?.pending ?? 0,
-    neutral: summary?.neutral ?? 0
-  }
+  return owner && isCompletePRCheckOwner(owner)
+    ? countsFromSummary(owner.checksSummary)
+    : getCheckCounts(checks)
 }
 
 /** `tone` keys the caller's `CHECK_COLOR`/`CHECK_ICON` maps so styling stays with the surface. */
@@ -145,7 +112,6 @@ export function getCheckCountChips(
 export function getChecksSummaryLabel(
   checks: readonly PRCheckDetail[],
   owner?: { headSha?: string; checksSummary?: ProviderCheckSummary },
-  rowsOwner?: { checksSummary?: ProviderCheckSummary },
   t: Translate = translate
 ): string {
   const complete = owner && isCompletePRCheckOwner(owner)
@@ -153,7 +119,7 @@ export function getChecksSummaryLabel(
     return t('auto.components.right.sidebar.ChecksPanel.976cefd02f', 'Checks unavailable')
   }
   const total = complete ? owner.checksSummary!.total : checks.length
-  const counts = getOverallCheckCounts(checks, owner, rowsOwner)
+  const counts = getOverallCheckCounts(checks, owner)
   if (total === 0) {
     return t('auto.components.prCheckCounts.noChecksFound', 'No checks found')
   }

@@ -1,6 +1,7 @@
+import { botFailureMessage } from './bot-failure-message'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { useEffect, useState } from 'react'
-import { LayoutAnimation, Pressable, ScrollView, Text, View } from 'react-native'
+import { useState } from 'react'
+import { LayoutAnimation, Pressable, Text, View } from 'react-native'
 import { Users } from 'lucide-react-native'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
@@ -12,7 +13,8 @@ import { mobileBotAvatarSource } from './host-bot-row-facts'
 import type { PhoneBot } from './host-bots-operations'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { BotGroup } from '../../../src/shared/bots/bot-group'
-import { botRoster, groupCreate, groupUpdate } from './bot-group-operations'
+import { groupCreate, groupUpdate } from './bot-group-operations'
+import { useBotPurposes } from './use-bot-purposes'
 import { groupStyles as styles } from './mobile-bot-group-styles'
 import {
   BOT_GROUP_NAME_MAX_LENGTH,
@@ -37,12 +39,15 @@ export function MobileBotGroupMembers({
   group,
   bots,
   client,
+  hostName,
   onClose,
   onSaved
 }: {
   group?: BotGroup
   bots: readonly PhoneBot[]
   client: RpcClient
+  /** The computer the group runs on, which its own bots are on. */
+  hostName: string
   onClose: () => void
   onSaved: (group: BotGroup) => void
 }) {
@@ -56,41 +61,31 @@ export function MobileBotGroupMembers({
   const [name, setName] = useState(group?.name ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [purposes, setPurposes] = useState(() => new Map<string, string>())
-  useEffect(() => {
-    let live = true
-    botRoster
-      .request(client, {})
-      .then((outcome) => {
-        const { bots: roster } = botRoster.interpret(outcome)
-        if (live) {
-          setPurposes(new Map(roster.flatMap((b) => (b.specialty ? [[b.id, b.specialty]] : []))))
-        }
-      })
-      .catch(() => {})
-    return () => {
-      live = false
-    }
-  }, [client])
+  const purposes = useBotPurposes(client)
   const savedIds = group?.members.map((member) => member.botId) ?? []
   const picked = botGroupPickOrder(savedIds, selected).flatMap(
     (id) => bots.find((bot) => bot.id === id) ?? []
   )
+  // Bots on paired computers: the phone keeps them as they are, since a save without them keeps them.
+  // They carry no `id`, so an uploaded picture, which is on that computer, shows as letters.
+  const remote = group?.remoteMembers ?? []
   const suggestion = name
     ? null
     : suggestName(
-        picked.map((bot) => bot.name),
+        [...picked, ...remote].map((bot) => bot.name),
         t
       )
-  const missingKey = botGroupMissing(picked.length, name, group !== undefined)
+  const missingKey = botGroupMissing(picked.length + remote.length, name, group !== undefined)
   const missing =
-    missingKey === 'pickTwo'
-      ? t('bots.groups.pickTwo', 'Pick 2 or more bots')
-      : missingKey === 'pickOne'
-        ? t('bots.groups.pickOne', 'Pick a bot')
-        : missingKey === 'nameIt'
-          ? t('bots.groups.nameIt', 'Name the group')
-          : null
+    remote.length > 0 && picked.length === 0
+      ? t('bots.groups.needsLocalBot', 'This group needs at least one bot on this computer.')
+      : missingKey === 'pickTwo'
+        ? t('bots.groups.pickTwo', 'Pick 2 or more bots')
+        : missingKey === 'pickOne'
+          ? t('bots.groups.pickOne', 'Pick a bot')
+          : missingKey === 'nameIt'
+            ? t('bots.groups.nameIt', 'Name the group')
+            : null
   const unchanged =
     group !== undefined &&
     botGroupUnchanged(
@@ -126,7 +121,7 @@ export function MobileBotGroupMembers({
         : groupCreate.interpret(await groupCreate.request(client, { name: name.trim(), botIds }))
       onSaved(result.group)
     } catch (error) {
-      setError(String(error))
+      setError(botFailureMessage(error) ?? String(error))
       setBusy(false)
     }
   }
@@ -140,7 +135,6 @@ export function MobileBotGroupMembers({
       }}
     >
       <SheetHeader
-        titleAboveActions
         title={
           group
             ? t('bots.groups.manageMembers', 'Manage members')
@@ -159,14 +153,17 @@ export function MobileBotGroupMembers({
         }}
       />
       <View style={styles.picture}>
-        {picked.length > 0 ? (
+        {picked.length + remote.length > 0 ? (
           <MobileBotFaceStack
             slot={96}
             ringColor={colors.sheetSurface}
-            faces={picked.map((bot) => ({
-              id: bot.id,
-              avatar: mobileBotAvatarSource(bot, undefined)
-            }))}
+            faces={[
+              ...picked.map((bot) => ({ id: bot.id, avatar: mobileBotAvatarSource(bot) })),
+              ...remote.map((bot) => ({
+                id: `${bot.environmentId}:${bot.botId}`,
+                avatar: mobileBotAvatarSource(bot)
+              }))
+            ]}
           />
         ) : (
           // The desktop dialog's empty picture, so the space reads as the group's picture to come.
@@ -190,14 +187,14 @@ export function MobileBotGroupMembers({
           </Pressable>
         ) : null}
       </View>
-      <ScrollView style={styles.members}>
+      <View style={styles.members}>
         <ListGroup>
           {bots.map((bot) => (
             <ListRow
               key={bot.id}
               title={bot.name}
               subtitle={purposes.get(bot.id)}
-              leading={<MobileBotAvatar avatar={mobileBotAvatarSource(bot, undefined)} size={28} />}
+              leading={<MobileBotAvatar avatar={mobileBotAvatarSource(bot)} size={28} />}
               selected={selected.includes(bot.id)}
               accessibilityRole="checkbox"
               disabled={busy}
@@ -205,7 +202,29 @@ export function MobileBotGroupMembers({
             />
           ))}
         </ListGroup>
-      </ScrollView>
+      </View>
+      {remote.length > 0 ? (
+        // Kept as they are, so in a group of their own with no checks: none can be picked or dropped here.
+        <View style={styles.members}>
+          <ListGroup>
+            {remote.map((bot) => (
+              <ListRow
+                key={`${bot.environmentId}:${bot.botId}`}
+                title={bot.name}
+                leading={<MobileBotAvatar avatar={mobileBotAvatarSource(bot)} size={28} />}
+                subtitle={bot.computer}
+              />
+            ))}
+          </ListGroup>
+          <Text style={[styles.label, styles.footer]}>
+            {t(
+              'bots.groups.remoteOnComputer',
+              'Add or remove bots from other computers in Orca on {{host}}.',
+              { host: hostName }
+            )}
+          </Text>
+        </View>
+      ) : null}
       {missing ? <Text style={styles.notice}>{missing}</Text> : null}
       {defaultId && !selected.includes(defaultId) ? (
         <Text style={styles.notice}>

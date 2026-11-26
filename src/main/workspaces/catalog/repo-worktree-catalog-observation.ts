@@ -22,13 +22,15 @@ export type WorktreeCatalogObservation = {
   readonly outcome: WorktreeCatalogOutcome
   /** Scan start: verification never moves it, so the full-list ceiling cannot slide. */
   readonly startedAt: number
+  /** Scan end: freshness windows run from here, so a scan slower than the window still yields usable rows. */
+  readonly completedAt: number
   readonly generation: number
   readonly revision: number
   /** Only runtime-started flights fingerprint first; without one the rows cannot be verified. */
   readonly adminFingerprint: Promise<string | null> | null
   readonly startedBy: WorktreeCatalogReaderKind
   witness: WorktreeCatalogWitness | undefined
-  /** Scan start, or the latest verifier answer that let a runtime reader reuse these rows. */
+  /** Scan end (scan start when fingerprinted before the scan), or the latest verifier answer that let a runtime reader reuse these rows. */
   confirmedAt: number
 }
 

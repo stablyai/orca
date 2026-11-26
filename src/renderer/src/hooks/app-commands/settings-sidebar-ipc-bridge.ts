@@ -6,6 +6,7 @@ import { subscribeToUnpairedDeviceAuthNotification } from '../../components/mobi
 import { translate } from '@/i18n/i18n'
 import { toast } from 'sonner'
 import { useAppStore } from '../../store/index'
+import { showWorkspaceListThen } from '../../components/app-rail/app-rail-navigation'
 import { openPluginInstallLink } from '../../store/plugins/navigation/plugin-preview-request'
 
 function getShortcutPlatform(): NodeJS.Platform {
@@ -158,7 +159,11 @@ export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): voi
 
   unsubs.push(
     window.api.ui.onToggleLeftSidebar(() => {
-      runBuiltInOrReplacement('sidebar.left.toggle', () => useAppStore.getState().toggleSidebar())
+      runBuiltInOrReplacement('sidebar.left.toggle', () => {
+        if (!showWorkspaceListThen(useAppStore)) {
+          useAppStore.getState().toggleSidebar()
+        }
+      })
     })
   )
 
@@ -173,10 +178,12 @@ export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): voi
   )
 
   unsubs.push(
-    window.api.ui.onToggleWorktreePalette(() => {
+    window.api.ui.onToggleWorktreePalette((options) => {
       const store = useAppStore.getState()
       if (store.activeModal === 'worktree-palette') {
-        store.closeModal()
+        if (!options?.openOnly) {
+          store.closeModal()
+        }
         return
       }
       store.openModal('worktree-palette')

@@ -8,6 +8,22 @@ export const BACKEND_CONNECTION_CHANGED = 'backend:connectionChanged'
 export const BACKEND_UTILITY_PROCESS_NAME = 'Orca backend'
 
 export type BackendConnectionPurpose = 'demand' | 'recovery'
+/** Main reports the renderer page a port serves; the document never names itself. */
+export const BackendDocumentRoleSchema = z.enum(['main', 'space', 'popout'])
+export type BackendDocumentRole = z.infer<typeof BackendDocumentRoleSchema>
+/** Main's private admission of one document port, bound to the backend incarnation it was minted for. */
+export const BackendDocumentAdmissionSchema = z
+  .object({
+    type: z.literal('client'),
+    incarnation: z.string().min(1).max(128),
+    document: z.object({ id: z.string().uuid(), role: BackendDocumentRoleSchema }).strip()
+  })
+  .strip()
+export type BackendDocumentAdmission = z.infer<typeof BackendDocumentAdmissionSchema>
+export type BackendDocumentBinding = z.infer<typeof BackendDocumentAdmissionSchema>['document'] & {
+  incarnation: string
+}
+export type BackendPortDelivery = { token: string; incarnation: string }
 export type BackendConnectionStatus = { connected: boolean; unavailable?: boolean }
 export type BackendConnectionDetail = { initial?: boolean; unavailable?: boolean }
 export type BackendConnectionListener = (

@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 
 /** Marks a prompt Orca answered from a coordinator's chat, so the chat's own closer leaves it alone.
  *  Builds before the answerer was named wrote it bare, for the coordinator and a person alike. */

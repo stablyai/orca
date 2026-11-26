@@ -1,6 +1,8 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
@@ -14,7 +16,7 @@ function eligibleFolderParents(
   child: Worktree,
   folderWorkspaces: readonly FolderWorkspace[] | undefined,
   currentParentWorkspaceKey: string | undefined,
-  runtimeStatusByEnvironmentId: AppState['runtimeStatusByEnvironmentId']
+  runtimeStatusByEnvironmentId: RuntimeStatuses
 ): Worktree[] {
   return folderWorkspaces?.length
     ? getEligibleFolderParents({
@@ -29,13 +31,12 @@ function eligibleFolderParents(
 /** Folder workspaces a sidebar drop may nest `child` under, read once from the store at drop time
  * instead of re-rendering on every lineage or runtime status change. Its current folder stays a
  * target, as a worktree parent does: dropping a child back on its own folder keeps it there. */
-export function getDropFolderParentsInState(state: AppState, child: Worktree): Worktree[] {
-  return eligibleFolderParents(
-    child,
-    selectFolderWorkspaces(state),
-    undefined,
-    state.runtimeStatusByEnvironmentId
-  )
+export function getDropFolderParentsInState(
+  state: AppState,
+  statuses: RuntimeStatuses,
+  child: Worktree
+): Worktree[] {
+  return eligibleFolderParents(child, selectFolderWorkspaces(state), undefined, statuses)
 }
 
 /** Folder workspaces Set Parent offers `child`; the menu gate, the picker and a sidebar drop read
@@ -47,8 +48,8 @@ export function useEligibleFolderParents(child: Worktree | undefined, enabled = 
       ? s.workspaceLineageByChildKey[worktreeWorkspaceKey(child.id)]?.parentWorkspaceKey
       : undefined
   )
-  const runtimeStatusByEnvironmentId = useAppStore((s) =>
-    enabled ? s.runtimeStatusByEnvironmentId : undefined
+  const runtimeStatusByEnvironmentId = useAppStoreWithHostStatuses((_s, statuses) =>
+    enabled ? statuses : undefined
   )
   return useMemo(
     () =>

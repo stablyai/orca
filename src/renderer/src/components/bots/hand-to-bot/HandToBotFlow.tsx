@@ -1,3 +1,4 @@
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 // Hand to bot…: pick a bot (or make one) for a workspace and, optionally, say what it should do. The
 // workspace moves under the bot's home and its agents keep running as the bot's workers.
 import { botRefKey, isSameBot } from '@/lib/bot-hosts'
@@ -41,14 +42,16 @@ import { useBotPurposes } from '../use-bot-purposes'
 import { closeHandToBot, type HandToBotRequest } from './hand-to-bot-open'
 import {
   botHomeParentFor,
-  handOverWorkspace,
   moveUnderParent,
   placementOf,
-  restorePlacement,
+  restorePlacement
+} from './hand-to-bot-workspace'
+import {
+  handOverWorkspace,
   suggestedBotAgent,
   suggestedBotName,
   suggestedBotPurpose
-} from './hand-to-bot-workspace'
+} from '../../../../../shared/bots/hand-over-workspace'
 
 const NEW_BOT_TILE =
   'flex size-7 items-center justify-center rounded-lg border border-dashed border-input text-muted-foreground'
@@ -90,7 +93,9 @@ export function HandToBotFlow({
     [workspaceHostId]
   )
   const purposes = useBotPurposes()
-  const folders = useAppStore((s) => selectFolderAncestors(s, worktree))
+  const folders = useAppStoreWithHostStatuses((s, statuses) =>
+    selectFolderAncestors(s, statuses, worktree)
+  )
   const owner = botOfFolders(folders, bots)
   const agents = useWorktreeAgentRows(worktree.id).filter((row) => row.rowSource !== 'subagent')
   const takeOver = useTakeOver(

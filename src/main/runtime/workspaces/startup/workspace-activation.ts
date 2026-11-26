@@ -27,7 +27,6 @@ import {
   type StartupFollowupPromptOptions,
   type WorktreeStartupReadinessHost
 } from './runtime-worktree-startup-readiness'
-import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
 import {
   provisionWorktreeTerminals,
   type WorktreeTerminalProvisioningHost
@@ -119,7 +118,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
         sleepingAgentWake = phoneWakeReport(
           records?.sleepingAgentSessionsByPaneKey,
           worktreeId,
-          Boolean(this.getAvailableAuthoritativeWindow())
+          Boolean(this.hasAuthoritativeWindow())
         )
       }
     }
@@ -278,24 +277,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
   }
 
   async provisionManagedWorktreeTerminals(
-    args: {
-      worktreeSelector: string
-      worktreeId: string
-      worktreePath: string
-      setup?: CreateWorktreeResult['setup']
-      defaultTabs?: CreateWorktreeResult['defaultTabs']
-      primaryTerminalHandle?: string | null
-      hasStartupTerminal: boolean
-      setupOnly?: boolean
-      setupCommandPlatform: 'windows' | 'posix'
-      observeSetupCompletion?: boolean
-      // Pass the setup wrapper that the agent awaits; a bare runner would execute a different script.
-      wrappedSetupCommand?: string
-      // Background provisioning must not move the user's sidebar selection.
-      surfaceOwner?: false
-      /** The create was the user's act: its terminals may start a stopped WSL distro. */
-      wslUserAct?: true
-    },
+    args: Parameters<typeof provisionWorktreeTerminals>[1],
     createdWorktree?: Worktree
   ): Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null; failed?: true }> {
     return provisionWorktreeTerminals(

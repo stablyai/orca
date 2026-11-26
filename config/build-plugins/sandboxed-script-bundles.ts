@@ -18,6 +18,10 @@ const GUEST_PRELOADS = [
   { entry: 'src/preload/browser-extension-preload.ts', fileName: 'browser-extension-preload.js' },
   { entry: 'src/preload/browser-guest.ts', fileName: 'browser-guest-preload.js' },
   {
+    entry: 'src/preload/browser-offscreen-page.ts',
+    fileName: 'browser-offscreen-page-preload.js'
+  },
+  {
     entry: 'src/preload/browser-system-dialogs.ts',
     fileName: 'browser-system-dialogs-preload.js'
   },

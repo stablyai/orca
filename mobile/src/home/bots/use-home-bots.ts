@@ -30,7 +30,7 @@ export function useHomeBots(args: {
   now: number
   subscribed: boolean
 }) {
-  const { homeHosts, hosts, hostStates, unreachableHosts, worktreeInfo, now } = args
+  const { homeHosts, hosts, hostStates, unreachableHosts, worktreeInfo, now, subscribed } = args
   const queries = useMemo(
     () =>
       homeHosts.map((host) =>
@@ -44,7 +44,7 @@ export function useHomeBots(args: {
       ),
     [homeHosts]
   )
-  const results = useQueries({ queries, combine, subscribed: args.subscribed })
+  const results = useQueries({ queries, combine, subscribed })
   // A read is live only on the connection it came over; one from before a reconnect is kept, not live.
   const { reads, fresh } = useMemo(() => {
     const byHost: Record<string, HomeComputerBots | undefined> = {}
@@ -96,14 +96,18 @@ export function useHomeBots(args: {
       }),
     [hosts, hostStates, unreachableHosts, reads, fresh, kept, hydrated, worktreeInfo, now]
   )
-  // Folds each live read into its computer's record; the record skips a read it already holds.
+  // Folds each live read into its computer's record; the record skips a read it already holds. Only a
+  // shown Home folds: a hidden one's reads are frozen, and two Homes folding different reads never settle.
   useEffect(() => {
+    if (!subscribed) {
+      return
+    }
     for (const hostId of fresh) {
       const read = reads[hostId]
       if (read && hydrated.has(hostId)) {
         foldKeptHomeComputer(hostId, read, bots.activityByHost.get(hostId) ?? {})
       }
     }
-  }, [fresh, reads, hydrated, bots.activityByHost])
+  }, [subscribed, fresh, reads, hydrated, bots.activityByHost])
   return { bots, botsByHost: reads }
 }

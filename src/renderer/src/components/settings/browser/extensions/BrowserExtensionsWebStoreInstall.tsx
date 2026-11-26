@@ -109,7 +109,7 @@ export function BrowserExtensionsWebStoreInstall({
         disabled={disabled}
         onClick={() => void openStore()}
       >
-        {t('settings.browser.extensions.webStore.browse', 'Browse the Chrome Web Store')}
+        {t('settings.browser.extensions.webStore.browse', 'Chrome Web Store')}
       </Button>
     </div>
   )

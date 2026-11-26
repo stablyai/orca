@@ -75,8 +75,8 @@ export function createBrowserPageCreateActions(
             },
             browserTabsByWorktree: {
               ...s.browserTabsByWorktree,
-              [current.worktreeId]: (s.browserTabsByWorktree[current.worktreeId] ?? []).map(
-                (tab) => (tab.id === workspaceId ? nextWorkspace : tab)
+              [current.worktreeId]: (s.browserTabsByWorktree[current.worktreeId] ?? []).map((tab) =>
+                tab.id === workspaceId ? nextWorkspace : tab
               )
             },
             pendingAddressBarFocusByPageId: shouldFocusAddressBar

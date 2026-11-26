@@ -13,22 +13,35 @@ const botAgentChoicesRead = bindDeferredRpcOperation(
     barrier: 'after-caller-barrier',
     read: rpcResultVariant(
       'bot-agent-choices',
-      z.looseObject({ agents: z.array(z.string()) }).transform(({ agents }) =>
-        // A newer host's agent this build can't name or draw is left out.
-        BOT_AGENTS.filter((agent) => agents.includes(agent))
-      )
+      z
+        .looseObject({ agents: z.array(z.string()), defaultAgent: z.unknown().optional() })
+        .transform(({ agents, defaultAgent }) => {
+          // A newer host's agent this build can't name or draw is left out.
+          const known = BOT_AGENTS.filter((agent) => agents.includes(agent))
+          return { agents: known, defaultAgent: known.find((agent) => agent === defaultAgent) }
+        })
     )
   })
 )
 
+export type NewBotAgentChoices = {
+  agents: BotAgent[]
+  /** The agent the host's own New bot picks first; absent from an older host. */
+  defaultAgent?: BotAgent
+}
+
 /** The agents the host's own New bot offers there. A host that can't say (an older build, a failed
  *  read) keeps every agent, as the desktop keeps a failed check choosable. */
-export async function readBotAgentChoices(client: RpcClient): Promise<BotAgent[]> {
+export async function readNewBotAgentChoices(client: RpcClient): Promise<NewBotAgentChoices> {
   try {
     return botAgentChoicesRead.interpret(await botAgentChoicesRead.request(client))
   } catch {
-    return [...BOT_AGENTS]
+    return { agents: [...BOT_AGENTS] }
   }
+}
+
+export async function readBotAgentChoices(client: RpcClient): Promise<BotAgent[]> {
+  return (await readNewBotAgentChoices(client)).agents
 }
 
 const orcaAccountStatusRead = bindDeferredRpcOperation(
@@ -44,12 +57,19 @@ const orcaAccountStatusRead = bindDeferredRpcOperation(
   })
 )
 
-/** The account a host is signed in to, or null when it isn't (or can't say). */
-export async function readSignedInEmail(client: RpcClient): Promise<string | null> {
+/** The host's Orca sign-in, as its status says it; null when it can't say (an older host, a failed read). */
+export async function readOrcaAccount(
+  client: RpcClient
+): Promise<{ state: string; email?: string } | null> {
   try {
-    const status = orcaAccountStatusRead.interpret(await orcaAccountStatusRead.request(client))
-    return status.state === 'signed-in' && status.email ? status.email : null
+    return orcaAccountStatusRead.interpret(await orcaAccountStatusRead.request(client))
   } catch {
     return null
   }
+}
+
+/** The account a host is signed in to, or null when it isn't (or can't say). */
+export async function readSignedInEmail(client: RpcClient): Promise<string | null> {
+  const account = await readOrcaAccount(client)
+  return account?.state === 'signed-in' && account.email ? account.email : null
 }

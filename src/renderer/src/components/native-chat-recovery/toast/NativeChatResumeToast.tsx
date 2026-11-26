@@ -16,6 +16,8 @@ export type NativeChatResumeToastProps = {
   defaultExpanded?: boolean
   onResume: (sessionIds: readonly string[]) => void
   onRowAction: (action: ResumeFailureAction, sessionId: string) => void
+  /** Opening the list keeps the report until it is closed. */
+  onDetailsOpened?: () => void
   /** Local only: deletes the durable offer. A server's chats can only be hidden by closing. */
   onDismissAll?: () => void
   onOpenSettings: () => void
@@ -28,57 +30,57 @@ function headline(view: ResumeToastView, t: Translate, machineName?: string): st
     return machineName
       ? t(
           'auto.components.NativeChatResumeToast.resumingOn',
-          'Resuming {{count}} chats on {{machine}}…',
+          'Resuming {{count}} agents on {{machine}}…',
           {
             count: counts.resuming,
             machine: machineName,
-            defaultValue_one: 'Resuming {{count}} chat on {{machine}}…'
+            defaultValue_one: 'Resuming {{count}} agent on {{machine}}…'
           }
         )
-      : t('auto.components.NativeChatResumeToast.resuming', 'Resuming {{count}} chats…', {
+      : t('auto.components.NativeChatResumeToast.resuming', 'Resuming {{count}} agents…', {
           count: counts.resuming,
-          defaultValue_one: 'Resuming {{count}} chat…'
+          defaultValue_one: 'Resuming {{count}} agent…'
         })
   }
   if (phase === 'finished' && counts.needsYou === 0) {
     if (machineName) {
       return t(
         'auto.components.NativeChatResumeToast.resumedOn',
-        'Resumed {{count}} chats on {{machine}}.',
+        'Resumed {{count}} agents on {{machine}}.',
         {
           count: counts.resumed,
           machine: machineName,
-          defaultValue_one: 'Resumed {{count}} chat on {{machine}}.'
+          defaultValue_one: 'Resumed {{count}} agent on {{machine}}.'
         }
       )
     }
     return view.interruptedByUpdate
       ? t(
           'auto.components.NativeChatResumeToast.resumedUpdate',
-          'Resumed {{count}} chats after the update.',
+          'Resumed {{count}} agents after the update.',
           {
             count: counts.resumed,
-            defaultValue_one: 'Resumed {{count}} chat after the update.'
+            defaultValue_one: 'Resumed {{count}} agent after the update.'
           }
         )
       : t(
           'auto.components.NativeChatResumeToast.resumedRestart',
-          'Resumed {{count}} chats after the restart.',
+          'Resumed {{count}} agents after the restart.',
           {
             count: counts.resumed,
-            defaultValue_one: 'Resumed {{count}} chat after the restart.'
+            defaultValue_one: 'Resumed {{count}} agent after the restart.'
           }
         )
   }
   if (phase === 'finished' && counts.resumed > 0) {
     const text = t(
       'auto.components.NativeChatResumeToast.partial',
-      'Resumed {{resumed}} of {{total}} chats. {{count}} need you.',
+      'Resumed {{resumed}} of {{total}} agents. {{count}} need you.',
       {
         resumed: counts.resumed,
         total: counts.total,
         count: counts.needsYou,
-        defaultValue_one: 'Resumed {{resumed}} of {{total}} chats. {{count}} needs you.'
+        defaultValue_one: 'Resumed {{resumed}} of {{total}} agents. {{count}} needs you.'
       }
     )
     return machineName ? `${machineName}: ${text}` : text
@@ -86,29 +88,29 @@ function headline(view: ResumeToastView, t: Translate, machineName?: string): st
   if (machineName) {
     return t(
       'auto.components.NativeChatResumeToast.stoppedOn',
-      '{{count}} chats stopped on {{machine}}.',
+      '{{count}} agents stopped on {{machine}}.',
       {
         count: counts.total,
         machine: machineName,
-        defaultValue_one: '{{count}} chat stopped on {{machine}}.'
+        defaultValue_one: '{{count}} agent stopped on {{machine}}.'
       }
     )
   }
   return view.interruptedByUpdate
     ? t(
         'auto.components.NativeChatResumeToast.stoppedUpdate',
-        '{{count}} chats stopped when Orca updated.',
+        '{{count}} agents stopped when Orca updated.',
         {
           count: counts.total,
-          defaultValue_one: '{{count}} chat stopped when Orca updated.'
+          defaultValue_one: '{{count}} agent stopped when Orca updated.'
         }
       )
     : t(
         'auto.components.NativeChatResumeToast.stoppedRestart',
-        '{{count}} chats stopped when Orca closed.',
+        '{{count}} agents stopped when Orca closed.',
         {
           count: counts.total,
-          defaultValue_one: '{{count}} chat stopped when Orca closed.'
+          defaultValue_one: '{{count}} agent stopped when Orca closed.'
         }
       )
 }
@@ -137,6 +139,7 @@ export function NativeChatResumeToast({
   defaultExpanded = false,
   onResume,
   onRowAction,
+  onDetailsOpened,
   onDismissAll,
   onOpenSettings,
   onClose
@@ -175,21 +178,18 @@ export function NativeChatResumeToast({
             >
               {headline(view, t, machineName)}
             </p>
-            <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
-              {offering
-                ? t(
-                    'auto.components.NativeChatResumeToast.promptsNotResent',
-                    'Resuming won’t send your prompts again.'
-                  )
-                : t(
-                    'auto.components.NativeChatResumeToast.promptsNotSent',
-                    'Your prompts weren’t sent again.'
-                  )}
-            </p>
+            {offering && (
+              <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+                {t(
+                  'auto.components.NativeChatResumeToast.promptsNotResent',
+                  'Resuming won’t send your prompts again.'
+                )}
+              </p>
+            )}
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             {showResume && (
-              <Button size="xs" onClick={() => onResume(view.resumable)}>
+              <Button variant="theme-accent" size="xs" onClick={() => onResume(view.resumable)}>
                 {t('auto.components.NativeChatResumeToast.resume', 'Resume')}
               </Button>
             )}
@@ -200,7 +200,12 @@ export function NativeChatResumeToast({
               className={showResume ? undefined : '-ml-2'}
               aria-expanded={expanded}
               aria-controls={listId}
-              onClick={() => setExpanded((open) => !open)}
+              onClick={() => {
+                if (!expanded) {
+                  onDetailsOpened?.()
+                }
+                setExpanded(!expanded)
+              }}
             >
               {t('auto.components.NativeChatResumeToast.details', 'Details')}
             </Button>
@@ -220,7 +225,7 @@ export function NativeChatResumeToast({
         <div className="relative">
           <ul
             ref={listRef}
-            aria-label={t('auto.components.NativeChatResumeToast.listLabel', 'Chats')}
+            aria-label={t('auto.components.NativeChatResumeToast.listLabel', 'Agents')}
             className="scrollbar-sleek max-h-64 overflow-y-auto p-1"
             onScroll={(event) => setMoreBelow(hasMoreBelow(event.currentTarget))}
           >
@@ -231,7 +236,7 @@ export function NativeChatResumeToast({
                 name={nameFor(
                   row.candidate.sessionId,
                   firstLine(row.candidate.latestPrompt) ||
-                    t('auto.components.NativeChatResumeToast.untitled', 'Untitled chat')
+                    t('auto.components.NativeChatResumeToast.untitled', 'Untitled agent')
                 )}
                 age={formatShortTimeAgo(row.candidate.recordedAt, listedAt)}
                 busy={busy}
@@ -251,11 +256,11 @@ export function NativeChatResumeToast({
             {offering
               ? t(
                   'auto.components.NativeChatResumeToast.willAsk',
-                  'Orca asks chats to continue. Queued messages may be sent.'
+                  'Orca asks agents to continue. Queued messages may be sent.'
                 )
               : t(
                   'auto.components.NativeChatResumeToast.asked',
-                  'Orca asked chats to continue. Queued messages may be sent.'
+                  'Orca asked agents to continue. Queued messages may be sent.'
                 )}
           </p>
           {(showDismissAll || view.startedBy === 'launch') && (

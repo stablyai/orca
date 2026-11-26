@@ -1,6 +1,7 @@
 export const TARGETLESS_BROWSER_METHODS: Record<string, true> = {
   browserProfileClearGoogleCookies: true,
   browserProfileClearDefaultCookies: true,
+  browserProfileClearCookies: true,
   browserProfileCreate: true,
   browserProfileDelete: true,
   browserProfileDetectBrowsers: true,
@@ -26,7 +27,7 @@ export function electronSidecarRuntimeMethodName(browserMethod: string): string 
     return named
   }
   const suffix = browserMethod.slice('browser'.length)
-  for (const group of ['Cookie', 'Intercept', 'Capture'] as const) {
+  for (const group of ['Cookie', 'Intercept', 'Capture', 'Grab'] as const) {
     if (suffix.startsWith(group)) {
       const action = suffix.slice(group.length)
       return `browser.${group.toLowerCase()}.${action[0].toLowerCase()}${action.slice(1)}`

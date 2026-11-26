@@ -2,7 +2,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layou
 import type { TerminalIdentityReadContext } from '../../../terminal/query/terminal-identity-read-context'
 import { ptyRecordForPaneKey } from '../../../terminal/query/pty-pane-record'
 import type { RuntimeTerminalAgentPresenceOptions } from '../../../terminal/query/runtime-terminal-agent-presence'
-import { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../../../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
+import { RuntimeSleptAgentWakes } from './slept-agent-wake-runtime'
 import type { RuntimePtyWorktreeRecord } from '../../../terminal/records/runtime-terminal-state-records'
 import {
   isTerminalLeafId,
@@ -30,8 +30,10 @@ import {
 import { closedChatWorkersForSession } from '../../workers/lifecycle/chat-assignee'
 import { OPERATOR_CLOSE_EXIT_CAUSE } from '../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { resolveTerminalIdentityFromProbes } from '../../../terminal/identity/terminal-identity-probe'
+import { observeChatWorkerWorking } from '../../workers/turn-stops/chat-worker-turn-stops'
+import { ChatWorkerModelWait } from '../../workers/turn-stops/chat-worker-model-wait'
 
-export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneMobileSessionTabGroupLayout {
+export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends RuntimeSleptAgentWakes {
   protected terminalIdentitySources = () => ({
     handles: this.handles,
     sshTerminals: this.orchestrationCompatibilitySshTerminals,
@@ -128,7 +130,11 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     handle: string,
     options?: RuntimeTerminalAgentPresenceOptions
   ): Promise<boolean> {
-    return this.terminalAgentPresence.isRunning(handle, options)
+    // A slept agent is an idle one to every caller: input wakes it in place.
+    return (
+      this.sleptAgentPaneForHandle(handle) !== null ||
+      this.terminalAgentPresence.isRunning(handle, options)
+    )
   }
 
   async isTerminalRunningSettledPromptAgent(handle: string): Promise<boolean> {
@@ -176,6 +182,16 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
   }
 
   /** The structured idle edge: any journal movement is a chance to redrive parked mail. */
+  /** Chat workers whose model is not answering: one watch per working chat worker. A chat that
+   *  never orchestrated must not create the database. */
+  private chatWorkerModelWaitWatch?: ChatWorkerModelWait
+  private get chatWorkerModelWait(): ChatWorkerModelWait {
+    return (this.chatWorkerModelWaitWatch ??= new ChatWorkerModelWait({
+      ...this.workerTurnStopReportDeps,
+      getDb: () => this.getExistingOrchestrationDb()
+    }))
+  }
+
   notifyStructuredSessionJournalActivity(sessionId: string): void {
     this.orchestrationStructuredMailboxPointerDelivery.onJournalActivity(sessionId)
   }
@@ -188,15 +204,21 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     // A repeat (a streamed revision republishes the same status) is nothing new to mail; what the
     // journal changes, the parked mail's own watch hears.
     const delivery = this.orchestrationStructuredMailboxPointerDelivery
-    if (
-      !delivery.statusChanged(summary.sessionId, summary.status) ||
-      summary.status === 'attention'
-    ) {
+    if (!delivery.statusChanged(summary.sessionId, summary.status)) {
+      return
+    }
+    try {
+      this.chatWorkerModelWait.observe(summary.sessionId, summary.status)
+    } catch (error) {
+      console.warn('[orchestration] chat model-wait watch failed', summary.sessionId, error)
+    }
+    if (summary.status === 'attention') {
       return
     }
     // Log failures without blocking the later first-turn workspace rename.
     try {
       if (summary.status === 'working') {
+        observeChatWorkerWorking(summary.sessionId, this.workerTurnStopReportDeps)
         // A working edge can follow a human answer, unblocking parked mail too.
         this.notifyStructuredSessionJournalActivity(summary.sessionId)
         return
@@ -235,12 +257,15 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
   /** Settlement drops anything parked for the session; nothing will ever redrive it again. */
   forgetStructuredSessionMail(sessionId: string): void {
     this.orchestrationStructuredMailboxPointerDelivery.forgetSession(sessionId)
+    this.chatWorkerModelWaitWatch?.end(sessionId)
   }
 
   /** After a check, move, takeover or reset, delete the cards that would hand a chat mail it no
    *  longer owes. Visible cleanup only: it never holds up the action that called it. `mailboxes`:
    *  only those the action touched; without it, every mailbox (a reset, a store becoming readable). */
-  withdrawStaleChatMail(mailboxes?: Iterable<string>): void {
+  withdrawStaleChatMail(touched?: Iterable<string>): void {
+    const mailboxes = touched && [...touched]
+    this.publishSleepingMail(mailboxes ? { mailboxes } : undefined)
     this.orchestrationStructuredMailboxPointerDelivery.withdrawStale(mailboxes)
   }
 

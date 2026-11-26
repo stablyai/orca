@@ -1,24 +1,21 @@
 import React from 'react'
-import { toast } from 'sonner'
 import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
-import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
-import { newBotHomeChat, startBotSession } from '@/lib/bot-catalog'
-import type { Bot, BotAgent } from '../../../../shared/bot-types'
-import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
+import type { Bot } from '../../../../shared/bot-types'
 import { chatUnavailableLabel } from '../agent/launch-menu/agent-menu-row-presentation'
 import type { NewTabAgentMenuModel } from '../agent/launch-menu/new-tab-agent-menu-model'
 import { BotAgentAvatar } from './BotAgentAvatar'
-import { useConfirmNewHomeChat } from './bot-home-chat-confirm'
-import { botAgentLabel, botErrorMessage } from './bot-presentation'
+import { botAgentLabel } from './bot-presentation'
+import { useBotNewChatLaunch } from './use-bot-new-chat-launch'
 import { botNewChatAgents } from '../../../../shared/bots/bot-agent-choices'
 
 /** The + menu's bot items in a bot's home: a new Home Chat, then a side chat with the bot on each
- *  agent it can be. The menu's search field keeps focus on open, as in every other workspace. */
+ *  agent it can be. The menu's search field keeps focus on open, as in every other workspace; while
+ *  it holds a query the same chats are search results instead (`buildBotNewChatSearchOptions`). */
 export function BotNewChatMenuItems({
   bot,
   model
@@ -27,23 +24,7 @@ export function BotNewChatMenuItems({
   model: NewTabAgentMenuModel
 }): React.JSX.Element {
   const t = useTranslate()
-  // Opens the tab here as well as on the host, refreshing the tab list if it has not arrived yet.
-  const opened = (session: Promise<string>): void => {
-    void session
-      .then((sessionId) =>
-        activateAiVaultStructuredSession({
-          structuredSession: { workspaceId: folderWorkspaceKey(bot.folderWorkspaceId), sessionId }
-        })
-      )
-      .catch((error: unknown) => toast.error(botErrorMessage(error)))
-  }
-  const start = (agent: BotAgent): void => opened(startBotSession(bot, { agent }))
-  const confirmNewHomeChat = useConfirmNewHomeChat()
-  const newHomeChat = async (): Promise<void> => {
-    if (await confirmNewHomeChat(bot)) {
-      opened(newBotHomeChat(bot))
-    }
-  }
+  const { startSideChat, newHomeChat } = useBotNewChatLaunch(bot)
 
   const entries = botNewChatAgents(bot, model)
   return (
@@ -88,7 +69,7 @@ export function BotNewChatMenuItems({
           <DropdownMenuItem
             key={agent}
             variant="create"
-            onSelect={() => start(agent)}
+            onSelect={() => startSideChat(agent)}
             onKeyDown={sendTypingToSearch}
             aria-label={fullLabel}
             title={fullLabel}

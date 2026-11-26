@@ -40,6 +40,7 @@ import { ClaudeUsageLimits } from './claude-usage-limits'
 import { ClaudeThreadGoal } from './claude-thread-goal'
 import { createClaudeFinalOutputCoverage } from './claude-final-output-coverage'
 import { withClaudeConversationContent } from './claude-internal-message-content'
+import { journalClaudeFullAccessRefusal } from '../permissions/claude-full-access-refusal-notice'
 import {
   journalClaudePluginInputFailure,
   settleClaudeInterruptedTurn
@@ -102,13 +103,11 @@ export function createClaudeJournalTranslator(
     ...(deps.coalesceMs === undefined ? {} : { coalesceMs: deps.coalesceMs }),
     ...(deps.schedule ? { schedule: deps.schedule } : {}),
     producer: subagents.linkage,
-    persist: (identity, text, options, ended) => {
-      const body = claudeStreamingMessageBody(text)
-      deps.sink.appendItem(identity, body, {
-        ...options,
-        turnScope: turnScope(),
-        ...(ended ? { lifecycle: true } : {})
-      })
+    sink: deps.sink,
+    liveBody: (text) => claudeStreamingMessageBody(text),
+    persist: (identity, text, options, ended, onCommitted) => {
+      const scoped = { ...options, turnScope: turnScope(), ...(ended ? { lifecycle: true } : {}) }
+      deps.sink.appendItem(identity, claudeStreamingMessageBody(text), scoped, onCommitted)
       deps.sink.publish()
     }
   })
@@ -186,6 +185,8 @@ export function createClaudeJournalTranslator(
             event.message.is_api_error_message !== true ||
             event.startedSend != null
         }
+        // Checked on every root frame: an approved plan settles the fallback without a new init.
+        journalClaudeFullAccessRefusal(deps, turnScope())
       }
     }
     if (event.type === 'message' && absorbClaudeCommandFrame(messageContext, event.message)) {
@@ -198,7 +199,7 @@ export function createClaudeJournalTranslator(
       return
     }
     // Observe announcements before flushing so buffered rows receive their resolved producer stamp.
-    const announced = event.type === 'message' && subagents.observeSystemFrame(event.message)
+    const announced = event.type === 'message' && subagents.observeFrame(event.message)
     // Only ahead of a frame that can write a row: one per thinking token rewrote the whole row.
     if (!(event.type === 'message' && isClaudeProgressFrame(event.message))) {
       flush()
@@ -218,7 +219,7 @@ export function createClaudeJournalTranslator(
     } else if (event.type === 'message') {
       backgroundTasks.observe(event.message, event.observedAt ?? Date.now())
       messageContext.usageLimits.observe(event.message, turn.command?.rejections)
-      const kind = claudeProviderFrameKind(event.message)
+      messageContext.assistantFailures.authRetry(event.message, turn.command ? null : turn.id)
       if (
         !journalClaudeMessage(
           messageContext,
@@ -230,7 +231,7 @@ export function createClaudeJournalTranslator(
         )
       ) {
         providerFallback.append(
-          kind,
+          claudeProviderFrameKind(event.message),
           event.message,
           undefined,
           undefined,

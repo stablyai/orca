@@ -1,4 +1,5 @@
 import type { NativeChatTaskList } from '../../../shared/native-chat/input/task-lists/native-chat-task-list'
+import type { JournalTurnAttribution } from './journal-domain-turn-attribution'
 import type { JournalRequestMark } from './journal-request-failure'
 import type { JournalMailAttempt, JournalMailObservation } from './journal-mail-observation'
 import type { JournalRewindCut, JournalRewindSelection } from './journal-domain-rewind-cut'
@@ -59,6 +60,8 @@ export type JournalSqlReads = AgentSessionJournalReads & {
   automationResultNotes(): Promise<AgentJournalSnapshot>
   /** The rows and sends that place these anchors' turns, never the whole conversation. */
   operationWindow(anchors: JournalOperationWindowAnchors): Promise<JournalOperationWindow>
+  /** Whom a turn acts for, by index over the turn's own rows (never the chat's send history). */
+  turnAttribution(turnId: string, through: number): Promise<JournalTurnAttribution>
   promptItem(end: 'first' | 'last'): Promise<AgentJournalRenderItem | null>
   /** The plan last written in the turn of the chat's newest tool call, or null. */
   latestTaskList(): Promise<NativeChatTaskList | null>
@@ -162,6 +165,8 @@ export function journalSqlReads(
     botMemorySources: async (after) => (await read({ kind: 'bot-memory-sources', after })).sources,
     automationResultNotes: async () => (await read({ kind: 'automation-result-notes' })).snapshot,
     operationWindow: async (anchors) => (await read({ kind: 'operation-window', anchors })).window,
+    turnAttribution: async (turnId, through) =>
+      (await read({ kind: 'turn-attribution', turnId, through })).attribution,
     promptItem: async (end) => (await read({ kind: 'prompt-item', end })).item,
     latestTaskList: async () => (await read({ kind: 'latest-task-list' })).list,
     runMentions: async (runId) => {
@@ -230,6 +235,7 @@ export function journalSqlReads(
       (await read({ kind: 'message-options', clientMessageId })).options,
     continuationContext: async () => (await read({ kind: 'continuation-context' })).context,
     continuationSpill: async (spill) => (await read({ kind: 'continuation-spill', spill })).bytes,
+    restartCut: async () => (await read({ kind: 'restart-cut' })).cut,
     latestPrompt: async () => (await read({ kind: 'latest-prompt' })).prompt,
     restartProgress: async (cursor) => (await read({ kind: 'restart-progress', cursor })).progress,
     outgrownChild: async (input) => (await read({ kind: 'outgrown-child', input })).child,
@@ -259,8 +265,14 @@ export function journalSqlReads(
       (await read({ kind: 'claude-history-prompts', sessionId, uuids })).prompts,
     submission: async (clientMessageId) =>
       (await read({ kind: 'submission', clientMessageId })).submission,
-    submissionBody: async (clientMessageId) =>
-      (await read({ kind: 'submission-body', clientMessageId })).body,
+    submissionBody: async (clientMessageId, options) =>
+      (
+        await read({
+          kind: 'submission-body',
+          clientMessageId,
+          ...(options?.family ? { family: true } : {})
+        })
+      ).body,
     receiptFor: async (clientMessageId) =>
       (await read({ kind: 'acceptance', clientMessageId })).receipt,
     lastProviderActivityAt: async (fence) => (await read({ kind: 'provider-activity', fence })).at,

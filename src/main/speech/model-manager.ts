@@ -102,7 +102,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
     }
 
     if (manifest.provider !== 'local') {
-      const ready = this.hasCloudCredentials(manifest.provider)
+      const ready = await this.hasCloudCredentials(manifest.provider)
       return { id: modelId, status: ready ? 'ready' : 'not-downloaded' }
     }
 

@@ -6,8 +6,8 @@ import {
 } from '../../native-chat/pane/routing/native-chat-leaf-routing'
 import { canContinueAgentSessionInNewSession } from '../session-continuation/terminal-agent-session-continuation'
 import type { TerminalPaneMobileController } from '../controller/use-terminal-pane-mobile-actions'
-import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store'
+import { shallow } from 'zustand/shallow'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import {
   canPaneOfferAgentId,
@@ -134,28 +134,30 @@ export function useTerminalPaneChatProjection({
   const contextMenuCanToggleChat = canToggleChatForLeaf(contextMenuLeafId)
   const activeLeafId = activePane?.leafId ?? null
   // One subscription for both reads keeps the pane inside its store listener budget.
-  const { menuAgentSessionId, menuAgentIdAvailable, activePaneCanResumeInChat } = useAppStore(
-    useShallow((state) => ({
-      menuAgentSessionId:
-        contextMenu.open && contextMenuLeafId
-          ? resolvePaneAgentSessionId(state, makePaneKey(tabId, contextMenuLeafId))
-          : null,
-      menuAgentIdAvailable:
-        contextMenu.open &&
-        contextMenuLeafId !== null &&
-        canPaneOfferAgentId(state, makePaneKey(tabId, contextMenuLeafId), () =>
-          canOwnerResolveSleepingAgentId(state, worktreeId)
-        ),
-      // Cheap stand-in for the tab menu's gate, on this pane's own conversation; the click looks it up.
-      activePaneCanResumeInChat:
-        !activePaneIsChatLeaf &&
-        activeLeafId !== null &&
-        canPaneOfferResumeInNewChat(state, {
-          worktreeId,
-          paneKey: makePaneKey(tabId, activeLeafId)
-        })
-    }))
-  )
+  const { menuAgentSessionId, menuAgentIdAvailable, activePaneCanResumeInChat } =
+    useAppStoreWithHostStatuses(
+      (state, statuses) => ({
+        menuAgentSessionId:
+          contextMenu.open && contextMenuLeafId
+            ? resolvePaneAgentSessionId(state, makePaneKey(tabId, contextMenuLeafId))
+            : null,
+        menuAgentIdAvailable:
+          contextMenu.open &&
+          contextMenuLeafId !== null &&
+          canPaneOfferAgentId(state, makePaneKey(tabId, contextMenuLeafId), () =>
+            canOwnerResolveSleepingAgentId(state, statuses, worktreeId)
+          ),
+        // Cheap stand-in for the tab menu's gate, on this pane's own conversation; the click looks it up.
+        activePaneCanResumeInChat:
+          !activePaneIsChatLeaf &&
+          activeLeafId !== null &&
+          canPaneOfferResumeInNewChat(state, statuses, {
+            worktreeId,
+            paneKey: makePaneKey(tabId, activeLeafId)
+          })
+      }),
+      shallow
+    )
   const contextMenuIsChatView = effectiveChatViewMode && contextMenuLeafId === chatLeafId
   const handleContextMenuToggleNativeChat = useCallback(() => {
     const leafId = getContextMenuLeafId()

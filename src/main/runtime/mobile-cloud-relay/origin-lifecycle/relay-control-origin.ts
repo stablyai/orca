@@ -151,7 +151,6 @@ export class RelayControlOrigin {
     this.relayJwt = relayJwt
     const previous = this.activeControl
     const { control, ack } = await this.openControl({
-      relayJwt,
       assignmentEpoch: assignment.assignmentEpoch,
       previousGeneration: this.generation,
       controlResumeSecret: this.controlResumeSecret
@@ -214,7 +213,8 @@ export class RelayControlOrigin {
     const watchStall = dialUrl === this.cellUrl && this.alternateCellUrls.length > 0
     const control: RelayControlClient = new RelayControlClient({
       cellUrl: dialUrl,
-      relayJwt: overrides?.relayJwt ?? this.options.relayJwt,
+      // Read at dial time: a failover resume waits out jitter and earlier alternates first.
+      relayJwt: this.relayJwt,
       relayHostId: this.options.relayHostId,
       assignmentEpoch: overrides?.assignmentEpoch ?? this.assignmentEpoch,
       identity: this.options.identity,
@@ -271,7 +271,6 @@ export class RelayControlOrigin {
     const ready = this.activeControl === stalled && this.controls.size === 1 && this.generation > 0
     return ready && this.controlResumeSecret
       ? {
-          relayJwt: this.relayJwt,
           assignmentEpoch: this.assignmentEpoch,
           previousGeneration: this.generation,
           controlResumeSecret: this.controlResumeSecret

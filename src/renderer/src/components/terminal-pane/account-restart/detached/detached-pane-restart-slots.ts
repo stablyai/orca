@@ -21,7 +21,3 @@ export function holdDetachedRestartSlot(ptyId: string, onStall: () => void): () 
     slotHolderPtyIds.delete(ptyId)
   }
 }
-
-export function resetDetachedRestartSlotsForTests(): void {
-  slotHolderPtyIds.clear()
-}

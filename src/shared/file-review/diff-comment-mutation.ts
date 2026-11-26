@@ -30,3 +30,13 @@ export function mergeDiffCommentMutation(
   )
   return [...retained, ...added]
 }
+
+/** The list a write leaves; with a base, only the writer's edit applies, so a stale writer keeps others' notes. */
+export function applyDiffCommentWrite(
+  current: readonly DiffComment[] | undefined,
+  { diffComments, diffCommentsBase }: { diffComments?: DiffComment[] } & DiffCommentBaseMutation
+): DiffComment[] | undefined {
+  return diffComments && diffCommentsBase
+    ? mergeDiffCommentMutation(diffCommentsBase, current ?? [], diffComments)
+    : diffComments
+}

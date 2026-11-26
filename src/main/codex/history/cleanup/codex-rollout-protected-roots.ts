@@ -2,13 +2,15 @@ import { realpath, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { isPathInsideOrEqual } from '../../../../shared/file-access/cross-platform-path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
+import { wslDistroForPath } from '../../../wsl/filesystem/wsl-unc-access-gate'
 
 /** Orca's homes to delete in, and roots (the user's import folder) no deletion may reach. */
 export type RolloutHomes = { homes: readonly string[]; protectedRoots: readonly string[] }
 
 /**
  * A protected root as seen from one rollout: the dev:ino of the root and of the folders that hold
- * this rollout in it, or, on a filesystem that gives the root no inode, its real path.
+ * this rollout in it, or, on a filesystem that gives the root no inode, its real path. A root in WSL
+ * is never read, and stands for its whole distro.
  */
 export type ProtectedRoot = { folderIds: ReadonlySet<string>; inodelessRealPath: string | null }
 
@@ -37,6 +39,12 @@ async function folderId(path: string): Promise<string | null> {
   }
 }
 
+/** The root of the WSL distro a Windows path is in (`\\?\UNC\` spellings too); null for any other. */
+function wslDistroRoot(path: string): string | null {
+  const distro = wslDistroForPath(path.replace(/^[\\/]{2}\?[\\/]UNC[\\/]/i, '\\\\'))
+  return distro ? `\\\\wsl.localhost\\${distro}` : null
+}
+
 /** Without inodes to compare, only a home whose real path is exactly the root's is that root. */
 async function isHomeRealPath(homes: readonly string[], realPath: string): Promise<boolean> {
   const homePaths = await Promise.all(
@@ -61,6 +69,13 @@ export async function resolveProtectedRoots(
   const dated = dirname(stem).split('/')
   const resolved: ProtectedRoot[] = []
   for (const root of protectedRoots) {
+    // Reading it would boot a stopped distro, and links inside the distro can reach it by any path
+    // there: every name that resolves into that distro stays.
+    const wslRoot = wslDistroRoot(root)
+    if (wslRoot) {
+      resolved.push({ folderIds: new Set(), inodelessRealPath: wslRoot })
+      continue
+    }
     const realPath = await realpathUnlessAbsent(root)
     if (!realPath) {
       continue
@@ -109,6 +124,10 @@ export async function isOutsideProtectedRoots(
     )
   ) {
     return false
+  }
+  // A root in WSL has no ids to find.
+  if (protectedRoots.every((root) => root.folderIds.size === 0)) {
+    return true
   }
   for (let folder = realFolder; ; folder = dirname(folder)) {
     const id = await folderId(folder)

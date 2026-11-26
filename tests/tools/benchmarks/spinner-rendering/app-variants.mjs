@@ -44,14 +44,26 @@ export async function spinnerCensus(page) {
       }
       let top = 0
       let bottom = innerHeight
+      let left = 0
+      let right = innerWidth
+      const clips = /(auto|scroll|hidden|clip)/
       for (let parent = ring.parentElement; parent; parent = parent.parentElement) {
-        if (/(auto|scroll|hidden|clip)/.test(getComputedStyle(parent).overflowY)) {
-          const bounds = parent.getBoundingClientRect()
+        const style = getComputedStyle(parent)
+        const bounds = parent.getBoundingClientRect()
+        if (clips.test(style.overflowY)) {
           top = Math.max(top, bounds.top)
           bottom = Math.min(bottom, bounds.bottom)
         }
+        if (clips.test(style.overflowX)) {
+          left = Math.max(left, bounds.left)
+          right = Math.min(right, bounds.right)
+        }
       }
-      return rect.bottom > top && rect.top < bottom
+      // A clip collapsed to zero size hides everything, even a wrapper that straddles its edge.
+      if (left >= right || top >= bottom) {
+        return false
+      }
+      return rect.bottom > top && rect.top < bottom && rect.right > left && rect.left < right
     }
     return {
       mounted: rings.length,

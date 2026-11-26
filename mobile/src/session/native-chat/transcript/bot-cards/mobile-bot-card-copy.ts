@@ -45,12 +45,18 @@ const OFFER_PIECES: Pieces<keyof typeof OFFER> = {
   createdTookOverOne: (t) => t('chat.botCards.offer.createdTookOverOne', OFFER.createdTookOverOne),
   createdTookOverMany: (t, values) =>
     t('chat.botCards.offer.createdTookOverMany', OFFER.createdTookOverMany, values),
+  askedOne: (t) => t('chat.botCards.offer.askedOne', OFFER.askedOne),
+  askedMany: (t, values) => t('chat.botCards.offer.askedMany', OFFER.askedMany, values),
+  tookOverSome: (t, values) => t('chat.botCards.offer.tookOverSome', OFFER.tookOverSome, values),
+  tookOverOne: (t) => t('chat.botCards.offer.tookOverOne', OFFER.tookOverOne),
+  tookOverMany: (t, values) => t('chat.botCards.offer.tookOverMany', OFFER.tookOverMany, values),
   deleted: (t) => t('chat.botCards.offer.deleted', OFFER.deleted),
   nameTaken: (t, values) => t('chat.botCards.offer.nameTaken', OFFER.nameTaken, values),
   rename: (t) => t('chat.botCards.offer.rename', OFFER.rename),
   edit: (t) => t('chat.botCards.offer.edit', OFFER.edit),
   create: (t) => t('chat.botCards.offer.create', OFFER.create),
   open: (t) => t('chat.botCards.offer.open', OFFER.open),
+  openBot: (t, values) => t('chat.botCards.offer.openBot', OFFER.openBot, values),
   origin: (t, values) => t('chat.botCards.offer.origin', OFFER.origin, values),
   originTemplate: (t, values) =>
     t('chat.botCards.offer.originTemplate', OFFER.originTemplate, values),
@@ -67,7 +73,7 @@ export function mobileBotCreateOfferSay(t: Translate): BotCreateOfferSay {
 }
 
 const TOOL_PIECES: Pieces<keyof typeof TOOL> = {
-  heading: (t) => t('chat.botCards.toolAdded.heading', TOOL.heading),
+  added: (t) => t('chat.botCards.toolAdded.added', TOOL.added),
   removed: (t) => t('chat.botCards.toolAdded.removed', TOOL.removed),
   remove: (t) => t('chat.botCards.toolAdded.remove', TOOL.remove)
 }

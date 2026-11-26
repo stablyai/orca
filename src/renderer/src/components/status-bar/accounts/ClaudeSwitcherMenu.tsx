@@ -1,7 +1,12 @@
+import { useTranslate } from '@/i18n/use-translate'
 import type React from 'react'
 import { useMemo } from 'react'
+import { ProviderDetailsMenu } from '../usage/ProviderDetailsMenu'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
-import type { AccountOwner } from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
+import {
+  accountOwnerFor,
+  wslHostDistroForTarget
+} from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
 import { useAppStore } from '../../../store/index'
 import type { ChatAccountAction } from './ProviderAccountChatButton'
 import { ClaudeSwitcherForOwner } from './ClaudeSwitcherForOwner'
@@ -13,8 +18,7 @@ import {
 
 export type ClaudeSwitcherMenuProps = {
   claude: ProviderRateLimits | null
-  compact: boolean
-  iconOnly: boolean
+  iconOnly?: boolean
   asSubmenu?: boolean
   triggerContent?: React.ReactNode
 } & (
@@ -24,10 +28,25 @@ export type ClaudeSwitcherMenuProps = {
 )
 
 export function ClaudeSwitcherMenu(props: ClaudeSwitcherMenuProps): React.JSX.Element | null {
+  const t = useTranslate()
   if (props.chatAction) {
     return <ChatClaudeSwitcherMenu {...props} chatAction={props.chatAction} />
   }
   const owner = props.ownerUsage.owner
+  if (!owner) {
+    return (
+      <ProviderDetailsMenu
+        provider={props.claude}
+        iconOnly={props.iconOnly}
+        asSubmenu={props.asSubmenu}
+        triggerContent={props.triggerContent}
+        ariaLabel={t(
+          'auto.components.status.bar.StatusBar.3dd7ddfae1',
+          'Open Claude details and account switcher'
+        )}
+      />
+    )
+  }
   return (
     <ClaudeSwitcherForOwner
       {...props}
@@ -43,7 +62,9 @@ function ChatClaudeSwitcherMenu(
   props: ClaudeSwitcherMenuProps & { chatAction: ChatAccountAction }
 ): React.JSX.Element | null {
   const target = props.chatAction.target
-  const owner = useMemo<AccountOwner>(() => ({ target, wslHostDistro: null }), [target])
+  // Why: a WSL host chat's accounts are this desktop's distro accounts, as in the status bar.
+  const distro = useAppStore((s) => wslHostDistroForTarget(target, s.runtimeEnvironments))
+  const owner = useMemo(() => accountOwnerFor(target, distro), [target, distro])
   const ownerUsage = useAccountOwnerUsage(
     owner,
     useAppStore((s) => s.rateLimits)

@@ -134,7 +134,7 @@ export function readPersistedState(
 }
 
 /** Restore aliases omitted by serialization, as Store.load does; use readPersistedState for raw state. */
-export function readDataFile(): unknown {
+export function readDataFile(): PersistedState {
   const parsed = readPersistedState()
   hydrateWorktreeMetaAliasProjection(parsed)
   return parsed

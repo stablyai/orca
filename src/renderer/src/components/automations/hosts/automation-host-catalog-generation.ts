@@ -143,7 +143,3 @@ export function syncAutomationHostCatalogGenerations(
 ): AutomationCatalogGenerationSync {
   return registry.sync(catalog)
 }
-
-export function resetAutomationHostCatalogGenerationsForTests(): void {
-  registry.reset()
-}

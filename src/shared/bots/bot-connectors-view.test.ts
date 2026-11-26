@@ -1,75 +1,51 @@
 import { describe, expect, it } from 'vitest'
+import type { GoogleDefaultRead } from '../google/google-bot-accounts'
 import type { GoogleAccountView } from '../google/google-connect-types'
-import { botConnectorServices, formatBotConnectors } from './bot-connectors-view'
+import { botConnectorServices } from './bot-connectors-view'
 
-const bot = { slack: null, slackApps: [], linear: null, linearWorkspaces: [], github: null }
+const account = (email: string): GoogleAccountView => ({
+  email,
+  status: 'connected',
+  services: [{ service: 'gmail', state: 'ready' }],
+  connectedAt: 0
+})
 
-describe('orca bot connectors', () => {
-  it('lists a connected bot, what to approve, and its workspaces by ref', () => {
-    const connected = {
-      ...bot,
-      slackApps: [{ teamId: 'T1', appId: 'A1' }],
-      github: {},
-      linearWorkspaces: [{ organizationId: 'o1', workspaceName: 'Acme' }]
+function googleRow(
+  googleAccounts?: string[],
+  hostEmails = ['Me@Work.com', 'me@gmail.com'],
+  googleDefault: GoogleDefaultRead = { email: 'me@work.com' }
+) {
+  const services = botConnectorServices(
+    { slack: null, linear: null, github: null, google: true, googleAccounts },
+    {
+      gh: 'signed-in',
+      linear: false,
+      google: hostEmails.map(account),
+      googleApp: true,
+      googleDefault
     }
-    const services = botConnectorServices(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: botConnectorServices reads only whether each link is there.
-      connected as never,
-      { gh: 'missing', linear: true },
-      'https://orca.example/approve'
-    )
-    expect(services.map((service) => [service.source, service.signedIn, service.wakes])).toEqual([
-      ['github', false, true],
-      ['linear', true, true],
-      ['slack', true, true]
-    ])
-    const printed = formatBotConnectors({
-      bot: 'Scout',
-      services,
-      workspaces: [
-        {
-          source: 'linear',
-          ref: 'linear:o1:workspace',
-          label: 'Acme',
-          places: [{ ref: 'linear:o1:team:t1', label: 'ENG Engineering' }]
-        }
-      ]
-    })
-    expect(printed).toContain(
-      'GitHub: `gh`, as your owner. Not signed in. Install the GitHub CLI (gh) on this computer, then run `gh auth login`.'
-    )
-    expect(printed).toContain('Slack: `orca slack`, as Scout. Connected.')
-    expect(printed).toContain('  Ask your owner to approve: https://orca.example/approve')
-    expect(printed).toContain(
-      'linear:o1:workspace  linear: Acme\n  linear:o1:team:t1  ENG Engineering'
+  )
+  return services.find((service) => service.source === 'google')
+}
+const googleDetail = (googleAccounts?: string[]) => googleRow(googleAccounts)?.detail
+
+describe('orca bot connectors, Google', () => {
+  it('lists only the accounts the bot may use, with its own default', () => {
+    expect(googleDetail(['me@gmail.com'])).toBe('me@gmail.com (default): Gmail ready')
+    // The host's email case doesn't hide which is the default.
+    expect(googleDetail()).toBe('Me@Work.com (default): Gmail ready; me@gmail.com: Gmail ready')
+  })
+
+  it('says none of its accounts is here, not that nobody is signed in', () => {
+    expect(googleRow(['gone@x.com'])?.gap).toContain(
+      'None of the Google accounts on this computer is chosen for you'
     )
   })
 
-  it('adds a Google row with each account’s services, or the one step that is missing', () => {
-    const ada: GoogleAccountView = {
-      email: 'ada@acme.dev',
-      status: 'connected',
-      connectedAt: 1,
-      services: [
-        { service: 'gmail', state: 'ready' },
-        { service: 'calendar', state: 'api-disabled' }
-      ]
-    }
-    const row = (google: boolean | undefined, accounts: GoogleAccountView[]) =>
-      botConnectorServices(
-        { ...bot, google },
-        { gh: 'signed-in', linear: true, google: accounts }
-      ).find((service) => service.source === 'google')
-    const on = row(true, [ada])
-    expect(on).toMatchObject({ signedIn: true, wakes: false })
-    const printed = formatBotConnectors({ bot: 'Scout', services: on ? [on] : [], workspaces: [] })
-    expect(printed).toContain(
-      'Google: `orca gmail|calendar|contacts`, as your owner. Signed in.\n  ada@acme.dev: Gmail ready, Calendar API off'
-    )
-    expect(printed).not.toContain('--offer google')
-    // A host that reports no Google sign-ins shows no row.
-    expect(
-      botConnectorServices(bot, { gh: 'signed-in', linear: true }).map((s) => s.source)
-    ).toEqual(['github', 'linear', 'slack'])
+  it('marks no default when the computer’s is unreadable and several are chosen', () => {
+    const detail = googleRow(['me@work.com', 'me@gmail.com'], undefined, {
+      unreadable: 'Keychain denied.'
+    })?.detail
+    expect(detail).toBe('Me@Work.com: Gmail ready; me@gmail.com: Gmail ready')
   })
 })

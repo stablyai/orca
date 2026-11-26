@@ -237,12 +237,9 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     return readAcpLiveOptions(session, session.permissionModes)
   }
 
-  readCommands = (sessionId: string) => {
-    const session = this.children.sessions.get(sessionId)
-    return session && childState.isAcpReadySession(session)
-      ? session.options.readCommands()
-      : undefined
-  }
+  // Not gated on ready: a list reported mid-startup is published only when it arrives.
+  readCommands = (sessionId: string) =>
+    this.children.sessions.get(sessionId)?.options.readCommands()
 
   capturePendingOutput: SessionAdapter['capturePendingOutput'] = (input) =>
     this.children.capturePendingOutput?.(input)

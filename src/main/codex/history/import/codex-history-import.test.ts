@@ -1,5 +1,6 @@
 import {
   appendFileSync,
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -84,6 +85,8 @@ describe('importCodexHistory', () => {
     writeFileSync(imported, 'new\n')
     const sourceTime = new Date('2026-03-01T00:00:00Z')
     utimesSync(imported, sourceTime, sourceTime)
+    // A read-only backup still gives a copy Codex can append to.
+    chmodSync(imported, 0o444)
     writeFileSync(join(importHome, DAY, TAKEN), 'import copy\n')
     writeFileSync(join(storeHome, DAY, TAKEN), 'store copy\n')
     // The store's compressed form wins even over a newer plain form here.
@@ -130,6 +133,23 @@ describe('importCodexHistory', () => {
     expect(existsSync(join(storeHome, 'archived_sessions', `${NEW}.zst`))).toBe(false)
     expect(readFileSync(join(storeHome, DAY, LATER), 'utf8')).toBe('later\n')
   })
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'imports the other years when one year folder cannot be read',
+    async () => {
+      const { importHome, storeHome, run } = setup()
+      writeFileSync(join(importHome, DAY, NEW), 'new\n')
+      const unreadable = join(importHome, 'sessions', '2025')
+      mkdirSync(join(unreadable, '01', '01'), { recursive: true })
+      chmodSync(unreadable, 0o000)
+      try {
+        expect(await run()).toBe(1)
+      } finally {
+        chmodSync(unreadable, 0o755)
+      }
+      expect(readFileSync(join(storeHome, DAY, NEW), 'utf8')).toBe('new\n')
+    }
+  )
 
   it('does not publish a conversation deleted while it was copied', async () => {
     let deleting = true

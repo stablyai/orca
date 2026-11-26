@@ -77,8 +77,8 @@ export function useTaskPageGitHubCacheReconciliation(model: TaskPageGitHubDetail
     }
     // Copy patched cache rows into local pages and overlay pending mutations so refetches cannot clobber coordinator fields.
     setPages((current) =>
-      reconcileTaskPagePagesWithWorkItemsCache(current, selectedWorkItemsCacheEntries).map(
-        (page) => (page ? (overlayPendingOnTaskPagePages([page])[0] ?? []) : null)
+      reconcileTaskPagePagesWithWorkItemsCache(current, selectedWorkItemsCacheEntries).map((page) =>
+        page ? (overlayPendingOnTaskPagePages([page])[0] ?? []) : null
       )
     )
   }, [githubMode, selectedWorkItemsCacheEntries, taskSource, setPages])

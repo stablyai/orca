@@ -2,6 +2,7 @@ import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import { Users } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useLatestHandler } from '@/lib/use-latest-handler'
+import { botRefKey } from '@/lib/bot-hosts'
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotGroup } from '../../../../shared/bots/bot-group'
 import { botGroupSingleRecipient } from '../../../../shared/bots/bot-group-mentions'
@@ -31,8 +32,22 @@ export function useBotGroupComposerRoom(
   const recipientId = useSyncExternalStore(subscribeDraft, () =>
     group ? botGroupSingleRecipient(readNativeChatDraftCache(draftScope), group, bots) : null
   )
+  // This computer's members, then bots on paired computers as the room saved them.
   const memberBots = useMemo(
-    () => bots.filter((bot) => group?.members.some((member) => member.botId === bot.id)),
+    () => [
+      ...bots.filter(
+        (bot) =>
+          bot.hostId === group?.hostId && group.members.some((member) => member.botId === bot.id)
+      ),
+      ...(group?.remoteMembers ?? []).map((member) => ({
+        id: member.botId,
+        hostId: `runtime:${member.environmentId}` as const,
+        name: member.name,
+        avatar: member.avatar,
+        avatarColor: member.avatarColor,
+        avatarOutfit: member.avatarOutfit
+      }))
+    ],
     [bots, group]
   )
   // Keyed by the names so transcript markdown keeps its extension across transcript polls.
@@ -48,6 +63,7 @@ export function useBotGroupComposerRoom(
         mentions: [
           ...memberBots.map((bot) => ({
             name: bot.name,
+            recentKey: botRefKey(bot),
             icon: <BotAvatar bot={bot} className="size-5 shrink-0" />
           })),
           {

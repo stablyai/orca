@@ -1,5 +1,6 @@
 import { sharedPromiseSettlementWaiters } from '../../../../shared/concurrency/promise-settlement-waiters'
 import { useAppStore } from '@/store'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { agentChildWorkLiveness } from '../../../../shared/agent-status/child-work/agent-status-child-work-liveness'
@@ -37,9 +38,7 @@ export function admitStructuredAgentSession(
   const pairing = (): number | undefined =>
     environmentId ? getRuntimeEnvironmentRevision(environmentId) : undefined
   const runtime = (): string | undefined =>
-    environmentId
-      ? useAppStore.getState().runtimeStatusByEnvironmentId.get(environmentId)?.status?.runtimeId
-      : undefined
+    environmentId ? readRuntimeStatuses().get(environmentId)?.status?.runtimeId : undefined
   const identity = (item: Tab | undefined) => [
     item?.worktreeId,
     item?.contentType,

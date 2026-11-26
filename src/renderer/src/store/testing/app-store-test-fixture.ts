@@ -1,4 +1,4 @@
-import { withAgentStatusOwnership } from '../slices/agent-status/status-ownership/agent-status-ownership-boundary'
+import { withStatusTransaction } from '../status-transaction/status-transaction-boundary'
 import { create, type StateCreator } from 'zustand'
 import type { AppState } from '../types'
 
@@ -65,7 +65,7 @@ import { resetProviderRuntimeSessionGenerationForTests } from '@/runtime/hosts/o
 import { markHydratedBrowserPageHandles } from '../slices/browser/hosts/browser-initialization-presentation-ownership'
 
 const withTestStorePolicies = (creator: StateCreator<AppState, [], []>, check: boolean) =>
-  withAgentStatusOwnership(withEditorBufferRecords(withAgentConversationRetention(creator), check))
+  withStatusTransaction(withEditorBufferRecords(withAgentConversationRetention(creator), check))
 
 export function createTestStore(
   isClaudeAgent: Parameters<typeof createTerminalSlice>[3] = undefined

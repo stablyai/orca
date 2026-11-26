@@ -2,9 +2,11 @@
 // and the phone's host list both draw, so order, folds, paging and trailing text never diverge.
 import {
   CHAT_TREE_CAPS,
-  chatFoldSummary,
+  chatFoldCounts,
   type BotChatFold,
-  type BotChatTreeChat
+  type BotChatTranslate,
+  type BotChatTreeChat,
+  type ChatFoldCounts
 } from './bot-chat-tree'
 import {
   botLiveWorkspaceIds,
@@ -17,15 +19,16 @@ import {
 
 /** What a chat row's right edge says: a folded chat's live counts, else its time; nothing while it replies. */
 export type BotSidebarChatTrailing =
-  | { kind: 'summary'; text: string }
+  | { kind: 'summary'; counts: ChatFoldCounts }
   | { kind: 'time'; at: number }
 
 /** A chat's "Show more" for its workers: a full step reads "Show 8 more", a last partial one names its count. */
 export type BotSidebarWorkerPaging = { remaining: number; label: 'step' | 'count' }
 
-type Translate = (key: string, fallback: string, values?: Record<string, unknown>) => string
-
-export function botSidebarWorkerPagingLabel(t: Translate, paging: BotSidebarWorkerPaging): string {
+export function botSidebarWorkerPagingLabel(
+  t: BotChatTranslate,
+  paging: BotSidebarWorkerPaging
+): string {
   return paging.label === 'step'
     ? t('bots.chats.showEightMoreWorkers', 'Show 8 more workers')
     : t('bots.chats.showMoreWorkers', 'Show {{count}} more workers', {
@@ -114,8 +117,8 @@ export function buildBotSidebarTree<T extends { id: string }>(input: {
 function chatTrailing(chat: BotChatTreeChat, folded: boolean): BotSidebarChatTrailing | null {
   const time = chat.lastActiveAt > 0 ? ({ kind: 'time', at: chat.lastActiveAt } as const) : null
   if (folded) {
-    const summary = chatFoldSummary(chat)
-    return summary ? { kind: 'summary', text: summary } : time
+    const counts = chatFoldCounts(chat)
+    return counts ? { kind: 'summary', counts } : time
   }
   return chat.live === 'replying' ? null : time
 }

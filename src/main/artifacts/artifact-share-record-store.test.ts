@@ -64,10 +64,9 @@ describe('artifact share record store', () => {
 
     expect(() => clearArtifactShareRecords('local-profile', path)).not.toThrow()
     expect(isArtifactShareLifecycleCurrent('local-profile', path, lifecycle)).toBe(false)
-    const persisted = JSON.parse(await readFile(recordsPath, 'utf8')) as {
-      lifecycleNonce?: string
-      shares: object
-    }
+    const persisted: { lifecycleNonce?: string; shares: object } = JSON.parse(
+      await readFile(recordsPath, 'utf8')
+    )
     expect(persisted.lifecycleNonce).toMatch(/^[0-9a-f-]{36}$/)
     expect(persisted.shares).toEqual({})
   })

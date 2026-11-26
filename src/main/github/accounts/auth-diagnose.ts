@@ -60,6 +60,16 @@ export function parseAuthStatus(text: string): GhAuthAccount[] {
   return accounts
 }
 
+// Unpinned gh calls use go-gh's defaultHost: GH_HOST, else the only hosts.yml host, else github.com.
+function ghDefaultHost(accounts: GhAuthAccount[]): string {
+  const envHost = process.env.GH_HOST?.trim().toLowerCase()
+  if (envHost) {
+    return envHost
+  }
+  const hosts = new Set(accounts.filter((a) => !a.envToken).map((a) => a.host.toLowerCase()))
+  return hosts.size === 1 ? [...hosts][0] : 'github.com'
+}
+
 export async function diagnoseGhAuth(
   requiredHost?: string,
   execOptions: { cwd?: string; wslDistro?: string } = {}
@@ -94,13 +104,9 @@ export async function diagnoseGhAuth(
   const accounts = parseAuthStatus(raw)
   // Diagnose only the requested host's account; other hosts' scopes do not apply.
   const normalizedRequiredHost = requiredHost?.trim().toLowerCase() || null
-  const hostAccounts = normalizedRequiredHost
-    ? accounts.filter((a) => a.host.toLowerCase() === normalizedRequiredHost)
-    : accounts
-  const active =
-    hostAccounts.find((a) => a.active) ??
-    hostAccounts[0] ??
-    (normalizedRequiredHost ? null : (accounts.find((a) => a.active) ?? accounts[0] ?? null))
+  const diagnosedHost = normalizedRequiredHost ?? ghDefaultHost(accounts)
+  const hostAccounts = accounts.filter((a) => a.host.toLowerCase() === diagnosedHost)
+  const active = hostAccounts.find((a) => a.active) ?? hostAccounts[0] ?? null
   const envTokenInProcess: 'GITHUB_TOKEN' | 'GH_TOKEN' | null = process.env.GH_TOKEN
     ? 'GH_TOKEN'
     : process.env.GITHUB_TOKEN

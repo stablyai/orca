@@ -5,7 +5,6 @@ import type { Store } from '../persistence/loading-store/store'
 import type { AutomationRunWriter } from './run-history/run-writer'
 import type { AutomationRunTargetResult } from './ownership/run-target-resolution'
 import { missedBeyondGrace, recordMissedRun } from './dispatch/dispatch-refusal'
-import type { AutomationWakeGate } from './dispatch/automation-wake-settle'
 import type { AutomationRunFailure } from '../../shared/automations/history/automation-run-failure-copy'
 import { onceClaimed } from '../../shared/automation-once'
 
@@ -21,9 +20,8 @@ export type AutomationOnceEffects = {
 export type AutomationTriggerRunContext = {
   store: Pick<Store, 'listAutomations' | 'listAutomationRuns' | 'getLatestAutomationOccurrence'>
   runs: AutomationRunWriter
-  tickMs: number
-  /** Holds a scheduled occurrence the wake gate delayed inside its grace. */
-  wakeGate: Pick<AutomationWakeGate, 'missedBeyondGrace'>
+  /** The wait the wake gate imposed before this scheduler pass. */
+  wakeGateDelayMs: number
   /** The automation's dispatch lane; the operation must not dispatch itself. */
   inLane<T>(automationId: string, operation: () => Promise<T>): Promise<T>
   describeRefusal(target: AutomationRunTargetResult): Promise<AutomationRunFailure | null>
@@ -53,7 +51,7 @@ export async function runScheduledOccurrence(
     await ctx.runs.advanceNextRun(automation.id, now)
     return
   }
-  if (ctx.wakeGate.missedBeyondGrace({ automation, scheduledFor, now, tickMs: ctx.tickMs })) {
+  if (missedBeyondGrace({ automation, scheduledFor, now, wakeGateDelayMs: ctx.wakeGateDelayMs })) {
     await recordMissedRun({ runs: ctx.runs, automation, scheduledFor })
     await ctx.runs.advanceNextRun(automation.id, now)
     return
@@ -134,7 +132,8 @@ async function admitEvent(
     return { run: folded }
   }
   const scheduledFor = event.occurredAt
-  if (missedBeyondGrace({ automation, scheduledFor, now: Date.now(), tickMs: ctx.tickMs })) {
+  // Events are never wake-gated, so no settle wait is credited.
+  if (missedBeyondGrace({ automation, scheduledFor, now: Date.now(), wakeGateDelayMs: 0 })) {
     return { run: await recordMissedRun({ runs: ctx.runs, automation, scheduledFor, event }) }
   }
   const target = ctx.resolveTarget(automation)

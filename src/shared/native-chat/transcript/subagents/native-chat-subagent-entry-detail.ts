@@ -77,9 +77,7 @@ function maskCodeSpans(text: string): { masked: string; restore: (value: string)
 
 /** `claude-opus-5-5` reads as `Opus 5.5`, `gpt-5.5` as `GPT-5.5`: the chat already names the provider. */
 export function subagentModelLabel(model: string): string {
-  return claudeListedModelLabel(model.trim())
-    .replace(/^Claude /, '')
-    .replace(/^GPT (\d)/, 'GPT-$1')
+  return claudeListedModelLabel(model.trim()).replace(/^GPT (\d)/, 'GPT-$1')
 }
 
 /** `general-purpose` reads as `General purpose`; Codex's bare `default` role says nothing. */

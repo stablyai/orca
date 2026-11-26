@@ -17,11 +17,15 @@ type Translate = (key: string, fallback: string, values?: Record<string, unknown
  *  the words between it and the items. */
 export type BotItemNoteLineChat = { chatId: string; name: string; after: string; home?: true }
 
+/** The one link a line names, a worker's by `dispatchId`; `after`: the words before the items. */
+export type BotItemNoteLineLink = { name: string; after: string; dispatchId?: string }
+
 export type BotItemNoteLine =
   | {
       kind: 'line'
       lead: string
       chat?: BotItemNoteLineChat
+      link?: BotItemNoteLineLink
       items: BotItemNoteItem[]
       tail?: string
       detail?: string
@@ -52,28 +56,44 @@ function chipOf(entries: readonly BotItemNoteEntry[]): BotItemNoteItem {
 const ITEMS = '\uE000'
 /** Where the acting chat's chip goes, before the items' chips. */
 const CHAT = '\uE001'
+/** Where the one link's name goes, just before the items. */
+const LINK = '\uE002'
 
-type Around = { lead: string; chat?: BotItemNoteLineChat; tail?: string }
+type Around = Pick<BotItemNoteLine & { kind: 'line' }, 'lead' | 'chat' | 'link' | 'tail'>
 
 /** A translated whole sentence ("Added and moved {{items}} to {{status}}", `items: ITEMS`) as the
  *  words around its chips; either side may be empty, so a translation puts the chips where its
  *  grammar wants them. A chat chip a translation puts after the items reads as its plain name. */
-function around(sentence: string, chat?: Omit<BotItemNoteLineChat, 'after'>): Around {
+function around(
+  sentence: string,
+  chat?: Omit<BotItemNoteLineChat, 'after'>,
+  named?: { name: string | null; dispatchId?: string }
+): Around {
+  const linkName = named?.name ?? undefined
   const [head = '', rest = ''] = sentence.split(ITEMS)
-  const tail = chat ? rest.replace(CHAT, chat.name) : rest
+  // A translation that names the link after the items, or before the chat, reads it as words.
+  const tail = (chat ? rest.replace(CHAT, chat.name) : rest).replace(LINK, linkName ?? '')
   const [lead = '', after] = head.split(CHAT)
+  const byChat = chat && after !== undefined
+  const [before = '', afterLink] = (byChat ? after : lead).split(LINK)
   return {
-    lead: lead.trim(),
-    ...(chat && after !== undefined ? { chat: { ...chat, after: after.trim() } } : {}),
+    lead: (byChat ? lead.replace(LINK, linkName ?? '') : before).trim(),
+    ...(byChat ? { chat: { ...chat, after: before.trim() } } : {}),
+    ...(linkName !== undefined && afterLink !== undefined
+      ? {
+          link: {
+            name: linkName,
+            after: afterLink.trim(),
+            ...(named?.dispatchId ? { dispatchId: named.dispatchId } : {})
+          }
+        }
+      : {}),
     ...(tail.trim() ? { tail: tail.trim() } : {})
   }
 }
 
 /** The line's words: one whole-sentence key per result. */
-function botSentence(
-  { added, ...act }: { added: boolean } & BotAct,
-  t: Translate
-): { lead: string; tail?: string } {
+function botSentence({ added, ...act }: { added: boolean } & BotAct, t: Translate): Around {
   switch (act.act) {
     case 'move': {
       const status = botItemStatusName(act.to, t)
@@ -121,8 +141,10 @@ function botSentence(
             })
           : t('bots.items.chat.linked', 'Linked {{link}} to {{items}}', {
               items: ITEMS,
-              link: act.link.name ?? t('bots.items.chat.aWorker', 'a worker')
-            })
+              link: act.link.name === null ? t('bots.items.chat.aWorker', 'a worker') : LINK
+            }),
+        undefined,
+        act.link
       )
   }
 }
@@ -157,13 +179,16 @@ function chatSentence(act: BotAct, chat: string, t: Translate): string {
           })
         : t('bots.items.chat.byChat.linked', '{{chat}} linked {{link}} to {{items}}', {
             ...v,
-            link: act.link.name ?? t('bots.items.chat.aWorker', 'a worker')
+            link: act.link.name === null ? t('bots.items.chat.aWorker', 'a worker') : LINK
           })
   }
 }
 
 /** How a line names another chat: Home Chat, its title, or "Another chat". */
-function chatName(chat: BotItemNoteChat | null, t: Translate): string {
+function chatName(chat: BotItemNoteChat | 'other-agent' | null, t: Translate): string {
+  if (chat === 'other-agent') {
+    return t('bots.items.chat.anotherAgent', 'Another agent')
+  }
   return chat?.home
     ? t('bots.items.homeChat', 'Home Chat')
     : chat?.title || t('bots.items.chat.anotherChat', 'Another chat')
@@ -180,20 +205,21 @@ function actKey({ added, ...act }: { added: boolean } & BotAct): string {
 function botLines(
   entries: readonly BotItemNoteEntry[],
   t: Translate,
-  by?: BotItemNoteChat | null
+  by?: BotItemNoteChat | 'other-agent' | null
 ): BotItemNoteLine[] {
   const sentence = (act: { added: boolean } & BotAct): Around => {
     if (by === undefined) {
       return botSentence(act, t)
     }
     const name = chatName(by, t)
-    return by
-      ? around(chatSentence(act, CHAT, t), {
-          chatId: by.chatId,
-          name,
-          ...(by.home ? { home: true as const } : {})
-        })
-      : around(chatSentence(act, name, t))
+    const link = act.act === 'link' ? act.link : undefined
+    return by && by !== 'other-agent'
+      ? around(
+          chatSentence(act, CHAT, t),
+          { chatId: by.chatId, name, ...(by.home ? { home: true as const } : {}) },
+          link
+        )
+      : around(chatSentence(act, name, t), undefined, link)
   }
   const lines = new Map<string, BotItemNoteLine & { kind: 'line' }>()
   for (const itemEntries of byItem(entries)) {
@@ -283,7 +309,7 @@ export function botItemNoteLines(note: BotItemNoteView, t: Translate): BotItemNo
   }
   return by === 'bot'
     ? botLines(note.entries, t)
-    : botLines(note.entries, t, typeof by === 'object' ? by : null)
+    : botLines(note.entries, t, typeof by === 'object' || by === 'other-agent' ? by : null)
 }
 
 /** A folded run of the owner's quick changes to one item: first → last status and how many. */

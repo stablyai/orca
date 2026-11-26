@@ -4,6 +4,7 @@ import { isWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layou
 import { parseRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { runtimeEnvironmentIdUnlessTwin } from '../../../lib/workspace/ownership/resolve-owner'
 import { useAppStore } from '../../../store/index'
+import { readRuntimeStatuses } from '../../../store/slices/runtime-status/views/runtime-status-owner'
 import type { WebRuntimeSplitSource } from './web-runtime-split-focus'
 
 /** Use published pane coordinates before attach only when the binding names this workspace’s server. */
@@ -33,7 +34,7 @@ export function notifyHostTabSplitRefused(source: WebRuntimeSplitSource): void {
   const environmentId = runtimeEnvironmentIdUnlessTwin(state, source.worktreeId)
   const disconnected =
     !environmentId ||
-    state.runtimeStatusByEnvironmentId.get(environmentId)?.snapshot?.transport === 'disconnected'
+    readRuntimeStatuses().get(environmentId)?.snapshot?.transport === 'disconnected'
   toast.error(
     disconnected
       ? translate(

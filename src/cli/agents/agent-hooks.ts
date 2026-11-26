@@ -7,7 +7,10 @@ import type { RuntimeClient } from '../runtime/client'
 import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { getDefaultUserDataPath } from '../runtime/profile/metadata'
 import { ensureCliAppEnvironment } from '../runtime/profile/cli-app-environment'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
+import {
+  getAgentHookConfigPaths,
+  type AgentHookInstallStatus
+} from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../shared/orca-profiles/orca-profiles'
 import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import type { ProfileStateOfflineLocation } from '../../main/persistence/profile-state/offline-access/profile-state-offline-settings'
@@ -156,7 +159,8 @@ function formatAgentHookCommandResult(result: AgentHookCommandResult): string {
   const statusSummary = result.statuses
     .map((status) => {
       const showDetail = status.detail && (status.state === 'partial' || status.state === 'error')
-      const path = status.configPath ? ` (${status.configPath})` : ''
+      const paths = getAgentHookConfigPaths(status)
+      const path = paths.length > 0 ? ` (${paths.join(', ')})` : ''
       return `${status.agent}: ${status.state}${path}${showDetail ? ` - ${status.detail}` : ''}`
     })
     .join('\n')

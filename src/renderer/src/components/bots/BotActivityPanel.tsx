@@ -7,9 +7,10 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../shared/bot-types'
 import { ChatWorkersActivity } from './ChatWorkersActivity'
 import { BotUpNextSection } from './BotUpNextSection'
-import { useBotActivity } from './use-bot-activity'
+import { NO_ACTIVITY, useBotActivityAuthorityRead } from './use-bot-activity'
+import { useBotAutomationDelete } from './use-bot-automation-delete'
+import { hiddenAutomationCardKeys, withoutHiddenAutomations } from './bot-automation-delete-hides'
 import { useBotNeedsYouCount, useBotNow } from './use-bot-now'
-import { useBotChatTree } from './use-bot-chat-tree'
 import { updateBotReporting } from './bot-update-reporting'
 import { useBotPictureSetting } from '../settings/bots/use-bot-picture-setting'
 import { BotPanelHeader } from './BotPanelHeader'
@@ -28,11 +29,7 @@ import { BotSettingsView } from './settings-view/BotSettingsView'
 import {
   BOT_ITEM_GROUP_IDS,
   BOT_ITEM_NO_FILTER,
-  botItemChats,
-  botItemFilterChat,
   botItemsByDispatch,
-  botNeedChat,
-  filterBotNeeds,
   type BotItemFilter
 } from '../../../../shared/bots/bot-item-groups'
 import { BotItemsFilterButton, BotItemsFilterChips } from './items/BotItemsFilter'
@@ -40,10 +37,13 @@ import { BotItemsSection } from './items/BotItemsSection'
 import { BotItemsReadFailed } from './items/BotItemsReadFailed'
 import { BotItemPane } from './items/BotItemPane'
 import { useBotItemOpenRequest } from './items/bot-item-open'
-import { botItemWalkReturnRow } from './items/bot-item-walk'
-import { useBotItems, useBotItemsSeenAtOpen } from './items/use-bot-items'
+import { botItemWalkReturnRow } from '../../../../shared/bots/bot-item-walk'
+import { useBotItems } from './items/use-bot-items'
+import { useBotItemsSeenAtOpen } from './items/use-bot-items-seen-mark'
 import { useBotItemWalk } from './items/use-bot-item-walk'
+import { useBotItemBackFocus } from './items/use-bot-item-back-focus'
 import { useBotItemsShownList } from './items/use-bot-items-shown-list'
+import { useRightSidebarGutterResize } from '@/components/right-sidebar/layout/right-sidebar-gutter-resize'
 
 /** Focus after the panel shows Activity again: the gear that opened settings. */
 function focusGearAfterClose(panel: HTMLElement | null): void {
@@ -96,12 +96,24 @@ function BotActivityOrSettings({ bot }: { bot: Bot }): React.JSX.Element {
 
 function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
   const t = useTranslate()
-  const activity = useBotActivity(bot)
+  const activityRead = useBotActivityAuthorityRead(bot)
+  // Its server is down: the panel shows the last read with its actions off until it's back.
+  const offline = useBotHostOffline(bot.hostId)
+  const deletion = useBotAutomationDelete(bot, activityRead, offline)
+  const listedActivity = activityRead.read?.activity ?? NO_ACTIVITY
+  // One projection for every place this tab names an automation: deleted here, it's gone from all.
+  const activity = useMemo(
+    () => withoutHiddenAutomations(listedActivity, deletion.hidden),
+    [listedActivity, deletion.hidden]
+  )
+  const hiddenCardKeys = useMemo(
+    () => hiddenAutomationCardKeys(listedActivity, deletion.hidden),
+    [listedActivity, deletion.hidden]
+  )
   const now = useBotNow(bot)
-  const tree = useBotChatTree(bot)
   const items = useBotItems(bot)
   const read = items.read
-  const seenAtOpen = useBotItemsSeenAtOpen(bot, read)
+  const seenAtOpen = useBotItemsSeenAtOpen(bot, read, items.landed)
   const [filter, setFilterState] = useState<BotItemFilter>(BOT_ITEM_NO_FILTER)
   // The row Back returns focus to; another filter shows other rows.
   const [returnTo, setReturnTo] = useState<string | null>(null)
@@ -109,13 +121,7 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
     setReturnTo(null)
     setFilterState(next)
   }
-  const itemChats = useMemo(
-    () => (read ? botItemChats(read.items, tree.chats) : []),
-    [read, tree.chats]
-  )
   const picture = useBotPictureSetting(bot, (updates) => updateBotReporting(bot, updates))
-  // Its server is down: the panel shows the last read with its actions off until it's back.
-  const offline = useBotHostOffline(bot.hostId)
   // "Today at…" and "next" roll over with the clock; a minute is fine-grained enough.
   const clock = useNow(60_000)
   // Read above the list/item switch: an open item walks this list, and Back finds its row in it.
@@ -133,27 +139,31 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
     setReturnTo(left ? botItemWalkReturnRow(left.walk, left.uid, listed) : null)
   }
   const scroll = React.useRef<HTMLDivElement | null>(null)
+  const gutterResize = useRightSidebarGutterResize(scroll)
+  useBotItemBackFocus(walk.uid !== null, scroll)
   const automationRows = useMemo(
     () => botAutomationCardRows(bot, activity, clock),
     [bot, activity, clock]
   )
-  // Asks are filtered beside the items, by their chat; a sign-in or access request is no chat's.
+  const stoppedForSignIn = useMemo(
+    () =>
+      now.stoppedForSignIn.flatMap((row) =>
+        deletion.hidden.has(row.automation.id) ? [] : [{ ...row, hostId: bot.hostId }]
+      ),
+    [now.stoppedForSignIn, bot.hostId, deletion.hidden]
+  )
+  // Every ask leads Needs you, whatever the filter: Needs you only keeps them all.
   const asks = useMemo<BotNeedsYouAsks>(() => {
     const byDispatch = botItemsByDispatch(read?.items ?? [])
-    const itemOf = (dispatchId: string) => byDispatch.get(dispatchId) ?? null
-    const homeChatId = itemChats.find((chat) => chat.kind === 'home')?.chatId ?? bot.chatSessionId
     return {
-      needs: filterBotNeeds(now.needs, filter, (need) => botNeedChat(need, homeChatId, itemOf)),
-      stoppedForSignIn: filter.chatIds === null ? now.stoppedForSignIn : [],
-      itemOf
+      needs: now.needs,
+      stoppedForSignIn,
+      itemOf: (dispatchId: string) => byDispatch.get(dispatchId) ?? null
     }
-  }, [read, itemChats, bot.chatSessionId, now.needs, now.stoppedForSignIn, filter])
+  }, [read, now.needs, stoppedForSignIn])
   // The badge's count, unfiltered: the header's dot and line say what the Items tab says.
   const needsYou = useBotNeedsYouCount(bot, now)
-  const signInStops = useMemo(
-    () => new Set(now.stoppedForSignIn.map((row) => row.key)),
-    [now.stoppedForSignIn]
-  )
+  const hasConnectorNeed = now.needs.some((need) => need.kind === 'connector')
   const rowName = (row: BotAutomationCardRow): string =>
     row.kind === 'look-around'
       ? t('settings.bots.lookAround.title', 'Look around')
@@ -181,9 +191,13 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
   }
   return (
     <div
-      ref={scroll}
+      data-bot-items-scroller=""
       tabIndex={-1}
-      className="@container scrollbar-sleek flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-2 py-3 outline-none"
+      // The bot row's hover card moves focus here when it opens the bot's Home.
+      data-bot-home-panel=""
+      // The wider left padding is the sidebar's resize grab area, 4 px clear of every row.
+      className="@container scrollbar-sleek flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto pl-3.5 pr-2 py-3 outline-none"
+      {...gutterResize}
     >
       {/* Outside the fieldset, so its settings open offline too and say what's unavailable. */}
       <BotPanelHeader
@@ -194,26 +208,17 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
         offline={offline}
         filter={
           read && read.items.length > 0 ? (
-            <BotItemsFilterButton
-              items={read.items}
-              chats={itemChats}
-              filter={filter}
-              onFilter={setFilter}
-            />
+            <BotItemsFilterButton items={read.items} filter={filter} onFilter={setFilter} />
           ) : null
         }
       />
       <fieldset disabled={offline} className="contents">
-        {read ? (
-          <BotItemsFilterChips chats={itemChats} filter={filter} onFilter={setFilter} />
-        ) : null}
+        {read ? <BotItemsFilterChips filter={filter} onFilter={setFilter} /> : null}
         {read && items.refreshFailed ? <BotItemsReadFailed stale onRetry={items.retry} /> : null}
         {/* Asks lead Needs you in every item-read state: loading, failed or empty. */}
         <BotItemsSection
-          key={botItemFilterChat(filter) ?? ''}
           bot={bot}
           list={list}
-          chats={itemChats}
           seenEventId={seenAtOpen}
           filter={filter}
           onFilter={setFilter}
@@ -224,13 +229,17 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
           asks={asks}
           offline={offline}
           focusFallback={scroll}
+          scroller={scroll}
         />
         <BotUpcomingSection
           bot={bot}
           rows={automationRows}
+          hiddenKeys={hiddenCardKeys}
+          deletion={deletion}
+          panelFallback={scroll}
           upNext={activity.upNext?.state}
           hasAutomations={activity.automations.length + activity.waits.length > 0}
-          signInStops={signInStops}
+          hasConnectorNeed={hasConnectorNeed}
           now={clock}
         />
         {activity.upNext ? (

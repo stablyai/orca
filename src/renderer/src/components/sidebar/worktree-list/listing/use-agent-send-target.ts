@@ -1,6 +1,7 @@
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import type { AppState } from '@/store/types'
 import { deriveRunningAgentSendTargets } from '@/lib/agent-session/messaging/running-agent-targets'
 import { recomputeOn } from '@/lib/recompute-on'
@@ -40,10 +41,8 @@ export function useAgentSendTargetWorktreeId(): string | null {
   const agentTargetRuntimePaneTitlesByTabId = useAppStore((s) =>
     agentSendPopoverTargetMode ? s.runtimePaneTitlesByTabId : EMPTY_RUNTIME_PANE_TITLES_BY_TAB_ID
   )
-  const agentTargetGuardedHosts = useAppStore((s) =>
-    agentSendPopoverTargetMode
-      ? selectSendApprovalGuardEnvironmentIds(s.runtimeStatusByEnvironmentId)
-      : NO_GUARDED_HOSTS
+  const agentTargetGuardedHosts = useAppStoreWithHostStatuses((_s, statuses) =>
+    agentSendPopoverTargetMode ? selectSendApprovalGuardEnvironmentIds(statuses) : NO_GUARDED_HOSTS
   )
   return useMemo(
     () =>

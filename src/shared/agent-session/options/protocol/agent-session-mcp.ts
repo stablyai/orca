@@ -5,6 +5,8 @@ export type AgentSessionMcpServerStatus =
   | 'needs-auth'
   | 'failed'
   | 'disabled'
+  /** Configured, but the agent connects it only once the chat starts. */
+  | 'not-started'
 
 export type AgentSessionMcpServer = {
   name: string

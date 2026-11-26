@@ -25,7 +25,3 @@ export function hashDaemonHostFile(path: string): string {
   }
   return sha256
 }
-
-export function resetDaemonHostFileHashCacheForTests(): void {
-  cachedHashes.clear()
-}

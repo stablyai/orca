@@ -183,6 +183,8 @@ export type NormalizedLocalHook = {
   onAccepted?: () => void
   /** A Stop without its text whose transcript normalize skipped; read it off the event loop. */
   stopTranscriptPath?: string
+  /** A Droid Stop's transcript, read off the event loop for the turn verdict Droid appends after it. */
+  droidVerdictTranscriptPath?: string
 }
 
 export type ServerStatusLineListener = ((event: ClaudeStatusLineRateLimits) => void) | null

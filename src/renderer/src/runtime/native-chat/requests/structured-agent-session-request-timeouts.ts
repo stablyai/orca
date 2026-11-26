@@ -8,7 +8,11 @@ export const STRUCTURED_AGENT_SESSION_METHOD_TIMEOUT_MS: ReadonlyMap<string, num
   // Waiting model catalogs can take Claude’s 60s listing plus 15s account switch and 5s login environment.
   ['agentSession.modelCatalog', 90_000],
   ['agentSession.sleepWorkspace', 120_000],
+  // It stops an idle agent and finds the chat's transcripts in a history scan before answering.
+  ['agentSession.delete', 120_000],
   // A cold Codex read or a Claude sign-in finish (exchange, reconnect, re-read) can run long.
   ['agentSession.mcp', 90_000],
-  ['agentSession.restartContinue', AGENT_SESSION_RESTART_CONTINUE_TIMEOUT_MS]
+  ['agentSession.restartContinue', AGENT_SESSION_RESTART_CONTINUE_TIMEOUT_MS],
+  // The host's own launch continuation runs the same starts before it answers.
+  ['agentSession.restartLaunchSettled', AGENT_SESSION_RESTART_CONTINUE_TIMEOUT_MS]
 ])

@@ -2,7 +2,7 @@
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import { withBotConnectorRuntime } from '@/lib/bot-connector-host-calls.test-fixture'
 import { useState } from 'react'
-import { PanelRight } from 'lucide-react'
+import { SidebarToggleIcon } from '@/components/icons/SidebarToggleIcon'
 import { useAppStore } from '@/store'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import type { AppState } from '@/store/types'
@@ -224,7 +224,7 @@ export function BotPanelFrame(): React.JSX.Element {
           ))}
         </div>
         <span className="sidebar-toggle mr-1">
-          <PanelRight size={16} />
+          <SidebarToggleIcon side="right" size={16} />
         </span>
       </div>
       {tab === 'bot-chats' ? <BotChatsPanel /> : <BotActivityPanel />}

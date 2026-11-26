@@ -1,10 +1,8 @@
-import { realpath } from 'node:fs/promises'
-import { posix, win32 } from 'node:path'
 import { actOnRuntimeBrowserInitialization } from './runtime-browser-page-initialization-action'
 import { isSameBrowserUrl } from '../../../../shared/browser/client-hosting/browser-expected-url'
 import type { BrowserExecutionHostKeyResolution } from './runtime-browser-client-page-adoption'
-import { BrowserClientAutomationMethod } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import { BrowserError } from '../../../browser/browser-error'
+import { BrowserClientAutomationMethod } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import {
   browserClientPageRefusal,
   readableBrowserClientPageRefusal
@@ -16,10 +14,10 @@ import type {
   RuntimeBrowserPageRegistry
 } from './runtime-browser-page-registry'
 import { isAgentRpcCaller, type RpcCallerIdentity } from '../../rpc/callers/rpc-caller-identity'
-import {
-  isWindowsAbsolutePathLike,
-  relativePathInsideRoot
-} from '../../../../shared/file-access/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
+import { grantClientPageUploadReads } from './client-page-upload-reads'
+import { downloadClientPageToPath } from './client-page-download-to-path'
+import { browserClientPageDesktopDataRefusal } from '../../../browser/client-pages/execution/browser-client-page-desktop-data-refusal'
 
 export type ClientHostedBrowserRpcRoute = { handled: false } | { handled: true; result: unknown }
 
@@ -32,7 +30,6 @@ type ClientAutomationRoute = {
   resolveExecutionHostKey?(workspaceId: string): Promise<BrowserExecutionHostKeyResolution>
   notifyWorkspace?(workspaceId: string): void
   resolveWorkspace(selector: string): Promise<{ id: string }>
-  resolveWorkspacePath(workspaceId: string): Promise<string>
 }
 
 export async function routeRuntimeBrowserClientAutomation(
@@ -45,6 +42,11 @@ export async function routeRuntimeBrowserClientAutomation(
   const page = await resolveTargetPage(options.params, options.pages, options.resolveWorkspace)
   if (!page) {
     return { handled: false }
+  }
+  // Refused here so an older desktop, which would run them, never receives them.
+  const dataRefusal = browserClientPageDesktopDataRefusal(method.data, options.params)
+  if (dataRefusal) {
+    throw new BrowserError(dataRefusal.code, dataRefusal.message)
   }
   const agent = isAgentRpcCaller(options.caller)
   // A person's tab pick waits while the agent drives this page.
@@ -95,12 +97,39 @@ async function runOnClientPage(
     }
     return { handled: true, result: { url, title: current.title } }
   }
-  const params =
+  if (method === 'browser.download') {
+    const result = await downloadClientPageToPath(requestParams, page.browserPageId, (params) =>
+      issueOnClientPage(options, method, params, page, agent).catch((error: unknown) => {
+        // An older desktop's own wording blames the path it was never sent.
+        throw error instanceof BrowserError &&
+          error.code === 'browser_client_download_path_unsupported'
+          ? browserClientPageRefusal(error.code)
+          : error
+      })
+    )
+    return { handled: true, result }
+  }
+  const releaseReads =
     method === 'browser.upload'
-      ? await toWorkspaceRelativeUploadParams(requestParams, () =>
-          options.resolveWorkspacePath(page.workspaceId)
-        )
-      : requestParams
+      ? grantClientPageUploadReads(page.browserPageId, absoluteUploadPaths(requestParams))
+      : undefined
+  try {
+    return {
+      handled: true,
+      result: await issueOnClientPage(options, method, requestParams, page, agent)
+    }
+  } finally {
+    releaseReads?.()
+  }
+}
+
+async function issueOnClientPage(
+  options: ClientAutomationRoute,
+  method: BrowserClientAutomationMethod,
+  params: Record<string, unknown>,
+  page: RuntimeBrowserClientPage,
+  agent: boolean
+): Promise<unknown> {
   let issued: ReturnType<BrowserHostLeaseRegistry['issueClientPageCommand']>
   try {
     issued = options.leases.issueClientPageCommand(
@@ -130,7 +159,7 @@ async function runOnClientPage(
       ? browserExpectedUrlMismatchError(result.expectedUrlMismatch)
       : browserClientPageRefusal(result.errorCode, result.errorMessage)
   }
-  return { handled: true, result: result.value }
+  return result.value
 }
 
 async function resolveTargetPage(
@@ -148,46 +177,13 @@ async function resolveTargetPage(
   return pages.listPages(workspace.id).find((page) => page.active)
 }
 
-/** The client host reads upload files by workspace-relative path; the CLI sends absolute ones. */
-async function toWorkspaceRelativeUploadParams(
-  params: Record<string, unknown>,
-  resolveWorkspacePath: () => Promise<string>
-): Promise<Record<string, unknown>> {
-  const isAbsolute = (file: unknown): file is string =>
-    typeof file === 'string' && (file.startsWith('/') || isWindowsAbsolutePathLike(file))
-  if (!Array.isArray(params.files) || !params.files.some(isAbsolute)) {
-    return params
-  }
-  const requested: unknown[] = params.files
-  const root = await resolveWorkspacePath()
-  const files: unknown[] = []
-  for (const file of requested) {
-    // Older CLIs and paired callers already send workspace-relative paths.
-    if (!isAbsolute(file)) {
-      files.push(file)
-      continue
-    }
-    // Collapse `..` so an escaping path gets this refusal, not the file reader's generic one.
-    const normalized = isWindowsAbsolutePathLike(file)
-      ? win32.normalize(file)
-      : posix.normalize(file)
-    // The CLI's cwd is physical, so a workspace saved under a symlink only matches once resolved.
-    const relative =
-      relativePathInsideRoot(root, normalized) ||
-      relativePathInsideRoot(await realpathOrSelf(root), await realpathOrSelf(normalized))
-    if (!relative) {
-      throw new BrowserError(
-        'invalid_argument',
-        `Cannot upload ${file}: this page runs on another device, so it can only upload files inside the workspace ${root}`
-      )
-    }
-    files.push(relative)
-  }
-  return { ...params, files }
-}
-
-function realpathOrSelf(path: string): Promise<string> {
-  return realpath(path).catch(() => path)
+// Relative paths (older CLIs, paired callers) stay inside the workspace; absolute ones are this host's.
+function absoluteUploadPaths(params: Record<string, unknown>): string[] {
+  const files: unknown[] = Array.isArray(params.files) ? params.files : []
+  return files.filter(
+    (file): file is string =>
+      typeof file === 'string' && (file.startsWith('/') || isWindowsAbsolutePathLike(file))
+  )
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

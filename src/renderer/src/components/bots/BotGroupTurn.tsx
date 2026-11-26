@@ -18,9 +18,12 @@ import {
   useNativeChatOpenSubagent,
   type NativeChatSubagentView
 } from '../native-chat/subagents/native-chat-open-subagent'
-import { useBotAvatarSrc } from './bot-avatar-image'
+import { useBotAvatarLook } from './bot-avatar-image'
 import { botFallback } from '../../../../shared/bots/bot-avatar-fallback'
-import type { BotGroupTurn as Turn } from '../../../../shared/bots/bot-group'
+import {
+  type BotGroupTurn as Turn,
+  withBotGroupTurnAnswer
+} from '../../../../shared/bots/bot-group'
 import type { BotGroupSession } from './BotGroupSessionReader'
 import type { NativeChatTurnStatus } from '../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
 
@@ -28,10 +31,12 @@ import { BotGroupTranscriptOwner, type useBotGroupFileContexts } from './BotGrou
 import { useNativeChatFileLinkClick } from '../native-chat/links/actions/use-native-chat-file-link-click'
 import { useRecheckNativeChatFileLinksWhenSettled } from '../native-chat/links/actions/use-native-chat-file-link-existence'
 import { NativeChatLinkClickContext } from '../native-chat/links/actions/native-chat-link-click-context'
+import { NativeChatBotAnswerContext } from '../native-chat/messages/rows/native-chat-bot-answer-context'
 import type { CommentMarkdownLinkClickHandler } from '@/components/comment-markdown/comment-markdown-element-renderers'
 import { routeNativeChatHref } from '../../../../shared/native-chat/file-access/native-chat-href-routing'
 import type { BotGroupRoomLinks } from './use-bot-group-room-links'
 import { type BotGroupTranscriptRows, useBotGroupTranscriptRows } from './bot-group-transcript-rows'
+import { botCodedText } from '../../../../shared/bots/bot-failure-copy'
 const noItems: never[] = []
 export const BotGroupTurn = memo(function BotGroupTurn({
   hostId,
@@ -70,11 +75,12 @@ export const BotGroupTurn = memo(function BotGroupTurn({
       id: turn.botId,
       name: turn.botName,
       avatar: turn.avatar,
-      avatarColor: turn.avatarColor
+      avatarColor: turn.avatarColor,
+      avatarOutfit: turn.avatarOutfit
     }),
-    [hostId, turn.botId, turn.botName, turn.avatar, turn.avatarColor]
+    [hostId, turn.botId, turn.botName, turn.avatar, turn.avatarColor, turn.avatarOutfit]
   )
-  const src = useBotAvatarSrc(bot)
+  const { src, outfit } = useBotAvatarLook(bot)
   const submissions = session?.submissions ?? noItems
   const readTurn = session?.groupTurnItems
   const items = useMemo(
@@ -86,10 +92,11 @@ export const BotGroupTurn = memo(function BotGroupTurn({
   const submission = submissions.find(
     (item) => item.clientMessageId === turn.operationId || item.queuedMessageId === turn.operationId
   )
-  const queued = session?.queuedMessages.cards.some((card) => card.messageId === turn.operationId)
+  const queued = session?.queuedMessages.holds(turn.operationId)
   const working = !turn.revoked && lifecycle?.state === 'running'
   const rejection =
-    turn.error ?? (submission?.dispatchState === 'rejected' ? submission.reason : null)
+    (turn.error === undefined ? null : botCodedText(turn.error, turn.failure, t)) ??
+    (submission?.dispatchState === 'rejected' ? submission.reason : null)
   const status = useMemo<NativeChatTurnStatus>(
     () => ({
       thinking: false,
@@ -112,8 +119,12 @@ export const BotGroupTurn = memo(function BotGroupTurn({
     [project, projection.messages, items, submissions]
   )
   const messages = useMemo(
-    () => projected.conversation.filter((message) => message.role !== 'user'),
-    [projected.conversation]
+    () =>
+      withBotGroupTurnAnswer(
+        projected.conversation.filter((message) => message.role !== 'user'),
+        { operationId: turn.operationId, answer: turn.answer }
+      ),
+    [projected.conversation, turn.operationId, turn.answer]
   )
   useBotGroupTranscriptRows(roomRows, turn.operationId, messages)
   // Each room turn opens its subagents in place, as a chat pane does, keyed to this turn.
@@ -216,12 +227,12 @@ export const BotGroupTurn = memo(function BotGroupTurn({
       ? queued
         ? t('components.native-chat.queuedMessages.queued', 'Queued')
         : submission?.dispatchState === 'unknown'
-          ? 'Delivery unconfirmed'
+          ? t('bots.groups.deliveryUnconfirmed', 'Delivery unconfirmed')
           : submission?.handoverRecorded && !submission.handedOverAt
-            ? 'Queued'
-            : 'Starting…'
+            ? t('components.native-chat.queuedMessages.queued', 'Queued')
+            : t('bots.groups.starting', 'Starting…')
       : rejection
-        ? 'Not started'
+        ? t('bots.groups.notStarted', 'Not started')
         : undefined
   return (
     <BotGroupTranscriptOwner
@@ -239,7 +250,7 @@ export const BotGroupTurn = memo(function BotGroupTurn({
           onKeyDown={(event) => closeNativeChatSubagentOnEscape(event, subagentKey)}
         >
           <NativeChatWorkingStatus
-            bot={{ name: turn.botName, src, fallback: botFallback(bot), showName: true }}
+            bot={{ name: turn.botName, src, outfit, fallback: botFallback(bot), showName: true }}
             {...status}
             pendingLabel={pendingLabel}
             workedSeconds={membershipEnded || waiting || rejection ? 0 : status.workedSeconds}
@@ -279,7 +290,9 @@ export const BotGroupTurn = memo(function BotGroupTurn({
           ) : null}
           {scope.bar}
           {scope.lead}
-          <NativeChatTranscriptRowStack slots={rows} context={context} />
+          <NativeChatBotAnswerContext value>
+            <NativeChatTranscriptRowStack slots={rows} context={context} />
+          </NativeChatBotAnswerContext>
         </section>
       </NativeChatLinkClickContext>
     </BotGroupTranscriptOwner>

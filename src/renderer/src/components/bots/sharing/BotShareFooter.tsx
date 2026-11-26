@@ -6,7 +6,7 @@ import { cn } from '@/lib/class-names'
 import type { Bot } from '../../../../../shared/bot-types'
 import { OrcaCloudSignInButton } from '../orca-cloud-sign-in'
 import { SettingsInsetGroup } from '../settings-view/BotSettingsRows'
-import type { BotShareFlagSpot } from './bot-share-flags'
+import type { BotShareFlagSpot } from '../../../../../shared/bots/bot-share-flag-spots'
 import type { BotShareContext } from './bot-share-pages'
 import { BotShareOverview, BotShareOverviewSkeleton } from './BotShareOverview'
 import type { BotShareCandidateState } from './use-bot-share-candidate'
@@ -172,7 +172,8 @@ export function Footer({
       {error?.message ?? state.error}
     </span>
   ) : (
-    <span className="min-w-0 flex-1 text-xs leading-4 text-muted-foreground">
+    // Its whole width or a line of its own: the hint never cuts off beside the buttons.
+    <span className="min-w-0 grow basis-[max-content] text-xs leading-4 text-muted-foreground">
       {link || read.kind === 'loading'
         ? null
         : t('bots.share.description', 'Anyone with the link can make a copy.')}
@@ -216,7 +217,7 @@ export function Footer({
       )
       primary = (
         <Button type="button" disabled={off} onClick={onPublish}>
-          {busy || state.building ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+          {busy ? <Loader2 className="animate-spin" /> : <RefreshCw />}
           {busy ? t('bots.share.updating', 'Updating…') : t('bots.share.updateLink', 'Update link')}
         </Button>
       )
@@ -234,7 +235,7 @@ export function Footer({
       </OrcaCloudSignInButton>
     ) : (
       <Button type="button" disabled={off || read.kind !== 'read'} onClick={onPublish}>
-        {busy || (state.building && candidate) ? <Loader2 className="animate-spin" /> : <Share2 />}
+        {busy ? <Loader2 className="animate-spin" /> : <Share2 />}
         {busy
           ? t('bots.share.publishing', 'Publishing…')
           : t('bots.share.publishLink', 'Publish link')}
@@ -242,7 +243,7 @@ export function Footer({
     )
   }
   return (
-    <div className={foot}>
+    <div className={cn(FOOT, 'flex-wrap')}>
       {signInNotice}
       {link && !error ? (
         <Button
@@ -256,8 +257,10 @@ export function Footer({
         </Button>
       ) : null}
       {message}
-      {second}
-      {primary}
+      <div className="ml-auto flex shrink-0 items-center gap-2">
+        {second}
+        {primary}
+      </div>
     </div>
   )
 }

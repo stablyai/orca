@@ -5,12 +5,16 @@ import {
 } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { commandTurnsByBody } from '../../../shared/agent-session/requests/structured-agent-session-command-entry'
 import { isStructuredAgentSessionNonRequestRow } from '../../../shared/agent-session/requests/structured-agent-session-latest-request'
-import { nativeChatUsageLimitOfRow } from '../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
+import {
+  nativeChatUsageLimitOfRow,
+  usageLimitStopWithdrawal
+} from '../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
 import {
   orcaStopCauseOfRow,
   type NativeChatOrcaStopCut
 } from '../../../shared/native-chat/transcript/continuation/native-chat-orca-stop-cut'
 import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
+import { agentJournalSubmissionReturnedToCard } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalSqlStatusContext } from './journal-sql-status-context'
 import { compareJournalStatusPositions, type JournalStatusItem } from './journal-status-items'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -19,6 +23,15 @@ import {
   USAGE_LIMIT_CONTINUE_CHAIN_LIMIT,
   type HostUsageLimitCut
 } from '../agent-session-wire/recovery/structured-agent-session-usage-limit-chain'
+
+/** A refused send its queued card took back is not a request; only user rows need the lookup. */
+function returnedToCard(state: JournalSqlStatusContext, item: JournalStatusItem['item']): boolean {
+  if (item.body.kind !== 'message' || item.body.role !== 'user') {
+    return false
+  }
+  const send = state.inputForItem(item.itemId)
+  return send !== undefined && agentJournalSubmissionReturnedToCard(send)
+}
 
 /** Merge only the two request-boundary families; command exclusions use current point lookups. */
 function latestCutTurn(state: JournalSqlStatusContext, floor: number) {
@@ -45,7 +58,7 @@ function latestCutTurn(state: JournalSqlStatusContext, floor: number) {
       turn && (!user || compareJournalStatusPositions(turn.position, user.position) >= 0)
     const candidate: JournalStatusItem = useTurn ? turn! : user!
     const item = candidate.item
-    if (!isStructuredAgentSessionNonRequestRow(item, commands)) {
+    if (!isStructuredAgentSessionNonRequestRow(item, commands) && !returnedToCard(state, item)) {
       if (item.body.kind === 'message' && item.body.role === 'user') {
         return null
       }
@@ -78,22 +91,31 @@ export function readJournalSqlUsageLimitCut(
   if (!latest || latest.verdict !== 'failure') {
     return null
   }
-  for (const { item } of state.select({
-    kind: 'scoped-statuses',
+  const limit = readJournalSqlTurnUsageLimit(state, latest.item.itemId, floor)
+  if (!limit) {
+    return null
+  }
+  const fence = state.itemFence(latest.item.itemId)
+  return {
     turnItemId: latest.item.itemId,
-    floor
-  })) {
+    chain: readUsageLimitChain(state, latest.item.itemId),
+    ...(fence === undefined ? {} : { fence }),
+    ...(limit.resetsAt !== undefined ? { resetsAt: limit.resetsAt } : {}),
+    turnEndedAt: latest.item.recoveredAt ?? latest.lifecycle.completedAt
+  }
+}
+
+/** The usage limit a turn's own status rows report, whatever else is pending in the chat. */
+export function readJournalSqlTurnUsageLimit(
+  state: JournalSqlStatusContext,
+  turnItemId: string,
+  floor = 0
+): ReturnType<typeof nativeChatUsageLimitOfRow> | null {
+  for (const { item } of state.select({ kind: 'scoped-statuses', turnItemId, floor })) {
     const displayed = state.displayed(item.itemId)
     const limit = displayed && nativeChatUsageLimitOfRow(displayed)
     if (limit) {
-      const fence = state.itemFence(latest.item.itemId)
-      return {
-        turnItemId: latest.item.itemId,
-        chain: readUsageLimitChain(state, latest.item.itemId),
-        ...(fence === undefined ? {} : { fence }),
-        ...(limit.resetsAt !== undefined ? { resetsAt: limit.resetsAt } : {}),
-        turnEndedAt: latest.item.recoveredAt ?? latest.lifecycle.completedAt
-      }
+      return limit
     }
   }
   return null
@@ -159,7 +181,8 @@ function readUsageLimitChain(state: JournalSqlStatusContext, turnItemId: string)
       if (
         compareJournalStatusPositions(candidate.position, currentPosition) >= 0 ||
         openerKeys.has(candidate.item.itemId) ||
-        isStructuredAgentSessionNonRequestRow(candidate.item, commands)
+        isStructuredAgentSessionNonRequestRow(candidate.item, commands) ||
+        returnedToCard(state, candidate.item)
       ) {
         continue
       }
@@ -202,13 +225,10 @@ function readUsageLimitChain(state: JournalSqlStatusContext, turnItemId: string)
   return chain
 }
 
-export function readJournalSqlUsageLimitContinueIdentity(
+export function readJournalSqlUsageLimitStopWithdrawal(
   state: JournalSqlStatusContext
 ): UsageLimitContinueIdentity | undefined {
-  const cut = readJournalSqlUsageLimitCut(state)
-  return cut?.resetsAt !== undefined && Number.isFinite(cut.resetsAt)
-    ? { turnItemId: cut.turnItemId, resetsAt: cut.resetsAt }
-    : undefined
+  return usageLimitStopWithdrawal(readJournalSqlUsageLimitCut(state))
 }
 
 export function readJournalSqlOrcaStopCut(

@@ -1,6 +1,7 @@
 import type { RuntimeWorktreeLifecycleEvent } from '../lifecycle/worktree-lifecycle-event'
 import type { AutomationsChangedPayload } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import type { WorkspaceCleanupRunFinishedEvent } from '../../../../shared/workspace-cleanup/workspace-cleanup-run'
+import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from '../../../ipc/worktrees/creation/worktree-base-directory-watcher'
 import { wakeFolderRepoGitUpgradeWatch } from '../../../ipc/worktrees/listing/folder-repo-git-upgrade-wake'
 import { runWorktreeChangeInvalidators } from '../../../ipc/worktrees/listing/worktree-change-invalidators'
 import type { WorktreeSortOrderUpdate } from '../../../../shared/worktree/metadata/sort-order-update'
@@ -57,6 +58,8 @@ export abstract class RuntimeWorkspaceChangeEvents extends NativeChatLaunchDraft
     wakeFolderRepoGitUpgradeWatch()
     this.notifier?.reposChanged()
     this.emitClientEvent({ type: 'reposChanged' })
+    // Same as the desktop IPC path: repo or nesting changes move the roots the watcher follows.
+    scheduleCurrentWorktreeBaseDirectoryWatcherSync()
     // Automation owners are projected from projects, so open lists must re-read them (STA-12812).
     this.notifyAutomationsChanged({ reason: 'definition' })
   }

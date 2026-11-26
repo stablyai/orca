@@ -1,5 +1,5 @@
 import { session } from 'electron'
-import { forgetBrowserExtensionActionProfile } from '../actions/browser-extension-action-registry'
+import { holdBrowserSessionRequestGate } from '../../sessions/requests/browser-session-request-gate'
 import {
   registerBrowserSessionFramePreload,
   unregisterBrowserSessionFramePreload
@@ -8,10 +8,8 @@ import type { BrowserSessionProfile } from '../../../../shared/browser/workspace
 import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
 import { isBrowserExtensionSupportEnabled } from '../browser-extension-support'
 import { getBrowserExtensionInstallStore } from '../installation/browser-extension-install-store'
-import { getBrowserExtensionProfileStateStore } from '../profile-storage/browser-extension-profile-state-store'
-import { getBrowserExtensionSyncStorageStore } from '../profile-storage/browser-extension-sync-storage-store'
-import { getBrowserExtensionDnrStore } from '../declarative-net-request/session/browser-extension-dnr-store'
 import { retireBrowserExtensionProfileStorage } from '../profile-storage/browser-extension-retired-profile-storage'
+import { forgetBrowserExtensionProfileData } from '../profile-storage/browser-extension-profile-data-forget'
 import {
   attachBrowserExtensionApiHostToSession,
   forgetBrowserExtensionContexts
@@ -28,10 +26,12 @@ import {
   throwIfBrowserExtensionLoadCancelled
 } from './browser-extension-profile-loads'
 import { removeBrowserExtensionFromSession } from './browser-extension-worker-registration'
+import * as idleKeptState from './browser-extension-idle-kept-state'
 import {
   loadBrowserExtensionIntoSession,
   loadInstalledBrowserExtensionIntoSession
 } from './browser-extension-session-load'
+import { noteBrowserExtensionLoadEnded } from './browser-extension-session-presence'
 
 type ProfileSessionState = {
   profile: BrowserSessionProfile
@@ -54,7 +54,8 @@ export type BrowserExtensionSessionHooks = {
   ) => Promise<void>
   /** Extensions turned off: undo what `attached` added to the request path. */
   detached: (sess: Electron.Session) => void
-  uninstalled: (profileId: string, extensionIds: ReadonlySet<string>) => void
+  /** Extensions uninstalled since this session last ran; returns the ones it turned off. */
+  uninstalled: (profileId: string, extensionIds: ReadonlySet<string>) => ReadonlySet<string>
 }
 
 let sessionHooks: BrowserExtensionSessionHooks | null = null
@@ -72,7 +73,7 @@ const reattachRequestedProfileIds = new Set<string>()
 const PRELOAD_FILE_NAME = 'browser-extension-preload.js'
 const PRELOAD_ID = 'orca-browser-extension-frame'
 
-// Workers load Orca's API shim through the background wrapper instead.
+// Workers load Orca's API shim from their own script instead.
 function registerExtensionPreload(sess: Electron.Session): void {
   if (!registerBrowserSessionFramePreload(sess, PRELOAD_ID, PRELOAD_FILE_NAME)) {
     console.warn(
@@ -81,7 +82,7 @@ function registerExtensionPreload(sess: Electron.Session): void {
   }
 }
 
-/** Session setup hook for a local browser profile: wire the host, register the preload, load what's enabled. */
+/** Session setup hook for a profile (local, or an SSH or This-device page's): wire the host, register the preload, load what's enabled. */
 export function attachBrowserExtensionsToProfileSession(
   profile: BrowserSessionProfile,
   enabledExtensionIds: string[]
@@ -98,28 +99,33 @@ export function attachBrowserExtensionsToProfileSession(
   registerExtensionPreload(sess)
   attachBrowserExtensionApiHostToSession(sess, profile.id)
   sessionHooks?.attached(sess, profile.id, enabledExtensionIds)
+  const kindFor = idleKeptState.settleKeptStateOnAttach(profile.id, enabledExtensionIds)
   const store = getBrowserExtensionInstallStore()
   const loads = new BrowserExtensionProfileLoads()
+  // Why not every stale one: a remote page's session clears an old install's data but still loads a reinstall its local profile has on.
+  let turnedOff: ReadonlySet<string> = new Set()
   const swept = removeUninstalledBrowserExtensionData(
     sess,
     profile.id,
     new Set(store.list().map((extension) => extension.id)),
-    (stale) => sessionHooks?.uninstalled(profile.id, stale)
+    (stale) => {
+      turnedOff = sessionHooks?.uninstalled(profile.id, stale) ?? stale
+    }
   )
   const startupLoads = enabledExtensionIds.map((extensionId) =>
     loads
       .track(extensionId, async (load) => {
-        const stale = await swept
+        await swept
         const installed = store.get(extensionId)
         throwIfBrowserExtensionLoadCancelled(load)
-        if (!installed || stale.has(extensionId)) {
+        if (!installed || turnedOff.has(extensionId)) {
           return
         }
         const loaded = await loadInstalledBrowserExtensionIntoSession(
           sess,
           profile.id,
           installed,
-          'startup',
+          kindFor(extensionId),
           load
         )
         await sessionHooks?.loaded(sess, profile.id, loaded)
@@ -127,6 +133,7 @@ export function attachBrowserExtensionsToProfileSession(
       .catch((error: unknown) => {
         console.warn(`[browser-extensions] Failed to load ${extensionId}:`, error)
       })
+      .finally(() => noteBrowserExtensionLoadEnded(sess, extensionId))
   )
   const loading = Promise.all([swept, ...startupLoads])
     .then(() => undefined)
@@ -141,10 +148,15 @@ export function attachBrowserExtensionsToProfileSession(
     loadingExtensions: enabledExtensionIds.length > 0,
     loads
   }
+  // The request gate listens only for loaded extensions; requests made while they load must still
+  // reach their startup holds (rules, webRequest listeners).
+  const releaseRequestGate = state.loadingExtensions ? holdBrowserSessionRequestGate(sess) : null
   void loading
     .catch(() => {})
     .finally(() => {
+      releaseRequestGate?.()
       state.loadingExtensions = false
+      idleKeptState.dropUnclaimedBrowserExtensionIdleState(profile.id)
     })
   stateByProfileId.set(profile.id, state)
   profileIdByPartition.set(profile.partition, profile.id)
@@ -184,12 +196,7 @@ export async function detachBrowserExtensionsFromProfileSession(
       await unloadProfileSession(state)
     }
   } finally {
-    forgetBrowserExtensionActionProfile(profile.id)
-    getBrowserExtensionProfileStateStore().forgetProfile(profile.id)
-    await Promise.all([
-      getBrowserExtensionSyncStorageStore().forgetProfile(profile.id),
-      getBrowserExtensionDnrStore().forgetProfile(profile.id)
-    ])
+    await forgetBrowserExtensionProfileData(profile.id)
   }
 }
 
@@ -204,7 +211,7 @@ export async function detachBrowserExtensionsFromAllProfileSessions(): Promise<v
 
 /**
  * A profile with no pages left stops its extensions, as closing a profile's last window does in
- * Chromium; its saved extension data stays. `afterUnload` runs before waiters resume, with whether
+ * Chromium; its saved extension data and session state stay. `afterUnload` runs before waiters resume, with whether
  * an attach asked for the profile meanwhile, so it can reattach.
  */
 export async function unloadBrowserExtensionsFromIdleProfile(
@@ -217,6 +224,7 @@ export async function unloadBrowserExtensionsFromIdleProfile(
   }
   stateByProfileId.delete(profileId)
   profileIdByPartition.delete(state.profile.partition)
+  idleKeptState.beginIdleUnload(profileId, state.session)
   const unloading = unloadProfileSession(state)
     .catch((error: unknown) => {
       console.warn("[browser-extensions] Could not stop an idle profile's extensions:", error)
@@ -247,19 +255,21 @@ export function whenBrowserExtensionProfileLoaded(profileId: string): Promise<vo
   return stateByProfileId.get(profileId)?.loading.catch(() => {}) ?? Promise.resolve()
 }
 
-/** Whether the profile's enabled extensions are still loading after its attach. */
-export function isBrowserExtensionProfileLoading(profileId: string): boolean {
-  return (
-    unloadingByProfileId.has(profileId) ||
-    (stateByProfileId.get(profileId)?.loadingExtensions ?? false)
-  )
+// The attach or unload its extensions are still loading or unloading for; null when idle.
+export function getBrowserExtensionProfileLoadingPhase(profileId: string): object | null {
+  const state = stateByProfileId.get(profileId)
+  return unloadingByProfileId.get(profileId) ?? (state?.loadingExtensions ? state.loading : null)
 }
+
+/** The profile already attached in this partition, without scanning every saved profile. */
+export const getAttachedBrowserExtensionProfileId = (partition: string): string | null =>
+  profileIdByPartition.get(partition) ?? null
 
 export function getBrowserExtensionSessionForProfile(profileId: string): Electron.Session | null {
   return stateByProfileId.get(profileId)?.session ?? null
 }
 
-/** Every local profile session extensions run in this launch. */
+/** Every session extensions run in this launch. */
 export function listBrowserExtensionSessions(): Electron.Session[] {
   return [...stateByProfileId.values()].map((state) => state.session)
 }

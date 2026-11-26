@@ -71,7 +71,3 @@ export function shouldDropQuarantinedTerminalInput(
   }
   return true
 }
-
-export function _resetTerminalInputQuarantineForTests(): void {
-  quarantineByTabId.clear()
-}

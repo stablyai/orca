@@ -15,6 +15,7 @@ import {
   nativeChatUsageLimitAutoContinueKind,
   nativeChatUsageLimitAutoContinueUnavailable,
   usageLimitContinueAtForCut,
+  usageLimitContinueResetForCut,
   usageLimitContinueStateForCut
 } from '../../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-auto-continue'
 import type { NativeChatUsageLimitAutoContinueState } from './native-chat-usage-limit-auto-continue-setting'
@@ -39,11 +40,18 @@ export function useNativeChatUsageLimitAutoContinue(
   )
   const feed = useMemo(() => getStructuredAgentSessionStatusFeed(target), [target])
   const turnItemId = cut?.turnItemId
-  const resetsAt = cut?.resetsAt
-  const knownReset = resetsAt !== undefined
+  const limited = turnItemId !== undefined
+  // An unknown reset still gets one once the chat moves accounts, so every cut listens.
   useEffect(
-    () => (capability === 'supported' && knownReset ? feed.activate() : undefined),
-    [capability, knownReset, feed]
+    () => (capability === 'supported' && limited ? feed.activate() : undefined),
+    [capability, limited, feed]
+  )
+  const subscribe = useCallback(
+    (listener: () => void) => feed.subscribeSession(sessionId, listener),
+    [feed, sessionId]
+  )
+  const resetsAt = useSyncExternalStore(subscribe, () =>
+    usageLimitContinueResetForCut(feed.getSnapshot().get(sessionId)?.usageLimitContinue, cut)
   )
   // Select one primitive: every status event replaces the summary, and the notice rows read this.
   const readCutState = useCallback(
@@ -55,10 +63,6 @@ export function useNativeChatUsageLimitAutoContinue(
             resetsAt
           }),
     [feed, sessionId, turnItemId, resetsAt]
-  )
-  const subscribe = useCallback(
-    (listener: () => void) => feed.subscribeSession(sessionId, listener),
-    [feed, sessionId]
   )
   const cutState = useSyncExternalStore(subscribe, readCutState)
   const continueAt = useSyncExternalStore(subscribe, () =>

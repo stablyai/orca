@@ -32,7 +32,6 @@ import {
   folderWorkspaceKey,
   getActiveSidebarWorkspaceId
 } from '../../../../shared/workspace/identity/workspace-scope'
-import type { Bot } from '../../../../shared/bot-types'
 import { botGroupMemberBots } from '../../../../shared/bots/bot-sidebar-entries'
 import { getHostKeyedBotSidebarEntries } from './bot-sidebar-entry-keys'
 import { readBotHostState } from '@/lib/bot-catalog-snapshot'
@@ -41,7 +40,6 @@ import { BotGroupRow } from './BotGroupRow'
 import { BotGroupMembersDialog } from './BotGroupMembersDialog'
 import { useBotGroupDelete } from './use-bot-group-delete'
 import { findBotGroupRoom, type BotGroup } from '../../../../shared/bots/bot-group'
-import { openBotFromSidebar } from './BotRow'
 import { NewBotDialog } from './NewBotDialog'
 import { openBotShareLink } from './sharing/bot-share-receive-open'
 import { BotSidebarOptionsMenu } from './BotSidebarOptionsMenu'
@@ -49,7 +47,7 @@ import { useBotSidebarArrangement } from './use-bot-sidebar-arrangement'
 import { ImportBotDialog } from './ImportBotDialog'
 import { botErrorMessage } from './bot-presentation'
 import { BotCollapsedPreview, useBotPreviewFacts } from './BotCollapsedPreview'
-import { collapsedBotPreview } from '../../../../shared/bots/bot-collapsed-preview'
+import { summarizeBotPreview } from '../../../../shared/bots/bot-collapsed-preview'
 import { openBotTemplates } from './templates/bot-templates-open'
 import { BotSidebarSearchButton, BotSidebarSearchHost } from './BotSidebarSearch'
 import { useBotCollapseAll } from './use-bot-collapse-all'
@@ -122,7 +120,7 @@ export function SidebarBotsSection({
   }
   const collapseAll = useBotCollapseAll(entries, savedEntries)
   const facts = useBotPreviewFacts(rows)
-  const preview = collapsedBotPreview(facts)
+  const preview = summarizeBotPreview(facts)
   // Bots reorder through the project-group header drag: one root bucket, each bot's order saved on its host.
   const botIdsByBucket = useMemo(
     () => new Map([[ROOT_PROJECT_GROUP_HEADER_BUCKET, entries.map(({ id }) => id)]]),
@@ -179,12 +177,6 @@ export function SidebarBotsSection({
       toggleCollapsedGroup(BOTS_GROUP_KEY)
     }
   }
-  // A face opens its bot as its row does, and unfolds the section so that row shows.
-  const openFromFace = (bot: Bot): void => {
-    if (openBotFromSidebar(bot, onOpenBot) && collapsed) {
-      toggleBots()
-    }
-  }
   const collapseLabel = collapsed
     ? t('bots.section.expand', 'Expand Bots')
     : t('bots.section.collapse', 'Collapse Bots')
@@ -219,12 +211,7 @@ export function SidebarBotsSection({
             <BotsCollapseAllButton collapseAll={collapseAll} />
           ) : null
         }
-        summary={
-          collapsed ? (
-            <BotCollapsedPreview facts={facts} onOpenBot={openFromFace} onExpand={toggleBots} />
-          ) : null
-        }
-        // Folded, the header is just its title and faces; the controls unmount so Tab can't reach them.
+        summary={collapsed ? <BotCollapsedPreview facts={facts} onOpenBot={onOpenBot} /> : null}
         actions={
           collapsed ? null : (
             <>
@@ -337,7 +324,7 @@ export function SidebarBotsSection({
             data-bot-sidebar-list=""
             className={cn(
               'bot-sidebar-scrollbar relative flex min-h-0 flex-col overflow-y-auto overscroll-y-contain [overflow-anchor:none]',
-              entries.length > 0 && 'pb-1 pl-1',
+              entries.length > 0 && 'pb-1 px-1',
               collapsed && 'hidden'
             )}
           >

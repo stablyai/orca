@@ -1,9 +1,9 @@
-import { useShallow } from 'zustand/react/shallow'
+import { shallow } from 'zustand/shallow'
 import { MessagesSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store/index'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { resolveCliChatResumeSource } from '../../tab-bar/session-actions/cli-chat-resume-source'
 import {
   runCliChatResume,
@@ -20,20 +20,17 @@ export function TerminalPaneResumeInChatButton({
   paneKey: string
 }): React.JSX.Element {
   const t = useTranslate()
-  const source = useAppStore(
-    useShallow((state) =>
-      resolveCliChatResumeSource(state, {
+  const source = useAppStoreWithHostStatuses(
+    (state, statuses) =>
+      resolveCliChatResumeSource(state, statuses, {
         tab: { id: tabId, worktreeId },
         paneKey
-      })
-    )
+      }),
+    shallow
   )
   const pending = useCliChatResumePending(source)
   const updateRequired = source?.hostUpdateRequired === true
-  const label = t(
-    'components.tab.bar.SortableTabContextMenu.switchToChatView',
-    'Continue in Chat UI'
-  )
+  const label = t('components.tab.bar.SortableTabContextMenu.switchToChatView', 'Continue in chat')
   const tooltip = updateRequired
     ? t(
         'components.native-chat.resumeInNewChat.hostUpdateRequired',

@@ -14,7 +14,8 @@ export function wrapPosixHookCommand(
   scriptPath: string,
   env: Record<string, string> = {},
   // Gate events treat silence as denial, so missing scripts may need fallback stdout.
-  options: { fallbackStdout?: string; skipPaneGuard?: boolean; stdinMayStayOpen?: boolean } = {}
+  // Hosts that ignore unread stdin may exit outside Orca before the drain spawns `cat`.
+  options: { fallbackStdout?: string; stdinMayStayOpen?: boolean; exitOutsideOrca?: boolean } = {}
 ): string {
   // Keep arbitrary paths literal across shell metacharacters.
   const quoted = quotePosixShell(scriptPath)
@@ -29,11 +30,10 @@ export function wrapPosixHookCommand(
     options.fallbackStdout === undefined
       ? drain
       : `printf '%s\\n' ${quotePosixShell(options.fallbackStdout)}; ${drain}`
-  const guards = [
-    ...(options.skipPaneGuard ? [] : [POSIX_ORCA_PANE_GUARD]),
-    `[ -f ${quoted} ]`,
-    `[ -r ${quoted} ]`,
-    `[ -x ${quoted} ]`
-  ].join(' && ')
+  const fileGuards = [`[ -f ${quoted} ]`, `[ -r ${quoted} ]`, `[ -x ${quoted} ]`]
+  if (options.exitOutsideOrca) {
+    return `${POSIX_ORCA_PANE_GUARD} || exit 0; if ${fileGuards.join(' && ')}; then ${invocation}; else ${fallback}; fi`
+  }
+  const guards = [POSIX_ORCA_PANE_GUARD, ...fileGuards].join(' && ')
   return `if ${guards}; then ${invocation}; else ${fallback}; fi`
 }

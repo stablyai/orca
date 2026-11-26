@@ -79,7 +79,7 @@ function bar(hosts: [string, AgentCliUpdateHost][]) {
     store: { agentCliUpdates: new Map(hosts) },
     render: () => (
       <div className="flex h-96 items-end justify-end bg-card p-2 text-foreground">
-        <AgentCliUpdateStatusSegment iconOnly={false} />
+        <AgentCliUpdateStatusSegment />
       </div>
     )
   }
