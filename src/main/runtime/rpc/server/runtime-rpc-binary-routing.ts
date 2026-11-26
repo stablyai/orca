@@ -6,6 +6,7 @@ import { botSharedWithAccount } from '../../../bots/team-share/bot-share-access'
 import { loadOrCreateE2EEKeypair, type E2EEKeypair } from './pairing/e2ee-keypair'
 import { ensureHostInstanceIdentity, type HostIdentityOutcome } from '../../host-instance-identity'
 import { RuntimeRpcState } from './runtime-rpc-state'
+import { RuntimeBinaryChannels } from './runtime-binary-channels'
 import {
   DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE,
   E2EE_KEY_UNAVAILABLE_GUIDANCE,
@@ -14,6 +15,12 @@ import {
 } from './runtime-rpc-pairing-types'
 
 export class RuntimeRpcBinaryRouting extends RuntimeRpcState {
+  /** A channel closes like its stream's own socket would: its stream cleanups, then its handlers. */
+  protected readonly binaryChannels = new RuntimeBinaryChannels((connectionId) => {
+    this.runtime.cleanupSubscriptionsForConnection(connectionId)
+    this.binaryMessageRouter.deleteConnection(connectionId)
+  })
+
   protected registerBinaryStreamHandler(
     connectionId: string | undefined,
     streamId: number,
@@ -35,7 +42,15 @@ export class RuntimeRpcBinaryRouting extends RuntimeRpcState {
       return
     }
     this.lastClientRequestAt = Date.now()
-    this.binaryMessageRouter.dispatch(this.mobileSocketWiring?.getConnectionId(ws), bytes)
+    const connectionId = this.mobileSocketWiring?.getConnectionId(ws)
+    const routed =
+      connectionId !== undefined &&
+      this.binaryChannels.route(connectionId, bytes, (channelConnectionId, payload) =>
+        this.binaryMessageRouter.dispatch(channelConnectionId, payload)
+      )
+    if (!routed) {
+      this.binaryMessageRouter.dispatch(connectionId, bytes)
+    }
   }
 
   protected registerWebSocketDispatchAbort(ws: WebSocket): {

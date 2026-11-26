@@ -116,6 +116,8 @@ export type RpcRequest = {
   expectedRuntimeSource?: unknown
   // Phone-supplied runtime target; validate at its point of use.
   executionHost?: unknown
+  // Untrusted: the binary channel this stream's frames ride (runtime-binary-channel.ts).
+  binaryChannel?: unknown
 }
 
 export type LegacyCoordinatorAuthorityProof = Readonly<{

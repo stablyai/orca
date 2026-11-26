@@ -6,6 +6,7 @@ import { AGENT_CLI_UPDATE_RUNTIME_CAPABILITY } from '../../agent-launch/installa
 import { REMOTE_SERVER_UPDATE_CAPABILITY } from '../host-catalog/remote-server-update'
 import { SSH_TARGET_MANAGEMENT_RUNTIME_CAPABILITY } from '../ssh/ssh-target-management'
 import { ENVIRONMENT_DOCTOR_RUNTIME_CAPABILITY } from '../../workspace-setup/environment-doctor/environment-doctor-runtime'
+import { RUNTIME_BINARY_CHANNELS_CAPABILITY } from './runtime-binary-channel'
 
 export const REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY = 'remote-runtime.shared-control.v1' as const
 // Why conditional: only a desktop runtime holds the SSH registry managed servers are run from.
@@ -40,5 +41,6 @@ export const HOST_RUNTIME_CAPABILITIES = [
   SSH_TARGET_MANAGEMENT_RUNTIME_CAPABILITY,
   ENVIRONMENT_DOCTOR_RUNTIME_CAPABILITY,
   USAGE_ANALYTICS_RUNTIME_CAPABILITY,
-  HOST_NOTIFICATION_SETTINGS_RUNTIME_CAPABILITY
+  HOST_NOTIFICATION_SETTINGS_RUNTIME_CAPABILITY,
+  RUNTIME_BINARY_CHANNELS_CAPABILITY
 ] as const
