@@ -273,9 +273,13 @@ describe('the Add picker on a GitHub session', () => {
     ['an empty result', 'zzqx', /No one found for/],
     ['a row with a limit', 'brennan', /Showing the first 100 people per repo\./]
   ])('dates the list on %s, with or without a heading in view', async (_case, query, shows) => {
+    // Pinned to a later day than the read, so the list is dated by its day in this
+    // computer's own format.
+    vi.setSystemTime(new Date(2026, 10, 20, 12, 0))
+    const readAt = new Date(2026, 10, 10, 9, 30).getTime()
     const cutRoster: BotGitHubRoster = {
       ...roster,
-      readAt: new Date(2026, 10, 10, 9, 30).getTime(),
+      readAt,
       cut: { people: true, members: false, repositories: false }
     }
     const users = async ({ query: login }: { query: string }): Promise<Users> => ({
@@ -302,7 +306,10 @@ describe('the Add picker on a GitHub session', () => {
     })
     await act(() => vi.advanceTimersByTimeAsync(300))
     expect(screen.getByText(shows)).toBeTruthy()
-    expect(screen.getByText(/Repo list from Nov 10\./)).toBeTruthy()
+    const day = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(
+      readAt
+    )
+    expect(screen.getByText(new RegExp(`Repo list from ${day}\\.`))).toBeTruthy()
   })
 
   it('recovers an unanswered list request in place, keeping the exact row, the pick and the query', async () => {

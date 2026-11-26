@@ -139,6 +139,36 @@ describe('what a read covered', () => {
     expect(readRoster(json({ a0: personal }), owner)?.cut.repositories).toBe(true)
   })
 
+  it('GPS-C6-07: records which kind of source lost people, or that the kind is unknown', () => {
+    const mixed = targetOf({ repositories: ['a/b'], owners: ['acme'], more: false }).target
+    const org = { membersWithRole: { totalCount: 1, nodes: [person(2, 'x')] } }
+    // Orgs read, the repository failed: a repository loss.
+    expect(readRoster(json({ r0: null, a0: org }), mixed)?.lost).toEqual({
+      repositories: true,
+      organizations: false,
+      unattributed: false
+    })
+    // The repository read, an org member malformed: an organization loss.
+    const broken = { membersWithRole: { totalCount: 2, nodes: [person(3, 'y'), { login: 7 }] } }
+    expect(readRoster(json({ r0: users(person(2, 'x')), a0: broken }), mixed)?.lost).toEqual({
+      repositories: false,
+      organizations: true,
+      unattributed: false
+    })
+    // An account that reads as neither kind, or a GraphQL error: the kind can't be told.
+    expect(readRoster(json({ r0: users(person(2, 'x')), a0: null }), mixed)?.lost).toMatchObject({
+      unattributed: true
+    })
+    expect(
+      readRoster(json({ r0: users(person(2, 'x')), a0: org }, [{ message: 'x' }]), mixed)?.lost
+    ).toMatchObject({ unattributed: true })
+    expect(readRoster(json({ r0: users(person(2, 'x')), a0: org }), mixed)?.lost).toEqual({
+      repositories: false,
+      organizations: false,
+      unattributed: false
+    })
+  })
+
   it('passes names as variables and reads the viewer in the same call', () => {
     const built = rosterQuery({ repositories: [['acme', 'web']], owners: ['org'] })
     expect(built.vars).toEqual({ ro0: 'acme', rn0: 'web', a0: 'org' })

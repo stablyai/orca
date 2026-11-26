@@ -90,12 +90,15 @@ export function useWhoCanAskSearch(
     // When more of the search lands, ask again for this same query in place: the rows stay up
     // until the fuller answer replaces them. Not before this query's own first search (its
     // debounce), and not while a retry waits for its whole answer.
-    const stopWatching =
-      active.onUpdate?.(() => {
-        if (issued && retryOwner.current === null && generation.current === gen) {
-          ask(active, query, { generation, order, setSearch }, gen)
-        }
-      }) ?? (() => {})
+    const again = (): void => {
+      if (issued && retryOwner.current === null && generation.current === gen) {
+        ask(active, query, { generation, order, setSearch }, gen)
+      }
+    }
+    const stopWatching = active.onUpdate?.(again) ?? (() => {})
+    // A check settling anywhere this open (an earlier session's included) can change who this
+    // query's rows are: rank them again from what the session already holds, asking nothing new.
+    const stopLedger = ledger.onSettle(again)
     const timer = setTimeout(() => {
       issued = true
       ask(active, query, { generation, order, setSearch }, gen)
@@ -104,8 +107,9 @@ export function useWhoCanAskSearch(
       generation.current += 1
       clearTimeout(timer)
       stopWatching()
+      stopLedger()
     }
-  }, [active, query])
+  }, [active, query, ledger])
 
   return {
     search,
@@ -123,6 +127,8 @@ export function useWhoCanAskSearch(
       const gen = generation.current
       retryOwner.current = gen
       setRetrying(true)
+      // Answers asked before this Try again no longer paint: only its own whole answer does.
+      order.current.shown = order.current.asked + 1
       active.retry()
       ask(active, query, { generation, order, setSearch }, gen, () => {
         retryOwner.current = null

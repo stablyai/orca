@@ -7,12 +7,13 @@ import {
   GITHUB_PERSONAL_REPOSITORIES
 } from '../../../../../shared/connector-bot-github-contract'
 
-/** When a list was read: the time today, the date otherwise (date and time wouldn't fit one line). */
-export function readTime(readAt: number, now: number): string {
+/** When a list was read: the time today, the date otherwise (date and time wouldn't fit one line),
+ *  in this computer's own format unless a `locale` is given. */
+export function readTime(readAt: number, now: number, locale?: string): string {
   const read = new Date(readAt)
   return new Date(now).toDateString() === read.toDateString()
-    ? read.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-    : read.toLocaleDateString([], { month: 'short', day: 'numeric' })
+    ? read.toLocaleTimeString(locale ?? [], { hour: 'numeric', minute: '2-digit' })
+    : read.toLocaleDateString(locale ?? [], { month: 'short', day: 'numeric' })
 }
 
 export type ListKind = 'repos' | 'orgs' | 'both'

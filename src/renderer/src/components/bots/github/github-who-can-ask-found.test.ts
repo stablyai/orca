@@ -1,10 +1,26 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   BotGitHubRoster,
   ConnectorGitHubUsersResponse
 } from '../../../../../shared/connector-bot-github-contract'
 import type { BotSlackResult } from '../../../../../shared/connector-bot-slack-contract'
 import { gitHubWhoCanAskAnswer, type GitHubRosterState } from './github-who-can-ask-found'
+import { readTime } from './github-who-can-ask-list-copy'
+
+// This computer's own time and date text, built apart from the code under test, so the
+// assertions hold in any locale; the clock is pinned where "today" matters.
+const READ_AT = new Date(2026, 10, 19, 14, 5).getTime()
+const clock = (ms: number) =>
+  new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(ms)
+const day = (ms: number) =>
+  new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(ms)
+const pinNow = (ms: number) => {
+  vi.useFakeTimers()
+  vi.setSystemTime(ms)
+}
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: echoes the English default like i18next does with no catalog.
 const t = ((_key: string, fallback: string, values?: Record<string, unknown>) =>
@@ -20,7 +36,7 @@ const read = (more: Partial<Read> = {}): BotGitHubRoster => ({
   complete: true,
   omitted: false,
   cut: noCut,
-  readAt: new Date(2026, 10, 19, 14, 5).getTime(),
+  readAt: READ_AT,
   reused: false,
   readFor: { scope, owner: 'owner' },
   ...more
@@ -149,13 +165,12 @@ describe('the GitHub picker’s reading of a search', () => {
   })
 
   it('says only what a settled empty search looked at', () => {
+    pinNow(READ_AT + 10 * 60_000)
     const empty = (roster: GitHubRosterState, exact: Exact | null, query = 'zed') =>
       value(answer(roster, exact, query)).empty
     expect(empty(read(), none)).toEqual({
       title: 'No one found for “zed”',
-      detail: expect.stringMatching(
-        /^Searched your repo list and exact usernames\.\nRepo list from (2:05\s?PM|Nov 19)\.$/
-      )
+      detail: `Searched your repo list and exact usernames.\nRepo list from ${clock(READ_AT)}.`
     })
     expect(empty(read(), null, 'neil par')?.detail).toMatch(
       /^Searched your repo list\.\nRepo list from /
@@ -179,7 +194,7 @@ describe('the GitHub picker’s reading of a search', () => {
   })
 
   it('says when a reused list was read only when that matters, with the date when not today', () => {
-    const readAt = new Date(2026, 10, 19, 14, 5).getTime()
+    const readAt = READ_AT
     const at = (now: number, query: string) =>
       gitHubWhoCanAskAnswer(
         {
@@ -197,19 +212,17 @@ describe('the GitHub picker’s reading of a search', () => {
     const minutes = (count: number) => readAt + count * 60_000
     // Every answer from a list dates it; restart advice joins only when it matters.
     // Recent, and the search found someone in it: the date alone.
-    expect(note(at(minutes(10), 'brennan'))).toMatch(/^Repo list from 2:05\s?PM\.$/)
-    expect(note(at(minutes(10), ''))).toMatch(/^Repo list from 2:05\s?PM\.$/)
+    const today = `Repo list from ${clock(readAt)}.`
+    const advice = `Repo list from ${clock(readAt)}. Restart Orca to refresh.`
+    expect(note(at(minutes(10), 'brennan'))).toBe(today)
+    expect(note(at(minutes(10), ''))).toBe(today)
     // Recent, but no one in it matched: the list's age could be why.
-    expect(note(at(minutes(10), 'zed'))).toMatch(
-      /^Repo list from 2:05\s?PM\. Restart Orca to refresh\.$/
-    )
+    expect(note(at(minutes(10), 'zed'))).toBe(advice)
     // Over an hour old: always, with the time today...
-    expect(note(at(minutes(90), 'brennan'))).toMatch(
-      /^Repo list from 2:05\s?PM\. Restart Orca to refresh\.$/
-    )
+    expect(note(at(minutes(90), 'brennan'))).toBe(advice)
     // ...and the date once it's another day (date and time wouldn't fit one line).
-    expect(note(at(minutes(60 * 20), 'brennan'))).toMatch(
-      /^Repo list from Nov 19\. Restart Orca to refresh\.$/
+    expect(note(at(minutes(60 * 20), 'brennan'))).toBe(
+      `Repo list from ${day(readAt)}. Restart Orca to refresh.`
     )
     // A list read during this open is dated too, without restart advice.
     expect(value(answer(read(), none)).note).toMatch(/^Repo list from [^.]+\.$/)
@@ -256,7 +269,7 @@ describe('the GitHub picker’s reading of a search', () => {
         tag: 'Not in the earlier list'
       })
       // Recent and matched, yet it still says when the list is from.
-      expect(found_?.note, label).toMatch(/^Repo list from 2:05\s?PM\. Restart Orca to refresh\.$/)
+      expect(found_?.note, label).toBe(`Repo list from ${clock(READ_AT)}. Restart Orca to refresh.`)
     }
     // The same scope and account, read this run: current.
     const same = at({ scope, owner: 'owner' }, found)
@@ -291,9 +304,11 @@ describe('the GitHub picker’s reading of a search', () => {
     expect(value(answer({ status: 'unavailable', spent: true }, none, 'zed', 'remote')).note).toBe(
       'Couldn’t read repos. Check the bot’s computer.'
     )
-    const old = read({ reused: true, readAt: new Date(2026, 10, 1).getTime() })
+    pinNow(READ_AT)
+    const earlier = new Date(2026, 10, 1).getTime()
+    const old = read({ reused: true, readAt: earlier })
     expect(value(answer(old, none, 'brennan', 'remote')).note).toBe(
-      'Repo list from Nov 1. Restart the bot’s Orca.'
+      `Repo list from ${day(earlier)}. Restart the bot’s Orca.`
     )
   })
 
@@ -302,5 +317,89 @@ describe('the GitHub picker’s reading of a search', () => {
       'Repos read as @someone-else.'
     )
     expect(after(value(answer(read({ searchedAs: 'OWNER' }), none)).note)).toBeUndefined()
+  })
+})
+
+describe('when a list was read', () => {
+  const sameDay = READ_AT + 30 * 60_000
+  const nextDay = READ_AT + 20 * 60 * 60_000
+  it('says the time on the same local day and the date on a later one, 12-hour', () => {
+    expect(readTime(READ_AT, sameDay, 'en-US')).toMatch(/^2:05\sPM$/u)
+    expect(readTime(READ_AT, nextDay, 'en-US')).toBe('Nov 19')
+  })
+  it('follows a 24-hour locale', () => {
+    expect(readTime(READ_AT, sameDay, 'en-GB')).toBe('14:05')
+    expect(readTime(READ_AT, nextDay, 'en-GB')).toBe('19 Nov')
+  })
+})
+
+describe('GPS-C6-07: a loss or omission is named by the kind it hit', () => {
+  const mixed = { repositories: ['acme/web'], owners: ['acme'], more: false }
+  const orgsOnly = { repositories: [], owners: ['acme'], more: false }
+  const noteOf = (asked: Read['readFor']['scope'], more: Partial<Read>) =>
+    value(
+      gitHubWhoCanAskAnswer(
+        {
+          roster: read({ readFor: { scope: asked, owner: 'owner' }, ...more }),
+          exact: none,
+          query: 'brennan',
+          ownerLogin: 'owner',
+          scope: asked,
+          producer: 'local'
+        },
+        t
+      )
+    ).note ?? ''
+  const orgsRead = { repositories: false, organizations: true }
+
+  it('orgs read and a repo lost: a repo loss, never an org one', () => {
+    const note = noteOf(mixed, {
+      from: orgsRead,
+      complete: false,
+      lost: { repositories: true, organizations: false, unattributed: false }
+    })
+    expect(note).toContain('Some repos or members couldn’t be read.')
+    expect(note).not.toContain('Some orgs couldn’t be read.')
+  })
+
+  it('repos read and an org lost: an org loss, never a repo one', () => {
+    const note = noteOf(mixed, {
+      complete: false,
+      lost: { repositories: false, organizations: true, unattributed: false }
+    })
+    expect(note).toContain('Some orgs couldn’t be read.')
+    expect(note).not.toContain('Some repos or members couldn’t be read.')
+  })
+
+  it('names both kinds when the lost kind is unknown, from any host', () => {
+    const unattributed = { repositories: false, organizations: false, unattributed: true }
+    expect(noteOf(mixed, { from: orgsRead, complete: false, lost: unattributed })).toContain(
+      'Some repos or orgs couldn’t be read.'
+    )
+    // An older host doesn't say what it lost.
+    expect(noteOf(mixed, { from: orgsRead, complete: false })).toContain(
+      'Some repos or orgs couldn’t be read.'
+    )
+  })
+
+  it('clipped: an omission from a mixed or account request names both kinds', () => {
+    for (const asked of [mixed, orgsOnly]) {
+      const note = noteOf(asked, { from: orgsRead, omitted: true })
+      expect(note).toContain('Not every connected repo or org was read.')
+      expect(note).not.toContain('Not every connected org was read.')
+    }
+    expect(noteOf(scope, { omitted: true })).toContain('Not every connected repo was read.')
+  })
+
+  it('keeps the pure-org loss, the reader and the date', () => {
+    const note = noteOf(orgsOnly, {
+      from: orgsRead,
+      complete: false,
+      lost: { repositories: false, organizations: true, unattributed: false },
+      searchedAs: 'other-reader'
+    })
+    expect(note.split('\n')[0]).toMatch(/^Org list from /)
+    expect(note).toContain('Some orgs couldn’t be read.')
+    expect(note).toContain('Orgs read as @other-reader.')
   })
 })

@@ -103,6 +103,7 @@ export class GitHubPeopleRosters {
       people: [...byId.values()],
       from: read.from,
       complete: !read.lossy,
+      ...(read.lossy ? { lost: read.lost } : {}),
       omitted,
       cut: read.cut,
       readAt,

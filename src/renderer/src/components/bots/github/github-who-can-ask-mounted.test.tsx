@@ -100,6 +100,13 @@ async function add(label: RegExp): Promise<void> {
   })
 }
 
+async function land<T>(gate: { resolve: (value: T) => void }, value: T): Promise<void> {
+  await act(async () => {
+    gate.resolve(value)
+    await vi.advanceTimersByTimeAsync(0)
+  })
+}
+
 const pick = (text: string): void => {
   const row = screen.getAllByRole('option').find((option) => option.textContent === text)
   if (!row) {
@@ -562,33 +569,48 @@ describe('GPS-D9-05, GPS-C1-04: an equal GitHub state refresh', () => {
     expect(optionTexts()).toContain('maya-cMaya Chen')
   })
 
-  it('a real scope change reads for the new scope and never paints the old answer', async () => {
-    const before = deferred<People>()
-    const after = deferred<People>()
-    host.calls.people.mockReturnValueOnce(before.promise).mockReturnValueOnce(after.promise)
-    mountWhoCanAsk()
-    await settle(300)
-    await act(async () => {
-      host.publish(
-        gitHubView(undefined, [{ installationId: '12', accountLogin: 'acme', repos: ['acme/api'] }])
-      )
-      await vi.advanceTimersByTimeAsync(300)
-    })
-    expect(host.calls.people).toHaveBeenCalledTimes(2)
-    expect(host.calls.people.mock.calls[1]?.[0]).toMatchObject({
-      scope: { repositories: ['acme/api'] }
-    })
-    await act(async () => {
-      before.resolve({
-        ok: true,
-        value: rosterOf([{ id: '80', login: 'old-scope', name: 'Old Scope' }])
+  it.each([
+    ['the retired request first', true],
+    ['the current request first', false]
+  ])(
+    'a real scope change asks again; the host’s one read comes back as history (%s)',
+    async (_c, oldFirst) => {
+      const before = deferred<People>()
+      const after = deferred<People>()
+      host.calls.people.mockReturnValueOnce(before.promise).mockReturnValueOnce(after.promise)
+      mountWhoCanAsk()
+      await settle(300)
+      await act(async () => {
+        host.publish(
+          gitHubView(undefined, [
+            { installationId: '12', accountLogin: 'acme', repos: ['acme/api'] }
+          ])
+        )
+        await vi.advanceTimersByTimeAsync(300)
       })
-      after.resolve({ ok: true, value: team })
-      await vi.advanceTimersByTimeAsync(ROSTER_WAIT_MS)
-    })
-    expect(optionTexts()).toContain('maya-cMaya Chen')
-    expect(screen.queryByText('old-scope')).toBeNull()
-  })
+      expect(host.calls.people).toHaveBeenCalledTimes(2)
+      expect(host.calls.people.mock.calls[1]?.[0]).toMatchObject({
+        scope: { repositories: ['acme/api'] }
+      })
+      // The host reads once per app run: the first request's read, and the same read handed to
+      // the later one, marked reused and still made for the first scope.
+      const fresh = () => land(before, { ok: true, value: team })
+      const reused = () => land(after, { ok: true, value: { ...team, reused: true } })
+      await (oldFirst ? fresh() : reused())
+      if (oldFirst) {
+        // The retired session's answer never paints here.
+        expect(screen.queryByText('Your repos')).toBeNull()
+        expect(optionTexts()).not.toContain('maya-cMaya Chen')
+      } else {
+        expect(screen.getByText('From an earlier repo list')).toBeTruthy()
+      }
+      await (oldFirst ? reused() : fresh())
+      await settle(ROSTER_WAIT_MS)
+      expect(screen.getByText('From an earlier repo list')).toBeTruthy()
+      expect(screen.queryByText('Your repos')).toBeNull()
+      expect(optionTexts()).toContain('maya-cMaya Chen')
+    }
+  )
 })
 
 describe('GPS-D9-02: a list read only from organizations', () => {

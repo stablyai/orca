@@ -5,7 +5,8 @@ import {
   GITHUB_ID_PATTERN,
   GITHUB_LOGIN_PATTERN,
   GITHUB_PEOPLE_PER_SOURCE,
-  GITHUB_PERSONAL_REPOSITORIES
+  GITHUB_PERSONAL_REPOSITORIES,
+  type GitHubRosterLoss
 } from '../../shared/connector-bot-github-contract'
 import {
   GITHUB_PEOPLE_MAX_OWNERS,
@@ -95,6 +96,9 @@ export type RosterRead = {
   from: { repositories: boolean; organizations: boolean }
   /** A source failed or lost entries: a null or malformed source or node, a GraphQL error. */
   lossy: boolean
+  /** Which kinds lost something: a repository's people, an organization's members, or a loss
+   *  that can't be told apart (a GraphQL error, an account that read as neither kind). */
+  lost: GitHubRosterLoss
   /** Sources that stopped at their fixed size, by kind. */
   cut: { people: boolean; members: boolean; repositories: boolean }
   viewer: string | null
@@ -119,6 +123,11 @@ export function readRoster(stdout: string, target: GitHubPeopleTarget): RosterRe
     from: { repositories: false, organizations: false },
     // Any errors entry, or an `errors` that isn't a list at all, means something was lost.
     lossy: !NoErrors.safeParse(raw).success,
+    lost: {
+      repositories: false,
+      organizations: false,
+      unattributed: !NoErrors.safeParse(raw).success
+    },
     cut: { people: false, members: false, repositories: false },
     viewer: viewer.success ? viewer.data.login : null
   }
@@ -130,6 +139,7 @@ export function readRoster(stdout: string, target: GitHubPeopleTarget): RosterRe
         read.people.push({ id, login: person.data.login, name: person.data.name?.trim() || null })
       } else {
         read.lossy = true
+        read.lost[kind === 'people' ? 'repositories' : 'organizations'] = true
       }
     }
     read.cut[kind] ||= connection.totalCount > connection.nodes.length
@@ -142,6 +152,7 @@ export function readRoster(stdout: string, target: GitHubPeopleTarget): RosterRe
       take(source.data.assignableUsers, 'people')
     } else {
       read.lossy = true
+      read.lost.repositories = true
     }
   })
   target.owners.forEach((_owner, index) => {
@@ -155,7 +166,9 @@ export function readRoster(stdout: string, target: GitHubPeopleTarget): RosterRe
       return
     }
     if (!personal.success) {
+      // Neither an organization nor a person's account: which kind was lost is unknown.
       read.lossy = true
+      read.lost.unattributed = true
       return
     }
     const repositories = personal.data.repositories
@@ -168,6 +181,7 @@ export function readRoster(stdout: string, target: GitHubPeopleTarget): RosterRe
         take(source.data.assignableUsers, 'people')
       } else {
         read.lossy = true
+        read.lost.repositories = true
       }
     }
     // An account with no repositories was read whole; one whose repositories all failed was not.

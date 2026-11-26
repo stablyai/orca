@@ -122,6 +122,21 @@ export function gitHubWhoCanAskAnswer(
         ? 'orgs'
         : 'repos'
   const list = listCopy(place, read ? readTime(read.readAt, now) : '', searchedAs ?? '', t)
+  // A loss or omission is named by the kind it hit, never by the kind that read fine: by what the
+  // host says it lost, else by what the read asked for (repos alone), else by both kinds.
+  const asked = read?.readFor.scope
+  const reposAsked = asked !== undefined && asked.owners.length === 0
+  const lostKind: ListKind = !read?.lost
+    ? reposAsked
+      ? 'repos'
+      : 'both'
+    : read.lost.unattributed || read.lost.repositories === read.lost.organizations
+      ? 'both'
+      : read.lost.organizations
+        ? 'orgs'
+        : 'repos'
+  const loss = listCopy(lostKind, '', '', t)
+  const omission = listCopy(reposAsked ? 'repos' : 'both', '', '', t)
 
   // The list as live checks left it: a login a newer check gave to someone else is not this
   // person's, and a confirmed new login replaces the listed one, before matching and the cut.
@@ -215,9 +230,9 @@ export function gitHubWhoCanAskAnswer(
           : list.earlier
         : list.from
       : null,
-    read?.omitted && !historical ? list.omitted : null,
+    read?.omitted && !historical ? omission.omitted : null,
     read && !historical ? cutLine(read.cut, t) : null,
-    read && !read.complete && !historical ? list.unread : null,
+    read && !read.complete && !historical ? loss.unread : null,
     ranked.length > shown.length
       ? t('bots.github.whoCanAsk.keepTyping', 'Keep typing to narrow.')
       : null,

@@ -97,6 +97,8 @@ export type BotGitHubRoster =
       /** Every chosen read came back whole: no source failed or lost entries. It does not mean
        *  everyone who can reach those repositories was listed. */
       complete: boolean
+      /** What an incomplete read lost, by kind; absent from an older host (then unknown). */
+      lost?: GitHubRosterLoss
       /** Some connected repositories or accounts were left out on purpose (past the scope's caps,
        *  or not a readable name): not a failure, but not everything either. */
       omitted: boolean
@@ -123,6 +125,14 @@ export type BotGitHubRoster =
   /** This host reads no list (Windows): the picker searches exact usernames only, and nothing
    *  was admitted or spent. */
   | { status: 'exact-only' }
+
+/** Which kinds of source lost people: a repository's, an organization's, or a loss that can't
+ *  be told apart (a GraphQL error, an account that read as neither kind). */
+export type GitHubRosterLoss = {
+  repositories: boolean
+  organizations: boolean
+  unattributed: boolean
+}
 
 /** People per repository or organization a roster read returns. */
 export const GITHUB_PEOPLE_PER_SOURCE = 100

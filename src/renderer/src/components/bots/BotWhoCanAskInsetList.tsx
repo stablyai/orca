@@ -131,7 +131,9 @@ export function BotWhoCanAskInsetList({
           </PopoverTrigger>
           <PopoverContent align="start" className="w-80">
             {list.pickerOpen ? (
+              // A draft belongs to one bot on one host: another one starts the picker afresh.
               <BotWhoCanAskPicker
+                key={`${bot.hostId}\0${bot.id}`}
                 bot={bot}
                 service={service}
                 owner={list.owner}

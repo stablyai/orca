@@ -15,6 +15,7 @@ import {
   optionTexts,
   pickRow,
   rosterOf,
+  searchBox,
   settle,
   typeQuery,
   usersOf,
@@ -105,9 +106,14 @@ const read = (roster: ReturnType<typeof rosterOf>): Promise<People> =>
   Promise.resolve({ ok: true, value: roster })
 const failed = (): Promise<People> => Promise.resolve({ ok: false, error: 'network' })
 const lookups = (hostId = 'local') => calls(hostId).users.mock.calls.map(([args]) => args.query)
+// This computer's own date text, built apart from the code under test; the clock is pinned.
+const day = (ms: number) =>
+  new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(ms)
+const TODAY = new Date(2026, 10, 20, 12, 0).getTime()
 
-/** What each confirmation was asked about, and what the grant saved. */
+/** What each confirmation was asked about, and what the grant saved: at most one write ever. */
 function granted(): { confirmed: unknown[]; saved: unknown } {
+  expect(host.update.mock.calls.length, 'one grant write at most').toBeLessThanOrEqual(1)
   const updates = host.update.mock.calls.at(-1)?.[1]
   return {
     confirmed: host.confirm.mock.calls.map(([grant]) => grant.people),
@@ -258,8 +264,16 @@ describe('GPS-C5-02: every check counts, whatever paints', () => {
     mountWhoCanAsk()
     await typeQuery('sam', 300)
     await typeQuery('sa', 300)
-    await land(roster, { ok: true, value: rosterOf([{ id: '21', login: 'sam', name: 'Sam Ito' }]) })
+    await land(roster, {
+      ok: true,
+      value: rosterOf([
+        { id: '21', login: 'sam', name: 'Sam Ito' },
+        { id: '22', login: 'sara-l', name: 'Sara Lane' }
+      ])
+    })
     await settle(ROSTER_WAIT_MS)
+    // The late list landed: its undisputed match shows, its displaced holder doesn't.
+    expect(optionTexts()).toContain('sara-lSara Lane')
     expect(screen.queryByText('Sam Ito')).toBeNull()
   })
 
@@ -290,10 +304,7 @@ describe('GPS-C5-02: every check counts, whatever paints', () => {
     })
   })
 
-  it.each([
-    ['a changed scope on the same host', 'local'],
-    ['a new executing host', 'remote-1']
-  ])('a pick carried into %s is checked against what that context learns', async (_c, next) => {
+  const twoContexts = (next: string) => {
     const before = read(
       rosterOf([
         { id: '2', login: 'sam', name: 'Sam Ito' },
@@ -307,25 +318,24 @@ describe('GPS-C5-02: every check counts, whatever paints', () => {
       usersOf(query === 'sam' ? (holders.shift() ?? []) : [])
     calls().people.mockReturnValueOnce(before).mockReturnValue(after)
     calls().users.mockImplementation(answer)
-    const later = calls(next)
-    later.people.mockReturnValue(after)
-    later.users.mockImplementation(answer)
-    const view = mountWhoCanAsk()
+    calls(next).people.mockReturnValue(after)
+    calls(next).users.mockImplementation(answer)
+  }
+  const pickBoth = async () => {
     await typeQuery('sam')
     pickRow('samSam Ito')
     await typeQuery('maya')
     pickRow('maya-cMaya C')
+  }
+
+  it('a pick carried into a changed scope on the same host is checked against what it learns', async () => {
+    twoContexts('local')
+    mountWhoCanAsk()
+    await pickBoth()
     await act(async () => {
-      if (next === 'local') {
-        host.publish(
-          gitHubView(undefined, [
-            { installationId: '12', accountLogin: 'acme', repos: ['acme/api'] }
-          ])
-        )
-      } else {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the same test bot on another host.
-        view.rerender({ ...bot, hostId: next } as unknown as Bot)
-      }
+      host.publish(
+        gitHubView(undefined, [{ installationId: '12', accountLogin: 'acme', repos: ['acme/api'] }])
+      )
       await vi.advanceTimersByTimeAsync(300)
     })
     expect(screen.getByText('2 selected')).toBeTruthy()
@@ -336,7 +346,25 @@ describe('GPS-C5-02: every check counts, whatever paints', () => {
       confirmed: [[{ id: '41', name: 'maya-c' }]],
       saved: [{ id: '41', name: 'maya-c' }]
     })
-    expect(calls(next).people).toHaveBeenCalledTimes(next === 'local' ? 2 : 1)
+    expect(calls().people).toHaveBeenCalledTimes(2)
+  })
+
+  it('GPS-C6-04: another executing host starts the picker afresh, carrying no pick', async () => {
+    twoContexts('remote-1')
+    const view = mountWhoCanAsk()
+    await pickBoth()
+    expect(screen.getByText('2 selected')).toBeTruthy()
+    await act(async () => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the same test bot on another host.
+      view.rerender({ ...bot, hostId: 'remote-1' } as unknown as Bot)
+    })
+    await settle(300)
+    expect(screen.queryByText(/selected$/)).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Add (1 person|\d+ people)$/ })).toBeNull()
+    expect(searchBox()).toHaveProperty('value', '')
+    expect(calls('remote-1').people).toHaveBeenCalledOnce()
+    expect(host.confirm).not.toHaveBeenCalled()
+    expect(host.update).not.toHaveBeenCalled()
   })
 })
 
@@ -399,6 +427,9 @@ describe('GPS-C5-03, GPS-C5-09: a renamed account keeps its place; its old login
     await typeQuery('samuel')
     await typeQuery('sam')
     await land(old, usersOf([{ id: '31', name: 'sam' }]))
+    // Right away, under the same query: "sam" is still the newer check's account.
+    expect(optionTexts()).toContain('samNot in your repo list')
+    expect(optionTexts()).not.toContain('samSam Ito')
     await typeQuery('samuel')
     expect(optionTexts()).toContain('samuelSam Ito')
     await typeQuery('sam')
@@ -477,7 +508,20 @@ describe('GPS-C5-04: Try again on a hard error asks only what failed, once', () 
 })
 
 describe('GPS-C5-05: a language or host label change keeps the search and its Try again', () => {
+  const packId = 'plugin:synthetic.switch/en' as const
+  afterEach(async () => {
+    await setRendererUiLanguage('en')
+    setRendererPluginLanguagePacks([])
+  })
+
   it('keeps a held retry, its rows and both requests through both changes', async () => {
+    const pack = parsePluginLanguagePackArtifact(
+      JSON.stringify({ bots: { whoCanAsk: { retry: 'Synthetic retry' } } }),
+      'tolerant'
+    )
+    if (!pack.ok) {
+      throw new Error(pack.error)
+    }
     const people = deferred<People>()
     calls().people.mockReturnValueOnce(failed()).mockReturnValueOnce(people.promise)
     calls().users.mockResolvedValue(usersOf([{ id: '50', name: 'jordan' }]))
@@ -487,12 +531,24 @@ describe('GPS-C5-05: a language or host label change keeps the search and its Tr
     await settle()
     const searching = watchSearching()
     await act(async () => {
-      i18n.addResourceBundle('en', 'translation', { synthetic: { sentinel: 'x' } }, true, true)
+      setRendererPluginLanguagePacks([
+        {
+          id: packId,
+          resourceLanguage: pluginLanguageResourceId(packId),
+          pluginKey: 'synthetic',
+          locale: 'en-US',
+          coverage: 1,
+          catalog: pack.catalog
+        }
+      ])
+      await setRendererUiLanguage(packId)
       host.relabel('Studio Mac')
       await vi.advanceTimersByTimeAsync(300 + ROSTER_WAIT_MS)
     })
+    expect(i18n.language).toBe(pluginLanguageResourceId(packId))
     expect(optionTexts()).toContain('jordanRepos not checked')
-    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(searchBox()).toHaveProperty('value', 'jordan')
+    fireEvent.click(screen.getByRole('button', { name: 'Synthetic retry' }))
     await land(people, { ok: true, value: rosterOf([{ id: '41', login: 'maya-c', name: null }]) })
     expect(calls().people).toHaveBeenCalledTimes(2)
     expect(lookups()).toEqual(['jordan'])
@@ -507,8 +563,10 @@ describe('GPS-C5-07: org-only reads say org, an unknown source says GitHub list'
       gitHubView(undefined, [{ installationId: '11', accountLogin: 'acme', repos: null }])
     )
 
-  it('names omission, unread sources and the other reader by the org list, aged too', async () => {
+  it('names an org loss and the other reader by the org list, aged too', async () => {
+    vi.setSystemTime(TODAY)
     orgsView()
+    const readAt = new Date(2026, 10, 1, 9, 0).getTime()
     calls().people.mockReturnValue(
       read({
         ...rosterOf([{ id: '41', login: 'maya-c', name: null }], {
@@ -516,9 +574,10 @@ describe('GPS-C5-07: org-only reads say org, an unknown source says GitHub list'
           organizations: true
         }),
         complete: false,
+        lost: { repositories: false, organizations: true, unattributed: false },
         omitted: true,
         reused: true,
-        readAt: new Date(2026, 10, 1, 9, 0).getTime(),
+        readAt,
         searchedAs: 'other-reader',
         readFor: { scope: { repositories: [], owners: ['acme'], more: false }, owner: 'owner-one' }
       })
@@ -528,18 +587,26 @@ describe('GPS-C5-07: org-only reads say org, an unknown source says GitHub list'
     await typeQuery('jordan')
     const text = document.body.textContent ?? ''
     for (const line of [
-      'Org list from Nov 1. Restart Orca to refresh.',
-      'Not every connected org was read.',
+      `Org list from ${day(readAt)}. Restart Orca to refresh.`,
+      // An account left out may be an org or a person's: the omission names neither alone.
+      'Not every connected repo or org was read.',
       'Some orgs couldn’t be read.',
       'Username check failed.',
       'Orgs read as @other-reader.'
     ]) {
       expect(text).toContain(line)
     }
-    expect(text).not.toMatch(/repo/i)
+    expect(text).not.toMatch(/repo list|repos read/i)
   })
 
   it('reads repos and orgs together as one GitHub list', async () => {
+    const mixed = { repositories: ['acme/web'], owners: ['acme'], more: false }
+    host.publish(
+      gitHubView(undefined, [
+        { installationId: '11', accountLogin: 'acme', repos: ['acme/web'] },
+        { installationId: '13', accountLogin: 'acme', repos: null }
+      ])
+    )
     calls().people.mockReturnValue(
       read({
         ...rosterOf([{ id: '41', login: 'maya-c', name: null }], {
@@ -547,7 +614,8 @@ describe('GPS-C5-07: org-only reads say org, an unknown source says GitHub list'
           organizations: true
         }),
         complete: false,
-        searchedAs: 'other-reader'
+        searchedAs: 'other-reader',
+        readFor: { scope: mixed, owner: 'owner-one' }
       })
     )
     mountWhoCanAsk()
@@ -643,7 +711,8 @@ describe('GPS-D9-06: eligibility changing while the confirmation is open', () =>
         ])
       )
     )
-    host.confirm.mockReturnValueOnce(first.promise).mockResolvedValue(true)
+    const second = deferred<boolean>()
+    host.confirm.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
     mountWhoCanAsk()
     await settle(300)
     pickRow('lee-kLee K')
@@ -659,6 +728,14 @@ describe('GPS-D9-06: eligibility changing while the confirmation is open', () =>
       await vi.advanceTimersByTimeAsync(0)
     })
     await land(first, true)
+    // The second confirmation is open: nothing has been written yet.
+    expect(host.confirm).toHaveBeenCalledTimes(2)
+    expect(host.update).not.toHaveBeenCalled()
+    await land(second, true)
+    expect(host.update).toHaveBeenCalledOnce()
+    expect(host.update.mock.calls[0]?.[1].addMembers).toEqual([
+      expect.objectContaining({ id: '41', name: 'maya-c', source: 'github' })
+    ])
     expect(granted()).toEqual({
       confirmed: [
         [

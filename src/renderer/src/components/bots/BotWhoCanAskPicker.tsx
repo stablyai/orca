@@ -1,4 +1,4 @@
-import React, { useId, useState, useSyncExternalStore } from 'react'
+import React, { useEffect, useId, useState, useSyncExternalStore } from 'react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -92,6 +92,21 @@ export function BotWhoCanAskPicker({
   const [ledger] = useState(() => new WhoCanAskIdentityLedger())
   // Every read of the ledger below is keyed on its version, so none is served stale.
   const ledgerVersion = useSyncExternalStore(ledger.subscribe, ledger.version)
+  // A tick a check showed to be someone else's leaves the draft for good: a later check naming
+  // that account again makes it pickable, not silently picked.
+  useEffect(
+    () =>
+      ledger.onSettle(() =>
+        setTicked((current) => {
+          const kept = current.filter(
+            (member) =>
+              ledger.identity(member.id, member.name || member.id).status !== 'contradicted'
+          )
+          return kept.length === current.length ? current : kept
+        })
+      ),
+    [ledger]
+  )
   const { search, retrying, retry } = useWhoCanAskSearch(service, query, ledger)
   const checkingId = useId()
   const typed = query.trim()
@@ -104,7 +119,7 @@ export function BotWhoCanAskPicker({
     currentPicks(ticked, (id) => !added.has(id) && !isOwner(id), ledger)
   )
   // Add waits for a check that could still show one of these picks to be someone else.
-  const held = recomputeOn([ledgerVersion], () => heldPicks(picked, realNames, ledger))
+  const held = recomputeOn([ledgerVersion], () => heldPicks(picked, ticked, realNames, ledger))
   const full =
     bot.members.length + picked.length >= BOT_MAX_MEMBERS ||
     added.size + picked.length >= service.max

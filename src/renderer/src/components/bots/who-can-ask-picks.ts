@@ -40,10 +40,12 @@ export function currentRows<T extends { id: string; name: string }>(
   })
 }
 
-/** Picks a username check still out could re-identify: its login is theirs, or it matches their
- *  login or real name (it may find their id under a new login). Others can be added meanwhile. */
+/** Picks a username check still out could re-identify: its login is one they have been known by
+ *  (as ticked, as now shown, or as any check saw them), or it matches one of those or their real
+ *  name (it may find their id under a new login). Others can be added meanwhile. */
 export function heldPicks(
   picks: readonly BotMember[],
+  ticked: readonly BotMember[],
   realNames: Readonly<Record<string, string>>,
   ledger: WhoCanAskIdentityLedger
 ): BotMember[] {
@@ -51,11 +53,13 @@ export function heldPicks(
   if (pending.length === 0) {
     return []
   }
-  return picks.filter((member) =>
-    pending.some(
-      (login) =>
-        (member.name || member.id).toLowerCase().includes(login) ||
-        (realNames[member.id] ?? '').toLowerCase().includes(login)
-    )
-  )
+  return picks.filter((member) => {
+    const known = [
+      member.name || member.id,
+      ticked.find((entry) => entry.id === member.id)?.name ?? '',
+      realNames[member.id] ?? '',
+      ...ledger.aliases(member.id)
+    ].map((name) => name.toLowerCase())
+    return pending.some((login) => known.some((name) => name !== '' && name.includes(login)))
+  })
 }
