@@ -1,7 +1,7 @@
 // An item's description or comment, drawn by chat's own Markdown so it reads and links as chat does.
 import { memo } from 'react'
 import { NativeChatMarkdown } from '../../native-chat/markdown/NativeChatMarkdown'
-import { NativeChatCodeBlock } from '../../native-chat/markdown/code/NativeChatCodeBlock'
+import { NativeChatDeferredCodeBlock } from '../../native-chat/markdown/code/NativeChatCodeBlock'
 
 // Chat spacing, tightened for item cards: no outer block margins, smaller gaps around code and headings.
 const ITEM_DENSITY =
@@ -17,7 +17,7 @@ export const BotItemMarkdown = memo(function BotItemMarkdown({
     <NativeChatMarkdown
       content={text}
       variant="document"
-      renderCodeBlock={NativeChatCodeBlock}
+      renderCodeBlock={NativeChatDeferredCodeBlock}
       linkifyFilePaths
       className={ITEM_DENSITY}
     />

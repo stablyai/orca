@@ -57,11 +57,6 @@ function finishedKey(language: string, source: string): string {
   return `${language}\n${source}`
 }
 
-/** Whether a block's colors are cached, so it can paint in color before anything measures it. */
-export function hasFinishedSyntax(code: string, language: string): boolean {
-  return finished.has(finishedKey(language, code.slice(0, MAX_HIGHLIGHTED_CODE_LENGTH)))
-}
-
 /** Tokens cover the highlighted prefix; code.slice(highlightedLength) stays plain until later renders. */
 export function useHighlightedSyntax(code: string, language: string): SyntaxProgress | null {
   const source =

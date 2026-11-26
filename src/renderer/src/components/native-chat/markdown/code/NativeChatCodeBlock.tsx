@@ -10,7 +10,6 @@ import { useNativeChatDisclosure } from '../../messages/disclosure/native-chat-d
 import { NativeChatHighlightedCode } from './NativeChatHighlightedCode'
 import { NativeChatHtmlPreview, NativeChatHtmlViewToggle } from './NativeChatHtmlPreview'
 import { isHtmlDocumentCodeBlock } from '../../../../../../shared/markdown/html-document-fences'
-import { hasFinishedSyntax } from '@/lib/syntax-highlighting/use-highlighted-syntax'
 import { observeTranscriptVisibility } from '../../media/images/native-chat-image-visibility'
 
 /** Code fences need their own copy target rather than the whole chat message. */
@@ -18,12 +17,15 @@ export function NativeChatCodeBlock({
   children,
   language,
   sourceLine,
-  plain = false
+  plain = false,
+  deferHighlight = false
 }: {
   children?: React.ReactNode
   language?: string
   sourceLine?: number
   plain?: boolean
+  /** Color only once on screen (an item's clamped, unvirtualized text); chat colors at once. */
+  deferHighlight?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const code = extractCodeText(children)
@@ -43,7 +45,7 @@ export function NativeChatCodeBlock({
   const previewing = htmlDocument && previewOpen
   const content = useRef<HTMLPreElement | null>(null)
   const highlights = Boolean(language && code && !plain)
-  const colored = useSeenOnScreen(content, highlights && !hasFinishedSyntax(code, language ?? ''))
+  const colored = useSeenOnScreen(content, highlights && deferHighlight)
   const actions = code ? (
     <>
       <NativeChatCodeWrapButton wrapped={wrapped} onToggle={() => setWrapped(!wrapped)} />
@@ -108,7 +110,8 @@ export function NativeChatCodeBlock({
   )
 }
 
-/** Tokens are a DOM node each: blocks off screen (or cut by a clamp) stay plain until first seen. */
+/** Tokens are a DOM node each: a deferred block off screen (or cut by a clamp) stays plain until
+ *  first seen, then stays colored. */
 function useSeenOnScreen(node: React.RefObject<HTMLElement | null>, waits: boolean): boolean {
   const [seen, setSeen] = useState(false)
   useEffect(() => {
@@ -116,7 +119,11 @@ function useSeenOnScreen(node: React.RefObject<HTMLElement | null>, waits: boole
     if (!waits || seen || !element) {
       return
     }
-    return observeTranscriptVisibility(element, (visible) => visible && setSeen(true))
+    return observeTranscriptVisibility(element, (visible) => {
+      if (visible) {
+        setSeen(true)
+      }
+    })
   }, [node, waits, seen])
   return seen || !waits
 }
@@ -144,6 +151,15 @@ function NativeChatCodeWrapButton({
       <WrapText className="size-3.5" />
     </button>
   )
+}
+
+/** For an item's text: unvirtualized and clamped, so only blocks on screen pay for their tokens. */
+export function NativeChatDeferredCodeBlock(props: {
+  children?: React.ReactNode
+  language?: string
+  sourceLine?: number
+}): React.JSX.Element {
+  return <NativeChatCodeBlock {...props} deferHighlight />
 }
 
 /** For dimmed rows: their code keeps the row's faint color, so it is not tokenized at all. */
