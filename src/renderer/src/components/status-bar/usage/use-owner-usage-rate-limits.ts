@@ -59,6 +59,7 @@ export type OwnerUsageRateLimits = {
   owner: AccountOwner | null
   rateLimits: RateLimitState
   accounts: ProviderAccountsSnapshot | null
+  pluginUsageProviders?: ProviderAccountsSnapshot['pluginUsageProviders']
   /** Null when this device owns the shown usage. */
   remoteOwner: RemoteUsageOwner | null
   /** Forces the owning host to re-read usage; null when this device owns it. */
@@ -217,6 +218,8 @@ export function useAccountOwnerUsage(
     owner,
     rateLimits: scopedRateLimits,
     accounts: ownerId ? (owned?.snapshot ?? null) : null,
+    pluginUsageProviders:
+      ownerId && !owned?.failure ? owned?.snapshot?.pluginUsageProviders : undefined,
     remoteOwner,
     refreshRemote: wslDistro ? wsl.refresh : ownerId || unavailable ? refreshRemote : null
   }

@@ -26,7 +26,12 @@ import {
   getProviderUsageStatusLabel,
   isClaudeUsageWaitingForClaude
 } from '../../../../../shared/agent-usage/status-copy/usage-error-copy'
-import { getTightestUsageSection, getUsageHeadlineSection } from './usage-headline-sections'
+import { getTightestUsageSection } from './usage-headline-sections'
+import {
+  isPluginUsageProvider,
+  usageRosterProviderName,
+  type UsageRosterProvider
+} from './plugin-usage-roster-provider'
 import { formatBareUsagePercentage } from './usage-percentage-label'
 import { formatUsageChipTitle } from './usage-chip-title'
 import { translate } from '@/i18n/i18n'
@@ -149,7 +154,7 @@ function OwnerNotSetUpLabel({
  * A provider at 80%+ used keeps its chip when the status bar runs out of room, whatever % display
  * the user chose. Why 80: the status bar's original threshold; it drives collapsing, not color.
  */
-export function isUsageUrgent(p: ProviderRateLimits): boolean {
+export function isUsageUrgent(p: UsageRosterProvider): boolean {
   const tightest = getTightestUsageSection(p, undefined, 'all')
   return tightest !== null && clampUsedPercent(tightest.window.usedPercent) >= USAGE_WARNING_PERCENT
 }
@@ -182,7 +187,7 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
 // Treat 99.5% as capped to tolerate rounding before revealing spendable overage.
 const CAP_THRESHOLD_PERCENT = 99.5
 
-function isExtraUsageActive(p: ProviderRateLimits): boolean {
+function isExtraUsageActive(p: UsageRosterProvider): boolean {
   if (
     !p.extraUsage ||
     !p.extraUsage.enabled ||
@@ -240,7 +245,7 @@ function CustomUsageText({
 }
 
 type ProviderSegmentProps = {
-  p: ProviderRateLimits | null
+  p: UsageRosterProvider | null
   /** Narrow bar: one percentage per window, no mini bar or status text. */
   compact?: boolean
   display: UsagePercentageDisplay
@@ -250,7 +255,8 @@ type ProviderSegmentProps = {
   /** Remote host the readings come from; the chip tooltip would otherwise hide the row's. */
   hostLabel?: string
   countdownActive?: boolean
-  /** Off-layout copy read only for its width: tooltips can't change width, so it builds none. */
+  pluginCountdownNow?: number
+  /** Off-layout copy used only to measure width. */
   measuring?: boolean
 }
 
@@ -272,22 +278,21 @@ export function ProviderSegment({
   barMode = mode,
   hostLabel,
   countdownActive = true,
+  pluginCountdownNow,
   measuring = false
 }: ProviderSegmentProps): React.JSX.Element {
   const t = useTranslate()
   const provider = p?.provider ?? 'claude'
   const usageFormat = useAppStore((state) => state.statusBarUsageFormat)
-  const template = resolveStatusBarUsageTemplate(usageFormat, provider)
-  const statusLabel = p ? getProviderUsageStatusLabel(p, t) : ''
+  const plugin = p && isPluginUsageProvider(p) ? p : null
+  const native = p && !isPluginUsageProvider(p) ? p : null
+  const icon = <ProviderIcon provider={provider} pluginIconSrc={plugin?.pluginIconSrc} />
+  const template = native ? resolveStatusBarUsageTemplate(usageFormat, native.provider) : null
   // Why: not a problem; Claude updates its own login the next time it runs.
-  const calm = p ? isClaudeUsageWaitingForClaude(p) : false
+  const calm = native ? isClaudeUsageWaitingForClaude(native) : false
   const calmClock = useNow(60_000, calm && p?.status === 'error')
-  const tightest = p
-    ? mode === 'compact'
-      ? getUsageHeadlineSection(p, t, 'all')
-      : getTightestUsageSection(p, t, 'all')
-    : null
   const sections = getStatusBarUsageSections(p, mode, t)
+  const tightest = mode === 'compact' ? sections[0] : p && getTightestUsageSection(p, t, 'all')
   const groupedBuckets = sections.map((section) => section.window).filter(isGroupedUsagePool)
   const showLabels = mode === 'verbose' || !compact
   // Why: gate only the clock, never the label, so visibility can't change width and re-trigger itself.
@@ -309,7 +314,7 @@ export function ProviderSegment({
   if (!p || p.status === 'idle' || (p.status === 'fetching' && !tightest)) {
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
-        <ProviderIcon provider={provider} />
+        {icon}
         <span>···</span>
       </span>
     )
@@ -317,21 +322,19 @@ export function ProviderSegment({
 
   if (p.status === 'unavailable') {
     return (
-      <span className="inline-flex items-center gap-1 text-muted-foreground/50">
-        <ProviderIcon provider={provider} /> --
-      </span>
+      <span className="inline-flex items-center gap-1 text-muted-foreground/50">{icon} --</span>
     )
   }
 
-  if (p.usageMetadata?.ownerNotSetUp) {
+  if (native?.usageMetadata?.ownerNotSetUp) {
     return (
       <span
         className="inline-flex items-center gap-1 text-muted-foreground"
-        title={measuring ? undefined : getProviderUsageErrorMessage(p, t)}
+        title={measuring ? undefined : getProviderUsageErrorMessage(native, t)}
       >
-        <ProviderIcon provider={provider} />
+        {icon}
         {/* Why "--" when compact: an icon alone would read as a healthy chip. */}
-        {compact ? '--' : <OwnerNotSetUpLabel placeholder={p.usageMetadata.ownerNotSetUp} />}
+        {compact ? '--' : <OwnerNotSetUpLabel placeholder={native.usageMetadata.ownerNotSetUp} />}
       </span>
     )
   }
@@ -339,9 +342,11 @@ export function ProviderSegment({
   if (p.status === 'error' && !tightest) {
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
-        <ProviderIcon provider={provider} />
+        {icon}
         {!calm && <AlertTriangle size={11} className="text-muted-foreground/80" />}
-        {!compact && <span className="text-[11px] font-medium">{statusLabel}</span>}
+        {!compact && native && (
+          <span className="text-[11px] font-medium">{getProviderUsageStatusLabel(native, t)}</span>
+        )}
       </span>
     )
   }
@@ -354,24 +359,27 @@ export function ProviderSegment({
     mode === 'verbose' && groupedBuckets.length > 0 && groupedBuckets.length === sections.length
 
   // Why the form, not barMode: a narrow Detailed chip is a bare percent too, so it needs the name.
-  const compactTitle =
-    mode === 'compact' && tightest && !measuring
-      ? [formatUsageChipTitle(p, sections[0], display, t), hostLabel].filter(Boolean).join('\n')
-      : undefined
+  const compactTitle = measuring
+    ? undefined
+    : mode === 'compact' && tightest
+      ? formatUsageChipTitle(p, sections[0], display, t)
+      : plugin
+        ? usageRosterProviderName(plugin, t)
+        : undefined
 
   return (
     <span
       className={
         compactBar ? 'inline-flex items-center gap-[5px]' : 'inline-flex items-center gap-1.5'
       }
-      title={compactTitle}
+      title={compactTitle && [compactTitle, hostLabel].filter(Boolean).join('\n')}
     >
-      <ProviderIcon provider={provider} />
+      {icon}
       {!template && mode === 'verbose' && tightest && !compact ? (
         <MiniBar usedPct={clampUsedPercent(tightest.window.usedPercent)} display={display} />
       ) : null}
-      {template ? (
-        <CustomUsageText template={template} limits={p} display={display} now={now} />
+      {template && native ? (
+        <CustomUsageText template={template} limits={native} display={display} now={now} />
       ) : showGroupedPools ? (
         <GroupedPoolUsage
           visibleBuckets={groupedBuckets}
@@ -386,7 +394,9 @@ export function ProviderSegment({
             <WindowLabel
               w={section.window}
               label={
-                mode === 'compact' ? section.label : formatStatusBarSectionLabel(p, section, now, t)
+                mode === 'compact'
+                  ? section.label
+                  : formatStatusBarSectionLabel(p, section, plugin ? pluginCountdownNow : now, t)
               }
               display={display}
               showLabel={showLabels && section.label !== '' && !(compactBar && section.labelFirst)}

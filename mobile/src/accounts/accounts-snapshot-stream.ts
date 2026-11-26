@@ -10,9 +10,10 @@ export function withoutAccountUsage(snapshot: AccountsSnapshot | null): Accounts
   if (!snapshot) {
     return null
   }
-  const { claudeTarget, codexTarget } = snapshot.rateLimits
+  const { pluginUsageProviders: _pluginUsageProviders, ...accounts } = snapshot
+  const { claudeTarget, codexTarget } = accounts.rateLimits
   return {
-    ...snapshot,
+    ...accounts,
     rateLimits: {
       claude: null,
       codex: null,

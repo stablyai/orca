@@ -1,5 +1,5 @@
 import { capabilityKinds } from '../../../shared/plugins/capabilities/plugin-capabilities'
-import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
+import { getPluginsDataDir, type ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
 import type { PluginAuditLog } from '../logging/plugin-audit-log'
 import type { PluginHostCallPolicy } from '../workers/host-api/plugin-host-call-adapter'
 import {
@@ -22,6 +22,9 @@ import type {
 import { executePluginHostCallRequest } from '../workers/host-api/plugin-host-call-adapter'
 import { getPluginHostRendererActions } from '../view/plugin-host-renderer-actions'
 import type { PluginServiceOptions } from '../plugin-service-options'
+import type { PluginUsageProviderState } from '../usage/plugin-usage-provider-state'
+import type { PluginService } from '../plugin-service'
+import type { PluginWorkerHostCall } from '../workers/worker-supervision/plugin-worker-startup'
 
 /** Who made a call: the open panel (frames only), and its host window's WebContents for desktop
  *  IPC calls. */
@@ -30,6 +33,7 @@ export type PluginHostCaller = {
   panel?: PluginPanelCaller
   /** Aborts when a worker cancels the call or exits. */
   signal?: AbortSignal
+  isCurrentWorker?: () => boolean
 }
 
 type FindApprovedPlugin = (
@@ -73,12 +77,15 @@ export function resolvePluginServiceHostCallPolicy(input: {
   pluginsDataDir: string
   desktop: PluginDesktopFrameServices | null | undefined
   panels: PluginPanelBridgeServices | null
+  usageProviders: PluginUsageProviderState
   /** The service's desktop sinks; each is absent where this Orca has none. */
   sinks: Pick<PluginServiceOptions, 'statusBar' | 'appearance' | 'editorTypography'>
   audit: PluginAuditLog
   log?: (pluginKey: string) => (line: string) => void
 }): PluginHostCallPolicy {
   const plugin = input.findApprovedPlugin(input.pluginKey)
+  const { caller, usageProviders } = input
+  const isCurrentWorker = caller?.isCurrentWorker
   return {
     grantedCapabilities: plugin ? capabilityKinds(plugin.manifest.capabilities) : null,
     allowProposed: plugin?.isDev === true,
@@ -90,6 +97,15 @@ export function resolvePluginServiceHostCallPolicy(input: {
           panels: input.panels,
           renderer: getPluginHostRendererActions(),
           declaredSettings: plugin?.manifest.contributes.settings,
+          usageProvider:
+            plugin && isCurrentWorker
+              ? (update) => {
+                  if (caller?.signal?.aborted || !isCurrentWorker()) {
+                    throw pluginHostCallRevoked()
+                  }
+                  return usageProviders.update(plugin, update)
+                }
+              : null,
           statusBar: input.sinks.statusBar,
           appearance: input.sinks.appearance,
           editorTypography: input.sinks.editorTypography,
@@ -139,4 +155,38 @@ export function createPluginServiceHostCall(
       surface,
       resolvePolicy: (boundPluginKey) => policy(boundPluginKey, caller)
     })
+}
+
+export function bindPluginServiceHostCall(
+  service: Pick<
+    PluginService,
+    'options' | 'panelBridge' | 'usageProviders' | 'findApprovedPlugin' | 'captureLog'
+  >,
+  audit: PluginAuditLog,
+  runtimeDelegate: () => PluginRuntimeDelegate | null
+): PluginServiceHostCall {
+  const findApprovedPlugin = service.findApprovedPlugin.bind(service)
+  return createPluginServiceHostCall((pluginKey, caller) =>
+    resolvePluginServiceHostCallPolicy({
+      pluginKey,
+      caller,
+      findApprovedPlugin,
+      runtimeDelegate: runtimeDelegate(),
+      pluginsDataDir: getPluginsDataDir(service.options.userDataPath),
+      desktop: service.options.getDesktopFrameServices?.(),
+      panels: pluginPanelBridgeServices(service.panelBridge),
+      usageProviders: service.usageProviders,
+      sinks: service.options,
+      audit,
+      log: (key) => {
+        const log = service.captureLog(key)
+        return (line) => log('info', line)
+      }
+    })
+  )
+}
+
+export function bindPluginWorkerHostCall(call: PluginServiceHostCall): PluginWorkerHostCall {
+  return (pluginKey, method, params, isCurrentWorker, signal) =>
+    call(pluginKey, method, params, 'worker', { signal, isCurrentWorker })
 }

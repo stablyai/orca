@@ -1,11 +1,11 @@
 import { translate } from '@/i18n/i18n'
+import { isPluginUsageProvider, type UsageRosterProvider } from './plugin-usage-roster-provider'
 import type { Translate } from '@/i18n/use-translate'
 import {
   formatRateLimitWindowChipLabel,
   formatWindowLabel
 } from './rate-limit-window-localized-label'
 import type {
-  ProviderRateLimits,
   RateLimitBucket,
   RateLimitWindow
 } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
@@ -75,11 +75,16 @@ export function formatPoolShortLabel(
 }
 
 export function formatStatusBarSectionLabel(
-  p: ProviderRateLimits,
+  p: UsageRosterProvider,
   section: { label: string; window: RateLimitWindow },
   now?: number,
   t?: Translate
 ): string {
+  if (isPluginUsageProvider(p)) {
+    return section.window.resetsAt === null
+      ? section.label
+      : formatRateLimitWindowChipLabel(section.window, now)
+  }
   return isGroupedUsagePool(section.window)
     ? formatPoolShortLabel(section.window, p.buckets ?? [], now, t)
     : section.label

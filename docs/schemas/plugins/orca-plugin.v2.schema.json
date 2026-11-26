@@ -170,7 +170,7 @@
       "x-orca-since": "1.4.160"
     },
     "main": {
-      "description": "Node entry run in an out-of-process plugin worker: a `.js`/`.mjs` module, or a `.ts`/`.mts` module that Orca transpiles when it loads (needs `engines.orca` `>=1.4.246`). Requires the `trusted-worker` execution profile, and is required by it, by `contributes.events`, by `contributes.hooks` and by any command without an `action`. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
+      "description": "Node entry run in an out-of-process plugin worker: a `.js`/`.mjs` module, or a `.ts`/`.mts` module that Orca transpiles when it loads (needs `engines.orca` `>=1.4.246`). Requires the `trusted-worker` execution profile, and is required by it, by `contributes.events`, by `contributes.hooks`, by `contributes.usageProviders` and by any command without an `action`. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
       "x-orca-since": "1.4.160",
       "examples": [
         "dist/main.mjs"
@@ -343,6 +343,16 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/StatusBarItemContribution"
+          }
+        },
+        "usageProviders": {
+          "default": [],
+          "description": "Quota sources in the usage area, updated by the plugin worker with `usageProvider.update`. At most 8.",
+          "x-orca-since": "1.4.278",
+          "maxItems": 8,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/UsageProviderContribution"
           }
         },
         "mcpServers": {
@@ -1601,6 +1611,37 @@
       ],
       "additionalProperties": false,
       "description": "An item in the status bar. Requires the `declarative` profile; a `trusted-worker` can change it with `statusBar.update`."
+    },
+    "UsageProviderContribution": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "description": "Provider id, unique within the plugin.",
+          "x-orca-since": "1.4.278",
+          "examples": [
+            "sample-quota"
+          ]
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Label shown in the usage area.",
+          "x-orca-since": "1.4.278",
+          "examples": [
+            "Sample quota"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "label"
+      ],
+      "additionalProperties": false,
+      "description": "A quota source updated by its plugin worker."
     },
     "McpServerContribution": {
       "type": "object",

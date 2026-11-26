@@ -1,11 +1,11 @@
 import type { PluginCapabilityKind } from '../../../shared/plugins/capabilities/plugin-capabilities'
-import type { PluginHostCallOutcome } from '../../../shared/plugins/frames/plugin-protocol'
 import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
 import { resolveContainedPluginArtifact } from '../artifacts/plugin-contained-artifact'
 import type { PluginContentVerifier } from '../artifacts/plugin-content-integrity'
 import { PluginWorkerManager } from './plugin-worker-manager'
 import type {
   PluginWorkerFactory,
+  PluginWorkerHostCall,
   PluginWorkerSpawnSpec
 } from './worker-supervision/plugin-worker-startup'
 import {
@@ -26,12 +26,7 @@ export type PluginWorkerControllerOptions = {
   isCurrentApproved: (spec: PluginWorkerSpawnSpec) => boolean
   /** Gates crash restarts: a refresh's temporary pause is not revocation. */
   isApprovalKept?: (spec: PluginWorkerSpawnSpec) => boolean
-  executeHostCall: (
-    pluginKey: string,
-    method: string,
-    params: unknown,
-    signal?: AbortSignal
-  ) => Promise<PluginHostCallOutcome>
+  executeHostCall: PluginWorkerHostCall
   onPanelPost?: (pluginKey: string, post: PluginWorkerPanelPost) => void
   log: (pluginKey: string) => (level: 'info' | 'warn' | 'error', line: string) => void
   onStateChanged: (pluginKey: string) => void

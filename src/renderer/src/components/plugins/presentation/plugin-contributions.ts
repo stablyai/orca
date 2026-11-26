@@ -15,7 +15,9 @@ import { fileList } from './plugin-contribution-file-list'
 import {
   fontContributionRows,
   mcpServerContributionRows,
+  nameFromContributionPath,
   statusBarContributionRows,
+  usageProviderContributionRows,
   vmRecipeContributionRows,
   statusBarItemTitles,
   withMode
@@ -64,6 +66,7 @@ export type PluginContributionSource = {
   vmRecipes: readonly string[]
   newFiles: readonly { title: string; extension: string }[]
   statusBarItems: readonly string[]
+  usageProviders?: readonly string[]
   /** Each server's name with its URL or the command line that starts it. */
   mcpServers: readonly { name: string; detail: string }[]
 }
@@ -81,16 +84,6 @@ export const EMPTY_CONTRIBUTION_SOURCE: PluginContributionSource = {
   newFiles: [],
   statusBarItems: [],
   mcpServers: []
-}
-
-/** "recipes/ubuntu-dev.json" → "Ubuntu dev"; manifests name these files by path only. */
-export function nameFromContributionPath(path: string): string {
-  const file = path.split('/').pop() ?? path
-  const words = file
-    .replace(/\.json$/i, '')
-    .replace(/[-_.]+/g, ' ')
-    .trim()
-  return words ? words.charAt(0).toUpperCase() + words.slice(1) : path
 }
 
 export function manifestContributionSource(manifest: PluginManifest): PluginContributionSource {
@@ -116,6 +109,7 @@ export function manifestContributionSource(manifest: PluginManifest): PluginCont
     vmRecipes: contributes.vmRecipes.map((recipe) => nameFromContributionPath(recipe.path)),
     newFiles: contributes.newFiles,
     statusBarItems: statusBarItemTitles(contributes.statusBarItems),
+    usageProviders: contributes.usageProviders.map((provider) => provider.label),
     mcpServers: contributes.mcpServers.map(pluginMcpServerListing)
   }
 }
@@ -157,6 +151,7 @@ export function summaryContributionSource(
     vmRecipes: of('vmRecipes').map((item) => nameFromContributionPath(item.name)),
     newFiles: of('newFiles').map((item) => ({ title: item.name, extension: item.detail ?? '' })),
     statusBarItems: of('statusBarItems').map((item) => item.name),
+    usageProviders: of('usageProviders').map((item) => item.name),
     // Why no detail: install checks a summary's names, not its details, so a catalog's address or
     // command line could differ from what runs.
     mcpServers: of('mcpServers').map((item) => ({ name: item.name, detail: '' }))
@@ -302,6 +297,7 @@ export function describePluginContributions(
     })
   }
   rows.push(...statusBarContributionRows(source.statusBarItems, t))
+  rows.push(...usageProviderContributionRows(source.usageProviders ?? [], t))
   rows.push(...mcpServerContributionRows(source.mcpServers, t))
   rows.push(...vmRecipeContributionRows(source.vmRecipes, t))
   return rows

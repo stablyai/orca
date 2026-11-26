@@ -82,3 +82,30 @@ export function vmRecipeContributionRows(
     tone: 'default'
   }))
 }
+
+export function usageProviderContributionRows(
+  labels: readonly string[],
+  t: Translate = translate
+): PluginContribution[] {
+  const detail = t(
+    'auto.components.settings.PluginDetailSections.typeUsageProvider',
+    'Usage provider'
+  )
+  return labels.map((title, index) => ({
+    key: `usageProviders:${index}`,
+    kind: 'usageProviders',
+    title,
+    detail,
+    tone: 'default'
+  }))
+}
+
+/** "recipes/ubuntu-dev.json" → "Ubuntu dev"; manifests name these files by path only. */
+export function nameFromContributionPath(path: string): string {
+  const file = path.split('/').pop() ?? path
+  const words = file
+    .replace(/\.json$/i, '')
+    .replace(/[-_.]+/g, ' ')
+    .trim()
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : path
+}

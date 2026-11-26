@@ -1,7 +1,8 @@
-import type {
-  ProviderRateLimits,
-  RateLimitWindow
-} from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { RateLimitWindow } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import {
+  isPluginUsageProvider,
+  type UsageRosterProvider
+} from '../usage/plugin-usage-roster-provider'
 import type { StatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
 import { isCursorUsageBucket } from '../../../../../shared/agent-usage/rate-limits/cursor-usage-buckets'
 import { translate } from '@/i18n/i18n'
@@ -17,7 +18,7 @@ export type StatusBarUsageSection = {
 }
 
 export function getStatusBarUsageSections(
-  p: ProviderRateLimits | null,
+  p: UsageRosterProvider | null,
   mode: StatusBarUsageMode,
   t: Translate = translate
 ): StatusBarUsageSection[] {
@@ -36,7 +37,7 @@ export function getStatusBarUsageSections(
     const isTimeWindow =
       !isNamedBucket &&
       !isScopedUsageWindow(p, headline.window) &&
-      [p.session, p.weekly, p.monthly].includes(headline.window)
+      (isPluginUsageProvider(p) || [p.session, p.weekly, p.monthly].includes(headline.window))
     return [
       {
         key: 'headline',
@@ -45,6 +46,13 @@ export function getStatusBarUsageSections(
         labelFirst: isNamedBucket
       }
     ]
+  }
+  if (isPluginUsageProvider(p)) {
+    return p.windows.map((window) => ({
+      key: window.key,
+      window,
+      label: window.rosterLabel
+    }))
   }
   if (p.buckets?.length) {
     // Antigravity pool names vary by account tier.

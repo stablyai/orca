@@ -132,6 +132,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'sidebarProjectsFirst',
   'syncTaskStatusFromWorkspaceBoard',
   'statusBarItems',
+  'hiddenPluginUsageProviders',
   'statusBarVisible',
   'usagePercentageDisplay',
   'statusBarUsageMode',

@@ -28,7 +28,7 @@ Add `"$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schem
 | `icon` | string | no | 1.4.160 | Square image shown beside the plugin name. PNG, WEBP, static, at least 128×128, square, at most 256 KB. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused. Example: `"assets/icon.png"` |
 | `engines` | object | yes | 1.4.160 | Host versions this plugin supports. Older hosts refuse to load it. |
 | `engines.orca` | string | yes | 1.4.160 | Oldest Orca release this plugin runs on, as `>=x.y.z`. Raise it to the newest "Since" of any field you use; a format 2 manifest needs at least `>=1.4.245`, because older Orca cannot read format 2. Example: `">=1.4.245"` |
-| `main` | string | no | 1.4.160 | Node entry run in an out-of-process plugin worker: a `.js`/`.mjs` module, or a `.ts`/`.mts` module that Orca transpiles when it loads (needs `engines.orca` `>=1.4.246`). Requires the `trusted-worker` execution profile, and is required by it, by `contributes.events`, by `contributes.hooks` and by any command without an `action`. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused. Example: `"dist/main.mjs"` |
+| `main` | string | no | 1.4.160 | Node entry run in an out-of-process plugin worker: a `.js`/`.mjs` module, or a `.ts`/`.mts` module that Orca transpiles when it loads (needs `engines.orca` `>=1.4.246`). Requires the `trusted-worker` execution profile, and is required by it, by `contributes.events`, by `contributes.hooks`, by `contributes.usageProviders` and by any command without an `action`. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused. Example: `"dist/main.mjs"` |
 | `contributes` | object | no | 1.4.160 | What the plugin adds to Orca. Every point defaults to empty. |
 | `contributes.panels` | [PanelContribution](#panelcontribution)[] | no | 1.4.160 | Sidebar panels. At most 64. |
 | `contributes.commands` | [CommandContribution](#commandcontribution)[] | no | 1.4.160 | Command palette entries. At most 256. |
@@ -46,6 +46,7 @@ Add `"$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schem
 | `contributes.newFiles` | [NewFileContribution](#newfilecontribution)[] | no | 1.4.245 | Untitled files the user can create from the + menu and the command palette. At most 16. |
 | `contributes.settings` | [SettingContribution](#settingcontribution)[] | no | 1.4.246 | Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`). At most 64. |
 | `contributes.statusBarItems` | [StatusBarItemContribution](#statusbaritemcontribution)[] | no | 1.4.248 | Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled. At most 8. |
+| `contributes.usageProviders` | [UsageProviderContribution](#usageprovidercontribution)[] | no | 1.4.278 | Quota sources in the usage area, updated by the plugin worker with `usageProvider.update`. At most 8. |
 | `contributes.mcpServers` | [McpServerContribution](#mcpservercontribution)[] | no | 1.4.276 | MCP servers Orca offers to the agents it launches on this host, listed under From plugins in Settings → MCP servers. At most 16. |
 | `contributes.agentHarnesses` | any[] | no | 1.4.245 | Reserved for coding-agent harness definitions; must be empty until their format is defined. |
 | `contributes.skills` | any[] | no | 1.4.245 | Reserved for agent skills; must be empty until their format is defined. |
@@ -230,6 +231,15 @@ An item in the status bar. Requires the `declarative` profile; a `trusted-worker
 | `tone` | `"neutral"` \| `"accent"` \| `"success"` \| `"warning"` \| `"danger"` | no | 1.4.248 | Colour of the item. Defaults to `neutral`. Example: `"warning"` |
 | `tooltip` | string | no | 1.4.248 | Shown on hover. Defaults to the plugin name. |
 | `command` | string | no | 1.4.248 | Id of a command this plugin contributes in `contributes.commands`, run when the item is pressed. Example: `"guard.showLog"` |
+
+## UsageProviderContribution
+
+A quota source updated by its plugin worker.
+
+| Field | Type | Required | Since | Description |
+| --- | --- | --- | --- | --- |
+| `id` | string | yes | 1.4.278 | Provider id, unique within the plugin. Example: `"sample-quota"` |
+| `label` | string | yes | 1.4.278 | Label shown in the usage area. Example: `"Sample quota"` |
 
 ## McpServerContribution
 

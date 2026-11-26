@@ -219,6 +219,47 @@ unchanged unless `hostId` is `local` or null (this machine) and `path` does not 
 unchanged when `workspaceId` is null or the lookup finds no workspace. A Windows-drive project
 running in WSL still reports `local` with a `C:\` path, so a hook cannot tell it apart yet.
 
+### Publishing quota readings
+
+Set `engines.orca` to `>=1.4.278` and use the `trusted-worker` execution profile with `main`.
+Declare each quota source in `contributes.usageProviders`, for example
+`[{ "id": "sample-quota", "label": "Sample quota" }]`. Orca keeps the worker running while the plugin is enabled.
+Usage shows the plugin's manifest `icon` when present.
+
+```ts
+await orca.host.call('usageProvider.update', {
+  id: 'sample-quota',
+  status: 'ok',
+  accounts: [
+    {
+      label: 'Shared account',
+      plan: 'Pro',
+      windows: [
+        { label: '5h', usedPercent: 28, resetsAt: Date.now() + 2 * 60 * 60 * 1000 },
+        { label: 'Weekly', usedPercent: 62 },
+        { label: 'Monthly', usedPercent: 41 }
+      ]
+    }
+  ]
+})
+```
+
+Each call replaces the previous reading. Provide up to eight accounts and eight windows in total.
+Account labels must be unique within the provider, and window labels must be unique within each
+account. Use percentages from 0 to 100 and Unix milliseconds for known reset times.
+
+Report `status: 'error'` with an optional user-facing `error` message when a refresh fails.
+Include previously fetched windows if you still want to display them. Use `status: 'unavailable'`
+when the source cannot report quotas. Account labels, plans, window labels, and error messages
+are visible to paired desktop clients. Publish only display text and keep credentials out of
+readings. To clear a reading, send `status: 'ok', accounts: []` and omit `error`.
+
+Orca timestamps readings, expires them after 30 minutes, and clears them when the plugin is
+disabled, removed or replaced. Orca desktop
+and Electron-backed `orca serve` run the worker and include its readings in host account snapshots
+for paired desktop clients. Standalone `orcad` skips plugin worker startup. Run
+`ORCA_SERVE_RUNTIME=electron orca serve` when serving a profile that uses plugin usage providers.
+
 ### Panels, workers and data
 
 A plugin's panels, custom editors and worker are one program. A panel asks its own worker, the

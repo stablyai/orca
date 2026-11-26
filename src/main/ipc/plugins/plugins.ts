@@ -21,6 +21,7 @@ import { registerPluginFrameEntryHandlers, rendererPanelOwner } from './plugin-f
 import { registerPluginPanelPushHandlers } from './plugin-panel-push-ipc'
 import { registerPluginSettingsHandlers } from './plugin-settings-ipc'
 import { registerPluginStatusBarHandlers } from './plugin-status-bar-ipc'
+import { registerPluginUsageProviderHandlers } from './plugin-usage-provider-ipc'
 import { registerPluginEditorSaveHookHandler } from './plugin-editor-save-hook-ipc'
 import { readPluginPanelImage } from '../../plugins/panels/panel-lifetime/plugin-panel-image'
 import {
@@ -152,6 +153,7 @@ export function registerPluginHandlers(
   registerPluginFrameEntryHandlers(store, pluginService)
   registerPluginPanelPushHandlers(pluginService)
   registerPluginStatusBarHandlers(pluginService)
+  registerPluginUsageProviderHandlers(pluginService)
   registerPluginEditorSaveHookHandler()
   registerPluginSettingsHandlers(pluginService)
 

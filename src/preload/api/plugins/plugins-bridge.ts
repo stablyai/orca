@@ -12,6 +12,10 @@ import {
   type PluginStatusBarOverrides
 } from '../../../shared/plugins/contributions/plugin-status-bar-state'
 import {
+  PLUGIN_USAGE_PROVIDERS_CHANGED_CHANNEL,
+  type PluginUsageReading
+} from '../../../shared/plugins/contributions/plugin-usage-provider-contribution'
+import {
   PLUGIN_VIEW_REPLY_CHANNEL,
   PLUGIN_VIEW_REQUEST_CHANNEL,
   type PluginViewRequest
@@ -118,6 +122,15 @@ export const pluginsApi = {
     }
   },
   statusBarState: () => ipcRenderer.invoke('plugins:statusBarState'),
+  usageProviders: () => ipcRenderer.invoke('plugins:usageProviders'),
+  onUsageProvidersChanged: (callback): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, readings: PluginUsageReading[]) =>
+      callback(readings)
+    ipcRenderer.on(PLUGIN_USAGE_PROVIDERS_CHANGED_CHANNEL, listener)
+    return () => {
+      ipcRenderer.removeListener(PLUGIN_USAGE_PROVIDERS_CHANGED_CHANNEL, listener)
+    }
+  },
   editorSaveHook: (event) => ipcRenderer.invoke('plugins:editorSaveHook', event),
   onStatusBarChanged: (callback): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, overrides: PluginStatusBarOverrides) =>

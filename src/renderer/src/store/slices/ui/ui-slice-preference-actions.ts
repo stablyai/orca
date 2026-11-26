@@ -262,6 +262,16 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     },
 
     statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],
+    hiddenPluginUsageProviders: [],
+    togglePluginUsageProvider: (provider) =>
+      set((state) => {
+        const hidden = state.hiddenPluginUsageProviders
+        const hiddenPluginUsageProviders = hidden.includes(provider)
+          ? hidden.filter((id) => id !== provider)
+          : [...hidden, provider]
+        window.api.ui.set({ hiddenPluginUsageProviders }).catch(console.error)
+        return { hiddenPluginUsageProviders }
+      }),
     toggleStatusBarItem: (item) =>
       set((s) => {
         const current = s.statusBarItems || DEFAULT_STATUS_BAR_ITEMS

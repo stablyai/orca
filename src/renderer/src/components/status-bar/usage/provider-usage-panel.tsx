@@ -1,5 +1,4 @@
 import type {
-  ProviderRateLimits,
   RateLimitBucket,
   RateLimitWindow
 } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
@@ -7,7 +6,7 @@ import { formatResetDuration } from '../../../../../shared/agent-usage/rate-limi
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { ClaudeIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from '../accounts/provider-icons'
 import { translate } from '@/i18n/i18n'
-import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { useTranslate } from '@/i18n/use-translate'
 import type { Translate } from '@/i18n/use-translate'
 import {
   getProviderDisplayName,
@@ -23,11 +22,17 @@ import {
 import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { useResetCountdownClock } from '@/components/status-bar/usage/useResetCountdownClock'
 import { recomputeOn } from '@/lib/recompute-on'
+import {
+  isPluginUsageProvider,
+  pluginUsageProviderSource,
+  type UsageRosterProvider
+} from './plugin-usage-roster-provider'
+import { PluginUsageIcon } from './PluginUsageIcon'
 import { ProviderExtraUsageSection } from './provider-extra-usage-section'
 import { formatWindowLabel } from './rate-limit-window-localized-label'
 import { formatPoolCardLabel } from './usage-pool-label'
-import { formatResetsInCaption } from './usage-reset-caption'
-import { UsageBar, UsageValue } from './usage-meter'
+import { ProviderRateLimitWindowSection } from './provider-rate-limit-window-section'
+import { getUsageRosterRowState } from './usage-roster-row-state'
 
 export function formatTimeAgo(ts: number, t: Translate = translate): string {
   const diff = Date.now() - ts
@@ -67,7 +72,16 @@ export function formatResetCreditExpiry(
       })
 }
 
-export function ProviderIcon({ provider }: { provider: string }): React.JSX.Element {
+export function ProviderIcon({
+  provider,
+  pluginIconSrc
+}: {
+  provider: string
+  pluginIconSrc?: string
+}): React.JSX.Element {
+  if (provider.startsWith('plugin:')) {
+    return <PluginUsageIcon src={pluginIconSrc} />
+  }
   if (provider === 'codex') {
     return <OpenAIIcon size={13} />
   }
@@ -129,15 +143,20 @@ function ErrorMessage({
   return (
     <div className="space-y-0.5" title={detail}>
       <div className={`text-[11px] font-medium ${labelClass}`}>{resolvedLabel}</div>
-      {message !== resolvedLabel ? <div className={detailClass}>{message}</div> : null}
+      {message !== resolvedLabel ? (
+        <div className={`wrap-anywhere ${detailClass}`}>{message}</div>
+      ) : null}
     </div>
   )
 }
 
 export function getWindowSections(
-  p: ProviderRateLimits,
+  p: UsageRosterProvider,
   t?: Translate
-): { label: string; window: RateLimitWindow | null }[] {
+): { key?: string; label: string; window: RateLimitWindow | null }[] {
+  if (isPluginUsageProvider(p)) {
+    return p.windows.map((window) => ({ key: window.key, label: window.rosterLabel, window }))
+  }
   const buckets = p.buckets ?? []
   return getUsageWindowSections(p).map((section) => ({
     label: getWindowSectionLabel(section, buckets, t),
@@ -175,55 +194,6 @@ function getWindowSectionLabel(
 
 // Tooltips invert the theme; use background text tokens for legible primary and secondary content.
 
-function ProviderRateLimitWindowSection({
-  window,
-  label,
-  textClass,
-  mutedClass,
-  emptyBarClass,
-  usagePercentageDisplay,
-  now
-}: {
-  window: RateLimitWindow | null
-  label: string
-  textClass: string
-  mutedClass: string
-  emptyBarClass: string
-  usagePercentageDisplay: UsagePercentageDisplay
-  now: number
-}): React.JSX.Element | null {
-  const t = useTranslate()
-  const intlLocale = useIntlLocale()
-  if (!window) {
-    return null
-  }
-  const caption = formatResetsInCaption(window.resetsAt, now, intlLocale, t)
-
-  return (
-    <div className="space-y-1.5" data-usage-window={label}>
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="min-w-0 truncate">
-          <span className={`font-semibold ${textClass}`}>{label}</span>
-          {caption ? <span className={mutedClass}>{` · ${caption}`}</span> : null}
-        </span>
-        <UsageValue
-          usedPercent={window.usedPercent}
-          display={usagePercentageDisplay}
-          className={`shrink-0 font-semibold ${textClass}`}
-        />
-      </div>
-      {/* Why: fill follows the selected percentage; only this card colors it by consumption. */}
-      <UsageBar
-        usedPercent={window.usedPercent}
-        display={usagePercentageDisplay}
-        tone="health"
-        className="h-[6px] w-full"
-        trackClassName={emptyBarClass}
-      />
-    </div>
-  )
-}
-
 export function ProviderPanel({
   p,
   inverted = false,
@@ -234,7 +204,7 @@ export function ProviderPanel({
   headerAction,
   usageSignInHint
 }: {
-  p: ProviderRateLimits | null
+  p: UsageRosterProvider | null
   inverted?: boolean
   className?: string
   showResetCredits?: boolean
@@ -263,9 +233,10 @@ export function ProviderPanel({
     )
   }
 
-  const name = getProviderDisplayName(p.provider)
+  const plugin = isPluginUsageProvider(p)
+  const name = plugin ? p.pluginLabel : getProviderDisplayName(p.provider)
 
-  if (p.status === 'unavailable') {
+  if (!plugin && p.status === 'unavailable') {
     return (
       <div className={`text-xs ${className ?? 'w-full'}`}>
         {embedded ? null : (
@@ -282,6 +253,7 @@ export function ProviderPanel({
   }
 
   if (
+    !plugin &&
     p.status === 'error' &&
     (signInRequired || (!p.session && !p.weekly && !p.fableWeekly && !p.monthly))
   ) {
@@ -305,6 +277,19 @@ export function ProviderPanel({
     )
   }
 
+  const renderWindow = (label: string, window: RateLimitWindow | null) => (
+    <ProviderRateLimitWindowSection
+      key={label}
+      window={window}
+      label={label}
+      textClass={textClass}
+      mutedClass={mutedClass}
+      emptyBarClass={emptyBarClass}
+      usagePercentageDisplay={usagePercentageDisplay}
+      now={now}
+    />
+  )
+  const pluginStatus = plugin ? getUsageRosterRowState(p, false, t).statusLabel : null
   const updatedAt = p.updatedAt
   // Why: both labels read Date.now(); recomputeOn ties React Compiler's cache to the clock tick.
   const updatedAgo = updatedAt
@@ -329,11 +314,17 @@ export function ProviderPanel({
         <div>
           <div className="flex items-center justify-between gap-2">
             <div className={`flex items-center gap-1.5 text-[13px] font-medium ${textClass}`}>
-              <ProviderIcon provider={p.provider} />
-              {name}
+              <ProviderIcon
+                provider={p.provider}
+                pluginIconSrc={plugin ? p.pluginIconSrc : undefined}
+              />
+              <span className="min-w-0 wrap-anywhere">{name}</span>
             </div>
             {headerAction}
           </div>
+          {plugin ? (
+            <div className={`wrap-anywhere ${faintClass}`}>{pluginUsageProviderSource(p, t)}</div>
+          ) : null}
           <div className={faintClass}>{updatedAgo}</div>
           {resetCreditCount !== null && resetCreditCount !== undefined ? (
             <div className={mutedClass}>
@@ -353,20 +344,21 @@ export function ProviderPanel({
 
       {embedded ? null : <div className={`border-t ${dividerClass}`} />}
 
-      {windowSections.map((s) => (
-        <ProviderRateLimitWindowSection
-          key={s.label}
-          window={s.window}
-          label={s.label}
-          textClass={textClass}
-          mutedClass={mutedClass}
-          emptyBarClass={emptyBarClass}
-          usagePercentageDisplay={usagePercentageDisplay}
-          now={now}
-        />
-      ))}
+      {plugin
+        ? p.accounts.map(({ label, plan, windows }) => (
+            <div key={label} className="space-y-2">
+              <div className={`wrap-anywhere font-medium ${mutedClass}`}>
+                {[label, plan].filter(Boolean).join(' · ')}
+              </div>
+              {p.status === 'unavailable' ? null : windows.map((w) => renderWindow(w.label, w))}
+            </div>
+          ))
+        : windowSections.map((s) => renderWindow(s.label, s.window))}
+      {pluginStatus && !p.error && (p.status !== 'ok' || windowSections.length === 0) ? (
+        <div className={mutedClass}>{pluginStatus}</div>
+      ) : null}
 
-      {p.extraUsage ? (
+      {!plugin && p.extraUsage ? (
         <ProviderExtraUsageSection
           balance={p.extraUsage}
           provider={p.provider}
@@ -381,7 +373,12 @@ export function ProviderPanel({
       {p.error ? (
         <ErrorMessage
           message={p.error}
-          stale={!!(p.session || p.weekly || p.fableWeekly || p.monthly)}
+          label={plugin && p.status === 'unavailable' ? (pluginStatus ?? undefined) : undefined}
+          stale={
+            plugin
+              ? windowSections.length > 0
+              : !!(p.session || p.weekly || p.fableWeekly || p.monthly)
+          }
           inverted={inverted}
         />
       ) : null}

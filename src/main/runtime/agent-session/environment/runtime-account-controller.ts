@@ -39,13 +39,16 @@ import {
 import type { HostClaudeProfileRefresh } from './host-claude-profile-refresh'
 import { HostAccountLaunchEnvState } from './host-account-launch-env-state'
 import { subscribeRuntimeAccountChanges } from './runtime-account-change-subscription'
-import { readRuntimeAccountsSnapshot } from './runtime-account-snapshot'
+import { readRuntimeAccountsSnapshot, runtimePluginUsageSnapshot } from './runtime-account-snapshot'
 import type { ManagedAccountNameProvider } from '../../../../shared/agent-accounts/managed-account-display-names'
+import type { PluginUsageReading } from '../../../../shared/plugins/contributions/plugin-usage-provider-contribution'
+import type { PluginUsageProviderState } from '../../../plugins/usage/plugin-usage-provider-state'
 
 export type RuntimeAccountServices = {
   claudeAccounts: ClaudeAccountService
   codexAccounts: CodexAccountService
   rateLimits: RateLimitService
+  pluginUsageProviders?: Pick<PluginUsageProviderState, 'snapshot' | 'onChanged'>
 }
 
 export type AccountsSnapshot = {
@@ -54,6 +57,7 @@ export type AccountsSnapshot = {
   claude: ClaudeRateLimitAccountsState
   codex: CodexRateLimitAccountsState
   rateLimits: RateLimitState
+  pluginUsageProviders?: PluginUsageReading[]
 }
 
 export type CodexRateLimitResetRpcResult = {
@@ -131,11 +135,13 @@ export class RuntimeAccountController {
     return this.requireServices().claudeAccounts.listAccounts()
   }
 
-  async getSnapshot(): Promise<AccountsSnapshot> {
-    return readRuntimeAccountsSnapshot(this.requireServices(), () => this.dataAccountsSnapshot())
+  async getSnapshot(includePluginUsage = true): Promise<AccountsSnapshot> {
+    const services = this.requireServices()
+    const snapshot = await readRuntimeAccountsSnapshot(services, () => this.dataAccountsSnapshot())
+    return includePluginUsage ? { ...snapshot, ...runtimePluginUsageSnapshot(services) } : snapshot
   }
 
-  async getStreamSnapshot(): Promise<AccountsSnapshot> {
+  private async getStreamSnapshot(): Promise<AccountsSnapshot> {
     return readRuntimeAccountsSnapshot(this.requireServices(), () =>
       this.streamDataAccountsSnapshot()
     )
@@ -247,11 +253,14 @@ export class RuntimeAccountController {
 
   async consumeCodexResetCredit(
     idempotencyKey: string,
-    expectedScope: CodexResetCreditExpectedScope
+    expectedScope: CodexResetCreditExpectedScope,
+    includePluginUsage = true
   ): Promise<CodexRateLimitResetRpcResult> {
-    const { claudeAccounts, codexAccounts } = this.requireServices()
+    const services = this.requireServices()
+    const { claudeAccounts, codexAccounts } = services
     const result = await codexAccounts.consumeRateLimitResetCredit(idempotencyKey, expectedScope)
     const snapshot = {
+      ...(includePluginUsage ? runtimePluginUsageSnapshot(services) : {}),
       claude: claudeAccounts.listAccounts(),
       codex: result.codex,
       rateLimits: result.rateLimits
@@ -314,9 +323,10 @@ export class RuntimeAccountController {
     return this.requireServices().codexAccounts.addAccountFromHome(sourceHome, target)
   }
 
-  onChanged(listener: (snapshot: AccountsSnapshot) => void): () => void {
+  onChanged(listener: (snapshot: AccountsSnapshot) => void, includePluginUsage = true) {
+    const services = this.requireServices()
     return subscribeRuntimeAccountChanges(
-      this.requireServices(),
+      includePluginUsage ? services : { ...services, pluginUsageProviders: undefined },
       {
         stream: () => this.getStreamSnapshot(),
         dataAccounts: () => this.streamDataAccountsSnapshot()

@@ -34,6 +34,7 @@ type ContributionValidationManifest = {
     newFiles: IdentifiedContribution[]
     settings: { key: string }[]
     statusBarItems: { id: string; command?: string }[]
+    usageProviders: IdentifiedContribution[]
     mcpServers: { name: string }[]
   }
   capabilities: { kind: string }[]
@@ -72,7 +73,8 @@ export function validatePluginManifestContributions(
     'iconThemes',
     'syntaxes',
     'customEditors',
-    'newFiles'
+    'newFiles',
+    'usageProviders'
   ] as const) {
     rejectDuplicateValues(
       manifest.contributes[path],
@@ -233,6 +235,13 @@ export function validatePluginManifestContributions(
       code: 'custom',
       path: ['main'],
       message: 'required when contributes.events is non-empty'
+    })
+  }
+  if (!manifest.main && manifest.contributes.usageProviders.length > 0) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['main'],
+      message: 'required when contributes.usageProviders is non-empty'
     })
   }
   for (const [index, subscription] of manifest.contributes.events.entries()) {

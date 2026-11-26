@@ -61,6 +61,32 @@ export function UsageValue({
   )
 }
 
+export function UsageDetailMetric({
+  windowLabel,
+  usedPercent,
+  label,
+  display,
+  title
+}: {
+  windowLabel: string
+  usedPercent: number
+  label: string
+  display: UsagePercentageDisplay
+  title?: string
+}): React.JSX.Element {
+  return (
+    <span
+      data-usage-window={windowLabel}
+      title={title}
+      className="flex shrink-0 items-center gap-1.5"
+    >
+      <span className="text-[10px] text-muted-foreground">{label}</span>
+      <UsageBar usedPercent={usedPercent} display={display} className="h-[5px] w-7" />
+      <UsageValue usedPercent={usedPercent} display={display} className="text-[11px]" />
+    </span>
+  )
+}
+
 export function useUsageDisplayLabel(display: UsagePercentageDisplay): string {
   const t = useTranslate()
   return display === 'used'

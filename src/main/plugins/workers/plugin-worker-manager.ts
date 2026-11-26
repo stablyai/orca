@@ -7,16 +7,14 @@ import {
   type PluginRestartDecision,
   type PluginRunState
 } from './worker-supervision/plugin-supervisor'
-import type {
-  PluginWorkerHandle,
-  PluginWorkerHostCallExecutor
-} from './parent-process/plugin-host-process-types'
+import type { PluginWorkerHandle } from './parent-process/plugin-host-process-types'
 import type { PluginWorkerPanelPost } from '../../../shared/plugins/workers/plugin-panel-bridge-protocol'
 import { PluginWorkerSlots } from './worker-supervision/plugin-worker-slot-pool'
 import {
   startPluginWorkerAttempt,
   type PluginWorkerAdmission,
   type PluginWorkerFactory,
+  type PluginWorkerHostCall,
   type PluginWorkerSpawnSpec,
   type StartedPluginWorker
 } from './worker-supervision/plugin-worker-startup'
@@ -37,12 +35,7 @@ export type PluginWorkerManagerOptions = {
   maxActive?: number
   idleReapMs?: number
   workerFactory?: PluginWorkerFactory
-  executeHostCall: (
-    pluginKey: string,
-    method: string,
-    params: unknown,
-    signal?: AbortSignal
-  ) => ReturnType<PluginWorkerHostCallExecutor>
+  executeHostCall: PluginWorkerHostCall
   onPanelPost?: (pluginKey: string, post: PluginWorkerPanelPost) => void
   log: (pluginKey: string) => (level: 'info' | 'warn' | 'error', line: string) => void
   onWorkerStateChange: (pluginKey: string) => void
@@ -162,8 +155,7 @@ export class PluginWorkerManager {
           slots: this.slots.for(spec, log),
           entryPath: this.options.entryPath,
           factory: this.options.workerFactory,
-          executeHostCall: (method, params, callSignal) =>
-            this.options.executeHostCall(spec.pluginKey, method, params, callSignal),
+          executeHostCall: this.options.executeHostCall,
           onPanelPost: (post) => this.options.onPanelPost?.(spec.pluginKey, post),
           log,
           assertActive: () => this.throwIfCancelled(spec.pluginKey, generation, signal),

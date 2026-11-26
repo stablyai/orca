@@ -167,6 +167,7 @@ export type PersistedUIState = {
   /** One-shot migration flag for adding the default-on Git blame status item. */
   _gitBlameStatusBarDefaultAdded?: boolean
   statusBarItems: StatusBarItem[]
+  hiddenPluginUsageProviders?: string[]
   statusBarVisible: boolean
   /** Why: this is client-side presentation, not a provider/account or execution-host setting. */
   usagePercentageDisplay?: UsagePercentageDisplay

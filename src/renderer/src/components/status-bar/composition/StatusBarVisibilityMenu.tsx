@@ -10,6 +10,8 @@ import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { ClaudeIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from '../accounts/provider-icons'
 import { useTranslate } from '@/i18n/use-translate'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
+import { PluginUsageIcon } from '../usage/PluginUsageIcon'
+import { PluginUsageProviderName } from '../usage/UsageRosterProviderName'
 import type { StatusBarController } from './use-status-bar-controller'
 
 export function StatusBarVisibilityMenu({
@@ -25,6 +27,9 @@ export function StatusBarVisibilityMenu({
     recordFeatureInteraction,
     setMenuOpen,
     statusBarItems,
+    pluginUsageProviders,
+    hiddenPluginUsageProviders,
+    togglePluginUsageProvider,
     toggleStatusBarItem
   } = controller
 
@@ -153,6 +158,17 @@ export function StatusBarVisibilityMenu({
           <AgentIcon agent="cursor" size={14} />
           {t('auto.components.status.bar.StatusBar.cursorUsageMenu', 'Cursor Usage')}
         </DropdownMenuCheckboxItem>
+        {pluginUsageProviders.map((provider) => (
+          <DropdownMenuCheckboxItem
+            key={provider.provider}
+            checked={!hiddenPluginUsageProviders.includes(provider.provider)}
+            onCheckedChange={() => togglePluginUsageProvider(provider.provider)}
+            className="max-w-72"
+          >
+            <PluginUsageIcon src={provider.pluginIconSrc} size={14} />
+            <PluginUsageProviderName provider={provider} />
+          </DropdownMenuCheckboxItem>
+        ))}
         <DropdownMenuCheckboxItem
           checked={statusBarItems.includes('ssh')}
           onCheckedChange={() => {

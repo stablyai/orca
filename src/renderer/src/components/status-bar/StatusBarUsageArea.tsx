@@ -32,6 +32,8 @@ import { useUsageRowWidths } from './composition/use-usage-row-widths'
 import { UsageUnitLabel, usageChipShowsPercentage } from './usage/usage-unit-label'
 import type { useStatusBarController } from './composition/use-status-bar-controller'
 import { isOwnerNotSetUpPlaceholder } from './usage/owner-usage-rate-limits'
+import { isPluginUsageProvider } from './usage/plugin-usage-roster-provider'
+import { useResetCountdownClock } from './usage/useResetCountdownClock'
 
 type StatusBarController = NonNullable<ReturnType<typeof useStatusBarController>>
 
@@ -66,6 +68,14 @@ export function StatusBarUsageArea({
     usageMenuOpen,
     usagePercentageDisplay
   } = controller
+  // One clock feeds both the measuring and visible copies of a plugin chip.
+  const pluginCountdownNow = useResetCountdownClock(
+    statusBarUsageMode === 'compact'
+      ? []
+      : rosterProviders
+          .filter(isPluginUsageProvider)
+          .flatMap((p) => p.windows.map((w) => w.resetsAt))
+  )
   const levelMode = (level: number) =>
     USAGE_ROW_LEVELS[level]?.tightestOnly ? 'compact' : statusBarUsageMode
   const chipFacts: UsageChipFacts[] = rosterProviders.map((p) => ({
@@ -129,11 +139,17 @@ export function StatusBarUsageArea({
                     <ClippedRowProviderSegment
                       key={p.provider}
                       p={p}
+                      pluginCountdownNow={pluginCountdownNow}
                       compact={usageCompact}
                       display={usagePercentageDisplay}
                       mode={usageMode}
                       barMode={statusBarUsageMode}
-                      hostLabel={remoteOwner?.label}
+                      // WSL usage uses the desktop plugin worker, so the distro is not its source.
+                      hostLabel={
+                        isPluginUsageProvider(p) && remoteOwner?.wslDistro
+                          ? undefined
+                          : remoteOwner?.label
+                      }
                     />
                   ))}
                   {hiddenProviders.length > 0 ? (
@@ -274,6 +290,7 @@ export function StatusBarUsageArea({
               >
                 <ProviderSegment
                   p={p}
+                  pluginCountdownNow={pluginCountdownNow}
                   compact={level.compact}
                   display={usagePercentageDisplay}
                   mode={levelMode(index)}

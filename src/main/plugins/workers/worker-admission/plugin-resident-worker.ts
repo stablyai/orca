@@ -11,18 +11,27 @@ import type { PluginService } from '../../plugin-service'
 export function pluginNeedsResidentWorker(manifest: PluginManifest): boolean {
   return (
     manifest.main !== undefined &&
-    (manifest.contributes.hooks.length > 0 || manifest.contributes.statusBarItems.length > 0)
+    (manifest.contributes.hooks.length > 0 ||
+      manifest.contributes.statusBarItems.length > 0 ||
+      manifest.contributes.usageProviders.length > 0)
   )
 }
 
 /** What makes a plugin the one the person approved: a change means a new revision. */
 export function pluginApprovedRevision(plugin: ValidDiscoveredPlugin): string {
-  return [
-    plugin.consentFingerprint,
-    plugin.contentHash ?? '',
-    plugin.devRevision ?? '',
-    plugin.rootDir
-  ].join('\n')
+  const { consentFingerprint, contentHash, consentContentHash, devRevision, rootDir, manifest } =
+    plugin
+  if (manifest.contributes.usageProviders.length > 0) {
+    // Quota readings and the manifest icon must expire together, including for local installs.
+    return [
+      consentFingerprint,
+      contentHash ?? consentContentHash ?? '',
+      devRevision ?? '',
+      rootDir,
+      JSON.stringify(manifest)
+    ].join('\n')
+  }
+  return [consentFingerprint, contentHash ?? '', devRevision ?? '', rootDir].join('\n')
 }
 
 export type PluginResidentWorkerContext = Pick<

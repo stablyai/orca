@@ -30,6 +30,11 @@ export const PluginRpcConsentParams = z
   })
   .strip()
 
+export const PluginReadUsageIconParams = z.strictObject({
+  pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key'),
+  revision: z.string().regex(/^[a-f0-9]{64}$/)
+})
+
 export const PluginReadPanelEntryParams = z.object({
   pluginKey: z.string().min(1),
   panelId: z.string().min(1)

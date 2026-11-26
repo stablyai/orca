@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '../../../store'
-import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { isPluginUsageProvider, type UsageRosterProvider } from './plugin-usage-roster-provider'
 import { normalizeUsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { ProviderPanel } from './provider-usage-panel'
 import { ProviderIdentityCard } from '../accounts/ProviderIdentityCard'
@@ -34,7 +34,7 @@ export function ProviderDetailsMenu({
   accountStatus,
   variant = 'default'
 }: {
-  provider: ProviderRateLimits | null
+  provider: UsageRosterProvider | null
   iconOnly?: boolean
   ariaLabel: string
   topContent?: React.ReactNode
@@ -70,7 +70,7 @@ export function ProviderDetailsMenu({
       {topContent}
       {provider ? (
         <div className="p-2">
-          {variant === 'account' ? (
+          {variant === 'account' && !isPluginUsageProvider(provider) ? (
             <ProviderIdentityCard
               p={provider}
               accountLabel={accountLabel}
@@ -126,7 +126,7 @@ export function ProviderDetailsMenu({
             className="inline-flex items-center cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
             aria-label={ariaLabel}
           >
-            {!provider ? null : iconOnly ? (
+            {!provider ? null : iconOnly && !isPluginUsageProvider(provider) ? (
               <ProviderLetterBadge p={provider} />
             ) : (
               <ProviderSegment p={provider} display={usagePercentageDisplay} />

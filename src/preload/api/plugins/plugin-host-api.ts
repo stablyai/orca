@@ -42,6 +42,7 @@ import type { PluginGitSourceResolution } from '../../../shared/plugins/installa
 
 import type { PluginHostListEntry } from '../../../shared/plugins/plugin-list-entry'
 import type { PluginStatusBarOverrides } from '../../../shared/plugins/contributions/plugin-status-bar-state'
+import type { PluginUsageReading } from '../../../shared/plugins/contributions/plugin-usage-provider-contribution'
 import type { PluginDeclaredSettingsSnapshot } from '../../../shared/plugins/contributions/plugin-settings-values'
 import type { PluginJsonValue } from '../../../shared/plugins/workers/plugin-host-api-storage-schemas'
 
@@ -272,6 +273,8 @@ export type PluginsApi = {
   onAutoUpdateChanged: (callback: (event: PluginAutoUpdateEvent) => void) => () => void
   /** What workers set with `statusBar.update`. Desktop only; older hosts reject. */
   statusBarState?: () => Promise<PluginStatusBarOverrides>
+  usageProviders?: () => Promise<PluginUsageReading[]>
+  onUsageProvidersChanged?: (callback: (readings: PluginUsageReading[]) => void) => () => void
   /** Runs plugins' `editor.save.before` on a buffer about to be saved. Older hosts lack it. */
   editorSaveHook?: (event: {
     workspaceId: string | null

@@ -6275,6 +6275,7 @@
             "gotIt": "Got it"
           },
           "UsageRosterPanel": {
+            "pluginProvider": "Plugin · {{name}}",
             "wslUsageNotShown": "WSL usage isn't shown yet",
             "title": "Usage",
             "openDetails": "Open usage details",
@@ -14738,6 +14739,7 @@
           "typeSyntax": "Syntax highlighting",
           "typeInstructions": "Agent instructions",
           "typePanel": "Sidebar panel",
+          "typeUsageProvider": "Usage provider",
           "typeWorker": "Background code",
           "adds": "Adds to Orca",
           "replaces": "Replaces your shortcut for {{value0}}",
