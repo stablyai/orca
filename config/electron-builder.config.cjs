@@ -378,6 +378,9 @@ module.exports = {
     'out/main/plugins/catalog/plugin-catalog-release-entry.js',
     'out/main/environment-doctor/environment-doctor.js',
     'out/main/environment-doctor/environment-doctor-host.js',
+    'out/main/browser/network/execution-routes/browser-network-proxy-settings-source.js',
+    'out/main/browser/network/tunnels/{browser-network-connected-socket,browser-network-tunnel-proxy-connect,browser-network-tunnel-proxy-selection,execution-route-socket-duplex}.js',
+    'out/main/network/electron-default-proxy-session.js',
     // `orca plugin test` and `orca plugin check` load the runtime, kit and hooks in Node.
     'resources/plugins/declarative/*.mjs',
     'out/main/skills/bundled-skill-install/bundled-skill-local-host.js',

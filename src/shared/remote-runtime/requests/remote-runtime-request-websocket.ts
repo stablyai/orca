@@ -3,10 +3,11 @@ import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connecti
 import type { PairedE2EEClientHandshake } from '../e2ee/paired-e2ee-client-handshake'
 import { createRemoteRuntimeClientHandshake } from '../remote-runtime-client-framing'
 import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
+import { remoteRuntimeConnectFailureMessage } from '../remote-runtime-connect-bound'
 import {
-  remoteRuntimeConnectFailureMessage,
-  remoteRuntimeConnectOptions
-} from '../remote-runtime-connect-bound'
+  createRemoteRuntimeWebSocket,
+  remoteRuntimeDialProxy
+} from '../remote-runtime-websocket-dial'
 import { REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES } from '../remote-runtime-memory-limits'
 import { remoteRuntimeUnavailableError } from './remote-runtime-request-frames'
 import { readSealedFrame, type RemoteRuntimeSealedFrame } from '../remote-runtime-sealed-frame'
@@ -49,7 +50,9 @@ export function openRemoteRuntimeWebSocket(
   const onError = (error: Error): void => {
     callbacks.onError(
       ws,
-      remoteRuntimeUnavailableError(remoteRuntimeConnectFailureMessage(error, connection.endpoint))
+      remoteRuntimeUnavailableError(
+        remoteRuntimeConnectFailureMessage(error, connection.endpoint, remoteRuntimeDialProxy(ws))
+      )
     )
   }
   const onClose = (code: number, reason: Buffer): void => callbacks.onClose(ws, code, reason)
@@ -109,12 +112,10 @@ function createSocket(
     return {
       ok: true,
       // Why: no runtime frame exceeds this, so a larger one is a broken peer, not a payload to buffer.
-      ws: new WebSocket(
+      ws: createRemoteRuntimeWebSocket(
         connection.endpoint,
-        remoteRuntimeConnectOptions(
-          { maxPayload: REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES },
-          connectTimeoutMs
-        )
+        { maxPayload: REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES },
+        connectTimeoutMs
       ),
       handshake
     }
