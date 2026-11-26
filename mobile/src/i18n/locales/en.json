@@ -8656,7 +8656,6 @@
     "agentFilesMessage": "Orca will keep your MCP servers in their settings files. Your own entries stay as they are.",
     "allow": "Allow",
     "removeTitle": "Remove {{name}}?",
-    "removeMessage": "New sessions won’t have it. You can add it again any time.",
     "removeMessageSavedData": "Sessions using it may lose access now. This can delete any saved headers, environment variables or sign-in for it; you’ll need to re-enter or sign in again to add it back.",
     "remove": "Remove",
     "moveTitle": "Move {{name}} to Orca?",
