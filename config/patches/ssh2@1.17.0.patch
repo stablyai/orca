@@ -1,0 +1,101 @@
+diff --git a/lib/protocol/crypto.js b/lib/protocol/crypto.js
+index 851cc73..cb6cf61 100644
+--- a/lib/protocol/crypto.js
++++ b/lib/protocol/crypto.js
+@@ -9,6 +9,8 @@
+ const {
+   createCipheriv, createDecipheriv, createHmac, randomFillSync, timingSafeEqual
+ } = require('crypto');
++const { readFileSync } = require('fs');
++const { join } = require('path');
+ 
+ const { readUInt32BE, writeUInt32BE } = require('./utils.js');
+ 
+@@ -1496,9 +1498,10 @@ function createCipher(config) {
+               ? new AESGCMCipherBinding(config)
+               : new AESGCMCipherNative(config));
+     case 'chacha20':
+-      return (ChaChaPolyCipher && !forceNative
+-              ? new ChaChaPolyCipherBinding(config)
+-              : new ChaChaPolyCipherNative(config));
++      if (ChaChaPolyCipher && !forceNative)
++        return new ChaChaPolyCipherBinding(config);
++      ensurePoly1305Sync();
++      return new ChaChaPolyCipherNative(config);
+     default: {
+       if (typeof outbound.macInfo !== 'object' || outbound.macInfo === null)
+         throw new Error('Invalid outbound.macInfo');
+@@ -1556,9 +1559,10 @@ function createDecipher(config) {
+               ? new AESGCMDecipherBinding(config)
+               : new AESGCMDecipherNative(config));
+     case 'chacha20':
+-      return (ChaChaPolyDecipher && !forceNative
+-              ? new ChaChaPolyDecipherBinding(config)
+-              : new ChaChaPolyDecipherNative(config));
++      if (ChaChaPolyDecipher && !forceNative)
++        return new ChaChaPolyDecipherBinding(config);
++      ensurePoly1305Sync();
++      return new ChaChaPolyDecipherNative(config);
+     default: {
+       if (typeof inbound.macInfo !== 'object' || inbound.macInfo === null)
+         throw new Error('Invalid inbound.macInfo');
+@@ -1573,27 +1577,42 @@ function createDecipher(config) {
+   }
+ }
+ 
++function ensurePoly1305Sync() {
++  if (poly1305_auth)
++    return;
++  const poly1305Path = join(__dirname, 'crypto', 'poly1305.js');
++  const src = readFileSync(poly1305Path, 'utf8');
++  const match = src.match(/data:application\/octet-stream;base64,([A-Za-z0-9+/=]+)/);
++  if (!match)
++    throw new Error('Failed to locate poly1305 WASM payload');
++  const wasmBytes = Buffer.from(match[1], 'base64');
++  let mod;
++  require('./crypto/poly1305.js')({
++    instantiateWasm(imports, receiveInstance) {
++      const inst = new WebAssembly.Instance(new WebAssembly.Module(wasmBytes), imports);
++      receiveInstance(inst);
++      return inst.exports;
++    },
++    onRuntimeInitialized() {
++      mod = this;
++    },
++  });
++  if (!mod)
++    throw new Error('Failed to initialize poly1305 WASM module');
++  POLY1305_WASM_MODULE = mod;
++  POLY1305_RESULT_MALLOC = POLY1305_WASM_MODULE._malloc(16);
++  poly1305_auth = POLY1305_WASM_MODULE.cwrap(
++    'poly1305_auth',
++    null,
++    ['number', 'array', 'number', 'array', 'number', 'array']
++  );
++}
++
+ module.exports = {
+   CIPHER_INFO,
+   MAC_INFO,
+   bindingAvailable: !!binding,
+-  init: (() => {
+-    // eslint-disable-next-line no-async-promise-executor
+-    return new Promise(async (resolve, reject) => {
+-      try {
+-        POLY1305_WASM_MODULE = await require('./crypto/poly1305.js')();
+-        POLY1305_RESULT_MALLOC = POLY1305_WASM_MODULE._malloc(16);
+-        poly1305_auth = POLY1305_WASM_MODULE.cwrap(
+-          'poly1305_auth',
+-          null,
+-          ['number', 'array', 'number', 'array', 'number', 'array']
+-        );
+-      } catch (ex) {
+-        return reject(ex);
+-      }
+-      resolve();
+-    });
+-  })(),
++  init: Promise.resolve(),
+ 
+   NullCipher,
+   createCipher,
