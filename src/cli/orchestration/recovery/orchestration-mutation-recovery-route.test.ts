@@ -359,7 +359,12 @@ describe('recovery commands withheld when only the original shell selects its Or
     const cleared = { ORCA_ENVIRONMENT: '' }
     const { text, recovery } = await original([...SEND, '--pairing-code', PAIRING], cleared)
     const id = recovery.orchestrationRequestId
-    const query = [...bareQuery(id).slice(0, -1), '--pairing-code', PAIRING, '--json']
+    // The inspect command exactly as displayed, then with the option the text says to add.
+    const displayed =
+      /Run (orca orchestration request-show \S+ \S+ --json) from a shell where/.exec(text)?.[1]
+    expect(displayed).toBe(bareQuery(id).join(' '))
+    const shown = displayed?.split(' ') ?? []
+    const query = [...shown, '--pairing-code', PAIRING]
     const retry = keyedRetry([...SEND, '--pairing-code', PAIRING], id)
 
     expect(sends).toEqual([{ ledger: `pairing:${PAIRING}`, requestId: id }])
@@ -367,13 +372,14 @@ describe('recovery commands withheld when only the original shell selects its Or
     expect(recovery).not.toHaveProperty('retryCommand')
     expect(recovery.requiredEnv).toEqual(['ORCA_ENVIRONMENT', 'ORCA_USER_DATA_PATH'])
     expect(text).toContain(
-      'from a shell where ORCA_ENVIRONMENT is unset or empty, with the same --pairing-code this command used'
+      `Run ${displayed} from a shell where ORCA_ENVIRONMENT is unset or empty, adding this command's original --pairing-code option`
     )
     expect(text).toContain(
       `--retry-request ${id} from a shell where ORCA_ENVIRONMENT is unset or empty`
     )
     expect(text).not.toContain('secret-pairing-payload')
-    // Once the named export resumes, the same pairing refuses; the stated condition reaches it.
+    // As displayed it asks the local Orca; once the named export resumes, the pairing refuses.
+    expect(await inspect(shown, cleared)).toBe('absent')
     expect(await inspect(query)).toContain('Use either --pairing-code or --environment')
     expect(await inspect(query, cleared)).toBe('completed')
     expect(await retryLands(retry, cleared)).toBe(`pairing:${PAIRING}`)

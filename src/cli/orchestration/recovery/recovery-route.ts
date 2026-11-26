@@ -112,7 +112,8 @@ function routeGuidance(
   if (flags?.has('pairing-code')) {
     return {
       ...none(),
-      restore: 'ORCA_ENVIRONMENT is unset or empty, with the same --pairing-code this command used',
+      restore:
+        "ORCA_ENVIRONMENT is unset or empty, adding this command's original --pairing-code option",
       requiredEnv: ['ORCA_ENVIRONMENT']
     }
   }
