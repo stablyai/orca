@@ -21,30 +21,32 @@ import type {
   OrchestrationEntryCaller,
   OrchestrationSessionCaller
 } from '../../../../orchestration/addressing/orchestration-caller-identity'
-import { checkRunPendingMail } from './check-run-pending-mail'
+import { checkRunPendingMail, type RecoveredRunChecker } from './check-run-pending-mail'
 import type { CheckMailReconciliation } from './check-mail-reconciliation'
 import { withTakenRunCheckNext } from '../receipt-next'
 import { FEDERATION_RELAY_WAIT_REARM_MS } from '../../../../orchestration/federation/relay/federation-relay-scheduler'
 
 type CheckParamsInput = z.infer<typeof CheckParams>
 
-export async function checkRunMailbox(args: {
-  params: CheckParamsInput
-  runtime: OrcaRuntimeService
-  db: OrchestrationDb
-  handle: string
-  paneKey: string | undefined
-  callerSession: OrchestrationEntryCaller | undefined
-  reader: OrchestrationSessionCaller | undefined
-  typeFilter: MessageType[] | undefined
-  signal: AbortSignal | undefined
-  legacyCoordinatorRunId: string | undefined
-  revalidateLegacyCoordinator: (() => string) | undefined
-  orchestrationCompatibilityEvidence: RpcContext['orchestrationCompatibilityEvidence']
-  recordMutationReceipt: ((receipt: unknown) => void) | undefined
-  reconciliation: CheckMailReconciliation
-  revalidateCaller: () => void
-}): Promise<unknown> {
+export async function checkRunMailbox(
+  args: {
+    params: CheckParamsInput
+    runtime: OrcaRuntimeService
+    db: OrchestrationDb
+    handle: string
+    paneKey: string | undefined
+    callerSession: OrchestrationEntryCaller | undefined
+    reader: OrchestrationSessionCaller | undefined
+    typeFilter: MessageType[] | undefined
+    signal: AbortSignal | undefined
+    legacyCoordinatorRunId: string | undefined
+    revalidateLegacyCoordinator: (() => string) | undefined
+    orchestrationCompatibilityEvidence: RpcContext['orchestrationCompatibilityEvidence']
+    recordMutationReceipt: ((receipt: unknown) => void) | undefined
+    reconciliation: CheckMailReconciliation
+    revalidateCaller: () => void
+  } & RecoveredRunChecker
+): Promise<unknown> {
   const {
     params,
     runtime,

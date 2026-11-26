@@ -5454,7 +5454,9 @@
       "statusUnreadable": "Bu sunucunun durumu okunamadı. Geri dönüp yeniden açın.",
       "tryAgain": "Tekrar dene",
       "isolationUnavailableAndroid": "Orca için Android System WebView veya Chrome 101 ya da daha yeni bir sürüm gerekir. Play Store’dan güncelleyin veya Geliştirici seçenekleri > WebView uygulaması bölümünden daha yeni bir sürüm seçin.",
-      "webViewInUse": "Bu cihazda {{name}} {{version}} var."
+      "webViewInUse": "Bu cihazda {{name}} {{version}} var.",
+      "downloadingLatestApp": "Uygulamanın son sürümü indiriliyor",
+      "downloadProgressFromHost": "{{host}} sunucusundan · {{progress}}"
     },
     "pageRouteUnavailable": {
       "updateTitle": "Orca’yı güncelleyin",
@@ -5462,6 +5464,9 @@
       "updateMessageNoHost": "Bu ekran için daha yeni bir Orca sürümü gerekiyor.",
       "serverTitle": "Bu sunucuya ulaşılamıyor",
       "serverMessage": "Telefonunuz bu çalışma alanının sunucusuna {{host}} üzerinden ulaşamıyor."
+    },
+    "downloadProgress": {
+      "megabytes": "{{received}} / {{total}} MB"
     }
   },
   "workspace": {
@@ -5866,6 +5871,12 @@
               "waiting": {
                 "label": "Claude çalıştığında güncellenir",
                 "message": "Claude kullanım bilgisi, Claude bir sonraki çalıştığında güncellenir."
+              }
+            },
+            "codex": {
+              "waiting": {
+                "label": "Codex çalıştığında güncellenir",
+                "message": "Codex kullanım bilgisi, Codex bir sonraki çalıştığında güncellenir."
               }
             },
             "1804cd8c3f": "Oturum açma yenileniyor",
@@ -7494,7 +7505,9 @@
         "replaced": "Ajan yeni bir soru sordu. Soruyu okuyup yanıtlayın.",
         "notNow": "Şimdi değil",
         "replacedByNewer": "Daha yeni bir soruyla değiştirildi",
-        "skipped": "Atlandı"
+        "skipped": "Atlandı",
+        "heldImagesLimit": "Yanıtların tek bir yorum olarak gider ve bir yorum en fazla {{max}} fotoğraf alır. Birkaçını kaldırıp yeniden dene.",
+        "heldSkillsLimit": "Yanıtların tek bir yorum olarak gider ve bir yorum en fazla {{max}} beceri alır. Birkaçını kaldırıp yeniden dene."
       }
     },
     "needs": {
@@ -8562,5 +8575,8 @@
       "needsWindow": "Güncellenemedi. {{desktop}} üzerinde Orca’yı açın.",
       "failed": "Ajan listesi güncellenemedi."
     }
+  },
+  "mcpServers": {
+    "agentBlocked": "Kuruluşunuzun Claude ayarları tarafından engellendi"
   }
 }

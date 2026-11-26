@@ -1,10 +1,6 @@
 import { readFile, rm } from 'node:fs/promises'
-import { z } from 'zod'
-import { BotFailureError } from '../../shared/bots/bot-failure-copy'
 import { stageCredentialFile } from '../credentials/credential-file-io'
-import { CredentialsFile, openEntry, warnOnce, type Stored } from './bot-tool-credential-envelope'
-
-const OlderLayout = z.object({ credentials: z.record(z.string(), z.unknown()) })
+import { openEntry, parseEnvelopes, type Entry, type Stored } from './bot-tool-credential-envelope'
 
 function missingFile(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT'
@@ -21,34 +17,20 @@ async function readCredentialText(path: string): Promise<string | null> {
   }
 }
 
-function parseCredentialJson(text: string): unknown {
-  try {
-    return JSON.parse(text)
-  } catch {
-    return null
-  }
-}
-
+/** The file's entries, each opened the first time it is read: most reads and writes touch one. */
 export function parseBotToolCredentialFile(folder: string, text: string | null): Stored {
-  if (text === null) {
-    return {}
-  }
-  const json = parseCredentialJson(text)
-  const parsed = CredentialsFile.safeParse(json)
-  if (parsed.success) {
-    return Object.fromEntries(
-      Object.entries(parsed.data.credentials).map(([id, envelope]) => [
-        id,
-        { envelope, entry: openEntry(folder, id, envelope) }
-      ])
-    )
-  }
-  // The old layout does not authenticate the credential's destination.
-  if (OlderLayout.safeParse(json).success) {
-    warnOnce(text, '[bot-tool-credentials] ignored credentials saved in the older layout')
-    return {}
-  }
-  throw new BotFailureError('toolCredentialsUnreadable')
+  return Object.fromEntries(
+    Object.entries(parseEnvelopes(text)).map(([id, envelope]) => {
+      let opened: Entry | null | undefined
+      const slot = {
+        envelope,
+        get entry() {
+          return opened === undefined ? (opened = openEntry(folder, id, envelope)) : opened
+        }
+      }
+      return [id, slot]
+    })
+  )
 }
 
 export async function readBotToolCredentialFile(

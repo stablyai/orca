@@ -4,10 +4,12 @@
 
 import { isAbsolute } from 'node:path'
 import type { AcpHostBackendInput } from '../acp/launch/acp-launch-contract'
+import { resolveProviderChildEnv } from '../provider-process/provider-process-launch'
 import { AntigravityChatAuthConfigSchema } from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { assertAntigravityChatAuthPublished } from './antigravity-chat-auth-publication'
 import { checkAntigravityHostAcp, checkAntigravityHostAcpCompatible } from './antigravity-host-acp'
 import { agyCredentialPresence } from './agy-credential-presence'
+import { envValue } from './antigravity-chat-credential'
 import { antigravityChatSignIn } from './antigravity-chat-account'
 
 export type AntigravityAgySignIn = 'signedIn' | 'signedOut' | 'unknown' | 'notInstalled'
@@ -86,7 +88,8 @@ export function lastAntigravityAgySignedOut(): boolean | null {
 
 /** agy's own sign-in for Google-account chats. Without a login to find, only whether agy can serve
  *  chats is asked, once per binary: on a locked-keyring host a session request raises the keyring
- *  prompt, which agy itself asks for when a chat starts. */
+ *  prompt, which agy itself asks for when a chat starts. A gateway serves agy's own home without a
+ *  login, so there a session request answers. */
 export async function antigravityAgySignIn(
   input: AcpHostBackendInput
 ): Promise<AntigravityAgySignIn> {
@@ -112,7 +115,7 @@ async function readAgySignIn(input: AcpHostBackendInput): Promise<AntigravityAgy
     return 'notInstalled'
   }
   const presence = await agyCredentialPresence(homePath)
-  if (presence !== 'present') {
+  if (presence === 'locked' || (presence === 'absent' && !agyHomeUsesGateway(input))) {
     const compatible = await checkAntigravityHostAcpCompatible(command, env, envToDelete, {
       start: input.startsProgram
     })
@@ -120,4 +123,14 @@ async function readAgySignIn(input: AcpHostBackendInput): Promise<AntigravityAgy
   }
   const answer = await checkAntigravityHostAcp(command, env, envToDelete)
   return answer === 'ready' ? 'signedIn' : answer === 'signedOut' ? 'signedOut' : 'unknown'
+}
+
+/** Whether chats on agy's own home reach models through an LLM gateway, which needs no Google
+ *  login. Orca's home drops agy's gateway variables. */
+function agyHomeUsesGateway(input: AcpHostBackendInput): boolean {
+  if (!savedChatAuthIsPersonal(input.settings.antigravityChatAuth)) {
+    return false
+  }
+  const env = resolveProviderChildEnv(input, process.env)
+  return Boolean(envValue(env, 'AGY_LLM_GATEWAY_URL')?.trim())
 }
