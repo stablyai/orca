@@ -3,6 +3,7 @@ import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view'
 import type { Editor } from '@tiptap/react'
+import { SIDE_CHAT_NODE } from './native-chat-side-chat-node'
 
 declare module '@tiptap/core' {
   // oxlint-disable-next-line typescript/consistent-type-definitions -- Tiptap Storage requires declaration merging.
@@ -99,40 +100,59 @@ function keywordsIn(text: string): ClaudeKeyword[] {
   return found
 }
 
-function keywordDecorations(doc: ProseMirrorNode): DecorationSet {
-  const decorations: Decoration[] = []
-  if (doc.textBetween(0, doc.content.size, '\n', '\ufffc').startsWith('/')) {
-    return DecorationSet.empty
-  }
-  // shortcut: matches within one paragraph's text, so quotes spanning paragraphs or pills are not
-  // seen; Claude reads the whole prompt. Upgrade if a miscolored word is reported.
+// The prompt as Claude reads it, with each character's document position: a side-chat pill reads
+// as its `/btw ` command, a hard break as `\n`, other pills as one placeholder, paragraphs joined by `\n`.
+function promptCharacters(doc: ProseMirrorNode): { text: string; positions: number[] } {
+  let text = ''
+  const positions: number[] = []
   doc.descendants((node, pos) => {
-    if (!node.isTextblock) {
-      return true
+    if (node.isTextblock && text !== '') {
+      text += '\n'
+      positions.push(-1)
     }
-    const text = node.textBetween(0, node.content.size, undefined, '￼')
-    for (const keyword of keywordsIn(text)) {
-      const from = pos + 1 + keyword.start
-      if (!keyword.rainbow) {
-        decorations.push(
-          Decoration.inline(from, pos + 1 + keyword.end, {
-            'data-claude-keyword': '',
-            style: `color: ${ULTRACODE_COLOR}`
-          })
-        )
-        continue
+    if (node.isText) {
+      text += node.text ?? ''
+      for (let index = 0; index < (node.text ?? '').length; index++) {
+        positions.push(pos + index)
       }
-      for (let letter = 0; letter < keyword.end - keyword.start; letter++) {
-        decorations.push(
-          Decoration.inline(from + letter, from + letter + 1, {
-            'data-claude-keyword': '',
-            style: `color: ${RAINBOW[letter % RAINBOW.length]}`
-          })
-        )
-      }
+    } else if (node.isLeaf) {
+      const leaf =
+        node.type.name === SIDE_CHAT_NODE
+          ? String(node.attrs.token ?? '')
+          : node.type.name === 'hardBreak'
+            ? '\n'
+            : '\ufffc'
+      text += leaf
+      positions.push(...Array.from(leaf, () => pos))
     }
-    return false
+    return true
   })
+  return { text, positions }
+}
+
+function keywordDecorations(doc: ProseMirrorNode): DecorationSet {
+  const { text, positions } = promptCharacters(doc)
+  const decorations: Decoration[] = []
+  for (const keyword of claudeKeywords(text)) {
+    const from = positions[keyword.start]
+    if (!keyword.rainbow) {
+      decorations.push(
+        Decoration.inline(from, from + keyword.end - keyword.start, {
+          'data-claude-keyword': '',
+          style: `color: ${ULTRACODE_COLOR}`
+        })
+      )
+      continue
+    }
+    for (let letter = 0; letter < keyword.end - keyword.start; letter++) {
+      decorations.push(
+        Decoration.inline(from + letter, from + letter + 1, {
+          'data-claude-keyword': '',
+          style: `color: ${RAINBOW[letter % RAINBOW.length]}`
+        })
+      )
+    }
+  }
   return DecorationSet.create(doc, decorations)
 }
 

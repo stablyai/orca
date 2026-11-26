@@ -74,6 +74,31 @@ describe('NativeChatPromptEditor keyword coloring', () => {
     expect(colored().map((span) => span.textContent)).toEqual(['ultracode', ...'ultraplan'])
   })
 
+  it('reads the whole prompt: a quote across paragraphs and a side-chat command stay plain', () => {
+    const { view, colored } = mount(true)
+    const editor = (within(view.container).getByRole('textbox') as unknown as { editor: Editor })
+      .editor
+    act(() => {
+      editor.commands.setContent('<p>"quoted</p><p>ultrathink" then ultracode</p>')
+    })
+    expect(colored().map((span) => span.textContent)).toEqual(['ultracode'])
+    act(() => {
+      editor.commands.setContent({
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'nativeChatSideChat', attrs: { token: '/btw ' } },
+              { type: 'text', text: 'ultrathink' }
+            ]
+          }
+        ]
+      })
+    })
+    expect(colored()).toEqual([])
+  })
+
   it('leaves other agents plain', () => {
     expect(mount(false).colored()).toEqual([])
   })
