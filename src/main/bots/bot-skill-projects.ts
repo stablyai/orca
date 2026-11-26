@@ -246,8 +246,13 @@ export function relinkBotSkills(
   repos: readonly Repo[]
 ): Promise<void> {
   return linkedSkillProjects(bot, repos, botLinkedSkillsFolder(bot.id))
-    .then(() => {})
-    .catch(() => {})
+    .then(
+      () => {},
+      (error: unknown) => {
+        // The folder keeps its last links, which the bot's chats and `/` menus still load.
+        console.warn("[bots] the bot's linked project skills could not be relinked", bot.id, error)
+      }
+    )
     .finally(() => {
       clearSkillDiscoveryCaches()
       retireAtRestCommandContext(folderWorkspaceKey(bot.folderWorkspaceId))
