@@ -26,7 +26,7 @@ import {
   getProviderUsageStatusLabel,
   isClaudeUsageWaitingForClaude
 } from '../../../../../shared/agent-usage/status-copy/usage-error-copy'
-import { getTightestUsageSection, getUsageHeadlineSection } from './usage-headline-sections'
+import { getTightestUsageSection } from './usage-headline-sections'
 import {
   isPluginUsageProvider,
   usageRosterProviderName,
@@ -256,6 +256,8 @@ type ProviderSegmentProps = {
   hostLabel?: string
   countdownActive?: boolean
   pluginCountdownNow?: number
+  /** Off-layout copy used only to measure width. */
+  measuring?: boolean
 }
 
 /** A chip in the clipping status bar row: clipped chips stop their countdown wakes. */
@@ -276,7 +278,8 @@ export function ProviderSegment({
   barMode = mode,
   hostLabel,
   countdownActive = true,
-  pluginCountdownNow
+  pluginCountdownNow,
+  measuring = false
 }: ProviderSegmentProps): React.JSX.Element {
   const t = useTranslate()
   const provider = p?.provider ?? 'claude'
@@ -288,12 +291,8 @@ export function ProviderSegment({
   // Why: not a problem; Claude updates its own login the next time it runs.
   const calm = native ? isClaudeUsageWaitingForClaude(native) : false
   const calmClock = useNow(60_000, calm && p?.status === 'error')
-  const tightest = p
-    ? mode === 'compact'
-      ? getUsageHeadlineSection(p, t, 'all')
-      : getTightestUsageSection(p, t, 'all')
-    : null
   const sections = getStatusBarUsageSections(p, mode, t)
+  const tightest = mode === 'compact' ? sections[0] : p && getTightestUsageSection(p, t, 'all')
   const groupedBuckets = sections.map((section) => section.window).filter(isGroupedUsagePool)
   const showLabels = mode === 'verbose' || !compact
   // Why: gate only the clock, never the label, so visibility can't change width and re-trigger itself.
@@ -331,7 +330,7 @@ export function ProviderSegment({
     return (
       <span
         className="inline-flex items-center gap-1 text-muted-foreground"
-        title={getProviderUsageErrorMessage(native, t)}
+        title={measuring ? undefined : getProviderUsageErrorMessage(native, t)}
       >
         {icon}
         {/* Why "--" when compact: an icon alone would read as a healthy chip. */}
@@ -360,9 +359,10 @@ export function ProviderSegment({
     mode === 'verbose' && groupedBuckets.length > 0 && groupedBuckets.length === sections.length
 
   // Why the form, not barMode: a narrow Detailed chip is a bare percent too, so it needs the name.
-  const compactTitle =
-    mode === 'compact' && tightest
-      ? formatUsageChipTitle(p, display, t)
+  const compactTitle = measuring
+    ? undefined
+    : mode === 'compact' && tightest
+      ? formatUsageChipTitle(p, sections[0], display, t)
       : plugin
         ? usageRosterProviderName(plugin, t)
         : undefined
