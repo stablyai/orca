@@ -105,6 +105,18 @@ Set the repo base ref before creating lots of worktrees so new tasks branch from
 
 `repo hide` takes a project out of the sidebar, project pickers and the workspace switcher without stopping anything: its terminals, agents and automations keep running, `repo list` still lists it with `hiddenAt` set, and commands that name it keep working. Hiding applies to one host's copy of a project; add `--host <host>` to pick which copy when it is set up on several. On a paired Orca server the setting lives on that server, so hiding a project there hides it for everyone connected to it. `repo unhide`, or the Hidden projects list at the bottom of the sidebar, shows it again.
 
+Project groups are the folders in the sidebar. They only arrange projects: moving a repo into or out of a group leaves its terminals, agents and worktrees alone.
+
+```bash
+orca project group list --json
+orca project group create --name Clients --json
+orca project group rename --group Clients --name Customers --json
+orca project group move --repo name:acme-web --group Customers --json
+orca project group move --repo name:acme-web --no-group --json
+```
+
+`--group` and `--parent-group` take a group id or name from `project group list` (`id:` or `name:` forces one kind); a name shared by several groups is refused, so use the id. `--order <n>` places the repo among the group's projects; by default it goes last.
+
 `repo add` defaults to `--kind git`. Use `--kind folder` to open an ordinary directory, including a repo-tool root containing separate Git repositories, as a folder workspace without Git worktrees or source control. With `--environment`, use an absolute path on that Orca server.
 
 ## Worktrees
