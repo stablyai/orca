@@ -112,9 +112,9 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeActionEf
     assertNoJavaScriptDialog(webContentsId, pageId, assertNotRevoked)
     const sessionName = `${ORCA_TAB_SESSION_PREFIX}${pageId}`
     const skipEffects = isActionEffectsOptOut()
-    // `--no-effects` asks for speed, so its pointer moves draw the cursor without waiting on it.
+    // `--no-effects` asks for speed: its input still draws the cursor but waits on nothing the page shows.
     const agentCommand = this.browserManager.beginAgentCommand(pageId, {
-      awaitCursor: !skipEffects
+      skipInputWaits: skipEffects
     })
     // Queued commands run under the caller ahead of them, so read this one's caller now
     // and re-enter its call, or what it marks would count as that other chat's.
