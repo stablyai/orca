@@ -220,7 +220,8 @@
         "softer": "更柔和",
         "sharper": "更清晰",
         "terminalControlledHint": "由终端界面设置",
-        "terminalControlledTooltip": "正在匹配终端外观，要更改此项，请关闭“匹配终端外观”"
+        "terminalControlledTooltip": "正在匹配终端外观，要更改此项，请关闭“匹配终端外观”",
+        "resetKeyword": "重置"
       },
       "editorTheme": {
         "light": "浅色编辑器主题",
@@ -646,7 +647,9 @@
       "invalidServer": "无效的服务器",
       "serverCount_one": "{{count}} 个服务器",
       "serverCount_other": "{{count}} 个服务器",
-      "claudeWorkspace": "Claude 工作区"
+      "claudeWorkspace": "Claude 工作区",
+      "inspectConfigsFailed": "无法检查 MCP 配置。",
+      "createConfigFailed": "无法创建 MCP 配置。"
     },
     "shortcuts": {
       "parseFailed": "无法解析快捷键",
@@ -22015,7 +22018,11 @@
         "removed": "已移除",
         "remove": "移除",
         "added": "已添加"
-      }
+      },
+      "htmlPreview": "HTML 预览",
+      "htmlView": "HTML 视图",
+      "htmlViewCode": "代码",
+      "htmlViewPreview": "预览"
     },
     "tab": {
       "bar": {
@@ -22430,6 +22437,9 @@
       },
       "hostFile": {
         "updateHostForOutsideFiles": "更新 {{value0}} 上的 Orca 以打开其工作区之外的文件"
+      },
+      "paste": {
+        "clipboardUnpastable": "无法粘贴复制的文件。请把它拖进终端试试。"
       }
     },
     "onboarding": {
@@ -26225,7 +26235,8 @@
       "bots": "Bots"
     },
     "searchKeyword": {
-      "worktreePaletteFormerTitle": "切换工作树"
+      "worktreePaletteFormerTitle": "切换工作树",
+      "quickCommandsMenuFormerTitle": "切换快捷命令菜单"
     }
   },
   "gpuFallback": {
@@ -28003,7 +28014,8 @@
       },
       "hostSleeping": "休眠中 · 使用时唤醒",
       "wslWaking": "正在唤醒 {{distro}}…",
-      "hostWaking": "正在唤醒…"
+      "hostWaking": "正在唤醒…",
+      "useChatDefaultsHint": "把智能体的模型、选项和权限恢复为你的聊天默认设置"
     },
     "googleSetup": {
       "otherAccount": "切换账号",
@@ -28130,7 +28142,12 @@
         "keyStored": "存储在此电脑上，bots 永远看不到它。你的应用登录信息由 Composio 保管",
         "addKey": "添加密钥并继续",
         "keyStoredOnHost": "存储在 {{host}} 上，bots 永远看不到它。你的应用登录信息由 Composio 保管",
-        "signsIn": "通过你的 Composio 账户登录。"
+        "signsIn": "通过你的 Composio 账户登录。",
+        "changeKeyTitle": "更换你的 Composio 密钥",
+        "replacesKeyEnding": "会替换以 {{hint}} 结尾的密钥，对你的所有 bots 生效。",
+        "replacesKey": "会替换你已保存的密钥，对你的所有 bots 生效。",
+        "newKeyNeeds": "新密钥需要 <permission/>。",
+        "replaceKey": "替换密钥并继续"
       },
       "closeKeepsSigningIn": "登录会在浏览器中继续进行",
       "openPageAgain": "再次打开页面",
@@ -28265,7 +28282,8 @@
       "filters": "按应用筛选",
       "searchAdded": "搜索已添加的应用",
       "setUp": "设置",
-      "setUpNamed": "设置 {{name}}"
+      "setUpNamed": "设置 {{name}}",
+      "couldNotConnect": "无法连接 {{app}}"
     },
     "row": {
       "paused": "已暂停",
@@ -30006,7 +30024,8 @@
         "purpose": "你的 Composio 项目密钥可让你的 bots 使用你在 Composio 中连接的应用。密钥保存在此电脑上；bots 永远看不到它",
         "getKey": "获取密钥",
         "change": "更改",
-        "purposeOnHost": "你的 Composio 项目密钥可让 {{host}} 上的 bots 使用你在 Composio 中连接的应用。密钥保存在 {{host}} 上；bots 永远看不到它"
+        "purposeOnHost": "你的 Composio 项目密钥可让 {{host}} 上的 bots 使用你在 Composio 中连接的应用。密钥保存在 {{host}} 上；bots 永远看不到它",
+        "changeKey": "更换密钥"
       },
       "card": {
         "heading": "Composio",
@@ -30521,7 +30540,10 @@
       "groupMailNeverStarted": "这封邮件从未开始一轮对话。",
       "groupRemoteUnreachable": "无法连接 {{host}}。{{detail}}",
       "groupRemoteUnreachableRetry": "无法连接 {{host}}。{{detail}} 重新发布即可重试。",
-      "googleAccountsChanged": "这个 bot 的 Google 账户在你打开后有变化，请重新检查并保存。"
+      "googleAccountsChanged": "这个 bot 的 Google 账户在你打开后有变化，请重新检查并保存。",
+      "composioKeyCantCreateSessions": "这个 Composio 密钥无法创建会话。它需要 {{permission}}。",
+      "composioKeyNeedsPermission": "这个 Composio 密钥缺少一项权限。它需要 {{permission}}。",
+      "composioKeyMissingPermission": "这个 Composio 密钥缺少 Orca 需要的一项权限。"
     },
     "notices": {
       "couldNotFinish": "{{bot}} 未能完成",
