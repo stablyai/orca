@@ -13,16 +13,7 @@ export function useResultsReadyAfterOpeningPaint(visible: boolean): {
   revealResultsNow: () => void
 } {
   const [ready, setReady] = useState(false)
-  const [wasVisible, setWasVisible] = useState(visible)
-  // A reopen during the close linger opens like a fresh mount; closing keeps results for the exit animation.
-  // The opening render itself reports not-ready, so the pass React discards builds nothing.
-  const reopening = visible && !wasVisible
-  if (visible !== wasVisible) {
-    setWasVisible(visible)
-    if (visible) {
-      setReady(false)
-    }
-  }
+  // A reopen during the close linger keeps ready: its results are still cached, so nothing rebuilds.
   useEffect(() => {
     if (!visible || ready) {
       return
@@ -50,5 +41,5 @@ export function useResultsReadyAfterOpeningPaint(visible: boolean): {
   const revealResultsNow = useCallback(() => {
     flushSync(() => setReady(true))
   }, [])
-  return { resultsReady: ready && !reopening, revealResultsNow }
+  return { resultsReady: ready, revealResultsNow }
 }

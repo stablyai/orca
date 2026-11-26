@@ -75,7 +75,7 @@ it('mounts no result rows in the opening commit and fills them in after the pain
   expect(documentsBuilt.count).toBe(WORKSPACE_COUNT)
 })
 
-it('defers results again when the palette reopens during its close linger', async () => {
+it('reuses cached results when the palette reopens during its close linger', async () => {
   render(<WorktreeJumpPalette />)
   act(() => {
     useAppStore.setState({ activeModal: 'worktree-palette' })
@@ -90,15 +90,14 @@ it('defers results again when the palette reopens during its close linger', asyn
     await vi.advanceTimersByTimeAsync(100)
   })
 
+  documentsBuilt.count = 0
+
   act(() => {
     useAppStore.setState({ activeModal: 'worktree-palette' })
   })
-  expect(resultRowCount()).toBe(0)
-
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(200)
-  })
+  // Still mounted with its index built: rows show at once and no search document is rebuilt.
   expect(resultRowCount()).toBe(11)
+  expect(documentsBuilt.count).toBe(0)
 })
 
 it('builds results once while unrelated store writes keep arriving', async () => {
