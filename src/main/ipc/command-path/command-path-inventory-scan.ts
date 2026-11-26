@@ -7,7 +7,6 @@ export type AgentPathMatch = {
 
 export type PathDirectory = { dir: string; key: string; quoted: boolean; runtime: boolean }
 export type DirectoryCandidate = { hit?: string; uncertain: boolean }
-const PATH_HEAD_START_MS = 100
 
 export function recordDirectoryMatch(
   match: AgentPathMatch,
@@ -72,6 +71,8 @@ function trackPathCommand(
 export async function scanInventoryPathCommands(
   directories: readonly PathDirectory[],
   commands: ReadonlySet<string>,
+  concurrency: number,
+  partialBudget: Promise<unknown>,
   scan: (command: string, dir: PathDirectory) => Promise<DirectoryCandidate>,
   publish: (command: string, match: AgentPathMatch) => void,
   complete: (command: string, uncertain: boolean) => void,
@@ -103,29 +104,31 @@ export async function scanInventoryPathCommands(
     return
   }
   let nextDirectory = 0
+  const scanDirectory = async (): Promise<void> => {
+    const index = nextDirectory++
+    const dir = directories[index]
+    await Promise.all(
+      [...pending].map(async ([command, record]) => {
+        const outcome = await scan(command, dir)
+        if (!signal.aborted && pending.has(command)) {
+          record(index, dir, outcome)
+        }
+      })
+    )
+  }
   const run = async (): Promise<void> => {
     while (!signal.aborted && pending.size && nextDirectory < directories.length) {
-      const index = nextDirectory++
-      const dir = directories[index]
-      await Promise.all(
-        [...pending].map(async ([command, record]) => {
-          const outcome = await scan(command, dir)
-          if (!signal.aborted && pending.has(command)) {
-            record(index, dir, outcome)
-          }
-        })
-      )
+      await scanDirectory()
     }
   }
-  // Let the head settle first on healthy PATHs, then give slow reads one independent directory scan.
-  let overlap: Promise<void> | undefined
-  const timer = setTimeout(() => {
-    overlap = run()
-    void overlap.catch(allCommandsDecided.reject)
-  }, PATH_HEAD_START_MS)
-  try {
-    await Promise.race([allCommandsDecided.promise, run().then(() => overlap)])
-  } finally {
-    clearTimeout(timer)
-  }
+  const first = scanDirectory()
+  // Keep the head's walk slot until its reads settle, even after the partial publication.
+  await Promise.race([
+    allCommandsDecided.promise,
+    concurrency === 1 ? first : Promise.race([first, partialBudget])
+  ])
+  await Promise.race([
+    allCommandsDecided.promise,
+    Promise.all([first.then(run), ...Array.from({ length: concurrency - 1 }, run)])
+  ])
 }

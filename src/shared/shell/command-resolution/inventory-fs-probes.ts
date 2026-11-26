@@ -1,14 +1,15 @@
 import type { Stats } from 'node:fs'
-import { access, constants } from 'node:fs/promises'
+import { access, constants, stat } from 'node:fs/promises'
 import { waitForPromiseWithSignal } from '../../concurrency/abort-signal-reason'
 import { PrioritySemaphore } from '../../concurrency/priority-semaphore'
 
 export const UNVERIFIED_FS_PROBE = Symbol('unverified filesystem probe')
-const SKIPPED_FS_PROBE = Symbol('filesystem probe canceled before admission')
+type ExecutableFile = 'file' | 'other'
 
 type ProbeValues = {
   stat: Stats
-  access: boolean
+  posixExecutable: ExecutableFile
+  windowsExecutable: ExecutableFile
   dirs: string[]
   listing: Map<string, string>
   file: string
@@ -17,11 +18,9 @@ type ProbeValues = {
 type ProbeKind = keyof ProbeValues
 type ProbeValue = ProbeValues[ProbeKind] | null
 type ProbeResult = ProbeValue | typeof UNVERIFIED_FS_PROBE
-type PendingProbe = { kind: ProbeKind; result: Promise<ProbeResult | typeof SKIPPED_FS_PROBE> }
-
-const pendingByPath = new Map<string, PendingProbe>()
+const pendingByKind = new Map<ProbeKind, Map<string, Promise<ProbeResult>>>()
 const overrideLane = new PrioritySemaphore(1)
-const inventoryLane = new PrioritySemaphore(2)
+const installerLane = new PrioritySemaphore(2)
 
 export function isPathPermissionError(error: unknown): boolean {
   return (
@@ -41,25 +40,54 @@ export function isMissingPathError(error: unknown): boolean {
   )
 }
 
+export async function probeExecutableFile(
+  path: string,
+  isWin: boolean
+): Promise<ExecutableFile | null | typeof UNVERIFIED_FS_PROBE> {
+  let stats: Stats
+  try {
+    stats = await stat(path)
+  } catch (error) {
+    return isMissingPathError(error) || isPathPermissionError(error) ? null : UNVERIFIED_FS_PROBE
+  }
+  if (isWin || stats.isDirectory()) {
+    return stats.isFile() ? 'file' : null
+  }
+  try {
+    await access(path, constants.X_OK)
+    return stats.isFile() ? 'file' : 'other'
+  } catch (error) {
+    // A denial on a file with execute bits can come from an inaccessible parent.
+    return isMissingPathError(error) || ((stats.mode & 0o111) === 0 && isPathPermissionError(error))
+      ? null
+      : UNVERIFIED_FS_PROBE
+  }
+}
+
 export class InventoryFsProbes {
-  private readonly lane: PrioritySemaphore
+  private readonly lane?: PrioritySemaphore
 
   constructor(
     readonly signal: AbortSignal,
-    lane: 'inventory' | 'override' = 'inventory'
+    lane: 'path' | 'installer' | 'override' = 'path'
   ) {
-    this.lane = lane === 'override' ? overrideLane : inventoryLane
+    this.lane =
+      lane === 'override' ? overrideLane : lane === 'installer' ? installerLane : undefined
   }
 
   private async readWithPermit(
+    lane: PrioritySemaphore,
+    pending: Map<string, Promise<ProbeResult>>,
+    path: string,
+    kind: ProbeKind,
     read: () => Promise<ProbeResult>
-  ): Promise<ProbeResult | typeof SKIPPED_FS_PROBE> {
-    const release = await this.lane.acquire(0, this.signal).catch(() => undefined)
-    if (!release) {
-      return SKIPPED_FS_PROBE
-    }
+  ): Promise<ProbeResult> {
+    const release = await lane.acquire(0, this.signal)
     try {
-      return this.signal.aborted ? SKIPPED_FS_PROBE : await read()
+      if (this.signal.aborted) {
+        return UNVERIFIED_FS_PROBE
+      }
+      return pending.get(path) ?? (await issueProbe(pending, path, kind, read))
     } finally {
       release()
     }
@@ -75,48 +103,46 @@ export class InventoryFsProbes {
     kind: ProbeKind,
     read: () => Promise<ProbeResult>
   ): Promise<ProbeResult> {
-    while (!this.signal.aborted) {
-      let pending = pendingByPath.get(path)
-      if (!pending) {
-        const result = this.readWithPermit(read)
-          .catch((error: unknown): null | typeof UNVERIFIED_FS_PROBE =>
-            isMissingPathError(error) ||
-            ((kind === 'stat' || kind === 'dirs') && isPathPermissionError(error))
-              ? null
-              : UNVERIFIED_FS_PROBE
-          )
-          .finally(() => pendingByPath.delete(path))
-        pending = { kind, result }
-        pendingByPath.set(path, pending)
-      }
-      const value = await waitForPromiseWithSignal(pending.result, this.signal).catch(
-        (): typeof UNVERIFIED_FS_PROBE => UNVERIFIED_FS_PROBE
-      )
-      if (value !== SKIPPED_FS_PROBE && pending.kind === kind) {
-        return value
-      }
+    if (this.signal.aborted) {
+      return UNVERIFIED_FS_PROBE
     }
-    return UNVERIFIED_FS_PROBE
+    const pending = pendingByKind.get(kind) ?? new Map<string, Promise<ProbeResult>>()
+    pendingByKind.set(kind, pending)
+    const lane = kind === 'dirs' ? undefined : this.lane
+    const result =
+      pending.get(path) ??
+      (lane
+        ? this.readWithPermit(lane, pending, path, kind, read)
+        : issueProbe(pending, path, kind, read))
+    return waitForPromiseWithSignal(result, this.signal).catch(
+      (): typeof UNVERIFIED_FS_PROBE => UNVERIFIED_FS_PROBE
+    )
   }
 
-  executableAccess(
+  executableFile(
     path: string,
-    stats: Stats
-  ): Promise<boolean | null | typeof UNVERIFIED_FS_PROBE> {
-    return this.read(path, 'access', async () => {
-      try {
-        await access(path, constants.X_OK)
-        return true
-      } catch (error) {
-        // A denial on a file with execute bits can come from an inaccessible parent.
-        if (
-          isMissingPathError(error) ||
-          ((stats.mode & 0o111) === 0 && isPathPermissionError(error))
-        ) {
-          return false
-        }
-        throw error
-      }
-    })
+    isWin: boolean
+  ): Promise<ExecutableFile | null | typeof UNVERIFIED_FS_PROBE> {
+    return this.read(path, isWin ? 'windowsExecutable' : 'posixExecutable', () =>
+      probeExecutableFile(path, isWin)
+    )
   }
+}
+
+function issueProbe(
+  pending: Map<string, Promise<ProbeResult>>,
+  path: string,
+  kind: ProbeKind,
+  read: () => Promise<ProbeResult>
+): Promise<ProbeResult> {
+  const result = (async () => read())()
+    .catch((error: unknown): null | typeof UNVERIFIED_FS_PROBE =>
+      isMissingPathError(error) ||
+      ((kind === 'stat' || kind === 'dirs') && isPathPermissionError(error))
+        ? null
+        : UNVERIFIED_FS_PROBE
+    )
+    .finally(() => pending.delete(path))
+  pending.set(path, result)
+  return result
 }

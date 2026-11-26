@@ -88,7 +88,11 @@ async function isNativeExecutableAsync(path: string): Promise<boolean> {
   }
 }
 
-export type CliFsProbeOptions = { probes: InventoryFsProbes; onUnverified: () => void }
+export type CliFsProbeOptions = {
+  probes: InventoryFsProbes
+  onUnverified: () => void
+  readDirectories?: (path: string) => Promise<string[] | null | typeof UNVERIFIED_FS_PROBE>
+}
 
 async function readInstallDirectoryNames(path: string): Promise<string[]> {
   const directories: string[] = []
@@ -125,19 +129,17 @@ async function readInstallDirectories(path: string): Promise<string[]> {
 
 async function readAsync(
   read: CliFsRead,
-  probes?: InventoryFsProbes
+  options?: CliFsProbeOptions
 ): Promise<CliFsReadResult | typeof UNVERIFIED_FS_PROBE> {
+  const probes = options?.probes
   try {
     switch (read.kind) {
       case 'runnable': {
         if (!probes) {
           return await isRunnableCommandAsync(read.platform, read.path)
         }
-        const stats = await probes.read(read.path, 'stat', () => stat(read.path))
-        if (stats === UNVERIFIED_FS_PROBE || !stats?.isFile()) {
-          return stats === UNVERIFIED_FS_PROBE ? stats : false
-        }
-        return read.platform === 'win32' ? true : await probes.executableAccess(read.path, stats)
+        const result = await probes.executableFile(read.path, read.platform === 'win32')
+        return result === UNVERIFIED_FS_PROBE ? result : result === 'file'
       }
       case 'file': {
         const stats = await (probes
@@ -151,10 +153,7 @@ async function readAsync(
           : readFile(read.path, 'utf8'))
       }
       case 'dirs':
-        // Dirent conversion can fan out DT_UNKNOWN lstat calls beyond the inventory permit.
-        return probes
-          ? await probes.read(read.path, 'dirs', () => readInstallDirectoryNames(read.path))
-          : await readInstallDirectories(read.path)
+        return await (options?.readDirectories?.(read.path) ?? readInstallDirectories(read.path))
       case 'native':
         return await isNativeExecutableAsync(read.path)
     }
@@ -177,7 +176,7 @@ export async function runCliFsReadsAsync<T>(
 ): Promise<T> {
   let step = reads.next()
   while (!step.done) {
-    const result = await readAsync(step.value, options?.probes)
+    const result = await readAsync(step.value, options)
     if (result === UNVERIFIED_FS_PROBE) {
       options?.onUnverified()
     }

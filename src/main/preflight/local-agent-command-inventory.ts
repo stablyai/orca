@@ -6,7 +6,11 @@ import {
 } from '../ipc/command-path/command-path-batch'
 import { isOrcaAgentRuntimePath } from '../managed-agent-cli/managed-agent-cli-path'
 import { resolveLoginShellEnvironment } from '../startup/shell-environment/login-shell-environment'
-import { InventoryFsProbes } from '../../shared/shell/command-resolution/inventory-fs-probes'
+import {
+  InventoryFsProbes,
+  UNVERIFIED_FS_PROBE
+} from '../../shared/shell/command-resolution/inventory-fs-probes'
+import { readInstallDirectoriesViaWorker } from '../ipc/command-path/command-path-directory-worker-client'
 import { buildLocalPreflightEnv } from '../ipc/preflight/preflight-local-env'
 import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-reason'
 import type { CommandInventory, InventoryPublication } from './agent-command-inventory-publication'
@@ -79,7 +83,8 @@ export async function scanLocalAgentCommandInventory(
   readLoginPath: boolean,
   { matches, found, probed }: LocalInventoryProgress,
   onChange: () => void,
-  signal: AbortSignal
+  signal: AbortSignal,
+  partialBudget: Promise<unknown>
 ): Promise<CommandInventory> {
   const env =
     buildLocalPreflightEnv() ??
@@ -102,7 +107,7 @@ export async function scanLocalAgentCommandInventory(
   }
   const pathMisses = new Map(names.map((command) => [command, Promise.withResolvers<boolean>()]))
   const unverifiedPath = new Set<string>()
-  const installerProbes = new InventoryFsProbes(signal)
+  const installerProbes = new InventoryFsProbes(signal, 'installer')
   let installs: Promise<void> | undefined
   const scanPath = async (): Promise<void> => {
     const pathScan = new AbortController()
@@ -114,6 +119,7 @@ export async function scanLocalAgentCommandInventory(
         found,
         probes: new InventoryFsProbes(pathSignal),
         signal: pathSignal,
+        inventoryScan: { partialBudget, commandCount: commands.size },
         onMatch: onChange,
         onCommandComplete: (command, uncertain) => {
           const needsInstall = !found.has(command) && !hasPathSeparatorToken(command)
@@ -124,6 +130,11 @@ export async function scanLocalAgentCommandInventory(
           }
           installs ??= detectCommandsInInstallDirs(names, {
             probes: installerProbes,
+            readDirectories: (dir) =>
+              installerProbes.read(dir, 'dirs', async () => {
+                const names = await readInstallDirectoriesViaWorker(dir)
+                return names === 'unverified' ? UNVERIFIED_FS_PROBE : [...(names?.values() ?? [])]
+              }),
             needsLookup: (name) => pathMisses.get(name)?.promise ?? Promise.resolve(false),
             complete: (name, user, installerUncertain) => {
               if (signal.aborted) {

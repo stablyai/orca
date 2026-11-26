@@ -1,5 +1,5 @@
 import { parentPort } from 'node:worker_threads'
-import { readDetectionDirectory } from './command-path-directory'
+import { readDetectionDirectory, readInstallSubdirectories } from './command-path-directory'
 import type {
   DetectionDirectoryRequest,
   DetectionDirectoryResponse
@@ -13,9 +13,10 @@ if (!parentPort) {
 }
 const port = parentPort
 
-port.on('message', (request: DetectionDirectoryRequest) => {
-  void readDetectionDirectory(request.dir, request.inventory).then((names) => {
-    const response: DetectionDirectoryResponse = { id: request.id, names }
-    port.postMessage(response)
-  })
+port.on('message', async (request: DetectionDirectoryRequest) => {
+  const names = request.subdirectories
+    ? readInstallSubdirectories(request.dir)
+    : await readDetectionDirectory(request.dir, request.inventory)
+  const response: DetectionDirectoryResponse = { id: request.id, names }
+  port.postMessage(response)
 })

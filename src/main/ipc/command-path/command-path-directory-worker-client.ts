@@ -66,7 +66,7 @@ export class DetectionDirectoryWorkerClient {
     })
   }
 
-  read(dir: string): Promise<DetectionDirectoryListing> {
+  read(dir: string, subdirectories = false): Promise<DetectionDirectoryListing> {
     if (!this.retainPending && this.pending.size >= MAX_PENDING_LISTINGS) {
       return Promise.resolve(null)
     }
@@ -85,7 +85,12 @@ export class DetectionDirectoryWorkerClient {
         worker.ref()
       }
       this.pending.set(id, { resolve, timer })
-      const request: DetectionDirectoryRequest = { id, dir, inventory: this.retainPending }
+      const request: DetectionDirectoryRequest = {
+        id,
+        dir,
+        inventory: this.retainPending,
+        subdirectories
+      }
       try {
         worker.postMessage(request)
       } catch {
@@ -114,6 +119,12 @@ export class DetectionDirectoryWorkerClient {
 
 let client: DetectionDirectoryWorkerClient | undefined
 let inventoryClient: DetectionDirectoryWorkerClient | undefined
+let installClient: DetectionDirectoryWorkerClient | undefined
+
+export function readInstallDirectoriesViaWorker(dir: string): Promise<DetectionDirectoryListing> {
+  installClient ??= new DetectionDirectoryWorkerClient(createWorker, true)
+  return installClient.read(dir, true)
+}
 
 export function readDetectionDirectoryViaWorker(
   dir: string,

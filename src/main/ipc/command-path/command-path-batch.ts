@@ -76,6 +76,7 @@ export async function findCommandsOnLocalPath(
     unverified?: Set<string>
     found?: Set<string>
     probes?: InventoryFsProbes
+    inventoryScan?: { partialBudget: Promise<unknown>; commandCount: number }
     onMatch?: () => void
     onCommandComplete?: (command: string, uncertain: boolean) => void
   } = {}
@@ -195,13 +196,17 @@ export async function findCommandsOnLocalPath(
     }
     return { uncertain }
   }
-  if (inventory && probes && options.signal) {
-    const { signal } = options
+  const { inventoryScan, signal } = options
+  const concurrency =
+    (inventoryScan?.commandCount ?? commands.length) <= DIRECT_DETECTION_COMMAND_LIMIT ? 1 : 4
+  if (inventory && probes && signal && inventoryScan) {
     const listings = new Map<string, Promise<Listing>>()
     const candidates = new Map<string, Map<string, Promise<DirectoryCandidate>>>()
     await scanInventoryPathCommands(
       directories,
       remaining,
+      concurrency,
+      inventoryScan.partialBudget,
       (command, dir) => {
         const byDirectory =
           candidates.get(command) ?? new Map<string, Promise<DirectoryCandidate>>()
@@ -287,13 +292,7 @@ export async function findCommandsOnLocalPath(
       found.add(command)
     }
   }
-  await scanDetectionDirectories(
-    directories,
-    commands.length <= DIRECT_DETECTION_COMMAND_LIMIT ? 1 : 4,
-    scan,
-    commit,
-    () => remaining.size === 0
-  )
+  await scanDetectionDirectories(directories, concurrency, scan, commit, () => remaining.size === 0)
   if (inventory) {
     for (const [command, match] of inventory.matches) {
       if (match.user) {

@@ -1,6 +1,9 @@
 import { homedir } from 'node:os'
 import path from 'node:path'
-import { runCliFsReadsAsync } from '../../shell/command-resolution/cli-fs-reads'
+import {
+  runCliFsReadsAsync,
+  type CliFsProbeOptions
+} from '../../shell/command-resolution/cli-fs-reads'
 import type { InventoryFsProbes } from '../../shell/command-resolution/inventory-fs-probes'
 import {
   cliInstallDirectories,
@@ -13,10 +16,12 @@ export async function detectCommandsInInstallDirs(
   {
     probes,
     needsLookup,
+    readDirectories,
     complete
   }: {
     probes: InventoryFsProbes
     needsLookup: (command: string) => Promise<boolean>
+    readDirectories: NonNullable<CliFsProbeOptions['readDirectories']>
     complete: (command: string, user: string | null, uncertain: boolean) => void
   }
 ): Promise<void> {
@@ -30,6 +35,7 @@ export async function detectCommandsInInstallDirs(
       }
       directories ??= runCliFsReadsAsync(cliInstallDirectories(platform, homedir()), {
         probes,
+        readDirectories,
         onUnverified: () => {
           unverifiedDirectories = true
         }

@@ -1,9 +1,10 @@
-import type { Dir, Stats } from 'node:fs'
-import { access, constants as fsConstants, opendir, readdir, stat } from 'node:fs/promises'
+import { opendirSync, readdirSync, type Dir } from 'node:fs'
+import { opendir } from 'node:fs/promises'
 import path from 'node:path'
 import {
   isMissingPathError,
   isPathPermissionError,
+  probeExecutableFile,
   UNVERIFIED_FS_PROBE,
   type InventoryFsProbes
 } from '../../../shared/shell/command-resolution/inventory-fs-probes'
@@ -24,36 +25,10 @@ export async function checkExecutableFile(
   isWin: boolean,
   probes?: InventoryFsProbes
 ): Promise<'executable' | 'missing' | 'unknown'> {
-  let stats: Stats | null | typeof UNVERIFIED_FS_PROBE
-  try {
-    // Follow symlinked CLIs to their real targets.
-    stats = await (probes ? probes.read(candidate, 'stat', () => stat(candidate)) : stat(candidate))
-  } catch (error) {
-    return isMissingPathError(error) || isPathPermissionError(error) ? 'missing' : 'unknown'
-  }
-  if (stats === UNVERIFIED_FS_PROBE) {
-    return 'unknown'
-  }
-  if (!stats || stats.isDirectory()) {
-    // PATH directories are not executable files despite their search bit.
-    return 'missing'
-  }
-  if (isWin) {
-    // Extension membership already enforced by the PATHEXT permutation.
-    return stats.isFile() ? 'executable' : 'missing'
-  }
-  if (probes) {
-    const result = await probes.executableAccess(candidate, stats)
-    return result === UNVERIFIED_FS_PROBE ? 'unknown' : result ? 'executable' : 'missing'
-  }
-  try {
-    await access(candidate, fsConstants.X_OK)
-    return 'executable'
-  } catch (error) {
-    return isMissingPathError(error) || ((stats.mode & 0o111) === 0 && isPathPermissionError(error))
-      ? 'missing'
-      : 'unknown'
-  }
+  const result = await (probes
+    ? probes.executableFile(candidate, isWin)
+    : probeExecutableFile(candidate, isWin))
+  return result === UNVERIFIED_FS_PROBE ? 'unknown' : result ? 'executable' : 'missing'
 }
 
 export function detectionDirectoryKey(dir: string, isWin: boolean): string {
@@ -93,21 +68,6 @@ export async function readDetectionDirectory(
   dir: string,
   inventory = false
 ): Promise<DetectionDirectoryListing> {
-  if (inventory) {
-    try {
-      // Names-only reads avoid synchronous DT_UNKNOWN lookups in the directory worker.
-      const names = await readdir(dir)
-      return names.length > MAX_DETECTION_DIRECTORY_ENTRIES ||
-        names.some((name) => /[^\p{ASCII}]/u.test(name))
-        ? null
-        : new Map(names.map((name) => [directoryNameKey(name), name]))
-    } catch (error) {
-      if (isMissingPathError(error)) {
-        return new Map()
-      }
-      return isPathPermissionError(error) ? null : 'unverified'
-    }
-  }
   let directory: Dir
   try {
     directory = await opendir(dir, { bufferSize: MAX_DETECTION_DIRECTORY_ENTRIES + 1 })
@@ -116,7 +76,7 @@ export async function readDetectionDirectory(
       return new Map()
     }
     // Searchable-but-unreadable directories still admit stat on known names.
-    return null
+    return !inventory || isPathPermissionError(error) ? null : 'unverified'
   }
   try {
     const names = new Map<string, string>()
@@ -133,7 +93,52 @@ export async function readDetectionDirectory(
       names.set(directoryNameKey(entry.name), entry.name)
     }
     return names
-  } catch {
-    return null
+  } catch (error) {
+    return !inventory || isDirentLookupError(error) || isPathPermissionError(error)
+      ? null
+      : 'unverified'
+  }
+}
+
+function isDirentLookupError(error: unknown): boolean {
+  return !!error && typeof error === 'object' && 'syscall' in error && error.syscall === 'lstat'
+}
+
+export function readInstallSubdirectories(dir: string): DetectionDirectoryListing {
+  const names = new Map<string, string>()
+  try {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        names.set(entry.name, entry.name)
+      }
+    }
+    return names
+  } catch (error) {
+    if (!isDirentLookupError(error)) {
+      return isMissingPathError(error) || isPathPermissionError(error) ? names : 'unverified'
+    }
+  }
+  try {
+    // Read one entry at a time so a DT_UNKNOWN lookup error only drops that entry.
+    using directory = opendirSync(dir, { bufferSize: 1 })
+    for (;;) {
+      try {
+        const entry = directory.readSync()
+        if (!entry) {
+          return names
+        }
+        if (entry.isDirectory()) {
+          names.set(entry.name, entry.name)
+        }
+      } catch (error) {
+        if (!isDirentLookupError(error)) {
+          throw error
+        }
+      }
+    }
+  } catch (error) {
+    return names.size || isMissingPathError(error) || isPathPermissionError(error)
+      ? names
+      : 'unverified'
   }
 }

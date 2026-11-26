@@ -91,7 +91,8 @@ async function scanInventory(
     readLoginPath,
     progress,
     () => notifyScanChange(scan),
-    controller.signal
+    controller.signal,
+    scan.publication.promise
   )
 }
 
@@ -99,7 +100,7 @@ function partialInventory(slot: InventorySlot, scan: InventoryScan): CommandInve
   const progress = partialLocalAgentCommandInventory(scan.progress)
   return mergeInventory(
     progress,
-    currentInventoryPublication(slot, 'complete')?.inventory,
+    currentInventoryPublication(slot)?.inventory,
     progress.probed,
     true
   )
