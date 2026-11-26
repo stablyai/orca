@@ -72,7 +72,9 @@ export { detectRemoteWindowsTerminalCapabilities }
 export type { RemoteWindowsTerminalCapabilities }
 
 // Collapse repeated Landing probes within an app session.
-let cached: PreflightStatus | null = null
+let cached: { result: PreflightStatus; expiresAt: number } | null = null
+// A short TTL recovers CLIs installed or authenticated after a not-ready probe.
+const LOCAL_PREFLIGHT_CACHE_TTL_MS = 30_000
 // Cache per distro; a short TTL recovers unreachable distros whose failures appear as missing tooling.
 const WSL_PREFLIGHT_CACHE_TTL_MS = 30_000
 const MAX_WSL_PREFLIGHT_DISTRO_ENTRIES = 128
@@ -85,6 +87,27 @@ let preflightRunCounter = 0
 let preflightCacheEpoch = 0
 
 const LOCAL_PREFLIGHT_CACHE_KEY = 'local'
+
+/** Only a not-ready local verdict expires; a fully ready one stays cached until reset. */
+export function shouldRefreshLocalPreflight(
+  entry: { result: PreflightStatus; expiresAt: number } | null,
+  now: number
+): boolean {
+  if (!entry) {
+    return true
+  }
+  const { git, gh, glab, bitbucket, azureDevOps, gitea } = entry.result
+  const optionalReady = [bitbucket, azureDevOps, gitea].every(
+    (service) => !service?.configured || service.authenticated
+  )
+  const fullyReady =
+    git.installed &&
+    gh.installed &&
+    gh.authenticated &&
+    optionalReady &&
+    (!glab || (glab.installed && glab.authenticated))
+  return !fullyReady && entry.expiresAt <= now
+}
 
 function preflightCacheKey(wslTarget: WslPreflightTarget | null): string {
   return wslTarget ? `wsl:${wslTarget.distro ?? ''}` : LOCAL_PREFLIGHT_CACHE_KEY
@@ -214,8 +237,8 @@ export async function runPreflightCheck(
       if (entry && entry.expiresAt > Date.now()) {
         return entry.result
       }
-    } else if (cached) {
-      return cached
+    } else if (cached && !shouldRefreshLocalPreflight(cached, Date.now())) {
+      return cached.result
     }
     const inFlight = preflightInFlight.get(cacheKey)
     if (inFlight) {
@@ -247,7 +270,10 @@ export async function runPreflightCheck(
           MAX_WSL_PREFLIGHT_DISTRO_ENTRIES
         )
       } else {
-        cached = result
+        cached = {
+          result,
+          expiresAt: Date.now() + LOCAL_PREFLIGHT_CACHE_TTL_MS
+        }
       }
     }
     return result
