@@ -153,14 +153,20 @@ export function slackMarkupShownText(text: string): { text: string; markdown: st
         ? `${segment.text} (${segment.url})`
         : segment.text
   )
-  const markdown = segments.map((segment) =>
-    segment.kind === 'text'
-      ? segment.text.replace(TYPED_MARKER, 'orca-mention\u200d:')
-      : segment.kind === 'link'
-        ? linkMarkdown(segment.url, segment.text)
-        : segment.kind === 'mention'
-          ? `[${escapeMarkdown(segment.text)}](<${SLACK_MENTION_HREF}>)`
-          : escapeMarkdown(segment.text)
-  )
-  return { text: readable.join(''), markdown: markdown.join('') }
+  return {
+    text: readable.join(''),
+    get markdown() {
+      return segments
+        .map((segment) =>
+          segment.kind === 'text'
+            ? segment.text.replace(TYPED_MARKER, 'orca-mention\u200d:')
+            : segment.kind === 'link'
+              ? linkMarkdown(segment.url, segment.text)
+              : segment.kind === 'mention'
+                ? `[${escapeMarkdown(segment.text)}](<${SLACK_MENTION_HREF}>)`
+                : escapeMarkdown(segment.text)
+        )
+        .join('')
+    }
+  }
 }

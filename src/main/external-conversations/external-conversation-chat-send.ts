@@ -19,6 +19,11 @@ import {
 import { callerFor, type ConversationChat } from './external-conversation-chat'
 import { refused, type ConnectorMessage, type Delivery } from './external-conversation-types'
 import type { AskerImages, ConnectorImage } from './connector-asker-images'
+import {
+  connectorImageInspection,
+  type ConnectorImageInspection
+} from './connector-asker-stored-image'
+import { getAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import type { DeliveryPreparation } from './external-conversation-delivery-receipts'
 
 /** Sent as a person's message would be: a busy chat takes it into the running turn. A bot's is
@@ -55,8 +60,9 @@ export async function deliverToChat(
     }
   }
   try {
+    let inspection: ConnectorImageInspection | undefined
     const readCarry = (direct: readonly ConnectorImage[]) =>
-      readCarriedMessages(chat, link, delivery.reply?.account, direct)
+      readCarriedMessages(chat, link, delivery.reply?.account, direct, inspection)
     let carried: CarriedMessages | undefined
     let directCount: number | undefined
     const images =
@@ -67,8 +73,12 @@ export async function deliverToChat(
               conversation: { source: link.source, externalId: link.externalId },
               asker: delivery.asker,
               signal: delivery.signal,
-              earlierBudget: async (direct) => {
+              earlierBudget: async (direct, signal) => {
                 directCount = direct.length
+                inspection = connectorImageInspection(
+                  getAgentSessionAttachmentStore()?.rootDir,
+                  signal
+                )
                 carried = await readCarry(direct)
                 return carried.earlierBudget
               }

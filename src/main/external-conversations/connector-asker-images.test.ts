@@ -4,6 +4,23 @@ import { connectorAskerImages } from './connector-asker-images'
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3])
 const conversation = { source: 'slack', externalId: 'T1:C1:1.1:U0BOT' }
+const earlierImage: ConnectorAsker = {
+  userId: 'U1',
+  role: 'owner',
+  place: { kind: 'public_channel', id: 'C1' },
+  text: '@bot',
+  context: [],
+  earlierOwn: {
+    messages: [
+      {
+        at: 0,
+        text: 'Screenshot',
+        messageRef: 'slack:T1:C1:1.2:1.2',
+        files: [{ id: 'FEARLIER', name: 'shot.png', type: 'image/png' }]
+      }
+    ]
+  }
+}
 
 describe('connectorAskerImages', () => {
   it('keeps an image on the mention ahead of earlier request images', async () => {
@@ -162,5 +179,70 @@ describe('connectorAskerImages', () => {
       'FDISTINCT7'
     ])
     expect(read).toHaveBeenCalledTimes(4)
+  })
+
+  it('stops reading an earlier image whose bytes do not match a supported format', async () => {
+    let chunks = 0
+    let cancelled = false
+    const store = vi.fn(async () => '/attachments/image.png')
+    const get = connectorAskerImages({
+      read: async () => ({
+        ok: true,
+        value: {
+          ok: true,
+          result: { download: { url: 'https://fixture.invalid/file', ticket: 'ticket' } }
+        }
+      }),
+      store,
+      fetch: async () =>
+        new Response(
+          new ReadableStream<Uint8Array>(
+            {
+              pull(controller) {
+                chunks++
+                controller.enqueue(new Uint8Array(12))
+                if (chunks === 4) {
+                  controller.close()
+                }
+              },
+              cancel() {
+                cancelled = true
+              }
+            },
+            { highWaterMark: 0 }
+          )
+        )
+    })
+    const images = await get({
+      botId: 'bot-1',
+      conversation,
+      signal: new AbortController().signal,
+      asker: earlierImage
+    })
+    expect(images).toEqual([])
+    expect(chunks).toBe(1)
+    expect(cancelled).toBe(true)
+    expect(store).not.toHaveBeenCalled()
+  })
+
+  it('stops waiting for an earlier-image budget when the delivery is cancelled', async () => {
+    const readingBudget = Promise.withResolvers<void>()
+    const abort = new AbortController()
+    const read = vi.fn(async () => null)
+    const get = connectorAskerImages({ read, store: async () => '/attachments/image.png' })
+    const staged = get({
+      botId: 'bot-1',
+      conversation,
+      signal: abort.signal,
+      asker: earlierImage,
+      earlierBudget: () => {
+        readingBudget.resolve()
+        return new Promise(() => {})
+      }
+    })
+    await readingBudget.promise
+    abort.abort()
+    await expect(staged).resolves.toEqual([])
+    expect(read).not.toHaveBeenCalled()
   })
 })

@@ -6,6 +6,7 @@ import {
   isSlackMessageRef
 } from '../../shared/connector-asker-file-validation'
 import type { ConnectorActionResponse } from '../../shared/connector-action-contract'
+import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-reason'
 import type { ConnectorResult } from '../connector-cloud/connector-cloud-request'
 
 export type ConnectorImage = { path: string; fileId: string; bytes: number }
@@ -23,7 +24,10 @@ export type AskerImages = (request: {
   conversation: { source: string; externalId: string }
   asker: ConnectorAsker
   signal: AbortSignal
-  earlierBudget?: (direct: readonly ConnectorImage[]) => Promise<EarlierImageBudget>
+  earlierBudget?: (
+    direct: readonly ConnectorImage[],
+    signal: AbortSignal
+  ) => Promise<EarlierImageBudget>
 }) => Promise<ConnectorImage[]>
 
 export const MAX_ASKER_IMAGES = 4
@@ -88,6 +92,7 @@ export function imageExtension(bytes: Uint8Array): string | null {
 }
 
 type Download = { name?: unknown; size?: unknown; url?: unknown; ticket?: unknown }
+const SIGNATURE_BYTES = 12
 
 const isDownload = (value: unknown): value is Download =>
   typeof value === 'object' && value !== null
@@ -97,7 +102,7 @@ async function imageBytes(
   request: typeof fetch,
   signal: AbortSignal,
   maxBytes: number
-): Promise<Buffer | null> {
+): Promise<{ bytes: Buffer; extension: string } | null> {
   if (typeof download.url !== 'string' || typeof download.ticket !== 'string') {
     return null
   }
@@ -112,33 +117,33 @@ async function imageBytes(
     return null
   }
   const chunks: Uint8Array[] = []
+  const prefix = Buffer.alloc(SIGNATURE_BYTES)
+  let extension: string | null = null
   let size = 0
   for await (const chunk of response.body) {
+    if (size < SIGNATURE_BYTES) {
+      prefix.set(chunk.subarray(0, SIGNATURE_BYTES - size), size)
+    }
     size += chunk.length
     // A file that says no size, or lies about it, still stops here.
     if (size > maxBytes) {
       return null
     }
+    if (extension === null && size >= SIGNATURE_BYTES) {
+      extension = imageExtension(prefix)
+      if (extension === null) {
+        return null
+      }
+    }
     chunks.push(chunk)
   }
-  return Buffer.concat(chunks)
-}
-
-// A call that may not heed the signal still ends with it: the delivery never waits past its budget.
-function within<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const stop = (): void => reject(new Error('out of time'))
-    if (signal.aborted) {
-      stop()
-      return
-    }
-    signal.addEventListener('abort', stop, { once: true })
-    work.then(resolve, reject).finally(() => signal.removeEventListener('abort', stop))
-  })
+  extension ??= imageExtension(prefix.subarray(0, size))
+  return extension ? { bytes: Buffer.concat(chunks, size), extension } : null
 }
 
 /** Fetches a request's images through Orca Cloud, as the bot's own `read --download` would. */
 export function connectorAskerImages(deps: {
+  enabled?: () => boolean
   /** A read of one file on the request's message, answered with where to stream it from. */
   read: (
     request: {
@@ -154,6 +159,9 @@ export function connectorAskerImages(deps: {
   budgetMs?: number
 }): AskerImages {
   return async ({ botId, conversation, asker, signal, earlierBudget }) => {
+    if (deps.enabled?.() === false) {
+      return []
+    }
     const current = asker.messageRef ? askerImageIds(asker.text) : []
     const earlier = hasEarlierImages(conversation.source, asker)
     if (current.length === 0 && !earlier) {
@@ -167,23 +175,26 @@ export function connectorAskerImages(deps: {
     const seen = new Set<string>()
     const stage = async ({ ref, fileId }: ImageTarget, maxBytes: number): Promise<number> => {
       try {
-        const answer = await within(
+        const answer = await waitForPromiseWithSignal(
           deps.read({ botId, ref, fileId, conversation }, bounded),
           bounded
         )
         const told = answer?.ok && answer.value.ok ? answer.value.result.download : undefined
         const download = isDownload(told) ? told : undefined
-        const bytes =
+        const image =
           download &&
-          (await within(imageBytes(download, deps.fetch ?? fetch, bounded, maxBytes), bounded))
-        const extension = bytes && imageExtension(bytes)
-        if (!bytes || !extension) {
+          (await waitForPromiseWithSignal(
+            imageBytes(download, deps.fetch ?? fetch, bounded, maxBytes),
+            bounded
+          ))
+        if (!image) {
           return 0
         }
+        const { bytes, extension } = image
         const named = typeof download?.name === 'string' ? download.name : fileId
         const base = named.slice(0, named.length - extname(named).length) || fileId
         // The disk is bounded too: a write that hangs must not hold the turn.
-        const path = await within(
+        const path = await waitForPromiseWithSignal(
           deps.store(
             `${base}${extension}`,
             bytes,
@@ -205,7 +216,13 @@ export function connectorAskerImages(deps: {
       await stage({ ref: asker.messageRef!, fileId }, MAX_ASKER_IMAGE_BYTES)
     }
     if (earlier && !bounded.aborted && seen.size < MAX_ASKER_IMAGES) {
-      const budget = await earlierBudget?.(images)
+      let budget: EarlierImageBudget | undefined
+      try {
+        budget =
+          earlierBudget && (await waitForPromiseWithSignal(earlierBudget(images, bounded), bounded))
+      } catch {
+        return images
+      }
       let slots = Math.min(budget?.count ?? MAX_ASKER_IMAGES, MAX_ASKER_IMAGES - seen.size)
       let bytes = budget?.bytes ?? MAX_ASKER_IMAGES * MAX_ASKER_IMAGE_BYTES
       for (const target of earlierImageTargets(asker)) {

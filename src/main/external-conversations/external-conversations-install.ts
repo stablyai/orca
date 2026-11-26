@@ -154,6 +154,7 @@ export function installExternalConversations(
       onLinked: () => runtime.onConversationLinked?.(),
       // Through the cloud a bot's own `read --download` goes through, into the attachment store.
       askerImages: connectorAskerImages({
+        enabled: () => runtime.getConnectorCloud?.()?.cloudFeatures()?.has('files.direct') === true,
         read: async ({ botId, ref, fileId, conversation }, imageSignal) => {
           const cloud = runtime.getConnectorCloud?.()
           const about = cloudConversation(conversation)

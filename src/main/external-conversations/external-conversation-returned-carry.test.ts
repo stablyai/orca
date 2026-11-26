@@ -27,7 +27,7 @@ import { actsForOwner, OWNER_ACTS_FOR } from '../../shared/bots/bot-acts-for'
 import { readBotActingTurn } from '../bots/bot-request-asker'
 import { carriedFields, carriedMessages } from './external-conversation-returned-carry'
 import { connectorAskerImages } from './connector-asker-images'
-import { storeConnectorImage } from './connector-asker-stored-image'
+import { connectorImageInspection, storeConnectorImage } from './connector-asker-stored-image'
 import { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
 
 // The real journal writer: a Slack message whose start failed, then the conversation's next message.
@@ -453,14 +453,15 @@ it('keeps a failed request and stages only new earlier images that fit the byte 
     const path = await storeConnectorImage(attachmentStore, `${fileId}.png`, fixture, fileId)
     failed.blocks.push({ type: 'image-ref', path })
   }
-  failedStart('failed', failed)
+  failedStart('missing', asked('d-missing', 'missing upload', THREAD, [join(dir, 'missing.png')]))
+  failedStart('failed', failed, 'notSignedIn', NOW + 1)
   const carried = await carriedMessages(
     THREAD,
     readJournalDomainReturnedCards(db, target, NOW),
     ACCOUNT,
     NOW,
     [],
-    attachmentStore.rootDir
+    connectorImageInspection(attachmentStore.rootDir, new AbortController().signal)
   )
 
   const reads: string[] = []

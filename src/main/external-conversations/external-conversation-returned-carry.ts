@@ -5,7 +5,6 @@
 // admission settles them (journal-domain-carried-cards).
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import type { NativeChatBlock } from '../../shared/native-chat/native-chat-types'
-import { stat } from 'node:fs/promises'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalCarriedCard } from '../../shared/agent-session/journal/agent-journal-bot-message-fields'
 import type { ConnectorMessageAsker } from '../../shared/connector-message-asker'
@@ -14,6 +13,7 @@ import {
   AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES
 } from '../../shared/agent-session/agent-session-attachments'
 import { connectorSentLine } from '../../shared/connector-asker-prompt'
+import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-reason'
 import {
   readAgentSessionFailureFact,
   type AgentSessionFailureKind
@@ -21,8 +21,7 @@ import {
 import type { JournalReturnedCard } from '../native-chat/agent-session-journal/journal-domain-queue-reads'
 import type { ConversationChat } from './external-conversation-chat'
 import type { EarlierImageBudget, ConnectorImage } from './connector-asker-images'
-import { storedConnectorImageId } from './connector-asker-stored-image'
-import { getAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
+import type { ConnectorImageInspection } from './connector-asker-stored-image'
 
 // What a later send can get past: the agent itself couldn't take the message. A refusal of the
 // message's own content (too large, too many images, empty) would fail again, so it stays a card.
@@ -91,7 +90,7 @@ export async function carriedMessages(
   account: string | undefined,
   now: number,
   direct: readonly ConnectorImage[] = [],
-  attachmentRoot?: string
+  inspection?: ConnectorImageInspection
 ): Promise<CarriedMessages> {
   // Oldest first: a failed start's card goes ahead of the queue, so queue order is newest first. A
   // card whose send time is gone came from an earlier Orca, so it is the older.
@@ -123,19 +122,22 @@ export async function carriedMessages(
         break cards
       }
       const path = block.url ? undefined : block.path
-      const fileId = path ? await storedConnectorImageId(attachmentRoot, path) : undefined
+      const stored = path && inspection ? await inspection.image(path) : undefined
+      if (stored === 'limit') {
+        break cards
+      }
+      // An older, unreadable card can still be edited. It needn't hold up the later ones.
+      if (stored === null) {
+        continue cards
+      }
+      const fileId = stored?.fileId
       if (fileId && cardFileIds.has(fileId)) {
         continue
       }
       if (++cardImages > count) {
         break cards
       }
-      if (path) {
-        cardBytes += await stat(path).then(
-          (info) => (info.isFile() ? info.size : Infinity),
-          () => Infinity
-        )
-      }
+      cardBytes += stored?.bytes ?? 0
       if (cardBytes > bytes) {
         break cards
       }
@@ -230,16 +232,22 @@ export async function readCarriedMessages(
   chat: ConversationChat,
   link: Pick<ExternalConversationLink, 'sessionId' | 'source' | 'externalId'>,
   account: string | undefined,
-  direct: readonly ConnectorImage[]
+  direct: readonly ConnectorImage[],
+  inspection?: ConnectorImageInspection
 ): Promise<CarriedMessages> {
+  if (inspection?.signal.aborted) {
+    return NOTHING_CARRIED
+  }
   try {
-    const returned = await (
-      await chat.conversation(link.sessionId)
-    ).journal.queuedMessages.returned()
-    const root = link.source === 'slack' ? getAgentSessionAttachmentStore()?.rootDir : undefined
-    return await carriedMessages(link, returned, account, Date.now(), direct, root)
+    const returned = await waitForPromiseWithSignal(
+      chat.conversation(link.sessionId).then(({ journal }) => journal.queuedMessages.returned()),
+      inspection?.signal
+    )
+    return await carriedMessages(link, returned, account, Date.now(), direct, inspection)
   } catch (error) {
-    console.warn('[connectors] could not read the chat’s unsent messages', error)
+    if (!inspection?.signal.aborted) {
+      console.warn('[connectors] could not read the chat’s unsent messages', error)
+    }
     return NOTHING_CARRIED
   }
 }

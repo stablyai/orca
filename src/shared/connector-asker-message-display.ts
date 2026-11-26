@@ -10,8 +10,15 @@ type ShownMessage = {
   asker?: { source?: string }
 }
 
+const SENT_LINE = /^\[Orca: sent [^\n\]]+\]\n/
+const ASKED_BY =
+  /^\[Orca: [^\n]*? · from ([^\n]+?)(?: \(your owner\)|, who has access \(not your owner\)|, another app your owner lets ask you)/
+
 /** Show the sender's words and keep the images, including on recovered requests. */
-export function connectorMessageShown({ role, blocks, origin, asker }: ShownMessage): {
+export function connectorMessageShown(
+  { role, blocks, origin, asker }: ShownMessage,
+  drawMarkdown = true
+): {
   blocks: NativeChatBlock[]
   drawnMarkdown?: string
 } {
@@ -19,20 +26,24 @@ export function connectorMessageShown({ role, blocks, origin, asker }: ShownMess
     return { blocks }
   }
   let changed = false
-  const markdown = new Map<NativeChatBlock, NativeChatBlock>()
-  const projected = blocks.map((block) => {
+  const markdown = drawMarkdown ? new Map<NativeChatBlock, NativeChatBlock>() : undefined
+  const own = blocks.findLastIndex((block) => block.type === 'text')
+  const projected = blocks.map((block, index) => {
     if (block.type !== 'text') {
       return block
     }
-    const text = block.text.replace(/^\[Orca: sent [^\n\]]+\]\n/, '')
+    const text = block.text.replace(SENT_LINE, '')
     const shown = connectorMessageShownText(text)
     if (shown === null) {
       return block
     }
     changed = true
-    const slack = asker?.source === 'slack' ? slackMarkupShownText(shown) : null
-    const shownBlock = { ...block, text: slack?.text ?? shown }
-    if (slack) {
+    // A failed request carries its own sender; the message's tag names only the latest requester.
+    const author = index === own ? undefined : ASKED_BY.exec(text)?.[1]
+    const words = author ? `${author}\n\n${shown}` : shown
+    const slack = asker?.source === 'slack' ? slackMarkupShownText(words) : null
+    const shownBlock = { ...block, text: slack?.text ?? words }
+    if (markdown && slack) {
       markdown.set(shownBlock, { ...block, text: slack.markdown })
     }
     return shownBlock
@@ -42,7 +53,7 @@ export function connectorMessageShown({ role, blocks, origin, asker }: ShownMess
   }
   return {
     blocks: projected,
-    ...(markdown.size > 0
+    ...(markdown?.size
       ? {
           drawnMarkdown: nativeChatProseToMarkdown(
             projected.map((block) => markdown.get(block) ?? block)
@@ -53,5 +64,5 @@ export function connectorMessageShown({ role, blocks, origin, asker }: ShownMess
 }
 
 export function connectorMessageShownBlocks(message: ShownMessage): NativeChatBlock[] {
-  return connectorMessageShown(message).blocks
+  return connectorMessageShown(message, false).blocks
 }
