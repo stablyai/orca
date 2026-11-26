@@ -7,6 +7,8 @@ import {
 } from '../../../../../shared/agent-usage/status-copy/owner-not-set-up-copy'
 import { getProviderUsageStatusLabel } from '../../../../../shared/agent-usage/status-copy/usage-error-copy'
 
+import { isPluginUsageProvider, type UsageRosterProvider } from './plugin-usage-roster-provider'
+
 export type UsageRosterRowState = {
   kind: 'usage' | 'loading' | 'sign-in' | 'unavailable' | 'error' | 'empty'
   statusLabel: string | null
@@ -37,7 +39,7 @@ function isConfirmedSignedOut(provider: ProviderRateLimits): boolean {
 }
 
 export function getUsageRosterRowState(
-  provider: ProviderRateLimits,
+  provider: UsageRosterProvider,
   hasUsage: boolean,
   t: Translate = translate
 ): UsageRosterRowState {
@@ -58,7 +60,7 @@ export function getUsageRosterRowState(
       statusLabel: t('auto.components.status.bar.UsageRosterPanel.loadingUsage', 'Loading usage…')
     }
   }
-  if (isConfirmedSignedOut(provider)) {
+  if (!isPluginUsageProvider(provider) && isConfirmedSignedOut(provider)) {
     return {
       kind: 'sign-in',
       statusLabel: t('auto.components.status.bar.UsageRosterPanel.notSignedIn', 'not signed in')

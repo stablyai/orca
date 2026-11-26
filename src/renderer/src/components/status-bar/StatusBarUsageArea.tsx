@@ -144,6 +144,7 @@ export function StatusBarUsageArea({
                       display={usagePercentageDisplay}
                       mode={usageMode}
                       barMode={statusBarUsageMode}
+                      // WSL usage uses the desktop plugin worker, so the distro is not its source.
                       hostLabel={
                         isPluginUsageProvider(p) && remoteOwner?.wslDistro
                           ? undefined

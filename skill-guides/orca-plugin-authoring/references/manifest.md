@@ -23,7 +23,7 @@
 - `icon` (string, since 1.4.160): Square image shown beside the plugin name. PNG, WEBP, static, at least 128×128, square, at most 256 KB.
 - `engines` (object, required, since 1.4.160): Host versions this plugin supports. Older hosts refuse to load it.
 - `engines.orca` (string, required, since 1.4.160): Oldest Orca release this plugin runs on, as `>=x.y.z`. Raise it to the newest "Since" of any field you use; a format 2 manifest needs at least `>=1.4.245`, because older Orca cannot read format 2.
-- `main` (string, since 1.4.160): Node entry run in an out-of-process plugin worker: a `.js`/`.mjs` module, or a `.ts`/`.mts` module that Orca transpiles when it loads (needs `engines.orca` `>=1.4.246`). Requires the `trusted-worker` execution profile. Events, hooks, usage providers and commands without an `action` need this entry.
+- `main` (string, since 1.4.160): Node entry run in an out-of-process plugin worker: a `.js`/`.mjs` module, or a `.ts`/`.mts` module that Orca transpiles when it loads (needs `engines.orca` `>=1.4.246`). Requires the `trusted-worker` execution profile, and is required by it, by `contributes.events`, by `contributes.hooks`, by `contributes.usageProviders` and by any command without an `action`.
 - `capabilities` (Capability[], since 1.4.160): Host APIs the plugin asks the user to grant. At most 32.
 - `cover` (object, since 1.4.245): Wide image at the top of the plugin page.
 - `cover.path` (string, required, since 1.4.245): Cover image shown on the plugin page, 16:10 recommended (1600×1000). PNG, JPEG, WEBP, static, at least 800×500, at most 1024 KB.

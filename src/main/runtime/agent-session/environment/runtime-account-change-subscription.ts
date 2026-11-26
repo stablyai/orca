@@ -89,6 +89,7 @@ export function subscribeRuntimeAccountChanges(
               listener({ ...snapshot, ...runtimePluginUsageSnapshot(services) })
             }
           } catch (error) {
+            lastValid = undefined
             console.warn('[accounts] Failed to publish account snapshot', error)
           }
         }

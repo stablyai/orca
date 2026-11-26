@@ -148,9 +148,9 @@ declare module 'orca/host' {
       result: { ok: true }
       surfaces: "worker"
     }
-    /** Publishes the current quota for one of the calling plugin’s `contributes.usageProviders` entries. Pass up to eight windows with distinct whole-minute durations from 1 to 527040, percentages from 0 to 100, and optional `resetsAt` timestamps in Unix milliseconds. An empty list clears the reading. Orca records the observation time and expires the reading after 30 minutes. An approved plugin declaring a usage provider has a resident worker. Since host API 1.11. */
+    /** Publishes the current quota for one of the calling plugin’s `contributes.usageProviders` entries. Replace the status, accounts, and optional display-safe error together. Send up to eight accounts and eight named windows in total, with percentages from 0 to 100 and optional `resetsAt` timestamps in Unix milliseconds. Send `status: "ok"` with no accounts or error to clear the reading. Orca records the observation time and expires the reading after 30 minutes. An approved plugin declaring a usage provider has a resident worker. Since host API 1.11. */
     "usageProvider.update": {
-      params: { id: string; windows: { windowMinutes: number; usedPercent: number; resetsAt?: number | null }[] }
+      params: { id: string; status: "idle" | "fetching" | "ok" | "error" | "unavailable"; accounts: { label: string; plan?: string; windows: { label: string; usedPercent: number; resetsAt?: number }[] }[]; error?: string }
       result: { ok: true }
       surfaces: "worker"
     }

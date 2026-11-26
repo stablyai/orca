@@ -1,6 +1,6 @@
 import type { UsageRosterProvider } from './plugin-usage-roster-provider'
 import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
-import { usageRosterProviderName } from './plugin-usage-roster-provider'
+import { isPluginUsageProvider, usageRosterProviderName } from './plugin-usage-roster-provider'
 import type { Translate } from '@/i18n/use-translate'
 import { getStatusBarUsageSections } from '../composition/status-bar-usage-sections'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
@@ -16,7 +16,9 @@ export function formatUsageChipTitle(
   if (!headline) {
     return providerName
   }
-  const name = headline.label
+  const name = isPluginUsageProvider(p)
+    ? p.windows.find((window) => window === headline.window)?.rosterLabel
+    : headline.label
   const subject =
     !name || name.startsWith(providerName) ? name || providerName : `${providerName} ${name}`
   return `${subject} ${formatUsagePercentageLabel(headline.window.usedPercent, display, t)}`

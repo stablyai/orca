@@ -229,18 +229,33 @@ Usage shows the plugin's manifest `icon` when present.
 ```ts
 await orca.host.call('usageProvider.update', {
   id: 'sample-quota',
-  windows: [
-    { windowMinutes: 300, usedPercent: 28, resetsAt: Date.now() + 2 * 60 * 60 * 1000 },
-    { windowMinutes: 10080, usedPercent: 62, resetsAt: null },
-    { windowMinutes: 43200, usedPercent: 41, resetsAt: null }
+  status: 'ok',
+  accounts: [
+    {
+      label: 'Shared account',
+      plan: 'Pro',
+      windows: [
+        { label: '5h', usedPercent: 28, resetsAt: Date.now() + 2 * 60 * 60 * 1000 },
+        { label: 'Weekly', usedPercent: 62 },
+        { label: 'Monthly', usedPercent: 41 }
+      ]
+    }
   ]
 })
 ```
 
-Replace the window list with each update. Provide up to eight windows with distinct durations in
-whole minutes, and use percentages from 0 to 100. Set `resetsAt` to a Unix timestamp in milliseconds
-when known. Publish an empty list when the quota is unavailable. Orca timestamps readings, expires
-them after 30 minutes, and clears them when the plugin is disabled, removed or replaced. Orca desktop
+Each call replaces the previous reading. Provide up to eight accounts and eight windows in total.
+Account labels must be unique within the provider, and window labels must be unique within each
+account. Use percentages from 0 to 100 and Unix milliseconds for known reset times.
+
+Report `status: 'error'` with an optional user-facing `error` message when a refresh fails.
+Include previously fetched windows if you still want to display them. Use `status: 'unavailable'`
+when the source cannot report quotas. Account labels, plans, window labels, and error messages
+are visible to paired desktop clients. Publish only display text and keep credentials out of
+readings. To clear a reading, send `status: 'ok', accounts: []` and omit `error`.
+
+Orca timestamps readings, expires them after 30 minutes, and clears them when the plugin is
+disabled, removed or replaced. Orca desktop
 and Electron-backed `orca serve` run the worker and include its readings in host account snapshots
 for paired desktop clients. Standalone `orcad` skips plugin worker startup. Run
 `ORCA_SERVE_RUNTIME=electron orca serve` when serving a profile that uses plugin usage providers.

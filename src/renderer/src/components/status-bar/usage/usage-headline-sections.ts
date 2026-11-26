@@ -5,14 +5,14 @@ import {
 } from './rate-limit-window-localized-label'
 import { CURSOR_MODELS_BUCKET_NAME } from '../../../../../shared/agent-usage/rate-limits/cursor-usage-buckets'
 import type { RateLimitWindow } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
-import type { UsageRosterProvider } from './plugin-usage-roster-provider'
+import { isPluginUsageProvider, type UsageRosterProvider } from './plugin-usage-roster-provider'
 import { clampUsedPercent } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { isGroupedUsagePool } from '../../../../../shared/agent-usage/display/grouped-usage-pool'
 import { getWindowSections } from './provider-usage-panel'
 import { USAGE_URGENT_PERCENT } from './usage-health-tone'
 import { formatPoolRosterLabel } from './usage-pool-label'
 
-export type UsageSection = { label: string; window: RateLimitWindow }
+export type UsageSection = { key?: string; label: string; window: RateLimitWindow }
 
 // Drop null and missing windows from partial/rehydrated snapshots before reading percentages.
 export function usedSections(p: UsageRosterProvider, t?: Translate): UsageSection[] {
@@ -45,6 +45,9 @@ export function shortUsageLabel(
   useRemainingDuration = false,
   t?: Translate
 ): string {
+  if (isPluginUsageProvider(p)) {
+    return section.label
+  }
   if (isGroupedUsagePool(section.window)) {
     return formatPoolRosterLabel(section.window, p.buckets ?? [], t)
   }

@@ -13,7 +13,8 @@ it('layers plugin readings over the newest valid account snapshot during and aft
     pluginKey: 'samples.quota',
     providerId: 'sample-quota',
     label: 'Sample quota',
-    windows: [{ windowMinutes: 60, usedPercent: 25, resetsAt: null }],
+    status: 'ok',
+    accounts: [{ label: 'Sample account', windows: [{ label: '5h', usedPercent: 25 }] }],
     observedAt: 1
   }
   const delayedRoster = Promise.withResolvers<AccountsSnapshot['codex']>()
@@ -25,11 +26,18 @@ it('layers plugin readings over the newest valid account snapshot during and aft
   let onPluginUsageChanged!: (readings: PluginUsageReading[]) => void
   let pluginUsageProviders: PluginUsageReading[] = []
   let rosterReads = 0
+  let failUsageRead = false
+  let streamUsage = initialUsage
   const removeListener = () => () => {}
   const services: Parameters<typeof subscribeRuntimeAccountChanges>[0] = {
     claudeAccounts: { listAccounts: () => accounts, onAccountRenamed: removeListener },
     codexAccounts: {
-      listAccounts: () => (rosterReads++ === 0 ? delayedRoster.promise : Promise.resolve(accounts)),
+      listAccounts: () => {
+        if (failUsageRead) {
+          return Promise.reject(new Error('Temporary usage read failure'))
+        }
+        return rosterReads++ === 0 ? delayedRoster.promise : Promise.resolve(accounts)
+      },
       onAccountRenamed: (listener) => {
         onRename = listener
         return () => {}
@@ -57,7 +65,7 @@ it('layers plugin readings over the newest valid account snapshot during and aft
         if (++streamReads === 2) {
           throw new Error('Temporary account read failure')
         }
-        return { claude: accounts, codex: accounts, rateLimits: initialUsage }
+        return { claude: accounts, codex: accounts, rateLimits: streamUsage }
       },
       dataAccounts: () => ({})
     },
@@ -106,6 +114,18 @@ it('layers plugin readings over the newest valid account snapshot during and aft
     await setImmediate()
     expect(snapshots.at(-1)?.pluginUsageProviders).toEqual([])
     expect(streamReads).toBe(3)
+
+    const snapshotsBeforeFailure = snapshots.length
+    streamUsage = nextUsage
+    failUsageRead = true
+    onUsageChanged(nextUsage)
+    await setImmediate()
+    expect(snapshots).toHaveLength(snapshotsBeforeFailure)
+    failUsageRead = false
+    pluginUsageProviders = [reading]
+    onPluginUsageChanged(pluginUsageProviders)
+    await setImmediate()
+    expect(snapshots.at(-1)).toMatchObject({ rateLimits: nextUsage, pluginUsageProviders })
   } finally {
     unsubscribe()
   }

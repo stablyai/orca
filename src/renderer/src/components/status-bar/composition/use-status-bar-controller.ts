@@ -193,7 +193,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     pluginUsage.length > 0
   const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
-  const isEmptyUsageState = pluginUsage.length === 0 && isUsageEmptyState(rateLimits, usageSettings)
+  const isEmptyUsageState =
+    pluginUsageProviders.length === 0 && isUsageEmptyState(rateLimits, usageSettings)
   // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
   const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed
   const anyFetching =

@@ -28,7 +28,7 @@ export class PluginUsageProviderState {
     }
     const existing = this.readings.get(pluginKey)
     const byProvider = existing?.revision === revision ? existing.byProvider : new Map()
-    if (update.windows.length === 0) {
+    if (update.status === 'ok' && update.accounts.length === 0 && update.error === undefined) {
       const removed = byProvider.delete(provider.id)
       if (byProvider.size === 0) {
         this.remove(pluginKey)
@@ -45,11 +45,9 @@ export class PluginUsageProviderState {
         : {}),
       providerId: provider.id,
       label: provider.label,
-      windows: update.windows.map(({ windowMinutes, usedPercent, resetsAt }) => ({
-        windowMinutes,
-        usedPercent,
-        resetsAt: resetsAt ?? null
-      })),
+      status: update.status,
+      accounts: update.accounts,
+      ...(update.error ? { error: update.error } : {}),
       observedAt: Date.now()
     })
     this.readings.set(pluginKey, { revision, byProvider })

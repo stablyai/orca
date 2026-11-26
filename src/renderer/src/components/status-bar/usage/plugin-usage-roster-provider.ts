@@ -12,7 +12,14 @@ export type PluginUsageRosterProvider = Omit<ProviderRateLimits, 'provider'> & {
   pluginLabel: string
   pluginName: string
   pluginIconSrc?: string
-  windows: RateLimitWindow[]
+  accounts: { label: string; plan?: string; windows: PluginUsageWindow[] }[]
+  windows: PluginUsageWindow[]
+}
+
+type PluginUsageWindow = RateLimitWindow & {
+  key: string
+  label: string
+  rosterLabel: string
 }
 
 export type UsageRosterProvider = ProviderRateLimits | PluginUsageRosterProvider
@@ -62,16 +69,30 @@ export function toPluginUsageRosterProvider(
   reading: PluginUsageReading,
   pluginIconSrc?: string
 ): PluginUsageRosterProvider {
+  const accounts = reading.accounts.map(({ label, plan, windows }) => ({
+    label,
+    plan,
+    windows: windows.map((window) => ({
+      key: JSON.stringify([label, window.label]),
+      label: window.label,
+      rosterLabel: reading.accounts.length === 1 ? window.label : `${label} · ${window.label}`,
+      usedPercent: window.usedPercent,
+      windowMinutes: 0,
+      resetsAt: window.resetsAt ?? null,
+      resetDescription: null
+    }))
+  }))
   return {
     provider: `plugin:${reading.pluginKey}:${reading.providerId}`,
     pluginLabel: reading.label,
     pluginName: reading.pluginName ?? reading.pluginKey,
     pluginIconSrc,
-    windows: reading.windows.map((window) => ({ ...window, resetDescription: null })),
+    accounts,
+    windows: reading.status === 'unavailable' ? [] : accounts.flatMap(({ windows }) => windows),
     session: null,
     weekly: null,
     updatedAt: reading.observedAt,
-    status: 'ok',
-    error: null
+    status: reading.status,
+    error: reading.error ?? null
   }
 }

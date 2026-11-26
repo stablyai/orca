@@ -68,7 +68,11 @@ describe('plugin usage worker authority', () => {
         'usageProvider.update',
         {
           id,
-          windows: [{ windowMinutes: 60, usedPercent }]
+          status: 'ok',
+          accounts: [
+            { label: 'Shared account', plan: 'Pro', windows: [{ label: '5h', usedPercent }] },
+            { label: 'Backup account', windows: [{ label: '5h', usedPercent: 10 }] }
+          ]
         },
         'worker',
         { isCurrentWorker: () => approved.get(worker.pluginKey) === worker }
@@ -90,7 +94,11 @@ describe('plugin usage worker authority', () => {
           providerId: 'first-quota',
           label: 'Sample quota',
           observedAt: expect.any(Number),
-          windows: [{ windowMinutes: 60, usedPercent: 50, resetsAt: null }]
+          status: 'ok',
+          accounts: [
+            { label: 'Shared account', plan: 'Pro', windows: [{ label: '5h', usedPercent: 50 }] },
+            { label: 'Backup account', windows: [{ label: '5h', usedPercent: 10 }] }
+          ]
         }
       ])
     } finally {

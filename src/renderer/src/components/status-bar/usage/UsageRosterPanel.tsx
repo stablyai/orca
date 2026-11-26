@@ -197,7 +197,7 @@ export function UsageRow({
             const label = shortUsageLabel(p, section, false, t)
             return (
               <UsageDetailMetric
-                key={section.label}
+                key={section.key ?? section.label}
                 windowLabel={section.label}
                 usedPercent={section.window.usedPercent}
                 label={label}
@@ -314,9 +314,7 @@ export function UsageRosterPanel({
       <div className="border-t border-border/70" />
       {sorted.map((p) => {
         const plugin = isPluginUsageProvider(p)
-        const state = plugin
-          ? ({ kind: 'usage', statusLabel: null } as const)
-          : getUsageRosterRowState(p, usedSections(p, t).length > 0, t)
+        const state = getUsageRosterRowState(p, usedSections(p, t).length > 0, t)
         const showSignInAction =
           !plugin && actionsAvailable && state.kind === 'sign-in' && canSignIn(p.provider)
         const rowNode = (

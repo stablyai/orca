@@ -5,7 +5,7 @@ import { spec, WORKER_ONLY } from './plugin-host-method-spec'
 export const PLUGIN_USAGE_PROVIDER_API = {
   'usageProvider.update': spec({
     summary:
-      'Publishes the current quota for one of the calling plugin’s `contributes.usageProviders` entries. Pass up to eight windows with distinct whole-minute durations from 1 to 527040, percentages from 0 to 100, and optional `resetsAt` timestamps in Unix milliseconds. An empty list clears the reading. Orca records the observation time and expires the reading after 30 minutes. An approved plugin declaring a usage provider has a resident worker.',
+      'Publishes the current quota for one of the calling plugin’s `contributes.usageProviders` entries. Replace the status, accounts, and optional display-safe error together. Send up to eight accounts and eight named windows in total, with percentages from 0 to 100 and optional `resetsAt` timestamps in Unix milliseconds. Send `status: "ok"` with no accounts or error to clear the reading. Orca records the observation time and expires the reading after 30 minutes. An approved plugin declaring a usage provider has a resident worker.',
     since: 11,
     scope: 'plugin-private',
     capability: null,

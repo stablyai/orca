@@ -49,9 +49,9 @@ export function getStatusBarUsageSections(
   }
   if (isPluginUsageProvider(p)) {
     return p.windows.map((window) => ({
-      key: String(window.windowMinutes),
+      key: window.key,
       window,
-      label: formatRateLimitWindowChipLabel(window)
+      label: window.rosterLabel
     }))
   }
   if (p.buckets?.length) {

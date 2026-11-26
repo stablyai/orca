@@ -19,13 +19,19 @@ export function pluginNeedsResidentWorker(manifest: PluginManifest): boolean {
 
 /** What makes a plugin the one the person approved: a change means a new revision. */
 export function pluginApprovedRevision(plugin: ValidDiscoveredPlugin): string {
-  return [
-    plugin.consentFingerprint,
-    plugin.contentHash ?? plugin.consentContentHash ?? '',
-    plugin.devRevision ?? '',
-    plugin.rootDir,
-    JSON.stringify(plugin.manifest)
-  ].join('\n')
+  const { consentFingerprint, contentHash, consentContentHash, devRevision, rootDir, manifest } =
+    plugin
+  if (manifest.contributes.usageProviders.length > 0) {
+    // Quota readings and the manifest icon must expire together, including for local installs.
+    return [
+      consentFingerprint,
+      contentHash ?? consentContentHash ?? '',
+      devRevision ?? '',
+      rootDir,
+      JSON.stringify(manifest)
+    ].join('\n')
+  }
+  return [consentFingerprint, contentHash ?? '', devRevision ?? '', rootDir].join('\n')
 }
 
 export type PluginResidentWorkerContext = Pick<

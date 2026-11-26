@@ -81,7 +81,9 @@ export function formatStatusBarSectionLabel(
   t?: Translate
 ): string {
   if (isPluginUsageProvider(p)) {
-    return formatRateLimitWindowChipLabel(section.window, now)
+    return section.window.resetsAt === null
+      ? section.label
+      : formatRateLimitWindowChipLabel(section.window, now)
   }
   return isGroupedUsagePool(section.window)
     ? formatPoolShortLabel(section.window, p.buckets ?? [], now, t)

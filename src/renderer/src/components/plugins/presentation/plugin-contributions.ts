@@ -152,7 +152,8 @@ export function summaryContributionSource(
     newFiles: of('newFiles').map((item) => ({ title: item.name, extension: item.detail ?? '' })),
     statusBarItems: of('statusBarItems').map((item) => item.name),
     usageProviders: of('usageProviders').map((item) => item.name),
-    // Why no detail: install checks the names, so a server's address or command can differ.
+    // Why no detail: install checks a summary's names, not its details, so a catalog's address or
+    // command line could differ from what runs.
     mcpServers: of('mcpServers').map((item) => ({ name: item.name, detail: '' }))
   }
 }
