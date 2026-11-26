@@ -59,7 +59,8 @@ export function createCombinedSearchRows({
     head.push({ type: 'section', section: 'files', count: '' })
     head.push({ type: 'error', section: 'files', message: namesError })
   } else if (names && names.total === 0 && names.truncated) {
-    head.push({ type: 'section', section: 'files', count: '0+' })
+    // An empty section shows no count; '0+' would read as nonsense next to the refine hint.
+    head.push({ type: 'section', section: 'files', count: '' })
     head.push({ type: 'refine', section: 'files' })
   } else if (names && names.total > 0) {
     head.push({
@@ -81,7 +82,7 @@ export function createCombinedSearchRows({
   } else if (tail.length > 0 && textResult) {
     head.push({ type: 'section', section: 'text', count: formatTextMatchCount(textResult) })
   } else if (textResult?.truncated) {
-    head.push({ type: 'section', section: 'text', count: formatTextMatchCount(textResult) })
+    head.push({ type: 'section', section: 'text', count: '' })
     head.push({ type: 'refine', section: 'text' })
   }
   // A capped or still-loading source may hide matches, so only a settled, complete miss says No results.
