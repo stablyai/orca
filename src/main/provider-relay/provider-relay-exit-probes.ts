@@ -16,7 +16,7 @@ export async function provenGone(identity: AgentSessionProcessIdentity, readToke
  * agent. At most 256 wait in the queue; past that a probe waits in the overflow, which moves into
  * the queue first as room frees, so every awaited run is reached however many there are. A
  * chat's interest and its waiters leave the moment its run is fenced off (close, deletion, new
- * run) or decided; a probe nobody waits on and no run needs is skipped when its turn comes. Each
+ * run) or decided; a probe nobody waits on and no run needs leaves its queue at once. Each
  * caller waits only its own deadline, then detaches. A proof that lands with no one waiting is kept
  * for the next ask.
  */
@@ -33,11 +33,10 @@ type AgentProbe = {
   waiters: Map<(gone: boolean) => void, string | null>
 }
 let agentProbesRunning = 0
-let agentProbesQueued = 0
-const agentProbeQueue: AgentProbe[] = []
-let agentProbeHead = 0
-/** Probes queued or running, by agent; the overflow waits, in order, for room in the queue. */
+/** Probes queued or running, by agent. The queue (at most 256) and the overflow behind it keep
+ * arrival order; a probe leaves either the moment it's dropped, so neither holds dead entries. */
 const agentProbes = new Map<string, AgentProbe>()
+const queue = new Map<string, AgentProbe>()
 const overflow = new Map<string, AgentProbe>()
 /** Which probes each chat's run is interested in, so a fence reaches them at once. */
 const probesByChat = new Map<string, Set<string>>()
@@ -52,7 +51,7 @@ function dropIfUnneeded(probe: AgentProbe): void {
   if (probe.state === 'overflow') {
     overflow.delete(probe.key)
   } else if (probe.state === 'queued') {
-    agentProbesQueued -= 1
+    queue.delete(probe.key)
     agentProbes.delete(probe.key)
   } else {
     return
@@ -62,36 +61,29 @@ function dropIfUnneeded(probe: AgentProbe): void {
 
 function refillAgentProbeQueue(): void {
   for (const [key, probe] of overflow) {
-    if (agentProbesQueued >= AGENT_PROBES_QUEUED) {
+    if (queue.size >= AGENT_PROBES_QUEUED) {
       return
     }
     overflow.delete(key)
     probe.state = 'queued'
-    agentProbesQueued += 1
+    queue.set(key, probe)
     agentProbes.set(key, probe)
-    agentProbeQueue.push(probe)
   }
 }
 
 function admitNextAgentProbe(): void {
-  for (;;) {
-    refillAgentProbeQueue()
-    if (agentProbesRunning >= AGENT_PROBES_RUNNING || agentProbeHead >= agentProbeQueue.length) {
-      break
+  refillAgentProbeQueue()
+  while (agentProbesRunning < AGENT_PROBES_RUNNING) {
+    const next = queue.values().next()
+    if (next.done) {
+      return
     }
-    const probe = agentProbeQueue[agentProbeHead]
-    agentProbeHead += 1
-    if (probe.state !== 'queued') {
-      continue
-    }
-    agentProbesQueued -= 1
+    const probe = next.value
+    queue.delete(probe.key)
     probe.state = 'running'
     agentProbesRunning += 1
     void runAgentProbe(probe)
-  }
-  if (agentProbeHead > 32 && agentProbeHead * 2 > agentProbeQueue.length) {
-    agentProbeQueue.splice(0, agentProbeHead)
-    agentProbeHead = 0
+    refillAgentProbeQueue()
   }
 }
 
