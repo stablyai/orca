@@ -18,6 +18,8 @@ export type WorktreeDeleteOptions = {
   expectedInstanceId?: string
   /** Pin deletion to the confirmed host because workspace IDs repeat across hosts. */
   expectedHostId?: ExecutionHostId
+  /** Caller already confirmed (press-again shortcut); lineage children still get the dialog. */
+  confirmed?: boolean
 }
 
 export type WorktreeDeleteWithToastOptions = {
