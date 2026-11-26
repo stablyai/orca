@@ -45,8 +45,8 @@ async function botHandoffStartOptions(
   if (!model || saved.model === model) {
     return { ...saved, ...requested }
   }
-  const { effort, serviceTier, fastMode } = saved
-  if (!effort && !serviceTier && !fastMode) {
+  const { effort, serviceTier } = saved
+  if (!effort && !serviceTier) {
     return { ...requested }
   }
   const catalog = await (
@@ -82,9 +82,6 @@ async function botHandoffStartOptions(
     (serviceTier === STANDARD_SERVICE_TIER ||
       listed?.serviceTiers?.some(({ value }) => value === serviceTier))
       ? { serviceTier }
-      : {}),
-    ...(fastMode === 'false' || (fastMode === 'true' && listed?.supportsFastMode)
-      ? { fastMode }
       : {}),
     ...requested
   }
