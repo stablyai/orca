@@ -41,7 +41,7 @@ export function isAgentCopyId(value: unknown): value is string {
 }
 
 /** Whether `selector` names `base` itself or one of its copies. */
-export function selectsAgent(selector: string | undefined, base: TuiAgent): boolean {
+export function selectsAgent(selector: string | undefined, base: string): boolean {
   return selector !== undefined && (agentCopyBase(selector) ?? selector) === base
 }
 

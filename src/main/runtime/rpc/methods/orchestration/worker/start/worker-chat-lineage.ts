@@ -7,6 +7,7 @@ import {
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import { resolveDispatchCreator } from '../../runs/dispatch-creator'
+import { selectsAgent } from '../../../../../../../shared/agent-launch/catalog/agent-copies'
 import {
   decideWorkerStartMode,
   readWorkerStartModeSettings
@@ -65,12 +66,13 @@ export function lineageModeForResolvedAgent(
     agent: string | undefined
   }
 ): ReturnType<typeof decideWorkerStartMode> {
-  if (!start.chatLineage || !start.agent || start.agent === start.params.agent) {
+  // A copy resolves to its own agent too, and was decided under the copy's settings already.
+  if (!start.chatLineage || !start.agent || selectsAgent(start.params.agent, start.agent)) {
     return decided
   }
   return decideWorkerStartMode({
     params: { ...start.params, agent: start.agent },
-    settings: readWorkerStartModeSettings(runtime, start.agent),
+    settings: readWorkerStartModeSettings(runtime),
     chatLineage: true
   })
 }
