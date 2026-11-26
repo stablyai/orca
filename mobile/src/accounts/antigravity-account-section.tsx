@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Text, View } from 'react-native'
 import { ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY } from '../../../src/shared/remote-runtime/protocol/account-runtime-capabilities'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
@@ -26,6 +26,12 @@ export function useAntigravityAccounts(
   reloadKey: number
 ): [AntigravityAccountState | null, (state: AntigravityAccountState) => void] {
   const [state, setState] = useState<AntigravityAccountState | null>(null)
+  // A select replaces the list. A list that started earlier must not write back over it.
+  const generation = useRef(0)
+  const replaceState = (next: AntigravityAccountState): void => {
+    generation.current += 1
+    setState(next)
+  }
   useEffect(() => {
     if (!client || !live) {
       return
@@ -40,10 +46,11 @@ export function useAntigravityAccounts(
         setState(null)
         return
       }
+      const listedAt = generation.current
       void listAntigravityAccounts
         .request(client, ANTIGRAVITY_HOST_TARGET)
         .then((response) => {
-          if (!cancelled) {
+          if (!cancelled && generation.current === listedAt) {
             setState(listAntigravityAccounts.interpret(response))
           }
         })
@@ -55,11 +62,39 @@ export function useAntigravityAccounts(
       stop()
     }
   }, [client, live, reloadKey])
-  return [state, setState]
+  return [state, replaceState]
 }
 
 export function antigravityBusyId(accountId: string): string {
   return `antigravity:${accountId}`
+}
+
+/** Live meter only when it belongs to this row. An omitted account is an older host. */
+function usageForAntigravityRow(
+  account: AntigravityAccountState['accounts'][number],
+  active: boolean,
+  activeUsage: ProviderRateLimits | null
+): ProviderRateLimits | null {
+  const readingId = active && activeUsage ? antigravityReadingAccountId(activeUsage) : undefined
+  if (active && activeUsage && (readingId === undefined || readingId === account.id)) {
+    return activeUsage
+  }
+  return account.usage ?? null
+}
+
+function antigravityReadingAccountId(limits: ProviderRateLimits): string | null | undefined {
+  const metadata: unknown = limits.usageMetadata
+  if (typeof metadata !== 'object' || metadata === null || !('account' in metadata)) {
+    return undefined
+  }
+  const reading: unknown = metadata.account
+  if (typeof reading !== 'object' || reading === null || !('id' in reading)) {
+    return undefined
+  }
+  if (typeof reading.id === 'string') {
+    return reading.id
+  }
+  return reading.id === null ? null : undefined
 }
 
 export function AntigravityAccountSection({
@@ -94,7 +129,7 @@ export function AntigravityAccountSection({
         {state.accounts.map((account) => {
           const active = state.activeAccountId === account.id
           const selected = active && state.selectedAccountId === account.id
-          const usage = active ? (activeUsage ?? account.usage ?? null) : (account.usage ?? null)
+          const usage = usageForAntigravityRow(account, active, activeUsage)
           return (
             <ListRow
               key={account.id}

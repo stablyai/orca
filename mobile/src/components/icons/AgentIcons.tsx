@@ -45,7 +45,14 @@ export function MiniMaxIcon({ size = 16 }: { size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 -2.9143 36.9143 36.9143">
       <Defs>
-        <LinearGradient id={gradientId} x1="0" y1="15.5" x2="36.9143" y2="15.5">
+        <LinearGradient
+          id={gradientId}
+          x1="0"
+          y1="15.5"
+          x2="36.9143"
+          y2="15.5"
+          gradientUnits="userSpaceOnUse"
+        >
           <Stop offset="0" stopColor="#E21680" />
           <Stop offset="1" stopColor="#FF633A" />
         </LinearGradient>
