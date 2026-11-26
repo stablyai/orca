@@ -19,16 +19,19 @@ function declaresType(match: RegExpExecArray): boolean {
   return !NOT_TYPES.has(match[1].split(/[<.[]/)[0])
 }
 
+// A declaration starts a line or follows `{`, `;` or `}`, as in `class Pair { int left() {} }`.
+const DECLARATION_START = '(?<=^|[{};])[ \\t]*'
+
 function methodPattern(name: string): RegExp {
   return new RegExp(
-    `^[ \\t]*${ANNOTATIONS}(?:(?:${MODIFIERS})\\s+)*(?:<[^>]*>\\s*)?(${TYPE})\\s+(${escapeName(name)})\\s*\\(`,
+    `${DECLARATION_START}${ANNOTATIONS}(?:(?:${MODIFIERS})\\s+)*(?:<[^>]*>\\s*)?(${TYPE})\\s+(${escapeName(name)})\\s*\\(`,
     'gm'
   )
 }
 
 function variablePattern(name: string): RegExp {
   return new RegExp(
-    `^[ \\t]*${ANNOTATIONS}(?:(?:${MODIFIERS})\\s+)*(${TYPE})\\s+(${escapeName(name)})\\s*(?:=|;|,)`,
+    `${DECLARATION_START}${ANNOTATIONS}(?:(?:${MODIFIERS})\\s+)*(${TYPE})\\s+(${escapeName(name)})\\s*(?:=|;|,)`,
     'gm'
   )
 }
@@ -165,7 +168,8 @@ export function locateJavaLocal(
     if (code[at] === '{') {
       depth += 1
     } else if (code[at] === '}') {
-      depth -= 1
+      // Why: a stray `}` closes no block; below zero the pop loop would never end.
+      depth = Math.max(0, depth - 1)
       while ((inScope.at(-1)?.depth ?? -1) > depth) {
         inScope.pop()
       }

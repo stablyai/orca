@@ -106,9 +106,7 @@ public class Base {
 public class Outer {
     public static void run() {}
 
-    public static class Inner {
-        public static void run() {}
-    }
+    public static class Inner { public static void run() {} }
 }
 `
 }
@@ -231,9 +229,10 @@ describe('Java Go to Definition', () => {
       line: 6,
       word: 'Options'
     })
+    // Inner's own `run`, though it shares a line with Inner's opening brace.
     expect(await childDefinitionAt('run', 1)).toEqual({
       filePath: `${SHOP}/Outer.java`,
-      line: 7,
+      line: 6,
       word: 'run'
     })
     // Child's supertypes apply, not those of Helper before it.
