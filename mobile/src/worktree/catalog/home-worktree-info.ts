@@ -4,7 +4,6 @@ import type { RuntimeWorktreeAgentRow } from '../../../../src/shared/worktree/ca
 import type { WorkspaceLineage } from '../../../../src/shared/worktree/lineage-types'
 import type { Worktree } from '../workspace-list/workspace-list-types'
 import type { WorktreeCatalogSnapshot } from './worktree-catalog-snapshot-client'
-import type { ServerWorkspaces } from '../execution-hosts/server-workspaces'
 
 export type HomeWorktreeSummary = {
   worktreeId: string
@@ -79,50 +78,6 @@ export function homeAgentEntries(
       ...(bot ? { bot } : {})
     }))
   })
-}
-
-/** A desktop's relayed servers as Home read them, with its own identity so a server paired directly lists once. */
-export type HomeServerAgentsRead = {
-  installationId?: string
-  servers: ServerWorkspaces
-}
-
-/**
- * Adds each relayed server's agents to its desktop's live ones, labelled with the server. A server paired
- * directly lists only there; one several desktops relay lists under the first in Home's order.
- */
-export function withRelayedServerAgents(
-  hostIds: readonly string[],
-  worktreeInfo: Readonly<Record<string, HostWorktreeInfo>>,
-  reads: Readonly<Record<string, HomeServerAgentsRead>>
-): Readonly<Record<string, HostWorktreeInfo>> {
-  const listed = new Set(hostIds.flatMap((hostId) => reads[hostId]?.installationId ?? []))
-  let merged: Record<string, HostWorktreeInfo> | null = null
-  for (const hostId of hostIds) {
-    const info = worktreeInfo[hostId]
-    const servers = reads[hostId]?.servers
-    if (!info?.agents || !servers) {
-      continue
-    }
-    const relayed = servers.hosts.flatMap((server) => {
-      if (server.installationId) {
-        if (listed.has(server.installationId)) {
-          return []
-        }
-        listed.add(server.installationId)
-      }
-      const executionHost = { id: server.hostId, label: server.label }
-      const rows = servers.worktrees.filter(
-        (row) => row.hostId === server.hostId && row.isArchived !== true
-      )
-      return homeAgentEntries(rows).map((entry) => ({ ...entry, executionHost }))
-    })
-    if (relayed.length > 0) {
-      merged ??= { ...worktreeInfo }
-      merged[hostId] = { ...info, agents: [...info.agents, ...relayed] }
-    }
-  }
-  return merged ?? worktreeInfo
 }
 
 /** One desktop's counts read, as its card and the Agents list see it. */

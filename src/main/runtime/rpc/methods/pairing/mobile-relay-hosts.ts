@@ -20,8 +20,7 @@ export const MOBILE_RELAY_HOSTS_METHODS = [
     params: MobileRelayHostWorktreesParamsSchema,
     handler: async (params, ctx) => {
       const { connectionId, runtime } = ctx
-      // The server stays watched for this phone's row notices until its connection closes; phones
-      // that can't read relayHostRowsChanged open no watch, as before.
+      // Watch the server for this phone until it disconnects; a phone that can't hear the event costs none.
       const reader =
         connectionId &&
         ctx.clientCapabilities?.includes(MOBILE_RELAY_HOST_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY)

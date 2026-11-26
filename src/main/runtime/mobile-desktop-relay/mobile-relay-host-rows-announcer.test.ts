@@ -14,8 +14,14 @@ const host: DescribedRelayHost = {
   identity: { pairingRevision: 1, runtimeId: 'rt-1' }
 }
 
+type StatusListener = Parameters<MobileDesktopRelayHosts['onStatusChanged']>[0]
+
 function fakeHosts() {
   const watches: { callbacks: WatchCallbacks; close: ReturnType<typeof vi.fn> }[] = []
+  const status: { listener: StatusListener | null; now: DescribedRelayHost | undefined } = {
+    listener: null,
+    now: host
+  }
   const only = () => {
     const [watch] = watches
     if (!watch) {
@@ -26,12 +32,20 @@ function fakeHosts() {
   return {
     watches,
     only,
+    status,
     hosts: {
       watchChanges: (_host: unknown, _expected: unknown, callbacks: WatchCallbacks) => {
         const close = vi.fn()
         watches.push({ callbacks, close })
         return { close, current: () => true }
-      }
+      },
+      onStatusChanged: (listener: StatusListener) => {
+        status.listener = listener
+        return () => {
+          status.listener = null
+        }
+      },
+      describe: async () => status.now
     }
   }
 }
@@ -91,5 +105,41 @@ describe('RelayHostRowsAnnouncer', () => {
     only().callbacks.onRowsChanged?.()
     await vi.advanceTimersByTimeAsync(2000)
     expect(changed).not.toHaveBeenCalled()
+  })
+
+  it('reopens a dropped watch when its server is back, and tells phones', async () => {
+    const { hosts, watches, status } = fakeHosts()
+    const changed = vi.fn()
+    const announcer = new RelayHostRowsAnnouncer(hosts, changed)
+    announcer.hold(host, reader('phone-1').reader)
+    await vi.runAllTimersAsync()
+    // The opening ready is no change.
+    watches[0]?.callbacks.onChange({ catalog: true })
+    watches[0]?.callbacks.onClose()
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(changed).not.toHaveBeenCalled()
+
+    status.listener?.({ environmentId: 'env-1', inContact: true })
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(watches).toHaveLength(2)
+    expect(changed).toHaveBeenCalledTimes(1)
+  })
+
+  it('moves every phone’s hold to the new watch on a re-pair', async () => {
+    const { hosts, watches } = fakeHosts()
+    const announcer = new RelayHostRowsAnnouncer(hosts, vi.fn())
+    const first = reader('phone-1')
+    const second = reader('phone-2')
+    announcer.hold(host, first.reader)
+    const repaired = { ...host, identity: { pairingRevision: 2, runtimeId: 'rt-1' } }
+    announcer.hold(repaired, second.reader)
+    await vi.runAllTimersAsync()
+    expect(watches).toHaveLength(2)
+    expect(watches[0]?.close).toHaveBeenCalledTimes(1)
+
+    second.releases[0]?.()
+    expect(watches[1]?.close).not.toHaveBeenCalled()
+    first.releases[0]?.()
+    expect(watches[1]?.close).toHaveBeenCalledTimes(1)
   })
 })

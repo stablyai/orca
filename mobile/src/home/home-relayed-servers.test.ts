@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import type { RuntimeWorktreeAgentRow } from '../../../../src/shared/worktree/catalog/runtime-worktree-contracts'
-import { hostAgents, everyRow } from '../../agents/agent-list-rows'
-import type { Worktree } from '../workspace-list/workspace-list-types'
+import type { MobileRelayHost } from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
+import type { RuntimeWorktreeAgentRow } from '../../../src/shared/worktree/catalog/runtime-worktree-contracts'
+import { hostAgents, everyRow } from '../agents/agent-list-rows'
+import { homeAgentEntries, type HostWorktreeInfo } from '../worktree/catalog/home-worktree-info'
+import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import {
-  homeAgentEntries,
+  pickRelayedServers,
   withRelayedServerAgents,
-  type HostWorktreeInfo
-} from './home-worktree-info'
+  type HomeRelayedServersRead
+} from './home-relayed-servers'
 
 const SERVER = 'runtime:build-box'
 
@@ -67,25 +69,26 @@ function desktopInfo(hostId: string): HostWorktreeInfo {
   return { hostId, totalWorktrees: 1, activeCount: 1, agents: homeAgentEntries([own]) }
 }
 
-const relayed = (installationId?: string) => ({
-  hosts: [
-    {
-      hostId: SERVER,
-      label: 'Build box',
-      health: 'available' as const,
-      relay: 'ready' as const,
-      ...(installationId ? { installationId } : {})
-    }
-  ],
-  worktrees: [row('server-ws', SERVER, 'tab-1:leaf-1')]
+function server(health: MobileRelayHost['health'] = 'available'): MobileRelayHost {
+  return { hostId: SERVER, label: 'Build box', health, relay: 'ready', installationId: 'server-1' }
+}
+
+const relaying = (hosts: MobileRelayHost[], live = true): HomeRelayedServersRead => ({
+  data: { deltas: true, hosts },
+  live
 })
 
 describe('relayed server agents on Home', () => {
-  it('lists a server two desktops relay once, apart from the desktop’s own pane of the same key', () => {
+  it('reads a server two desktops relay through the first only, apart from the desktop’s own pane', () => {
+    const picks = pickRelayedServers(['desk-a', 'desk-b'], {
+      'desk-a': relaying([server()]),
+      'desk-b': relaying([server()])
+    })
+    expect(picks.map((pick) => pick.desktopHostId)).toEqual(['desk-a'])
     const merged = withRelayedServerAgents(
-      ['desk-a', 'desk-b'],
       { 'desk-a': desktopInfo('desk-a'), 'desk-b': desktopInfo('desk-b') },
-      { 'desk-a': { servers: relayed('server-1') }, 'desk-b': { servers: relayed('server-1') } }
+      picks,
+      [[row('server-ws', SERVER, 'tab-1:leaf-1')]]
     )
     const input = {
       hosts: [{ id: 'desk-a' }, { id: 'desk-b' }],
@@ -94,27 +97,28 @@ describe('relayed server agents on Home', () => {
       now: 2
     }
     const rowsA = everyRow(hostAgents(input, 'desk-a').roots)
-    const rowsB = everyRow(hostAgents(input, 'desk-b').roots)
-
-    const serverRows = [...rowsA, ...rowsB].filter((r) => r.entry.executionHost)
+    const serverRows = rowsA.filter((r) => r.entry.executionHost)
     expect(serverRows).toHaveLength(1)
     expect(serverRows[0]?.entry.executionHost).toEqual({ id: SERVER, label: 'Build box' })
     // The desktop reads and clears only its own agents.
     expect(serverRows[0]?.unread).toBeUndefined()
     expect(serverRows[0]?.clearable).toBe(false)
     expect(new Set(rowsA.map((r) => r.key)).size).toBe(2)
-    expect(rowsB).toHaveLength(1)
   })
 
-  it('lists a server paired directly only under its own pairing', () => {
-    const merged = withRelayedServerAgents(
-      ['desk-a', 'server-direct'],
-      { 'desk-a': desktopInfo('desk-a'), 'server-direct': desktopInfo('server-direct') },
-      {
-        'desk-a': { servers: relayed('server-1') },
-        'server-direct': { installationId: 'server-1', servers: { hosts: [], worktrees: [] } }
+  it('lists a server paired directly only under its own pairing, even while that pairing is offline', () => {
+    const picks = pickRelayedServers(['desk-a', 'server-direct'], {
+      'desk-a': relaying([server()]),
+      'server-direct': {
+        data: { installationId: 'server-1', deltas: true, hosts: [] },
+        live: false
       }
-    )
-    expect(merged['desk-a']?.agents?.some((entry) => entry.executionHost)).toBe(false)
+    })
+    expect(picks).toEqual([])
+  })
+
+  it('reads no agents from a relayed server that is not available', () => {
+    const picks = pickRelayedServers(['desk-a'], { 'desk-a': relaying([server('unavailable')]) })
+    expect(picks).toEqual([])
   })
 })

@@ -22,6 +22,7 @@ import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import { describeRelayHosts, relayHostFence } from './mobile-relay-host-descriptions'
 import {
   RelayHostRowsAnnouncer,
+  relayHostRowsSources,
   type RelayHostRowsReader
 } from './mobile-relay-host-rows-announcer'
 import {
@@ -216,7 +217,7 @@ export class MobileRelayHostCatalog {
 
   /** Calls `changed` when a server a connected phone read has new agent rows, so phones need not poll them. */
   publishRowChanges(changed: (hostId: `runtime:${string}`) => void): () => void {
-    const announcer = new RelayHostRowsAnnouncer(this.options.hosts, changed)
+    const announcer = new RelayHostRowsAnnouncer(relayHostRowsSources(this.options.hosts), changed)
     this.rowsAnnouncer = announcer
     return () => announcer.dispose()
   }

@@ -7,7 +7,11 @@ import type {
   MobileDesktopRelayHosts,
   MobileDesktopRelayHostWatch
 } from './mobile-desktop-relay-hosts'
-import { relayHostFence, type DescribedRelayHost } from './mobile-relay-host-descriptions'
+import {
+  describeRelayHosts,
+  relayHostFence,
+  type DescribedRelayHost
+} from './mobile-relay-host-descriptions'
 
 // The server's own worktreeRowsChanged windows, so a busy agent costs the phone no more than one here would.
 const ROWS_FLUSH_MS = 500
@@ -19,11 +23,30 @@ export type RelayHostRowsReader = {
   onClose: (release: () => void) => void
 }
 
+export type RelayHostRowsSources = Pick<
+  MobileDesktopRelayHosts,
+  'watchChanges' | 'onStatusChanged'
+> & {
+  /** The server as the desktop describes it now; undefined once it is no longer relayed. */
+  describe: (environmentId: string) => Promise<DescribedRelayHost | undefined>
+}
+
+export function relayHostRowsSources(hosts: MobileDesktopRelayHosts): RelayHostRowsSources {
+  return {
+    watchChanges: (host, expected, callbacks) => hosts.watchChanges(host, expected, callbacks),
+    onStatusChanged: (listener) => hosts.onStatusChanged(listener),
+    describe: async (environmentId) =>
+      (await describeRelayHosts(hosts)).find((host) => host.environmentId === environmentId)
+  }
+}
+
+type OpenWatch = { watch: MobileDesktopRelayHostWatch | null; closed: boolean }
+
 type WatchedServer = {
-  fence: string
+  host: DescribedRelayHost
   connections: Set<string>
-  watch: MobileDesktopRelayHostWatch | null
-  stopped: boolean
+  // Null while the server's stream is down: the holds stay, and the watch reopens when it is back.
+  open: OpenWatch | null
 }
 
 /**
@@ -33,10 +56,11 @@ type WatchedServer = {
 export class RelayHostRowsAnnouncer {
   private readonly servers = new Map<string, WatchedServer>()
   private readonly coalescer: KeyedTrailingEdgeCoalescer
+  private stopStatusWatch: (() => void) | null = null
   private disposed = false
 
   constructor(
-    private readonly hosts: Pick<MobileDesktopRelayHosts, 'watchChanges'>,
+    private readonly sources: RelayHostRowsSources,
     changed: (hostId: `runtime:${string}`) => void
   ) {
     this.coalescer = createKeyedTrailingEdgeCoalescer(
@@ -52,11 +76,19 @@ export class RelayHostRowsAnnouncer {
     }
     const key = host.environmentId
     let server = this.servers.get(key)
-    if (!server || server.fence !== relayHostFence(host.identity)) {
-      if (server) {
-        this.stop(key, server)
-      }
-      server = this.open(host)
+    if (!server) {
+      server = { host, connections: new Set(), open: null }
+      this.servers.set(key, server)
+      this.stopStatusWatch ??= this.sources.onStatusChanged((contact) =>
+        this.reopenReturned(contact)
+      )
+    }
+    // A re-pair moves every phone's hold to the new watch.
+    if (
+      !this.watching(server) ||
+      relayHostFence(server.host.identity) !== relayHostFence(host.identity)
+    ) {
+      this.open(server, host)
     }
     if (server.connections.has(reader.connectionId)) {
       return
@@ -79,47 +111,90 @@ export class RelayHostRowsAnnouncer {
     this.coalescer.dispose()
   }
 
-  private open(host: DescribedRelayHost): WatchedServer {
-    const key = host.environmentId
-    const server: WatchedServer = {
-      fence: relayHostFence(host.identity),
-      connections: new Set(),
-      watch: null,
-      stopped: false
-    }
-    this.servers.set(key, server)
-    // A stream that ends drops the watch; the phone's next read, on relayHostsChanged or focus, opens it again.
-    const drop = (): void => {
-      if (this.servers.get(key) === server) {
-        this.stop(key, server)
+  private watching(server: WatchedServer): boolean {
+    return server.open !== null && server.open.watch?.current() !== false
+  }
+
+  /** A held server whose stream ended is back: watch it again and tell phones, since changes went unheard. */
+  private reopenReturned(contact?: { environmentId: string; inContact: boolean }): void {
+    for (const [key, server] of this.servers) {
+      if (
+        this.watching(server) ||
+        (contact && (contact.environmentId !== key || !contact.inContact))
+      ) {
+        continue
       }
+      void this.sources.describe(key).then(
+        (host) => {
+          if (
+            host?.health === 'available' &&
+            this.servers.get(key) === server &&
+            !this.watching(server)
+          ) {
+            this.open(server, host)
+            this.coalescer.schedule(key)
+          }
+        },
+        () => {}
+      )
     }
+  }
+
+  private open(server: WatchedServer, host: DescribedRelayHost): void {
+    this.closeWatch(server)
+    server.host = host
+    const open: OpenWatch = { watch: null, closed: false }
+    server.open = open
+    const key = host.environmentId
     const changed = (): void => {
-      if (!server.stopped) {
+      if (!open.closed) {
         this.coalescer.schedule(key)
       }
     }
+    // The stream's opening ready is no change; announcing it would loop read, open, ready on a flapping stream.
+    let opened = false
+    const drop = (): void => {
+      if (server.open === open) {
+        this.closeWatch(server)
+      }
+    }
     void Promise.resolve(
-      this.hosts.watchChanges(host, host.identity, {
+      this.sources.watchChanges(host, host.identity, {
         // A reconnect replay or a workspace change may stand for missed row changes.
-        onChange: changed,
+        onChange: () => {
+          if (opened) {
+            changed()
+          }
+          opened = true
+        },
         onRowsChanged: changed,
         onClose: drop
       })
     ).then((watch) => {
-      if (server.stopped) {
+      if (open.closed) {
         watch.close()
       } else {
-        server.watch = watch
+        open.watch = watch
       }
     }, drop)
-    return server
+  }
+
+  private closeWatch(server: WatchedServer): void {
+    const open = server.open
+    server.open = null
+    if (open) {
+      open.closed = true
+      open.watch?.close()
+    }
   }
 
   private stop(key: string, server: WatchedServer): void {
-    server.stopped = true
-    server.watch?.close()
+    this.closeWatch(server)
     this.servers.delete(key)
     this.coalescer.cancel(key)
+    if (this.servers.size === 0) {
+      this.stopStatusWatch?.()
+      this.stopStatusWatch = null
+    }
   }
 }
