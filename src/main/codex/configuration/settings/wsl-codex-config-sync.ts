@@ -143,6 +143,29 @@ function isHelperOutput(value: unknown): value is CodexConfigSyncWslOutput {
     'protocol' in value &&
     value.protocol === CODEX_CONFIG_SYNC_WSL_PROTOCOL &&
     'homes' in value &&
-    Array.isArray(value.homes)
+    Array.isArray(value.homes) &&
+    value.homes.every(isHomeResult)
+  )
+}
+
+// A malformed entry takes the "gave no result" path instead of throwing after the helper ran.
+function isHomeResult(value: unknown): value is CodexConfigSyncWslHomeResult {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    'runtimeHome' in value &&
+    typeof value.runtimeHome === 'string' &&
+    'complete' in value &&
+    typeof value.complete === 'boolean' &&
+    'status' in value &&
+    !!value.status &&
+    typeof value.status === 'object' &&
+    'state' in value.status &&
+    (value.status.state === 'synced' || value.status.state === 'stalled') &&
+    'error' in value &&
+    (value.error === null || typeof value.error === 'string') &&
+    'warnings' in value &&
+    Array.isArray(value.warnings) &&
+    value.warnings.every((warning) => typeof warning === 'string')
   )
 }
