@@ -14,10 +14,22 @@ async function runGuest(
 ): Promise<string> {
   const result = await runWslProcess({ ...spec, distro, timeoutMs, maxOutputBytes })
   if (result.code !== 0 || result.timedOut) {
-    throw new Error(`WSL ${distro}: ${describeWslProcessFailure(result)}`)
+    throw new WslGuestRunError(`WSL ${distro}: ${describeWslProcessFailure(result)}`, result.code)
   }
   return result.stdout.trim()
 }
+
+/** A guest command that ran and failed, as opposed to a distro that was stopped before it ran. */
+class WslGuestRunError extends Error {
+  readonly code: number | null
+  constructor(message: string, code: number | null) {
+    super(message)
+    this.code = code
+  }
+}
+
+// `env` exits 127 when the cached pinned Node is gone (its cache cleared, or on tmpfs).
+const COMMAND_NOT_FOUND_EXIT_CODE = 127
 
 async function findBundledHelper(filename: string): Promise<string | null> {
   for (const directory of relayBundleCandidates('wsl')) {
@@ -78,10 +90,15 @@ export async function runWslGuestNodeHelper(args: {
     try {
       return await runHelper(cached.node, cachedHelper)
     } catch (error) {
-      // The runtime may have been removed: the next run resolves it again (a retry here would
-      // double a long helper's timeout).
+      // A stopped distro keeps the cache; a helper that failed on its own isn't rerun (that would
+      // double a long helper's timeout), but a missing runtime is reinstalled below, once.
+      if (!(error instanceof WslGuestRunError)) {
+        throw error
+      }
       resolvedGuests.delete(key)
-      throw error
+      if (error.code !== COMMAND_NOT_FOUND_EXIT_CODE) {
+        throw error
+      }
     }
   }
   const node = await ensureWslPinnedRuntime(
@@ -101,7 +118,9 @@ export async function runWslGuestNodeHelper(args: {
   try {
     return await runHelper(node, guestHelper)
   } catch (error) {
-    resolvedGuests.delete(key)
+    if (error instanceof WslGuestRunError) {
+      resolvedGuests.delete(key)
+    }
     throw error
   }
 }

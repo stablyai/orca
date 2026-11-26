@@ -23,6 +23,9 @@ export type WslCodexConfigSyncHome = {
 
 // One pass at a time per distro, so a launch and a background pass never race on the same files.
 const queues = new Map<string, CodexHistoryPassQueue>()
+// Passes queued but not started, by distro and home set: a request joins one, since it will read
+// the files after the request was made. A pass that started needs a new run for later requests.
+const waiting = new Map<string, { forLaunch: boolean; pass?: Promise<void> }>()
 
 /**
  * Runs the settings sync inside the distro, where every read and rename stays on its own file
@@ -38,10 +41,32 @@ export function syncWslCodexConfigInDistro(args: {
   if (args.homes.length === 0) {
     return Promise.resolve()
   }
-  const key = args.distro.toLowerCase()
-  const queue = queues.get(key) ?? new CodexHistoryPassQueue()
-  queues.set(key, queue)
-  return queue.add(() => runPass(args), { forLaunch: args.forLaunch })
+  const distroKey = args.distro.toLowerCase()
+  const homeSetKey = [
+    distroKey,
+    args.linuxSystemHome,
+    ...args.homes.map((home) => home.linuxRuntimeHome).sort()
+  ].join('\0')
+  const queuedPass = waiting.get(homeSetKey)
+  // A launch never waits behind a queued background pass's place in line.
+  if (queuedPass?.pass && (queuedPass.forLaunch || !args.forLaunch)) {
+    return queuedPass.pass
+  }
+  const queue = queues.get(distroKey) ?? new CodexHistoryPassQueue()
+  queues.set(distroKey, queue)
+  // Registered before queueing: an idle queue starts the job at once.
+  const entry: { forLaunch: boolean; pass?: Promise<void> } = { forLaunch: args.forLaunch }
+  waiting.set(homeSetKey, entry)
+  entry.pass = queue.add(
+    async () => {
+      if (waiting.get(homeSetKey) === entry) {
+        waiting.delete(homeSetKey)
+      }
+      await runPass(args)
+    },
+    { forLaunch: args.forLaunch }
+  )
+  return entry.pass
 }
 
 async function runPass({
