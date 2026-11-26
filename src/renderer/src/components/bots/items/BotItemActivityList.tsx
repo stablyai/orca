@@ -37,7 +37,10 @@ import { BotItemStatusIcon } from './BotItemStatusIcon'
 import { BotItemLinkedRefs } from './BotItemLinkedRefs'
 import { formatBotItemSnoozeTime } from './bot-item-snooze-time'
 import type { BotItemPendingComments } from '../../../../../shared/bots/bot-item-pending-comments'
-import { botItemPendingAnswersOnly } from '../../../../../shared/bots/bot-item-sent-answers'
+import {
+  botItemPendingAnswersOnly,
+  botItemPendingWordsBesideAnswers
+} from '../../../../../shared/bots/bot-item-sent-answers'
 import { NATIVE_CHAT_QUOTE_SOURCE_PROPS } from '../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
 
 const ACTOR = 'font-medium text-foreground/80'
@@ -345,33 +348,33 @@ export function BotItemActivityList({
           const { event, failed, intent } = sending
           // Answers on their way show on their question's lines already; words or files beyond them
           // show here.
-          if (intent && botItemPendingAnswersOnly(sending)) {
-            const shown = quickReplies?.sent?.get(intent.askId)
-            const ask = entries.find(
-              (entry) => entry.kind === 'comment' && entry.event.id === intent.askId
+          const shown = intent && quickReplies?.sent?.get(intent.askId)
+          const ask = intent
+            ? entries.find((entry) => entry.kind === 'comment' && entry.event.id === intent.askId)
+            : undefined
+          const onLines =
+            intent &&
+            shown &&
+            ask?.kind === 'comment' &&
+            !ask.onAsk &&
+            ask.answers &&
+            intent.answers.every(
+              (words, index) =>
+                !words ||
+                (shown[index] === words &&
+                  (!ask.answers?.[index] ||
+                    (intent.shape.decisions.length > 1 && ask.byOrder?.[index])))
             )
-            if (
-              shown &&
-              ask?.kind === 'comment' &&
-              !ask.onAsk &&
-              ask.answers &&
-              intent.answers.every(
-                (words, index) =>
-                  !words ||
-                  (shown[index] === words &&
-                    (!ask.answers?.[index] ||
-                      (intent.shape.decisions.length > 1 && ask.byOrder?.[index])))
-              )
-            ) {
-              return null
-            }
+          if (onLines && botItemPendingAnswersOnly(sending)) {
+            return null
           }
+          const beside = onLines ? botItemPendingWordsBesideAnswers(sending) : null
           return (
             <BotItemCommentCard
               key={event.id}
               bot={bot}
               item={item}
-              entry={{ event }}
+              entry={beside === null ? { event } : { event, beside }}
               failed={
                 failed
                   ? {

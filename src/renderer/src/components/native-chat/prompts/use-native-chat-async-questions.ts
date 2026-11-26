@@ -9,6 +9,7 @@ import type { NativeChatMessage } from '../../../../../shared/native-chat/native
 import { nativeChatPromptDismissals as dismissals } from './native-chat-prompt-dismissals'
 import { shownStructuredAgentSessionAsyncQuestions } from '../../../../../shared/agent-session/view/structured-agent-session-async-questions'
 import type { StructuredAgentSessionAsyncQuestionSkip } from './use-structured-agent-session-async-question-skip'
+import { projectionBesideStreamedText } from '../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 
 export function useNativeChatAsyncQuestions({
   paneKey,
@@ -44,20 +45,22 @@ export function useNativeChatAsyncQuestions({
     useCallback(() => () => dismissals.forgetAsync(scopeKey), [scopeKey])
   )
   const hidden = useSyncExternalStore(dismissals.subscribe, () => dismissals.readAsync(scopeKey))
-  const scan = useMemo(() => (settled ? scanPendingAsks(messages) : null), [messages, settled])
+  // Asks are tool calls and answers are sends, so a streamed reply's text revision keeps the scan.
+  const structure = projectionBesideStreamedText(messages)
+  const scan = useMemo(() => (settled ? scanPendingAsks(structure) : null), [structure, settled])
   const skippedThrough = skip?.skippedThrough
   const awaiting = skip?.awaiting
   const contributors = useMemo(
     () =>
       shownStructuredAgentSessionAsyncQuestions(
         scan?.contributors ?? [],
-        settled ? messages : null,
+        settled ? structure : null,
         {
           awaiting,
           skippedThrough
         }
       ),
-    [scan, awaiting, settled, messages, skippedThrough]
+    [scan, awaiting, settled, structure, skippedThrough]
   )
   const prompt = useMemo(
     () => aggregateAsyncQuestions(contributors, sourceScope, hidden, queuedTexts),

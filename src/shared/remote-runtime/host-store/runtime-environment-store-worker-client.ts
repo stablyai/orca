@@ -45,15 +45,56 @@ const readers = new Set<EnvironmentStoreCommand['operation']>([
   'readEnvironmentStoreRecords',
   'readWslHostDeployments'
 ])
+const IDLE_TEARDOWN_MS = 30_000
 const queue: Pending[] = []
 let owner: Owner | undefined
 let sequence = 0
 let writes = 0
 let retiring: Promise<void> | undefined
+let idleTimer: ReturnType<typeof setTimeout> | undefined
 let scheduled = false
 let closing: Promise<void> | undefined
 let finishClose: (() => void) | undefined
 let runInline: typeof runEnvironmentStoreBatch | undefined
+
+function clearIdleTimer(): void {
+  if (idleTimer !== undefined) {
+    clearTimeout(idleTimer)
+    idleTimer = undefined
+  }
+}
+
+function retireIdleWorker(): void {
+  idleTimer = undefined
+  const current = owner
+  if (!current?.worker || current.active || queue.length > 0 || finishClose || retiring) {
+    return
+  }
+  owner = undefined
+  retiring = current.worker.terminate().then(
+    () => {},
+    () => {}
+  )
+  void retiring.then(() => {
+    retiring = undefined
+    dispatch()
+  })
+}
+
+function scheduleIdleTeardown(): void {
+  if (
+    idleTimer !== undefined ||
+    !owner?.worker ||
+    owner.active ||
+    queue.length > 0 ||
+    finishClose ||
+    retiring
+  ) {
+    return
+  }
+  idleTimer = setTimeout(retireIdleWorker, IDLE_TEARDOWN_MS)
+  idleTimer.unref?.()
+}
 
 /** Parent generation survives worker restarts and invalidates derived pairing caches on uncertainty. */
 export function environmentStoreWriteCount(): number {
@@ -85,6 +126,7 @@ function fail(current: Owner, error: Error): void {
   if (owner !== current) {
     return
   }
+  clearIdleTimer()
   owner = undefined
   writes++
   for (const item of [...(current.active?.pending ?? []), ...queue.splice(0)]) {
@@ -146,6 +188,7 @@ function dispatch(): void {
   if (queue.length === 0) {
     owner?.worker?.unref()
     if (finishClose) {
+      clearIdleTimer()
       const current = owner
       owner = undefined
       if (current?.worker) {
@@ -156,9 +199,12 @@ function dispatch(): void {
       } else {
         finishClose()
       }
+    } else {
+      scheduleIdleTeardown()
     }
     return
   }
+  clearIdleTimer()
   try {
     if (!owner) {
       const worker = environmentStoreRunsInline()

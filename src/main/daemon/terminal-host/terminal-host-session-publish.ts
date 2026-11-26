@@ -182,6 +182,9 @@ export async function spawnAndPublishSession(
   onPublished(opts.sessionId, session.isAlive)
   const token = session.attachClient(opts.streamClient)
   attachSessionInputViewer(session, opts.streamClient)
+  if (opts.startupNotice && opts.command) {
+    session.startupIngress.accept(opts.startupNotice)
+  }
 
   const startupCommandWritten =
     Boolean(opts.command) && !subprocess.startupCommandDeliveredInShellArgs

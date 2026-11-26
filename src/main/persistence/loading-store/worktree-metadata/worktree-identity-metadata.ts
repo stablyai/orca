@@ -23,10 +23,7 @@ import {
 } from '../profile-writing/write-scheduling'
 import { mergeWorktreeMetaForWrite } from './worktree-meta-write-normalization'
 import { WORKTREE_METADATA_DOMAINS } from '../../profile-save-domains'
-import {
-  isLocalOnlyWorktreeMetaId,
-  worktreeMetaHostFor
-} from '../../../../shared/worktree/metadata/local-only-worktree-meta-ids'
+import { worktreeMetaHostFor } from '../../../../shared/worktree/metadata/local-only-worktree-meta-ids'
 
 type MetadataRuntime = Pick<StoreRuntimeState, 'state'> &
   Partial<Pick<StoreRuntimeState, 'worktreeMetaWriteListeners'>>
@@ -187,45 +184,7 @@ export function getWorktreeMetaForHost(
   return !legacy?.hostId || legacy.hostId === executionHostId ? legacy : undefined
 }
 
-// Local-only IDs cannot belong to remote hosts even when legacy rows lack stamps.
-function isOtherHostsLocalOnlyRow(worktreeId: string, executionHostId: ExecutionHostId): boolean {
-  return executionHostId !== LOCAL_EXECUTION_HOST_ID && isLocalOnlyWorktreeMetaId(worktreeId)
-}
-
-export function getAllWorktreeMetaForHost(
-  runtime: { state: WorktreeMetaState },
-  executionHostId: ExecutionHostId
-): Record<string, WorktreeMeta> {
-  const state = runtime.state
-  const projected: Record<string, WorktreeMeta> = {}
-  for (const [worktreeId, meta] of Object.entries(state.worktreeMeta)) {
-    if (isOtherHostsLocalOnlyRow(worktreeId, executionHostId)) {
-      continue
-    }
-    if (!meta.hostId || meta.hostId === executionHostId) {
-      projected[worktreeId] = meta
-    }
-  }
-  for (const alias of Object.keys(state.worktreeIdentityAliases ?? {})) {
-    if (getExecutionHostIdFromWorktreeHostIdentity(alias) !== executionHostId) {
-      continue
-    }
-    const worktreeId = getWorktreeIdFromHostIdentity(alias)
-    const identityKey = resolveAliasIdentityKey(state, alias)
-    const meta = identityKey ? state.worktreeMetaByIdentity?.[identityKey] : undefined
-    if (
-      !worktreeId ||
-      isOtherHostsLocalOnlyRow(worktreeId, executionHostId) ||
-      !meta ||
-      (meta.hostId && meta.hostId !== executionHostId)
-    ) {
-      continue
-    }
-    projected[worktreeId] =
-      meta.hostId === executionHostId ? meta : { ...meta, hostId: executionHostId }
-  }
-  return projected
-}
+export { getAllWorktreeMetaForHost } from './worktree-host-meta-projection'
 
 export function setWorktreeMetaForHost(
   runtime: MetadataRuntime,
