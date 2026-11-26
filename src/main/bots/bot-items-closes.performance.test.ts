@@ -1,7 +1,8 @@
-// #49868: the journal looks up each close it writes by its item and close time. Guards that lookup:
-// it seeks the close by index, so the events SQLite tests stay the same however many came after it.
-// The tally is a SQL function SQLite calls for each event it tests as the close, on a database the
-// test opens itself over a file the store set up.
+// #49868, #49882: the journal reads each item's closes since its last pass, and each close is
+// numbered when it is made. Guards both: each seeks status events by index, so the events SQLite
+// tests stay the same however many came before the pass (earlier closes and reopens) or after the
+// close (comments). The tally is a SQL function SQLite calls for each status event it tests, on a
+// database the test opens itself over a file the store set up.
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -18,8 +19,8 @@ afterEach(() => {
   }
 })
 
-it('tests the same events to find a close however many events came after it', () => {
-  const lookup = (after: number) => {
+it('tests the same events to number a close and find it, however many events came before or after', () => {
+  const lookup = (history: number) => {
     const directory = mkdtempSync(join(tmpdir(), 'bot-items-closes-'))
     directories.push(directory)
     const path = join(directory, 'bot-items.sqlite')
@@ -44,18 +45,25 @@ it('tests the same events to find a close however many events came after it', ()
       HOME,
       at++
     ).uid
-    const closedAt = at++
-    store.close(uid, 'done', undefined, HOME, [{ kind: 'owner' }], closedAt)
-    for (let i = 0; i < after; i++) {
+    // Closed and reopened before the journal's last pass.
+    for (let i = 0; i < history; i++) {
+      store.close(uid, 'done', undefined, HOME, [{ kind: 'owner' }], at++)
+      store.ownerStatus({ uids: [uid], to: 'working' }, { kind: 'owner' }, at++)
+    }
+    const since = at++
+    tested = 0
+    store.close(uid, 'done', undefined, HOME, [{ kind: 'owner' }], at++)
+    const numbered = tested
+    for (let i = 0; i < history; i++) {
       store.comment(uid, 'More', HOME, [], at++)
     }
     tested = 0
-    const found = store.closes([{ uid, closedAt }])[uid]?.actsFor
+    const found = store.closes([{ uid, since }])[uid]?.map((close) => close.closeNumber)
     store.dispose()
-    return { found, tested }
+    return { numbered, found, tested }
   }
-  expect([lookup(1_000), lookup(10_000)]).toEqual([
-    { found: [{ kind: 'owner' }], tested: 1 },
-    { found: [{ kind: 'owner' }], tested: 1 }
+  expect([lookup(200), lookup(2_000)]).toEqual([
+    { numbered: 2, found: [201], tested: 1 },
+    { numbered: 2, found: [2_001], tested: 1 }
   ])
 })

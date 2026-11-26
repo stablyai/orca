@@ -7,6 +7,7 @@ import {
   type BotItemStatus
 } from '../../shared/bots/bot-items'
 import { BotItemError } from './bot-item-error'
+import { withCloseNumber } from './bot-item-close-number'
 import { assertBotItemLinkRoom, linkWords, type BotItemLinkInput } from './bot-items-input'
 import { hasKeptWaitingAsks, waitingAskOf } from './bot-item-waiting-ask-keep'
 import { eventRecordOf, itemRecordOf, linkRecordOf } from './bot-items-rows'
@@ -105,7 +106,7 @@ export class BotItemsTables {
         uid,
         kind,
         JSON.stringify(actor),
-        JSON.stringify(data),
+        JSON.stringify(kind === 'status' ? withCloseNumber(this.db, uid, data) : data),
         mail ? 'owed' : null,
         this.action ?? 0,
         now

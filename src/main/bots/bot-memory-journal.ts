@@ -14,6 +14,8 @@ export type JournalItem = Pick<BotItem, 'number' | 'title' | 'status' | 'links'>
   closedAt: number
   /** Whom its closing chat acted for, when not the owner (see `journalCloseLabel`). */
   closedFor?: string
+  /** Which of the item's closes this is, when not its first: a line, and a close, of its own. */
+  closeNumber?: number
 }
 
 /** The label a close for someone other than the owner carries, so the journal never reads as the
@@ -64,7 +66,8 @@ export function journalLines(item: JournalItem): string[] {
       })
     )
   ]
-  const head = `- ${date} | item #${item.number}`
+  const again = item.closeNumber ? ` (close ${item.closeNumber})` : ''
+  const head = `- ${date} | item #${item.number}${again}`
   const tail = item.closedFor ? ` | ${item.closedFor}` : ''
   if (prs.length === 0) {
     return [`${head} | ${item.status} | ${title}${tail}`]
@@ -80,8 +83,9 @@ export function journalLines(item: JournalItem): string[] {
   })
 }
 
-/** The close a line belongs to: its date and item. A close is journaled once, all its lines in
- *  one append, so a pass that sees it again (its links changed since) adds nothing. */
+/** The close a line belongs to: its date and item, with the item's close number after its first. A
+ *  close is journaled once, all its lines in one append, so a pass that sees it again (its links
+ *  changed since) adds nothing. */
 function closeKey(line: string): string {
   const [date = '', item = ''] = line.split(' | ')
   return `${date} | ${item}`
