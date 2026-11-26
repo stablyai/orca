@@ -6,7 +6,12 @@ type SearchDraft = { text: string; allowShort: boolean; token: number }
 
 /** Bounded: only recently searched workspaces keep a draft. */
 const MAX_DRAFTS = 64
-let nextDraftToken = 1
+let lastDraftToken = 0
+
+function takeDraftToken(): number {
+  lastDraftToken += 1
+  return lastDraftToken
+}
 
 // Why: a Map, not the store, so recording every keystroke notifies no subscribers, and a remounting
 // field (owner change, tab switch) reads the newest text instead of waiting on the old field's cleanup.
@@ -73,7 +78,7 @@ export function useSearchDraftLifecycle({
   runTextSearch: (query: string) => void
 }): void {
   const hasQuery = query.trim().length > 0
-  const [token] = useState(() => nextDraftToken++)
+  const [token] = useState(takeDraftToken)
   useLayoutEffect(() => {
     recordSearchDraft(activeWorktreeId, { text: query, allowShort: allowShortQuery, token })
   }, [activeWorktreeId, allowShortQuery, query, token])
