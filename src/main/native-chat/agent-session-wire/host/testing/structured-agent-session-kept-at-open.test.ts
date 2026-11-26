@@ -2,6 +2,7 @@ import { spawn, spawnSync } from 'node:child_process'
 import { once } from 'node:events'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { DaemonClient } from '../../../../daemon/transport/client/daemon-client'
+import { DaemonClientListeners } from '../../../../daemon/transport/client/daemon-client-listener-registry'
 import type { ProviderRelayInfo } from '../../../../daemon/protocol/daemon-provider-relay-protocol'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { readProcessStartTimeMs } from '../../../../runtime/agent-session/ownership/agent-session-process-identity-probe'
@@ -42,6 +43,7 @@ function daemon(instance: string, relays: () => ProviderRelayInfo[] | null | 'bu
     ensureConnectedWithin: async () => {},
     onEvent: () => () => {},
     onDisconnected: () => () => {},
+    connectedListeners: new DaemonClientListeners<() => void>(),
     request: (type: string) => {
       if (type !== 'relayList') {
         return Promise.resolve({})
