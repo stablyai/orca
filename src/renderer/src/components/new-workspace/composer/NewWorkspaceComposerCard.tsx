@@ -29,6 +29,10 @@ import { NewWorkspaceComposerAdvancedSection } from './NewWorkspaceComposerAdvan
 import { NewWorkspaceComposerAgentSection } from './NewWorkspaceComposerAgentSection'
 import { NewWorkspaceComposerFooter } from './NewWorkspaceComposerFooter'
 import { NewWorkspaceComposerNameSection } from './NewWorkspaceComposerNameSection'
+import {
+  FolderProjectSyncControl,
+  getFolderProjectSyncSelection
+} from '../project-location/FolderProjectSyncControl'
 import { NewWorkspaceComposerProjectSection } from './NewWorkspaceComposerProjectSection'
 import {
   EMPTY_EPHEMERAL_VM_RECIPES,
@@ -133,6 +137,11 @@ export default function NewWorkspaceComposerCard(
   const defaultCloneUrl = resolveProjectCloneUrlPrefill(projects, repos, selectedProjectId)
   const readyProjectHostSetupOptions = projectHostSetupOptions.filter(
     (option) => option.kind === 'ready'
+  )
+  const folderSyncSelection = getFolderProjectSyncSelection(
+    selectedRepo,
+    selectedRepoExecutionHostId,
+    readyProjectHostSetupOptions
   )
   const needsSetupProjectHostSetupOptions = projectHostSetupOptions.filter(
     (option) => option.kind === 'needs-setup'
@@ -339,6 +348,13 @@ export default function NewWorkspaceComposerCard(
           connectButtonLabel={connectButtonLabel}
           selectedProjectName={selectedProjectName}
         />
+        {folderSyncSelection ? (
+          <FolderProjectSyncControl
+            key={folderSyncSelection.option.id}
+            {...folderSyncSelection.target}
+            onRetry={() => handleSetLocation(folderSyncSelection.option)}
+          />
+        ) : null}
         <NewWorkspaceComposerNameSection {...props} onNamePlainEnter={handleNamePlainEnter} />
         <NewWorkspaceComposerAgentSection
           {...props}

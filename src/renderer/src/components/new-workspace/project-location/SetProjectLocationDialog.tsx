@@ -18,6 +18,7 @@ import {
 } from '@/lib/workspace/creation/project-host-setup-options'
 import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { RepoKind } from '../../../../../shared/repository/repo-types'
+import { FolderReplicaSetupForm } from './FolderReplicaSetupForm'
 import { pickLocalProjectLocationFolder } from './pick-local-project-folder'
 import { CloneForm, ExistingFolderForm, LocationActionButton } from './SetProjectLocationForms'
 
@@ -42,6 +43,7 @@ export function SetProjectLocationDialog({
   onReady
 }: SetProjectLocationDialogProps): React.JSX.Element {
   const open = option !== null
+  const [folderSetupInProgress, setFolderSetupInProgress] = useState(false)
   // Keep the last body through the close animation to avoid blanking it mid-exit.
   const [renderOption, setRenderOption] = useState(option)
   if (option !== null && option !== renderOption) {
@@ -55,7 +57,7 @@ export function SetProjectLocationDialog({
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!next) {
+        if (!next && !folderSetupInProgress) {
           onClose()
         }
       }}
@@ -64,13 +66,23 @@ export function SetProjectLocationDialog({
         data-testid="set-project-location-dialog"
         className="sm:max-w-lg"
         onEscapeKeyDown={(event) => {
-          if (exitHostBrowser.current?.()) {
+          if (folderSetupInProgress || exitHostBrowser.current?.()) {
             // Radix only skips onDismiss when the escape was defaultPrevented.
             event.preventDefault()
           }
         }}
       >
-        {activeOption ? (
+        {activeOption?.folderReplica ? (
+          <FolderReplicaSetupForm
+            key={activeOption.id}
+            option={activeOption}
+            target={activeOption.folderReplica}
+            projectName={projectName}
+            pending={folderSetupInProgress}
+            onPendingChange={setFolderSetupInProgress}
+            onReady={onReady}
+          />
+        ) : activeOption ? (
           <SetProjectLocationDialogBody
             key={activeOption.id}
             option={activeOption}

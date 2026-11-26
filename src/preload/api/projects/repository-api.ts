@@ -1,3 +1,10 @@
+import type {
+  FolderProjectSetupRequest,
+  FolderProjectSyncPreference,
+  FolderProjectSyncStatus,
+  FolderProjectSyncTarget,
+  FolderReplicaResult
+} from '../../../shared/project/folder-project-sync'
 import type { GroupHookCheckResult } from '../../../shared/project/groups/project-group-hooks'
 import type { RepoCreateFailure } from '../../../shared/repository/creation/repo-create-failure-copy'
 import type {
@@ -124,6 +131,9 @@ export type RepositoryApi = {
 }
 
 export type ProjectsApi = {
+  setupFolderReplica?: (args: FolderProjectSetupRequest) => Promise<FolderReplicaResult>
+  getFolderSyncStatus?: (args: FolderProjectSyncTarget) => Promise<FolderProjectSyncStatus | null>
+  setFolderSyncPreference?: (args: FolderProjectSyncPreference) => Promise<FolderProjectSyncStatus>
   list: () => Promise<Project[]>
   update: (args: ProjectUpdateArgs) => Promise<Project | null>
   listHostSetups: () => Promise<ProjectHostSetup[]>

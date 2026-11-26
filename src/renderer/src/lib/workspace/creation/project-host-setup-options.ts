@@ -1,26 +1,31 @@
 import {
   getExecutionHostLabel,
+  getRepoExecutionHostId,
   isRuntimeOwnedSshTargetId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
 import type { ExecutionHostRegistryEntry } from '../../../../../shared/execution-host/execution-host-registry-entry'
-import { getHostHealthUnavailableDetail } from './project-host-health-detail'
+import {
+  getHostConnectAction,
+  getHostHealthUnavailableDetail,
+  getHostSetupUnavailableDetail
+} from './project-host-health-detail'
+export { getHostSetupUnavailableDetail } from './project-host-health-detail'
+import {
+  FOLDER_PROJECT_SYNC_CAPABILITY,
+  FolderProjectSourceId
+} from '../../../../../shared/project/folder-project-sync'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { getNeedsSetupDetail } from './project-host-needs-setup-detail'
 import { isHostLocalProjectId } from '../../../../../shared/project/host-setup/project-host-setup-projection'
 import { isEphemeralVmRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { isMergedAwayExecutionHost } from '../../../../../shared/execution-host/managed-orcad-execution-host'
-import '../../../../../shared/remote-runtime/protocol/protocol-version'
-import {
-  PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
-  WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
-} from '../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import type { ProjectHostSetup } from '../../../../../shared/project/project-types'
 import type { Repo, RepoKind } from '../../../../../shared/repository/repo-types'
 import { getRepoKind } from '../../../../../shared/repository/repo-kind'
 import { translate } from '@/i18n/i18n'
-import type { Translate } from '@/i18n/use-translate'
 import { translateHostDisplayLabel } from '@/runtime/hosts/display/execution-host-label'
 import {
   dedupeReadySetupRows,
@@ -54,6 +59,7 @@ export type ProjectHostSetupOption =
       attention: boolean
       // Available pathless hosts can set up in place; connecting/in-progress/unsupported hosts need another step.
       canSetLocation: boolean
+      folderReplica?: { sourceRepoId: string; environmentId: string; retry?: boolean }
       connectAction?: { kind: 'ssh'; targetId: string } | { kind: 'runtime'; environmentId: string }
     }
 
@@ -78,6 +84,7 @@ type BuildReadySetupOptionsInput = {
 type BuildNeedsSetupOptionsInput = {
   projectId: string
   hostLocalKind: RepoKind | null
+  localFolderRepoId?: string
   hosts: readonly ExecutionHostRegistryEntry[]
   readySetupByHost: ReadonlyMap<ExecutionHostId, ReadyProjectHostSetupOption>
   pendingSetupByHost: ReadonlyMap<ExecutionHostId, ProjectHostSetup>
@@ -116,6 +123,14 @@ export function buildProjectHostSetupOptions({
     ...buildNeedsSetupOptions({
       projectId,
       hostLocalKind: getHostLocalProjectKind(projectId, projectHostSetups),
+      localFolderRepoId: eligibleRepos.find(
+        (repo) =>
+          projectId === `repo:${repo.id}` &&
+          repo.kind === 'folder' &&
+          !repo.folderProjectSourceId &&
+          FolderProjectSourceId.safeParse(repo.id).success &&
+          getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
+      )?.id,
       hosts,
       readySetupByHost,
       pendingSetupByHost
@@ -189,6 +204,7 @@ function buildReadySetupOptions({
 function buildNeedsSetupOptions({
   projectId,
   hostLocalKind,
+  localFolderRepoId,
   hosts,
   readySetupByHost,
   pendingSetupByHost
@@ -209,6 +225,14 @@ function buildNeedsSetupOptions({
       const unavailableDetail =
         getHostHealthUnavailableDetail(host.health) ?? getHostSetupUnavailableDetail(host)
       const isAvailable = unavailableDetail === null
+      const hostRoute = parseExecutionHostId(host.id)
+      const folderReplica =
+        !isWebClientLocation() &&
+        localFolderRepoId &&
+        hostRoute?.kind === 'runtime' &&
+        host.capabilities?.includes(FOLDER_PROJECT_SYNC_CAPABILITY)
+          ? { sourceRepoId: localFolderRepoId, environmentId: hostRoute.environmentId }
+          : undefined
       const connectAction = getHostConnectAction(host)
       return {
         id: `needs-setup:${host.id}`,
@@ -216,10 +240,26 @@ function buildNeedsSetupOptions({
         projectId,
         hostId: host.id,
         label: host.label ? translateHostDisplayLabel(host) : getExecutionHostLabel(host.id),
-        detail: unavailableDetail ?? getNeedsSetupDetail(hostLocalKind, pendingSetup),
+        detail:
+          unavailableDetail ??
+          (hostLocalKind === 'folder' &&
+          !isWebClientLocation() &&
+          localFolderRepoId &&
+          hostRoute?.kind === 'runtime' &&
+          !folderReplica
+            ? translate(
+                'auto.lib.projectHostSetupOptions.folderSyncUpdateRequired',
+                'Update Orca on this server to sync folders'
+              )
+            : getNeedsSetupDetail(folderReplica ? null : hostLocalKind, pendingSetup)),
         isAvailable,
         attention: host.health === 'error',
-        canSetLocation: canSetProjectLocation(hostLocalKind !== null, isAvailable, pendingSetup),
+        canSetLocation: canSetProjectLocation(
+          hostLocalKind !== null && !folderReplica,
+          isAvailable,
+          pendingSetup
+        ),
+        ...(folderReplica ? { folderReplica } : {}),
         ...(connectAction ? { connectAction } : {})
       }
     })
@@ -235,37 +275,6 @@ function isRuntimeOwnedSshSetupHost(hostId: ExecutionHostId): boolean {
   return parsed?.kind === 'ssh' && isRuntimeOwnedSshTargetId(parsed.targetId)
 }
 
-export function getHostSetupUnavailableDetail(
-  host: ExecutionHostRegistryEntry,
-  t: Translate = translate
-): string | null {
-  if (host.health === 'blocked') {
-    return t(
-      'auto.components.settings.RepositoryPane.hostSetupBlockedVersion',
-      'Orca server version is incompatible'
-    )
-  }
-  if (host.kind !== 'runtime') {
-    return null
-  }
-  if (!host.capabilities) {
-    return t(
-      'auto.components.settings.RepositoryPane.hostSetupCheckingCapability',
-      'Checking host capabilities'
-    )
-  }
-  if (
-    !host.capabilities.includes(PROJECT_HOST_SETUP_RUNTIME_CAPABILITY) ||
-    !host.capabilities.includes(WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY)
-  ) {
-    return t(
-      'auto.components.settings.RepositoryPane.hostSetupMissingCapability',
-      'Update Orca on this host to set up projects'
-    )
-  }
-  return null
-}
-
 function canSetProjectLocation(
   isHostLocal: boolean,
   isAvailable: boolean,
@@ -279,22 +288,6 @@ function canSetProjectLocation(
     return true
   }
   return pendingSetup.setupState === 'not-set-up' || pendingSetup.setupState === 'error'
-}
-
-function getHostConnectAction(
-  host: ExecutionHostRegistryEntry
-): NeedsSetupProjectHostOption['connectAction'] | undefined {
-  if (host.health !== 'disconnected' && host.health !== 'error') {
-    return undefined
-  }
-  const parsed = parseExecutionHostId(host.id)
-  if (parsed?.kind === 'ssh') {
-    return { kind: 'ssh', targetId: parsed.targetId }
-  }
-  if (parsed?.kind === 'runtime') {
-    return { kind: 'runtime', environmentId: parsed.environmentId }
-  }
-  return undefined
 }
 
 function compareProjectHostSetupOptions(

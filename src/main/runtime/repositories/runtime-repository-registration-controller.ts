@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { mkdir, readdir, rm, stat } from 'node:fs/promises'
+import { mkdir, readdir, stat } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/repository/appearance/repo-badge-color'
 import {
@@ -8,7 +8,7 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../shared/repository/repo-types'
-import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
+import { initializeNewGitProject } from './new-project-git-initialization'
 import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/host-routing/windows-host-git-environment'
 import { getRepoName } from '../../git/repositories/repository-name'
 import { inspectGitRepoForRegistrationAsync } from '../../git/repositories/discovery/repo-detection'
@@ -156,11 +156,13 @@ export class RuntimeRepositoryRegistrationController {
   async create(
     parentPath: string,
     name: string,
-    kind: 'git' | 'folder' = 'git'
+    kind: 'git' | 'folder' = 'git',
+    folderReplica?: { sourceRepoId: string; displayName: string }
   ): Promise<
     { repo: Repo } | (RepoCreateFailure & { windowsDriveRefusal?: WslHostWindowsDriveRefusal })
   > {
     const store = this.requireStore()
+    const folderProjectSourceId = folderReplica?.sourceRepoId
     const trimmedName = name.trim()
     const trimmedParentPath = parentPath.trim()
     const repoKind: 'git' | 'folder' = kind === 'folder' ? 'folder' : 'git'
@@ -196,6 +198,13 @@ export class RuntimeRepositoryRegistrationController {
             targetPathKeys.includes(getClonePathComparisonKey(repo.path))
         )
     const existing = findLocalAtTarget()
+    if (
+      existing &&
+      folderProjectSourceId &&
+      existing.folderProjectSourceId !== folderProjectSourceId
+    ) {
+      return repoCreateFailure('targetNotEmpty', { name: trimmedName })
+    }
     if (existing) {
       return { repo: existing }
     }
@@ -213,7 +222,7 @@ export class RuntimeRepositoryRegistrationController {
         if (!existingStat.isDirectory()) {
           return repoCreateFailure('targetNotFolder', { name: trimmedName })
         }
-        if ((await readdir(targetPath)).length > 0) {
+        if (folderProjectSourceId || (await readdir(targetPath)).length > 0) {
           return repoCreateFailure('targetNotEmpty', { name: trimmedName })
         }
       } else {
@@ -226,7 +235,7 @@ export class RuntimeRepositoryRegistrationController {
     }
 
     if (repoKind === 'git') {
-      const failure = await this.initializeGitRepo(targetPath, createdDir)
+      const failure = await initializeNewGitProject(targetPath, createdDir)
       if (failure) {
         return failure
       }
@@ -234,7 +243,9 @@ export class RuntimeRepositoryRegistrationController {
     targetPathKeys = await getSavedProjectPathKeys(targetPath)
     const raceWinner = findLocalAtTarget()
     if (raceWinner) {
-      return { repo: raceWinner }
+      return folderProjectSourceId && raceWinner.folderProjectSourceId !== folderProjectSourceId
+        ? repoCreateFailure('targetNotEmpty', { name: trimmedName })
+        : { repo: raceWinner }
     }
     // Register Git's checkout path so the new project stays its own selected checkout.
     const repoPath =
@@ -249,11 +260,12 @@ export class RuntimeRepositoryRegistrationController {
     const repo: Repo = {
       id: randomUUID(),
       path: repoPath,
-      displayName: trimmedName,
+      displayName: folderReplica?.displayName ?? trimmedName,
       badgeColor: DEFAULT_REPO_BADGE_COLOR,
       ...detected,
       addedAt: Date.now(),
       kind: repoKind,
+      ...(folderProjectSourceId ? { folderProjectSourceId } : {}),
       ...(repoKind === 'git' ? { externalWorktreeVisibilityLegacy: false } : {})
     }
     store.addRepo(repo)
@@ -261,40 +273,6 @@ export class RuntimeRepositoryRegistrationController {
     invalidateAuthorizedRootsCache()
     this.invalidate(repo.id)
     return { repo: store.getRepo(repo.id) ?? repo }
-  }
-
-  private async initializeGitRepo(
-    targetPath: string,
-    createdDir: boolean
-  ): Promise<RepoCreateFailure | null> {
-    let step: 'init' | 'commit' = 'init'
-    try {
-      // Host Git on purpose: the new repo has no project yet, even inside one.
-      await gitExecFileAsync(['init'], { cwd: targetPath, hostGit: true })
-      step = 'commit'
-      await gitExecFileAsync(['commit', '--allow-empty', '-m', 'Initial commit'], {
-        cwd: targetPath,
-        // Host Git on purpose: the new repo has no project yet, even inside one.
-        hostGit: true
-      })
-      return null
-    } catch (error) {
-      if (createdDir) {
-        await rm(targetPath, { recursive: true, force: true }).catch(() => {})
-      } else if (step === 'commit') {
-        await rm(join(targetPath, '.git'), {
-          recursive: true,
-          force: true
-        }).catch(() => {})
-      }
-      const message = error instanceof Error ? error.message : String(error)
-      if (step === 'commit' && /Please tell me who you are|user\.name|user\.email/i.test(message)) {
-        return repoCreateFailure('gitIdentityMissing')
-      }
-      return repoCreateFailure(step === 'init' ? 'gitInitFailed' : 'initialCommitFailed', {
-        detail: message
-      })
-    }
   }
 
   /** Read on this host so a paired client suggests this host's Workspace Directory, not its own. */

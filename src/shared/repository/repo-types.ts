@@ -107,6 +107,8 @@ export type Repo = {
   workspaceCleanupPolicy?: RepoWorkspaceCleanupPolicy
   /** Transitional source for ProjectHostSetup.setupMethod while Repo remains compatibility storage. */
   projectHostSetupMethod?: RepoProjectHostSetupMethod
+  /** Desktop folder whose identity this server-created replica shares. */
+  folderProjectSourceId?: string
   /** Local row a WSL host now owns, kept for a downgrade; set only by the mover's retention pass. */
   orcadRetained?: OrcadRetainedMarker
   /** Dictation terms used only in this repo, kept in Orca (on the repo's host), never in the checkout. */
