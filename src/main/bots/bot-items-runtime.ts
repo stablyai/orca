@@ -8,6 +8,7 @@ import {
   type BotChangeScope,
   type BotNeedsYouCounts
 } from '../../shared/bots/bot-change-scope'
+import { access } from 'node:fs/promises'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { retainedItemAttachmentUploads } from './bot-item-attachment-retention'
 import { BotItemWorkerLinks } from './bot-item-worker-links'
