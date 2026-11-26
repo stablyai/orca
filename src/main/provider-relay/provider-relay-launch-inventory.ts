@@ -144,6 +144,8 @@ type InstanceListing = {
   listing: Promise<ReadonlyMap<string, ProviderRelayInfo> | null>
   /** The answer's cleanup, run once by the first ask that acts on it; an observer never runs it. */
   kept: Promise<void> | null
+  /** Its cleanup is still running: every ask joins this listing until it ends, fresh or not. */
+  cleaning: boolean
   keep: () => Promise<void>
 }
 /** By daemon start; bounded by the daemons this app has talked to. */
@@ -164,7 +166,13 @@ export async function listProviderRelayInstance(
   const entry = instanceListing(client, instance, fresh)
   const listing = await entry.listing
   if (listing && !observe) {
-    entry.kept ??= entry.keep()
+    if (!entry.kept) {
+      entry.cleaning = true
+      entry.kept = entry.keep().finally(() => {
+        entry.cleaning = false
+        entry.settledAt = Date.now()
+      })
+    }
     await entry.kept
   }
   return listing
@@ -175,6 +183,7 @@ function instanceListing(client: DaemonClient, instance: string, fresh: boolean)
   if (
     cached &&
     (cached.settledAt === Number.POSITIVE_INFINITY ||
+      cached.cleaning ||
       (!fresh && cached.answered && Date.now() - cached.settledAt < INSTANCE_LISTING_FRESH_MS))
   ) {
     return cached
@@ -185,6 +194,7 @@ function instanceListing(client: DaemonClient, instance: string, fresh: boolean)
     answered: false,
     listing: Promise.resolve(null),
     kept: null,
+    cleaning: false,
     keep: async () => {}
   }
   entry.listing = withTimeout(
@@ -206,7 +216,7 @@ function instanceListing(client: DaemonClient, instance: string, fresh: boolean)
     })
   // Only a settled answer within its 2 s is ever reused: older ones (a restarted daemon's) go.
   for (const [key, old] of instanceListings) {
-    if (Date.now() - old.settledAt >= INSTANCE_LISTING_FRESH_MS) {
+    if (!old.cleaning && Date.now() - old.settledAt >= INSTANCE_LISTING_FRESH_MS) {
       instanceListings.delete(key)
     }
   }
