@@ -19,7 +19,8 @@ import { acpAgentName } from '../session/acp-structured-agent-definitions'
 import { acpClientInfo } from '../launch/acp-client-info'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import type { AcpStructuredSessionAdapterDeps } from '../session/acp-structured-session-adapter-deps'
-import { checkAcpLaunchVersion, takeAcpKeptVersionSkip } from '../launch/acp-launch-version'
+import { checkAcpLaunchVersion } from '../launch/acp-launch-version'
+import { keptRunningProviderRelayPid } from '../../provider-relay/app-provider-relays'
 import { AgentCliInstallationError } from '../../native-chat/agent-launch/agent-cli-installation-error'
 import type { AcpStructuredLaunch } from '../launch/acp-structured-launch-resolution'
 
@@ -60,6 +61,8 @@ export async function copyAcpConversation(
         await waitForPromiseWithSignal(Promise.resolve(deps.resolveLaunchArgs?.() ?? []), signal)
       )
       signal.throwIfAborted()
+      // The read skips the version check while the source chat's agent is kept; the copy's doesn't.
+      const sourceKept = keptRunningProviderRelayPid(input.identity.sessionId) !== null
       const reading = deps.readLaunch(input.identity)
       // An abort leaves the read running; whatever it then writes is released when it lands.
       reading.then(
@@ -75,7 +78,9 @@ export async function copyAcpConversation(
       release = launch.release
       signal.throwIfAborted()
       deps.spec.assertCopyLaunchArgs?.([], launch.prefixArgs)
-      await assertCopyCliVersion(deps.spec, input.identity.sessionId, launch)
+      if (sourceKept || keptRunningProviderRelayPid(input.identity.sessionId) !== null) {
+        await assertCopyCliVersion(deps.spec, launch, signal)
+      }
       signal.throwIfAborted()
       await assertCopyAccountSelected(deps, input.accountHome, launch.env, signal)
       signal.throwIfAborted()
@@ -123,7 +128,8 @@ export async function copyAcpConversation(
     } catch (error) {
       if (
         error instanceof AcpCopyAccountMismatchError ||
-        error instanceof OpenCodeCopyServerRouteError
+        error instanceof OpenCodeCopyServerRouteError ||
+        error instanceof AgentCliInstallationError
       ) {
         throw error
       }
@@ -210,20 +216,15 @@ async function assertCopyAccountSelected(
   }
 }
 
-/**
- * The copy runs its own agent, so a launch read that skipped the version check because the source
- * chat's agent is kept still checks it here: a downgraded CLI is named, not left to fail mid-copy.
- */
+/** The copy runs its own agent: a downgraded CLI is named, not left to fail mid-copy. */
 async function assertCopyCliVersion(
   spec: AcpStructuredSessionAdapterDeps['spec'],
-  sourceChat: string,
-  launch: Pick<AcpStructuredLaunch, 'command' | 'prefixArgs' | 'cwd' | 'env'>
+  launch: Pick<AcpStructuredLaunch, 'command' | 'prefixArgs' | 'cwd' | 'env'>,
+  signal: AbortSignal
 ): Promise<void> {
-  if (!takeAcpKeptVersionSkip(sourceChat)) {
-    return
-  }
   const { command, prefixArgs, cwd, env } = launch
-  const version = await checkAcpLaunchVersion(spec, { command, prefixArgs, cwd, env }, false)
+  const checking = checkAcpLaunchVersion(spec, { command, prefixArgs, cwd, env }, false)
+  const version = await waitForPromiseWithSignal(checking, signal)
   if (version.status === 'tooOld') {
     throw AgentCliInstallationError.tooOld(spec.agent, version)
   }
