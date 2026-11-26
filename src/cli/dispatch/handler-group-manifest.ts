@@ -213,7 +213,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   {
     name: 'mcp-exec',
-    keys: ['mcp exec'],
+    keys: ['mcp exec', 'mcp env'],
     load: async () => (await import('../mcp/mcp-exec.js')).MCP_EXEC_HANDLERS
   },
   {

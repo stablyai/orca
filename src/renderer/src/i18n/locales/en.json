@@ -882,6 +882,7 @@
         "widthDescription": "How wide messages and the message box can grow in a wide pane.",
         "resetAppearance": "Reset chat appearance",
         "resetDescription": "Restore the defaults above.",
+        "resetKeyword": "reset",
         "comfortable": "Comfortable",
         "wide": "Wide",
         "full": "Full",
@@ -1080,7 +1081,7 @@
         "importInvalid": "{{count}} unreadable rows",
         "importUndecryptable": "{{count}} protected by the browser; export a CSV from it instead",
         "imported": "Imported {{count}} passwords",
-        "deleteAllConfirmDescription": "Every saved password in the {{profile}} profile is permanently deleted. This can’t be undone.",
+        "deleteAllConfirmDescription": "All saved passwords, notes, and never-save sites in the {{profile}} profile will be permanently deleted. This can’t be undone.",
         "deletedAll": "Password data deleted",
         "form": {
           "invalidSite": "Enter a website address, like example.com.",
@@ -1363,6 +1364,8 @@
     },
     "mcp": {
       "inspectFailed": "Unable to inspect {{directory}}.",
+      "inspectConfigsFailed": "Unable to inspect MCP configs.",
+      "createConfigFailed": "Failed to create MCP config.",
       "unreadable": "Unreadable",
       "notFound": "Not found",
       "invalidJson": "Invalid JSON",
@@ -1426,6 +1429,7 @@
           "spaces": "spaces",
           "link": "link",
           "tabs": "tabs",
+          "tab_characters": "tab characters",
           "trim": "trim",
           "root": "root",
           "word_wrap": "word wrap",
@@ -1707,7 +1711,10 @@
           "checkAgain": "Check again",
           "executionContextOnHost": "{{agent}} · {{host}}",
           "commandWarningOnHost": "The command runs in this bot’s home folder on {{host}}. Adding or saving can start it during the native check. Only add software you trust."
-        }
+        },
+        "hostMcpNone": "None on this host yet",
+        "hostMcp": "Your MCP servers",
+        "hostMcpAndMore": "Your MCP servers, {{rest}}"
       },
       "editPicture": "Edit bot picture",
       "retry": "Retry",
@@ -2074,7 +2081,10 @@
         "workspaces": "{{name}}: {{workspaces}}",
         "added": "{{name}} added",
         "newSessions": "Applies to new sessions",
-        "restart": "Restart {{count}} sessions"
+        "restart": "Restart {{count}} sessions",
+        "addedMany": "{{count}} servers added",
+        "repoOn": "{{name}} turned on in {{repo}}",
+        "repoOff": "{{name}} turned off in {{repo}}"
       },
       "fileAgent": {
         "title": "Let Orca edit {{agent}}’s MCP file?",
@@ -2088,7 +2098,8 @@
         "all": "All agents",
         "someOff": "{{count}} agents off",
         "none": "No agents",
-        "some": "{{on}} of {{total}} agents"
+        "some": "{{on}} of {{total}} agents",
+        "blocked": "Blocked by your organization’s Claude settings"
       },
       "stale": "This server changed elsewhere. Showing it as it is now.",
       "launch": {
@@ -2167,7 +2178,13 @@
       "fromPlugins": "From plugins",
       "unsupported": "MCP servers aren’t available on {{host}}.",
       "title": "MCP servers",
-      "description": "Servers your agents can use. Changes apply to new sessions."
+      "description": "Servers your agents can use. Changes apply to new sessions.",
+      "repo": {
+        "on": "On in this repo",
+        "add": "Add a server for this repo",
+        "files": "From this repo’s files",
+        "open": "Open {{file}}"
+      }
     }
   },
   "menu": {
@@ -6225,6 +6242,12 @@
               "waiting": {
                 "label": "Updates when Claude runs",
                 "message": "Claude usage updates the next time Claude runs."
+              }
+            },
+            "codex": {
+              "waiting": {
+                "label": "Updates when Codex runs",
+                "message": "Codex usage updates the next time Codex runs."
               }
             },
             "justNow": "just now",
@@ -14190,6 +14213,8 @@
             "unverifiable": "Not done: Orca couldn’t confirm what is running on this server. Try again when the host is reachable.",
             "migration": "Not done: a move onto this server is unfinished. Resume it first.",
             "deferred": "Not done yet: the server isn’t ready for this. Try again later.",
+            "stopIncomplete": "Not done: Orca couldn’t confirm the current server exited, so it did not start the update. Check orcad.log in the server’s install folder under ~/.orca-remote on the host before trying again.",
+            "rollbackStopIncomplete": "Not done: Orca couldn’t confirm the current server exited, so it did not roll back. Check orcad.log in the server’s install folder under ~/.orca-remote on the host before trying again.",
             "failed": "Orca couldn’t finish this on the server. Try again.",
             "defaultServer": "Not done: this server is the default host for new projects. Choose another one under New projects open on before stopping it.",
             "wslMoveRunning": "Not done: a project is moving onto this server. Orca updates it once the move finishes."
@@ -18256,7 +18281,7 @@
           "13822cdfda": "Plain text"
         },
         "RichMarkdownDocLinkMenu": {
-          "e17b987473": "↑↓ navigate&nbsp;&nbsp;↵ select&nbsp;&nbsp;esc dismiss",
+          "e17b987473": "↑↓ navigate  ↵ select  esc dismiss",
           "63ced7cb9b": "No documents found",
           "0e8489bc11": "Markdown document links",
           "showingOfTotal": "Showing {{shown}} of {{total}}"
@@ -22008,10 +22033,7 @@
         "started_other": "Kicked off {{count}} subagents",
         "ran_one": "Ran {{count}} subagent",
         "ran_other": "Ran {{count}} subagents",
-        "backToMain": "Back to main agent",
         "mainAgent": "Main agent",
-        "promptFromMain": "Prompt from main agent",
-        "backTo": "Back to {{value0}}",
         "path": "Subagent path",
         "stateHeading": {
           "completed": "Completed",
@@ -22024,7 +22046,15 @@
         "noSteps": "No steps yet",
         "beforeClear": "This subagent ran before the chat was cleared",
         "stoppedBeforeReply": "Stopped before replying",
-        "noReply": "Ended without a reply"
+        "noReply": "Ended without a reply",
+        "prompt": "Prompt",
+        "result": "Result",
+        "close": "Close",
+        "needsYou": "Needs you",
+        "agentNeedsYou": "{{name}} needs you",
+        "mainNeedsYou": "Main agent needs you",
+        "show": "Show",
+        "backTo": "Back to {{value0}}"
       },
       "rewind": {
         "unsupported": "This chat can't go back to an earlier message.",
@@ -22055,6 +22085,10 @@
       "copyCode": "Copy code",
       "wrapLines": "Wrap lines",
       "disableLineWrap": "Disable line wrap",
+      "htmlPreview": "HTML preview",
+      "htmlView": "HTML view",
+      "htmlViewCode": "Code",
+      "htmlViewPreview": "Preview",
       "context": {
         "unavailable": "Context usage is not known yet. It becomes available after the agent next responds.",
         "summary": "Context: {{used}} / {{window}} tokens ({{percent}}%), estimated from the last response.",
@@ -23517,6 +23551,9 @@
       },
       "hostFile": {
         "updateHostForOutsideFiles": "Update Orca on {{value0}} to open files outside its workspaces"
+      },
+      "paste": {
+        "clipboardUnpastable": "Couldn't paste the copied file. Try dragging it into the terminal."
       }
     },
     "settings": {
@@ -23811,7 +23848,8 @@
           "correctionWord": "Correction word",
           "correctionWordDescription": "Say it to take back what you just said: “at four, {{word}}, at five”.",
           "correctionWordOff": "None"
-        }
+        },
+        "localOnlyNotice": "Talk instead of typing in any pane. These settings apply to this computer only; {{host}} keeps its own."
       },
       "repositoryHooks": {
         "availableEnvVars": "Available environment variables"
@@ -23986,6 +24024,7 @@
         },
         "rulesLoadFailed": "Couldn't load this host's cleanup rules: {{error}}",
         "retry": "Try again",
+        "listSeparator": ", ",
         "summary": {
           "merged": "Delete merged",
           "unchanged": "Delete unchanged",
@@ -24380,6 +24419,9 @@
       "fileRenameFailed": "Failed to rename '{{name}}'.",
       "worktreeCreateFailed": "Failed to create worktree.",
       "missingBaseBranchHelp": "Create an initial commit (for example on main), or select an existing branch in Create From, then try again.",
+      "baseBranchLookupFailedTitle": "Could not look up the base branch",
+      "baseBranchLookupFailedMessage": "Git failed or timed out while looking up this repo's default base branch.",
+      "baseBranchLookupFailedHelp": "Try again, or select a base branch in Create From.",
       "dropTooManyPaths": "Drop contains too many paths.",
       "dropPathsTooLarge": "Drop path list is too large.",
       "fileOwnerResolveFailed": "Failed to resolve file owner."
@@ -25675,6 +25717,12 @@
       }
     },
     "remoteScopeAccountsAddHere": "Showing accounts managed by {{value0}}. New accounts sign in there; you finish in this device’s browser.",
+    "selection": {
+      "claudeRemoteWslDefaultUnavailable": "Switching this host's WSL lane back to the system default isn't available from here yet.",
+      "claudeWslLanesNotReset": "WSL Claude accounts can't be reset from here yet.",
+      "codexSystemDefaultIncludingWsl": "Use your current {{value0}} Codex login, including WSL.",
+      "systemDefaultIncludingWsl": "{{value0}} · including WSL"
+    },
     "rename": {
       "action": "Rename",
       "title": "Rename account",
@@ -26710,7 +26758,8 @@
       "bots": "Bots"
     },
     "searchKeyword": {
-      "worktreePaletteFormerTitle": "Switch worktree"
+      "worktreePaletteFormerTitle": "Switch worktree",
+      "quickCommandsMenuFormerTitle": "Toggle Quick Commands menu"
     }
   },
   "gpuFallback": {
@@ -28137,7 +28186,6 @@
         "cancel": "Cancel",
         "cancelRunning": "Cancel generating",
         "edit": "Edit description",
-        "realPerson": "Avatars can't show real people. Describe a character instead.",
         "signedOut": "{{agent}} isn't signed in. Sign in to it, then try again.",
         "usageLimit": "{{agent}} hit its usage limit. Try again later.",
         "noImage": "{{agent}} didn't make an image. Try rewording your description.",
@@ -30570,8 +30618,10 @@
         "activity": "Activity",
         "canceledNote": "Canceled:",
         "doneNote": "Done:",
+        "links": "Links",
         "showLess": "Show less",
         "showMore": "Show more",
+        "subWhere": "Item {{number}} · {{chat}}",
         "showEarlier": "Show earlier",
         "next": "Next item",
         "previous": "Previous item",
@@ -30583,10 +30633,7 @@
         "firstItem": "First item",
         "lastItem": "Last item",
         "deleted": "This item was deleted.",
-        "linkCount": "{{count}} links",
-        "reply": "Reply",
-        "replyAbove": "Reply, above",
-        "replyBelow": "Reply, below",
+        "moreLinks": "{{count}} more links",
         "loading": "Loading item…"
       },
       "loading": "Loading items…",
@@ -30622,7 +30669,9 @@
         "sending": "Sending…",
         "sendSome": "Send {{count}}/{{total}}",
         "sendSomeLabel": "Send {{count}} of {{total}} answers",
-        "changeAnswer": "{{question}}: {{answer}}. Change answer"
+        "changeAnswer": "{{question}}: {{answer}}. Change answer",
+        "heldImagesLimit": "Your answers go as one comment, which takes up to {{max}} images. Send the answers held so far first, or remove some.",
+        "heldSkillsLimit": "Your answers go as one comment, which takes up to {{max}} skills. Send the answers held so far first, or remove some."
       },
       "readMoreClosedFailed": "Reading more Closed items failed",
       "wait": {

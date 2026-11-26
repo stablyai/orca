@@ -72,6 +72,7 @@ function useMemberWorkers(
 
 function MemberItemsReader({
   client,
+  hostKey,
   botId,
   showing,
   reads,
@@ -80,6 +81,7 @@ function MemberItemsReader({
   forget
 }: {
   client: RpcClient | null
+  hostKey: string
   botId: string
   showing: boolean
   reads: number
@@ -93,7 +95,7 @@ function MemberItemsReader({
   ) => void
 }) {
   useLayoutEffect(() => () => forget(botId), [botId, forget])
-  const items = usePhoneBotItems({ client, botId, chatIds: null, showing, reads })
+  const items = usePhoneBotItems({ client, hostKey, botId, chatIds: null, showing, reads })
   const tree = usePhoneBotChatTree({ client, botId, showing, reads: askReads })
   const workers = useMemberWorkers(client, botId, showing, askReads)
   const chats = tree.kind === 'tree' ? tree.chats : null
@@ -114,6 +116,7 @@ function MemberItemsReader({
 export function useMobileBotGroupItems({
   visible,
   client,
+  hostKey,
   groupId,
   bots,
   reads,
@@ -122,6 +125,8 @@ export function useMobileBotGroupItems({
 }: {
   visible: boolean
   client: RpcClient | null
+  /** The phone's key for the group's host (`hostBotsKey`). */
+  hostKey: string
   groupId: string
   bots: readonly PhoneBot[]
   reads: BotGroupItemReads
@@ -296,6 +301,7 @@ export function useMobileBotGroupItems({
     <MemberItemsReader
       key={bot.id}
       client={client}
+      hostKey={hostKey}
       botId={bot.id}
       showing={visible}
       reads={memberItemReads(reads, bot.id)}

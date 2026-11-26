@@ -132,6 +132,7 @@ function split(
       'twin-asking-child',
       'loop-held-child'
     ]),
+    readChats: chats,
     workspaces: WORKSPACES,
     workspaceChats: WORKSPACE_CHATS,
     childrenOf: (line) => CHILDREN[identityOf(line)] ?? [],

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ActivityIndicator, Animated, Easing, StyleSheet, Text, View } from 'react-native'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { colors, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -37,7 +38,14 @@ export function ShellWaitingFrame({
 }
 
 // Cover the mounted view until first paint, not ready; keep it noninteractive so a missing report cannot block an otherwise usable page.
-export function ShellPageCover({ label, visible }: { label: string; visible: boolean }) {
+export function ShellPageCover({
+  label,
+  visible
+}: {
+  label?: string
+  visible: boolean
+}) {
+  const t = useMobileTranslation()
   useMobileColorScheme()
   const opacity = useRef(new Animated.Value(1)).current
   const [mounted, setMounted] = useState(visible)
@@ -74,7 +82,13 @@ export function ShellPageCover({ label, visible }: { label: string; visible: boo
       testID="mobile-web-shell-cover"
       pointerEvents="none"
     >
-      <ShellWaitingFrame label={label} />
+      <ShellWaitingFrame
+        label={
+          label === undefined || label === SHELL_OPENING_LABEL
+            ? t('webShell.shellStateScreen.openingWorkspace', SHELL_OPENING_LABEL)
+            : label
+        }
+      />
     </Animated.View>
   )
 }

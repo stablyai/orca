@@ -124,27 +124,11 @@ export function createSleepingAgentRecordIndex() {
         dirty.add(after.worktreeId)
       }
     }
+    // Snapshots are rebuilt on the next read of that workspace, not on every change to it.
     for (const worktreeId of dirty) {
-      const bucket = entriesByWorktree.get(worktreeId)
-      if (bucket?.size) {
-        snapshotsByWorktree.set(
-          worktreeId,
-          [...bucket].sort(([a], [b]) => {
-            const indexA = Number(a)
-            const indexB = Number(b)
-            const numericA =
-              Number.isInteger(indexA) && indexA >= 0 && indexA < 4294967295 && String(indexA) === a
-            const numericB =
-              Number.isInteger(indexB) && indexB >= 0 && indexB < 4294967295 && String(indexB) === b
-            if (numericA || numericB) {
-              return numericA && numericB ? indexA - indexB : numericA ? -1 : 1
-            }
-            return orderByKey.get(a)! - orderByKey.get(b)!
-          })
-        )
-      } else {
+      snapshotsByWorktree.delete(worktreeId)
+      if (!entriesByWorktree.get(worktreeId)?.size) {
         entriesByWorktree.delete(worktreeId)
-        snapshotsByWorktree.delete(worktreeId)
       }
     }
     source = records
@@ -186,7 +170,28 @@ export function createSleepingAgentRecordIndex() {
     },
     entries(records: Records, worktreeId: string): readonly RecordEntry[] {
       update(records)
-      return snapshotsByWorktree.get(worktreeId) ?? EMPTY_ENTRIES
+      const cached = snapshotsByWorktree.get(worktreeId)
+      if (cached) {
+        return cached
+      }
+      const bucket = entriesByWorktree.get(worktreeId)
+      if (!bucket) {
+        return EMPTY_ENTRIES
+      }
+      const snapshot = [...bucket].sort(([a], [b]) => {
+        const indexA = Number(a)
+        const indexB = Number(b)
+        const numericA =
+          Number.isInteger(indexA) && indexA >= 0 && indexA < 4294967295 && String(indexA) === a
+        const numericB =
+          Number.isInteger(indexB) && indexB >= 0 && indexB < 4294967295 && String(indexB) === b
+        if (numericA || numericB) {
+          return numericA && numericB ? indexA - indexB : numericA ? -1 : 1
+        }
+        return orderByKey.get(a)! - orderByKey.get(b)!
+      })
+      snapshotsByWorktree.set(worktreeId, snapshot)
+      return snapshot
     },
     hasTabPrefix(records: Records, tabId: string): boolean {
       update(records)
@@ -199,6 +204,13 @@ export function createSleepingAgentRecordIndex() {
       update(records)
       const key = providerSessionKey(record)
       return (key ? recordsByProviderSession.get(key)?.values() : undefined) ?? []
+    },
+    /** Records naming the same provider conversation, keyed by pane; a copy, safe to clear while walking. */
+    providerSessionEntries(records: Records, record: SleepingAgentSessionRecord): RecordEntry[] {
+      update(records)
+      const key = providerSessionKey(record)
+      const bucket = key ? recordsByProviderSession.get(key) : undefined
+      return bucket ? [...bucket] : []
     },
     worktreeIds(records: Records): Iterable<string> {
       update(records)

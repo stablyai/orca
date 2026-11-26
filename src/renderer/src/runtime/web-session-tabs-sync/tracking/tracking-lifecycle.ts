@@ -15,6 +15,7 @@ import {
   sessionTabsEnvironmentsByWorktree,
   lastHostTerminalTabCountByWorktree,
   sessionTabsInventoryOmissionsByWorktree,
+  hostSessionGroupIdByLocalKey,
   hostSessionTabIdByLocalKey,
   hostSessionTabMappingKeysByEnvironmentAndWorktree,
   markHostSessionTabMappingsChanged,
@@ -58,6 +59,10 @@ import { clearHostMirrorHandleGapVerdictsForEnvironment } from '@/lib/agent-sess
 import { createBoundedGenerationMap } from '@/lib/bounded-generation-map'
 import { clearHostSessionTabIdMappings } from '../identity/tracking-mappings'
 import { untrackWebSessionTabsWorktree, removeWebSessionTabsEnvironment } from './tracking'
+import {
+  clearDirectlyOpenedChats,
+  clearDirectlyOpenedChatsForWorktree
+} from './directly-opened-chat-tabs'
 
 const sessionTabsTrackingGenerations = createBoundedGenerationMap(512)
 
@@ -83,6 +88,7 @@ export function getLatestWebSessionTabsPublicationEpoch(
 }
 
 export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
+  clearDirectlyOpenedChats(() => true)
   latestSessionTabsSnapshotByWorktree.clear()
   replayableSessionTabsSnapshotByWorktree.clear()
   latestReceivedSessionTabsSnapshotByWorktree.clear()
@@ -96,6 +102,7 @@ export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   resetReceivedSessionTabsFrameSequence()
   lastHostTerminalTabCountByWorktree.clear()
   sessionTabsInventoryOmissionsByWorktree.clear()
+  hostSessionGroupIdByLocalKey.clear()
   hostSessionTabIdByLocalKey.clear()
   hostSessionTabMappingKeysByEnvironmentAndWorktree.clear()
   markHostSessionTabMappingsChanged()
@@ -111,6 +118,7 @@ export function clearWebSessionTabsTrackingForWorktree(
   worktreeId: string
 ): void {
   const key = sessionTabsFreshnessKey(environmentId, worktreeId)
+  clearDirectlyOpenedChatsForWorktree(environmentId, worktreeId)
   latestSessionTabsSnapshotByWorktree.delete(key)
   replayableSessionTabsSnapshotByWorktree.delete(key)
   forgetRetiredEpochCensuses((candidate) => candidate === key)
@@ -137,6 +145,7 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
     return
   }
   const keyPrefix = `${trimmedEnvironmentId}:`
+  clearDirectlyOpenedChats((key) => key.startsWith(keyPrefix))
   sessionTabsTrackingGenerations.advance(trimmedEnvironmentId)
   forgetRetiredEpochCensuses((key) => key.startsWith(keyPrefix))
   for (const key of latestSessionTabsSnapshotByWorktree.keys()) {
@@ -188,6 +197,7 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
     for (const mappingKeys of mappingKeysByWorktree.values()) {
       for (const mappingKey of mappingKeys) {
         hostSessionTabIdByLocalKey.delete(mappingKey)
+        hostSessionGroupIdByLocalKey.delete(mappingKey)
       }
     }
     hostSessionTabMappingKeysByEnvironmentAndWorktree.delete(trimmedEnvironmentId)

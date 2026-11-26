@@ -126,19 +126,19 @@ export class SessionMcpTools {
    */
   beside(taken: Iterable<string>): { tools: SessionMcpTools; skipped: string[] } {
     const names = new Set(taken)
-    const skipped = [...this.hostNames].filter((name) => names.has(name))
-    if (skipped.length === 0) {
-      return { tools: this, skipped }
+    const skipped = new Set([...this.hostNames].filter((name) => names.has(name)))
+    if (skipped.size === 0) {
+      return { tools: this, skipped: [] }
     }
     return {
       tools: new SessionMcpTools(
-        this.servers.filter((server) => !skipped.includes(server.name)),
+        this.servers.filter((server) => !skipped.has(server.name)),
         this.env,
         this.commandEnv,
         this.relayed,
-        new Set([...this.hostNames].filter((name) => !names.has(name)))
+        new Set([...this.hostNames].filter((name) => !skipped.has(name)))
       ),
-      skipped
+      skipped: [...skipped]
     }
   }
 }

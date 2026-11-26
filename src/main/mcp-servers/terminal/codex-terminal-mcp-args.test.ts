@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { mcpEnvWrapperCommand } from '../../../shared/mcp-servers/mcp-env-pairs'
 import { codexTerminalMcpArgs } from './codex-terminal-mcp-args'
 
 describe('a Codex terminal’s -c overrides for the host list', () => {
@@ -46,5 +47,41 @@ describe('a Codex terminal’s -c overrides for the host list', () => {
       headers: { authorization: 'Bearer real-secret' }
     }
     expect(codexTerminalMcpArgs([server], 'posix')).toEqual({ args: [], skipped: ['leaky'] })
+  })
+})
+
+describe('a WSL terminal’s guest wrapper in Codex overrides', () => {
+  it('passes through the POSIX shell a WSL distro runs as literal strings', () => {
+    const wrapper = mcpEnvWrapperCommand(
+      {
+        launcher: '/mnt/c/Users/A B/orca-ide',
+        id: 'id-pg-000001',
+        agent: 'codex',
+        workspaceId: null
+      },
+      { command: 'npx', args: ['-y', 'pg-mcp'] }
+    )
+    const { args, skipped } = codexTerminalMcpArgs([{ name: 'pg', ...wrapper }], 'posix')
+    expect(skipped).toEqual([])
+    expect(args).toContain(
+      `mcp_servers.pg.args=[${wrapper.args.map((arg) => `'${arg}'`).join(',')}]`
+    )
+  })
+})
+
+describe('a WSL server that runs the guest’s orca under Codex', () => {
+  it('passes on the interop variables Codex would otherwise leave out', () => {
+    const connect = {
+      name: 'linear',
+      command: '/mnt/c/Users/A/orca-ide',
+      args: ['mcp', 'connect', 'id-linear-01', '--agent', 'codex']
+    }
+    const plain = { name: 'fs', command: 'npx', args: ['fs-mcp'] }
+    const { args } = codexTerminalMcpArgs([connect, plain], 'posix', {
+      names: new Set(['linear']),
+      vars: ['WSL_INTEROP', 'WSL_DISTRO_NAME']
+    })
+    expect(args).toContain("mcp_servers.linear.env_vars=['WSL_INTEROP','WSL_DISTRO_NAME']")
+    expect(args.some((arg) => arg.startsWith('mcp_servers.fs.env_vars'))).toBe(false)
   })
 })

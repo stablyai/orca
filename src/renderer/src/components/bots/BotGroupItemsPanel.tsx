@@ -2,14 +2,14 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { ListChecks } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { useBots } from '@/lib/bot-catalog'
+import { botRefKey } from '@/lib/bot-hosts'
 import { useNow } from '@/lib/window-activity/use-now'
 import type { Bot } from '../../../../shared/bot-types'
 import { botGroupSessionIds, type BotGroup } from '../../../../shared/bots/bot-group'
-import { botGroupMemberBots } from '../../../../shared/bots/bot-sidebar-entries'
 import { BOT_ITEM_GROUP_IDS, type BotItemFilter } from '../../../../shared/bots/bot-item-groups'
 import type { BotItem } from '../../../../shared/bots/bot-items'
 import { BotGroupPanelHeader } from './BotGroupPanelHeader'
+import { useBotGroupMembers } from './use-bot-group-members'
 import { BotItemsFilterButton, botItemChatName } from './items/BotItemsFilter'
 import { renderBotGroupItemsAllClear } from './items/BotItemsAllClear'
 import { BotItemsList } from './items/BotItemsList'
@@ -37,8 +37,8 @@ function botNames(bots: readonly Bot[], t: Translate): string {
 
 export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.Element {
   const t = useTranslate()
-  const bots = useBots()
-  const members = useMemo(() => botGroupMemberBots(group, bots), [group, bots])
+  const [heldKey, setHeldKey] = useState<string | null>(null)
+  const members = useBotGroupMembers(group, heldKey)
   const [botIds, setBotIds] = useState<readonly string[] | null>(null)
   const [needsYouOnly, setNeedsYouOnly] = useState(false)
   const filter: BotItemFilter = useMemo(() => {
@@ -82,6 +82,11 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
     ...(filter.needsYou ? [t('bots.items.filter.needsYou', 'Needs you only')] : [])
   ].join(' · ')
   const openBot = walk.uid ? merged.botOfUid(walk.uid) : null
+  // The open item's member stays read if its computer drops, so the item stays up offline.
+  const nextHeldKey = walk.uid === null ? null : openBot ? botRefKey(openBot) : heldKey
+  if (nextHeldKey !== heldKey) {
+    setHeldKey(nextHeldKey)
+  }
   useBotItemBackFocus(openBot !== null, scroll)
   // An item no member read holds once every read has landed (a Closed page's, reopened after the
   // panel remounted): back to the list rather than a list under a stale open item.
