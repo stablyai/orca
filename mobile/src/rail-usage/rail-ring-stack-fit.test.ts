@@ -36,6 +36,10 @@ describe('railRingStackFit', () => {
     // Three rings at pitch 49 end at 12 + 2*49 + 41 + 5 = 156; a fourth would need 205 + 12 of peek.
     expect(fit).toEqual({ gap: 8, paddingBottom: 7, height: 169, pitch: 49 })
     expect(fit.height!).toBeLessThanOrEqual(200)
+    // An exact leftover used to count one ring too many and return 169 for a 168 band.
+    const tight = railRingStackFit({ ...base, count: 5, room: 168 })
+    expect(tight).toEqual({ gap: 8, paddingBottom: 7, height: 120, pitch: 49 })
+    expect(tight.height!).toBeLessThanOrEqual(168)
     // Below the cut only the peek: the next ring starts at 159, so 10pt of its top edge shows, faded.
     expect(fit.height! - 12).toBeLessThanOrEqual(12 + 3 * 49)
   })

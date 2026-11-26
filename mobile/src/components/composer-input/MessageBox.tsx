@@ -69,7 +69,9 @@ export function MessageBox({
   const ref = inputRef ?? ownRef
   const contentHeight = useTextInputContentHeight(ref, value)
   const focus = useInputFocus({ onFocus, onBlur })
-  const hasActions = leading !== undefined || trailing !== undefined || onSend !== undefined
+  const hasMiddle = middle !== undefined && middle !== null
+  const hasActions =
+    leading !== undefined || trailing !== undefined || onSend !== undefined || hasMiddle
   const minHeight = hasActions ? MESSAGE_MIN_HEIGHT : FORM_MESSAGE_MIN_HEIGHT
   return (
     <View

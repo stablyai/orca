@@ -18,8 +18,7 @@ function jumpEasing() {
 const railButton = {
   borderRadius: radii.pill,
   alignItems: 'center' as const,
-  justifyContent: 'center' as const,
-  backgroundColor: colors.bgRaised
+  justifyContent: 'center' as const
 }
 
 function useShown(shown: boolean): Animated.Value {
@@ -63,6 +62,7 @@ function ChatJumpButton({
   onPress: () => void
   icon: ReactNode
 }): React.JSX.Element {
+  useMobileColorScheme()
   const reducedMotion = useReducedMotionEnabled() === true
   const scale = reducedMotion
     ? 1
@@ -86,12 +86,15 @@ function ChatJumpButton({
     >
       <Animated.View style={{ opacity: shownValue, transform: [{ scale }] }}>
         <Pressable
+          accessibilityRole="button"
           accessibilityLabel={shown ? label : undefined}
           disabled={!shown}
           focusable={shown}
           style={({ pressed }) => [
             frame ? railButton : styles.fab,
-            frame ? { width: frame.size, height: frame.size } : null,
+            frame
+              ? { width: frame.size, height: frame.size, backgroundColor: colors.bgRaised }
+              : null,
             pressed && { opacity: feedback.pressedOpacity }
           ]}
           onPress={onPress}

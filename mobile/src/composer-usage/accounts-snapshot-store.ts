@@ -27,6 +27,8 @@ function entryFor(client: RpcClient): Entry {
 
 function startStream(client: RpcClient, entry: Entry): () => void {
   let stopped = false
+  // A retained snapshot must not block a later list. Only a snapshot from this call's stream is newer.
+  let sawStream = false
   const accept = (snapshot: AccountsSnapshot): void => {
     entry.snapshot = snapshot
     for (const listener of entry.listeners) {
@@ -34,14 +36,17 @@ function startStream(client: RpcClient, entry: Entry): () => void {
     }
   }
   const unsubscribe = subscribeAccountsSnapshots(client, {
-    onSnapshot: accept,
+    onSnapshot: (snapshot) => {
+      sawStream = true
+      accept(snapshot)
+    },
     onInvalidSnapshot: () => undefined,
     onStreamError: () => undefined
   })
   // Hosts without the stream still answer the one-shot list; a streamed snapshot is never older.
   void client.sendRequest('accounts.list').then(
     (res) => {
-      if (stopped || entry.snapshot !== null || !res.ok) {
+      if (stopped || sawStream || !res.ok) {
         return
       }
       try {
