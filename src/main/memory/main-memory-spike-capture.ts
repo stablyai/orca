@@ -79,9 +79,9 @@ export function observeMainMemorySample(footprintMB: number, nowMs: number): voi
   }
   const sample: Sample = { atMs: nowMs, mb: footprintMB, heap: v8Heap() }
   let baseline = sample
-  for (const sample of recent) {
-    if (sample.mb < baseline.mb) {
-      baseline = sample
+  for (const prior of recent) {
+    if (prior.mb < baseline.mb) {
+      baseline = prior
     }
   }
   recent.push(sample)
