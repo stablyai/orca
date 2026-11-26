@@ -11,7 +11,6 @@ import type { OrchestrationWorkerServer } from '../../federation/environment-tra
 import { importRemoteOwnedItem } from './remote-owned-import'
 import { recordRemoteStart, reserveRemotePlacement } from './remote-placements'
 import { markRemotePlacementNeverSent } from './remote-placement-hold'
-import { recordRemoteStartReceipt } from './remote-start-receipt'
 import { openRemoteRunLink, remoteServerPin } from './remote-run-links'
 import {
   reportNeverReadyWorkerStart,
@@ -49,8 +48,6 @@ const FAILURES: readonly Failure[] = [
   'never-ready-in-terminal',
   'start-blocked'
 ]
-/** How this Orca learns which Dispatch its start began: the start's answer, or a receipt lookup after it was lost. */
-type Receipt = 'answer' | 'lookup'
 
 const open: OrchestrationDb[] = []
 afterEach(() => {
@@ -194,24 +191,14 @@ function pairedRun() {
         startOptions: {}
       }).dispatch.id
     },
-    /** This Orca learns which Dispatch its start under `requestKey` began, by `how`. */
-    receive(dispatchId: string, how: Receipt, requestKey = KEY) {
-      if (how === 'answer') {
-        recordRemoteStart(home, {
-          conversationId: link.conversation_id,
-          taskId: TASK,
-          dispatchId,
-          requestKey,
-          peerRunId
-        })
-        return
-      }
-      recordRemoteStartReceipt(home, requestKey, {
-        requestId: requestKey,
-        state: 'pending',
-        method: 'orchestration.workerStart',
-        receipt: { accepted: { dispatchId } },
-        interpretation: ''
+    /** The server's answer to this Orca's start under `requestKey` names the Dispatch it began. */
+    receive(dispatchId: string, requestKey = KEY) {
+      recordRemoteStart(home, {
+        conversationId: link.conversation_id,
+        taskId: TASK,
+        dispatchId,
+        requestKey,
+        peerRunId
       })
     },
     fail(dispatchId: string, failure: Failure) {
@@ -275,11 +262,11 @@ function pairedRun() {
 }
 
 /** worker-start --on as `creator` asks it; its start fails there and its report comes home. */
-function failOnServer(creator: DispatchCreator, failure: Failure, how: Receipt) {
+function failOnServer(creator: DispatchCreator, failure: Failure) {
   const run = pairedRun()
   run.reserve(creator)
   const dispatchId = run.start()
-  run.receive(dispatchId, how)
+  run.receive(dispatchId)
   run.fail(dispatchId, failure)
   run.pull()
   return run.judge()
@@ -287,14 +274,12 @@ function failOnServer(creator: DispatchCreator, failure: Failure, how: Receipt) 
 
 describe("a paired server's start outcome reaches its asker as a local one does", () => {
   const cases = FAILURES.flatMap((failure) =>
-    (['answer', 'lookup'] as const).flatMap((how) =>
-      (['thread', 'orca'] as const).map((asked) => [failure, how, asked] as const)
-    )
+    (['thread', 'orca'] as const).map((asked) => [failure, asked] as const)
   )
 
-  it.each(cases)('%s, receipt by %s, asked in %s: remote equals local', (failure, how, asked) => {
+  it.each(cases)('%s, asked in %s: remote equals local', (failure, asked) => {
     const creator = asked === 'thread' ? THREAD_TURN : ORCA_TURN
-    expect(failOnServer(creator, failure, how)).toEqual(failLocally(creator, failure))
+    expect(failOnServer(creator, failure)).toEqual(failLocally(creator, failure))
   })
 
   it('answers in the thread for failed and never-ready starts, and keeps a blocked one in Orca', () => {
@@ -306,7 +291,7 @@ describe("a paired server's start outcome reaches its asker as a local one does"
     ])
   })
 
-  it('keeps the outcome in Orca when no receipt of the start reached this Orca', () => {
+  it("keeps the outcome in Orca when the start's answer never reached this Orca", () => {
     const run = pairedRun()
     run.reserve(THREAD_TURN)
     run.fail(run.start(), 'never-ready')
@@ -314,13 +299,13 @@ describe("a paired server's start outcome reaches its asker as a local one does"
     expect(run.judge().toThread).toBe(false)
   })
 
-  it('takes a receipt that arrives after its report', () => {
+  it('takes a start answer that arrives after its report', () => {
     const run = pairedRun()
     run.reserve(THREAD_TURN)
     const dispatchId = run.start()
     run.fail(dispatchId, 'never-ready-in-terminal')
     run.pull()
-    run.receive(dispatchId, 'lookup')
+    run.receive(dispatchId)
     expect(run.judge().toThread).toBe(true)
   })
 
@@ -328,7 +313,7 @@ describe("a paired server's start outcome reaches its asker as a local one does"
     const run = pairedRun()
     run.reserve(THREAD_TURN)
     const dispatchId = run.start()
-    run.receive(dispatchId, 'answer')
+    run.receive(dispatchId)
     run.forgeNeverReady(dispatchId)
     run.pull()
     expect(run.judge(sentBy(WORKER_TERMINAL)).toThread).toBe(false)
@@ -338,7 +323,7 @@ describe("a paired server's start outcome reaches its asker as a local one does"
     const run = pairedRun()
     run.reserve(THREAD_TURN)
     const dispatchId = run.start()
-    run.receive(dispatchId, 'answer')
+    run.receive(dispatchId)
     run.olderServerNeverReady(dispatchId)
     run.pull()
     expect(run.judge().toThread).toBe(false)
@@ -350,7 +335,7 @@ describe("a paired server's start outcome reaches its asker as a local one does"
       handle: 'term_other',
       turnSource: 'connector'
     }
-    expect(failOnServer(other, 'never-ready', 'answer').toThread).toBe(false)
+    expect(failOnServer(other, 'never-ready').toThread).toBe(false)
   })
 })
 
@@ -365,7 +350,7 @@ describe('the asker a paired-server attempt reports for', () => {
       run.reserve(first)
       run.reserve(retry)
       const dispatchId = run.start()
-      run.receive(dispatchId, 'lookup')
+      run.receive(dispatchId)
       run.fail(dispatchId, 'never-ready')
       run.pull()
       expect(run.judge().toThread).toBe(toThread)
@@ -378,7 +363,7 @@ describe('the asker a paired-server attempt reports for', () => {
     run.neverSent()
     run.reserve(ORCA_TURN)
     const dispatchId = run.start()
-    run.receive(dispatchId, 'lookup')
+    run.receive(dispatchId)
     run.fail(dispatchId, 'never-ready')
     run.pull()
     expect(run.judge().toThread).toBe(false)
@@ -388,7 +373,7 @@ describe('the asker a paired-server attempt reports for', () => {
     const run = pairedRun()
     run.reserve(THREAD_TURN)
     const first = run.start()
-    run.receive(first, 'answer')
+    run.receive(first)
     run.fail(first, 'never-ready')
     const second = run.start(first)
     run.fail(second, 'never-ready')
@@ -404,17 +389,7 @@ describe('the asker a paired-server attempt reports for', () => {
     run.fail(first, 'never-ready')
     run.pull()
     run.reserve(THREAD_TURN, 'retry-key', first)
-    run.receive(first, 'answer')
+    run.receive(first)
     expect(run.judge(sentBy(`dispatch:${first}`)).toThread).toBe(false)
-  })
-
-  it("ignores a lookup's answer for another request", () => {
-    const run = pairedRun()
-    run.reserve(THREAD_TURN)
-    const dispatchId = run.start()
-    run.receive(dispatchId, 'lookup', 'another-request')
-    run.fail(dispatchId, 'never-ready')
-    run.pull()
-    expect(run.judge().toThread).toBe(false)
   })
 })

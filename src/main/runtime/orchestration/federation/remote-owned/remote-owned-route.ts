@@ -18,7 +18,6 @@ import {
   recordRemoteAskAnswered
 } from '../../db/remote-owned/remote-dispatch-records'
 import { adoptRemoteAttempt } from '../../db/remote-owned/remote-placements'
-import { recordRemoteStartReceipt } from '../../db/remote-owned/remote-start-receipt'
 import {
   getOpenRemoteRunLink,
   getRemoteRunLink,
@@ -216,8 +215,6 @@ async function routeServerCall(
       undefined,
       { expectedEnvironmentPairingRevision: server.pairingRevision }
     )
-    // A lost start answer's receipt names the worker this Orca's start began there.
-    recordRemoteStartReceipt(db, forward.key, answer)
     return { handled: true, result: inServerTerms(answer, { server: server.name, forward }) }
   }
 }
