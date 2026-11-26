@@ -1,5 +1,6 @@
 // What the transcript remembers about its head between first-row changes, and what an older page
-// the reader pages in changes there: turns kept open, and rows that keep their run's disclosures.
+// changes there (older-history paging, including the mount prefetch): turns kept open, and rows
+// that keep their run's disclosures.
 
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import {
@@ -27,8 +28,9 @@ export type NativeChatHeadTrack = {
   held: ReadonlySet<string>
   /** Rows whose run an older page grew at its start, with the disclosure id each keeps. */
   carried: ReadonlyMap<string, string>
-  /** The reader paged older history since the window was recorded: the next older rows are
-   *  theirs, not a chat's first load arriving in steps. */
+  /** An older-history page (including the mount prefetch) is in flight, or was in the commit
+   *  before: the older rows it lands are the reader's paging, not a chat's first load arriving in
+   *  steps. Set when a request starts; cleared when it lands or ends without landing. */
   paging: boolean
 }
 

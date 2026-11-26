@@ -16,13 +16,22 @@ import type { NativeChatToolRunAsides } from './NativeChatToolRun'
 /** One drawn row of an opened run. `focusable`: it renders a control, so keyboard order can land on it. */
 export type NativeChatToolRunRow =
   | { kind: 'aside'; key: string; focusable: boolean; element: React.JSX.Element }
-  | { kind: 'tasks'; key: string; focusable: boolean; taskList: NativeChatTaskListRow }
+  | {
+      kind: 'tasks'
+      key: string
+      focusable: boolean
+      taskList: NativeChatTaskListRow
+      /** What its disclosure is remembered by: its call, so earlier calls joining the run don't move it. */
+      disclosureKey: string
+    }
   | {
       kind: 'edit'
       key: string
       focusable: true
       editKey: string
       files: NativeChatEditFile[]
+      /** Each file's disclosure key: its call and path, so earlier calls joining the run don't move it. */
+      fileDisclosureKeys: string[]
     }
   | {
       kind: 'line'
@@ -32,6 +41,13 @@ export type NativeChatToolRunRow =
       result: NativeChatToolResultBlock | undefined
       lineIdentity: string
     }
+
+/** The call's provider id, when it has a usable one. */
+function namedCallId(block: NativeChatBlock): string | undefined {
+  return block.type === 'tool-call' && block.callId !== undefined && block.callId.trim() !== ''
+    ? block.callId
+    : undefined
+}
 
 /** A thought with no words draws nothing, so keyboard order cannot land on it. */
 function asideDrawsControl(element: React.JSX.Element): boolean {
@@ -82,11 +98,13 @@ export function buildNativeChatToolRunRows({
     const taskList = taskLists.rows.get(block)
     if (taskList) {
       // Only an update shows its "Full task list" trigger; a first list has no control.
+      const callId = namedCallId(block)
       rows.push({
         kind: 'tasks',
         key: `tasks:${blockIndex}`,
         focusable: taskList.previous !== undefined,
-        taskList
+        taskList,
+        disclosureKey: callId === undefined ? `tasks:${blockIndex}` : `call:${callId}`
       })
       continue
     }
@@ -95,12 +113,18 @@ export function buildNativeChatToolRunRows({
     }
     const edit = editCards.get(block)
     if (edit) {
+      const callId = namedCallId(block)
       rows.push({
         kind: 'edit',
         key: `edit:${edit.key}`,
         focusable: true,
         editKey: edit.key,
-        files: edit.files
+        files: edit.files,
+        fileDisclosureKeys: edit.files.map((file, fileIndex) =>
+          callId === undefined
+            ? `${edit.key}:${fileIndex}`
+            : `call:${callId}:${fileIndex}:${file.path}`
+        )
       })
       continue
     }

@@ -56,7 +56,9 @@ export function NativeChatToolRunMemberList({
             <NativeChatTaskList
               {...row.taskList}
               disclosureKey={
-                disclosureId === undefined ? undefined : `tasks:${disclosureId}:${row.key}`
+                disclosureId === undefined
+                  ? undefined
+                  : `tasks:${disclosureId}:${row.disclosureKey}`
               }
             />
           )
@@ -74,7 +76,7 @@ export function NativeChatToolRunMemberList({
               disclosureKey={
                 disclosureId === undefined
                   ? undefined
-                  : `diff:${disclosureId}:${row.editKey}:${fileIndex}`
+                  : `diff:${disclosureId}:${row.fileDisclosureKeys[fileIndex]}`
               }
             />
           ))

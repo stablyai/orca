@@ -40,8 +40,8 @@ export function useNativeChatTranscriptSlots({
 }: Omit<NativeChatTranscriptSlotsInput, 'liveReasoningId' | 'workers'> & {
   /** Receives turns kept open because an older page would fold work the reader was looking at. */
   setExpandedTurnKeys?: (update: (current: ReadonlySet<string>) => ReadonlySet<string>) => void
-  /** Whose older history this is (another session or reset starts over), and whether the reader
-   *  is paging it in (by scrolling up or asking). */
+  /** Whose older history this is (another session or reset starts over), and whether it is being
+   *  paged in: older-history paging, including the mount prefetch. Read only here, for this rule. */
   history?: Pick<
     NativeChatLiveSession,
     'agent' | 'sessionId' | 'olderHistoryGeneration' | 'loadingEarlier'
@@ -197,8 +197,10 @@ export function useNativeChatTranscriptSlots({
         loadingOlder
       )
     )
-  } else if (loadingOlder && !head.paging) {
-    setHead({ ...head, paging: true })
+  } else if (loadingOlder !== head.paging) {
+    // A request starting opens the latch; one ending without landing (failed, empty, superseded)
+    // closes it, so nothing arriving later counts as its page.
+    setHead({ ...head, paging: loadingOlder })
   } else if (head.held.size > 0 && [...head.held].every((key) => expandedTurnKeys.has(key))) {
     // The reader's expanded turns now hold them, so their status row folds them as usual.
     setHead({ ...head, held: NO_TURNS })
