@@ -177,15 +177,15 @@ async function admitBotRequestMail(
     if (refusal || !bot || !isBotRequestPurpose(params.type)) {
       return refuse(refusal ?? BOT_REQUEST_TYPE_REFUSAL)
     }
+    if (args.launchOptions && bot.agent !== receiving.bot.agent) {
+      throw new OrchestrationError(
+        'invalid_argument',
+        'The receiving bot changed agents. Send again with options for its current agent.'
+      )
+    }
     return { bot, purpose: params.type }
   }
   const { bot: target, purpose } = check()
-  if (args.launchOptions && target.agent !== receiving.bot.agent) {
-    throw new OrchestrationError(
-      'invalid_argument',
-      'The receiving bot changed agents. Send again with options for its current agent.'
-    )
-  }
   const groupScope = isBotGroupMemberSession(acting.sessionId)
     ? await runtimeBotGroups(runtime).peerScope(acting.sessionId, target.id, acting.turn.rootItemId)
     : null
@@ -255,7 +255,7 @@ async function admitBotRequestMail(
     if (!recipient.ok) {
       throw new OrchestrationError(recipient.code, recipient.message)
     }
-    // The bot may have been paused or removed while the Chat was found.
+    // The bot may have changed while the chat was being prepared.
     check()
     runtimeBotGroups(runtime).assertPeerScope(groupScope)
     const mail = {

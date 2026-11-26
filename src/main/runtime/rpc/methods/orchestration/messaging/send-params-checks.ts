@@ -1,5 +1,29 @@
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+import { BOT_HANDOFF_LAUNCH_RELAY_REFUSAL } from '../../../../../../shared/orchestration/bot-handoff-launch-options'
+import type { RpcCallerScope } from '../../../callers/rpc-caller-scope'
+import type { RpcDispatchStreamingOptions } from '../../../dispatch/dispatcher-stream-options'
 import { isConversationReportOutcome, parseRemoteWorkerPayload } from './message-payload'
+
+export function assertLocalBotHandoffLaunch(
+  params: unknown,
+  scope: RpcCallerScope,
+  transport: RpcDispatchStreamingOptions | undefined
+): void {
+  if (!params || typeof params !== 'object') {
+    return
+  }
+  if (
+    (scope.kind !== 'owner' ||
+      transport?.pairedDeviceId !== undefined ||
+      transport?.caller?.kind === 'paired-device') &&
+    (('model' in params && params.model !== undefined) ||
+      ('effort' in params && params.effort !== undefined))
+  ) {
+    throw new OrchestrationError('capability_unsupported', BOT_HANDOFF_LAUNCH_RELAY_REFUSAL, {
+      effectsApplied: false
+    })
+  }
+}
 
 /** Refuses a send whose type and recipient can never be delivered, before any effect. */
 export function assertSendParamsDeliverable(params: {

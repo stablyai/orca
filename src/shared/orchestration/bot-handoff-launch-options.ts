@@ -7,8 +7,8 @@ export function botHandoffLaunchRouteError(params: {
   to?: string
   type?: string
   chat?: string
-  item?: string
-  on?: string
+  item?: unknown
+  on?: unknown
   onClient?: string
   model?: string
   effort?: string

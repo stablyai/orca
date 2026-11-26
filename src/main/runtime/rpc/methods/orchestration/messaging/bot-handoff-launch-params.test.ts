@@ -24,3 +24,20 @@ test('a paired-server handoff cannot drop a requested model and send anyway', ()
     false
   )
 })
+
+test.each([
+  { on: '' },
+  { item: '' },
+  { on: '   ' },
+  { item: '   ' },
+  { onClient: '' },
+  { onClient: '   ' }
+])('a launch override rejects explicit empty routing selectors %j', (selector) => {
+  expect(SendParams.safeParse({ ...handoff, model: 'sonnet', ...selector }).success).toBe(false)
+})
+
+test('ordinary mail still normalizes empty server and item selectors away', () => {
+  const parsed = SendParams.parse({ ...handoff, on: '', item: '' })
+  expect(parsed.on).toBeUndefined()
+  expect(parsed.item).toBeUndefined()
+})

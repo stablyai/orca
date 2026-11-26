@@ -278,10 +278,9 @@ export async function startBotSession(
     runtime.getOrchestrationDb().recordBotConversationActsFor(sessionId, input.actsFor)
   }
   const permissionMode = bot.permissionMode && newChatPermissionMode(bot.agent, bot.permissionMode)
+  const host = () => requireStructuredHost(runtime)
   // A model the agent no longer lists still goes through: the agent's own failure names it, as for any chat.
-  const saved =
-    input.launchOptions ??
-    botStartOptions(() => runtime.requireStore().getSettings(), bot, input.background === true)
+  const saved = await botStartOptions(() => runtime.requireStore().getSettings(), bot, input, host)
   const launch = supportedStructuredSeedOptions(bot.agent, saved)
   const dropped = Object.keys(saved).filter((key) => !(key in launch))
   if (dropped.length) {
@@ -293,7 +292,6 @@ export async function startBotSession(
     ...launch,
     ...(permissionMode ? { [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: permissionMode } : {})
   }
-  const host = () => requireStructuredHost(runtime)
   const create = input.background
     ? createBackgroundStructuredAgentSession
     : createStructuredAgentSessionForWorktree

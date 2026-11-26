@@ -26,7 +26,11 @@ import { requireWorkerDoneSettlement } from '../workers/orchestration-worker-set
 import { getOptionalStructuredMessagePayload } from './message-payload'
 import { callOrchestrationMutation } from '../recovery/mutation-request'
 import { isDevCliInvocation } from '../recovery/runtime-compatibility'
-import { refuseAgentServerRoute, requirePeerMailCarrier } from '../identity/agent-server-route'
+import {
+  refuseAgentServerRoute,
+  requireLocalBotHandoffLaunch,
+  requirePeerMailCarrier
+} from '../identity/agent-server-route'
 import {
   resolveOrchestrationTerminalHandle,
   throwNoActiveSenderTerminal
@@ -90,7 +94,7 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
     const to = getOptionalStringFlag(flags, 'to')
     const type = getOptionalStringFlag(flags, 'type')
     const chat = getOptionalStringFlag(flags, 'chat')
-    const item = getOptionalStringFlag(flags, 'item')
+    const item = getOptionalStringFlagAllowingEmpty(flags, 'item')
     const on = getOptionalStringFlagAllowingEmpty(flags, 'on')
     const onClient = getOptionalStringFlagAllowingEmpty(flags, 'on-client')
     const model = getPresentStringFlag(flags, 'model')
@@ -107,6 +111,9 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
     })
     if (routeError) {
       throw new RuntimeClientError('invalid_argument', routeError)
+    }
+    if (model !== undefined) {
+      requireLocalBotHandoffLaunch(client)
     }
     await refuseAgentServerRoute('send', ctx)
     await requirePeerMailCarrier(ctx)
@@ -136,7 +143,7 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       from,
       to,
       chat,
-      item,
+      item: item || undefined,
       ...(model === undefined ? {} : { model, effort }),
       ...attachedFiles(flags, cwd),
       run: getOptionalStringFlag(flags, 'run'),
