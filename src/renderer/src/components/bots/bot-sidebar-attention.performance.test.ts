@@ -1,7 +1,7 @@
 // Guards STA-18283 (follow-up to #48722): a bot list's folded-history attention re-reads only the
 // workspaces a store write changed, so an agent status update outside the list reads none of them.
-// STA-18521: a browser navigation elsewhere costs the reader nothing per other workspace, however
-// many browser workspaces exist.
+// STA-18521 / STA-18523: a browser navigation or a combined terminal title write elsewhere costs the
+// reader nothing per other workspace, however many browser workspaces or tab buckets exist.
 import { beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
@@ -139,4 +139,39 @@ it('reads no other browser workspace when a page elsewhere navigates (STA-18521)
   )
   expect(bucketReads).toBe(0)
   expect(reads).toBe(0)
+})
+
+it('reads no other tab bucket for a combined pane and tab title write (STA-18523)', () => {
+  const ids = Array.from({ length: FLEET }, (_, index) => `title-wt-${index}`)
+  let tabIdReads = 0
+  const countTabIdReads = (): void => {
+    tabIdReads += 1
+  }
+  useAppStore.setState({
+    tabsByWorktree: Object.fromEntries(
+      ids.map((id) => [
+        id,
+        [counted(makeTab({ id: `tab-${id}`, worktreeId: id }), countTabIdReads)]
+      ])
+    ),
+    runtimePaneTitlesByTabId: {}
+  })
+  const read = createWatchedAttentionReader()
+  const watched = [ids[0]!]
+  read(useAppStore.getState(), watched)
+
+  const titled = `tab-${ids[FLEET - 1]}`
+  useAppStore.getState().setRuntimePaneTitle(titled, 1, 'build', { alsoTabTitle: true })
+  expect(useAppStore.getState().runtimePaneTitlesByTabId[titled]).toEqual({ 1: 'build' })
+  tabIdReads = 0
+  reads = 0
+  expect(read(useAppStore.getState(), watched)).toEqual([])
+  expect(tabIdReads).toBe(0)
+  expect(reads).toBe(0)
+
+  // A title write in a watched workspace re-reads that workspace alone.
+  useAppStore.getState().setRuntimePaneTitle(`tab-${ids[0]}`, 1, 'build', { alsoTabTitle: true })
+  reads = 0
+  read(useAppStore.getState(), watched)
+  expect(reads).toBe(1)
 })
