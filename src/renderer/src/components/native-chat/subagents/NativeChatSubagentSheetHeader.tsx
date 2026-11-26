@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { ChevronDown, ChevronLeft, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -11,7 +11,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
 import { formatSubagentTokens } from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-group-header'
-import { normalizeSubagentState } from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-summary'
+import {
+  normalizeSubagentState,
+  subagentElapsedTiming
+} from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-summary'
 import { subagentRoleLabel } from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-entry-detail'
 import type { NativeChatSubagentEntry } from '../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatSubagentRow } from '../../../../../shared/native-chat/transcript/native-chat-transcript-projection'
@@ -58,8 +61,10 @@ export function NativeChatSubagentSheetHeader({
   const entry = entries.get(agentId)
   const state = entry ? normalizeSubagentState(entry.state) : null
   const role = subagentRoleLabel(entry?.agentType)
+  const [mountedAt] = useState(() => Date.now())
   const { waiting } = controls
   const counting = state === 'working'
+  const elapsed = entry ? subagentElapsedTiming(entry, mountedAt) : null
   return (
     <div className="shrink-0">
       <div className="flex items-start gap-2 border-b border-border/60 py-2 pr-2 pl-4">
@@ -150,17 +155,17 @@ export function NativeChatSubagentSheetHeader({
             className="h-4 min-w-0 truncate pl-[18px] text-xs text-chat-foreground-faint tabular-nums"
           >
             {state ? sayNativeChatSubagentStateHeading(state) : null}
-            {entry?.startedAt !== undefined ? (
+            {elapsed ? (
               // Ticking digits stay out of live announcements.
               <span
-                aria-hidden={counting || undefined}
+                aria-hidden={elapsed.counting || undefined}
                 className="@max-[20rem]/subagent-sheet:hidden"
               >
                 {' · '}
                 <SubagentElapsed
-                  startedAt={entry.startedAt}
-                  settledAt={entry.settledAt ?? null}
-                  counting={counting}
+                  startedAt={elapsed.startedAt}
+                  settledAt={elapsed.settledAt}
+                  counting={elapsed.counting}
                 />
               </span>
             ) : null}

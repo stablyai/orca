@@ -1,6 +1,10 @@
 // Share spawn-group headline/verdict/alert/clock/token derivation; callers supply platform translations.
 
-import { normalizeSubagentState, summarizeSubagentGroup } from './native-chat-subagent-summary'
+import {
+  normalizeSubagentState,
+  summarizeSubagentGroup,
+  type NativeChatSubagentElapsedTiming
+} from './native-chat-subagent-summary'
 import type { NativeChatSubagentEntry, NativeChatSubagentState } from '../../native-chat-types'
 import {
   englishCopyText,
@@ -148,4 +152,26 @@ export function nativeChatSubagentGroupHeader(
         ? say('tokens', { value0: formatSubagentTokens(summary.tokens) })
         : null
   }
+}
+
+/** Resolve group elapsed timing, falling back to mount time while working without host child timestamps. */
+export function subagentGroupElapsedTiming(
+  header: Pick<NativeChatSubagentGroupHeader, 'working' | 'clockStartedAt' | 'settledAt'>,
+  fallbackStartedAt?: number | null
+): NativeChatSubagentElapsedTiming | null {
+  if (header.clockStartedAt !== null) {
+    return {
+      startedAt: header.clockStartedAt,
+      settledAt: header.settledAt,
+      counting: header.working
+    }
+  }
+  if (
+    header.working &&
+    typeof fallbackStartedAt === 'number' &&
+    Number.isFinite(fallbackStartedAt)
+  ) {
+    return { startedAt: fallbackStartedAt, settledAt: null, counting: true }
+  }
+  return null
 }
