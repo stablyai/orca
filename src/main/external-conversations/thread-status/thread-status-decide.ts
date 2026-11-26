@@ -20,7 +20,7 @@ export const THREAD_STATUS_WORKING_LINE = (elapsed: string): string =>
 export const THREAD_STATUS_IDLE_LINE = (elapsed: string): string =>
   `Still open (${elapsed}), but nothing is running on it right now. Reply here to ask where it stands.`
 export const THREAD_STATUS_STOP_LINE =
-  "No change for a while, so I'm pausing these automatic updates. Reply here to ask where it stands."
+  'Pausing these automatic updates for now. Reply here to ask where it stands.'
 
 export type ThreadStatusView = Pick<ConversationWorkerView, 'activity' | 'open' | 'helpersRunning'>
 
