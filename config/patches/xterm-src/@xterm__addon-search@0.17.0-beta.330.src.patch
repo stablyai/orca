@@ -1,3 +1,78 @@
+diff --git a/src/SearchAddon.ts b/src/SearchAddon.ts
+index e5fd31cfb0d6c0267278daaf459b32e47b5f854f..f24e53e722e3cb0e531bac4d97a930e2c58bcd48 100644
+--- a/src/SearchAddon.ts
++++ b/src/SearchAddon.ts
+@@ -35,6 +35,8 @@ export class SearchAddon extends Disposable implements ITerminalAddon, ISearchAp
+   private _highlightLimit: number;
+   private _highlightTimeout = this._register(new MutableDisposable<IDisposable>());
+   private _lineCache = this._register(new MutableDisposable<SearchLineCache>());
++  private _selectionChangedByUser = false;
++  private _selectionAfterFind = '';
+ 
+   // Component instances
+   private _state = new SearchState();
+@@ -64,6 +66,7 @@ export class SearchAddon extends Disposable implements ITerminalAddon, ISearchAp
+     this._decorationManager = new DecorationManager(terminal);
+     this._register(this._terminal.onWriteParsed(() => this._updateMatches()));
+     this._register(this._terminal.onResize(() => this._updateMatches()));
++    this._register(this._terminal.onSelectionChange(() => this._selectionChangedByUser = true));
+     this._register(toDisposable(() => this.clearDecorations()));
+   }
+ 
+@@ -72,12 +75,34 @@ export class SearchAddon extends Disposable implements ITerminalAddon, ISearchAp
+     if (this._state.cachedSearchTerm && this._state.lastSearchOptions?.decorations) {
+       this._highlightTimeout.value = disposableTimeout(() => {
+         const term = this._state.cachedSearchTerm;
++        const searchOptions = this._state.lastSearchOptions;
++        if (!term || !searchOptions?.decorations) {
++          return;
++        }
++        if (this._selectionChangedByUser || this._selectionShape() !== this._selectionAfterFind) {
++          this._refreshHighlights(term, searchOptions);
++          return;
++        }
+         this._state.clearCachedTerm();
+-        this.findPrevious(term!, { ...this._state.lastSearchOptions, incremental: true }, { noScroll: true });
++        this.findPrevious(term, { ...searchOptions, incremental: true }, { noScroll: true });
+       }, 200);
+     }
+   }
+ 
++  private _selectionShape(): string {
++    const range = this._terminal?.getSelectionPosition();
++    return range ? `${range.start.x},${range.end.x},${range.end.y - range.start.y}` : '';
++  }
++
++  private _refreshHighlights(term: string, searchOptions: ISearchOptions): void {
++    const activeMatch = this._resultTracker.selectedDecoration?.match;
++    this._highlightAllMatches(term, searchOptions);
++    if (activeMatch && searchOptions.decorations && this._resultTracker.findResultIndex(activeMatch) !== -1) {
++      this._resultTracker.selectedDecoration = this._decorationManager?.createActiveDecoration(activeMatch, searchOptions.decorations);
++    }
++    this._fireResults(searchOptions);
++  }
++
+   public clearDecorations(retainCachedSearchTerm?: boolean): void {
+     this._resultTracker.clearSelectedDecoration();
+     this._decorationManager?.clearHighlightDecorations();
+@@ -112,6 +137,8 @@ export class SearchAddon extends Disposable implements ITerminalAddon, ISearchAp
+     }
+ 
+     const found = this._findNextAndSelect(term, searchOptions, internalSearchOptions);
++    this._selectionChangedByUser = false;
++    this._selectionAfterFind = this._selectionShape();
+     this._fireResults(searchOptions);
+     this._state.cachedSearchTerm = term;
+ 
+@@ -193,6 +220,8 @@ export class SearchAddon extends Disposable implements ITerminalAddon, ISearchAp
+     }
+ 
+     const found = this._findPreviousAndSelect(term, searchOptions, internalSearchOptions);
++    this._selectionChangedByUser = false;
++    this._selectionAfterFind = this._selectionShape();
+     this._fireResults(searchOptions);
+     this._state.cachedSearchTerm = term;
+ 
 diff --git a/src/SearchEngine.ts b/src/SearchEngine.ts
 index 1760bc2bd1fd274d23e2032fde631b39c739f0d9..5b3c5cc5e861356b87e8a15c55797f45bac20a5c 100644
 --- a/src/SearchEngine.ts
