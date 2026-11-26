@@ -30,7 +30,7 @@ export function openLinkedBotItem(from: BotRef, botId: string, uid: string): voi
   if (!owner) {
     return
   }
-  const shown = findBotByWorkspace(bots, useAppStore.getState().activeWorktreeId)
+  const shown = findBotByWorkspace(bots, useAppStore.getState().activeWorktreeId, owner.hostId)
   if ((!shown || !isSameBot(shown, owner)) && !openBotHome(owner)) {
     return
   }

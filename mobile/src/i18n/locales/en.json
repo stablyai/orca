@@ -6516,7 +6516,8 @@
         "fileOutside": "{{path}} isn't in this bot's folder",
         "automation": "Automation",
         "automationOn": "Will wake the agent for this item",
-        "automationEnded": "Ended"
+        "automationEnded": "Ended",
+        "itemMissing": "Item not found"
       },
       "open": {
         "failed": "Couldn’t open this item.",

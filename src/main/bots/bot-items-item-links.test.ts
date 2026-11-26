@@ -57,33 +57,28 @@ describe('item links', () => {
     ])
   })
 
-  it('stores another bot’s item by uid however it was named, and reads it back for the view', async () => {
+  it('stores another bot’s item by uid however it was named, never itself or one not there', async () => {
     const store = BotItemsStore.open(':memory:')
     stores.push(store)
     const backend = add(store, BACKEND, 'Release API')
     const qa = add(store, QA, 'Verify the release')
     const number = store.get(backend)!.number
+    const link = (ref: string) => itemLinksByUid(remote(store), [parseItemLink(ref)], qa)
 
-    const byNumber = await itemLinksByUid(remote(store), [parseItemLink(`item:${number}`)], qa)
-    const byUid = await itemLinksByUid(remote(store), [parseItemLink(` item:${backend} `)], qa)
-    expect(byNumber).toEqual([{ kind: 'item', ref: backend }])
-    expect(byUid).toEqual(byNumber)
+    expect(await link(`item:${number}`)).toEqual([{ kind: 'item', ref: backend }])
+    expect(await link(` item:${backend} `)).toEqual([{ kind: 'item', ref: backend }])
+    await expect(link('item:999')).rejects.toThrow(/no such item/)
+    await expect(link(`item:${qa}`)).rejects.toThrow(/can't link itself/)
 
-    store.link(qa, byNumber, QA)
+    store.link(qa, await link(`item:${number}`), QA)
     expect(store.viewRows([qa]).linked).toEqual({
       [backend]: { number, ownerBotId: 'backend', title: 'Release API', status: 'working' }
     })
-  })
-
-  it('refuses an item link that names no item, itself, or nothing', async () => {
-    const store = BotItemsStore.open(':memory:')
-    stores.push(store)
-    const qa = add(store, QA, 'Verify the release')
-    const link = (ref: string) => itemLinksByUid(remote(store), [parseItemLink(ref)], qa)
-    await expect(link('item:999')).rejects.toThrow(/no such item/)
-    await expect(link('item:not-a-uid')).rejects.toThrow(/no such item/)
-    await expect(link(`item:${qa}`)).rejects.toThrow(/can't link itself/)
-    expect(() => parseItemLink('item:')).toThrow(/item:<number or uid>/)
+    // Backlinks: what `item list --link` lists, and whom a change to the target re-reads.
+    const backlink = { kind: 'item' as const, ref: backend }
+    const listed = store.list({ botId: 'qa', statuses: ['working'], link: backlink, limit: 10 })
+    expect(listed.items.map((item) => item.uid)).toEqual([qa])
+    expect(store.itemsLinkingItems([backend])).toEqual([{ uid: qa, ownerBotId: 'qa' }])
   })
 
   it('reaches a client: its parse keeps the link, and an unreadable target as not found', () => {

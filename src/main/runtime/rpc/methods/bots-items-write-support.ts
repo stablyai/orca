@@ -152,9 +152,7 @@ export async function itemLinksByUid(
       if (link.kind !== 'item') {
         return link
       }
-      const target = /^\d+$/.test(link.ref)
-        ? await store.byNumber(Number(link.ref))
-        : await store.get(link.ref)
+      const target = await linkedItemOf(store, link.ref)
       if (!target) {
         throw new BotItemError(
           'not_found',
@@ -167,6 +165,14 @@ export async function itemLinksByUid(
       return { kind: 'item', ref: target.uid }
     })
   )
+}
+
+/** The item an `item:` link's number or uid names on this host. */
+export async function linkedItemOf(
+  store: BotItemsRemote,
+  ref: string
+): Promise<BotItemRecord | null> {
+  return /^\d+$/.test(ref) ? store.byNumber(Number(ref)) : store.get(ref)
 }
 
 /** A list cursor as a list printed it. */

@@ -12,6 +12,7 @@ import {
 } from '../../shared/bots/bot-items'
 import type { Automation } from '../../shared/automations/automation-definition'
 import type { IssueInfo, PRInfo } from '../../shared/github/pull-requests/pull-request-types'
+import type { BotItemLinkedRow } from './bot-items-reads'
 import type { BotItemLinkRecord } from './bot-items-schema'
 import type { BotWorkWorker } from './bot-work-types'
 import { workspaceReader, type BotWorkRuntime } from './bot-work-runtime'
@@ -250,4 +251,19 @@ function workerState(worker: BotWorkWorker | null): BotItemWorkerState {
     return 'stopped'
   }
   return worker.state === 'unverifiable' ? 'unknown' : worker.state
+}
+
+/** An `item:` link's target as its link shows it, its bot named as this host names it. */
+export function linkedItemView(
+  row: BotItemLinkedRow | undefined,
+  nameOf: (botId: string) => string | null
+): BotItemLinkedItem | null {
+  return row
+    ? {
+        number: row.number,
+        owner: { botId: row.ownerBotId, name: nameOf(row.ownerBotId) },
+        title: row.title,
+        status: row.status
+      }
+    : null
 }

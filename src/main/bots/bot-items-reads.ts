@@ -2,6 +2,7 @@
 // item views need in one round trip.
 import {
   type BotItemActor,
+  BOT_ITEM_LIMITS,
   botItemEventId,
   isOpenBotItemStatus,
   type BotItemLinkKind,
@@ -73,6 +74,17 @@ export class BotItemsReads extends BotItemsTables {
       )
       .all(kind, JSON.stringify(refs), limit)
       .map((row) => String(row.item_uid))
+  }
+
+  /** Up to a list page of items linking any of these items (`item:`), with their bots. */
+  itemsLinkingItems(uids: readonly string[]): { uid: string; ownerBotId: string }[] {
+    return this.db
+      .prepare(
+        `SELECT DISTINCT items.uid, items.owner_bot_id FROM item_links JOIN items ON items.uid = item_links.item_uid
+          WHERE item_links.kind = 'item' AND item_links.ref IN (SELECT value FROM json_each(?)) LIMIT ?`
+      )
+      .all(JSON.stringify(uids), BOT_ITEM_LIMITS.listPageMax)
+      .map((row) => ({ uid: text(row, 'uid'), ownerBotId: text(row, 'owner_bot_id') }))
   }
 
   /** An item and where its work started (its `made` event's `startedIn`), in one call: what a
