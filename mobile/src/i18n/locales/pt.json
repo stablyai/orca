@@ -1802,9 +1802,6 @@
       "loadFailed": "Não foi possível carregar os arquivos",
       "title": "Arquivos",
       "truncatedList": "{{worktreeLabel}} - Mostrando os primeiros 5000",
-      "filterPlaceholder": "Filtrar arquivos",
-      "noMatchesHint": "Somente as pastas que você abriu serão pesquisadas.",
-      "clearFilter": "Limpar filtro",
       "loading": "Carregando arquivos…"
     },
     "fileExplorerRow": {
@@ -1815,13 +1812,8 @@
       "openFolder": "Abrir pasta {{name}}",
       "previewFile": "Pré-visualizar arquivo {{name}}",
       "retryLoading": "Tentar carregar {{path}} novamente",
-      "searchAll": "Pesquisar tudo",
-      "searchAllIn": "Pesquisar todo o {{folder}}",
       "ignored": "Ignorado pelo .gitignore",
-      "searched": "{{loaded}} de {{total}} pesquisados em {{folder}}.",
-      "searching": "Pesquisando {{folder}}… {{loaded}} de {{total}}",
-      "showMore": "Mostrar mais {{rows}}",
-      "unavailable": "Indisponível no celular"
+      "showMore": "Mostrar mais {{rows}}"
     },
     "fileExplorerRowActions": {
       "copyName": "Copiar Nome",

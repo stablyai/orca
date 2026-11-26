@@ -1690,13 +1690,8 @@
       "openFolder": "フォルダー「{{name}}」を開く",
       "previewFile": "ファイル「{{name}}」をプレビュー",
       "retryLoading": "{{path}} の読み込みを再試行",
-      "searchAll": "すべて検索",
-      "searchAllIn": "{{folder}} をすべて検索",
       "ignored": ".gitignore によって無視される",
-      "searched": "{{folder}} の {{total}} 件中 {{loaded}} 件を検索しました。",
-      "searching": "{{folder}} を検索中… {{total}} 件中 {{loaded}} 件",
-      "showMore": "さらに {{rows}} 件を表示",
-      "unavailable": "モバイルでは利用不可"
+      "showMore": "さらに {{rows}} 件を表示"
     },
     "fileExplorerRowActions": {
       "copyName": "名前をコピー",
