@@ -17,6 +17,10 @@ import { shouldSeedPreAttachPtySize } from '../delivery/attached-pty-size'
 import { applyTerminalImageEnvironment } from './terminal-image-environment'
 import type { TerminalMcpPaneLaunch } from '../../../mcp-servers/terminal/terminal-mcp-launch'
 import { withSpawnTerminalMcpServers } from '../../../mcp-servers/terminal/terminal-mcp-spawn-step'
+import {
+  CLAUDE_ROOT_BYPASS_NOTICE,
+  withoutClaudeRootBypass
+} from '../../../../shared/agent-launch/permissions/claude-root-bypass-launch'
 
 type TrustInput = Parameters<typeof applyAgentWorkspaceTrustToSpawn>[0]
 
@@ -110,10 +114,16 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
     connectionId
   })
   const pluginDir = !connectionId ? env.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR : undefined
-  const launchCommand =
+  const viewedCommand =
     pluginDir && mcp.command
       ? withClaudeAgentViewPlugin(mcp.command, pluginDir, shell)
       : mcp.command
+  // Claude exits as root on its bypass switch; only a shell on this host shares main's uid.
+  const rootSafeCommand =
+    viewedCommand && !connectionId && input.codexRuntime !== 'wsl' && process.getuid?.() === 0
+      ? withoutClaudeRootBypass(viewedCommand, launchAgent, shell)
+      : null
+  const launchCommand = rootSafeCommand ?? viewedCommand
   promoteAgentTeamsShimPath(env, input.requestedAgentTeamsPath)
   const spawnOptions: PtySpawnOptions = {
     cols: args.cols,
@@ -145,6 +155,9 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
       !connectionId && inlineImagesEnabled && !input.envToDelete.includes('KITTY_WINDOW_ID')
         ? withCodexStartupImageCommand(command, shell)
         : command
+  }
+  if (rootSafeCommand) {
+    spawnOptions.startupNotice = CLAUDE_ROOT_BYPASS_NOTICE
   }
   if (args.commandDelivery !== undefined) {
     spawnOptions.commandDelivery = args.commandDelivery
