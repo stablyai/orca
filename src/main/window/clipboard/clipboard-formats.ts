@@ -63,6 +63,8 @@ export function clipboardFormatSnapshot(): ClipboardFormatReader {
     availableFormats: async () => (await read()).flatMap((item) => item.types),
     readBuffer: async (format, assertByteLength) =>
       readItemsBuffer(await read(), format, assertByteLength),
-    has: (format) => clipboard.has(nativeClipboardFormat(format))
+    // Electron's has() is membership in this same type list, enumerated again.
+    has: async (format) =>
+      (await read()).some((item) => item.types.includes(nativeClipboardFormat(format)))
   }
 }
