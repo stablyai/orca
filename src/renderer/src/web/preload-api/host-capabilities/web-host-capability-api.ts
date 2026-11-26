@@ -40,8 +40,7 @@ async function detectRuntimeAgents(
   if (!requireActiveEnvironmentOrNull()) {
     return []
   }
-  const params = args?.withManagedAgentCommands ? { withManagedAgentCommands: true } : undefined
-  return callRuntimeResult<AgentInventoryReply | string[]>('preflight.detectAgents', params).catch(
+  return callRuntimeResult<AgentInventoryReply | string[]>('preflight.detectAgents', args).catch(
     () => []
   )
 }

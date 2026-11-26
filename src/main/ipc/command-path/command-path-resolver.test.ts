@@ -117,16 +117,16 @@ describe('win32 PATH lookup', () => {
     }
   })
 
-  it('reuses settled candidate misses for staggered callers during a cmd folder check', async () => {
+  it('rechecks settled cmd candidates and shares pending stats across staggered callers', async () => {
     const entered = Promise.withResolvers<void>()
     const held = Promise.withResolvers<void>()
-    const candidates = ['EXE', 'CMD', 'BAT', 'COM'].map((ext) =>
+    const [exe, cmd, bat, com] = ['EXE', 'CMD', 'BAT', 'COM'].map((ext) =>
       path.join(quotedBin, `staggered-tool.${ext}`)
     )
     const statFile = vi.mocked(stat)
     statFile.mockClear()
     statFile.mockImplementation(async (file) => {
-      if (file === candidates[3]) {
+      if (file === bat) {
         entered.resolve()
         await held.promise
       }
@@ -141,12 +141,47 @@ describe('win32 PATH lookup', () => {
       )
     try {
       const first = lookup()
-      await Promise.race([entered.promise, first])
+      await expect(Promise.race([entered.promise, first])).resolves.toBeUndefined()
       const second = lookup()
+      // Let the second caller finish its immediate misses and reach the stalled stat.
+      await new Promise<void>((resolve) => setImmediate(resolve))
       held.resolve()
       await expect(Promise.all([first, second])).resolves.toEqual([null, null])
-      expect(statFile.mock.calls).toEqual(candidates.map((candidate) => [candidate]))
+      expect(statFile.mock.calls).toEqual([[exe], [cmd], [bat], [exe], [cmd], [com]])
     } finally {
+      held.resolve()
+      statFile.mockReset()
+    }
+  })
+
+  it('finds a cmd shim created after an expired caller missed it', async () => {
+    const cmd = path.join(quotedBin, 'claude.CMD')
+    const bat = path.join(quotedBin, 'claude.BAT')
+    const entered = Promise.withResolvers<void>()
+    const held = Promise.withResolvers<void>()
+    const statFile = vi.mocked(stat)
+    statFile.mockImplementation(async (file) => {
+      if (file === bat) {
+        entered.resolve()
+        await held.promise
+        throw new Error('Missing executable')
+      }
+      return filesystem.realStat!(file)
+    })
+    const lookup = (signal: AbortSignal) =>
+      resolveCmdLaunchFolderProgram('claude', quotedBin, '.EXE;.CMD;.BAT;.COM', signal)
+    const caller = new AbortController()
+    const first = lookup(caller.signal).catch((error: unknown) => error)
+    try {
+      await expect(Promise.race([entered.promise, first])).resolves.toBeUndefined()
+      caller.abort()
+      expect(await first).toMatchObject({ name: 'AbortError' })
+      await writeFile(cmd, '@echo off\r\n')
+      const second = lookup(new AbortController().signal)
+      held.resolve()
+      await expect(second).resolves.toBe(cmd)
+    } finally {
+      caller.abort()
       held.resolve()
       statFile.mockReset()
     }

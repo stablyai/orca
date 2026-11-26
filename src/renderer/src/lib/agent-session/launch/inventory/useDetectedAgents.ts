@@ -6,6 +6,7 @@ import { getLocalAgentPreflightContext } from '@/runtime/hosts/preflight/local-p
 import { localAgentInventoryContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
 import { runtimeHostContactForEntry } from '../../../../../../shared/remote-runtime/host-status/runtime-host-contact'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/agent-inventory/runtime-agent-inventory-key'
+import { agentInventoryRetryParams } from '@/store/slices/agent-inventory/managed-agent-launch-commands'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { observedAgentTargetsForGroup } from './observed-agent-targets'
 
@@ -228,20 +229,23 @@ export function useDetectedAgents(
         // Empty results are intentionally retryable through the normal probe.
         void state.ensureRemoteDetectedAgents(targetId)
       }
-    } else if (targetKind === 'runtime' && targetId) {
+    } else if (targetKind === 'runtime' && targetId && recordKey) {
+      const cachedIds = state.runtimeDetectedAgentIds[recordKey] ?? null
       const failedWhileOffline =
-        runtimeContactEpoch === 'down' &&
-        recordKey !== null &&
-        state.runtimeAgentInventoryOutcome(recordKey) === 'failed'
-      if (detectedIds === null) {
+        runtimeContactEpoch === 'down' && state.runtimeAgentInventoryOutcome(recordKey) === 'failed'
+      if (cachedIds === null) {
         if (!failedWhileOffline) {
           void state.ensureRuntimeDetectedAgents(targetId, runtimeWorktreeId)
         }
-      } else if (isNewRemoteTarget && detectedIds.length > 0) {
+      } else if (
+        isNewRemoteTarget &&
+        cachedIds.length > 0 &&
+        agentInventoryRetryParams(cachedIds).afterPublication === undefined
+      ) {
         // Refresh once when a new launch surface observes a host; cached inventory may predate installs.
         void state.refreshRuntimeDetectedAgents(targetId, runtimeWorktreeId)
       } else if (isNewRemoteTarget) {
-        // Empty results are intentionally retryable through the normal probe.
+        // The normal probe can recover a newer complete publication after a timeout.
         void state.ensureRuntimeDetectedAgents(targetId, runtimeWorktreeId)
       }
     } else {
