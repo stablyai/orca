@@ -1,29 +1,25 @@
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import {
-  closeSync,
-  openSync,
-  readFileSync,
-  statSync,
-  unlinkSync,
-  utimesSync,
-  writeSync
-} from 'node:fs'
+import { closeSync, openSync, readFileSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import { setTimeout as delay } from 'node:timers/promises'
 import {
   fixtureCacheDir,
   fixtureServerCodeStamp,
-  releaseStartLock,
   repoRoot,
-  serverLockPath,
   serverLogPath,
   serverScriptPath,
   serverStatePath
 } from './fixture-paths.mjs'
+import {
+  addStartLockOwner,
+  isProcessAlive,
+  releaseStartLock,
+  startLockOwners,
+  tryAcquireStartLock
+} from './fixture-start-lock.mjs'
 
 const STARTUP_TIMEOUT_MS = 120_000
-const STALE_LOCK_MS = 150_000
 
 function readServerState() {
   try {
@@ -54,33 +50,7 @@ async function readServerHealth(state, timeoutMs = STARTUP_TIMEOUT_MS) {
   }
 }
 
-function tryAcquireStartLock(token) {
-  let fd
-  try {
-    fd = openSync(serverLockPath, 'wx')
-  } catch {
-    try {
-      if (Date.now() - statSync(serverLockPath).mtimeMs > STALE_LOCK_MS) {
-        unlinkSync(serverLockPath)
-        return tryAcquireStartLock(token)
-      }
-    } catch {
-      return tryAcquireStartLock(token)
-    }
-    return false
-  }
-  try {
-    writeSync(fd, token)
-  } finally {
-    closeSync(fd)
-  }
-  return true
-}
-
 function startServerProcess(lockToken) {
-  // Why: the stale-lock lease covers the child's startup, not the previous server's teardown.
-  const now = new Date()
-  utimesSync(serverLockPath, now, now)
   const log = openSync(serverLogPath, 'w')
   const child = spawn(process.execPath, [serverScriptPath], {
     cwd: repoRoot,
@@ -91,6 +61,8 @@ function startServerProcess(lockToken) {
   })
   child.unref()
   closeSync(log)
+  // Same tick as spawn: the server owns the lock even if this launcher exits next.
+  addStartLockOwner(lockToken, child.pid)
   return child
 }
 
@@ -107,15 +79,18 @@ async function stopPreviousServer(state, deadline) {
   try {
     await callFixtureServer(state.url, 'stop', {}, AbortSignal.timeout(remaining()))
   } catch (error) {
-    // Why: another caller may already have stopped it. Only a server still answering is a failure.
-    if ((await readServerHealth(state, remaining()))?.pid === state.pid) {
+    // Why: another caller may already be stopping it. A server still serving refused the stop.
+    const health = await readServerHealth(state, remaining())
+    if (health?.pid === state.pid && !health.stopping) {
       throw error
     }
-    return
   }
-  while ((await readServerHealth(state, remaining()))?.pid === state.pid) {
+  // Why the pid: a closed or garbled listener does not prove its browser has exited.
+  while (isProcessAlive(state.pid)) {
     if (Date.now() >= deadline) {
-      throw new Error('Timed out waiting for the previous fixture server to stop.')
+      throw new Error(
+        `Timed out waiting for the previous fixture server (pid ${state.pid}) to stop.`
+      )
     }
     await delay(150)
   }
@@ -126,49 +101,68 @@ export async function ensureFixtureServer({ onStart } = {}) {
   const deadline = Date.now() + STARTUP_TIMEOUT_MS
   const lockToken = `${process.pid}-${randomUUID()}`
   let child
+  let retiringPid
+  let seenPid
   let waited = false
-  while (Date.now() < deadline) {
-    const state = readServerState()
-    const health = await readServerHealth(state, Math.max(1, deadline - Date.now()))
-    const identified = Boolean(health) && health.pid === state.pid
-    const stopping = identified && health.stopping === true
-    // Why after the probe: a script edit while it was in flight must not admit old code.
-    if (identified && !stopping && health.codeStamp === fixtureServerCodeStamp()) {
-      return { url: state.url, started: waited }
-    }
-    // Our child is up with an older stamp, or a client stopped it (exit 0) to replace it.
-    if (child && ((identified && health.pid === child.pid) || child.exitCode === 0)) {
-      child = undefined
-    }
-    if (child && (child.exitCode !== null || child.signalCode !== null)) {
-      throw new Error(`Fixture server exited during startup:\n${readLogTail()}`)
-    }
-    if (!waited) {
-      await mkdir(fixtureCacheDir, { recursive: true })
-    }
-    // A stopping server still holds its port and browser, so wait for it to exit.
-    if (!child && !stopping && tryAcquireStartLock(lockToken)) {
-      const published = readServerState()
-      if (published?.pid !== state?.pid || published?.url !== state?.url) {
-        // Recheck the server published by a concurrent starter.
-        releaseStartLock(lockToken)
-        continue
+  try {
+    while (Date.now() < deadline) {
+      const state = readServerState()
+      const health = await readServerHealth(state, Math.max(1, deadline - Date.now()))
+      const identified = Boolean(health) && health.pid === state.pid
+      const stopping = identified && health.stopping === true
+      if (identified) {
+        seenPid = state.pid
       }
-      try {
-        if (identified) {
+      // Why after the probe: a script edit while it was in flight must not admit old code.
+      if (identified && !stopping && health.codeStamp === fixtureServerCodeStamp()) {
+        return { url: state.url, started: waited }
+      }
+      // Our child is up with an older stamp, or a client stopped it (exit 0) to replace it.
+      if (child && ((identified && health.pid === child.pid) || child.exitCode === 0)) {
+        child = undefined
+      }
+      if (child && (child.exitCode !== null || child.signalCode !== null)) {
+        throw new Error(`Fixture server exited during startup:\n${readLogTail()}`)
+      }
+      if (!waited) {
+        await mkdir(fixtureCacheDir, { recursive: true })
+      }
+      // A stopping server may still hold its port and browser until its process exits.
+      if (stopping) {
+        retiringPid = state.pid
+      } else if (retiringPid && !isProcessAlive(retiringPid)) {
+        retiringPid = undefined
+      }
+      if (!child && !retiringPid && tryAcquireStartLock(lockToken)) {
+        const published = readServerState()
+        if (published?.pid !== state?.pid || published?.url !== state?.url) {
+          // Recheck the server published by a concurrent starter.
+          releaseStartLock(lockToken)
+          continue
+        }
+        // Why seenPid: a reset or garbled probe of a server we just saw does not mean it is gone.
+        if (identified || (state?.pid === seenPid && isProcessAlive(seenPid))) {
           await stopPreviousServer(state, deadline)
         }
         onStart?.()
         child = startServerProcess(lockToken)
-      } catch (error) {
-        releaseStartLock(lockToken)
-        throw error
       }
+      waited = true
+      await delay(150)
     }
-    waited = true
-    await delay(150)
+    if (child && child.exitCode === null && child.signalCode === null) {
+      // Why: a server that missed its startup deadline would keep the start lock with no waiter.
+      child.kill()
+    }
+    const owners = startLockOwners().filter(
+      (pid) => pid !== process.pid && pid !== child?.pid && isProcessAlive(pid)
+    )
+    const holder = owners.length > 0 ? ` The start lock is held by pid ${owners.join(', ')}.` : ''
+    throw new Error(`Fixture server did not start in time.${holder} Log tail:\n${readLogTail()}`)
+  } finally {
+    // Releases only this call's lock; a lock owned by anyone else has another token.
+    releaseStartLock(lockToken)
   }
-  throw new Error(`Fixture server did not start in time. Log tail:\n${readLogTail()}`)
 }
 
 export async function callFixtureServer(url, endpoint, body, signal) {

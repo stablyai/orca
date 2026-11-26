@@ -9,10 +9,10 @@ import {
   fixtureCacheDir,
   fixtureServerCodeStamp,
   matchFixtureIds,
-  releaseStartLock,
   repoRoot,
   serverStatePath
 } from './fixture-paths.mjs'
+import { releaseStartLock } from './fixture-start-lock.mjs'
 
 const fixtureRegistryPath = path
   .join(repoRoot, 'src/renderer/src/component-fixtures/component-fixture-registry.ts')
@@ -20,6 +20,7 @@ const fixtureRegistryPath = path
 const codeStamp = fixtureServerCodeStamp()
 const lockToken = process.env.ORCA_FIXTURES_LOCK_TOKEN
 const IDLE_SHUTDOWN_MS = Number(process.env.ORCA_FIXTURES_IDLE_MS) || 20 * 60 * 1000
+const STOP_GRACE_MS = 10_000
 
 process.chdir(repoRoot)
 
@@ -188,6 +189,8 @@ async function main() {
     // Why first: health must stop admitting this server before its browser starts closing.
     session.stopping = true
     clearInterval(idleTimer)
+    // Why: clients wait for this process to exit before replacing it, so teardown cannot hang.
+    setTimeout(() => process.exit(0), STOP_GRACE_MS).unref()
     // Leave the last endpoint for the client to probe. A successor may already own it.
     await (await browserPromise.catch(() => null))?.close()
     await vite.close()
