@@ -37,7 +37,10 @@ import { BotItemStatusIcon } from './BotItemStatusIcon'
 import { BotItemLinkedRefs } from './BotItemLinkedRefs'
 import { formatBotItemSnoozeTime } from './bot-item-snooze-time'
 import type { BotItemPendingComments } from '../../../../../shared/bots/bot-item-pending-comments'
-import { botItemPendingAnswersOnly } from '../../../../../shared/bots/bot-item-sent-answers'
+import {
+  botItemPendingAnswersOnly,
+  botItemPendingWordsBesideAnswers
+} from '../../../../../shared/bots/bot-item-sent-answers'
 import { NATIVE_CHAT_QUOTE_SOURCE_PROPS } from '../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
 
 const ACTOR = 'font-medium text-foreground/80'
@@ -366,12 +369,13 @@ export function BotItemActivityList({
               return null
             }
           }
+          const beside = botItemPendingWordsBesideAnswers(sending)
           return (
             <BotItemCommentCard
               key={event.id}
               bot={bot}
               item={item}
-              entry={{ event }}
+              entry={beside === null ? { event } : { event, beside }}
               failed={
                 failed
                   ? {

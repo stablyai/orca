@@ -146,3 +146,26 @@ export function botItemRideAlongText(
   const answered = botItemAnswersText(shape, picks)
   return answered ? `${answered}\n${words.join('\n')}` : words.join('\n')
 }
+
+/** A comment's own words beside its "Question → answer" lines for the lines it `answered`, which read
+ *  on the ask's lines (a ride-along comment); null when it holds no other words or answers none. */
+export function botItemWordsBesideAnswers(
+  shape: BotItemQuestionShape,
+  text: string,
+  answered: readonly boolean[]
+): string | null {
+  const taken = new Set(
+    botItemNamedAnswerLines(shape, text).flatMap((line, index) =>
+      line && answered[index] ? [line.lineIndex] : []
+    )
+  )
+  if (taken.size === 0) {
+    return null
+  }
+  const rest = text
+    .split('\n')
+    .filter((_, at) => !taken.has(at))
+    .join('\n')
+    .trim()
+  return rest || null
+}

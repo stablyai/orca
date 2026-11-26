@@ -41,7 +41,10 @@ export function MobileBotItemCommentCard({
   item: BotItem
   entry: Pick<Extract<BotItemActivityEntry, { kind: 'comment' }>, 'event' | 'replyTo' | 'waiting'> &
     Partial<
-      Pick<Extract<BotItemActivityEntry, { kind: 'comment' }>, 'answers' | 'byOrder' | 'ended'>
+      Pick<
+        Extract<BotItemActivityEntry, { kind: 'comment' }>,
+        'answers' | 'byOrder' | 'ended' | 'beside'
+      >
     >
   attachments: MobileBotItemAttachmentSource
   /** A comment sent from the box that didn't reach the host; no Retry when it may have. */
@@ -64,7 +67,7 @@ export function MobileBotItemCommentCard({
   const { event, replyTo, waiting } = entry
   const time = useMobileMessageTime()
   const shape = botItemQuestionShape(event.data)
-  const text = mobileBotItemCommentWords({ ...event.data, text: shape.body })
+  const text = mobileBotItemCommentWords({ ...event.data, text: entry.beside ?? shape.body })
   // A question's lines too, as the agent wrote them.
   const quoted = onQuote ? mobileBotItemCommentWords(event.data).trim() : ''
   return (
