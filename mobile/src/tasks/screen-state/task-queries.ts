@@ -229,5 +229,8 @@ export function taskListParams(input: TaskListInput, repoKey: string): HostQuery
             query
           }
         : null
+    // Never offered on the phone (see filterAvailableTaskProviders).
+    case 'ngit':
+      return null
   }
 }

@@ -51,6 +51,7 @@ const PROVIDER_LABELS: Record<HostedReviewProvider, string> = {
   bitbucket: 'Bitbucket',
   'azure-devops': 'Azure DevOps',
   gitea: 'Gitea',
+  ngit: 'ngit',
   unsupported: 'hosted-review'
 }
 

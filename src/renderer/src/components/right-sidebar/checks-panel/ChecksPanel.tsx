@@ -23,6 +23,7 @@ import { ChecksPanelActiveContent } from './presentation/active-content'
 import { ChecksPanelLoadingAnnouncement } from './presentation/checks-panel-loading-announcement'
 import { getChecksPanelRefreshErrorBannerLine } from '../hosted-review/provider-actions/github-refresh-error-copy'
 import { useTranslate } from '@/i18n/use-translate'
+import { NgitBranchReview } from '@/components/task-page/ngit/ngit-branch-review'
 
 export default function ChecksPanel(): React.JSX.Element {
   const t = useTranslate()
@@ -91,7 +92,10 @@ export default function ChecksPanel(): React.JSX.Element {
         loading={coldChecks || coldComments}
         reviewKey={model.stateRequestKey}
       />
-      {showActive ? (
+      {model.repo && !model.isFolder && model.hostedReview?.provider === 'ngit' ? (
+        // The panel's check, comment and merge machinery is GitHub's and GitLab's alone.
+        <NgitBranchReview repo={model.repo} review={model.hostedReview} />
+      ) : showActive ? (
         <ChecksPanelActiveContent
           model={model}
           refreshError={refreshError}

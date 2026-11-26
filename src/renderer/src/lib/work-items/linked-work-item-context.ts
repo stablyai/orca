@@ -95,6 +95,20 @@ export function buildLinearLaunchContextBlock(args: LinearLaunchContextArgs): st
   return lines.join('\n')
 }
 
+/** The URL is a web app an agent cannot read, so name the command that can. */
+export function buildNgitLaunchContextBlock(url: string): string | null {
+  const reference = url.trim().match(/\/(issues|prs)\/(nevent1[0-9a-z]+)$/)
+  if (!reference) {
+    return null
+  }
+  const [, section, nevent] = reference
+  const type = section === 'issues' ? 'issue' : 'pr'
+  return [
+    `Linked ngit ${type === 'issue' ? 'issue' : 'pull request'}: ${url.trim()}`,
+    `Read it with: ngit ${type} view ${nevent} --comments --json`
+  ].join('\n')
+}
+
 function escapeLinkedContextControlChars(value: string): string {
   return Array.from(value, (char) => {
     const code = char.codePointAt(0) ?? 0
@@ -166,7 +180,8 @@ export function getLaunchableWorkItemDraftContent(args: {
     })
     return linearBlock ? formatDraftContextBlock(linearBlock) : ''
   }
-  return args.url
+  const ngitBlock = args.provider === 'ngit' ? buildNgitLaunchContextBlock(args.url) : null
+  return ngitBlock ? formatDraftContextBlock(ngitBlock) : args.url
 }
 
 export function resolveQuickCreateLinkedWorkItemPrompt(
@@ -194,10 +209,13 @@ export function resolveQuickCreateLinkedWorkItemPrompt(
         url: linkedWorkItem?.url
       })
     : null
-  const linearDraft = linearBlock ? formatDraftContextBlock(linearBlock) : null
+  const ngitBlock =
+    linkedWorkItem?.provider === 'ngit' ? buildNgitLaunchContextBlock(linkedWorkItem.url) : null
+  const providerBlock = linearBlock ?? ngitBlock
+  const providerDraft = providerBlock ? formatDraftContextBlock(providerBlock) : null
   const linkedUrl = linkedWorkItem?.url?.trim() || null
-  const draftPrompt = linearDraft
-    ? [trimmedNote, linearDraft].filter(Boolean).join('\n\n')
+  const draftPrompt = providerDraft
+    ? [trimmedNote, providerDraft].filter(Boolean).join('\n\n')
     : linkedUrl
       ? [trimmedNote, linkedUrl].filter(Boolean).join('\n\n')
       : null

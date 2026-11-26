@@ -204,13 +204,15 @@ export async function getHostedReviewCreationEligibility(
   if (args.hasUncommittedChanges) {
     return { ...baseResult, canCreate: false, blockedReason: 'dirty', nextAction: 'commit' }
   }
-  if (args.hasUpstream === false) {
+  // `ngit send` publishes the commits itself, so the branch needs no upstream or prior push.
+  const publishesOnCreate = provider === 'ngit'
+  if (!publishesOnCreate && args.hasUpstream === false) {
     return { ...baseResult, canCreate: false, blockedReason: 'no_upstream', nextAction: 'publish' }
   }
-  if (args.hasUpstream !== true) {
+  if (!publishesOnCreate && args.hasUpstream !== true) {
     return { ...baseResult, canCreate: false, blockedReason: null, nextAction: null }
   }
-  if ((args.behind ?? 0) > 0) {
+  if (!publishesOnCreate && (args.behind ?? 0) > 0) {
     return { ...baseResult, canCreate: false, blockedReason: 'needs_sync', nextAction: 'sync' }
   }
   const authenticated = await isProviderAuthenticated(
@@ -227,7 +229,7 @@ export async function getHostedReviewCreationEligibility(
       nextAction: 'authenticate'
     }
   }
-  if ((args.ahead ?? 0) > 0) {
+  if (!publishesOnCreate && (args.ahead ?? 0) > 0) {
     return { ...baseResult, canCreate: false, blockedReason: 'needs_push', nextAction: 'push' }
   }
   // Block local-only submitted bases because providers use them verbatim.

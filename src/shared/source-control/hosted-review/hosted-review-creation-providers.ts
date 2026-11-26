@@ -6,6 +6,7 @@ export type HostedReviewCreationProvider =
   | 'bitbucket'
   | 'azure-devops'
   | 'gitea'
+  | 'ngit'
 
 // Accept arbitrary wire strings so newer hosts’ unknown provider tokens fail the creation gate safely.
 export function supportsHostedReviewCreation(
@@ -16,7 +17,8 @@ export function supportsHostedReviewCreation(
     provider === 'gitlab' ||
     provider === 'bitbucket' ||
     provider === 'azure-devops' ||
-    provider === 'gitea'
+    provider === 'gitea' ||
+    provider === 'ngit'
   )
 }
 

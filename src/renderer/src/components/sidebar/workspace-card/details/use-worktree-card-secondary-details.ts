@@ -187,6 +187,8 @@ export function useWorktreeCardSecondaryDetails({
         case 'gitea':
           void updateWorktreeMeta(worktree.id, { linkedGiteaPR: null }, options)
           break
+        // ngit stores no link; its review follows the branch.
+        case 'ngit':
         case 'unsupported':
         case undefined:
           break

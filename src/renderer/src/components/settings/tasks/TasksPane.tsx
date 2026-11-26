@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Github, Gitlab } from 'lucide-react'
+import { Github, Gitlab, Waypoints } from 'lucide-react'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 
 import {
@@ -92,6 +92,18 @@ const PROVIDER_META: Record<
       )
     },
     Icon: ({ className }) => <JiraIcon className={className} />
+  },
+  ngit: {
+    get label() {
+      return translate('components.taskPage.ngit.source', 'ngit')
+    },
+    get description() {
+      return translate(
+        'components.settings.TasksPane.ngitDescription',
+        'Browse Nostr (NIP-34) issues and pull requests and start workspaces from them.'
+      )
+    },
+    Icon: ({ className }) => <Waypoints className={className} />
   }
 }
 

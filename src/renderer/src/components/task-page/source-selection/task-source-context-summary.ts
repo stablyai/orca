@@ -60,7 +60,9 @@ type RepoBackedTaskSourceSummaryArgs = {
 
 export function getTaskSourceContextSummary(
   args:
-    | ({ provider: Extract<TaskProvider, 'github' | 'gitlab'> } & RepoBackedTaskSourceSummaryArgs)
+    | ({
+        provider: Extract<TaskProvider, 'github' | 'gitlab' | 'ngit'>
+      } & RepoBackedTaskSourceSummaryArgs)
     | {
         provider: Extract<TaskProvider, 'linear' | 'jira'>
         providerLabel: string
@@ -75,6 +77,7 @@ export function getTaskSourceContextSummary(
   switch (args.provider) {
     case 'github':
     case 'gitlab':
+    case 'ngit':
       return getRepoBackedTaskSourceSummary(args, t)
     case 'linear':
       return getAccountBackedTaskSourceSummary(
@@ -239,6 +242,8 @@ function getProviderIdentityLabel(
       return identity.workspaceName ?? identity.workspaceId ?? null
     case 'jira':
       return identity.siteUrl ?? identity.siteId ?? null
+    case 'ngit':
+      return identity.coordinate ?? null
   }
 }
 

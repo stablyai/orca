@@ -24150,6 +24150,9 @@
       },
       "git": {
         "branchPrefixHostGitUsername": "Git username on {{host}}"
+      },
+      "TasksPane": {
+        "ngitDescription": "Browse Nostr (NIP-34) issues and pull requests and start workspaces from them."
       }
     },
     "agentChildRow": {
@@ -24509,6 +24512,58 @@
         "disconnectedHostLine": "{{host}} isn’t connected. Its files stay on the host.",
         "filesStayLine": "Its files stay on {{host}}.",
         "removing": "Removing…"
+      }
+    },
+    "taskPage": {
+      "ngit": {
+        "source": "ngit",
+        "viewIssues": "Issues",
+        "viewPrs": "PRs & patches",
+        "stateOpen": "Open",
+        "stateMerged": "Merged",
+        "stateClosed": "Closed",
+        "stateAll": "All",
+        "refreshList": "Refresh ngit work items",
+        "newIssue": "New issue",
+        "noRepoTitle": "No ngit repository selected",
+        "emptyTitle": "Nothing matches this filter",
+        "noRepoDescription": "Select a project with a nostr:// remote or a maintainers.yaml file.",
+        "emptyDescription": "Try another state or refresh.",
+        "startWorkspace": "Start workspace",
+        "openInBrowser": "Open on gitworkshop.dev",
+        "columnId": "ID",
+        "columnTitle": "Title",
+        "columnAuthor": "Author",
+        "columnType": "Type / State",
+        "columnUpdated": "Updated",
+        "detailDescription": "ngit work item detail",
+        "refresh": "Refresh",
+        "close": "Close",
+        "noDescription": "No description.",
+        "noComments": "No comments yet.",
+        "reply": "reply",
+        "signInToWrite": "Run ngit account login on this machine to comment or change status.",
+        "installToWrite": "Install the ngit CLI on this machine to comment or change status.",
+        "commentAs": "Comment publicly as {{name}}…",
+        "commentPlaceholder": "Comment…",
+        "comment": "Comment",
+        "createWorkspace": "Create workspace",
+        "newIssueWarning": "ngit signs this issue with your Nostr identity and publishes it to public relays.",
+        "description": "Description",
+        "cancel": "Cancel",
+        "publishIssue": "Publish issue",
+        "actionClose": "Close",
+        "actionResolved": "Mark resolved",
+        "actionReopen": "Reopen",
+        "actionReady": "Ready for review",
+        "actionDraft": "Convert to draft",
+        "actionApplied": "Mark merged",
+        "stateDraft": "Draft",
+        "typeIssue": "Issue",
+        "typePatch": "Patch",
+        "typePr": "PR",
+        "publishFailed": "ngit could not publish: {{error}}",
+        "fetchingPr": "Fetching the pull request…"
       }
     }
   },

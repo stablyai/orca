@@ -37,6 +37,9 @@ function reviewLinkForProvider(
       return { linkedReviewNumber: input.linkedAzureDevOpsPR ?? null }
     case 'gitea':
       return { linkedReviewNumber: input.linkedGiteaPR ?? null }
+    // ngit reviews follow the branch name and tip; no number is stored on the worktree.
+    case 'ngit':
+      return {}
   }
 }
 
