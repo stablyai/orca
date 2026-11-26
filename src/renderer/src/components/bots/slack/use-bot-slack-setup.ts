@@ -12,7 +12,8 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/ex
 import { botSlackErrorMessage } from './bot-slack-copy'
 import { useBotHostLabel } from '../use-bot-host-label'
 import { slackSetupShownStep, useSlackApprovalOutcome } from './slack-setup-shown-step'
-import { hostBots, otherSlackTeams, setupTeams, slackAppMadeIn } from './slack-setup-teams'
+import { otherSlackTeams } from '../../../../../shared/bots/bot-slack-setup-teams'
+import { hostBots, setupTeams, slackAppMadeIn } from './slack-setup-teams'
 import {
   slackInstallLink as installLink,
   useSlackLinkExpired,

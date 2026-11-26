@@ -12,6 +12,12 @@ export function fillsLiveModelsFromCatalog(agent: string): boolean {
   return usesModelSpecificAcpEfforts(agent) || agent === 'cursor'
 }
 
+/** Its session-free listing can come back short (`agy models` on an eligibility hiccup) while its
+ *  chats list the account's full catalog, so its catalog keeps rows this process saw listed. */
+export function keepsRicherAgentModelListing(agent: string): boolean {
+  return agent === 'antigravity'
+}
+
 export function usesModelSpecificAcpEfforts(agent: string): boolean {
   return agent === 'opencode' || agent === 'opencode2' || agent === 'omp' || agent === 'kilo'
 }

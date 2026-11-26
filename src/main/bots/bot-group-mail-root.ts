@@ -18,17 +18,52 @@ export const rootOf = (message: {
   rootSequence: message.rootSequence ?? message.sequence
 })
 
-/** Item mail's root before its line is saved: a request of its own, after every earlier one. */
-export const itemsRoot = (groupId: string, member: BotGroupMember): BotGroupPeerScope => ({
+/** Mail that starts a request of its own: a change to the member's items, or a worker's report
+ *  that lands after the request it served was stopped, which the bot's own chat reads too. */
+export type OwnRequestMail = 'items' | 'reports'
+
+/** Own-request mail's root before its line is saved: after every earlier request. */
+const ownRequestRoot = (
+  groupId: string,
+  member: BotGroupMember,
+  kind: OwnRequestMail
+): BotGroupPeerScope => ({
   id: groupId,
-  rootRequestId: `items:${member.sessionId}`,
+  rootRequestId: `${kind}:${member.sessionId}`,
   rootSequence: Number.MAX_SAFE_INTEGER,
   sourceSessionId: member.sessionId,
   targetSessionId: member.sessionId
 })
 
+/** Which own request a root is, or null for mail continuing a room request. */
+export function ownRequestMail(
+  root: Pick<BotGroupPeerScope, 'rootRequestId'>,
+  member: BotGroupMember
+): OwnRequestMail | null {
+  return (
+    (['items', 'reports'] as const).find(
+      (kind) => root.rootRequestId === `${kind}:${member.sessionId}`
+    ) ?? null
+  )
+}
+
+/** Own-request mail already on a line whose turn hasn't run is that line's request, which a later
+ *  Stop ends; otherwise it is a new request after the Stop. */
+function ownRequest(
+  groups: BotGroupRuntime,
+  groupId: string,
+  member: BotGroupMember,
+  mailId: string,
+  kind: OwnRequestMail
+): BotGroupPeerScope {
+  const root = ownRequestRoot(groupId, member, kind)
+  const line = mailLine(groups, member, mailId)
+  return line && !mailTurnRan(line.turns[0]) ? { ...root, rootSequence: line.sequence } : root
+}
+
 /** The group request a mail to this member continues: a member's peer request, a report from a
- *  worker one of this member's turns started, or a change to its items (a new request). */
+ *  worker one of this member's turns started, or a new request (a change to its items, or a
+ *  report from a worker whose request was stopped). */
 export function mailRoot(
   groups: BotGroupRuntime,
   groupId: string,
@@ -36,11 +71,7 @@ export function mailRoot(
   mail: Pick<MessageRow, 'id' | 'thread_id' | 'from_handle'>
 ): BotGroupPeerScope | null {
   if (mail.from_handle === BOT_ITEM_MAIL_SENDER) {
-    // Mail already on a line whose turn hasn't run is that line's request, which a later Stop ends.
-    const line = itemMailLine(groups, member, mail.id)
-    return line && !mailTurnRan(line.turns[0])
-      ? { ...itemsRoot(groupId, member), rootSequence: line.sequence }
-      : itemsRoot(groupId, member)
+    return ownRequest(groups, groupId, member, mail.id, 'items')
   }
   const db = groups.runtime.getOrchestrationDb()
   const request =
@@ -71,14 +102,19 @@ export function mailRoot(
   const owned = message?.turns.some(
     (turn) => turn.operationId === operationId && turn.sessionId === member.sessionId
   )
-  return message && owned
-    ? {
+  if (!message || !owned) {
+    return null
+  }
+  const root = rootOf(message)
+  // Stop ends the turn, not the workers it started: their later reports wake the member.
+  return root.rootSequence <= (member.stoppedThroughSequence ?? 0)
+    ? ownRequest(groups, groupId, member, mail.id, 'reports')
+    : {
         id: message.groupId,
-        ...rootOf(message),
+        ...root,
         sourceSessionId: member.sessionId,
         targetSessionId: member.sessionId
       }
-    : null
 }
 
 const warnedUnboundMail = new Set<string>()
@@ -106,7 +142,7 @@ export function mailTurnRan(turn: BotGroupTurn | undefined): boolean {
 }
 
 /** The newest line a member's mail turn took `mailId` on: its id is `mail:<sessionId>:<ids>[#n]`. */
-function itemMailLine(groups: BotGroupRuntime, member: BotGroupMember, mailId: string) {
+function mailLine(groups: BotGroupRuntime, member: BotGroupMember, mailId: string) {
   const prefix = `mail:${member.sessionId}:`
   const id = groups.store.db
     .prepare(

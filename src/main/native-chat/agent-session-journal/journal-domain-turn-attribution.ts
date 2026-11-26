@@ -5,7 +5,7 @@ import type {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalConnectorDelivery } from '../../../shared/agent-session/journal/agent-journal-bot-message-fields'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { connectorReplyTurnStamps } from '../../../shared/agent-session/journal/journal-connector-reply-turn'
+import { connectorReplyStampsOf } from '../../../shared/agent-session/journal/journal-connector-reply-turn'
 import { journalTurnAnsweredMessages } from '../../../shared/agent-session/journal/journal-turn-answered-messages'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
@@ -67,12 +67,13 @@ export function readJournalDomainTurnAttribution(
     const item = ended(journalVisibleItem(scope.db, scope.prefix, key))
     return item ? [item] : []
   })
+  const messages = journalTurnAnsweredMessages({ items, submissions }, opener, row.itemId)
   return {
     cursor,
     turnItemId: row.itemId,
     opener,
-    stamps: connectorReplyTurnStamps({ items, submissions }, opener, row.itemId),
-    messages: journalTurnAnsweredMessages({ items, submissions }, opener, row.itemId)
+    stamps: connectorReplyStampsOf(opener, messages),
+    messages
   }
 }
 

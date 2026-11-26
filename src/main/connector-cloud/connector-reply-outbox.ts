@@ -13,12 +13,13 @@ import type {
   JournalConnectorReplyCutRows,
   JournalConnectorReplyFill,
   JournalConnectorReplyKey,
-  JournalConnectorReplyOutcome,
+  JournalConnectorReplyRetryRows,
   JournalConnectorReplyRow
 } from '../../shared/agent-session/journal/journal-connector-reply'
 import { JOURNAL_CONNECTOR_REPLY_PROSE_BYTES } from '../../shared/agent-session/journal/journal-connector-reply'
 import type { ConnectorResult } from './connector-cloud-request'
 import { capAnswer } from './connector-snapshot'
+import { outcomeSentence } from './connector-reply-outcome-sentence'
 import type { ConnectorReplyBody } from './connector-replies'
 
 export type ConnectorReplyJournal = {
@@ -42,6 +43,7 @@ export type ConnectorReplyCutJournal = ConnectorReplyJournal & {
     failure?: ConnectorFailure
   ): Promise<boolean>
   releaseClaim(claimMessageId: string): Promise<boolean>
+  holdForRetry(rows: JournalConnectorReplyRetryRows): Promise<boolean>
 }
 
 export type ConnectorReplyEvent = Extract<ConnectorEvent, { kind: 'reply' }>
@@ -69,31 +71,12 @@ const PAGE_ROWS = 200
 export const isReplyEvent = (event: ConnectorEvent): event is ConnectorReplyEvent =>
   event.kind === 'reply'
 
+export const replyDeliveryIds = (events: readonly ConnectorEvent[]): string[] =>
+  events.filter(isReplyEvent).flatMap((event) => event.deliveryIds)
+
 /** The kill-switch drain's reply id: stable per delivery, so its post id is idempotent. */
 export function drainReplyId(deliveryId: string): string {
   return `outcome-${createHash('sha256').update(deliveryId).digest('base64url')}`
-}
-
-/** What the thread reads for an outcome with no prose (design §5). */
-export function outcomeSentence(outcome: JournalConnectorReplyOutcome, hostName: string): string {
-  switch (outcome) {
-    case 'answered':
-    case 'quiet':
-    case 'no_answer':
-      return `Done on ${hostName}, without a written answer.`
-    case 'interrupted':
-    case 'failed':
-      return `The agent on ${hostName} stopped before it answered. Send again to retry.`
-    case 'cancelled':
-    case 'withdrawn':
-      return `Stopped on ${hostName}.`
-    case 'cleared':
-      return 'The chat was cleared in Orca before this was answered. Ask again.'
-    case 'not_found':
-      return `Orca on ${hostName} no longer has this request. Ask again.`
-    case 'unattributed':
-      return `Done on ${hostName}, answered together with the earlier messages.`
-  }
 }
 
 type Filled = JournalConnectorReplyRow & { fill: NonNullable<JournalConnectorReplyRow['fill']> }
@@ -116,7 +99,8 @@ export function replyEventsOf(rows: readonly Filled[]): ConnectorReplyEvent[] {
       row.conversation,
       row.fill.answerDeliveryId,
       row.fill.outcome,
-      row.fill.turnStartedAt
+      row.fill.turnStartedAt,
+      row.fill.toolsRan
     ])
     groups.set(key, [...(groups.get(key) ?? []), row])
   }
@@ -127,7 +111,8 @@ export function replyEventsOf(rows: readonly Filled[]): ConnectorReplyEvent[] {
     if (!first || !conversation) {
       continue
     }
-    const { answerDeliveryId, outcome, prose, failure, links, tookMs, turnStartedAt } = first.fill
+    const { answerDeliveryId, outcome, prose, failure, links, tookMs, turnStartedAt, toolsRan } =
+      first.fill
     // Each event names the answer's own delivery among its ids.
     const others = group.map((row) => row.deliveryId).filter((id) => id !== answerDeliveryId)
     const room = CONNECTOR_CLIENT_LIMITS.maxReplyDeliveryIds - 1
@@ -142,7 +127,8 @@ export function replyEventsOf(rows: readonly Filled[]): ConnectorReplyEvent[] {
         ...(failure ? { failure } : {}),
         ...(links?.length ? { links } : {}),
         ...(outcome === 'answered' && tookMs ? { tookMs } : {}),
-        ...(turnStartedAt === undefined ? {} : { turnId: turnStartedAt })
+        ...(turnStartedAt === undefined ? {} : { turnId: turnStartedAt }),
+        ...(outcome === 'no_answer' && toolsRan ? { toolsRan } : {})
       })
     }
   }
@@ -181,16 +167,14 @@ export class ConnectorReplyOutbox {
     return this.waiting
   }
 
-  /** Events the transport no longer holds go again on the next drain. */
-  forget(events: readonly ConnectorEvent[]): void {
-    for (const event of events.filter(isReplyEvent)) {
-      event.deliveryIds.forEach((id) => this.inFlight.delete(id))
-    }
+  /** Replies (by delivery id) the transport no longer holds go again on the next drain. */
+  forget(ids: readonly string[]): void {
+    ids.forEach((id) => this.inFlight.delete(id))
   }
 
   /** The cloud accepted these events: their rows are sent. */
   async accepted(events: readonly ConnectorEvent[]): Promise<void> {
-    const ids = events.filter(isReplyEvent).flatMap((event) => event.deliveryIds)
+    const ids = replyDeliveryIds(events)
     const journal = this.journal()
     if (ids.length === 0 || !journal) {
       return
@@ -198,7 +182,7 @@ export class ConnectorReplyOutbox {
     await journal
       .sent(ids.map((deliveryId) => ({ account: this.account, deliveryId })))
       .catch((error: unknown) => console.warn('[connector] could not mark replies sent', error))
-    this.forget(events)
+    this.forget(ids)
   }
 
   /** Signed out or another account: nothing of this one's goes anywhere again. */
@@ -295,7 +279,7 @@ export class ConnectorReplyOutbox {
   ): Promise<number | null> {
     let left = owed.length
     for (const row of owed) {
-      const { outcome, prose, answerDeliveryId, filledAt } = row.fill
+      const { outcome, prose, answerDeliveryId, filledAt, toolsRan } = row.fill
       const conversation = cloudConversation(row.conversation)
       if (outcome !== 'quiet' && conversation) {
         // Checked just before the wire: still this account, still the kill switch's hello.
@@ -309,7 +293,9 @@ export class ConnectorReplyOutbox {
           conversation,
           turnId: filledAt,
           text:
-            outcome === 'answered' && prose ? prose : outcomeSentence(outcome, client.hostName()),
+            outcome === 'answered' && prose
+              ? prose
+              : outcomeSentence(outcome, client.hostName(), toolsRan),
           answerDeliveryId
         })
         if (this.retired) {

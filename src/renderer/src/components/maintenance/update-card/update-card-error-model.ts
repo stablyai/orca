@@ -24,7 +24,8 @@ export function buildUpdateCardErrorModel(
     onEnableHttp1Compatibility,
     onRetryDownload,
     onRecheck,
-    onInstallRetry
+    onInstallRetry,
+    onQuitToInstall
   }: {
     status: UpdateStatus
     isLocalBuild: boolean
@@ -37,6 +38,7 @@ export function buildUpdateCardErrorModel(
     onRetryDownload: () => void
     onRecheck: () => void
     onInstallRetry: () => void
+    onQuitToInstall: () => void
   },
   t: Translate = translate
 ): UpdateErrorCardModel | null {
@@ -51,13 +53,18 @@ export function buildUpdateCardErrorModel(
   ) {
     return {
       variant: 'waiting',
-      title: t('updates.installOnQuit.title', 'Restart Orca manually'),
-      summary: t(
-        'updates.installOnQuit.summary',
-        'Orca couldn’t restart automatically. Quit Orca and let the update install before reopening it.'
-      ),
-      detail: installError ?? (status.state === 'error' ? updaterMessageText(status) : undefined),
-      deferLabel: t('updates.installOnQuit.keepWorking', 'Keep Working')
+      title: t('updates.installOnQuit.title', 'Update ready to install'),
+      summary: t('updates.installOnQuit.summary', 'Quit Orca. Reopen after installation.'),
+      // Coded messages are retry instructions with no cause; only uncoded host text is a diagnostic.
+      detail:
+        installError ??
+        (status.state === 'error' && !status.messageCode ? status.message : undefined),
+      compactActions: true,
+      primaryAction: {
+        label: t('updates.installOnQuit.quit', 'Quit Orca'),
+        onClick: onQuitToInstall
+      },
+      deferLabel: t('updates.installOnQuit.later', 'Later')
     }
   }
   if (status.state !== 'error') {

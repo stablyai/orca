@@ -27,6 +27,7 @@ import { resolveDispatchCreator } from '../runs/dispatch-creator'
 import { checkedWorkerOrigin } from '../../bots-items-worker-origin'
 import { decideStartMode, noteTerminalFallbackOnItem } from './start/worker-chat-lineage'
 import { withKeepOpenDefault } from './start/worker-keep-open-default'
+import { withTerminalUsage } from './start/worker-start-terminal-usage'
 import {
   linkWorkerToQuestion,
   openQuestionReminder,
@@ -73,13 +74,13 @@ export async function startWorker(
   if (startParams.origin !== undefined && startParams.on) {
     throw new OrchestrationError(
       'invalid_argument',
-      'worker-start --item starts workers on this computer, where the item is. No effects were applied.',
+      "--item can't be combined with --on: worker-start --item starts workers on this computer, where the item is. No effects were applied.",
       { effectsApplied: false }
     )
   }
   const checked =
     startParams.origin !== undefined
-      ? await checkedWorkerOrigin(startParams.origin, ctx)
+      ? await checkedWorkerOrigin(startParams.origin, ctx, startFollowUp?.of)
       : undefined
   const prepared = await prepareWorkerStart(
     checked ? { ...startParams, origin: checked.origin } : startParams,
@@ -138,7 +139,7 @@ export async function startWorker(
   const note = { itemUid: checked?.itemUid, chatLineage, terminal: params.terminal }
   void noteTerminalFallbackOnItem(runtime, note, receipt).catch(warnItemNote)
   const next = withKeepOpenDefault(runtime, params.worktree, withWorkerStartNext(receipt))
-  const started = withLink(withRun(next))
+  const started = withTerminalUsage(runtime, withLink(withRun(next)))
   return checked && started && typeof started === 'object'
     ? { ...started, linkedItem: checked.linkedItem }
     : started

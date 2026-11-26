@@ -1,6 +1,6 @@
 // Settings › Google, read and changed on the host whose Google it is: this computer, or the paired
 // server Settings points at. That host keeps the sign-ins; this window sees emails and states only.
-import { botTarget, callBotRpc, type BotOnHost, type BotRef } from '@/lib/bot-hosts'
+import { botTarget, type BotOnHost, type BotRef } from '@/lib/bot-hosts'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
@@ -15,17 +15,16 @@ import type { GoogleClientView } from '../../../../../shared/google/google-clien
 import {
   GOOGLE_CONNECT_RUNTIME_CAPABILITY,
   type GoogleAccountView,
+  type GoogleSignInAsk,
   type GoogleSignInPrompt,
   type GoogleSignInStatus,
   type GoogleStatusView
 } from '../../../../../shared/google/google-connect-types'
 import { googleAppExportFileName } from '../../../../../shared/google/google-console-setup'
-import type { GoogleServiceChoice } from '../../../../../shared/google/google-scopes'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { Bot } from '../../../../../shared/bot-types'
 import { errorMessage } from '../../../../../shared/errors/error-message'
 import { googleReachAreas, type GoogleReachArea } from '../../../../../shared/bots/bot-access-reach'
-import { botConnectorRowKey, forgetBotConnectorPage } from '../bot-connector-page'
 
 export type GoogleHostView =
   | { status: 'loading' }
@@ -43,6 +42,7 @@ type GoogleHostEntry = { view: GoogleHostView; read: number; pending: boolean }
 
 let readsStarted = 0
 const latestReadOf = new Map<string, number>()
+const inFlightReadOf = new Map<string, number>()
 const views = new Map<string, GoogleHostEntry>()
 const listeners = new Set<() => void>()
 function publish(target: RuntimeClientTarget, view: GoogleHostView, read: number): void {
@@ -51,6 +51,7 @@ function publish(target: RuntimeClientTarget, view: GoogleHostView, read: number
   if (latestReadOf.get(key) !== read) {
     return
   }
+  inFlightReadOf.delete(key)
   views.set(key, { view, read, pending: false })
   notify()
 }
@@ -64,6 +65,7 @@ function startRead(target: RuntimeClientTarget): number {
   const key = keyOf(target)
   const read = ++readsStarted
   latestReadOf.set(key, read)
+  inFlightReadOf.set(key, read)
   const entry = views.get(key)
   if (entry && !entry.pending) {
     views.set(key, { ...entry, pending: true })
@@ -115,16 +117,17 @@ export function useGoogleHost(target: RuntimeClientTarget, shown = true): Google
 
 function useGoogleHostEntry(
   target: RuntimeClientTarget,
-  shown = true
+  shown = true,
+  afterRead = 0
 ): GoogleHostEntry | undefined {
   const key = keyOf(target)
   const entry = useSyncExternalStore(subscribe, () => views.get(key))
   const environmentId = target.kind === 'environment' ? target.environmentId : null
   useEffect(() => {
-    if (shown) {
+    if (shown && (inFlightReadOf.get(key) ?? 0) <= afterRead) {
       void refreshGoogle(runtimeTargetForOwnerEnvironment(environmentId))
     }
-  }, [environmentId, shown])
+  }, [key, environmentId, shown, afterRead])
   return entry
 }
 
@@ -139,7 +142,7 @@ export function useBotGoogleReach(bot: Pick<Bot, 'google'> & BotOnHost): {
 } {
   // Reads already started may predate a sign-in or an update, so only a later one can say "nothing".
   const [readsBeforeMount] = useState(() => readsStarted)
-  const entry = useGoogleHostEntry(botTarget(bot))
+  const entry = useGoogleHostEntry(botTarget(bot), bot.google === true, readsBeforeMount)
   if (bot.google !== true) {
     return { areas: [], unknown: false }
   }
@@ -201,15 +204,6 @@ export async function disconnectGoogle(
 ): Promise<void> {
   await callRuntimeRpc(target, 'google.disconnect', { account, revoke })
   await refreshGoogle(target)
-}
-
-/** The bot toggle lives with the bot, on its host. */
-export async function setBotGoogle(bot: BotRef, on: boolean): Promise<void> {
-  await callBotRpc(bot, 'google.bot.set', { botId: bot.id, on })
-  if (!on) {
-    forgetBotConnectorPage(botConnectorRowKey(bot, 'google'))
-  }
-  await refreshGoogle(botTarget(bot))
 }
 
 /** Google sign-in and "Open in my browser": the person's default browser, where their accounts are. */
@@ -285,7 +279,7 @@ async function untilSettled(run: SignInRun, first: GoogleSignInStatus): Promise<
 export async function connectGoogle(
   target: RuntimeClientTarget,
   // `bot`: whose workspace a server's page opens in.
-  request: { services: readonly GoogleServiceChoice[]; account?: string; bot?: BotRef },
+  request: GoogleSignInAsk & { bot?: BotRef },
   onPrompt: (prompt: GoogleSignInPrompt, way: GoogleSignInWay) => void
 ): Promise<GoogleAccountView> {
   if (running) {
@@ -294,10 +288,8 @@ export async function connectGoogle(
   const run: SignInRun = { target, flowId: null, cancelled: false, reopen: openInMyBrowser }
   running = run
   try {
-    const started = await callRuntimeRpc<GoogleSignInStatus>(target, 'google.signIn.start', {
-      services: [...request.services],
-      ...(request.account ? { account: request.account } : {})
-    })
+    const { bot, ...ask } = request
+    const started = await callRuntimeRpc<GoogleSignInStatus>(target, 'google.signIn.start', ask)
     run.flowId = started.flowId
     const waiting = await settle(run, started)
     if (waiting.phase !== 'waiting' || !waiting.prompt) {
@@ -311,10 +303,10 @@ export async function connectGoogle(
         ? toRuntimeExecutionHostId(target.environmentId)
         : null
     const onServer =
-      serverHost !== null && openOnServer(serverHost, waiting.prompt.authorizeUrl, request.bot)
+      serverHost !== null && openOnServer(serverHost, waiting.prompt.authorizeUrl, bot)
     // Its return reaches only the server's loopback, so it never reopens in the system browser.
     run.reopen = onServer
-      ? (url) => void openBotHostPageOrSay(serverHost, url, { bot: request.bot, local: 'system' })
+      ? (url) => void openBotHostPageOrSay(serverHost, url, { bot, local: 'system' })
       : run.reopen
     if (serverHost !== null && !onServer) {
       await callRuntimeRpc(target, 'google.signIn.cancel', { flowId: started.flowId }).catch(

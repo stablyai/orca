@@ -260,17 +260,61 @@ export const googlePage = defineFixture({
   interact: () => openRow('Google')
 })
 
-/** The Google page's menu: add another account, as GitHub's does. */
+/** Signed in, with a setup left open from before: no Setting up, as `orca bot connectors` says. */
+export const googlePageSetupLeftOpen = defineFixture({
+  width: 720,
+  setup: () => fresh({ linearLinked: true, composio: false, googleSetupRunning: true }),
+  render: () => <Panel bot={base} />,
+  interact: () => openRow('Google')
+})
+
+const openPageMenu = async (row: string, name: string): Promise<void> => {
+  await openRow(row)
+  const trigger = [...document.querySelectorAll<HTMLElement>('button')].find(
+    (button) => button.getAttribute('aria-label') === `${name} actions`
+  )
+  trigger?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+  await settle(200)
+}
+
+/** The Google page's menu: choose its accounts, or remove Google. */
 export const googlePageMenu = defineFixture({
   width: 420,
   setup: () => fresh({ linearLinked: true, composio: false }),
   render: () => <Panel bot={base} />,
+  interact: () => openPageMenu('Google', 'Google')
+})
+
+/** The GitHub page's menu: add an org, another login, or read again what the logins reach. */
+export const gitHubPageMenu = defineFixture({
+  width: 420,
+  setup: () => fresh({ linearLinked: true, composio: false }),
+  render: () => <Panel bot={base} />,
+  interact: () => openPageMenu('GitHub · stablyai', 'GitHub · stablyai')
+})
+
+/** Add to <bot>, Google signed in here: Add continues to which accounts the bot may use. */
+export const googleAccountsStep = defineFixture({
+  width: 900,
+  setup: () => fresh({ linearLinked: true, composio: false }),
+  render: () => <Panel bot={slackOnly} />,
   interact: async () => {
-    await openRow('Google')
-    const trigger = [...document.querySelectorAll<HTMLElement>('button')].find(
-      (button) => button.getAttribute('aria-label') === 'Google actions'
-    )
-    trigger?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
-    await settle(200)
+    await clickWhenShown(named('Add'))
+    await clickWhenShown((button) => button.getAttribute('aria-label') === 'Add Google')
+    await settle(400)
+  }
+})
+
+/** Choose accounts… on the Google page: the same list in a popover on ⋯, then Save. */
+export const googleChooseAccounts = defineFixture({
+  width: 420,
+  setup: () => fresh({ linearLinked: true, composio: false }),
+  render: () => <Panel bot={base} />,
+  interact: async () => {
+    await openPageMenu('Google', 'Google')
+    ;[...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+      .find((item) => item.textContent?.trim() === 'Choose accounts…')
+      ?.click()
+    await settle(400)
   }
 })

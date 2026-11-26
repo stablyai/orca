@@ -19,6 +19,7 @@ import {
   readBrowserGuestDiscardProtection
 } from './browser-guest-discard-protection'
 import { readBrowserMemoryPageDiscardProtection } from '../../browser-page-memory'
+import { isBrowserClientPageGuest } from '../../../client-pages/lifecycle/browser-client-page-memory-registry'
 import { installBrowserNavigationStallWatchdog } from '../navigation/browser-navigation-stall-watchdog'
 
 export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestCleanup {
@@ -206,7 +207,8 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     return readBrowserMemoryPageDiscardProtection(
       browserPageId,
       guest,
-      this.rendererWebContentsIdByTabId.get(browserPageId)
+      this.rendererWebContentsIdByTabId.get(browserPageId),
+      isBrowserClientPageGuest(browserPageId, guest.id)
     )
   }
 

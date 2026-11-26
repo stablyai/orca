@@ -7,13 +7,29 @@ import {
   BOT_ITEM_MAIL_ID_PREFIX,
   BOT_ITEM_MAIL_SENDER
 } from '../../../../shared/bots/bot-item-note-runs'
-import { runtimeBotChats } from '../../../bots/bot-chat-session'
+import { botMailSession, botMailSessionStillCurrent } from '../../../bots/bot-mail-chat'
+import { ownerCommentAttachmentBody } from '../../../bots/bot-item-comment-attachment-body'
+import { takeAdmittedCommentClaim } from '../../../bots/bot-item-comment-admitted-claims'
+import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { isAgentSessionAttachmentExpiredError } from '../../../native-chat/agent-session-attachments/agent-session-attachment-claims'
+import {
+  getAgentSessionAttachmentClaimer,
+  getAgentSessionAttachmentStore,
+  type AgentSessionAttachmentClaimer
+} from '../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
+import {
+  agentSessionAttachmentClaimWithoutUploads,
+  agentSessionAttachmentReferences
+} from '../../../native-chat/agent-session-attachments/agent-session-attachment-references'
 import type { BotItemNoteBy } from '../../../../shared/bots/bot-item-note'
 import { appendBotItemNote, botItemNote } from '../../../bots/bot-item-chat-notes'
-import { botItemChangeMail, botItemMailImages } from '../../../bots/bot-items-mail-text'
+import {
+  botItemChangeMail,
+  botItemMailImages,
+  botItemMailWithoutExpiredImages
+} from '../../../bots/bot-items-mail-text'
 import type { BotItemMail } from '../../../bots/bot-items-schema'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { botChatTakingMail } from './bots-chats'
 
 /** A message id from the first item event it carries. */
 export function botItemMailId(eventId: number): string {
@@ -57,6 +73,37 @@ function answerAskedIn(owed: BotItemMail): string | null {
   return null
 }
 
+async function claimItemMailUploads(
+  claim: AgentSessionAttachmentClaimer,
+  root: string,
+  sessionId: string,
+  body: AgentJournalMessageItem,
+  expired: Set<string>
+): Promise<void> {
+  let remaining = expired.size
+    ? agentSessionAttachmentClaimWithoutUploads(root, body, expired)
+    : body
+  while (remaining.blocks.length > 0) {
+    try {
+      await claim(sessionId, remaining)
+      return
+    } catch (error) {
+      if (!isAgentSessionAttachmentExpiredError(error)) {
+        throw error
+      }
+      // Older mail can name files already lost. The other files still need the recipient's claim.
+      const previous = expired.size
+      for (const { uploadId } of error.expired) {
+        expired.add(uploadId)
+      }
+      if (expired.size === previous) {
+        throw error
+      }
+      remaining = agentSessionAttachmentClaimWithoutUploads(root, body, expired)
+    }
+  }
+}
+
 /** Stores the event's mail unless it is there already; true once nothing is owed. */
 export async function sendBotItemMail(
   runtime: OrcaRuntimeService,
@@ -73,10 +120,48 @@ export async function sendBotItemMail(
   if (!mail || !bot) {
     return true
   }
-  const chat = await botChatTakingMail(runtime, bot, owed.chatId)
-  const sessionId = chat?.sessionId ?? (await runtimeBotChats(runtime).ensure(bot.id))
-  const to = `orca_session_id:${sessionId}`
-  const images = botItemMailImages(owed.changes)
+  let sessionId = await botMailSession(runtime, bot, owed.chatId)
+  const expired = new Set<string>()
+  const comment = owed.changes.find(({ event }) => event.kind === 'commented')?.event
+  const attachment = comment ? ownerCommentAttachmentBody(comment) : null
+  if (comment && attachment) {
+    const store = getAgentSessionAttachmentStore()
+    const claim = getAgentSessionAttachmentClaimer()
+    if (!store || !claim) {
+      return false
+    }
+    const uploadIds = agentSessionAttachmentReferences(store.rootDir, attachment)
+    if (uploadIds.size > 0) {
+      // Never opens a store: a drain only runs on one already open.
+      const items = runtime.botItems.openedStore()
+      // The outbox keeps the uploads until the actual recipient claims them.
+      for (let attempt = 0; ; attempt++) {
+        if (
+          attempt > 0 ||
+          !items ||
+          !takeAdmittedCommentClaim(items, comment.id, { sessionId, uploadIds })
+        ) {
+          await claimItemMailUploads(claim, store.rootDir, sessionId, attachment, expired)
+        }
+        if (botMailSessionStillCurrent(runtime, bot.id, owed.chatId, sessionId)) {
+          break
+        }
+        const current = runtime.bots.list().find((entry) => entry.id === bot.id)
+        if (!current) {
+          return true
+        }
+        if (attempt === 1) {
+          return false
+        }
+        sessionId = await botMailSession(runtime, current, owed.chatId)
+      }
+    }
+  }
+  const deliveredChanges = expired.size
+    ? botItemMailWithoutExpiredImages(owed.changes, expired)
+    : owed.changes
+  const images = botItemMailImages(deliveredChanges)
+  const delivered = expired.size ? (botItemChangeMail(deliveredChanges) ?? mail) : mail
   const asker = answerAskedIn(owed)
   const payload = JSON.stringify({
     botItems: owed.changes.map(({ event, item }) => ({
@@ -91,12 +176,16 @@ export async function sendBotItemMail(
     // checks it is that chat (conversation-ask-answer.ts).
     ...(asker ? { askedInConversation: asker } : {})
   })
+  const to = `orca_session_id:${sessionId}`
   db.insertMessage({
     id,
     from: BOT_ITEM_MAIL_SENDER,
     to,
     type: 'status',
-    ...mail,
+    subject: mail.subject,
+    body: expired.size
+      ? `${delivered.body}\n\n[Orca: Some of the owner's attachments expired before delivery.]`
+      : delivered.body,
     payload,
     orcaAuthored: 'item-mail'
   })

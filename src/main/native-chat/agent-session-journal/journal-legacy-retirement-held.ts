@@ -9,7 +9,7 @@ import {
   compareAppVersions,
   isValidAppVersion
 } from '../../../shared/app-lifecycle/identity/app-version'
-import { LEGACY_PROOF_LAYOUT, type LegacySourceHeld } from './journal-legacy-retirement-state'
+import { isLegacyProofLayout, type LegacySourceHeld } from './journal-legacy-retirement-state'
 import type { JournalLegacyProof, LegacyProofObservation } from './journal-legacy-proof'
 import type { LegacyJournalRetirementOutcome } from './journal-legacy-retirement-outcome'
 import type { JournalSqlMaintenanceResult } from './journal-sql-maintenance'
@@ -117,7 +117,7 @@ export function sourceBytes(observation: { proof: string; walBytes: string }): n
   }
 }
 
-/** A held record of the proof of this original into this store, under this build's layout. */
+/** A held record of the proof of this original into this store, under a layout this build reads. */
 export function heldFor(
   saved: string | null,
   observation: LegacyProofObservation
@@ -127,7 +127,7 @@ export function heldFor(
     if (
       !isRecord(record) ||
       record.phase !== 'held' ||
-      record.layout !== LEGACY_PROOF_LAYOUT ||
+      !isLegacyProofLayout(record.layout) ||
       record.proof !== observation.proof ||
       record.store !== observation.store
     ) {
@@ -140,7 +140,7 @@ export function heldFor(
     return {
       version: 2,
       phase: 'held',
-      layout: LEGACY_PROOF_LAYOUT,
+      layout: record.layout,
       proof: observation.proof,
       store: observation.store,
       counts: !isRecord(record.counts)

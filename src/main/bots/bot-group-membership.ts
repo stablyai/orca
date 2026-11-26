@@ -11,10 +11,10 @@ import {
 } from '../../shared/bots/bot-group'
 import type { Bot } from '../../shared/bot-types'
 import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
-import { closeStructuredAgentSessionChild } from '../runtime/agent-session/lifecycle/structured-agent-session-close'
 import { requireStructuredHost, startBotSession } from './bot-chat-session'
 import type { BotGroupRuntime } from './bot-group-runtime'
 import * as remote from './bot-group-remote'
+import { closeMemberChat } from './bot-mail-chat'
 
 /** The bots behind these ids, refusing duplicates and bots this host cannot run in a room. */
 export function requireGroupBots(groups: BotGroupRuntime, ids: readonly string[]): Bot[] {
@@ -311,12 +311,8 @@ async function startMembers(
 
 async function closeSessions(
   groups: BotGroupRuntime,
-  sessions: readonly Pick<BotGroupMember, 'sessionId'>[]
+  sessions: readonly BotGroupMember[]
 ): Promise<void> {
   // Settled, so one session that will not close never leaves the others open.
-  await Promise.allSettled(
-    sessions.map(({ sessionId }) =>
-      closeStructuredAgentSessionChild(sessionId, { runtime: groups.runtime })
-    )
-  )
+  await Promise.allSettled(sessions.map((member) => closeMemberChat(groups.runtime, member)))
 }

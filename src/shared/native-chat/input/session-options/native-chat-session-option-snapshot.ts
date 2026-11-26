@@ -18,6 +18,7 @@ import {
   type NativeChatSessionOptionRecord,
   type TrackedNativeChatSessionOption
 } from './native-chat-session-option-state'
+import { nativeChatOptionsWithoutModel } from './native-chat-session-option-values-without-model'
 
 export type NativeChatSessionOptionMode = 'draft' | 'live'
 
@@ -293,6 +294,9 @@ export function buildNativeChatSessionOptionSnapshot(args: {
   const defaultModelId = cliDefaultModelId(catalog, models, trackedModelId)
   const effectiveModelId = trackedModelId ?? defaultModelId
   const model = models.find((candidate) => candidate.id === effectiveModelId)
+  const values = trackedModelId
+    ? (record.valuesByModel[trackedModelId] ?? {})
+    : (record.valuesWithoutModel ?? {})
   return nativeChatSessionOptionDescriptors({
     ...args,
     agent: record.agent,
@@ -301,8 +305,11 @@ export function buildNativeChatSessionOptionSnapshot(args: {
       valueSource: record.model?.source ?? (defaultModelId ? 'default' : 'unknown'),
       tracked: record.model
     },
-    controls: effectiveModelId ? (model?.options ?? []) : [],
-    values: effectiveModelId ? (record.valuesByModel[effectiveModelId] ?? {}) : {},
+    controls: effectiveModelId
+      ? (model?.options ?? [])
+      : // Only held values show, so a launch without an effort gets no empty Effort row.
+        nativeChatOptionsWithoutModel(catalog).filter((option) => values[option.id] !== undefined),
+    values,
     modelIsCliDefault: effectiveModelId === defaultModelId
   })
 }

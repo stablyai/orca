@@ -440,7 +440,7 @@ describe('agents on a paired server messaging an agent on this computer', () => 
 
     await vi.waitFor(() => expect(computer.db.getUnreadMessages(DOCS_HOME)).toHaveLength(2))
     expect(await call('pairedServerAsks.allowances', { botId: 'docs' })).toEqual({
-      servers: [{ serverKey: 'fingerprint_s', environmentId: 'env_s' }]
+      servers: [{ serverKey: 'fingerprint_s', environmentId: 'env_s', serverName: 'Build Box' }]
     })
   })
 

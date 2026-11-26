@@ -21,7 +21,9 @@ import {
 } from '../../../../../shared/bots/bot-items'
 import {
   botItemActivity,
+  botItemLiveAskKey,
   botItemWaitEntryKey,
+  botItemWorkerStopReason,
   type BotItemActivityEntry
 } from '../../../../../shared/bots/bot-item-activity'
 import { botItemActorName } from '../../../../../shared/bots/bot-item-actor-name'
@@ -35,6 +37,10 @@ import { BotItemStatusIcon } from './BotItemStatusIcon'
 import { BotItemLinkedRefs } from './BotItemLinkedRefs'
 import { formatBotItemSnoozeTime } from './bot-item-snooze-time'
 import type { BotItemPendingComments } from '../../../../../shared/bots/bot-item-pending-comments'
+import {
+  botItemPendingAnswersOnly,
+  botItemPendingWordsBesideAnswers
+} from '../../../../../shared/bots/bot-item-sent-answers'
 import { NATIVE_CHAT_QUOTE_SOURCE_PROPS } from '../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
 
 const ACTOR = 'font-medium text-foreground/80'
@@ -199,12 +205,14 @@ function WorkerBody({
     )
   }
   const failed = entry.link.state === 'failed' || entry.link.state === 'stopped'
+  const reason = botItemWorkerStopReason(entry.link)
   return (
     <>
       {failed
         ? t('bots.items.activity.workerFailed', 'Worker stopped:')
         : t('bots.items.activity.workerFinished', 'Worker finished:')}{' '}
       {title}
+      {reason ? ` - ${reason}` : null}
       {entry.link.report ? <span className="block">{entry.link.report.subject}</span> : null}
     </>
   )
@@ -264,6 +272,7 @@ export function BotItemActivityList({
   const t = useTranslate()
   const entries = botItemActivity(item, events)
   const waitKey = botItemWaitEntryKey(item, entries)
+  const liveAskId = botItemLiveAskKey(entries)
   const list = useRef<HTMLDivElement | null>(null)
   // A reply's quote leads to its question, focused so Tab goes on from there.
   const jump = useCallback(
@@ -290,13 +299,15 @@ export function BotItemActivityList({
                 key={entry.key}
                 bot={bot}
                 item={item}
-                // A reply already sent answers the question, before the host's read says so.
+                // A several-question card stays live until the host read confirms the send.
                 entry={
-                  pending?.shown.some(({ failed }) => !failed)
+                  quickReplies?.sent?.has(entry.event.id) &&
+                  quickReplies.steps?.askId !== entry.event.id
                     ? { ...entry, waiting: false }
                     : entry
                 }
                 onJump={jump}
+                liveAskId={liveAskId}
                 quickReplies={quickReplies}
               />
             )
@@ -333,14 +344,37 @@ export function BotItemActivityList({
           <BotItemWaitCard text={item.wait.text} at={item.wait.at} />
         ) : null}
         {/* Last, as sent: never placed by this machine's clock among the host's events. */}
-        {pending?.shown.map(({ event, failed }) =>
-          // Answers posted as one comment show on their lines already.
-          !failed && event.data.text === quickReplies?.sent?.text ? null : (
+        {pending?.shown.map((sending) => {
+          const { event, failed, intent } = sending
+          // Answers on their way show on their question's lines already; words or files beyond them
+          // show here.
+          const shown = intent && quickReplies?.sent?.get(intent.askId)
+          const ask = intent
+            ? entries.find((entry) => entry.kind === 'comment' && entry.event.id === intent.askId)
+            : undefined
+          const onLines =
+            intent &&
+            shown &&
+            ask?.kind === 'comment' &&
+            !ask.onAsk &&
+            ask.answers &&
+            intent.answers.every(
+              (words, index) =>
+                !words ||
+                (shown[index] === words &&
+                  (!ask.answers?.[index] ||
+                    (intent.shape.decisions.length > 1 && ask.byOrder?.[index])))
+            )
+          if (onLines && botItemPendingAnswersOnly(sending)) {
+            return null
+          }
+          const beside = onLines ? botItemPendingWordsBesideAnswers(sending) : null
+          return (
             <BotItemCommentCard
               key={event.id}
               bot={bot}
               item={item}
-              entry={{ event }}
+              entry={beside === null ? { event } : { event, beside }}
               failed={
                 failed
                   ? {
@@ -351,7 +385,7 @@ export function BotItemActivityList({
               }
             />
           )
-        )}
+        })}
       </div>
       {entries.some((entry) => entry.kind !== 'worker' && entry.kind !== 'event') ||
       pending?.shown.length ? null : (

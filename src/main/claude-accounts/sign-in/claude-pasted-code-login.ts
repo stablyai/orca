@@ -7,6 +7,8 @@ import { isClaudeLocalSignInLink, prepareClaudeSignInBrowser } from './claude-si
 const LOGIN_TIMEOUT_MS = 600_000
 const MAX_SCAN_CHARS = 8_000
 const CLAUDE_AUTHORIZE_HOSTS = new Set(['claude.com', 'claude.ai'])
+// Claude 2.1.330+ shortens the full /cai/ link to /oauth/authorize without code or redirect_uri.
+const CLAUDE_AUTHORIZE_PATHS = new Set(['/cai/oauth/authorize', '/oauth/authorize'])
 const CLAUDE_SIGN_IN_CANCELLED_MESSAGE = 'Claude sign-in was cancelled.'
 export const CLAUDE_PASTED_CODE_REJECTED_MESSAGE =
   'Claude did not accept that code. Start the sign-in again.'
@@ -26,8 +28,7 @@ export function parseClaudePastedCodeSignInLink(output: string): string | null {
       const url = new URL(match[1])
       if (
         CLAUDE_AUTHORIZE_HOSTS.has(url.hostname) &&
-        url.searchParams.get('code') === 'true' &&
-        url.searchParams.has('redirect_uri') &&
+        CLAUDE_AUTHORIZE_PATHS.has(url.pathname) &&
         !isClaudeLocalSignInLink(url.toString())
       ) {
         return url.toString()

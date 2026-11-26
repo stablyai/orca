@@ -47,29 +47,18 @@
 3 src/main/ai-vault/scan-service/session-scanner-service-entry-path.ts
 12 src/main/ai-vault/scan-service/session-scanner-service-spawn.ts
 2 src/main/ai-vault/scanners/devin/session-scanner-devin-db.ts
-2 src/main/ai-vault/scanners/hermes/hermes-state-db-conversations.ts
-3 src/main/ai-vault/scanners/hermes/hermes-state-db-schema.ts
 1 src/main/ai-vault/scanners/hermes/session-scanner-hermes-sources.ts
-15 src/main/ai-vault/scanners/hermes/session-scanner-hermes-sqlite.ts
 1 src/main/ai-vault/scanners/omp/omp-session-root.ts
 2 src/main/ai-vault/scanners/opencode/reader-transport/opencode-wsl-runtime-preparation.ts
-15 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-dispatch.ts
-1 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-process-entry.ts
 5 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn.ts
 2 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-wsl-client.ts
-3 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-capture.ts
-2 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-list.ts
 1 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-open.ts
-3 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite.ts
-1 src/main/ai-vault/scanners/opencode2/session-scanner-opencode2-sqlite-list.ts
-4 src/main/ai-vault/scanners/opencode2/session-scanner-opencode2-sqlite.ts
 1 src/main/ai-vault/session-handoff-snapshot.ts
 1 src/main/ai-vault/session-titles/session-title-resolver.ts
 4 src/main/amp/hook-service.ts
-1 src/main/antigravity/antigravity-chat-sign-in.ts
 8 src/main/antigravity/hook-service.ts
 1 src/main/antigravity/native-account-host.ts
-3 src/main/antigravity/native-account-launch.ts
+2 src/main/antigravity/native-account-launch.ts
 4 src/main/antigravity/native-credential-backend.ts
 1 src/main/antigravity/native-file-credentials.ts
 12 src/main/antigravity/native-windows-credentials.ts
@@ -96,25 +85,24 @@
 1 src/main/bots/bot-look-around-store.ts
 1 src/main/bots/bot-memory-history.ts
 1 src/main/bots/bot-package-apply.ts
-2 src/main/bots/bot-structured-session-wiring.ts
-14 src/main/bots/bot-tool-credentials.ts
-2 src/main/bots/bot-tool-details.ts
+16 src/main/bots/bot-tool-credentials.ts # +1 botToolCredentialFingerprints: botToolCredentialsFingerprint split so one store read serves every credential; +1 botToolCredentialsReader: one store read serves every sign-in and saved-value lookup of a list, check or write
+3 src/main/bots/bot-tool-details.ts # +1 botToolDetailsOf: readBotToolDetails split so the host MCP list masks one id-keyed read
 3 src/main/bots/bot-tool-secret-scrub.ts
-2 src/main/bots/bot-tools-claude.ts
-20 src/main/bots/bot-tools-file.ts
-13 src/main/bots/bot-tools-host.ts
+3 src/main/bots/bot-tools-claude.ts # claudeOwnServerNames: one read of the account config for its user and per-folder servers, once per chat launch that has host servers
+21 src/main/bots/bot-tools-file.ts # +1 changeBotToolEntries: the same tools-file write changeBotToolServers now wraps, adding per-server extra keys; +1 botOwnTools and changeSnapshot: one credential store read per list and write instead of one per row
+14 src/main/bots/bot-tools-host.ts # +1 botOwnTools and botToolCredentialsReader: one credential store read per tools list and check instead of one per row
 4 src/main/bots/bot-tools-removal.ts
 5 src/main/bots/bot-tools-sign-in.ts
-3 src/main/bots/bot-work-runtime.ts
-1 src/main/bots/bot-work-store.ts
+1 src/main/bots/bot-tools-snapshot.ts # moved from bot-tools-file.ts with the snapshot read of the credential store
+2 src/main/bots/bot-work-runtime.ts
 1 src/main/bots/sharing/bot-share-client.ts
 1 src/main/bots/sharing/bot-share-picks-store.ts
 3 src/main/bots/sharing/bot-share-sources.ts
-5 src/main/bots/tool-oauth/bot-tool-credential-source.ts
+4 src/main/bots/tool-oauth/bot-tool-credential-source.ts
 1 src/main/bots/tool-oauth/bot-tool-oauth-revoke.ts
 4 src/main/bots/tool-oauth/bot-tool-oauth-sign-in.ts
 12 src/main/bots/tool-oauth/bot-tool-oauth-tokens.ts
-6 src/main/bots/tool-oauth/bot-tool-owned-sign-in.ts
+7 src/main/bots/tool-oauth/bot-tool-owned-sign-in.ts # +1 botOwnTool now reads the credential store in its own file; it always did, through botToolSignInState
 3 src/main/bots/tool-oauth/bot-tool-sign-in-attempts.ts
 7 src/main/bots/tool-oauth/bot-tool-sign-in-flows.ts
 2 src/main/bots/tool-relay/bot-tool-relay.ts
@@ -138,7 +126,7 @@
 4 src/main/browser/cookies/imports/import-validated-cookies.ts
 3 src/main/browser/cookies/route-partition/browser-route-partition-cookie-import.ts # browser cookie source detection moved here from the import IPC and client-route import
 1 src/main/browser/cookies/route-partition/browser-ssh-route-cookie-import.ts # same source detection as the local import IPC
-2 src/main/browser/cookies/session-restore/browser-session-cookie-restore.ts
+1 src/main/browser/cookies/session-restore/browser-session-cookie-restore.ts
 1 src/main/browser/cookies/session-restore/browser-session-cookie-snapshot-file.ts
 5 src/main/browser/cookies/sources/browser-cookie-detection.ts
 4 src/main/browser/cookies/sources/browser-cookie-firefox-import.ts
@@ -163,11 +151,9 @@
 1 src/main/browser/guest-lifecycle/prompts/browser-system-dialogs.ts
 7 src/main/browser/identity/mode/browser-identity-mode-store.ts
 1 src/main/browser/network/egress/browser-route-egress-electron-launch.ts
-1 src/main/browser/network/execution-routes/browser-network-execution-route-dispatch.ts
 1 src/main/browser/network/execution-routes/ssh-browser-network-execution-route.ts
-2 src/main/browser/network/execution-routes/wsl-browser-network-execution-route.ts
-2 src/main/browser/network/execution-routes/wsl-browser-network-relay-launch.ts
-2 src/main/browser/routing/local-host-partitions/local-ssh-browser-partitions.ts
+1 src/main/browser/routing/local-host-partitions/local-ssh-browser-partition-bindings.ts # moved with the jar binding code from local-ssh-browser-partitions.ts
+1 src/main/browser/routing/local-host-partitions/local-ssh-browser-partitions.ts
 1 src/main/browser/routing/local-host-partitions/wsl-host-browser-route-partition.ts
 4 src/main/browser/routing/partitions/browser-route-partition-binding-store.ts
 5 src/main/browser/routing/partitions/browser-route-partition-pending-deletes.ts
@@ -223,7 +209,7 @@
 3 src/main/claude/hooks/windows-hook-files.ts
 2 src/main/claude/structured/claude-structured-session-adapter.ts
 2 src/main/claude/structured/launch/claude-structured-child-env.ts
-1 src/main/claude/structured/launch/claude-structured-launch-resolution.ts
+2 src/main/claude/structured/launch/claude-structured-launch-resolution.ts # claudeOwnServerNames: one config-file lookup per launch, only when the host list adds servers
 1 src/main/claude/theme-sync/claude-code-theme-sync-schedule.ts
 10 src/main/claude/theme-sync/claude-code-theme-sync.ts
 1 src/main/claude/transcripts/claude-conversation-copy.ts
@@ -244,6 +230,7 @@
 5 src/main/cli/launchers/linux-bare-orca-dispatcher.ts
 14 src/main/cli/launchers/linux-terminal-orca-cli-shim.ts
 1 src/main/cli/launchers/orca-cli-child-path.ts
+1 src/main/cli/launchers/this-app-orca-cli-launcher.ts # resolves this app's CLI launcher once per data folder per run (the Linux packaged shim check), for the MCP agent-file and terminal entries
 1 src/main/cli/wsl/wsl-cli-installer.ts
 1 src/main/cli/wsl/wsl-cli-registration-reconciliation.ts
 6 src/main/cli/wsl/wsl-cli-registration-registry.ts
@@ -264,8 +251,8 @@
 4 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-sync.ts
 19 src/main/codex-accounts/runtime-home/legacy-host/legacy-shared-auth-migration.ts
 2 src/main/codex-accounts/runtime-home/legacy-host/legacy-shared-config-compatibility.ts
-3 src/main/codex-accounts/runtime-home/legacy-host/runtime-home-service-legacy-migration.ts
-11 src/main/codex-accounts/runtime-home/routing/runtime-home-service-home-routing.ts # Codex launch prep from #43365 already merged; unblocks main, async follow-up owed
+2 src/main/codex-accounts/runtime-home/legacy-host/runtime-home-service-legacy-migration.ts
+9 src/main/codex-accounts/runtime-home/routing/runtime-home-service-home-routing.ts # Codex launch prep from #43365 already merged; unblocks main, async follow-up owed
 9 src/main/codex-accounts/runtime-home/routing/runtime-home-service-launch.ts
 8 src/main/codex-accounts/runtime-home/routing/runtime-home-service-managed-home.ts
 1 src/main/codex-accounts/runtime-home/runtime-home-service-paths.ts
@@ -278,6 +265,7 @@
 1 src/main/codex-usage/store.ts
 1 src/main/codex/app-server/codex-app-server-connection.ts
 2 src/main/codex/app-server/codex-app-server-session.ts
+1 src/main/codex/app-server/shared-servers/codex-shared-server-windows-job.ts # the windows-process-tree loader: one cached readFileSync per process (relay addon check)
 1 src/main/codex/codex-conversation-copy.ts
 2 src/main/codex/configuration/agent-state-file-reader.ts
 1 src/main/codex/configuration/codex-path-observation.ts
@@ -289,20 +277,21 @@
 2 src/main/codex/configuration/homes/codex-runtime-home-launch-preparation.ts # +1: the deferred config mirror now runs here from data (it was a closure built in runtime-home-service-*); main runs it only when the trust worker did not
 1 src/main/codex/configuration/homes/codex-stale-pane-accounts.ts
 9 src/main/codex/configuration/homes/codex-windows-sandbox-read-grant.ts
+2 src/main/codex/configuration/settings/codex-config-guest-carry-forward.ts # writeFileAtomicallyIfUnchanged, writeCodexSettingsBaseline: one-time migration of kept values per WSL home, run by the guest helper inside the distro
 1 src/main/codex/configuration/settings/codex-config-mirror-merge.ts
 3 src/main/codex/configuration/settings/codex-config-mirror-source.ts # moved from codex-config-mirror.ts with the system-config preparation helpers; no new calls
 27 src/main/codex/configuration/settings/codex-config-mirror.ts
 2 src/main/codex/configuration/settings/codex-config-path-reference-rewrite.ts
 1 src/main/codex/configuration/settings/codex-config-runtime-owned-values.ts
-2 src/main/codex/configuration/settings/config-settings-baseline.ts
-1 src/main/codex/configuration/settings/config-settings-promotion-write-target.ts
-8 src/main/codex/configuration/settings/config-settings-promotion.ts
+1 src/main/codex/configuration/settings/codex-native-source-check.ts # retireCodexNativeSourceMark, only after the background ~/.codex check finds it now leads into a WSL distro (never on clean passes)
+5 src/main/codex/configuration/settings/config-settings-baseline.ts # same one sync write, now temp file plus rename so a cut-off write keeps the old baseline; +2 retireCodexNativeSourceMark: one baseline read plus a compare-and-swap write, only after a background check finds a trusted native ~/.codex now leads into a WSL distro
+11 src/main/codex/configuration/settings/config-settings-promotion.ts # +1 resolvesIntoWslShare: realpath.native of a drive root only on Windows for a drive-letter target in a write-back or held-back pass (#45247); +1 recoverInterruptedGuardedFileOperation of the baseline, only when it reads absent (fresh home, or a quit while retiring the native mark); +1 migrateGuestCarryForward, which writes only once per WSL home whose baseline still holds kept values from a one-way build (runs inside the distro)
 1 src/main/codex/configuration/settings/config-sync-stall.ts
 1 src/main/codex/configuration/shared-server/codex-daemon-socket-path-guard.ts
 1 src/main/codex/configuration/shared-server/codex-shared-server-fix.ts
 3 src/main/codex/configuration/shared-server/codex-shared-server-pane.ts
 2 src/main/codex/configuration/shared-server/codex-shared-server-probe.ts
-7 src/main/codex/configuration/toml/config-toml-atomic-write.ts # compare-before-publish re-read of config.toml so a save made after Orca read it is never overwritten (moved here from the worker-only trust transaction)
+8 src/main/codex/configuration/toml/config-toml-atomic-write.ts # compare-before-publish re-read of config.toml so a save made after Orca read it is never overwritten (moved here from the worker-only trust transaction); +1 resolvesIntoWslShare only with refuseWslTarget (promotion write-back), realpath.native only for a Windows drive-letter target (#45247)
 4 src/main/codex/configuration/toml/config-toml-runtime-owned-sections.ts
 9 src/main/codex/history/backfill/codex-session-backfill-marker.ts
 6 src/main/codex/history/backfill/codex-session-backfill.ts
@@ -451,7 +440,7 @@
 5 src/main/daemon/providers/lifecycle/daemon-provider-state.ts
 4 src/main/daemon/providers/lifecycle/daemon-severed-restart.ts
 1 src/main/daemon/providers/lifecycle/daemon-uninstall-shutdown.ts
-3 src/main/daemon/providers/routing/daemon-legacy-adapters.ts
+2 src/main/daemon/providers/routing/daemon-legacy-adapters.ts
 8 src/main/daemon/providers/routing/daemon-newer-protocol-hold.ts
 2 src/main/daemon/providers/routing/daemon-unlisted-session.ts
 1 src/main/daemon/providers/wsl/daemon-wsl-bridge-boot-identity.ts
@@ -466,6 +455,7 @@
 1 src/main/daemon/server/daemon-session-background-routing.ts
 1 src/main/daemon/server/daemon-terminal-admission.ts
 7 src/main/daemon/shell-readiness/shell-ready.ts
+2 src/main/daemon/terminal-host/foreground-agent-identity-check.ts # one-shot: both Windows helpers reach the addon file read once on first load (cached); the per-watch check then opens one process (microseconds)
 1 src/main/daemon/terminal-host/terminal-host-session-create.ts
 1 src/main/daemon/terminal-host/terminal-host-session-process.ts
 2 src/main/daemon/terminal-host/terminal-host-session-publish.ts
@@ -476,6 +466,7 @@
 1 src/main/daemon/transport/stream/daemon-stream-keep-tail-drop.ts
 6 src/main/devin/hook-service.ts
 2 src/main/diagnostics/main-thread-churn-probe.ts
+2 src/main/droid/droid-hook-config-files.ts # hooks.json, or legacy hooks/hooks.json while it is absent, is read on the same one-shot startup install, toggle, status and uninstall paths as settings.json
 6 src/main/droid/hook-service.ts
 11 src/main/dsh/hook-service.ts
 2 src/main/emulator/android/android-avd-boot.ts
@@ -512,7 +503,6 @@
 4 src/main/filesystem/rolling-file-backup.ts # stageRollingFileBackup + commit (same sync copy and rename); the staged-copy rmSync moved into removeFileWithWindowsRetry so Windows AV locks are retried
 1 src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry-path.ts
 5 src/main/foreign-sqlite-readers/foreign-sqlite-reader-spawn.ts
-6 src/main/gemini/hook-service.ts
 1 src/main/git/command-runner/git-environment/git-ssh-policy-env.ts
 1 src/main/git/command-runner/git-exec-file-sync.ts
 3 src/main/git/command-runner/git-exec-file.ts
@@ -562,7 +552,7 @@
 4 src/main/hang-watchdog/renderer-hang-records.ts
 4 src/main/hermes/hermes-acp-launch-spec.ts
 4 src/main/hermes/hermes-default-home.ts
-15 src/main/hermes/hermes-home-filesystem.ts
+10 src/main/hermes/hermes-home-filesystem.ts
 2 src/main/hermes/hermes-transcript-import.ts
 27 src/main/hermes/hook-service.ts
 2 src/main/host/deferred-secret-protection-report.ts
@@ -756,6 +746,15 @@
 3 src/main/managed-server/lifecycle/orcad-runtime-maintenance.ts
 1 src/main/managed-server/lifecycle/orcad-runtime-status.ts
 1 src/main/managed-server/migration/cutover/orcad-unreachable-setup-release.ts
+3 src/main/mcp-servers/mcp-host-list-launch.ts # mcpServersForLaunch moved from mcp-host-list.ts: reads the host list per chat launch and per orca mcp connect; +2 the saved-values digests, read at launch and after Orca writes the list
+3 src/main/mcp-servers/mcp-host-list-sign-in.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does
+10 src/main/mcp-servers/mcp-host-list.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does; +2 botOwnTools for a list from one credential store read, and botOwnTool now reading the store in its own file
+1 src/main/mcp-servers/mcp-shared-process-servers.ts # a shared server's relay request reads the host list as a launch does; only its one-time inline-header migration is synchronous
+2 src/main/mcp-servers/session-mcp-launch.ts # per chat launch and turn: the bot launch read of its tools file and its revision check (moved from bot-structured-session-wiring.ts)
+1 src/main/mcp-servers/terminal/terminal-mcp-cli-support.ts # runWslProcess for a WSL CLI's --help/--version probe, once per CLI and distro per 10 minutes
+1 src/main/mcp-servers/terminal/terminal-mcp-launch.ts # the stale-terminal count reads the host list once per count (after an MCP edit or a host start), in place of one read per terminal
+1 src/main/mcp-servers/terminal/terminal-mcp-servers.ts # wslGuestOrcaLauncher: the managed WSL CLI launcher, resolved once per data folder per run
+3 src/main/mcp-servers/terminal/terminal-mcp-wsl-servers.ts # resolves the managed WSL CLI launcher (getManagedWslCliDir) once per data folder per run; settleWslAutomountRoot reads a distro mount root once per distro start (cached after)
 1 src/main/media/local-preview-grant-file.ts
 1 src/main/media/media-preview-protocol.ts
 1 src/main/memory/hydrate-local-pty-registry.ts
@@ -770,7 +769,7 @@
 4 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts
 1 src/main/native-chat/agent-session-journal/context-epochs/journal-context-cursor.ts
 12 src/main/native-chat/agent-session-journal/database/journal-database.ts
-5 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts # tail table create at store open (one-shot startup); worker-only: +2 create the retired-epoch pending table in a transaction on the journal SQL worker
+6 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts # tail table create at store open (one-shot startup); worker-only: +2 create the retired-epoch pending table in a transaction on the journal SQL worker; +1 creates the operation-window send indexes (IF NOT EXISTS, one-shot) on the journal SQL worker
 3 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
 1 src/main/native-chat/agent-session-journal/durable-rows/journal-row-table.ts
 1 src/main/native-chat/agent-session-journal/history-import/adopted-transcript-source.ts
@@ -798,12 +797,8 @@
 1 src/main/native-chat/transcript-filesystem/process/wsl-transcript-fs-process-spawn.ts
 2 src/main/native-chat/transcript-filesystem/wsl-transcript-fs-access.ts
 2 src/main/native-chat/transcript-history/codex/codex-rollout-history-source.ts
-7 src/main/native-chat/transcript-history/hermes/transcript-hermes-sqlite.ts
 3 src/main/native-chat/transcript-history/opencode/transcript-opencode-database.ts
-7 src/main/native-chat/transcript-history/opencode/transcript-opencode-sqlite-query.ts
 2 src/main/native-chat/transcript-history/opencode/transcript-opencode.ts
-2 src/main/native-chat/transcript-history/opencode/transcript-opencode2-fork-coverage.ts
-2 src/main/native-chat/transcript-history/opencode/transcript-opencode2-sqlite.ts
 1 src/main/network/macos-tailscale-dns-diagnostic.ts
 3 src/main/node-runtime/managed-runtime-installation.ts
 1 src/main/node-runtime/managed-runtime-release-install.ts
@@ -1031,7 +1026,8 @@
 2 src/main/plugins/storage/plugin-secrets-store.ts
 2 src/main/plugins/storage/plugin-storage-store.ts
 2 src/main/ports/darwin-process-metadata.ts
-7 src/main/ports/local-workspace-platform-port-scanner.ts
+1 src/main/ports/linux-socket-owners.ts # Linux socket listing runs in the port-scan worker; the only sync call is the worker client's one existsSync per lazy worker spawn
+8 src/main/ports/local-workspace-platform-port-scanner.ts # Linux socket listing runs in the port-scan worker; the only sync call is the worker client's one existsSync per lazy worker spawn
 1 src/main/ports/local-workspace-port-scanner.ts
 1 src/main/ports/port-scan-command-client.ts
 3 src/main/preflight/agent-command-detection.ts
@@ -1043,7 +1039,6 @@
 1 src/main/provider-process/provider-ownership-journal.ts
 1 src/main/provider-process/provider-process-spawn.ts
 1 src/main/provider-process/supervised-provider-child-location.ts
-2 src/main/providers/accounts/provider-account-services.ts
 1 src/main/providers/execution-host-provider-dispatch.ts
 2 src/main/providers/foreground/agent-process.ts
 1 src/main/providers/foreground/windows/process-rows.ts
@@ -1104,6 +1099,7 @@
 1 src/main/rate-limits/service/service-muse-usage-fetch.ts
 3 src/main/rate-limits/service/service-provider-cycles.ts
 1 src/main/rate-limits/service/service-state.ts
+1 src/main/rate-limits/service/service-target-usage-read.ts # the same sync Codex state-db read the poller already does, reached only when the WSL HTTP read fails; bounded by the renderer TTL and Retry-After
 2 src/main/remote-policies/release-asset-policy-live-update.ts
 4 src/main/ripgrep/bundled-ripgrep-path.ts
 1 src/main/ripgrep/bundled-ripgrep-spawn.ts
@@ -1112,7 +1108,7 @@
 2 src/main/runtime/agent-session/environment/structured-session-child-env.ts
 2 src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts
 3 src/main/runtime/agent-session/installation/structured-agent-runtime-metadata.ts
-2 src/main/runtime/agent-session/installation/structured-agent-runtime-registrations.ts
+3 src/main/runtime/agent-session/installation/structured-agent-runtime-registrations.ts # claudeStructuredLaunchPart now names claudeOwnServerNames (one config lookup per launch with host servers)
 1 src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
 1 src/main/runtime/agent-session/installation/structured-agent-session-runtime-teardown.ts
 2 src/main/runtime/agent-session/installation/structured-agent-session-runtime.ts
@@ -1145,7 +1141,7 @@
 1 src/main/runtime/mobile-cloud-relay/desktop-relay-service.ts
 2 src/main/runtime/mobile-cloud-relay/pairing/relay-revoke-outbox.ts
 4 src/main/runtime/mobile-cloud-relay/region-selection/relay-region-preference.ts
-5 src/main/runtime/orca-runtime-bots.ts
+4 src/main/runtime/orca-runtime-bots.ts
 2 src/main/runtime/orca-runtime.ts
 16 src/main/runtime/orchestration/db/attach-orchestration-db-methods.ts
 1 src/main/runtime/orchestration/db/database-file-permissions.ts
@@ -1218,10 +1214,9 @@
 2 src/main/runtime/repositories/runtime-repository-registration-controller.ts
 1 src/main/runtime/repositories/runtime-repository-settings-controller.ts
 2 src/main/runtime/rpc/dispatcher.ts
-4 src/main/runtime/rpc/methods/accounts/antigravity-accounts.ts
 3 src/main/runtime/rpc/methods/accounts/usage-credentials.ts
 2 src/main/runtime/rpc/methods/bots-tools-owned-sign-in.ts
-11 src/main/runtime/rpc/methods/bots-tools.ts
+12 src/main/runtime/rpc/methods/bots-tools.ts # +1 botOwnTool now reads the credential store in its own file; it always did, through botToolSignInState
 1 src/main/runtime/rpc/methods/bots.ts
 1 src/main/runtime/rpc/methods/browser/browser-identity-rpc.ts
 15 src/main/runtime/rpc/methods/computer/computer.ts
@@ -1229,6 +1224,8 @@
 1 src/main/runtime/rpc/methods/host-management/environment-doctor.ts
 1 src/main/runtime/rpc/methods/host-management/host-capabilities.ts
 1 src/main/runtime/rpc/methods/host-management/managed-runtime-install.ts
+3 src/main/runtime/rpc/methods/mcp-servers-sign-in.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does
+3 src/main/runtime/rpc/methods/mcp-servers.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does
 1 src/main/runtime/rpc/methods/mobile-delivery/bundled-mobile-web-bundle.ts
 8 src/main/runtime/rpc/methods/mobile-delivery/mobile-web-bundle.ts
 1 src/main/runtime/rpc/methods/orcad/orcad-migration.ts
@@ -1440,7 +1437,8 @@
 2 src/main/window/desktop-integration/macos-press-and-hold-default.ts
 1 src/main/windows/windows-administrator-restart.ts
 2 src/main/windows/windows-directory-acl.ts
-11 src/main/windows/windows-process-table.ts
+1 src/main/windows/windows-job-object.ts # the windows-process-tree loader: one cached readFileSync per process (relay addon check)
+12 src/main/windows/windows-process-table.ts # the windows-process-tree loader: one cached readFileSync per process (relay addon check)
 3 src/main/worker-threads/forked-child-entry-path.ts
 2 src/main/worker-threads/worker-send-ledger.ts
 2 src/main/workspace-hooks/hook-orca-cli-env.ts
@@ -1508,7 +1506,7 @@
 5 src/main/wsl/orcad/wsl-orcad-instance-adoption.ts
 1 src/main/wsl/orcad/wsl-orcad-liveness-wiring.ts
 1 src/main/wsl/orcad/wsl-orcad-pairing-repair.ts
-6 src/main/zcode/hook-service.ts
+7 src/main/zcode/hook-service.ts # zcode-app-cli setting.json is read on the same one-shot startup, toggle and uninstall paths as config.json
 3 src/main/zcode/zcode-plan-credential-commands.ts
 3 src/main/zcode/zcode-v2-plan-credentials.ts
 13 src/shared/agent-hook-listener/claude-session-continuation.ts

@@ -5,6 +5,7 @@ import { delimiter } from 'node:path'
 import { dropInheritedOrcaFishHistory } from '../../pty/history/fish-history-session'
 import { removeAppImageRuntimeEnv } from '../../pty/shell-startup/appimage-terminal-env'
 import { removeChromiumDisabledSessionBus } from '../../pty/shell-startup/chromium-session-bus-env'
+import { removeChromiumCrashpadPipeName } from '../../pty/shell-startup/chromium-crashpad-pipe-env'
 import { stripInheritedBuildModeEnv } from '../../pty/shell-startup/build-mode-env'
 import { stripPiProcessOwnerEnv } from '../../pty/shell-startup/pi-process-owner-env'
 import { dropIncoherentCondaActivationEnv } from '../../pty/shell-startup/conda-activation-env'
@@ -175,6 +176,7 @@ function removeInheritedDevAgentHookEndpoint(
 export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<string, string> {
   const inheritedEnv = stripInheritedBuildModeEnv(process.env)
   restoreManagedDataAccountEnvironment(inheritedEnv)
+  removeChromiumCrashpadPipeName(inheritedEnv)
   const env: Record<string, string> = {
     ...mergeGitConfigEnvProtocol(inheritedEnv, opts.env),
     TERM: 'xterm-256color',

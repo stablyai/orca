@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { manageConnectors } from '@/components/bots/AddConnectorDialog'
+import { manageConnectors } from '@/components/bots/bot-connector-descriptions'
 import { useTranslate } from '@/i18n/use-translate'
 import { useBots, useBotsEnabled, useBotWebhooks } from '@/lib/bot-catalog'
 import type { Automation } from '../../../../../shared/automations/automation-definition'

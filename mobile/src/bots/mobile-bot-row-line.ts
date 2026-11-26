@@ -11,9 +11,15 @@ import {
 import { compactAgentStatusLine } from '../../../src/shared/agent-status/presentation/agent-compact-status'
 import { resolveProgramStatusPresentation } from '../../../src/shared/program-status/presentation'
 import { botNeedsYouCount } from '../../../src/shared/bots/bot-now'
+import {
+  botRowLimit,
+  type NamedUsageLimitStop
+} from '../../../src/shared/bots/bot-usage-limit-stop'
+import type { BotRowStatus } from '../../../src/shared/bots/bot-row-status'
 import { translate } from '../i18n/mobile-i18n'
 import { agentDotState, agentRowTimeAt } from '../worktree/agent-lineage/agent-row-display'
 import type { MobileBotRowFacts } from './host-bot-row-facts'
+import { mobileUsageLimitStopText } from './mobile-usage-limit-copy'
 
 const PHONE_ROWS: BotRowLineReader<RuntimeWorktreeAgentRow> = {
   paneKey: (row) => row.paneKey,
@@ -84,4 +90,30 @@ export function mobileBotRowLineText(line: BotRowLine, now: number): string {
   return botRowLineText(line, translate, (by) =>
     new Intl.DateTimeFormat(undefined, botWaitTimeFormat(by, now)).format(by)
   )
+}
+
+/** The usage-limit line, said in place of a quiet line; null while the bot or a worker works or
+ *  asks. Its own Home Chat goes unnamed: tapping the row opens it. */
+export function mobileBotRowLimitText(
+  stop: NamedUsageLimitStop | null,
+  line: BotRowLine | null,
+  bot: {
+    dot: BotRowStatus | null
+    workers?: MobileBotRowFacts['line']['workers']
+    chatSessionId: string | null | undefined
+  },
+  now: number
+): string | null {
+  const { dot, workers } = bot
+  const busy =
+    dot === 'working' ||
+    dot === 'permission' ||
+    (workers?.working ?? 0) > 0 ||
+    (workers?.permission ?? 0) > 0
+  const limit = botRowLimit(stop, line, busy, bot.chatSessionId, translate)
+  if (!limit) {
+    return null
+  }
+  const place = limit.stop.sessionId === bot.chatSessionId ? null : limit.place
+  return [place, mobileUsageLimitStopText(limit.stop, now)].filter(Boolean).join(' · ')
 }

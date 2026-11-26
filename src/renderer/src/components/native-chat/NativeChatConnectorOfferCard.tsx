@@ -7,7 +7,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useCardBot } from '@/lib/bot-catalog'
 import { useBotGitHub } from '@/lib/bot-github-state'
 import { slackTeamState, useBotSlack } from '@/lib/bot-slack-state'
-import { connectorDescription } from '../bots/AddConnectorDialog'
+import { connectorDescription } from '../bots/bot-connector-descriptions'
 import { BotAppBrandLogo } from '../bots/apps/BotAppBrandLogo'
 import { BOT_CONNECTORS, connectorAddAccessLabel, connectorAdded } from '../bots/bot-connectors'
 import { useConnectorSetup } from '../bots/ConnectorSetupDialogs'
@@ -119,7 +119,11 @@ function OfferCard({
     )
   ) : (
     <NativeChatOfferActions offer={answering}>
-      <Button type="button" size="sm" onClick={() => setup.start(offer.source)}>
+      <Button
+        type="button"
+        size="sm"
+        onClick={() => setup.start(offer.source, { workspace: offer.workspace })}
+      >
         {actionLabel}
       </Button>
     </NativeChatOfferActions>

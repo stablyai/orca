@@ -14,6 +14,7 @@ import { JournalSqlScope } from '../native-chat/agent-session-journal/journal-sq
 import type { ResolveDispatchInput } from '../native-chat/agent-session-journal/journal-store-contracts'
 import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
 import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
+import { failWorkerStartWithReceipt } from '../runtime/rpc/methods/orchestration/worker/start/worker-start-receipt'
 import {
   settleBotRequestFailure,
   settleBotRequestTurn
@@ -30,10 +31,13 @@ import type * as ChatSession from './bot-chat-session'
 import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
   AgentJournalMessageItem,
+  AgentJournalSnapshot,
   AgentJournalTurnJoin
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { testOrcaSessionId } from '../../shared/agent-session/identity/orca-session-address-test-fixture'
 import type { BotRequestRecord } from './bot-request-view'
+import { TerminalHostCapError } from '../../shared/terminal/pty/lifecycle/terminal-host-cap-refusal'
+import { exposeUtcTimestamp } from '../runtime/orchestration/db/utc-timestamp'
 
 // How a request another agent sent ends back at its asker: the chat's real journal says which turn
 // answered it, the real orchestration database holds the request and takes the notice. Stubbed:
@@ -50,6 +54,8 @@ vi.mock('./bot-chat-session', async (original) => ({
 }))
 
 const target = { sessionId: 'chat', epoch: 'epoch' }
+// The chat as orchestration records its starts' creator.
+const CHAT_SESSION = testOrcaSessionId('00000000-0000-4000-8000-00000000c4a7')
 const turnOf = (id: string) => codexTurnLifecycleIdentity('chat', id)
 const TURN_A = turnOf('turn-a')
 const TURN_B = turnOf('turn-b')
@@ -310,6 +316,69 @@ it('tells the asker its request failed when the turn that answered it fails', as
     expect.stringContaining("Helper's turn failed with an error. It ended without answering"),
     expect.stringContaining("Helper's turn failed with an error. It ended without answering")
   ])
+})
+
+it('names the host terminal cap when a worker start the failed turn made was refused at it', async () => {
+  const r1 = request('review this')
+  send('m1', r1, null, { turn: TURN_A, via: 'start' })
+  turn('turn-a', 'm1', 'running')
+  const turnId = agentJournalItemKey(TURN_A)
+  // The chat's own worker start, refused at the cap while its turn ran.
+  const task = db.createTask({ runId, spec: 'review' })
+  const { dispatch } = db.createStartingWorkerDispatch({
+    creator: { kind: 'session', orcaSessionId: CHAT_SESSION },
+    maxDepth: Number.MAX_SAFE_INTEGER,
+    taskId: task.id,
+    startOptions: {}
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a start failed at worktree_create only echoes these into its receipt.
+  const echoedOnly = {} as never
+  // Refused the way worker-start fails it, so the chat reads what the receipt stored.
+  await failWorkerStartWithReceipt({
+    runtime: runtime(),
+    structuredSession: null,
+    db,
+    runId,
+    taskId: task.id,
+    dispatchId: dispatch.id,
+    failedStage: 'worktree_create',
+    error: new Error(
+      `Failed to create the startup terminal for /repo/wt: ${new TerminalHostCapError(256, 256).message}`
+    ),
+    setup: echoedOnly,
+    launch: echoedOnly,
+    mode: echoedOnly
+  })
+  turn('turn-a', 'm1', 'failure')
+  // The turn began a second before the start was recorded.
+  const created = exposeUtcTimestamp(db.getWorkerDispatch(dispatch.id)!.created_at)!
+  const startedAt = Date.parse(created) - 1_000
+  const snapshot: AgentJournalSnapshot = {
+    sessionId: CHAT_SESSION,
+    cursor: { epoch: 'epoch', sequence: 1 },
+    items: [
+      {
+        itemId: turnId,
+        revision: 1,
+        sequence: 1,
+        observedAt: startedAt,
+        body: { kind: 'turn', turnId: 'turn-a', state: 'completed', startedAt }
+      }
+    ],
+    submissions: []
+  }
+
+  await settleBotRequestFailure(runtime(), {
+    ...failedTurn(turnId),
+    sessionId: CHAT_SESSION,
+    read: async () => snapshot
+  })
+  // The run's coordinator also got the failed start's own mail.
+  expect(notices()).toContainEqual(
+    expect.stringContaining(
+      "Helper's turn failed: Orca refused the terminal of a worker it started because this host is at its terminal limit (256 of 256 terminals in use)."
+    )
+  )
 })
 
 it('a refused send of agent mail that is no request settles nothing else', async () => {

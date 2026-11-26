@@ -61,7 +61,8 @@ export const BOT_ITEM_LIMITS = {
   text: 8_000,
   /** What a Waiting item waits on: one line. */
   wait: 200,
-  links: 50,
+  /** A sanity bound, not a budget: a busy item gathers hundreds of workers. */
+  links: 1_000,
   listPage: 50,
   /** Also the most items one list read names by uid. */
   listPageMax: 100,
@@ -131,6 +132,8 @@ export type BotItemLinkView =
       settledAt: number | null
       /** The report the worker ended with: its result. */
       report: { subject: string; body: string | null } | null
+      /** Why it ended, as the chat's worker strip shows it. Absent from older hosts. */
+      reason?: string | null
       pr: BotItemPullRequest | null
     }
   | { kind: 'pr'; ref: string; pr: BotItemPullRequest | null }

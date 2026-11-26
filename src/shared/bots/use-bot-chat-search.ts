@@ -40,6 +40,8 @@ export function createBotChatSearchHook({
     const [answer, setAnswer] = useState<Answer | null>(null)
     const [attempt, setAttempt] = useState(0)
     const retry = useCallback(() => setAttempt((count) => count + 1), [])
+    // A chat gone or new since the last answer (a Delete chat, say) is asked again.
+    const chatIds = chats.map((chat) => chat.chatId).join('\n')
     useEffect(() => {
       if (!trimmed) {
         return
@@ -58,7 +60,7 @@ export function createBotChatSearchHook({
         current = false
         clearTimeout(timer)
       }
-    }, [ask, trimmed, attempt])
+    }, [ask, trimmed, attempt, chatIds])
 
     return useMemo(() => {
       if (!trimmed) {

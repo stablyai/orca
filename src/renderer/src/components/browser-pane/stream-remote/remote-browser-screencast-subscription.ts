@@ -14,6 +14,10 @@ import type { RemoteBrowserDialogPage } from './remote-browser-javascript-dialog
 import type { RemoteBrowserViewportSize } from './remote-browser-stream-tokens'
 import type { RemoteBrowserPagePrompts } from './remote-browser-page-prompts'
 import type { RemoteBrowserHostContextMenus } from './remote-browser-host-context-menus'
+import { showRemoteBrowserDownloadNotice } from './remote-browser-download-notices'
+import { saveRemoteBrowserPagePrint } from './remote-browser-page-print'
+import { readBrowserScreencastFrameSeq } from '../../../../../shared/browser/screencast/browser-screencast-protocol'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 
 export type RemoteBrowserScreencastSubscribe = (
   args: { selector: string; method: string; params?: unknown; timeoutMs?: number },
@@ -84,6 +88,8 @@ export async function openRemoteBrowserScreencastStream(
     worktree: request.worktree,
     pageId: request.pageId
   }
+  // Set once `ready` echoes frameAck; hosts that strip the opt-in never get an ack.
+  let ackSubscriptionId: string | null = null
   const subscription = await subscribe(
     {
       selector: request.environmentId,
@@ -107,16 +113,37 @@ export async function openRemoteBrowserScreencastStream(
         pointerEvents: 1,
         pagePrompts: 1,
         contextMenus: 1,
-        // A web client's picked files have no paths to stage on the host.
-        ...(isWebClientLocation() ? {} : { fileChoosers: 1 }),
+        // A web client's picked files have no paths to stage on the host, and it can't save a printed PDF or a download.
+        ...(isWebClientLocation() ? {} : { fileChoosers: 1, prints: 1, downloadCopyStreams: 1 }),
         agentCursor: 1,
-        driverEvents: 1
+        driverEvents: 1,
+        downloads: 1,
+        // Frame credit keeps a slow link from queueing seconds of frames, and lowers quality while the page moves.
+        frameAck: 1
       }),
       timeoutMs: 15_000
     },
     {
-      onResponse: (response) => dispatchScreencastResponse(response, events, dialogPage),
-      onBinary: (bytes) => events.onFrame(bytes),
+      onResponse: (response) => {
+        const ready = readFrameAckReady(response)
+        if (ready !== undefined) {
+          ackSubscriptionId = ready
+        }
+        dispatchScreencastResponse(response, events, dialogPage)
+      },
+      onBinary: (bytes) => {
+        const seq = readBrowserScreencastFrameSeq(bytes)
+        if (ackSubscriptionId && seq !== null && events.isCurrent()) {
+          // Cumulative, so a lost ack is covered by the next one.
+          void callRuntimeRpc(
+            dialogPage.target,
+            'browser.screencast.ack',
+            { subscriptionId: ackSubscriptionId, seq },
+            { skipCompatibilityCheck: true, suppressFeatureInteraction: true, background: true }
+          ).catch(() => {})
+        }
+        events.onFrame(bytes)
+      },
       onError: (error) => {
         if (!events.isCurrent()) {
           return
@@ -139,6 +166,18 @@ export async function openRemoteBrowserScreencastStream(
       subscription.unsubscribe()
     }
   }
+}
+
+/** The acked subscription from a `ready`, null when the host did not echo frameAck; undefined otherwise. */
+function readFrameAckReady(response: RuntimeRpcResponse<unknown>): string | null | undefined {
+  if (response.ok === false || !response.result || typeof response.result !== 'object') {
+    return undefined
+  }
+  const event = response.result as BrowserScreencastResult
+  if (event.type !== 'ready') {
+    return undefined
+  }
+  return event.frameAck === true ? event.subscriptionId : null
 }
 
 function dispatchScreencastResponse(
@@ -186,6 +225,13 @@ function dispatchScreencastResponse(
     events.onAgentCursor({ x, y, viewportWidth, viewportHeight, press })
   } else if (event.type === 'driver') {
     events.onDriver({ browserPageId: event.browserPageId, driver: event.driver })
+  } else if (
+    (event.type === 'downloadRequested' || event.type === 'downloadFinished') &&
+    dialogPage.target.kind === 'environment'
+  ) {
+    showRemoteBrowserDownloadNotice(event, dialogPage.target)
+  } else if (event.type === 'print') {
+    void saveRemoteBrowserPagePrint(dialogPage, event)
   } else if (event.type === 'error') {
     events.onFailed(event.message)
   }

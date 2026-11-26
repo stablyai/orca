@@ -225,7 +225,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithTer
         const dispatchId = this.getAgentStatusOrchestrationContextForPaneKey(paneKey)?.dispatchId
         return dispatchId ? (index?.botOfDispatch(dispatchId) ?? null) : null
       },
-      inGroupRoom: (sessionId) => this.botSessions.groupRoomOf(sessionId) !== null,
+      groupRoomOf: (sessionId) => this.botSessions.groupRoomOf(sessionId)?.group.id ?? null,
       workerPane: (paneKey) =>
         this.getAgentStatusOrchestrationContextForPaneKey(paneKey) !== undefined,
       readEveryBot: () => this.botChatTreeIndex?.readEveryBot() !== false

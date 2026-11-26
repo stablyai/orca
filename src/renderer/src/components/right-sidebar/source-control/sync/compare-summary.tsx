@@ -218,14 +218,14 @@ export function CompareUnavailable({
               'Branch compare unavailable'
             )}
       </div>
-      <div className="mt-1 text-muted-foreground">
+      <div className="mt-1 text-muted-foreground [overflow-wrap:anywhere]">
         {summary.errorMessage ??
           t(
             'auto.components.right.sidebar.SourceControl.b6922abb13',
             'Unable to load branch compare.'
           )}
       </div>
-      <div className="mt-3 flex items-center gap-2">
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         {changeBaseRefAllowed && (
           <Button
             type="button"

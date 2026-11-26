@@ -50,7 +50,9 @@ export const phoneBotSchema = z.looseObject({
   acceptedOffers: BotSchema.shape.acceptedOffers,
   // The link a bot was made from, so opening that link again offers it.
   sharedFrom: BotSchema.shape.sharedFrom,
-  createdAt: salvagedOptional('createdAt', z.number())
+  createdAt: salvagedOptional('createdAt', z.number()),
+  // Most recent first where Connect Slack lists the host's other workspaces.
+  updatedAt: salvagedOptional('updatedAt', z.number())
 })
 
 export type PhoneBot = z.output<typeof phoneBotSchema>

@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import SyncDatabase from '../sqlite/sync-database'
-import type { BotItemBotActor } from './bot-items-input'
+import type { BotItemBotActor, BotItemOwnerActor } from './bot-items-input'
 import { BOT_ITEMS_MIGRATIONS, migrateBotItems } from './bot-items-schema'
 import { BotItemsStore } from './bot-items-store'
 
 const BOT: BotItemBotActor = { kind: 'bot', botId: 'bot', chatId: 'home' }
+const OWNER: BotItemOwnerActor = { kind: 'owner' }
 
 describe('Waiting items', () => {
   const stores: BotItemsStore[] = []
@@ -82,6 +83,33 @@ describe('Waiting items', () => {
     expect(waitText(store, uid)).toBe('Review on #47193')
     store.linkStartedWorker(uid, 'ctx_fix', BOT)
     expect(store.get(uid)).toMatchObject({ status: 'working', waitEvent: null })
+  })
+
+  it('keeps Needs you through a worker start while a question is open, and only then', () => {
+    const store = open()
+    const dispatches = (uid: string) =>
+      store
+        .links(uid)
+        .filter((link) => link.kind === 'dispatch')
+        .map((link) => link.ref)
+    const asking = addWorking(store)
+    const asked = { questions: [{ prompt: 'Merge now?', options: [{ label: 'Yes' }] }] }
+    store.set(asking, { status: 'needs_you', ask: asked }, BOT)
+    store.linkStartedWorker(asking, 'ctx_review', BOT)
+    expect(store.get(asking)!.status).toBe('needs_you')
+    expect(dispatches(asking)).toEqual(['ctx_review'])
+    store.ownerComment(asking, 'Yes', OWNER)
+    expect(store.get(asking)!.status).toBe('working')
+
+    const looking = addWorking(store)
+    store.set(looking, { status: 'needs_you', comment: 'Have a look.' }, BOT)
+    store.linkStartedWorker(looking, 'ctx_fix', BOT)
+    expect(store.get(looking)!.status).toBe('working')
+
+    const planned = addWorking(store)
+    store.set(planned, { status: 'planned' }, BOT)
+    store.linkStartedWorker(planned, 'ctx_plan', BOT)
+    expect(store.get(planned)!.status).toBe('working')
   })
 
   it('never hides the owner’s open question behind Waiting', () => {

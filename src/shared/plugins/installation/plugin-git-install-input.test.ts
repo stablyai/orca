@@ -38,6 +38,18 @@ describe('parsePluginGitInstallInput', () => {
     })
   })
 
+  it('reads a GitHub blob page as a repository', () => {
+    expect(parsePluginGitInstallInput('https://github.com/o/r/blob/main/README.md')).toEqual({
+      ok: true,
+      url: 'https://github.com/o/r',
+      ref: ''
+    })
+    // Why `#v1` still wins: `--ref` reaches the host as a `#ref` on the pasted URL.
+    expect(
+      parsePluginGitInstallInput('https://github.com/o/r/blob/feature/x/README.md#v1')
+    ).toEqual({ ok: true, url: 'https://github.com/o/r', ref: 'v1' })
+  })
+
   it('keeps a `-` ref segment on Codeberg and www hosts', () => {
     expect(
       parsePluginGitInstallInput('https://codeberg.org/o/r/src/branch/feature/-/example')
@@ -65,6 +77,11 @@ describe('parsePluginGitInstallInput', () => {
     expect(
       parsePluginGitInstallInput('https://gitlab.example.com/g/sub/tree/p/-/blob/main/README.md')
     ).toEqual({ ok: true, url: 'https://gitlab.example.com/g/sub/tree/p', ref: '' })
+    expect(parsePluginGitInstallInput('https://gitlab.example.com/g/sub/blob/p')).toEqual({
+      ok: true,
+      url: 'https://gitlab.example.com/g/sub/blob/p',
+      ref: ''
+    })
     expect(
       parsePluginGitInstallInput('https://gitlab.com/g/sub/src/branch/p/-/graphs/main')
     ).toEqual({ ok: true, url: 'https://gitlab.com/g/sub/src/branch/p', ref: '' })

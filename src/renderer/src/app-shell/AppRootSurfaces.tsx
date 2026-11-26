@@ -14,6 +14,7 @@ import RecentTabSwitcher from '../components/tab-bar/recent-switcher/RecentTabSw
 import { SkillFreshnessUpdateDialog } from '../components/skills/freshness/SkillFreshnessUpdateDialog'
 import { StarNagAgentValueMomentObserver } from '../components/star-nag/StarNagAgentValueMomentObserver'
 import { NativeChatResumeToasts } from '../components/native-chat-recovery/toast/NativeChatResumeToastHost'
+import { McpStaleTerminalsStartupOffer } from '../components/settings/mcp-servers/McpStaleTerminalsStartupOffer'
 import { StarNagToastHost } from '../components/star-nag/StarNagToastHost'
 import { LanguagePackDiscoveryHost } from '../components/languages/LanguagePackDiscoveryHost'
 import { PluginInstallTrustDialogHost } from '../components/plugins/dialogs/PluginInstallTrustDialog'
@@ -31,6 +32,7 @@ import {
   usePreloadWorktreeJumpPalette,
   WorktreeJumpPalette
 } from '../components/worktree-jump/worktree-jump-palette-preload'
+import { AiVaultSessionHistoryDialog } from '../components/right-sidebar/ai-vault/session-list/agent-session-history-dialog-preload'
 import { usePrefetchAvatarCapability } from '../components/bots/avatar-generation-capability-store'
 import { useLocalAgentCliUpdateCheck } from '../components/agent-cli-update/use-local-agent-cli-update-check'
 import {
@@ -66,9 +68,6 @@ const ProjectAddedDialog = lazy(
 )
 const NodeDistMirrorDialog = lazy(
   () => import('../components/ssh-host-recovery/NodeDistMirrorDialog')
-)
-const AiVaultSessionHistoryDialog = lazy(
-  () => import('../components/right-sidebar/ai-vault/session-list/AiVaultSessionHistoryDialog')
 )
 const NativeChatAccountUsageDialog = lazy(
   () => import('../components/native-chat/usage/NativeChatAccountUsageDialog')
@@ -305,6 +304,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
       />
       <OverlayBoundary boundaryId="overlay.native-chat-resume-on-restart" resetKey={activeView}>
         <NativeChatResumeToasts />
+        <McpStaleTerminalsStartupOffer />
       </OverlayBoundary>
       <OverlayBoundary boundaryId="overlay.star-nag-toast" resetKey={activeView}>
         <StarNagToastHost />

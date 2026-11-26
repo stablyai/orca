@@ -37,7 +37,7 @@ import type { CodexStructuredNotificationRetry } from '../session-lifecycle/code
 import type { deliverCodexServerRequest } from '../session-lifecycle/codex-structured-provider-events'
 import { codexAcquisitionNotificationHandler } from './codex-structured-acquisition-notification'
 import { codexStartFailure } from '../../app-server/codex-startup-outcome'
-import { codexAcceptedSend } from '../journal/codex-structured-journal-translation-turns'
+import { codexEchoedSend } from '../journal/codex-structured-journal-translation-turns'
 
 export async function acquireCodexStructuredSession(input: {
   input: StructuredAgentSessionAcquireInput
@@ -73,11 +73,9 @@ export async function acquireCodexStructuredSession(input: {
   const dispatchEchoes = createCodexDispatchEchoes(
     () => deps.onHeldSendsChanged?.({ sessionId }),
     (clientMessageId, providerIdentity) =>
-      deps.onDispatchSettledLate?.({
-        sessionId,
-        clientMessageId,
-        ...codexAcceptedSend(sessionId, providerIdentity, dispatchEchoes.sentVia(clientMessageId))
-      })
+      deps.onDispatchSettledLate?.(
+        codexEchoedSend(sessionId, clientMessageId, providerIdentity, dispatchEchoes)
+      )
   )
   let account: AgentSessionAccountKind | undefined
   // Frame row identities include this generation.
@@ -99,8 +97,8 @@ export async function acquireCodexStructuredSession(input: {
     subagentExecutions,
     prompts: acquisition.prompts
   })
-  let sharedServer = false
-  const spawnIdentity = codexSpawnedProcessIdentity(acquireInput, deps, () => sharedServer)
+  let sharedServer = (): boolean => false
+  const spawnIdentity = codexSpawnedProcessIdentity(acquireInput, deps, () => sharedServer())
   try {
     await stopSupersededCodexAcquisition({
       sessionId,
@@ -139,8 +137,10 @@ export async function acquireCodexStructuredSession(input: {
           }
     acquisitions.assertCurrent(sessionId, attempt)
     account = launch.codexHome ? deps.resolveAccountKind?.(launch.codexHome) : undefined
-    const open = codexConnectionOpener(deps, sessionId, launch)
-    sharedServer = opensSharedCodexServer(open)
+    const startup = { attempt, signal: acquireInput.signal }
+    const open = codexConnectionOpener(deps, sessionId, launch, startup)
+    // Read at spawn: a Windows shared open can fall back to the chat's own server.
+    sharedServer = () => opensSharedCodexServer(open)
     const connection = await open(
       {
         command: launch.command,

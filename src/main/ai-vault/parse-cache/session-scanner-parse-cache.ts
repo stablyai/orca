@@ -11,7 +11,6 @@ import { createDroidSessionResumeState } from '../scanners/droid/session-scanner
 import { createMessageGraphSessionResumeState } from '../scanners/session-scanner-graph-parsers'
 import { createClaudeSessionResumeState } from '../scanners/claude/session-scanner-primary-parsers'
 import { createCodebuddySessionResumeState } from '../scanners/codebuddy/session-scanner-codebuddy-parser'
-import { createGeminiJsonlSessionResumeState } from '../scanners/gemini/session-scanner-gemini-parsers'
 import { createCopilotSessionResumeState } from '../scanners/copilot/session-scanner-copilot-parser'
 import { createCursorSessionResumeState } from '../scanners/cursor/session-scanner-cursor-parser'
 import { countSubagentTranscripts } from '../scanners/claude/session-scanner-subagent-transcripts'
@@ -74,10 +73,6 @@ function resumableStateFactoryFor(
       const agent = candidate.agent
       return (messages) => createMessageGraphSessionResumeState(agent, candidate.file, messages)
     }
-    case 'gemini':
-      return candidate.file.path.endsWith('.jsonl')
-        ? (messages) => createGeminiJsonlSessionResumeState(candidate.file, messages)
-        : null
     case 'antigravity':
       return (messages) => createAntigravitySessionResumeState(candidate.file, messages)
     case 'devin':

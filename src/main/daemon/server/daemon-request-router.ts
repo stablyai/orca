@@ -16,6 +16,7 @@ import { DaemonHealthRequests } from '../health/daemon-health-requests'
 import type { TerminalHistorySeedTransferRegistry } from '../history/seed-transfer/terminal-history-seed-transfer-registry'
 import type { TerminalHost } from '../terminal-host/terminal-host'
 import { SessionNotFoundError } from '../protocol/daemon-errors'
+import { HOST_LOST_EXIT_CAUSE } from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { DaemonRequest, GetSnapshotRequest } from '../protocol/daemon-rpc-contract'
 
 type DaemonRequestRouterOptions = {
@@ -205,7 +206,7 @@ export class DaemonRequestRouter {
     } catch (error) {
       this.options.attachments.clearInput(sessionId)
       if (error instanceof SessionNotFoundError) {
-        this.sendExitEvent(client, sessionId, -1)
+        this.sendSessionLostEvent(client, sessionId)
       }
       throw error
     }
@@ -222,7 +223,7 @@ export class DaemonRequestRouter {
       this.options.host.resize(sessionId, cols, rows)
     } catch (error) {
       if (error instanceof SessionNotFoundError) {
-        this.sendExitEvent(client, sessionId, -1)
+        this.sendSessionLostEvent(client, sessionId)
       }
       throw error
     }
@@ -290,11 +291,8 @@ export class DaemonRequestRouter {
     return {}
   }
 
-  private sendExitEvent(
-    client: ConnectedDaemonClient | undefined,
-    sessionId: string,
-    code: number
-  ): void {
+  /** The client wrote to a session this host no longer has: nobody asked it to stop. */
+  private sendSessionLostEvent(client: ConnectedDaemonClient | undefined, sessionId: string): void {
     if (!client?.streamSocket) {
       return
     }
@@ -302,7 +300,7 @@ export class DaemonRequestRouter {
       type: 'event',
       event: 'exit',
       sessionId,
-      payload: { code }
+      payload: { code: -1, cause: HOST_LOST_EXIT_CAUSE }
     })
     this.options.streamDataBatcher.flush(client.clientId)
   }

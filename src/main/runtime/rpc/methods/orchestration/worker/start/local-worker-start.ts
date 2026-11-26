@@ -12,11 +12,15 @@ import type {
 import type { OrchestrationEntryCaller } from '../../../../../orchestration/addressing/orchestration-caller-identity'
 import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import { resolveDispatchCallerWorktreeId } from '../../orchestration-caller-workspace'
-import { resolveWorkerStartModeOnHost } from '../../structured-workers/orchestration-worker-start-mode'
+import {
+  refuseUnmatchedWorkerSelector,
+  workerStartTargetLabel
+} from './worker-start-selector-refusal'
+import { preflightWorkerAgentOnHost } from './launch/worker-agent-host-preflight'
 import { lineageModeForResolvedAgent } from './worker-chat-lineage'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { EXISTING_WORKTREE_SETUP, placeWorkerAgent } from './placement/worker-start-agent-placement'
-import { assertOrchestrationWorktreeCreationSupported } from './placement/folder-worktree-placement'
+import { resolveExistingWorkerWorkspace } from './placement/folder-worktree-placement'
 import { resolveWorkerWorktreeCreationTarget } from './placement/worker-worktree-creation'
 import type { WorkerStartInput } from './worker-start-input'
 import {
@@ -38,7 +42,7 @@ import {
 import { requireWorkerAuthority, type WorkerEffect } from './placement/worker-placement-topology'
 import { prepareLocalWorkerStart } from './launch/worker-start-validation'
 import { deliverAndSettleWorkerStartReadiness } from './readiness/worker-start-readiness-settlement'
-import { handOverWhenReady } from './readiness/placed-worker-readiness'
+import { handOverWhenReady, wakeReusedSleptAgent } from './readiness/placed-worker-readiness'
 import type { WorkerStartMutation } from './worker-start-mutation'
 import {
   prepareWorkerStartCard,
@@ -83,24 +87,24 @@ export async function startLocalWorker(args: {
       callerWorktreeId,
       crossStoreParent: params.crossStoreParent
     })
-  const coordinatorWorktreeId = await resolveDispatchCallerWorktreeId(
-    runtime,
-    params.from,
-    callerSession
+  const coordinatorWorktreeId = await refuseUnmatchedWorkerSelector(
+    { flag: '--from', value: params.from },
+    () => resolveDispatchCallerWorktreeId(runtime, params.from, callerSession)
   )
   const existingWorktree =
     requestedWorktree === 'current' ? `id:${coordinatorWorktreeId}` : requestedWorktree
-  const launchParams = await resolveWorkerConfiguredAgentParams(runtime, params, async () =>
-    createsWorktree
-      ? { repo: (await creationTargetFor(coordinatorWorktreeId)).repoSelector }
-      : { worktree: existingWorktree }
+  const targetLabel = workerStartTargetLabel({ ...args.params, createsWorktree, requestedWorktree })
+  const launchParams = await refuseUnmatchedWorkerSelector(targetLabel, () =>
+    resolveWorkerConfiguredAgentParams(runtime, params, async () =>
+      createsWorktree
+        ? { repo: (await creationTargetFor(coordinatorWorktreeId)).repoSelector }
+        : { worktree: existingWorktree }
+    )
   )
   let openCodeModelLaunchSupported = false
   if (!createsWorktree && launchParams.agent === 'opencode' && launchParams.model) {
-    openCodeModelLaunchSupported = await probeWorkerOpenCodeModelLaunchSupport(
-      runtime,
-      launchParams,
-      { worktree: existingWorktree }
+    openCodeModelLaunchSupported = await refuseUnmatchedWorkerSelector(targetLabel, () =>
+      probeWorkerOpenCodeModelLaunchSupport(runtime, launchParams, { worktree: existingWorktree })
     )
   }
 
@@ -114,15 +118,10 @@ export async function startLocalWorker(args: {
   const creationTarget = createsWorktree
     ? await creationTargetFor(coordinatorWorktreeId)
     : undefined
-  if (creationTarget) {
-    await assertOrchestrationWorktreeCreationSupported({
-      runtime,
-      repoSelector: creationTarget.repoSelector,
-      existingPlacement: 'current or an exact existing folder workspace'
-    })
-  }
   let resolvedWorktree: Awaited<ReturnType<typeof placeWorkerAgent>>['worktree'] | undefined =
-    creationTarget ? undefined : await runtime.showManagedTerminalWorkspace(existingWorktree)
+    await refuseUnmatchedWorkerSelector(targetLabel, () =>
+      resolveExistingWorkerWorkspace(runtime, creationTarget, existingWorktree)
+    )
   if (terminal) {
     await assertExplicitWorkerUsable({
       runtime,
@@ -134,8 +133,8 @@ export async function startLocalWorker(args: {
     })
   }
   const decided = lineageModeForResolvedAgent(runtime, args.mode, { ...args, params, agent })
-  const hostMode = resolveWorkerStartModeOnHost(runtime, decided, resolvedWorktree?.id, agent)
-  let mode = chatWorkerMode(await hostMode, chat)
+  const host = { runtime, agent, resolvedWorktree, creationTarget, terminal: params.terminal }
+  let mode = chatWorkerMode(await preflightWorkerAgentOnHost({ ...host, mode: decided }), chat)
 
   // Synchronous through the Dispatch insert, so nothing else claims the terminal in between.
   refuseClaimedWorkerTerminal(db, params.terminal, runtime, args.followUp?.of)
@@ -242,10 +241,10 @@ export async function startLocalWorker(args: {
       reusesTerminal: Boolean(params.terminal),
       creation: placed.terminalCreation
     }
+    const sleptIncarnation = await wakeReusedSleptAgent(runtime, placed, workerChat, timeoutMs)
     // Fixed now: the hand-over may run later, from the background wait.
     const placement = placed
     const handle = terminalHandle
-    const worktreeId = resolvedWorktree.id
     // A hand-over from the background wait gets a fresh delivery budget; one in time keeps the shared one.
     const bindTerminal = (): void => {
       const terminalAuthority = authority ?? requireWorkerAuthority(runtime, handle)
@@ -253,10 +252,11 @@ export async function startLocalWorker(args: {
         dispatchId: started.dispatch.id,
         handle,
         ...terminalAuthority,
-        worktreeId,
+        worktreeId: placement.worktree.id,
         effects,
         setupState: setupReceipt.state,
-        terminalOwnership: external ? 'external' : 'created'
+        terminalOwnership: external ? 'external' : 'created',
+        sleptProcessIncarnation: sleptIncarnation
       })
     }
     const handOver = async (deliveryDeadline = readinessDeadline): Promise<unknown> => {

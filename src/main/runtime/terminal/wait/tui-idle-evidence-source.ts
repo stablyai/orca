@@ -20,7 +20,7 @@ import {
   isCurrentCommandStatus,
   isCurrentFirstPartyReport,
   isShellInFront
-} from '../input/terminal-command-paint'
+} from '../input/terminal-command-paint-record'
 import { resolveTerminalTitlePolicyAgentType } from '../../../../shared/agent-status/title/terminal-title-agent-type'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { titleCommandLaunchesInteractiveTui } from '../../../../shared/agent-status/title/interactive-agent-title-command'

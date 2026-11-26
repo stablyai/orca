@@ -154,6 +154,7 @@ export function PairedServerAskCardView({
       isSubmitting={submitting !== undefined}
       submittingOption={submitting}
       placement="stacked"
+      wrapOptions
     />
   )
 }

@@ -75,6 +75,13 @@ const WslMoveCutoverSchema = z.object({
   // Automations the manifest carries disabled (the wire only takes disabled ones) that were on
   // here; the host turns them back on after commit. Set with the record, never changed after.
   automationsToReenable: z.array(z.string().min(1).max(1_024)).max(10_000).optional(),
+  // Subset of `automationsToReenable` already confirmed on the host, so a timed-out or failed
+  // turn resumes with only the rest. Lenient: a malformed list reads as absent and retries all.
+  reenabledAutomationIds: z
+    .array(z.string().min(1).max(1_024))
+    .max(10_000)
+    .optional()
+    .catch(undefined),
   // A refused undo turned these off on the host and could not turn them back on yet; retried.
   // Lenient: a malformed list reads as absent.
   hostAutomationsLeftOff: z
@@ -89,6 +96,8 @@ const WslMoveCutoverSchema = z.object({
     .record(z.string().min(1).max(1_024), z.boolean())
     .optional()
     .catch(undefined),
+  // Startup's catch-up ran for this pre-local-automations move, so it never re-disables a copy re-enabled here.
+  localAutomationsCaughtUp: z.literal(true).optional().catch(undefined),
   // Drive letters mapped into the distro when the move was planned; every recovery reads these,
   // never the drive. Strict: a malformed list fails closed.
   mappedDrives: WslMappedDrivesSchema.optional(),

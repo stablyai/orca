@@ -83,6 +83,7 @@ const linkSchema: z.ZodType<BotItemLinkView, unknown> = z.discriminatedUnion('ki
     startedAt: z.number().nullable(),
     settledAt: z.number().nullable(),
     report: z.looseObject({ subject: z.string(), body: z.string().nullable() }).nullable(),
+    reason: salvagedOptional('reason', z.string().nullable()),
     pr: prSchema.nullable().catch(null)
   }),
   z.looseObject({ kind: z.literal('pr'), ref: z.string(), pr: prSchema.nullable().catch(null) }),
