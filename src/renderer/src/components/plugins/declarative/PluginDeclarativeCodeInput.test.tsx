@@ -86,6 +86,30 @@ it('breaks the line on Shift+Enter while suggestions are open', () => {
   expect(screen.queryByRole('option')).toBeNull()
 })
 
+it('leaves Shift+Tab to move focus while suggestions are open', () => {
+  const { textarea } = field({ ...base, defaultValue: 'to + status' })
+  suggest(textarea, 2)
+  // fireEvent returns false when the handler prevented the default focus move.
+  expect(fireEvent.keyDown(textarea, { key: 'Tab', shiftKey: true })).toBe(true)
+  expect(textarea.value).toBe('to + status')
+  fireEvent.blur(textarea)
+  expect(screen.queryByRole('option')).toBeNull()
+})
+
+it('breaks the line instead of submitting on the submit modifier with Shift+Enter', () => {
+  const { textarea, emit } = field({
+    ...base,
+    defaultValue: 'ab',
+    rows: 2,
+    onSubmit: { $callback: 'submit' }
+  })
+  placeCaret(textarea, 1)
+  // Ctrl on Linux/Windows, Cmd on macOS; holding both covers whichever the test platform reads.
+  fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: true, ctrlKey: true, metaKey: true })
+  expect(textarea.value).toBe('a\nb')
+  expect(emit).not.toHaveBeenCalledWith('submit', expect.anything())
+})
+
 it('hides uncontrolled diagnostics after an edit until the guest has seen it', () => {
   const props: Props = {
     ...base,

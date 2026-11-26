@@ -152,9 +152,12 @@ export function PluginDeclarativeCodeInput({
         setActive((shown + step + items.length) % items.length)
         return
       }
-      const plainEnter =
-        event.key === 'Enter' && !event.metaKey && !event.ctrlKey && !event.shiftKey
-      if (plainEnter || event.key === 'Tab') {
+      const noModifier = !event.metaKey && !event.ctrlKey && !event.shiftKey
+      // Only a bare Tab accepts; Shift+Tab moves focus and the blur closes the menu.
+      const accepts =
+        (event.key === 'Enter' && noModifier) ||
+        (event.key === 'Tab' && noModifier && !event.altKey)
+      if (accepts) {
         event.preventDefault()
         accept(items[shown]!)
         return
@@ -178,7 +181,8 @@ export function PluginDeclarativeCodeInput({
       return
     }
     const modifier = IS_MAC ? event.metaKey : event.ctrlKey
-    if (modifier || (rows === 1 && !event.shiftKey)) {
+    // Shift+Enter always breaks the line, even with the submit modifier held.
+    if (!event.shiftKey && (modifier || rows === 1)) {
       event.preventDefault()
       if (submit) {
         setMenu(null)
