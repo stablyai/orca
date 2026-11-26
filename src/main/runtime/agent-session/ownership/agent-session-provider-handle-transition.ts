@@ -12,6 +12,18 @@ import {
   agentSessionProviderHandleRoot
 } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import { migrationAdjustedHandleChain } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-provider-support'
+
+/** A transport migration (OMP's ACP-to-RPC cutover) strands same-agent relic links nothing can resume; the first append of the new transport re-bases the stored chain, since append validation requires namespace homogeneity. */
+export function migrationRebasedChain(
+  record: AgentSessionRecord,
+  link: AgentSessionProviderHandleLink
+): AgentSessionRecord['providerHandleChain'] {
+  return migrationAdjustedHandleChain(
+    { agent: link.handle.agent, handleTransport: link.handle.transport },
+    record.providerHandleChain
+  )
+}
 
 export function recordAgentSessionProviderHandle(args: {
   record: AgentSessionRecord
@@ -33,7 +45,7 @@ export function recordAgentSessionProviderHandle(args: {
     throw agentSessionRefusalError('agent_session_ownership_unknown', { reason: 'leaseMoved' })
   }
   const providerHandleChain = appendAgentSessionProviderHandleLink(
-    record.providerHandleChain,
+    migrationRebasedChain(record, args.link),
     args.link
   )
   const head = providerHandleChain.at(-1)
