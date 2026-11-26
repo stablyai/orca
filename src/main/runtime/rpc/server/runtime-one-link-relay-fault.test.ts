@@ -118,7 +118,8 @@ async function openBurst(
         onClose: () => {
           stream.ends += 1
           if (!closedByOwner) {
-            void open()
+            // A reopen racing teardown fails like any failed open; the owner just stops.
+            void open().catch(() => {})
           }
         }
       }
@@ -130,6 +131,8 @@ async function openBurst(
     }
   }
   await open()
+  // Owners close their streams before the link and cell go, as a closing pane does.
+  cleanups.push(() => stream.close())
   return stream
 }
 

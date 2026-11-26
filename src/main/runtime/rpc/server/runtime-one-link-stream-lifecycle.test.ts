@@ -192,6 +192,21 @@ describe('streams and calls on a host one link', () => {
   )
 })
 
+describe('closing a link before a stream started', () => {
+  it(
+    'rejects the stream without telling its owner it closed',
+    async () => {
+      const { connection, link } = await startOneLinkHostBehindCell([caps], cleanups)
+      let ends = 0
+      const opening = openCapsStream(connection, () => void (ends += 1))
+      link.close()
+      await expect(opening).rejects.toThrow()
+      expect(ends).toBe(0)
+    },
+    /* A real host through a cell. */ 30_000
+  )
+})
+
 describe('replaying JSON streams on a new socket', () => {
   it('replays a JSON stream but never a stream on a binary channel', () => {
     const subscriptions = new Map<string, SharedControlLogicalSubscription<unknown>>()

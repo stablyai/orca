@@ -67,7 +67,8 @@ export function channelStreamsEndedByClose(
   subscriptions: Map<string, SharedControlLogicalSubscription<unknown>>
 ): () => void {
   const streams = Array.from(subscriptions.values()).filter(
-    (subscription) => subscription.binaryChannel !== undefined && !subscription.closed
+    (subscription) =>
+      subscription.binaryChannel !== undefined && subscription.sent && !subscription.closed
   )
   return () => notifyChannelStreamsEnded(streams)
 }
