@@ -93,22 +93,22 @@ function keptInitialization(line: string | null): unknown {
 
 /**
  * Opens a chat's Claude connection: the agent kept running while Orca was closed, else a new one
- * (under the terminal daemon where it can, so it outlives the next restart).
+ * (under the terminal daemon where it can, so it outlives the next restart). A kept agent is always
+ * reattached, so no launch starts a second agent beside it; one whose tools changed since is
+ * replaced through the chat's own retirement.
  */
 export function claudeChatConnectionOpener(
-  /** Null keeps today's launch (a bot's chat, whose grants end with this run). */
-  chatKey: string | null,
-  open: typeof openClaudeStreamJsonConnection = openClaudeStreamJsonConnection
+  chatKey: string,
+  open: typeof openClaudeStreamJsonConnection = openClaudeStreamJsonConnection,
+  /** False keeps today's launch for a new agent (grants that end with this run). */
+  relaysNew = true
 ): (
   launch: ClaudeStreamJsonLaunch,
   handlers: ClaudeStreamJsonConnectionHandlers
 ) => Promise<ClaudeStreamJsonConnection> {
-  if (chatKey === null) {
-    return (launch, handlers) => open(launch, handlers)
-  }
   return async (launch, handlers) =>
     (await openKeptClaudeAgentConnection(chatKey, launch, handlers)) ??
-    open({ ...launch, relayChatKey: chatKey }, handlers)
+    open(relaysNew ? { ...launch, relayChatKey: chatKey } : launch, handlers)
 }
 
 /** The agent had already ended, or the daemon answered with a refusal; a lost reply proves nothing. */

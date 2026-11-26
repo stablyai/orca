@@ -190,7 +190,11 @@ export async function acquireClaudeSession({
     attempt.launch = launch
     observedLeafUuid = launch.resumeLeafUuid
     const connection = await withAgentSessionCreatePhase('spawn', input.recordPhase, () =>
-      claudeChatConnectionOpener(launch.appBoundGrants ? null : sessionId, deps.openConnection)(
+      claudeChatConnectionOpener(
+        sessionId,
+        deps.openConnection,
+        !launch.appBoundGrants
+      )(
         {
           pathToClaudeCodeExecutable: launch.pathToClaudeCodeExecutable,
           prefixArgs: launch.prefixArgs,
