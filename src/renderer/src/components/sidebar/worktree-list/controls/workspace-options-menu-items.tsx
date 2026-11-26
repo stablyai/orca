@@ -23,6 +23,7 @@ import {
 import { useSidebarHostScopeOptions } from './use-sidebar-host-scope-options'
 import { SidebarHostScopeMenuSection } from './SidebarHostScopeMenuSection'
 import { PROJECT_ORDER_OPTIONS, SORT_OPTIONS } from './sidebar-workspace-option-items'
+import { TagOrderOptionItem } from './tag-order-option-item'
 import {
   WorktreeCardDisplayMenuItem,
   WorktreeCardLayoutMenuItem,
@@ -185,6 +186,7 @@ const OPTION_ITEMS: Record<WorkspaceViewOptionKey, ComponentType<OptionItemProps
   groupBy: GroupByOptionItem,
   sortBy: SortByOptionItem,
   projectOrderBy: ProjectOrderOptionItem,
+  tagOrderBy: TagOrderOptionItem,
   cardLayout: WorktreeCardLayoutMenuItem,
   cardProperties: WorktreeCardPropertiesMenuItem,
   cardDisplay: WorktreeCardDisplayMenuItem,

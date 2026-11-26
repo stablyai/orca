@@ -12,6 +12,7 @@ export type QuickSubmitPreparationInput = Pick<
   | 'loadHookCheckForRepo'
   | 'name'
   | 'note'
+  | 'tags'
   | 'prepareQuickSubmitSource'
   | 'repoId'
   | 'resolvedSetupDecision'

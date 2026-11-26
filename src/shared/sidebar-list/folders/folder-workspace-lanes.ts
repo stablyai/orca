@@ -11,6 +11,7 @@ import { ALL_GROUP_KEY } from '../sections/group-keys'
 import { getPRLaneKey } from '../../workspace-view/workspace-pr-groups'
 import { compareCodePoints, compareSidebarText } from '../sorting/text-order'
 import type { WorktreeGroupBy } from '../row-types'
+import { getTagGroupKeys } from '../sections/tag-groups'
 
 /** Carry the owning ProjectGroup through emission: FolderWorkspaceRow requires it and emitters cannot resolve owners. */
 export type RenderableFolderWorkspace = {
@@ -47,20 +48,24 @@ export function getRenderableFolderWorkspaces(
   return renderable
 }
 
-/** Switch exhaustively so new grouping modes cannot silently hide folder workspaces again. */
-export function getFolderWorkspaceLaneKey(
+/** Switch exhaustively so new grouping modes cannot silently hide folder workspaces again; tag mode yields one lane per tag. */
+export function getFolderWorkspaceLaneKeys(
   pair: RenderableFolderWorkspace,
   groupBy: Exclude<WorktreeGroupBy, 'repo'>,
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
-): string {
+): string[] {
   switch (groupBy) {
     case 'workspace-status':
-      return getWorkspaceStatusGroupKey(getWorkspaceStatus(pair.folderWorkspace, workspaceStatuses))
+      return [
+        getWorkspaceStatusGroupKey(getWorkspaceStatus(pair.folderWorkspace, workspaceStatuses))
+      ]
     case 'pr-status':
       // Folders cannot resolve a PR; match worktrees without one in the in-progress lane.
-      return getPRLaneKey('in-progress')
+      return [getPRLaneKey('in-progress')]
+    case 'tag':
+      return getTagGroupKeys(pair.folderWorkspace)
     case 'none':
-      return ALL_GROUP_KEY
+      return [ALL_GROUP_KEY]
   }
 }
 

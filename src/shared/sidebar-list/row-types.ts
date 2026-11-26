@@ -6,8 +6,9 @@ import type { Repo } from '../repository/repo-types'
 import type { DetectedWorktree, WorkspaceStatus, Worktree } from '../worktree/types'
 import type { ExecutionHostId } from '../execution-host/execution-host'
 import type { PRGroupKey } from '../workspace-view/workspace-pr-groups'
+import type { WorkspaceGroupBy } from '../workspace-view/workspace-group-by'
 
-export type WorktreeGroupBy = 'none' | 'workspace-status' | 'repo' | 'pr-status'
+export type WorktreeGroupBy = WorkspaceGroupBy
 /** A row's own registration of its repo; the same repo id can be registered on several hosts. */
 export type RepoOfWorktree = (worktree: Worktree) => Repo | undefined
 export type PinnedWorktreeDisplayPolicy = 'single-location' | 'duplicate-in-groups'
@@ -25,6 +26,8 @@ export type SidebarHeaderIcon =
   | { kind: 'project' }
   | { kind: 'pr-status'; prGroup: PRGroupKey }
   | { kind: 'workspace-status'; status: WorkspaceStatus }
+  | { kind: 'tag' }
+  | { kind: 'untagged' }
 
 /** A worktree's PR lane, read by each client from its own PR facts. */
 export type SidebarPRGroupReader = (worktree: Worktree) => PRGroupKey
@@ -119,6 +122,8 @@ export type FolderWorkspaceRow = {
   lineageDescendantIdentities?: WorktreeLineageSource
   type: 'folder-workspace'
   key: string
+  /** Set only where one folder workspace renders in several sections (tag grouping). */
+  sectionKey?: string
   folderWorkspace: FolderWorkspace
   projectGroup: ProjectGroup
   depth: number

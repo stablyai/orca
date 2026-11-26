@@ -5,6 +5,7 @@ import {
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import { workspaceHostScopeForVisibleHosts } from '../../../../../shared/workspace-view/workspace-host-visibility'
 import { createAgentsViewPreferenceActions } from './ui-slice-agents-view-preference-actions'
+import { createUiTagOrderActions } from './ui-slice-tag-order-actions'
 import {
   DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
   normalizeAgentActivityDisplayMode
@@ -300,6 +301,7 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
       window.api.ui.set({ statusBarUsageFormat: normalized }).catch(console.error)
       set({ statusBarUsageFormat: normalized })
     },
+    ...createUiTagOrderActions(set),
     statusBarUsageMode: DEFAULT_STATUS_BAR_USAGE_MODE,
     setStatusBarUsageMode: (mode) => {
       const normalized = normalizeStatusBarUsageMode(mode)

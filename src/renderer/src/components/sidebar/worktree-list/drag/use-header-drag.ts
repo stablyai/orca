@@ -30,6 +30,7 @@ import {
 } from './root-project-header-drop'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { useTagHeaderDrag } from './use-tag-header-drag'
 
 const readLiveRepos = (): readonly Repo[] => useAppStore.getState().repos
 
@@ -135,6 +136,12 @@ export function useWorktreeSidebarHeaderDrag(args: {
         .map((row) => row.hostId),
     [rows]
   )
+  const { canReorderTagHeaders, tagDrag } = useTagHeaderDrag({
+    rows,
+    groupBy,
+    scrollRef,
+    onScrollIntent
+  })
   const hostDrag = useHostHeaderDrag({
     orderedHostIds,
     onCommit: onReorderHostSections,
@@ -269,6 +276,8 @@ export function useWorktreeSidebarHeaderDrag(args: {
     rootProjectHeaderCountByOccurrenceKey,
     rootProjectHeaderSectionEndByKey,
     canReorderRepoHeaders,
+    canReorderTagHeaders,
+    tagDrag,
     canReorderProjectGroupHeaders,
     rootProjectHeaderKeys,
     orderedHostIds,

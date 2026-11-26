@@ -41,6 +41,7 @@ import { useMainSidebarListModel } from './use-main-list-model'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import { useWorktreeStatusMutations } from '../drag/use-status-mutations'
+import { useSidebarTagModeProps } from '../../workspace-tags/use-sidebar-tag-mode'
 import { shouldFiltersHideAllRows } from './sidebar-empty-state-gate'
 import { buildWorktreeManualOrderCatalog } from '../drag/worktree-manual-order-catalog'
 import { useWorkspaceBoardStatuses } from '../../workspace-status/presentation/use-workspace-board-statuses'
@@ -141,11 +142,13 @@ const WorktreeList = React.memo(function WorktreeList({
     () => buildWorktreeManualOrderCatalog({ worktrees: allWorktrees, folderWorkspaces }),
     [allWorktrees, folderWorkspaces]
   )
+  const tagMode = useSidebarTagModeProps(groupBy, onWorkspaceBoardDragPreviewStart)
   const { visibleWorktrees, visibleScope, externalWorktreeCards, rowModel } = useSidebarListModel({
     filterState,
     sortBy,
     groupBy,
     projectOrderBy,
+    tagOrder: tagMode.tagOrder,
     pinnedDisplayPolicy,
     defaultHostId,
     workspaceStatuses: boardStatuses,
@@ -393,10 +396,10 @@ const WorktreeList = React.memo(function WorktreeList({
         onMoveWorktreesToStatusAtIndex={statusMutations.moveWorktreesToStatusAtIndex}
         onPinWorktree={statusMutations.pinWorktree}
         onPinWorktrees={statusMutations.pinWorktrees}
+        {...tagMode.viewportProps}
         onDropWorktreesOnWorkspaceBoard={statusMutations.dropWorktreesOnWorkspaceBoard}
         workspaceBoardOpen={workspaceBoardOpen}
         onWorktreeCardClick={onWorktreeCardClick}
-        onWorkspaceBoardDragPreviewStart={onWorkspaceBoardDragPreviewStart}
         onWorkspaceBoardDragPreviewCommit={onWorkspaceBoardDragPreviewCommit}
         onWorkspaceBoardDragPreviewCancel={onWorkspaceBoardDragPreviewCancel}
         shouldShowWorkspaceBoardDropIndicator={

@@ -16,6 +16,7 @@ export type WorkspaceCardShowOptions = {
   automation: boolean
   cli: boolean
   comment: boolean
+  tags: boolean
   ports: boolean
   inlineAgents: boolean
   host: boolean
@@ -47,6 +48,8 @@ export type WorkspaceCardFacts = {
     hasRenameError: boolean
     removalError: string | null
     comment: string
+    /** User-authored tags, normalized on write and load. */
+    tags: readonly string[]
   }
   repo: { id: string; name: string; ssh: boolean } | null
   host: {

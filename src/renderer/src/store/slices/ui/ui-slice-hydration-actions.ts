@@ -40,7 +40,6 @@ import {
   filterSetupScriptPromptDismissalsToValidRepos,
   sanitizeSetupScriptPromptDismissals
 } from '../../../runtime/repo-hooks/setup-script-prompt'
-import { isBundledPetId, DEFAULT_PET_ID } from '../../../components/pet/pet-models'
 import { getRepoHostIdentity } from '../../../../../shared/repository/repo-host-identity'
 import {
   withWslMovedRepoIds,
@@ -72,6 +71,7 @@ import {
   hydrateReadAndBotState,
   sanitizeTaskResumeState
 } from './ui-slice-bot-sidebar-hydration'
+import { hydrateTagOrder, resolveHydratedPetId } from './ui-slice-hydration-values'
 import { hydrateWslMovedSection } from './ui-slice-wsl-moved-section-actions'
 import { hydrateBrowserPaneLayout } from './browser-pane-layout-hydration'
 import { hydrateStatusBarItems } from './ui-slice-hydration-status-bar-items'
@@ -135,6 +135,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           sortBy,
           // Why: main-process getUI() already normalized this (defaulting to 'manual'); read it through without migrating.
           projectOrderBy: ui.projectOrderBy,
+          ...hydrateTagOrder(ui),
           // Why: Active-only was retired; force the old flag off so an old profile can't invisibly narrow the workspace list.
           showActiveOnly: false,
           // Why: ignore older positive-form keys so old profiles start from the new default (sleeping workspaces visible).
@@ -206,19 +207,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           }),
           customPets,
           // Why: fall back to default when the persisted id is unknown (e.g. custom pet removed elsewhere) so the overlay renders.
-          petId: ((): string => {
-            const id = petId
-            if (typeof id !== 'string') {
-              return DEFAULT_PET_ID
-            }
-            if (isBundledPetId(id)) {
-              return id
-            }
-            if (customPets.some((m) => m.id === id)) {
-              return id
-            }
-            return DEFAULT_PET_ID
-          })(),
+          petId: resolveHydratedPetId(petId, customPets),
           dismissedUpdateVersion: ui.dismissedUpdateVersion ?? null,
           ...hydrateUnexpectedSignoutDismissal(s, ui.dismissedUnexpectedSignoutVersion),
           // Reject channels unknown to this build; activeChannel falls back only on null, otherwise leaking invalid values to listBuilds/controls.

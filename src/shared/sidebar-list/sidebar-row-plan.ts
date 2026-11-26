@@ -54,7 +54,8 @@ import type {
 import { orderMainWorktreeFirst } from './sections/section-order'
 import { appendImportedWorktreeLines } from './sections/imported-worktree-lines'
 import { withRepoSectionDisplayLabels } from './sections/project-section-order'
-import { buildOrderedGroups } from './sections/worktree-grouping'
+import { buildOrderedGroups, type TagSectionOrder } from './sections/worktree-grouping'
+import { groupedBy } from '../collections/grouped-by'
 import type { WorkspaceSortBy } from '../workspace-view/workspace-row-sort'
 
 type SidebarOccurrenceSection = WorktreeOccurrenceSection<Worktree> & { group: WorktreeGroupEntry }
@@ -90,6 +91,8 @@ export type SidebarRowPlanInputs = {
   filterRepoIds: readonly string[]
   /** A hidden project's rows reach the plan only under a folder workspace; they never make its section. */
   hiddenProjects?: HiddenProjects
+  /** Read only in Tag mode; clients without tag grouping leave it out. */
+  tagOrder?: TagSectionOrder
 }
 
 /** Plans the sidebar's sections once; `render` emits rows for a collapse state. */
@@ -124,12 +127,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
   const repoOf = repoOfWorktree ?? ((worktree: Worktree) => repoMap.get(worktree.repoId))
   // Resolve folder membership before groupBy; every mode renders the same set (#15362).
   const renderableFolderWorkspaces = getRenderableFolderWorkspaces(folderWorkspaces, projectGroups)
-  const pendingByRepo = new Map<string, PendingCreationRef[]>()
-  for (const creation of pendingCreations) {
-    const list = pendingByRepo.get(creation.repoId) ?? []
-    list.push(creation)
-    pendingByRepo.set(creation.repoId, list)
-  }
+  const pendingByRepo = groupedBy(pendingCreations, (creation) => creation.repoId)
 
   const projectGroupPaths = getProjectGroupOccurrencePaths(projectGroups)
   // Folder rows are occurrences too, so a folder parent nests its children like any other row.
@@ -177,6 +175,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
               pendingByRepo,
               repoOrder,
               projectOrderBy,
+              tagOrder: inputs.tagOrder,
               folderWorkspaces: renderableFolderWorkspaces
             })
       if (pinned.length > 0) {

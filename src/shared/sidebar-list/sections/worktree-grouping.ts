@@ -8,7 +8,7 @@ import {
 } from '../../workspace/status/workspace-statuses'
 import {
   compareFolderWorkspacesForDisplay,
-  getFolderWorkspaceLaneKey,
+  getFolderWorkspaceLaneKeys,
   type RenderableFolderWorkspace
 } from '../folders/folder-workspace-lanes'
 import './group-keys'
@@ -23,6 +23,15 @@ import type {
   SidebarPRGroupReader,
   WorktreeGroupBy
 } from '../row-types'
+import { getTagSections, sortTagEntries, type TaggedSection } from './tag-groups'
+import { DEFAULT_TAG_SECTION_ORDER, type TagSectionOrder } from './tag-section-order'
+
+export type { TagSectionOrder } from './tag-section-order'
+import { preferTagSpelling } from '../../worktree/metadata/worktree-tags'
+
+function getFolderTagLaneLabel(key: string, pair: RenderableFolderWorkspace): string {
+  return getTagSections(pair.folderWorkspace).find((section) => section.key === key)?.label ?? ''
+}
 
 export function buildOrderedGroups(args: {
   groupBy: WorktreeGroupBy
@@ -38,6 +47,7 @@ export function buildOrderedGroups(args: {
   pendingByRepo: ReadonlyMap<string, PendingCreationRef[]>
   repoOrder: Map<string, number> | undefined
   projectOrderBy: ProjectOrderBy
+  tagOrder?: TagSectionOrder
   folderWorkspaces?: readonly RenderableFolderWorkspace[]
 }): OrderedGroupEntry[] {
   const {
@@ -54,6 +64,7 @@ export function buildOrderedGroups(args: {
     pendingByRepo,
     repoOrder,
     projectOrderBy,
+    tagOrder = DEFAULT_TAG_SECTION_ORDER,
     folderWorkspaces = []
   } = args
 
@@ -81,34 +92,53 @@ export function buildOrderedGroups(args: {
     })
   }
 
-  // Section emitters/clients supply status and PR labels.
+  // Section emitters/clients supply status and PR labels; tag mode renders a workspace once per tag.
+  const getSections = (w: Worktree): TaggedSection[] =>
+    groupBy === 'tag'
+      ? getTagSections(w)
+      : [
+          {
+            key:
+              groupBy === 'workspace-status'
+                ? getWorkspaceStatusGroupKey(getWorkspaceStatus(w, workspaceStatuses))
+                : getPRLaneKey(prGroupOf(w)),
+            label: ''
+          }
+        ]
+
   const grouped = new Map<string, WorktreeGroupEntry>()
   for (const w of naturalWorktrees) {
-    const key =
-      groupBy === 'workspace-status'
-        ? getWorkspaceStatusGroupKey(getWorkspaceStatus(w, workspaceStatuses))
-        : getPRLaneKey(prGroupOf(w))
-    if (!grouped.has(key)) {
-      grouped.set(key, { label: '', items: [], repo: undefined, repoIds: new Set() })
+    for (const { key, label } of getSections(w)) {
+      if (!grouped.has(key)) {
+        grouped.set(key, { label, items: [], repo: undefined, repoIds: new Set() })
+      }
+      const group = grouped.get(key)!
+      if (groupBy === 'tag') {
+        // Why: spellings of one tag differ per workspace; the header must not follow sort order.
+        group.label = preferTagSpelling(group.label, label)
+      }
+      group.items.push(w)
+      group.repoIds.add(w.repoId)
     }
-    const group = grouped.get(key)!
-    group.items.push(w)
-    group.repoIds.add(w.repoId)
   }
   // Folder workspaces bypass the worktree loop; create their lanes even when they are the only occupants (#15362).
   for (const pair of folderWorkspaces) {
-    const key = getFolderWorkspaceLaneKey(pair, groupBy, workspaceStatuses)
-    if (!grouped.has(key)) {
-      grouped.set(key, {
-        label: '',
-        items: [],
-        repo: undefined,
-        repoIds: new Set()
-      })
+    for (const key of getFolderWorkspaceLaneKeys(pair, groupBy, workspaceStatuses)) {
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          label: groupBy === 'tag' ? getFolderTagLaneLabel(key, pair) : '',
+          items: [],
+          repo: undefined,
+          repoIds: new Set()
+        })
+      }
+      const group = grouped.get(key)!
+      if (groupBy === 'tag') {
+        group.label = preferTagSpelling(group.label, getFolderTagLaneLabel(key, pair))
+      }
+      group.folderWorkspaces ??= []
+      group.folderWorkspaces.push(pair)
     }
-    const group = grouped.get(key)!
-    group.folderWorkspaces ??= []
-    group.folderWorkspaces.push(pair)
   }
   for (const group of grouped.values()) {
     group.folderWorkspaces?.sort((left, right) =>
@@ -123,6 +153,14 @@ export function buildOrderedGroups(args: {
       if (group) {
         orderedGroups.push([key, group])
       }
+    }
+  } else if (groupBy === 'tag') {
+    for (const entry of sortTagEntries(
+      Array.from(grouped.entries()),
+      tagOrder.by,
+      tagOrder.manual
+    )) {
+      orderedGroups.push(entry)
     }
   } else if (groupBy === 'workspace-status') {
     // Status grouping is opt-in; omit empty sidebar lanes while the board keeps all drag targets.

@@ -149,7 +149,7 @@ function formatRow(row: PsRow, now: number, names: ReadonlyMap<string, string>):
     // What its agents are doing now leads; a branch's PR can be long merged while they moved on.
     ...(agents.length ? agents.flatMap((agent) => agentLines(agent, now)) : ['no agent open']),
     ...(links ? [links] : []),
-    `${formatWorktreePsTerminalFields(row)}  unread:${row.unread ? 'yes' : 'no'}${formatWorktreePsProgramStatus(row.agents)}`,
+    `${formatWorktreePsTerminalFields(row)}  unread:${row.unread ? 'yes' : 'no'}${formatWorktreePsProgramStatus(row.agents)}${row.tags?.length ? `  tags:${row.tags.join(',')}` : ''}`,
     // An agent's own words say more than its terminal's last line (often a spinner or an error).
     ...(row.preview && !agents.some((agent) => agent.lastAssistantMessage)
       ? [`preview: ${row.preview}`]

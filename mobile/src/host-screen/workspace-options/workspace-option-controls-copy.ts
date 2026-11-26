@@ -17,13 +17,24 @@ function workspaceOptionChoices<Id extends string>(
   }))
 }
 
+type PhoneGroupByChoice = Exclude<
+  (typeof viewOptions.WORKSPACE_GROUP_BY_CHOICES)[number],
+  { id: 'tag' }
+>
+
+// Why no Tag: mobile has no tag view yet; a desktop in Tag mode shows here as a flat list.
 export const groupByChoices = (t: Translate) =>
-  workspaceOptionChoices(viewOptions.WORKSPACE_GROUP_BY_CHOICES, {
-    none: t('hostScreen.workspaceOptionControls.none', 'None'),
-    'workspace-status': t('hostScreen.workspaceOptionControls.status', 'Status'),
-    'pr-status': t('hostScreen.workspaceOptionControls.pr', 'PR'),
-    repo: t('hostScreen.workspaceOptionControls.project', 'Project')
-  })
+  workspaceOptionChoices(
+    viewOptions.WORKSPACE_GROUP_BY_CHOICES.filter(
+      (choice): choice is PhoneGroupByChoice => choice.id !== 'tag'
+    ),
+    {
+      none: t('hostScreen.workspaceOptionControls.none', 'None'),
+      'workspace-status': t('hostScreen.workspaceOptionControls.status', 'Status'),
+      'pr-status': t('hostScreen.workspaceOptionControls.pr', 'PR'),
+      repo: t('hostScreen.workspaceOptionControls.project', 'Project')
+    }
+  )
 
 export const sortByChoices = (t: Translate) =>
   workspaceOptionChoices(
@@ -89,7 +100,8 @@ export const cardPropertyChoices = (t: Translate) =>
       comment: t('hostScreen.workspaceOptionControls.notes', 'Notes'),
       ports: t('hostScreen.workspaceOptionControls.ports', 'Ports'),
       'inline-agents': t('hostScreen.workspaceOptionControls.agentActivity', 'Agent activity'),
-      host: t('hostScreen.workspaceOptionControls.host', 'Host')
+      host: t('hostScreen.workspaceOptionControls.host', 'Host'),
+      tags: t('hostScreen.workspaceOptionControls.tags', 'Tags')
     })
   )
 
@@ -112,6 +124,7 @@ export function cardDisplayChoices(
       ports: t('hostScreen.workspaceOptionControls.ports', 'Ports'),
       'inline-agents': t('hostScreen.workspaceOptionControls.agentStatuses', 'Agent statuses'),
       host: t('hostScreen.workspaceOptionControls.host', 'Host'),
+      tags: t('hostScreen.workspaceOptionControls.tags', 'Tags'),
       branch: hasProjectGroups
         ? t('hostScreen.workspaceOptionControls.branchFolderPath', 'Branch / folder path')
         : t('hostScreen.workspaceOptionControls.branchName', 'Branch name')

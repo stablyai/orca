@@ -20,6 +20,7 @@ import {
 import { isReleaseChannel } from '../../updater/release-channel'
 import type { ReleaseChannel } from '../../updater/release-channel'
 import { ClientUiWorkspaceFilterFields } from './client-ui-workspace-filter-fields-params'
+import { ClientUiSidebarSectionFields } from './client-ui-sidebar-section-fields-params'
 import { TaskResumeState } from './task-resume-state-params'
 import { WorkspaceCleanup } from '../workspace-cleanup/workspace-cleanup-ui-params'
 import { omitUndefinedValues, tolerateUnknownValues } from './ui-update-value-tolerance-params'
@@ -121,7 +122,6 @@ export const UiUpdateFields = z
     activityBarHidden: z.array(z.string()).optional(),
     markdownTocPanelWidth: z.number().finite().optional(),
     combinedDiffFileTreeWidth: z.number().finite().optional(),
-    groupBy: z.enum(['none', 'workspace-status', 'repo', 'pr-status']).optional(),
     showWorkspaceLineage: z.boolean().optional(),
     sortBy: z.enum(['name', 'smart', 'recent', 'repo', 'manual']).optional(),
     projectOrderBy: z.enum(['manual', 'recent']).optional(),
@@ -157,9 +157,7 @@ export const UiUpdateFields = z
         z.object({ kind: z.literal('host'), hostKey: z.string().min(1) }).strict()
       ])
       .optional(),
-    manualRepoOrder: z
-      .array(z.object({ hostId: z.string(), repoId: z.string() }).strict())
-      .optional(),
+    ...ClientUiSidebarSectionFields,
     ...ClientUiWorkspaceFilterFields,
     // Part of App.tsx’s debounced writer; missing fields reject the whole paired-client payload.
     explorerDisplayRootByWorktree: z.record(z.string(), z.string()).optional(),

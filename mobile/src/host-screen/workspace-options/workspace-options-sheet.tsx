@@ -42,6 +42,7 @@ function workspaceOptionLabels(t: Translate): Record<WorkspaceViewOptionKey, str
     groupBy: t('hostScreen.workspaceOptionsSheet.groupBy', 'Group by'),
     sortBy: t('hostScreen.workspaceOptionsSheet.sortBy', 'Sort by'),
     projectOrderBy: t('hostScreen.workspaceOptionsSheet.projectOrder', 'Project order'),
+    tagOrderBy: t('hostScreen.workspaceOptionsSheet.tagOrder', 'Tag order'),
     cardLayout: t('hostScreen.workspaceOptionsSheet.cardLayout', 'Card layout'),
     cardProperties: t('hostScreen.workspaceOptionsSheet.showProperties', 'Show properties'),
     cardDisplay: t('hostScreen.workspaceOptionsSheet.cardDisplay', 'Card display'),
@@ -174,7 +175,8 @@ function WorkspaceOptionsContent({
   const optionLabels = workspaceOptionLabels(t)
   const sectionLabels = workspaceSectionLabels(t)
   const sections = getShownWorkspaceViewSections({
-    groupBy: state.view.groupBy,
+    // Why: the phone has no tag view and lists desktop Tag grouping flat, as None.
+    groupBy: state.view.groupBy === 'tag' ? 'none' : state.view.groupBy,
     hideSleepingWorkspaces: state.view.filters.hideSleepingWorkspaces,
     hideWorkspacesFromOtherDevices: state.view.filters.hideWorkspacesFromOtherDevices,
     newCardStyle: state.view.newCardStyle,

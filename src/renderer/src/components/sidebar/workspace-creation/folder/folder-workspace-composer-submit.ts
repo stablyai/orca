@@ -20,6 +20,7 @@ import {
   resolveFolderWorkspaceName,
   toFolderWorkspaceLinkedTask
 } from './folder-workspace-source-selection'
+import { persistFolderWorkspaceCreationTags } from './folder-workspace-creation-tags'
 import {
   planAgentSessionLaunch,
   adoptAgentSessionLaunchVerdict
@@ -51,6 +52,7 @@ export async function submitFolderWorkspaceCreate({
   linkedWorkItem,
   linkedTaskSourceContext,
   note,
+  tags = [],
   quickAgent,
   launchChoice,
   launchInputs,
@@ -227,6 +229,7 @@ export async function submitFolderWorkspaceCreate({
       ? { kind: 'environment', environmentId: runtimeEnvironmentId }
       : { kind: 'local' }
   )
+  persistFolderWorkspaceCreationTags(workspace, tags)
   const launchFailed = isCancelled()
 
   const startup = buildFolderWorkspaceStartupPayload({

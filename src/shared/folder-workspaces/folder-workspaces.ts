@@ -8,6 +8,7 @@ import { normalizeWorkspaceCreatorProvenance } from '../workspace/identity/works
 import { getWorkspaceAttachments } from '../workspace-attachments/workspace-attachments'
 import { isSmartTier } from '../sidebar-list/sorting/sort-stamps'
 import { normalizeOrcadRetainedMarker } from '../remote-runtime/orcad-lifecycle/orcad-retained-marker'
+import { normalizeWorktreeTags } from '../worktree/metadata/worktree-tags'
 
 export function normalizeFolderWorkspaceName(
   name: string | null | undefined,
@@ -57,6 +58,7 @@ export function normalizeFolderWorkspaces(
     const linkedTaskSourceContext = normalizeStoredTaskSourceContext(raw.linkedTaskSourceContext)
     const creatorProvenance = normalizeWorkspaceCreatorProvenance(raw.creatorProvenance)
     const orcadRetained = normalizeOrcadRetainedMarker(raw.orcadRetained)
+    const tags = normalizeWorktreeTags(raw.tags)
     seen.add(raw.id)
     // Do not persist fetch-time executionHostId: it may name an unowned runtime authority and lacks a generation fence.
     // connectionId is the durable pin main projects from.
@@ -100,6 +102,7 @@ export function normalizeFolderWorkspaces(
       ...(typeof raw.workspaceStatus === 'string' && raw.workspaceStatus.trim().length > 0
         ? { workspaceStatus: raw.workspaceStatus }
         : {}),
+      ...(tags.length > 0 ? { tags } : {}),
       ...(isTuiAgent(raw.createdWithAgent) ? { createdWithAgent: raw.createdWithAgent } : {}),
       ...(raw.pendingFirstAgentMessageRename === true
         ? { pendingFirstAgentMessageRename: true }

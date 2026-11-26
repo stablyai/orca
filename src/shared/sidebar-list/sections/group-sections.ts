@@ -3,7 +3,7 @@ import type { WorktreeOccurrencePlan } from '../lineage/worktree-occurrence-plan
 import type { WorkspaceStatusDefinition, Worktree } from '../../worktree/types'
 import type { ExecutionHostId } from '../../execution-host/execution-host'
 import { getWorkspaceStatusFromGroupKey } from '../../workspace/status/workspace-statuses'
-import type { PRGroupKey } from '../../workspace-view/workspace-pr-groups'
+import { PR_GROUP_ORDER, getPRLaneKey } from '../../workspace-view/workspace-pr-groups'
 import type { NoticeHostContext } from '../hosts/host-labels'
 import {
   getHostWorktreeIds,
@@ -28,8 +28,10 @@ import type {
   GroupHeaderRow,
   RepoOfWorktree,
   Row,
+  SidebarHeaderIcon,
   WorktreeGroupBy
 } from '../row-types'
+import { UNTAGGED_GROUP_KEY } from './tag-groups'
 
 /** Everything section emission reads that stays fixed for one planSidebarRows call. */
 export type SectionAppendContext = {
@@ -146,12 +148,24 @@ export function appendOrderedGroups(
               }
             })()
           : (() => {
-              const prGroup = key.replace(/^pr:/, '') as PRGroupKey
+              const icon: SidebarHeaderIcon =
+                groupBy !== 'tag'
+                  ? {
+                      kind: 'pr-status',
+                      prGroup:
+                        PR_GROUP_ORDER.find((prGroup) => getPRLaneKey(prGroup) === key) ??
+                        'in-progress'
+                    }
+                  : key === UNTAGGED_GROUP_KEY
+                    ? { kind: 'untagged' }
+                    : { kind: 'tag' }
               return {
                 type: 'header' as const,
                 key,
+                // Why: a tag's spelling is data; Untagged and the PR lanes are named by each client.
+                ...(icon.kind === 'tag' ? { label: group.label } : {}),
                 count: group.items.length + folderPairs.length,
-                icon: { kind: 'pr-status' as const, prGroup },
+                icon,
                 hostWorktreeCounts: getLaneHostWorktreeCounts(
                   group.items,
                   folderPairs,
@@ -218,7 +232,8 @@ export function appendOrderedGroups(
         sectionKey: key,
         hostContextLabelByRepoId,
         hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels,
-        folderPairByIdentity: ctx.folderPairByIdentity
+        folderPairByIdentity: ctx.folderPairByIdentity,
+        sectionScopedFolderRows: groupBy === 'tag'
       })
     }
   }

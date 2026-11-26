@@ -63,6 +63,7 @@ import {
   getCreateReferenceInputs,
   resolveReferenceInputs
 } from '../references/reference-input'
+import { getWorktreeSetTagParams } from './worktree-tag-flags'
 
 function getOptionalStartupAgent(flags: Map<string, string | boolean>): TuiAgent | undefined {
   const agent = getPresentStringFlag(flags, 'agent')
@@ -230,6 +231,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       comment: getOptionalStringFlagAllowingEmpty(flags, 'comment'),
       workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),
       ...readFlags,
+      ...(await getWorktreeSetTagParams(flags, client)),
       ...parentFields,
       noParent: flags.get('no-parent') === true
     })

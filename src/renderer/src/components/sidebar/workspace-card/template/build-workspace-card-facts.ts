@@ -6,6 +6,7 @@ import type {
 } from '../../../../../../shared/workspace-cards/workspace-card-facts'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 
+const NO_TAGS: readonly string[] = []
 const showOptionsCache = new WeakMap<readonly WorktreeCardProperty[], WorkspaceCardShowOptions>()
 
 // Why cached: every card shares one properties array, so the toggles are built once per change.
@@ -27,6 +28,7 @@ function showOptions(cardProps: readonly WorktreeCardProperty[]): WorkspaceCardS
     automation: has('automation'),
     cli: has('cli'),
     comment: has('comment'),
+    tags: has('tags'),
     ports: has('ports'),
     inlineAgents: has('inline-agents'),
     host: has('host')
@@ -59,7 +61,8 @@ export function buildWorkspaceCardFacts(card: WorktreeCardController): Workspace
         typeof worktree.firstAgentMessageRenameError === 'string' &&
         worktree.firstAgentMessageRenameError.length > 0,
       removalError: worktree.removalError || null,
-      comment: worktree.comment
+      comment: worktree.comment,
+      tags: worktree.tags ?? NO_TAGS
     },
     repo: repo ? { id: repo.id, name: repo.displayName, ssh: Boolean(repo.connectionId) } : null,
     host: {

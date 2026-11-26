@@ -12,6 +12,7 @@ import type {
 } from '../../../../../../shared/sidebar-list/row-types'
 import type { ProjectGroupingModel } from '../../../../../../shared/sidebar-list/sections/project-section-grouping'
 import { getFolderWorkspaceRevealGroupKeys } from '../navigation/folder-reveal'
+import { narrowTagRevealKeys } from '../../../../../../shared/sidebar-list/sections/tag-groups'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
@@ -73,7 +74,7 @@ export function useEffectiveCollapsedGroups(args: {
         return collapsedGroups
       }
       const nextForFolder = new Set(collapsedGroups)
-      for (const groupKey of folderKeys) {
+      for (const groupKey of narrowTagRevealKeys(folderKeys, collapsedGroups)) {
         nextForFolder.delete(groupKey)
       }
       return nextForFolder

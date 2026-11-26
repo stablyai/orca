@@ -12,6 +12,7 @@ import type {
   WorktreeGroupBy
 } from '../../../../../../shared/sidebar-list/row-types'
 import type { WorkspaceSortBy as SortBy } from '../../../../../../shared/workspace-view/workspace-row-sort'
+import type { TagSectionOrder } from '../../../../../../shared/sidebar-list/sections/tag-section-order'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { SidebarWorktreeFilters } from './use-filters'
@@ -24,6 +25,7 @@ export type SidebarListModelArgs = {
   sortBy: SortBy
   groupBy: WorktreeGroupBy
   projectOrderBy: ProjectOrderBy
+  tagOrder?: TagSectionOrder
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
   defaultHostId: ExecutionHostId
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
@@ -54,6 +56,8 @@ export type SectionRowsArgs = {
   groupBy: WorktreeGroupBy
   sortBy: SortBy
   projectOrderBy: ProjectOrderBy
+  /** Omitted: tag sections sort by name. */
+  tagOrder?: TagSectionOrder
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
   defaultHostId: ExecutionHostId
   worktrees: Worktree[]

@@ -15,6 +15,7 @@ import {
 } from '../metadata/worktree-card-meta-items'
 import { WorktreeCardStatusLane } from '../surface/worktree-card-status-lane'
 import { WorktreeLineageToggle } from '../identity/WorktreeLineageToggle'
+import { WorktreeCardTagChips } from '../surface/WorktreeCardTagChips'
 import { cardElement } from './card-template-compiler'
 
 type Card = WorktreeCardController
@@ -86,6 +87,9 @@ export const CARD_ACTIVITY_PARTS = {
       settings={settings}
     />
   )),
+  Tags: part([], (_props, _children, { worktree }) =>
+    worktree.tags?.length ? <WorktreeCardTagChips tags={worktree.tags} /> : null
+  ),
   ChildToggle: part([], (_props, _children, card) => (
     <WorktreeLineageToggle
       childWorktreeIds={card.lineageChildWorktreeIds}

@@ -89,6 +89,7 @@ export function buildRuntimeWorktreePsSummaries(args: {
         : undefined
     const priorWorktreeIds = meta?.priorWorktreeIds ?? worktree.priorWorktreeIds
     const hostId = meta?.hostId ?? worktree.hostId
+    const tags = worktree.tags ?? meta?.tags
     setPsSummary(summaries, {
       workspaceKind: 'git',
       worktreeId: worktree.id,
@@ -129,6 +130,7 @@ export function buildRuntimeWorktreePsSummaries(args: {
         : {}),
       displayName: worktree.displayName,
       workspaceStatus: meta?.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
+      ...(tags?.length ? { tags } : {}),
       sortOrder: meta?.sortOrder ?? 0,
       ...(meta?.manualOrder !== undefined ? { manualOrder: meta.manualOrder } : {}),
       lastActivityAt: worktree.lastActivityAt,
@@ -188,6 +190,7 @@ export function buildRuntimeWorktreePsSummaries(args: {
       childWorktreeIds: [],
       displayName: worktree.displayName,
       workspaceStatus: worktree.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
+      ...(worktree.tags?.length ? { tags: worktree.tags } : {}),
       sortOrder: worktree.sortOrder ?? 0,
       ...(worktree.manualOrder !== undefined ? { manualOrder: worktree.manualOrder } : {}),
       lastActivityAt: worktree.lastActivityAt,

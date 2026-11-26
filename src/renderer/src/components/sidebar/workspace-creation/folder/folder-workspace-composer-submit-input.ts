@@ -25,6 +25,8 @@ export type SubmitFolderWorkspaceCreateParams = {
   linkedWorkItem: LinkedWorkItemSummary | null
   linkedTaskSourceContext?: TaskSourceContext | null
   note: string
+  /** Tags applied right after the folder workspace is created. */
+  tags?: string[]
   quickAgent: TuiAgent | null
   launchChoice?: AgentLaunchChoice
   legacyLaunchInputs?: AgentLaunchInputViews
