@@ -67,10 +67,7 @@
       "messages_one": "{{count}} Nachricht",
       "messages_other": "{{count}} Nachrichten",
       "resumeSession": "Agentensitzung fortsetzen",
-      "continueInCli": "In CLI fortsetzen",
-      "hidePreview": "Blendet die letzten Nachrichten aus.",
-      "showPreview": "Zeigt die letzten Nachrichten an.",
-      "you": "Du"
+      "continueInCli": "In CLI fortsetzen"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "Host nicht erreichbar",
@@ -496,7 +493,6 @@
       "applying": "Wird angewendet…",
       "onAttach": "Wird angewendet, sobald der Chat verbunden ist",
       "heldPickRefused": "{{picked}} ist in diesem Chat nicht verfügbar. {{kept}} beibehalten.",
-      "optionsSection": "Optionen",
       "permissionsLabel": "Berechtigungen, {{value}}",
       "settingsLocked": "Die Modelleinstellungen werden nach diesem Durchgang freigegeben.",
       "workingAnnouncement": "Der Agent arbeitet. Die Modelleinstellungen werden nach diesem Durchgang freigegeben."
@@ -1020,10 +1016,7 @@
       "discardChanges": "Änderungen verwerfen",
       "rangeLine": "Zeile {{line}}",
       "rangeLines": "Zeilen {{startLine}}–{{line}}",
-      "sendToAgent": "An {{agent}} senden",
-      "sendToAnAgent": "An Agenten senden",
       "rangePlaceholder": "Was soll hier geändert werden?",
-      "commentOnGitHub": "Auf GitHub kommentieren",
       "sendUnsentNotes": "Ungesendete Notizen senden",
       "statusUnreadable": "Der Status dieses Hosts konnte nicht gelesen werden. Erneuter Versuch…",
       "terminal": "Terminal",
@@ -1138,7 +1131,6 @@
       "agent": "Agent",
       "connectTarget": "Mit Ziel verbinden",
       "options": "Optionen",
-      "createWorkspace": "Arbeitsbereich erstellen",
       "startFrom": "Ausgangspunkt",
       "loadingProjects": "Projekte werden geladen…",
       "connectTargetFirst": "Zuerst mit dem Ziel verbinden",
@@ -1332,15 +1324,6 @@
       "expand": "Diagramm vergrößern",
       "label": "Mermaid-Diagramm"
     },
-    "worktreeAgentList": {
-      "hideChildAgents_one": "{{count}} untergeordneten Agenten ausblenden",
-      "hideChildAgents_other": "{{count}} untergeordnete Agenten ausblenden",
-      "showChildAgents_one": "{{count}} untergeordneten Agenten anzeigen",
-      "showChildAgents_other": "{{count}} untergeordnete Agenten anzeigen",
-      "hideIdleChildren": "{{count}} inaktive untergeordnete Agenten ausblenden",
-      "showIdleChildren": "{{count}} inaktive untergeordnete Agenten anzeigen",
-      "idleChildCount": "{{count}} inaktiv"
-    },
     "diffReviewFilesSheet": {
       "title": "Dateien",
       "search": "Zu Datei wechseln",
@@ -1350,8 +1333,6 @@
     },
     "native-chat": {
       "turnDiff": {
-        "changedFiles_one": "{{count}} geänderte Datei",
-        "changedFiles_other": "{{count}} geänderte Dateien",
         "partial": "Teilweiser Diff",
         "showMoreFiles": "{{count}} weitere anzeigen"
       },
@@ -1676,9 +1657,6 @@
       "backToSession": "Zurück zur Sitzung",
       "closeFiles": "Dateien schließen",
       "emptyState": "Keine Dateien gefunden",
-      "filterPlaceholder": "Dateien filtern",
-      "noMatchesHint": "Nur bereits geöffnete Ordner werden durchsucht.",
-      "clearFilter": "Filter zurücksetzen",
       "loading": "Dateien werden geladen…",
       "loadFailed": "Dateien konnten nicht geladen werden.",
       "title": "Dateien",
@@ -1862,8 +1840,7 @@
       "computerRemoved": "Dieser Host wurde von diesem Smartphone entfernt.",
       "couldNotLoad": "Host konnte nicht geladen werden.",
       "couldNotSave": "Host konnte nicht gespeichert werden.",
-      "save": "Speichern",
-      "removeHost": "Host entfernen"
+      "save": "Speichern"
     }
   },
   "hostScreen": {
@@ -1993,7 +1970,6 @@
     },
     "notificationDeliverySection": {
       "onlyWhenAgentNeedsInput": "Nur wenn ein Agent mich braucht",
-      "onlyWhenAgentNeedsInputHint": "Berechtigungsanfragen und Rückfragen. Abgeschlossene Agenten werden übersprungen.",
       "sound": "Benachrichtigungston"
     }
   },
@@ -2029,7 +2005,6 @@
       "daysAgo_other": "vor {{count}} Tagen",
       "deleteConfirmMessage": "Dadurch wird der Kommentar auf GitHub dauerhaft gelöscht.",
       "editPlaceholder": "Kommentar bearbeiten…",
-      "replyToComment": "Auf Kommentar antworten",
       "hoursAgo_one": "vor {{count}} Std.",
       "hoursAgo_other": "vor {{count}} Std.",
       "justNow": "gerade eben",
@@ -2038,39 +2013,22 @@
       "monthsAgo_one": "vor {{count}} Monat",
       "monthsAgo_other": "vor {{count}} Monaten",
       "reply": "Antworten",
-      "editComment": "Kommentar bearbeiten",
-      "deleteComment": "Kommentar löschen",
-      "unresolveThread": "Thread als ungelöst markieren",
-      "resolveThread": "Thread als erledigt markieren",
       "resolve": "Erledigen",
-      "replyPlaceholder": "Antwort schreiben…",
       "unresolve": "Als ungelöst markieren",
       "yearsAgo_one": "vor {{count}} Jahr",
-      "yearsAgo_other": "vor {{count}} Jahren",
-      "resolved": "erledigt",
-      "openOnGitHub": "Kommentar auf GitHub öffnen"
+      "yearsAgo_other": "vor {{count}} Jahren"
     },
     "commentsSection": {
-      "all": "Alle",
-      "humans": "Menschen",
-      "bots": "Bots",
-      "noBotComments": "Keine Kommentare von Bots.",
-      "noHumanComments": "Keine Kommentare von Menschen.",
       "comment": "Kommentieren",
       "resolvedThreadSingle": "Erledigter Thread von {{author}}",
       "resolvedThreadCount": "Erledigter Thread von {{author}} ({{count}})",
-      "resolvedCommentSingle": "Erledigter Kommentar von {{author}}",
-      "resolvedCommentCount": "Erledigter Kommentar von {{author}} ({{count}})",
       "commentsLoadFailedRetry": "Kommentare konnten nicht geladen werden.",
       "description": "Beschreibung",
       "descriptionLoadFailed": "Beschreibung konnte nicht geladen werden. Zum erneuten Laden auf „Aktualisieren“ tippen.",
       "noComments": "Noch keine Kommentare.",
       "noDescription": "Keine Beschreibung angegeben.",
       "showMore": "{{count}} weitere anzeigen",
-      "addCommentPlaceholder": "Kommentar hinzufügen…",
-      "title": "Kommentare",
-      "commentsLoadFailed": "Kommentare konnten nicht geladen werden. Zum erneuten Laden auf „Aktualisieren“ tippen.",
-      "showMoreOf": "{{count}} von {{remaining}} weiteren anzeigen"
+      "title": "Kommentare"
     },
     "linkPrForm": {
       "linkButton": "Pull Request verknüpfen",
@@ -2228,7 +2186,6 @@
       "titleLabel": "Titel",
       "descriptionLabel": "Beschreibung",
       "writeWithAi": "Mit KI schreiben",
-      "descriptionPlaceholder": "Optional",
       "draft": "Als Entwurf erstellen"
     },
     "screens": {
@@ -2239,7 +2196,6 @@
       "failedAfter": "Fehlgeschlagen nach {{duration}}",
       "failed": "Fehlgeschlagen",
       "checkActions": "Weitere Optionen für {{name}}",
-      "rerun": "Erneut ausführen",
       "copyErrorFailed": "Der Fehler konnte nicht kopiert werden.",
       "durationSeconds": "{{seconds}} s",
       "durationMinutes": "{{minutes}} min {{seconds}} s",
@@ -2471,7 +2427,6 @@
     },
     "commandDock": {
       "liveInputHint": "Eingegebener Text wird direkt an das aktive Terminal gesendet",
-      "tapToShowKeyboard": "Tippen, um die Tastatur anzuzeigen",
       "liveInputLabel": "Live-Eingabe im Terminal"
     },
     "contentRow": {
@@ -2841,7 +2796,6 @@
     },
     "sheets": {
       "browser": "Browser",
-      "browserStreamingUnavailable": "Dieser Host kann keine Browser-Tabs streamen",
       "chat": "Chat",
       "cli": "CLI",
       "cliOnly": "Nur CLI",
@@ -4400,8 +4354,7 @@
       "noFilterMatches": "Keine Arbeitsbereiche entsprechen den Filtern",
       "reopen": "Zum Aktualisieren erneut öffnen",
       "reopenDetail": "Dieser Host listet Arbeitsbereiche in einem Format auf, das diese Seite noch nicht unterstützt.",
-      "loading": "Arbeitsbereiche werden geladen…",
-      "retryingAutomatically": "Wird automatisch erneut versucht."
+      "loading": "Arbeitsbereiche werden geladen…"
     },
     "workspaceListSections": {
       "all": "Alle",

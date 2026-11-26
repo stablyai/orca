@@ -113,14 +113,9 @@
       "previewColumns_one": "{{count}} columna",
       "previewColumns_other": "{{count}} columnas",
       "previewLabel": "Vista previa de la terminal",
-      "previewHeading": "VISTA PREVIA",
-      "fontHeading": "FUENTE",
-      "fontDescription": "Pellizca en una terminal para cambiar el tamaño; se guarda aquí. Solo cambia este dispositivo, no la terminal del escritorio.",
       "font": "Fuente",
       "size": "Tamaño",
       "sizePoints": "{{size}} pt",
-      "smaller": "Más pequeño",
-      "larger": "Más grande",
       "lineSpacing": "Interlineado",
       "lineSpacingTight": "Estrecho",
       "lineSpacingNormal": "Normal",
@@ -1580,17 +1575,6 @@
       "updateDesktop": "Actualiza Orca en {{desktop}} para usar las automatizaciones.",
       "pairComputer": "Empareja un escritorio para ver y ejecutar automatizaciones."
     },
-    "emptyState": {
-      "connectedDescription": "Tu escritorio aparecerá aquí. Todo está cifrado de extremo a extremo.",
-      "connectedTitle": "Ya tienes conexión",
-      "description": "Empareja tu teléfono con Orca en tu ordenador para supervisar a tus agentes, acceder a cualquier terminal y gestionar el trabajo desde el móvil.",
-      "pairDesktopButton": "Emparejar escritorio",
-      "scanCodeBelowDescription": "Toca Emparejar escritorio abajo y apunta con la cámara al código QR de tu pantalla.",
-      "openDesktopDescription": "Ve a Ajustes → Móvil y genera un código QR de emparejamiento.",
-      "openDesktopTitle": "Abre Orca en el escritorio",
-      "scanCodeTitle": "Escanea el código",
-      "title": "Conecta tu escritorio"
-    },
     "listFooter": {
       "openTasksOn": "Abrir tareas en"
     },
@@ -1606,15 +1590,10 @@
       "sameNetworkOnly": "Solo se conecta en la misma red Wi-Fi o por Tailscale. Para conectarte desde cualquier lugar, inicia sesión en tu escritorio y vuelve a emparejar"
     },
     "bottomBar": {
-      "connectFirst": "Conecta un escritorio para empezar un trabajo nuevo.",
       "newWorkspace": "Nuevo espacio de trabajo"
     },
-    "desktops": {
-      "pairDesktop": "Emparejar un escritorio"
-    },
     "sections": {
-      "tasks": "Tareas",
-      "tasksSubtitle": "Consulta tus issues y revisiones"
+      "tasks": "Tareas"
     },
     "stats": {
       "agentTime": "Tiempo de agentes",
@@ -3590,14 +3569,6 @@
       "behind": "{{count}} por detrás",
       "upToDate": "Actualizado",
       "switchBranch": "Cambiar de rama desde {{branch}}",
-      "mergeInProgress": "Fusión en progreso",
-      "rebaseInProgress": "Rebase en progreso",
-      "cherryPickInProgress": "Cherry-pick en progreso",
-      "filesNeedDecision_many": "{{count}} archivos necesitan una decisión antes de que puedas terminar.",
-      "filesNeedDecision_one": "{{count}} archivo necesita una decisión antes de que puedas terminar.",
-      "filesNeedDecision_other": "{{count}} archivos necesitan una decisión antes de que puedas terminar.",
-      "conflictsResolved": "Todos los conflictos están resueltos. Termina desde la barra de abajo.",
-      "continueOnComputer": "Todos los conflictos están resueltos. Continúa en tu equipo para terminar.",
       "commits_many": "{{count}} commits",
       "commits_one": "{{count}} commit",
       "commits_other": "{{count}} commits",
@@ -3625,29 +3596,15 @@
       "loadPageFailed": "No se pudo cargar la página {{page}} desde GitHub."
     },
     "filterSheet": {
-      "sortBy": "Ordenar por",
       "issueSource": "Fuente de issues",
-      "issueSourceRow": "Upstream u origin",
       "view": "Vista",
-      "projectView": "Vista del proyecto",
-      "projectItems_many": "{{count}} elementos",
-      "projectItems_one": "{{count}} elemento",
-      "projectItems_other": "{{count}} elementos",
-      "chooseView": "Elegir",
       "showOnRows": "Mostrar en las filas",
-      "projectFields": "Campos del proyecto",
       "workspace": "Espacio de trabajo",
-      "linearWorkspace": "Espacio de trabajo de Linear",
       "layout": "Diseño",
       "groupBy": "Agrupar por",
       "orderBy": "Ordenar por",
-      "displayProperties": "Propiedades de visualización",
       "title": "Filtrar y mostrar",
-      "done": "Listo",
-      "jqlReplacesPreset": "Tu búsqueda JQL reemplaza el filtro predefinido. Borra la búsqueda para volver a elegir uno."
-    },
-    "jiraViewControls": {
-      "jqlSearch": "Búsqueda JQL"
+      "done": "Listo"
     },
     "itemComments": {
       "noComments": "Aún no hay comentarios",
@@ -3751,10 +3708,6 @@
       "checks": "Checks",
       "description": "Descripción",
       "discussion": "Discusión",
-      "details": "Detalles",
-      "type": "Tipo",
-      "status": "Estado",
-      "assignee": "Asignado",
       "project": "Proyecto",
       "priority": "Prioridad",
       "assignees": "Asignados",
@@ -3987,24 +3940,6 @@
       "reviewers": "Revisores",
       "viewFile": "Ver"
     },
-    "providerControls": {
-      "myTodos": "Mis tareas pendientes",
-      "reposLabel": "Repositorios: {{repos}}",
-      "filterCount": "Filtrar · {{count}}",
-      "filter": "Filtrar",
-      "filterLabel": "Filtrar y mostrar",
-      "projectMergeRequests": "MR del proyecto"
-    },
-    "providerItemList": {
-      "intoBranch": "en {{base}}",
-      "kindAndStatus": "{{kind}}, {{status}}",
-      "nextPage": "Página siguiente",
-      "page": "Página {{page}}",
-      "pageOfTotal": "Página {{page}} de {{total}}",
-      "previousPage": "Página anterior",
-      "selectPage": "Seleccionar página, página {{page}}",
-      "selectPageOfTotal": "Seleccionar página, página {{page}} de {{total}}"
-    },
     "providerPickers": {
       "allRepositories": "Todos los repositorios"
     },
@@ -4082,7 +4017,6 @@
       "advanced": "Avanzado",
       "agent": "Agente",
       "connectFirst": "Conecta primero el repositorio",
-      "optionalLabel": "Opcional",
       "defaultBranch": "Rama predeterminada",
       "detectingAgents": "Detectando agentes…",
       "remoteRepository": "Repositorio remoto",
@@ -4366,7 +4300,6 @@
       "keepEditing": "Seguir editando",
       "on": "Activada",
       "repeats": "Se repite",
-      "newOnePerRun": "Uno nuevo por ejecución",
       "moreActions": "Más acciones",
       "noRunsYet": "Aún no hay ejecuciones",
       "nextRunToday": "Próxima ejecución hoy a las {{time}}",
@@ -4569,11 +4502,8 @@
       "workers_other": "{{count}} workers",
       "noMatches": "Ningún agente coincide con «{{query}}»",
       "emptyTitle": "No hay agentes en ejecución",
-      "pairDesktop": "Empareja un escritorio para ver aquí sus agentes.",
       "emptyBody": "Inicia un agente en cualquier espacio de trabajo y aparecerá aquí.",
       "unread": "Sin leer",
-      "noDesktopTitle": "No hay ningún escritorio conectado",
-      "noDesktopBody": "Los agentes aparecen aquí cuando se conecta un escritorio.",
       "hideWorkers": "Ocultar {{workers}}",
       "showWorkers": "Mostrar {{workers}}"
     },
@@ -4592,31 +4522,17 @@
       "status": "Estado",
       "workspace": "Espacio de trabajo",
       "project": "Proyecto",
-      "agent": "Agente",
-      "desktop": "Escritorio"
+      "agent": "Agente"
     },
     "options": {
       "groupBy": "Agrupar por",
       "showWorkers": "Mostrar agentes worker",
-      "open": "Opciones de la lista de agentes",
       "unreadOnly": "Solo sin leer",
       "markAllRead": "Marcar todo como leído",
       "clearFinished": "Quitar agentes terminados"
     },
     "search": {
-      "toggle": "Buscar agentes",
       "placeholder": "Buscar agentes"
-    },
-    "desktops": {
-      "pickerTitle": "Mostrar agentes de",
-      "agents_many": "{{count}} agentes",
-      "agents_one": "{{count}} agente",
-      "agents_other": "{{count}} agentes",
-      "all": "Todos los escritorios",
-      "offline": "Sin conexión",
-      "needsYou_many": "{{count}} te necesitan",
-      "needsYou_one": "{{count}} te necesita",
-      "needsYou_other": "{{count}} te necesitan"
     },
     "sections": {
       "needsYou": "Requieren tu atención",

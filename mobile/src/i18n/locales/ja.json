@@ -67,10 +67,7 @@
       "messages_one": "{{count}} 件のメッセージ",
       "messages_other": "{{count}} 件のメッセージ",
       "resumeSession": "Agent セッションを再開",
-      "continueInCli": "CLIで続行",
-      "hidePreview": "最近のメッセージを非表示にします。",
-      "showPreview": "最近のメッセージを表示します。",
-      "you": "あなた"
+      "continueInCli": "CLIで続行"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "ホストに接続できません",
@@ -496,7 +493,6 @@
       "applying": "適用中…",
       "onAttach": "チャットの接続時に適用されます",
       "heldPickRefused": "このチャットでは {{picked}} を利用できません。{{kept}} のままにしました。",
-      "optionsSection": "オプション",
       "permissionsLabel": "権限、{{value}}",
       "settingsLocked": "このターンが完了すると、モデル設定を変更できます。",
       "workingAnnouncement": "Agent が作業中です。このターンが完了すると、モデル設定を変更できます。"
@@ -1016,10 +1012,7 @@
       "discardChanges": "変更を破棄",
       "rangeLine": "{{line}} 行目",
       "rangeLines": "{{startLine}}–{{line}} 行目",
-      "sendToAgent": "{{agent}} に送信",
-      "sendToAnAgent": "Agent に送信",
       "rangePlaceholder": "ここで何を変更しますか？",
-      "commentOnGitHub": "GitHub でコメント",
       "sendUnsentNotes": "未送信のメモを送信",
       "statusUnreadable": "このホストの状態を読み取れませんでした。再試行中…",
       "terminal": "ターミナル",
@@ -1134,7 +1127,6 @@
       "agent": "Agent",
       "connectTarget": "接続先に接続",
       "options": "オプション",
-      "createWorkspace": "ワークスペースを作成",
       "startFrom": "作成元",
       "loadingProjects": "プロジェクトを読み込み中…",
       "connectTargetFirst": "先に接続先へ接続",
@@ -1328,15 +1320,6 @@
       "expand": "図を拡大",
       "label": "Mermaid 図"
     },
-    "worktreeAgentList": {
-      "hideChildAgents_one": "{{count}} 件の子 Agent を非表示",
-      "hideChildAgents_other": "{{count}} 件の子 Agent を非表示",
-      "showChildAgents_one": "{{count}} 件の子 Agent を表示",
-      "showChildAgents_other": "{{count}} 件の子 Agent を表示",
-      "hideIdleChildren": "アイドル状態の子 Agent {{count}} 件を非表示",
-      "showIdleChildren": "アイドル状態の子 Agent {{count}} 件を表示",
-      "idleChildCount": "アイドル状態 {{count}} 件"
-    },
     "diffReviewFilesSheet": {
       "title": "ファイル",
       "search": "ファイルに移動",
@@ -1346,8 +1329,6 @@
     },
     "native-chat": {
       "turnDiff": {
-        "changedFiles_one": "変更されたファイル {{count}} 個",
-        "changedFiles_other": "変更されたファイル {{count}} 個",
         "partial": "部分的な差分",
         "showMoreFiles": "さらに {{count}} 個を表示"
       },
@@ -1672,9 +1653,6 @@
       "backToSession": "セッションに戻る",
       "closeFiles": "ファイル一覧を閉じる",
       "emptyState": "ファイルが見つかりません。",
-      "filterPlaceholder": "ファイルをフィルター",
-      "noMatchesHint": "検索対象は、開いたことのあるフォルダーのみです。",
-      "clearFilter": "フィルターをクリア",
       "loading": "ファイルを読み込み中…",
       "loadFailed": "ファイルを読み込めませんでした。",
       "title": "ファイル",
@@ -1858,8 +1836,7 @@
       "computerRemoved": "このホストはこのスマートフォンから削除されました。",
       "couldNotLoad": "ホストの読み込みに失敗しました。",
       "couldNotSave": "ホストの保存に失敗しました。",
-      "save": "保存",
-      "removeHost": "ホストを削除"
+      "save": "保存"
     }
   },
   "hostScreen": {
@@ -1991,7 +1968,6 @@
     },
     "notificationDeliverySection": {
       "onlyWhenAgentNeedsInput": "Agent が対応を求めているときのみ",
-      "onlyWhenAgentNeedsInputHint": "権限リクエストと質問のみ通知します。Agent の完了は通知しません。",
       "sound": "通知音"
     }
   },
@@ -2027,7 +2003,6 @@
       "daysAgo_other": "{{count}} 日前",
       "deleteConfirmMessage": "GitHub 上のコメントを完全に削除します。",
       "editPlaceholder": "コメントを編集…",
-      "replyToComment": "コメントに返信",
       "hoursAgo_one": "{{count}} 時間前",
       "hoursAgo_other": "{{count}} 時間前",
       "justNow": "たった今",
@@ -2036,39 +2011,22 @@
       "monthsAgo_one": "{{count}} か月前",
       "monthsAgo_other": "{{count}} か月前",
       "reply": "返事",
-      "editComment": "コメントを編集",
-      "deleteComment": "コメントを削除",
-      "unresolveThread": "スレッドを未解決に戻す",
-      "resolveThread": "スレッドを解決",
       "resolve": "解決",
-      "replyPlaceholder": "返信を入力…",
       "unresolve": "未解決に戻す",
       "yearsAgo_one": "{{count}} 年前",
-      "yearsAgo_other": "{{count}} 年前",
-      "resolved": "解決済み",
-      "openOnGitHub": "GitHub でコメントを開く"
+      "yearsAgo_other": "{{count}} 年前"
     },
     "commentsSection": {
-      "all": "全て",
-      "humans": "人間",
-      "bots": "ボット",
-      "noBotComments": "ボットのコメントはありません。",
-      "noHumanComments": "ユーザーによるコメントはありません。",
       "comment": "コメント",
       "resolvedThreadSingle": "{{author}} の解決済みスレッド",
       "resolvedThreadCount": "{{author}} の解決済みスレッド（{{count}}）",
-      "resolvedCommentSingle": "{{author}} の解決済みコメント",
-      "resolvedCommentCount": "{{author}} の解決済みコメント（{{count}}）",
       "commentsLoadFailedRetry": "コメントを読み込めませんでした。",
       "description": "説明",
       "descriptionLoadFailed": "説明を読み込めませんでした。「更新」をタップして再試行してください。",
       "noComments": "コメントはまだありません。",
       "noDescription": "説明はありません。",
       "showMore": "さらに {{count}} 件を表示",
-      "addCommentPlaceholder": "コメントを追加…",
-      "title": "コメント",
-      "commentsLoadFailed": "コメントを読み込めませんでした。「更新」をタップして再試行してください。",
-      "showMoreOf": "残り {{remaining}} 件中 {{count}} 件をさらに表示"
+      "title": "コメント"
     },
     "linkPrForm": {
       "linkButton": "PR をリンク",
@@ -2226,7 +2184,6 @@
       "titleLabel": "タイトル",
       "descriptionLabel": "説明",
       "writeWithAi": "AI で作成",
-      "descriptionPlaceholder": "任意",
       "draft": "下書きとして作成"
     },
     "screens": {
@@ -2237,7 +2194,6 @@
       "failedAfter": "{{duration}} 後に失敗",
       "failed": "失敗",
       "checkActions": "{{name}} のその他の操作",
-      "rerun": "再実行",
       "copyErrorFailed": "エラーをコピーできませんでした。",
       "durationSeconds": "{{seconds}}秒",
       "durationMinutes": "{{minutes}}分 {{seconds}}秒",
@@ -2469,7 +2425,6 @@
     },
     "commandDock": {
       "liveInputHint": "入力したテキストは、選択中のターミナルに直接送信されます。",
-      "tapToShowKeyboard": "タップしてキーボードを表示",
       "liveInputLabel": "ターミナルへのリアルタイム入力"
     },
     "contentRow": {
@@ -2839,7 +2794,6 @@
     },
     "sheets": {
       "browser": "ブラウザ",
-      "browserStreamingUnavailable": "このホストはブラウザタブをストリーミングできません",
       "chat": "チャット",
       "cli": "CLI",
       "cliOnly": "CLI のみ",
@@ -3949,13 +3903,6 @@
       "behind": "{{count}} コミット遅れ",
       "upToDate": "最新",
       "switchBranch": "{{branch}} からブランチを切り替え",
-      "mergeInProgress": "マージ進行中",
-      "rebaseInProgress": "リベース進行中",
-      "cherryPickInProgress": "チェリーピック進行中",
-      "filesNeedDecision_one": "完了するには、{{count}} 件のファイルについて選択が必要です。",
-      "filesNeedDecision_other": "完了するには、{{count}} 件のファイルについて選択が必要です。",
-      "conflictsResolved": "すべての競合が解決されました。下のバーから完了してください。",
-      "continueOnComputer": "すべての競合が解決されました。完了するには、コンピュータで続行してください。",
       "commits_one": "{{count}} 件のコミット",
       "commits_other": "{{count}} 件のコミット",
       "conflictsMayRemain": "一部のファイルが表示されていないため、競合が残っている可能性があります。コンピュータで確認してください。"
@@ -4060,10 +4007,6 @@
       "checks": "チェック",
       "description": "説明",
       "discussion": "ディスカッション",
-      "details": "詳細",
-      "type": "種類",
-      "status": "状態",
-      "assignee": "担当者",
       "project": "プロジェクト",
       "priority": "優先度",
       "assignees": "担当者",
@@ -4188,28 +4131,15 @@
       "loadPageFailed": "ページ {{page}} を GitHub から読み込めませんでした。"
     },
     "filterSheet": {
-      "sortBy": "並べ替え",
       "issueSource": "Issue ソース",
-      "issueSourceRow": "upstream または origin",
       "view": "表示",
-      "projectView": "プロジェクトビュー",
-      "projectItems_one": "{{count}} 件のアイテム",
-      "projectItems_other": "{{count}} 件のアイテム",
-      "chooseView": "選択",
       "showOnRows": "行に表示",
-      "projectFields": "プロジェクトのフィールド",
       "workspace": "ワークスペース",
-      "linearWorkspace": "Linear ワークスペース",
       "layout": "レイアウト",
       "groupBy": "グループ化",
       "orderBy": "並び順",
-      "displayProperties": "表示プロパティ",
       "title": "フィルターと表示",
-      "done": "完了",
-      "jqlReplacesPreset": "JQL 検索中は「表示」のプリセットが置き換えられます。プリセットを選び直すには、検索をクリアしてください。"
-    },
-    "jiraViewControls": {
-      "jqlSearch": "JQL 検索"
+      "done": "完了"
     },
     "itemComments": {
       "noComments": "コメントはまだありません",
@@ -4337,24 +4267,6 @@
       "reviewers": "レビュアー",
       "viewFile": "表示"
     },
-    "providerControls": {
-      "myTodos": "自分の ToDo",
-      "reposLabel": "リポジトリ: {{repos}}",
-      "filterCount": "フィルター · {{count}}",
-      "filter": "フィルター",
-      "filterLabel": "フィルターと表示",
-      "projectMergeRequests": "プロジェクトの MR"
-    },
-    "providerItemList": {
-      "intoBranch": "{{base}} へ",
-      "kindAndStatus": "{{kind}}、{{status}}",
-      "nextPage": "次のページ",
-      "page": "{{page}} ページ",
-      "pageOfTotal": "{{page}} / {{total}} ページ",
-      "previousPage": "前のページへ",
-      "selectPage": "ページを選択、{{page}} ページ",
-      "selectPageOfTotal": "ページを選択、全 {{total}} ページ中 {{page}} ページ"
-    },
     "providerPickers": {
       "allRepositories": "すべてのリポジトリ"
     },
@@ -4431,7 +4343,6 @@
       "advanced": "詳細設定",
       "agent": "Agent",
       "connectFirst": "先にリポジトリに接続",
-      "optionalLabel": "任意",
       "defaultBranch": "デフォルトブランチ",
       "detectingAgents": "Agent を検出中…",
       "remoteRepository": "リモートリポジトリ",
@@ -4599,8 +4510,7 @@
       "noFilterMatches": "フィルターに一致するワークスペースがありません",
       "reopen": "開き直して更新",
       "reopenDetail": "このページは、このホストのワークスペース一覧の形式にまだ対応していません。",
-      "loading": "ワークスペースを読み込み中…",
-      "retryingAutomatically": "自動的に再試行しています。"
+      "loading": "ワークスペースを読み込み中…"
     },
     "workspaceListSections": {
       "all": "全て",
@@ -4726,7 +4636,6 @@
       "keepEditing": "編集を続ける",
       "on": "オン",
       "repeats": "繰り返し",
-      "newOnePerRun": "実行ごとに新規作成",
       "moreActions": "その他の操作",
       "noRunsYet": "実行はまだありません",
       "nextRunToday": "次回：今日 {{time}}",
@@ -5015,11 +4924,8 @@
       "workers_other": "{{count}} 件のワーカー",
       "noMatches": "「{{query}}」に一致する Agent はありません",
       "emptyTitle": "実行中の Agent はありません",
-      "pairDesktop": "デスクトップとペアリングすると、その Agent がここに表示されます。",
       "emptyBody": "いずれかのワークスペースで Agent を開始すると、ここに表示されます。",
       "unread": "未読",
-      "noDesktopTitle": "デスクトップが接続されていません",
-      "noDesktopBody": "デスクトップが接続されると、Agent がここに表示されます。",
       "hideWorkers": "{{workers}} を非表示",
       "showWorkers": "{{workers}} を表示"
     },
@@ -5038,29 +4944,17 @@
       "status": "状態",
       "workspace": "ワークスペース",
       "project": "プロジェクト",
-      "agent": "Agent",
-      "desktop": "デスクトップ"
+      "agent": "Agent"
     },
     "options": {
       "groupBy": "グループ化",
       "showWorkers": "ワーカー Agent を表示",
-      "open": "Agent 一覧のオプション",
       "unreadOnly": "未読のみ",
       "markAllRead": "すべて既読にする",
       "clearFinished": "完了済みをクリア"
     },
     "search": {
-      "toggle": "Agent を検索",
       "placeholder": "Agent を検索"
-    },
-    "desktops": {
-      "pickerTitle": "Agent を表示するデスクトップ",
-      "agents_one": "{{count}} 個の Agent",
-      "agents_other": "{{count}} 個の Agent",
-      "all": "すべてのデスクトップ",
-      "offline": "オフライン",
-      "needsYou_one": "{{count}} 件が対応待ち",
-      "needsYou_other": "{{count}} 件が対応待ち"
     },
     "sections": {
       "needsYou": "確認が必要",

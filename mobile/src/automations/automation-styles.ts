@@ -1,7 +1,7 @@
 import { themedStyleSheet } from '../theme/themed-styles'
 import { COMPOSER_TEXT_SIZE } from '../components/composer-input/composer-input-styles'
 import { LIST_ROW_PADDING } from '../components/list/ListGroup'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 
 export const automationStyles = themedStyleSheet(() => ({
   screen: { flex: 1, backgroundColor: colors.bgBase },

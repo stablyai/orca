@@ -1,4 +1,4 @@
-import { useRef, useState, type ComponentType, type Ref, type RefObject } from 'react'
+import { useEffect, useRef, useState, type ComponentType, type Ref, type RefObject } from 'react'
 import {
   Keyboard as SoftKeyboard,
   Platform,
@@ -40,6 +40,8 @@ type Props = {
   addressFocused: boolean
   setAddressValue: (value: string) => void
   setAddressFocused: (focused: boolean) => void
+  /** A blank tab has nothing to show yet, so the address takes focus once it can be typed in. */
+  focusWhenReady: boolean
   navigateToAddress: () => void
   showStop: boolean
   stopPage: () => void
@@ -146,9 +148,17 @@ function AddressPill({
   stopPage,
   reloadPage,
   onKeyboard,
+  focusWhenReady,
   inputRef
 }: Props & { inputRef: RefObject<TextInputInstance | null> }) {
   const t = useMobileTranslation()
+  const focusedOnceRef = useRef(false)
+  useEffect(() => {
+    if (focusWhenReady && !controlsDisabled && !focusedOnceRef.current) {
+      focusedOnceRef.current = true
+      inputRef.current?.focus()
+    }
+  }, [focusWhenReady, controlsDisabled, inputRef])
   const label = mobileBrowserAddressLabel(url)
   const ReloadIcon = showStop ? X : RotateCw
   return (

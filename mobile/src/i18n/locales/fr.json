@@ -120,14 +120,9 @@
       "previewColumns_one": "{{count}} colonne",
       "previewColumns_other": "{{count}} colonnes",
       "previewLabel": "Aperçu du terminal",
-      "previewHeading": "APERÇU",
-      "fontHeading": "POLICE",
-      "fontDescription": "Pincez dans un terminal pour modifier la taille ; elle est enregistrée ici. Ne modifie que cet appareil, pas le terminal de l'ordinateur.",
       "font": "Police",
       "size": "Taille",
       "sizePoints": "{{size}} pt",
-      "smaller": "Plus petit",
-      "larger": "Plus grand",
       "lineSpacing": "Interligne",
       "lineSpacingTight": "Serré",
       "lineSpacingNormal": "Normal",
@@ -985,10 +980,7 @@
       "discardChanges": "Abandonner les modifications",
       "rangeLine": "Ligne {{line}}",
       "rangeLines": "Lignes {{startLine}}–{{line}}",
-      "sendToAgent": "Envoyer à {{agent}}",
-      "sendToAnAgent": "Envoyer à un agent",
       "rangePlaceholder": "Que faut-il changer ici ?",
-      "commentOnGitHub": "Commenter sur GitHub",
       "sendUnsentNotes": "Envoyer les notes non envoyées",
       "statusUnreadable": "Impossible de lire l'état de cet hôte. Nouvelle tentative…",
       "terminal": "Terminal",
@@ -1106,7 +1098,6 @@
       "agent": "Agent",
       "connectTarget": "Se connecter à la cible",
       "options": "Options",
-      "createWorkspace": "Créer un espace de travail",
       "startFrom": "À partir de",
       "loadingProjects": "Chargement des projets…",
       "connectTargetFirst": "Connectez-vous d'abord à la cible",
@@ -1301,17 +1292,6 @@
       "expand": "Agrandir le diagramme",
       "label": "Diagramme Mermaid"
     },
-    "worktreeAgentList": {
-      "hideChildAgents_many": "Masquer {{count}} agents enfants",
-      "hideChildAgents_one": "Masquer {{count}} agent enfant",
-      "hideChildAgents_other": "Masquer {{count}} agents enfants",
-      "showChildAgents_many": "Afficher {{count}} agents enfants",
-      "showChildAgents_one": "Afficher {{count}} agent enfant",
-      "showChildAgents_other": "Afficher {{count}} agents enfants",
-      "hideIdleChildren": "Masquer les agents enfants inactifs ({{count}})",
-      "showIdleChildren": "Afficher les agents enfants inactifs ({{count}})",
-      "idleChildCount": "Inactifs : {{count}}"
-    },
     "diffReviewFilesSheet": {
       "title": "Fichiers",
       "search": "Aller au fichier",
@@ -1321,9 +1301,6 @@
     },
     "native-chat": {
       "turnDiff": {
-        "changedFiles_many": "{{count}} fichiers modifiés",
-        "changedFiles_one": "{{count}} fichier modifié",
-        "changedFiles_other": "{{count}} fichiers modifiés",
         "partial": "Diff partiel",
         "showMoreFiles": "Afficher {{count}} de plus"
       },
@@ -1653,9 +1630,6 @@
       "backToSession": "Retour à la session",
       "closeFiles": "Fermer les fichiers",
       "emptyState": "Aucun fichier trouvé",
-      "filterPlaceholder": "Filtrer les fichiers",
-      "noMatchesHint": "Seuls les dossiers que vous avez ouverts sont parcourus.",
-      "clearFilter": "Effacer le filtre",
       "loading": "Chargement des fichiers…",
       "loadFailed": "Impossible de charger les fichiers",
       "title": "Fichiers",
@@ -1769,17 +1743,6 @@
       "updateDesktop": "Mettez à jour Orca sur {{desktop}} pour utiliser les automatisations.",
       "pairComputer": "Appairez un ordinateur pour afficher et exécuter des automatisations."
     },
-    "emptyState": {
-      "connectedDescription": "Votre ordinateur apparaîtra ici. Tout est chiffré de bout en bout.",
-      "connectedTitle": "Vous êtes connecté",
-      "description": "Appairez votre téléphone à Orca sur votre ordinateur pour suivre vos agents, accéder à n'importe quel terminal et piloter votre travail depuis votre téléphone.",
-      "pairDesktopButton": "Appairer un ordinateur",
-      "scanCodeBelowDescription": "Touchez « Appairer un ordinateur » ci-dessous, puis pointez votre caméra vers le QR code affiché à l'écran.",
-      "openDesktopDescription": "Allez dans Paramètres → Mobile et générez un QR code d'appairage.",
-      "openDesktopTitle": "Ouvrir Orca sur l'ordinateur",
-      "scanCodeTitle": "Scanner le code",
-      "title": "Connectez votre ordinateur"
-    },
     "listFooter": {
       "openTasksOn": "Ouvrir les tâches sur"
     },
@@ -1795,15 +1758,10 @@
       "sameNetworkOnly": "Se connecte uniquement sur le même Wi-Fi ou via Tailscale. Pour vous connecter de partout, connectez-vous sur votre ordinateur et appairez de nouveau"
     },
     "bottomBar": {
-      "connectFirst": "Connectez un ordinateur pour démarrer un nouveau travail.",
       "newWorkspace": "Nouvel espace de travail"
     },
-    "desktops": {
-      "pairDesktop": "Appairer un ordinateur"
-    },
     "sections": {
-      "tasks": "Tâches",
-      "tasksSubtitle": "Parcourez vos issues et vos revues"
+      "tasks": "Tâches"
     },
     "stats": {
       "agentTime": "Temps agent",
@@ -1868,8 +1826,7 @@
       "computerRemoved": "Cet hôte a été supprimé de ce téléphone.",
       "couldNotLoad": "Impossible de charger l'hôte.",
       "couldNotSave": "Impossible d'enregistrer l'hôte.",
-      "save": "Enregistrer",
-      "removeHost": "Retirer l'hôte"
+      "save": "Enregistrer"
     }
   },
   "hostScreen": {
@@ -2033,7 +1990,6 @@
     },
     "notificationDeliverySection": {
       "onlyWhenAgentNeedsInput": "Uniquement quand un agent a besoin de moi",
-      "onlyWhenAgentNeedsInputHint": "Demandes d'autorisation et questions. Ignore les agents qui ont terminé.",
       "sound": "Son des notifications"
     }
   },
@@ -2070,7 +2026,6 @@
       "daysAgo_other": "il y a {{count}} j",
       "deleteConfirmMessage": "Cette action supprime définitivement le commentaire sur GitHub.",
       "editPlaceholder": "Modifier le commentaire…",
-      "replyToComment": "Répondre au commentaire",
       "hoursAgo_many": "il y a {{count}} h",
       "hoursAgo_one": "il y a {{count}} h",
       "hoursAgo_other": "il y a {{count}} h",
@@ -2082,40 +2037,23 @@
       "monthsAgo_one": "il y a {{count}} mois",
       "monthsAgo_other": "il y a {{count}} mois",
       "reply": "Répondre",
-      "editComment": "Modifier le commentaire",
-      "deleteComment": "Supprimer le commentaire",
-      "unresolveThread": "Marquer le fil comme non résolu",
-      "resolveThread": "Résoudre le fil",
       "resolve": "Résoudre",
-      "replyPlaceholder": "Écrire une réponse…",
       "unresolve": "Marquer comme non résolu",
       "yearsAgo_many": "il y a {{count}} ans",
       "yearsAgo_one": "il y a {{count}} an",
-      "yearsAgo_other": "il y a {{count}} ans",
-      "resolved": "résolu",
-      "openOnGitHub": "Ouvrir le commentaire sur GitHub"
+      "yearsAgo_other": "il y a {{count}} ans"
     },
     "commentsSection": {
-      "all": "Tous",
-      "humans": "Humains",
-      "bots": "Bots",
-      "noBotComments": "Aucun commentaire de bot.",
-      "noHumanComments": "Aucun commentaire humain.",
       "comment": "Commenter",
       "resolvedThreadSingle": "Fil de {{author}} résolu",
       "resolvedThreadCount": "Fil de {{author}} résolu ({{count}})",
-      "resolvedCommentSingle": "Commentaire de {{author}} résolu",
-      "resolvedCommentCount": "Commentaire de {{author}} résolu ({{count}})",
       "commentsLoadFailedRetry": "Impossible de charger les commentaires.",
       "description": "Description",
       "descriptionLoadFailed": "Impossible de charger la description. Appuyez sur Actualiser pour réessayer.",
       "noComments": "Aucun commentaire pour le moment.",
       "noDescription": "Aucune description fournie.",
       "showMore": "Afficher {{count}} de plus",
-      "addCommentPlaceholder": "Ajouter un commentaire…",
-      "title": "Commentaires",
-      "commentsLoadFailed": "Impossible de charger les commentaires. Appuyez sur Actualiser pour réessayer.",
-      "showMoreOf": "Afficher {{count}} de plus sur {{remaining}}"
+      "title": "Commentaires"
     },
     "linkPrForm": {
       "linkButton": "Lier la pull request",
@@ -2280,7 +2218,6 @@
       "titleLabel": "Titre",
       "descriptionLabel": "Description",
       "writeWithAi": "Rédiger avec l'IA",
-      "descriptionPlaceholder": "Facultatif",
       "draft": "Créer en brouillon"
     },
     "screens": {
@@ -2291,7 +2228,6 @@
       "failedAfter": "Échec après {{duration}}",
       "failed": "Échec",
       "checkActions": "Plus d'actions pour {{name}}",
-      "rerun": "Relancer",
       "copyErrorFailed": "Impossible de copier l'erreur.",
       "durationSeconds": "{{seconds}} s",
       "durationMinutes": "{{minutes}} min {{seconds}} s",
@@ -3980,14 +3916,6 @@
       "behind": "{{count}} en retard",
       "upToDate": "À jour",
       "switchBranch": "Changer de branche (actuelle : {{branch}})",
-      "mergeInProgress": "Merge en cours",
-      "rebaseInProgress": "Rebase en cours",
-      "cherryPickInProgress": "Cherry-pick en cours",
-      "filesNeedDecision_many": "{{count}} fichiers nécessitent une décision avant de pouvoir terminer.",
-      "filesNeedDecision_one": "{{count}} fichier nécessite une décision avant de pouvoir terminer.",
-      "filesNeedDecision_other": "{{count}} fichiers nécessitent une décision avant de pouvoir terminer.",
-      "conflictsResolved": "Tous les conflits sont résolus. Terminez depuis la barre ci-dessous.",
-      "continueOnComputer": "Tous les conflits sont résolus. Continuez sur votre ordinateur pour terminer.",
       "commits_many": "{{count}} commits",
       "commits_one": "{{count}} commit",
       "commits_other": "{{count}} commits",
@@ -4015,29 +3943,15 @@
       "loadPageFailed": "La page {{page}} n’a pas pu être chargée depuis GitHub."
     },
     "filterSheet": {
-      "sortBy": "Trier par",
       "issueSource": "Source des issues",
-      "issueSourceRow": "Upstream ou origin",
       "view": "Affichage",
-      "projectView": "Vue de projet",
-      "projectItems_many": "{{count}} éléments",
-      "projectItems_one": "{{count}} élément",
-      "projectItems_other": "{{count}} éléments",
-      "chooseView": "Choisir",
       "showOnRows": "Afficher sur les lignes",
-      "projectFields": "Champs du projet",
       "workspace": "Espace de travail",
-      "linearWorkspace": "Espace de travail Linear",
       "layout": "Disposition",
       "groupBy": "Grouper par",
       "orderBy": "Ordonner par",
-      "displayProperties": "Propriétés affichées",
       "title": "Filtre et affichage",
-      "done": "Terminé",
-      "jqlReplacesPreset": "Votre recherche JQL remplace le préréglage « Afficher ». Effacez la recherche pour en choisir un à nouveau."
-    },
-    "jiraViewControls": {
-      "jqlSearch": "Recherche JQL"
+      "done": "Terminé"
     },
     "itemComments": {
       "noComments": "Aucun commentaire pour l'instant",
@@ -4141,10 +4055,6 @@
       "checks": "Vérifications",
       "description": "Description",
       "discussion": "Discussion",
-      "details": "Détails",
-      "type": "Type",
-      "status": "Statut",
-      "assignee": "Assigné",
       "project": "Projet",
       "priority": "Priorité",
       "assignees": "Assignés",
@@ -4377,24 +4287,6 @@
       "reviewers": "Reviewers",
       "viewFile": "Afficher"
     },
-    "providerControls": {
-      "myTodos": "Mes tâches à faire",
-      "reposLabel": "Dépôts : {{repos}}",
-      "filterCount": "Filtre · {{count}}",
-      "filter": "Filtre",
-      "filterLabel": "Filtre et affichage",
-      "projectMergeRequests": "MR du projet"
-    },
-    "providerItemList": {
-      "intoBranch": "vers {{base}}",
-      "kindAndStatus": "{{kind}}, {{status}}",
-      "nextPage": "Page suivante",
-      "page": "Page {{page}}",
-      "pageOfTotal": "Page {{page}} sur {{total}}",
-      "previousPage": "Page précédente",
-      "selectPage": "Sélectionner une page, page {{page}}",
-      "selectPageOfTotal": "Sélectionner une page, page {{page}} sur {{total}}"
-    },
     "providerPickers": {
       "allRepositories": "Tous les dépôts"
     },
@@ -4472,7 +4364,6 @@
       "advanced": "Avancé",
       "agent": "Agent",
       "connectFirst": "Connectez d'abord le dépôt",
-      "optionalLabel": "Facultatif",
       "defaultBranch": "Branche par défaut",
       "detectingAgents": "Détection des agents…",
       "remoteRepository": "Dépôt distant",
@@ -4644,8 +4535,7 @@
       "noFilterMatches": "Aucun espace de travail ne correspond aux filtres",
       "reopen": "Rouvrir pour mettre à jour",
       "reopenDetail": "Cet hôte fournit une liste d'espaces de travail dans un format que cette page ne reconnaît pas encore.",
-      "loading": "Chargement des espaces de travail…",
-      "retryingAutomatically": "Nouvelle tentative automatique."
+      "loading": "Chargement des espaces de travail…"
     },
     "workspaceListSections": {
       "all": "Tous",
@@ -4771,7 +4661,6 @@
       "keepEditing": "Continuer la modification",
       "on": "Activée",
       "repeats": "Répétition",
-      "newOnePerRun": "Nouveau à chaque exécution",
       "moreActions": "Plus d'actions",
       "noRunsYet": "Aucune exécution pour l'instant",
       "nextRunToday": "Prochaine exécution aujourd'hui à {{time}}",
@@ -5061,11 +4950,8 @@
       "workers_other": "{{count}} workers",
       "noMatches": "Aucun agent ne correspond à « {{query}} »",
       "emptyTitle": "Aucun agent en cours d'exécution",
-      "pairDesktop": "Appairez un ordinateur pour voir ses agents ici.",
       "emptyBody": "Démarrez un agent dans n'importe quel espace de travail : il apparaîtra ici.",
       "unread": "Non lu",
-      "noDesktopTitle": "Aucun ordinateur connecté",
-      "noDesktopBody": "Les agents apparaîtront ici dès qu'un ordinateur sera connecté.",
       "hideWorkers": "Masquer {{workers}}",
       "showWorkers": "Afficher {{workers}}"
     },
@@ -5084,31 +4970,17 @@
       "status": "Statut",
       "workspace": "Espace de travail",
       "project": "Projet",
-      "agent": "Agent",
-      "desktop": "Ordinateur"
+      "agent": "Agent"
     },
     "options": {
       "groupBy": "Grouper par",
       "showWorkers": "Afficher les workers",
-      "open": "Options de la liste des agents",
       "unreadOnly": "Non lus uniquement",
       "markAllRead": "Tout marquer comme lu",
       "clearFinished": "Retirer les agents terminés"
     },
     "search": {
-      "toggle": "Rechercher des agents",
       "placeholder": "Rechercher des agents"
-    },
-    "desktops": {
-      "pickerTitle": "Afficher les agents sur",
-      "agents_many": "{{count}} agents",
-      "agents_one": "{{count}} agent",
-      "agents_other": "{{count}} agents",
-      "all": "Tous les ordinateurs",
-      "offline": "Hors ligne",
-      "needsYou_many": "{{count}} ont besoin de vous",
-      "needsYou_one": "{{count}} a besoin de vous",
-      "needsYou_other": "{{count}} ont besoin de vous"
     },
     "sections": {
       "needsYou": "Nécessitent votre attention",

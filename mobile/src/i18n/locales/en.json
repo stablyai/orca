@@ -2387,7 +2387,8 @@
       "sourceControl": "Source control",
       "itemsNeedYou": "Items, {{count}} need you",
       "items": "Items",
-      "textSize": "Text size"
+      "textSize": "Text size",
+      "openSourceControl": "Open source control"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Agent History",

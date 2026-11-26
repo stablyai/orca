@@ -60,10 +60,7 @@
       "messages_one": "{{count}} 則訊息",
       "messages_other": "{{count}} 則訊息",
       "resumeSession": "恢復代理程式工作階段",
-      "continueInCli": "在 CLI 中繼續",
-      "hidePreview": "隱藏最近的訊息。",
-      "showPreview": "顯示最近的訊息。",
-      "you": "你"
+      "continueInCli": "在 CLI 中繼續"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "無法連上主機",
@@ -489,7 +486,6 @@
       "applying": "正在套用…",
       "onAttach": "聊天連線後套用",
       "heldPickRefused": "此聊天無法使用 {{picked}}。已保留 {{kept}}。",
-      "optionsSection": "選項",
       "permissionsLabel": "權限，{{value}}",
       "settingsLocked": "本回合結束後即可變更模型設定。",
       "workingAnnouncement": "代理程式正在執行。本回合結束後即可變更模型設定。"
@@ -2099,7 +2095,6 @@
     },
     "commandDock": {
       "liveInputHint": "輸入的文字會直接傳送至目前使用中的終端機",
-      "tapToShowKeyboard": "點一下以顯示鍵盤",
       "liveInputLabel": "終端機即時輸入"
     },
     "contentRow": {
@@ -2469,7 +2464,6 @@
     },
     "sheets": {
       "browser": "瀏覽器",
-      "browserStreamingUnavailable": "此主機無法串流瀏覽器分頁",
       "chat": "聊天",
       "cli": "CLI",
       "cliOnly": "僅限 CLI",
@@ -3579,13 +3573,6 @@
       "behind": "落後 {{count}} 筆",
       "upToDate": "已是最新",
       "switchBranch": "切換分支（目前為 {{branch}}）",
-      "mergeInProgress": "合併正在進行中",
-      "rebaseInProgress": "變基正在進行中",
-      "cherryPickInProgress": "揀選正在進行中",
-      "filesNeedDecision_one": "{{count}} 個檔案需要你決定如何處理，才能完成。",
-      "filesNeedDecision_other": "{{count}} 個檔案需要你決定如何處理，才能完成。",
-      "conflictsResolved": "所有衝突皆已解決。請從下方列完成。",
-      "continueOnComputer": "所有衝突皆已解決。請在電腦上繼續以完成。",
       "commits_one": "{{count}} 筆提交",
       "commits_other": "{{count}} 筆提交",
       "conflictsMayRemain": "未列出所有檔案，因此可能仍有衝突。請在電腦上檢查。"
@@ -3612,28 +3599,15 @@
       "loadPageFailed": "無法從 GitHub 載入第 {{page}} 頁。"
     },
     "filterSheet": {
-      "sortBy": "排序方式",
       "issueSource": "議題來源",
-      "issueSourceRow": "upstream 或 origin",
       "view": "檢視",
-      "projectView": "專案檢視",
-      "projectItems_one": "{{count}} 個項目",
-      "projectItems_other": "{{count}} 個項目",
-      "chooseView": "選擇",
       "showOnRows": "在列上顯示",
-      "projectFields": "專案欄位",
       "workspace": "工作區",
-      "linearWorkspace": "Linear 工作區",
       "layout": "版面配置",
       "groupBy": "分組依據",
       "orderBy": "排序依據",
-      "displayProperties": "顯示屬性",
       "title": "篩選與顯示",
-      "done": "完成",
-      "jqlReplacesPreset": "你的 JQL 搜尋會取代「顯示」預設篩選。清除搜尋即可重新選擇。"
-    },
-    "jiraViewControls": {
-      "jqlSearch": "JQL 搜尋"
+      "done": "完成"
     },
     "itemComments": {
       "noComments": "尚無留言",
@@ -3734,10 +3708,6 @@
       "checks": "檢查項目",
       "description": "描述",
       "discussion": "討論",
-      "details": "詳情",
-      "type": "類型",
-      "status": "狀態",
-      "assignee": "負責人",
       "project": "專案",
       "priority": "優先等級",
       "assignees": "負責人",
@@ -3967,24 +3937,6 @@
       "reviewers": "審查人",
       "viewFile": "檢視"
     },
-    "providerControls": {
-      "myTodos": "我的待辦事項",
-      "reposLabel": "存放庫：{{repos}}",
-      "filterCount": "篩選 · {{count}}",
-      "filter": "篩選",
-      "filterLabel": "篩選與顯示",
-      "projectMergeRequests": "專案 MR"
-    },
-    "providerItemList": {
-      "intoBranch": "合併至 {{base}}",
-      "kindAndStatus": "{{kind}}，{{status}}",
-      "nextPage": "前往下一頁",
-      "page": "第 {{page}} 頁",
-      "pageOfTotal": "第 {{page}} 頁，共 {{total}} 頁",
-      "previousPage": "前往上一頁",
-      "selectPage": "選擇頁面，第 {{page}} 頁",
-      "selectPageOfTotal": "選擇頁面，第 {{page}} 頁，共 {{total}} 頁"
-    },
     "providerPickers": {
       "allRepositories": "所有存放庫"
     },
@@ -4061,7 +4013,6 @@
       "advanced": "進階",
       "agent": "代理程式",
       "connectFirst": "請先連線存放庫",
-      "optionalLabel": "選填",
       "defaultBranch": "預設分支",
       "detectingAgents": "正在偵測代理程式…",
       "remoteRepository": "遠端存放庫",
@@ -4341,7 +4292,6 @@
       "keepEditing": "繼續編輯",
       "on": "開啟",
       "repeats": "重複",
-      "newOnePerRun": "每次執行都新建",
       "moreActions": "更多操作",
       "noRunsYet": "尚無執行記錄",
       "nextRunToday": "下次執行：今天 {{time}}",
@@ -4543,11 +4493,8 @@
       "workers_other": "{{count}} 個工作者",
       "noMatches": "沒有符合「{{query}}」的代理程式",
       "emptyTitle": "沒有執行中的代理程式",
-      "pairDesktop": "配對電腦後，即可在這裡查看它的代理程式。",
       "emptyBody": "在任一工作區啟動代理程式，就會顯示在這裡。",
       "unread": "未讀",
-      "noDesktopTitle": "未連線任何電腦",
-      "noDesktopBody": "電腦連線後，代理程式就會顯示在這裡。",
       "hideWorkers": "隱藏 {{workers}}",
       "showWorkers": "顯示 {{workers}}"
     },
@@ -4566,29 +4513,17 @@
       "status": "狀態",
       "workspace": "工作區",
       "project": "專案",
-      "agent": "代理程式",
-      "desktop": "電腦"
+      "agent": "代理程式"
     },
     "options": {
       "groupBy": "分組依據",
       "showWorkers": "顯示工作者",
-      "open": "代理程式清單選項",
       "unreadOnly": "僅顯示未讀",
       "markAllRead": "標記全部已讀",
       "clearFinished": "清除已完成"
     },
     "search": {
-      "toggle": "搜尋代理程式",
       "placeholder": "搜尋代理程式"
-    },
-    "desktops": {
-      "pickerTitle": "顯示哪台電腦的代理程式",
-      "agents_one": "{{count}} 個代理程式",
-      "agents_other": "{{count}} 個代理程式",
-      "all": "所有電腦",
-      "offline": "離線",
-      "needsYou_one": "{{count}} 個需要你處理",
-      "needsYou_other": "{{count}} 個需要你處理"
     },
     "sections": {
       "needsYou": "需要你處理",
