@@ -149,7 +149,7 @@ export function connectorAskerImages(deps: {
     },
     signal: AbortSignal
   ) => Promise<ConnectorResult<ConnectorActionResponse> | null>
-  store: (name: string, bytes: Buffer) => Promise<string>
+  store: (name: string, bytes: Buffer, slackFileId?: string) => Promise<string>
   fetch?: typeof fetch
   budgetMs?: number
 }): AskerImages {
@@ -183,7 +183,14 @@ export function connectorAskerImages(deps: {
         const named = typeof download?.name === 'string' ? download.name : fileId
         const base = named.slice(0, named.length - extname(named).length) || fileId
         // The disk is bounded too: a write that hangs must not hold the turn.
-        const path = await within(deps.store(`${base}${extension}`, bytes), bounded)
+        const path = await within(
+          deps.store(
+            `${base}${extension}`,
+            bytes,
+            conversation.source === 'slack' ? fileId : undefined
+          ),
+          bounded
+        )
         images.push({ path, fileId, bytes: bytes.byteLength })
         return bytes.byteLength
       } catch {

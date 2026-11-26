@@ -178,11 +178,7 @@ function sendConnectorTurn(
         blocks: [
           ...carried.blocks,
           { type: 'text', text },
-          ...images.map(({ path, fileId }) => ({
-            type: 'image-ref' as const,
-            path,
-            ...(link.source === 'slack' ? { connectorFileId: fileId } : {})
-          }))
+          ...images.map(({ path }) => ({ type: 'image-ref' as const, path }))
         ],
         // An event no one asked through is the connector's too, so the turn finds its conversation;
         // a bot's message whose asker didn't parse is someone unknown's, never the owner's.

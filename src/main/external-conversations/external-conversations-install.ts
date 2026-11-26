@@ -16,6 +16,7 @@ import {
 } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { SlackMirror } from './slack-mirror'
 import { connectorAskerImages } from './connector-asker-images'
+import { storeConnectorImage } from './connector-asker-stored-image'
 import { postConnectorAction } from '../connector-cloud/connector-actions'
 import { cloudConversation } from '../../shared/connectors/connector-cloud-contract'
 import { getAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
@@ -172,12 +173,12 @@ export function installExternalConversations(
             imageSignal
           )
         },
-        store: async (name, bytes) => {
+        store: async (name, bytes, fileId) => {
           const attachments = getAgentSessionAttachmentStore()
           if (!attachments) {
             throw new Error('no attachment store')
           }
-          return await attachments.storeFile(name, bytes)
+          return await storeConnectorImage(attachments, name, bytes, fileId)
         }
       }),
       // An older cloud without refs names no channel; the row then shows Slack's name.

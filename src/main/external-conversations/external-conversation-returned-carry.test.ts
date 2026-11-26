@@ -27,6 +27,8 @@ import { actsForOwner, OWNER_ACTS_FOR } from '../../shared/bots/bot-acts-for'
 import { readBotActingTurn } from '../bots/bot-request-asker'
 import { carriedFields, carriedMessages } from './external-conversation-returned-carry'
 import { connectorAskerImages } from './connector-asker-images'
+import { storeConnectorImage } from './connector-asker-stored-image'
+import { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
 
 // The real journal writer: a Slack message whose start failed, then the conversation's next message.
 const NOW = 1_800_000_000_000
@@ -442,24 +444,26 @@ it('keeps a failed request and stages only new earlier images that fit the byte 
   const byteLength = 9 * 1024 * 1024
   const oldIds = ['F0', 'F1', 'F2', 'F3']
   const failed = asked('d-failed', 'four images')
-  failed.blocks.push(
-    ...oldIds.map((fileId) => ({
-      type: 'image-ref' as const,
-      path: stagedImage(`${fileId}.png`, byteLength),
-      connectorFileId: fileId
-    }))
-  )
+  const attachmentStore = new AgentSessionAttachmentStore(join(dir, 'agent-session-attachments'), {
+    hasSession: () => true
+  })
+  const fixture = Buffer.alloc(byteLength)
+  fixture.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+  for (const fileId of oldIds) {
+    const path = await storeConnectorImage(attachmentStore, `${fileId}.png`, fixture, fileId)
+    failed.blocks.push({ type: 'image-ref', path })
+  }
   failedStart('failed', failed)
   const carried = await carriedMessages(
     THREAD,
     readJournalDomainReturnedCards(db, target, NOW),
     ACCOUNT,
-    NOW
+    NOW,
+    [],
+    attachmentStore.rootDir
   )
 
   const reads: string[] = []
-  const bytes = new Uint8Array(byteLength)
-  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
   const stage = connectorAskerImages({
     read: async ({ fileId }) => {
       reads.push(fileId)
@@ -479,7 +483,7 @@ it('keeps a failed request and stages only new earlier images that fit the byte 
       }
     },
     store: async (name, image) => stagedImage(name, image.byteLength),
-    fetch: async () => new Response(bytes)
+    fetch: async () => new Response(new Uint8Array(fixture))
   })
   const staged = await stage({
     botId: 'seeded',

@@ -21,6 +21,8 @@ import {
 import type { JournalReturnedCard } from '../native-chat/agent-session-journal/journal-domain-queue-reads'
 import type { ConversationChat } from './external-conversation-chat'
 import type { EarlierImageBudget, ConnectorImage } from './connector-asker-images'
+import { storedConnectorImageId } from './connector-asker-stored-image'
+import { getAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 
 // What a later send can get past: the agent itself couldn't take the message. A refusal of the
 // message's own content (too large, too many images, empty) would fail again, so it stays a card.
@@ -88,7 +90,8 @@ export async function carriedMessages(
   returned: readonly JournalReturnedCard[],
   account: string | undefined,
   now: number,
-  direct: readonly ConnectorImage[] = []
+  direct: readonly ConnectorImage[] = [],
+  attachmentRoot?: string
 ): Promise<CarriedMessages> {
   // Oldest first: a failed start's card goes ahead of the queue, so queue order is newest first. A
   // card whose send time is gone came from an earlier Orca, so it is the older.
@@ -102,43 +105,46 @@ export async function carriedMessages(
     AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES -
     direct.reduce((total, image) => total + image.bytes, 0)
   let fileIds = new Set(direct.map((image) => image.fileId))
+  let inspections = AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT
   const carried: JournalReturnedCard[] = []
   const blocks: NativeChatBlock[] = []
   // Keep the oldest whole requests whose images fit; each remaining card can still be retried.
-  for (const each of eligible) {
+  cards: for (const each of eligible) {
     const cardFileIds = new Set(fileIds)
-    const ownBlocks = each.card.body.blocks.filter((block) => {
-      if (block.type !== 'image-ref' || !block.connectorFileId) {
-        return true
-      }
-      if (cardFileIds.has(block.connectorFileId)) {
-        return false
-      }
-      cardFileIds.add(block.connectorFileId)
-      return true
-    })
-    const images = ownBlocks.filter((block) => block.type === 'image-ref')
-    if (images.length > count) {
-      break
-    }
+    const ownBlocks: NativeChatBlock[] = []
     let cardBytes = 0
-    for (const image of images) {
-      if (image.url || !image.path) {
+    let cardImages = 0
+    for (const block of each.card.body.blocks) {
+      if (block.type !== 'image-ref') {
+        ownBlocks.push(block)
         continue
       }
-      const size = await stat(image.path).then(
-        (info) => (info.isFile() ? info.size : Infinity),
-        () => Infinity
-      )
-      cardBytes += size
-      if (cardBytes > bytes) {
-        break
+      if (inspections-- <= 0) {
+        break cards
       }
+      const path = block.url ? undefined : block.path
+      const fileId = path ? await storedConnectorImageId(attachmentRoot, path) : undefined
+      if (fileId && cardFileIds.has(fileId)) {
+        continue
+      }
+      if (++cardImages > count) {
+        break cards
+      }
+      if (path) {
+        cardBytes += await stat(path).then(
+          (info) => (info.isFile() ? info.size : Infinity),
+          () => Infinity
+        )
+      }
+      if (cardBytes > bytes) {
+        break cards
+      }
+      if (fileId) {
+        cardFileIds.add(fileId)
+      }
+      ownBlocks.push(block)
     }
-    if (cardBytes > bytes) {
-      break
-    }
-    count -= images.length
+    count -= cardImages
     bytes -= cardBytes
     fileIds = cardFileIds
     carried.push(each)
@@ -230,7 +236,8 @@ export async function readCarriedMessages(
     const returned = await (
       await chat.conversation(link.sessionId)
     ).journal.queuedMessages.returned()
-    return await carriedMessages(link, returned, account, Date.now(), direct)
+    const root = link.source === 'slack' ? getAgentSessionAttachmentStore()?.rootDir : undefined
+    return await carriedMessages(link, returned, account, Date.now(), direct, root)
   } catch (error) {
     console.warn('[connectors] could not read the chat’s unsent messages', error)
     return NOTHING_CARRIED
