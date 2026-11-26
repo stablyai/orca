@@ -202,7 +202,9 @@ function onManifestRead(
 
 // Reenter gates after failure: ready may hold unreadable reconnect status, which must not become a bundle-unavailable wall.
 const refetchAfterDelete: RefetchAfterDelete = (session, gates) =>
-  startFlow(session, gates, { retriedOnce: true, cached: null }, [{ kind: 'delete-cache' }])
+  startFlow(session, gates, { retriedOnce: true, cached: null, manifestFirst: true }, [
+    { kind: 'delete-cache' }
+  ])
 
 function onLayoutChanged(session: MobileWebShellSession, wide: boolean): MobileWebShellStep {
   if (session.state.kind === 'failed' && session.state.reason === 'host-profile-unreadable') {

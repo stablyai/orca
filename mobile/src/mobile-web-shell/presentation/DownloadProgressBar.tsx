@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Animated, Easing, Platform, StyleSheet, View } from 'react-native'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
+import type { Translate } from '../../i18n/mobile-i18n'
 import { colors } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -11,8 +12,19 @@ const FILL_EASE_MS = 100
 const FILL_RESTART_MS = 50
 const useNativeDriver = Platform.OS !== 'web'
 
-export function downloadedMegabytesCaption(receivedBytes: number, totalBytes: number): string {
-  return `${megabytes(receivedBytes)} of ${megabytes(totalBytes)} MB`
+export function downloadedMegabytesCaption(
+  receivedBytes: number,
+  totalBytes: number,
+  t?: Translate
+): string {
+  const received = megabytes(receivedBytes)
+  const total = megabytes(totalBytes)
+  return t
+    ? t('webShell.shellStateScreen.downloadedMegabytes', '{{received}} of {{total}} MB', {
+        received,
+        total
+      })
+    : `${received} of ${total} MB`
 }
 
 function megabytes(bytes: number): string {

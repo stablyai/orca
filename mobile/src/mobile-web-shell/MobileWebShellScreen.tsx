@@ -13,7 +13,6 @@ import { reportPageRouteRefusal } from './routing/page-route-refusal'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { BridgeInitRoute } from './bridge/protocol/bridge-init-route'
 import type { BridgeClearableRouteParam } from './bridge/page-lifecycle/bridge-route-update'
-import type { MobileWebShellUpdateNotice } from './session/mobile-web-shell-session-contract'
 import { useMobileWebShellDroppedFrames } from './diagnostics/mobile-web-shell-dev-facts'
 import { ShellDevFacts } from './presentation/ShellDevFacts'
 import { cancelledShellNavigationTarget } from './routing/cancelled-navigation-target'
@@ -43,7 +42,7 @@ import {
   storageReadParamsSchema,
   type BridgeNativeVerb
 } from './bridge/native-capabilities/bridge-native-verbs'
-import { SHELL_OPENING_LABEL, ShellPageCover } from './presentation/ShellWaitingFrame'
+import { ShellPageCover } from './presentation/ShellWaitingFrame'
 import { ShellStateScreen } from './presentation/ShellStateScreen'
 import {
   useReportedShellOverlayLoad,
@@ -57,14 +56,6 @@ import { usePageFoldDivision, usePublishedFoldDivision } from './page-geometry/p
 import { usePublishedShellKeyRail, useShellKeyRail } from './terminal-controls/use-shell-key-rail'
 import { hostProfileUnreadableLine, pageFaultLine } from './diagnostics/shell-lifecycle-log'
 import { recordShellLifecycleLine } from './diagnostics/shell-lifecycle-line-recorder'
-
-// Do not promise a retry: the shell schedules no second update attempt.
-function updateNoticeMessage(notice: MobileWebShellUpdateNotice): string {
-  switch (notice) {
-    case 'update-failed':
-      return "Couldn't download the latest app from this host. Showing the last version that worked."
-  }
-}
 
 export type MobileWebShellScreenProps = {
   hostId: string
@@ -135,9 +126,16 @@ export function MobileWebShellScreen({
   useReportedHostAreaServing(ownsHostArea && state.kind !== 'checking')
   // Key dismissal by session id so a new generation’s refusal still appears.
   const [noticeDismissedFor, setNoticeDismissedFor] = useState<string | null>(null)
+  // Do not promise a retry: the shell schedules no second update attempt.
   const banner =
-    updateNotice !== null
-      ? { message: updateNoticeMessage(updateNotice), tone: 'failure' as const }
+    updateNotice === 'update-failed'
+      ? {
+          message: t(
+            'webShell.shellStateScreen.updateFailedNotice',
+            "Couldn't download the latest app from this host. Showing the last version that worked."
+          ),
+          tone: 'failure' as const
+        }
       : notice
         ? { message: notice, tone: 'notice' as const }
         : null
@@ -350,6 +348,7 @@ export function MobileWebShellScreen({
     }
   }, [hostId, unreadable])
 
+  const openingLabel = t('webShell.shellStateScreen.openingWorkspace', 'Opening workspace')
   if (overlay && state.kind !== 'ready') {
     return null
   }
@@ -426,9 +425,7 @@ export function MobileWebShellScreen({
           }
         }}
       />
-      {overlay ? null : (
-        <ShellPageCover label={SHELL_OPENING_LABEL} visible={pageFrame === 'unpainted'} />
-      )}
+      {overlay ? null : <ShellPageCover label={openingLabel} visible={pageFrame === 'unpainted'} />}
       <ShellDevFacts state={state} droppedBinaryFrames={droppedBinaryFrames} />
     </View>
   )
