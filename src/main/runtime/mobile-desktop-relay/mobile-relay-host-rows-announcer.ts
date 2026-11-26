@@ -16,6 +16,8 @@ import {
 // The server's own worktreeRowsChanged windows, so a busy agent costs the phone no more than one here would.
 const ROWS_FLUSH_MS = 500
 const ROWS_MAX_WAIT_MS = 2000
+// An active Home observer re-reads within its 3 s floor; no follow-up read means no phone is watching.
+export const UNACKNOWLEDGED_NOTICE_RELEASE_MS = 15_000
 
 /** The phone connection reading a server's rows, and where its release runs when it closes. */
 export type RelayPhoneReader = {
@@ -54,6 +56,8 @@ type WatchedServer = {
   open: OpenWatch | null
   // Spent once per hold, so a stream that readies then drops can't loop read, reopen, announce.
   earlyReadAnnounced: boolean
+  // Drops the watch if no phone re-reads after an announcement (e.g. Home blurred on an older app).
+  unackedReleaseTimer: ReturnType<typeof setTimeout> | null
 }
 
 /**
@@ -71,7 +75,14 @@ export class RelayHostRowsAnnouncer {
     changed: (hostId: `runtime:${string}`) => void
   ) {
     this.coalescer = createKeyedTrailingEdgeCoalescer(
-      (environmentId) => changed(toRuntimeExecutionHostId(environmentId)),
+      (environmentId) => {
+        const server = this.servers.get(environmentId)
+        if (!server) {
+          return
+        }
+        changed(toRuntimeExecutionHostId(environmentId))
+        this.armUnacknowledgedRelease(environmentId, server)
+      },
       { flushMs: ROWS_FLUSH_MS, maxWaitMs: ROWS_MAX_WAIT_MS }
     )
   }
@@ -85,12 +96,19 @@ export class RelayHostRowsAnnouncer {
     const key = host.environmentId
     let server = this.servers.get(key)
     if (!server) {
-      server = { host, connections: new Set(), open: null, earlyReadAnnounced: false }
+      server = {
+        host,
+        connections: new Set(),
+        open: null,
+        earlyReadAnnounced: false,
+        unackedReleaseTimer: null
+      }
       this.servers.set(key, server)
       this.stopStatusWatch ??= this.sources.onStatusChanged((contact) =>
         this.reopenReturned(contact)
       )
     }
+    this.clearUnacknowledgedRelease(server)
     // A re-pair moves every phone's hold to the new watch.
     const fence = relayHostFence(host.identity)
     if (!this.watching(server) || relayHostFence(server.host.identity) !== fence) {
@@ -107,6 +125,15 @@ export class RelayHostRowsAnnouncer {
         this.stop(key, held)
       }
     })
+  }
+
+  /** A phone navigated away from row views while staying connected: release all of its holds now. */
+  release(connectionId: string): void {
+    for (const [key, server] of this.servers) {
+      if (server.connections.delete(connectionId) && server.connections.size === 0) {
+        this.stop(key, server)
+      }
+    }
   }
 
   /** The phone's read fetched this server's rows: one that landed before the stream was ready may miss a change. */
@@ -132,12 +159,26 @@ export class RelayHostRowsAnnouncer {
 
   /** A held server whose stream ended is back: watch it again, and tell phones once its stream is ready. */
   private reopenReturned(contact?: { environmentId: string; inContact: boolean }): void {
-    const dropped = [...this.servers].filter(
-      ([key, server]) =>
-        !this.watching(server) && (!contact || (contact.environmentId === key && contact.inContact))
-    )
-    if (dropped.length === 0) {
-      return
+    let dropped: [string, WatchedServer][]
+    if (contact) {
+      if (!contact.inContact) {
+        return
+      }
+      const server = this.servers.get(contact.environmentId)
+      if (!server || this.watching(server)) {
+        return
+      }
+      dropped = [[contact.environmentId, server]]
+    } else {
+      dropped = []
+      for (const [key, server] of this.servers) {
+        if (!this.watching(server)) {
+          dropped.push([key, server])
+        }
+      }
+      if (dropped.length === 0) {
+        return
+      }
     }
     void this.sources.describe().then(
       (described) => {
@@ -201,7 +242,29 @@ export class RelayHostRowsAnnouncer {
     }
   }
 
+  private armUnacknowledgedRelease(key: string, server: WatchedServer): void {
+    if (server.unackedReleaseTimer !== null) {
+      return
+    }
+    const timer = setTimeout(() => {
+      server.unackedReleaseTimer = null
+      if (this.servers.get(key) === server) {
+        this.stop(key, server)
+      }
+    }, UNACKNOWLEDGED_NOTICE_RELEASE_MS)
+    timer.unref?.()
+    server.unackedReleaseTimer = timer
+  }
+
+  private clearUnacknowledgedRelease(server: WatchedServer): void {
+    if (server.unackedReleaseTimer !== null) {
+      clearTimeout(server.unackedReleaseTimer)
+      server.unackedReleaseTimer = null
+    }
+  }
+
   private stop(key: string, server: WatchedServer): void {
+    this.clearUnacknowledgedRelease(server)
     this.closeWatch(server)
     this.servers.delete(key)
     this.coalescer.cancel(key)

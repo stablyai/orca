@@ -49,8 +49,22 @@ export type BranchAutoRenameRetryAvailability = {
   runningAttemptId: number | null
 }
 
+/** False when the workspace is gone; the error then has nothing left to clear. */
+export type BranchAutoRenameDismissResult = { dismissed: boolean }
+
 export type BranchAutoRenameRetryResult = {
   attemptId: number | null
   outcome: BranchAutoRenameOutcome
   finishedAt: number
 }
+
+/** A remote Try again waits on a full generation run (its own timeout is 60s) plus setup. */
+export const AUTO_NAME_RETRY_TIMEOUT_MS = 120_000
+
+/** The runtime methods behind a paired client's Try again and Dismiss. */
+export const AUTO_NAME_RPC_METHODS = {
+  availability: 'worktree.autoName.availability',
+  retry: 'worktree.autoName.retry',
+  dismiss: 'worktree.autoName.dismiss',
+  wait: 'worktree.autoName.wait'
+} as const
