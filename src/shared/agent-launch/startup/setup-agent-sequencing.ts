@@ -32,6 +32,7 @@ export const SETUP_WAIT_TIMEOUT_MESSAGE = 'Timed out waiting for setup before st
 export { SETUP_AGENT_BLOCKED_MESSAGE }
 export const SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV = 'ORCA_SEQUENCED_STARTUP_COMMAND'
 export const SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV = 'ORCA_SEQUENCED_STARTUP_SCRIPT'
+export const SETUP_AGENT_SEQUENCE_POWERSHELL_SCRIPT_ENV = 'ORCA_SEQUENCED_POWERSHELL_SCRIPT'
 export const SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV = 'ORCA_SEQUENCED_SETUP_SCRIPT'
 export const SETUP_AGENT_PROMPT_ENV = [
   ...AGENT_STARTUP_PROMPT_ENV,
@@ -81,15 +82,23 @@ export function createSequencedSetupAgentCommands(args: {
 
   if (resolution.shell === 'windows' && !posixGateForWindowsRunner) {
     return {
-      setupCommand: buildWindowsSetupCommand(
-        resolution.runnerScriptPathForShell,
-        markerPath,
-        nonce,
-        args.completionToken
-      ),
-      startupCommand: buildWindowsStartupCommand(markerPath, nonce, waitTimeoutSeconds),
+      setupCommand: powerShellScriptInvocation(SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV),
+      setupEnv: {
+        [SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]: buildWindowsSetupScript(
+          resolution.runnerScriptPathForShell,
+          markerPath,
+          nonce,
+          args.completionToken
+        )
+      },
+      startupCommand: powerShellScriptInvocation(SETUP_AGENT_SEQUENCE_POWERSHELL_SCRIPT_ENV),
       startupEnv: {
-        [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: args.startupCommand
+        [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: args.startupCommand,
+        [SETUP_AGENT_SEQUENCE_POWERSHELL_SCRIPT_ENV]: buildWindowsStartupScript(
+          markerPath,
+          nonce,
+          waitTimeoutSeconds
+        )
       }
     }
   }
@@ -187,14 +196,14 @@ function buildPosixStartupScript(
   return script
 }
 
-function buildWindowsSetupCommand(
+function buildWindowsSetupScript(
   runnerScriptPath: string,
   markerPath: string,
   nonce: string,
   completionToken?: string
 ): string {
   // Why: delayed expansion keeps path metacharacters as data when cmd invokes the batch runner.
-  const script = [
+  return [
     `$runner = ${quotePowerShellLiteral(runnerScriptPath)}`,
     `$marker = ${quotePowerShellLiteral(markerPath)}`,
     '$tmp = $marker + ".tmp"',
@@ -218,18 +227,16 @@ function buildWindowsSetupCommand(
       : []),
     'exit $setupStatus'
   ].join('; ')
-
-  return encodePowerShellInvocation(script)
 }
 
-function buildWindowsStartupCommand(
+function buildWindowsStartupScript(
   markerPath: string,
   nonce: string,
   waitTimeoutSeconds: number
 ): string {
   const timeout = Math.max(1, Math.floor(waitTimeoutSeconds))
   // Use PowerShell for safe bounded marker polling; native Windows runners still launch through cmd.
-  const script = [
+  return [
     // User startup may invoke policy-gated .ps1; apply relief in-payload to avoid the flagged command-line switch.
     // Silence/restore module-autoload progress so stderr stays clean. Stop routes nonterminating autoload errors
     // to a reporting catch; never rethrow and abort startup over a broken security module.
@@ -299,12 +306,10 @@ function buildWindowsStartupCommand(
     '  Start-Sleep -Seconds 1',
     `} } finally { ${clearEnvCommand(SETUP_AGENT_PROMPT_ENV, 'powershell')} }`
   ].join('; ')
-
-  return encodePowerShellInvocation(script)
 }
 
 // EncodedCommand is not policy-gated; omit the EDR-heavy ExecutionPolicy Bypass switch.
-// Keep base64 because terminal panes reparse the command.
-function encodePowerShellInvocation(script: string): string {
+function powerShellScriptInvocation(name: string): string {
+  const script = `if (!$env:${name}) { exit 1 }; Invoke-Expression $env:${name}`
   return `powershell.exe -NoProfile -NonInteractive -EncodedCommand ${encodePowerShellCommand(script)}`
 }

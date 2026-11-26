@@ -58,23 +58,20 @@ export function buildPosixSetupAgentRecheck(timeoutSeconds: number): string[] {
     'trap \'kill -TERM "$supervisor" 2>/dev/null; exit 143\' TERM;',
     'exec 3< <(',
     '  exec 2>/dev/null;',
-    '  worker= watchdog=;',
-    '  cleanup() {',
-    '    if [ -n "$worker" ]; then kill -KILL -- "-$worker" 2>/dev/null || :; fi;',
-    '    if [ -n "$watchdog" ]; then kill -KILL -- "-$watchdog" 2>/dev/null || :; fi;',
-    '  };',
+    '  worker=;',
+    '  cleanup() { [ -z "$worker" ] || kill -KILL -- "-$worker" || :; };',
     "  trap 'cleanup; exit 1' INT TERM;",
     '  set -m;',
     `  (set +m; eval "$${SETUP_AGENT_RECHECK_ENV}") </dev/null & worker=$!;`,
-    `  (set +m; command -p sleep ${timeoutSeconds}; kill -KILL -- "-$worker") </dev/null >/dev/null 2>&1 & watchdog=$!;`,
+    // Complete the pipe record only after the worker exits successfully.
     '  recheck_status=0; wait "$worker" || recheck_status=$?;',
     '  cleanup;',
-    '  wait "$watchdog" 2>/dev/null || :;',
-    // Complete the pipe record only after the worker exits successfully.
     '  if [ "$recheck_status" = 0 ]; then printf "\\0"; fi;',
     '); supervisor=$!;',
-    `if ! IFS= read -r -d "" ${SETUP_AGENT_EXECUTABLE_ENV} <&3 ||`,
-    `   ! IFS= read -r -d "" ${SETUP_AGENT_ARGV0_ENV} <&3; then unset ${SETUP_AGENT_EXECUTABLE_ENV}; fi;`,
+    `if IFS= read -r -t ${timeoutSeconds} -d "" checked <&3 && [[ "$checked" = ?*/* ]]; then`,
+    `  ${SETUP_AGENT_ARGV0_ENV}=\${checked%%/*};`,
+    `  ${SETUP_AGENT_EXECUTABLE_ENV}=/\${checked#*/};`,
+    'else kill -TERM "$supervisor" 2>/dev/null || :; fi;',
     'exec 3<&-; trap - INT TERM;'
   ]
 }
@@ -116,7 +113,10 @@ function buildPosixRecheck(path: string): string {
     `program=${quotePosixShell(path)}`,
     'pin=$(orca_setup_realpath "$program" && printf .) || exit 1',
     'pin=${pin%.}',
-    '[ -f "$pin" ] && [ -x "$pin" ] && printf "%s\\0%s" "$pin" "${program##*/}"'
+    '[ -f "$pin" ] && [ -x "$pin" ] || exit 1',
+    'magic=; LC_ALL=C IFS= read -r -n 2 -d "" magic < "$pin" || :',
+    'if [ "$magic" = "#!" ]; then pin=$program; fi',
+    'printf "%s%s" "${program##*/}" "$pin"'
   ].join('\n')
 }
 
@@ -158,8 +158,9 @@ function buildPowerShellRecheck(path: string): string {
     '  $resolved = Resolve-OrcaSetupPath $program $root',
     '  $pin = $resolved.Path',
     '  $extensions = ($env:PATHEXT -split ";") + @(".exe", ".com", ".cmd", ".bat", ".ps1")',
-    '  if ([IO.Path]::GetExtension($pin) -in $extensions -and (Test-Path -LiteralPath $pin -PathType Leaf -ErrorAction Stop)) {',
-    '    if ($resolved.ReparsePoint) { return $pin }; return $program',
+    '  $extension = [IO.Path]::GetExtension($pin)',
+    '  if ($extension -in $extensions -and (Test-Path -LiteralPath $pin -PathType Leaf -ErrorAction Stop)) {',
+    '    if ($resolved.ReparsePoint -and $extension -in ".exe", ".com") { return $pin }; return $program',
     '  }',
     '} catch { return }'
   ].join('\n')

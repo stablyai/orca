@@ -10,20 +10,20 @@ export function waitForWorktreeSetupGate(
   host: WorktreeStartupReadinessHost,
   ptyId: string,
   signal: AbortSignal
-): Promise<boolean> {
+): Promise<boolean | undefined> {
   if (signal.aborted) {
-    return Promise.resolve(false)
+    return Promise.resolve(undefined)
   }
   return new Promise((resolve) => {
     const gate = createSetupWaitGate(true)
     let unsubscribe: (() => void) | undefined
-    const finish = (ready: boolean): void => {
+    const finish = (ready: boolean | undefined): void => {
       clearTimeout(timer)
       unsubscribe?.()
       signal.removeEventListener('abort', abort)
       resolve(ready)
     }
-    const abort = (): void => finish(false)
+    const abort = (): void => finish(undefined)
     const timer = setTimeout(abort, SETUP_WAIT_GATE_MAX_MS)
     const observe = (data: string): void => {
       const { phase } = gate.observe(data)

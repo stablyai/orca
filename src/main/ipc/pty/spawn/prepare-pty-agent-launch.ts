@@ -31,6 +31,7 @@ import { TUI_AGENT_DISPLAY_NAMES } from '../../../../shared/agent-launch/catalog
 import { nativeWindowsPathToPosixShellPath } from '../../../../shared/agent-launch/startup/setup-runner-command'
 import {
   SETUP_AGENT_PROMPT_ENV,
+  SETUP_AGENT_SEQUENCE_POWERSHELL_SCRIPT_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
 } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
@@ -215,6 +216,7 @@ export async function preparePtyAgentLaunch(
   if (sequenced) {
     if (!keepGate) {
       delete env[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]
+      delete env[SETUP_AGENT_SEQUENCE_POWERSHELL_SCRIPT_ENV]
     }
     if (prepared === undefined) {
       delete env[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]

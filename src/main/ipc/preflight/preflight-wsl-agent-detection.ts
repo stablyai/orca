@@ -7,9 +7,16 @@ import {
   POSIX_WINDOWS_MOUNT_PRELUDE
 } from '../../../shared/shell/command-resolution/posix-command-path-lookup'
 import { runWslProcess, type WslSpec } from '../../wsl/execution/wsl-runner'
+import { getWslGuestEnvironmentGeneration } from '../../wsl/execution/wsl-guest-environment'
+import {
+  throwIfSignalAborted,
+  waitForPromiseWithSignal
+} from '../../../shared/concurrency/abort-signal-reason'
 
 const WSL_AGENT_DETECTION_TIMEOUT_MS = 10000
 const WSL_AGENT_DETECTION_PREFIX = '__ORCA_AGENT_PATH__'
+const WSL_AGENT_RECHECK_TTL_MS = 30_000
+const wslAgentRechecks = new Map<string, Promise<string | undefined>>()
 
 export type WslPreflightTarget = {
   distro?: string
@@ -41,17 +48,39 @@ const WSL_AGENT_PATH_RECHECK = [
   'printf "%s" "$canonical"'
 ].join('\n')
 
-export async function recheckWslAgentPath(
+export function recheckWslAgentPath(
   distro: string,
   candidate: string,
   signal: AbortSignal
 ): Promise<string | undefined> {
+  throwIfSignalAborted(signal)
+  const key = JSON.stringify([
+    getWslGuestEnvironmentGeneration(distro),
+    distro.toLowerCase(),
+    candidate
+  ])
+  const existing = wslAgentRechecks.get(key)
+  if (existing) {
+    return waitForPromiseWithSignal(existing, signal)
+  }
+  const recheck = probeWslAgentPath(distro, candidate).then((value) => {
+    if (value === undefined) {
+      wslAgentRechecks.delete(key)
+    } else {
+      setTimeout(() => wslAgentRechecks.delete(key), WSL_AGENT_RECHECK_TTL_MS).unref()
+    }
+    return value
+  })
+  wslAgentRechecks.set(key, recheck)
+  return waitForPromiseWithSignal(recheck, signal)
+}
+
+async function probeWslAgentPath(distro: string, candidate: string): Promise<string | undefined> {
   const result = await runWslAgentProbe({
     distro,
     loginPath: 'none',
     script: WSL_AGENT_PATH_RECHECK,
-    args: [candidate],
-    signal
+    args: [candidate]
   })
   return result?.stdout.endsWith('.') && path.posix.isAbsolute(result.stdout)
     ? result.stdout.slice(0, -1)

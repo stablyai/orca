@@ -104,7 +104,8 @@ export async function resolveSpawnAgentProgram(
       : unknownSelection
   }, spawn.signal).catch(() => unknownSelection)
   if (onProgramSelected && 'path' in selection.result) {
-    if (shell === 'cmd' && selection.result.kind === 'by-name') {
+    // A reused selection cannot establish PATH precedence at the later spawn.
+    if (!spawn.sshTarget && selection.result.kind === 'by-name') {
       selection = {
         program: selection.program,
         result: { kind: 'full-path', path: selection.result.path }

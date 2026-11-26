@@ -189,7 +189,7 @@ export async function rewriteLaunchExecutable(
       process.platform === 'win32' && shell === 'posix' && !guest
         ? nativeWindowsPathToPosixShellPath(path)
         : path
-    const launchHead = setupGate ? toPanePath(selectedHead) : selectedHead
+    const launchHead = selected.kind === 'full-path' ? toPanePath(selectedHead) : selectedHead
     if (setupGate) {
       postSetupProgram = { agent, launchHead }
       if ('path' in verified && verified.canonicalPath) {

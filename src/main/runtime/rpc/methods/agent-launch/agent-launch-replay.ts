@@ -115,6 +115,16 @@ function readsUnconfirmedLaunchPrompt(
   )
 }
 
+export function presentAgentLaunchPrompt(
+  context: RpcContext,
+  result: AgentLaunchResult
+): AgentLaunchResult {
+  if (result.prompt?.outcome === 'unconfirmed' && !readsUnconfirmedLaunchPrompt(context)) {
+    throw new Error('agent_session_operation_unknown')
+  }
+  return result
+}
+
 /** Resolve the current handle by durable pane key when PTY incarnation or host re-adoption changed it.
  * Keep the recorded handle for an unknown pane: shipped clients require one, and an exited terminal is truthful. */
 function withLiveTerminalHandle(

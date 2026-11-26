@@ -10,6 +10,7 @@ import {
 export type InventoryRead = {
   wait: (signal: AbortSignal) => Promise<InventoryPublication | null>
   snapshot: () => InventoryPublication | null
+  scannedMatch?: (program: string, match: AgentPathMatch | undefined) => boolean
 }
 
 export type InventoryReadOptions = {
@@ -86,6 +87,8 @@ export function readInventoryScan(
         scan = successor
       }
     },
-    snapshot: () => snapshot()
+    snapshot: () => snapshot(),
+    scannedMatch: (program, match) =>
+      match !== undefined && scan.progress.matches.get(program) === match
   }
 }

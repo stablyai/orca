@@ -3,6 +3,7 @@ import {
   type RuntimeTerminalCreate
 } from '../../shared/terminal/runtime/runtime-terminal-create-contract'
 import { randomUUID } from 'node:crypto'
+import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-reason'
 import { createStructuredAgentSessionOperationId } from '../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { structuredAgentSessionSendBody } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { StructuredAgentSessionFirstMessage } from '../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
@@ -55,7 +56,10 @@ export function settledAtCreation(
     return structuredLaunchSubmitText(intent) === undefined ? NOT_DELIVERED : UNCONFIRMED
   }
   const gate = created.terminalCreation?.[SETUP_AGENT_GATE]
-  if (gate && (!gate.verified || created.promptRodeLaunchCommand)) {
+  if (gate && created.promptRodeLaunchCommand) {
+    return UNCONFIRMED
+  }
+  if (gate?.verified === false) {
     return NOT_DELIVERED
   }
   if (created.promptRodeLaunchCommand) {
@@ -68,11 +72,14 @@ export async function settleLaunchPromptDisposal(
   execution: AgentLaunchSurfaceExecution,
   created: CreatedSurface
 ): Promise<AgentLaunchPromptDisposal> {
-  if (
-    created.structured ||
-    created.promptRodeLaunchCommand ||
-    created.terminalCreation?.[SETUP_AGENT_GATE]?.verified === false
-  ) {
+  const gate = created.terminalCreation?.[SETUP_AGENT_GATE]
+  if (gate && created.promptRodeLaunchCommand) {
+    const started = await waitForPromiseWithSignal(gate.started, execution.signal).catch(
+      () => undefined
+    )
+    return started === undefined ? UNCONFIRMED : started ? HANDED_TO_TERMINAL : NOT_DELIVERED
+  }
+  if (created.structured || created.promptRodeLaunchCommand || gate?.verified === false) {
     return settledAtCreation(execution.intent, created)
   }
   return deliverTerminalLaunchPrompt(execution, created.outcome.handle, {

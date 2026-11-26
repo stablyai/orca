@@ -140,14 +140,19 @@ export async function selectTerminalAgentProgram(
           inconclusive = true
           continue
         }
-        const result = qualifyProgram(inventory.matches.get(program), shell)
+        const match = inventory.matches.get(program)
+        const result = qualifyProgram(match, shell)
         if ('path' in result) {
           const canonicalPath = await canonicalLocalAgentProgram(result.path, waitSignal)
           if (slot !== getLocalInventory(shellPath) || waitSignal.aborted) {
             return { program, result: { kind: 'unknown' } }
           }
           if (canonicalPath) {
-            return { program, result: options.pinForSetup ? { ...result, canonicalPath } : result }
+            const kind = read.scannedMatch?.(program, match) ? result.kind : 'full-path'
+            return {
+              program,
+              result: { ...result, kind, ...(options.pinForSetup ? { canonicalPath } : {}) }
+            }
           }
           if (retry) {
             return { program, result: { kind: 'unknown' } }

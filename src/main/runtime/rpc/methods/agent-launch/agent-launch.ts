@@ -18,6 +18,7 @@ import { defineMethod, type RpcContext } from '../../core'
 import {
   admitAgentLaunchOperation,
   agentLaunchOperationCallerKey,
+  presentAgentLaunchPrompt,
   type ReplaySafeLaunch
 } from './agent-launch-replay'
 import {
@@ -269,7 +270,7 @@ export const AGENT_LAUNCH_METHODS = [
       }
       assertAgentLaunchTargetAuthorized(params.target, context)
       try {
-        return await runReplaySafeAgentLaunch(params, context)
+        return presentAgentLaunchPrompt(context, await runReplaySafeAgentLaunch(params, context))
       } catch (error) {
         // Nested failures cannot authorize another workspace, regardless of their message or code.
         if (error instanceof AgentLaunchExecutionError) {
@@ -310,16 +311,16 @@ export async function launchAgentOnHost(
     throw new Error('agent_launch_unsupported')
   }
   assertAgentLaunchTargetAuthorized(params.target, host)
-  if (!operationId) {
-    return runLegacyAgentLaunch(params, host)
-  }
-  return runReplaySafeAgentLaunch({ ...params, operationId }, host).catch((error: unknown) => {
-    // Preserve the original error contract for callers of the optional-identity method.
-    if (error instanceof AgentLaunchExecutionError) {
-      throw error.cause instanceof AgentLaunchTabClosedError
-        ? agentLaunchTabClosedAnswer(host)
-        : error.cause
-    }
-    throw error
-  })
+  const result = operationId
+    ? await runReplaySafeAgentLaunch({ ...params, operationId }, host).catch((error: unknown) => {
+        // Preserve the original error contract for callers of the optional-identity method.
+        if (error instanceof AgentLaunchExecutionError) {
+          throw error.cause instanceof AgentLaunchTabClosedError
+            ? agentLaunchTabClosedAnswer(host)
+            : error.cause
+        }
+        throw error
+      })
+    : await runLegacyAgentLaunch(params, host)
+  return presentAgentLaunchPrompt(host, result)
 }

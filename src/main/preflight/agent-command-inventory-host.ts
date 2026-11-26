@@ -166,11 +166,14 @@ export async function selectWslTerminalAgentProgram(
         break
       }
       options.onWslDistroSelected?.(slot.distro)
+      // The guest scan skips Windows mounts, so it cannot prove by-name precedence.
       return {
         program,
         result: options.pinForSetup
           ? { kind: 'full-path', path: match.first, canonicalPath }
-          : { kind: 'by-name', path: program }
+          : options.verifyWslHit
+            ? { kind: 'full-path', path: match.first }
+            : { kind: 'by-name', path: program }
       }
     }
     if (!rejected) {
