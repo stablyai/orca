@@ -3258,6 +3258,7 @@
       "switchBranch": "브랜치 전환",
       "syncCounts": "커밋 {{behind}}개를 풀하고 {{ahead}}개를 푸시하세요.",
       "upToDate": "커밋할 항목이 없습니다. 브랜치가 최신 상태입니다.",
+      "openCommits": "커밋 보기",
       "waitForRemoteOperation": "원격 작업이 끝나면 다시 시도하세요."
     },
     "branchBaseRef": {
@@ -3289,6 +3290,11 @@
       "commitSync": "커밋 및 동기화",
       "commitThenPullPush": "커밋한 다음 풀 및 푸시",
       "enterMessage": "커밋하려면 커밋 메시지를 입력하세요.",
+      "statusConflicts": "충돌",
+      "statusNothingStaged": "스테이징된 항목 없음",
+      "statusNeedsMessage": "메시지 필요",
+      "statusNotPublished": "게시되지 않음",
+      "statusNoBranch": "브랜치 없음",
       "linkedReviewTargetUnavailable": "연결된 리뷰 브랜치 대상을 사용할 수 없습니다",
       "prAlreadyMerged": "PR이 이미 병합되었습니다",
       "publishBranchFirstToPush": "커밋을 푸시하려면 먼저 브랜치를 게시하세요",
@@ -3369,8 +3375,10 @@
       "loadingCommitted": "커밋된 변경 사항 로드 중…",
       "openChangedFile": "변경된 파일 {{path}} 열기",
       "openCommittedChange": "{{path}}의 커밋된 변경 사항 열기",
+      "discard": "버리기",
       "renamedFrom": "이전 경로: {{path}}",
       "stageFile": "{{path}} 스테이지",
+      "discardFile": "{{path}} 버리기",
       "unresolvedConflict": "해결되지 않은 충돌",
       "unstageFile": "{{path}} 언스테이지"
     },
@@ -3393,11 +3401,14 @@
       "loadFailed": "기록을 불러오지 못했습니다.",
       "loadFilesFailed": "커밋 파일을 불러올 수 없습니다.",
       "noCommits": "커밋이 없습니다.",
+      "loading": "커밋 로드 중…",
       "noFileChanges": "파일 변경 사항 없음",
       "retryFiles": "커밋 파일 다시 불러오기"
     },
     "gitStatus": {
-      "conflicts": "충돌"
+      "conflicts": "충돌",
+      "uncommitted": "커밋되지 않음",
+      "staged": "스테이징됨"
     },
     "header": {
       "backToSession": "세션으로 돌아가기",
@@ -3456,7 +3467,8 @@
       "pushBeforeCreateFailed": "푸시에 실패했습니다. 푸시 오류를 해결한 후 다시 시도하세요."
     },
     "hubTab": {
-      "changes": "변경 사항"
+      "changes": "변경 사항",
+      "pullRequest": "PR"
     },
     "loaders": {
       "loadFailed": "소스 제어를 로드할 수 없습니다.",
@@ -3473,7 +3485,24 @@
       "switchBranchTitle": "브랜치 전환"
     },
     "panel": {
-      "unavailableTitle": "소스 제어 사용 불가"
+      "unavailableTitle": "소스 제어 사용 불가",
+      "loading": "변경 사항 로드 중…"
+    },
+    "folder": {
+      "emptyTitle": "아직 연결된 워크트리가 없습니다",
+      "emptyCopy": "이 워크스페이스에서 만든 워크트리가 여기에 표시됩니다.",
+      "statusUnavailable": "사용할 수 없음",
+      "backToFolder": "폴더로 돌아가기",
+      "createSection": "워크트리 만들기",
+      "createIn": "{{repo}}에 워크트리 만들기",
+      "created": "{{repo}}에 워크트리 {{name}}을(를) 만들었습니다",
+      "createdNamed": "워크트리 {{name}}을(를) 만들었습니다",
+      "createFailed": "{{repo}}에 워크트리를 만들 수 없습니다.",
+      "loadReposRetry": "저장소 불러오기",
+      "setupChoiceTitle": "설정 없이 다시 시도할까요?",
+      "setupChoiceMessage": "Orca가 {{repo}}의 마지막 생성 작업을 확인하지 못했습니다. 다시 시도하려면 설정 실행 여부를 정해야 합니다. 다시 시도하면 저장소의 설정을 실행하지 않고 워크트리를 만듭니다.",
+      "setupChoiceSkip": "설정 없이 다시 시도",
+      "checking": "{{repo}}의 워크트리가 이미 만들어졌을 수 있습니다. 폴더를 확인하는 중…"
     },
     "prCreate": {
       "authRequired": "{{reviewLabel}} 생성 전에 인증하세요.",
@@ -3502,6 +3531,13 @@
       "forcePush": "강제 푸시",
       "forcePushFromDesktop": "데스크톱에서 이 PR의 브랜치를 강제 푸시하세요.",
       "publishBranch": "브랜치 게시",
+      "commitFiles_one": "파일 {{count}}개 커밋",
+      "commitFiles_other": "파일 {{count}}개 커밋",
+      "pushCommits_one": "커밋 {{count}}개 푸시",
+      "pushCommits_other": "커밋 {{count}}개 푸시",
+      "pullCommits_one": "커밋 {{count}}개 풀",
+      "pullCommits_other": "커밋 {{count}}개 풀",
+      "stageAll": "모두 스테이징",
       "pull": "풀",
       "push": "푸시",
       "sync": "동기화"
@@ -3550,6 +3586,14 @@
       "rebaseFromBase": "베이스에서 리베이스",
       "rebaseFromNamedBase": "{{baseRef}}에서 리베이스",
       "rebaseWithLatestFrom": "현재 브랜치를 {{baseRef}}의 최신 커밋으로 리베이스",
+      "statusUpToDate": "최신 상태",
+      "statusSetsUpstream": "업스트림 설정",
+      "statusNotPublished": "게시되지 않음",
+      "statusNoBranch": "브랜치 없음",
+      "statusMayFail": "실패할 수 있음",
+      "statusPublished": "게시됨",
+      "statusStashFirst": "먼저 스태시",
+      "statusReplaces": "↓{{behind}} 대체",
       "sync": "동기화",
       "tryFastForwardPull": "fast-forward 풀을 시도합니다. git에서 로컬 커밋을 거부할 수 있습니다",
       "tryRegularPush": "일반 푸시를 시도합니다. git에서 강제 푸시가 필요할 수 있습니다",
@@ -3653,17 +3697,101 @@
     "useMobileCommitMessageGeneration": {
       "generateFailed": "커밋 메시지를 생성하지 못했습니다."
     },
+    "useMobileCreatePrRunner": {
+      "branchRequired": "PR을 만들기 전에 브랜치를 체크아웃하세요."
+    },
     "useMobileGitRequests": {
       "actionFailed": "소스 제어 작업에 실패했습니다.",
       "branchUnavailable": "브랜치 상태를 확인할 수 없습니다.",
       "commitFailed": "커밋 실패"
     },
     "conflictActions": {
+      "resolveFile": "{{action}}: {{path}}",
       "needsNewerHost": "휴대전화에서 병합 충돌을 해결하려면 이 워크스페이스를 실행 중인 컴퓨터의 Orca를 업데이트하세요.",
       "markResolved": "해결됨으로 표시",
       "keepFile": "파일 유지",
       "keepDeletion": "삭제 유지",
       "completeMergeFailed": "병합을 완료하지 못했습니다"
+    },
+    "commitDetail": {
+      "copySha": "SHA 복사",
+      "openOnGitHub": "GitHub에서 열기",
+      "openOnWeb": "웹에서 열기",
+      "back": "커밋 목록으로 돌아가기",
+      "title": "커밋",
+      "more": "커밋 작업 더 보기",
+      "author": "작성자",
+      "date": "날짜",
+      "status": "상태",
+      "onOrigin": "origin에 있음",
+      "notPushed": "푸시되지 않음",
+      "files_one": "파일 {{count}}개",
+      "files_other": "파일 {{count}}개",
+      "filesHeader": "파일",
+      "authorWithCoAuthors": "{{author}} (공동 작성자: {{coAuthors}})"
+    },
+    "commits": {
+      "branchedFrom": "{{baseRef}}에서 만든 브랜치",
+      "baseUpToDate": "최신 상태",
+      "baseNewer_one": "새 커밋 1개",
+      "baseNewer_other": "새 커밋 {{count}}개",
+      "updateBranch": "브랜치 업데이트",
+      "back": "소스 제어로 돌아가기",
+      "title": "커밋",
+      "loadMoreFailed": "커밋 다시 불러오기",
+      "notPushed": "푸시하지 않은 커밋 {{count}}개",
+      "onOrigin": "origin의 커밋 {{count}}개"
+    },
+    "nextStep": {
+      "willMergeWhenReady": "준비되면 병합 예정",
+      "cancelAutoMerge": "취소",
+      "cancelAutoMergeLabel": "자동 병합 취소",
+      "mergedInto": "{{base}}에 병합됨",
+      "merged": "병합됨",
+      "genericAgent": "AI",
+      "resolveWithAgent": "{{agent}}(으)로 해결",
+      "fixWithAgent": "{{agent}}(으)로 수정",
+      "cantMergeYet": "아직 병합할 수 없음:",
+      "checksFailing_one": "체크 {{count}}개 실패",
+      "checksFailing_other": "체크 {{count}}개 실패",
+      "mergeWhenReady": "준비되면 병합",
+      "pushAndCreateReview": "푸시 후 {{review}} 생성",
+      "createReview": "{{review}} 생성",
+      "merge": "병합",
+      "checksRunning_one": "아직 체크 {{count}}개 실행 중",
+      "checksRunning_other": "아직 체크 {{count}}개 실행 중",
+      "waitingOnReviewer": "{{login}}의 리뷰 대기 중",
+      "waitingOnReview": "리뷰 대기 중"
+    },
+    "prCreateDraft": {
+      "generateFailed": "설명을 작성하지 못했습니다"
+    },
+    "changesHeader": {
+      "merging": "병합 중",
+      "rebasing": "리베이스 중",
+      "cherryPicking": "체리픽 중",
+      "notPublished": "게시되지 않음",
+      "notPushed": "{{count}}개 푸시 안 됨",
+      "behind": "{{count}}개 뒤처짐",
+      "upToDate": "최신 상태",
+      "switchBranch": "{{branch}}에서 다른 브랜치로 전환",
+      "mergeInProgress": "병합 진행 중",
+      "rebaseInProgress": "리베이스 진행 중",
+      "cherryPickInProgress": "체리픽 진행 중",
+      "filesNeedDecision_one": "완료하려면 파일 {{count}}개의 처리 방법을 정해야 합니다.",
+      "filesNeedDecision_other": "완료하려면 파일 {{count}}개의 처리 방법을 정해야 합니다.",
+      "conflictsResolved": "모든 충돌이 해결되었습니다. 하단 바에서 완료하세요.",
+      "continueOnComputer": "모든 충돌이 해결되었습니다. 완료하려면 컴퓨터에서 계속하세요.",
+      "commits_one": "커밋 {{count}}개",
+      "commits_other": "커밋 {{count}}개",
+      "conflictsMayRemain": "일부 파일만 표시되어 충돌이 남아 있을 수 있습니다. 컴퓨터에서 확인하세요."
+    },
+    "fileList": {
+      "stageAll": "모두 스테이징",
+      "mergedCleanly": "충돌 없이 병합됨",
+      "unstageAll": "모두 언스테이징",
+      "onThisBranch": "이 브랜치의 변경 사항 {{count}}",
+      "versusBase": "{{base}} 대비"
     }
   },
   "tasks": {
@@ -3680,6 +3808,46 @@
       "loadPageFailed": "GitHub에서 {{page}}페이지를 불러오지 못했습니다.",
       "noMoreResults": "{{page}}페이지에 더 이상 결과가 없습니다."
     },
+    "filterSheet": {
+      "sortBy": "정렬 기준",
+      "issueSource": "이슈 소스",
+      "issueSourceRow": "업스트림 또는 origin",
+      "view": "보기",
+      "projectView": "프로젝트 보기",
+      "projectItems_one": "항목 {{count}}개",
+      "projectItems_other": "항목 {{count}}개",
+      "chooseView": "선택",
+      "showOnRows": "행에 표시",
+      "projectFields": "프로젝트 필드",
+      "workspace": "워크스페이스",
+      "linearWorkspace": "Linear 워크스페이스",
+      "layout": "레이아웃",
+      "groupBy": "그룹화 기준",
+      "orderBy": "정렬 순서",
+      "displayProperties": "표시 속성",
+      "title": "필터 및 표시",
+      "done": "완료",
+      "jqlReplacesPreset": "JQL 검색 중에는 Jira 필터가 적용되지 않습니다. 필터를 다시 선택하려면 검색을 지우세요."
+    },
+    "jiraViewControls": {
+      "jqlSearch": "JQL 검색"
+    },
+    "itemComments": {
+      "noComments": "아직 댓글이 없습니다",
+      "oneComment": "댓글 1개",
+      "commentCount": "댓글 {{commentCount}}개"
+    },
+    "listState": {
+      "loading": "작업 로드 중…"
+    },
+    "connectionPresentation": {
+      "connectToHost": "작업을 로드하려면 호스트에 연결하세요",
+      "noMatchingTasks": "일치하는 작업이 없습니다"
+    },
+    "runtimeHydration": {
+      "loadFailed": "작업 설정을 로드하지 못했습니다"
+    },
+    "rerunUnsuccessful": "실패한 체크 재실행",
     "composerSource": {
       "baseFailed": "기본 브랜치를 확인하지 못했습니다.",
       "forkPushWarning": "이 PR에서 \"유지 관리자의 수정 허용\"이 꺼져 있어 GitHub에서 포크로의 푸시를 거부할 수 있습니다."
@@ -3707,6 +3875,7 @@
       "gitlabView": "GitLab 보기",
       "jiraFilter": "Jira 필터",
       "jiraSite": "Jira 사이트",
+      "statesFailed": "상태를 불러오지 못했습니다. 닫았다가 다시 열어 보세요.",
       "linearFilter": "Linear 필터",
       "linearIssue": "Linear 이슈",
       "linearWorkspace": "Linear 워크스페이스",
@@ -3728,6 +3897,8 @@
       "items": "항목",
       "moreFields_one": "필드 +{{count}}개",
       "moreFields_other": "필드 +{{count}}개",
+      "loading": "프로젝트 로드 중…",
+      "noMatches": "일치하는 프로젝트 항목이 없습니다.",
       "noItems": "프로젝트 항목이 없습니다.",
       "pullRequestSubtitle": "PR · {{repository}}{{number}}",
       "linkedPullRequestsOverflow": "+{{count}}개 더"
@@ -3762,6 +3933,9 @@
     },
     "itemActions": {
       "changeStatus": "상태 변경",
+      "copyLink": "링크 복사",
+      "startWorkspace": "워크스페이스 시작",
+      "moreActions": "추가 작업",
       "copyGitHubLink": "GitHub 링크 복사",
       "copyLinearLink": "Linear 링크 복사",
       "creating": "만드는 중…",
@@ -3776,6 +3950,14 @@
       "discussion": "토론",
       "noChecks": "체크를 찾을 수 없습니다.",
       "noComments": "댓글이 없습니다.",
+      "details": "세부 정보",
+      "type": "유형",
+      "status": "상태",
+      "assignee": "담당자",
+      "project": "프로젝트",
+      "priority": "우선순위",
+      "assignees": "담당자",
+      "loading": "세부 정보 로드 중…",
       "noPipelineRuns": "이 MR에 실행된 파이프라인이 없습니다.",
       "noSubIssues": "하위 이슈가 없습니다.",
       "none": "없음",
@@ -4018,10 +4200,15 @@
     },
     "providerControls": {
       "myTodos": "내 할 일",
+      "reposLabel": "저장소: {{repos}}",
+      "filterCount": "필터 · {{count}}",
+      "filter": "필터",
+      "filterLabel": "필터 및 표시",
       "projectMergeRequests": "프로젝트 MR"
     },
     "providerItemList": {
       "intoBranch": "{{base}}(으)로",
+      "kindAndStatus": "{{kind}}, {{status}}",
       "nextPage": "다음 페이지",
       "page": "{{page}}페이지",
       "pageOfTotal": "{{page}} / {{total}}페이지",
@@ -4137,6 +4324,7 @@
       "agent": "에이전트",
       "connectFirst": "먼저 저장소를 연결하세요",
       "connectRepository": "저장소 연결",
+      "optionalLabel": "선택 사항",
       "defaultBranch": "기본 브랜치",
       "detectingAgents": "에이전트 감지 중…",
       "remoteRepository": "원격 저장소",
@@ -4428,6 +4616,7 @@
       "timeZone": "시간대",
       "runsOnTheSelectedHostKeepThatHostAvailableAtTheScheduledTime": "선택한 호스트에서 실행됩니다. 예약된 시간에 해당 호스트를 사용할 수 있도록 하세요.",
       "pairedHost": "페어링된 호스트",
+      "chooseHost": "{{host}}의 자동화, 다른 호스트 선택",
       "selectedServerUnavailable": "선택한 서버(사용 불가)",
       "addANameInstructionsAndAnAgent": "이름, 지침, 에이전트를 추가하세요.",
       "chooseAnExistingWorkspace": "기존 작업 공간을 선택하세요.",
@@ -4459,7 +4648,16 @@
       "discardChangesTitle": "변경 사항을 버릴까요?",
       "discardChangesMessage": "이 자동화에서 저장하지 않은 변경 사항이 사라집니다.",
       "discard": "버리기",
-      "keepEditing": "계속 편집"
+      "keepEditing": "계속 편집",
+      "on": "사용",
+      "repeats": "반복",
+      "newOnePerRun": "실행마다 새 워크스페이스",
+      "moreActions": "추가 작업",
+      "noRunsYet": "아직 실행이 없습니다",
+      "nextRunToday": "다음 실행: 오늘 {{time}}",
+      "nextRunTomorrow": "다음 실행: 내일 {{time}}",
+      "nextRunWeekday": "다음 실행: {{day}} {{time}}",
+      "nextRunDate": "다음 실행: {{date}}"
     },
     "orphanIssues": {
       "hostReselection": "실행하기 전에 이 자동화를 편집하고 호스트를 다시 선택하세요.",
@@ -4495,6 +4693,7 @@
       "hooksReviewBlocked": "에이전트가 새로 추가되거나 변경된 훅을 누군가 검토하기를 기다리고 있습니다(\"Hooks need review\"). 이 실행을 열고 해당 훅을 신뢰하거나 제거하세요. 예약된 실행은 계속되며, 검토할 항목이 없어지면 성공합니다.",
       "agentNeverStarted": "프롬프트를 제출한 후 자동화 에이전트가 시작되지 않았습니다.",
       "agentNoCompletion": "자동화 에이전트가 완료를 보고하지 않았습니다.",
+      "agentInterrupted": "에이전트가 이번 실행을 마치기 전에 중단되었습니다.",
       "watchTimedOut": "완료 신호 없이 6시간이 지나 Orca가 이 실행의 모니터링을 중단했습니다.",
       "projectSetupState": {
         "notSetUp": "선택한 자동화 호스트에 프로젝트가 설정되어 있지 않습니다.",
@@ -4643,6 +4842,84 @@
           }
         }
       }
+    }
+  },
+  "agents": {
+    "list": {
+      "idleCount": "{{count}}개 유휴",
+      "offlineTitle": "{{desktop}}이(가) 오프라인입니다",
+      "offlineMessage": "이 에이전트를 열려면 데스크톱을 다시 연결하세요.",
+      "actions": "{{title}} 관련 작업",
+      "workers_one": "워커 {{count}}개",
+      "workers_other": "워커 {{count}}개",
+      "noMatches": "“{{query}}”와(과) 일치하는 에이전트가 없습니다",
+      "emptyTitle": "실행 중인 에이전트 없음",
+      "pairDesktop": "데스크톱을 페어링하면 에이전트가 여기에 표시됩니다.",
+      "emptyBody": "워크스페이스에서 에이전트를 시작하면 여기에 표시됩니다.",
+      "unread": "읽지 않음",
+      "noDesktopTitle": "연결된 데스크톱 없음",
+      "noDesktopBody": "데스크톱이 연결되면 에이전트가 여기에 표시됩니다.",
+      "hideWorkers": "{{workers}} 숨기기",
+      "showWorkers": "{{workers}} 표시"
+    },
+    "actions": {
+      "offlineHint": "이 에이전트의 데스크톱이 오프라인입니다.",
+      "open": "열기",
+      "goToWorkspace": "워크스페이스로 이동",
+      "copyTitle": "제목 복사",
+      "copied": "복사됨",
+      "copyFailed": "제목을 복사하지 못했습니다",
+      "markRead": "읽음으로 표시",
+      "markUnread": "읽지 않음으로 표시",
+      "clear": "목록에서 지우기"
+    },
+    "groupBy": {
+      "status": "상태",
+      "workspace": "워크스페이스",
+      "project": "프로젝트",
+      "agent": "에이전트",
+      "desktop": "데스크톱"
+    },
+    "options": {
+      "groupBy": "그룹화 기준",
+      "showWorkers": "워커 에이전트 표시",
+      "open": "에이전트 목록 옵션",
+      "unreadOnly": "읽지 않은 항목만",
+      "markAllRead": "모두 읽은 것으로 표시",
+      "clearFinished": "완료된 항목 지우기"
+    },
+    "search": {
+      "toggle": "에이전트 검색",
+      "placeholder": "에이전트 검색"
+    },
+    "desktops": {
+      "pickerTitle": "에이전트를 표시할 데스크톱",
+      "agents_one": "에이전트 {{count}}개",
+      "agents_other": "에이전트 {{count}}개",
+      "all": "모든 데스크톱",
+      "offline": "오프라인",
+      "needsYou_one": "확인 필요 {{count}}개",
+      "needsYou_other": "확인 필요 {{count}}개"
+    },
+    "sections": {
+      "needsYou": "확인 필요",
+      "working": "작업 중",
+      "done": "완료",
+      "offline": "오프라인",
+      "offlineSeenAgo": "오프라인 · {{ago}} 전 확인",
+      "offlineSeenJustNow": "오프라인 · 방금 확인",
+      "seenAgo": "{{ago}} 전 확인",
+      "seenJustNow": "방금 확인",
+      "clear": "지우기"
+    },
+    "swipe": {
+      "read": "읽음",
+      "unread": "읽지 않음",
+      "clear": "지우기"
+    },
+    "activity": {
+      "needsWindow": "업데이트하지 못했습니다. {{desktop}}에서 Orca를 여세요.",
+      "failed": "에이전트 목록을 업데이트하지 못했습니다."
     }
   },
   "bots": {
