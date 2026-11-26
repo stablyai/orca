@@ -39,10 +39,7 @@ import {
 } from '../../../../../../shared/sidebar-list/hosts/host-filtering'
 import { selectWorkspaceBoardStatuses } from '@/store/workspaces/status/host-workspace-status-columns'
 import { indexHiddenProjects } from '../../../../../../shared/project/catalog/hidden-projects'
-import {
-  getRepoHostIdentity,
-  getRepoHostIdentityForParts
-} from '../../../../../../shared/repository/repo-host-identity'
+import { createWorkspaceSectionOwnership } from '../../../../../../shared/sidebar-list/sections/workspace-section-ownership'
 import { workspaceSectionFolds } from '../../../../../../shared/sidebar-list/sections/workspace-section-folds'
 
 const EMPTY_REPO_ID_SET: ReadonlySet<string> = Object.freeze(new Set<string>())
@@ -71,16 +68,14 @@ export function computeRenderedSidebarRows(
     const repos = state.repos.filter(
       (repo) => Boolean(repo.chatWorkspace) === (section === 'chats')
     )
-    if (section === 'chats' && repos.length === 0) {
+    if (section === 'chats' && (repos.length === 0 || state.collapsedGroups.has('sidebar:chats'))) {
       return []
     }
-    const owners = new Set(repos.map(getRepoHostIdentity))
+    const owns = createWorkspaceSectionOwnership(state.repos, section)
     return computeRenderedSectionRows(
       { ...state, repos, collapsedGroups: workspaceSectionFolds(state.collapsedGroups, section) },
       statuses,
-      visibleWorktrees.filter((row) =>
-        owners.has(getRepoHostIdentityForParts(row.repoId, row.hostId ?? 'local'))
-      ),
+      visibleWorktrees.filter(owns),
       section === 'chats'
     )
   })

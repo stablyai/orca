@@ -10,6 +10,7 @@ import {
   getRepoHostIdentity,
   getRepoHostIdentityForParts
 } from '../../../../../../shared/repository/repo-host-identity'
+import { createWorkspaceSectionOwnership } from '../../../../../../shared/sidebar-list/sections/workspace-section-ownership'
 import { getProjectIdentityKey } from '../../../../../../shared/project/host-setup/project-host-setup-projection'
 
 const EMPTY = []
@@ -24,15 +25,8 @@ export function useProjectSectionScope(section: 'projects' | 'chats') {
   return useMemo(() => {
     const repos = catalog.filter((repo) => Boolean(repo.chatWorkspace) === (section === 'chats'))
     const keys = new Set(repos.map(getRepoHostIdentity))
-    const byHost = new Map(catalog.map((repo) => [getRepoHostIdentity(repo), repo]))
-    const byId = new Map(catalog.map((repo) => [repo.id, repo]))
     const projectIds = new Set(repos.map(getProjectIdentityKey))
-    const owns = (row: { repoId: string; hostId?: string | null }) => {
-      const repo =
-        byHost.get(getRepoHostIdentityForParts(row.repoId, row.hostId ?? 'local')) ??
-        byId.get(row.repoId)
-      return repo !== undefined && Boolean(repo.chatWorkspace) === (section === 'chats')
-    }
+    const owns = createWorkspaceSectionOwnership(catalog, section)
     return {
       allRepoIds: catalog.map((repo) => repo.id),
       repos,
