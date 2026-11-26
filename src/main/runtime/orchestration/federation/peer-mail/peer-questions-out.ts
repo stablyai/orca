@@ -84,10 +84,13 @@ export function settlePeerQuestionsOut(
       )
       .run(conversationId, requestId)
   } else if (reply.threadId) {
+    // A reply naming no request settles one handoff of its thread, the oldest; the others still wait.
     db.db
       .prepare(
-        `DELETE FROM peer_handoffs_out
-         WHERE conversation_id = ?1 AND (message_id = ?2 OR thread_id = ?2)`
+        `DELETE FROM peer_handoffs_out WHERE rowid = (
+           SELECT rowid FROM peer_handoffs_out
+           WHERE conversation_id = ?1 AND (message_id = ?2 OR thread_id = ?2)
+           ORDER BY rowid LIMIT 1)`
       )
       .run(conversationId, reply.threadId)
     db.db

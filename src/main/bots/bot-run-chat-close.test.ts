@@ -26,7 +26,7 @@ function closerWith(input: {
   /** Targeted by an automation, which holds it. */
   targets?: string[]
   /** What happens to a chat between the sweep's checks and its close. */
-  late?: Record<string, 'asked' | 'opened'>
+  late?: Record<string, 'asked' | 'opened' | 'targeted'>
 }) {
   let now = 0
   let file = ''
@@ -70,7 +70,7 @@ function closerWith(input: {
     close: async (sessionId, admit) => {
       const late = input.late?.[sessionId]
       if (late) {
-        ;(late === 'asked' ? owes : inUse).add(sessionId)
+        ;(late === 'asked' ? owes : late === 'targeted' ? targets : inUse).add(sessionId)
       }
       if (!admit()) {
         return false
@@ -129,12 +129,13 @@ describe('BotRunChatCloser', () => {
         inTab: { lastActivityAt: 0, kept: false },
         asked: { lastActivityAt: 0, kept: false },
         askedLate: { lastActivityAt: 0, kept: false },
-        openedLate: { lastActivityAt: 0, kept: false }
+        openedLate: { lastActivityAt: 0, kept: false },
+        targetedLate: { lastActivityAt: 0, kept: false }
       },
       busy: ['working'],
       inUse: ['inTab'],
       asked: ['asked'],
-      late: { askedLate: 'asked', openedLate: 'opened' }
+      late: { askedLate: 'asked', openedLate: 'opened', targetedLate: 'targeted' }
     })
     for (const [bot, sessionId] of [
       [bots[0], 'due'],
@@ -148,6 +149,7 @@ describe('BotRunChatCloser', () => {
       [bots[0], 'asked'],
       [bots[0], 'askedLate'],
       [bots[0], 'openedLate'],
+      [bots[0], 'targetedLate'],
       [botOf('elsewhere'), 'otherProfile']
     ] as const) {
       run.closer.arm(bot, sessionId)
@@ -169,6 +171,7 @@ describe('BotRunChatCloser', () => {
       'openedLate',
       'otherProfile',
       'renamed',
+      'targetedLate',
       'weekly',
       'working'
     ])

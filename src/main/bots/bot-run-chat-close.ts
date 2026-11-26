@@ -276,10 +276,13 @@ export class BotRunChatCloser {
     if (busy) {
       return this.parked(entry, busy === 'item' ? 'item' : true)
     }
-    // A turn, a wake, a question, an open tab or a new Close after may come up to the close itself.
+    // A turn, a wake, a question, an open tab, an automation saved to run in it or a new Close
+    // after may come up to the close itself.
+    const targeted = () =>
+      [...this.deps.automationChats()].some((id) => this.deps.rootOf(id) === entry.sessionId)
     const closed = await this.deps.close(
       entry.sessionId,
-      () => waiting() === 'due' && !this.deps.owesReply(entry.sessionId)
+      () => waiting() === 'due' && !this.deps.owesReply(entry.sessionId) && !targeted()
     )
     if (closed) {
       return null

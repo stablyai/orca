@@ -67,6 +67,7 @@ export function recentBotChatTreeParts(
 }
 
 type BotChatSearchIndex = {
+  /** The open ones, in list order. */
   chats: BotChatTreeChat[]
   byId: ReadonlyMap<string, BotChatTreeChat>
   /** The worker rows the tree drew, by key. */
@@ -103,7 +104,8 @@ function searchIndexOf(parts: BotChatTreeParts): BotChatSearchIndex {
     )
   ]
   const index = {
-    chats,
+    // A closed chat is left out of the bot's list, so of its search too; Session History has it.
+    chats: chats.filter((chat) => !chat.closed),
     byId: new Map(chats.map((chat) => [chat.chatId, chat])),
     shown,
     workers,

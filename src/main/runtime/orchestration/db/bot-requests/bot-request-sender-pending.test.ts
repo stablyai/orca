@@ -73,17 +73,21 @@ it('a chat waits on mail from its open requests, paired asks and undelivered mai
 
   // A handoff to a paired computer holds its chat until the answer comes back, the send fails, or
   // the pairing ends.
-  const handOff = (messageId: string) =>
+  const handOff = (messageId: string, threadId?: string) =>
     recordPeerHandoffOut(db, {
       messageId,
       conversationId: 'conversation',
       environmentId: 'server',
       peerFingerprint: 'fingerprint',
-      asker: 'orca_session_id:handing'
+      asker: 'orca_session_id:handing',
+      threadId
     })
   handOff('msg_handoff')
+  handOff('msg_handoff_2', 'msg_handoff')
   expect(sessionAwaitsMail(db, ['handing'])).toBe(true)
-  // An older paired Orca's reply names only its thread.
+  // A reply naming only its thread (an ordinary chat's, or an older paired Orca's) settles one.
+  settlePeerQuestionsOut(db, 'conversation', { threadId: 'msg_handoff' })
+  expect(sessionAwaitsMail(db, ['handing'])).toBe(true)
   settlePeerQuestionsOut(db, 'conversation', { threadId: 'msg_handoff' })
   expect(sessionAwaitsMail(db, ['handing'])).toBe(false)
   handOff('msg_failed')
