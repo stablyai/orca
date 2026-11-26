@@ -123,15 +123,23 @@ export function hostBotChatItems(args: {
   // Every workspace no listed chat has (Home Chat's, a quiet or closed chat's) leads, flat, so none
   // reads as a listed chat's: live ones and the open one always, the rest paged as a chat's lines.
   const liveIds = botLiveWorkspaceIds(tree.chats)
-  const isLive = (branch: HostBotWorkerBranch) =>
-    branch.lines.some((line) => liveIds.has(line.row.worktreeId))
-  const ranked = rankBotWorkspacesByLive(
-    tree.chats,
-    args.branches.filter((branch) => !listed.has(tree.workspaceChats[branch.id] ?? ''))
-  )
-  const flat = [...ranked.filter(isLive), ...ranked.filter((branch) => !isLive(branch))]
+  const liveBranches = new Set<string>()
+  const rest = args.branches.filter((branch) => {
+    if (listed.has(tree.workspaceChats[branch.id] ?? '')) {
+      return false
+    }
+    if (branch.lines.some((line) => liveIds.has(line.row.worktreeId))) {
+      liveBranches.add(branch.id)
+    }
+    return true
+  })
+  const ranked = rankBotWorkspacesByLive(tree.chats, rest)
+  const flat = [
+    ...ranked.filter(({ id }) => liveBranches.has(id)),
+    ...ranked.filter(({ id }) => !liveBranches.has(id))
+  ]
   const flatSteps = args.steps[keyOf(FLAT_LINES_KEY)] ?? 0
-  const page = pageChatLines(flat, new Set(flat.filter(isLive).map(({ id }) => id)), flatSteps)
+  const page = pageChatLines(flat, liveBranches, flatSteps)
   const leading = flat
     .filter((branch, index) => index < page.shown || branch.lines.some((line) => line.row.isActive))
     .flatMap((branch) => lineItems(branch, view.notes.get(branch.id)))

@@ -226,9 +226,10 @@ export function drawHostBotEntries(
     // Searching lists the matching workspaces flat, as before chats; otherwise its chats, once read. A
     // down host's last tree is not live, and its bot lists nothing.
     const tree = query || offline ? undefined : inputs.chatTrees.get(hostBotTreeKey(hostId, bot.id))
-    // Until its first read lands it lists nothing, so its rows don't swap under you.
+    // Until its first read lands it lists nothing, so its rows don't swap under you; a folded bot
+    // lists nothing under its row, so its lines aren't built.
     const chatItems =
-      tree === 'loading'
+      tree === 'loading' || (!listsUnder && !query)
         ? []
         : hostBotChatItems({
             tree,
