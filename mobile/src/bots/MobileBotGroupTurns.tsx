@@ -16,6 +16,10 @@ import {
   type BotGroupTurn,
   withBotGroupTurnAnswer
 } from '../../../src/shared/bots/bot-group'
+import {
+  botGroupTurnRows,
+  botGroupTurnSilent
+} from '../../../src/shared/bots/bot-group-member-turn'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { colors } from '../theme/mobile-theme'
 import { groupStyles as styles } from './mobile-bot-group-styles'
@@ -126,12 +130,7 @@ export function MobileBotGroupTurn({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const [expanded, setExpanded] = useState(false)
-  const items = useMemo(
-    () =>
-      turn.frozenItems ??
-      (session ? session.groupTurnItems(turn.operationId, turn.workerDispatchIds) : []),
-    [turn.frozenItems, session?.groupTurnItems, turn.operationId, turn.workerDispatchIds]
-  )
+  const items = useMemo(() => botGroupTurnRows(turn, session?.groupTurnItems), [turn, session])
   const lifecycle = items.find((item) => item.body.kind === 'turn')?.body
   const clock = lifecycle?.kind === 'turn' ? lifecycle : null
   const queued = session?.queued.holds(turn.operationId)
@@ -195,6 +194,10 @@ export function MobileBotGroupTurn({
       ),
     [messages, fold, turn.operationId, turn.answer]
   )
+  // A member turn that ended saying only the quiet marker told the room nothing: it draws nothing.
+  if (botGroupTurnSilent(turn, items)) {
+    return null
+  }
   return (
     // Group turns keep the action sheet for every link; the phone's link setting isn't read here.
     <MobileNativeChatRowOverlaysHost
