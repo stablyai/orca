@@ -1,6 +1,6 @@
 // Pre-handoff gate: runs the checks a change's paths need, in parallel, printing failures in full.
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { setMaxListeners } from 'node:events'
 import { createRequire } from 'node:module'
 import { availableParallelism } from 'node:os'
@@ -19,7 +19,7 @@ import {
   selectImportingTests
 } from './check-changed-direct-tests.mjs'
 import { planChangedChecks } from './check-changed-selection.mjs'
-import { runChangedCheckTasks } from './changed-check-task-pool.mjs'
+import { runChangedCheckTasks, selectChangedCheckTasks } from './changed-check-task-pool.mjs'
 import { resolveOxcCliInvocation } from '../../tool-invocation/oxc-cli-invocation.mjs'
 import { resolvePnpmCliInvocation } from '../../tool-invocation/pnpm-cli-invocation.mjs'
 
@@ -40,6 +40,8 @@ function parseArgs(argv) {
     base: null,
     maxWorkers: null,
     checkConcurrency: null,
+    checkGroup: 'all',
+    report: null,
     typecheckCompiler: null,
     stepTimeoutMs: DEFAULT_STEP_TIMEOUT_MINUTES * 60_000
   }
@@ -52,6 +54,10 @@ function parseArgs(argv) {
       options.related = true
     } else if (argument.startsWith('--base=')) {
       options.base = argument.slice('--base='.length)
+    } else if (/^--check-group=(all|types-and-tests|static)$/.test(argument)) {
+      options.checkGroup = argument.split('=')[1]
+    } else if (argument.startsWith('--report=') && argument.length > '--report='.length) {
+      options.report = argument.slice('--report='.length)
     } else if (/^--max-?workers=\d+$/i.test(argument)) {
       options.maxWorkers = argument.split('=')[1]
     } else if (/^--check-concurrency=[1-9]\d*$/.test(argument)) {
@@ -66,7 +72,7 @@ function parseArgs(argv) {
       options.typecheckCompiler = argument.split('=')[1]
     } else {
       throw new Error(
-        `Unknown option ${argument}. Use --force, --related, --base=<ref>, --maxWorkers=<n>, --check-concurrency=<n>, --timeout=<minutes>, --typecheck-compiler=auto|tsrs|bun|native.`
+        `Unknown option ${argument}. Use --force, --related, --base=<ref>, --maxWorkers=<n>, --check-concurrency=<n>, --check-group=all|types-and-tests|static, --report=<path>, --timeout=<minutes>, --typecheck-compiler=auto|tsrs|bun|native.`
       )
     }
   }
@@ -425,7 +431,14 @@ async function runChangedChecks(root, options, signal) {
     return 0
   }
   const hash = `${computePassHash(root, mergeBase)}:${options.typecheckCompiler ?? 'auto'}`
-  if (!options.force && !options.related && readPassHash(root) === hash) {
+  const fullGate = options.checkGroup === 'all'
+  if (
+    fullGate &&
+    !options.report &&
+    !options.force &&
+    !options.related &&
+    readPassHash(root) === hash
+  ) {
     console.log('Nothing changed since last passing run.')
     return 0
   }
@@ -487,7 +500,7 @@ async function runChangedChecks(root, options, signal) {
   const { resolvePinnedBunExecutable } =
     await import('../../tool-invocation/pinned-bun-executable.mjs')
   const bun = () => resolvePinnedBunExecutable(root, runProcessSync) ?? 'bun'
-  const tasks = buildTasks(root, plan, {
+  const plannedTasks = buildTasks(root, plan, {
     files,
     mergeBase,
     maxWorkers: options.maxWorkers,
@@ -495,8 +508,10 @@ async function runChangedChecks(root, options, signal) {
     bun,
     transitive: options.related
   })
+  const tasks = selectChangedCheckTasks(plannedTasks, options.checkGroup)
+  const selection = fullGate ? '' : ` of ${plannedTasks.length} (${options.checkGroup})`
   console.log(
-    `check:changed: ${files.length} changed file(s) since ${ref} (${mergeBase.slice(0, 10)}); running ${tasks.length} check(s).`
+    `check:changed: ${files.length} changed file(s) since ${ref} (${mergeBase.slice(0, 10)}); running ${tasks.length}${selection} check(s).`
   )
 
   // Typecheck and tests lead the queue: they take longest, so the short checks fill in around them.
@@ -534,6 +549,22 @@ async function runChangedChecks(root, options, signal) {
   if (signal?.aborted) {
     return signal.reason
   }
+  if (options.report) {
+    writeFileSync(
+      path.resolve(root, options.report),
+      `${JSON.stringify(
+        {
+          mergeBase,
+          group: options.checkGroup,
+          plannedChecks: plannedTasks.map((task) => task.name),
+          selectedChecks: tasks.map((task) => task.name),
+          results: results.map(({ task, ok }) => ({ name: task.name, ok }))
+        },
+        null,
+        2
+      )}\n`
+    )
+  }
   const failed = results.filter((result) => !result.ok)
   if (failed.length > 0) {
     console.error(
@@ -541,7 +572,9 @@ async function runChangedChecks(root, options, signal) {
     )
     return 1
   }
-  writePassHash(root, hash)
+  if (fullGate) {
+    writePassHash(root, hash)
+  }
   console.log(`✓ ${results.length} check(s) passed in ${seconds(startedAt)}.`)
   return 0
 }

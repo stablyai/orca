@@ -1,3 +1,16 @@
+export function selectChangedCheckTasks(tasks, group = 'all') {
+  if (group === 'all') {
+    return tasks
+  }
+  if (group === 'types-and-tests') {
+    return tasks.filter((task) => task.exclusive)
+  }
+  if (group === 'static') {
+    return tasks.filter((task) => !task.exclusive)
+  }
+  throw new Error(`Unknown check group: ${group}`)
+}
+
 async function runConcurrent(tasks, concurrency, run, signal) {
   const results = []
   let next = 0

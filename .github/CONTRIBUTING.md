@@ -58,6 +58,8 @@ On macOS and Linux, set `git config --local orca.serializeChangedChecks true` to
 
 Use `--check-concurrency=2 --maxWorkers=2` on small runners: typechecks and unit tests each run alone, then other checks run in at most two groups. `--check-concurrency=1` serializes every group. The same selected checks run with their existing deadlines; without this option the normal concurrent schedule is unchanged.
 
+CI can split the same plan with `--check-group=types-and-tests` and `--check-group=static`; run both groups to cover the full gate. Partial groups never read or write the full-gate pass cache. Add `--report=<path>` to write the complete plan, selected checks and actual outcomes as JSON; a report requests fresh execution even when the full gate has a cached pass.
+
 Use `pnpm test`, not raw `vitest`: only it keeps the transform cache that makes repeat runs fast.
 
 ```bash

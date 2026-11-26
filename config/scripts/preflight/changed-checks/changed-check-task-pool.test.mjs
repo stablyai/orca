@@ -1,5 +1,30 @@
 import { expect, it } from 'vitest'
-import { runChangedCheckTasks } from './changed-check-task-pool.mjs'
+import { runChangedCheckTasks, selectChangedCheckTasks } from './changed-check-task-pool.mjs'
+
+it('executes every planned check exactly once across the two CI groups', async () => {
+  const tasks = [
+    { name: 'types', exclusive: true },
+    { name: 'lint' },
+    { name: 'tests', exclusive: true },
+    { name: 'format' }
+  ]
+  const completed = await Promise.all(
+    ['types-and-tests', 'static'].map((group) =>
+      runChangedCheckTasks(selectChangedCheckTasks(tasks, group), 2, async (task) => task.name)
+    )
+  )
+  expect(completed).toEqual([
+    ['types', 'tests'],
+    ['lint', 'format']
+  ])
+  expect(completed.flat().sort()).toEqual(['format', 'lint', 'tests', 'types'])
+  expect(selectChangedCheckTasks(tasks).map((task) => task.name)).toEqual([
+    'types',
+    'lint',
+    'tests',
+    'format'
+  ])
+})
 
 it('isolates resource checks, retains a failed check and runs every remaining check within the cap', async () => {
   const names = ['types', 'tests', 'lint', 'format', 'links']
