@@ -6,6 +6,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
 import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { writeDurableSecureJsonFile } from '../../../../shared/secure-storage/secure-file'
 import { wslMoveJournalKey } from '../../../../shared/wsl-move/wsl-move-cutover'
@@ -94,19 +95,37 @@ export function wslMoveOrchestratorStorePath(userDataPath: string): string {
   return join(userDataPath, FILE_NAME)
 }
 
+/** Paths whose last read failed: writing their in-memory map would drop records it never saw. */
+const unreadableStorePaths = new Set<string>()
+
 /** Every readable record, keyed by the distro's journal key; a bad record is dropped alone. */
 export function readWslMoveOrchestratorRecords(
   userDataPath: string
 ): Map<string, WslMoveOrchestratorRecord> {
+  const storePath = wslMoveOrchestratorStorePath(userDataPath)
   const records = new Map<string, WslMoveOrchestratorRecord>()
+  let text: string
+  try {
+    text = readFileSync(storePath, 'utf8')
+  } catch (error) {
+    // A missing file is genuinely empty; any other failure proves nothing about the records.
+    if (errnoCodeOrUnknown(error) === 'ENOENT') {
+      unreadableStorePaths.delete(storePath)
+    } else {
+      unreadableStorePaths.add(storePath)
+    }
+    return records
+  }
   let raw: unknown
   try {
-    raw = JSON.parse(readFileSync(wslMoveOrchestratorStorePath(userDataPath), 'utf8'))
+    raw = JSON.parse(text)
   } catch {
+    unreadableStorePaths.add(storePath)
     return records
   }
   const file = fileSchema.safeParse(raw)
   if (!file.success) {
+    unreadableStorePaths.add(storePath)
     return records
   }
   for (const value of Object.values(file.data.distros)) {
@@ -115,6 +134,7 @@ export function readWslMoveOrchestratorRecords(
       records.set(wslMoveJournalKey(record.data.distro), record.data)
     }
   }
+  unreadableStorePaths.delete(storePath)
   return records
 }
 
@@ -122,6 +142,10 @@ export function writeWslMoveOrchestratorRecords(
   userDataPath: string,
   records: ReadonlyMap<string, WslMoveOrchestratorRecord>
 ): void {
+  // A failed initial read cannot prove the other distros gone; rewriting would delete their records.
+  if (unreadableStorePaths.has(wslMoveOrchestratorStorePath(userDataPath))) {
+    throw new Error(`Refusing to overwrite unreadable ${FILE_NAME}`)
+  }
   writeDurableSecureJsonFile(wslMoveOrchestratorStorePath(userDataPath), {
     version: 1,
     distros: Object.fromEntries(records)
