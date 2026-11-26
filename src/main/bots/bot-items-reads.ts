@@ -79,23 +79,30 @@ export class BotItemsReads extends BotItemsTables {
       .map((row) => String(row.item_uid))
   }
 
-  /** Items linking any of these items (`item:`), or any of a bot's, with their bots. Up to a list page:
-   *  past it, a linking item reads its target afresh the next time it is opened or listed. */
-  itemsLinkingItems(target: BotItemLinkTargets): { uid: string; ownerBotId: string }[] {
+  /** Items linking any of these items (`item:`), or any of a bot's, with their bots: up to a list page,
+   *  and `more` when others link them too. */
+  itemsLinkingItems(target: BotItemLinkTargets): {
+    linking: { uid: string; ownerBotId: string }[]
+    more: boolean
+  } {
     const refs =
       'uids' in target
         ? 'SELECT value FROM json_each(?)'
         : 'SELECT uid FROM items WHERE owner_bot_id = ?'
-    return this.db
+    const rows = this.db
       .prepare(
         `SELECT DISTINCT items.uid, items.owner_bot_id FROM item_links JOIN items ON items.uid = item_links.item_uid
           WHERE item_links.kind = 'item' AND item_links.ref IN (${refs}) LIMIT ?`
       )
       .all(
         'uids' in target ? JSON.stringify(target.uids) : target.botId,
-        BOT_ITEM_LIMITS.listPageMax
+        BOT_ITEM_LIMITS.listPageMax + 1
       )
       .map((row) => ({ uid: text(row, 'uid'), ownerBotId: text(row, 'owner_bot_id') }))
+    return {
+      linking: rows.slice(0, BOT_ITEM_LIMITS.listPageMax),
+      more: rows.length > BOT_ITEM_LIMITS.listPageMax
+    }
   }
 
   /** An item and where its work started (its `made` event's `startedIn`), in one call: what a

@@ -270,7 +270,8 @@ export function linkedItemView(
     : null
 }
 
-/** Tells the bots whose items link `target` to re-read them; a failed read only warns. */
+/** Tells the bots whose items link `target` to re-read them; with more than a page linking it, every
+ *  bot's items re-read. A failed read only warns. */
 export function notifyItemsLinking(
   store: BotItemsRemote | null,
   target: BotItemLinkTargets,
@@ -278,8 +279,8 @@ export function notifyItemsLinking(
 ): void {
   void store
     ?.itemsLinkingItems(target)
-    .then((linking) => {
-      const scope = botItemsChangeScope(linking)
+    .then(({ linking, more }) => {
+      const scope = more ? { kinds: ['items' as const] } : botItemsChangeScope(linking)
       if (scope) {
         notify(scope)
       }
