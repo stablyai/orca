@@ -38,10 +38,6 @@ export type ExtraUsageBalance = CurrencyExtraUsageBalance | CreditExtraUsageBala
 
 export type RateLimitBucket = RateLimitWindow & {
   name: string
-  /** Model-group name the pool belongs to, when the provider groups pools. */
-  group?: string
-  /** Provider's own window name for the pool, e.g. "Weekly Limit Remaining". */
-  windowName?: string
 }
 
 export type UsageRateLimitSource = 'oauth' | 'cli' | 'web' | 'live-session'
@@ -206,6 +202,8 @@ export type RateLimitState = {
   codexTarget: RateLimitRuntimeTarget
   inactiveClaudeAccounts: InactiveAccountUsage[]
   inactiveCodexAccounts: InactiveAccountUsage[]
+  /** Retired with Antigravity usage and always empty; older clients read it unguarded. */
+  antigravityAccounts?: []
 }
 
 export type RuntimeTargetUsageProvider = 'claude' | 'codex'

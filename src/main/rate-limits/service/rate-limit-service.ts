@@ -215,7 +215,8 @@ export class RateLimitService extends RateLimitServiceTargetUsageRead {
       inactiveCodexAccounts: this.buildInactiveArray(
         this.inactiveCodexCache,
         this.inactiveCodexFetching
-      )
+      ),
+      antigravityAccounts: []
     }
   }
 }
