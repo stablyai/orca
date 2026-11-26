@@ -153,6 +153,20 @@ export const getGeneralEditorSearchDescriptors = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.markdownRichKw', 'rich')
     ]
   }),
+  generalSetting(GENERAL_SETTING_ANCHORS.markdownWidth, {
+    title: translate('settings.editor.markdownWidth', 'Markdown content width'),
+    description: translate(
+      'settings.editor.markdownWidthDescription',
+      'How wide the reading column grows in a wide Markdown pane.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.editor.markdownWidthKeywordMarkdown', 'markdown'),
+      ...translateSearchKeyword('settings.editor.markdownWidthKeywordWidth', 'width'),
+      ...translateSearchKeyword('settings.editor.markdownWidthKeywordReading', 'reading'),
+      ...translateSearchKeyword('settings.editor.markdownWidthKeywordWide', 'wide'),
+      ...translateSearchKeyword('settings.editor.markdownWidthKeywordFull', 'full')
+    ]
+  }),
   generalSetting(GENERAL_SETTING_ANCHORS.spellcheck, {
     title: translate(
       'auto.components.settings.general.search.8ad175042b',

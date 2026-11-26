@@ -15,6 +15,7 @@ import { SettingsSegmentedControl, SettingsSwitchRow } from '../form-controls/Se
 import { useTranslate } from '@/i18n/use-translate'
 import { RichMarkdownSpellcheckSetting } from './RichMarkdownSpellcheckSetting'
 import { MarkdownDefaultViewSetting } from './MarkdownDefaultViewSetting'
+import { MarkdownReadingWidthSetting } from './MarkdownReadingWidthSetting'
 import { DiffShowWhitespaceSetting } from './DiffShowWhitespaceSetting'
 import { EditorWordWrapSetting } from './EditorWordWrapSetting'
 import { EditorFontFamilySetting } from './EditorFontFamilySetting'
@@ -361,6 +362,7 @@ export function GeneralEditorSettingsSection({
       </SettingsGroup>
       <SettingsGroup title={t('settings.general.editorGroups.markdown', 'Markdown')}>
         <MarkdownDefaultViewSetting settings={settings} />
+        <MarkdownReadingWidthSetting settings={settings} updateSettings={updateSettings} />
         <RichMarkdownSpellcheckSetting settings={settings} updateSettings={updateSettings} />
         <SearchableSetting
           id={GENERAL_SETTING_ANCHORS.reviewNotes}
