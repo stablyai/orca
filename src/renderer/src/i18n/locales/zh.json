@@ -1392,7 +1392,12 @@
         "workspaces": "{{name}}：{{workspaces}}",
         "added": "已添加 {{name}}",
         "newSessions": "对新会话生效",
-        "restart": "重启 {{count}} 个会话",
+        "restart_other": "重启 {{count}} 个会话",
+        "staleTerminals_other": "{{count}} 个智能体终端使用的是旧的 MCP 设置",
+        "staleTerminalsOnHost_other": "{{host}} 上有 {{count}} 个智能体终端使用的是旧的 MCP 设置",
+        "staleTerminalsRestart_other": "重启它们以重新连接 Orca 的 MCP 服务器。",
+        "staleTerminalsRestartManual_other": "请手动重启它们以重新连接 Orca 的 MCP 服务器。",
+        "staleTerminalsRestartSome_other": "其中 {{restartable}} 个可在此恢复，其余 {{count}} 个请手动重启。",
         "addedMany": "已添加 {{count}} 个服务器",
         "repoOn": "已在 {{repo}} 中开启 {{name}}",
         "repoOff": "已在 {{repo}} 中关闭 {{name}}"
