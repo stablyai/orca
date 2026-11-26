@@ -1,26 +1,31 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../../../../shared/schema/lazy-zod-schema'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import { isTuiAgent } from '../../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { DispatchContextRow } from '../../../../../orchestration/db/orchestration-records'
 
 const EARLIER_WORK_CLIP = 2_000
 
-const StartOptions = z.looseObject({
-  agent: z.string().nullish(),
-  launch: z
-    .looseObject({
-      requested: z
-        .looseObject({ model: z.string().nullish(), effort: z.string().nullish() })
-        .nullish()
-    })
-    .nullish()
-})
+const StartOptions = lazyZodSchema(() =>
+  z.looseObject({
+    agent: z.string().nullish(),
+    launch: z
+      .looseObject({
+        requested: z
+          .looseObject({ model: z.string().nullish(), effort: z.string().nullish() })
+          .nullish()
+      })
+      .nullish()
+  })
+)
 
-const WorkerReport = z.looseObject({
-  outcome: z.string().optional(),
-  subject: z.string().optional(),
-  body: z.string().optional()
-})
+const WorkerReport = lazyZodSchema(() =>
+  z.looseObject({
+    outcome: z.string().optional(),
+    subject: z.string().optional(),
+    body: z.string().optional()
+  })
+)
 
 function parseJson(raw: string | null): unknown {
   try {

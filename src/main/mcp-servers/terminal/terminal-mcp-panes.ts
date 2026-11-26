@@ -3,6 +3,7 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { writePluginFileAtomically } from '../../plugins/installation/plugin-atomic-file-write'
 import type { TerminalMcpPaneLaunch } from './terminal-mcp-launch'
@@ -10,15 +11,19 @@ import type { TerminalMcpPaneLaunch } from './terminal-mcp-launch'
 const FILE = 'mcp-terminal-panes.json'
 const MAX_PANES = 500
 
-const PaneSchema = z.object({
-  agent: z.string().max(64),
-  workspaceKey: z.string().max(1024).nullable(),
-  workspaceId: z.string().max(4096).nullable(),
-  wsl: z.boolean(),
-  wslDistro: z.string().max(256).nullable().optional(),
-  fingerprint: z.string().max(128).nullable()
-})
-const FileSchema = z.object({ version: z.literal(1), panes: z.record(z.string(), PaneSchema) })
+const PaneSchema = lazyZodSchema(() =>
+  z.object({
+    agent: z.string().max(64),
+    workspaceKey: z.string().max(1024).nullable(),
+    workspaceId: z.string().max(4096).nullable(),
+    wsl: z.boolean(),
+    wslDistro: z.string().max(256).nullable().optional(),
+    fingerprint: z.string().max(128).nullable()
+  })
+)
+const FileSchema = lazyZodSchema(() =>
+  z.object({ version: z.literal(1), panes: z.record(z.string(), PaneSchema) })
+)
 
 /** This run's records over the ones read from disk; written back in order, newest last. */
 class TerminalMcpPanes {

@@ -86,7 +86,8 @@ class OrchestrationDbCore {
     refreshOutstandingDeliveryTrigger(this.db)
     installWorkerTerminalPriorOwnerIndex(this)
     for (const [table, columns] of [
-      ['messages', ['answer_sender_snapshot']],
+      // reply_to: the message a reply answers, when its sender named one.
+      ['messages', ['answer_sender_snapshot', 'reply_to']],
       ['federation_relay_items', ['answer_sender_report']],
       ['message_dispatch_provenance', ['sender_snapshot']]
     ] as const) {
@@ -120,6 +121,8 @@ class OrchestrationDbCore {
         ON attempt_observation_facts(task_id);
       CREATE INDEX IF NOT EXISTS idx_message_dispatch_provenance_dispatch
         ON message_dispatch_provenance(dispatch_id);
+      CREATE INDEX IF NOT EXISTS idx_peer_questions_out_thread
+        ON peer_questions_out(conversation_id, COALESCE(thread_id, message_id), awaiting);
       CREATE INDEX IF NOT EXISTS idx_remote_run_links_run ON remote_run_links(run_id);
       CREATE INDEX IF NOT EXISTS idx_remote_placements_run ON remote_placements(run_id);
       CREATE INDEX IF NOT EXISTS idx_worker_dispatches_agent_terminal_handle

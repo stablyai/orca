@@ -11,6 +11,7 @@ import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from '../../shared/fi
 import type { HandlerContext } from '../dispatch/dispatch'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { getCallerExecutionHostId } from '../workspace-selection/caller-host-worktree-selection'
+import { resolveFilePath } from './file-open-path'
 
 const WORKTREE_LIST_LIMIT = 10_000
 
@@ -37,23 +38,10 @@ export async function resolveFileOpenTarget(
   path: string,
   explicitWorktree: boolean
 ): Promise<FileOpenTarget> {
-  if (!isRuntimePathAbsolute(path)) {
-    return { worktree, relativePath: path }
-  }
-  const shown = await ctx.client.call<{ worktree: { path: string } }>('worktree.show', { worktree })
-  const rootPath = shown.result.worktree.path
-  const relativePath = relativePathInsideRoot(
-    rootPath,
-    toWorktreeRootPathFlavor(rootPath, ctx.cwd, path)
-  )
-  if (relativePath === '') {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      'The selected worktree root is a directory, not a file-open target.'
-    )
-  }
-  if (relativePath !== null) {
-    return { worktree, relativePath }
+  // `./` is cwd-relative on local calls; an absolute result is outside the selected worktree.
+  const resolved = await resolveFilePath(ctx, worktree, path)
+  if (!isRuntimePathAbsolute(resolved)) {
+    return { worktree, relativePath: resolved }
   }
   if (explicitWorktree) {
     throw outsideSelectedWorktree(ctx.client.isRemote)
@@ -71,7 +59,7 @@ export async function resolveFileOpenTarget(
       }
     )
   }
-  return pickContainingWorktree(ctx.cwd, path, listed.result.worktrees)
+  return pickContainingWorktree(ctx.cwd, resolved, listed.result.worktrees)
 }
 
 function outsideSelectedWorktree(isRemote: boolean): RuntimeClientError {

@@ -117,6 +117,38 @@ const catalog: ListedWorktree[] = [
 ]
 
 describe('file open absolute paths outside the selected worktree', () => {
+  it('resolves a leading ./ from the cwd inside the current worktree', async () => {
+    const call = await run('file open', ['file', 'open', './src/App.tsx', '--json'], catalog)
+    expect(call.mock.calls.filter((entry) => entry[0] === 'files.open')).toEqual([
+      [
+        'files.open',
+        {
+          worktree: CURRENT,
+          relativePath: 'src/App.tsx',
+          navigation: 'caller'
+        }
+      ]
+    ])
+  })
+
+  it('opens a leading ./ that leaves the current worktree in the worktree that contains it', async () => {
+    const call = await run(
+      'file open',
+      ['file', 'open', './../feature/README.md', '--json'],
+      catalog
+    )
+    expect(call.mock.calls.filter((entry) => entry[0] === 'files.open')).toEqual([
+      [
+        'files.open',
+        {
+          worktree: 'id:repoA::/repos/feature',
+          relativePath: 'README.md',
+          navigation: 'caller'
+        }
+      ]
+    ])
+  })
+
   it('opens an absolute path in the other registered worktree', async () => {
     const call = await run(
       'file open',

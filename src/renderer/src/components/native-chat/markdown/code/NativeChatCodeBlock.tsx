@@ -1,31 +1,37 @@
 // @protected-copy: preserve code controls used by approval prompts.
-import React, { useContext } from 'react'
+import React, { useContext, useEffect, useRef, useState } from 'react'
 import { WrapText } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { getCodeFenceLanguageLabel } from './code-fence-language-label'
 import { NativeChatCopyButton } from '../../messages/actions/NativeChatCopyButton'
-import { NativeChatMarkdownRowKeyContext } from '../native-chat-markdown-row-identity'
+import { NativeChatMarkdownCodeBlockContext } from '../native-chat-markdown-code-block-context'
 import { useNativeChatDisclosure } from '../../messages/disclosure/native-chat-disclosure-store'
 import { NativeChatHighlightedCode } from './NativeChatHighlightedCode'
 import { NativeChatHtmlPreview, NativeChatHtmlViewToggle } from './NativeChatHtmlPreview'
 import { isHtmlDocumentCodeBlock } from '../../../../../../shared/markdown/html-document-fences'
+import { observeTranscriptVisibility } from '../../media/images/native-chat-image-visibility'
 
 /** Code fences need their own copy target rather than the whole chat message. */
 export function NativeChatCodeBlock({
   children,
   language,
   sourceLine,
-  plain = false
+  fenceClosed = false,
+  plain = false,
+  deferHighlight = false
 }: {
   children?: React.ReactNode
   language?: string
   sourceLine?: number
+  fenceClosed?: boolean
   plain?: boolean
+  /** Color only once on screen (an item's clamped, unvirtualized text); chat colors at once. */
+  deferHighlight?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const code = extractCodeText(children)
-  const rowKey = useContext(NativeChatMarkdownRowKeyContext)
+  const { rowKey, growing } = useContext(NativeChatMarkdownCodeBlockContext)
   // Keep wrap state in the transcript store so windowing and streaming block recuts cannot reset it; never persist it.
   const blockKey =
     rowKey === undefined || sourceLine === undefined ? undefined : `${rowKey}:${sourceLine}`
@@ -38,7 +44,11 @@ export function NativeChatCodeBlock({
     blockKey && `code-preview:${blockKey}`,
     false
   )
-  const previewing = htmlDocument && previewOpen
+  const previewAvailable = !growing || fenceClosed
+  const previewing = htmlDocument && previewAvailable && previewOpen
+  const content = useRef<HTMLPreElement | null>(null)
+  const highlights = Boolean(language && code && !plain)
+  const colored = useSeenOnScreen(content, highlights && deferHighlight && !previewing)
   const actions = code ? (
     <>
       <NativeChatCodeWrapButton wrapped={wrapped} onToggle={() => setWrapped(!wrapped)} />
@@ -63,7 +73,11 @@ export function NativeChatCodeBlock({
           )}
         >
           {htmlDocument ? (
-            <NativeChatHtmlViewToggle previewing={previewing} onChange={setPreviewing} />
+            <NativeChatHtmlViewToggle
+              previewing={previewing}
+              previewAvailable={previewAvailable}
+              onChange={setPreviewing}
+            />
           ) : (
             <span
               data-code-language={language}
@@ -77,6 +91,7 @@ export function NativeChatCodeBlock({
       ) : null}
       {previewing ? <NativeChatHtmlPreview code={code} /> : null}
       <pre
+        ref={content}
         data-native-chat-code-content
         hidden={previewing}
         className={cn(
@@ -86,9 +101,13 @@ export function NativeChatCodeBlock({
           htmlDocument ? 'px-3 pt-0.5 pb-3' : language ? 'px-3.5 pt-0.5 pb-3' : 'mr-17 p-3 pr-1.5'
         )}
       >
-        {language && code && !plain ? (
+        {highlights && language ? (
           <code>
-            <NativeChatHighlightedCode code={code} language={language} />
+            {colored && !previewing ? (
+              <NativeChatHighlightedCode code={code} language={language} />
+            ) : (
+              code
+            )}
           </code>
         ) : (
           children
@@ -101,6 +120,24 @@ export function NativeChatCodeBlock({
       ) : null}
     </div>
   )
+}
+
+/** Tokens are a DOM node each: a deferred block off screen (or cut by a clamp) stays plain until
+ *  first seen, then stays colored. */
+function useSeenOnScreen(node: React.RefObject<HTMLElement | null>, waits: boolean): boolean {
+  const [seen, setSeen] = useState(false)
+  useEffect(() => {
+    const element = node.current
+    if (!waits || seen || !element) {
+      return
+    }
+    return observeTranscriptVisibility(element, (visible) => {
+      if (visible) {
+        setSeen(true)
+      }
+    })
+  }, [node, waits, seen])
+  return seen || !waits
 }
 
 function NativeChatCodeWrapButton({
@@ -126,6 +163,15 @@ function NativeChatCodeWrapButton({
       <WrapText className="size-3.5" />
     </button>
   )
+}
+
+/** For an item's text: unvirtualized and clamped, so only blocks on screen pay for their tokens. */
+export function NativeChatDeferredCodeBlock(props: {
+  children?: React.ReactNode
+  language?: string
+  sourceLine?: number
+}): React.JSX.Element {
+  return <NativeChatCodeBlock {...props} deferHighlight />
 }
 
 /** For dimmed rows: their code keeps the row's faint color, so it is not tokenized at all. */

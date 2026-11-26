@@ -109,6 +109,7 @@
   --color-chat-focus-ring: var(--chat-focus-ring);
   --color-unread: var(--unread);
   --color-unread-inverse: var(--unread-inverse);
+  --color-unread-bell: var(--unread-bell);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -333,6 +334,8 @@
   --unread: var(--color-blue-500);
   /* The unread dot on an inverted surface (tips): blue-500 keeps 3:1 on both the near-black and near-white inverse. */
   --unread-inverse: var(--color-blue-500);
+  /* The amber unread bell, shared by both themes. */
+  --unread-bell: var(--color-amber-500);
   /* Keep PR-state hues stable across theme changes. */
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;
