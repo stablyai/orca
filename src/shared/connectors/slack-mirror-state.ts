@@ -15,7 +15,9 @@ export const SLACK_MIRROR_KEPT_POSTS = 100
 const MAX_OPENER_NAME = 80
 
 /** Who began a conversation, from the delivery that started it. */
-export function conversationOpener(asker: ConnectorAsker): ExternalConversationOpener {
+export function conversationOpener(
+  asker: Pick<ConnectorAsker, 'app' | 'name' | 'place' | 'role'>
+): ExternalConversationOpener {
   const name = asker.name?.slice(0, MAX_OPENER_NAME)
   return {
     role: asker.app ? 'member' : asker.role,

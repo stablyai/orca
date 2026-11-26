@@ -238,6 +238,24 @@ export class DeliveryReceipts {
       : Promise.resolve(refused('delivery_id_reused'))
   }
 
+  /** A later send can arrive before the startup sweep has repaired its thread's link. */
+  async restoreConversation(key: ConversationKey): Promise<void> {
+    if (!this.recoverAttempt) {
+      return
+    }
+    const requestPrefix = JSON.stringify([key.externalId]).slice(0, -1)
+    for (const receipt of this.settledDb().pendingConversationReceiptAttempts(
+      callerFingerprint(key.source),
+      requestPrefix,
+      ATTEMPT_PREFIX
+    )) {
+      const attempt = admissionAttempt(receipt)
+      if (attempt?.thread) {
+        await this.recover(attempt)
+      }
+    }
+  }
+
   private recover(attempt: DeliveryAdmissionAttempt): Promise<Delivery | null> {
     let running = this.recovering.get(attempt.operationId)
     if (!running) {

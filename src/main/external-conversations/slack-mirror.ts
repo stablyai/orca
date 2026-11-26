@@ -16,10 +16,7 @@ import {
   slackMirrorMayPost,
   slackMirrorPosts
 } from '../../shared/connectors/slack-mirror-state'
-import {
-  cloudConversation,
-  type ConnectorAsker
-} from '../../shared/connectors/connector-cloud-contract'
+import { cloudConversation } from '../../shared/connectors/connector-cloud-contract'
 import type { AdmittedMessage } from '../native-chat/agent-session-wire/host/structured-agent-session-host-types'
 import { readLinks, type LinkedConversation } from './external-conversation-links'
 import { postsWaiting, withHeldTurnEnd, type ConversationTurnEnd } from './slack-mirror-held'
@@ -82,7 +79,7 @@ export class SlackMirror extends SlackMirrorLinks {
    *  another chat (`fresh` false) keeps what it had: a chat from before this stays off. */
   opened(
     linked: LinkedConversation | null,
-    asker: ConnectorAsker,
+    asker: Parameters<typeof conversationOpener>[0],
     fresh: boolean
   ): LinkedConversation | null {
     if (!linked || !fresh) {

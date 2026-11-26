@@ -10,12 +10,30 @@ import type {
   ExternalConversationSeamDeps
 } from './external-conversation-host'
 import { recordLastTurn } from './external-conversation-last-turn'
-import type {
-  ExternalConversationLinkStore,
-  LinkedConversation
+import {
+  findLink,
+  type ExternalConversationLinkStore,
+  type LinkedConversation
 } from './external-conversation-links'
+import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-reason'
 import { resumeRefusal } from './external-conversation-resume'
 import type { ConnectorMessage, ConversationKey, Delivery } from './external-conversation-types'
+
+export async function recoverConnectorSendLink(
+  deps: Pick<ExternalConversationSeamDeps, 'store' | 'receipts'>,
+  key: ConversationKey,
+  signal: AbortSignal
+): Promise<LinkedConversation | null> {
+  try {
+    await waitForPromiseWithSignal(deps.receipts.restoreConversation(key), signal)
+    return findLink(deps.store, key)
+  } catch (error) {
+    if (signal.aborted) {
+      return null
+    }
+    throw error
+  }
+}
 
 export async function chatForConversationSend(
   store: ExternalConversationLinkStore,

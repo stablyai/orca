@@ -240,6 +240,21 @@ export function pendingMutationReceiptsWithPrefix(
     }))
 }
 
+export function pendingConversationReceiptAttempts(
+  this: OrchestrationDb,
+  callerFingerprint: string,
+  requestPrefix: string,
+  receiptPrefix: string
+): string[] {
+  // Request IDs are JSON pairs. The character immediately after this escaped key is a comma.
+  return this.db
+    .prepare(`SELECT DISTINCT receipt FROM mutation_receipts
+      WHERE caller_fingerprint=? AND request_id>=? AND request_id<?
+        AND state='pending' AND instr(receipt,?)=1`)
+    .all(callerFingerprint, requestPrefix + ',', requestPrefix + '-', receiptPrefix)
+    .map((row) => String(row.receipt))
+}
+
 export function getMutationReceipt(
   this: OrchestrationDb,
   callerFingerprint: string,
@@ -264,6 +279,7 @@ export type MutationReceiptStoreMethods = {
   countPendingMutationReceipts: typeof countPendingMutationReceipts
   settlePendingMutationReceipts: typeof settlePendingMutationReceipts
   pendingMutationReceiptsWithPrefix: typeof pendingMutationReceiptsWithPrefix
+  pendingConversationReceiptAttempts: typeof pendingConversationReceiptAttempts
   getMutationReceipt: typeof getMutationReceipt
 }
 
@@ -278,6 +294,7 @@ export function attachMutationReceiptStore(ctor: { prototype: object }): void {
     countPendingMutationReceipts,
     settlePendingMutationReceipts,
     pendingMutationReceiptsWithPrefix,
+    pendingConversationReceiptAttempts,
     getMutationReceipt
   })
 }

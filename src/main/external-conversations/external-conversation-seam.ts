@@ -12,14 +12,18 @@ import {
 import { answerConversation } from './external-conversation-answer'
 import { chatPromptFacts } from './external-conversation-chat-prompts'
 import { startConnectorConversation } from './external-conversation-start'
-import { chatForConversationSend, sendConnectorChat } from './external-conversation-delivery-target'
+import {
+  chatForConversationSend,
+  recoverConnectorSendLink,
+  sendConnectorChat
+} from './external-conversation-delivery-target'
 import {
   ChatDeliveries,
   type ConnectorChatDelivery,
   type LinkableChat
 } from './external-conversation-chat-delivery'
 import { cancelConversation } from './external-conversation-cancel'
-import { ConversationChain, type QueuedWork } from './external-conversation-chain'
+import { ConversationChain, refusalOf, type QueuedWork } from './external-conversation-chain'
 import { GoneChats } from './external-conversation-gone-chats'
 import { ConversationEvents, type ConversationWatchListener } from './external-conversation-events'
 import { conversationOwnsTurn } from './external-conversation-chat-turns'
@@ -233,12 +237,18 @@ export class ExternalConversationSeam {
           this.linked.set(id, { key, worktreeId: queued.workspace.worktreeId })
         }
         return this.chain.enqueue(id, async (signal) => {
-          const stopped = preparation?.stopped(preparation.signal(signal))
+          const deliverySignal = preparation?.signal(signal) ?? signal
+          const stopped = preparation?.stopped(deliverySignal)
           if (stopped) {
             return stopped
           }
-          const linked = findLink(this.deps.store, key)
+          const linked =
+            findLink(this.deps.store, key) ??
+            (await recoverConnectorSendLink(this.deps, key, deliverySignal))
           if (!linked) {
+            if (deliverySignal.aborted) {
+              return preparation?.stopped(deliverySignal) ?? refused(refusalOf(deliverySignal))
+            }
             throw new Error('external_conversation_not_found')
           }
           const chat = await chatForConversationSend(this.deps.store, host, key, linked, message)
@@ -289,7 +299,12 @@ export class ExternalConversationSeam {
   }
 
   /** Links a conversation to an existing native chat, which runs only on this host. */
-  linkChat(key: ConversationKey, chat: LinkableChat, text?: string, asker?: ConnectorAsker): void {
+  linkChat(
+    key: ConversationKey,
+    chat: LinkableChat,
+    text?: string,
+    asker?: Pick<ConnectorAsker, 'app' | 'name' | 'place' | 'role'>
+  ): void {
     const fresh = findLink(this.deps.store, key) === null
     const written = writeChatLink(this.deps.store, key, chat, text)
     const linked = (asker && this.deps.slackMirror?.()?.opened(written, asker, fresh)) || written

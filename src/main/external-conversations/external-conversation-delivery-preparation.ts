@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { isBotAgent } from '../../shared/bot-types'
 import { CONNECTOR_SOURCES } from '../../shared/connectors/external-conversation-link'
+import { ConnectorAsker } from '../../shared/connector-asker-contract'
 import type { LinkableChat } from './external-conversation-chat-delivery'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { rejectedSendRefusal } from './external-conversation-failure'
@@ -10,11 +11,13 @@ import { refused, type Delivery } from './external-conversation-types'
 
 export const PREPARING = JSON.stringify({ phase: 'preparing_attachments' })
 export const ATTEMPT_PREFIX = '{"phase":"admitting_attachments",'
+const RestorableAsker = ConnectorAsker.pick({ app: true, name: true, place: true, role: true })
 const RestorableThread = z.object({
   source: z.enum(CONNECTOR_SOURCES),
   externalId: z.string(),
   botId: z.string(),
-  title: z.string()
+  title: z.string(),
+  asker: RestorableAsker.optional()
 })
 export type RestorableThread = z.infer<typeof RestorableThread>
 const AdmissionAttempt = z.object({
@@ -80,7 +83,7 @@ export class DeliveryPreparation {
   }
 
   restoreThreadOnRestart(thread: RestorableThread): void {
-    this.thread = thread
+    this.thread = RestorableThread.parse(thread)
   }
 
   /** The writer's command receipt proves whether this particular attempt took effect. */

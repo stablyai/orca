@@ -24,7 +24,7 @@ function toolResult(
 
 export function itemBlocks(
   item: AgentJournalRenderItem,
-  drawMarkdown: boolean,
+  drawMarkdown = true,
   connectorTextLimit?: number
 ): {
   role: NativeChatMessage['role']

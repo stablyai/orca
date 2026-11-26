@@ -38,7 +38,8 @@ export async function startConnectorConversation(
     preparation.restoreThreadOnRestart({
       ...key,
       botId: target.botId,
-      title: externalConversationTitle(key.source, message.asker?.text ?? prompt)
+      title: externalConversationTitle(key.source, message.asker?.text ?? prompt),
+      ...(message.asker ? { asker: message.asker } : {})
     })
   }
   const initial = await deps.receipts.run(
@@ -58,7 +59,7 @@ export async function startConnectorConversation(
         }
         let stagedImages: StagedConnectorImages | undefined
         let fresh = false
-        let expired = false
+        let abandoned = false
         const beforeCreate = async (agent: NativeChatAgent) => {
           fresh = true
           if (message.asker && deps.askerImages) {
@@ -92,17 +93,17 @@ export async function startConnectorConversation(
                   signal,
                   ...(stagedImages ? { stagedImages } : {})
                 })
-          expired = delivered.outcome === 'expired'
+          abandoned = delivered.outcome === 'expired' || delivered.outcome === 'refused'
           return delivered
         } catch (error) {
           const stoppedDuringStart = preparation?.stopped(deliverySignal)
           if (stoppedDuringStart) {
-            expired = stoppedDuringStart.outcome === 'expired'
+            abandoned = true
             return stoppedDuringStart
           }
           throw error
         } finally {
-          if (fresh && expired) {
+          if (fresh && abandoned) {
             await host.bots?.forgetUnusedStart?.(deliveryChatId(key, target, deliveryId))
           }
         }

@@ -30,8 +30,8 @@ export async function forgetExpiredBotThread(
       runtime,
       admitClose: (work) => work.sessionId === sessionId && work.state === 'idle' && unused()
     })
-    if (closed.stopped) {
-      await host.serialize(sessionId, async () => {
+    const forgetIfStillUnused = () =>
+      host.serialize(sessionId, async () => {
         if (!host.hasSession(sessionId) && unused()) {
           await store.forgetIdleChat(
             { sessionId, location: record.location, idleBefore: record.createdAt },
@@ -39,9 +39,19 @@ export async function forgetExpiredBotThread(
           )
         }
       })
+    if (closed.stopped) {
+      await forgetIfStillUnused()
+    } else if (closed.whenStartEnds) {
+      void closed.whenStartEnds
+        .then((stopped) => (stopped ? forgetIfStillUnused() : undefined))
+        .catch(report)
     }
   } catch (error) {
-    host.deps.logger.warn('retiring an unused connector chat failed', {
+    report(error)
+  }
+
+  function report(error: unknown): void {
+    host?.deps.logger.warn('retiring an unused connector chat failed', {
       scope: 'connector-start-expiry',
       sessionId,
       error

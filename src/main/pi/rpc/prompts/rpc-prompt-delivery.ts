@@ -141,9 +141,15 @@ export class PiRpcPromptDelivery {
     } catch {
       this.remove(submission)
       this.deps.refused?.()
-      return !sending && signal?.aborted
-        ? piRejection(agentSessionFailureFact('cancelled', { neverReachedAgent: true }))
-        : { state: 'unknown', reason: 'Pi prompt write did not settle' }
+      if (sending) {
+        return { state: 'unknown', reason: 'Pi prompt write did not settle' }
+      }
+      const kind = signal?.aborted
+        ? 'cancelled'
+        : this.ended
+          ? 'providerExited'
+          : 'providerRejected'
+      return piRejection(agentSessionFailureFact(kind, { neverReachedAgent: true }))
     }
   }
 
