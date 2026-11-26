@@ -1,8 +1,9 @@
 // The Slack connector's section in the Connectors panel (350 and 280 px) and the after-install
-// dialog: Who can ask as one list, and who messages typed in Orca show as.
+// dialog: Who can ask as one list, who messages typed in Orca show as, and the channel intro switch.
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { ConfirmationDialogProvider } from '../../dismiss/confirmation/confirmation-dialog'
 import { publishBots } from '@/lib/bot-catalog-snapshot'
+import { useCardBot } from '@/lib/bot-catalog'
 import { refreshAccessRequests } from '@/lib/bot-access-requests'
 import type { Bot } from '../../../../../shared/bot-types'
 import { clickWhenShown, Panel, settle, slackOnly, stub } from '../bot-connectors-host-fixture'
@@ -46,11 +47,17 @@ const installed = (fields: Record<string, unknown> = {}) => ({
   ...fields
 })
 
-function host(bot: Bot, options: { requests?: boolean; photo?: boolean } = {}): void {
+function host(
+  bot: Bot,
+  options: { requests?: boolean; photo?: boolean; intro?: boolean } = {}
+): void {
   stub({ linearLinked: false, composio: false })
   serveCachedAvatars()
   const poster = options.photo === false ? { name: 'Alice' } : { name: 'Alice', avatarUrl: PHOTO }
-  publishBots([bot])
+  // The host's bot as it saves it, so a switch flipped here reads back as flipped.
+  let saved = bot
+  const facts = { threadReplies: false, webhooks: undefined, slackChannelHello: options.intro }
+  publishBots([bot], facts)
   Reflect.set(window.api, 'botSlack', {
     members: async () => ({ ok: false, error: 'fixture' }),
     state: async () => ({ ok: true, value: installed({ poster }) }),
@@ -60,31 +67,47 @@ function host(bot: Bot, options: { requests?: boolean; photo?: boolean } = {}): 
     })
   })
   const call = window.api.runtime.call
+  const answer = (id: string, result: unknown) => ({
+    id,
+    ok: true as const,
+    _meta: { runtimeId: 'fixture' },
+    result
+  })
   window.api.runtime.call = async (args) =>
-    args.method === 'bots.access.list'
-      ? {
-          id: 'access-list',
-          ok: true,
-          _meta: { runtimeId: 'fixture' },
-          result: {
-            ok: true,
-            value: options.requests
-              ? [
-                  {
-                    requestId: 'r1',
-                    botId: bot.id,
-                    source: 'slack',
-                    workspaceId: 'T1',
-                    workspaceName: 'Globex',
-                    requester: { id: 'U-dana', name: 'Dana Kim', handle: 'dana', detail: '' },
-                    createdAt: Date.now() - 4 * 60_000,
-                    expiresAt: Date.now() + 86_400_000
-                  }
-                ]
-              : []
-          }
-        }
-      : call(args)
+    args.method === 'bots.update'
+      ? answer('update', {
+          bot: (saved = {
+            ...saved,
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the switch's own bots.update call sends { botId, updates }.
+            ...(args.params as { updates: Partial<Bot> }).updates
+          })
+        })
+      : args.method === 'bots.list'
+        ? answer('list', { bots: [saved], ...facts })
+        : args.method === 'bots.access.list'
+          ? {
+              id: 'access-list',
+              ok: true,
+              _meta: { runtimeId: 'fixture' },
+              result: {
+                ok: true,
+                value: options.requests
+                  ? [
+                      {
+                        requestId: 'r1',
+                        botId: bot.id,
+                        source: 'slack',
+                        workspaceId: 'T1',
+                        workspaceName: 'Globex',
+                        requester: { id: 'U-dana', name: 'Dana Kim', handle: 'dana', detail: '' },
+                        createdAt: Date.now() - 4 * 60_000,
+                        expiresAt: Date.now() + 86_400_000
+                      }
+                    ]
+                  : []
+              }
+            }
+          : call(args)
   void refreshAccessRequests()
 }
 
@@ -113,13 +136,33 @@ const pickComputer = async () => {
   await settle(200)
 }
 
-const panel = (width: number, bot: Bot, extra?: () => Promise<void>, requests = false) =>
+// The workspace's own page, opened from its row in the list.
+const openPage = () =>
+  clickWhenShown((button) => button.textContent?.startsWith('Slack · Globex') === true)
+
+// As the app does, the list reads the bot from the catalog, so a saved switch shows at once.
+function LivePanel({ bot, width }: { bot: Bot; width: number }): React.JSX.Element {
+  return <Panel bot={useCardBot(bot.id).bot ?? bot} width={width} />
+}
+
+const panel = (
+  width: number,
+  bot: Bot,
+  extra?: () => Promise<void>,
+  requests = false,
+  intro?: boolean
+) =>
   defineFixture({
     width: width + 40,
-    setup: () => host(bot, { requests }),
-    render: () => <Panel bot={bot} width={width} />,
+    setup: () => host(bot, { requests, intro }),
+    render: () =>
+      intro === undefined ? (
+        <Panel bot={bot} width={width} />
+      ) : (
+        <LivePanel bot={bot} width={width} />
+      ),
     interact: async () => {
-      await openRow()
+      await (intro === undefined ? openRow() : openPage())
       await settle(300)
       await extra?.()
     }
@@ -135,6 +178,26 @@ export const panel280OnePerson = panel(280, shared)
 export const panel280Request = panel(280, builder, undefined, true)
 export const panel280Picker = panel(280, builder, openPicker)
 export const panel280Approval = panel(280, builder, pickComputer)
+
+// The channel intro switch, where the host's Orca Cloud honours it; elsewhere the row isn't drawn.
+const quiet: Bot = { ...builder, slackChannelHello: false }
+const twoWorkspaces: Bot = {
+  ...builder,
+  slackApps: [
+    ...(builder.slack ? [builder.slack] : []),
+    ...(builder.slack ? [{ ...builder.slack, teamId: 'T2', appId: 'A2' }] : [])
+  ]
+}
+const flipIntro = async () => {
+  await settle(200)
+  await clickWhenShown((button) => button.getAttribute('role') === 'switch')
+  await settle(400)
+}
+export const panel350Intro = panel(350, builder, undefined, false, true)
+export const panel350IntroOff = panel(350, quiet, undefined, false, true)
+export const panel350IntroFlipped = panel(350, builder, flipIntro, false, true)
+export const panel350IntroTwoWorkspaces = panel(350, twoWorkspaces, undefined, false, true)
+export const panel280Intro = panel(280, builder, undefined, false, true)
 
 const dialog = (interact?: () => Promise<void>, photo = true) =>
   defineFixture({

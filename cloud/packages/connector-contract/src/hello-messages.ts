@@ -108,7 +108,11 @@ export const ConnectorBotSchema = z.object({
   botPurpose: BotPurposeSchema.optional(),
   // Its mascot and services, for the invite of someone it is shared with (agentCard on
   // `${shares}/mine`). Absent from an older machine, and when it is shared with no one.
-  agentCard: AgentCardSchema
+  agentCard: AgentCardSchema,
+  // false: the owner turned off the intro the bot posts in a Slack channel a person adds it to.
+  // Absent (an older machine, or the owner left it on) posts it. A value this contract can't read is
+  // dropped, never a refused hello.
+  channelHello: z.boolean().optional().catch(undefined)
 })
 
 export const ConnectorHelloRequestSchema = z
@@ -207,6 +211,9 @@ export const CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE = 'post.schedule'
 // The cloud takes the verbs for Slack's own surfaces (pin, canvas, list, scheduled). Kept out of
 // CONNECTOR_CLOUD_FEATURES, as post.schedule is.
 export const CONNECTOR_CLOUD_SLACK_TOOLS_FEATURE = 'slack.tools'
+// The cloud reads a bot's `channelHello` and posts no channel intro for one whose owner turned it
+// off. Kept out of CONNECTOR_CLOUD_FEATURES: only the code that honours the field lists it.
+export const CONNECTOR_CLOUD_SLACK_CHANNEL_HELLO_FEATURE = 'slack.channelHello'
 // The cloud takes a reply's `choices` and routes a press of one as its presser's message. Kept out
 // of CONNECTOR_CLOUD_FEATURES, as post.schedule is.
 export const CONNECTOR_CLOUD_REPLY_CHOICES_FEATURE = 'reply.choices'

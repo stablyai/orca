@@ -17,6 +17,11 @@ export const BOT_HANDLER_GROUPS: HandlerGroup[] = [
     load: async () => (await import('./bot-look-around.js')).BOT_LOOK_AROUND_HANDLERS
   },
   {
+    name: 'bot-slack-intro',
+    keys: ['bot slack intro'],
+    load: async () => (await import('./bot-slack-intro.js')).BOT_SLACK_INTRO_HANDLERS
+  },
+  {
     name: 'bot-work',
     keys: ['bot work list', 'bot work forget'],
     load: async () => (await import('./bot-work.js')).BOT_WORK_HANDLERS

@@ -218,6 +218,9 @@ export const BotSchema = z.object({
   /** Whether a new Slack thread the owner starts posts the owner's Orca messages back to it; absent is on.
    *  Threads others start, and the owner's teammates' DMs, start off whatever this says. */
   slackMirror: z.boolean().optional().catch(undefined),
+  /** Whether it posts a short intro in a Slack channel a person adds it to, in every workspace; absent
+   *  is on. Orca Cloud reads it from the hello, so an off saved here applies once the hello is sent. */
+  slackChannelHello: z.boolean().optional().catch(undefined),
   /** The bot may use the Google accounts signed in on its host, for its owner's own requests. Absent is off. */
   google: z.boolean().optional(),
   /** The accounts it may use while `google` is on; absent is every account, now and later. A malformed

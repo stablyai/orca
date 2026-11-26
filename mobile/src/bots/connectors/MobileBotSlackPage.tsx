@@ -1,5 +1,5 @@
 // One Slack workspace's page in Connectors: the desktop's BotSlackCard and BotSlackSection. How to ask, its
-// waiting requests and people, who replies post as, and the card's menu and Remove.
+// waiting requests and people, who replies post as, its channel intro, and the card's menu and Remove.
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
 import { BOTS_SLACK_POST_AS_RUNTIME_CAPABILITY } from '../../../../src/shared/bot-runtime-capabilities'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
@@ -25,6 +25,7 @@ import { slackTeamState } from '../../../../src/shared/connector-bot-slack-contr
 import type { PhoneSlackView } from './use-phone-bot-slack'
 import { useConnectorPeople } from './MobileConnectorAccountParts'
 import { MobileSlackPostAsPage, slackPosterNames } from './MobileSlackPostAsPage'
+import { MobileSlackChannelIntro } from './MobileSlackChannelIntro'
 
 export function MobileBotSlackPage(props: {
   client: RpcClient | null
@@ -40,6 +41,8 @@ export function MobileBotSlackPage(props: {
   banner: ReactNode
   showToast: (message: string, durationMs?: number) => void
   removeMember: (member: BotMember) => void
+  /** Saves the bot's channel intro switch; null where the host's Orca Cloud doesn't honour it. */
+  channelIntro: ((on: boolean) => void) | null
   onBack: () => void
   /** Finish, update or add another workspace: Connect Slack. */
   onSetUp: (teamId: string | undefined) => void
@@ -252,6 +255,9 @@ export function MobileBotSlackPage(props: {
             onPress={canPostAs ? () => setPostAsOpen(true) : undefined}
           />
         </SettingsSection>
+      ) : null}
+      {installed && props.channelIntro ? (
+        <MobileSlackChannelIntro bot={bot} online={props.online} onChange={props.channelIntro} />
       ) : null}
       {removable && teamId !== undefined ? (
         <SettingsSection>

@@ -78,6 +78,7 @@ async function withPairedReadSlot<T>(read: () => Promise<T>): Promise<T> {
 type BotsListAnswer = {
   bots: Bot[]
   threadReplies?: boolean
+  slackChannelHello?: boolean
   webhooks?: boolean
   waits?: BotListWaits
   needsYou?: Record<string, number>
@@ -114,6 +115,7 @@ async function readBotHost(hostId: ExecutionHostId, state: HostRefresh): Promise
       result.bots,
       {
         threadReplies: result.threadReplies === true,
+        slackChannelHello: result.slackChannelHello === true,
         webhooks: result.webhooks,
         waits: result.waits,
         needsYou: result.needsYou,

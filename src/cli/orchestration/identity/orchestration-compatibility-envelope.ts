@@ -3,6 +3,7 @@ import { readInjectedAgentSessionId } from '../../../shared/agent-session/lifecy
 import { readOrchestrationCompatibilityEvidence } from '../../../shared/orchestration/orchestration-compatibility-evidence'
 import { BOT_ITEM_WRITE_METHOD_NAMES } from '../../../shared/bots/bot-items'
 import { CONNECTOR_POST_METHOD_NAMES } from '../../../shared/connector-action-contract'
+import { BOT_SLACK_CHANNEL_HELLO_SET_METHOD } from '../../../shared/rpc-contract/bots-slack-channel-hello-params'
 import type { RuntimeOrchestrationEnvelope } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 export function createOrchestrationCompatibilityEnvelope(
@@ -30,13 +31,14 @@ export function createChatCallerEvidence(
 }
 
 /** Methods whose calling agent session the host verifies: a launch, which it records in the caller's
- *  chat (older hosts ignore the evidence), and automation, item and connector post writes, which act
- *  for that session. */
+ *  chat (older hosts ignore the evidence), and automation, item and connector post writes and the
+ *  Slack intro switch, which act for that session. */
 const SESSION_EVIDENCE_METHODS: ReadonlySet<string> = new Set([
   'agent.launch',
   'agent.launchReplay',
   'automation.create',
   'automation.update',
+  BOT_SLACK_CHANNEL_HELLO_SET_METHOD,
   ...BOT_ITEM_WRITE_METHOD_NAMES,
   ...CONNECTOR_POST_METHOD_NAMES
 ])

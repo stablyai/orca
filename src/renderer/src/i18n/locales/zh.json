@@ -30413,6 +30413,13 @@
         "otherDevice": "在其他设备上批准",
         "linkLabel": "Slack 批准链接",
         "copied": "已复制"
+      },
+      "channelIntro": {
+        "caption": "在频道中",
+        "title": "被添加到频道时发介绍",
+        "detail": "有人把 {{name}} 添加到频道时，它会在频道里发一条消息，说明如何向它提问。",
+        "detailEvery": "有人把 {{name}} 添加到频道时，它会在频道里发一条消息，说明如何向它提问。此设置适用于 {{name}} 所在的每个 Slack 工作区。",
+        "failed": "无法保存介绍设置。"
       }
     },
     "page": {

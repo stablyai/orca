@@ -15,6 +15,8 @@ type HostBotsEntry = {
   connectorStatus?: ConnectorCloudStatus
   /** Its Orca Cloud answers an event in that event's thread; false from an older host. */
   threadReplies: boolean
+  /** Its Orca Cloud honours a bot's Slack intro switch; false from an older host, which refuses the key. */
+  slackChannelHello: boolean
 }
 
 const entries = new Map<string, HostBotsEntry>()
@@ -32,15 +34,25 @@ function subscribe(listener: () => void): () => void {
 export function publishHostBots(
   key: string,
   read: Pick<HostBotsEntry, 'bots' | 'hideBotCreated'> &
-    Partial<Pick<HostBotsEntry, 'needsYou' | 'connectorStatus' | 'threadReplies'>>
+    Partial<
+      Pick<HostBotsEntry, 'needsYou' | 'connectorStatus' | 'threadReplies' | 'slackChannelHello'>
+    >
 ): void {
-  const { bots, hideBotCreated, needsYou = {}, connectorStatus, threadReplies = false } = read
+  const {
+    bots,
+    hideBotCreated,
+    needsYou = {},
+    connectorStatus,
+    threadReplies = false,
+    slackChannelHello = false
+  } = read
   entries.set(key, {
     bots,
     hideBotCreated,
     needsYou,
     connectorStatus,
     threadReplies,
+    slackChannelHello,
     statusByBotId: entries.get(key)?.statusByBotId ?? new Map()
   })
   notify()

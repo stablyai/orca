@@ -287,6 +287,8 @@ export type ConnectorBot = {
   handle?: string
   /** Workspaces of a shared-app source (Linear, GitHub installations) it answers in, with who may ask there. */
   sharedAppWorkspaces?: ConnectorBotWorkspace[]
+  /** Sent only as false: the owner turned off the intro it posts in a Slack channel a person adds it to. */
+  channelHello?: false
 }
 
 /** One event rule of a bot automation here; the cloud sends a match to this machine alone. */

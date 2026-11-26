@@ -146,7 +146,8 @@ function ConnectorsPage(
   const composio = useMobileComposio(props.client, hostKey, bot.id)
   // Only the apps' URL servers are checked, as the desktop's Connectors does.
   const tools = useBotToolsPage(props.client, bot.id, 'apps', reads, hostKey)
-  const hostBots = useHostBotsEntry(hostKey)?.bots ?? []
+  const hostEntry = useHostBotsEntry(hostKey)
+  const hostBots = hostEntry?.bots ?? []
   const githubState = github.view.status === 'ready' ? github.view.value : null
   const githubInstallUrl = githubState?.installUrl ?? null
 
@@ -185,6 +186,12 @@ function ConnectorsPage(
         banner={props.banner}
         showToast={props.showToast}
         removeMember={(member) => void props.save(memberRemoval(member))}
+        // Shown only where the host's Orca Cloud honours it: an older host refuses the key.
+        channelIntro={
+          hostEntry?.slackChannelHello === true
+            ? (on) => void props.save({ slackChannelHello: on })
+            : null
+        }
         onBack={list}
         onSetUp={(teamId) => setPage({ kind: 'slack-setup', teamId, from: page })}
       />

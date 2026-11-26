@@ -64,6 +64,10 @@ export const CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE = 'post.schedule'
  *  constant, as the cloud's contract keeps it. */
 export const CONNECTOR_CLOUD_SLACK_TOOLS_FEATURE = 'slack.tools'
 
+/** The cloud reads a bot's `channelHello` and posts no channel intro for one whose owner turned it
+ *  off. Its own constant, as the cloud's contract keeps it: without it the switch is not offered. */
+export const CONNECTOR_CLOUD_SLACK_CHANNEL_HELLO_FEATURE = 'slack.channelHello'
+
 /** The cloud takes a reply's `choices` and routes a press of one as its presser's message. Its own
  *  constant, as the cloud's contract keeps it. */
 export const CONNECTOR_CLOUD_REPLY_CHOICES_FEATURE = 'reply.choices'

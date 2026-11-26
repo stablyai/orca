@@ -38,6 +38,24 @@ export async function waitUntil(
   }
 }
 
+/** Tells `changed` when `next` lists other features than `before`; none yet (null) differs from any
+ *  list. */
+export function tellFeatureChange(
+  before: ReadonlySet<string> | null,
+  next: ReadonlySet<string> | null,
+  changed: (() => void) | undefined
+): void {
+  const same =
+    before === next ||
+    (before !== null &&
+      next !== null &&
+      before.size === next.size &&
+      [...before].every((feature) => next.has(feature)))
+  if (!same) {
+    changed?.()
+  }
+}
+
 /** A 409's re-hello spread, which a change to say (`cut`) ends early so it reaches the cloud at once. */
 export class ConnectorRehelloSpread {
   private cutting: AbortController | null = null

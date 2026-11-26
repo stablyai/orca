@@ -28326,6 +28326,13 @@
         "otherDevice": "다른 기기에서 승인",
         "linkLabel": "Slack 승인 링크",
         "copied": "복사됨"
+      },
+      "channelIntro": {
+        "caption": "채널에서",
+        "title": "채널에 추가되면 소개",
+        "detail": "누군가 {{name}}을(를) 채널에 추가하면 그 채널에 질문하는 방법을 알리는 메시지를 게시합니다.",
+        "detailEvery": "누군가 {{name}}을(를) 채널에 추가하면 그 채널에 질문하는 방법을 알리는 메시지를 게시합니다. 이 설정은 {{name}}이(가) 있는 모든 Slack 워크스페이스에 적용됩니다.",
+        "failed": "소개 설정을 저장하지 못했습니다."
       }
     },
     "automations": {

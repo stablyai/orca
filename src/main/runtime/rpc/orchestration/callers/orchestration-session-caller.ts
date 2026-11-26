@@ -33,6 +33,7 @@ import type { AgentSessionRecordStore } from '../../../agent-session/records/age
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { structuredWorkerHostScope } from '../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { BOT_ITEM_WRITE_METHOD_NAMES } from '../../../../../shared/bots/bot-items'
+import { BOT_SLACK_CHANNEL_HELLO_SET_METHOD } from '../../../../../shared/rpc-contract/bots-slack-channel-hello-params'
 import { CONNECTOR_POST_METHOD_NAMES } from '../../../../../shared/connector-action-contract'
 import type { RpcRequest } from '../../core'
 import type { OrchestrationCallerField } from '../../methods/orchestration/access/orchestration-method-access'
@@ -63,6 +64,8 @@ const NEEDS_RUNNING_AGENT: ReadonlySet<string> = new Set([
 const SESSION_CALLER_METHODS: ReadonlySet<string> = new Set([
   'automation.create',
   'automation.update',
+  // Turning off a bot's Slack intro from its chat needs the turn its owner asked for.
+  BOT_SLACK_CHANNEL_HELLO_SET_METHOD,
   ...BOT_ITEM_WRITE_METHOD_NAMES,
   ...CONNECTOR_POST_METHOD_NAMES
 ])

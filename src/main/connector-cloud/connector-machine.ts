@@ -69,4 +69,6 @@ export type ConnectorPollClientOptions = {
   wakeSocketFactory?: ConnectorWakeSocketFactory
   /** The cloud stopped this client, for good. */
   onHalt?: (reason: string) => void
+  /** What the cloud's hello answer lists changed, so what bots.list says of it may have too. */
+  onFeaturesChanged?: () => void
 }
