@@ -23,7 +23,8 @@ export function copyChatReadMarksAtLoad(state: PersistedState): {
       activityClearedAtByPaneKey: state.ui.activityClearedAtByPaneKey ?? {},
       manuallyUnreadTurnsByPaneKey: state.ui.manuallyUnreadTurnsByPaneKey ?? {}
     },
-    sessionIds
+    sessionIds,
+    new Set(['acknowledgedAgentsByPaneKey'])
   )
   return {
     state: {

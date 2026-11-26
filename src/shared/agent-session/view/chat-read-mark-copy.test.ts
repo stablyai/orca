@@ -22,3 +22,17 @@ it('adds a missing conversation key from a tab key and keeps every existing key'
     }
   })
 })
+
+it('keeps a newer legacy acknowledgement and preserves the existing conversation cutoff', () => {
+  const tabKey = `agent-chat-tab-v1-1111:${LEAF_1}`
+  const conversationKey = `structured-agent-session-s1:${LEAF_1}`
+  const records = {
+    acknowledgedAgentsByPaneKey: { [tabKey]: 200, [conversationKey]: 100 },
+    activityClearedAtByPaneKey: { [tabKey]: 400, [conversationKey]: 300 }
+  }
+  expect(
+    copyChatReadMarksToConversationKeys(records, ['s1'], new Set(['acknowledgedAgentsByPaneKey']))
+  ).toEqual({
+    acknowledgedAgentsByPaneKey: { [tabKey]: 200, [conversationKey]: 200 }
+  })
+})
