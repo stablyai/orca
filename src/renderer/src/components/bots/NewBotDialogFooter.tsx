@@ -1,6 +1,6 @@
 // @protected-copy scope=file
 // New bot's footer: Use chat defaults on the left, Template, share-back and Create on the right.
-import React from 'react'
+import React, { useRef } from 'react'
 import { LayoutTemplate } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DialogFooter } from '@/components/ui/dialog'
@@ -20,7 +20,7 @@ export function NewBotDialogFooter({
 }: {
   setup: BotAgentSetup
   onSetupChange: (setup: BotAgentSetup, permissionPicked?: boolean) => void
-  /** Offered only before anything is typed, since it closes the dialog. */
+  /** Offered only before anything is typed or picked, since it closes the dialog. */
   onTemplate?: () => void
   shareSource?: NewBotShareSource
   creating: boolean
@@ -28,6 +28,7 @@ export function NewBotDialogFooter({
 }): React.JSX.Element {
   const t = useTranslate()
   const chatDefaults = botAgentSetupOnDefaults(setup, true)
+  const createRef = useRef<HTMLButtonElement>(null)
   return (
     <DialogFooter
       className="mt-0 shrink-0"
@@ -45,7 +46,11 @@ export function NewBotDialogFooter({
                 "Reset the agent's model and options to your chat defaults"
               )}
               disabled={creating}
-              onClick={() => onSetupChange(chatDefaults, true)}
+              onClick={() => {
+                onSetupChange(chatDefaults, true)
+                // The link unmounts; keep keyboard focus in the footer instead of the dialog's top.
+                createRef.current?.focus()
+              }}
             >
               {t('bots.new.useChatDefaults', 'Use chat defaults')}
             </Button>
@@ -53,14 +58,19 @@ export function NewBotDialogFooter({
         ) : null
       }
     >
-      {onTemplate ? (
+      {onTemplate && !chatDefaults ? (
         <Button type="button" variant="ghost" size="sm" onClick={onTemplate}>
           <LayoutTemplate aria-hidden />
           {t('bots.new.fromTemplate', 'Template')}
         </Button>
       ) : null}
       {shareSource ? <NewBotShareBack source={shareSource} disabled={creating} /> : null}
-      <BotCreateButton type="submit" busy={creating} disabled={creating || hostBusy}>
+      <BotCreateButton
+        ref={createRef}
+        type="submit"
+        busy={creating}
+        disabled={creating || hostBusy}
+      >
         {t('bots.new.create', 'Create')}
       </BotCreateButton>
     </DialogFooter>

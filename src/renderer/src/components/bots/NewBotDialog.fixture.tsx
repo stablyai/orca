@@ -324,8 +324,7 @@ export const link340 = defineFixture(fromLink(340))
 export const link480 = defineFixture(fromLink(480))
 
 // A model picked, so Use chat defaults shows on the footer's left.
-const pickModel = async (): Promise<void> => {
-  await FILLED()
+const pickModelOnly = async (): Promise<void> => {
   const trigger = document.querySelector<HTMLElement>(
     '[role="dialog"] [role="group"][aria-label="Agent"] button'
   )
@@ -346,6 +345,14 @@ const pickModel = async (): Promise<void> => {
   }
   await new Promise((resolve) => setTimeout(resolve, 300))
 }
+const pickModel = async (): Promise<void> => {
+  await FILLED()
+  await pickModelOnly()
+}
+export const chatDefaultsTemplate340 = defineFixture({
+  ...newBotFixture(340),
+  interact: pickModelOnly
+})
 export const chatDefaults340 = defineFixture({ ...newBotFixture(340), interact: pickModel })
 export const chatDefaults480 = defineFixture({ ...newBotFixture(480), interact: pickModel })
 export const chatDefaultsFocus340 = defineFixture({
