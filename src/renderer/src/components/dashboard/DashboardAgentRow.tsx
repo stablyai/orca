@@ -51,6 +51,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { useAgentRowMenuTrigger } from '../sidebar/workspace-actions/agent-row-menu/use-agent-row-menu-trigger'
 
 function formatTimeAgo(ts: number, now: number, t: Translate = translate): string {
   const delta = now - ts
@@ -230,6 +231,13 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
     )
   }
 
+  const menuTrigger = useAgentRowMenuTrigger({
+    agent,
+    label: displayLabel,
+    sendTargetStatus,
+    onActivate
+  })
+
   const titleParts = sendTargetDisabledReason ? [sendTargetDisabledReason, ...tsParts] : tsParts
 
   // Why: interpolate-size:allow-keywords is the only way to animate height to/from auto without measuring in JS; falls back to an instant swap where unsupported.
@@ -280,6 +288,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       title={titleParts.length > 0 ? titleParts.join(' • ') : undefined}
       role={participatesInLineage ? 'treeitem' : undefined}
       aria-level={participatesInLineage ? (lineage?.depth ?? 0) + 1 : undefined}
+      {...menuTrigger}
     >
       {lineageChildCount > 0 && !hideLineageConnectors ? (
         <span

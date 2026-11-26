@@ -23824,6 +23824,15 @@
         "disconnectedHostLine": "{{host}} 未連線。檔案會留在主機上。",
         "filesStayLine": "檔案會留在 {{host}} 上。",
         "removing": "正在移除…"
+      },
+      "agentRowMenu": {
+        "copyId": "複製 ID",
+        "open": "開啟",
+        "rename": "重新命名…",
+        "workspace": "工作區",
+        "workspaces_other": "{{count}} 個工作區",
+        "ariaLabel": "代理程式：{{name}}",
+        "agentGone": "此代理程式已不再開啟。"
       }
     },
     "terminal": {

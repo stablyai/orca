@@ -23178,6 +23178,15 @@
         "disconnectedHostLine": "{{host}} は接続されていません。ファイルはホストに残ります。",
         "filesStayLine": "ファイルは {{host}} に残ります。",
         "removing": "削除中…"
+      },
+      "agentRowMenu": {
+        "copyId": "ID をコピー",
+        "open": "開く",
+        "rename": "名前を変更…",
+        "workspace": "ワークスペース",
+        "workspaces_other": "{{count}} 個のワークスペース",
+        "ariaLabel": "Agent: {{name}}",
+        "agentGone": "この Agent はもう開いていません。"
       }
     },
     "terminal": {

@@ -24512,6 +24512,16 @@
         "disconnectedHostLine": "{{host}} isn’t connected. Its files stay on the host.",
         "filesStayLine": "Its files stay on {{host}}.",
         "removing": "Removing…"
+      },
+      "agentRowMenu": {
+        "copyId": "Copy ID",
+        "open": "Open",
+        "rename": "Rename…",
+        "workspace": "Workspace",
+        "workspaces_one": "{{count}} Workspace",
+        "workspaces_other": "{{count}} Workspaces",
+        "ariaLabel": "Agent: {{name}}",
+        "agentGone": "This agent is no longer open."
       }
     }
   },

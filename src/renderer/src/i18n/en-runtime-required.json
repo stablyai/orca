@@ -3277,6 +3277,12 @@
         }
       }
     },
+    "sidebar": {
+      "agentRowMenu": {
+        "workspaces_one": "{{count}} Workspace",
+        "workspaces_other": "{{count}} Workspaces"
+      }
+    },
     "tab": {
       "bar": {
         "bulkClose": {

@@ -56,6 +56,13 @@ const NON_UNIT_TEST_RUNNERS = [
     mirrors: ["'tests/tools/benchmarks/bot-chat-tree/bot-chat-tree-notices-benchmark.ts'"]
   },
   {
+    name: 'agent row menu Electron proof',
+    manual: true,
+    include: ['tests/tools/agent-row-menu/row-actions.spec.ts'],
+    sources: ['tests/tools/agent-row-menu/proof.config.ts'],
+    mirrors: ["testMatch: 'row-actions.spec.ts'"]
+  },
+  {
     name: 'mobile',
     include: ['mobile/src/**/*.test.ts', 'mobile/src/**/*.test.tsx', 'mobile/scripts/**/*.test.ts'],
     sources: ['mobile/vitest.config.ts'],

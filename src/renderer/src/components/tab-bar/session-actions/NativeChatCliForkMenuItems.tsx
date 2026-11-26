@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { ContextMenuSeparator } from '@/components/ui/context-menu'
 import { useAppStore } from '@/store/index'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { AI_VAULT_AGENTS } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { AiVaultSessionSurfaceSwitchMenuItems } from '../../right-sidebar/ai-vault/session-list/AiVaultSessionSurfaceSwitchMenuItems'
 import {
@@ -15,13 +16,18 @@ export function NativeChatCliForkMenuItems({
   nativeChat,
   leadingSeparator,
   menuKind = 'context',
-  onComplete
+  onComplete,
+  beforeRun,
+  requireLocalHost = false
 }: {
   tab: { id: string; worktreeId: string }
   nativeChat: NativeChatTabSession
   leadingSeparator: boolean
   menuKind?: 'context' | 'dropdown'
   onComplete?: () => void
+  beforeRun?: () => boolean
+  /** Offer the fork only when it prepares and launches on this computer. */
+  requireLocalHost?: boolean
 }): React.JSX.Element | null {
   const [subject] = useState(() =>
     resolveTabSessionHistorySubject(useAppStore.getState(), { tab, nativeChat })
@@ -31,7 +37,11 @@ export function NativeChatCliForkMenuItems({
     chat ? { executionHostScope: chat.request.executionHostScope, sessionId: chat.sessionId } : null
   )
   const agent = AI_VAULT_AGENTS.find((candidate) => candidate === nativeChat.agent)
-  if (!chat || !agent) {
+  if (
+    !chat ||
+    !agent ||
+    (requireLocalHost && chat.request.executionHostScope !== LOCAL_EXECUTION_HOST_ID)
+  ) {
     return null
   }
   const Separator = menuKind === 'context' ? ContextMenuSeparator : DropdownMenuSeparator
@@ -45,6 +55,9 @@ export function NativeChatCliForkMenuItems({
         cliPending={pending}
         onResumeInNewCli={(event) => {
           event.preventDefault()
+          if (beforeRun && !beforeRun()) {
+            return
+          }
           void runNativeChatCliFork({ subject: chat, tab, agent, onComplete })
         }}
       />
