@@ -33,6 +33,7 @@ export async function selectPtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
       ? 'posix'
       : 'powershell'
     : paneShell
+  let wslDistro = input.expectedWslDistro
   const {
     command: startupCommand,
     launchConfig,
@@ -45,6 +46,7 @@ export async function selectPtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
       launchCommand: sequenced || input.launchCommand,
       launchAgent,
       shellPath: process.platform === 'win32' ? undefined : input.shellOverride,
+      refreshAgentProgram: args.refreshAgentProgram,
       preselectedAgentProgram:
         !sequenced || args.preselectedAgentProgram?.shell === shell
           ? args.preselectedAgentProgram
@@ -53,10 +55,21 @@ export async function selectPtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
       nativeChatSignIn: args.nativeChatSignIn,
       sshTarget: Boolean(connectionId),
       ...(sequenced
-        ? { sourceShell: paneShell, setupGate: !connectionId && !input.preAdoptedStablePane }
+        ? {
+            sourceShell: paneShell,
+            setupGate:
+              !connectionId &&
+              !input.preAdoptedStablePane &&
+              input.launchConfig?.commandProvenance === 'generated'
+          }
         : {})
     },
-    shell
+    shell,
+    sequenced
+      ? (selected) => {
+          wslDistro = selected.wslDistro ?? wslDistro
+        }
+      : undefined
   )
   let paneEnv = input.env
   if (
@@ -80,6 +93,7 @@ export async function selectPtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
     selectionBlocked,
     postSetupProgram,
     rebuiltHermesQuery,
+    wslDistro,
     paneEnv
   }
 }

@@ -14,9 +14,9 @@ import { setupCompletionMarkerPrefix } from './setup-completion-marker'
 import {
   SETUP_AGENT_BLOCKED_MESSAGE,
   SETUP_AGENT_EXECUTABLE_ENV,
-  SETUP_AGENT_RESOLVER_ENV
+  SETUP_AGENT_NOTICE_ENV,
+  SETUP_AGENT_RECHECK_ENV
 } from './setup-agent-program'
-import { INVENTORY_WAIT_MS } from '../installation/agent-inventory-deadline'
 
 export const SETUP_AGENT_WAIT_TIMEOUT_SECONDS = 2 * 60 * 60
 export const SETUP_WAIT_MESSAGE = 'Waiting for setup to finish before starting agent...'
@@ -139,27 +139,7 @@ function buildPosixStartupScript(
   const nonceValue = quotePosixShellUnlessPlainNoAt(nonce)
   const timeout = Math.max(1, Math.floor(waitTimeoutSeconds))
   const shellFunctions = getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction()
-  const blocked = `${SETUP_AGENT_BLOCKED_MESSAGE} Try again.`
-  // Keep the interactive wrapper one line to avoid visible quote-continuation prompts.
   const script = [
-    'orca_resolve_setup_agent() (',
-    '  command -p -v sleep >/dev/null || exit 1;',
-    '  output=$(command -p mktemp) || exit 1;',
-    '  resolver_pid=;',
-    '  trap \'if [ -n "$resolver_pid" ]; then kill -KILL -- "-$resolver_pid" 2>/dev/null || :; fi; command -p rm -f -- "$output"\' EXIT;',
-    "  trap 'exit 1' HUP INT TERM;",
-    // Give the lookup its own process group so a timed-out login shell is stopped with it.
-    '  set -m || exit 1;',
-    `  (set +m; eval "$${SETUP_AGENT_RESOLVER_ENV}") >"$output" 2>/dev/null &`,
-    '  resolver_pid=$!;',
-    `  resolve_deadline=$((SECONDS + ${INVENTORY_WAIT_MS / 1_000}));`,
-    '  while kill -0 "$resolver_pid" 2>/dev/null; do',
-    '    [ "$SECONDS" -lt "$resolve_deadline" ] || exit 1;',
-    '    command -p sleep 0.2 || exit 1;',
-    '  done;',
-    '  wait "$resolver_pid"; result=$?; resolver_pid=;',
-    '  [ "$result" = 0 ] && [ -s "$output" ] && command -p cat -- "$output";',
-    ');',
     `deadline=$((SECONDS + ${timeout}));`,
     `echo ${quotePosixShellUnlessPlainNoAt(SETUP_WAIT_MESSAGE)} >&2;`,
     'while :; do',
@@ -168,11 +148,12 @@ function buildPosixStartupScript(
     `if [ "$seen" = ${nonceValue} ]; then`,
     'if [ "$status" = "0" ]; then',
     `rm -f ${marker} ${tmp} 2>/dev/null;`,
-    `if [ -n "$${SETUP_AGENT_RESOLVER_ENV}" ]; then`,
-    `  ${SETUP_AGENT_EXECUTABLE_ENV}=$(orca_resolve_setup_agent) || { echo ${quotePosixShellUnlessPlainNoAt(blocked)} >&2; exit 1; };`,
-    `  export ${SETUP_AGENT_EXECUTABLE_ENV};`,
+    `if [ -n "$${SETUP_AGENT_RECHECK_ENV}" ]; then`,
+    `  if ! ${SETUP_AGENT_EXECUTABLE_ENV}=$(eval "$${SETUP_AGENT_RECHECK_ENV}" 2>/dev/null) || [ -z "$${SETUP_AGENT_EXECUTABLE_ENV}" ] || [ -z "$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}" ]; then`,
+    `    printf '%s\\n' "$${SETUP_AGENT_NOTICE_ENV}" '${SETUP_AGENT_BLOCKED_MESSAGE}' >&2; exit 1; fi;`,
+    `  ${SETUP_AGENT_EXECUTABLE_ENV}=\${${SETUP_AGENT_EXECUTABLE_ENV}%.}; export ${SETUP_AGENT_EXECUTABLE_ENV};`,
     `else\n${shellFunctions}fi;`,
-    `if [ -z "$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}" ]; then echo ${quotePosixShellUnlessPlainNoAt(blocked)} >&2; exit 1; fi;`,
+    `if [ -z "$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}" ]; then echo '${SETUP_AGENT_BLOCKED_MESSAGE}' >&2; exit 1; fi;`,
     `echo ${quotePosixShellUnlessPlainNoAt(SETUP_COMPLETE_MESSAGE)} >&2;`,
     `eval "$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}"; exit "$?"; fi;`,
     `rm -f ${marker} ${tmp} 2>/dev/null;`,
@@ -263,9 +244,13 @@ function buildWindowsStartupCommand(
     '        exit $setupStatus',
     '      }',
     `      $startup = $env:${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}`,
-    `      if ($env:${SETUP_AGENT_RESOLVER_ENV}) {`,
-    `        $env:${SETUP_AGENT_EXECUTABLE_ENV} = & ([ScriptBlock]::Create($env:${SETUP_AGENT_RESOLVER_ENV}))`,
-    `        if (!$env:${SETUP_AGENT_EXECUTABLE_ENV} -or [string]::IsNullOrWhiteSpace($startup)) { [Console]::Error.WriteLine(${quotePowerShellLiteral(`${SETUP_AGENT_BLOCKED_MESSAGE} Try again.`)}); exit 1 }`,
+    `      if ($env:${SETUP_AGENT_RECHECK_ENV}) {`,
+    `        $env:${SETUP_AGENT_EXECUTABLE_ENV} = & ([ScriptBlock]::Create($env:${SETUP_AGENT_RECHECK_ENV}))`,
+    `        if (!$env:${SETUP_AGENT_EXECUTABLE_ENV} -or [string]::IsNullOrWhiteSpace($startup)) {`,
+    `          [Console]::Error.WriteLine($env:${SETUP_AGENT_NOTICE_ENV})`,
+    `          [Console]::Error.WriteLine(${quotePowerShellLiteral(SETUP_AGENT_BLOCKED_MESSAGE)})`,
+    '          exit 1',
+    '        }',
     '      }',
     '      if ([string]::IsNullOrWhiteSpace($startup)) {',
     '        [Console]::Error.WriteLine("Missing sequenced startup command.")',

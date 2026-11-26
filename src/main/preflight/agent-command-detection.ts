@@ -4,8 +4,6 @@ import {
   getPreflightWslTarget,
   type PreflightRuntimeContext
 } from '../ipc/preflight/preflight-runtime-target'
-import type { AgentPathMatch } from '../ipc/command-path/command-path-batch'
-import { isOrcaAgentRuntimePath } from '../managed-agent-cli/managed-agent-cli-path'
 import type { AgentStartupShell } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { INVENTORY_WAIT_MS } from '../../shared/agent-launch/installation/agent-inventory-deadline'
 import {
@@ -18,8 +16,20 @@ import {
   readInventory,
   type InventorySlot
 } from './agent-command-inventory'
-import { getLocalInventory, wslInventory } from './agent-command-inventory-host'
-import { isInventoryListCommandSettled } from './agent-command-inventory-publication'
+import {
+  getLocalInventory,
+  wslInventory,
+  qualifyProgram,
+  type TerminalAgentProgram
+} from './agent-command-inventory-host'
+export {
+  readPublishedLocalTerminalAgentProgram,
+  type TerminalAgentProgram
+} from './agent-command-inventory-host'
+import {
+  completeInventoryAfter,
+  isInventoryListCommandSettled
+} from './agent-command-inventory-publication'
 
 export const INVENTORY_COMPLETION_WAIT_MS = 60_000
 
@@ -57,34 +67,7 @@ export async function withAgentInventoryDeadline<T>(
   }
 }
 
-export type TerminalAgentProgram =
-  | { kind: 'by-name' | 'full-path'; path: string }
-  | { kind: 'unavailable' | 'unknown' }
-
 export type TerminalAgentProgramSelection = { program: string; result: TerminalAgentProgram }
-
-function qualifyProgram(
-  match: AgentPathMatch | undefined,
-  shell: AgentStartupShell
-): TerminalAgentProgram {
-  if (!match?.user) {
-    return { kind: 'unavailable' }
-  }
-  const winner = shell === 'powershell' ? match.unquoted : match.first
-  return winner && !isOrcaAgentRuntimePath(winner)
-    ? { kind: 'by-name', path: winner }
-    : { kind: 'full-path', path: match.user }
-}
-
-export function readPublishedLocalTerminalAgentProgram(
-  program: string,
-  shell: AgentStartupShell
-): TerminalAgentProgram {
-  const inventory = currentInventoryPublication(getLocalInventory())?.inventory
-  return inventory?.probed.has(program)
-    ? qualifyProgram(inventory.matches.get(program), shell)
-    : { kind: 'unknown' }
-}
 
 export async function readLocalTerminalAgentProgram(
   program: string,
@@ -112,6 +95,8 @@ export async function selectTerminalAgentProgram(
     shellPath?: string
     refresh?: boolean
     revalidateUnavailable?: boolean
+    forceRefresh?: boolean
+    pinForSetup?: boolean
     signal?: AbortSignal
     onWslDistroSelected?: (distro: string) => void
   }
@@ -122,14 +107,19 @@ export async function selectTerminalAgentProgram(
     const slot = wsl ? await wslInventory(wsl, waitSignal) : getLocalInventory(shellPath)
     throwIfSignalAborted(waitSignal)
     const read = slot
-      ? readInventory(slot, programs, refresh ? 'revalidate' : 'read', {
-          acceptAnyMatch: true,
-          qualifiesEarly: wsl
-            ? undefined
-            : (match) => qualifyProgram(match, shell).kind === 'by-name',
-          revalidateUnavailable: options.revalidateUnavailable,
-          waitForCompletion: true
-        })
+      ? readInventory(
+          slot,
+          programs,
+          options.forceRefresh ? 'refresh' : refresh ? 'revalidate' : 'read',
+          {
+            acceptAnyMatch: true,
+            qualifiesEarly: wsl
+              ? undefined
+              : (match) => qualifyProgram(match, shell).kind === 'by-name',
+            revalidateUnavailable: options.revalidateUnavailable,
+            waitForCompletion: true
+          }
+        )
       : undefined
     const publication = read
       ? await read.wait(waitSignal).catch((error: unknown) => {
@@ -153,11 +143,25 @@ export async function selectTerminalAgentProgram(
         inconclusive = true
         continue
       }
+      const match = inventory.matches.get(program)
+      if (wsl && options.pinForSetup && inventory.found.has(program)) {
+        if (!match?.first || !match.user) {
+          inconclusive = true
+          continue
+        }
+        if (slot?.distro) {
+          options.onWslDistroSelected?.(slot.distro)
+        }
+        return {
+          program,
+          result: { kind: 'full-path', path: match.first, canonicalPath: match.user }
+        }
+      }
       const result: TerminalAgentProgram = wsl
         ? inventory.found.has(program)
           ? { kind: 'by-name', path: program }
           : { kind: 'unavailable' }
-        : qualifyProgram(inventory.matches.get(program), shell)
+        : qualifyProgram(match, shell)
       if (result.kind !== 'unavailable') {
         if (slot?.distro) {
           options.onWslDistroSelected?.(slot.distro)
@@ -192,20 +196,6 @@ export async function detectAgentCommandsOnHost(
   return (await detectAgentCommandInventoryOnHost(commands, options)).found
 }
 
-function completeInventoryAfter(
-  slot: InventorySlot,
-  sequence: number,
-  commands: readonly string[]
-) {
-  const latest = currentInventoryPublication(slot, 'complete')
-  return latest &&
-    latest.sequence > sequence &&
-    !latest.inventory.incomplete &&
-    commands.every((command) => isInventoryListCommandSettled(latest.inventory, command))
-    ? latest
-    : undefined
-}
-
 export async function detectAgentCommandInventoryOnHost(
   commands: readonly string[],
   options: CommandDetectionOptions = {}
@@ -216,6 +206,7 @@ export async function detectAgentCommandInventoryOnHost(
   const wslTarget = getPreflightWslTarget(options.context)
   const targeted = options.onlyRequested ?? false
   const ordinaryMode = targeted && options.reuseSettled ? 'read' : 'detect'
+  const allowFallbackMisses = !options.reuseSettled
   const detect = async (waitSignal: AbortSignal) => {
     let slot: InventorySlot | undefined
     let read: ReturnType<typeof readInventory> | undefined
@@ -224,7 +215,12 @@ export async function detectAgentCommandInventoryOnHost(
       const before = slot?.published?.sequence ?? 0
       throwIfSignalAborted(waitSignal)
       if (slot && !options.refresh && options.afterPublication !== undefined) {
-        const completed = completeInventoryAfter(slot, options.afterPublication, commands)
+        const completed = completeInventoryAfter(
+          currentInventoryPublication(slot, 'complete'),
+          options.afterPublication,
+          commands,
+          allowFallbackMisses
+        )
         if (completed) {
           return { slot, publication: completed }
         }
@@ -237,13 +233,19 @@ export async function detectAgentCommandInventoryOnHost(
         return { slot, publication: null }
       }
       const completed = !options.refresh
-        ? completeInventoryAfter(slot, before, commands)
+        ? completeInventoryAfter(
+            currentInventoryPublication(slot, 'complete'),
+            before,
+            commands,
+            allowFallbackMisses
+          )
         : undefined
       if (completed) {
         return { slot, publication: completed }
       }
       read = readInventory(slot, commands, options.refresh ? 'refresh' : ordinaryMode, {
         targeted,
+        allowFallbackMisses,
         afterPublication: options.afterPublication,
         waitForCompletion:
           options.waitForCompletion || (!options.refresh && options.afterPublication !== undefined)

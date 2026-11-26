@@ -52,6 +52,7 @@ export type TerminalCreateOptions = {
   /** Host-only runtime fact used to quote this launch; spawn must take its shell from that same fact, never client input. */
   launchRuntime?: AgentLaunchRuntime
   preselectedAgentProgram?: PreselectedAgentProgram
+  refreshAgentProgram?: boolean
   /** Account routing env merged over `startupAgent`'s plan env; an input to that plan, like
    *  `agentArgs`, so not part of `callerSuppliedLaunch`. */
   accountEnv?: Record<string, string>

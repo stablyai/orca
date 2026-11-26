@@ -1,5 +1,6 @@
 import {
-  SETUP_AGENT_RESOLVER_ENV,
+  SETUP_AGENT_NOTICE_ENV,
+  SETUP_AGENT_RECHECK_ENV,
   SETUP_AGENT_RUNTIME_ROOT_ENV
 } from '../../../shared/agent-launch/startup/setup-agent-program'
 import {
@@ -32,7 +33,11 @@ import {
 import { PI_CLIPBOARD_OSC52_ENV } from '../../ipc/pty/host-env/remote-viewer-clipboard-env'
 
 const WSLENV_ENTRY_SEPARATOR = ':'
-const SETUP_AGENT_WSLENV_ENTRIES = [SETUP_AGENT_RESOLVER_ENV, `${SETUP_AGENT_RUNTIME_ROOT_ENV}/p`]
+const SETUP_AGENT_WSLENV_ENTRIES = [
+  SETUP_AGENT_NOTICE_ENV,
+  SETUP_AGENT_RECHECK_ENV,
+  `${SETUP_AGENT_RUNTIME_ROOT_ENV}/p`
+]
 
 function parseWslenvEntries(value: string | undefined): string[] {
   return value ? value.split(WSLENV_ENTRY_SEPARATOR).filter(Boolean) : []
@@ -75,7 +80,7 @@ function worktreeSetupWslenvEntries(env: Record<string, string | undefined>): st
 }
 
 export function addSetupAgentWslInteropEnv(env: Record<string, string>): void {
-  // Why: a retained same-protocol daemon may lack the resolver's passthrough entries.
+  // Why: a retained same-protocol daemon may lack the gate's passthrough entries.
   env.WSLENV ??= process.env.WSLENV ?? ''
   applyWslenvPassthrough(env, SETUP_AGENT_WSLENV_ENTRIES)
 }

@@ -11,6 +11,11 @@ import {
 } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
 import React, { useCallback } from 'react'
 import { toast } from 'sonner'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
+import { resolveOwnerOrLocal } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { notifyBlockedAgentStartup } from '@/lib/agent-session/launch/prompt/blocked-agent-startup-notice'
+import type { AgentProgramBlockReason } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 
 import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
@@ -93,7 +98,7 @@ export function useTabAgentMenuLaunch({
   onFocusChat?: (tabId: string) => void
 }) {
   const runLaunch = useCallback(
-    (row: NewTabAgentMenuRow, draft?: AgentPickerDraft, pickerEntry?: AgentPickerEntry) => {
+    async (row: NewTabAgentMenuRow, draft?: AgentPickerDraft, pickerEntry?: AgentPickerEntry) => {
       if (
         disabled ||
         row.kind === 'chat-unavailable' ||
@@ -103,6 +108,37 @@ export function useTabAgentMenuLaunch({
           }))
       ) {
         return false
+      }
+      if (row.kind !== 'chat' && !prompt && !draft?.prompt) {
+        const owner = resolveOwnerOrLocal(useAppStore.getState(), { workspaceId: worktreeId })
+        if (owner.kind === 'resolved' && owner.owner.at === 'local') {
+          try {
+            const retry = await callRuntimeRpc<{
+              tabId?: string
+              blocked?: AgentProgramBlockReason
+            } | null>(
+              owner.owner.endpoint.kind === 'self' ? { kind: 'local' } : owner.owner.endpoint,
+              'terminal.retrySetupStartup',
+              { worktreeId, agent: row.agent, groupId }
+            )
+            if (retry) {
+              if (retry.blocked) {
+                notifyBlockedAgentStartup(retry.blocked, undefined)
+              }
+              if (retry.tabId && owner.owner.endpoint.kind === 'self') {
+                onFocusTerminal(retry.tabId)
+              } else {
+                onFocusHostTerminal?.()
+              }
+              return !retry.blocked
+            }
+          } catch (error) {
+            if (!(error instanceof RuntimeRpcCallError && error.code === 'method_not_found')) {
+              notifyBlockedAgentStartup('unknown', undefined)
+              return false
+            }
+          }
+        }
       }
       const { agent } = row
       const entry = getCatalogEntry(agent)

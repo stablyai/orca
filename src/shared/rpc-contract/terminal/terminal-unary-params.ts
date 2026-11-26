@@ -298,6 +298,12 @@ export const TerminalCreateParams = z.object({
   cwd: OptionalString
 })
 
+export const TerminalRetrySetupStartup = z.object({
+  worktreeId: z.string().min(1),
+  agent: z.string().refine(isTuiAgent),
+  groupId: OptionalString
+})
+
 export const TerminalStop = z.object({
   worktree: requiredString('Missing worktree selector')
 })

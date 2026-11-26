@@ -11,11 +11,14 @@ export type CommandInventory = {
 
 export function isInventoryListCommandSettled(
   inventory: CommandInventory,
-  command: string
+  command: string,
+  allowFallbackMisses = true
 ): boolean {
   return (
     (inventory.probed.has(command) && (!inventory.incomplete || inventory.found.has(command))) ||
-    (!inventory.incomplete && inventory.fallbackMisses?.has(command) === true)
+    (allowFallbackMisses &&
+      !inventory.incomplete &&
+      inventory.fallbackMisses?.has(command) === true)
   )
 }
 
@@ -88,4 +91,20 @@ export function publishInventory(
     slot.completed = publication
   }
   return publication
+}
+
+export function completeInventoryAfter(
+  publication: InventoryPublication | undefined,
+  sequence: number,
+  commands: readonly string[],
+  allowFallbackMisses: boolean
+): InventoryPublication | undefined {
+  return publication &&
+    publication.sequence > sequence &&
+    !publication.inventory.incomplete &&
+    commands.every((command) =>
+      isInventoryListCommandSettled(publication.inventory, command, allowFallbackMisses)
+    )
+    ? publication
+    : undefined
 }

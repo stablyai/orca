@@ -13,7 +13,10 @@ import {
   waitForPromiseWithSignal
 } from '../../shared/concurrency/abort-signal-reason'
 import { invalidateExactLoginShellEnvironments } from '../startup/shell-environment/login-shell-environment'
-import type { InventorySlot } from './agent-command-inventory'
+import { currentInventoryPublication, type InventorySlot } from './agent-command-inventory'
+import { isOrcaAgentRuntimePath } from '../managed-agent-cli/managed-agent-cli-path'
+import type { AgentPathMatch } from '../ipc/command-path/command-path-batch'
+import type { AgentStartupShell } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
 
 function stockCommands(platform: NodeJS.Platform, runtime: NodeJS.Platform | 'wsl' = platform) {
   return [
@@ -81,4 +84,31 @@ export async function wslInventory(
   const slot = wsl.get(key) ?? { distro, stockCommands: wslStockCommands }
   wsl.set(key, slot)
   return slot
+}
+
+export type TerminalAgentProgram =
+  | { kind: 'by-name' | 'full-path'; path: string; canonicalPath?: string }
+  | { kind: 'unavailable' | 'unknown' }
+
+export function qualifyProgram(
+  match: AgentPathMatch | undefined,
+  shell: AgentStartupShell
+): TerminalAgentProgram {
+  if (!match?.user) {
+    return { kind: 'unavailable' }
+  }
+  const winner = shell === 'powershell' ? match.unquoted : match.first
+  return winner && !isOrcaAgentRuntimePath(winner)
+    ? { kind: 'by-name', path: winner }
+    : { kind: 'full-path', path: match.user }
+}
+
+export function readPublishedLocalTerminalAgentProgram(
+  program: string,
+  shell: AgentStartupShell
+): TerminalAgentProgram {
+  const inventory = currentInventoryPublication(getLocalInventory())?.inventory
+  return inventory?.probed.has(program)
+    ? qualifyProgram(inventory.matches.get(program), shell)
+    : { kind: 'unknown' }
 }

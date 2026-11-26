@@ -14,6 +14,7 @@ export type InventoryReadOptions = {
   acceptAnyMatch?: boolean
   qualifiesEarly?: (match: AgentPathMatch | undefined) => boolean
   revalidateUnavailable?: boolean
+  allowFallbackMisses?: boolean
   afterPublication?: number
   waitForCompletion?: boolean
 }

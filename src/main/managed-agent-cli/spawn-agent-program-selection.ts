@@ -23,7 +23,11 @@ import {
   withAgentInventoryDeadline,
   type TerminalAgentProgramSelection
 } from '../preflight/agent-command-detection'
-import { createAgentRuntimeTargetCheck, isOrcaAgentRuntimePath } from './managed-agent-cli-path'
+import {
+  canonicalLocalSetupProgram,
+  createAgentRuntimeTargetCheck,
+  isOrcaAgentRuntimePath
+} from './managed-agent-cli-path'
 
 type ConfiguredPathResult = string | null | typeof UNVERIFIED_FS_PROBE
 const pendingLookups = new Map<string, PromiseSettlementWaiters<ConfiguredPathResult>>()
@@ -35,6 +39,8 @@ export type SpawnProgramContext = {
   sshTarget?: boolean
   shellPath?: string
   requirePinnedProgram?: boolean
+  setupGate?: boolean
+  refreshAgentProgram?: boolean
   cwd?: string
   readCwd?: () => Promise<string | undefined>
   env?: NodeJS.ProcessEnv
@@ -61,7 +67,7 @@ export async function resolveSpawnAgentProgram(
     result: { kind: 'unknown' }
   }
   const preselected = spawn.preselectedAgentProgram
-  if (preselected) {
+  if (preselected && !spawn.setupGate && !spawn.refreshAgentProgram) {
     const sameRuntime =
       spawn.codexRuntime === 'wsl'
         ? preselected.wslDistro !== undefined &&
@@ -75,13 +81,27 @@ export async function resolveSpawnAgentProgram(
       : unknownSelection
   }
   let wslDistro: string | undefined
-  let selection = await withAgentInventoryDeadline(
-    (signal) =>
-      selectSpawnAgentProgram(spawn, shell, programs, launchCwd, pinned, signal, (distro) => {
+  const pinLocally = spawn.setupGate && !spawn.sshTarget && spawn.codexRuntime !== 'wsl'
+  let selection = await withAgentInventoryDeadline(async (signal) => {
+    const selected = await selectSpawnAgentProgram(
+      spawn,
+      shell,
+      programs,
+      launchCwd,
+      pinned,
+      signal,
+      (distro) => {
         wslDistro = distro
-      }),
-    spawn.signal
-  ).catch(() => unknownSelection)
+      }
+    )
+    if (!pinLocally || !('path' in selected.result)) {
+      return selected
+    }
+    const canonicalPath = await canonicalLocalSetupProgram(selected.result.path, signal)
+    return canonicalPath
+      ? { ...selected, result: { ...selected.result, canonicalPath } }
+      : unknownSelection
+  }, spawn.signal).catch(() => unknownSelection)
   if (onProgramSelected && 'path' in selection.result) {
     if (shell === 'cmd' && selection.result.kind === 'by-name') {
       selection = {
@@ -110,6 +130,8 @@ async function selectSpawnAgentProgram(
   if (spawn.codexRuntime === 'wsl') {
     return selectTerminalAgentProgram(programs, shell, {
       wsl: { distro: spawn.expectedWslDistro ?? undefined },
+      pinForSetup: spawn.setupGate,
+      forceRefresh: spawn.refreshAgentProgram,
       revalidateUnavailable: true,
       signal,
       onWslDistroSelected
@@ -164,6 +186,7 @@ async function selectSpawnAgentProgram(
   }
   selection ??= await selectTerminalAgentProgram(programs, shell, {
     refresh: Boolean(pinned),
+    forceRefresh: spawn.refreshAgentProgram,
     shellPath: spawn.shellPath,
     revalidateUnavailable: true,
     signal

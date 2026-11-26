@@ -84,7 +84,7 @@ async function scanInventory(
     }
     return {
       found: probe.found,
-      matches: new Map(),
+      matches: probe.matches,
       probed: probe.environmentResolved ? commands : probe.found,
       incomplete: !probe.environmentResolved
     }
@@ -210,6 +210,7 @@ export function readInventory(
     acceptAnyMatch = false,
     qualifiesEarly,
     revalidateUnavailable = false,
+    allowFallbackMisses = true,
     afterPublication,
     waitForCompletion = false
   }: InventoryReadOptions = {}
@@ -226,7 +227,9 @@ export function readInventory(
     (afterPublication === undefined || published.sequence > afterPublication) &&
     ((acceptAnyMatch && hasMatch) ||
       requested.every((cmd) =>
-        acceptAnyMatch ? current.probed.has(cmd) : isInventoryListCommandSettled(current, cmd)
+        acceptAnyMatch
+          ? current.probed.has(cmd)
+          : isInventoryListCommandSettled(current, cmd, allowFallbackMisses)
       ))
   const revalidateMiss = settled && revalidateUnavailable && !hasMatch
   const readPublished = (): InventoryRead => ({

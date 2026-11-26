@@ -24,7 +24,7 @@ export type SetupWaitPhase = 'waiting' | 'started' | 'failed'
 
 export type SetupWaitGate = {
   /** The chunk's agent output (none while Setup holds the pane) and the phase it entered, if any. */
-  observe: (chunk: string) => { output: string; phase: SetupWaitPhase | null }
+  observe: (chunk: string) => { output: string; phase: SetupWaitPhase | null; blocked?: true }
 }
 
 /** A wait-for-setup pane runs no agent between the sequenced wrapper's wait line and the line that ends it. */
@@ -47,11 +47,11 @@ export function createSetupWaitGate(initiallyWaiting = false): SetupWaitGate {
         state = phase = 'waiting'
         window = window.slice(at + SETUP_WAIT_MESSAGE.length)
       }
-      let end: { at: number; length: number; phase: 'started' | 'failed' } | null = null
+      let end: { at: number; line: string; phase: 'started' | 'failed' } | null = null
       for (const { line, phase: endPhase } of SETUP_WAIT_END_LINES) {
         const at = window.indexOf(line)
         if (at !== -1 && (!end || at < end.at)) {
-          end = { at, length: line.length, phase: endPhase }
+          end = { at, line, phase: endPhase }
         }
       }
       if (!end) {
@@ -60,7 +60,12 @@ export function createSetupWaitGate(initiallyWaiting = false): SetupWaitGate {
       }
       state = 'ended'
       carry = ''
-      return { output: window.slice(end.at + end.length), phase: end.phase }
+      const blocked = end.line === SETUP_AGENT_BLOCKED_MESSAGE ? true : undefined
+      return {
+        output: window.slice(end.at + end.line.length),
+        phase: end.phase,
+        ...(blocked ? { blocked } : {})
+      }
     }
   }
 }

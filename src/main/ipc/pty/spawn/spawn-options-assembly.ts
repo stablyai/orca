@@ -25,6 +25,7 @@ export type PtySpawnLaunchOptionsInput = {
     rows: number
     launchAgent?: unknown
     preselectedAgentProgram?: PreselectedAgentProgram
+    refreshAgentProgram?: boolean
     nativeChatSignIn?: NativeChatSignInRequest
     resumeProviderSession?: unknown
     resumeOrigin?: unknown
@@ -79,6 +80,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   const { args } = input
   const connectionId = args.connectionId ?? undefined
   const selection = await selectPtyAgentLaunch(input)
+  const expectedWslDistro = selection.wslDistro
   const openCodeLaunch = await prepareOpenCodePtyLaunch({
     command: selection.startupCommand,
     agent: selection.launchAgent,
@@ -91,9 +93,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
       selection.startupCommand !== undefined &&
       (!selection.postSetupProgram || selection.postSetupProgram.path !== undefined),
     shell: selection.shell,
-    ...(input.codexRuntime === 'wsl'
-      ? { wsl: { distro: input.expectedWslDistro ?? undefined } }
-      : {})
+    ...(input.codexRuntime === 'wsl' ? { wsl: { distro: expectedWslDistro ?? undefined } } : {})
   })
   const {
     env,
@@ -105,7 +105,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
     launchConfig,
     blocked,
     startupNotice
-  } = await preparePtyAgentLaunch(input, selection, openCodeLaunch)
+  } = await preparePtyAgentLaunch({ ...input, expectedWslDistro }, selection, openCodeLaunch)
   const spawnOptions: PtySpawnOptions = {
     cols: args.cols,
     rows: args.rows,
@@ -157,7 +157,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
     settings: input.getSettings?.(),
     env,
     claudeAuth: input.claudeAuth,
-    wslDistro: input.expectedWslDistro,
+    wslDistro: expectedWslDistro,
     connectionId: connectionId ?? null,
     codexHome: input.selectedCodexHomePath,
     spawnOptions
@@ -187,7 +187,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
     })
     if (process.platform === 'win32') {
       // Preserve the PowerShell implementation choice across both provider paths.
-      spawnOptions.terminalWindowsWslDistro = input.expectedWslDistro
+      spawnOptions.terminalWindowsWslDistro = expectedWslDistro
       spawnOptions.terminalWindowsPowerShellImplementation = input.getSettings
         ? (input.getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
         : undefined

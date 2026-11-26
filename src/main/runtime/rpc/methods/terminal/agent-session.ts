@@ -1,4 +1,5 @@
 import { ensureAgentSessionFeatureRequirement } from '../../startup/agent-launch-feature-requirement'
+import { TerminalRetrySetupStartup } from '../../../../../shared/rpc-contract/terminal/terminal-unary-params'
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 import {
   type RuntimeAgentSessionRpcCaller,
@@ -41,6 +42,27 @@ function assertOperationTimestampWithinFutureSkew(clientOperationId: string): vo
 }
 
 export const AGENT_SESSION_METHODS = [
+  defineMethod({
+    name: 'terminal.retrySetupStartup',
+    requires: ['accounts'],
+    permission: 'workspace',
+    params: TerminalRetrySetupStartup,
+    handler: async ({ worktreeId, agent, groupId }, context) => {
+      const terminal = await context.runtime.retryBlockedWorktreeStartup(
+        worktreeId,
+        agent,
+        (startup) =>
+          context.runtime.createTerminal(`id:${worktreeId}`, {
+            ...startup,
+            targetGroupId: groupId,
+            terminalImageViewerSupported: terminalImageViewerSupported(context),
+            presentation: context.clientKind ? 'background' : 'focused',
+            wslUserAct: true
+          })
+      )
+      return terminal && { tabId: terminal.tabId, blocked: terminal.agentProgramBlocked }
+    }
+  }),
   defineMethod({
     name: 'terminal.ensureAgentSession',
     requires: ensureAgentSessionFeatureRequirement,

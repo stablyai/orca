@@ -1,10 +1,11 @@
-import { join, resolve } from 'node:path'
+import { isAbsolute, join, resolve } from 'node:path'
 import { hasAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { isPathInsideOrEqual } from '../../shared/file-access/cross-platform-path'
 import {
   UNVERIFIED_FS_PROBE,
-  type InventoryFsProbes
+  InventoryFsProbes
 } from '../../shared/shell/command-resolution/inventory-fs-probes'
+import { checkExecutableFile } from '../ipc/command-path/command-path-directory'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 
 export function getOrcaAgentRuntimeRoot(): string | undefined {
@@ -31,4 +32,21 @@ export function createAgentRuntimeTargetCheck(probes: InventoryFsProbes) {
       : realRoot !== null &&
           (isOrcaAgentRuntimePath(target) || isPathInsideOrEqual(realRoot, target))
   }
+}
+
+export async function canonicalLocalSetupProgram(
+  path: string,
+  signal: AbortSignal
+): Promise<string | undefined> {
+  if (!isAbsolute(path)) {
+    return undefined
+  }
+  const probes = new InventoryFsProbes(signal)
+  const target = await probes.realPath(path)
+  return typeof target === 'string' &&
+    isAbsolute(target) &&
+    (await createAgentRuntimeTargetCheck(probes)(target)) === false &&
+    (await checkExecutableFile(target, process.platform === 'win32', probes)) === 'executable'
+    ? target
+    : undefined
 }

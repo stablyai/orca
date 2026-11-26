@@ -1,12 +1,9 @@
 import type { TerminalWorkspaceCreationEvidence } from './terminal-workspace-scope'
-import {
-  recordTerminalLaunchMetadata,
-  resolveTerminalLaunchResult,
-  terminalLaunchPublicFacts
-} from './terminal-launch-result'
+import { resolveTerminalLaunchResult, terminalLaunchPublicFacts } from './terminal-launch-result'
 import { revealCreatedTerminal } from './terminal-create-reveal'
 import type { PaneSpawnOperation } from '../../../ipc/pty/pane/pane-spawn-operation'
-import { OrcaRuntimeWithTerminalCreateDeduplication } from './terminal-create-deduplication'
+import { OrcaRuntimeWithCreateTerminalSetupGate } from './terminal-create-setup-gate'
+import { generatedSetupStartupCommand } from '../../workspaces/startup/worktree-setup-gate'
 import { type PaneStartArgsOf, spawnInAdmittedPane } from './runtime-pane-admission'
 import type { TerminalCreateOptions } from './terminal-create-options'
 import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
@@ -37,7 +34,7 @@ import { migratedPaneRestoreHint } from '../recovery/migrated-pane-restore-cwd'
 import { paneSize, resolvePtyFirstSize } from '../../../ipc/pty/delivery/pty-first-size'
 import * as dependenciesOwner1 from '../../../../shared/workspace-layout/stable-pane-id'
 
-export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreateDeduplication {
+export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithCreateTerminalSetupGate {
   protected abstract paneStartStatusArgs: PaneStartArgsOf
 
   async createTerminal(
@@ -63,6 +60,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
       }
       const workspace = await this.resolveTerminalCreateLaunchScope(selector, opts, ...evidence)
       const launchOpts = await this.resolveAgentTerminalCreateOptions(workspace, opts)
+      const gatedStartup = generatedSetupStartupCommand(launchOpts, workspace.connectionId)
       const launchTitleAt = { sequence: this.nextTitleObservationSequence(), epochMs: Date.now() }
       let cwd = this.resolveWorkspaceTerminalStartupCwd(workspace, launchOpts.cwd) ?? workspace.path
       const session = this.getWorkspaceSessionForWorktree(workspace.id)
@@ -153,7 +151,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
             ),
             resumeProviderSession: launchOpts.resumeProviderSession,
             ...(launchOpts.resumeOrigin ? { resumeOrigin: launchOpts.resumeOrigin } : {}),
-            telemetry: launchOpts.telemetry,
+            telemetry: gatedStartup ? undefined : launchOpts.telemetry,
             connectionId: workspace.connectionId,
             worktreeId: workspace.id,
             resolvedWorkspace: workspace,
@@ -236,6 +234,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           })
         }
         const pty = this.getOrCreatePtyWorktreeRecord(result.id)
+        const handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
         if (pty) {
           pty.runtimeSessionOwned = true
           if (!launch.adoptedStablePane) {
@@ -243,17 +242,18 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
               this.setPtyManagementTitleFromObservedTitle(pty, title, at)
             )
           }
-          this.watchLaunchedAgent(
-            pty,
-            recordTerminalLaunchMetadata(pty, result, launch, launchOpts.command)
-          )
-          if (!launch.adoptedStablePane) {
-            this.rememberSavedTerminalLaunchResult(result.id, result)
-          }
           const standing = spawnSurfaceClaimSequence(this.graphSequence)
           recordPtySurface(this.terminalIdentity, pty, tabId, paneKey, standing)
+          this.recordCreatedTerminalLaunch(
+            pty,
+            handle,
+            result,
+            launch,
+            launchOpts,
+            gatedStartup,
+            savedStartupCwd
+          )
         }
-        const handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
         if (pty && !launch.adoptedStablePane && launchOpts.deferMobileSessionPublish !== true) {
           this.publishPtyBackedMobileSessionTerminal(workspace.id, pty, {
             tabId,

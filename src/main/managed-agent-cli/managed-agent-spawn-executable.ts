@@ -1,4 +1,5 @@
 import { basename, isAbsolute, win32 } from 'node:path'
+import type { TerminalAgentProgram } from '../preflight/agent-command-detection'
 import {
   matchesStockLaunchProgram,
   renderCmdLaunchForPowerShell,
@@ -52,7 +53,6 @@ export type AgentExecutableLaunch = SpawnProgramContext & {
   launchAgent?: TuiAgent
   sourceShell?: AgentStartupShell
   restoring?: boolean
-  setupGate?: boolean
 }
 
 export type AlignedLaunch = {
@@ -174,33 +174,27 @@ export async function rewriteLaunchExecutable(
       pinned,
       onProgramSelected
     )
-    let selected = selection.result
-    if (setupGate) {
-      if (
-        'path' in selected &&
-        (guest ? selected.path.startsWith('/') : isAbsolute(selected.path))
-      ) {
-        selected = { kind: 'full-path', path: selected.path }
-      } else {
-        postSetupProgram = { name: preferred }
-        selected = { kind: 'by-name', path: preferred }
-      }
-    }
-    const program = postSetupProgram?.name ?? selection.program
+    const verified = selection.result
+    const selected: TerminalAgentProgram = setupGate
+      ? 'path' in verified && verified.canonicalPath
+        ? { kind: 'full-path', path: verified.path }
+        : { kind: 'by-name', path: selection.program }
+      : verified
+    const program = selection.program
     if (!('path' in selected)) {
       return { command: undefined, launchConfig: config, blocked: selected.kind }
     }
     const selectedHead = selected.kind === 'full-path' ? selected.path : program
-    const launchHead =
-      setupGate &&
-      selected.kind === 'full-path' &&
-      process.platform === 'win32' &&
-      shell === 'posix' &&
-      !guest
-        ? nativeWindowsPathToPosixShellPath(selectedHead)
-        : selectedHead
-    if (setupGate && selected.kind === 'full-path') {
-      postSetupProgram = { name: program, path: launchHead }
+    const toPanePath = (path: string): string =>
+      process.platform === 'win32' && shell === 'posix' && !guest
+        ? nativeWindowsPathToPosixShellPath(path)
+        : path
+    const launchHead = setupGate ? toPanePath(selectedHead) : selectedHead
+    if (setupGate) {
+      postSetupProgram = { agent, launchHead }
+      if ('path' in verified && verified.canonicalPath) {
+        postSetupProgram.path = toPanePath(verified.canonicalPath)
+      }
     }
     const replaceable =
       executable &&

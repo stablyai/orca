@@ -21,12 +21,15 @@ import {
 import { withClaudeDirectLaunchCommand } from '../../../../shared/agent-launch/startup/claude-direct-launch-command'
 import { prepareFreshOmpLaunch } from '../../../../shared/agent-launch/startup/omp-fresh-launch'
 import {
-  buildSetupAgentResolver,
+  buildSetupAgentRecheck,
   setupAgentProgramExpression,
-  SETUP_AGENT_RESOLVER_ENV,
+  SETUP_AGENT_NOTICE_ENV,
+  SETUP_AGENT_RECHECK_ENV,
   SETUP_AGENT_RUNTIME_ROOT_ENV,
   type SetupAgentProgram
 } from '../../../../shared/agent-launch/startup/setup-agent-program'
+import { translateMain } from '../../../i18n/main-i18n'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { nativeWindowsPathToPosixShellPath } from '../../../../shared/agent-launch/startup/setup-runner-command'
 import {
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
@@ -151,7 +154,8 @@ export async function preparePtyAgentLaunch(
   const images = inlineImagesEnabled && !input.envToDelete.includes('KITTY_WINDOW_ID')
   let prepared = agentCommand
   if (sequenced) {
-    delete env[SETUP_AGENT_RESOLVER_ENV]
+    delete env[SETUP_AGENT_NOTICE_ENV]
+    delete env[SETUP_AGENT_RECHECK_ENV]
     delete env[SETUP_AGENT_RUNTIME_ROOT_ENV]
   }
   if (postSetupProgram && shell !== 'cmd') {
@@ -160,11 +164,16 @@ export async function preparePtyAgentLaunch(
       runtimeRoot && local && process.platform === 'win32' && shell === 'posix'
         ? nativeWindowsPathToPosixShellPath(runtimeRoot)
         : (runtimeRoot ?? '')
-    env[SETUP_AGENT_RESOLVER_ENV] = buildSetupAgentResolver(postSetupProgram, shell)
+    env[SETUP_AGENT_RECHECK_ENV] = buildSetupAgentRecheck(postSetupProgram.path, shell)
+    env[SETUP_AGENT_NOTICE_ENV] = translateMain(
+      'terminal.agentStartup.setupBlocked',
+      "Setup finished. Orca couldn't verify {{agent}} for this launch. Start it from the agent menu.",
+      { agent: TUI_AGENT_DISPLAY_NAMES[postSetupProgram.agent] }
+    )
     if (input.codexRuntime === 'wsl') {
       addSetupAgentWslInteropEnv(env)
     }
-    if (prepared && !rebuiltHermesQuery) {
+    if (prepared && postSetupProgram.path && !rebuiltHermesQuery) {
       prepared = await preparePostSetupCommand(prepared, postSetupProgram, shell, images)
     }
   } else if (
@@ -230,7 +239,7 @@ async function preparePostSetupCommand(
     const launch = readLaunchPosition(inner, shell)
     if (
       !launch ||
-      !matchesStockLaunchProgram(launch.executable, program.path ?? program.name, process.platform)
+      !matchesStockLaunchProgram(launch.executable, program.launchHead, process.platform)
     ) {
       return inner
     }
