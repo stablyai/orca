@@ -78,17 +78,11 @@ export const WorkerDockRow = memo(function WorkerDockRow({
           'Stop or clear this from the computer it runs on'
         )
       : ''
-  const reason =
-    row &&
-    (row.state === 'failed' || row.state === 'unexpected' || row.state === 'stopping') &&
-    row.reason
-      ? row.reason
-      : ''
-  const label = [mixed && row ? workerDockKindLabel(t, row.kind) : '', title, state, reason, remote]
+  const label = [mixed && row ? workerDockKindLabel(t, row.kind) : '', title, state, remote]
     .filter(Boolean)
     .join(' · ')
   const tooltip = row
-    ? [row.name, title === row.title ? '' : row.title, title, state, reason, remote]
+    ? [row.name, title === row.title ? '' : row.title, title, state, remote]
         .filter(Boolean)
         .join(' · ')
     : undefined
