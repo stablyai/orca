@@ -7,6 +7,11 @@ import type { GitHubCalloutKind } from '../../../../src/shared/github/markdown/g
 
 declare module 'mdast' {
   // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging registers the node.
+  interface ImageRow extends Parent {
+    type: 'imageRow'
+    children: BlockContent[]
+  }
+  // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging registers the node.
   interface Details extends Parent {
     type: 'details'
     /** Authored `open`: the section starts expanded. */
@@ -49,6 +54,7 @@ declare module 'mdast' {
   }
   // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging registers the node.
   interface RootContentMap {
+    imageRow: ImageRow
     details: Details
     htmlSpan: HtmlSpan
     inlineMath: InlineMath
@@ -57,6 +63,7 @@ declare module 'mdast' {
   }
   // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging registers the node.
   interface BlockContentMap {
+    imageRow: ImageRow
     details: Details
     math: Math
   }

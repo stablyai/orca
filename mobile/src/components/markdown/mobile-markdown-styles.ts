@@ -156,7 +156,15 @@ export const styles = themedStyleSheet(() => ({
     lineHeight: 17,
     color: colors.textPrimary
   },
+  imageRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: spacing.xs
+  },
   imageParagraph: {
+    maxWidth: '100%',
     gap: spacing.sm
   },
   details: {

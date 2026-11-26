@@ -4,7 +4,7 @@ import { htmlImages } from './mobile-markdown-preview-html'
 /** Icons and badges this small stay out, as before: GitHub draws them inline beside their text. */
 const MIN_DRAWN_IMAGE_WIDTH = 33
 
-const TAG = /<(\/?)([a-z][a-z0-9-]*)\b(?:[^<>"']|"[^"]*"|'[^']*')*>/gi
+export const TAG = /<(\/?)([a-z][a-z0-9-]*)\b(?:[^<>"']|"[^"]*"|'[^']*')*>/gi
 const VOID_TAGS = new Set(['img', 'br', 'hr', 'source', 'input', 'meta', 'link', 'wbr'])
 /** Elements that only place an image; one inside anything else (a link, a heading, bold) keeps it. */
 const IMAGE_WRAPPERS = new Set(['p', 'div', 'picture', 'center'])

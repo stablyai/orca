@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { MarkdownImageLayout } from '../../components/markdown/blocks/MobileMarkdownImageRow'
+import { useContext, useEffect, useState } from 'react'
 import { ActivityIndicator, Image, Pressable, Text, View } from 'react-native'
 import { colors, spacing, typography, pressedStyle } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
@@ -17,14 +18,23 @@ type Props = {
   documentPath: string
   href: string
   alt: string
+  width?: number
 }
 
-export function MobileMarkdownPreviewImage({ client, worktreeId, documentPath, href, alt }: Props) {
+export function MobileMarkdownPreviewImage({
+  client,
+  worktreeId,
+  documentPath,
+  href,
+  alt,
+  width
+}: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const inRow = useContext(MarkdownImageLayout) === 'row'
   const [load, setLoad] = useState<{ uri?: string; error?: string }>({})
   const [attempt, setAttempt] = useState(0)
-  const [aspectRatio, setAspectRatio] = useState(16 / 9)
+  const [size, setSize] = useState<{ width: number; height: number }>()
   const [expanded, setExpanded] = useState(false)
   useEffect(() => {
     let cancelled = false
@@ -36,7 +46,7 @@ export function MobileMarkdownPreviewImage({ client, worktreeId, documentPath, h
             uri,
             (width, height) => {
               if (!cancelled && width > 0 && height > 0) {
-                setAspectRatio(width / height)
+                setSize({ width, height })
               }
             },
             () => {}
@@ -60,7 +70,12 @@ export function MobileMarkdownPreviewImage({ client, worktreeId, documentPath, h
   }, [client, worktreeId, documentPath, href, attempt])
 
   return (
-    <View style={styles.frame}>
+    <View
+      style={[
+        styles.frame,
+        inRow && !load.error && { width: width ?? size?.width, maxWidth: '100%' }
+      ]}
+    >
       {load.error ? (
         <MobileLoadErrorState
           error={load.error}
@@ -84,7 +99,7 @@ export function MobileMarkdownPreviewImage({ client, worktreeId, documentPath, h
             source={{ uri: load.uri }}
             accessibilityLabel={alt || t('files.markdownPreviewImage.imageLabel', 'Markdown image')}
             resizeMode="contain"
-            style={{ width: '100%', aspectRatio }}
+            style={{ width: '100%', aspectRatio: size ? size.width / size.height : 16 / 9 }}
             onError={() =>
               setLoad({
                 error: translate('files.markdownPreviewImage.loadFailed', 'Unable to load image')
@@ -95,7 +110,7 @@ export function MobileMarkdownPreviewImage({ client, worktreeId, documentPath, h
       ) : (
         <ActivityIndicator color={colors.textSecondary} />
       )}
-      {alt ? <Text style={styles.caption}>{alt}</Text> : null}
+      {alt && (!inRow || load.error) ? <Text style={styles.caption}>{alt}</Text> : null}
       {expanded && load.uri ? (
         <MobileImageViewer
           uri={load.uri}
