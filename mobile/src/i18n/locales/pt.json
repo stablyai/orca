@@ -128,7 +128,8 @@
       "scanCodeStep": "Escaneie o código QR",
       "title": "Parear com desktop",
       "tryAgain": "Tentar novamente",
-      "codeNoLongerValid": "Este código de pareamento expirou, já foi usado ou foi substituído. Mostre um novo código no computador e escaneie novamente."
+      "codeNoLongerValid": "Este código de pareamento expirou, já foi usado ou foi substituído. Mostre um novo código no computador e escaneie novamente.",
+      "runtimeAccessLink": "Este link é para outro app do Orca. Escaneie o código em Configurações → Mobile no seu computador ou execute orca pair --mobile no seu servidor."
     },
     "terminalSettings": {
       "keepPhoneSize": "Manter no tamanho do celular (padrão)",
@@ -142,6 +143,32 @@
       "restoreAfterSeconds_one": "Após {{count}}s",
       "restoreAfterSeconds_other": "Após {{count}}s",
       "restoreHost": "Restaurar {{name}}",
+      "previewColumns_many": "{{count}} colunas",
+      "previewColumns_one": "{{count}} coluna",
+      "previewColumns_other": "{{count}} colunas",
+      "previewLabel": "Pré-visualização do terminal",
+      "previewHeading": "PRÉ-VISUALIZAÇÃO",
+      "fontHeading": "FONTE",
+      "fontDescription": "Use o gesto de pinça em um terminal para alterar o tamanho; ele fica salvo aqui. Só altera este dispositivo, não o terminal do desktop.",
+      "font": "Fonte",
+      "size": "Tamanho",
+      "sizePoints": "{{size}} pt",
+      "smaller": "Menor",
+      "larger": "Maior",
+      "lineSpacing": "Espaçamento entre linhas",
+      "lineSpacingTight": "Reduzido",
+      "lineSpacingNormal": "Normal",
+      "lineSpacingRoomy": "Amplo",
+      "weight": "Peso",
+      "weightLight": "Leve",
+      "weightRegular": "Regular",
+      "weightMedium": "Médio",
+      "fontPickerTitle": "Fonte do terminal",
+      "fontsOnDevice": "Neste dispositivo",
+      "fontsIncluded": "Incluídas no Orca",
+      "systemMono": "Monoespaçada do sistema",
+      "defaultFont": "Padrão",
+      "resetFont": "Restaurar configurações de fonte",
       "title": "Terminal"
     }
   },
@@ -173,6 +200,12 @@
     }
   },
   "browser": {
+    "clientHost": {
+      "openOnNamed": "Abrir em {{device}}",
+      "openOn": "Abrir em outro computador",
+      "offlineNamed": "{{device}} está offline",
+      "offline": "O computador que exibe esta página está offline"
+    },
     "addressField": {
       "urlPlaceholder": "URL"
     },
@@ -186,7 +219,9 @@
       "sendText": "Enviar texto ao navegador",
       "dialogTitleWithOrigin": "{{origin}} diz",
       "dialogTitleNoOrigin": "Esta página diz",
-      "dialogAnswer": "Resposta"
+      "dialogAnswer": "Resposta",
+      "stop": "Parar",
+      "reconnect": "Reconectar"
     },
     "pointerModifiers": {
       "clickModifier": "Modificador de clique {{key}}"
@@ -202,9 +237,11 @@
     },
     "stream": {
       "updateApp": "Atualize o aplicativo Orca para transmitir as guias do navegador aqui.",
+      "hostCannotStream": "Este host não pode transmitir abas do navegador aqui.",
       "checking": "Verificando o suporte de streaming do navegador de desktop.",
       "pageUnavailable": "A página do navegador ainda não está disponível.",
-      "timedOut": "A transmissão do navegador expirou."
+      "timedOut": "A transmissão do navegador expirou.",
+      "stopped": "Transmissão interrompida"
     },
     "loadFailure": {
       "retry": "Tentar novamente",
@@ -218,7 +255,43 @@
       "certificateChallengeExpired": "Esta aprovação de certificado expirou. Tente novamente a página para solicitar uma nova.",
       "certificateChallengeChanged": "A solicitação de certificado foi alterada. Tente novamente a página e revise o novo aviso.",
       "certificateProceedFailed": "O Orca não conseguiu aprovar esta solicitação de certificado. Tente novamente a página.",
-      "certificateChallengeUnavailable": "Esta solicitação de certificado não está mais disponível. Tente novamente a página para solicitar uma nova."
+      "certificateChallengeUnavailable": "Esta solicitação de certificado não está mais disponível. Tente novamente a página para solicitar uma nova.",
+      "certificateProceedNeedsHostUpdate": "Atualize o Orca neste host para aceitar avisos de certificado pelo celular."
+    },
+    "pagePrompt": {
+      "downloadStarted": "Baixando para {{path}} no host",
+      "downloadSaved": "Salvo em {{path}} no host",
+      "downloadCanceled": "Download cancelado.",
+      "downloadFailed": "Não foi possível concluir o download.",
+      "answerFailed": "A resposta não chegou à página.",
+      "openFailed": "Não foi possível abrir um app para este link {{scheme}}.",
+      "localFiles": "Arquivos locais",
+      "ask": {
+        "camera": "Usar sua câmera",
+        "microphone": "Usar seu microfone",
+        "location": "Saber sua localização",
+        "notifications": "Mostrar notificações",
+        "clipboard": "Ver textos e imagens copiados para a área de transferência",
+        "midi": "Usar seus dispositivos MIDI",
+        "windowManagement": "Gerenciar janelas em todas as suas telas",
+        "idleDetection": "Saber quando você está usando este dispositivo ativamente",
+        "localNetwork": "Acessar apps neste dispositivo e dispositivos na sua rede local"
+      },
+      "fileTitle": "Este arquivo quer",
+      "permissionTitle": "{{site}} quer",
+      "block": "Bloquear",
+      "allow": "Permitir",
+      "signInTitle": "Entrar",
+      "signInDescription": "{{origin}} está solicitando um nome de usuário e uma senha.",
+      "signInInsecure": "Sua conexão com este site não é privada.",
+      "signInRetry": "Esse nome de usuário ou senha não funcionou.",
+      "signIn": "Entrar",
+      "openLinkTitle": "Abrir este link {{scheme}}?",
+      "openLinkDescription": "{{origin}} quer abrir outro aplicativo.",
+      "openLinkAnonymous": "Uma página no navegador quer abrir outro aplicativo.",
+      "openLink": "Abrir link",
+      "username": "Nome de usuário",
+      "password": "Senha"
     }
   },
   "chat": {
@@ -1784,7 +1857,9 @@
       "automations": "Automações",
       "chooseDesktop": "{{desktop}}, escolher outro desktop",
       "feed": "Atividade",
-      "usage": "Uso"
+      "usage": "Uso",
+      "agents": "Agentes",
+      "bots": "Bots"
     },
     "usage": {
       "active": "Ativa",
@@ -1797,6 +1872,10 @@
       "showUsageFor": "Mostrar uso de",
       "updatedAgo": "Atualizado há {{time}}",
       "updatedJustNow": "Atualizado agora mesmo"
+    },
+    "activeAgents": {
+      "heading": "Ativos",
+      "seeAll": "Ver todos os agentes"
     },
     "bottomBar": {
       "connectFirst": "Conecte um computador para iniciar um novo trabalho.",
@@ -1860,7 +1939,24 @@
       "reconnect": "Reconectar",
       "tasks": "Tarefas",
       "automations": "Automações",
+      "mcpServers": "Servidores MCP",
       "moreActions": "Mais ações"
+    },
+    "deleteConfirm": {
+      "changes_many": "{{count}} alterações não commitadas",
+      "changes_one": "{{count}} alteração não commitada",
+      "changes_other": "{{count}} alterações não commitadas",
+      "changesAndIgnoredLost": "{{what}} e os arquivos ignorados serão perdidos",
+      "lost": "O seguinte será perdido: {{what}}",
+      "ignoredLost": "Os arquivos ignorados serão perdidos",
+      "checking": "Verificando alterações…",
+      "unchecked": "Não foi possível verificar as alterações",
+      "ignoredNamesMore": "{{names}} e outros",
+      "ignoredNamesCount": "{{names}} +{{value0}}",
+      "ignoredUnchecked": "Não foi possível verificar completamente os arquivos ignorados",
+      "needsUpdate": "Atualize o Orca no seu computador para excluir este espaço de trabalho pelo celular.",
+      "removeTitle": "Remover Espaço de Trabalho",
+      "removeFolderMessage": "Remover \"{{name}}\" do Orca? A pasta no disco será mantida."
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "Excluir \"{{name}}\" ({{branch}})?",
@@ -1876,6 +1972,8 @@
       "deleteFailed": "Falha ao excluir \"{{name}}\"",
       "markRead": "Marcar como Lido",
       "markUnread": "Marcar como Não Lido",
+      "muteNotifications": "Silenciar Notificações",
+      "unmuteNotifications": "Reativar Notificações",
       "moveToStatus": "Mover para Status"
     },
     "workspaceDetailsSheet": {
@@ -3393,6 +3491,12 @@
         "heading": "IDIOMA",
         "systemWithCurrent": "Sistema ({{language}})"
       },
+      "usage": {
+        "used": "Usado",
+        "remaining": "Restante",
+        "heading": "PORCENTAGENS DE USO",
+        "description": "As barras de uso no Início e em Contas mostram quanto de cada limite foi usado ou ainda resta. Salvo neste celular."
+      },
       "theme": {
         "dark": "Escuro",
         "description": "A opção Sistema segue a configuração de tema claro ou escuro deste dispositivo.",
@@ -3437,6 +3541,28 @@
       "on": "Ativado",
       "openInChatUi": "Abrir sessões na Interface de Chat",
       "title": "Interface de Chat"
+    },
+    "nativeChatText": {
+      "heading": "TEXTO",
+      "footer": "Use o gesto de pinça em um chat para alterar; a mudança fica salva aqui.",
+      "size": "Tamanho do texto",
+      "sizeDefault": "Padrão",
+      "sizePoints": "{{size}} pt",
+      "sizeSpoken": "{{size}} pontos",
+      "font": "Fonte",
+      "fontPickerTitle": "Fonte do chat",
+      "fontSystem": "Sistema",
+      "fontSerif": "Com serifa",
+      "fontMono": "Monoespaçada",
+      "fontMonoSubtitle": "A mesma do código",
+      "lineSpacing": "Espaçamento entre linhas",
+      "spacingCompact": "Compacto",
+      "spacingDefault": "Padrão",
+      "spacingRelaxed": "Amplo",
+      "reset": "Restaurar configurações de texto",
+      "previewQuestion": "Por que o teste de retomada está instável?",
+      "previewTools": "Leu 3 arquivos · Executou pnpm test",
+      "previewAnswer": "O teste aguarda `setTimeout(0)` enquanto o stream ainda está fazendo flush, então só passa quando o flush termina primeiro."
     },
     "nativeNotificationDeliverySettings": {
       "loadFailed": "Não foi possível carregar as configurações de entrega. Reabra esta tela para tentar novamente.",
@@ -3530,6 +3656,9 @@
       "download": "Baixar para este celular",
       "downloadSize": "Cerca de {{size}} MB",
       "phoneChecking": "Verificando…"
+    },
+    "sharedLinks": {
+      "bots": "Bots"
     }
   },
   "sourceControl": {
@@ -5557,7 +5686,7 @@
       "add": "Adicionar uma ferramenta",
       "addButton": "Adicionar",
       "sourceLabel": "URL do servidor ou comando de início",
-      "sourcePlaceholder": "https://… or npx …",
+      "sourcePlaceholder": "https://… ou npx …",
       "details": "Detalhes",
       "serverType": "Tipo de servidor",
       "urlMode": "Conectar a uma URL",
@@ -5885,6 +6014,95 @@
     }
   },
   "mcpServers": {
-    "agentBlocked": "Bloqueado pelas configurações do Claude da sua organização"
+    "category": {
+      "coding": "Programação",
+      "chat": "Chat",
+      "monitoring": "Monitoramento",
+      "docs": "Documentos e projetos",
+      "more": "Mais"
+    },
+    "searchApps": "Buscar apps",
+    "filterActive": "Filtro, {{filter}}",
+    "filter": "Filtro",
+    "allApps": "Todos os apps",
+    "added": "Adicionado",
+    "addTitle": "Adicionar um servidor MCP",
+    "customServer": "Servidor personalizado",
+    "customServerLine": "URL, comando ou configuração colada",
+    "noMatch": "Nenhum app corresponde a “{{query}}”.",
+    "apps": "Apps",
+    "header": "Cabeçalho",
+    "headerName": "Nome",
+    "headerValue": "Valor",
+    "removeHeader": "Remover cabeçalho",
+    "headers": "Cabeçalhos",
+    "headerEmpty": "Vazio",
+    "addHeader": "Adicionar cabeçalho",
+    "addButton": "Adicionar",
+    "sourceLabel": "URL do servidor ou comando de início",
+    "sourcePlaceholder": "https://… ou npx …",
+    "sourceNote": "Cole uma URL de servidor, um comando de início ou uma configuração mcpServers.",
+    "details": "Detalhes",
+    "trust": "Adicione apenas software em que você confia.",
+    "serverType": "Tipo de servidor",
+    "urlMode": "Conectar a uma URL",
+    "commandMode": "Executar um comando",
+    "serverName": "Nome do servidor",
+    "headersNone": "Nenhum",
+    "yours": "Seus",
+    "addServer": "Adicionar um servidor",
+    "fromPlugins": "De plugins",
+    "inYourAgents": "Nos seus agentes",
+    "needsSignIn": "Login necessário",
+    "wontStart": "Não inicia",
+    "signIn": "Entrar",
+    "projectsOnly": "Somente {{projects}}",
+    "moreFor": "Mais para {{name}}",
+    "moveToOrca": "Mover para o Orca",
+    "copyToOrca": "Copiar para o Orca",
+    "signInAgain": "Entrar novamente",
+    "signOut": "Sair",
+    "workspaces": "Espaços de trabalho",
+    "account": "Conta",
+    "signedIn": "Conectado",
+    "agents": "Agentes",
+    "turnAllOn": "Ativar todos",
+    "agentsUnread": "Não foi possível ler os agentes neste computador.",
+    "agentBlocked": "Bloqueado pelas configurações do Claude da sua organização",
+    "advanced": "Avançado",
+    "sharedProcess": "Compartilhar um processo entre os agentes",
+    "sharedProcessNote": "Usa menos memória. É executado fora da pasta do espaço de trabalho.",
+    "removeServer": "Remover servidor",
+    "url": "URL",
+    "command": "Comando",
+    "arguments": "Argumentos",
+    "title": "Servidores MCP",
+    "reading": "Lendo servidores MCP…",
+    "unavailable": "Os servidores MCP não estão disponíveis em {{host}}",
+    "signedInTo": "Conectado ao {{app}}",
+    "allWorkspaces": "Todos os espaços de trabalho",
+    "includingLater": "Incluindo os adicionados depois",
+    "appliesToNewNote": "As alterações valem para novas sessões.",
+    "allAgents": "Todos os agentes",
+    "agentsOf": "{{on}} de {{total}}",
+    "workspacesAll": "Todos",
+    "workspacesAllBut": "Todos, exceto {{names}}",
+    "workspacesNone": "Nenhum",
+    "appliesToNew": "Vale para novas sessões",
+    "restartSessions": "Reiniciar sessões ({{count}})",
+    "restarted": "Sessões reiniciadas: {{count}}",
+    "agentFileTitle": "Ativar {{server}} para {{agent}}?",
+    "agentFileMessage": "O Orca vai manter seus servidores MCP no arquivo de configurações do {{agent}} ({{file}}). Suas próprias entradas continuam como estão.",
+    "agentFilesMessage": "O Orca vai manter seus servidores MCP nos arquivos de configurações deles. Suas próprias entradas continuam como estão.",
+    "allow": "Permitir",
+    "removeTitle": "Remover {{name}}?",
+    "remove": "Remover",
+    "moveTitle": "Mover {{name}} para o Orca?",
+    "moveMessage": "O Orca o remove das configurações de {{agents}} e mantém um backup.",
+    "move": "Mover",
+    "workspacesCount": "{{count}} espaços de trabalho",
+    "workspacesAllButCount": "Todos, exceto {{count}}",
+    "headerMissing": "Preencha {{header}} para adicionar este servidor.",
+    "servers": "Servidores"
   }
 }
