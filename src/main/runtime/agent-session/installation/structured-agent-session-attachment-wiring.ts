@@ -25,7 +25,7 @@ export function installAgentSessionAttachments(deps: {
   stateDirectory: string
   store: Pick<AgentSessionRecordStore, 'getRecord' | 'isSessionUnreadable'>
   journalDatabase: JournalSqlDatabase
-  retainedUploadIds?: (root: string) => Promise<ReadonlySet<string>>
+  retainedUploadIds?: (root: string) => Promise<ReadonlySet<string> | null>
   logger: StructuredAgentSessionLogger
 }): void {
   stopAgentSessionAttachments()

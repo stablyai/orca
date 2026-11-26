@@ -182,6 +182,39 @@ describe('sweepAgentSessionAttachments', () => {
     expect(claimedSessions()).toEqual([])
   })
 
+  it('keeps every old upload when item-mail retention cannot read its store', async () => {
+    await seedUpload(UNSENT, OLD)
+    const markForSweep = vi.fn(facts().markForSweep)
+    await sweepAgentSessionAttachments(
+      store,
+      facts({
+        markForSweep,
+        retention: {
+          isUnclaimed: () => true,
+          uploads: async () => null
+        }
+      }),
+      NOW
+    )
+    expect(await remaining()).toEqual([UNSENT])
+    expect(markForSweep).not.toHaveBeenCalled()
+  })
+
+  it('sweeps an old upload when an opened item-mail store has no retained uploads', async () => {
+    await seedUpload(UNSENT, OLD)
+    await sweepAgentSessionAttachments(
+      store,
+      facts({
+        retention: {
+          isUnclaimed: () => true,
+          uploads: async () => new Set()
+        }
+      }),
+      NOW
+    )
+    expect(await remaining()).toEqual([])
+  })
+
   it('judges no claim orphaned while the record list is incomplete', async () => {
     claim('session-1', await seedUpload(SENT, OLD))
     recorded = null

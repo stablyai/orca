@@ -109,9 +109,17 @@ export class BotItemsHost {
   async owedCommentAttachmentUploads(
     stateDirectory: string,
     root: string
-  ): Promise<ReadonlySet<string>> {
+  ): Promise<ReadonlySet<string> | null> {
     const tracked = this.stores.get(botItemsStoreFile(stateDirectory))
-    return new Set(await tracked?.remote.owedCommentAttachmentUploads(root))
+    if (!tracked) {
+      return null
+    }
+    try {
+      return new Set(await tracked.remote.owedCommentAttachmentUploads(root))
+    } catch (error) {
+      warn(error)
+      return null
+    }
   }
 
   /** Once the runtime has its bot hooks: an existing items file sends what a crash left owed and
