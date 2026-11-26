@@ -7,7 +7,7 @@ export function gpuFallbackRestartOptions(): MessageBoxOptions {
   return {
     type: 'warning',
     buttons: [
-      translateMain('gpuFallback.restartPrompt.restartButton', 'Restart in Safe Graphics Mode'),
+      translateMain('gpuFallback.restartPrompt.restartButton', 'Restart in Safe Mode'),
       translateMain('gpuFallback.restartPrompt.keepRunningButton', 'Keep Running')
     ],
     defaultId: 0,

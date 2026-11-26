@@ -8,7 +8,7 @@ import {
   getSshTargetIdForExecutionHost,
   normalizeExecutionHostId,
   type ExecutionHostId
-} from '../execution-host'
+} from './execution-host'
 
 export type ExecutionHostOwnerRow = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
 

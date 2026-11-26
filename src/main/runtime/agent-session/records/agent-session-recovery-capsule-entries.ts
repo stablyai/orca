@@ -3,6 +3,7 @@
 import { readAgentSessionRefusalReference } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionAnyRefusalDetails } from '../../../../shared/agent-session/failures/agent-session-refusal-details'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import {
   AGENT_SESSION_RESUME_FAILURE_OUTCOMES,
   parseAgentSessionResumeMarker,
@@ -13,30 +14,38 @@ import {
 const RESUME_ACTION_LEASE_TTL_MS = 10 * 60 * 1000
 export const MAX_FAILURE_FIELD_LENGTH = 512
 
-const legacyCapsuleSchema = z.object({ version: z.literal(1), markers: z.array(z.unknown()) })
-const entrySchema = z.object({
-  state: z.enum(['pending', 'in-progress']),
-  operationId: z.string().min(1).optional(),
-  startedAt: z.number().int().nonnegative().optional(),
-  marker: z.unknown(),
-  replacement: z.unknown().optional()
-})
-const failureSchema = z.object({
-  marker: z.unknown(),
-  failedAt: z.number().int().nonnegative(),
-  outcome: z.enum(AGENT_SESSION_RESUME_FAILURE_OUTCOMES),
-  reason: z.string().max(MAX_FAILURE_FIELD_LENGTH),
-  details: z.unknown().optional(),
-  latestPrompt: z.string().max(MAX_FAILURE_FIELD_LENGTH),
-  latestUserItemId: z.string().max(MAX_FAILURE_FIELD_LENGTH).nullable()
-})
+const legacyCapsuleSchema = lazyZodSchema(() =>
+  z.object({ version: z.literal(1), markers: z.array(z.unknown()) })
+)
+const entrySchema = lazyZodSchema(() =>
+  z.object({
+    state: z.enum(['pending', 'in-progress']),
+    operationId: z.string().min(1).optional(),
+    startedAt: z.number().int().nonnegative().optional(),
+    marker: z.unknown(),
+    replacement: z.unknown().optional()
+  })
+)
+const failureSchema = lazyZodSchema(() =>
+  z.object({
+    marker: z.unknown(),
+    failedAt: z.number().int().nonnegative(),
+    outcome: z.enum(AGENT_SESSION_RESUME_FAILURE_OUTCOMES),
+    reason: z.string().max(MAX_FAILURE_FIELD_LENGTH),
+    details: z.unknown().optional(),
+    latestPrompt: z.string().max(MAX_FAILURE_FIELD_LENGTH),
+    latestUserItemId: z.string().max(MAX_FAILURE_FIELD_LENGTH).nullable()
+  })
+)
 // Keep failures in a separate optional key: older builds reject new entry states but ignore unknown keys.
-const capsuleSchema = z.object({
-  version: z.literal(2),
-  entries: z.array(z.unknown()),
-  dismissedAt: z.number().int().nonnegative().optional(),
-  failed: z.unknown().optional()
-})
+const capsuleSchema = lazyZodSchema(() =>
+  z.object({
+    version: z.literal(2),
+    entries: z.array(z.unknown()),
+    dismissedAt: z.number().int().nonnegative().optional(),
+    failed: z.unknown().optional()
+  })
+)
 
 /** Failure guidance remains until user action, successful retry, dismissal or a newer teardown supersedes it. */
 export type AgentSessionResumeFailureRecord = {
@@ -201,12 +210,82 @@ export type KeepRecord = (marker: AgentSessionResumeMarker) => boolean
 export function splitDismissedAll(
   state: Pick<RecoveryCapsuleState, 'entries' | 'failed'>,
   keep: KeepRecord
-): { kept: Pick<RecoveryCapsuleState, 'entries' | 'failed'>; dismissedPending: number } {
+): { kept: Pick<RecoveryCapsuleState, 'entries' | 'failed'>; dismissal: RecoveryDismissal } {
   const entries = state.entries.filter((entry) => keep(entry.marker))
+  const dismissal = abandonedBy(state, (marker) => !keep(marker))
   return {
     kept: { entries, failed: state.failed.filter((failure) => keep(failure.marker)) },
-    dismissedPending: state.entries.filter(
-      (entry) => entry.state === 'pending' && !keep(entry.marker)
-    ).length
+    dismissal: {
+      ...dismissal,
+      count: state.entries.filter((entry) => entry.state === 'pending' && !keep(entry.marker))
+        .length
+    }
   }
 }
+
+/** Removes every record of each session `removed` names. `recorded` keeps each removed marker, a
+ *  reservation's replacement too, so the same cut read again stays dismissed. */
+export function removeOffers(
+  state: Pick<RecoveryCapsuleState, 'entries' | 'failed'>,
+  removed: KeepRecord
+): {
+  kept: Pick<RecoveryCapsuleState, 'entries' | 'failed'>
+  recorded: AgentSessionResumeMarker[]
+  dismissal: RecoveryDismissal
+} {
+  const records = [...state.entries, ...state.failed].filter(({ marker }) => removed(marker))
+  const sessions = new Set(records.map(({ marker }) => marker.sessionId))
+  return {
+    kept: {
+      entries: state.entries.filter((entry) => !sessions.has(entry.marker.sessionId)),
+      failed: state.failed.filter((failure) => !sessions.has(failure.marker.sessionId))
+    },
+    recorded: records.flatMap((record) =>
+      'replacement' in record && record.replacement
+        ? [record.marker, record.replacement]
+        : [record.marker]
+    ),
+    dismissal: abandonedBy(state, removed)
+  }
+}
+
+/** The offers a removal abandons: pending ones and failures, never one being continued or retried. */
+function abandonedBy(
+  state: Pick<RecoveryCapsuleState, 'entries' | 'failed'>,
+  removed: KeepRecord
+): RecoveryDismissal {
+  const continuing = new Set(
+    state.entries.flatMap((entry) =>
+      entry.state === 'in-progress' ? [entry.marker.sessionId] : []
+    )
+  )
+  const abandoned: AbandonedOffer[] = [
+    ...state.entries.flatMap((entry) =>
+      entry.state === 'pending' && removed(entry.marker) ? [{ marker: entry.marker }] : []
+    ),
+    ...state.failed.flatMap((failure) =>
+      removed(failure.marker) && !continuing.has(failure.marker.sessionId)
+        ? [
+            {
+              marker: failure.marker,
+              // A handoff the agent never confirmed may still be running.
+              ...(failure.outcome === 'unconfirmed' ? { unconfirmed: true as const } : {})
+            }
+          ]
+        : []
+    )
+  ]
+  const sessions = [...state.entries, ...state.failed].filter(({ marker }) => removed(marker))
+  return {
+    count: new Set(sessions.map(({ marker }) => marker.sessionId)).size,
+    abandoned
+  }
+}
+
+/** What a dismissal removed. `abandoned` holds only offers nothing was continuing: one being
+ *  continued is removed too, but its work goes on. */
+export type AbandonedOffer = { marker: AgentSessionResumeMarker; unconfirmed?: true }
+
+export type RecoveryDismissal = { count: number; abandoned: AbandonedOffer[] }
+
+export const NO_RECOVERY_DISMISSAL: RecoveryDismissal = { count: 0, abandoned: [] }

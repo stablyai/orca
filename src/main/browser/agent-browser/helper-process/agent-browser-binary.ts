@@ -2,7 +2,7 @@ import { platform, arch } from 'node:os'
 import { app } from 'electron'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { ensureDependencyBinaryExecutable } from './agent-browser-dependency-binary'
+import { agentBrowserDependencyBinaryPath } from '../../../../shared/remote-runtime/orcad-distribution/orcad-agent-browser-name'
 
 export function agentBrowserNativeName(): string {
   const ext = process.platform === 'win32' ? '.exe' : ''
@@ -24,13 +24,9 @@ export function resolveAgentBrowserBinary(): string {
   // Bundling makes __dirname unreliable for locating development dependencies.
   const nmBin = join(
     app.getAppPath(),
-    'node_modules',
-    'agent-browser',
-    'bin',
-    agentBrowserNativeName()
+    ...agentBrowserDependencyBinaryPath(process.platform, arch())
   )
   if (existsSync(nmBin)) {
-    ensureDependencyBinaryExecutable(nmBin)
     return nmBin
   }
 

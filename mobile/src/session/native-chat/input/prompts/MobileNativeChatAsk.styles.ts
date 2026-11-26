@@ -94,6 +94,17 @@ export const mobileNativeChatAskStyles = themedStyleSheet(() => ({
     color: colors.textSecondary,
     fontSize: typography.metaSize
   },
+  // A failed answer, quiet in the bar rather than a banner over the card.
+  notice: {
+    flexShrink: 1,
+    textAlign: 'center',
+    color: colors.statusRed,
+    fontSize: typography.metaSize
+  },
+  // Stays at the bar's end when nothing sits before it.
+  confirm: {
+    marginLeft: 'auto'
+  },
   next: {
     minHeight: MIN_TOUCH_TARGET,
     justifyContent: 'center',
@@ -107,6 +118,10 @@ export const mobileNativeChatAskStyles = themedStyleSheet(() => ({
   nextSkip: {
     backgroundColor: 'transparent',
     borderColor: colors.choiceBorder
+  },
+  // Submit waits for the required question on screen to be answered.
+  nextBlocked: {
+    opacity: 0.5
   },
   nextText: {
     color: colors.bgBase,

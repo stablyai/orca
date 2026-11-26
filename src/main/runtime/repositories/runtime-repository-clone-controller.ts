@@ -2,7 +2,10 @@ import { randomUUID } from 'node:crypto'
 import { refuseWslHostWindowsDrivePath } from '../terminal/launch/wsl-host-windows-drive-guard'
 import { mkdir } from 'node:fs/promises'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/repository/appearance/repo-badge-color'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../shared/repository/repo-types'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { getGitCloneFailureMessage } from '../../../shared/git/remotes/git-clone-failure-message'

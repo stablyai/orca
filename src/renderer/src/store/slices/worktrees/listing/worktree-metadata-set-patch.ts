@@ -1,7 +1,7 @@
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { WorkspaceMetadataSet } from '../../../../../../shared/worktree/metadata/workspace-metadata-set'
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'

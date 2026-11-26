@@ -1,19 +1,15 @@
 import { showWorktreeCreateWarningToast } from './worktree-create-warning-toast'
 import { reviewSetupTrustMismatch } from './created-worktree-setup-trust'
-import { createWorktreeOnRuntimeHost } from './host-planned-agent-launch'
 import { runtimeRpcTargetForAuthorityKey } from '@/runtime/rpc/targets/runtime-client-target'
 import { repoHostId } from '../listing/worktree-host-ownership'
 import {
   isUnresolvedOwnerHostId,
   toRuntimeExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { adoptFromEndpoint } from '../../../host-catalog/endpoint-catalog-adoption'
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
-import {
-  pickClientWorktreeCreateSettings,
-  type ClientWorktreeCreateSettings
-} from './client-worktree-create-settings'
+import { pickClientWorktreeCreateSettings } from './client-worktree-create-settings'
 import {
   CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS,
   getClientWorktreeCreateCandidate,
@@ -22,7 +18,6 @@ import {
 } from '../../../../../../shared/new-workspace/worktree-create-retry-policy'
 import { assertRuntimeEnvironmentCapability } from '../../../../runtime/rpc/compatibility/runtime-capability-proof'
 import { runtimeTargetSupportsCapability } from '../../../../runtime/rpc/compatibility/runtime-target-capability'
-import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { runtimeTargetForRepoOwner } from '@/lib/workspace/ownership/repo-runtime-owner'
 import {
   WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
@@ -30,82 +25,23 @@ import {
   WORKTREE_OPEN_EXISTING_BRANCH_V2_RUNTIME_CAPABILITY,
   WORKTREE_OPEN_EXISTING_BRANCH_V2_REQUEST_RUNTIME_CAPABILITY
 } from '../../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
-import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/workspace-creation/base-ref-update/local-base-ref-suggestion-toast'
-import { requestWorktreeBaseFallbackNotice } from '@/components/worktree-base-fallback-notice'
-import { showLocalBaseRefRefreshToast } from './local-base-ref-refresh-toast'
+import { showCreatedWorktreeBaseRefNotices } from './created-worktree-base-ref-notices'
 import { applyCreatedWorktree } from './created-worktree-state-merge'
-import { adoptRuntimeProvisionedRoot } from './runtime-provisioned-root-adoption'
-import { isRuntimeLineageParentMissingError } from '../listing/runtime-worktree-rpc-errors'
-import {
-  buildLocalWorktreeCreateArgs,
-  type CreatedWorktreeResult,
-  type WorktreeCreateAttempt,
-  type WorktreeCreateRequest
-} from './worktree-create-payload'
+import type { WorktreeCreateRequest } from './worktree-create-payload'
 import { holdCreatedSidebarWorkspace } from '@/components/sidebar/sidebar-feed/sidebar-pending-layer'
-import {
-  resolveCreateCrossStoreParent,
-  withoutRefusedInferredParent
-} from './worktree-create-cross-store-parent'
+import { resolveCreateCrossStoreParent } from './worktree-create-cross-store-parent'
+import { runCreateAttempt } from './worktree-create-attempt'
+import type { RuntimeStatuses } from '../../runtime-status/views/runtime-status-owner'
 import {
   lostRequestedParent,
   notifyWorktreeParentDropped,
-  resolveWorktreeCreateParent,
-  type CreateAttemptOutcome
+  resolveWorktreeCreateParent
 } from './worktree-create-parent-pick'
-
-type RuntimeTarget = RuntimeClientTarget
-
-async function runCreateAttempt(
-  request: WorktreeCreateRequest,
-  attempt: WorktreeCreateAttempt,
-  target: RuntimeTarget,
-  clientCreateSettings: ClientWorktreeCreateSettings = {}
-): Promise<CreateAttemptOutcome> {
-  const provisionedRoot = request.options?.provisionedRoot
-  const create = async (
-    parentWorkspace: WorktreeCreateAttempt['parentWorkspace']
-  ): Promise<CreatedWorktreeResult> =>
-    provisionedRoot
-      ? target.kind === 'environment'
-        ? await adoptRuntimeProvisionedRoot(
-            target,
-            request,
-            { ...attempt, parentWorkspace },
-            provisionedRoot
-          )
-        : await window.api.worktrees.adoptProvisionedRoot({
-            ...buildLocalWorktreeCreateArgs(request, { ...attempt, parentWorkspace }),
-            ...provisionedRoot
-          })
-      : target.kind === 'local'
-        ? // Why local can still reject on the parent: paired web clients route this API to their host.
-          await window.api.worktrees.create(
-            buildLocalWorktreeCreateArgs(request, { ...attempt, parentWorkspace })
-          )
-        : await createWorktreeOnRuntimeHost(
-            target.environmentId,
-            request,
-            { ...attempt, parentWorkspace },
-            clientCreateSettings
-          )
-  try {
-    return { result: await create(attempt.parentWorkspace), droppedParent: false }
-  } catch (error) {
-    const unnested = withoutRefusedInferredParent(attempt, error)
-    if (unnested) {
-      return await runCreateAttempt(request, unnested, target, clientCreateSettings)
-    }
-    if (!attempt.parentWorkspace || !isRuntimeLineageParentMissingError(error)) {
-      throw error
-    }
-    return { result: await create(undefined), droppedParent: true }
-  }
-}
 
 export function createCreateWorktree(
   set: WorktreeSliceSet,
-  get: WorktreeSliceGet
+  get: WorktreeSliceGet,
+  readStatuses: () => RuntimeStatuses
 ): WorktreeSlice['createWorktree'] {
   return async (
     repoId,
@@ -215,7 +151,7 @@ export function createCreateWorktree(
       if (parent.staleBeforeCreate) {
         warnParentDroppedOnce()
       }
-      const crossStoreParent = await resolveCreateCrossStoreParent(get(), target, {
+      const crossStoreParent = await resolveCreateCrossStoreParent(get(), readStatuses(), target, {
         pick: parent,
         requestedParentWorktreeId: options?.parentWorktreeId,
         note: options?.note,
@@ -268,20 +204,15 @@ export function createCreateWorktree(
           }
           const { result } = outcome
           showWorktreeCreateWarningToast(result.warning)
-          reviewSetupTrustMismatch(get, repoId, creationHostId, result, target)
-          showLocalBaseRefRefreshToast(result.localBaseRefRefresh, result.worktree, {
-            updateSettings: get().updateSettings,
-            executionHostId: creationHostId
-          })
-          if (result.baseFallback) {
-            requestWorktreeBaseFallbackNotice(result.baseFallback)
-          }
-          showLocalBaseRefUpdateSuggestionToast(result.localBaseRefUpdateSuggestion, {
-            updateSettings: get().updateSettings,
-            getSettings: () => get().settings,
-            openSettingsPage: get().openSettingsPage,
-            openSettingsTarget: get().openSettingsTarget
-          })
+          reviewSetupTrustMismatch(
+            get,
+            repoId,
+            creationHostId,
+            result,
+            target,
+            options?.hookTrustContext
+          )
+          showCreatedWorktreeBaseRefNotices(result, target, creationHostId, get)
           return result
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)

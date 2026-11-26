@@ -1,9 +1,10 @@
 /** Publish xterm-equivalent theme reply attributes to main’s hidden-PTY responder; module-global dedup avoids repeated sends from per-pane/attribute-neutral appearance updates. */
 import type { ITheme } from '@xterm/xterm'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { TerminalColorSchemeMode } from '../../../../../shared/terminal/protocol/queries/terminal-color-scheme-protocol'
 import {
   terminalColorSchemeReport,
+  terminalViewColorQueryReplyColors,
   type TerminalViewAttributes,
   type TerminalViewRgb
 } from '../../../../../shared/terminal/protocol/queries/terminal-view-attributes'
@@ -207,6 +208,15 @@ let lastPublishedAttributes: TerminalViewAttributes | null = null
 type PublishedAttributesListener = (attributes: TerminalViewAttributes) => void
 const publishedAttributesListeners = new Set<PublishedAttributesListener>()
 
+/** OSC 10/11 colours of this window's published theme; undefined before the first publish. */
+export function publishedTerminalColorQueryReplyColors():
+  | TerminalOscColorQueryReplyColors
+  | undefined {
+  return lastPublishedAttributes
+    ? terminalViewColorQueryReplyColors(lastPublishedAttributes)
+    : undefined
+}
+
 /** Hears every published change, starting with the current one if any. */
 export function subscribeToPublishedTerminalViewAttributes(
   listener: PublishedAttributesListener
@@ -266,10 +276,4 @@ export function publishTerminalViewAttributes(
     listener(attributes)
   }
   return true
-}
-
-export function _resetTerminalViewAttributesPublisherForTest(): void {
-  lastPublishedSnapshot = null
-  lastPublishedAttributes = null
-  publishedAttributesListeners.clear()
 }

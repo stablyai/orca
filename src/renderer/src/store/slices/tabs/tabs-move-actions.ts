@@ -4,7 +4,10 @@ import { buildActiveSurfacePatch } from './tabs-surface'
 import { findGroupAndWorktree, findGroupForTab, findTabAndWorktree } from './tab-group-state'
 import { pickNextActiveTab, pushRecentTabId, sanitizeRecentTabIds } from './tab-selection-history'
 import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-groups/tab-order'
-import { replaceRecordEntries, replaceTabBuckets } from '../../keyed-record-transitions'
+import {
+  replaceRecordEntries,
+  replaceTabBuckets
+} from '../../record-transitions/keyed-record-transitions'
 
 export function createTabsMoveActions(
   set: TabsSliceSet,

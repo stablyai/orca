@@ -1,4 +1,7 @@
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../shared/execution-host/execution-host'
 import {
   findFolderWorkspaceCandidateRepos,
   resolveFolderWorkspaceHost,

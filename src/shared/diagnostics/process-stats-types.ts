@@ -38,13 +38,24 @@ export type SessionMemory = UsageValues & {
   pid: number
 }
 
-/** The top-level cpu/memory are the sum of sessions. */
+/** A chat agent's process tree (its CLI and the processes running under it), in its workspace. */
+export type ChatAgentMemory = Pick<UsageValues, 'cpu' | 'memory'> & {
+  agentSessionId: string
+  /** Agent id such as `claude`; clients name it. */
+  agent: string
+  /** The conversation's name; null until it has one. */
+  name: string | null
+}
+
+/** The top-level cpu/memory are the sum of sessions and chats. */
 export type WorktreeMemory = UsageValues & {
   worktreeId: string
   worktreeName: string
   repoId: string
   repoName: string
   sessions: SessionMemory[]
+  /** Absent from older hosts. */
+  chats?: ChatAgentMemory[]
   /** Oldest-first memory samples (bytes) for this worktree's tracked subtrees. */
   history: number[]
 }
@@ -66,16 +77,18 @@ export type HostMemory = {
 export type MemorySnapshot = {
   app: AppMemory
   worktrees: WorktreeMemory[]
+  /** Every agent process outside terminals, including the chats listed under worktrees; absent from older hosts. */
+  agentProcesses?: UsageValues
   host: HostMemory
   /** Per-process byte metric used by app, session, worktree, history, and totalMemory values. */
   processMemoryMetric: ProcessMemoryMetric
   /** Committed-byte metric; absent on older hosts or unsupported captures means unknown, never zero. */
   processCommitMetric?: ProcessCommitMetric
-  /** Sum of app + all tracked worktree sessions. Percent of a single core, so may exceed 100 on multi-core machines. */
+  /** Sum of app + agent processes + all tracked worktree sessions. Percent of a single core, so may exceed 100 on multi-core machines. */
   totalCpu: number
   /** Sum of per-process samples. With rss/working-set, shared pages may repeat, so this can exceed host.totalMemory. */
   totalMemory: number
-  /** App plus tracked-worktree committed bytes, present exactly with processCommitMetric; exceeding physical RAM is meaningful. */
+  /** App, agent-process and tracked-worktree committed bytes, present exactly with processCommitMetric; exceeding physical RAM is meaningful. */
   totalPrivateMemory?: number
   collectedAt: number
 }

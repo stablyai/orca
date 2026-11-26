@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { ConfirmedUnsavedDiscards } from './removed-workspace-unsaved-files'
 
 import type { NestedWorktreeRemovalApproval } from '../../../../../../shared/worktree/removal/nested-removal'

@@ -1,7 +1,7 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { vi } from 'vitest'
-import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
+import { ConfirmationDialogContext } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 

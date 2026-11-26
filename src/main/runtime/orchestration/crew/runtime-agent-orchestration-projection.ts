@@ -54,6 +54,9 @@ export type DispatchProjectionOptions = {
   deferAttention?: boolean
 }
 
+// Projections read evidence activity and clock only; resolving each binding's Dispatch composed every row twice.
+const withoutDispatchBinding = (): undefined => undefined
+
 export class RuntimeAgentOrchestrationProjection {
   constructor(private readonly deps: RuntimeAgentOrchestrationDependencies) {}
 
@@ -107,9 +110,7 @@ export class RuntimeAgentOrchestrationProjection {
                 row.assignee_orca_session_id ? [scope.resolve(row.assignee_orca_session_id)] : []
               )
             ])
-          ].flatMap((pane) =>
-            this.deps.getAgentStatusForPaneKey!(pane, (key) => this.identityContext(key, db, scope))
-          )
+          ].flatMap((pane) => this.deps.getAgentStatusForPaneKey!(pane, withoutDispatchBinding))
         : this.deps.getAgentStatusSnapshot()
     const evidenceByPaneKey = new Map(
       statuses.map((evidence) => [evidence.activity.paneKey, evidence])
@@ -193,9 +194,8 @@ export class RuntimeAgentOrchestrationProjection {
     const db = source?.view ?? raw
     const scope = createOrchestrationProjectionScope(db, this.deps)
     const statuses =
-      this.deps.getAgentStatusForPaneKey?.(paneKey, (key) =>
-        this.identityContext(key, db, scope)
-      ) ?? this.deps.getAgentStatusSnapshot().filter((entry) => entry.activity.paneKey === paneKey)
+      this.deps.getAgentStatusForPaneKey?.(paneKey, withoutDispatchBinding) ??
+      this.deps.getAgentStatusSnapshot().filter((entry) => entry.activity.paneKey === paneKey)
     const options = {
       paneKey,
       evidence: statuses.at(-1),
@@ -245,17 +245,6 @@ export class RuntimeAgentOrchestrationProjection {
           options,
           scope
         )
-      : undefined
-  }
-
-  private identityContext(
-    paneKey: string,
-    db: OrchestrationDb,
-    scope: ReturnType<typeof createOrchestrationProjectionScope>
-  ) {
-    const handle = this.deps.getHandleForPaneKey(paneKey)
-    return handle
-      ? this.getForHandle(handle, db, { paneKey, deferAttention: true }, scope)
       : undefined
   }
 

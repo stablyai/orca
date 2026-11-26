@@ -47,7 +47,7 @@ function throwIfCancelled(signal?: AbortSignal): void {
   }
 }
 
-async function readJsonEntry(
+export async function readJsonEntry(
   reader: TarByteReader,
   expectedPath: string,
   signal?: AbortSignal
@@ -72,7 +72,7 @@ async function readJsonEntry(
   }
 }
 
-async function extractFile(
+export async function extractFile(
   reader: TarByteReader,
   destination: string,
   expected: SkillPackageFile,
@@ -107,7 +107,10 @@ async function extractFile(
   await consumePadding(reader, expected.size)
 }
 
-async function requireArchiveEnd(reader: TarByteReader, signal?: AbortSignal): Promise<void> {
+export async function requireArchiveEnd(
+  reader: TarByteReader,
+  signal?: AbortSignal
+): Promise<void> {
   for (let index = 0; index < 2; index += 1) {
     throwIfCancelled(signal)
     if (!(await reader.readExact(SKILL_TAR_BLOCK_BYTES)).every((byte) => byte === 0)) {

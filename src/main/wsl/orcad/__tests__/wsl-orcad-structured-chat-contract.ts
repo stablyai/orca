@@ -12,7 +12,7 @@ import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/
 import '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { subscribeRemoteRuntimeTransport } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
 import type { RemoteRuntimeTransportSubscription } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
-import { claudeSessionIdForOrcaSession } from '../../../claude/structured/claude-structured-session-id'
+import { claudeSessionIdForOrcaSession } from '../../../claude/structured/lifecycle/claude-structured-session-id'
 import { packagedClaudeChatScenario } from '../../../orcad/testing/structured-chat/orcad-structured-chat-scenario'
 import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-quoting'
 import { wslClaudeChatScenario } from './wsl-orcad-chat-scenario'

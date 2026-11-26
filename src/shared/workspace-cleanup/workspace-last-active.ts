@@ -1,4 +1,4 @@
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../sidebar-list/feed/sidebar-inputs-switch'
 import {
   getWorkspaceCleanupInactivityReasons,
   type WorkspaceCleanupCandidate

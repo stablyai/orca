@@ -355,7 +355,7 @@ export default function PairScanScreen() {
           >
             <ClipboardIcon size={16} color={colors.textSecondary} />
             <Text style={styles.pasteButtonText}>
-              {t('app.pairScan.pastePairingCode', 'Or paste pairing code')}
+              {t('app.pairScan.pastePairingCode', 'Paste pairing code')}
             </Text>
           </Pressable>
         </>

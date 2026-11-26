@@ -1,0 +1,253 @@
+import React, { useEffect, useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Command,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator
+} from '@/components/ui/command'
+import { useTranslate } from '@/i18n/use-translate'
+import { BOT_MAX_MEMBERS, type Bot, type BotMember } from '../../../../shared/bot-types'
+import { BotMemberAvatar, BotOwnerAvatar } from './bot-connector-people'
+import type { BotWhoCanAskFound, BotWhoCanAskService } from './BotWhoCanAskList'
+
+const SEARCH_DEBOUNCE_MS = 250
+
+type Search =
+  | { status: 'loading' }
+  | { status: 'ready'; found: BotWhoCanAskFound }
+  | { status: 'failed'; error: string }
+
+type Found = BotWhoCanAskFound['members'][number]
+
+function useMemberSearch(
+  service: BotWhoCanAskService,
+  query: string
+): { search: Search; retry: () => void } {
+  const [search, setSearch] = useState<Search>({ status: 'loading' })
+  const [attempt, setAttempt] = useState(0)
+  const { search: find, errorMessage } = service
+  useEffect(() => {
+    let current = true
+    setSearch({ status: 'loading' })
+    const timer = setTimeout(() => {
+      void find(query.trim()).then((result) => {
+        if (current) {
+          setSearch(
+            result.ok
+              ? { status: 'ready', found: result.value }
+              : { status: 'failed', error: errorMessage(result.error) }
+          )
+        }
+      })
+    }, SEARCH_DEBOUNCE_MS)
+    return () => {
+      current = false
+      clearTimeout(timer)
+    }
+  }, [find, errorMessage, query, attempt])
+  return { search, retry: () => setAttempt((count) => count + 1) }
+}
+
+const matches = (name: string, needle: string): boolean =>
+  needle === '' || name.toLowerCase().includes(needle)
+
+// Saved as the chips draw it: a found person's picture is kept, their handle isn't; an app is
+// marked so, so it draws as one.
+const asMember = (found: Found, service: BotWhoCanAskService): BotMember => ({
+  id: found.id,
+  name: found.name,
+  ...(found.avatarUrl ? { avatarUrl: found.avatarUrl } : {}),
+  ...(found.app ? { kind: 'app' as const } : {}),
+  ...service.stamp
+})
+
+function PersonLabel({ name, handle }: { name: string; handle?: string }): React.JSX.Element {
+  return (
+    <span className="min-w-0 flex-1 truncate">
+      {name}
+      {handle && handle !== name ? (
+        <span className="ml-1.5 text-xs text-muted-foreground">{handle}</span>
+      ) : null}
+    </span>
+  )
+}
+
+function PickerNote({ title, detail }: { title: string; detail: string }): React.JSX.Element {
+  return (
+    <div role="status" className="px-6 py-6 text-center text-sm text-muted-foreground">
+      <p className="text-foreground">{title}</p>
+      <p className="mt-1 text-xs">{detail}</p>
+    </div>
+  )
+}
+
+/** People with access › Add: tick people found in this row's workspace, then add them together.
+ *  Those who already have access stay listed, greyed, so a search for them never looks empty. */
+export function BotWhoCanAskPicker({
+  bot,
+  service,
+  owner,
+  onPicked
+}: {
+  bot: Bot
+  service: BotWhoCanAskService
+  /** How the owner row names the owner: You, or their name there. */
+  owner: string
+  onPicked: (picked: BotMember[]) => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  const [query, setQuery] = useState('')
+  const [picked, setPicked] = useState<BotMember[]>([])
+  const { search, retry } = useMemberSearch(service, query)
+  const needle = query.trim().toLowerCase()
+  const listed = service.listed(bot.members)
+  const added = new Set(listed.map((member) => member.id))
+  const full =
+    bot.members.length + picked.length >= BOT_MAX_MEMBERS ||
+    added.size + picked.length >= service.max
+  const isPicked = (id: string): boolean => picked.some((entry) => entry.id === id)
+  const toggle = (member: BotMember): void =>
+    setPicked((current) =>
+      isPicked(member.id) ? current.filter((entry) => entry.id !== member.id) : [...current, member]
+    )
+
+  const found = search.status === 'ready' ? search.found.members : []
+  const handles = new Map(found.map((person) => [person.id, person.handle]))
+  const isOwner = (id: string): boolean =>
+    id === service.ownerId || (service.otherOwnerIds?.includes(id) ?? false)
+  const addable = found.filter((person) => !added.has(person.id) && !isOwner(person.id))
+  const withAccess = listed.filter(
+    (member) => matches(member.name || member.id, needle) || found.some((p) => p.id === member.id)
+  )
+  const ownerShown = needle === '' || found.some((person) => isOwner(person.id))
+  const idle = needle === '' ? service.idleHint : undefined
+
+  const pickRow = (member: BotMember, handle?: string): React.JSX.Element => {
+    const on = isPicked(member.id)
+    return (
+      <CommandItem
+        key={member.id}
+        value={member.id}
+        aria-checked={on}
+        disabled={full && !on}
+        onSelect={() => toggle(member)}
+      >
+        <Checkbox checked={on} tabIndex={-1} aria-hidden className="pointer-events-none" />
+        <span className="size-6 shrink-0">
+          <BotMemberAvatar member={member} />
+        </span>
+        <PersonLabel name={member.name || member.id} handle={handle} />
+      </CommandItem>
+    )
+  }
+  // Ticked people the current search no longer shows stay on top, so the footer's count is on screen.
+  const offScreen = picked.filter((member) => !addable.some((person) => person.id === member.id))
+  const selectedGroup =
+    offScreen.length > 0 ? (
+      <CommandGroup heading={t('bots.whoCanAsk.selectedHeading', 'Selected')}>
+        {offScreen.map((member) => pickRow(member))}
+      </CommandGroup>
+    ) : null
+
+  const peopleGroup = idle ? (
+    <PickerNote title={idle.title} detail={idle.detail} />
+  ) : search.status === 'failed' ? (
+    <div role="alert" className="flex items-center gap-2 p-3 text-sm">
+      <span className="min-w-0 flex-1 text-destructive">{search.error}</span>
+      <Button size="xs" variant="outline" onClick={retry}>
+        {t('bots.whoCanAsk.retry', 'Try again')}
+      </Button>
+    </div>
+  ) : search.status === 'loading' ? (
+    <p role="status" className="p-3 text-sm text-muted-foreground">
+      {t('bots.whoCanAsk.searching', 'Searching…')}
+    </p>
+  ) : addable.length > 0 ? (
+    <CommandGroup heading={service.peopleHeading}>
+      {addable.map((person) => pickRow(asMember(person, service), person.handle))}
+    </CommandGroup>
+  ) : withAccess.length === 0 && !ownerShown ? (
+    <PickerNote {...service.noMatch(query.trim())} />
+  ) : null
+
+  const hasAccessLabel = t('bots.whoCanAsk.canAsk', 'Can ask')
+  const accessGroup =
+    withAccess.length > 0 || ownerShown ? (
+      <CommandGroup heading={hasAccessLabel}>
+        {ownerShown ? (
+          <CommandItem value="owner" disabled>
+            <span className="size-4 shrink-0" />
+            <span className="size-6 shrink-0">
+              <BotOwnerAvatar />
+            </span>
+            <PersonLabel name={owner} handle={t('bots.whoCanAsk.owner', 'Owner')} />
+            <span className="text-xs text-muted-foreground">{hasAccessLabel}</span>
+          </CommandItem>
+        ) : null}
+        {withAccess.map((member) => (
+          <CommandItem key={member.id} value={`listed:${member.id}`} disabled>
+            <span className="size-4 shrink-0" />
+            <span className="size-6 shrink-0">
+              <BotMemberAvatar member={member} />
+            </span>
+            <PersonLabel name={member.name || member.id} handle={handles.get(member.id)} />
+            <span className="text-xs text-muted-foreground">{hasAccessLabel}</span>
+          </CommandItem>
+        ))}
+      </CommandGroup>
+    ) : null
+
+  return (
+    <Command shouldFilter={false}>
+      <CommandInput
+        autoFocus
+        value={query}
+        onValueChange={setQuery}
+        placeholder={service.searchPlaceholder}
+      />
+      <CommandList>
+        {selectedGroup}
+        {selectedGroup && peopleGroup ? <CommandSeparator className="mx-0" /> : null}
+        {peopleGroup}
+        {(selectedGroup || peopleGroup) && accessGroup ? (
+          <CommandSeparator className="mx-0" />
+        ) : null}
+        {accessGroup}
+      </CommandList>
+      <p className="px-3 pt-2 text-xs text-muted-foreground tabular-nums">
+        {t('bots.whoCanAsk.addedCount', '{{count}} of {{max}} added', {
+          count: added.size + picked.length,
+          max: service.max
+        })}
+      </p>
+      {search.status === 'ready' && !search.found.complete ? (
+        <p className="px-3 pb-2 text-xs text-muted-foreground">
+          {t(
+            'bots.whoCanAsk.incomplete',
+            'Not everyone is listed. Search by name to find someone.'
+          )}
+        </p>
+      ) : null}
+      {picked.length > 0 ? (
+        <div className="flex items-center justify-between gap-2 border-t border-border p-2 pl-3">
+          <span className="text-xs text-muted-foreground">
+            {t('bots.whoCanAsk.selected', '{{count}} selected', {
+              count: picked.length
+            })}
+          </span>
+          <Button size="sm" onClick={() => onPicked(picked)}>
+            {picked.length === 1
+              ? t('bots.whoCanAsk.addOne', 'Add 1 person')
+              : t('bots.whoCanAsk.addMany', 'Add {{count}} people', {
+                  count: picked.length
+                })}
+          </Button>
+        </div>
+      ) : null}
+    </Command>
+  )
+}

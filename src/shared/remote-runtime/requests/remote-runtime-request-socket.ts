@@ -50,10 +50,12 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
   prepareRequest?: RuntimeRequestPreparation,
   // Internal: the framing fallback's legacy status check on a latched host uses exactly this dial.
   latchedHostCheck?: RemoteRuntimeClientHandshake,
-  prepareGuard?: RuntimeRequestGuard
+  prepareGuard?: RuntimeRequestGuard,
+  /** Replaces timeoutMs once the host authenticates, so only a reachable host gets a long reply wait. */
+  responseTimeoutMs?: number
 ): Promise<RuntimeRpcResponse<TResult>> {
   throwIfSignalAborted(signal)
-  if (!isSafeTimerDelayMs(timeoutMs)) {
+  if (!isSafeTimerDelayMs(timeoutMs) || !isSafeTimerDelayMs(responseTimeoutMs ?? timeoutMs)) {
     throw new RemoteRuntimeClientError(
       'invalid_argument',
       `Runtime request timeout must be an integer between 0 and ${MAX_TIMER_DELAY_MS}ms.`
@@ -75,6 +77,8 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
       let settled = false
       let ws: WebSocket | null = null
       let router: RemoteRuntimeRequestResponseRouter<TResult>
+      // Only the requested frame can put its keyed mutation in flight, not the status preflight.
+      let keyedRequestUnsent = Boolean(envelope?.orchestrationRequestId)
 
       const cleanupSocketListeners = (): void => {
         signal?.removeEventListener('abort', onAbort)
@@ -91,6 +95,7 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
         }
       }
 
+      let phaseTimeoutMs = timeoutMs
       let deadline = performance.now() + timeoutMs
       let timeout = setTimeout(onTimeout, timeoutMs)
 
@@ -99,7 +104,10 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
           new RemoteRuntimeClientError(
             'runtime_timeout',
             'Timed out waiting for the remote Orca runtime to respond.',
-            { pairingStage: router.pairingStage }
+            {
+              pairingStage: router.pairingStage,
+              data: keyedRequestUnsent ? { requestSent: false } : undefined
+            }
           )
         )
       }
@@ -109,14 +117,24 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
       }
 
       function refreshTimeout(): void {
-        deadline = performance.now() + timeoutMs
+        deadline = performance.now() + phaseTimeoutMs
         const refreshableTimeout = timeout as { refresh?: () => void }
         if (typeof refreshableTimeout.refresh === 'function') {
           refreshableTimeout.refresh()
           return
         }
         clearTimeout(timeout)
-        timeout = setTimeout(onTimeout, timeoutMs)
+        timeout = setTimeout(onTimeout, phaseTimeoutMs)
+      }
+
+      // Timeout.refresh() keeps the old delay, so a new phase budget needs a new timer.
+      function startResponseWait(): void {
+        if (responseTimeoutMs !== undefined) {
+          phaseTimeoutMs = responseTimeoutMs
+          deadline = performance.now() + phaseTimeoutMs
+          clearTimeout(timeout)
+          timeout = setTimeout(onTimeout, phaseTimeoutMs)
+        }
       }
 
       const finish = (
@@ -150,9 +168,8 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
           return
         }
         preparingSend = true
-        void sendPreparedRpc(status).catch((error: unknown) =>
-          finishError(error instanceof Error ? error : new Error(String(error)))
-        )
+        startResponseWait()
+        void sendPreparedRpc(status)
       }
 
       async function sendPreparedRpc(status?: unknown): Promise<void> {
@@ -178,6 +195,7 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
               }
               const frame = handshake.channel.sealText(request)
               requestSelection?.onDispatch?.()
+              keyedRequestUnsent = false
               ws?.send(frame)
             }
           })

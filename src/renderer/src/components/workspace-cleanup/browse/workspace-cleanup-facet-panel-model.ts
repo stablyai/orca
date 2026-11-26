@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { HostedReviewProvider } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { WorkspaceCleanupFilterState } from '../../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
 

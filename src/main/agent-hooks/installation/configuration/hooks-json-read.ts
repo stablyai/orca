@@ -1,6 +1,6 @@
 import { readObservedFileSync as readFileSync } from '../../../filesystem/file-content-observation'
 
-import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import type { HooksConfig } from './hook-config-schema'
 
 export function isPlainObject(value: unknown): value is Record<string, unknown> {

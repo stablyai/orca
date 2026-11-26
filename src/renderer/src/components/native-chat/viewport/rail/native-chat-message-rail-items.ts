@@ -3,23 +3,12 @@
 import {
   nativeChatTurnReplyPreviews,
   nativeChatUserMessagePreview
-} from '../../../../../../shared/agent-session/agent-session-conversation-outline'
+} from '../../../../../../shared/agent-session/view/messages/agent-session-conversation-outline'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
 
-/** Ticks up to this count sit at the roomy pitch; past it they pack tight. */
-export const NATIVE_CHAT_RAIL_ROOMY_TICKS = 20
-/** The tight pitch as the rail draws it: a 3px tick inside `py-0.5`. */
-const RAIL_TIGHT_PITCH_PX = 7
-const RAIL_VIEWPORT_SHARE = 0.7
-
-/** Fit ticks within the viewport share before sampling; never shrink below roomy capacity. */
-export function nativeChatRailTickCapacity(viewportHeight: number): number {
-  return Math.max(
-    NATIVE_CHAT_RAIL_ROOMY_TICKS,
-    Math.floor((viewportHeight * RAIL_VIEWPORT_SHARE) / RAIL_TIGHT_PITCH_PX)
-  )
-}
+/** The rail never draws more ticks than this; a longer thread is sampled, and past it with loaded rows, listed. */
+export const NATIVE_CHAT_RAIL_MAX_TICKS = 20
 
 export type NativeChatRailItem = {
   id: string
@@ -28,6 +17,8 @@ export type NativeChatRailItem = {
   /** Preview prose, whitespace collapsed. Empty when the message is images only. */
   text: string
   hasImages: boolean
+  /** When it was sent; null for unloaded outline history or a transcript without times. */
+  timestamp: number | null
   /** The host's preview of the agent's reply, on an outline item only. */
   reply?: string
   /** On an outline item that did not open its turn: the message that did. */
@@ -49,21 +40,49 @@ export type NativeChatRailTurnRows = {
   turnKeys: readonly (string | undefined)[]
 }
 
-/** Resolve replies only on preview to avoid rebuilding ticks on every stream frame; loaded turn tails outrank host previews. */
-export function nativeChatRailReplyPreview(
+/** The previewed turn's rows, found on the rows as last saved: ids and turns don't move as text
+ *  streams, so only the preview's text needs the newest rows. */
+export type NativeChatRailPreviewTurn = {
+  turnKey: string | undefined
+  /** Every row of the turn, in order; another scope's note can sit between them. */
+  rows: readonly number[]
+  hostReply: string
+}
+
+export function nativeChatRailPreviewTurn(
   { messages, turnKeys }: NativeChatRailTurnRows,
   items: readonly NativeChatRailItem[],
   id: string
-): string {
+): NativeChatRailPreviewTurn {
   const row = messages.findIndex((message) => message.id === id)
   const item = items.find((candidate) => candidate.id === id)
-  // Unloaded prompts default to their own turn; steers use the host’s opener key.
   const turnKey = row === -1 ? (item?.turnKey ?? id) : turnKeys[row]
+  const rows: number[] = []
+  if (turnKey !== undefined) {
+    turnKeys.forEach((key, index) => {
+      if (key === turnKey) {
+        rows.push(index)
+      }
+    })
+  }
+  return { turnKey, rows, hostReply: item?.reply ?? '' }
+}
+
+/** The turn's reply from the newest rows, read only within the turn. */
+export function nativeChatRailTurnReply(
+  rows: NativeChatRailTurnRows,
+  turn: NativeChatRailPreviewTurn
+): string {
+  const { turnKey } = turn
   const loaded =
-    turnKey === undefined
+    turnKey === undefined || turn.rows.length === 0
       ? undefined
-      : nativeChatTurnReplyPreviews(messages, turnKeys, turnKey).get(turnKey)
-  return loaded ?? item?.reply ?? ''
+      : nativeChatTurnReplyPreviews(
+          turn.rows.map((index) => rows.messages[index]!),
+          turn.rows.map(() => turnKey),
+          turnKey
+        ).get(turnKey)
+  return loaded ?? turn.hostReply
 }
 
 export function buildNativeChatRailItems(
@@ -76,21 +95,33 @@ export function buildNativeChatRailItems(
     if (
       slot.kind !== 'message' ||
       slot.message.role !== 'user' ||
+      slot.message.orcaNotice !== undefined ||
       slot.message.from !== undefined ||
       slot.message.stoppedBeforeStart === true
     ) {
       continue
     }
-    const preview = nativeChatUserMessagePreview(slot.message)
+    const run = slot.message.automationRun
+    // A run's tick names its automation, never the prompt as if the owner wrote it.
+    const preview = run
+      ? { text: run.automation.name, imageCount: 0 }
+      : nativeChatUserMessagePreview(slot.message)
     const hasImages = preview.imageCount > 0
     const prior = previous[items.length]
     items.push(
       prior?.id === slot.message.id &&
         prior.slotIndex === slotIndex &&
         prior.text === preview.text &&
-        prior.hasImages === hasImages
+        prior.hasImages === hasImages &&
+        prior.timestamp === slot.message.timestamp
         ? prior
-        : { id: slot.message.id, slotIndex, text: preview.text, hasImages }
+        : {
+            id: slot.message.id,
+            slotIndex,
+            text: preview.text,
+            hasImages,
+            timestamp: slot.message.timestamp
+          }
     )
   }
   return items.length === previous.length && items.every((item, index) => item === previous[index])
@@ -110,7 +141,7 @@ export function mergeNativeChatRailOutline(
   const unloaded: NativeChatRailItem[] = []
   for (const entry of outline) {
     if (!loadedIds.has(entry.id)) {
-      unloaded.push({ ...entry, slotIndex: null })
+      unloaded.push({ ...entry, slotIndex: null, timestamp: null })
     }
   }
   return unloaded.length === 0 ? loaded : [...unloaded, ...loaded]
@@ -120,7 +151,7 @@ export function mergeNativeChatRailOutline(
 export function selectNativeChatRailTicks({
   items,
   keepIds = [],
-  maxTicks = NATIVE_CHAT_RAIL_ROOMY_TICKS
+  maxTicks = NATIVE_CHAT_RAIL_MAX_TICKS
 }: {
   items: readonly NativeChatRailItem[]
   keepIds?: readonly (string | null)[]

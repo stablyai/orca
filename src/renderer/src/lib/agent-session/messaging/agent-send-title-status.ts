@@ -1,4 +1,7 @@
-import type { AgentStatus } from '../../../../../shared/agent-status/title/agent-title-core'
+import {
+  leadingGeminiGlyphStatus,
+  type AgentStatus
+} from '../../../../../shared/agent-status/title/agent-title-core'
 import { isOpenCodeNativeTitle } from '../../../../../shared/agent-status/title/providers/opencode-terminal-title'
 import { detectAgentStatusFromTitle } from '../../../../../shared/agent-status/title/agent-title-status'
 import { getAgentLabel } from '../../../../../shared/agent-status/title/agent-title-identity'
@@ -6,7 +9,6 @@ import { getPiCompatibleTitleSeparatorStatus } from '../../../../../shared/agent
 
 const EXPLICIT_IDLE_SEND_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
 const CLAUDE_IDLE_PREFIX = '\u2733'
-const GEMINI_IDLE_PREFIX = '\u25c7'
 
 export function detectAgentSendTitleStatus(title: string | null | undefined): AgentStatus | null {
   if (!title || getAgentLabel(title) === null) {
@@ -29,7 +31,7 @@ function isExplicitIdleSendTitle(title: string): boolean {
     isOpenCodeNativeTitle(title) ||
     title.startsWith(CLAUDE_IDLE_PREFIX) ||
     title.startsWith('* ') ||
-    title.includes(GEMINI_IDLE_PREFIX) ||
+    leadingGeminiGlyphStatus(title) === 'idle' ||
     // Owned panes show `Pi - cwd`/`OMP > cwd` (rebranded from `π`), so read the separator, not the raw brand.
     getPiCompatibleTitleSeparatorStatus(title) === 'idle'
   )

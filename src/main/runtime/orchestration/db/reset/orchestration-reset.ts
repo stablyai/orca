@@ -58,6 +58,7 @@ export function resetAll(this: OrchestrationDb): void {
     DELETE FROM attempt_observation_facts;
     DELETE FROM structured_pointer_operations;
     DELETE FROM worker_dispatches;
+    DELETE FROM worker_presence;
     DELETE FROM dispatch_contexts;
     DELETE FROM tasks;
     DELETE FROM messages;
@@ -82,7 +83,7 @@ export function resetTasks(this: OrchestrationDb): ResetRemovedWork | undefined 
     DELETE FROM decision_gates;
     DELETE FROM remote_questions;
     UPDATE question_threads
-      SET status = 'closed', closed_at = COALESCE(closed_at, datetime('now'))
+      SET status = 'closed', closed_at = COALESCE(closed_at, datetime('now')), awaiting = NULL
       WHERE status = 'pending';
     DELETE FROM legacy_mail_receipts;
     DELETE FROM legacy_operation_receipts;
@@ -96,6 +97,7 @@ export function resetTasks(this: OrchestrationDb): ResetRemovedWork | undefined 
     DELETE FROM attempt_observation_facts;
     DELETE FROM structured_pointer_operations;
     DELETE FROM worker_dispatches;
+    DELETE FROM worker_presence;
     DELETE FROM dispatch_contexts;
     DELETE FROM tasks;
   `,

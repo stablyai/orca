@@ -4,7 +4,7 @@ import {
   plainTextContextMenuTargetChannel,
   richMarkdownContextMenuTargetChannel,
   type RichMarkdownContextMenuTableTarget
-} from '../../../shared/rich-markdown-context-menu'
+} from '../../../shared/editor/markdown/rich-markdown-context-menu'
 import {
   DEFAULT_RENDERER_RECOVERY_MAX_RECOVERIES,
   DEFAULT_RENDERER_RECOVERY_WINDOW_MS,

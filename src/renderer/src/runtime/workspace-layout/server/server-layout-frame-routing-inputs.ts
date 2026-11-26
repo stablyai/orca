@@ -1,11 +1,12 @@
 import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
 
 /** The store slices a workspace's owning server derives from. */
-export function routingInputs(state: AppState): unknown[] {
+export function routingInputs(state: AppState, statuses: RuntimeStatuses): unknown[] {
   return [
     state.repos,
     selectWorktreesByRepo(state),
@@ -13,7 +14,7 @@ export function routingInputs(state: AppState): unknown[] {
     state.projectGroups,
     state.restoredRuntimeHostIdByWorkspaceSessionKey,
     state.runtimeEnvironments,
-    state.runtimeStatusByEnvironmentId
+    statuses
   ]
 }
 

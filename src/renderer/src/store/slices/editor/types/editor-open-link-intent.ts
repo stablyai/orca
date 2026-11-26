@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 /** A link's source, captured before async path resolution. */
 export type EditorOpenLinkIntent = {

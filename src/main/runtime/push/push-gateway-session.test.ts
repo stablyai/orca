@@ -1,98 +1,49 @@
-import { createHash } from 'node:crypto'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { deriveRelayHostId } from '../mobile-cloud-relay/director/relay-http-client'
 import { buildPushChallengeFixture, createPushHostKeypair } from './push-host-challenge-fixtures'
-import { PushGatewaySession, type PushSessionOutcome } from './push-gateway-session'
+import { PushGatewaySession } from './push-gateway-session'
 
-const GATEWAY_ORIGIN = 'https://push.onorca.dev'
-const NOW = 1_770_000_000_000
+const ORIGIN = 'https://push.onorca.dev'
 
-function jsonResponse(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json' }
-  })
-}
-
-function tokenOf(outcome: PushSessionOutcome): string | null {
-  return outcome.ok ? outcome.session.token : null
-}
-
-function createSessionHarness(
-  options: { sessionStatus?: number; challengeStatus?: number; wrongFingerprint?: boolean } = {}
-): {
-  session: PushGatewaySession
-  challenges: () => number
-  requests: () => number
-  now: { value: number }
-} {
-  const hostKeypair = createPushHostKeypair()
-  const hostFingerprint = createHash('sha256')
-    .update(hostKeypair.publicKey)
-    .digest('base64url')
-    .slice(0, 16)
-  const now = { value: NOW }
-  let issued = 0
-  let requests = 0
-  let pendingProof: string | null = null
-
-  const fetchImpl = (async (input: string, init?: RequestInit): Promise<Response> => {
-    const url = String(input)
-    requests += 1
-    if (url.endsWith('/v1/host/challenge')) {
-      if (options.challengeStatus) {
-        return jsonResponse(options.challengeStatus, { error: 'rate_limited' })
-      }
-      const built = buildPushChallengeFixture({
-        hostKeypair,
-        gatewayOrigin: GATEWAY_ORIGIN,
-        hostFingerprint,
-        issuedAt: now.value,
-        challengeId: `challenge-${++issued}`
-      })
-      pendingProof = built.proof
-      return jsonResponse(200, built.challenge)
+describe('PushGatewaySession clock refusals', () => {
+  it('signs in again as soon as an ahead clock is set back, instead of waiting out the cache', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const keypair = createPushHostKeypair()
+    const hostFingerprint = deriveRelayHostId(keypair.publicKey)
+    const gatewayNow = 1_770_000_000_000
+    let hostNow = gatewayNow + 3_600_000
+    const paths: string[] = []
+    const fetchImpl: typeof fetch = async (input) => {
+      const path = new URL(input instanceof Request ? input.url : String(input)).pathname
+      paths.push(path)
+      const body =
+        path === '/v1/host/challenge'
+          ? buildPushChallengeFixture({
+              hostKeypair: keypair,
+              gatewayOrigin: ORIGIN,
+              hostFingerprint,
+              issuedAt: gatewayNow
+            }).challenge
+          : { sessionToken: 'session-1', expiresAt: gatewayNow + 3_600_000, hostFingerprint }
+      return new Response(JSON.stringify(body), { status: 200 })
     }
-    if (options.sessionStatus) {
-      return jsonResponse(options.sessionStatus, { error: 'nope' })
-    }
-    const body = init?.body ? (JSON.parse(String(init.body)) as { proofB64: string }) : null
-    if (body?.proofB64 !== pendingProof) {
-      return jsonResponse(401, { error: 'bad_proof' })
-    }
-    return jsonResponse(200, {
-      sessionToken: `session-${issued}`,
-      expiresAt: now.value + 24 * 60 * 60_000,
-      hostFingerprint: options.wrongFingerprint ? 'someone-else' : hostFingerprint
-    })
-  }) as unknown as typeof globalThis.fetch
-
-  return {
-    session: new PushGatewaySession({
-      origin: GATEWAY_ORIGIN,
-      keypair: hostKeypair,
+    const session = new PushGatewaySession({
+      origin: ORIGIN,
+      keypair,
       fetchImpl,
-      now: () => now.value
-    }),
-    challenges: () => issued,
-    requests: () => requests,
-    now
-  }
-}
+      now: () => hostNow
+    })
 
-describe('PushGatewaySession', () => {
-  it('drops only the exact session that received the 401', async () => {
-    const harness = createSessionHarness()
-    expect(tokenOf(await harness.session.ensure(null))).toBe('session-1')
+    expect(await session.ensure(null)).toEqual({
+      ok: false,
+      reason: 'rejected',
+      clockSkewMs: 3_600_000
+    })
+    expect(session.clockSkewMs()).toBe(3_600_000)
 
-    expect(tokenOf(await harness.session.ensure('session-1'))).toBe('session-2')
-    expect(tokenOf(await harness.session.ensure('session-1'))).toBe('session-2')
-    expect(harness.challenges()).toBe(2)
-  })
-
-  it('shares one handshake across concurrent callers', async () => {
-    const harness = createSessionHarness()
-
-    await Promise.all([harness.session.ensure(null), harness.session.ensure(null)])
-    expect(harness.challenges()).toBe(1)
+    hostNow = gatewayNow + 1_000
+    expect((await session.ensure(null)).ok).toBe(true)
+    expect(session.clockSkewMs()).toBeNull()
+    expect(paths).toEqual(['/v1/host/challenge', '/v1/host/challenge', '/v1/host/session'])
   })
 })

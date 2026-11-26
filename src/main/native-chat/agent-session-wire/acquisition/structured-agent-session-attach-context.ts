@@ -26,7 +26,10 @@ export type StructuredAgentSessionAttachContext = {
   runtimeState: StructuredAgentSessionHostRuntimeState
   sessions: Map<string, StructuredAgentSessionHostSession> &
     Pick<StructuredAgentSessionConversations, 'observeSettledTurns' | 'snapshotSource'>
-  subscribers: Pick<AgentSessionSubscribers, 'publishLiveText'> & {
+  subscribers: Pick<
+    AgentSessionSubscribers,
+    'publishLiveText' | 'promptSuggestions' | 'liveTextReaders'
+  > & {
     snapshot: (sessionId: string, journal: AgentSessionJournal, fence: number) => void
     publish: (
       sessionId: string,

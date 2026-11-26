@@ -3,7 +3,7 @@ import type {
   ActiveRightSidebarTab,
   ActivityBarPosition,
   RightSidebarExplorerView
-} from '../../../../../shared/ui-chrome-types'
+} from '../../../../../shared/ui-chrome/ui-chrome-types'
 import { defaultFileSearchState } from '../editor/search/file-search-state'
 
 export type RightSidebarState = {
@@ -12,18 +12,26 @@ export type RightSidebarState = {
   rightSidebarTab: ActiveRightSidebarTab
   rightSidebarExplorerView: RightSidebarExplorerView
   rightSidebarRouteRequestId: number
+  /** Whether the latest route asked Agents to focus its search box (keyboard activation of its tab). */
+  rightSidebarRouteFocusesVaultSearch: boolean
   /** Set to ask the Agent Session Search panel to widen to all computers and focus its box. */
   aiVaultSearchFocusRequested: boolean
   rightSidebarTabByWorktree: Record<string, ActiveRightSidebarTab>
   rightSidebarExplorerViewByWorktree: Record<string, RightSidebarExplorerView>
   /** In memory: the tab the mounted sidebar renders, which differs from rightSidebarTab when that tab is hidden here. */
   rightSidebarEffectiveTab: ActiveRightSidebarTab | null
+  activityBarOrder: string[]
+  /** Bot pages keep their own order, so their tabs never move workspace tabs. */
+  activityBarBotOrder: string[]
+  activityBarHidden: string[]
+  setActivityBarOrder: (order: string[]) => void
+  setActivityBarBotOrder: (order: string[]) => void
+  setActivityBarHidden: (hidden: string[]) => void
   activityBarPosition: ActivityBarPosition
   toggleRightSidebar: () => void
   setRightSidebarOpen: (open: boolean) => void
   setRightSidebarWidth: (width: number) => void
-  setRightSidebarTab: (tab: ActiveRightSidebarTab) => void
-  setRightSidebarExplorerView: (view: RightSidebarExplorerView) => void
+  setRightSidebarTab: (tab: ActiveRightSidebarTab, options?: { focusVaultSearch?: boolean }) => void
   showRightSidebarFiles: () => void
   showRightSidebarSearch: (payload?: {
     query?: string | null
@@ -42,32 +50,27 @@ export function createRightSidebarState(set: EditorSet, _get: EditorGet): RightS
     rightSidebarTab: 'explorer',
     rightSidebarExplorerView: 'files',
     rightSidebarRouteRequestId: 0,
+    rightSidebarRouteFocusesVaultSearch: false,
     aiVaultSearchFocusRequested: false,
     rightSidebarTabByWorktree: {},
     rightSidebarExplorerViewByWorktree: {},
     rightSidebarEffectiveTab: null,
     activityBarPosition: 'top',
+    activityBarOrder: [],
+    activityBarBotOrder: [],
+    activityBarHidden: [],
+    setActivityBarOrder: (activityBarOrder) => set({ activityBarOrder }),
+    setActivityBarBotOrder: (activityBarBotOrder) => set({ activityBarBotOrder }),
+    setActivityBarHidden: (activityBarHidden) => set({ activityBarHidden }),
     toggleRightSidebar: () => set((s) => ({ rightSidebarOpen: !s.rightSidebarOpen })),
     setRightSidebarOpen: (open) => set({ rightSidebarOpen: open }),
     setRightSidebarWidth: (width) => set({ rightSidebarWidth: width }),
-    setRightSidebarTab: (tab) =>
+    setRightSidebarTab: (tab, options) =>
       set((s) => ({
         rightSidebarTab: tab,
         rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
+        rightSidebarRouteFocusesVaultSearch: tab === 'vault' && options?.focusVaultSearch === true,
         ...(tab === 'explorer' ? { rightSidebarExplorerView: 'files' as const } : {})
-      })),
-    setRightSidebarExplorerView: (view) =>
-      set((s) => ({
-        rightSidebarExplorerView: view,
-        rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
-        ...(s.activeWorktreeId
-          ? {
-              rightSidebarExplorerViewByWorktree: {
-                ...s.rightSidebarExplorerViewByWorktree,
-                [s.activeWorktreeId]: view
-              }
-            }
-          : {})
       })),
     showRightSidebarFiles: () =>
       set((s) => ({
@@ -89,13 +92,13 @@ export function createRightSidebarState(set: EditorSet, _get: EditorGet): RightS
         const next = {
           rightSidebarOpen: true,
           rightSidebarTab: 'explorer' as const,
-          rightSidebarExplorerView: 'search' as const,
+          rightSidebarExplorerView: 'files' as const,
           rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
           ...(s.activeWorktreeId
             ? {
                 rightSidebarExplorerViewByWorktree: {
                   ...s.rightSidebarExplorerViewByWorktree,
-                  [s.activeWorktreeId]: 'search' as const
+                  [s.activeWorktreeId]: 'files' as const
                 }
               }
             : {})
@@ -119,7 +122,14 @@ export function createRightSidebarState(set: EditorSet, _get: EditorGet): RightS
                 resultOwner: null,
                 loading: false,
                 collapsedFiles: new Set<string>(),
-                seedRequestId: (current.seedRequestId ?? 0) + 1
+                seedRequestId: (current.seedRequestId ?? 0) + 1,
+                // A filters-only seed must not demote a still-pending query seed.
+                seedKind:
+                  query || (current.seedRequestId !== undefined && current.seedKind === 'query')
+                    ? ('query' as const)
+                    : ('filters' as const),
+                // Why: results cover the tree from this commit, so the hidden tree never loads first.
+                active: true
               }
             : {}),
           ...(shouldFocus ? { focusRequestId: (current.focusRequestId ?? 0) + 1 } : {})

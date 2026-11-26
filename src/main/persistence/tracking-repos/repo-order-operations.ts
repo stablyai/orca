@@ -1,6 +1,9 @@
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import type { Repo } from '../../../shared/repository/repo-types'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 
 export type RepoOrderMutationOperations = {
   state: PersistedState

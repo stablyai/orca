@@ -9,7 +9,7 @@ import {
   startStructuredAgentLaunch
 } from '@/lib/agent-session/launch/structured-agent-session-launch'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type {
   StructuredAgentLaunchOptions,
   StructuredPromptDeliveryResult

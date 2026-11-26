@@ -6,6 +6,8 @@ import {
   resolveFloatingTerminalPanelCommittedBounds,
   shouldReconcileFloatingTerminalPanelBounds
 } from './floating-terminal-panel-bounds'
+import { getDefaultFloatingTerminalPanelBoundsState } from './floating-terminal-panel-initial-bounds'
+import { RESET_FLOATING_TERMINAL_PANEL_LAYOUT_EVENT } from './floating-terminal-panel-layout-reset'
 import { persistFloatingTerminalPanelMaximized } from '../state/floating-terminal-panel-view-state'
 import type { FloatingTerminalPanelLocalState } from '../state/use-floating-terminal-panel-local-state'
 
@@ -19,6 +21,7 @@ type FloatingTerminalPanelMaximizeInput = Pick<
   | 'committedBoundsRef'
   | 'boundsSourceRef'
   | 'stagedBoundsRef'
+  | 'lastPersistedBoundsRef'
 > & { open: boolean }
 
 export function useFloatingTerminalPanelMaximize({
@@ -30,6 +33,7 @@ export function useFloatingTerminalPanelMaximize({
   committedBoundsRef,
   boundsSourceRef,
   stagedBoundsRef,
+  lastPersistedBoundsRef,
   open
 }: FloatingTerminalPanelMaximizeInput) {
   const toggleMaximized = useCallback(() => {
@@ -100,6 +104,29 @@ export function useFloatingTerminalPanelMaximize({
       maximizePanel()
     }
   }, [open, maximizePanel])
+
+  useEffect(() => {
+    const resetLayout = (): void => {
+      restoreBoundsRef.current = null
+      stagedBoundsRef.current = null
+      lastPersistedBoundsRef.current = null
+      const defaults = getDefaultFloatingTerminalPanelBoundsState()
+      committedBoundsRef.current = defaults.committedBounds
+      boundsSourceRef.current = defaults.source
+      setBounds(defaults.renderedBounds)
+      setMaximized(false)
+    }
+    window.addEventListener(RESET_FLOATING_TERMINAL_PANEL_LAYOUT_EVENT, resetLayout)
+    return () => window.removeEventListener(RESET_FLOATING_TERMINAL_PANEL_LAYOUT_EVENT, resetLayout)
+  }, [
+    boundsSourceRef,
+    committedBoundsRef,
+    lastPersistedBoundsRef,
+    restoreBoundsRef,
+    setBounds,
+    setMaximized,
+    stagedBoundsRef
+  ])
 
   return { toggleMaximized }
 }

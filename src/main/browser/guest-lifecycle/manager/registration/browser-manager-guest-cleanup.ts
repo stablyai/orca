@@ -1,5 +1,6 @@
 import { BrowserManagerGuestNavigationPolicy } from '../navigation/browser-manager-guest-navigation-policy'
 import { webContents } from 'electron'
+import { clearBrowserGuestUserAgentDemand } from '../../../identity/requests/browser-session-ua-demand'
 import { clearBrowserPageMemoryInvalidation } from '../../browser-page-memory'
 
 export abstract class BrowserManagerGuestCleanup extends BrowserManagerGuestNavigationPolicy {
@@ -30,6 +31,7 @@ export abstract class BrowserManagerGuestCleanup extends BrowserManagerGuestNavi
     this.popupOwnerContextByGuestId.delete(guestWebContentsId)
     this.pageInitiatedTabBudgetByRootGuestId.delete(guestWebContentsId)
     this.cdpUserAgentOverrideStateByGuestId.delete(guestWebContentsId)
+    clearBrowserGuestUserAgentDemand(guestWebContentsId)
     this.pendingNavigationByGuestId.delete(guestWebContentsId)
     // Revoke popup authorization as soon as the owner retires, before child destruction.
     if (isPrimaryGuest) {
@@ -40,6 +42,7 @@ export abstract class BrowserManagerGuestCleanup extends BrowserManagerGuestNavi
       }
     }
     this.pendingLoadFailuresByGuestId.delete(guestWebContentsId)
+    this.pendingLoadStallsByGuestId.delete(guestWebContentsId)
     this.loadErrorsByGuestId.delete(guestWebContentsId)
     this.clearedLoadErrorsByGuestId.delete(guestWebContentsId)
     this.remoteTabFaviconUrlByGuestId.delete(guestWebContentsId)

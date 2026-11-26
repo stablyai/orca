@@ -1,5 +1,5 @@
 import { useState, type SyntheticEvent } from 'react'
-import type { PanZoomSize } from '../../../../../src/shared/pan-zoom-view'
+import type { PanZoomSize } from '../../../../../src/shared/document-preview/pan-zoom-view'
 import { useMobilePanZoom } from './use-mobile-pan-zoom'
 
 type Props = {

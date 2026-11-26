@@ -2,11 +2,13 @@ import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-a
 import { translate } from '../../i18n/mobile-i18n'
 import {
   filterEnabledMobileTuiAgents,
-  isMobileTuiAgentEnabled,
-  pickMobileTuiAgent
+  isMobileTuiAgentEnabled
 } from '../../agents/mobile-tui-agents'
+import {
+  pickQuickWorkspaceAgent,
+  resolveQuickWorkspaceAgentSelection
+} from '../../../../src/shared/agent-launch/catalog/quick-workspace-agent-selection'
 import { isTuiAgent as isMobileTuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent-config'
-import { TUI_AGENT_AUTO_PICK_ORDER as MOBILE_TUI_AGENT_AUTO_PICK_ORDER } from '../../../../src/shared/agent-launch/catalog/tui-agent-selection'
 import { TUI_AGENT_DISPLAY_NAMES as MOBILE_TUI_AGENT_LABELS } from '../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 
 export type WorkspaceAgentChoice = TuiAgent | 'blank'
@@ -40,26 +42,26 @@ export function normalizeWorkspaceAgent(value: unknown): WorkspaceAgentChoice | 
   return isMobileTuiAgent(value) ? value : null
 }
 
+/** Desktop's quick-create pick; the phone has no chat offers yet, so every pick is a detected CLI. */
 export function pickWorkspaceAgent(
   settings: WorkspaceAgentSettings,
   detectedAgentIds: Set<string> | null
 ): WorkspaceAgentChoice {
-  const preferred = normalizeWorkspaceAgent(settings.defaultTuiAgent)
-  if (preferred === 'blank') {
-    return preferred
-  }
-  const disabled = settings.disabledTuiAgents
-  const enabledAutoPickOrder = filterEnabledMobileTuiAgents(
-    MOBILE_TUI_AGENT_AUTO_PICK_ORDER,
-    disabled
+  return (
+    pickQuickWorkspaceAgent(
+      normalizeWorkspaceAgent(settings.defaultTuiAgent),
+      detectedTuiAgents(detectedAgentIds),
+      asDisabledList(settings.disabledTuiAgents)
+    ) ?? 'blank'
   )
-  if (detectedAgentIds === null) {
-    return preferred && isMobileTuiAgentEnabled(preferred, disabled)
-      ? preferred
-      : (enabledAutoPickOrder[0] ?? 'blank')
-  }
-  const detectedAgents = enabledAutoPickOrder.filter((agent) => detectedAgentIds.has(agent))
-  return pickMobileTuiAgent(preferred, detectedAgents, disabled) ?? 'blank'
+}
+
+function detectedTuiAgents(detectedAgentIds: Set<string> | null): TuiAgent[] | null {
+  return detectedAgentIds && [...detectedAgentIds].filter(isMobileTuiAgent)
+}
+
+function asDisabledList(disabled: unknown): unknown[] | null {
+  return Array.isArray(disabled) ? disabled : null
 }
 
 export function filterWorkspaceAgents(agents: readonly TuiAgent[], disabled?: unknown): TuiAgent[] {
@@ -81,20 +83,17 @@ export function resolveWorkspaceAgentSelection({
   if (!selectionActive) {
     return current
   }
-
   const pickedAgent = pickWorkspaceAgent(settings, detectedAgentIds)
   if (!overridden) {
     return agent === pickedAgent ? current : { agent: pickedAgent, overridden: false }
   }
-
-  if (
-    detectedAgentIds === null ||
-    !agent ||
-    agent === 'blank' ||
-    (detectedAgentIds.has(agent) && isWorkspaceAgentEnabled(agent, settings.disabledTuiAgents))
-  ) {
-    return current
-  }
-
-  return { agent: pickedAgent, overridden: false }
+  // Desktop's rule for keeping a user's choice; a blank terminal is its null override.
+  const override = agent === 'blank' ? null : agent
+  const { quickAgentOverride } = resolveQuickWorkspaceAgentSelection({
+    quickAgentOverride: override,
+    preferredQuickAgent: pickedAgent === 'blank' ? null : pickedAgent,
+    detectedAgentIds: detectedTuiAgents(detectedAgentIds),
+    disabledTuiAgents: asDisabledList(settings.disabledTuiAgents)
+  })
+  return quickAgentOverride === override ? current : { agent: pickedAgent, overridden: false }
 }

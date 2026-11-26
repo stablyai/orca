@@ -1,4 +1,4 @@
-import { useId } from 'react'
+import { useId, useState } from 'react'
 import { SourceControlTextActionAgentPicker } from './text-actions/SourceControlTextActionAgentPicker'
 import type { SourceControlAiModelEdits } from '../../../../../shared/source-control/ai/settings/source-control-ai-action-model-edits'
 import type {
@@ -13,7 +13,6 @@ import {
 import { canonicalSourceControlActionSelection } from '../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import type { ActionArgumentChoices } from '../../../../../shared/source-control/ai/recipes/source-control-action-argument-document'
 import { SourceControlActionAgentPicker } from './SourceControlActionAgentPicker'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { CustomAgentId } from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { isCustomAgentId } from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
@@ -33,7 +32,7 @@ import {
   AI_TEXT_ACTION_ID_SET,
   getSourceControlActionAgentSupportText,
   getSourceControlActionAgentWarningText,
-  getSourceControlAgentArgsPlaceholder
+  SOURCE_CONTROL_AGENT_ARGS_PLACEHOLDER
 } from './source-control-action-recipe-options'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -43,6 +42,8 @@ const DEFAULT_AGENT_VALUE = '__default_agent__'
 
 type SourceControlActionRecipeRowProps<ActionId extends AiActionId> = {
   actionId: ActionId
+  /** Anchor a settings deep link can scroll to and highlight. */
+  sectionId?: string
   source?: SourceControlAiSettings
   /** Lets the text picker save model lists the CLI reports. */
   writeSourceControlAiSettings?: (patch: SourceControlAiSettingsPatch) => Promise<void>
@@ -56,7 +57,6 @@ type SourceControlActionRecipeRowProps<ActionId extends AiActionId> = {
   selectedAgent: TuiAgent | CustomAgentId | null
   draftValue: ActionRecipeDraftValue
   baseValue: ActionRecipeDraftValue
-  defaultTuiAgent: GlobalSettings['defaultTuiAgent']
   isSavingTemplate: boolean
   hasUnsavedChanges?: boolean
   defaultAgentLabel?: string
@@ -84,16 +84,6 @@ type SourceControlActionRecipeRowProps<ActionId extends AiActionId> = {
   onSave: (actionId: ActionId) => void
 }
 
-function resolveAgentArgsPlaceholderAgent(
-  selectedAgent: TuiAgent | CustomAgentId | null | undefined,
-  defaultTuiAgent: GlobalSettings['defaultTuiAgent']
-): TuiAgent | null {
-  if (selectedAgent && !isCustomAgentId(selectedAgent)) {
-    return selectedAgent
-  }
-  return defaultTuiAgent && defaultTuiAgent !== 'blank' ? defaultTuiAgent : null
-}
-
 function getActionLabel(actionId: AiActionId, t: Translate = translate): string {
   return actionId === 'conversationName'
     ? t('settings.chat.names.recipe', 'Chat name')
@@ -102,6 +92,7 @@ function getActionLabel(actionId: AiActionId, t: Translate = translate): string 
 
 export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
   actionId,
+  sectionId,
   source,
   onTextModelChoiceChange,
   writeSourceControlAiSettings,
@@ -109,7 +100,6 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
   selectedAgent,
   draftValue,
   baseValue,
-  defaultTuiAgent,
   isSavingTemplate,
   hasUnsavedChanges,
   defaultAgentLabel,
@@ -130,20 +120,23 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
   const fieldIdPrefix = useId()
   const draftScope = useAgentPickerDraftScope(setupDiscardSignal)
   const isLaunchAction = !AI_TEXT_ACTION_ID_SET.has(actionId)
+  // The picker's Permissions and Arguments need the card's full width, under its header row.
+  const [launchFields, setLaunchFields] = useState<HTMLDivElement | null>(null)
   const templateDirty =
     hasUnsavedChanges ?? JSON.stringify(draftValue) !== JSON.stringify(baseValue)
   const agentArgsPlaceholder =
-    (!selectedAgent && defaultAgentArgsPlaceholder) ||
-    getSourceControlAgentArgsPlaceholder(
-      resolveAgentArgsPlaceholderAgent(selectedAgent, defaultTuiAgent)
-    )
+    (!selectedAgent && defaultAgentArgsPlaceholder) || SOURCE_CONTROL_AGENT_ARGS_PLACEHOLDER
   const agentWarningText = getSourceControlActionAgentWarningText(actionId, selectedAgent, t)
   const agentSupportText =
     (!selectedAgent && defaultAgentSupportText) ||
     getSourceControlActionAgentSupportText(actionId, t)
 
   return (
-    <div className="rounded-md border border-border px-3 py-3">
+    <div
+      id={sectionId}
+      data-settings-section={sectionId}
+      className="scroll-mt-8 rounded-md border border-border px-3 py-3"
+    >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-0.5">
           <p className="text-xs font-medium text-foreground">{getActionLabel(actionId, t)}</p>
@@ -162,6 +155,7 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
           {isLaunchAction ? (
             <SourceControlActionAgentPicker
               draftScope={draftScope}
+              launchDefaultsContainer={launchFields}
               agent={selectedAgent && !isCustomAgentId(selectedAgent) ? selectedAgent : null}
               surface={surface}
               disabled={isSavingTemplate}
@@ -211,6 +205,7 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
         </div>
       </div>
       <div className="mt-3 grid min-w-0 grid-cols-1 items-start gap-3">
+        {isLaunchAction ? <div ref={setLaunchFields} className="min-w-0 empty:hidden" /> : null}
         {!isLaunchAction ? (
           <SourceControlActionOptionField
             label={t('auto.components.settings.AgentsPane.cfb3f35775', 'Arguments')}

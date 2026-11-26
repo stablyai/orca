@@ -95,10 +95,28 @@ export class RuntimeBrowserTabCatalog {
       }
       return page
     }
-    const workspaceId = params.worktree
-      ? (await this.host.resolveBrowserWorkspace(params.worktree)).id
-      : undefined
+    // Unscoped commands never route to client pages, as in client automation.
+    if (!params.worktree) {
+      return undefined
+    }
+    const workspaceId = (await this.host.resolveBrowserWorkspace(params.worktree)).id
     return pages.listPages(workspaceId).find((page) => page.active)
+  }
+
+  describeClientHostedBrowserTab(
+    page: RuntimeBrowserClientPage
+  ): BrowserTabListResult['tabs'][number] {
+    const tab = this.listLogicalBrowserTabs(
+      page.workspaceId,
+      this.host.getRuntimeBrowserPageRegistry().listPages(page.workspaceId)
+    ).find((candidate) => candidate.browserPageId === page.browserPageId)
+    if (!tab) {
+      throw new BrowserError(
+        'browser_tab_not_found',
+        `Browser page ${page.browserPageId} was not found`
+      )
+    }
+    return tab
   }
 
   describeBrowserTab(

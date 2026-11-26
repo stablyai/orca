@@ -8,7 +8,7 @@ import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host
 import { useActiveSkillDiscoveryRuntimeTarget } from '@/hooks/skills/discovery/use-active-skill-discovery-runtime-target'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
-import { UNRESOLVED_OWNER_HOST_ID } from '../../../../shared/execution-host'
+import { UNRESOLVED_OWNER_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import type {
   DiscoveredSkill,
   SkillDiscoveryResult

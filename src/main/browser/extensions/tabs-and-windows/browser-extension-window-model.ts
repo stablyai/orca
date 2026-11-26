@@ -7,6 +7,7 @@ import {
   showWhenAppActive,
   showWindowWithoutStealingFocus
 } from '../../../window/activation/foreground-activation-policy'
+import { markNativeBrowserPopupWindow } from '../../guest-lifecycle/popups/presentation/native-browser-popup-windows'
 import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
 import { watchBrowserMainWindowReadiness } from '../../guest-lifecycle/browser-main-window-readiness'
 import { recordBrowserSessionInput } from '../../guest-lifecycle/input/browser-guest-input-gesture'
@@ -243,6 +244,7 @@ export function createBrowserExtensionPopout(
     }
   })
   popoutsByWindowId.set(window.id, { window, session: sess, type: options.type })
+  markNativeBrowserPopupWindow(window)
   const windowId = window.id
   watchWindowEvents(window, sess, () => {
     popoutsByWindowId.delete(windowId)

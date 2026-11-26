@@ -17,7 +17,10 @@ import {
   type RepositoryMetadataOwner
 } from '../../workspaces/catalog/imported-folder-project-link'
 import { readCurrentGitRemoteIdentity } from '../../workspaces/catalog/repo-git-remote-identity'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { updateProjectHostSetupWithProvenKind } from '../../workspaces/catalog/folder-repo-git-conversion'
 import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'

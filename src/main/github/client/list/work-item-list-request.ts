@@ -1,4 +1,4 @@
-import type { ClassifiedError } from '../../../../shared/classified-error'
+import type { ClassifiedError } from '../../../../shared/errors/classified-error'
 import type { IssueSourcePreference } from '../../../../shared/repository/repo-types'
 import type { ParsedTaskQuery } from '../../../../shared/work-items/task-query'
 import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/github/work-items/work-item-ssh-error'

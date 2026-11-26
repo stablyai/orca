@@ -1,4 +1,4 @@
-import type { AgentSessionPromptResponse } from '../../../shared/agent-session/agent-session-question-answer'
+import type { AgentSessionPromptResponse } from '../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import {
   AgentSessionPromptAnswerRejectedError,

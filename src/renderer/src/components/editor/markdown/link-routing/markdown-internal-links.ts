@@ -6,7 +6,7 @@ import {
 import {
   isWindowsAbsolutePathLike,
   relativePathInsideRoot
-} from '../../../../../../shared/cross-platform-path'
+} from '../../../../../../shared/file-access/cross-platform-path'
 
 // Share classification across preview, rich-editor and link-bubble activation; see docs/markdown-internal-link-opening-design.md.
 

@@ -29,6 +29,8 @@ type AddRemoteHostDialogProps = {
   onOpenChange: (mode: AddRemoteHostMode | null) => void
   /** Prefills the server pairing field, e.g. from an `orca://pair?...` link. */
   initialPairingCode?: string | null
+  /** Mode 'wsl': the distro picked before the dialog opened. */
+  wslDistro?: string
 }
 
 type SshDialogView = 'form' | 'config-picker'
@@ -36,7 +38,8 @@ type SshDialogView = 'form' | 'config-picker'
 export function AddRemoteHostDialog({
   mode,
   onOpenChange,
-  initialPairingCode = null
+  initialPairingCode = null,
+  wslDistro
 }: AddRemoteHostDialogProps): React.JSX.Element {
   const t = useTranslate()
   const open = mode !== null
@@ -357,6 +360,8 @@ export function AddRemoteHostDialog({
           </div>
         ) : renderMode === 'wsl' ? (
           <AddWslHostDialogBody
+            key={wslDistro}
+            initialDistro={wslDistro}
             adding={isSaving}
             onAddingChange={setIsSaving}
             onAdded={() => {

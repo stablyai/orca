@@ -5,9 +5,10 @@ export type SshHostServerSetupRemedy =
   | 'stop-unmanaged-runtime'
   | 'see-details'
 
-// A later connect clears these by itself: another run held the host, or its daemon didn't answer a count.
+// A later connect clears these by itself: another run held the host, or the host didn't answer a probe.
 const RETRYABLE_SETUP_CODES: ReadonlySet<string> = new Set([
   'orcad_activation_fence_busy',
+  'orcad_candidate_preflight_unanswered',
   'orcad_update_terminal_census_unavailable'
 ])
 

@@ -12,7 +12,7 @@ import { listActivationPtySessions } from './worktree-activation-pty-inventory'
 import { resumeSleepingAgentSessionsForWorktree } from '../../agent-session/resume/resume-sleeping-agent-session'
 import type { ResumeSleepingAgentSessionsOptions } from '../../agent-session/resume/sleeping-agent-session-launch'
 import '../../agent-session/resume/sleeping-agent-pane-ownership'
-import { getProviderSessionClaimKey } from '../../../../../shared/sleeping-record-legacy-pane-key'
+import { getProviderSessionClaimKey } from '../../../../../shared/agent-session/lifecycle/resume/sleeping-record-legacy-pane-key'
 import {
   adoptLiveWorkspacePtySurfaces,
   type LiveSurfaceAdoptionStore
@@ -313,10 +313,4 @@ export function gateWorktreeAgentActivation(
   })
   inFlightByWorktreeId.set(worktreeId, gate)
   return gate
-}
-
-export function waitForWorktreeAgentActivationGateForTests(
-  worktreeId: string
-): Promise<WorktreeAgentActivationOutcome | null> {
-  return inFlightByWorktreeId.get(worktreeId) ?? Promise.resolve(null)
 }

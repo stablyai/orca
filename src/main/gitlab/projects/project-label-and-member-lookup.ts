@@ -1,4 +1,4 @@
-import type { GitLabAssignableUser } from '../../../shared/gitlab-types'
+import type { GitLabAssignableUser } from '../../../shared/gitlab/gitlab-types'
 import type { IssueSourcePreference } from '../../../shared/repository/repo-types'
 import { mapGitLabUser, type GitLabRawUser } from './gitlab-assignable-user-mapping'
 import { acquire, release } from '../requests/glab-request-admission'

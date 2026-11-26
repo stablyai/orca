@@ -1,31 +1,5 @@
-import { existsSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
-import { resolveClaudeGlobalConfigFile } from './claude-folder-trust-file'
-
-type ClaudeApiKeyResponses = { approved: readonly unknown[]; rejected: readonly unknown[] }
-
-async function readApiKeyResponses(configFile: string): Promise<ClaudeApiKeyResponses> {
-  const empty = { approved: [], rejected: [] }
-  try {
-    const parsed: unknown = JSON.parse(await readFile(configFile, 'utf8'))
-    if (typeof parsed !== 'object' || parsed === null || !('customApiKeyResponses' in parsed)) {
-      return empty
-    }
-    const responses = parsed.customApiKeyResponses
-    if (typeof responses !== 'object' || responses === null) {
-      return empty
-    }
-    return {
-      approved:
-        'approved' in responses && Array.isArray(responses.approved) ? responses.approved : [],
-      rejected:
-        'rejected' in responses && Array.isArray(responses.rejected) ? responses.rejected : []
-    }
-  } catch {
-    return empty
-  }
-}
+import { readClaudeGlobalConfig } from './claude-global-config'
+import { isRecord } from '../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 
 /** Non-interactive Claude bills even rejected API keys; omit them to match the TUI’s login. */
 export async function withoutRejectedClaudeApiKey(
@@ -39,17 +13,12 @@ export async function withoutRejectedClaudeApiKey(
   if (!apiKey) {
     return env
   }
-  const style = platform === 'win32' ? 'win32' : 'posix'
-  const configFile = resolveClaudeGlobalConfigFile({
-    env,
-    homeDir: (style === 'win32' ? env.USERPROFILE : env.HOME) || homedir(),
-    style,
-    exists: existsSync
-  })
-  const responses = await readApiKeyResponses(configFile)
+  const responses = (await readClaudeGlobalConfig(env, platform))?.customApiKeyResponses
+  const { approved, rejected } = isRecord(responses) ? responses : {}
   // Claude records answers by the trimmed key's last 20 characters.
   const suffix = apiKey.trim().slice(-20)
-  if (!responses.approved.includes(suffix) && responses.rejected.includes(suffix)) {
+  const lists = (answers: unknown) => Array.isArray(answers) && answers.includes(suffix)
+  if (!lists(approved) && lists(rejected)) {
     for (const name of keyNames) {
       delete env[name]
     }

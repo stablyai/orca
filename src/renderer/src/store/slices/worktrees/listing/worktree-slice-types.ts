@@ -2,14 +2,15 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../../../types'
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import type {
+  DetectedWorktree,
   DetectedWorktreeListResult,
   GitPushTarget,
   Worktree
 } from '../../../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { DirectSshAuthority } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
-import type { HostQualifiedDetectedWorktreeResult } from '../../../../../../shared/detected-worktree-provider-contract'
+import type { HostQualifiedDetectedWorktreeResult } from '../../../../../../shared/worktree/catalog/detected-worktree-provider-contract'
 import type { ProjectHostSetup } from '../../../../../../shared/project/project-types'
 import type {
   WorkspaceLineage,
@@ -50,6 +51,11 @@ export type AdmittedDetectedWorktreeRefresh = {
     runtimeConnectionGeneration: number
   }
 }
+
+export type WorktreeCatalogAuthority = Pick<
+  AdmittedDetectedWorktreeRefresh,
+  'executionHostId' | 'directSshAuthority' | 'runtimeAuthority'
+> & { pairingRevision?: number }
 
 export type DetectedWorktreeRefreshOutcome =
   | AdmittedDetectedWorktreeRefresh
@@ -97,6 +103,7 @@ export type FencedWorktreeMergeArgs = {
   ownerWasMissingAtStart: boolean
   missingDirectSshOwnerReposSnapshot?: AppState['repos']
   requestStartedWorktrees: readonly Worktree[] | undefined
+  requestStartedDetectedWorktrees?: readonly DetectedWorktree[]
   setup?: ProjectHostSetup
   refresh: AdmittedDetectedWorktreeRefresh
   purgeRemovedWorktrees?: boolean

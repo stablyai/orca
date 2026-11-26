@@ -1,7 +1,11 @@
 import type { AppState } from '../../types'
-import { toVisibleTabType, type Tab, type TabGroup } from '../../../../../shared/tab-types'
+import {
+  toVisibleTabType,
+  type Tab,
+  type TabGroup
+} from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { sanitizeRecentTabIds } from './tab-selection-history'
-import type { RecordDraft } from '../../keyed-record-transitions'
+import type { RecordDraft } from '../../record-transitions/keyed-record-transitions'
 
 /** Surfaces leaving workspaces that stay, such as one host's tabs under an id its twin publishes. */
 export type KeptWorktreeSurfaceRemoval = {

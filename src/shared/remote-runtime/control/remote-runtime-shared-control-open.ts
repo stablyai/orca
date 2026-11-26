@@ -5,8 +5,13 @@ import type {
 } from './remote-runtime-shared-control-types'
 import type WebSocket from 'ws'
 import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
-import type { RemoteRuntimeClientError } from '../remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { remoteRuntimeUnavailableError } from '../requests/remote-runtime-request-frames'
+import {
+  ORCAD_IDLE_STOP_CLOSE_CODE,
+  RUNTIME_IDLE_STOPPED_ERROR_CODE,
+  RUNTIME_IDLE_STOPPED_MESSAGE
+} from '../orcad-lifecycle/orcad-idle-stop-signal'
 import {
   openRemoteRuntimeWebSocket,
   type RemoteRuntimeWebSocket
@@ -55,7 +60,13 @@ export function openSharedControlSocket(
     onClose: (ws, code, reason) => {
       if (callbacks.getCurrentSocket() === ws) {
         callbacks.onSocketClosed(
-          remoteRuntimeUnavailableError(formatSharedControlCloseMessage(code, reason)),
+          // Pending requests fail with this code, which tells callers they were never dispatched.
+          code === ORCAD_IDLE_STOP_CLOSE_CODE
+            ? new RemoteRuntimeClientError(
+                RUNTIME_IDLE_STOPPED_ERROR_CODE,
+                RUNTIME_IDLE_STOPPED_MESSAGE
+              )
+            : remoteRuntimeUnavailableError(formatSharedControlCloseMessage(code, reason)),
           'socket_close',
           { code, reason: reason.toString() }
         )
@@ -161,5 +172,17 @@ export async function openPreparedSharedControlSocket(
     args.refuse(error)
     return
   }
-  args.accept(openSharedControlSocket(connection, args.callbacks))
+  const { onSocketClosed } = args.callbacks
+  args.accept(
+    openSharedControlSocket(connection, {
+      ...args.callbacks,
+      onSocketClosed: (error, cause, close) => {
+        // Before the close is handled, so the retry it schedules already sees the hold.
+        if (close?.code === ORCAD_IDLE_STOP_CLOSE_CODE) {
+          options.onIdleStop?.()
+        }
+        onSocketClosed(error, cause, close)
+      }
+    })
+  )
 }

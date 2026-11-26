@@ -3,7 +3,10 @@ import { ListFilter, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/class-names'
-import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
+import {
+  useRepoLabelsBySlug,
+  useRepoAssigneesBySlug
+} from '@/lib/work-items/github/useGitHubSlugMetadata'
 import type { PickerOption } from '@/components/github/PRFilterPickers'
 import { filterAuthorsValue, filterLabelsValue } from '@/components/github/pr-filter-value-summary'
 import {

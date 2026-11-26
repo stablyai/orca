@@ -36,9 +36,12 @@ import {
 } from 'lucide-react'
 import React from 'react'
 import type { Components } from 'react-markdown'
-import type { CommentMarkdownExtension } from '@/components/sidebar/CommentMarkdown'
-import { compactCommentMarkdownComponents } from '@/components/sidebar/comment-markdown-element-renderers'
-import { isMermaidPre, renderMermaidFence } from '@/components/sidebar/comment-mermaid-fence'
+import type { CommentMarkdownExtension } from '@/components/comment-markdown/CommentMarkdown'
+import { compactCommentMarkdownComponents } from '@/components/comment-markdown/comment-markdown-element-renderers'
+import {
+  isMermaidPre,
+  renderMermaidFence
+} from '@/components/comment-markdown/comment-mermaid-fence'
 
 const icons = new Map<string, LucideIcon>([
   ['book-open', BookOpen],

@@ -1,10 +1,10 @@
-import { getTextDrivenNativeChatCommands } from '../../native-chat/native-chat-agent-profiles'
+import { getTextDrivenNativeChatCommands } from '../../native-chat/input/commands/native-chat-agent-profiles'
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import {
   sessionSlashCommandSuggestions,
   type SlashCommandSuggestion
 } from '../../native-chat/input/commands/native-chat-slash-commands'
-import type { AgentSessionConversationCommand } from '../agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../conversation-context/agent-session-conversation-command'
 import type { AgentSessionSlashCommand } from '../agent-session-wire'
 
 const COMPACT_INSTRUCTIONS_HINT = '[instructions]'

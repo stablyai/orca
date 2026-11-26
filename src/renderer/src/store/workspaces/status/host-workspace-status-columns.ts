@@ -3,7 +3,7 @@ import {
   DEFAULT_WORKSPACE_STATUS_ID,
   mergeHostWorkspaceStatuses
 } from '../../../../../shared/workspace/status/workspace-statuses'
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition

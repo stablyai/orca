@@ -30,8 +30,68 @@ export function mobileSessionOptionSummaryValue(descriptor: SessionOptionDescrip
   if (!choice) {
     return translate('chat.sessionOptionCopy.notSet', 'Not set')
   }
+  if (descriptor.id === 'permissionMode') {
+    const deferred = deferredPermissionSummary(descriptor, choice)
+    if (deferred) {
+      return deferred.compact
+    }
+  }
   if (descriptor.id === 'permissionMode' && descriptor.description) {
     return descriptor.description
   }
   return nativeChatSessionChoiceLabel(choice, say, descriptor.id)
+}
+
+type DeferredPermissionSummary = { saved: string; compact: string; timing: string; full: string }
+
+/** A permission pick saved for the next message while another launch mode runs, in every length mobile shows. */
+export function mobileDeferredPermissionSummary(
+  descriptor: SessionOptionDescriptor
+): DeferredPermissionSummary | null {
+  if (descriptor.id !== 'permissionMode' || descriptor.kind.type !== 'select') {
+    return null
+  }
+  const choice = selectedNativeChatChoice(descriptor)
+  return choice ? deferredPermissionSummary(descriptor, choice) : null
+}
+
+function deferredPermissionSummary(
+  descriptor: SessionOptionDescriptor,
+  choice: NonNullable<ReturnType<typeof selectedNativeChatChoice>>
+): DeferredPermissionSummary | null {
+  if (
+    descriptor.kind.type !== 'select' ||
+    descriptor.valueSource !== 'dispatched' ||
+    typeof descriptor.activeValue !== 'string'
+  ) {
+    return null
+  }
+  const active = descriptor.kind.choices.find((choice) => choice.value === descriptor.activeValue)
+  const activeLabel = active
+    ? nativeChatSessionChoiceLabel(active, say, descriptor.id)
+    : descriptor.activeValue === 'own'
+      ? translate('settings.agents.permissionOwnAll', "Agents' own settings")
+      : null
+  if (!activeLabel) {
+    return null
+  }
+  const saved = nativeChatSessionChoiceLabel(choice, say, descriptor.id)
+  return {
+    saved,
+    compact: translate(
+      'chat.sessionOptionCopy.permissionAppliesNextMessageCompact',
+      '{{saved}} · next message',
+      { saved }
+    ),
+    timing: translate(
+      'chat.sessionOptionCopy.permissionAppliesNextMessageTiming',
+      'Applies next message · running {{active}}',
+      { active: activeLabel }
+    ),
+    full: translate(
+      'chat.sessionOptionCopy.permissionAppliesNextMessage',
+      '{{saved}} applies to your next message; running {{active}}',
+      { saved, active: activeLabel }
+    )
+  }
 }

@@ -12,6 +12,7 @@ versions or suppress advisories.
 | minimatch 9.0.9, 10.2.5, 10.2.6 | GHSA-g3hv-75wg-m249 | Backport minimatch 11.0.1: stop `**/..` splitting at `braceExpandMax` patterns and skip pairwise dedupe above 1000 patterns.                                     |
 | glob 13.0.6                     | GHSA-3g3m-2fjr-6pw4 | Backport glob 14.0.2: return after an abort instead of continuing the walk. Load the unbundled build so the patched walker and minimatch are used.               |
 | deepmerge 4.3.1                 | GHSA-gcqx-w48m-w2h4 | Define merged keys as own data properties so an own `__proto__` key cannot replace the result's prototype.                                                       |
+| picomatch 2.3.2, 4.0.4–4.0.7    | GHSA-fc5q-39xc-vjpf | Collapse redundant outer quantifiers on single-branch wildcard extglobs (`+(*)`, `+(*a)`) and bound repeated wildcard alternatives so nested stars cannot hang.  |
 
 The braces patch applies to mobile, docs tooling, and isolated audit tools.
 The minimatch and glob patches apply to every workspace that installs an affected copy;

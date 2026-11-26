@@ -5,6 +5,7 @@ import type { RpcSendParams } from '../../../src/shared/rpc-contract/rpc-send-pa
 import type { MobileAutomation } from './automation-reply-schema'
 import type { AutomationTargets } from './automation-target-inventory'
 import { AutomationDraftValidationError } from './automation-error'
+import { automationSetupRedecided } from './automation-setup-redecision'
 import {
   automationTargetContext,
   automationTargetDestination,
@@ -29,6 +30,8 @@ export type AutomationDraft = {
   timezone: string
   baseBranch: string
   setupDecision: 'inherit' | 'run' | 'skip'
+  /** Set only by an approval that can't trust the repo; the host runs only this setup content. */
+  setupTrustHash?: string
   reuseSession: boolean
   extraAgentArgs: string
   precheckCommand: string
@@ -182,6 +185,9 @@ function editableFields(draft: AutomationDraft): UpdateFields {
     timezone: draft.timezone,
     baseBranch: draft.baseBranch || null,
     setupDecision: draft.setupDecision,
+    ...(draft.setupDecision === 'run' && draft.setupTrustHash
+      ? { setupTrustHash: draft.setupTrustHash }
+      : {}),
     reuseSession: draft.workspaceMode === 'existing' && draft.reuseSession,
     extraAgentArgs: draft.extraAgentArgs,
     precheck: draft.precheckCommand.trim()
@@ -197,7 +203,15 @@ export function automationDraftPatch(
 ): UpdateFields {
   const fields: Record<string, unknown> = editableFields(draft)
   const before: Record<string, unknown> = editableFields(original)
-  const patch: UpdateFields = {}
+  // The host keeps the saved pin unless a write names the decision, so a re-decided save always names it.
+  const patch: UpdateFields = automationSetupRedecided(draft, original)
+    ? {
+        setupDecision: draft.setupDecision,
+        ...(draft.setupDecision === 'run' && draft.setupTrustHash
+          ? { setupTrustHash: draft.setupTrustHash }
+          : {})
+      }
+    : {}
   for (const key of new Set([...Object.keys(before), ...Object.keys(fields)])) {
     if (fields[key] !== before[key]) {
       if (

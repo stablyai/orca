@@ -1,4 +1,4 @@
-import type { Tab } from '../../../../../../shared/tab-types'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 
 /** Presentation actions use terminal entityId for backed tabs, unified ID for rowless structured chats. */
 export function findRenamableUnifiedTab(

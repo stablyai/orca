@@ -15,6 +15,14 @@ if (!commandPath) {
   process.exit(0)
 }
 
+function isDanglingSymlink(target) {
+  try {
+    return lstatSync(target).isSymbolicLink() && !existsSync(target)
+  } catch {
+    return false
+  }
+}
+
 function isOwnedByUs(target) {
   try {
     if (!lstatSync(target).isSymbolicLink()) {
@@ -24,6 +32,15 @@ function isOwnedByUs(target) {
   } catch {
     return false
   }
+}
+
+// existsSync follows the link, so a link to a removed checkout reads as absent and `ln` then fails.
+if (isDanglingSymlink(commandPath)) {
+  console.error(
+    `[orca-dev] ${commandPath} points to ${readlinkSync(commandPath)}, which no longer exists, so orca-dev runs nothing. Point it at this checkout with:\n` +
+      `  sudo ln -sf ${source} ${commandPath}`
+  )
+  process.exit(0)
 }
 
 if (existsSync(commandPath)) {

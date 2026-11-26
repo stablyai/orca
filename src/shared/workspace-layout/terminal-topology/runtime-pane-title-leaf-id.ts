@@ -1,4 +1,4 @@
-import { FIRST_PANE_ID } from '../../pane-key'
+import { FIRST_PANE_ID } from '../pane-key'
 import { isTerminalLeafId } from '../stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalPaneLayoutNode } from '../terminal-tab-types'
 

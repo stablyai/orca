@@ -1,4 +1,4 @@
-import '../../../../../shared/constants'
+import '../../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import type {
   BrowserPage,
@@ -6,7 +6,7 @@ import type {
 } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard/clipboard-text'
-import { compareBaseSensitivityLocaleText } from '../../../../../shared/locale-text-collators'
+import { compareBaseSensitivityLocaleText } from '../../../../../shared/i18n/locale-text-collators'
 import {
   comparePaletteTabResults,
   isOmniboxPaletteTabFieldAllowed,
@@ -18,7 +18,7 @@ import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
 } from '../../workspace/display/worktree-default-display-name'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { MatchRange } from '../../../../../shared/palette-match/normalized-text'
 import type {
   PaletteDocument,

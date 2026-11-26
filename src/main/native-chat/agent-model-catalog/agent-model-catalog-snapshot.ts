@@ -230,7 +230,11 @@ export function projectAgentModelCatalogSnapshot(
     deps.agentReadsProjectModelConfig?.(params.agent) === false
       ? { defaultHoldsInEveryWorkspace: true as const }
       : {}),
-    ...(result && ((independent && !params.legacy) || bound.folder !== undefined || bound.exact)
+    ...(result &&
+    ((independent && !params.legacy) ||
+      deps.listsInChatFolder?.has(params.agent) ||
+      bound.folder !== undefined ||
+      bound.exact)
       ? { modelsDifferByWorkspace: true as const }
       : {}),
     ...(!params.savedOnly &&

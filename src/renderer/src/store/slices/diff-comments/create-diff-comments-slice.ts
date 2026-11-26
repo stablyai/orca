@@ -2,7 +2,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
-import type { DiffComment } from '../../../../../shared/diff-comment-types'
+import type { DiffComment } from '../../../../../shared/file-review/diff-comment-types'
 import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { isMarkdownComment } from '@/lib/source-control/review/comments/diff-comment-compat'
 import {

@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { posix, resolve, win32 } from 'node:path'
 import { runProcessSync } from '@orca/process-host'
-import { CLI_BOOLEAN_FLAGS, findCliCommandIndex } from '../../../shared/cli-argument-boundary'
+import { CLI_BOOLEAN_FLAGS, findCliCommandIndex } from '../../../shared/cli/cli-argument-boundary'
 import { ELECTRON_NO_SANDBOX_REQUEST_ENV } from '../../../shared/app-lifecycle/launch/electron-no-sandbox-request'
 import { CLI_COMMAND_NAMES } from './cli-command-names'
 import { reexecHeadlessServeOnX11IfNeeded } from '../serve-launch/headless-serve-x11-reexec'

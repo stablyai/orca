@@ -5,7 +5,7 @@ import {
 } from '../../../shared/worktree/naming/retired-name-registry'
 import { getRemoteRetirementNamespaceKey } from '../../workspaces/removal/retirement/worktree-name-retirement'
 import { retirementNamespaceKeysToRead } from '../../workspaces/removal/retirement/worktree-retirement-namespace'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 
 export function extractRetiredNameRegistriesByNamespace(
   sourceState: PersistedState,

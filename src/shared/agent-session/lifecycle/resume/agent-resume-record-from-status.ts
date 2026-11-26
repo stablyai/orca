@@ -29,6 +29,7 @@ export type ResumeRecordStatus = Pick<
   | 'terminalTitle'
   | 'lastAssistantMessage'
   | 'terminalResumeEligible'
+  | 'executionHost'
   | 'interrupted'
   | 'mainAgent'
   | 'worktreeId'
@@ -57,6 +58,7 @@ export function resumeRecordFromStatus(args: {
   const agent = args.entry.agentType
   if (
     args.entry.terminalResumeEligible === false ||
+    args.entry.executionHost === 'shared' ||
     !isResumableTuiAgent(agent) ||
     !args.entry.providerSession
   ) {
@@ -158,7 +160,23 @@ export function liveResumeRecordChange(
   live: SleepingAgentSessionRecord | null
 ): { set: SleepingAgentSessionRecord } | 'clear' | null {
   if (live) {
-    return recoveryRecordMatches(existing, live) ? null : { set: live }
+    // A finished turn's checkpoint must not demote the sleep record of the same conversation (wakes
+    // key on its origin), but the record takes the turn's resume settings.
+    const next =
+      existing?.origin === 'worktree-sleep' &&
+      live.state === 'done' &&
+      recoveryRecordTargetsSameSession(existing, live)
+        ? {
+            ...existing,
+            providerSession: {
+              ...existing.providerSession,
+              effort: live.providerSession.effort,
+              permissionMode: live.providerSession.permissionMode
+            },
+            launchConfig: live.launchConfig ?? existing.launchConfig
+          }
+        : live
+    return recoveryRecordMatches(existing, next) ? null : { set: next }
   }
   return existing ? 'clear' : null
 }

@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import { removeStaleDurableWriteTempFiles } from '../../filesystem/durable-file-write'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import type {
   WorkspaceSessionOperationListener,
   WorkspaceSessionWriteListener
 } from './workspace-sessions/workspace-session-write-listeners'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type {
   StateWriteListener,
   WorktreeMetaWriteListener
@@ -18,6 +18,7 @@ import {
   type TerminalScrollbackSnapshotStorage
 } from '../../pty/scrollback/terminal-scrollback-snapshots'
 import { ProtectedSecretPersistence } from '../../credentials/protected-secret-persistence'
+import type { KeyedJsonRowCache } from '../../sqlite/row-cache/keyed-json-row-cache'
 import { getDataFile, getGithubCacheFile } from './user-data-path'
 import { dirname, join } from 'node:path'
 import { STALE_DURABLE_WRITE_TEMP_AGE_MS } from '../tracking-repos/worktree-metadata-normalization'
@@ -43,6 +44,8 @@ export type DurableProfileStateMutation<T> = {
   rollback?: () => void
   /** Absent means any host may have changed; otherwise notify only listed partitions. */
   writtenHostIds?: readonly ExecutionHostId[]
+  /** The workspaces a listed host's write changed; a listed host absent here may have changed any. */
+  writtenWorkspaces?: ReadonlyMap<ExecutionHostId, ReadonlySet<string>>
 }
 
 export type StoreRuntimeOptions = {
@@ -94,6 +97,8 @@ export class StoreRuntimeState {
   githubCacheLegacyFileHash: string | null = null
   /** The saved cache or an older build's sidecar was unreadable at load: save nothing this session. */
   githubCachePersistenceDisabled = false
+  /** Held between saves; suspend and saves while fenced (maintenance, quit) close it. */
+  githubCacheRows: KeyedJsonRowCache | null = null
   readonly githubCacheWriteListeners = new Set<() => void>()
   readonly staleGithubCacheTempCleanup: Promise<void>
   readonly staleProfileStateTempCleanup: Promise<void>

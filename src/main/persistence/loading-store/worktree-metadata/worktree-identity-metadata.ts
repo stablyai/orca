@@ -1,54 +1,33 @@
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachments/workspace-attachment-mutation'
-import type { DiffCommentBaseMutation } from '../../../../shared/diff-comment-mutation'
+import type { DiffCommentBaseMutation } from '../../../../shared/file-review/diff-comment-mutation'
 import { randomUUID } from 'node:crypto'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { canonicalWorktreeIdentity } from '../../../../shared/worktree/identity'
 import {
   composeWorktreeHostIdentity,
   getExecutionHostIdFromWorktreeHostIdentity,
   getWorktreeIdFromHostIdentity
 } from '../../../../shared/worktree/host-qualified-identity'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import type { StoreRuntimeState } from '../store-runtime-state'
 
-import { type WriteSchedulingOperations, scheduleSave } from '../profile-writing/write-scheduling'
+import {
+  type WriteSchedulingOperations,
+  scheduleSave,
+  withUnreadStateHint,
+  workspaceLinkWriteOptions
+} from '../profile-writing/write-scheduling'
 import { mergeWorktreeMetaForWrite } from './worktree-meta-write-normalization'
 import { WORKTREE_METADATA_DOMAINS } from '../../profile-save-domains'
-import {
-  isLocalOnlyWorktreeMetaId,
-  worktreeMetaHostFor
-} from '../../../../shared/worktree/metadata/local-only-worktree-meta-ids'
+import { worktreeMetaHostFor } from '../../../../shared/worktree/metadata/local-only-worktree-meta-ids'
+import { resolveAliasIdentityKey } from './worktree-identity-alias'
 
 type MetadataRuntime = Pick<StoreRuntimeState, 'state'> &
   Partial<Pick<StoreRuntimeState, 'worktreeMetaWriteListeners'>>
-type WorktreeMetaState = Pick<
-  PersistedState,
-  'worktreeMeta' | 'worktreeMetaByIdentity' | 'worktreeIdentityAliases'
->
-
-export function resolveAliasIdentityKey(
-  state: WorktreeMetaState,
-  alias: string
-): string | undefined {
-  const identityKeys = state.worktreeIdentityAliases?.[alias] ?? []
-  if (identityKeys.length === 0) {
-    return undefined
-  }
-  const resolvable = identityKeys.filter((key) => state.worktreeMetaByIdentity?.[key])
-  const candidates = resolvable.length > 0 ? resolvable : identityKeys
-  // Deterministic tie-breaking keeps hosts consistent: newest activity, then greatest key.
-  const winner = candidates.reduce((best, key) => {
-    const bestTouch = state.worktreeMetaByIdentity?.[best]?.lastActivityAt ?? 0
-    const keyTouch = state.worktreeMetaByIdentity?.[key]?.lastActivityAt ?? 0
-    if (keyTouch !== bestTouch) {
-      return keyTouch > bestTouch ? key : best
-    }
-    return key > best ? key : best
-  })
-  return winner
-}
-
 export function pruneUnreferencedWorktreeIdentityMeta(
   state: PersistedState,
   candidates?: ReadonlySet<string>
@@ -179,45 +158,7 @@ export function getWorktreeMetaForHost(
   return !legacy?.hostId || legacy.hostId === executionHostId ? legacy : undefined
 }
 
-// Local-only IDs cannot belong to remote hosts even when legacy rows lack stamps.
-function isOtherHostsLocalOnlyRow(worktreeId: string, executionHostId: ExecutionHostId): boolean {
-  return executionHostId !== LOCAL_EXECUTION_HOST_ID && isLocalOnlyWorktreeMetaId(worktreeId)
-}
-
-export function getAllWorktreeMetaForHost(
-  runtime: { state: WorktreeMetaState },
-  executionHostId: ExecutionHostId
-): Record<string, WorktreeMeta> {
-  const state = runtime.state
-  const projected: Record<string, WorktreeMeta> = {}
-  for (const [worktreeId, meta] of Object.entries(state.worktreeMeta)) {
-    if (isOtherHostsLocalOnlyRow(worktreeId, executionHostId)) {
-      continue
-    }
-    if (!meta.hostId || meta.hostId === executionHostId) {
-      projected[worktreeId] = meta
-    }
-  }
-  for (const alias of Object.keys(state.worktreeIdentityAliases ?? {})) {
-    if (getExecutionHostIdFromWorktreeHostIdentity(alias) !== executionHostId) {
-      continue
-    }
-    const worktreeId = getWorktreeIdFromHostIdentity(alias)
-    const identityKey = resolveAliasIdentityKey(state, alias)
-    const meta = identityKey ? state.worktreeMetaByIdentity?.[identityKey] : undefined
-    if (
-      !worktreeId ||
-      isOtherHostsLocalOnlyRow(worktreeId, executionHostId) ||
-      !meta ||
-      (meta.hostId && meta.hostId !== executionHostId)
-    ) {
-      continue
-    }
-    projected[worktreeId] =
-      meta.hostId === executionHostId ? meta : { ...meta, hostId: executionHostId }
-  }
-  return projected
-}
+export { getAllWorktreeMetaForHost } from './worktree-host-meta-projection'
 
 export function setWorktreeMetaForHost(
   runtime: MetadataRuntime,
@@ -228,10 +169,14 @@ export function setWorktreeMetaForHost(
 ): WorktreeMeta {
   const state = runtime.state
   const executionHostId = worktreeMetaHostFor(worktreeId, requestedHostId)
-  migrateLegacyWorktreeMetadata(state, worktreeId, executionHostId)
+  const migrated = migrateLegacyWorktreeMetadata(state, worktreeId, executionHostId)
   const alias = composeWorktreeHostIdentity(executionHostId, worktreeId)
   const identityKeys = state.worktreeIdentityAliases?.[alias] ?? []
   if (identityKeys.length > 1 && meta.instanceId === undefined) {
+    // The refused write still migrated the legacy row; save it and tell observers.
+    if (migrated) {
+      scheduleSave(scheduling, WORKTREE_METADATA_DOMAINS)
+    }
     throw new Error('Worktree identity is ambiguous for this host and locator.')
   }
   const existingIdentityKey = resolveAliasIdentityKey(state, alias)
@@ -260,7 +205,31 @@ export function setWorktreeMetaForHost(
   if (!legacy || legacy.hostId === executionHostId) {
     state.worktreeMeta[worktreeId] = updated
   }
-  scheduleSave(scheduling, WORKTREE_METADATA_DOMAINS)
+  const singleWorkspaceUnmoved =
+    !migrated &&
+    identityKeys.length <= 1 &&
+    (!existing?.hostId || existing.hostId === executionHostId)
+  const linkWriteOptions = singleWorkspaceUnmoved
+    ? workspaceLinkWriteOptions(
+        {
+          worktreeId,
+          sshHostId: executionHostId === LOCAL_EXECUTION_HOST_ID ? null : executionHostId
+        },
+        'externalConversations' in meta ||
+          existing?.externalConversations !== updated.externalConversations,
+        updated.externalConversations
+      )
+    : undefined
+  scheduleSave(
+    scheduling,
+    WORKTREE_METADATA_DOMAINS,
+    undefined,
+    undefined,
+    // A migrated, rehomed or adopted row can change what this or another locator reads.
+    singleWorkspaceUnmoved && meta.instanceId === undefined
+      ? withUnreadStateHint(linkWriteOptions, existing, updated)
+      : linkWriteOptions
+  )
   for (const listener of runtime.worktreeMetaWriteListeners ?? []) {
     try {
       listener({ worktreeId, hostId: executionHostId, previous: existing, next: updated })

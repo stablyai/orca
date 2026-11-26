@@ -52,6 +52,7 @@ export function antigravityDiscoveries(
       onDirectoryEntries: (dirPath, entries) =>
         recordAntigravityArtifactPath(antigravityArtifactPaths, rootDir, dirPath, entries),
       keepScopeFiles: scopeWalksAgentFiles('antigravity', options.scopePaths),
+      statCache: options.statCache,
       signal: options.signal
     })
       .then((discovery) => completeAntigravityTranscriptPairs(discovery, issues))

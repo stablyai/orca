@@ -23,7 +23,7 @@ import type {
   AgentActivityDisplayMode,
   ProjectOrderBy,
   WorktreeCardProperty
-} from '../../../../src/shared/ui-chrome-types'
+} from '../../../../src/shared/ui-chrome/ui-chrome-types'
 import { getWorktreeCardModeUpdates } from '../../../../src/shared/worktree/row-display/card-properties'
 import type { HostScreenState } from '../use-host-screen-state'
 import { applyCollapse, withPendingViewChanges } from './host-view-pending-changes'

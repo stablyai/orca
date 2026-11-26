@@ -11,7 +11,8 @@ import {
 } from '../../../shared/process-observation/tables/process-table-snapshot-reader'
 import {
   collectDescendantsFromIndex,
-  getProcessTableIndex
+  getProcessTableIndex,
+  type ProcessTableIndex
 } from '../../../shared/process-observation/tables/process-table-index'
 import {
   resolveWindowsAgentForegroundProcessWithAvailability,
@@ -36,6 +37,8 @@ export type AgentForegroundProcessResolution = {
   processName: string | null
   /** Windows liveness anchor for an unambiguous recognized name; omitted for fallbacks and POSIX. */
   processId?: number
+  /** Windows: the anchor's creation time, when the scan read it. */
+  processCreationTimeMs?: number
   /** Windows: the scan proved the caller's `anchorProcessId` is now a non-agent. */
   anchorPidForeign?: boolean
 }
@@ -46,9 +49,13 @@ type ShellForegroundConfirmationOptions = {
     | null
     | Promise<ReadonlySet<number> | null>
   readWindowsProcessIdentityTable?: () => Promise<WindowsProcessIdentityRow[]>
+  /** POSIX: a capture the caller already took, so one proof costs one table read. */
+  processIndex?: ProcessTableIndex
+  /** POSIX: which stopped jobs deny the shell its foreground; every one by default. */
+  stoppedJobBlocks?: (row: ProcessTableRow) => boolean
 }
 
-function commandExecutable(command: string): string {
+export function commandExecutable(command: string): string {
   const trimmed = command.trim().replace(/^[-]/, '')
   if (trimmed.startsWith('"') || trimmed.startsWith("'")) {
     const closingQuote = trimmed.indexOf(trimmed[0], 1)
@@ -83,7 +90,8 @@ export async function confirmShellForegroundProcess(
     }
   }
   try {
-    const index = getProcessTableIndex(await getFreshShellForegroundSnapshot())
+    const index =
+      options.processIndex ?? getProcessTableIndex(await getFreshShellForegroundSnapshot())
     const root = index.byPid.get(shellPid)
     if (!root) {
       return false
@@ -98,7 +106,8 @@ export async function confirmShellForegroundProcess(
           isShellProcess(commandExecutable(row.command))
       )
       .sort((left, right) => left.depth - right.depth)[0]
-    if (tree.some((row) => row.depth > 0 && row.stat.includes('T'))) {
+    const blocks = options.stoppedJobBlocks ?? (() => true)
+    if (tree.some((row) => row.depth > 0 && row.stat.includes('T') && blocks(row))) {
       return false
     }
     const confirmed = foregroundShell?.stat.includes('+') === true
@@ -148,7 +157,12 @@ export async function resolveAgentForegroundProcessWithAvailability(
           : fallbackProcess),
       // The anchor only travels with the name it proved, never with a fallback.
       ...(resolution.processName !== null && resolution.processId !== undefined
-        ? { processId: resolution.processId }
+        ? {
+            processId: resolution.processId,
+            ...(resolution.processCreationTimeMs !== undefined
+              ? { processCreationTimeMs: resolution.processCreationTimeMs }
+              : {})
+          }
         : {}),
       ...(resolution.anchorPidForeign ? { anchorPidForeign: true } : {})
     }

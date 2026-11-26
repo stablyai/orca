@@ -15,8 +15,8 @@ import { loadNotificationDeliveryPreferences } from './delivery-policy/notificat
 import {
   allowsMobilePushDelivery,
   mobilePushAlertContent
-} from '../../../src/shared/mobile-push-alert'
-import { reserveNotificationCooldown } from '../../../src/shared/notification-burst-cooldown'
+} from '../../../src/shared/notifications/mobile-push-alert'
+import { reserveNotificationCooldown } from '../../../src/shared/notifications/notification-burst-cooldown'
 import type { MobileNotificationDispatchEvent } from '../../../src/main/runtime/push/notifications/runtime-mobile-notification-controller'
 
 export function subscribeToDesktopNotifications(client: RpcClient, hostId: string): () => void {

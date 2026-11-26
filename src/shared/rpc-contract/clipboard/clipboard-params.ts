@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import {
   CLIPBOARD_IMAGE_MAX_BASE64_CHARS as MAX_CLIPBOARD_IMAGE_BASE64_CHARS,
   CLIPBOARD_IMAGE_TOO_LARGE_ERROR
@@ -30,38 +31,48 @@ export function clipboardImageBase64Payload(maxChars: number, tooLargeMessage: s
   })
 }
 
-export const SaveImageAsTempFile = z.object({
-  contentBase64: clipboardImageBase64Payload(
-    MAX_CLIPBOARD_IMAGE_BASE64_CHARS,
-    CLIPBOARD_IMAGE_TOO_LARGE_ERROR
-  ),
-  connectionId: z.string().min(1).nullable().optional()
-})
+export const SaveImageAsTempFile = lazyZodSchema(() =>
+  z.object({
+    contentBase64: clipboardImageBase64Payload(
+      MAX_CLIPBOARD_IMAGE_BASE64_CHARS,
+      CLIPBOARD_IMAGE_TOO_LARGE_ERROR
+    ),
+    connectionId: z.string().min(1).nullable().optional()
+  })
+)
 
-export const StartImageUpload = z.object({
-  expectedBase64Length: z
-    .number()
-    .int()
-    .nonnegative()
-    .max(MAX_CLIPBOARD_IMAGE_BASE64_CHARS, CLIPBOARD_IMAGE_TOO_LARGE_ERROR),
-  connectionId: z.string().min(1).nullable().optional(),
-  // Older hosts drop this unknown key and keep naming the upload .png.
-  fileName: z.string().min(1).max(1024).optional()
-})
+export const StartImageUpload = lazyZodSchema(() =>
+  z.object({
+    expectedBase64Length: z
+      .number()
+      .int()
+      .nonnegative()
+      .max(MAX_CLIPBOARD_IMAGE_BASE64_CHARS, CLIPBOARD_IMAGE_TOO_LARGE_ERROR),
+    connectionId: z.string().min(1).nullable().optional(),
+    // Older hosts drop this unknown key and keep naming the upload .png.
+    fileName: z.string().min(1).max(1024).optional()
+  })
+)
 
-export const AppendImageUploadChunk = z.object({
-  uploadId: z.string().min(1),
-  offset: z.number().int().nonnegative(),
-  contentBase64: clipboardImageBase64Payload(
-    CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS,
-    'Clipboard image chunk is too large'
-  )
-})
+export const AppendImageUploadChunk = lazyZodSchema(() =>
+  z.object({
+    uploadId: z.string().min(1),
+    offset: z.number().int().nonnegative(),
+    contentBase64: clipboardImageBase64Payload(
+      CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS,
+      'Clipboard image chunk is too large'
+    )
+  })
+)
 
-export const CommitImageUpload = z.object({
-  uploadId: z.string().min(1)
-})
+export const CommitImageUpload = lazyZodSchema(() =>
+  z.object({
+    uploadId: z.string().min(1)
+  })
+)
 
-export const AbortImageUpload = z.object({
-  uploadId: z.string().min(1)
-})
+export const AbortImageUpload = lazyZodSchema(() =>
+  z.object({
+    uploadId: z.string().min(1)
+  })
+)

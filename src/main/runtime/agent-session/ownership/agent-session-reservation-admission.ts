@@ -47,7 +47,7 @@ import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome
 } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import { assertReservedTabUnheld } from '../agent-session-tab-table'
+import { assertReservedTabUnheld } from '../records/agent-session-tab-table'
 
 export type AgentSessionReserveRequest = {
   forkedFrom?: AgentSessionRecord['forkedFrom']

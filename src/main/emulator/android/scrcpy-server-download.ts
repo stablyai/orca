@@ -5,7 +5,7 @@ import { pipeline } from 'node:stream/promises'
 import type { IncomingMessage } from 'node:http'
 import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { EmulatorError } from '../emulator-errors'
-import { emulatorFailureText } from '../../../shared/emulator-failure-copy'
+import { emulatorFailureText } from '../../../shared/emulator/emulator-failure-copy'
 import { emulatorProbe, emulatorProbeError } from '../emulator-probe'
 import { SCRCPY_SERVER_VERSION } from './scrcpy-server-deploy'
 

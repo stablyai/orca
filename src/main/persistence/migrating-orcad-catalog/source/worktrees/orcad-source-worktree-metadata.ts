@@ -1,4 +1,4 @@
-import type { PersistedState } from '../../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../../shared/orca-profiles/persisted-state-types'
 import type { WorktreeMeta } from '../../../../../shared/worktree/meta-types'
 
 import {

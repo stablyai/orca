@@ -6,7 +6,7 @@ import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   toSshExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import {
   findIndexedReviewRepository,
   hasIndexedRepository

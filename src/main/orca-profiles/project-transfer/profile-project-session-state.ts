@@ -1,5 +1,5 @@
-import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import { getDefaultWorkspaceSession } from '../../../shared/orca-profiles/constants'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import {

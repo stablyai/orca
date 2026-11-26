@@ -7,7 +7,7 @@ import {
 } from './subagents/native-chat-subagent-summary'
 import { subagentFallbackText } from './subagents/native-chat-subagent-items'
 import type { NativeChatMessage } from '../native-chat-types'
-import { isInlineDataUrl } from '../native-chat-inline-data-url'
+import { isInlineDataUrl } from '../attachments/native-chat-inline-data-url'
 
 export function formatWorkerTranscriptMessage(message: NativeChatMessage): string {
   const fallbacks = workerTranscriptBlockFallbacks(message.blocks)

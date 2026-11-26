@@ -5,7 +5,7 @@ import type { PRCacheView } from '../../../shared/sidebar-list/feed-facts/worksp
 import { readWorktreeMetaForHost } from '../../persistence/host-qualified-worktree-meta'
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
-import { mergeWorktree } from '../worktree-metadata-merge'
+import { mergeWorktree } from '../worktrees/metadata/worktree-metadata-merge'
 import type {
   WorkspaceCleanupAutomationRunLookup,
   WorkspaceCleanupCandidate,

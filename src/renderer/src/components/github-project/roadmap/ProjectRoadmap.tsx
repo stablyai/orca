@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { CalendarClock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
+import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
 import { cn } from '@/lib/class-names'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import ProjectGroupHeader from '../ProjectGroupHeader'

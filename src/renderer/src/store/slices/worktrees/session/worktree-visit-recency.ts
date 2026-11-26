@@ -7,7 +7,7 @@ import {
   parseWorkspaceKey,
   worktreeWorkspaceKey
 } from '../../../../../../shared/workspace/identity/workspace-scope'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   getWorktreeIdFromVisitKey,
   getWorktreeVisitKey,

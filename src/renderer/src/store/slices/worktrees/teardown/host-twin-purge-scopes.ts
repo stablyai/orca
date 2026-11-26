@@ -5,7 +5,7 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId,
   getRepoExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import type { WorktreePurgeTarget } from './worktree-purge-target'

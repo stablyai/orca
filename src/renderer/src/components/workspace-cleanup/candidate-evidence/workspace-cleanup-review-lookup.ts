@@ -3,7 +3,7 @@ import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-rev
 import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type {
   HostedReviewInfo,
   HostedReviewProvider

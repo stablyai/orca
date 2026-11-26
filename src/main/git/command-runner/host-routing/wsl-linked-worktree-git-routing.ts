@@ -260,21 +260,3 @@ export function usesHostGitForWslLinkedWorktree(
     cachedRoute(normalize(cwd), now()) === true
   )
 }
-
-export function resetWslLinkedWorktreeGitRoutingForTests(): void {
-  routeByCwd.clear()
-  pendingRoutes.clear()
-  transientFailuresByCwd.clear()
-  activeProbeCountByCwd.clear()
-  activeProbeCount = 0
-  routeProbeGeneration += 1
-  nextRoutePruneAt = 0
-}
-
-export function seedWslLinkedWorktreeGitRoutingForTests(root: string): void {
-  const normalizedRoot = normalize(root)
-  routeByCwd.set(normalizedRoot, {
-    usesHostGit: true,
-    expiresAt: Number.POSITIVE_INFINITY
-  })
-}

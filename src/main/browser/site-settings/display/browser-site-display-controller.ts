@@ -14,7 +14,7 @@ import {
   normalizeBrowserPageZoomLevel,
   type BrowserPageZoomDirection
 } from '../../../../shared/browser/site-settings/browser-page-zoom'
-import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import type { PersistedUIState } from '../../../../shared/orca-profiles/persisted-ui-state-types'
 import { errorMessage } from '../../../../shared/errors/error-message'
 
 type TrackedGuest = {
@@ -57,6 +57,7 @@ export class BrowserSiteDisplayController {
   }
 
   onGuestRegistered(guest: Electron.WebContents, profileId: string | null): void {
+    guest.setZoomMode('isolated')
     const previous = this.guests.get(guest.id)
     previous?.stopWatchingDomReady()
     // dom-ready follows Electron's post-commit copy of the embedder zoom.

@@ -4,7 +4,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import {
   FORK_MARKED_NAME_SLOTS,
   forkMarkedNameParts
-} from '../../../../../shared/agent-session/agent-session-fork-name-order'
+} from '../../../../../shared/agent-session/conversation-naming/agent-session-fork-name-order'
 
 /** A forked chat's name with its "Fork ·" mark, in the locale's order; screen readers hear
  *  "Fork: <name>" at every width. In a tab (`narrowIcon`) narrower than 180px (168px inside the

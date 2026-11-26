@@ -1,4 +1,4 @@
-import { getNextRootProjectOrder } from '../../../../shared/root-project-order'
+import { getNextRootProjectOrder } from '../../../../shared/sidebar-list/sections/root-project-order'
 import type {
   ProjectGroup,
   ProjectGroupMutation

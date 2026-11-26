@@ -1,15 +1,15 @@
 import { type BrowserWindow, ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { access, mkdir, readdir, rm } from 'node:fs/promises'
-import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { RepositoryMetadataOwner } from '../../workspaces/catalog/imported-folder-project-link'
-import { DEFAULT_REPO_BADGE_COLOR, getDefaultWorkspaceDir } from '../../../shared/constants'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { getEffectiveHostSetting } from '../../../shared/execution-host/host-setting-overrides'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/repository/appearance/repo-badge-color'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../shared/execution-host/execution-host'
 import { probeGitAvailability } from '../../git/command-runner/host-routing/git-availability'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import { inspectGitRepoForRegistrationAsync } from '../../git/repositories/discovery/repo-detection'
@@ -27,6 +27,7 @@ import {
 import { emitRepoAdded } from './repo-added-telemetry'
 import { notifyReposChanged } from './repos-changed-notification'
 import { addLocalRepoFromPath } from './local-repo-registration'
+import { getDefaultCreateProjectParent } from '../../runtime/repositories/default-create-project-parent'
 
 const GIT_AVAILABILITY_TIMEOUT_MS = 1500
 
@@ -38,32 +39,15 @@ export async function probeLocalGitAvailability(): Promise<boolean> {
   })
 }
 
-/** Ignore seeded workspaceDir: treating it as user intent nests projects inside the worktree root. */
-function getDefaultCreateProjectParent(store: Store): string {
-  const home = homedir()
-  const settings = store.getSettings()
-  const configured = getEffectiveHostSetting(
-    settings,
-    LOCAL_EXECUTION_HOST_ID,
-    'defaultWorktreeLocation',
-    settings.workspaceDir ?? ''
-  ).trim()
-  const isUntouchedDefault =
-    normalizeRuntimePathForComparison(configured) ===
-    normalizeRuntimePathForComparison(getDefaultWorkspaceDir(home))
-  if (configured && !isUntouchedDefault) {
-    return configured
-  }
-  return join(home, 'orca', 'projects')
-}
-
 export function registerRepoCreationHandlers(
   mainWindow: BrowserWindow,
   store: Store,
   enqueueMetadata: RepositoryMetadataOwner['enqueueRepositoryMetadata']
 ): void {
   ipcMain.handle('repos:isGitAvailable', () => probeLocalGitAvailability())
-  ipcMain.handle('repos:getDefaultCreateProjectParent', () => getDefaultCreateProjectParent(store))
+  ipcMain.handle('repos:getDefaultCreateProjectParent', () =>
+    getDefaultCreateProjectParent(store.getSettings())
+  )
 
   ipcMain.handle(
     'repos:add',

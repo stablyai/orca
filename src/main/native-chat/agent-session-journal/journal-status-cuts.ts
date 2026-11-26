@@ -1,5 +1,5 @@
-import { latestNativeChatUsageLimitCut } from '../../../shared/native-chat/native-chat-usage-limit-cut'
-import { latestNativeChatOrcaStopCut } from '../../../shared/native-chat/native-chat-orca-stop-cut'
+import { latestNativeChatUsageLimitCut } from '../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
+import { latestNativeChatOrcaStopCut } from '../../../shared/native-chat/transcript/continuation/native-chat-orca-stop-cut'
 import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
 import type { JournalReducerState } from './projection/journal-reducer'
 import { renderJournalStatus, renderJournalStatusItem } from './projection/journal-public-read'

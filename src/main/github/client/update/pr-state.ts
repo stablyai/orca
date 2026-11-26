@@ -1,12 +1,15 @@
 import { invalidateReviewLookupsAfterPRMutation } from '../../pull-requests/refresh/pr-mutation-review-invalidation'
-import type { GitHubPullRequestStateUpdate } from '../../../../shared/issue-mutation-types'
+import type { GitHubPullRequestStateUpdate } from '../../../../shared/work-items/issue-mutation-types'
 import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
 import { acquire, release } from '../../execution/github-operation-slots'
 import { classifyPullRequestUpdateError } from '../../api/gh-error-classification'
 import type { LocalGitExecOptions } from '../../repositories/github-repository-identity'
 import { resolveGitHubRepoExecution } from '../../repositories/github-api-repository'
 import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
-import { codeHostFailure, classifiedFailure } from '../../../../shared/code-host-failure-copy'
+import {
+  codeHostFailure,
+  classifiedFailure
+} from '../../../../shared/source-control/code-host-failure-copy'
 export async function updatePRState(
   repoPath: string,
   prNumber: number,

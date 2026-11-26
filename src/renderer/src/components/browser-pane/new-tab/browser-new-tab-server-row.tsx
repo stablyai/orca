@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import { BrowserFavicon } from '@/components/browser-favicon'
+import { BrowserFavicon } from '@/components/browser-pane/describe-page/browser-favicon'
 import { useLocalhostLabelRouteForPort } from '@/lib/workspace-ports/workspace-port-localhost-label-selector'
 import { addressForPort } from '@/lib/workspace-ports/workspace-port-urls'
 import {

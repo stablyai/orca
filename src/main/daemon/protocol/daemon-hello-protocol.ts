@@ -16,6 +16,7 @@ export type DaemonEndpointIdentity = {
   entryPath?: string
   appVersion?: string
   spawnerExecPath?: string
+  providerSpawn?: true
 }
 
 export type HelloResponse = {
@@ -27,4 +28,6 @@ export type HelloResponse = {
   streamFraming?: string
   /** How this daemon's live emulators resize (daemon-history-replay-pty.ts); absent means xterm's. */
   resizeModel?: string
+  /** Opt-in screen projection support, advertised on the authenticated control connection. */
+  visibleProjectionSnapshots?: true
 }

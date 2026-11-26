@@ -7,6 +7,7 @@ import {
 } from '../../../../shared/wsl-move/wsl-move-cutover'
 import { scanWslMoveCutovers } from '../cutover-recovery/wsl-move-cutover-journal'
 import { comparableWslPath } from '../manifest-scope/wsl-move-comparable-path'
+import type { WslMappedDrive } from '../../../../shared/wsl-move/wsl-mapped-drive-paths'
 import { wslMoveScopeRootPaths } from '../manifest-scope/wsl-move-scope-roots'
 import {
   listWslDriveUncConversions,
@@ -34,7 +35,12 @@ export type WslMoveFenceState = {
   }
 }
 
-export type WslMoveFencedRoots = { distro: string; roots: readonly string[] }
+export type WslMoveFencedRoots = {
+  distro: string
+  roots: readonly string[]
+  /** The move's mapped drives, from its cutover: a spawn in `W:\x` names a fenced folder too. */
+  mappedDrives?: readonly WslMappedDrive[]
+}
 
 const phaseIndex = (phase: WslMoveCutoverPhase): number => WSL_MOVE_CUTOVER_PHASES.indexOf(phase)
 const FENCED_FROM = phaseIndex('source-fenced')
@@ -119,7 +125,9 @@ function fencedRootsOf(cutover: Readonly<WslMoveCutover>): WslMoveFencedRoots {
   const roots = wslMoveScopeRootPaths(cutover.manifest).flatMap(
     (root) => comparableWslPath(root, distro) ?? []
   )
-  return { distro, roots }
+  return cutover.mappedDrives?.length
+    ? { distro, roots, mappedDrives: cutover.mappedDrives }
+    : { distro, roots }
 }
 
 function addScope(

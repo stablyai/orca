@@ -1,5 +1,5 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
-import { getDefaultVoiceSettings } from '../../../../../shared/constants'
+import { getDefaultVoiceSettings } from '../../../../../shared/orca-profiles/constants'
 import {
   NEMOTRON_DICTATION_LANGUAGES,
   PARAKEET_V3_LANGUAGES

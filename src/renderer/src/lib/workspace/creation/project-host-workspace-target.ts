@@ -3,7 +3,7 @@ import {
   getRepoExecutionHostId,
   type ExecutionHostId,
   type ExecutionHostScope
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import {
   getProjectIdentityKey,
   projectHostSetupProjectionFromRepos
@@ -11,9 +11,9 @@ import {
 import type { Project, ProjectHostSetup } from '../../../../../shared/project/project-types'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import './new-workspace-composer-repo'
-import { resolveNewWorkspaceDialogRepoId } from '../../../../../shared/new-workspace-dialog-repo'
+import { resolveNewWorkspaceDialogRepoId } from '../../../../../shared/new-workspace/new-workspace-dialog-repo'
 import { findSoleHostCopy } from '../../../../../shared/worktree/host-qualified-identity'
-import { normalizeRuntimePathForComparison } from '../../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../../shared/file-access/cross-platform-path'
 
 export type WorkspaceCreationTarget = {
   projectId: string

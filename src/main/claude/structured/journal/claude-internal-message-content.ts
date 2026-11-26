@@ -26,6 +26,17 @@ export function isClaudeInjectedUserMessage(frame: Record<string, unknown>): boo
   )
 }
 
+/** A delivered task notification: Claude resuming on its own, a turn no prompt opened. */
+export function isClaudeTaskNotificationTurnStart(frame: Record<string, unknown>): boolean {
+  return (
+    frame.type === 'user' &&
+    asRecord(frame.origin)?.kind === 'task-notification' &&
+    frame.isMeta !== true &&
+    frame.isSynthetic !== true &&
+    frame.isCompactSummary !== true
+  )
+}
+
 /** Resume repair text is not conversation; semantic siblings still take their normal paths. */
 export function claudeMessageWithoutSyntheticText(
   frame: Record<string, unknown>

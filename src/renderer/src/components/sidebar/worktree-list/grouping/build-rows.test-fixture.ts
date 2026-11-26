@@ -2,14 +2,14 @@ import type { AppState } from '@/store/types'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
-import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
+import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import { cloneDefaultWorkspaceStatuses } from '../../../../../../shared/workspace/status/workspace-statuses'
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { ProjectGroupingModel } from '../../../../../../shared/sidebar-list/sections/project-section-grouping'
 import {
   getPinnedWorktreeDisplayPolicy,

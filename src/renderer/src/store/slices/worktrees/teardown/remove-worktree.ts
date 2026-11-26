@@ -1,5 +1,5 @@
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
-import { parseExecutionHostId } from '../../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { ensureHooksConfirmed } from '@/runtime/repo-hooks/ensure-hooks-confirmed'
 import { runtimeTargetForOwnerEnvironment } from '../../../../runtime/rpc/targets/runtime-client-target'
 import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'

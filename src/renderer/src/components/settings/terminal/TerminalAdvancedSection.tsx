@@ -1,7 +1,7 @@
 import { TerminalLimitSetting } from './session-management/TerminalLimitSetting'
 import type { SettingsHostScope } from '../host-scope/settings-host-scope'
 import { useState } from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { TERMINAL_DEFAULT_WORD_SEPARATOR } from '../../../../../shared/terminal/input/terminal-word-separator'
 import {
   DESKTOP_TERMINAL_SCROLLBACK_ROWS_MAX,

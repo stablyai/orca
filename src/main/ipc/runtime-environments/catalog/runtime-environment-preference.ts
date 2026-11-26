@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { listEnvironments } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getEnvironmentStorePath } from '../../../../shared/remote-runtime/host-store/runtime-environment-store-records'
 import type { Store } from '../../../persistence/loading-store/store'
@@ -32,7 +32,8 @@ export async function readSettingsWithRuntimeEnvironmentPreference(
     // An unavailable registry cannot prove the selected host was removed.
     environments = await listEnvironments(userDataPath, { requireStoreFile: true })
   } catch {
-    return settings
+    // Why: the lookup waited, so the settings may have changed since they were read above.
+    return store.getSettings()
   }
   return reconcileRuntimeEnvironmentPreference(store, environments)
 }

@@ -225,12 +225,9 @@ export function GitHubItemDialogIssueHeader({
                 size="sm"
                 onClick={() => onUse(workItem)}
                 className="gap-1.5 whitespace-nowrap"
-                aria-label={t(
-                  'auto.components.GitHubItemDialog.0ab4664a8b',
-                  'Start workspace from issue'
-                )}
+                aria-label={t('auto.components.GitHubItemDialog.0ab4664a8b', 'Start workspace')}
               >
-                {t('auto.components.GitHubItemDialog.0ab4664a8b', 'Start workspace from issue')}
+                {t('auto.components.GitHubItemDialog.0ab4664a8b', 'Start workspace')}
                 <ArrowRight className="size-3.5" />
               </Button>
             )}

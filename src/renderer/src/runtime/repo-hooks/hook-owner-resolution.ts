@@ -7,7 +7,7 @@ import {
   getRepoExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 
 export function findHookRepo(state: AppState, repoId: string, hostId?: ExecutionHostId) {
   const group = state.projectGroups.find(

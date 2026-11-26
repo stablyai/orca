@@ -1,6 +1,10 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { GitHubProjectViewError } from '../../../../../shared/github/projects/project-result-types'
+import {
+  ghAuthLoginCommand,
+  ghAuthRefreshCommand
+} from '../../../../../shared/github/projects/project-gh-auth-commands'
 
 type ProjectViewErrorCopyContext = {
   /** Host of the failing surface, used when an older host omits `error.host`. */
@@ -97,21 +101,17 @@ function typeCopy(
   const host = error.host ?? context.host
   switch (error.type) {
     case 'auth_required':
-      return host
-        ? t(
-            'projectViews.error.authRequired',
-            'Sign in to GitHub to load project tasks. Run `{{command}}`.',
-            { command: `gh auth login --hostname ${host}` }
-          )
-        : undefined
+      return t(
+        'projectViews.error.authRequired',
+        'Sign in to GitHub to load project tasks. Run `{{command}}`.',
+        { command: ghAuthLoginCommand(host) }
+      )
     case 'scope_missing':
-      return host
-        ? t(
-            'projectViews.error.scopeMissing',
-            'GitHub project access needs additional scopes. Run `{{command}}`.',
-            { command: `gh auth refresh --hostname ${host} -s project -s read:org -s repo` }
-          )
-        : undefined
+      return t(
+        'projectViews.error.scopeMissing',
+        'GitHub project access needs additional scopes. Run `{{command}}`.',
+        { command: ghAuthRefreshCommand(host) }
+      )
     case 'rate_limited':
       return error.rateLimit
         ? t(

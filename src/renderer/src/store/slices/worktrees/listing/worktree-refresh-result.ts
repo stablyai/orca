@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { AdmittedDetectedWorktreeRefresh } from './worktree-slice-types'
 
 export type WorktreeRefreshResult = {

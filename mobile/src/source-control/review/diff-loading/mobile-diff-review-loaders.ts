@@ -1,4 +1,5 @@
 import { buildMobileDiffLines } from '../diff-state/mobile-diff-lines'
+import { mobileDiffImageDataUri } from '../../../files/session-documents/mobile-diff-image-preview'
 import {
   highlightMobileDiffLines,
   resolveMobileSyntaxLanguage
@@ -195,7 +196,14 @@ export async function loadMobileDiffReviewDiff(
     )
   }
   if (result.kind === 'binary') {
-    return { kind: 'binary', itemKey: input.itemKey }
+    // Branch and commit diffs don't flag deletion; their fixed status proves it. Worktree diffs flag it.
+    const provenDeleted = input.deleted && (input.scope === 'branch' || input.scope === 'commit')
+    const dataUri = mobileDiffImageDataUri(
+      provenDeleted ? { ...result, modifiedDeleted: true } : result
+    )
+    return dataUri
+      ? { kind: 'image', itemKey: input.itemKey, dataUri }
+      : { kind: 'binary', itemKey: input.itemKey }
   }
   if (result.kind === 'too-large') {
     return { kind: 'too-large', itemKey: input.itemKey, byteLength: result.byteLength }

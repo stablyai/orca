@@ -4,7 +4,7 @@ import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { requireRepoLocalGitRoute } from '../../../workspaces/execution-host/repo-execution-host'
 import { fetchCompareBaseRefWithLocalFallback } from '../../../git/remotes/compare-base-ref-fetch'
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
-import { REVIEW_HEAD_FETCH_TIMEOUT_MS } from '../../../../shared/review-head-tracking-ref'
+import { REVIEW_HEAD_FETCH_TIMEOUT_MS } from '../../../../shared/worktree/hosted-review/review-head-tracking-ref'
 import { getProjectRefForRemote } from '../../../gitlab/projects/gitlab-project-ref-resolution'
 import { getWorkItemByProjectRef } from '../../../gitlab/work-items/work-item-queries'
 import { getGlabKnownHosts } from '../../../gitlab/projects/gitlab-known-host-probe'
@@ -15,7 +15,7 @@ import {
 import type { ProjectRuntimeResolutionStore } from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import { resolveRuntimeGitLabForkMrBase } from './runtime-gitlab-fork-mr-base'
 import { resolveRuntimeGitLabIssueSourceRemote } from './runtime-gitlab-issue-source-remote'
-import { reviewStartPointFailure } from '../../../../shared/review-start-point-failure-copy'
+import { reviewStartPointFailure } from '../../../../shared/worktree/hosted-review/review-start-point-failure-copy'
 import { resolvePrStartPointUnlessWslStopped } from '../../../github/pull-requests/start-points/pr-start-point-wsl-gate'
 
 export type RuntimeGitLabWorktreeBaseArgs = {

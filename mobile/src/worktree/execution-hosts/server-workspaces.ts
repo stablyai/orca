@@ -1,6 +1,5 @@
 import * as z from 'zod'
-import type { ExecutionHostId } from '../../../../src/shared/execution-host'
-import type { ExecutionHostHealth } from '../../../../src/shared/execution-host/execution-host-health'
+import type { ExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import type { MobileRelayHost } from '../../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { relayHostsFeed } from './relay-hosts-feed'
@@ -18,40 +17,6 @@ import { areWorktreeListsEqual } from '../catalog/worktree-list-snapshot'
 export type ServerWorkspaces = { hosts: readonly MobileRelayHost[]; worktrees: readonly Worktree[] }
 
 export const NO_SERVER_WORKSPACES: ServerWorkspaces = { hosts: [], worktrees: [] }
-
-export function serverHostHealth(host: MobileRelayHost): ExecutionHostHealth {
-  return host.relay === 'update-needed' ? 'blocked' : host.health
-}
-
-/** The desktop's own WSL host that only the desktop can bring up: stopped, or not ready there. */
-export type ServerHostDesktopReach = 'stopped' | 'unavailable'
-
-export function serverHostDesktopReach(host: MobileRelayHost): ServerHostDesktopReach | undefined {
-  if (host.stoppedOnDesktop) {
-    return 'stopped'
-  }
-  return host.unavailableOnDesktop ? 'unavailable' : undefined
-}
-
-// Why: a phone never starts or connects the desktop's own WSL host, so the badge says where to.
-export function serverHostHealthLabel(host: MobileRelayHost): string | undefined {
-  const reach = serverHostDesktopReach(host)
-  if (reach === undefined) {
-    return undefined
-  }
-  return reach === 'stopped' ? 'Start on computer' : 'Open on computer'
-}
-
-export function serverHostHealthLabels(
-  hosts: readonly MobileRelayHost[]
-): ReadonlyMap<ExecutionHostId, string> {
-  return new Map(
-    hosts.flatMap((host) => {
-      const label = serverHostHealthLabel(host)
-      return label ? [[host.hostId, label] as const] : []
-    })
-  )
-}
 
 export function withServerHosts<Value>(
   desktop: ReadonlyMap<ExecutionHostId, Value>,
@@ -107,10 +72,23 @@ export class ServerRowSnapshots {
   constructor(readonly deltas: boolean) {}
 
   async read(client: RpcClient, hosts: readonly MobileRelayHost[]): Promise<(Worktree[] | null)[]> {
-    let byHost = this.byClient.get(client)
+    this.retain(client, hosts)
+    if (hosts.length === 0) {
+      return []
+    }
+    const byHost = this.hostsOf(client)
+    return Promise.all(hosts.map((host) => this.readHost(client, byHost, host.hostId)))
+  }
+
+  /** Drops snapshots for servers no longer listed by this client. */
+  retain(client: RpcClient, hosts: readonly MobileRelayHost[]): void {
+    const byHost = this.byClient.get(client)
     if (!byHost) {
-      byHost = new Map()
-      this.byClient.set(client, byHost)
+      return
+    }
+    if (hosts.length === 0) {
+      this.byClient.delete(client)
+      return
     }
     const listed = new Set<ExecutionHostId>(hosts.map((host) => host.hostId))
     for (const hostId of byHost.keys()) {
@@ -118,7 +96,23 @@ export class ServerRowSnapshots {
         byHost.delete(hostId)
       }
     }
-    return Promise.all(hosts.map((host) => this.readHost(client, byHost, host.hostId)))
+    if (byHost.size === 0) {
+      this.byClient.delete(client)
+    }
+  }
+
+  /** One server's rows, leaving the other servers' snapshots alone. */
+  readOne(client: RpcClient, hostId: ExecutionHostId): Promise<Worktree[] | null> {
+    return this.readHost(client, this.hostsOf(client), hostId)
+  }
+
+  private hostsOf(client: RpcClient): Map<ExecutionHostId, WorktreeCatalogSnapshotClient> {
+    let byHost = this.byClient.get(client)
+    if (!byHost) {
+      byHost = new Map()
+      this.byClient.set(client, byHost)
+    }
+    return byHost
   }
 
   private async readHost(

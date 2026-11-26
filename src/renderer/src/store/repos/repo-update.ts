@@ -9,7 +9,7 @@ import { sanitizeAgentWorkspaceTrustDecision } from '../../../../shared/agent-la
 import { findRepoForHost, repoMatchesHostIdentity } from './repo-host-identity'
 import { getRepoHostIdentityForParts } from '../../../../shared/repository/repo-host-identity'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences

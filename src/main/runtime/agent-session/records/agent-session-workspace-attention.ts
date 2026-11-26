@@ -1,4 +1,4 @@
-import type { StructuredAttentionRead } from '../../../../shared/agent-session/agent-session-attention'
+import type { StructuredAttentionRead } from '../../../../shared/agent-session/view/agent-session-attention'
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import {
   agentSessionExecutionLocationsEqual,

@@ -11,7 +11,7 @@ import {
   agentSessionExecutionLocationsEqual,
   type AgentSessionExecutionLocation
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { StructuredAttentionRead } from '../../../../shared/agent-session/agent-session-attention'
+import type { StructuredAttentionRead } from '../../../../shared/agent-session/view/agent-session-attention'
 
 export function readStoredWorkspaceAttention(
   database: JournalHostDatabase,

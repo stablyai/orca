@@ -3,10 +3,10 @@ import type {
   OnboardingOutcome,
   OnboardingState
 } from '../../../shared/onboarding/onboarding-state-types'
-import type { NotificationSettings } from '../../../shared/notification-settings-types'
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import { getDefaultNotificationSettings } from '../../../shared/notification-settings-defaults'
-import { normalizeVisibleExecutionHostIds } from '../../../shared/execution-host'
+import type { NotificationSettings } from '../../../shared/notifications/notification-settings-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import { getDefaultNotificationSettings } from '../../../shared/notifications/notification-settings-defaults'
+import { normalizeVisibleExecutionHostIds } from '../../../shared/execution-host/execution-host'
 import {
   getDefaultOnboardingState,
   ONBOARDING_FINAL_STEP,

@@ -62,10 +62,3 @@ export function scheduleWslMoveRewriteRetry(
   }, delay)
   timer.unref?.()
 }
-
-export function cancelWslMoveRewriteRetryForTests(): void {
-  if (timer) {
-    clearTimeout(timer)
-    timer = null
-  }
-}

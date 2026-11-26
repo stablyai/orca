@@ -1,3 +1,4 @@
+import { DEFAULT_TERMINAL_FONT_STYLE } from '../terminal/preferences/terminal-font-style'
 import { useState, useRef, useMemo } from 'react'
 import { useTerminalSplitLayout } from '../terminal/session/pane-layout/use-terminal-split-layout'
 import { createLiveInputCapture } from '../terminal/session/input-controls/live-input-capture'
@@ -11,9 +12,11 @@ import {
 } from '../terminal/key-input/terminal-accessory-layout'
 import type { CustomKey } from '../terminal/key-input/terminal-custom-keys'
 import type { AppliedSnapshotMarker } from './tabs/session-tab-snapshot-gate'
+import type { ClosingTerminalTab } from './tabs/closing-terminal-tab-handles'
+import type { TerminalRowHandles } from '../terminal/session/pane-layout/mobile-terminal-pane-layout'
 import { useWorktreeSessionTabsLoaded } from '../terminal/session/creation/use-initial-session-terminal-autocreate'
 import { createMobileSessionCreateWarningState } from './tabs/mobile-session-create-warning-state'
-import type { DiffComment } from '../../../src/shared/diff-comment-types'
+import type { DiffComment } from '../../../src/shared/file-review/diff-comment-types'
 import type { DiffNotesDelivery } from '../source-control/review/review-notes/mobile-review-comment-state'
 import type {
   DirtyMarkdownDraft,
@@ -25,6 +28,7 @@ import type { TerminalRecord as Terminal } from '../terminal/session/inventory/m
 import type { MobileSessionTab } from './tabs/mobile-session-tabs'
 import { useMobileSessionTabActionTargets } from './tabs/use-mobile-session-tab-action-targets'
 import type { MobileSessionFoundationModel } from './use-mobile-session-foundation'
+import type { MobileSessionTextSizeSheetKind } from './MobileSessionTextSizeSheet'
 
 export function useMobileSessionScreenState(scope: MobileSessionFoundationModel) {
   const { worktreeId, initialCreateWarning } = scope
@@ -36,8 +40,11 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const appliedSnapshotMarkerRef = useRef<AppliedSnapshotMarker>({ epoch: null, version: -1 })
   const appliedSessionTabsRevisionRef = useRef(0)
   const closedTabTombstonesRef = useRef<Map<string, number>>(new Map())
+  const closingTerminalTabsRef = useRef(new Set<ClosingTerminalTab>())
+  const terminalRowHandlesRef = useRef<TerminalRowHandles>(new Map())
   const [terminalsLoaded, setTerminalsLoaded] = useWorktreeSessionTabsLoaded(worktreeId)
   const [terminalTextScale, setTerminalTextScale] = useState(1)
+  const [terminalFontStyle, setTerminalFontStyle] = useState(DEFAULT_TERMINAL_FONT_STYLE)
   const terminalTextScaleRevisionRef = useRef(0)
   const [linkOpenMode, setLinkOpenMode] = useState<MobileLinkOpenMode>(DEFAULT_LINK_OPEN_MODE)
   const [liveInputCapture] = useState(createLiveInputCapture)
@@ -69,6 +76,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [showCreateBrowserModal, setShowCreateBrowserModal] = useState(false)
   const [showHeaderMoreActions, setShowHeaderMoreActions] = useState(false)
   const [showTerminalLayout, setShowTerminalLayout] = useState(false)
+  const [textSizeSheet, setTextSizeSheet] = useState<MobileSessionTextSizeSheetKind | null>(null)
   const sessionTabActionTargets = useMobileSessionTabActionTargets()
   const [discardMarkdownTarget, setDiscardMarkdownTarget] = useState<Extract<
     MobileSessionTab,
@@ -113,11 +121,15 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     appliedSnapshotMarkerRef,
     appliedSessionTabsRevisionRef,
     closedTabTombstonesRef,
+    closingTerminalTabsRef,
+    terminalRowHandlesRef,
     terminalsLoaded,
     setTerminalsLoaded,
     terminalTextScale,
     setTerminalTextScale,
     terminalTextScaleRevisionRef,
+    terminalFontStyle,
+    setTerminalFontStyle,
     linkOpenMode,
     setLinkOpenMode,
     liveInputCapture,
@@ -163,6 +175,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setShowHeaderMoreActions,
     showTerminalLayout,
     setShowTerminalLayout,
+    textSizeSheet,
+    setTextSizeSheet,
     ...sessionTabActionTargets,
     discardMarkdownTarget,
     setDiscardMarkdownTarget,

@@ -1,6 +1,6 @@
 import type { FreshWorkspaceAgentLaunch } from '@/lib/workspace/creation/worktree-startup-payload'
 import type { TerminalState } from './terminal-state'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TabSplitTarget } from '../slices/tabs/tabs-slice-contract'
 import type {
   TerminalLayoutSnapshot,
@@ -25,7 +25,7 @@ import type {
   NativeChatLaunchDraft,
   NativeChatLaunchPrompt
 } from '@/components/native-chat/drafts/native-chat-launch-prompt'
-import type { AgentStatusWorktreeShutdownReason } from '../slices/agent-status/agent-status-contract'
+import type { AgentStatusWorktreeShutdownReason } from '../slices/agent-status/contracts/agent-status-contract'
 import type {
   TerminalTabCloseReason,
   TerminalTabRetirementPlan
@@ -133,7 +133,13 @@ export type TerminalActions = {
   ) => void
   setGeneratedTabTitlesFromAgentPrompts: (updates: readonly GeneratedTabTitleUpdate[]) => void
   clearTabLaunchAgent: (tabId: string) => void
-  setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
+  /** alsoTabTitle applies updateTabTitle in the same store update. */
+  setRuntimePaneTitle: (
+    tabId: string,
+    paneId: number,
+    title: string,
+    options?: { alsoTabTitle?: boolean }
+  ) => void
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
   setTabCustomTitle: (
     tabId: string,
@@ -181,6 +187,8 @@ export type TerminalActions = {
       leafId: string
       ptyId: string
       expectedRuntimePtyId?: string
+      /** Re-checked after main's sleep admission: the user may have come back to the pane meanwhile. */
+      stillEligible?: () => Promise<boolean>
     }
   ) => Promise<void>
   suppressPtyExit: (ptyId: string) => void

@@ -12,7 +12,7 @@ import {
   captureRuntimeEnvironmentCall,
   isWebRuntimeSessionActive
 } from '../../web-session-tabs-sync/identity/web-runtime-session-environment'
-import { isServerFrameDrawnWorkspace } from '../../web-session-tabs-sync/frame-drawn-server-workspace-set'
+import { isServerFrameDrawnWorkspace } from '../../web-session-tabs-sync/frame-drawn/frame-drawn-server-workspace-set'
 
 // Push remote geometry to its host or the next authoritative snapshot reverts it.
 export async function updateWebRuntimePaneLayout(args: {

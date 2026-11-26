@@ -63,7 +63,26 @@ export const runtimeRpcStartFailedSchema = z
 
 // Why: classify session-killing 1013 closures as producer size failures or queue backpressure.
 export const remoteOutboundBudgetCloseSchema = z
-  .object({ emitter: z.enum(['size', 'queue']) })
+  .object({
+    emitter: z.enum(['size', 'queue']),
+    // Which limit fired, and the RPC method that queued the most since the socket's backlog began.
+    cap: z
+      .enum([
+        'maxQueuedBytes',
+        'maxQueuedFrames',
+        'maxFrameBytes',
+        'claimQueuedBytes',
+        'sendFailed',
+        'bufferedBytes',
+        'socketSources'
+      ])
+      .optional(),
+    top_method: z
+      .string()
+      .max(80)
+      .regex(/^[A-Za-z][\w.]*$/)
+      .optional()
+  })
   .strict()
 
 // Main deadlocks yield no crash report. self_recovered separates stalls that resolved from those a recovery kill might help;

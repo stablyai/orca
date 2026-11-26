@@ -2,15 +2,15 @@ import {
   getRepoExecutionHostId,
   isRuntimeOwnedSshTargetId,
   parseExecutionHostId
-} from '../../../../../shared/execution-host'
-import '../../../../../shared/new-workspace-dialog-repo'
+} from '../../../../../shared/execution-host/execution-host'
+import '../../../../../shared/new-workspace/new-workspace-dialog-repo'
 import { getProjectIdentityKey } from '../../../../../shared/project/host-setup/project-host-setup-projection'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import {
   isEphemeralVmRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
 } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { isRepoHidden } from '../../../../../shared/hidden-projects'
+import { isRepoHidden } from '../../../../../shared/project/catalog/hidden-projects'
 
 type RuntimeEnvironmentSource = Pick<PublicKnownRuntimeEnvironment, 'id' | 'source'>
 

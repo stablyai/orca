@@ -1,8 +1,9 @@
 import { haveSameDisabledTuiAgents } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import { getLocalAgentPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { localAgentInventoryContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
+import { dropEnabledLocalAgentInventories } from './local-agent-inventory-invalidation'
 import * as contextEviction from './local-agent-context-eviction'
 import { getLegacyLoadingPatch } from './local-agent-legacy-loading'
 import { markLocalAgentRefusal, refreshLocalAgentInventory } from './local-agent-inventory-refresh'
@@ -287,7 +288,11 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
       )
     ) {
       const reacquireNativeInventory = nativeInventoryRequested
-      actions.clearLocalDetectedAgents()
+      if (overridesChanged) {
+        actions.clearLocalDetectedAgents()
+      } else {
+        dropEnabledLocalAgentInventories(set, get, lifecycle)
+      }
       // Native consumers can remain mounted while workspace consumers reacquire only WSL.
       if (reacquireNativeInventory) {
         void actions.ensureNativeDetectedAgents()

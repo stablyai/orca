@@ -7,10 +7,14 @@ import {
   type DashboardCard,
   type DashboardCardSubagent,
   type DashboardSnapshot
-} from '../../../../../shared/dashboard-snapshot'
+} from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import { dashboardBucketForDotState } from '../../dashboard/snapshot/dashboard-card-bucket'
 import { dashboardCardDotState } from '../../dashboard/rows/dashboard-row-bucket'
 import { isAgentTurnUnacknowledged } from '@/attention/agent-attention-acknowledgement'
+import {
+  dashboardCardIndex,
+  replaceDashboardCards
+} from '../../dashboard/snapshot/dashboard-card-changes'
 
 export type DashboardAgentStatusPatchResult = {
   matched: boolean
@@ -21,10 +25,8 @@ function patchedSubagents(
   card: DashboardCard,
   event: AgentStatusIpcPayload
 ): DashboardCardSubagent[] | undefined {
-  if (event.subagents === undefined) {
-    return card.subagents
-  }
-  return event.subagents.map((subagent) => ({
+  // Producers omit the field when the roster is empty, so absent means none, as the store reads it.
+  return event.subagents?.map((subagent) => ({
     id: `${card.paneKey}\u0000subagent:${subagent.id}`,
     name: subagent.description || subagent.agentType || 'unknown',
     dotState: dashboardCardDotState(subagent.state)
@@ -38,7 +40,7 @@ export function patchDashboardSnapshotFromAgentStatus(
   if (event.providerSessionOnly || event.programStatusOnly) {
     return { matched: true, snapshot }
   }
-  const index = snapshot.cards.findIndex((card) => card.paneKey === event.paneKey)
+  const index = dashboardCardIndex(snapshot.cards, event.paneKey)
   if (index === -1) {
     return { matched: false, snapshot }
   }
@@ -51,8 +53,10 @@ export function patchDashboardSnapshotFromAgentStatus(
   }
 
   const stateChanged = event.stateStartedAt > card.stateChangedAt
+  const restatesTurn = event.state === 'done' && event.sessionBoundary === true
   // Why ack 0: the event is a live turn and the pop-out holds no acks; the next snapshot has them.
-  const unseen = stateChanged ? isAgentTurnUnacknowledged(0, event.stateStartedAt) : card.unseen
+  const unseen =
+    stateChanged && !restatesTurn ? isAgentTurnUnacknowledged(0, event.stateStartedAt) : card.unseen
   const dotState = event.state
   const workingMode =
     event.state === 'working' && event.workingMode === 'monitoring' ? event.workingMode : undefined
@@ -76,7 +80,8 @@ export function patchDashboardSnapshotFromAgentStatus(
     unseen,
     stateChangedAt: stateChanged ? event.stateStartedAt : card.stateChangedAt,
     statusUpdatedAt: event.receivedAt,
-    finishedAt: dotState === 'done' && stateChanged ? event.stateStartedAt : card.finishedAt,
+    finishedAt:
+      dotState === 'done' && stateChanged && !restatesTurn ? event.stateStartedAt : card.finishedAt,
     askSummary:
       bucket === 'attention'
         ? event.interactivePrompt !== undefined
@@ -90,8 +95,7 @@ export function patchDashboardSnapshotFromAgentStatus(
         : undefined,
     subagents: patchedSubagents(card, event)
   }
-  const cards = snapshot.cards.slice()
-  cards[index] = nextCard
+  const cards = replaceDashboardCards(snapshot.cards, new Map([[index, nextCard]]))
   return {
     matched: true,
     snapshot: { ...snapshot, generatedAt: Math.max(snapshot.generatedAt, event.receivedAt), cards }

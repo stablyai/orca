@@ -5,7 +5,7 @@ import {
   getRepoExecutionHostId,
   normalizeExecutionHostId,
   parseExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { enrichRepoGitUsernames } from '../../workspaces/catalog/repo-git-username-enrichment'
 import { enrichMissingRepoGitRemoteIdentities } from '../../workspaces/catalog/repo-git-remote-identity-enrichment'
@@ -23,7 +23,10 @@ import {
   isWslMoveSourceHost
 } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { listWslMovedProjects } from '../../persistence/moving-wsl-projects/desktop-state/wsl-moved-projects'
-import { listHostRepoCatalogSnapshots } from '../../host-repo-catalog-snapshot/host-repo-catalog-snapshot-recorder'
+import {
+  forgetHostRepoCatalogRepo,
+  listHostRepoCatalogSnapshots
+} from '../../host-repo-catalog-snapshot/host-repo-catalog-snapshot-recorder'
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getRuntimeEnvironmentRegistryRoot } from '../runtime-environments/catalog/runtime-environment-registry-root'
 import { isGatedOffWslHost } from '../../wsl/host-lifecycle/wsl-host-gate'
@@ -127,13 +130,17 @@ export function registerRepoCatalogHandlers(
       const row = store
         .getRepos()
         .find((repo) => repo.id === args.repoId && getRepoExecutionHostId(repo) === hostId)
+      const host = parseExecutionHostId(hostId)
       // Runtime sweeps stop local/SSH sessions absent from renderer listings; paired-server rows are residue.
-      if (row && parseExecutionHostId(hostId)?.kind !== 'runtime') {
+      if (row && host?.kind !== 'runtime') {
         await runtime.removeProject(row)
         scheduleCurrentWorktreeBaseDirectoryWatcherSync()
         return
       }
       store.removeProjectForHost({ id: args.repoId, executionHostId: hostId })
+      if (host?.kind === 'runtime') {
+        forgetHostRepoCatalogRepo(store, host.environmentId, args.repoId)
+      }
       invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)
     }

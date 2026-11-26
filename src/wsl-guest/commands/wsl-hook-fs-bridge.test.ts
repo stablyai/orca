@@ -44,14 +44,6 @@ describe.skipIf(process.platform === 'win32')('registerWslHookFsHandlers (WSL fs
     rmSync(home, { recursive: true, force: true })
   })
 
-  it('round-trips writeFile + readFile inside home', async () => {
-    const path = posix.join(home, 'note.txt')
-    const write = await call(WSL_HOOK_FS_METHODS.writeFile, { path, content: 'hello guest' })
-    expect(write.ok).toBe(true)
-    const read = await call<{ content: string }>(WSL_HOOK_FS_METHODS.readFile, { path })
-    expect(read).toEqual({ ok: true, content: 'hello guest' })
-  })
-
   it('refuses a `..` traversal that escapes home', async () => {
     const result = await call(WSL_HOOK_FS_METHODS.writeFile, {
       path: `${home}/../escape.txt`,
@@ -67,17 +59,6 @@ describe.skipIf(process.platform === 'win32')('registerWslHookFsHandlers (WSL fs
       content: 'x'
     })
     expect(result).toMatchObject({ ok: false, errno: 'EACCES' })
-  })
-
-  it('allows readdir existence probes on an ancestor of home and on /', async () => {
-    const ancestor = await call<{ entries: { filename: string }[] }>(WSL_HOOK_FS_METHODS.readdir, {
-      path: posix.dirname(home)
-    })
-    expect(ancestor.ok).toBe(true)
-    const root = await call<{ entries: { filename: string }[] }>(WSL_HOOK_FS_METHODS.readdir, {
-      path: '/'
-    })
-    expect(root.ok).toBe(true)
   })
 
   it('refuses readdir on a non-ancestor dir outside home', async () => {

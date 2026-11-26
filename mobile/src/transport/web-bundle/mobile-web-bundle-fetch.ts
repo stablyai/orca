@@ -74,6 +74,8 @@ export type MobileWebBundleReusableAssets = {
   readonly has: (asset: MobileWebBundleAssetRead) => boolean
   // Stat without reading bytes; absent/short files fall back to download and checks never reject.
   readonly check: (asset: MobileWebBundleAssetRead) => Promise<boolean>
+  // Save a verified asset as it lands, so a fetch of the same build after a cut link reads only the rest.
+  readonly keep?: (asset: MobileWebBundleAssetRead, bytes: Uint8Array) => void
 }
 
 // Verify every asset hash before returning; report only wire bytes so reuse does not make progress jump then stall.
@@ -181,6 +183,7 @@ export async function fetchMobileWebBundle(args: {
         return
       }
       assets.set(asset.entry.path, verified)
+      args.reusable?.keep?.(asset.entry, verified)
       downloadedAssets += 1
     }
     // Per window, not per asset: the largest asset goes first, so asset completions bunch at the end.

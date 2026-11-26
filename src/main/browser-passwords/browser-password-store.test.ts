@@ -1,7 +1,8 @@
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { removeTreeSync } from '../../shared/file-write/windows-transient-lock-removal'
 import { _resetSecretStoreForTests, setSecretStore } from '../../shared/secure-storage/secret-store'
 import { BrowserPasswordStore } from './browser-password-store'
 
@@ -39,7 +40,7 @@ describe('BrowserPasswordStore', () => {
 
   afterEach(() => {
     _resetSecretStoreForTests()
-    rmSync(dir, { recursive: true, force: true })
+    removeTreeSync(dir)
   })
 
   it('round-trips entries and passwords through a fresh instance, sealed on disk', () => {

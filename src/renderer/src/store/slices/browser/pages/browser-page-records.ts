@@ -4,7 +4,7 @@ import type {
   BrowserWorkspace
 } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import { browserPageDocLocationsEqual } from '../../../../../../shared/browser/workspaces/browser-page-doc-location'
-import '../../../../../../shared/constants'
+import '../../../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../../shared/browser/browser-blank-page'
 import { getBrowserDisplayTitle } from '../../../../../../shared/browser/browser-display-title'
 import { redactKagiSessionToken } from '../../../../../../shared/browser/navigation/browser-url'

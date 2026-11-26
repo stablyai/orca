@@ -9,7 +9,7 @@ import type { BrowserSliceGet } from '../browser-slice-contract'
 
 type BrowserLayoutCommand = Extract<
   WindowLayoutCommand,
-  { type: 'openBrowserPage' | 'closeBrowserPage' | 'replaceBrowserPage' | 'setBrowserTabProfile' }
+  { type: 'openBrowserPage' | 'closeBrowserPage' | 'replaceTabContent' | 'setBrowserTabProfile' }
 >
 
 /** Return false for paired-owned layouts and use here directly. Main may route twins to paired servers; shown runs only after frames arrive. */
@@ -19,6 +19,8 @@ export function sendBrowserLayoutCommand(
   command: BrowserLayoutCommand,
   write: { here: () => void; shown?: () => void }
 ): boolean {
+  const browserTabId =
+    command.type === 'replaceTabContent' ? command.replacement.browserTabId : command.browserTabId
   // A page being added is pending on its tab: a caller acting on the tab's pages waits for it.
   const settle =
     command.type === 'openBrowserPage'
@@ -29,14 +31,14 @@ export function sendBrowserLayoutCommand(
       try {
         write.shown?.()
       } finally {
-        settle(command.browserTabId)
+        settle(browserTabId)
       }
     },
     asToday: () => {
       try {
         write.here()
       } finally {
-        settle(command.browserTabId)
+        settle(browserTabId)
       }
     },
     refused: () => settle(null)

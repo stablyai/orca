@@ -8,6 +8,7 @@ import { issueCacheKey } from '../cache/cache-identity'
 import { CACHE_TTL } from '../cache/cache-policy'
 import { settingsForGitHubRepoOwner } from '../work-items/work-item-routing'
 import { selectWorktreesByRepo } from '../../workspaces/catalog/workspace-record-fields'
+import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
 
 export const createStaleWorktreeRefreshActions = (
   get: Parameters<StateCreator<AppState>>[1]
@@ -36,7 +37,7 @@ export const createStaleWorktreeRefreshActions = (
     const cardProps = state.worktreeCardProperties ?? []
     const shouldRefreshPR =
       state.groupBy === 'pr-status' ||
-      (state.settings?.experimentalNewWorktreeCardStyle === true
+      (selectDrawsNewWorktreeCards(state)
         ? cardProps.includes('status')
         : cardProps.includes('pr') || cardProps.some((property: string) => property === 'ci')) ||
       rightSidebarShowsPullRequestData(state)

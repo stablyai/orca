@@ -11,7 +11,7 @@ import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-
 import {
   getRepoExecutionHostId,
   parseExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { useTranslate } from '@/i18n/use-translate'
 import { searchKeywords } from '../../search/settings-search-keywords'
 import {

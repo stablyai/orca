@@ -7,7 +7,7 @@ import type {
   PrepareDroppedPathsRequest,
   PreparedDroppedPaths
 } from '../../../shared/file-import/native-file-drop-preparation'
-import { abortWhenRendererGone } from '../../ipc/renderer-lifetime-abort'
+import { abortWhenRendererGone } from '../../ipc/renderer-requests/renderer-lifetime-abort'
 import { getDragTempCopyRoot } from './dragged-temp-file-copy'
 import {
   createDroppedPathPreparationQueue,

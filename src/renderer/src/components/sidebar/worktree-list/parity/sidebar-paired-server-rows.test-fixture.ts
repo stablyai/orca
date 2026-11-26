@@ -5,7 +5,7 @@ import {
 import type { AppState } from '@/store/types'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
-import { projectResolvedWorktreeLineage } from '../../../../../../shared/resolved-worktree-lineage'
+import { projectResolvedWorktreeLineage } from '../../../../../../shared/worktree/lineage/resolved-worktree-lineage'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import {

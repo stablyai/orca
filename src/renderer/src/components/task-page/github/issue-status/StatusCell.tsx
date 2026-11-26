@@ -1,5 +1,5 @@
 import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
-import type { GitHubIssueUpdate } from '../../../../../../shared/issue-mutation-types'
+import type { GitHubIssueUpdate } from '../../../../../../shared/work-items/issue-mutation-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { TaskSourceContext } from '../../../../../../shared/work-items/task-source-context'
 import React, { useState, useMemo, useCallback } from 'react'

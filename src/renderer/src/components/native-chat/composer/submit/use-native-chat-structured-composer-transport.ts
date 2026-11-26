@@ -1,7 +1,7 @@
 import { openNativeChatAccountUsageModal } from '@/components/native-chat/usage/native-chat-account-usage-modal'
 import { useNativeChatMcpTray } from '@/components/native-chat/mcp/use-native-chat-mcp-tray'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
-import { AGENT_SESSION_MCP_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
+import { AGENT_SESSION_MCP_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import { useMemo, type Dispatch, type SetStateAction } from 'react'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../../../shared/agent-session/view/structured-agent-session-composer'
 import { localizeStructuredComposerOutcome } from '@/components/native-chat/composer/submit/structured-composer-command-error-text'
@@ -15,10 +15,12 @@ import type { NativeChatStructuredViewProps } from '@/components/native-chat/nat
 import type { useStructuredAgentSession } from '@/components/native-chat/session/structured/use-structured-agent-session'
 import type { NativeChatPaneForks } from '@/components/native-chat/messages/actions/use-native-chat-fork'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import type { AgentSessionThreadGoalChange } from '../../../../../../shared/agent-session/agent-session-thread-goal-wire'
+import type { AgentSessionThreadGoalChange } from '../../../../../../shared/agent-session/thread-goals/agent-session-thread-goal-wire'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
+import { useAppStore } from '@/store'
+import { nativeChatShowsPromptSuggestions } from '../../../../../../shared/native-chat/settings/native-chat-appearance-settings'
 
 function nativeChatSessionAttachmentNotReadyNotice(
   agent: AgentType,
@@ -127,6 +129,10 @@ export function useNativeChatStructuredComposerTransport(args: {
     (props.target.kind === 'local' || remoteManagesMcp)
   const mcpTray = useNativeChatMcpTray(props.sessionId, props.isVisible)
   const { fork, sideChat } = forks
+  // Turned off while one shows: the read restarts without asking, and this hides what it held.
+  const showsPromptSuggestions = useAppStore((state) =>
+    nativeChatShowsPromptSuggestions(state.settings)
+  )
   return useMemo((): NativeChatStructuredComposerTransport => {
     const threadGoal = controller.threadGoal
     const mcpPanel = managesMcp ? mcpTray : undefined
@@ -219,6 +225,7 @@ export function useNativeChatStructuredComposerTransport(args: {
       commandsChecking: controller.commandsChecking,
       acceptsImages,
       contextUsage: controller.contextUsage,
+      promptSuggestion: showsPromptSuggestions ? controller.promptSuggestion : null,
       worktreeId,
       onError,
       onSubmitted,
@@ -252,6 +259,7 @@ export function useNativeChatStructuredComposerTransport(args: {
     sendBlockedReason,
     sendThroughLaunch,
     setOptionPickerRequest,
+    showsPromptSuggestions,
     starting,
     transportEnabled
   ])

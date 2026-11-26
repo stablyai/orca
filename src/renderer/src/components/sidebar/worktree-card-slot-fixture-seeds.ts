@@ -5,7 +5,7 @@ import type {
   HostedReviewInfo,
   HostedReviewState
 } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import * as agentExpansion from './workspace-card/activity/worktree-card-agents-expansion-state'
@@ -50,7 +50,7 @@ export function makeWorktree(seed: WorkspaceSeed, now: number): Worktree {
     repoId: 'repo-orca',
     path: `/repo/orca/${seed.name}`,
     displayName: seed.name,
-    branch: `jinjing/${seed.name}`,
+    branch: `user/${seed.name}`,
     head: 'abc123',
     isBare: false,
     isMainWorktree: false,

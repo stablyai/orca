@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { AgentLaunchSettings } from '../../../../../shared/agent-launch/choices/agent-launch-settings'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useAppStore } from '@/store/index'

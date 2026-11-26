@@ -71,9 +71,7 @@ function MediaDownload({ media, client, title }: Props) {
   if (!client) {
     return (
       <View style={styles.state}>
-        <Text style={styles.stateText}>
-          {t('files.fileMediaPreview.waiting', 'Waiting for desktop...')}
-        </Text>
+        <Text style={styles.stateText}>{t('common.waitingForHost', 'Waiting for host…')}</Text>
       </View>
     )
   }

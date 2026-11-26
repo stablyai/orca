@@ -12,7 +12,7 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import {
   finishAcceptedWorktreeRemoval,
   waitForWorktreeRemovalAcceptance
@@ -33,7 +33,7 @@ import { authorizeUnregisteredWindowsRemoval } from '../../../git/worktrees/remo
 import { findRegisteredDeletableWorktree } from '../../../workspaces/removal/worktree-removal-safety'
 import { removeRuntimeUnregisteredWorktree } from './runtime-unregistered-worktree-removal'
 import { removeStaleLocalWorktreeRegistration } from '../../../workspaces/removal/local-worktree-removal-recovery'
-import { cleanupUnusedWorktreePushTargetRemote } from '../../../ipc/worktree-remote'
+import { cleanupUnusedWorktreePushTargetRemote } from '../../../ipc/worktrees/worktree-remote'
 import { removeRuntimeRegisteredLocalWorktree } from './runtime-registered-local-worktree-removal'
 import { removeOrphanOrFolderWorktree } from './workspace-registration-removal'
 import {

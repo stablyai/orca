@@ -23,13 +23,7 @@ function runItemCommand(item: ActivePluginStatusBarItem): void {
   })
 }
 
-function PluginStatusBarItem({
-  item,
-  iconOnly
-}: {
-  item: ActivePluginStatusBarItem
-  iconOnly: boolean
-}): React.JSX.Element {
+function PluginStatusBarItem({ item }: { item: ActivePluginStatusBarItem }): React.JSX.Element {
   const t = useTranslate()
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   // Why: palette and shortcuts skip workspace commands with no workspace; pressing must too.
@@ -37,11 +31,10 @@ function PluginStatusBarItem({
     ? pluginCommandUnavailableReason(item.command, activeWorktreeId, t)
     : null
   const tooltip = unavailable ? `${item.tooltip} · ${unavailable}` : item.tooltip
-  const showText = item.text !== undefined && (!iconOnly || !item.icon)
   const content = (
     <>
       {item.icon ? <PluginDeclarativeIconGlyph name={item.icon} className="size-3" /> : null}
-      {showText ? <span className="text-[11px]">{item.text}</span> : null}
+      {item.text !== undefined ? <span className="text-[11px]">{item.text}</span> : null}
     </>
   )
   return (
@@ -77,12 +70,12 @@ function PluginStatusBarItem({
 }
 
 /** Items enabled plugins declare in `contributes.statusBarItems`. */
-export function PluginStatusBarItems({ iconOnly }: { iconOnly: boolean }): React.JSX.Element {
+export function PluginStatusBarItems(): React.JSX.Element {
   const items = usePluginStatusBarItems()
   return (
     <>
       {items.map((item) => (
-        <PluginStatusBarItem key={item.key} item={item} iconOnly={iconOnly} />
+        <PluginStatusBarItem key={item.key} item={item} />
       ))}
     </>
   )

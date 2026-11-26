@@ -24,7 +24,7 @@ import {
 import type { WorkspaceOwnerRef } from '@/lib/workspace/ownership/resolve-owner'
 import { NO_OPEN_IN_APPLICATIONS } from '@/lib/files/os-open/open-in-application-selection'
 import { showOpenFailureToast } from './worktree-open-failure-toast'
-import type { OpenInApplication } from '../../../../../../shared/ui-chrome-types'
+import type { OpenInApplication } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 

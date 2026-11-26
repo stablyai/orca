@@ -7,7 +7,7 @@ export function gpuFallbackRecoveredLaunchOptions(): MessageBoxOptions {
   return {
     type: 'info',
     buttons: [
-      translateMain('gpuFallback.recoveredLaunch.keepSafeButton', 'Keep Safe Graphics Mode'),
+      translateMain('gpuFallback.recoveredLaunch.keepSafeButton', 'Keep Safe Mode'),
       translateMain('gpuFallback.recoveredLaunch.tryHardwareButton', 'Try Hardware Acceleration')
     ],
     defaultId: 0,

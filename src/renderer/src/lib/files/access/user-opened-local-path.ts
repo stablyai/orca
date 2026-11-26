@@ -1,4 +1,4 @@
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import { isPathOutsideAllowedDirectoriesError } from '../../../../../shared/file-access/local-file-access'
 import { isRemoteRuntimeFileOperation } from '@/runtime/files/runtime-file-routing'
 import { statRuntimePath } from '@/runtime/files/metadata/runtime-file-metadata-client'

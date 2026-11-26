@@ -11,13 +11,13 @@ import {
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
-import { observeOffscreenAnimation } from '@/lib/window-activity/offscreen-animation-pause'
+import { SpinnerFrame } from '@/components/ui/LoadingSpinner'
 import { useTranslate } from '@/i18n/use-translate'
 import { CHECK_COLOR, CHECK_ICON, checkPresentationKey } from './check-presentation'
 import { CheckRunDetails } from './check-run-details'
 import { CheckRunTime } from './check-run-time'
+import { ChecksListLoading } from './checks-list-loading'
 import { getCheckStatusLabel } from '@/components/github/pr-check-presentation'
-import { getCheckConclusion } from '@/components/pr-check-counts'
 import { type ChecksListProps, useChecksListState } from '../refresh/use-checks-list-state'
 import {
   openAppHttpLink,
@@ -25,13 +25,21 @@ import {
 } from '@/lib/browser/navigation/app-http-link-open'
 import type { PRCheckDetail } from '../../../../../../shared/github/checks/check-types'
 
-export function ChecksList(props: ChecksListProps): React.JSX.Element {
+export function ChecksList(
+  props: ChecksListProps & {
+    loadingSkeleton?: boolean
+    /** False until a read settles: an unread list must not claim no checks are configured. */
+    checksRead?: boolean
+  }
+): React.JSX.Element {
   const t = useTranslate()
   const {
     checks,
     pipelineCheck,
     checksError,
     checksLoading,
+    loadingSkeleton,
+    checksRead = true,
     checkDetailsContextKey,
     detailsStickySurface = 'sidebar',
     getGitLabProjectRef,
@@ -55,6 +63,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
     toggleCheckExpanded,
     requestCheckDetails
   } = useChecksListState(props)
+  const emptyLoading = checks.length === 0 && !checksError && (loadingSkeleton ?? checksLoading)
   return (
     <>
       {pipelineCheck && <PipelineCheckRow check={pipelineCheck} />}
@@ -122,23 +131,27 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
       )}
 
       {/* A kept parent stands in for an empty job list, but a failed read still reports itself. */}
-      {pipelineCheck && checks.length === 0 && !checksError ? null : checksLoading &&
-        checks.length === 0 &&
-        !pipelineCheck ? (
-        <div className="flex items-center justify-center py-8">
-          <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
-        </div>
+      {pipelineCheck && checks.length === 0 && !checksError ? null : emptyLoading ? (
+        loadingSkeleton ? (
+          <ChecksListLoading expanded={checksExpanded} detailsHeight={detailsHeight} />
+        ) : (
+          <div className="flex items-center justify-center py-8">
+            <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
+          </div>
+        )
       ) : checks.length === 0 && checksError ? (
         <div role="alert" className="px-4 py-8 text-[11px] break-words text-destructive">
           {checksError}
         </div>
       ) : checks.length === 0 ? (
-        <div className="px-4 py-8 text-[11px] text-muted-foreground">
-          {t(
-            'auto.components.right.sidebar.checks.panel.content.991f50c7e4',
-            'No checks configured'
-          )}
-        </div>
+        checksRead && (
+          <div className="px-4 py-8 text-[11px] text-muted-foreground">
+            {t(
+              'auto.components.right.sidebar.checks.panel.content.991f50c7e4',
+              'No checks configured'
+            )}
+          </div>
+        )
       ) : !checksExpanded ? null : (
         <>
           <div
@@ -147,13 +160,11 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
           >
             {rows.map((row) => {
               const check = row.check
-              const conclusion = getCheckConclusion(check)
               const expanded = expandedCheckKeys.has(row.key)
               const openUrl = check.url
               return (
                 <div key={row.key} className="min-w-0">
                   <div
-                    ref={conclusion === 'pending' ? observeOffscreenAnimation : undefined}
                     className={cn(
                       'group/check-row @container flex min-w-0 cursor-pointer items-center gap-2 px-3 py-1.5 transition-colors hover:bg-accent/40',
                       expanded && 'bg-accent/25'
@@ -256,13 +267,13 @@ function CheckStatusIcon({ check }: { check: PRCheckDetail }): React.JSX.Element
     <Tooltip>
       <TooltipTrigger asChild>
         <span role="img" aria-label={label} className="flex shrink-0">
-          <Icon
-            className={cn(
-              'size-3.5',
-              CHECK_COLOR[conclusion] ?? 'text-muted-foreground',
-              conclusion === 'pending' && 'animate-spin motion-reduce:animate-none'
-            )}
-          />
+          {conclusion === 'pending' ? (
+            <SpinnerFrame>
+              <Icon className={cn('block size-3.5', CHECK_COLOR[conclusion])} />
+            </SpinnerFrame>
+          ) : (
+            <Icon className={cn('size-3.5', CHECK_COLOR[conclusion] ?? 'text-muted-foreground')} />
+          )}
         </span>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
@@ -274,7 +285,6 @@ function CheckStatusIcon({ check }: { check: PRCheckDetail }): React.JSX.Element
 
 // The parent pipeline opens on the provider; it has no inline job log to expand.
 function PipelineCheckRow({ check }: { check: PRCheckDetail }): React.JSX.Element {
-  const conclusion = getCheckConclusion(check)
   const content = (
     <>
       <CheckStatusIcon check={check} />
@@ -286,10 +296,8 @@ function PipelineCheckRow({ check }: { check: PRCheckDetail }): React.JSX.Elemen
     </>
   )
   const className = '@container flex min-w-0 items-center gap-2 border-b border-border px-3 py-1.5'
-  const animationRef = conclusion === 'pending' ? observeOffscreenAnimation : undefined
   return check.url ? (
     <a
-      ref={animationRef}
       href={check.url}
       onClick={openAppHttpLinkFromAnchor}
       className={cn(className, 'transition-colors hover:bg-accent/40')}
@@ -297,8 +305,6 @@ function PipelineCheckRow({ check }: { check: PRCheckDetail }): React.JSX.Elemen
       {content}
     </a>
   ) : (
-    <div ref={animationRef} className={className}>
-      {content}
-    </div>
+    <div className={className}>{content}</div>
   )
 }

@@ -1,9 +1,13 @@
-import { getBrowserProcessUserAgentIdentity } from '../../../identity/browser-process-user-agent'
+import { webContents } from 'electron'
+import type { BrowserViewportOverride } from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import {
+  getBrowserProcessUserAgentIdentity,
+  isBrowserProcessUserAgentInitialized
+} from '../../../identity/browser-process-user-agent'
 import type { BrowserSessionRequestUserAgentResolver } from '../../../identity/requests/browser-session-ua'
-import { isGoogleAuthUrl } from '../../../identity/browser-google-auth-ua'
 import {
   desktopUserAgentMetadata,
-  googleAuthTabIdentity,
+  distinctSiteTabIdentities,
   resolveBrowserTabIdentity
 } from '../../../identity/browser-tab-identity'
 import type { BrowserTabIdentity } from '../../../identity/browser-tab-identity'
@@ -13,40 +17,40 @@ import type {
   CdpUserAgentOverrideState
 } from './browser-user-agent-override-state'
 import { BrowserManagerVisibility } from '../browser-manager-visibility'
+import { setBrowserGuestPageUserAgentDemand } from '../../../identity/requests/browser-session-ua-demand'
+import { teamsRequestUserAgent } from '../../../identity/browser-site-user-agent'
 
 export abstract class BrowserManagerNavigation extends BrowserManagerVisibility {
   resolveBrowserGuestRequestUserAgent(
     request: Parameters<BrowserSessionRequestUserAgentResolver>[0]
   ): BrowserTabIdentity {
     const processIdentity = getBrowserProcessUserAgentIdentity()
-    const googleAuth = googleAuthTabIdentity()
     const pendingNavigation =
       request.webContentsId === undefined
         ? undefined
         : this.pendingNavigationByGuestId.get(request.webContentsId)
-    // Only a UA distinct from the process UA can mark a request as part of sign-in.
-    const authUaIsDistinct = googleAuth.userAgent !== processIdentity.userAgent
-    if (
-      authUaIsDistinct &&
-      request.currentUserAgent === googleAuth.userAgent &&
-      (!pendingNavigation || isGoogleAuthUrl(pendingNavigation.currentUrl))
-    ) {
-      return googleAuth
-    }
     const standingOverride =
       request.webContentsId === undefined
         ? undefined
         : this.standingCdpUserAgentOverride(request.webContentsId)
-    if (
-      authUaIsDistinct &&
-      !standingOverride &&
-      request.effectiveUserAgent === googleAuth.userAgent &&
-      (!pendingNavigation || isGoogleAuthUrl(pendingNavigation.currentUrl))
-    ) {
-      return googleAuth
-    }
-    if (authUaIsDistinct && standingOverride?.userAgent === googleAuth.userAgent) {
-      return googleAuth
+    // A request carrying a site's pinned UA comes from that site's tab, e.g. a sign-in subresource.
+    for (const site of distinctSiteTabIdentities(processIdentity.userAgent)) {
+      const siteUserAgent = site.identity.userAgent
+      const navigationStaysOnSite =
+        !pendingNavigation || site.matchesUrl(pendingNavigation.currentUrl)
+      if (request.currentUserAgent === siteUserAgent && navigationStaysOnSite) {
+        return site.identity
+      }
+      if (
+        !standingOverride &&
+        request.effectiveUserAgent === siteUserAgent &&
+        navigationStaysOnSite
+      ) {
+        return site.identity
+      }
+      if (standingOverride?.userAgent === siteUserAgent) {
+        return site.identity
+      }
     }
     // Shared/service workers lack a guest ID and retain the process identity.
     // Derive mobile identity from the standing override, never an unapplied preset.
@@ -71,11 +75,10 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     sameDocument: boolean
   ): Promise<boolean> {
     const identity = this.resolveGuestTabIdentity(guest, url)
+    this.noteUserAgentDemand(guest, url, identity)
     // Mobile identity needs CDP metadata that setUserAgent cannot supply.
     const webContentsUserAgent =
-      identity.kind === 'google-auth'
-        ? identity.userAgent
-        : getBrowserProcessUserAgentIdentity().userAgent
+      identity.kind === 'site' ? identity.userAgent : getBrowserProcessUserAgentIdentity().userAgent
     let presentedByWebContents = guest.getUserAgent()
     if (!sameDocument && presentedByWebContents !== webContentsUserAgent) {
       guest.setUserAgent(webContentsUserAgent)
@@ -85,10 +88,57 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
   }
 
   protected retargetTabIdentity(guest: Electron.WebContents, url: string): Promise<boolean> {
-    return this.writeTabIdentityOverride(
-      guest,
-      this.resolveGuestTabIdentity(guest, url),
-      guest.getUserAgent()
+    const identity = this.resolveGuestTabIdentity(guest, url)
+    this.noteUserAgentDemand(guest, url, identity)
+    return this.writeTabIdentityOverride(guest, identity, guest.getUserAgent())
+  }
+
+  /**
+   * Synchronous so the session's header policy listens before this navigation's request. Until
+   * the target commits, the current page (or a navigation that turns into a download) still needs
+   * its own rewrites.
+   */
+  private noteUserAgentDemand(
+    guest: Electron.WebContents,
+    url: string,
+    identity: BrowserTabIdentity
+  ): void {
+    const committed = guest.getURL()
+    setBrowserGuestPageUserAgentDemand(
+      guest.session,
+      guest.id,
+      rewritesRequestHeaders(url, identity) ||
+        rewritesRequestHeaders(committed, this.resolveGuestTabIdentity(guest, committed))
+    )
+  }
+
+  // Applying or clearing a mobile preset (CDP detach clears it) changes the page's header demand.
+  protected override recordAppliedViewportOverride(
+    browserTabId: string,
+    guestWebContentsId: number,
+    applied: BrowserViewportOverride | null
+  ): void {
+    super.recordAppliedViewportOverride(browserTabId, guestWebContentsId, applied)
+    const guest = webContents.fromId(guestWebContentsId)
+    if (guest && !guest.isDestroyed() && isBrowserProcessUserAgentInitialized()) {
+      // A navigation still in flight keeps its destination's demand alongside the committed page's.
+      const url = this.getInFlightNavigationUrl(guest) ?? guest.getURL()
+      this.noteUserAgentDemand(guest, url, this.resolveGuestTabIdentity(guest, url))
+    }
+  }
+
+  /** At commit: the new page's own demand; the old document's iframes are gone. */
+  protected settleUserAgentDemand(guest: Electron.WebContents): void {
+    // A commit can fire before startup sets the identity; nothing rewrites yet.
+    if (!isBrowserProcessUserAgentInitialized()) {
+      return
+    }
+    const url = guest.getURL()
+    setBrowserGuestPageUserAgentDemand(
+      guest.session,
+      guest.id,
+      rewritesRequestHeaders(url, this.resolveGuestTabIdentity(guest, url)),
+      'clear'
     )
   }
 
@@ -260,4 +310,13 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
   protected resolveTabNavigationUrl(guest: Electron.WebContents): string {
     return this.pendingNavigationByGuestId.get(guest.id)?.currentUrl ?? guest.getURL()
   }
+}
+
+export function rewritesRequestHeaders(url: string, identity: BrowserTabIdentity): boolean {
+  const processUserAgent = getBrowserProcessUserAgentIdentity().userAgent
+  return (
+    identity.kind === 'mobile' ||
+    identity.userAgent !== processUserAgent ||
+    teamsRequestUserAgent(url, processUserAgent) !== processUserAgent
+  )
 }

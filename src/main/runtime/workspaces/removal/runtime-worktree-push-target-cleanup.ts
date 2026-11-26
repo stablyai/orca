@@ -1,4 +1,4 @@
-import { cleanupUnusedWorktreePushTargetRemote } from '../../../ipc/worktree-remote'
+import { cleanupUnusedWorktreePushTargetRemote } from '../../../ipc/worktrees/worktree-remote'
 import type { RuntimeLocalWorktreeRemovalFinishArgs } from './runtime-registered-local-worktree-removal'
 
 export async function cleanupRemovedWorktreePushTarget(

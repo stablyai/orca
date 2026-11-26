@@ -1,16 +1,17 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store/index'
-import { useRuntimeFileListForWorktree } from '@/components/quick-open-file-list'
-import { rankQuickOpenFilesWithHistory } from '@/components/quick-open-history-ranking'
+import { useRuntimeFileListForWorktree } from '@/components/file-actions/quick-open/quick-open-file-list'
+import { rankQuickOpenFilesWithHistory } from '@/components/file-actions/quick-open/quick-open-history-ranking'
 import { useQuickOpenHistory } from '@/lib/files/search/quick-open-file-history'
 import { chatWorkspaceByTabId as findTerminalTabWorktreeId } from '../../../../lib/agent-session/tab-identity/structured-chat-tab-index'
 import { useFileListWorktree } from '@/store/workspaces/selection/use-selected-worktree'
+import { withFolderPaths } from '../../../../../../shared/quick-open/quick-open-folder-paths'
 
 const MENTION_FILE_LIMIT = 20
 const NO_FILES: readonly string[] = []
 
 export type NativeChatMentionFiles = {
-  /** Workspace-relative paths, best match first. */
+  /** Workspace-relative paths, best match first; a folder's ends in `/`. */
   files: readonly string[]
   loading: boolean
   failed: boolean
@@ -45,7 +46,7 @@ export function useNativeChatMentionFiles(args: {
       files:
         query === null
           ? NO_FILES
-          : rankQuickOpenFilesWithHistory(query, list.files, history)
+          : rankQuickOpenFilesWithHistory(query, withFolderPaths(list.files), history)
               .slice(0, MENTION_FILE_LIMIT)
               .map((item) => item.path),
       loading: list.loading,

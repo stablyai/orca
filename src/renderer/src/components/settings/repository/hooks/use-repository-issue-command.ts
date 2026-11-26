@@ -4,7 +4,7 @@ import {
   readRuntimeIssueCommand,
   writeRuntimeIssueCommand
 } from '@/runtime/repo-hooks/runtime-hooks-client'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { watchRefusedWslRead } from '@/runtime/hosts/wsl/wsl-refused-read-watch'
 
 export function useRepositoryIssueCommand({

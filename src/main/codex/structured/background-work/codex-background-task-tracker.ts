@@ -3,7 +3,7 @@ import type { StructuredAgentSessionChildWorkProducer } from '../../../native-ch
 import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskState
-} from '../../../../shared/agent-session/agent-session-background-task-wire'
+} from '../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import type { AgentChildWorkEvidence } from '../../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import {
   observeCodexExecutionFrame,

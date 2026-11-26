@@ -1,4 +1,4 @@
-import { normalizeProxyUrl } from '../../shared/network-proxy'
+import { normalizeProxyUrl } from '../../shared/network/network-proxy'
 import type { ProxySession } from './electron-default-proxy-session'
 
 export type ElectronProxyCredentials = {
@@ -93,14 +93,6 @@ export function getElectronProxyCredentialsForChallenge(
     credentials.port === authInfo.port
     ? credentials
     : null
-}
-
-export function resetElectronProxyCredentialsForTests(proxySession?: ProxySession): void {
-  if (proxySession) {
-    clearElectronProxyCredentialsForSession(proxySession)
-  } else {
-    proxyCredentialsBySession = new WeakMap()
-  }
 }
 
 export function handleElectronProxyLogin(

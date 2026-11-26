@@ -37,7 +37,7 @@ type HookObserverOptions = {
   consumePendingStampedTailForAgent: (agent: string | null, identity: string | null) => boolean
   consumeStampedTailForCurrentCoordinator: (timestamp: number) => void
   clearOriginStampedTail: () => void
-  clearProcessExitCompletion: () => void
+  retirePreviousTurnCompletion: () => void
   recordWorkingBoundary: (timestamp: number | undefined) => void
   dropPendingTitle: () => void
 }
@@ -69,7 +69,7 @@ export function createAgentCompletionHookObserver({
   consumePendingStampedTailForAgent,
   consumeStampedTailForCurrentCoordinator,
   clearOriginStampedTail,
-  clearProcessExitCompletion,
+  retirePreviousTurnCompletion,
   recordWorkingBoundary,
   dropPendingTitle
 }: HookObserverOptions) {
@@ -117,8 +117,8 @@ export function createAgentCompletionHookObserver({
         return
       }
       clearOriginStampedTail()
-      // Clear exit identity on a new turn or agent-only matching would swallow every later Done from that agent.
-      clearProcessExitCompletion()
+      // Why: agent-only matching against the last turn's receipt would swallow this turn's exit or Done.
+      retirePreviousTurnCompletion()
       recordWorkingBoundary(payload.stateStartedAt)
       clearPendingHookDone()
       state.workingStatusObserved = true

@@ -240,5 +240,11 @@ CREATE TABLE IF NOT EXISTS worker_terminal_archives (
   created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- When maintenance last pruned settled history (epoch ms), so a restart waits out the interval.
+CREATE TABLE IF NOT EXISTS orchestration_maintenance (
+  id        INTEGER PRIMARY KEY CHECK(id = 1),
+  pruned_at INTEGER
+);
+
   `
 }

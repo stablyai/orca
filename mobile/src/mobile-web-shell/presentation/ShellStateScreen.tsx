@@ -43,6 +43,7 @@ function failureMessage(reason: MobileWebShellFailureCause, t: Translate): strin
       return t('webShell.shellStateScreen.renderProcessGone', 'The workspace stopped responding.')
     case 'generation-unreadable':
     case 'document-load-failed':
+    case 'page-fault':
       return t(
         'webShell.shellStateScreen.documentLoadFailed',
         'The downloaded app could not be opened.'
@@ -122,6 +123,7 @@ export function ShellStateScreen({
   const t = useMobileTranslation()
   switch (state.kind) {
     case 'route-unavailable':
+      // Neither this app nor the host's page has the screen; either side may be the one behind.
       return <PageRouteUnavailableScreen hostId={hostId} />
     case 'wall':
       return <ProtocolBlockScreen verdict={state.verdict} />

@@ -3,10 +3,20 @@ import {
   AGENT_SESSION_AGENTS_METHOD,
   decodeAgentSessionAgentsResult,
   type AgentSessionRegisteredAgent
-} from '../../../../../src/shared/agent-session/agent-session-registered-agents'
+} from '../../../../../src/shared/agent-session/agent-discovery/agent-session-registered-agents'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 
 const AGENTS_READ_RETRIES_MS = [2_000, 8_000, 30_000]
+
+/** The host's registered agents, or null when the read failed or was not an agent list. */
+export function readMobileRegisteredAgents(
+  client: RpcClient
+): Promise<AgentSessionRegisteredAgent[] | null> {
+  return client
+    .sendRequest(AGENT_SESSION_AGENTS_METHOD, {})
+    .then((response) => (response.ok ? decodeAgentSessionAgentsResult(response.result) : null))
+    .catch(() => null)
+}
 
 /** One stretch of discovery: a client, its generation, and one supported, unlearned spell. Its
  *  reads, failures and retry timer die with it, so a new stretch starts with every retry. */
@@ -25,6 +35,14 @@ export function useMobileRegisteredAgent(
   offered: boolean,
   agent: string | null
 ): AgentSessionRegisteredAgent | undefined {
+  return useMobileRegisteredAgents(client, offered)?.find((row) => row.agent === agent)
+}
+
+/** Every agent the host can run as a chat; undefined until this connection's read answers. */
+export function useMobileRegisteredAgents(
+  client: RpcClient | null,
+  offered: boolean
+): readonly AgentSessionRegisteredAgent[] | undefined {
   const [agents, setAgents] = useState<{
     client: RpcClient
     generation: number | undefined
@@ -59,20 +77,16 @@ export function useMobileRegisteredAgent(
       return
     }
     let cancelled = false
-    void client
-      .sendRequest(AGENT_SESSION_AGENTS_METHOD, {})
-      .then((response) => (response.ok ? decodeAgentSessionAgentsResult(response.result) : null))
-      .catch(() => null)
-      .then((rows) => {
-        if (cancelled) {
-          return
-        }
-        if (rows) {
-          setAgents({ client, generation, rows })
-        } else {
-          update((current) => ({ count: current.count, failures: current.failures + 1 }))
-        }
-      })
+    void readMobileRegisteredAgents(client).then((rows) => {
+      if (cancelled) {
+        return
+      }
+      if (rows) {
+        setAgents({ client, generation, rows })
+      } else {
+        update((current) => ({ count: current.count, failures: current.failures + 1 }))
+      }
+    })
     return () => {
       cancelled = true
     }
@@ -100,5 +114,5 @@ export function useMobileRegisteredAgent(
       }
     })
   }, [client, wanted, update])
-  return learned ? agents.rows.find((row) => row.agent === agent) : undefined
+  return learned ? agents.rows : undefined
 }

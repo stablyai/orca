@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { shallow } from 'zustand/shallow'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { persistedUIValuesEqual } from '../../../../../../shared/persisted-ui-equality'
+import { persistedUIValuesEqual } from '../../../../../../shared/collections/persisted-ui-equality'
 import { getProjectHeaderHostContexts } from '../rows/project-header-host-context'
 
 type ContextArgs = Omit<

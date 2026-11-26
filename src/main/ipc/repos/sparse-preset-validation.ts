@@ -2,7 +2,7 @@ import { SparsePresetValidationError } from '../../../shared/worktree/creation/s
 import {
   InvalidSparseDirectoryError,
   normalizeSparseDirectories
-} from '../sparse-checkout-directories'
+} from './sparse-checkout-directories'
 
 export function normalizeSparsePresetName(name: string): string {
   const trimmed = name.trim()

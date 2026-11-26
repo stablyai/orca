@@ -3,7 +3,10 @@ import type WebSocket from 'ws'
 import type { PairedE2EEChannel } from '../e2ee/paired-e2ee-client-handshake'
 import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
 import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
-import { serializeRemoteRuntimeRpcRequest } from '../remote-runtime-memory-limits'
+import {
+  REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES,
+  serializeRemoteRuntimeRpcRequest
+} from '../remote-runtime-memory-limits'
 import type { RuntimeRpcResponse } from '../rpc/runtime-rpc-envelope'
 import { isSafeTimerDelayMs, MAX_TIMER_DELAY_MS } from '../../concurrency/timer-delay'
 
@@ -68,7 +71,9 @@ export class RemoteRuntimeSubscriptionRequestChannel {
         requestId,
         deviceToken: this.options.connection.credential.deviceToken,
         method,
-        params
+        params,
+        // Why: the host closes the shared socket on an oversized frame, ending the subscription too.
+        maxBytes: REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES
       })
     } catch (error) {
       return Promise.reject(

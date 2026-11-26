@@ -18,14 +18,15 @@ export type AgentSessionRestartProbe = { record: AgentSessionRecord; probe: Agen
 
 export async function collectAgentSessionRestartProbes(
   store: {
-    listRecords: () => AgentSessionRecord[]
+    listLeaseHolders: () => AgentSessionRecord[]
     getRecord: (sessionId: string) => AgentSessionRecord | null
   },
   args: AgentSessionRestartProbeArgs
 ): Promise<Map<string, AgentSessionRestartProbe>> {
   const probes = new Map<string, AgentSessionRestartProbe>()
   const target = args.sessionId === undefined ? null : store.getRecord(args.sessionId)
-  const candidates = args.sessionId === undefined ? store.listRecords() : target ? [target] : []
+  const candidates =
+    args.sessionId === undefined ? store.listLeaseHolders() : target ? [target] : []
   const records = candidates.filter((record) => record.lease.unreconciled)
   if (records.length === 0) {
     return probes

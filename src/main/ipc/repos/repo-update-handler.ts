@@ -8,7 +8,7 @@ import {
   type ExecutionHostId,
   getRepoExecutionHostId,
   normalizeExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import { normalizeRepoBadgeColor } from '../../../shared/repository/appearance/repo-badge-color'
 import { sanitizeRepoIcon } from '../../../shared/repository/appearance/repo-icon'
 import {

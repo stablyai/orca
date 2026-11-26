@@ -6,7 +6,10 @@ import type { SessionFileCandidate } from '../../ai-vault/session-scanner-types'
 export type SessionSearchSyntheticSource = { container: string; id: string }
 
 export function splitSyntheticSessionSource(path: string): SessionSearchSyntheticSource | null {
-  const sqlite = splitOpenCodeSqliteCandidate(path) ?? splitOpenCodeSqliteCandidate(path, 'zcode')
+  const sqlite =
+    splitOpenCodeSqliteCandidate(path) ??
+    splitOpenCodeSqliteCandidate(path, 'zcode') ??
+    splitOpenCodeSqliteCandidate(path, 'hermes')
   return sqlite ? { container: sqlite.dbPath, id: sqlite.sessionId } : null
 }
 

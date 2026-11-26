@@ -1,10 +1,10 @@
-import { setTimeout as delay } from 'node:timers/promises'
+import { retryAcpRequest } from '../protocol/acp-request-retry'
 import { observeAcpForkSupport } from '../capabilities/acp-fork-support'
 import {
   assertStructuredAgentResolutionCurrent,
   type StructuredAgentResolutionOperation
 } from '../../native-chat/agent-launch/structured-agent-command-resolution'
-import type { AgentSessionModelOption } from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionModelOption } from '../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import type { AcpSessionModelDiscovery } from './acp-model-discovery-policy'
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
 import type { AcpSessionStarted, AcpSessionStartOptions } from '../protocol/acp-session-setup'
@@ -39,18 +39,14 @@ async function startListingSession(
   workspace: string,
   operation?: StructuredAgentResolutionOperation
 ): Promise<AcpSessionStarted> {
-  for (const backoffMs of [250, 500]) {
-    try {
-      return await connection.start({ cwd: workspace, mcpServers: [] })
-    } catch (error) {
-      if (!(error instanceof AcpAgentError && error.code === -32603)) {
-        throw error
-      }
-    }
-    await delay(backoffMs, undefined, { signal: operation?.signal })
-    assertStructuredAgentResolutionCurrent(operation)
-  }
-  return connection.start({ cwd: workspace, mcpServers: [] })
+  return retryAcpRequest(
+    () => connection.start({ cwd: workspace, mcpServers: [] }),
+    {
+      signal: operation?.signal,
+      assertCurrent: () => assertStructuredAgentResolutionCurrent(operation)
+    },
+    (error) => error instanceof AcpAgentError && error.code === -32603
+  )
 }
 
 /** Lists models from a disposable session, learning menus for the models it starts on or switches to. */
@@ -70,16 +66,18 @@ export async function readSessionModels(
       known: (model: string) => boolean
     ) => void
     demanded: NonNullable<AgentModelCatalogProgress['demanded']>
-  }
+  },
+  onSessionStarted?: (sessionId: string) => void
 ): Promise<{ models: AgentSessionModelOption[]; attemptedModels: string[] }> {
   const initialized = await connection.initialize()
   assertStructuredAgentResolutionCurrent(operation)
   observeAcpForkSupport(spec.agent, initialized)
   const deletes = Boolean(initialized.agentCapabilities?.sessionCapabilities?.delete)
-  if (!deletes && !listing.sessionFolderArgs) {
+  if (!deletes && !listing.sessionFolderArgs && !listing.discardSession) {
     throw new Error(`${spec.agent} cannot delete a session, so it lists its models only in chats`)
   }
   const started = await startListingSession(connection, workspace, operation)
+  onSessionStarted?.(started.sessionId)
   let stopped = false
   const cleanup = async (): Promise<void> => {
     stopped = true

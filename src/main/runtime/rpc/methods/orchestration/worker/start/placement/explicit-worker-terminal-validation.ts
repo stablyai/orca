@@ -1,5 +1,6 @@
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
+import { refuseUnmatchedWorkerSelector } from '../worker-start-selector-refusal'
 import { isPeerCaller } from '../../../../../../orchestration/addressing/orchestration-caller-identity'
 import { isStructuredWorkerHandle } from '../../../../../../../../shared/orchestration/workers/structured-worker-handle'
 import type {
@@ -24,7 +25,10 @@ export async function assertExplicitWorkerTerminalUsable(args: {
   resolvedWorktreeId: string | undefined
 }): Promise<void> {
   const { runtime, terminal, from, coordinator, resolvedWorktreeId } = args
-  const explicitTerminal = await runtime.showTerminal(terminal)
+  const explicitTerminal = await refuseUnmatchedWorkerSelector(
+    { flag: '--terminal', value: terminal },
+    () => runtime.showTerminal(terminal)
+  )
   const targetPane = runtime.getTerminalPaneKey(terminal)
   const callerPane = coordinator?.paneKey ?? runtime.getTerminalPaneKey(from)
   // Structured coordinators may have no showable terminal; compare their handle/pane identity, or session address for handle-less callers.
@@ -34,7 +38,11 @@ export async function assertExplicitWorkerTerminalUsable(args: {
       ? coordinator.address
       : isStructuredWorkerHandle(from)
         ? from
-        : (await runtime.showTerminal(from)).handle
+        : (
+            await refuseUnmatchedWorkerSelector({ flag: '--from', value: from }, () =>
+              runtime.showTerminal(from)
+            )
+          ).handle
   if (
     explicitTerminal.handle === coordinatorHandle ||
     (targetPane !== null && targetPane === callerPane)
@@ -56,6 +64,26 @@ export async function assertExplicitWorkerTerminalUsable(args: {
       `Terminal ${terminal} is not running a recognized agent.`
     )
   }
+}
+
+/** `--terminal` without `--worktree` starts where that terminal or chat already is, not in the caller's workspace. */
+export async function explicitWorkerWorkspace(
+  runtime: Pick<OrcaRuntimeService, 'showTerminal' | 'ensureStructuredAgentSessionHost'>,
+  db: OrchestrationDb,
+  terminal: OrchestrationParty | '' | undefined
+): Promise<string> {
+  if (!terminal) {
+    return 'current'
+  }
+  const chat = chatAssigneeOf(terminal)
+  const workspaceId = chat
+    ? (await admitChatAssignee(runtime, chat, db)).location.workspaceId
+    : (
+        await refuseUnmatchedWorkerSelector({ flag: '--terminal', value: terminal.address }, () =>
+          runtime.showTerminal(terminal.address)
+        )
+      ).worktreeId
+  return workspaceId ? `id:${workspaceId}` : 'current'
 }
 
 /** A `--terminal` party: a terminal pane, or a chat named by its Orca session ID. */

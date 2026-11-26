@@ -85,19 +85,43 @@ function yieldWhenOverBudget(): Promise<void> {
 
 export type DnrRulesBuild = { ok: true; built: DnrBuiltRuleset } | { ok: false; error: string }
 
-/** Static rulesets skip invalid rules; API updates ('error') reject on the first one. */
+const BUILD_CANCELLED_MESSAGE = 'Rules build cancelled'
+
+// Avoid a module-level Error sentinel: V8's unformatted stack trace pins the module-loader frames (~15 MiB).
+class DnrRulesBuildCancelledError extends Error {
+  constructor() {
+    super(BUILD_CANCELLED_MESSAGE)
+  }
+}
+
+/** `cancelled` ends the build at its next slice, e.g. once the extension it was for unloads. */
 export async function buildDnrRules(
   rules: readonly unknown[],
   extensionId: string,
   source: DnrRulesetSource,
-  invalidRules: DnrInvalidRulePolicy
+  invalidRules: DnrInvalidRulePolicy,
+  cancelled?: () => boolean
 ): Promise<DnrRulesBuild> {
-  const result = await buildDnrRulesetInSlices(
-    rules,
-    { extensionId, source, invalidRules },
-    BUILD_SLICE_SIZE,
-    yieldWhenOverBudget
-  )
+  const pause = async (): Promise<void> => {
+    await yieldWhenOverBudget()
+    if (cancelled?.()) {
+      throw new DnrRulesBuildCancelledError()
+    }
+  }
+  let result: Awaited<ReturnType<typeof buildDnrRulesetInSlices>>
+  try {
+    result = await buildDnrRulesetInSlices(
+      rules,
+      { extensionId, source, invalidRules },
+      BUILD_SLICE_SIZE,
+      pause
+    )
+  } catch (error) {
+    if (error instanceof DnrRulesBuildCancelledError) {
+      return { ok: false, error: BUILD_CANCELLED_MESSAGE }
+    }
+    throw error
+  }
   if (!result.ok) {
     return { ok: false, error: result.error.message }
   }

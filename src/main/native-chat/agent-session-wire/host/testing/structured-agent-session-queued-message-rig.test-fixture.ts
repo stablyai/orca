@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect } from 'vitest'
-import { activeProviderContext } from '../../../../../shared/agent-session/agent-session-provider-context'
+import { activeProviderContext } from '../../../../../shared/agent-session/conversation-context/agent-session-provider-context'
 import { agentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
 import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
@@ -54,6 +54,8 @@ export async function createQueuedMessageTestRig(
     probeOwner?: StructuredAgentSessionHostDeps['probeOwner']
     onRequestFailure?: StructuredAgentSessionHostDeps['onRequestFailure']
     usageLimitAutoContinue?: StructuredAgentSessionHostDeps['usageLimitAutoContinue']
+    /** Other host hooks a case sets, such as its turn context or queued-message gates. */
+    hostDeps?: Partial<StructuredAgentSessionHostDeps>
   } = {}
 ) {
   const SESSION = options.sessionId ?? DEFAULT_SESSION
@@ -77,6 +79,7 @@ export async function createQueuedMessageTestRig(
       usageLimitAutoContinue: options.usageLimitAutoContinue,
       ...(options.probeOwner ? { probeOwner: options.probeOwner } : {}),
       ...(options.idleSweep ? { idleSweep: options.idleSweep } : {}),
+      ...options.hostDeps,
       ...(options.recoveryCapsule ? { recoveryCapsule: new AgentSessionRecoveryCapsule(root) } : {})
     })
   let host = makeHost()
@@ -127,8 +130,9 @@ export async function createQueuedMessageTestRig(
       ...(delivery ? { delivery } : {}),
       ...(options?.carried ? { options: options.carried } : {})
     }
+    const sent = envelope(fields, 'agentSession.send', clientOperationId)
     const result = host.send(QUEUED_RIG_CALLER, {
-      envelope: envelope(fields, 'agentSession.send', clientOperationId),
+      envelope: { ...sent, expectedRuntimeFence: options?.fence ?? 1 },
       ...fields,
       body,
       ...(options?.internal ? {} : { userSend: true as const })
@@ -137,9 +141,7 @@ export async function createQueuedMessageTestRig(
   }
 
   function stop(clientOperationId = hostTestOperationId(), caller = QUEUED_RIG_CALLER) {
-    return host.cancel(caller, {
-      envelope: envelope({}, 'agentSession.cancel', clientOperationId)
-    })
+    return host.cancel(caller, { envelope: envelope({}, 'agentSession.cancel', clientOperationId) })
   }
 
   function sendNow(
@@ -299,6 +301,7 @@ export async function createQueuedMessageTestRig(
     setOption,
     cancelTurn,
     closeSession,
+    releaseAcquisition: provider.releaseAcquisition,
     compact,
     starts: provider.starts,
     holdNextStart: provider.holdNextStart,

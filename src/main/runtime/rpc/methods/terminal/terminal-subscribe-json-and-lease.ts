@@ -97,7 +97,7 @@ export async function runTerminalJsonSubscription(args: TerminalSubscriptionArgs
     undefined,
     undefined,
     false,
-    args.viewerDeviceId
+    args.viewer
   )
   unsubscribeData = () => {
     releaseViewSubscriber()

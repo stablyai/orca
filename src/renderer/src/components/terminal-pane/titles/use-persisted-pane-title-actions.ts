@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { useAppStore } from '../../../store'
 import type { TerminalPaneStartupController } from '../controller/use-terminal-pane-startup-actions'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { sendLayoutCommandToOwner } from '@/runtime/workspace-layout/commands/layout-owner-command'
 import { notePendingPaneTitleRename } from '@/runtime/web-session-tabs-sync/naming/pending-pane-title-renames'
 

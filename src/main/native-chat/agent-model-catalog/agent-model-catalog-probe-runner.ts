@@ -1,5 +1,5 @@
 import type { ClaudeBackgroundFailedExit } from '../../../shared/text-generation/launch/claude-background-run-isolation'
-import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
+import type { ProviderProcessSpawner } from '../../provider-process/provider-process-spawn'
 import { StringDecoder } from 'node:string_decoder'
 import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 
@@ -8,10 +8,10 @@ import { spawnManagedProviderProcess } from '../../provider-process/managed-prov
 import type { ProviderProcessClosePolicy } from '../../provider-process/provider-process-close'
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../../provider-process/provider-process-supervisor'
-import {
-  providerStderrForDisplay,
-  supervisedProviderSpawnFailure
-} from '../../provider-process/provider-spawn-failure-report'
+import { providerLaunchFailed } from '../../provider-process/provider-executable-missing'
+import { withLostProviderOutcome } from '../../provider-process/provider-process-exit-status'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 
 // Allow cold network-backed listings; timed-out pickers retain their existing catalog.
 export const AGENT_MODEL_CATALOG_PROBE_TIMEOUT_MS = 15_000
@@ -57,7 +57,7 @@ export type AgentModelCatalogRunnerOptions = {
   timeoutMs?: number | null
   maxOutputBytes?: number
   signal?: AbortSignal
-  spawnImpl?: PipedProcessSpawner
+  spawnImpl?: ProviderProcessSpawner
   platform?: NodeJS.Platform
   inheritedEnv?: NodeJS.ProcessEnv
   /** Finish required replies even when an optional control request never completes. */
@@ -88,8 +88,7 @@ export async function runAgentModelCatalogListing(
   const output = createOutputSink(
     options.maxOutputBytes ?? AGENT_MODEL_CATALOG_PROBE_MAX_OUTPUT_BYTES
   )
-  const stderrDetail = (): string =>
-    providerStderrForDisplay(managed.stderrTail()).trim().slice(0, STDERR_DETAIL_MAX_CHARS)
+  const stderrDetail = (): string => managed.stderrTail().trim().slice(0, STDERR_DETAIL_MAX_CHARS)
   let timer: ReturnType<typeof setTimeout> | undefined
   let partialTimer: ReturnType<typeof setTimeout> | undefined
   let onAbort = (): void => {}
@@ -101,11 +100,14 @@ export async function runAgentModelCatalogListing(
         failedExit?: ClaudeBackgroundFailedExit
       ): void =>
         reject(
-          new AgentModelCatalogProbeError(
-            message,
-            reason,
-            reason === 'spawn' && managed.executableMissing,
-            failedExit
+          withLostProviderOutcome(
+            new AgentModelCatalogProbeError(
+              message,
+              reason,
+              reason === 'spawn' && managed.executableMissing,
+              failedExit
+            ),
+            child
           )
         )
       // Required replies already in hand outlive an optional reply that runs out of time or room.
@@ -157,25 +159,27 @@ export async function runAgentModelCatalogListing(
       child.stdout.on('error', () => {})
       child.stdin.on('error', () => {})
       child.on('error', (error) => {
-        if (child.pid === undefined) {
+        if (child.pid === undefined || providerLaunchFailed(error)) {
           fail(`${launch.command} could not start: ${error.message}`, 'spawn')
         }
       })
       // close follows stdout drainage; exit may arrive before the final bytes.
       child.on('close', (code: number | null) => {
-        const spawnFailure = managed.supervised
-          ? supervisedProviderSpawnFailure(code, managed.stderrTail())
-          : null
-        if (spawnFailure) {
-          fail(`${launch.command} could not start: ${spawnFailure.error.message}`, 'spawn')
-        } else if (code === 0) {
+        if (code === 0) {
           resolve(output.text())
         } else {
           const detail = stderrDetail()
           fail(
-            `${launch.command} exited ${code ?? 'by signal'}${detail ? `: ${detail}` : ''}`,
+            child.outcomeLost
+              ? agentSessionFailureWords(agentSessionFailureFact('hostFault'), {
+                  agentName: launch.command,
+                  surface: 'rejection'
+                }).reason
+              : `${launch.command} exited ${code ?? 'by signal'}${detail ? `: ${detail}` : ''}`,
             'exit',
-            { exitCode: code, stdout: output.text(), stderr: managed.stderrTail() }
+            child.outcomeLost
+              ? undefined
+              : { exitCode: code, stdout: output.text(), stderr: managed.stderrTail() }
           )
         }
       })

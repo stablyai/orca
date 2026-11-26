@@ -1,5 +1,5 @@
 import { memoryJournalMap } from '../journal-memory-collections'
-import { orchestrationMailNotice } from '../../../../shared/agent-session/agent-session-message-source'
+import { orchestrationMailNotice } from '../../../../shared/agent-session/journal/agent-session-message-source'
 import type { QueuedMessageRow } from '../queued-messages/queued-message-table'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { LegacyQueueCardIndex } from './legacy-queue-card-index'

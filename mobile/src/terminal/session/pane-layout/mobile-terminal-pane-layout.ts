@@ -39,6 +39,45 @@ export function resolveTerminalPaneHandles(
   return companion ? [active, companion] : [active]
 }
 
+/** Each terminal row's last terminal handle, kept while the row waits for a new one. */
+export type TerminalRowHandles = ReadonlyMap<string, string>
+
+/** A host that restarts a pane keeps its row and gives it a new terminal: the split follows the
+ *  row, as the selected pane does. Returns the rows' handles and each replaced handle's successor. */
+export function followTerminalRows(
+  previous: TerminalRowHandles,
+  rows: readonly { type: string; id: string; terminal?: string | null }[]
+): { handles: TerminalRowHandles; replaced: ReadonlyMap<string, string> } {
+  const handles = new Map<string, string>()
+  const replaced = new Map<string, string>()
+  for (const row of rows) {
+    if (row.type !== 'terminal') {
+      continue
+    }
+    const last = previous.get(row.id)
+    if (typeof row.terminal !== 'string') {
+      if (last) {
+        handles.set(row.id, last)
+      }
+      continue
+    }
+    if (last && last !== row.terminal) {
+      replaced.set(last, row.terminal)
+    }
+    handles.set(row.id, row.terminal)
+  }
+  return { handles, replaced }
+}
+
+export function withReplacedTerminalHandles(
+  pair: readonly string[] | null,
+  replaced: ReadonlyMap<string, string>
+): readonly string[] | null {
+  return pair?.some((handle) => replaced.has(handle))
+    ? pair.map((handle) => replaced.get(handle) ?? handle)
+    : pair
+}
+
 export function terminalPaneDirection(
   frame: TerminalFrame,
   layout: TerminalSplitLayout = 'auto'

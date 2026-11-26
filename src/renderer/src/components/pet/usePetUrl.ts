@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { CustomPet } from '../../../../shared/pet-types'
-import { applyCodexSpriteTimingDefaults } from '../../../../shared/codex-pet-sprite-defaults'
+import type { CustomPet } from '../../../../shared/pets/pet-types'
+import { applyCodexSpriteTimingDefaults } from '../../../../shared/pets/codex-pet-sprite-defaults'
 import { useAppStore } from '../../store'
 import { BUNDLED_PET, findBundledPet, isBundledPetId } from './pet-models'
 import {

@@ -1,11 +1,12 @@
 import type { AppState } from '@/store/types'
-import type { WorktreeCardProperty } from '../../../../../../shared/ui-chrome-types'
+import type { WorktreeCardProperty } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
 
 export type WorktreeListReviewCacheState = Pick<
   AppState,
-  'folderWorkspaces' | 'hostedReviewCache' | 'prCache' | 'settings'
+  'folderWorkspaces' | 'hostedReviewCache' | 'prCache' | 'settings' | 'worktreeCardsIntroChoice'
 >
 
 export type WorktreeListReviewCacheInputs = {
@@ -26,7 +27,7 @@ export function selectWorktreeListReviewCacheInputs(
   cardProperties: readonly WorktreeCardProperty[]
 ): WorktreeListReviewCacheInputs {
   const hasFolderWorkspaces = selectFolderWorkspaces(state).length > 0
-  const newCardStyle = state.settings?.experimentalNewWorktreeCardStyle === true
+  const newCardStyle = selectDrawsNewWorktreeCards(state)
   const folderCardsNeedReview =
     hasFolderWorkspaces &&
     (newCardStyle ? cardProperties.includes('status') : cardProperties.includes('pr'))

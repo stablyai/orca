@@ -22,6 +22,7 @@ import {
   ORCAD_TEMPLATE_TARGETS_DIR,
   ORCAD_VERSION_FILENAME,
   ORCAD_CLI_ENTRY_FILENAME,
+  isOrcadExecutableArtifact,
   orcadNodeRuntimeExecutable,
   orcadTemplateCommonFilenames,
   orcadTemplateTargetFilenames
@@ -62,10 +63,6 @@ function sha256(path) {
   return createHash('sha256').update(readFileSync(path)).digest('hex')
 }
 
-function isExecutable(filename) {
-  return /(?:^|\/)(?:rg|spawn-helper)$/.test(filename)
-}
-
 function copyVerified(source, destination, expectedSha256, executable) {
   mkdirSync(dirname(destination), { recursive: true })
   copyFileSync(source, destination)
@@ -101,7 +98,7 @@ function stageSlot(templateDir, target, slotDir) {
       join(templateDir, ...filename.split('/')),
       join(slotDir, ...filename.split('/')),
       expected,
-      isExecutable(filename)
+      isOrcadExecutableArtifact(filename)
     )
   }
   for (const filename of orcadTemplateTargetFilenames(target)) {
@@ -113,7 +110,7 @@ function stageSlot(templateDir, target, slotDir) {
       join(templateDir, ORCAD_TEMPLATE_TARGETS_DIR, target, ...filename.split('/')),
       join(slotDir, ...filename.split('/')),
       expected,
-      isExecutable(filename)
+      isOrcadExecutableArtifact(filename)
     )
   }
   // Hashed like a desktop slot without the optional browser, which this tarball omits.

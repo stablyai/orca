@@ -1,5 +1,5 @@
 import type { i18n as I18nInstance } from 'i18next'
-import { withPluralCategoriesFromOther } from '../i18n-plural-family'
+import { withPluralCategoriesFromOther } from '../i18n/i18n-plural-family'
 import { structuralValuesEqual } from '../collections/structural-value-equality'
 import type { PluginLanguagePackRegistration } from './artifacts/plugin-language-pack-artifact'
 

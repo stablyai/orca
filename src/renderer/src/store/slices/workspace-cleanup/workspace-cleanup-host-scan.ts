@@ -5,7 +5,7 @@ import {
   getRepoExecutionHostId,
   parseRoutableExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import {
   WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT,
   type WorkspaceCleanupCandidate,

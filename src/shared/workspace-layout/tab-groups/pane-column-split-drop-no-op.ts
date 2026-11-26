@@ -1,4 +1,4 @@
-import type { TabGroupLayoutNode } from '../../tab-types'
+import type { TabGroupLayoutNode } from './tab-types'
 import type { GroupSide } from '../workspace-layout-command-types'
 
 function getDirectLayoutSiblingOnSplitSide(

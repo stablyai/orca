@@ -2,54 +2,12 @@ import { renderOrchestrationArgv, type OrchestrationAgentView } from '../agent-v
 import type { WorkerListRunScope } from './worker-list-run-scope'
 import { isActionableOrchestrationFleetAttention } from '../../../shared/orchestration/fleet/orchestration-fleet-attention'
 import { formatPrCommentRelativeTime } from '../../../shared/source-control/review-comments/pr-comment-time'
-
-type WorkerProjection = {
-  runId?: string
-  outcome?: string | null
-  provider?: { id: string; model: string | null } | null
-  host: { id: string }
-  workspace?: { id: string } | null
-  stage: { activity: string }
-  liveness: { verdict: string; detail?: string }
-  evidence?: { lastObservedAt: number | null }
-  nextAction: { argv: string[] }
-  attention?: { categories: string[] }
-  resource?: { terminalState?: string | null } | null
-  autoReleaseAt?: string
-}
-
-export type WorkerShowResult = {
-  dispatch: {
-    id: string
-    taskId: string
-    runId?: string
-    status: string
-    followUpOf?: string | null
-  } | null
-  worker: {
-    dispatchId?: string
-    state: string
-    stage: string
-    agentTerminalHandle: string | null
-    worktreeId?: string | null
-    lastError?: string | null
-  }
-  projection?: WorkerProjection | null
-  terminalResource?: {
-    releaseState?: string | null
-    terminalHandle?: string | null
-  } | null
-  observation?: { agentWait?: { source: string; reason?: string } | null; reason?: string }
-  /** Present only for a worker a paired server runs, which this Orca's record answers. */
-  server?: RemoteWorkerServer & { reachable?: boolean }
-  lastReport?: string | null
-  autoReleaseAt?: string | null
-  /** The paired Orca whose Run here coordinates this worker. */
-  coordinatedFrom?: string | null
-}
-
-/** A worker a paired server runs, as this Orca names that server and last heard from it. */
-type RemoteWorkerServer = { name: string; asOf: string; repaired?: true }
+import type {
+  RemoteWorkerServer,
+  WorkerListResult,
+  WorkerProjection,
+  WorkerShowResult
+} from './worker-view-results'
 
 type WorkerShowFields = {
   dispatchId: string
@@ -63,6 +21,7 @@ type WorkerShowFields = {
   lastActivity?: string
   terminal?: string
   terminalState?: string
+  handedOnTo?: string
   workspace?: string
   server?: string
   asOf?: string
@@ -79,6 +38,8 @@ type WorkerShowFields = {
 export const WORKER_SHOW_VIEW: OrchestrationAgentView<WorkerShowResult, WorkerShowFields> = {
   fields: (value) => {
     const wait = value.observation?.agentWait
+    // A handed-on terminal's row is its follow-up's; its release state is not this worker's.
+    const ownTerminal = value.handedOnTo ? null : value.terminalResource
     return {
       dispatchId: value.dispatch?.id ?? value.worker.dispatchId ?? 'unknown',
       taskId: value.dispatch?.taskId,
@@ -89,13 +50,14 @@ export const WORKER_SHOW_VIEW: OrchestrationAgentView<WorkerShowResult, WorkerSh
       liveness: livenessField(value.projection),
       activity: knownActivity(value.projection),
       lastActivity: lastActivity(value.projection),
-      terminal:
-        value.worker.agentTerminalHandle ?? value.terminalResource?.terminalHandle ?? undefined,
+      // Handoff keeps the predecessor's recorded handle; that terminal is the follow-up's now.
+      terminal: value.handedOnTo
+        ? undefined
+        : (value.worker.agentTerminalHandle ?? value.terminalResource?.terminalHandle ?? undefined),
       // The projection's accounting state matches worker-list; releaseState is the raw column.
       terminalState:
-        value.projection?.resource?.terminalState ??
-        value.terminalResource?.releaseState ??
-        undefined,
+        value.projection?.resource?.terminalState ?? ownTerminal?.releaseState ?? undefined,
+      handedOnTo: value.handedOnTo ?? undefined,
       workspace: value.projection?.workspace?.id ?? value.worker.worktreeId ?? undefined,
       server: value.server?.name,
       asOf: value.server?.asOf,
@@ -122,32 +84,6 @@ export const WORKER_SHOW_VIEW: OrchestrationAgentView<WorkerShowResult, WorkerSh
       next: value.projection ? renderOrchestrationArgv(value.projection.nextAction.argv) : undefined
     }
   }
-}
-
-export type WorkerListResult = {
-  workers: {
-    dispatchId: string
-    taskId: string
-    runId: string
-    workerState: string
-    dispatchStatus: string
-    agentTerminalHandle: string | null
-    terminalState: string | null
-    coordinatedFrom?: string | null
-    resource?: { worktreeId?: string | null; autoReleaseAt?: string | null } | null
-    projection?: WorkerProjection
-    /** Only on a worker a paired server runs, listed from this Orca's record of it. */
-    server?: RemoteWorkerServer
-  }[]
-  counts: Record<string, number>
-  page?: { hasMore: boolean; nextCursor: string | null; total: number }
-  warnings?: string[]
-  partialHostErrors?: {
-    environmentId: string
-    name: string
-    code: string
-    dispatchIds: string[]
-  }[]
 }
 
 type WorkerListRow = {
@@ -262,8 +198,14 @@ function livenessField(projection: WorkerProjection | null | undefined): string 
   return liveness?.detail ? `${liveness.verdict} (${liveness.detail})` : liveness?.verdict
 }
 
-/** Only a live worker's activity is known; a finished turn is an idle agent, not finished work. */
+/** Only a live worker's activity is known; a finished turn is an idle agent, not finished work. A turn
+ *  its own background tasks hold open is named for them, as last seen, even once its status is stale. */
 function knownActivity(projection: WorkerProjection | null | undefined): string | undefined {
+  const wait = projection?.stage.backgroundWait
+  if (wait) {
+    const [command, ...more] = wait.commands
+    return `waiting on its background task${command ? ` \`${command}\`` : ''}${more.length ? ` (and ${more.length} more)` : ''}${sinceIso(wait.since)}`
+  }
   if (projection?.liveness.verdict !== 'live' || projection.stage.activity === 'unknown') {
     return undefined
   }
@@ -275,4 +217,10 @@ function lastActivity(projection: WorkerProjection | null | undefined): string |
   return knownActivity(projection) && typeof at === 'number'
     ? formatPrCommentRelativeTime(new Date(at).toISOString(), Date.now())
     : undefined
+}
+
+/** A relayed copy may carry a time no date can hold. */
+function sinceIso(since: number): string {
+  const date = new Date(since)
+  return Number.isFinite(date.getTime()) ? ` since ${date.toISOString()}` : ''
 }

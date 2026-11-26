@@ -1,16 +1,19 @@
 import {
   acceptedAgentStatuses,
   type AcceptedAgentStatuses
-} from '@/store/slices/agent-status/accepted-agent-statuses'
+} from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
-import type { AgentMessageSource } from '../../../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import { NativeChatAgentMessageCard } from './NativeChatAgentMessageCard'
 import { MessageRow } from './NativeChatMessageRow'
 import { projectStructuredAgentStartItem } from '../../../../../../shared/native-chat/transcript/messages/structured-agent-start-projection'
 import { NativeChatUserMessageRow } from './NativeChatUserMessageRow'
 import { orchestrationMailFixture } from '../../../../../../shared/agent-session/orchestration-mail.test-fixture'
+import { NativeChatWorkersContext } from '../../native-chat-workers-context'
+import type { OrchestrationSessionWorker } from '../../../../../../shared/orchestration-session-workers'
+import { nativeChatEventPlan } from '../../../../../../shared/native-chat/transcript/events/native-chat-event-plan'
 
 const workspace = 'agent-message-fixture'
 const image =
@@ -41,7 +44,7 @@ function cards() {
     timestamp: 1_800_000_000_000
   }
   return (
-    <div className="space-y-4 p-4">
+    <div className="space-y-4 bg-chat-pane p-4">
       {[
         started,
         { ...started, id: 'reopened', agentFollowUp: 'reopened' as const },
@@ -172,8 +175,12 @@ export const mail = defineFixture({
       body: 'The message now shows the result directly.\n\nAll relevant checks passed. Open [the report](https://example.com/report) for details.'
     })
     return (
-      <div className="p-4">
-        <NativeChatAgentMessageCard message={message} from={message.from} onRefolded={() => {}} />
+      <div className="bg-chat-pane p-4">
+        <NativeChatAgentMessageCard
+          message={{ ...message, timestamp: 1_800_000_000_000 }}
+          from={message.from}
+          onRefolded={() => {}}
+        />
       </div>
     )
   },
@@ -191,4 +198,189 @@ export const expanded = defineFixture({
       }
     }
   }
+})
+// Mail from a paired computer: an agent there by its carried avatar, and a terminal agent, each with its host pill.
+export const fromAnotherComputer = defineFixture({
+  width: 440,
+  render: () => (
+    <div className="space-y-4 bg-chat-pane p-4">
+      {[
+        { name: 'Release helper', bot: true as const, botAvatar: 'mascot:A1', agent: 'claude' },
+        { name: 'Release check', agent: 'codex' }
+      ].map((sender) => {
+        const from: AgentMessageSource = {
+          kind: 'agent',
+          senders: [
+            {
+              party: {
+                address: `${sender.name} on Alice's Mac`,
+                terminalHandle: null,
+                orcaSessionId: null
+              },
+              host: "Alice's Mac",
+              ...sender
+            }
+          ],
+          orchestration: {
+            message: 'mail-notice',
+            mailbox: 'term_recipient',
+            dispatchId: null,
+            messages: []
+          }
+        }
+        return (
+          <NativeChatAgentMessageCard
+            key={sender.name}
+            message={{
+              id: sender.name,
+              role: 'user',
+              source: 'transcript',
+              blocks: [{ type: 'text', text: 'Where is the install guide?' }],
+              timestamp: 1_800_000_000_000,
+              from
+            }}
+            from={from}
+            onRefolded={() => {}}
+          />
+        )
+      })}
+    </div>
+  )
+})
+
+function sessionWorker(
+  dispatchId: string,
+  state: OrchestrationSessionWorker['state'],
+  address: string
+): OrchestrationSessionWorker {
+  return {
+    dispatchId,
+    taskId: 't',
+    runId: 'r',
+    title: 'Parser worker',
+    agent: 'claude',
+    state,
+    liveness: state === 'working' ? 'live' : 'exited',
+    host: 'local',
+    worktreeId: workspace,
+    address,
+    paneKey: null,
+    chatSessionId: null,
+    startedAt: 1_800_000_000_000,
+    settledAt: state === 'working' ? null : 1_800_000_060_000
+  }
+}
+
+// The chat's own workers as the host records them: one still running (spinner on its start), one
+// whose Dispatch failed (red badge on its update), whatever its pane shows now.
+const failedUpdate = {
+  ...orchestrationMailFixture({ body: 'Stopped: the screenshot tool timed out.' }),
+  timestamp: 1_800_000_030_000
+}
+const recordedWorkers = [
+  sessionWorker('fixture-dispatch', 'working', 'term_sender'),
+  sessionWorker('failed-dispatch', 'failed', failedUpdate.from.senders[0]!.party.address)
+]
+export const workerStates = defineFixture({
+  width: 560,
+  store,
+  render: () => {
+    const update = failedUpdate
+    return (
+      <NativeChatWorkersContext.Provider value={recordedWorkers}>
+        <div className="space-y-1 bg-chat-pane p-4">
+          <MessageRow
+            message={started}
+            expandSignal={false}
+            onScrollMessageToTop={() => {}}
+            runtimeContext={{
+              worktreeId: workspace,
+              worktreePath: null,
+              target: { kind: 'local' }
+            }}
+          />
+          <NativeChatAgentMessageCard message={update} from={update.from} onRefolded={() => {}} />
+        </div>
+      </NativeChatWorkersContext.Provider>
+    )
+  }
+})
+
+// A worker's start and its failed update, back to back: drawn as two rows, then as the event plan
+// merges them, one failed row whose details hold the report and, under it, the start.
+const reviewStarted = projectStructuredAgentStartItem({
+  itemId: 'review-started',
+  revision: 1,
+  sequence: 8,
+  observedAt: 1_800_000_000_000,
+  body: {
+    kind: 'agent-start',
+    dispatchId: 'review-dispatch',
+    task: 'Review the share dialog change and run its tests.',
+    worker: {
+      party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
+      name: 'Review worker',
+      agent: 'codex'
+    }
+  }
+})!
+const reviewFailed = {
+  ...orchestrationMailFixture({
+    body: 'share-dialog.test.tsx timed out twice on CI; the change itself is on the branch.'
+  }),
+  timestamp: 1_800_000_060_000
+}
+const reviewWorkers = [
+  { ...sessionWorker('review-dispatch', 'failed', 'term_worker'), agent: 'codex' }
+]
+
+function reviewRows(merge: boolean) {
+  const rows = [reviewStarted, reviewFailed]
+  const shown = merge
+    ? nativeChatEventPlan(rows, { turnKeys: [undefined, undefined], workers: reviewWorkers })
+    : rows
+  return (
+    <NativeChatWorkersContext.Provider value={reviewWorkers}>
+      <div className="space-y-1 bg-chat-pane p-4">
+        {shown
+          .filter((message) => message.mergedInto === undefined)
+          .map((message) => (
+            <MessageRow
+              key={message.id}
+              message={message}
+              expandSignal={false}
+              onScrollMessageToTop={() => {}}
+              runtimeContext={{
+                worktreeId: workspace,
+                worktreePath: null,
+                target: { kind: 'local' }
+              }}
+            />
+          ))}
+      </div>
+    </NativeChatWorkersContext.Provider>
+  )
+}
+// Opens each row, then its Show more once the details have measured.
+const openEveryRow = async (frame: HTMLElement) => {
+  for (let pass = 0; pass < 2; pass += 1) {
+    for (const button of frame.querySelectorAll('button')) {
+      if (button.getAttribute('aria-expanded') === 'false') {
+        button.click()
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+}
+export const sameDispatchBefore = defineFixture({
+  width: 560,
+  store,
+  render: () => reviewRows(false),
+  interact: openEveryRow
+})
+export const sameDispatchMerged = defineFixture({
+  width: 560,
+  store,
+  render: () => reviewRows(true),
+  interact: openEveryRow
 })

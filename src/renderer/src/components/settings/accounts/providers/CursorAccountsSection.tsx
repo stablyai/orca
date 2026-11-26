@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ExternalLink, Loader2, RefreshCw, ShieldCheck } from 'lucide-react'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { isLinuxUserAgent } from '@/app-shell/platform/user-agent-platform'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -20,6 +21,12 @@ function credentialSourceLabel(
   source: CursorAccountStatus['credentialSource'],
   t: Translate = translate
 ): string | null {
+  if (source === 'keychain' && isLinuxUserAgent()) {
+    return t(
+      'auto.components.settings.CursorAccountsSection.source.keyring',
+      'Linux keyring (cursor-agent)'
+    )
+  }
   if (source === 'keychain') {
     return t(
       'auto.components.settings.CursorAccountsSection.source.keychain',

@@ -1,5 +1,7 @@
+import { useState } from 'react'
+import { View } from 'react-native'
 import { FileText, ListChecks } from 'lucide-react-native'
-import type { DiffComment } from '../../../../../src/shared/diff-comment-types'
+import type { DiffComment } from '../../../../../src/shared/file-review/diff-comment-types'
 import {
   MobileLoadErrorState,
   MobileOfflineState,
@@ -8,6 +10,8 @@ import {
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { MobileDiffReviewLines, type LineRange } from './MobileDiffReviewLines'
+import { MobilePanZoomImage } from '../../../files/media/presentation/MobilePanZoomImage'
+import { filePreviewStyles } from '../../../files/preview/mobile-file-preview-styles'
 import type {
   ReviewDiffState,
   ReviewScreenState
@@ -119,6 +123,15 @@ export function MobileDiffReviewBody({
       <MobileLoadErrorState error={diffState.message} onRetry={onRetry} />
     )
   }
+  if (diffState.kind === 'image') {
+    return (
+      <DiffImage
+        key={diffState.dataUri}
+        diffState={diffState}
+        title={currentItem?.filePath ?? ''}
+      />
+    )
+  }
   if (diffState.kind !== 'ready') {
     return <DiffUnavailableState diffState={diffState} />
   }
@@ -137,6 +150,31 @@ export function MobileDiffReviewBody({
       {...(currentItem?.scope === 'commit' ? {} : { onPickLines })}
       onEditNote={onEditNote}
     />
+  )
+}
+
+/** Same view as the file tab: the image after the change, or the deleted one. */
+function DiffImage({
+  diffState,
+  title
+}: {
+  diffState: Extract<ReviewDiffState, { kind: 'image' }>
+  title: string
+}) {
+  const t = useMobileTranslation()
+  // An image the WebView can't decode stays hidden, so fall back to the binary notice.
+  const [failed, setFailed] = useState(false)
+  if (failed) {
+    return <DiffUnavailableState diffState={{ kind: 'binary', itemKey: diffState.itemKey }} />
+  }
+  return (
+    <View style={filePreviewStyles.imageContainer}>
+      <MobilePanZoomImage
+        uri={diffState.dataUri}
+        onError={() => setFailed(true)}
+        label={t('files.filePreviewBody.imageLabel', '{{title}} image', { title })}
+      />
+    </View>
   )
 }
 

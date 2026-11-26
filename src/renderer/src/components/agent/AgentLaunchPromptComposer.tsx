@@ -13,7 +13,7 @@ import {
   readNativeChatComposerDraft,
   clearNativeChatComposerDraftIfUnchanged
 } from '../native-chat/drafts/native-chat-composer-draft-store'
-import { getNativeChatAgentProfile } from '../../../../shared/native-chat/native-chat-agent-profiles'
+import { getNativeChatAgentProfile } from '../../../../shared/native-chat/input/commands/native-chat-agent-profiles'
 import type { SessionOptionsSurface } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 

@@ -18,10 +18,19 @@ import {
   type TerminalCursorContext
 } from '../../../../shared/terminal/input/terminal-composer-draft'
 import { openCodeComposerHoldsDraft } from '../../../../shared/terminal/input/opencode-composer'
+import { piComposerHoldsDraft } from '../../../../shared/terminal/input/pi-composer'
 import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox/routing/mailbox-owner'
 import type { MailboxDeliveryHold } from '../../orchestration/mailbox/delivery-hold/mailbox-delivery-hold'
+import { tuiAgentDisplayName } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
+import { receiptMailboxOwnershipHold } from '../../orchestration/mailbox/delivery-hold/receipt-mailbox-ownership'
 
 const DIALOG_HOLD_RECHECK_MS = 2000
+const CORROBORATED_HOLDS: ReadonlySet<MailboxDeliveryHold['kind']> = new Set([
+  'prompt',
+  'draft',
+  'blocked',
+  'overlay'
+])
 
 export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyIncarnationHandle {
   protected resolvePtyExitWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void {
@@ -106,6 +115,8 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     if (!terminal || !this.orchestrationMailboxNotifications.hasDeliverableMail(terminal)) {
       return
     }
+    // As a tui-idle wait does: a reattached idle agent prints nothing, so ask for the paint that settles it.
+    this.requestReattachedRepaint(ptyId)
     // Schedule just beyond the quiet window and re-arm from fresher output if still streaming.
     const outputAt = this.readOutputClockAt(ptyId)
     const quietRemainingMs =
@@ -131,17 +142,52 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     return this.deliveryRefusal(ptyId) === null
   }
 
-  /** Why delivery would hold mail for this worker terminal now, for a send receipt: the gate's own reason. */
-  readTerminalMailHold(terminalHandle: string): MailboxDeliveryHold | null {
-    const ptyId = this.getOrchestrationMailboxTerminalForHandle(terminalHandle)?.ptyId
-    const refusal = ptyId ? this.deliveryRefusal(ptyId) : null
-    return refusal === 'no-terminal' ? null : refusal
+  /** Why delivery would not type a note for this mailbox now, for a send receipt: the gates' own reads,
+   *  through the terminal delivery resolves (a Run's current coordinator, a Dispatch's assignee),
+   *  once that terminal is shown to read the mailbox. */
+  readTerminalMailHold(mailbox: string): MailboxDeliveryHold | null {
+    const terminal = this.orchestrationMailboxDeliveryTarget.resolveTerminal(mailbox)
+    if (!terminal) {
+      return null
+    }
+    const db = this._orchestrationDb
+    const notRead = db ? receiptMailboxOwnershipHold(db, terminal, mailbox) : null
+    if (notRead) {
+      return notRead
+    }
+    const refusal = this.deliveryRefusal(terminal.ptyId)
+    if (refusal === 'no-terminal') {
+      return null
+    }
+    if (isMailboxTerminalTakingInput(terminal)) {
+      return refusal
+    }
+    // Without live status, only holds Orca read on screen or from the agent stay true once status arrives.
+    return refusal && CORROBORATED_HOLDS.has(refusal.kind)
+      ? refusal
+      : { kind: 'unverified', terminal: terminal.handle }
+  }
+
+  /** Whether a waiting `check --wait` takes mail of this type stored for this mailbox, as arrival would. */
+  hasMessageWaiterFor(mailbox: string, messageType: string): boolean {
+    return [...(this.messageWaiters.get(mailbox) ?? [])].some(
+      (waiter) => !waiter.typeFilter || waiter.typeFilter.includes(messageType)
+    )
   }
 
   private deliveryRefusal(ptyId: string): MailboxDeliveryHold | 'no-terminal' | null {
     const pty = this.ptysById.get(ptyId)
     if (!pty) {
       return 'no-terminal'
+    }
+    // Why: Agent Sleep is stopping this agent; its mail waits for the slept-agent wake, not this process.
+    if (this.intentionalPtyStops.isReversibleStopInFlight(ptyId)) {
+      return {
+        kind: 'asleep',
+        agentName: tuiAgentDisplayName(this.getPaneTerminalAgent(ptyId) ?? '') ?? 'The agent',
+        openTab: true,
+        waking: true
+      }
     }
     const hold = this.ptyDeliveryHold(ptyId)
     if (hold) {
@@ -192,12 +238,17 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     return holding ? (draft ? 'draft' : 'restoring') : null
   }
 
-  // Why: OpenCode's composer has no prompt glyph, so only its own pane is read with its box layout.
+  // Why: OpenCode's and Pi's composers have no prompt glyph, so only their own panes are read with
+  // their layouts.
   private hasComposerDraft(ptyId: string, context: TerminalCursorContext | null): boolean {
     const agent = this.getPaneTerminalAgent(ptyId)
-    return (agent === 'opencode' || agent === 'opencode2') && context
-      ? openCodeComposerHoldsDraft(context)
-      : !!readTerminalComposerTypedText(context)
+    if (context && (agent === 'opencode' || agent === 'opencode2')) {
+      return openCodeComposerHoldsDraft(context)
+    }
+    if (context && agent === 'pi') {
+      return piComposerHoldsDraft(context)
+    }
+    return !!readTerminalComposerTypedText(context)
   }
 
   protected getAdoptedPtyExplicitIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null {

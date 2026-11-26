@@ -19,7 +19,7 @@ import { memoryJournalInputIndexStorage } from '../journal-memory-input-index-st
 /** Reconstructible query evidence on the input owner; canonical records remain authoritative. */
 export class JournalInputEvidence extends JournalInputObservations {
   readonly links: JournalSubmissionLinks
-  private readonly evidenceFacts: JournalInputEvidenceFacts
+  protected readonly evidenceFacts: JournalInputEvidenceFacts
   private readonly nonRefused: JournalInputPlaceStorage
   private readonly acceptedByTime: JournalInputPlaceStorage
   private readonly failedRequests: JournalInputPlaceStorage

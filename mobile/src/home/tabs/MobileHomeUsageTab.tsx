@@ -7,7 +7,8 @@ import Animated, {
   useSharedValue,
   withTiming
 } from 'react-native-reanimated'
-import { usageBarFill } from '../../accounts/usage/UsageBar'
+import { formatUsageBarValue, usageBarFill } from '../../accounts/usage/UsageBar'
+import { useUsagePercentageDisplay } from '../../accounts/usage/usage-percentage-display-preference'
 import {
   getUsageBarState,
   getWindowResetLabel,
@@ -36,6 +37,7 @@ import { selectHomeUsageSections, type HomeUsageCard } from './home-usage-cards'
 import { MobileHomeHostPill, useHomeTabHost } from './MobileHomeHostPill'
 import { MobileHomeTabHeader, MobileHomeTabHeaderButton } from './MobileHomeTabHeader'
 import { mobileHomeUsageStyles as styles } from './mobile-home-usage-styles'
+import { getManagedAccountPrimaryLabel } from '../../../../src/shared/agent-accounts/managed-account-display-names'
 
 const PROVIDER_TITLES: Record<ProviderKey, string> = { claude: 'Claude Code', codex: 'Codex' }
 
@@ -215,11 +217,17 @@ function UsageCard(props: {
   useMobileColorScheme()
   const [pressed, setPressed] = useState(false)
   const { card } = props
-  const title = card.email ?? t('accounts.screen.default', 'System default')
+  const title =
+    card.email == null
+      ? t('accounts.screen.default', 'System default')
+      : getManagedAccountPrimaryLabel({ email: card.email, displayName: card.displayName })
+  // A named card keeps its email on the second line, as desktop rows do.
   const subtitle =
     card.email == null
       ? t('accounts.screen.agentLogin', "Use the agent's own login")
-      : card.subtitle
+      : title === card.email
+        ? card.subtitle
+        : [card.email, card.subtitle].filter(Boolean).join(' · ')
   const windows: { key: 'session' | 'weekly'; label: string }[] = [
     { key: 'session', label: t('accounts.screen.sessionWindow', '5h') },
     { key: 'weekly', label: t('accounts.screen.weeklyWindow', '7d') }
@@ -296,20 +304,22 @@ function UsageMeter(props: {
   reducedMotion: boolean
 }) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const usageWindow = props.card.limits?.[props.windowKey] ?? null
   const bar = getUsageBarState(props.card.limits, usageWindow, props.card.fetching)
-  const { used, color } = usageBarFill(bar.usedPercent, bar.unavailable)
+  const display = useUsagePercentageDisplay()
+  const { shown, color } = usageBarFill(bar.usedPercent, bar.unavailable, display)
   const reset = getWindowResetLabel(usageWindow, props.now)
-  const width = useSharedValue(props.reducedMotion ? (used ?? 0) : 0)
+  const width = useSharedValue(props.reducedMotion ? (shown ?? 0) : 0)
 
   useEffect(() => {
     width.value = props.reducedMotion
-      ? (used ?? 0)
-      : withTiming(used ?? 0, { duration: 450, easing: HOME_EASE_OUT })
-  }, [props.reducedMotion, used, width])
+      ? (shown ?? 0)
+      : withTiming(shown ?? 0, { duration: 450, easing: HOME_EASE_OUT })
+  }, [props.reducedMotion, shown, width])
 
   const fillStyle = useAnimatedStyle(() => ({ width: `${width.value}%` }))
-  const value = bar.unavailable || used == null ? '—' : `${used}%`
+  const value = formatUsageBarValue(bar.unavailable ? null : shown, display, t)
 
   return (
     <>

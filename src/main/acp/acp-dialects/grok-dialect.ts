@@ -7,6 +7,7 @@ import { grokBackgroundTaskNotification, grokToolBackgroundTasks } from './grok-
 import { grokModelEfforts } from './grok-model-catalog'
 import { grokSubagentNotification, grokToolSubagents } from './grok-subagents'
 import { grokSubagentStop } from './grok-subagent-stop'
+import { grokThreadGoalReport } from './grok-goal-updates'
 import { grokBackgroundTaskStop } from './grok-background-task-stop'
 
 const tokenCount = z.number().int().nonnegative()
@@ -171,6 +172,14 @@ function notification(
       disposition: 'map',
       ...(envelope._meta?.isReplay === true ? { replay: true } : {}),
       subagents: [subagent]
+    }
+  }
+  const threadGoal = grokThreadGoalReport(envelope.update)
+  if (threadGoal) {
+    return {
+      disposition: 'map',
+      ...(envelope._meta?.isReplay === true ? { replay: true } : {}),
+      threadGoal
     }
   }
   const meta = turnMetaSchema.safeParse(envelope._meta)

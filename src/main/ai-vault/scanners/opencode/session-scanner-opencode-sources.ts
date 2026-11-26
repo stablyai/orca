@@ -35,6 +35,7 @@ export function opencodeDiscoveries(
           limitPerAgent: limit,
           issues,
           scopePaths: options.scopePaths,
+          statCache: options.statCache,
           signal: options.signal
         })
       ),

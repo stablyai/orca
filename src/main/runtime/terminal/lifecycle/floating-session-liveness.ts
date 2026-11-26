@@ -1,12 +1,15 @@
+import { reconsiderCreatorRest } from '../../orchestration/workers/turn-stops/worker-presence-report'
 import { OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory } from './pty-controller-inventory-refresh'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
 import { indexFloatingSnapshotPtyBindings } from './floating-snapshot-pty-bindings'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
 } from '../records/runtime-terminal-state-records'
 
+import { botGroupOfRoomMailAddress } from '../../../../shared/bots/bot-group-room-mail'
 import { questionAnswerWaitPrefix } from '../../orchestration/mailbox/questions/question-answer-delivery'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 const DISCONNECTED_PTY_RECORD_MAX = 128
 
 export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory {
@@ -78,6 +81,7 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
       return
     }
     // Keep disconnected records addressable for status/exit, but release their transcripts.
+    pty.releasedLinesTotal = Math.max(pty.releasedLinesTotal ?? 0, pty.tailLinesTotal)
     pty.tailBuffer = []
     pty.tailTranscriptBuffer = []
     pty.tailTranscriptChars = 0
@@ -92,14 +96,49 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
   }
 
   protected pruneDisconnectedPtyRecords(): void {
-    const retained = [...this.ptysById.values()]
-      .filter((pty) => !pty.connected && !this.leafExistsForPty(pty.ptyId))
-      .sort((a, b) => (a.disconnectedAt ?? 0) - (b.disconnectedAt ?? 0))
+    let retained = [...this.ptysById.values()].filter(
+      (pty) => !pty.connected && !this.leafExistsForPty(pty.ptyId)
+    )
+    if (retained.length > DISCONNECTED_PTY_RECORD_MAX) {
+      // An open slept pane's handle still names its stopped process; that archive goes with the pane.
+      retained = retained.filter((pty) => !this.isSleptPanePty(pty))
+    }
+    retained.sort((a, b) => (a.disconnectedAt ?? 0) - (b.disconnectedAt ?? 0))
     const staleCount = Math.max(0, retained.length - DISCONNECTED_PTY_RECORD_MAX)
     for (const stale of retained.slice(0, staleCount)) {
       // Bound retained exited-terminal archives in long-lived runtimes.
       this.dropDisconnectedPtyRecord(stale.ptyId)
     }
+  }
+
+  /** A stopped process whose handle a processless pane still holds: only a sleep keeps it so. The
+   *  panes it can name (its own pane by leaf id, its handle's, its incarnation's) are checked by
+   *  key; a pane counts when it shows no process and its bound handle still names this one. */
+  private isSleptPanePty(pty: RuntimePtyWorktreeRecord): boolean {
+    const keys = new Set<string>()
+    const pane = pty.paneKey ? parsePaneKey(pty.paneKey) : null
+    if (pane) {
+      keys.add(this.getLeafKey(pane.tabId, pane.leafId))
+      for (const key of this.terminalIdentity.paneCandidates.leavesForId(pane.leafId)) {
+        keys.add(key)
+      }
+    }
+    const handle = this.handleByPtyId.get(pty.ptyId)
+    const record = handle ? this.handles.get(handle) : undefined
+    if (record) {
+      keys.add(this.getLeafKey(record.tabId, record.leafId))
+    }
+    const incarnation = this.handleByPtyIncarnation.get(pty.ptyId)
+    if (incarnation?.leafKey) {
+      keys.add(incarnation.leafKey)
+    }
+    for (const key of keys) {
+      const bound = this.leaves.get(key)?.ptyId === null ? this.handleByLeafKey.get(key) : undefined
+      if (bound && this.handles.get(bound)?.ptyId === pty.ptyId) {
+        return true
+      }
+    }
+    return false
   }
 
   protected dropDisconnectedPtyRecord(ptyId: string): void {
@@ -125,6 +164,7 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     this.ptyOutputSequenceById.delete(ptyId)
     this.providerSequenceInitializedPtys.delete(ptyId)
     this.providerSequenceOffsetByPtyId.delete(ptyId)
+    this.reattachedProviderSequenceByPtyId.delete(ptyId)
     this.providerSnapshotPreferredPtys.delete(ptyId)
     this.providerModeTrackersByPtyId.delete(ptyId)
     this.providerModeSnapshotScansByPtyId.delete(ptyId)
@@ -142,17 +182,36 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     this.terminalCwdByPtyId.delete(ptyId)
     this.terminalFileUriHostnameByPtyId.delete(ptyId)
     this.wslDistroByPtyId.delete(ptyId)
+    this.orchestrationMailboxNotifications.forgetReleasedPointerPty(ptyId)
     const handle = this.handleByPtyId.get(ptyId)
     if (handle) {
+      this.terminalIdentity.unbindPty(ptyId)
+      if (this.handlesMovedOnFrom(handle, ptyId)) {
+        return
+      }
       // Pruning can bypass onPtyExit; release leader teams here too.
       this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
-      this.terminalIdentity.unbindPty(ptyId)
       this.terminalIdentity.removeSynthetic(handle)
       const record = this.handles.get(handle)
       if (record?.tabId.startsWith('pty:')) {
         this.terminalIdentity.removeHandle(handle)
       }
     }
+  }
+
+  /** Whether another process now holds this handle, which a stopped process only aliases. */
+  protected handlesMovedOnFrom(handle: string, ptyId: string): boolean {
+    const current = this.handles.get(handle)?.ptyId
+    return !!current && current !== ptyId
+  }
+
+  /** A stopped process still aliasing the handle its successor took over answers to that handle. */
+  protected answersToSuccessor(pty: RuntimePtyWorktreeRecord, handle: string): boolean {
+    return (
+      !pty.connected &&
+      this.handleByPtyId.get(pty.ptyId) === handle &&
+      this.handlesMovedOnFrom(handle, pty.ptyId)
+    )
   }
 
   protected leafExistsForPty(ptyId: string): boolean {
@@ -179,6 +238,9 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     return this.leavesByPtyId.get(ptyId) ?? []
   }
 
+  /** Mail for a bot group's room arrived; the runtime copies it into the room. */
+  protected botGroupRoomMailArrived(_groupId: string): void {}
+
   // Keep the notification hook on the runtime as well as on the installed
   // command surface: exit escalation can wake an in-flight --wait directly.
   notifyMessageArrived(handle: string, messageType?: string): void {
@@ -186,11 +248,19 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     if (messageType === 'heartbeat') {
       return
     }
+    // A bot on another computer answered a group's question: it goes to that room, never a mailbox.
+    const roomGroupId = botGroupOfRoomMailAddress(handle)
+    if (roomGroupId !== null) {
+      this.botGroupRoomMailArrived(roomGroupId)
+      return
+    }
     if (!handle.startsWith('dispatch:')) {
       this.mailPointerRepointScheduler.schedule(handle)
     } else {
       // A waiting ask rechecks its question, which a settled Dispatch has closed.
       this.messageWaiters.notifyPrefix(questionAnswerWaitPrefix(handle.slice('dispatch:'.length)))
+      // A helper that settled may have been all that held back its creator's report.
+      reconsiderCreatorRest(handle, this.workerTurnStopReportDeps)
     }
     this.orchestrationMailboxNotifications.notifyMessageArrived(handle, messageType)
   }

@@ -1,0 +1,47 @@
+# Bot code names its host through lib/bot-hosts, the one owner of "which host runs this bot".
+# The TSX document below mirrors the TypeScript one; keep them in sync.
+id: bots-no-local-target
+language: typescript
+severity: error
+message: "Bot code reaches a host only through lib/bot-hosts: botTarget(bot), callBotRpc, forEachBotHost or ownBotHost. A hard-coded { kind: 'local' } pins a bot to this computer."
+files:
+  - '**/src/renderer/src/components/bots/**'
+  - '**/src/renderer/src/components/settings/bots/**'
+  - '**/src/renderer/src/lib/bot-*'
+  - '**/src/renderer/src/lib/bots-*'
+  - '**/src/renderer/src/hooks/ipc-events/bot-*'
+ignores:
+  - '**/src/renderer/src/lib/bot-hosts.ts'
+  - '**/*.test.*'
+  - '**/*.spec.*'
+  - '**/*fixture*'
+rule:
+  kind: object
+  has:
+    kind: pair
+    all:
+      - has: { field: key, regex: '^kind$' }
+      - has: { field: value, regex: '^.local.$' }
+---
+id: bots-no-local-target-tsx
+language: tsx
+severity: error
+message: "Bot code reaches a host only through lib/bot-hosts: botTarget(bot), callBotRpc, forEachBotHost or ownBotHost. A hard-coded { kind: 'local' } pins a bot to this computer."
+files:
+  - '**/src/renderer/src/components/bots/**'
+  - '**/src/renderer/src/components/settings/bots/**'
+  - '**/src/renderer/src/lib/bot-*'
+  - '**/src/renderer/src/lib/bots-*'
+  - '**/src/renderer/src/hooks/ipc-events/bot-*'
+ignores:
+  - '**/src/renderer/src/lib/bot-hosts.ts'
+  - '**/*.test.*'
+  - '**/*.spec.*'
+  - '**/*fixture*'
+rule:
+  kind: object
+  has:
+    kind: pair
+    all:
+      - has: { field: key, regex: '^kind$' }
+      - has: { field: value, regex: '^.local.$' }

@@ -12,13 +12,16 @@ import {
   getIndexedAllWorktrees,
   getIndexedWorktreesById
 } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { readBots } from '@/lib/bot-catalog-snapshot'
+import { readBotGroups } from '@/lib/bot-group-catalog-snapshot'
+import { isHome } from '../../../../../../shared/bots/bot-homes'
 import {
   getWorktreeHostIdentity,
   isWorktreeHostIdentity
 } from '../../../../../../shared/worktree/host-qualified-identity'
 import { resolveReviewRepository } from '@/lib/source-control/review/review-owner'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { findFolderWorkspaceRecord } from '../../../folder-workspaces/folder-workspace-record-index'
 import {
   selectFolderWorkspaces,
@@ -28,6 +31,7 @@ import { getFolderWorkspaceWorktree } from '../../../../../../shared/folder-work
 import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/lineage/cross-store-lineage-resolution'
 import type { AppState } from '../../../types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
+import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { CreatedWorktreeResult } from './worktree-create-payload'
 
@@ -132,6 +136,17 @@ export function resolveWorktreeCreateParent(
           state.activeWorkspaceExecutionHostId ?? undefined
         )
       : undefined
+  // A bot's or group's home parents only its own workers' workspaces, never one made while it is open.
+  if (
+    activeScope?.type === 'folder' &&
+    isActiveHome(
+      activeFolder,
+      activeScope.folderWorkspaceId,
+      state.activeWorkspaceExecutionHostId ?? undefined
+    )
+  ) {
+    return { pickedDisplayName, staleBeforeCreate: Boolean(requestedParentWorktreeId) }
+  }
   const activeFolderRow = activeFolder ? getFolderWorkspaceWorktree(activeFolder) : undefined
   const childStore = lineageStoreKeyOfRow({ id: '', hostId: executionHostId })
   const folderStore = activeFolderRow ? lineageStoreKeyOfRow(activeFolderRow) : undefined
@@ -158,6 +173,23 @@ export function resolveWorktreeCreateParent(
     pickedDisplayName,
     staleBeforeCreate: Boolean(requestedParentWorktreeId)
   }
+}
+
+/** Whether the active folder is a bot's or group's home. Fails closed when its record isn't loaded:
+ * an owner naming that folder on the active host, or on any host when none is known, still counts. */
+function isActiveHome(
+  activeFolder: FolderWorkspace | undefined,
+  folderWorkspaceId: string,
+  activeHostId: ExecutionHostId | undefined
+): boolean {
+  const owners = [...readBots(), ...readBotGroups()]
+  if (activeFolder) {
+    return isHome(activeFolder, owners)
+  }
+  if (activeHostId) {
+    return isHome({ id: folderWorkspaceId, executionHostId: activeHostId }, owners)
+  }
+  return owners.some((owner) => owner.folderWorkspaceId === folderWorkspaceId)
 }
 
 /** Resolve label only for warnings; missing labels must never fail an already successful create. */

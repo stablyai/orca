@@ -2,8 +2,8 @@
 
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type { AiVaultSessionTitle } from '../../ai-vault/contracts/ai-vault-session-title'
-import type { ExecutionHostId } from '../../execution-host'
-import type { TabContentType, TabGroupLayoutNode } from '../../tab-types'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
+import type { TabContentType, TabGroupLayoutNode } from '../tab-groups/tab-types'
 import type { TerminalPaneLayoutNode } from '../terminal-tab-types'
 import { pickStoredFields } from '../persistence/stored-record-fields'
 import { collectLayoutLeafIdsInOrder } from '../terminal-topology/terminal-pane-tree'

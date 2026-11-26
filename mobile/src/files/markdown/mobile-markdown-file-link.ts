@@ -2,7 +2,7 @@ import {
   isWindowsAbsolutePathLike,
   relativePathInsideRoot,
   resolveRuntimePath
-} from '../../../../src/shared/cross-platform-path'
+} from '../../../../src/shared/file-access/cross-platform-path'
 import { splitFilePathLineSuffix } from '../../components/markdown/links/markdown-file-path-detection'
 import {
   createMobileFilePreviewHref,

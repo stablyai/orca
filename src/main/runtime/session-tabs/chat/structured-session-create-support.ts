@@ -1,0 +1,325 @@
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import { resolveStructuredAgentSessionForkIntent } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-fork-intent'
+import {
+  captureStructuredAgentCliSource,
+  structuredAgentCliSourceFromEvidence
+} from '../../../native-chat/conversation-adoption/structured-agent-cli-source'
+import type { OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce as RestoreStructuredAgentSessionTabsOnceMethods } from './structured-session-tab-restoration'
+import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { OrcaRuntimeWithStructuredResumeFolderCheck } from './structured-session-resume-folder-check'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import {
+  resolveCommittedStructuredAgentSessionAdoptionIntent,
+  requireUnownedStructuredAgentSessionAdoption,
+  resolveStructuredAgentSessionAdoptionForCreate,
+  structuredAgentSessionAdoptAttach,
+  type StructuredAgentSessionCreateIntentInput
+} from '../../agent-session/ownership/structured-agent-session-create-adoption'
+import type { AgentSessionAttachParams } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-attach'
+import { resolveHostStructuredAgentLaunchEnvironment } from '../../agent-session/launch/structured-agent-launch-support'
+import { structuredAgentCreateSupportAt } from '../../agent-session/launch/structured-agent-create-support-at'
+import { structuredAgentRuntimeMetadata } from '../../agent-session/installation/structured-agent-runtime-metadata'
+import { structuredLaunchSeedOptions } from '../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
+import { hasPersistedStructuredAgentSessionStore as hasPersistedStructuredAgentSessionStoreOnDisk } from '../../agent-session/records/agent-session-record-store-slot'
+import { ensureStructuredAgentSessionHostUnlessRefused } from '../../agent-session/installation/structured-agent-session-host-refusal'
+import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
+import { isFloatingWorkspaceSelector } from '../../../../shared/workspace/identity/floating-workspace-worktree'
+import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
+import type { StructuredAgentCreateSupportReply } from '../../../../shared/agent-session/lifecycle/operations/structured-agent-create-support-reply'
+import type { AgentCliInstallationProblem } from '../../../../shared/agent-launch/catalog/agent-cli-installation-problem'
+
+type CreateSupportOptions = { requireInstalledChatProgram?: boolean }
+type CreateSupport = StructuredAgentCreateSupportReply & {
+  installation?: AgentCliInstallationProblem
+}
+
+export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaRuntimeWithStructuredResumeFolderCheck {
+  protected abstract restoreStructuredAgentSessionTabsOnce(
+    ...args: Parameters<
+      RestoreStructuredAgentSessionTabsOnceMethods['restoreStructuredAgentSessionTabsOnce']
+    >
+  ): ReturnType<
+    RestoreStructuredAgentSessionTabsOnceMethods['restoreStructuredAgentSessionTabsOnce']
+  >
+
+  /** A workspace, or a repo a workspace is about to be created in, which runs where the repo does.
+   *  `requireInstalledChatProgram` is for launches with no chat tab to offer Orca's install. */
+  async getStructuredAgentSessionCreateSupport(
+    place: string | { repo: string },
+    agent: StructuredAgentId,
+    options?: CreateSupportOptions
+  ): Promise<CreateSupport> {
+    const at = { ...options, agent, runtime: this }
+    if (typeof place === 'string') {
+      const target = () => this.resolveRuntimeFileTarget(place)
+      const location = await this.resolveStructuredAgentSessionLocation(place)
+      return structuredAgentCreateSupportAt({
+        ...at,
+        location,
+        workspacePath: async () => (await target()).worktree.path
+      })
+    }
+    const repo = await this.resolveRepoSelector(place.repo)
+    const location = this.structuredAgentSessionLocationForRepo(repo)
+    return structuredAgentCreateSupportAt({ ...at, location, workspacePath: async () => repo.path })
+  }
+
+  /** Use this runtime's registered definition to pin account home; reads/create must not install the host just to inspect it. */
+  protected requireRegisteredStructuredAgent(agent: StructuredAgentId) {
+    const definition = structuredAgentRuntimeMetadata(agent)?.definition
+    if (!definition) {
+      throw agentSessionRefusalError('structured_agent_session_unsupported', {
+        reason: 'hostUnsupported'
+      })
+    }
+    return definition
+  }
+
+  /** Share new-chat selection between create and createSupport so client pickers show what create will run. */
+  structuredAgentSessionLaunchSeedOptions(
+    agent: StructuredAgentId
+  ): Record<string, string> | undefined {
+    return structuredLaunchSeedOptions(this.requireStore().getSettings(), agent)
+  }
+
+  async resolveStructuredAgentSessionCreateIntent(
+    input: StructuredAgentSessionCreateIntentInput
+  ): Promise<AgentSessionAttachParams & { hostLaunchDirectory?: string }> {
+    if (input.resumeFrom) {
+      const { providerSessionId } = input.resumeFrom
+      try {
+        requireUnownedStructuredAgentSessionAdoption({
+          host: getStructuredAgentSessionHost(),
+          agent: input.agent,
+          providerSessionId,
+          selfSessionId: input.envelope.sessionId
+        })
+      } catch (ownerConflict) {
+        // Refuse transfer from a live terminal or the chat's first send starts a second writer.
+        await this.assertStructuredAdoptionTerminalWritersExited(input.agent, providerSessionId)
+        throw ownerConflict
+      }
+    }
+    const structuredAgentCliSourceEvidence =
+      input.structuredAgentCliSourceEvidence ??
+      (input.resumeFrom?.cliSource
+        ? captureStructuredAgentCliSource(
+            () => this.getAgentProviderSessionRows(),
+            input.resumeFrom.cliSource,
+            (source) => this.getStructuredAgentCliSourceRoute(source)
+          )
+        : undefined)
+    const hostLaunchDirectory = isFloatingWorkspaceSelector(input.worktree)
+      ? (await this.resolveRuntimeFileTarget(input.worktree)).worktree.path
+      : undefined
+    // A fork runs where its source runs, and an adopted conversation where it was saved.
+    const resolved = input.forkFrom
+      ? await resolveStructuredAgentSessionForkIntent({
+          ...input,
+          forkFrom: input.forkFrom,
+          host: getStructuredAgentSessionHost(),
+          location: await this.resolveStructuredAgentSessionLocation(input.worktree)
+        })
+      : await this.resolveStructuredAgentSessionIntent(
+          { ...input, structuredAgentCliSourceEvidence },
+          this.structuredAgentAccountHomeResolver(
+            input.agent,
+            input.worktree,
+            'launch',
+            hostLaunchDirectory
+          )
+        )
+    return !resolved.hostLaunchDirectory && hostLaunchDirectory
+      ? { ...resolved, hostLaunchDirectory }
+      : resolved
+  }
+
+  /** Resolve catalog account home through the same host create-intent resolver when no session record exists. */
+  async resolveStructuredAgentAccountHome(
+    agent: StructuredAgentId,
+    purpose: 'read' | 'catalog' = 'read'
+  ): Promise<AgentSessionAccountHome> {
+    const resolveAccountHome = this.structuredAgentAccountHomeResolver(agent, '', purpose)
+    if (!resolveAccountHome) {
+      throw agentSessionRefusalError('structured_agent_session_unsupported', {
+        reason: 'hostUnsupported'
+      })
+    }
+    // A read, not a launch: only the account push is awaited, never a folder refresh.
+    await this.accounts.prepareHostAgentLaunch(null)
+    const launchEnv = this.structuredAgentLaunchEnv(agent, this.requireStore().getSettings())
+    return resolveAccountHome({ launchEnv, location: null })
+  }
+
+  protected async resolveStructuredAgentSessionIntent(
+    input: StructuredAgentSessionCreateIntentInput,
+    resolveAccountHome:
+      | ((
+          context: {
+            launchEnv: NodeJS.ProcessEnv
+            location: {
+              executionHostId: string
+              wslDistro: string | null
+              workspaceId: string
+              workspaceKind: 'folder' | 'git-worktree'
+            }
+          },
+          permissionMode?: string
+        ) => AgentSessionAccountHome | Promise<AgentSessionAccountHome>)
+      | null
+  ): Promise<AgentSessionAttachParams & { hostLaunchDirectory?: string }> {
+    const support = await this.getStructuredAgentSessionCreateSupport(input.worktree, input.agent)
+    // Adopting a conversation reads the agent's own transcript, so only an agent registered with an
+    // importer adopts.
+    const transcriptImport = structuredAgentRuntimeMetadata(input.agent)?.transcriptImport
+    if (!resolveAccountHome || !support.supported || (input.resumeFrom && !transcriptImport)) {
+      throw agentSessionRefusalError('structured_agent_session_unsupported', {
+        reason: 'hostUnsupported',
+        ...(support.installation ? { agentInstallation: support.installation } : {})
+      })
+    }
+    await this.accounts.prepareHostAgentLaunch(input.agent)
+    const settings = this.requireStore().getSettings()
+    const launchEnv = this.structuredAgentLaunchEnv(input.agent, settings)
+    const options = structuredLaunchSeedOptions(
+      {
+        ...settings,
+        agentLaunchChoices: input.resumeFrom ? undefined : settings.agentLaunchChoices
+      },
+      input.agent
+    )
+    const location = await this.resolveStructuredAgentSessionLocation(input.worktree)
+    const definition = this.requireRegisteredStructuredAgent(input.agent)
+    const host = getStructuredAgentSessionHost()
+    const committedReplay = resolveCommittedStructuredAgentSessionAdoptionIntent({
+      host,
+      ...input,
+      location,
+      ...(options ? { options } : {})
+    })
+    if (committedReplay) {
+      return committedReplay
+    }
+    const resumeFrom = input.resumeFrom
+    if (resumeFrom) {
+      await this.assertStructuredAdoptionTerminalWritersExited(
+        input.agent,
+        resumeFrom.providerSessionId
+      )
+    }
+    const workspaceCwd = resumeFrom
+      ? (await this.resolveRuntimeFileTarget(input.worktree)).worktree.path
+      : ''
+    const permissionMode = options?.[AGENT_CHAT_PERMISSION_MODE_OPTION_ID]
+    const selectedAccountHome = await resolveAccountHome({ launchEnv, location }, permissionMode)
+    // Adoption pins the transcript's actual account home; fresh-create defaults may open a blank conversation under the old name.
+    const adoption =
+      resumeFrom && transcriptImport
+        ? await resolveStructuredAgentSessionAdoptionForCreate({
+            settings,
+            agent: input.agent,
+            transcriptImport,
+            providerSessionId: resumeFrom.providerSessionId,
+            resolveTranscriptSource: () =>
+              structuredAgentCliSourceFromEvidence({
+                agent: input.agent,
+                resumeFrom,
+                workspaceId: location.workspaceId,
+                evidence: input.structuredAgentCliSourceEvidence
+              }),
+            prepareCodexResume: this.prepareAiVaultSessionResumeFn ?? undefined,
+            selectedAccountHome,
+            launchEnv: await resolveHostStructuredAgentLaunchEnvironment(input.agent, settings),
+            workspaceCwd: workspaceCwd
+          })
+        : null
+    return {
+      envelope: {
+        sessionId: input.envelope.sessionId,
+        clientOperationId: input.envelope.clientOperationId,
+        expectedRuntimeFence: null,
+        payloadFingerprint: ''
+      },
+      location,
+      provider: input.agent,
+      agent: input.agent,
+      accountHome: adoption ? adoption.accountHome : selectedAccountHome,
+      ...(options ? { options } : {}),
+      ...(input.resumeFrom && adoption
+        ? {
+            adopt: structuredAgentSessionAdoptAttach({
+              definition,
+              handleNamesTranscript: transcriptImport!.handleNamesTranscript,
+              ...(input.agent === 'codex'
+                ? {
+                    conversationStore:
+                      transcriptImport!.conversationStore({
+                        accountHome: adoption.accountHome,
+                        launchEnv
+                      }) ?? undefined
+                  }
+                : {}),
+              transcriptPath: adoption.transcriptPath,
+              providerSessionId: input.resumeFrom.providerSessionId,
+              workspaceCwd: adoption.folder,
+              conversationName: adoption.conversationName
+            })
+          }
+        : {}),
+      ...(adoption && adoption.folder !== workspaceCwd
+        ? { hostLaunchDirectory: adoption.folder }
+        : {}),
+      runtimeKind: 'native'
+    }
+  }
+
+  restoreStructuredAgentSessionTabs(): Promise<void> {
+    this.structuredAgentSessionTabRestorePromise ??=
+      this.restoreStructuredAgentSessionTabsOnce().then(
+        () => {
+          // Only host answers finalize restoration; without one, retry so journals opened later can publish.
+          if (
+            this.structuredAgentSessionInventoryUnverifiable ||
+            !getStructuredAgentSessionHost()
+          ) {
+            this.structuredAgentSessionTabRestorePromise = null
+          }
+        },
+        (error) => {
+          this.structuredAgentSessionTabRestorePromise = null
+          throw error
+        }
+      )
+    return this.structuredAgentSessionTabRestorePromise
+  }
+
+  prepareStructuredAgentSessionStartupRestoration(): Promise<void> {
+    this.structuredAgentSessionStartupRestorePromise ??= this.continueAfterStartupRestoration(
+      this.prepareStructuredAgentSessionStartupRestorationOnce()
+    ).catch((error) => {
+      this.structuredAgentSessionStartupRestorePromise = null
+      throw error
+    })
+    return this.structuredAgentSessionStartupRestorePromise
+  }
+
+  protected async prepareStructuredAgentSessionStartupRestorationOnce(): Promise<void> {
+    const startup = this.structuredAgentSessionStartupOpen
+    this.structuredAgentSessionStartupOpen = undefined
+    if (!(startup ? startup.persisted : this.hasPersistedStructuredAgentSessionStore())) {
+      return
+    }
+    // Load durable agent records before reconciling daemon inventory; refused hosts block only structured requests, not app startup.
+    // This startup's refused open is its answer; a later chat request retries the install.
+    await ensureStructuredAgentSessionHostUnlessRefused(() =>
+      Promise.resolve(startup?.opened).then(() => this.ensureStructuredAgentSessionHost())
+    )
+    await this.refreshMobileSessionPtyRecords()
+    await getStructuredAgentSessionHost()?.reconcileRestartLeases()
+  }
+
+  protected hasPersistedStructuredAgentSessionStore(): boolean {
+    return hasPersistedStructuredAgentSessionStoreOnDisk(getProfileUserDataPath())
+  }
+}

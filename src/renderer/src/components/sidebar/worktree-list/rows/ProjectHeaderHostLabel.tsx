@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { HostRowIcon } from '@/components/host-row-icon'
+import { HostRowIcon } from '@/components/host-picker/host-row-icon'
 import {
   useWslHostDistro,
   WslHostMark,

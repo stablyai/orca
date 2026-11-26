@@ -2,7 +2,7 @@ import {
   isAgentSessionConversationCommand,
   type AgentSessionConversationCommand,
   type AgentSessionConversationCommandResult
-} from '../../../agent-session/agent-session-conversation-command'
+} from '../../../agent-session/conversation-context/agent-session-conversation-command'
 import {
   readWholeAgentSessionFailureFact,
   type AgentSessionFailureFact

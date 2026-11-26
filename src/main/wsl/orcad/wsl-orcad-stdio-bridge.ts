@@ -12,6 +12,9 @@ import {
 import type { StartedPortForward } from '../../ssh/port-forwarding/ssh-port-forward-provider'
 import { assertWslUncPathRunning } from '../filesystem/wsl-unc-access-gate'
 
+// One wsl.exe per socket and no SSH MaxSessions to share; this only bounds a leaky client's spawns.
+const WSL_ORCAD_STDIO_BRIDGE_MAX_CHANNELS = 64
+
 export type WslOrcadStdioBridgeOptions = {
   environmentId: string
   /** The distro each bridge child runs in; a dial is refused while it is stopped (E9). */
@@ -51,7 +54,8 @@ export function listenWslOrcadStdioBridge(
         const channel = await dependencies.openChannel(conn, bridge)
         return events ? observeWslOrcadBridgeChannel(channel, events) : channel
       }
-    }
+    },
+    WSL_ORCAD_STDIO_BRIDGE_MAX_CHANNELS
   )
 }
 

@@ -18,6 +18,7 @@ import type { AiVaultDeleteSessionArgs } from '../../../shared/ai-vault/contract
 
 import {
   AI_VAULT_SCOPE_PATHS_MAX_COUNT,
+  AI_VAULT_SINGLE_HOST_LIST_TIMEOUT_MS,
   isAiVaultScanCancelledError,
   type AiVaultFirstUserPromptArgs,
   type AiVaultListArgs,
@@ -33,8 +34,8 @@ import {
   requestedExecutionHostScope,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../shared/execution-host'
-import { createSenderScopedRequestCancellations } from '../sender-scoped-request-cancellation'
+} from '../../../shared/execution-host/execution-host'
+import { createSenderScopedRequestCancellations } from '../renderer-requests/sender-scoped-request-cancellation'
 import { discoverAiVaultHosts, type AiVaultHostDiscoveryResult } from './ai-vault-host-discovery'
 import {
   scanRuntimeAiVaultSessions,
@@ -207,7 +208,7 @@ async function scanAiVaultSessionsByHostScope(
       },
       scanner: handlerOptions.scanRuntimeAiVaultSessions,
       listArgs: args,
-      options: { signal }
+      options: { signal, responseTimeoutMs: AI_VAULT_SINGLE_HOST_LIST_TIMEOUT_MS }
     })
   }
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Loader2, RefreshCw } from 'lucide-react'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { cn } from '@/lib/class-names'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { Badge } from '../../../ui/badge'

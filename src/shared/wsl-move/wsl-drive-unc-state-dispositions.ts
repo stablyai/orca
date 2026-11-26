@@ -2,7 +2,7 @@
  * What converting a UNC Windows-drive project to its drive path (D1c) does with each saved field;
  * src/main/wsl/filesystem/wsl-drive-unc-state-rewrite.ts applies it.
  */
-import type { PersistedState } from '../persisted-state-types'
+import type { PersistedState } from '../orca-profiles/persisted-state-types'
 
 type Disposition =
   /** Every identity string in it is re-keyed. */
@@ -41,6 +41,7 @@ export const WSL_DRIVE_UNC_STATE_DISPOSITIONS = {
   workspaceSessionsByHostId: 'keep',
   remoteLayoutSnapshots: 'keep',
   hostRepoCatalogSnapshots: 'keep',
+  pairedPortForwards: 'keep',
   sshTargets: 'keep',
   sshTargetGenerationCounter: 'keep',
   deletedSshConfigAliases: 'keep',
@@ -58,5 +59,10 @@ export const WSL_DRIVE_UNC_STATE_DISPOSITIONS = {
   onboarding: 'keep',
   featureInteractionTelemetryBuckets: 'keep',
   codexResetCreditAttemptLedger: 'keep',
-  chatUiLaunchTipAudience: 'keep'
+  chatUiLaunchTipAudience: 'keep',
+  // A bot's home is an Orca-owned folder, never a converted project.
+  bots: 'keep',
+  botsNewerAgents: 'keep',
+  botOrder: 'keep',
+  botsPermissionDefaultMigrated: 'keep'
 } as const satisfies Record<keyof PersistedState, Disposition>

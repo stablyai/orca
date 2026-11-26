@@ -1,5 +1,5 @@
 import { FileText, Search } from 'lucide-react'
-import { BrowserFavicon } from '@/components/browser-favicon'
+import { BrowserFavicon } from '@/components/browser-pane/describe-page/browser-favicon'
 import { Button } from '@/components/ui/button'
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
 import { useTranslate } from '@/i18n/use-translate'

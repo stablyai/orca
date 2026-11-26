@@ -1,4 +1,4 @@
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { AppState } from '../../../store/types'
 
@@ -20,6 +20,8 @@ export function makeState(overrides: Partial<AppState> = {}): AppState {
     browserTabsByWorktree: {},
     browserPagesByWorkspace: {},
     browserCertificateFailuresByPageId: {},
+    browserAudiblePageIds: {},
+    browserAudioMutedTabIds: {},
     openFiles: [],
     editorDrafts: {},
     activeTabId: null,

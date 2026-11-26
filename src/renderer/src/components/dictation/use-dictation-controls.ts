@@ -4,7 +4,7 @@ import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-ke
 import { isPlainEscapeKeyEvent } from '../terminal-pane/input/keyboard/agent-interrupt-key-event'
 import { DICTATION_CONTROL_EVENT, type DictationControlAction } from './dictation-control-events'
 import type { DictationState } from '../../../../shared/speech/speech-types'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 
 function isPlainEnterKeyEvent(event: KeyboardEvent): boolean {
   return (

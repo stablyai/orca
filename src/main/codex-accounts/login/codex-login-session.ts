@@ -196,7 +196,7 @@ async function runCodexLoginProcess(
       child.stderr?.off('data', readStderr)
       child.off('error', onError)
       child.off('close', onClose)
-      spawnConfig.interactiveLogin?.cleanup?.()
+      void spawnConfig.interactiveLogin?.cleanup()
     }
 
     const settle = (callback: () => void): void => {
@@ -256,7 +256,8 @@ async function runCodexLoginProcess(
       })
     }
 
-    const onClose = (code: number | null): void => {
+    const onClose = async (closeEventCode: number | null): Promise<void> => {
+      const code = (await spawnConfig.interactiveLogin?.readExitCode()) ?? closeEventCode
       settle(() => {
         // A forced post-auth exit remains successful unless credentials are definitively absent.
         // An unreadable snapshot cannot revoke success and trigger destructive rollback.

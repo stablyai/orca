@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import '@/diagnostics/crash-reporting/crash-diagnostics'
 import { recordRendererCrashBreadcrumb } from '../../../../diagnostics/crash-reporting/crash-breadcrumb-recorder'
 import { activateWorktreeFromSidebar } from '@/lib/workspace/activation/sidebar-worktree-activation'

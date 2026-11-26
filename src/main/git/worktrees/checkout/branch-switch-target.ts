@@ -9,6 +9,7 @@ import {
   type GitRuntimeOptions
 } from '../../command-runner/git-runtime-options'
 import { readGitCommandFailureStderr } from '../../../../shared/git/commands/git-command-failure-text'
+import { getGitCurrentBranchName } from '../../../../shared/git/refs/git-current-branch'
 
 export class BranchSwitchCollisionError extends Error {
   constructor(readonly branch: string) {
@@ -23,15 +24,9 @@ export async function readCurrentBranch(
   worktreePath: string,
   options: GitRuntimeOptions
 ): Promise<string | null> {
-  try {
-    const { stdout } = await gitExecFileAsync(
-      ['symbolic-ref', '--quiet', '--short', 'HEAD'],
-      gitOptionsForWorktree(worktreePath, options)
-    )
-    return stdout.trim() || null
-  } catch {
-    return null
-  }
+  return getGitCurrentBranchName((args) =>
+    gitExecFileAsync(args, gitOptionsForWorktree(worktreePath, options))
+  )
 }
 
 export async function readBranchSwitchHead(

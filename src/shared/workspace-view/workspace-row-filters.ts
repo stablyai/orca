@@ -1,5 +1,5 @@
-import type { ExecutionHostId } from '../execution-host'
-import type { PersistedUIState } from '../persisted-ui-state-types'
+import type { ExecutionHostId } from '../execution-host/execution-host'
+import type { PersistedUIState } from '../orca-profiles/persisted-ui-state-types'
 import {
   isHiddenByKindSwitch,
   type WorkspaceKind,

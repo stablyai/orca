@@ -5,7 +5,7 @@ import {
   promptTextContent,
   appendPromptDocumentText
 } from '../composer/editor/native-chat-prompt-document-text'
-import { appendReturnedDraftText } from '../../../../../shared/returned-draft-text'
+import { appendReturnedDraftText } from '../../../../../shared/native-chat/input/drafts/returned-draft-text'
 import { isLoneStructuredAgentSessionConversationCommand } from '../../../../../shared/agent-session/view/structured-agent-session-composer'
 import { basename } from '@/lib/path'
 import type {

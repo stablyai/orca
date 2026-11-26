@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto'
 import type SyncDatabase from '../../sqlite/sync-database'
 import { openVersionedCacheDatabase } from '../../sqlite/versioned-cache-database'
 import { asRecord } from '../../ai-vault/parsing/session-record-fields'
+import { PARTIAL_FILE_CURSOR } from './session-search-file-cursor'
+import type { AiVaultAgent } from '../../../shared/ai-vault/contracts/ai-vault-types'
 
 // Cache transcript content verbatim; outbound snippet policy belongs at the transport boundary.
 
@@ -68,11 +70,31 @@ CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
   user_text, assistant_text, tool_text, identifiers, ${TOKENIZER}, detail=full
 );
 `
+// Reread transcripts indexed before a parser fix once, without a schema bump. A partial cursor
+// forces a whole read without counting as due, so unreachable roots cannot hold the index in
+// indexing. The pending gate is the outer loop, so later opens skip the sessions lookup.
+function filesRepairSql(versionKey: string, agent: AiVaultAgent): string {
+  return `
+UPDATE files SET byte_offset = ${PARTIAL_FILE_CURSOR} WHERE session_row_id IN (
+  SELECT sessions.id
+  FROM (SELECT 1 WHERE NOT EXISTS (
+    SELECT 1 FROM meta WHERE key = '${versionKey}' AND value = '1'
+  )) AS pending CROSS JOIN sessions
+  WHERE sessions.agent = '${agent}'
+);
+INSERT OR REPLACE INTO meta(key, value) VALUES ('${versionKey}', '1');
+`
+}
+const FILES_REPAIR_SQL =
+  // Grok transcripts indexed before the synthetic-turn filter.
+  filesRepairSql('grok_files_version', 'grok') +
+  // Pi transcripts indexed before session_info names became titles.
+  filesRepairSql('pi_title_files_version', 'pi')
 
 export function openSessionSearchDatabase(path: string): SyncDatabase {
   return openVersionedCacheDatabase(path, {
     version: SESSION_SEARCH_SCHEMA_VERSION,
-    sql: SCHEMA_SQL,
+    sql: `${SCHEMA_SQL}${FILES_REPAIR_SQL}`,
     afterSchema: (db) => {
       db.prepare('INSERT OR IGNORE INTO meta(key, value) VALUES (?, ?)').run(
         'index_incarnation',

@@ -1,7 +1,7 @@
 import { branchName } from '@/lib/source-control/branches/branch-name'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-review-cache-identity'
 import type { AppState } from '@/store/types'
-import type { DashboardCardReview } from '../../../../../shared/dashboard-snapshot'
+import type { DashboardCardReview } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../../shared/source-control/hosted-review/hosted-review-github'
 import { isPositiveHostedReviewNumber } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { Repo } from '../../../../../shared/repository/repo-types'

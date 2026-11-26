@@ -91,12 +91,7 @@ export function useMobileCommitFailureRecovery({
       return false
     }
     if (!client || connState !== 'connected') {
-      setLaunchError(
-        translate(
-          'sourceControl.useMobileCommitFailureRecovery.waitingForDesktop',
-          'Waiting for desktop...'
-        )
-      )
+      setLaunchError(translate('common.waitingForHost', 'Waiting for host…'))
       triggerError()
       return false
     }

@@ -3,6 +3,7 @@ import { normalizeSourceControlAiActionDefaults } from '../../source-control/ai/
 import { z } from 'zod'
 import { OptionalGitAdmissionTier } from './git-admission-tier-params'
 import { OptionalTuiAgent } from '../workspaces/worktree-params'
+import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
 import { CONFLICT_RESOLUTIONS } from '../../source-control/listing/source-control-entry-actions'
 
 export const WorktreeSelector = z.object({
@@ -58,6 +59,11 @@ export const GitDiff = GitFilePath.extend({
   oldPath: z.string().optional()
 })
 
+// Hosts that predate knownHeadOid ignore it and resend the full blame.
+export const GitBlame = GitFilePath.extend({
+  knownHeadOid: z.string().optional()
+})
+
 export const GitBranchCompare = WorktreeSelector.extend({
   admissionTier: OptionalGitAdmissionTier,
   baseRef: z
@@ -102,6 +108,7 @@ export const GitHistory = WorktreeSelector.extend({
   limit: z.number().int().min(1).max(200).optional(),
   baseRef: z.string().nullable().optional(),
   branchOnly: z.boolean().optional(),
+  branchListOnly: z.boolean().optional(),
   refs: z
     .union([z.literal('head'), z.literal('all'), z.array(GitHistoryRefName).max(1000)])
     .optional(),
@@ -136,7 +143,8 @@ export const CommitMessageModelCapability = z.object({
   id: z.string(),
   label: z.string(),
   thinkingLevels: z.array(z.object({ id: z.string(), label: z.string() })).optional(),
-  defaultThinkingLevel: z.string().optional()
+  defaultThinkingLevel: z.string().optional(),
+  isDefault: z.boolean().optional()
 })
 
 export const CommitMessageAiSettings = z.object({
@@ -154,6 +162,7 @@ export const CommitMessageAiSettings = z.object({
 })
 
 export const SourceControlAiSettings = CommitMessageAiSettings.omit({ customPrompt: true }).extend({
+  discoveredAtByAgentByHost: z.record(z.string(), z.record(z.string(), z.number())).optional(),
   actions: z.unknown().optional().transform(normalizeSourceControlAiActionDefaults),
   instructionsByOperation: z.record(z.string(), z.string()).optional(),
   modelOverridesByOperation: z
@@ -182,6 +191,7 @@ export const SourceControlAiSettings = CommitMessageAiSettings.omit({ customProm
 export const ResolvedSourceControlAiGenerationParams = z.object({
   agentId: z.string(),
   model: z.string(),
+  usesOrcaDefaultModel: z.boolean().optional(),
   thinkingLevel: z.string().optional(),
   customPrompt: z.string().optional(),
   commandInputTemplate: z.string().optional(),
@@ -195,7 +205,12 @@ export const GitGenerateCommitMessage = WorktreeSelector.extend({
   sourceControlAi: SourceControlAiSettings.optional(),
   sourceControlAiResolvedParams: ResolvedSourceControlAiGenerationParams.optional(),
   agentCmdOverrides: z.record(z.string(), z.string()).optional(),
-  defaultTuiAgent: OptionalTuiAgent.nullable(),
+  // Why: 'blank' (Blank terminal) and a removed agent (an older client's saved Gemini CLI) pick the same fallback as null.
+  defaultTuiAgent: z.preprocess(
+    (value) =>
+      value === 'blank' || (typeof value === 'string' && !isTuiAgent(value)) ? null : value,
+    OptionalTuiAgent.nullable()
+  ),
   commitMessageDiscoveryHostKey: z.string().optional()
 })
 
@@ -246,6 +261,18 @@ export const GitForkSync = WorktreeSelector.extend({
     owner: z.string().trim().min(1),
     repo: z.string().trim().min(1)
   })
+})
+
+export const GitContinueRebase = WorktreeSelector.extend({
+  action: z.enum(['continue', 'inspect']).optional(),
+  // Continue refuses unless the rebase is still at the stop the user was shown.
+  expected: z
+    .object({
+      head: z.string().nullable(),
+      step: z.string().nullable(),
+      incarnation: z.string().nullable()
+    })
+    .optional()
 })
 
 export const GitRebaseFromBase = WorktreeSelector.extend({

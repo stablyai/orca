@@ -10,7 +10,8 @@ import type {
   GitConflictOperation,
   GitStatusEntry,
   GitStatusResult,
-  GitUpstreamStatus
+  GitUpstreamStatus,
+  RebaseFromBaseResult
 } from '../../../../../../shared/git/status/git-status-types'
 import type { WorkspaceSessionState } from '../../../../../../shared/workspace-session/workspace-session-state-types'
 import type { GitPushTarget } from '../../../../../../shared/worktree/types'
@@ -24,6 +25,7 @@ export type EditorGitSlice = {
 
   gitStatusByWorktree: Record<string, GitStatusEntry[]>
   gitStatusHeadByWorktree: Record<string, string>
+  gitRebaseIndexObservationByWorktree: Record<string, string | undefined>
   // Why: set when status hit the entry limit; SCM shows "too many changes" and pauses polling. `{ limit }` when huge, else absent.
   gitStatusHugeByWorktree: Record<string, { limit: number }>
   // Git's error from the latest failed status read; entries keep the last successful read.
@@ -85,7 +87,7 @@ export type EditorGitSlice = {
     connectionId?: string,
     pushTarget?: GitPushTarget,
     options?: GitRuntimeOperationOptions
-  ) => Promise<void>
+  ) => Promise<RebaseFromBaseResult>
   fetchBranch: (
     worktreeId: string,
     worktreePath: string,
@@ -112,9 +114,8 @@ export type EditorGitSlice = {
 
   fileSearchStateByWorktree: Record<string, FileSearchWorktreeState>
   updateFileSearchState: (worktreeId: string, updates: Partial<FileSearchWorktreeState>) => void
-  seedFileSearchQuery: (worktreeId: string, query: string) => void
-  seedFileSearchIncludePattern: (worktreeId: string, includePattern: string) => void
   consumeFileSearchSeedRequest: (worktreeId: string, seedRequestId: number) => void
+  consumeFileSearchFocusRequest: (worktreeId: string, focusRequestId: number) => void
   toggleFileSearchCollapsedFile: (worktreeId: string, filePath: string) => void
   clearFileSearch: (worktreeId: string) => void
 

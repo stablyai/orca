@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
-import { VirtualizedList } from '../../../virtualized-list'
+import { VirtualizedList } from '../../../ui/virtualized-list'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
 import {
   isWorkspaceKey,
   parseWorkspaceKey

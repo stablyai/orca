@@ -10,7 +10,7 @@ import {
   AGENT_MESSAGE_SOURCE,
   USER_MESSAGE_SOURCE,
   type AgentSessionMessageSource
-} from '../../../../shared/agent-session/agent-session-message-source'
+} from '../../../../shared/agent-session/journal/agent-session-message-source'
 import type { AgentSessionOperationOutcome } from '../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import type {
   AgentSessionCancelResult,
@@ -22,7 +22,7 @@ import type {
 import {
   agentSessionConversationCommandFields,
   type AgentSessionConversationCommandResult
-} from '../../../../shared/agent-session/agent-session-conversation-command'
+} from '../../../../shared/agent-session/conversation-context/agent-session-conversation-command'
 import '../../agent-session-journal/projection/journal-dispatch-doubt-reasons'
 import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING as DISPATCH_DOUBT_SUBMISSION_MISSING } from '../../../../shared/agent-session/requests/structured-agent-session-send-evidence'
 import type { StructuredAgentSessionBackgroundStopInput } from '../termination/structured-agent-session-background-stop'

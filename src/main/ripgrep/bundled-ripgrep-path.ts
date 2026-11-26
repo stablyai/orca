@@ -111,11 +111,6 @@ export function bundledRipgrepContentKey(platform: BundledRipgrepPlatform): stri
   return contentKeys.get(platform) ?? null
 }
 
-export function resetBundledRipgrepPathCacheForTests(): void {
-  resolvedPaths.clear()
-  contentKeys.clear()
-}
-
 // No git/readdir fallback: partial listings would hide damaged installs or security-software blocks.
 export function bundledRipgrepUnavailableError(): Error {
   return new Error(

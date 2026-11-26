@@ -1,7 +1,7 @@
 import type React from 'react'
 import { Monitor, Moon, Sun } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { SettingsSegmentedControl } from '../settings/form-controls/SettingsFormControls'
 
 /** The step's primary choice: System, Dark, or Light. */

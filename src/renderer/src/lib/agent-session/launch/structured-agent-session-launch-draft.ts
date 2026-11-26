@@ -14,7 +14,7 @@ import type { StructuredLaunchState } from './structured-agent-session-launch-st
 type DraftDestination = Pick<
   StructuredLaunchState['intent'],
   'sessionId' | 'worktreeId' | 'executionHostId'
->
+> & { params?: { tabId?: string } }
 
 export function moveStructuredAgentLaunchDraft(
   destination: DraftDestination,
@@ -35,6 +35,7 @@ export function moveStructuredAgentLaunchDraft(
           : { at: 'end' }),
         target:
           findStructuredLaunchTab(destination)?.id ??
+          destination.params?.tabId ??
           structuredAgentSessionTabId(destination.sessionId),
         pending: true
       }
@@ -75,7 +76,10 @@ function seedEmptyLaunchDraft(
     undefined,
     {
       at: 'end',
-      target: findStructuredLaunchTab(destination)?.id ?? structuredAgentSessionTabId(sessionId),
+      target:
+        findStructuredLaunchTab(destination)?.id ??
+        destination.params?.tabId ??
+        structuredAgentSessionTabId(sessionId),
       pending: true
     }
   )

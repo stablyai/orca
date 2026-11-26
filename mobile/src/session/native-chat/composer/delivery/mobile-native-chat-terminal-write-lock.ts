@@ -12,7 +12,3 @@ export function acquireMobileNativeChatTerminalWrite(terminal: string): boolean 
 export function releaseMobileNativeChatTerminalWrite(terminal: string): void {
   writeInFlightTerminals.delete(terminal)
 }
-
-export function resetMobileNativeChatTerminalWritesForTests(): void {
-  writeInFlightTerminals.clear()
-}

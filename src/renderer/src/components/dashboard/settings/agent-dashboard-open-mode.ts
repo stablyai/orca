@@ -1,5 +1,5 @@
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { AgentDashboardMode } from '../../../../../shared/ui-chrome-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { AgentDashboardMode } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 
 /** A browser tab cannot open a second Orca window, so a web client only has the in-window board. */

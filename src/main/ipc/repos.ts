@@ -82,7 +82,7 @@ export function registerRepoHandlers(
   registerNestedRepoImportHandler(mainWindow, store, metadata.enqueueRepositoryMetadata)
   registerRepoUpdateHandler(mainWindow, store)
   registerSparsePresetHandlers(mainWindow, store)
-  registerRepoFolderPickerHandlers(mainWindow)
+  registerRepoFolderPickerHandlers(mainWindow, store)
   registerRepoCloneHandlers(mainWindow, store, metadata.enqueueRepositoryMetadata)
   registerBaseRefQueryHandlers(store)
 }

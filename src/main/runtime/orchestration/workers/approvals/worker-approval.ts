@@ -13,19 +13,18 @@ import {
   type WorkerApprovalPayload
 } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 
-/** The outcome of a chat prompt Orca answered: a deny's reason is told only when it went to the
- *  worker as mail; a coordinator's allow keeps its reason for the receipt. */
+/** The outcome of a chat prompt Orca answered: its reason is told only when it went to the worker
+ *  as mail. */
 export function chatAnswerOutcome(input: {
   by: WorkerApprovalAnswerer
   decision: WorkerApprovalDecision
   reason: string | null
   reasonMailed: boolean
 }): WorkerApprovalOutcome {
-  const kept = input.decision === 'allow' ? input.by === 'coordinator' : input.reasonMailed
   return {
     by: input.by,
     decision: input.decision,
-    reason: kept ? input.reason : null,
+    reason: input.reasonMailed ? input.reason : null,
     reasonDelivered: false
   }
 }
@@ -86,6 +85,7 @@ export function workerApprovalPayload(input: {
     worker: input.worker,
     summary: {
       title: item.displayName ? `Allow ${item.displayName}?` : item.title,
+      ...(item.toolName ? { tool: item.toolName } : {}),
       detail,
       reason: item.decisionReason ?? null
     },

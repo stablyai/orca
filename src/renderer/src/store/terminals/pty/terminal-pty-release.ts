@@ -1,4 +1,7 @@
-import { replaceTabBuckets, replaceRecordEntries } from '@/store/keyed-record-transitions'
+import {
+  replaceTabBuckets,
+  replaceRecordEntries
+} from '@/store/record-transitions/keyed-record-transitions'
 import { getFirstTerminalTabOwnerWorktreeId } from '../ownership/terminal-tab-owner-index'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { hasWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-intent'

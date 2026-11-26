@@ -15,7 +15,7 @@ import { discoverSkillObservationInWsl } from './skill-discovery-wsl'
 import type { SkillProviderRootOverrides } from '../providers/skill-provider-destinations'
 import { stablePathId } from './skill-discovery-classification'
 import { skillScanSourceKinds } from './skill-discovery-source-filter'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { isSkillRootUnavailableError, SkillScanCoalescer } from './skill-scan-coalescer'
 import { assertWslUncPathRunning } from '../../wsl/filesystem/wsl-unc-access-gate'
 import {
@@ -42,6 +42,8 @@ export type ResolvedSkillDiscoveryTarget =
   | {
       kind: 'native-host'
       cwd: string | undefined
+      /** The cwd is a bot's home: its linked-project skills folder is scanned too. */
+      linkedSkillsFolder?: string
       names?: string[]
       sourceKinds?: SkillDiscoveryTarget['sourceKinds']
     }
@@ -152,6 +154,7 @@ function scanKey(
     : JSON.stringify([
         'native',
         target.cwd ?? null,
+        target.linkedSkillsFolder ?? null,
         target.cwd ? null : repoDigest(repos),
         providerRoots,
         names,
@@ -196,6 +199,9 @@ export async function discoverSkillsOnTarget(
           ? discoverSkills({
               repos: [],
               cwd: target.cwd,
+              ...(target.linkedSkillsFolder
+                ? { linkedSkillsFolder: target.linkedSkillsFolder }
+                : {}),
               refresh,
               ...(target.names ? { names: target.names } : {}),
               ...(target.sourceKinds ? { sourceKinds: target.sourceKinds } : {}),

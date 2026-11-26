@@ -1,6 +1,7 @@
 import { createReadStream } from 'node:fs'
 import { realpath, stat } from 'node:fs/promises'
-import { isAbsolute, relative, resolve, sep } from 'node:path'
+import { resolve } from 'node:path'
+import { pathInsidePluginRoot } from '../../../shared/plugins/artifacts/plugin-root-containment'
 
 /** Reads plugin files by their real path, refusing any that a symlink takes outside the plugin.
  *  Free of manifest code so the plain-Node check bundle can share it. */
@@ -45,13 +46,7 @@ export async function readContainedPluginArtifactBytes(
 
 /** Whether a real path lies strictly inside the plugin's real root. */
 export function isInsidePluginRoot(rootReal: string, artifactReal: string): boolean {
-  const fromRoot = relative(rootReal, artifactReal)
-  return (
-    fromRoot.length > 0 &&
-    !isAbsolute(fromRoot) &&
-    fromRoot !== '..' &&
-    !fromRoot.startsWith(`..${sep}`)
-  )
+  return pathInsidePluginRoot(rootReal, artifactReal) !== null
 }
 
 export async function resolvePathFromRealRoot(

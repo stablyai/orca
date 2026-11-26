@@ -2,7 +2,7 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState, type RefObject } 
 import { Quote } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
-import { addViewportSizeChangeListener } from '@/hooks/viewport-size-change-listener'
+import { addViewportSizeChangeListener } from '@/lib/window-activity/viewport-size-change-listener'
 import { useTranslate } from '@/i18n/use-translate'
 
 // Why: shown at once, a double-click's action would sit under the pointer and take the third click.

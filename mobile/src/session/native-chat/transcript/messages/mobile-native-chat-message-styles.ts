@@ -89,6 +89,11 @@ export const styles = themedStyleSheet(() => ({
     color: colors.statusRed,
     fontSize: typography.metaSize
   },
+  automationResultsCarried: {
+    marginTop: spacing.xs,
+    color: colors.textMuted,
+    fontSize: typography.metaSize
+  },
   showFull: {
     alignSelf: 'flex-start',
     paddingTop: spacing.xs

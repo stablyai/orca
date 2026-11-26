@@ -3,8 +3,8 @@ import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   UNRESOLVED_OWNER_HOST_ID
-} from '../../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
@@ -15,7 +15,7 @@ import {
 } from './worktree-runtime-owner-index'
 import { getActiveWorkspaceExecutionHostId } from './active-workspace-host'
 import { getSingleFocusedRuntimeEnvironmentId } from './single-runtime-legacy-owner'
-import { isEphemeralSetupTerminalWorktreeId } from '../../../../../shared/ephemeral-setup-terminal-worktree-id'
+import { isEphemeralSetupTerminalWorktreeId } from '../../../../../shared/workspace-setup/ephemeral-setup-terminal-worktree-id'
 import { getPairedWebClientEnvironmentId } from '../../../app-shell/platform/paired-web-client-host'
 import {
   findFolderWorkspaceOwner,

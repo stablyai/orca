@@ -9,7 +9,7 @@ import {
   externalAutomationTargetRemovedError,
   isExternalAutomationProvider,
   type ScopedExternalAutomationRequest
-} from '../../../shared/external-automation-scope'
+} from '../../../shared/automations/external/external-automation-scope'
 import { ownerKey } from '../../../shared/automations/ownership/automation-owner-key'
 import { sanitizeSshTargetGeneration } from '../../../shared/remote-runtime/ssh/ssh-target-generation'
 import type {

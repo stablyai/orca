@@ -96,7 +96,7 @@ export function getCrashReportSubmitFailureNotice(
       ? isFreezeReport
         ? translate(
             'crashReport.freeze.uncheckAttachments',
-            'Uncheck "Attach saved freeze report and diagnostic logs" and try again, or copy the details.'
+            'Uncheck "Include the saved freeze report and recent logs (redacted)" and try again, or copy the details.'
           )
         : translate(
             'auto.components.crash.report.submit.notice.uncheckDiagnostics',

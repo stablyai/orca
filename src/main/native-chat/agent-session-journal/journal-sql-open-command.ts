@@ -15,6 +15,7 @@ import {
 import { staleSubagentRosterRevisions } from './item-lifecycle/journal-subagent-liveness'
 import { applyJournalDomainLifecycle } from './journal-domain-lifecycle'
 import { withdrawOpeningDerivedQueue } from './journal-open-queue-withdrawal'
+import { readJournalStoredItem } from './journal-stored-output-rows'
 
 export type JournalOpenRecoveryResult = {
   failures: {
@@ -140,7 +141,9 @@ function settleOpeningLiveWork(
       AND (lifecycle_state IN ('running','pending') OR live_work=1) AND live_work=1
       ${after ? 'AND (ordinal,item_id)>(?,?)' : ''} ORDER BY ordinal,item_id LIMIT 128`)
       .all(target.sessionId, target.epoch, ...(after ?? []))
-    const items: AgentJournalRenderItem[] = rows.map((row) => JSON.parse(String(row.payload_json)))
+    const items: AgentJournalRenderItem[] = rows.map((row) =>
+      readJournalStoredItem(db, [target.sessionId, target.epoch], row.payload_json)
+    )
     const revisions = staleSubagentRosterRevisions(items)
     if (revisions.length > 0) {
       const head = db

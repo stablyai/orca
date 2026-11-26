@@ -1,6 +1,7 @@
 import { createWebRuntimeSessionTerminalResult } from './web-runtime-terminal-create-operation'
 import { resolveWebRuntimeSessionEnvironmentId } from '../../web-session-tabs-sync/workspace-selection/web-runtime-session-workspace-routing'
 import { useAppStore } from '../../../store/index'
+import { cancelPendingBotThreadOpen } from '@/lib/agent-session/open/bot-thread-open-lifecycle'
 import type {
   CreateWebRuntimeSessionTerminalArgs,
   WebRuntimeTerminalCreateOutcome,
@@ -8,6 +9,7 @@ import type {
   CreatedWebRuntimeSessionTerminal
 } from './terminal-create-contracts'
 import { notifyWebRuntimeTerminalCreateFailure } from './web-runtime-terminal-create-failure-notice'
+import { webTerminalMirroredTabId } from '../placement/web-session-terminal-placement'
 import {
   startStoppedWslHostForUserAct,
   stoppedWslHostMessage
@@ -49,6 +51,9 @@ async function createWebRuntimeTerminal(
   options: TerminalCreateOptions,
   create: () => Promise<CreatedWebRuntimeSessionTerminal>
 ): Promise<WebRuntimeTerminalCreateOutcome> {
+  if (options.userAct && args.activate !== false) {
+    cancelPendingBotThreadOpen()
+  }
   if (options.userAct && !(await startStoppedWslHostForUserAct(args.environmentId))) {
     // The start already told the user why; the host is still stopped.
     return { status: 'failed', message: stoppedWslHostMessage(args.environmentId) }
@@ -64,5 +69,7 @@ async function createWebRuntimeTerminal(
       worktreeId: args.worktreeId
     })
   }
-  return created.outcome
+  return created.outcome.status === 'created' && created.hostTabId
+    ? { ...created.outcome, mirroredTabId: webTerminalMirroredTabId(created.hostTabId) }
+    : created.outcome
 }

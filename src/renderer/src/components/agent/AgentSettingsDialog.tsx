@@ -19,7 +19,7 @@ import {
   useLocalWindowsTerminalCapabilities
 } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
-import { useWindowsTerminalCapabilityOwnerKey } from '@/hooks/useWindowsTerminalCapabilityOwnerKey'
+import { useWindowsTerminalCapabilityOwnerKey } from '@/runtime/hosts/capabilities/useWindowsTerminalCapabilityOwnerKey'
 import { resolveSettingsHostScope } from '@/components/settings/host-scope/settings-host-scope'
 
 type AgentSettingsDialogProps = {

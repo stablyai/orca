@@ -5,13 +5,15 @@ import { structuredAgentSessionPayloadFingerprint } from '../../../../../shared/
 import type { AgentJournalApprovalItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { mintAgentSessionOperationId } from '../../mailbox/structured-pointer/structured-pointer-operation-id'
 import { workerApprovalDecisionOf, workerApprovalOption } from './worker-approval'
-import type {
-  WorkerApprovalDecision,
-  WorkerApprovalOutcome
+import {
+  ORCHESTRATION_APPROVAL_CALLER_PREFIX,
+  ORCHESTRATION_COORDINATOR_APPROVAL_CALLER_PREFIX,
+  ORCHESTRATION_PERSON_APPROVAL_CALLER_PREFIX,
+  type WorkerApprovalDecision,
+  type WorkerApprovalOutcome
 } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 
-/** Marks a prompt Orca answered for a coordinator or a person, so the chat's own closer leaves it alone. */
-export const ORCHESTRATION_APPROVAL_CALLER_PREFIX = 'trusted-local:orchestration:approval:'
+export { ORCHESTRATION_APPROVAL_CALLER_PREFIX }
 
 export type ChatWorkerPrompt = { revision: number; body: AgentJournalApprovalItem }
 export type ChatWorkerPromptReader = (
@@ -111,7 +113,8 @@ export async function answerChatWorkerApproval(input: {
           : `Approval ${approvalId} offers no way to allow just this request. A person must answer it on the worker.`
     }
   }
-  const callerKey = `${ORCHESTRATION_APPROVAL_CALLER_PREFIX}${input.dispatchId}`
+  // The worker's chat names who answered: the coordinator, or a person in its chat.
+  const callerKey = `${input.byAgent ? ORCHESTRATION_COORDINATOR_APPROVAL_CALLER_PREFIX : ORCHESTRATION_PERSON_APPROVAL_CALLER_PREFIX}${input.dispatchId}`
   const { resolution } = prompt.body
   // A retry of this Dispatch's own answer: the same receipt, and no second effect.
   if (

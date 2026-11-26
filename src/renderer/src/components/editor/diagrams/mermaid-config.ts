@@ -1,6 +1,6 @@
 import type mermaid from 'mermaid'
 import { hexToRgb, readableOn, rgbaToHex } from '../../../../../shared/color/rgba-contrast'
-import { READABLE_CONTRAST } from '../../../../../shared/mermaid-flowchart-contrast'
+import { READABLE_CONTRAST } from '../../../../../shared/document-preview/mermaid-flowchart-contrast'
 
 export type MermaidThemeColors = {
   background: string

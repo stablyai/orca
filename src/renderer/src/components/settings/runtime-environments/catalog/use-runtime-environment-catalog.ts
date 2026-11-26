@@ -70,8 +70,11 @@ export function useRuntimeEnvironmentCatalog(): RuntimeEnvironmentCatalog {
   }, [detailsByEnvironmentId])
   const mountedRef = useMountedRef()
 
-  const loadEnvironments = useCallback(
-    async (verified?: { environmentId: string; runtimeStatus: RuntimeStatus }): Promise<void> => {
+  const load = useCallback(
+    async (
+      verified: { environmentId: string; runtimeStatus: RuntimeStatus } | undefined,
+      force: boolean
+    ): Promise<void> => {
       if (mountedRef.current) {
         setIsLoading(true)
       }
@@ -114,7 +117,8 @@ export function useRuntimeEnvironmentCatalog(): RuntimeEnvironmentCatalog {
               try {
                 const response = await window.api.runtimeEnvironments.getStatus({
                   selector: environment.id,
-                  timeoutMs: 10_000
+                  timeoutMs: 10_000,
+                  ...(force ? { force: true as const } : {})
                 })
                 const runtimeStatus = unwrapRuntimeRpcResult<RuntimeStatus>(response)
                 // Publish manual refreshes to sidebar pickers as well as Settings.
@@ -172,9 +176,15 @@ export function useRuntimeEnvironmentCatalog(): RuntimeEnvironmentCatalog {
     [mountedRef]
   )
 
+  // Every caller but the mount load is a user action, which probes now despite a host's failure backoff.
+  const loadEnvironments = useCallback(
+    (verified?: { environmentId: string; runtimeStatus: RuntimeStatus }) => load(verified, true),
+    [load]
+  )
+
   useEffect(() => {
-    void loadEnvironments()
-  }, [loadEnvironments])
+    void load(undefined, false)
+  }, [load])
 
   return {
     environments,

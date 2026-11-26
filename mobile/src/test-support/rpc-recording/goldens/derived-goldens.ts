@@ -20,7 +20,6 @@ export type DerivedGolden = {
 const LIFECYCLE_BASES = [
   'inventory-lifecycle',
   'b3',
-  'settings-bot-overrides-fulfilled',
   'settings-workspace-context-fulfilled',
   'settings-task-hydration-fulfilled'
 ]

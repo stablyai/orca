@@ -1,4 +1,4 @@
-import type { GitLabIssueUpdate } from '../../../shared/gitlab-types'
+import type { GitLabIssueUpdate } from '../../../shared/gitlab/gitlab-types'
 import type { IssueSourcePreference } from '../../../shared/repository/repo-types'
 import { acquire, release } from '../requests/glab-request-admission'
 import { classifyGlabError } from '../requests/glab-error-classification'
@@ -12,8 +12,11 @@ import {
 import { resolveIssueSource } from './gitlab-issue-source-resolution'
 import type { ProjectRef } from '../projects/project-ref-parser'
 import { encodedProject } from '../projects/project-path-encoding'
-import { codeHostFailure, combinedClassifiedFailure } from '../../../shared/code-host-failure-copy'
-import type { ClassifiedError } from '../../../shared/classified-error'
+import {
+  codeHostFailure,
+  combinedClassifiedFailure
+} from '../../../shared/source-control/code-host-failure-copy'
+import type { ClassifiedError } from '../../../shared/errors/classified-error'
 
 /** Mutate the preference-selected project so equal origin/upstream issue numbers cannot retarget edits. */
 export async function updateIssue(

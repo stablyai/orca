@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import ProjectCombobox from '@/components/new-workspace/project-selection/ProjectCombobox'
 import type { ProjectComboboxAddProjectMenu } from '../project-selection/ProjectComboboxAddProjectOption'
-import RunTargetCombobox from '@/components/new-workspace/run-target/RunTargetCombobox'
+import WorkspaceRunTargetCombobox from '../run-target/WorkspaceRunTargetCombobox'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { getSelectedNewWorkspaceProjectOptionId } from '@/lib/workspace/creation/new-workspace-project-options'
@@ -49,6 +49,8 @@ type NewWorkspaceComposerProjectSectionProps = Pick<
   handleProjectHostSetupChange: (setupId: string) => void
   handleAddSshHost: () => void
   handleAddRemoteServer: () => void
+  /** A distro picked under Add host › WSL distro; the Add WSL distro dialog sets it up. */
+  handleAddWslDistro?: (distro: string) => void
   handleConnectRunTargetHost: (option: NeedsSetupProjectHostOption) => Promise<void>
   handleSetLocation: (option: NeedsSetupProjectHostOption) => void
   sshStatusLabel: string
@@ -81,6 +83,7 @@ export function NewWorkspaceComposerProjectSection({
   onEphemeralVmRecipeChange,
   handleAddSshHost,
   handleAddRemoteServer,
+  handleAddWslDistro,
   handleConnectRunTargetHost,
   handleSetLocation,
   ephemeralVmRecipeError,
@@ -213,7 +216,7 @@ export function NewWorkspaceComposerProjectSection({
             <label className="flex h-5 min-w-0 items-center truncate text-xs font-medium text-muted-foreground">
               {t('auto.components.NewWorkspaceComposerCard.runOn', 'Run on')}
             </label>
-            <RunTargetCombobox
+            <WorkspaceRunTargetCombobox
               hostOptions={projectHostSetupOptions ?? []}
               hostValue={selectedProjectHostSetupId ?? null}
               hostExecutionHostId={selectedRepoExecutionHostId}
@@ -223,6 +226,9 @@ export function NewWorkspaceComposerProjectSection({
               onRecipeChange={onEphemeralVmRecipeChange}
               onAddSshHost={handleAddSshHost}
               onAddRemoteServer={handleAddRemoteServer}
+              onAddWslDistro={
+                handleAddWslDistro ? (distro) => handleAddWslDistro(distro.name) : undefined
+              }
               onConnectHost={handleConnectRunTargetHost}
               onSetLocation={handleSetLocation}
             />

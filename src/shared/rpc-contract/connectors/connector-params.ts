@@ -1,36 +1,7 @@
-import { z } from 'zod'
-import { CONNECTOR_SOURCES } from '../../external-conversation-link'
-import { AgentLaunchFields } from '../agent-launch/agent-launch-params'
-
-const ConnectorDelivery = {
-  source: z.enum(CONNECTOR_SOURCES),
-  externalId: z.string().min(1, 'Missing external conversation id'),
-  /** The caller's id for this delivery; a retry with the same id and payload shares its answer. */
-  deliveryId: z.string().min(1, 'Missing delivery id')
-}
-
-export const ConnectorStart = z.object({
-  ...ConnectorDelivery,
-  /** Admitted by the host's connector agent list, so an unsupported one is a refusal, not invalid. */
-  agent: z.string().min(1, 'Missing agent'),
-  target: AgentLaunchFields.shape.target,
-  prompt: z.string().min(1, 'Missing prompt')
-})
-
-export const ConnectorSend = z.object({
-  ...ConnectorDelivery,
-  text: z.string().min(1, 'Missing text')
-})
-
-/** Settles the conversation's queued work and stops what its agent is doing. */
-export const ConnectorCancel = z.object(ConnectorDelivery)
-
-const ConnectorConversation = {
-  source: ConnectorDelivery.source,
-  externalId: ConnectorDelivery.externalId
-}
-
-export const ConnectorPendingPrompt = z.object(ConnectorConversation)
+import * as z from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
+import { ConnectorReview } from '../../connector-review-contract'
+import { CONNECTOR_ACTION_VERBS, ConnectorActionArgs } from '../../connector-action-contract'
 
 /** Why `connector.reply` refused; connector_unavailable comes after the host's own retries. */
 export const CONNECTOR_REPLY_ERROR_CODES = [
@@ -38,31 +9,78 @@ export const CONNECTOR_REPLY_ERROR_CODES = [
   'no_current_turn',
   'connector_not_connected',
   'not_this_hosts_thread',
-  'connector_unavailable'
+  'connector_unavailable',
+  // A bot's Chat, which answers whichever direct message wrote last; its final message still posts.
+  'bot_chat_reply',
+  // The chat's conversation names a bot that is gone, off, or lives in another home.
+  'not_this_bots_conversation',
+  // Asked with pagesAsFiles: the text holds a whole HTML page, which Slack gets as an .html file.
+  'html_document_as_file'
 ] as const
 
-// What a reply from a pane with no connector conversation on this machine (SSH, a paired server) answers.
+export const CONNECTOR_REPLY_HTML_PAGE_AS_FILE =
+  'html_document_as_file' satisfies (typeof CONNECTOR_REPLY_ERROR_CODES)[number]
+
+// What a reply answers when its host can't post for anyone: an SSH relay, an older host, or connectors off or signed out.
 export const CONNECTOR_REPLY_UNAVAILABLE =
   "Replies aren't available from this host yet; the agent's final message is posted to the thread when the turn ends."
 
-/** An agent's reply to its conversation's thread, from the pane it runs in; one replyId posts at most once. */
-export const ConnectorReply = z.object({
-  paneKey: z.string().min(1, 'Missing pane key'),
+const ReplyText = {
   replyId: z.string().min(1, 'Missing reply id'),
-  text: z.string().min(1, 'Missing text')
-})
+  text: z.string().min(1, 'Missing text'),
+  // Inline notes on the pull request the conversation is on; elsewhere they follow the text.
+  review: ConnectorReview.optional(),
+  // The caller can send a whole HTML page as a file; only then may Slack text holding one be refused.
+  pagesAsFiles: z.literal(true).optional()
+}
 
-export const ConnectorAnswer = z.object({
-  ...ConnectorConversation,
-  /** The `promptId` the answer is for; any other prompt, or none, refuses. */
-  promptId: z.string().min(1, 'Missing prompt id'),
-  optionId: z.string().min(1, 'Missing option id')
-})
+/** An agent's reply to its conversation's thread, from the pane or native chat it runs in; one replyId posts at most once. */
+export const ConnectorReply = lazyZodSchema(() =>
+  z.union([
+    z.object({ paneKey: z.string().min(1, 'Missing pane key'), ...ReplyText }),
+    z.object({ sessionId: z.string().min(1, 'Missing session id'), ...ReplyText })
+  ])
+)
 
-/** Longest a dev watch window may stay open. */
-export const CONNECTOR_WATCH_MAX_MS = 10 * 60 * 1000
+/** A bot's shared verb in a source, from one of its chats; the cloud reads the ref, the host only who asks. */
+export const ConnectorAct = lazyZodSchema(() =>
+  z.object({
+    sessionId: z.string().min(1, 'Missing session id'),
+    verb: z.enum([...CONNECTOR_ACTION_VERBS, 'capabilities', 'places', 'reply']),
+    ref: z.string().min(1).max(2048).optional(),
+    args: ConnectorActionArgs.default({})
+  })
+)
 
-/** A dev window over the events: the snapshot, then every event until `forMs` passes. */
-export const ConnectorWatch = z.object({
-  forMs: z.number().int().min(0).max(CONNECTOR_WATCH_MAX_MS)
-})
+/** `orca bot reply --react`: an emoji on the message that woke the calling bot's run. */
+export const ConnectorReact = lazyZodSchema(() =>
+  z.object({
+    sessionId: z.string().min(1, 'Missing session id'),
+    emoji: z.string().min(1).max(100)
+  })
+)
+
+export const ConnectorLeaveThread = lazyZodSchema(() =>
+  z.object({
+    sessionId: z.string().min(1, 'Missing session id')
+  })
+)
+
+const MirrorChat = { sessionId: z.string().min(1, 'Missing session id') }
+
+/** A bot's Slack thread chat: post the owner's next messages there too, or keep them in Orca. */
+export const ConnectorSlackMirrorSet = lazyZodSchema(() =>
+  z.object({ ...MirrorChat, on: z.boolean() })
+)
+
+/** One Orca-typed message's post to the thread: Retry, Dismiss or Delete from Slack. */
+export const ConnectorSlackMirrorPost = lazyZodSchema(() =>
+  z.object({
+    ...MirrorChat,
+    itemId: z.string().min(1, 'Missing item id'),
+    action: z.enum(['retry', 'dismiss', 'delete'])
+  })
+)
+
+/** What the cloud says of the chat's thread for its menu. */
+export const ConnectorSlackMirrorStatus = lazyZodSchema(() => z.object(MirrorChat))

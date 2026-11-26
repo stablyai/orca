@@ -2,14 +2,16 @@ import {
   AgentHookStartup,
   listenForAgentHooks
 } from '../../../shared/agent-hook-listener/transport/agent-hook-startup'
-import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { randomUUID } from 'node:crypto'
+import { join } from 'node:path'
 
 import {
   CLAUDE_STATUSLINE_PATHNAME,
-  parseClaudeStatusLineBody
+  readClaudeStatusLineForm,
+  readClaudeStatusLineRateLimits
 } from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
+import { readClaudeStatusLineModel } from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-statusline-model'
 import { mergeAgentHookRequestHeaders } from '../../../shared/agent-hook-listener/hook-envelope'
 import { readRequestBody } from '../../../shared/agent-hook-listener/request-body'
 import { resolveHookSource } from '../../../shared/agent-hook-listener/source-routing'
@@ -17,13 +19,14 @@ import { HOOK_REQUEST_SLOWLORIS_MS } from '../../../shared/agent-hook-listener/l
 import { isHookRequestTruncatedError } from '../../../shared/agent-hook-listener/transport/agent-hook-transport-interference'
 import { clearAllListenerCaches } from '../../../shared/agent-hook-listener/listener-state'
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
-import { AgentHookServerStatusHookLifecycle } from './server-status-hook-lifecycle'
+import { AgentHookServerClaudeStatusLineModel } from './server-claude-statusline-model'
 import { OPENCODE_STARTUP_PROMPT_CLAIM_PATH } from '../../../shared/agent-launch/startup/opencode-startup-prompt'
 import { CLAUDE_AGENT_VIEW_PATH } from '../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
 
-import type { HookServerStartOptions } from './server-types'
+import type { HookServerStartOptions, NormalizedLocalHook } from './server-types'
+import { withPrefetchedRolloutReads } from '../../../shared/agent-hook-listener/providers/codex/codex-rollout-prefetch-scope'
 
-export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHookLifecycle {
+export abstract class AgentHookServerLifecycle extends AgentHookServerClaudeStatusLineModel {
   private readonly startup = new AgentHookStartup()
 
   start(options?: HookServerStartOptions): Promise<void> {
@@ -57,6 +60,9 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
     }
     if (!isCurrent()) {
       return
+    }
+    if (this.endpointDir) {
+      void this.restoreClaudeAgentViews(join(this.endpointDir, 'claude-agent-views.json'))
     }
     const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
       if (req.method !== 'POST') {
@@ -103,8 +109,14 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           return
         }
         if (pathname === CLAUDE_AGENT_VIEW_PATH) {
+          const { durable, observed, ...reply } = this.claudeAgentViews.receive(body, {
+            sameMachine: this.claudeViewMayGoQuiet(body)
+          })
+          // Acknowledged only once saved, so a quit before the save cannot strand an idle Claude;
+          // without the flag the mod registers again and keeps checking in.
+          const saved = (durable || observed) && (await this.claudeAgentViews.saved())
           res.writeHead(200, { 'content-type': 'application/json' })
-          res.end(JSON.stringify(this.claudeAgentViews.receive(body)))
+          res.end(JSON.stringify(saved ? { ...reply, durable, observed } : reply))
           return
         }
         await this.initializeStatusHookOwner()
@@ -114,9 +126,16 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           return
         }
         if (pathname === CLAUDE_STATUSLINE_PATHNAME) {
-          const statusLineEvent = parseClaudeStatusLineBody(body)
-          if (statusLineEvent) {
-            this.onClaudeStatusLine?.(statusLineEvent)
+          const form = readClaudeStatusLineForm(body)
+          if (form) {
+            const statusLineEvent = readClaudeStatusLineRateLimits(form)
+            if (statusLineEvent) {
+              this.onClaudeStatusLine?.(statusLineEvent)
+            }
+            const modelReport = readClaudeStatusLineModel(form)
+            if (modelReport) {
+              this.applyClaudeStatusLineModel(modelReport)
+            }
           }
           res.writeHead(204)
           res.end()
@@ -137,55 +156,23 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           return
         }
         await this.checkHookOwner(source, aliasedBody)
-        if (!isStatusCurrent()) {
-          res.writeHead(204)
-          res.end()
-          return
-        }
-        const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
-        if (source === 'muse' && !normalized.event) {
-          this.rearmIgnoredMuseHook(aliasedBody)
-        }
-        const statusDisposition = normalized.event
-          ? this.getAgentStatusDisposition(normalized.event.paneKey, {
-              source,
-              hookEventName: normalized.event.hookEventName,
-              isReplay: normalized.event.isReplay,
-              hasExplicitPrompt: normalized.event.hasExplicitPrompt,
-              launchToken: normalized.event.launchToken
-            })
-          : 'suppress'
-        let toolCallOwner: typeof normalized.event = null
-        if (normalized.event && statusDisposition !== 'suppress') {
-          const restartedAuthority =
-            statusDisposition === 'restart' && source === 'omp'
-              ? this.restoreRetiredStatusRestart(normalized.event.paneKey)
-              : undefined
-          const event =
-            statusDisposition === 'restart'
-              ? {
-                  ...normalized.event,
-                  launchToken: undefined,
-                  ...(restartedAuthority
-                    ? {
-                        ...restartedAuthority,
-                        tabId: parsePaneKey(restartedAuthority.paneKey)?.tabId
-                      }
-                    : {})
-                }
-              : normalized.event
-          if (statusDisposition === 'restart') {
-            // A new session must not inherit the retired one's observation order.
-            this.observations.rebind(event.paneKey)
+        // Why: rollout reads stay off the main thread; a slow open on Windows froze the window (#43539).
+        const prefetch =
+          source === 'codex'
+            ? await this.codexRolloutPrefetcher.prefetch(this.state, aliasedBody)
+            : undefined
+        let toolCallOwner: NormalizedLocalHook['event'] = null
+        try {
+          if (!isStatusCurrent()) {
+            res.writeHead(204)
+            res.end()
+            return
           }
-          this.recordCurrentAuthorityObservation(event)
-          toolCallOwner = event
-          const enriched = this.applyObservedLocalHook(event, normalized.onAccepted)
-          if (enriched) {
-            this.checkAgentPresenceAfterHook(event, enriched)
-            this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
-            this.scheduleTranscriptPoll(source, aliasedBody, enriched)
-          }
+          toolCallOwner = withPrefetchedRolloutReads(prefetch?.reads, () =>
+            this.ingestLocalHook(source, aliasedBody)
+          )
+        } finally {
+          prefetch?.release()
         }
         await this.respondToHook(req, res, source, aliasedBody, toolCallOwner)
       } catch (error) {
@@ -225,6 +212,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           }
           this.activateClaudeHelperObservations()
           this.maybeWriteEndpointFile()
+          this.scheduleReplayTranscriptPolls()
         },
         (error) => console.error('[agent-hooks] server error', error)
       )
@@ -238,6 +226,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
   }
 
   private rollbackTransportStart(): void {
+    this.replayTranscriptPolls.clear()
     this.server?.close()
     this.server = null
     this.port = 0
@@ -248,7 +237,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
   /** Quit retains status until chat teardown reads resumable child and background work. */
   stop(options?: { keepStatus?: boolean }): void {
     this.startup.stop()
-    this.claudeAgentViews.clear()
+    this.claudeAgentViews.close()
     this.claudePermissionHooks.drain()
     // Terminal status may still have a pending write while hook ingress is disabled.
     if (this.statusHooksEnabled || this.statusPersistTimer) {
@@ -266,11 +255,9 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
     this.onPaneStatusCleared = null
     this.onTransportInterference = null
     this.transportInterference.reset()
-    for (const timer of this.assistantMessageRetryTimers.values()) {
-      clearTimeout(timer)
-    }
-    this.assistantMessageRetryTimers.clear()
+    this.clearAllAssistantMessageRetries()
     this.hookSilenceRechecks.clear()
+    this.clearModelWaits()
     this.programStatusFacetRepublishes.clear()
     this.clearAllTranscriptPolls()
     this.claudeOwedNotificationExpiry.clearAll()

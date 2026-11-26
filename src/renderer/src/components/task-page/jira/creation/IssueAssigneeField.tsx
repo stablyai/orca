@@ -1,7 +1,10 @@
 import { useCallback } from 'react'
 import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
-import { getJiraSelfUser } from '@/components/jira-self-user'
-import { JiraUserPicker, type JiraUserPickerFixedOption } from '@/components/jira-user-picker'
+import { getJiraSelfUser } from '@/components/task-page/jira/project-selection/jira-self-user'
+import {
+  JiraUserPicker,
+  type JiraUserPickerFixedOption
+} from '@/components/task-page/jira/issue-workspace/jira-user-picker'
 import { hasJiraAssigneeCreateField } from '@/components/task-page/jira/creation/task-page-jira-create-fields'
 import { getJiraProjectSelectionKey } from '@/components/task-page/jira/task-page-jira-project-selection'
 import { jiraListAssignableUsersForProject } from '@/runtime/jira/runtime-jira-user-fields-client'

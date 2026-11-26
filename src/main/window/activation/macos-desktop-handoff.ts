@@ -72,16 +72,15 @@ export function createDesktopHandoff(options: {
 
 /** Drains what the sidecar buffered from an open into the desktop app's launch arguments. */
 export function desktopHandoffArguments(pending: {
-  skillShareDeepLinks: { consume: () => string | null }
+  deepLinks: { drainArguments: () => string[] }
   pluginInstallLinks: { consume: () => string | null }
   remotePairingLinks: { consume: () => string | null }
   osOpenedDocuments: { consume: () => string[] }
 }): string[] {
-  const shareId = pending.skillShareDeepLinks.consume()
   const pluginLink = pending.pluginInstallLinks.consume()
   const pairingLink = pending.remotePairingLinks.consume()
   return [
-    ...(shareId ? [`orca://skills/share/${shareId}`] : []),
+    ...pending.deepLinks.drainArguments(),
     ...(pluginLink ? [pluginLink] : []),
     ...(pairingLink ? [pairingLink] : []),
     ...pending.osOpenedDocuments.consume()

@@ -7,9 +7,10 @@ import {
   agentSessionRewindTargetIds
 } from './agent-session-rewind-targets'
 import type { AgentSessionWriteFailure } from '../../failures/agent-session-write-failure'
-import type { StructuredAgentSessionState } from '../../structured-agent-session-reducer'
+import type { StructuredAgentSessionState } from '../../view/live-read/structured-agent-session-reducer'
 import type { AgentJournalMessageItem } from '../../journal/agent-session-journal-types'
-import { nativeChatRewindOffered } from '../../../native-chat/native-chat-rewind-eligibility'
+import { rowsBesideStreamedText } from '../../view/structured-agent-session-streamed-text-rows'
+import { nativeChatRewindOffered } from '../../../native-chat/transcript/turns/native-chat-rewind-eligibility'
 import type { AgentJournalCursor } from '../../journal/agent-session-journal-identity'
 
 /** How long a confirmed rewind waits for its new conversation before letting go. */
@@ -283,8 +284,14 @@ export function createAgentSessionRewindHook(
       return !blockedRef.current
     }, [])
     const offered = nativeChatRewindOffered(input.support)
-    const floor = agentSessionRewindContextFloor(input.state, input.contextFloor)
-    const { items, submissions } = input.state
+    // Targets and the floor read no reply text, so they hold while a reply streams.
+    const items = rowsBesideStreamedText(input.state.items)
+    const { submissions, epoch } = input.state
+    const { contextFloor } = input
+    const floor = useMemo(
+      () => agentSessionRewindContextFloor({ items, epoch }, contextFloor),
+      [items, epoch, contextFloor]
+    )
     // Streaming rebuilds items per chunk; keep the set while its ids hold so row actions don't redraw.
     const heldTargets = useRef<ReadonlySet<string>>(new Set())
     const eligibleItemIds = useMemo(() => {

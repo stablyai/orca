@@ -1,7 +1,7 @@
 import { cancelActiveWorktreeRemoval } from '@/store/workspaces/selection/active-worktree-deselection-intent'
 import { projectWorktreeTabModelReconciliation } from '../../tabs/tabs-reconciliation'
 import { moveFocusToRendererBeforeFocusedWebviewHidden } from '../../../../components/browser-pane/host-guest/webview-registry'
-import { tabHasLivePty } from '../../../../../../shared/tab-has-live-pty'
+import { tabHasLivePty } from '../../../../../../shared/workspace-layout/terminal-surfaces/tab-has-live-pty'
 import {
   markInputQuietSchedulerInput,
   scheduleAfterInputQuiet

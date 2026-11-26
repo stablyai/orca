@@ -1,7 +1,7 @@
 import { closeSync, fstatSync, openSync, readSync } from 'node:fs'
 import { freemem, loadavg, totalmem } from 'node:os'
 import { sanitizeCrashReportString } from '../../shared/crash-reporting/crash-report-redaction'
-import { redactString } from '../observability/redactor'
+import { redactString } from '../../shared/observability/redactor'
 import type { CompletedHangContext, HangMachineSnapshot } from './hang-observations'
 
 function numberMatch(text: string, expression: RegExp): number | null {

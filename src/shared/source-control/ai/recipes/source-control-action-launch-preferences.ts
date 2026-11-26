@@ -15,7 +15,7 @@ import {
 } from './source-control-action-argument-document'
 import { actionModelSelectionChoices } from './source-control-action-model-selection'
 import { normalizeAgentModelOptionChoices } from '../../../agent-launch/choices/agent-launch-choices'
-import type { ExecutionHostId } from '../../../execution-host'
+import type { ExecutionHostId } from '../../../execution-host/execution-host'
 import {
   resolveTuiAgentLaunchRawArgs,
   type AgentLaunchProfileSettings

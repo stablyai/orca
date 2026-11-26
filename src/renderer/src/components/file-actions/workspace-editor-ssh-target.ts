@@ -1,4 +1,4 @@
-import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
+import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host/execution-host'
 import {
   getRuntimeSshAccess,
   type PublicKnownRuntimeEnvironment

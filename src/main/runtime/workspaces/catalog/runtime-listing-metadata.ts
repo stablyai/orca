@@ -4,7 +4,7 @@ import type { WorkspaceMetadataCursor } from '../../../../shared/worktree/metada
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { getRepoOwnedWorktreeMeta } from '../../../workspaces/catalog/worktree-metadata-ownership'
 import { readWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
 export function readRuntimeWorktreeMetadata(
   store: RuntimeStore,

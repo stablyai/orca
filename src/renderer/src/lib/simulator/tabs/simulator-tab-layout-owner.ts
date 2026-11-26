@@ -7,7 +7,7 @@ import {
   isPendingTab
 } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import type { AppState } from '@/store/types'
-import { isFrameDrawnServerWorkspace } from '@/runtime/web-session-tabs-sync/frame-drawn-server-workspace-set'
+import { isFrameDrawnServerWorkspace } from '@/runtime/web-session-tabs-sync/frame-drawn/frame-drawn-server-workspace-set'
 import { runtimeEnvironmentIdUnlessTwin } from '../../workspace/ownership/resolve-owner'
 import { noteDesktopCreatedServerTab } from '../../../store/workspace-layout/frames/desktop-created-server-tabs'
 

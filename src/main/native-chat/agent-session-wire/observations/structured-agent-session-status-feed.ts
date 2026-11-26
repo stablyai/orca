@@ -40,7 +40,7 @@ export class StructuredAgentSessionStatusFeed {
   )
   private readonly subscriptions = new StructuredAgentSessionStatusSubscriptions()
   private readonly broadcast = this.subscriptions.broadcast
-  // Never evicted: chats are named only while in here, and AI Vault reads closed ones' names here.
+  // Live chats and shown tabs (all closed chats on stores that can't list tabs); names come from records.
   private readonly published = new Map<string, StatusPublication>()
   private readonly acceptedSends = new Map<string, string>()
   readonly journalProjection
@@ -49,9 +49,8 @@ export class StructuredAgentSessionStatusFeed {
     this.journalProjection = createStructuredAgentSessionStatusReader(deps, this.publish.bind(this))
   }
 
-  private logFailure(scope: string, message: string, sessionId: string, error: unknown): void {
+  private logFailure = (scope: string, message: string, sessionId: string, error: unknown): void =>
     this.deps.logger.warn(message, { scope, sessionId, error })
-  }
 
   subscribe(subscriber: StructuredAgentSessionStatusSubscriber): () => void {
     // Naming completion must be observable even if a held journal cannot be read.
@@ -70,19 +69,24 @@ export class StructuredAgentSessionStatusFeed {
     return unsubscribe
   }
 
-  /** Revoke live ownership/remove sink children while retaining reload history. */
+  /** Revoke live ownership and remove sink children; with no tab left, its row goes too. */
   close(sessionId: string): void {
     this.revokeLive(sessionId)
     this.forget(sessionId)
+    this.published.delete(sessionId)
   }
 
-  /** Drop sink roster membership and refresh retained child projections. */
+  /** Drop sink roster membership; a live chat keeps its row with refreshed child projections. */
   forget(sessionId: string): void {
     this.acceptedSends.delete(sessionId)
     try {
       this.ownership.forget(sessionId)
     } catch (error) {
       this.logFailure('status-sink-forget', 'status sink forget failed', sessionId, error)
+    }
+    if (!this.deps.sessions.has(sessionId)) {
+      this.published.delete(sessionId)
+      return
     }
     const publication = this.published.get(sessionId)
     const previous = publication?.summary
@@ -135,6 +139,8 @@ export class StructuredAgentSessionStatusFeed {
   }
 
   readPublished = (sessionId: string) => this.published.get(sessionId)?.summary
+  /** The current work the published summary was read with; a live chat's, as of its last publish. */
+  readPublishedWork = (sessionId: string) => this.published.get(sessionId)?.work
 
   /** Seed unopened lists and the phone sink without reactions or saved-status writes. */
   publishSavedGroup = createSavedStructuredStatusGroup(
@@ -203,6 +209,7 @@ export class StructuredAgentSessionStatusFeed {
       state: projection.state,
       stopping: projection.stopping,
       usageLimitContinue: this.deps.readUsageLimitContinue?.(sessionId, projection.usageLimitCut),
+      runningPermissionMode: this.deps.runningPermissionMode?.(sessionId),
       childWork: this.childWorkFields(sessionId, session.params.provider),
       namingFailure: this.deps.namingFailure?.(sessionId),
       now: this.deps.now
@@ -214,6 +221,9 @@ export class StructuredAgentSessionStatusFeed {
     const inputChanged = publication?.firstInputSubmissionKey !== projection.firstInputSubmissionKey
     const reportOnly = !inputChanged && permissionReportOnly(previous, summary)
     if (!summaryChanged && !inputChanged) {
+      if (publication && projection.work) {
+        this.published.set(sessionId, { ...publication, work: projection.work })
+      }
       if (!this.ownership.matchesLocation(sessionId, session.params.location)) {
         this.sink(summary, this.deps.rowRetired?.(sessionId) ? undefined : session.params.location)
       }
@@ -221,7 +231,8 @@ export class StructuredAgentSessionStatusFeed {
     }
     this.published.set(sessionId, {
       summary,
-      firstInputSubmissionKey: projection.firstInputSubmissionKey
+      firstInputSubmissionKey: projection.firstInputSubmissionKey,
+      ...(projection.work ? { work: projection.work } : {})
     })
     if (summaryChanged) {
       if (!reportOnly || !this.ownership.matchesLocation(sessionId, session.params.location)) {

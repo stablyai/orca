@@ -1,8 +1,10 @@
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { selectMobileSessionTab } from '../../session-tabs/mobile-session-tab-selection'
-import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as MobileSessionPublication } from '../../session-tabs/session-tabs-change-publication'
-import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as MobileSessionPreservation } from '../../session-tabs/mobile-session-publication-preservation'
+import { selectMobileSessionTab } from '../../session-tabs/layout/mobile-session-tab-selection'
+import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as MobileSessionPublication } from '../../session-tabs/publication/session-tabs-change-publication'
+import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as MobileSessionPreservation } from '../../session-tabs/restoration/mobile-session-publication-preservation'
 import { OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh } from './perform-mobile-session-pty-records-refresh'
+import type { BrowserSessionTabSelectionOptions } from '../../browser/tabs/browser-tab-create-publication'
+import type { ServerPagePopupPresentation } from '../../../browser/guest-lifecycle/popups/browser-popup-ownership'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
@@ -31,6 +33,20 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
   protected abstract isHeadlessMobileSessionPublication(
     ...args: Parameters<MobileSessionPreservation['isHeadlessMobileSessionPublication']>
   ): ReturnType<MobileSessionPreservation['isHeadlessMobileSessionPublication']>
+
+  protected abstract markHeadlessBrowserSessionTabActive(
+    worktreeId: string | undefined,
+    browserPageId: string,
+    options: BrowserSessionTabSelectionOptions
+  ): Promise<void>
+
+  /** Moves only the paired client whose click opened a server page's popup, as with a link it opens. */
+  async showServerPagePopupToClient(popup: ServerPagePopupPresentation): Promise<void> {
+    await this.markHeadlessBrowserSessionTabActive(popup.worktreeId, popup.browserPageId, {
+      focusesHost: false,
+      caller: { clientNavigationId: popup.pairedDeviceId, navigation: 'caller', follows: true }
+    })
+  }
 
   protected applyMobileSessionTabNavigation(
     snapshot: RuntimeMobileSessionTabsResult,
@@ -198,8 +214,7 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
       activeTab
     )
     this.persistHeadlessTerminalActiveLeaf(worktreeId, activeTab, nextSnapshot)
-    this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
-    this.emitMobileSessionTabsSnapshot(nextSnapshot)
+    this.emitMobileSessionTabsSnapshot(this.storeMobileSessionSnapshot(worktreeId, nextSnapshot))
   }
 
   protected persistHeadlessTerminalActiveLeaf(

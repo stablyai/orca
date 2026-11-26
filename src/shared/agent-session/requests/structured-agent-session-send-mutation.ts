@@ -45,7 +45,22 @@ export function agentSessionSendFields(
 
 /** Exclude sender metadata because the provider never receives it; preserve body hashes for legacy messages and echo matching. */
 export function agentSessionMessagePayload(body: AgentJournalMessageItem): AgentJournalMessageItem {
-  const { from: _sender, ...payload } = body
+  const {
+    from: _sender,
+    typedBy: _typedBy,
+    origin: _origin,
+    asker: _asker,
+    connectorConversation: _connectorConversation,
+    leaveEligible: _leaveEligible,
+    connectorDelivery: _connectorDelivery,
+    connectorClaim: _connectorClaim,
+    carriedCards: _carriedCards,
+    carriedAskers: _carriedAskers,
+    memorySource: _memorySource,
+    triggeredBy: _triggeredBy,
+    automationRun: _automationRun,
+    ...payload
+  } = body
   return payload
 }
 

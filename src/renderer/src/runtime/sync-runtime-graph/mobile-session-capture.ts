@@ -175,12 +175,16 @@ export function canReuseMobileSessionSnapshot(
     narrowedEntriesEqual(previous.terminalLayoutByTabId, next.terminalLayoutByTabId) &&
     narrowedEntriesEqual(previous.paneTitlesByTabId, next.paneTitlesByTabId) &&
     narrowedEntriesEqual(previous.launchDraftByPaneKey, next.launchDraftByPaneKey) &&
-    narrowedEntriesEqual(previous.agentStatusByPaneKey, next.agentStatusByPaneKey) &&
     narrowedEntriesEqual(previous.editorDraftVersionByFileId, next.editorDraftVersionByFileId) &&
     narrowedEntriesEqual(previous.pagesByBrowserWorkspaceId, next.pagesByBrowserWorkspaceId) &&
     narrowedEntriesEqual(
       previous.certificateFailureByBrowserPageId,
       next.certificateFailureByBrowserPageId
+    ) &&
+    narrowedEntriesEqual(previous.audibleBrowserPageIds, next.audibleBrowserPageIds) &&
+    narrowedEntriesEqual(
+      previous.audioMutedBrowserWorkspaceIds,
+      next.audioMutedBrowserWorkspaceIds
     ) &&
     mountedSurfaceCapturesEqual(
       previous.mountedSurfaceCaptureByTabId,

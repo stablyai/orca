@@ -1,4 +1,4 @@
-import type { SetupConfig } from '../../../../../shared/orca-hook-setup-config'
+import type { SetupConfig } from '../../../../../shared/workspace-setup/hooks/orca-hook-setup-config'
 
 export type WorkspaceSetupKindCopy = {
   configLabel: string

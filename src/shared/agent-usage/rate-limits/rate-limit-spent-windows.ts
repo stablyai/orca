@@ -39,3 +39,13 @@ export function rateLimitSpentUntil(
   }
   return until
 }
+
+/** Whether the reading affirmatively shows turns can run: an account-wide window with room, or
+ *  overage that carries turns. A reading with neither shows nothing, not room. */
+export function rateLimitShowsRoom(limits: ProviderRateLimits): boolean {
+  if (overageCarriesTurns(limits.extraUsage)) {
+    return true
+  }
+  const windows = [limits.session, limits.weekly, limits.monthly]
+  return windows.some(Boolean) && rateLimitSpentUntil(limits) === undefined
+}

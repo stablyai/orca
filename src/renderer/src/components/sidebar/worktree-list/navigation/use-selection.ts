@@ -5,12 +5,12 @@ import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
 import { getRenderedWorkspaceRowsInSidebarOrder } from './worktree-sidebar-row-preference'
-import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
+import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   setVisibleWorktreeIds,
   setVisibleWorktreeShortcutTargets
 } from '../listing/visible-worktrees'
-import { useListMultiSelection } from '@/hooks/use-list-multi-selection'
+import { useListMultiSelection } from '@/lib/list-interaction/use-list-multi-selection'
 import { useReusedArrayIdentity } from '../listing/use-reused-array-identity'
 import { useAppStore } from '@/store'
 import { focusActiveWorkspaceSurfaceFromSidebar } from './focus-workspace-surface'

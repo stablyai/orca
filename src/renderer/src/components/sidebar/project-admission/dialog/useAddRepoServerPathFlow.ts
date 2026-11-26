@@ -15,7 +15,7 @@ import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner
 import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import {
   wslHostWindowsDriveRefusalForLinuxPath,
   type WslHostWindowsDriveRefusal

@@ -64,5 +64,6 @@ export const orcaProfilesApi = {
   orgMemberInvite: (args) => ipcRenderer.invoke('orcaProfiles:orgMemberInvite', args),
   orgInviteRevoke: (args) => ipcRenderer.invoke('orcaProfiles:orgInviteRevoke', args),
   orgMemberChangeRole: (args) => ipcRenderer.invoke('orcaProfiles:orgMemberChangeRole', args),
-  orgMemberRemove: (args) => ipcRenderer.invoke('orcaProfiles:orgMemberRemove', args)
+  orgMemberRemove: (args) => ipcRenderer.invoke('orcaProfiles:orgMemberRemove', args),
+  openCloudConsole: (args) => ipcRenderer.invoke('orcaProfiles:openCloudConsole', args)
 } satisfies PreloadApi['orcaProfiles']

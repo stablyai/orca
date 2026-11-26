@@ -7,7 +7,7 @@ import {
 import type { AttemptProjectedOutcome } from '../attempt-observation-types'
 import type { DispatchStatus, WorkerDispatchState } from '../orchestration-records'
 import type { TerminalExitCause } from '../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
-import type { OrchestrationDb } from '../orchestration-db'
+import type { OrchestrationDb, OrchestrationDbConnection } from '../orchestration-db'
 import { ATTEMPT_OBSERVATION_FACT_COLUMN_LIST } from '../row-column-lists'
 
 export type WorkerAttentionFacts = {
@@ -50,7 +50,7 @@ export type WorkerAttentionInput = {
 }
 
 export function readWorkerAttentionInputs(
-  db: OrchestrationDb,
+  db: OrchestrationDbConnection,
   dispatchIds: readonly string[]
 ): Map<string, WorkerAttentionInput> {
   const ids = [...new Set(dispatchIds)]

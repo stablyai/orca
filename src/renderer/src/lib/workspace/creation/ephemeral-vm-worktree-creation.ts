@@ -177,7 +177,9 @@ export async function attachEphemeralVmRuntimeToWorkspace(
     if (request.ephemeralVmRuntimeEnvironmentId) {
       void useAppStore
         .getState()
-        .refreshRuntimeEnvironmentStatus(request.ephemeralVmRuntimeEnvironmentId)
+        .refreshRuntimeEnvironmentStatus(request.ephemeralVmRuntimeEnvironmentId, undefined, {
+          force: true
+        })
     }
   } catch (error) {
     console.error('Failed to attach ephemeral VM runtime to workspace:', error)

@@ -1,4 +1,5 @@
 import { withStructuredHistoryInvocation } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-invocation'
+import { retryAcpRequest } from '../../protocol/acp-request-retry'
 import { observeAcpForkSupport } from '../../capabilities/acp-fork-support'
 import { withAcpStartupDiagnostic } from './acp-startup-diagnostic'
 // An ACP child's handshake, run after the host has published it: initialize, reopen the chat's
@@ -13,6 +14,7 @@ import type { StructuredAgentSessionAcquireInput } from '../../../native-chat/ag
 import type { StructuredAgentSessionProviderOpenResult } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import {
   ACP_REOPEN_FAILED,
+  acpListedSessionFolder,
   acpReopenTakeover,
   acpSessionOtherFolder,
   acpSessionNotRestoredRow
@@ -27,6 +29,7 @@ import type { AcpStructuredLaunch } from '../../launch/acp-structured-launch-res
 import type { AcpStructuredOptions } from '../../options/acp-structured-options'
 import type { AcpStructuredPrompts } from '../../requests/acp-structured-prompts'
 import { acpSessionStartMeta } from '../../launch/acp-session-meta'
+import { withAcpSessionOpen } from '../../launch/acp-instructions'
 import type { AcpStructuredSessionAdapterDeps } from '../acp-structured-session-adapter-deps'
 import { AcpStructuredTurns } from '../../turns/acp-structured-turns'
 import type { AcpStructuredTurnsDeps } from '../../turns/acp-turn-dispatch-contract'
@@ -71,6 +74,16 @@ export async function initializeAcpStructuredSession(
   const initialized = await connection.initialize()
   assertStarting()
   observeAcpForkSupport(spec.agent, initialized)
+  const sessionMetaRefused = Boolean(
+    launch.sessionMeta && launch.takesSessionMeta && !launch.takesSessionMeta(initialized)
+  )
+  if (sessionMetaRefused && !launch.sessionMetaOptional) {
+    const version = initialized.agentInfo?.version
+    throw new Error(
+      `${agentName}${version ? ` ${version}` : ''} cannot take this chat's standing instructions, so it did not start`
+    )
+  }
+  const sessionMeta = sessionMetaRefused ? undefined : launch.sessionMeta
   options.adoptInitialize(initialized)
   const meta = await spec.resolveSessionMeta?.({
     initialized,
@@ -86,7 +99,6 @@ export async function initializeAcpStructuredSession(
     antigravityChatAuth: launch.antigravityChatAuth
   })
   const setup = {
-    ...acpSessionStartMeta(spec, meta),
     authMethodId,
     authMethodUnavailableMessage: spec.authMethodUnavailableMessage,
     resumePreference: spec.resumePreference
@@ -105,33 +117,62 @@ export async function initializeAcpStructuredSession(
     options.adoptSession(accepted.response, accepted.kind === 'new' ? 'new' : 'loaded')
   }
   if (resume) {
-    const reopenIn = async (cwd: string, attaching: AcpStructuredLane) => {
-      const opened = await connection.start(
-        { cwd, mcpServers: [], sessionId: resume.sessionId, ...setup },
-        acceptSession
+    const reopenMeta = launch.sessionMetaOnReopen ? sessionMeta : undefined
+    const reopenIn = (cwd: string) =>
+      retryAcpRequest(
+        async () => {
+          liveLane?.dispose()
+          input.lanes.clear()
+          const attaching = input.lanes.create(resume.sessionId, true)
+          liveLane = attaching
+          const opened = await withAcpSessionOpen(launch, cwd, () =>
+            connection.start(
+              {
+                cwd,
+                mcpServers: launch.mcpServers ?? [],
+                sessionId: resume.sessionId,
+                ...acpSessionStartMeta(spec, meta, reopenMeta),
+                ...setup
+              },
+              acceptSession
+            )
+          )
+          assertStarting()
+          const frames = input.lanes.finishLoad()
+          attaching.translator.finishLoad()
+          return { opened, frames, lane: attaching }
+        },
+        { signal: input.signal, assertCurrent: assertStarting }
       )
-      assertStarting()
-      const frames = input.lanes.finishLoad()
-      attaching.translator.finishLoad()
-      return { opened, frames }
-    }
-    liveLane = input.lanes.create(resume.sessionId, true)
+    // A failed lookup fails the start; it says nothing about whether the session can reopen.
+    const listedIn = spec.dialect.reopenMovesSession
+      ? await retryAcpRequest(
+          () =>
+            acpListedSessionFolder(resume.sessionId, { initialized, connection, assertStarting }),
+          { signal: input.signal, assertCurrent: assertStarting }
+        )
+      : null
     try {
-      ;({ opened: started, frames: replayed } = await reopenIn(launch.cwd, liveLane))
+      ;({
+        opened: started,
+        frames: replayed,
+        lane: liveLane
+      } = await reopenIn(listedIn ?? launch.cwd))
     } catch (refused) {
       let error: unknown = refused
       try {
-        const movedTo = await acpSessionOtherFolder(refused, resume.sessionId, launch.cwd, {
-          dialect: spec.dialect,
-          initialized,
-          connection,
-          assertStarting
-        })
+        const movedTo = await retryAcpRequest(
+          () =>
+            acpSessionOtherFolder(refused, resume.sessionId, launch.cwd, {
+              dialect: spec.dialect,
+              initialized,
+              connection,
+              assertStarting
+            }),
+          { signal: input.signal, assertCurrent: assertStarting }
+        )
         if (movedTo) {
-          liveLane.dispose()
-          input.lanes.clear()
-          liveLane = input.lanes.create(resume.sessionId, true)
-          ;({ opened: started, frames: replayed } = await reopenIn(movedTo, liveLane))
+          ;({ opened: started, frames: replayed, lane: liveLane } = await reopenIn(movedTo))
         }
       } catch (followFailed) {
         // A failed lookup or reopen gets the same takeover policy as the first refusal.
@@ -151,7 +192,17 @@ export async function initializeAcpStructuredSession(
   if (!started || !liveLane) {
     liveLane?.dispose()
     input.lanes.clear()
-    started = await connection.start({ cwd: launch.cwd, mcpServers: [], ...setup }, acceptSession)
+    started = await withAcpSessionOpen(launch, launch.cwd, () =>
+      connection.start(
+        {
+          cwd: launch.cwd,
+          mcpServers: launch.mcpServers ?? [],
+          ...acpSessionStartMeta(spec, meta, sessionMeta),
+          ...setup
+        },
+        acceptSession
+      )
+    )
     assertStarting()
   }
   if (!liveLane) {
@@ -250,6 +301,7 @@ export async function initializeAcpStructuredSession(
       withdrawRequests: () => prompts.withdrawAll(),
       lane: liveLane,
       agentName,
+      compactCommand: spec.dialect.compactCommand,
       now,
       settle: onSettled,
       sessionLost: input.onSessionLost,

@@ -1,7 +1,7 @@
 import type {
   DiffComment,
   MobileDiffReviewState
-} from '../../../../../src/shared/diff-comment-types'
+} from '../../../../../src/shared/file-review/diff-comment-types'
 import type {
   MobileGitBranchCompareReply as MobileGitBranchCompareResult,
   MobileGitChangedFile
@@ -48,6 +48,7 @@ export type ReviewDiffState =
       truncated: boolean
     }
   | { kind: 'binary'; itemKey: string }
+  | { kind: 'image'; itemKey: string; dataUri: string }
   | { kind: 'too-large'; itemKey: string; byteLength?: number }
   | { kind: 'deleted'; itemKey: string }
   | { kind: 'error'; itemKey: string; message: string }

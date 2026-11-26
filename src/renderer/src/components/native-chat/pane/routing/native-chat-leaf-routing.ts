@@ -29,18 +29,7 @@ export function resolveNativeChatActiveLayoutLeafId(
   return layout.root?.type === 'leaf' ? layout.root.leafId : null
 }
 
-export function isNativeChatTabWideFallbackSafe(
-  layout: TerminalLayoutSnapshot | null | undefined
-): boolean {
-  if (!layout?.root) {
-    return true
-  }
-  if (layout.root.type === 'split') {
-    return false
-  }
-  // A stale active id can still name the removed sibling, so tab-wide evidence must wait for collapse.
-  return !layout.activeLeafId || layout.activeLeafId === layout.root.leafId
-}
+export { isTerminalTabWideFallbackSafe as isNativeChatTabWideFallbackSafe } from '../../../../../../shared/agent-status/mobile-terminal-status-shaping'
 
 /** Tab-wide evidence applies only to the original sole pane, never split siblings. */
 export function nativeChatLeafOwnsTabWideEvidence(args: {

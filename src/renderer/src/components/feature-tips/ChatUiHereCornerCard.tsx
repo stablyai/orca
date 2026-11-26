@@ -61,14 +61,20 @@ export function ChatUiHereCornerCard({ onClose }: { onClose: () => void }): JSX.
     }
     focusSwitchedNote.current = event.detail === 0 && document.activeElement === event.currentTarget
     setState({ stage: 'saving' })
-    const saved = await setAgentDefaultSurfaceFromFeatureTip('chat', { confirmWithToast: false })
-    if (mountedRef.current) {
-      setState(
-        saved
-          ? { stage: 'switched', focusSettings: focusSwitchedNote.current }
-          : { stage: 'prompt' }
-      )
+    const result = await setAgentDefaultSurfaceFromFeatureTip('chat', { confirmWithToast: false })
+    if (!mountedRef.current) {
+      return
     }
+    if (result === 'reported') {
+      // The notice already told the user what changed; a second confirmation would contradict it.
+      onClose()
+      return
+    }
+    setState(
+      result === 'saved'
+        ? { stage: 'switched', focusSettings: focusSwitchedNote.current }
+        : { stage: 'prompt' }
+    )
   }
 
   const handleStayInTerminal = (): void => {

@@ -1,7 +1,5 @@
-import type {
-  AgentSessionModelCatalogResult,
-  AgentSessionModelOption
-} from '../../agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../../agent-session-wire'
+import type { AgentSessionModelOption } from '../model-catalog/agent-session-model-option'
 import type { AgentSessionOptionCatalog } from '../catalog-providers/agent-session-option-catalog-types'
 import {
   applyStructuredAgentSessionModelCatalog,

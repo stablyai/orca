@@ -8,7 +8,7 @@ import type { NativeCodexResumePreparation } from '../../codex/history/resume/co
 import { getSystemCodexHomePath } from '../../codex/configuration/homes/codex-home-paths'
 import type { StructuredAgentSessionAdoption } from './structured-agent-session-history-adoption'
 import { admitTranscriptPath } from '../transcript-discovery/transcript-path-admission'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 
 export async function prepareCodexAdoption(
   source: StructuredAgentSessionAdoption,

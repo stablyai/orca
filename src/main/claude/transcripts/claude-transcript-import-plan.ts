@@ -18,10 +18,8 @@ import {
   HISTORY_CATCH_UP_MAX_OPERATIONS,
   type HistoryCatchUpPlan
 } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
-import {
-  legacyItemBody,
-  LEGACY_IMPORT_BLOCK_LIMITS
-} from '../../native-chat/agent-session-journal/history-import/journal-legacy-import'
+import { LEGACY_IMPORT_BLOCK_LIMITS } from '../../native-chat/agent-session-journal/history-import/journal-legacy-import'
+import { legacyItemBody } from '../../native-chat/agent-session-journal/history-import/journal-replacement-items'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionItemAppendOptions
@@ -40,8 +38,8 @@ import {
 import { createClaudeJournalTranslator } from '../structured/journal/claude-structured-journal-translation'
 import type { ClaudeTranscriptItemReader } from './claude-transcript-item-reader'
 import { idleClaudeJournalTurn } from '../structured/turns/claude-session-state-turn-over'
-import { claudeMessageWithoutSyntheticText } from '../structured/journal/claude-internal-message-content'
 import { claudeTranscriptPrompt } from './claude-transcript-prompt'
+import { claudeTranscriptRowFrame } from './claude-local-command-reply'
 
 export function createClaudeTranscriptImportPlan(input: {
   sessionId: string
@@ -139,11 +137,7 @@ export function createClaudeTranscriptImportPlan(input: {
     restore: async (row: Record<string, unknown>) => {
       try {
         input.check()
-        const frame = claudeMessageWithoutSyntheticText({
-          ...row,
-          session_id: row.sessionId,
-          parent_tool_use_id: null
-        })
+        const frame = claudeTranscriptRowFrame(row)
         if (!frame) {
           return
         }

@@ -3,14 +3,14 @@ import { normalizeHookPayload } from '../normalization/normalize-hook-payload'
 import { createHookListenerState, type HookListenerState } from '../listener-state'
 import type { AgentHookSource } from '../transport/agent-hook-relay'
 import { continueMainAgentStatus } from '../../agent-status/lifecycle/agent-lead-status-fold'
-import { tmuxCanonicalStatusEvent, tmuxInnerSubject } from '../../tmux-selected-status'
+import { tmuxCanonicalStatusEvent, tmuxInnerSubject } from './tmux-selected-status'
 import type { AgentStatusPtySubject } from '../../agent-status/contracts/agent-status-subject'
 import {
   readTmuxHookPane,
   resolveTmuxClientAttachment,
   type TmuxHookPane
-} from '../../tmux-client-attachment'
-import { probeTmuxHostAttachments } from '../../tmux-host-attachment-probe'
+} from './tmux-client-attachment'
+import { probeTmuxHostAttachments } from './tmux-host-attachment-probe'
 
 type OuterPane = {
   paneKey: string

@@ -1,5 +1,5 @@
 import { stat } from 'node:fs/promises'
-import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import { isMissingCommandBinaryError } from '../process-capture/exec-error'
 

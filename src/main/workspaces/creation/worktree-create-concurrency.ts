@@ -98,8 +98,3 @@ export function trackPreparationWork<T>(operation: Promise<T>): Promise<T> {
   const work = beginPreparationWork()
   return operation.finally(() => work.end())
 }
-
-export function _resetWorktreeCreateConcurrencyForTests(): void {
-  creates.clear()
-  preparations.clear()
-}

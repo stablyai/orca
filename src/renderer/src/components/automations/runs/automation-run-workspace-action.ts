@@ -1,6 +1,4 @@
 import { openExistingStructuredSession } from '@/lib/agent-session/open/open-existing-structured-session'
-import { ALL_TUI_AGENTS } from '../../../../../shared/agent-launch/catalog/tui-agent-display-names'
-import { isStructuredAgentSessionIdFor } from '../../../../../shared/agent-session/structured-agent-session-create'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import {
@@ -128,13 +126,6 @@ export function createAutomationRunWorkspaceAction({
         : activateAndRevealWorktree(workspaceId, options)
     }
     if (runViewState.availability === 'chat' && run.chatSessionId) {
-      const agent = ALL_TUI_AGENTS.find((entry) =>
-        isStructuredAgentSessionIdFor(entry, run.chatSessionId!)
-      )
-      if (!agent) {
-        toast.error(workspaceUnavailableMessage())
-        return
-      }
       void openRunChat(run.workspaceId, run.chatSessionId, ownerEnvironmentId, reveal)
       return
     }

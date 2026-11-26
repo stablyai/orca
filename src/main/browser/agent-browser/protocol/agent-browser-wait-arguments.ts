@@ -1,3 +1,4 @@
+import { assertAgentBrowserOperands } from './agent-browser-operands'
 import { BROWSER_WAIT_DEFAULT_TIMEOUT_MS } from '../../../../shared/browser/automation/browser-wait-timeout'
 
 // Lets agent-browser report its own wait timeout before Orca kills the process.
@@ -23,6 +24,8 @@ export function agentBrowserWaitArguments(options: AgentBrowserWaitOptions): {
       args: options.timeout == null ? ['wait'] : ['wait', String(options.timeout)]
     }
   }
+  const { selector, text, url, load, fn, state } = options
+  assertAgentBrowserOperands('Wait conditions', [selector, text, url, load, fn, state])
   const args = ['wait']
   if (options.selector) {
     args.push(options.selector)

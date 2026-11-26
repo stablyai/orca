@@ -31,11 +31,13 @@ export function isAcpBackgroundTaskChildWorkEvent(event: ProviderTimelineEvent):
 export function acpBackgroundTaskChildWork(
   event: ProviderTimelineEvent,
   observedAt: number,
-  stoppable: boolean
+  stoppable: boolean,
+  /** Tasks Orca inferred and cannot stop must not hold the session busy. */
+  inferred: (taskId: string) => boolean = () => false
 ): AgentChildWorkEvidence[] {
   return backgroundTaskBlocks(event).flatMap((block): AgentChildWorkEvidence[] => {
     const handle = acpBackgroundTaskHandle(block.taskId)
-    if (handle.id.length > AGENT_CHILD_WORK_ID_MAX_LENGTH) {
+    if (handle.id.length > AGENT_CHILD_WORK_ID_MAX_LENGTH || inferred(block.taskId)) {
       return []
     }
     if (isSettledBackgroundTaskState(block.state)) {

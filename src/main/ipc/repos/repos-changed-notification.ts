@@ -1,6 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { wakeFolderRepoGitUpgradeWatch } from '../folder-repo-git-upgrade-wake'
+import { wakeFolderRepoGitUpgradeWatch } from '../worktrees/listing/folder-repo-git-upgrade-wake'
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from '../worktrees/creation/worktree-base-directory-watcher'
 
 type RepoRemoteClientNotifier = Pick<

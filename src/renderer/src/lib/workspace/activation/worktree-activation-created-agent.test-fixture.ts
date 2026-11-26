@@ -1,4 +1,4 @@
-import { getDefaultSettings } from '../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import path from 'node:path'
 import { vi } from 'vitest'
 import type { Worktree } from '../../../../../shared/worktree/types'

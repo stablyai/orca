@@ -90,6 +90,12 @@ function computePublishedQueuedMessages(
       continue
     }
     const held = row.state === 'waiting' && row.holdReason !== null
+    const steers =
+      row.state === 'waiting' &&
+      !held &&
+      row.deliveryMode === 'steer' &&
+      row.unattended === false &&
+      row.body.command === undefined
     published.push({
       messageId: row.messageId,
       position: row.position,
@@ -101,7 +107,8 @@ function computePublishedQueuedMessages(
       ...(row.state === 'returned' ? { returnedReason: row.returnedReason } : {}),
       ...(row.state === 'returned' && row.returnedRejection
         ? { returnedRejection: row.returnedRejection }
-        : {})
+        : {}),
+      ...(steers ? { steers: true as const } : {})
     })
   }
   return published

@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { ExecutionHostId } from '../../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import type { MobileRelayHost } from '../../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import { reachableServerClients, relaysToServers } from './execution-host-scoped-rpc-client'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'

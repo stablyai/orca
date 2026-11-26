@@ -4,7 +4,7 @@ import {
 } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-environment-sleep'
 import { listEphemeralVmRuntimes } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
 import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
-import { isRuntimeOwnedSshTargetId } from '../../shared/execution-host'
+import { isRuntimeOwnedSshTargetId } from '../../shared/execution-host/execution-host'
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getRecipeVmWaker } from '../runtime/workspaces/sleep/recipe-vm-waker-registry'
 import { getRuntimeOwnedSshTargetId } from '../ssh/targets/ssh-target-runtime-ownership'

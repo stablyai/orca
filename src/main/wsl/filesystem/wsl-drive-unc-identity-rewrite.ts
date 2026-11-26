@@ -5,8 +5,11 @@
  * ids are rebuilt by the export's composite rewriters; user text is never touched.
  */
 import { isDeepStrictEqual } from 'node:util'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
-import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../shared/execution-host'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import {
   PTY_SESSION_ID_SEPARATOR,
   WORKTREE_ID_SEPARATOR

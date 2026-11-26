@@ -1,6 +1,6 @@
 import { useCallback, useContext } from 'react'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
+import { ConfirmationDialogContext } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { attemptEditorFileSave, confirmEditorUtf8Conversion } from './editor-file-save-attempt'
 import { getEditorSaveTargetFile } from '../queue/editor-save-target'
 

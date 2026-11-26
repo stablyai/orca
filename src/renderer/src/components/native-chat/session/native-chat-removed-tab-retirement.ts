@@ -1,4 +1,6 @@
-import type { Tab } from '../../../../../shared/tab-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { forgetDirectlyOpenedChat } from '@/runtime/web-session-tabs-sync/tracking/directly-opened-chat-tabs'
 import { retireNativeChatDraftPosition } from '../drafts/native-chat-composer-draft-memory'
 import { readNativeChatComposerDraft } from '../drafts/native-chat-composer-draft-store'
 import { structuredAgentSessionDraftScopeKey } from '../drafts/native-chat-draft-scope'
@@ -18,6 +20,10 @@ export function retireRemovedNativeChatTabs(before: readonly Tab[], after: reado
         next.entityId !== tab.entityId ||
         next.executionHostId !== tab.executionHostId)
     ) {
+      const host = parseExecutionHostId(tab.executionHostId)
+      if (host?.kind === 'runtime') {
+        forgetDirectlyOpenedChat(host.environmentId, tab.worktreeId, tab.entityId, tab.id)
+      }
       retireNativeChatDraftPosition(
         readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(tab.entityId)),
         tab.id

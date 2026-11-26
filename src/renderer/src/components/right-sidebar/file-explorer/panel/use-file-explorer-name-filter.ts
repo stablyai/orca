@@ -1,90 +1,80 @@
-import type { Dispatch, SetStateAction } from 'react'
 import { useCallback, useMemo, useState } from 'react'
 import {
   useRuntimeFileListForWorktree,
   type RuntimeFileListState
-} from '@/components/quick-open-file-list'
+} from '@/components/file-actions/quick-open/quick-open-file-list'
 import {
-  isFileExplorerNameFilterQueryTooLarge,
-  type FileExplorerNameFilterProjectionSource
-} from '../tree/file-explorer-name-filter-projection'
+  findNameMatches,
+  isNameFilterQueryTooLarge,
+  NAME_MATCH_PREVIEW_LIMIT,
+  type NameMatchResults
+} from '../combined-search/name-match-results'
+
+const NO_NAME_MATCHES: NameMatchResults = { total: 0, matches: [] }
 
 type UseFileExplorerNameFilterResult = {
-  nameFilterQuery: string
-  setNameFilterQuery: Dispatch<SetStateAction<string>>
-  nameFilterCollapsedPaths: Set<string>
-  setNameFilterCollapsedPaths: Dispatch<SetStateAction<Set<string>>>
-  hasNameFilter: boolean
+  hasNameFilterQuery: boolean
   nameFilterFiles: RuntimeFileListState
-  nameFilterSource: FileExplorerNameFilterProjectionSource | null
-  handleClearNameFilter: () => void
+  /** null while the listing for this query is loading. */
+  nameMatches: NameMatchResults | null
+  showAllNameMatches: () => void
 }
 
+/** Name half of the combined search: the same listing request as the old name filter, projected to flat ranked rows. */
 export function useFileExplorerNameFilter({
-  isFilesViewActive,
-  activeWorktreeId
+  query,
+  activeWorktreeId,
+  worktreePath,
+  displayRootPath,
+  showDotfiles
 }: {
-  isFilesViewActive: boolean
+  query: string
   activeWorktreeId: string | null
+  worktreePath: string | null
+  displayRootPath: string | null
+  showDotfiles: boolean
 }): UseFileExplorerNameFilterResult {
-  const [nameFilterQuery, setNameFilterQuery] = useState('')
-  const [nameFilterCollapsedPaths, setNameFilterCollapsedPaths] = useState<Set<string>>(
-    () => new Set()
-  )
-  const hasNameFilterQuery = nameFilterQuery.trim().length > 0
-  const nameFilterQueryTooLarge = useMemo(
-    () => isFileExplorerNameFilterQueryTooLarge(nameFilterQuery),
-    [nameFilterQuery]
-  )
-  const hasNameFilter = isFilesViewActive && hasNameFilterQuery
-  // Clear on deactivation during render so the tree never commits stale filter collapses.
-  const [prevHasNameFilter, setPrevHasNameFilter] = useState(hasNameFilter)
-  if (prevHasNameFilter !== hasNameFilter) {
-    setPrevHasNameFilter(hasNameFilter)
-    if (!hasNameFilter && nameFilterCollapsedPaths.size > 0) {
-      setNameFilterCollapsedPaths(new Set())
-    }
-  }
+  const hasNameFilterQuery = query.trim().length > 0
+  const queryTooLarge = useMemo(() => isNameFilterQueryTooLarge(query), [query])
   const nameFilterFiles = useRuntimeFileListForWorktree({
-    enabled: hasNameFilter && !nameFilterQueryTooLarge,
+    enabled: hasNameFilterQuery && !queryTooLarge,
     worktreeId: activeWorktreeId,
-    query: nameFilterQuery,
+    query,
     hostFilterWhenCapped: true
   })
-  const nameFilterSource = useMemo(
-    () =>
-      hasNameFilter
-        ? {
-            query: nameFilterQuery,
-            operationOwner: nameFilterFiles.operationOwner,
-            relativePaths: nameFilterQueryTooLarge
-              ? []
-              : nameFilterFiles.loading
-                ? null
-                : nameFilterFiles.files
-          }
-        : null,
-    [
-      hasNameFilter,
-      nameFilterFiles.files,
-      nameFilterFiles.loading,
-      nameFilterFiles.operationOwner,
-      nameFilterQuery,
-      nameFilterQueryTooLarge
-    ]
-  )
-  const handleClearNameFilter = useCallback(() => {
-    setNameFilterQuery('')
-  }, [setNameFilterQuery])
+  const [showAllQuery, setShowAllQuery] = useState<string | null>(null)
+  const showAll = showAllQuery === query
+  const { files, loading } = nameFilterFiles
+  const nameMatches = useMemo(() => {
+    if (!hasNameFilterQuery || !worktreePath) {
+      return null
+    }
+    if (queryTooLarge) {
+      return NO_NAME_MATCHES
+    }
+    if (loading) {
+      return null
+    }
+    return findNameMatches({
+      relativePaths: files,
+      query,
+      worktreePath,
+      displayRootPath: displayRootPath ?? worktreePath,
+      showDotfiles,
+      limit: showAll ? null : NAME_MATCH_PREVIEW_LIMIT
+    })
+  }, [
+    displayRootPath,
+    files,
+    hasNameFilterQuery,
+    loading,
+    query,
+    queryTooLarge,
+    showAll,
+    showDotfiles,
+    worktreePath
+  ])
+  const showAllNameMatches = useCallback(() => setShowAllQuery(query), [query])
 
-  return {
-    nameFilterQuery,
-    setNameFilterQuery,
-    nameFilterCollapsedPaths,
-    setNameFilterCollapsedPaths,
-    hasNameFilter,
-    nameFilterFiles,
-    nameFilterSource,
-    handleClearNameFilter
-  }
+  return { hasNameFilterQuery, nameFilterFiles, nameMatches, showAllNameMatches }
 }

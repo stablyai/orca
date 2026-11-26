@@ -3,7 +3,7 @@ import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathSeparators,
   resolveRuntimePath
-} from '../../cross-platform-path'
+} from '../../file-access/cross-platform-path'
 import type { Repo } from '../../repository/repo-types'
 import { resolveWslRepoWorktreeBasePath } from '../../file-access/wsl-paths'
 

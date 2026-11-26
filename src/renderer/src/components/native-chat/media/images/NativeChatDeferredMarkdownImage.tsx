@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { basename } from '@/lib/path'
-import { routeNativeChatHref } from '../../../../../../shared/native-chat/native-chat-href-routing'
+import { routeNativeChatHref } from '../../../../../../shared/native-chat/file-access/native-chat-href-routing'
 import { NativeChatMarkdownImage } from './NativeChatMarkdownImage'
 import { observeTranscriptVisibility } from './native-chat-image-visibility'
 

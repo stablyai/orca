@@ -5,7 +5,7 @@ import type { Translate } from '@/i18n/use-translate'
 import {
   credentialDecryptionMessage,
   isIntegrationCredentialDecryptionError
-} from '../../../../../shared/integration-credential-errors'
+} from '../../../../../shared/secure-storage/integration-credential-errors'
 import { isLinearIssueAttributeFilterUnsupportedError } from '@/runtime/linear/runtime-linear-client'
 
 export function linearIssueReadError(error: unknown, t: Translate = translate): string {
