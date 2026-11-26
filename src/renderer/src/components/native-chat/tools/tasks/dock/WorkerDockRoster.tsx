@@ -289,6 +289,7 @@ export function WorkerDockRoster(props: {
       >
         <WorkerDockPill
           pill={pill}
+          kind={topRow?.kind}
           glyph={
             top
               ? workerDockGlyph({ ...top, retired: topRow?.retired })

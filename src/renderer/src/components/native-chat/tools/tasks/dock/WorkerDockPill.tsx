@@ -11,6 +11,8 @@ import { cn } from '@/lib/class-names'
 import { ChevronUp } from 'lucide-react'
 import { WorkerDockGlyph } from './WorkerDockGlyph'
 import type { WorkerDockGlyph as Glyph } from './worker-dock-card-order'
+import type { WorkerDockEntry } from '../../../../../../../shared/orchestration/dock/worker-dock'
+import { workerDockKindLabel } from './worker-dock-labels'
 
 // Where Jump to latest rests while the open panel rises over the transcript: 8px above it.
 const JUMP_LIFT = '--native-chat-worker-jump-lift'
@@ -27,6 +29,7 @@ export const WORKER_DOCK_SURFACE_CLASS =
 export function WorkerDockPill({
   pill,
   glyph,
+  kind,
   label,
   latest,
   total,
@@ -38,6 +41,7 @@ export function WorkerDockPill({
 }: {
   pill: RefObject<HTMLButtonElement | null>
   glyph: Glyph
+  kind?: WorkerDockEntry['kind']
   /** The chip's text: how many workers, or what is known when none are listed. */
   label: string
   /** The most relevant worker's title, for assistive technology. */
@@ -51,6 +55,7 @@ export function WorkerDockPill({
   onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void
 }) {
   const t = useTranslate()
+  const accessibleTitle = kind ? `${workerDockKindLabel(t, kind)} · ${latest}` : latest
   // One wrapper either way, so the button keeps its place (and focus) as the chip becomes the header.
   return (
     <div
@@ -70,7 +75,7 @@ export function WorkerDockPill({
             ? undefined
             : t('components.native-chat.workerDock.chipLabel', '{{label}}, latest: {{title}}', {
                 label,
-                title: latest
+                title: accessibleTitle
               })
         }
         className={cn(
@@ -95,7 +100,7 @@ export function WorkerDockPill({
           </>
         ) : (
           <>
-            <WorkerDockGlyph glyph={glyph} still />
+            <WorkerDockGlyph glyph={glyph} kind={kind} still />
             <span data-worker-dock-pill-title="" className="min-w-0 truncate">
               {label}
             </span>
