@@ -12,11 +12,8 @@ import { ClaudePromptRegistry } from '../permissions/claude-prompt-registry'
 import { adoptClaudeStructuredSpawnOptions } from '../launch/claude-structured-spawn-options'
 import { observeClaudeFrameModels } from '../turns/claude-structured-execution-observations'
 import { observeClaudeFastModeFacts } from '../launch/claude-structured-session-options'
-import {
-  createClaudeSessionPublication,
-  reportClaudeOptions,
-  publishClaudeSessionAttempt
-} from '../startup/claude-structured-session-publication'
+import { reportClaudeOptions } from '../startup/claude-structured-session-publication'
+import * as publication from '../startup/claude-structured-session-publication'
 import type * as sessionState from '../claude-structured-session-state'
 import { resolveClaudeAcquisitionError } from './claude-structured-session-close'
 import * as startupExit from '../startup/claude-structured-session-startup-exit'
@@ -189,12 +186,9 @@ export async function acquireClaudeSession({
     naming?.launch(launch)
     attempt.launch = launch
     observedLeafUuid = launch.resumeLeafUuid
+    const openChat = claudeChatConnectionOpener(sessionId, deps.openConnection, launch)
     const connection = await withAgentSessionCreatePhase('spawn', input.recordPhase, () =>
-      claudeChatConnectionOpener(
-        sessionId,
-        deps.openConnection,
-        !launch.appBoundGrants
-      )(
+      openChat(
         {
           pathToClaudeCodeExecutable: launch.pathToClaudeCodeExecutable,
           prefixArgs: launch.prefixArgs,
@@ -255,7 +249,7 @@ export async function acquireClaudeSession({
         new Error(`claude stream-json for session ${sessionId} exited while being acquired`)
       )
     }
-    const { session, acquisition } = createClaudeSessionPublication({
+    const { session, acquisition } = publication.createClaudeSessionPublication({
       connection,
       launch,
       request: input,
@@ -285,7 +279,7 @@ export async function acquireClaudeSession({
       sdkOptions: launch.options
     })
     acquisitions.deleteIfCurrent(sessionId, attempt)
-    await publishClaudeSessionAttempt({
+    await publication.publishClaudeSessionAttempt({
       sessionId,
       session,
       attempt,

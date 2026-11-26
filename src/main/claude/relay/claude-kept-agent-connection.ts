@@ -102,16 +102,16 @@ function keptInitialization(line: string | null): unknown {
 export function claudeChatConnectionOpener(
   chatKey: string,
   open: typeof openClaudeStreamJsonConnection = openClaudeStreamJsonConnection,
-  /** False keeps today's launch for a new agent (grants that end with this run). */
-  relaysNew = true
+  /** App-bound grants end with this run: a new agent keeps today's launch, outside the daemon. */
+  { appBoundGrants }: { appBoundGrants?: true } = {}
 ): (
   launch: ClaudeStreamJsonLaunch,
   handlers: ClaudeStreamJsonConnectionHandlers
 ) => Promise<ClaudeStreamJsonConnection> {
   return async (launch, handlers) =>
     // Kept agents were all started without this run's grants.
-    (await openKeptClaudeAgentConnection(chatKey, launch, handlers, !relaysNew)) ??
-    open(relaysNew ? { ...launch, relayChatKey: chatKey } : launch, handlers)
+    (await openKeptClaudeAgentConnection(chatKey, launch, handlers, appBoundGrants)) ??
+    open(appBoundGrants ? launch : { ...launch, relayChatKey: chatKey }, handlers)
 }
 
 /** The agent had already ended, or the daemon answered with a refusal; a lost reply proves nothing. */
@@ -138,7 +138,7 @@ export async function openKeptClaudeAgentConnection(
   chatKey: string,
   launch: ClaudeStreamJsonLaunch,
   handlers: ClaudeStreamJsonConnectionHandlers = {},
-  freshOwed = false
+  freshOwed?: true
 ): Promise<ClaudeKeptAgentConnection | null> {
   let query: ClaudeKeptAgentQuery | null = null
   // Reattach only: nothing is spawned, so the command is never run.
