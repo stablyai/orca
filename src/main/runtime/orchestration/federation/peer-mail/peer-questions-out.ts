@@ -118,7 +118,7 @@ export function tellUnpairedPeerQuestions(
         to: recipient.ok ? recipient.to : handle,
         subject: 'Re: Question',
         body: maybeAnswered(db, String(row.conversation_id), threadKey)
-          ? `${reason} Your question ${id} there may already be answered: a reply in this thread didn't say which question it answers. Check the replies in this thread, or ask again.`
+          ? `${reason} Your question ${id} there may already be answered. Check the replies in this thread, or ask again.`
           : `${reason} Your question ${id} there will not be answered. Decide without it, or ask again.`,
         threadId: threadKey,
         runId: recipient.ok ? recipient.runId : undefined

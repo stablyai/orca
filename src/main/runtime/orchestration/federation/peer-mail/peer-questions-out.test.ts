@@ -150,7 +150,7 @@ describe('questions asked of an agent on a paired computer', () => {
     ).toEqual([
       [
         'thread_1',
-        `${REMOVED} Your question msg_q2 there may already be answered: a reply in this thread didn't say which question it answers. Check the replies in this thread, or ask again.`
+        `${REMOVED} Your question msg_q2 there may already be answered. Check the replies in this thread, or ask again.`
       ],
       [
         'thread_2',
