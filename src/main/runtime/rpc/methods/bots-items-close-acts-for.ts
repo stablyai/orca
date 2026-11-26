@@ -4,6 +4,8 @@ import { turnActsForOwner } from '../../../bots/bot-request-asker'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { BotItemWriter } from './bots-items-caller'
 import { readBotTurn } from './orchestration/messaging/bot-recipient'
+import { readFirstMessageActsFor } from './orchestration/messaging/bot-first-message-acts-for'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
 /** Whom the writer's running turn acts for, kept on a close so the journal says whose work it was:
  *  read as every check reads a turn, so a teammate's request taken in the owner's own chat is
@@ -18,13 +20,26 @@ export async function closingTurnActsFor(
   return whoOnly(await closingAskers(runtime, writer))
 }
 
-/** Whom the writer's chat acts for, by its record alone, as closes read it before they read turns:
- *  for a write that most likely closes nothing, so it reads no turn. */
-export function closingChatActsFor(
+/** Whom the writer's chat acts for, as closes read it before they read turns: its record, else its
+ *  /clear root's first message when that conversation is already open (never opening one). For a
+ *  write that most likely closes nothing, so it reads no turn. */
+export async function closingChatActsFor(
   runtime: OrcaRuntimeService,
   writer: { actor: Pick<BotItemWriter['actor'], 'chatId'> }
-): BotRequestAsker[] {
-  return whoOnly(chatRecord(runtime, writer.actor.chatId))
+): Promise<BotRequestAsker[]> {
+  const root = writer.actor.chatId
+  try {
+    const db = runtime.getOrchestrationDb()
+    const recorded = db.getBotConversationActsFor(root)?.actsFor
+    const host = getStructuredAgentSessionHost()
+    // Started in the same tick as the check, so it takes the open handle and can't reopen one.
+    const reads = !recorded && host?.hasSession(root) ? host.journalReads(root) : null
+    const askers = recorded ?? (reads ? await readFirstMessageActsFor(db, reads, null) : null)
+    return whoOnly(askers ?? UNKNOWN)
+  } catch (error) {
+    console.warn('[bots] could not read whom a closing chat acts for', error)
+    return whoOnly(UNKNOWN)
+  }
 }
 
 function whoOnly(askers: readonly BotRequestAsker[]): BotRequestAsker[] {

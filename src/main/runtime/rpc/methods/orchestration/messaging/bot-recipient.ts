@@ -308,7 +308,8 @@ export async function readBotTurn(
           automationPlace: (run?: AutomationRunMessage) =>
             automationPlace(runtime, sessionId, run, conversation)
         }),
-    conversationWorkspaceId: workspaceId
+    conversationWorkspaceId: workspaceId,
+    ...(indexedOnly ? { askersOnly: true as const } : {})
   }
   if (!opening && indexedOnly && !host.hasSession(sessionId)) {
     // Opening a chat at rest can convert its whole history first. Checked in the tick that reads.

@@ -7,7 +7,7 @@ import { OWNER_ACTS_FOR, type BotRequestAsker } from '../../../../shared/bots/bo
 import type { BotConversationActsFor } from '../../orchestration/db/bot-requests/bot-conversation-acts-for-store'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { closingTurnActsFor } from './bots-items-close-acts-for'
+import { closingChatActsFor, closingTurnActsFor } from './bots-items-close-acts-for'
 
 const CHAT = '11111111-1111-4111-8111-111111111111'
 const host = {
@@ -102,7 +102,8 @@ function closing(input: {
     getOrchestrationDb: () => db
   } as unknown as OrcaRuntimeService
   return {
-    close: () => closingTurnActsFor(runtime, { sessionId: CHAT, actor: { chatId: CHAT } })
+    close: () => closingTurnActsFor(runtime, { sessionId: CHAT, actor: { chatId: CHAT } }),
+    closeWithoutTurn: () => closingChatActsFor(runtime, { actor: { chatId: CHAT } })
   }
 }
 
@@ -138,7 +139,7 @@ describe('whom a close keeps its closing turn acting for', () => {
   })
 
   it("keeps a teammate chat's turn as the teammate's, by its first message when there is no record", async () => {
-    const { close } = closing({
+    const { close, closeWithoutTurn } = closing({
       journal: [
         message('asked', {
           origin: 'connector',
@@ -152,7 +153,13 @@ describe('whom a close keeps its closing turn acting for', () => {
         })
       ]
     })
+    // A set to the status the item already has reads no turn, but still its chat's first message.
+    expect(await closeWithoutTurn()).toEqual([KEPT])
     expect(await close()).toEqual([KEPT])
+    // With no record and the chat at rest, unknown, and nothing opened.
+    const atRest = closing({})
+    host.journals.clear()
+    expect([await atRest.closeWithoutTurn(), host.opened]).toEqual([[{ kind: 'unknown' }], []])
   })
 
   it("keeps the chat's record when only the whole chat could place the turn", async () => {

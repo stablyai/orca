@@ -83,7 +83,7 @@ const SET = defineMethod({
     const closedFor = !closing
       ? undefined
       : item.status === status
-        ? closingChatActsFor(context.runtime, writer)
+        ? await closingChatActsFor(context.runtime, writer)
         : await closingTurnActsFor(context.runtime, writer)
     const changes = {
       ...(closedFor ? { closedFor } : {}),
