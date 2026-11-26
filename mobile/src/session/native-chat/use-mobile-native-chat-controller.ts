@@ -80,6 +80,7 @@ export function useMobileNativeChatController(args: {
     composerScopeKey: mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId),
     structured: activeChatStructured,
     resolution: activeChatResolution,
+    activeProvider: providerPicker?.active,
     sourceIdentity,
     enabled: showNativeChat,
     hostSupport: agentSessionHostSupport,
@@ -210,7 +211,8 @@ export function useMobileNativeChatController(args: {
   })
 
   const structuredSend = useMobileStructuredNativeChatSendBridge({
-    agent: activeChatResolution?.agent,
+    agent:
+      providerPicker?.selection?.agent ?? providerPicker?.active ?? activeChatResolution?.agent,
     sessionCommands: nativeChatLane.sessionCommands.commands,
     sendStructured: structuredNativeChat.sendWithOutcome,
     captureSendOrigin,
@@ -252,7 +254,6 @@ export function useMobileNativeChatController(args: {
     appendComposerTextRef.current = appendComposerText
   }, [appendComposerText, recordNativeChatSessionOptionCommand])
 
-  const { interruptedContinue } = structuredNativeChat
   return {
     reportQueuedEditError: onSendError,
     chatComposerScopeKey: mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId),
@@ -298,7 +299,9 @@ export function useMobileNativeChatController(args: {
     nativeChatQueued: structuredNativeChat.queued,
     nativeChatBackgroundTasks: activeChatStructured ? structuredNativeChat.backgroundTasks : null,
     nativeChatContextUsage: activeChatStructured ? structuredNativeChat.contextUsage : null,
-    nativeChatInterruptedContinue: activeChatStructured ? interruptedContinue : null,
+    nativeChatInterruptedContinue: activeChatStructured
+      ? structuredNativeChat.interruptedContinue
+      : null,
     nativeChatThreadGoal: activeChatStructured ? structuredNativeChat.threadGoal : null,
     nativeChatMcpPanel: activeChatStructured ? structuredNativeChat.mcpPanel : null,
     nativeChatAccountUsage: activeChatStructured ? structuredNativeChat.accountUsage : null,
