@@ -166,3 +166,16 @@ export const servers = about(
   { interact: (frame) => expand(frame, 'Servers') }
 )
 export const serversNarrow = narrow(servers)
+
+async function confirmUpdateAll(frame: HTMLElement): Promise<void> {
+  expand(frame, 'Servers')
+  await nextFrame()
+  // Unfolded, the header offers Check, so the only Update all is the list's confirm trigger.
+  Array.from(frame.querySelectorAll<HTMLButtonElement>('button'))
+    .find((button) => button.textContent?.trim() === 'Update all')
+    ?.click()
+  await nextFrame()
+}
+
+export const serversConfirm = about({ state: 'not-available' }, { interact: confirmUpdateAll })
+export const serversConfirmNarrow = narrow(serversConfirm)
