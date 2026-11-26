@@ -191,9 +191,11 @@ export function firstWorkDismissDeps(
   store: Parameters<typeof firstWorkRenameDeps>[0],
   runtime: Parameters<typeof firstWorkRenameDeps>[1]
 ): FirstWorkDismissDeps {
+  // Only this host's row counts: a same-id row from another host must not stand in for it.
   const localMeta = (worktreeId: string) =>
-    store.getWorktreeMetaForHost?.(worktreeId, LOCAL_EXECUTION_HOST_ID) ??
-    store.getWorktreeMeta(worktreeId)
+    store.getWorktreeMetaForHost
+      ? store.getWorktreeMetaForHost(worktreeId, LOCAL_EXECUTION_HOST_ID)
+      : store.getWorktreeMeta(worktreeId)
   return {
     readIncarnation: firstWorkRenameDeps(store, runtime).readIncarnation,
     keepCurrentName: (worktreeId) => {

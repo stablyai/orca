@@ -33,7 +33,7 @@ export const webWorktreeAutoNameCalls: Pick<
       AUTO_NAME_RPC_METHODS.wait,
       { worktreeId, attemptId },
       AUTO_NAME_RETRY_TIMEOUT_MS
-    ).catch(() => null),
+    ),
   dismissBranchAutoRename: ({ worktreeId }) =>
     callRuntimeResult<BranchAutoRenameDismissResult>(AUTO_NAME_RPC_METHODS.dismiss, {
       worktreeId
