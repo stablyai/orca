@@ -17,11 +17,18 @@
       "switchFailed": "계정을 전환하지 못했습니다.",
       "title": "계정",
       "useReset": "재설정권 사용",
+      "pairingInvalidMessage": "계정을 보려면 이 휴대폰을 데스크톱과 다시 페어링하세요.",
       "weeklyWindow": "7일"
     },
     "claude": {
       "usageSignInLabel": "다시 로그인",
       "usageSignInMessage": "이 계정에 다시 로그인해야 합니다."
+    },
+    "codex": {
+      "usageSignInLabel": "로그아웃됨"
+    },
+    "usage": {
+      "percentLeft": "{{value}}% 남음"
     }
   },
   "agentHistory": {
@@ -735,6 +742,20 @@
   },
   "common": {
     "details": "세부 정보",
+    "loadError": {
+      "title": "불러올 수 없음",
+      "unreachable": "데스크톱에 연결하지 못했습니다. 다시 시도하세요."
+    },
+    "offline": {
+      "waitingFor": "{{host}} 연결 대기 중",
+      "waiting": "호스트 연결 대기 중",
+      "message": "호스트가 절전 모드가 아니며 Orca가 실행 중인지 확인하세요.",
+      "reconnect": "다시 연결"
+    },
+    "noMatch": {
+      "title": "일치하는 항목 없음",
+      "clearSearch": "검색 지우기"
+    },
     "hideDetails": "세부 정보 숨기기",
     "back": "뒤로",
     "cancel": "취소",
@@ -869,6 +890,10 @@
       "noReviewableChanges": "리뷰할 변경 사항 없음",
       "reviewUnavailable": "리뷰 사용 불가",
       "selectFile": "리뷰할 파일을 선택하세요.",
+      "showUnchangedLines": "변경되지 않은 {{count}}줄 표시",
+      "unchangedLines_one": "변경되지 않은 {{count}}줄",
+      "unchangedLines_other": "변경되지 않은 {{count}}줄",
+      "allStaged": "모두 스테이징됨",
       "tooLargeMessage": "이 차이점은 너무 커서 모바일에서 미리 볼 수 없습니다."
     },
     "diffReviewDrawers": {
@@ -890,6 +915,21 @@
       "saveLineNote": "{{lineNumber}}행에 메모 저장",
       "sendNotes": "메모 보내기",
       "sendNotesLabel": "에이전트에 메모 보내기",
+      "viewedFiles_one": "파일 {{count}}개 확인함",
+      "viewedFiles_other": "파일 {{count}}개 확인함",
+      "notes_one": "메모 {{count}}개",
+      "notes_other": "메모 {{count}}개",
+      "allViewedTitle": "모든 파일 확인함",
+      "unstageFile": "언스테이지",
+      "addFileNote": "파일 메모 추가",
+      "pullRequest": "PR",
+      "discardChanges": "변경사항 취소",
+      "rangeLine": "{{line}}행",
+      "rangeLines": "{{startLine}}–{{line}}행",
+      "sendToAgent": "{{agent}}에게 보내기",
+      "sendToAnAgent": "에이전트에게 보내기",
+      "rangePlaceholder": "여기를 어떻게 바꿀까요?",
+      "commentOnGitHub": "GitHub에 댓글 달기",
       "sendUnsentNotes": "미전송 메모 보내기",
       "statusUnreadable": "이 호스트의 상태를 읽지 못했습니다. 다시 시도 중…",
       "terminal": "터미널",
@@ -901,14 +941,24 @@
     "diffReviewFileSummary": {
       "changed": "변경됨",
       "editFileNote": "파일 메모 편집",
-      "stale": "오래됨"
+      "stale": "오래됨",
+      "untracked": "추적되지 않음",
+      "notStaged": "스테이징되지 않음",
+      "viewed": "확인함",
+      "renamedFrom": "이름 변경 전: {{oldPath}}",
+      "threadsWhenInSync_one": "이 브랜치가 PR과 일치하면 이 파일의 GitHub 댓글이 여기에 표시됩니다.",
+      "threadsWhenInSync_other": "이 브랜치가 PR과 일치하면 이 파일의 GitHub 댓글 {{count}}개가 여기에 표시됩니다."
     },
     "diffReviewFooter": {
       "nextFile": "다음 파일",
+      "stageNext": "스테이징 · 다음 파일",
+      "viewedNext": "확인함 · 다음 파일",
+      "nextFileButton": "다음 파일",
       "previousFile": "이전 파일"
     },
     "diffReviewHeader": {
       "openReviewActions": "리뷰 작업 메뉴 열기",
+      "jumpToFile": "{{fileName}}, 다른 파일로 이동",
       "title": "변경 사항"
     },
     "diffReviewLine": {
@@ -998,6 +1048,10 @@
     "newWorktreeFormSheet": {
       "agent": "에이전트",
       "connectTarget": "대상 연결",
+      "options": "옵션",
+      "createWorkspace": "워크스페이스 만들기",
+      "startFrom": "시작 기준",
+      "loadingProjects": "프로젝트 불러오는 중…",
       "connectTargetFirst": "먼저 대상에 연결하세요",
       "createWorktree": "작업 트리 만들기",
       "noProjectsFound": "프로젝트를 찾을 수 없습니다.",
@@ -1017,7 +1071,8 @@
       "project": "프로젝트",
       "runOn": "실행 위치",
       "selectProject": "프로젝트 선택",
-      "selectRunTarget": "실행 대상 선택"
+      "selectRunTarget": "실행 대상 선택",
+      "where": "위치"
     },
     "prSidebar": {
       "loading": "PR 로드 중…",
@@ -1072,6 +1127,17 @@
     "setupHookTrustDrawer": {
       "description": "워크스페이스가 시작되기 전에 이 저장소의 orca.yaml이 실행됩니다. 이 저장소를 신뢰하는 경우에만 실행하세요.",
       "dontRun": "실행 안 함",
+      "runArchiveTitle": "{{repoName}}의 아카이브 스크립트를 실행하시겠습니까?",
+      "archiveScriptChangedTitle": "{{repoName}}의 아카이브 스크립트가 변경됨",
+      "archiveDescription": "워크스페이스가 삭제되기 전에 이 저장소의 orca.yaml이 실행됩니다. 이 저장소를 신뢰하는 경우에만 실행하세요.",
+      "archiveScriptLabel": "아카이브 스크립트",
+      "newArchiveScriptLabel": "새 아카이브 스크립트",
+      "runOnce": "한 번만 실행",
+      "alwaysTrust": "항상 신뢰",
+      "alwaysTrustScope": "항상 신뢰를 선택하면 앞으로 {{repoName}}의 orca.yaml이 바뀌어도 묻지 않고 실행합니다.",
+      "branchDiffersTitle": "이 워크스페이스의 브랜치에 다른 설정 명령이 있습니다",
+      "branchDiffersDescription": "워크스페이스는 만들어졌지만 설정이 실행되지 않았습니다. 브랜치의 orca.yaml이 승인한 내용과 다릅니다. 이 저장소를 신뢰하는 경우에만 이 워크스페이스에서 실행하세요.",
+      "branchSetupLabel": "브랜치의 설정 스크립트",
       "newScriptLabel": "새 설정 스크립트",
       "runHooks": "후크 실행",
       "runSetupTitle": "{{repoName}}의 설정 스크립트를 실행하시겠습니까?",
@@ -1090,12 +1156,16 @@
       "gitHubRemoteRequired": "이 SSH 저장소에서 이슈와 PR 목록을 보려면 GitHub 원격 저장소가 필요합니다.",
       "noResults": "검색 결과가 없습니다.",
       "searchPlaceholder": "이름 입력 또는 소스 검색",
+      "workspaceName": "워크스페이스 이름",
+      "startFrom": "시작 기준",
       "switchRepo": "{{repoName}}(으)로 전환",
       "typeWorkspaceName": "아래 입력란에 워크스페이스 이름을 입력하세요."
     },
     "smartWorkspaceSourceField": {
       "openSelectedSource": "선택한 소스 열기",
-      "searchPlaceholder": "이름 입력 또는 소스 검색"
+      "searchPlaceholder": "이름 입력 또는 소스 검색",
+      "optionalLabel": "선택 사항",
+      "clearSelectedSource": "선택한 소스 지우기"
     },
     "smartWorkspaceSourceRow": {
       "createBranch": "\"{{name}}\" 브랜치 생성",
@@ -1165,6 +1235,7 @@
       "child": "하위",
       "children_one": "하위 {{count}}개",
       "children_other": "하위 {{count}}개",
+      "unsavedName": "저장되지 않은 이름: {{name}}",
       "folder": "폴더",
       "project": "프로젝트 {{repo}}",
       "remoteHost": "원격 호스트"
@@ -1173,6 +1244,15 @@
       "title": "문제가 발생했습니다",
       "tryAgain": "다시 시도",
       "home": "홈"
+    },
+    "pullDownMenu": {
+      "close": "메뉴 닫기"
+    },
+    "bottomSearchBar": {
+      "closeSearch": "검색 닫기"
+    },
+    "sheetHeader": {
+      "close": "닫기"
     },
     "svgPreview": {
       "drawFailed": "이 SVG를 그릴 수 없습니다",
@@ -1184,14 +1264,107 @@
       "expand": "다이어그램 확대",
       "label": "Mermaid 다이어그램"
     },
+    "worktreeAgentList": {
+      "hideChildAgents_one": "하위 에이전트 {{count}}개 숨기기",
+      "hideChildAgents_other": "하위 에이전트 {{count}}개 숨기기",
+      "showChildAgents_one": "하위 에이전트 {{count}}개 표시",
+      "showChildAgents_other": "하위 에이전트 {{count}}개 표시",
+      "hideIdleChildren": "유휴 하위 에이전트 {{count}}개 숨기기",
+      "showIdleChildren": "유휴 하위 에이전트 {{count}}개 표시",
+      "idleChildCount": "{{count}}개 유휴"
+    },
+    "diffReviewFilesSheet": {
+      "title": "파일",
+      "search": "파일로 이동",
+      "noMatches": "일치하는 파일 없음",
+      "current": "현재",
+      "viewedFile": "{{path}} 확인함"
+    },
     "native-chat": {
+      "turnDiff": {
+        "changedFiles_one": "변경된 파일 {{count}}개",
+        "changedFiles_other": "변경된 파일 {{count}}개",
+        "partial": "부분적인 차이점",
+        "showMoreFiles": "{{count}}개 더 보기"
+      },
       "composer": {
         "planMode": "계획",
         "exitPlanMode": "계획 모드 종료"
       },
       "goal": {
         "sentAsGoal": "목표로 보냄"
+      },
+      "connectorAsker": {
+        "directMessage": "{{source}} DM",
+        "groupMessage": "{{source}} 그룹 DM",
+        "you": "나",
+        "someone": "누군가",
+        "anApp": "어떤 앱",
+        "label": "{{place}}의 {{name}}",
+        "open": "{{source}}에서 열기",
+        "noAccess": "접근 권한 없음",
+        "earlierMessages_one": "스레드의 이전 메시지 {{count}}개",
+        "earlierMessages_other": "스레드의 이전 메시지 {{count}}개",
+        "via": "{{bot}}을(를) 통한 {{name}}"
+      },
+      "typedBy": {
+        "anotherComputer": "다른 컴퓨터",
+        "fromVia": "{{name}} 님, {{computer}} 경유",
+        "fromViaPhone": "{{name}} 님, {{phone}}에서 입력, {{computer}} 경유"
+      },
+      "fork": {
+        "pending": "이 채팅 분기 중…",
+        "commandWorking": "{{agent}}이(가) 응답하는 동안에는 분기할 수 없습니다. 응답이 끝나면 /fork를 다시 실행하세요.",
+        "commandNothing": "아직 분기할 응답이 없습니다.",
+        "commandTakesNoText": "/fork만 보낸 뒤 새 채팅에 내용을 입력하세요.",
+        "commandDescription": "가장 최근 응답에서 이 채팅 분기"
+      },
+      "usage": {
+        "description": "이 채팅의 Codex 계정 사용량 표시",
+        "sharedAccount": "현재 공유 계정",
+        "failed": "Codex 사용량을 불러오지 못했습니다. 다시 시도하세요.",
+        "codexVersion": "이 Codex 버전은 사용량을 보고하지 않습니다. Codex를 업데이트하세요.",
+        "apiKeyAuth": "API 키로는 Codex 사용량을 볼 수 없습니다. 사용량을 보려면 ChatGPT 계정으로 Codex에 로그인하세요.",
+        "title": "Codex 사용량",
+        "loading": "Codex 사용량을 불러오는 중…",
+        "account": "이 채팅이 사용하는 계정",
+        "retry": "다시 시도"
+      },
+      "workerDock": {
+        "coordinator": "코디네이터 대기 중",
+        "starting": "시작 중",
+        "idle": "유휴",
+        "saving": "결과 저장 중…",
+        "failed": "실패",
+        "unexpected": "예기치 않게 중지됨",
+        "stopping": "중지하는 중…",
+        "workerCount_one": "워커 {{count}}개",
+        "workerCount_other": "워커 {{count}}개",
+        "taskCount_one": "작업 {{count}}개",
+        "taskCount_other": "작업 {{count}}개",
+        "failedCount": "{{count}}개 실패",
+        "needsYouCount": "확인 필요 {{count}}개",
+        "runningCount": "{{count}}개 실행 중",
+        "workersRegion": "워커",
+        "stopOnComputer": "워커는 실행 중인 컴퓨터에서 중지하거나 지우세요"
       }
+    },
+    "hostOfflineBanner": {
+      "offline": "{{host}}에 연결할 수 없음",
+      "reconnecting": "{{host}}에 다시 연결하는 중…",
+      "asOf": "{{time}} 기준"
+    },
+    "offlineAsOfTime": {
+      "yesterday": "어제 {{time}}"
+    },
+    "newWorkspaceCreateSubmit": {
+      "uncertainFolderCreate": "이 워크트리가 만들어졌을 수 있습니다. 다른 워크트리를 만들기 전에 폴더를 확인하세요.",
+      "uncertainCreate": "이 워크스페이스가 만들어졌을 수 있습니다. 다른 워크스페이스를 만들기 전에 워크스페이스 목록을 확인하세요.",
+      "folderCreateBusy": "이 저장소의 워크트리를 아직 만들거나 확인하는 중입니다. 완료되면 폴더에 표시됩니다."
+    },
+    "smartRailRow": {
+      "title": "스마트 레일",
+      "subtitle": "에이전트가 하는 작업에 맞는 키를 표시합니다"
     }
   },
   "connection": {
@@ -1457,6 +1630,10 @@
       "backToSession": "세션으로 돌아가기",
       "closeFiles": "파일 닫기",
       "emptyState": "찾은 파일이 없습니다.",
+      "filterPlaceholder": "파일 필터",
+      "noMatchesHint": "열어 본 폴더만 검색합니다.",
+      "clearFilter": "필터 지우기",
+      "loading": "파일 로드 중…",
       "loadFailed": "파일을 불러올 수 없습니다.",
       "title": "파일",
       "truncatedList": "{{worktreeLabel}} - 처음 5000개 표시"
@@ -1471,6 +1648,7 @@
       "retryLoading": "{{path}} 다시 불러오기",
       "searchAll": "모두 검색",
       "searchAllIn": "{{folder}} 전체 검색",
+      "ignored": ".gitignore에 의해 무시됨",
       "searched": "{{folder}}에서 {{total}}개 중 {{loaded}}개를 검색했습니다.",
       "searching": "{{folder}} 검색 중… {{total}}개 중 {{loaded}}개",
       "showMore": "{{rows}}개 더 보기",
@@ -1483,6 +1661,8 @@
     "fileMarkdownPreview": {
       "copyLoadedSource": "불러온 Markdown 소스 복사",
       "copySource": "Markdown 소스 복사",
+      "previewMode": "미리보기",
+      "sourceMode": "소스",
       "viewPreview": "렌더링된 Markdown 미리보기 표시",
       "viewSource": "Markdown 소스 보기"
     },
@@ -1643,6 +1823,10 @@
     "edit": {
       "address": "주소",
       "connectionPreview": "{{endpoint}}에 연결",
+      "updateStepsServiceManager": "패키지 관리자 또는 서비스 관리자로 업데이트하세요.",
+      "updateStepsSourceCheckout": "소스 체크아웃에서 업데이트하세요.",
+      "updateStepsServer": "서버에서 Orca를 업데이트한 뒤 다시 시작하세요.",
+      "orcaVersion": "Orca 버전",
       "goBack": "돌아가기",
       "hostNamePlaceholder": "호스트 이름",
       "hostRemoved": "이 호스트는 이 휴대폰에서 제거되었습니다.",
@@ -1651,8 +1835,15 @@
       "name": "이름",
       "saveFailed": "호스트를 저장하지 못했습니다.",
       "saveHost": "호스트 저장",
-      "title": "호스트 편집"
+      "title": "호스트 편집",
+      "removeHost": "호스트 제거"
     }
+  },
+  "hostMutation": {
+    "renameOffline": "{{host}}이(가) 오프라인입니다. 저장할 수 있을 때까지 입력한 내용이 여기에 유지됩니다.",
+    "renameUnconfirmed": "아직 확인되지 않았습니다. {{host}}이(가) 다시 연결되면 Orca가 이름을 확인합니다.",
+    "saving": "저장 중",
+    "serverUnreachable": "서버에 연결할 수 없습니다."
   },
   "hostScreen": {
     "hostListActionSheetActions": {
@@ -1791,7 +1982,8 @@
       "tasks": "작업",
       "terminal": "터미널",
       "workspace": "워크스페이스",
-      "automations": "자동화"
+      "automations": "자동화",
+      "mcpServers": "MCP 서버"
     }
   },
   "newWorkspace": {
@@ -1802,6 +1994,11 @@
       "downloadProgress": "다운로드 중… {{progress}}",
       "downloading": "다운로드 중",
       "loading": "로드 중"
+    },
+    "createdSetupReview": {
+      "hostUnsupported": "승인했습니다. 기존 워크스페이스의 설정을 실행하려면 워크스페이스 호스트의 Orca를 업데이트하세요.",
+      "changedAgain": "설정이 실행되지 않았습니다. 검토한 이후 이 워크스페이스의 orca.yaml이 다시 변경되었습니다.",
+      "runFailed": "설정을 시작할 수 없습니다."
     }
   },
   "notifications": {
@@ -1811,6 +2008,8 @@
     },
     "notificationDeliverySection": {
       "footer": "알림 유형은 페어링된 각 데스크톱의 알림 설정을 따릅니다. 이 앱을 7일 동안 사용하지 않으면 알림이 일시 중지됩니다. 다시 받으려면 앱을 열고 다시 연결하세요.",
+      "onlyWhenAgentNeedsInput": "에이전트가 내 응답을 기다릴 때만",
+      "onlyWhenAgentNeedsInputHint": "권한 요청과 질문만 알립니다. 작업 완료는 알리지 않습니다.",
       "onlyWhenAway": "데스크톱을 사용하지 않을 때만",
       "onlyWhenAwayHint": "키보드나 마우스를 3분간 사용하지 않거나 데스크톱이 잠겨 있을 때 알림을 보냅니다.",
       "sound": "알림음",
@@ -4250,10 +4449,19 @@
       "downloadingLatestApp": "최신 앱 다운로드 중",
       "hostProfileUnreadable": "기기에서 이 호스트 정보를 읽지 못했습니다. 다시 시도하세요.",
       "isolationUnavailable": "이 기기의 WebView 버전이 너무 오래되어 워크스페이스를 안전하게 열 수 없습니다.",
+      "isolationUnavailableAndroid": "Orca를 사용하려면 버전 101 이상의 Android System WebView 또는 Chrome이 필요합니다. Play 스토어에서 업데이트하거나 개발자 옵션 > WebView 구현에서 더 최신 버전을 선택하세요.",
+      "webViewInUse": "이 기기의 WebView는 {{name}} {{version}}입니다.",
       "openingWorkspace": "워크스페이스 여는 중",
       "renderProcessGone": "워크스페이스가 응답하지 않습니다.",
       "statusUnreadable": "이 호스트의 상태를 읽지 못했습니다. 뒤로 돌아가 다시 열어 보세요.",
       "tryAgain": "다시 시도"
+    },
+    "pageRouteUnavailable": {
+      "updateTitle": "Orca 업데이트",
+      "updateMessage": "이 화면을 사용하려면 휴대폰 또는 {{host}}의 Orca를 최신 버전으로 업데이트해야 합니다.",
+      "updateMessageNoHost": "이 화면을 사용하려면 Orca를 최신 버전으로 업데이트해야 합니다.",
+      "serverTitle": "이 서버에 연결할 수 없음",
+      "serverMessage": "휴대폰에서 {{host}}을(를) 통해 이 워크스페이스의 서버에 연결할 수 없습니다."
     }
   },
   "workspace": {
@@ -4276,6 +4484,7 @@
       "days_one": "{{count}}일",
       "days_other": "{{count}}일",
       "done": "완료",
+      "permission": "확인 필요",
       "failed": "실패",
       "hours_one": "{{count}}시간",
       "hours_other": "{{count}}시간",
@@ -4297,7 +4506,9 @@
       "loadFailed": "이 호스트에서 워크스페이스를 불러오지 못했습니다.",
       "noFilterMatches": "필터에 맞는 워크스페이스가 없습니다.",
       "reopen": "업데이트하려면 다시 여세요",
-      "reopenDetail": "이 페이지는 아직 이 호스트의 워크스페이스 목록 형식을 지원하지 않습니다."
+      "reopenDetail": "이 페이지는 아직 이 호스트의 워크스페이스 목록 형식을 지원하지 않습니다.",
+      "loading": "워크스페이스를 불러오는 중…",
+      "retryingAutomatically": "자동으로 다시 시도하는 중입니다."
     },
     "workspaceListSections": {
       "all": "모두",
@@ -4315,6 +4526,9 @@
       "right": "방향 패드 오른쪽",
       "down": "방향 패드 아래",
       "hint": "방향키를 보냅니다. 길게 눌러 반복합니다."
+    },
+    "terminalKeyRail": {
+      "ctrlC": "Ctrl+C"
     }
   },
   "automations": {
@@ -4640,6 +4854,93 @@
             "cabdc2a9e0": "Claude 로그인 자격 증명을 읽을 수 없습니다.",
             "a7517cccb6": "현재 Claude 사용량을 사용할 수 없습니다.",
             "8418ec448d": "{{value0}} 사용량을 새로 고칠 수 없습니다. 에이전트 세션은 여전히 로그인되어 있을 수 있습니다."
+          },
+          "StatusBar": {
+            "c676918adc": "시스템 기본값"
+          }
+        }
+      }
+    },
+    "lib": {
+      "rateLimits": {
+        "errors": {
+          "opencodeInvalidWorkspaceId": "워크스페이스 ID 형식이 올바르지 않습니다",
+          "sessionCookieNotConfigured": "세션 쿠키가 설정되지 않았습니다",
+          "opencodeNoAuthCookie": "인증 쿠키를 찾을 수 없습니다. opencode.ai DevTools에서 Cookie 헤더 전체를 붙여 넣으세요",
+          "opencodeNoWorkspaceId": "워크스페이스 ID를 찾을 수 없습니다. 설정에서 워크스페이스 ID를 직접 지정하세요",
+          "opencodeNoWorkspaceIdShort": "워크스페이스 ID를 찾을 수 없습니다",
+          "workspacesFetchFailed": "워크스페이스를 가져오지 못했습니다 ({{status}})",
+          "usagePageFetchFailed": "사용량 페이지를 가져오지 못했습니다 ({{status}})",
+          "couldNotParseUsagePage": "페이지에서 사용량 데이터를 해석할 수 없습니다",
+          "couldNotParseUsageAnyWorkspace": "사용 가능한 워크스페이스에서 사용량 데이터를 해석할 수 없습니다",
+          "minimaxCookieNotConfigured": "MiniMax 세션 쿠키가 설정되지 않았습니다",
+          "minimaxSessionExpired": "MiniMax 세션이 만료되었습니다. 설정에서 MiniMax 쿠키를 바꾸세요.",
+          "minimaxAuthCookieMissing": "MiniMax 인증 쿠키를 찾을 수 없습니다. _token이 들어 있는 Cookie 헤더를 붙여 넣으세요",
+          "minimaxModelUsageMissing": "설정한 모델의 MiniMax 사용량 데이터를 찾을 수 없습니다",
+          "minimaxCookieDecryptFailed": "MiniMax 세션 쿠키를 복호화할 수 없습니다",
+          "kimiNotSignedIn": "Kimi Code에 로그인하지 않았습니다",
+          "kimiCredentialsInvalid": "Kimi 자격 증명 파일이 올바르지 않습니다",
+          "kimiCredentialsMissingToken": "Kimi 자격 증명 파일에 액세스 토큰이 없습니다",
+          "kimiQuotaWindowsMissing": "Kimi 사용량 응답에 할당량 구간이 없습니다",
+          "wslKimiHomeUnavailable": "{{distro}}의 WSL Kimi 홈을 사용할 수 없습니다",
+          "kimiSessionExpired": "Kimi 세션이 만료되었습니다. kimi를 실행한 뒤 사용량을 다시 확인하세요. 실행 위치: {{where}}",
+          "kimiUsageUnauthorizedHttp": "Kimi 사용량 요청이 승인되지 않았습니다 (HTTP {{status}})",
+          "kimiUsageFailedHttp": "Kimi 사용량 요청에 실패했습니다 (HTTP {{status}})",
+          "grokNotSignedIn": "Grok에 로그인하지 않았습니다. grok login을 실행하세요",
+          "grokAuthInvalid": "Grok 인증 파일이 올바르지 않습니다",
+          "grokAuthUnreadable": "Grok 인증 파일을 읽을 수 없습니다",
+          "grokSignInExpired": "Grok 로그인이 만료되었습니다. Orca가 실행 중인 컴퓨터에서 grok을 실행하고, 요청하면 로그인하세요. 채팅 메시지는 보내지 않아도 됩니다.",
+          "grokBillingConfigMissing": "Grok 결제 응답에 설정이 없습니다",
+          "grokBillingUsageMissing": "Grok 결제 응답에 크레딧 사용량이 없습니다",
+          "grokUsageUnauthorizedHttp": "Grok 사용량 요청이 승인되지 않았습니다 (HTTP {{status}})",
+          "grokUsageFailedHttp": "Grok 사용량 요청에 실패했습니다 (HTTP {{status}})",
+          "codexNotSignedIn": "Codex에 로그인하지 않았습니다",
+          "codexHomeUnavailable": "Codex 홈을 사용할 수 없습니다",
+          "wslCodexHomeUnavailable": "{{distro}}의 WSL Codex 홈을 사용할 수 없습니다",
+          "codexRebuildingIndex": "Codex가 세션 색인을 다시 만드는 중입니다. 복구가 끝나면 사용량을 새로 고칩니다",
+          "chatgptAuthRequired": "사용량 한도를 읽으려면 ChatGPT 인증이 필요합니다",
+          "claudeRateLimited": "지금은 Claude 사용량 요청이 제한되어 있습니다.",
+          "claudeUsageUnavailable": "현재 Claude 사용량을 확인할 수 없습니다.",
+          "claudeOauthTokenUnavailable": "Claude OAuth 액세스 토큰을 사용할 수 없습니다",
+          "claudeKeychainUnavailable": "Claude 키체인 자격 증명을 사용할 수 없습니다",
+          "claudePlanUsageUnavailable": "이 Claude CLI 세션에서는 Claude 플랜 사용량을 볼 수 없습니다.",
+          "waitingForClaudeSession": "Claude 세션 대기 중",
+          "wslClaudeConfigUnavailable": "{{distro}}의 WSL Claude 설정을 사용할 수 없습니다",
+          "noCredentials": "자격 증명 없음",
+          "fetchAborted": "사용량 한도 가져오기가 중단되었습니다",
+          "failedToLoadUsage": "사용량 데이터를 불러오지 못했습니다",
+          "ptyUsageTimeout": "PTY 시간 초과 — /usage 패널이 표시되지 않았습니다",
+          "cliExitedBeforeUsage": "/usage가 표시되기 전에 CLI가 종료되었습니다",
+          "cliExitedBeforeStatus": "상태를 받기 전에 CLI가 종료되었습니다",
+          "minimaxUsageFetchFailed": "MiniMax 사용량을 가져오지 못했습니다 ({{status}})",
+          "minimaxReturnedError": "MiniMax가 오류를 반환했습니다",
+          "minimaxInvalidUsageResponse": "MiniMax 사용량 응답이 올바르지 않습니다",
+          "minimaxUnknownUsageError": "알 수 없는 MiniMax 사용량 오류",
+          "kimiCredentialsUnreadable": "Kimi 자격 증명을 읽을 수 없습니다",
+          "kimiUsageRequestFailed": "Kimi 사용량 요청에 실패했습니다",
+          "grokUsageRequestFailed": "Grok 사용량 요청에 실패했습니다",
+          "rpcTimeout": "RPC 시간 초과",
+          "rpcFailed": "RPC 실패",
+          "signInWithChatgpt": "ChatGPT로 로그인",
+          "codexCliNotFound": "Codex CLI를 찾을 수 없습니다",
+          "codexCliCannotRun": "Codex CLI를 찾았지만 실행할 수 없습니다. Node.js가 PATH에 없을 수 있습니다",
+          "rpcProcessExited": "RPC 프로세스가 예기치 않게 종료되었습니다",
+          "ptyTimeout": "PTY 시간 초과",
+          "failedToParseCliOutput": "CLI 출력을 해석하지 못했습니다",
+          "codexSignInCheckTimeout": "Codex 로그인 상태를 확인하는 중에 시간이 초과되었습니다",
+          "codexSignInStatusUnavailable": "Codex 로그인 상태를 알 수 없습니다",
+          "codexResetFailedHttp": "Codex 초기화 실패: HTTP {{status}}",
+          "codexResetUnknownOutcome": "Codex 초기화 결과를 알 수 없습니다",
+          "codexResetIdempotencyRequired": "Codex 초기화에는 멱등성 키가 필요합니다",
+          "noSubscriptionApiKeyBilling": "구독 플랜 없음 — API 키 과금",
+          "claudeWaitingCredentialRotate": "실행 중인 Claude 터미널이 자격 증명을 교체할 때까지 Claude 사용량 새로 고침을 기다립니다.",
+          "unknown": "알 수 없는 오류"
+        }
+      },
+      "codex": {
+        "session": {
+          "restart": {
+            "9f0b1c2d3e": "Codex 계정"
           }
         }
       }
