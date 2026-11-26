@@ -63,13 +63,13 @@ export function settlePeerQuestionsOut(
 
 // awaiting: 1 while open, NULL once settled, 0 once a reply that named no question settled it.
 // idx_peer_questions_out_thread keys (conversation_id, thread key, awaiting), so both read one seek.
-export const SETTLE_OLDEST_IN_THREAD_SQL = `UPDATE peer_questions_out SET awaiting = 0
+const SETTLE_OLDEST_IN_THREAD_SQL = `UPDATE peer_questions_out SET awaiting = 0
   WHERE rowid = (
     SELECT rowid FROM peer_questions_out
     WHERE conversation_id = ?1 AND COALESCE(thread_id, message_id) = ?2 AND awaiting = 1
     ORDER BY rowid LIMIT 1
   )`
-export const THREAD_SETTLED_UNNAMED_SQL = `SELECT 1 FROM peer_questions_out
+const THREAD_SETTLED_UNNAMED_SQL = `SELECT 1 FROM peer_questions_out
   WHERE conversation_id = ?1 AND COALESCE(thread_id, message_id) = ?2 AND awaiting = 0 LIMIT 1`
 
 /** Tells each asker still waiting on that computer that no answer will come: it was removed (no
