@@ -22071,10 +22071,8 @@
       },
       "automationResult": {
         "openRun": "開啟執行紀錄",
-        "notRead": "{{name}} 尚未讀取此內容，將隨你的下一則訊息一併送出。",
-        "read": "{{name}} 已隨你的下一則訊息讀取此內容。",
-        "sentWithOne": "已隨附 1 個自動化結果傳送",
-        "sentWithMany": "已隨附 {{count}} 個自動化結果傳送",
+        "notRead": "{{name}} 尚未得知此結果，它會隨你之後的一則訊息一併送出。",
+        "read": "{{name}} 已隨你之後的一則訊息得知此結果。",
         "cleared": "在聊天清除前已送達，不會傳給 {{name}}。"
       },
       "slashCommandDescriptions": {

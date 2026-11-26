@@ -21343,10 +21343,8 @@
       },
       "automationResult": {
         "openRun": "実行を開く",
-        "notRead": "{{name}} はまだこれを読んでいません。次のメッセージと一緒に送られます。",
-        "read": "{{name}} は次のメッセージと一緒にこれを読みました。",
-        "sentWithOne": "オートメーションの結果 1 件と一緒に送信",
-        "sentWithMany": "オートメーションの結果 {{count}} 件と一緒に送信",
+        "notRead": "{{name}} にはまだ伝えていません。後のメッセージと一緒に送られます。",
+        "read": "{{name}} には後のメッセージと一緒に伝えました。",
         "cleared": "チャットがクリアされる前に届きました。{{name}} には送られません。"
       },
       "slashCommandDescriptions": {

@@ -21578,10 +21578,8 @@
       },
       "automationResult": {
         "openRun": "실행 열기",
-        "notRead": "{{name}}이(가) 아직 이 내용을 읽지 않았습니다. 다음 메시지와 함께 전달됩니다.",
-        "read": "{{name}}이(가) 다음 메시지와 함께 이 내용을 읽었습니다.",
-        "sentWithOne": "자동화 결과 1개와 함께 전송됨",
-        "sentWithMany": "자동화 결과 {{count}}개와 함께 전송됨",
+        "notRead": "{{name}}에게 아직 알리지 않았습니다. 이후 메시지와 함께 전달됩니다.",
+        "read": "이후 메시지와 함께 {{name}}에게 전달되었습니다.",
         "cleared": "채팅을 지우기 전에 도착했습니다. {{name}}에게는 전달되지 않습니다."
       },
       "slashCommandDescriptions": {

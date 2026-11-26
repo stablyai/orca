@@ -22395,10 +22395,8 @@
       },
       "automationResult": {
         "openRun": "Open run",
-        "notRead": "{{name}} hasn't read this yet. It goes with your next message.",
-        "read": "{{name}} read this with your next message.",
-        "sentWithOne": "Sent with 1 automation result",
-        "sentWithMany": "Sent with {{count}} automation results",
+        "notRead": "{{name}} hasn't been told yet. It goes with a later message.",
+        "read": "{{name}} was told about this with a later message.",
         "cleared": "Arrived before the chat was cleared. It won't go to {{name}}."
       },
       "slashCommandDescriptions": {

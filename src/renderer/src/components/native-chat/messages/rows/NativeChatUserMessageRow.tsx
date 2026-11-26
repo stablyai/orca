@@ -5,7 +5,6 @@ import { NativeChatTextAttachments } from '../../media/text/NativeChatTextAttach
 import { Goal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
-import { AUTOMATION_RESULT_NOTE_COPY } from '../../../../../../shared/bots/bot-automation-result-note'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import { useTranslate } from '@/i18n/use-translate'
@@ -182,20 +181,6 @@ export function NativeChatUserMessageRow({
           <Goal className="size-3" aria-hidden />
           <span>{t('components.native-chat.goal.sentAsGoal', 'Sent as goal')}</span>
         </div>
-      ) : null}
-      {message.automationResultsCarried ? (
-        <p className="text-2xs text-chat-foreground-faint">
-          {message.automationResultsCarried === 1
-            ? t(
-                'components.native-chat.automationResult.sentWithOne',
-                AUTOMATION_RESULT_NOTE_COPY.sentWithOne
-              )
-            : t(
-                'components.native-chat.automationResult.sentWithMany',
-                AUTOMATION_RESULT_NOTE_COPY.sentWithMany,
-                { count: message.automationResultsCarried }
-              )}
-        </p>
       ) : null}
       {!from ? (
         <UserMessageMeta

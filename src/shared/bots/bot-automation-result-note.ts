@@ -37,20 +37,11 @@ export const AUTOMATION_RESULT_PREAMBLE_LIMITS = {
 export const AUTOMATION_RESULT_NOTE_COPY = {
   finished: 'finished',
   couldNotFinish: "couldn't finish",
-  notRead: "{{name}} hasn't read this yet. It goes with your next message.",
-  read: '{{name}} read this with your next message.',
+  notRead: "{{name}} hasn't been told yet. It goes with a later message.",
+  read: '{{name}} was told about this with a later message.',
   cleared: "Arrived before the chat was cleared. It won't go to {{name}}.",
-  openRun: 'Open run',
-  sentWithOne: 'Sent with 1 automation result',
-  sentWithMany: 'Sent with {{count}} automation results'
+  openRun: 'Open run'
 } as const
-
-/** The caption under a person's message that carried results; desktop translates the same copy. */
-export function automationResultsCarriedText(count: number): string {
-  return count === 1
-    ? AUTOMATION_RESULT_NOTE_COPY.sentWithOne
-    : AUTOMATION_RESULT_NOTE_COPY.sentWithMany.replace('{{count}}', String(count))
-}
 
 function clip(text: string, max: number): string {
   return text.length > max ? `${sliceAtCodeUnitLimit(text, max - 1).trimEnd()}…` : text

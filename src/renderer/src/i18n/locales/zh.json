@@ -21211,10 +21211,8 @@
       },
       "automationResult": {
         "openRun": "打开运行",
-        "notRead": "{{name}} 尚未读取此结果，它会随你的下一条消息一起发送",
-        "read": "{{name}} 已随你的下一条消息读取此结果",
-        "sentWithOne": "已附带 1 个自动化结果发送",
-        "sentWithMany": "已附带 {{count}} 个自动化结果发送",
+        "notRead": "{{name}} 尚未得知此结果，它会随你之后的一条消息一起发送",
+        "read": "{{name}} 已随你之后的一条消息得知此结果",
         "cleared": "此结果在聊天被清除前送达，不会发送给 {{name}}"
       },
       "slashCommandDescriptions": {

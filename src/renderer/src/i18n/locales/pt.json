@@ -23485,10 +23485,8 @@
       },
       "automationResult": {
         "openRun": "Abrir execução",
-        "notRead": "{{name}} ainda não leu isto. Irá junto com sua próxima mensagem.",
-        "read": "{{name}} leu isto com sua próxima mensagem.",
-        "sentWithOne": "Enviado com 1 resultado de automação",
-        "sentWithMany": "Enviado com {{count}} resultados de automação",
+        "notRead": "{{name}} ainda não foi informado. Irá junto com uma mensagem posterior.",
+        "read": "{{name}} foi informado sobre isto com uma mensagem posterior.",
         "cleared": "Chegou antes de o chat ser limpo. Não será enviado para {{name}}."
       },
       "slashCommandDescriptions": {

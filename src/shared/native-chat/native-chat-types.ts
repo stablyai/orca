@@ -266,8 +266,6 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   parentId?: string
   /** How a user message was delivered when it was not an ordinary prompt. */
   sentAs?: AgentJournalMessageSendMode
-  /** On a person's message: how many automation result notes went to the agent with it. */
-  automationResultsCarried?: number
   /** Its text was shortened to fit the copy sent to this client; the host keeps it whole. */
   shortened?: true
   /** The journal row's own lifecycle; absent means unknown, never live. */

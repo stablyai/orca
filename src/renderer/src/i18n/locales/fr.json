@@ -22206,10 +22206,8 @@
       },
       "automationResult": {
         "openRun": "Ouvrir l’exécution",
-        "notRead": "{{name}} ne l’a pas encore lu. Il sera envoyé avec votre prochain message.",
-        "read": "{{name}} l’a lu avec votre message suivant.",
-        "sentWithOne": "Envoyé avec 1 résultat d’automatisation",
-        "sentWithMany": "Envoyé avec {{count}} résultats d’automatisation",
+        "notRead": "{{name}} n’en a pas encore été informé. Il partira avec un message ultérieur.",
+        "read": "{{name}} en a été informé avec un message ultérieur.",
         "cleared": "Arrivé avant que le chat ne soit effacé. Il ne sera pas transmis à {{name}}."
       },
       "slashCommandDescriptions": {

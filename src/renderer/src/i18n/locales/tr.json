@@ -22364,10 +22364,8 @@
       },
       "automationResult": {
         "openRun": "Çalıştırmayı aç",
-        "notRead": "{{name}} bunu henüz okumadı. Sonraki mesajınızla birlikte gönderilecek.",
-        "read": "{{name}} bunu sonraki mesajınızla birlikte okudu.",
-        "sentWithOne": "1 otomasyon sonucuyla birlikte gönderildi",
-        "sentWithMany": "{{count}} otomasyon sonucuyla birlikte gönderildi",
+        "notRead": "{{name}} henüz haberdar edilmedi. Daha sonraki bir mesajla birlikte gönderilecek.",
+        "read": "{{name}} bundan daha sonraki bir mesajla haberdar edildi.",
         "cleared": "Sohbet temizlenmeden önce ulaştı. {{name}} bunu görmeyecek."
       },
       "githubPeek": {
