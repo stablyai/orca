@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { activeProviderContext } from '../../../../../shared/agent-session/conversation-context/agent-session-provider-context'
+import { agentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
 import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import { OPENCODE_ACP_DIALECT } from '../../../../acp/acp-dialects/opencode-dialect'
 import { AcpStructuredLane } from '../../../../acp/journal/acp-structured-lane'
@@ -123,6 +124,9 @@ async function startWorker({ unavailableErrorRead = false } = {}) {
     sessionId: SESSION,
     cause: 'unexpected-exit',
     reason: 'provider process exited',
+    failure: agentSessionFailureFact('providerExited', {
+      detail: { text: 'fixture process exit code 42', audience: 'log' }
+    }),
     fence: child.fence,
     acquisitionGeneration: child.generation,
     observedAt: NOW
@@ -130,6 +134,12 @@ async function startWorker({ unavailableErrorRead = false } = {}) {
   const reportExit = () => current.host.handleAdapterEvent(exit)
   const endTimeline = () =>
     timeline.apply([{ type: 'session.ended', verdict: { state: 'interrupted', completedAt: NOW } }])
+  const writePartialReply = () => {
+    timeline.apply([
+      { type: 'text.delta', item: { id: 'reply' }, channel: 'assistant', text: 'Work in progress' }
+    ])
+    timeline.flush()
+  }
   const record = () => current.store.requireWritableRecord(SESSION)
   const project = () =>
     projectWorkerFleet({
@@ -173,6 +183,7 @@ async function startWorker({ unavailableErrorRead = false } = {}) {
     record,
     project,
     endTimeline,
+    writePartialReply,
     readReports,
     reportExit,
     resume,
@@ -190,7 +201,12 @@ it('reports the same interrupted request once and offers in-place resume after t
   await worker.reportExit()
 
   expect(await worker.readReports()).toMatchObject([
-    { turnOutcome: 'interruption', dispatchId: worker.dispatch.id }
+    {
+      turnOutcome: 'interruption',
+      dispatchId: worker.dispatch.id,
+      failureKind: 'providerExited',
+      detail: 'fixture process exit code 42'
+    }
   ])
   expect(worker.project()).toMatchObject({
     liveness: { verdict: 'exited' },
@@ -221,7 +237,7 @@ it('wakes on a proven exit when the journal detail read fails and leaves an expl
     return appendSteps(...args)
   })
   try {
-    worker.endTimeline()
+    worker.writePartialReply()
     const written = worker.sink.written?.()
     await writeStarted.promise
     const ended = worker.reportExit()
@@ -236,7 +252,7 @@ it('wakes on a proven exit when the journal detail read fails and leaves an expl
     { turnOutcome: 'interruption', dispatchId: worker.dispatch.id }
   ])
   await worker.resume()
-  await worker.lifetime.stopAgent(SESSION, { cause: 'user-stop' })
+  await worker.lifetime.stopAgent(SESSION, { recorded: 'user-stop' })
   expect(worker.project()).toMatchObject({
     liveness: { verdict: 'exited' },
     attention: { requiresAction: false },

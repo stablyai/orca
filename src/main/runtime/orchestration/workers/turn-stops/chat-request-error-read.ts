@@ -25,7 +25,10 @@ export async function readChatRequestError(
     await new Promise((resolve) => setTimeout(resolve, Math.min(50, remaining)))
   }
   const snapshot = await request.read()
-  if (!snapshot) {
+  if (snapshot === undefined) {
+    return unrecordedChatRequestError(request)
+  }
+  if (snapshot === null) {
     return null
   }
   const recorded = chatRequestError(snapshot, request)
