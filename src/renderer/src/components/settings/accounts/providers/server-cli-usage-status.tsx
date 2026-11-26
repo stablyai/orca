@@ -3,9 +3,12 @@ import { Loader2, RefreshCw, ShieldCheck } from 'lucide-react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import {
+  currentOwnerAccountsStream,
   readOwnerAccounts,
   subscribeOwnerAccounts,
-  type OwnerAccountsFailure
+  type OwnerAccountsFailure,
+  type OwnerAccountsState,
+  type OwnerAccountsStreamToken
 } from '@/runtime/provider-accounts/observations/owner-accounts-stream'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { ProviderRateLimits } from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
@@ -35,7 +38,11 @@ const FIX_BY_SIGN_IN_FAILURES: ReadonlySet<string> = new Set([
 const NO_LOCAL_USAGE = createEmptyRateLimitState()
 
 const refreshesInFlight = new Map<string, Promise<void>>()
-const refreshErrors = new Map<string, string>()
+// Why: an error belongs to the host observation it failed in; a newer snapshot or stream supersedes it.
+const refreshErrors = new Map<
+  string,
+  { stream: OwnerAccountsStreamToken | null; state: OwnerAccountsState | null; message: string }
+>()
 const refreshListeners = new Set<() => void>()
 
 function notifyRefreshListeners(): void {
@@ -56,9 +63,17 @@ function joinHostRefresh(hostKey: string): Promise<void> {
     return running
   }
   refreshErrors.delete(hostKey)
+  const startedOn = currentOwnerAccountsStream(hostKey)
   const started = refreshOwnerAccountsUsage(hostKey)
     .catch((cause: unknown) => {
-      refreshErrors.set(hostKey, cause instanceof Error ? cause.message : String(cause))
+      const stream = currentOwnerAccountsStream(hostKey)
+      if (stream === startedOn) {
+        refreshErrors.set(hostKey, {
+          stream,
+          state: readOwnerAccounts(hostKey),
+          message: cause instanceof Error ? cause.message : String(cause)
+        })
+      }
     })
     .finally(() => {
       refreshesInFlight.delete(hostKey)
@@ -67,6 +82,15 @@ function joinHostRefresh(hostKey: string): Promise<void> {
   refreshesInFlight.set(hostKey, started)
   notifyRefreshListeners()
   return started
+}
+
+function currentRefreshError(hostKey: string): string | null {
+  const failed = refreshErrors.get(hostKey)
+  return failed &&
+    failed.stream === currentOwnerAccountsStream(hostKey) &&
+    failed.state === readOwnerAccounts(hostKey)
+    ? failed.message
+    : null
 }
 
 function hasUsageWindow(provider: ServerCliProvider, usage: ProviderRateLimits): boolean {
@@ -110,7 +134,7 @@ export function useServerCliUsage(
   )
   const refreshError = useSyncExternalStore(
     subscribeRefreshes,
-    () => (hostKey ? (refreshErrors.get(hostKey) ?? null) : null),
+    () => (hostKey ? currentRefreshError(hostKey) : null),
     () => null
   )
   const refresh = useCallback(() => {
@@ -155,24 +179,26 @@ function describeServerCliStatus(
     body: null,
     signedIn: false
   }
+  // Why: a lost host outranks whatever it last said about this provider.
+  if (host.failure) {
+    return { title: describeUnverifiableOwner(label, host.failure, t), body: null, signedIn: false }
+  }
   if (!usage) {
     if (!host.answered) {
       return checking
     }
     return {
-      title: host.failure
-        ? describeUnverifiableOwner(label, host.failure, t)
-        : grok
-          ? t(
-              'auto.components.settings.ServerCliUsageStatus.notReportedGrok',
-              '{{host}} has not reported Grok usage',
-              { host: label }
-            )
-          : t(
-              'auto.components.settings.ServerCliUsageStatus.notReportedCursor',
-              '{{host}} has not reported Cursor usage',
-              { host: label }
-            ),
+      title: grok
+        ? t(
+            'auto.components.settings.ServerCliUsageStatus.notReportedGrok',
+            '{{host}} has not reported Grok usage',
+            { host: label }
+          )
+        : t(
+            'auto.components.settings.ServerCliUsageStatus.notReportedCursor',
+            '{{host}} has not reported Cursor usage',
+            { host: label }
+          ),
       body: null,
       signedIn: false
     }

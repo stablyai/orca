@@ -12,6 +12,7 @@ import type {
   CursorAccountStatus,
   ProviderRateLimits
 } from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { getProviderUsageStatusLabel } from '../../../../../../shared/agent-usage/status-copy/usage-error-copy'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
@@ -74,7 +75,10 @@ function CursorAccountsGroup({
   // Stale snapshots retain numbers; show their refresh failure beside them.
   const staleUsageError =
     usageKnown && cursorUsage?.status === 'error' && (pools.length > 0 || monthly)
-      ? (cursorUsage.error ?? null)
+      ? // Why: a server's own error text describes "this computer", meaning the server.
+        serverLabel
+        ? getProviderUsageStatusLabel(cursorUsage, t)
+        : (cursorUsage.error ?? null)
       : null
 
   return (
