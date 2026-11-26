@@ -84,6 +84,7 @@ type DesktopHandoffRequest = { userRequested?: true }
 /** Batch AppKit open-file events into one desktop launch. */
 export function createDesktopHandoff(options: {
   drainArguments: () => string[]
+  canHandOff?: () => boolean
   handOff?: (args: readonly string[], request: DesktopHandoffRequest) => void
 }): (request?: DesktopHandoffRequest) => void {
   const handOff = options.handOff ?? handOffToDesktopApp
@@ -99,6 +100,9 @@ export function createDesktopHandoff(options: {
       scheduled = false
       const request: DesktopHandoffRequest = userRequested ? { userRequested: true } : {}
       userRequested = false
+      if (options.canHandOff?.() === false) {
+        return
+      }
       handOff(options.drainArguments(), request)
     })
   }

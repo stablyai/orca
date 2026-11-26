@@ -86,6 +86,7 @@ function focusExistingWindow(request: DesktopActivationRequest = {}): void {
 }
 
 const requestDesktopHandoff = createDesktopHandoff({
+  canHandOff: () => !state.isQuitting && !isQuittingForUpdate(),
   drainArguments: () => desktopHandoffArguments(state)
 })
 
