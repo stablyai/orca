@@ -7,13 +7,13 @@ import { BOT_MEMORY_INDEX_LINE_CAP } from '../../shared/bot-memory-lines'
 import {
   TIDY_UP_HOURS,
   botTidyUp,
+  tidyUpSupported,
   type TidyNowRefusal,
   type BotTidyUpSummary,
   type TidyUpEvery,
   tidyUpChangeCount
 } from '../../shared/bots/bot-tidy-up'
 import type { BotMemoryHistoryRow } from '../../shared/bots/bot-memory-history'
-import { lookAroundSupported } from '../../shared/bots/bot-look-around'
 import type { Bot } from '../../shared/bot-types'
 import { nativeChatProseToMarkdown } from '../../shared/native-chat/transcript/row-content/native-chat-prose'
 import { fenceQuotedText } from '../../shared/quoted-text-fence'
@@ -166,7 +166,7 @@ export function tidyNowRefusal(
   if (!bot) {
     return 'not_found'
   }
-  if (!lookAroundSupported(bot.agent)) {
+  if (!tidyUpSupported(bot.agent)) {
     return 'unsupported'
   }
   if (bot.paused) {

@@ -16,6 +16,7 @@ export type AcpStructuredChild = Pick<
   | 'permissionModes'
   | 'permission'
   | 'launchArgsGrantFullAccess'
+  | 'readOnly'
   | 'connection'
   | 'closeRequested'
   | 'failureClose'

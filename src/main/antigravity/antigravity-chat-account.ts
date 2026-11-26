@@ -47,6 +47,20 @@ async function gcpProjection(
   return { gcp: { project, location } }
 }
 
+/** Settings projection that selects `auth` (and gcloud's project) inside an agy home. */
+export async function antigravityChatAuthSettingsProjection(
+  auth: AntigravityChatAuthConfig,
+  env: Readonly<Record<string, string>>
+): Promise<{
+  auth: { type: AntigravityChatAuthConfig['method'] }
+  gcp?: { project: string; location: string }
+}> {
+  return {
+    auth: { type: auth.method },
+    ...(await gcpProjection(auth, env))
+  }
+}
+
 /** Writes the chat home's `settings.json` for `auth`, which agy reads to pick the
  *  sign-in method (and gcloud's project); an unchanged file is left alone. */
 export async function writeAntigravityChatSettings(
@@ -56,10 +70,7 @@ export async function writeAntigravityChatSettings(
   assertCurrent?: () => void
 ): Promise<void> {
   const path = join(home, ANTIGRAVITY_ACP_HOME, 'settings.json')
-  const projection = JSON.stringify({
-    auth: { type: auth.method },
-    ...(await gcpProjection(auth, env))
-  })
+  const projection = JSON.stringify(await antigravityChatAuthSettingsProjection(auth, env))
   // Unchanged settings cost no durable write, so a listing or a start mostly writes nothing.
   if ((await readFile(path, 'utf8').catch(() => null)) === projection) {
     return
