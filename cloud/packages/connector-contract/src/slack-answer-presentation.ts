@@ -1,6 +1,8 @@
 import * as z from 'zod'
 
 export const CONNECTOR_SLACK_PRESENTATION_FEATURE = 'slack.answerPresentation'
+export const SLACK_PRESENTATION_POST_VERSION = 2
+export const SLACK_PRESENTATION_EVENT_VERSION = 3
 export const SLACK_ANSWER_MAX_BYTES = 12 * 1024
 export const SLACK_ANSWER_MAX_TEXT = 3_000
 // Older connector revisions cap ordinary answer prose at 8 KiB.
