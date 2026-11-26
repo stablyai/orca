@@ -4,8 +4,9 @@ type CodeInputProps = PluginDeclarativeProps<'CodeInput'>
 export type PluginCodeInputCompletion = NonNullable<CodeInputProps['completions']>[number]
 export type PluginCodeInputDiagnostic = NonNullable<CodeInputProps['diagnostics']>[number]
 
-// `$` and `.` belong to the word so operators (`$gt`) and dotted paths (`a.b`) complete whole.
-const WORD_CHAR = /[\p{L}\p{N}_$.]/u
+// `$` and `.` belong to the word so operators (`$gt`) and dotted paths (`a.b`) complete whole;
+// combining marks (`\p{M}`) keep a decomposed letter such as `e\u0301` in its word.
+const WORD_CHAR = /[\p{L}\p{M}\p{N}_$.]/u
 const MAX_SHOWN = 50
 
 export function isCompletionWordChar(character: string): boolean {

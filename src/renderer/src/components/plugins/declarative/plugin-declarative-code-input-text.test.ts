@@ -22,6 +22,11 @@ describe('completionWordAt', () => {
     // A lone surrogate is no letter, so the word stops after it.
     expect(completionWordAt('\udc00na', 3)).toEqual({ from: 1, word: 'na' })
   })
+
+  it('keeps combining marks in the word', () => {
+    expect(completionWordAt('cafe\u0301na', 7)).toEqual({ from: 0, word: 'cafe\u0301na' })
+    expect(completionWordAt('{ a.e\u0301$g', 8)).toEqual({ from: 2, word: 'a.e\u0301$g' })
+  })
 })
 
 describe('normalizeLineBreaks', () => {
