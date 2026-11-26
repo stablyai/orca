@@ -20,7 +20,6 @@ import { acpClientInfo } from '../launch/acp-client-info'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import type { AcpStructuredSessionAdapterDeps } from '../session/acp-structured-session-adapter-deps'
 import { checkAcpLaunchVersion } from '../launch/acp-launch-version'
-import { keptRunningProviderRelayPid } from '../../provider-relay/app-provider-relays'
 import { AgentCliInstallationError } from '../../native-chat/agent-launch/agent-cli-installation-error'
 import type { AcpStructuredLaunch } from '../launch/acp-structured-launch-resolution'
 
@@ -61,8 +60,6 @@ export async function copyAcpConversation(
         await waitForPromiseWithSignal(Promise.resolve(deps.resolveLaunchArgs?.() ?? []), signal)
       )
       signal.throwIfAborted()
-      // The read skips the version check while the source chat's agent is kept; the copy's doesn't.
-      const sourceKept = keptRunningProviderRelayPid(input.identity.sessionId) !== null
       const reading = deps.readLaunch(input.identity)
       // An abort leaves the read running; whatever it then writes is released when it lands.
       reading.then(
@@ -78,9 +75,9 @@ export async function copyAcpConversation(
       release = launch.release
       signal.throwIfAborted()
       deps.spec.assertCopyLaunchArgs?.([], launch.prefixArgs)
-      if (sourceKept || keptRunningProviderRelayPid(input.identity.sessionId) !== null) {
-        await assertCopyCliVersion(deps.spec, launch, signal)
-      }
+      // The read skips the version check while the source chat's agent is kept, which can change
+      // under it; the copy runs its own agent, so it always checks.
+      await assertCopyCliVersion(deps.spec, launch, signal)
       signal.throwIfAborted()
       await assertCopyAccountSelected(deps, input.accountHome, launch.env, signal)
       signal.throwIfAborted()
