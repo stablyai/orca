@@ -39,6 +39,42 @@ export async function readRepoWorktreeAdminFingerprint(repoPath: string): Promis
   }
 }
 
+/** The admin fingerprint plus a stamp that moves on every worktree add or remove, which the fingerprint alone misses when the two happen between probes. */
+export async function readRepoWorktreeReconcileProbe(repoPath: string): Promise<string | null> {
+  const [fingerprint, changeStamp] = await Promise.all([
+    readRepoWorktreeAdminFingerprint(repoPath),
+    readRepoWorktreeAdminChangeStamp(repoPath)
+  ])
+  return fingerprint === null || changeStamp === null
+    ? null
+    : [fingerprint, changeStamp].join(FIELD_SEPARATOR)
+}
+
+export function isWorktreeReconcileProbeWithoutAdminDir(probe: string): boolean {
+  return probe.endsWith(`${FIELD_SEPARATOR}${MISSING}`)
+}
+
+async function readRepoWorktreeAdminChangeStamp(repoPath: string): Promise<string | null> {
+  try {
+    const commonDir = await resolveGitCommonDirectory(repoPath)
+    if (!commonDir) {
+      return null
+    }
+    try {
+      const stats = await stat(path.join(commonDir, 'worktrees'))
+      return `${stats.mtimeMs}:${stats.ctimeMs}:${stats.ino}`
+    } catch (err) {
+      // No admin dir: nothing git read/write activity leaves untouched can stand in.
+      if (isMissingEntryError(err)) {
+        return MISSING
+      }
+      throw err
+    }
+  } catch {
+    return null
+  }
+}
+
 async function readLinkedWorktreeStamp(
   commonDir: string,
   adminDir: string,

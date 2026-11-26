@@ -62,6 +62,7 @@
 1 src/main/runtime/terminal/input/agent-prompt-permission-hold.ts
 1 src/main/runtime/terminal/output/terminal-derived-agent-facts.ts
 1 src/main/runtime/terminal/wait/terminal-idle-polls.ts
+1 src/main/runtime/workspaces/catalog/remote-client-worktree-reconcile.ts
 1 src/main/ssh/legacy-relay/bridge/legacy-relay-daily-activity.ts
 1 src/main/ssh/legacy-relay/cli/legacy-relay-cli-call-limits.ts
 1 src/main/ssh/port-forwarding/ssh-tcp-forwarding-probe.ts

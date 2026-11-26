@@ -10,13 +10,20 @@ import {
   WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS
 } from './worktree-scan-admin-budget'
 import { getLocalProjectWorktreeGitOptionsForRuntime } from '../../../workspaces/execution-host/project-runtime-git-options'
-import { readRepoWorktreeAdminFingerprint } from './repo-worktree-admin-fingerprint'
+import {
+  isWorktreeReconcileProbeWithoutAdminDir,
+  readRepoWorktreeAdminFingerprint,
+  readRepoWorktreeReconcileProbe
+} from './repo-worktree-admin-fingerprint'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 import { scanLocalRepoWorktreesForResolution } from './repo-worktree-resolution-scan'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import { listStoredWorktreeRowsForRepo } from './repo-worktree-row-resolution'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
-import { getRepoSshConnectionId } from '../../../../shared/execution-host/execution-host'
+import {
+  getRepoRoutingConnectionId,
+  getRepoSshConnectionId
+} from '../../../../shared/execution-host/execution-host'
 import {
   blockedWslDistroForPath,
   wslDistroForPath
@@ -32,6 +39,8 @@ import {
   worktreeCatalogHygienePlan
 } from '../../../ipc/worktrees/listing/worktree-catalog-observation-hygiene'
 import type { Store } from '../../../persistence/loading-store/store'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
+import { RemoteClientWorktreeReconcile } from './remote-client-worktree-reconcile'
 import { SUPERSEDED_SCAN_RESCANS } from '../../../ipc/worktrees/listing/overtaken-scan-rerun'
 
 const lastFingerprintUnknownWarnAt = new Map<string, number>()
@@ -54,6 +63,38 @@ function warnFingerprintUnknownOnce(repoId: string, reason: string): void {
 }
 
 export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCatalog {
+  private readonly remoteClientWorktreeReconcile = new RemoteClientWorktreeReconcile({
+    listProbeableRepos: () =>
+      (this.store?.getRepos() ?? []).filter((repo) => this.isLocalProbeableRepo(repo)),
+    probe: (repo) => readRepoWorktreeReconcileProbe(repo.path),
+    isEmptyAdminDir: isWorktreeReconcileProbeWithoutAdminDir,
+    notifyChanged: (repoId) => this.notifyWorktreeCatalogChangedForRemoteClients(repoId)
+  })
+
+  // A repo whose runtime cannot resolve (repair required) is skipped, not allowed to stop the others.
+  private isLocalProbeableRepo(repo: Repo): boolean {
+    try {
+      return (
+        !isFolderRepo(repo) &&
+        !getRepoRoutingConnectionId(repo) &&
+        !wslDistroForPath(
+          repo.path,
+          getLocalProjectWorktreeGitOptionsForRuntime(
+            repo,
+            resolveWorktreeScanRuntime(this.requireStore(), repo).projectRuntime
+          ).wslDistro
+        )
+      )
+    } catch {
+      return false
+    }
+  }
+
+  /** Hold while a paired client is subscribed; release on disconnect. */
+  retainRemoteClientWorktreeReconcile(): () => void {
+    return this.remoteClientWorktreeReconcile.retain()
+  }
+
   /** Runtime readers accept the owner's observation for the scan TTL, then its admin-fingerprint verifier. */
   protected async readRepoWorktreeCatalog(
     repo: Repo,
@@ -132,6 +173,9 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
       return { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
     }
     const result = runtimeResultForObservation(observation)
+    if (result.worktrees.some((worktree) => !worktree.isMainWorktree)) {
+      this.remoteClientWorktreeReconcile.noteLinkedWorktreesObserved(repo.id)
+    }
     // Mutations kept overtaking scans: publish the rows as non-authoritative, never as current truth.
     return superseded && result.ok ? { ok: false, worktrees: result.worktrees } : result
   }
