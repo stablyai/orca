@@ -195,8 +195,14 @@ function asking(
   {
     text = '',
     total = 13,
-    locale
-  }: { text?: string; total?: number; locale?: 'en' | 'tr' | 'zh' } = {}
+    locale,
+    question = ASK
+  }: {
+    text?: string
+    total?: number
+    locale?: 'en' | 'tr' | 'zh'
+    question?: BotItemWaitingQuestion
+  } = {}
 ): ComponentFixture {
   return defineFixture({
     width: width + 32,
@@ -206,7 +212,7 @@ function asking(
         { text, images: [] },
         'immediate'
       ),
-    render: () => <Row width={width} total={total} attach question={ASK} />,
+    render: () => <Row width={width} total={total} attach question={question} />,
     interact: async () => switchLocale(locale ?? 'en')
   })
 }
@@ -228,3 +234,17 @@ export const askTr520 = asking(520, { locale: 'tr', total: 105 })
 export const askZh440 = asking(440, { locale: 'zh' })
 export const askZh480 = asking(480, { locale: 'zh' })
 export const askZh520 = asking(520, { locale: 'zh', total: 105 })
+
+/** A question without quick replies, from a bot with a long name: "Reply to <name>…". */
+const OPEN_ASK: BotItemWaitingQuestion = {
+  ...ASK,
+  replies: false,
+  asker: 'Design Review Assistant'
+}
+export const openAskEn520 = asking(520, { question: OPEN_ASK, total: 1204 })
+export const openAskEn560 = asking(560, { question: OPEN_ASK, total: 1204 })
+export const openAskTr520 = asking(520, { question: OPEN_ASK, locale: 'tr' })
+export const openAskTr560 = asking(560, { question: OPEN_ASK, locale: 'tr', total: 105 })
+export const openAskZh520 = asking(520, { question: OPEN_ASK, locale: 'zh' })
+export const openAskZh560 = asking(560, { question: OPEN_ASK, locale: 'zh', total: 1204 })
+export const openAskEn760 = asking(760, { question: OPEN_ASK, total: 1204 })

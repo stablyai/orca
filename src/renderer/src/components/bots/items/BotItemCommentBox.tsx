@@ -207,8 +207,9 @@ function BotItemCommentField({
     shown.current = draft
   }, [draft, ime])
 
-  const reply = useBotItemReplyMark(box, question ?? null, scopeKey, onShowQuestion)
-  const { field, stacked, height } = useBotItemCommentStacked(draft)
+  const field = useRef<HTMLDivElement | null>(null)
+  const reply = useBotItemReplyMark(box, field, question ?? null, scopeKey, onShowQuestion)
+  const layout = useBotItemCommentStacked(draft, field, reply.crowded)
   const caretToEnd = useBotItemCommentBoxHandle(ref, {
     scopeKey,
     input: () => input.current,
@@ -347,9 +348,8 @@ function BotItemCommentField({
         <NativeChatComposerNotices notices={mentions.notices} className="mb-1.5" />
         <BotItemReplyingTo mark={reply} />
         {images.length > 0 ? (
-          // Two rows of chips (fewer in a short pane), then they scroll; the padding keeps rings and × in view.
-          // Their left edge is the chip's and the text's.
-          <div className="scrollbar-sleek mb-1.5 flex max-h-[min(128px,14cqh)] flex-wrap gap-2 overflow-y-auto pb-0.5 pr-2 pt-2">
+          // Two rows (fewer in a short pane), then they scroll; on the chip's and text's edge, rings and × in view.
+          <div className="scrollbar-sleek mb-1.5 flex max-h-[min(128px,14cqh)] flex-wrap gap-2 -ml-0.5 overflow-y-auto pb-0.5 pl-0.5 pr-2 pt-2">
             {images.map((attachment, index) => (
               <NativeChatImageAttachmentPreview
                 key={attachment.id}
@@ -363,16 +363,7 @@ function BotItemCommentField({
         ) : null}
         <div className={cn('flex flex-wrap items-end gap-0.5', nav && BOT_ITEM_TOOL_ROW_TOUCH_FIT)}>
           {access.session ? <NativeChatAttachButton onAttach={fileDrops.pickAttachments} /> : null}
-          {/* Under 520px the text, and a question's placeholder, would not fit beside the controls: own row. */}
-          <div
-            ref={field}
-            className={cn(
-              'min-w-0 flex-1',
-              stacked
-                ? 'order-first basis-full'
-                : '@max-[520px]/item-pane:order-first @max-[520px]/item-pane:basis-full'
-            )}
-          >
+          <div ref={field} className={cn('min-w-0 flex-1', layout.slot)}>
             <NativeChatPromptEditor
               key={scopeKey}
               scopeKey={scopeKey}
@@ -392,23 +383,16 @@ function BotItemCommentField({
               onCompositionStart={editorCompositionStart}
               onCompositionEnd={editorCompositionEnd}
               onBlur={editorBlur}
-              // On its own row the text starts on the chip's and the buttons' left edge.
               className={cn(
                 'scrollbar-sleek block overflow-y-auto bg-transparent py-1.5 text-[13px] leading-5 text-chat-foreground-strong outline-none [&_p.is-editor-empty:only-child]:before:!h-auto [&_p.is-editor-empty:only-child]:before:mr-[-100%] [&_p.is-editor-empty:only-child]:before:w-full [&_p.is-editor-empty:only-child]:before:truncate',
-                stacked ? 'px-0' : 'px-1 @max-[520px]/item-pane:px-0',
-                height
+                layout.inset,
+                layout.height
               )}
             />
           </div>
-          {/* Beside the text the arrows keep their counter's width; on their own row they take the free space.
-              The buttons' height, so the arrows center on + and send rather than on their trimmed margins. */}
+          {/* The buttons' height, so the arrows center on + and send rather than on their trimmed margins. */}
           {nav ? (
-            <div
-              className={cn(
-                'flex h-8 min-w-0 items-center pointer-coarse:h-11',
-                stacked ? 'flex-1' : 'shrink-0 @max-[520px]/item-pane:flex-1'
-              )}
-            >
+            <div className={cn('flex h-8 min-w-0 items-center pointer-coarse:h-11', layout.arrows)}>
               {nav}
             </div>
           ) : null}
