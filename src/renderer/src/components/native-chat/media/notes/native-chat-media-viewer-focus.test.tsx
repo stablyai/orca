@@ -3,7 +3,10 @@ import { useRef, useState } from 'react'
 import { act, fireEvent, render } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { NativeChatMediaViewer } from './NativeChatMediaViewer'
-import { nominateNativeChatMediaViewerTile } from './use-native-chat-media-viewer-focus'
+import {
+  nominateNativeChatMediaViewerReplacement,
+  nominateNativeChatMediaViewerTile
+} from './use-native-chat-media-viewer-focus'
 
 const SRC =
   'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/%3E'
@@ -155,5 +158,65 @@ it('closing a chip its marked copy replaced returns focus to the new chip, not t
   await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull())
   await vi.waitFor(() =>
     expect(document.activeElement).toBe(view.container.querySelector('[data-chip="1"]'))
+  )
+})
+
+/** Three numbered chips; the first one's viewer, on close, replaces it with its marked copy, which
+ *  joins at the end, so another image now has number 1. */
+function NumberedChips(): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  const [ids, setIds] = useState(['a', 'b', 'c'])
+  const row = useRef<HTMLDivElement>(null)
+  return (
+    <div ref={row}>
+      {ids.map((id, at) => (
+        <button
+          key={id}
+          type="button"
+          data-native-chat-attachment-id={id}
+          aria-label={`Image ${at + 1}: View image ${id}`}
+          onClick={() => setOpen(true)}
+        >
+          {id}
+        </button>
+      ))}
+      <NativeChatMediaViewer
+        open={open}
+        onOpenChange={(next) => {
+          if (!next) {
+            // As the hand-off does once the marked copy took the chip's place.
+            nominateNativeChatMediaViewerReplacement('marked')
+            setIds((current) => [...current.filter((id) => id !== 'a'), 'marked'])
+          }
+          setOpen(next)
+        }}
+        src={SRC}
+        title="a.png"
+        source={{ path: '/a.png' }}
+        opener={row}
+        annotatable={false}
+      />
+    </div>
+  )
+}
+
+it('closing a numbered chip its marked copy replaced returns focus to that copy, not the chip now numbered 1', async () => {
+  const view = render(<NumberedChips />)
+  const first = view.container.querySelector<HTMLButtonElement>(
+    '[data-native-chat-attachment-id="a"]'
+  )!
+  first.focus()
+  act(() => {
+    first.click()
+  })
+  await openWithFocus()
+  act(() => {
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
+  })
+  await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull())
+  await vi.waitFor(() =>
+    expect(document.activeElement).toBe(
+      view.container.querySelector('[data-native-chat-attachment-id="marked"]')
+    )
   )
 })

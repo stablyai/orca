@@ -62,6 +62,15 @@ if (typeof document !== 'undefined') {
 // image over, so neither focus nor the last pressed control (in the closed set) is its tile.
 let nominated: Element | null = null
 
+// The draft image that took the opener's place (the marked copy that replaced a reopened chip):
+// focus goes to it by its attachment id, whatever number or label it now shows.
+let replacement: string | null = null
+
+/** The marked copy that replaced this viewer's chip: closing returns focus to it. */
+export function nominateNativeChatMediaViewerReplacement(attachmentId: string | undefined): void {
+  replacement = attachmentId ?? null
+}
+
 /** The control the next viewer to open returns focus to on close. */
 export function nominateNativeChatMediaViewerOpener(opener: Element | null | undefined): void {
   nominated = opener ?? null
@@ -100,12 +109,16 @@ function closeBody(session: NativeChatMediaViewerFocusSession, event: Event): vo
   const around = session.around
   session.opener = null
   session.around = []
+  const replacedBy = replacement
+    ? document.querySelector<HTMLElement>(
+        `[data-native-chat-attachment-id="${CSS.escape(replacement)}"]`
+      )
+    : null
+  replacement = null
   const target =
     previous instanceof HTMLElement && previous.isConnected
       ? previous
-      : previous
-        ? replacementFor(previous, around)
-        : null
+      : (replacedBy ?? (previous ? replacementFor(previous, around) : null))
   if (target) {
     event.preventDefault()
     target.focus({ preventScroll: true })

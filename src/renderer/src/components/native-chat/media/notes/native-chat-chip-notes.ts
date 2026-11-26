@@ -95,6 +95,14 @@ export function markNativeChatNotedImageEditing(scopeKey: string, id: string): (
   }
 }
 
+/** Whether any viewer, here or in another window, has this marked image open for editing. */
+export function nativeChatNotedImageBeingEdited(scopeKey: string, id: string): boolean {
+  return (
+    (editingImages.get(scopeKey)?.get(id) ?? 0) > 0 ||
+    nativeChatNotesEditClaimedElsewhere(scopeKey, id)
+  )
+}
+
 /** Whether another viewer, here or in another window, also has this marked image open: replacing it
  *  from one viewer would take it from under the other. */
 export function nativeChatNotedImageEditedByOthers(scopeKey: string, id: string): boolean {

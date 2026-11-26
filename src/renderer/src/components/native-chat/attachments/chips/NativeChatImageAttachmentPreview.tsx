@@ -8,6 +8,7 @@ import { NativeChatMediaViewer } from '../../media/notes/NativeChatMediaViewer'
 import { useNativeChatAttachmentNotes } from '../../media/notes/native-chat-attachment-notes'
 import {
   markNativeChatNotedImageEditing,
+  nativeChatNotedImageBeingEdited,
   replaceNativeChatNotedImage,
   restoreNativeChatCleanImage,
   takeNativeChatNotedImage,
@@ -274,6 +275,16 @@ function NativeChatImageThumbnail({
       onRemove?.(attachment.id)
       return
     }
+    // Removing it would close another viewer's edit of it (here or in another window) under it.
+    if (nativeChatNotedImageBeingEdited(notesScopeKey, attachment.id)) {
+      showNativeChatNotesNotice(notesScopeKey, {
+        text: t(
+          'components.native-chat.notes.removeWhileEditing',
+          'This image is open for editing in another window. Finish there first.'
+        )
+      })
+      return
+    }
     // Its words stay saved until the draft without it is, so a restart never finds it without them.
     const putBack = takeNativeChatNotedImage(notesScopeKey, attachment.id, true)
     showNativeChatNotesNotice(notesScopeKey, {
@@ -300,6 +311,7 @@ function NativeChatImageThumbnail({
           aria-busy={isPending}
           title={label}
           data-native-chat-copy-image-src={copySrc}
+          data-native-chat-attachment-id={attachment.id}
           onClick={() => setIsOpen(true)}
           className="flex size-full items-center justify-center overflow-hidden rounded-md border border-border bg-chat-canvas transition-colors hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >

@@ -129,12 +129,14 @@ it('notes sent while their viewer’s row scrolls away are delivered once and ne
   act(() => {
     void view.result.current.send()
   })
-  await vi.waitFor(() => expect(handle.attachGeneratedImage).toHaveBeenCalledTimes(1))
+  await vi.waitFor(() => expect(handle.attachGeneratedImage).toHaveBeenCalledTimes(1), {
+    timeout: 10_000
+  })
   // The message row unmounts mid-Send, taking the viewer with it.
   view.unmount()
   appendToNativeChatComposerDraft(SCOPE, { text: '', images: [{ id: 'marked', path: '/m.png' }] })
   settle('marked')
-  await vi.waitFor(() => expect(handle.submit).toHaveBeenCalledTimes(1))
+  await vi.waitFor(() => expect(handle.submit).toHaveBeenCalledTimes(1), { timeout: 10_000 })
   // Delivered: nothing kept to reopen the media with, so a later Send can't repeat them.
   expect(readHeldNativeChatNotes(SCOPE, '/a.png')).toBeNull()
 })

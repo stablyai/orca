@@ -22882,7 +22882,8 @@
         "sendWhileEditing": "Feche a imagem cujas notas você está editando e depois envie.",
         "undoUnsaved": "Não foi possível desfazer: as notas anteriores não puderam ser salvas. Estas continuam na sua mensagem.",
         "alreadyAdded": "Estas notas já foram adicionadas à sua mensagem a partir de outra janela.",
-        "editedElsewhere": "Esta imagem está sendo editada em outra janela. Termine lá primeiro; suas notas continuam aqui."
+        "editedElsewhere": "Esta imagem está sendo editada em outra janela. Termine lá primeiro; suas notas continuam aqui.",
+        "removeWhileEditing": "Esta imagem está sendo editada em outra janela. Termine lá primeiro."
       }
     },
     "tab": {

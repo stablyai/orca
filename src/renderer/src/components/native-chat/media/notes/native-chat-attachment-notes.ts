@@ -12,7 +12,10 @@ import { dismissNativeChatNotesNotice } from './native-chat-notes-notice'
 import { releaseHeldNativeChatNotesHandedTo } from './native-chat-held-notes'
 import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
 import { currentDraftScope } from '../../drafts/native-chat-launch-draft-source'
-import { load as draftLoad } from '../../drafts/native-chat-composer-draft-memory'
+import {
+  isNativeChatEditDraft,
+  load as draftLoad
+} from '../../drafts/native-chat-composer-draft-memory'
 import {
   captureNativeChatNotesEntries,
   createNativeChatNotesStorage,
@@ -79,10 +82,18 @@ export function retryNativeChatAttachmentNotesAdoption(): void {
   if (!nativeChatComposerDraftsHydrated()) {
     return
   }
+  const scopeOf = (key: string): string => key.slice(0, key.indexOf('\u0000'))
+  const idOf = (key: string): string => key.slice(key.indexOf('\u0000') + 1)
   for (const [own, left] of adoptions) {
     const entry = storage.get(left)
-    if (!entry) {
+    // Removed from its draft meanwhile: nothing to adopt for it any more.
+    const held = readNativeChatComposerDraft(scopeOf(own)).images.some(({ id }) => id === idOf(own))
+    if (!entry || !held) {
       adoptions.delete(own)
+      // An earlier, refused attempt would otherwise land with the next save.
+      if (!held && storage.get(own)) {
+        storage.update((entries) => entries.delete(own))
+      }
       continue
     }
     // Copied already but refused: only a save that lands counts.
@@ -93,18 +104,24 @@ export function retryNativeChatAttachmentNotesAdoption(): void {
       continue
     }
     adoptions.delete(own)
-    const scopeOf = (key: string): string => key.slice(0, key.indexOf('\u0000'))
-    onAdopted(scopeOf(left), scopeOf(own), own.slice(own.indexOf('\u0000') + 1))
+    onAdopted(scopeOf(left), scopeOf(own), idOf(own))
   }
 }
 
-function leftElsewhere(own: string, attachmentId: string): NativeChatAttachmentNotes | null {
+function leftElsewhere(
+  scopeKey: string,
+  own: string,
+  attachmentId: string
+): NativeChatAttachmentNotes | null {
   const suffix = `\u0000${attachmentId}`
-  const left = storage.keys().find((key) => key !== own && key.endsWith(suffix))
+  // The most recently written copy, should several scopes hold one.
+  const left = storage.keys().findLast((key) => key !== own && key.endsWith(suffix))
   if (!left) {
     return null
   }
-  if (!adoptions.has(own)) {
+  // A queued edit copies a message's images without moving its draft: it reads their notes, but
+  // never takes them over.
+  if (!adoptions.has(own) && !isNativeChatEditDraft(scopeKey)) {
     adoptions.set(own, left)
     if (!adoptionQueued) {
       adoptionQueued = true
@@ -141,7 +158,7 @@ export function readNativeChatAttachmentNotes(
   }
   // Only for an image this chat's draft holds: another chat never reads notes that aren't its own.
   return readNativeChatComposerDraft(scopeKey).images.some(({ id }) => id === attachmentId)
-    ? leftElsewhere(own, attachmentId)
+    ? leftElsewhere(scopeKey, own, attachmentId)
     : null
 }
 

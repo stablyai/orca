@@ -2,6 +2,7 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
 import { showNativeChatNotesNotice } from './native-chat-notes-notice'
 import { useNativeChatNotesKeptOnUnmount } from './use-native-chat-notes-kept-on-unmount'
+import { nominateNativeChatMediaViewerReplacement } from './use-native-chat-media-viewer-focus'
 import {
   nativeChatNotesBlockedReason,
   nativeChatNotesKeptText,
@@ -183,6 +184,8 @@ export function useNativeChatNotesDelivery({
           frame: async () => ({ image: loaded.image, ...loaded.size })
         })
         const restore = settleNativeChatNotesReplacement(composer.scopeKey, ids, onAttached?.(ids))
+        // Closing returns focus to the marked copy that took the reopened chip's place.
+        nominateNativeChatMediaViewerReplacement(replacesAttachmentId ? ids[0] : undefined)
         // One marked copy per hold; the hold ends once the draft holding it is saved, not before.
         // Claimed once: refused here, a deliberate retry hands these words off as new notes.
         const claim = heldIn.current

@@ -2,7 +2,15 @@
 import { createElement } from 'react'
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
-import { useNativeChatNotesOriginal } from './native-chat-chip-notes'
+import {
+  markNativeChatNotedImageEditing,
+  useNativeChatNotesOriginal
+} from './native-chat-chip-notes'
+import {
+  appendToNativeChatComposerDraft,
+  readNativeChatComposerDraft
+} from '../../drafts/native-chat-composer-draft-store'
+import { readNativeChatAttachmentNotes } from './native-chat-attachment-notes'
 import { useNativeChatGeneratedImageAttach } from '../../paste/use-native-chat-generated-image-attach'
 import { NativeChatImageAttachmentPreview } from '../../attachments/chips/NativeChatImageAttachmentPreview'
 import { setNativeChatAttachmentNotes } from './native-chat-attachment-notes'
@@ -85,4 +93,31 @@ it('a marked chip opens its viewer only once the clean original is read or known
   expect(screen.queryByRole('dialog')).toBeNull()
   await act(async () => settle(null))
   expect(screen.getByRole('dialog')).toBeTruthy()
+})
+
+it('a marked chip another viewer is editing can’t be removed from under it', () => {
+  const scope = 'agent-session:chip-remove'
+  appendToNativeChatComposerDraft(scope, {
+    text: '',
+    images: [{ id: 'chip-1', path: '/tmp/marked.png' }]
+  })
+  setNativeChatAttachmentNotes(scope, 'chip-1', {
+    ...NOTES,
+    notes: [{ id: 'n1', number: 1, text: 'keep me', mark: { kind: 'pin', x: 0.5, y: 0.5 } }]
+  })
+  // Another viewer (here, as another window's would be) has the chip open.
+  const end = markNativeChatNotedImageEditing(scope, 'chip-1')
+  const onRemove = vi.fn()
+  render(
+    createElement(NativeChatImageAttachmentPreview, {
+      attachment: { id: 'chip-1', path: '/tmp/marked.png' },
+      notesScopeKey: scope,
+      onRemove
+    })
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Remove attachment' }))
+  expect(onRemove).not.toHaveBeenCalled()
+  expect(readNativeChatComposerDraft(scope).images.map(({ id }) => id)).toEqual(['chip-1'])
+  expect(readNativeChatAttachmentNotes(scope, 'chip-1')?.notes[0]?.text).toBe('keep me')
+  end()
 })
