@@ -21,7 +21,11 @@ const CUT: NativeChatUsageLimitCut & { fence: number } = {
   fence: 3
 }
 
-function attributed(current: LegacyAgentSessionAccountHome, reading: ProviderRateLimits | null) {
+function attributed(
+  current: LegacyAgentSessionAccountHome,
+  reading: ProviderRateLimits | null,
+  cut: NativeChatUsageLimitCut & { fence: number } = CUT
+) {
   const holds = new UsageLimitAccountHolds()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attribution reads only these fields
   const host = {
@@ -41,7 +45,7 @@ function attributed(current: LegacyAgentSessionAccountHome, reading: ProviderRat
       })
     }
   } as unknown as Parameters<UsageLimitAccountHolds['attribute']>[1]
-  return holds.attribute('chat', host, CUT, SWITCHED).then(() => holds)
+  return holds.attribute('chat', host, cut, SWITCHED).then(() => holds)
 }
 
 const reading = (session: { usedPercent: number; resetsAt: number }): ProviderRateLimits => ({
@@ -59,6 +63,26 @@ it('continues an unknown-reset cut once the chat moved to an account with room',
   expect(cut.resetsAt).toBe(SWITCHED)
   expect(holds.schedulable('chat', cut, SWITCHED + 20_000)).toBe(true)
   expect(holds.ready('chat', { ...cut, resetsAt: SWITCHED }, SWITCHED + 20_000)).toBe(true)
+})
+
+// A cut on the account it hit, with the reset its error named an hour on.
+const LIMITED = { ...CUT, resetsAt: ENDED + 3_600_000, window: 'session' as const }
+
+it('continues a same-account cut early only once the window that stopped it started over', async () => {
+  const at = SWITCHED + 25_000
+  const lagging = await attributed(
+    HIT,
+    reading({ usedPercent: 98, resetsAt: LIMITED.resetsAt }),
+    LIMITED
+  )
+  expect(lagging.ready('chat', LIMITED, at)).toBe(false)
+  const modelLimited = { ...LIMITED, window: 'weeklyModel' as const }
+  const fresh = reading({ usedPercent: 4, resetsAt: SWITCHED + 5 * 3_600_000 })
+  const model = await attributed(HIT, fresh, modelLimited)
+  expect(model.ready('chat', modelLimited, at)).toBe(false)
+  const renewed = await attributed(HIT, fresh, LIMITED)
+  expect(renewed.verdict('chat', LIMITED, at).resetsAt).toBe(SWITCHED + 5_000)
+  expect(renewed.ready('chat', LIMITED, at)).toBe(true)
 })
 
 it('holds it while the account it moved to is spent too', async () => {
