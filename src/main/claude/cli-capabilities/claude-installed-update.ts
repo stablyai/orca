@@ -70,6 +70,10 @@ async function checkClaudeInstalledUpdate(
     return
   }
   const installed = await session.cliVersion().catch(() => null)
+  // A failed or backed-off read says nothing about the install, so the last report stands.
+  if (!parseClaudeCliVersion(installed)) {
+    return
+  }
   const update = claudeInstalledUpdate(session.runningVersion, installed)
   if (!current() || session.installedUpdate?.installedVersion === update?.installedVersion) {
     return

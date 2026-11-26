@@ -149,6 +149,7 @@ export function createClaudeSessionPublication(input: {
         )
       ),
       fastModeAtStart: false,
+      runningVersion: input.initialization.proof.version(),
       translator: input.translator,
       delivery: input.delivery,
       events: input.request.events,
