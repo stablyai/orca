@@ -1,5 +1,5 @@
-import { translate } from '@/i18n/i18n'
-import { formatResetDuration } from '../../../../../shared/agent-usage/rate-limits/rate-limit-reset-format'
+import { getIntlLocale, translate } from '@/i18n/i18n'
+import { formatLocalizedResetDuration } from './usage-reset-caption'
 import { formatWindowLabel as formatSharedWindowLabel } from '../../../../../shared/agent-usage/rate-limits/rate-limit-window-label'
 
 const WEEK_MINUTES = 60 * 24 * 7
@@ -22,7 +22,11 @@ export function formatRateLimitWindowChipLabel(
   now: number = Date.now()
 ): string {
   if (window.resetsAt != null) {
-    return formatResetDuration(window.resetsAt - now)
+    // Why: same units as the usage menu's reset column, so "19h 3m" never sits beside "19시간 3분".
+    return (
+      formatLocalizedResetDuration(window.resetsAt, now, getIntlLocale()) ??
+      translate('auto.components.status.bar.InlineUsageBars.now', 'now')
+    )
   }
   return formatWindowLabel(window.windowMinutes)
 }
