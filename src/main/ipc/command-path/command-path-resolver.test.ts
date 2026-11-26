@@ -154,6 +154,26 @@ describe('win32 PATH lookup', () => {
     }
   })
 
+  it('stats cmd launch folders separately when their paths differ only by case', async () => {
+    const held = Promise.withResolvers<Awaited<ReturnType<typeof stat>>>()
+    const statFile = vi.mocked(stat)
+    statFile.mockClear()
+    statFile.mockImplementation(() => held.promise)
+    const signal = new AbortController().signal
+    try {
+      const lower = resolveCmdLaunchFolderProgram('claude', 'C:/case/repo', '.EXE', signal)
+      const upper = resolveCmdLaunchFolderProgram('claude', 'C:/case/Repo', '.EXE', signal)
+      held.reject(new Error('Missing executable'))
+      await Promise.all([lower, upper])
+      expect(statFile.mock.calls).toEqual([
+        [path.join('C:/case/repo', 'claude.EXE')],
+        [path.join('C:/case/Repo', 'claude.EXE')]
+      ])
+    } finally {
+      statFile.mockReset()
+    }
+  })
+
   it('finds a cmd shim created after an expired caller missed it', async () => {
     const cmd = path.join(quotedBin, 'claude.CMD')
     const bat = path.join(quotedBin, 'claude.BAT')

@@ -1,4 +1,3 @@
-import { win32 } from 'node:path'
 import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
@@ -21,14 +20,13 @@ export async function resolveCmdLaunchFolderProgram(
     env: { PATH: '', PATHEXT: pathExt },
     signal,
     probeCandidate: (candidate) => {
-      const key = win32.resolve(candidate).toLowerCase()
-      let pending = pendingCmdFolderStats.get(key)
+      let pending = pendingCmdFolderStats.get(candidate)
       if (!pending) {
         // A stat can outlive its last caller, but a later launch must recheck once it settles.
         pending = isExecutableFile(candidate, true).finally(() => {
-          pendingCmdFolderStats.delete(key)
+          pendingCmdFolderStats.delete(candidate)
         })
-        pendingCmdFolderStats.set(key, pending)
+        pendingCmdFolderStats.set(candidate, pending)
       }
       return waitForPromiseWithSignal(pending, signal)
     }
