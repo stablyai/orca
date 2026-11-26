@@ -46,6 +46,7 @@ import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
 } from './hosted-review-git-options'
+import { regionalDateTimeFormat, TIME_NUMERIC } from '../../shared/i18n/regional-date-time-format'
 
 export type ForgeProviderId = Exclude<HostedReviewProvider, 'unsupported'>
 
@@ -148,9 +149,7 @@ async function assertGitHubReviewRateLimitBudget(
   )
   if (block) {
     throw new Error(
-      `GitHub PR lookup failed (rate_limited): GitHub rate limit is low. Try again after ${new Date(
-        block.resetAt * 1000
-      ).toLocaleTimeString()}.`
+      `GitHub PR lookup failed (rate_limited): GitHub rate limit is low. Try again after ${regionalDateTimeFormat(TIME_NUMERIC).format(block.resetAt * 1000)}.`
     )
   }
 }

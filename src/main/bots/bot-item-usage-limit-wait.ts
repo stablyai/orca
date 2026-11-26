@@ -13,10 +13,6 @@ import {
   getStructuredAgentSessionHost,
   onStructuredAgentSessionHostChanged
 } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import {
-  regionalDateTimeFormat,
-  SHORT_MONTH_DAY_TIME
-} from '../../shared/i18n/regional-date-time-format'
 
 /** A session's stop: its agent, when it ends (Orca's continue, else the reset) and whether Orca
  *  continues it. */
@@ -35,7 +31,12 @@ export function botItemUsageLimitWaitText(
   }
   const soonest = stops.reduce((a, b) => (b!.at < a!.at ? b : a))!
   const agent = tuiAgentDisplayName(soonest.agent) ?? soonest.agent
-  const when = regionalDateTimeFormat(SHORT_MONTH_DAY_TIME, locale).format(new Date(soonest.at))
+  const when = new Intl.DateTimeFormat(locale, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  }).format(new Date(soonest.at))
   return soonest.auto ? `${agent} continues ${when}` : `${agent} usage resets ${when}`
 }
 

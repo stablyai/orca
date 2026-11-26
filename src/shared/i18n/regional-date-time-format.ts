@@ -65,18 +65,25 @@ function maximizedScript(tag: string): string | undefined {
   }
 }
 
-/** The UI locale with the OS region: `en` + NL → `en-NL`; keeps the UI's script (`zh` + TW → `zh-Hans-TW`). */
+/** The UI locale with the OS region: `en` + NL → `en-NL`; keeps the UI's script (`zh` + TW →
+ *  `zh-Hans-TW`), variants and extensions (`en-u-ca-buddhist` + US → `en-US-u-ca-buddhist`). */
 export function withOsRegion(uiLocale: string, region: string | null): string {
   if (!region || !REGION.test(region)) {
     return uiLocale
   }
-  const [language = '', first] = uiLocale.split('-')
-  let script = first && SCRIPT.test(first) ? first : undefined
+  const subtags = uiLocale.split('-')
+  const singleton = subtags.findIndex((subtag, index) => index > 0 && subtag.length === 1)
+  const extensions = singleton === -1 ? [] : subtags.slice(singleton)
+  const [language = '', ...rest] = singleton === -1 ? subtags : subtags.slice(0, singleton)
+  let script = rest[0] && SCRIPT.test(rest[0]) ? rest.shift() : undefined
+  if (rest[0] && REGION.test(rest[0])) {
+    rest.shift()
+  }
   if (!script) {
     const uiScript = maximizedScript(uiLocale)
     script = uiScript !== maximizedScript(`${language}-${region}`) ? uiScript : undefined
   }
-  return [language, script, region.toUpperCase()].filter(Boolean).join('-')
+  return [language, script, region.toUpperCase(), ...rest, ...extensions].filter(Boolean).join('-')
 }
 
 let runtimeLocale: string | undefined
