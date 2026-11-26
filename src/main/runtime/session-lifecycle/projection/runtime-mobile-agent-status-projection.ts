@@ -19,6 +19,18 @@ import {
 import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 import { codexAsyncQuestionOutlivesWorkingTitle } from './codex-async-question-title-hold'
 
+// Moves ordering past title evidence without extending the row's freshness.
+function advancePastPtyStatusEvidence(
+  status: AgentStatusEntry,
+  pty: RuntimePtyWorktreeRecord,
+  titleEvidenceAt: number
+): AgentStatusEntry {
+  const updatedAt = Math.max(status.updatedAt, ptyStatusEvidenceAt(pty, titleEvidenceAt))
+  return updatedAt === status.updatedAt
+    ? status
+    : { ...status, updatedAt, evidenceObservedAt: agentStatusAuthorityObservedAt(status) }
+}
+
 export function renewRuntimeMobileAgentStatusFromPtyTitle(
   status: AgentStatusEntry | null,
   pty: RuntimePtyWorktreeRecord | null,
@@ -61,10 +73,7 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
     pty.lastAgentStatus !== 'working' &&
     pty.lastAgentStatus !== 'permission'
   ) {
-    const updatedAt = Math.max(status.updatedAt, ptyStatusEvidenceAt(pty, titleEvidenceAt ?? 0))
-    return updatedAt === status.updatedAt
-      ? status
-      : { ...status, updatedAt, evidenceObservedAt: agentStatusAuthorityObservedAt(status) }
+    return advancePastPtyStatusEvidence(status, pty, titleEvidenceAt ?? 0)
   }
   if (titleEvidenceAt === null) {
     return richStatusCanOwnTitleInterval ? status : null
@@ -95,7 +104,7 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
   if (!titleConfirmsState) {
     // A repaint of the idle interval preceding this hook is not a new turn boundary.
     if (workingHookOwnsIdleTitleInterval(status, agentStatusAuthorityObservedAt(status), pty)) {
-      return status
+      return advancePastPtyStatusEvidence(status, pty, titleEvidenceAt)
     }
     if (
       richStatusCanOwnTitleInterval &&
