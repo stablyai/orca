@@ -372,7 +372,9 @@ function RemoteServerAboutRow({
         )}
       </span>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm">{entry.name}</div>
+        <div title={entry.name} className="truncate text-sm">
+          {entry.name}
+        </div>
         <div
           title={sub}
           // Static strings: cn() would merge the size token away as a text colour.
