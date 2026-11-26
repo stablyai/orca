@@ -9,14 +9,29 @@ import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { colors, pressedStyle, radii, spacing } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import { agentDotState, agentStateLabel } from '../agent-row-display'
+import { agentDotState, agentStateLabel, type AgentDotState } from '../agent-row-display'
 import { agentTileTitle } from '../agent-tile-title'
 import { WorktreeAgentDetailsSheet } from './WorktreeAgentDetailsSheet'
 
+/** An agent nested under a tile's agent: a sub-agent or a spawned agent, at any depth. */
+export type NestedAgent = {
+  key: string
+  title: string
+  /** What the agent is doing now, when the host reports it. */
+  detail?: string
+  dotState: AgentDotState
+  /** 1 for a direct child, 2 for a grandchild, and so on. */
+  depth: number
+  /** The pane that opens it: its own, or its parent's for a sub-agent that has none. */
+  openPaneKey: string
+}
+
 export type CarouselAgent = {
   agent: RuntimeWorktreeAgentRow
-  /** Sub-agents and spawned agents nested under this one. */
+  /** Direct children, shown as the tile's +N badge. */
   childCount: number
+  /** Every nested agent, listed in the details sheet so each stays reachable. */
+  nested: readonly NestedAgent[]
 }
 
 type Props = {
@@ -29,6 +44,8 @@ type Props = {
   onWorkspaceActions?: () => void
 }
 
+const NO_NESTED: readonly NestedAgent[] = []
+
 // Expanded agent summary as a swipeable strip of square tiles: big targets, recognizable icons.
 export function WorktreeAgentCarousel({
   agents,
@@ -39,7 +56,7 @@ export function WorktreeAgentCarousel({
   onWorkspaceActions
 }: Props) {
   const [detailsPaneKey, setDetailsPaneKey] = useState<string | null>(null)
-  const detailsAgent = agents.find((item) => item.agent.paneKey === detailsPaneKey)?.agent ?? null
+  const details = agents.find((item) => item.agent.paneKey === detailsPaneKey) ?? null
   return (
     <>
       <ScrollView
@@ -63,7 +80,8 @@ export function WorktreeAgentCarousel({
         ))}
       </ScrollView>
       <WorktreeAgentDetailsSheet
-        agent={detailsAgent}
+        agent={details?.agent ?? null}
+        nested={details?.nested ?? NO_NESTED}
         now={now}
         onClose={() => setDetailsPaneKey(null)}
         onOpenAgent={isReadOnly ? undefined : onAgentPress}
@@ -99,16 +117,39 @@ const AgentTile = memo(function AgentTile({
     <Pressable
       style={({ pressed }) => [styles.tile, pressed && pressedStyle]}
       accessibilityRole="button"
-      accessibilityLabel={`${title}. ${formatAgentTypeLabel(agent.agentType)}. ${agentStateLabel(dotState)}`}
+      accessibilityLabel={[
+        title,
+        formatAgentTypeLabel(agent.agentType),
+        agentStateLabel(dotState),
+        childCount > 0
+          ? t('worktree.agentCarousel.subAgentCount', 'Sub-agents: {{count}}', {
+              count: childCount
+            })
+          : null
+      ]
+        .filter(Boolean)
+        .join('. ')}
       accessibilityHint={t(
         'worktree.agentCarousel.holdHint',
-        'Touch and hold to see the full name'
+        'Touch and hold for details and sub-agents'
       )}
-      // Why: a read-only host still lets you read names; only opening the agent is blocked.
+      // Same action screen readers reach through the long-press rows elsewhere in the app.
+      accessibilityActions={[
+        { name: 'longpress', label: t('worktree.agentCarousel.showDetails', 'Show details') }
+      ]}
+      onAccessibilityAction={(event) => {
+        if (event.nativeEvent.actionName === 'longpress') {
+          onLongPress(agent.paneKey)
+        }
+      }}
+      // Why: a read-only host cannot open the agent, so a press opens its details instead; that also
+      // gives keyboard users a route to the sheet and the workspace actions it holds.
       onPress={(event) => {
         event.stopPropagation()
-        if (!isReadOnly) {
-          onPress?.(agent.paneKey)
+        if (isReadOnly || !onPress) {
+          onLongPress(agent.paneKey)
+        } else {
+          onPress(agent.paneKey)
         }
       }}
       onLongPress={(event) => {

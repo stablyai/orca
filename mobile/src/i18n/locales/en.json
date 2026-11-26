@@ -1189,9 +1189,12 @@
       "done": "Done"
     },
     "agentCarousel": {
-      "holdHint": "Touch and hold to see the full name",
+      "holdHint": "Touch and hold for details and sub-agents",
       "openAgent": "Open agent",
-      "workspaceActions": "Workspace actions"
+      "workspaceActions": "Workspace actions",
+      "showDetails": "Show details",
+      "subAgentCount": "Sub-agents: {{count}}",
+      "subAgents": "Sub-agents"
     }
   },
   "components": {

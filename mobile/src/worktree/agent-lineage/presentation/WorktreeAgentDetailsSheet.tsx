@@ -7,7 +7,12 @@ import { withoutNativeChatVisualDirectiveLines } from '../../../../../src/shared
 import { AgentStateDot } from '../../../agents/presentation/AgentStateDot'
 import { BottomDrawer } from '../../../components/bottom-drawer/BottomDrawer'
 import { MobileAgentIcon } from '../../../components/icons/MobileAgentIcon'
-import { LIST_ROW_PADDING } from '../../../components/list/ListGroup'
+import {
+  LIST_LEADING_INSET,
+  LIST_ROW_PADDING,
+  ListGroup,
+  ListRow
+} from '../../../components/list/ListGroup'
 import {
   ActionSheetContent,
   type ActionSheetAction
@@ -18,10 +23,13 @@ import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { agentDotState, agentRowTimeAt, agentStateLabel, formatTimeAgo } from '../agent-row-display'
 import { agentTileTitle } from '../agent-tile-title'
+import type { NestedAgent } from './WorktreeAgentCarousel'
 
 type Props = {
   /** The agent whose details are shown; null keeps the sheet closed. */
   agent: RuntimeWorktreeAgentRow | null
+  /** The agent's sub-agents and spawned agents; each row opens its pane. */
+  nested: readonly NestedAgent[]
   now: number
   onClose: () => void
   onOpenAgent?: (paneKey: string) => void
@@ -31,6 +39,7 @@ type Props = {
 // Long-press details for a carousel tile: the full name a 2-line tile cannot fit, plus its actions.
 export function WorktreeAgentDetailsSheet({
   agent,
+  nested,
   now,
   onClose,
   onOpenAgent,
@@ -113,6 +122,33 @@ export function WorktreeAgentDetailsSheet({
             </View>
           ) : null}
         </View>
+        {nested.length > 0 ? (
+          <>
+            <Text style={styles.sectionLabel} accessibilityRole="header">
+              {t('worktree.agentCarousel.subAgents', 'Sub-agents')}
+            </Text>
+            <ListGroup separatorInset={LIST_LEADING_INSET} style={styles.nestedGroup}>
+              {nested.map((child) => (
+                <ListRow
+                  key={child.key}
+                  title={child.title}
+                  titlePrefix={child.depth > 1 ? '↳ ' : undefined}
+                  subtitle={child.detail}
+                  leading={<AgentStateDot state={child.dotState} />}
+                  navigates={Boolean(onOpenAgent)}
+                  onPress={
+                    onOpenAgent
+                      ? () => {
+                          onOpenAgent(child.openPaneKey)
+                          onClose()
+                        }
+                      : undefined
+                  }
+                />
+              ))}
+            </ListGroup>
+          </>
+        ) : null}
       </ActionSheetContent>
     </BottomDrawer>
   )
@@ -130,6 +166,14 @@ const styles = themedStyleSheet(() => ({
     fontWeight: '600',
     color: colors.textPrimary
   },
+  sectionLabel: {
+    paddingHorizontal: LIST_ROW_PADDING,
+    paddingBottom: spacing.xs,
+    fontSize: 13,
+    fontWeight: '500',
+    color: colors.textSecondary
+  },
+  nestedGroup: { marginBottom: spacing.md },
   replyRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',

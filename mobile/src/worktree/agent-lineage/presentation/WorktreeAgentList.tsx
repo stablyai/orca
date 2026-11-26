@@ -19,7 +19,9 @@ import type { AgentListStatus as AgentDotState } from '../../../../../src/shared
 import { WorktreeAgentChildToggle, WorktreeAgentIdleGroupRow } from './WorktreeAgentChildDisclosure'
 import { WorktreeAgentRow } from './WorktreeAgentRow'
 import { WorktreeAgentSummary } from './WorktreeAgentSummary'
-import { WorktreeAgentCarousel } from './WorktreeAgentCarousel'
+import { WorktreeAgentCarousel, type NestedAgent } from './WorktreeAgentCarousel'
+import { agentTileTitle } from '../agent-tile-title'
+import { mobileAgentChildRowText } from '../mobile-agent-child-row-text'
 import { useSharedNow } from '../../../hooks/use-now'
 import { worktreeAgentChildRows } from '../worktree-agent-child-rows'
 
@@ -109,6 +111,35 @@ export function WorktreeAgentList({
   const hidesUnread = (hidden: readonly ChildItem[]): boolean =>
     hidesUnreadAgent(hidden.flatMap((item) => (item.kind === 'agent' ? [item.node.row] : [])))
 
+  // Everything under a summary root, depth-first, so the details sheet can open any of it.
+  const nestedOf = (node: AgentRowNode, depth = 1): NestedAgent[] =>
+    childItemsOf(node).flatMap((child): NestedAgent[] => {
+      if (child.kind === 'subagent') {
+        const text = mobileAgentChildRowText(child.childRow, now)
+        return [
+          {
+            key: child.key,
+            title: text.lead,
+            detail: text.trail || undefined,
+            dotState: child.dotState,
+            depth,
+            // A sub-agent has no pane of its own; its row opened the parent, so this does too.
+            openPaneKey: node.row.paneKey
+          }
+        ]
+      }
+      return [
+        {
+          key: child.key,
+          title: agentTileTitle(child.node.row, now),
+          dotState: child.dotState,
+          depth,
+          openPaneKey: child.node.row.paneKey
+        },
+        ...nestedOf(child.node, depth + 1)
+      ]
+    })
+
   const renderNode = (node: AgentRowNode): ReactNode => {
     const parentKey = node.row.paneKey
     const children = childItemsOf(node)
@@ -180,7 +211,8 @@ export function WorktreeAgentList({
         <WorktreeAgentCarousel
           agents={roots.map((node) => ({
             agent: node.row,
-            childCount: childItemsOf(node).length
+            childCount: childItemsOf(node).length,
+            nested: nestedOf(node)
           }))}
           now={now}
           unvisited={unvisited}
