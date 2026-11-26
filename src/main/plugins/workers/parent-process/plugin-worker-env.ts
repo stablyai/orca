@@ -43,9 +43,7 @@ const WORKER_ENV_ALLOWLIST = [
 export function buildPluginWorkerEnv(
   baseEnv: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform,
-  userDataPath: string | undefined = hasAppEnvironment()
-    ? getAppEnvironment().getPath('userData')
-    : undefined
+  userDataPath?: string
 ): Record<string, string> {
   const env: Record<string, string> = {}
   const windowsLookup = new Map<string, string>()
@@ -71,4 +69,10 @@ export function buildPluginWorkerEnv(
   env.GIT_TERMINAL_PROMPT = '0'
   env.ELECTRON_RUN_AS_NODE = '1'
   return env
+}
+
+/** The environment a worker starts with, naming the profile this Orca runs from. */
+export function pluginWorkerEnv(): Record<string, string> {
+  const userDataPath = hasAppEnvironment() ? getAppEnvironment().getPath('userData') : undefined
+  return buildPluginWorkerEnv(process.env, process.platform, userDataPath)
 }
