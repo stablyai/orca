@@ -21128,6 +21128,7 @@
       "htmlView": "HTML 보기",
       "htmlViewCode": "코드",
       "htmlViewPreview": "미리보기",
+      "htmlViewPreviewWaiting": "이 코드 블록이 완성되면 미리보기를 사용할 수 있습니다.",
       "context": {
         "unavailable": "컨텍스트 사용량을 아직 알 수 없습니다. 에이전트가 다음에 응답하면 확인할 수 있습니다.",
         "summary": "컨텍스트: {{used}}/{{window}} 토큰 ({{percent}}%), 마지막 응답 기준 추정치입니다.",
@@ -24985,12 +24986,24 @@
       "scopeDetails": "스파스 체크아웃 범위 안내",
       "scopeExplanation": "폴더 선택은 표시 범위만 바꾸며 체크아웃된 파일은 바꾸지 않습니다. 저장소 루트에는 루트와 상위 폴더에 체크아웃된 파일도 표시됩니다.",
       "folderLoadError": "이 폴더를 불러오지 못했습니다:",
-      "emptyFolder": "이 폴더에 파일이 없습니다"
+      "emptyFolder": "이 폴더에 파일이 없습니다",
+      "combinedSearchExplanation": "검색은 보고 있는 폴더에서 파일 이름을, 워크스페이스 전체에서 텍스트를 찾습니다. 스파스 체크아웃으로 제외된 파일은 검색하지 않습니다."
     },
     "trashFailed": {
       "titleRecycleBin": "'{{name}}'을(를) 휴지통으로 이동하지 못했습니다. 영구적으로 삭제하시겠습니까?",
       "titleTrash": "'{{name}}'을(를) 휴지통으로 이동하지 못했습니다. 영구적으로 삭제하시겠습니까?",
       "description": "이 작업은 되돌릴 수 없습니다."
+    },
+    "combinedSearch": {
+      "text": "텍스트",
+      "filesIn": "{{path}}의 파일",
+      "files": "파일",
+      "showAll": "{{count}}개 모두 표시",
+      "noResults": "결과 없음",
+      "placeholder": "검색",
+      "placeholderScoped": "{{path}}에서 검색",
+      "textInWorkspace": "워크스페이스의 텍스트",
+      "refine": "일치하는 항목이 너무 많음"
     }
   },
   "sparsePreset": {
@@ -25397,7 +25410,8 @@
     "filters": {
       "toggle": "검색 세부 정보 전환",
       "active": "{{count}}개 활성"
-    }
+    },
+    "unavailable": "여기서는 사용할 수 없음"
   },
   "csv": {
     "detectingDelimiter": "분리자 감지 중…",
