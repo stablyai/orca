@@ -63,7 +63,8 @@ export function settlePeerQuestionsOut(
          WHERE rowid = (
            SELECT rowid FROM peer_questions_out
            WHERE conversation_id = ?1 AND awaiting = 1 AND (message_id = ?2 OR thread_id = ?2)
-           ORDER BY rowid LIMIT 1
+           -- +rowid keeps the plan on the awaiting index; a bare rowid order scans settled history.
+           ORDER BY +rowid LIMIT 1
          )`
       )
       .run(conversationId, reply.threadId)
