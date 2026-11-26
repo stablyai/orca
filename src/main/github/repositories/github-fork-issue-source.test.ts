@@ -5,8 +5,11 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { expect, it, vi } from 'vitest'
 import { githubReferenceRepo } from '../../../shared/github/markdown/github-reference-links'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { removeTree } from '../../../shared/file-write/windows-transient-lock-removal'
 import { ghExecFileAsync } from '../../git/command-runner/hosted-cli/gh-exec-file'
+import { getGitHubRepoConnectionId } from '../../ipc/source-control/github-repo-routing'
+import { RuntimeHostedReviewCommands } from '../../runtime/integrations/reviews/runtime-hosted-review-commands'
 import { installRealWorkerThreadChildProcesses } from '../../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
 import { probeRepoUpstream } from '../client/fetch/repo-slug-upstream'
 import { listWorkItems } from '../client/list/list-work-items'
@@ -84,5 +87,41 @@ it('keeps both issue sources for a renamed fork and follows changes to its Git r
     })
   } finally {
     await removeTree(dir)
+  }
+})
+
+it('keeps a same-path checkout on this host out of SSH issue source discovery', async () => {
+  const path = await mkdtemp(join(tmpdir(), 'orca-ssh-issue-source-'))
+  const git = (...args: string[]) => promisify(execFile)('git', args, { cwd: path })
+  try {
+    await git('init', '-q')
+    await git('remote', 'add', 'origin', 'https://github.com/local/project.git')
+    await git('remote', 'add', 'upstream', 'https://github.com/local/parent.git')
+    for (const host of [
+      { executionHostId: 'ssh:build' },
+      { executionHostId: 'runtime:server', connectionId: 'build' }
+    ] as const) {
+      const repo: Repo = {
+        id: 'project',
+        path,
+        displayName: 'Project',
+        badgeColor: '',
+        addedAt: 0,
+        ...host
+      }
+      const metadata = new RuntimeHostedReviewCommands({
+        resolveRepo: async () => repo,
+        getExecutionOptions: () => undefined,
+        resolveTarget: vi.fn(),
+        recordCreated: vi.fn()
+      })
+      await expect(
+        listWorkItems(path, 1, 'is:issue', 1, 'auto', getGitHubRepoConnectionId(repo))
+      ).rejects.toThrow('GitHub work items require a GitHub remote for SSH repositories')
+      expect(await metadata.getRepoSlug(repo.id)).toBeNull()
+      expect(await metadata.getRepoUpstream(repo.id)).toBeNull()
+    }
+  } finally {
+    await removeTree(path)
   }
 })

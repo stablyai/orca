@@ -1,5 +1,6 @@
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
-import type { IssueSourcePreference } from '../../../shared/repository/repo-types'
+import type { IssueSourcePreference, Repo } from '../../../shared/repository/repo-types'
+import { getRepoRoutingConnectionId } from '../../../shared/execution-host/execution-host'
 
 export type WorkItemArgs = {
   repoPath: string
@@ -9,12 +10,6 @@ export type WorkItemArgs = {
   type?: 'issue' | 'pr'
 }
 
-type RegisteredRepoContext = {
-  path: string
-  connectionId?: string | null
-  issueSourcePreference?: IssueSourcePreference
-}
-
 type LocalGitExecOptions = {
   wslDistro?: string
 }
@@ -22,7 +17,7 @@ type LocalGitExecOptions = {
 // Reject invalid item numbers; unknown types fall back to issue-then-PR probing.
 export function dispatchWorkItem<T>(
   args: WorkItemArgs,
-  repo: RegisteredRepoContext,
+  repo: Pick<Repo, 'path' | 'executionHostId' | 'connectionId' | 'issueSourcePreference'>,
   fn: (
     path: string,
     n: number,
@@ -43,7 +38,7 @@ export function dispatchWorkItem<T>(
     repo.path,
     number,
     safeType,
-    repo.connectionId ?? null,
+    getRepoRoutingConnectionId(repo),
     localGitOptions,
     repo.issueSourcePreference
   )

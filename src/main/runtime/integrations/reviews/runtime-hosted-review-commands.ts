@@ -8,6 +8,7 @@ import type {
   PRSnapshotReply
 } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 import type { DeviceScope } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getRepoSlug, getRepoUpstream } from '../../../github/client/fetch/repo-slug-upstream'
 import {
@@ -61,7 +62,7 @@ export class RuntimeHostedReviewCommands {
   async getRepoSlug(repoSelector: string): Promise<GitHubOwnerRepo | null> {
     const repo = await this.deps.resolveRepo(repoSelector)
     const options = this.deps.getExecutionOptions(repo)
-    const connectionId = hostedReviewSshConnectionId(getStoredRepoExecutionHostId(repo))
+    const connectionId = getRepoRoutingConnectionId(repo)
     return options
       ? getRepoSlug(repo.path, connectionId, options)
       : getRepoSlug(repo.path, connectionId)
@@ -70,7 +71,7 @@ export class RuntimeHostedReviewCommands {
   async getRepoUpstream(repoSelector: string): Promise<GitHubOwnerRepo | null> {
     const repo = await this.deps.resolveRepo(repoSelector)
     const options = this.deps.getExecutionOptions(repo)
-    const connectionId = hostedReviewSshConnectionId(getStoredRepoExecutionHostId(repo))
+    const connectionId = getRepoRoutingConnectionId(repo)
     return options
       ? getRepoUpstream(repo.path, connectionId, options)
       : getRepoUpstream(repo.path, connectionId)

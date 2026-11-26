@@ -1,6 +1,6 @@
 import {
   getRepoExecutionHostId,
-  getRepoSshConnectionId
+  getRepoRoutingConnectionId
 } from '../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../shared/repository/repo-types'
 import { githubAvatarIcon, githubAvatarSlug } from '../../../shared/repository/appearance/repo-icon'
@@ -116,7 +116,7 @@ export class RuntimeRepositoryForkBackfill {
       row.path === snapshot.path &&
       row.kind === snapshot.kind &&
       row.kind !== 'folder' &&
-      !getRepoSshConnectionId(row) &&
+      !getRepoRoutingConnectionId(row) &&
       !isWslMoveRepoBlocked(row)
       ? row
       : undefined
