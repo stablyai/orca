@@ -183,7 +183,7 @@ function hasReplyHeadingOrLink(prose: readonly NativeChatBlock[]): boolean {
       isTextBlock(block) &&
       !block.providerFrame &&
       !block.presentation &&
-      /(?:^ {0,3}#{1,6}[ \t]+\S|\bhttps?:\/\/[^\s<>]+)/im.test(block.text)
+      /(?:^ {0,3}#{1,6}[ \t]+\S|\b_*https?:\/\/[^\s<>]+)/im.test(block.text)
   )
   replyHeadingOrLink.set(prose, found)
   return found
@@ -232,6 +232,9 @@ export function nativeChatTurnAnswerRows(
       if (previous !== undefined && rows[previous]?.replyEnd === 'words' && row.replyEnd) {
         if ((lastThought.get(turnKey) ?? -1) > previous) {
           splitFrom.set(index, previous)
+          if (answers.has(previous)) {
+            answers.add(index)
+          }
         } else {
           answers.add(previous)
         }
