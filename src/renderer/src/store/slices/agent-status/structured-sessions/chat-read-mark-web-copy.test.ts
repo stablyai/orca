@@ -9,6 +9,10 @@ const LEAF = '2b8ea975-8113-41ae-a25c-feb50cbe084a'
 const OLD_TAB_KEY = `agent-chat-tab-v1-abc:${LEAF}`
 const OTHER_OLD_TAB_KEY = `structured-agent-session-old:${LEAF}`
 const CONVERSATION_KEY = `structured-agent-session-sess-2:${LEAF}`
+const completeInventory = (workspaceIds: string[]) => ({
+  affirmedWorkspaceIds: workspaceIds,
+  pendingWorkspaceIds: []
+})
 
 it('copies a web client’s tab-keyed marks to the conversation key once, and never again', () => {
   let state: Parameters<typeof copyWebClientChatReadMarksOnce>[0] = {
@@ -80,7 +84,7 @@ it('keeps an active-frame copy when its full inventory later arrives stale', () 
   }
   state = {
     ...state,
-    ...copyWebClientChatReadMarksForTabLists(state, () => tabs, ['w1'], ['w1'])
+    ...copyWebClientChatReadMarksForTabLists(state, () => tabs, ['w1'], completeInventory(['w1']))
   }
 
   expect(state).toEqual({
@@ -103,7 +107,10 @@ it('completes a delayed first inventory workspace when its replacement arrives',
 
   state = {
     ...state,
-    ...copyWebClientChatReadMarksForTabLists(state, () => tabs, ['w1'], ['w1', 'w2'])
+    ...copyWebClientChatReadMarksForTabLists(state, () => tabs, ['w1'], {
+      affirmedWorkspaceIds: ['w1'],
+      pendingWorkspaceIds: ['w2']
+    })
   }
   expect(state.chatReadMarksCopiedHere).toBe(false)
   state = {
@@ -127,7 +134,7 @@ it('discharges pending workspaces without reading unchanged tabs', () => {
       state,
       () => ({ w1: [{ contentType: 'terminal' }] }),
       ['w1'],
-      ['w1', 'w2']
+      { affirmedWorkspaceIds: ['w1'], pendingWorkspaceIds: ['w2'] }
     )
   ).toBeNull()
   expect(copyWebClientChatReadMarksForTabLists(state, undefined, ['w2'])).toEqual({
@@ -159,7 +166,7 @@ it('remembers only copied chats and releases migration bookkeeping after complet
 
   state = {
     ...state,
-    ...copyWebClientChatReadMarksForTabLists(state, () => tabs, ['w1'], ['w1'])
+    ...copyWebClientChatReadMarksForTabLists(state, () => tabs, ['w1'], completeInventory(['w1']))
   }
   expect(state.chatReadMarksCopiedHere).toBe(true)
 
@@ -171,4 +178,68 @@ it('remembers only copied chats and releases migration bookkeeping after complet
   expect(copyWebClientChatReadMarksForTabLists(restartedState, () => tabs, ['w1'])).toEqual({
     activityClearedAtByPaneKey: { [oldKey]: 91, [conversationKey]: 91 }
   })
+})
+
+it('copies every affirmed workspace from the resulting full inventory tabs', () => {
+  const secondSessionId = 'sess-3'
+  const secondKey = chatPaneKey(secondSessionId)
+  const secondOldKey = `agent-chat-tab-v1-old:${secondKey.slice(secondKey.lastIndexOf(':') + 1)}`
+  const state: Parameters<typeof copyWebClientChatReadMarksOnce>[0] = {
+    activityClearedAtByPaneKey: {},
+    manuallyUnreadTurnsByPaneKey: { [OLD_TAB_KEY]: 70, [secondOldKey]: 80 },
+    chatReadMarksCopiedHere: false
+  }
+  const tabs = {
+    w1: [{ contentType: 'agent-session', entityId: 'sess-2' }],
+    w2: [{ contentType: 'agent-session', entityId: secondSessionId }]
+  }
+
+  expect(
+    copyWebClientChatReadMarksForTabLists(
+      state,
+      () => tabs,
+      ['w1'],
+      completeInventory(['w1', 'w2'])
+    )
+  ).toEqual({
+    manuallyUnreadTurnsByPaneKey: {
+      [OLD_TAB_KEY]: 70,
+      [CONVERSATION_KEY]: 70,
+      [secondOldKey]: 80,
+      [secondKey]: 80
+    },
+    chatReadMarksCopiedHere: true
+  })
+})
+
+it('leaves an unverifiable inventory pending', () => {
+  const state: Parameters<typeof copyWebClientChatReadMarksOnce>[0] = {
+    activityClearedAtByPaneKey: {},
+    manuallyUnreadTurnsByPaneKey: { [OLD_TAB_KEY]: 70 },
+    chatReadMarksCopiedHere: false
+  }
+  expect(
+    copyWebClientChatReadMarksForTabLists(state, () => ({}), [], {
+      affirmedWorkspaceIds: [],
+      pendingWorkspaceIds: ['w1']
+    })
+  ).toBeNull()
+  expect(copyWebClientChatReadMarksForTabLists(state, () => ({}), ['w1'])).toEqual({
+    chatReadMarksCopiedHere: true
+  })
+})
+
+it('does not refill a destination that existed when its legacy mark was examined', () => {
+  let state: Parameters<typeof copyWebClientChatReadMarksOnce>[0] = {
+    activityClearedAtByPaneKey: {},
+    manuallyUnreadTurnsByPaneKey: { [OLD_TAB_KEY]: 70, [CONVERSATION_KEY]: 80 },
+    chatReadMarksCopiedHere: false
+  }
+  const tabs = { w1: [{ contentType: 'agent-session', entityId: 'sess-2' }] }
+  expect(copyWebClientChatReadMarksForTabLists(state, () => tabs, ['w1'])).toBeNull()
+  state = {
+    ...state,
+    manuallyUnreadTurnsByPaneKey: { [OLD_TAB_KEY]: 70 }
+  }
+  expect(copyWebClientChatReadMarksForTabLists(state, () => tabs, ['w1'])).toBeNull()
 })

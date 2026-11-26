@@ -15,6 +15,7 @@ import {
 } from '../tracking/tracking-decisions'
 import {
   acceptReplayedWebSessionTabsSnapshot,
+  latestReceivedSessionTabsSnapshotByWorktree,
   latestSessionTabsSnapshotByWorktree,
   replayableSessionTabsSnapshotByWorktree
 } from '../state'
@@ -23,6 +24,7 @@ import { applyWebSessionTabsSnapshots } from '../snapshots/snapshot-api'
 
 import { applyWebSessionTabsStorePatch } from '../snapshots/store-patch'
 import { isHostMirroredWorktree } from '../identity/host-mirrored-worktree'
+import { hostSnapshotAffirmsAgentSessions } from '../../../../../shared/remote-runtime/session-graph/host-session-snapshot-authority'
 import type { VisibilityResumeCoordinator } from '../visibility-resume/visibility-resume-coordinator'
 
 export type GlobalSessionInventoryEventArgs = {
@@ -133,6 +135,35 @@ export function handleGlobalSessionInventoryEvent({
       const freshSnapshots = applicable.flatMap(({ snapshot }, index) =>
         decisions[index]!.apply ? [snapshot] : []
       )
+      const settledWorkspaces = new Set(
+        applicable.flatMap(({ snapshot }, index) =>
+          decisions[index]!.settlesHostMirror ? [snapshot.worktree] : []
+        )
+      )
+      const pendingAgentSessionWorkspaceIds = event.snapshots.flatMap((snapshot, index) => {
+        if (!isHostMirroredWorktree(snapshot.worktree)) {
+          return []
+        }
+        if (!hostSnapshotAffirmsAgentSessions(snapshot)) {
+          return [snapshot.worktree]
+        }
+        if (settledWorkspaces.has(snapshot.worktree)) {
+          return []
+        }
+        const key = `${environmentId}:${snapshot.worktree}`
+        const received = latestReceivedSessionTabsSnapshotByWorktree.get(key)
+        const applied = latestSessionTabsSnapshotByWorktree.get(key)
+        if (
+          received &&
+          received.receivedFrame !== receivedFrames[index] &&
+          (!applied ||
+            applied.publicationEpoch !== received.publicationEpoch ||
+            applied.snapshotVersion !== received.snapshotVersion)
+        ) {
+          return [snapshot.worktree]
+        }
+        return []
+      })
       settleHydration = applyWebSessionTabsStorePatch(
         (state, changedAgentPaneKeys) =>
           applyWebSessionTabsSnapshots(
@@ -163,7 +194,15 @@ export function handleGlobalSessionInventoryEvent({
             ).length,
             mirroredWorkspaceIds: event.snapshots
               .filter((snapshot) => isHostMirroredWorktree(snapshot.worktree))
-              .map((snapshot) => snapshot.worktree)
+              .map((snapshot) => snapshot.worktree),
+            affirmedAgentSessionWorkspaceIds: event.snapshots
+              .filter(
+                (snapshot) =>
+                  isHostMirroredWorktree(snapshot.worktree) &&
+                  hostSnapshotAffirmsAgentSessions(snapshot)
+              )
+              .map((snapshot) => snapshot.worktree),
+            pendingAgentSessionWorkspaceIds
           }
         },
         freshSnapshots

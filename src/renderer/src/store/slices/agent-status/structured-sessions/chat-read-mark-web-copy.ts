@@ -11,6 +11,11 @@ type ChatTabsByWorkspace = Readonly<
   Record<string, readonly { contentType: string; entityId?: string }[]>
 >
 
+type FullInventory = {
+  affirmedWorkspaceIds: Iterable<string>
+  pendingWorkspaceIds: Iterable<string>
+}
+
 const copiedChatPaneKeys = new Set<string>()
 const pendingWorkspaceIds = new Set<string>()
 let receivedFullInventory = false
@@ -23,11 +28,13 @@ function clearMigrationBookkeeping(): void {
 }
 
 function hasLegacyMark(state: WebCopyState, sessionId: string): boolean {
-  const destination = chatPaneKey(sessionId)
-  const leaf = destination.slice(destination.lastIndexOf(':') + 1)
+  const key = chatPaneKey(sessionId)
+  const leaf = key.slice(key.lastIndexOf(':') + 1)
   return [state.activityClearedAtByPaneKey, state.manuallyUnreadTurnsByPaneKey].some(
     (record) =>
-      record[destination] === undefined && (paneKeysByLeaf(record).get(leaf)?.length ?? 0) > 0
+      paneKeysByLeaf(record)
+        .get(leaf)
+        ?.some((paneKey) => paneKey !== key) === true
   )
 }
 
@@ -77,20 +84,17 @@ export function copyWebClientChatReadMarksForTabLists(
   state: WebCopyState,
   readTabsByWorkspace: (() => ChatTabsByWorkspace) | undefined,
   workspaceIds: Iterable<string>,
-  fullInventoryWorkspaceIds?: Iterable<string>
+  fullInventory?: FullInventory
 ): Partial<WebCopyState> | null {
   if (state.chatReadMarksCopiedHere) {
     return null
   }
-  const affectedWorkspaceIds = [...new Set(workspaceIds)]
-  if (fullInventoryWorkspaceIds !== undefined) {
+  const affectedWorkspaceIds = [...new Set(fullInventory?.affirmedWorkspaceIds ?? workspaceIds)]
+  if (fullInventory) {
     receivedFullInventory = true
-    const applied = new Set(affectedWorkspaceIds)
     pendingWorkspaceIds.clear()
-    for (const workspaceId of fullInventoryWorkspaceIds) {
-      if (!applied.has(workspaceId)) {
-        pendingWorkspaceIds.add(workspaceId)
-      }
+    for (const workspaceId of fullInventory.pendingWorkspaceIds) {
+      pendingWorkspaceIds.add(workspaceId)
     }
   } else if (receivedFullInventory) {
     for (const workspaceId of affectedWorkspaceIds) {

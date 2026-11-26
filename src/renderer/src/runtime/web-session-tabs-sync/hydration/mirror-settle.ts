@@ -28,6 +28,8 @@ export type HostSessionMirrorPatchVerdict = {
     environmentId: string
     publishedSnapshotCount: number
     mirroredWorkspaceIds?: readonly string[]
+    affirmedAgentSessionWorkspaceIds?: readonly string[]
+    pendingAgentSessionWorkspaceIds?: readonly string[]
     authoritative?: boolean
     expectedEnvironmentConnectionGeneration?: number
     expectedEnvironmentPairingRevision?: number

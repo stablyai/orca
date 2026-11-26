@@ -30,14 +30,15 @@ import { recordAgentFinishDropped } from '@/attention/agent-finish-drop-breadcru
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { copyWebClientChatReadMarksForTabLists } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-web-copy'
 import { isHostMirroredWorktree } from '../identity/host-mirrored-worktree'
+import { hostSnapshotAffirmsAgentSessions } from '../../../../../shared/remote-runtime/session-graph/host-session-snapshot-authority'
 
 function copyWebClientChatReadMarksForPatch(
   state: AppState,
   patch: AppState | Partial<AppState>,
-  verdict: HostSessionMirrorPatchVerdict,
-  affectedWorkspaces: readonly string[]
+  verdict: HostSessionMirrorPatchVerdict
 ): AppState | Partial<AppState> {
-  const fullInventoryWorkspaceIds = verdict.fullInventory?.mirroredWorkspaceIds
+  const fullInventory = verdict.fullInventory
+  const fullInventoryWorkspaceIds = fullInventory?.mirroredWorkspaceIds
   const workspaceIds = fullInventoryWorkspaceIds
     ? verdict.frames
         .filter(
@@ -45,10 +46,18 @@ function copyWebClientChatReadMarksForPatch(
             decision.apply && source !== undefined && isHostMirroredWorktree(worktreeId)
         )
         .map(({ worktreeId }) => worktreeId)
-    : affectedWorkspaces
+    : verdict.frames
+        .filter(
+          ({ decision, source, worktreeId }) =>
+            decision.apply &&
+            source !== undefined &&
+            isHostMirroredWorktree(worktreeId) &&
+            hostSnapshotAffirmsAgentSessions(source)
+        )
+        .map(({ worktreeId }) => worktreeId)
   const nextTabs = patch.unifiedTabsByWorktree ?? state.unifiedTabsByWorktree
   const tabsUnchanged =
-    fullInventoryWorkspaceIds === undefined &&
+    fullInventory === undefined &&
     workspaceIds.every(
       (workspaceId) => nextTabs[workspaceId] === state.unifiedTabsByWorktree[workspaceId]
     )
@@ -56,7 +65,12 @@ function copyWebClientChatReadMarksForPatch(
     state,
     tabsUnchanged ? undefined : () => nextTabs,
     workspaceIds,
-    fullInventoryWorkspaceIds
+    fullInventory
+      ? {
+          affirmedWorkspaceIds: fullInventory.affirmedAgentSessionWorkspaceIds ?? [],
+          pendingWorkspaceIds: fullInventory.pendingAgentSessionWorkspaceIds ?? []
+        }
+      : undefined
   )
   return copied ? { ...(patch === state ? {} : patch), ...copied } : patch
 }
@@ -91,7 +105,7 @@ export function applyWebSessionTabsStorePatch(
     const shouldCopyChatReadMarks = isWebClientLocation() && !state.chatReadMarksCopiedHere
     const builtPatch = buildPatch(state, changedAgentPaneKeys)
     const patch = shouldCopyChatReadMarks
-      ? copyWebClientChatReadMarksForPatch(state, builtPatch, hostMirrorVerdict, affectedWorkspaces)
+      ? copyWebClientChatReadMarksForPatch(state, builtPatch, hostMirrorVerdict)
       : builtPatch
     markHostMirrorPatchFullResync(state, patch)
     mirroredAgentStatusChanged = patch !== state && Object.hasOwn(patch, 'agentStatusByPaneKey')
