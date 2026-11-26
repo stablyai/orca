@@ -248,8 +248,8 @@ export function BotItemBody({
     [fileContext?.fileLinkContext, runtimeContext]
   )
   // `waitingLine`: the question the comment box names, until a reply is on its way.
-  const { steps, sent, quick, fromBox, answerNone, answerWaiting, waitingLine } =
-    useBotItemQuestionSteps(bot, item, view.events, sendLatest, pending.shown)
+  const { steps, sent, quick, fromBox, answerNone, answerWaiting, waitingLine, replyMark } =
+    useBotItemQuestionSteps(bot, item, view.events, sendLatest, pending.shown, view.eventsRead)
   const quickReplies = useMemo(
     () =>
       deleted
@@ -413,6 +413,7 @@ export function BotItemBody({
                 attachTo={attachTo}
                 nav={nav}
                 question={waitingOn}
+                replyMark={replyMark}
                 onShowQuestion={(eventId) =>
                   revealBotItemComment(scrollRef.current, eventId, 'flash')
                 }
