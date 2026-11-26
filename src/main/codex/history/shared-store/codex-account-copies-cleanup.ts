@@ -4,7 +4,10 @@ import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath
 } from '../../../worker-threads/worker-thread-entry-path'
+import { join } from 'node:path'
 import { findOpenFiles } from '../../../filesystem/open-file-check'
+import { distinctFolders } from '../bridges/codex-legacy-session-copy-writer-locks'
+import { holdThreadLockFolders, WRITER_LOCKS } from './codex-thread-writer-locks'
 import { withTimeoutResult } from '../../../../shared/concurrency/promise-timeout-fallback'
 import { addTally, emptyTally, type CopiesTally } from './codex-account-copies-tally'
 import type { CodexHistoryMoveOutcome } from '../../../telemetry/codex-history-move-telemetry'
@@ -20,9 +23,9 @@ const MAX_BYTES_PER_LAUNCH = 4 * 1024 ** 3
 const MAX_MS_PER_LAUNCH = 3 * 60_000
 const GAP_BETWEEN_HOMES_MS = 1_000
 const STOP_WAIT_MS = 10_000
-// One `lsof` per batch: the window between a copy's open check and its unlink stays a fraction of
-// a second, without a process per file.
-const OPEN_CHECK_BATCH = 64
+// One lock hold and one `lsof` per batch: Codex waits on coordination for well under a second,
+// and no process starts per file.
+const OPEN_CHECK_BATCH = 128
 
 export type CodexAccountCopiesWorker = {
   call(request: CodexAccountCopiesRequest): Promise<CodexAccountCopiesResponse>
@@ -79,6 +82,8 @@ export async function cleanUpCodexAccountCopies(args: {
   shouldStop: () => boolean
   worker: CodexAccountCopiesWorker
   findOpen?: typeof findOpenFiles
+  /** Holds Codex's lock coordination in these folders; null when it can't be taken. */
+  holdLocks?: typeof holdThreadLockFolders
   platform?: NodeJS.Platform
   /** This Orca's version; each home settled under it is skipped. */
   version: string
@@ -91,6 +96,7 @@ export async function cleanUpCodexAccountCopies(args: {
   }
   const moved = (home: string): boolean => args.moveOutcome(home) === 'moved'
   const findOpen = args.findOpen ?? findOpenFiles
+  const holdLocks = args.holdLocks ?? holdThreadLockFolders
   const total = { ...emptyTally(), homes: 0 }
   const deadline = Date.now() + MAX_MS_PER_LAUNCH
   let bytesLeft = MAX_BYTES_PER_LAUNCH
@@ -128,36 +134,60 @@ export async function cleanUpCodexAccountCopies(args: {
     total.homes += 1
     bytesLeft = Math.max(0, bytesLeft - checked.bytesRead)
     addTally(total, checked.tally)
+    // The account's lock folder is linked to the store's once its history moved: one folder.
+    const lockFolders = await distinctFolders([
+      join(args.storeHome, WRITER_LOCKS),
+      join(accountHome, WRITER_LOCKS)
+    ])
     for (let start = 0; start < checked.verified.length; start += OPEN_CHECK_BATCH) {
-      const batch = checked.verified.slice(start, start + OPEN_CHECK_BATCH)
-      // The open check runs right before its batch's unlinks; a pass due meanwhile keeps them all.
-      const open = moved(accountHome)
-        ? await findOpen(
-            batch.map((copy) => copy.copy),
-            { shouldStop: args.shouldStop }
-          )
-        : null
       if (args.shouldStop()) {
         return null
       }
-      const closed = open && moved(accountHome) ? batch.filter((copy) => !open.has(copy.copy)) : []
-      total.open += batch.length - closed.length
-      if (closed.length === 0) {
+      const batch = checked.verified.slice(start, start + OPEN_CHECK_BATCH)
+      if (!moved(accountHome) || Date.now() > deadline) {
+        total.deferred += batch.length
         continue
       }
-      const deleted = await args.worker.call({
-        op: 'delete',
-        accountHome,
-        storeHome: args.storeHome,
-        copies: closed
-      })
-      if (deleted.ok && deleted.op === 'delete') {
-        addTally(total, deleted.tally)
-      } else {
+      // While coordination is held no Codex can take a thread lock, so the open check and the
+      // unlinks that follow see every writer that matters: none can start meanwhile.
+      const hold = await holdLocks(lockFolders)
+      if (!hold) {
+        total.busy += batch.length
+        continue
+      }
+      try {
+        const open = await findOpen(
+          batch.map((copy) => copy.copy),
+          { shouldStop: args.shouldStop }
+        )
         if (args.shouldStop()) {
           return null
         }
-        total.error += closed.length
+        const closed =
+          open && hold.stillHeld() && moved(accountHome)
+            ? batch.filter((copy) => !open.has(copy.copy))
+            : []
+        total.open += batch.length - closed.length
+        if (closed.length === 0) {
+          continue
+        }
+        const deleted = await args.worker.call({
+          op: 'delete',
+          accountHome,
+          storeHome: args.storeHome,
+          copies: closed,
+          lockFolders
+        })
+        if (deleted.ok && deleted.op === 'delete') {
+          addTally(total, deleted.tally)
+        } else {
+          if (args.shouldStop()) {
+            return null
+          }
+          total.error += closed.length
+        }
+      } finally {
+        await hold.release()
       }
     }
     await new Promise((resolve) => setTimeout(resolve, GAP_BETWEEN_HOMES_MS).unref?.())

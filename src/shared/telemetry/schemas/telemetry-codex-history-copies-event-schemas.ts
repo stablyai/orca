@@ -20,6 +20,10 @@ export const codexHistoryCopiesCleanupSchema = z
     // Written to between the check and the delete.
     kept_changed: fileCount,
     kept_error: fileCount,
+    // The original or the copy is compressed and the other isn't: never decoded to compare.
+    kept_compressed: fileCount,
+    // A Codex holds the thread's writer lock, or the locks couldn't be held.
+    kept_busy: fileCount,
     // Past this launch's read budget; checked on a later launch.
     deferred: fileCount
   })

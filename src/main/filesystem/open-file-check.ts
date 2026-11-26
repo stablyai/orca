@@ -13,8 +13,9 @@ const WINDOWS_EXCLUSIVE_OPEN = 0x10000000
 type Target = { path: string; ino: bigint }
 
 // Matched by inode: lsof escapes unusual characters in the names it prints. It exits 0 when every
-// file is open, 1 with output when some are, and 1 with no output when none are; an exit 1 that
-// complains on stderr failed. Processes of other users are invisible to it.
+// file is open, 1 with output when some are, and 1 with no output when none are; anything on
+// stderr means it failed or skipped something. Processes of other users are invisible to it, so
+// callers also keep files others could write.
 async function openOnMac(targets: Target[]): Promise<Set<string> | null> {
   // Batched well under ARG_MAX (1 MiB on macOS), so a long list never fails to start.
   const found = new Set<string>()
@@ -44,7 +45,8 @@ async function openOnMacBatch(targets: Target[]): Promise<Set<string> | null> {
   }
   const result = await runProcess({
     program: '/usr/sbin/lsof',
-    args: ['-w', '-F', 'i', '--', ...targets.map((target) => target.path)],
+    // Warnings left on: any complaint means the answer is incomplete.
+    args: ['-F', 'i', '--', ...targets.map((target) => target.path)],
     timeoutMs: LSOF_TIMEOUT_MS,
     maxOutputBytes: 4 * 1024 * 1024
   }).catch(() => null)
@@ -60,7 +62,7 @@ async function openOnMacBatch(targets: Target[]): Promise<Set<string> | null> {
   const found = new Set(
     targets.filter((target) => inodes.has(target.ino)).map((target) => target.path)
   )
-  if (result.code === 1 && result.stderr.trim() !== '') {
+  if (result.stderr.trim() !== '') {
     return null
   }
   if (result.code === 1 && result.stdout.trim() === '') {

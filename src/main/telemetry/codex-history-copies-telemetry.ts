@@ -48,6 +48,8 @@ export async function reportCodexHistoryCopiesCleanup(
     kept_missing_original: cap(tally.missing_original),
     kept_changed: cap(tally.changed),
     kept_error: cap(tally.error),
+    kept_compressed: cap(tally.compressed),
+    kept_busy: cap(tally.busy),
     deferred: cap(tally.deferred)
   })
   if (!sent) {

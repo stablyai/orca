@@ -18,6 +18,7 @@ import {
   fileKey,
   isInsideHome,
   lstatOrNull,
+  onlyOwnerWrites,
   removeEmptyFolders,
   type VerifiedCopy
 } from './codex-account-copies-delete'
@@ -198,26 +199,28 @@ export async function verifyCodexAccountCopies(args: {
           tally.linked += 1
           continue
         }
+        // Another user could write it, and no open check sees their processes: kept unread.
+        if (!onlyOwnerWrites(copyStats)) {
+          tally.open += 1
+          continue
+        }
         const key = `${fileKey(copyStats)}|${original.path}|${fileKey(original.stats)}`
         const sameForm =
           copy.endsWith(COMPRESSED_ROLLOUT_SUFFIX) ===
           original.path.endsWith(COMPRESSED_ROLLOUT_SUFFIX)
-        const compressedCopy = copy.endsWith(COMPRESSED_ROLLOUT_SUFFIX)
-        // A `.zst` copy is deleted only for an identical `.zst`: decoding stops after its first
-        // frame, so a later frame's content could never be compared.
-        if (
-          kept[name] === key ||
-          (sameForm && copyStats.size > original.stats.size) ||
-          (compressedCopy && !sameForm)
-        ) {
+        // One form compressed and the other not: kept. Decoding can't prove a `.zst` complete
+        // (a cut-off frame or checksum still decodes), so content is only compared as stored.
+        if (!sameForm) {
+          tally.compressed += 1
+          continue
+        }
+        if (kept[name] === key || copyStats.size > original.stats.size) {
           nextKept[name] = key
           tally.differs += 1
           continue
         }
-        // The copy, plus as much of a plain original or all of a compressed one.
-        const size =
-          Number(copyStats.size) * 2 +
-          (sameForm ? 0 : Number(original.stats.size) - Number(copyStats.size))
+        // The copy, and as much of the original.
+        const size = Number(copyStats.size) * 2
         // A pair larger than the whole budget goes first in its launch rather than never.
         const oversizedFirst = args.budget.admitOversized && bytesRead === 0
         if (!oversizedFirst && bytesRead + size > args.budget.maxBytes) {
@@ -230,19 +233,13 @@ export async function verifyCodexAccountCopies(args: {
         bytesRead += size
         let holds: boolean
         try {
-          holds = await originalHoldsCopy(copy, original.path, args.budget.deadline)
+          holds = originalHoldsCopy(copy, original.path, args.budget.deadline)
         } catch (error) {
           if (error instanceof OutOfTime) {
             tally.deferred += 1
             continue
           }
-          // A corrupt `.zst` never matches; anything else is tried again next launch.
-          const code =
-            typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : ''
-          if (!code.startsWith('ZSTD_')) {
-            throw error
-          }
-          holds = false
+          throw error
         }
         const copyAfter = lstatOrNull(copy)
         const originalAfter = lstatOrNull(original.path)
@@ -302,7 +299,7 @@ export async function runCodexAccountCopiesRequest(
     case 'verify':
       return { ok: true, op: 'verify', ...(await verifyCodexAccountCopies(request)) }
     case 'delete': {
-      const tally = deleteCheckedCopies(request.accountHome, request.copies)
+      const tally = deleteCheckedCopies(request.accountHome, request.copies, request.lockFolders)
       if (tally.deleted > 0) {
         removeEmptiedCopyFolders(request.accountHome, request.storeHome)
       }

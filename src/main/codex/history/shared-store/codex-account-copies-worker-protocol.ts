@@ -12,7 +12,14 @@ export type CodexAccountCopiesRequest =
       version: string
       managedAccountsRoot: string
     }
-  | { op: 'delete'; accountHome: string; storeHome: string; copies: VerifiedCopy[] }
+  | {
+      op: 'delete'
+      accountHome: string
+      storeHome: string
+      copies: VerifiedCopy[]
+      /** Codex's thread-writer-locks folders whose coordination the caller holds right now. */
+      lockFolders: string[]
+    }
 
 export type CodexAccountCopiesResponse =
   | { ok: true; op: 'verify'; verified: VerifiedCopy[]; tally: CopiesTally; bytesRead: number }

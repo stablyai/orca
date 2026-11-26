@@ -6,7 +6,7 @@ import {
   rmdirSync,
   unlinkSync
 } from 'node:fs'
-import { dirname, join, relative } from 'node:path'
+import { basename, dirname, join, relative } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { emptyTally, type CopiesTally } from './codex-account-copies-tally'
 
@@ -39,16 +39,59 @@ export function isInsideHome(accountHome: string, path: string): boolean {
   }
 }
 
+const THREAD_ID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g
+
 /**
- * Deletes each copy the open check just cleared, only while both files are exactly as their
- * comparison saw them; anything else stays for a later launch.
+ * With Codex's lock coordination held in `lockFolders`, a thread lock file still there is held by
+ * a live Codex (any user): that thread, the copy's or the original's, may be written. A name with
+ * no thread id, or a lock folder that can't be read, proves nothing.
  */
-export function deleteCheckedCopies(accountHome: string, copies: VerifiedCopy[]): CopiesTally {
+function isThreadBusy(copy: string, lockFolders: readonly string[]): boolean {
+  const ids = basename(copy).toLowerCase().match(THREAD_ID) ?? []
+  if (ids.length === 0) {
+    return true
+  }
+  try {
+    return lockFolders.some((folder) => ids.some((id) => lstatOrNull(join(folder, `${id}.lock`))))
+  } catch {
+    return true
+  }
+}
+
+/**
+ * Whether only this user could write the copy: owned by them, with no group or other write bit.
+ * Unprivileged `lsof` can't see other users' processes; these can't open the copy to append.
+ */
+export function onlyOwnerWrites(stats: BigIntStats): boolean {
+  if (process.platform === 'win32') {
+    return true
+  }
+  return stats.uid === BigInt(process.getuid?.() ?? -1) && (stats.mode & 0o022n) === 0n
+}
+
+/**
+ * Deletes each copy the open check just cleared, while Codex's lock coordination is held in
+ * `lockFolders` (by the caller), only when no Codex holds the thread and both files are exactly as
+ * their comparison saw them; anything else stays for a later launch.
+ */
+export function deleteCheckedCopies(
+  accountHome: string,
+  copies: VerifiedCopy[],
+  lockFolders: readonly string[]
+): CopiesTally {
   const tally = emptyTally()
   for (const copy of copies) {
     try {
+      if (lockFolders.length === 0 || isThreadBusy(copy.copy, lockFolders)) {
+        tally.busy += 1
+        continue
+      }
       const stats = lstatOrNull(copy.copy)
       const original = lstatOrNull(copy.original)
+      if (stats?.isFile() && !onlyOwnerWrites(stats)) {
+        tally.open += 1
+        continue
+      }
       if (
         !isInsideHome(accountHome, copy.copy) ||
         !stats?.isFile() ||

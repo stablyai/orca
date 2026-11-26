@@ -1,5 +1,6 @@
 import {
   appendFileSync,
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -31,12 +32,15 @@ function put(path: string, content: string | Buffer): string {
 
 const conflictCopy = (rel = REL): string => join(home, 'sessions.orca-profile-merge', rel)
 const storeFile = (rel = REL): string => join(store, 'sessions', rel)
+const otherThread = (n: number): string => REL.replace('0199a1b2', `0199a1b${n}`)
 
 function run(
   options: {
     outcome?: CodexHistoryMoveOutcome
     open?: (paths: string[]) => Set<string> | null
     beforeDelete?: () => void
+    /** False: Codex's lock coordination can't be taken. */
+    locks?: boolean
   } = {}
 ) {
   return cleanUpCodexAccountCopies({
@@ -48,6 +52,8 @@ function run(
     moveOutcome: () => options.outcome ?? 'moved',
     shouldStop: () => false,
     findOpen: async (paths) => (options.open ? options.open(paths) : new Set()),
+    holdLocks: async () =>
+      options.locks === false ? null : { stillHeld: () => true, release: async () => {} },
     worker: {
       call: async (request) => {
         if (request.op === 'delete') {
@@ -79,18 +85,15 @@ describe('cleanUpCodexAccountCopies', () => {
   it('deletes a copy identical to or a prefix of its original, keeps one with bytes it lacks', async () => {
     put(storeFile(), LINE_1 + LINE_2)
     const prefix = put(conflictCopy(), LINE_1)
-    const identicalRel = REL.replace('0199a1b2', '0199a1b3')
-    put(storeFile(identicalRel), LINE_1 + LINE_2)
-    const identical = put(conflictCopy(identicalRel), LINE_1 + LINE_2)
+    put(storeFile(otherThread(3)), LINE_1 + LINE_2)
+    const identical = put(conflictCopy(otherThread(3)), LINE_1 + LINE_2)
     // Same size, one byte different: only reading both shows it.
-    const differsRel = REL.replace('0199a1b2', '0199a1b4')
-    put(storeFile(differsRel), LINE_1 + LINE_2)
-    const differs = put(conflictCopy(differsRel), LINE_1 + LINE_2.replace('second', 'secAnd'))
+    put(storeFile(otherThread(4)), LINE_1 + LINE_2)
+    const differs = put(conflictCopy(otherThread(4)), LINE_1 + LINE_2.replace('second', 'secAnd'))
     // The copy has a turn ~/.codex never got.
-    const longerRel = REL.replace('0199a1b2', '0199a1b5')
-    put(storeFile(longerRel), LINE_1)
-    const longer = put(conflictCopy(longerRel), LINE_1 + LINE_2)
-    const orphan = put(conflictCopy(REL.replace('0199a1b2', '0199a1b6')), LINE_1)
+    put(storeFile(otherThread(5)), LINE_1)
+    const longer = put(conflictCopy(otherThread(5)), LINE_1 + LINE_2)
+    const orphan = put(conflictCopy(otherThread(6)), LINE_1)
 
     const tally = await run()
 
@@ -103,54 +106,73 @@ describe('cleanUpCodexAccountCopies', () => {
     expect(existsSync(storeFile())).toBe(true)
   })
 
-  it('compares decompressed content when the store holds the other form', async () => {
-    const setAside = (rel: string) => join(home, '.orca-set-aside-rollouts', 'sessions', rel)
-    put(`${storeFile()}.zst`, zstdCompressSync(Buffer.from(LINE_1 + LINE_2)))
-    const prefix = put(setAside(REL), LINE_1)
-    const otherRel = REL.replace('0199a1b2', '0199a1b3')
-    put(`${storeFile(otherRel)}.zst`, zstdCompressSync(Buffer.from(LINE_1)))
-    const extra = put(setAside(otherRel), LINE_1 + LINE_2)
-    // Decodes past the copy's bytes, then fails: no readable original holds them.
-    const damagedRel = REL.replace('0199a1b2', '0199a1b4')
-    const whole = zstdCompressSync(Buffer.from(LINE_1 + LINE_2.repeat(20_000)))
-    put(`${storeFile(damagedRel)}.zst`, whole.subarray(0, -64))
-    const readable = put(setAside(damagedRel), LINE_1)
-    // A `.zst` copy against a plain original: only its first frame could be compared.
-    const framesRel = REL.replace('0199a1b2', '0199a1b5')
-    put(storeFile(framesRel), LINE_1)
-    const frames = put(
-      `${setAside(framesRel)}.zst`,
-      Buffer.concat([zstdCompressSync(Buffer.from(LINE_1)), zstdCompressSync(Buffer.from(LINE_2))])
-    )
+  it('keeps a copy whose thread a Codex has open to append, before it writes anything', async () => {
+    put(storeFile(), LINE_1)
+    const copy = put(conflictCopy(), LINE_1)
+    // Held: with coordination held, a lock file still there belongs to a live Codex.
+    put(join(store, 'thread-writer-locks', '0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b.lock'), '')
 
-    await run()
-
-    expect(existsSync(prefix)).toBe(false)
-    expect(existsSync(extra)).toBe(true)
-    expect(existsSync(readable)).toBe(true)
-    expect(existsSync(frames)).toBe(true)
+    expect(await run()).toMatchObject({ deleted: 0, busy: 1 })
+    expect(existsSync(copy)).toBe(true)
   })
 
-  it('touches nothing in a folder that is not an Orca account home', async () => {
-    rmSync(join(home, '.orca-managed-home'))
+  it('keeps every copy when Codex lock coordination cannot be held', async () => {
     put(storeFile(), LINE_1)
     const copy = put(conflictCopy(), LINE_1)
 
-    await run()
+    await run({ locks: false })
 
     expect(existsSync(copy)).toBe(true)
   })
 
-  it('never follows a link out of the home', async () => {
-    put(`${storeFile()}.zst`, zstdCompressSync(Buffer.from(LINE_1)))
-    const elsewhere = join(root, 'backup')
-    const backupCopy = put(join(elsewhere, 'sessions', REL), LINE_1)
-    symlinkSync(elsewhere, join(home, '.orca-set-aside-rollouts'), 'junction')
+  it('keeps a copy whose original was truncated after the check', async () => {
+    put(storeFile(), LINE_1 + LINE_2)
+    const copy = put(conflictCopy(), LINE_1 + LINE_2)
 
-    await run()
+    await run({ beforeDelete: () => writeFileSync(storeFile(), LINE_1.slice(0, 4)) })
 
-    expect(existsSync(backupCopy)).toBe(true)
+    expect(existsSync(copy)).toBe(true)
   })
+
+  it('keeps a plain copy against a cut-off compressed original, and never decodes one', async () => {
+    const setAside = (rel: string) => join(home, '.orca-set-aside-rollouts', 'sessions', rel)
+    const whole = zstdCompressSync(Buffer.from(LINE_1 + LINE_2))
+    // The checksum cut off: every declared byte still decodes.
+    put(`${storeFile()}.zst`, whole.subarray(0, -4))
+    const readable = put(setAside(REL), LINE_1)
+    put(`${storeFile(otherThread(3))}.zst`, whole)
+    const twin = put(conflictCopy(otherThread(3)), LINE_1)
+    // A `.zst` copy against a plain original: its later frames could hold anything.
+    put(storeFile(otherThread(4)), LINE_1)
+    const frames = put(
+      `${conflictCopy(otherThread(4))}.zst`,
+      Buffer.concat([zstdCompressSync(Buffer.from(LINE_1)), zstdCompressSync(Buffer.from(LINE_2))])
+    )
+    // Identical compressed bytes are the one `.zst` case that goes.
+    put(`${storeFile(otherThread(5))}.zst`, whole)
+    const sameZst = put(`${conflictCopy(otherThread(5))}.zst`, whole)
+
+    const tally = await run()
+
+    expect(existsSync(readable)).toBe(true)
+    expect(existsSync(twin)).toBe(true)
+    expect(existsSync(frames)).toBe(true)
+    expect(existsSync(sameZst)).toBe(false)
+    expect(tally).toMatchObject({ compressed: 3, deleted: 1 })
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps a copy another user could write, which no open check can see them hold',
+    async () => {
+      put(storeFile(), LINE_1)
+      const copy = put(conflictCopy(), LINE_1)
+      chmodSync(copy, 0o666)
+
+      await run()
+
+      expect(existsSync(copy)).toBe(true)
+    }
+  )
 
   it('keeps a copy a process has open, or when that cannot be told', async () => {
     put(storeFile(), LINE_1)
@@ -179,5 +201,26 @@ describe('cleanUpCodexAccountCopies', () => {
     await run({ beforeDelete: () => appendFileSync(copy, LINE_2.replace('second', 'other')) })
 
     expect(existsSync(copy)).toBe(true)
+  })
+
+  it('touches nothing in a folder that is not an Orca account home', async () => {
+    rmSync(join(home, '.orca-managed-home'))
+    put(storeFile(), LINE_1)
+    const copy = put(conflictCopy(), LINE_1)
+
+    await run()
+
+    expect(existsSync(copy)).toBe(true)
+  })
+
+  it('never follows a link out of the home', async () => {
+    put(storeFile(), LINE_1)
+    const elsewhere = join(root, 'backup')
+    const backupCopy = put(join(elsewhere, REL), LINE_1)
+    symlinkSync(elsewhere, join(home, 'sessions.orca-profile-merge'), 'junction')
+
+    await run()
+
+    expect(existsSync(backupCopy)).toBe(true)
   })
 })
