@@ -32,14 +32,13 @@ export function answerProviderRelayRequest(
       ? { ...request.payload }
       : {}
   const relayId = payload.relayId
+  // Which daemon start answers, echoed so a client never reads it from a reconnect's newer hello.
+  const instance = relays.daemonInstance ? { daemonInstance: relays.daemonInstance } : {}
   switch (request.type) {
     case 'relaySpawn':
-      return relays.spawn(
-        request.payload?.spec,
-        request.payload?.chatKey,
-        payload.policy,
-        payload.agent
-      )
+      return relays
+        .spawn(request.payload?.spec, request.payload?.chatKey, payload.policy, payload.agent)
+        .then((spawned) => ('relayId' in spawned ? { ...spawned, ...instance } : spawned))
     case 'relayAttach':
       if (!client.streamSocket) {
         return Promise.reject(new Error('Daemon client connection is incomplete; reconnect'))
@@ -65,7 +64,7 @@ export function answerProviderRelayRequest(
     case 'relayClose':
       return relays.close(relayId, payload.grace).then(() => ({}))
     case 'relayList':
-      return Promise.resolve(relays.list())
+      return Promise.resolve({ ...relays.list(), ...instance })
     case 'relayDetach':
       return relays.detach(clientId, relayId, payload.policy).then(() => ({}))
   }
