@@ -14,20 +14,21 @@ export abstract class RuntimeTerminalNames extends RuntimeWorkspaceArchive {
     options: { ifManualTitle?: string } = {}
   ): Promise<RuntimeTerminalRename> {
     const { ifManualTitle } = options
-    // The check and each write path below run without yielding in between, so no other rename can land between them.
+    const conditional = ifManualTitle !== undefined ? { ifManualTitle } : {}
+    // Switch point: a terminal main owns is renamed in main's layout, with or without a window.
+    // That path compares the manual name inside its queued durable write.
+    const mainRename = ORCA_LAYOUT_OWNER_IS_MAIN
+      ? await this.renameTerminalInMainLayout(handle, title, ifManualTitle)
+      : null
+    if (mainRename) {
+      return { ...mainRename, ...conditional }
+    }
+    // Other paths write synchronously from here, so no other rename can land between this check and the write.
     if (
       ifManualTitle !== undefined &&
       (this.getTerminalManualTitle(handle) ?? '') !== ifManualTitle.trim()
     ) {
       throw new Error('terminal_title_changed')
-    }
-    const conditional = ifManualTitle !== undefined ? { ifManualTitle } : {}
-    // Switch point: a terminal main owns is renamed in main's layout, with or without a window.
-    const mainRename = ORCA_LAYOUT_OWNER_IS_MAIN
-      ? await this.renameTerminalInMainLayout(handle, title)
-      : null
-    if (mainRename) {
-      return { ...mainRename, ...conditional }
     }
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
