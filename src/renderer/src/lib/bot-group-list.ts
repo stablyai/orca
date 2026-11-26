@@ -41,7 +41,8 @@ async function readBotHostGroups(hostId: ExecutionHostId): Promise<void> {
   requests.set(hostId, revision)
   const result = await callRuntimeRpc<{ groups: BotGroup[] }>(
     botHostTarget(hostId),
-    'bots.groups.list'
+    'bots.groups.list',
+    { includeReplyPreviews: true }
   )
   if (revision === requests.get(hostId)) {
     publishBotGroups(result.groups, hostId)

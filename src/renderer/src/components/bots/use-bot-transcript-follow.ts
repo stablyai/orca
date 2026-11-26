@@ -101,6 +101,15 @@ export function useBotTranscriptFollow({
     readerAtEnd: scroll.readerAtEnd,
     scrollTo
   })
+  const { scrollMessageToTop } = scroll
+  const revealRow = useCallback(
+    (row: HTMLElement) => {
+      scrollMessageToTop(row)
+      // A resize before the scroll event must preserve the newly revealed row.
+      recordAnchor()
+    },
+    [recordAnchor, scrollMessageToTop]
+  )
   const followScroll = scroll.onScroll
   const onScroll = useCallback(
     (event: React.UIEvent<HTMLDivElement>) => {
@@ -133,6 +142,7 @@ export function useBotTranscriptFollow({
     leaveEnd: scroll.readerLeavesEnd,
     forwardedGesture: reader.forwardedGesture,
     transcriptRef,
-    scrollMessageToTop: scroll.scrollMessageToTop
+    scrollMessageToTop,
+    revealRow
   }
 }

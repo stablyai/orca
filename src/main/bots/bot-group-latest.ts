@@ -49,11 +49,19 @@ export async function noteBotGroupMemberReply(
   const finished = ended?.completed
     ? botGroupCompletedReply(botGroupTurnItems(snapshot, operationId, turn.workerDispatchIds))
     : null
+  const at = finished?.completedAt ?? endedAt
   // Saved now, while the chat is open, so later posts never reopen it to quote this reply.
   groups.store.update({
     ...message,
     turns: message.turns.map((candidate) =>
-      candidate === turn ? { ...candidate, reply: finished?.text ?? null } : candidate
+      candidate === turn
+        ? {
+            ...candidate,
+            reply: finished?.text ?? null,
+            replyAt: finished ? at : undefined,
+            replyMessageId: finished?.messageId
+          }
+        : candidate
     )
   })
   if (!finished) {
@@ -61,10 +69,10 @@ export async function noteBotGroupMemberReply(
   }
   const kept = groups.store.setLatest(
     owner.group.id,
-    { authorName: turn.botName, text: finished.text, at: finished.completedAt ?? endedAt },
+    { authorName: turn.botName, text: finished.text, at },
     { after, reply }
   )
-  if (kept) {
+  if (kept || !message.threadId) {
     groups.changed(owner.group.id)
   }
   await handOffGroupMentions(groups, message, turn, { full: finished.full, saved: finished.text })

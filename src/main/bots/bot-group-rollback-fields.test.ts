@@ -2,8 +2,13 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { BotGroup, BotGroupMessage } from '../../shared/bots/bot-group'
 import { botGroupRoomMailAddress } from '../../shared/bots/bot-group-room-mail'
 import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
-import { remoteRoomMailArrived, settleStoredRoomMail } from './bot-group-remote-answers'
+import {
+  collectRemoteAnswers,
+  remoteRoomMailArrived,
+  settleStoredRoomMail
+} from './bot-group-remote-answers'
 import type { BotGroupRuntime } from './bot-group-runtime'
+import { saveGroupPeerAnswer } from './bot-group-peer-answer'
 import { BotGroupStore } from './bot-group-store'
 
 // What keeps a group's paired roster, remote answers and image refs through a rollback, and how a
@@ -125,7 +130,7 @@ describe('a rollback to a build that predates these fields', () => {
     expect(groups.store.get(group.id).remoteMembers).toEqual([ATLAS])
     expect(groups.store.message(posted.id)).toEqual(answered)
     expect(answered.images).toEqual([image])
-    expect(answered.remoteAsks![0].reply).toEqual({ kind: 'answer', text: 'Green on main.' })
+    expect(answered.remoteAsks![0].reply).toMatchObject({ kind: 'answer', text: 'Green on main.' })
   })
 
   it('still clears a roster removed on a build that knows it', () => {
@@ -140,8 +145,120 @@ describe('a remote answer arriving', () => {
     const { groups, group, arrive, unread, reply } = room()
     arrive('q-1', 'Green on main.')
     remoteRoomMailArrived(groups, group.id)
-    expect(reply('post-1')).toEqual({ kind: 'answer', text: 'Green on main.' })
+    expect(reply('post-1')).toMatchObject({ kind: 'answer', text: 'Green on main.' })
     expect(unread()).toEqual([])
+  })
+
+  it('lists paired mail by the member host and points to the exact persisted answer', async () => {
+    const { groups, group, arrive, posted } = room()
+    expect((await groups.store.listing(true))[0].replyPreviews).toEqual([])
+    const { message } = arrive('q-1', 'Green on main.')
+    expect(message).toBeDefined()
+    remoteRoomMailArrived(groups, group.id)
+    const target = groups.store.message(posted.id)!
+    expect((await groups.store.listing(true))[0].replyPreviews).toEqual([
+      {
+        source: 'mail',
+        environmentId: 'env-s',
+        botId: 'bot-0',
+        messageId: 'post-1',
+        sequence: target.sequence,
+        requestId: 'q-1',
+        replyMessageId: 'msg_q-1',
+        text: 'Green on main.',
+        at: Date.parse(message!.created_at),
+        receivedSequence: message!.sequence
+      }
+    ])
+  })
+
+  it('recovers legacy reply metadata for the list without settling mail', async () => {
+    const { groups, arrive, posted, unread, reply } = room()
+    const { message } = arrive('q-1', 'Green on main.')
+    const post = groups.store.message(posted.id)!
+    const answer = { kind: 'answer', text: 'Green on main.' } as const
+    groups.store.update({
+      ...post,
+      remoteAsks: post.remoteAsks?.map((ask) => ({ ...ask, reply: answer }))
+    })
+
+    const [listed] = await groups.store.listing(true, async (posts) => ({
+      messages: collectRemoteAnswers(groups, posts, true),
+      complete: true
+    }))
+
+    expect(listed.replyPreviews).toMatchObject([
+      { text: answer.text, replyMessageId: message!.id, at: Date.parse(message!.created_at) }
+    ])
+    expect(unread().map(({ id }) => id)).toEqual([message!.id])
+    expect(reply(post.id)).toEqual(answer)
+  })
+
+  it('ranks a tool-only room answer by the sent mail time', async () => {
+    const { groups, group, arrive } = room()
+    const { message } = arrive('q-1', 'The build is green.')
+    expect(message).toBeDefined()
+    const at = Date.parse(message!.created_at)
+    const turn = {
+      botId: 'scout',
+      botName: 'Scout',
+      sessionId: 'scout-room',
+      agent: 'claude',
+      avatar: null,
+      operationId: 'ordinary-reply',
+      reply: 'The build is running.',
+      replyAt: at - 1000
+    } as const
+    const post = { groupId: group.id, createdAt: at - 2000, author: { kind: 'owner' as const } }
+    groups.store.append({ ...post, id: 'older-answer', text: 'How is the build?', turns: [turn] })
+    groups.store.append({
+      ...post,
+      id: 'mailed-answer',
+      text: 'Is the build ready?',
+      turns: [{ ...turn, operationId: 'mailed-reply', reply: null, replyAt: undefined }]
+    })
+    saveGroupPeerAnswer(groups, 'mailed-reply', message!)
+
+    const mailPreview = {
+      at,
+      messageId: 'mailed-answer',
+      replyMessageId: 'mailed-reply:answer',
+      text: message!.body
+    }
+    expect((await groups.store.listing(true))[0].replyPreviews).toMatchObject([mailPreview])
+
+    const mailed = groups.store.message('mailed-answer')!
+    groups.store.update({
+      ...mailed,
+      turns: [
+        {
+          ...mailed.turns[0],
+          reply: 'NO_REPLY',
+          replyAt: at + 1000,
+          replyMessageId: 'quiet-marker'
+        }
+      ]
+    })
+    expect((await groups.store.listing(true))[0].replyPreviews).toMatchObject([mailPreview])
+
+    groups.store.update({
+      ...mailed,
+      turns: [
+        {
+          ...mailed.turns[0],
+          reply: message!.body,
+          replyAt: at + 2000,
+          replyMessageId: 'visible-journal-answer'
+        }
+      ]
+    })
+    expect((await groups.store.listing(true))[0].replyPreviews).toMatchObject([
+      {
+        ...mailPreview,
+        at: at + 2000,
+        replyMessageId: 'visible-journal-answer'
+      }
+    ])
   })
 
   it('indexes questions asked before the index existed, past damaged posts', () => {
@@ -155,7 +272,7 @@ describe('a remote answer arriving', () => {
     const groups = groupsOn(orchestration, new BotGroupStore(db))
     arrive('q-1', 'Green on main.')
     remoteRoomMailArrived(groups, group.id)
-    expect(reply('post-1')).toEqual({ kind: 'answer', text: 'Green on main.' })
+    expect(reply('post-1')).toMatchObject({ kind: 'answer', text: 'Green on main.' })
   })
 
   it('reads at startup only the posts added since the last pass', () => {
@@ -172,7 +289,7 @@ describe('a remote answer arriving', () => {
     db.prepare('UPDATE bot_group_remote_asks_scanned SET sequence = 0').run()
     arrive('q-1', 'Green on main.')
     settleStoredRoomMail(groupsOn(orchestration, new BotGroupStore(db)))
-    expect(reply('post-1')).toEqual({ kind: 'answer', text: 'Green on main.' })
+    expect(reply('post-1')).toMatchObject({ kind: 'answer', text: 'Green on main.' })
     expect(unread()).toEqual([])
   })
 
@@ -197,7 +314,7 @@ describe('a remote answer arriving', () => {
     arrive('q-1', 'One.')
     arrive('q-2', 'Two.')
     remoteRoomMailArrived(groups, group.id)
-    expect(reply('post-2')).toEqual({ kind: 'answer', text: 'Two.' })
+    expect(reply('post-2')).toMatchObject({ kind: 'answer', text: 'Two.' })
     expect(unread()).toEqual([])
   })
 
@@ -210,7 +327,7 @@ describe('a remote answer arriving', () => {
     expect(unread()).toHaveLength(1)
     db.exec('DROP TRIGGER reject_post')
     remoteRoomMailArrived(groups, group.id)
-    expect(reply('post-1')).toEqual({ kind: 'answer', text: 'Green on main.' })
+    expect(reply('post-1')).toMatchObject({ kind: 'answer', text: 'Green on main.' })
     expect(unread()).toEqual([])
   })
 
@@ -227,7 +344,7 @@ describe('a remote answer arriving', () => {
     expect(unread()).toHaveLength(1)
     db.exec('DROP TRIGGER fail_marker')
     settleStoredRoomMail(groupsOn(orchestration, new BotGroupStore(db)))
-    expect(reply('post-1')).toEqual({ kind: 'answer', text: 'Green on main.' })
+    expect(reply('post-1')).toMatchObject({ kind: 'answer', text: 'Green on main.' })
     expect(unread()).toEqual([])
   })
 

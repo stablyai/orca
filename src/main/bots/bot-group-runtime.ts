@@ -200,7 +200,8 @@ export class BotGroupRuntime {
   answerTurn = (sessionId: string, text: string) => groupAnswerTurn(this, sessionId, text)
   noteMailed = (operationId: string | undefined, botId: string) =>
     noteGroupTurnMailed(this, operationId, botId)
-  saveAnswer = (operationId: string, text: string) => saveGroupPeerAnswer(this, operationId, text)
+  saveAnswer = (operationId: string, reply: Pick<MessageRow, 'body' | 'created_at'>) =>
+    saveGroupPeerAnswer(this, operationId, reply)
   recordWorker = (operation: Promise<string | null>, dispatchId: string) =>
     recordGroupWorker(this, operation, dispatchId)
 }

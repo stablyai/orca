@@ -74,6 +74,27 @@ export const BotGroupLatestSchema = z.object({
   at: z.number()
 })
 
+const BotGroupReplyPreviewBase = BotGroupLatestSchema.pick({ text: true }).extend({
+  at: z.number().nullable(),
+  botId: z.string(),
+  messageId: z.string(),
+  sequence: z.number().int().positive()
+})
+const BotGroupReplyPreviewSchema = z.union([
+  BotGroupReplyPreviewBase.extend({
+    source: z.literal('turn').optional(),
+    operationId: z.string(),
+    replyMessageId: z.string().optional()
+  }),
+  BotGroupReplyPreviewBase.extend({
+    source: z.literal('mail'),
+    environmentId: z.string(),
+    requestId: z.string(),
+    receivedSequence: z.number().optional(),
+    replyMessageId: z.string().optional()
+  })
+])
+
 export const BotGroupSchema = z.object({
   id: z.string().min(1),
   name: BotNameSchema,
@@ -94,7 +115,8 @@ export const BotGroupSchema = z.object({
   /** Listed beside the record, never in it: its place in the sidebar, set by a drag. */
   sidebarOrder: z.number().int().nonnegative().optional(),
   /** Listed beside the record, never in it. Older hosts list neither. */
-  latest: BotGroupLatestSchema.optional()
+  latest: BotGroupLatestSchema.optional(),
+  replyPreviews: z.array(BotGroupReplyPreviewSchema).optional()
 })
 
 /** One native operation a post started; the bot's name, avatar and agent as they were then. */
@@ -117,8 +139,11 @@ const BotGroupTurnSchema = z.object({
   /** The finished reply, saved when the turn ended; null when it ended without one. Absent while
    *  the turn runs, and on turns saved before replies were. */
   reply: z.string().nullable().optional(),
+  replyAt: z.number().optional(),
+  replyMessageId: z.string().optional(),
   /** Its answer to another member's request: sent as mail, so its own chat shows only the call. */
   answer: z.string().optional(),
+  answerAt: z.number().optional(),
   /** The members its reply named, saved as their hand-offs were reserved: a replay wakes none. */
   handedOff: z.array(z.string()).optional(),
   /** The members it sent peer requests to: its @mentions of them wake no second turn. */
@@ -144,6 +169,9 @@ export const BotGroupRemoteAskSchema = BotGroupRemoteMemberSchema.extend({
       z.object({
         kind: z.literal('answer'),
         text: z.string(),
+        messageId: z.string().optional(),
+        receivedAt: z.number().nullable().optional(),
+        receivedSequence: z.number().optional(),
         /** Shortened here; the whole answer is in this computer's mail. */
         truncated: z.literal(true).optional()
       }),
@@ -227,7 +255,8 @@ export const LegacyBotGroupSchema = BotGroupSchema.omit({
   folder: true,
   folderWorkspaceId: true,
   sidebarOrder: true,
-  latest: true
+  latest: true,
+  replyPreviews: true
 }).extend({ anchorSessionId: z.string().min(1) })
 
 export type BotGroupReplyMode = z.infer<typeof BotGroupReplyMode>

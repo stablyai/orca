@@ -1,6 +1,7 @@
 import { ZodError } from 'zod'
 import type { BotGroupMessage } from '../../shared/bots/bot-group'
 import type { MessageRow } from '../runtime/orchestration/db/orchestration-records'
+import { exposeUtcTimestamp } from '../runtime/orchestration/db/utc-timestamp'
 import { botGroupRoomMailAddress } from '../../shared/bots/bot-group-room-mail'
 import type { BotGroupRuntime } from './bot-group-runtime'
 import { isRemoteAskInFlight } from './bot-group-remote'
@@ -49,7 +50,7 @@ export function presentPageAnswers(messages: readonly BotGroupMessage[]): BotGro
           ...ask,
           state,
           reply: {
-            kind: 'answer' as const,
+            ...ask.reply,
             text: answer,
             ...(answer.length < ask.reply.text.length || ask.reply.truncated
               ? { truncated: true as const }
@@ -67,14 +68,18 @@ export function presentPageAnswers(messages: readonly BotGroupMessage[]): BotGro
  * room's own conversation with that computer counts; the other computer threads its answer and its
  * "won't answer" notice on the question's id, and the answer carries the bot's answer marker. An
  * answer replaces a notice, never the reverse. Each post is merged as it is stored now.
+ * Legacy preview recovery returns metadata without settling the post or mail.
  */
 export function collectRemoteAnswers(
   groups: BotGroupRuntime,
-  messages: readonly BotGroupMessage[]
+  messages: readonly BotGroupMessage[],
+  recoverSaved = false
 ): BotGroupMessage[] {
-  const open = messages.filter((message) =>
-    message.remoteAsks?.some((ask) => ask.reply?.kind !== 'answer')
-  )
+  const needsMail = (ask: NonNullable<BotGroupMessage['remoteAsks']>[number]) =>
+    recoverSaved
+      ? ask.reply?.kind === 'answer' && ask.reply.receivedAt === undefined
+      : ask.reply?.kind !== 'answer'
+  const open = messages.filter((message) => message.remoteAsks?.some(needsMail))
   if (open.length === 0) {
     return [...messages]
   }
@@ -89,16 +94,16 @@ export function collectRemoteAnswers(
   )
   const updated = new Map<string, BotGroupMessage>()
   const read: string[] = []
-  groups.store.transaction(() => {
-    for (const { id } of open) {
-      const current = groups.store.message(id)
+  const collect = (): void => {
+    for (const message of open) {
+      const current = recoverSaved ? message : groups.store.message(message.id)
       if (!current?.remoteAsks) {
         continue
       }
       const address = botGroupRoomMailAddress(current.groupId)
       let changed = false
       const remoteAsks = current.remoteAsks.map((ask) => {
-        if (ask.reply?.kind === 'answer') {
+        if (!needsMail(ask)) {
           return ask
         }
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: m.* over messages returns its row shape.
@@ -108,15 +113,21 @@ export function collectRemoteAnswers(
           address,
           ask.requestId
         ) as MessageRow[]
-        read.push(...rows.filter((row) => row.read === 0).map((row) => row.id))
+        if (!recoverSaved) {
+          read.push(...rows.filter((row) => row.read === 0).map((row) => row.id))
+        }
         const answer = rows.find((row) => isBotAnswer(row, ask.requestId))
         if (answer) {
           changed = true
+          const receivedAt = Date.parse(exposeUtcTimestamp(answer.created_at) ?? '')
           return {
             ...ask,
             state: 'sent' as const,
             reply: {
               kind: 'answer' as const,
+              messageId: answer.id,
+              receivedAt: Number.isFinite(receivedAt) ? receivedAt : null,
+              receivedSequence: answer.sequence,
               text: answer.body.slice(0, SAVED_ANSWER_MAX),
               ...(answer.body.length > SAVED_ANSWER_MAX ? { truncated: true as const } : {})
             }
@@ -130,11 +141,18 @@ export function collectRemoteAnswers(
       })
       if (changed) {
         const next = { ...current, remoteAsks }
-        groups.store.update(next)
-        updated.set(id, next)
+        if (!recoverSaved) {
+          groups.store.update(next)
+        }
+        updated.set(current.id, next)
       }
     }
-  })
+  }
+  if (recoverSaved) {
+    collect()
+  } else {
+    groups.store.transaction(collect)
+  }
   if (read.length > 0) {
     db.markAsRead(read, { kind: 'orca' })
   }

@@ -39,6 +39,7 @@ import {
 
 /** Not a chat id: chat ids are session ids. */
 const OLDER_TOGGLE_KEY = '\u0000older-toggle'
+const GROUP_REPLIES_KEY = '\u0000group-replies'
 
 /** The bot's open chat tabs in the panel's order, each with the workspaces its workers have, nested by
  *  indent; settled ones a day old fold under one "Show N older" link. */
@@ -53,7 +54,8 @@ export function BotSidebarChats({
   onStep,
   showOlder,
   onToggleOlder,
-  onOpen
+  onOpen,
+  groupReplies
 }: {
   bot: Bot
   tree: BotChatTree
@@ -68,6 +70,7 @@ export function BotSidebarChats({
   showOlder: boolean
   onToggleOlder: () => void
   onOpen: () => void
+  groupReplies: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const { chats, workspaceChats } = tree
@@ -215,8 +218,14 @@ export function BotSidebarChats({
   )
   // One keyed list, toggle included, so a chat moving between recent and older keeps its row (focus,
   // open menu) instead of mounting again under another parent.
+  const replyRows = <React.Fragment key={GROUP_REPLIES_KEY}>{groupReplies}</React.Fragment>
   const rows = [
-    ...recent.map((chatView) => chatRow(chatView, false)),
+    ...(!recent.some(({ chat }) => chat.origin === 'home') ? [replyRows] : []),
+    ...recent.flatMap((chatView) =>
+      chatView.chat.origin === 'home'
+        ? [chatRow(chatView, false), replyRows]
+        : [chatRow(chatView, false)]
+    ),
     ...(older.length > 0
       ? [
           <BotSidebarOlderToggle

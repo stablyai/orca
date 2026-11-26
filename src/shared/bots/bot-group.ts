@@ -17,6 +17,8 @@ import {
   type BotGroupMessage
 } from './bot-group-schema'
 
+export { botGroupCompletedReply, botGroupCompletedText } from './bot-group-completed-reply'
+
 export {
   BotGroupReplyMode,
   botGroupOwnerMessageBlocks,
@@ -113,6 +115,7 @@ const GroupId = z.object({ groupId: z.string().min(1) })
 /** A room in the group: one of its threads, or the original room when absent. */
 const Room = GroupId.extend({ threadId: z.string().min(1).optional() })
 const Revision = GroupId.extend({ revision: z.number().int().positive() })
+export const BotGroupList = z.object({ includeReplyPreviews: z.boolean().optional() })
 export const BotGroupCreate = z.object({
   name: BotNameSchema,
   botIds: z.array(z.string().min(1)).min(1).max(32),
@@ -258,30 +261,6 @@ export function botGroupTurnItems(
   workerDispatchIds: readonly string[] = []
 ): AgentJournalRenderItem[] {
   return indexBotGroupJournal(snapshot)(operationId, workerDispatchIds)
-}
-
-export function botGroupCompletedText(items: readonly AgentJournalRenderItem[]): string | null {
-  return botGroupCompletedReply(items)?.text ?? null
-}
-
-/** A turn's finished reply (`text` cut for room history, `full` whole) and when it finished; null
- *  until it completes with text. */
-export function botGroupCompletedReply(
-  items: readonly AgentJournalRenderItem[]
-): { text: string; full: string; completedAt: number | undefined } | null {
-  const turn = items.find((item) => item.body.kind === 'turn')
-  if (turn?.body.kind !== 'turn' || turn.body.state !== 'completed') {
-    return null
-  }
-  const completedAt = turn.body.completedAt
-  const full = items
-    .flatMap((item) =>
-      item.body.kind === 'message' && item.body.role === 'assistant'
-        ? item.body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
-        : []
-    )
-    .join('\n')
-  return full ? { text: full.slice(-16_000), full, completedAt } : null
 }
 
 /** What a member has not seen: posts and replies since it was last asked (all, if new), newest kept

@@ -1,7 +1,7 @@
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { useTranslate } from '@/i18n/use-translate'
-import { memo, useCallback, useMemo, useState } from 'react'
+import { memo, useCallback, useLayoutEffect, useMemo, useState } from 'react'
 import { createNativeChatMessageListProjection } from '../native-chat/conversation/projection/native-chat-message-list-projection'
 import { Reply, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -42,6 +42,7 @@ export const BotGroupTurn = memo(function BotGroupTurn({
   hostId,
   turn,
   session,
+  revealReplyId,
   onStop,
   onReply,
   scrollMessageToTop,
@@ -62,6 +63,7 @@ export const BotGroupTurn = memo(function BotGroupTurn({
   tabId: string
   isVisible: boolean
   session?: BotGroupSession
+  revealReplyId?: string
   onStop: (botId: string) => void
   onReply: (botId: string) => void
   scrollMessageToTop: (element: HTMLElement) => void
@@ -186,6 +188,19 @@ export const BotGroupTurn = memo(function BotGroupTurn({
       subagentHeads
     ]
   )
+  useLayoutEffect(() => {
+    if (
+      revealReplyId &&
+      !subagentOpen &&
+      !expanded &&
+      messages.some((message) => message.id === revealReplyId) &&
+      !slots.some(
+        (slot) => slot.kind === 'message' && slot.message.id === revealReplyId && slot.drawsMessage
+      )
+    ) {
+      setExpanded(true)
+    }
+  }, [expanded, messages, revealReplyId, slots, subagentOpen])
   // The turn's own header line draws its status; its rows must not draw it again.
   const rows = useMemo(
     () => slots.map((slot) => (slot.kind === 'message' ? { ...slot, status: undefined } : slot)),
