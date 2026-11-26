@@ -218,10 +218,12 @@ export class ClaudeHookService {
       writeManagedScript(scriptPath, payload)
     }
     if (options.configDir === undefined) {
-      publishClaudeHookPlugin(
-        this.options.agent,
-        nextConfig,
-        getManagedScriptFileName(this.options.settings)
+      const merged = nextConfig.hooks ?? {}
+      // applyManagedHooks appends Orca's entry last per event; reuse it so a user's async choice carries over.
+      publishClaudeHookPlugin(this.options.agent, () =>
+        Object.fromEntries(
+          plan.install.map(({ eventName }) => [eventName, merged[eventName].slice(-1)])
+        )
       )
     }
     // Profiles inherit statusLine from the default-home settings copy.
