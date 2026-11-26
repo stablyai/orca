@@ -1072,6 +1072,8 @@
       "claudeWorkspace": "Claude-Arbeitsbereich",
       "httpServer": "HTTP-Server",
       "inspectFailed": "{{directory}} konnte nicht geprüft werden.",
+      "inspectConfigsFailed": "MCP-Konfigurationen konnten nicht geprüft werden.",
+      "createConfigFailed": "MCP-Konfiguration konnte nicht erstellt werden.",
       "invalidJson": "Ungültiges JSON",
       "invalidServer": "Ungültiger Server",
       "noServers": "Keine Server",
@@ -1241,8 +1243,152 @@
       "keywordSecurity": "Sicherheit"
     },
     "mcpServers": {
+      "custom": {
+        "noneChecked": "Markiere einen Server zum Hinzufügen.",
+        "addMany": "{{count}} Server hinzufügen",
+        "found": "{{count}} Server gefunden",
+        "foundUrl": "URL · {{line}}",
+        "foundCommand": "Befehl · {{line}}",
+        "title": "Eigener Server",
+        "sourceLabel": "Server-URL, Startbefehl oder Konfiguration",
+        "sourceHint": "Füge eine Server-URL, einen Startbefehl oder eine Konfiguration ein oder gib die Details selbst ein.",
+        "nameTaken": "Ein Server namens {{name}} existiert bereits. Wähle einen anderen Namen.",
+        "line": "Eine URL, ein Startbefehl oder eine Konfiguration",
+        "foundTaken": "Bereits hinzugefügt"
+      },
+      "empty": {
+        "copied": "{{count}} Server von {{host}} kopiert",
+        "title": "Keine MCP-Server auf {{host}}",
+        "copyFrom": "Von {{host}} kopieren"
+      },
+      "addServer": "Server hinzufügen",
+      "toast": {
+        "allOn": "{{name}} für alle Agenten aktiviert",
+        "allOff": "{{name}} für alle Agenten deaktiviert",
+        "agentOn": "{{name}} für {{agent}} aktiviert",
+        "agentOff": "{{name}} für {{agent}} deaktiviert",
+        "saved": "{{name}} gespeichert",
+        "sharedOn": "{{name}} teilt sich einen Prozess",
+        "sharedOff": "{{name}} läuft einmal pro Sitzung",
+        "signedOut": "Von {{name}} abgemeldet",
+        "removed": "{{name}} entfernt",
+        "workspaces": "{{name}}: {{workspaces}}",
+        "added": "{{name}} hinzugefügt",
+        "newSessions": "Gilt für neue Sitzungen",
+        "restart_one": "{{count}} Sitzung neu starten",
+        "restart_other": "{{count}} Sitzungen neu starten",
+        "staleTerminals_one": "{{count}} Agenten-Terminal verwendet eine ältere MCP-Einrichtung",
+        "staleTerminals_other": "{{count}} Agenten-Terminals verwenden eine ältere MCP-Einrichtung",
+        "staleTerminalsOnHost_one": "{{count}} Agenten-Terminal auf {{host}} verwendet eine ältere MCP-Einrichtung",
+        "staleTerminalsOnHost_other": "{{count}} Agenten-Terminals auf {{host}} verwenden eine ältere MCP-Einrichtung",
+        "staleTerminalsRestart_one": "Starte es neu, um Orcas MCP-Server wieder zu verbinden.",
+        "staleTerminalsRestart_other": "Starte sie neu, um Orcas MCP-Server wieder zu verbinden.",
+        "staleTerminalsRestartManual_one": "Starte es selbst neu, um Orcas MCP-Server wieder zu verbinden.",
+        "staleTerminalsRestartManual_other": "Starte sie selbst neu, um Orcas MCP-Server wieder zu verbinden.",
+        "staleTerminalsRestartSome_one": "Davon kannst du {{restartable}} hier fortsetzen. Starte das andere selbst neu.",
+        "staleTerminalsRestartSome_other": "Davon kannst du {{restartable}} hier fortsetzen. Starte die anderen {{count}} selbst neu.",
+        "addedMany": "{{count}} Server hinzugefügt",
+        "repoOn": "{{name}} in {{repo}} aktiviert",
+        "repoOff": "{{name}} in {{repo}} deaktiviert"
+      },
+      "fileAgent": {
+        "title": "Orca die MCP-Datei von {{agent}} bearbeiten lassen?",
+        "line": "Orca speichert deine MCP-Server in der Einstellungsdatei von {{agent}} ({{file}}). Deine eigenen Einträge bleiben unverändert.",
+        "allow": "Zulassen"
+      },
       "agents": {
+        "title": "Agenten",
+        "allOff": "Alle deaktivieren",
+        "allOn": "Alle aktivieren",
+        "all": "Alle Agenten",
+        "someOff": "{{count}} Agenten deaktiviert",
+        "none": "Keine Agenten",
+        "some": "{{on}} von {{total}} Agenten",
         "blocked": "Durch die Claude-Einstellungen deiner Organisation blockiert"
+      },
+      "stale": "Dieser Server wurde anderswo geändert. Er wird im aktuellen Zustand angezeigt.",
+      "launch": {
+        "title": "Start",
+        "command": "Befehl",
+        "args": "Argumente",
+        "env": "Umgebung"
+      },
+      "connection": {
+        "title": "Verbindung",
+        "url": "URL",
+        "headers": "Header"
+      },
+      "shared": {
+        "title": "Einen Prozess für alle Agenten teilen",
+        "line": "Verbraucht weniger Arbeitsspeicher. Der Server läuft außerhalb des Arbeitsbereichsordners."
+      },
+      "status": {
+        "needsSignIn": "Anmeldung erforderlich",
+        "signedIn": "Angemeldet",
+        "commandFailed": "Befehl auf {{host}} nicht gefunden",
+        "unreachable": "{{host}} nicht erreichbar"
+      },
+      "signIn": "Anmelden",
+      "signInActions": "Anmeldeaktionen",
+      "signInAgain": "Erneut anmelden",
+      "signOut": "Abmelden",
+      "loading": "MCP-Server werden gelesen…",
+      "remove": {
+        "title": "{{name}} entfernen?",
+        "line": "Neue Sitzungen auf {{host}} haben ihn nicht mehr. Seine gespeicherten Werte und die Anmeldung werden gelöscht.",
+        "confirm": "Entfernen",
+        "button": "Server entfernen"
+      },
+      "found": {
+        "onlyIn": "{{agents}} · nur {{projects}}",
+        "move": "Zu Orca verschieben",
+        "actions": "Aktionen für {{name}}",
+        "copy": "In Orca kopieren",
+        "open": "Öffnen",
+        "copied": "{{name}} in Orca kopiert",
+        "title": "In deinen Agenten",
+        "summary": "{{count}} Server in {{agents}} gefunden",
+        "moveAll": "Alle zu Orca verschieben"
+      },
+      "signedInToast": "Bei {{name}} angemeldet",
+      "pasteRefused": "Diese Adresse stammt nicht von dieser Anmeldung.",
+      "workspaces": {
+        "title": "Arbeitsbereiche",
+        "later": "Später hinzugefügte Arbeitsbereiche",
+        "all": "Alle Arbeitsbereiche",
+        "none": "Keine Arbeitsbereiche",
+        "allBut": "Alle außer {{names}}",
+        "only": "Nur {{names}}"
+      },
+      "catalog": {
+        "noMatch": "Kein Server entspricht „{{query}}“.",
+        "search": "Server suchen",
+        "caption": "Server"
+      },
+      "add": {
+        "title": "MCP-Server hinzufügen"
+      },
+      "catalogLine": {
+        "github": "Issues, Pull Requests und Codesuche",
+        "linear": "Issues und Projekte lesen und aktualisieren"
+      },
+      "move": {
+        "title": "{{name}} zu Orca verschieben?",
+        "allTitle": "{{count}} Server zu Orca verschieben?",
+        "line": "Orca entfernt ihn aus den Einstellungen von {{agents}} und behält eine Sicherung.",
+        "allLine": "Orca entfernt sie aus den Einstellungen von {{agents}} und behält eine Sicherung.",
+        "confirm": "Verschieben"
+      },
+      "yours": "Deine",
+      "fromPlugins": "Aus Plugins",
+      "unsupported": "MCP-Server sind auf {{host}} nicht verfügbar.",
+      "title": "MCP-Server",
+      "description": "Server, die deine Agenten verwenden können. Änderungen gelten für neue Sitzungen.",
+      "repo": {
+        "on": "In diesem Repo aktiv",
+        "add": "Server für dieses Repo hinzufügen",
+        "files": "Aus den Dateien dieses Repos",
+        "open": "{{file}} öffnen"
       }
     }
   },
@@ -12137,6 +12283,7 @@
         "PluginConsentDialog": {
           "reconsent": "Seit der letzten Prüfung dieses Plugins haben sich Berechtigungen, die Vertrauensstufe des Hintergrundprozesses oder die enthaltenen Anweisungen geändert. Vor der Ausführung erneut prüfen.",
           "instructionalWarning": "Dieses Plugin hat keinen Hintergrundprozess. Seine Anweisungen können bei der Nutzung durch Benutzer oder Agenten dennoch Aktionen auslösen. Vor der Aktivierung die folgenden Anweisungen und Befehle prüfen.",
+          "mcpServersWarning": "Gibt deinen Agenten seine MCP-Server, die Programme starten und in ihrem Namen handeln können",
           "declarativeWarning": "Dieses Plugin stellt ausschließlich validierte Inhalte bereit. Es führt keinen Hintergrundprozess aus und erhält keinen Zugriff auf die Orca-API.",
           "enable": "Plugin aktivieren",
           "capability": {
@@ -12146,7 +12293,10 @@
             "secrets": "Geheimnisse im eigenen verschlüsselten Tresor des Plugins speichern und lesen",
             "settingsOwn": "Die eigenen Einstellungen des Plugins lesen und ändern",
             "agentsRead": "Benachrichtigung bei Änderungen des Agent-Status",
-            "terminalRun": "Befehle in deinen Terminals ausführen, auch über SSH"
+            "terminalRun": "Befehle in deinen Terminals ausführen, auch über SSH",
+            "terminalRead": "Die Ausgabe deiner Terminals lesen, auch über SSH",
+            "workspaceWrite": "Deine Arbeitsbereiche und Dateien öffnen und integrierte Befehle ausführen",
+            "agentLaunch": "Agenten in deinen Arbeitsbereichen starten, auch über SSH"
           },
           "decisionFailed": "Die Berechtigungsentscheidung konnte nicht gespeichert werden. Erneut versuchen.",
           "fullAccessWarning": "Vollzugriff: läuft wie ein normales Programm und kann deine Dateien lesen, deine gespeicherten Anmeldedaten und SSH-Schlüssel verwenden, das Netzwerk nutzen, andere Programme ausführen und Orca steuern, einschließlich deiner Terminals und Agenten.",
@@ -12319,7 +12469,8 @@
           "installedManifestUnloadable": "Diese Version kann in dieser Orca-Version nicht geladen werden. Aktualisieren oder neu installieren.",
           "invalidArtifact": "Eine deklarierte Datei für einen Hintergrundprozess oder ein Panel fehlt oder ist unsicher. Die Plugin-Dateien korrigieren und anschließend aktualisieren.",
           "consentChanged": "Das Plugin wurde während der Prüfung geändert. Diesen Dialog schließen und die aktualisierten Berechtigungen prüfen.",
-          "installGitMoved": "Das Repository hat sich geändert, nachdem Orca es geprüft hat. Erneut versuchen."
+          "installGitMoved": "Das Repository hat sich geändert, nachdem Orca es geprüft hat. Erneut versuchen.",
+          "installReservedIdentity": "Dieses Plugin verwendet einen Namen, der offiziellen Orca-Plugins vorbehalten ist, die nur aus dem Orca-Katalog installiert werden. Ändere für deine eigene Kopie oder deinen Fork \"id\" in orca-plugin.json so, dass sie nicht mit \"orca-\" beginnt, und setze \"publisher\" auf deinen eigenen Namen."
         },
         "plugins": {
           "search": {
@@ -13299,9 +13450,11 @@
           "newPanels": "Fügt Panels hinzu",
           "newEvents": "Reagiert auf mehr Orca-Ereignisse",
           "newRecipes": "Maschinenrezepte",
+          "newMcpServers": "MCP-Server",
           "newContributions": "Funktionen, die für dich handeln",
           "allAccess": "Alle Zugriffe anzeigen",
           "update": "Aktualisieren",
+          "replacesAction": "{{value0}} wird anstelle von Orcas {{value1}} ausgeführt",
           "newFileTypes": "Ändert, welche Dateien es öffnet",
           "newHooks": "Kann ändern oder stoppen, was Orca und deine Agenten tun",
           "newSettings": "Eine Einstellungsseite",
@@ -13407,6 +13560,7 @@
           "customEditor": "Editor",
           "panel": "Seitenleistenbereich",
           "recipe": "Maschinenrezept",
+          "mcpServer": "MCP-Server",
           "logs": "Protokolle",
           "copyLogs": "Kopieren",
           "noAccessReach": "Nichts außerhalb seiner eigenen Dateien"
@@ -13440,6 +13594,7 @@
           "updatesKeepApproval": "Updates fragen nur bei neuem Zugriff erneut",
           "fullAccessUpdates": "Updates können den Code ohne Nachfrage ändern",
           "editsFileTypes": "Öffnet und bearbeitet {{value0}}-Dateien in Orca. Es kann die geöffneten Dateien lesen.",
+          "replacesAction": "{{value0}} wird anstelle von Orcas {{value1}} ausgeführt. Du kannst das auf der Plugin-Seite wieder umstellen.",
           "install": "Installieren und aktivieren",
           "keepOff": "Ausgeschaltet lassen"
         },
@@ -13522,6 +13677,7 @@
           "contentOnly": "Nur Inhalte",
           "fullAccess": "Vollzugriff",
           "addsVmRecipes": "Fügt VM-Rezepte hinzu",
+          "addsMcpServers": "Fügt MCP-Server hinzu",
           "opensAndEditsFiles": "Öffnet und bearbeitet Dateien",
           "runsPluginCode": "Führt Plugin-Code aus"
         },
@@ -13593,7 +13749,9 @@
           "languageCoverage": "Oberflächensprache · {{value0}} % übersetzt",
           "newFileMenu": "Ergänzt das +-Menü",
           "editorReplacesViewer": "Öffnet {{value0}} anstelle des Orca-Viewers",
-          "editorMayReplaceViewer": "Öffnet möglicherweise {{value0}} anstelle des Orca-Viewers"
+          "editorMayReplaceViewer": "Öffnet möglicherweise {{value0}} anstelle des Orca-Viewers",
+          "statusBar": "Statusleiste",
+          "font": "Schriftart für Terminal, Editor oder Oberfläche"
         },
         "PluginPageAction": {
           "failedTitle": "{{value0}} konnte nicht installiert werden",
@@ -13624,7 +13782,9 @@
           "worktreeCreated": "Wenn ein Arbeitsbereich erstellt wird",
           "worktreeRemoved": "Wenn ein Arbeitsbereich entfernt wird",
           "agentStatusChanged": "Wenn sich der Status eines Agenten ändert",
-          "detail": "Hintergrundcode wird ausgeführt"
+          "detail": "Hintergrundcode wird ausgeführt",
+          "workspaceChanged": "Wenn du den Arbeitsbereich wechselst oder sich seine Terminals ändern",
+          "editorTypographyChanged": "Wenn sich die Schriftart oder der Zoom des Editors ändert"
         },
         "PluginChips": {
           "updateNeedsReview": "Update muss geprüft werden",
@@ -15154,10 +15314,14 @@
             "unavailable": "Dieses Plugin-Panel ist nicht mehr verfügbar.",
             "loading": "Plugin-Panel wird geladen…",
             "unresponsive": "Dieses Plugin-Panel reagiert nicht mehr und wurde angehalten.",
-            "loadFailed": "Das Plugin-Panel konnte nicht geladen werden."
+            "loadFailed": "Das Plugin-Panel konnte nicht geladen werden.",
+            "needsDesktop": "Dieses Panel läuft nur in der Orca-Desktop-App.",
+            "needsIsolatedFrames": "Dieses Panel ist nicht verfügbar: Es benötigt isolierte Plugin-Frames, die deaktiviert sind."
           },
           "activityBar": {
-            "error": "Fehler"
+            "error": "Fehler",
+            "disablePlugin": "Plugin deaktivieren",
+            "disableFailed": "Das Plugin konnte nicht deaktiviert werden."
           },
           "AiVaultSessionLimitMenu": {
             "historyDepth": "Verlaufstiefe: {{value0}}",
@@ -17038,7 +17202,8 @@
                 "description": "Diese Datei ist kein UTF-8-Text. Beim Speichern als UTF-8 werden alle Zeichen, die kein gültiges UTF-8 sind, durch � ersetzt. Die ursprünglichen Bytes können nicht wiederhergestellt werden.",
                 "action": "Als UTF-8 speichern"
               }
-            }
+            },
+            "deniedByPlugin": "Das Plugin {{plugin}} hat dieses Speichern abgelehnt: {{reason}}"
           }
         },
         "RichMarkdownTableControls": {
@@ -18534,6 +18699,14 @@
           "messageTooLarge": "Die Nachricht überschreitet die Größenbeschränkung.",
           "tooManyRequests": "Zu viele Anfragen."
         },
+        "PluginDeclarativePanel": {
+          "dismissLoadError": "Schließen",
+          "invalidTree": "Das Panel hat ein Layout gesendet, das Orca nicht anzeigen kann.",
+          "loadFailed": "{{value0}} konnte nicht geladen werden.",
+          "loadFailedKeptLastGood": "{{value0}} konnte nicht geladen werden. Die zuletzt geladene Version wird angezeigt.",
+          "pluginMessage": "Nachricht von {{value0}}: {{value1}}",
+          "reloaded": "Neu geladen"
+        },
         "FolderWorkspaceSourceControl": {
           "openWorktree": "Diesen Worktree öffnen",
           "reconnect": "Stelle die Verbindung wieder her, um die Änderungen dieses Worktrees zu sehen."
@@ -19145,6 +19318,32 @@
         "pluginInstallCount": {
           "installs": "{{value0}} Installationen"
         },
+        "declarative": {
+          "PluginDeclarativeView": {
+            "unsupported": "{{value0}} ist in dieser Orca-Version nicht verfügbar"
+          },
+          "KeyValue": {
+            "yes": "Ja",
+            "no": "Nein"
+          },
+          "Skeleton": {
+            "loading": "Wird geladen"
+          },
+          "Table": {
+            "yes": "Ja",
+            "empty": "Keine Zeilen",
+            "loading": "Weitere werden geladen…"
+          },
+          "Tree": {
+            "loading": "Wird geladen…"
+          }
+        },
+        "PluginCommandReplacementRow": {
+          "title": "{{value0}} wird anstelle von Orcas {{value1}} ausgeführt",
+          "conflict": "Nicht verwendet: {{value0}} wurde zuerst installiert und ersetzt es",
+          "detail": "Über das Tastenkürzel, die Befehlspalette und Menüs. Schlägt das Plugin fehl, wird Orcas eigene Version ausgeführt.",
+          "switch": "{{value0}} anstelle von Orcas {{value1}} verwenden"
+        },
         "PluginCatalogLinkDialog": {
           "failed": "Dieser Katalog konnte nicht hinzugefügt werden.",
           "title": "Katalog {{value0}} hinzufügen?",
@@ -19154,6 +19353,14 @@
         },
         "pluginNameDisambiguation": {
           "nameWithPublisher": "{{value0}} ({{value1}})"
+        },
+        "PluginCatalogHighlights": {
+          "justNow": "gerade eben",
+          "added": "Hinzugefügt {{value0}}",
+          "featured": "Empfohlen",
+          "featuredDetail": "am häufigsten installiert, eins pro Kategorie",
+          "newlyAdded": "Neu hinzugefügt",
+          "newlyAddedDetail": "aus all deinen Katalogen"
         }
       },
       "agent-workspace-trust-decision": {
@@ -25542,6 +25749,16 @@
       "label": "Vom Team vorgeschrieben",
       "body": "Orca konnte {{plugin}} nicht installieren."
     },
+    "frameSaveAs": {
+      "title": "Datei speichern",
+      "allFiles": "Alle Dateien"
+    },
+    "frameOpenExternal": {
+      "open": "Öffnen",
+      "cancel": "Abbrechen",
+      "message": "{{plugin}} möchte {{host}} öffnen",
+      "alwaysAllow": "{{host}} für dieses Plugin immer erlauben"
+    },
     "actionConfirmation": {
       "cancel": "Abbrechen",
       "deleteAutomation": "{{plugin}} möchte die Automatisierung „{{automation}}“ löschen",
@@ -25748,5 +25965,14 @@
     "moveLeft": "Nach links verschieben",
     "moveRight": "Nach rechts verschieben",
     "reset": "Tab-Reihenfolge zurücksetzen"
+  },
+  "mcpServers": {
+    "paste": {
+      "badCommand": "Trage die Werte selbst in den Befehl mcp add ein: Orca kann keine $VARIABLES oder andere Shell-Ausdrücke ausfüllen.",
+      "unsupported": "Orca kann diesen Server so nicht hinzufügen: Er verwendet SSE, einen eigenen OAuth-Client oder einen aus der Umgebung gelesenen Wert.",
+      "badAddCommand": "Prüfe den Befehl mcp add: ein Name und eine URL oder ein Befehl.",
+      "badJson": "Prüfe das eingefügte JSON: Es lässt sich nicht parsen.",
+      "none": "Orca hat keinen Server gefunden, den es hinzufügen kann. SSE-Server, Server mit eigenem OAuth-Client oder Tool-Filtern sowie aus der Umgebung gelesene Werte (${VAR}) werden nicht unterstützt."
+    }
   }
 }
