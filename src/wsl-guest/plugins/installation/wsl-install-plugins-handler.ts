@@ -53,6 +53,7 @@ export function createInstallPluginsHandler(
     const omp = params.ompExtensionSource
     const primeAgent = params.primeAgentExtensionSource
     const kimchi = params.kimchiExtensionSource
+    const kimchiPrefill = params.kimchiPrefillExtensionSource
     // Why: bound per-source bytes so a buggy/hostile host can't OOM the guest relay.
     assertPluginSourceUnderByteCap('opencodeStartupPromptSource', startupPrompt)
     assertPluginSourceUnderByteCap('opencodePluginSource', opencode)
@@ -61,6 +62,7 @@ export function createInstallPluginsHandler(
     assertPluginSourceUnderByteCap('ompExtensionSource', omp)
     assertPluginSourceUnderByteCap('primeAgentExtensionSource', primeAgent)
     assertPluginSourceUnderByteCap('kimchiExtensionSource', kimchi)
+    assertPluginSourceUnderByteCap('kimchiPrefillExtensionSource', kimchiPrefill)
     pluginOverlay.setSources({
       ...(typeof claudeAgentView === 'string' ? { claudeAgentViewSource: claudeAgentView } : {}),
       opencodeStartupPromptSource: typeof startupPrompt === 'string' ? startupPrompt : undefined,
@@ -69,7 +71,8 @@ export function createInstallPluginsHandler(
       piExtensionSource: typeof pi === 'string' ? pi : undefined,
       ompExtensionSource: typeof omp === 'string' ? omp : undefined,
       primeAgentExtensionSource: typeof primeAgent === 'string' ? primeAgent : undefined,
-      kimchiExtensionSource: typeof kimchi === 'string' ? kimchi : undefined
+      kimchiExtensionSource: typeof kimchi === 'string' ? kimchi : undefined,
+      kimchiPrefillExtensionSource: typeof kimchiPrefill === 'string' ? kimchiPrefill : undefined
     })
     let opencodeDir: string | undefined
     const launchKind =

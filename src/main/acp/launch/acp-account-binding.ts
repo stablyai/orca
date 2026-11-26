@@ -34,7 +34,7 @@ export function directoryAccountBinding(
   options?: { allowOverride?: boolean }
 ): AcpAccountBinding {
   const effectiveChildHome = (launchEnv: NodeJS.ProcessEnv, fallback: string): string =>
-    (process.platform === 'win32' ? launchEnv.USERPROFILE : launchEnv.HOME)?.trim() || fallback
+    (process.platform === 'win32' ? launchEnv.USERPROFILE : launchEnv.HOME) || fallback
   const resolvedHome = (launchEnv: NodeJS.ProcessEnv): string =>
     resolveStructuredEnvAccountHomePath({
       launchEnv:

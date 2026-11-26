@@ -19,6 +19,7 @@ import {
   getOpenCodePluginSource
 } from '../../opencode/status-hooks/plugin-source/status-plugin-module-source'
 import { getPiAgentStatusExtensionSource } from '../../pi/managed-extensions/agent-status/agent-status-extension-source'
+import { getPiPrefillExtensionSource } from '../../pi/managed-extensions/prefill-extension-source'
 import { codexHookService } from '../../codex/hooks/installation/hook-service'
 import type { AgentHookInstallStatus } from '../../../shared/agent-hook-listener/configuration/agent-hook-types'
 import type { PluginSources } from '../../../wsl-guest/plugins/installation/plugin-sources'
@@ -167,7 +168,8 @@ export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
     opencode2PluginSource: getOpenCode2PluginSource(),
     piExtensionSource: getPiAgentStatusExtensionSource('pi'),
     ompExtensionSource: getPiAgentStatusExtensionSource('omp'),
-    kimchiExtensionSource: getPiAgentStatusExtensionSource('kimchi')
+    kimchiExtensionSource: getPiAgentStatusExtensionSource('kimchi'),
+    kimchiPrefillExtensionSource: getPiPrefillExtensionSource('kimchi')
   }),
   warn: (message) => console.warn(message),
   transientRetryDelayMs: WSL_RELAY_TRANSIENT_RETRY_DELAY_MS

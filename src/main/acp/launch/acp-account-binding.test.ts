@@ -50,4 +50,18 @@ describe('directoryAccountBinding', () => {
       AGENT_HOME: join(childHome, '.agent')
     })
   })
+
+  it("preserves whitespace in the child process's home", async () => {
+    const binding = directoryAccountBinding('AGENT_HOME', (homePath) => join(homePath, '.agent'), {
+      allowOverride: false
+    })
+    const childHome = '/child-home '
+    const launchEnv: Record<string, string> =
+      process.platform === 'win32' ? { USERPROFILE: childHome } : { HOME: childHome }
+
+    await expect(binding.resolve({ launchEnv, stateDirectory: '/state' })).resolves.toEqual({
+      variable: 'AGENT_HOME',
+      path: join(childHome, '.agent')
+    })
+  })
 })

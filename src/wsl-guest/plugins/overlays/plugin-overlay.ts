@@ -26,6 +26,7 @@ import {
   openCodeTuiPluginDirName,
   writeOpenCodeTuiPlugin
 } from '../../../shared/agent-launch/plugins/opencode/opencode-tui-plugin-install'
+import { KimchiPrefillExtension } from './kimchi-prefill-extension'
 type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'prime-agent' | 'kimchi'>
 const RELAY_HOOKS_DIR = '.orca-relay'
 const OPENCODE_OVERLAY_SUBDIR = 'opencode-overlays'
@@ -87,6 +88,7 @@ export class PluginOverlayManager {
     'prime-agent': null,
     kimchi: null
   }
+  private kimchiPrefillExtension = new KimchiPrefillExtension()
   private homeDir: string
   private opencodeRoot: string
   private opencode2Root: string
@@ -130,6 +132,7 @@ export class PluginOverlayManager {
         sources.kimchiExtensionSource
       )
     }
+    this.kimchiPrefillExtension.setSource(sources.kimchiPrefillExtensionSource)
   }
   hasOpenCodeSource(agent: 'opencode' | 'opencode2' = 'opencode'): boolean {
     return Boolean(agent === 'opencode2' ? this.opencode2PluginSource : this.opencodePluginSource)
@@ -290,6 +293,7 @@ export class PluginOverlayManager {
         return null
       }
       writeFileSync(extensionPath, extensionSource)
+      this.kimchiPrefillExtension.write(extensionsDir, kind)
       return {
         sourceAgentDir,
         statusExtensionPath: extensionPath

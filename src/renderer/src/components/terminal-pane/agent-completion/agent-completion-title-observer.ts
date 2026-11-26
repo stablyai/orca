@@ -18,6 +18,8 @@ type TitleObserverOptions = {
   dispatchTitleCompletion: (title: string) => void
 }
 
+const LEADING_KIMCHI_TITLE_RE = /^\s*(?:[\u2800-\u28ff]\s+)?kimchi(?:\s|[:!-]|$)/i
+
 export function createAgentCompletionTitleObserver({
   getLastStatus,
   setLastStatus,
@@ -33,6 +35,9 @@ export function createAgentCompletionTitleObserver({
 }: TitleObserverOptions) {
   function titleCompletionAgentIdentity(title: string): string | null {
     const normalized = title.toLowerCase()
+    if (LEADING_KIMCHI_TITLE_RE.test(title)) {
+      return 'kimchi'
+    }
     if (/\bcodex\b/.test(normalized)) {
       return 'codex'
     }

@@ -17,7 +17,10 @@ describe('Kimchi guest plugin installation', () => {
     const home = mkdtempSync(join(tmpdir(), 'orca-kimchi-wsl-'))
     homes.push(home)
     const manager = new PluginOverlayManager({ homeDir: home })
-    manager.setSources({ kimchiExtensionSource: '// kimchi status' })
+    manager.setSources({
+      kimchiExtensionSource: '// kimchi status',
+      kimchiPrefillExtensionSource: '// kimchi prefill'
+    })
 
     const result = manager.materializePi('wsl-kimchi', undefined, 'kimchi', {
       materializeDefaultHome: true
@@ -25,5 +28,11 @@ describe('Kimchi guest plugin installation', () => {
 
     expect(result?.sourceAgentDir).toBe(join(home, '.config', 'kimchi', 'harness'))
     expect(readFileSync(result!.statusExtensionPath!, 'utf8')).toContain('// kimchi status')
+    expect(
+      readFileSync(
+        join(home, '.config', 'kimchi', 'harness', 'extensions', 'orca-prefill.ts'),
+        'utf8'
+      )
+    ).toContain('// kimchi prefill')
   })
 })

@@ -77,7 +77,10 @@ export function buildPtyHostEnv(
   const shouldInstallPrimeAgentExtensions =
     opts.agentStatusHooksEnabled && isTuiAgentEnabled('prime-agent', opts.disabledTuiAgents)
   // Pi/OMP source shadows are agent-scoped to avoid cross-agent extension state.
-  const preexistingPiAgentDir = resolvePiAgentSourceDir(baseEnv, 'pi')
+  const preexistingPiAgentDir = resolvePiAgentSourceDir(
+    baseEnv,
+    piAgentKind === 'kimchi' ? 'kimchi' : 'pi'
+  )
   const preexistingOmpAgentDir =
     piAgentKind === 'omp'
       ? resolvePiAgentSourceDir(baseEnv, 'omp')
@@ -213,7 +216,8 @@ export function buildPtyHostEnv(
       Object.assign(baseEnv, primeEnv)
       exposePiManagedExtensionEnv(baseEnv, 'prime-agent', primeEnv)
     }
-    installKimchiManagedExtensionEnv(id, baseEnv, opts, piAgentKind, explicitPiAgentKind)
+    // prettier-ignore
+    installKimchiManagedExtensionEnv(id, baseEnv, opts, piAgentKind, explicitPiAgentKind, preexistingPiAgentDir)
   } else {
     // Nested PTYs must not inherit another agent's source/overlay state.
     restoreOrStripOverlayEnv(baseEnv, {
