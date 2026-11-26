@@ -5,6 +5,7 @@ import { getRelativePathInsideRoot } from '@/lib/path'
 import { getExplorerDisplayDepth } from './file-explorer-display-root'
 import { FILE_EXPLORER_FULL_ROOT } from '../../../../../../shared/file-listing/file-explorer-display-root'
 import { useAppStore } from '@/store/index'
+import type { PendingExplorerReveal } from '@/store/slices/editor/explorer/explorer-dir-state'
 import { getRevealTarget } from './file-explorer-paths'
 import type { DirCache } from '../tree/file-explorer-types'
 import type { FileExplorerRowProjection } from '../tree/file-explorer-row-projection'
@@ -15,12 +16,7 @@ type UseFileExplorerRevealParams = {
   activeWorktreeId: string | null
   worktreePath: string | null
   displayRootPath?: string | null
-  pendingExplorerReveal: {
-    worktreeId: string
-    filePath: string
-    requestId: number
-    flash?: boolean
-  } | null
+  pendingExplorerReveal: PendingExplorerReveal | null
   clearPendingExplorerReveal: () => void
   expanded: Set<string>
   dirCache: Record<string, DirCache>
@@ -54,7 +50,10 @@ export function useFileExplorerReveal({
   setFlashingPath,
   flashTimeoutRef,
   virtualizer
-}: UseFileExplorerRevealParams): () => void {
+}: UseFileExplorerRevealParams): {
+  cancelRevealTimers: () => void
+  cancelRevealScroll: () => void
+} {
   const revealScrollFrameRef = useRef<number | null>(null)
   const revealScrollTimeoutRef = useRef<number | null>(null)
 
@@ -279,5 +278,5 @@ export function useFileExplorerReveal({
     displayRootPath
   ])
 
-  return cancelRevealTimers
+  return { cancelRevealTimers, cancelRevealScroll }
 }

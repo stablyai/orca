@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, render, renderHook } from '@testing-library/react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
@@ -238,16 +238,16 @@ function renderExplorerRevealHarness(initialProps: HarnessProps) {
       })
       virtualizer.scrollToIndex = scrollToIndex
       const hasNameFilterQuery = nameFilterQuery.trim().length > 0
+      const clearNameFilter = useCallback(() => setNameFilterQuery(''), [])
       const displayRootPath = props.displayRootPath ?? props.worktreePath
 
       useClearNameFilterForReveal({
         activeWorktreeId: WORKTREE_ID,
-        visibleFilesWorktreePath: props.worktreePath,
-        hasNameFilter: props.worktreePath !== null && hasNameFilterQuery,
-        setNameFilterQuery
+        hasQuery: props.worktreePath !== null && hasNameFilterQuery,
+        clearQuery: clearNameFilter
       })
 
-      useFileExplorerReveal({
+      const { cancelRevealScroll } = useFileExplorerReveal({
         onRevealOutsideRoot: props.onRevealOutsideRoot,
         activeWorktreeId: WORKTREE_ID,
         worktreePath: props.worktreePath,
@@ -277,6 +277,7 @@ function renderExplorerRevealHarness(initialProps: HarnessProps) {
         rowProjection: props.rowProjection,
         selectedPath: selection.selectedPath,
         setSelectedPath: selection.setSingleSelectedPath,
+        cancelRevealScroll,
         virtualizer
       })
 
@@ -710,5 +711,169 @@ describe('FileExplorer active file reveal', () => {
     seedStore({ activeFileId: 'file-git-graph' })
     expect(revealActiveFileInExplorer(useAppStore.getState())).toBe(false)
     expect(useAppStore.getState().pendingExplorerReveal).toBeNull()
+  })
+
+  it('supersedes a pending automatic reveal when the active file changes before it resolves', () => {
+    const betaNode: TreeNode = {
+      name: 'beta',
+      path: '/repo/src/beta',
+      relativePath: 'src/beta',
+      isDirectory: true,
+      depth: 1
+    }
+    const dirCache = makeLoadedCache({
+      [ROOT]: [srcNode],
+      '/repo/src': [alphaNode, betaNode],
+      '/repo/src/alpha': [editNode],
+      '/repo/src/beta': [otherNode]
+    })
+
+    const { result, rerender, scrollToIndex } = renderExplorerRevealHarness({
+      activeFileId: null,
+      worktreePath: ROOT,
+      rowProjection: collapsedProjection,
+      dirCache
+    })
+
+    // Queue an automatic reveal for file A while its ancestors are collapsed.
+    rerender({
+      activeFileId: 'file-edit',
+      worktreePath: ROOT,
+      rowProjection: collapsedProjection,
+      dirCache
+    })
+    expect(useAppStore.getState().pendingExplorerReveal).toMatchObject({
+      worktreeId: WORKTREE_ID,
+      filePath: EDIT_PATH,
+      source: 'auto'
+    })
+
+    // Switch to file B while A's automatic reveal is still pending.
+    rerender({
+      activeFileId: 'file-other',
+      worktreePath: ROOT,
+      rowProjection: collapsedProjection,
+      dirCache
+    })
+    expect(useAppStore.getState().pendingExplorerReveal).toMatchObject({
+      worktreeId: WORKTREE_ID,
+      filePath: OTHER_PATH,
+      source: 'auto'
+    })
+
+    // Once the expanded projection commits, B (not A) is selected and scrolled.
+    rerender({
+      activeFileId: 'file-other',
+      worktreePath: ROOT,
+      rowProjection: createFileExplorerRowProjection([srcNode, betaNode, otherNode]),
+      dirCache
+    })
+    act(() => vi.runAllTimers())
+
+    expect(result.current.selectedPath).toBe(OTHER_PATH)
+    expect(result.current.flashingPath).toBeNull()
+    expect(useAppStore.getState().pendingExplorerReveal).toBeNull()
+    expect(scrollToIndex).toHaveBeenCalledWith(2, { align: 'center' })
+
+    // Switching to an already-visible file while another auto-reveal is pending clears the stale request.
+    rerender({
+      activeFileId: 'file-edit',
+      worktreePath: ROOT,
+      rowProjection: createFileExplorerRowProjection([srcNode, betaNode, otherNode]),
+      dirCache
+    })
+    expect(useAppStore.getState().pendingExplorerReveal?.filePath).toBe(EDIT_PATH)
+
+    rerender({
+      activeFileId: 'file-other',
+      worktreePath: ROOT,
+      rowProjection: createFileExplorerRowProjection([srcNode, betaNode, otherNode]),
+      dirCache
+    })
+    act(() => vi.runAllTimers())
+
+    expect(useAppStore.getState().pendingExplorerReveal).toBeNull()
+    expect(result.current.selectedPath).toBe(OTHER_PATH)
+  })
+
+  it('keeps a pending manual reveal ahead of automatic reveal and evaluates a tab switched mid-flight once it clears', () => {
+    const dirCache = makeLoadedCache({
+      [ROOT]: [srcNode, diffNode],
+      '/repo/src': [alphaNode, diffNode],
+      '/repo/src/alpha': [editNode]
+    })
+
+    const { result, rerender, scrollToIndex } = renderExplorerRevealHarness({
+      activeFileId: 'file-diff',
+      worktreePath: ROOT,
+      rowProjection: collapsedProjection,
+      dirCache
+    })
+
+    // Trigger a manual reveal for EDIT_PATH while it is still collapsed.
+    act(() => {
+      useAppStore.getState().revealInExplorer(WORKTREE_ID, EDIT_PATH)
+    })
+    expect(useAppStore.getState().pendingExplorerReveal).toMatchObject({
+      filePath: EDIT_PATH,
+      source: 'manual'
+    })
+
+    // Switching to file-preview while the manual reveal is pending must not overwrite the manual request.
+    rerender({
+      activeFileId: 'file-preview',
+      worktreePath: ROOT,
+      rowProjection: collapsedProjection,
+      dirCache
+    })
+    expect(useAppStore.getState().pendingExplorerReveal).toMatchObject({
+      filePath: EDIT_PATH,
+      source: 'manual'
+    })
+
+    // Once the manual reveal resolves and clears, the still-active file-preview is evaluated and revealed.
+    rerender({
+      activeFileId: 'file-preview',
+      worktreePath: ROOT,
+      rowProjection: fullProjection,
+      dirCache
+    })
+    act(() => vi.runAllTimers())
+
+    expect(useAppStore.getState().pendingExplorerReveal).toBeNull()
+    expect(result.current.selectedPath).toBe(PREVIEW_PATH)
+    expect(scrollToIndex).toHaveBeenLastCalledWith(3, { align: 'auto' })
+  })
+
+  it('lets a manual reveal win when the explorer mounts with it pending alongside an active file', () => {
+    const dirCache = makeLoadedCache({
+      [ROOT]: [srcNode, previewNode],
+      '/repo/src': [alphaNode],
+      '/repo/src/alpha': [editNode]
+    })
+
+    useAppStore.getState().revealInExplorer(WORKTREE_ID, EDIT_PATH)
+
+    const { result, rerender } = renderExplorerRevealHarness({
+      activeFileId: 'file-preview',
+      worktreePath: ROOT,
+      rowProjection: collapsedProjection,
+      dirCache
+    })
+    expect(useAppStore.getState().pendingExplorerReveal).toMatchObject({
+      filePath: EDIT_PATH,
+      source: 'manual'
+    })
+
+    rerender({
+      activeFileId: 'file-preview',
+      worktreePath: ROOT,
+      rowProjection: fullProjection,
+      dirCache
+    })
+    act(() => vi.runAllTimers())
+
+    expect(useAppStore.getState().pendingExplorerReveal).toBeNull()
+    expect(result.current.selectedPath).toBe(EDIT_PATH)
   })
 })
