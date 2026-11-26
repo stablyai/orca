@@ -31,6 +31,9 @@ export type SharedBotHostView = {
   botName: string
   /** Who shared it: their name, else their email, else their computer's name. */
   ownerName: string
+  /** The account it is shared with (the viewer's own), as a phone keeps it; absent until a list from
+   *  a computer that names it. */
+  accountId?: string
   /** This computer's folder workspace the agent's chats open in; null until main has made it. */
   homeWorkspaceId: string | null
   link: SharedBotHostLink
@@ -46,10 +49,13 @@ export type SharedBotHostView = {
 /** A share as a device lists it, with how that device reaches it; nothing holds while held sends
  *  are off. */
 export function sharedBotHostView(
-  share: Pick<SharedBotHostView, 'environmentId' | 'shareId' | 'botId' | 'botName' | 'ownerName'>,
+  share: Pick<
+    SharedBotHostView,
+    'environmentId' | 'shareId' | 'botId' | 'botName' | 'ownerName' | 'accountId'
+  >,
   reach: Pick<SharedBotHostView, 'homeWorkspaceId' | 'link' | 'accepting' | 'holds' | 'held'>
 ): SharedBotHostView {
-  const { environmentId, shareId, botId, botName, ownerName } = share
+  const { environmentId, shareId, botId, botName, ownerName, accountId } = share
   const holds = SHARED_HOSTS_HOLD_WHILE_AWAY && reach.holds
   return {
     environmentId,
@@ -57,6 +63,7 @@ export function sharedBotHostView(
     botId,
     botName,
     ownerName,
+    ...(accountId ? { accountId } : {}),
     ...reach,
     holds,
     held: holds ? reach.held : []

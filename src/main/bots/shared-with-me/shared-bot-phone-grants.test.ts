@@ -63,6 +63,7 @@ function grants() {
           }
         : { id: method, ok: true, result: { revoked: true } }
     },
+    account: () => 'acct-teammate',
     origin: () => 'https://cloud.example',
     requests: () => [],
     answer: async () => false
@@ -73,6 +74,14 @@ function grants() {
 const ask = { shareId: 'share-1', devicePublicKey: 'k', sealKey: 's', credentialHash: 'h' }
 
 describe('a phone’s key to a shared agent', () => {
+  it('lists each share with the account it is shared with, whose the phone’s messages are', () => {
+    expect(
+      grants()
+        .phones.phoneShares()
+        .shares.map((share) => share.accountId)
+    ).toEqual(['acct-teammate'])
+  })
+
   it('carries the pinned host key and where to hold messages', async () => {
     const { phones, asked, store } = grants()
     expect(await phones.provisionPhone('phone-a', ask)).toEqual({
@@ -82,6 +91,7 @@ describe('a phone’s key to a shared agent', () => {
       botName: 'Ivy',
       ownerName: 'Jinwoo Hong',
       environmentId: 'env-1',
+      accountId: 'acct-teammate',
       connectorOrigin: 'https://cloud.example',
       hostKey: HOST_KEY,
       sealedOffer: 'sealed'

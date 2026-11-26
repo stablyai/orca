@@ -59,7 +59,9 @@ export type BotChatTreeChat = {
   turnDone?: { paneKey: string; at: number }
   closed: boolean
   closedAt?: number
-  /** Its tab is open on the bot's host; absent from an older host. */
+  /** Its tab is open where it is viewed: the host's own tabs for the owner; a teammate's client fills
+   *  it from its own tabs (`withViewerChatTabs`), since the host never sends its tabs to them. Absent
+   *  from an older host. */
   tab?: boolean
   /** A thread the bot started on its own that the owner has not opened yet. */
   unseen?: boolean

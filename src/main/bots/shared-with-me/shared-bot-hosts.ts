@@ -75,6 +75,7 @@ export class SharedBotHosts {
       listed: () => this.listed(),
       reach: (entry) => this.reach(entry),
       request: (entry, method, params) => this.linkFor(entry).request(method, params),
+      account: () => deps.account(),
       origin: () => deps.connectorOrigin?.() ?? null,
       requests: () => sharedBotRequests(this.store, this.shares),
       answer: (shareId, accept) => (accept ? this.accept(shareId) : this.decline(shareId))
@@ -83,8 +84,7 @@ export class SharedBotHosts {
 
   /** The kept shares are loaded, so `views` lists them. */
   ready(): Promise<void> {
-    this.loaded ??= this.store.load()
-    return this.loaded
+    return (this.loaded ??= this.store.load())
   }
 
   start(): void {

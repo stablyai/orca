@@ -33,6 +33,15 @@ export function actsForOwner(askers: readonly BotRequestAsker[]): boolean {
   )
 }
 
+/** The host's one tab rule: a chat a teammate started from their own Orca (a new chat or their Home
+ *  with a shared agent) opens no tab on the host, whose user didn't start it; it still lists in the
+ *  agent's Chats. Unrecorded is the host's own. */
+export function opensHostTab(askers: readonly BotRequestAsker[] | undefined): boolean {
+  const teammate = (asker: BotRequestAsker) =>
+    asker.kind === 'person' && asker.source === 'orca' && asker.role !== 'owner'
+  return !askers?.length || !askers.every(teammate)
+}
+
 /** Whether a chat is a shared teammate's own: every person it acts for is that Orca account, in
  *  Orca or through their linked Slack login. A chat that also acts for anyone else is not theirs. */
 export function shareOwnsChat(askers: readonly BotRequestAsker[], accountId: string): boolean {

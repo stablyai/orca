@@ -20,7 +20,7 @@ import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { useFoldedIntoBotRequest } from '../../bot-request-folded-mail'
 import { NativeChatAgentMessageCard } from './NativeChatAgentMessageCard'
 import { NativeChatConnectorAskerTag } from '../../NativeChatConnectorAskerTag'
-import { NativeChatTypedByTag } from '../../NativeChatTypedByTag'
+import { NativeChatTypedByTag, useOtherPersonTypist } from '../../NativeChatTypedByTag'
 import {
   NativeChatSlackMirrorPostLine,
   NativeChatSlackMirrorTag,
@@ -99,6 +99,7 @@ export function NativeChatUserMessageRow({
   const from = message.from
   const sending = deliveryNotice?.sending === true
   const slackPost = useNativeChatSlackMirrorPost(message.id)
+  const typist = useOtherPersonTypist(message.typist)
   // A bot request's answer shows on its card, not as a mailbox pointer.
   const folded = useFoldedIntoBotRequest(from)
   // A Slack message draws its markup; copy keeps `markdown`, its readable form.
@@ -116,11 +117,11 @@ export function NativeChatUserMessageRow({
       className={cn('group relative flex flex-col gap-0.5', from ? 'items-start' : 'items-end')}
     >
       {!from && message.asker ? <NativeChatConnectorAskerTag asker={message.asker} /> : null}
-      {!from && !message.asker && (message.typedByOther || slackPost?.state === 'posted') ? (
+      {!from && !message.asker && (typist || slackPost?.state === 'posted') ? (
         <div className="flex min-w-0 max-w-full justify-end gap-1.5">
-          {message.typedByOther ? <NativeChatTypedByTag typist={message.typedByOther} /> : null}
+          {typist ? <NativeChatTypedByTag typist={typist} /> : null}
           {slackPost?.state === 'posted' ? (
-            <NativeChatSlackMirrorTag nameless={message.typedByOther !== undefined} />
+            <NativeChatSlackMirrorTag nameless={typist !== undefined} />
           ) : null}
         </div>
       ) : null}
