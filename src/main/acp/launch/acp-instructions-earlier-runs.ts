@@ -1,11 +1,11 @@
 import { lstat, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { nativeChatScratchFolderName } from '../../native-chat/conversation-files/native-chat-scratch-folder'
-import { listProviderRelaysAtLaunch } from '../../provider-relay/app-provider-relays'
 import {
-  providerRelayChatsKeptThisRun,
+  listProviderRelaysAtLaunch,
   providerRelayLaunchListed
-} from '../../provider-relay/provider-relay-launch-inventory'
+} from '../../provider-relay/app-provider-relays'
+import { providerRelayChatsKeptThisRun } from '../../provider-relay/provider-relay-launch-inventory'
 
 /** Removals run this many at a time, so a large leftover folder doesn't hold the launch long. */
 const REMOVE_BATCH = 16

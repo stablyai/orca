@@ -20,6 +20,7 @@ import {
   noteProviderRelayReattachedFromLastRun,
   keptProviderRelay,
   listKeptProviderRelays,
+  providerRelayLaunchListed as launchListed,
   providerRelayMayKeep
 } from './provider-relay-launch-inventory'
 import { providerRelayRoute } from './provider-relay-route'
@@ -119,6 +120,11 @@ export function listProviderRelaysAtLaunch(): Promise<void> {
   return installed ? listKeptProviderRelays(() => installed.all()) : Promise.resolve()
 }
 
+/** Every daemon answered the launch pass; with no relay route there is none to ask. */
+export function providerRelayLaunchListed(): boolean {
+  return !providerRelayRoute() || launchListed()
+}
+
 /** Whether this chat could have an agent kept here; no other chat waits on a daemon. */
 export function providerRelayMayKeepChat(provider: string, ownerOnLocalHost: boolean): boolean {
   return providerRelayRoute() !== null && providerRelayMayKeep(provider, ownerOnLocalHost)
@@ -205,11 +211,9 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
         rememberKeptProviderRelay(launch.chatKey, relay)
         handedBack.add(launch.chatKey)
       }
-      const managed = relayedManagedProcess(child, () =>
-        providerRelayRunOutlivesQuit(launch.chatKey)
-          ? detachProviderRelayForQuit(launch.chatKey, null)
-          : null
-      )
+      // A reattached agent is relayed before its placement commits: quit hands it back even then.
+      const handOff = () => (quitting ? detachProviderRelayForQuit(launch.chatKey, null) : null)
+      const managed = relayedManagedProcess(child, handOff)
       return { managed, child, reattached: true, keep }
     }
   }
