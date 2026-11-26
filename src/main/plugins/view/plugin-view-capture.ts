@@ -151,7 +151,7 @@ export async function capturePluginPanelPng(
   rect: PluginViewDrawnPanel['rect'],
   guest?: { contents: WebContents; rect: CaptureRect; fromBitmap: BitmapImageFactory },
   wait: (ms: number) => Promise<void> = sleep
-): Promise<{ png: Buffer; width: number; height: number }> {
+): Promise<{ png: Buffer; width: number; height: number; zoom: number }> {
   const zoom = contents.getZoomFactor()
   const target = pluginPanelCaptureRect(rect, zoom)
   if (target.width < 1 || target.height < 1) {
@@ -185,5 +185,5 @@ export async function capturePluginPanelPng(
       `The capture is ${Math.ceil(png.byteLength / 1024 / 1024)} MiB, over the ${PLUGIN_SHOT_MAX_PNG_BYTES / 1024 / 1024} MiB limit; pass a smaller --width.`
     )
   }
-  return { png, width: target.width, height: target.height }
+  return { png, width: target.width, height: target.height, zoom }
 }

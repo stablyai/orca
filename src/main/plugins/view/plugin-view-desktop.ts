@@ -268,7 +268,7 @@ export function createPluginViewDesktop(deps: PluginViewDesktopDeps): PluginView
             const contentHeight =
               drawn.contentHeight === undefined
                 ? undefined
-                : pluginPanelContentHeight(drawn.contentHeight, contents.getZoomFactor())
+                : pluginPanelContentHeight(drawn.contentHeight, image.zoom)
             return {
               pluginKey,
               panelId: panel.panelId,
