@@ -12,8 +12,8 @@ import { agentSessionFailureWords } from '../../shared/agent-session/failures/ag
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionSendBodyFingerprint } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { ensureAgentSessionAttachmentClaimTables } from '../native-chat/agent-session-attachments/agent-session-attachment-claims'
-import Database from '../sqlite/sync-database'
-import { migrateJournalDomainSchema } from '../native-chat/agent-session-journal/journal-domain-schema'
+import type Database from '../sqlite/sync-database'
+import { openJournalDomainDatabase } from '../native-chat/agent-session-journal/database/journal-domain-database'
 import { applyJournalDomainSubmission } from '../native-chat/agent-session-journal/journal-domain-submission-admission'
 import { applyJournalDomainGenerationSettlement } from '../native-chat/agent-session-journal/journal-domain-generation-settlement'
 import { readJournalDomainReturnedCards } from '../native-chat/agent-session-journal/journal-domain-queue-reads'
@@ -51,8 +51,7 @@ let dir = ''
 let db: Database
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'orca-returned-carry-'))
-  db = new Database(join(dir, 'journal.db'))
-  migrateJournalDomainSchema(db)
+  db = openJournalDomainDatabase(join(dir, 'journal.db')).db
   ensureAgentSessionAttachmentClaimTables(db)
   db.prepare(
     `INSERT INTO journal_chat_state(workspace_id,session_id,epoch,last_sequence,highest_fence)
