@@ -48,6 +48,10 @@ export function showUploadProgressToast(title: string): UploadProgressToast {
     toast.dismiss(id)
   }
   const cancel = (): void => {
+    // Sonner keeps the card clickable while it animates out; once closed, the paste may already be running.
+    if (closed) {
+      return
+    }
     controller.abort()
     close()
   }
