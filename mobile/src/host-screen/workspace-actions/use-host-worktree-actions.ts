@@ -29,6 +29,7 @@ import { useHostWorktreeDelete } from './use-host-worktree-delete'
 import { useHostWorktreeRowWrites } from './use-host-worktree-row-writes'
 import { useHostMutation, type HostMutationPhase } from '../../query/host-mutation'
 import { workspaceRename } from './workspace-rename-mutation'
+import type { NewWorktreeInitialRepo } from '../../new-workspace/creation/forms/new-worktree-modal-types'
 
 export function useHostWorktreeActions(args: {
   client: RpcClient | null
@@ -86,7 +87,7 @@ export function useHostWorktreeActions(args: {
   }, [router])
 
   const openNewWorktreeModal = useCallback(
-    () => setNewWorktreeVisible(true),
+    (repo: NewWorktreeInitialRepo | null = null) => setNewWorktreeVisible(true, repo),
     [setNewWorktreeVisible]
   )
   const closeNewWorktreeModal = useCallback(

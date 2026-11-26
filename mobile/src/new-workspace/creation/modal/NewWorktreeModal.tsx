@@ -78,7 +78,8 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     openExternalUrl,
     onCreated,
     onClose,
-    folderLaunch
+    folderLaunch,
+    initialRepo
   } = props
   const { repos, allRepos, selectedRepo, setSelectedRepo, loading, loadError, retryLoad } =
     useNewWorkspaceRepositories({
@@ -88,9 +89,12 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
       visible,
       ...(folderLaunch
         ? {
-            initialRepo: { id: folderLaunch.repoId, executionHostId: folderLaunch.executionHostId }
+            initialRepo: { id: folderLaunch.repoId, executionHostId: folderLaunch.executionHostId },
+            onlyInitialRepoHost: true
           }
-        : {})
+        : initialRepo
+          ? { initialRepo }
+          : {})
     })
   // Route picked-repo operations to its host; desktop settings/accounts stay on desktop.
   const repoServer = selectedRepo ? serverOf(selectedRepo) : undefined

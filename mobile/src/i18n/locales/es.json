@@ -1210,13 +1210,9 @@
       "placeholder": "Nombre del espacio de trabajo"
     },
     "worktreeListRow": {
-      "child": "Secundario",
       "children_many": "{{count}} secundarios",
       "children_one": "{{count}} secundario",
-      "children_other": "{{count}} secundarios",
-      "folder": "Carpeta",
-      "project": "Proyecto {{repo}}",
-      "remoteHost": "Host remoto"
+      "children_other": "{{count}} secundarios"
     },
     "nativeScreenRecovery": {
       "title": "Algo salió mal",

@@ -1162,12 +1162,8 @@
       "placeholder": "워크스페이스 이름"
     },
     "worktreeListRow": {
-      "child": "하위",
       "children_one": "하위 {{count}}개",
-      "children_other": "하위 {{count}}개",
-      "folder": "폴더",
-      "project": "프로젝트 {{repo}}",
-      "remoteHost": "원격 호스트"
+      "children_other": "하위 {{count}}개"
     },
     "nativeScreenRecovery": {
       "title": "문제가 발생했습니다",

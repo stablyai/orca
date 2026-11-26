@@ -18,6 +18,7 @@ import {
 } from '../worktree/execution-hosts/server-workspaces'
 import type { ProjectGroup } from '../../../src/shared/project/groups/project-group-types'
 import { cachedHostWorktrees } from './catalog/host-list-queries'
+import type { NewWorktreeInitialRepo } from '../new-workspace/creation/forms/new-worktree-modal-types'
 import { cachedHostView, useHostViewMemory } from './view-settings/host-view-memory'
 
 export function useHostScreenState(
@@ -71,7 +72,15 @@ export function useHostScreenState(
   const [confirmDelete, setConfirmDelete] = useState<Worktree | null>(null)
   const [confirmRemoveHost, setConfirmRemoveHost] = useState(false)
   const [showNewWorktree, setShowNewWorktree] = useState(false)
-  const setNewWorktreeVisible = useCallback((visible: boolean) => setShowNewWorktree(visible), [])
+  // The project a header's + opened the sheet for; the bar's + opens it for none.
+  const [newWorktreeRepo, setNewWorktreeRepo] = useState<NewWorktreeInitialRepo | null>(null)
+  const setNewWorktreeVisible = useCallback(
+    (visible: boolean, repo: NewWorktreeInitialRepo | null = null) => {
+      setNewWorktreeRepo(visible ? repo : null)
+      setShowNewWorktree(visible)
+    },
+    []
+  )
   const [sleptIds, setSleptIds] = useState<Set<string>>(new Set())
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set())
   const [showPinnedInGroups, setShowPinnedInGroups] = useState(false)
@@ -128,6 +137,7 @@ export function useHostScreenState(
     setWorktrees,
     setWorktreesLoaded,
     showNewWorktree,
+    newWorktreeRepo,
     showWorkspaceOptions,
     showPinnedInGroups,
     setView,

@@ -27,6 +27,8 @@ export function useNewWorkspaceRepositories(args: {
   visible: boolean
   /** Picked once it is listed, in place of the last visited repo. */
   initialRepo?: { id: string; executionHostId: ExecutionHostId }
+  /** Offer only the initial repo's host, as a folder's launch must. */
+  onlyInitialRepoHost?: boolean
 }): {
   repos: MobileWorkspaceRepo[]
   allRepos: MobileWorkspaceRepo[]
@@ -37,7 +39,14 @@ export function useNewWorkspaceRepositories(args: {
   loadError: string | null
   retryLoad: () => void
 } {
-  const { client, serverClients = NO_SERVER_CLIENTS, hostId, visible, initialRepo } = args
+  const {
+    client,
+    serverClients = NO_SERVER_CLIENTS,
+    hostId,
+    visible,
+    initialRepo,
+    onlyInitialRepoHost = false
+  } = args
   const queryClient = useQueryClient()
   // The host list's repos, so the form opens with them while repo.list answers.
   const [initialRepos] = useState(() => cachedHostRepos<MobileWorkspaceRepo>(queryClient, hostId))
@@ -63,10 +72,10 @@ export function useNewWorkspaceRepositories(args: {
   const repos = useMemo(() => {
     // Hidden projects drop out as on desktop, except the one this form was opened for.
     const eligible = pickerRepos(getNewWorkspaceDialogEligibleRepos(allRepos), initialRepoId)
-    return initialRepoHost
+    return initialRepoHost && onlyInitialRepoHost
       ? eligible.filter((repo) => getRepoExecutionHostId(repo) === initialRepoHost)
       : eligible
-  }, [allRepos, initialRepoHost, initialRepoId])
+  }, [allRepos, initialRepoHost, initialRepoId, onlyInitialRepoHost])
   // Derive the pick so it follows updated listings and disappears when its host stops listing it.
   const selectedRepo = useMemo(
     () => refreshMobileNewWorkspaceDialogSelectedRepo(repos, pickedRepo),
