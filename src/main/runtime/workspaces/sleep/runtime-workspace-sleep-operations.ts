@@ -2,6 +2,7 @@ import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-typ
 import { OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce } from '../../session-tabs/chat/structured-session-tab-restoration'
 import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type {
+  SleptPaneWakeResult,
   WorkspaceSleepNotice,
   WorkspaceSleepOutcome,
   WorkspaceSleepRequest
@@ -181,8 +182,9 @@ export abstract class RuntimeWorkspaceSleepOperations extends OrcaRuntimeWithRes
   }
 
   /** The window opened a slept pane; main resumes it and the window attaches. */
-  resumeSleptPane(pane: RestoredPane, automatic?: boolean): Promise<boolean> {
-    return this.workspaceSleep.resumePane(pane, automatic)
+  async resumeSleptPane(pane: RestoredPane, automatic?: boolean): Promise<SleptPaneWakeResult> {
+    const started = await this.workspaceSleep.resumePane(pane, automatic)
+    return started ? { resumeOutcome: started.resumeOutcome } : null
   }
 
   /** The window reopened a slept agent whose tab is gone in a fresh tab; this record is spent. */

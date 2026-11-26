@@ -7,7 +7,6 @@ import type { SessionOptionValue } from '../../native-chat/input/native-chat-ses
 import { buildSleepingAgentLaunchConfig } from '../../agent-session/lifecycle/resume/sleeping-agent-launch-config'
 import { resolveAgentLaunchCommand } from './tui-agent-launch-command'
 import { withAgentTerminalInputArgs } from './codex-terminal-input-args'
-import type { ManagedAgentCommands } from './managed-agent-launch-program'
 import { startupUpdatePromptSuppression } from './agent-startup-update-prompt'
 import type { AgentStartupPlan } from './tui-agent-startup'
 import {
@@ -47,7 +46,6 @@ export function buildAgentResumeStartupPlan(args: {
   fork?: boolean
   /** OS that runs the agent when `platform` only picks quoting; null when unreported. */
   agentHostPlatform?: NodeJS.Platform | null
-  managedAgentCommands?: ManagedAgentCommands | null
 }): AgentStartupPlan | null {
   const resumeArgv = args.fork
     ? getAgentForkArgv(args.agent, args.providerSession)
@@ -93,8 +91,7 @@ export function buildAgentResumeStartupPlan(args: {
         sessionOptions: args.sessionOptions,
         sessionOptionsOverrideAgentArgs: args.sessionOptionsOverrideAgentArgs,
         isRemote: args.isRemote,
-        agentHostPlatform: args.agentHostPlatform,
-        managedAgentCommands: undefined
+        agentHostPlatform: args.agentHostPlatform
       })
   if (!baseCommand.ok) {
     return null

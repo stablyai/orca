@@ -1,12 +1,23 @@
+import { realpath } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, isAbsolute, join, resolve } from 'node:path'
 import { readLaunchPosition } from '../../../../shared/agent-launch/startup/launch-position'
 import { structuredAgentCommandPlan } from '../../../../shared/agent-launch/startup/tui-agent-launch-command-override'
 import { launchCommandProvenance } from '../../../../shared/agent-launch/startup/managed-agent-launch-program'
-import { readLocalTerminalAgentProgram } from '../../../preflight/agent-command-detection'
+import {
+  AgentInventoryDeadlineError,
+  readLocalTerminalAgentProgram
+} from '../../../preflight/agent-command-detection'
 import { isOrcaAgentRuntimePath } from '../../../managed-agent-cli/managed-agent-cli-path'
+import { isExecutableFile } from '../../../ipc/command-path/command-path-directory'
+import { resolveCommandOnLocalPath } from '../../../ipc/command-path/command-path-resolver'
 
-export async function resolveClaudeTeamsInvocation(override: string | undefined): Promise<{
+type Caller = { env?: Record<string, string>; cwd?: string }
+
+export async function resolveClaudeTeamsInvocation(
+  override: string | undefined,
+  caller: Caller = {}
+): Promise<{
   command: string
   args?: string[]
 }> {
@@ -25,15 +36,42 @@ export async function resolveClaudeTeamsInvocation(override: string | undefined)
     if (isOrcaAgentRuntimePath(command)) {
       throw new Error('Agent Teams requires your own Claude installation.')
     }
-    return { command: command === 'claude' ? await userClaude() : command, args: plan.prefixArgs }
+    return {
+      command: command === 'claude' ? await userClaude(caller) : command,
+      args: plan.prefixArgs
+    }
   }
-  return { command: await userClaude() }
+  return { command: await userClaude(caller) }
 }
 
-async function userClaude(): Promise<string> {
+async function userClaude(caller: Caller): Promise<string> {
   const selection = await readLocalTerminalAgentProgram('claude', 'posix')
-  if (!('path' in selection)) {
-    throw new Error('Your Claude installation could not be found.')
+  if ('path' in selection) {
+    return selection.path
   }
-  return selection.path
+  if (caller.env) {
+    const cwd = caller.cwd ?? caller.env.PWD
+    const directories = (caller.env.PATH ?? '/usr/bin:/bin').split(delimiter)
+    const path = directories
+      .map((dir) => (cwd && isAbsolute(cwd) ? resolve(cwd, dir) : dir))
+      .filter((dir) => isAbsolute(dir) && !isOrcaAgentRuntimePath(dir))
+      .join(delimiter)
+    const command = await resolveCommandOnLocalPath('claude', {
+      env: { ...caller.env, PATH: path },
+      cwd,
+      probeCandidate: async (candidate) => {
+        const target = await realpath(candidate).catch(() => undefined)
+        return Boolean(
+          target && !isOrcaAgentRuntimePath(target) && (await isExecutableFile(candidate, false))
+        )
+      }
+    })
+    if (command) {
+      return command
+    }
+  }
+  if (selection.kind === 'unknown') {
+    throw new AgentInventoryDeadlineError()
+  }
+  throw new Error('Your Claude installation could not be found.')
 }

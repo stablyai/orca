@@ -199,7 +199,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
       ),
     // A web client runs no VM, so a reopen during a sleep changes nothing.
     sleepReopened: async () => {},
-    resumeSleptPane: async () => false,
+    resumeSleptPane: async () => null,
     retireStrandedSleepRecord: async () => {},
     ...createWebWorktreeRemovalCalls(),
     // Why: forget-locally clears a desktop workspace pinned to a dead SSH host; a paired web client has no such ghost state.

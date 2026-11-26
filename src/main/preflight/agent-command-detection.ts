@@ -22,7 +22,7 @@ import {
 } from './agent-command-inventory'
 
 const INVENTORY_WAIT_MS = 10_000
-class AgentInventoryDeadlineError extends Error {
+export class AgentInventoryDeadlineError extends Error {
   constructor() {
     super('Agent inventory is still running. Try again.')
   }

@@ -9,7 +9,10 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { alignManagedAgentLaunchAtSpawn } from '../../../../managed-agent-cli/managed-agent-spawn-program'
-import { detectInstalledAgentInventory } from '../../../../preflight/installed-agent-detection'
+import {
+  detectInstalledAgentInventory,
+  detectInstalledAgents
+} from '../../../../preflight/installed-agent-detection'
 import {
   detectAgentCommandsOnHost,
   readLocalTerminalAgentProgram,
@@ -18,11 +21,13 @@ import {
 import { invalidateWslGuestEnvironment } from '../../../../wsl/execution/wsl-guest-environment'
 import {
   detectAgentInventoryOnHost,
+  detectAgentsOnHost,
   detectProjectLaunchContext,
   HOST_DEFAULT_AGENT_DETECTION,
   refreshAgentsOnHost
 } from '../../../../preflight/workspace-agent-detection'
 import { resolveClaudeTeamsInvocation } from '../../../terminal/launch/claude-teams-invocation'
+import { resolveQoderTerminalCommand } from '../../../terminal/launch/qoder-terminal-command-resolution'
 
 const fixture = vi.hoisted(() => {
   const pending: { installs?: Promise<void>; onScan?: () => void } = {}
@@ -124,6 +129,28 @@ async function executable(...parts: string[]): Promise<string> {
   await writeFile(file, '', { mode: 0o755 })
   return file
 }
+
+it('starts and records Qoder when only the qoder alias is installed', async () => {
+  await executable('path', windows ? 'qoder.exe' : 'qoder')
+  const launch = await resolveQoderTerminalCommand(
+    {
+      launchAgent: 'qoder' as const,
+      command: 'qodercli --verbose',
+      launchConfig: {
+        commandProvenance: 'generated' as const,
+        agentCommand: 'qodercli --verbose',
+        agentEnv: {}
+      }
+    },
+    { shell }
+  )
+  await expect(
+    alignManagedAgentLaunchAtSpawn({ ...launch, launchCommand: launch.command }, shell)
+  ).resolves.toMatchObject({
+    command: 'qoder --verbose',
+    launchConfig: { agentCommand: 'qoder --verbose', commandProvenance: 'generated' }
+  })
+})
 
 it('migrates saved Orca and bare Claude heads through the same inventory', async () => {
   const orca = await executable('agent-runtimes', 'claude', '1.0', claudeName)
@@ -425,6 +452,10 @@ it('returns the published agents as incomplete when a detect wait expires', asyn
   fixture.installs = held.promise
   vi.useFakeTimers()
   const detect = detectInstalledAgentInventory().catch((error: unknown) => error)
+  const plainLists = Promise.allSettled([
+    detectInstalledAgents(),
+    detectAgentsOnHost(HOST_DEFAULT_AGENT_DETECTION)
+  ])
   try {
     await entered.promise
     await vi.advanceTimersByTimeAsync(10_000)
@@ -433,6 +464,10 @@ it('returns the published agents as incomplete when a detect wait expires', asyn
       incomplete: true,
       afterPublication: 1
     })
+    expect(await plainLists).toEqual([
+      { status: 'rejected', reason: new Error('Agent inventory is still running. Try again.') },
+      { status: 'rejected', reason: new Error('Agent inventory is still running. Try again.') }
+    ])
   } finally {
     const completion = detectInstalledAgentInventory()
     held.resolve()

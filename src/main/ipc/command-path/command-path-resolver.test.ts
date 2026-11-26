@@ -56,6 +56,20 @@ describe('isCommandOnLocalPath', () => {
         isCommandOnLocalPath('runme', { platform: 'linux', env: { PATH: '.' }, cwd: dir })
       ).resolves.toBe(false)
     })
+
+    it.skipIf(process.platform !== 'linux')(
+      'does not satisfy codex with Codex on PATH',
+      async () => {
+        const file = path.join(dir, 'Codex')
+        await writeFile(file, '#!/bin/sh\n')
+        await chmod(file, 0o755)
+        await expect(
+          findCommandsOnLocalPath(['codex', 'absent-a', 'absent-b', 'absent-c', 'absent-d'], {
+            env: { PATH: dir }
+          })
+        ).resolves.toEqual(new Set())
+      }
+    )
   })
 })
 

@@ -3,8 +3,12 @@
 import { isPtyIdMintedForAnotherWorkspace } from './foreign-pane-bindings'
 import type { RuntimeMobileSessionCreateTerminalResult as CreatedTerminal } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 
-export type StartedPty = Pick<CreatedTerminal, 'startupCwdFallback'> & { id: string }
+export type StartedPty = Pick<CreatedTerminal, 'startupCwdFallback'> & {
+  id: string
+  resumeOutcome?: PaneResumeOutcome
+}
 export type RestoredPane = { worktreeId: string; tabId: string; leafId: string }
 
 export type RestoredPaneStartPlan = {
@@ -66,11 +70,11 @@ export class RestoredPaneStarter {
       this.started.delete(key)
       return Promise.resolve(null)
     }
+    const started = this.started.get(key)
     if (this.isOwnLive(pane, bound)) {
       this.started.delete(key)
-      return Promise.resolve({ id: bound })
+      return Promise.resolve(started?.id === bound ? started : { id: bound })
     }
-    const started = this.started.get(key)
     // Why: until the started terminal's binding is written, the stored layout still names the old one.
     if (started && this.ports.isLive(started.id)) {
       return Promise.resolve(started)

@@ -24,7 +24,7 @@ export type AgentLaunchExecutionContext = {
   isRemote: boolean
   /** Only set for a local Windows launch; remote targets need their own shell signal. */
   queuedShell: AgentStartupShell | undefined
-  /** Full paths to Orca's copies on the workspace's host, for agents the user has none of. */
+  /** User executables the workspace's host found outside PATH. */
   managedAgentCommands: ManagedAgentCommands | undefined
 }
 

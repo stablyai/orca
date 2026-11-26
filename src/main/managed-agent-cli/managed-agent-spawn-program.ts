@@ -33,7 +33,7 @@ import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { MANAGED_AGENT_CLI_IDS, managedAgentCli } from './managed-agent-cli-registry'
 import { isOrcaAgentRuntimePath } from './managed-agent-cli-path'
 import { resolveCmdLaunchFolderProgram } from '../ipc/command-path/cmd-launch-folder-program'
-import { isExecutableFile } from '../ipc/command-path/command-path-directory'
+import { checkExecutableFile } from '../ipc/command-path/command-path-directory'
 import {
   readLocalTerminalAgentProgram,
   readWslTerminalAgentProgram,
@@ -113,13 +113,17 @@ async function selectProgram(
     // SSH panes execute the name in the guest shell, with no desktop runtime paths.
     return { kind: 'by-name', path: program }
   }
-  if (
-    pinned &&
-    isAbsolute(pinned) &&
-    !isOrcaAgentRuntimePath(pinned) &&
-    (await waitForPromiseWithSignal(isExecutableFile(pinned, process.platform === 'win32'), signal))
-  ) {
-    return { kind: 'full-path', path: pinned }
+  if (pinned && isAbsolute(pinned) && !isOrcaAgentRuntimePath(pinned)) {
+    const checked = await waitForPromiseWithSignal(
+      checkExecutableFile(pinned, process.platform === 'win32'),
+      signal
+    )
+    if (checked === 'executable') {
+      return { kind: 'full-path', path: pinned }
+    }
+    if (checked === 'unknown') {
+      return { kind: 'unknown' }
+    }
   }
   const selected = await readLocalTerminalAgentProgram(program, shell, Boolean(pinned), signal)
   throwIfSignalAborted(signal)
@@ -215,14 +219,20 @@ async function rewriteLaunchExecutable(
   const guest = spawn.sshTarget || spawn.codexRuntime === 'wsl'
   const platform = guest ? 'linux' : process.platform
   const stock = (agent: TuiAgent) => stockLaunchProgram(agent, platform, guest)
+  const alias = (agent: TuiAgent, program: string) =>
+    TUI_AGENT_CONFIG[agent].detectCmdAliases?.find((name) =>
+      matchesStockLaunchProgram(program, name, platform)
+    )
+  const matchesAgent = (agent: TuiAgent, program: string) =>
+    matchesStockLaunchProgram(program, stock(agent), platform) ||
+    alias(agent, program) !== undefined
   const sourceProgram =
     spawn.codexRuntime === 'wsl'
       ? (toWindowsWslDrivePath(launch.executable) ?? launch.executable)
       : process.platform === 'win32' && source === 'posix'
         ? msysDrivePathToWindows(launch.executable)
         : launch.executable
-  const recorded =
-    legacy && config?.agentCommand ? readLaunchPosition(config.agentCommand, source) : launch
+  const recorded = config?.agentCommand ? readLaunchPosition(config.agentCommand, source) : launch
   const bare =
     recorded &&
     !recorded.env.size &&
@@ -233,16 +243,13 @@ async function rewriteLaunchExecutable(
     ? (managedPathAgent(sourceProgram) ??
       (bare
         ? [spawn.launchAgent, ...stockAgents].find(
-            (agent) =>
-              agent && matchesStockLaunchProgram(recorded.executable, stock(agent), platform)
+            (agent) => agent && matchesAgent(agent, recorded.executable)
           )
         : undefined))
     : undefined
   const agent = generated
     ? (spawn.launchAgent ??
-      stockAgents.find((candidate) =>
-        matchesStockLaunchProgram(launch.executable, stock(candidate), platform)
-      ))
+      stockAgents.find((candidate) => matchesAgent(candidate, launch.executable)))
     : oldAgent
   if (generated && !agent) {
     return { command: undefined, launchConfig: config, blocked: 'unknown' }
@@ -250,7 +257,10 @@ async function rewriteLaunchExecutable(
   let executable = launch.executable
   let launchConfig = config
   if (agent) {
-    const program = stock(agent)
+    const program =
+      alias(agent, launch.executable) ??
+      (recorded && alias(agent, recorded.executable)) ??
+      stock(agent)
     const pinned = spawn.restoring ? config?.selectedExecutable : undefined
     const selected = await withAgentInventoryDeadline((signal) =>
       selectProgram(spawn, shell, program, launch, pinned, signal)
@@ -258,12 +268,17 @@ async function rewriteLaunchExecutable(
     if (!('path' in selected)) {
       return { command: undefined, launchConfig: config, blocked: selected.kind }
     }
-    executable = selected.kind === 'by-name' ? program : selected.path
+    executable =
+      selected.kind === 'full-path'
+        ? selected.path
+        : matchesStockLaunchProgram(launch.executable, program, platform)
+          ? launch.executable
+          : program
     if (config) {
       const { selectedExecutable: _previous, ...recipe } = config
       launchConfig = {
         ...recipe,
-        ...(oldAgent && recorded && config.agentCommand
+        ...((oldAgent || program !== stock(agent)) && recorded && config.agentCommand
           ? {
               agentCommand: replaceLaunchExecutable(config.agentCommand, source, recorded, program)
             }

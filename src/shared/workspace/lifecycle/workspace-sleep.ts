@@ -3,6 +3,10 @@ import {
   type SleepingAgentSessionRecord
 } from '../../agent-session/lifecycle/agent-session-resume'
 import type { ExecutionHostId } from '../../execution-host/execution-host'
+import type { PaneResumeOutcome } from '../../workspace-layout/published-layout/workspace-layout-published'
+
+/** A terminal is ready to attach; only an agent that actually resumed has a restored outcome. */
+export type SleptPaneWakeResult = { resumeOutcome?: PaneResumeOutcome } | null
 
 export type SleepingAgentWakeRequest = {
   worktreeId: string

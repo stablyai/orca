@@ -98,8 +98,7 @@ export function resolveAgentAccountRestartResumeStartup(
       state.getKnownWorktreeById(
         args.worktreeId,
         getExecutionHostIdForWorktree(state, args.worktreeId)
-      )?.path,
-    managedAgentCommands: readManagedAgentCommandsForWorktree(state, args.worktreeId)
+      )?.path
   })
   if (!startupPlan) {
     return null

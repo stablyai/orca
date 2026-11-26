@@ -1,22 +1,10 @@
-import {
-  readManagedAgentCommandsForRepo,
-  readManagedAgentCommandsForWorktree
-} from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { mailWakeLaunchToken } from '@/lib/agent-session/resume/sleeping-agent-wake-requests'
 import {
   getConnectionIdForWorktreeCopy,
   getConnectionIdFromState
 } from '@/lib/workspace/ownership/connection-owner-resolution'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  normalizeExecutionHostId
-} from '../../../../../../shared/execution-host/execution-host'
-import { isWslUncPath } from '../../../../../../shared/file-access/wsl-paths'
-import {
-  isWslShellName,
-  resolveLocalWindowsTerminalShellOverrideForTab
-} from '../../../../../../shared/shell/launch/local-windows-terminal-runtime'
+import { normalizeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '@/store/index'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { buildAgentResumeStartupPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-resume-startup'
@@ -127,29 +115,6 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       ),
       runtimeHostTerminalWindowsShell
     })
-    const isWslWorktree = isWslUncPath(worktreePath ?? '')
-    const isWslPane =
-      isWslWorktree ||
-      (resumeTarget.platform === 'win32' &&
-        isWslShellName(
-          paneHostId === LOCAL_EXECUTION_HOST_ID
-            ? resolveLocalWindowsTerminalShellOverrideForTab({
-                explicitShellOverride: session.shellOverride,
-                defaultWindowsShell: state.settings?.terminalWindowsShell,
-                isWslWorktree,
-                projectRuntime: session.projectRuntime
-              })
-            : (runtimeHostTerminalWindowsShell ?? undefined)
-        ))
-    const managedAgentCommands =
-      connectionId || isWslPane
-        ? undefined
-        : paneHostId
-          ? readManagedAgentCommandsForRepo(
-              { executionHostId: paneHostId, connectionId },
-              resumeTarget.platform
-            )
-          : readManagedAgentCommandsForWorktree(state, session.deps.worktreeId)
     const startupPlan = buildAgentResumeStartupPlan({
       agent,
       providerSession,
@@ -158,8 +123,7 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       platform: resumeTarget.platform,
       agentHostPlatform: resumeTarget.agentHostPlatform,
       shell: resumeTarget.shell,
-      launchCwd: worktreePath,
-      managedAgentCommands
+      launchCwd: worktreePath
     })
     if (!startupPlan) {
       return null

@@ -142,6 +142,7 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
   async prepareClaudeAgentTeamsLeader(args: {
     paneKey: string
     baseEnv?: Record<string, string>
+    cwd?: string
     prepareAuth?: boolean
   }): Promise<{
     env: Record<string, string>
@@ -165,7 +166,8 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
     return {
       ...launch,
       ...(await resolveClaudeTeamsInvocation(
-        this.requireStore().getSettings().agentCmdOverrides?.claude
+        this.requireStore().getSettings().agentCmdOverrides?.claude,
+        { env: args.baseEnv, cwd: args.cwd }
       ))
     }
   }

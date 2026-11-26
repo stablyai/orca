@@ -292,6 +292,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
       const launch = await runtime.prepareClaudeAgentTeamsLeader({
         paneKey: params.paneKey,
         baseEnv: params.env,
+        cwd: params.cwd,
         prepareAuth: params.prepareAuth
       })
       return { launch }

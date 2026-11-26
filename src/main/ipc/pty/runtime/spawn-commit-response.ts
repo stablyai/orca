@@ -13,7 +13,11 @@ export function resumeOutcomeOf(ctx: RuntimeResumeOutcomeState): PaneResumeOutco
     return null
   }
   // Refused saved admission removes the request; the spawned shell still carries its outcome.
-  if (ctx.result.agentResumeUnavailable || ctx.codexResumeUnavailable) {
+  if (
+    ctx.result.agentResumeUnavailable ||
+    ctx.result.agentProgramBlocked ||
+    ctx.codexResumeUnavailable
+  ) {
     return 'resume-unavailable'
   }
   // A resume dropped silently named another agent's session: nothing came back, and nothing is owed.

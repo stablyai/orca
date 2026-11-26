@@ -200,8 +200,7 @@ export function readAgentInventoryForWorktree(state: AppState, worktreeId: strin
     : { ids: null, state: 'unresolved' as const }
 }
 
-/** Full paths to Orca's copies the workspace's host reported, for the launch builders; a local
- *  workspace running under WSL has none (Orca's copies live on this computer). */
+/** User executables found outside PATH by the workspace's host. WSL inventory reports names only. */
 export function readManagedAgentCommandsForWorktree(
   state: AppState,
   worktreeId: string | null | undefined
@@ -223,8 +222,7 @@ export function readManagedAgentCommandsForWorktree(
   return inWsl ? undefined : readManagedAgentCommands(LOCAL_MANAGED_AGENT_HOST)
 }
 
-/** Orca's copy paths on a project's host before its workspace exists; a local project running
- *  under WSL (a launch platform other than this computer's) has none. */
+/** User executables found outside PATH by the project's host before its workspace exists. */
 export function readManagedAgentCommandsForRepo(
   repo: RepoHostFields,
   launchPlatform: NodeJS.Platform | null | undefined

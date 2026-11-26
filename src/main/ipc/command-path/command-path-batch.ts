@@ -138,7 +138,11 @@ export async function findCommandsOnLocalPath(
                 continue
               }
               checked.add(key)
-              const candidate = joinCandidatePath(isWin, dir.dir, listed ?? wanted)
+              const candidate = joinCandidatePath(
+                isWin,
+                dir.dir,
+                isWin ? (listed ?? wanted) : wanted
+              )
               if (await isExecutableFile(candidate, isWin)) {
                 const hit =
                   isWin && !listed && process.platform === 'win32'

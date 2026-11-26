@@ -1,4 +1,3 @@
-import { readManagedAgentCommandsForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { toast } from 'sonner'
@@ -74,8 +73,7 @@ export function launchSleepingAgentSession(
     platform: resumeTarget.platform,
     agentHostPlatform: resumeTarget.agentHostPlatform,
     shell: resumeTarget.shell,
-    launchCwd: state.getKnownWorktreeById(record.worktreeId)?.path,
-    managedAgentCommands: readManagedAgentCommandsForWorktree(state, record.worktreeId)
+    launchCwd: state.getKnownWorktreeById(record.worktreeId)?.path
   })
   if (!startupPlan) {
     toast.error(

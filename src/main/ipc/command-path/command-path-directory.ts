@@ -9,22 +9,38 @@ export function directoryNameKey(name: string): string {
 }
 
 export async function isExecutableFile(candidate: string, isWin: boolean): Promise<boolean> {
+  return (await checkExecutableFile(candidate, isWin)) === 'executable'
+}
+
+export async function checkExecutableFile(
+  candidate: string,
+  isWin: boolean
+): Promise<'executable' | 'missing' | 'unknown'> {
   try {
     // Follow symlinked CLIs to their real targets.
     const stats = await stat(candidate)
     if (stats.isDirectory()) {
       // PATH directories are not executable files despite their search bit.
-      return false
+      return 'missing'
     }
     if (isWin) {
       // Extension membership already enforced by the PATHEXT permutation.
-      return stats.isFile()
+      return stats.isFile() ? 'executable' : 'missing'
     }
     await access(candidate, fsConstants.X_OK)
-    return true
-  } catch {
-    return false
+    return 'executable'
+  } catch (error) {
+    return isMissingPathError(error) ? 'missing' : 'unknown'
   }
+}
+
+function isMissingPathError(error: unknown): boolean {
+  return (
+    !!error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    (error.code === 'ENOENT' || error.code === 'ENOTDIR')
+  )
 }
 
 export function detectionDirectoryKey(dir: string, isWin: boolean): string {
@@ -65,12 +81,7 @@ export async function readDetectionDirectory(dir: string): Promise<Map<string, s
   try {
     directory = await opendir(dir, { bufferSize: MAX_DETECTION_DIRECTORY_ENTRIES + 1 })
   } catch (error) {
-    if (
-      error &&
-      typeof error === 'object' &&
-      'code' in error &&
-      (error.code === 'ENOENT' || error.code === 'ENOTDIR')
-    ) {
+    if (isMissingPathError(error)) {
       return new Map()
     }
     // Searchable-but-unreadable directories still admit stat on known names.

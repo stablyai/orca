@@ -73,13 +73,13 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
       launch: {
         env: Record<string, string>
         envToDelete?: string[]
-        outsidePath?: string
         command?: string
         args?: string[]
       }
     }>('agentTeams.prepareLaunch', {
       paneKey,
       env: inheritedEnv,
+      cwd: process.cwd(),
       prepareAuth: true
     })
     for (const key of response.result.launch.envToDelete ?? []) {
@@ -91,7 +91,7 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
         ...response.result.launch.env
       },
       [...(response.result.launch.args ?? []), ...(rawArgs ?? [])],
-      response.result.launch.outsidePath ?? response.result.launch.command
+      response.result.launch.command
     )
   },
   open: async ({ client, json }) => {

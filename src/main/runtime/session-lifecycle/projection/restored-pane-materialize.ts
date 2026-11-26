@@ -34,6 +34,7 @@ import { movedPaneHistorySessionId } from '../../../persistence/migrating-orcad-
 import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 
 export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs {
   protected abstract resolveAgentLaunchRuntime(
@@ -96,7 +97,8 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
         if (!started.tab.ptyId || !this.ptysById.has(started.tab.ptyId)) {
           throw new Error('terminal_not_started')
         }
-        return { id: started.tab.ptyId, startupCwdFallback: started.startupCwdFallback }
+        const { startupCwdFallback, resumeOutcome } = started
+        return { id: started.tab.ptyId, startupCwdFallback, resumeOutcome }
       }
     })
     return this.restoredPanes.ensureStarted(pane, trigger)
@@ -210,7 +212,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
       sessionId,
       wslUserAct
     }: RestoredPaneTrigger & { sessionId?: string }
-  ): Promise<RuntimeMobileSessionCreateTerminalResult> {
+  ): Promise<RuntimeMobileSessionCreateTerminalResult & { resumeOutcome?: PaneResumeOutcome }> {
     // Recover undelivered startup commands (#7587) or recorded agent sessions (#27147, #27777); live-session attach skips startup commands, preventing double launches.
     const resumeStartup = await this.resolvePaneOwnedResumeStartup(worktreeId, tab)
     // After a claimed-record resume starts, mark that record live.
@@ -239,6 +241,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
       }
     }
     let dispatched = false
+    let resumeOutcome: PaneResumeOutcome | undefined
     try {
       const startSessionId =
         sessionId ??
@@ -277,30 +280,34 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
           onPtySpawnDispatched: () => {
             dispatched = true
           },
-          ...(resumeClaim
-            ? {
-                onPtyCreated: (ptyId: string, result: RuntimeTerminalCreate) => {
-                  const decision = result.savedResumeDecision
-                  if (
-                    !result.isReattach &&
-                    result.agentSessionDisposition !== 'adopted' &&
-                    decision &&
-                    decision.agent === resumeStartup?.launchAgent &&
-                    decision.verdict !== 'admitted' &&
-                    decision.verdict === result.agentResumeRefused &&
-                    agentProviderSessionsEqual(
-                      decision.agent,
-                      decision.providerSession,
-                      resumeStartup?.resumeProviderSession
-                    )
-                  ) {
-                    resumeClaim.settleFailure(false)
-                  } else {
-                    resumeClaim.bind(ptyId)
-                  }
-                }
-              }
-            : {}),
+          onPtyCreated: (ptyId: string, result: RuntimeTerminalCreate) => {
+            const fresh = !result.isReattach && result.agentSessionDisposition !== 'adopted'
+            const blocked = result.agentResumeUnavailable || result.agentProgramBlocked
+            if (fresh && 'resumeProviderSession' in agentStartup) {
+              resumeOutcome =
+                blocked || result.agentResumeRefused
+                  ? 'resume-unavailable'
+                  : result.resumeProviderSession && 'restored'
+            }
+            const decision = result.savedResumeDecision
+            if (
+              fresh &&
+              (blocked ||
+                (decision &&
+                  decision.agent === resumeStartup?.launchAgent &&
+                  decision.verdict !== 'admitted' &&
+                  decision.verdict === result.agentResumeRefused &&
+                  agentProviderSessionsEqual(
+                    decision.agent,
+                    decision.providerSession,
+                    resumeStartup?.resumeProviderSession
+                  )))
+            ) {
+              resumeClaim?.settleFailure(false)
+            } else {
+              resumeClaim?.bind(ptyId)
+            }
+          },
           ...(automatic ? { refuseSleptWorktree: true } : {}),
           reopensPane: true,
           // Only resumes from this pane's record show the window banner.
@@ -308,7 +315,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
         }
       )
       // A running resumed agent's record must not remain asleep.
-      if (created.tab.ptyId && resumedRecord) {
+      if (created.tab.ptyId && resumedRecord && resumeOutcome === 'restored') {
         const hostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
         void markResumedRecordLive(
           (edit) => this.commitWorkspaceSessionEdit(hostId, edit),
@@ -316,7 +323,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
           resumedRecord
         ).catch((err: unknown) => console.warn('[layout] could not mark a resumed pane live', err))
       }
-      return created
+      return { ...created, ...(resumeOutcome ? { resumeOutcome } : {}) }
     } catch (err) {
       resumeClaim?.settleFailure(dispatched, err)
       if (

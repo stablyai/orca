@@ -73,7 +73,7 @@ type AiVaultResumeStartupArgs = {
   host: AiVaultResumeHostShell
   settings: AiVaultResumeLaunchSettings | null | undefined
   commandOverride?: string | null
-  /** Full paths to Orca's copies on the resume's host. */
+  /** User executables found outside PATH on the resume's host. */
   managedAgentCommands?: ManagedAgentCommands
 }
 
@@ -187,8 +187,7 @@ export function buildAiVaultLocalResumeStartup(
         ...managedDataAccountResumeEnv(session)
       },
       resumeInLaunchCwd: true,
-      ...(session.agent === 'omp' && resumeFilePath ? { ompResumeFilePath: resumeFilePath } : {}),
-      managedAgentCommands: args.managedAgentCommands
+      ...(session.agent === 'omp' && resumeFilePath ? { ompResumeFilePath: resumeFilePath } : {})
     })
     if (startupPlan) {
       return {
@@ -248,7 +247,7 @@ export function buildAiVaultLocalResumeStartup(
 
 /** Return null without fork support: plain resume would create a second writer on the chat's conversation. Omit providerSession because the copy owns a new ID and cold restore must not resume the source. */
 export function buildAiVaultForkStartup(
-  args: AiVaultResumeStartupArgs
+  args: Omit<AiVaultResumeStartupArgs, 'managedAgentCommands'>
 ): AiVaultResumeStartup | null {
   const { session, settings } = args
   const { platform, codexHome, liveShell } = args.host
@@ -274,8 +273,7 @@ export function buildAiVaultForkStartup(
     ),
     agentEnv: resolveTuiAgentLaunchEnv(session.agent, settings, platform),
     resumeInLaunchCwd: true,
-    fork: true,
-    managedAgentCommands: args.managedAgentCommands
+    fork: true
   })
   if (!plan) {
     return null

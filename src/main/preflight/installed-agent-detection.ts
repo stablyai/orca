@@ -13,7 +13,10 @@ import {
   getPreflightWslTarget,
   type PreflightRuntimeContext
 } from '../ipc/preflight/preflight-runtime-target'
-import { detectAgentCommandInventoryOnHost } from './agent-command-detection'
+import {
+  AgentInventoryDeadlineError,
+  detectAgentCommandInventoryOnHost
+} from './agent-command-detection'
 import { normalizeDisabledTuiAgents } from '../../shared/agent-launch/catalog/tui-agent-selection'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { TuiAgentDetectionRuntime } from '../../shared/agent-launch/catalog/tui-agent-config-types'
@@ -180,7 +183,16 @@ export async function detectInstalledAgents(
   revalidate = false,
   signal?: AbortSignal
 ): Promise<string[]> {
-  return (await detectInstalledAgentInventory(context, options, revalidate, signal)).agents
+  return completeAgentList(
+    await detectInstalledAgentInventory(context, options, revalidate, signal)
+  )
+}
+
+function completeAgentList(inventory: InstalledAgentInventory): string[] {
+  if (inventory.incomplete) {
+    throw new AgentInventoryDeadlineError()
+  }
+  return inventory.agents
 }
 
 export async function detectInstalledAgentInventoryWithShellPathHydration(
@@ -198,6 +210,7 @@ export async function detectInstalledAgentsWithShellPathHydration(
   options?: InstalledAgentDetectionOptions,
   signal?: AbortSignal
 ): Promise<string[]> {
-  return (await detectInstalledAgentInventoryWithShellPathHydration(context, options, signal))
-    .agents
+  return completeAgentList(
+    await detectInstalledAgentInventoryWithShellPathHydration(context, options, signal)
+  )
 }

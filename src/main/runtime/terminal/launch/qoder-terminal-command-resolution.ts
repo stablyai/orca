@@ -21,7 +21,11 @@ export async function resolveQoderTerminalCommand<
   },
   detect = detectAgentCommandsOnHost
 ): Promise<T> {
-  if (options.launchAgent !== 'qoder' || !options.command) {
+  if (
+    options.launchAgent !== 'qoder' ||
+    !options.command ||
+    options.launchConfig?.commandProvenance === 'authored'
+  ) {
     return options
   }
   const parsed = tokenizeStartupCommand(options.command, host.shell)
@@ -40,7 +44,7 @@ export async function resolveQoderTerminalCommand<
     return options
   }
   const candidates = getTuiAgentDetectCommands(TUI_AGENT_CONFIG.qoder)
-  const found = await detect(candidates, host)
+  const found = await detect(candidates, { ...host, onlyRequested: true })
   const selected = candidates.find((candidate) => found.has(candidate))
   if (!selected || selected === parsed.tokens[executableIndex]) {
     return options

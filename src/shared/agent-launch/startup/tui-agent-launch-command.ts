@@ -74,7 +74,7 @@ export function resolveAgentLaunchCommand(args: {
     args.platform
   )
   const command =
-    (commandProvenance === 'authored' ? override : undefined) ||
+    (commandProvenance === 'authored' ? override : override?.trim()) ||
     getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[args.agent], args.platform, {
       isRemote: args.isRemote
     })

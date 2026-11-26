@@ -69,16 +69,19 @@ export function buildAiVaultCliForkStartupForWorktree(
   const startupArgs = {
     session,
     host: resolveAiVaultResumeHost(args),
-    settings,
-    managedAgentCommands: readManagedAgentCommandsForWorktree(
-      useAppStore.getState(),
-      args.worktreeId
-    )
+    settings
   }
   if (args.copied) {
     assertAiVaultCopiedSessionLaunchAllowed(args)
     return {
-      ...buildAiVaultLocalResumeStartup({ ...startupArgs, embedCwd: false }),
+      ...buildAiVaultLocalResumeStartup({
+        ...startupArgs,
+        embedCwd: false,
+        managedAgentCommands: readManagedAgentCommandsForWorktree(
+          useAppStore.getState(),
+          args.worktreeId
+        )
+      }),
       agent: session.agent
     }
   }

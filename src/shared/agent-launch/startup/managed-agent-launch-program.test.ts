@@ -105,6 +105,26 @@ describe('launching a user CLI found outside PATH', () => {
     })
   })
 
+  it('replaces a bare Command Code override head without adding trust flags', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'command-code',
+        prompt: '',
+        allowEmptyPromptLaunch: true,
+        cmdOverrides: { 'command-code': 'command-code' },
+        platform: 'linux',
+        managedAgentCommands: { 'command-code': '/opt/user tools/bin/command-code' }
+      })
+    ).toMatchObject({
+      launchCommand: "'/opt/user tools/bin/command-code'",
+      launchConfig: {
+        agentCommand: 'command-code',
+        commandProvenance: 'generated',
+        selectedExecutable: '/opt/user tools/bin/command-code'
+      }
+    })
+  })
+
   it('renders native-chat sign-in with a resolved executable', () => {
     expect(
       agentSessionSignInCommand('codex', {
