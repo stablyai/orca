@@ -5,6 +5,7 @@ import {
   type StructuredTab
 } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import { parseAgentStatusPaneIdentity } from '../../../../../shared/agent-status/identity/agent-status-worktree-attribution'
+import { chatPaneKeySessionId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { tabHasLivePty } from '../../../../../shared/workspace-layout/terminal-surfaces/tab-has-live-pty'
 import { activityLiveAgentState } from './activity-event-state'
 import { agentRowStateDecaysAfter } from '../../../../../shared/agent-status/presentation/agent-row-decay-state'
@@ -129,14 +130,19 @@ export function buildActivityEvents(
   }
 
   const buildLivePane = (paneKey: string, entry: AgentStatusEntry): PaneBuild | null => {
-    const parsed = parseAgentStatusPaneIdentity(
-      paneKey,
-      (args.structuredTabs
+    const representedTab = (
+      args.structuredTabs
         ? structuredTabsByPaneKey(args.structuredTabs)
         : getStructuredAgentSessionTabsByPaneKey(args.unifiedTabsByWorktree)
-      ).get(paneKey)
-    )
-    if (!parsed) {
+    ).get(paneKey)
+    const parsed = parseAgentStatusPaneIdentity(paneKey, representedTab)
+    if (
+      !parsed ||
+      (entry.state === 'done' &&
+        !representedTab &&
+        chatPaneKeySessionId(paneKey) !== null &&
+        !statuses.projection.rowWorktree(paneKey))
+    ) {
       return null
     }
     // A tabless pane is listed only where workspace cards list it: finished local panes whose tab closed drop out.

@@ -7,6 +7,7 @@ import { isFrameDrawnServerWorkspace } from '../frame-drawn/frame-drawn-server-w
 import { mirroredRuntimeEnvironmentIdForWorkspace } from '../workspace-selection/mirrored-workspace-owner'
 import { getRuntimeEnvironmentRevision } from '../../rpc/environment-revisions/runtime-environment-revision'
 import { recoverMirroredTerminalOrphansBeforeApply } from '../terminal-handles/mirror-terminal-orphan-recovery'
+import type { TerminalOrphanRecoveryOptions } from '../../hosted-terminals/recovery/web-session-terminal-orphan-recovery-options'
 import {
   installWindowVisibilitySubscriptionParking,
   type WindowVisibilitySubscriptionParking
@@ -106,16 +107,14 @@ export function installActiveSessionTabsSubscription({
     response: RuntimeRpcResponse<unknown>,
     isCurrent: () => boolean,
     receivedFrame: number,
+    recoveryOptions: TerminalOrphanRecoveryOptions,
     runtimeId?: string
   ): Promise<HostSessionMirrorSettle | null> => {
     const recovered = await recoverMirroredTerminalOrphansBeforeApply(
       useAppStore.getState(),
       event,
       environmentId,
-      {
-        expectedEnvironmentPairingRevision: activeWorktreeRuntimePairingRevision,
-        getCurrentState: () => useAppStore.getState()
-      }
+      recoveryOptions
     )
     if (
       !isCurrent() ||
@@ -256,9 +255,18 @@ export function installActiveSessionTabsSubscription({
               if (runtimeId && !acceptSessionTabsRuntimeId(environmentId, runtimeId)) {
                 return
               }
-              const frame = recordReceivedSessionTabsStreamFrame(environmentId, event, runtimeId)
+              const recoveryOptions = {
+                expectedEnvironmentPairingRevision: activeWorktreeRuntimePairingRevision,
+                getCurrentState: () => useAppStore.getState()
+              }
+              const frame = recordReceivedSessionTabsStreamFrame(
+                environmentId,
+                event,
+                runtimeId,
+                recoveryOptions
+              )
               visibilitySnapshotReceipt.current(environmentId, event, frame, runtimeId)
-              void applyActiveSnapshot(event, response, isCurrent, frame, runtimeId)
+              void applyActiveSnapshot(event, response, isCurrent, frame, recoveryOptions, runtimeId)
                 .catch((error) => {
                   if (isCurrent()) {
                     console.warn('[web-session-tabs-sync] active snapshot recovery failed:', error)

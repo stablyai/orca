@@ -5,6 +5,7 @@ import { agentSenderPublicationPatch } from '../../native-chat/agent-senders/age
 import { isCurrentSessionTabsRuntimeFrame } from './publisher-identity-fences'
 import { recordReceivedWebSessionTabsSnapshot } from './tracking'
 import { isHostMirroredWorktree } from '../identity/host-mirrored-worktree'
+import type { TerminalOrphanRecoveryOptions } from '../../hosted-terminals/recovery/web-session-terminal-orphan-recovery-options'
 
 type Publications = AppState['agentSenderPublicationsByHost']
 
@@ -57,9 +58,18 @@ export function applyReceivedAgentSenderPublications(
 export function recordReceivedSessionTabsStreamFrame(
   environmentId: string,
   snapshot: RuntimeMobileSessionTabsResult,
-  runtimeId: string | undefined
+  runtimeId: string | undefined,
+  recoveryOptions: TerminalOrphanRecoveryOptions
 ): number {
-  const frame = recordReceivedWebSessionTabsSnapshot(environmentId, snapshot, undefined, runtimeId)
+  const frame = recordReceivedWebSessionTabsSnapshot(
+    environmentId,
+    snapshot,
+    undefined,
+    runtimeId,
+    'stream',
+    false,
+    recoveryOptions
+  )
   applyReceivedAgentSenderPublications(environmentId, [snapshot], runtimeId)
   return frame
 }

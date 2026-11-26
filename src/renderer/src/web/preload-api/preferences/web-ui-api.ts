@@ -29,18 +29,51 @@ import {
 import { callRuntimeResult } from '../../runtime/client/web-runtime-calls'
 import { requireActiveEnvironmentOrNull } from '../../runtime/client/web-runtime-session'
 import { UI_STORAGE_KEY, noopUnsubscribe, writeJson } from '../web-storage'
+import { mergeWebChatReadMarkEdits, type ChatReadMarks } from './web-chat-read-mark-storage'
+
+type UIUpdates = Parameters<PreloadApi['ui']['set']>[0]
+export type WebUiApi = NonNullable<PreloadApi['ui']> & {
+  setPersistedUIWithAck: (
+    updates: UIUpdates,
+    marks: Partial<ChatReadMarks>,
+    baseline: ChatReadMarks
+  ) => Promise<void>
+}
 
 /** Combines browser-local preferences with host persistence; acknowledged writes remain distinct from best-effort writes. */
-export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
+export function createWebUiApi(): WebUiApi {
   const explorerRoots = createWebExplorerRootSync()
   /** Captures the target host and strips browser-local or unsupported fields before sending a UI update. */
-  const prepareHostUpdates = (updates: Parameters<PreloadApi['ui']['set']>[0]) => {
+  const prepareHostUpdates = (updates: UIUpdates) => {
     const environmentId = requireActiveEnvironmentOrNull()?.id
     const hostUpdates = omitPairingLocalUiFields(updates)
     explorerRoots.prepare(environmentId, hostUpdates)
     return { environmentId, hostUpdates }
   }
+  const sendHostUpdatesWithAck = async (updates: UIUpdates): Promise<void> => {
+    const { environmentId, hostUpdates } = prepareHostUpdates(updates)
+    await callRuntimeResult('ui.set', hostUpdates, 15_000)
+    explorerRoots.acknowledge(environmentId, hostUpdates)
+    if (
+      updates.explorerDisplayRootByWorktree !== undefined &&
+      hostUpdates.explorerDisplayRootByWorktree === undefined
+    ) {
+      throw new Error('Explorer root preference is pending host support')
+    }
+  }
   let zoomLevel = readLocalWebUIState().uiZoomLevel
+  const persistLocalUpdates = (
+    updates: UIUpdates,
+    marks?: Partial<ChatReadMarks>,
+    baseline?: ChatReadMarks
+  ): void => {
+    const next = mergeWebUIState(readLocalWebUIState(), updates)
+    if (marks && baseline) {
+      mergeWebChatReadMarkEdits(next, marks, baseline)
+    }
+    writeJson(UI_STORAGE_KEY, next)
+    zoomLevel = next.uiZoomLevel
+  }
   return {
     ...createWebJiraFilterStateApi(),
     /** Hydrates from the active host after replaying pending roots, falling back to local state on failure or host changes. */
@@ -77,9 +110,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     },
     /** Persists locally first and attempts the host write without propagating offline failures to fire-and-forget callers. */
     set: async (updates) => {
-      const next = mergeWebUIState(readLocalWebUIState(), updates)
-      writeJson(UI_STORAGE_KEY, next)
-      zoomLevel = next.uiZoomLevel
+      persistLocalUpdates(updates)
       // Older hosts lack stripping; sending browser runtime:web-* keys would overwrite desktop order.
       const { environmentId, hostUpdates } = prepareHostUpdates(updates)
       try {
@@ -91,18 +122,12 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     },
     /** Rejects failed or stripped host updates so the diff writer cannot acknowledge preferences the host never received. */
     setWithAck: async (updates) => {
-      const next = mergeWebUIState(readLocalWebUIState(), updates)
-      writeJson(UI_STORAGE_KEY, next)
-      zoomLevel = next.uiZoomLevel
-      const { environmentId, hostUpdates } = prepareHostUpdates(updates)
-      await callRuntimeResult('ui.set', hostUpdates, 15_000)
-      explorerRoots.acknowledge(environmentId, hostUpdates)
-      if (
-        updates.explorerDisplayRootByWorktree !== undefined &&
-        hostUpdates.explorerDisplayRootByWorktree === undefined
-      ) {
-        throw new Error('Explorer root preference is pending host support')
-      }
+      persistLocalUpdates(updates)
+      await sendHostUpdatesWithAck(updates)
+    },
+    setPersistedUIWithAck: (updates, marks, baseline) => {
+      persistLocalUpdates(updates, marks, baseline)
+      return sendHostUpdatesWithAck(updates)
     },
     recordFeatureInteraction: async (id: FeatureInteractionId) => {
       const current = readLocalWebUIState()

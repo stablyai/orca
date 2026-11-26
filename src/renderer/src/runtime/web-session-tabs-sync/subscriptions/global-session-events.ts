@@ -84,7 +84,17 @@ export function handleGlobalSessionEvent(args: GlobalSessionEventArgs): void {
   if (event.type !== 'snapshot' && event.type !== 'updated') {
     return
   }
-  const receivedFrame = recordReceivedSessionTabsStreamFrame(environmentId, event, runtimeId)
+  const recoveryOptions = {
+    expectedEnvironmentPairingRevision,
+    expectedRuntimeId: runtimeId,
+    getCurrentState: () => useAppStore.getState()
+  }
+  const receivedFrame = recordReceivedSessionTabsStreamFrame(
+    environmentId,
+    event,
+    runtimeId,
+    recoveryOptions
+  )
   coordinator.recordSnapshotReceipt(environmentId, event, receivedFrame, runtimeId)
   if (
     isRetiredSessionTabsPublicationEpoch(
@@ -109,11 +119,12 @@ export function handleGlobalSessionEvent(args: GlobalSessionEventArgs): void {
     )
   }
   let settleHydration: HostSessionMirrorSettle | null = null
-  void recoverMirroredTerminalOrphansBeforeApply(useAppStore.getState(), event, environmentId, {
-    expectedEnvironmentPairingRevision,
-    expectedRuntimeId: runtimeId,
-    getCurrentState: () => useAppStore.getState()
-  })
+  void recoverMirroredTerminalOrphansBeforeApply(
+    useAppStore.getState(),
+    event,
+    environmentId,
+    recoveryOptions
+  )
     .then((recovered) => {
       if (
         !isCurrent() ||

@@ -6,6 +6,7 @@ import {
   writeWebChatReadMarkEdits,
   type ChatReadMarks
 } from '@/web/preload-api/preferences/web-chat-read-mark-storage'
+import type { WebUiApi } from '@/web/preload-api/preferences/web-ui-api'
 import {
   capturePersistedUIWriteBaseline,
   diffPersistedUIWriteFields,
@@ -58,6 +59,8 @@ function createPersistedUIWriteController(): PersistedUIWriteController {
       return
     }
     const state = useAppStore.getState()
+    const baseline = state.persistedUIWriteBaseline
+    let marks: Partial<ChatReadMarks> | undefined
     if (isWebClientLocation()) {
       const {
         activityClearedAtByPaneKey,
@@ -66,13 +69,17 @@ function createPersistedUIWriteController(): PersistedUIWriteController {
         ...hostAndOtherLocalChanges
       } = changed
       void _copiedHere
-      const marks: Partial<ChatReadMarks> = {
-        ...(activityClearedAtByPaneKey && { activityClearedAtByPaneKey }),
-        ...(manuallyUnreadTurnsByPaneKey && { manuallyUnreadTurnsByPaneKey })
+      if (activityClearedAtByPaneKey || manuallyUnreadTurnsByPaneKey) {
+        marks = {
+          ...(activityClearedAtByPaneKey && { activityClearedAtByPaneKey }),
+          ...(manuallyUnreadTurnsByPaneKey && { manuallyUnreadTurnsByPaneKey })
+        }
       }
-      const baseline = state.persistedUIWriteBaseline
-      if (baseline && (activityClearedAtByPaneKey || manuallyUnreadTurnsByPaneKey)) {
-        // Browser-local marks settle at storage, even if the host write fails.
+      changed = hostAndOtherLocalChanges
+    }
+    const fields = Object.keys(changed) as (keyof PersistedUIWriteBaseline)[]
+    if (fields.length === 0) {
+      if (baseline && marks) {
         try {
           writeWebChatReadMarkEdits(marks, baseline)
           useAppStore.setState({ persistedUIWriteBaseline: { ...baseline, ...marks } })
@@ -80,19 +87,21 @@ function createPersistedUIWriteController(): PersistedUIWriteController {
           // Leave local marks dirty when storage rejects the write.
         }
       }
-      changed = hostAndOtherLocalChanges
-    }
-    const fields = Object.keys(changed) as (keyof PersistedUIWriteBaseline)[]
-    if (fields.length === 0) {
       return
     }
     const sentAtGeneration = state.persistedUIWriteBaselineGeneration
     state.notePersistedUIWriteStarted(fields)
     let request: Promise<void>
     try {
-      // Use acknowledged writes when available; older preloads fall back to set, which web may silently reject.
-      const send = window.api.ui.setWithAck ?? window.api.ui.set
-      request = send(persistedUIWriteFieldsToWireUpdate(changed))
+      const updates = persistedUIWriteFieldsToWireUpdate(changed)
+      if (baseline && marks) {
+        request = (window.api.ui as WebUiApi).setPersistedUIWithAck(updates, marks, baseline)
+        // The local write settled synchronously, independently of the host acknowledgement.
+        useAppStore.setState({ persistedUIWriteBaseline: { ...baseline, ...marks } })
+      } else {
+        const send = window.api.ui.setWithAck ?? window.api.ui.set
+        request = send(updates)
+      }
     } catch {
       // Settle even synchronous failure so fields cannot stay pinned against hydration forever.
       useAppStore.getState().notePersistedUIWriteSettled(fields, null)

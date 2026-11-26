@@ -283,12 +283,12 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           ),
           // Normalize hand-editable mixed-version cleanup state fieldwise; sync broadcasts must preserve locally debounced browse edits.
           workspaceCleanupBrowse:
-            source === 'startup'
+            source !== 'sync'
               ? normalizeWorkspaceCleanupBrowseState(ui.workspaceCleanup?.browse)
               : s.workspaceCleanupBrowse,
           // Why: restore only on startup; on 'sync' broadcasts it would clobber the window's current per-window view.
           activeView:
-            source === 'startup' ? sanitizeHydratedActiveView(ui.activeView) : s.activeView,
+            source === 'sync' ? s.activeView : sanitizeHydratedActiveView(ui.activeView),
           persistedUIReady: true
         }
         keepUnchangedHydratedFields(s, hydrated as Partial<UISlice>)

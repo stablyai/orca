@@ -3,7 +3,8 @@ import type { PersistedUIState } from '../../../../../shared/orca-profiles/persi
 import type { PersistedUIWriteBaseline } from '@/store/slices/ui/persisted-ui-write-baseline'
 import {
   isPlainPersistedRecord,
-  isSafePersistedRecordKey
+  isSafePersistedRecordKey,
+  sanitizePaneKeyTimestampRecord
 } from '@/store/slices/ui/ui-slice-hydration-sanitizers'
 import { UI_STORAGE_KEY, readJson, writeJson } from '../web-storage'
 
@@ -37,21 +38,27 @@ function storedMarkRecord(record: Record<string, number> | undefined): Record<st
   return isPlainPersistedRecord(record) ? record : {}
 }
 
+export function mergeWebChatReadMarkEdits(
+  stored: Partial<PersistedUIState>,
+  changes: Partial<ChatReadMarks>,
+  baseline: ChatReadMarks
+): void {
+  for (const field of CHAT_READ_MARK_FIELDS) {
+    const current = changes[field]
+    if (current) {
+      stored[field] = sanitizePaneKeyTimestampRecord(
+        applyWebChatReadMarkEdits(storedMarkRecord(stored[field]), current, baseline[field])
+      )
+    }
+  }
+}
+
 export function writeWebChatReadMarkEdits(
   changes: Partial<ChatReadMarks>,
   baseline: ChatReadMarks
 ): void {
   const stored = readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {})
-  for (const field of CHAT_READ_MARK_FIELDS) {
-    const current = changes[field]
-    if (current) {
-      stored[field] = applyWebChatReadMarkEdits(
-        storedMarkRecord(stored[field]),
-        current,
-        baseline[field]
-      )
-    }
-  }
+  mergeWebChatReadMarkEdits(stored, changes, baseline)
   writeJson(UI_STORAGE_KEY, stored)
 }
 

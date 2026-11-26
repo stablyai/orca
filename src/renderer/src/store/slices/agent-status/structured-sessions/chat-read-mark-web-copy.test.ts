@@ -1,16 +1,23 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { computeLapsedManualUnreadProtections } from '@/attention/agent-attention-acknowledgement'
+import { useAppStore } from '@/store/index'
+import { collectCancelledStructuredSessionIds } from '@/runtime/native-chat/tab-retirement/structured-agent-session-tab-retirement'
+import {
+  recordReceivedWebSessionTabsSnapshot,
+  recordWebSessionTabsCensusForChatReadMarks
+} from '@/runtime/web-session-tabs-sync/tracking/tracking'
 import { UI_STORAGE_KEY } from '@/web/preload-api/web-storage'
 import { writeWebChatReadMarkEdits } from '@/web/preload-api/preferences/web-chat-read-mark-storage'
 import { hostSnapshotAffirmsAgentSessions } from '../../../../../../shared/remote-runtime/session-graph/host-session-snapshot-authority'
 import type { RuntimeMobileSessionAgentTab } from '../../../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { PersistedUIState } from '../../../../../../shared/orca-profiles/persisted-ui-state-types'
+import { AcceptedAgentStatuses } from '../status-ownership/accepted-agent-statuses'
 import { diffPersistedUIWriteFields } from '../../ui/persisted-ui-write-baseline'
 import { createUIStore, makePersistedUI } from '../../ui/ui-slice-test-harness'
 import {
   isWebChatReadMarkCopyPending,
   readWebChatMark,
-  receivePairedChatReadMarkCandidates,
   receiveWebChatReadMarkCensus,
   receiveWebChatReadMarkFrame
 } from './chat-read-mark-web-copy'
@@ -19,6 +26,7 @@ const LEAF = '2b8ea975-8113-41ae-a25c-feb50cbe084a'
 const OLD = `agent-chat-tab-v1-abc:${LEAF}`
 const REPLACED = `structured-agent-session-old:${LEAF}`
 const CHAT = `structured-agent-session-sess-2:${LEAF}`
+const UNRELATED = 'agent-chat-tab-v1-unrelated:27048d30-b9d3-4d1b-a5ea-446d248a354a'
 const TERMINAL = 'terminal-tab:pane-0'
 const OTHER_TERMINAL = 'another-terminal:pane-0'
 const CHAT_TAB: RuntimeMobileSessionAgentTab = {
@@ -55,7 +63,8 @@ function load(initial: Partial<PersistedUIState>) {
     worktreeId: string,
     tabs: readonly RuntimeMobileSessionAgentTab[],
     unconfirmed = false,
-    censusMember = false
+    censusMember = false,
+    scanChatSessions?: Parameters<typeof receiveWebChatReadMarkFrame>[1]['scanChatSessions']
   ) => {
     const copied = receiveWebChatReadMarkFrame(store.getState(), {
       environmentId: 'paired',
@@ -68,7 +77,8 @@ function load(initial: Partial<PersistedUIState>) {
         ...(unconfirmed && { agentSessionsUnverifiable: true as const })
       }),
       tabs,
-      censusMember
+      censusMember,
+      scanChatSessions
     })
     if (copied) {
       store.setState(copied)
@@ -98,7 +108,10 @@ function load(initial: Partial<PersistedUIState>) {
   }
 }
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+})
 
 it('copies once at startup, choosing the largest source and keeping stored destinations and originals', () => {
   const marks = load({
@@ -184,19 +197,41 @@ it('does not refill a cleared copy from a retained original after reload', () =>
 })
 
 it('keeps an on-screen chat protected by the matching hash and lapses it on switch-away', () => {
-  const marks = load({ manuallyUnreadTurnsByPaneKey: { [OLD]: 70, [REPLACED]: 60 } })
-  const state = marks.store.getState()
-  const records = {
-    liveTurns: new Map([[CHAT, { stateStartedAt: 70 }]]),
-    manuallyUnreadTurnStartedAt: state.manuallyUnreadTurnsByPaneKey,
-    chatReadMarksCopiedHere: state.chatReadMarksCopiedHere
+  for (const copied of [false, true]) {
+    const marks = load({
+      manuallyUnreadTurnsByPaneKey: {
+        [OLD]: 70,
+        [REPLACED]: 60,
+        [UNRELATED]: 80,
+        ...(copied && { [CHAT]: 70 })
+      },
+      chatReadMarksCopiedHere: copied
+    })
+    const state = marks.store.getState()
+    const records = {
+      liveTurns: new Map([[CHAT, { stateStartedAt: 70 }]]),
+      manuallyUnreadTurnStartedAt: state.manuallyUnreadTurnsByPaneKey,
+      chatReadMarksCopiedHere: state.chatReadMarksCopiedHere
+    }
+    expect(readWebChatMark(state, 'manuallyUnreadTurnsByPaneKey', CHAT)).toBe(70)
+    expect(computeLapsedManualUnreadProtections(records, new Set([CHAT]))).toEqual([UNRELATED])
+    expect(
+      computeLapsedManualUnreadProtections({ ...records, liveTurns: new Map() }, new Set([CHAT]))
+    ).toEqual([UNRELATED])
+    const lapsed = computeLapsedManualUnreadProtections(records, new Set([TERMINAL]))
+    expect(lapsed).toEqual([OLD, REPLACED, UNRELATED, ...(copied ? [CHAT] : [])])
+    state.clearManuallyUnreadTurns(lapsed)
+    expect(
+      readWebChatMark(marks.store.getState(), 'manuallyUnreadTurnsByPaneKey', CHAT)
+    ).toBeUndefined()
   }
-  expect(readWebChatMark(state, 'manuallyUnreadTurnsByPaneKey', CHAT)).toBe(70)
-  expect(computeLapsedManualUnreadProtections(records, new Set([CHAT]))).toEqual([])
-  const lapsed = computeLapsedManualUnreadProtections(records, new Set([TERMINAL]))
-  expect(lapsed).toEqual([OLD, REPLACED])
-  state.clearManuallyUnreadTurns(lapsed)
-  expect(readWebChatMark(marks.store.getState(), 'manuallyUnreadTurnsByPaneKey', CHAT)).toBeUndefined()
+})
+
+it('explicitly marking a chat read removes its matching old manual-unread keys before the copy', () => {
+  const marks = load({ manuallyUnreadTurnsByPaneKey: { [OLD]: 70, [REPLACED]: 60, [UNRELATED]: 80 } })
+  marks.store.setState({ agentStatusByPaneKey: new AcceptedAgentStatuses() })
+  marks.store.getState().acknowledgeAgents([CHAT], undefined, 'explicit')
+  expect(marks.store.getState().manuallyUnreadTurnsByPaneKey).toEqual({ [UNRELATED]: 80 })
 })
 
 it('merges pending edits by key and respects another tab’s stored values and completion', () => {
@@ -225,10 +260,11 @@ it('merges pending edits by key and respects another tab’s stored values and c
   }
 })
 
-it('skips unchanged tab lists and releases the receipt and fallback state after completion', () => {
+it('shares the tab walk on a fresh array and releases the receipt and fallback after completion', () => {
   const marks = load({ manuallyUnreadTurnsByPaneKey: { [OLD]: 70 } })
+  const unmatchedTab = { ...CHAT_TAB, id: 'another-tab', sessionId: 'another-session' }
   let rowsRead = 0
-  const tabs = new Proxy([CHAT_TAB], {
+  const tabs = new Proxy([unmatchedTab], {
     get: (target, key) => {
       if (key === '0') {
         rowsRead += 1
@@ -240,7 +276,37 @@ it('skips unchanged tab lists and releases the receipt and fallback state after 
   expect(rowsRead).toBe(1)
   marks.frame('w1', tabs, false, true)
   expect(rowsRead).toBe(1)
-  marks.census('w1')
+  marks.frame('w2', [], true, true)
+  marks.census('w1', 'w2')
+  let streamRowsRead = 0
+  const updatedTabs = new Proxy([{ ...unmatchedTab, title: 'Updated title' }], {
+    get: (target, key) => {
+      if (key === '0' || key === '1') {
+        streamRowsRead += 1
+      }
+      return Reflect.get(target, key)
+    }
+  })
+  const snapshot: RuntimeMobileSessionTabsResult = {
+    worktree: 'w1',
+    publicationEpoch: 'epoch',
+    snapshotVersion: 2,
+    activeGroupId: null,
+    activeTabId: null,
+    activeTabType: null,
+    tabs: updatedTabs
+  }
+  marks.frame('w1', updatedTabs, false, false, (visit) => {
+    collectCancelledStructuredSessionIds(snapshot, visit)
+  })
+  expect(rowsRead).toBe(1)
+  expect(streamRowsRead).toBe(1)
+  const addedTabs = [...updatedTabs, CHAT_TAB]
+  marks.frame('w1', addedTabs, false, false, (visit) => {
+    collectCancelledStructuredSessionIds({ ...snapshot, tabs: addedTabs }, visit)
+  })
+  marks.frame('w2', [])
+  expect(marks.stored().manuallyUnreadTurnsByPaneKey).toEqual({ [OLD]: 70, [CHAT]: 70 })
   const state = marks.store.getState()
   expect(isWebChatReadMarkCopyPending()).toBe(false)
   const forbidden = new Proxy({} as never, {
@@ -260,10 +326,50 @@ it('skips unchanged tab lists and releases the receipt and fallback state after 
   expect(marks.localStorage.setItem).toHaveBeenCalledTimes(1)
 })
 
-it('copies a chat observed in a paired list reply even if it closed before coverage completed', () => {
+it('copies a closed chat delivered only in an outranked bootstrap reply', () => {
   const marks = load({ activityClearedAtByPaneKey: { [OLD]: 50 } })
-  receivePairedChatReadMarkCandidates(marks.store.getState(), [CHAT_TAB])
-  marks.frame('w1', [], false, true)
-  marks.census('w1')
+  vi.spyOn(useAppStore, 'getState').mockImplementation(marks.store.getState)
+  vi.spyOn(useAppStore, 'setState').mockImplementation(marks.store.setState)
+  const environment = 'late-bootstrap-copy'
+  const latest: RuntimeMobileSessionTabsResult = {
+    worktree: 'w1',
+    publicationEpoch: 'epoch',
+    snapshotVersion: 2,
+    activeGroupId: null,
+    activeTabId: null,
+    activeTabType: null,
+    tabs: []
+  }
+  const bootstrap: RuntimeMobileSessionTabsResult = {
+    ...latest,
+    snapshotVersion: 1,
+    agentSessionsUnverifiable: true,
+    tabs: [CHAT_TAB]
+  }
+  recordReceivedWebSessionTabsSnapshot(environment, latest, 2, 'runtime')
+  recordReceivedWebSessionTabsSnapshot(environment, bootstrap, 1, 'runtime', 'bootstrap', true)
+  recordWebSessionTabsCensusForChatReadMarks(environment, [bootstrap], 'runtime', 1)
   expect(marks.stored().activityClearedAtByPaneKey).toEqual({ [OLD]: 50, [CHAT]: 50 })
+  expect(marks.stored().chatReadMarksCopiedHere).toBe(true)
+})
+
+it('bounds stored cutoffs on every flush across reloads', () => {
+  const marks = load({
+    chatReadMarksCopiedHere: true,
+    activityClearedAtByPaneKey: Object.fromEntries(
+      Array.from({ length: 500 }, (_, i) => [`terminal-${i}:pane-0`, i + 1])
+    )
+  })
+  let store = marks.store
+  for (const edit of [501, 502, 503]) {
+    const baseline = store.getState().persistedUIWriteBaseline!
+    const key = `new-terminal-${edit}:pane-0`
+    store.getState().applyActivityClearedAt({ [key]: edit })
+    writeWebChatReadMarkEdits(diffPersistedUIWriteFields(store.getState(), baseline), baseline)
+    const stored = marks.stored().activityClearedAtByPaneKey!
+    expect(Object.keys(stored)).toHaveLength(500)
+    expect(stored[key]).toBe(edit)
+    store = marks.reload()
+    expect(store.getState().activityClearedAtByPaneKey).toEqual(stored)
+  }
 })

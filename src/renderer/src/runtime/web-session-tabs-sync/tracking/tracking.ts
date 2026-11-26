@@ -32,10 +32,13 @@ import { appPairedTerminalTabCloseIntentStore } from '../closing/paired-terminal
 import { useAppStore } from '@/store/index'
 import {
   isWebChatReadMarkCopyPending,
+  receiveWebChatReadMarkCandidates,
   receiveWebChatReadMarkCensus,
   receiveWebChatReadMarkFrame
 } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-web-copy'
 import { isHostMirroredWorktree } from '../identity/host-mirrored-worktree'
+import { collectCancelledStructuredSessionIds } from '../../native-chat/tab-retirement/structured-agent-session-tab-retirement'
+import type { TerminalOrphanRecoveryOptions } from '../../hosted-terminals/recovery/web-session-terminal-orphan-recovery-options'
 
 export function isSessionTabsListAllResult(value: unknown): value is SessionTabsListAllResult {
   return (
@@ -97,20 +100,26 @@ export function recordReceivedWebSessionTabsSnapshot(
   receivedFrame: number | undefined = undefined,
   runtimeId?: string,
   source: 'stream' | 'bootstrap' = 'stream',
-  censusMember = false
+  censusMember = false,
+  recoveryOptions?: TerminalOrphanRecoveryOptions
 ): number {
   const frame = receivedFrame ?? nextReceivedSessionTabsFrame()
   recordBrowserInitializationReceipt(environmentId, snapshot, frame)
   const key = sessionTabsFreshnessKey(environmentId, snapshot.worktree)
   const current = latestReceivedSessionTabsSnapshotByWorktree.get(key)
-  // Bootstrap reserves before request; a later received stream makes its eventual response stale and unable to advance epoch history.
-  if (source === 'bootstrap' && current && frame < current.receivedFrame) {
+  // A late bootstrap can supply chat candidates without changing receipt or publisher history.
+  const lateBootstrap = source === 'bootstrap' && current && frame < current.receivedFrame
+  if (
+    runtimeId &&
+    !(lateBootstrap
+      ? isCurrentSessionTabsRuntimeFrame(environmentId, runtimeId)
+      : acceptSessionTabsRuntimeId(environmentId, runtimeId, frame))
+  ) {
     return frame
   }
-  if (runtimeId && !acceptSessionTabsRuntimeId(environmentId, runtimeId, frame)) {
-    return frame
+  if (!lateBootstrap) {
+    recordReceivedWebSessionTabsEnvironmentFrame(environmentId, frame)
   }
-  recordReceivedWebSessionTabsEnvironmentFrame(environmentId, frame)
   const publicationEpoch = snapshot.publicationEpoch
   const isRetraction = 'removed' in snapshot && snapshot.removed === true
   const history = sessionTabsPublicationEpochHistoryByWorktree.get(key)
@@ -119,7 +128,7 @@ export function recordReceivedWebSessionTabsSnapshot(
     return frame
   }
   // Unchanged reconnect frames may be filtered before apply; check held closes at receipt, but only authoritative worktree evidence can settle presence.
-  if (!isRetraction && hostSnapshotAffirmsWorktreeContents(snapshot)) {
+  if (!lateBootstrap && !isRetraction && hostSnapshotAffirmsWorktreeContents(snapshot)) {
     replayWebSessionClosesDueForSnapshot(
       environmentId,
       snapshot,
@@ -128,6 +137,7 @@ export function recordReceivedWebSessionTabsSnapshot(
   }
   // Retraction/unpublished placeholders are no takeover; noting them current retires and locks out the still-live publisher.
   if (
+    !lateBootstrap &&
     !isRetraction &&
     hostSnapshotAffirmsWorktreeContents(snapshot) &&
     (!history || history.current !== publicationEpoch)
@@ -135,13 +145,14 @@ export function recordReceivedWebSessionTabsSnapshot(
     noteSessionTabsPublicationEpoch(key, publicationEpoch)
   }
   // Stream receipt order wins even if host versions regress; bootstrap lists retain version/epoch ordering and cannot outrank later-received streams.
-  if (
-    source === 'stream' ||
-    !current ||
-    current.publicationEpoch !== publicationEpoch ||
-    snapshot.snapshotVersion > current.snapshotVersion ||
-    (snapshot.snapshotVersion === current.snapshotVersion && current.receivedFrame <= frame)
-  ) {
+  const recordsLatestReceipt =
+    !lateBootstrap &&
+    (source === 'stream' ||
+      !current ||
+      current.publicationEpoch !== publicationEpoch ||
+      snapshot.snapshotVersion > current.snapshotVersion ||
+      (snapshot.snapshotVersion === current.snapshotVersion && current.receivedFrame <= frame))
+  if (recordsLatestReceipt) {
     setBoundedSessionTabsReceipt(
       latestReceivedSessionTabsSnapshotByWorktree,
       key,
@@ -156,25 +167,40 @@ export function recordReceivedWebSessionTabsSnapshot(
     if (isRetraction) {
       recordReceivedWebSessionTabsRemoval(environmentId, snapshot.worktree, frame, publicationEpoch)
     }
-    if (
-      isWebChatReadMarkCopyPending() &&
-      (source === 'stream' || censusMember) &&
-      !precedesWebSessionTabsRemoval(key, frame) &&
-      isHostMirroredWorktree(snapshot.worktree)
-    ) {
-      const copied = receiveWebChatReadMarkFrame(useAppStore.getState(), {
-        environmentId,
-        worktreeId: snapshot.worktree,
-        runtimeId,
-        trackingRecord: sessionTabsPublicationEpochHistoryByWorktree.get(key),
-        affirmsChats: !isRetraction && hostSnapshotAffirmsAgentSessions(snapshot),
-        tabs: snapshot.tabs,
-        censusMember
-      })
-      if (copied) {
-        useAppStore.setState(copied)
-      }
-    }
+  }
+  if (
+    !isWebChatReadMarkCopyPending() ||
+    (source !== 'stream' && !censusMember) ||
+    precedesWebSessionTabsRemoval(key, frame) ||
+    !isHostMirroredWorktree(snapshot.worktree)
+  ) {
+    return frame
+  }
+  const state = useAppStore.getState()
+  if (!recordsLatestReceipt) {
+    receiveWebChatReadMarkCandidates(state, snapshot.tabs)
+    return frame
+  }
+  const copied = receiveWebChatReadMarkFrame(state, {
+    environmentId,
+    worktreeId: snapshot.worktree,
+    runtimeId,
+    trackingRecord: sessionTabsPublicationEpochHistoryByWorktree.get(key),
+    affirmsChats: !isRetraction && hostSnapshotAffirmsAgentSessions(snapshot),
+    tabs: snapshot.tabs,
+    censusMember,
+    // Share the stream's pre-recovery tab walk with cancelled-chat detection.
+    scanChatSessions: recoveryOptions
+      ? (visit) => {
+          recoveryOptions.cancelledChatSessionIds = collectCancelledStructuredSessionIds(
+            snapshot,
+            visit
+          )
+        }
+      : undefined
+  })
+  if (copied) {
+    useAppStore.setState(copied)
   }
   return frame
 }

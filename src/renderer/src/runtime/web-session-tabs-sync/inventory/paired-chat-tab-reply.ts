@@ -25,7 +25,7 @@ import { isWebSessionTabsWorktreeRemovalFrame } from '../tracking/session-tabs-i
 import { admitWebSessionTabsChatRead } from '../tracking/tracking'
 import {
   isWebChatReadMarkCopyPending,
-  receivePairedChatReadMarkCandidates
+  receiveWebChatReadMarkCandidates
 } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-web-copy'
 import { waitForChatLinkSessionTabs } from './remote-runtime-session-tabs-inflight'
 
@@ -90,7 +90,7 @@ export async function readPairedChatTab(args: {
           readRuntimeStatuses().get(environmentId)?.status?.runtimeId
         )
       ) {
-        receivePairedChatReadMarkCandidates(useAppStore.getState(), reply.tabs)
+        receiveWebChatReadMarkCandidates(useAppStore.getState(), reply.tabs)
       }
       return { snapshot: reply, runtimeId: replyRuntimeId }
     }

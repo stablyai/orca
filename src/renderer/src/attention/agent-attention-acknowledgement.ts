@@ -2,10 +2,8 @@ import {
   readAgentAttentionUnreadReason,
   type ReadableAgentAttentionUnread
 } from './agent-attention-contract'
-import {
-  legacyWebChatReadMarkKeys,
-  readWebChatMark
-} from '@/store/slices/agent-status/structured-sessions/chat-read-mark-web-copy'
+import { readWebChatMark } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-web-copy'
+import { chatPaneKeySessionId } from '../../../shared/agent-session/view/structured-agent-session-projection'
 
 export type AgentAttentionTurn = {
   stateStartedAt: number
@@ -100,34 +98,30 @@ export function computeLapsedManualUnreadProtections(
   activeSubjectKeys: ReadonlySet<string>
 ): string[] {
   const { manuallyUnreadTurnStartedAt: marks, chatReadMarksCopiedHere } = records
-  let protectedAliases: Set<string> | undefined
-  if (!chatReadMarksCopiedHere) {
-    for (const subjectKey of activeSubjectKeys) {
-      const aliases = legacyWebChatReadMarkKeys('manuallyUnreadTurnsByPaneKey', subjectKey)
-      if (!aliases) {
-        continue
-      }
-      const currentTurn = readAgentAttentionTurnStartedAt(records, subjectKey)
-      const protection = readWebChatMark(
-        { manuallyUnreadTurnsByPaneKey: marks },
-        'manuallyUnreadTurnsByPaneKey',
-        subjectKey
-      )
-      if (currentTurn === null || currentTurn === protection) {
-        protectedAliases ??= new Set()
-        for (const alias of aliases) {
-          protectedAliases.add(alias)
-        }
-      }
+  const entries = Object.entries(marks)
+  if (entries.length === 0) {
+    return []
+  }
+  const activeChatsByLeaf = new Map<string, { turn: number | null; protection?: number }>()
+  for (const subjectKey of activeSubjectKeys) {
+    if (chatPaneKeySessionId(subjectKey) !== null) {
+      activeChatsByLeaf.set(subjectKey.slice(subjectKey.lastIndexOf(':') + 1), {
+        turn: readAgentAttentionTurnStartedAt(records, subjectKey),
+        protection: readWebChatMark(
+          { manuallyUnreadTurnsByPaneKey: marks, chatReadMarksCopiedHere },
+          'manuallyUnreadTurnsByPaneKey',
+          subjectKey
+        )
+      })
     }
   }
   const lapsed: string[] = []
-  for (const [subjectKey, turnStartedAt] of Object.entries(marks)) {
-    if (protectedAliases?.has(subjectKey)) {
-      continue
-    }
+  for (const [subjectKey, turnStartedAt] of entries) {
     if (!activeSubjectKeys.has(subjectKey)) {
-      lapsed.push(subjectKey)
+      const chat = activeChatsByLeaf.get(subjectKey.slice(subjectKey.lastIndexOf(':') + 1))
+      if (!chat || (chat.turn !== null && chat.turn !== (chat.protection ?? turnStartedAt))) {
+        lapsed.push(subjectKey)
+      }
       continue
     }
     const currentTurn = readAgentAttentionTurnStartedAt(records, subjectKey)

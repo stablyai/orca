@@ -15,17 +15,26 @@ export function liveEntryWorktreeId(
   tabIdToWorktreeId: Pick<ReadonlyMap<string, string>, 'get'>,
   representedTabs?: Pick<ReadonlyMap<string, Tab>, 'get'>
 ): string | undefined {
-  const parsed = parseAgentStatusPaneIdentity(paneKey, representedTabs?.get(paneKey))
+  const representedTab = representedTabs?.get(paneKey)
+  const parsed = parseAgentStatusPaneIdentity(paneKey, representedTab)
   if (!parsed) {
     return undefined
   }
   const tabWorktreeId = tabIdToWorktreeId.get(parsed.tabId)
   const remote = Boolean(entry.connectionId) || isWebTerminalSurfaceTabId(parsed.tabId)
-  // A chat row names its own workspace; its key's tab part may be another workspace's tab id.
-  if (remote || (entry.worktreeId && chatPaneKeySessionId(paneKey) !== null)) {
+  if (remote) {
     return resolveAgentStatusWorktreeId(entry, tabIdToWorktreeId) ?? undefined
   }
-  return tabWorktreeId ?? (entry.state === 'done' && !remote ? undefined : entry.worktreeId)
+  if (chatPaneKeySessionId(paneKey) !== null) {
+    if (!representedTab && entry.state === 'done') {
+      return undefined
+    }
+    // The key's tab part may be an unrelated tab id.
+    if (entry.worktreeId) {
+      return entry.worktreeId
+    }
+  }
+  return tabWorktreeId ?? (entry.state === 'done' ? undefined : entry.worktreeId)
 }
 
 /** Delivery sequence is consumed from the store by attention, never displayed in agent rows. */
