@@ -128,6 +128,8 @@ export type SourceControlAgentSpawnInput = {
   literalArgIndices?: number[]
   stdinMode: 'ignore' | 'pipe'
   useCwdForNative: boolean
+  /** The command starts a daemon other clients share, so it must outlive the command. */
+  startsSharedDaemon?: true
 }
 
 export type SpawnSourceControlAgent = (

@@ -83,7 +83,8 @@ export async function discoverDimaModelsOnHost(
           cwd: input.options.cwd,
           env,
           stdinMode: 'ignore',
-          useCwdForNative: true
+          useCwdForNative: true,
+          startsSharedDaemon: true
         },
         signal
       )

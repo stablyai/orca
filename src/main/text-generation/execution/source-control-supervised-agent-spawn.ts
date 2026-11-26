@@ -6,6 +6,7 @@ import { resolveGuestNativeAgentCommand } from '../../codex-cli/command'
 import { createProviderSpawnSpec } from '../../provider-process/provider-process-supervisor'
 import { spawnProviderProcess } from '../../provider-process/provider-process-spawn'
 import { guestNativeSpawnEnv } from '../../wsl/filesystem/wsl-guest-windows-drive-path'
+import { spawnDaemonStarterAgent } from './source-control-daemon-starter-spawn'
 import type {
   SourceControlAgentSpawnInput,
   SpawnedSourceControlAgentProcess
@@ -26,9 +27,16 @@ export function spawnSupervisedAgent(
         pathEnv: pathEnvRelativeTo(env.PATH, cwd ?? process.cwd()),
         homePath: env.HOME
       })
+  const childEnv = withCliRuntimeOnPath(binary, env)
+  if (input.startsSharedDaemon) {
+    return spawnDaemonStarterAgent(
+      { binary, args: input.args, cwd, env: childEnv },
+      input.stdinMode
+    )
+  }
   const spec = createProviderSpawnSpec(
     { command: binary, args: input.args, ...(cwd !== undefined ? { cwd } : {}) },
-    withCliRuntimeOnPath(binary, env),
+    childEnv,
     process.platform,
     { lifetime: 'one-shot' }
   )
