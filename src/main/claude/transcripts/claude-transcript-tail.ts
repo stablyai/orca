@@ -22,7 +22,10 @@ export async function readClaudeTranscriptTail(input: {
   maxBytes?: number
   check: () => void
   onLeafAbsent?: () => void
+  /** The saved leaf's row, when it isn't the row whose uuid is `leafUuid` (a block of a message). */
+  isLeaf?: (row: Record<string, unknown>) => boolean
 }): Promise<ClaudeTranscriptTail | null> {
+  const isLeaf = input.isLeaf ?? ((row: Record<string, unknown>) => row.uuid === input.leafUuid)
   const maxBytes = input.maxBytes ?? CLAUDE_TRANSCRIPT_TAIL_MAX_BYTES
   const handle = await open(input.filePath, 'r')
   try {
@@ -40,7 +43,8 @@ export async function readClaudeTranscriptTail(input: {
       complete = true
       return row
     }
-    const found = () => mainChain(newestFirst.toReversed(), input.leafUuid)
+    const found = (leaf: Record<string, unknown>) =>
+      mainChain(newestFirst.toReversed(), String(leaf.uuid))
     let position = size
     while (position > 0) {
       input.check()
@@ -60,8 +64,8 @@ export async function readClaudeTranscriptTail(input: {
         pieces.push(chunk.subarray(index + 1, end))
         end = index
         const row = endLine()
-        if (row?.uuid === input.leafUuid) {
-          return found()
+        if (row && isLeaf(row)) {
+          return found(row)
         }
         if (row) {
           newestFirst.push(row)
@@ -69,8 +73,9 @@ export async function readClaudeTranscriptTail(input: {
       }
       pieces.push(chunk.subarray(0, end))
     }
-    if (endLine()?.uuid === input.leafUuid) {
-      return found()
+    const first = endLine()
+    if (first && isLeaf(first)) {
+      return found(first)
     }
     input.onLeafAbsent?.()
     return null
