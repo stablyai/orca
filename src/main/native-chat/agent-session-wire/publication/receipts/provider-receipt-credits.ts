@@ -48,6 +48,7 @@ type Unread = {
   revision: ProviderReceiptCursor
   document: AbortSignal
   bytes: number
+  reply?: ProviderReceiptReply
   stream?: { subscription: string; token: symbol }
   handedOff: boolean
 }
@@ -78,6 +79,11 @@ export class ProviderReceiptCredits {
 
   get(transport: AbortSignal): Destination | undefined {
     return this.destinations.get(transport)
+  }
+
+  preparedReply(endpoint: ProviderReceiptDestination): ProviderReceiptReply | undefined {
+    const unread = this.get(endpoint.transport)?.unread
+    return unread?.document === endpoint.document ? unread.reply : undefined
   }
 
   hasRoom(transport: AbortSignal): boolean {
@@ -115,6 +121,7 @@ export class ProviderReceiptCredits {
     ) {
       post?.()
       unread.handedOff = true
+      unread.reply = undefined
       return true
     }
     return false
@@ -225,6 +232,7 @@ export class ProviderReceiptCredits {
       revision: reply.revision,
       document: wait.document,
       bytes,
+      reply,
       stream,
       handedOff: false
     }

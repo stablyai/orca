@@ -21,9 +21,9 @@ import { electronDocumentEndpoint } from '../../backend-desktop/electron-documen
 import { inspectProcessSignal } from '../../daemon/endpoint/identity/daemon-process-inspection'
 import type { ProviderReceiptDestination } from '../../native-chat/agent-session-wire/publication/receipts/provider-receipt-credits'
 import type { ProviderReceiptReaders } from '../../native-chat/agent-session-wire/publication/receipts/provider-receipt-readers'
+import { providerReceiptEnvelope } from '../../native-chat/agent-session-wire/publication/receipts/provider-receipt-frame'
 import type { RpcDispatcher } from '../../runtime/rpc/dispatcher'
 import { DESKTOP_RPC_CALLER } from '../../runtime/rpc/callers/rpc-caller-identity'
-import { successResponse } from '../../runtime/rpc/responses/rpc-response'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from './desktop-renderer-runtime-capabilities'
 
 type ReceiptDocument = {
@@ -172,7 +172,7 @@ export class DesktopProviderReceiptPort {
     const { endpoint } = document
     const previous = document.binding
     if (
-      !this.readers.canBind(endpoint, reader) ||
+      !this.readers.canOpenPort(endpoint, reader) ||
       (previous &&
         (previous.pending ||
           previous.reader.id !== reader.id ||
@@ -215,7 +215,7 @@ export class DesktopProviderReceiptPort {
       binding.pending = true
       void (async () => {
         try {
-          let reply = await this.dispatcher.dispatch(
+          const dispatched = await this.dispatcher.dispatch(
             {
               id: 'desktop-ipc',
               authToken: 'desktop-ipc',
@@ -235,15 +235,22 @@ export class DesktopProviderReceiptPort {
             this.readers.suppress(endpoint)
             return
           }
-          if (!reply.ok) {
+          let result = dispatched.ok ? dispatched.result : undefined
+          if (!dispatched.ok) {
             if (!this.readers.canRead(endpoint, input.data)) {
               document.retire()
               return
             }
-            const result = await this.readers.read(endpoint, input.data, undefined, 'closed')
-            reply = successResponse('desktop-ipc', { runtimeId: this.runtimeId() }, result)
+            result = await this.readers.read(endpoint, input.data, undefined, 'closed')
           }
-          const encoded = encoder.encode(JSON.stringify(reply))
+          const prepared = this.readers.preparedReply(endpoint)
+          if (!prepared || prepared !== result) {
+            document.retire()
+            return
+          }
+          const encoded = encoder.encode(
+            JSON.stringify(providerReceiptEnvelope(this.runtimeId(), prepared))
+          )
           if (!isCurrent()) {
             this.readers.suppress(endpoint)
             return

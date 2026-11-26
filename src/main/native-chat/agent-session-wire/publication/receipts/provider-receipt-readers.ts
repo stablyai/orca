@@ -54,18 +54,21 @@ export class ProviderReceiptReaders {
 
   canRead(endpoint: ProviderReceiptDestination, input: ProviderReceiptRead): boolean {
     const target = this.credits.get(endpoint.transport)
-    const generation = this.generations.get(endpoint.document)
-    if (
-      !this.canBind(endpoint, input.reader) ||
-      target?.waiting ||
-      (generation && generation.generation !== input.reader.generation)
-    ) {
+    if (!this.canOpenPort(endpoint, input.reader) || target?.waiting) {
       return false
     }
     const unread = target?.unread
     return unread
       ? unread.handedOff && sameCursor(unread.revision, input.since)
       : input.since === null || sameCursor(input.since, target?.consumed ?? null)
+  }
+
+  canOpenPort(endpoint: ProviderReceiptDestination, identity: ProviderReceiptReader): boolean {
+    const generation = this.generations.get(endpoint.document)
+    return (
+      this.canBind(endpoint, identity) &&
+      (!generation || generation.generation === identity.generation)
+    )
   }
 
   retireDocument(endpoint: ProviderReceiptDestination): void {
@@ -245,6 +248,7 @@ export class ProviderReceiptReaders {
   discard = this.credits.discard.bind(this.credits)
   handoff = this.credits.handoff.bind(this.credits)
   suppress = this.credits.suppress.bind(this.credits)
+  preparedReply = this.credits.preparedReply.bind(this.credits)
 
   private ready(target: Destination, reader: Reader, member: Membership): void {
     if (member.epoch !== undefined && reader.streams.get(member.stream.subscription) === member) {

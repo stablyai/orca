@@ -41,6 +41,7 @@ it.each([
       await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(1))
       const ingress = claudeReceiptIngress(rig)
       const session = await rig.host.conversation(CHAT)
+      await session.activityRead
       const cursor = session.journal.cursor()
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the actual dispatcher and host use only these runtime methods for the requests below.
       const runtime = {

@@ -406,6 +406,7 @@ it.each([1_000, 10_000])('retains one physical credit through %s replacements', 
       generation: count + 1,
       reset: { complete: true }
     })
+    rig.readers.handoff(renderer.endpoint)
     previous.close()
     rig.readers.discard(renderer.endpoint, replacement.revision)
     const fleet = Array.from({ length: 256 }, (_, index) => rig.renderer().attach(String(index)))

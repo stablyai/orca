@@ -74,7 +74,9 @@ it('records only the first matched receipt from a live dispatch', () => {
   const receipts: unknown[] = []
   const frame = (message: Record<string, unknown>, at: number) =>
     resolveClaudeReplayTurn(session, message, undefined, (waiter) =>
-      recordClaudeDispatchReceipt(session, waiter, at, (receipt) => receipts.push(receipt))
+      recordClaudeDispatchReceipt(session, waiter, at, (receipt) => {
+        receipts.push(receipt)
+      })
     )
 
   arm(SENT, 'opener')
