@@ -118,9 +118,8 @@ function LiveInputField({
     <TextField
       inputRef={bindLiveInputField}
       monospace
-      style={dockStyles.liveField}
+      style={[inputStyles.filledField, dockStyles.liveField]}
       leading={<KeyboardIcon size={17} color={colors.textSecondary} strokeWidth={2} />}
-      label={t('session.terminalLiveInputStatus.liveInput', 'Live input')}
       trailing={trailing}
       value={text}
       onChange={(event) => {

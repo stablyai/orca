@@ -4,6 +4,7 @@ import { ChevronLeft } from 'lucide-react-native'
 import { colors, pressedStyle } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { BottomDrawer } from '../../../components/bottom-drawer/BottomDrawer'
+import { composerInputStyles as inputStyles } from '../../../components/composer-input/composer-input-styles'
 import { TextField } from '../../../components/composer-input/TextField'
 import {
   buildTerminalShortcutKey,
@@ -383,6 +384,7 @@ export function CustomKeyModal(props: Props) {
               placeholder={t('components.customKeyModal.labelPlaceholder', 'e.g. Build')}
               autoCapitalize="none"
               autoCorrect={false}
+              style={inputStyles.filledField}
             />
             <Text style={styles.fieldLabel}>
               {t('components.customKeyModal.command', 'Command')}
@@ -394,6 +396,7 @@ export function CustomKeyModal(props: Props) {
               placeholder={t('components.customKeyModal.commandPlaceholder', 'e.g. pnpm build')}
               autoCapitalize="none"
               autoCorrect={false}
+              style={inputStyles.filledField}
             />
             <View style={styles.switchRow}>
               <Text style={styles.switchLabel}>

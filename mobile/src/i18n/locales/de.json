@@ -3070,7 +3070,6 @@
     },
     "terminalLiveInputStatus": {
       "listening": "Hört zu",
-      "liveInput": "Direkte Eingabe",
       "preparingMic": "Mikrofon wird vorbereitet",
       "processing": "Wird verarbeitet",
       "releaseMicHint": "Zum Stoppen Mikrofon loslassen",
@@ -4480,27 +4479,21 @@
     },
     "tasksCreateDrawers": {
       "connect": "Verbinden",
-      "connectLinearWorkspace": "Linear-Arbeitsbereich verbinden",
-      "createIssue": "Issue erstellen",
       "createWorkspaceIn": "Arbeitsbereich im Repository erstellen",
       "description": "Beschreibung",
-      "descriptionPlaceholder": "Kontext hinzufügen",
-      "fileIn": "In {{slug}} erstellen",
-      "issueSource": "Issue-Quelle",
       "keySecurityHint": "Der Schlüssel wird über den Schlüsselbund des Host-Betriebssystems verschlüsselt und lokal gespeichert.",
-      "linearConnectSubtitle": "Persönlichen API-Schlüssel einfügen, um Issues aus diesem Arbeitsbereich anzuzeigen.",
       "linearSettingsLink": "Linear-Einstellungen öffnen",
       "linearTeam": "Linear-Team",
-      "linearTeamSubtitle": "Issue im ausgewählten Linear-Team erstellen.",
-      "newIssueTitle": "Neues {{providerLabel}}-Issue",
       "origin": "Origin",
       "personalApiKey": "Persönlicher API-Schlüssel",
       "repository": "Repository",
-      "repositorySubtitle": "Issue im ausgewählten Repository erstellen.",
       "team": "Team",
       "title": "Titel",
-      "titlePlaceholder": "Aufgabentitel",
-      "upstream": "Upstream"
+      "upstream": "Upstream",
+      "newIssue": "Neues Issue",
+      "create": "Erstellen",
+      "fileInRow": "Ablegen in",
+      "connectLinear": "Linear verbinden"
     },
     "workspaceAgentSelection": {
       "blankTerminal": "Leeres Terminal"
@@ -4558,7 +4551,6 @@
       "directories_other": "{{count}} Verzeichnisse",
       "editSparsePreset": "Voreinstellung für partiellen Checkout bearbeiten",
       "nameLabel": "Name",
-      "namePlaceholder": "Renderer-Oberfläche",
       "newSparsePreset": "Neue Voreinstellung für partiellen Checkout",
       "runSetupAndCreate": "Einrichten und erstellen",
       "setupSubtitle": "Für {{name}} muss vor dem Erstellen dieses Arbeitsbereichs eine Einrichtungsoption gewählt werden.",
@@ -5122,7 +5114,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Computer koppeln",
       "pairRequired": "Kopple dieses Telefon mit einem Computer, um diesen Link zu öffnen, und öffne den Link dann erneut.",
@@ -5286,6 +5277,11 @@
         "skipped": "Übersprungen",
         "heldImagesLimit": "Deine Antworten gehen als ein Kommentar, der höchstens {{max}} Fotos aufnimmt. Entferne einige und versuche es erneut.",
         "heldSkillsLimit": "Deine Antworten gehen als ein Kommentar, der höchstens {{max}} Skills aufnimmt. Entferne einige und versuche es erneut."
+      },
+      "wait": {
+        "offlineSave": "{{host}} ist offline. Dein Text bleibt erhalten; Sichern geht wieder, sobald er zurück ist.",
+        "placeholder": "Wartet auf",
+        "count": "{{count}} Einträge"
       }
     },
     "needs": {

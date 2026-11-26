@@ -3556,7 +3556,6 @@
     },
     "terminalLiveInputStatus": {
       "listening": "Dinliyor",
-      "liveInput": "Canlı giriş",
       "preparingMic": "Mikrofon hazırlanıyor",
       "processing": "İşleniyor",
       "releaseMicHint": "Durdurmak için mikrofonu bırakın",
@@ -5173,27 +5172,21 @@
     },
     "tasksCreateDrawers": {
       "connect": "Bağlan",
-      "connectLinearWorkspace": "Linear çalışma alanına bağlan",
-      "createIssue": "Sorun Oluştur",
       "createWorkspaceIn": "Çalışma Alanı İçin Repo",
       "description": "Açıklama",
-      "descriptionPlaceholder": "Bağlam ekleyin",
-      "fileIn": "Oluşturulacağı yer: {{slug}}",
-      "issueSource": "Sorun kaynağı",
       "keySecurityHint": "Anahtarınız, sunucunun işletim sistemi anahtar zinciriyle şifrelenir ve yerel olarak saklanır.",
-      "linearConnectSubtitle": "Bu çalışma alanındaki sorunlara göz atmak için bir kişisel API anahtarı yapıştırın.",
       "linearSettingsLink": "Linear ayarlarını aç",
       "linearTeam": "Linear Takımı",
-      "linearTeamSubtitle": "Seçili Linear takımında bir sorun oluşturun.",
-      "newIssueTitle": "Yeni {{providerLabel}} Sorunu",
       "origin": "Origin",
       "personalApiKey": "Kişisel API anahtarı",
       "repository": "Repository",
-      "repositorySubtitle": "Seçili repository'de bir sorun oluşturun.",
       "team": "Takım",
       "title": "Başlık",
-      "titlePlaceholder": "Görev başlığı",
-      "upstream": "Upstream"
+      "upstream": "Upstream",
+      "newIssue": "Yeni sorun",
+      "create": "Oluştur",
+      "fileInRow": "Şuraya aç",
+      "connectLinear": "Linear’ı bağla"
     },
     "workspaceAgentSelection": {
       "blankTerminal": "Boş Terminal"
@@ -5252,7 +5245,6 @@
       "directories_other": "{{count}} dizin",
       "editSparsePreset": "Sparse Ön Ayarını Düzenle",
       "nameLabel": "Ad",
-      "namePlaceholder": "İşleyici Arayüzü",
       "newSparsePreset": "Yeni Sparse Ön Ayarı",
       "runSetupAndCreate": "Kurulumu çalıştır ve oluştur",
       "setupSubtitle": "Bu çalışma alanını oluşturmadan önce {{name}} için bir kurulum seçeneği belirlemeniz gerekiyor.",
@@ -7356,12 +7348,9 @@
         "confirmMany": "{{count}} öğeyi iptal et"
       },
       "wait": {
-        "titleOne": "{{title}} neyi bekliyor?",
-        "titleMany": "{{count}} öğe neyi bekliyor?",
         "placeholder": "Beklenen",
-        "keep": "İptal",
-        "confirm": "Bekliyor olarak işaretle",
-        "offline": "{{host}} çevrimdışı. Yazdıklarınız saklanır. Sunucu yeniden bağlandığında öğeyi tekrar bekliyor olarak işaretleyebilirsiniz."
+        "offlineSave": "{{host}} çevrimdışı. Yazdıkların saklanıyor; geri geldiğinde Kaydet yeniden çalışır.",
+        "count": "{{count}} öğe"
       },
       "group": {
         "stale": "Güncel Değil",

@@ -2377,7 +2377,6 @@
       "listening": "Listening",
       "processing": "Processing",
       "startingMic": "Starting mic",
-      "liveInput": "Live input",
       "uploadingImageTitle": "Uploading image",
       "releaseMicHint": "Release mic to stop",
       "preparingMic": "Preparing microphone",
@@ -4922,28 +4921,22 @@
       "doneSubtitle": "Your recently resolved issues"
     },
     "tasksCreateDrawers": {
-      "newIssueTitle": "New {{providerLabel}} Issue",
-      "repositorySubtitle": "Create an issue in the selected repository.",
-      "linearTeamSubtitle": "Create an issue in the selected Linear team.",
       "repository": "Repository",
       "team": "Team",
-      "issueSource": "Issue source",
-      "fileIn": "File in {{slug}}",
       "upstream": "Upstream",
       "origin": "Origin",
       "title": "Title",
-      "titlePlaceholder": "Task title",
       "description": "Description",
-      "descriptionPlaceholder": "Add context",
-      "createIssue": "Create Issue",
       "linearTeam": "Linear Team",
-      "connectLinearWorkspace": "Connect Linear workspace",
-      "linearConnectSubtitle": "Paste a Personal API key to browse issues from that workspace.",
       "personalApiKey": "Personal API key",
       "linearSettingsLink": "Open Linear settings",
       "keySecurityHint": "Your key is encrypted via the host OS keychain and stored locally.",
       "connect": "Connect",
-      "createWorkspaceIn": "Create Workspace In"
+      "createWorkspaceIn": "Create Workspace In",
+      "newIssue": "New issue",
+      "create": "Create",
+      "fileInRow": "File in",
+      "connectLinear": "Connect Linear"
     },
     "filterPickers": {
       "fieldsTitle": "Project Fields",
@@ -5327,7 +5320,6 @@
       "newSparsePreset": "New Sparse Preset",
       "editSparsePreset": "Edit Sparse Preset",
       "nameLabel": "Name",
-      "namePlaceholder": "Renderer UI",
       "directoriesLabel": "Directories",
       "directories_one": "{{count}} directory",
       "directories_other": "{{count}} directories",
@@ -6559,12 +6551,9 @@
         "confirmMany": "Cancel {{count}}"
       },
       "wait": {
-        "titleOne": "What is {{title}} waiting on?",
-        "titleMany": "What are {{count}} items waiting on?",
         "placeholder": "Waiting on",
-        "keep": "Cancel",
-        "confirm": "Set Waiting",
-        "offline": "{{host}} is offline. What you typed is kept; Set Waiting works again when it’s back."
+        "offlineSave": "{{host}} is offline. What you typed is kept; Save works again when it’s back.",
+        "count": "{{count}} items"
       },
       "group": {
         "stale": "Stale",

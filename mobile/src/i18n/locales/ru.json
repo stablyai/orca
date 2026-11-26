@@ -3770,7 +3770,6 @@
     },
     "terminalLiveInputStatus": {
       "listening": "Прослушивание",
-      "liveInput": "Прямой ввод",
       "preparingMic": "Подготовка микрофона",
       "processing": "Обработка",
       "releaseMicHint": "Отпустите кнопку микрофона, чтобы остановить запись",
@@ -5459,27 +5458,21 @@
     },
     "tasksCreateDrawers": {
       "connect": "Подключить",
-      "connectLinearWorkspace": "Подключить рабочее пространство Linear",
-      "createIssue": "Создать задачу",
       "createWorkspaceIn": "Где создать рабочее пространство",
       "description": "Описание",
-      "descriptionPlaceholder": "Добавьте подробности",
-      "fileIn": "Создать в {{slug}}",
-      "issueSource": "Источник задач",
       "keySecurityHint": "Ваш ключ шифруется с помощью хранилища ключей ОС сервера и хранится локально.",
-      "linearConnectSubtitle": "Вставьте личный API-ключ, чтобы просматривать задачи из этого рабочего пространства.",
       "linearSettingsLink": "Открыть настройки Linear",
       "linearTeam": "Команда Linear",
-      "linearTeamSubtitle": "Создайте задачу в выбранной команде Linear.",
-      "newIssueTitle": "Новая задача в {{providerLabel}}",
       "origin": "Исходный репозиторий",
       "personalApiKey": "Личный API-ключ",
       "repository": "Репозиторий",
-      "repositorySubtitle": "Создайте задачу в выбранном репозитории.",
       "team": "Команда",
       "title": "Заголовок",
-      "titlePlaceholder": "Заголовок задачи",
-      "upstream": "Вышестоящий репозиторий"
+      "upstream": "Вышестоящий репозиторий",
+      "newIssue": "Новая задача",
+      "create": "Создать",
+      "fileInRow": "Где создать",
+      "connectLinear": "Подключить Linear"
     },
     "workspaceAgentSelection": {
       "blankTerminal": "Пустой терминал"
@@ -5540,7 +5533,6 @@
       "directories_other": "{{count}} каталога",
       "editSparsePreset": "Изменить набор выборочной выгрузки",
       "nameLabel": "Название",
-      "namePlaceholder": "Интерфейс рендерера",
       "newSparsePreset": "Новый набор выборочной выгрузки",
       "runSetupAndCreate": "Выполнить настройку и создать",
       "setupSubtitle": "Перед созданием рабочего пространства для {{name}} выберите, запускать ли скрипт настройки.",
@@ -7130,12 +7122,9 @@
       },
       "readFailedTitle": "Не удалось загрузить элементы",
       "wait": {
-        "keep": "Отмена",
-        "titleOne": "Чего ждёт {{title}}?",
-        "titleMany": "Чего ждут элементы ({{count}})?",
         "placeholder": "Ожидает",
-        "confirm": "Отметить ожидание",
-        "offline": "{{host}} не в сети. Введённый текст сохранится; «Отметить ожидание» снова заработает, когда сервер вернётся."
+        "offlineSave": "{{host}} не в сети. Введённый текст сохранится; кнопка «Сохранить» снова заработает, когда компьютер вернётся.",
+        "count": "Элементов: {{count}}"
       }
     },
     "needs": {

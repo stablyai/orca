@@ -3424,7 +3424,6 @@
     },
     "terminalLiveInputStatus": {
       "listening": "正在聆听",
-      "liveInput": "实时输入",
       "preparingMic": "正在准备麦克风",
       "processing": "处理中",
       "releaseMicHint": "松开麦克风按钮即可停止",
@@ -5076,27 +5075,21 @@
     },
     "tasksCreateDrawers": {
       "connect": "连接",
-      "connectLinearWorkspace": "连接 Linear 工作区",
-      "createIssue": "创建议题",
       "createWorkspaceIn": "选择创建工作区的仓库",
       "description": "描述",
-      "descriptionPlaceholder": "补充背景信息",
-      "fileIn": "在 {{slug}} 中创建议题",
-      "issueSource": "议题来源",
       "keySecurityHint": "密钥通过主机操作系统的钥匙串加密，并存储在本地",
-      "linearConnectSubtitle": "粘贴个人 API 密钥，即可浏览该工作区的议题",
       "linearSettingsLink": "打开 Linear 设置",
       "linearTeam": "Linear 团队",
-      "linearTeamSubtitle": "在所选 Linear 团队中创建议题",
-      "newIssueTitle": "新建 {{providerLabel}} 议题",
       "origin": "origin",
       "personalApiKey": "个人API密钥",
       "repository": "仓库",
-      "repositorySubtitle": "在所选仓库中创建议题",
       "team": "团队",
       "title": "标题",
-      "titlePlaceholder": "任务标题",
-      "upstream": "上游"
+      "upstream": "上游",
+      "newIssue": "新建 Issue",
+      "create": "创建",
+      "fileInRow": "提交到",
+      "connectLinear": "连接 Linear"
     },
     "workspaceAgentSelection": {
       "blankTerminal": "空白终端"
@@ -5155,7 +5148,6 @@
       "directories_other": "{{count}} 个目录",
       "editSparsePreset": "编辑稀疏检出预设",
       "nameLabel": "名称",
-      "namePlaceholder": "渲染器界面",
       "newSparsePreset": "新建稀疏检出预设",
       "runSetupAndCreate": "运行设置脚本并创建",
       "setupSubtitle": "创建此工作区前，请选择是否运行 {{name}} 的设置脚本",
@@ -6711,7 +6703,12 @@
       },
       "readFailedTitle": "无法加载事项",
       "readFailedClosedPage": "无法读取更多已关闭的事项",
-      "skillLimit": "消息未发送。请最多选择 {{limit}} 个技能文件后重试。"
+      "skillLimit": "消息未发送。请最多选择 {{limit}} 个技能文件后重试。",
+      "wait": {
+        "offlineSave": "{{host}} 已离线。你输入的内容会保留，恢复连接后即可保存。",
+        "placeholder": "等待",
+        "count": "{{count}} 项"
+      }
     },
     "needs": {
       "permission": "需要权限",

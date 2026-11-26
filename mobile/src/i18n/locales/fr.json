@@ -3107,7 +3107,6 @@
     },
     "terminalLiveInputStatus": {
       "listening": "Écoute en cours",
-      "liveInput": "Saisie en direct",
       "preparingMic": "Préparation du microphone",
       "processing": "Traitement en cours",
       "releaseMicHint": "Relâchez le micro pour arrêter",
@@ -4698,27 +4697,21 @@
     },
     "tasksCreateDrawers": {
       "connect": "Se connecter",
-      "connectLinearWorkspace": "Connecter un espace de travail Linear",
-      "createIssue": "Créer un ticket",
       "createWorkspaceIn": "Créer un espace de travail dans",
       "description": "Description",
-      "descriptionPlaceholder": "Ajouter du contexte",
-      "fileIn": "Créer dans {{slug}}",
-      "issueSource": "Source des issues",
       "keySecurityHint": "Votre clé est chiffrée via le trousseau du système d'exploitation de l'hôte et stockée localement.",
-      "linearConnectSubtitle": "Collez une clé d'API personnelle pour parcourir les tickets de cet espace de travail.",
       "linearSettingsLink": "Ouvrir les paramètres Linear",
       "linearTeam": "Équipe Linear",
-      "linearTeamSubtitle": "Créez un ticket dans l'équipe Linear sélectionnée.",
-      "newIssueTitle": "Nouveau ticket {{providerLabel}}",
       "origin": "Origine",
       "personalApiKey": "Clé d'API personnelle",
       "repository": "Dépôt",
-      "repositorySubtitle": "Créez un ticket dans le dépôt sélectionné.",
       "team": "Équipe",
       "title": "Titre",
-      "titlePlaceholder": "Titre de la tâche",
-      "upstream": "Upstream"
+      "upstream": "Upstream",
+      "newIssue": "Nouveau ticket",
+      "create": "Créer",
+      "fileInRow": "Classer dans",
+      "connectLinear": "Connecter Linear"
     },
     "workspaceAgentSelection": {
       "blankTerminal": "Terminal vierge"
@@ -4778,7 +4771,6 @@
       "directories_other": "{{count}} répertoires",
       "editSparsePreset": "Modifier le préréglage de checkout partiel",
       "nameLabel": "Nom",
-      "namePlaceholder": "Interface de rendu",
       "newSparsePreset": "Nouveau préréglage de checkout partiel",
       "runSetupAndCreate": "Exécuter le setup et créer",
       "setupSubtitle": "Choisissez si vous souhaitez exécuter le setup de {{name}} avant de créer cet espace de travail.",
@@ -5437,7 +5429,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Jumeler un ordinateur",
       "pairRequired": "Pour ouvrir ce lien, jumelez ce téléphone à un ordinateur, puis rouvrez le lien.",
@@ -5604,6 +5595,11 @@
         "skipped": "Ignorées",
         "heldImagesLimit": "Vos réponses partent en un seul commentaire, qui accepte au plus {{max}} photos. Retirez-en quelques-unes et réessayez.",
         "heldSkillsLimit": "Vos réponses partent en un seul commentaire, qui accepte au plus {{max}} skills. Retirez-en quelques-uns et réessayez."
+      },
+      "wait": {
+        "offlineSave": "{{host}} est hors ligne. Votre texte est conservé ; Enregistrer fonctionnera de nouveau à son retour.",
+        "placeholder": "En attente de",
+        "count": "{{count}} éléments"
       }
     },
     "needs": {

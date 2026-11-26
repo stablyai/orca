@@ -7,9 +7,7 @@ import {
   Pressable,
   ActivityIndicator,
   KeyboardAvoidingView,
-  ScrollView,
-  TextInput,
-  type TextInputProps
+  ScrollView
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -30,7 +28,9 @@ import { removeHostAndCloseClient } from '../../../src/host-catalog/host-removal
 import { useHostDisplay } from '../../../src/host-descriptors/use-host-display'
 import { leaveHostRoute } from '../../../src/host-route-exit'
 import { ConfirmModal } from '../../../src/components/sheets/ConfirmModal'
-import { LIST_ROW_PADDING, ListRow } from '../../../src/components/list/ListGroup'
+import { ListRow } from '../../../src/components/list/ListGroup'
+import { TextField } from '../../../src/components/composer-input/TextField'
+import { groupFieldStyles } from '../../../src/components/composer-input/composer-input-styles'
 import type { HostProfile } from '../../../src/host-catalog/host-profile'
 import { hostOs } from '../../../src/platform/host-os'
 import { translate } from '../../../src/i18n/mobile-i18n'
@@ -266,7 +266,7 @@ export default function EditHostScreen() {
             keyboardShouldPersistTaps="handled"
           >
             <SettingsSection first footer={fieldsNote}>
-              <HostFieldRow
+              <TextField
                 key="name"
                 label={t('host.edit.name', 'Name')}
                 value={name}
@@ -281,8 +281,9 @@ export default function EditHostScreen() {
                 autoCapitalize="words"
                 autoCorrect={false}
                 returnKeyType="next"
+                style={groupFieldStyles.line}
               />
-              <HostFieldRow
+              <TextField
                 key="address"
                 label={t('host.edit.address', 'Address')}
                 value={address}
@@ -301,6 +302,7 @@ export default function EditHostScreen() {
                     void handleSave()
                   }
                 }}
+                style={groupFieldStyles.line}
               />
             </SettingsSection>
 
@@ -333,53 +335,9 @@ export default function EditHostScreen() {
   )
 }
 
-type HostFieldRowProps = Omit<
-  TextInputProps,
-  'style' | 'placeholderTextColor' | 'selectionColor' | 'accessibilityLabel'
-> & { label: string }
-
-// An editable grouped-list row: the label where a ListRow's title sits, the text after it.
-function HostFieldRow({ label, ...inputProps }: HostFieldRowProps) {
-  useMobileColorScheme()
-  return (
-    <View style={styles.fieldRow}>
-      <Text style={styles.fieldLabel} numberOfLines={1}>
-        {label}
-      </Text>
-      <TextInput
-        accessibilityLabel={label}
-        placeholderTextColor={colors.textMuted}
-        selectionColor={colors.accentBlue}
-        style={styles.fieldInput}
-        {...inputProps}
-      />
-    </View>
-  )
-}
-
 const styles = themedStyleSheet(() => ({
   flex: {
     flex: 1
-  },
-  fieldRow: {
-    minHeight: 48,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: LIST_ROW_PADDING
-  },
-  fieldLabel: {
-    minWidth: 72,
-    fontSize: 15,
-    color: colors.textPrimary
-  },
-  fieldInput: {
-    flex: 1,
-    minHeight: 48,
-    paddingVertical: 0,
-    fontSize: 15,
-    color: colors.textPrimary,
-    outlineWidth: 0
   },
   errorText: {
     color: colors.statusRed,

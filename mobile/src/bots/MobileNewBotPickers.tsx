@@ -4,8 +4,7 @@ import { Shuffle } from 'lucide-react-native'
 import type { BotAgent } from '../../../src/shared/bot-types'
 import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
 import { HostKindIcon } from '../components/icons/HostKindIcon'
-import { COMPOSER_LINE_HEIGHT } from '../components/composer-input/composer-input-styles'
-import { LIST_ROW_PADDING, ListRow } from '../components/list/ListGroup'
+import { ListRow } from '../components/list/ListGroup'
 import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, radii, spacing } from '../theme/mobile-theme'
@@ -219,23 +218,4 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.sheetGroup
   },
   pressed: { opacity: 0.7 }
-}))
-
-const ROW_HEIGHT = 48
-// The phone's own text fields drawn as rows of a group: no edge, fill or ring, the text on the row inset.
-const unframed = {
-  borderWidth: 0,
-  borderRadius: 0,
-  backgroundColor: 'transparent',
-  outlineWidth: 0
-} as const
-
-export const groupFieldStyles = themedStyleSheet(() => ({
-  line: { ...unframed, minHeight: ROW_HEIGHT, paddingHorizontal: LIST_ROW_PADDING },
-  // The message text pads itself 6 across and 2 down; its first line sits where a one-line row's does.
-  lines: {
-    ...unframed,
-    paddingHorizontal: LIST_ROW_PADDING - 6,
-    paddingVertical: (ROW_HEIGHT - COMPOSER_LINE_HEIGHT) / 2 - spacing.xxs
-  }
 }))

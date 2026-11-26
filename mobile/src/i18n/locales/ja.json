@@ -3068,7 +3068,6 @@
     },
     "terminalLiveInputStatus": {
       "listening": "聞き取り中",
-      "liveInput": "リアルタイム入力",
       "preparingMic": "マイクを準備中",
       "processing": "処理中",
       "releaseMicHint": "マイクボタンから指を離すと停止",
@@ -4665,27 +4664,21 @@
     },
     "tasksCreateDrawers": {
       "connect": "接続",
-      "connectLinearWorkspace": "Linear ワークスペースに接続",
-      "createIssue": "Issue を作成",
       "createWorkspaceIn": "ワークスペースの作成先リポジトリ",
       "description": "説明",
-      "descriptionPlaceholder": "背景情報を追加",
-      "fileIn": "{{slug}} に登録",
-      "issueSource": "Issue ソース",
       "keySecurityHint": "キーはホスト OS のキーチェーンで暗号化され、ローカルに保存されます。",
-      "linearConnectSubtitle": "ワークスペースの Issue を閲覧するには、個人用 API キーを貼り付けてください。",
       "linearSettingsLink": "Linearの設定を開く",
       "linearTeam": "Linear チーム",
-      "linearTeamSubtitle": "選択した Linear チームに Issue を作成します。",
-      "newIssueTitle": "{{providerLabel}} の新規 Issue",
       "origin": "オリジン",
       "personalApiKey": "個人用APIキー",
       "repository": "リポジトリ",
-      "repositorySubtitle": "選択したリポジトリに Issue を作成します。",
       "team": "チーム",
       "title": "タイトル",
-      "titlePlaceholder": "タスクのタイトル",
-      "upstream": "upstream"
+      "upstream": "upstream",
+      "newIssue": "新しい Issue",
+      "create": "作成",
+      "fileInRow": "登録先",
+      "connectLinear": "Linear に接続"
     },
     "workspaceAgentSelection": {
       "blankTerminal": "ブランクターミナル"
@@ -4744,7 +4737,6 @@
       "directories_other": "{{count}} 個のディレクトリ",
       "editSparsePreset": "スパースプリセットを編集",
       "nameLabel": "名前",
-      "namePlaceholder": "レンダラー UI",
       "newSparsePreset": "新しいスパースプリセット",
       "runSetupAndCreate": "セットアップを実行して作成",
       "setupSubtitle": "{{name}} でこのワークスペースを作成する前に、セットアップの実行有無を選択してください。",
@@ -5397,7 +5389,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "コンピュータをペアリング",
       "pairRequired": "このリンクを開くには、このスマートフォンをコンピュータとペアリングしてから、もう一度リンクを開いてください。",
@@ -5561,6 +5552,11 @@
         "skipped": "スキップ済み",
         "heldImagesLimit": "回答は1件のコメントとして送信され、写真は{{max}}枚までです。いくつか削除して、もう一度お試しください。",
         "heldSkillsLimit": "回答は1件のコメントとして送信され、スキルは{{max}}個までです。いくつか削除して、もう一度お試しください。"
+      },
+      "wait": {
+        "offlineSave": "{{host}} はオフラインです。入力した内容は保持され、戻ると保存できるようになります。",
+        "placeholder": "待ち",
+        "count": "{{count}} 件"
       }
     },
     "needs": {

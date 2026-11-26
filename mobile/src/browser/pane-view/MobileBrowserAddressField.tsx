@@ -45,7 +45,7 @@ export function MobileBrowserAddressField({
   return (
     <View style={styles.host}>
       <TextField
-        style={styles.compact}
+        style={[composerInputStyles.filledField, styles.compact]}
         value={value}
         onChangeText={onChangeText}
         onFocus={onFocus}
@@ -66,7 +66,12 @@ export function MobileBrowserAddressField({
       {fileLabel ? (
         <View
           pointerEvents="none"
-          style={[composerInputStyles.field, styles.compact, styles.fileLabelHost]}
+          style={[
+            composerInputStyles.field,
+            composerInputStyles.filledField,
+            styles.compact,
+            styles.fileLabelHost
+          ]}
         >
           <Text style={styles.fileLabel} numberOfLines={1} ellipsizeMode="middle">
             {fileLabel}
