@@ -14,6 +14,8 @@ import type { BotSlackResult } from '../../../../../shared/connector-bot-slack-c
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { TranslationScopeProvider } from '@/i18n/translation-scope-provider'
 import { LinkedPeople } from './BotGitHubSetupDialog'
+import { BotWhoCanAskList } from '../BotWhoCanAskList'
+import { useGitHubWhoCanAsk } from './use-github-who-can-ask'
 
 export type Users = BotSlackResult<ConnectorGitHubUsersResponse>
 export type People = BotSlackResult<BotGitHubRoster>
@@ -150,3 +152,26 @@ export function pickRow(text: string): void {
 /** The Add button, by its visible name. */
 export const addButton = (): HTMLElement =>
   screen.getByRole('button', { name: /^Add (1 person|\d+ people)$/ })
+
+/** A bot's GitHub row in Settings (one installation), with the production service. */
+export function SettingsWhoCanAsk({
+  listed = bot,
+  installationId
+}: {
+  listed?: Bot
+  installationId: string
+}): React.JSX.Element {
+  const service = useGitHubWhoCanAsk(listed.hostId, true, installationId)
+  return (
+    <TranslationScopeProvider>
+      <TooltipProvider>
+        <BotWhoCanAskList bot={listed} service={service} compactCaption="Who can ask" />
+      </TooltipProvider>
+    </TranslationScopeProvider>
+  )
+}
+
+export function mountSettingsWhoCanAsk(installationId: string): void {
+  render(<SettingsWhoCanAsk installationId={installationId} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Add people' }))
+}

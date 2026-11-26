@@ -33,6 +33,14 @@ import { botErrorMessage } from './bot-presentation'
 import type { BotWhoCanAskService } from './BotWhoCanAskList'
 import { useOrcaCloudSignedOut } from './orca-cloud-signed-out'
 import { useBotHostLabel } from './use-bot-host-label'
+import type { WhoCanAskProposal } from './who-can-ask-picks'
+
+/** The same people under the same logins: anything else needs a fresh answer. */
+const sameProposal = (next: readonly BotMember[], asked: readonly BotMember[]): boolean =>
+  next.length === asked.length &&
+  next.every(
+    (member, index) => member.id === asked[index]?.id && member.name === asked[index]?.name
+  )
 
 // A request's row repeats no name: Slack's real name often equals the display name.
 export const requestLine = (request: HostAccessRequest): string => {
@@ -174,8 +182,13 @@ export function useBotWhoCanAsk(bot: Bot, service: BotWhoCanAskService) {
       request ? () => void decideAccessRequest(request, 'declined') : undefined
     )
 
-  // The picker closes first, so the confirmation is the only thing on screen.
-  const add = async (picked: BotMember[], request?: HostAccessRequest): Promise<void> => {
+  // The picker closes first, so the confirmation is the only thing on screen. `proposal`: the
+  // picker's checks still settling, so who is written is who the checks finally say.
+  const add = async (
+    picked: BotMember[],
+    request?: HostAccessRequest,
+    proposal?: WhoCanAskProposal
+  ): Promise<void> => {
     setPickerOpen(false)
     if (request) {
       // A request's person is added by the host once the cloud records the grant.
@@ -184,19 +197,18 @@ export function useBotWhoCanAsk(bot: Bot, service: BotWhoCanAskService) {
       }
       return
     }
-    // Only who was confirmed is saved: if someone stopped being eligible while the confirmation
-    // was open, the rest are asked about again rather than saved on the earlier answer.
-    let people = picked
+    // Only who was confirmed is saved: if someone stopped being eligible, or a check the picker
+    // had asked renamed or displaced someone, while the confirmation was open, the rest are asked
+    // about again, under their names now, rather than saved on the earlier answer.
+    const settled = (people: BotMember[]) => (proposal ? proposal.settle(people) : people)
+    let people = await settled(picked)
     for (;;) {
-      if (!(await confirmPeople(people))) {
+      if (people.length === 0 || !(await confirmPeople(people))) {
         return
       }
-      const now = stillEligible(people)
-      if (now.length === people.length) {
+      const now = await settled(stillEligible(people))
+      if (sameProposal(now, people)) {
         break
-      }
-      if (now.length === 0) {
-        return
       }
       people = now
     }

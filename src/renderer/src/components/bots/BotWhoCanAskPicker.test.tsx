@@ -203,7 +203,7 @@ describe('GPS-C5-06: a pick kept in view on a service that does not match by nam
         ok: true as const,
         value: { members: query === '' || query === 'dana' ? people : [], complete: true }
       }))
-      const picked = vi.fn<(members: BotMember[]) => void>()
+      const picked = vi.fn<(members: BotMember[], proposal: unknown) => void>()
       render(
         <BotWhoCanAskPicker
           bot={bot}
@@ -255,7 +255,7 @@ describe('the Who can ask picker', () => {
   })
 
   it('offers other Slack apps beside people, and saves a picked one as an app', async () => {
-    const picked = vi.fn<(members: BotMember[]) => void>()
+    const picked = vi.fn<(members: BotMember[], proposal: unknown) => void>()
     act(() => {
       root.render(
         <BotWhoCanAskPicker bot={slackBot} service={slackService} owner="You" onPicked={picked} />
@@ -276,7 +276,7 @@ describe('the Who can ask picker', () => {
       button.textContent?.startsWith('Add')
     )
     act(() => add?.click())
-    expect(picked).toHaveBeenCalledWith([
+    expect(picked.mock.calls[0]?.[0]).toEqual([
       { id: 'U0CIAPP', name: 'CI (app)', kind: 'app', source: 'slack', workspaceId: 'T1' }
     ])
   })

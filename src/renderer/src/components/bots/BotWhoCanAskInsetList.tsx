@@ -137,7 +137,7 @@ export function BotWhoCanAskInsetList({
                 bot={bot}
                 service={service}
                 owner={list.owner}
-                onPicked={(picked) => void list.add(picked)}
+                onPicked={(picked, proposal) => void list.add(picked, undefined, proposal)}
               />
             ) : null}
           </PopoverContent>

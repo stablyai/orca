@@ -92,9 +92,16 @@ const PathedErrors = z.object({
   errors: z.array(z.object({ path: z.array(z.union([z.string(), z.number()])).optional() }))
 })
 
-/** Which kind a GraphQL error's path points into: a repository (`rN`), an owner of a known kind
- *  (`aN`), or neither (no path, the viewer, an owner of unknown kind): then it can't be told. */
-function errorLoss(raw: unknown, data: Record<string, unknown>): GitHubRosterLoss {
+/** Which kind a GraphQL error's path points into, by an alias this query emitted: a repository
+ *  (`rN`, through its `assignableUsers`) or an account of the kind it declared (`aN`: an
+ *  Organization through `membersWithRole`, a User through `repositories`). Anything else (no path,
+ *  the viewer, an alias never asked, a connection that alias doesn't select, an account of unknown
+ *  kind) can't be told. */
+function errorLoss(
+  raw: unknown,
+  data: Record<string, unknown>,
+  target: GitHubPeopleTarget
+): GitHubRosterLoss {
   const lost: GitHubRosterLoss = { repositories: false, organizations: false, unattributed: false }
   if (NoErrors.safeParse(raw).success) {
     return lost
@@ -104,12 +111,19 @@ function errorLoss(raw: unknown, data: Record<string, unknown>): GitHubRosterLos
     return { ...lost, unattributed: true }
   }
   for (const error of parsed.data.errors) {
-    const head = error.path?.[0]
+    const [head, connection] = error.path ?? []
+    const repo = typeof head === 'string' ? /^r(\d+)$/.exec(head) : null
+    const owner = typeof head === 'string' ? /^a(\d+)$/.exec(head) : null
     const kind =
-      typeof head === 'string' && /^a\d+$/.test(head) ? OwnerKind.safeParse(data[head]) : null
-    if (typeof head === 'string' && /^r\d+$/.test(head)) {
+      owner && Number(owner[1]) < target.owners.length ? OwnerKind.safeParse(data[owner[0]]) : null
+    const through = (selected: string): boolean =>
+      connection === undefined || connection === selected
+    if (repo && Number(repo[1]) < target.repositories.length && through('assignableUsers')) {
       lost.repositories = true
-    } else if (kind?.success) {
+    } else if (
+      kind?.success &&
+      through(kind.data.__typename === 'Organization' ? 'membersWithRole' : 'repositories')
+    ) {
       lost[kind.data.__typename === 'Organization' ? 'organizations' : 'repositories'] = true
     } else {
       lost.unattributed = true
@@ -154,7 +168,7 @@ export function readRoster(stdout: string, target: GitHubPeopleTarget): RosterRe
     from: { repositories: false, organizations: false },
     // Any errors entry, or an `errors` that isn't a list at all, means something was lost.
     lossy: !NoErrors.safeParse(raw).success,
-    lost: errorLoss(raw, data),
+    lost: errorLoss(raw, data, target),
     cut: { people: false, members: false, repositories: false },
     viewer: viewer.success ? viewer.data.login : null
   }

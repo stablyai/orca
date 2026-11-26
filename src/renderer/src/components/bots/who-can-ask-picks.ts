@@ -65,3 +65,35 @@ export function heldPicks(
     return pending.some((login) => known.some((name) => name !== '' && name.includes(login)))
   })
 }
+
+/** The picks handed to Add, still tied to the checks this picker open had already asked: those
+ *  keep settling after the picker closes, so the grant can see what they found before writing. */
+export type WhoCanAskProposal = {
+  /** `people` as those checks now leave them (renamed, or dropped when shown to be someone
+   *  else), once no check still out could change one of them. */
+  settle: (people: readonly BotMember[]) => Promise<BotMember[]>
+}
+
+export function whoCanAskProposal(
+  ticked: readonly BotMember[],
+  realNames: Readonly<Record<string, string>>,
+  ledger: WhoCanAskIdentityLedger
+): WhoCanAskProposal {
+  const asTicked = [...ticked]
+  const names = { ...realNames }
+  return {
+    settle: async (people) => {
+      // No new check is asked: this waits only on ones already out, which settle on their own
+      // bounds, and looks again each time one does.
+      while (heldPicks(people, asTicked, names, ledger).length > 0) {
+        await new Promise<void>((resolve) => {
+          const stop = ledger.onSettle(() => {
+            stop()
+            resolve()
+          })
+        })
+      }
+      return currentPicks(people, () => true, ledger)
+    }
+  }
+}

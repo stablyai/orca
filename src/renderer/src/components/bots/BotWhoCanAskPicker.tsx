@@ -15,7 +15,13 @@ import { BotMemberAvatar, BotOwnerAvatar } from './bot-connector-people'
 import type { BotWhoCanAskFound, BotWhoCanAskService } from './BotWhoCanAskList'
 import { useWhoCanAskSearch } from './use-who-can-ask-search'
 import { WhoCanAskIdentityLedger } from './who-can-ask-identity-ledger'
-import { currentPicks, currentRows, heldPicks } from './who-can-ask-picks'
+import {
+  currentPicks,
+  currentRows,
+  heldPicks,
+  whoCanAskProposal,
+  type WhoCanAskProposal
+} from './who-can-ask-picks'
 import { recomputeOn } from '@/lib/recompute-on'
 
 // How close to a service's cap the picker starts showing it while people are ticked.
@@ -80,7 +86,8 @@ export function BotWhoCanAskPicker({
   service: BotWhoCanAskService
   /** How the owner row names the owner: You, or their name there. */
   owner: string
-  onPicked: (picked: BotMember[]) => void
+  /** `proposal`: the checks this open had asked, still settling once the picker closes. */
+  onPicked: (picked: BotMember[], proposal: WhoCanAskProposal) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const [query, setQuery] = useState('')
@@ -393,7 +400,7 @@ export function BotWhoCanAskPicker({
             size="sm"
             disabled={held.length > 0}
             aria-describedby={held.length > 0 && service.checkingStatus ? checkingId : undefined}
-            onClick={() => onPicked(picked)}
+            onClick={() => onPicked(picked, whoCanAskProposal(ticked, realNames, ledger))}
             // Enter is the button's own, as for Try again (the list would pick its highlighted row).
             onKeyDown={(event) => event.stopPropagation()}
           >

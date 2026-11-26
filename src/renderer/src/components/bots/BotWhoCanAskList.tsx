@@ -207,7 +207,7 @@ export function BotWhoCanAskList({
             bot={bot}
             service={service}
             owner={owner}
-            onPicked={(picked) => void add(picked)}
+            onPicked={(picked, proposal) => void add(picked, undefined, proposal)}
           />
         ) : null}
       </PopoverContent>

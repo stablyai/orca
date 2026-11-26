@@ -458,6 +458,20 @@ describe('GPS-C7-04, GPS-C7-05: a known lost kind, and the personal-account cap,
     ])
   })
 
+  it('GPS-C8-03: a loss of unknown kind on an org-only read is named neutrally, with source, reader and date', () => {
+    expect(
+      noteOf({
+        from: { repositories: false, organizations: true },
+        complete: false,
+        lost: { repositories: false, organizations: false, unattributed: true }
+      })
+    ).toEqual([
+      `Org list from ${day(READ_AT)}.`,
+      'Some repos or orgs couldn’t be read.',
+      'Orgs read as @reader-x.'
+    ])
+  })
+
   it('a direct repo read whole and a personal account capped: the cap is per account', () => {
     expect(noteOf({ cut: { people: false, members: false, repositories: true } })).toEqual([
       `Repo list from ${day(READ_AT)}.`,

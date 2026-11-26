@@ -213,6 +213,49 @@ describe('what a read covered', () => {
     })
   })
 
+  it('GPS-C8-03: names a lost kind only from an alias this query asked, through its own connection', () => {
+    const orgOnly = targetOf({ repositories: [], owners: ['acme'], more: false }).target
+    const mixed = targetOf({ repositories: ['a/b'], owners: ['acme'], more: false }).target
+    const org = {
+      __typename: 'Organization',
+      membersWithRole: { totalCount: 1, nodes: [person(2, 'x')] }
+    }
+    const lost = (target: typeof mixed, data: Record<string, unknown>, path: unknown[]) =>
+      readRoster(json(data, [{ message: 'x', path }]), target)?.lost
+    const neutral = { repositories: false, organizations: false, unattributed: true }
+    // A healthy org-only read: a repository alias it never asked, or an account it never asked
+    // (even one the response claims is a User), names no kind.
+    expect(lost(orgOnly, { a0: org }, ['r42', 'assignableUsers'])).toEqual(neutral)
+    expect(
+      lost(orgOnly, { a0: org, a42: { __typename: 'User' } }, ['a42', 'repositories'])
+    ).toEqual(neutral)
+    // An asked alias through a connection it doesn't select names no kind either.
+    expect(lost(mixed, { r0: users(person(3, 'y')), a0: org }, ['a0', 'repositories'])).toEqual(
+      neutral
+    )
+    expect(lost(mixed, { r0: users(person(3, 'y')), a0: org }, ['r0', 'membersWithRole'])).toEqual(
+      neutral
+    )
+    // Through its own connection, or at the alias itself, the kind is named; the other source read.
+    expect(lost(mixed, { r0: users(person(3, 'y')), a0: org }, ['r0', 'assignableUsers'])).toEqual({
+      repositories: true,
+      organizations: false,
+      unattributed: false
+    })
+    expect(
+      lost(mixed, { r0: users(person(3, 'y')), a0: org }, ['a0', 'membersWithRole', 'nodes'])
+    ).toEqual({
+      repositories: false,
+      organizations: true,
+      unattributed: false
+    })
+    expect(lost(mixed, { r0: users(person(3, 'y')), a0: org }, ['a0'])).toEqual({
+      repositories: false,
+      organizations: true,
+      unattributed: false
+    })
+  })
+
   it('GPS-C7-05: a capped personal account beside a direct repo sets only the per-account cap', () => {
     const mixed = targetOf({ repositories: ['a/b'], owners: ['amy'], more: false }).target
     const personal = {
