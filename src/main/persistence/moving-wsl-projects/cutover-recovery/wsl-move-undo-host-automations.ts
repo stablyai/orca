@@ -9,6 +9,7 @@
 import type { Automation } from '../../../../shared/automations/automation-definition'
 import type { WslMoveCutover } from '../../../../shared/wsl-move/wsl-move-cutover'
 import { listWslMoveCutovers, writeWslMoveCutover } from './wsl-move-cutover-journal'
+import { wslMoveAutomationsPending } from '../desktop-state/wsl-move-host-automations-rewrite'
 
 export type WslMoveHostAutomationStop =
   | {
@@ -21,12 +22,15 @@ export type WslMoveHostAutomationStop =
   | { outcome: 'unreachable' | 'failed' | 'removal-pending' }
 
 export type WslMoveHostAutomationPorts = {
+  /** The host's state of each it still has; one it no longer has is absent. */
   read: (automationIds: readonly string[]) => Promise<Record<string, boolean>>
   /** Throws on a refusal; ids it could not turn back on ride the error as `leftOff`. */
   disable: (automationIds: readonly string[]) => Promise<string[]>
   restore: (automationIds: readonly string[]) => Promise<void>
   listHere: () => readonly Pick<Automation, 'id' | 'enabled'>[]
   setHere: (automationId: string, enabled: boolean) => void
+  /** A copy turned back on: its next run moves past now, as a disabled one is never advanced. */
+  advanceHere: (automationId: string) => void
 }
 
 let exclusive: Promise<unknown> = Promise.resolve()
@@ -110,12 +114,11 @@ export async function stopWslMoveHostAutomations(
       }
       settleRefusedUndo(userDataPath, migrationId, recorded, leftOff)
     },
-    // One the host no longer answers for goes back to how it was here before the move.
     applyHere: () =>
-      applyWslMoveAutomationStatesHere(ports, {
-        ...wslMoveAutomationsOnBeforeMove(readMove(userDataPath, migrationId)),
-        ...intent
-      })
+      applyWslMoveAutomationStatesHere(
+        ports,
+        wslMoveAutomationIntentHere(readMove(userDataPath, migrationId), intent)
+      )
   }
 }
 
@@ -126,9 +129,26 @@ export function wslMoveAutomationsOnBeforeMove(
   return Object.fromEntries((move?.automationsToReenable ?? []).map((id) => [id, true]))
 }
 
+/**
+ * The state each copy here takes: the host's, except where the host holds no real choice. One it
+ * no longer has, or one it was never confirmed to have turned on, goes back to its pre-move state.
+ */
+export function wslMoveAutomationIntentHere(
+  move: Parameters<typeof wslMoveAutomationsPending>[0] | undefined,
+  hostIntent: Readonly<Record<string, boolean>>
+): Record<string, boolean> {
+  const before = wslMoveAutomationsOnBeforeMove(move)
+  const pending = move ? wslMoveAutomationsPending(move) : []
+  return {
+    ...before,
+    ...hostIntent,
+    ...Object.fromEntries(pending.map((id) => [id, true]))
+  }
+}
+
 /** Gives the copies here `intent`; returns how to undo that write. */
 export function applyWslMoveAutomationStatesHere(
-  ports: Pick<WslMoveHostAutomationPorts, 'listHere' | 'setHere'>,
+  ports: Pick<WslMoveHostAutomationPorts, 'listHere' | 'setHere' | 'advanceHere'>,
   intent: Readonly<Record<string, boolean>>
 ): () => void {
   const applied: { id: string; enabled: boolean }[] = []
@@ -136,6 +156,9 @@ export function applyWslMoveAutomationStatesHere(
     try {
       ports.setHere(update.id, update.enabled)
       applied.push(update)
+      if (update.enabled) {
+        ports.advanceHere(update.id)
+      }
     } catch (error) {
       console.warn('[wsl-move] Could not give an automation here its host state:', error)
     }

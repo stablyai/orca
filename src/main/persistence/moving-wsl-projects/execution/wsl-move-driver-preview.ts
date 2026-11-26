@@ -11,6 +11,7 @@ import {
   wslMoveClaimRefusal
 } from '../orchestration/wsl-move-running-moves'
 import { unreadableSleptHistory } from '../terminal-state/wsl-move-slept-scrollback'
+import { wslMoveScopeCounts } from '../manifest-scope/wsl-move-scope-counts'
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
 import { isRecoverableRemoteRuntimeConnectionError } from '../../../../shared/remote-runtime/remote-runtime-client-error-classification'
 
@@ -92,6 +93,7 @@ async function previewPrepared(
     refused: plan.refused,
     blockers: prepared.blockers,
     mappedDrives: plan.mappedDrives ?? [],
+    counts: wslMoveScopeCounts(prepared.exported),
     ...(host.browserLoginsNotCarried
       ? { browserLoginsNotCarried: host.browserLoginsNotCarried }
       : {})

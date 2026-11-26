@@ -100,6 +100,7 @@ type UndoStore = Pick<
   | 'patchWorkspaceSession'
   | 'listAutomations'
   | 'updateAutomation'
+  | 'advanceAutomationNextRun'
   | 'getUI'
   | 'updateUI'
 >
@@ -193,6 +194,12 @@ export function createWslMoveUndoPorts(
     listHere: () => store.listAutomations(),
     setHere: (id: string, enabled: boolean) => {
       store.updateAutomation(id, { enabled })
+    },
+    // A wait's due time is its own; only a schedule has a next run to move.
+    advanceHere: (id: string) => {
+      if (store.listAutomations().some((a) => a.id === id && !a.once)) {
+        store.advanceAutomationNextRun(id)
+      }
     }
   }
   return {
