@@ -4,7 +4,6 @@
 // before the event is written, so the chat's claims and sweep keep it exactly as long as that chat's own pastes.
 import { botFailure, botFailureEnglish, type BotFailure } from '../../shared/bots/bot-failure-copy'
 import { isAbsolute } from 'node:path'
-import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { isAgentInlineImagePath } from '../../shared/native-chat/input/composer/agent-inline-image-types'
 import { formatNativeChatFileReference } from '../../shared/native-chat/input/composer/agent-image-paste'
 import {
@@ -22,6 +21,7 @@ import {
   type BotAttachmentStore
 } from './bot-attachment-images'
 import { BotItemError } from './bot-item-error'
+import { botItemCommentAttachmentBody } from './bot-item-comment-attachment-body'
 
 const COMMENT_IMAGE_LABELS = {
   tooMany: 'commentImagesTooMany',
@@ -94,14 +94,7 @@ export async function claimBotItemCommentAttachments(
   text: string,
   images: readonly Pick<BotItemCommentImage, 'path'>[]
 ): Promise<void> {
-  const body: AgentJournalMessageItem = {
-    kind: 'message',
-    role: 'user',
-    blocks: [
-      { type: 'text', text },
-      ...images.map(({ path }) => ({ type: 'image-ref' as const, path }))
-    ]
-  }
+  const body = botItemCommentAttachmentBody(text, images)
   if (!deps.store || agentSessionAttachmentReferences(deps.store.rootDir, body).size === 0) {
     return
   }

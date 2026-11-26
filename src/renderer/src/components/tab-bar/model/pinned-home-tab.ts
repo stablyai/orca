@@ -29,11 +29,17 @@ export function findBotHomeTab<T extends HomeCandidate>(
   return preview
 }
 
-/** The bot's Home wherever it sits in the order; it leaves the strip for a fixed slot at the left. */
+/**
+ * The bot's Home wherever it sits in the order; it leaves the strip for a fixed slot at the left. A null lookup is a
+ * strip no bot calls home, so its tabs are never walked.
+ */
 export function findPinnedHomeTabId(
   orderedItems: readonly TabBarItem[],
-  homeBotFor: HomeBotLookup
+  homeBotFor: HomeBotLookup | null
 ): string | null {
+  if (homeBotFor === null) {
+    return null
+  }
   // Why anywhere: a restored layout, a new tab or a host's snapshot can land ahead of Home before placement reorders it.
   const chats = orderedItems.flatMap((item) => (item.type === 'agent-session' ? [item.data] : []))
   const home = findBotHomeTab(chats, homeBotFor)
@@ -62,8 +68,11 @@ export function withPinnedHomeFirst<T>(
 export function withBotHomeFirstTabIds(
   orderedIds: string[],
   groupTabs: readonly HomeCandidate[],
-  homeBotFor: HomeBotLookup
+  homeBotFor: HomeBotLookup | null
 ): string[] {
+  if (homeBotFor === null) {
+    return orderedIds
+  }
   // Search in drawn order, as the tab bar does, so twin Homes resolve to the same tab on every path.
   const byId = new Map(groupTabs.map((tab) => [tab.id, tab]))
   const drawnTabs = orderedIds.flatMap((id) => byId.get(id) ?? [])

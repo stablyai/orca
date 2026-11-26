@@ -24,10 +24,10 @@ export function PinnedHomeTabSlot({
         // Read by the pane header: with side tabs beside it, Home adds a second 40px floor its action budget must keep.
         data-pinned-home-with-strip={withStrip ? '' : undefined}
         // Why: Home keeps its usual 144px while the strip beside it shrinks and scrolls; narrower, Home drops its label
-        // (hidden whole once it no longer fits), then its color dot and pin, down to the usual 40px tab floor.
+        // (hidden whole once it no longer fits), then its color dot, down to the usual 40px tab floor.
         // The tab fills this box, so the drop marker on its right edge is never clipped; sr-only keeps "Home" as the accessible name.
-        // Thresholds: 114 = 84 idle titled tab + 16 working/unread dot + 14 color dot; 74 = 44 icon tab + 16 + 14; 60 = 44 + 16.
-        className="@container/pinned-home group/tab-strip flex min-h-0 min-w-10 shrink grow-0 basis-[144px] overflow-hidden [&>[data-tab-strip-slot]]:w-full [&>[data-tab-strip-slot]]:max-w-none [&>[data-tab-strip-slot]]:min-w-0 @max-[114px]/pinned-home:[&_.tab-label]:sr-only @max-[74px]/pinned-home:[&_[data-tab-color-dot]]:hidden @max-[60px]/pinned-home:[&_.lucide-pin]:hidden"
+        // Thresholds: 114 = 84 idle titled tab + 16 working/unread dot + 14 color dot; 74 = 44 icon tab + 16 + 14.
+        className="@container/pinned-home group/tab-strip flex min-h-0 min-w-10 shrink grow-0 basis-[144px] overflow-hidden [&>[data-tab-strip-slot]]:w-full [&>[data-tab-strip-slot]]:max-w-none [&>[data-tab-strip-slot]]:min-w-0 @max-[114px]/pinned-home:[&_.tab-label]:sr-only @max-[74px]/pinned-home:[&_[data-tab-color-dot]]:hidden"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
         <TabStripTooltipProvider>{children}</TabStripTooltipProvider>

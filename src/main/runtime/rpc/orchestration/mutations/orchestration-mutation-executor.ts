@@ -5,6 +5,10 @@ import {
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { OrchestrationEntryCaller } from '../../../orchestration/addressing/orchestration-caller-identity'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
+import {
+  isReplayOnlyRequest,
+  retryNotReplayable
+} from '../../../orchestration/db/mutation-receipts/replay-only-request'
 import type { RpcRequest } from '../../core'
 import {
   attachMutationReceipt,
@@ -60,7 +64,12 @@ export class OrchestrationMutationExecutor {
     caller?: OrchestrationEntryCaller
   ): Promise<unknown> {
     const requestId = request.orchestrationRequestId
+    // A retry after a possibly delivered timeout must replay or join; absence may mean eviction.
+    const requireExisting = isReplayOnlyRequest(request)
     if (!requestId || !isDurableMutation(request.method, params)) {
+      if (requireExisting) {
+        throw retryNotReplayable(requestId, 'route_keeps_no_receipt')
+      }
       return await invoke()
     }
     const callerFingerprint =
@@ -73,6 +82,10 @@ export class OrchestrationMutationExecutor {
     const existingPromptReceipt = isPromptMutation
       ? db.getMutationReceipt(callerFingerprint, requestId)
       : undefined
+    if (isPromptMutation && !existingPromptReceipt) {
+      // A slept agent resumes in place first, so the prompt binds to its woken process.
+      await this.runtime.wakeSleptAgentHandle((params as { terminal: string }).terminal, {})
+    }
     if (
       existingPromptReceipt &&
       (existingPromptReceipt.method !== request.method ||
@@ -121,6 +134,9 @@ export class OrchestrationMutationExecutor {
         ? (() => {
             const row = db.getMutationReceipt(callerFingerprint, requestId)
             if (!row) {
+              if (requireExisting) {
+                throw retryNotReplayable(requestId, 'receipt_absent')
+              }
               return { disposition: 'started' as const }
             }
             if (row.method !== request.method || row.payload_hash !== payloadHash) {
@@ -131,7 +147,7 @@ export class OrchestrationMutationExecutor {
             }
             return { disposition: row.state, row }
           })()
-        : db.beginMutationReceipt(identity)
+        : db.beginMutationReceipt(identity, { requireExisting })
     const resumedPendingWorkerDone =
       begun.disposition === 'pending' &&
       isResumablePendingWorkerDone(request.method, params, begun.row.receipt)

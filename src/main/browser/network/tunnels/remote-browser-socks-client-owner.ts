@@ -2,14 +2,19 @@ import { readFile } from 'node:fs/promises'
 import type { Socket } from 'node:net'
 import { app } from 'electron'
 import { parseProcNetTcpEndpoint, parseProcNetTcpRow } from '../../../ports/linux-proc-net-tcp-rows'
-import { loadWindowsSecurityAsync } from '../../../../shared/secure-storage/windows-security-addon'
+import {
+  darwinSocketOwnerHelperAvailable,
+  isOwnDarwinConnection,
+  retainDarwinSocketOwnerHelper
+} from './darwin-socket-owner-helper'
+import {
+  loadWindowsSecurityAsync,
+  type WindowsSecurity
+} from '../../../../shared/secure-storage/windows-security-addon'
 
 export type SocksClientOwnerVerdict =
-  /**
-   * `unchecked` says why this build can't look the owner up; the loopback check still applied.
-   * `unreadableOwnProcess`: the owner is one of this app's processes, but its account couldn't be read.
-   */
-  | { allowed: true; unchecked?: string; unreadableOwnProcess?: string }
+  /** `unreadableOwnProcess`: the owner is one of this app's processes, but its account couldn't be read. */
+  | { allowed: true; unreadableOwnProcess?: string }
   /** `owner` is `uid <n>` on Linux and the token user's SID on Windows. */
   | { allowed: false; reason: 'foreign-owner'; owner: string }
   | { allowed: false; reason: 'lookup-failed'; detail: string }
@@ -30,9 +35,7 @@ export function createSocksClientAdmission(
   const logged = new Set<string>()
   const logOnce = (verdict: SocksClientOwnerVerdict): void => {
     const key = verdict.allowed
-      ? verdict.unchecked
-        ? 'unchecked'
-        : 'unreadable-own-process'
+      ? 'unreadable-own-process'
       : verdict.reason === 'foreign-owner'
         ? `owner:${verdict.owner}`
         : verdict.reason
@@ -42,9 +45,7 @@ export function createSocksClientAdmission(
     logged.add(key)
     console.warn(
       verdict.allowed
-        ? verdict.unchecked
-          ? `[browser-tunnel] ${listener} clients are checked for loopback only: ${verdict.unchecked}.`
-          : `[browser-tunnel] Admitted a ${listener} connection from this app's own process whose account could not be read (${verdict.unreadableOwnProcess}).`
+        ? `[browser-tunnel] Admitted a ${listener} connection from this app's own process whose account could not be read (${verdict.unreadableOwnProcess}).`
         : verdict.reason === 'foreign-owner'
           ? `[browser-tunnel] Refused a ${listener} connection from ${verdict.owner}; only this user may use it.`
           : `[browser-tunnel] Refused a ${listener} connection: could not confirm its owner (${verdict.detail}).`
@@ -55,11 +56,24 @@ export function createSocksClientAdmission(
       socket.destroy()
       return
     }
-    void verifySocksClientOwner(socket).then((verdict) => {
+    // A connection that closes before its owner check never costs one. A half-close is not a close:
+    // forwards stay half-open, and the client may still be reading.
+    const closed = new AbortController()
+    const abort = (): void => closed.abort()
+    socket.once('close', abort)
+    // A pauseOnConnect socket doesn't notice a reset until it reads; bytes stay buffered.
+    socket.read(0)
+    void verifySocksClientOwner(socket, undefined, closed.signal).then((verdict) => {
+      socket.off('close', abort)
       if (socket.destroyed) {
         return
       }
-      if (!verdict.allowed || verdict.unchecked || verdict.unreadableOwnProcess) {
+      // Its lookup was dropped because the client left; nothing to report.
+      if (!verdict.allowed && closed.signal.aborted) {
+        socket.destroy()
+        return
+      }
+      if (!verdict.allowed || verdict.unreadableOwnProcess) {
         logOnce(verdict)
       }
       if (verdict.allowed) {
@@ -102,14 +116,73 @@ export function findProcNetTcpClientUid(
   return null
 }
 
-/** Linux and Windows list every user's connections with their owner; the client end must be ours. macOS relies on the loopback check. */
+/** How this computer names a loopback client's account. */
+type OwnerLookup =
+  | { kind: 'darwin' }
+  | { kind: 'uid'; uid: number }
+  | { kind: 'windows'; security: WindowsSecurity }
+  /** `reason` is fixed text, so a raw load error (which may name EACCES) never reads as a bind failure. */
+  | { kind: 'unavailable'; reason: string; detail?: string }
+
+async function readOwnerLookup(): Promise<OwnerLookup> {
+  if (process.platform === 'win32') {
+    const security = await loadWindowsSecurityAsync()
+    if ('error' in security) {
+      return {
+        kind: 'unavailable',
+        reason: 'the Windows security addon did not load',
+        detail: security.error
+      }
+    }
+    return security.addon.hasNativeExport('tcpClientOwnerAsync')
+      ? { kind: 'windows', security }
+      : { kind: 'unavailable', reason: 'the Windows security addon predates the owner lookup' }
+  }
+  if (process.platform === 'darwin') {
+    return (await darwinSocketOwnerHelperAvailable())
+      ? { kind: 'darwin' }
+      : { kind: 'unavailable', reason: 'the macOS socket owner helper is missing' }
+  }
+  if (process.platform !== 'linux') {
+    return { kind: 'unavailable', reason: `no connection owner lookup on ${process.platform}` }
+  }
+  const uid = process.getuid?.()
+  return uid === undefined
+    ? { kind: 'unavailable', reason: 'this process has no user id' }
+    : { kind: 'uid', uid }
+}
+
+/** Refuses to open a listener whose connections would all be refused for want of an owner lookup. */
+export async function assertSocksClientOwnerLookup(listener: string): Promise<void> {
+  const lookup = await readOwnerLookup()
+  if (lookup.kind !== 'unavailable') {
+    return
+  }
+  if (lookup.detail) {
+    console.warn(`[browser-tunnel] ${lookup.reason}: ${lookup.detail}`)
+  }
+  throw new Error(
+    `Can't start the ${listener}: Orca can't confirm which account on this computer opens each connection (${lookup.reason}).`
+  )
+}
+
+/** Keeps the owner lookup ready while a listener is open (macOS runs a helper); call the result on close. */
+export function holdSocksClientOwnerLookup(): () => void {
+  return process.platform === 'darwin' ? retainDarwinSocketOwnerHelper() : () => {}
+}
+
+/** The client end of the connection must belong to this account: Linux and Windows list every user's
+ *  connections with their owner, and macOS looks among this account's own processes. */
 export async function verifySocksClientOwner(
   socket: AcceptedSocket,
-  readTable: (path: string) => Promise<string> = (path) => readFile(path, 'utf-8')
+  readTable: (path: string) => Promise<string> = (path) => readFile(path, 'utf-8'),
+  /** Aborts when the connection closes, so a queued macOS lookup is dropped unscanned. */
+  closed?: AbortSignal
 ): Promise<SocksClientOwnerVerdict> {
-  const ownUid = process.platform === 'linux' ? process.getuid?.() : undefined
-  if (process.platform !== 'win32' && ownUid === undefined) {
-    return { allowed: true }
+  const lookup = await readOwnerLookup()
+  if (lookup.kind === 'unavailable') {
+    const detail = lookup.detail ? `${lookup.reason}: ${lookup.detail}` : lookup.reason
+    return { allowed: false, reason: 'lookup-failed', detail }
   }
   const client = toEndpoint(socket.remoteAddress, socket.remotePort)
   const listener = toEndpoint(socket.localAddress, socket.localPort)
@@ -117,8 +190,14 @@ export async function verifySocksClientOwner(
     return { allowed: false, reason: 'lookup-failed', detail: 'socket has no address' }
   }
   try {
-    if (process.platform === 'win32') {
-      return await verifyWindowsClientOwner(client, listener)
+    if (lookup.kind === 'windows') {
+      return await verifyWindowsClientOwner(lookup.security, client, listener)
+    }
+    if (lookup.kind === 'darwin') {
+      // Another account's sockets are unreadable without root, so they read as not ours.
+      return (await isOwnDarwinConnection(client, listener, closed))
+        ? { allowed: true }
+        : { allowed: false, reason: 'lookup-failed', detail: 'no process of this account holds it' }
     }
     // The kernel pages these tables and can skip a row that moved mid-read, so look twice before refusing.
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -126,7 +205,7 @@ export async function verifySocksClientOwner(
       for (const path of ['/proc/net/tcp', '/proc/net/tcp6']) {
         const uid = findProcNetTcpClientUid(await readTable(path), client, listener)
         if (uid !== null) {
-          return uid === ownUid
+          return uid === lookup.uid
             ? { allowed: true }
             : { allowed: false, reason: 'foreign-owner', owner: `uid ${uid}` }
         }
@@ -143,17 +222,10 @@ export async function verifySocksClientOwner(
 }
 
 async function verifyWindowsClientOwner(
+  security: WindowsSecurity,
   client: Endpoint,
   listener: Endpoint
 ): Promise<SocksClientOwnerVerdict> {
-  const security = await loadWindowsSecurityAsync()
-  // Only a missing lookup admits unchecked; a lookup that ran and found nothing refuses.
-  if ('error' in security) {
-    return { allowed: true, unchecked: `the security addon did not load (${security.error})` }
-  }
-  if (!security.addon.hasNativeExport('tcpClientOwnerAsync')) {
-    return { allowed: true, unchecked: 'the security addon predates the owner lookup' }
-  }
   const owner = await security.addon.tcpClientOwnerAsync(
     client.host,
     client.port,
@@ -191,7 +263,7 @@ function toEndpoint(address: string | undefined, port: number | undefined): Endp
   if (!address || !port) {
     return null
   }
-  // The listener binds IPv4 only, so Node reports both ends as IPv4 (maybe v4-mapped).
+  // An IPv4 connection may be reported v4-mapped; the owner tables list it as plain IPv4.
   const host = address.toLowerCase().startsWith('::ffff:') ? address.slice(7) : address
   return { host, port }
 }

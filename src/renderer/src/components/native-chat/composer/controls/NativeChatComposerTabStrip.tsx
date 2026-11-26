@@ -1,6 +1,6 @@
 import { cn } from '@/lib/class-names'
 
-/** A strip that sits on the composer's top edge like a tab (thread goal, temporary worker, MCP tray). */
+/** A strip in the rows above the composer (thread goal, temporary worker, MCP tray), on their shared edges. */
 export function NativeChatComposerTabStrip({
   children,
   layout = 'row',
@@ -11,17 +11,16 @@ export function NativeChatComposerTabStrip({
   layout?: 'row' | 'stack'
 } & Record<`data-${string}`, string>): React.JSX.Element {
   return (
-    // Pulled over the composer's top padding so the strip sits on the input box.
+    // A dock row like the queue: the same edges, and its own 8px top gap.
     <div
-      className="group/goal relative -mb-2 shrink-0 px-3 sm:px-4 [[data-native-chat-composer-tab-strip]+&]:mt-2"
+      className="relative shrink-0 bg-chat-pane px-3 pt-2 sm:px-4"
       data-native-chat-composer-tab-strip=""
       {...dataAttributes}
     >
-      <div className="mx-auto w-full max-w-(--chat-content-max-width) px-2">
-        {/* Right after the task strip, that strip's bottom border is this tab's top edge; stacked tabs square off. */}
+      <div className="mx-auto w-full max-w-(--chat-content-max-width)">
         <div
           className={cn(
-            'rounded-t-md border border-b-0 border-border bg-muted/30 text-xs text-muted-foreground group-[[data-native-chat-background-tasks]+&]/goal:rounded-t-none group-[[data-native-chat-background-tasks]+&]/goal:border-t-0 group-[[data-native-chat-composer-tab-strip]+&]/goal:rounded-t-none',
+            'rounded-lg border border-border bg-muted/30 text-xs text-muted-foreground',
             layout === 'row' ? 'flex items-start gap-2 py-1 pr-1 pl-3' : 'flex flex-col'
           )}
         >

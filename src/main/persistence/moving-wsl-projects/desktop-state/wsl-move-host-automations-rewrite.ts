@@ -6,6 +6,7 @@
 import type { WslMoveCutover } from '../../../../shared/wsl-move/wsl-move-cutover'
 import type { WslMoveUnfinished } from '../../../../shared/wsl-move/wsl-move-driver-types'
 import { listWslMoveCutovers } from '../cutover-recovery/wsl-move-cutover-journal'
+import { runWslMoveHostAutomationsExclusive } from '../cutover-recovery/wsl-move-host-automations-lock'
 import { registerWslMoveDesktopRewriteStore } from './wsl-move-desktop-rewrite-stores'
 
 export const WSL_MOVE_HOST_AUTOMATIONS_STORE_ID = 'host-automations'
@@ -21,26 +22,34 @@ export type WslMoveHostAutomations = {
   enable: (environmentId: string, automations: readonly WslMoveMovedAutomation[]) => Promise<void>
 }
 
-export function registerWslMoveHostAutomationsStore(host: WslMoveHostAutomations): void {
+export function registerWslMoveHostAutomationsStore(
+  host: WslMoveHostAutomations,
+  userDataPath: string
+): void {
   registerWslMoveDesktopRewriteStore({
     id: WSL_MOVE_HOST_AUTOMATIONS_STORE_ID,
     side: 'main',
-    run: async ({ cutover }) => {
-      const ids = cutover.automationsToReenable ?? []
-      if (ids.length === 0) {
-        return
-      }
-      const carried = new Map(
-        (cutover.manifest.payload.dormantState?.automations ?? []).map((row) => [
-          row.id,
-          row.updatedAt
-        ])
-      )
-      await host.enable(
-        cutover.destinationEnvironmentId,
-        ids.map((id) => ({ id, updatedAt: carried.get(id) ?? null }))
-      )
-    },
+    // In undo's turn, on a fresh read: a released move's copy here runs again, so its host copy stays off.
+    run: ({ cutover: planned }) =>
+      runWslMoveHostAutomationsExclusive(async () => {
+        const cutover = listWslMoveCutovers(userDataPath).find(
+          (entry) => entry.migrationId === planned.migrationId
+        )
+        const ids = cutover?.automationsToReenable ?? []
+        if (!cutover || ids.length === 0) {
+          return
+        }
+        const carried = new Map(
+          (cutover.manifest.payload.dormantState?.automations ?? []).map((row) => [
+            row.id,
+            row.updatedAt
+          ])
+        )
+        await host.enable(
+          cutover.destinationEnvironmentId,
+          ids.map((id) => ({ id, updatedAt: carried.get(id) ?? null }))
+        )
+      }),
     // Nothing to flush here: the write is the host's.
     flush: () => {}
   })

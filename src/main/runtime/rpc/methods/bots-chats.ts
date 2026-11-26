@@ -14,12 +14,12 @@ import { createCanonicalOrcaSessionResolver } from '../../orchestration/addressi
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import {
   clearedInto,
-  lineageLiveSession,
   readAgentSessionRecordStore,
   type AgentSessionRecordReader
 } from '../../orchestration/addressing/session-lineage/structured-session-lineage'
 import {
   createStructuredSessionReachContext,
+  structuredSessionMailReach,
   type StructuredSessionReachContext
 } from '../../orchestration/mailbox/routing/structured-session-mail-address'
 import { refuseUndeliverableSessionRecipientWith } from './orchestration/messaging/session-recipient'
@@ -100,7 +100,8 @@ export async function botChatTakingMail(
   bot: Pick<Bot, 'folderWorkspaceId' | 'chatSessionId'>,
   id: string
 ): Promise<{ title: string | null; sessionId: string } | null> {
-  return chatTakingMail(runtime, bot, (chat) => chat.id === id)
+  await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
+  return botChatTakingMailNow(runtime, bot, id)
 }
 
 /** The bot's Home Chat as `botChatTakingMail` reads one of its chats; null while it has none. */
@@ -108,21 +109,36 @@ export async function botHomeChatTakingMail(
   runtime: Parameters<typeof botChatTakingMail>[0],
   bot: Parameters<typeof botChatTakingMail>[1]
 ): Promise<{ title: string | null; sessionId: string } | null> {
-  return chatTakingMail(runtime, bot, (chat) => chat.home)
+  const home = (await readBotChats(runtime, bot, null)).find((chat) => chat.home)
+  return home ? botChatTakingMailNow(runtime, bot, home.id) : null
 }
 
-async function chatTakingMail(
-  runtime: Parameters<typeof botChatTakingMail>[0],
-  bot: Parameters<typeof botChatTakingMail>[1],
-  match: (chat: BotChatRow) => boolean
-): Promise<{ title: string | null; sessionId: string } | null> {
-  const row = (await readBotChats(runtime, bot, null)).find(match)
-  if (!row) {
+/** Recheck the named chat after an awaited attachment claim, before committing its mail. */
+export function botChatTakingMailNow(
+  runtime: Pick<OrcaRuntimeService, 'getOrchestrationDb' | 'lookAround'>,
+  bot: Pick<Bot, 'folderWorkspaceId'>,
+  id: string
+): { title: string | null; sessionId: string } | null {
+  const store = readAgentSessionRecordStore()
+  const record = store?.getRecord(id)
+  if (!store || !record || !isOrcaSessionId(id)) {
     return null
   }
-  const store = readAgentSessionRecordStore()
-  const live = store ? lineageLiveSession(store, row.id) : null
-  return { title: row.title, sessionId: live?.sessionId ?? row.id }
+  const reach = structuredSessionMailReach(store, record, runtime.getOrchestrationDb())
+  if (reach.kind !== 'reachable') {
+    return null
+  }
+  const live = reach.session
+  const root = createCanonicalOrcaSessionResolver(store)
+  if (
+    !isOrcaSessionId(live.sessionId) ||
+    root(live.sessionId) !== id ||
+    !botOfHomeWorkspace([bot], live.location.workspaceId) ||
+    isBotBackgroundRun(runtime.lookAround, live)
+  ) {
+    return null
+  }
+  return { title: live.conversationName ?? null, sessionId: live.sessionId }
 }
 
 /** `bot list`'s count of a bot's chats, naming the asking one when it is among them. */
