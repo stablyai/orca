@@ -114,6 +114,7 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     const noPairing = flags.get('no-pairing') === true
     const mobilePairing = flags.get('mobile-pairing') === true
     const grantDesktopControl = flags.get('grant-desktop-control') === true
+    const allowCliBotCreate = flags.get('allow-cli-bot-create') === true
     const allowPublic = flags.get('allow-public') === true
     const refusePublic = flags.get('refuse-public') === true
     const recipeJson = flags.get('recipe-json') === true
@@ -150,6 +151,7 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
       grantDesktopControl,
       recipeJson,
       projectRoot,
+      ...(allowCliBotCreate ? { allowCliBotCreate: true } : {}),
       ...(allowPublic ? { allowPublic: true } : {}),
       ...(refusePublic ? { refusePublic: true } : {}),
       ...(force ? { force: true } : {}),

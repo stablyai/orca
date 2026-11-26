@@ -1,6 +1,7 @@
 import { OrcaRuntimeRpcServer } from '../../runtime/rpc/server/runtime-rpc'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { OrcadOptions } from '../serve-startup/orcad-start-contract'
+import { setCliBotCreateAllowed } from '../../bots/bot-cli-create'
 import { resolveOrcadWebClientRoot } from '../serve-startup/orcad-command-arguments'
 import {
   clearDesktopRuntimeFallbackPort,
@@ -14,6 +15,7 @@ export function createOrcadRuntimeRpcServer(
   bindHost: string
 ): OrcaRuntimeRpcServer {
   clearDesktopRuntimeFallbackPort(userDataPath)
+  setCliBotCreateAllowed(options.allowCliBotCreate === true)
   return new OrcaRuntimeRpcServer({
     runtime,
     userDataPath,

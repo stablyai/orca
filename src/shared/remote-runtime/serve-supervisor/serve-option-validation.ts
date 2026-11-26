@@ -45,6 +45,8 @@ const SERVE_SECURITY_FLAG_NAMES = [
   '--serve-mobile-pairing',
   '--grant-desktop-control',
   '--serve-grant-desktop-control',
+  '--allow-cli-bot-create',
+  '--serve-allow-cli-bot-create',
   '--recipe-json',
   '--serve-recipe-json',
   '--pairing-address',
