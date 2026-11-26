@@ -4,6 +4,7 @@ import { colors, spacing, typography, pressedStyle } from '../../theme/mobile-th
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { MobileLoadErrorState } from '../../components/feedback/MobileStateView'
+import { styles as markdownStyles } from '../../components/markdown/mobile-markdown-styles'
 import { MobileImageViewer } from '../media/presentation/MobileImageViewer'
 import { MobileImageViewerActions } from '../../session/native-chat/visual/MobileImageViewerActions'
 import type { MobileFilePreviewRpcSender } from '../preview/mobile-file-preview-operations'
@@ -60,6 +61,7 @@ export function MobileMarkdownPreviewImage({
   }, [client, worktreeId, documentPath, href, attempt])
 
   const label = alt || t('files.markdownPreviewImage.imageLabel', 'Markdown image')
+  const fallbackLink = load.error ? onOpenLink : undefined
   return (
     <View style={styles.frame}>
       {load.error ? (
@@ -98,7 +100,15 @@ export function MobileMarkdownPreviewImage({
       ) : (
         <ActivityIndicator color={colors.textSecondary} />
       )}
-      {alt ? <Text style={styles.caption}>{alt}</Text> : null}
+      {alt || fallbackLink ? (
+        <Text
+          style={[styles.caption, fallbackLink && markdownStyles.link]}
+          onPress={fallbackLink}
+          accessibilityRole={fallbackLink ? 'link' : undefined}
+        >
+          {label}
+        </Text>
+      ) : null}
       {expanded && load.uri ? (
         <MobileImageViewer
           uri={load.uri}

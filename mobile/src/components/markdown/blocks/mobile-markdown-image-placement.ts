@@ -9,9 +9,14 @@ export function mobileMarkdownParagraphImage(
   node: PhrasingContent,
   documentImages: boolean
 ): Image | undefined {
-  const image =
-    documentImages && node.type === 'link' && node.children.length === 1 ? node.children[0] : node
-  return image?.type === 'image' ? image : undefined
+  if (documentImages && node.type === 'link') {
+    const children = node.children.filter(
+      (child) => child.type !== 'text' || child.value.trim() !== ''
+    )
+    const image = children[0]
+    return image?.type === 'image' && children.length === 1 ? image : undefined
+  }
+  return node.type === 'image' ? node : undefined
 }
 
 export function mobileMarkdownParagraphImages(
