@@ -8,6 +8,7 @@ import { automationPlace } from './bot-automation-place'
 import { botOfAddress, parseBotAddress } from '../../../../../../shared/bot-roster'
 import { botOfSession } from '../../../../../bots/bot-session-tabs'
 import { requireStructuredHost } from '../../../../../bots/bot-chat-session'
+import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { readBotConversationActsFor } from '../../../../../bots/bot-conversation-acts-for'
 import {
   readBotActingTurn,
@@ -252,6 +253,9 @@ export async function readActingSender(
       }
 }
 
+const atRest = () =>
+  Object.assign(new Error('the chat is at rest'), { name: 'JournalWindowNotIndexed' })
+
 /** What a bot's chat is doing now: who its running turn is for, and the conversation it answers.
  *  With `opening`, the turn that message is about to open, read from it alone, not the journal. */
 export async function readBotTurn(
@@ -287,7 +291,11 @@ export async function readBotTurn(
     : runtime.getExternalConversationSeam()?.replyTarget(chatPaneKey(sessionId))?.key
   const conversation = key ? { source: key.source, externalId: key.externalId } : null
   const workspaceId = conversation ? workspaceOf(conversation.externalId) : null
-  const host = await requireStructuredHost(runtime)
+  // Index-only takes the host as it is: installing one, perhaps just retired, is no optional read's.
+  const host = indexedOnly ? getStructuredAgentSessionHost() : await requireStructuredHost(runtime)
+  if (!host) {
+    throw atRest()
+  }
   const root =
     knownRoot ?? (isOrcaSessionId(sessionId) ? canonicalOrcaSessionId(sessionId) : sessionId)
   // Index-only takes the record as saved: an old automation run's repair looks through every run.
@@ -324,7 +332,7 @@ export async function readBotTurn(
   }
   if (!opening && indexedOnly && !host.hasSession(sessionId)) {
     // Opening a chat at rest can convert its whole history first. Checked in the tick that reads.
-    throw Object.assign(new Error('the chat is at rest'), { name: 'JournalWindowNotIndexed' })
+    throw atRest()
   }
   const turn = opening
     ? readBotActingTurn([openingItem(opening)], lookups, [])

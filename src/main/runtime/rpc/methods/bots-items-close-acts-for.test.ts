@@ -13,6 +13,9 @@ const CHAT = '11111111-1111-4111-8111-111111111111'
 const host = {
   deps: {},
   journals: new Map<string, AgentJournalRenderItem[]>(),
+  /** Whether the host is installed, and how many times a read asked to install it. */
+  installed: true,
+  installs: 0,
   /** Chats a read opened from rest. */
   opened: new Array<string>(),
   hasSession: (id: string) => host.journals.has(id),
@@ -28,7 +31,7 @@ const host = {
   }
 }
 vi.mock('../../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
-  getStructuredAgentSessionHost: () => host
+  getStructuredAgentSessionHost: () => (host.installed ? host : undefined)
 }))
 
 const DANA: BotRequestAsker = {
@@ -97,7 +100,9 @@ function closing(input: {
   } as unknown as OrchestrationDb
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the read uses only these of the runtime's methods.
   const runtime = {
-    ensureStructuredAgentSessionHost: async () => undefined,
+    ensureStructuredAgentSessionHost: async () => {
+      host.installs += 1
+    },
     getExternalConversationSeam: () => null,
     getOrchestrationDb: () => db
   } as unknown as OrcaRuntimeService
@@ -112,6 +117,8 @@ describe('whom a close keeps its closing turn acting for', () => {
   beforeEach(() => {
     host.journals.clear()
     host.opened.length = 0
+    host.installed = true
+    host.installs = 0
   })
 
   it("keeps a teammate's request taken in the owner's own chat as theirs, naming who but not where", async () => {
@@ -209,5 +216,11 @@ describe('whom a close keeps its closing turn acting for', () => {
       closing({}).close()
     ]).finally(() => (host.journalReads = reads))
     expect(results).toEqual([[KEPT], [{ kind: 'unknown' }]])
+  })
+
+  it("keeps the chat's record, installing no host, when none is installed", async () => {
+    const { close } = closing({ record: { actsFor: [DANA] }, journal: [requestMail('req-1')] })
+    host.installed = false
+    expect([await close(), host.installs]).toEqual([[KEPT], 0])
   })
 })
