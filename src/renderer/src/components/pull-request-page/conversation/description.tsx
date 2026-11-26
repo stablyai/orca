@@ -153,6 +153,14 @@ export function ConversationDescription({
             wrapperClassName="flex min-h-64 w-full items-stretch"
             className="scrollbar-sleek block min-h-64 w-full resize-y rounded-md border border-input bg-background px-3 py-2 font-mono text-[13px] leading-5 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
+        ) : !detailsLoaded ? (
+          // Why: no read is running or owed (e.g. no repo route), so nothing confirms the description is empty.
+          <span className="text-muted-foreground">
+            {t(
+              'auto.components.sidebar.worktreeCardPrDisplay.prDetailsUnavailable',
+              'PR details unavailable'
+            )}
+          </span>
         ) : body.trim() ? (
           <CommentMarkdown
             content={body}
