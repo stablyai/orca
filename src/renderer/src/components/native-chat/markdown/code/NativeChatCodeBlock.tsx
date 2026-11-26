@@ -82,7 +82,8 @@ export function NativeChatCodeBlock({
         className={cn(
           'scrollbar-sleek m-0 max-w-full font-mono text-chat-code text-chat-code-foreground',
           wrapped ? 'whitespace-pre-wrap [overflow-wrap:anywhere]' : 'overflow-x-auto',
-          htmlDocument ? 'px-3 pt-0.5 pb-3' : language ? 'px-3.5 pt-0.5 pb-3' : 'p-3 pr-16'
+          // Margin, not padding: overflowing text scrolls under padding, so only a margin keeps it out from under the actions.
+          htmlDocument ? 'px-3 pt-0.5 pb-3' : language ? 'px-3.5 pt-0.5 pb-3' : 'mr-17 p-3 pr-1.5'
         )}
       >
         {language && code && !plain ? (
@@ -94,7 +95,7 @@ export function NativeChatCodeBlock({
         )}
       </pre>
       {code && !language ? (
-        <div className="absolute right-2 top-2 flex items-center gap-0.5 opacity-100 transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover/code:pointer-events-auto group-hover/code:opacity-100 [[class~='group/code']:has(:focus-visible)_&]:pointer-events-auto [[class~='group/code']:has(:focus-visible)_&]:opacity-100">
+        <div className="absolute right-1.5 top-1.5 flex items-center gap-0.5 opacity-100 transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover/code:pointer-events-auto group-hover/code:opacity-100 [[class~='group/code']:has(:focus-visible)_&]:pointer-events-auto [[class~='group/code']:has(:focus-visible)_&]:opacity-100">
           {actions}
         </div>
       ) : null}
