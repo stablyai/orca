@@ -145,9 +145,9 @@ const phoneHooks = createBotItemQuestionStepsHooks(React, (scopeKey) => {
   return { draft, setDraft: (next: string) => (held.set(scopeKey, next), setDraft(next)) }
 })
 
-function phone(uid: string, start: View): Hook {
+function phone(uid: string, start: View, boxEmpty = true): Hook {
   const posted: Posted[] = []
-  let props = { ...start, boxEmpty: true }
+  let props = { ...start, boxEmpty }
   const hook = renderHook(
     ({ item, events, boxEmpty }: View & { boxEmpty: boolean }) =>
       phoneHooks.useBotItemQuestionSteps(
@@ -222,4 +222,23 @@ it("keeps a later line a desktop step's Type your answer bound", () => {
     )
   )
   expect(hook.result.current.waitingLine?.id).toBe(`${PAIR.id}:1`)
+})
+
+describe.each([
+  ['desktop', desktop],
+  ['phone', phone]
+] as const)('%s comment box remounted mid-draft', (app, open) => {
+  it('still answers the question the draft started on', () => {
+    const start = { item: needsYou(A), events: [A] }
+    const first = open(`${app}-remount`, start)
+    first.type('words')
+    const started = first.line()
+    expect(started?.eventId).toBe(A.id)
+    // Leaving the item unmounts the box; its draft stays in the store.
+    cleanup()
+    const again = open(`${app}-remount`, start, false)
+    expect(again.line()?.id).toBe(started?.id)
+    again.send()
+    expect(again.posted).toEqual([{ questionId: A.id, plain: false }])
+  })
 })

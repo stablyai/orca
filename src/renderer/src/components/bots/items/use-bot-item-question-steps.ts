@@ -31,7 +31,7 @@ import {
   botItemWaitingLine,
   type BotItemWaitingLine
 } from '../../../../../shared/bots/bot-item-question-answers'
-import { createBotItemReplyTargetHook } from '../../../../../shared/bots/use-bot-item-question-steps'
+import { createBotItemReplyTargetHook } from '../../../../../shared/bots/bot-item-reply-target'
 import type {
   BotItemPendingComment,
   BotItemPendingIntent
@@ -161,7 +161,7 @@ export function useBotItemQuestionSteps(
     : oneLine && !pending.some((entry) => !entry.failed && entry.intent?.askId === oneLine.eventId)
       ? [oneLine]
       : []
-  const target = useBotItemReplyTarget(open, boxEmpty)
+  const target = useBotItemReplyTarget(boxScope, open, boxEmpty)
   // Stored picks: a line a comment answered by name loses its pick; one on its way keeps it, to
   // recover if the host refuses it.
   const stored = (index: number, answer: BotItemHeldAnswer | null): (BotItemHeldAnswer | null)[] =>

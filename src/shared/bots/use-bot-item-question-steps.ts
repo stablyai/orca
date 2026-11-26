@@ -1,6 +1,6 @@
 // An ask of several questions, one line at a time, on the phone (the desktop shows them all on one
 // card, in its own use-bot-item-question-steps): a quick reply answers the line it is on, the box's
-// send the line it names (`createBotItemReplyTargetHook`, which both apps use), and the step moves to
+// send the line it names (./bot-item-reply-target, which both apps use), and the step moves to
 // the first open line. Answers, picked or
 // typed, are held on this device (the app's draft store, keyed by `heldScope`) and post as one comment
 // when the last line is answered, so the agent wakes once, or with "send anyway", which skips the
@@ -29,56 +29,9 @@ import {
   type BotItemWaitingLine
 } from './bot-item-question-answers'
 import type { BotItemPendingComment, BotItemPendingIntent } from './bot-item-pending-comments'
+import { createBotItemReplyTargetHook } from './bot-item-reply-target'
 
 const NO_ASK: BotItemQuestionShape = { body: '', decisions: [] }
-
-export type BotItemReplyTarget = {
-  /** The line the box names; null: what it sends answers nothing. */
-  line: BotItemWaitingLine | null
-  /** The owner chose this line (a line's edit, Type your answer, a step): it holds in an empty box too,
-   *  until a send. */
-  bind: (id: string) => void
-  /** The box's next draft answers no line. */
-  none: () => void
-  /** A send: the next draft takes the line named when it starts. */
-  release: () => void
-}
-
-/** What the comment box replies to, desktop and phone alike: the line named when its draft's first
- *  words (or a photo) arrived, until it is empty again. A later ask never moves a draft to its line:
- *  the box then names nothing, so the words go as a comment of their own. An empty box names the first
- *  of `open`; a draft already there when the item opens (restored) names none, since which line it was
- *  for is not known. */
-export function createBotItemReplyTargetHook({ useState }: Pick<typeof React, 'useState'>) {
-  return function useBotItemReplyTarget(
-    /** The lines the box could name now, the one an empty box names first. */
-    open: readonly BotItemWaitingLine[],
-    boxEmpty: boolean
-  ): BotItemReplyTarget {
-    const [bound, setBound] = useState<{ id: string; explicit: boolean } | 'none' | null>(null)
-    const [wasEmpty, setWasEmpty] = useState(boxEmpty)
-    const find = (id: string): BotItemWaitingLine | null =>
-      open.find((line) => line.id === id) ?? null
-    const first = open[0] ?? null
-    let held = bound
-    if (wasEmpty !== boxEmpty) {
-      setWasEmpty(boxEmpty)
-      if (!boxEmpty && held !== 'none' && !(held && find(held.id))) {
-        held = first ? { id: first.id, explicit: false } : 'none'
-      } else if (boxEmpty && (held === 'none' || (held && !held.explicit))) {
-        held = null
-      }
-      setBound(held)
-    }
-    const line = held === 'none' ? null : ((held && find(held.id)) ?? (boxEmpty ? first : null))
-    return {
-      line,
-      bind: (id) => setBound({ id, explicit: true }),
-      none: () => setBound('none'),
-      release: () => setBound(null)
-    }
-  }
-}
 
 /** Where one ask's held answers live in the draft store: `itemScope` names the item on its host. */
 export function botItemHeldAnswersScope(itemScope: string, askId: string): string {
@@ -235,6 +188,7 @@ export function createBotItemQuestionStepsHooks(
       chosen && chosen.askId === askId && lines.includes(chosen.index) ? chosen.index : firstOpen
     // The step shown first, then the other open lines a draft may have started on.
     const target = useBotItemReplyTarget(
+      itemScope,
       waiting
         ? (lines.includes(current)
             ? [current, ...lines.filter((index) => index !== current)]
