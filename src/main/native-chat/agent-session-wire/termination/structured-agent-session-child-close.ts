@@ -162,7 +162,9 @@ export async function releaseLeaseOfEndedStructuredAgentSessionChild(
     sessionId,
     expectedFence: ended.fence,
     now: context.now(),
-    ...(ended.cause === 'exit' ? { unexpectedExitJournal: session.journal } : {}),
+    ...(ended.cause === 'exit' && !ended.duringStartup
+      ? { unexpectedExitJournal: session.journal }
+      : {}),
     ...(ended.deathEvidenceKind ? { deathEvidenceKind: ended.deathEvidenceKind } : {}),
     ...(ended.reason ? { exitReason: ended.reason } : {})
   }).catch((error: unknown) =>

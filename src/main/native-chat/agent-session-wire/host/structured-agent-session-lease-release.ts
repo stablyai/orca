@@ -80,7 +80,7 @@ export async function releaseExitedStructuredAgentSessionOwner(
   fence: number,
   exit: StructuredAgentSessionChildExit,
   observedAt: number,
-  journal: AgentSessionJournal
+  resumableJournal?: AgentSessionJournal
 ): Promise<boolean> {
   let released = false
   try {
@@ -91,7 +91,7 @@ export async function releaseExitedStructuredAgentSessionOwner(
       now: context.now(),
       exitObservedAt: observedAt,
       exitReason: exit.reason,
-      ...(!exit.expected ? { unexpectedExitJournal: journal } : {}),
+      ...(!exit.expected && resumableJournal ? { unexpectedExitJournal: resumableJournal } : {}),
       ...(exit.deathEvidenceKind ? { deathEvidenceKind: exit.deathEvidenceKind } : {})
     })
     released = true

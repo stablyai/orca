@@ -1,6 +1,6 @@
 import type { CommandHandler } from '../../dispatch/dispatch'
 import { printResult } from '../../output/command-result-output'
-import { printOrchestrationResult } from '../agent-view'
+import { printOrchestrationResult, renderOrchestrationArgv } from '../agent-view'
 import { remoteHost, WORKER_LIST_VIEW } from './worker-agent-views'
 import type { WorkerListResult } from './worker-view-results'
 import {
@@ -16,7 +16,6 @@ import {
 } from '../../arguments/flags'
 import { RuntimeClientError } from '../../runtime/connection/types'
 import { callOrchestrationMutation } from '../recovery/mutation-request'
-import { renderCommand } from '../recovery/orchestration-mutation-recovery'
 import { resolveOrchestrationTerminalHandle } from '../identity/terminal-identity'
 import { formatWorkerRelease, type WorkerReleaseReceipt } from './worker-output'
 import { formatWorkerListScope, resolveWorkerListRunScope } from './worker-list-run-scope'
@@ -215,7 +214,7 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
                     ? `] host=${remoteHost(worker.server)} asOf=${worker.server.asOf}`
                     : `]`
                 const next = projection
-                  ? ` next=${renderCommand(projection.nextAction.argv) || 'none'}`
+                  ? ` next=${renderOrchestrationArgv(projection.nextAction.argv) ?? 'none'}`
                   : ''
                 const autoRelease = projection?.autoReleaseAt
                   ? ` auto-release=${projection.autoReleaseAt}`
