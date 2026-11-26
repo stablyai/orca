@@ -67,9 +67,21 @@ function isDirentLookupError(error: unknown): boolean {
   return !!error && typeof error === 'object' && 'syscall' in error && error.syscall === 'lstat'
 }
 
-export async function readInstallSubdirectories(dir: string): Promise<InstallDirectoryListing> {
+export async function readInstallSubdirectories(
+  dir: string,
+  mode: 'worker' | 'cli' = 'worker'
+): Promise<InstallDirectoryListing> {
   const names: string[] = []
   try {
+    if (mode === 'cli') {
+      // Node's DT_UNKNOWN lstats use the isolated CLI child's own libuv pool.
+      for (const entry of await readdir(dir, { withFileTypes: true })) {
+        if (entry.isDirectory()) {
+          names.push(entry.name)
+        }
+      }
+      return { names, uncertain: false }
+    }
     // Node resolves DT_UNKNOWN sequentially on the worker, outside the libuv pool.
     for await (const entry of await opendir(dir)) {
       if (entry.isDirectory()) {
