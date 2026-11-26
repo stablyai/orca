@@ -5,6 +5,7 @@ import type { HookCommandConfig, HookDefinition } from '../configuration/hook-co
 import { isPlainObject } from '../configuration/hooks-json-read'
 
 const POSIX_SIMPLE_SHELL_EXECUTABLE = /^(?:\/bin\/sh|sh|bash|cmd|cmd\.exe)$/i
+const CMD_EXECUTABLE = /^cmd(?:\.exe)?$/i
 const POWERSHELL_EXECUTABLE = /(?:^|\/)(?:powershell(?:\.exe)?|pwsh(?:\.exe)?)$/i
 
 // Match only commands whose ownership by Orca is established, so user-maintained or composite
@@ -89,16 +90,18 @@ function hookHasManagedCommand(hook: HookCommandConfig, matches: (value?: string
     if (args.length === 1) {
       return matches(args[0])
     }
-    if (args.length === 2 && (args[0] === '-c' || args[0] === '/c')) {
+    const commandFlag = CMD_EXECUTABLE.test(normalizedCommand) ? '/c' : '-c'
+    if (args.length === 2 && args[0] === commandFlag) {
       return matches(args[1])
     }
-    if (args.length === 3 && args[0] === '/d' && args[1] === '/c') {
+    if (commandFlag === '/c' && args.length === 3 && args[0] === '/d' && args[1] === '/c') {
       return matches(args[2])
     }
     return false
   }
   if (POWERSHELL_EXECUTABLE.test(normalizedCommand) || NATIVE_EXE_SUFFIX.test(normalizedCommand)) {
-    return matches(`${hook.command} ${args.join(' ')}`)
+    // Joining is only faithful when each configured argument is a single token.
+    return args.every((arg) => /^\S+$/.test(arg)) && matches(`${hook.command} ${args.join(' ')}`)
   }
   return false
 }

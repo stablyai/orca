@@ -271,6 +271,16 @@ describe('Droid managed hooks', () => {
     expect(matches(`${wrapWindowsHookCommand(winCmd)} && my-hook`)).toBe(false)
     expect(matches('C:/Users/u/.orca/agent-hooks/orca-agent-hook.exe droid && my-hook')).toBe(false)
     expect(matches(`${posix}.custom`)).toBe(false)
+    // A quoted `]` in the profile path must not hide Orca's own wrapper.
+    expect(matches(wrapPosixHookCommand('/home/Dev [QA]/.orca/agent-hooks/droid-hook.sh'))).toBe(
+      true
+    )
+    // A user condition around the Orca script is the user's wrapper, not Orca's.
+    expect(matches(`if [ "$(date +%u)" -lt 6 ]; then /bin/sh '${posix}'; fi`)).toBe(false)
+    expect(matches(`sh\n${posix}`)).toBe(false)
+    const encoded = wrapWindowsHookCommand(winCmd).match(/-EncodedCommand\s+(\S+)/)![1]
+    expect(matches(`powershell.exe -NoProfile -EncodedCommand ${encoded}`)).toBe(true)
+    expect(matches(`team-powershell.exe -NoProfile -EncodedCommand ${encoded}`)).toBe(false)
   })
 
   // STA-17697: remote install must preserve simultaneous user edits to hooks.json and settings.json.
