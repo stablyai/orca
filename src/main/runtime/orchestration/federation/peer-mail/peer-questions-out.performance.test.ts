@@ -63,8 +63,8 @@ describe('paired-question lookups by thread', () => {
     expect(reads).toHaveLength(2)
     for (const plan of reads) {
       expect(plan).toHaveLength(1)
-      expect(plan[0]).toMatch(
-        /^SEARCH peer_questions_out USING COVERING INDEX idx_peer_questions_out_thread/
+      expect(plan[0]).toBe(
+        'SEARCH peer_questions_out USING COVERING INDEX idx_peer_questions_out_thread (conversation_id=? AND <expr>=? AND awaiting=?)'
       )
     }
   })
