@@ -25,7 +25,6 @@ export type JournalStatusItemSelection =
   | { kind: 'assistant-prose'; floor?: number; turnItemId?: string }
   | { kind: 'async-question-candidates'; floor?: number }
   | { kind: 'assistant-exists' }
-  | { kind: 'prompt' }
   | { kind: 'pending-prompts'; floor?: number }
   | { kind: 'scoped-statuses'; turnItemId: string; floor?: number }
   | { kind: 'tools'; after: JournalStatusPosition; running?: true }

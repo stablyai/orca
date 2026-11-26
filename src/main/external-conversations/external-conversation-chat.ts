@@ -1,5 +1,6 @@
 // A conversation's native chat (structured session): its deliveries, prompts, turns and Stop.
 import { randomUUID } from 'node:crypto'
+import type { AgentSessionConversationView } from '../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { isConversationReport } from './external-conversation-turn-opener'
 import {
   endedTurn,
@@ -42,7 +43,16 @@ export type ConversationChat = StructuredAgentTurnHost &
     | 'publishedWork'
     | 'conversation'
   > & {
-    deps: { store: { getConversation(sessionId: string): { currentFence: number } | null } }
+    deps: {
+      store: {
+        getConversation(
+          sessionId: string
+        ):
+          | (Pick<AgentSessionConversationView, 'currentFence'> &
+              Partial<Pick<AgentSessionConversationView, 'provider' | 'location'>>)
+          | null
+      }
+    }
   }
 
 /** The native-chat host is installed lazily and can be replaced, so readers follow it. */

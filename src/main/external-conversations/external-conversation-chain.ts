@@ -98,7 +98,7 @@ export class ConversationChain {
       return Promise.resolve(true)
     }
     return lane.running.then(
-      (delivery) => delivery.outcome === 'refused',
+      (delivery) => delivery.outcome === 'refused' || delivery.outcome === 'expired',
       () => false
     )
   }

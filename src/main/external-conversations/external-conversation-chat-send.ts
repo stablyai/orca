@@ -14,10 +14,31 @@ import {
   carriedFields,
   NOTHING_CARRIED,
   readCarriedMessages,
-  type CarriedMessages
+  type CarriedMessages,
+  reconcileCarriedImageLabels
 } from './external-conversation-returned-carry'
+import type { ReturnedImageProgress } from './external-conversation-returned-image-progress'
 import { callerFor, type ConversationChat } from './external-conversation-chat'
-import { refused, type ConnectorMessage, type Delivery } from './external-conversation-types'
+import {
+  conversationId,
+  refused,
+  type ConnectorMessage,
+  type Delivery
+} from './external-conversation-types'
+import {
+  ASKER_IMAGES_BUDGET_MS,
+  hasEarlierImages,
+  StagedConnectorImages,
+  type AskerImages,
+  type ConnectorImage
+} from './connector-asker-images'
+import {
+  connectorImageInspection,
+  type ConnectorImageInspection
+} from './connector-asker-stored-image'
+import { getAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
+import type { DeliveryPreparation } from './external-conversation-delivery-receipts'
+import { budgetForEarlierImages, earlierImagesThatFit } from './connector-asker-image-budget'
 
 /** Sent as a person's message would be: a busy chat takes it into the running turn. A bot's is
  *  labelled with who asked, where and what came before; the chat shows the message alone. Its
@@ -32,9 +53,19 @@ export async function deliverToChat(
     signal: AbortSignal
     admitted?: () => (() => void) | void
     deliveryId?: string
-    images?: readonly string[]
+    askerImages?: AskerImages
+    stagedImages?: StagedConnectorImages
+    preparation?: DeliveryPreparation
+    returnedImageProgress?: ReturnedImageProgress
   }
 ): Promise<Delivery> {
+  const signal = delivery.preparation?.signal(delivery.signal) ?? delivery.signal
+  const stopped = () =>
+    delivery.preparation?.stopped(signal) ?? (signal.aborted ? refused(refusalOf(signal)) : null)
+  const stoppedBeforePreparation = stopped()
+  if (stoppedBeforePreparation) {
+    return stoppedBeforePreparation
+  }
   if (!chat) {
     return refused('agent_not_reachable')
   }
@@ -43,6 +74,8 @@ export async function deliverToChat(
     return refused(CHAT_GONE_REFUSAL)
   }
   let admitted = false
+  let staged = delivery.stagedImages
+  let selected: readonly ConnectorImage[] = []
   // What takes back an admission the writer then refused.
   const taken: { back?: (() => void) | void } = {}
   const admit = () => {
@@ -52,18 +85,87 @@ export async function deliverToChat(
     }
   }
   try {
+    // The download timeout only limits new image staging. Returned requests use the delivery lease.
+    const earlierImageContext =
+      !delivery.stagedImages && hasEarlierImages(link.source, delivery.asker)
+    const inspection: ConnectorImageInspection | undefined =
+      link.bot && link.source === 'slack'
+        ? connectorImageInspection(
+            getAgentSessionAttachmentStore()?.rootDir,
+            delivery.preparation
+              ? signal
+              : AbortSignal.any([signal, AbortSignal.timeout(ASKER_IMAGES_BUDGET_MS)]),
+            {
+              allPaths: link.agent === 'pi' || Boolean(delivery.askerImages && earlierImageContext),
+              queueSignal: delivery.preparation?.imageProbeQueueSignal(signal)
+            }
+          )
+        : undefined
+    let firstCarry: Promise<CarriedMessages> | undefined
+    const readCarry = (direct: readonly ConnectorImage[]) =>
+      readCarriedMessages(
+        chat,
+        link,
+        delivery.reply?.account,
+        direct,
+        signal,
+        inspection,
+        inspection && delivery.returnedImageProgress
+          ? {
+              owner: delivery.returnedImageProgress,
+              key: JSON.stringify([link.sessionId, conversationId(link)])
+            }
+          : undefined
+      )
+    const earlierBudget = (carried: CarriedMessages, direct: readonly ConnectorImage[]) =>
+      budgetForEarlierImages(link.agent, carried.earlierBudget, direct)
+    let carried: CarriedMessages | undefined
+    let directCount: number | undefined
+    const images =
+      link.bot && !delivery.stagedImages && delivery.asker && delivery.askerImages
+        ? await delivery
+            .askerImages({
+              botId: link.bot.botId,
+              conversation: { source: link.source, externalId: link.externalId },
+              asker: delivery.asker,
+              signal,
+              earlierBudget: async (direct) => {
+                directCount = direct.length
+                firstCarry = readCarry(direct)
+                return earlierBudget(await firstCarry, direct)
+              }
+            })
+            .catch(() => [])
+        : []
+    staged ??= new StagedConnectorImages(images, directCount)
+    const { direct, earlier } = staged
     // A carried card that changed since it was read (a Retry, an edit) refuses the send: read again.
     for (let attempt = 1; ; attempt += 1) {
-      const carried =
+      const stoppedBeforeCarry = stopped()
+      if (stoppedBeforeCarry) {
+        return stoppedBeforeCarry
+      }
+      carried =
         link.bot && attempt <= CARRY_READS
-          ? await readCarriedMessages(
-              chat,
-              link,
-              delivery.reply?.account,
-              delivery.images?.length ?? 0
-            )
+          ? await (attempt === 1 && firstCarry ? firstCarry : readCarry(direct))
           : NOTHING_CARRIED
-      const outcome = await sendConnectorTurn(chat, link, delivery, carried, admit)
+      const stoppedBeforeSend = stopped()
+      if (stoppedBeforeSend) {
+        return stoppedBeforeSend
+      }
+      if (!chat.deps.store.getConversation(link.sessionId)) {
+        return refused(CHAT_GONE_REFUSAL)
+      }
+      const fitting = earlierImagesThatFit(earlier, earlierBudget(carried, direct))
+      selected = [...direct, ...fitting]
+      const outcome = await sendConnectorTurn(
+        chat,
+        link,
+        { ...delivery, signal },
+        carried,
+        selected,
+        admit
+      )
       if (
         outcome.kind === 'refused' &&
         carried.cards.length > 0 &&
@@ -76,8 +178,10 @@ export async function deliverToChat(
         continue
       }
       if (outcome.kind === 'refused') {
-        return refused('agent_not_reachable')
+        return stopped() ?? refused('agent_not_reachable')
       }
+      // A rejected dispatch can still leave a returned request that references these files.
+      staged.retain(selected)
       const dispatched = outcome.kind === 'sent' ? outcome.submission?.dispatchState : 'accepted'
       if (dispatched === 'rejected') {
         // Why the agent couldn't take it (signed out, not installed…), or that a person's Stop did.
@@ -93,9 +197,14 @@ export async function deliverToChat(
     }
   } catch {
     if (admitted) {
+      staged?.retain(selected)
       return { outcome: 'unknown', reason: 'writer_failed' }
     }
-    return refused(delivery.signal.aborted ? refusalOf(delivery.signal) : 'agent_not_reachable')
+    return stopped() ?? refused('agent_not_reachable')
+  } finally {
+    if (!delivery.stagedImages) {
+      staged?.discardUnused()
+    }
   }
 }
 
@@ -107,15 +216,22 @@ function sendConnectorTurn(
   link: ExternalConversationLink,
   delivery: Parameters<typeof deliverToChat>[2],
   carried: CarriedMessages,
+  images: readonly ConnectorImage[],
   admit: () => void
 ) {
   const { asker, note, signal } = delivery
+  const attached = new Map(carried.imagePositions)
+  const carriedImageCount = carried.blocks.filter((block) => block.type === 'image-ref').length
+  for (const [index, image] of images.entries()) {
+    attached.set(image.fileId, carriedImageCount + index + 1)
+  }
   const text = asker
-    ? connectorAskerPrompt(link.source, asker, note, delivery)
+    ? connectorAskerPrompt(link.source, asker, note, { ...delivery, attached })
     : connectorPlainMessages([delivery, ...(delivery.later ?? [])], note)
   // Kept beside the message for the chat's tag, with only the links a tag may open or fetch.
   const stored = asker ? storedConnectorAsker(link.source, asker) : undefined
   const carriedIds = [...carried.deliveryIds, ...(delivery.reply?.carried ?? [])]
+  const operationId = createStructuredAgentSessionOperationId(randomUUID)
   const fence = chat.deps.store.getConversation(link.sessionId)?.currentFence ?? 0
   return sendAgentTurn({
     kind: 'structured-session',
@@ -130,9 +246,9 @@ function sendConnectorTurn(
         role: 'user',
         // Its images ride as a person's attached ones would; the chat shows them with the message.
         blocks: [
-          ...carried.blocks,
+          ...reconcileCarriedImageLabels(carried.blocks, attached),
           { type: 'text', text },
-          ...(delivery.images ?? []).map((path) => ({ type: 'image-ref' as const, path }))
+          ...images.map(({ path }) => ({ type: 'image-ref' as const, path }))
         ],
         // An event no one asked through is the connector's too, so the turn finds its conversation;
         // a bot's message whose asker didn't parse is someone unknown's, never the owner's.
@@ -160,7 +276,7 @@ function sendConnectorTurn(
           : {}),
         ...(delivery.memorySource ? { memorySource: delivery.memorySource } : {})
       },
-      operationId: createStructuredAgentSessionOperationId(randomUUID),
+      operationId,
       expectedRuntimeFence: fence,
       delivery: 'now',
       personsMessage: true,
@@ -169,6 +285,10 @@ function sendConnectorTurn(
         if (signal.aborted) {
           throw new Error(refusalOf(signal))
         }
+        if (delivery.preparation?.expired()) {
+          throw new Error('conversation_cancelled')
+        }
+        delivery.preparation?.attempting(link.sessionId, operationId)
         admit()
       }
     }

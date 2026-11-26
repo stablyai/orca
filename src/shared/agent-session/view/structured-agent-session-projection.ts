@@ -90,14 +90,17 @@ export function projectStructuredItemsToNativeChat(
 }
 
 export function projectStructuredItemToNativeChat(
-  item: AgentJournalRenderItem
+  item: AgentJournalRenderItem,
+  drawMarkdown = true,
+  connectorTextLimit?: number
 ): NativeChatMessage | null {
-  const cached = projectedItems.get(item)
+  const cacheable = drawMarkdown && connectorTextLimit === undefined
+  const cached = cacheable ? projectedItems.get(item) : undefined
   if (cached !== undefined) {
     return cached
   }
   // Reducer updates replace journal items, so unchanged rows keep their render caches.
-  const projected = itemBlocks(item)
+  const projected = itemBlocks(item, drawMarkdown, connectorTextLimit)
   const sentAs = item.body.kind === 'message' ? item.body.sentAs : undefined
   const lifecycle = item.body.kind === 'message' ? messageLifecycle(item.body) : {}
   const command = item.body.kind === 'message' ? item.body.command : undefined
@@ -119,7 +122,9 @@ export function projectStructuredItemToNativeChat(
         journalRevision: item.revision
       }
     : null
-  projectedItems.set(item, message)
+  if (cacheable) {
+    projectedItems.set(item, message)
+  }
   return message
 }
 
@@ -204,7 +209,8 @@ export function projectStructuredAgentSessionStatusState(
   /** Item ids of the approvals and questions waiting on the user: what makes the status `attention`. */
   pendingPromptIds: string[]
 } {
-  const latestPrompt = latestStructuredAgentSessionPrompt(items)
+  const promptItems = items
+  let promptPreview: string | undefined
   if (!hasStructuredAgentSessionRequest(items, submissions, currentFence)) {
     return {
       summary: { status: null, latestPrompt: '' },
@@ -250,7 +256,11 @@ export function projectStructuredAgentSessionStatusState(
     pendingPromptIds: pending.map((item) => item.itemId),
     summary: {
       status,
-      latestPrompt: normalizePromptField(latestPrompt),
+      get latestPrompt() {
+        return (promptPreview ??= normalizePromptField(
+          latestStructuredAgentSessionPrompt(promptItems)
+        ))
+      },
       ...(toolName ? { toolName } : {}),
       ...(toolInput ? { toolInput } : {}),
       ...(lastAssistantMessage ? { lastAssistantMessage } : {}),

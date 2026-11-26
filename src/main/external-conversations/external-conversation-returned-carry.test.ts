@@ -1,4 +1,5 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { ReturnedImageProgress } from './external-conversation-returned-image-progress'
+import { closeSync, ftruncateSync, mkdtempSync, openSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
@@ -11,8 +12,8 @@ import { agentSessionFailureWords } from '../../shared/agent-session/failures/ag
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionSendBodyFingerprint } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { ensureAgentSessionAttachmentClaimTables } from '../native-chat/agent-session-attachments/agent-session-attachment-claims'
-import Database from '../sqlite/sync-database'
-import { migrateJournalDomainSchema } from '../native-chat/agent-session-journal/journal-domain-schema'
+import type Database from '../sqlite/sync-database'
+import { openJournalDomainDatabase } from '../native-chat/agent-session-journal/database/journal-domain-database'
 import { applyJournalDomainSubmission } from '../native-chat/agent-session-journal/journal-domain-submission-admission'
 import { applyJournalDomainGenerationSettlement } from '../native-chat/agent-session-journal/journal-domain-generation-settlement'
 import { readJournalDomainReturnedCards } from '../native-chat/agent-session-journal/journal-domain-queue-reads'
@@ -25,7 +26,20 @@ import { readJournalConnectorReplies } from '../native-chat/agent-session-journa
 import type { ConnectorMessageAsker } from '../../shared/connector-message-asker'
 import { actsForOwner, OWNER_ACTS_FOR } from '../../shared/bots/bot-acts-for'
 import { readBotActingTurn } from '../bots/bot-request-asker'
-import { carriedFields, carriedMessages } from './external-conversation-returned-carry'
+import { connectorAskerPrompt } from '../../shared/connector-asker-prompt'
+import {
+  carriedFields,
+  carriedMessages,
+  reconcileCarriedImageLabels
+} from './external-conversation-returned-carry'
+import { connectorAskerImages } from './connector-asker-images'
+import {
+  connectorImageInspection,
+  ConnectorImageProbes,
+  RETURNED_IMAGE_RETRY_MS,
+  storeConnectorImage
+} from './connector-asker-stored-image'
+import { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
 
 // The real journal writer: a Slack message whose start failed, then the conversation's next message.
 const NOW = 1_800_000_000_000
@@ -37,8 +51,7 @@ let dir = ''
 let db: Database
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'orca-returned-carry-'))
-  db = new Database(join(dir, 'journal.db'))
-  migrateJournalDomainSchema(db)
+  db = openJournalDomainDatabase(join(dir, 'journal.db')).db
   ensureAgentSessionAttachmentClaimTables(db)
   db.prepare(
     `INSERT INTO journal_chat_state(workspace_id,session_id,epoch,last_sequence,highest_fence)
@@ -150,18 +163,18 @@ function refuseStart(id: string, kind: AgentSessionFailureKind = 'notSignedIn', 
 }
 
 /** The next message of THREAD, as deliverToChat builds it and its admission settles it. */
-function sendNext(
+async function sendNext(
   id: string,
   text: string,
   at = NOW + 120_000,
   { images = [], asker }: { images?: string[]; asker?: ConnectorMessageAsker } = {}
 ) {
-  const carried = carriedMessages(
+  const carried = await carriedMessages(
     THREAD,
     readJournalDomainReturnedCards(db, target, at),
     ACCOUNT,
     at,
-    images.length
+    images.map((path) => ({ path, fileId: path, bytes: 1 }))
   )
   const own = asked(id, text, THREAD, images, asker)
   const body: AgentJournalMessageItem = {
@@ -189,20 +202,32 @@ function admitCarrying(id: string, body: AgentJournalMessageItem, at: number): b
   return true
 }
 
+function stagedImage(name: string, bytes = 1): string {
+  const path = join(dir, name)
+  const file = openSync(path, 'w')
+  try {
+    ftruncateSync(file, bytes)
+  } finally {
+    closeSync(file)
+  }
+  return path
+}
+
 const returnedIds = () =>
   readJournalDomainReturnedCards(db, target, NOW + 300_000).map(({ card }) => card.messageId)
 
-it('carries the failed root with its image ahead of the next message, once', () => {
-  failedStart('root', asked('d-root', 'what is in this screenshot?', THREAD, ['/a/shot.png']))
+it('carries the failed root with its image ahead of the next message, once', async () => {
+  const shot = stagedImage('shot.png')
+  failedStart('root', asked('d-root', 'what is in this screenshot?', THREAD, [shot]))
   expect(returnedIds()).toEqual(['root'])
 
-  const next = sendNext('next', 'it is signed in now')
+  const next = await sendNext('next', 'it is signed in now')
   expect(next.body.blocks).toEqual([
     {
       type: 'text',
       text: '[Orca: sent 2027-01-15T08:00:00.000Z, 2 minutes before it reached you]\nwhat is in this screenshot?'
     },
-    { type: 'image-ref', path: '/a/shot.png' },
+    { type: 'image-ref', path: shot },
     { type: 'text', text: 'it is signed in now' }
   ])
   expect(next.admit()).toBe(true)
@@ -221,22 +246,22 @@ it('carries the failed root with its image ahead of the next message, once', () 
     ['next', 'next']
   ])
   // A later message carries nothing again.
-  expect(sendNext('third', 'and now?').carried.cards).toEqual([])
+  expect((await sendNext('third', 'and now?')).carried.cards).toEqual([])
 })
 
-it('carries several failed sends in order, and only this conversation’s', () => {
+it('carries several failed sends in order, and only this conversation’s', async () => {
   failedStart('first', asked('d1', 'one'), 'notSignedIn', NOW)
   failedStart('elsewhere', asked('d-x', 'another thread', OTHER), 'notSignedIn', NOW + 1)
   failedStart('second', asked('d2', 'two'), 'cliMissing', NOW + 2)
 
-  const next = sendNext('next', 'three')
+  const next = await sendNext('next', 'three')
   expect(next.carried.cards.map((card) => card.messageId)).toEqual(['first', 'second'])
   expect(next.carried.deliveryIds).toEqual(['d1', 'd2'])
   expect(next.admit()).toBe(true)
   expect(returnedIds()).toEqual(['elsewhere'])
 })
 
-it('leaves content refusals and edited cards as cards; the message still goes', () => {
+it('leaves content refusals and edited cards as cards; the message still goes', async () => {
   failedStart('big', asked('d-big', 'huge image'), 'attachmentInvalid')
   failedStart('empty', asked('d-empty', ''), 'emptyMessage')
   failedStart('editing', asked('d-edit', 'being edited'))
@@ -246,15 +271,15 @@ it('leaves content refusals and edited cards as cards; the message still goes', 
      VALUES('chat-1','e','owner','caller','edit','editing',?,?)`
   ).run(editing.revision, NOW + 10 * 60_000)
 
-  const next = sendNext('next', 'hello')
+  const next = await sendNext('next', 'hello')
   expect(next.carried.cards).toEqual([])
   expect(next.admit()).toBe(true)
   expect(returnedIds().sort()).toEqual(['big', 'editing', 'empty'])
 })
 
-it('refuses the admission when a carried card changed since it was read', () => {
+it('refuses the admission when a carried card changed since it was read', async () => {
   failedStart('root', asked('d-root', 'root'))
-  const next = sendNext('next', 'follow-up')
+  const next = await sendNext('next', 'follow-up')
   // The owner presses Retry first: the card is handed to its own send.
   const root = journalDomainQueueRow(db, target, 'root')!
   inWriter(() =>
@@ -289,12 +314,13 @@ it('refuses the admission when a carried card changed since it was read', () => 
   expect(next.admit()).toBe(false)
   expect(journalDomainQueueRow(db, target, 'root')?.card.consumedAs).toBe('retry')
   // Read again, the message goes alone.
-  const again = sendNext('next-2', 'follow-up')
+  const again = await sendNext('next-2', 'follow-up')
   expect(again.carried.cards).toEqual([])
   expect(again.admit()).toBe(true)
 })
 
-function insertOldCard(): void {
+function insertOldCard(): string {
+  const shot = stagedImage('old.png')
   // As builds before this change stored it: no queue time, no unattended mark, no sent time.
   db.prepare(
     `INSERT INTO journal_queue_cards(session_id,epoch,message_id,revision,state,position,command_turn_item_id,payload_json)
@@ -306,7 +332,7 @@ function insertOldCard(): void {
         role: 'user',
         blocks: [
           { type: 'text', text: 'see attached' },
-          { type: 'image-ref', path: '/a/old.png' }
+          { type: 'image-ref', path: shot }
         ],
         origin: 'connector',
         connectorConversation: THREAD,
@@ -319,38 +345,39 @@ function insertOldCard(): void {
       queuedAt: null
     })
   )
+  return shot
 }
 
-it('reads a returned card an earlier Orca saved', () => {
-  insertOldCard()
-  const next = sendNext('next', 'ping')
+it('reads a returned card an earlier Orca saved', async () => {
+  const shot = insertOldCard()
+  const next = await sendNext('next', 'ping')
   expect(next.body.blocks).toEqual([
     { type: 'text', text: 'see attached' },
-    { type: 'image-ref', path: '/a/old.png' },
+    { type: 'image-ref', path: shot },
     { type: 'text', text: 'ping' }
   ])
   expect(next.admit()).toBe(true)
   expect(returnedIds()).toEqual([])
 })
 
-it('carries an earlier Orca’s card ahead of a newer one', () => {
+it('carries an earlier Orca’s card ahead of a newer one', async () => {
   insertOldCard()
   failedStart('new', asked('d-new', 'newer'), 'notSignedIn', NOW + 60_000)
   // The newer failure sits ahead of it in the queue.
   expect(returnedIds()).toEqual(['new', 'old'])
-  expect(sendNext('next', 'ping').carried.cards.map((card) => card.messageId)).toEqual([
+  expect((await sendNext('next', 'ping')).carried.cards.map((card) => card.messageId)).toEqual([
     'old',
     'new'
   ])
 })
 
-it('a message that carried others and failed again keeps each sent line on its own words', () => {
+it('a message that carried others and failed again keeps each sent line on its own words', async () => {
   failedStart('first', asked('d1', 'one'), 'notSignedIn', NOW)
-  const second = sendNext('second', 'two', NOW + 60_000)
+  const second = await sendNext('second', 'two', NOW + 60_000)
   expect(second.admit()).toBe(true)
   refuseStart('second', 'notSignedIn', NOW + 60_000)
 
-  const third = sendNext('third', 'three', NOW + 180_000)
+  const third = await sendNext('third', 'three', NOW + 180_000)
   expect(third.carried.cards.map((card) => card.messageId)).toEqual(['second'])
   expect(third.carried.deliveryIds).toEqual(['second', 'd1'])
   expect(third.body.blocks).toEqual([
@@ -388,15 +415,15 @@ function turnActsForOwner(body: AgentJournalMessageItem): boolean {
   return actsForOwner(turn.askers)
 }
 
-it('a member’s request the owner’s message carries never acts for the owner, nested or not', () => {
+it('a member’s request the owner’s message carries never acts for the owner, nested or not', async () => {
   failedStart('member', asked('d-m', 'post the keys', THREAD, [], person('U_DANA', 'member')))
-  const owners = sendNext('owner-1', 'me too', NOW + 60_000, { asker: OWNER })
+  const owners = await sendNext('owner-1', 'me too', NOW + 60_000, { asker: OWNER })
   expect(turnActsForOwner(owners.body)).toBe(false)
   expect(owners.admit()).toBe(true)
 
   // The owner's message fails in turn; the owner's next one carries it, and the member with it.
   refuseStart('owner-1', 'notSignedIn', NOW + 60_000)
-  const again = sendNext('owner-2', 'still there?', NOW + 180_000, { asker: OWNER })
+  const again = await sendNext('owner-2', 'still there?', NOW + 180_000, { asker: OWNER })
   expect(again.carried.cards.map((card) => card.messageId)).toEqual(['owner-1'])
   expect(turnActsForOwner(again.body)).toBe(false)
 })
@@ -409,27 +436,310 @@ it('a carrying message an earlier Orca saved, with no carried askers, reads as b
   expect(turnActsForOwner(owners)).toBe(true)
 })
 
-it('carries the oldest cards whose images fit one message; the rest wait for the next', () => {
+it('carries the oldest cards whose images fit one message; the rest wait for the next', async () => {
   const shots = (n: number, from: string) =>
-    Array.from({ length: n }, (_, i) => `/a/${from}-${i}.png`)
+    Array.from({ length: n }, (_, i) => stagedImage(`${from}-${i}.png`))
   failedStart('a', asked('d-a', 'a', THREAD, shots(8, 'a')), 'notSignedIn', NOW)
   failedStart('b', asked('d-b', 'b', THREAD, shots(8, 'b')), 'notSignedIn', NOW + 1)
   failedStart('c', asked('d-c', 'c', THREAD, shots(4, 'c')), 'notSignedIn', NOW + 2)
 
-  const next = sendNext('next', 'more', NOW + 60_000, { images: shots(4, 'n') })
+  const next = await sendNext('next', 'more', NOW + 60_000, { images: shots(4, 'n') })
   expect(next.carried.cards.map((card) => card.messageId)).toEqual(['a', 'b'])
   expect(next.body.blocks.filter((block) => block.type === 'image-ref')).toHaveLength(20)
   expect(next.admit()).toBe(true)
   expect(returnedIds()).toEqual(['c'])
 })
 
+it.each([20, 200])(
+  'carries healthy files after %i unavailable images and retries restored files',
+  async (unavailableCount) => {
+    const byteLength = 9 * 1024 * 1024
+    const oldIds = ['F0', 'F1', 'F2', 'F3']
+    const failed = asked('d-failed', 'four images')
+    const attachmentStore = new AgentSessionAttachmentStore(
+      join(dir, 'agent-session-attachments'),
+      {
+        hasSession: () => true
+      }
+    )
+    const fixture = Buffer.alloc(byteLength)
+    fixture.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    for (const fileId of oldIds) {
+      const { path } = await storeConnectorImage(
+        attachmentStore,
+        `${fileId}.png`,
+        fixture,
+        fileId,
+        new AbortController().signal
+      )
+      failed.blocks.push({ type: 'image-ref', path })
+    }
+    for (let index = 0; index < unavailableCount; index += 1) {
+      const id = `missing-${index}`
+      failedStart(
+        id,
+        asked(id, 'missing upload', THREAD, [join(dir, `${id}.png`)]),
+        'notSignedIn',
+        NOW + index
+      )
+    }
+    failedStart('failed', failed, 'notSignedIn', NOW + unavailableCount)
+    let probeNow = NOW + unavailableCount + 30
+    const images = new ConnectorImageProbes(undefined, () => probeNow)
+    const progress = new ReturnedImageProgress()
+    const carry = () =>
+      carriedMessages(
+        THREAD,
+        readJournalDomainReturnedCards(db, target, NOW + unavailableCount + 30),
+        ACCOUNT,
+        probeNow,
+        [],
+        connectorImageInspection(attachmentStore.rootDir, new AbortController().signal, {
+          probes: images
+        }),
+        { owner: progress, key: 'thread' }
+      )
+    expect((await carry()).cards).toEqual([])
+    // Interleaved conversations may evict all path misses. The returned queue can still advance.
+    images.clearRetries()
+    probeNow += RETURNED_IMAGE_RETRY_MS + 1
+    let carried = await carry()
+    for (let batch = 1; batch < unavailableCount / 20; batch += 1) {
+      probeNow += RETURNED_IMAGE_RETRY_MS + 1
+      carried = await carry()
+    }
+
+    const reads: string[] = []
+    const stage = connectorAskerImages({
+      reader:
+        () =>
+        async ({ fileId }) => {
+          reads.push(fileId)
+          return {
+            ok: true,
+            value: {
+              ok: true,
+              result: {
+                download: {
+                  name: `${fileId}.png`,
+                  size: byteLength,
+                  url: 'https://fixture.invalid/image',
+                  ticket: 'fixture'
+                }
+              }
+            }
+          }
+        },
+      store: async (name, image) => ({ path: stagedImage(name, image.byteLength) }),
+      fetch: async () => new Response(new Uint8Array(fixture))
+    })
+    const staged = await stage({
+      botId: 'seeded',
+      conversation: THREAD,
+      signal: new AbortController().signal,
+      asker: {
+        userId: 'U1',
+        role: 'owner',
+        place: { kind: 'public_channel', id: 'C1' },
+        text: '@bot',
+        context: [],
+        earlierOwn: {
+          messages: [
+            {
+              at: NOW,
+              text: 'These too',
+              messageRef: 'slack:T1:C1:1.2:1.2',
+              files: ['F0', 'F4', 'F5', 'F6', 'F7'].map((id) => ({
+                id,
+                name: 'shot.png',
+                type: 'image/png'
+              }))
+            }
+          ]
+        }
+      },
+      earlierBudget: async () => carried.earlierBudget
+    })
+    expect(carried.cards.map(({ messageId }) => messageId)).toEqual(['failed'])
+    expect(staged.map(({ fileId }) => fileId)).toEqual(['F4', 'F5', 'F6'])
+    expect(reads).toEqual(['F4', 'F5', 'F6', 'F7'])
+    const restored = openSync(join(dir, 'missing-0.png'), 'w')
+    ftruncateSync(restored, 1)
+    closeSync(restored)
+    probeNow += RETURNED_IMAGE_RETRY_MS
+    const retried = await carry()
+    expect(retried.cards.map(({ messageId }) => messageId)).toContain('missing-0')
+  }
+)
+
+it('updates screenshot positions even when a nested image precedes its label', async () => {
+  const store = new AgentSessionAttachmentStore(join(dir, 'agent-session-attachments'), {
+    hasSession: () => true
+  })
+  const signal = new AbortController().signal
+  const image = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+  const quoted = '[Orca: file FAFTER: quoted.png; attached to this turn as image 1]'
+  for (const [index, fileId] of ['FBEFORE', 'FAFTER'].entries()) {
+    const { path } = await storeConnectorImage(store, `${fileId}.png`, image, fileId, signal)
+    const text = connectorAskerPrompt(
+      'slack',
+      {
+        userId: 'U1',
+        role: 'owner',
+        place: { kind: 'public_channel', id: 'C1' },
+        text: quoted,
+        context: [],
+        earlierOwn: {
+          messages: [
+            {
+              at: NOW,
+              text: 'Compare this screenshot.',
+              messageRef: 'slack:T1:C1:1.2:1.2',
+              files: [{ id: fileId, name: `${fileId}.png`, type: 'image/png' }]
+            }
+          ]
+        }
+      },
+      undefined,
+      { attached: new Map([[fileId, 1]]) }
+    )
+    const card = asked(fileId, text, THREAD)
+    const attachment = { type: 'image-ref' as const, path }
+    if (index === 0) {
+      card.blocks.unshift(
+        { type: 'text', text: 'An earlier returned request sent this image.' },
+        attachment
+      )
+    } else {
+      card.blocks.push(attachment)
+    }
+    failedStart(fileId, card, 'notSignedIn', NOW + index)
+  }
+  const returned = readJournalDomainReturnedCards(db, target, NOW + 3)
+  const carried = await carriedMessages(
+    THREAD,
+    returned,
+    ACCOUNT,
+    NOW + 3,
+    [],
+    connectorImageInspection(store.rootDir, signal, { allPaths: false })
+  )
+  const blocks = reconcileCarriedImageLabels(carried.blocks, carried.imagePositions)
+  expect(carried.cards.map((card) => card.messageId)).toEqual(['FBEFORE', 'FAFTER'])
+  expect(blocks).toMatchObject([
+    { type: 'text', text: 'An earlier returned request sent this image.' },
+    { type: 'image-ref' },
+    {
+      type: 'text',
+      text: expect.stringContaining('FBEFORE.png, image/png; attached to this turn as image 1')
+    },
+    {
+      type: 'text',
+      text: expect.stringContaining('FAFTER.png, image/png; attached to this turn as image 2')
+    },
+    { type: 'image-ref' }
+  ])
+  expect(blocks[3]).toMatchObject({ type: 'text', text: expect.stringContaining(quoted) })
+})
+
+it('leaves a returned request retryable if its images would exceed the Pi turn budget', async () => {
+  const bytes = 3 * 1024 * 1024
+  const path = stagedImage('earlier.png', bytes)
+  const next = { path: stagedImage('current.png', 1024 * 1024), fileId: 'FNEXT', bytes: 1024 ** 2 }
+  const prompt = connectorAskerPrompt(
+    'slack',
+    {
+      userId: 'U1',
+      role: 'owner',
+      place: { kind: 'public_channel', id: 'C1' },
+      text: '@bot',
+      context: [],
+      earlierOwn: {
+        messages: [
+          {
+            at: NOW,
+            text: 'Two screenshots',
+            messageRef: 'slack:T1:C1:1.2:1.2',
+            files: ['FONE', 'FTWO'].map((id) => ({ id, name: 'earlier.png', type: 'image/png' }))
+          }
+        ]
+      }
+    },
+    undefined,
+    {
+      attached: new Map([
+        ['FONE', 1],
+        ['FTWO', 2]
+      ])
+    }
+  )
+  failedStart('failed', asked('failed', prompt, THREAD, [path, path]), 'notSignedIn')
+  const queue = readJournalDomainReturnedCards(db, target, NOW + 3)
+  const inspect = () => connectorImageInspection(undefined, new AbortController().signal)
+  const pi = { ...THREAD, agent: 'pi' as const }
+  const withDirect = await carriedMessages(pi, queue, ACCOUNT, NOW + 3, [next], inspect())
+  expect(withDirect.cards).toEqual([])
+  expect(returnedIds()).toEqual(['failed'])
+  const alone = await carriedMessages(pi, queue, ACCOUNT, NOW + 3, [], inspect())
+  expect(alone.cards.map(({ messageId }) => messageId)).toEqual(['failed'])
+})
+
+it('carries a returned Pi request with a larger direct image when the follow-up is text', async () => {
+  const image = stagedImage('large.png', 5 * 1024 * 1024)
+  failedStart('failed', asked('failed', 'Attached directly', THREAD, [image]), 'notSignedIn')
+  const queue = readJournalDomainReturnedCards(db, target, NOW + 3)
+  const carried = await carriedMessages(
+    { ...THREAD, agent: 'pi' },
+    queue,
+    ACCOUNT,
+    NOW + 3,
+    [],
+    connectorImageInspection(undefined, new AbortController().signal)
+  )
+  expect(carried.cards.map(({ messageId }) => messageId)).toEqual(['failed'])
+  expect(carried.blocks).toContainEqual({ type: 'image-ref', path: image })
+})
+
+it('rechecks a previously missing image when carry progress clears during inspection', async () => {
+  const missing = join(dir, 'restored.png')
+  const healthy = stagedImage('healthy.png')
+  failedStart('missing', asked('missing', 'Earlier request', THREAD, [missing]), 'notSignedIn', NOW)
+  failedStart(
+    'healthy',
+    asked('healthy', 'Next request', THREAD, [healthy]),
+    'notSignedIn',
+    NOW + 1
+  )
+  const progress = new ReturnedImageProgress()
+  const probes = new ConnectorImageProbes()
+  const carry = () =>
+    carriedMessages(
+      THREAD,
+      readJournalDomainReturnedCards(db, target, NOW + 3),
+      ACCOUNT,
+      Date.now(),
+      [],
+      connectorImageInspection(undefined, new AbortController().signal, { probes }),
+      { owner: progress, key: 'thread' }
+    )
+  expect((await carry()).cards.map(({ messageId }) => messageId)).toEqual(['healthy'])
+  const inFlight = carry()
+  progress.clear()
+  probes.clearRetries()
+  await inFlight
+  stagedImage('restored.png')
+  expect((await carry()).cards.map(({ messageId }) => messageId)).toEqual(['missing', 'healthy'])
+})
+
 /** Who each message of a chain of 20 failed starts carries, the senders taking turns. */
-function failedChainStamps(senders: ConnectorMessageAsker[]): (string | undefined)[][] {
+async function failedChainStamps(
+  senders: ConnectorMessageAsker[]
+): Promise<(string | undefined)[][]> {
   failedStart('m0', asked('d0', 'm0', THREAD, [], senders[0]), 'notSignedIn', NOW)
   const stamps: (string | undefined)[][] = []
   for (let i = 1; i <= 20; i++) {
     const at = NOW + i * 60_000
-    const next = sendNext(`m${i}`, `m${i}`, at, { asker: senders[i % senders.length] })
+    const next = await sendNext(`m${i}`, `m${i}`, at, { asker: senders[i % senders.length] })
     stamps.push((next.body.carriedAskers ?? []).map((asker) => asker?.userId))
     expect(next.admit()).toBe(true)
     refuseStart(`m${i}`, 'notSignedIn', at)
@@ -437,23 +747,25 @@ function failedChainStamps(senders: ConnectorMessageAsker[]): (string | undefine
   return stamps
 }
 
-it('a chain of failed starts from one sender keeps one stamp', () => {
-  expect(failedChainStamps([OWNER]).every((stamps) => stamps.join() === 'U_OWNER')).toBe(true)
+it('a chain of failed starts from one sender keeps one stamp', async () => {
+  expect((await failedChainStamps([OWNER])).every((stamps) => stamps.join() === 'U_OWNER')).toBe(
+    true
+  )
 })
 
-it('a chain of failed starts from two senders keeps one stamp each, newest first', () => {
-  const stamps = failedChainStamps([person('U_DANA', 'member'), OWNER])
+it('a chain of failed starts from two senders keeps one stamp each, newest first', async () => {
+  const stamps = await failedChainStamps([person('U_DANA', 'member'), OWNER])
   expect(stamps.slice(0, 3)).toEqual([['U_DANA'], ['U_OWNER', 'U_DANA'], ['U_DANA', 'U_OWNER']])
   expect(stamps.every((each) => each.length <= 2)).toBe(true)
 })
 
-it('a card an earlier Orca saved with repeated stamps carries each sender once', () => {
+it('a card an earlier Orca saved with repeated stamps carries each sender once', async () => {
   const dana = person('U_DANA', 'member')
   failedStart('old', {
     ...asked('d-old', 'old', THREAD, [], OWNER),
     carriedAskers: [dana, dana, OWNER, null, dana, null]
   })
-  const next = sendNext('next', 'again', NOW + 60_000, { asker: OWNER })
+  const next = await sendNext('next', 'again', NOW + 60_000, { asker: OWNER })
   expect(next.body.carriedAskers).toEqual([OWNER, dana, null])
   expect(turnActsForOwner(next.body)).toBe(false)
 })

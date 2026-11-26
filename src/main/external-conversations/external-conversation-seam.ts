@@ -4,7 +4,6 @@ import type {
 } from '../../shared/connectors/connector-cloud-contract'
 import type { AdmittedMessage } from '../native-chat/agent-session-wire/host/structured-agent-session-host-types'
 import { nameLinkedPlace } from './external-conversation-place'
-import { isBotAgent } from '../../shared/bot-types'
 import {
   type ConversationChatHost,
   chatTurnFacts,
@@ -12,21 +11,28 @@ import {
 } from './external-conversation-chat'
 import { answerConversation } from './external-conversation-answer'
 import { chatPromptFacts } from './external-conversation-chat-prompts'
-import { botChatFor } from './external-conversation-bots'
+import { startConnectorConversation } from './external-conversation-start'
+import {
+  chatForConversationSend,
+  recoverConnectorSendLink,
+  sendConnectorChat
+} from './external-conversation-delivery-target'
 import {
   ChatDeliveries,
-  linkedChat,
+  type ConnectorChatDelivery,
   type LinkableChat
 } from './external-conversation-chat-delivery'
 import { cancelConversation } from './external-conversation-cancel'
-import { resumeRefusal } from './external-conversation-resume'
-import { ConversationChain, type QueuedWork } from './external-conversation-chain'
+import { ConversationChain, refusalOf, type QueuedWork } from './external-conversation-chain'
 import { GoneChats } from './external-conversation-gone-chats'
 import { ConversationEvents, type ConversationWatchListener } from './external-conversation-events'
 import { conversationOwnsTurn } from './external-conversation-chat-turns'
 import { conversationWorkerActivities } from './external-conversation-workers'
 import { chatPromptReads } from './external-conversation-prompt-standing'
-import type { DeliveryReceipts } from './external-conversation-delivery-receipts'
+import type {
+  DeliveryPreparation,
+  DeliveryReceipts
+} from './external-conversation-delivery-receipts'
 import {
   HOST_CLOCK,
   type ExternalConversationHost,
@@ -38,7 +44,7 @@ import {
   findConversationChat,
   type LinkedConversation
 } from './external-conversation-links'
-import { writeChatLink } from './external-conversation-link-writes'
+import { openChatLink } from './external-conversation-link-writes'
 import {
   conversationId,
   type ConnectorMessage,
@@ -49,7 +55,7 @@ import {
   type Delivery
 } from './external-conversation-types'
 
-import { recordAdmittedTurn, recordLastTurn } from './external-conversation-last-turn'
+import { recordAdmittedTurn } from './external-conversation-last-turn'
 export type { ExternalConversationSeamDeps } from './external-conversation-host'
 
 /** One enabled period: disabling settles queued work and aborts running work at its next boundary. */
@@ -190,53 +196,77 @@ export class ExternalConversationSeam {
   }
 
   /** A bot's conversation is a native chat, which starts whether or not status hooks are on. */
-  async start(
+  start(
     host: ExternalConversationHost,
     key: ConversationKey,
     deliveryId: string,
-    input: ConnectorStartInput
+    input: ConnectorStartInput,
+    preparation?: DeliveryPreparation
   ): Promise<ConversationStart> {
-    const { agent, target, prompt, ...message } = input
-    const initial = await this.deps.receipts.run(
+    return startConnectorConversation(
+      {
+        ...this.deps,
+        enqueue: (signalWork) => this.chain.enqueue(conversationId(key), signalWork),
+        deliver: (chat, delivery) => this.deliverToChat(host, key, chat, delivery, preparation),
+        link: (chat, text, asker) => this.linkChat(key, chat, text, asker)
+      },
+      host,
       key,
       deliveryId,
-      'connector.start',
-      [agent, target, prompt],
-      () =>
-        this.chain.enqueue(conversationId(key), async (signal) => {
-          if (!isBotAgent(agent)) {
-            return refused('unsupported_agent')
-          }
-          const chat = await botChatFor(this.deps.store, host.bots, key, target)
-          return 'outcome' in chat
-            ? chat
-            : this.deliverToChat(host, key, chat, { ...message, text: prompt, deliveryId }, signal)
-        })
+      input,
+      preparation
     )
-    return { conversation: key, initial }
   }
 
   send(
     host: ExternalConversationHost,
     key: ConversationKey,
     deliveryId: string,
-    message: ConnectorMessage
+    message: ConnectorMessage,
+    preparation?: DeliveryPreparation
   ): Promise<Delivery> {
     const id = conversationId(key)
-    return this.deps.receipts.run(key, deliveryId, 'connector.send', [message.text], () => {
-      const queued = findLink(this.deps.store, key)
-      if (queued) {
-        this.linked.set(id, { key, worktreeId: queued.workspace.worktreeId })
-      }
-      return this.chain.enqueue(id, async (signal) => {
-        const linked = findLink(this.deps.store, key)
-        if (!linked) {
-          throw new Error('external_conversation_not_found')
+    return this.deps.receipts.run(
+      key,
+      deliveryId,
+      'connector.send',
+      [message.text],
+      () => {
+        const queued = findLink(this.deps.store, key)
+        if (queued) {
+          this.linked.set(id, { key, worktreeId: queued.workspace.worktreeId })
         }
-        const delivered = await this.deliver(host, key, linked, { ...message, deliveryId }, signal)
-        return this.goneChats.settle(key, delivered)
-      })
-    })
+        return this.chain.enqueue(id, async (signal) => {
+          const deliverySignal = preparation?.signal(signal) ?? signal
+          const stopped = preparation?.stopped(deliverySignal)
+          if (stopped) {
+            return stopped
+          }
+          const linked =
+            findLink(this.deps.store, key) ??
+            (await recoverConnectorSendLink(this.deps, key, deliverySignal))
+          if (!linked) {
+            if (deliverySignal.aborted) {
+              return preparation?.stopped(deliverySignal) ?? refused(refusalOf(deliverySignal))
+            }
+            throw new Error('external_conversation_not_found')
+          }
+          const chat = await chatForConversationSend(this.deps.store, host, key, linked, message)
+          const delivered =
+            'outcome' in chat
+              ? chat
+              : await this.deliverToChat(
+                  host,
+                  key,
+                  chat,
+                  { ...message, deliveryId, signal },
+                  preparation
+                )
+          return this.goneChats.settle(key, delivered)
+        })
+      },
+      preparation
+    )
   }
 
   /** Its delivery receipts: what an earlier process's received delivery came to (never run again),
@@ -269,18 +299,19 @@ export class ExternalConversationSeam {
   }
 
   /** Links a conversation to an existing native chat, which runs only on this host. */
-  linkChat(key: ConversationKey, chat: LinkableChat, text?: string, asker?: ConnectorAsker): void {
-    const fresh = findLink(this.deps.store, key) === null
-    const written = writeChatLink(this.deps.store, key, chat, text)
-    const linked = (asker && this.deps.slackMirror?.()?.opened(written, asker, fresh)) || written
+  linkChat(
+    key: ConversationKey,
+    chat: LinkableChat,
+    opening?: string | { title: string },
+    asker?: Pick<ConnectorAsker, 'app' | 'name' | 'place' | 'role'>
+  ): void {
+    const linked = openChatLink(this.deps, key, chat, opening, asker)
+    const kept = linked ?? findLink(this.deps.store, key)
     if (linked) {
       this.events?.linked(linked, this.deps.actsForOf?.(chat.sessionId))
       this.deps.onLinked?.()
-    } else {
-      const kept = findLink(this.deps.store, key)
-      if (kept) {
-        this.events?.delivered(kept.link)
-      }
+    } else if (kept) {
+      this.events?.delivered(kept.link)
     }
     if (asker && chat.bot) {
       void nameLinkedPlace(this.deps, key, chat.bot.botId, asker.place, this.abort.signal)
@@ -298,53 +329,17 @@ export class ExternalConversationSeam {
     this.deps.onLinked?.()
   }
 
-  private async deliverToChat(
+  private deliverToChat(
     host: ExternalConversationHost,
     key: ConversationKey,
     chat: LinkableChat,
-    message: ConnectorMessage & { deliveryId: string },
-    signal: AbortSignal
+    delivery: ConnectorChatDelivery,
+    preparation: DeliveryPreparation | undefined
   ): Promise<Delivery> {
     this.linked.set(conversationId(key), { key, worktreeId: chat.worktreeId })
-    // A bot's request may list images; they go with its words, so the agent sees them at once.
-    const images =
-      chat.bot && message.asker && this.deps.askerImages
-        ? await this.deps
-            .askerImages({ botId: chat.bot.botId, conversation: key, asker: message.asker, signal })
-            .catch(() => [])
-        : []
-    const delivered = await this.chatDeliveries.deliver(host.chat, key, chat, {
-      ...message,
-      signal,
-      ...(images.length > 0 ? { images } : {})
+    return sendConnectorChat(this.deps, this.chatDeliveries, host, key, chat, {
+      ...delivery,
+      ...(preparation ? { preparation } : {})
     })
-    // Its outbox row may have committed even when the send was then rejected: watch from now on.
-    if (message.reply) {
-      this.deps.replyAdmitted?.(chat.sessionId)
-    }
-    // A new conversation's link is written only once its chat took the message, after admission.
-    if (delivered.outcome !== 'refused') {
-      recordLastTurn(this.deps, key, 'conversation', {
-        worktreeId: chat.worktreeId,
-        sshHostId: null
-      })
-    }
-    return delivered
-  }
-
-  private async deliver(
-    host: ExternalConversationHost,
-    key: ConversationKey,
-    { workspace, link }: LinkedConversation,
-    message: ConnectorMessage & { deliveryId: string },
-    signal: AbortSignal
-  ): Promise<Delivery> {
-    const chat = link.bot
-      ? await botChatFor(this.deps.store, host.bots, key, link.bot)
-      : linkedChat(workspace.worktreeId, link)
-    return 'outcome' in chat
-      ? chat
-      : ((await resumeRefusal(message, host.chat, chat.sessionId, { workspace, link })) ??
-          this.deliverToChat(host, key, chat, message, signal))
   }
 }

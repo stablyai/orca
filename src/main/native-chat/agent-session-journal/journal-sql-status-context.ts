@@ -19,6 +19,7 @@ import { journalContextEpoch } from './context-epochs/journal-context-epoch'
 import type { JournalSqlScope } from './journal-sql-scope'
 import { AGENT_SESSION_ITEM_WIRE_VERSION } from '../agent-session-wire/publication/history/agent-session-item-presentation-contract'
 import type { JournalStatusItem, JournalStatusItemSelection } from './journal-status-items'
+import { readJournalSqlStatusPrompt } from './journal-sql-status-prompt'
 import { sqlJournalStatusItems, sqlJournalStatusItem } from './journal-sql-status-items'
 import { sqlFailedStatusItems, sqlHasStatusRequestItem } from './journal-sql-status-request-items'
 import { sqlStatusRelatedInputIds } from './journal-sql-status-inputs'
@@ -207,6 +208,8 @@ export class JournalSqlStatusContext {
 
   item = (id: string) => this.current(id)?.item
 
+  latestPrompt = () => readJournalSqlStatusPrompt(this.scope, this.item)
+
   /** Semantic display uses the writer's saved Stop rewrite without shortening ordinary items. */
   displayed = (id: string): AgentJournalRenderItem | null => {
     const row = this.current(id)
@@ -247,7 +250,7 @@ export class JournalSqlStatusContext {
     if (prepared) {
       return prepared
     }
-    if (!['clear', 'boundary', 'prompt', 'assistant-exists'].includes(selection.kind)) {
+    if (!['clear', 'boundary', 'assistant-exists'].includes(selection.kind)) {
       return sqlJournalStatusItems(this.scope, this.item, selection)
     }
     const key = JSON.stringify(selection)

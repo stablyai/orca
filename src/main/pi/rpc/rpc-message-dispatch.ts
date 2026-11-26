@@ -35,8 +35,9 @@ export async function dispatchPiRpcMessage(
 ): Promise<AgentSessionDispatchOutcome> {
   let prompt
   try {
-    prompt = await preparePiRpcPrompt(input.body, session.shrinksImages)
+    prompt = await preparePiRpcPrompt(input.body, session.shrinksImages, input.signal)
   } catch (error) {
+    input.signal?.throwIfAborted()
     logger.warn('Pi prompt could not be prepared', {
       scope: 'pi-prompt',
       sessionId: input.sessionId,
@@ -110,9 +111,11 @@ async function submitPiRpcPrompt(
     { ...prompt },
     async () => {
       await input.beforeDispatch?.()
+      input.signal?.throwIfAborted()
       input.onExecutionSnapshot?.()
       ranOptions = Object.fromEntries(session.optionProof.current)
-    }
+    },
+    input.signal
   )
   return outcome.state === 'accepted' || outcome.state === 'admitted'
     ? { ...outcome, ranOptions }

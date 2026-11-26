@@ -2,8 +2,7 @@
 // one turn.
 import {
   CONNECTOR_CLIENT_LIMITS,
-  ConnectorDelivery,
-  type ConnectorDeliveryResult
+  ConnectorDelivery
 } from '../../shared/connectors/connector-cloud-contract'
 import type { ExternalConversationHost } from '../external-conversations/external-conversation-host'
 import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
@@ -99,11 +98,20 @@ export function dispatchBatch(
   if (!first) {
     return late.map((delivery) => refuse(delivery.deliveryId, { outcome: 'expired' }))
   }
-  const carriedBy = (done: Promise<ConnectorDeliveryResult>) => (delivery: SendDelivery) =>
-    seam.receipts.carried(delivery.conversation, delivery.deliveryId, delivery.text, done)
+  const carriedBy = (
+    turn: Pick<DispatchedDelivery, 'done' | 'preparation'>,
+    delivery: SendDelivery
+  ) =>
+    seam.receipts.carried(
+      delivery.conversation,
+      delivery.deliveryId,
+      delivery.text,
+      turn.done,
+      turn.preparation
+    )
   const [next, ...after] = later
   // `carrier`: the turn of the first send so far that went on, carrying the rest; null for none.
-  type Turn = { done: Promise<ConnectorDeliveryResult> } | null
+  type Turn = Pick<DispatchedDelivery, 'done' | 'preparation'> | null
   function heldBatch(carrier: Promise<Turn>): DispatchedDelivery[] {
     return later.map((delivery, index) => {
       const before = carrier
@@ -119,13 +127,13 @@ export function dispatchBatch(
       )
       const ownCarries = own?.carriedLater ?? Promise.resolve(false)
       carrier = Promise.all([before, ownCarries]).then(
-        ([turn, carries]): Turn => turn ?? (carries && own ? { done: own.done } : null)
+        ([turn, carries]): Turn => turn ?? (carries ? own : null)
       )
       return {
         deliveryId: delivery.deliveryId,
         received: false,
         done: before.then((turn) =>
-          turn ? carriedBy(turn.done)(delivery) : (own?.done ?? { outcome: 'unsupported' as const })
+          turn ? carriedBy(turn, delivery) : (own?.done ?? { outcome: 'unsupported' as const })
         )
       }
     })
@@ -135,13 +143,14 @@ export function dispatchBatch(
   // follow-ups stay one turn and nothing later in the poll overtakes them.
   const heldLater = first.carriedLater
   const carried: DispatchedDelivery[] = heldLater
-    ? heldBatch(heldLater.then((carries) => (carries ? { done: first.done } : null)))
+    ? heldBatch(heldLater.then((carries) => (carries ? first : null)))
     : first.received
       ? later.map((delivery): DispatchedDelivery => ({
           deliveryId: delivery.deliveryId,
           received: true,
           ...(first.viaOutbox ? { viaOutbox: true as const } : {}),
-          done: carriedBy(first.done)(delivery)
+          ...(first.preparation ? { preparation: first.preparation } : {}),
+          done: carriedBy(first, delivery)
         }))
       : // Refused before the seam (expired, unsupported): the later ones go on as their own batch.
         next

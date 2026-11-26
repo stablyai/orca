@@ -265,6 +265,7 @@ export async function startBotSession(
   bot: Bot,
   input: {
     sessionId?: string
+    signal?: AbortSignal
     message?: { text: string; clientMessageId: string; run?: BotRunFields }
     background?: true
     /** Whom the conversation acts for, recorded before it starts; unrecorded, its first message says. */
@@ -323,6 +324,7 @@ export async function startBotSession(
           }
         }
       : {}),
+    signal: input.signal,
     beforeFirstMessage: input.beforeFirstMessage,
     beforeDelivery: input.beforeDelivery,
     atRest: true,

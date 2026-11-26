@@ -1,7 +1,7 @@
 import type { AgentJournalRenderItem } from '../journal/agent-session-journal-types'
 import type { NativeChatBlock, NativeChatMessage } from '../../native-chat/native-chat-types'
 import { agentJournalToolCallLifecycle } from '../journal/agent-journal-tool-call-lifecycle'
-import { connectorMessageShown } from '../../connector-asker-prompt'
+import { connectorMessageShown } from '../../connector-asker-message-display'
 import { structuredAgentSessionStatusBlock } from './structured-agent-session-status-block'
 import {
   isStructuredAgentSessionToolAction,
@@ -22,14 +22,18 @@ function toolResult(
   }
 }
 
-export function itemBlocks(item: AgentJournalRenderItem): {
+export function itemBlocks(
+  item: AgentJournalRenderItem,
+  drawMarkdown = true,
+  connectorTextLimit?: number
+): {
   role: NativeChatMessage['role']
   blocks: NativeChatBlock[]
   drawnMarkdown?: string
 } | null {
   const body = item.body
   if (body.kind === 'message') {
-    return { role: body.role, ...connectorMessageShown(body) }
+    return { role: body.role, ...connectorMessageShown(body, drawMarkdown, connectorTextLimit) }
   }
   if (isStructuredAgentSessionToolAction(body)) {
     const call = structuredAgentSessionToolCallBlock(body, item.itemId)

@@ -50,36 +50,30 @@ export function* sqlJournalStatusItems(
         params.push(selection.before)
       }
       break
-    case 'prompt':
     case 'users':
-      predicates.push(
-        selection.kind === 'users' && selection.fromPerson ? JOURNAL_PERSON_PROMPT_ROWS : 'prompt=1'
-      )
-      if (selection.kind === 'users') {
-        if (selection.unknown) {
-          predicates.push("turn_scope_kind='unknown'")
-        }
-        if (selection.after) {
-          predicates.push('(sequence,sequence_index,ordinal)>(?,?,?)')
-          params.push(
-            selection.after.sequence,
-            selection.after.sequenceIndex,
-            selection.after.ordinal
-          )
-          ascending = true
-          // The walk usually stops at the first row, so its pages start small.
-          limit = 1
-        }
-        if (selection.before) {
-          predicates.push('(sequence,sequence_index,ordinal)<(?,?,?)')
-          params.push(
-            selection.before.sequence,
-            selection.before.sequenceIndex,
-            selection.before.ordinal
-          )
-        }
+      predicates.push(selection.fromPerson ? JOURNAL_PERSON_PROMPT_ROWS : 'prompt=1')
+      if (selection.unknown) {
+        predicates.push("turn_scope_kind='unknown'")
       }
-      single = selection.kind === 'prompt'
+      if (selection.after) {
+        predicates.push('(sequence,sequence_index,ordinal)>(?,?,?)')
+        params.push(
+          selection.after.sequence,
+          selection.after.sequenceIndex,
+          selection.after.ordinal
+        )
+        ascending = true
+        // The walk usually stops at the first row, so its pages start small.
+        limit = 1
+      }
+      if (selection.before) {
+        predicates.push('(sequence,sequence_index,ordinal)<(?,?,?)')
+        params.push(
+          selection.before.sequence,
+          selection.before.sequenceIndex,
+          selection.before.ordinal
+        )
+      }
       break
     case 'assistant-prose':
       predicates.push(

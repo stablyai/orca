@@ -1,4 +1,5 @@
 // This host's link to the Orca Cloud connector, as whichever Orca account it is signed in to.
+import { connectorBotListFacts } from './connector-cloud-bot-facts'
 import { connectorAccountName } from './connector-token-mint'
 import type { z } from 'zod'
 import type { ConnectorCloudStatus } from '../../shared/bots/connector-cloud-status'
@@ -8,7 +9,7 @@ import {
   type ConnectorResult
 } from './connector-cloud-request'
 import { ConnectorPollClient } from './connector-poll-client'
-import type { ConnectorMachine } from './connector-machine'
+import type { ConnectorMachine, ConnectorTransport } from './connector-machine'
 import {
   ConnectorAccountTransport,
   type ConnectorCallOptions,
@@ -148,35 +149,13 @@ export class ConnectorCloud {
     return connectorStopNeedsSignIn(this.clientStop)
   }
 
-  /** What `bots.list` says of this connection. */
-  botListFacts(): {
-    threadReplies: boolean
-    githubEvents2: boolean
-    githubWorkflows: boolean
-    githubCiFinished: boolean
-    connectorStatus: ConnectorCloudStatus
-    connectorMessage?: string
-    connectorNeedsSignIn?: true
-  } {
-    const connectorStatus = this.status()
-    const features = this.cloudFeatures()
-    const needsSignIn = this.needsSignIn() || connectorStatus === 'needs-sign-in'
-    return {
-      threadReplies: this.takesThreadReplies(),
-      // Whether it sends GitHub's newer events and label=, so trigger-options offers only those it does.
-      githubEvents2: features?.has('triggers.github2' satisfies ConnectorCloudFeature) === true,
-      // Whether it sends github.workflow_finished, so trigger-options offers it only where it does.
-      githubWorkflows: features?.has('triggers.workflows' satisfies ConnectorCloudFeature) === true,
-      // Whether it sends github.ci_finished, so trigger-options and watch-pr use it only where it does.
-      githubCiFinished:
-        features?.has('triggers.ci_finished' satisfies ConnectorCloudFeature) === true,
-      connectorStatus,
-      ...((connectorStatus === 'refused' || connectorStatus === 'needs-sign-in') &&
+  botListFacts() {
+    return connectorBotListFacts(
+      this.cloudFeatures(),
+      this.status(),
+      this.needsSignIn(),
       this.reach.refusal
-        ? { connectorMessage: this.reach.refusal }
-        : {}),
-      ...(needsSignIn ? { connectorNeedsSignIn: true } : {})
-    }
+    )
   }
 
   /**
@@ -235,6 +214,23 @@ export class ConnectorCloud {
   ): Promise<ConnectorResult<z.infer<TSchema>>> {
     const account = this.activeAccount()
     return account ? await this.transportFor(account).call(path, body, schema, options) : SIGNED_OUT
+  }
+
+  /** A file batch belongs to the poll client that gave it work. Fence retries on account changes. */
+  fileActionTransport(): ConnectorTransport | null {
+    const client = this.client
+    const account = this.knownAccount()
+    if (!client?.cloudFeatures?.has('files.direct') || !account) {
+      return null
+    }
+    const transport = this.transportFor(account)
+    const current = () => this.client === client && this.knownAccount() === account
+    return {
+      call: async (...args) => {
+        const result = current() ? await transport.call(...args) : SIGNED_OUT
+        return current() ? result : SIGNED_OUT
+      }
+    }
   }
 
   private activeAccount(): string | null {

@@ -116,6 +116,9 @@ CREATE TABLE IF NOT EXISTS mutation_receipts (
   PRIMARY KEY (caller_fingerprint, request_id)
 );
 
+CREATE INDEX IF NOT EXISTS idx_mutation_receipts_pending_caller
+  ON mutation_receipts(caller_fingerprint) WHERE state = 'pending';
+
 CREATE TABLE IF NOT EXISTS mutation_caller_identities (
   transport           TEXT PRIMARY KEY,
   caller_fingerprint  TEXT NOT NULL UNIQUE

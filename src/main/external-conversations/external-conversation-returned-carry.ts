@@ -8,14 +8,26 @@ import type { NativeChatBlock } from '../../shared/native-chat/native-chat-types
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalCarriedCard } from '../../shared/agent-session/journal/agent-journal-bot-message-fields'
 import type { ConnectorMessageAsker } from '../../shared/connector-message-asker'
-import { AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT } from '../../shared/agent-session/agent-session-attachments'
+import {
+  AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT,
+  AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES
+} from '../../shared/agent-session/agent-session-attachments'
+import {
+  hasConnectorImagePositions,
+  rewriteConnectorImagePositions
+} from '../../shared/connector-asker-prompt-display'
 import { connectorSentLine } from '../../shared/connector-asker-prompt'
+import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-reason'
 import {
   readAgentSessionFailureFact,
   type AgentSessionFailureKind
 } from '../../shared/agent-session/failures/agent-session-failure'
 import type { JournalReturnedCard } from '../native-chat/agent-session-journal/journal-domain-queue-reads'
 import type { ConversationChat } from './external-conversation-chat'
+import type { EarlierImageBudget, ConnectorImage } from './connector-asker-images'
+import type { ReturnedImageProgress } from './external-conversation-returned-image-progress'
+import type { ConnectorImageInspection } from './connector-asker-stored-image'
+import { budgetForEarlierImages } from './connector-asker-image-budget'
 
 // What a later send can get past: the agent itself couldn't take the message. A refusal of the
 // message's own content (too large, too many images, empty) would fail again, so it stays a card.
@@ -40,6 +52,8 @@ export type CarriedMessages = {
   askers: (ConnectorMessageAsker | undefined)[]
   /** Everyone who asked a carried message, nested carries included; null for one Orca can't name. */
   askedBy: (ConnectorMessageAsker | null)[]
+  earlierBudget: EarlierImageBudget
+  imagePositions: ReadonlyMap<string, number>
 }
 
 export const NOTHING_CARRIED: CarriedMessages = {
@@ -47,7 +61,13 @@ export const NOTHING_CARRIED: CarriedMessages = {
   cards: [],
   deliveryIds: [],
   askers: [],
-  askedBy: []
+  askedBy: [],
+  imagePositions: new Map(),
+  earlierBudget: {
+    count: AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT,
+    bytes: AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES,
+    fileIds: new Set()
+  }
 }
 
 /** Whether a returned card is one this conversation's next message carries. */
@@ -72,13 +92,16 @@ export function carriesReturnedCard(
 
 /** The carried cards as the turn takes them, ahead of its own message; `account` is the outbox
  *  account the turn answers through, if any, and `ownImages` the images the message brings. */
-export function carriedMessages(
-  link: Pick<ExternalConversationLink, 'source' | 'externalId'>,
+export async function carriedMessages(
+  link: Pick<ExternalConversationLink, 'source' | 'externalId'> &
+    Partial<Pick<ExternalConversationLink, 'agent'>>,
   returned: readonly JournalReturnedCard[],
   account: string | undefined,
   now: number,
-  ownImages = 0
-): CarriedMessages {
+  direct: readonly ConnectorImage[] = [],
+  inspection?: ConnectorImageInspection,
+  progress?: { owner: ReturnedImageProgress; key: string }
+): Promise<CarriedMessages> {
   // Oldest first: a failed start's card goes ahead of the queue, so queue order is newest first. A
   // card whose send time is gone came from an earlier Orca, so it is the older.
   const sentAt = (each: JournalReturnedCard) => each.submittedAt ?? Number.NEGATIVE_INFINITY
@@ -86,35 +109,113 @@ export function carriedMessages(
     .filter((each) => carriesReturnedCard(link, each))
     .toReversed()
     .sort((a, b) => (sentAt(a) === sentAt(b) ? 0 : sentAt(a) < sentAt(b) ? -1 : 1))
-  // Oldest first while the images fit one message; the rest stay returned for the next message.
-  let images = ownImages
-  const over = eligible.findIndex(({ card }) => {
-    images += card.body.blocks.filter((block) => block.type === 'image-ref').length
-    return images > AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT
-  })
-  const carried = over === -1 ? eligible : eligible.slice(0, over)
-  if (carried.length === 0) {
-    return NOTHING_CARRIED
+  let count = AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT - direct.length
+  let bytes =
+    AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES -
+    direct.reduce((total, image) => total + image.bytes, 0)
+  let fileIds = new Set(direct.map((image) => image.fileId))
+  const piBudget =
+    link.agent === 'pi' ? budgetForEarlierImages('pi', { count, bytes, fileIds }, direct) : null
+  const reservedBytes = piBudget ? bytes - piBudget.bytes : 0
+  let imageCount = 0
+  let carriesPositionedImages = false
+  let largestImage = direct.reduce((largest, image) => Math.max(largest, image.bytes), 0)
+  const imagePositions = new Map<string, number>()
+  const start = progress?.owner.read(progress.key, eligible, now) ?? 0
+  let missingPrefix = start
+  let missingUntil = Infinity
+  let resume = false
+  const carried: JournalReturnedCard[] = []
+  const blocks: NativeChatBlock[] = []
+  // Keep the oldest whole requests whose images fit; each remaining card can still be retried.
+  cards: for (let index = start; index < eligible.length; index += 1) {
+    const each = eligible[index]!
+    const cardFileIds = new Set(fileIds)
+    const cardPositions = new Map<string, number>()
+    const ownBlocks: NativeChatBlock[] = []
+    let cardBytes = 0
+    let cardImages = 0
+    let largestCardImage = 0
+    const positioned =
+      inspection &&
+      each.card.body.blocks.some(
+        (block) => block.type === 'text' && hasConnectorImagePositions(block.text)
+      )
+    for (const block of each.card.body.blocks) {
+      if (block.type !== 'image-ref') {
+        ownBlocks.push(block)
+        continue
+      }
+      const path = block.url ? undefined : block.path
+      const probe =
+        path && inspection && (inspection.allPaths || positioned)
+          ? await inspection.image(path)
+          : undefined
+      if (probe === 'limit') {
+        // Reach uninspected cards before rechecking this prefix, even between sparse deliveries.
+        resume = carried.length === 0
+        break cards
+      }
+      // An older, unreadable card can still be edited. It needn't hold up the later ones.
+      const retry = probe && 'retryAt' in probe ? probe : undefined
+      const stored = retry ? retry.readableImage : probe && 'bytes' in probe ? probe : undefined
+      if (retry && (positioned || !stored)) {
+        if (index === missingPrefix && !inspection?.signal.aborted) {
+          missingPrefix += 1
+          missingUntil = Math.min(missingUntil, retry.retryAt)
+        }
+        continue cards
+      }
+      const fileId = stored?.fileId
+      if (fileId && cardFileIds.has(fileId)) {
+        continue
+      }
+      if (++cardImages > count) {
+        break cards
+      }
+      const imageBytes = stored?.bytes ?? 0
+      cardBytes += imageBytes
+      largestCardImage = Math.max(largestCardImage, imageBytes)
+      if (cardBytes > bytes) {
+        break cards
+      }
+      if (fileId) {
+        cardFileIds.add(fileId)
+        cardPositions.set(fileId, imageCount + cardImages)
+      }
+      ownBlocks.push(block)
+    }
+    // Older Pi must be able to take a new combination with automatic pictures. A returned
+    // request on its own keeps the attachments it originally had, including larger modern images.
+    if (
+      piBudget?.maxImageBytes !== undefined &&
+      (positioned || carriesPositionedImages) &&
+      direct.length + imageCount > 0 &&
+      cardImages > 0 &&
+      (cardBytes + reservedBytes > bytes ||
+        Math.max(largestImage, largestCardImage) > piBudget.maxImageBytes)
+    ) {
+      continue
+    }
+    carriesPositionedImages ||= Boolean(positioned && cardImages > 0)
+    largestImage = Math.max(largestImage, largestCardImage)
+    imageCount += cardImages
+    for (const [fileId, position] of cardPositions) {
+      imagePositions.set(fileId, position)
+    }
+    count -= cardImages
+    bytes -= cardBytes
+    fileIds = cardFileIds
+    carried.push(each)
+    blocks.push(...withSentLine(ownBlocks, each.submittedAt, now))
+  }
+  if (progress && missingPrefix > 0 && !inspection?.signal.aborted) {
+    progress.owner.remember(progress.key, eligible, missingPrefix, missingUntil, resume)
   }
   return {
-    blocks: carried.flatMap(({ card, submittedAt }) => {
-      const sent =
-        submittedAt === undefined
-          ? null
-          : connectorSentLine({ askedAt: submittedAt, waitedMs: now - submittedAt }, true)
-      // On its own words: a card that carried earlier ones holds their lines before its last text.
-      const own = card.body.blocks.findLastIndex((block) => block.type === 'text')
-      if (!sent) {
-        return card.body.blocks
-      }
-      return own === -1
-        ? [{ type: 'text' as const, text: sent }, ...card.body.blocks]
-        : card.body.blocks.map((block, index) =>
-            index === own && block.type === 'text'
-              ? { ...block, text: `${sent}\n${block.text}` }
-              : block
-          )
-    }),
+    blocks,
+    imagePositions,
+    earlierBudget: { count, bytes, fileIds },
     cards: carried.map(({ card }) => ({
       messageId: card.messageId,
       fingerprint: card.fingerprint
@@ -138,6 +239,38 @@ export function carriedMessages(
       ])
     )
   }
+}
+
+export function reconcileCarriedImageLabels(
+  blocks: readonly NativeChatBlock[],
+  attached: ReadonlyMap<string, number>
+): NativeChatBlock[] {
+  return blocks.map((block) => {
+    if (block.type !== 'text') {
+      return block
+    }
+    const text = rewriteConnectorImagePositions(block.text, attached)
+    return text === block.text ? block : { ...block, text }
+  })
+}
+
+function withSentLine(blocks: NativeChatBlock[], submittedAt: number | undefined, now: number) {
+  const sent =
+    submittedAt === undefined
+      ? null
+      : connectorSentLine({ askedAt: submittedAt, waitedMs: now - submittedAt }, true)
+  if (!sent) {
+    return blocks
+  }
+  // A card that carried earlier ones holds their lines before its last text.
+  const own = blocks.findLastIndex((block) => block.type === 'text')
+  return own === -1
+    ? [{ type: 'text' as const, text: sent }, ...blocks]
+    : blocks.map((block, index) =>
+        index === own && block.type === 'text'
+          ? { ...block, text: `${sent}\n${block.text}` }
+          : block
+      )
 }
 
 // A chain of failed starts carries its askers again each time; one stamp per sender keeps it linear.
@@ -173,15 +306,21 @@ export async function readCarriedMessages(
   chat: ConversationChat,
   link: Pick<ExternalConversationLink, 'sessionId' | 'source' | 'externalId'>,
   account: string | undefined,
-  ownImages: number
+  direct: readonly ConnectorImage[],
+  signal: AbortSignal,
+  inspection?: ConnectorImageInspection,
+  progress?: { owner: ReturnedImageProgress; key: string }
 ): Promise<CarriedMessages> {
   try {
-    const returned = await (
-      await chat.conversation(link.sessionId)
-    ).journal.queuedMessages.returned()
-    return carriedMessages(link, returned, account, Date.now(), ownImages)
+    const returned = await waitForPromiseWithSignal(
+      chat.conversation(link.sessionId).then(({ journal }) => journal.queuedMessages.returned()),
+      signal
+    )
+    return await carriedMessages(link, returned, account, Date.now(), direct, inspection, progress)
   } catch (error) {
-    console.warn('[connectors] could not read the chat’s unsent messages', error)
+    if (!signal.aborted) {
+      console.warn('[connectors] could not read the chat’s unsent messages', error)
+    }
     return NOTHING_CARRIED
   }
 }

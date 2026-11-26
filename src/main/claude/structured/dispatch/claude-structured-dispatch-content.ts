@@ -67,16 +67,20 @@ type ImageBudget = {
 export async function readClaudeImage(
   path: string,
   maxBytes = AGENT_SESSION_ATTACHMENT_MAX_BYTES,
-  openImpl: typeof open = open
+  openImpl: typeof open = open,
+  signal?: AbortSignal
 ): Promise<Buffer> {
+  signal?.throwIfAborted()
   const file = await openImpl(path, 'r')
   try {
+    signal?.throwIfAborted()
     const tooLarge = (): Error =>
       attachmentError(`Claude image must be no larger than ${maxBytes} bytes`, {
         reason: 'tooLarge',
         limit: maxBytes
       })
     const info = await file.stat()
+    signal?.throwIfAborted()
     if (!info.isFile()) {
       throw attachmentError('Claude image must be a file', { reason: 'notAFile' })
     }
@@ -87,6 +91,7 @@ export async function readClaudeImage(
     let bytesRead = 0
     while (bytesRead < buffer.length) {
       const result = await file.read(buffer, bytesRead, buffer.length - bytesRead, bytesRead)
+      signal?.throwIfAborted()
       if (result.bytesRead === 0) {
         break
       }
@@ -94,6 +99,7 @@ export async function readClaudeImage(
     }
     // A file can grow after EOF; verify the open descriptor still matches the bytes read.
     const finalInfo = await file.stat()
+    signal?.throwIfAborted()
     if (bytesRead > maxBytes) {
       throw tooLarge()
     }

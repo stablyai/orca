@@ -16,12 +16,15 @@ import {
 } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { SlackMirror } from './slack-mirror'
 import { connectorAskerImages } from './connector-asker-images'
-import { postConnectorAction } from '../connector-cloud/connector-actions'
-import { cloudConversation } from '../../shared/connectors/connector-cloud-contract'
+import { storeConnectorImage } from './connector-asker-stored-image'
+import { connectorImageReader } from './connector-asker-image-reader'
+import type { ConnectorCloud } from '../connector-cloud/connector-cloud'
 import { getAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import type { SlackMirrorCloud } from './slack-mirror-cloud'
+import { recoverConnectorAdmission } from './external-conversation-delivery-preparation'
 import { DeliveryReceipts, type DeliveryReceiptDb } from './external-conversation-delivery-receipts'
 import {
+  findLink,
   findLinkForSession,
   findLinksForSession,
   type ExternalConversationLinkStore
@@ -71,12 +74,13 @@ export function installExternalConversations(
       continued: Promise<{ cutByLastRun: ReadonlySet<string> }>
     }
     getConnectorCloud?: () =>
-      | (SlackMirrorCloud & {
-          refResolver(): ConnectorRefResolver | null
-          orcaAccountName(): string
-          repliesFilled(): void
-          reply: LeaveLinesCloud['reply']
-        })
+      | (SlackMirrorCloud &
+          Pick<ConnectorCloud, 'fileActionTransport'> & {
+            refResolver(): ConnectorRefResolver | null
+            orcaAccountName(): string
+            repliesFilled(): void
+            reply: LeaveLinesCloud['reply']
+          })
       | null
   }
 ): {
@@ -141,7 +145,17 @@ export function installExternalConversations(
       replyFill: () => replyOutbox?.fill ?? null,
       replyAdmitted: (sessionId) => replyOutbox?.admitted(sessionId),
       store,
-      receipts: new DeliveryReceipts(() => runtime.getOrchestrationDb()),
+      receipts: new DeliveryReceipts(
+        () => runtime.getOrchestrationDb(),
+        (attempt) =>
+          recoverConnectorAdmission(attempt, runtime, (thread, chat) => {
+            const { source, externalId, title, asker } = thread
+            const key = { source, externalId }
+            if (!findLink(store, key)) {
+              seam?.linkChat(key, chat, { title }, asker)
+            }
+          })
+      ),
       onWorkspaceRemoved: (listener) =>
         runtime.onWorktreeLifecycle((event) => {
           if (event.kind === 'removed') {
@@ -153,31 +167,13 @@ export function installExternalConversations(
       onLinked: () => runtime.onConversationLinked?.(),
       // Through the cloud a bot's own `read --download` goes through, into the attachment store.
       askerImages: connectorAskerImages({
-        read: async ({ botId, ref, fileId, conversation }, imageSignal) => {
-          const cloud = runtime.getConnectorCloud?.()
-          const about = cloudConversation(conversation)
-          // A cloud that can't stream a file leaves it to the agent's own download.
-          if (!cloud?.cloudFeatures()?.has('files.direct' satisfies ConnectorCloudFeature)) {
-            return null
-          }
-          return await postConnectorAction(
-            cloud,
-            {
-              botId,
-              verb: 'read',
-              ref,
-              args: { download: fileId, stream: true },
-              ...(about ? { conversation: about } : {})
-            },
-            imageSignal
-          )
-        },
-        store: async (name, bytes) => {
+        reader: () => connectorImageReader(runtime.getConnectorCloud?.()?.fileActionTransport()),
+        store: async (name, bytes, fileId, signal) => {
           const attachments = getAgentSessionAttachmentStore()
           if (!attachments) {
             throw new Error('no attachment store')
           }
-          return await attachments.storeFile(name, bytes)
+          return await storeConnectorImage(attachments, name, bytes, fileId, signal)
         }
       }),
       // An older cloud without refs names no channel; the row then shows Slack's name.

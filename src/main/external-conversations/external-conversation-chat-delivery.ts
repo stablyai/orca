@@ -12,6 +12,10 @@ import { chatPaneKey, watchChatNews, type ConversationChatHost } from './externa
 import { deliverToChat } from './external-conversation-chat-send'
 import { HOST_CLOCK } from './external-conversation-host'
 import type { ConnectorMessage, ConversationKey, Delivery } from './external-conversation-types'
+import type { AskerImages, StagedConnectorImages } from './connector-asker-images'
+import type { DeliveryPreparation } from './external-conversation-delivery-receipts'
+import { ReturnedImageProgress } from './external-conversation-returned-image-progress'
+import { connectorImageProbes } from './connector-asker-stored-image'
 
 /** A native chat a conversation links to; chats run only on this host. */
 export type LinkableChat = {
@@ -19,6 +23,14 @@ export type LinkableChat = {
   sessionId: string
   agent: NativeChatAgent
   bot?: ExternalConversationBot
+}
+
+export type ConnectorChatDelivery = ConnectorMessage & {
+  deliveryId: string
+  signal: AbortSignal
+  askerImages?: AskerImages
+  stagedImages?: StagedConnectorImages
+  preparation?: DeliveryPreparation
 }
 
 export function chatLink(key: ConversationKey, chat: LinkableChat): ExternalConversationLink {
@@ -39,6 +51,7 @@ export function linkedChat(worktreeId: string, link: ExternalConversationLink): 
 }
 
 export class ChatDeliveries {
+  private readonly returnedImageProgress = new ReturnedImageProgress()
   // Chats sent a delivery since their last turn ended; that turn is the delivery's, not Orca-typed.
   private readonly delivered = new Set<string>()
   // Chats a delivery is being sent to; their turn may start before the send returns.
@@ -61,6 +74,8 @@ export class ChatDeliveries {
 
   /** A watch gap leaves no proof these deliveries still belong to the current turn. */
   clear(): void {
+    connectorImageProbes.clearRetries()
+    this.returnedImageProgress.clear()
     this.generations.clear()
     this.sending.clear()
     this.delivered.clear()
@@ -180,25 +195,32 @@ export class ChatDeliveries {
     chats: ConversationChatHost | undefined,
     key: ConversationKey,
     chat: LinkableChat,
-    delivery: ConnectorMessage & {
-      deliveryId: string
-      signal: AbortSignal
-      /** Images saved on this machine for the turn to see, beside its words. */
-      images?: readonly string[]
-    }
+    delivery: ConnectorChatDelivery
   ): Promise<Delivery> {
     // A send starts the chat's agent, so the host is installed for it as any send would.
     const generation = this.generations.get(chat.sessionId) ?? {}
     this.generations.set(chat.sessionId, generation)
-    const sending = this.sending.get(chat.sessionId) ?? new Set<object>()
     const attempt = {}
-    sending.add(attempt)
-    this.sending.set(chat.sessionId, sending)
+    let sending: Set<object> | undefined
     const current = () => this.generations.get(chat.sessionId) === generation
+    const stopSending = () => {
+      if (!sending) {
+        return
+      }
+      sending.delete(attempt)
+      if (this.sending.get(chat.sessionId) === sending && sending.size === 0) {
+        this.sending.delete(chat.sessionId)
+      }
+      sending = undefined
+    }
     // Listed at admission: the turn it starts may begin before the send returns, and none before.
     let sent: { deliveryId: string; sentAt: number } | undefined
     const admitted = () => {
       if (current()) {
+        // Only admission can make a concurrent turn this delivery's. Downloads are still preparation.
+        sending = this.sending.get(chat.sessionId) ?? new Set()
+        sending.add(attempt)
+        this.sending.set(chat.sessionId, sending)
         sent = this.admit(chat.sessionId, delivery.deliveryId)
       }
       return () => {
@@ -206,22 +228,23 @@ export class ChatDeliveries {
           this.unadmit(chat.sessionId, sent)
         }
         sent = undefined
+        stopSending()
       }
+    }
+    const stopped = delivery.preparation?.stopped(delivery.preparation.signal(delivery.signal))
+    if (stopped) {
+      return stopped
     }
     const outcome = await deliverToChat((await chats?.ensure()) ?? null, chatLink(key, chat), {
       ...delivery,
+      returnedImageProgress: this.returnedImageProgress,
       admitted
-    }).finally(() => {
-      sending.delete(attempt)
-      if (this.sending.get(chat.sessionId) === sending && sending.size === 0) {
-        this.sending.delete(chat.sessionId)
-      }
-    })
+    }).finally(stopSending)
     if (!current()) {
       return outcome
     }
     // Only a committed send's turn is the delivery's. A bot's title reads what its asker wrote.
-    if (outcome.outcome === 'refused') {
+    if (outcome.outcome === 'refused' || outcome.outcome === 'expired') {
       if (sent) {
         this.unadmit(chat.sessionId, sent)
       }

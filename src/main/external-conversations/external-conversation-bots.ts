@@ -6,6 +6,8 @@ import type {
 } from '../../shared/connectors/external-conversation-link'
 import { linkedChat, type LinkableChat } from './external-conversation-chat-delivery'
 import { findLink, type ExternalConversationLinkStore } from './external-conversation-links'
+import { deterministicAgentSessionUuid } from '../runtime/terminal/launch/runtime-agent-launch-resolution'
+import type { NativeChatAgent } from '../../shared/agent-launch/permissions/agent-chat-permission-support'
 import type { Bot } from '../../shared/bot-types'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import {
@@ -15,11 +17,18 @@ import {
   type ReplyTarget
 } from './external-conversation-types'
 
+export type ConversationChatOpening = {
+  sessionId?: string
+  signal: AbortSignal
+  beforeCreate?: (agent: NativeChatAgent) => Promise<void>
+}
+
 export type ConversationBots = {
   /** Why the bot takes no conversation now; null when it does. */
   refusal(botId: string): 'bot_not_found' | 'bot_paused' | null
   /** A new chat for a thread, or the bot's current Chat. */
-  open(target: ExternalConversationBot): Promise<LinkableChat>
+  open(target: ExternalConversationBot, opening?: ConversationChatOpening): Promise<LinkableChat>
+  forgetUnusedStart?(sessionId: string): Promise<void>
   /** The pull requests a bot conversation's work opened. */
   workLinks(link: ExternalConversationLink): Promise<ConnectorWorkLink[]>
 }
@@ -32,7 +41,8 @@ export async function botChatFor(
   store: ExternalConversationLinkStore,
   bots: ConversationBots | undefined,
   key: ConversationKey,
-  bot: ExternalConversationBot
+  bot: ExternalConversationBot,
+  preparation?: Omit<ConversationChatOpening, 'sessionId'> & { deliveryId: string }
 ): Promise<LinkableChat | Delivery> {
   if (!bots) {
     return refused('bot_not_found')
@@ -46,7 +56,26 @@ export async function botChatFor(
   if (bot.kind === 'bot' && linked && linked.link.bot?.kind !== 'bot-chat') {
     return linkedChat(linked.workspace.worktreeId, linked.link)
   }
-  return { ...(await bots.open(bot)), bot }
+  const opening =
+    bot.kind === 'bot' && preparation
+      ? {
+          sessionId: deliveryChatId(key, bot, preparation.deliveryId),
+          signal: preparation.signal,
+          ...(preparation.beforeCreate ? { beforeCreate: preparation.beforeCreate } : {})
+        }
+      : undefined
+  return { ...(await (opening ? bots.open(bot, opening) : bots.open(bot))), bot }
+}
+
+/** Reuse the same new thread chat when its first delivery is retried. */
+export function deliveryChatId(
+  key: ConversationKey,
+  bot: ExternalConversationBot,
+  deliveryId: string
+): string {
+  return deterministicAgentSessionUuid(
+    JSON.stringify(['connector-start', key.source, key.externalId, bot.botId, deliveryId])
+  )
 }
 
 /**

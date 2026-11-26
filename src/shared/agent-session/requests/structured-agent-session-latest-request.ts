@@ -12,7 +12,7 @@ import {
   type AgentSessionFailureFact
 } from '../failures/agent-session-failure'
 import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
-import { connectorMessageShownBlocks } from '../../connector-asker-prompt'
+import { connectorMessageShownBlocks } from '../../connector-asker-message-display'
 import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
 import {
   readAgentJournalTurn,

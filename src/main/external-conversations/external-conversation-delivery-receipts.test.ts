@@ -7,6 +7,7 @@ import { MUTATION_RECEIPT_MAX_ROWS } from '../runtime/orchestration/db/mutation-
 import {
   CONNECTOR_CANCEL_RECEIPT_RESERVE,
   CONNECTOR_PENDING_RECEIPT_LIMIT,
+  DeliveryPreparation,
   DeliveryReceipts
 } from './external-conversation-delivery-receipts'
 import type { ConversationKey, Delivery } from './external-conversation-types'
@@ -122,6 +123,48 @@ describe('DeliveryReceipts ledger capacity', () => {
 })
 
 describe('DeliveryReceipts.recorded', () => {
+  it('recovers a prepared batch from the journal outcome of its last admission attempt', async () => {
+    const { path, db } = fileDb()
+    const before = new DeliveryReceipts(() => db)
+    const stalled = new DeliveryPreparation()
+    const superseded = new DeliveryPreparation()
+    const sent = new DeliveryPreparation()
+    for (const [id, phase] of [
+      ['stalled', stalled],
+      ['superseded', superseded],
+      ['sent', sent]
+    ] as const) {
+      const head = before.run(KEY, id, 'connector.start', ['hi'], never, phase)
+      void before.carried(KEY, `${id}-later`, 'and this', head, phase)
+    }
+    superseded.attempting('session', 'refused-operation')
+    sent.attempting('session', 'accepted-operation')
+    db.close()
+
+    const reopened = new OrchestrationDb(path)
+    const after = new DeliveryReceipts(
+      () => reopened,
+      async ({ operationId }) =>
+        operationId === 'refused-operation' ? null : { outcome: 'accepted' }
+    )
+    let executed = 0
+    const execute = async (): Promise<Delivery> => {
+      executed += 1
+      return { outcome: 'accepted' }
+    }
+    for (const id of ['stalled', 'superseded', 'sent']) {
+      await expect(after.run(KEY, id, 'connector.start', ['hi'], execute)).resolves.toEqual({
+        outcome: 'accepted'
+      })
+      await expect(
+        after.run(KEY, `${id}-later`, 'connector.send', ['and this'], execute)
+      ).resolves.toEqual({ outcome: 'accepted' })
+    }
+    expect(executed).toBe(4)
+    expect(reopened.countPendingMutationReceipts(['connector:slack'])).toBe(0)
+    reopened.close()
+  })
+
   it('replays a result, reads an interrupted delivery as unknown, and runs nothing', async () => {
     const { path, db } = fileDb()
     const receipts = new DeliveryReceipts(() => db)

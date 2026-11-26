@@ -107,12 +107,13 @@ export class PiRpcTurns {
     id: string,
     at: number,
     frame: JsonlRpcRecord,
-    before?: () => Promise<void>
+    before?: () => Promise<void>,
+    signal?: AbortSignal
   ): Promise<AgentSessionDispatchOutcome> {
     if (this.ended) {
       throw new Error('Pi session ended before dispatch')
     }
-    return this.delivery.submit(id, at, frame, before)
+    return this.delivery.submit(id, at, frame, before, signal)
   }
 
   receive(frame: JsonlRpcRecord): void {
@@ -173,10 +174,8 @@ export class PiRpcTurns {
       case 'turn_end':
         this.refreshUsage()
         break
-      case 'agent_end':
-        // This can precede automatic retry or detached compaction.
-        break
       case 'agent_settled':
+        // agent_end can precede automatic retry or detached compaction.
         this.commandCompleted()
         return
       case 'compaction_start':
@@ -226,6 +225,7 @@ export class PiRpcTurns {
 
   stop(): void {
     this.stopped = true
+    this.delivery.stop()
   }
 
   beginCommand(command: StructuredAgentSessionCommandRun): void {
