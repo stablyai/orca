@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path'
 import { isConnectorFileId } from '../../shared/connector-asker-file-validation'
 import { AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT } from '../../shared/agent-session/agent-session-attachments'
 import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-reason'
-import { CapabilityProbeCache } from '../../shared/concurrency/capability-probe-cache'
+import { PrioritySemaphore } from '../../shared/concurrency/priority-semaphore'
 import { parseAgentSessionAttachmentStorePath } from '../native-chat/agent-session-attachments/agent-session-attachment-references'
 import {
   removeQuietly,
@@ -62,38 +62,67 @@ async function storedConnectorImageId(
   }
 }
 
-type StoredImage = { bytes: number; fileId: string | undefined }
-type ImageProbe = StoredImage | 'missing' | 'unreadable' | 'limit'
+type StoredImage = { bytes: number; fileId: string | undefined; identityUnreadable?: true }
+type MissingImage = { missingUntil: number }
+type ImageProbe = StoredImage | MissingImage | 'unreadable' | 'limit'
 export const RETURNED_IMAGE_RETRY_MS = 5 * 60_000
 const MAX_ACTIVE_IMAGE_PROBES = 8
+const MAX_MISSING_IMAGES = 4096
 
 export class ConnectorImageProbes {
-  private readonly missing = new CapabilityProbeCache<string>(RETURNED_IMAGE_RETRY_MS, 4096)
+  private readonly missing = new Map<string, MissingImage>()
   private readonly active = new Map<string, Promise<ImageProbe>>()
+  private readonly slots = new PrioritySemaphore(MAX_ACTIVE_IMAGE_PROBES)
 
-  constructor(private readonly lookup = inspectConnectorImage) {}
+  constructor(
+    private readonly lookup = inspectConnectorImage,
+    private readonly now = Date.now
+  ) {}
 
-  read(root: string | undefined, path: string): Promise<ImageProbe> {
-    const existing = this.active.get(path)
-    if (existing) {
-      return existing
+  cachedMissing(path: string): MissingImage | undefined {
+    const missing = this.missing.get(path)
+    if (missing && missing.missingUntil <= this.now()) {
+      this.missing.delete(path)
+      return undefined
     }
-    if (!this.missing.shouldTry(path)) {
-      return Promise.resolve('missing')
-    }
-    if (this.active.size >= MAX_ACTIVE_IMAGE_PROBES) {
-      return Promise.resolve('limit')
-    }
-    const pending = this.lookup(root, path)
-      .then((result) => {
-        if (result === 'missing') {
-          this.missing.rememberUnsupported(path)
+    return missing
+  }
+
+  async read(root: string | undefined, path: string, signal: AbortSignal): Promise<ImageProbe> {
+    let pending = this.active.get(path)
+    if (!pending) {
+      const release = await this.slots.acquire(0, signal)
+      pending = this.active.get(path)
+      const missing = this.cachedMissing(path)
+      if (pending || signal.aborted || missing) {
+        release()
+        if (!pending) {
+          return missing ?? 'limit'
         }
-        return result
-      })
-      .finally(() => this.active.delete(path))
-    this.active.set(path, pending)
-    return pending
+      } else {
+        pending = this.lookup(root, path)
+          .then((result) => {
+            if (result === 'missing') {
+              const absent = { missingUntil: this.now() + RETURNED_IMAGE_RETRY_MS }
+              this.missing.set(path, absent)
+              if (this.missing.size > MAX_MISSING_IMAGES) {
+                const oldest = this.missing.keys().next()
+                if (!oldest.done) {
+                  this.missing.delete(oldest.value)
+                }
+              }
+              return absent
+            }
+            return result
+          })
+          .finally(() => {
+            this.active.delete(path)
+            release()
+          })
+        this.active.set(path, pending)
+      }
+    }
+    return waitForPromiseWithSignal(pending, signal)
   }
 
   clearMissing(): void {
@@ -117,38 +146,46 @@ export function connectorImageInspection(
     image(path: string): Promise<ImageProbe> {
       let lookup = images.get(path)
       if (!lookup) {
-        if (signal.aborted || images.size >= AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT) {
+        if (signal.aborted) {
           return Promise.resolve('limit')
         }
-        lookup = probes.read(root, path)
-        images.set(path, lookup)
-      }
-      return waitForPromiseWithSignal(lookup, signal)
-        .then((result) => {
-          if (result === 'limit') {
-            images.delete(path)
-          }
-          return result
-        })
-        .catch((error) => {
+        const missing = probes.cachedMissing(path)
+        if (missing) {
+          return Promise.resolve(missing)
+        }
+        if (images.size >= AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT) {
+          return Promise.resolve('limit')
+        }
+        lookup = probes.read(root, path, signal).catch((error) => {
           if (signal.aborted) {
             return 'limit' as const
           }
           throw error
         })
+        images.set(path, lookup)
+      }
+      return lookup
     }
   }
 }
 
-async function inspectConnectorImage(root: string | undefined, path: string): Promise<ImageProbe> {
+async function inspectConnectorImage(
+  root: string | undefined,
+  path: string
+): Promise<StoredImage | 'missing' | 'unreadable'> {
+  const info = await stat(path).catch((error): 'missing' | 'unreadable' =>
+    isMissingPath(error) ? 'missing' : 'unreadable'
+  )
+  if (typeof info === 'string') {
+    return info
+  }
+  if (!info.isFile() || info.size === 0) {
+    return 'missing'
+  }
   try {
-    const info = await stat(path)
-    if (!info.isFile() || info.size === 0) {
-      return 'missing'
-    }
     return { bytes: info.size, fileId: await storedConnectorImageId(root, path) }
-  } catch (error) {
-    return isMissingPath(error) ? 'missing' : 'unreadable'
+  } catch {
+    return { bytes: info.size, fileId: undefined, identityUnreadable: true }
   }
 }
 

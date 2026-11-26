@@ -116,6 +116,7 @@ export async function carriedMessages(
   const imagePositions = new Map<string, number>()
   const start = progress?.owner.read(progress.key, eligible, now) ?? 0
   let missingPrefix = start
+  let missingUntil = Infinity
   const carried: JournalReturnedCard[] = []
   const blocks: NativeChatBlock[] = []
   // Keep the oldest whole requests whose images fit; each remaining card can still be retried.
@@ -126,8 +127,8 @@ export async function carriedMessages(
     const ownBlocks: NativeChatBlock[] = []
     let cardBytes = 0
     let cardImages = 0
-    const inspectImages =
-      inspection?.allPaths ||
+    const positioned =
+      inspection &&
       each.card.body.blocks.some(
         (block) => block.type === 'text' && hasConnectorImagePositions(block.text)
       )
@@ -137,15 +138,25 @@ export async function carriedMessages(
         continue
       }
       const path = block.url ? undefined : block.path
-      const stored = path && inspection && inspectImages ? await inspection.image(path) : undefined
+      const stored =
+        path && inspection && (inspection.allPaths || positioned)
+          ? await inspection.image(path)
+          : undefined
       if (stored === 'limit') {
         break cards
       }
       // An older, unreadable card can still be edited. It needn't hold up the later ones.
-      if (stored === 'missing' || stored === 'unreadable') {
-        if (stored === 'missing' && index === missingPrefix && !inspection?.signal.aborted) {
+      if (stored === 'unreadable') {
+        continue cards
+      }
+      if (stored && 'missingUntil' in stored) {
+        if (index === missingPrefix && !inspection?.signal.aborted) {
           missingPrefix += 1
+          missingUntil = Math.min(missingUntil, stored.missingUntil)
         }
+        continue cards
+      }
+      if (stored?.identityUnreadable && positioned) {
         continue cards
       }
       const fileId = stored?.fileId
@@ -176,7 +187,7 @@ export async function carriedMessages(
     blocks.push(...withSentLine(ownBlocks, each.submittedAt, now))
   }
   if (progress && missingPrefix > start) {
-    progress.owner.remember(progress.key, eligible, missingPrefix, now)
+    progress.owner.remember(progress.key, eligible, missingPrefix, missingUntil)
   }
   return {
     blocks,

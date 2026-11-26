@@ -106,7 +106,7 @@ it.each([20, 200])('bounds image stores for %d simultaneous deliveries', async (
         firstFour.resolve()
       }
       try {
-        return await finishStores.promise
+        return { path: await finishStores.promise }
       } finally {
         active -= 1
       }

@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto'
 import type { JournalReturnedCard } from '../native-chat/agent-session-journal/journal-domain-queue-reads'
-import { RETURNED_IMAGE_RETRY_MS } from './connector-asker-stored-image'
 
 // An unchanged prefix of broken cards must not spend every delivery's file inspection budget.
 type MissingPrefix = { count: number; digest: string; expiresAt: number }
@@ -22,8 +21,13 @@ export class ReturnedImageProgress {
     return 0
   }
 
-  remember(key: string, eligible: readonly JournalReturnedCard[], count: number, now: number): void {
-    const expiresAt = this.prefixes.get(key)?.expiresAt ?? now + RETURNED_IMAGE_RETRY_MS
+  remember(
+    key: string,
+    eligible: readonly JournalReturnedCard[],
+    count: number,
+    missingUntil: number
+  ): void {
+    const expiresAt = Math.min(this.prefixes.get(key)?.expiresAt ?? Infinity, missingUntil)
     this.prefixes.delete(key)
     this.prefixes.set(key, {
       count,

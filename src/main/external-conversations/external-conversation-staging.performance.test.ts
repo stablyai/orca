@@ -82,10 +82,14 @@ it.each([10, 100])('retains no unadmitted uploads after %i retired starts', asyn
           bots: {
             refusal: () => null,
             open: async (_, opening) => {
-              await opening?.beforeCreate?.('codex')
+              if (!opening?.sessionId || !opening.beforeCreate) {
+                throw new Error('The bot start did not prepare its delivery')
+              }
+              const { sessionId } = opening
+              await opening.beforeCreate('codex')
               expect(await readdir(root)).toHaveLength(4)
               poll.abort('connectors_disabled')
-              return { sessionId: opening!.sessionId, agent: 'codex', worktreeId: 'fixture' }
+              return { sessionId, agent: 'codex', worktreeId: 'fixture' }
             },
             workLinks: async () => []
           }
@@ -118,6 +122,7 @@ it.each([100, 1000])('bounds unsettled image probes across %i retired deliveries
       const inspection = connectorImageInspection(undefined, poll.signal, { probes })
       const first = inspection.image('same-file')
       const second = inspection.image(`file-${index}`)
+      await Promise.resolve()
       poll.abort()
       expect(await first).toBe('limit')
       expect(await second).toBe('limit')
@@ -125,10 +130,11 @@ it.each([100, 1000])('bounds unsettled image probes across %i retired deliveries
     expect(reads).toBe(8)
     const successor = connectorImageInspection(undefined, new AbortController().signal, { probes })
     const same = successor.image('same-file')
+    const queued = successor.image('new-file')
     expect(reads).toBe(8)
     storage.resolve(result)
     expect(await same).toEqual(result)
-    expect(await successor.image('new-file')).toEqual(result)
+    expect(await queued).toEqual(result)
     expect(reads).toBe(9)
   } finally {
     storage.resolve(result)

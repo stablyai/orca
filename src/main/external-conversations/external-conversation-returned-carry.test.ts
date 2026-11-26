@@ -480,14 +480,15 @@ it('keeps a failed request and stages only new earlier images that fit the byte 
     )
   }
   failedStart('failed', failed, 'notSignedIn', NOW + 20)
-  const images = new ConnectorImageProbes()
+  let probeNow = NOW + 30
+  const images = new ConnectorImageProbes(undefined, () => probeNow)
   const progress = new ReturnedImageProgress()
-  const carry = (now = NOW + 30) =>
+  const carry = () =>
     carriedMessages(
       THREAD,
       readJournalDomainReturnedCards(db, target, NOW + 30),
       ACCOUNT,
-      now,
+      probeNow,
       [],
       connectorImageInspection(attachmentStore.rootDir, new AbortController().signal, {
         probes: images
@@ -557,8 +558,8 @@ it('keeps a failed request and stages only new earlier images that fit the byte 
   ftruncateSync(restored, 1)
   closeSync(restored)
   expect((await carry()).cards.map(({ messageId }) => messageId)).toEqual(['failed'])
-  images.clearMissing()
-  const retried = await carry(NOW + 30 + RETURNED_IMAGE_RETRY_MS)
+  probeNow += RETURNED_IMAGE_RETRY_MS
+  const retried = await carry()
   expect(retried.cards.map(({ messageId }) => messageId)).toContain('missing-0')
 })
 
