@@ -37,19 +37,22 @@ export function placeLaunchedChat(
   if (!split) {
     return undefined
   }
-  const placing =
-    surface.outcome.kind === 'structured'
-      ? runtime.placeAgentLaunchSplit({
-          worktreeId: surface.worktreeId,
-          sessionId: surface.outcome.sessionId,
-          split,
-          activate: presentation === 'focused',
-          expiresAt: Date.now() + 10_000
-        })
-      : null
-  // A chat that fell back to a terminal opens as a tab; a lost answer never fails the launch.
-  return (placing ?? Promise.resolve({ groupId: '', fallback: 'not-split' as const })).then(
-    (placement) => ({ placement }),
-    () => ({})
-  )
+  // A chat that fell back to a terminal opens as a tab, which main knows without asking.
+  if (surface.outcome.kind !== 'structured') {
+    return Promise.resolve({ placement: { groupId: '', fallback: 'not-split' } })
+  }
+  const placing = runtime.placeAgentLaunchSplit({
+    worktreeId: surface.worktreeId,
+    sessionId: surface.outcome.sessionId,
+    split,
+    activate: presentation === 'focused',
+    expiresAt: Date.now() + 10_000
+  })
+  // No window to ask, or no answer: placement stays out, and the launch never fails over it.
+  return placing
+    ? placing.then(
+        (placement) => ({ placement }),
+        () => ({})
+      )
+    : Promise.resolve({})
 }
