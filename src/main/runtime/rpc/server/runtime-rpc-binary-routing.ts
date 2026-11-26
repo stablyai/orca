@@ -115,7 +115,11 @@ export class RuntimeRpcBinaryRouting extends RuntimeRpcState {
     this.botShareDevices = identity.ok ? identity.botShareDevices : null
     this.e2eeKeypair = identity.ok ? identity.e2eeKeypair : null
     this.pairingInitializationFailure = identity.ok ? null : identity.failure
-    this.deviceRegistry?.setOnPairedDevicesChanged(() => this.onPairedDevicesChanged?.())
+    this.deviceRegistry?.setOnPairedDevicesChanged(() => {
+      this.runtime.republishClientHostedBrowserRows()
+      this.onPairedDevicesChanged?.()
+    })
+    this.runtime.republishClientHostedBrowserRows()
     return identity
   }
 

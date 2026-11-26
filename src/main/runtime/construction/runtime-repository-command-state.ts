@@ -1,3 +1,4 @@
+import type { BotShareDevices } from '../../bots/team-share/bot-share-access'
 import type { RuntimeTerminalAgentStatus } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { RuntimeGitCommands } from '../integrations/git/orca-runtime-git'
 import { RuntimeHostedReviewCommands } from '../integrations/reviews/runtime-hosted-review-commands'
@@ -174,18 +175,27 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
     getStore: () => this.store
   })
 
+  /** Set by the RPC server once it starts (`OrcaRuntimeWithBots`). */
+  declare botShareDevices: BotShareDevices | null
+
   protected readonly clientHostedBrowserRows = new ClientHostedBrowserRowPublisher({
     listClientPages: (worktreeId) => getRuntimeBrowserPageRegistry(this).listPages(worktreeId),
     getClientPage: (browserPageId) => getRuntimeBrowserPageRegistry(this).getPage(browserPageId),
     hasLivePlacement: (browserPageId) =>
       getBrowserHostLeaseRegistry(this).getPlacement(browserPageId) !== undefined,
     resolveDeviceName: (pairedDeviceId) => this.getPairedDeviceNameFn(pairedDeviceId),
+    isOwnerDevice: (pairedDeviceId) => this.botShareDevices?.isOwnerDevice(pairedDeviceId) ?? false,
     getEmitter: () => {
       const notifier = this.notifier
       const send = notifier?.clientHostedBrowserRowsChanged
       return send ? (event) => send.call(notifier, event) : null
     }
   })
+
+  /** Host rows follow which computers are the owner's: re-read once pairing loads or devices change. */
+  republishClientHostedBrowserRows(): void {
+    this.clientHostedBrowserRows.publishAll()
+  }
 
   protected readonly persistedClientHostedBrowserWorktreeIds = new Set<string>()
 }

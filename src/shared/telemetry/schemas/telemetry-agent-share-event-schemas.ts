@@ -35,7 +35,8 @@ export const agentShareFailedSchema = z.discriminatedUnion('stage', [
     'bot_not_found',
     'session_not_found',
     'method_not_found',
-    'path_not_found'
+    'path_not_found',
+    'host_window'
   ]),
   // Owner: a held message delivered through Orca Cloud was refused.
   stage('held_delivery_refused', [

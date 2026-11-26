@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { ALL_RPC_METHODS } from '../methods/rpc-method-registry'
-import { TEAMMATE_METHOD_CLASS_TABLE } from './teammate-method-classes'
+import { TEAMMATE_METHOD_CLASS_TABLE, TEAMMATE_METHOD_CLASSES } from './teammate-method-classes'
 import {
   TEAMMATE_HANDLER_FILTERED,
   TEAMMATE_LISTED_METHODS
 } from '../../../bots/team-share/teammate-workspace-lists'
 import { TEAMMATE_CLIENT_EVENT_DECISIONS } from '../../../bots/team-share/teammate-client-events'
 
-const classified = Object.entries(TEAMMATE_METHOD_CLASS_TABLE).flatMap(([kind, names]) =>
-  names.map((name: string) => ({ name, kind }))
+const classified = TEAMMATE_METHOD_CLASSES.flatMap((kind) =>
+  TEAMMATE_METHOD_CLASS_TABLE[kind].map((name: string) => ({ name, kind }))
 )
 const classOf = new Map<string, string>(classified.map((entry) => [entry.name, entry.kind]))
 
@@ -70,5 +70,18 @@ describe('the workspace tier’s method table', () => {
         'workspaceViewChanged'
       ].sort()
     )
+  })
+
+  it('classifies the host-window effect of every method a teammate can reach, exactly once', () => {
+    // Either tier: the workspace tier's classes, or a chats-only teammate's shared methods.
+    const reachable = ALL_RPC_METHODS.filter(
+      (method) => classOf.get(method.name) !== 'refused' || method.share !== 'not-shared'
+    ).map((method): string => method.name)
+    const { refused, none, conditional } = TEAMMATE_METHOD_CLASS_TABLE.hostWindow
+    const listed: string[] = [...refused, ...none, ...Object.values(conditional).flat()]
+    expect(listed.filter((name, index) => listed.indexOf(name) !== index)).toEqual([])
+    const unlisted = reachable.filter((name) => !listed.includes(name))
+    expect(unlisted, 'classify these under hostWindow in teammate-method-classes.json').toEqual([])
+    expect(listed.filter((name) => !reachable.includes(name))).toEqual([])
   })
 })

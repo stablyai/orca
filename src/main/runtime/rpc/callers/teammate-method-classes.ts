@@ -8,12 +8,21 @@ import classes from './teammate-method-classes.json'
  *  `filtered`: a list or stream kept to the agent's workspaces (`teammate-workspace-lists.ts`, or its
  *  handler through `teammate-workspace-view.ts`).
  *  `own`: bound to the caller's own connection, uploads, subscriptions or device.
- *  `refused`: the owner's own host, accounts, settings or other workspaces. */
-export type TeammateMethodClass = keyof typeof classes
+ *  `refused`: the owner's own host, accounts, settings or other workspaces.
+ *  (`hostWindow`, beside the classes, is each reachable method's effect on the host's own window:
+ *  `bot-share-host-window-fence.ts`.) */
+export type TeammateMethodClass = Exclude<keyof typeof classes, 'hostWindow'>
 
-const KINDS: readonly TeammateMethodClass[] = ['scoped', 'filtered', 'own', 'refused']
+export const TEAMMATE_METHOD_CLASSES: readonly TeammateMethodClass[] = [
+  'scoped',
+  'filtered',
+  'own',
+  'refused'
+]
 const CLASS_BY_METHOD: ReadonlyMap<string, TeammateMethodClass> = new Map(
-  KINDS.flatMap((kind) => classes[kind].map((name: string) => [name, kind] as const))
+  TEAMMATE_METHOD_CLASSES.flatMap((kind) =>
+    classes[kind].map((name: string) => [name, kind] as const)
+  )
 )
 
 export function teammateMethodClass(methodName: string): TeammateMethodClass {

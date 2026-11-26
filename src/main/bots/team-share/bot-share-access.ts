@@ -31,6 +31,8 @@ export type BotShareDevices = {
   revokeBotSharePhone: (parentDeviceId: string, deviceId: string) => Promise<boolean>
   /** The key teammates seal held messages to: this host's pairing E2EE key, null without one. */
   getE2EEPublicKey: () => string | null
+  /** One of the owner's own paired computers, as known now: not a teammate's, not revoked or unknown. */
+  isOwnerDevice: (deviceId: string) => boolean
   /** Each bot's teammates (accounts) with a share device on it. */
   reachedAccounts: () => ReadonlyMap<string, ReadonlySet<string>>
   deliverBotShareHeldMessage: (

@@ -4,6 +4,7 @@ import type { BotShareCallerScope, RpcCallerScope } from '../../callers/rpc-call
 import type { BotShareDevice, BotShareGrant } from './bot-share-device-store'
 import { createHash } from 'node:crypto'
 import { BOTS_SHARE_WORKSPACES_CAPABILITY } from '../../../../../shared/bot-runtime-capabilities'
+import { unshippedTestSwitchOn } from '../../../../../shared/app-lifecycle/unshipped-test-switch'
 
 /** Socket revoke/close uses deviceId; per-client drivers, dictation and file grants use clientId. */
 export type DevicePrincipal = {
@@ -27,7 +28,19 @@ export function devicePrincipalOf(device: DeviceEntry): DevicePrincipal {
   }
 }
 
+// Dev-only rig switch: a paired desktop calls as a teammate with the workspace tier.
+const PAIRED_DEVICE_AS_TEAMMATE_TEST_SWITCH = 'ORCA_TEST_PAIRED_DEVICE_AS_TEAMMATE'
+
 export function callerScopeOf(device: DeviceEntry): RpcCallerScope {
+  if (device.scope === 'runtime' && unshippedTestSwitchOn(PAIRED_DEVICE_AS_TEAMMATE_TEST_SWITCH)) {
+    return {
+      kind: 'bot-share',
+      botId: '',
+      accountId: device.deviceId,
+      name: device.name,
+      workspaceTier: true
+    }
+  }
   return device.scope === 'mobile'
     ? { kind: 'mobile', delegated: device.parentDeviceId !== undefined }
     : {
