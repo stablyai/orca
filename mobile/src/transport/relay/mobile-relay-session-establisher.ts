@@ -111,7 +111,8 @@ export class MobileRelaySessionEstablisher {
       }
       lastError = result.error
       this.args.onDialFailure(result.error)
-      if (result.error instanceof RelayDirectorHttpError) {
+      // Only a 401 used the admission; a rate-limited 503/429 never reached the token, so it goes first next.
+      if (isDirectorRefusal(result.error)) {
         this.directorTried.set(credential.token, ++this.directorTrySeq)
       }
       if (isExplicitCredentialRejection(result.error)) {

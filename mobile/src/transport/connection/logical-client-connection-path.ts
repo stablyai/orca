@@ -84,11 +84,18 @@ export class LogicalClientConnectionPath {
     const previousRejected = this.pairingRejected
     const previousReachability = this.relayHostReachability
     apply()
+    // A refused-credential verdict outranks path and attempt, so slow reprobes that dial under it
+    // must not refresh every listener (Home re-projects all hosts) when nothing visible changed.
+    const refusedThroughout =
+      previousReachability === 'credential-refused' &&
+      this.relayHostReachability === 'credential-refused' &&
+      previousRejected === this.pairingRejected
     if (
-      previousPath === this.pending() &&
-      previousAttempt === this.reconnectAttempt(0) &&
-      previousRejected === this.pairingRejected &&
-      previousReachability === this.relayHostReachability
+      refusedThroughout ||
+      (previousPath === this.pending() &&
+        previousAttempt === this.reconnectAttempt(0) &&
+        previousRejected === this.pairingRejected &&
+        previousReachability === this.relayHostReachability)
     ) {
       return
     }
