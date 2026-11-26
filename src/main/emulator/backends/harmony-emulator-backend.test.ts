@@ -1,5 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type * as FsPromises from 'node:fs/promises'
 import { EventEmitter } from 'node:events'
+import { PassThrough } from 'node:stream'
 import type { ChildProcess } from 'node:child_process'
 import { HarmonyEmulatorBackend } from './harmony-emulator-backend'
 import type { HarmonyCommandResult, HarmonyCommandRunner } from '../harmony/harmony-command-runner'
@@ -10,10 +12,31 @@ import type { StartHarmonyStream } from '../harmony/harmony-stream-session-start
 const spawnMock = vi.hoisted(() => vi.fn())
 vi.mock('node:child_process', () => ({ spawn: spawnMock }))
 
-// launchInstance only uses `.on('error')` and `.unref()`.
+// vitest 5 / Node 24 ESM namespaces are not reconfigurable, so readFile must be replaced through a
+// hoisted module mock instead of vi.spyOn(await import('node:fs/promises'), ...).
+const fsState = vi.hoisted(() => ({ layoutJson: '' }))
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof FsPromises>()
+  return {
+    ...actual,
+    readFile: vi.fn((path: string) =>
+      fsState.layoutJson ? Promise.resolve(fsState.layoutJson) : actual.readFile(path)
+    )
+  }
+})
+afterEach(() => {
+  fsState.layoutJson = ''
+})
+
+// launchInstance needs piped stdio plus the exit/close/error events a real ChildProcess emits.
 function makeSpawnedChild(): ChildProcess {
-  const child = Object.assign(new EventEmitter(), { unref: () => {} })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fake ChildProcess; launchInstance only calls on('error')/unref.
+  const child = Object.assign(new EventEmitter(), {
+    unref: vi.fn(),
+    stdin: new PassThrough(),
+    stdout: new PassThrough(),
+    stderr: new PassThrough()
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fake ChildProcess; launchInstance only uses stdio streams, on() and unref().
   return child as unknown as ChildProcess
 }
 
@@ -278,7 +301,7 @@ describe('HarmonyEmulatorBackend sessions', () => {
     expect(spawnMock).toHaveBeenCalledWith(
       SDK.emulator,
       expect.arrayContaining(['-start', 'MatePad Pro', '-hdcPort', '10000']),
-      expect.objectContaining({ stdio: 'ignore', windowsHide: true })
+      expect.objectContaining({ stdio: 'pipe', windowsHide: true })
     )
     spawnMock.mockReset()
   })
@@ -427,12 +450,10 @@ describe('HarmonyEmulatorBackend install and launch', () => {
 
 describe('HarmonyEmulatorBackend accessibility tree', () => {
   it('dumps and normalizes the uitest layout', async () => {
-    const layout = JSON.stringify({
+    fsState.layoutJson = JSON.stringify({
       attributes: { type: 'PhoneWindow', bounds: '[0,0][1280,2832]' },
       children: []
     })
-    const readFile = vi.spyOn(await import('node:fs/promises'), 'readFile')
-    readFile.mockResolvedValue(layout)
 
     const harmony = backend({
       generic: (args) =>
@@ -446,7 +467,6 @@ describe('HarmonyEmulatorBackend accessibility tree', () => {
     }
     expect(tree).toHaveLength(1)
     expect(tree[0]).toMatchObject({ type: 'PhoneWindow' })
-    readFile.mockRestore()
   })
 })
 

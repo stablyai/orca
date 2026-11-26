@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type * as FsPromises from 'node:fs/promises'
 import {
   dumpHarmonyAccessibilityTree,
   installHapArgs,
@@ -9,6 +10,22 @@ import {
 } from './harmony-capability-operations'
 import type { HarmonyCommandRunner } from './harmony-command-runner'
 import type { HarmonySdkPaths } from './harmony-sdk-discovery'
+
+// vitest 5 / Node 24 ESM namespaces are not reconfigurable, so readFile must be replaced through a
+// hoisted module mock instead of vi.spyOn(await import('node:fs/promises'), ...).
+const fsState = vi.hoisted(() => ({ layoutJson: '' }))
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof FsPromises>()
+  return {
+    ...actual,
+    readFile: vi.fn((path: string) =>
+      fsState.layoutJson ? Promise.resolve(fsState.layoutJson) : actual.readFile(path)
+    )
+  }
+})
+afterEach(() => {
+  fsState.layoutJson = ''
+})
 
 const SDK: HarmonySdkPaths = {
   sdkRoot: '/sdk',
@@ -126,15 +143,12 @@ describe('dumpHarmonyAccessibilityTree', () => {
   }
 
   it('dumps, pulls, parses and normalizes', async () => {
-    // The pulled file is read from disk; intercept via the runner's known path.
-    const localRead = vi.spyOn(await import('node:fs/promises'), 'readFile')
-    localRead.mockResolvedValue(JSON.stringify(layoutTree))
+    fsState.layoutJson = JSON.stringify(layoutTree)
 
     const run = runnerFor({})
     const tree = await dumpHarmonyAccessibilityTree(run, SDK, KEY)
     expect(tree).toHaveLength(1)
     expect(tree[0]?.type).toBe('PhoneWindow')
-    localRead.mockRestore()
   })
 
   it('throws when dumpLayout reports no path', async () => {

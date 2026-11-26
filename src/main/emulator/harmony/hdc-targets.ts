@@ -29,6 +29,50 @@ export function hdcTargetArgs(connectKey: string, args: readonly string[]): stri
   return ['-t', connectKey, ...args]
 }
 
+export const listTargetsVerboseArgs: readonly string[] = ['list', 'targets', '-v']
+
+// `hdc tconn <key> -remove` drops a daemon-side target registration.
+export function removeTargetArgs(connectKey: string): string[] {
+  return ['tconn', connectKey, '-remove']
+}
+
+export type HdcTargetState = 'connected' | 'offline' | 'other'
+export type HdcVerboseTarget = { connectKey: string; state: HdcTargetState }
+
+/**
+ * Parses `hdc list targets -v`, whose plain sibling hides Offline registrations. Observed columns
+ * (tab/space separated): `127.0.0.1:10000  TCP  Offline  unknown...  hdc`.
+ */
+export function parseHdcVerboseTargets(stdout: string): HdcVerboseTarget[] {
+  const targets: HdcVerboseTarget[] = []
+  for (const rawLine of stdout.split('\n')) {
+    const line = rawLine.trim()
+    if (line === '' || line.startsWith('[')) {
+      continue
+    }
+    const columns = line.split(/\s+/)
+    const connectKey = columns[0]
+    if (!connectKey || !connectKey.includes(':')) {
+      continue
+    }
+    const stateToken = columns[2]?.toLowerCase()
+    targets.push({
+      connectKey,
+      state:
+        stateToken === 'connected' ? 'connected' : stateToken === 'offline' ? 'offline' : 'other'
+    })
+  }
+  return targets
+}
+
+// A crashed emulator leaves its loopback registration stuck Offline; only local targets are safe
+// to prune — USB/Wi-Fi devices must never be removed on our say-so.
+export function offlineLocalConnectKeys(targets: readonly HdcVerboseTarget[]): string[] {
+  return targets
+    .filter((target) => target.state === 'offline' && isLocalEmulatorTarget(target.connectKey))
+    .map((target) => target.connectKey)
+}
+
 // A local emulator connectKey is an IPv4 loopback address; USB/Wi-Fi devices are not.
 export function isLocalEmulatorTarget(connectKey: string): boolean {
   return /^127\.0\.0\.1:\d+$/.test(connectKey)
