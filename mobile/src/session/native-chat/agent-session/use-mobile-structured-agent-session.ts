@@ -62,7 +62,6 @@ export function useMobileStructuredAgentSession(
     sessionId,
     sourceIdentity = '',
     enabled,
-    onActionResolved,
     onSendError,
     hostSupport,
     onCommandsChanged
@@ -240,8 +239,7 @@ export function useMobileStructuredAgentSession(
     editCapable: hostSupport ? hostSupport.queuedMessageEdit === true : null,
     chatActive: enabled,
     enabled: enabled && connected,
-    mutate,
-    ...(onActionResolved ? { onActionResolved } : {})
+    mutate
   })
   // Stop preserves host-held cards under queue pause; only a later user action resumes them.
   const requestCancel = useMobileStructuredRequestCancel({
