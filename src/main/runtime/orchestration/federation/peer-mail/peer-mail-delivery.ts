@@ -13,6 +13,7 @@ import type {
 import { parseOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
 import { botOfSession } from '../../../../bots/bot-session-tabs'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../../shared/schema/lazy-zod-schema'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { PeerMailConversationRow } from '../../db/federation/peer-mail-store'
@@ -33,15 +34,21 @@ export type PeerMailRuntime = Pick<
 >
 
 const NOTHING_SENT = { effectsApplied: false } as const
-const RuntimeStatusCapabilities = z.object({ capabilities: z.array(z.string()).optional() })
+const RuntimeStatusCapabilities = lazyZodSchema(() =>
+  z.object({ capabilities: z.array(z.string()).optional() })
+)
 const DELIVER_TIMEOUT_MS = 15_000
 // An older server returns none; one this Orca cannot read is dropped, since the mail is already stored.
-const PeerMailDeliverResult = z.object({ warnings: z.array(z.unknown()).max(8).optional() })
-const PeerMailDeliveryHeld = z.object({
-  code: z.literal('recipient_delivery_held'),
-  recipient: z.string(),
-  message: z.string().max(2000)
-})
+const PeerMailDeliverResult = lazyZodSchema(() =>
+  z.object({ warnings: z.array(z.unknown()).max(8).optional() })
+)
+const PeerMailDeliveryHeld = lazyZodSchema(() =>
+  z.object({
+    code: z.literal('recipient_delivery_held'),
+    recipient: z.string(),
+    message: z.string().max(2000)
+  })
+)
 
 /** "term_9f3c on Jinwoo's Mac": who sent it, and the Orca server it came from. */
 export function peerMailSenderLabel(runtime: PeerMailRuntime, sender: string): string {

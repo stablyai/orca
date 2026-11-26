@@ -5,6 +5,7 @@ import type { DispatchContextRow } from '../../db/orchestration-records'
 import { canonicalOrcaSessionId } from '../../addressing/session-lineage/canonical-orca-session-id'
 import { resolveOrchestrationParty } from '../../addressing/orchestration-party'
 import { runCoordinatorKey } from '../../addressing/orchestration-caller-identity'
+import { isOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address'
 import { getRemoteDispatch } from '../../db/remote-owned/remote-dispatch-records'
 
 type Party = Pick<AgentMessageSender['party'], 'terminalHandle' | 'orcaSessionId'>
@@ -96,8 +97,15 @@ function remoteWorkerLineage(
 ): Lineage {
   const record = getRemoteDispatch(db, dispatchId)
   return record?.run_id === runId &&
+    record.asker_proven === 1 &&
     sameParty(
-      { terminalHandle: record.creator_handle, orcaSessionId: record.creator_orca_session_id },
+      {
+        terminalHandle: record.creator_handle,
+        orcaSessionId:
+          record.creator_orca_session_id && isOrcaSessionId(record.creator_orca_session_id)
+            ? record.creator_orca_session_id
+            : null
+      },
       recipient
     )
     ? { relation: 'worker', workerDispatch: { creator_turn_source: record.creator_turn_source } }

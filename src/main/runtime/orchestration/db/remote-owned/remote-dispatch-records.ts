@@ -2,7 +2,7 @@ import type { OrchestrationDb } from '../orchestration-db'
 import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
 import type { RemoteRunLinkRow } from './remote-run-links'
 import { writtenRow } from './written-row'
-import type { RemoteStartCreatorColumns } from './remote-placement-hold'
+import type { RemoteCreatorColumns } from './remote-placement-hold'
 
 export type RemoteDispatchRow = {
   dispatch_id: string
@@ -24,7 +24,9 @@ export type RemoteDispatchRow = {
   task_settled_here: number
   created_at: string
   updated_at: string
-} & RemoteStartCreatorColumns
+  asker_proven: number
+  worktree_id: string | null
+} & RemoteCreatorColumns
 
 const SETTLED_WORKER_STATES = ['succeeded', 'failed', 'stopped', 'abandoned']
 /** `task_settled_here` for an attempt abandoned here, which a retry may follow at once. */
@@ -101,49 +103,12 @@ export function countRemoteDispatches(db: OrchestrationDb, runId: string | undef
   return row.count
 }
 
-/** Identity only: which server runs the Dispatch and for which Task. State comes from the server's queue. */
-export function ensureRemoteDispatchRecord(
-  db: OrchestrationDb,
-  link: RemoteRunLinkRow,
-  identity: { dispatchId: string; taskId: string; agent?: string | null }
-): RemoteDispatchRow {
+/** This Orca's own receipt of the start proves the creator its placement gave the attempt asked
+ *  for it: only then does its start outcome report where it was asked. Adoption alone proves none. */
+export function markRemoteAskerProven(db: OrchestrationDb, dispatchId: string): void {
   db.db
-    .prepare(
-      `INSERT INTO remote_dispatches (dispatch_id, conversation_id, run_id, environment_id, task_id, agent)
-       VALUES (?, ?, ?, ?, ?, ?)
-       ON CONFLICT(dispatch_id) DO UPDATE SET agent = COALESCE(remote_dispatches.agent, excluded.agent)`
-    )
-    .run(
-      identity.dispatchId,
-      link.conversation_id,
-      link.run_id,
-      link.environment_id,
-      identity.taskId,
-      identity.agent ?? null
-    )
-  return writtenRow(getRemoteDispatch(db, identity.dispatchId), `Dispatch ${identity.dispatchId}`)
-}
-
-/** The attempt that answers this Orca's own reservation was asked by its creator, as a local
- *  Dispatch records; one the server started by itself names no one here. The first asker stands. */
-export function recordRemoteAttemptCreator(
-  db: OrchestrationDb,
-  dispatchId: string,
-  placement: RemoteStartCreatorColumns
-): void {
-  db.db
-    .prepare(
-      `UPDATE remote_dispatches
-       SET creator_handle = ?, creator_orca_session_id = ?, creator_turn_source = ?
-       WHERE dispatch_id = ? AND creator_handle IS NULL AND creator_orca_session_id IS NULL
-         AND creator_turn_source IS NULL`
-    )
-    .run(
-      placement.creator_handle,
-      placement.creator_orca_session_id,
-      placement.creator_turn_source,
-      dispatchId
-    )
+    .prepare('UPDATE remote_dispatches SET asker_proven = 1 WHERE dispatch_id = ?')
+    .run(dispatchId)
 }
 
 /** The server's state for the Dispatch, applied in its queue order. A terminal state sends any stop owed at once: its receipt is now the proof. */

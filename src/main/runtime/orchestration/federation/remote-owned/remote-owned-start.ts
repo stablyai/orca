@@ -32,12 +32,12 @@ import {
 import { openRemoteRunLink } from '../../db/remote-owned/remote-run-links'
 import { callRemoteOwnedServer } from './remote-owned-calls'
 import { resolveCrossMachineChildParent } from '../cross-machine-child-parent'
-import { resolveDispatchCreator } from '../../../rpc/methods/orchestration/runs/dispatch-creator'
-import { recordedCreatorIdentity } from '../../db/dispatch-depth'
 import { remoteForwardKey } from './remote-forward-caller'
+import { resolveDispatchCreator } from '../../../rpc/methods/orchestration/runs/dispatch-creator'
 import {
   errorData,
   failedBeforeSending,
+  answeredWorktreeId,
   inServerTerms,
   serverNeverAnswered
 } from './remote-owned-answers'
@@ -166,10 +166,7 @@ export async function startRemoteOwnedWorker(
     taskId,
     requestKey: forward.key,
     retryOf: params.retryOf,
-    // As a local start's Dispatch records it, so the server's reports go where the start was asked.
-    creator: recordedCreatorIdentity(
-      resolveDispatchCreator(runtime, params.from, ctx.orchestrationCaller)
-    ),
+    creator: resolveDispatchCreator(runtime, params.from, ctx.orchestrationCaller),
     create: existingTask
       ? undefined
       : {
@@ -236,7 +233,8 @@ export async function startRemoteOwnedWorker(
       dispatchId: started.data.dispatchId,
       requestKey: forward.key,
       peerRunId: started.data.run?.id,
-      agent
+      agent,
+      worktreeId: answeredWorktreeId(receipt)
     })
     if (!recorded) {
       // A reset already removed the reservation; a re-made pairing keeps it, so a later start of the Task there is refused here.

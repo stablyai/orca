@@ -1,18 +1,23 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { AgentJournalPromptIntent } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import { acpPermissionPresentation } from '../requests/acp-timeline-requests'
 import type { AcpDialect, AcpRequestPresentation } from './acp-dialect'
 
-const gooseShellOutputSchema = z.looseObject({
-  stdout: z.string(),
-  stderr: z.string(),
-  exit_code: z.number().int()
-})
+const gooseShellOutputSchema = lazyZodSchema(() =>
+  z.looseObject({
+    stdout: z.string(),
+    stderr: z.string(),
+    exit_code: z.number().int()
+  })
+)
 
-const gooseToolCallMetaSchema = z.looseObject({
-  goose: z.looseObject({ toolCall: z.looseObject({ toolName: z.string().min(1) }) })
-})
+const gooseToolCallMetaSchema = lazyZodSchema(() =>
+  z.looseObject({
+    goose: z.looseObject({ toolCall: z.looseObject({ toolName: z.string().min(1) }) })
+  })
+)
 
 // Goose's own refusals when no provider, model or key is configured.
 const NOT_CONFIGURED =

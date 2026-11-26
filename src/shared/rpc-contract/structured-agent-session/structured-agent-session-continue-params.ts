@@ -1,7 +1,8 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { SessionId } from './structured-agent-session-identifiers'
 
 /** Recheck the latest Orca-interrupted turn before continuing; stale or repeated clicks send nothing. */
-export const ContinueInterruptedParams = z
-  .object({ sessionId: SessionId, turnItemId: z.string().min(1).max(1024) })
-  .strict()
+export const ContinueInterruptedParams = lazyZodSchema(() =>
+  z.object({ sessionId: SessionId, turnItemId: z.string().min(1).max(1024) }).strict()
+)

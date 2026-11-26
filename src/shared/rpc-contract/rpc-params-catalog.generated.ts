@@ -71,6 +71,7 @@ import { DelegatedMobileDeviceSyncParamsSchema } from '../remote-runtime/pairing
 import { RegisterDeviceKeyParamsSchema } from '../remote-runtime/pairing/device-key-registration-contract'
 import { DeclareOrcaAccountParamsSchema } from '../remote-runtime/pairing/paired-desktop-account-contract'
 import { PairingCreateOfferParamsSchema } from '../remote-runtime/pairing/pairing-create-offer-contract'
+import { PairingGetDirectEndpointsParamsSchema } from '../remote-runtime/pairing/pairing-direct-endpoints-contract'
 import { ExchangePairingTicketParamsSchema } from '../remote-runtime/pairing/ticket-exchange-contract'
 import {
   PairingGetEndpointsParamsSchema,
@@ -2054,6 +2055,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'pairing.createOffer': PairingCreateOfferParamsSchema,
   'pairing.delegatedMobileDevice.sync': DelegatedMobileDeviceSyncParamsSchema,
   'pairing.exchangeTicket': ExchangePairingTicketParamsSchema,
+  'pairing.getDirectEndpoints': PairingGetDirectEndpointsParamsSchema,
   'pairing.getEndpoints': PairingGetEndpointsParamsSchema,
   'pairing.provisionRelay': PairingProvisionRelayParamsSchema,
   'pairing.registerDeviceKey': RegisterDeviceKeyParamsSchema,

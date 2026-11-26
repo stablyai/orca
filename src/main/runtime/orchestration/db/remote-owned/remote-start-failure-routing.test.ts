@@ -6,12 +6,12 @@ import '../dispatch-row-writer'
 import '../attempt-outcome-projection'
 import type { DispatchCreator } from '../dispatch-depth'
 import type { MessageRow } from '../orchestration-records'
-import { recordedCreatorIdentity } from '../dispatch-depth'
 import type { OrchestrationWorkerServer } from '../../federation/environment-transport'
 import { importRemoteOwnedItem } from './remote-owned-import'
 import { recordRemoteStart, reserveRemotePlacement } from './remote-placements'
 import { markRemotePlacementNeverSent } from './remote-placement-hold'
 import { openRemoteRunLink, remoteServerPin } from './remote-run-links'
+import { getRemoteDispatch } from './remote-dispatch-records'
 import {
   reportNeverReadyWorkerStart,
   START_BLOCKED_FENCE
@@ -191,7 +191,7 @@ function pairedRun() {
         taskId: TASK,
         requestKey,
         ...(retryOf ? { retryOf } : { create: { spec: 'work' } }),
-        creator: recordedCreatorIdentity(creator)
+        creator
       })
     },
     neverSent() {
@@ -271,6 +271,11 @@ function pairedRun() {
         })
       }
     },
+    /** Who this Orca's record of the attempt says started it. */
+    creatorOf(dispatchId: string) {
+      const record = getRemoteDispatch(home, dispatchId)
+      return [record?.creator_handle, record?.creator_turn_source]
+    },
     judge(pick?: (message: MessageRow) => boolean) {
       return answersThread(home, runId, pick)
     }
@@ -319,8 +324,11 @@ describe("a paired server's start outcome reaches its asker as a local one does"
   it("keeps the outcome in Orca when the start's answer never reached this Orca", () => {
     const run = pairedRun()
     run.reserve(THREAD_TURN)
-    run.fail(run.start(), 'never-ready')
+    const dispatchId = run.start()
+    run.fail(dispatchId, 'never-ready')
     run.pull()
+    // The queue's adoption copied the placement's creator; only the start's answer proves the ask.
+    expect(run.creatorOf(dispatchId)).toEqual([COORDINATOR, 'connector'])
     expect(run.judge().toThread).toBe(false)
   })
 
@@ -409,6 +417,13 @@ describe('the asker a paired-server attempt reports for', () => {
     run.pull()
     expect(run.judge(sentBy(`dispatch:${first}`)).toThread).toBe(true)
     expect(run.judge(sentBy(`dispatch:${second}`)).toThread).toBe(false)
+    // A new start of the Task is an ask of its own again.
+    run.reserve(THREAD_TURN, 'retry-key', second)
+    const third = run.start(second)
+    run.receive(third, 'retry-key')
+    run.fail(third, 'never-ready')
+    run.pull()
+    expect(run.judge(sentBy(`dispatch:${third}`)).toThread).toBe(true)
   })
 
   it('names no one for an attempt the server started by itself', () => {
@@ -420,6 +435,7 @@ describe('the asker a paired-server attempt reports for', () => {
     const second = run.start(first)
     run.fail(second, 'never-ready')
     run.pull()
+    expect(run.creatorOf(second)).toEqual([COORDINATOR, 'connector'])
     expect(run.judge(sentBy(`dispatch:${first}`)).toThread).toBe(true)
     expect(run.judge(sentBy(`dispatch:${second}`)).toThread).toBe(false)
   })
