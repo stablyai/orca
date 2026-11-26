@@ -27388,7 +27388,8 @@
       "cliMethod": "本机 CLI",
       "sdkHelp": "填写飞书开发者后台中的应用凭据。Orca 会将密钥保存在机器人的宿主机上。",
       "credentialsRequired": "宿主机无法读取已保存的应用密钥。请断开连接并重新输入凭据。",
-      "uploadPermission": "请在「应用身份」下启用 IM 文件上传权限并发布应用。仅授权用户身份无法让机器人上传文件。"
+      "uploadPermission": "请在「应用身份」下启用 IM 文件上传权限并发布应用。仅授权用户身份无法让机器人上传文件。",
+      "disconnectFailed": "监听已停止。请再次断开连接以释放此应用。"
     },
     "deepLink": {
       "missing": "该对话未在此电脑上打开",

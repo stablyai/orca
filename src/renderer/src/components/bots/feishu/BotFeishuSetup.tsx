@@ -101,6 +101,11 @@ export function BotFeishuSetup({
           'bots.feishu.uploadPermission',
           'Enable IM file upload under App identity (tenant), then publish the permission. A user-only grant cannot authorize bot uploads.'
         )
+      case 'disconnect-failed':
+        return t(
+          'bots.feishu.disconnectFailed',
+          'The listener has stopped. Disconnect again to release this app.'
+        )
       case 'credentials-required':
         return t(
           'bots.feishu.credentialsRequired',

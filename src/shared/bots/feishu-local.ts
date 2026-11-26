@@ -8,6 +8,7 @@ export type FeishuLocalState = {
   status:
     | 'off'
     | 'credentials-required'
+    | 'disconnect-failed'
     | 'upload-permission'
     | 'connecting'
     | 'pairing'

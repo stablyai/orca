@@ -17,6 +17,8 @@ export class FeishuLocalHost {
   private restoreFailed = false
   private readonly file: string
   private readonly scope: string
+  private readonly connecting = new Set<Promise<void>>()
+  private readonly failedRemovals = new Set<string>()
   private readonly retiring = new Map<string, Promise<void>>()
   private readonly unwatch: () => void
   constructor(
@@ -58,21 +60,22 @@ export class FeishuLocalHost {
       if (this.stopping) {
         return
       }
-      if (this.runtime.bots.list().some((bot) => bot.id === b.bot)) {
-        let secret: string | null = null
-        if (b.profile === null) {
-          const sealed = await this.inbox.credential(b.account)
-          try {
-            if (sealed) {
-              secret = getSecretStore().decryptString(Buffer.from(sealed, 'base64'))
-            }
-          } catch {
-            /* Leave an unreadable credential disconnected. */
+      let secret: string | null = null
+      if (b.profile === null) {
+        const sealed = await this.inbox.credential(b.account)
+        try {
+          if (sealed) {
+            secret = getSecretStore().decryptString(Buffer.from(sealed, 'base64'))
           }
+        } catch {
+          /* Leave an unreadable credential disconnected. */
         }
-        if (!this.stopping) {
-          this.launch(b, secret, false)
-        }
+      }
+      if (this.stopping) {
+        return
+      }
+      if (this.runtime.bots.list().some((bot) => bot.id === b.bot)) {
+        this.launch(b, secret, false)
       } else {
         await this.inbox.remove(this.scope, b.bot, b.account)
       }
@@ -88,12 +91,24 @@ export class FeishuLocalHost {
     if (this.restoreFailed) {
       throw new Error('Could not read Feishu bindings')
     }
+    if (this.failedRemovals.has(bot)) {
+      return { status: 'disconnect-failed' }
+    }
     return this.active.get(bot)?.state() ?? { status: 'off' }
   }
   async profiles(): Promise<string[]> {
     return (await listProfiles()).map((p) => p.name)
   }
   async connect(bot: string, setup: FeishuSetup): Promise<void> {
+    const pending = this.connectBot(bot, setup)
+    this.connecting.add(pending)
+    try {
+      await pending
+    } finally {
+      this.connecting.delete(pending)
+    }
+  }
+  private async connectBot(bot: string, setup: FeishuSetup): Promise<void> {
     await this.opening
     if (
       this.restoreFailed ||
@@ -150,10 +165,16 @@ export class FeishuLocalHost {
       .stop()
       .then(async () => {
         await this.inbox.remove(this.scope, bot, c.binding.account)
+        this.failedRemovals.delete(bot)
         if (this.active.get(bot) === c) {
           this.active.delete(bot)
         }
         this.runtime.notifyBotsChanged({ botIds: [bot], kinds: ['settings'] })
+      })
+      .catch((error: unknown) => {
+        this.failedRemovals.add(bot)
+        this.runtime.notifyBotsChanged({ botIds: [bot], kinds: ['settings'] })
+        throw error
       })
       .finally(() => this.retiring.delete(bot))
     this.retiring.set(bot, removal)
@@ -170,6 +191,7 @@ export class FeishuLocalHost {
     if (
       this.stopping ||
       this.retiring.has(botId) ||
+      this.failedRemovals.has(botId) ||
       !c ||
       !c.binding.owner ||
       dmKey(c.binding).externalId !== externalId ||
@@ -202,7 +224,7 @@ export class FeishuLocalHost {
     await Promise.allSettled(
       [...this.active.values()]
         .map((c) => c.stop())
-        .concat([...this.retiring.values()], this.opening)
+        .concat([...this.retiring.values()], [...this.connecting], this.opening)
     )
     this.active.clear()
   }

@@ -1,12 +1,12 @@
 import { acknowledgeFeishuMessage } from './feishu-replies'
-import { randomBytes } from 'node:crypto'
+import { FeishuPairing } from './feishu-pairing'
 import { setTimeout as delay } from 'node:timers/promises'
 import type { FeishuLocalState } from '../../shared/bots/feishu-local'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { runtimeConversationHost } from '../external-conversations/external-conversation-runtime-host'
 import { drainFeishuOutbox } from './feishu-outbox'
-import { matchesPairingOriginal, type FeishuMessage } from './feishu-message'
+import type { FeishuMessage } from './feishu-message'
 import { feishuCliTransport } from './feishu-cli-transport'
 import { feishuProblem } from './feishu-cli-status'
 import { FeishuUploadPermissionError } from './feishu-transport'
@@ -21,13 +21,11 @@ export class FeishuConnection {
   private readonly controller = new AbortController()
   private readonly signal = this.controller.signal
   private phase: FeishuLocalState['status'] = 'connecting'
-  private code: string | undefined
-  private expires = 0
+  private pairing?: FeishuPairing
   private work: Promise<void> | undefined
   private transport?: Promise<FeishuTransport>
   private consumer: Promise<void> | undefined
   private release?: () => void
-  private tick?: NodeJS.Timeout
   private retry?: NodeJS.Timeout
   private again = false
   private deliveryRetry: 'retrying' | 'upload-permission' | null = null
@@ -58,14 +56,10 @@ export class FeishuConnection {
     }
 
     if (pair) {
-      this.code = `Orca ${randomBytes(16).toString('hex')}`
-      this.expires = Date.now() + 5 * 60_000
-      this.tick = setTimeout(() => {
-        if (this.code) {
-          this.setPhase('expired')
-          void this.stop()
-        }
-      }, 5 * 60_000).unref()
+      this.pairing = new FeishuPairing(() => {
+        this.setPhase('expired')
+        void this.stop()
+      })
     }
     this.watch()
     this.transport =
@@ -104,8 +98,8 @@ export class FeishuConnection {
       ...(this.binding.profile === null ? {} : { profile: this.binding.profile }),
       appId: this.binding.app,
       status,
-      ...((status === 'pairing' || status === 'verification-failed') && this.code
-        ? { pairingText: this.code }
+      ...((status === 'pairing' || status === 'verification-failed') && this.pairing
+        ? { pairingText: this.pairing.text }
         : {})
     }
   }
@@ -117,9 +111,9 @@ export class FeishuConnection {
   }
   async stop(): Promise<void> {
     this.controller.abort()
-    this.code = undefined
+    this.pairing?.close()
+    this.pairing = undefined
     this.release?.()
-    clearTimeout(this.tick)
     clearTimeout(this.retry)
     await Promise.allSettled([this.consumer, this.work])
   }
@@ -132,11 +126,18 @@ export class FeishuConnection {
         this.setPhase('connecting')
         await api.listen(
           () => {
+            if (this.signal.aborted) {
+              return
+            }
             this.setPhase(this.binding.owner ? 'listening' : 'pairing')
             backoff = 1000
             this.wake()
           },
-          () => this.setPhase('retrying'),
+          () => {
+            if (!this.signal.aborted) {
+              this.setPhase('retrying')
+            }
+          },
           (message) => this.receive(api, message)
         )
       } catch (error) {
@@ -163,33 +164,29 @@ export class FeishuConnection {
       }
       await this.inbox.accept(b, m)
       this.wake()
-    } else if (
-      m.message_type === 'text' &&
-      this.code &&
-      m.content === this.code &&
-      Date.now() < this.expires
-    ) {
-      try {
-        await this.confirm(api, m)
-      } catch {
-        if (!this.signal.aborted) {
-          this.setPhase('verification-failed')
-        }
-      }
+    } else if (m.message_type === 'text' && this.pairing?.matches(m.content)) {
+      await this.confirm(api, m, this.pairing)
     }
   }
-  private async confirm(api: FeishuTransport, m: FeishuMessage): Promise<void> {
-    if (
-      !matchesPairingOriginal(await api.original(m.message_id), m) ||
-      this.signal.aborted ||
-      !this.bot() ||
-      Date.now() >= this.expires
-    ) {
+  private async confirm(
+    api: FeishuTransport,
+    m: FeishuMessage,
+    challenge: FeishuPairing
+  ): Promise<void> {
+    const result = await challenge.verify(
+      api,
+      m,
+      () => !this.signal.aborted && !this.binding.owner && Boolean(this.bot()),
+      () => this.inbox.pair(this.scope, this.binding, m)
+    )
+    if (this.signal.aborted) {
       return
     }
-    if ((await this.inbox.pair(this.scope, this.binding, m)) && !this.signal.aborted) {
-      this.code = undefined
-      clearTimeout(this.tick)
+    if (result === 'rejected') {
+      this.setPhase('verification-failed')
+    }
+    if (result === 'paired') {
+      this.pairing = undefined
       this.binding.owner = m.sender_id
       this.binding.chat = m.chat_id
       this.binding.pairedAt = Number(m.create_time)
@@ -249,7 +246,7 @@ export class FeishuConnection {
   private async drain(api: FeishuTransport): Promise<void> {
     const b = this.binding
     let row = await this.inbox.next(b.account)
-    while (row && !this.signal.aborted) {
+    for (let count = 0; row && !this.signal.aborted && count < 32; count++) {
       const bot = this.bot()
       if (!bot) {
         return
@@ -281,6 +278,9 @@ export class FeishuConnection {
       }
       await this.inbox.admitted(b.account, row.mid)
       row = await this.inbox.next(b.account)
+    }
+    if (row && !this.retry && !this.signal.aborted) {
+      this.again = true
     }
     const journal = getStructuredAgentSessionHost()?.deps.store.connectorReplies()
     if (!journal) {

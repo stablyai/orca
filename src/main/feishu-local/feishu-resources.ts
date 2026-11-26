@@ -32,7 +32,8 @@ const postElement = z.discriminatedUnion('tag', [
 ])
 const savedPost = z.object({
   prompt: z.string(),
-  storedImages: z.array(z.string()).max(MAX_ASKER_IMAGES)
+  storedImages: z.array(z.string()).max(MAX_ASKER_IMAGES),
+  skippedImages: z.boolean().optional()
 })
 
 function postInput(value: unknown): { prompt: string; keys: string[] } {
@@ -99,17 +100,27 @@ async function fetchInput(
   if (kind === 'post') {
     const { prompt, keys } = postInput(value)
     const storedImages: string[] = []
+    const missing: number[] = []
     if (withImages) {
-      for (const key of keys) {
-        storedImages.push(await save(key, 'image', 'image'))
+      for (const [index, key] of keys.entries()) {
+        try {
+          storedImages.push(await save(key, 'image', 'image'))
+        } catch {
+          signal.throwIfAborted()
+          missing.push(index + 1)
+        }
       }
     }
+    const skippedImages = !withImages && keys.length > 0
+    const caption = skippedImages
+      ? 'This agent cannot accept the attached images.'
+      : missing.length
+        ? `Could not attach inline image(s) ${missing.join(', ')}.`
+        : undefined
     const input = {
-      prompt:
-        !withImages && keys.length
-          ? `${prompt}\nThis agent cannot accept the attached images.`
-          : prompt,
-      storedImages
+      prompt: caption ? `${prompt}\n${caption}` : prompt,
+      storedImages,
+      skippedImages: skippedImages || missing.length > 0
     }
     return { ...input, path: JSON.stringify(input) }
   }
@@ -186,7 +197,9 @@ export async function feishuInput(
       const saved = savedPost.parse(JSON.parse(row.path))
       if (
         !withImages ||
-        (await Promise.all(saved.storedImages.map(storedResourceAvailable))).every(Boolean)
+        ((saved.skippedImages === false ||
+          (saved.skippedImages === undefined && saved.storedImages.length > 0)) &&
+          (await Promise.all(saved.storedImages.map(storedResourceAvailable))).every(Boolean))
       ) {
         return withImages ? saved : { prompt: saved.prompt }
       }

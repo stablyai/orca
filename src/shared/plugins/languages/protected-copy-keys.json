@@ -716,6 +716,7 @@
     "bots.feishu.credentials",
     "bots.feishu.credentialsRequired",
     "bots.feishu.disconnect",
+    "bots.feishu.disconnectFailed",
     "bots.feishu.error",
     "bots.feishu.expired",
     "bots.feishu.hostError",

@@ -143,3 +143,65 @@ it('reuses a present inbox attachment but rechecks the original after the unclai
     await rm(dir, { recursive: true, force: true })
   }
 })
+
+it('rechecks skipped post images and retains verified text and earlier images if another download fails', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'feishu-inline-'))
+  const current = vi
+    .spyOn(attachmentRegistry, 'getAgentSessionAttachmentStore')
+    .mockReturnValue(new AgentSessionAttachmentStore(dir, { hasSession: () => true }))
+  try {
+    const post = {
+      ...original,
+      msg_type: 'post',
+      body: {
+        content: JSON.stringify({
+          title: 'Verified caption',
+          content: [
+            [
+              { tag: 'img', image_key: 'img_first' },
+              { tag: 'img', image_key: 'img_second' }
+            ]
+          ]
+        })
+      }
+    }
+    const raw = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==',
+      'base64'
+    )
+    const api = {
+      original: async () => [post],
+      download: vi.fn(async (_mid: string, key: string) => {
+        if (key === 'img_second') {
+          throw new Error('Unavailable')
+        }
+        return raw
+      })
+    }
+    const row: { mid: string; kind: 'post'; body: string; path: string | null } = {
+      mid: post.message_id,
+      kind: 'post',
+      body: 'post',
+      path: null
+    }
+    const stored = async (_account: string, _mid: string, path: string) => {
+      row.path = path
+    }
+    await feishuInput(api, { stored }, verified, row, 'text-only', new AbortController().signal)
+    expect(api.download).not.toHaveBeenCalled()
+    const read = await feishuInput(
+      api,
+      { stored },
+      verified,
+      row,
+      'codex',
+      new AbortController().signal
+    )
+    expect(read.prompt).toContain('Verified caption')
+    expect(read.prompt).toContain('inline image(s) 2')
+    expect(read.storedImages).toHaveLength(1)
+  } finally {
+    current.mockRestore()
+    await rm(dir, { recursive: true, force: true })
+  }
+})

@@ -1,3 +1,4 @@
+import { feishuCliProcess } from './feishu-cli-process'
 import { runProcess, spawnProcess } from '@orca/process-host'
 import { signalProcessTree } from '@orca/process-host/process-tree-termination'
 import type { Readable } from 'node:stream'
@@ -43,7 +44,7 @@ export async function feishuCommand(
   input?: string | Uint8Array
 ): Promise<unknown> {
   const result = await runProcess({
-    program: 'lark-cli',
+    ...(await feishuCliProcess()),
     detached: process.platform !== 'win32',
     args,
     input,
@@ -143,7 +144,7 @@ export async function consumeFeishu(
 ): Promise<void> {
   signal.throwIfAborted()
   const child = spawnProcess({
-    program: 'lark-cli',
+    ...(await feishuCliProcess()),
     args: ['--profile', app, 'event', 'consume', EVENT, '--as', 'bot'],
     stdio: 'pipe',
     detached: process.platform !== 'win32'

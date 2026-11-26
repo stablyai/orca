@@ -1,3 +1,4 @@
+import { feishuCliProcess } from './feishu-cli-process'
 import { mkdtemp, open, readdir, rm, stat, watch } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -139,7 +140,7 @@ export function feishuCliTransport(
       })()
       try {
         const reply = await runProcess({
-          program: 'lark-cli',
+          ...(await feishuCliProcess()),
           args: [
             '--profile',
             app,

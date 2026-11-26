@@ -27712,7 +27712,8 @@
       "cliMethod": "Local CLI",
       "sdkHelp": "Use the credentials from your Feishu app’s developer console. Orca stores the secret on the bot’s host.",
       "credentialsRequired": "The host could not open the stored app secret. Disconnect and enter the credentials again.",
-      "uploadPermission": "Enable IM file upload under App identity (tenant), then publish the permission. A user-only grant cannot authorize bot uploads."
+      "uploadPermission": "Enable IM file upload under App identity (tenant), then publish the permission. A user-only grant cannot authorize bot uploads.",
+      "disconnectFailed": "The listener has stopped. Disconnect again to release this app."
     },
     "row": {
       "deleteTitle": "Delete {{name}}?",
