@@ -266,11 +266,11 @@ describe('OrchestrationWorkerModelSetting', () => {
         onChange={() => {}}
       />
     )
-    expect(markup).toContain('aria-label="Gemini model"')
-    expect(markup).toContain('aria-label="Gemini effort"')
+    expect(markup).toContain('aria-label="Goose model"')
+    expect(markup).toContain('aria-label="Goose effort"')
     expect(markup).toContain('Not available')
-    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*aria-label="Gemini model"/)
-    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*aria-label="Gemini effort"/)
+    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*aria-label="Goose model"/)
+    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*aria-label="Goose effort"/)
   })
 
   it('disables Effort until the selected model actually offers effort choices', () => {
