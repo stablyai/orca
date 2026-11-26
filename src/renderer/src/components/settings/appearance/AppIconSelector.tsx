@@ -2,9 +2,6 @@ import { useEffect, useState } from 'react'
 import type React from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
-import classicIconUrl from '../../../../../../resources/icon.png?url'
-import watercolorIconUrl from '../../../../../../resources/app-icons/orca-watercolor.png?url'
-import blueIconUrl from '../../../../../../resources/app-icons/orca-blue.png?url'
 import {
   APP_ICON_OPTIONS,
   CUSTOM_APP_ICON_ID,
@@ -14,19 +11,13 @@ import {
   DEFAULT_APP_ICON_ID,
   normalizeAppIconId,
   type AppIconId,
-  type BuiltInAppIconId,
   type CustomAppIconImportFailureCode
 } from '../../../../../shared/app-lifecycle/identity/app-icon'
 import { Button } from '../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { APP_ICON_URLS } from './app-icon-urls'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
-
-const APP_ICON_URLS = {
-  classic: classicIconUrl,
-  watercolor: watercolorIconUrl,
-  blue: blueIconUrl
-} satisfies Record<BuiltInAppIconId, string>
 
 const BUILT_IN_APP_ICON_IDS: readonly AppIconId[] = APP_ICON_OPTIONS.map((option) => option.id)
 

@@ -1,34 +1,25 @@
-import { getUpdateInstallBlockGuidance } from '../../maintenance/update-card/update-install-block-guidance'
 import type React from 'react'
 import { useEffect, useRef, useState } from 'react'
-import { Download, Loader2, Power, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '../../../store/index'
-import { Button } from '../../ui/button'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
-import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import { updaterMessageText } from '@/app-shell/updates/updater-message-copy'
-import {
-  getUpdateCheckClickOptions,
-  getUpdateCheckHint
-} from '@/app-shell/updates/update-check-click-options'
+import { useTranslate } from '@/i18n/use-translate'
 import { GeneralRemoteServerUpdates } from './GeneralRemoteServerUpdates'
 import { ReleaseChannelSection } from './ReleaseChannelSection'
 import { UpdateDelaySetting } from './UpdateDelaySetting'
 import { AutomaticUpdatesSetting } from './AutomaticUpdatesSetting'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
-import { formatUpdateDelayDate } from './update-delay-copy'
 import { useNow } from '@/lib/window-activity/use-now'
-import { isDelayedUpdatePending } from '../../../../../shared/updater/update-delay'
-import { getReleaseNotesUrlForVersion } from '../../../../../shared/updater/release-channel'
-import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
+import { getOrcaCloudTeamCapabilities } from '../../../../../shared/orca-profiles/orca-cloud-team-policy'
+import { getBuiltInAppIconUrl } from '../appearance/app-icon-urls'
+import { UpdateStatusRow } from './UpdateStatusRow'
+import { getUpdateStatusRowModel } from './update-status-row-model'
 
 export function GeneralUpdateSettingsSection({
-  children
-}: { children?: React.ReactNode } = {}): React.JSX.Element {
+  headerAction
+}: { headerAction?: React.ReactNode } = {}): React.JSX.Element {
   const t = useTranslate()
-  const intlLocale = useIntlLocale()
   const updateStatus = useAppStore((s) => s.updateStatus)
   // Older hosts omit error versions; retain the target for accurate failure copy.
   const updateVersionRef = useRef<string | null>(null)
@@ -45,6 +36,10 @@ export function GeneralUpdateSettingsSection({
 
   const [appVersion, setAppVersion] = useState<string | null>(null)
   const installTarget = useAppStore((s) => s.retainedUpdateTarget)
+  const appIcon = useAppStore((s) => s.settings?.appIcon)
+  const teamDelayDays = useAppStore(
+    (s) => getOrcaCloudTeamCapabilities(s.orcaProfileAuthStatus)?.teamPolicy?.updateDelayDays
+  )
   const [failedRestartTarget, setFailedRestartTarget] = useState<typeof installTarget>(null)
   const showManualRestart =
     updateStatus.installOnQuit === true &&
@@ -57,7 +52,6 @@ export function GeneralUpdateSettingsSection({
     60_000,
     updateStatus.state === 'not-available' && Boolean(updateStatus.delayedUpdate)
   )
-  const updateCheckHint = getUpdateCheckHint()
   // Hide channel switching behind Option/Alt-click because it can downgrade to unvetted builds.
   const [channelSwitcherRevealed, setChannelSwitcherRevealed] = useState(false)
 
@@ -88,10 +82,33 @@ export function GeneralUpdateSettingsSection({
     })
   }
 
+  const handleDownload = (): void => {
+    void window.api.updater.download().catch((error) => {
+      toast.error(
+        t(
+          'auto.components.settings.GeneralUpdateSettingsSection.02dc082e70',
+          'Could not start the update download.'
+        ),
+        { description: String((error as Error)?.message ?? error) }
+      )
+    })
+  }
+
+  const model = getUpdateStatusRowModel(updateStatus, {
+    showManualRestart,
+    retainedVersion: updateVersionRef.current,
+    canSkipDelay: teamDelayDays === undefined,
+    now
+  })
+
   return (
     <SettingsGroup
       key="updates"
       title={t('settings.general.about.title', 'About')}
+      action={
+        // The header sits 4px in; this lines a ghost action's text up with the rows' 20px right edge.
+        headerAction ? <div className="pe-2">{headerAction}</div> : undefined
+      }
       onHeaderClick={(event) => {
         if (event.altKey) {
           setChannelSwitcherRevealed((revealed) => !revealed)
@@ -108,245 +125,20 @@ export function GeneralUpdateSettingsSection({
           'Check for app updates and install a newer Orca version.'
         )}
         keywords={['about', 'update', 'version', 'release notes', 'download']}
-        className="space-y-3 py-3"
       >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className="text-sm">
-            {t('settings.general.about.version', 'Orca {{version}}', {
-              version: appVersion ?? '…'
-            })}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            // Modifier clicks are one-off update actions, not saved toggles.
-            onClick={(event) => window.api.updater.check(getUpdateCheckClickOptions(event))}
-            title={updateCheckHint}
-            disabled={
-              updateStatus.state === 'checking' ||
-              updateStatus.state === 'downloading' ||
-              (updateStatus.state === 'error' &&
-                updateStatus.messageCode === 'macStagingTimeout') ||
-              (updateStatus.state === 'downloaded' && updateStatus.installing)
-            }
-            className="gap-2"
-          >
-            {updateStatus.state === 'checking' ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <RefreshCw className="size-3.5" />
-            )}
-            {t(
-              'auto.components.settings.GeneralUpdateSettingsSection.6d27bd46e3',
-              'Check for updates'
-            )}
-          </Button>
-
-          {updateStatus.state === 'available' && !updateStatus.externallyManaged ? (
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => {
-                void window.api.updater.download().catch((error) => {
-                  toast.error(
-                    t(
-                      'auto.components.settings.GeneralUpdateSettingsSection.02dc082e70',
-                      'Could not start the update download.'
-                    ),
-                    {
-                      description: String((error as Error)?.message ?? error)
-                    }
-                  )
-                })
-              }}
-              className="gap-2"
-            >
-              <Download className="size-3.5" />
-              {t(
-                'auto.components.settings.GeneralUpdateSettingsSection.downloadUpdate',
-                'Download update'
-              )}
-            </Button>
-          ) : !showManualRestart &&
-            updateStatus.state === 'error' &&
-            updateStatus.retryAction === 'install' &&
-            updateStatus.retryable !== false ? (
-            <Button variant="default" size="sm" onClick={handleRestartToUpdate} className="gap-2">
-              <RefreshCw className="size-3.5" />
-              {t('auto.components.UpdateCard.b3b02a9d84', 'Try again')}
-            </Button>
-          ) : !showManualRestart &&
-            updateStatus.state === 'downloaded' &&
-            !(updateStatus.automaticDownload && updateStatus.installing) ? (
-            <Button
-              variant="default"
-              size="sm"
-              onClick={handleRestartToUpdate}
-              disabled={updateStatus.installing}
-              className="gap-2"
-            >
-              <Download className="size-3.5" />
-              {t(
-                'auto.components.settings.GeneralUpdateSettingsSection.restartToUpdate',
-                'Restart to update'
-              )}
-            </Button>
-          ) : null}
-        </div>
-
-        {showManualRestart && (
-          // The action follows its copy and wraps below it, end-aligned, when narrow.
-          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-            <p className="text-xs text-muted-foreground">
-              <span className="block font-medium text-foreground">
-                {t('updates.installOnQuit.title', 'Update ready to install')}
-              </span>
-              {t('updates.installOnQuit.summary', 'Quit Orca. Reopen after installation.')}
-            </p>
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => void window.api.app.quit().catch(console.error)}
-              className="ms-auto"
-            >
-              <Power className="size-3.5" />
-              {t('updates.installOnQuit.quit', 'Quit Orca')}
-            </Button>
-          </div>
-        )}
-        <p className="text-xs text-muted-foreground empty:hidden">
-          {updateStatus.state === 'idle' &&
-            t(
-              'auto.components.settings.GeneralUpdateSettingsSection.d69a09b672',
-              'Updates are checked automatically on launch.'
-            )}
-          {updateStatus.state === 'checking' &&
-            t(
-              'auto.components.settings.GeneralUpdateSettingsSection.31fd7150cf',
-              'Checking for updates...'
-            )}
-          {updateStatus.state === 'available' && (
-            <>
-              {updateStatus.externallyManaged
-                ? t(
-                    'auto.components.settings.GeneralUpdateSettingsSection.externallyManagedVersionAvailable',
-                    'Version {{version}} is available. Update Orca through your system package manager — Orca cannot install this release itself.',
-                    { version: updateStatus.version }
-                  )
-                : t(
-                    'auto.components.settings.GeneralUpdateSettingsSection.versionAvailable',
-                    'Version {{version}} is available.',
-                    { version: updateStatus.version }
-                  )}
-              {updateStatus.source !== 'local' && (
-                <a
-                  href={
-                    updateStatus.releaseUrl ?? getReleaseNotesUrlForVersion(updateStatus.version)
-                  }
-                  target="_blank"
-                  onClick={openAppHttpLinkFromAnchor}
-                  rel="noopener noreferrer"
-                  className="ms-1 whitespace-nowrap underline hover:text-foreground"
-                >
-                  {t(
-                    'auto.components.settings.GeneralUpdateSettingsSection.8a52ca1d02',
-                    'Release notes'
-                  )}
-                </a>
-              )}
-            </>
-          )}
-          {updateStatus.state === 'not-available' &&
-            (updateStatus.unsupportedSystemUpdate
-              ? t(
-                  'macosUpdateRequirement.settingsStatus',
-                  'Orca {{version}} requires macOS {{macos}} or later. This is the latest version for this Mac.',
-                  {
-                    version: updateStatus.unsupportedSystemUpdate.version,
-                    macos: updateStatus.unsupportedSystemUpdate.minimumMacosVersion
-                  }
-                )
-              : updateStatus.delayedUpdate
-                ? isDelayedUpdatePending(updateStatus.delayedUpdate, now)
-                  ? t(
-                      'settings.updateDelay.upToDateWithHeld',
-                      'You’re up to date. A newer release is on hold until {{date}}.',
-                      {
-                        date: formatUpdateDelayDate(
-                          Date.parse(updateStatus.delayedUpdate.availableAt),
-                          intlLocale
-                        )
-                      }
-                    )
-                  : t(
-                      'settings.updateDelay.heldReleaseReady',
-                      'A newer release is ready. Check for updates to get it.'
-                    )
-                : t(
-                    'auto.components.settings.GeneralUpdateSettingsSection.f40d88390d',
-                    'You’re on the latest version.'
-                  ))}
-          {updateStatus.state === 'downloading' &&
-            t(
-              'auto.components.settings.GeneralUpdateSettingsSection.downloadingVersion',
-              'Downloading version {{version}} ({{percent}}%)…',
-              { version: updateStatus.version, percent: updateStatus.percent }
-            )}
-          {updateStatus.state === 'downloaded' && !showManualRestart && (
-            <>
-              {updateStatus.installing
-                ? t(
-                    'auto.components.settings.GeneralUpdateSettingsSection.versionInstalling',
-                    'Version {{version}} is being installed.',
-                    { version: updateStatus.version }
-                  )
-                : t(
-                    'auto.components.settings.GeneralUpdateSettingsSection.versionReadyToInstall',
-                    'Version {{version}} is ready to install.',
-                    { version: updateStatus.version }
-                  )}
-              {updateStatus.source !== 'local' && (
-                <a
-                  href={
-                    updateStatus.releaseUrl ?? getReleaseNotesUrlForVersion(updateStatus.version)
-                  }
-                  target="_blank"
-                  onClick={openAppHttpLinkFromAnchor}
-                  rel="noopener noreferrer"
-                  className="ms-1 whitespace-nowrap underline hover:text-foreground"
-                >
-                  {t(
-                    'auto.components.settings.GeneralUpdateSettingsSection.8a52ca1d02',
-                    'Release notes'
-                  )}
-                </a>
-              )}
-            </>
-          )}
-          {updateStatus.state === 'error' &&
-            !showManualRestart &&
-            (updateStatus.installBlock
-              ? getUpdateInstallBlockGuidance(updateStatus.installBlock, t).explainer
-              : updateStatus.recovery?.kind === 'linux-package-install'
-                ? updaterMessageText(updateStatus)
-                : updateVersionRef.current
-                  ? t(
-                      'auto.components.settings.GeneralUpdateSettingsSection.b9ad70c30d',
-                      'Update error. {{value0}}',
-                      { value0: updaterMessageText(updateStatus) }
-                    )
-                  : t(
-                      'auto.components.settings.GeneralUpdateSettingsSection.bd79d412f0',
-                      'Update check failed. {{value0}}',
-                      { value0: updaterMessageText(updateStatus) }
-                    ))}
-        </p>
+        <UpdateStatusRow
+          model={model}
+          status={updateStatus}
+          appVersion={appVersion}
+          iconUrl={getBuiltInAppIconUrl(appIcon)}
+          onDownload={handleDownload}
+          onRestart={handleRestartToUpdate}
+        />
       </SearchableSetting>
       {isWebClientLocation() ? null : <AutomaticUpdatesSetting />}
       <UpdateDelaySetting />
       {channelSwitcherRevealed ? <ReleaseChannelSection /> : null}
       <GeneralRemoteServerUpdates />
-      {children}
     </SettingsGroup>
   )
 }

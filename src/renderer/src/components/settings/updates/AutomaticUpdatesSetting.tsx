@@ -1,7 +1,4 @@
 import { useId, useState } from 'react'
-import { Info } from 'lucide-react'
-import { Button } from '../../ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
@@ -33,23 +30,6 @@ export function AutomaticUpdatesSetting(): React.JSX.Element {
       <SettingsRow
         label={title}
         htmlFor={switchId}
-        labelAccessory={
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                aria-label={t('settings.automaticUpdates.info', 'About automatic updates')}
-              >
-                <Info className="size-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4} className="max-w-xs">
-              {description}
-            </TooltipContent>
-          </Tooltip>
-        }
         control={
           <Switch
             id={switchId}

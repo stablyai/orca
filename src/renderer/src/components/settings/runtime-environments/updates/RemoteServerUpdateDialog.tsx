@@ -12,42 +12,13 @@ import {
 } from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
 import { useAppStore } from '@/store/index'
-import type { RemoteServerUpdateEntry } from '../../../../../../shared/remote-runtime/host-updates/remote-server-update-coordinator'
-import { translate } from '@/i18n/i18n'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
+import { useTranslate } from '@/i18n/use-translate'
+import { RemoteServerUpdateStatus } from './RemoteServerUpdateStatus'
 import {
-  getRemoteServerManualUpdateHelp,
-  RemoteServerUpdateStatus
-} from './RemoteServerUpdateStatus'
-
-function versionDescription(entry: RemoteServerUpdateEntry, t: Translate = translate): string {
-  if (entry.currentVersion && entry.targetVersion && entry.currentVersion !== entry.targetVersion) {
-    return `${entry.currentVersion} → ${entry.targetVersion}`
-  }
-  if (entry.currentVersion) {
-    return `v${entry.currentVersion}`
-  }
-  return t(
-    'auto.components.settings.RemoteServerUpdateDialog.versionUnavailable',
-    'Version unavailable'
-  )
-}
-
-function entryHelp(entry: RemoteServerUpdateEntry, t: Translate = translate): string | null {
-  if (entry.error) {
-    return entry.error
-  }
-  if (entry.phase === 'manual') {
-    return getRemoteServerManualUpdateHelp(entry, t)
-  }
-  if (entry.phase === 'restarting') {
-    return t(
-      'auto.components.settings.RemoteServerUpdateDialog.restartingHelp',
-      'Waiting for the replacement server to reconnect on the new version.'
-    )
-  }
-  return null
-}
+  getRemoteServerEntryHelp as entryHelp,
+  getRemoteServerVersionDescription as versionDescription
+} from './remote-server-update-entry-copy'
 
 function ServerUpdateRow({
   entry,
@@ -145,7 +116,7 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="max-h-[min(720px,calc(100vh-2rem))] gap-4 sm:max-w-2xl">
+      <DialogContent className="max-h-[min(720px,calc(100vh-2rem))] sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
             {t(

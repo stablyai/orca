@@ -1,16 +1,13 @@
 import type React from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Download, Loader2, RefreshCw } from 'lucide-react'
+import { Download, Loader2, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '../../../store/index'
 import { Button } from '../../ui/button'
 import { ReleaseBuildPicker } from './ReleaseBuildPicker'
-import {
-  SettingsSegmentedControl,
-  SettingsSubsectionHeader
-} from '../form-controls/SettingsFormControls'
-import { Badge } from '../../ui/badge'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
+import { useTranslate } from '@/i18n/use-translate'
+import { AboutDisclosureRow } from './AboutDisclosureRow'
 import {
   getReleaseChannelLabel,
   updaterMessageText
@@ -22,40 +19,11 @@ import {
   DEV_CHANNEL_PLATFORM_LABEL,
   RELEASE_CHANNELS,
   getVersionChannel,
-  hasDedicatedReleaseRepo,
   isChannelSupportedOnPlatform,
   requiresManualDevChannelInstall,
   type ReleaseBuild,
   type ReleaseChannel
 } from '../../../../../shared/updater/release-channel'
-
-const CHANNEL_DESCRIPTIONS: Record<ReleaseChannel, (t: Translate) => string> = {
-  stable: (t) =>
-    t(
-      'auto.components.settings.ReleaseChannelSection.stableDescription',
-      'Stable releases for general use.'
-    ),
-  rc: (t) =>
-    t(
-      'auto.components.settings.ReleaseChannelSection.rcDescription',
-      'Release candidates published before a stable release.'
-    ),
-  hourly: (t) =>
-    t(
-      'auto.components.settings.ReleaseChannelSection.hourlyDescription',
-      'Built every hour from main.'
-    ),
-  daily: (t) =>
-    t(
-      'auto.components.settings.ReleaseChannelSection.dailyDescription',
-      'Built once a day from main.'
-    ),
-  adhoc: (t) =>
-    t(
-      'auto.components.settings.ReleaseChannelSection.adhocDescription',
-      'One-off builds from a branch for trying changes before they merge.'
-    )
-}
 
 export function ReleaseChannelSection(): React.JSX.Element {
   const t = useTranslate()
@@ -68,6 +36,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
   const [loadError, setLoadError] = useState<UpdaterCodedMessage | null>(null)
   const [loading, setLoading] = useState(false)
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
+  const [open, setOpen] = useState(false)
 
   const platform = getShortcutPlatform()
   const runningChannel = appVersion ? getVersionChannel(appVersion) : null
@@ -170,92 +139,55 @@ export function ReleaseChannelSection(): React.JSX.Element {
     void window.api.shell.openUrl(build.installerUrl ?? build.releaseUrl)
   }
 
-  const title = t('auto.components.settings.ReleaseChannelSection.title', 'Update channel')
+  const title = t('settings.about.channel.title', 'Channel')
   const platformLabel = t(
     'auto.components.settings.ReleaseChannelSection.devChannelPlatforms',
     DEV_CHANNEL_PLATFORM_LABEL
   )
 
   return (
-    <div data-settings-row="" className="space-y-4 py-3">
-      <div className="flex items-start justify-between gap-3">
-        <SettingsSubsectionHeader
-          title={title}
-          description={t(
-            'auto.components.settings.ReleaseChannelSection.description',
-            'Switch update channels or jump to any published build, including older ones. Downgrades are allowed and unvetted builds can be broken.'
-          )}
-        />
-        <Badge variant="outline" className="mt-0.5 shrink-0">
-          {t('auto.components.settings.ReleaseChannelSection.devOnly', 'Dev only')}
-        </Badge>
-      </div>
-
-      <div className="space-y-2">
-        <SettingsSegmentedControl<ReleaseChannel>
-          value={activeChannel}
-          // Selecting the running channel clears the override so browsing cannot permanently pin background checks.
-          onChange={(channel) =>
-            setReleaseChannelOverride(channel === runningChannel ? null : channel)
-          }
-          ariaLabel={title}
-          wrap
-          // Show unsupported channels disabled with reasons so users can discover why they are unavailable.
-          options={RELEASE_CHANNELS.map((channel) => {
-            const supported = isChannelSupportedOnPlatform(channel, platform)
-            const label = getReleaseChannelLabel(channel, t)
-            return {
-              value: channel,
-              label,
-              disabled: !supported,
-              ariaLabel: supported
-                ? undefined
-                : t(
-                    'auto.components.settings.ReleaseChannelSection.devChannelUnsupportedAria',
-                    '{{value0}} ({{value1}} only)',
-                    { value0: label, value1: platformLabel }
-                  ),
-              tooltip: supported
-                ? undefined
-                : t(
-                    'auto.components.settings.ReleaseChannelSection.devChannelUnsupported',
-                    '{{value0}} builds are produced only for {{value1}}. Linux stays on {{stable}} or {{rc}}.',
-                    {
-                      value0: label,
-                      value1: platformLabel,
-                      stable: getReleaseChannelLabel('stable', t),
-                      rc: getReleaseChannelLabel('rc', t)
-                    }
-                  )
-            }
-          })}
-        />
-        <p className="text-xs text-muted-foreground">{CHANNEL_DESCRIPTIONS[activeChannel](t)}</p>
-      </div>
-
-      {hasDedicatedReleaseRepo(activeChannel) ? (
-        <div className="flex items-start gap-2 rounded-md border border-border bg-muted/40 p-3">
-          <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-          <p className="text-xs text-muted-foreground">
-            {activeChannel === 'adhoc'
-              ? t(
-                  'auto.components.settings.ReleaseChannelSection.adhocWarning',
-                  'Windows builds are unsigned. The author may stop maintaining a build, so keep a stable build handy.'
+    <div data-settings-row="">
+      <AboutDisclosureRow
+        label={title}
+        open={open}
+        onOpenChange={setOpen}
+        control={
+          <Select
+            value={activeChannel}
+            // Selecting the running channel clears the override so browsing cannot permanently pin background checks.
+            onValueChange={(value) => {
+              const channel = RELEASE_CHANNELS.find((candidate) => candidate === value)
+              if (channel) {
+                setReleaseChannelOverride(channel === runningChannel ? null : channel)
+              }
+            }}
+          >
+            <SelectTrigger size="sm" aria-label={title}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {RELEASE_CHANNELS.map((channel) => {
+                const supported = isChannelSupportedOnPlatform(channel, platform)
+                return (
+                  // Unsupported channels stay listed, disabled, so users can see why they are missing.
+                  <SelectItem key={channel} value={channel} disabled={!supported}>
+                    {getReleaseChannelLabel(channel, t)}
+                    {supported ? null : (
+                      <span className="text-muted-foreground">{platformLabel}</span>
+                    )}
+                  </SelectItem>
                 )
-              : t(
-                  'auto.components.settings.ReleaseChannelSection.scheduledWarning',
-                  'These builds ship with no test gate. Windows builds are unsigned. Keep a stable build handy.'
-                )}
-          </p>
-        </div>
-      ) : null}
-
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
+              })}
+            </SelectContent>
+          </Select>
+        }
+      >
+        <div data-settings-row="" className="flex items-center gap-2">
           <ReleaseBuildPicker
             key={activeChannel}
             builds={builds ?? []}
             selectedTag={selectedTag}
+            runningVersion={appVersion}
             onSelect={setSelectedTag}
             disabled={loading || !builds || builds.length === 0}
             placeholder={
@@ -267,7 +199,6 @@ export function ReleaseChannelSection(): React.JSX.Element {
                 : t('auto.components.settings.ReleaseChannelSection.noBuilds', 'No builds found')
             }
           />
-
           <Button
             variant="ghost"
             size="icon-sm"
@@ -279,13 +210,8 @@ export function ReleaseChannelSection(): React.JSX.Element {
             disabled={loading}
             onClick={() => void loadBuilds(activeChannel, { force: true })}
           >
-            {loading ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <RefreshCw className="size-3.5" />
-            )}
+            {loading ? <Loader2 className="animate-spin" /> : <RefreshCw />}
           </Button>
-
           <Button
             variant="outline"
             size="sm"
@@ -302,33 +228,21 @@ export function ReleaseChannelSection(): React.JSX.Element {
               handleSwitchTo(selectedBuild)
             }}
           >
-            {busy ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : needsManualInstall ? (
-              <span className="inline-flex items-center gap-1.5">
-                <Download className="size-3.5" aria-hidden="true" />
-                {t(
+            {busy ? <Loader2 className="animate-spin" /> : needsManualInstall ? <Download /> : null}
+            {needsManualInstall
+              ? t(
                   'auto.components.settings.ReleaseChannelSection.downloadInstaller',
                   'Download installer'
-                )}
-              </span>
-            ) : (
-              t('auto.components.settings.ReleaseChannelSection.switchTo', 'Switch to build')
-            )}
+                )
+              : t('settings.about.channel.switch', 'Switch')}
           </Button>
         </div>
-
-        <p className="text-xs text-muted-foreground">
-          {t(
-            'auto.components.settings.ReleaseChannelSection.cacheHint',
-            'Build lists are cached for 5 minutes. Refresh to check for new builds.'
-          )}
-        </p>
-
         {loadError ? (
-          <p className="text-xs text-destructive">{updaterMessageText(loadError)}</p>
+          <p data-settings-row="" className="text-settings-detail text-destructive">
+            {updaterMessageText(loadError)}
+          </p>
         ) : needsManualInstall && selectedBuild ? (
-          <p className="text-xs text-muted-foreground">
+          <p data-settings-row="" className="text-settings-detail text-muted-foreground">
             {t(
               'auto.components.settings.ReleaseChannelSection.manualInstallHint',
               '{{value0}} builds are unsigned on Windows, so the in-app updater cannot install one over a signed build. Run the downloaded installer once — Windows will warn about an unknown publisher — and every later switch, including back to {{stable}}, works from here.',
@@ -338,23 +252,8 @@ export function ReleaseChannelSection(): React.JSX.Element {
               }
             )}
           </p>
-        ) : isRunningBuild ? (
-          <p className="text-xs text-muted-foreground">
-            {t(
-              'auto.components.settings.ReleaseChannelSection.alreadyRunning',
-              'This is the build you are running.'
-            )}
-          </p>
-        ) : selectedBuild ? (
-          <p className="text-xs text-muted-foreground">
-            {t(
-              'auto.components.settings.ReleaseChannelSection.willSwitch',
-              '{{value0}} → {{value1}}',
-              { value0: appVersion ?? '…', value1: selectedBuild.version }
-            )}
-          </p>
         ) : null}
-      </div>
+      </AboutDisclosureRow>
     </div>
   )
 }

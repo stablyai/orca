@@ -2276,6 +2276,54 @@
         "open": "Open {{file}}"
       },
       "unreadable": "Saved sign-in or key can’t be opened on this computer"
+    },
+    "about": {
+      "star": {
+        "starred": "Starred"
+      },
+      "servers": {
+        "readyCount": "{{value0}} ready",
+        "updating": "Updating",
+        "updateAll": "Update all",
+        "title": "Servers"
+      },
+      "action": {
+        "update": "Update",
+        "check": "Check",
+        "retry": "Retry",
+        "skipDelay": "Skip delay",
+        "restart": "Restart"
+      },
+      "channel": {
+        "running": "Running",
+        "title": "Channel",
+        "switch": "Switch"
+      },
+      "status": {
+        "checking": "Checking…",
+        "upToDate": "Up to date",
+        "heldUntil": "{{version}} on hold until {{date}}",
+        "held": "{{version}} on hold",
+        "available": "{{version}} available",
+        "latestForMac": "Latest for this Mac",
+        "downloading": "Downloading {{version}}",
+        "ready": "{{version}} ready",
+        "installing": "Installing {{version}}…",
+        "installOnQuit": "Quit to install",
+        "installBlocked": "Install blocked",
+        "updateFailed": "Update failed",
+        "checkFailed": "Check failed",
+        "failed": "Failed",
+        "notes": "Notes",
+        "hideDetails": "Hide details",
+        "showDetails": "Show details",
+        "hide": "Hide",
+        "details": "Details",
+        "downloadProgress": "Download progress",
+        "copyDetails": "Copy details",
+        "copied": "Copied",
+        "copyFailed": "Could not copy details."
+      }
     }
   },
   "menu": {
