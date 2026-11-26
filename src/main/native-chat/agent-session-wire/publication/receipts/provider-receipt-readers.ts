@@ -71,16 +71,6 @@ export class ProviderReceiptReaders {
     )
   }
 
-  retireDocument(endpoint: ProviderReceiptDestination): void {
-    const target = this.credits.get(endpoint.transport)
-    if (target?.reader?.document === endpoint.document) {
-      for (const member of target.reader.streams.values()) {
-        member.close()
-      }
-    }
-    this.suppress(endpoint)
-  }
-
   attach(
     endpoint: ProviderReceiptDestination,
     identity: ProviderReceiptReader,
@@ -249,6 +239,7 @@ export class ProviderReceiptReaders {
   handoff = this.credits.handoff.bind(this.credits)
   suppress = this.credits.suppress.bind(this.credits)
   preparedReply = this.credits.preparedReply.bind(this.credits)
+  retireDocument = this.credits.retireDocument.bind(this.credits)
 
   private ready(target: Destination, reader: Reader, member: Membership): void {
     if (member.epoch !== undefined && reader.streams.get(member.stream.subscription) === member) {

@@ -136,6 +136,16 @@ export class ProviderReceiptCredits {
     }
   }
 
+  retireDocument(endpoint: ProviderReceiptDestination): void {
+    const reader = this.get(endpoint.transport)?.reader
+    if (reader?.document === endpoint.document) {
+      for (const member of reader.streams.values()) {
+        member.close()
+      }
+    }
+    this.suppress(endpoint)
+  }
+
   allocate(transport: AbortSignal): Destination | undefined {
     if (this.destinations.size >= MAX_PROVIDER_RECEIPT_DESTINATIONS) {
       return undefined
