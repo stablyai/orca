@@ -225,9 +225,20 @@ const MAX_KEYS_PER_OPTIONS = 8
 const JANUARY = new Date(2026, 0, 1)
 const JULY = new Date(2026, 6, 1)
 
-// A formatter keeps the zone it was built in; the offsets change when the system zone does.
+const ZONE_NAME_RECHECK_MS = 1_000
+let zoneName = ''
+let zoneNameReadAt = Number.NEGATIVE_INFINITY
+
+// A formatter keeps the zone it was built in. The offsets catch most zone changes at once; the
+// IANA name catches zones that share them (Helsinki, Cairo) and costs a formatter, so it is re-read
+// at most once a second.
 function systemZoneKey(): string {
-  return `${JANUARY.getTimezoneOffset()}/${JULY.getTimezoneOffset()}`
+  const now = Date.now()
+  if (now - zoneNameReadAt >= ZONE_NAME_RECHECK_MS) {
+    zoneNameReadAt = now
+    zoneName = new Intl.DateTimeFormat().resolvedOptions().timeZone ?? ''
+  }
+  return `${zoneName}/${JANUARY.getTimezoneOffset()}/${JULY.getTimezoneOffset()}`
 }
 const formats = new WeakMap<Intl.DateTimeFormatOptions, Map<string, RegionalDateTimeFormat>>()
 

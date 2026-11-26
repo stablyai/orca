@@ -1,4 +1,5 @@
 import { app, systemPreferences } from 'electron'
+import { runProcess } from '@orca/process-host'
 import {
   hourCycleFromTimePattern,
   osLocaleRegion,
@@ -58,4 +59,46 @@ export function getOsDateTimeRegion(): OsDateTimeRegion | null {
     setOsDateTimeRegion(snapshot)
   }
   return snapshot
+}
+
+const GSETTINGS_TIMEOUT_MS = 2_000
+let desktopClock: Promise<OsDateTimeRegion | null> | undefined
+
+// GNOME keeps its 12/24-hour choice in gsettings, apart from LC_TIME. Other desktops, headless hosts
+// and SSH sessions have no such setting to follow.
+function isGnomeDesktop(env: NodeJS.ProcessEnv): boolean {
+  const desktops = (env.XDG_CURRENT_DESKTOP ?? '').toUpperCase().split(':')
+  return desktops.includes('GNOME') && Boolean(env.DISPLAY || env.WAYLAND_DISPLAY)
+}
+
+async function gnomeHourCycle(): Promise<OsDateTimeRegion['hourCycle']> {
+  try {
+    const result = await runProcess({
+      program: 'gsettings',
+      args: ['get', 'org.gnome.desktop.interface', 'clock-format'],
+      timeoutMs: GSETTINGS_TIMEOUT_MS,
+      maxOutputBytes: 64
+    })
+    const value = result.timedOut || result.code !== 0 ? '' : result.stdout.trim()
+    return value === "'24h'" ? 'h23' : value === "'12h'" ? 'h12' : null
+  } catch {
+    // No gsettings on this machine.
+    return null
+  }
+}
+
+/** What windows get: the snapshot, plus GNOME's clock choice read once, async, when a window first asks. */
+export function getOsDateTimeRegionForWindow(): Promise<OsDateTimeRegion | null> {
+  const base = getOsDateTimeRegion()
+  if (base === null || process.platform !== 'linux' || !isGnomeDesktop(process.env)) {
+    return Promise.resolve(base)
+  }
+  desktopClock ??= gnomeHourCycle().then((hourCycle) => {
+    if (hourCycle !== null && snapshot !== undefined) {
+      snapshot = { ...snapshot, hourCycle }
+      setOsDateTimeRegion(snapshot)
+    }
+    return snapshot ?? base
+  })
+  return desktopClock
 }

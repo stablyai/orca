@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   hourCycleFromTimePattern,
   osLocaleRegion,
@@ -88,6 +88,23 @@ describe('regionalDateTimeFormat', () => {
     expect(format.format(Number.NaN)).toBe('Invalid Date')
     expect(format.format(new Date(8.64e15 + 1))).toBe('Invalid Date')
     expect(format.formatToParts(Number.NaN)).toEqual([{ type: 'literal', value: 'Invalid Date' }])
+  })
+
+  it('tells apart zones that share their January and July offsets', () => {
+    const zone = process.env.TZ
+    const at = Date.UTC(2026, 3, 15, 12)
+    const hour = { hour: 'numeric', hourCycle: 'h23' } as const
+    vi.useFakeTimers()
+    try {
+      process.env.TZ = 'Europe/Helsinki'
+      expect(regionalDateTimeFormat(hour, 'en').format(at)).toBe('15')
+      process.env.TZ = 'Africa/Cairo'
+      vi.advanceTimersByTime(1_000)
+      expect(regionalDateTimeFormat(hour, 'en').format(at)).toBe('14')
+    } finally {
+      process.env.TZ = zone
+      vi.useRealTimers()
+    }
   })
 
   it('follows a system time zone change instead of keeping the old zone', () => {
