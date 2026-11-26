@@ -1,21 +1,34 @@
 // An agent copy in the + menu: its own row and submenu, as its base agent has, launching the copy.
-import { chmodSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { expect } from '@stablyai/playwright-test'
-import { SUPPORTED, test } from '../session-fixtures/structured-claude-stub'
+import { test } from '../../desktop/electron-fixtures/orca-app'
+import { getGoldenStubAgentLaunchEnv } from '../../golden-journeys/golden-stub-agent'
 import { waitForActiveWorktree, waitForSessionReady } from '../../desktop/renderer-probes/store'
 import { waitForTerminalOutput } from '../../terminal/layout/terminal-pane-operations'
 
-test.skip(!SUPPORTED, 'the Claude stub wrapper is POSIX-only')
+test.skip(process.platform === 'win32', 'the copy wrapper is a POSIX shell script')
+// The fixture's stub `claude` makes Claude a detected agent, so the + menu lists it and its copy.
+test.use({ launchEnv: getGoldenStubAgentLaunchEnv() })
+
+let wrapperDir: string | null = null
+
+test.afterEach(() => {
+  if (wrapperDir) {
+    rmSync(wrapperDir, { recursive: true, force: true })
+    wrapperDir = null
+  }
+})
 
 test('an agent copy has its own submenu in the + menu and launches as the copy', async ({
-  orcaPage: page,
-  claudeStub
+  orcaPage: page
 }) => {
   // Two agent launches after a cold Orca start; the default 60s is too tight on CI.
   test.setTimeout(180_000)
   // A terminal shows the environment the copy started with.
-  const wrapper = path.join(path.dirname(claudeStub.command), 'claude-code-mode')
+  wrapperDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-agent-copy-'))
+  const wrapper = path.join(wrapperDir, 'claude-code-mode')
   writeFileSync(
     wrapper,
     [

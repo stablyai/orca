@@ -1,10 +1,23 @@
 // An agent copy's ID field: its agent prefix is fixed, only the suffix edits, and the whole id
 // still selects and copies as one string.
-import type { Locator, Page } from '@stablyai/playwright-test'
+import type { CDPSession, Locator, Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
 import { test } from '../../desktop/electron-fixtures/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from '../../desktop/renderer-probes/store'
-import { commitImeText, setImeComposition } from '../../terminal/ime/terminal-ime-cdp-composition'
+
+// A real Chromium composition session (CDP), as an IME's preedit sends.
+async function setImeComposition(session: CDPSession, text: string): Promise<void> {
+  const length = Array.from(text).length
+  await session.send('Input.imeSetComposition', {
+    text,
+    selectionStart: length,
+    selectionEnd: length
+  })
+}
+
+async function commitImeText(session: CDPSession, text: string): Promise<void> {
+  await session.send('Input.insertText', { text })
+}
 
 const savedCopyIds = (page: Page) =>
   page.evaluate(() => window.__store?.getState().settings?.agentCopies?.map((copy) => copy.id))
