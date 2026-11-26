@@ -5,7 +5,7 @@ import { JiraIcon } from '@/components/icons/JiraIcon'
 import { getWorkspaceAttachmentKey } from '../../../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import { getProviderChecksOutcome } from '../../../../../../shared/source-control/checks/provider-check-summary'
 import type { WorkspaceAttachment } from '../../../../../../shared/worktree/types'
-import { ReviewIcon } from './worktree-review-presentation'
+import { getReviewIconComponent, getReviewIconTone } from './worktree-review-presentation'
 import { workspaceAttachmentLabel } from '../metadata/worktree-attachment-editing'
 import {
   workspaceReferenceReview,
@@ -38,24 +38,46 @@ function singleReferenceLabel(item: WorkspaceAttachment, t: Translate = translat
       })
 }
 
-function ReferenceGlyph({
-  item,
-  details
-}: {
-  item: WorkspaceAttachment
+type ReferenceGlyphSpec = { Icon: React.ComponentType<{ className?: string }>; tone: string }
+
+function referenceGlyph(
+  item: WorkspaceAttachment,
   details: WorkspaceReferenceDetailsMap
-}): React.JSX.Element {
+): ReferenceGlyphSpec {
   const review = workspaceReferenceReview(item, details[getWorkspaceAttachmentKey(item)])
   if (review) {
-    return <ReviewIcon review={review} />
+    return { Icon: getReviewIconComponent(review), tone: getReviewIconTone(review) }
   }
-  if (item.provider === 'linear') {
-    return <LinearIcon className="text-muted-foreground" />
+  const Icon =
+    item.provider === 'linear' ? LinearIcon : item.provider === 'jira' ? JiraIcon : CircleDot
+  return { Icon, tone: 'text-muted-foreground' }
+}
+
+function ReferenceGlyph({
+  glyph: { Icon, tone }
+}: {
+  glyph: ReferenceGlyphSpec
+}): React.JSX.Element {
+  return <Icon className={tone} />
+}
+
+// Ghosts identical to a glyph already drawn read as a blurred icon, not extra information.
+function distinctGlyphs(
+  ordered: readonly WorkspaceAttachment[],
+  details: WorkspaceReferenceDetailsMap
+): { item: WorkspaceAttachment; glyph: ReferenceGlyphSpec }[] {
+  const drawn: { item: WorkspaceAttachment; glyph: ReferenceGlyphSpec }[] = []
+  for (const item of ordered) {
+    const glyph = referenceGlyph(item, details)
+    if (drawn.some(({ glyph: g }) => g.Icon === glyph.Icon && g.tone === glyph.tone)) {
+      continue
+    }
+    drawn.push({ item, glyph })
+    if (drawn.length === 3) {
+      break
+    }
   }
-  if (item.provider === 'jira') {
-    return <JiraIcon className="text-muted-foreground" />
-  }
-  return <CircleDot className="text-muted-foreground" />
+  return drawn
 }
 
 function priority(item: WorkspaceAttachment, details: WorkspaceReferenceDetailsMap): number {
@@ -116,6 +138,7 @@ export function WorktreeReferenceStack({
   if (!front) {
     return null
   }
+  const [frontGlyph, ...ghosts] = distinctGlyphs(ordered, details)
   const summary = ordered
     .map((item) => {
       const detail = details[getWorkspaceAttachmentKey(item)]
@@ -135,21 +158,18 @@ export function WorktreeReferenceStack({
       className="workspace-reference-stack"
       data-workspace-reference-stack={front.type === 'issue' ? front.provider : 'review'}
     >
-      {ordered
-        .slice(1, 3)
-        .toReversed()
-        .map((item, index, ghosts) => (
-          <span
-            key={getWorkspaceAttachmentKey(item)}
-            className="workspace-reference-stack-ghost"
-            data-depth={ghosts.length - index}
-            aria-hidden
-          >
-            <ReferenceGlyph item={item} details={details} />
-          </span>
-        ))}
+      {ghosts.toReversed().map(({ item, glyph }, index, ghosts) => (
+        <span
+          key={getWorkspaceAttachmentKey(item)}
+          className="workspace-reference-stack-ghost"
+          data-depth={ghosts.length - index}
+          aria-hidden
+        >
+          <ReferenceGlyph glyph={glyph} />
+        </span>
+      ))}
       <span className="workspace-reference-stack-front" data-reference-front="" aria-hidden>
-        <ReferenceGlyph item={front} details={details} />
+        <ReferenceGlyph glyph={frontGlyph.glyph} />
       </span>
       {items.length > 1 ? (
         <span
