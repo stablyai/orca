@@ -41,3 +41,29 @@ export function isBlankBrowserUrl(value: string | null | undefined): boolean {
   const trimmed = value?.trim() ?? ''
   return !trimmed || trimmed === 'about:blank' || trimmed.startsWith('data:text/html')
 }
+
+/** What the bottom bar's pill shows while reading: the site alone, as Safari does. Null for a blank page. */
+export function mobileBrowserAddressLabel(
+  value: string
+): { text: string; secure: boolean; file: boolean } | null {
+  if (isBlankBrowserUrl(value)) {
+    return null
+  }
+  const file = compactMobileBrowserFileAddress(value)
+  if (file) {
+    return { text: file, secure: false, file: true }
+  }
+  try {
+    const url = new URL(value)
+    if (url.host) {
+      return {
+        text: url.host.replace(/^www\./, ''),
+        secure: url.protocol === 'https:',
+        file: false
+      }
+    }
+  } catch {
+    // Not a URL the phone can parse; show it as the host sent it.
+  }
+  return { text: value, secure: false, file: false }
+}
