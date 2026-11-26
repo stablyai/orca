@@ -73,7 +73,12 @@ export async function readSessionModels(
   assertStructuredAgentResolutionCurrent(operation)
   observeAcpForkSupport(spec.agent, initialized)
   const deletes = Boolean(initialized.agentCapabilities?.sessionCapabilities?.delete)
-  if (!deletes && !listing.sessionFolderArgs && !listing.discardSession) {
+  if (
+    !deletes &&
+    !listing.sessionFolderArgs &&
+    !listing.discardSession &&
+    !listing.keepsListingSession
+  ) {
     throw new Error(`${spec.agent} cannot delete a session, so it lists its models only in chats`)
   }
   const started = await startListingSession(connection, workspace, operation)

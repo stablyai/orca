@@ -34,12 +34,14 @@ export function customAcpLaunchSpec(agent: CustomAcpAgent): AcpLaunchSpec {
     loginCommand: [],
     account: CUSTOM_ACP_ACCOUNT,
     installDirectories: () => [],
-    // A disposable session in a private folder; never in warm-up, only when someone asks for the list.
+    // A session in a private folder, only when someone asks for the list. Orca can't know how an
+    // arbitrary agent removes sessions, so one without ACP delete may keep it in its history.
     modelDiscovery: {
       kind: 'session',
       listingNamesConfiguredModel: false,
       inPrivateFolder: true,
-      listsOnDemand: true
+      listsOnDemand: true,
+      keepsListingSession: true
     },
     transcriptImport: null,
     sessionHistory: CUSTOM_ACP_SESSION_HISTORY
