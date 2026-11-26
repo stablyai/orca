@@ -297,3 +297,46 @@ const CLEAR_LOADED = { size: { width: 10, height: 10 }, image: new Image() }
 const CLEAR_SOURCE = { path: '/a.png' }
 const CLEAR_INITIAL = [note(1)]
 const noop = (): void => {}
+
+it('a chip another viewer opens while its marked copy is prepared stays, with both viewers’ words', async () => {
+  let endSecond = (): void => {}
+  // The second viewer opens the chip while this one's image is being prepared.
+  const { handle, opener } = chat(async () => {
+    endSecond = markNativeChatNotedImageEditing(SCOPE, 'chip')
+    appendToNativeChatComposerDraft(SCOPE, {
+      text: '',
+      images: [{ id: 'marked-copy', path: '/m.png' }]
+    })
+    return 'marked-copy'
+  })
+  appendToNativeChatComposerDraft(SCOPE, { text: '', images: [{ id: 'chip', path: '/c.png' }] })
+  setNativeChatAttachmentNotes(SCOPE, 'chip', {
+    mediaName: 'a.png',
+    source: { path: '/a.png' },
+    kind: 'image',
+    notes: [note(1)],
+    offset: 0
+  })
+  const endFirst = markNativeChatNotedImageEditing(SCOPE, 'chip')
+  const onAttached = vi.fn(() => replaceNativeChatNotedImage(SCOPE, 'chip'))
+  const onOpenChange = vi.fn()
+  const view = viewer({
+    opener,
+    notes: [note(1), note(2, 'mine')],
+    initialNotes: [note(1)],
+    onAttached,
+    replacesAttachmentId: 'chip',
+    onOpenChange
+  })
+  await act(async () => {
+    await view.result.current.close()
+  })
+  expect(handle.attachGeneratedImage).toHaveBeenCalledTimes(1)
+  // The chip and its notes stay for the other viewer; this one stays open with its own words.
+  expect(onAttached).not.toHaveBeenCalled()
+  expect(onOpenChange).not.toHaveBeenCalled()
+  expect(readNativeChatComposerDraft(SCOPE).images.map(({ id }) => id)).toEqual(['chip'])
+  expect(readNativeChatAttachmentNotes(SCOPE, 'chip')?.notes).toHaveLength(1)
+  endFirst()
+  endSecond()
+})

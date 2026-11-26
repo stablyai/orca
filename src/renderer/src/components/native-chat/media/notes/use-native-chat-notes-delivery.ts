@@ -1,11 +1,12 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
-import { showNativeChatNotesNotice } from './native-chat-notes-notice'
+import { nativeChatNotesRetryingUndo, showNativeChatNotesNotice } from './native-chat-notes-notice'
 import { useNativeChatNotesKeptOnUnmount } from './use-native-chat-notes-kept-on-unmount'
 import { nominateNativeChatMediaViewerReplacement } from './use-native-chat-media-viewer-focus'
 import {
   nativeChatNotesBlockedReason,
   nativeChatNotesKeptText,
+  undoRemoveFailedText,
   type NativeChatNotesBlocked
 } from './native-chat-notes-reasons'
 import { NATIVE_CHAT_NOTES_ERROR_ID } from './NativeChatMediaNotesPanel'
@@ -72,7 +73,7 @@ export function useNativeChatNotesDelivery({
   onAttached: ((ids: string[]) => (() => boolean | void) | void | false) | undefined
   /** A reopened marked image whose notes were all deleted: the caller takes them out of the draft
    *  and returns what puts them back. */
-  onCleared?: () => () => void
+  onCleared?: () => () => boolean
   /** The draft image these notes replace (a reopened or annotated chip), not part of "your message". */
   replacesAttachmentId?: string
   onOpenChange: (open: boolean) => void
@@ -182,6 +183,8 @@ export function useNativeChatNotesDelivery({
           offset,
           frame: async () => ({ image: loaded.image, ...loaded.size })
         })
+        // Another viewer may have opened the chip while the image was prepared.
+        assertNativeChatNotesSoleEditor(composer.scopeKey, replacesAttachmentId, ids)
         const restore = settleNativeChatNotesReplacement(composer.scopeKey, ids, onAttached?.(ids))
         // Closing returns focus to the marked copy that took the reopened chip's place.
         nominateNativeChatMediaViewerReplacement(replacesAttachmentId ? ids[0] : undefined)
@@ -283,7 +286,7 @@ export function useNativeChatNotesDelivery({
           defaultValue_one: '{{count}} note removed',
           count: initialNotes.length
         }),
-        undo: putBack
+        undo: nativeChatNotesRetryingUndo(scopeKey, putBack, undoRemoveFailedText(t))
       })
       finish()
       return
