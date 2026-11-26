@@ -70,6 +70,11 @@ describe('botItemAskWhileWorker', () => {
     expect(botItemAskWhileWorker(db, stopped.id)).toBe('stopped')
     const failed = attempt(db, { status: 'failed', lastFailure: 'boom', worker: 'failed' })
     expect(botItemAskWhileWorker(db, failed.id)).toBe('failed')
+    const closed = attempt(db, { status: 'failed', lastFailure: 'boom', worker: 'failed' })
+    db.db
+      .prepare("UPDATE dispatch_contexts SET termination_reason = 'operator_close' WHERE id = ?")
+      .run(closed.id)
+    expect(botItemAskWhileWorker(db, closed.id)).toBe('stopped')
   })
 
   it('reads unknown while a failed attempt may still report or recover, or is not on this computer', () => {
@@ -94,6 +99,25 @@ describe('botItemAskWhileWorker', () => {
     const followUp = attempt(db, { status: 'dispatched', followUpOf: retry.id })
     expect(botItemAskWhileWorker(db, first.id)).toBe('running')
     db.db.prepare("UPDATE dispatch_contexts SET status = 'completed' WHERE id = ?").run(followUp.id)
+    expect(botItemAskWhileWorker(db, first.id)).toBe('completed')
+  })
+
+  it('stays running while a follow-up of the first attempt runs, though its retry reported', () => {
+    const db = openDb()
+    const first = attempt(db, { status: 'failed', lastFailure: 'stopped', worker: 'stopped' })
+    attempt(db, { task: first.task, status: 'completed', retryOf: first.id })
+    const followUp = attempt(db, { status: 'dispatched', followUpOf: first.id })
+    expect(botItemAskWhileWorker(db, first.id)).toBe('running')
+    db.db.prepare("UPDATE dispatch_contexts SET status = 'completed' WHERE id = ?").run(followUp.id)
+    expect(botItemAskWhileWorker(db, first.id)).toBe('completed')
+  })
+
+  it('reads a fresh start on the same Task, with no retry edge, as the worker now', () => {
+    const db = openDb()
+    const first = attempt(db, { status: 'failed', lastFailure: 'boom', worker: 'failed' })
+    const fresh = attempt(db, { task: first.task, status: 'dispatched' })
+    expect(botItemAskWhileWorker(db, first.id)).toBe('running')
+    db.db.prepare("UPDATE dispatch_contexts SET status = 'completed' WHERE id = ?").run(fresh.id)
     expect(botItemAskWhileWorker(db, first.id)).toBe('completed')
   })
 })

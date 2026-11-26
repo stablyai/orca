@@ -185,6 +185,18 @@ describe('Needs you asks kept open --while', () => {
     store.close(uid, 'done', undefined, BOT)
     expect(late).toThrow(expect.objectContaining({ code: 'item_changed' }))
     expect(store.ownerComment(uid, 'Noted.', OWNER, [], LATER + 2).eventId).not.toBeNull()
+
+    // A later comment that asks nothing became the item's question; a reply naming the ask itself is
+    // refused too.
+    const twice = asked(store, { kind: 'until', at: LATER })
+    const ask = store.get(twice)!.questionEvent!
+    store.set(twice, { status: 'needs_you', comment: 'Still blocked.' }, BOT, NOW + 1)
+    const comment = store.get(twice)!.questionEvent!
+    expect(comment).not.toBe(ask)
+    store.withdrawAsk(twice, comment, { kind: 'until', at: LATER, state: 'passed' }, LATER)
+    expect(() => store.ownerComment(twice, 'Yes', OWNER, [], LATER + 1, undefined, ask)).toThrow(
+      expect.objectContaining({ code: 'item_changed' })
+    )
   })
 
   it('sends withdrawal mail a crash left owed on the first minute after a restart', async () => {

@@ -91,9 +91,11 @@ export async function writeResult(
     )
     const owner = runtime.bots.list().find((bot) => bot.id === record.ownerBotId)
     // Only while it still asks that question: Orca may have withdrawn it during the awaits above.
+    // The question this write asked, by its own events, so a newer ask committed meanwhile can't pass.
     const asks = write.some((event) => event.kind === 'status' && event.data.to === 'needs_you')
+    const question = write.findLast((event) => event.kind === 'commented')?.id ?? null
     const now = asks ? await store.get(outcome.uid) : null
-    if (now?.status === 'needs_you' && now.questionEvent === record.questionEvent) {
+    if (now?.status === 'needs_you' && now.questionEvent === question) {
       notifyBotItemQuestion(runtimeBotOwnerNotice(runtime), owner, item!, write)
     }
   }

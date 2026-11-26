@@ -6,6 +6,7 @@ import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-
 import type { DispatchContextRow } from '../runtime/orchestration/db/orchestration-records'
 import { DISPATCH_CONTEXT_COLUMN_LIST } from '../runtime/orchestration/db/row-column-lists'
 import { getFollowUpDispatch } from '../runtime/orchestration/db/dispatch-context/worker-follow-up-lineage'
+import { getActiveDispatchForTask } from '../runtime/orchestration/db/dispatch-context/task-dispatch-reconciliation'
 import { reportCorrectsUnobservedPrompt } from '../runtime/orchestration/workers/reports/worker-report-admission'
 
 export type BotItemAskWhileWorker = 'running' | BotItemWorkerEnd | 'unknown'
@@ -20,33 +21,57 @@ const OPEN_WORKER_STATES = new Set([
   'stop_unknown'
 ])
 
-function retryOf(db: OrchestrationDb, row: DispatchContextRow): DispatchContextRow | undefined {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type.
-  return db.db
-    .prepare(
-      `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts
-        WHERE task_id = ? AND retry_of_dispatch_id = ? ORDER BY rowid DESC LIMIT 1`
-    )
-    .get(row.task_id, row.id) as DispatchContextRow | undefined
+type Attempt = DispatchContextRow & { at: number }
+
+function attemptOf(row: unknown): Attempt | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, plus its rowid as `at`.
+  return row as Attempt | undefined
 }
 
-/** The attempt that speaks for the worker now: retries and follow-ups after `ref`, newest last. */
-function newestAttempt(db: OrchestrationDb, ref: string): DispatchContextRow | undefined {
-  let row = db.getDispatchContextById(ref)
-  const seen = new Set<string>()
-  while (row && !seen.has(row.id) && seen.size < LINEAGE_MAX) {
-    seen.add(row.id)
-    const next = retryOf(db, row) ?? getFollowUpDispatch(db, row.id)
-    if (!next) {
-      return row
-    }
-    row = next
+function attempt(db: OrchestrationDb, id: string): Attempt | undefined {
+  return attemptOf(
+    db.db
+      .prepare(
+        `SELECT rowid AS at, ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts WHERE id = ?`
+      )
+      .get(id)
+  )
+}
+
+/** The Task's newest attempt after this one: a retry, or a fresh start after recovery readied it. */
+function laterAttempt(db: OrchestrationDb, row: Attempt): Attempt | undefined {
+  return attemptOf(
+    db.db
+      .prepare(
+        `SELECT rowid AS at, ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts
+          WHERE task_id = ? AND rowid > ? ORDER BY rowid DESC LIMIT 1`
+      )
+      .get(row.task_id, row.at)
+  )
+}
+
+/** How one attempt with nothing after it ended; `unknown` while a report or recovery could change it. */
+function endOf(db: OrchestrationDb, row: DispatchContextRow): BotItemAskWhileWorker {
+  if (row.status === 'completed') {
+    return 'completed'
   }
-  return undefined
+  const task = db.getTask(row.task_id)
+  if (!task || reportCorrectsUnobservedPrompt(row, task)) {
+    return 'unknown'
+  }
+  const worker = db.getWorkerDispatch(row.id)
+  if (worker && OPEN_WORKER_STATES.has(worker.state)) {
+    return 'unknown'
+  }
+  return worker?.state === 'stopped' ||
+    row.last_failure === 'stopped' ||
+    row.termination_reason === 'operator_close'
+    ? 'stopped'
+    : 'failed'
 }
 
-/** How the newest attempt stands. Anything a later report or recovery could still change reads
- *  `unknown`, as does anything unreadable. */
+/** Every branch after `ref` (later attempts on its Task, follow-ups): running while any is, unknown
+ *  while any can't be told, else how the newest one ended. */
 export function botItemAskWhileWorker(
   db: OrchestrationDb | null | undefined,
   ref: string
@@ -55,25 +80,41 @@ export function botItemAskWhileWorker(
     return 'unknown'
   }
   try {
-    const row = newestAttempt(db, ref)
-    if (!row) {
+    const root = attempt(db, ref)
+    if (!root) {
       return 'unknown'
     }
-    if (row.status === 'pending' || row.status === 'dispatched') {
-      return 'running'
+    const seen = new Set<string>()
+    const ends: { row: Attempt; end: BotItemAskWhileWorker }[] = []
+    const stack = [root]
+    for (let row = stack.pop(); row; row = stack.pop()) {
+      if (seen.has(row.id)) {
+        continue
+      }
+      seen.add(row.id)
+      if (seen.size > LINEAGE_MAX) {
+        return 'unknown'
+      }
+      if (
+        row.status === 'pending' ||
+        row.status === 'dispatched' ||
+        getActiveDispatchForTask(db, row.task_id)
+      ) {
+        return 'running'
+      }
+      const followUp = getFollowUpDispatch(db, row.id)
+      const next = [laterAttempt(db, row), followUp && attempt(db, followUp.id)].filter(
+        (entry): entry is Attempt => entry !== undefined
+      )
+      if (next.length === 0) {
+        ends.push({ row, end: endOf(db, row) })
+      }
+      stack.push(...next)
     }
-    if (row.status === 'completed') {
-      return 'completed'
-    }
-    const task = db.getTask(row.task_id)
-    if (!task || reportCorrectsUnobservedPrompt(row, task)) {
+    if (ends.length === 0 || ends.some(({ end }) => end === 'unknown')) {
       return 'unknown'
     }
-    const worker = db.getWorkerDispatch(row.id)
-    if (worker && OPEN_WORKER_STATES.has(worker.state)) {
-      return 'unknown'
-    }
-    return worker?.state === 'stopped' || row.last_failure === 'stopped' ? 'stopped' : 'failed'
+    return ends.reduce((a, b) => (b.row.at > a.row.at ? b : a)).end
   } catch (error) {
     console.warn('[bots] items: could not read a --while worker', error)
     return 'unknown'

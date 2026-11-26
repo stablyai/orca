@@ -76,12 +76,19 @@ export function parseBotItemAskWhile(
   return { ok: false, message: '--while takes dispatch:<worker id> or until:<date and time>.' }
 }
 
+/** A stored object's fields, read without trusting their types. */
+function fieldsOf(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null
+    ? Object.fromEntries(Object.entries(value))
+    : null
+}
+
 /** A kept `while`, or null when it isn't one this build reads. */
 export function botItemAskWhileOf(value: unknown): BotItemAskWhile | null {
-  if (typeof value !== 'object' || value === null) {
+  const entry = fieldsOf(value)
+  if (!entry) {
     return null
   }
-  const entry = value as Record<string, unknown>
   if (entry.kind === 'dispatch' && typeof entry.ref === 'string' && DISPATCH_REF.test(entry.ref)) {
     return { kind: 'dispatch', ref: entry.ref }
   }
@@ -93,10 +100,10 @@ export function botItemAskWhileOf(value: unknown): BotItemAskWhile | null {
 
 /** A kept withdrawal, or null when it isn't one this build reads. */
 export function botItemAskWithdrawnOf(value: unknown): BotItemAskWithdrawn | null {
-  if (typeof value !== 'object' || value === null) {
+  const entry = fieldsOf(value)
+  if (!entry) {
     return null
   }
-  const entry = value as Record<string, unknown>
   if (
     entry.kind === 'dispatch' &&
     typeof entry.ref === 'string' &&

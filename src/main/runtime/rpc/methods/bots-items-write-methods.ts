@@ -143,7 +143,7 @@ function hostAskWhile(value: string, db: OrchestrationDb): BotItemAskWhile {
     if (state === 'unknown') {
       throw new BotItemError(
         'invalid_argument',
-        `No worker dispatch:${parsed.value.ref} on this computer, so Orca couldn't withdraw the ask when it ends. Nothing was posted.`
+        `Orca couldn't verify that worker dispatch:${parsed.value.ref} is running here. Nothing was posted.`
       )
     }
     if (state !== 'running') {
