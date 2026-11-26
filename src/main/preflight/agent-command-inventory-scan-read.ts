@@ -10,7 +10,7 @@ import {
 export type InventoryRead = {
   wait: (signal: AbortSignal) => Promise<InventoryPublication | null>
   snapshot: () => InventoryPublication | null
-  isCurrentMatch?: (command: string, match: AgentPathMatch | undefined) => boolean
+  isCurrentMatch: (command: string, match: AgentPathMatch | undefined) => boolean
 }
 
 export type InventoryReadOptions = {
@@ -21,6 +21,20 @@ export type InventoryReadOptions = {
   allowFallbackMisses?: boolean
   afterPublication?: number
   waitForCompletion?: boolean
+}
+
+export function readInventoryPublication(
+  publication: InventoryPublication | undefined
+): InventoryRead {
+  return {
+    wait: (signal) => waitForPromiseWithSignal(Promise.resolve(publication ?? null), signal),
+    snapshot: () => publication ?? null,
+    isCurrentMatch: (command, match) =>
+      match !== undefined &&
+      publication !== undefined &&
+      !publication.partial &&
+      publication.inventory.matches.get(command) === match
+  }
 }
 
 export function readInventoryScan(

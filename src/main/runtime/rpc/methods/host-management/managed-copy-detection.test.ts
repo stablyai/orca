@@ -1,13 +1,13 @@
 import { savedLaunchProgramHead } from '../../../../../shared/agent-launch/startup/managed-agent-launch-program'
 import type * as PreflightRuntimeTarget from '../../../../ipc/preflight/preflight-runtime-target'
 import type * as InstallerDetection from '../../../../../shared/agent-launch/installation/local-agent-install-dir-detection'
-import type * as FileSystem from 'node:fs/promises'
 import type * as NodeOs from 'node:os'
 import type * as AppEnvironment from '../../../../../shared/app-lifecycle/app-environment'
+import type * as LoginShellEnvironment from '../../../../startup/shell-environment/login-shell-environment'
 import type * as WslDefaultDistro from '../../../../wsl/discovery/wsl-default-distro'
 import type * as WslRunner from '../../../../wsl/execution/wsl-runner'
 import type { SleepingAgentLaunchConfig } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -63,10 +63,6 @@ vi.mock('../../../../../shared/app-lifecycle/app-environment', async (original) 
 vi.mock('../../../../orca-profiles/profile-storage-paths', () => ({
   getProfileUserDataPath: () => fixture.root
 }))
-vi.mock('node:fs/promises', async (original) => {
-  const fs = await original<typeof FileSystem>()
-  return { ...fs, realpath: vi.fn(fs.realpath) }
-})
 vi.mock('node:os', async (original) => ({
   ...(await original<typeof NodeOs>()),
   homedir: () => fixture.root
@@ -74,6 +70,10 @@ vi.mock('node:os', async (original) => ({
 vi.mock('../../../../ipc/preflight/preflight-local-env', () => ({
   buildLocalPreflightEnv: () => ({ PATH: fixture.path, PATHEXT: '.EXE;.CMD' }),
   buildLocalPreflightEnvAsync: async () => ({ PATH: fixture.path, PATHEXT: '.EXE;.CMD' })
+}))
+vi.mock('../../../../startup/shell-environment/login-shell-environment', async (original) => ({
+  ...(await original<typeof LoginShellEnvironment>()),
+  captureLoginShellEnvironment: async () => ({ status: 'captured', env: { PATH: fixture.path } })
 }))
 vi.mock('../../../../ipc/command-path/command-path-directory-worker-client', async () => {
   const directory = await import('../../../../ipc/command-path/command-path-directory')
@@ -740,18 +740,19 @@ it('uses the verified caller PATH for standalone Agent Teams when host inventory
   const held = Promise.withResolvers<void>()
   fixture.onScan = entered.resolve
   fixture.installs = held.promise
-  const checked = vi.mocked(realpath).mockClear()
   vi.useFakeTimers()
   const launch = resolveClaudeTeamsInvocation(undefined, {
     env: { PATH: dirname(callerClaude), PATHEXT: '.exe' }
   })
-  const resolved = launch.catch((error: unknown) => error)
+  let settled = false
+  const resolved = launch
+    .catch((error: unknown) => error)
+    .finally(() => {
+      settled = true
+    })
   try {
     await entered.promise
-    await vi.waitFor(() => {
-      const call = checked.mock.calls.findIndex(([file]) => file === callerClaude)
-      expect(checked.mock.settledResults[call]?.type).toBe('fulfilled')
-    })
+    await vi.waitFor(() => expect(settled).toBe(true))
     await vi.advanceTimersByTimeAsync(10_000)
     await expect(resolved).resolves.toEqual({ command: callerClaude })
   } finally {

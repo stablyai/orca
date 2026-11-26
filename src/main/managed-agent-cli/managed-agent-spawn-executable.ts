@@ -177,7 +177,7 @@ export async function rewriteLaunchExecutable(
     const verified = selection.result
     const selected: TerminalAgentProgram = setupGate
       ? 'path' in verified && verified.canonicalPath
-        ? { kind: 'full-path', path: verified.canonicalPath }
+        ? { kind: 'full-path', path: verified.path }
         : { kind: 'by-name', path: selection.program }
       : verified
     const program = selection.program
@@ -193,7 +193,7 @@ export async function rewriteLaunchExecutable(
     if (setupGate) {
       postSetupProgram = { agent, launchHead }
       if ('path' in verified && verified.canonicalPath) {
-        postSetupProgram.path = toPanePath(verified.canonicalPath)
+        postSetupProgram.path = launchHead
       }
     }
     const replaceable =

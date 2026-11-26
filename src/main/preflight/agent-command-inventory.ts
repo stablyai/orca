@@ -3,7 +3,6 @@ import {
   getWslGuestEnvironmentGeneration,
   invalidateWslGuestEnvironment
 } from '../wsl/execution/wsl-guest-environment'
-import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-reason'
 import {
   isInventoryListCommandSettled,
   publishInventory,
@@ -12,6 +11,7 @@ import {
   type InventoryPublications
 } from './agent-command-inventory-publication'
 import {
+  readInventoryPublication,
   readInventoryScan,
   type InventoryRead,
   type InventoryReadOptions
@@ -236,17 +236,13 @@ export function readInventory(
     revalidateUnavailable &&
     !hasMatch &&
     (settled || requested.some((cmd) => current?.fallbackMisses?.has(cmd)))
-  const readPublished = (): InventoryRead => ({
-    wait: (signal) => waitForPromiseWithSignal(Promise.resolve(published ?? null), signal),
-    snapshot: () => published ?? null
-  })
   if (
     settled &&
     !revalidateMiss &&
     (!slot.pending || (!qualifiesEarly && slot.pending.active.mode !== 'refresh')) &&
     (!published?.partial || !waitForCompletion || acceptAnyMatch)
   ) {
-    return readPublished()
+    return readInventoryPublication(published)
   }
 
   const readScan = (scan: InventoryScan): InventoryRead =>
@@ -295,11 +291,11 @@ export function readInventory(
     missRetry.generation === generation &&
     Date.now() < missRetry.after
   ) {
-    return readPublished()
+    return readInventoryPublication(published)
   }
   const retry = slot.retry
   if (mode !== 'refresh' && retry && retry.generation === generation && Date.now() < retry.after) {
-    return readPublished()
+    return readInventoryPublication(published)
   }
 
   const active = createScan(commands, mode, targeted, generation)

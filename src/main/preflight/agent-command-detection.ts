@@ -109,67 +109,42 @@ export async function selectTerminalAgentProgram(
       return selectWslTerminalAgentProgram(wsl, programs, options, waitSignal)
     }
     const slot = getLocalInventory(shellPath)
-    let rejectedCachedTarget = false
-    for (;;) {
-      const read = readInventory(
-        slot,
-        programs,
-        refresh || rejectedCachedTarget ? 'revalidate' : 'read',
-        {
-          acceptAnyMatch: true,
-          qualifiesEarly: rejectedCachedTarget
-            ? undefined
-            : (match) => qualifyProgram(match, shell).kind === 'by-name',
-          revalidateUnavailable: options.revalidateUnavailable,
-          waitForCompletion: true
-        }
-      )
-      const publication = await read.wait(waitSignal).catch((error: unknown) => {
-        if (
-          !rejectedCachedTarget &&
-          error instanceof AgentInventoryDeadlineError &&
-          isAbortSignalReason(waitSignal, error)
-        ) {
-          return read.snapshot()
-        }
-        throw error
-      })
-      const inventory = publication?.inventory
-      if (!inventory || slot !== getLocalInventory(shellPath)) {
-        return { program: preferred, result: { kind: 'unknown' } }
+    const read = readInventory(slot, programs, refresh ? 'revalidate' : 'read', {
+      acceptAnyMatch: true,
+      qualifiesEarly: (match) => qualifyProgram(match, shell).kind === 'by-name',
+      revalidateUnavailable: options.revalidateUnavailable,
+      waitForCompletion: true
+    })
+    const publication = await read.wait(waitSignal).catch((error: unknown) => {
+      if (error instanceof AgentInventoryDeadlineError && isAbortSignalReason(waitSignal, error)) {
+        return read.snapshot()
       }
-      let inconclusive = false
-      let retry = false
-      for (const program of programs) {
-        if (!inventory.probed.has(program)) {
-          inconclusive = true
-          continue
-        }
-        const match = inventory.matches.get(program)
-        const result = qualifyProgram(match, shell)
-        if ('path' in result && !read.isCurrentMatch?.(program, match)) {
-          const path = await canonicalLocalAgentProgram(result.path, waitSignal)
-          if (slot !== getLocalInventory(shellPath)) {
-            return { program, result: { kind: 'unknown' } }
-          }
-          if (path) {
-            return { program, result: { kind: 'full-path', path, canonicalPath: path } }
-          }
-          if (rejectedCachedTarget || waitSignal.aborted) {
-            return { program, result: { kind: 'unknown' } }
-          }
-          retry = true
-          break
-        }
-        if (result.kind !== 'unavailable') {
-          return { program, result }
-        }
-      }
-      if (!retry) {
-        return { program: preferred, result: { kind: inconclusive ? 'unknown' : 'unavailable' } }
-      }
-      rejectedCachedTarget = true
+      throw error
+    })
+    const inventory = publication?.inventory
+    if (!inventory || slot !== getLocalInventory(shellPath)) {
+      return { program: preferred, result: { kind: 'unknown' } }
     }
+    let inconclusive = false
+    for (const program of programs) {
+      if (!inventory.probed.has(program)) {
+        inconclusive = true
+        continue
+      }
+      const match = inventory.matches.get(program)
+      const result = qualifyProgram(match, shell)
+      if ('path' in result && (options.pinForSetup || !read.isCurrentMatch(program, match))) {
+        const canonicalPath = await canonicalLocalAgentProgram(result.path, waitSignal)
+        if (!canonicalPath || slot !== getLocalInventory(shellPath)) {
+          return { program, result: { kind: 'unknown' } }
+        }
+        return { program, result: options.pinForSetup ? { ...result, canonicalPath } : result }
+      }
+      if (result.kind !== 'unavailable') {
+        return { program, result }
+      }
+    }
+    return { program: preferred, result: { kind: inconclusive ? 'unknown' : 'unavailable' } }
   }, signal).catch((): TerminalAgentProgramSelection => ({
     program: preferred,
     result: { kind: 'unknown' }

@@ -188,6 +188,7 @@ async function selectSpawnAgentProgram(
     refresh: Boolean(pinned),
     shellPath: spawn.shellPath,
     revalidateUnavailable: true,
+    pinForSetup: spawn.setupGate,
     signal
   })
   const { program, result: selected } = selection
@@ -201,7 +202,7 @@ async function selectSpawnAgentProgram(
   }
   // Pin the selection when the agent's PATH differs from the host inventory's.
   if (configuredEnv) {
-    return { program, result: { kind: 'full-path', path: selected.path } }
+    return { program, result: { ...selected, kind: 'full-path' } }
   }
   if (process.platform === 'win32' && shell === 'cmd') {
     try {

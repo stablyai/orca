@@ -75,9 +75,10 @@ function buildPosixRecheck(path: string): string {
     '  root=${root%??}',
     'fi',
     'root=${root:-$runtime}; root=${root%/}',
-    `pin=$(orca_setup_realpath ${quotePosixShell(path)} && printf .) || exit 1`,
+    `program=${quotePosixShell(path)}`,
+    'pin=$(orca_setup_realpath "$program" && printf .) || exit 1',
     'pin=${pin%.}',
-    '[ -f "$pin" ] && [ -x "$pin" ] && printf "%s." "$pin"'
+    '[ -f "$pin" ] && [ -x "$pin" ] && printf "%s." "$program"'
   ].join('\n')
 }
 
@@ -115,9 +116,10 @@ function buildPowerShellRecheck(path: string): string {
     'try {',
     '  $compare = [StringComparison]::OrdinalIgnoreCase',
     `  $root = (Resolve-OrcaSetupPath $env:${SETUP_AGENT_RUNTIME_ROOT_ENV} $null -AllowMissing).TrimEnd('\\')`,
-    `  $pin = Resolve-OrcaSetupPath ${quotePowerShellLiteral(path)} $root`,
+    `  $program = ${quotePowerShellLiteral(path)}`,
+    '  $pin = Resolve-OrcaSetupPath $program $root',
     '  $extensions = ($env:PATHEXT -split ";") + @(".exe", ".com", ".cmd", ".bat", ".ps1")',
-    '  if ([IO.Path]::GetExtension($pin) -in $extensions -and (Test-Path -LiteralPath $pin -PathType Leaf -ErrorAction Stop)) { return $pin }',
+    '  if ([IO.Path]::GetExtension($pin) -in $extensions -and (Test-Path -LiteralPath $pin -PathType Leaf -ErrorAction Stop)) { return $program }',
     '} catch { return }'
   ].join('\n')
 }
