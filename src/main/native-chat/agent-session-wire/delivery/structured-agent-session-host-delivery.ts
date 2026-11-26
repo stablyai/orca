@@ -202,7 +202,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     sessions,
     serialize: input.serialize,
     trackStart: input.trackStart,
-    owner: (id) => deps.store.getConversation(id)?.ownerObservation.ownerProcess ?? null,
+    record: (id) => deps.store.getConversation(id) ?? null,
     fence: (id) => deps.store.getConversation(id)?.currentFence,
     settle: async (id, open, fence, openedSince) => {
       await settleGoneStructuredAgentSessionGeneration(deps, id, open)

@@ -1,6 +1,6 @@
 import {
   hasAttachedProviderRelay,
-  keptRunningProviderRelayPid,
+  providerRelayRunMayContinue,
   withProviderRelayRebind
 } from '../../../provider-relay/app-provider-relays'
 import type { StructuredAgentSessionAttachContext } from '../acquisition/structured-agent-session-attach-context'
@@ -32,7 +32,8 @@ export async function rebindKeptStructuredAgentSessionAgent(
       ...(outcome.refusal.details ? { details: outcome.refusal.details } : {})
     })
   }
-  if (keptRunningProviderRelayPid(sessionId) !== null) {
+  // Its daemon start still lists it, or can't say yet: never settled as gone here.
+  if (providerRelayRunMayContinue(sessionId)) {
     return 'unresolved'
   }
   // Open skipped settling the last run's turn while the agent was kept; it ended, so settle now.

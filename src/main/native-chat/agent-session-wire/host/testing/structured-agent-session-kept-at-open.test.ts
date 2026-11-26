@@ -5,66 +5,85 @@ import type { DaemonClient } from '../../../../daemon/transport/client/daemon-cl
 import type { ProviderRelayInfo } from '../../../../daemon/protocol/daemon-provider-relay-protocol'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 
-const SESSION = 'chat-with-held-approval'
+// Only a run's placement and its own daemon start decide whether its agent may still run: a held
+// approval survives any late or partial listing, and nothing but that start's word (or both its
+// daemon and agent proven gone) ever settles it.
 
-const keptRelay = (chatKey: string, pid: number | null = process.pid): ProviderRelayInfo => ({
-  relayId: `r-${chatKey}`,
-  chatKey,
+const SESSION = 'chat-with-held-approval'
+const INSTANCE = 'daemon-start-a'
+
+const relay = (relayId: string, exit: ProviderRelayInfo['exit'] = null): ProviderRelayInfo => ({
+  relayId,
+  chatKey: SESSION,
   agent: 'codex-test',
-  pid,
+  pid: process.pid,
   spawnedAtMs: 1,
   attached: false,
-  exit: null,
+  exit,
   nextSeq: 20,
   ackedSeq: 18,
   pendingCount: 1
 })
 
-/** A daemon whose relay listing answers only when the test says so. */
-function lateDaemon() {
-  let answer: (relays: ProviderRelayInfo[]) => void = () => {}
-  const listed = new Promise<{ relays: ProviderRelayInfo[] }>((resolve) => {
-    answer = (relays) => resolve({ relays })
-  })
+/** A daemon start whose listing answers what `relays()` returns, or never when it returns null. */
+function daemon(instance: string, relays: () => ProviderRelayInfo[] | null) {
   const client = {
-    getDaemonIdentity: () => ({ providerRelay: true, pid: 1 }),
+    getDaemonIdentity: () => ({
+      providerRelay: true,
+      pid: 1,
+      startedAtMs: 1,
+      launchNonce: instance
+    }),
+    ensureConnectedWithin: async () => {},
     onEvent: () => () => {},
     onDisconnected: () => () => {},
-    request: (type: string) => (type === 'relayList' ? listed : Promise.resolve({}))
+    request: (type: string) => {
+      if (type !== 'relayList') {
+        return Promise.resolve({})
+      }
+      const listed = relays()
+      return listed
+        ? Promise.resolve({ relays: listed, daemonInstance: instance })
+        : new Promise(() => {})
+    }
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the inventory calls only these members
-  return { client: client as unknown as DaemonClient, answer }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the liveness reads only these members
+  return client as unknown as DaemonClient
 }
 
-async function freshRelays(daemon: DaemonClient) {
+async function fresh(clients: DaemonClient[]) {
   vi.resetModules()
   const relays = await import('../../../../provider-relay/app-provider-relays')
   relays.registerReattachableProviderRelayAgent('codex-test', { provider: 'codex' })
   relays.installProviderRelayRoute({
-    current: async () => daemon,
-    all: async () => [daemon],
+    current: async () => clients[0] ?? null,
+    all: async () => clients,
     appVersion: 'test',
     idleStopMs: () => null
   })
-  const open = await import('../structured-agent-session-kept-at-open')
-  const { StructuredAgentSessionKeptOpens } =
-    await import('../../delivery/structured-agent-session-kept-open-reconciler')
-  return { relays, open, StructuredAgentSessionKeptOpens }
+  return relays
 }
 
-const owner = (pid: number, processStartTimeMs: number | null = null) => ({
+const identity = (pid: number) => ({
   hostId: LOCAL_EXECUTION_HOST_ID,
   pid,
-  processStartTimeMs,
+  processStartTimeMs: null,
   spawnToken: 'kept-agent-token'
 })
 
-const chat = (ownerProcess: ReturnType<typeof owner> | null, deathEvidence: unknown = null) => ({
+const relayed = (daemonPid: number, agentPid: number, instance = INSTANCE) => ({
+  fence: 3,
+  kind: 'relayed' as const,
+  relayId: 'r-1',
+  daemon: { instance, pid: daemonPid, startedAtMs: 1 },
+  agent: identity(agentPid)
+})
+
+const chat = (lastRunPlacement?: unknown) => ({
   sessionId: SESSION,
   provider: 'codex',
   location: { executionHostId: LOCAL_EXECUTION_HOST_ID },
-  neverStarted: false,
-  ownerObservation: { ownerProcess, deathEvidence }
+  ...(lastRunPlacement ? { lastRunPlacement } : {})
 })
 
 function exitedPid(): number {
@@ -79,281 +98,154 @@ beforeEach(() => {
   vi.restoreAllMocks()
 })
 
-type Fresh = Awaited<ReturnType<typeof freshRelays>>
-
-/** One host's kept opens over the given open sessions; settle is the spy that a settle happened. */
-/** `ownerOf` null keeps the reconciler from probing processes, so nothing runs behind the test. */
-function keptOpens(
-  fresh: Fresh,
-  sessions: Map<string, unknown>,
-  ownerOf: () => ReturnType<typeof owner> | null = () => null,
-  fenceOf: () => number = () => 3
-) {
-  const settle = vi.fn(async (_id: string, _open: unknown, _fence: number, _since: number) => {})
-  const opens = new fresh.StructuredAgentSessionKeptOpens({
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reconciler reads only child and journal.cursor
-    sessions: sessions as never,
-    serialize: (_id, task) => task(),
-    trackStart: (start) => start,
-    owner: ownerOf,
-    fence: fenceOf,
-    settle,
-    logger: { warn: () => {} }
-  })
-  const adopt = (id: string, session: ReturnType<typeof openSession>): void =>
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reconciler reads only child and journal.cursor
-    opens.adopted(id, session as never)
-  return { opens, settle, adopt }
-}
-
-const openSession = () => ({
-  child: null,
-  journal: { cursor: () => ({ epoch: 'e', sequence: 5 }) }
-})
-
-/** Lets the promise chains the fakes started run out; every fake answers without real I/O. */
-async function settleTurns(): Promise<void> {
-  for (let i = 0; i < 50; i += 1) {
-    await Promise.resolve()
-  }
-}
-
-async function openKept(
-  fresh: Fresh,
-  sessionId: string,
-  ownerPid: number,
-  waitMs = 1_000
-): Promise<boolean> {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the verdict reads only these fields
-  const record = { ...chat(owner(ownerPid)), sessionId } as unknown as Parameters<
-    typeof fresh.open.structuredAgentSessionKeptAtOpen
-  >[0]
-  return fresh.open.structuredAgentSessionKeptAtOpen(record, waitMs)
-}
-
-// A held approval must survive a launch whose relay listing is late: only proof ends the last run.
 it.skipIf(process.platform === 'win32')(
-  'opens a chat as kept while the listing is late, and settles it only once the listing proves its agent gone',
+  "a relayed run is kept or gone by its own daemon start's listing, never another daemon's",
   async () => {
-    const late = lateDaemon()
-    const fresh = await freshRelays(late.client)
-    expect(await openKept(fresh, SESSION, process.pid, 10)).toBe(true)
-    const session = openSession()
-    const { adopt, settle } = keptOpens(fresh, new Map([[SESSION, session]]))
-    adopt(SESSION, session)
-    // Another chat's relay with no process, so the listing reads no process before it settles.
-    late.answer([keptRelay('another-chat', null)])
-    await fresh.relays.providerRelayListingSettled()
-    await settleTurns()
-    expect(settle).toHaveBeenCalledTimes(1)
-    expect(settle).toHaveBeenCalledWith(SESSION, session, 3, 6)
+    let listing: ProviderRelayInfo[] = [relay('r-1')]
+    // Another daemon start lists an older relay for the same chat; it must never decide or reattach.
+    const other = daemon('daemon-start-b', () => [relay('r-old')])
+    const relays = await fresh([other, daemon(INSTANCE, () => listing)])
+    const record = chat(relayed(1, 1))
+    expect(await relays.providerRelayRunLiveness(record)).toBe('kept')
+    expect(relays.keptRunningProviderRelayPid(SESSION)).toBe(process.pid)
+    listing = [relay('r-1', { code: 0, signal: null })]
+    expect(await relays.providerRelayRunLiveness(record, { fresh: true })).toBe('gone')
+    expect(relays.keptRunningProviderRelayPid(SESSION)).toBeNull()
   }
 )
 
 it.skipIf(process.platform === 'win32')(
-  'never settles a chat the late listing shows kept',
+  'a run that started in the app, or has no placement, is gone without asking any daemon',
   async () => {
-    const late = lateDaemon()
-    const fresh = await freshRelays(late.client)
-    expect(await openKept(fresh, SESSION, process.pid, 10)).toBe(true)
-    const session = openSession()
-    const { adopt, settle } = keptOpens(fresh, new Map([[SESSION, session]]))
-    adopt(SESSION, session)
-    late.answer([keptRelay(SESSION)])
-    await settleTurns()
-    expect(settle).not.toHaveBeenCalled()
+    // This daemon never answers: a direct run must not wait on it (the test's timeout would).
+    const relays = await fresh([daemon(INSTANCE, () => null)])
+    expect(await relays.providerRelayRunLiveness(chat({ fence: 3, kind: 'direct' }))).toBe('gone')
+    expect(await relays.providerRelayRunLiveness(chat())).toBe('gone')
+    // A malformed placement reads as none, never as kept.
+    expect(await relays.providerRelayRunLiveness(chat({ fence: 3, kind: 'relayed' }))).toBe('gone')
   }
 )
 
-// QA r20: launch recovery had released the S1 chat's recorded owner, so its open settled the run
-// the relay still held, 45 ms before the reattach.
 it.skipIf(process.platform === 'win32')(
-  'keeps a chat the listing shows kept even when its recorded owner was released',
+  'an unanswered listing is unknown, and a later ask hears the answer instead of a cached timeout',
   async () => {
-    const late = lateDaemon()
-    const fresh = await freshRelays(late.client)
-    late.answer([keptRelay(SESSION)])
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the verdict reads only these fields
-    const record = chat(null) as unknown as Parameters<
-      typeof fresh.open.structuredAgentSessionKeptAtOpen
-    >[0]
-    expect(await fresh.open.structuredAgentSessionKeptAtOpen(record, 5_000)).toBe(true)
+    let answers = false
+    const relays = await fresh([daemon(INSTANCE, () => (answers ? [relay('r-1')] : null))])
+    const record = chat(relayed(process.pid, process.pid))
+    expect(await relays.providerRelayRunLiveness(record, { waitMs: 20 })).toBe('unknown')
+    expect(relays.providerRelayKeptFromLastRun(SESSION)).toBe(true)
+    answers = true
+    expect(await relays.providerRelayRunLiveness(record, { fresh: true })).toBe('kept')
   }
 )
 
-// The same released owner with the listing late: nothing proves the agent gone, so nothing settles.
 it.skipIf(process.platform === 'win32')(
-  'keeps a chat whose owner was released without proof while the listing is late',
+  'with its daemon start unreachable, a run is gone only once its daemon and agent are both proven gone',
   async () => {
-    const fresh = await freshRelays(lateDaemon().client)
-    const verdict = (record: ReturnType<typeof chat>) =>
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the verdict reads only these fields
-      fresh.open.structuredAgentSessionKeptAtOpen(record as never, 10)
-    expect(await verdict(chat(null))).toBe(true)
-    // A new chat never waits on the listing: the late one here would hold it past the test's timeout.
-    expect(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the verdict reads only these fields
-      await fresh.open.structuredAgentSessionKeptAtOpen({
-        ...chat(null),
-        neverStarted: true
-      } as never)
-    ).toBe(false)
-    expect(await verdict({ ...chat(null, { kind: 'exit-observed' }), sessionId: 'exited' })).toBe(
-      false
+    // No client speaks for this start: its endpoint may be gone while the daemon still runs.
+    const relays = await fresh([daemon('daemon-start-b', () => [])])
+    // A live pid with no start time or token to check can't be proven gone: it may still write.
+    expect(await relays.providerRelayRunLiveness(chat(relayed(exitedPid(), process.pid)))).toBe(
+      'unknown'
+    )
+    expect(await relays.providerRelayRunLiveness(chat(relayed(process.pid, exitedPid())))).toBe(
+      'unknown'
+    )
+    expect(await relays.providerRelayRunLiveness(chat(relayed(exitedPid(), exitedPid())))).toBe(
+      'gone'
     )
   }
 )
 
-it.skipIf(process.platform === 'win32')(
-  'settles at open when the owner process is proven gone, even while the listing is late',
-  async () => {
-    const fresh = await freshRelays(lateDaemon().client)
-    expect(await openKept(fresh, SESSION, exitedPid())).toBe(false)
-  }
-)
-
-it.skipIf(process.platform === 'win32')(
-  'settles at open when the owner pid now names another process, even while the listing is late',
-  async () => {
-    const fresh = await freshRelays(lateDaemon().client)
-    // The pid is live, but started long after the recorded owner: a reused pid, not the kept agent.
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the verdict reads only these fields
-    const record = chat(owner(process.pid, 1)) as unknown as Parameters<
-      typeof fresh.open.structuredAgentSessionKeptAtOpen
-    >[0]
-    expect(await fresh.open.structuredAgentSessionKeptAtOpen(record, 10)).toBe(false)
-  }
-)
-
-/** A daemon whose first listings fail; `recover()` makes later ones answer, without any chat. */
-function downDaemon() {
-  let up = false
-  const client = {
-    getDaemonIdentity: () => ({ providerRelay: true, pid: 1 }),
-    onEvent: () => () => {},
-    onDisconnected: () => () => {},
-    request: (type: string) =>
-      type !== 'relayList'
-        ? Promise.resolve({})
-        : up
-          ? Promise.resolve({ relays: [] })
-          : Promise.reject(new Error('daemon down'))
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the inventory calls only these members
-  return { client: client as unknown as DaemonClient, recover: () => (up = true) }
-}
-
-it.skipIf(process.platform === 'win32')(
-  'through a daemon outage, settles only chats still open when the inventory completes, once each',
-  async () => {
-    const daemon = downDaemon()
-    const fresh = await freshRelays(daemon.client)
-    const inventory = await import('../../../../provider-relay/provider-relay-launch-inventory')
-    const sessions = new Map<string, unknown>()
-    const { adopt, settle } = keptOpens(fresh, sessions)
-    const chats = Array.from({ length: 1_000 }, (_, i) => `chat-${i}`)
-    for (const id of chats) {
-      expect(await openKept(fresh, id, process.pid)).toBe(true)
-      const session = openSession()
-      sessions.set(id, session)
-      adopt(id, session)
-      adopt(id, session)
+it('owner release keeps the run placement; only the next run replaces it', async () => {
+  const { commitAgentSessionProcessIdentity, releaseUnprovenAgentSessionOwner } =
+    await import('../../../../runtime/agent-session/ownership/agent-session-lease-transitions')
+  const { agentSessionRunPlacement } =
+    await import('../../../../../shared/agent-session/lifecycle/agent-session-run-placement')
+  const reserved = {
+    sessionId: SESSION,
+    lease: {
+      runtimeFence: 3,
+      claimStatus: 'reserved',
+      ownerProcess: null,
+      reservedSpawnToken: 'kept-agent-token',
+      handoffStage: 'new-owner-proving'
     }
-    await settleTurns()
-    expect(settle).not.toHaveBeenCalled()
-    // Every chat but one closes while the daemon is down.
-    for (const id of chats.slice(1)) {
-      sessions.delete(id)
-    }
-    daemon.recover()
-    await inventory.listKeptProviderRelays(async () => [daemon.client], true)
-    await settleTurns()
-    expect(settle).toHaveBeenCalledTimes(1)
-    expect(settle).toHaveBeenCalledWith('chat-0', expect.anything(), 3, 6)
   }
-)
+  const committed = commitAgentSessionProcessIdentity({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the commit reads only these lease fields
+    record: reserved as never,
+    sessionId: SESSION,
+    fence: 3,
+    process: identity(42),
+    placement: {
+      kind: 'relayed',
+      relayId: 'r-1',
+      daemon: { instance: INSTANCE, pid: 7, startedAtMs: 1 }
+    },
+    now: 1
+  })
+  const placement = agentSessionRunPlacement(committed)
+  expect(placement).toEqual(relayed(7, 42))
+  const released = releaseUnprovenAgentSessionOwner({
+    record: { ...committed, lease: { ...committed.lease, handoffStage: 'recovering' } },
+    expectedFence: 3,
+    now: 2
+  })
+  expect(released.lease.ownerProcess).toBeNull()
+  expect(agentSessionRunPlacement(released)).toEqual(placement)
+})
 
-// A send reserves the next run first, clearing the store's owner; the proof must still probe the
-// owner the open saw.
 it.skipIf(process.platform === 'win32')(
-  'lets a send start a fresh agent once the owner the open saw is gone, though no listing ever answers',
+  'a send to a chat held as unknown settles its gone run once, at the current fence, then starts fresh',
   async () => {
-    const daemon = downDaemon()
-    const fresh = await freshRelays(daemon.client)
     const agent = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60_000)'])
     const pid = agent.pid
     if (pid === undefined) {
       throw new Error('no child pid')
     }
-    expect(await openKept(fresh, SESSION, pid)).toBe(true)
-    const session = openSession()
-    let reserved = false
-    const { adopt, settle } = keptOpens(
-      fresh,
-      new Map([[SESSION, session]]),
-      () => (reserved ? null : owner(pid)),
-      () => (reserved ? 4 : 3)
-    )
-    adopt(SESSION, session)
-    await settleTurns()
+    // No client speaks for the run's daemon start, which is gone; its agent outlives it a while.
+    const relays = await fresh([daemon('daemon-start-b', () => [])])
+    const record = chat(relayed(exitedPid(), pid))
+    expect(await relays.providerRelayRunLiveness(record)).toBe('unknown')
+    const { StructuredAgentSessionKeptOpens } =
+      await import('../../delivery/structured-agent-session-kept-open-reconciler')
+    const session = { child: null, journal: { cursor: () => ({ epoch: 'e', sequence: 5 }) } }
+    const settle = vi.fn(async (_id: string, _open: unknown, _fence: number, _since: number) => {})
+    const opens = new StructuredAgentSessionKeptOpens({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reconciler reads only child and journal.cursor
+      sessions: new Map([[SESSION, session]]) as never,
+      serialize: (_id, task) => task(),
+      trackStart: (start) => start,
+      record: () => record,
+      // A send's reservation already moved the fence; writes go at the current one.
+      fence: () => 4,
+      settle,
+      logger: { warn: () => {} }
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reconciler reads only child and journal.cursor
+    opens.adopted(SESSION, session as never)
+    const launch = () =>
+      relays.launchRelayedProviderProcess(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a refused or proven-gone launch reads no launch field
+        {} as never,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a refused or proven-gone launch reads only chatKey
+        { chatKey: SESSION } as never
+      )
+    await expect(launch()).rejects.toThrow('agent_kept_running_unreachable')
     expect(settle).not.toHaveBeenCalled()
     const exited = once(agent, 'exit')
     agent.kill('SIGKILL')
     await exited
-    reserved = true
-    const launched = fresh.relays.launchRelayedProviderProcess(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a refused or proven-gone launch reads no launch field
-      {} as never,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a refused or proven-gone launch reads only chatKey
-      { chatKey: SESSION } as never
-    )
-    await expect(launched).resolves.toBeNull()
+    await expect(launch()).resolves.toBeNull()
     expect(settle).toHaveBeenCalledTimes(1)
-    // Its writes go at the journal's current fence, which the reservation moved.
     expect(settle).toHaveBeenCalledWith(SESSION, session, 4, 6)
-    // The fresh agent ends; the next start in the same outage must not be refused either.
-    const again = fresh.relays.launchRelayedProviderProcess(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a launch with no daemon reads no launch field
-      {} as never,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a launch with no daemon reads only chatKey
-      { chatKey: SESSION } as never
-    )
-    await expect(again).resolves.toBeNull()
+    // The run stays gone: a later start in the same outage is neither refused nor settled again.
+    await expect(launch()).resolves.toBeNull()
     expect(settle).toHaveBeenCalledTimes(1)
+    opens.dispose()
   }
 )
-
-// A relay a partial listing placed that has since ended must not read as kept once every daemon
-// answers, or the chat's gone run would never settle.
-it('a complete listing drops a relay an earlier partial listing placed and no daemon lists now', async () => {
-  vi.resetModules()
-  const inventory = await import('../../../../provider-relay/provider-relay-launch-inventory')
-  inventory.registerReattachableProviderRelayAgent('codex-test', { provider: 'codex' })
-  let firstAnswer = true
-  let otherUp = false
-  const daemon = (relayList: () => Promise<unknown>) =>
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the inventory calls only these members
-    ({
-      getDaemonIdentity: () => ({ providerRelay: true, pid: 1 }),
-      onEvent: () => () => {},
-      onDisconnected: () => () => {},
-      request: (type: string) => (type === 'relayList' ? relayList() : Promise.resolve({}))
-    }) as unknown as DaemonClient
-  const holder = daemon(async () => {
-    const relays = firstAnswer ? [keptRelay(SESSION, null)] : []
-    firstAnswer = false
-    return { relays }
-  })
-  const other = daemon(() =>
-    otherUp ? Promise.resolve({ relays: [] }) : Promise.reject(new Error('daemon down'))
-  )
-  await inventory.listKeptProviderRelays(async () => [holder, other], true)
-  expect(inventory.keptProviderRelay(SESSION)).toBeDefined()
-  otherUp = true
-  await inventory.listKeptProviderRelays(async () => [holder, other], true)
-  expect(inventory.providerRelayInventoryComplete()).toBe(true)
-  expect(inventory.keptProviderRelay(SESSION)).toBeUndefined()
-})
 
 // A start refused beside a possibly running kept agent proves no exit: death evidence from it would
 // resettle the chat's last turn before the kept agent's buffered end replays.

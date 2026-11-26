@@ -9,8 +9,8 @@ import type { AgentSessionRecordStore } from '../records/agent-session-record-st
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import {
   listProviderRelaysAtLaunch,
-  liveProviderRelayChats,
-  providerRelayChatsIdleStoppedThisRun
+  providerRelayChatsIdleStoppedThisRun,
+  providerRelayRunLiveness
 } from '../../../provider-relay/app-provider-relays'
 import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import type { KeptAgentRebind } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-kept-agent'
@@ -203,7 +203,15 @@ export function structuredAgentSessionLaunchContinuationDeps(
         resumeWorkOnRestart,
         keptRunning: async () => {
           await listProviderRelaysAtLaunch()
-          return liveProviderRelayChats()
+          // Held chats whose run may still be going; each relayed run asks only its daemon start.
+          const held = host.deps.store.listHeldSessionIds()
+          const verdicts = await Promise.all(
+            held.map(async (sessionId) => {
+              const record = host.deps.store.getRecord(sessionId)
+              return record ? providerRelayRunLiveness(record) : 'gone'
+            })
+          )
+          return new Set(held.filter((_, index) => verdicts[index] !== 'gone'))
         },
         finishedWhileDetached: providerRelayChatsIdleStoppedThisRun,
         rebindKeptAgent: host.mutations.rebindKeptAgent
