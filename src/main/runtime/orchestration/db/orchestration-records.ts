@@ -327,6 +327,10 @@ export type DispatchContextRow = {
   for_message_id: string | null
   /** 1 when this worker, and every worker it starts, starts as a chat wherever one can run. */
   chat_lineage: 1 | null
+  /** Whom it acts for (JSON, as `bot_conversation_acts_for`), stamped when it was made from its
+   *  creator: the creating Dispatch's stamp, else the creating chat's record. Null: the owner, as
+   *  every Dispatch from before teammates. */
+  acts_for: string | null
 }
 
 export type DecisionGateRow = {

@@ -5,9 +5,8 @@
 // the owner's.
 import { isOrcaSessionId } from '../../shared/agent-session/identity/orca-session-address'
 import type { BotShareCallerScope } from '../runtime/rpc/callers/rpc-caller-scope'
-import type { OrchestrationSessionCaller } from '../runtime/orchestration/addressing/orchestration-caller-identity'
 import { canonicalOrcaSessionId } from '../runtime/orchestration/addressing/session-lineage/canonical-orca-session-id'
-import { creatorSession } from '../runtime/rpc/methods/orchestration/messaging/bot-recipient'
+import type { BotRequestAsker } from '../../shared/bots/bot-acts-for'
 import {
   readBotConversationActsFor,
   type BotConversationActsForSources
@@ -81,30 +80,55 @@ export function botItemAccessOfChat(
   return botItemAccessOfAudience(chatAudience(sources, chatId))
 }
 
+/** A caller's identity, as the host has it: a chat or worker session it verified, or the terminal
+ *  handle a terminal's own calls carry. */
+export type BotItemCallerIdentity = { handle: string; paneKey?: string | null; sessionId?: string }
+
 /**
- * What a caller reaches: a teammate's own connection, their items; a chat, what it reaches; a worker
- * (or a worker's worker), what the chat that started it reaches, by its Dispatch lineage, and none
- * when no chat did; the owner's own CLI or devices (no session), everyone's.
+ * What a caller reaches: a teammate's own connection, their items; a paired Orca's coordinator, the
+ * owner's own (it names no one here); a bot chat, what its people reach; a worker, chat or terminal
+ * alike, what its Dispatch's stamp reaches (`acts_for`, copied when it was made, so a worker's worker
+ * reaches the same); anything else of the owner's (his CLI, terminals and own chats), everyone's.
  */
 export function botItemAccessOfCaller(
   sources: BotConversationActsForSources,
-  caller: { share?: BotShareCallerScope | null; sender?: OrchestrationSessionCaller | null }
+  caller: {
+    share?: BotShareCallerScope | null
+    peer?: boolean
+    identity?: BotItemCallerIdentity | null
+  }
 ): BotItemAccess {
   if (caller.share) {
     return botItemsOfPeople([caller.share.accountId])
   }
-  const { sender } = caller
-  if (!sender) {
+  if (caller.peer) {
+    return botItemsOfPeople(null)
+  }
+  const { identity } = caller
+  if (!identity) {
     return BOT_ITEMS_EVERYONE
   }
-  if (readBotConversationActsFor(sources, rootOf(sender.sessionId))) {
-    return botItemAccessOfChat(sources, sender.sessionId)
+  if (identity.sessionId && readBotConversationActsFor(sources, rootOf(identity.sessionId))) {
+    return botItemAccessOfChat(sources, identity.sessionId)
   }
-  const lineage = creatorSession(sources.getOrchestrationDb(), sender)
-  if (lineage.dispatchId === null) {
-    return botItemAccessOfChat(sources, sender.sessionId)
+  const dispatch = sources
+    .getOrchestrationDb()
+    .getActiveDispatchForIdentity(identity.handle, identity.paneKey ?? undefined)
+  if (!dispatch?.acts_for) {
+    return BOT_ITEMS_EVERYONE
   }
-  return lineage.sessionId ? botItemAccessOfChat(sources, lineage.sessionId) : botItemsOfPeople([])
+  return botItemAccessOfAudience(botTurnAudienceOf(stampedActsFor(dispatch.acts_for)))
+}
+
+function stampedActsFor(stamp: string): BotRequestAsker[] {
+  try {
+    const parsed: unknown = JSON.parse(stamp)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the Dispatch insert writes it, copied from an acts-for record
+    return Array.isArray(parsed) ? (parsed as BotRequestAsker[]) : [{ kind: 'unknown' }]
+  } catch {
+    // An unreadable stamp names no one, which reaches only the owner's own items.
+    return [{ kind: 'unknown' }]
+  }
 }
 
 export function botItemAccessible(

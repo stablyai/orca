@@ -44,14 +44,22 @@ type CallerRuntime = Pick<
   | 'showAutomation'
 >
 
-/** The items a read may see, by the caller the host verified, never a claimed session. */
+/** The items a call may reach, by the caller the host verified (a chat's or worker's session, a
+ *  paired Orca), else the terminal its call names; never a claimed session id. */
 export function itemsAccess(
   context: Pick<RpcContext, 'runtime' | 'orchestrationCaller'> &
-    Partial<Pick<RpcContext, 'callerScope'>>
+    Partial<Pick<RpcContext, 'callerScope' | 'orchestrationCompatibilityEvidence'>>
 ): BotItemAccess {
+  const session = sessionCallerOf(context.orchestrationCaller)
+  const terminal = context.orchestrationCompatibilityEvidence
   return botItemAccessOfCaller(context.runtime, {
     share: botShareScopeOf(context),
-    sender: sessionCallerOf(context.orchestrationCaller) ?? null
+    peer: context.orchestrationCaller?.kind === 'peer',
+    identity: session
+      ? { handle: session.address, paneKey: session.paneKey, sessionId: session.sessionId }
+      : terminal?.terminalHandle
+        ? { handle: terminal.terminalHandle, paneKey: terminal.paneKey ?? null }
+        : null
   })
 }
 

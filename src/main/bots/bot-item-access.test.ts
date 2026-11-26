@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { OWNER_ACTS_FOR, type BotRequestAsker } from '../../shared/bots/bot-acts-for'
-import type { OrchestrationSessionCaller } from '../runtime/orchestration/addressing/orchestration-caller-identity'
+import { testOrcaSessionId } from '../../shared/agent-session/identity/orca-session-address-test-fixture'
+import type { DispatchCreator } from '../runtime/orchestration/db/dispatch-depth'
 import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { resolveItem } from '../runtime/rpc/methods/bots-items-write-support'
 import SyncDatabase from '../sqlite/sync-database'
@@ -22,7 +23,6 @@ const OWNER_CHAT = '11111111-1111-4111-8111-111111111111'
 const TEAMMATE_CHAT = '22222222-2222-4222-8222-222222222222'
 const SLACK_CHAT = '33333333-3333-4333-8333-333333333333'
 const SHARED_CHAT = '44444444-4444-4444-8444-444444444444'
-const WORKER = '55555555-5555-4555-8555-555555555555'
 
 const teammate = (accountId: string): BotRequestAsker =>
   botShareAsker({ kind: 'bot-share', botId: 'bot-1', accountId, name: accountId })
@@ -68,18 +68,10 @@ afterEach(() => {
   rmSync(directory, { recursive: true, force: true })
 })
 
-const caller = (sessionId: string): OrchestrationSessionCaller => {
-  const fields = {
-    sessionId,
-    orcaSessionId: sessionId,
-    address: `orca_session_id:${sessionId}`,
-    terminalHandle: null,
-    paneKey: null,
-    workspaceId: 'workspace'
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: access reads the session id, and the dispatch lookup its address and pane
-  return fields as unknown as OrchestrationSessionCaller
-}
+// A chat's own calls, as the host verified them: its session, at its session address.
+const chat = (sessionId: string) => ({
+  identity: { handle: `orca_session_id:${sessionId}`, sessionId }
+})
 
 function addItem(title: string, actsForAccounts: readonly string[] | null): void {
   store.add(
@@ -122,8 +114,8 @@ it("reads an item from before teammates as the owner's: his chats reach it, a te
       byNumber: async (number: number) => upgraded.byNumber(number),
       get: async (uid: string) => upgraded.get(uid)
     } as never
-    const owner = botItemAccessOfCaller(sources, { sender: caller(OWNER_CHAT) })
-    const theirs = botItemAccessOfCaller(sources, { sender: caller(TEAMMATE_CHAT) })
+    const owner = botItemAccessOfCaller(sources, chat(OWNER_CHAT))
+    const theirs = botItemAccessOfCaller(sources, chat(TEAMMATE_CHAT))
     const share = botItemAccessOfCaller(sources, {
       share: { kind: 'bot-share', botId: 'bot-1', accountId: 'acct-2', name: 'Kim' }
     })
@@ -135,27 +127,65 @@ it("reads an item from before teammates as the owner's: his chats reach it, a te
   }
 })
 
-it('gives a worker what the chat that started it reaches, and none when no chat did', () => {
-  addItem('Owner work', null)
-  addItem('Kim work', ['acct-2'])
+/** A worker as `worker-start` makes it, its stamp written by the real insert, then bound to the
+ *  session or terminal it runs in. */
+function startWorker(
+  creator: DispatchCreator,
+  runsIn: { session: string } | { terminal: string }
+): string {
   const task = db.createTask({ runId: 'run_legacy_local', spec: 'Look into it' })
   const { dispatch } = db.createStartingWorkerDispatch({
-    creator: { kind: 'system' },
+    creator,
     maxDepth: 10,
     taskId: task.id,
     startOptions: { agent: 'claude' }
   })
-  const assign = (creator: string | null) =>
-    db.db
-      .prepare(
-        'UPDATE dispatch_contexts SET creator_orca_session_id = ?, assignee_handle = ? WHERE id = ?'
-      )
-      .run(creator, `orca_session_id:${WORKER}`, dispatch.id)
+  const handle = 'session' in runsIn ? `orca_session_id:${runsIn.session}` : runsIn.terminal
+  db.db
+    .prepare(
+      'UPDATE dispatch_contexts SET assignee_handle = ?, assignee_orca_session_id = ? WHERE id = ?'
+    )
+    .run(handle, 'session' in runsIn ? runsIn.session : null, dispatch.id)
+  return handle
+}
 
-  assign(TEAMMATE_CHAT)
-  expect(listed(botItemAccessOfCaller(sources, { sender: caller(WORKER) }))).toEqual(['Kim work'])
-  assign(null)
-  expect(listed(botItemAccessOfCaller(sources, { sender: caller(WORKER) }))).toEqual([])
+const fromSession = (sessionId: string): DispatchCreator => ({
+  kind: 'session',
+  orcaSessionId: testOrcaSessionId(sessionId)
+})
+const reachOf = (handle: string) => listed(botItemAccessOfCaller(sources, { identity: { handle } }))
+
+it("gives every worker under a teammate's chat, chat or terminal, only that teammate's items", () => {
+  addItem('Owner work', null)
+  addItem('Kim work', ['acct-2'])
+  const [a, b, c] = [
+    '66666666-6666-4666-8666-666666666661',
+    '66666666-6666-4666-8666-666666666662',
+    '66666666-6666-4666-8666-666666666663'
+  ]
+  startWorker(fromSession(TEAMMATE_CHAT), { session: a })
+  startWorker(fromSession(a), { session: b })
+  const subSub = startWorker(fromSession(b), { session: c })
+  expect(reachOf(subSub)).toEqual(['Kim work'])
+
+  const terminal = startWorker(fromSession(TEAMMATE_CHAT), { terminal: 'term_kim' })
+  expect(reachOf(terminal)).toEqual(['Kim work'])
+})
+
+it("gives the owner's terminal workers, and a Dispatch from before stamps, everyone's items", () => {
+  addItem('Owner work', null)
+  addItem('Kim work', ['acct-2'])
+  const ownerTerminal = startWorker(
+    { kind: 'terminal', handle: 'term_owner' },
+    { terminal: 'term_owner_worker' }
+  )
+  expect(reachOf(ownerTerminal)).toEqual(['Kim work', 'Owner work'])
+
+  const old = startWorker(fromSession(TEAMMATE_CHAT), { terminal: 'term_old' })
+  db.db
+    .prepare("UPDATE dispatch_contexts SET acts_for = NULL WHERE assignee_handle = 'term_old'")
+    .run()
+  expect(reachOf(old)).toEqual(['Kim work', 'Owner work'])
 })
 
 it("decides a chat's people the same for every channel, and a shared chat never reaches the owner's", () => {

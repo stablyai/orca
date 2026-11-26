@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import { readInjectedAgentSessionId } from '../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import { readOrchestrationCompatibilityEvidence } from '../../../shared/orchestration/orchestration-compatibility-evidence'
-import { BOT_ITEM_WRITE_METHOD_NAMES } from '../../../shared/bots/bot-items'
+import {
+  BOT_ITEM_READ_METHOD_NAMES,
+  BOT_ITEM_WRITE_METHOD_NAMES
+} from '../../../shared/bots/bot-items'
 import { CONNECTOR_POST_METHOD_NAMES } from '../../../shared/connector-action-contract'
 import type { RuntimeOrchestrationEnvelope } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
@@ -41,6 +44,8 @@ const SESSION_EVIDENCE_METHODS: ReadonlySet<string> = new Set([
   ...CONNECTOR_POST_METHOD_NAMES
 ])
 
+const BOT_ITEM_READS: ReadonlySet<string> = new Set(BOT_ITEM_READ_METHOD_NAMES)
+
 function namesChatCaller(method: string): boolean {
   return SESSION_EVIDENCE_METHODS.has(method) || method.startsWith('browser.')
 }
@@ -79,6 +84,13 @@ export class OrchestrationRequestEvidence {
       return {
         orchestrationCompatibilityEvidence: this.orchestration.orchestrationCompatibilityEvidence
       }
+    }
+    // An item read names its chat, or its worker's terminal, so it reaches only what that caller may.
+    if (BOT_ITEM_READS.has(method) && !request.remote) {
+      const evidence = { ...this.remoteRead.orchestrationCompatibilityEvidence, ...this.chatCaller }
+      return Object.keys(evidence).length > 0
+        ? { orchestrationCompatibilityEvidence: evidence }
+        : {}
     }
     return namesChatCaller(method) && !request.remote && this.chatCaller
       ? { orchestrationCompatibilityEvidence: this.chatCaller }

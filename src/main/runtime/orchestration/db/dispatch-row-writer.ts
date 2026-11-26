@@ -5,13 +5,37 @@ import type { DispatchCreatorTurnSource } from './dispatch-depth'
 
 /** Centralize live-worker inserts to enforce depth; callers retain transactions, receipts and companion writes. */
 
+/** Whom a new Dispatch acts for, copied once from whoever makes it: a paired Orca's coordinator
+ *  names no one here (unknown); a worker passes on its own Dispatch's stamp; a chat its record. None
+ *  of those (the owner's terminal or own chats) leaves it null: the owner. Bound to the creator's
+ *  handle, Dispatch id (twice) and session id, in that order. */
+const STAMP_ACTS_FOR_SQL = `CASE
+    WHEN ? LIKE 'peer:%' THEN '[{"kind":"unknown"}]'
+    WHEN ? IS NOT NULL THEN (SELECT stamp.acts_for FROM dispatch_contexts stamp WHERE stamp.id = ?)
+    ELSE (SELECT record.acts_for FROM bot_conversation_acts_for record WHERE record.session_id = ?)
+  END`
+
+function stampArgs(params: {
+  creatorHandle?: string | null
+  creatorDispatchId?: string | null
+  creatorOrcaSessionId?: OrcaSessionId | null
+}): (string | null)[] {
+  return [
+    params.creatorHandle ?? null,
+    params.creatorDispatchId ?? null,
+    params.creatorDispatchId ?? null,
+    params.creatorOrcaSessionId ?? null
+  ]
+}
+
 export const DISPATCH_CONTEXT_CLAIM_SQL = `INSERT INTO dispatch_contexts (
   id, run_id, task_id, contract_version, launch_token_hash,
   assignee_handle, assignee_pane_key, assignee_orca_session_id, process_incarnation,
   creator_dispatch_id, creator_handle, creator_pane_key, creator_orca_session_id,
-  creator_turn_source, status, failure_count, depth, dispatched_at
+  creator_turn_source, status, failure_count, depth, dispatched_at, acts_for
 )
-SELECT ?, run_id, id, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'dispatched', ?, ?, datetime('now')
+SELECT ?, run_id, id, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'dispatched', ?, ?, datetime('now'),
+  ${STAMP_ACTS_FOR_SQL}
 FROM tasks
 WHERE id = ? AND status = 'ready'
   AND NOT EXISTS (
@@ -40,8 +64,9 @@ const STARTING_DISPATCH_CONTEXT_SQL = `INSERT INTO dispatch_contexts (
    id, run_id, task_id, contract_version, launch_token_hash, retry_of_dispatch_id,
    creator_dispatch_id, creator_handle, creator_pane_key, creator_orca_session_id,
    creator_turn_source, depth, status, failure_count, dispatched_at, follow_up_of_dispatch_id,
-   origin_ref, for_message_id, chat_lineage
- ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, datetime('now'), ?, ?, ?, ?)`
+   origin_ref, for_message_id, chat_lineage, acts_for
+ ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, datetime('now'), ?, ?, ?, ?,
+   ${STAMP_ACTS_FOR_SQL})`
 
 const REMOTE_DISPATCH_ATTACHMENT_SQL = `INSERT INTO remote_dispatch_attachments (
    dispatch_id, home_run_id, task_id, home_peer_fingerprint, protocol_version, runtime_epoch, depth
@@ -96,6 +121,7 @@ export function claimDispatchContextRow(
       params.creatorTurnSource ?? null,
       params.priorFailures,
       params.depth,
+      ...stampArgs(params),
       params.taskId,
       params.assigneeHandle,
       params.assigneePaneKey,
@@ -146,7 +172,8 @@ export function insertStartingDispatchContextRow(
     params.followUpOfDispatchId ?? null,
     params.originRef ?? null,
     params.forMessageId ?? null,
-    params.chatLineage ? 1 : null
+    params.chatLineage ? 1 : null,
+    ...stampArgs(params)
   )
 }
 

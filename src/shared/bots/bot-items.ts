@@ -53,6 +53,9 @@ export const BOT_ITEM_WRITE_METHOD_NAMES = [
   'bots.items.link'
 ] as const
 
+/** Item reads see only what the calling chat or worker may reach, so the CLI names its caller too. */
+export const BOT_ITEM_READ_METHOD_NAMES = ['bots.items.list', 'bots.items.show'] as const
+
 /** Longer text is refused, so details go in a file the item links. */
 export const BOT_ITEM_LIMITS = {
   title: 200,
