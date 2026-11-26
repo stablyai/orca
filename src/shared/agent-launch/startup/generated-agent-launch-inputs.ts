@@ -13,9 +13,7 @@ type GeneratedAgentLaunchInputs =
   | GeneratedCmdLaunchInputs
   | { kind: 'hermes-query'; argv: readonly string[] }
 
-export function generatedAgentLaunchEnv(
-  inputs: GeneratedAgentLaunchInputs
-): Record<string, string> {
+export function generatedAgentLaunchEnv(inputs: GeneratedCmdLaunchInputs): Record<string, string> {
   return { [GENERATED_AGENT_LAUNCH_ENV]: JSON.stringify(inputs) }
 }
 
@@ -30,14 +28,15 @@ export function readGeneratedAgentLaunchInputs(
     return undefined
   }
   try {
-    const inputs = JSON.parse(value) as Partial<
-      Record<keyof GeneratedCmdLaunchInputs | 'argv', unknown>
-    > | null
-    if (inputs?.kind === 'hermes-query' && isStringArray(inputs.argv)) {
+    const inputs: unknown = JSON.parse(value)
+    if (!isLaunchRecord(inputs)) {
+      return undefined
+    }
+    if (inputs.kind === 'hermes-query' && isStringArray(inputs.argv)) {
       return { kind: inputs.kind, argv: inputs.argv }
     }
     if (
-      inputs?.kind === 'cmd' &&
+      inputs.kind === 'cmd' &&
       typeof inputs.executable === 'string' &&
       inputs.executable &&
       !/["\r\n\0]/.test(inputs.executable) &&
@@ -62,4 +61,8 @@ export function readGeneratedAgentLaunchInputs(
   } catch {
     return undefined
   }
+}
+
+function isLaunchRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

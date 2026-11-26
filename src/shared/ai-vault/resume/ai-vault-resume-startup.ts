@@ -17,7 +17,10 @@ import {
   resolveTuiAgentLaunchEnv,
   type AgentLaunchProfileSettings
 } from '../../agent-launch/choices/tui-agent-launch-defaults'
-import { buildAgentResumeStartupPlan } from '../../agent-launch/startup/tui-agent-resume-startup'
+import {
+  buildAgentResumeStartupPlan,
+  buildAgentTypedResumeStartupPlan
+} from '../../agent-launch/startup/tui-agent-resume-startup'
 import {
   withManagedAgentProgram,
   type ManagedAgentCommands
@@ -133,13 +136,28 @@ function ompResumeProgram(
 
 /** A resume run on the host itself: no prebuilt remote command. */
 export function buildAiVaultLocalResumeStartup(
-  args: AiVaultResumeStartupArgs & {
-    agentArgs?: string
-    embedCwd: boolean
-    /** Copy-path only: names the pasted line must strip off the agent itself.
-     *  Spawned startups drop them through `envToDelete` instead. */
-    clearEnvNames?: readonly string[]
-  }
+  args: AiVaultLocalResumeStartupArgs
+): AiVaultResumeStartup {
+  return buildAiVaultResumeStartup(args, buildAgentResumeStartupPlan)
+}
+
+export function buildAiVaultTypedResumeStartup(
+  args: AiVaultLocalResumeStartupArgs
+): AiVaultResumeStartup {
+  return buildAiVaultResumeStartup(args, buildAgentTypedResumeStartupPlan)
+}
+
+type AiVaultLocalResumeStartupArgs = AiVaultResumeStartupArgs & {
+  agentArgs?: string
+  embedCwd: boolean
+  /** Copy-path only: names the pasted line must strip off the agent itself.
+   *  Spawned startups drop them through `envToDelete` instead. */
+  clearEnvNames?: readonly string[]
+}
+
+function buildAiVaultResumeStartup(
+  args: AiVaultLocalResumeStartupArgs,
+  buildResumePlan: typeof buildAgentResumeStartupPlan
 ): AiVaultResumeStartup {
   const { session, settings, embedCwd, clearEnvNames } = args
   const { platform, codexHome, liveShell } = args.host
@@ -173,7 +191,7 @@ export function buildAiVaultLocalResumeStartup(
     }
   }
   if (localProviderSession && isResumableTuiAgent(session.agent)) {
-    const startupPlan = buildAgentResumeStartupPlan({
+    const startupPlan = buildResumePlan({
       agent: session.agent,
       providerSession: localProviderSession,
       cmdOverrides: resumeCommandOverrides(args),

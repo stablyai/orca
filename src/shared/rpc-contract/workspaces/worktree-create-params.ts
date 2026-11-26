@@ -138,6 +138,8 @@ export const WorktreeCreate = z
     // Desktop can prequote startup commands; clients unable to quote for the host send startupAgent.
     startupCommand: OptionalString,
     startupEnv: z.record(z.string(), z.string()).optional(),
+    generatedAgentLaunch: z.string().optional(),
+    hermesStartupQueryArgv: z.string().optional(),
     startupLaunchConfig: sleepingAgentLaunchConfigSchema,
     startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
     // Quote agent launches on the execution host because SSH shells can differ from the client’s.

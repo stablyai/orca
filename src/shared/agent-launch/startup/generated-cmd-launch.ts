@@ -3,7 +3,7 @@ import {
   generatedAgentLaunchEnv,
   type GeneratedCmdLaunchInputs
 } from './generated-agent-launch-inputs'
-import type { LaunchPosition } from './launch-position'
+import { readLaunchPosition, type LaunchPosition } from './launch-position'
 import { launchProgramHead } from './managed-agent-launch-program'
 
 export function renderGeneratedCmdLaunch(
@@ -33,6 +33,18 @@ export function generatedCmdLaunchEnv(
   }
   const { cwd, codexHome, clearEnvNames } = options
   return generatedAgentLaunchEnv({ kind: 'cmd', executable, args, cwd, codexHome, clearEnvNames })
+}
+
+export function generatedCmdResumeEnv(
+  recipe: { agentCommand: string; selectedExecutable?: string },
+  recorded: boolean,
+  invocation: string,
+  options: Parameters<typeof generatedCmdLaunchEnv>[2]
+): Record<string, string> | undefined {
+  const executable = recorded
+    ? (readLaunchPosition(recipe.agentCommand, 'cmd')?.executable ?? recipe.selectedExecutable)
+    : (recipe.selectedExecutable ?? recipe.agentCommand.split(' ')[0])
+  return generatedCmdLaunchEnv(executable, invocation, options)
 }
 
 /** Conversion only needs the trailing arguments, cwd and environment from the verified command. */

@@ -22,11 +22,14 @@ import { argvPromptSeparator } from './argv-prompt-separator'
 import { appliedSessionOptionProps, buildFlagPromptStartupPlan } from './flag-prompt-startup'
 import { generatedCmdLaunchEnv } from './generated-cmd-launch'
 
-function carryGeneratedCmdLaunch<T extends { launchCommand: string; env?: Record<string, string> }>(
-  plan: T,
-  executable: string | undefined
-): T {
-  const inputs = generatedCmdLaunchEnv(executable, plan.launchCommand)
+function carryGeneratedCmdLaunch<
+  T extends Pick<AgentStartupPlan, 'launchCommand' | 'env' | 'launchConfig'>
+>(plan: T, shell: AgentStartupShell): T {
+  const { commandProvenance, agentCommand, selectedExecutable } = plan.launchConfig
+  const inputs =
+    shell === 'cmd' && commandProvenance === 'generated'
+      ? generatedCmdLaunchEnv(selectedExecutable ?? agentCommand?.split(' ')[0], plan.launchCommand)
+      : undefined
   return inputs ? { ...plan, env: { ...plan.env, ...inputs } } : plan
 }
 
@@ -103,7 +106,7 @@ export function buildAgentStartupPlan(args: {
     ? { ...args.agentEnv, ...baseCommand.startupEnv }
     : args.agentEnv
   const withRebuildInputs = (plan: AgentStartupPlan): AgentStartupPlan =>
-    carryGeneratedCmdLaunch(plan, baseCommand.generatedCmdExecutable)
+    carryGeneratedCmdLaunch(plan, shell)
 
   if (!trimmedPrompt) {
     if (!allowEmptyPromptLaunch) {
@@ -308,5 +311,5 @@ export function buildAgentDraftLaunchPlan(args: {
   ) {
     return null
   }
-  return carryGeneratedCmdLaunch(plan, baseCommand.generatedCmdExecutable)
+  return carryGeneratedCmdLaunch(plan, shell)
 }

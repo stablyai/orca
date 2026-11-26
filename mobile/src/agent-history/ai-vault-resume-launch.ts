@@ -3,7 +3,7 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../../src/shared/agent-session/lifecycle/agent-session-resume'
 import {
-  buildAiVaultLocalResumeStartup,
+  buildAiVaultTypedResumeStartup,
   type AiVaultResumeCommandSession,
   type AiVaultResumeLaunchSettings
 } from '../../../src/shared/ai-vault/resume/ai-vault-resume-startup'
@@ -55,7 +55,7 @@ export function buildMobileAiVaultResumeLaunch(args: {
   const commandOverride = args.settings?.agentCmdOverrides?.[args.session.agent]
   const startup =
     buildAiVaultRemoteResumeStartup(args.session, commandOverride) ??
-    buildAiVaultLocalResumeStartup({
+    buildAiVaultTypedResumeStartup({
       session: args.session,
       host: resolveAiVaultResumeHostShell({
         session: args.session,

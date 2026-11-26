@@ -21,10 +21,9 @@ import { buildAiVaultResumeShellCommand } from '../../ai-vault/resume/ai-vault-r
 import { normalizeRuntimePathForComparison } from '../../file-access/cross-platform-path'
 import { parseWslUncPath } from '../../file-access/wsl-paths'
 import { dropRecordedAgentPermissionArgs } from '../permissions/tui-agent-permission-lift'
-import { generatedCmdLaunchEnv } from './generated-cmd-launch'
-import { readLaunchPosition } from './launch-position'
+import { generatedCmdResumeEnv } from './generated-cmd-launch'
 
-export function buildAgentResumeStartupPlan(args: {
+type AgentResumeStartupArgs = {
   agent: ResumableTuiAgent
   providerSession: AgentProviderSessionMetadata
   cmdOverrides: Partial<Record<TuiAgent, string>>
@@ -53,7 +52,23 @@ export function buildAgentResumeStartupPlan(args: {
   fork?: boolean
   /** OS that runs the agent when `platform` only picks quoting; null when unreported. */
   agentHostPlatform?: NodeJS.Platform | null
-}): AgentStartupPlan | null {
+}
+
+export function buildAgentResumeStartupPlan(args: AgentResumeStartupArgs): AgentStartupPlan | null {
+  return buildAgentResumePlan(args, generatedCmdResumeEnv)
+}
+
+/** Build a line the client will type into an existing shell, without host spawn metadata. */
+export function buildAgentTypedResumeStartupPlan(
+  args: AgentResumeStartupArgs
+): AgentStartupPlan | null {
+  return buildAgentResumePlan(args)
+}
+
+function buildAgentResumePlan(
+  args: AgentResumeStartupArgs,
+  buildRebuildEnv?: typeof generatedCmdResumeEnv
+): AgentStartupPlan | null {
   const resumeArgv = args.fork
     ? getAgentForkArgv(args.agent, args.providerSession)
     : getAgentResumeArgv(args.agent, args.providerSession, args.ompResumeFilePath)
@@ -86,12 +101,10 @@ export function buildAgentResumeStartupPlan(args: {
               : args.agentHostPlatform,
           shell
         ),
-        resumeLaunch: { agentCommand: resolvedAgentCommand },
-        generatedCmdExecutable:
-          shell === 'cmd' && args.commandProvenance === 'generated'
-            ? (readLaunchPosition(resolvedAgentCommand, shell)?.executable ??
-              args.selectedExecutable)
-            : undefined,
+        resumeLaunch: {
+          agentCommand: resolvedAgentCommand,
+          selectedExecutable: args.selectedExecutable
+        },
         appliedSessionOptions: {}
       } as const)
     : resolveAgentLaunchCommand({
@@ -133,8 +146,15 @@ export function buildAgentResumeStartupPlan(args: {
     ? buildAiVaultResumeShellCommand({ ...resumeShell, resumeCommand, platform: args.platform })
     : resumeCommand
   const rebuildEnv =
-    !resumeShell || (args.platform === 'win32' && resumeShell.shell === 'cmd')
-      ? generatedCmdLaunchEnv(baseCommand.generatedCmdExecutable, resumeCommand, resumeShell)
+    shell === 'cmd' &&
+    launchConfig.commandProvenance === 'generated' &&
+    (!resumeShell || (args.platform === 'win32' && resumeShell.shell === 'cmd'))
+      ? buildRebuildEnv?.(
+          baseCommand.resumeLaunch,
+          Boolean(resolvedAgentCommand),
+          resumeCommand,
+          resumeShell
+        )
       : undefined
   const applied = baseCommand.appliedSessionOptions
   return {

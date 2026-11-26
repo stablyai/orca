@@ -16,6 +16,7 @@ import type {
 import { readRetiredNameRegistryForRepo } from '../../../../../shared/worktree/naming/retired-name-cache'
 import { EMPTY_RETIRED_NAME_REGISTRY } from '../../../../../shared/worktree/naming/retired-name-registry'
 import { toRuntimeWorktreeSelector } from '../../../runtime/rpc/targets/runtime-worktree-selector'
+import { worktreeAgentStartupParams } from '../../../runtime/hosted-terminals/creation/terminal-agent-create-launch-params'
 import {
   getRemoteRuntimeStatus,
   callRuntimeResult,
@@ -87,8 +88,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         pendingFirstAgentMessageRename: args.pendingFirstAgentMessageRename,
         ...(args.startup
           ? {
-              startupCommand: args.startup.command,
-              ...(args.startup.env ? { startupEnv: args.startup.env } : {}),
+              ...worktreeAgentStartupParams(args.startup),
               ...(args.startup.launchConfig
                 ? { startupLaunchConfig: args.startup.launchConfig }
                 : {}),

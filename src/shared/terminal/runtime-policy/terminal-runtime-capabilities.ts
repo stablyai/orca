@@ -35,9 +35,11 @@ export const TERMINAL_SEND_APPROVAL_GUARD_RUNTIME_CAPABILITY =
   'terminal.send-approval-guard.v1' as const
 
 export const QUEUED_AGENT_LAUNCH_CAPABILITY = 'preflight.queued-agent-launch.v1'
+export const HERMES_STARTUP_QUERY_ARGV_CAPABILITY = 'terminal.hermes-startup-query-argv.v1'
 
 export const TERMINAL_RUNTIME_CAPABILITIES = [
   QUEUED_AGENT_LAUNCH_CAPABILITY,
+  HERMES_STARTUP_QUERY_ARGV_CAPABILITY,
   TERMINAL_ORDERED_INPUT_CAPABILITY,
   TERMINAL_LIMIT_RUNTIME_CAPABILITY,
   'terminal.binary-stream.v1',

@@ -255,6 +255,8 @@ export const TerminalCreateParams = z.object({
   nativeChatSignIn: NativeChatSignIn.optional(),
   startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
   env: z.record(z.string(), z.string()).optional(),
+  generatedAgentLaunch: z.string().optional(),
+  hermesStartupQueryArgv: z.string().optional(),
   envToDelete: z.array(z.string().min(1).max(256)).max(32).optional(),
   launchConfig: z
     .object({

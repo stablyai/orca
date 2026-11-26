@@ -20,6 +20,7 @@ import {
 } from '../../../../../shared/rpc-contract/terminal/terminal-unary-params'
 import { TerminalSplit } from '../../../../../shared/rpc-contract/terminal/terminal-split-params'
 import { TerminalResizeForClient } from '../../../../../shared/rpc-contract/terminal/terminal-stream-params'
+import { generatedAgentLaunchRequestEnv } from '../../startup/agent-launch-request-env'
 
 export const TERMINAL_LIFECYCLE_METHODS = [
   defineMethod({
@@ -41,6 +42,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
     params: TerminalCreateParams,
     handler: async (params, context) => {
       const { runtime, pairedDeviceId, clientId, clientKind } = context
+      const env = generatedAgentLaunchRequestEnv(params)
       // Paired viewers create in the background; only caller-local session-tab navigation may select it, never the host renderer.
       const pairedViewer = clientKind !== undefined
       const focus = pairedViewer ? false : params.focus === true
@@ -68,7 +70,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
               ...(params.shell ? { shellOverride: params.shell } : {}),
               nativeChatSignIn: params.nativeChatSignIn,
               startupCommandDelivery: params.startupCommandDelivery,
-              env: params.env,
+              env,
               envToDelete: params.envToDelete,
               ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
               ...(params.resumeProviderSession
@@ -96,7 +98,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
             ...(params.shell ? { shellOverride: params.shell } : {}),
             nativeChatSignIn: params.nativeChatSignIn,
             startupCommandDelivery: params.startupCommandDelivery,
-            env: params.env,
+            env,
             envToDelete: params.envToDelete,
             ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
             ...(params.resumeProviderSession
