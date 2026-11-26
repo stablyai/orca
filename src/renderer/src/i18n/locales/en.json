@@ -27745,6 +27745,7 @@
       "computerHint": "Where the bot runs.",
       "computerAccountHint": "Where the bot runs, signed in to Orca as {{account}}.",
       "useChatDefaults": "Use chat defaults",
+      "useChatDefaultsHint": "Reset the agent's model, options and permissions to your chat defaults",
       "usingChatDefault": "Using your chat default. Background runs use your Agents setting.",
       "agent": "Agent",
       "folder": "Folder: {{path}}",
