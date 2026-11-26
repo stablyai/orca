@@ -140,13 +140,16 @@ function CombinedSearchHarness({
   initialQuery,
   initialInclude = '',
   initialExclude = '',
-  cappedNames = false
+  cappedNames = false,
+  textUnavailable = false
 }: {
   initialQuery: string
   initialInclude?: string
   initialExclude?: string
   /** Simulates a capped listing whose rows all fall outside the view. */
   cappedNames?: boolean
+  /** Simulates a workspace whose text scan is skipped (two hosts publish it). */
+  textUnavailable?: boolean
 }): React.JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState(initialQuery)
@@ -181,11 +184,12 @@ function CombinedSearchHarness({
     () =>
       createCombinedSearchRows({
         names: cappedNames ? { total: 0, matches: [], truncated: true } : names,
-        textResult: cappedNames ? null : text,
+        textResult: cappedNames || textUnavailable ? null : text,
         textRows: buildSearchRows(text, collapsed),
-        textPending: false
+        textPending: false,
+        textError: textUnavailable ? 'Not available here' : null
       }),
-    [cappedNames, collapsed, names, text]
+    [cappedNames, collapsed, names, text, textUnavailable]
   )
   const clearQuery = useCallback(() => setQuery(''), [])
   const openRow = useCallback(
@@ -335,4 +339,12 @@ export const longFilterNarrow = defineFixture({
       initialExclude="dist/**, node_modules/**"
     />
   )
+})
+export const textUnavailable = defineFixture({
+  width: 300,
+  render: () => <CombinedSearchHarness initialQuery="cart" textUnavailable />
+})
+export const textUnavailableNarrow = defineFixture({
+  width: 220,
+  render: () => <CombinedSearchHarness initialQuery="cart" textUnavailable />
 })

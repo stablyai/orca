@@ -103,7 +103,7 @@ export function useFileSearchRunner({
         if (!worktreePath || !activeWorktreeId || ownerIsTwin) {
           updateActiveSearchState({
             query,
-            error: translate('fileSearch.unavailable', 'Text search is not available here'),
+            error: translate('fileSearch.unavailable', 'Not available here'),
             results: null,
             resultOwner: null,
             loading: false
