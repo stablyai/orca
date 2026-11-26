@@ -3,6 +3,7 @@
 
 import { AGENT_LAUNCH_SURFACES } from '../../agent-launch/contracts/agent-launch-surface'
 import { z } from 'zod'
+import { AgentLaunchSplitParam } from '../../agent-launch/contracts/agent-launch-split'
 import { isAgentSessionOptions } from '../../agent-session/lifecycle/agent-session-record'
 import { parseAgentSessionOperationTimestamp } from '../../agent-session/lifecycle/operations/agent-session-host-authority'
 import { parsePaneKey } from '../../workspace-layout/stable-pane-id'
@@ -88,7 +89,12 @@ export const AgentLaunch = z.object({
   /** View-only placement is outside replay identity and never fails launch: fall back from missing group to
    * anchor group, then active group; drop unknown keys. Requires agent.launch.placement.v1; receipt reports placement. */
   placement: z
-    .object({ groupId: tolerantTabLayoutId, afterTabId: tolerantTabLayoutId })
+    .object({
+      groupId: tolerantTabLayoutId,
+      afterTabId: tolerantTabLayoutId,
+      /** A chat beside the caller; an unknown value drops only this field. Requires agent.launch.split.v1. */
+      split: AgentLaunchSplitParam.optional().catch(undefined)
+    })
     .optional()
     .catch(undefined),
   /** focused selects the tab; background leaves selection; absent reveals as before. Caller navigation defaults

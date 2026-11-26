@@ -5,6 +5,7 @@ import type {
   AgentLaunchTabPublishRequest
 } from '../../../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import type { AgentLaunchPlacementReceipt } from '../../../../shared/agent-launch/contracts/agent-launch-intent'
+import type { AgentLaunchSplitRequest } from '../../../../shared/agent-launch/contracts/agent-launch-split'
 import type { AgentLaunchPaneAddress } from '../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
@@ -50,6 +51,15 @@ export abstract class OrcaRuntimeWithMainLayoutAgentLaunchTabs extends OrcaRunti
     return this.getWorkspaceSessionForWorktree(worktreeId)?.unifiedTabs?.[worktreeId]?.find(
       (tab) => tab.entityId === tabId
     )?.groupId
+  }
+
+  /** The window, which owns the layout, places a `--split` chat; null without one. */
+  placeAgentLaunchSplit(
+    request: Omit<AgentLaunchSplitRequest, 'requestId'>
+  ): Promise<AgentLaunchPlacementReceipt> | null {
+    return this.hasAuthoritativeWindow()
+      ? (this.notifier?.placeAgentLaunchSplit?.(request) ?? null)
+      : null
   }
 
   /** The launch's tab in main's layout; null for a workspace main does not own (today's path). */

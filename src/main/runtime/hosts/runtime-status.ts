@@ -75,6 +75,8 @@ import { DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY } from '../../../shared/brows
 import { darkSwitchRuntimeCapabilities } from '../construction/dark-switch-runtime-capabilities'
 import { supportsDurableTerminalPromptDelivery } from '../terminal/input/durable-terminal-prompt-delivery-support'
 import { RuntimeWorkspaceChangeEvents } from '../workspaces/catalog/runtime-workspace-change-events'
+import { AGENT_LAUNCH_SPLIT_RUNTIME_CAPABILITY } from '../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 
 export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEvents {
   getStatus(): RuntimeStatus {
@@ -94,6 +96,9 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
           capability !== BROWSER_PROFILE_COOKIE_CLEAR_CAPABILITY) ||
           runtimeBrowserCommandsFactorySupportsEngineCapability(capability)) &&
         (capability !== 'browser.screencast.v1' || canBrowse) &&
+        // A split chat is placed by a window that owns the layout; headless hosts would open a tab.
+        (capability !== AGENT_LAUNCH_SPLIT_RUNTIME_CAPABILITY ||
+          (hasRenderer && !ORCA_LAYOUT_OWNER_IS_MAIN)) &&
         (capability !== BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY || canHostClientPages) &&
         (capability !== BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY ||
           canBrowse ||

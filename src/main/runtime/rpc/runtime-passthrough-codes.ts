@@ -2,6 +2,7 @@ import { WORKTREE_CREATE_COLLISION_CODE } from '../../../shared/new-workspace/wo
 import { AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE } from '../../../shared/agent-launch/contracts/agent-launch-pane-already-live'
 import { AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE } from '../../../shared/agent-launch/contracts/agent-launch-session-already-exists'
 import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../shared/agent-launch/contracts/agent-launch-tab-closed'
+import { AGENT_LAUNCH_SPLIT_UNSUPPORTED_CODE } from './methods/agent-launch/agent-launch-split'
 import { AGENT_LAUNCH_TARGET_FORBIDDEN_CODE } from '../../../shared/agent-launch/contracts/agent-launch-target-forbidden'
 import { CONNECTOR_REPLY_ERROR_CODES } from '../../../shared/rpc-contract/connectors/connector-params'
 import { BOT_ERROR_CODES } from '../../../shared/rpc-contract/bots-params'
@@ -15,6 +16,7 @@ export const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   AGENT_LAUNCH_TAB_CLOSED_CODE,
   AGENT_LAUNCH_TARGET_FORBIDDEN_CODE,
   'agent_launch_replay_unsupported',
+  AGENT_LAUNCH_SPLIT_UNSUPPORTED_CODE,
   'runtime_unavailable',
   'chat_fork_source_unavailable',
   'chat_fork_runtime_incompatible',

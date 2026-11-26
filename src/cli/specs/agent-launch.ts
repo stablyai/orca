@@ -6,7 +6,7 @@ export const AGENT_LAUNCH_COMMAND_SPECS: CommandSpec[] = [
     path: ['agent', 'launch'],
     summary: 'Start an agent in an existing workspace, as a chat or a terminal',
     usage:
-      'orca agent launch --agent <id> [--worktree <selector>] [--prompt <text>] [--model <id>] [--effort <level>] [--surface chat|terminal] [--focus] [--retry-launch <operationId>] [--json]',
+      'orca agent launch --agent <id> [--worktree <selector>] [--prompt <text>] [--model <id>] [--effort <level>] [--surface chat|terminal] [--split right|down] [--focus] [--retry-launch <operationId>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'agent',
@@ -15,6 +15,7 @@ export const AGENT_LAUNCH_COMMAND_SPECS: CommandSpec[] = [
       'model',
       'effort',
       'surface',
+      'split',
       'focus',
       'retry-launch'
     ],
@@ -24,12 +25,14 @@ export const AGENT_LAUNCH_COMMAND_SPECS: CommandSpec[] = [
       '--worktree defaults to the native folder workspace or worktree containing the current directory. For a new checkout with its agent, use `orca worktree create --agent`.',
       '--model takes a provider model id (OMP also takes its model roles and selectors) and --effort a reasoning effort for that model; --effort requires --model. Pi takes a `provider/id` model and maps --effort to `--thinking` (off, minimal, low, medium, high, xhigh, max). They apply to either surface.',
       'The tab opens without switching focus; pass --focus to switch to it.',
+      '--split right|down opens the agent as a chat in a new pane beside the chat that ran the command (else the focused pane), instead of a tab; the focused pane keeps focus unless --focus. Remote, windowless and older hosts refuse it. A retry with --split needs the window open; otherwise retry without --split, keeping --surface chat.',
       'If the launch reply is lost, re-issue the same command from the same directory on the same host with --retry-launch <operationId> from the error. Never retry as a fresh launch; older hosts require inspecting the workspace first.'
     ],
     examples: [
       'orca agent launch --agent codex --json',
       'orca agent launch --agent codex --model gpt-6-astra --effort high --prompt "Write the design doc" --json',
-      'orca agent launch --agent claude --worktree path:/projects/myapp --focus'
+      'orca agent launch --agent claude --worktree path:/projects/myapp --focus',
+      'orca agent launch --agent claude --prompt "Review the diff" --split right --json'
     ]
   },
   {
