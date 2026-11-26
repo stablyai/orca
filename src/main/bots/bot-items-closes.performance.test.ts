@@ -31,28 +31,30 @@ it('tests the same events to find a close however many events came after it', ()
     const status = "kind = 'status'"
     db.prepare = (sql: string) => prepare(sql.replaceAll(status, `tested() AND ${status}`))
     const store = new BotItemsStore(db, false)
-    let at = 1_000
-    const uid = store.add(
-      {
-        ownerBotId: 'b1',
-        chatId: 'home',
-        source: { kind: 'home', title: null },
-        title: 'Ship it',
-        status: 'working',
-        links: []
-      },
-      HOME,
-      at++
-    ).uid
-    const closedAt = at++
-    store.close(uid, 'done', undefined, HOME, [{ kind: 'owner' }], closedAt)
-    for (let i = 0; i < after; i++) {
-      store.comment(uid, 'More', HOME, [], at++)
+    try {
+      let at = 1_000
+      const uid = store.add(
+        {
+          ownerBotId: 'b1',
+          chatId: 'home',
+          source: { kind: 'home', title: null },
+          title: 'Ship it',
+          status: 'working',
+          links: []
+        },
+        HOME,
+        at++
+      ).uid
+      const closedAt = at++
+      store.close(uid, 'done', undefined, HOME, [{ kind: 'owner' }], closedAt)
+      for (let i = 0; i < after; i++) {
+        store.comment(uid, 'More', HOME, [], at++)
+      }
+      tested = 0
+      return { found: store.closes([{ uid, closedAt }])[uid]?.actsFor, tested }
+    } finally {
+      store.dispose()
     }
-    tested = 0
-    const found = store.closes([{ uid, closedAt }])[uid]?.actsFor
-    store.dispose()
-    return { found, tested }
   }
   expect([lookup(1_000), lookup(10_000)]).toEqual([
     { found: [{ kind: 'owner' }], tested: 1 },
