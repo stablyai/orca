@@ -135,19 +135,7 @@ export function WorktreeReferenceStack({
       className="workspace-reference-stack"
       data-workspace-reference-stack={front.type === 'issue' ? front.provider : 'review'}
     >
-      {ordered
-        .slice(1, 3)
-        .toReversed()
-        .map((item, index, ghosts) => (
-          <span
-            key={getWorkspaceAttachmentKey(item)}
-            className="workspace-reference-stack-ghost"
-            data-depth={ghosts.length - index}
-            aria-hidden
-          >
-            <ReferenceGlyph item={item} details={details} />
-          </span>
-        ))}
+      {/* One glyph for the most urgent reference; the count says how many. */}
       <span className="workspace-reference-stack-front" data-reference-front="" aria-hidden>
         <ReferenceGlyph item={front} details={details} />
       </span>
