@@ -117,13 +117,17 @@ export function agentSessionThreadGoalStatusChange(
   }
 }
 
-/** The status change a goal's controls offer; an agent-owned goal can only resume, and only when its agent's /goal does. */
+/** An agent-owned goal offers only the status changes its command accepts. */
 export function agentSessionThreadGoalOfferedStatusChange(
   status: AgentJournalThreadGoalStatus,
-  control: { hostChanges: boolean; agentResumes: boolean }
+  control: { hostChanges: boolean; agentResumes: boolean; agentPauses?: boolean }
 ): 'active' | 'paused' | null {
   const change = agentSessionThreadGoalStatusChange(status)
-  return control.hostChanges || (control.agentResumes && change === 'active') ? change : null
+  return control.hostChanges ||
+    (control.agentResumes && change === 'active') ||
+    (control.agentPauses && change === 'paused')
+    ? change
+    : null
 }
 
 /** Accrue beyond exact provider time only during an active running turn, starting at the later of updatedAt and turn start. */

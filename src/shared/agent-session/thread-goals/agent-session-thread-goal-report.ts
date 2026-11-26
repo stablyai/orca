@@ -12,10 +12,14 @@ export const AGENT_OWNED_THREAD_GOAL_CLEAR_COMMAND = '/goal clear'
 /** The message an agent-owned goal change sends; null when the agent's /goal has no such command. */
 export function agentOwnedThreadGoalCommand(
   change: AgentSessionThreadGoalChange,
-  agentResumes: boolean
+  agentResumes: boolean,
+  agentPauses = false
 ): string | null {
   if (change.kind === 'clear') {
     return AGENT_OWNED_THREAD_GOAL_CLEAR_COMMAND
+  }
+  if (agentPauses && change.kind === 'status' && change.status === 'paused') {
+    return '/goal pause'
   }
   return agentResumes && change.kind === 'status' && change.status === 'active'
     ? '/goal resume'
@@ -24,7 +28,7 @@ export function agentOwnedThreadGoalCommand(
 
 export type AgentSessionThreadGoalReport = {
   goal: AgentSessionGoalDisplay | null
-  /** False for an agent-owned /goal: clear goes through the agent's command and there is no pause. */
+  /** False for a provider-owned goal controlled by its own commands. */
   hostChanges: boolean
 }
 

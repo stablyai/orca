@@ -50,6 +50,7 @@ export type StructuredAgentSessionSendRequest = Pick<
   onSettled?: (outcome: StructuredAgentSessionSendOutcome) => void
   /** Do the other thing than the follow-up setting: Cmd/Ctrl+Enter, or the phone's hold menu. */
   alternate?: true
+  immediate?: true
 }
 
 /** Reserve the chat’s single unanswered-send slot; return null while occupied. */

@@ -17,10 +17,11 @@ import { rowsBesideStreamedText } from '../../../../../../shared/agent-session/v
 export type StructuredAgentSessionThreadGoal = {
   goal: AgentSessionGoalDisplay | null
   pending: boolean
-  /** False for agent-owned /goal: clear uses a command and pause is unavailable. */
+  /** False for a provider-owned goal controlled by its own commands. */
   hostChanges: boolean
   /** An agent-owned goal resumes through the agent's `/goal resume`. */
   agentResumes: boolean
+  agentPauses: boolean
   /** Resolves false when the change was refused or not sent; the error surfaces separately. */
   change: (change: AgentSessionThreadGoalChange) => Promise<boolean>
 }
@@ -33,11 +34,13 @@ export function useStructuredAgentSessionThreadGoal(args: {
   journalEpoch?: string | null
   mutate: StructuredAgentSessionMutate
   /** Sends the agent a command, for a goal only its own `/goal` changes. */
-  send: (text: string) => boolean | 'queued'
+  send: (text: string, immediate?: true) => boolean | 'queued'
   agent: string
 }): StructuredAgentSessionThreadGoal | null {
   const { journalItems, mutate, support, reported, journalEpoch, send } = args
-  const agentResumes = getNativeChatAgentProfile(args.agent)?.resumesOwnGoal === true
+  const profile = getNativeChatAgentProfile(args.agent)
+  const agentResumes = profile?.resumesOwnGoal === true
+  const agentPauses = profile?.pausesOwnGoal === true
   const [pendingCount, setPendingCount] = useState(0)
   const goalRows = rowsBesideStreamedText(journalItems)
   const report = useMemo(
@@ -49,8 +52,10 @@ export function useStructuredAgentSessionThreadGoal(args: {
   const change = useCallback(
     async (next: AgentSessionThreadGoalChange): Promise<boolean> => {
       if (!hostChanges) {
-        const command = agentOwnedThreadGoalCommand(next, agentResumes)
-        return command !== null && send(command) !== false
+        const command = agentOwnedThreadGoalCommand(next, agentResumes, agentPauses)
+        return (
+          command !== null && send(command, command === '/goal pause' ? true : undefined) !== false
+        )
       }
       setPendingCount((count) => count + 1)
       try {
@@ -64,10 +69,17 @@ export function useStructuredAgentSessionThreadGoal(args: {
         setPendingCount((count) => count - 1)
       }
     },
-    [agentResumes, hostChanges, mutate, send]
+    [agentPauses, agentResumes, hostChanges, mutate, send]
   )
   if (report === null) {
     return null
   }
-  return { goal: report.goal, pending: pendingCount > 0, hostChanges, agentResumes, change }
+  return {
+    goal: report.goal,
+    pending: pendingCount > 0,
+    hostChanges,
+    agentResumes,
+    agentPauses,
+    change
+  }
 }

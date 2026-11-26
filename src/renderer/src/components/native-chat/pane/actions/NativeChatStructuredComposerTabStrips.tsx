@@ -68,6 +68,7 @@ function NativeChatStructuredGoalStrip(props: {
       pending={threadGoal.pending}
       hostChanges={threadGoal.hostChanges}
       agentResumes={threadGoal.agentResumes}
+      agentPauses={threadGoal.agentPauses}
       sendUnavailable={transport.sendOut === true || props.isWorking}
       startsHeld={startsHeld}
       isVisible={props.isVisible}

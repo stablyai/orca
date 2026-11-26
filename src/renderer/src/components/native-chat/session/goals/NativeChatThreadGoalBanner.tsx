@@ -48,10 +48,11 @@ export function NativeChatThreadGoalBanner(props: {
   goal: AgentSessionGoalDisplay
   objectiveContent?: React.ReactNode
   pending: boolean
-  /** False where only the agent's own `/goal` changes the goal, which has no pause. */
+  /** False where only the agent's own `/goal` changes the goal. */
   hostChanges: boolean
   /** The agent's own `/goal` resumes a paused goal. */
   agentResumes?: boolean
+  agentPauses?: boolean
   /** The composer cannot admit another message or the session is working. */
   sendUnavailable: boolean
   /** The host may take no turn now: Resume, and a clear that enters a turn, are held. */
@@ -69,9 +70,10 @@ export function NativeChatThreadGoalBanner(props: {
   const label = nativeChatThreadGoalStatusLabel(goal.status, runningTurn !== null, t)
   const statusChange = agentSessionThreadGoalOfferedStatusChange(goal.status, {
     hostChanges: props.hostChanges,
-    agentResumes: props.agentResumes === true
+    agentResumes: props.agentResumes === true,
+    agentPauses: props.agentPauses === true
   })
-  // An agent-owned change is a message that must enter a fresh turn, like a composer send.
+  // Agent-owned resume and clear use the ordinary composer send path.
   const agentCommandUnavailable =
     !props.hostChanges && (props.sendUnavailable || props.startsHeld === true)
   if (label === null) {

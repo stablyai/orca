@@ -196,7 +196,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     support: threadGoalSupport,
     reported: reportedThreadGoal,
     mutate,
-    send,
+    send: (text, immediate) => send(text, [], immediate ? { immediate } : undefined),
     agent
   })
   const contextClear = useNativeChatContextClearFloor(state.epoch, journalItems)
