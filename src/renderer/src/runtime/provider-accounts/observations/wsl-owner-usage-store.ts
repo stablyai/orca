@@ -100,11 +100,13 @@ function markUnattributed(key: string, touched: Set<string>, retryAt = 0): void 
   const existing = entries.get(key)
   const attempts = existing?.attempts ?? 0
   const wait = Math.min(UNATTRIBUTED_RETRY_MS * 2 ** attempts, TTL_MS)
-  const due = Math.max(Date.now() + wait, retryAt)
+  // Why retained: a later unattributed read must not make the key due before a kept Retry-After.
+  const retained = Math.max(existing?.retryAt ?? 0, retryAt)
+  const due = Math.max(Date.now() + wait, retained)
   entries.set(key, {
     usage: existing?.usage ?? { kind: 'pending' },
     expiresAt: due,
-    retryAt: Math.max(existing?.retryAt ?? 0, retryAt),
+    retryAt: retained,
     attempts: attempts + 1
   })
   touched.add(key)
