@@ -220,12 +220,12 @@ function freshInstall(exe) {
 }
 
 // Runs one update step and records the row. expect(after, ctx) returns a list of failed checks.
-async function step(scenario, label, exe, args, { leftover, expect, extraEnv, during } = {}) {
+async function step(scenario, label, exe, args, { leftover, expect, extraEnv, during, run } = {}) {
   const before = probe()
   const pending = during ? during() : null
   const result = pending
     ? await pending.run(exe, args, extraEnv)
-    : runInstaller(exe, args, extraEnv)
+    : (run ?? runInstaller)(exe, args, extraEnv)
   sleep(2000)
   const after = probe()
   const leftoverAlive = leftover ? isPidAlive(leftover) : null
