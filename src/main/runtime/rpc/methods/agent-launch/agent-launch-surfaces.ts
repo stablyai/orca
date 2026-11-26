@@ -1,3 +1,5 @@
+import { localChatClient } from '../../../../native-chat/local-host/local-chat-routing'
+import type { LocalChatOperations } from '../../../../native-chat/local-host/local-chat-operations'
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 /** Use ordinary user-facing terminal/chat creation; worker factories add redrive, mailbox and background-tab behavior.
  * The executor selects surface and prompt delivery; this factory supplies the wire-shaped runtime calls. */
@@ -72,12 +74,7 @@ export function agentLaunchSurfaceFactory(
         (withoutPrompt === true &&
           context.clientCapabilities?.includes(AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY) ===
             true)
-      const created = await createStructuredAgentSessionForWorktree({
-        runtime: context.runtime,
-        ensureHost: async () => {
-          await context.runtime.ensureStructuredAgentSessionHost()
-          return requireInstalledHost()
-        },
+      const launch: Parameters<LocalChatOperations['createLaunchSession']>[0] = {
         caller: operationCallerKey
           ? { callerKey: operationCallerKey }
           : structuredCallerFor(context),
@@ -96,11 +93,31 @@ export function agentLaunchSurfaceFactory(
         ...(tabId ? { tabId } : {}),
         ...(atRest ? { atRest: true as const } : {}),
         ...(firstMessage ? { firstMessage } : {}),
-        ...(signal ? { signal } : {}),
         activate:
           !callerPresentsSurface &&
           (presentation === undefined || (presentation === 'focused' && movesHostWindow))
-      })
+      }
+      const client = localChatClient()
+      const created = client
+        ? await client.callHost('createLaunchSession', launch, signal)
+        : await createStructuredAgentSessionForWorktree({
+            ...launch,
+            runtime: context.runtime,
+            signal,
+            ensureHost: async () => {
+              await context.runtime.ensureStructuredAgentSessionHost()
+              return requireInstalledHost()
+            }
+          })
+      if (created.ok && client) {
+        context.runtime.projectStructuredAgentSessionTab({
+          workspaceId: worktreeId,
+          agent,
+          sessionId: created.value.sessionId,
+          tabId: created.value.tabId,
+          activate: launch.activate
+        })
+      }
       if (!created.ok) {
         // A caller-named session conflict must surface to that caller, never downgrade to terminal.
         if (requested && created.refusal.code === 'agent_session_conflict') {

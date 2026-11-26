@@ -6,7 +6,7 @@ import { runJournalTransaction } from './database/journal-database'
 import { mkdirSync, lstatSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { parentPort, workerData } from 'node:worker_threads'
-import type Database from '../../sqlite/sync-database'
+import Database from '../../sqlite/sync-database'
 import { journalDomainDatabasePath } from './database/journal-host-database'
 import {
   initializeJournalDomainDatabase,
@@ -68,9 +68,15 @@ let parking: JournalSqlWalParking | undefined
 const clock = new JournalSqlQueueClock(() => parking?.mark() ?? { bulk: 0, urgent: 0 })
 const gate = { ms: 0 }
 
+// The OS releases this SQLite reservation even if the detached host dies mid-write.
+let writerLease: Database.Database | undefined
 async function open(): Promise<void> {
   try {
     mkdirSync(dirname(workerData.filename), { recursive: true })
+    if (process.platform === 'darwin') {
+      writerLease = new Database(`${workerData.filename}.writer-lock`, { timeout: 0 })
+      writerLease.exec('BEGIN IMMEDIATE')
+    }
     if (workerData.filename === journalDomainDatabasePath(stateDirectory)) {
       await initializeJournalDomainDatabase(stateDirectory)
     }
@@ -105,6 +111,7 @@ async function open(): Promise<void> {
       error: journalSqlFailure(error)
     })
     db?.close()
+    writerLease?.close()
     port.close()
   }
 }
@@ -217,6 +224,7 @@ async function drain(): Promise<void> {
       }
       await (checkpointClosing ?? checkpoint?.close())
       db?.close()
+      writerLease?.close()
       db = undefined
       reply({ type: 'done', id: close.id })
       port.close()

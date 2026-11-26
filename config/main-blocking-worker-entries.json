@@ -1,4 +1,5 @@
 {
+  "src/main/native-chat/local-host/local-chat-host-entry.ts": "Detached local chat process, started via ELECTRON_RUN_AS_NODE. Owns provider I/O while Desktop is absent.",
   "src/main/plugins/panels/plugin-source-transpile-worker-entry.ts": "Dedicated worker-thread entry; blocking work stays off Electron main.",
   "src/main/claude/transcripts/claude-conversation-fork-worker-entry.ts": "Dedicated worker-thread entry; blocking work stays off Electron main.",
   "src/main/speech/stt-worker.ts": "Dedicated utility/forked-process entry; speech work stays off Electron main.",

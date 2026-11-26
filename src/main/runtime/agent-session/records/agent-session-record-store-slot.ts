@@ -1,3 +1,4 @@
+import { localChatClient } from '../../../native-chat/local-host/local-chat-routing'
 import { sessionCrewChanges } from '../../orchestration/crew/crew-changes'
 // Launch admission opens the single-writer store before chat-host installation; both must reuse this instance.
 
@@ -61,6 +62,9 @@ export async function closeAgentSessionRecordStoreDatabase(
 export function openAgentSessionRecordStoreOnce(
   location: AgentSessionRecordStoreLocation
 ): Promise<OpenedAgentSessionRecordStore> {
+  if (localChatClient()) {
+    return Promise.reject(new Error('The local chat host owns this journal'))
+  }
   if (opening) {
     if (opening.retire) {
       return finishRetirement(opening).then(() => openAgentSessionRecordStoreOnce(location))

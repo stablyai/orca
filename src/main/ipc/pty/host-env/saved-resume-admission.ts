@@ -1,3 +1,4 @@
+import { localChatClient } from '../../../native-chat/local-host/local-chat-routing'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   normalizeAgentProviderSession,
@@ -13,7 +14,7 @@ import type {
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import {
   agentSessionLeasePossiblyWriting,
-  listStructuredProviderSessionOwnership
+  terminalResumeOwnership
 } from '../../../native-chat/agent-session-wire/host/structured-provider-session-ownership'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 // oxfmt-ignore
@@ -124,13 +125,12 @@ async function judgeResumes(
     [providerSession.id, providerSession.transcriptPath].flatMap((id) =>
       id?.trim() ? [terminalConversationKey(agent, id)] : []
     )
-  const admitted = (): ResumeSpawnAdmission => ({
-    verdict: 'admitted',
-    refused: resumes[0]
-  })
-  let store: AgentSessionRecordStore
+  let ownership: ReturnType<typeof terminalResumeOwnership>
   try {
-    store = await runtime.openAgentSessionRecordStore()
+    const client = localChatClient()
+    ownership = client
+      ? await client.callHost('terminalResumeOwnership', null)
+      : terminalResumeOwnership(await runtime.openAgentSessionRecordStore())
   } catch (error) {
     console.warn(
       "[pty] native chat records unreadable; cannot tell whether a resume is a chat's",
@@ -138,10 +138,7 @@ async function judgeResumes(
     )
     return { verdict: 'unverifiable', refused: resumes[0] }
   }
-  const heads = listStructuredProviderSessionOwnership(store.listConversations()).filter(
-    (holding) => holding.role === 'head'
-  )
-  const tabs = store.getVisibleSessionTabIndex()
+  const { heads, tabs } = ownership
   for (const refused of resumes) {
     const holders = heads.filter((holding) =>
       keysOf(refused).some((key) => keysMayMatch(holding.key, key))
@@ -156,7 +153,7 @@ async function judgeResumes(
       return { verdict: 'chat-home', refused }
     }
   }
-  return admitted()
+  return { verdict: 'admitted', refused: resumes[0] }
 }
 
 /** A refused resume becomes the pane's plain shell: nothing of the agent launch is left to run,

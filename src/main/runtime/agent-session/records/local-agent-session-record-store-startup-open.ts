@@ -1,3 +1,4 @@
+import { localChatClient } from '../../../native-chat/local-host/local-chat-routing'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { withPRWatchRecovery } from '../lifecycle/pr-watch-runtime'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
@@ -35,7 +36,7 @@ export function startLocalAgentSessionRecordStoreOpen(
   maintenanceAfter: Promise<void>
 ): AgentSessionRecordStoreStartupOpen {
   const location = localAgentSessionRecordStoreLocation(legacySessionTabIds)
-  if (!hasPersistedStructuredAgentSessionStore(location.stateDirectory)) {
+  if (localChatClient() || !hasPersistedStructuredAgentSessionStore(location.stateDirectory)) {
     return { legacySessionTabIds, persisted: false, opened: null }
   }
   const opened = openAgentSessionRecordStoreOnce({ ...location, maintenanceAfter })

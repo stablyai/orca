@@ -1,3 +1,4 @@
+import { localChatClient } from '../../../native-chat/local-host/local-chat-routing'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { resolveStructuredAgentSessionForkIntent } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-fork-intent'
 import {
@@ -20,7 +21,7 @@ import { resolveHostStructuredAgentLaunchEnvironment } from '../../agent-session
 import { structuredAgentCreateSupportAt } from '../../agent-session/launch/structured-agent-create-support-at'
 import { structuredAgentRuntimeMetadata } from '../../agent-session/installation/structured-agent-runtime-metadata'
 import { structuredLaunchSeedOptions } from '../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
-import { hasPersistedStructuredAgentSessionStore as hasPersistedStructuredAgentSessionStoreOnDisk } from '../../agent-session/records/agent-session-record-store-slot'
+import { hasPersistedStructuredAgentSessionStore as hasChatStoreOnDisk } from '../../agent-session/records/agent-session-record-store-slot'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../../agent-session/installation/structured-agent-session-host-refusal'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
 import { isFloatingWorkspaceSelector } from '../../../../shared/workspace/identity/floating-workspace-worktree'
@@ -281,7 +282,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
           // Only host answers finalize restoration; without one, retry so journals opened later can publish.
           if (
             this.structuredAgentSessionInventoryUnverifiable ||
-            !getStructuredAgentSessionHost()
+            (!localChatClient() && !getStructuredAgentSessionHost())
           ) {
             this.structuredAgentSessionTabRestorePromise = null
           }
@@ -307,7 +308,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
   protected async prepareStructuredAgentSessionStartupRestorationOnce(): Promise<void> {
     const startup = this.structuredAgentSessionStartupOpen
     this.structuredAgentSessionStartupOpen = undefined
-    if (!(startup ? startup.persisted : this.hasPersistedStructuredAgentSessionStore())) {
+    if (!(startup?.persisted ?? this.hasPersistedStructuredAgentSessionStore())) {
       return
     }
     // Load durable agent records before reconciling daemon inventory; refused hosts block only structured requests, not app startup.
@@ -320,6 +321,6 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
   }
 
   protected hasPersistedStructuredAgentSessionStore(): boolean {
-    return hasPersistedStructuredAgentSessionStoreOnDisk(getProfileUserDataPath())
+    return !localChatClient() && hasChatStoreOnDisk(getProfileUserDataPath())
   }
 }

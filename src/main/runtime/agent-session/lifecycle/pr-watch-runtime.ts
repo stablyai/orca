@@ -1,3 +1,4 @@
+import { localChatClient } from '../../../native-chat/local-host/local-chat-routing'
 import { prWatchStorage } from '../../../github/pr-watch/pr-watch-storage'
 // Owns the host's CI-line watches apart from the chat host: they start once startup settles, so a
 // PR is watched whether or not any chat was opened.
@@ -46,7 +47,7 @@ export function startPRWatchRuntime(
   options: { admit?: boolean } = {}
 ): Promise<void> {
   admitted ||= options.admit === true
-  if (!admitted || isHostShuttingDown()) {
+  if (!admitted || isHostShuttingDown() || localChatClient()) {
     return Promise.resolve()
   }
   admittedDeps = deps

@@ -1,3 +1,4 @@
+import { localChatClient } from '../native-chat/local-host/local-chat-routing'
 import { agentQuestionNotices } from './rpc/methods/orchestration/messaging/agent-question-notices'
 import { announceAgentCliUpdatesFinished } from '../agent-cli-update/agent-cli-update-service'
 import { forgetPairedServerAsksOf } from './orchestration/federation/paired-server-asks/paired-server-ask-removal'
@@ -270,7 +271,9 @@ class OrcaRuntimeService extends OrcaRuntimeWithRelayHostNotices {
 
   /** Warm up before the first client launch so that launch does not open the record. */
   noteAgentLaunchClientReady(): void {
-    this.agentLaunchRecordWarmup.launchClientReady()
+    if (!localChatClient()) {
+      this.agentLaunchRecordWarmup.launchClientReady()
+    }
   }
 
   /** Plan a pane spawn through the host launch planner, including runtime attribution. */

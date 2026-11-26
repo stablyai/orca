@@ -1,7 +1,12 @@
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { captureStructuredAgentCliSource } from '../../../native-chat/conversation-adoption/structured-agent-cli-source'
 import type { OrchestrationEntryCaller } from '../../orchestration/addressing/orchestration-caller-identity'
-import { isRegistrationFencedUnsubscribe, type RpcContext, type RpcRequest } from '../core'
+import {
+  isRegistrationFencedUnsubscribe,
+  type RpcContext,
+  type RpcRequest,
+  type RpcMethod
+} from '../core'
 import { resolveRpcCallerIdentity } from '../callers/rpc-caller-identity'
 import type { RpcCallerScope } from '../callers/rpc-caller-scope'
 
@@ -108,4 +113,11 @@ function cliSourceCoordinates(params: unknown) {
     typeof source.paneKey === 'string'
     ? { workspaceId: source.workspaceId, paneKey: source.paneKey }
     : undefined
+}
+
+export type AdmittedUnaryCall = {
+  request: RpcRequest
+  method: RpcMethod
+  params: unknown
+  caller: OrchestrationEntryCaller | undefined
 }
