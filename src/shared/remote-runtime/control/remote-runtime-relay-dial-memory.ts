@@ -8,6 +8,7 @@ import { MOBILE_RELAY_CLOSE_CODE } from '../relay/mobile-relay-close-codes'
 import {
   RELAY_DIRECTOR_RETRY_AFTER_MAX_MS,
   RelayDirectorHttpError,
+  relayDirectorRetryAfterMs,
   resolveRelayEndpoint
 } from '../relay/client/relay-director-resolve'
 import {
@@ -74,6 +75,8 @@ export class RelayRuntimeDialMemory {
   redialsWithinOfflineEpisode(error: Error): boolean {
     return (
       this.hostOfflineDials > 1 &&
+      // Only while a hold paces it: any other failure (a dropped network) ends the channel.
+      this.heldUntil > this.now() &&
       !(error instanceof RelayDialAbortedError) &&
       !relayCredentialRefused(error) &&
       !(error instanceof PairedE2EEAuthenticationError)
@@ -166,6 +169,10 @@ export async function dialRelayRuntimeLink(args: {
 }): Promise<{ ok: true } | { ok: false; error: Error }> {
   for (;;) {
     const result = await dialThroughDirector(args)
+    if (!result.ok) {
+      // Before deciding to redial: a director's pause holds the redial too.
+      args.memory.noteRetryAfter(relayDirectorRetryAfterMs(result.error))
+    }
     if (result.ok || !args.memory.redialsWithinOfflineEpisode(result.error)) {
       return result
     }

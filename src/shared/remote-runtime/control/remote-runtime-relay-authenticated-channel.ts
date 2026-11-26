@@ -11,10 +11,7 @@ import {
   type SharedHostLinkEntry
 } from '../relay/client/shared-host-relay-link'
 import { RelayDialAbortedError } from '../relay/client/relay-director-fallback'
-import {
-  relayDirectorRetryAfterMs,
-  type resolveRelayEndpoint
-} from '../relay/client/relay-director-resolve'
+import type { resolveRelayEndpoint } from '../relay/client/relay-director-resolve'
 import {
   dialRelayRuntimeLink,
   RelayRuntimeDialMemory,
@@ -139,7 +136,6 @@ function openRelayRuntimeChannel(
     if (state === 'closed' || error instanceof RelayDialAbortedError) {
       return
     }
-    memory.noteRetryAfter(relayDirectorRetryAfterMs(error))
     if (relayCredentialRefused(error)) {
       const current = config.store.entry()
       const next = current ? withoutRefusedDial(current, dial) : undefined

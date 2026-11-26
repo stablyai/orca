@@ -1,5 +1,8 @@
 import { randomBytes, randomUUID } from 'node:crypto'
-import { setRemoteRuntimeOneLink } from '../../../../shared/remote-runtime/control/remote-runtime-one-link'
+import {
+  clearRemoteRuntimeOneLink,
+  setRemoteRuntimeOneLink
+} from '../../../../shared/remote-runtime/control/remote-runtime-one-link'
 import type { RemoteRuntimeSharedControlConnection } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-connection'
 import type { RemoteRuntimeSharedControlConnectionOptions } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-types'
 import { remoteRuntimeOneLinkAllowed } from './runtime-environment-one-link'
@@ -147,4 +150,10 @@ export function clearRelayDialHolds(environmentId?: string): void {
       memory.clearHold()
     }
   }
+}
+
+/** A host's control connection closed: it stops being the host's one link, and its dial memory goes. */
+export function releaseRemoteRuntimeOneLink(environmentId: string): void {
+  clearRemoteRuntimeOneLink(environmentId)
+  dialMemories.delete(environmentId)
 }
