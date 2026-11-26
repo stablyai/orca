@@ -260,8 +260,9 @@ export async function readBotTurn(
   sessionId: string,
   opening?: AgentJournalMessageItem,
   /** Only whom the turn acts for, by index alone: where an automation's run happened is not read,
-   *  an unopened /clear root is not opened, and a turn only the whole chat could place throws
-   *  `JournalWindowNotIndexed`, so the read's cost never grows with the chat's history. */
+   *  the conversation's record is taken as saved, an unopened /clear root is not opened, and a turn
+   *  only the whole chat could place throws `JournalWindowNotIndexed`, so the read's cost never
+   *  grows with the chat's history. */
   { indexedOnly = false }: { indexedOnly?: boolean } = {}
 ): Promise<{
   turn: BotActingTurn
@@ -275,7 +276,10 @@ export async function readBotTurn(
   const workspaceId = conversation ? workspaceOf(conversation.externalId) : null
   const host = await requireStructuredHost(runtime)
   const root = isOrcaSessionId(sessionId) ? canonicalOrcaSessionId(sessionId) : sessionId
-  let recorded = readBotConversationActsFor(runtime, root)
+  // Index-only takes the record as saved: an old automation run's repair looks through every run.
+  let recorded = indexedOnly
+    ? db.getBotConversationActsFor(root)
+    : readBotConversationActsFor(runtime, root)
   if (!recorded && (!indexedOnly || host.hasSession(root))) {
     // Conversations from before Orca recorded this, and ones a person opened: their first message
     // says, and is kept as the record.

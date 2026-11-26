@@ -25,7 +25,6 @@ import { RemoteLayoutSnapshotPersistence } from '../../remote-layout-snapshot/re
 import { HostRepoCatalogSnapshotPersistence } from '../../host-repo-catalog-snapshot/host-repo-catalog-snapshot-persistence'
 import { PairedPortForwardPersistence } from '../../ports/paired-forwards/paired-port-forward-persistence'
 import { SparsePresetPersistence } from './project-catalog/sparse-preset-persistence'
-import { AutomationRunChatPersistence } from './automation-state/automation-run-chat-persistence'
 import { PtyBindingPersistenceOperations } from './terminal-bindings/pty-binding-persistence'
 import { LayoutCommandPersistence } from '../terminal-topology/layout-command-persistence'
 import { SshProfileOperations } from './ssh-state/ssh-profile-operations'
@@ -46,7 +45,6 @@ export type StoreDomainOperations = WriteSchedulingOperations &
   PairedPortForwardPersistence &
   SparsePresetPersistence &
   AutomationPersistence &
-  AutomationRunChatPersistence &
   MetadataLineageOperations &
   CrossStoreLineagePersistence &
   FolderParentLineagePersistence &
@@ -81,7 +79,6 @@ export type StoreDomains = {
   folderParentLineage: FolderParentLineagePersistence
   projects: ProjectCollectionOperations
   automations: AutomationPersistence
-  automationRunChats: AutomationRunChatPersistence
   mobileTabSelections: MobileTabSelectionPersistence
   bots: BotPersistence
   remoteLayoutSnapshots: RemoteLayoutSnapshotPersistence
@@ -110,7 +107,6 @@ export const STORE_DOMAIN_OPERATION_CLASSES = [
   PairedPortForwardPersistence,
   SparsePresetPersistence,
   AutomationPersistence,
-  AutomationRunChatPersistence,
   MetadataLineageOperations,
   CrossStoreLineagePersistence,
   FolderParentLineagePersistence,
@@ -192,7 +188,6 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
     folderParentLineage: new FolderParentLineagePersistence(runtime, scheduling),
     projects,
     automations,
-    automationRunChats: new AutomationRunChatPersistence(runtime),
     mobileTabSelections,
     bots: new BotPersistence(runtime, scheduling),
     remoteLayoutSnapshots,

@@ -15,7 +15,8 @@ export async function readNewestBotActingTurn(
   lookups: BotActingTurnLookups,
   before?: string,
   /** `newest` reads only the newest turn, settling as if it were the whole chat: enough for what
-   *  that turn alone can say, such as where its work started. `indexed` widens as the default does.
+   *  that turn alone can say, such as where its work started. `indexed` widens from the newest turn
+   *  alone, so a long turn before it never fills its first read.
    *  Both read by index alone, and throw `JournalWindowNotIndexed` where only the whole chat
    *  answers, so their cost never grows with the chat's history. */
   read: 'widening' | 'indexed' | 'newest' = 'widening'
@@ -25,7 +26,7 @@ export async function readNewestBotActingTurn(
     // Finding a turn before another may need older turns, which an unwidened read never reads.
     throw new Error('an unwidened acting-turn read takes no earlier turn')
   }
-  for (let newestTurns = widen ? 8 : 1; ; newestTurns *= 4) {
+  for (let newestTurns = read === 'widening' ? 8 : 1; ; newestTurns *= 4) {
     const { snapshot, complete } = await reads.operationWindow({
       latestTurns: newestTurns,
       // Who a turn acted for is in its messages and turn rows; its tool calls would only fill memory.

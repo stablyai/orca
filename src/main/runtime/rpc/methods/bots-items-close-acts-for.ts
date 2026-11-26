@@ -7,43 +7,59 @@ import { readBotTurn } from './orchestration/messaging/bot-recipient'
 
 /** Whom the writer's running turn acts for, kept on a close so the journal says whose work it was:
  *  read as every check reads a turn, so a teammate's request taken in the owner's own chat is
- *  theirs, but by index alone, so a close costs the same however long the chat ran. Unknown, never
- *  the owner, when that read can't say. Only who, not where they asked. */
+ *  theirs, but by index alone, so a close costs the same however long the chat ran. A turn only
+ *  the whole chat could place keeps the chat's record, as closes did before they read turns;
+ *  unknown, never the owner, when neither says. Only who, not where they asked. */
 export async function closingTurnActsFor(
   runtime: OrcaRuntimeService,
-  writer: Pick<BotItemWriter, 'sessionId'>
+  writer: Pick<BotItemWriter, 'sessionId'> & { actor: Pick<BotItemWriter['actor'], 'chatId'> }
 ): Promise<BotRequestAsker[]> {
+  return (await closingAskers(runtime, writer)).map((asker): BotRequestAsker =>
+    asker.kind === 'person'
+      ? {
+          kind: 'person',
+          source: asker.source,
+          userId: asker.userId,
+          ...(asker.name ? { name: asker.name } : {}),
+          workspaceId: null,
+          role: asker.role
+        }
+      : asker
+  )
+}
+
+async function closingAskers(
+  runtime: OrcaRuntimeService,
+  writer: Pick<BotItemWriter, 'sessionId'> & { actor: Pick<BotItemWriter['actor'], 'chatId'> }
+): Promise<readonly BotRequestAsker[]> {
+  const db = runtime.getOrchestrationDb()
   try {
-    const { turn } = await readBotTurn(
-      runtime,
-      runtime.getOrchestrationDb(),
-      writer.sessionId,
-      undefined,
-      { indexedOnly: true }
-    )
+    const { turn } = await readBotTurn(runtime, db, writer.sessionId, undefined, {
+      indexedOnly: true
+    })
     // A device Orca can't place as the owner typed in it: the owner's chat, but not known to be them.
-    const askers: readonly BotRequestAsker[] = turnActsForOwner(turn)
+    return turnActsForOwner(turn)
       ? OWNER_ACTS_FOR
       : turn.typedByAnother
         ? [...turn.askers, { kind: 'unknown' }]
         : turn.askers
-    return askers.map((asker): BotRequestAsker =>
-      asker.kind === 'person'
-        ? {
-            kind: 'person',
-            source: asker.source,
-            userId: asker.userId,
-            ...(asker.name ? { name: asker.name } : {}),
-            workspaceId: null,
-            role: asker.role
-          }
-        : asker
-    )
   } catch (error) {
-    // A turn only the whole chat could place is unknown, as designed: never the owner.
-    if (!(error instanceof Error && error.name === 'JournalWindowNotIndexed')) {
-      console.warn('[bots] could not read whom a closing turn acts for', error)
+    if (error instanceof Error && error.name === 'JournalWindowNotIndexed') {
+      return chatRecord(runtime, writer.actor.chatId)
     }
-    return [{ kind: 'unknown' }]
+    console.warn('[bots] could not read whom a closing turn acts for', error)
+    return UNKNOWN
   }
 }
+
+/** The chat's record, as closes read it before they read turns; unknown when there is none. */
+function chatRecord(runtime: OrcaRuntimeService, root: string): readonly BotRequestAsker[] {
+  try {
+    return runtime.getOrchestrationDb().getBotConversationActsFor(root)?.actsFor ?? UNKNOWN
+  } catch (error) {
+    console.warn('[bots] could not read whom a closing chat acts for', error)
+    return UNKNOWN
+  }
+}
+
+const UNKNOWN: readonly BotRequestAsker[] = [{ kind: 'unknown' }]

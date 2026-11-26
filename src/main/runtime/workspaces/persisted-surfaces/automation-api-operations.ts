@@ -48,14 +48,6 @@ export abstract class OrcaRuntimeWithAutomationApiOperations extends OrcaRuntime
     )
   }
 
-  /** The existing automation a retained run that landed in this chat belongs to; a bare read,
-   *  like the unscoped listAutomationRuns. */
-  findLiveAutomationOfRunChat(chatSessionId: string): string | null {
-    return this.automation.withExternalProbePriority(() =>
-      this.automation.findLiveAutomationOfRunChat(chatSessionId)
-    )
-  }
-
   /** Bare reads, like the unscoped listAutomationRuns: no owner precondition to fence. */
   listAutomationRunsByAutomation(automationIds: readonly string[]): Map<string, AutomationRun[]> {
     return this.automation.withExternalProbePriority(() =>

@@ -577,7 +577,7 @@ it("reads a closing turn's askers with the same work however long the chat ran, 
     return { rows: scope.work.rows, opener: turn.rootItemId !== null }
   }
   expect([await examined(500), await examined(5_000)]).toEqual([
-    { rows: 74, opener: true },
-    { rows: 74, opener: true }
+    { rows: 18, opener: true },
+    { rows: 18, opener: true }
   ])
 })

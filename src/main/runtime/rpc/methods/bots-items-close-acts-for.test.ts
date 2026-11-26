@@ -8,7 +8,6 @@ import type { BotConversationActsFor } from '../../orchestration/db/bot-requests
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { closingTurnActsFor } from './bots-items-close-acts-for'
-import { findLiveAutomationOfRunChat } from '../../../persistence/scheduling-automations/automation-run-chat-lookup'
 
 const CHAT = '11111111-1111-4111-8111-111111111111'
 const host = {
@@ -84,8 +83,6 @@ function closing(input: {
   record?: BotConversationActsFor
   journal?: AgentJournalRenderItem[]
   requests?: Record<string, BotRequestAsker[]>
-  runs?: { chatSessionId: string; automationId: string }[]
-  automations?: string[]
 }) {
   host.journals.set(CHAT, input.journal ?? [])
   const records = new Map<string, BotConversationActsFor>(
@@ -101,21 +98,14 @@ function closing(input: {
       return askers ? { record: JSON.stringify({ askers }) } : undefined
     }
   } as unknown as OrchestrationDb
-  // The run history and automations as persistence keeps them: each change replaces the array.
-  const history = {
-    automationRuns: input.runs ?? [],
-    automations: (input.automations ?? []).map((id) => ({ id }))
-  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the read uses only these of the runtime's methods.
   const runtime = {
     ensureStructuredAgentSessionHost: async () => undefined,
     getExternalConversationSeam: () => null,
-    getOrchestrationDb: () => db,
-    findLiveAutomationOfRunChat: (chat: string) => findLiveAutomationOfRunChat(history, chat)
+    getOrchestrationDb: () => db
   } as unknown as OrcaRuntimeService
   return {
-    history,
-    close: () => closingTurnActsFor(runtime, { sessionId: CHAT })
+    close: () => closingTurnActsFor(runtime, { sessionId: CHAT, actor: { chatId: CHAT } })
   }
 }
 
@@ -134,7 +124,7 @@ describe('whom a close keeps its closing turn acting for', () => {
     expect(await close()).toEqual([{ kind: 'owner' }, KEPT])
     // By index alone: an old unanswered send never pins the read back to the whole chat.
     expect(host.windows).toEqual([
-      { latestTurns: 8, turnShape: true, anchorsOnly: true, indexedOnly: true }
+      { latestTurns: 1, turnShape: true, anchorsOnly: true, indexedOnly: true }
     ])
   })
 
@@ -172,21 +162,16 @@ describe('whom a close keeps its closing turn acting for', () => {
     expect(await close()).toEqual([KEPT])
   })
 
-  it("keeps an old automation chat as the owner's while its automation exists, and again once a run lands in it", async () => {
-    const record = {
-      actsFor: [...OWNER_ACTS_FOR, { kind: 'unknown' as const }],
-      triggeredBy: { source: 'slack' }
-    }
-    const run = { chatSessionId: CHAT, automationId: 'auto-1' }
-    const kept = closing({ record, runs: [run], automations: ['auto-1'] })
-    expect(await kept.close()).toEqual([{ kind: 'owner' }])
-    const gone = closing({ record, runs: [run] })
-    expect(await gone.close()).toEqual([{ kind: 'owner' }, { kind: 'unknown' }])
-    // Its run aged out of the history, then the automation ran in the chat again.
-    const pruned = closing({ record, automations: ['auto-1'] })
-    expect(await pruned.close()).toEqual([{ kind: 'owner' }, { kind: 'unknown' }])
-    pruned.history.automationRuns = [run]
-    expect(await pruned.close()).toEqual([{ kind: 'owner' }])
+  it("keeps the chat's record when only the whole chat could place the turn", async () => {
+    const { close } = closing({ record: { actsFor: [DANA] }, journal: [message('typed')] })
+    const reads = host.journalReads
+    host.journalReads = async (id: string) => ({
+      ...(await reads(id)),
+      operationWindow: async () => {
+        throw Object.assign(new Error('not indexed'), { name: 'JournalWindowNotIndexed' })
+      }
+    })
+    expect(await close().finally(() => (host.journalReads = reads))).toEqual([KEPT])
   })
 
   it('is unknown, never the owner, when the read fails', async () => {
