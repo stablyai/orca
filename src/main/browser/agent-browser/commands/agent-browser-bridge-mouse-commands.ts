@@ -7,6 +7,7 @@ import {
   cdpMouseModifierMask,
   resolveMobileTouchClickPoint
 } from '../../cdp/input/cdp-pointer-targets'
+import { resolveCrossSiteMobileTouchClick } from '../../cdp/input/cross-site-frame-touch-click'
 import { acquireElectronDebugger } from '../../cdp/debugger/electron-debugger-lease'
 import { assertExpectedPageUrlForStep } from '../../cdp/input/browser-expected-page-url'
 import { sendGuestCdpCommand } from '../../cdp/debugger/guest-cdp-command'
@@ -71,11 +72,16 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
               fromPairedViewer: this.browserManager.isPersonCommandRunning(target.webContentsId)
             })
           }
-          const point =
+          const mainPoint =
             cdpButton === 'left'
               ? // DOM activation drops modifiers; let CDP dispatch modifier clicks.
                 await resolveMobileTouchClickPoint(wc.debugger, x, y, radius, cdpModifiers === 0)
               : { x, y, adjusted: false, handled: false }
+          const point =
+            cdpButton === 'left' && !mainPoint.handled && !mainPoint.adjusted
+              ? ((await resolveCrossSiteMobileTouchClick(wc, x, y, radius, cdpModifiers === 0)) ??
+                mainPoint)
+              : mainPoint
           // Mobile-emulated guests can ignore CDP clicks, so hit testing may already activate the control.
           await this.browserManager.showAgentPointer(wc, {
             type: 'mousePressed',

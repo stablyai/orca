@@ -40,11 +40,9 @@ export function sendGuestCdpCommand(
           ? guest.debugger.sendCommand(rawMethod, rawParams)
           : guest.debugger.sendCommand(rawMethod, rawParams, rawSessionId)
       )
+    // Hidden/parked and mobile-emulated webviews lack Viz hit-test surfaces for OOPIFs just like offscreen pages.
     return trackRemoteCliInput(guest.id, method, params, () =>
-      method === 'Input.dispatchMouseEvent' &&
-      sessionId === undefined &&
-      params &&
-      guest.isOffscreen()
+      method === 'Input.dispatchMouseEvent' && sessionId === undefined && params
         ? sendOffscreenPagePointerInput(guest, sendRaw, params)
         : sendRaw(method, params, sessionId)
     )
