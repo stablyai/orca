@@ -1,15 +1,56 @@
 import { parseGitRemoteVerboseOutput } from '../../../shared/git/remotes/git-remote-identity'
 import { isDefaultGitHubHost } from '../../../shared/github/repositories/repository-identity-key'
 import { isGitHubHostAuthenticated } from '../../github/repositories/github-enterprise-repository'
-import { parseGitHubRemoteIdentity } from '../../github/repositories/github-remote-identity-parsing'
 import {
   getGlabKnownHosts,
   getGlabPartialHosts
 } from '../../gitlab/projects/gitlab-known-host-probe'
-import { parseGitLabProjectRef } from '../../gitlab/projects/project-ref-parser'
+import {
+  parseGitLabProjectRef,
+  parseGitLabProjectRefCandidate,
+  parseRemoteProjectRefCandidate
+} from '../../gitlab/projects/project-ref-parser'
+import {
+  gitHubSshConfigHostAlias,
+  parseGitHubRemoteIdentity,
+  rawSshTransportHost
+} from '../../github/repositories/github-remote-identity-parsing'
 import { REMOTE_URL_PROBE_TIMEOUT_MS } from './remote-git-probe-timeout'
 import { gitExecFileAsync } from '../command-runner/git-exec-file'
 import type { RemoteRefLocalGitOptions } from './remote-ref-probe-cache'
+
+type RemoteForgeEvidence = 'github' | 'gitlab' | 'non-github' | 'unknown'
+
+async function resolveRemoteForgeEvidence(
+  remoteUrl: string,
+  provider: 'github' | 'gitlab',
+  gitLabHosts: readonly string[],
+  repoPath: string,
+  localGitOptions: RemoteRefLocalGitOptions
+): Promise<RemoteForgeEvidence> {
+  // An SSH alias cannot be ruled out without expanding it in the repo runtime; unknown stays visible.
+  if (gitHubSshConfigHostAlias(remoteUrl) ?? rawSshTransportHost(remoteUrl)) {
+    return 'unknown'
+  }
+  const url = remoteUrl
+
+  const identity = parseGitHubRemoteIdentity(url)
+  if (
+    identity &&
+    (isDefaultGitHubHost(identity.host) ||
+      (await isGitHubHostAuthenticated(identity.host, repoPath, null, localGitOptions)))
+  ) {
+    return 'github'
+  }
+  const gitlabRef =
+    provider === 'github'
+      ? parseGitLabProjectRef(url, gitLabHosts)
+      : parseGitLabProjectRefCandidate(url)
+  if (gitlabRef) {
+    return 'gitlab'
+  }
+  return parseRemoteProjectRefCandidate(url) ? 'non-github' : 'unknown'
+}
 
 /** Call only after the requested provider found no usable source; unknown is never exclusion evidence. */
 export async function isTaskRepositoryIneligible(
@@ -40,23 +81,15 @@ export async function isTaskRepositoryIneligible(
             ...getGlabPartialHosts(connectionId, localGitOptions)
           ]
         : []
-    for (const remote of remotes) {
-      if (provider === 'github') {
-        if (!parseGitLabProjectRef(remote.url, gitLabHosts)) {
-          return false
-        }
-      } else {
-        const identity = parseGitHubRemoteIdentity(remote.url)
-        if (
-          !identity ||
-          (!isDefaultGitHubHost(identity.host) &&
-            !(await isGitHubHostAuthenticated(identity.host, repoPath, null, localGitOptions)))
-        ) {
-          return false
-        }
-      }
+    const evidence = await Promise.all(
+      remotes.map((remote) =>
+        resolveRemoteForgeEvidence(remote.url, provider, gitLabHosts, repoPath, localGitOptions)
+      )
+    )
+    if (provider === 'github') {
+      return evidence.every((item) => item === 'gitlab' || item === 'non-github')
     }
-    return true
+    return evidence.every((item) => item === 'github')
   } catch {
     return false
   }
