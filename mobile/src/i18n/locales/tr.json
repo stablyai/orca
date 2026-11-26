@@ -2712,7 +2712,6 @@
       "failedAfter": "{{duration}} sonra başarısız oldu",
       "failed": "Başarısız",
       "checkActions": "{{name}} için diğer işlemler",
-      "rerun": "Yeniden çalıştır",
       "copyErrorFailed": "Hata kopyalanamadı.",
       "durationSeconds": "{{seconds}} sn",
       "durationMinutes": "{{minutes}} dk {{seconds}} sn",

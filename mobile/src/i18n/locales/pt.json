@@ -2424,7 +2424,6 @@
       "openOnGitHub": "Abrir no GitHub",
       "failedAfter": "Falha após {{duration}}",
       "failed": "Falhou",
-      "rerun": "Executar novamente",
       "copyErrorFailed": "Não foi possível copiar o erro.",
       "durationMinutes": "{{minutes}}min {{seconds}}s",
       "failing": "Com falha",
