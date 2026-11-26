@@ -3,6 +3,7 @@ import { getPresentStringFlag, getRequiredStringFlag } from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { readInjectedAgentSessionId } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
+import type { ChatCloseResult } from '../../shared/agent-conversations/agent-conversation-contracts'
 
 type ChatRenameResult = { name: string | null; applied: boolean }
 
@@ -30,7 +31,32 @@ export const CHAT_HANDLERS: Record<string, CommandHandler> = {
       throw new RuntimeClientError('invalid_argument', 'Not renamed: the name has no visible text.')
     }
     printResult(result, json, (value) => `Renamed chat to "${value.name}".`)
+  },
+  'chat close': async ({ flags, client, json }) => {
+    const result = await client
+      .call<ChatCloseResult>('chat.close', { id: getRequiredStringFlag(flags, 'session') })
+      .catch((error: unknown) => {
+        throw explainCloseRefusal(error)
+      })
+    printResult(result, json, (value) => `Closed chat ${value.orcaSessionId}.`)
   }
+}
+
+// Older hosts lack chat.close; a paired host refuses a client that can neither use nor close chats.
+function explainCloseRefusal(error: unknown): unknown {
+  if (!(error instanceof RuntimeClientError)) {
+    return error
+  }
+  if (
+    error.message === 'structured_agent_session_unsupported' ||
+    error.code === 'method_not_found'
+  ) {
+    return new RuntimeClientError(
+      'incompatible_runtime',
+      'This Orca host cannot close chats from the CLI. Update Orca on that host, or check that it has chats turned on.'
+    )
+  }
+  return error
 }
 
 // The host answers with bare wire codes; say what they mean for this command.

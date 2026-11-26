@@ -36,6 +36,12 @@ export type AgentShowResult = {
   places: AgentConversationRow[]
 }
 
+export type ChatCloseResult = {
+  orcaSessionId: string
+  /** The session that was running the conversation, which differs from the root after /clear. */
+  sessionId: string
+}
+
 export type AgentReadTool = { name: string; state?: string }
 
 /** Every entry may say `shortened`: its text was cut to fit one reply; the app keeps it whole. */
@@ -74,5 +80,7 @@ export const AGENT_CONVERSATION_REFUSAL_CODES = {
   terminalHandle: 'agent_terminal_handle',
   invalidId: 'agent_invalid_id',
   unavailable: 'agent_unavailable',
-  noTranscript: 'agent_no_transcript'
+  noTranscript: 'agent_no_transcript',
+  notChat: 'agent_not_chat',
+  notOpen: 'agent_not_open'
 } as const
