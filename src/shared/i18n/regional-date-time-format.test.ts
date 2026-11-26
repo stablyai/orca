@@ -75,6 +75,8 @@ describe('regionalDateTimeFormat', () => {
     expect(shape('ko', { region: 'DE', hourCycle: null }).hourCycle).toBe('h23')
     expect(shape('ko', { region: 'RU', hourCycle: null }).hourCycle).toBe('h23')
     expect(shape('en', { region: 'US', hourCycle: null }).hourCycle).toBe('h12')
+    // ICU knows fr-CA, which is 24-hour even though Canada's main language is not.
+    expect(shape('fr', { region: 'CA', hourCycle: null }).hourCycle).toBe('h23')
   })
 
   it('reads an out-of-range date as "Invalid Date" instead of throwing', () => {

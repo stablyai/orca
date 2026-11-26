@@ -137,18 +137,31 @@ function forgiving(formatter: Intl.DateTimeFormat): RegionalDateTimeFormat {
   }
 }
 
+// ICU dropped the region when it has no data for this language there (en-BR resolves to en).
+function regionDropped(tag: string, region: string | null): boolean {
+  try {
+    return (
+      region !== null &&
+      !new Intl.DateTimeFormat(tag).resolvedOptions().locale.split('-').includes(region)
+    )
+  } catch {
+    return false
+  }
+}
+
 function buildDateTimeFormat(
   options: Intl.DateTimeFormatOptions,
   uiLocale: string
 ): Intl.DateTimeFormat {
   const { region, hourCycle: forced } = osDateTimeRegion
-  const hourCycle = forced ?? regionHourCycle(region)
-  const regional =
-    hourCycle && options.hour12 === undefined && options.hourCycle === undefined
-      ? { ...options, hourCycle }
-      : options
   try {
     const tag = withOsRegion(uiLocale, region)
+    // A pair ICU knows keeps its own clock (fr-CA is 24-hour though Canada's main language is not).
+    const hourCycle = forced ?? (regionDropped(tag, region) ? regionHourCycle(region) : null)
+    const regional =
+      hourCycle && options.hour12 === undefined && options.hourCycle === undefined
+        ? { ...options, hourCycle }
+        : options
     const formatter = new Intl.DateTimeFormat(tag, regional)
     // A 24-hour hour alone reads as a bare number ("20"), so it gets its minutes ("20:00").
     const bareHour =
