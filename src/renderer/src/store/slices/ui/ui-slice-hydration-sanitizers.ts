@@ -19,7 +19,6 @@ import { resolveVisibleWorkspaceHostIds } from '../../../../../shared/workspace-
 import { persistedUIValuesEqual } from '../../../../../shared/collections/persisted-ui-equality'
 import '../../../../../shared/orca-profiles/constants'
 import type { UISlice } from './ui-slice-contract'
-import { chatPaneKeySessionId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 const MIN_SIDEBAR_WIDTH = 220
 
@@ -133,15 +132,12 @@ export function sanitizePaneKeyTimestampRecord(value: unknown): Record<string, n
   if (entries.length <= PANE_KEY_TIMESTAMP_MAX_ENTRIES) {
     return out
   }
-  // A chat's mark kept under its tab's old key (chat-read-mark-copy.ts) shares its conversation
-  // key's leaf, so the two count once and rank by the newer value, even after only one changes.
+  // A chat's mark kept under its tab's old key (chat-read-mark-copy.ts) counts with its
+  // conversation key only while both keys still hold the same mark.
   const leaf = (key: string) => key.slice(key.lastIndexOf(':') + 1)
-  const conversationLeaves = new Set(
-    entries.flatMap(([key]) => (chatPaneKeySessionId(key) === null ? [] : [leaf(key)]))
-  )
   const groups = new Map<string, { at: number; keys: [string, number][] }>()
   for (const entry of entries) {
-    const group = conversationLeaves.has(leaf(entry[0])) ? `\0${leaf(entry[0])}` : entry[0]
+    const group = `${leaf(entry[0])}\0${entry[1]}`
     const found = groups.get(group)
     if (found) {
       found.keys.push(entry)
@@ -150,19 +146,15 @@ export function sanitizePaneKeyTimestampRecord(value: unknown): Record<string, n
       groups.set(group, { at: entry[1], keys: [entry] })
     }
   }
-  if (
-    groups.size <= PANE_KEY_TIMESTAMP_MAX_ENTRIES &&
-    entries.length <= 2 * PANE_KEY_TIMESTAMP_MAX_ENTRIES
-  ) {
+  if (groups.size <= PANE_KEY_TIMESTAMP_MAX_ENTRIES) {
     return out
   }
-  // A group is a chat's few keys; the newest keys overall still bound a hand-built record.
+  // Keep every old and conversation key in each retained mark pair.
   return Object.fromEntries(
     [...groups.values()]
       .toSorted((left, right) => right.at - left.at)
       .slice(0, PANE_KEY_TIMESTAMP_MAX_ENTRIES)
-      .flatMap(({ keys }) => keys.toSorted((left, right) => right[1] - left[1]))
-      .slice(0, 2 * PANE_KEY_TIMESTAMP_MAX_ENTRIES)
+      .flatMap(({ keys }) => keys)
   )
 }
 
