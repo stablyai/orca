@@ -394,11 +394,12 @@ function BotItemCommentField({
               className={`scrollbar-sleek block overflow-y-auto bg-transparent px-1 py-1.5 text-[13px] leading-5 text-chat-foreground-strong outline-none [&_p.is-editor-empty:only-child]:before:!h-auto [&_p.is-editor-empty:only-child]:before:mr-[-100%] [&_p.is-editor-empty:only-child]:before:w-full [&_p.is-editor-empty:only-child]:before:truncate ${height}`}
             />
           </div>
-          {/* Beside the text the arrows keep their counter's width; on their own row they take the free space. */}
+          {/* Beside the text the arrows keep their counter's width; on their own row they take the free space.
+              The buttons' height, so the arrows center on + and send rather than on their trimmed margins. */}
           {nav ? (
             <div
               className={cn(
-                'flex min-w-0',
+                'flex h-8 min-w-0 items-center pointer-coarse:h-11',
                 stacked ? 'flex-1' : 'shrink-0 @max-[440px]/item-pane:flex-1'
               )}
             >
