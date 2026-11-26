@@ -178,8 +178,8 @@ function isManagedPowerShellEncodedCommand(
 
 function isOrcaPosixFallback(fallback: string): boolean {
   let rest = fallback.trim()
-  rest = rest.replace(/^printf\s+'%s\\n'\s+'[^']*'(?:\\''[^']*')*;\s*/, '')
-  rest = rest.replace(/^printf\s+'\{\}\\n';\s*/, '')
+  rest = rest.replace(/^printf[ \t]+'%s\\n'[ \t]+'[^']*'(?:\\''[^']*')*;\s*/, '')
+  rest = rest.replace(/^printf[ \t]+'\{\}\\n';\s*/, '')
   if (rest.startsWith(WINDOWS_GIT_BASH_HOOK_ENVIRONMENT_GUARD)) {
     rest = rest.slice(WINDOWS_GIT_BASH_HOOK_ENVIRONMENT_GUARD.length).trimStart()
     if (rest.startsWith(';')) {
@@ -195,7 +195,7 @@ function isOrcaPosixFallback(fallback: string): boolean {
     rest === 'exit 0' ||
     rest === POSIX_HOOK_STDIN_DRAIN_COMMAND ||
     rest === POSIX_HOOK_STDIN_BACKGROUND_DRAIN_COMMAND ||
-    /^cat\s+>\/dev\/null\s+2>&1\s*\|\|\s*:$/.test(rest)
+    /^cat[ \t]+>\/dev\/null[ \t]+2>&1[ \t]*\|\|[ \t]*:$/.test(rest)
   )
 }
 

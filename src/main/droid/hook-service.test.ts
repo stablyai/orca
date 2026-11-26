@@ -279,6 +279,11 @@ describe('Droid managed hooks', () => {
       true
     )
     expect(matches(`TAG='x\\'; my-hook # ' /bin/sh '${posix}'`)).toBe(false)
+    expect(
+      matches(
+        `if [ -f '${posix}' ]; then /bin/sh '${posix}'; else printf '%s\\n'\n'my-hook'; :; fi`
+      )
+    ).toBe(false)
     // A user condition around the Orca script is the user's wrapper, not Orca's.
     expect(matches(`if [ "$(date +%u)" -lt 6 ]; then /bin/sh '${posix}'; fi`)).toBe(false)
     expect(matches(`sh\n${posix}`)).toBe(false)
