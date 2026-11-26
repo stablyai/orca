@@ -15,32 +15,26 @@ const clearing = new Map<string, Promise<boolean>>()
 /** Roots whose clear ran this run. */
 const cleared = new Set<string>()
 
-/** Per-launch folders (`<chat>-<uuid>`) of each of `names`' chats but its newest. */
-async function olderLaunches(root: string, names: string[]): Promise<string[]> {
+/** When this app run started: a folder written since belongs to a launch of this run. */
+const RUN_STARTED_MS = Date.now() - process.uptime() * 1000
+
+/** Per-launch folders (`<chat>-<uuid>`) among `names` written before this app run started. */
+async function earlierRunFolders(root: string, names: string[]): Promise<string[]> {
   const length = nativeChatScratchFolderName('').length
-  const launches: { name: string; chat: string; at: number | null }[] = []
-  for (const name of names.filter((entry) => entry.charAt(length) === '-')) {
-    launches.push({ name, chat: name.slice(0, length), at: null })
-  }
+  const launches = names.filter((entry) => entry.charAt(length) === '-')
+  const earlier: string[] = []
   for (let at = 0; at < launches.length; at += REMOVE_BATCH) {
-    const batch = launches.slice(at, at + REMOVE_BATCH)
     await Promise.all(
-      batch.map(async (launch) => {
-        launch.at = (await lstat(join(root, launch.name)).catch(() => null))?.mtimeMs ?? null
+      launches.slice(at, at + REMOVE_BATCH).map(async (name) => {
+        // One whose time can't be read may be the one an agent reads: it stays.
+        const written = (await lstat(join(root, name)).catch(() => null))?.mtimeMs
+        if (written !== undefined && written < RUN_STARTED_MS) {
+          earlier.push(name)
+        }
       })
     )
   }
-  const newest = new Map<string, { name: string; at: number }>()
-  for (const { name, chat, at } of launches) {
-    if (at !== null && (newest.get(chat)?.at ?? -1) < at) {
-      newest.set(chat, { name, at })
-    }
-  }
-  const kept = new Set([...newest.values()].map((launch) => launch.name))
-  // One whose time can't be read may be the one an agent reads: it stays.
-  return launches
-    .filter((launch) => launch.at !== null && !kept.has(launch.name))
-    .map((launch) => launch.name)
+  return earlier
 }
 
 /**
@@ -75,7 +69,7 @@ async function liveRelayedChats(present: ReadonlySet<string>): Promise<Set<strin
 }
 
 /** An earlier run's leftovers go, except every folder of a chat whose relayed run may still go
- *  (its agent reads them) and the newest of chats this run launched. One host holds a profile. */
+ *  (its agent reads them) and every folder this run wrote. One host holds a profile. */
 async function clearEarlierRuns(root: string, remove: (path: string) => Promise<void>) {
   const length = nativeChatScratchFolderName('').length
   const listed = await readdir(root).then(
@@ -97,9 +91,10 @@ async function clearEarlierRuns(root: string, remove: (path: string) => Promise<
   const isLive = (name: string) => ownedBy(name, (chat) => live.has(chat))
   const keptBy = (name: string) =>
     isLive(name) || ownedBy(name, (chat) => launched.get(root)?.has(chat) === true)
-  // Only names read before the asks: a folder written since belongs to a launch of this run.
+  // Only names read before the asks, and of this run's chats (a fork shares its chat's name, so
+  // one may run several agents) only folders an earlier run wrote.
   const older = new Set(
-    await olderLaunches(
+    await earlierRunFolders(
       root,
       listed.filter((n) => keptBy(n) && !isLive(n))
     )
