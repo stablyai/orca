@@ -58,6 +58,7 @@ class OrchestrationDbCore {
   private closed = false
   private readonly closeListeners = new Set<() => void>()
   private changedDispatchIds: Set<string> | null = null
+  private workerStatusNoticeSuppressedDepth = 0
   /** The user's auto-close switch; this runtime's choice also governs the remote workers it coordinates. */
   workerAutoReleaseEnabled: (() => boolean) | undefined
   /** PTYs whose pointers were released this session; title edges skip the release write for them. */
@@ -147,6 +148,9 @@ class OrchestrationDbCore {
     createCoordinatorMailRoutingTrigger.call(this as unknown as OrchestrationDb)
     rememberCurrentRunCoordinatorHandles.call(this as unknown as OrchestrationDb)
     installWorkerStatusNotice(this.db, (dispatchId, change) => {
+      if (this.workerStatusNoticeSuppressedDepth > 0) {
+        return
+      }
       if (dispatchId) {
         revokeAgentSessionPublicationFences([JSON.stringify(['worker', dispatchId])])
       }
@@ -157,6 +161,16 @@ class OrchestrationDbCore {
       }
     })
     hardenOrchestrationDatabaseFiles(dbPath)
+  }
+
+  /** Runs a write without firing worker-status triggers (used for heartbeat-only timestamp updates). */
+  withoutWorkerStatusNotice<T>(operation: () => T): T {
+    this.workerStatusNoticeSuppressedDepth += 1
+    try {
+      return operation()
+    } finally {
+      this.workerStatusNoticeSuppressedDepth -= 1
+    }
   }
 
   /** After the writes that fired it, so the read sees committed rows and never runs inside a trigger;

@@ -91,10 +91,16 @@ async function hashFileBounded(
 }
 
 /** `fileDigests` (optional) receives each file's own sha256, keyed by its `/`-separated path, from
- *  the same read that hashes the tree, so a later serve can prove it sends exactly those bytes. */
+ *  the same read that hashes the tree, so a later serve can prove it sends exactly those bytes.
+ *  `only` (optional) hashes just the files whose lowercased `/`-separated path it holds; the whole
+ *  tree is still walked, so its limits and symlink rule apply as before. */
 export async function hashPluginTree(
   root: string,
-  options: { fileDigests?: Map<string, string>; devFolder?: boolean } = {}
+  options: {
+    fileDigests?: Map<string, string>
+    devFolder?: boolean
+    only?: ReadonlySet<string>
+  } = {}
 ): Promise<PluginTreeHashResult> {
   const files: PluginFile[] = []
   try {
@@ -108,13 +114,19 @@ export async function hashPluginTree(
     // Length framing prevents delimiter-containing paths/bytes from sharing a hash preimage.
     hash.update('orca-plugin-tree-v1\0')
     let totalBytes = 0
+    let fileCount = 0
     for (const file of files) {
+      // Normalize separators so the same tree hashes identically on Windows.
+      const rel = relative(root, file.path).replaceAll('\\', '/')
+      // Why lowercased: macOS and Windows open `Orca-Plugin.json` for `orca-plugin.json`.
+      if (options.only && !options.only.has(rel.toLowerCase())) {
+        continue
+      }
       totalBytes += file.size
+      fileCount += 1
       if (totalBytes > MAX_PLUGIN_TOTAL_BYTES) {
         return { ok: false, error: `plugin exceeds the ${MAX_PLUGIN_TOTAL_BYTES}-byte limit` }
       }
-      // Normalize separators so the same tree hashes identically on Windows.
-      const rel = relative(root, file.path).replaceAll('\\', '/')
       hashLength(hash, Buffer.byteLength(rel, 'utf8'))
       hash.update(rel, 'utf8')
       hashLength(hash, file.size)
@@ -128,7 +140,7 @@ export async function hashPluginTree(
     return {
       ok: true,
       hash: hash.digest('hex'),
-      fileCount: files.length,
+      fileCount,
       totalBytes
     }
   } catch (error) {

@@ -13,6 +13,17 @@ export const BotOfferAnswerSchema = z.object({
 
 export type BotOfferAnswer = z.infer<typeof BotOfferAnswerSchema>
 
+/** `bots.offer.answer`: a press on an offer card, which the bot hears as a card answer queued behind its running turn. */
+export const BotOfferAnswerParams = z.object({
+  botId: z.string().min(1, 'Missing bot id'),
+  /** The chat the card sits in; the bot's Chat when absent. */
+  sessionId: z.string().min(1).optional(),
+  text: z.string().trim().min(1).max(100_000)
+})
+
+/** What Not now tells the bot, in the words its create-offer result promised. */
+export const BOT_OFFER_DISMISS_ANSWER = 'Dismiss'
+
 const BOT_OFFER_ANSWER_FIELDS = ['dismissed', 'sent'] as const
 type BotOfferAnswerField = (typeof BOT_OFFER_ANSWER_FIELDS)[number]
 
@@ -59,6 +70,9 @@ export async function answerBotOffer(
     update: (offerAnswer: BotOfferAnswerUpdate) => Promise<unknown>
     /** Tells the bot; false when the chat refused it. */
     send: () => Promise<boolean>
+    /** The send threw after it may have reached the host (a lost reply): the claim stays, so a second
+     *  press can't tell the bot twice. */
+    deliveryUnknown?: (error: unknown) => boolean
   }
 ): Promise<BotOfferAnswerOutcome> {
   const field: BotOfferAnswerField = answer.sent ? 'sent' : 'dismissed'
@@ -71,10 +85,14 @@ export async function answerBotOffer(
     throw error
   }
   let sent = false
+  let maybeSent = false
   try {
     sent = await ops.send()
+  } catch (error) {
+    maybeSent = ops.deliveryUnknown?.(error) === true
+    throw error
   } finally {
-    if (!sent) {
+    if (!sent && !maybeSent) {
       await ops.update({ cardId: answer.cardId, release: field })
     }
   }

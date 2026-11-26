@@ -1,6 +1,7 @@
 // The top of a group's Items tab, in a bot header's shape: the group's own picture (its sidebar row's
 // faces) opening its member list, its name, a counts-only line, then the filter, gear and more.
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { MoreHorizontal, Settings, Trash2, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -21,8 +22,11 @@ import type { BotGroup } from '../../../../shared/bots/bot-group'
 import { BOT_GROUP_FACE_SLOT, botGroupFaces } from '../../../../shared/bots/bot-group-face-layout'
 import { BotAvatar } from './BotAvatar'
 import { BotGroupFaces } from './BotGroupFaces'
-import { BotGroupMembersDialog } from './BotGroupMembersDialog'
 import { botQuietLine } from './BotPanelHeader'
+
+const LazyBotGroupMembersDialog = lazy(() =>
+  import('./BotGroupMembersDialog').then((module) => ({ default: module.BotGroupMembersDialog }))
+)
 import { BotPanelHostLine } from './BotPanelHostLine'
 import { BotRowLineText, useBotRowLine } from './BotRowActivityLine'
 import { useBotGroupDelete } from './use-bot-group-delete'
@@ -227,7 +231,11 @@ export function BotGroupPanelHeader({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      {managing ? <BotGroupMembersDialog group={group} onClose={() => setManaging(false)} /> : null}
+      {managing ? (
+        <Suspense fallback={null}>
+          <LazyBotGroupMembersDialog group={group} onClose={() => setManaging(false)} />
+        </Suspense>
+      ) : null}
     </div>
   )
 }
