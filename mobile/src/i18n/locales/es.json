@@ -2074,6 +2074,9 @@
       "requested": "Solicitado",
       "reviewed": "Revisado",
       "title": "Revisores"
+    },
+    "createSheet": {
+      "create": "Crear"
     }
   },
   "session": {

@@ -2010,6 +2010,9 @@
       "requested": "已要求審查",
       "reviewed": "已審查",
       "title": "審查人"
+    },
+    "createSheet": {
+      "create": "建立"
     }
   },
   "session": {

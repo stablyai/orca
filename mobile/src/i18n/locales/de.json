@@ -2016,6 +2016,9 @@
       "requested": "Angefordert",
       "reviewed": "Geprüft",
       "title": "Prüfer"
+    },
+    "createSheet": {
+      "create": "Erstellen"
     }
   },
   "session": {

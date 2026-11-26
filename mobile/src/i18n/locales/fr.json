@@ -2074,6 +2074,9 @@
       "requested": "Revue demandée",
       "reviewed": "Revue effectuée",
       "title": "Reviewers"
+    },
+    "createSheet": {
+      "create": "Créer"
     }
   },
   "session": {
