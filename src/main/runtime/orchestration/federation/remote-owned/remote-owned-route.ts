@@ -28,6 +28,7 @@ import { remoteForwardKey, type RemoteForwardKey } from './remote-forward-caller
 import { inServerTerms, serverNeverAnswered } from './remote-owned-answers'
 import { remoteWorkerShow, remoteServerName } from './remote-owned-reads'
 import { OrchestrationError } from '../../orchestration-error'
+import { nameRefusingComputer } from '../../../rpc/methods/orchestration/worker/start/launch/worker-agent-host-preflight'
 import { refuseReplayOnly } from '../../db/mutation-receipts/replay-only-request'
 import { latestRunLink, repairedListError } from './re-paired-run-list'
 import { explainRemoteServerFailure } from './remote-server-unreachable'
@@ -283,11 +284,8 @@ async function forwardToLink(
     seedNamedDispatches(db, link, answer)
     return inServerTerms(answer, { server, forward, link })
   } catch (error) {
-    throw inServerTerms(explainRemoteServerFailure(error, { server, method, params, dispatchId }), {
-      server,
-      forward,
-      link
-    })
+    const explained = explainRemoteServerFailure(error, { server, method, params, dispatchId })
+    throw nameRefusingComputer(inServerTerms(explained, { server, forward, link }), server)
   }
 }
 

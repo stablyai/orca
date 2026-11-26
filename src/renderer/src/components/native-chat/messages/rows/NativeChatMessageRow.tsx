@@ -29,7 +29,11 @@ import { nativeChatMessageRowBlocks } from './native-chat-message-row-words'
 import { ProviderFrameRow } from '../diagnostics/NativeChatProviderDetails'
 import type { NativeChatDiffReveal } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
-import { useNativeChatWorkRun } from '../../tools/runs/use-native-chat-work-run'
+import {
+  NativeChatWorkRunStreamedContext,
+  useNativeChatWorkRun,
+  useNativeChatWorkRunStreamed
+} from '../../tools/runs/use-native-chat-work-run'
 import { useNativeChatRowNavigation } from '../actions/use-native-chat-row-navigation'
 import { useTranslate } from '@/i18n/use-translate'
 import {
@@ -143,6 +147,7 @@ function MessageRowContent(props: MessageRowProps): React.JSX.Element | null {
     revealedDiff: props.revealedDiff,
     activeTurnIsWorking
   })
+  const streamedMembers = useNativeChatWorkRunStreamed(workRun)
 
   const { scrollToTop, returnToView } = useNativeChatRowNavigation(rowRef, onScrollMessageToTop)
 
@@ -367,13 +372,15 @@ function MessageRowContent(props: MessageRowProps): React.JSX.Element | null {
   }
 
   return (
-    <NativeChatAssistantMessageRow
-      props={props}
-      content={content}
-      run={run}
-      rowRef={rowRef}
-      scrollToTop={scrollToTop}
-    />
+    <NativeChatWorkRunStreamedContext.Provider value={streamedMembers}>
+      <NativeChatAssistantMessageRow
+        props={props}
+        content={content}
+        run={run}
+        rowRef={rowRef}
+        scrollToTop={scrollToTop}
+      />
+    </NativeChatWorkRunStreamedContext.Provider>
   )
 }
 

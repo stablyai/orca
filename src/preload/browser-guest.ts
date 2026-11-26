@@ -6,7 +6,6 @@ import {
   installBrowserWindowCloseGuard,
   PRELOAD_BROWSER_GUEST_WINDOW_CLOSE_CHANNEL
 } from './browser/window-controls/browser-window-close-installation'
-import { installBrowserWindowPrompt } from './browser/window-controls/browser-window-prompt-installation'
 import { installNativeChatVisualGuestTheme } from './native-chat/native-chat-visual-guest-theme'
 import { installBrowserGuestEditProtection } from './browser/edit-protection/browser-guest-edit-protection'
 import { isHeaderRewriteSiteHost } from '../shared/browser/identity/browser-site-hosts'
@@ -61,8 +60,6 @@ if (!process.isMainFrame) {
 installBrowserGuestPageVisibilityReport((state) =>
   ipcRenderer.send(BROWSER_GUEST_PAGE_VISIBILITY_CHANNEL, state)
 )
-// Every frame this preload runs in also got Electron's throwing prompt.
-contextBridge.executeInMainWorld({ func: installBrowserWindowPrompt, args: [] })
 
 // Why no contextBridge exposure: page script must not be able to call into the detector.
 installBrowserPasswordDetector({

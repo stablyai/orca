@@ -52,6 +52,21 @@ export function botAgentSetupFromDraft(agent: BotAgent, draft: AgentPickerDraft)
   }
 }
 
+/** `value` back on its agent's chat defaults, or none when it already is. A permission the picker
+ *  doesn't offer stays. */
+export function botAgentSetupOnDefaults(
+  value: BotAgentSetup,
+  withPermission: boolean
+): BotAgentSetup | undefined {
+  if (!value.launch && !(withPermission && value.permissionMode)) {
+    return undefined
+  }
+  return {
+    agent: value.agent,
+    ...(!withPermission && value.permissionMode ? { permissionMode: value.permissionMode } : {})
+  }
+}
+
 /** Each agent the host can run a bot on, as a chat that keeps its setup. */
 function useBotAgentPickerEntries(
   observed: AgentPickerEntry[],
@@ -133,6 +148,7 @@ export function BotAgentLaunchPicker({
   defaultModelHint,
   withPermission = true,
   showChatDefaultHint = true,
+  showReset = true,
   disabled,
   inherit,
   keptPermission,
@@ -149,6 +165,8 @@ export function BotAgentLaunchPicker({
   /** False where the bot's permission has its own control beside the picker. */
   withPermission?: boolean
   showChatDefaultHint?: boolean
+  /** False where the dialog offers Use chat defaults itself (`botAgentSetupOnDefaults`). */
+  showReset?: boolean
   disabled?: boolean
   /** Offered under the card; while chosen, the field shows it instead of `value`. */
   inherit?: BotAgentLaunchInherit
@@ -208,16 +226,8 @@ export function BotAgentLaunchPicker({
     [onChange, value.agent, carried]
   )
   const resetLabel = t('bots.new.useChatDefaults', 'Use chat defaults')
-  const canReset = !inherit && Boolean(value.launch || (withPermission && value.permissionMode))
-  const reset = () => {
-    onChange(
-      {
-        agent: value.agent,
-        ...(!withPermission && value.permissionMode ? { permissionMode: value.permissionMode } : {})
-      },
-      withPermission
-    )
-  }
+  const defaults =
+    showReset && !inherit ? botAgentSetupOnDefaults(value, withPermission) : undefined
   const extraChoice = inherit
     ? {
         id: 'inherit',
@@ -258,14 +268,14 @@ export function BotAgentLaunchPicker({
           )}
         </p>
       ) : null}
-      {canReset ? (
+      {defaults ? (
         <Button
           type="button"
           variant="link"
           size="inlineText"
           className="self-start"
           disabled={disabled}
-          onClick={reset}
+          onClick={() => onChange(defaults, withPermission)}
         >
           {resetLabel}
         </Button>

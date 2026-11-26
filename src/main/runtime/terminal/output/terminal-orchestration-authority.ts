@@ -15,7 +15,7 @@ import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execu
 import { resolveLocalProjectRuntimeForWorktreeId } from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import type { AgentDetectionHost } from '../../../preflight/workspace-agent-detection'
 import { resolveRuntimeAgentDetectionHost } from '../../workspaces/catalog/runtime-agent-detection-host'
-import { resolveRuntimeTerminalOrchestrationCliCommand } from '../../orchestration/workers/launch/orchestration-cli-command'
+import { resolveRuntimeTerminalOrchestrationCliTarget } from '../../orchestration/workers/launch/orchestration-cli-command'
 import {
   readAgentOrchestrationProjectionRecords,
   readCapturedOrchestrationFleetAgentStatusSnapshot
@@ -293,8 +293,8 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
     )
   }
 
-  getTerminalOrchestrationCliCommand(handle: string) {
-    return resolveRuntimeTerminalOrchestrationCliCommand(handle, {
+  getTerminalOrchestrationCliTarget(handle: string) {
+    return resolveRuntimeTerminalOrchestrationCliTarget(handle, {
       resolvePtyId: (handle) => this.resolveLeafForHandle(handle)?.ptyId,
       getPty: (ptyId) => this.ptysById.get(ptyId),
       getProjectRuntime: (pty) =>

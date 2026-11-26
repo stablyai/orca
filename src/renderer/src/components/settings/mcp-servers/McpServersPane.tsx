@@ -95,7 +95,7 @@ export function McpServersPane({
     void (async () => {
       // One at a time: each move edits the same agent files.
       for (const server of servers) {
-        await importMcpServer(target, server.key, mode)
+        await importMcpServer(target, server, mode)
       }
     })()
       .then(() => {

@@ -233,7 +233,7 @@
   inherits: false;
 }
 
-/* Why: only the workspace board sheet reads its right edge; don't restyle the board subtree on every resize. */
+/* Why: only the docked board sheets read their right edge; don't restyle their subtrees on every resize. */
 @property --workspace-board-right-edge {
   syntax: '*';
   inherits: false;

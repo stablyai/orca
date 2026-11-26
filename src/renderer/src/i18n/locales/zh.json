@@ -406,7 +406,7 @@
         "importInvalid": "{{count}} 行无法读取",
         "importUndecryptable": "{{count}} 个受浏览器保护，请改为从该浏览器导出 CSV",
         "imported": "已导入 {{count}} 个密码",
-        "deleteAllConfirmDescription": "{{profile}} 配置文件中所有已保存的密码都将被永久删除，此操作无法撤销",
+        "deleteAllConfirmDescription": "{{profile}} 配置文件中所有已保存的密码、备注和永不保存密码的网站都将被永久删除。此操作无法撤销。",
         "deletedAll": "密码数据已删除",
         "form": {
           "invalidSite": "请输入网站地址，例如 example.com",
@@ -922,6 +922,7 @@
           "spaces": "空格",
           "link": "链接",
           "tabs": "标签页",
+          "tab_characters": "制表符",
           "trim": "去除",
           "root": "根目录",
           "word_wrap": "自动换行",
@@ -1408,7 +1409,8 @@
         "all": "所有智能体",
         "someOff": "已关闭 {{count}} 个智能体",
         "none": "无智能体",
-        "some": "{{total}} 个智能体中的 {{on}} 个"
+        "some": "{{total}} 个智能体中的 {{on}} 个",
+        "blocked": "已被你所在组织的 Claude 设置阻止"
       },
       "stale": "此服务器已在其他地方更改，现显示其当前状态。",
       "launch": {
@@ -13506,6 +13508,8 @@
             "unverifiable": "未完成：Orca 无法确认此服务器上正在运行什么，请在主机可访问时重试",
             "migration": "未完成：迁移到此服务器的操作尚未完成，请先继续该操作",
             "deferred": "尚未完成：服务器尚未准备好执行此操作，请稍后重试",
+            "stopIncomplete": "未完成：Orca 无法确认当前服务器已退出，因此未开始更新，请先查看主机上 ~/.orca-remote 中服务器安装文件夹内的 orcad.log 再重试",
+            "rollbackStopIncomplete": "未完成：Orca 无法确认当前服务器已退出，因此未回滚，请先查看主机上 ~/.orca-remote 中服务器安装文件夹内的 orcad.log 再重试",
             "failed": "Orca 无法在服务器上完成此操作，请重试",
             "defaultServer": "未执行：此服务器是新项目的默认主机，停止前请在“新项目打开位置”中选择其他主机",
             "wslMoveRunning": "未完成：有项目正在移到此服务器上。移动完成后，Orca 会更新它"
@@ -22847,7 +22851,8 @@
           "correctionWord": "更正词",
           "correctionWordDescription": "说出这个词即可撤回刚说的内容：“四点，{{word}}，五点”",
           "correctionWordOff": "无"
-        }
+        },
+        "localOnlyNotice": "在任意面板中用说话代替打字。这些设置仅对此电脑生效，{{host}} 会保留自己的设置。"
       },
       "repositoryHooks": {
         "availableEnvVars": "可用的环境变量"
@@ -23011,6 +23016,7 @@
         },
         "rulesLoadFailed": "无法加载此主机的清理规则：{{error}}",
         "retry": "重试",
+        "listSeparator": "、",
         "summary": {
           "merged": "删除已合并",
           "unchanged": "删除无改动",
@@ -28377,15 +28383,14 @@
         "activity": "活动",
         "canceledNote": "已取消：",
         "doneNote": "已完成：",
+        "links": "链接",
         "showLess": "收起",
         "showMore": "展开",
-        "linkCount": "{{count}} 个链接",
-        "reply": "回复",
-        "replyAbove": "回复上方的问题",
-        "replyBelow": "回复下方的问题",
+        "subWhere": "事项 {{number}} · {{chat}}",
         "showEarlier": "显示更早的",
         "place": "{{index}} / {{total}}",
         "deleted": "此事项已被删除",
+        "moreLinks": "还有 {{count}} 个链接",
         "loading": "正在加载事项…"
       },
       "activity": {
@@ -28580,7 +28585,9 @@
         "sending": "正在发送…",
         "sendSome": "发送 {{count}}/{{total}}",
         "sendSomeLabel": "发送 {{total}} 个回答中的 {{count}} 个",
-        "changeAnswer": "{{question}}：{{answer}}。更改回答"
+        "changeAnswer": "{{question}}：{{answer}}。更改回答",
+        "heldImagesLimit": "你的回答会作为一条评论发送，一条评论最多包含 {{max}} 张图片。请先发送目前保留的回答，或移除一些。",
+        "heldSkillsLimit": "你的回答会作为一条评论发送，一条评论最多包含 {{max}} 个技能。请先发送目前保留的回答，或移除一些。"
       },
       "readMoreClosedFailed": "无法读取更多已关闭的条目",
       "wait": {
@@ -29930,7 +29937,6 @@
         "cancel": "取消",
         "cancelRunning": "取消生成",
         "edit": "编辑描述",
-        "realPerson": "头像不能呈现真实人物。请改为描述一个角色",
         "signedOut": "{{agent}} 未登录。请先登录，然后重试",
         "usageLimit": "{{agent}} 已达到使用上限。请稍后重试",
         "noImage": "{{agent}} 未生成图片。请尝试换一种描述方式",

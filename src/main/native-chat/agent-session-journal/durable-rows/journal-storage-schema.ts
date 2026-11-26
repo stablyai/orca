@@ -178,7 +178,11 @@ export const storedMessageBody = messageBody.extend({
         computer: z.string().optional(),
         phone: z.string().optional()
       }),
-      z.object({ by: z.literal('agent') })
+      z.object({
+        by: z.literal('agent'),
+        deviceId: z.string().optional(),
+        own: z.boolean().optional()
+      })
     ])
     .optional(),
   origin: text,
