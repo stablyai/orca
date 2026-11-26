@@ -6,7 +6,8 @@ import { listEnvironments } from '../../../shared/remote-runtime/host-store/runt
 import { addManagedOrcadEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
 import {
   getOrcadSshDeployment,
-  redactRuntimeEnvironment
+  redactRuntimeEnvironment,
+  type KnownRuntimeEnvironment
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   ORCAD_MANAGED_REMOTE_PORT,
@@ -71,8 +72,13 @@ export async function createManagedOrcadEnvironment(
         throw new Error('The SSH target is owned by a server that is not deployed on it.')
       }
     }
+    const moveSavedServer = !args.migration
+    const mayBeThisMachineUnderAnotherRoute = (entry: KnownRuntimeEnvironment) =>
+      moveSavedServer && getOrcadSshDeployment(entry) !== undefined
     const namesake = findCollidingEnvironmentName(
-      environments.filter((entry) => entry.id !== environmentId),
+      environments.filter(
+        (entry) => entry.id !== environmentId && !mayBeThisMachineUnderAnotherRoute(entry)
+      ),
       args.name
     )
     if (namesake) {
@@ -158,7 +164,7 @@ export async function createManagedOrcadEnvironment(
           localPort,
           remotePort: ORCAD_MANAGED_REMOTE_PORT
         },
-        moveSavedServer: !args.migration
+        moveSavedServer
       })
       const outcome = serving.created ? 'created' : 'already-current'
       if (environment.id !== environmentId) {
