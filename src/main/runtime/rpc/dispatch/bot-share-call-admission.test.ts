@@ -49,6 +49,9 @@ import { STATUS_METHODS } from '../methods/host-management/status'
 import { STRUCTURED_AGENT_SESSION_STATUS_METHODS } from '../methods/structured-sessions/subscriptions/structured-agent-session-status-stream'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import { makeTestBot } from '../../../bots/bot.test-fixture'
+import { BotItemsStore } from '../../../bots/bot-items-store'
+import type { BotItemRecord } from '../../../bots/bot-items-schema'
+import { BOT_ITEMS_OWNER_METHODS } from '../methods/bots-items-owner-methods'
 
 const SHARED = { id: 'bot-shared', folderWorkspaceId: 'home-shared' }
 const OTHER = { id: 'bot-other', folderWorkspaceId: 'home-other' }
@@ -277,6 +280,9 @@ beforeEach(() => {
         handler: ran
       }),
       ...BOT_METHODS.filter((method) => method.name === 'bots.roster'),
+      ...BOT_ITEMS_OWNER_METHODS.filter((method) =>
+        ['bots.items.owner.list', 'bots.items.owner.show'].includes(method.name)
+      ),
       // Their real share decisions: every call below is refused before its handler.
       ...STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS.filter((method) =>
         MODEL_PICKER_METHODS.has(method.name)
@@ -354,6 +360,66 @@ const errorCode = (response: Awaited<ReturnType<typeof call>>) =>
   response.ok ? null : response.error.code
 
 describe('the share guard', () => {
+  it('lists a teammate their own items by default and everyone’s when they ask, on the shared bot only', async () => {
+    const store = BotItemsStore.open(':memory:')
+    try {
+      const add = (botId: string, title: string, actsForAccounts: string[] | null): string =>
+        store.add(
+          {
+            ownerBotId: botId,
+            chatId: ids.alicesChat,
+            source: { kind: 'home', title: null },
+            actsForAccounts,
+            title,
+            status: 'working',
+            links: []
+          },
+          { kind: 'bot', botId, chatId: ids.alicesChat }
+        ).uid
+      add(SHARED.id, 'Alice’s', ['acct-alice'])
+      const ownersUid = add(SHARED.id, 'The owner’s', null)
+      add(SHARED.id, 'Bob’s', ['acct-bob'])
+      const otherBotsUid = add(OTHER.id, 'Another bot’s', ['acct-alice'])
+      vi.spyOn(runtime.bots, 'assertEnabled').mockReturnValue(undefined)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the list and show handlers read only these two
+      vi.spyOn(runtime, 'botItems', 'get').mockReturnValue({
+        store: () => store,
+        views: async (records: readonly BotItemRecord[]) =>
+          records.map((record) => ({
+            uid: record.uid,
+            title: record.title,
+            status: record.status
+          })),
+        events: async () => []
+      } as never)
+      const titles = async (params: Record<string, unknown>) => {
+        const response = await call('bots.items.owner.list', params)
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the list's answer
+        const result = (response.ok ? response.result : null) as {
+          items: { title: string }[]
+        } | null
+        return result?.items.map((item) => item.title).sort() ?? null
+      }
+      expect(await titles({ botId: SHARED.id })).toEqual(['Alice’s'])
+      expect(await titles({ botId: SHARED.id, everyone: true })).toEqual([
+        'Alice’s',
+        'Bob’s',
+        'The owner’s'
+      ])
+      expect(await titles({ botId: SHARED.id, person: 'acct-bob' })).toEqual(['Bob’s'])
+      expect(errorCode(await call('bots.items.owner.list', { botId: OTHER.id }))).toBe('not_found')
+      // Any of the shared bot's items opens by number or uid; another bot's does not.
+      expect(
+        errorCode(await call('bots.items.owner.show', { botId: SHARED.id, item: ownersUid }))
+      ).toBeNull()
+      expect(
+        errorCode(await call('bots.items.owner.show', { botId: SHARED.id, item: otherBotsUid }))
+      ).toBe('not_found')
+    } finally {
+      store.dispose()
+    }
+  })
+
   it('admits reads and actions only in the teammate’s own chats on the shared bot', async () => {
     const history = (sessionId: string) =>
       call('agentSession.history', { sessionId, direction: 'tail' })
@@ -646,6 +712,8 @@ describe('the share guard', () => {
         'bots.chatTree',
         'bots.chats',
         'bots.chats.own',
+        'bots.items.owner.list',
+        'bots.items.owner.show',
         'bots.list',
         'bots.roster',
         'bots.session.start',

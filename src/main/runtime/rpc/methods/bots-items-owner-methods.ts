@@ -24,6 +24,7 @@ import {
 import { botChatTakingMail } from './bots-chats'
 import type { BotItemOwnerActor } from '../../../bots/bot-items-input'
 import { defineMethod, type RpcContext } from '../core'
+import { SHARE_BY_BOT } from '../../../../shared/bots/bot-share-rpc-methods'
 import { ownerOnly } from './bots-caller-gates'
 import { botItemListScope, botItemsOfPeople } from '../../../bots/bot-item-access'
 import { parseCursor, resolveItem } from './bots-items-write-support'
@@ -48,7 +49,7 @@ function ownerActor(context: RpcContext): BotItemOwnerActor {
 const LIST = defineMethod({
   name: 'bots.items.owner.list',
   permission: 'workspace',
-  share: 'not-shared',
+  share: SHARE_BY_BOT,
   params: BotItemsOwnerList,
   handler: async (params, context) => {
     ownerActor(context)
@@ -56,12 +57,13 @@ const LIST = defineMethod({
     const store = botItems.store()
     // An older client names one chat; a group's panel names its rooms' member sessions.
     const chatIds = params.chatIds ?? (params.chatId !== undefined ? [params.chatId] : undefined)
-    // A picked person's items, else the caller's default: the same scope the items commands list.
-    const whose =
+    // A picked person's items, else the caller's default (a teammate's own) or everyone's when asked:
+    // the same scope the items commands list.
+    const scope =
       params.person === undefined
-        ? itemsAccess(context)
-        : botItemsOfPeople(params.person === null ? null : [params.person])
-    const chat = { ...(chatIds ? { chatIds } : {}), ...botItemListScope(whose) }
+        ? botItemListScope(itemsAccess(context), params.everyone === true)
+        : botItemListScope(botItemsOfPeople(params.person === null ? null : [params.person]))
+    const chat = { ...(chatIds ? { chatIds } : {}), ...scope }
     // Read after the rows, so a mark another device moved meanwhile is the one sent.
     const seenEventId = (): string =>
       botItemEventId(
@@ -119,12 +121,15 @@ const LIST = defineMethod({
 const SHOW = defineMethod({
   name: 'bots.items.owner.show',
   permission: 'workspace',
-  share: 'not-shared',
+  share: SHARE_BY_BOT,
   params: BotItemsOwnerShow,
   handler: async (params, context) => {
     ownerActor(context)
     const { botItems } = context.runtime
     const record = await resolveItem(botItems.store(), params.item)
+    if (params.botId !== undefined && record.ownerBotId !== params.botId) {
+      throw new BotItemError('not_found', `No item ${params.item}.`)
+    }
     const after = params.after !== undefined ? parseBotItemEventId(params.after) : 0
     const before = params.before !== undefined ? parseBotItemEventId(params.before) : 0
     if (after === null || before === null) {

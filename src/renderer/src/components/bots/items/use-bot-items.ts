@@ -283,7 +283,7 @@ export function showBotItem(
   uid: string,
   page: { after: string } | { newest: true; before?: string }
 ): Promise<BotItemShow> {
-  return callBotRpc(bot, 'bots.items.owner.show', { item: uid, ...page })
+  return callBotRpc(bot, 'bots.items.owner.show', { botId: bot.id, item: uid, ...page })
 }
 
 /** `images`: chat-attachment paths on the bot's host; files ride in `text` as `@path`. `requestId`:
