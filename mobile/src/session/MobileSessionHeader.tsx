@@ -59,6 +59,7 @@ export function MobileSessionHeader({
     terminalResume,
     connState,
     statusDot,
+    nativeChatController,
     activeSessionTabId,
     openSessionTabActionSheetAfterKeyboardDismiss
   } = controller
@@ -160,6 +161,8 @@ export function MobileSessionHeader({
           <SafeAreaView
             style={[
               styles.sessionChrome,
+              // A chat is one ground from the top: its header sits on the canvas, with no line under it.
+              nativeChatController.showNativeChat && styles.sessionChromeOnChat,
               topChrome.space && {
                 paddingLeft: topChrome.space.left,
                 paddingRight: topChrome.space.right,

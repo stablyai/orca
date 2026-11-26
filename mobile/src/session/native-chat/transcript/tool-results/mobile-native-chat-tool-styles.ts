@@ -102,7 +102,7 @@ export const toolStyles = themedStyleSheet(() => ({
     borderRadius: radii.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.chatPanel,
     padding: spacing.sm
   },
   // Bound long output to a scroll box so it cannot fill the transcript.

@@ -50,7 +50,7 @@ const styles = themedStyleSheet(() => ({
     paddingLeft: spacing.md,
     paddingRight: spacing.sm,
     paddingVertical: spacing.xs,
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.chatPanel,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borderSubtle
   },
