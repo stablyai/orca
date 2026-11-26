@@ -1,6 +1,6 @@
 // The agents shared with this Orca account, as main publishes them. Each is a host the app reaches by
 // its environment id; main routes its calls over the share link rather than a paired server's connection.
-import { useSyncExternalStore } from 'react'
+import { useMemo, useSyncExternalStore } from 'react'
 import type {
   SharedBotHostsState,
   SharedBotHostView,
@@ -30,8 +30,6 @@ const listeners = new Set<() => void>()
 // Each shared host's own id for the shared agent's home, as its listing names it (the catalog shows
 // this computer's home instead), so this computer's Files can read that folder there.
 const hostHomes = new Map<string, { botId: string; folderWorkspaceId: string }>()
-// Changes with the shares or their hosts' homes, so a Files view follows where a home reads.
-let homeRoutesRevision = 0
 
 function setState(next: SharedBotHostsState): void {
   // A cloud that doesn't take shares has none to show, whatever was kept from before.
@@ -39,7 +37,6 @@ function setState(next: SharedBotHostsState): void {
   requests = next.sharing === false ? NO_REQUESTS : (next.requests ?? NO_REQUESTS)
   sharing = next.sharing
   hydrated = true
-  homeRoutesRevision++
   for (const listener of listeners) {
     listener()
   }
@@ -128,15 +125,19 @@ export function noteSharedBotHostListing(
     return
   }
   hostHomes.set(host.environmentId, { botId: bot.id, folderWorkspaceId: bot.folderWorkspaceId })
-  homeRoutesRevision++
   for (const listener of listeners) {
     listener()
   }
 }
 
-/** Re-renders a reader of `sharedBotHomeOnHost` when its answer may have changed. */
-export function useSharedBotHomeRoutesRevision(): number {
-  return useSyncExternalStore(subscribeSharedBotHosts, () => homeRoutesRevision)
+/** `sharedBotHomeOnHost`, followed for its changes; the same object while its answer is the same. */
+export function useSharedBotHomeOnHost(
+  worktreeId: string | null | undefined
+): ReturnType<typeof sharedBotHomeOnHost> {
+  const key = useSyncExternalStore(subscribeSharedBotHosts, () =>
+    JSON.stringify(sharedBotHomeOnHost(worktreeId))
+  )
+  return useMemo(() => JSON.parse(key) as ReturnType<typeof sharedBotHomeOnHost>, [key])
 }
 
 /** Where this computer's home of a shared agent reads its files: that agent's home folder on the

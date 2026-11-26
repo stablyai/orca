@@ -171,7 +171,7 @@ describe('a shared agent’s host, reached through runtimeEnvironments', () => {
   })
 
   it('never sends a method the share refuses, and answers it as the host would', async () => {
-    for (const method of ['bots.activity', 'bots.upNext.unseen', 'pairedServerAsks.list']) {
+    for (const method of ['bots.delete', 'bots.upNext.unseen', 'pairedServerAsks.list']) {
       expect(await windowCall(SHARED, method)).toMatchObject({
         ok: false,
         error: { code: 'method_not_found' }

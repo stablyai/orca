@@ -29,7 +29,7 @@ import type { WorktreeOperationRoute } from '@/lib/workspace/ownership/worktree-
 import { captureWorktreeOperationGenerationGuard } from '@/lib/workspace/ownership/worktree-operation-generation'
 import {
   sharedBotHomeOnHost,
-  useSharedBotHomeRoutesRevision
+  useSharedBotHomeOnHost
 } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 
 const ownerUnresolved = (): Error => new Error(getFileExplorerOwnerUnresolvedMessage())
@@ -64,14 +64,15 @@ export function getFileExplorerOperationOwnerFromState(
   state: FileExplorerOwnerState,
   worktreeId: string | null | undefined,
   /** Names a twin's host when `state` omits the selection that would. */
-  hostId?: ExecutionHostId
+  hostId?: ExecutionHostId,
+  /** Where a shared agent's home here reads its files; a hook passes the one it follows. */
+  shared: ReturnType<typeof sharedBotHomeOnHost> = sharedBotHomeOnHost(worktreeId)
 ): FileExplorerOperationOwner {
   if (!worktreeId) {
     return { kind: 'local' }
   }
   // This computer's home of an agent shared with it shows that agent's folder on its host, never the
   // folder kept here; until the host has listed it, there is nothing to show.
-  const shared = sharedBotHomeOnHost(worktreeId)
   if (shared) {
     return shared.hostWorktreeId
       ? {
@@ -111,11 +112,10 @@ export function useFileListOperationOwner(worktreeId: string | null): FileExplor
     }))
   )
   const hostId = useAppStore((s) => getSelectedFolderTwinHostId(s, worktreeId))
-  const sharedHomes = useSharedBotHomeRoutesRevision()
+  const sharedHome = useSharedBotHomeOnHost(worktreeId)
   return useMemo(
-    () => getFileExplorerOperationOwnerFromState(state, worktreeId, hostId),
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- sharedHomes: the shared homes' routes, read outside the store.
-    [hostId, state, worktreeId, sharedHomes]
+    () => getFileExplorerOperationOwnerFromState(state, worktreeId, hostId, sharedHome),
+    [hostId, state, worktreeId, sharedHome]
   )
 }
 

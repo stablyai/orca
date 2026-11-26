@@ -4,11 +4,11 @@ import { validateFileRangeRequest } from '../../../../../shared/file-content/fil
 import type { RuntimeFileReadArgs } from '../runtime-file-client-types'
 import {
   assertExternalSshReadOwnership,
+  runtimeFileWorktreeSelector,
   workspaceOrScratchFileAddress
 } from '../runtime-file-routing'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
-import { runtimeFileWorktreeSelector } from '../runtime-file-routing'
 import { decodeBase64Bytes } from '@/lib/base64-bytes'
 import {
   remoteFileRequest,

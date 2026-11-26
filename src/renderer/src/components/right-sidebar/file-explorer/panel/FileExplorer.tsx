@@ -44,7 +44,7 @@ import { useFileExplorerTreePaneState } from '../tree/use-file-explorer-tree-pan
 import { useWslHostUnavailableReason } from '../../../../runtime/hosts/wsl/wsl-host-availability'
 import { useWslHostReadOutage } from '../../../wsl-host-stopped/use-stopped-wsl-host'
 import { useTranslate } from '@/i18n/use-translate'
-import { useSharedBotHomeRoutesRevision } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
+import { useSharedBotHomeOnHost } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 /** Coordinates scoped navigation while retaining the actual worktree root for file operations and runtime routing. */
@@ -377,7 +377,7 @@ const FileExplorerFilesMemo = React.memo(FileExplorerFiles)
 
 function FileExplorer(): React.JSX.Element {
   // A shared agent's home reads on its host once that host lists it.
-  useSharedBotHomeRoutesRevision()
+  useSharedBotHomeOnHost(useAppStore((state) => state.activeWorktreeId))
   const ownerKey = useAppStore((state) =>
     JSON.stringify(getFileExplorerOperationOwnerFromState(state, state.activeWorktreeId))
   )
