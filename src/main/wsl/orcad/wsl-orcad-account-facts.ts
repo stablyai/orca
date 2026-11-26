@@ -15,7 +15,8 @@ export const WSL_ACCOUNT_FACTS_COMMAND = [
   `printf '${PEER_MARKER}%s %s\\n' "$_orca_peer" "$([ -n "$_orca_peer" ] && getent passwd "$_orca_peer" | cut -d: -f1)"`
 ].join(' ')
 
-export type WslLinuxAccount = { uid: string; name: string }
+/** `name` is null when the account has no passwd entry, so nothing may pin it. */
+export type WslLinuxAccount = { uid: string; name: string | null }
 
 export type WslAccountFacts = {
   account?: WslLinuxAccount
@@ -28,7 +29,7 @@ function readAccount(line: string, marker: string): WslLinuxAccount | null | und
     return undefined
   }
   const [uid = '', name = ''] = line.slice(marker.length).trim().split(/\s+/)
-  return /^\d+$/.test(uid) ? { uid, name: name || uid } : null
+  return /^\d+$/.test(uid) ? { uid, name: name || null } : null
 }
 
 /** Null when the lines aren't the command's two lines; otherwise whatever they proved. */
@@ -48,12 +49,13 @@ export function readWslAccountFacts(userLine: string, peerLine: string): WslAcco
 export class WslOrcadOtherAccountServerError extends Error {
   readonly code = 'wsl_orcad_other_account_server'
   constructor(distro: string, other: WslLinuxAccount, account: WslLinuxAccount | undefined) {
-    const self = account ? ` as ${account.name}` : ''
+    const otherName = other.name ?? `uid ${other.uid}`
+    const self = account ? ` as ${account.name ?? `uid ${account.uid}`}` : ''
     super(
-      `Orca’s server is already running in ${distro} for the Linux user ${other.name} (uid ${other.uid}), ` +
+      `Orca’s server is already running in ${distro} for the Linux user ${otherName} (uid ${other.uid}), ` +
         `so Orca won’t start a second one${self} that would compete for its port. Stop that server ` +
         `(for example with \`wsl.exe --terminate ${distro}\`), or remove this WSL host and add it ` +
-        `again while ${other.name} is the distro’s default user.`
+        `again while ${otherName} is the distro’s default user.`
     )
     this.name = 'WslOrcadOtherAccountServerError'
   }
