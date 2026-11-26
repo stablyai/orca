@@ -28,6 +28,10 @@
     "panel": {
       "all": "모두",
       "emptyScope": "이 범위에는 이전 에이전트 세션이 없습니다.",
+      "hideDetails": "세부 정보 숨기기",
+      "showDetails": "세부 정보 표시",
+      "loading": "에이전트 세션 로드 중…",
+      "showAllAgents": "모든 에이전트 표시",
       "missingResumeId": "이 세션에는 재개 ID가 없습니다.",
       "noSearchResults": "검색 조건에 맞는 세션이 없습니다.",
       "noSessions": "에이전트 세션 없음",
@@ -58,7 +62,10 @@
       "messages_one": "메시지 {{count}}개",
       "messages_other": "메시지 {{count}}개",
       "resumeSession": "에이전트 세션 재개",
-      "continueInCli": "CLI에서 계속"
+      "continueInCli": "CLI에서 계속",
+      "hidePreview": "최근 메시지를 숨깁니다.",
+      "showPreview": "최근 메시지를 표시합니다.",
+      "you": "나"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "호스트에 연결할 수 없습니다.",
@@ -68,6 +75,42 @@
     "worktreeNavigationActions": {
       "agentSessionHistory": "에이전트 세션 기록",
       "sourceControl": "소스 제어"
+    },
+    "resume": {
+      "hostConnectionChanged": "호스트 연결이 변경되었습니다. 재개를 다시 시도하세요."
+    },
+    "interrupted": {
+      "failed": "중단된 채팅을 재개하지 못했습니다.",
+      "count_one": "채팅 {{count}}개가 중단되었습니다",
+      "count_other": "채팅 {{count}}개가 중단되었습니다",
+      "resumeAll": "모두 재개",
+      "failedCount_one": "채팅 {{count}}개를 재개하지 못했습니다",
+      "failedCount_other": "채팅 {{count}}개를 재개하지 못했습니다"
+    },
+    "viewControls": {
+      "allAgents": "모든 에이전트",
+      "lastUpdated": "마지막 업데이트",
+      "created": "생성일",
+      "agents": "에이전트"
+    },
+    "filterSheet": {
+      "title": "필터 및 정렬",
+      "activeLabel": "필터 및 정렬, {{count}}개 적용 중",
+      "reset": "재설정",
+      "done": "완료",
+      "sortBy": "정렬 기준"
+    },
+    "actions": {
+      "resume": "재개"
+    },
+    "handoff": {
+      "title": "에이전트에게 넘기기",
+      "context": "컨텍스트",
+      "latestStatus": "최신 상태",
+      "fullTranscript": "전체 기록",
+      "noContext": "새 세션에서 계속할 세션 컨텍스트가 없습니다.",
+      "launchFailed": "새 세션을 시작하지 못했습니다.",
+      "promptCopied": "프롬프트를 복사했습니다. 에이전트를 열고 붙여넣으세요."
     }
   },
   "app": {
@@ -203,9 +246,17 @@
   },
   "chat": {
     "ask": {
+      "send": "보내기",
+      "notNow": "나중에",
       "answerPlaceholder": "답변을 입력하세요",
+      "optionPreview": "{{option}} 미리보기",
+      "previewPosition": "{{current}} / {{total}}",
+      "chosen": "선택됨",
+      "chooseThis": "이 옵션 선택",
+      "viewPreview": "보기",
       "next": "다음",
       "other": "기타…",
+      "recommended": "추천",
       "skip": "건너뛰기",
       "step": "{{step}}단계"
     },
@@ -239,6 +290,7 @@
       "file": "파일",
       "fileMeta": "{{type}} · {{size}}",
       "removeFile": "{{name}} 제거",
+      "uploadingImage": "이미지 업로드 중",
       "removeImage": "이미지 제거",
       "uploadingFile": "{{name}} 업로드 중"
     },
@@ -282,7 +334,9 @@
       "saveFailed": "이미지를 저장할 수 없습니다",
       "shareFailed": "이미지를 공유할 수 없습니다",
       "photosAccessDenied": "설정에서 Orca의 사진 추가를 허용하세요",
-      "imageTooLarge": "이미지가 너무 큽니다"
+      "imageTooLarge": "이미지가 너무 큽니다",
+      "previousImage": "이전 이미지",
+      "nextImage": "다음 이미지"
     },
     "nativeChatProse": {
       "attachedImage": "첨부 이미지",
@@ -341,6 +395,7 @@
       "permissionDenied": "{{agent}}이(가) 권한을 거부했습니다. 세부 정보 보기.",
       "safetyReviewApproved": "{{agent}}이(가) 이 작업을 승인했습니다. 세부 정보 보기.",
       "safetyReview": "{{agent}}이(가) 안전 검토 경고를 보고했습니다. 세부 정보 보기.",
+      "autoReviewDenied": "{{agent}}의 자동 리뷰에서 거부됨: {{action}}",
       "truncatedResponse": "공급자 응답이 잘렸습니다(원래 크기: {{bytes}}바이트).",
       "modelFallback": "Claude가 모델을 변경했습니다: {{from}} → {{to}}.",
       "signIn": "로그인",
@@ -363,6 +418,12 @@
     "interruptedContinue": {
       "failed": "이 채팅을 계속할 수 없습니다. 다시 시도하거나 메시지를 보내세요.",
       "explanation": "계속하면 에이전트가 먼저 마지막 단계가 완료되었는지 확인합니다."
+    },
+    "restartNote": {
+      "continued": "Orca가 재시작 후 이 에이전트에게 계속하도록 요청했습니다. 직접 입력한 프롬프트는 다시 전송되지 않았습니다.",
+      "refused": "Orca가 재시작 후 이 채팅을 계속하지 못했습니다. 메시지를 보내 계속하세요.",
+      "unconfirmed": "Orca가 재시작 후 이 에이전트에게 계속하도록 요청했지만 실제로 계속했는지 확인할 수 없습니다. 다른 메시지를 보내기 전에 최신 응답을 확인하세요.",
+      "notConnected": "Orca가 재시작 후 이 채팅에 다시 연결할 수 없어 에이전트에게 계속하도록 요청하지 않았습니다."
     },
     "sendError": {
       "dismiss": "닫기"
@@ -411,10 +472,27 @@
       "unavailable": "선택한 답변을 사용할 수 없습니다.",
       "thisPhone": "이 휴대전화",
       "computer": "컴퓨터",
-      "otherDevice": "다른 기기"
+      "otherDevice": "다른 기기",
+      "questionCancelled": "질문 취소됨",
+      "youAnswered": "내 답변: <answer>{{answer}}</answer>",
+      "answeredCount_one": "<answer>질문 {{count}}개</answer>에 답변했습니다",
+      "answeredCount_other": "<answer>질문 {{count}}개</answer>에 답변했습니다",
+      "answeredCount": "<answer>질문 {{count}}개</answer>에 답변했습니다"
+    },
+    "approvalRecord": {
+      "cancelled": "<tool>{{tool}}</tool> 요청 취소됨",
+      "coordinatorAllowed": "코디네이터가 <tool>{{tool}}</tool>을(를) 허용했습니다",
+      "coordinatorDenied": "코디네이터가 <tool>{{tool}}</tool>을(를) 거부했습니다",
+      "allowedUnnamed": "<tool>{{tool}}</tool> 허용됨",
+      "deniedUnnamed": "<tool>{{tool}}</tool> 거부됨",
+      "youAllowed": "<tool>{{tool}}</tool>을(를) 허용했습니다",
+      "youAllowedForSession": "이 세션에서 <tool>{{tool}}</tool>을(를) 허용했습니다",
+      "youDenied": "<tool>{{tool}}</tool>을(를) 거부했습니다",
+      "youAnswered": "<tool>{{tool}}</tool>에 답변했습니다: <answer>{{answer}}</answer>"
     },
     "sessionOptionCopy": {
       "none": "없음",
+      "ultracode": "Ultracode",
       "availableAfterSessionStarts": "세션이 시작된 후 사용할 수 있습니다.",
       "chooseInAgentPicker": "에이전트 선택기에서 선택…",
       "effort": "추론 수준",
@@ -433,6 +511,11 @@
       "on": "켜짐",
       "permissions": "권한",
       "sessionOptions": "세션 옵션",
+      "permissionAppliesNextMessage": "{{saved}}은(는) 다음 메시지부터 적용됩니다. 현재 {{active}} 사용 중",
+      "permissionAppliesNextMessageCompact": "{{saved}} · 다음 메시지부터",
+      "permissionAppliesNextMessageTiming": "다음 메시지부터 적용 · 현재 {{active}} 사용 중",
+      "modelsLoading": "모델 로드 중…",
+      "signInForModels": "사용할 수 있는 모델을 보려면 로그인하세요.",
       "setWhenSessionStarts": "세션 시작 시에만 설정할 수 있습니다.",
       "speed": "속도",
       "standard": "표준",
@@ -449,6 +532,10 @@
       "modelFullAccessLabel": "모델, {{value}}, 전체 액세스",
       "modelLabel": "모델, {{value}}",
       "permissions": "권한",
+      "applying": "적용 중…",
+      "onAttach": "채팅이 연결될 때 적용됩니다",
+      "heldPickRefused": "이 채팅에서는 {{picked}}을(를) 사용할 수 없습니다. {{kept}}을(를) 유지했습니다.",
+      "optionsSection": "옵션",
       "permissionsLabel": "권한, {{value}}",
       "settingsLocked": "이번 턴이 끝나면 모델 설정을 변경할 수 있습니다.",
       "workingAnnouncement": "에이전트가 작업 중입니다. 이번 턴이 끝나면 모델 설정을 변경할 수 있습니다."
@@ -631,6 +718,27 @@
       "saveUpdate": "저장 기능은 휴대전화 업데이트에서 제공될 예정입니다.",
       "fullCopySaveUpdate": "이 첨부 파일의 전체 복사와 저장 기능은 휴대전화 업데이트에서 제공될 예정입니다."
     },
+    "agentMessage": {
+      "open": "{{name}} 열기",
+      "row": {
+        "started": "시작됨",
+        "forItems": "대상",
+        "reopened": "다시 열었음",
+        "followedUp": "후속 메시지 전송 대상",
+        "handedOff": "인계 대상",
+        "task": "작업 보낸 쪽",
+        "update": "업데이트 보낸 쪽",
+        "message": "메시지 보낸 쪽",
+        "notSentYet": "아직 전송되지 않음"
+      },
+      "kind": {
+        "started": "시작됨",
+        "reopened": "다시 열림",
+        "followedUp": "후속 메시지",
+        "handedOff": "인계됨",
+        "task": "작업"
+      }
+    },
     "hostOutage": {
       "offlineAsOf": "{{host}} 오프라인 · {{time}} 기준",
       "reconnecting": "{{hostName}}에 다시 연결하는 중…",
@@ -652,7 +760,10 @@
       "collapse": "전체 목표 숨기기",
       "attachmentsUnsupported": "목표를 설정하기 전에 첨부 파일을 제거하세요.",
       "pause": "일시정지",
-      "resume": "재개"
+      "resume": "재개",
+      "checks_one": "확인 {{count}}회",
+      "checks_other": "확인 {{count}}회",
+      "last-check": "마지막 목표 확인"
     },
     "rewind": {
       "title": "여기로 되감을까요?",
@@ -673,6 +784,15 @@
       "timeout": "이 메시지로 돌아간 후 채팅이 업데이트되지 않았습니다. 최신 내용을 보려면 다시 열세요.",
       "pending": "대화가 이전 메시지로 돌아갈 때까지 기다리세요."
     },
+    "urlRequest": {
+      "title": "로그인 요청됨",
+      "open": "로그인 페이지 열기",
+      "decline": "거절",
+      "opened": "브라우저에서 로그인 페이지를 열었습니다.",
+      "openAgain": "다시 열기",
+      "finished": "로그인 완료",
+      "finishedWith": "로그인 완료 · {{message}}"
+    },
     "fork": {
       "busy": "다른 채팅이나 터미널을 여는 중입니다. 기다린 다음 {{agent}} 채팅을 다시 분기하세요.",
       "unconfirmed": "{{agent}}이(가) 분기를 확인하지 못했습니다. 채팅이 열렸을 수 있습니다. 다시 분기하기 전에 세션 기록을 확인하세요.",
@@ -684,6 +804,35 @@
     "selectionQuote": {
       "action": "인용",
       "hint": "선택한 텍스트를 메시지에 인용으로 추가합니다"
+    },
+    "eventRow": {
+      "running": "실행 중",
+      "failed": "실패"
+    },
+    "workerApproval": {
+      "allowFor": "{{worker}}에게 {{tool}}을(를) 허용할까요?",
+      "title": "{{worker}} · {{title}}",
+      "allow": "허용",
+      "deny": "거부",
+      "waiting": "워커 {{count}}개 대기 중 · 오래된 순",
+      "countdown": "아무도 응답하지 않으면 {{time}} 후 Claude가 자동으로 거부합니다.",
+      "openWorker": "워커 열기",
+      "record": {
+        "youAllowedFor": "<task>{{task}}</task>의 <tool>{{tool}}</tool>을(를) 허용했습니다",
+        "youDeniedFor": "<task>{{task}}</task>의 <tool>{{tool}}</tool>을(를) 거부했습니다",
+        "coordinatorAllowed": "코디네이터가 <task>{{task}}</task>의 <tool>{{tool}}</tool>을(를) 허용했습니다",
+        "coordinatorDenied": "코디네이터가 <task>{{task}}</task>의 <tool>{{tool}}</tool>을(를) 거부했습니다",
+        "allowedInTerminal": "<task>{{task}}</task>의 <tool>{{tool}}</tool>을(를) 해당 터미널에서 허용했습니다",
+        "deniedInTerminal": "<task>{{task}}</task>의 <tool>{{tool}}</tool>을(를) 해당 터미널에서 거부했습니다",
+        "allowedInChat": "<task>{{task}}</task>의 <tool>{{tool}}</tool>을(를) 해당 채팅에서 허용했습니다",
+        "deniedInChat": "<task>{{task}}</task>의 <tool>{{tool}}</tool>을(를) 해당 채팅에서 거부했습니다",
+        "timedOut": "<task>{{task}}</task>의 <tool>{{tool}}</tool>이(가) 시간 초과되었습니다",
+        "waitsInTerminal": "<task>{{task}}</task>의 <tool>{{tool}}</tool>이(가) 해당 터미널에서 대기 중입니다",
+        "workerEnded": "<task>{{task}}</task>의 <tool>{{tool}}</tool> 닫힘: 워커가 종료되었습니다",
+        "closedUnnamed": "<task>{{task}}</task>의 <tool>{{tool}}</tool>이(가) 기록된 답변 없이 닫혔습니다",
+        "reasonSentAsMessage": "사유 (메시지로 전송)",
+        "coordinatorReason": "코디네이터의 사유"
+      }
     },
     "messageTime": {
       "yesterday": "어제 {{time}}"
@@ -700,7 +849,8 @@
         "off": "꺼짐",
         "pending": "연결 중…",
         "tools_other": "도구 {{count}}개",
-        "waitingForSignIn": "로그인을 기다리는 중…"
+        "waitingForSignIn": "로그인을 기다리는 중…",
+        "tools_one": "도구 {{count}}개"
       },
       "source": {
         "project": "프로젝트",
@@ -727,10 +877,12 @@
       "summary": {
         "signingIn": "{{name}}에 로그인하는 중",
         "connected": "연결됨: {{count}}",
+        "needsAuth_one": "로그인 필요: {{count}}",
         "needsAuth_other": "로그인 필요: {{count}}",
         "failed": "실패: {{count}}"
       },
-      "pasteHint": "브라우저가 불러올 수 없는 페이지로 이동하면 주소를 복사해 여기에 붙여넣으세요."
+      "pasteHint": "브라우저가 불러올 수 없는 페이지로 이동하면 주소를 복사해 여기에 붙여넣으세요.",
+      "manage": "MCP 서버 관리"
     }
   },
   "common": {
@@ -2198,7 +2350,10 @@
       "dismissKeyboard": "키보드 닫기",
       "sendKey": "{{label}} 보내기",
       "typeCharacter": "{{character}} 입력",
+      "control": "Control",
       "interrupt": "터미널 중단",
+      "alt": "Alt",
+      "shift": "Shift",
       "keysModeLabel": "키 모드: 입력 내용이 터미널로 바로 전송됩니다. 메시지 모드로 전환",
       "messageModeLabel": "메시지 모드: 작성한 뒤 전송합니다. 키 모드로 전환",
       "moreKeys": "더 많은 키와 작업",
@@ -2303,6 +2458,7 @@
     "browserTabActionSheet": {
       "forward": "앞으로",
       "reload": "새로고침",
+      "hardReload": "강제 새로고침",
       "title": "브라우저"
     },
     "bulkCloseSheetActions": {
@@ -2318,6 +2474,7 @@
     },
     "commandDock": {
       "liveInputHint": "입력한 텍스트가 활성 터미널로 바로 전송됩니다.",
+      "tapToShowKeyboard": "탭하여 키보드 표시",
       "liveInputLabel": "실시간 터미널 입력"
     },
     "contentRow": {
@@ -2335,21 +2492,38 @@
       "committedChangesFailed": "커밋된 변경 사항을 불러오지 못했습니다.",
       "committedChangesUnavailable": "커밋된 변경 사항을 사용할 수 없습니다.",
       "committedDiffUnavailable": "커밋된 차이점을 사용할 수 없습니다.",
+      "commitLoadFailed": "이 커밋을 불러올 수 없습니다",
+      "commitDiffUnavailable": "커밋 차이점을 표시할 수 없습니다",
       "desktopUpdateRequired": "모바일에서 변경 사항을 리뷰하려면 이 호스트의 Orca를 업데이트하세요.",
       "diffLoadFailed": "차이점을 불러올 수 없습니다.",
       "reviewNotesLoadFailed": "리뷰 메모를 불러올 수 없습니다."
     },
     "diffReviewQueue": {
       "committedOnBranch": "브랜치에 커밋됨",
+      "inCommit": "이 커밋에 포함됨",
       "staged": "스테이징됨",
       "unstaged": "스테이징 안 됨"
     },
     "diffReviewScreenModel": {
       "branch": "브랜치",
       "staged": "스테이징됨",
-      "unstaged": "스테이징 안 됨"
+      "unstaged": "스테이징 안 됨",
+      "positionUncommitted": "커밋되지 않은 {{count}}개 중 {{position}}번째",
+      "positionInCommit": "이 커밋의 {{count}}개 중 {{position}}번째",
+      "positionViewed": "{{count}}개 중 {{position}}번째 · {{viewedCount}}개 확인함",
+      "commitFiles_one": "파일 {{count}}개",
+      "commitFiles_other": "파일 {{count}}개",
+      "uncommittedFiles_one": "커밋되지 않은 파일 {{count}}개",
+      "uncommittedFiles_other": "커밋되지 않은 파일 {{count}}개",
+      "viewedOfCount": "{{count}}개 중 {{viewedCount}}개 확인함"
     },
     "failure": {
+      "forkOriginalMissing": "{{agent}}이(가) 원래 채팅에서 이 응답을 찾을 수 없습니다. 원래 채팅을 열고 거기서 분기하세요.",
+      "forkOriginalUnavailable": "{{agent}}은(는) 원래 채팅의 이 응답에서 분기할 수 없습니다. 원래 채팅을 열고 거기서 분기하세요.",
+      "forkOriginalMissingNamed": "{{agent}}이(가) \"{{detail}}\"에서 이 응답을 찾을 수 없습니다. 해당 채팅을 열고 거기서 분기하세요.",
+      "forkOriginalUnavailableNamed": "{{agent}}은(는) \"{{detail}}\"의 이 응답에서 분기할 수 없습니다. 해당 채팅을 열고 거기서 분기하세요.",
+      "forkOriginalLatestOnly": "{{agent}}은(는) 원래 채팅의 최신 응답에서만 분기할 수 있습니다. 해당 채팅을 열고 최신 응답이 끝난 뒤 분기하세요.",
+      "forkOriginalLatestOnlyNamed": "{{agent}}은(는) \"{{detail}}\"의 최신 응답에서만 분기할 수 있습니다. 해당 채팅을 열고 최신 응답이 끝난 뒤 분기하세요.",
       "accountSwitchInProgress": "이 호스트에서 {{agent}} 설정을 변경하는 중입니다. 완료된 후 다시 시도하세요.",
       "agentCommandNotRunnable": "{{agent}}의 설정 → 에이전트 → 명령은 Orca가 찾을 수 있는 프로그램 경로나 이름이어야 하며, 인수나 변수를 포함할 수 없습니다. 변경하거나 재설정하세요.",
       "agentCommandFailed": "설정 → 에이전트에서 {{agent}}의 명령이 {{agent}}을(를) 시작하지 못했습니다: {{detail}}. 명령을 변경하거나 초기화하세요.",
@@ -2359,6 +2533,7 @@
       "agentStillWorking": "에이전트가 아직 작업 중입니다.",
       "answerUnconfirmed": "응답이 기록되었지만 에이전트가 확인하지 않았습니다.",
       "antigravityNotSignedIn": "Antigravity에 로그인되어 있지 않습니다. 설정 → 계정 → Antigravity에서 로그인한 후 메시지를 다시 보내세요.",
+      "antigravitySystemNotSignedIn": "Antigravity에 로그인되어 있지 않습니다. 이 채팅을 실행 중인 컴퓨터에서 `agy`를 실행해 로그인한 뒤 메시지를 다시 보내세요.",
       "argumentsMissingValue": "저장된 인수의 {{option}}에 값이 필요합니다.",
       "argumentsMultipleValues": "저장된 인수에 {{option}}의 값이 여러 개 지정되어 있습니다.",
       "argumentsPositionalPrompt": "저장된 인수에 프롬프트가 포함되어 있습니다.",
@@ -2385,6 +2560,7 @@
       "chooseClaudeAccount": "Claude 계정 설정에서 선택하거나 추가하세요.",
       "chooseClaudeAccountThenRunCommand": "Claude 계정 설정에서 선택하거나 추가한 다음 /{{command}}을(를) 다시 실행하세요.",
       "chooseClaudeAccountThenSend": "Claude 계정 설정에서 선택하거나 추가한 다음 메시지를 다시 보내세요.",
+      "unconfirmed": "전송되었는지 확인할 수 없습니다. 다시 보내지는 않았습니다.",
       "claudeAccountFolderMissing": "선택한 Claude 계정의 폴더가 없습니다. 다시 로그인하거나 다른 계정을 선택하세요.",
       "claudeAccountSetupFailed": "선택한 Claude 계정을 설정할 수 없습니다. 다시 시도하거나 다른 계정을 선택하세요.",
       "claudeEffortInvalid": "Claude의 추론 수준이 올바르지 않습니다. low, medium, high, xhigh, max 중에서 선택한 후 다시 보내세요.",
@@ -2487,6 +2663,7 @@
       "imageLabel": "{{title}} 이미지",
       "noReviewNotes": "리뷰 메모 없음",
       "previewLabel": "{{title}} 미리보기",
+      "loading": "파일 로드 중…",
       "reviewNotes_one": "리뷰 메모 {{count}}개",
       "reviewNotes_other": "리뷰 메모 {{count}}개",
       "send": "보내기",
@@ -2497,6 +2674,7 @@
     },
     "githubPrMutations": {
       "reviewThreadUpdateFailed": "리뷰 스레드를 업데이트하지 못했습니다.",
+      "fileViewedFailed": "확인 상태를 업데이트하지 못했습니다.",
       "titleUpdateFailed": "제목을 업데이트하지 못했습니다."
     },
     "githubPrRpc": {
@@ -2513,9 +2691,11 @@
       "terminalLayout": "터미널 레이아웃",
       "fileExplorer": "파일 탐색기",
       "sourceControl": "소스 제어",
+      "itemsNeedYou": "항목, {{count}}개 확인 필요",
       "newTab": "새 탭",
       "quickCommands": "빠른 명령어",
-      "items": "항목"
+      "items": "항목",
+      "textSize": "텍스트 크기"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "에이전트 기록",
@@ -2528,6 +2708,7 @@
       "copyLoaded": "불러온 내용 복사",
       "copyLoadedSource": "불러온 Markdown 소스 복사",
       "copyPath": "경로 복사",
+      "loading": "문서 로드 중…",
       "copyPathLabel": "Markdown 경로 복사",
       "copySource": "Markdown 소스 복사",
       "discard": "버리기",
@@ -2680,7 +2861,10 @@
     },
     "sheets": {
       "browser": "브라우저",
+      "browserStreamingUnavailable": "이 호스트는 브라우저 탭을 스트리밍할 수 없습니다",
       "chat": "채팅",
+      "cli": "CLI",
+      "cliOnly": "CLI 전용",
       "copyAllAndLeave": "모두 복사 후 나가기",
       "copyDraftsFailed": "초안을 복사하지 못했습니다.",
       "copyNotes": "메모 복사",
@@ -2704,6 +2888,8 @@
       "shortcut": "단축키",
       "terminal": "터미널",
       "terminalWithShell": "터미널: {{shell}}",
+      "linkCopied": "링크를 복사했습니다",
+      "copyLinkFailed": "링크를 복사하지 못했습니다",
       "shellPowerShell": "PowerShell",
       "shellCmd": "CMD 프롬프트",
       "shellGitBash": "Git Bash",
@@ -2783,7 +2969,8 @@
       "browserUnavailable": "아직 브라우저 페이지를 사용할 수 없습니다.",
       "invalidUrl": "올바른 URL을 입력하세요.",
       "noteCreateFailed": "Markdown 노트를 만들지 못했습니다.",
-      "untitledNoteCreateFailed": "제목 없는 Markdown 노트를 만들 수 없습니다."
+      "untitledNoteCreateFailed": "제목 없는 Markdown 노트를 만들 수 없습니다.",
+      "browserStreamingUnavailable": "이 호스트는 브라우저 탭을 스트리밍할 수 없습니다"
     },
     "useDiffComments": {
       "copyNotesFailed": "메모를 복사하지 못했습니다.",
@@ -2799,6 +2986,7 @@
     },
     "useDiffReviewController": {
       "loadFailed": "리뷰를 로드할 수 없습니다.",
+      "commitMissing": "여기서 커밋 파일을 열려면 Orca 앱을 업데이트하세요.",
       "missingWorktree": "워크트리가 없습니다."
     },
     "useDiffReviewDiffLoading": {
@@ -2959,6 +3147,7 @@
       "reattachFiles": "제거한 후 다시 첨부하세요.",
       "recordFailed": "Orca가 이 내용을 채팅 기록에 저장하지 못했습니다.",
       "recordUnreadable": "Orca가 이 채팅의 저장된 상태를 읽지 못했습니다.",
+      "mailOwnerUnconfirmed": "Orca가 이 메시지가 여전히 이 채팅을 대상으로 하는지 확인할 수 없습니다.",
       "reopenChat": "다시 확인하려면 채팅을 다시 여세요.",
       "restartFailed": "에이전트를 다시 시작하지 못했습니다.",
       "runClearWhenDone": "작업이 끝나면 /clear를 실행하세요.",
@@ -3026,18 +3215,76 @@
       "inputPane": "{{title}} · 입력"
     },
     "structuredOpen": {
+      "goneGeneric": "에이전트의 채팅이 더 이상 이 호스트에 없어 여기서 다시 열 수 없습니다.",
+      "unknownGeneric": "이 호스트에서 에이전트의 채팅을 찾을 수 없습니다. 해당 컴퓨터에 다시 연결한 뒤 다시 시도하세요.",
+      "unsupportedGeneric": "Orca를 업데이트하기 전에는 에이전트의 채팅을 다시 열 수 없습니다.",
+      "unreachableGeneric": "에이전트의 채팅을 아직 사용할 수 없습니다. 잠시 후 다시 시도하세요.",
+      "gone": "{{agent}}의 채팅이 더 이상 이 호스트에 없어 여기서 다시 열 수 없습니다.",
+      "unknown": "이 호스트에서 {{agent}}의 채팅을 찾을 수 없습니다. 해당 컴퓨터에 다시 연결한 뒤 다시 시도하세요.",
+      "unsupported": "Orca를 업데이트하기 전에는 {{agent}}의 채팅을 다시 열 수 없습니다.",
+      "unreachable": "{{agent}}의 채팅을 아직 사용할 수 없습니다. 잠시 후 다시 시도하세요.",
+      "paneUnavailable": "에이전트 창을 더 이상 사용할 수 없습니다.",
       "worktreeDeleted": "워크트리가 삭제되었습니다.",
       "projectRemoved": "프로젝트가 Orca에서 제거되었습니다.",
       "folderWorkspaceRemoved": "폴더 워크스페이스가 제거되었습니다."
     },
     "nativeChatView": {
+      "loading": "대화 로드 중…",
       "linkedMessageMissing": "해당 메시지를 찾을 수 없습니다."
+    },
+    "contentState": {
+      "connectingTo": "{{host}}에 연결 중…",
+      "connecting": "연결 중…",
+      "tabsStalled": "탭을 불러오는 데 예상보다 오래 걸리고 있습니다",
+      "tabsAsOf": "{{time}} 기준 탭"
+    },
+    "presentation": {
+      "loadingTabs": "탭 로드 중",
+      "tapToRetry": "{{status}} — 탭하여 다시 시도"
+    },
+    "documentReaders": {
+      "markdownFailed": "Markdown을 불러오지 못했습니다",
+      "diffFailed": "차이점 미리보기를 불러오지 못했습니다",
+      "fileFailed": "파일 미리보기를 불러오지 못했습니다",
+      "outsideWorkspace": "이 파일은 워크스페이스 밖에 있습니다. 데스크톱에서 열어 확인하세요."
+    },
+    "linkActionSheet": {
+      "openInOrca": "Orca 브라우저에서 열기",
+      "openInBrowser": "시스템 브라우저에서 열기",
+      "copyLink": "링크 복사"
+    },
+    "usePrTextAction": {
+      "updateFailed": "PR을 업데이트하지 못했습니다."
+    },
+    "smartKeys": {
+      "always": "항상",
+      "answer": "답변",
+      "background": "백그라운드",
+      "cancel": "취소",
+      "confirm": "확인",
+      "edit": "편집",
+      "history": "기록",
+      "keyLabel": "{{word}}, {{combo}} 보내기",
+      "mode": "모드",
+      "no": "아니요",
+      "queue": "대기열 추가",
+      "reject": "거부",
+      "rewind": "되감기",
+      "sendNow": "지금 보내기",
+      "skip": "건너뛰기",
+      "stop": "중지",
+      "yes": "예"
     },
     "tabsSheet": {
       "needsYou": "확인 필요",
       "working": "작업 중",
       "everythingElse": "기타",
-      "closeTab": "{{title}} 닫기"
+      "closeTab": "{{title}} 닫기",
+      "panes_one": "창 {{count}}개",
+      "panes_other": "창 {{count}}개"
+    },
+    "tabMenu": {
+      "closeTab": "탭 닫기"
     },
     "tabRows": {
       "browser": "브라우저",
@@ -3047,7 +3294,12 @@
       "terminal": "터미널"
     },
     "browserProfile": {
-      "default": "기본"
+      "title": "프로필",
+      "default": "기본",
+      "workspaceDefault": "워크스페이스 기본값"
+    },
+    "orcaCommands": {
+      "desktopOnly": "데스크톱 앱에서 사용할 수 있습니다"
     },
     "tabBar": {
       "oneTab": "탭 1개",
@@ -3057,6 +3309,14 @@
       "next": "다음 탭",
       "previous": "이전 탭",
       "hint": "모든 탭 표시"
+    },
+    "textSizeSheet": {
+      "chatTitle": "채팅 텍스트",
+      "size": "크기",
+      "moreChat": "텍스트 설정 더 보기",
+      "terminalTitle": "터미널 텍스트",
+      "pointsAndColumns": "{{points}} · {{count}}열",
+      "moreTerminal": "터미널 설정 더 보기"
     }
   },
   "settings": {
