@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 
-const { helperRuns } = vi.hoisted(() => ({
-  helperRuns: { count: 0, release: [] as (() => void)[] }
-}))
+const { helperRuns } = vi.hoisted(() => {
+  const release: (() => void)[] = []
+  return { helperRuns: { count: 0, release } }
+})
 
 vi.mock('../../../wsl/execution/wsl-guest-node-helper', () => ({
   runWslGuestNodeHelper: async (args: { helperArgs: readonly string[] }) => {
