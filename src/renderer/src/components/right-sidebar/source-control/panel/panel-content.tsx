@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, type ReactNode } from 'react'
 import { useGitCommitActionsSupport } from '@/runtime/source-control/git/git-commit-actions-capability'
 import { shouldShowSourceControlCompareUnavailableCard } from './header-toolbar'
 import { shouldRenderCommitArea } from '../commit/component-gates'
@@ -11,11 +11,17 @@ import { SourceControlForkPushNotice } from './fork-push-notice'
 import type { SourceControlPanelReadyProps } from './panel-props'
 import { useTranslate } from '@/i18n/use-translate'
 import { CommitScopeFilesStatus } from './commit-scope-files-status'
+import { useSourceControlScope } from './worktree-scope'
+import { cn } from '@/lib/class-names'
 
 const NO_COMMENT_COUNTS = new Map<string, number>()
 
-export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
+export function SourceControlPanelContent({
+  fileListHeader = null,
+  ...props
+}: SourceControlPanelReadyProps & { fileListHeader?: ReactNode }) {
   const { activeWorktree, currentWorktreeId, model, worktreePath } = props
+  const embedded = useSourceControlScope() !== null
   const t = useTranslate()
   const commitFilesHeaderRef = useRef<HTMLButtonElement>(null)
   const {
@@ -96,6 +102,9 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
       : null
   // A commit's files still loading must not read as "No matching files" under a filter.
   const commitFilesPending = scopeKind === 'commit' && currentCommitFiles?.status !== 'ready'
+  const commitSurfaceShown =
+    scopeKind !== 'commit' &&
+    shouldRenderCommitArea(unresolvedConflicts.length, conflictOperation, recovery.supported)
   const showGenericEmptyState =
     scopeKind === 'all' &&
     statusReadError === undefined &&
@@ -141,14 +150,21 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
       {/* Keep CommitArea through clean/mid-commit states (#1448); only active conflict operations replace the action surface. */}
       <SourceControlForkPushNotice pushTarget={activeWorktree.pushTarget ?? null} />
 
-      {scopeKind !== 'commit' &&
-        shouldRenderCommitArea(
-          unresolvedConflicts.length,
-          conflictOperation,
-          recovery.supported
-        ) && (
-          <SourceControlCommitSurface {...props} showGenericEmptyState={showGenericEmptyState} />
-        )}
+      {commitSurfaceShown && (
+        <SourceControlCommitSurface {...props} showGenericEmptyState={showGenericEmptyState} />
+      )}
+
+      {fileListHeader ? (
+        <div
+          className={cn(
+            // Sticky in the selected panel so its tools stay in reach while the list scrolls.
+            !embedded && 'sticky top-0 z-10 bg-sidebar',
+            commitSurfaceShown && 'border-t border-border'
+          )}
+        >
+          {fileListHeader}
+        </div>
+      ) : null}
 
       {hasFilteredUncommittedEntries && (
         <SourceControlUncommittedSections

@@ -229,7 +229,7 @@ describe('SourceControlChangeScopeBar menu', () => {
 })
 
 describe('SourceControlChangeScopeBar summary and Open diff', () => {
-  it('opens the whole scope for All changes and links the commit count to the menu', async () => {
+  it('opens the whole scope for All changes', () => {
     const calls = renderBar()
     fireEvent.click(screen.getByTestId('source-control-change-scope-open-diff'))
     expect(calls.openAllDiffs).toHaveBeenCalledWith(
@@ -242,13 +242,6 @@ describe('SourceControlChangeScopeBar summary and Open diff', () => {
         wholeScope: true
       }
     )
-    fireEvent.click(screen.getByRole('button', { name: '1 commit' }))
-    expect(await screen.findByRole('menu')).toBeTruthy()
-  })
-
-  it('hides the commit count when nothing is ahead', () => {
-    renderBar({ summary: { ...READY, commitsAhead: 0 } })
-    expect(screen.queryByRole('button', { name: /commit/ })).toBeNull()
   })
 
   it('waits for branch compare instead of opening a partial All changes diff', () => {

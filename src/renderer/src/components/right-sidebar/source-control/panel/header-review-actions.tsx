@@ -56,9 +56,7 @@ export function CreatePrHeaderButton({
         >
           {isCreatePrIntentInFlight || isCreatingPr ? (
             <Loader2 className="size-3.5 animate-spin" />
-          ) : (
-            <GitPullRequestArrow className="size-3.5" aria-hidden="true" />
-          )}
+          ) : null}
           {action.label}
         </Button>
       </span>

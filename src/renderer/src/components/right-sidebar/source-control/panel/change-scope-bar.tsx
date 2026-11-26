@@ -1,6 +1,7 @@
 import React, { useRef } from 'react'
 import { ChevronDown, FileDiff, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/class-names'
 import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
@@ -14,6 +15,11 @@ import {
   type SourceControlChangeScope
 } from './change-scope'
 import type { SourceControlPanelReadyProps } from './panel-props'
+import {
+  SourceControlFilterRow,
+  SourceControlFilterToggle,
+  type SourceControlFileFilterProps
+} from './file-filter-controls'
 
 function fileCountLabel(t: Translate, count: number): string {
   return t('auto.components.right.sidebar.SourceControl.scopeFileCount', '{{count}} files', {
@@ -41,18 +47,16 @@ function uncommittedScopeDetail(t: Translate, files: number): string {
     : t('auto.components.right.sidebar.SourceControl.scopeNone', 'None')
 }
 
-function LineCounts({ added, removed }: { added: number; removed: number }): React.JSX.Element {
-  return (
-    <>
-      {' '}
-      <span className="font-mono text-3xs text-[color:var(--git-decoration-added)]">
-        +{added}
-      </span>{' '}
-      <span className="font-mono text-3xs text-[color:var(--git-decoration-deleted)]">
-        −{removed}
-      </span>
-    </>
-  )
+function scopeCountTitle(
+  t: Translate,
+  files: number,
+  lines: { added: number; removed: number } | null,
+  locale: string
+): string {
+  const fileLabel = fileCountLabel(t, files)
+  return lines && files > 0
+    ? `${fileLabel} · +${lines.added.toLocaleString(locale)} −${lines.removed.toLocaleString(locale)}`
+    : fileLabel
 }
 
 function scopeTriggerLabel(t: Translate, scope: SourceControlChangeScope): string {
@@ -68,11 +72,22 @@ export function SourceControlChangeScopeBar({
   currentWorktreeId,
   worktreePath,
   model,
-  graphSupported
-}: SourceControlPanelReadyProps & { graphSupported: boolean }): React.JSX.Element {
+  graphSupported,
+  filter,
+  graphControl,
+  overflowMenu
+}: SourceControlPanelReadyProps & {
+  graphSupported: boolean
+  /** Null where a folder card's header owns the filter toggle and its row. */
+  filter?: SourceControlFileFilterProps | null
+  graphControl?: React.ReactNode
+  overflowMenu?: React.ReactNode
+}): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const scopeTriggerRef = useRef<HTMLButtonElement>(null)
+  // The toggle remounts when the filter row closes; focus returns to it on Escape or clear.
+  const restoreFilterToggleFocus = useRef(false)
   const {
     branchEntries,
     branchLineTotal,
@@ -160,7 +175,10 @@ export function SourceControlChangeScopeBar({
       type="button"
       variant="outline"
       size="xs"
-      className="aria-disabled:cursor-default @max-[260px]/change-scope:w-6"
+      className={cn(
+        'aria-disabled:cursor-default',
+        !(openDiffDisabled && !branchCompareLoading) && 'mx-0.5'
+      )}
       disabled={openDiffDisabled && !branchCompareLoading}
       // Stays focusable while loading so the tooltip can say why.
       aria-disabled={branchCompareLoading || undefined}
@@ -169,7 +187,7 @@ export function SourceControlChangeScopeBar({
       data-testid="source-control-change-scope-open-diff"
     >
       <FileDiff className="size-3.5" />
-      <span className="@max-[260px]/change-scope:hidden">{openDiffLabel}</span>
+      {t('auto.components.right.sidebar.SourceControl.scopeDiffButton', 'Diff')}
     </Button>
   )
   const showAllLabel = t(
@@ -177,97 +195,118 @@ export function SourceControlChangeScopeBar({
     'Show all changes'
   )
   const scopeLabel = scopeTriggerLabel(t, changeScope)
+  const commitMeta =
+    changeScope.kind === 'commit' ? commitMetaLine(changeScope.commit, intlLocale) : null
+  const countTitle = scoped ? scopeCountTitle(t, scoped.files, scoped.lines, intlLocale) : null
   return (
     <DropdownMenu open={changeScopeMenuOpen} onOpenChange={setChangeScopeMenuOpen}>
       <div
-        className="@container/change-scope flex shrink-0 flex-col gap-1 border-b border-border py-1.5"
+        className="@container/change-scope flex h-[34px] shrink-0 items-center px-3"
         data-testid="source-control-change-scope"
       >
-        <div className="flex min-w-0 items-center gap-1 px-2.5">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  ref={scopeTriggerRef}
-                  type="button"
-                  variant="outline"
-                  size="xs"
-                  className="min-w-0 shrink justify-start"
-                  data-testid="source-control-change-scope-trigger"
-                >
-                  <span className="min-w-0 truncate">{scopeLabel}</span>
-                  <ChevronDown className="size-3 text-muted-foreground" />
-                </Button>
-              </DropdownMenuTrigger>
-            </TooltipTrigger>
-            {changeScope.kind === 'commit' ? (
-              <TooltipContent className="max-w-xs break-words">{scopeLabel}</TooltipContent>
-            ) : null}
-          </Tooltip>
-          {changeScope.kind !== 'all' ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={showAllLabel}
-                  onClick={() => {
-                    scopeTriggerRef.current?.focus()
-                    setChangeScope(ALL_CHANGES_SCOPE)
-                  }}
-                >
-                  <X className="size-3" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{showAllLabel}</TooltipContent>
-            </Tooltip>
-          ) : null}
-          <div className="ml-auto flex shrink-0">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                {openDiffDisabled && !branchCompareLoading ? (
-                  <span className="inline-flex">{openDiffButton}</span>
-                ) : (
-                  openDiffButton
-                )}
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                {branchCompareLoading
-                  ? t(
-                      'auto.components.right.sidebar.SourceControl.scopeLoadingBranchChanges',
-                      'Loading branch changes…'
-                    )
-                  : openDiffLabel}
-              </TooltipContent>
-            </Tooltip>
+        {filter?.filterExpanded ? (
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+            <SourceControlFilterRow
+              {...filter}
+              onCollapsed={() => {
+                restoreFilterToggleFocus.current = true
+              }}
+            />
           </div>
-        </div>
-        <div className="truncate px-2.5 text-2xs text-muted-foreground">
-          {changeScope.kind === 'commit'
-            ? `${commitMetaLine(changeScope.commit, intlLocale)} · `
-            : null}
-          {scoped ? (
-            <>
-              {fileCountLabel(t, scoped.files)}
-              {scoped.lines && scoped.files > 0 ? (
-                <LineCounts added={scoped.lines.added} removed={scoped.lines.removed} />
+        ) : (
+          <div className="flex min-w-0 flex-1 items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    ref={scopeTriggerRef}
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    // Pull the label onto the panel's 12px edge; the hover fill uses the padding.
+                    className="-ml-1 min-w-0 shrink justify-start px-1 text-foreground"
+                    data-testid="source-control-change-scope-trigger"
+                  >
+                    <span className="min-w-0 truncate">{scopeLabel}</span>
+                    <ChevronDown className="size-3 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              {commitMeta ? (
+                <TooltipContent className="max-w-xs break-words">
+                  {scopeLabel}
+                  <div className="text-muted-foreground">{commitMeta}</div>
+                </TooltipContent>
               ) : null}
-            </>
-          ) : null}
-          {changeScope.kind === 'all' && commitsAhead > 0 ? (
-            <>
-              {' · '}
-              <button
-                type="button"
-                className="rounded-sm text-foreground underline underline-offset-2 outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring"
-                onClick={() => setChangeScopeMenuOpen(true)}
+            </Tooltip>
+            {changeScope.kind !== 'all' ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className="-ml-1 shrink-0"
+                    aria-label={showAllLabel}
+                    onClick={() => {
+                      scopeTriggerRef.current?.focus()
+                      setChangeScope(ALL_CHANGES_SCOPE)
+                    }}
+                  >
+                    <X className="size-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{showAllLabel}</TooltipContent>
+              </Tooltip>
+            ) : null}
+            {scoped && countTitle ? (
+              <span
+                className="shrink-0 text-2xs tabular-nums text-muted-foreground @max-[226px]/change-scope:hidden"
+                title={countTitle}
+                data-testid="source-control-change-scope-count"
               >
-                {commitCountLabel(t, commitsAhead)}
-              </button>
-            </>
-          ) : null}
-        </div>
+                <span aria-hidden="true">{scoped.files.toLocaleString(intlLocale)}</span>
+                <span className="sr-only">{countTitle}</span>
+              </span>
+            ) : null}
+            {commitMeta ? <span className="sr-only">{commitMeta}</span> : null}
+            <div className="ml-auto flex shrink-0 items-center">
+              {filter ? (
+                <SourceControlFilterToggle
+                  {...filter}
+                  embedded={false}
+                  className="size-5"
+                  ref={(node: HTMLButtonElement | null) => {
+                    if (node && restoreFilterToggleFocus.current) {
+                      restoreFilterToggleFocus.current = false
+                      node.focus()
+                    }
+                  }}
+                />
+              ) : null}
+              {graphControl}
+              {/* Disabled buttons swallow pointer events, so a wrapper carries the tooltip. */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  {openDiffDisabled && !branchCompareLoading ? (
+                    <span className="mx-0.5 inline-flex">{openDiffButton}</span>
+                  ) : (
+                    openDiffButton
+                  )}
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>
+                  {branchCompareLoading
+                    ? t(
+                        'auto.components.right.sidebar.SourceControl.scopeLoadingBranchChanges',
+                        'Loading branch changes…'
+                      )
+                    : openDiffLabel}
+                </TooltipContent>
+              </Tooltip>
+              {overflowMenu}
+            </div>
+          </div>
+        )}
       </div>
       {/* An open menu always has both summaries; the checks only narrow their types. */}
       {changeScopeMenuOpen && all && uncommitted ? (
