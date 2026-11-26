@@ -26,6 +26,8 @@ import { claudeStreamJsonExitError } from './sdk-transport/claude-stream-json-ex
 import { withObservedProviderExit } from '../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import type { ProviderProcessCloseOptions } from '../provider-process/provider-process-close'
 import { withLostProviderOutcome } from '../provider-process/provider-process-exit-status'
+import { createClaudeForkedCommandLiveFrames } from './subagents/claude-forked-command-live-frames'
+import { createClaudeReadingBarrier } from './sdk-transport/claude-reading-barrier'
 
 /** Bound output draining after proven exit so inherited pipes cannot hold close open. */
 export const CLAUDE_READER_DRAIN_AFTER_EXIT_MS = 2_000
@@ -110,6 +112,14 @@ export async function openClaudeStreamJsonConnection(
     })
   )
   const inbox = createClaudeUserMessageQueue()
+  const reading = createClaudeReadingBarrier(
+    () => closing || managed?.rootVerdict === 'exited' || terminalError !== null
+  )
+  const { pauseReading, resumeReading, waitUntilReadable } = reading
+  const forkedCommands = createClaudeForkedCommandLiveFrames(
+    (message) => handlers.onMessage?.(message),
+    reading
+  )
   const session = (queryImpl ?? query)({
     prompt: inbox.messages,
     options: {
@@ -118,6 +128,7 @@ export async function openClaudeStreamJsonConnection(
       env: withOrcaClaudeChatEntrypoint(env, process.platform),
       pathToClaudeCodeExecutable: launch.pathToClaudeCodeExecutable,
       spawnClaudeCodeProcess: spawner.spawn,
+      hooks: forkedCommands.hooks,
       ...(handlers.canUseTool ? { canUseTool: handlers.canUseTool } : {}),
       ...(handlers.onUserDialog ? { onUserDialog: handlers.onUserDialog } : {})
     }
@@ -133,23 +144,6 @@ export async function openClaudeStreamJsonConnection(
   let faultReported = false
   let exitReported = false
   let closePromise: Promise<boolean> | null = null
-  let readingBarrier: Promise<void> | null = null
-  let releaseReadingBarrier: (() => void) | null = null
-  const pauseReading = (): void => {
-    if (closing || managed.rootVerdict === 'exited' || terminalError || readingBarrier) {
-      return
-    }
-    readingBarrier = new Promise<void>((resolve) => {
-      releaseReadingBarrier = resolve
-    })
-  }
-  const resumeReading = (): void => {
-    const release = releaseReadingBarrier
-    readingBarrier = null
-    releaseReadingBarrier = null
-    release?.()
-  }
-  const waitUntilReadable = (): Promise<void> => readingBarrier ?? Promise.resolve()
   // Share descendant evidence across close retries and fault cleanup.
   const rootSettled = (): boolean => managed.rootVerdict === 'exited'
   const tree = createClaudeChildTreeReaper(child, {
@@ -225,7 +219,7 @@ export async function openClaudeStreamJsonConnection(
           if (!isRecord(next.value)) {
             throw new Error('claude stream-json yielded a non-object message')
           }
-          handlers.onMessage?.(next.value)
+          handlers.onMessage?.(forkedCommands.observe(next.value))
         }
       } finally {
         if (!completed) {
