@@ -4,8 +4,10 @@ import {
   disablePlugin,
   enablePlugin,
   installOrcaStatusConfig,
+  removeOrcaStatusConfig,
   updateConfigContent
 } from './hermes-config-yaml'
+import { HERMES_CLIENT_ENV_PASSTHROUGH } from './hermes-managed-plugin-source'
 
 const fixture = [
   '# Operator documentation',
@@ -88,6 +90,40 @@ describe('Hermes YAML document edits', () => {
     const output = updateConfigContent(input, enablePlugin)
     expect(output.content).toBeNull()
     expect(output.detail).toBeTruthy()
+  })
+
+  // Hermes reads a key with no value as unset, e.g. a section whose only child is commented out.
+  it.each([
+    'plugins:\n  # clone_timeout_seconds: 300\nmodel: "001"\n',
+    'plugins: # none yet',
+    'plugins:\n  enabled:\n    # - other\n  disabled:\n',
+    'plugins:\r\n  custom: "off"\r\n  enabled:\r\nterminal:\r\n',
+    'terminal:\n  backend: local\n  client_env_passthrough: # e.g. GEM_HOME\n',
+    'plugins: ~ # none\nterminal:\n  client_env_passthrough: null\n',
+    '{plugins: {custom: "off", enabled: }, terminal: }\n',
+    '{plugins: # none\n}\n',
+    '{\n  plugins: {custom: "off", enabled: # ours\n  },\n  terminal: # env\n}\n',
+    'plugins:\r\n  ~\r\nterminal:\r\n  client_env_passthrough: NULL\r\n'
+  ])('fills a key that has no value as if it were absent (%j)', (input) => {
+    const installed = updateConfigContent(input, installOrcaStatusConfig)
+    expect(installed.detail).toBeUndefined()
+    const output = installed.content ?? ''
+    const parsed = parse(input)
+    const withLists = (enabled: string[], passthrough: readonly string[]) => ({
+      ...parsed,
+      plugins: { ...parsed.plugins, enabled },
+      terminal: { ...parsed.terminal, client_env_passthrough: passthrough }
+    })
+    expect(parse(output)).toEqual(withLists(['orca-status'], HERMES_CLIENT_ENV_PASSTHROUGH))
+    for (const comment of input.match(/#[^\r\n]*/g) ?? []) {
+      expect(output).toContain(comment)
+    }
+    expect(output).not.toMatch(/[ \t]\r?$/m)
+    if (input.includes('\r\n')) {
+      expect(output.replaceAll('\r\n', '')).not.toContain('\n')
+    }
+    const removed = updateConfigContent(output, removeOrcaStatusConfig).content ?? ''
+    expect(parse(removed)).toEqual(withLists([], []))
   })
 
   it('adds the passthrough beside an anchored terminal setting', () => {

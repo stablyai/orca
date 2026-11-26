@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from 'node:util'
-import { Document, isMap, isNode, isSeq, parseDocument } from 'yaml'
+import { Document, isMap, isNode, isScalar, isSeq, parseDocument } from 'yaml'
 import type { Node, YAMLMap, YAMLSeq } from 'yaml'
 
 type SourceEdit = { start: number; end: number; text: string }
@@ -27,6 +27,53 @@ function requireRange(node: unknown): [number, number, number] {
   return node.range
 }
 
+function requirePair(map: YAMLMap, key: string) {
+  const pair = map.items.find((item) => isNode(item.key) && item.key.toJSON() === key)
+  if (!pair) {
+    throw new Error(`Missing Hermes YAML key: ${key}`)
+  }
+  return pair
+}
+
+/** An empty, `~` or `null` key, e.g. `plugins:` with its only child commented out; Hermes reads it as unset. */
+export function isUnsetHermesValue(node: unknown): boolean {
+  return isScalar(node) && node.value === null && !node.anchor && !node.tag
+}
+
+/** Gives `key`, which has no value, its new one: inline in a flow mapping, else on the lines below the key. */
+function fillUnsetValue(
+  source: string,
+  printed: string,
+  parent: YAMLMap,
+  key: string,
+  value: Node
+): SourceEdit {
+  const pair = requirePair(parent, key)
+  const [start, end] = requireRange(pair.value)
+  if (parent.flow) {
+    // JSON is valid flow YAML; a comment right after the value needs a space before its `#`.
+    const text = `${JSON.stringify(value.toJSON())}${source[end] === '#' ? ' ' : ''}`
+    return { start, end, text: source[start - 1] === ':' ? ` ${text}` : text }
+  }
+  const valueRange = requireRange(value)
+  const column = columnAt(source, requireRange(pair.key)[0]) + 2
+  const fragment = printed.slice(valueRange[0], valueRange[1]).replace(/\n$/, '')
+  // Below the key's own line, so a comment that ends it stays where it is; a spelled-out null goes.
+  const lineEnd = source.indexOf('\n', end)
+  const stop = lineEnd === -1 ? source.length : lineEnd
+  const position = source[stop - 1] === '\r' ? stop - 1 : stop
+  const rest = source.slice(end, position)
+  const spelledOut = end > start
+  // Without a comment after it, the spelled-out null's leading whitespace goes too.
+  const from = spelledOut && !rest.trim() ? source.slice(0, start).trimEnd().length : start
+  const lineTail = spelledOut ? rest.trimStart() : rest
+  return {
+    start: from,
+    end: position,
+    text: `${lineTail}\n${' '.repeat(column)}${indentFragment(fragment, column - columnAt(printed, valueRange[0]))}`
+  }
+}
+
 function insertPair(
   source: string,
   printed: string,
@@ -35,10 +82,7 @@ function insertPair(
   key: string,
   enclosing: YAMLMap = parent
 ): SourceEdit {
-  const pair = updated.items.find((item) => isNode(item.key) && item.key.toJSON() === key)
-  if (!pair) {
-    throw new Error(`Missing Hermes YAML key: ${key}`)
-  }
+  const pair = requirePair(updated, key)
   const keyRange = requireRange(pair.key)
   const valueRange = requireRange(pair.value)
   const parentRange = requireRange(parent)
@@ -120,6 +164,8 @@ function applySectionEdits(
   const edits: SourceEdit[] = []
   if (section === undefined) {
     edits.push(insertPair(source, printed, original.contents, updatedRoot, sectionKey))
+  } else if (isUnsetHermesValue(section)) {
+    edits.push(fillUnsetValue(source, printed, original.contents, sectionKey, updatedSection))
   } else {
     if (!isMap(section)) {
       throw new Error(`Unexpected Hermes ${sectionKey} mapping`)
@@ -132,6 +178,11 @@ function applySectionEdits(
       }
       if (previous === undefined) {
         edits.push(insertPair(source, printed, section, updatedSection, key, original.contents))
+      } else if (isUnsetHermesValue(previous)) {
+        // A list key the update left unset reads back as the same null.
+        if (isSeq(next)) {
+          edits.push(fillUnsetValue(source, printed, section, key, next))
+        }
       } else if (isNode(previous) && !isDeepStrictEqual(previous.toJSON(), next.toJSON())) {
         const edited = document.createNode(document.getIn([sectionKey, key], true))
         if (!isSeq(edited)) {
