@@ -1258,7 +1258,6 @@
       "labelWithHint": "{{label}} — {{hint}}",
       "pairingInvalid": "Appairage invalide — refaites l'appairage avec votre ordinateur",
       "relayAccessRefreshDetail": "Connectez-vous une fois sur le même réseau que {{host}} pour renouveler l'accès Relay. Si Relay refuse encore, refaites l'appairage",
-      "rePairDetail": "Refaites l'appairage avec votre ordinateur",
       "reconnecting": "Reconnexion…",
       "relayAccessRefused": "Relay a refusé l'accès pour {{host}}",
       "relayConnectFailed": "Connexion impossible via Relay",

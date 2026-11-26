@@ -2081,7 +2081,6 @@
       "labelWithHint": "{{label}} — {{hint}}",
       "pairingInvalid": "Сопряжение недействительно — повторите сопряжение с компьютером",
       "relayAccessRefreshDetail": "Подключитесь один раз в той же сети, что и {{host}}, чтобы обновить доступ к Relay. Если Relay по-прежнему отказывает, повторите сопряжение",
-      "rePairDetail": "Повторно выполните сопряжение с компьютером",
       "reconnecting": "Повторное подключение…",
       "relayAccessRefused": "Relay отказал в доступе для {{host}}",
       "relayConnectFailed": "Не удаётся подключиться через Relay",

@@ -1,5 +1,4 @@
 import { isTailscaleEndpoint } from '../../../../src/shared/remote-runtime/remote-runtime-tailscale-hint'
-import { isLinkLocalEndpoint } from '../../../../src/shared/network/link-local-address'
 import { translate } from '../../i18n/mobile-i18n'
 import type { RelayHostReachability } from '../relay/relay-host-reachability'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
@@ -20,8 +19,7 @@ export function isEarlyConnectRetry(
 }
 
 // Relay verdicts describe the desktop directly; Tailscale advice would misdiagnose offline/signed-out hosts.
-// A link-local endpoint is never dialed, so only re-pairing can refresh its Relay access.
-function relayHostCopy(directRefreshUnavailable: boolean): Record<
+function relayHostCopy(): Record<
   Exclude<RelayHostReachability, 'connecting'>,
   {
     kind: 'warning' | 'unreachable'
@@ -64,13 +62,11 @@ function relayHostCopy(directRefreshUnavailable: boolean): Record<
           }
         ),
       detail: (host) =>
-        directRefreshUnavailable
-          ? translate('connection.connectionHealth.rePairDetail', 'Re-pair with your desktop')
-          : translate(
-              'connection.connectionHealth.relayAccessRefreshDetail',
-              'Connect once on the same network as {{host}} to refresh Relay access. If Relay still refuses, re-pair',
-              { host }
-            )
+        translate(
+          'connection.connectionHealth.relayAccessRefreshDetail',
+          'Connect once on the same network as {{host}} to refresh Relay access. If Relay still refuses, re-pair',
+          { host }
+        )
     },
     // Cell reachability failure says nothing about desktop health, so keep it amber.
     unreachable: {
@@ -145,7 +141,7 @@ export function classifyConnection(args: {
   // Revoked pairing outranks sign-in advice; explicit relay verdicts must survive a cleared pending path.
   const reachability = args.relayHostReachability ?? 'connecting'
   if (reachability !== 'connecting') {
-    const copy = relayHostCopy(isLinkLocalEndpoint(args.endpoint ?? ''))[reachability]
+    const copy = relayHostCopy()[reachability]
     return copy.kind === 'warning'
       ? { kind: 'warning', label: copy.label(host), detail: copy.detail(host), relay: reachability }
       : {

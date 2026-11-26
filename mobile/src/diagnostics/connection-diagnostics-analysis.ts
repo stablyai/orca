@@ -1,5 +1,4 @@
 import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime/remote-runtime-tailscale-hint'
-import { isLinkLocalEndpoint } from '../../../src/shared/network/link-local-address'
 import {
   relayHostReachabilityForCloseCode,
   type RelayHostReachabilityFromCloseCode
@@ -57,7 +56,7 @@ function diagnoseFailure(
   if (/relay director resolve failed \(401\)/i.test(evidence)) {
     return {
       likelyCause: 'Relay rejected the saved resume credential.',
-      nextStep: credentialRefusedNextStep(args.endpoint),
+      nextStep: RELAY_DIAL_ADVICE['credential-refused'].nextStep,
       reportability: 'none'
     }
   }
@@ -72,7 +71,7 @@ function diagnoseFailure(
   }
 
   // After the director branches: a director error also arrives as a relay dial failure.
-  const relayDial = relayDialFailure(failure, args.endpoint)
+  const relayDial = relayDialFailure(failure)
   if (relayDial) {
     return relayDial
   }
@@ -193,17 +192,7 @@ const RELAY_DIAL_ADVICE: Record<
 }
 
 // The relay code names desktop state; a direct timeout may only mean the phone is off LAN. Neither cause is reportable as a relay fault.
-// A link-local endpoint is never dialed, so only re-pairing can refresh its Relay access.
-function credentialRefusedNextStep(endpoint: string): string {
-  return isLinkLocalEndpoint(endpoint)
-    ? 'Re-pair this phone with the desktop.'
-    : RELAY_DIAL_ADVICE['credential-refused'].nextStep
-}
-
-function relayDialFailure(
-  failure: ConnectionLogEntry | undefined,
-  endpoint: string
-): ConnectionDiagnosis | null {
+function relayDialFailure(failure: ConnectionLogEntry | undefined): ConnectionDiagnosis | null {
   if (failure?.code !== 'relay-dial-failed') {
     return null
   }
@@ -220,9 +209,7 @@ function relayDialFailure(
     failure.relayCredentialRejected === true
   )
   const advice = RELAY_DIAL_ADVICE[reachability]
-  const nextStep =
-    reachability === 'credential-refused' ? credentialRefusedNextStep(endpoint) : advice.nextStep
-  return { likelyCause: advice.likelyCause(code), nextStep, reportability: 'none' }
+  return { likelyCause: advice.likelyCause(code), nextStep: advice.nextStep, reportability: 'none' }
 }
 
 // Prefer current-window failures, then mark older evidence stale; frequent iOS resumes must not erase the only known cause.
