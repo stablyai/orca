@@ -4,7 +4,11 @@ import { getUtf8ByteLength } from '../../shared/text/utf8-byte-limits'
 import { watchImDeliveryTurns } from './im-stream-delivery-turn'
 import type { ImJournal } from './im-stream-follow'
 import { ImLiveStream } from './im-stream-live'
-import { sendImParts, type ImDeliveryGuarantee } from './im-stream-part-delivery'
+import {
+  sendImParts,
+  type ImDeliveryGuarantee,
+  type ImPartsProgress
+} from './im-stream-part-delivery'
 import { imAnswerText, maskImText } from './im-stream-mask'
 import { IM_PART_LABEL, splitImPieces, splitImText, type ImTextLimit } from './im-stream-parts'
 import {
@@ -383,7 +387,7 @@ describe('following a turn', () => {
 class Unanswered extends Error {}
 
 function partsLog() {
-  const progress = { sent: 0, sending: null as number | null }
+  const progress: ImPartsProgress = { sent: 0, sending: null }
   const events: string[] = []
   return {
     progress,
