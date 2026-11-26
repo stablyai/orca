@@ -21040,6 +21040,7 @@
       "antigravityAuth": {
         "chipLabel": "Antigravity se connecte via {{method}}. Modifier",
         "chipTooltip": "Google · {{method}}",
+        "signedOutMethod": "{{method}}, déconnecté",
         "menuTitle": "Antigravity se connecte via",
         "detected": "Détecté",
         "settings": "Paramètres de connexion…",

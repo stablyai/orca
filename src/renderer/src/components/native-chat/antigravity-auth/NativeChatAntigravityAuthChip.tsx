@@ -43,6 +43,11 @@ export function NativeChatAntigravityAuthChip(): React.JSX.Element | null {
       )
     : null
   const signedOut = isAntigravityGoogleMethod(chatMethod) && auth.detection?.agySignedOut === true
+  const status = signedOut
+    ? t('components.native-chat.antigravityAuth.signedOutMethod', '{{method}}, signed out', {
+        method: shown
+      })
+    : shown
   const newChatsDiffer = chatMethod !== method
   return (
     <DropdownMenu onOpenChange={(open) => open && auth.refresh()}>
@@ -59,7 +64,7 @@ export function NativeChatAntigravityAuthChip(): React.JSX.Element | null {
               aria-label={t(
                 'components.native-chat.antigravityAuth.chipLabel',
                 'Antigravity signs in with {{method}}. Change',
-                { method: shown }
+                { method: status }
               )}
             >
               {auth.switching ? (
@@ -76,10 +81,10 @@ export function NativeChatAntigravityAuthChip(): React.JSX.Element | null {
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent side="top" sideOffset={4} className="max-w-64">
+        <TooltipContent side="top" sideOffset={4} className="max-w-80">
           <span className="block truncate">
             {t('components.native-chat.antigravityAuth.chipTooltip', 'Google · {{method}}', {
-              method: shown
+              method: status
             })}
           </span>
         </TooltipContent>

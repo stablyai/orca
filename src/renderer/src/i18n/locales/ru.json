@@ -21693,6 +21693,7 @@
       "antigravityAuth": {
         "chipLabel": "Способ входа в Antigravity: {{method}}. Изменить",
         "chipTooltip": "Google · {{method}}",
+        "signedOutMethod": "{{method}}, вход не выполнен",
         "menuTitle": "Способ входа в Antigravity",
         "detected": "Обнаружено",
         "settings": "Настройки входа…",
