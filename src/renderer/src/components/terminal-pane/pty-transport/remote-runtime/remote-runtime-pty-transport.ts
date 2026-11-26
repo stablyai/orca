@@ -1,10 +1,7 @@
 import type { TerminalOutputCadence } from '../../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { webTerminalPlacementParentTabId } from '@/runtime/hosted-terminals/placement/web-session-terminal-placement'
-import {
-  terminalAgentCreateLaunchParams,
-  withLegacyHermesExecutable
-} from '@/runtime/hosted-terminals/creation/terminal-agent-create-launch-params'
+import { terminalAgentCreateLaunchParams } from '@/runtime/hosted-terminals/creation/terminal-agent-create-launch-params'
 import { pairedAgentLaunchInputs } from '@/lib/agent-session/launch/routing/paired-agent-launch-inputs'
 import {
   agentSessionCreateCapabilities,
@@ -3740,17 +3737,7 @@ export function createRemoteRuntimePtyTransport(
           legacyCreateParams.launchConfig = plan.launchConfig
           legacyCreateParams.startupCommandDelivery = plan.startupCommandDelivery
         }
-        const launchParams = {
-          ...legacyCreateParams,
-          ...legacyLaunchParams
-        }
-        const params = launchParams.hermesStartupQueryArgv
-          ? await withLegacyHermesExecutable(
-              launchParams,
-              createEnvironmentId,
-              currentPaneRevision()
-            )
-          : launchParams
+        const params = { ...legacyCreateParams, ...legacyLaunchParams }
         const result = await createWithUnknownOutcomeRecovery(
           'terminal',
           (timeoutMs, reconcileExisting) =>

@@ -1,5 +1,4 @@
 import { buildLegacyAgentCreateTerminalParams } from './web-runtime-legacy-agent-create-params'
-import { withLegacyHermesExecutable } from './terminal-agent-create-launch-params'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
 import { createAgentSessionTerminalOptions } from './agent-launch/agent-session-terminal-options'
 import { publishedTerminalColorQueryReplyColors } from '../../../components/terminal-pane/appearance/terminal-view-attributes-publisher'
@@ -180,16 +179,13 @@ export async function createWebRuntimeSessionTerminalResult(
           : {}),
         legacy: async () => {
           const legacyAgentLaunch = await args.legacyAgentLaunch?.()
-          const params = buildLegacyAgentCreateTerminalParams(
-            args,
-            legacyAgentLaunch,
-            args.trustWorktreeId ? await trustOptions(environmentId) : {}
-          )
           const response = await callEnvironment({
             method: 'session.tabs.createTerminal',
-            params: params.hermesStartupQueryArgv
-              ? await withLegacyHermesExecutable(params, environmentId, intentOwner.pairingRevision)
-              : params,
+            params: buildLegacyAgentCreateTerminalParams(
+              args,
+              legacyAgentLaunch,
+              args.trustWorktreeId ? await trustOptions(environmentId) : {}
+            ),
             timeoutMs: 15_000
           })
           const legacyCreated = unwrapRuntimeRpcResult(
