@@ -108,18 +108,16 @@ export function recordReceivedWebSessionTabsSnapshot(
   const key = sessionTabsFreshnessKey(environmentId, snapshot.worktree)
   const current = latestReceivedSessionTabsSnapshotByWorktree.get(key)
   // A late bootstrap can supply chat candidates without changing receipt or publisher history.
-  const lateBootstrap = source === 'bootstrap' && current && frame < current.receivedFrame
-  if (
-    runtimeId &&
-    !(lateBootstrap
-      ? isCurrentSessionTabsRuntimeFrame(environmentId, runtimeId)
-      : acceptSessionTabsRuntimeId(environmentId, runtimeId, frame))
-  ) {
+  if (source === 'bootstrap' && current && frame < current.receivedFrame) {
+    if (censusMember) {
+      recordWebSessionTabsReplyCandidates(environmentId, snapshot, frame, runtimeId)
+    }
     return frame
   }
-  if (!lateBootstrap) {
-    recordReceivedWebSessionTabsEnvironmentFrame(environmentId, frame)
+  if (runtimeId && !acceptSessionTabsRuntimeId(environmentId, runtimeId, frame)) {
+    return frame
   }
+  recordReceivedWebSessionTabsEnvironmentFrame(environmentId, frame)
   const publicationEpoch = snapshot.publicationEpoch
   const isRetraction = 'removed' in snapshot && snapshot.removed === true
   const history = sessionTabsPublicationEpochHistoryByWorktree.get(key)
@@ -128,7 +126,7 @@ export function recordReceivedWebSessionTabsSnapshot(
     return frame
   }
   // Unchanged reconnect frames may be filtered before apply; check held closes at receipt, but only authoritative worktree evidence can settle presence.
-  if (!lateBootstrap && !isRetraction && hostSnapshotAffirmsWorktreeContents(snapshot)) {
+  if (!isRetraction && hostSnapshotAffirmsWorktreeContents(snapshot)) {
     replayWebSessionClosesDueForSnapshot(
       environmentId,
       snapshot,
@@ -137,7 +135,6 @@ export function recordReceivedWebSessionTabsSnapshot(
   }
   // Retraction/unpublished placeholders are no takeover; noting them current retires and locks out the still-live publisher.
   if (
-    !lateBootstrap &&
     !isRetraction &&
     hostSnapshotAffirmsWorktreeContents(snapshot) &&
     (!history || history.current !== publicationEpoch)
@@ -146,27 +143,30 @@ export function recordReceivedWebSessionTabsSnapshot(
   }
   // Stream receipt order wins even if host versions regress; bootstrap lists retain version/epoch ordering and cannot outrank later-received streams.
   const recordsLatestReceipt =
-    !lateBootstrap &&
-    (source === 'stream' ||
-      !current ||
-      current.publicationEpoch !== publicationEpoch ||
-      snapshot.snapshotVersion > current.snapshotVersion ||
-      (snapshot.snapshotVersion === current.snapshotVersion && current.receivedFrame <= frame))
-  if (recordsLatestReceipt) {
-    setBoundedSessionTabsReceipt(
-      latestReceivedSessionTabsSnapshotByWorktree,
-      key,
-      {
-        receivedFrame: frame,
-        publicationEpoch,
-        snapshotVersion: snapshot.snapshotVersion,
-        ...(runtimeId ? { runtimeId } : {})
-      },
-      (entry) => entry.receivedFrame
-    )
-    if (isRetraction) {
-      recordReceivedWebSessionTabsRemoval(environmentId, snapshot.worktree, frame, publicationEpoch)
+    source === 'stream' ||
+    !current ||
+    current.publicationEpoch !== publicationEpoch ||
+    snapshot.snapshotVersion > current.snapshotVersion ||
+    (snapshot.snapshotVersion === current.snapshotVersion && current.receivedFrame <= frame)
+  if (!recordsLatestReceipt) {
+    if (censusMember) {
+      recordWebSessionTabsReplyCandidates(environmentId, snapshot, frame, runtimeId)
     }
+    return frame
+  }
+  setBoundedSessionTabsReceipt(
+    latestReceivedSessionTabsSnapshotByWorktree,
+    key,
+    {
+      receivedFrame: frame,
+      publicationEpoch,
+      snapshotVersion: snapshot.snapshotVersion,
+      ...(runtimeId ? { runtimeId } : {})
+    },
+    (entry) => entry.receivedFrame
+  )
+  if (isRetraction) {
+    recordReceivedWebSessionTabsRemoval(environmentId, snapshot.worktree, frame, publicationEpoch)
   }
   if (
     !isWebChatReadMarkCopyPending() ||
@@ -176,12 +176,7 @@ export function recordReceivedWebSessionTabsSnapshot(
   ) {
     return frame
   }
-  const state = useAppStore.getState()
-  if (!recordsLatestReceipt) {
-    receiveWebChatReadMarkCandidates(state, snapshot.tabs)
-    return frame
-  }
-  const copied = receiveWebChatReadMarkFrame(state, {
+  const copied = receiveWebChatReadMarkFrame(useAppStore.getState(), {
     environmentId,
     worktreeId: snapshot.worktree,
     runtimeId,
@@ -203,6 +198,29 @@ export function recordReceivedWebSessionTabsSnapshot(
     useAppStore.setState(copied)
   }
   return frame
+}
+
+export function recordWebSessionTabsReplyCandidates(
+  environmentId: string,
+  snapshot: RuntimeMobileSessionTabsResult,
+  receivedFrame: number,
+  runtimeId?: string
+): void {
+  if (
+    !isWebChatReadMarkCopyPending() ||
+    !isCurrentSessionTabsRuntimeFrame(environmentId, runtimeId)
+  ) {
+    return
+  }
+  const key = sessionTabsFreshnessKey(environmentId, snapshot.worktree)
+  if (
+    isRetiredSessionTabsPublicationEpoch(key, snapshot.publicationEpoch) ||
+    precedesWebSessionTabsRemoval(key, receivedFrame) ||
+    !isHostMirroredWorktree(snapshot.worktree)
+  ) {
+    return
+  }
+  receiveWebChatReadMarkCandidates(useAppStore.getState(), snapshot.tabs)
 }
 
 export function recordWebSessionTabsCensusForChatReadMarks(

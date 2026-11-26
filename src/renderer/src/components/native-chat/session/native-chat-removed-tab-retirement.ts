@@ -8,6 +8,21 @@ import { retireNativeChatSubagentViews } from '../subagents/native-chat-open-sub
 import { chatPaneAddressTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 /** A chat tab's death retires its pane-only UI: the draft's unsatisfied position (never the draft) and any open subagent view. */
+export function retireNativeChatTab(tab: Tab, conversationStillShown: boolean): void {
+  const host = parseExecutionHostId(tab.executionHostId)
+  if (host?.kind === 'runtime') {
+    forgetDirectlyOpenedChat(host.environmentId, tab.worktreeId, tab.entityId, tab.id)
+  }
+  retireNativeChatDraftPosition(
+    readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(tab.entityId)),
+    tab.id
+  )
+  // Views follow the conversation; another tab still showing it keeps them.
+  if (!conversationStillShown) {
+    retireNativeChatSubagentViews(chatPaneAddressTabId(tab.entityId))
+  }
+}
+
 export function retireRemovedNativeChatTabs(before: readonly Tab[], after: readonly Tab[]): void {
   if (before === after) {
     return
@@ -22,21 +37,10 @@ export function retireRemovedNativeChatTabs(before: readonly Tab[], after: reado
         next.entityId !== tab.entityId ||
         next.executionHostId !== tab.executionHostId)
     ) {
-      const host = parseExecutionHostId(tab.executionHostId)
-      if (host?.kind === 'runtime') {
-        forgetDirectlyOpenedChat(host.environmentId, tab.worktreeId, tab.entityId, tab.id)
-      }
-      retireNativeChatDraftPosition(
-        readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(tab.entityId)),
-        tab.id
-      )
-      // Views follow the conversation; another tab still showing it keeps them.
       shownSessions ??= new Set(
         after.flatMap((other) => (other.contentType === 'agent-session' ? [other.entityId] : []))
       )
-      if (!shownSessions.has(tab.entityId)) {
-        retireNativeChatSubagentViews(chatPaneAddressTabId(tab.entityId))
-      }
+      retireNativeChatTab(tab, shownSessions.has(tab.entityId))
     }
   }
 }

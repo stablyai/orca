@@ -22,11 +22,11 @@ import { buildMirroredAgentTabs } from '../tab-projection/terminal-surfaces'
 import { recordDirectlyOpenedChat } from '../tracking/directly-opened-chat-tabs'
 import { getSessionTabsRuntimeIdFromResponse } from '../tracking/publisher-identity-fences'
 import { isWebSessionTabsWorktreeRemovalFrame } from '../tracking/session-tabs-inventory-absence'
-import { admitWebSessionTabsChatRead } from '../tracking/tracking'
 import {
-  isWebChatReadMarkCopyPending,
-  receiveWebChatReadMarkCandidates
-} from '@/store/slices/agent-status/structured-sessions/chat-read-mark-web-copy'
+  admitWebSessionTabsChatRead,
+  recordWebSessionTabsReplyCandidates
+} from '../tracking/tracking'
+import { isWebChatReadMarkCopyPending } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-web-copy'
 import { waitForChatLinkSessionTabs } from './remote-runtime-session-tabs-inflight'
 
 /** Materialize one listed chat before its subscription frame arrives. */
@@ -81,16 +81,9 @@ export async function readPairedChatTab(args: {
         isSameConnection() &&
         reply?.worktree === worktreeId &&
         !isWebSessionTabsWorktreeRemovalFrame(reply) &&
-        hostSnapshotAffirmsWorktreeContents(reply) &&
-        admitWebSessionTabsChatRead(
-          environmentId,
-          reply,
-          frame,
-          replyRuntimeId,
-          readRuntimeStatuses().get(environmentId)?.status?.runtimeId
-        )
+        hostSnapshotAffirmsWorktreeContents(reply)
       ) {
-        receiveWebChatReadMarkCandidates(useAppStore.getState(), reply.tabs)
+        recordWebSessionTabsReplyCandidates(environmentId, reply, frame, replyRuntimeId)
       }
       return { snapshot: reply, runtimeId: replyRuntimeId }
     }

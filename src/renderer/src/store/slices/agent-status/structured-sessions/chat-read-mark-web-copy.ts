@@ -20,7 +20,6 @@ import {
   diffPersistedUIWriteFields,
   type PersistedUIWriteBaseline
 } from '../../ui/persisted-ui-write-baseline'
-import { sanitizePaneKeyTimestampRecord } from '../../ui/ui-slice-hydration-sanitizers'
 import type { AppState } from '../../../types'
 
 type LegacyIndex = Record<ChatReadMarkField, Map<string, string[]>>
@@ -120,17 +119,12 @@ function complete(
   sessionIds?: () => Iterable<string>
 ): CopyPatch | undefined {
   const pending = diffPersistedUIWriteFields(capturePersistedUIWriteBaseline(state), baseline)
-  let stored: ReturnType<typeof commitWebChatReadMarkCopy>
+  let result: ReturnType<typeof commitWebChatReadMarkCopy>
   try {
-    stored = commitWebChatReadMarkCopy(pending, baseline, sessionIds)
+    result = commitWebChatReadMarkCopy(pending, baseline, sessionIds)
   } catch {
     copy.writeFailed = true
     return undefined
-  }
-  const result = {
-    activityClearedAtByPaneKey: sanitizePaneKeyTimestampRecord(stored.activityClearedAtByPaneKey),
-    manuallyUnreadTurnsByPaneKey: sanitizePaneKeyTimestampRecord(stored.manuallyUnreadTurnsByPaneKey),
-    chatReadMarksCopiedHere: stored.chatReadMarksCopiedHere
   }
   migration = undefined
   return { ...result, persistedUIWriteBaseline: { ...baseline, ...result } }

@@ -2,6 +2,8 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { computeLapsedManualUnreadProtections } from '@/attention/agent-attention-acknowledgement'
 import { useAppStore } from '@/store/index'
 import { collectCancelledStructuredSessionIds } from '@/runtime/native-chat/tab-retirement/structured-agent-session-tab-retirement'
+import * as runtimeRpc from '@/runtime/rpc/calls/runtime-rpc-call'
+import { readPairedChatTab } from '@/runtime/web-session-tabs-sync/inventory/paired-chat-tab-reply'
 import {
   recordReceivedWebSessionTabsSnapshot,
   recordWebSessionTabsCensusForChatReadMarks
@@ -296,9 +298,11 @@ it('shares the tab walk on a fresh array and releases the receipt and fallback a
     activeTabType: null,
     tabs: updatedTabs
   }
-  marks.frame('w1', updatedTabs, false, false, (visit) => {
+  const scanChatSessions = vi.fn((visit: (sessionId: string) => void) => {
     collectCancelledStructuredSessionIds(snapshot, visit)
   })
+  marks.frame('w1', updatedTabs, false, false, scanChatSessions)
+  expect(scanChatSessions).toHaveBeenCalledTimes(1)
   expect(rowsRead).toBe(1)
   expect(streamRowsRead).toBe(1)
   const addedTabs = [...updatedTabs, CHAT_TAB]
@@ -349,6 +353,45 @@ it('copies a closed chat delivered only in an outranked bootstrap reply', () => 
   recordReceivedWebSessionTabsSnapshot(environment, latest, 2, 'runtime')
   recordReceivedWebSessionTabsSnapshot(environment, bootstrap, 1, 'runtime', 'bootstrap', true)
   recordWebSessionTabsCensusForChatReadMarks(environment, [bootstrap], 'runtime', 1)
+  expect(marks.stored().activityClearedAtByPaneKey).toEqual({ [OLD]: 50, [CHAT]: 50 })
+  expect(marks.stored().chatReadMarksCopiedHere).toBe(true)
+})
+
+it('copies a closed chat delivered only in an outranked paired reply', async () => {
+  const marks = load({ activityClearedAtByPaneKey: { [OLD]: 50 } })
+  vi.spyOn(useAppStore, 'getState').mockImplementation(marks.store.getState)
+  vi.spyOn(useAppStore, 'setState').mockImplementation(marks.store.setState)
+  const environmentId = 'late-paired-copy'
+  const latest: RuntimeMobileSessionTabsResult = {
+    worktree: 'w1',
+    publicationEpoch: 'epoch',
+    snapshotVersion: 2,
+    activeGroupId: null,
+    activeTabId: null,
+    activeTabType: null,
+    tabs: []
+  }
+  vi.spyOn(runtimeRpc, 'callRuntimeRpcResponse').mockImplementationOnce(
+    async (_target, _method, _params, options) => {
+      options?.beforeSend?.()
+      recordReceivedWebSessionTabsSnapshot(environmentId, latest, undefined, 'runtime')
+      return {
+        id: 'list',
+        ok: true,
+        result: { ...latest, snapshotVersion: 1, tabs: [CHAT_TAB] },
+        _meta: { runtimeId: 'runtime' }
+      }
+    }
+  )
+  await readPairedChatTab({
+    environmentId,
+    worktreeId: latest.worktree,
+    sessionId: 'linked-chat',
+    timeoutMs: 1000,
+    signal: new AbortController().signal,
+    current: () => true
+  })
+  recordWebSessionTabsCensusForChatReadMarks(environmentId, [latest], 'runtime')
   expect(marks.stored().activityClearedAtByPaneKey).toEqual({ [OLD]: 50, [CHAT]: 50 })
   expect(marks.stored().chatReadMarksCopiedHere).toBe(true)
 })

@@ -100,6 +100,9 @@ export function commitWebChatReadMarkCopy(
       }
     }
   }
+  for (const field of CHAT_READ_MARK_FIELDS) {
+    marks[field] = sanitizePaneKeyTimestampRecord(marks[field])
+  }
   const result = { ...marks, chatReadMarksCopiedHere: true as const }
   writeJson(UI_STORAGE_KEY, { ...stored, ...result })
   return result
