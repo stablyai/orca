@@ -364,21 +364,79 @@ it('keeps the backups and pauses switching while a folder holds no login after a
   expect([...keychain.slots.keys()].sort()).toEqual(['svc-a', 'svc-b'])
 })
 
-it('keeps the backups when b holds a third account after a swap cut off before its journal step', async () => {
-  const { folders, keychain, deps, files } = setup(['a', 'b'])
-  await swapFolderLogins(folder(folders, 'a'), folder(folders, 'b'), request, deps)
-  const journal = await files.loadJournal()
-  if (!journal) {
-    throw new Error('missing journal')
+it('keeps the backups and reports once when a cut-off swap left a folder without its account', async () => {
+  // Both writes landed but the journal still says a_written, and the session in a wrote its old
+  // login back: with b holding a third account or none, b's login is left only in its backup.
+  const cut = async (slotB: ClaudeKeychainSlot) => {
+    const env = setup(['a', 'b'])
+    await swapFolderLogins(folder(env.folders, 'a'), folder(env.folders, 'b'), request, env.deps)
+    const journal = await env.files.loadJournal()
+    if (!journal) {
+      throw new Error('missing journal')
+    }
+    await env.files.saveJournal({ ...journal, step: 'a_written', meta: undefined })
+    env.keychain.slots.set('svc-a', slotOf('a'))
+    env.keychain.slots.set('svc-b', slotB)
+    return env
   }
-  await files.saveJournal({ ...journal, step: 'a_written', meta: undefined })
-  // The session in a wrote its old login back and b was signed in to another account, so the
-  // login of b is left only in its backup.
+  for (const slotB of [{ ...slotOf('b'), claudeAiOauth: login('c') }, { mcpOAuth: {} }]) {
+    const { keychain, deps, files } = await cut(slotB)
+    expect(await recoverInterruptedSwap(deps)).toBe('needs_repair')
+    expect(await recoverInterruptedSwap(deps)).toBe('repair_waiting')
+    expect((await files.loadJournal())?.needsRepair).toBe(true)
+    expect(keychain.slots.get(ROTATION_JOURNAL_SERVICE_B)?.claudeAiOauth).toEqual(login('b'))
+  }
+  // A login the server cannot name yet is not reported: the lookup may only be down for now.
+  const unnamed = { ...login('b'), accessToken: 'access-x', refreshToken: 'refresh-x' }
+  const later = await cut({ ...slotOf('b'), claudeAiOauth: unnamed })
+  expect(await recoverInterruptedSwap(later.deps)).toBe('undecided')
+  expect((await later.files.loadJournal())?.needsRepair).toBeUndefined()
+  // Signing b back in to its own account ends the journal, as nothing is only in a backup now.
+  const signedIn = { ...slotOf('b'), claudeAiOauth: { ...login('b'), refreshToken: 'refresh-b2' } }
+  later.keychain.slots.set('svc-b', signedIn)
+  expect(await recoverInterruptedSwap(later.deps)).toBe('nothing_written')
+  expect(await later.files.loadJournal()).toBeNull()
+
+  // Cut after the first write, then b took a third account: a's login is only in its backup.
+  const third = setup(['a', 'b'])
+  third.keychain.crashOnWrite = 4
+  await swapFolderLogins(
+    folder(third.folders, 'a'),
+    folder(third.folders, 'b'),
+    request,
+    third.deps
+  )
+  third.keychain.slots.set('svc-b', { ...slotOf('b'), claudeAiOauth: login('c') })
+  expect(await recoverInterruptedSwap(third.deps)).toBe('needs_repair')
+  expect(third.keychain.slots.get(ROTATION_JOURNAL_SERVICE_A)?.claudeAiOauth).toEqual(login('a'))
+  // A third account in a is reported the same way.
+  const inA = setup(['a', 'b'])
+  inA.keychain.crashOnWrite = 4
+  await swapFolderLogins(folder(inA.folders, 'a'), folder(inA.folders, 'b'), request, inA.deps)
+  inA.keychain.slots.set('svc-a', { ...slotOf('a'), claudeAiOauth: login('c') })
+  expect(await recoverInterruptedSwap(inA.deps)).toBe('needs_repair')
+})
+
+it('ends a pending swap once a folder was removed with its account', async () => {
+  const { folders, keychain, deps, files } = setup(['a', 'b'])
+  const b = folder(folders, 'b')
+  expect((await swapFolderLogins(folder(folders, 'a'), b, request, deps)).ok).toBe(true)
   keychain.slots.set('svc-a', slotOf('a'))
-  keychain.slots.set('svc-b', { ...slotOf('b'), claudeAiOauth: login('c') })
-  expect(await recoverInterruptedSwap(deps)).toBe('undecided')
-  expect(await files.loadJournal()).not.toBeNull()
-  expect(keychain.slots.get(ROTATION_JOURNAL_SERVICE_B)?.claudeAiOauth).toEqual(login('b'))
+  keychain.slots.delete('svc-b')
+  rmSync(b.home, { recursive: true, force: true })
+  expect((await verifySwap(deps, true))?.outcome).toBe('folder_gone')
+  expect(await files.loadJournal()).toBeNull()
+  expect([...keychain.slots.keys()]).toEqual(['svc-a'])
+
+  // The same holds for a swap cut off between its writes.
+  const cut = setup(['a', 'b'])
+  cut.keychain.crashOnWrite = 4
+  const cutB = folder(cut.folders, 'b')
+  await swapFolderLogins(folder(cut.folders, 'a'), cutB, request, cut.deps)
+  cut.keychain.slots.delete('svc-b')
+  rmSync(cutB.home, { recursive: true, force: true })
+  expect(await recoverInterruptedSwap(cut.deps)).toBe('folder_gone')
+  expect(await cut.files.loadJournal()).toBeNull()
 })
 
 it('keeps the backups while the journal that points to them is still on disk', async () => {

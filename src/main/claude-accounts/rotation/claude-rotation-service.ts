@@ -177,21 +177,22 @@ export class ClaudeAccountRotationService {
     }
     // A swap in flight is finished or checked even after the feature is turned off.
     if (await this.files.journalExists()) {
-      const recovered = await recoverInterruptedSwap(this.deps)
-      if (recovered) {
-        this.files.log('recover_cycle', { result: recovered })
+      // Recovery reports a folder left with no login or a third account once, as the check does.
+      if ((await recoverInterruptedSwap(this.deps)) === 'needs_repair') {
+        this.options.notify(rotationNotice({ type: 'needs_repair' }))
       }
       const verified = await verifySwap(this.deps)
       if (verified) {
         this.afterVerify(verified.outcome, verified.journal)
       }
       if (await this.files.journalExists()) {
-        if (!(await this.files.loadJournal())) {
+        const pending = await this.files.loadJournal()
+        if (!pending) {
           // Its backups may hold the only copy of a login, so it blocks swaps until removed.
           this.files.log('journal_unreadable')
         }
         // Only the user can repair the folders, so look less often meanwhile.
-        return verified?.journal.needsRepair ? ROTATION_TIMING.idleMaxMs : ROTATION_TIMING.cycleMs
+        return pending?.needsRepair ? ROTATION_TIMING.idleMaxMs : ROTATION_TIMING.cycleMs
       }
     }
     const folders = await this.folders()

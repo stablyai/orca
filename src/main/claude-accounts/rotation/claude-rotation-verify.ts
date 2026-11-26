@@ -13,6 +13,7 @@ export type RotationVerifyOutcome =
   | 'ok'
   | 'reverted'
   | 'needs_repair'
+  | 'folder_gone'
   | 'unchanged'
   | 'unverified'
   | 'waiting'
@@ -49,6 +50,9 @@ export async function verifySwap(
   const settled = await settleFolders(journal, deps)
   if (settled.kind === 'busy') {
     return waiting
+  }
+  if (settled.kind === 'gone') {
+    return done('folder_gone')
   }
   if (settled.kind === 'unexpected') {
     // A login may be left only in its backup, and filling the folder would overwrite whatever it

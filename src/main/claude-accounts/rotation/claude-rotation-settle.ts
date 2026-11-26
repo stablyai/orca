@@ -1,3 +1,4 @@
+import { stat } from 'node:fs/promises'
 import {
   accessTokenOf,
   accessUsable,
@@ -9,12 +10,13 @@ import {
   withOauth,
   type ClaudeAiOauth
 } from './claude-rotation-keychain'
+import type { RotationFolder } from './claude-rotation-login-meta'
 import { ROTATION_TIMING } from './claude-rotation-policy'
 import type { RotationJournal } from './claude-rotation-state-files'
 import { clearRotationJournal, refreshLock, type RotationSwapDeps } from './claude-rotation-swap'
 
 /** The account a login belongs to, as the server names it; null when its token cannot be used. */
-export async function accountHolding(
+async function accountHolding(
   oauth: ClaudeAiOauth,
   deps: Pick<RotationSwapDeps, 'whoami' | 'now'>
 ): Promise<string | null> {
@@ -22,10 +24,21 @@ export async function accountHolding(
   return token && accessUsable(oauth, deps.now()) ? deps.whoami(token) : null
 }
 
-/** The side of the swap a login belongs to: outgoing, incoming, neither, or unknown (null). */
+/** Removing an account from Orca deletes its folder and keychain item; nothing can go back. */
+export async function folderGone(folder: RotationFolder): Promise<boolean> {
+  return stat(folder.home).then(
+    () => false,
+    (error: unknown) => error instanceof Error && 'code' in error && error.code === 'ENOENT'
+  )
+}
+
+/**
+ * The side of the swap a login belongs to: outgoing, incoming, neither (no login, or an account
+ * the server names as a third one), or null when that cannot be told yet.
+ */
 type Side = 'from' | 'to' | 'other' | null
 
-async function sideOf(
+export async function sideOf(
   oauth: ClaudeAiOauth,
   journal: RotationJournal,
   deps: RotationSwapDeps
@@ -59,6 +72,7 @@ export type RotationSettlement =
   | { kind: 'unknown'; aHash: string }
   | { kind: 'busy' }
   | { kind: 'unexpected' }
+  | { kind: 'gone' }
 
 /**
  * Reads both folders under their refresh locks so each account ends up in exactly one of them.
@@ -71,6 +85,10 @@ export async function settleFolders(
 ): Promise<RotationSettlement> {
   const a = journal.aFolder
   const b = journal.bFolder
+  // A folder removed with its account cannot be locked, and nothing can go back into it.
+  if ((await folderGone(a)) || (await folderGone(b))) {
+    return { kind: 'gone' }
+  }
   const lock = await refreshLock(deps, a, b)
   if (!(await lock.acquire(ROTATION_TIMING.lockWaitMs))) {
     return { kind: 'busy' }
