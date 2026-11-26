@@ -46,12 +46,12 @@ describe('worker auto-close banner live region', () => {
     expect(screen.getByText(/1:42/)).toBeTruthy()
     // A re-mounted, pre-filled region may not be announced; it must be the node that mounted empty.
     expect(screen.getByRole('status')).toBe(status)
-    expect(status.textContent).toBe('Orchestration worker finished · Closes soon')
+    expect(status.textContent).toBe('Worker finished · closes soon')
 
     rerender(bannerAt(FINISHED, '2026-11-17T12:00:19.000Z'))
     expect(screen.getByText(/1:41/)).toBeTruthy()
     expect(screen.getByRole('status')).toBe(status)
-    expect(status.textContent).toBe('Orchestration worker finished · Closes soon')
+    expect(status.textContent).toBe('Worker finished · closes soon')
   })
 
   it('mounts an empty status node even when the worker has already finished', () => {
@@ -65,7 +65,7 @@ describe('worker auto-close banner live region', () => {
     act(() => vi.runAllTimers())
 
     expect(screen.getByRole('status')).toBe(status)
-    expect(status.textContent).toBe('Orchestration worker finished · Closes soon')
+    expect(status.textContent).toBe('Worker finished · closes soon')
   })
 
   it('holds the announcement when a newly mounted running worker finishes in the same task', () => {
@@ -80,6 +80,6 @@ describe('worker auto-close banner live region', () => {
     act(() => vi.runAllTimers())
 
     expect(screen.getByRole('status')).toBe(status)
-    expect(status.textContent).toBe('Orchestration worker finished · Closes soon')
+    expect(status.textContent).toBe('Worker finished · closes soon')
   })
 })

@@ -18,9 +18,8 @@ import {
 } from '../state'
 import {
   acceptSessionTabsRuntimeId,
-  isCurrentSessionTabsRuntimeId,
+  isCurrentSessionTabsRuntimeFrame,
   isRetiredSessionTabsPublicationEpoch,
-  isRetiredSessionTabsRuntimeId,
   noteSessionTabsPublicationEpoch,
   recordReceivedWebSessionTabsEnvironmentFrame
 } from './publisher-identity-fences'
@@ -191,13 +190,35 @@ export function shouldApplyRecoveredWebSessionTabsSnapshot(
   receivedFrame: number,
   runtimeId?: string
 ): boolean {
-  if (
-    runtimeId &&
-    (isRetiredSessionTabsRuntimeId(environmentId, runtimeId) ||
-      !isCurrentSessionTabsRuntimeId(environmentId, runtimeId))
-  ) {
-    return false
-  }
+  return (
+    isCurrentSessionTabsRuntimeFrame(environmentId, runtimeId) &&
+    canApplyWebSessionTabsWorktreeFrame(environmentId, snapshot, receivedFrame, 'recovery')
+  )
+}
+
+/** Admit the verified replacement runtime before its feed arrives, without advancing the worktree cursor. */
+export function admitWebSessionTabsChatRead(
+  environmentId: string,
+  snapshot: RuntimeMobileSessionTabsResult,
+  receivedFrame: number,
+  runtimeId: string | undefined,
+  verifiedRuntimeId: string | undefined
+): boolean {
+  return (
+    canApplyWebSessionTabsWorktreeFrame(environmentId, snapshot, receivedFrame, 'read') &&
+    (isCurrentSessionTabsRuntimeFrame(environmentId, runtimeId) ||
+      (runtimeId !== undefined &&
+        runtimeId === verifiedRuntimeId &&
+        acceptSessionTabsRuntimeId(environmentId, runtimeId, receivedFrame)))
+  )
+}
+
+function canApplyWebSessionTabsWorktreeFrame(
+  environmentId: string,
+  snapshot: RuntimeMobileSessionTabsResult,
+  receivedFrame: number,
+  source: 'recovery' | 'read'
+): boolean {
   const key = sessionTabsFreshnessKey(environmentId, snapshot.worktree)
   if (isRetiredSessionTabsPublicationEpoch(key, snapshot.publicationEpoch)) {
     return false
@@ -207,8 +228,11 @@ export function shouldApplyRecoveredWebSessionTabsSnapshot(
   }
 
   const latest = latestReceivedSessionTabsSnapshotByWorktree.get(key)
-  if (!latest || latest.receivedFrame === receivedFrame) {
-    return latest !== undefined
+  if (!latest) {
+    return source === 'read'
+  }
+  if (latest.receivedFrame === receivedFrame) {
+    return true
   }
   if (latest.publicationEpoch !== snapshot.publicationEpoch) {
     return receivedFrame > latest.receivedFrame

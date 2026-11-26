@@ -5,7 +5,10 @@ import {
   CONNECTOR_REPLIES_OUTBOX_FEATURE
 } from '../../../../../shared/connectors/connector-cloud-contract'
 import { botReplyRefusal } from '../../../../external-conversations/external-conversation-bots'
-import { ConnectorReply } from '../../../../../shared/rpc-contract/connectors/connector-params'
+import {
+  ConnectorReply,
+  CONNECTOR_REPLY_HTML_PAGE_AS_FILE
+} from '../../../../../shared/rpc-contract/connectors/connector-params'
 import type { ExternalConversationSeam } from '../../../../external-conversations/external-conversation-seam'
 import { chatPaneKey } from '../../../../external-conversations/external-conversation-chat'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
@@ -16,6 +19,9 @@ import { CONNECTOR_ACT_METHOD } from '../connector-act'
 import { connectorPostAttempts } from '../../../../external-conversations/connector-post-attempts'
 import { CONNECTOR_REACT_METHOD } from '../connector-react'
 import { CONNECTOR_LEAVE_THREAD_METHOD } from '../connector-leave-thread'
+import { splitSlackHtmlReply } from '../../../../../shared/connectors/slack-html-reply'
+import type { ConnectorCloudFeature } from '../../../../../shared/connector-cloud-features'
+import { botOfSession } from '../../../../bots/bot-session-tabs'
 
 export function requireSeam(
   runtime: Pick<OrcaRuntimeService, 'getExternalConversationSeam'>
@@ -57,14 +63,27 @@ export const CONNECTOR_METHODS = [
       }
       const turnFor =
         'sessionId' in params
-          ? await botTurnFor(
-              context.runtime,
-              params.sessionId,
-              sessionCallerOf(context.orchestrationCaller)?.sessionId
-            )
+          ? await botTurnFor(context.runtime, params.sessionId, {
+              verifiedSessionId: sessionCallerOf(context.orchestrationCaller)?.sessionId
+            })
           : // A terminal pane's reply names no chat whose turn Orca can read.
             'someone_else'
       const cloud = context.runtime.getConnectorCloud()
+      // Slack shows a whole page as an .html file; a caller that asked resends it with the page attached.
+      const features = cloud?.cloudFeatures()
+      if (
+        params.pagesAsFiles &&
+        conversation.source === 'slack' &&
+        'sessionId' in params &&
+        context.runtime.bots.enabled() &&
+        (['actions', 'files.direct', 'reply.files'] satisfies ConnectorCloudFeature[]).every(
+          (feature) => features?.has(feature)
+        ) &&
+        botOfSession(context.runtime.bots, params.sessionId) &&
+        splitSlackHtmlReply(text) !== null
+      ) {
+        throw new Error(CONNECTOR_REPLY_HTML_PAGE_AS_FILE)
+      }
       // Under replies.outbox a reply naming its turn's request takes that request's answer key.
       const keyed =
         target.answerDeliveryId &&

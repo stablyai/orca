@@ -246,5 +246,67 @@ export const BOT_MCP_APPS: readonly BotMcpApp[] = [
     signIn: 'browser',
     category: 'sales',
     composio: ['stripe']
+  },
+  {
+    id: 'clickup',
+    name: 'ClickUp',
+    line: 'Manage tasks, lists and docs',
+    url: 'https://mcp.clickup.com/mcp',
+    signIn: 'browser',
+    category: 'docs',
+    composio: ['clickup']
+  },
+  {
+    id: 'airtable',
+    name: 'Airtable',
+    line: 'Query and edit bases, tables and records',
+    url: 'https://mcp.airtable.com/mcp',
+    signIn: 'browser',
+    category: 'docs',
+    composio: ['airtable']
+  },
+  {
+    id: 'todoist',
+    name: 'Todoist',
+    line: 'Add, sort and complete tasks',
+    url: 'https://ai.todoist.net/mcp',
+    signIn: 'browser',
+    category: 'docs',
+    composio: ['todoist']
+  },
+  {
+    id: 'zapier',
+    name: 'Zapier',
+    line: 'Run actions in the apps you set up in Zapier',
+    url: 'https://mcp.zapier.com/api/v1/connect',
+    signIn: 'browser',
+    category: 'docs'
+  },
+  {
+    id: 'granola',
+    name: 'Granola',
+    line: 'Search meeting notes and transcripts',
+    url: 'https://mcp.granola.ai/mcp',
+    signIn: 'browser',
+    category: 'mail'
+  },
+  {
+    id: 'intercom',
+    name: 'Intercom',
+    line: 'Search conversations, contacts and articles',
+    url: 'https://mcp.{site}/mcp',
+    // Australia-hosted workspaces have no MCP server yet.
+    variable: {
+      key: 'site',
+      label: 'Intercom region',
+      default: 'intercom.com',
+      choices: [
+        { name: 'US', place: 'United States', value: 'intercom.com' },
+        { name: 'EU', place: 'Europe', value: 'eu.intercom.com' }
+      ]
+    },
+    signIn: 'browser',
+    category: 'sales',
+    composio: ['intercom']
   }
 ]

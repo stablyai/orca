@@ -46,6 +46,7 @@ import { PAIR_COMMAND_SPECS } from './pair'
 import { PLUGIN_VIEW_COMMAND_SPECS } from './plugin-view'
 import { PLUGIN_INSTALL_COMMAND_SPECS } from './plugin-install'
 import { WORKSPACE_CLEANUP_COMMAND_SPECS } from './workspace-cleanup'
+import { MCP_COMMAND_SPECS } from './mcp'
 
 export const COMMAND_SPECS: CommandSpec[] = [
   ...CORE_COMMAND_SPECS,
@@ -62,6 +63,7 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...ORCHESTRATION_COMMAND_SPECS.map(withFullRecordFlag),
   ...COMPUTER_COMMAND_SPECS,
   ...AGENT_HOOK_COMMAND_SPECS,
+  ...MCP_COMMAND_SPECS,
   ...AGENT_LAUNCH_COMMAND_SPECS,
   ...AGENT_CONVERSATION_COMMAND_SPECS,
   ...CHAT_COMMAND_SPECS,
