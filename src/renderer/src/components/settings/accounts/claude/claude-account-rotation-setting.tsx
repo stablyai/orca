@@ -199,7 +199,7 @@ export function ClaudeAccountRotationSetting({
               >
                 <SelectTrigger
                   size="sm"
-                  className="w-[200px]"
+                  className="w-[220px]"
                   aria-label={t('accounts.claude.rotation.orderTitle', 'Switch to')}
                 >
                   <SelectValue />
