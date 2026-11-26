@@ -4,6 +4,7 @@ import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import { providerRelayChannel, type ProviderRelayChannel } from './provider-relay-channel'
 import { readFile } from 'node:fs/promises'
 import { spawnTokenFromEnvironBlock } from '../runtime/agent-session/ownership/agent-session-spawn-token-readback'
+import { cancelProviderRelayExitProbes } from './provider-relay-exit-probes'
 
 const LIST_TIMEOUT_MS = 3_000
 /** Launch waits this long for the daemon before treating its relays as unknown (not absent). */
@@ -289,6 +290,7 @@ export function noteProviderRelayRunVerdict(
       unknownRuns.add(chatKey)
     } else {
       unknownRuns.delete(chatKey)
+      cancelProviderRelayExitProbes(chatKey)
     }
   }
   ask.inFlight -= 1
@@ -302,14 +304,10 @@ export function providerRelayRunAskCurrent(chatKey: string, seq: number): boolea
   return ask !== undefined && seq > ask.floor
 }
 
-/** Something still waits on the chat's run: an ask in flight, or its unknown verdict. */
-export function providerRelayRunAwaited(chatKey: string): boolean {
-  return asks.has(chatKey) || unknownRuns.has(chatKey)
-}
-
 /** Its chat closed or was deleted, or a new run replaced the one asked about. */
 export function forgetProviderRelayRunVerdict(chatKey: string): void {
   unknownRuns.delete(chatKey)
+  cancelProviderRelayExitProbes(chatKey)
   const ask = asks.get(chatKey)
   if (ask) {
     ask.floor = askSeq

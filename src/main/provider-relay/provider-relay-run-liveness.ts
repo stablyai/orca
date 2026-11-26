@@ -107,7 +107,7 @@ async function decide(
   }
   // Its daemon start can't answer: only both processes proven gone end the run. A daemon can lose
   // its endpoint and keep its agents, and a supervised agent may outlive its daemon for a grace.
-  if (await processesProvenGone(record.sessionId, placement, waitMs)) {
+  if (await processesProvenGone(ask === null ? null : record.sessionId, placement, waitMs)) {
     forget()
     return 'gone'
   }
@@ -181,7 +181,7 @@ function daemonProvenGone(daemon: AgentSessionRunDaemon, hostId: string): Promis
 }
 
 async function processesProvenGone(
-  chatKey: string,
+  chatKey: string | null,
   placement: Extract<AgentSessionRunPlacement, { kind: 'relayed' }>,
   deadlineMs: number
 ): Promise<boolean> {
