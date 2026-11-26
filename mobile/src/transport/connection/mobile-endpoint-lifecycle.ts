@@ -22,6 +22,8 @@ import { directPathForEndpoint } from '../relay/mobile-direct-endpoint-probe'
 import { directProbeTimeoutMsForEndpoint } from '../relay/mobile-direct-return-probe'
 import { MobileRelayDirectUpgradeController } from '../relay/mobile-relay-direct-upgrade-controller'
 import { defaultCancelTimer, defaultScheduleTimer } from '../../platform/timer-scheduler'
+import { RELAY_BACKGROUND_GRACE_MS } from '../relay/mobile-relay-background-grace'
+import { loadRelayBackgroundGraceMs } from '../../storage/preferences'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import { skipsDirectEndpoint } from './undialable-direct-endpoint'
 
@@ -43,12 +45,27 @@ export function startMobileEndpointLifecycle(
   let stopped = false
   let foreground = true
   let owner: EndpointOwner
+  let relayBackgroundGraceMs = RELAY_BACKGROUND_GRACE_MS
+  void loadRelayBackgroundGraceMs().then(
+    (ms) => {
+      relayBackgroundGraceMs = ms
+    },
+    () => {
+      // The default still applies when phone-local storage is unavailable.
+    }
+  )
 
   const startSupervisor = async (relay: MobileRelayEndpoint): Promise<void> => {
     if (stopped) {
       return
     }
-    const supervisor = createSupervisor(logical, initialHost, relay, onLog)
+    const supervisor = createSupervisor(
+      logical,
+      initialHost,
+      relay,
+      onLog,
+      () => relayBackgroundGraceMs
+    )
     owner.stop()
     owner = supervisor
     supervisor.setForeground(foreground)
@@ -56,7 +73,13 @@ export function startMobileEndpointLifecycle(
   }
 
   if (initialHost.relay) {
-    owner = createSupervisor(logical, initialHost, initialHost.relay, onLog)
+    owner = createSupervisor(
+      logical,
+      initialHost,
+      initialHost.relay,
+      onLog,
+      () => relayBackgroundGraceMs
+    )
     void owner.start()
   } else {
     owner = new MobileRelayDirectUpgradeController(logical, initialHost, {
@@ -95,7 +118,8 @@ function createSupervisor(
   logical: StableLogicalRpcClient,
   host: HostProfile,
   relay: MobileRelayEndpoint,
-  onLog: ConnectionLogSink
+  onLog: ConnectionLogSink,
+  readRelayBackgroundGraceMs: () => number
 ): MobileEndpointSupervisor {
   return new MobileEndpointSupervisor(logical, host.id, relay, {
     openDirect: () =>
@@ -126,6 +150,7 @@ function createSupervisor(
     now: Date.now,
     randomBytes: ExpoCrypto.getRandomBytes,
     setTimer: defaultScheduleTimer,
-    clearTimer: defaultCancelTimer
+    clearTimer: defaultCancelTimer,
+    relayBackgroundGraceMs: readRelayBackgroundGraceMs
   })
 }

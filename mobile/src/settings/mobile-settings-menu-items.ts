@@ -4,6 +4,7 @@ import {
   Info,
   MessageSquare,
   Mic,
+  Radio,
   SunMoon,
   Terminal,
   Wrench
@@ -42,6 +43,12 @@ export function mobileSettingsMenuItems(push: (route: string) => void): MobileSe
       label: translate('settings.menuItems.voice', 'Voice'),
       icon: Mic,
       onPress: () => push('/voice-settings')
+    },
+    {
+      id: 'relay',
+      label: translate('settings.menuItems.relay', 'Relay'),
+      icon: Radio,
+      onPress: () => push('/relay-settings')
     },
     {
       id: 'notifications',

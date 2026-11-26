@@ -32,5 +32,6 @@ export type MobileEndpointSupervisorDependencies = {
   randomBytes: (length: number) => Uint8Array
   setTimer: ScheduleTimer
   clearTimer: typeof clearTimeout
+  relayBackgroundGraceMs: () => number
   onLog?: ConnectionLogSink
 }

@@ -3,6 +3,7 @@ import type { MobileRelayCredentialBundle } from '../../host-credentials/mobile-
 import type { MobileRelayRpcSession } from '../relay/mobile-relay-rpc-session-contract'
 import { RelayDialStageTracker, type RelayDialStage } from '../relay/relay-dial-stage'
 import { defaultCancelTimer, defaultScheduleTimer } from '../../platform/timer-scheduler'
+import { RELAY_BACKGROUND_GRACE_MS } from '../relay/mobile-relay-background-grace'
 import type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor-contract'
 import type { RpcClient } from '../rpc/rpc-client-contract'
 import type { SendRequestOptions } from '../rpc/unvalidated-rpc-request-port'
@@ -224,6 +225,7 @@ export function dependencies(
     randomBytes: (length) => new Uint8Array(length).fill(1),
     setTimer: defaultScheduleTimer,
     clearTimer: defaultCancelTimer,
+    relayBackgroundGraceMs: () => RELAY_BACKGROUND_GRACE_MS,
     ...overrides
   }
 }

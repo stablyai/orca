@@ -69,7 +69,8 @@
       "voice": "Voice",
       "notifications": "Notifications",
       "troubleshooting": "Troubleshooting",
-      "about": "About"
+      "about": "About",
+      "relay": "Relay"
     },
     "nativeChatSettingsScreen": {
       "title": "Chat UI",
@@ -227,6 +228,17 @@
       "title": "Shared links",
       "bots": "Bots",
       "description": "Links you’ve published."
+    },
+    "relaySettings": {
+      "thirtySeconds": "30 seconds",
+      "oneMinute": "1 minute",
+      "fiveMinutes": "5 minutes",
+      "backgroundGrace": "Relay background grace",
+      "title": "Relay",
+      "heading": "CONNECTION",
+      "description": "How long a healthy relay stays connected after you leave the app. The system may still stop the app sooner.",
+      "loadFailed": "Could not load relay settings. Try again.",
+      "saveFailed": "Could not save relay settings. Try again."
     }
   },
   "common": {
