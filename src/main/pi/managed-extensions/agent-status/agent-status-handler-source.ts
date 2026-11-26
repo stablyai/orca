@@ -6,6 +6,7 @@ import { getOmpSessionOwnerHandlerSourceLines } from './omp-session-status-owner
 import { getOmpPlanReviewHandlerSourceLines } from './omp-plan-review-source'
 import { getPiAgentStatusUiPromptHandlerSourceLines } from './agent-status-ui-prompt-source'
 import { getPiAgentStatusCompactionHandlerSourceLines } from './agent-status-compaction-source'
+import { getPiHeldTurnEndHandlerSourceLines } from './agent-status-held-turn-end-source'
 import {
   getPiSubagentRosterEventSourceLines,
   getPiSubagentRosterSetupSourceLines
@@ -139,6 +140,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     ...(kind === 'omp' ? getPiPrefillHandlerSourceLines('omp', true) : []),
     `  onStatus('before_agent_start', (event${ctxParam}) => {`,
     ...captureSessionMetadata,
+    ...(kind === 'pi' ? ["    piUserTurnPending = event?.messageType !== 'custom'"] : []),
     "    post('before_agent_start', { prompt: event.prompt ?? '' })",
     '  })',
     '',
@@ -149,7 +151,12 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '    lifecycleState.runGeneration += 1',
     // Turn start proves no input-holding modal remains; recover missing dialog-close events.
     ...(kind === 'pi'
-      ? ['    piUiPromptDepth = 0', '    piTurnInFlight = true', '    replyFinishedAt = undefined']
+      ? [
+          '    piUiPromptDepth = 0',
+          '    piTurnInFlight = true',
+          '    replyFinishedAt = undefined',
+          '    rememberUserTurnPriorChildren()'
+        ]
       : []),
     "    post('agent_start')",
     '  })',
@@ -181,6 +188,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     ...(kind === 'prime-agent' ? [] : getOmpPlanReviewHandlerSourceLines()),
     ...getPiAgentStatusUiPromptHandlerSourceLines(kind),
     ...getPiAgentStatusCompactionHandlerSourceLines(kind),
+    ...getPiHeldTurnEndHandlerSourceLines(kind),
     ...modelSelectHandler,
     '  // message_end finalizes preview text before agent_end, so dashboards see the latest reply sooner.',
     `  onStatus('message_end', (event${ctxParam}) => {`,
@@ -204,7 +212,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '    pendingAgentEndCheck = null',
     '    pendingAgentEndContext = null',
     '  }',
-    ...getPiSubagentRosterEventSourceLines(),
+    ...getPiSubagentRosterEventSourceLines(kind),
     // Exited child runners retain ownership through their grace period.
     '  function isHeldByChildren(): boolean {',
     '    return lifecycleState.active.size > 0',
@@ -218,6 +226,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '    for (const id of lifecycleState.exited ?? []) forgetSubagent(id)',
     '    if (isHeldByChildren()) {',
     '      lifecycleState.waiting = true',
+    ...(kind === 'pi' ? ['      postHeldTurnEnd()'] : []),
     '      return false',
     '    }',
     '    lifecycleState.waiting = false',
