@@ -24,13 +24,21 @@ export function feishuResponseText(data: FeishuCardData): string {
   const response = data.response!
   const baseline =
     response.baseline?.turnItemId === response.native?.turnItemId ? response.baseline : undefined
+  const previousMessages = [
+    ...(response.history ?? []).filter((turn) => turn.turnItemId === response.native?.turnItemId),
+    ...(baseline ? [baseline] : [])
+  ].flatMap((turn) => turn.messages)
   const texts = [
-    ...response.progress.map((entry) => entry.text),
+    ...response.progress
+      .filter(
+        (entry) => !response.history?.some((turn) => turn.messages.some((m) => m.id === entry.id))
+      )
+      .map((entry) => entry.text),
     ...(response.native?.messages ?? []).flatMap((entry) => {
       if (response.final?.trim() === entry.text.trim()) {
         return []
       }
-      const before = baseline?.messages.find((m) => m.id === entry.id)?.text
+      const before = previousMessages.findLast((m) => m.id === entry.id)?.text
       const text =
         before && entry.text.startsWith(before) ? entry.text.slice(before.length) : entry.text
       return text.trim() ? [text] : []
@@ -50,8 +58,11 @@ export function feishuResponseCard(data: FeishuCardData, botName: string, stream
   const native = response.native
   const text = feishuResponseText(data)
   const tools = [
-    ...(response.history ?? []).flatMap((turn) => turn.tools),
-    ...(native?.tools ?? [])
+    ...new Map(
+      [...(response.history ?? []).flatMap((turn) => turn.tools), ...(native?.tools ?? [])].map(
+        (tool) => [tool.id, tool]
+      )
+    ).values()
   ].filter(
     (tool) =>
       response.baseline?.turnItemId !== native?.turnItemId ||
