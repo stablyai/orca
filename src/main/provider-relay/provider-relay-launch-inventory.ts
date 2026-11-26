@@ -4,6 +4,7 @@ import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import { providerRelayChannel, type ProviderRelayChannel } from './provider-relay-channel'
 import { readFile } from 'node:fs/promises'
 import { spawnTokenFromEnvironBlock } from '../runtime/agent-session/ownership/agent-session-spawn-token-readback'
+import { cancelProviderRelayExitProbes } from './provider-relay-exit-probes'
 
 const LIST_TIMEOUT_MS = 3_000
 /** Launch waits this long for the daemon before treating its relays as unknown (not absent). */
@@ -98,13 +99,24 @@ async function keep(channel: ProviderRelayChannel, relays: readonly ProviderRela
 }
 
 /** The chat's run placement named this relay and its daemon start listed it: reattach it. */
-export async function placeKeptProviderRelay(chatKey: string, relay: KeptProviderRelay) {
+/** `ask`: the liveness ask that found it; an ask fenced off by a close, deletion or new run writes nothing. */
+export async function placeKeptProviderRelay(
+  chatKey: string,
+  relay: KeptProviderRelay,
+  ask: number
+) {
+  if (!providerRelayRunAskCurrent(chatKey, ask)) {
+    return
+  }
   if (listed.get(chatKey)?.info.relayId === relay.info.relayId) {
     return
   }
   listed.set(chatKey, relay)
   const { pid, exit } = relay.info
   const token = pid !== null && exit === null ? await readSpawnToken(pid) : null
+  if (!providerRelayRunAskCurrent(chatKey, ask) || listed.get(chatKey) !== relay) {
+    return
+  }
   if (token) {
     spawnTokens.set(chatKey, token)
   } else {
@@ -244,22 +256,69 @@ export function forgetListedProviderRelayChat(chatKey: string): void {
   spawnTokens.delete(chatKey)
 }
 
-/** Chats whose last run's daemon start couldn't say at their last ask; a close forgets one. */
+/** Chats whose current run's daemon start couldn't say at their newest applied ask. */
 const unknownRuns = new Set<string>()
+let askSeq = 0
+/**
+ * Per chat with an ask in flight: how many, and the newest ask a later answer, close, deletion or
+ * new run fenced off. An ask's verdict applies only when it started after that floor.
+ */
+const asks = new Map<string, { inFlight: number; floor: number; unknownFloor: number }>()
 
+/** Starts one ask; its number is passed back with its verdict. */
+export function beginProviderRelayRunAsk(chatKey: string): number {
+  const ask = asks.get(chatKey) ?? { inFlight: 0, floor: 0, unknownFloor: 0 }
+  ask.inFlight += 1
+  asks.set(chatKey, ask)
+  askSeq += 1
+  return askSeq
+}
+
+/** Ends one ask; a thrown ask (null) or one older than the floor leaves the verdict as it was. */
 export function noteProviderRelayRunVerdict(
   chatKey: string,
-  verdict: 'kept' | 'gone' | 'unknown'
+  seq: number,
+  verdict: 'kept' | 'gone' | 'unknown' | null
 ): void {
-  if (verdict === 'unknown') {
+  const ask = asks.get(chatKey)
+  if (!ask) {
+    return
+  }
+  if (verdict === 'unknown' && seq > ask.floor && seq > ask.unknownFloor) {
+    ask.floor = seq
     unknownRuns.add(chatKey)
-  } else {
+  } else if ((verdict === 'kept' || verdict === 'gone') && seq > ask.floor) {
+    ask.floor = seq
+    // No ask already in flight can undo this answer with an unknown.
+    ask.unknownFloor = askSeq
     unknownRuns.delete(chatKey)
+    cancelProviderRelayExitProbes(chatKey)
+  }
+  ask.inFlight -= 1
+  if (ask.inFlight <= 0) {
+    asks.delete(chatKey)
   }
 }
 
+/** The ask may still end as unknown: no fence and no conclusive answer since it started. */
+export function providerRelayRunAskAwaitsProof(chatKey: string, seq: number): boolean {
+  const ask = asks.get(chatKey)
+  return ask !== undefined && seq > ask.floor && seq > ask.unknownFloor
+}
+
+export function providerRelayRunAskCurrent(chatKey: string, seq: number): boolean {
+  const ask = asks.get(chatKey)
+  return ask !== undefined && seq > ask.floor
+}
+
+/** Its chat closed or was deleted, or a new run replaced the one asked about. */
 export function forgetProviderRelayRunVerdict(chatKey: string): void {
   unknownRuns.delete(chatKey)
+  cancelProviderRelayExitProbes(chatKey)
+  const ask = asks.get(chatKey)
+  if (ask) {
+    ask.floor = askSeq
+  }
 }
 
 /** Its daemon start couldn't say at the last ask; the host holds the chat until it can. */
@@ -283,6 +342,9 @@ export function keptRunningProviderRelayPid(chatKey: string): number | null {
 /** Ended relays found at launch are dropped once their chat cold-resumes. */
 /** `keepUnread`: output no app took stays with the daemon (it expires there); a deleted chat drops it. */
 export function dropListedProviderRelay(chatKey: string, keepUnread = false): void {
+  if (!keepUnread) {
+    forgetProviderRelayRunVerdict(chatKey)
+  }
   const relay = keptProviderRelay(chatKey)
   if (relay) {
     forgetKeptProviderRelay(chatKey, relay)

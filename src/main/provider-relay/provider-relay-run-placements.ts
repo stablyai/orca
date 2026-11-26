@@ -1,5 +1,6 @@
 import type { DaemonClient } from '../daemon/transport/client/daemon-client'
 import type { AgentSessionRunPlacementLaunch } from '../../shared/agent-session/lifecycle/agent-session-run-placement'
+import { forgetProviderRelayRunVerdict } from './provider-relay-launch-inventory'
 
 /** Where each chat's current launch started its run, taken once by the process commit. */
 const placements = new Map<string, AgentSessionRunPlacementLaunch>()
@@ -8,6 +9,8 @@ const placements = new Map<string, AgentSessionRunPlacementLaunch>()
 export function takeProviderRelayRunPlacement(chatKey: string): AgentSessionRunPlacementLaunch {
   const placement = placements.get(chatKey) ?? { kind: 'direct' }
   placements.delete(chatKey)
+  // The new run replaces the one any earlier ask was about.
+  forgetProviderRelayRunVerdict(chatKey)
   return placement
 }
 

@@ -7,18 +7,21 @@ import {
   type AgentSessionRunPlacement
 } from '../../shared/agent-session/lifecycle/agent-session-run-placement'
 import type { AgentSessionProcessIdentity } from '../../shared/agent-session/lifecycle/agent-session-record'
-import { probeAgentSessionProcessIdentity } from '../runtime/agent-session/ownership/agent-session-process-identity-probe'
-import { readEchoedAgentSessionSpawnToken } from '../runtime/agent-session/ownership/agent-session-spawn-token-readback'
 import { providerRelayChannel } from './provider-relay-channel'
 import {
   forgetListedProviderRelayChat,
   keptProviderRelayOutstanding,
   listProviderRelayInstance,
+  beginProviderRelayRunAsk,
   noteProviderRelayRunVerdict,
+  providerRelayRunAskAwaitsProof,
+  providerRelayRunAskCurrent,
   placeKeptProviderRelay,
   providerRelayMayKeep
 } from './provider-relay-launch-inventory'
 import { providerRelayRoute } from './provider-relay-route'
+import { watchProviderRelayClient } from './provider-relay-instance-signals'
+import { agentProvenGone, provenGone } from './provider-relay-exit-probes'
 
 /** `kept`: its daemon start holds it. `gone`: proven ended. `unknown`: its daemon can't say yet. */
 export type ProviderRelayRunLiveness = 'kept' | 'gone' | 'unknown'
@@ -47,27 +50,30 @@ export async function providerRelayRunLiveness(
   record: ProviderRelayRunRecord,
   options: { waitMs?: number; fresh?: boolean; observe?: boolean } = {}
 ): Promise<ProviderRelayRunLiveness> {
-  const apply = options.observe !== true
-  const verdict = await decide(
-    record,
-    options.waitMs ?? DEFAULT_WAIT_MS,
-    options.fresh === true,
-    apply
-  )
-  if (apply) {
-    noteProviderRelayRunVerdict(record.sessionId, verdict)
+  const waitMs = options.waitMs ?? DEFAULT_WAIT_MS
+  const fresh = options.fresh === true
+  if (options.observe === true) {
+    return decide(record, waitMs, fresh, null)
   }
-  return verdict
+  const ask = beginProviderRelayRunAsk(record.sessionId)
+  let verdict: ProviderRelayRunLiveness | null = null
+  try {
+    verdict = await decide(record, waitMs, fresh, ask)
+    return verdict
+  } finally {
+    noteProviderRelayRunVerdict(record.sessionId, ask, verdict)
+  }
 }
 
 async function decide(
   record: ProviderRelayRunRecord,
   waitMs: number,
   fresh: boolean,
-  apply: boolean
+  /** The ask's number; null observes only. */
+  ask: number | null
 ): Promise<ProviderRelayRunLiveness> {
   const forget = (): void => {
-    if (apply) {
+    if (ask !== null && providerRelayRunAskCurrent(record.sessionId, ask)) {
       forgetListedProviderRelayChat(record.sessionId)
     }
   }
@@ -89,11 +95,12 @@ async function decide(
   if (client && listing) {
     const info = listing.get(placement.relayId)
     if (info && keptProviderRelayOutstanding(info)) {
-      if (!info.attached && apply) {
-        await placeKeptProviderRelay(record.sessionId, {
-          channel: providerRelayChannel(client),
-          info
-        })
+      if (!info.attached && ask !== null) {
+        await placeKeptProviderRelay(
+          record.sessionId,
+          { channel: providerRelayChannel(client), info },
+          ask
+        )
       }
       return 'kept'
     }
@@ -102,7 +109,18 @@ async function decide(
   }
   // Its daemon start can't answer: only both processes proven gone end the run. A daemon can lose
   // its endpoint and keep its agents, and a supervised agent may outlive its daemon for a grace.
-  if (await processesProvenGone(placement)) {
+  if (
+    await processesProvenGone(
+      ask === null
+        ? null
+        : {
+            chatKey: record.sessionId,
+            current: () => providerRelayRunAskAwaitsProof(record.sessionId, ask)
+          },
+      placement,
+      waitMs
+    )
+  ) {
     forget()
     return 'gone'
   }
@@ -138,6 +156,9 @@ async function instanceClient(
     waitMs,
     []
   )
+  for (const client of clients) {
+    watchProviderRelayClient(client)
+  }
   const named = (client: DaemonClient) => client.getDaemonIdentity()?.launchNonce === instance
   const found = clients.find(named)
   if (found) {
@@ -151,14 +172,6 @@ async function instanceClient(
     )
   )
   return waiting.find(named) ?? null
-}
-
-async function provenGone(identity: AgentSessionProcessIdentity, readToken: boolean) {
-  const probe = await probeAgentSessionProcessIdentity({
-    identity,
-    deps: readToken ? { readEchoedSpawnToken: readEchoedAgentSessionSpawnToken } : {}
-  }).catch(() => null)
-  return probe?.outcome === 'pid-absent' || probe?.outcome === 'identity-mismatch'
 }
 
 /** One daemon start's proof, shared by every chat asking within 2 s; bounded by daemon starts. */
@@ -184,11 +197,13 @@ function daemonProvenGone(daemon: AgentSessionRunDaemon, hostId: string): Promis
 }
 
 async function processesProvenGone(
-  placement: Extract<AgentSessionRunPlacement, { kind: 'relayed' }>
+  asker: Parameters<typeof agentProvenGone>[0],
+  placement: Extract<AgentSessionRunPlacement, { kind: 'relayed' }>,
+  deadlineMs: number
 ): Promise<boolean> {
   const { daemon, agent } = placement
   // A live daemon decides alone; its agent is only probed once the daemon is proven gone.
-  return (await daemonProvenGone(daemon, agent.hostId)) && provenGone(agent, true)
+  return (await daemonProvenGone(daemon, agent.hostId)) && agentProvenGone(asker, agent, deadlineMs)
 }
 
 /**
