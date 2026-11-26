@@ -24,10 +24,6 @@ import type { RpcContext, RpcMethod } from '../../runtime/rpc/core'
 import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import type { WorkspaceLayoutStreamEvent } from '../../../shared/workspace-layout/published-layout/workspace-layout-stream-frames'
 import { admitTeammateCall } from './teammate-call-admission'
-import { teammateTerminalAdmission } from './teammate-call-targets'
-import { installMultiplexSubscribeFrame } from '../../runtime/rpc/methods/terminal/terminal-multiplex-subscribe-frame'
-import type { TerminalMultiplexConnection } from '../../runtime/rpc/methods/terminal/terminal-multiplex-connection'
-import { encodeTerminalStreamJson } from '../../../shared/terminal/stream/terminal-stream-protocol'
 
 // The owner's host: a shared bot whose home parents one worker worktree, and the owner's own repo,
 // worktree and folder beside it.
@@ -71,8 +67,7 @@ const folder = (id: string) => ({ id, projectGroupId: `group-${id}`, path: `/f/$
 const repo = (id: string, projectGroupId: string) => ({
   id,
   path: `/r/${id}`,
-  projectGroupId,
-  gitRemoteIdentity: { canonicalKey: `github.com/acme/gh-${id}` }
+  projectGroupId
 })
 
 let directory: string
@@ -306,12 +301,11 @@ describe('a workspace teammate on a shared agent', () => {
     ])
   })
 
-  it('reads and sends to chats in the agent’s workers’ workspaces, and none of the owner’s', async () => {
+  it('reads chats in the agent’s workers’ workspaces, which a chats-only teammate cannot', async () => {
     const history = (scope: RpcCallerScope, sessionId: string) =>
       call(scope, 'agentSession.history', { sessionId, direction: 'tail' })
     expect(await history(TEAMMATE, OWNERS_WORKSPACE_CHAT)).not.toMatchObject({ code: 'not_found' })
     expect(await history(CHATS_ONLY, OWNERS_WORKSPACE_CHAT)).toMatchObject({ code: 'not_found' })
-    expect(await history(TEAMMATE, OWNERS_OTHER_CHAT)).toMatchObject({ code: 'not_found' })
   })
 
   it('reads the host’s full status as a paired client does, without the update offer', async () => {
@@ -403,7 +397,7 @@ describe('a workspace teammate on a shared agent', () => {
   })
 })
 
-describe('what a workspace teammate’s call may name', () => {
+describe('a workspace teammate’s calls', () => {
   /** Whether the tier admits `method` with `params`, before its handler runs. */
   async function admits(method: string, params: unknown) {
     const found = ALL_RPC_METHODS.find((candidate) => candidate.name === method)
@@ -423,93 +417,18 @@ describe('what a workspace teammate’s call may name', () => {
     }
   })
 
-  it('starts a chat in the agent’s workspaces under a new id, and none in the owner’s', async () => {
-    const create = (worktree: string, sessionId: string) => ({
-      envelope: { sessionId },
-      worktree: `id:${worktree}`,
-      agent: 'codex'
-    })
-    expect(await admits('agentSession.create', create(WORKER, chat(9)))).toBe(true)
-    expect(await admits('agentSession.ensure', create(HOME, chat(9)))).toBe(true)
-    expect(await admits('agentSession.create', create(OWNERS, chat(9)))).toBe(false)
-    // An id the owner's chat already holds is not a new chat.
-    expect(await admits('agentSession.ensure', create(WORKER, OWNERS_OTHER_CHAT))).toBe(false)
-  })
-
-  it('reads an agent CLI session running in the agent’s workspaces, by its provider id', async () => {
-    vi.spyOn(runtime, 'getAgentProviderSessionRows').mockReturnValue(
-      fake([
-        { providerSession: { id: 'cli-agent' }, worktreeId: WORKER, paneKey: 'p1' },
-        { providerSession: { id: 'cli-owner' }, worktreeId: OWNERS, paneKey: 'p2' }
-      ])
-    )
-    expect(await admits('nativeChat.readSession', { sessionId: 'cli-agent' })).toBe(true)
-    expect(await admits('nativeChat.subscribe', { sessionId: 'cli-owner' })).toBe(false)
-    expect(await admits('nativeChat.readSession', { sessionId: 'cli-unknown' })).toBe(false)
-  })
-
-  it('works on GitHub repos the agent’s workspaces push to, by slug', async () => {
-    const slug = (name: string) => ({ owner: 'acme', repo: name, number: 1 })
-    expect(await admits('github.project.workItemDetailsBySlug', slug('gh-repo-agent'))).toBe(true)
-    expect(await admits('github.project.workItemDetailsBySlug', slug('gh-repo-owner'))).toBe(false)
-  })
-
-  it('refuses a call that names no workspace, page or terminal rather than act on the owner’s', async () => {
-    vi.spyOn(runtime, 'browserTabList').mockResolvedValue(
-      fake({ tabs: [{ browserPageId: 'page-agent' }] })
-    )
+  it('runs a call as the owner’s would, whatever it names: only lists are kept to the agent', async () => {
     for (const [method, params] of [
-      ['browser.tabCurrent', {}],
-      ['browser.snapshot', { page: 'page-agent' }],
-      ['workspacePorts.scan', {}],
+      ['agentSession.history', { sessionId: OWNERS_OTHER_CHAT, direction: 'tail' }],
+      ['agentSession.create', { envelope: { sessionId: chat(9) }, worktree: `id:${OWNERS}` }],
       ['terminal.resolveActive', {}],
-      ['orchestration.workerStart', { task: 'task-1', from: 'term_coord', agent: 'codex' }],
       ['session.tabs.list', { worktree: `id:${OWNERS}` }]
     ] as const) {
-      expect(await admits(method, params), method).toBe(false)
+      expect(await admits(method, params), method).toBe(true)
     }
-    expect(await admits('browser.snapshot', { page: 'page-agent', worktree: `id:${WORKER}` })).toBe(
-      true
-    )
-    expect(await admits('browser.snapshot', { page: 'page-owner', worktree: `id:${WORKER}` })).toBe(
-      false
-    )
-    expect(await admits('session.tabs.list', { worktree: `id:${WORKER}` })).toBe(true)
-  })
-
-  it('streams only the agent’s terminals, judged as the set is when each is subscribed', async () => {
-    vi.spyOn(runtime, 'getTerminalWorktreeIdForHandle').mockImplementation((handle) => handle)
-    // Past admission, a terminal with no live pane ends as no_connected_pty.
-    vi.spyOn(runtime, 'resolveLiveLeafForHandle').mockReturnValue(null)
-    const refusals: string[] = []
-    const connection = (scope: RpcCallerScope) => {
-      const state = fake<TerminalMultiplexConnection>({
-        runtime,
-        admitsTerminal: teammateTerminalAdmission(fake({ runtime, callerScope: scope })),
-        streams: new Map(),
-        closed: false,
-        sendStreamError: (_streamId: number, code: string) => void refusals.push(code),
-        emit: () => {},
-        detachStream: () => {},
-        cancelPendingPtyWaits: () => {}
-      })
-      installMultiplexSubscribeFrame(state)
-      return (terminal: string) =>
-        state.handleSubscribeFrame(encodeTerminalStreamJson({ streamId: 1, terminal }))
+    for (const method of ['settings.update', 'pairing.createOffer', 'accounts.subscribe']) {
+      expect(await admits(method, {}), method).toBe(false)
     }
-    const teammate = connection(TEAMMATE)
-    await teammate(WORKER)
-    await teammate(OWNERS)
-    // The worker leaves the agent's workspaces: its terminal is no longer theirs.
-    scanned = scanned.filter((id) => id !== WORKER)
-    await teammate(WORKER)
-    await connection(OWNER)(OWNERS)
-    expect(refusals).toEqual([
-      'no_connected_pty',
-      'terminal_not_found',
-      'terminal_not_found',
-      'no_connected_pty'
-    ])
   })
 
   it('streams layouts of the agent’s workspaces in order, the home with only their own chats', async () => {

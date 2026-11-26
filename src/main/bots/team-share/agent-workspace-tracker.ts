@@ -17,10 +17,7 @@ export const NO_WORKSPACES: AgentWorkspaceSet = {
   homeKey: 'folder:',
   keys: new Set(),
   repoIds: new Set(),
-  groupIds: new Set(),
-  paths: new Set(),
-  repoNames: new Set(),
-  remoteKeys: new Set()
+  groupIds: new Set()
 }
 
 /** The workspace teammate's scope, or null for anyone else. */

@@ -3,8 +3,8 @@
 // a test fails until it is classified, so a new method can't reach a teammate without a decision.
 import classes from './teammate-method-classes.json'
 
-/** `scoped`: acts only on what its params name; a workspace, chat, terminal or party it names must
- *  be one of the agent's (`teammate-call-admission.ts`). A method that names none touches no workspace.
+/** `scoped`: acts on what its params name, and runs as the owner's call would (a trusted teammate has
+ *  the owner's access; only lists are kept to the agent's workspaces).
  *  `filtered`: a list or stream kept to the agent's workspaces (`teammate-workspace-lists.ts`, or its
  *  handler through `teammate-workspace-view.ts`).
  *  `own`: bound to the caller's own connection, uploads, subscriptions or device.
