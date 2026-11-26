@@ -13,6 +13,8 @@ import {
 } from '../../host-catalog/host-direct-endpoint-persistence'
 import { peekHosts } from '../../host-catalog/host-store'
 import { isPairingRelayRpcUnavailable } from '../../pairing/pairing-relay-rpc-unavailable'
+import { openAuthenticatedDirectEndpoint } from '../relay/mobile-direct-endpoint-probe'
+import { directProbeTimeoutMsForEndpoint } from '../relay/mobile-direct-return-probe'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../rpc/rpc-operation'
 import { rpcResultVariant } from '../rpc/rpc-operation-result-reader'
 import type { RpcClient } from '../rpc/rpc-client-contract'
@@ -28,23 +30,29 @@ const pairingDirectEndpointsRead = bindDeferredRpcOperation(
   })
 )
 
+// A replacement that did not answer is not dialed again on every screen focus.
+const FAILED_REPLACEMENT_RETRY_MS = 60_000
+
 export type HostDirectEndpointFollower = {
-  /** Where the desktop should answer now: an unverified replacement, else the saved endpoint. */
+  /** The saved direct endpoint, moved once the desktop's replacement answered from this phone. */
   directEndpoint(): string
-  /** Open a return-probe dial; a direct win at the replacement proves it, a failure tries the other. */
-  dial(open: (endpoint: string) => RpcClient): RpcClient
-  onNetworkArrival(): void
   onConnected(): void
   refresh(): void
 }
 
-/** Follows a desktop's moved direct address: dial the desktop's replacement, save it once it answers. */
+/**
+ * Follows a desktop's moved direct address. Only the desktop can say an address is no longer its
+ * own; its replacement is saved only after this phone authenticates there, so an address that left
+ * for a moment, or one this phone cannot reach, never strands the row.
+ */
 export function createHostDirectEndpointFollower(args: {
   client: StableLogicalRpcClient
   hostId: string
   saved: HostDirectEndpointFields
+  openDirect: (endpoint: string) => RpcClient
   /** Background work can wait: the resume nudge asks again. */
   isForeground: () => boolean
+  now: () => number
 }): HostDirectEndpointFollower {
   const { client, hostId } = args
   // The last settled host list is storage as of its read, until a write clears it; the opener's copy may be older.
@@ -54,10 +62,7 @@ export function createHostDirectEndpointFollower(args: {
   let syncedWithStorage = settledRow !== undefined
   // After one answer only a desktop-owned row can change, so manual and unknown rows stop asking.
   let answered = false
-  let candidate: string | null = null
-  let lastDialed: string | null = null
-  // After a failed dial, try the other of candidate/saved: an address back from a blip answers there.
-  let dialSaved = false
+  let failedReplacement: { endpoint: string; at: number } | null = null
   let unsupported = false
   let inFlight = false
   // A cutover can publish the new session's connected edge while the old session's read is pending.
@@ -67,6 +72,26 @@ export function createHostDirectEndpointFollower(args: {
     if (fields) {
       saved = fields
     }
+  }
+  const tryReplacement = async (replacement: string): Promise<void> => {
+    if (
+      failedReplacement?.endpoint === replacement &&
+      args.now() - failedReplacement.at < FAILED_REPLACEMENT_RETRY_MS
+    ) {
+      return
+    }
+    const reached = await openAuthenticatedDirectEndpoint(
+      () => args.openDirect(replacement),
+      directProbeTimeoutMsForEndpoint(replacement)
+    )
+    if (!reached) {
+      failedReplacement = { endpoint: replacement, at: args.now() }
+      return
+    }
+    // Return probes dial the saved endpoint and own promotion; this dial only proved it reachable.
+    reached.close()
+    failedReplacement = null
+    adoptSaved(await adoptHostDirectEndpoint(hostId, saved.endpoint, replacement))
   }
   const read = async (): Promise<void> => {
     const reply = await pairingDirectEndpointsRead.request(client, {})
@@ -80,12 +105,11 @@ export function createHostDirectEndpointFollower(args: {
       adoptSaved(await markHostDirectEndpointListed(hostId, endpoints))
       syncedWithStorage = true
     }
-    const next = directEndpointCandidate(saved, endpoints)
-    if (next !== candidate) {
-      candidate = next
-      dialSaved = false
-    }
     answered = true
+    const replacement = directEndpointCandidate(saved, endpoints)
+    if (replacement !== null) {
+      await tryReplacement(replacement)
+    }
   }
   const refresh = (): void => {
     if (inFlight) {
@@ -113,58 +137,12 @@ export function createHostDirectEndpointFollower(args: {
         }
       })
   }
-  let adopting = false
-  const saveVerifiedCandidate = (): void => {
-    const verified = candidate
-    if (
-      adopting ||
-      verified === null ||
-      lastDialed !== verified ||
-      client.getActivePath() === 'relay'
-    ) {
-      return
-    }
-    adopting = true
-    // This connection authenticated at the replacement, so it is reachable from here: keep it.
-    void adoptHostDirectEndpoint(hostId, saved.endpoint, verified)
-      .then((fields) => {
-        adoptSaved(fields)
-        if (candidate === verified && saved.endpoint === verified) {
-          candidate = null
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        adopting = false
-      })
-  }
-  const directEndpoint = (): string => candidate ?? saved.endpoint
   return {
-    directEndpoint,
-    dial(open) {
-      const endpoint = candidate !== null && dialSaved ? saved.endpoint : directEndpoint()
-      lastDialed = endpoint
-      const client = open(endpoint)
-      // Keep dialing whichever answered; hysteresis needs consecutive wins at one address.
-      const stop = client.onStateChange((state) => {
-        if (state === 'connected') {
-          stop()
-        } else if (state === 'disconnected' || state === 'auth-failed') {
-          stop()
-          if (lastDialed === endpoint && candidate !== null) {
-            dialSaved = endpoint !== saved.endpoint
-          }
-        }
-      })
-      return client
-    },
-    onNetworkArrival() {
-      // A dial aborted by the network change is not evidence against the replacement.
-      dialSaved = false
-    },
+    directEndpoint: () => saved.endpoint,
     onConnected() {
+      // A new connection may be on a new network, where an earlier miss can now answer.
       unsupported = false
-      saveVerifiedCandidate()
+      failedReplacement = null
       refresh()
     },
     refresh

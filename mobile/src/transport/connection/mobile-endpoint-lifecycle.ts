@@ -47,12 +47,14 @@ export function startMobileEndpointLifecycle(
   let stopped = false
   let foreground = true
   let owner: EndpointOwner
-  // The desktop may move its direct address mid-session; return probes dial where it says it is now.
+  // The desktop may move its direct address mid-session; the saved endpoint follows once the new one answers.
   const directEndpoints = createHostDirectEndpointFollower({
     client: logical,
     hostId: initialHost.id,
     saved: initialHost,
-    isForeground: () => foreground
+    openDirect: (endpoint) => openHostDirect(initialHost, endpoint, onLog),
+    isForeground: () => foreground,
+    now: Date.now
   })
   const unsubscribeDirectEndpoints = logical.onStateChange((state) => {
     if (state === 'connected') {
@@ -95,9 +97,7 @@ export function startMobileEndpointLifecycle(
     nudge(reason) {
       // Why: a focus nudge can precede the AppState listener; keep the closure in
       // sync or a later supervisor swap would start with a stale background flag.
-      if (reason === 'network-change') {
-        directEndpoints.onNetworkArrival()
-      } else {
+      if (reason !== 'network-change') {
         foreground = true
         directEndpoints.refresh()
       }
@@ -111,6 +111,10 @@ export function startMobileEndpointLifecycle(
   }
 }
 
+function openHostDirect(host: HostProfile, endpoint: string, onLog: ConnectionLogSink) {
+  return connect(endpoint, host.deviceToken, host.publicKeyB64, { onLog, hostId: host.id })
+}
+
 function createSupervisor(
   logical: StableLogicalRpcClient,
   host: HostProfile,
@@ -119,11 +123,8 @@ function createSupervisor(
   onLog: ConnectionLogSink
 ): MobileEndpointSupervisor {
   return new MobileEndpointSupervisor(logical, host.id, relay, {
-    openDirect: () =>
-      directEndpoints.dial((endpoint) =>
-        connect(endpoint, host.deviceToken, host.publicKeyB64, { onLog, hostId: host.id })
-      ),
-    // Getters: each return probe reads where the desktop says it listens now (same kind as the saved one).
+    openDirect: () => openHostDirect(host, directEndpoints.directEndpoint(), onLog),
+    // Getters: each return probe reads the saved endpoint, which follows a moved desktop.
     get directPath() {
       return directPathForEndpoint(directEndpoints.directEndpoint())
     },
