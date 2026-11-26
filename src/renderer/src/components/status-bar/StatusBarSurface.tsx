@@ -10,6 +10,7 @@ import { SkillUpdateStatusSegment } from './updates/SkillUpdateStatusSegment'
 import { AgentCliUpdateStatusSegment } from './updates/AgentCliUpdateStatusSegment'
 import { NativeChatResumeStatusSegment } from './NativeChatResumeStatusSegment'
 import { CaffeinateStatusSegment } from './CaffeinateStatusSegment'
+import { CopilotStatusSegment } from './CopilotStatusSegment'
 import { PluginsStatusSegment } from './plugins/PluginsStatusSegment'
 import { PluginStatusBarItems } from './plugins/PluginStatusBarItems'
 import { RemoteServerUpdateStatusSegment } from './updates/RemoteServerUpdateStatusSegment'
@@ -109,6 +110,7 @@ export function StatusBarSurface({
         <div className="flex w-max items-center gap-3 px-1">
           {!isPairedWebClientWindow() ? (
             <>
+              <CopilotStatusSegment />
               <PluginsStatusSegment />
               <PluginStatusBarItems />
               <CaffeinateStatusSegment />

@@ -10,6 +10,7 @@ import type { Store } from '../../persistence/loading-store/store'
 import { resolveDesktopAuthorizedPath } from '../filesystem/access/local-file-access-resolution'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { StatsCollector } from '../../stats/collector'
+import { registerCopilotInlineCompletionHandlers } from '../copilot-inline-completion'
 import { registerFilesystemHandlers } from '../filesystem/filesystem'
 import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/execution/commit-message-agent-environment'
 import { registerFilesystemWatcherHandlers } from '../filesystem/watchers/filesystem-watcher-handlers'
@@ -224,6 +225,7 @@ export async function registerCoreHandlers(
     registerLocalhostWorktreeLabelHandlers(store)
     registerFilesystemHandlers(store, commitMessageAgentEnv)
     registerFilesystemWatcherHandlers()
+    registerCopilotInlineCompletionHandlers(store)
     registerRuntimeHandlers(runtime)
     const hostsReady = registerRuntimeHostHandlers(store, lifecycleOptions.hostInitialization)
     registerWslMoveWiring(store, runtime)

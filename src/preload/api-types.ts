@@ -18,6 +18,7 @@ import type {
   RateLimitsApi
 } from './api/agent-usage/agent-usage-api'
 import type { AiVaultApi } from './api/ai-vault/ai-vault-api'
+import type { CopilotCompletionApi } from './api/copilot-completion-api'
 import type { AppApi, E2EApi, PlatformApi } from './api/app-api'
 import type { AutomationsApi } from './api/automations/automation-api'
 import type { BrowserApi } from './api/browser/browser-api'
@@ -172,6 +173,7 @@ export type PreloadApi = {
   aiVault: AiVaultApi
   nativeChat: NativeChatApi
   fs: FilesystemApi['fs']
+  copilotCompletion: CopilotCompletionApi
   git: Merged<GitInspectionApi & GitOperationApi>
   ui: Merged<UiCommandEventApi & UiWindowApi & BotLinkEventApi>
   runtime: RuntimeApi['runtime']

@@ -1,3 +1,4 @@
+import { copilotCompletionApi } from './api/copilot-completion-bridge'
 import { contextBridge, ipcRenderer } from 'electron'
 import { HIDDEN_WINDOW_FRAME_PUMP_STOP_CHANNEL } from '../shared/app-lifecycle/windows/hidden-window-frame-pump'
 import { installHiddenWindowFramePump } from './renderer/hidden-window-frame-pump'
@@ -187,6 +188,7 @@ const api = {
   docPreview: docPreviewApi,
   notebook: notebookApi,
   fs: fsApi,
+  copilotCompletion: copilotCompletionApi,
   git: gitApi,
   ui: uiApi,
   stats: statsApi,

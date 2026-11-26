@@ -4,7 +4,8 @@ import { resolveIndexedWorktreeOwner } from './worktree-runtime-owner-index'
 import { resolveWorktreeExecutionHost } from '../../../../../shared/execution-host/worktree-execution-host-resolution'
 import {
   getRepoExecutionHostId,
-  getRepoSshConnectionId
+  getRepoSshConnectionId,
+  LOCAL_EXECUTION_HOST_ID
 } from '../../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
@@ -15,7 +16,10 @@ import {
   normalizeRuntimePathForComparison
 } from '../../../../../shared/file-access/cross-platform-path'
 import { getFolderWorkspaceConnectionId } from './folder-workspace-connection'
-import { findFolderWorkspaceCandidateRepos } from '../../../../../shared/folder-workspaces/folder-workspace-execution-host'
+import {
+  resolveFolderWorkspaceHost,
+  findFolderWorkspaceCandidateRepos
+} from '../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
@@ -135,6 +139,16 @@ export function getFolderFileConnectionOwnerFromState(
   folderWorkspaceId: string,
   filePath: string
 ): { connectionId: string | null; repo?: Repo } | undefined {
+  const repo = folderRepoForFile(state, folderWorkspaceId, filePath)
+  return repo ? { connectionId: getRepoSshConnectionId(repo), repo } : undefined
+}
+
+// null means the folder owns this path directly; undefined means its matching repos disagree.
+function folderRepoForFile(
+  state: ConnectionOwnerState,
+  folderWorkspaceId: string,
+  filePath: string
+): Repo | null | undefined {
   const candidateRepos = findFolderWorkspaceCandidateRepos(state, folderWorkspaceId)
   const matchingRepos = candidateRepos
     .filter((repo) => isPathInsideOrEqual(repo.path, filePath))
@@ -142,7 +156,7 @@ export function getFolderFileConnectionOwnerFromState(
     .sort((left, right) => right.normalizedPath.length - left.normalizedPath.length)
   const longestPathLength = matchingRepos[0]?.normalizedPath.length
   if (!longestPathLength) {
-    return undefined
+    return null
   }
   const longest = matchingRepos.filter(
     (candidate) => candidate.normalizedPath.length === longestPathLength
@@ -153,9 +167,7 @@ export function getFolderFileConnectionOwnerFromState(
     )
   )
   const repo = longest[0]?.repo
-  return owners.size === 1 && repo
-    ? { connectionId: getRepoSshConnectionId(repo), repo }
-    : undefined
+  return owners.size === 1 ? repo : undefined
 }
 
 /**
@@ -178,4 +190,46 @@ export function getConnectionIdForWorktreeCopy(
   }
   const folder = resolveQualifiedIndexedFolderWorkspace(state, workspace.folderWorkspaceId, hostId)
   return folder.kind === 'selected' ? folder.value.connectionId : undefined
+}
+
+export function isFileOnLocalHostFromState(
+  state: ConnectionOwnerState,
+  worktreeId: string | null,
+  filePath: string
+): boolean {
+  if (!worktreeId || getConnectionIdForFileFromState(state, worktreeId, filePath) !== null) {
+    return false
+  }
+  const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)
+  if (parsedWorkspaceKey?.type === 'folder') {
+    const folderId = parsedWorkspaceKey.folderWorkspaceId
+    if (resolveFolderWorkspaceHost(state, folderId).kind !== 'local') {
+      return false
+    }
+    const repo = folderRepoForFile(state, folderId, filePath)
+    return (
+      repo === null ||
+      (!!repo &&
+        getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
+        !getRepoSshConnectionId(repo))
+    )
+  }
+  const worktreeResolution = resolveIndexedWorktreeOwner(selectWorktreesByRepo(state), worktreeId)
+  if (worktreeResolution.kind === 'ambiguous') {
+    return false
+  }
+  const worktree = worktreeResolution.kind === 'resolved' ? worktreeResolution.owner : undefined
+  const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
+  const resolution = resolveWorktreeExecutionHost(
+    {
+      byId: (id) => resolveIndexedRepoOwner(state.repos, id),
+      byHost: (id, hostId) => findIndexedRepoOwnerForHost(state.repos, id, hostId)
+    },
+    { repoId, hostId: worktree?.hostId ?? null }
+  )
+  return (
+    !worktree?.runtimeOwnerEnvironmentId?.trim() &&
+    resolution.kind === 'resolved' &&
+    resolution.hostId === LOCAL_EXECUTION_HOST_ID
+  )
 }
