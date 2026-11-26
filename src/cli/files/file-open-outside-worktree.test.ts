@@ -238,6 +238,54 @@ describe('file open absolute paths outside the selected worktree', () => {
     ])
   })
 
+  it('collapses parent segments before the no-cwd containment match', async () => {
+    selectorMocks.resolveCurrentWorktreeSelector.mockRejectedValue(
+      new RuntimeClientError(
+        'selector_not_found',
+        'No Orca workspace contains the current directory: /tmp/outside'
+      )
+    )
+    const paths = COMMAND_SPECS.flatMap((spec) => specPaths(spec))
+    const argv = ['file', 'open', '/repos/feature/../other/README.md', '--json']
+    const parsed = normalizeCommandPositionals(COMMAND_SPECS, parseArgs(argv, paths, COMMAND_SPECS))
+    const opened = clientFor([...catalog, { id: 'repoA::/repos/other', path: '/repos/other' }])
+    await FILE_HANDLERS['file open']({
+      flags: parsed.flags,
+      client: opened.client,
+      cwd: '/tmp/outside',
+      json: true,
+      rawArgs: argv
+    })
+    expect(opened.call.mock.calls.filter((entry) => entry[0] === 'files.open')).toEqual([
+      [
+        'files.open',
+        {
+          worktree: 'id:repoA::/repos/other',
+          relativePath: 'README.md',
+          navigation: 'caller'
+        }
+      ]
+    ])
+  })
+
+  it('collapses parent segments in an absolute path when the cwd worktree is known', async () => {
+    const call = await run(
+      'file open',
+      ['file', 'open', '/repos/feature/../other/README.md', '--json'],
+      [...catalog, { id: 'repoA::/repos/other', path: '/repos/other' }]
+    )
+    expect(call.mock.calls.filter((entry) => entry[0] === 'files.open')).toEqual([
+      [
+        'files.open',
+        {
+          worktree: 'id:repoA::/repos/other',
+          relativePath: 'README.md',
+          navigation: 'caller'
+        }
+      ]
+    ])
+  })
+
   it('does not list worktrees when show fails after the cwd workspace resolves', async () => {
     const paths = COMMAND_SPECS.flatMap((spec) => specPaths(spec))
     const argv = ['file', 'open', '/repos/feature/README.md', '--json']

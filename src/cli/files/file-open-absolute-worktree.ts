@@ -1,7 +1,8 @@
 import {
   isRuntimePathAbsolute,
   normalizeRuntimePathForComparison,
-  relativePathInsideRoot
+  relativePathInsideRoot,
+  resolveRuntimePath
 } from '../../shared/file-access/cross-platform-path'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -64,6 +65,10 @@ async function listContainingFileOpenTarget(
   ctx: HandlerContext,
   absolutePath: string
 ): Promise<FileOpenTarget> {
+  // Prefix containment treats `..` as a real segment, so collapse dots before the match.
+  const path = isRuntimePathAbsolute(absolutePath)
+    ? resolveRuntimePath(absolutePath, absolutePath)
+    : absolutePath
   const listed = await ctx.client.call<{ worktrees: ListedWorktree[]; truncated?: boolean }>(
     'worktree.list',
     { limit: WORKTREE_LIST_LIMIT }
@@ -77,7 +82,7 @@ async function listContainingFileOpenTarget(
       }
     )
   }
-  return pickContainingWorktree(ctx.cwd, absolutePath, listed.result.worktrees)
+  return pickContainingWorktree(ctx.cwd, path, listed.result.worktrees)
 }
 
 function outsideSelectedWorktree(isRemote: boolean): RuntimeClientError {
