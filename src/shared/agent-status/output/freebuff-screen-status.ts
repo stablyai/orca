@@ -88,7 +88,9 @@ export function readFreebuffScreenStatus(
   if (status === '' && text.includes('Your first message starts the session.')) {
     return { state: 'done', sessionBoundary: true }
   }
-  if (/^(?:\d+[hms]\s*)+left\b|^unlimited\b/.test(status) && /End session/.test(status)) {
+  // The bar ends with "✕ End session" only while idle; its label varies by plan
+  // (untimed sessions show just the context readout).
+  if (status.endsWith('\u2715 End session')) {
     return { state: 'done' }
   }
   return null
