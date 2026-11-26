@@ -118,6 +118,8 @@ export class DeviceRegistryStore {
     const written = this.writer.write(before, devices, options)
     // Every save includes current timestamps, making a pending refresh redundant.
     this.cancelPendingLastSeenFlush()
+    // Memory takes the write before listeners run, so a listener reads the devices it was told of.
+    this.devices = written
     this.publishPairedDevicesChange(written)
     return written
   }

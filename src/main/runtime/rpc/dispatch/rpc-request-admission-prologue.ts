@@ -27,8 +27,12 @@ import {
 import { admitOrchestrationPeerCall } from '../orchestration/callers/orchestration-peer-caller'
 import { waitForRestoredWorkerCallerIdentity } from '../orchestration/callers/worker-caller-identity-restore-wait'
 import { admitBotShareCall } from './bot-share-call-admission'
+import { reachesHostWindow } from './bot-share-host-window-fence'
 import { admitTeammateCall } from '../../../bots/team-share/teammate-call-admission'
 import { rpcCallContext } from '../rpc-call-context'
+
+const HOST_WINDOW_REFUSAL =
+  "A teammate's pages and navigation stay on their own computer, never on the host's window."
 
 type RpcRequestAdmissionDeps = {
   runtime: OrcaRuntimeService
@@ -98,6 +102,16 @@ export function admitRpcRequest<M extends RpcMethod | RpcStreamingMethod>(
     const admitted = { method, request, caller, params: parsedParams.value }
     if (callerScope.kind !== 'bot-share') {
       return admitted
+    }
+    // Every teammate call, either tier: nothing it opens, focuses or drives lands on the host's window.
+    if (
+      reachesHostWindow(method.name, admitted.params, {
+        runtime,
+        pairedDeviceId: options?.pairedDeviceId
+      })
+    ) {
+      reportAgentShareFailure({ stage: 'admission_refused', reason: 'host_window' })
+      return reject(errorResponse(request.id, meta, 'forbidden', HOST_WINDOW_REFUSAL))
     }
     const answered = callerScope.workspaceTier
       ? admitTeammateCall(

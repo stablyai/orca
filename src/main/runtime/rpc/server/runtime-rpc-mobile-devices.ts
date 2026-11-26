@@ -6,6 +6,7 @@ import type { DeviceEntry, DeviceOrcaAccount, PairedDeviceTypist } from './pairi
 import type { BotShareDevice, BotShareDeviceStore } from './pairing/bot-share-device-store'
 import type { DeviceSelfRpcContext } from '../core'
 import { pairedDeviceTypistOf } from './pairing/paired-device-typist'
+import { callerScopeOf } from './pairing/device-principal'
 import type {
   DelegatedPhone,
   DelegatedMobileDeviceSyncResult
@@ -140,7 +141,12 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
     return true
   }
 
-  /** Make the runtime device `parentDeviceId`'s phones exactly `phones`; dropped ones are fully revoked. */
+  /** See `BotShareDevices.isOwnerDevice`. Share devices live in their own store, never this registry. */
+  isOwnerDevice(deviceId: string): boolean {
+    const device = this.deviceRegistry?.getDevice(deviceId)
+    return device ? callerScopeOf(device).kind !== 'bot-share' : false
+  }
+
   /** Who typed a paired device's message; see `pairedDeviceTypistOf`. */
   pairedDeviceTypist(
     deviceId: string,
@@ -183,7 +189,8 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
     }
   }
 
-  /** The syncing socket's installation owns its phones: several desktops can share one row. */
+  /** Make the runtime device `parentDeviceId`'s phones exactly `phones`; dropped ones are fully revoked.
+   *  The syncing socket's installation owns its phones: several desktops can share one row. */
   protected syncDelegatedMobileDevices(
     parentDeviceId: string,
     phones: readonly DelegatedPhone[],
