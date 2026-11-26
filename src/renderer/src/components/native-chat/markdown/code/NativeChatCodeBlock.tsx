@@ -1,5 +1,5 @@
 // @protected-copy: preserve code controls used by approval prompts.
-import React, { useContext } from 'react'
+import React, { useContext, useEffect, useRef, useState } from 'react'
 import { WrapText } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -8,29 +8,44 @@ import { NativeChatCopyButton } from '../../messages/actions/NativeChatCopyButto
 import { NativeChatMarkdownRowKeyContext } from '../native-chat-markdown-row-identity'
 import { useNativeChatDisclosure } from '../../messages/disclosure/native-chat-disclosure-store'
 import { NativeChatHighlightedCode } from './NativeChatHighlightedCode'
+import { NativeChatHtmlPreview, NativeChatHtmlViewToggle } from './NativeChatHtmlPreview'
+import { isHtmlDocumentCodeBlock } from '../../../../../../shared/markdown/html-document-fences'
+import { observeTranscriptVisibility } from '../../media/images/native-chat-image-visibility'
 
 /** Code fences need their own copy target rather than the whole chat message. */
 export function NativeChatCodeBlock({
   children,
   language,
   sourceLine,
-  plain = false
+  plain = false,
+  deferHighlight = false
 }: {
   children?: React.ReactNode
   language?: string
   sourceLine?: number
   plain?: boolean
+  /** Color only once on screen (an item's clamped, unvirtualized text); chat colors at once. */
+  deferHighlight?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const code = extractCodeText(children)
   const rowKey = useContext(NativeChatMarkdownRowKeyContext)
   // Keep wrap state in the transcript store so windowing and streaming block recuts cannot reset it; never persist it.
+  const blockKey =
+    rowKey === undefined || sourceLine === undefined ? undefined : `${rowKey}:${sourceLine}`
   const { open: wrapped, setOpen: setWrapped } = useNativeChatDisclosure(
-    rowKey === undefined || sourceLine === undefined
-      ? undefined
-      : `code-wrap:${rowKey}:${sourceLine}`,
+    blockKey && `code-wrap:${blockKey}`,
     false
   )
+  const htmlDocument = !plain && isHtmlDocumentCodeBlock(language, code)
+  const { open: previewOpen, setOpen: setPreviewing } = useNativeChatDisclosure(
+    blockKey && `code-preview:${blockKey}`,
+    false
+  )
+  const previewing = htmlDocument && previewOpen
+  const content = useRef<HTMLPreElement | null>(null)
+  const highlights = Boolean(language && code && !plain)
+  const colored = useSeenOnScreen(content, highlights && deferHighlight)
   const actions = code ? (
     <>
       <NativeChatCodeWrapButton wrapped={wrapped} onToggle={() => setWrapped(!wrapped)} />
@@ -48,39 +63,70 @@ export function NativeChatCodeBlock({
       className="group/code relative my-3 min-w-0 max-w-full overflow-hidden rounded-lg border border-chat-code-border bg-chat-code-surface"
     >
       {language ? (
-        <div className="flex h-7.5 items-center justify-between px-3">
-          <span
-            data-code-language={language}
-            className="min-w-0 font-sans text-xs text-chat-foreground-faint"
-          >
-            <span className="truncate">{getCodeFenceLanguageLabel(language)}</span>
-          </span>
-          {code ? <div className="-mr-1 flex items-center gap-0.5">{actions}</div> : null}
+        <div
+          className={cn(
+            'flex items-center justify-between px-3',
+            htmlDocument ? 'h-8.5 gap-2' : 'h-7.5'
+          )}
+        >
+          {htmlDocument ? (
+            <NativeChatHtmlViewToggle previewing={previewing} onChange={setPreviewing} />
+          ) : (
+            <span
+              data-code-language={language}
+              className="min-w-0 font-sans text-xs text-chat-foreground-faint"
+            >
+              <span className="truncate">{getCodeFenceLanguageLabel(language)}</span>
+            </span>
+          )}
+          {code ? <div className="flex shrink-0 items-center gap-0.5">{actions}</div> : null}
         </div>
       ) : null}
+      {previewing ? <NativeChatHtmlPreview code={code} /> : null}
       <pre
+        ref={content}
         data-native-chat-code-content
+        hidden={previewing}
         className={cn(
           'scrollbar-sleek m-0 max-w-full font-mono text-chat-code text-chat-code-foreground',
           wrapped ? 'whitespace-pre-wrap [overflow-wrap:anywhere]' : 'overflow-x-auto',
-          language ? 'px-3.5 pt-0.5 pb-3' : 'p-3 pr-16'
+          // Margin, not padding: overflowing text scrolls under padding, so only a margin keeps it out from under the actions.
+          htmlDocument ? 'px-3 pt-0.5 pb-3' : language ? 'px-3.5 pt-0.5 pb-3' : 'mr-17 p-3 pr-1.5'
         )}
       >
-        {language && code && !plain ? (
+        {highlights && language ? (
           <code>
-            <NativeChatHighlightedCode code={code} language={language} />
+            {colored ? <NativeChatHighlightedCode code={code} language={language} /> : code}
           </code>
         ) : (
           children
         )}
       </pre>
       {code && !language ? (
-        <div className="absolute right-2 top-2 flex items-center gap-0.5 opacity-100 transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover/code:pointer-events-auto group-hover/code:opacity-100 [[class~='group/code']:has(:focus-visible)_&]:pointer-events-auto [[class~='group/code']:has(:focus-visible)_&]:opacity-100">
+        <div className="absolute right-1.5 top-1.5 flex items-center gap-0.5 opacity-100 transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover/code:pointer-events-auto group-hover/code:opacity-100 [[class~='group/code']:has(:focus-visible)_&]:pointer-events-auto [[class~='group/code']:has(:focus-visible)_&]:opacity-100">
           {actions}
         </div>
       ) : null}
     </div>
   )
+}
+
+/** Tokens are a DOM node each: a deferred block off screen (or cut by a clamp) stays plain until
+ *  first seen, then stays colored. */
+function useSeenOnScreen(node: React.RefObject<HTMLElement | null>, waits: boolean): boolean {
+  const [seen, setSeen] = useState(false)
+  useEffect(() => {
+    const element = node.current
+    if (!waits || seen || !element) {
+      return
+    }
+    return observeTranscriptVisibility(element, (visible) => {
+      if (visible) {
+        setSeen(true)
+      }
+    })
+  }, [node, waits, seen])
+  return seen || !waits
 }
 
 function NativeChatCodeWrapButton({
@@ -106,6 +152,15 @@ function NativeChatCodeWrapButton({
       <WrapText className="size-3.5" />
     </button>
   )
+}
+
+/** For an item's text: unvirtualized and clamped, so only blocks on screen pay for their tokens. */
+export function NativeChatDeferredCodeBlock(props: {
+  children?: React.ReactNode
+  language?: string
+  sourceLine?: number
+}): React.JSX.Element {
+  return <NativeChatCodeBlock {...props} deferHighlight />
 }
 
 /** For dimmed rows: their code keeps the row's faint color, so it is not tokenized at all. */

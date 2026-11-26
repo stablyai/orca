@@ -40,7 +40,26 @@ export function useMobileBotCardHost(): MobileBotCardHost | null {
   return useContext(MobileBotCardHostContext)
 }
 
-/** Tells the chat's agent `text`, as if typed; resolves false when the chat refused it. Null outside a chat. */
-export const MobileBotCardSendContext = createContext<((text: string) => Promise<boolean>) | null>(
-  null
-)
+/** Where a chat's cards answer its agent. Null outside a chat. */
+export type MobileBotCardSend = {
+  /** Tells the agent `text`, as if typed; resolves false when the chat refused it. */
+  typed: (text: string) => Promise<boolean>
+  /** The chat's structured session, which card answers name; null before it has one. */
+  sessionId: string | null
+}
+
+export const MobileBotCardSendContext = createContext<MobileBotCardSend | null>(null)
+
+/** How a card tells its agent `text`: a card answer, which waits for a running turn, when the host
+ *  takes one (`cardAnswer`) and the chat has a session; else typed, which follows the follow-up setting. */
+export function mobileBotOfferTell(
+  card: MobileBotCardSend | null,
+  cardAnswer: ((text: string, sessionId: string) => Promise<boolean>) | null,
+  text: string
+): Promise<boolean> {
+  const sessionId = card?.sessionId
+  if (cardAnswer && sessionId) {
+    return cardAnswer(text, sessionId)
+  }
+  return card ? card.typed(text) : Promise.resolve(false)
+}

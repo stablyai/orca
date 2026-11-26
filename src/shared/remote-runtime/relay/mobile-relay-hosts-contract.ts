@@ -4,6 +4,7 @@ import type { ExecutionHostHealth } from '../../execution-host/execution-host-he
 // Why: both are answered by the paired desktop itself; the phone lists servers the desktop shows.
 export const MOBILE_RELAY_HOSTS_LIST_METHOD = 'mobileRelay.hosts.list'
 export const MOBILE_RELAY_HOST_WORKTREES_METHOD = 'mobileRelay.hosts.worktrees'
+export const MOBILE_RELAY_HOSTS_UNWATCH_ROWS_METHOD = 'mobileRelay.hosts.unwatchRows'
 
 /** Whether the desktop can relay the phone to this server now; `update-needed` is the server's build. */
 export type MobileRelayHostRelay = 'ready' | 'update-needed' | 'unavailable'
@@ -19,6 +20,8 @@ export type MobileRelayHost = {
   unavailableOnDesktop?: true
   /** The server's store identity as the desktop verified it; cross-store records name it. */
   installationId?: string
+  /** The server publishes worktreeRowsChanged, so phones hear its row changes as relayHostRowsChanged. */
+  rowChanges?: true
 }
 
 export type MobileRelayHostsListResult = { hosts: MobileRelayHost[] }

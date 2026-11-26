@@ -1,6 +1,10 @@
 import { NativeChatWaitingAgentMailRowsContext } from '../queue/NativeChatWaitingAgentMailActions'
 import { slackPeopleOf } from '../../../../../shared/connectors/slack-mention-tokens'
-import { useCallback, useContext, useEffect, useId, useMemo, useRef } from 'react'
+import { useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react'
+import {
+  projectionBesideStreamedText,
+  rowsBesideStreamedText
+} from '../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { NativeChatMessageList } from '../NativeChatMessageList'
 import { NativeChatSideChatForkPointContext } from '../messages/actions/native-chat-fork-context'
 import { NativeChatSlackPeopleContext } from '../native-chat-markdown-mentions'
@@ -39,6 +43,28 @@ function returnFocusTarget(
     root?.querySelector<HTMLElement>('[data-native-chat-prompt-editor]') ??
     null
   )
+}
+
+/** `current` while shown; covered, what it drew on covering until `beside` (its rows besides streamed
+ *  text) changes, then `current`, which never shows less text than was drawn. */
+function useHeldWhileHidden<T extends readonly object[]>(
+  current: T | undefined,
+  hidden: boolean,
+  beside: (rows: T) => T
+): T | undefined {
+  const [held, setHeld] = useState<{ base: T; drawn: T } | null>(null)
+  if (!hidden || current === undefined) {
+    if (held !== null) {
+      setHeld(null)
+    }
+    return current
+  }
+  const base = beside(current)
+  if (held?.base !== base) {
+    setHeld({ base, drawn: current })
+    return current
+  }
+  return held.drawn
 }
 
 /** The conversation stays mounted and in place under an open subagent's sheet, so closing keeps the reader's place. */
@@ -83,7 +109,22 @@ export function NativeChatSubagentTranscripts({
     [open, openId, paneKey, showWaiting, stop, titleId, waiting]
   )
   const isVisible = props.isVisible ?? true
-  const slackPeople = useMemo(() => slackPeopleOf(props.session.messages), [props.session.messages])
+  // Paused under the sheet, the conversation keeps the rows and messages it last drew until they
+  // change besides streamed text, so it projects nothing each live window and never rewinds text.
+  const mainItems = useHeldWhileHidden(props.journalItems, shown !== null, rowsBesideStreamedText)
+  const mainMessages = useHeldWhileHidden(
+    props.session.messages,
+    shown !== null,
+    projectionBesideStreamedText
+  )!
+  const mainSession = useMemo(
+    () =>
+      mainMessages === props.session.messages
+        ? props.session
+        : { ...props.session, messages: mainMessages },
+    [mainMessages, props.session]
+  )
+  const slackPeople = useMemo(() => slackPeopleOf(mainMessages), [mainMessages])
   const mainRef = useRef<HTMLDivElement>(null)
   const sheetView = useCallback(
     () =>
@@ -128,6 +169,8 @@ export function NativeChatSubagentTranscripts({
           <NativeChatGalleryCoveredFocusContext value={sheetView}>
             <NativeChatMessageList
               {...props}
+              session={mainSession}
+              journalItems={mainItems}
               isVisible={isVisible && shown === null}
               subagentView={main}
             />
