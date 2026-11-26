@@ -55,6 +55,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
     ) => {
       const db = runtime.getOrchestrationDb()
       const creator = resolveDispatchCreator(runtime, params.from, orchestrationCaller)
+      const chatLineage = dispatchStartsChatWorkers(runtime, db, params.from, orchestrationCaller)
       const assigneeParty = params.to ? resolveDispatchAssigneeParty(params.to, db) : undefined
       const assignee = assigneeParty?.address
       // A chat has no pane, process or agent to probe: it is reached as mail to it is.
@@ -65,7 +66,6 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
 
       // Dry-run previews without state changes; skip readiness and use a placeholder Dispatch id.
       if (params.dryRun) {
-        const chatLineage = dispatchStartsChatWorkers(runtime, db, params.from, orchestrationCaller)
         const maxDepth = runtime.getNestedWorkerMaxDepth()
         const previewDepth = db.resolveChildDispatchDepth(creator, maxDepth)
         const preamble = buildDispatchPreamble({
@@ -157,6 +157,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           ? JSON.stringify(dispatchAuthority.hostScope)
           : null,
         creator,
+        chatLineage,
         maxDepth: runtime.getNestedWorkerMaxDepth()
       })
 

@@ -213,12 +213,6 @@ export const DISPATCH_LINKS_CREATED_BY_ANY_SQL = `
   SELECT ${DISPATCH_LINK_COLUMNS} FROM dispatch_contexts d ${DISPATCH_LINK_JOINS}
   WHERE d.creator_pane_key IN (SELECT value FROM json_each(?2))`
 
-function sqliteUtcMs(value: unknown): number {
-  const ms = typeof value === 'string' ? Date.parse(exposeUtcTimestamp(value) ?? value) : Number.NaN
-  return Number.isFinite(ms) ? ms : 0
-}
-
-const textOrNull = (value: unknown): string | null => (typeof value === 'string' ? value : null)
 /** Every Dispatch these chats or panes created, of any age, with only the columns that place it. */
 export function listDispatchLinksCreatedByAny(
   this: OrchestrationDb,
