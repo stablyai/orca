@@ -21,14 +21,26 @@ import type { SearchResult } from '../../../../../../shared/file-search/code-sea
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 
 const SEARCH_DEBOUNCE_MS = 300
+export const TEXT_SEARCH_MIN_QUERY_LENGTH = 2
 const SEARCH_MAX_RESULTS = 2000
 
+/** One-character text scans of a large repo cost the most and fill the result cap with noise. */
+export function isTextSearchQuery(query: string): boolean {
+  return query.trim().length >= TEXT_SEARCH_MIN_QUERY_LENGTH
+}
+
 type UpdateSearchState = (updates: {
+  query?: string
   error?: string | null
   loading?: boolean
   results?: SearchResult | null
   resultOwner?: FileSearchResultOwner | null
 }) => void
+
+type ExecuteSearchOptions = {
+  /** Seeded searches (search selection, Find in Folder) are explicit, so they run at any length. */
+  allowShortQuery?: boolean
+}
 
 type UseFileSearchRunnerArgs = {
   activeWorktreeId: string | null
@@ -41,7 +53,7 @@ export function useFileSearchRunner({
   worktreePath,
   updateActiveSearchState
 }: UseFileSearchRunnerArgs): {
-  executeSearch: (query: string) => void
+  executeSearch: (query: string, options?: ExecuteSearchOptions) => void
   cancelPendingSearch: () => void
 } {
   const runtimeEnvironmentId = useAppStore((state) =>
@@ -73,12 +85,11 @@ export function useFileSearchRunner({
   }, [updateActiveSearchState])
 
   const executeSearch = useCallback(
-    (query: string) => {
+    (query: string, options?: ExecuteSearchOptions) => {
       searchControllerRef.current?.abort()
       searchControllerRef.current = null
       latestSearchIdRef.current += 1
       const searchId = latestSearchIdRef.current
-      updateActiveSearchState({ error: null })
 
       if (searchTimerRef.current) {
         clearTimeout(searchTimerRef.current)
@@ -86,7 +97,7 @@ export function useFileSearchRunner({
       }
 
       if (!worktreePath || !activeWorktreeId || ownerIsTwin) {
-        updateActiveSearchState({ results: null, resultOwner: null, loading: false })
+        updateActiveSearchState({ query, results: null, resultOwner: null, loading: false })
         return
       }
 
@@ -99,6 +110,8 @@ export function useFileSearchRunner({
         })
       ) {
         updateActiveSearchState({
+          query,
+          error: null,
           results: createEmptyRuntimeFileSearchResult(),
           resultOwner: createFileSearchResultOwner(activeWorktreeId, runtimeEnvironmentId, {
             rootPath: worktreePath,
@@ -109,14 +122,20 @@ export function useFileSearchRunner({
         return
       }
 
-      if (!query.trim()) {
-        updateActiveSearchState({ results: null, resultOwner: null, loading: false })
-        return
-      }
-
-      updateActiveSearchState({ loading: true })
+      // Why: typing shares this field with the name filter, so the store is written once per pause, not per keystroke.
       searchTimerRef.current = setTimeout(async () => {
         searchTimerRef.current = null
+        if (options?.allowShortQuery ? !query.trim() : !isTextSearchQuery(query)) {
+          updateActiveSearchState({
+            query,
+            error: null,
+            results: null,
+            resultOwner: null,
+            loading: false
+          })
+          return
+        }
+        updateActiveSearchState({ query, error: null, loading: true })
         // Results outlive navigation; clicks must retain the route that produced them.
         const resultOwner = createFileSearchResultOwner(activeWorktreeId, runtimeEnvironmentId, {
           rootPath: worktreePath,

@@ -14092,8 +14092,7 @@
             "741ff8a0d2": "{{value0}} 푸시 및 생성"
           },
           "FileExplorer": {
-            "79b1537dd3": "파일을 찾아보려면 워크스페이스를 선택하세요.",
-            "2f4483d6c4": "이 필터와 일치하는 파일이 없습니다"
+            "79b1537dd3": "파일을 찾아보려면 워크스페이스를 선택하세요."
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "새 폴더",
@@ -14136,7 +14135,6 @@
             "31b4c3195d": "추가 탐색기 작업",
             "d95e30fe28": "탐색기 새로 고침",
             "6026b16950": "모두 축소",
-            "c1f3f3ec70": "파일 내용 검색",
             "openInApp": "{{app}}에서 열기"
           },
           "FileExplorerTreeStatus": {
@@ -14249,17 +14247,6 @@
             "localPortInUse": "포트 {{port}}은(는) 이미 사용 중입니다. 다른 로컬 포트를 선택하세요.",
             "localPortRequiresPrivileges": "포트 {{port}}에는 관리자 권한이 필요합니다. 로컬 포트 ≥ 1024를 사용하세요."
           },
-          "Search": {
-            "1abfb25a66": "파일에서 검색하려면 입력하세요.",
-            "d56d140747": "검색하려면 Enter를 누르세요.",
-            "98c8435e36": "검색할 워크스페이스를 선택하세요",
-            "dcc294f28d": "(결과가 잘림)",
-            "resultsInFiles": "{{files}}에서 {{results}}",
-            "resultCount_one": "결과 {{count}}개",
-            "resultCount_other": "결과 {{count}}개",
-            "fileCount_one": "파일 {{count}}개",
-            "fileCount_other": "파일 {{count}}개"
-          },
           "SearchFilters": {
             "01e4671ccf": "제외할 파일(예: *.min.js, dist/**)",
             "0a6412a895": "제외할 파일",
@@ -14269,11 +14256,9 @@
           "SearchHeader": {
             "6234a5ef85": "정규식 사용",
             "4567e6e0b6": "전체 단어 일치",
-            "464ae3974f": "대소문자 일치",
-            "693cbeadd0": "검색"
+            "464ae3974f": "대소문자 일치"
           },
           "SearchQueryRow": {
-            "queryLabel": "파일 검색",
             "clearLabel": "검색 지우기"
           },
           "SearchResultItems": {
@@ -15431,14 +15416,7 @@
             "confirm": "삭제"
           },
           "FileExplorerNameFilter": {
-            "26fb73c6e3": "파일 찾기",
-            "4d5a6b2a49": "파일 필터 지우기",
-            "7a9fb1e6aa": "내용"
-          },
-          "FileExplorerViewSwitch": {
-            "c4e9a2b713": "이름",
-            "b3c8f1a902": "이름으로 파일 필터링",
-            "f8a2c4d1e0": "탐색기 검색 모드"
+            "26fb73c6e3": "파일 찾기"
           },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "이 커밋에는 파일 변경 사항이 없습니다"
@@ -25199,8 +25177,7 @@
     "filters": {
       "toggle": "검색 세부 정보 전환",
       "active": "{{count}}개 활성"
-    },
-    "noResults": "결과가 없습니다. 다른 검색을 시도하거나 필터를 조정하세요."
+    }
   },
   "csv": {
     "detectingDelimiter": "분리자 감지 중…",
