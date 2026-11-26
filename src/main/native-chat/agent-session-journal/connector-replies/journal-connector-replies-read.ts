@@ -66,7 +66,7 @@ export function readOwedJournalConnectorReplies(
   const rows = db
     .prepare(`SELECT ${REPLY_COLUMNS},${includePresentations ? 'has_presentation,' : ''}
       CASE WHEN octet_length(prose)>? THEN substr(prose,1,?) ELSE prose END AS prose
-      FROM journal_connector_replies
+      FROM journal_connector_replies INDEXED BY journal_connector_replies_owed
       WHERE account=? ${cursor} AND outcome IS NOT NULL AND sent_at IS NULL
       ORDER BY delivery_id LIMIT ?`)
     .all(
