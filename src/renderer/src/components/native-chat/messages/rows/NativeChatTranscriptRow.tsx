@@ -1,6 +1,6 @@
-import { useNativeChatMessagingStyle } from '../../appearance/use-native-chat-messaging-style'
-import type { BotChatIdentity } from '../../../bots/use-bot-chat-identity'
 import { memo, useContext } from 'react'
+import type { BotChatIdentity } from '../../../bots/use-bot-chat-identity'
+import { useNativeChatMessagingStyle } from '../../appearance/use-native-chat-messaging-style'
 import { cn } from '@/lib/class-names'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { MessageRow, type NativeChatDeliveryNotice } from './NativeChatMessageRow'
@@ -131,7 +131,8 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   joinsActivityAbove?: boolean
   joinsMessageAbove?: boolean
 }): React.JSX.Element {
-  const messaging = useNativeChatMessagingStyle()
+  const messagingEnabled = useNativeChatMessagingStyle()
+  const messaging = messagingEnabled && context.turnBot != null
   // Offered only on the conversation's own turn-opening prompts (`nativeChatRowOffersRewind`).
   const rewind = useContext(NativeChatRewindContext)
   const fork = useContext(NativeChatForkContext)
@@ -224,6 +225,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       ) : (
         <MessageRow
           message={message}
+          messaging={messaging}
           agentName={context.agentName}
           previousTodoWrite={predecessors?.todowrite}
           previousUpdatePlan={predecessors?.update_plan}

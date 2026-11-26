@@ -12,7 +12,10 @@ import {
   DropdownMenuTrigger
 } from '../../ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
-import { getChatWidthOptions } from '../../settings/appearance/chat/chat-appearance-search'
+import {
+  getChatWidthOptions,
+  getChatMessageStyleOptions
+} from '../../settings/appearance/chat/chat-appearance-search'
 import { writeNativeChatAppearance } from './native-chat-appearance-write'
 
 export function NativeChatSettingsButton(): React.JSX.Element {
@@ -63,17 +66,18 @@ export function NativeChatSettingsButton(): React.JSX.Element {
           {t('settings.appearance.chat.messageStyle', 'Message style')}
         </DropdownMenuLabel>
         <DropdownMenuRadioGroup value={messageStyle}>
-          {(['default', 'messaging'] as const).map((value) => (
+          {getChatMessageStyleOptions(t).map((option) => (
             <DropdownMenuRadioItem
-              key={value}
-              value={value}
+              key={option.value}
+              value={option.value}
               onSelect={() => {
-                void writeNativeChatAppearance((current) => ({ ...current, messageStyle: value }))
+                void writeNativeChatAppearance((current) => ({
+                  ...current,
+                  messageStyle: option.value
+                }))
               }}
             >
-              {value === 'default'
-                ? t('settings.appearance.chat.messageStyleDefault', 'Default')
-                : t('settings.appearance.chat.messageStyleMessaging', 'Messaging')}
+              {option.label}
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>

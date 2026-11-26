@@ -67,16 +67,30 @@ const slots = buildNativeChatTranscriptSlots({
   lifecycleWorking: false
 })
 
-function Conversation() {
+function Conversation({ bot = true, streamingText }: { bot?: boolean; streamingText?: string }) {
+  const appearance = useAppStore((state) => state.settings?.nativeChatAppearance)
+  const shownSlots =
+    streamingText === undefined
+      ? slots
+      : slots
+          .filter((slot) => slot.kind === 'message')
+          .filter((slot) => slot.message.id === 'followup')
+          .map((slot) => ({
+            ...slot,
+            activeTurnIsWorking: true,
+            trailingRun: true,
+            message: { ...slot.message, blocks: [{ type: 'text' as const, text: streamingText }] }
+          }))
   const theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light'
   return (
     <div
       className="native-chat-appearance bg-chat-canvas p-4"
-      style={nativeChatAppearanceStyle({ theme })}
+      style={nativeChatAppearanceStyle({ theme, nativeChatAppearance: appearance })}
     >
       <NativeChatTranscriptRowStack
-        slots={slots}
+        slots={shownSlots}
         context={{
+          turnBot: bot ? { name: 'Scout', src: null, fallback: 'S' } : null,
           expandSignal: false,
           revealedDiff: null,
           taskListPredecessors: new Map(),
@@ -91,9 +105,11 @@ function Conversation() {
   )
 }
 
-function setStyle(messageStyle: 'default' | 'messaging') {
+function setStyle(messageStyle: 'default' | 'messaging', contrast = 100) {
   const settings = useAppStore.getState().settings!
-  useAppStore.setState({ settings: { ...settings, nativeChatAppearance: { messageStyle } } })
+  useAppStore.setState({
+    settings: { ...settings, nativeChatAppearance: { messageStyle, contrast } }
+  })
 }
 
 export const before = defineFixture({
@@ -118,4 +134,32 @@ export const expanded = defineFixture({
   interact: (frame) => {
     frame.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')?.click()
   }
+})
+
+export const coding = defineFixture({
+  width: 640,
+  setup: () => setStyle('messaging'),
+  render: () => <Conversation bot={false} />
+})
+export const codingDefault = defineFixture({
+  width: 640,
+  setup: () => setStyle('default'),
+  render: () => <Conversation bot={false} />
+})
+export const contrast50 = defineFixture({
+  width: 640,
+  setup: () => setStyle('messaging', 50),
+  render: () => <Conversation />
+})
+export const streamingShort = defineFixture({
+  width: 640,
+  setup: () => setStyle('messaging'),
+  render: () => <Conversation streamingText="I’ll check" />
+})
+export const streamingLong = defineFixture({
+  width: 640,
+  setup: () => setStyle('messaging'),
+  render: () => (
+    <Conversation streamingText="I’ll check your calendar for tomorrow and keep your afternoon free." />
+  )
 })

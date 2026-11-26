@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatOpenedPullRequest } from '../../../../../../shared/native-chat/tools/native-chat-opened-pull-requests'
-import { nativeChatSlotJoinsActivityAbove } from './native-chat-activity-row-joins'
+import {
+  nativeChatSlotJoinsActivityAbove,
+  nativeChatSlotJoinsMessageAbove
+} from './native-chat-activity-row-joins'
 import { buildNativeChatTranscriptSlots } from './native-chat-transcript-slots'
 
 let clock = 0
@@ -93,5 +96,118 @@ describe('one-line rows across slots', () => {
       true
     ])
     expect(joins(slots, 2)).toBe(true)
+  })
+})
+
+describe('messaging bubble grouping', () => {
+  const pair = (role: 'user' | 'assistant') =>
+    slotsOf([row('first', role, 'First message.'), row('second', role, 'Second message.')]).filter(
+      (slot) => slot.kind === 'message'
+    )
+  const input = (role: 'user' | 'assistant' = 'user') => {
+    const [previous, slot] = pair(role)
+    return {
+      slot: slot!,
+      previous: previous!,
+      timedRowsAfter: undefined,
+      markerKey: undefined,
+      leavesWhole: false
+    }
+  }
+
+  it.each(['user', 'assistant'] as const)('joins consecutive %s text messages', (role) => {
+    expect(nativeChatSlotJoinsMessageAbove(input(role))).toBe(true)
+  })
+
+  it('keeps tools and different senders apart', () => {
+    const value = input()
+    expect(
+      nativeChatSlotJoinsMessageAbove({
+        ...value,
+        slot: { ...value.slot, message: { ...value.slot.message, role: 'assistant' } }
+      })
+    ).toBe(false)
+    expect(
+      nativeChatSlotJoinsMessageAbove({
+        ...value,
+        previous: {
+          ...value.previous,
+          message: {
+            ...value.previous.message,
+            blocks: [
+              { type: 'text', text: 'Checking.' },
+              {
+                type: 'tool-call',
+                name: 'read_file',
+                callId: 'read',
+                input: {},
+                state: 'completed'
+              }
+            ]
+          }
+        }
+      })
+    ).toBe(false)
+  })
+
+  it('keeps the gap after a timed row and before the new-message marker', () => {
+    const value = input()
+    expect(
+      nativeChatSlotJoinsMessageAbove({
+        ...value,
+        timedRowsAfter: new Map([['first', [{ key: 'approval', at: 1, node: null }]]])
+      })
+    ).toBe(false)
+    expect(nativeChatSlotJoinsMessageAbove({ ...value, markerKey: 'second' })).toBe(false)
+  })
+
+  it('never stacks a leaving or continuing row’s negative margin', () => {
+    const value = input('assistant')
+    expect(nativeChatSlotJoinsMessageAbove({ ...value, leavesWhole: true })).toBe(false)
+    expect(
+      nativeChatSlotJoinsMessageAbove({ ...value, previous: { ...value.previous, leaving: 'row' } })
+    ).toBe(false)
+    expect(
+      nativeChatSlotJoinsMessageAbove({
+        ...value,
+        previous: { ...value.previous, continuesTurn: true, endsResponse: false }
+      })
+    ).toBe(false)
+    expect(
+      nativeChatSlotJoinsMessageAbove({
+        ...value,
+        previous: { ...value.previous, continuesTurn: true, endsResponse: true }
+      })
+    ).toBe(true)
+  })
+
+  it('keeps sender cards, status bars and receipts outside message groups', () => {
+    const value = input()
+    const sender = update('sender').from
+    const boundaries: Partial<typeof value.slot>[] = [
+      { message: { ...value.slot.message, from: sender } },
+      { status: { startedAt: 0, thinking: false, workedSeconds: 1 } },
+      {
+        receipt: {
+          kind: 'question',
+          question: 'Continue?',
+          options: [],
+          resolution: {
+            state: 'resolved',
+            selectedOptionId: 'yes',
+            resolvedBy: null,
+            resolvedAt: 1
+          }
+        }
+      }
+    ]
+    for (const boundary of boundaries) {
+      expect(
+        nativeChatSlotJoinsMessageAbove({ ...value, slot: { ...value.slot, ...boundary } })
+      ).toBe(false)
+      expect(
+        nativeChatSlotJoinsMessageAbove({ ...value, previous: { ...value.previous, ...boundary } })
+      ).toBe(false)
+    }
   })
 })

@@ -1,4 +1,3 @@
-import { useNativeChatMessagingStyle } from '../../appearance/use-native-chat-messaging-style'
 import { useContext } from 'react'
 import { NativeChatInSubagentSheet } from '../../subagents/native-chat-subagent-sheet-context'
 import { cn } from '@/lib/class-names'
@@ -51,10 +50,10 @@ export function NativeChatAssistantMessageRow({
   rowRef: React.RefObject<HTMLDivElement | null>
   scrollToTop: () => void
 }): React.JSX.Element {
-  const messaging = useNativeChatMessagingStyle()
   const t = useTranslate()
   const {
     message,
+    messaging = false,
     activeTurnIsWorking,
     trailingRun,
     continuesTurn = false,
@@ -123,7 +122,12 @@ export function NativeChatAssistantMessageRow({
         enablePreview={runtimeContext !== undefined}
       />
       {reply && messaging && !isSystem ? (
-        <div className="w-fit min-w-0 max-w-[80%] rounded-2xl rounded-bl-md bg-chat-user-surface px-3.5 py-2.5 text-chat-foreground-strong">
+        <div
+          className={cn(
+            'min-w-0 max-w-[80%] rounded-2xl rounded-bl-md bg-chat-messaging-assistant-surface px-3.5 py-2.5 text-chat-foreground-strong',
+            streaming ? 'w-full' : 'w-fit'
+          )}
+        >
           {reply}
         </div>
       ) : (

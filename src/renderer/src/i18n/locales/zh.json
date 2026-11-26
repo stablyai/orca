@@ -221,7 +221,11 @@
         "sharper": "更清晰",
         "terminalControlledHint": "由终端界面设置",
         "terminalControlledTooltip": "正在匹配终端外观，要更改此项，请关闭“匹配终端外观”",
-        "resetKeyword": "重置"
+        "resetKeyword": "重置",
+        "messageStyle": "消息样式",
+        "messageStyleDefault": "默认",
+        "messageStyleMessaging": "即时通讯",
+        "messageStyleDescription": "以气泡显示与机器人的一对一聊天。编程聊天保留默认布局。"
       },
       "editorTheme": {
         "light": "浅色编辑器主题",

@@ -67,6 +67,7 @@ export type NativeChatDeliveryNotice =
 
 export type MessageRowProps = {
   message: NativeChatMessage
+  messaging?: boolean
   agentName?: string
   previousTodoWrite?: NativeChatToolCallBlock
   previousUpdatePlan?: NativeChatToolCallBlock
@@ -282,6 +283,7 @@ function MessageRowContent(props: MessageRowProps): React.JSX.Element | null {
         {divider}
         <NativeChatUserMessageRow
           message={message}
+          messaging={props.messaging}
           markdown={markdown}
           prose={prose}
           rowRef={rowRef}
@@ -347,6 +349,7 @@ function MessageRowContent(props: MessageRowProps): React.JSX.Element | null {
     return (
       <NativeChatUserMessageRow
         message={message}
+        messaging={props.messaging}
         markdown={markdown}
         prose={prose}
         rowRef={rowRef}
