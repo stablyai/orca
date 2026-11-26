@@ -97,6 +97,7 @@ function directClaudePath(selection: TerminalAgentProgram): string | undefined {
   ) {
     return selection.path
   }
+  return undefined
 }
 
 function resolveClaudeOnCallerPath(
