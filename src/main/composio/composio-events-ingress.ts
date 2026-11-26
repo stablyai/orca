@@ -1,7 +1,7 @@
 // One Orca address per Composio project: the "Composio events" hook. Composio sends every bot's
 // events there, and the host hands each call to the bot automation it's for, by the Composio user it
 // names (orca-bot-<id>) and that automation's own filter. Adding a bot never takes another's events.
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
 import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
@@ -9,6 +9,7 @@ import { matchesWebhookCall } from '../../../cloud/packages/connector-contract/s
 import { automationWebhookTrigger } from '../../shared/automation-event-triggers'
 import type { Automation } from '../../shared/automations/automation-definition'
 import type { WebhookWhere } from '../../shared/connector-webhook-contract'
+import { errnoCodeOrUnknown } from '../../shared/errors/errno-code'
 import { EXPIRED_EVENT } from './composio-api-answers'
 import { composioKeyEnvelopeFile } from './composio-key-store'
 
@@ -26,6 +27,8 @@ const Saved = lazyZodSchema(() =>
 export type ComposioSavedIngress = z.infer<typeof Saved>
 /** Each project's own hook, by the project's key fingerprint; the owner's setup made each one. */
 const SavedFile = lazyZodSchema(() => z.object({ projects: z.record(z.string(), Saved) }))
+const UNREADABLE =
+  '[composio] the events ingress store could not be read; not rewriting other projects'
 
 /** Where each project's ingress is saved, next to the key on the host that runs the bots. */
 export class ComposioIngressStore {
@@ -33,15 +36,17 @@ export class ComposioIngressStore {
     private readonly file = join(dirname(composioKeyEnvelopeFile().path), 'composio-events.json')
   ) {}
 
-  all(): Record<string, ComposioSavedIngress> {
-    if (!existsSync(this.file)) {
-      return {}
-    }
+  /** Null when the file exists but could not be read: never the same as empty, since a write would drop it. */
+  private projects(): Record<string, ComposioSavedIngress> | null {
     try {
       return SavedFile.parse(JSON.parse(readFileSync(this.file, 'utf8'))).projects
-    } catch {
-      return {}
+    } catch (error) {
+      return errnoCodeOrUnknown(error) === 'ENOENT' ? {} : null
     }
+  }
+
+  all(): Record<string, ComposioSavedIngress> {
+    return this.projects() ?? {}
   }
 
   read(project: string | null): ComposioSavedIngress | null {
@@ -60,14 +65,24 @@ export class ComposioIngressStore {
 
   /** `from`'s record becomes `to`'s, unless `to` has its own. */
   relabel(from: string, to: string): void {
-    const { [from]: moved, ...others } = this.all()
+    const projects = this.projects()
+    if (!projects) {
+      console.warn(UNREADABLE)
+      return
+    }
+    const { [from]: moved, ...others } = projects
     if (moved && from !== to && !others[to]) {
       this.save({ ...others, [to]: moved })
     }
   }
 
   write(project: string, ingress: ComposioSavedIngress | null): void {
-    const { [project]: _old, ...others } = this.all()
+    const projects = this.projects()
+    if (!projects) {
+      console.warn(UNREADABLE)
+      return
+    }
+    const { [project]: _old, ...others } = projects
     this.save(ingress ? { ...others, [project]: ingress } : others)
   }
 
