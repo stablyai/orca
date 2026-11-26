@@ -1,9 +1,13 @@
 import { lstat } from 'node:fs/promises'
-import type { KnownRuntimeEnvironment } from '../host-catalog/runtime-environments'
+import {
+  getPreferredPairingOffer,
+  type KnownRuntimeEnvironment
+} from '../host-catalog/runtime-environments'
 import type {
   EnvironmentStoreCommand,
   EnvironmentStoreSuccess
 } from './runtime-environment-store-worker-protocol'
+import { resolveEnvironmentFromStore } from './runtime-environment-selection'
 
 export const ENVIRONMENT_STORE_READ_OPERATIONS = new Set<EnvironmentStoreCommand['operation']>([
   'listEnvironments',
@@ -101,8 +105,42 @@ export function clearEnvironmentListCache(): void {
   listCache.clear()
 }
 
-export async function runCachedListEnvironments(args: {
-  userDataPath: string
+export type CacheableEnvironmentStoreRead = Extract<
+  EnvironmentStoreCommand,
+  { operation: 'listEnvironments' | 'resolveEnvironment' | 'resolveEnvironmentPairingOffer' }
+>
+
+export function isCacheableEnvironmentStoreRead(
+  command: EnvironmentStoreCommand
+): command is CacheableEnvironmentStoreRead {
+  if (command.operation === 'listEnvironments') {
+    return !command.args[1]?.requireStoreFile && !command.args[1]?.recoverBlankStore
+  }
+  return (
+    command.operation === 'resolveEnvironment' ||
+    command.operation === 'resolveEnvironmentPairingOffer'
+  )
+}
+
+function answerFromCachedEnvironments(
+  command: CacheableEnvironmentStoreRead,
+  environments: KnownRuntimeEnvironment[]
+): EnvironmentStoreSuccess {
+  if (command.operation === 'listEnvironments') {
+    return { operation: 'listEnvironments', value: environments }
+  }
+  const resolved = resolveEnvironmentFromStore({ environments }, command.args[1])
+  if (command.operation === 'resolveEnvironment') {
+    return { operation: 'resolveEnvironment', value: resolved }
+  }
+  return {
+    operation: 'resolveEnvironmentPairingOffer',
+    value: getPreferredPairingOffer(resolved)
+  }
+}
+
+export async function runCachedEnvironmentStoreRead(args: {
+  command: CacheableEnvironmentStoreRead
   servingWsl: boolean
   observe?: (generation: number) => void
   readWrites: () => number
@@ -110,20 +148,18 @@ export async function runCachedListEnvironments(args: {
   isIdle: () => boolean
   enqueue: () => Promise<EnvironmentStoreSuccess>
 }): Promise<EnvironmentStoreSuccess> {
+  const userDataPath = args.command.args[0]
   const startWrites = args.readWrites()
-  const stamp = await readEnvironmentStoreListStamp(args.userDataPath, args.servingWsl)
+  const stamp = await readEnvironmentStoreListStamp(userDataPath, args.servingWsl)
   if (args.isClosing()) {
     throw new Error('Environment store is closing')
   }
   if (stamp && args.readWrites() === startWrites && args.isIdle()) {
-    if (stamp.allMissing) {
+    const environments = stamp.allMissing ? [] : getCachedEnvironmentList(userDataPath, stamp.token)
+    if (environments !== null) {
+      const reply = answerFromCachedEnvironments(args.command, environments)
       args.observe?.(startWrites)
-      return { operation: 'listEnvironments', value: [] }
-    }
-    const cached = getCachedEnvironmentList(args.userDataPath, stamp.token)
-    if (cached) {
-      args.observe?.(startWrites)
-      return { operation: 'listEnvironments', value: cached }
+      return reply
     }
   }
   const reply = await args.enqueue()
@@ -132,7 +168,7 @@ export async function runCachedListEnvironments(args: {
     stamp?.settled &&
     args.readWrites() === startWrites
   ) {
-    setCachedEnvironmentList(args.userDataPath, stamp.token, reply.value)
+    setCachedEnvironmentList(userDataPath, stamp.token, reply.value)
   }
   return reply
 }
