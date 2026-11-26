@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { assertRuntimeEnvironmentNotReconciling } from '../../../shared/remote-runtime/host-catalog/runtime-environment-reconciliation-record'
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { addManagedOrcadEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
+import { RuntimeEnvironmentStoreError } from '../../../shared/remote-runtime/host-store/runtime-environment-store-records'
 import {
   getOrcadSshDeployment,
   redactRuntimeEnvironment,
@@ -165,6 +166,12 @@ export async function createManagedOrcadEnvironment(
           remotePort: ORCAD_MANAGED_REMOTE_PORT
         },
         moveSavedServer
+      }).catch(async (error: unknown) => {
+        if (moveSavedServer && isStoreRefusal(error)) {
+          claims.release(claimed.id, environmentId)
+          await claims.flush(args.signal)
+        }
+        throw error
       })
       const outcome = serving.created ? 'created' : 'already-current'
       if (environment.id !== environmentId) {
@@ -195,6 +202,10 @@ export async function createManagedOrcadEnvironment(
 }
 
 type DeployedOrcad = OrcadRunningAdoption & { created?: true }
+
+function isStoreRefusal(error: unknown): boolean {
+  return error instanceof RuntimeEnvironmentStoreError && error.code === 'invalid_argument'
+}
 
 async function deployOwnOrcad(
   context: OrcadRemoteContext<SshTarget>,
