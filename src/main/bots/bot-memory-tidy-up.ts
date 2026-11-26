@@ -140,6 +140,10 @@ export function tidyUpOwed(
   now: number
 ): boolean {
   const setting = botTidyUp(bot)
+  // Offered during tonight's window: its first run is the next night's, even while this one is open.
+  if ((state.offeredAt ?? 0) > tidyUpSlot(now)) {
+    return false
+  }
   const onSince = Math.max(setting.since ?? bot.createdAt, state.offeredAt ?? 0)
   return setting.on && tidyUpDue(state, now, setting.every, onSince)
 }
