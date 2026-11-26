@@ -21,7 +21,7 @@ export function WorkspaceStatusSheet({
   const current = getWorkspaceStatus(row, statuses)
   return (
     <ActionSheetContent
-      title={t('hostScreen.hostScreenOverlays.moveToStatus', 'Move to Status')}
+      title={t('hostScreen.hostScreenOverlays.status', 'Status')}
       actions={statuses.map((status) => ({
         id: status.id,
         label: status.label,

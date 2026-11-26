@@ -2121,7 +2121,6 @@
       "deleteDestroysEnvironment": "Isto também destrói o ambiente \"{{environment}}\" que o Orca criou para ele, com as alterações não confirmadas e os terminais em execução nele.",
       "deleteKeepsEnvironment": "O ambiente \"{{environment}}\" que o Orca criou para ele continua em execução: a receita não tem um passo de destruição.",
       "pin": "Fixar",
-      "primaryWorktreeDeleteHint": "Worktree primária — não pode ser excluída. Remova o projeto em vez disso.",
       "removeHost": "Remover host",
       "removeHostMessage": "Remover \"{{name}}\"? Você pode parear novamente mais tarde.",
       "sleep": "Suspender",
@@ -2131,8 +2130,7 @@
       "markRead": "Marcar como Lido",
       "markUnread": "Marcar como Não Lido",
       "muteNotifications": "Silenciar Notificações",
-      "unmuteNotifications": "Reativar Notificações",
-      "moveToStatus": "Mover para Status"
+      "unmuteNotifications": "Reativar Notificações"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Verificações: com falha",
@@ -6018,7 +6016,6 @@
       "valueSaved": "Salvo"
     },
     "handToBot": {
-      "menu": "Repassar a um bot…",
       "title": "Repassar {{name}} a um bot",
       "noAgents": "Não há agentes em execução.",
       "oneAgent": "O agente dele continua em execução e trabalha para o bot.",

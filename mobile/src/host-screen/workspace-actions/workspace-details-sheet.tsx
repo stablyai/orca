@@ -8,7 +8,7 @@ import {
   SquareTerminal,
   StickyNote
 } from 'lucide-react-native'
-import { colors, spacing, typography } from '../../theme/mobile-theme'
+import { colors, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { prStateColor } from '../../worktree/row-presentation/pr-state-color'
@@ -21,7 +21,6 @@ import {
   ListRow
 } from '../../components/list/ListGroup'
 import { TaskProviderLogo } from '../../components/icons/TaskProviderLogo'
-import { getWorktreeGitIdentityDisplay } from '../../../../src/shared/worktree/row-display/git-identity-display'
 import {
   buildWorkspaceDetailLinks,
   buildWorkspaceOrigin,
@@ -65,13 +64,22 @@ export function WorkspaceDetailsSheet(props: { row: Worktree; onOpenLink: (url: 
   const t = useMobileTranslation()
   useMobileColorScheme()
   const { row, onOpenLink } = props
-  const identity = getWorktreeGitIdentityDisplay({ branch: row.branch })
   const origin = buildWorkspaceOrigin(row)
   const OriginIcon = origin?.kind === 'automation' ? CalendarClock : SquareTerminal
   const notes = workspaceNotes(row)
   const rows: ReactNode[] = buildWorkspaceDetailLinks(row).map((item) => (
     <LinkRow key={item.key} item={item} onOpen={onOpenLink} />
   ))
+  if (origin) {
+    rows.push(
+      <ListRow
+        key="origin"
+        testID="workspace-origin"
+        title={originLabel(origin, t)}
+        leading={<OriginIcon size={ICON_SIZE} color={colors.textSecondary} />}
+      />
+    )
+  }
   if (notes) {
     rows.push(
       // Notes wrap and stay selectable, which a ListRow title cannot; laid out on the same grid.
@@ -85,35 +93,13 @@ export function WorkspaceDetailsSheet(props: { row: Worktree; onOpenLink: (url: 
       </View>
     )
   }
-  return (
-    <>
-      <View style={styles.header}>
-        <Text style={styles.heading} numberOfLines={1}>
-          {row.displayName || row.repo}
-        </Text>
-        {identity?.kind === 'branch' ? (
-          <Text style={styles.branch} numberOfLines={1}>
-            {identity.branchName}
-          </Text>
-        ) : null}
-        {origin ? (
-          <View style={styles.origin} testID="workspace-origin">
-            <OriginIcon size={12} color={colors.textMuted} style={styles.originIcon} />
-            <Text style={styles.originText} numberOfLines={2}>
-              {originLabel(origin, t)}
-            </Text>
-          </View>
-        ) : null}
-      </View>
-      {rows.length > 0 && (
-        <View testID="workspace-details">
-          <ListGroup style={styles.group} separatorInset={LIST_LEADING_INSET}>
-            {rows}
-          </ListGroup>
-        </View>
-      )}
-    </>
-  )
+  return rows.length > 0 ? (
+    <View testID="workspace-details">
+      <ListGroup style={styles.group} separatorInset={LIST_LEADING_INSET}>
+        {rows}
+      </ListGroup>
+    </View>
+  ) : null
 }
 
 function originLabel(origin: WorkspaceOrigin, t: Translate): string {
@@ -197,36 +183,6 @@ function LinkRow({ item, onOpen }: { item: WorkspaceDetailLink; onOpen: (url: st
 }
 
 const styles = themedStyleSheet(() => ({
-  header: {
-    paddingHorizontal: LIST_ROW_PADDING,
-    paddingBottom: spacing.sm
-  },
-  heading: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  branch: {
-    marginTop: 1,
-    fontSize: typography.metaSize,
-    fontFamily: typography.monoFamily,
-    color: colors.textMuted
-  },
-  origin: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.xs,
-    marginTop: spacing.xs
-  },
-  originIcon: {
-    marginTop: 2
-  },
-  originText: {
-    flex: 1,
-    fontSize: typography.metaSize,
-    lineHeight: 16,
-    color: colors.textMuted
-  },
   group: {
     marginBottom: spacing.md
   },
