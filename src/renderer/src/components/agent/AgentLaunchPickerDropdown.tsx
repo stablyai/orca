@@ -102,7 +102,8 @@ export function AgentLaunchPickerDropdown(props: AgentLaunchPickerDropdownProps)
   }
   return (
     <div
-      className="flex min-h-0 flex-col"
+      // Why: the model list keeps two rows in a short window; the menu scrolls instead.
+      className="scrollbar-sleek flex min-h-0 flex-col overflow-y-auto [&_[cmdk-list]]:min-h-18"
       data-agent-launch-picker="true"
       onKeyDownCapture={(event) => {
         // Shift+Tab from the search goes back to the agent tabs.
