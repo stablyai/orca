@@ -19782,11 +19782,6 @@
           "output": "Çıktı",
           "runNumber": "Çalıştırma #{{number}}",
           "runFailed": "Çalıştırma başarısız oldu.",
-          "runShowOutput": "Çıktıyı göster",
-          "runHideOutput": "Çıktıyı gizle",
-          "runReplyLabel": "Komuta yanıt ver",
-          "runReplyPlaceholder": "Bir yanıt yazın, göndermek için Enter",
-          "runStop": "Durdur",
           "scheduledAt": "Planlanan zaman: {{time}}",
           "startedAt": "Başlangıç: {{time}}",
           "noFailureReason": "Bu çalıştırma başlatılamadı. Nedeni kaydedilmedi."
@@ -21920,6 +21915,11 @@
       "runTimedOut": "5 dakika sonra durduruldu",
       "runClosed": "Terminal bitmeden kapandı",
       "runFailed": "Çalıştırılamadı",
+      "runReplyLabel": "Komuta yanıt ver",
+      "runReplyPlaceholder": "Bir yanıt yazın, göndermek için Enter",
+      "runStop": "Durdur",
+      "runShowOutput": "Çıktıyı göster",
+      "runHideOutput": "Çıktıyı gizle",
       "context": {
         "unavailable": "Bağlam kullanımı henüz bilinmiyor. Ajanın bir sonraki yanıtından sonra görüntülenebilir.",
         "summary": "Bağlam: {{used}} / {{window}} token (%{{percent}}), son yanıta göre tahmini değer.",

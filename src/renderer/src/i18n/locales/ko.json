@@ -18822,11 +18822,6 @@
           "output": "출력",
           "runNumber": "실행 #{{number}}",
           "runFailed": "실행하지 못했습니다.",
-          "runShowOutput": "출력 표시",
-          "runHideOutput": "출력 숨기기",
-          "runReplyLabel": "명령에 응답",
-          "runReplyPlaceholder": "응답을 입력하고 Enter로 보내기",
-          "runStop": "중지",
           "scheduledAt": "예약 시각 {{time}}",
           "startedAt": "{{time}}에 시작",
           "noFailureReason": "이번 실행이 시작되지 않았으며 기록된 이유가 없습니다."
@@ -20956,6 +20951,11 @@
       "runTimedOut": "5분 후 중지됨",
       "runClosed": "완료되기 전에 터미널이 닫혔습니다",
       "runFailed": "실행할 수 없습니다",
+      "runReplyLabel": "명령에 응답",
+      "runReplyPlaceholder": "응답을 입력하고 Enter로 보내기",
+      "runStop": "중지",
+      "runShowOutput": "출력 표시",
+      "runHideOutput": "출력 숨기기",
       "context": {
         "unavailable": "컨텍스트 사용량을 아직 알 수 없습니다. 에이전트가 다음에 응답하면 확인할 수 있습니다.",
         "summary": "컨텍스트: {{used}}/{{window}} 토큰 ({{percent}}%), 마지막 응답 기준 추정치입니다.",

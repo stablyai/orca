@@ -19462,11 +19462,6 @@
           "output": "輸出",
           "runNumber": "執行 #{{number}}",
           "runFailed": "執行失敗。",
-          "runShowOutput": "顯示輸出",
-          "runHideOutput": "隱藏輸出",
-          "runReplyLabel": "回覆指令",
-          "runReplyPlaceholder": "輸入回覆，按 Enter 傳送",
-          "runStop": "停止",
           "scheduledAt": "排定於 {{time}}",
           "startedAt": "開始於 {{time}}",
           "noFailureReason": "此次執行未啟動，且未記錄原因。"
@@ -21526,6 +21521,11 @@
       "runTimedOut": "5 分鐘後已停止",
       "runClosed": "終端機在完成前關閉了",
       "runFailed": "無法執行",
+      "runReplyLabel": "回覆指令",
+      "runReplyPlaceholder": "輸入回覆，按 Enter 傳送",
+      "runStop": "停止",
+      "runShowOutput": "顯示輸出",
+      "runHideOutput": "隱藏輸出",
       "context": {
         "unavailable": "上下文用量暫時未知，將在代理程式下次回應後提供。",
         "summary": "上下文：{{used}}/{{window}} token（{{percent}}%），根據上一次回應的估算值。",

@@ -19056,11 +19056,6 @@
           "output": "输出",
           "runNumber": "运行 #{{number}}",
           "runFailed": "运行失败",
-          "runShowOutput": "显示输出",
-          "runHideOutput": "隐藏输出",
-          "runReplyLabel": "回复命令",
-          "runReplyPlaceholder": "输入回复，按 Enter 发送",
-          "runStop": "停止",
           "scheduledAt": "计划于 {{time}}",
           "startedAt": "开始于 {{time}}",
           "noFailureReason": "此次运行未启动，且没有记录原因"
@@ -21009,6 +21004,11 @@
       "runTimedOut": "5 分钟后已停止",
       "runClosed": "终端在完成前关闭了",
       "runFailed": "无法运行",
+      "runReplyLabel": "回复命令",
+      "runReplyPlaceholder": "输入回复，按 Enter 发送",
+      "runStop": "停止",
+      "runShowOutput": "显示输出",
+      "runHideOutput": "隐藏输出",
       "context": {
         "unavailable": "上下文用量暂时未知，将在代理下次响应后提供",
         "summary": "上下文：{{used}}/{{window}} token（{{percent}}%），根据上一次响应的估算值",
