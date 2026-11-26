@@ -21,12 +21,14 @@ import {
 import { withImagesSplitOut } from './mobile-markdown-html-images'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
 import { endLinkifyUrlsAtProsePunctuation } from './markdown-linkify-prose-boundary'
+import { mobileMarkdownCodexFileCitations } from './mobile-markdown-codex-file-citations'
 
 // Match desktop CommonMark/GFM tables, strikethrough, autolinks, footnotes and CJK emphasis using phone-efficient parser.
 const markdown = new MarkdownIt({ html: true, linkify: true })
   .use(footnote)
   .use(cjkFriendly)
   .use(mobileMarkdownMath)
+  .use(mobileMarkdownCodexFileCitations)
 // Every href parses as a link, file: included; routeMarkdownHref decides what a tap opens.
 markdown.validateLink = () => true
 endLinkifyUrlsAtProsePunctuation(markdown.linkify)
