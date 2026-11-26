@@ -95,6 +95,15 @@ export async function catchUpClaudeTranscript(input: {
         return { hasRows, newest, origin, covered, turns }
       }),
     prepare: async ({ view, history, signal, check, yieldTurn, warn }) => {
+      // Decided from the journal first, so a chat with nothing to import touches no files.
+      const planned = await view()
+      check()
+      // Only a chat on its first turn: an older one without a saved leaf is left as it is.
+      const afterFirstPrompt =
+        input.leafUuid === '' && !planned.covered && !!input.fromFirstPrompt && planned.turns === 1
+      if (input.leafUuid === '' && !planned.covered && !afterFirstPrompt) {
+        return null
+      }
       const claudeProjectsDir = join(input.claudeConfigDir, 'projects')
       // A moved project can leave its transcript outside the cwd's bucket; the resolver probes both.
       const filePath = await resolveSessionFilePath(
@@ -105,13 +114,6 @@ export async function catchUpClaudeTranscript(input: {
       )
       check()
       if (!filePath) {
-        return null
-      }
-      const planned = await view()
-      // Only a chat on its first turn: an older one without a saved leaf is left as it is.
-      const afterFirstPrompt =
-        input.leafUuid === '' && !planned.covered && !!input.fromFirstPrompt && planned.turns === 1
-      if (input.leafUuid === '' && !planned.covered && !afterFirstPrompt) {
         return null
       }
       let leafAbsent = input.leafUuid === '' && (!!planned.covered || afterFirstPrompt)
