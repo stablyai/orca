@@ -6,11 +6,11 @@ import { nativeChatScratchFolderName } from '../../../native-chat/conversation-f
 
 const SPAWNED_AT = 1_800_000_000_000
 vi.mock('../../../provider-relay/app-provider-relays', () => ({
-  listProviderRelaysAtLaunch: async () => {},
-  providerRelayInventoryComplete: () => true
+  listProviderRelaysAtLaunch: async () => {}
 }))
 vi.mock('../../../provider-relay/provider-relay-launch-inventory', () => ({
-  providerRelayChatsKeptThisRun: () => new Map([['kept-chat', SPAWNED_AT]])
+  providerRelayChatsKeptThisRun: () => new Map([['kept-chat', SPAWNED_AT]]),
+  providerRelayLaunchListed: () => true
 }))
 
 const { clearEarlierRunsOnce } = await import('../acp-instructions-earlier-runs')
