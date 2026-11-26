@@ -47,7 +47,11 @@ export function railRingStackFit(args: {
     }
   }
   const pitch = ring + minGap
-  const shown = Math.max(1, Math.floor((room - peek - paddingTop - ring - overhang) / pitch) + 1)
+  // The +1 in the height is the cut itself, so the count has to leave room for it.
+  const shown = Math.max(
+    1,
+    Math.floor((room - peek - paddingTop - ring - overhang - 1) / pitch) + 1
+  )
   return {
     gap: minGap,
     paddingBottom: tightBottom,

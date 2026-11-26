@@ -114,9 +114,22 @@ export function duoRailJumpFrames(
   const gap = spacing.sm
   const latestTop = args.composerTop - gap - size
   const previousTop = latestTop - gap - size
-  const floor = args.keyboardUp ? args.strip.top : back.top + back.size + gap
-  if (previousTop < floor || latestTop + size > args.composerTop - gap) {
+  if (previousTop < args.strip.top || latestTop + size > args.composerTop - gap) {
     return null
+  }
+  const column = statusColumn(args)
+  const fromTop = column !== null ? column.y <= 1 : args.strip.top > 1
+  if (fromTop) {
+    const floor = args.keyboardUp ? args.strip.top : back.top + size + gap
+    if (previousTop < floor) {
+      return null
+    }
+  } else {
+    // A bottom column's free space is above Back. While the keyboard hides Back, stop at the column.
+    const limit = args.keyboardUp ? statusOcclusionEdge(args, column, false) : back.top - gap
+    if (latestTop + size > limit) {
+      return null
+    }
   }
   return {
     previous: { top: previousTop, left: back.left, size },

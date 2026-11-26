@@ -149,5 +149,16 @@ describe('Duo rail jump placement', () => {
         keyboardUp: false
       })
     ).toBeNull()
+    // The same column leaves room above Back when the composer sits higher.
+    const above = duoRailJumpFrames({
+      ...turned,
+      strip: strip!,
+      composerTop: 400,
+      keyboardUp: false
+    })
+    const back = duoRailBackFrame({ ...turned, strip: strip! })
+    expect(above).not.toBeNull()
+    expect(above!.latest.top + above!.latest.size).toBeLessThanOrEqual(back.top - spacing.sm)
+    expect(above!.previous.top).toBeGreaterThanOrEqual(strip!.top)
   })
 })

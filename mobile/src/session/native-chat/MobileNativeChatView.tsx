@@ -372,7 +372,9 @@ export function MobileNativeChatView({
             title={t('session.nativeChatView.loading', 'Loading conversation…')}
           />
         ) : firstScreen ? (
-          <MobileBotFirstScreen firstScreen={firstScreen} after={mailRows} />
+          <View style={[styles.listWrap, transcriptInset]}>
+            <MobileBotFirstScreen firstScreen={firstScreen} after={mailRows} />
+          </View>
         ) : (
           <GestureHandlerRootView style={[styles.listWrap, transcriptInset]}>
             <MobileNativeChatDisclosureContext.Provider value={disclosures}>
