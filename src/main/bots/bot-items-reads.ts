@@ -19,6 +19,7 @@ import {
 import type { BotRequestAsker } from '../../shared/bots/bot-acts-for'
 import type { BotItemEventRecord, BotItemLinkRecord, BotItemRecord } from './bot-items-schema'
 import { BotItemsTables } from './bot-items-tables'
+import { BOT_ITEM_EVENT_NOT_BY_VIEWER, BOT_ITEM_OWNER_VIEWER } from './bot-item-author'
 
 export type BotItemListQuery = {
   botId: string
@@ -209,7 +210,9 @@ export class BotItemsReads extends BotItemsTables {
   viewRows(
     uids: readonly string[],
     /** Also each open item's waiting ask, which reads its events: for its own view only. */
-    withWaitingAsks = false
+    withWaitingAsks = false,
+    /** Whose unseen marks `othersLast` holds: the owner's (kept on each row), or a teammate's. */
+    viewer = BOT_ITEM_OWNER_VIEWER
   ): {
     items: BotItemRecord[]
     links: Record<string, BotItemLinkRecord[]>
@@ -225,7 +228,17 @@ export class BotItemsReads extends BotItemsTables {
       .all(ids)
     const items = rows.map(itemRecordOf)
     const othersLast: Record<string, number> = {}
-    for (const row of rows) {
+    const teammates =
+      viewer === BOT_ITEM_OWNER_VIEWER
+        ? null
+        : this.db
+            .prepare(
+              `SELECT item_uid AS uid, MAX(id) AS others_last_event_id FROM item_events
+                 WHERE item_uid IN (SELECT value FROM json_each(?)) AND ${BOT_ITEM_EVENT_NOT_BY_VIEWER}
+                 GROUP BY item_uid`
+            )
+            .all(ids, viewer)
+    for (const row of teammates ?? rows) {
       const id = integer(row, 'others_last_event_id')
       if (id > 0) {
         othersLast[text(row, 'uid')] = id

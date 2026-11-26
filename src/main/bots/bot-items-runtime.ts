@@ -250,14 +250,17 @@ export class BotItemsHost {
     items: readonly BotItemRecord[],
     summary = false,
     /** Each Needs you item's waiting ask too: for the item's own view. */
-    withWaitingAsks = false
+    withWaitingAsks = false,
+    /** Whose unseen marks `othersLastEventId` carries (`botItemAuthorViewer`): the owner's by default. */
+    viewer?: string
   ): Promise<BotItem[]> {
     if (items.length === 0) {
       return []
     }
     const rows = await this.store().viewRows(
       items.map((item) => item.uid),
-      withWaitingAsks
+      withWaitingAsks,
+      viewer
     )
     const refs = Object.values(rows.links)
       .flat()

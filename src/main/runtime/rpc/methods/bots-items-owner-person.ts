@@ -3,6 +3,7 @@
 import { botItemEventId } from '../../../../shared/bots/bot-items'
 import type { Bot } from '../../../../shared/bot-types'
 import { BotItemError } from '../../../bots/bot-item-error'
+import { BOT_ITEM_OWNER_VIEWER } from '../../../bots/bot-item-author'
 import type { BotItemOwnerActor } from '../../../bots/bot-items-input'
 import { botShareScopeOf } from '../../../bots/team-share/bot-share-chats'
 import type { RpcContext } from '../core'
@@ -20,6 +21,11 @@ export function ownerActor(context: RpcContext): BotItemOwnerActor {
     ...(context.pairedDeviceId ? { device: context.pairedDeviceId } : {}),
     ...(share ? { person: { accountId: share.accountId, name: share.name } } : {})
   }
+}
+
+/** The caller as an unseen mark's viewer: the owner, or the teammate by account. */
+export function itemsViewerOf(context: RpcContext): string {
+  return botShareScopeOf(context)?.accountId ?? BOT_ITEM_OWNER_VIEWER
 }
 
 /** Items a call names must be its named bot's (the shared bot, on a teammate's call). */

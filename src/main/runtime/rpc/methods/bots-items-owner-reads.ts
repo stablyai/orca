@@ -6,6 +6,7 @@ import type { BotItemListQuery } from '../../../bots/bot-items-reads'
 import type { BotItemsRemote } from '../../../bots/bot-items-ops'
 import { BOT_ITEM_LIMITS, BOT_ITEM_OPEN_STATUSES } from '../../../../shared/bots/bot-items'
 import type { RpcContext } from '../core'
+import { itemsViewerOf } from './bots-items-owner-person'
 
 /** Each row as the panel shows it: a teammates' item names them. */
 export async function ownerViews(
@@ -14,7 +15,12 @@ export async function ownerViews(
   records: readonly BotItemRecord[],
   summary: boolean | undefined
 ): Promise<BotItem[]> {
-  const views = await context.runtime.botItems.views(records, summary)
+  const views = await context.runtime.botItems.views(
+    records,
+    summary,
+    false,
+    itemsViewerOf(context)
+  )
   const bot = context.runtime.bots.list().find((entry) => entry.id === botId)
   return views.map((view, index) => {
     const accounts = records[index]?.actsForAccounts

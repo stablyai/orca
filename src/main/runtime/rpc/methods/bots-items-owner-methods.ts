@@ -24,7 +24,13 @@ import {
 import { botChatTakingMail } from './bots-chats'
 import { defineMethod } from '../core'
 import { SHARE_BY_BOT } from '../../../../shared/bots/bot-share-rpc-methods'
-import { assertItemsOfBot, itemsSeenOf, markItemsSeen, ownerActor } from './bots-items-owner-person'
+import {
+  assertItemsOfBot,
+  itemsSeenOf,
+  itemsViewerOf,
+  markItemsSeen,
+  ownerActor
+} from './bots-items-owner-person'
 import { botItemListScope, botItemsOfPeople } from '../../../bots/bot-item-access'
 import { parseCursor, resolveItem } from './bots-items-write-support'
 import { itemsAccess } from './bots-items-caller'
@@ -126,7 +132,10 @@ const SHOW = defineMethod({
       throw new BotItemError('invalid_argument', 'after and before take an event id such as e41.')
     }
     const limit = BOT_ITEM_LIMITS.eventsPage
-    const [item] = botItemsForClient(await botItems.views([record], false, true), context)
+    const [item] = botItemsForClient(
+      await botItems.views([record], false, true, itemsViewerOf(context)),
+      context
+    )
     if (params.newest) {
       // The newest page; `earlierCursor` pages back from its oldest event.
       const events = await botItems.eventsBefore(record.uid, before, limit + 1)
