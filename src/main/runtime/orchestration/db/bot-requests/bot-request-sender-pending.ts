@@ -13,13 +13,19 @@ import type { OrchestrationDb } from '../orchestration-db'
 export function sessionAwaitsMailSql(count: number): string {
   const list = Array.from({ length: count }, () => '?').join(',')
   // A bot request is owed until its outcome; one to any other chat until its recipient replies to
-  // this chat in it (mail it sends on in the thread to anyone else is no answer).
+  // this chat in it (mail it sends on in the thread to anyone else is no answer), one reply for each:
+  // owed while, from it on, this chat's asks of that recipient outnumber the replies.
   return `SELECT 1 FROM messages m
     WHERE m.from_handle IN (${list}) AND m.type IN ('question', 'handoff')
       AND CASE WHEN EXISTS (SELECT 1 FROM bot_requests b WHERE b.message_id = m.id)
         THEN NOT EXISTS (SELECT 1 FROM bot_request_outcomes o WHERE o.message_id = m.id)
-        ELSE NOT EXISTS (
-          SELECT 1 FROM messages r WHERE r.thread_id = COALESCE(m.thread_id, m.id)
+        ELSE (
+          SELECT COUNT(*) FROM messages q
+          WHERE (q.thread_id = COALESCE(m.thread_id, m.id) OR q.id = COALESCE(m.thread_id, m.id))
+            AND q.from_handle = m.from_handle AND q.to_handle = m.to_handle
+            AND q.type IN ('question', 'handoff') AND q.sequence >= m.sequence
+        ) > (
+          SELECT COUNT(*) FROM messages r WHERE r.thread_id = COALESCE(m.thread_id, m.id)
             AND r.from_handle = m.to_handle AND r.to_handle IN (${list})
             AND r.sequence > m.sequence)
       END

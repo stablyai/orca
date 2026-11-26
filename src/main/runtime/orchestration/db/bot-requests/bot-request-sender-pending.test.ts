@@ -132,14 +132,25 @@ it('a chat waits on mail from its open requests, paired asks and undelivered mai
   })
   db.db.prepare("UPDATE messages SET delivered_at = datetime('now') WHERE id = ?").run(forwarded.id)
   expect(sessionAwaitsMail(db, ['asking'])).toBe(true)
-  const reply = db.insertMessage({
-    from: 'orca_session_id:other',
-    to: 'orca_session_id:asking',
-    subject: 'Re: Which branch?',
+  // A second ask of the same chat in the thread needs its own reply.
+  const again = db.insertMessage({
+    from: 'orca_session_id:asking',
+    to: 'orca_session_id:other',
+    subject: 'And the tag?',
+    type: 'handoff',
     threadId: asked.id
   })
-  db.db.prepare("UPDATE messages SET delivered_at = datetime('now') WHERE id = ?").run(reply.id)
-  expect(sessionAwaitsMail(db, ['asking'])).toBe(false)
+  db.db.prepare("UPDATE messages SET delivered_at = datetime('now') WHERE id = ?").run(again.id)
+  for (const expected of [true, false]) {
+    const reply = db.insertMessage({
+      from: 'orca_session_id:other',
+      to: 'orca_session_id:asking',
+      subject: 'Re: Which branch?',
+      threadId: asked.id
+    })
+    db.db.prepare("UPDATE messages SET delivered_at = datetime('now') WHERE id = ?").run(reply.id)
+    expect(sessionAwaitsMail(db, ['asking'])).toBe(expected)
+  }
 
   // A handoff to one chat and a question to another in the same thread: each is owed by its own
   // recipient, so one reply settles only its own.

@@ -1,5 +1,5 @@
 import type { AutomationUsageClient } from '../../shared/backend/backend-service-contract'
-import { observeAutomationChatRun } from './observation/runtime-chat-run-observer'
+import { observeAutomationRunChat } from './bot-automation-run-chat-close'
 import { readAutomationRunReceipt } from './launch/automation-run-receipt'
 import { publishedLaunchTarget } from './launch/automation-agent-run-result'
 import { launchAutomationChatAgent } from './launch/automation-chat-agent-launch'
@@ -130,10 +130,10 @@ export function createRuntimeAutomationService(input: {
           if (run.sessionKind === 'chat') {
             try {
               // A bot automation sends its own prompt; any other chat run is launched with a receipt.
-              const sentByRun = Boolean(
-                store.listAutomations().find((entry) => entry.id === run?.automationId)?.bot
-              )
-              return await observeAutomationChatRun(runtime, run, options.signal, sentByRun)
+              const automation = store
+                .listAutomations()
+                .find((entry) => entry.id === run?.automationId)
+              return await observeAutomationRunChat(runtime, automation, run, options.signal)
             } catch (error) {
               if (options.signal.aborted) {
                 throw error
