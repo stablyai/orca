@@ -122,6 +122,16 @@ it('a chat waits on mail from its open requests, paired asks and undelivered mai
   })
   db.db.prepare("UPDATE messages SET delivered_at = datetime('now') WHERE id = ?").run(asked.id)
   expect(sessionAwaitsMail(db, ['asking'])).toBe(true)
+  // Mail it sends on in the thread to someone else is no answer.
+  const forwarded = db.insertMessage({
+    from: 'orca_session_id:other',
+    to: 'orca_session_id:third',
+    subject: 'Which branch?',
+    type: 'question',
+    threadId: asked.id
+  })
+  db.db.prepare("UPDATE messages SET delivered_at = datetime('now') WHERE id = ?").run(forwarded.id)
+  expect(sessionAwaitsMail(db, ['asking'])).toBe(true)
   const reply = db.insertMessage({
     from: 'orca_session_id:other',
     to: 'orca_session_id:asking',
@@ -227,7 +237,7 @@ it('a chat waits on mail from its open requests, paired asks and undelivered mai
   // Looked up by sender and recipient, never by scanning the mail.
   const plan = db.db
     .prepare(`EXPLAIN QUERY PLAN ${sessionAwaitsMailSql(2)}`)
-    .all('x', 'y', 'x', 'y', 'x', 'y', 'x', 'y', 'x', 'y', 'x', 'y', 'x', 'y')
+    .all(...Array.from({ length: 8 }, () => ['x', 'y']).flat())
     .map((row) => String(row.detail))
   expect(plan.filter((detail) => detail.startsWith('SCAN'))).toEqual([])
 })

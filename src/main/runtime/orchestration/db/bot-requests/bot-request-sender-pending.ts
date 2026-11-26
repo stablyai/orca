@@ -8,18 +8,20 @@ import type { OrchestrationDb } from '../orchestration-db'
 /** Each part is an indexed lookup: idx_messages_bot_request_sender (then idx_thread for a reply),
  *  idx_peer_questions_out_asker_awaiting, idx_peer_handoffs_out_asker, idx_messages_native_direct_work,
  *  idx_dispatch_creator_orca_session_id, and idx_runs_coordinator_orca_session_id with
- *  idx_messages_native_account_work or idx_remote_placements_run. Four lists of `count` addresses,
+ *  idx_messages_native_account_work or idx_remote_placements_run. Five lists of `count` addresses,
  *  then three of `count` ids. */
 export function sessionAwaitsMailSql(count: number): string {
   const list = Array.from({ length: count }, () => '?').join(',')
-  // A bot request is owed until its outcome; one to any other chat until its recipient replies in it.
+  // A bot request is owed until its outcome; one to any other chat until its recipient replies to
+  // this chat in it (mail it sends on in the thread to anyone else is no answer).
   return `SELECT 1 FROM messages m
     WHERE m.from_handle IN (${list}) AND m.type IN ('question', 'handoff')
       AND CASE WHEN EXISTS (SELECT 1 FROM bot_requests b WHERE b.message_id = m.id)
         THEN NOT EXISTS (SELECT 1 FROM bot_request_outcomes o WHERE o.message_id = m.id)
         ELSE NOT EXISTS (
           SELECT 1 FROM messages r WHERE r.thread_id = COALESCE(m.thread_id, m.id)
-            AND r.from_handle = m.to_handle AND r.sequence > m.sequence)
+            AND r.from_handle = m.to_handle AND r.to_handle IN (${list})
+            AND r.sequence > m.sequence)
       END
     UNION ALL
     SELECT 1 FROM peer_questions_out WHERE awaiting = 1 AND asker IN (${list})
@@ -51,8 +53,7 @@ export function sessionAwaitsMail(db: OrchestrationDb, sessionIds: readonly stri
   return (
     db.db
       .prepare(sessionAwaitsMailSql(ids.length))
-      .get(...addresses, ...addresses, ...addresses, ...addresses, ...ids, ...ids, ...ids) !==
-    undefined
+      .get(...[1, 2, 3, 4, 5].flatMap(() => addresses), ...ids, ...ids, ...ids) !== undefined
   )
 }
 

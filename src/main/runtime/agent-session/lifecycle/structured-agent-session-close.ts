@@ -271,7 +271,8 @@ export async function closeCapturedStructuredSession(
   sessionId: string,
   cause: StructuredAgentSessionCloseCause,
   surface: StructuredSessionSurface | null,
-  runtime: StructuredSessionSurfaceRuntime & Partial<Pick<OrcaRuntimeService, 'bots'>>
+  runtime: StructuredSessionSurfaceRuntime &
+    Partial<Pick<OrcaRuntimeService, 'bots' | 'botRunChatCloser'>>
 ): Promise<boolean> {
   if (surface && !structuredSessionSurfaceIsCurrent(host, sessionId, surface, runtime)) {
     return false
@@ -294,6 +295,9 @@ export async function closeCapturedStructuredSession(
   }
   if (!keepRunning) {
     await host.close(sessionId, cause)
+  } else {
+    // A finished run chat its tab held open counts down again.
+    runtime.botRunChatCloser?.wake([sessionId])
   }
   return result.committed
 }

@@ -64,11 +64,14 @@ export class BotRunChatCloser {
   // Every read and write of the list runs here, one at a time.
   private queue: Promise<void> = Promise.resolve()
 
+  // The chats automations run in, and their /clear roots, as of the last automation edit.
   private targets: ReadonlySet<string>
+  private targetRoots: ReadonlySet<string>
 
   constructor(private readonly deps: BotRunChatCloseDeps) {
     this.list = new RunChatList(deps)
     this.targets = deps.automationChats()
+    this.targetRoots = new Set([...this.targets].map(deps.rootOf))
   }
 
   /** A run's own conversation just finished: its countdown starts now. A bot on Never tracks none. */
@@ -121,10 +124,8 @@ export class BotRunChatCloser {
   automationsChanged(): void {
     const before = this.targets
     this.targets = this.deps.automationChats()
-    const released = [...before].filter((id) => !this.targets.has(id))
-    if (released.length > 0) {
-      this.wake(released)
-    }
+    this.targetRoots = new Set([...this.targets].map(this.deps.rootOf))
+    this.wake([...before].filter((id) => !this.targets.has(id)))
   }
 
   /** These bots' items changed, so an item holding one of their parked chats may have closed. */
@@ -278,11 +279,12 @@ export class BotRunChatCloser {
     }
     // A turn, a wake, a question, an open tab, an automation saved to run in it or a new Close
     // after may come up to the close itself.
-    const targeted = () =>
-      [...this.deps.automationChats()].some((id) => this.deps.rootOf(id) === entry.sessionId)
     const closed = await this.deps.close(
       entry.sessionId,
-      () => waiting() === 'due' && !this.deps.owesReply(entry.sessionId) && !targeted()
+      () =>
+        waiting() === 'due' &&
+        !this.deps.owesReply(entry.sessionId) &&
+        !this.targetRoots.has(entry.sessionId)
     )
     if (closed) {
       return null

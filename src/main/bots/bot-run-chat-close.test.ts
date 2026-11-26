@@ -71,6 +71,10 @@ function closerWith(input: {
       const late = input.late?.[sessionId]
       if (late) {
         ;(late === 'asked' ? owes : late === 'targeted' ? targets : inUse).add(sessionId)
+        if (late === 'targeted') {
+          // Saving an automation publishes its edit, as the runtime's change notice does.
+          closer.automationsChanged()
+        }
       }
       if (!admit()) {
         return false
