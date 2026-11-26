@@ -112,6 +112,13 @@ export function useCombinedSearch({
       isCurrentOwner
     })
   const hasQuery = query.trim().length > 0
+  // The notice holds for the whole search session; dropping it while each pause's rerun is pending
+  // would re-announce it on every keystroke. A remount (workspace or owner change) starts fresh.
+  const [sessionNotice, setSessionNotice] = useState('')
+  const nextSessionNotice = hasQuery ? (textNotice ?? sessionNotice) : ''
+  if (nextSessionNotice !== sessionNotice) {
+    setSessionNotice(nextSessionNotice)
+  }
 
   const model = useMemo(
     () =>
@@ -236,7 +243,7 @@ export function useCombinedSearch({
   return {
     clearQuery,
     inputRef,
-    announcement: hasQuery ? (textNotice ?? '') : '',
+    announcement: nextSessionNotice,
     field: {
       query,
       loading: hasQuery && (namesLoading || textPending),

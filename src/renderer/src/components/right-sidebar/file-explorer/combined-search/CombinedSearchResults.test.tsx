@@ -24,7 +24,7 @@ const ROW_ACTIONS: NameMatchRowActions = {
 const WRAPPED_ERROR_HEIGHT = 60
 
 function rectOf(height: number): DOMRect {
-  return { x: 0, y: 0, top: 0, left: 0, right: 300, bottom: height, width: 300, height } as DOMRect
+  return DOMRect.fromRect({ x: 0, y: 0, width: 300, height })
 }
 
 function heightOf(element: HTMLElement): number {
@@ -58,7 +58,8 @@ afterEach(() => {
 })
 
 function translateY(element: Element): number {
-  const match = /translateY\(([\d.]+)px\)/.exec((element as HTMLElement).style.transform)
+  const transform = element instanceof HTMLElement ? element.style.transform : ''
+  const match = /translateY\(([\d.]+)px\)/.exec(transform)
   return match ? Number(match[1]) : Number.NaN
 }
 
@@ -94,7 +95,7 @@ describe('combined search results layout', () => {
     expect(errorIndex).toBeGreaterThan(0)
     // The error is the last row; the list must reserve its wrapped height, not the one-line estimate.
     const listHeight = Number.parseFloat(
-      (container.querySelector('[role="listbox"]') as HTMLElement).style.height
+      container.querySelector<HTMLElement>('[role="listbox"]')?.style.height ?? ''
     )
     expect(listHeight).toBeGreaterThanOrEqual(translateY(rows[errorIndex]) + WRAPPED_ERROR_HEIGHT)
   })

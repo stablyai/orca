@@ -44,6 +44,7 @@ afterEach(() => {
   cleanup()
   mounted.field = null
   mounted.renders = []
+  mounted.announcements = []
   vi.useRealTimers()
   useAppStore.setState(initial, true)
 })
@@ -71,7 +72,11 @@ function renderField(worktreeId: string) {
 type Field = ReturnType<typeof renderField>['result']
 
 type FieldState = ReturnType<typeof useCombinedSearch>
-const mounted: { field: FieldState | null; renders: string[] } = { field: null, renders: [] }
+const mounted: { field: FieldState | null; renders: string[]; announcements: string[] } = {
+  field: null,
+  renders: [],
+  announcements: []
+}
 
 function FieldHost({
   worktreeId,
@@ -96,6 +101,7 @@ function FieldHost({
   })
   const { model } = mounted.field.results
   mounted.renders.push(Array.from({ length: model.count }, (_, i) => model.getKey(i)).join(','))
+  mounted.announcements.push(mounted.field.announcement)
   return null
 }
 
@@ -219,5 +225,19 @@ describe('combined search text state', () => {
     expect(pending).toEqual([])
     // The muted row is not a live region itself; the pane's persistent region carries this text.
     expect(field().announcement).toBe('Not available here')
+  })
+
+  it('keeps announcing the same notice while the user keeps typing', async () => {
+    render(<FieldHost worktreeId="wt-skip-typing" worktreePath={null} />)
+    act(() => field().field.onQueryChange('cart'))
+    await advanceFakeClock()
+    act(() => field().field.onQueryChange('carts'))
+    await advanceFakeClock()
+    act(() => field().field.onQueryChange('cartsx'))
+    await advanceFakeClock()
+    const first = mounted.announcements.indexOf('Not available here')
+    expect(first).toBeGreaterThan(-1)
+    // Each change of the live text is a new announcement; the notice must not drop between pauses.
+    expect(mounted.announcements.slice(first)).not.toContain('')
   })
 })

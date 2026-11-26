@@ -2,6 +2,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import { getDefaultSettings } from '../../../../../../shared/orca-profiles/constants'
 import { useFileExplorerTreeLoadEffects } from './use-file-explorer-tree-load-effects'
 
 const initial = useAppStore.getState()
@@ -12,11 +13,11 @@ afterEach(() => {
 })
 
 function setFollowSymlinks(value: boolean): void {
-  const { settings } = useAppStore.getState()
-  useAppStore.setState({
-    settings: { ...settings, followSymlinkedDirectories: value } as typeof settings
-  })
+  const settings = useAppStore.getState().settings ?? getDefaultSettings('/home/test')
+  useAppStore.setState({ settings: { ...settings, followSymlinkedDirectories: value } })
 }
+
+const INITIAL_TREE: { visible: string | null } = { visible: '/repo/a' }
 
 /** Counts root reloads while search hides the tree (visible path null) and reveals it again. */
 function renderTree() {
@@ -37,7 +38,7 @@ function renderTree() {
         resetSelection: () => {},
         clearNameFilter: () => {}
       }),
-    { initialProps: { visible: '/repo/a' as string | null } }
+    { initialProps: INITIAL_TREE }
   )
   return { ...hook, resetAndLoad }
 }

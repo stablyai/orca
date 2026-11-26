@@ -11,6 +11,7 @@ import {
 import { CombinedSearchStrip } from './CombinedSearchStrip'
 import { CombinedSearchResults } from './CombinedSearchResults'
 import { useCombinedSearch } from './useCombinedSearch'
+import { SearchAnnouncer } from './SearchAnnouncer'
 import { getInitialSearchDraft } from './use-search-draft-lifecycle'
 import type { NameMatch, NameMatchResults } from './name-match-results'
 import type { NameMatchRowActions } from './use-name-match-row-actions'
@@ -153,10 +154,7 @@ export const FileExplorerSearchPane = React.memo(function FileExplorerSearchPane
         filters={search.filters}
         scopeLabel={scopeLabel}
       />
-      {/* Mounted for the pane's lifetime so a notice that appears later is announced. */}
-      <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-        {search.announcement}
-      </span>
+      <SearchAnnouncer text={search.announcement} />
       <div className="relative min-h-0 flex-1 overflow-hidden">
         {tree}
         {hasQuery ? (
