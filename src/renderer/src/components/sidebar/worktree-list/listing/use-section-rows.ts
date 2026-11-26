@@ -109,7 +109,8 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     visibleRepos: args.visibleReposForRows,
     visibleWorktrees: worktrees,
     filterRepoIds: args.filterRepoIds,
-    defaultHostId
+    defaultHostId,
+    hideDoneWorkspaces: args.hideDoneWorkspaces
   })
 
   // Why: subscribe on a flat key array (useShallow) so progress ticks don't rebuild the whole row model.

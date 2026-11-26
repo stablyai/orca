@@ -31,6 +31,8 @@ export type VisibleSidebarWorktreeInputs = {
   injectLineageAncestors?: boolean
   preserveLineageParentOrder?: boolean
   forcedVisibleWorktreeIds?: readonly string[]
+  /** Extra gate for ancestors pulled in for a visible child (e.g. Hide Done). */
+  includeLineageAncestor?: (worktree: Worktree) => boolean
 }
 
 /** The sidebar's visible worktrees, in display order, before grouping. */
@@ -45,7 +47,8 @@ export function selectVisibleSidebarWorktrees({
   filterRepoIds,
   injectLineageAncestors,
   preserveLineageParentOrder,
-  forcedVisibleWorktreeIds
+  forcedVisibleWorktreeIds,
+  includeLineageAncestor
 }: VisibleSidebarWorktreeInputs): Worktree[] {
   const facts = withFolderNestedRowsListed(projectFacts, lineageParentIdentities)
   // Keep valid nonarchived ancestors despite ordinary filters so children retain their hierarchy.
@@ -80,7 +83,8 @@ export function selectVisibleSidebarWorktrees({
       ancestorByIdentity,
       worktreeLineageById,
       selectedRepoIds,
-      lineageParentIdentities
+      lineageParentIdentities,
+      includeLineageAncestor
     )
   }
   all = all
@@ -95,7 +99,8 @@ export function selectVisibleSidebarWorktrees({
         ancestorByIdentity,
         worktreeLineageById,
         selectedRepoIds,
-        lineageParentIdentities
+        lineageParentIdentities,
+        includeLineageAncestor
       )
 }
 
@@ -134,7 +139,8 @@ function addVisibleLineageAncestors(
   ancestorByIdentity: ReadonlyMap<string, Worktree>,
   lineageById: Record<string, WorktreeLineage>,
   selectedRepoIds: ReadonlySet<string> | null,
-  lineageParentIdentities: SidebarLineageParentIdentities | undefined
+  lineageParentIdentities: SidebarLineageParentIdentities | undefined,
+  includeAncestor: ((worktree: Worktree) => boolean) | undefined
 ): Worktree[] {
   const result: Worktree[] = []
   const included = new Set<string>()
@@ -158,7 +164,11 @@ function addVisibleLineageAncestors(
     visiting.add(identity)
     const parent = parentByIdentity.get(identity)
     // Repository filters are hard boundaries; ordinary filters may retain ancestors.
-    if (parent && (!selectedRepoIds || selectedRepoIds.has(parent.repoId))) {
+    if (
+      parent &&
+      (!selectedRepoIds || selectedRepoIds.has(parent.repoId)) &&
+      includeAncestor?.(parent) !== false
+    ) {
       addWithAncestors(parent)
     }
     if (!included.has(identity)) {

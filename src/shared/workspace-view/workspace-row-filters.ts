@@ -11,6 +11,8 @@ export type WorkspaceRowFilters = WorkspaceKindSwitches & {
   hideSleepingWorkspaces: boolean
   /** Keeps each project's main workspace out of the "Hide sleeping" sweep. Absent means on (#8873). */
   alwaysShowDefaultBranchWorkspace?: boolean
+  /** The sidebar's opt-in; the Workspace Board keeps every status lane visible. */
+  hideDoneWorkspaces: boolean
   hideWorkspacesFromOtherDevices: boolean
   filterRepoIds: readonly string[]
   /** The hosts shown; null shows every host. */
@@ -21,6 +23,7 @@ export type WorkspaceRowFilters = WorkspaceKindSwitches & {
 export const WORKSPACE_ROW_FILTER_UI_FIELDS = {
   hideSleepingWorkspaces: 'hideSleepingWorkspaces',
   alwaysShowDefaultBranchWorkspace: 'alwaysShowDefaultBranchWorkspace',
+  hideDoneWorkspaces: 'hideDoneWorkspaces',
   hideDefaultBranchWorkspace: 'hideDefaultBranchWorkspace',
   hideAutomationGeneratedWorkspaces: 'hideAutomationGeneratedWorkspaces',
   hideCliCreatedWorkspaces: 'hideCliCreatedWorkspaces',
@@ -39,6 +42,7 @@ export const WORKSPACE_ROW_FILTER_KEYS = Object.keys(
 export const NO_WORKSPACE_ROW_FILTERS: WorkspaceRowFilters = {
   hideSleepingWorkspaces: false,
   alwaysShowDefaultBranchWorkspace: true,
+  hideDoneWorkspaces: false,
   hideDefaultBranchWorkspace: false,
   hideAutomationGeneratedWorkspaces: false,
   hideCliCreatedWorkspaces: false,
@@ -65,6 +69,7 @@ export type WorkspaceRowFactReader<Row> = {
   isAutomationCreated: (row: Row) => boolean
   isCliCreated: (row: Row) => boolean
   isDetachedHead: (row: Row) => boolean
+  isDone: (row: Row) => boolean
   isMainWorktree: (row: Row) => boolean
   isSleeping: (row: Row) => boolean
 }
@@ -107,6 +112,9 @@ function buildWorkspaceRowPredicate<Row>(
       if (hostId === null || !hostIds.has(hostId)) {
         return false
       }
+    }
+    if (filters.hideDoneWorkspaces && read.isDone(row)) {
+      return false
     }
     if (read.isFolderWorkspace(row)) {
       return true

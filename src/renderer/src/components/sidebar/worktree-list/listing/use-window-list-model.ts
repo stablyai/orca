@@ -60,6 +60,7 @@ export function useWindowSidebarListModel(args: SidebarListModelArgs): SidebarLi
     importedWorktreesByRepo: externalWorktreeCards.importedWorktreesByRepo,
     newExternalWorktreesInboxByRepo: externalWorktreeCards.newExternalWorktreesInboxByRepo,
     filterRepoIds: filterState.filterRepoIds,
+    hideDoneWorkspaces: filterState.hideDoneWorkspaces,
     visibleWorkspaceHostIds: filterState.visibleWorkspaceHostIds,
     workspaceHostScope: filterState.workspaceHostScope
   })

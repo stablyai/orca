@@ -69,7 +69,8 @@ function workspaceOptionLabels(t: Translate): Record<WorkspaceViewOptionKey, str
     hideDetachedHeadWorkspaces: t(
       'hostScreen.workspaceOptionsSheet.hideDetachedHead',
       'Hide detached HEAD'
-    )
+    ),
+    hideDoneWorkspaces: t('hostScreen.workspaceOptionsSheet.hideDone', 'Hide Done')
   }
 }
 

@@ -98,6 +98,7 @@ export const visibilityArgs: Parameters<typeof useVisibleSidebarWorktrees>[0] = 
     hideAutomationGeneratedWorkspaces: false,
     hideCliCreatedWorkspaces: false,
     hideDetachedHeadWorkspaces: false,
+    hideDoneWorkspaces: false,
     hideWorkspacesFromOtherDevices: false,
     alwaysShowDefaultBranchWorkspace: true,
     visibleWorkspaceHostIds: null,
@@ -133,6 +134,7 @@ export function sectionArgs(): Parameters<typeof useSidebarSectionRows>[0] {
     importedWorktreesByRepo: new Map(),
     newExternalWorktreesInboxByRepo: new Map(),
     filterRepoIds: [],
+    hideDoneWorkspaces: false,
     visibleWorkspaceHostIds: null,
     workspaceHostScope: 'all'
   }

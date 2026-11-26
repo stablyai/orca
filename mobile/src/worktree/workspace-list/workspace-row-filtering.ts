@@ -8,6 +8,7 @@ import {
   filterWorkspaceRows,
   type WorkspaceRowFactReader
 } from '../../../../src/shared/workspace-view/workspace-row-filters'
+import { isDoneWorkspaceStatus } from '../../../../src/shared/workspace/status/workspace-statuses'
 import type { FilterState, Worktree } from './workspace-list-types'
 import { resolveWorktreeHostId } from '../row-presentation/worktree-host-context-labels'
 import { getWorktreeRowIdentity } from '../row-presentation/worktree-host-row-identity'
@@ -68,6 +69,7 @@ function phoneRowFacts(
     isAutomationCreated: (w) => w.automationCreated === true,
     isCliCreated: (w) => w.cliCreated === true,
     isDetachedHead: (w) => w.detachedHead === true,
+    isDone: (w) => isDoneWorkspaceStatus(w.workspaceStatus),
     // Why the guess: #8873's exemption must fail open on hosts that predate isMainWorktree.
     isMainWorktree: (w) => w.isMainWorktree ?? guessDefaultBranchWorkspace(w),
     isSleeping: (w) => !isWorktreeActive(w)

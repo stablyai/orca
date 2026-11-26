@@ -6,6 +6,7 @@ import {
 } from '../../project/catalog/hidden-projects'
 import type { Worktree } from '../../worktree/types'
 import type { WorktreeGroupBy } from '../row-types'
+import { isDoneWorkspaceStatus } from '../../workspace/status/workspace-statuses'
 
 export function getEmptyProjectPlaceholderRepoIds(args: {
   groupBy: WorktreeGroupBy
@@ -17,6 +18,8 @@ export function getEmptyProjectPlaceholderRepoIds(args: {
   hiddenProjects: HiddenProjects
   /** Repos whose checkout a VM create in progress has not adopted; its pending row stands for them. */
   pendingVmRepoIds?: ReadonlySet<string>
+  /** Hide Done removes a grouped repo's only completed workspaces without retiring the membership. */
+  hideDoneWorkspaces?: boolean
 }): Set<string> {
   if (args.groupBy !== 'repo') {
     return new Set()
@@ -34,10 +37,16 @@ export function getEmptyProjectPlaceholderRepoIds(args: {
     ) {
       continue
     }
-    const hasNoWorktrees = (args.worktreesByRepo[repo.id]?.length ?? 0) === 0
+    const worktrees = args.worktreesByRepo[repo.id] ?? []
+    const hasNoWorktrees = worktrees.length === 0
     // Workspace filters must not change persisted Project Group membership (#8865).
     const isFilteredProjectGroupMember = repo.projectGroupId != null && !visibleRepoIds.has(repo.id)
-    if (hasNoWorktrees || isFilteredProjectGroupMember) {
+    const hiddenOnlyByDone =
+      args.hideDoneWorkspaces === true &&
+      isFilteredProjectGroupMember &&
+      worktrees.length > 0 &&
+      worktrees.every((worktree) => isDoneWorkspaceStatus(worktree.workspaceStatus))
+    if (hasNoWorktrees || (isFilteredProjectGroupMember && !hiddenOnlyByDone)) {
       placeholderRepoIds.add(repo.id)
     }
   }

@@ -12,6 +12,7 @@ import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   isWorkspaceOwnedBySomeoneElse
 } from '../../../../shared/workspace-view/workspace-creator-visibility'
+import { isDoneWorkspaceStatus } from '../../../../shared/workspace/status/workspace-statuses'
 import type { NotificationSettings } from '../../../../shared/notifications/notification-settings-types'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 
@@ -48,25 +49,26 @@ export function isWorkspaceHiddenBySidebarFilters(
     return false
   }
   const hideOtherClients = ui.hideWorkspacesFromOtherDevices === true
+  const hideDone = ui.hideDoneWorkspaces === true
   const switches: WorkspaceKindSwitches = {
     hideDefaultBranchWorkspace: ui.hideDefaultBranchWorkspace === true,
     hideAutomationGeneratedWorkspaces: ui.hideAutomationGeneratedWorkspaces === true,
     hideCliCreatedWorkspaces: ui.hideCliCreatedWorkspaces === true,
     hideDetachedHeadWorkspaces: ui.hideDetachedHeadWorkspaces === true
   }
-  if (!hideOtherClients && !Object.values(switches).some(Boolean)) {
+  if (!hideOtherClients && !hideDone && !Object.values(switches).some(Boolean)) {
     return false
   }
   const folderScope = parseWorkspaceKey(workspaceId)
   if (folderScope?.type === 'folder') {
-    // Folder rows answer only the other-client switch, as in the sidebar.
     const folder = deps.store
       .getFolderWorkspaces?.()
       .find((item) => item.id === folderScope.folderWorkspaceId)
     return (
-      hideOtherClients &&
-      folder !== undefined &&
-      isWorkspaceOwnedBySomeoneElse(folder, EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT)
+      (hideDone && isDoneWorkspaceStatus(folder?.workspaceStatus)) ||
+      (hideOtherClients &&
+        folder !== undefined &&
+        isWorkspaceOwnedBySomeoneElse(folder, EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT))
     )
   }
   const lineage = Object.values(deps.store.getAllWorktreeLineage?.() ?? {})
@@ -83,6 +85,9 @@ export function isWorkspaceHiddenBySidebarFilters(
         EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT
       )
     ) {
+      return true
+    }
+    if (hideDone && isDoneWorkspaceStatus(listed?.workspaceStatus ?? meta?.workspaceStatus)) {
       return true
     }
     // Without a Git listing, only provenance filters can apply; branch and HEAD are unknown.

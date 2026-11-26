@@ -14,6 +14,8 @@ type WorkspaceStatusNormalizationOptions = {
 }
 
 export const DEFAULT_WORKSPACE_STATUS_ID: WorkspaceStatus = 'in-progress'
+/** The built-in "Done" column; custom labels keep this id. */
+export const DONE_WORKSPACE_STATUS_ID: WorkspaceStatus = 'completed'
 export const DEFAULT_WORKSPACE_STATUS_COLOR_ID = 'neutral'
 export const DEFAULT_WORKSPACE_STATUS_ICON_ID = 'circle-dot'
 export const WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT = 308
@@ -286,6 +288,10 @@ export function getWorkspaceStatus(
   return worktree.workspaceStatus && isWorkspaceStatusId(worktree.workspaceStatus, statuses)
     ? worktree.workspaceStatus
     : getDefaultWorkspaceStatusId(statuses)
+}
+
+export function isDoneWorkspaceStatus(status: WorkspaceStatus | undefined): boolean {
+  return status === DONE_WORKSPACE_STATUS_ID
 }
 
 export function getWorkspaceStatusGroupKey(status: WorkspaceStatus): string {

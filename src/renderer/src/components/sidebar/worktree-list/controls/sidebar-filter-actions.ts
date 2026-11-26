@@ -17,6 +17,7 @@ export type SidebarFilterState = {
   hideAutomationGeneratedWorkspaces: boolean
   hideCliCreatedWorkspaces: boolean
   hideDetachedHeadWorkspaces: boolean
+  hideDoneWorkspaces: boolean
   hideWorkspacesFromOtherDevices: boolean
   /** Keeps each project's main workspace out of the "Hide sleeping" sweep; absent means on. */
   alwaysShowDefaultBranchWorkspace?: boolean
@@ -32,6 +33,7 @@ export function sidebarWorkspaceRowFilters(state: SidebarFilterState): Workspace
     hideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
     hideCliCreatedWorkspaces: state.hideCliCreatedWorkspaces,
     hideDetachedHeadWorkspaces: state.hideDetachedHeadWorkspaces,
+    hideDoneWorkspaces: state.hideDoneWorkspaces,
     hideWorkspacesFromOtherDevices: state.hideWorkspacesFromOtherDevices,
     filterRepoIds: state.filterRepoIds,
     visibleHostIds: resolveVisibleWorkspaceHostIds(
@@ -52,6 +54,7 @@ export function selectSidebarFilterState(
     hideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
     hideCliCreatedWorkspaces: state.hideCliCreatedWorkspaces,
     hideDetachedHeadWorkspaces: state.hideDetachedHeadWorkspaces,
+    hideDoneWorkspaces: state.hideDoneWorkspaces,
     hideWorkspacesFromOtherDevices: state.hideWorkspacesFromOtherDevices,
     alwaysShowDefaultBranchWorkspace: state.alwaysShowDefaultBranchWorkspace,
     visibleWorkspaceHostIds: state.visibleWorkspaceHostIds,
@@ -71,6 +74,7 @@ export type SidebarFilterSetters = Pick<
   | 'setHideAutomationGeneratedWorkspaces'
   | 'setHideCliCreatedWorkspaces'
   | 'setHideDetachedHeadWorkspaces'
+  | 'setHideDoneWorkspaces'
   | 'setHideWorkspacesFromOtherDevices'
   | 'setFilterRepoIds'
   | 'setVisibleWorkspaceHostIds'
@@ -97,6 +101,8 @@ const RESET_SIDEBAR_FILTER: Record<
     store.setHideCliCreatedWorkspaces(NO_WORKSPACE_ROW_FILTERS.hideCliCreatedWorkspaces),
   hideDetachedHeadWorkspaces: (store) =>
     store.setHideDetachedHeadWorkspaces(NO_WORKSPACE_ROW_FILTERS.hideDetachedHeadWorkspaces),
+  hideDoneWorkspaces: (store) =>
+    store.setHideDoneWorkspaces(NO_WORKSPACE_ROW_FILTERS.hideDoneWorkspaces),
   hideWorkspacesFromOtherDevices: (store) =>
     store.setHideWorkspacesFromOtherDevices(
       NO_WORKSPACE_ROW_FILTERS.hideWorkspacesFromOtherDevices
