@@ -79,7 +79,9 @@
       "on": "On",
       "off": "Off",
       "composerUsageHeading": "COMPOSER USAGE",
-      "composerUsageDescription": "Chat and agent terminal composers show your agent plan as used or left. Tap the meter for every window, reset times and pace."
+      "composerUsageDescription": "Chat and agent terminal composers show your agent plan as used or left. Tap the meter for every window, reset times and pace.",
+      "railRingsDuringChats": "Show usage rings in the side rail during chats",
+      "railRingsDuringChatsHint": "When a chat leaves the status column free. A chat that fills the column always hides them."
     },
     "nativeChatText": {
       "heading": "TEXT",

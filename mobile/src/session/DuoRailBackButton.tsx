@@ -8,6 +8,7 @@ import { getSideRailStrip } from '../layout/side-rail-strip'
 import { useWindowSafeAreaInsets } from '../layout/side-safe-area'
 import { duoRailBackVisible } from './duo-rail-back'
 import { useDuoChatExpanded } from './duo-chat-width'
+import { useDuoRailBackShown } from './use-duo-rail-back-shown'
 
 /** Back sits below the status occlusion, on the cluster's midX, and hides while the keyboard is up. */
 
@@ -25,13 +26,18 @@ export function DuoRailBackButton({
   const { width, height } = useWindowDimensions()
   const insets = useWindowSafeAreaInsets()
   const { occlusions } = useReservedRegions()
+  const shown = useDuoRailBackShown()
   const strip = getSideRailStrip({
     windowWidth: width,
     windowHeight: height,
     insets,
     occlusions
   })
-  if (!duoRailBackVisible({ chatVisible, expanded, strip, keyboardInset }) || strip === null) {
+  if (
+    !shown ||
+    !duoRailBackVisible({ chatVisible, expanded, strip, keyboardInset }) ||
+    strip === null
+  ) {
     return null
   }
   const frame = duoRailBackFrame({

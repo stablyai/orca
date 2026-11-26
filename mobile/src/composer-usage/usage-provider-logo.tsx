@@ -1,4 +1,7 @@
+import { Text } from 'react-native'
+import { getProviderDisplayName } from '../../../src/shared/agent-usage/display/usage-provider-windows'
 import { hasMobileAgentIcon, MobileAgentIcon } from '../components/icons/MobileAgentIcon'
+import { colors } from '../theme/mobile-theme'
 
 /** The CLI that spends a provider's quota, whose icon stands for the provider in a tab. */
 const USAGE_PROVIDER_LOGO_AGENT: Record<string, string> = {
@@ -17,11 +20,40 @@ const USAGE_PROVIDER_LOGO_AGENT: Record<string, string> = {
 
 const USAGE_TAB_LOGO_SIZE = 18
 
+function usageProviderLogoAgent(provider: string): string | null {
+  const agent = USAGE_PROVIDER_LOGO_AGENT[provider]
+  return agent && hasMobileAgentIcon(agent) ? agent : null
+}
+
 /** A provider's logo for a tab, or undefined where it has none and the tab keeps its name. */
 export function usageProviderTabLogo(provider: string): React.JSX.Element | undefined {
-  const agent = USAGE_PROVIDER_LOGO_AGENT[provider]
-  if (!agent || !hasMobileAgentIcon(agent)) {
-    return undefined
+  const agent = usageProviderLogoAgent(provider)
+  return agent ? <MobileAgentIcon agentId={agent} size={USAGE_TAB_LOGO_SIZE} /> : undefined
+}
+
+/** A provider's logo at `size`, or its initial where it has none. */
+export function UsageProviderGlyph({
+  provider,
+  size
+}: {
+  provider: string
+  size: number
+}): React.JSX.Element {
+  const agent = usageProviderLogoAgent(provider)
+  if (agent) {
+    return <MobileAgentIcon agentId={agent} size={size} />
   }
-  return <MobileAgentIcon agentId={agent} size={USAGE_TAB_LOGO_SIZE} />
+  return (
+    <Text
+      style={{
+        fontSize: size * 0.8,
+        lineHeight: size,
+        fontWeight: '700',
+        color: colors.textPrimary
+      }}
+      allowFontScaling={false}
+    >
+      {getProviderDisplayName(provider).slice(0, 1)}
+    </Text>
+  )
 }

@@ -1,4 +1,4 @@
-import { useMemo, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { useWindowDimensions, View } from 'react-native'
 import { Slot, usePathname } from 'expo-router'
 import { SafeAreaFrameContext, SafeAreaInsetsContext } from 'react-native-safe-area-context'
@@ -11,6 +11,7 @@ import { themedStyleSheet } from '../src/theme/themed-styles'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { isOverlayPageRoute } from '../src/new-workspace/overlay-page-route'
 import { usePageGeometry } from '../src/layout/reserved-regions.web'
+import { useDuoRailFreeBand } from '../src/session/duo-rail-free-band'
 
 // The session lays its chat across the Duo's status column itself; every other page stays clear of it.
 const SESSION_ROUTE = /^\/h\/[^/]+\/session\//
@@ -33,6 +34,13 @@ export default function PageRootLayout() {
         ? 'right'
         : 'left'
       : null
+  // The shell draws usage rings on the strip unless the page is laid across it, or in the span it leaves empty.
+  const covered = releaseSide !== null
+  const band = useDuoRailFreeBand()
+  const free = covered ? band : null
+  useEffect(() => {
+    client.notifySideStripCover(covered, free)
+  }, [client, covered, free])
   const frame = useMemo(() => ({ x: 0, y: 0, width, height }), [width, height])
   return (
     <SafeAreaFrameContext.Provider value={frame}>

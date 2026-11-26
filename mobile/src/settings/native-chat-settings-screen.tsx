@@ -19,6 +19,11 @@ import {
 } from '../session/native-chat/preferences/native-chat-text-settings'
 import { useMobileDefaultSessionViewPreference } from '../session/use-mobile-default-session-view-preference'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useSideRailStrip } from '../layout/side-rail'
+import {
+  setRailRingsDuringChats,
+  useRailRingsDuringChats
+} from '../rail-usage/rail-rings-during-chats-preference'
 import {
   nativeChatLineSpacingSegments,
   NativeChatTextSizeSlider,
@@ -64,6 +69,13 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
   const { defaultView, setDefaultView } = useMobileDefaultSessionViewPreference()
   const chatDefault = defaultView === 'chat'
   const label = t('settings.nativeChatSettingsScreen.openInChatUi', 'Open sessions in Chat UI')
+  // Only a window with a side rail (the iPhone Duo's status column) has rings to show.
+  const hasSideRail = useSideRailStrip() !== null
+  const ringsDuringChats = useRailRingsDuringChats()
+  const ringsLabel = t(
+    'settings.nativeChatSettingsScreen.railRingsDuringChats',
+    'Show usage rings in the side rail during chats'
+  )
 
   // The slider's gesture needs a root here, as Terminal settings has.
   return (
@@ -173,6 +185,24 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
         >
           <ComposerUsageWindowPicker inSettings />
           <ComposerUsageDisplayPicker inSettings />
+          {hasSideRail ? (
+            <ListRow
+              key="railRings"
+              title={ringsLabel}
+              subtitle={t(
+                'settings.nativeChatSettingsScreen.railRingsDuringChatsHint',
+                'When a chat leaves the status column free. A chat that fills the column always hides them.'
+              )}
+              accessory={
+                <MobileSwitch
+                  accessibilityLabel={ringsLabel}
+                  value={ringsDuringChats}
+                  onValueChange={setRailRingsDuringChats}
+                  testID="rail-rings-during-chats"
+                />
+              }
+            />
+          ) : null}
         </SettingsSection>
       </SettingsScreen>
     </GestureHandlerRootView>

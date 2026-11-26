@@ -11,6 +11,8 @@ export const DUO_RAIL_CONTROL_SIZE = 44
  */
 export const DUO_STATUS_GLYPH_FROM_EDGE = 29.33
 export const DUO_STATUS_GLYPH_SIZE = 37
+/** The Wi-Fi/battery ring that glyph draws: 41pt across, 3.5pt stroke, measured on the iOS 27.1 simulator. */
+export const DUO_STATUS_RING_DIAMETER = 41
 
 const STATUS_ROW_CENTER_FROM_EDGE = DUO_STATUS_GLYPH_FROM_EDGE + DUO_STATUS_GLYPH_SIZE / 2
 
@@ -20,14 +22,14 @@ export type DuoRailControlFrame = {
   size: number
 }
 
-type RowArgs = {
+export type DuoStatusRowArgs = {
   windowWidth: number
   windowHeight: number
   strip: SideRailStrip
   occlusions: readonly ReservedRect[]
 }
 
-function statusColumn(args: RowArgs): ReservedRect | null {
+function statusColumn(args: DuoStatusRowArgs): ReservedRect | null {
   const start = args.strip.side === 'right' ? args.windowWidth - args.strip.width : 0
   const end = start + args.strip.width
   return (
@@ -71,11 +73,16 @@ function statusGlyph(
   return mark
 }
 
+/** Horizontal center of the status glyph (the Wi-Fi and battery ring), in window points. */
+export function duoStatusGlyphMidX(args: DuoStatusRowArgs): number {
+  return clusterMidX(args, statusColumn(args))
+}
+
 /**
  * Below the reported status occlusion, on the status cluster's midX.
  * The full control stays inside the column. A bottom column clears upward.
  */
-export function duoRailBackFrame(args: RowArgs): DuoRailControlFrame {
+export function duoRailBackFrame(args: DuoStatusRowArgs): DuoRailControlFrame {
   const size = DUO_RAIL_CONTROL_SIZE
   const column = statusColumn(args)
   const span = columnSpan(args, column)
@@ -97,7 +104,7 @@ export type DuoRailJumpFrames = {
  * While the keyboard is up the back button is hidden, so the stack may use that slot.
  */
 export function duoRailJumpFrames(
-  args: RowArgs & { composerTop: number; keyboardUp: boolean }
+  args: DuoStatusRowArgs & { composerTop: number; keyboardUp: boolean }
 ): DuoRailJumpFrames | null {
   if (!(args.composerTop > 0)) {
     return null
@@ -117,7 +124,20 @@ export function duoRailJumpFrames(
   }
 }
 
-function clusterMidX(args: RowArgs, column: ReservedRect | null): number {
+/** The span of the column a collapsed chat leaves empty: below Back, above the jump arrows' slot. */
+export function duoRailFreeBand(
+  args: DuoStatusRowArgs & { composerTop: number; backShown: boolean }
+): { top: number; bottom: number } | null {
+  const back = duoRailBackFrame(args)
+  const gap = spacing.sm
+  // With no rail Back the band starts at the window top, and the shell places it under the status glyph.
+  const top = args.backShown ? back.top + back.size + gap : 0
+  // Reserved even while the arrows are hidden, so the band doesn't jump as they come and go.
+  const bottom = args.composerTop - 3 * gap - 2 * back.size
+  return bottom > top ? { top, bottom } : null
+}
+
+function clusterMidX(args: DuoStatusRowArgs, column: ReservedRect | null): number {
   const mark = column === null ? null : statusGlyph(column, args.occlusions)
   if (mark !== null) {
     return mark.x + mark.width / 2
@@ -135,7 +155,10 @@ function controlLeft(midX: number, span: { start: number; width: number }, size:
   return Math.min(Math.max(midX - size / 2, min), max)
 }
 
-function columnSpan(args: RowArgs, column: ReservedRect | null): { start: number; width: number } {
+function columnSpan(
+  args: DuoStatusRowArgs,
+  column: ReservedRect | null
+): { start: number; width: number } {
   if (column !== null) {
     return { start: column.x, width: column.width }
   }
@@ -145,7 +168,11 @@ function columnSpan(args: RowArgs, column: ReservedRect | null): { start: number
   return { start: 0, width: args.strip.width }
 }
 
-function statusOcclusionEdge(args: RowArgs, column: ReservedRect | null, fromTop: boolean): number {
+function statusOcclusionEdge(
+  args: DuoStatusRowArgs,
+  column: ReservedRect | null,
+  fromTop: boolean
+): number {
   if (column !== null) {
     return fromTop ? column.y + column.height : column.y
   }

@@ -9,12 +9,15 @@ import {
   type ReactNode
 } from 'react'
 import { StyleSheet, View, useWindowDimensions, type HostInstance } from 'react-native'
-import type { DuoRailJumpFrames } from '../layout/duo-status-row'
+import { duoRailFreeBand, type DuoRailJumpFrames } from '../layout/duo-status-row'
 import { useReservedRegions } from '../layout/reserved-regions'
 import { getSideRailStrip } from '../layout/side-rail-strip'
 import { useWindowSafeAreaInsets } from '../layout/side-safe-area'
 import { useDuoChatExpanded } from './duo-chat-width'
 import { duoRailJumpPlacement } from './duo-rail-jump'
+import { publishDuoRailFreeBand } from './duo-rail-free-band'
+import { useDuoRailBackShown } from './use-duo-rail-back-shown'
+import { spacing } from '../theme/mobile-theme'
 import { MobileNativeChatFloatingControls } from './native-chat/lower-region/MobileNativeChatFloatingControls'
 
 type JumpActions = {
@@ -50,12 +53,34 @@ function useRailFrames(
   const { width, height } = useWindowDimensions()
   const insets = useWindowSafeAreaInsets()
   const { occlusions } = useReservedRegions()
+  const backShown = useDuoRailBackShown()
   const strip = getSideRailStrip({
     windowWidth: width,
     windowHeight: height,
     insets,
     occlusions
   })
+  // Without the status occlusions (a folded Duo that reports no fold division) the page draws no
+  // rail Back or arrows, so it frees everything above the composer; the shell places the top itself.
+  const band =
+    chatVisible && !expanded && !(keyboardInset > 0) && composerTop !== null
+      ? strip !== null
+        ? duoRailFreeBand({
+            windowWidth: width,
+            windowHeight: height,
+            strip,
+            occlusions,
+            composerTop,
+            backShown
+          })
+        : composerTop > spacing.sm
+          ? { top: 0, bottom: composerTop - spacing.sm }
+          : null
+      : null
+  useEffect(() => {
+    publishDuoRailFreeBand(band)
+  }, [band?.top, band?.bottom])
+  useEffect(() => () => publishDuoRailFreeBand(null), [])
   return duoRailJumpPlacement({
     chatVisible,
     expanded,

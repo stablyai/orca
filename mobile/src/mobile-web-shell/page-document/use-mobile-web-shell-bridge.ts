@@ -31,6 +31,7 @@ import type { MobileWebShellSessionState } from '../session/mobile-web-shell-ses
 import type { PageHostSnapshot } from '../host-gates/use-page-host-snapshot'
 import type { PageStorageForInit } from '../page-storage/page-storage-keys'
 import { createPageFramesWithoutHost } from './page-frames-without-host'
+import type { BridgeSideStripFree } from '../bridge/page-geometry/bridge-side-strip-cover'
 
 class BridgeViewGoneError extends Error {
   constructor() {
@@ -113,6 +114,7 @@ export type MobileWebShellBridgeArgs = {
   onPageBackClaim: (claimed: boolean) => void
   onPageLocation: (href: string) => void
   onPageSwapSafe: (safe: boolean, round: number) => void
+  onSideStripCover: (covered: boolean, free: BridgeSideStripFree | null) => void
   /** The page shows a terminal with its key row, or stopped; false again on each new document. */
   onTerminalKeyRailClaim: (
     claimed: boolean,
