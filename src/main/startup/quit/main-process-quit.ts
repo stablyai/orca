@@ -142,10 +142,10 @@ function installWillQuitHandler(): void {
       // After the teardown, so they save every write it accepted; each never rejects.
       closeDataStores: () =>
         Promise.all([
-          closeEnvironmentStore(),
           closeBrowserExtensionProfileDocumentStores(),
           closeBrowserExtensionProfileStateStore()
         ]),
+      closeWorkerStores: closeEnvironmentStore,
       shutdownDiagnostics: async () => {
         await shutdownTelemetry()
         await shutdownObservability()

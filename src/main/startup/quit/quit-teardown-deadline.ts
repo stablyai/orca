@@ -41,20 +41,30 @@ export async function settleTeardownWithinDeadline(
 }
 
 /**
- * Bounded teardown, then the final saves (unbounded, as their old synchronous will-quit saves
- * were), then diagnostics. Saves run before diagnostics so an exit deadline cuts telemetry, not data.
+ * Bounded teardown, then the final saves, then diagnostics. Saves run before diagnostics so an exit
+ * deadline cuts telemetry, not data.
  */
 export async function finishQuitTeardown(input: {
   teardowns: readonly NamedQuitTeardown[]
   deadlineMs: number
+  /** Unbounded, as their old synchronous will-quit saves were. */
   closeDataStores: () => Promise<unknown>
+  /** A worker that a stalled disk can wedge; bounded by deadlineMs so quit cannot hang (#9447). */
+  closeWorkerStores: () => Promise<unknown>
   shutdownDiagnostics: () => Promise<unknown>
 }): Promise<void> {
   const pendingTeardowns = await settleTeardownWithinDeadline(input.teardowns, input.deadlineMs)
   if (pendingTeardowns.length > 0) {
     console.warn('[shutdown] Quit teardown deadline reached', { pendingTeardowns })
   }
-  await input.closeDataStores().catch(() => {})
+  await Promise.all([
+    settleWithinMs(input.closeWorkerStores(), input.deadlineMs).then((result) => {
+      if (result.outcome === 'timed-out') {
+        console.warn('[shutdown] Worker store close deadline reached')
+      }
+    }),
+    input.closeDataStores().catch(() => {})
+  ])
   // Telemetry must never prevent app.quit().
   await input.shutdownDiagnostics().catch(() => {})
 }

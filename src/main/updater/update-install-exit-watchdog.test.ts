@@ -5,7 +5,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', () => ({ app: { exit: vi.fn() } }))
 
 import { updateInstallExitTimeoutMs } from './update-install-exit-watchdog'
-import { finishQuitTeardown, quitTeardownDeadlineMs } from '../startup/quit/quit-teardown-deadline'
+import {
+  finishQuitTeardown,
+  quitTeardownDeadlineMs,
+  settleWithinMs
+} from '../startup/quit/quit-teardown-deadline'
 
 // Telemetry's shutdown bound (telemetry/client.ts) plus the trace flush bound (observability).
 const DIAGNOSTICS_SHUTDOWN_BOUND_MS = 2_500
@@ -35,11 +39,12 @@ describe('Windows update exit budget', () => {
       closeDataStores: async () => {
         events.push(`stores@${Date.now()}`)
       },
-      shutdownDiagnostics: () =>
-        new Promise((resolve) => {
-          events.push(`diagnostics@${Date.now()}`)
-          setTimeout(resolve, DIAGNOSTICS_SHUTDOWN_BOUND_MS)
-        })
+      closeWorkerStores: async () => {},
+      // Telemetry and the trace sink each bound their flush; model one that never answers.
+      shutdownDiagnostics: async () => {
+        events.push(`diagnostics@${Date.now()}`)
+        await settleWithinMs(new Promise(() => {}), DIAGNOSTICS_SHUTDOWN_BOUND_MS)
+      }
     }).then(() => events.push(`quit@${Date.now()}`))
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const start = Date.now()
@@ -53,5 +58,27 @@ describe('Windows update exit budget', () => {
     expect(at('quit')).toBeLessThan(updateInstallExitTimeoutMs('win32'))
     expect(quitTeardownDeadlineMs(true, 'darwin')).toBe(20_000)
     expect(quitTeardownDeadlineMs(false, 'win32')).toBe(20_000)
+  })
+
+  // #9447: no store may hold quit open forever; a wedged environment-store worker is cut at the
+  // quit deadline while the extension stores still save.
+  it('quits after the deadline when the environment store never closes', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const events: string[] = []
+    void finishQuitTeardown({
+      teardowns: [],
+      deadlineMs: quitTeardownDeadlineMs(false, 'darwin'),
+      closeDataStores: async () => {
+        events.push('extension-stores')
+      },
+      closeWorkerStores: () => new Promise(() => {}),
+      shutdownDiagnostics: async () => {}
+    }).then(() => events.push('quit'))
+
+    await vi.advanceTimersByTimeAsync(quitTeardownDeadlineMs(false, 'darwin') - 1)
+    expect(events).toEqual(['extension-stores'])
+    await vi.advanceTimersByTimeAsync(1)
+    expect(events).toEqual(['extension-stores', 'quit'])
   })
 })
