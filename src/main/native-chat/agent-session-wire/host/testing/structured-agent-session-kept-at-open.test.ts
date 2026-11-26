@@ -190,6 +190,14 @@ it.skipIf(process.platform === 'win32')(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the verdict reads only these fields
       fresh.open.structuredAgentSessionKeptAtOpen(record as never, 10)
     expect(await verdict(chat(null))).toBe(true)
+    // A new chat never waits on the listing: the late one here would hold it past the test's timeout.
+    expect(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the verdict reads only these fields
+      await fresh.open.structuredAgentSessionKeptAtOpen({
+        ...chat(null),
+        neverStarted: true
+      } as never)
+    ).toBe(false)
     expect(await verdict({ ...chat(null, { kind: 'exit-observed' }), sessionId: 'exited' })).toBe(
       false
     )
@@ -265,8 +273,8 @@ it.skipIf(process.platform === 'win32')(
   }
 )
 
-// A send reserves the next run first, clearing the store's owner and moving its fence; the proof
-// must still probe the owner the open saw and settle that run, never the send's own.
+// A send reserves the next run first, clearing the store's owner; the proof must still probe the
+// owner the open saw.
 it.skipIf(process.platform === 'win32')(
   'lets a send start a fresh agent once the owner the open saw is gone, though no listing ever answers',
   async () => {
@@ -301,6 +309,16 @@ it.skipIf(process.platform === 'win32')(
     )
     await expect(launched).resolves.toBeNull()
     expect(settle).toHaveBeenCalledTimes(1)
-    expect(settle).toHaveBeenCalledWith(SESSION, session, 3, 6)
+    // Its writes go at the journal's current fence, which the reservation moved.
+    expect(settle).toHaveBeenCalledWith(SESSION, session, 4, 6)
+    // The fresh agent ends; the next start in the same outage must not be refused either.
+    const again = fresh.relays.launchRelayedProviderProcess(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a launch with no daemon reads no launch field
+      {} as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a launch with no daemon reads only chatKey
+      { chatKey: SESSION } as never
+    )
+    await expect(again).resolves.toBeNull()
+    expect(settle).toHaveBeenCalledTimes(1)
   }
 )

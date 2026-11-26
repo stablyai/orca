@@ -205,7 +205,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     owner: (id) => deps.store.getConversation(id)?.ownerObservation.ownerProcess ?? null,
     fence: (id) => deps.store.getConversation(id)?.currentFence,
     settle: async (id, open, fence, openedSince) => {
-      await settleGoneStructuredAgentSessionGeneration(deps, id, open, fence)
+      await settleGoneStructuredAgentSessionGeneration(deps, id, open)
       await recoverStructuredAgentSessionKeptOpen(open.journal, fence, openedSince)
     },
     logger: deps.logger

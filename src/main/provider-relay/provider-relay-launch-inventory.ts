@@ -178,6 +178,11 @@ export function noteProviderRelayKeptUnverified(chatKey: string): void {
   keptUnverified.add(chatKey)
 }
 
+/** Its last run was proven gone and settled, so a later start needn't wait on the listing. */
+export function forgetProviderRelayKeptUnverified(chatKey: string): void {
+  keptUnverified.delete(chatKey)
+}
+
 export function providerRelayKeptUnverified(chatKey: string): boolean {
   return keptUnverified.has(chatKey)
 }

@@ -5,6 +5,7 @@ import {
   providerRelayKeptUnverified,
   providerRelayListingSettled
 } from '../../../provider-relay/app-provider-relays'
+import { forgetProviderRelayKeptUnverified } from '../../../provider-relay/provider-relay-launch-inventory'
 import { ownerProvenGone } from '../host/structured-agent-session-kept-at-open'
 import type { AgentSessionProcessIdentity } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
@@ -26,11 +27,10 @@ export type StructuredAgentSessionKeptOpensInput = {
   logger: Pick<StructuredAgentSessionLogger, 'warn'>
 }
 
-/** The gone run as the open saw it: a send reserves the next run, clearing its owner and fence. */
+/** The gone run's owner as the open saw it: a send's reservation clears the recorded one. */
 type KeptOpen = {
   since: number
   owner: AgentSessionProcessIdentity | null
-  fence: number | undefined
 }
 
 /**
@@ -60,8 +60,7 @@ export class StructuredAgentSessionKeptOpens {
     }
     this.opened.set(session, {
       since: session.journal.cursor().sequence + 1,
-      owner: this.input.owner(sessionId),
-      fence: this.input.fence(sessionId)
+      owner: this.input.owner(sessionId)
     })
     void this.reconcile(sessionId).catch((error: unknown) => this.warn(sessionId, error))
   }
@@ -117,10 +116,14 @@ export class StructuredAgentSessionKeptOpens {
     if (!open || !kept) {
       return
     }
-    this.opened.delete(open)
-    if (!open.child && kept.fence !== undefined) {
-      await this.input.settle(sessionId, open, kept.fence, kept.since)
+    // Writes go at the journal's current fence; a failed settle keeps its entry for a later try.
+    const fence = this.input.fence(sessionId)
+    if (!open.child && fence !== undefined) {
+      await this.input.settle(sessionId, open, fence, kept.since)
     }
+    this.opened.delete(open)
+    // The last run is settled, so later starts in this outage go ahead without the listing.
+    forgetProviderRelayKeptUnverified(sessionId)
   }
 
   private warn(sessionId: string, error: unknown): void {

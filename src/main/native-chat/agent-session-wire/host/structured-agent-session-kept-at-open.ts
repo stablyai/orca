@@ -41,7 +41,11 @@ export async function structuredAgentSessionKeptAtOpen(
 ): Promise<boolean> {
   const { sessionId, provider, location } = record
   const owner = record.ownerObservation.ownerProcess
-  if (!providerRelayMayKeepChat(provider, location.executionHostId === LOCAL_EXECUTION_HOST_ID)) {
+  // A chat that never started an agent has none to keep, so a new chat never waits on the listing.
+  if (
+    record.neverStarted ||
+    !providerRelayMayKeepChat(provider, location.executionHostId === LOCAL_EXECUTION_HOST_ID)
+  ) {
     return false
   }
   const listed = await listProviderRelaysAtLaunchWithin(waitMs)
@@ -53,9 +57,7 @@ export async function structuredAgentSessionKeptAtOpen(
     return false
   }
   // An owner released without proof (launch recovery) leaves only the listing to prove it gone.
-  const gone = owner
-    ? await ownerProvenGone(owner)
-    : record.neverStarted || record.ownerObservation.deathEvidence !== null
+  const gone = owner ? await ownerProvenGone(owner) : record.ownerObservation.deathEvidence !== null
   if (gone) {
     return false
   }
