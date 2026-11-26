@@ -39,6 +39,8 @@ export type MobileRichMarkdownEditorComponentProps = Omit<
   'onOpenLink'
 > & {
   onOpenLink?: (url: string) => void
+  initialScrollRatio?: number
+  onScrollRatioChange?: (ratio: number) => void
   /** Loads a workspace-relative image path; without it those images stay unloaded. */
   loadImageSource?: (path: string) => Promise<string>
 }
@@ -56,6 +58,8 @@ function MobileRichMarkdownEditorWebInner(
     editable,
     onChange,
     onOpenLink,
+    initialScrollRatio,
+    onScrollRatioChange,
     loadImageSource
   }: MobileRichMarkdownEditorComponentProps,
   ref: ForwardedRef<MobileRichMarkdownEditorHandle>
@@ -74,6 +78,14 @@ function MobileRichMarkdownEditorWebInner(
   // Hold typed URL until drawer loses focus; WebKit execCommand otherwise lacks document selection and inserts nothing.
   const answeredUrlRef = useRef<string | null>(null)
 
+  const onScrollRatioChangeRef = useRef(onScrollRatioChange)
+  useEffect(() => {
+    onScrollRatioChangeRef.current = onScrollRatioChange
+  }, [onScrollRatioChange])
+
+  const initialScrollRatioRef = useRef(initialScrollRatio)
+  const restoredScrollRef = useRef(false)
+
   const send = useCallback((call: (api: RichMarkdownEditorApi) => void) => {
     const mounted = documentRef.current
     if (mounted) {
@@ -88,6 +100,20 @@ function MobileRichMarkdownEditorWebInner(
       setMarkdown: (markdown: string, generation: number) =>
         send((api) => {
           api.setMarkdown(markdown, generation)
+          if (
+            !restoredScrollRef.current &&
+            typeof initialScrollRatioRef.current === 'number' &&
+            initialScrollRatioRef.current > 0
+          ) {
+            const host = hostRef.current
+            if (host instanceof HTMLElement) {
+              const maxScroll = host.scrollHeight - host.clientHeight
+              if (maxScroll > 0) {
+                host.scrollTop = initialScrollRatioRef.current * maxScroll
+                restoredScrollRef.current = true
+              }
+            }
+          }
         }),
       setEditable: (nextEditable: boolean) =>
         send((api) => {
@@ -175,6 +201,33 @@ function MobileRichMarkdownEditorWebInner(
     if (!(host instanceof HTMLElement)) {
       return
     }
+
+    const restoreInitialScroll = () => {
+      if (
+        restoredScrollRef.current ||
+        typeof initialScrollRatioRef.current !== 'number' ||
+        initialScrollRatioRef.current <= 0
+      ) {
+        return
+      }
+      const maxScroll = host.scrollHeight - host.clientHeight
+      if (maxScroll > 0) {
+        host.scrollTop = initialScrollRatioRef.current * maxScroll
+        restoredScrollRef.current = true
+      }
+    }
+
+    const handleScroll = () => {
+      restoredScrollRef.current = true
+      const maxScroll = host.scrollHeight - host.clientHeight
+      if (maxScroll > 0) {
+        const ratio = Math.max(0, Math.min(1, host.scrollTop / maxScroll))
+        onScrollRatioChangeRef.current?.(ratio)
+      }
+    }
+
+    host.addEventListener('scroll', handleScroll, { passive: true })
+
     const live = mountRichMarkdownWebDocument(host, {
       postToHost: (message) => receiveRef.current?.(message),
       promptForUrl,
@@ -185,7 +238,17 @@ function MobileRichMarkdownEditorWebInner(
       call(live.send)
     }
     beforeMountRef.current = []
+
+    restoreInitialScroll()
+    const rafId = requestAnimationFrame(restoreInitialScroll)
+    const timerId = setTimeout(restoreInitialScroll, 50)
+    const timerId2 = setTimeout(restoreInitialScroll, 200)
+
     return () => {
+      cancelAnimationFrame(rafId)
+      clearTimeout(timerId)
+      clearTimeout(timerId2)
+      host.removeEventListener('scroll', handleScroll)
       documentRef.current = null
       // Settle modal before disposing document so command resumes into stopped/refusing document rather than retaining mount scope.
       pendingUrlRef.current?.(null)

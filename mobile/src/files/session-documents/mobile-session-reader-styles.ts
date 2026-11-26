@@ -37,6 +37,56 @@ export const mobileSessionReaderStyles = themedStyleSheet(() => ({
     minHeight: 0,
     backgroundColor: colors.editorSurface
   },
+  imagePreviewScroll: {
+    flex: 1
+  },
+  imagePreviewContent: {
+    flexGrow: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg
+  },
+  imagePreview: {
+    width: '100%',
+    height: '100%',
+    minHeight: 200
+  },
+  fileReaderToolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle,
+    backgroundColor: colors.bgPanel
+  },
+  fileReaderPath: {
+    flex: 1,
+    color: colors.textSecondary,
+    fontSize: typography.metaSize,
+    fontWeight: '500',
+    marginHorizontal: spacing.sm
+  },
+  fileReaderToolbarActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs
+  },
+  fileReaderToolbarButton: {
+    width: 30,
+    height: 30,
+    borderRadius: radii.button,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bgRaised,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle
+  },
+  fileReaderToolbarButtonActive: {
+    backgroundColor: colors.bgRaised,
+    borderColor: colors.accentBlue
+  },
   diffNotesToolbar: {
     flexDirection: 'row',
     alignItems: 'center',

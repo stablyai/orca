@@ -21,7 +21,8 @@ export function SessionDockColumn({
   worktreeId,
   name,
   availableWidth,
-  onRequestClose
+  onRequestClose,
+  onOpenFile
 }: Props) {
   useMobileColorScheme()
   const { dockWidth, panHandlers } = useMobileDockResize(availableWidth)
@@ -38,6 +39,7 @@ export function SessionDockColumn({
           worktreeId={worktreeId}
           name={name}
           onRequestClose={onRequestClose}
+          onOpenFile={onOpenFile}
         />
       </Suspense>
     </View>

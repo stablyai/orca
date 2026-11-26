@@ -144,10 +144,11 @@ export function MobileFileExplorerPanel(props: {
   /** Inside a panel that names it already (a bot's Files tab): no bar of its own. */
   headerless?: boolean
   onRequestClose?: () => void
+  onOpenFile?: (relativePath: string) => void
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const { hostId, worktreeId, name, embedded, headerless, onRequestClose } = props
+  const { hostId, worktreeId, name, embedded, headerless, onRequestClose, onOpenFile } = props
   const router = useWorkspaceRouteHandoff()
   const executionHost = useWorkspaceExecutionHost()
   const { client, state: connState } = useWorkspaceClient(hostId)
@@ -257,6 +258,10 @@ export function MobileFileExplorerPanel(props: {
 
   const previewFile = useCallback(
     (relativePath: string, displayName: string) => {
+      if (onOpenFile) {
+        onOpenFile(relativePath)
+        return
+      }
       navigateToMobileFilePreview(
         router,
         {
@@ -269,7 +274,7 @@ export function MobileFileExplorerPanel(props: {
         { embedded, onRequestClose }
       )
     },
-    [embedded, hostId, name, onRequestClose, router, worktreeId]
+    [embedded, hostId, name, onOpenFile, onRequestClose, router, worktreeId]
   )
 
   const renderItem: ListRenderItem<FileExplorerRow> = ({ item }) => {
