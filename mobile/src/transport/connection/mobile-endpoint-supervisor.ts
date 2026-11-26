@@ -65,7 +65,7 @@ export class MobileEndpointSupervisor {
       now: dependencies.now,
       setTimer: dependencies.setTimer,
       clearTimer: dependencies.clearTimer,
-      onExternalSignal: () => this.sessionEstablisher.refillPendingBudget(),
+      onExternalSignal: (liftOnly) => this.sessionEstablisher.refillPendingBudget(liftOnly),
       onLocalNetworkArrival: () => this.directProbe.arrive()
     })
     this.leaseRotation = new RelayLeaseRotationTimer(dependencies, () => {
@@ -300,10 +300,7 @@ export class MobileEndpointSupervisor {
         return
       }
       if (dialed.error === null) {
-        leaseRetryFloorMs = Math.max(
-          leaseRetryFloorMs,
-          this.sessionEstablisher.pendingPauseRemainingMs()
-        )
+        leaseRetryFloorMs += this.sessionEstablisher.pendingPauseRemainingMs()
       }
       // Record a dial completing after cleanup without recreating foreground timers.
       const scheduleRetry = (!forceReplacement || ownsRecovery) && this.isActive()
@@ -315,7 +312,12 @@ export class MobileEndpointSupervisor {
     } finally {
       this.operationInFlight = false
       if (forceReplacement && this.relayRotationPending && this.isActive()) {
-        this.leaseRotation.armRetry(this.relayReconnect.retryDelayMs(leaseRetryFloorMs))
+        // A gate (say, a refused pending) books no lease retry, so keep its slow reprobe running instead.
+        const leaseRetryMs = this.relayReconnect.retryDelayMs(leaseRetryFloorMs)
+        if (leaseRetryMs === null) {
+          this.relayReconnect.armCredentialReprobe()
+        }
+        this.leaseRotation.armRetry(leaseRetryMs)
       }
       // Why: an unforced operation that skipped its dial (direct redialing) or was aborted
       // schedules no retry, so a direct-grace race queued behind it would wait for the next state change.

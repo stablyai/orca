@@ -19,10 +19,10 @@ export function isEarlyConnectRetry(
 }
 
 // Relay verdicts describe the desktop directly; Tailscale advice would misdiagnose offline/signed-out hosts.
-// A link-local endpoint (169.254/16, fe80::/10) is never dialed, so only re-pairing refreshes its
+// A link-local endpoint (169.254/16, fe80::/10, or 169.254/16 mapped into IPv6) is never dialed, so only re-pairing refreshes its
 // Relay access. A literal-prefix check: the full shared parser costs the web bundle's size budget.
 export function isUndialableLinkLocal(endpoint: string | null | undefined): boolean {
-  return /\/\/(169\.254\.|\[fe[89ab])/i.test(endpoint ?? '')
+  return /\/\/(169\.254\.|\[(fe[89ab]|::ffff:(169\.254\.|a9fe:)))/i.test(endpoint ?? '')
 }
 
 function relayHostCopy(

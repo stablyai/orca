@@ -57,7 +57,7 @@ function diagnoseFailure(
   if (/relay director resolve failed \(401\)/i.test(evidence)) {
     return {
       likelyCause: 'Relay rejected the saved resume credential.',
-      nextStep: RELAY_DIAL_ADVICE['credential-refused'].nextStep,
+      nextStep: refusedCredentialNextStep(args.endpoint),
       reportability: 'none'
     }
   }
@@ -211,10 +211,15 @@ function relayDialFailure(
   )
   const advice = RELAY_DIAL_ADVICE[reachability]
   const nextStep =
-    reachability === 'credential-refused' && isUndialableLinkLocal(endpoint)
-      ? 'Re-pair this phone.'
-      : advice.nextStep
+    reachability === 'credential-refused' ? refusedCredentialNextStep(endpoint) : advice.nextStep
   return { likelyCause: advice.likelyCause(code), nextStep, reportability: 'none' }
+}
+
+// A link-local host is never dialed directly, so only re-pairing can refresh its Relay access.
+function refusedCredentialNextStep(endpoint: string): string {
+  return isUndialableLinkLocal(endpoint)
+    ? 'Re-pair this phone.'
+    : RELAY_DIAL_ADVICE['credential-refused'].nextStep
 }
 
 // Prefer current-window failures, then mark older evidence stale; frequent iOS resumes must not erase the only known cause.

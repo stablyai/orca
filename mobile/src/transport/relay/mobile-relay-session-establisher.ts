@@ -47,6 +47,7 @@ export class MobileRelaySessionEstablisher {
   pendingProven = false
   private pendingPausedUntil = 0
   private pendingPauseMs = PENDING_PAUSE_MIN_MS
+  private lastLiftGrantAt = Number.NEGATIVE_INFINITY
   private resolvedThisAttempt = false
 
   constructor(
@@ -85,9 +86,20 @@ export class MobileRelaySessionEstablisher {
       : 0
   }
 
-  refillPendingBudget(): void {
-    this.pendingFailures = 0
-    this.pendingPauseMs = PENDING_PAUSE_MIN_MS
+  // A resume or real network move refills pending. A gated network lift only grants a paused pending one
+  // try per pause window, so a stream of callbacks on an unchanged network can't keep it dialing.
+  refillPendingBudget(liftOnly = false): void {
+    const now = this.args.now()
+    if (!liftOnly) {
+      this.pendingFailures = 0
+      this.pendingPauseMs = PENDING_PAUSE_MIN_MS
+    } else if (
+      this.pendingFailures >= PENDING_DIAL_BUDGET &&
+      now - this.lastLiftGrantAt >= this.pendingPauseMs
+    ) {
+      this.pendingFailures = PENDING_DIAL_BUDGET - 1
+      this.lastLiftGrantAt = now
+    }
   }
 
   async adoptRelay(relay: MobileRelayEndpoint): Promise<void> {

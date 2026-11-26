@@ -26,7 +26,7 @@ export class MobileEndpointNudgeRouter {
       now: () => number
       setTimer: ScheduleTimer
       // A resume or network change is fresh evidence, so speculative credentials may be retried.
-      onExternalSignal: () => void
+      onExternalSignal: (liftOnly?: boolean) => void
       clearTimer: typeof clearTimeout
       onLocalNetworkArrival: () => void
     }
@@ -57,11 +57,11 @@ export class MobileEndpointNudgeRouter {
     // iOS repeats callbacks for an unchanged network, and cellular always reads as no network: under a
     // slow gate, a Wi-Fi move lifts it at once, any other callback at most once per window.
     if (reason === 'network-change' && args.controller.holdsExternalSignalGate()) {
-      // A lift refills pending first: cellular never reads as a move, and a dial with pending paused does nothing.
+      // Cellular never reads as a move, so a lift grants a paused pending its try first; a dial without it does nothing.
       const liftGate = () => {
         this.cancelTrailingLift()
         this.lastGateLiftAt = args.now()
-        args.onExternalSignal()
+        args.onExternalSignal(true)
         args.controller.handleActiveNudge(args.logical, reason)
       }
       const sinceLift = args.now() - this.lastGateLiftAt
