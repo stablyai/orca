@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { UsageRosterProvider } from './plugin-usage-roster-provider'
 import type { UsageSection } from './usage-headline-sections'
 import {
   getDisplayedUsagePercentage,
@@ -9,7 +9,7 @@ import {
 
 /** MCP windows are not weekly, so they get no weekly-limit title. */
 export function formatScopedUsageTitle(
-  p: ProviderRateLimits,
+  p: UsageRosterProvider,
   section: UsageSection,
   display: UsagePercentageDisplay,
   t: Translate

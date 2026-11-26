@@ -18,9 +18,8 @@ import { PluginAuditLog, type PluginAuditEntry } from './logging/plugin-audit-lo
 import { PluginContentVerifier } from './artifacts/plugin-content-integrity'
 import type { PluginRuntimeDelegate } from './workers/host-api/plugin-host-service-bindings'
 import {
-  createPluginServiceHostCall,
-  pluginPanelBridgeServices,
-  resolvePluginServiceHostCallPolicy,
+  bindPluginServiceHostCall,
+  bindPluginWorkerHostCall,
   type PluginServiceHostCall
 } from './runtime/plugin-service-host-call'
 import { PluginPanelBridge } from './panels/plugin-panel-bridge'
@@ -46,6 +45,7 @@ import { invokePluginWorkerCommand } from './commands/plugin-command-invocation'
 import { deliverPluginEvent, pluginWorkersWantEvent } from './events/plugin-event-delivery'
 import type { PluginEventDeliveryContext } from './events/plugin-event-delivery'
 import { PluginInstallationState } from './installation/plugin-installation-state'
+import { PluginUsageProviderState } from './usage/plugin-usage-provider-state'
 
 export class PluginService {
   readonly options: PluginServiceOptions
@@ -55,6 +55,9 @@ export class PluginService {
   readonly contentPacks: ReturnType<typeof createPluginContentPacks>
   readonly panels: PluginPanelController
   readonly panelBridge: PluginPanelBridge
+  readonly usageProviders = new PluginUsageProviderState((key) =>
+    this.disposed ? null : this.findApprovedPlugin(key, true)
+  )
   private readonly hostCall: PluginServiceHostCall
   private readonly changeListeners = new Set<(event: PluginChangeEvent) => void>()
   private readonly housekeeping = new PluginServiceHousekeeping()
@@ -65,7 +68,10 @@ export class PluginService {
   private disposed = false
   private readonly installed = new PluginInstallationState({
     pluginsDir: () => getUserPluginsDir(this.options.userDataPath),
-    deactivate: (pluginKey) => this.workerController.deactivate(pluginKey),
+    deactivate: (pluginKey) => {
+      this.usageProviders.remove(pluginKey)
+      return this.workerController.deactivate(pluginKey)
+    },
     notifyChanged: () => this.notifyChanged(false)
   })
 
@@ -83,20 +89,7 @@ export class PluginService {
       log: (pluginKey) => this.installed.captureLog(pluginKey, 'warn'),
       runtimeDelegate: () => this.runtimeDelegate
     })
-    this.hostCall = createPluginServiceHostCall((pluginKey, caller) =>
-      resolvePluginServiceHostCallPolicy({
-        pluginKey,
-        caller,
-        findApprovedPlugin: resolveApproved,
-        runtimeDelegate: this.runtimeDelegate,
-        pluginsDataDir: getPluginsDataDir(this.options.userDataPath),
-        desktop: this.options.getDesktopFrameServices?.(),
-        panels: pluginPanelBridgeServices(this.panelBridge),
-        sinks: this.options,
-        audit: this.audit,
-        log: (pluginKey) => this.installed.captureLog(pluginKey, 'info')
-      })
-    )
+    this.hostCall = bindPluginServiceHostCall(this, this.audit, () => this.runtimeDelegate)
     this.panels = new PluginPanelController({
       resolveApprovedPlugin: resolveApproved,
       contentVerifier: this.contentVerifier,
@@ -114,8 +107,7 @@ export class PluginService {
       capabilities: (pluginKey) => this.getGrantedCapabilities(pluginKey),
       isCurrentApproved: (spec) => isApprovedWorkerSpec(spec, resolveApproved(spec.pluginKey)),
       isApprovalKept: (spec) => isApprovedWorkerSpec(spec, resolveApproved(spec.pluginKey, true)),
-      executeHostCall: (pluginKey, method, params, signal) =>
-        this.executeHostCall(pluginKey, method, params, 'worker', signal ? { signal } : undefined),
+      executeHostCall: bindPluginWorkerHostCall(this.hostCall),
       onPanelPost: (pluginKey, post) => this.panelBridge.onWorkerPost(pluginKey, post),
       log: (pluginKey) => this.installed.logs.capture(pluginKey),
       onStateChanged: () => this.notifyChanged(false)
@@ -134,6 +126,7 @@ export class PluginService {
   }
 
   private notifyChanged(contentPacksChanged: boolean): void {
+    this.usageProviders.reconcile()
     for (const listener of this.changeListeners) {
       listener({ contentPacksChanged })
     }
@@ -151,6 +144,7 @@ export class PluginService {
   }
 
   refresh(): Promise<void> {
+    this.usageProviders.reconcile()
     // Snapshot off→on transitions so reconciliation cannot miss worker/panel revocation.
     const enabled = this.options.isPluginSystemEnabled()
     const devPaths = this.options.getDevPluginPaths()
@@ -310,12 +304,14 @@ export class PluginService {
   }
 
   async deactivatePlugin(pluginKey: string): Promise<void> {
+    this.usageProviders.remove(pluginKey)
     await this.workerController.deactivate(pluginKey)
     this.notifyChanged(false)
   }
 
   /** Reconcile consent/enablement without rereading files or starting workers. */
   async reconcileActivationState(): Promise<void> {
+    this.usageProviders.reconcile()
     return this.enqueue(() => this.performActivationStateReconciliation())
   }
 
@@ -336,6 +332,7 @@ export class PluginService {
 
   async dispose(): Promise<void> {
     this.disposed = true
+    this.usageProviders.dispose()
     this.housekeeping.dispose()
     this.panels.dispose()
     this.panelBridge.dispose()

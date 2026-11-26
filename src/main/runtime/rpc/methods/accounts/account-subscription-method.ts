@@ -1,5 +1,4 @@
 import { defineStreamingMethod } from '../../core'
-import type { AccountsSnapshot } from '../../../agent-session/environment/runtime-account-controller'
 
 // Same-millisecond subscriptions must not evict each other's cleanup.
 let accountsSubscriptionSeq = 0
@@ -9,21 +8,18 @@ export const ACCOUNT_SUBSCRIPTION_METHOD = defineStreamingMethod({
   name: 'accounts.subscribe',
   permission: 'workspace',
   params: null,
-  handler: async (_params, { runtime, connectionId, signal, caller }, emit) => {
+  handler: async (_params, { runtime, connectionId, signal, caller, clientKind }, emit) => {
     if (signal?.aborted) {
       return
     }
     const stopped = Promise.withResolvers<void>()
     let active = true
     let ready = false
-    let latest: AccountsSnapshot | undefined
-    const unsubscribe = runtime.onAccountsChanged((snapshot) => {
+    const { initialize, unsubscribe } = runtime.onAccountsChanged((snapshot) => {
       if (ready) {
         emit({ type: 'snapshot', snapshot })
-      } else {
-        latest = snapshot
       }
-    })
+    }, clientKind !== 'mobile')
     // A paired client watching keeps polls running without a window; the host's own renderer follows window focus.
     const releaseUsageViewer =
       caller?.kind === 'paired-device' ? runtime.getUsageRateLimits()?.addUsageViewer() : undefined
@@ -50,12 +46,13 @@ export const ACCOUNT_SUBSCRIPTION_METHOD = defineStreamingMethod({
       } else {
         signal?.addEventListener('abort', release, { once: true })
         // Publish a snapshot immediately, then refresh stale data; reconnect must not force repeated provider fetches.
-        const snapshot = await runtime.getAccountsStreamSnapshot()
-        if (active && !signal?.aborted) {
-          emit({ type: 'ready', subscriptionId, snapshot: latest ?? snapshot })
-          ready = true
-          void runtime.refreshAccountsForMobileSubscriber()
-        }
+        await initialize((snapshot) => {
+          if (active && !signal?.aborted) {
+            emit({ type: 'ready', subscriptionId, snapshot })
+            ready = true
+            void runtime.refreshAccountsForMobileSubscriber()
+          }
+        })
       }
       await stopped.promise
       emit({ type: 'end' })

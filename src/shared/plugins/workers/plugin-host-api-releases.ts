@@ -7,6 +7,7 @@ import { PLUGIN_HOST_API_1_8_SINCE } from './plugin-host-api-1-8'
 import { PLUGIN_HOST_API_1_9_SINCE } from './plugin-host-api-1-9'
 import { PLUGIN_HOST_API_1_10_SINCE } from './plugin-host-api-1-10'
 import { PLUGIN_HOST_API_1_7_SINCE } from './plugin-host-api-workspace-methods'
+import { PLUGIN_USAGE_PROVIDERS_SINCE } from '../contributions/plugin-usage-provider-contribution'
 import { pluginHostMethodSinceFor, type PluginHostMethodSpec } from './plugin-host-method-spec'
 
 /**
@@ -26,7 +27,8 @@ export const PLUGIN_HOST_API_MINOR_SINCE: readonly string[] = [
   PLUGIN_HOST_API_1_7_SINCE,
   PLUGIN_HOST_API_1_8_SINCE,
   PLUGIN_HOST_API_1_9_SINCE,
-  PLUGIN_HOST_API_1_10_SINCE
+  PLUGIN_HOST_API_1_10_SINCE,
+  PLUGIN_USAGE_PROVIDERS_SINCE
 ]
 
 /** `orca.host.has` arrived with manifest format 2; on older Orca a guard throws instead of answering. */

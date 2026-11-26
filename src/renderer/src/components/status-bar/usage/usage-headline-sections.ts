@@ -4,10 +4,8 @@ import {
   formatWindowLabel
 } from './rate-limit-window-localized-label'
 import { CURSOR_MODELS_BUCKET_NAME } from '../../../../../shared/agent-usage/rate-limits/cursor-usage-buckets'
-import type {
-  ProviderRateLimits,
-  RateLimitWindow
-} from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { RateLimitWindow } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { UsageRosterProvider } from './plugin-usage-roster-provider'
 import { clampUsedPercent } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { isGroupedUsagePool } from '../../../../../shared/agent-usage/display/grouped-usage-pool'
 import { getWindowSections } from './provider-usage-panel'
@@ -17,23 +15,23 @@ import { formatPoolRosterLabel } from './usage-pool-label'
 export type UsageSection = { label: string; window: RateLimitWindow }
 
 // Drop null and missing windows from partial/rehydrated snapshots before reading percentages.
-export function usedSections(p: ProviderRateLimits, t?: Translate): UsageSection[] {
+export function usedSections(p: UsageRosterProvider, t?: Translate): UsageSection[] {
   return getWindowSections(p, t).filter(
     (s): s is UsageSection => s.window !== null && s.window !== undefined
   )
 }
 
 /** Windows that limit one model or tool (Fable, ZCode MCP), never the provider's ordinary requests. */
-export function isScopedUsageWindow(p: ProviderRateLimits, window: RateLimitWindow): boolean {
+export function isScopedUsageWindow(p: UsageRosterProvider, window: RateLimitWindow): boolean {
   return window === p.fableWeekly || (p.provider === 'zcode' && window === p.monthly)
 }
 
-export function primarySections(p: ProviderRateLimits, t?: Translate): UsageSection[] {
+export function primarySections(p: UsageRosterProvider, t?: Translate): UsageSection[] {
   return usedSections(p, t).filter((s) => !isScopedUsageWindow(p, s.window))
 }
 
 /** Highest primary consumption for sorting; -1 when only scoped windows were read. */
-export function providerPrimaryMaxUsed(p: ProviderRateLimits, t?: Translate): number {
+export function providerPrimaryMaxUsed(p: UsageRosterProvider, t?: Translate): number {
   const sections = primarySections(p, t)
   return sections.length > 0
     ? Math.max(...sections.map((s) => clampUsedPercent(s.window.usedPercent)))
@@ -42,7 +40,7 @@ export function providerPrimaryMaxUsed(p: ProviderRateLimits, t?: Translate): nu
 
 // Buckets (Antigravity and Cursor pools) keep their name; windows use their duration.
 export function shortUsageLabel(
-  p: ProviderRateLimits,
+  p: UsageRosterProvider,
   section: UsageSection,
   useRemainingDuration = false,
   t?: Translate
@@ -72,7 +70,7 @@ export function shortUsageLabel(
 export type UsageHeadlineScope = 'primary' | 'all'
 
 function headlineSections(
-  p: ProviderRateLimits,
+  p: UsageRosterProvider,
   t: Translate | undefined,
   scope: UsageHeadlineScope
 ): UsageSection[] {
@@ -81,7 +79,7 @@ function headlineSections(
 
 /** Most-consumed window within the scope. */
 export function getTightestUsageSection(
-  p: ProviderRateLimits,
+  p: UsageRosterProvider,
   t?: Translate,
   scope: UsageHeadlineScope = 'primary'
 ): UsageSection | null {
@@ -99,7 +97,7 @@ export function getTightestUsageSection(
 }
 
 export function getUsageHeadlineSection(
-  p: ProviderRateLimits,
+  p: UsageRosterProvider,
   t?: Translate,
   scope: UsageHeadlineScope = 'primary'
 ): UsageSection | null {
@@ -116,7 +114,7 @@ export function getUsageHeadlineSection(
 
 /** The most-used scoped (Fable/MCP) window at or above minUsedPercent, labeled for the roster. */
 export function getTopScopedSection(
-  p: ProviderRateLimits,
+  p: UsageRosterProvider,
   t?: Translate,
   minUsedPercent = 0
 ): UsageSection | null {
@@ -134,6 +132,6 @@ export function getTopScopedSection(
 }
 
 /** The most-used scoped window once it is nearly spent, so the roster can flag it beside the headline. */
-export function getUrgentScopedSection(p: ProviderRateLimits, t?: Translate): UsageSection | null {
+export function getUrgentScopedSection(p: UsageRosterProvider, t?: Translate): UsageSection | null {
   return getTopScopedSection(p, t, USAGE_URGENT_PERCENT)
 }

@@ -132,7 +132,7 @@ const pluginManifestFields = {
     .optional()
     .meta(
       pluginPathFieldDoc(
-        `Node entry run in an out-of-process plugin worker: a \`.js\`/\`.mjs\` module, or a \`.ts\`/\`.mts\` module that Orca transpiles when it loads (needs \`engines.orca\` \`>=${PLUGIN_SOURCE_MODULES_SINCE}\`). Requires the \`trusted-worker\` execution profile, and is required by it, by \`contributes.events\`, by \`contributes.hooks\` and by any command without an \`action\`.`,
+        `Node entry run in an out-of-process plugin worker: a \`.js\`/\`.mjs\` module, or a \`.ts\`/\`.mts\` module that Orca transpiles when it loads (needs \`engines.orca\` \`>=${PLUGIN_SOURCE_MODULES_SINCE}\`). Requires the \`trusted-worker\` execution profile. Events, hooks, usage providers and commands without an \`action\` need this entry.`,
         V1,
         ['dist/main.mjs']
       )

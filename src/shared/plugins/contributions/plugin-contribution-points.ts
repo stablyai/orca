@@ -59,6 +59,11 @@ import {
   PLUGIN_SETTING_LIMIT,
   pluginSettingContributionSchema
 } from './plugin-settings-contribution'
+import {
+  PLUGIN_USAGE_PROVIDER_LIMIT,
+  PLUGIN_USAGE_PROVIDERS_SINCE,
+  pluginUsageProviderContributionSchema
+} from './plugin-usage-provider-contribution'
 
 /** Every `contributes` key, in manifest order. Adding a point starts here. */
 export const PLUGIN_CONTRIBUTION_POINTS = [
@@ -78,6 +83,7 @@ export const PLUGIN_CONTRIBUTION_POINTS = [
   'newFiles',
   'settings',
   'statusBarItems',
+  'usageProviders',
   'mcpServers'
 ] as const
 
@@ -239,6 +245,12 @@ export const pluginContributesFields = {
     'Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled.',
     PLUGIN_STATUS_BAR_SINCE
   ),
+  usageProviders: contributionList(
+    pluginUsageProviderContributionSchema,
+    PLUGIN_USAGE_PROVIDER_LIMIT,
+    'Quota sources in the usage area, updated by the plugin worker with `usageProvider.update`.',
+    PLUGIN_USAGE_PROVIDERS_SINCE
+  ),
   mcpServers: contributionList(
     pluginMcpServerContributionSchema,
     PLUGIN_MCP_SERVER_LIMIT,
@@ -293,6 +305,7 @@ export const PLUGIN_CONTRIBUTION_POINT_POLICY: Record<
   settings: { execution: 'sandboxed-ui', catalogType: null, bindsContent: false },
   // Why declarative: a static item only names its own command; updating it needs a worker.
   statusBarItems: { execution: 'declarative', catalogType: null, bindsContent: false },
+  usageProviders: { execution: 'trusted-worker', catalogType: null, bindsContent: false },
   // Why bound: a command server runs on the host for every agent session, so approval names it.
   mcpServers: { execution: 'declarative', catalogType: 'instructions', bindsContent: true }
 }

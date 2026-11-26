@@ -19,6 +19,7 @@ import {
 } from '../usage/use-owner-usage-rate-limits'
 import { isOwnerNotSetUpPlaceholder } from '../usage/owner-usage-rate-limits'
 import { useTranslate } from '@/i18n/use-translate'
+import { usePluginUsageProviders } from '../usage/use-plugin-usage-providers'
 
 export function useStatusBarController(floatingTerminalOpen: boolean) {
   const t = useTranslate()
@@ -28,6 +29,12 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const ownerUsage = useOwnerUsageRateLimits(localRateLimits)
   const { rateLimits, remoteOwner, refreshRemote } = ownerUsage
   const remoteOwned = remoteOwner !== null
+  const pluginUsageProviders = usePluginUsageProviders(ownerUsage)
+  const hiddenPluginUsageProviders = useAppStore((s) => s.hiddenPluginUsageProviders)
+  const togglePluginUsageProvider = useAppStore((s) => s.togglePluginUsageProvider)
+  const pluginUsage = pluginUsageProviders.filter(
+    (p) => !hiddenPluginUsageProviders.includes(p.provider)
+  )
   const settings = useAppStore((s) => s.settings)
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
@@ -182,10 +189,11 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showGrok ||
     showCursor ||
     showZcode ||
-    showMuse
+    showMuse ||
+    pluginUsage.length > 0
   const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
-  const isEmptyUsageState = isUsageEmptyState(rateLimits, usageSettings)
+  const isEmptyUsageState = pluginUsage.length === 0 && isUsageEmptyState(rateLimits, usageSettings)
   // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
   const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed
   const anyFetching =
@@ -281,7 +289,10 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     petEnabled,
     recordFeatureInteraction,
     remoteOwner,
-    rosterProviders,
+    rosterProviders: [...rosterProviders, ...pluginUsage],
+    pluginUsageProviders,
+    hiddenPluginUsageProviders,
+    togglePluginUsageProvider,
     setMenuOpen,
     setMenuPoint,
     setStatusBarUsageMode,

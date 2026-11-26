@@ -3,6 +3,7 @@ import type { PluginFrameEntry } from '../../../../../shared/plugins/frames/plug
 import { listPluginsForClients } from '../../../../plugins/discovery/plugin-client-list'
 import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import type { PluginService } from '../../../../plugins/plugin-service'
+import { pluginUsageIconMethod } from './plugin-usage-icon-method'
 import type { PluginConsentRequest } from '../../../../../shared/plugins/approval/plugin-consent-request'
 import {
   PluginDevInspectParams,
@@ -107,6 +108,7 @@ export const PLUGIN_METHODS = [
     params: null,
     handler: async () => listForRpc()
   }),
+  pluginUsageIconMethod(requirePluginService),
   defineMethod({
     // Why the flag even for paired callers: an agent CLI reaches serve as a paired device too, so
     // no transport proves a person clicked; only the fingerprint from `approval_required` grants.

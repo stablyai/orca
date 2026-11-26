@@ -1,5 +1,4 @@
 import type {
-  ProviderRateLimits,
   RateLimitBucket,
   RateLimitWindow
 } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
@@ -23,6 +22,12 @@ import {
 import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { useResetCountdownClock } from '@/components/status-bar/usage/useResetCountdownClock'
 import { recomputeOn } from '@/lib/recompute-on'
+import {
+  isPluginUsageProvider,
+  pluginUsageProviderSource,
+  type UsageRosterProvider
+} from './plugin-usage-roster-provider'
+import { PluginUsageIcon } from './PluginUsageIcon'
 import { ProviderExtraUsageSection } from './provider-extra-usage-section'
 import { formatWindowLabel } from './rate-limit-window-localized-label'
 import { formatPoolCardLabel } from './usage-pool-label'
@@ -67,7 +72,16 @@ export function formatResetCreditExpiry(
       })
 }
 
-export function ProviderIcon({ provider }: { provider: string }): React.JSX.Element {
+export function ProviderIcon({
+  provider,
+  pluginIconSrc
+}: {
+  provider: string
+  pluginIconSrc?: string
+}): React.JSX.Element {
+  if (provider.startsWith('plugin:')) {
+    return <PluginUsageIcon src={pluginIconSrc} />
+  }
   if (provider === 'codex') {
     return <OpenAIIcon size={13} />
   }
@@ -135,9 +149,12 @@ function ErrorMessage({
 }
 
 export function getWindowSections(
-  p: ProviderRateLimits,
+  p: UsageRosterProvider,
   t?: Translate
 ): { label: string; window: RateLimitWindow | null }[] {
+  if (isPluginUsageProvider(p)) {
+    return p.windows.map((window) => ({ label: formatWindowLabel(window.windowMinutes), window }))
+  }
   const buckets = p.buckets ?? []
   return getUsageWindowSections(p).map((section) => ({
     label: getWindowSectionLabel(section, buckets, t),
@@ -234,7 +251,7 @@ export function ProviderPanel({
   headerAction,
   usageSignInHint
 }: {
-  p: ProviderRateLimits | null
+  p: UsageRosterProvider | null
   inverted?: boolean
   className?: string
   showResetCredits?: boolean
@@ -263,7 +280,8 @@ export function ProviderPanel({
     )
   }
 
-  const name = getProviderDisplayName(p.provider)
+  const plugin = isPluginUsageProvider(p)
+  const name = plugin ? p.pluginLabel : getProviderDisplayName(p.provider)
 
   if (p.status === 'unavailable') {
     return (
@@ -282,6 +300,7 @@ export function ProviderPanel({
   }
 
   if (
+    !plugin &&
     p.status === 'error' &&
     (signInRequired || (!p.session && !p.weekly && !p.fableWeekly && !p.monthly))
   ) {
@@ -329,11 +348,17 @@ export function ProviderPanel({
         <div>
           <div className="flex items-center justify-between gap-2">
             <div className={`flex items-center gap-1.5 text-[13px] font-medium ${textClass}`}>
-              <ProviderIcon provider={p.provider} />
-              {name}
+              <ProviderIcon
+                provider={p.provider}
+                pluginIconSrc={plugin ? p.pluginIconSrc : undefined}
+              />
+              <span className="min-w-0 wrap-anywhere">{name}</span>
             </div>
             {headerAction}
           </div>
+          {plugin ? (
+            <div className={`wrap-anywhere ${faintClass}`}>{pluginUsageProviderSource(p, t)}</div>
+          ) : null}
           <div className={faintClass}>{updatedAgo}</div>
           {resetCreditCount !== null && resetCreditCount !== undefined ? (
             <div className={mutedClass}>
@@ -366,7 +391,7 @@ export function ProviderPanel({
         />
       ))}
 
-      {p.extraUsage ? (
+      {!plugin && p.extraUsage ? (
         <ProviderExtraUsageSection
           balance={p.extraUsage}
           provider={p.provider}

@@ -31,6 +31,14 @@ export type PluginWorkerAdmission = {
   verifyBeforeSpawn?: () => Promise<void>
 }
 
+export type PluginWorkerHostCall = (
+  pluginKey: string,
+  method: string,
+  params: unknown,
+  isCurrent: () => boolean,
+  signal?: AbortSignal
+) => ReturnType<PluginWorkerHostCallExecutor>
+
 export type PluginWorkerFactory = (options: {
   pluginId: string
   rootDir: string
@@ -59,7 +67,7 @@ export async function startPluginWorkerAttempt(options: {
   slots: PluginWorkerSlotPool
   entryPath: string
   factory?: PluginWorkerFactory
-  executeHostCall: PluginWorkerHostCallExecutor
+  executeHostCall: PluginWorkerHostCall
   onPanelPost?: (post: PluginWorkerPanelPost) => void
   log: PluginWorkerLogSink
   assertActive: () => void
@@ -69,6 +77,15 @@ export async function startPluginWorkerAttempt(options: {
   const lease = await options.slots.acquire(options.signal)
   let handle: PluginWorkerHandle | null = null
   let retained = false
+  let acceptingHostCalls = true
+  const isCurrent = (): boolean => {
+    try {
+      options.assertActive()
+      return acceptingHostCalls
+    } catch {
+      return false
+    }
+  }
   try {
     options.assertActive()
     if (options.verifyBeforeSpawn) {
@@ -83,7 +100,8 @@ export async function startPluginWorkerAttempt(options: {
       entryPath: options.entryPath,
       grantedCapabilities: options.spec.grantedCapabilities,
       allowProposed: options.spec.allowProposed === true,
-      executeHostCall: options.executeHostCall,
+      executeHostCall: (method, params, signal) =>
+        options.executeHostCall(options.spec.pluginKey, method, params, isCurrent, signal),
       onPanelPost: options.onPanelPost,
       log: options.log,
       signal: options.signal
@@ -103,6 +121,7 @@ export async function startPluginWorkerAttempt(options: {
       }
     }
     handle.onExit((code) => {
+      acceptingHostCalls = false
       if (!startCompleted) {
         earlyExit = true
         earlyExitCode = code
@@ -113,6 +132,7 @@ export async function startPluginWorkerAttempt(options: {
     retained = true
     return worker
   } catch (error) {
+    acceptingHostCalls = false
     if (handle) {
       await handle.dispose().catch(() => undefined)
     }

@@ -190,7 +190,14 @@ export function configureRuntimeServices(
     allowedOrigins: skillPackageDownloadOrigins(!isPackaged),
     requireHttps: isPackaged
   })
-  runtime.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
+  runtime.setAccountServices({
+    claudeAccounts,
+    codexAccounts,
+    rateLimits,
+    get pluginUsageProviders() {
+      return core.pluginService?.usageProviders
+    }
+  })
   installWslOrcadAccountShim(store)
   runtime.setCommitMessageAgentEnvironmentResolvers({
     // Resolve every Codex launch through runtime-home, including default-account hooks/auth.

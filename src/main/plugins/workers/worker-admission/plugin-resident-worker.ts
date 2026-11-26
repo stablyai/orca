@@ -11,7 +11,9 @@ import type { PluginService } from '../../plugin-service'
 export function pluginNeedsResidentWorker(manifest: PluginManifest): boolean {
   return (
     manifest.main !== undefined &&
-    (manifest.contributes.hooks.length > 0 || manifest.contributes.statusBarItems.length > 0)
+    (manifest.contributes.hooks.length > 0 ||
+      manifest.contributes.statusBarItems.length > 0 ||
+      manifest.contributes.usageProviders.length > 0)
   )
 }
 
@@ -19,9 +21,10 @@ export function pluginNeedsResidentWorker(manifest: PluginManifest): boolean {
 export function pluginApprovedRevision(plugin: ValidDiscoveredPlugin): string {
   return [
     plugin.consentFingerprint,
-    plugin.contentHash ?? '',
+    plugin.contentHash ?? plugin.consentContentHash ?? '',
     plugin.devRevision ?? '',
-    plugin.rootDir
+    plugin.rootDir,
+    JSON.stringify(plugin.manifest)
   ].join('\n')
 }
 

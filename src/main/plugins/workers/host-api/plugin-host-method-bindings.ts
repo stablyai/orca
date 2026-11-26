@@ -30,6 +30,8 @@ import { PLUGIN_TERMINAL_ACTION_HANDLERS } from './plugin-host-terminal-method-b
 import { PLUGIN_WORKSPACE_CREATE_HANDLERS } from './plugin-host-workspace-create-bindings'
 import { PLUGIN_AUTOMATION_HANDLERS } from './plugin-host-automation-bindings'
 import { PLUGIN_AGENT_HISTORY_HANDLERS } from './plugin-host-agent-history-bindings'
+import { pluginUsageProviderUpdate } from './plugin-host-usage-provider-binding'
+import type { PluginUsageProviderUpdate } from '../../../../shared/plugins/contributions/plugin-usage-provider-contribution'
 import { PLUGIN_PROJECT_VISIBILITY_HANDLERS } from './plugin-host-project-visibility-binding'
 import {
   pluginHostRpc as rpc,
@@ -116,6 +118,7 @@ export type PluginHostServices = {
   panels?: PluginPanelBridgeServices | null
   /** Absent where no Orca window draws a status bar. */
   statusBar?: PluginStatusBarServices | null
+  usageProvider?: ((update: PluginUsageProviderUpdate) => boolean) | null
   /** The runtime methods the `orca` CLI calls, for workspace actions; absent without a runtime. */
   runtimeRpc?: PluginRuntimeRpc | null
   /** Orca's window, for actions only it can take; absent in headless serve. */
@@ -273,6 +276,7 @@ const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
   }),
   ...PLUGIN_PANEL_BRIDGE_HANDLERS,
   ...PLUGIN_STATUS_BAR_HANDLERS,
+  'usageProvider.update': pluginUsageProviderUpdate,
   ...PLUGIN_WORKSPACE_ACTION_HANDLERS,
   ...PLUGIN_PROJECT_VISIBILITY_HANDLERS,
   ...PLUGIN_TERMINAL_ACTION_HANDLERS,

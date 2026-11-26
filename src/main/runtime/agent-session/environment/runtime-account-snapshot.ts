@@ -2,6 +2,13 @@ import { hasAppEnvironment } from '../../../../shared/app-lifecycle/app-environm
 import { getManagedDataAccountService } from '../../../managed-data-accounts/service'
 import type { AccountsSnapshot, RuntimeAccountServices } from './runtime-account-controller'
 
+export function runtimePluginUsageSnapshot(
+  services: Pick<RuntimeAccountServices, 'pluginUsageProviders'>
+): Pick<AccountsSnapshot, 'pluginUsageProviders'> {
+  const pluginUsageProviders = services.pluginUsageProviders?.snapshot()
+  return pluginUsageProviders ? { pluginUsageProviders } : {}
+}
+
 export async function readRuntimeAccountsSnapshot(
   services: RuntimeAccountServices,
   dataAccounts: () => Pick<AccountsSnapshot, 'opencode' | 'devin'>

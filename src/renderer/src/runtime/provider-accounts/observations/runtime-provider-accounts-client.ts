@@ -2,6 +2,7 @@ import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
 } from '../../../../../shared/agent-accounts/managed-account-types'
+import type { PluginUsageReading } from '../../../../../shared/plugins/contributions/plugin-usage-provider-contribution'
 import type { RateLimitState } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
@@ -14,6 +15,7 @@ export type ProviderAccountsSnapshot = {
   claude: ClaudeRateLimitAccountsState
   codex: CodexRateLimitAccountsState
   rateLimits: RateLimitState | null
+  pluginUsageProviders?: PluginUsageReading[]
   // Partial local failures substitute empty state; that half is not an authoritative roster.
   failedProviders?: ('claude' | 'codex')[]
 }

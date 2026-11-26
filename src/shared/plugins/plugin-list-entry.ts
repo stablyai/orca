@@ -4,6 +4,7 @@ import type { PluginExecutionProfile } from './contributions/plugin-execution-pr
 import type { ResolvedPluginPanelPathIcon } from './contributions/plugin-panel-path-icon'
 import type { PluginHostImages } from './images/plugin-image-url'
 import type { PluginStatusBarItemContribution } from './contributions/plugin-status-bar-item-contribution'
+import type { PluginUsageProviderContribution } from './contributions/plugin-usage-provider-contribution'
 
 /** One installed plugin as main projects it for every client (preload IPC and the `plugins.list`
  *  RPC). Optional fields are absent on older hosts, so paired clients must tolerate them. */
@@ -114,6 +115,7 @@ export type PluginHostListEntry = {
   }[]
   /** The manifest's status bar items; a worker's changes arrive separately. Absent on older hosts. */
   statusBarItems?: PluginStatusBarItemContribution[]
+  usageProviders?: PluginUsageProviderContribution[]
   /** The hooks its manifest lists, so a window can skip asking when none applies. Absent on older
    *  hosts. */
   hooks?: string[]

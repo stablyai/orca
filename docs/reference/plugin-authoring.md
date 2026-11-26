@@ -219,6 +219,32 @@ unchanged unless `hostId` is `local` or null (this machine) and `path` does not 
 unchanged when `workspaceId` is null or the lookup finds no workspace. A Windows-drive project
 running in WSL still reports `local` with a `C:\` path, so a hook cannot tell it apart yet.
 
+### Publishing quota readings
+
+Set `engines.orca` to `>=1.4.277` and use the `trusted-worker` execution profile with `main`.
+Declare each quota source in `contributes.usageProviders`, for example
+`[{ "id": "sample-quota", "label": "Sample quota" }]`. Orca keeps the worker running while the plugin is enabled.
+Usage shows the plugin's manifest `icon` when present.
+
+```ts
+await orca.host.call('usageProvider.update', {
+  id: 'sample-quota',
+  windows: [
+    { windowMinutes: 300, usedPercent: 28, resetsAt: Date.now() + 2 * 60 * 60 * 1000 },
+    { windowMinutes: 10080, usedPercent: 62, resetsAt: null },
+    { windowMinutes: 43200, usedPercent: 41, resetsAt: null }
+  ]
+})
+```
+
+Replace the window list with each update. Provide up to eight windows with distinct durations in
+whole minutes, and use percentages from 0 to 100. Set `resetsAt` to a Unix timestamp in milliseconds
+when known. Publish an empty list when the quota is unavailable. Orca timestamps readings, expires
+them after 30 minutes, and clears them when the plugin is disabled, removed or replaced. Orca desktop
+and Electron-backed `orca serve` run the worker and include its readings in host account snapshots
+for paired desktop clients. Standalone `orcad` skips plugin worker startup. Run
+`ORCA_SERVE_RUNTIME=electron orca serve` when serving a profile that uses plugin usage providers.
+
 ### Panels, workers and data
 
 A plugin's panels, custom editors and worker are one program. A panel asks its own worker, the

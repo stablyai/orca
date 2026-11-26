@@ -135,7 +135,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
     name: 'accounts.list',
     permission: 'workspace',
     params: ListAccountsParams,
-    handler: async (params, { runtime }) => {
+    handler: async (params, { runtime, clientKind }) => {
       // Refresh before replying: unfocused desktop polling and unopened account caches can leave mobile usage stale.
       if (params.refreshUsage) {
         await runtime.refreshAccountsForMobile()
@@ -147,7 +147,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
           undefined
         )
       }
-      return runtime.getAccountsSnapshot()
+      return runtime.getAccountsSnapshot(clientKind !== 'mobile')
     }
   }),
   defineMethod({
@@ -175,8 +175,12 @@ const ACCOUNT_METHOD_DEFINITIONS = [
     name: 'accounts.consumeCodexResetCredit',
     permission: 'accounts-admin',
     params: ConsumeCodexResetCreditParams,
-    handler: async (params, { runtime }) =>
-      runtime.consumeCodexRateLimitResetCredit(params.idempotencyKey, params.expectedScope)
+    handler: async (params, { runtime, clientKind }) =>
+      runtime.consumeCodexRateLimitResetCredit(
+        params.idempotencyKey,
+        params.expectedScope,
+        clientKind !== 'mobile'
+      )
   }),
   defineMethod({
     name: 'accounts.removeClaude',

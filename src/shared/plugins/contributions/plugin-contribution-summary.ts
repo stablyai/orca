@@ -103,6 +103,7 @@ export function pluginContributionSummary(
     ),
     // Each item's text, or its id when it shows only an icon.
     ...named('statusBarItems', c.statusBarItems, (item) => item.text || item.id),
+    ...named('usageProviders', c.usageProviders, (provider) => provider.label),
     ...named('mcpServers', c.mcpServers, (server) => server.name, pluginMcpServerSummaryDetail)
   ].slice(0, PLUGIN_CONTRIBUTION_SUMMARY_LIMIT)
 }

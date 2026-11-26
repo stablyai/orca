@@ -1,5 +1,5 @@
 import React from 'react'
-import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { UsageRosterProvider } from './plugin-usage-roster-provider'
 import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { useTranslate } from '@/i18n/use-translate'
 import { formatUsageChipTitle } from './usage-chip-title'
@@ -11,7 +11,7 @@ export function UsageOverflowChip({
   display,
   hostLabel
 }: {
-  hidden: readonly ProviderRateLimits[]
+  hidden: readonly UsageRosterProvider[]
   providerCount: number
   display: UsagePercentageDisplay
   hostLabel?: string

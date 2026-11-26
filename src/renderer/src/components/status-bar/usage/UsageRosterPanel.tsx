@@ -1,15 +1,19 @@
 import React from 'react'
 import { ChevronRight, RefreshCw } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
-import { cn } from '@/lib/class-names'
 import { SettingsSegmentedControl } from '@/components/settings/form-controls/SettingsFormControls'
 import { useResetCountdownClock } from '@/components/status-bar/usage/useResetCountdownClock'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
+import { ProviderDetailsMenu } from './ProviderDetailsMenu'
+import { UsageRosterProviderName } from './UsageRosterProviderName'
 import { ProviderIcon } from './provider-usage-panel'
-import { getProviderDisplayName } from '../../../../../shared/agent-usage/display/usage-provider-windows'
-import { formatPlanLabel } from './usage-roster-formatting'
+import {
+  duplicateUsageRosterLabels,
+  isPluginUsageProvider,
+  type UsageRosterProvider
+} from './plugin-usage-roster-provider'
 import { getUsageRosterRowState, type UsageRosterRowState } from './usage-roster-row-state'
 import type { StatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
 import {
@@ -29,48 +33,16 @@ import {
 } from './usage-reset-caption'
 import { formatBareUsagePercentage, formatScopedUsageTitle } from './usage-percentage-label'
 import { getUsageHealthTone } from './usage-health-tone'
-import { UsageBar, UsageDisplayToggle, UsageValue } from './usage-meter'
+import { UsageBar, UsageDetailMetric, UsageDisplayToggle, UsageValue } from './usage-meter'
 
 type ProviderId = ProviderRateLimits['provider']
-
-function DetailMetric({
-  section,
-  label,
-  display,
-  title
-}: {
-  section: UsageSection
-  label: string
-  display: UsagePercentageDisplay
-  title?: string
-}): React.JSX.Element {
-  return (
-    <span
-      data-usage-window={section.label}
-      title={title}
-      className="flex shrink-0 items-center gap-1.5"
-    >
-      <span className="text-[10px] text-muted-foreground">{label}</span>
-      <UsageBar
-        usedPercent={section.window.usedPercent}
-        display={display}
-        className="h-[5px] w-7"
-      />
-      <UsageValue
-        usedPercent={section.window.usedPercent}
-        display={display}
-        className="text-[11px]"
-      />
-    </span>
-  )
-}
 
 function ScopedUsageFlag({
   p,
   section,
   display
 }: {
-  p: ProviderRateLimits
+  p: UsageRosterProvider
   section: UsageSection
   display: UsagePercentageDisplay
 }): React.JSX.Element {
@@ -91,7 +63,7 @@ function RowUsageSummary({
   display,
   now
 }: {
-  p: ProviderRateLimits
+  p: UsageRosterProvider
   display: UsagePercentageDisplay
   now: number
 }): React.JSX.Element {
@@ -162,22 +134,22 @@ export function UsageRow({
   state,
   showSignInAction,
   now,
+  showPluginSource = false,
   mode = 'verbose'
 }: {
-  p: ProviderRateLimits
+  p: UsageRosterProvider
   display: UsagePercentageDisplay
   state: UsageRosterRowState
   showSignInAction: boolean
   now: number
+  showPluginSource?: boolean
   mode?: StatusBarUsageMode
 }): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const sections = usedSections(p, t)
   const hasUsage = sections.length > 0
-  const name = getProviderDisplayName(p.provider)
-  const plan = formatPlanLabel(p.planType, p.provider)
-  // Why: Detailed lists every window below, so a top-right summary would repeat one of them.
+  // Why: the Detailed row gives every window, so a summary would repeat one of them.
   const showDetails = hasUsage && mode === 'verbose'
   const soonestReset = showDetails ? soonestResetLabel(sections, now, intlLocale, t) : null
 
@@ -185,18 +157,16 @@ export function UsageRow({
     <div data-usage-mode={mode} className="flex min-w-0 flex-1 flex-col gap-1">
       <div className="flex items-center gap-2.5">
         <span className="flex size-5 shrink-0 items-center justify-center rounded-md border border-border bg-secondary">
-          <ProviderIcon provider={p.provider} />
+          <ProviderIcon
+            provider={p.provider}
+            pluginIconSrc={isPluginUsageProvider(p) ? p.pluginIconSrc : undefined}
+          />
         </span>
-        <span
-          className={cn(
-            'shrink truncate text-[13px] font-medium text-foreground',
-            // Why: a fixed minimum would leave a gap before the reset that follows a short name.
-            showDetails ? 'min-w-0' : 'min-w-14'
-          )}
-        >
-          {name}
-          {plan ? <span className="font-normal text-muted-foreground"> · {plan}</span> : null}
-        </span>
+        <UsageRosterProviderName
+          provider={p}
+          showDetails={showDetails}
+          showPluginSource={showPluginSource}
+        />
         {!hasUsage ? (
           <>
             <span className="min-w-0 truncate text-[11px] text-muted-foreground">
@@ -226,9 +196,10 @@ export function UsageRow({
           {sections.map((section) => {
             const label = shortUsageLabel(p, section, false, t)
             return (
-              <DetailMetric
+              <UsageDetailMetric
                 key={section.label}
-                section={section}
+                windowLabel={section.label}
+                usedPercent={section.window.usedPercent}
                 label={label}
                 display={display}
                 title={formatScopedUsageTitle(p, { ...section, label }, display, t)}
@@ -257,7 +228,7 @@ export function UsageRosterPanel({
   actionsAvailable = true,
   renderRow
 }: {
-  providers: ProviderRateLimits[]
+  providers: UsageRosterProvider[]
   display: UsagePercentageDisplay
   statusBarUsageMode: StatusBarUsageMode
   onStatusBarUsageModeChange: (mode: StatusBarUsageMode) => void
@@ -279,6 +250,7 @@ export function UsageRosterPanel({
       usedSections(provider, t).map((section) => section.window.resetsAt)
     )
   )
+  const duplicateLabels = duplicateUsageRosterLabels(providers)
   // Why primary-only: a spent Fable/MCP window must not push a healthy provider to the top.
   const sorted = [...providers].sort(
     (a, b) => providerPrimaryMaxUsed(b, t) - providerPrimaryMaxUsed(a, t)
@@ -341,9 +313,12 @@ export function UsageRosterPanel({
       </div>
       <div className="border-t border-border/70" />
       {sorted.map((p) => {
-        const state = getUsageRosterRowState(p, usedSections(p, t).length > 0, t)
+        const plugin = isPluginUsageProvider(p)
+        const state = plugin
+          ? ({ kind: 'usage', statusLabel: null } as const)
+          : getUsageRosterRowState(p, usedSections(p, t).length > 0, t)
         const showSignInAction =
-          actionsAvailable && state.kind === 'sign-in' && canSignIn(p.provider)
+          !plugin && actionsAvailable && state.kind === 'sign-in' && canSignIn(p.provider)
         const rowNode = (
           <UsageRow
             p={p}
@@ -351,9 +326,21 @@ export function UsageRosterPanel({
             state={state}
             showSignInAction={showSignInAction}
             now={now}
+            showPluginSource={plugin && duplicateLabels.has(p.pluginLabel.toLowerCase())}
             mode={statusBarUsageMode}
           />
         )
+        if (plugin) {
+          return (
+            <ProviderDetailsMenu
+              key={p.provider}
+              provider={p}
+              asSubmenu
+              triggerContent={rowNode}
+              ariaLabel={p.pluginLabel}
+            />
+          )
+        }
         if (showSignInAction) {
           return (
             <DropdownMenuItem

@@ -63,6 +63,7 @@ export function bindPluginHostServices(input: {
   renderer?: PluginHostRendererActions | null
   /** The calling plugin's `contributes.settings`: defaults and value checks. */
   declaredSettings?: readonly PluginSettingContribution[]
+  usageProvider?: PluginHostServices['usageProvider']
   statusBar?: PluginStatusBarState | null
   appearance?: PluginAppearanceService | null
   editorTypography?: PluginEditorTypographySource | null
@@ -81,6 +82,7 @@ export function bindPluginHostServices(input: {
     statusBar: input.statusBar
       ? statusBarServices(input.statusBar, input.declaredStatusBarItemIds, input.statusBarRevision)
       : null,
+    usageProvider: input.usageProvider ?? null,
     runtimeRpc: delegate.callRuntime ?? null,
     renderer: input.renderer ?? null,
     resolveActiveWorktreeContext: async () => {
