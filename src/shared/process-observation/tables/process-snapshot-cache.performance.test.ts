@@ -20,6 +20,30 @@ it('waits for fresh evidence only while the newer check is active', async () => 
   expect(runPs).toHaveBeenCalledTimes(2)
 })
 
+it('does not join a poll that later reports argv captured before the cleanup boundary', async () => {
+  let now = 100
+  let reportInputAt: ((atMs: number) => void) | undefined
+  const poll = Promise.withResolvers<string>()
+  const runPs = vi
+    .fn()
+    .mockImplementationOnce((_mode, inputAt) => {
+      reportInputAt = inputAt
+      return poll.promise
+    })
+    .mockResolvedValueOnce('after-boundary')
+  const reader = createProcessTableSnapshotReader<string>({ runPs, now: () => now })
+
+  const display = reader.getSnapshot()
+  now += 10
+  const cleanup = reader.getSnapshotWithAge(now)
+  reportInputAt?.(90)
+  poll.resolve('stale-poll')
+
+  await expect(display).resolves.toBe('stale-poll')
+  await expect(cleanup).resolves.toMatchObject({ value: 'after-boundary' })
+  expect(runPs.mock.calls.map(([mode]) => mode)).toEqual(['poll', 'after-boundary'])
+})
+
 it.each([300, 3_000])(
   'shares one elapsed capture across %i checks from one action',
   async (count) => {

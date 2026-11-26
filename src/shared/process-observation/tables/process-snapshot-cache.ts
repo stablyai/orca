@@ -34,6 +34,7 @@ export function createProcessTableSnapshotReader<T = string>(
   let cached: Snapshot<T> | null = null
   let inFlight: Promise<T> | null = null
   let inFlightCapturedAtMs = 0
+  let inFlightMode: ProcessTableCaptureMode | null = null
   let sequence = 0
   let freshQueued: { promise: Promise<T>; startSequence: number | null } | null = null
 
@@ -42,6 +43,7 @@ export function createProcessTableSnapshotReader<T = string>(
     // yet still coalesce instead of spawning one whole-machine ps per caller on loaded hosts.
     let capturedAtMs = deps.now()
     inFlightCapturedAtMs = capturedAtMs
+    inFlightMode = mode
     const promise = deps.runPs(mode, (atMs) => {
       capturedAtMs = Math.min(capturedAtMs, atMs)
       inFlightCapturedAtMs = capturedAtMs
@@ -54,6 +56,7 @@ export function createProcessTableSnapshotReader<T = string>(
     } finally {
       if (inFlight === promise) {
         inFlight = null
+        inFlightMode = null
       }
     }
   }
@@ -92,7 +95,9 @@ export function createProcessTableSnapshotReader<T = string>(
     if (cached && cached.capturedAtMs >= afterMs) {
       return cached.value
     }
-    if (inFlight && inFlightCapturedAtMs >= afterMs) {
+    // Only a capture deliberately started after the boundary can authorize cleanup. A poll may
+    // discover that its argv was older after we joined it, particularly on macOS.
+    if (inFlight && inFlightMode === 'after-boundary' && inFlightCapturedAtMs >= afterMs) {
       return waitForPromiseWithSignal(inFlight, signal)
     }
     // A stale capture can't authorize cleanup. Do not queue a new capture behind it after callers leave.
