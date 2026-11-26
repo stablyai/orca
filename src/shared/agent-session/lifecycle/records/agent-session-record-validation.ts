@@ -143,6 +143,8 @@ export function isPersistedAgentSessionObservationRecord(
     (record.selectedProvider === undefined ||
       isAgentSessionProviderSelection(record.selectedProvider)) &&
     (record.providerSwitch === undefined || isAgentSessionProviderSwitch(record.providerSwitch)) &&
+    (record.providerSwitchQueueBoundary === undefined ||
+      isProviderSwitchCursor(record.providerSwitchQueueBoundary)) &&
     (record.deferredProviderContext === undefined ||
       isDeferredProviderContext(record.deferredProviderContext)) &&
     (!head ||
@@ -195,6 +197,7 @@ function isAgentSessionProviderSwitch(value: unknown): value is AgentSessionProv
     typeof value.hostRunId === 'string' &&
     (value.fromLinkId === undefined || typeof value.fromLinkId === 'string') &&
     (value.retryHome === undefined || isAgentSessionProviderSelection(value.retryHome)) &&
+    (value.queueBoundary === undefined || isProviderSwitchCursor(value.queueBoundary)) &&
     isProviderSwitchCursor(value.through) &&
     isStoredRecordObject(from) &&
     isStructuredAgentId(from.provider) &&

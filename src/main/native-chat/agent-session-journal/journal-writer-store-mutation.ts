@@ -4,6 +4,7 @@ import { clearSuccessor } from '../../runtime/agent-session/records/agent-sessio
 import { pruneJournalWriterOperations } from './journal-writer-operation-expiry'
 import { copyAgentSessionStoreCache } from '../../runtime/agent-session/records/agent-session-store-cache'
 import { journalDomainPublicCursor } from './journal-domain-context-replacement'
+import { journalProviderHandleOwners } from './database/journal-retained-provider-handles'
 import {
   loadAgentSessionStoreTabs,
   loadAgentSessionStoreRecordRow
@@ -72,34 +73,21 @@ export function resolveJournalWriterStoreMutation(
   }
   const recordIds = [
     ...identity.recordIds,
+    ...(identity.adoptedNativeId === undefined
+      ? []
+      : journalProviderHandleOwners(db, identity.adoptedNativeId)),
     ...(state.sessionTabs === null ? (identity.legacyRecordIds ?? []) : [])
   ]
-  const extraPredicates: string[] = []
-  if (identity.adoptedNativeId !== undefined) {
-    extraPredicates.push(`adopted_native_id = ? OR EXISTS (
-      SELECT 1 FROM json_each(
-        CASE WHEN json_valid(record_json) THEN record_json END, '$.inactiveProviderHandleLinks'
-      ) WHERE CASE WHEN type = 'object' THEN COALESCE(
-        json_extract(value, '$.handle.nativeId'),
-        json_extract(value, '$.handle.sessionId'),
-        json_extract(value, '$.handle.threadId')
-      ) END = ?
-    )`)
-  }
-  if (identity.missingPermission) {
-    extraPredicates.push(`CASE WHEN json_valid(record_json)
-      THEN json_type(record_json,'$.permissionMode') IS NULL ELSE 0 END`)
-  }
   for (const row of db
     .prepare(`SELECT session_id,record_json FROM agent_session_records
       WHERE session_id IN (SELECT value FROM json_each(?))
-        ${extraPredicates.map((predicate) => `OR (${predicate})`).join(' ')} ORDER BY rowid`)
-    .all(
-      JSON.stringify(recordIds),
-      ...(identity.adoptedNativeId !== undefined
-        ? [identity.adoptedNativeId, identity.adoptedNativeId]
-        : [])
-    )) {
+        ${
+          identity.missingPermission
+            ? `OR CASE WHEN json_valid(record_json)
+          THEN json_type(record_json,'$.permissionMode') IS NULL ELSE 0 END`
+            : ''
+        } ORDER BY rowid`)
+    .all(JSON.stringify(recordIds))) {
     loadAgentSessionStoreRecordRow(state, String(row.session_id), String(row.record_json), false)
   }
   const loadRecord = (id: string) => {

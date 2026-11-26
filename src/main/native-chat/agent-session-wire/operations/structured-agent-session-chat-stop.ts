@@ -28,6 +28,7 @@ import {
   writeStructuredAgentSessionStopNote
 } from '../termination/structured-agent-session-stop-unconfirmed-note'
 import { STOP_NOTE_CANCELLATION_REQUESTED } from '../termination/structured-agent-session-turn-stop-notes'
+import { botProviderSelectionWithoutConsent } from '../../../../shared/agent-session/lifecycle/records/agent-session-provider-selection'
 import {
   endStoppedStructuredAgentSession,
   type StructuredAgentSessionStopWindDown
@@ -208,13 +209,11 @@ export function mutateWithChatStop<TValue>(
     if (!accepted.ok) {
       return accepted
     }
-    if (
-      turnId === undefined &&
-      context.deps.store.getRecord(sessionId)?.selectedProvider?.consent
-    ) {
+    const selection = context.deps.store.getRecord(sessionId)?.selectedProvider
+    if (turnId === undefined && selection?.consent) {
       await context.deps.store.updateRecord(sessionId, {
         kind: 'select-provider',
-        selection: null,
+        selection: botProviderSelectionWithoutConsent(selection),
         now: context.now()
       })
     }

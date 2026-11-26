@@ -85,6 +85,7 @@ function endedTurn(
     workLinks: async () => [],
     promptsAudience: () => true,
     turnOpener: () => (opener ? openerItem(opener) : null),
+    switchedAgentForLink: () => (opener === 'switched' ? 'Codex' : undefined),
     keepAdoptedTurn: () => {},
     turnStartedAt: () => null
   })
@@ -116,10 +117,26 @@ function endedTurn(
   )
   waiting = false
   end()
-  return { chats, show, starts, end }
+  return { chats, show, starts, end, events }
 }
 
 describe('a chat turn’s status row after the turn ended', () => {
+  it('adds the switched agent once when the opener arrives after the working status', () => {
+    const { events } = endedTurn((_chats, show, hostRuns) => {
+      hostRuns('')
+      show({ state: 'working', stateStartedAt: SENT })
+      hostRuns('switched')
+      show({ state: 'working', stateStartedAt: HANDED_OVER })
+      show({ state: 'working', stateStartedAt: HANDED_OVER })
+    })
+    const starts = events.filter((event) => event.kind === 'turn-started')
+    expect(starts).toHaveLength(2)
+    expect(starts[0]).toMatchObject({ at: SENT, deliveryId: 'delivery-1' })
+    expect(starts[0]?.switchedAgent).toBeUndefined()
+    expect(starts[1]).toMatchObject({ at: SENT, switchedAgent: 'Codex' })
+    expect(starts[1]?.deliveryId).toBeUndefined()
+  })
+
   it('tells no new turn from the ended turn’s own row, and tells the next real one', () => {
     const { show, starts } = endedTurn()
     expect(starts()).toEqual([SENT])

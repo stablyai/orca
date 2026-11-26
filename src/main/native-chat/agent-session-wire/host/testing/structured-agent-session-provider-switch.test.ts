@@ -7,16 +7,34 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/
 import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION as SESSION,
-  HOST_TEST_THREAD as THREAD
+  HOST_TEST_THREAD as THREAD,
+  hostTestMessage,
+  hostTestOperationId
 } from './structured-agent-session-host-test-data.test-fixture'
 import {
   createQueuedMessageTestRig,
+  QUEUED_RIG_CALLER,
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import { PI_RPC_AGENT } from '../../../../pi/rpc-agent-definition'
 import { CODEX_STRUCTURED_AGENT } from '../../../../codex/structured/launch/codex-structured-agent-definition'
 import { structuredAgentsDeclaringNothing } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
+import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
+
+const piSelection = {
+  sessionId: SESSION,
+  agent: 'pi',
+  consent: { from: 'codex', fromPermission: 'ask', permission: 'full-access' }
+} as const
+
+const piHost = {
+  agents: structuredAgentsDeclaringNothing([CODEX_STRUCTURED_AGENT, PI_RPC_AGENT]),
+  resolveProviderSwitchAccount: async () => ({
+    variable: 'PI_CODING_AGENT_DIR' as const,
+    path: '/test/pi'
+  })
+}
 
 let rig: QueuedMessageTestRig | undefined
 afterEach(() => rig?.dispose())
@@ -99,25 +117,12 @@ it('finishes the current reply before carrying its history into the next agent o
 })
 
 it('requires fresh consent after the host restarts before the first switched turn', async () => {
-  const chat = await createQueuedMessageTestRig({
-    hostDeps: {
-      agents: structuredAgentsDeclaringNothing([CODEX_STRUCTURED_AGENT, PI_RPC_AGENT]),
-      resolveProviderSwitchAccount: async () => ({
-        variable: 'PI_CODING_AGENT_DIR',
-        path: '/test/pi'
-      })
-    }
-  })
+  const chat = await createQueuedMessageTestRig({ hostDeps: piHost })
   rig = chat
   const pick = { sessionId: SESSION, agent: 'pi' }
   const required = { status: 'consent-required', from: 'codex', fromPermission: 'ask' }
   expect(await chat.host.selectProvider(pick)).toEqual(required)
-  expect(
-    await chat.host.selectProvider({
-      ...pick,
-      consent: { from: 'codex', fromPermission: 'ask', permission: 'full-access' }
-    })
-  ).toEqual({ status: 'selected' })
+  expect(await chat.host.selectProvider(piSelection)).toEqual({ status: 'selected' })
 
   await chat.quitRestartHostProcess()
   expect(await chat.host.selectProvider(pick)).toEqual(required)
@@ -128,4 +133,75 @@ it('requires fresh consent after the host restarts before the first switched tur
   })
   expect(chat.store.getRecord(SESSION)?.provider).toBe('codex')
   expect(chat.dispatch).not.toHaveBeenCalled()
+})
+
+it('leaves a failed Home Chat handoff pending and requires fresh consent', async () => {
+  const chat = await createQueuedMessageTestRig({
+    hostDeps: { ...piHost, botHomeDefault: () => 'pi' }
+  })
+  rig = chat
+  expect(
+    await chat.host.selectProvider(piSelection, { botId: 'builder', save: async () => {} })
+  ).toEqual({ status: 'selected' })
+  chat.failNextStart(new Error('Pi start failed'))
+  const { id, result } = chat.send('Write the test')
+  await result
+  await eventually(async () => {
+    expect((await chat.submission(id))?.dispatchState).toBe('rejected')
+    expect(chat.store.getRecord(SESSION)).toMatchObject({
+      provider: 'codex',
+      selectedProvider: {
+        agent: 'pi',
+        botDefault: 'builder'
+      }
+    })
+  })
+  const starts = chat.starts.mock.calls.length
+  const { id: retry, result: sent } = chat.send('Write the test again', undefined, {
+    fence: chat.store.getRecord(SESSION)!.lease.runtimeFence
+  })
+  await sent
+  await eventually(async () =>
+    expect((await chat.submission(retry))?.rejection).toMatchObject({
+      kind: 'providerSwitchConsentRequired'
+    })
+  )
+  expect(chat.starts).toHaveBeenCalledTimes(starts)
+  expect(chat.dispatch).not.toHaveBeenCalled()
+})
+
+it('sends new work after a switch while keeping a held card under its earlier permissions', async () => {
+  const chat = await createQueuedMessageTestRig({ hostDeps: piHost, restartable: true })
+  rig = chat
+  const journal = (await chat.host.conversation(SESSION)).journal
+  const old = await journal.queuedMessages.insert({
+    messageId: 'held-before-consent',
+    body: hostTestMessage('Review the private notes'),
+    holdReason: QUEUED_MESSAGE_PAUSED_SEND_FAILED
+  })
+  expect(await chat.host.selectProvider(piSelection)).toEqual({ status: 'selected' })
+  chat.dispatch.mockResolvedValueOnce({ state: 'accepted', providerIdentity: null })
+  const { id, result } = chat.send('Write the test')
+  await result
+  await eventually(async () => {
+    expect((await chat.submission(id))?.dispatchState).toBe('accepted')
+    expect(chat.store.getRecord(SESSION)?.provider).toBe('pi')
+    expect(chat.store.getRecord(SESSION)?.providerSwitch).toBeUndefined()
+  })
+  const messageId = old.messageId
+  const sent = await chat.host.queuedMessageSend(QUEUED_RIG_CALLER, {
+    messageId,
+    envelope: {
+      ...chat.envelope({ messageId }, 'agentSession.queuedMessageSend', hostTestOperationId()),
+      expectedRuntimeFence: chat.store.getRecord(SESSION)!.lease.runtimeFence
+    }
+  })
+  expect(sent).toMatchObject({ ok: true })
+  await eventually(async () =>
+    expect(await journal.queuedMessages.get(messageId)).toMatchObject({
+      state: 'returned',
+      returnedRejection: { kind: 'providerSwitchQueuedPermission' }
+    })
+  )
+  expect(chat.dispatch).toHaveBeenCalledTimes(1)
 })

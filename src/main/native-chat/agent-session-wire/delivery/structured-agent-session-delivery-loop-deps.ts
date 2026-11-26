@@ -50,7 +50,7 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   prepareProviderSwitch?: (
     session: StructuredAgentSessionHostSession,
     submission: AgentJournalSubmission
-  ) => Promise<'none' | 'blocked' | 'changed'>
+  ) => Promise<'none' | 'blocked' | 'changed' | 'rejected'>
   settleProviderSwitch?: (
     session: StructuredAgentSessionHostSession,
     clientMessageId: string,

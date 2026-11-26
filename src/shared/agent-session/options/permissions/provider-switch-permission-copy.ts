@@ -21,6 +21,14 @@ function permissionLabel(agent: string, mode: AgentChatPermissionChoice, t: Copy
   }
 }
 
+function effectivePermissionLabel(
+  agent: string,
+  mode: AgentChatPermissionChoice,
+  t: CopyTranslate
+): string {
+  return permissionLabel(agent, agent === 'aug' ? 'own' : agent === 'pi' ? 'full-access' : mode, t)
+}
+
 function targetPermissionCopy(agent: string, t: CopyTranslate): string[] {
   const mode = permissionLabel(agent, agent === 'aug' ? 'own' : 'full-access', t)
   return [
@@ -49,7 +57,7 @@ export function chatSwitchPermissionCopy(
 ): string {
   return [
     t('chat.providerSwitch.currentPermission', 'Current permission: {{mode}}.', {
-      mode: permissionLabel(from, current, t)
+      mode: effectivePermissionLabel(from, current, t)
     }),
     ...targetPermissionCopy(agent, t),
     t(
@@ -67,12 +75,12 @@ export function botSwitchPermissionCopy(
     ...(home
       ? [
           t('bots.agentSwitch.currentHomePermission', 'Home Chat currently uses {{mode}}.', {
-            mode: permissionLabel(home.from, home.permission, t)
+            mode: effectivePermissionLabel(home.from, home.permission, t)
           })
         ]
       : []),
     t('bots.agentSwitch.currentDefaultPermission', 'New chats currently use {{mode}}.', {
-      mode: permissionLabel(from, defaultPermission, t)
+      mode: effectivePermissionLabel(from, defaultPermission, t)
     }),
     ...targetPermissionCopy(agent, t)
   ]

@@ -79,7 +79,15 @@ export type AgentSessionProviderSwitch = {
   from: AgentSessionProviderSetup
   fromLinkId?: string
   through: AgentJournalCursor
+  queueBoundary?: AgentJournalCursor
   retryHome?: AgentSessionProviderSelection
+}
+
+export function botProviderSelectionWithoutConsent(
+  selection: AgentSessionProviderSelection
+): AgentSessionProviderSelection | null {
+  const { consent: _consent, ...pending } = selection
+  return pending.botDefault ? pending : null
 }
 
 /** A provider command goes through as-is. Its first prose message carries the saved handoff. */

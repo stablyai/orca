@@ -33,6 +33,17 @@ export function providerSwitchHostRunId(deps: StructuredAgentSessionHostDeps): s
   return run
 }
 
+export function isCurrentProviderSwitch(
+  deps: StructuredAgentSessionHostDeps,
+  record: Pick<AgentSessionRecord, 'providerSwitch'>,
+  clientMessageId: string | undefined
+): boolean {
+  return (
+    record.providerSwitch?.hostRunId === providerSwitchHostRunId(deps) &&
+    record.providerSwitch.clientMessageId === clientMessageId
+  )
+}
+
 export type ProviderSelectionHost = {
   deps: StructuredAgentSessionHostDeps
   publish: (sessionId: string) => void
@@ -54,10 +65,13 @@ export async function selectStructuredChatProvider(
 ): Promise<AgentSessionSelectProviderResult> {
   const { deps } = host
   const record = deps.store.requireWritableRecord(sessionId)
+  const home =
+    botDefault ??
+    (record.selectedProvider?.agent === agent ? record.selectedProvider.botDefault : undefined)
   const selection = {
     agent,
     ...(options ? { options } : {}),
-    ...(botDefault ? { botDefault } : {})
+    ...(home ? { botDefault: home } : {})
   }
   if (agent !== record.provider) {
     if (

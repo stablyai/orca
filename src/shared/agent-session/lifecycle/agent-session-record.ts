@@ -1,5 +1,6 @@
 import type { AgentSessionDeathEvidence } from './leases/agent-session-death-evidence'
 import type { AgentSessionRewindRecord } from './rewind/agent-session-rewind'
+import type { AgentJournalCursor } from '../journal/agent-session-journal-identity'
 /** Identity pins location, provider and account home independently of terminal tabs; the lease separately grants one process writer authority. */
 
 import type { AgentSessionLastTurn } from './records/agent-session-last-turn'
@@ -96,6 +97,7 @@ export type AgentSessionRecord = {
   providerHandleChain: AgentSessionProviderHandleLink[]
   selectedProvider?: AgentSessionProviderSelection
   providerSwitch?: AgentSessionProviderSwitch
+  providerSwitchQueueBoundary?: AgentJournalCursor
   deferredProviderContext?: DeferredProviderContext
   providerContextBoundary?: AgentSessionProviderContextBoundary
   accountHome: AgentSessionAccountHome

@@ -10,6 +10,11 @@ import type {
   StructuredAgentSessionHostSession
 } from '../host/structured-agent-session-host-types'
 import type { StructuredAgentSessionDeliveryLoopDeps } from './structured-agent-session-delivery-loop-deps'
+import type { AgentSessionSlashCommand } from '../../../../shared/agent-session/agent-session-wire'
+import {
+  getNativeChatAgentProfile,
+  getVerifiedNativeChatCommands
+} from '../../../../shared/native-chat/input/commands/native-chat-agent-profiles'
 
 export async function structuredChatSwitchInput(
   deps: StructuredAgentSessionDeliveryLoopDeps,
@@ -40,13 +45,26 @@ export async function structuredChatSwitchInput(
   }
 }
 
-export function isNativeProviderCommand(body: { blocks: readonly { type: string }[] }): boolean {
+export function isNativeProviderCommand(
+  body: { blocks: readonly { type: string }[] },
+  provider: string,
+  reported?: readonly AgentSessionSlashCommand[]
+): boolean {
   const first = body.blocks[0]
-  return (
-    first?.type === 'text' &&
-    'text' in first &&
-    typeof first.text === 'string' &&
-    /^\/[\w:-]+(?:\s|$)/.test(first.text.trimStart())
+  if (first?.type !== 'text' || !('text' in first) || typeof first.text !== 'string') {
+    return false
+  }
+  const name = /^\/([\w:-]+)(?:\s|$)/.exec(first.text.trimStart())?.[1]?.toLowerCase()
+  if (!name || !isTuiAgent(provider)) {
+    return false
+  }
+  const profile = getNativeChatAgentProfile(provider)
+  const namespace = profile?.skillNamePrefix
+  return Boolean(
+    reported?.some((command) => command.name === name) ||
+    (namespace && name.startsWith(namespace) && name.length > namespace.length) ||
+    profile?.textDrivenCommands?.includes(name) ||
+    getVerifiedNativeChatCommands(provider).some((command) => command.name === name)
   )
 }
 
@@ -67,7 +85,11 @@ export async function readStructuredChatProviderSwitchPrompt(
     return null
   }
   const body = await session.journal.reads.itemBody(agentJournalSubmissionKey(clientMessageId))
-  if (body?.kind !== 'message' || body.command || isNativeProviderCommand(body)) {
+  if (
+    body?.kind !== 'message' ||
+    body.command ||
+    isNativeProviderCommand(body, record.provider, deps.adapter.readCommands?.(sessionId))
+  ) {
     return null
   }
   if (deferred) {

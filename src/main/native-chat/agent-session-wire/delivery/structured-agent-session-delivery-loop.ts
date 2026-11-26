@@ -203,8 +203,12 @@ export class StructuredAgentSessionDeliveryLoop {
     if (failedStart) {
       return failStructuredDelivery(this.deps, sessionId, failedStart, oldest.clientMessageId)
     }
-    if ((await this.deps.prepareProviderSwitch?.(session, oldest)) === 'blocked') {
+    const switching = await this.deps.prepareProviderSwitch?.(session, oldest)
+    if (switching === 'blocked') {
       return this.stop(sessionId)
+    }
+    if (switching === 'rejected') {
+      return 'continue'
     }
     await this.deps.retireOutgrownChild(sessionId, undefined, oldest)
     const child = this.deps.sessions.get(sessionId)?.child
@@ -275,7 +279,7 @@ export class StructuredAgentSessionDeliveryLoop {
     if (switching === 'blocked') {
       return this.stop(sessionId)
     }
-    if (switching === 'changed') {
+    if (switching === 'changed' || switching === 'rejected') {
       return 'continue'
     }
     if (waited) {

@@ -10,7 +10,7 @@ import { terminalOwnerRefusalMessage } from '../../../../shared/agent-session/li
 import type { StructuredAgentSessionAttachContext } from '../acquisition/structured-agent-session-attach-context'
 import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-agent-start'
 import { hostCanStartRecord } from '../providers/structured-agent-session-provider-support'
-import { isCurrentProviderSwitch } from '../delivery/structured-agent-session-provider-switch'
+import { isCurrentProviderSwitch } from '../delivery/structured-agent-session-provider-selection'
 import {
   structuredAgentSessionResumeOperationId,
   structuredAgentSessionResumeParams

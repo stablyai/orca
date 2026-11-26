@@ -22,7 +22,10 @@ import {
   nativeChatSessionOptionLabel
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-labels'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
-import { mobileDeferredPermissionSummary } from './mobile-native-chat-session-option-labels'
+import {
+  mobileDeferredPermissionSummary,
+  mobileSessionOptionSummaryValue
+} from './mobile-native-chat-session-option-labels'
 import {
   descriptorRowElements,
   ModelPill,

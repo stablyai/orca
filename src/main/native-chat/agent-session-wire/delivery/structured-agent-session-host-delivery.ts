@@ -41,7 +41,7 @@ import type { StructuredAgentSessionAcquireAborts } from '../startup/structured-
 import type { StructuredAgentSessionStopEnding } from '../termination/structured-agent-session-host-stop-event'
 import { settleStructuredAgentSessionLeftovers } from '../termination/structured-agent-session-leftover-settlement'
 import { createStructuredAgentSessionRanRecorder } from '../options/structured-agent-session-ran-options'
-import { wireStructuredChatProviderSwitch } from './structured-agent-session-provider-switch'
+import { wireStructuredChatProviderSwitch } from './structured-agent-session-provider-switch-delivery'
 
 export type StructuredAgentSessionConversationDelivery = {
   loop: StructuredAgentSessionDeliveryLoop

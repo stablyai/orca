@@ -2,9 +2,10 @@ import { agentSessionLeaseIsReleased } from '../../../../shared/agent-session/li
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { isAgentChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
-import type {
-  AgentSessionProviderSelection,
-  AgentSessionProviderSetup
+import {
+  botProviderSelectionWithoutConsent,
+  type AgentSessionProviderSelection,
+  type AgentSessionProviderSetup
 } from '../../../../shared/agent-session/lifecycle/records/agent-session-provider-selection'
 
 export type AgentSessionProviderCommand =
@@ -86,6 +87,7 @@ function beginProviderSwitch(
     ...rest
   } = record
   const head = record.providerHandleChain.at(-1)
+  const retryHome = botProviderSelectionWithoutConsent(selectedProvider)
   return {
     ...rest,
     ...command.target,
@@ -104,9 +106,8 @@ function beginProviderSwitch(
       clientMessageId: command.clientMessageId,
       hostRunId: command.hostRunId,
       through: command.through,
-      ...(selectedProvider.botDefault && !selectedProvider.consent
-        ? { retryHome: selectedProvider }
-        : {}),
+      ...(retryHome ? { retryHome } : {}),
+      ...(selectedProvider.consent ? { queueBoundary: selectedProvider.consent.through } : {}),
       ...(head ? { fromLinkId: head.linkId } : {}),
       from: {
         provider,
@@ -132,9 +133,16 @@ function settleProviderSwitch(
     return record
   }
   if (command.outcome === 'delivered') {
-    const { deferredProviderContext: _previous, ...active } = rest
+    const {
+      deferredProviderContext: _previous,
+      providerSwitchQueueBoundary: _queue,
+      ...active
+    } = rest
     return {
       ...active,
+      ...(providerSwitch.queueBoundary
+        ? { providerSwitchQueueBoundary: providerSwitch.queueBoundary }
+        : {}),
       ...(command.deferContext
         ? {
             deferredProviderContext: {

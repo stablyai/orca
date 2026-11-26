@@ -5,6 +5,7 @@ import { ensureJournalConnectorRepliesSchema } from '../connector-replies/journa
 import { ensureJournalRetirePending } from './journal-retire-pending'
 import { ensureJournalTextTailTable } from './journal-text-tail-schema'
 import { ensureJournalSubmissionWindowIndexes } from './journal-submission-window-indexes'
+import { ensureJournalRetainedProviderHandles } from './journal-retained-provider-handles'
 
 export const JOURNAL_DOMAIN_SCHEMA_VERSION = 2
 
@@ -29,6 +30,7 @@ export function migrateJournalDomainSchema(db: Database.Database): void {
   ensureJournalSubmissionWindowIndexes(db)
   ensureJournalConnectorRepliesSchema(db)
   ensureJournalRetirePending(db, (run) => runJournalTransaction(db, run))
+  ensureJournalRetainedProviderHandles(db, (run) => runJournalTransaction(db, run))
 }
 
 /** Added without a user_version change: released builds name their columns and never read it. */

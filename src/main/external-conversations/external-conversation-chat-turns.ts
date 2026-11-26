@@ -11,6 +11,7 @@ import { turnLeave } from './external-conversation-thread-leaves'
 import { ToldWorkLinks } from './external-conversation-told-work-links'
 import { ConversationWorkers } from './external-conversation-workers'
 import { TurnDates } from './external-conversation-turn-dates'
+import { emitChatTurnStart } from './external-conversation-chat-turn-start'
 import type { ChatTurnsDeps } from './external-conversation-chat-turns-deps'
 import {
   endAdoptedTurn,
@@ -132,15 +133,7 @@ export class ChatTurns {
       return true
     }
     this.told.add(paneKey)
-    const deliveryId = this.deps.chatTurnDelivery(linked.link.sessionId, at)
-    const switchedAgent = this.deps.switchedAgentForLink?.(linked.link)
-    this.deps.emit({
-      kind: 'turn-started',
-      ...conversationPane(linked.link, linked.workspace.worktreeId),
-      at,
-      ...(deliveryId ? { deliveryId } : {}),
-      ...(switchedAgent ? { switchedAgent } : {})
-    })
+    emitChatTurnStart(this.deps, linked, at)
     return true
   }
 
@@ -180,8 +173,12 @@ export class ChatTurns {
         previous === 'working' &&
         !this.deps.chatTurnWaiting(linked.link.sessionId))
     ) {
-      if (open !== undefined) {
-        this.dates.showed(paneKey, lead.stateStartedAt, this.openerOf(paneKey) ?? null)
+      if (
+        open !== undefined &&
+        this.dates.showed(paneKey, lead.stateStartedAt, this.openerOf(paneKey) ?? null) &&
+        this.told.has(paneKey)
+      ) {
+        emitChatTurnStart(this.deps, linked, open, true)
       }
       return
     }

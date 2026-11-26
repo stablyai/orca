@@ -78,6 +78,10 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'unconfirmed',
   /** A conversation command the chat's state refused when its turn to run came. */
   'commandRefused',
+  'providerSwitchConsentRequired',
+  'providerSwitchPlanMode',
+  'providerSwitchUnavailable',
+  'providerSwitchQueuedPermission',
   'compactionFailed',
   'compactionUnconfirmed',
   'cancelUnconfirmed',
