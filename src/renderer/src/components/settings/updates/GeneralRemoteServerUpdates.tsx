@@ -264,7 +264,7 @@ function ServerRestartConfirm({
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-auto max-w-[calc(100vw-1rem)]">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 p-1.5 ps-3">
           <p className="whitespace-nowrap text-sm">
             {question}
             {live ? ` ${t('settings.about.servers.liveMayDrop', 'Live sessions may drop.')}` : null}
