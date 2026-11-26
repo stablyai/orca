@@ -7,19 +7,19 @@ import { posix as pathPosix } from 'node:path'
 const POSIX_PWSH_NAMES = new Set(['pwsh', 'pwsh-preview'])
 
 /** A leading '-' is the login-shell argv[0] convention. */
+const posixPwshName = (shellPath: string): string =>
+  pathPosix.basename(shellPath).replace(/^-/, '').toLowerCase()
+
 export function isPosixPwshShell(shellPath: string | null | undefined): boolean {
-  if (!shellPath) {
-    return false
-  }
-  const name = pathPosix.basename(shellPath).replace(/^-/, '').toLowerCase()
-  return POSIX_PWSH_NAMES.has(name)
+  return shellPath ? POSIX_PWSH_NAMES.has(posixPwshName(shellPath)) : false
 }
 
 /** Only honoured as pwsh's first argument; on Unix it re-execs through `/bin/sh -l`. */
 export const POSIX_PWSH_LOGIN_ARG = '-Login'
 
 function posixPwshInstallCandidates(name: string): string[] {
-  if (name === 'pwsh-preview') {
+  // The family follows the normalized name; PATH lookups keep the spelling as given.
+  if (posixPwshName(name) === 'pwsh-preview') {
     // Preview installs side by side under 7-preview, plus the pwsh-preview links Homebrew and deb/rpm/Snap add.
     return process.platform === 'darwin'
       ? [
@@ -105,4 +105,25 @@ export async function resolvePosixPaneShellPath(
     }
   }
   return shellPath
+}
+
+/** resolvePosixPaneShellPath within a probe's budget, which ends at `deadline` (ms since epoch):
+ *  null once it runs out, so a hung mount can't stall the probe before its own timer starts. */
+export async function resolvePosixPaneShellPathBy(
+  shellPath: string,
+  spawnPathValue: string,
+  deadline: number
+): Promise<string | null> {
+  if (!needsPosixPaneShellResolution(shellPath)) {
+    return shellPath
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const expired = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), Math.max(0, deadline - Date.now()))
+  })
+  try {
+    return await Promise.race([resolvePosixPaneShellPath(shellPath, spawnPathValue), expired])
+  } finally {
+    clearTimeout(timer)
+  }
 }

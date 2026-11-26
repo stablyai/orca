@@ -4,7 +4,7 @@ import { spawnProcess } from '@orca/process-host'
 import { stripAnsiEscapeSequences } from '../../../shared/terminal/protocol/escape/ansi-escape-sequences'
 import type { ShellHydrationFailureReason } from '../../../shared/shell/launch/shell-path-hydration-types'
 import { resolveWindowsShellStartupFamily } from '../../../shared/shell/launch/windows-terminal-shell'
-import { resolvePosixPaneShellPath } from '../../pty/shell-startup/posix-pwsh'
+import { resolvePosixPaneShellPathBy } from '../../pty/shell-startup/posix-pwsh'
 import { SHELL_PATH_DELIMITER as DELIMITER, shellPathProbe } from './shell-path-probe'
 import { WindowsShellPathOwnership, createWindowsPathKey } from './windows-shell-path-ownership'
 import { bindShellProbeLifetime } from './shell-probe-lifetime'
@@ -152,7 +152,11 @@ export function runWithLaunchPath<T>(action: () => T): T {
 }
 
 async function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
-  const program = await resolvePosixPaneShellPath(shell, shellProbeEnv().PATH ?? '')
+  const deadline = Date.now() + SPAWN_TIMEOUT_MS
+  const program = await resolvePosixPaneShellPathBy(shell, shellProbeEnv().PATH ?? '', deadline)
+  if (program === null) {
+    return { segments: [], ok: false, failureReason: 'timeout' }
+  }
   return new Promise((resolve) => {
     const probe = shellPathProbe(shell)
     let finished = false
@@ -195,11 +199,14 @@ async function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
       resolve(result)
     }
 
-    timer = setTimeout(() => {
-      // Bound slow rc setup so agent discovery can fall back rather than wait forever.
-      lifetime.kill()
-      finish({ segments: [], ok: false, failureReason: 'timeout' })
-    }, SPAWN_TIMEOUT_MS)
+    timer = setTimeout(
+      () => {
+        // Bound slow rc setup so agent discovery can fall back rather than wait forever.
+        lifetime.kill()
+        finish({ segments: [], ok: false, failureReason: 'timeout' })
+      },
+      Math.max(0, deadline - Date.now())
+    )
 
     const onStdoutData = (chunk: Buffer): void => {
       stdout += chunk.toString('utf8')

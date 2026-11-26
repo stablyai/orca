@@ -5,7 +5,7 @@ import { resolveWindowsShellStartupFamily } from '../../../shared/shell/launch/w
 import {
   isPosixPwshShell,
   POSIX_PWSH_LOGIN_ARG,
-  resolvePosixPaneShellPath
+  resolvePosixPaneShellPathBy
 } from '../../pty/shell-startup/posix-pwsh'
 import {
   resolveProfileLoadingFallbackShell,
@@ -171,7 +171,11 @@ async function spawnShellAndReadEnvironment(
   if (!probe) {
     return null
   }
-  const program = await resolvePosixPaneShellPath(shell, env.PATH ?? '')
+  const deadline = Date.now() + timeoutMs
+  const program = await resolvePosixPaneShellPathBy(shell, env.PATH ?? '', deadline)
+  if (program === null) {
+    return null
+  }
   return new Promise((resolve) => {
     let settled = false
     const chunks: Buffer[] = []
@@ -191,10 +195,13 @@ async function spawnShellAndReadEnvironment(
       lifetime.release()
       resolve(value)
     }
-    const timer = setTimeout(() => {
-      lifetime.kill()
-      finish(null)
-    }, timeoutMs)
+    const timer = setTimeout(
+      () => {
+        lifetime.kill()
+        finish(null)
+      },
+      Math.max(0, deadline - Date.now())
+    )
     child.stdin.on('error', () => {})
     child.stdout.on('error', () => finish(null))
     child.stderr.on('error', () => {})
