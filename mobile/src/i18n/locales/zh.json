@@ -5305,6 +5305,9 @@
     }
   },
   "webShell": {
+    "downloadProgress": {
+      "megabytes": "{{received}} / {{total}} MB"
+    },
     "shellStateScreen": {
       "checkingHost": "正在检查主机",
       "connectToDownload": "连接到此主机以下载最新版本的应用",
@@ -5317,7 +5320,9 @@
       "openingWorkspace": "正在打开工作区",
       "renderProcessGone": "工作区已停止响应",
       "statusUnreadable": "无法读取此主机的状态。请返回后重新打开",
-      "tryAgain": "重试"
+      "tryAgain": "重试",
+      "downloadingLatestApp": "正在下载最新版本的应用",
+      "downloadProgressFromHost": "来自 {{host}} · {{progress}}"
     }
   },
   "workspace": {
@@ -5712,6 +5717,12 @@
               "waiting": {
                 "label": "运行 Claude 时更新",
                 "message": "Claude 用量将在下次运行 Claude 时更新"
+              }
+            },
+            "codex": {
+              "waiting": {
+                "label": "运行 Codex 时更新",
+                "message": "Codex 用量将在下次运行 Codex 时更新"
               }
             },
             "1804cd8c3f": "正在刷新登录",
@@ -6773,7 +6784,9 @@
         "replaced": "智能体提出了新问题。请先阅读，再回复",
         "replacedByNewer": "已由较新的问题取代",
         "skipped": "已跳过",
-        "notNow": "暂不"
+        "notNow": "暂不",
+        "heldImagesLimit": "你的回答会作为一条评论发送，一条评论最多包含 {{max}} 张照片。请移除一些后重试。",
+        "heldSkillsLimit": "你的回答会作为一条评论发送，一条评论最多包含 {{max}} 个技能。请移除一些后重试。"
       },
       "write": {
         "unknown": "发送时连接中断，内容可能已经送达。重新连接后请先查看“活动”，再决定是否重新发送",
@@ -8318,5 +8331,8 @@
     "cardSlot": {
       "working": "工作中"
     }
+  },
+  "mcpServers": {
+    "agentBlocked": "已被你所在组织的 Claude 设置阻止"
   }
 }

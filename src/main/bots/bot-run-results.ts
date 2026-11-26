@@ -317,7 +317,8 @@ export function runtimeBotRunResults(runtime: OrcaRuntimeService): BotRunResults
                   ?.reply({ replyId, conversation, turnId: Date.now(), text, turnFor }) ?? null)
               : null
           },
-          turnForOf: (sessionId) => botTurnFor(runtime, sessionId, undefined),
+          // The host delivers the run's own result: no request to verify.
+          turnForOf: (sessionId) => botTurnFor(runtime, sessionId, 'host'),
           ...runtimeBotOwnerNotice(runtime)
         },
         result

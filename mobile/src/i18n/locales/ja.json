@@ -4060,11 +4060,16 @@
     }
   },
   "webShell": {
+    "downloadProgress": {
+      "megabytes": "{{received}} / {{total}} MB"
+    },
     "shellStateScreen": {
       "checkingHost": "ホストを確認中",
       "connectToDownload": "このホストに接続して、最新のアプリをダウンロードしてください。",
       "documentLoadFailed": "ダウンロードしたアプリを開けませんでした。",
       "downloadFailed": "このホストから最新のアプリをダウンロードできませんでした。",
+      "downloadProgressFromHost": "{{host}} から · {{progress}}",
+      "downloadingLatestApp": "最新のアプリをダウンロードしています",
       "hostProfileUnreadable": "このデバイスでこのホストの情報を読み取れませんでした。再試行してください。",
       "isolationUnavailable": "このデバイスの WebView が古すぎるため、ワークスペースを安全に開けません。",
       "openingWorkspace": "ワークスペースを開いています",
@@ -4419,6 +4424,12 @@
                 "message": "Claude の使用状況は、次に Claude を実行したときに更新されます。"
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "Codex の実行時に更新",
+                "message": "Codex の使用状況は、次に Codex を実行したときに更新されます。"
+              }
+            },
             "1804cd8c3f": "サインインを更新中",
             "bf2e739f18": "サインインを利用できません",
             "f8f0f9d8cc": "ネットワークの問題",
@@ -4695,7 +4706,9 @@
       "ask": {
         "replaced": "Agent が新たな質問をしました。確認してから返信してください。",
         "replacedByNewer": "新しい質問に置き換えられました",
-        "skipped": "スキップ済み"
+        "skipped": "スキップ済み",
+        "heldImagesLimit": "回答は1件のコメントとして送信され、写真は{{max}}枚までです。いくつか削除して、もう一度お試しください。",
+        "heldSkillsLimit": "回答は1件のコメントとして送信され、スキルは{{max}}個までです。いくつか削除して、もう一度お試しください。"
       }
     },
     "needs": {
@@ -5258,5 +5271,8 @@
     "cardSlot": {
       "working": "作業中"
     }
+  },
+  "mcpServers": {
+    "agentBlocked": "組織の Claude 設定によりブロックされています"
   }
 }

@@ -9,6 +9,9 @@ import { mcpServerWorkspaceKeyOf } from '../../../shared/mcp-servers/mcp-servers
 import { addWslEnvKeys } from '../../../shared/shell/wsl/wsl-env'
 import { botToolRelay, type BotToolRelay } from '../../bots/tool-relay/bot-tool-relay'
 import { terminalServers, type WslLaunch } from './terminal-mcp-servers'
+import { readBotToolsSnapshot } from '../../bots/bot-tools-file'
+import type { McpHostListRead } from '../mcp-host-list-launch'
+import { mcpHostListFolder } from '../mcp-host-list-folder'
 import { agentOwnMcpServerNames } from '../agent-own-mcp-server-names'
 import { codexArgsMcpServerNames } from '../../codex/structured/launch/codex-structured-launch-args'
 import { tokenizeStartupCommand } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
@@ -52,7 +55,12 @@ export type TerminalMcpLaunchInput = {
   codexHome: string | null
 }
 
-type Deps = { relay?: Pick<BotToolRelay, 'grant'>; hostFolder?: string }
+type Deps = {
+  relay?: Pick<BotToolRelay, 'grant'>
+  hostFolder?: string
+  /** How the host list is read; many panes share one read through it. */
+  hostListRead?: McpHostListRead
+}
 
 type OfferedTools = { tools: SessionMcpTools; bridged: readonly BotToolServer[] }
 
@@ -83,16 +91,44 @@ async function offeredTools(
   return { tools, bridged }
 }
 
-/** The fingerprint a pane launched with these settings would have now; null with the switch off. */
-export async function currentTerminalMcpFingerprint(
-  pane: Pick<TerminalMcpPaneLaunch, 'agent' | 'workspaceId' | 'wsl' | 'wslDistro'>,
+type FingerprintedPane = Pick<TerminalMcpPaneLaunch, 'agent' | 'workspaceId' | 'wsl' | 'wslDistro'>
+
+/**
+ * The fingerprint each pane launched with these settings would have now, from one read of the host
+ * list, shared by panes with the same settings; null with the switch off or the list unreadable.
+ */
+export async function currentTerminalMcpFingerprints<Pane extends FingerprintedPane>(
+  panes: readonly Pane[],
   deps: Deps = {}
-): Promise<string | null> {
-  if (!isMcpServersFeatureEnabled()) {
-    return null
+): Promise<Map<Pane, string | null>> {
+  const answers = new Map<Pane, string | null>()
+  if (panes.length === 0) {
+    return answers
   }
-  const wsl = pane.wsl ? { distro: pane.wslDistro ?? null } : null
-  return fingerprintOf(await offeredTools(pane.agent, pane.workspaceId, wsl, deps))
+  const hostFolder = deps.hostFolder ?? mcpHostListFolder()
+  // Fresh for each count: an edit made outside Orca moves no epoch, and a restart stops agents on it.
+  const snapshot = !isMcpServersFeatureEnabled()
+    ? null
+    : await readBotToolsSnapshot(hostFolder).catch(() => null)
+  const bySettings = new Map<string, Promise<string | null>>()
+  for (const pane of panes) {
+    const wsl = pane.wsl ? { distro: pane.wslDistro ?? null } : null
+    const settings = JSON.stringify([pane.agent, pane.workspaceId, wsl])
+    let answer = bySettings.get(settings)
+    if (!answer) {
+      answer =
+        snapshot === null
+          ? Promise.resolve(null)
+          : offeredTools(pane.agent, pane.workspaceId, wsl, {
+              ...deps,
+              hostFolder,
+              hostListRead: async () => snapshot
+            }).then(fingerprintOf, () => null)
+      bySettings.set(settings, answer)
+    }
+    answers.set(pane, await answer)
+  }
+  return answers
 }
 
 function adapterAndExecutable(
@@ -195,7 +231,19 @@ export async function withTerminalMcpServers(
         env: input.env,
         envToDelete: input.envToDelete,
         cwd: input.cwd,
-        ...(input.wsl ? { wsl: input.wsl } : {})
+        ...(input.wsl
+          ? {
+              wsl: {
+                ...input.wsl,
+                // In WSL each rewritten server runs the guest's `orca`, which needs interop.
+                interop: new Set(
+                  offered.bridged
+                    .map((server) => server.name)
+                    .filter((name) => tools.servers.some((server) => server.name === name))
+                )
+              }
+            }
+          : {})
       },
       executable
     )
@@ -206,7 +254,11 @@ export async function withTerminalMcpServers(
     }))
   noteTerminalMcpDelivery(
     adapter.agent,
-    delivery.delivered ? null : delivery.agentWide ? delivery.reason : undefined
+    delivery.delivered
+      ? (delivery.problem ?? null)
+      : delivery.agentWide
+        ? delivery.reason
+        : undefined
   )
   if (!delivery.delivered) {
     console.warn(

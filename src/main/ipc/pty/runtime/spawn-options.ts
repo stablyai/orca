@@ -89,6 +89,9 @@ export async function buildRuntimePtySpawnOptions(
   })
   ctx.spawnOptions = launch.spawnOptions
   ctx.env = launch.env
+  if (launch.env) {
+    ctx.deps.runtime?.shareClaudeAgentTeamsLeadMcpEnv(launch.env)
+  }
   ctx.launchCommand = launch.launchCommand
   ctx.terminalMcp = launch.terminalMcp
   ctx.provisionalPtySize = seedPtySpawnSize({

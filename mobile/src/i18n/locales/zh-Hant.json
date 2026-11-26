@@ -4057,11 +4057,16 @@
     }
   },
   "webShell": {
+    "downloadProgress": {
+      "megabytes": "{{received}} / {{total}} MB"
+    },
     "shellStateScreen": {
       "checkingHost": "正在檢查主機",
       "connectToDownload": "連線至此主機以下載最新版應用程式",
       "documentLoadFailed": "無法開啟已下載的應用程式。",
       "downloadFailed": "無法從此主機下載最新版應用程式。",
+      "downloadProgressFromHost": "來自 {{host}} · {{progress}}",
+      "downloadingLatestApp": "正在下載最新版應用程式",
       "hostProfileUnreadable": "裝置無法讀取此主機的資料。請重試。",
       "isolationUnavailable": "此裝置的 WebView 版本過舊，無法安全開啟工作區。",
       "openingWorkspace": "正在開啟工作區",
@@ -4416,6 +4421,12 @@
                 "message": "Claude 用量將在下次執行 Claude 時更新。"
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "執行 Codex 時更新",
+                "message": "Codex 用量將在下次執行 Codex 時更新。"
+              }
+            },
             "1804cd8c3f": "正在重新整理登入",
             "bf2e739f18": "登入不可用",
             "f8f0f9d8cc": "網路問題",
@@ -4615,7 +4626,9 @@
       "ask": {
         "replaced": "代理程式提出了新問題。請先閱讀，再回覆。",
         "replacedByNewer": "已由較新的問題取代",
-        "skipped": "已略過"
+        "skipped": "已略過",
+        "heldImagesLimit": "你的回答會作為一則留言送出，一則留言最多包含 {{max}} 張照片。請移除一些後再試一次。",
+        "heldSkillsLimit": "你的回答會作為一則留言送出，一則留言最多包含 {{max}} 個技能。請移除一些後再試一次。"
       }
     },
     "needs": {
@@ -5178,5 +5191,8 @@
     "cardSlot": {
       "working": "執行中"
     }
+  },
+  "mcpServers": {
+    "agentBlocked": "已被你所屬組織的 Claude 設定阻止"
   }
 }

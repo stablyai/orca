@@ -23,7 +23,7 @@ import {
   type PendingCall,
   type PluginWorkerRequestChannel
 } from './plugin-worker-requests'
-import { buildPluginWorkerEnv } from './plugin-worker-env'
+import { pluginWorkerEnv } from './plugin-worker-env'
 import { pipePluginWorkerOutput } from './plugin-worker-output-buffer'
 import { PluginWorkerHostCalls } from './plugin-worker-host-calls'
 
@@ -52,7 +52,7 @@ export async function startPluginWorker(
 
   const child: ChildProcess = fork(entryPath, [], {
     // Scrub shell-exported secrets; ELECTRON_RUN_AS_NODE runs the Electron binary as Node.
-    env: buildPluginWorkerEnv(),
+    env: pluginWorkerEnv(),
     // Parent inspector/loader flags must not execute inside third-party workers.
     execArgv: [],
     // Default JSON serialization rejects supported structured-clone payloads (BigInt, cycles, maps).

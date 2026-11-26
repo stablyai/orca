@@ -2,22 +2,38 @@ import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesy
 import { JsonTextStructureCapacityError } from '../../../../shared/json-stream/json-text-structure-limit'
 import { NodeFileReadTooLargeError } from '../../../../shared/file-content/node-bounded-file-reader'
 import { join } from 'node:path'
-import {
-  MAX_AGENT_STATE_FILE_BYTES,
-  readAgentStateFileSync,
-  readAgentStateJsonFileSync
-} from '../agent-state-file-reader'
+import { readAgentStateFileSync, readAgentStateJsonFileSync } from '../agent-state-file-reader'
 import {
   writeFileAtomically,
   writeFileAtomicallyIfUnchanged
 } from '../../../filesystem/atomic-file-publication'
-import {
-  EMPTY_GUEST_CARRY_FORWARD,
-  isGuestCarryForwardEmpty,
-  type CodexGuestCarriedRegistration,
-  type CodexGuestCarryForward
-} from './codex-config-guest-carry-forward'
 import type { CodexRegistrationPromotion } from './config-plugin-registration-promotion'
+
+/**
+ * Tab edits a one-way WSL build (v1.4.27x) kept as marked lines in the managed copy instead of
+ * writing the distro's config. Read for one release so the first two-way pass promotes them.
+ */
+export type CodexGuestCarryForward = {
+  /** Structured key -> runtime raw, plus the distro raw it overrides. */
+  settings: ReadonlyMap<string, { raw: string; system: string | null }>
+  /** `system` is the distro's normalized field value (null for appends or an absent field) and `identity` its source. */
+  registrations: readonly CodexGuestCarriedRegistration[]
+}
+
+export type CodexGuestCarriedRegistration = {
+  promotion: CodexRegistrationPromotion
+  system: string | null
+  identity: string | null
+}
+
+export const EMPTY_GUEST_CARRY_FORWARD: CodexGuestCarryForward = {
+  settings: new Map(),
+  registrations: []
+}
+
+export function isGuestCarryForwardEmpty(carry: CodexGuestCarryForward): boolean {
+  return carry.settings.size === 0 && carry.registrations.length === 0
+}
 
 const SETTINGS_BASELINE_FILE = '.orca-config-settings-baseline.json'
 
@@ -36,7 +52,7 @@ export type CodexSettingsBaseline = {
   mcpServerRoot: boolean
   /** False for baselines from before Orca recorded which plugin tables it mirrored. */
   tracksRegistrations?: boolean
-  /** Set once a WSL distro config regenerated this home; absent on homes an older Orca mirrored. */
+  /** Read-only: kept values a one-way WSL build left; the next two-way pass promotes them and drops this. */
   guestCarryForward?: CodexGuestCarryForward
   /** Set once a pass found ~/.codex outside any WSL distro, so clean passes need not resolve it again. */
   nativeSource?: boolean
@@ -216,29 +232,11 @@ export function writeCodexSettingsBaseline(
   if (baseline.mcpServerRoot) {
     file.mcpServerRoot = true
   }
-  if (baseline.guestCarryForward) {
-    file.guestCarryForward = {
-      settings: Object.fromEntries(baseline.guestCarryForward.settings),
-      registrations: [...baseline.guestCarryForward.registrations]
-    }
-  }
   if (baseline.nativeSource) {
     file.nativeSource = true
   }
   const baselinePath = getCodexSettingsBaselinePath(runtimeHomePath)
-  let serialized = `${JSON.stringify(file, null, 2)}\n`
-  // Kept values live only here, so never write a file the reader would drop as too large.
-  if (
-    baseline.guestCarryForward &&
-    !isGuestCarryForwardEmpty(baseline.guestCarryForward) &&
-    Buffer.byteLength(serialized) > MAX_AGENT_STATE_FILE_BYTES
-  ) {
-    // A home regenerated from a distro reads only its kept values and MCP names back.
-    serialized = `${JSON.stringify({ ...file, settings: {}, conflicts: undefined, registrations: undefined }, null, 2)}\n`
-    if (Buffer.byteLength(serialized) > MAX_AGENT_STATE_FILE_BYTES) {
-      throw new Error('Codex settings baseline with kept values exceeds the readable size')
-    }
-  }
+  const serialized = `${JSON.stringify(file, null, 2)}\n`
   let existing: string | null = null
   try {
     existing = readAgentStateFileSync(baselinePath)
@@ -252,30 +250,22 @@ export function writeCodexSettingsBaseline(
   if (existing === serialized) {
     return
   }
-  // Atomic: kept tab edits live only here, so a cut-off write must leave the previous file whole.
+  // Atomic: a cut-off write must leave the previous file whole.
   writeFileAtomically(baselinePath, serialized, { mode: 0o600 })
 }
 
 /**
- * Drop the native-source mark a clean pass trusted once a later check finds otherwise. `regenerated`
- * also records what a regeneration from the distro would have: no kept values. Skipped unless the
- * baseline still carries that mark and no kept values, so a newer pass's record always wins.
+ * Drop the native-source mark a clean pass trusted once a later check finds otherwise. Skipped
+ * unless the baseline still carries that mark, so a newer pass's record always wins.
  */
-export function retireCodexNativeSourceMark(runtimeHomePath: string, regenerated: boolean): void {
+export function retireCodexNativeSourceMark(runtimeHomePath: string): void {
   const baselinePath = getCodexSettingsBaselinePath(runtimeHomePath)
   const existing = readAgentStateFileSync(baselinePath)
   const parsed: unknown = JSON.parse(existing)
-  if (
-    !isStoredSettingsBaseline(parsed) ||
-    parsed.nativeSource !== true ||
-    parsed.guestCarryForward
-  ) {
+  if (!isStoredSettingsBaseline(parsed) || parsed.nativeSource !== true) {
     return
   }
-  const { nativeSource: _retired, ...rest } = parsed
-  const next: StoredSettingsBaseline = regenerated
-    ? { ...rest, guestCarryForward: { settings: {}, registrations: [] } }
-    : rest
+  const { nativeSource: _retired, ...next } = parsed
   // Its content comes from this read, so a baseline another thread saved since must win.
   writeFileAtomicallyIfUnchanged(baselinePath, existing, `${JSON.stringify(next, null, 2)}\n`, {
     mode: 0o600
