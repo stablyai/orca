@@ -1,5 +1,4 @@
 import { spawn } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
 import { closeSync, openSync, readFileSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -9,15 +8,10 @@ import {
   repoRoot,
   serverLogPath,
   serverScriptPath,
-  serverStatePath
+  serverStatePath,
+  startGuardPath
 } from './fixture-paths.mjs'
-import {
-  addStartLockOwner,
-  isProcessAlive,
-  releaseStartLock,
-  startLockOwners,
-  tryAcquireStartLock
-} from './fixture-start-lock.mjs'
+import { SERVER_BUSY_EXIT_CODE, tryHoldLock } from './fixture-locks.mjs'
 
 const STARTUP_TIMEOUT_MS = 120_000
 
@@ -50,19 +44,26 @@ async function readServerHealth(state, timeoutMs = STARTUP_TIMEOUT_MS) {
   }
 }
 
-function startServerProcess(lockToken) {
+function isProcessAlive(pid) {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return error?.code === 'EPERM'
+  }
+}
+
+function startServerProcess() {
   const log = openSync(serverLogPath, 'w')
   const child = spawn(process.execPath, [serverScriptPath], {
     cwd: repoRoot,
     detached: true,
     windowsHide: true,
     stdio: ['ignore', log, log],
-    env: { ...process.env, ORCA_FIXTURES_LOCK_TOKEN: lockToken }
+    env: process.env
   })
   child.unref()
   closeSync(log)
-  // Same tick as spawn: the server owns the lock even if this launcher exits next.
-  addStartLockOwner(lockToken, child.pid)
   return child
 }
 
@@ -99,10 +100,13 @@ async function stopPreviousServer(state, deadline) {
 /** Returns the running fixture server, starting a detached one if needed. */
 export async function ensureFixtureServer({ onStart } = {}) {
   const deadline = Date.now() + STARTUP_TIMEOUT_MS
-  const lockToken = `${process.pid}-${randomUUID()}`
+  // Held while this call decides on and starts a server, until that server is up or gone.
+  let startLock = null
   let child
   let retiringPid
-  let seenPid
+  // The last server this call saw answer as itself; it must exit before a replacement starts.
+  let seen
+  let readyPid
   let waited = false
   try {
     while (Date.now() < deadline) {
@@ -111,14 +115,21 @@ export async function ensureFixtureServer({ onStart } = {}) {
       const identified = Boolean(health) && health.pid === state.pid
       const stopping = identified && health.stopping === true
       if (identified) {
-        seenPid = state.pid
+        seen = { pid: state.pid, url: state.url }
       }
       // Why after the probe: a script edit while it was in flight must not admit old code.
       if (identified && !stopping && health.codeStamp === fixtureServerCodeStamp()) {
+        readyPid = state.pid
         return { url: state.url, started: waited }
       }
-      // Our child is up with an older stamp, or a client stopped it (exit 0) to replace it.
-      if (child && ((identified && health.pid === child.pid) || child.exitCode === 0)) {
+      // Our child is up with an older stamp, was stopped (exit 0) by a client replacing it,
+      // or found another server owning the checkout.
+      if (
+        child &&
+        ((identified && health.pid === child.pid) ||
+          child.exitCode === 0 ||
+          child.exitCode === SERVER_BUSY_EXIT_CODE)
+      ) {
         child = undefined
       }
       if (child && (child.exitCode !== null || child.signalCode !== null)) {
@@ -133,35 +144,33 @@ export async function ensureFixtureServer({ onStart } = {}) {
       } else if (retiringPid && !isProcessAlive(retiringPid)) {
         retiringPid = undefined
       }
-      if (!child && !retiringPid && tryAcquireStartLock(lockToken)) {
+      if (!child && !retiringPid) {
+        startLock ??= tryHoldLock(startGuardPath)
+      }
+      if (!child && !retiringPid && startLock) {
         const published = readServerState()
         if (published?.pid !== state?.pid || published?.url !== state?.url) {
           // Recheck the server published by a concurrent starter.
-          releaseStartLock(lockToken)
           continue
         }
-        // Why seenPid: a reset or garbled probe of a server we just saw does not mean it is gone.
-        if (identified || (state?.pid === seenPid && isProcessAlive(seenPid))) {
-          await stopPreviousServer(state, deadline)
+        // Why seen: the record can vanish (an older server removes it on stop) while it lives.
+        const previous = identified ? state : seen && isProcessAlive(seen.pid) ? seen : null
+        if (previous) {
+          await stopPreviousServer(previous, deadline)
         }
         onStart?.()
-        child = startServerProcess(lockToken)
+        child = startServerProcess()
       }
       waited = true
       await delay(150)
     }
-    if (child && child.exitCode === null && child.signalCode === null) {
-      // Why: a server that missed its startup deadline would keep the start lock with no waiter.
+    throw new Error(`Fixture server did not start in time. Log tail:\n${readLogTail()}`)
+  } finally {
+    if (child && child.pid !== readyPid && child.exitCode === null && child.signalCode === null) {
+      // Why: a server this call started but is not returning holds, or waits for, the guard.
       child.kill()
     }
-    const owners = startLockOwners().filter(
-      (pid) => pid !== process.pid && pid !== child?.pid && isProcessAlive(pid)
-    )
-    const holder = owners.length > 0 ? ` The start lock is held by pid ${owners.join(', ')}.` : ''
-    throw new Error(`Fixture server did not start in time.${holder} Log tail:\n${readLogTail()}`)
-  } finally {
-    // Releases only this call's lock; a lock owned by anyone else has another token.
-    releaseStartLock(lockToken)
+    startLock?.release()
   }
 }
 

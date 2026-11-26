@@ -1,7 +1,9 @@
 // Share detached Vite/headless Chromium between fixtures-shot.mjs and the fixtures MCP server.
+import { execFileSync } from 'node:child_process'
 import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { createServer as createNetServer } from 'node:net'
 import path from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
 import { chromium } from 'playwright-core'
 import { createServer as createViteServer } from 'vite'
 import { createFixturePageRunner } from './fixture-page-runner.mjs'
@@ -10,17 +12,21 @@ import {
   fixtureServerCodeStamp,
   matchFixtureIds,
   repoRoot,
+  serverGuardPath,
   serverStatePath
 } from './fixture-paths.mjs'
-import { releaseStartLock } from './fixture-start-lock.mjs'
+import { SERVER_BUSY_EXIT_CODE, tryHoldLock } from './fixture-locks.mjs'
 
 const fixtureRegistryPath = path
   .join(repoRoot, 'src/renderer/src/component-fixtures/component-fixture-registry.ts')
   .replaceAll('\\', '/')
 const codeStamp = fixtureServerCodeStamp()
-const lockToken = process.env.ORCA_FIXTURES_LOCK_TOKEN
 const IDLE_SHUTDOWN_MS = Number(process.env.ORCA_FIXTURES_IDLE_MS) || 20 * 60 * 1000
 const STOP_GRACE_MS = 10_000
+// Covers a predecessor's teardown, which its own watchdog bounds by STOP_GRACE_MS.
+const GUARD_WAIT_MS = 20_000
+// Module scope keeps the guard connection open; a collected connection would drop the lock.
+let serverGuard = null
 
 process.chdir(repoRoot)
 
@@ -163,8 +169,47 @@ function createFixtureApiPlugin(session) {
   }
 }
 
+function isProcessAlive(pid) {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return error?.code === 'EPERM'
+  }
+}
+
+// Why: a hung browser.close() must not leave the browser running after this process (and its
+// guard) is gone, or a successor would start beside it. POSIX only; Windows just exits.
+async function forceExit() {
+  let pids = []
+  if (process.platform !== 'win32') {
+    try {
+      pids = execFileSync('pgrep', ['-P', String(process.pid)], { encoding: 'utf8' })
+        .split('\n')
+        .filter(Boolean)
+        .map(Number)
+    } catch {}
+  }
+  for (const pid of pids) {
+    try {
+      process.kill(pid, 'SIGKILL')
+    } catch {}
+  }
+  for (const started = Date.now(); Date.now() - started < 2000 && pids.some(isProcessAlive);) {
+    await delay(50)
+  }
+  process.exit(0)
+}
+
 async function main() {
   await mkdir(fixtureCacheDir, { recursive: true })
+  // One server per checkout: held until this process exits, so a successor cannot start
+  // until this one, crashed or not, is gone.
+  serverGuard = tryHoldLock(serverGuardPath, GUARD_WAIT_MS)
+  if (!serverGuard) {
+    console.error('[fixtures] another fixture server owns this checkout')
+    process.exit(SERVER_BUSY_EXIT_CODE)
+  }
   const port = await findFreePort()
   const baseUrl = `http://127.0.0.1:${port}`
   // Why parallel: browser launch and Vite startup are independent cold costs.
@@ -189,8 +234,8 @@ async function main() {
     // Why first: health must stop admitting this server before its browser starts closing.
     session.stopping = true
     clearInterval(idleTimer)
-    // Why: clients wait for this process to exit before replacing it, so teardown cannot hang.
-    setTimeout(() => process.exit(0), STOP_GRACE_MS).unref()
+    // Why: a successor waits for this process to exit, so teardown cannot hang.
+    setTimeout(() => void forceExit(), STOP_GRACE_MS).unref()
     // Leave the last endpoint for the client to probe. A successor may already own it.
     await (await browserPromise.catch(() => null))?.close()
     await vite.close()
@@ -210,12 +255,10 @@ async function main() {
   const pendingState = `${serverStatePath}.${process.pid}.tmp`
   await writeFile(pendingState, JSON.stringify({ pid: process.pid, port, url: baseUrl, codeStamp }))
   await rename(pendingState, serverStatePath)
-  releaseStartLock(lockToken)
   console.log(`[fixtures] ready at ${baseUrl}/fixtures.html`)
 }
 
 main().catch(async (error) => {
   console.error(`[fixtures] server failed: ${error?.stack ?? error}`)
-  releaseStartLock(lockToken)
   process.exit(1)
 })

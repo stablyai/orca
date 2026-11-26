@@ -4,8 +4,11 @@ import path from 'node:path'
 export const repoRoot = path.resolve(import.meta.dirname, '../../..')
 export const fixtureCacheDir = path.join(repoRoot, '.cache', 'fixtures')
 export const serverStatePath = path.join(fixtureCacheDir, 'server.json')
-export const serverLockPath = path.join(fixtureCacheDir, 'server.lock')
 export const serverLogPath = path.join(fixtureCacheDir, 'server.log')
+// Held by the one live fixture server of this checkout for its whole lifetime.
+export const serverGuardPath = path.join(fixtureCacheDir, 'server.guard.db')
+// Held by the client that is starting a server, until that server is up or has exited.
+export const startGuardPath = path.join(fixtureCacheDir, 'start.guard.db')
 export const serverScriptPath = path.join(
   repoRoot,
   'config',
