@@ -2,6 +2,7 @@ import type { ExecutionHostId } from '../../../../../src/shared/execution-host/e
 import type { Repo as SharedRepo } from '../../../../../src/shared/repository/repo-types'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import { resolveRepoBadgeColor } from '../../../../../src/shared/repository/appearance/repo-badge-color'
+import type { NewWorkspaceProjectActivity } from '../../source-selection/presentation/new-workspace-project-targets'
 
 export type MobileWorkspaceRepo = Pick<SharedRepo, 'id' | 'displayName' | 'path'> &
   Partial<
@@ -53,6 +54,8 @@ export type NewWorktreeModalProps = {
   hostLabelById?: ReadonlyMap<ExecutionHostId, string>
   existingWorktreePaths?: readonly string[]
   existingWorktrees?: readonly { repoId: string; branch: string }[]
+  /** Workspaces on the desktop and its servers; the Project picker lists the most recently active projects first. */
+  projectActivity?: readonly NewWorkspaceProjectActivity[]
   openExternalUrl: (url: string) => void
   /** `executionHost` names the server the workspace was created on; absent for the desktop's own. */
   onCreated: (

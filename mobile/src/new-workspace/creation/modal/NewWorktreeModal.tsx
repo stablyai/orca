@@ -32,6 +32,8 @@ import {
 } from '../forms/new-worktree-modal-types'
 import {
   buildNewWorkspaceProjectOptions,
+  orderNewWorkspaceProjectsByIds,
+  orderNewWorkspaceProjectsByRecentActivity,
   buildNewWorkspaceRunTargetOptions,
   getNewWorkspaceRunTarget
 } from '../../source-selection/presentation/new-workspace-project-targets'
@@ -75,6 +77,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     hostLabelById,
     existingWorktreePaths,
     existingWorktrees,
+    projectActivity,
     openExternalUrl,
     onCreated,
     onClose,
@@ -237,7 +240,31 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
       })),
     [hostRepos]
   )
-  const projectPickerItems = useMemo(() => buildNewWorkspaceProjectOptions(repos), [repos, t])
+  // Why: the order is read as the picker opens and held, later arrivals added as first seen, so rows don't shuffle.
+  const projectOptions = useMemo(() => buildNewWorkspaceProjectOptions(repos), [repos, t])
+  const projectDrawerOpen = navigation.drawerView === 'project'
+  const [wasProjectDrawerOpen, setWasProjectDrawerOpen] = useState(false)
+  const [projectOrder, setProjectOrder] = useState<readonly string[]>([])
+  if (projectDrawerOpen !== wasProjectDrawerOpen) {
+    setWasProjectDrawerOpen(projectDrawerOpen)
+    if (projectDrawerOpen) {
+      setProjectOrder(
+        orderNewWorkspaceProjectsByRecentActivity(projectOptions, repos, projectActivity ?? []).map(
+          (project) => project.id
+        )
+      )
+    }
+  } else if (projectDrawerOpen) {
+    const heldIds = new Set(projectOrder)
+    const arrivedIds = projectOptions.map((project) => project.id).filter((id) => !heldIds.has(id))
+    if (arrivedIds.length > 0) {
+      setProjectOrder([...projectOrder, ...arrivedIds])
+    }
+  }
+  const projectPickerItems = useMemo(
+    () => orderNewWorkspaceProjectsByIds(projectOptions, projectOrder),
+    [projectOptions, projectOrder]
+  )
   const selectedProjectId = selectedRepo ? getProjectIdentityKey(selectedRepo) : null
   const selectedProject =
     projectPickerItems.find((project) => project.id === selectedProjectId) ?? null
