@@ -9,10 +9,10 @@ import {
   type BotChatTreeChat
 } from '../../../src/shared/bots/bot-chat-tree'
 import {
-  botLiveWorkspaceIds,
+  botLiveWorkspaceRanks,
   botSidebarListedChats,
   pageChatLines,
-  rankBotWorkspacesByLive
+  sortBotWorkspacesByLiveRank
 } from '../../../src/shared/bots/bot-sidebar-chat-groups'
 import {
   botSidebarWorkerPaging,
@@ -130,24 +130,22 @@ export function hostBotChatItems(args: {
   }
   // Every workspace no shown chat has (Home Chat's, a quiet or closed chat's) leads, flat, so none
   // reads as a listed chat's: live ones and the open one always, the rest paged as a chat's lines.
-  const flatSteps = args.steps[keyOf(FLAT_LINES_KEY)] ?? 0
-  if (rest.length === 0 && flatSteps === 0) {
+  if (rest.length === 0) {
     return items
   }
-  const liveIds = botLiveWorkspaceIds(tree.chats)
+  const flatSteps = args.steps[keyOf(FLAT_LINES_KEY)] ?? 0
+  const ranks = botLiveWorkspaceRanks(tree.chats)
   const liveBranches = new Set(
     rest
-      .filter((branch) => branch.lines.some((line) => liveIds.has(line.row.worktreeId)))
+      .filter((branch) => branch.lines.some((line) => ranks.has(line.row.worktreeId)))
       .map(({ id }) => id)
   )
   // Idle ones keep the list's order; only live ones rank, those waiting on the owner first.
   const flat = [
-    ...(liveBranches.size > 0
-      ? rankBotWorkspacesByLive(
-          tree.chats,
-          rest.filter(({ id }) => liveBranches.has(id))
-        )
-      : []),
+    ...sortBotWorkspacesByLiveRank(
+      rest.filter(({ id }) => liveBranches.has(id)),
+      ranks
+    ),
     ...rest.filter(({ id }) => !liveBranches.has(id))
   ]
   const page = pageChatLines(flat, liveBranches, flatSteps)

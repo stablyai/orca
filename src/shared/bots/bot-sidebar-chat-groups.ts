@@ -36,12 +36,19 @@ export function rankBotWorkspacesByLive<T extends { id: string }>(
   chats: readonly BotChatTreeChat[],
   workspaces: readonly T[]
 ): T[] {
-  const rank = liveWorkspaceRanks(chats)
+  return sortBotWorkspacesByLiveRank(workspaces, botLiveWorkspaceRanks(chats))
+}
+
+/** `rankBotWorkspacesByLive` over ranks already read from the chats. */
+export function sortBotWorkspacesByLiveRank<T extends { id: string }>(
+  workspaces: readonly T[],
+  rank: ReadonlyMap<string, number>
+): T[] {
   return [...workspaces].sort((a, b) => (rank.get(a.id) ?? 2) - (rank.get(b.id) ?? 2))
 }
 
 /** Each live workspace's rank: 0 when a worker in it waits on the owner, 1 while one runs. */
-function liveWorkspaceRanks(chats: readonly BotChatTreeChat[]): Map<string, number> {
+export function botLiveWorkspaceRanks(chats: readonly BotChatTreeChat[]): Map<string, number> {
   const rank = new Map<string, number>()
   for (const chat of chats) {
     for (const worker of chat.running) {
@@ -56,7 +63,7 @@ function liveWorkspaceRanks(chats: readonly BotChatTreeChat[]): Map<string, numb
 
 /** The workspaces some worker still runs or waits in. */
 export function botLiveWorkspaceIds(chats: readonly BotChatTreeChat[]): ReadonlySet<string> {
-  return new Set(liveWorkspaceRanks(chats).keys())
+  return new Set(botLiveWorkspaceRanks(chats).keys())
 }
 
 /** A chat's lines on the left: every live one, then the last finished few, then steps of 8. Lines come
