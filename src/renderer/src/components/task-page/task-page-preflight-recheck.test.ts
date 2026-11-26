@@ -35,6 +35,7 @@ function args(overrides: Partial<Args> = {}): Args {
     preflightStatusChecked: true,
     preflightStatusCurrent: true,
     preflightDescribesDesktop: true,
+    desktopPreflightFailed: false,
     runtimePreflightStatusByHostId: new Map(),
     ...overrides
   }
@@ -90,6 +91,25 @@ it('targets both desktop and runtime when both are stale', () => {
       args({
         contexts: [localContext, runtimeContext],
         preflightStatus: signedOut,
+        runtimePreflightStatusByHostId: runtimeMap(signedOut)
+      })
+    )
+  ).toEqual({ desktop: true, runtimeHostIds: [runtimeHostId] })
+})
+
+it('treats a failed desktop request as stale and keeps runtime targets independent', () => {
+  expect(
+    selectProviderPreflightRefreshTargets(
+      args({ desktopPreflightFailed: true, preflightStatus: null })
+    )
+  ).toEqual({ desktop: true, runtimeHostIds: [] })
+
+  expect(
+    selectProviderPreflightRefreshTargets(
+      args({
+        contexts: [localContext, runtimeContext],
+        desktopPreflightFailed: true,
+        preflightStatus: null,
         runtimePreflightStatusByHostId: runtimeMap(signedOut)
       })
     )

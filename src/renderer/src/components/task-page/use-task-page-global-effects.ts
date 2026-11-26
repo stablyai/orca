@@ -49,7 +49,8 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
     newJiraIssueOpen
   } = model
   const githubTasksBusy = githubListPending || tasksRefreshing || tasksFiltering
-  const forcedPreflightKeyRef = useRef<string | null>(null)
+  const refreshContextRef = useRef<string | null>(null)
+  const attemptedRefreshKeysRef = useRef<Set<string>>(new Set())
   // GitHub and Linear details replace the list in-page; the Jira detail is a Sheet that owns Esc.
   const detailPageOpen =
     (taskSource === 'github' && Boolean(dialogWorkItem)) ||
@@ -115,6 +116,11 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
     if (!preflightStatusCurrent || !preflightStatusChecked) {
       void refreshPreflightStatus()
     }
+    const refreshContext = `${expectedPreflightContextKey}|${selectedReposKey}|${taskSource}`
+    if (refreshContextRef.current !== refreshContext) {
+      refreshContextRef.current = refreshContext
+      attemptedRefreshKeysRef.current = new Set()
+    }
     const targets = selectProviderPreflightRefreshTargets({
       taskSource,
       contexts: taskSourceRepoContexts,
@@ -122,25 +128,18 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
       preflightStatusChecked,
       preflightStatusCurrent,
       preflightDescribesDesktop,
+      desktopPreflightFailed: preflightStatusError !== null,
       runtimePreflightStatusByHostId
     })
     const refreshKey =
       targets.desktop || targets.runtimeHostIds.length > 0
-        ? [
-            expectedPreflightContextKey,
-            selectedReposKey,
-            taskSource,
-            targets.desktop ? 'desktop' : '',
-            targets.runtimeHostIds.join(',')
-          ].join('|')
+        ? [refreshContext, targets.desktop ? 'desktop' : '', targets.runtimeHostIds.join(',')].join(
+            '|'
+          )
         : null
-    if (preflightStatusError) {
-      // Retry on a later open/focus; forcing again in this effect would loop.
-      forcedPreflightKeyRef.current = null
-    } else if (!refreshKey) {
-      forcedPreflightKeyRef.current = null
-    } else if (forcedPreflightKeyRef.current !== refreshKey) {
-      forcedPreflightKeyRef.current = refreshKey
+    // Keep the attempt while a host is temporarily unchecked; clearing it here causes a force loop.
+    if (refreshKey && !attemptedRefreshKeysRef.current.has(refreshKey)) {
+      attemptedRefreshKeysRef.current.add(refreshKey)
       if (targets.desktop) {
         void refreshPreflightStatus({ force: true })
       }

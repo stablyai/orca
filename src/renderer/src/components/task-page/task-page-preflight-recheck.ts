@@ -25,6 +25,8 @@ export function selectProviderPreflightRefreshTargets(args: {
   preflightStatusChecked: boolean
   preflightStatusCurrent: boolean
   preflightDescribesDesktop: boolean
+  /** A failed desktop request leaves the last status stale and must be retried on the next open. */
+  desktopPreflightFailed: boolean
   runtimePreflightStatusByHostId: ReadonlyMap<
     TaskSourceContext['hostId'],
     RuntimeProviderPreflightStatus
@@ -44,7 +46,7 @@ export function selectProviderPreflightRefreshTargets(args: {
         args.preflightStatusCurrent &&
         args.preflightStatusChecked &&
         args.preflightDescribesDesktop &&
-        toolIsUnavailable(args.taskSource, args.preflightStatus)
+        (args.desktopPreflightFailed || toolIsUnavailable(args.taskSource, args.preflightStatus))
       ) {
         desktop = true
       }
