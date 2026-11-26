@@ -18,7 +18,7 @@ Everything a components panel (`"ui": "components"`) imports comes from `orca`. 
 
 - `Stack` (children: any): `gap?: Gap; align?: Align`
 - `Row` (children: any): `gap?: Gap; align?: Align; justify?: 'start' | 'center' | 'end' | 'between'; wrap?: boolean`
-- `Text` (children: text, Text, Link, Code, Badge, RelativeTime): `tone?: Tone; muted?: boolean; size?: Size; weight?: 'regular' | 'medium' | 'semibold'; truncate?: boolean`
+- `Text` (children: text, Text, Link, Code, Badge, RelativeTime): `tone?: Tone; muted?: boolean; size?: Size; weight?: 'regular' | 'medium' | 'semibold'; truncate?: boolean; tooltip?: string`
 - `Heading` (children: text, Text, Link, Code, Badge, RelativeTime): `level?: 1 | 2 | 3`
 - `Button` (children: text): `variant?: Variant; tone?: Tone; size?: Size; icon?: IconName; tooltip?: string; disabled?: boolean; onPress?: Press`
 - `IconButton` (children: none): `icon: IconName; label: string; tooltip?: string; variant?: Variant; tone?: Tone; size?: Size; disabled?: boolean; onPress?: Press`

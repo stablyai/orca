@@ -155,19 +155,36 @@ function PluginDeclarativeNodeView({
           {children}
         </div>
       )
-    case 'Text':
-      return (
+    case 'Text': {
+      const plainValue =
+        node.children.length > 0 && node.children.every((child) => typeof child === 'string')
+          ? node.children.join('')
+          : null
+      const text = (
         <span
           data-tone={node.props.muted ? 'muted' : (node.props.tone ?? 'neutral')}
           data-size={node.props.size ?? 'sm'}
           data-weight={node.props.weight ?? 'regular'}
           data-truncate={node.props.truncate ?? false}
           data-inline={context.inline}
+          // A truncated plain value is still readable on hover without an author-provided tooltip.
+          title={node.props.truncate && !node.props.tooltip ? (plainValue ?? undefined) : undefined}
           className="min-w-0 break-words text-foreground data-[inline=false]:block data-[size=md]:text-base data-[size=sm]:text-sm data-[size=xs]:text-xs data-[tone=accent]:text-primary data-[tone=danger]:text-destructive data-[tone=muted]:text-muted-foreground data-[tone=success]:text-status-success data-[tone=warning]:text-status-warning-text data-[truncate=true]:truncate data-[weight=medium]:font-medium data-[weight=semibold]:font-semibold"
         >
           {children}
         </span>
       )
+      return node.props.tooltip ? (
+        <Tooltip>
+          <TooltipTrigger asChild>{text}</TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4}>
+            {node.props.tooltip}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        text
+      )
+    }
     case 'Heading':
       // Under the panel's own title, so plugin levels 1–3 are document levels 2–4.
       if (node.props.level === 3) {

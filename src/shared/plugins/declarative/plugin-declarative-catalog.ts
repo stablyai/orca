@@ -51,7 +51,8 @@ const textProps = z
     muted: flag,
     size,
     weight: z.enum(['regular', 'medium', 'semibold']).optional(),
-    truncate: flag
+    truncate: flag,
+    tooltip: label.optional()
   })
   .strict()
 const headingProps = z
