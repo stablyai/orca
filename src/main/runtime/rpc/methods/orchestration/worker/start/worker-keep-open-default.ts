@@ -42,8 +42,12 @@ export function workerStartedByBot(
   isBotChat: (sessionId: string) => boolean
 ): boolean {
   const seen = new Set<string>()
-  let id: string | null = dispatchId
-  while (id && !seen.has(id) && seen.size < 100) {
+  const pending = [dispatchId]
+  while (pending.length > 0 && seen.size < 100) {
+    const id = pending.pop()
+    if (!id || seen.has(id)) {
+      continue
+    }
     seen.add(id)
     const context = db.getDispatchContextById(id)
     if (!context) {
@@ -59,7 +63,12 @@ export function workerStartedByBot(
     if (session && isBotChat(session)) {
       return true
     }
-    id = context.creator_dispatch_id
+    if (context.creator_dispatch_id) {
+      pending.push(context.creator_dispatch_id)
+    }
+    if (context.retry_of_dispatch_id) {
+      pending.push(context.retry_of_dispatch_id)
+    }
   }
   return false
 }

@@ -21,10 +21,7 @@ import {
 import { validateFederatedWorkerStartPlacement } from '../../rpc/methods/orchestration/worker/start/launch/worker-start-validation'
 import { resolveFederatedWorkerStartBudgets } from '../../rpc/methods/orchestration/worker/start/launch/worker-start-budgets'
 import { resolveDispatchCreator } from '../../rpc/methods/orchestration/runs/dispatch-creator'
-import {
-  isReadyRemoteFederatedWorkerStartReceipt,
-  parseRemoteFederatedWorkerStartReceipt
-} from './federated-attach-receipt'
+import * as attachReceipt from './federated-attach-receipt'
 import { isWorkerStartTimeoutWithinTimerLimit } from '../../../../shared/orchestration/orchestration-timing-budgets'
 import {
   federatedFailedReceipt,
@@ -37,14 +34,9 @@ import { recordReadyFederatedDispatch } from './federated-worker-ready-record'
 import { federatedAttachParent, resolveFederatedChildParent } from './federated-worker-child-parent'
 import { reportFailedWorkerStart } from '../workers/turn-stops/failed-worker-start-report'
 import { dispatchWorkerStarted, prepareWorkerStartCard } from '../workers/launch/worker-start-card'
-import {
-  recordWorkerLaunchObservation,
-  workerLaunchAgent
-} from '../workers/launch/worker-launch-observation'
-import {
-  federatedWorkerChatLineage,
-  forwardedFederatedChatLineage
-} from './federated-worker-chat-lineage'
+import * as workerLaunch from '../workers/launch/worker-launch-observation'
+import * as lineage from './federated-worker-chat-lineage'
+import { startsInChatLineage } from '../../rpc/methods/orchestration/worker/start/worker-chat-lineage'
 export async function startFederatedWorker(args: FederatedWorkerStartRequest): Promise<unknown> {
   const { params, runtime, db, task, orchestrationMutation } = args
   const recordStart = prepareWorkerStartCard(runtime, args.callerSession)
@@ -126,8 +118,8 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
       : supportsControlMail
         ? ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION
         : 1
-  const setupDecision = createsWorktree ? (params.setup ?? 'inherit') : 'not_applicable'
-  const chatLineage = federatedWorkerChatLineage(runtime, db, params, args.callerSession)
+  const chatLineage = startsInChatLineage(runtime, db, params, args.callerSession)
+  const botLineage = lineage.federatedWorkerChatLineage(runtime, db, params, args.callerSession)
   const runId = args.bindRunId()
   const started = db.createStartingWorkerDispatch({
     creator: resolveDispatchCreator(runtime, params.from, args.callerSession),
@@ -151,7 +143,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
       agent: params.agent ?? null,
       launch: requestedLaunch,
       timeoutMs: budgets.readinessTimeoutMs,
-      setup: setupDecision,
+      setup: createsWorktree ? (params.setup ?? 'inherit') : 'not_applicable',
       setupSource: createsWorktree
         ? params.setup
           ? 'explicit_request'
@@ -171,7 +163,8 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
   const createdTask = started.task
   const taskForRemote = task ?? createdTask
   const recordStarted = (ready: boolean) => {
-    const agent = workerLaunchAgent(launch) ?? workerLaunchAgent(requestedLaunch)
+    const agent =
+      workerLaunch.workerLaunchAgent(launch) ?? workerLaunch.workerLaunchAgent(requestedLaunch)
     if (!params.terminal) {
       recordStart(dispatchWorkerStarted(ready, started.dispatch.id, taskForRemote, agent))
     }
@@ -180,7 +173,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
   let readyResult: unknown
   let launch = requestedLaunch
   try {
-    const remote = parseRemoteFederatedWorkerStartReceipt(
+    const remote = attachReceipt.parseRemoteFederatedWorkerStartReceipt(
       await runtime.callOrchestrationWorkerServer(
         server.environmentId,
         'orchestration.federationAttachStart',
@@ -211,7 +204,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
           effort: params.effort,
           timeoutMs: budgets.readinessTimeoutMs,
           devMode: params.devMode,
-          ...forwardedFederatedChatLineage(chatLineage, status.capabilities)
+          ...lineage.forwardedFederatedChatLineage(botLineage, status.capabilities)
         },
         budgets.attachDeadlineMs,
         { orchestrationRequestId: orchestrationMutation.requestId },
@@ -224,13 +217,13 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
         'The worker server returned a different Dispatch attachment.'
       )
     }
-    recordWorkerLaunchObservation(db, started.dispatch.id, remote.launch)
+    workerLaunch.recordWorkerLaunchObservation(db, started.dispatch.id, remote.launch)
     launch = resolveFederatedWorkerLaunchReceipt(
       remote.launch,
       requestedLaunch,
       remote.state === 'ready'
     )
-    if (isReadyRemoteFederatedWorkerStartReceipt(remote)) {
+    if (attachReceipt.isReadyRemoteFederatedWorkerStartReceipt(remote)) {
       recordReadyFederatedDispatch(db, started.dispatch.id, remote)
       const readyWorker = db.markWorkerDispatchReady(started.dispatch.id)
       runtime.ensureOrchestrationFederationRelay(runId)

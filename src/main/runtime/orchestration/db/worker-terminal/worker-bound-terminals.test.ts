@@ -159,6 +159,17 @@ describe('terminals bound to a worker', () => {
     expect(closed).toEqual([worker.setup.terminalHandle, worker.tab.terminalHandle])
   })
 
+  it('keeps bot commit-credit lineage when a helper is retried by a person', () => {
+    const worker = startWorker(botChat)
+    const helper = startWorker(personChat, 'succeeded', worker.dispatchId)
+    const retry = startWorker(personChat)
+    db.db
+      .prepare('UPDATE dispatch_contexts SET retry_of_dispatch_id = ? WHERE id = ?')
+      .run(helper.dispatchId, retry.dispatchId)
+
+    expect(workerStartedByBot(db, retry.dispatchId, isBotChat)).toBe(true)
+  })
+
   it("a chat worker a bot's home chat started, and the chat workers under it, close with their terminals", async () => {
     const worker = startWorker(botChat, 'succeeded', undefined, true)
     const helper = startWorker(personChat, 'succeeded', worker.dispatchId, true)

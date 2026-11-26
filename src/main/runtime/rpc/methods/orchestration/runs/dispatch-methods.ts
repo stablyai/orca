@@ -37,6 +37,16 @@ export function dispatchStartsChatWorkers(
   return startsInChatLineage(runtime, db, { from }, caller)
 }
 
+function dispatchPreservesHumanCommitCredit(
+  runtime: Parameters<typeof startsInChatLineage>[0],
+  db: Parameters<typeof startsInChatLineage>[1],
+  creator: ReturnType<typeof resolveDispatchCreator>,
+  from: string | undefined,
+  caller: Parameters<typeof startsInChatLineage>[3]
+): boolean {
+  return dispatchStartsChatWorkers(runtime, db, from, caller) || db.creatorHasBotLineage(creator)
+}
+
 export const ORCHESTRATION_DISPATCH_METHODS = [
   defineOrchestrationMethod({
     name: 'orchestration.dispatch',
@@ -56,6 +66,13 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
       const db = runtime.getOrchestrationDb()
       const creator = resolveDispatchCreator(runtime, params.from, orchestrationCaller)
       const chatLineage = dispatchStartsChatWorkers(runtime, db, params.from, orchestrationCaller)
+      const preserveHumanCommitCredit = dispatchPreservesHumanCommitCredit(
+        runtime,
+        db,
+        creator,
+        params.from,
+        orchestrationCaller
+      )
       const assigneeParty = params.to ? resolveDispatchAssigneeParty(params.to, db) : undefined
       const assignee = assigneeParty?.address
       // A chat has no pane, process or agent to probe: it is reached as mail to it is.
@@ -76,7 +93,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           coordinatorHandle: orcaSessionIdOrHandle(params.from ?? 'coordinator', db),
           workerHandle: assignee ? orcaSessionIdOrHandle(assignee, db) : 'worker',
           devMode: params.devMode,
-          preserveHumanCommitCredit: chatLineage,
+          preserveHumanCommitCredit,
           ...(assignee ? runtime.getTerminalOrchestrationCliTarget(assignee) : {})
         })
         return { dispatch: null, injected: false, dryRun: true, preamble }
