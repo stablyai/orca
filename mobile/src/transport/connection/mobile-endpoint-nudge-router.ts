@@ -1,9 +1,6 @@
 import type { RelayReconnectController } from '../relay/mobile-relay-reconnect-controller'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ForegroundNudgeReason } from './connection-state'
-import type { ScheduleTimer } from '../../platform/timer-scheduler'
-
-const GATED_NETWORK_NUDGE_WINDOW_MS = 30_000
 
 export class MobileEndpointNudgeRouter {
   // Undefined until read, so a join before the first read still counts as a change.
@@ -11,8 +8,6 @@ export class MobileEndpointNudgeRouter {
   // Reads can settle out of order; a result older than the last applied one is stale.
   private readsStarted = 0
   private lastAppliedRead = 0
-  private lastGateLiftAt = Number.NEGATIVE_INFINITY
-  private trailingLift: ReturnType<typeof setTimeout> | null = null
 
   constructor(
     private readonly args: {
@@ -23,15 +18,6 @@ export class MobileEndpointNudgeRouter {
       setForeground: (foreground: boolean) => void
       scheduleDirectProbe: () => void
       readLocalNetwork: () => Promise<string | null>
-      now: () => number
-      setTimer: ScheduleTimer
-      // A resume or network change is fresh evidence, so speculative credentials may be retried.
-      onExternalSignal: (liftOnly?: boolean) => void
-      // A lift that can't dial anything only rearms the gate, so unchanged-network callbacks skip it.
-      canLiftDial: () => boolean
-      // A lifted gate was the only retry owner of a due lease replacement, which a connected relay's nudge skips.
-      retryDueLease: () => void
-      clearTimer: typeof clearTimeout
       onLocalNetworkArrival: () => void
     }
   ) {
@@ -58,56 +44,6 @@ export class MobileEndpointNudgeRouter {
       }
       args.setForeground(true)
     }
-    // iOS repeats callbacks for an unchanged network, and cellular always reads as no network: under a
-    // slow gate, a Wi-Fi move lifts it at once, any other callback at most once per window.
-    if (reason === 'network-change' && args.controller.holdsExternalSignalGate()) {
-      // Cellular never reads as a move, so a lift grants a paused pending its try first; a dial without it does nothing.
-      const liftGate = () => {
-        this.cancelTrailingLift()
-        this.lastGateLiftAt = args.now()
-        args.onExternalSignal(true)
-        const lifting = args.controller.holdsExternalSignalGate()
-        args.controller.handleActiveNudge(args.logical, reason)
-        if (lifting) {
-          args.retryDueLease()
-        }
-      }
-      const sinceLift = args.now() - this.lastGateLiftAt
-      if (sinceLift >= GATED_NETWORK_NUDGE_WINDOW_MS && args.canLiftDial()) {
-        liftGate()
-        void this.routeNetworkChange()
-        return
-      }
-      void this.routeNetworkChange(() => {
-        // The read can settle after the app backgrounds; background keeps its slow cadence.
-        if (args.isForeground()) {
-          liftGate()
-        }
-      })
-      // A suppressed callback may be connectivity returning, so it still earns one retry when the window ends,
-      // if that retry could dial anything (rechecked when it fires).
-      if (args.canLiftDial()) {
-        this.trailingLift ??= args.setTimer(
-          () => {
-            this.trailingLift = null
-            if (
-              !args.isStopped() &&
-              args.isForeground() &&
-              args.controller.holdsExternalSignalGate() &&
-              args.canLiftDial()
-            ) {
-              liftGate()
-            }
-          },
-          Math.max(0, GATED_NETWORK_NUDGE_WINDOW_MS - sinceLift)
-        )
-      }
-      return
-    }
-    // Refill speculative retries on a resume or a real network move, never on a repeated callback.
-    if (reason === 'app-resume') {
-      args.onExternalSignal()
-    }
     args.controller.handleActiveNudge(args.logical, reason)
     if (reason !== 'network-change') {
       args.scheduleDirectProbe()
@@ -118,16 +54,8 @@ export class MobileEndpointNudgeRouter {
     }
   }
 
-  // A newer lift, background or stop supersedes the window's trailing retry.
-  cancelTrailingLift(): void {
-    if (this.trailingLift) {
-      this.args.clearTimer(this.trailingLift)
-      this.trailingLift = null
-    }
-  }
-
   // iOS repeats callbacks for an unchanged network; only a move onto a new Wi-Fi network is an arrival.
-  private async routeNetworkChange(onMoved?: () => void): Promise<void> {
+  private async routeNetworkChange(): Promise<void> {
     const read = ++this.readsStarted
     let network: string | null
     try {
@@ -147,8 +75,6 @@ export class MobileEndpointNudgeRouter {
       return
     }
     this.lastLocalNetwork = network
-    this.args.onExternalSignal()
-    onMoved?.()
     if (network === null) {
       this.args.scheduleDirectProbe()
     } else {

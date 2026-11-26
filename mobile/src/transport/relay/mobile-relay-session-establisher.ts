@@ -8,19 +8,13 @@ import { RelayHostOfflineStreak } from './relay-host-offline-streak'
 import { RelayDirectorHttpError, RelayResolveTimeoutBudget } from './mobile-relay-resume-director'
 import { encodeBase64Url } from '../encryption/mobile-session-id-encoding'
 import { persistResumeConfirmation } from './mobile-relay-credential-rotation'
-import { isExplicitCredentialRejection, isRelayHostOffline } from './relay-credential-eligibility'
+import { isExplicitCredentialRejection } from './relay-credential-eligibility'
 import { relayHostReachabilityForFailure } from './relay-host-reachability-latch'
 import type { MobileRelayCredentialBundle } from '../../host-credentials/mobile-relay-credential-bundle'
 import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import type { StableLogicalRpcClient } from '../connection/stable-logical-rpc-client'
 import type { MobileRelayEndpoint } from '../../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { RELAY_HOST_CLOSE_REASON } from '../../../../src/shared/remote-runtime/relay/relay-host-close-reason'
-
-const PENDING_DIAL_BUDGET = 3
-// A paused pending still gets one automatic try per window, doubling up to an hour, so a valid one
-// is never stranded without a resume or network change.
-const PENDING_PAUSE_MIN_MS = 5 * 60_000
-const PENDING_PAUSE_MAX_MS = 60 * 60_000
 
 function isDirectorRefusal(error: Error | null): boolean {
   return error instanceof RelayDirectorHttpError && error.status === 401
@@ -37,18 +31,6 @@ export class MobileRelaySessionEstablisher {
   private relay: MobileRelayEndpoint
   private readonly hostOfflineStreak: RelayHostOfflineStreak
   private readonly resolveTimeout = new RelayResolveTimeoutBudget()
-  // The director admits one resolve per host per window, so tokens it answered dial least recently
-  // tried first; otherwise current takes every admission and the next token always gets a 503.
-  private readonly directorTried = new Map<string, number>()
-  private directorTrySeq = 0
-  // Pending is speculative: it gets a few failed dials, then pauses until a resume or network change
-  // refills the budget, so failures behind an unchanged state cost a bounded number of dials.
-  private pendingFailures = 0
-  // The last pending dial got a 4404: the cell accepted it, so selection need not reread the keychain.
-  pendingProven = false
-  private pendingPausedUntil = 0
-  private pendingPauseMs = PENDING_PAUSE_MIN_MS
-  private lastLiftGrantAt = Number.NEGATIVE_INFINITY
   private resolvedThisAttempt = false
 
   constructor(
@@ -57,7 +39,6 @@ export class MobileRelaySessionEstablisher {
       controller: RelayReconnectController
       openRelay: MobileEndpointSupervisorDependencies['openRelay']
       randomBytes: (length: number) => Uint8Array
-      now: () => number
       writeBundle: (bundle: MobileRelayCredentialBundle) => Promise<void>
       isActive: () => boolean
       isForeground: () => boolean
@@ -80,45 +61,6 @@ export class MobileRelaySessionEstablisher {
     this.hostOfflineStreak = new RelayHostOfflineStreak(() => args.logical.getLastConnectedAt())
   }
 
-  // A gated lift can dial only a dialable current or grace, or a pending that isn't paused or may take its lift try.
-  liftCanDial(): boolean {
-    const bundle = this.args.bundle()
-    return (
-      (bundle !== null &&
-        this.args.controller.hasDialableCredential(bundle.current, bundle.grace)) ||
-      this.pendingFailures < PENDING_DIAL_BUDGET ||
-      this.args.now() - this.lastLiftGrantAt >= this.pendingPauseMs
-    )
-  }
-
-  // Proven by a 4404 or paused: either way, rereading the keychain for it would find nothing to dial.
-  pendingSettled(): boolean {
-    return this.pendingProven || this.pendingPauseRemainingMs() > 0
-  }
-
-  // Time left before a paused pending may dial again; zero while it isn't paused.
-  pendingPauseRemainingMs(): number {
-    return this.pendingFailures >= PENDING_DIAL_BUDGET
-      ? Math.max(0, this.pendingPausedUntil - this.args.now())
-      : 0
-  }
-
-  // A resume or real network move refills pending. A gated network lift only grants a paused pending one
-  // try per pause window, so a stream of callbacks on an unchanged network can't keep it dialing.
-  refillPendingBudget(liftOnly = false): void {
-    const now = this.args.now()
-    if (!liftOnly) {
-      this.pendingFailures = 0
-      this.pendingPauseMs = PENDING_PAUSE_MIN_MS
-    } else if (
-      this.pendingFailures >= PENDING_DIAL_BUDGET &&
-      now - this.lastLiftGrantAt >= this.pendingPauseMs
-    ) {
-      this.pendingFailures = PENDING_DIAL_BUDGET - 1
-      this.lastLiftGrantAt = now
-    }
-  }
-
   async adoptRelay(relay: MobileRelayEndpoint): Promise<void> {
     // A stopped supervisor’s successor owns routing after removal/re-pairing.
     if (this.args.isStopped()) {
@@ -128,52 +70,28 @@ export class MobileRelaySessionEstablisher {
     this.relay = relay
   }
 
-  // Try the next credential only after the relay refuses one. unconfirmed: the last failure used the
-  // unconfirmed pending install, or ended in a director 401 that may be stale; only the cell can tell.
+  // Try the next credential only after the relay refuses one; pending comes last (relayDialCandidates).
   async dialEligible(
     credentials: { token: string; version: number }[]
   ): Promise<
     | { outcome: 'established' }
     | { outcome: 'aborted' }
-    | { outcome: 'failed'; error: Error | null; unconfirmed: boolean; evidence?: Error }
+    | { outcome: 'failed'; error: Error | null; evidence?: Error }
   > {
     let lastError: Error | null = null
     let refusal: Error | undefined
-    let usedPending = false
-    const pendingToken = this.args.bundle()?.pending?.token
-    // Keep only this bundle's tokens, so retention stays at three.
-    for (const token of this.directorTried.keys()) {
-      if (!credentials.some((credential) => credential.token === token)) {
-        this.directorTried.delete(token)
-      }
-    }
-    const lastTried = (token: string) => this.directorTried.get(token) ?? -1
-    if (this.pendingFailures >= PENDING_DIAL_BUDGET && this.args.now() >= this.pendingPausedUntil) {
-      // The window lapsed: one more try, and a failure pauses for twice as long.
-      this.pendingFailures = PENDING_DIAL_BUDGET - 1
-    }
-    const pendingPaused = this.pendingFailures >= PENDING_DIAL_BUDGET
-    const ordered = credentials
-      .filter((credential) => !(pendingPaused && credential.token === pendingToken))
-      .sort((a, b) => lastTried(a.token) - lastTried(b.token))
-    if (ordered.length === 0) {
-      // Only a paused pending is left: wait, undialed, for the next resume or network change.
-      return { outcome: 'failed', error: null, unconfirmed: true }
-    }
-    this.resolvedThisAttempt = false
     let directorRefused = false
-    for (const credential of ordered) {
+    const pendingToken = this.args.bundle()?.pending?.token
+    this.resolvedThisAttempt = false
+    for (const credential of credentials) {
       // After a director 401 the rest only redial the cell that sent us there, which can know only the newer
       // pending install; redialing current or grace would just repeat its wrong-assignment answer.
       if (directorRefused && credential.token !== pendingToken) {
         continue
       }
-      usedPending = credential.token === pendingToken
       // The director admits one resolve per host per window, so after any lookup the rest only dial the cell.
       const result = await this.dial(credential, !this.resolvedThisAttempt)
       if (result.ok) {
-        this.directorTried.clear()
-        this.refillPendingBudget()
         return { outcome: 'established' }
       }
       if (result.error instanceof RelayDialAbortedError) {
@@ -181,24 +99,9 @@ export class MobileRelaySessionEstablisher {
       }
       lastError = result.error
       this.args.onDialFailure(result.error)
-      // Only a 401 used the admission; a rate-limited 503/429 never reached the token, so it goes first next.
-      if (isDirectorRefusal(result.error)) {
-        this.directorTried.set(credential.token, ++this.directorTrySeq)
-      }
-      // A 4404 comes after the cell accepted the credential, so it proves pending rather than spends it.
-      if (usedPending) {
-        this.pendingProven = isRelayHostOffline(result.error)
-        if (!this.pendingProven && ++this.pendingFailures === PENDING_DIAL_BUDGET) {
-          this.pendingPausedUntil = this.args.now() + this.pendingPauseMs
-          this.pendingPauseMs = Math.min(this.pendingPauseMs * 2, PENDING_PAUSE_MAX_MS)
-        }
-      }
       if (isExplicitCredentialRejection(result.error)) {
-        // Why: a rejected version stays invalid; retry only the later credentials. Pending is spared:
-        // its install can still commit after this refusal, so it only spends its retry budget.
-        if (!usedPending) {
-          this.args.controller.recordRejectedCredential(credential.version)
-        }
+        // Why: a rejected version stays invalid; retry only the later credentials.
+        this.args.controller.recordRejectedCredential(credential.version)
         refusal ??= result.error
         continue
       }
@@ -212,7 +115,6 @@ export class MobileRelaySessionEstablisher {
     return {
       outcome: 'failed',
       error: lastError,
-      unconfirmed: usedPending || isDirectorRefusal(lastError),
       // A verdict-less last failure (say, a director 503 for pending) must not reopen the refused verdict.
       evidence: relayHostReachabilityForFailure(lastError) === 'connecting' ? refusal : undefined
     }

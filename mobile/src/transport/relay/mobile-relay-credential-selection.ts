@@ -15,7 +15,6 @@ export async function selectDialableRelayCredentials(args: {
   bundle: MobileRelayCredentialBundle | null
   controller: RelayReconnectController
   readBundle: () => Promise<MobileRelayCredentialBundle | null>
-  pendingSettled?: boolean
   onAdoptedFresherBundle: () => void
 }): Promise<{
   bundle: MobileRelayCredentialBundle | null
@@ -25,18 +24,12 @@ export async function selectDialableRelayCredentials(args: {
   const memoryCredentials = memory
     ? args.controller.eligibleCredentials(...relayDialCandidates(memory))
     : []
-  // Pending alone is speculative, so reread durable state for a fresher credential, unless a 4404 just
-  // proved it or it is paused: the 5-15 s offline cadence and a paused pending's gate lifts must not read the
-  // keychain each time.
-  const rereadForPending =
-    memoryCredentials.every((credential) => credential.token === memory?.pending?.token) &&
-    !args.pendingSettled
-  if (memoryCredentials.length > 0 && !rereadForPending) {
+  if (memoryCredentials.length > 0) {
     // Keep newer in-memory resume state when its durable write failed.
     return { bundle: memory, credentials: memoryCredentials }
   }
   const disk = await args.readBundle().catch(() => null)
-  if (disk && !(memoryCredentials.length > 0 && disk.current.token === memory?.current.token)) {
+  if (disk) {
     const diskCredentials = args.controller.eligibleCredentials(...relayDialCandidates(disk))
     if (diskCredentials.length > 0) {
       args.controller.acceptFreshCredential(disk.current.version)
@@ -44,5 +37,5 @@ export async function selectDialableRelayCredentials(args: {
       return { bundle: disk, credentials: diskCredentials }
     }
   }
-  return { bundle: memory ?? disk, credentials: memoryCredentials }
+  return { bundle: memory ?? disk, credentials: [] }
 }

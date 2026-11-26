@@ -52,10 +52,7 @@ export class MobileEndpointSupervisor {
   ) {
     this.hysteresis = new MobileEndpointHysteresis(dependencies.now())
     this.logRelay = createRelayRecoveryLog(dependencies.now, dependencies.onLog)
-    // A due lease rotation rides every retry tick, so a gated reprobe still replaces a live session.
-    this.relayReconnect = new RelayReconnectController(dependencies, () =>
-      this.recoverRelay(this.relayRotationPending)
-    )
+    this.relayReconnect = new RelayReconnectController(dependencies, this.recoverRelay.bind(this))
     this.relayReconnect.reportRecoveryTo(logical)
     this.nudgeRouter = new MobileEndpointNudgeRouter({
       logical,
@@ -65,12 +62,6 @@ export class MobileEndpointSupervisor {
       setForeground: (foreground) => this.setForeground(foreground),
       scheduleDirectProbe: () => this.directProbe.schedule(0),
       readLocalNetwork: dependencies.readLocalNetwork,
-      now: dependencies.now,
-      setTimer: dependencies.setTimer,
-      clearTimer: dependencies.clearTimer,
-      onExternalSignal: (liftOnly) => this.sessionEstablisher.refillPendingBudget(liftOnly),
-      canLiftDial: () => this.sessionEstablisher.liftCanDial(),
-      retryDueLease: () => void (this.relayRotationPending && this.recoverRelay(true)),
       onLocalNetworkArrival: () => this.directProbe.arrive()
     })
     this.leaseRotation = new RelayLeaseRotationTimer(dependencies, () => {
@@ -86,7 +77,6 @@ export class MobileEndpointSupervisor {
       controller: this.relayReconnect,
       openRelay: dependencies.openRelay,
       randomBytes: dependencies.randomBytes,
-      now: dependencies.now,
       writeBundle: dependencies.writeBundle,
       isActive: () => this.isActive(),
       isForeground: () => this.backgroundGrace.isForeground(),
@@ -206,7 +196,6 @@ export class MobileEndpointSupervisor {
   setForeground(foreground: boolean): void {
     if (!foreground) {
       this.replaceQueuedBehindRecovery = false
-      this.nudgeRouter.cancelTrailingLift()
     }
     this.backgroundGrace.setForeground(foreground)
     if (foreground && this.relayRotationPending) {
@@ -219,7 +208,6 @@ export class MobileEndpointSupervisor {
   stop(): void {
     this.stopped = true
     this.replaceQueuedBehindRecovery = false
-    this.nudgeRouter.cancelTrailingLift()
     this.directProbe.stop()
     this.unsubscribeState?.()
     this.unsubscribeState = null
@@ -262,14 +250,11 @@ export class MobileEndpointSupervisor {
     let retryAfterOperation = false
     // Only an operation that withdrew without dialing replays a queued race; a failed dial books its own retry.
     let withdrewWithoutDial = false
-    // A paused pending left nothing to dial; a lease retry before the pause ends would only reread the keychain.
-    let leaseRetryFloorMs = 5000
     try {
       const selection = await selectDialableRelayCredentials({
         bundle: this.bundle,
         controller: this.relayReconnect,
         readBundle: () => this.dependencies.readBundle(this.hostId),
-        pendingSettled: this.sessionEstablisher.pendingSettled(),
         onAdoptedFresherBundle: () => this.logRelay('adopted fresher durable credential bundle')
       })
       this.bundle = selection.bundle
@@ -304,9 +289,6 @@ export class MobileEndpointSupervisor {
         // Withdrawal is not failure; booking cooldown would delay genuine later recovery.
         return
       }
-      if (dialed.error === null) {
-        leaseRetryFloorMs += this.sessionEstablisher.pendingPauseRemainingMs()
-      }
       // Record a dial completing after cleanup without recreating foreground timers.
       const scheduleRetry = (!forceReplacement || ownsRecovery) && this.isActive()
       this.relayReconnect.registerFailure(dialed.error, scheduleRetry, dialed)
@@ -317,7 +299,7 @@ export class MobileEndpointSupervisor {
     } finally {
       this.operationInFlight = false
       if (forceReplacement && this.relayRotationPending && this.isActive()) {
-        this.leaseRotation.armRetry(this.relayReconnect.retryDelayMs(leaseRetryFloorMs))
+        this.leaseRotation.armRetry(this.relayReconnect.retryDelayMs(5000))
       }
       // Why: an unforced operation that skipped its dial (direct redialing) or was aborted
       // schedules no retry, so a direct-grace race queued behind it would wait for the next state change.
