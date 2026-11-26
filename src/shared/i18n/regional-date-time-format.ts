@@ -240,6 +240,16 @@ function systemZoneKey(): string {
   }
   return `${zoneName}/${JANUARY.getTimezoneOffset()}/${JULY.getTimezoneOffset()}`
 }
+
+// A formatter built inside the recheck window may already be in a newer zone; file it under that.
+function builtZoneKey(formatter: RegionalDateTimeFormat): string {
+  const built = formatter.resolvedOptions().timeZone
+  if (built && built !== zoneName) {
+    zoneName = built
+    zoneNameReadAt = Date.now()
+  }
+  return systemZoneKey()
+}
 const formats = new WeakMap<Intl.DateTimeFormatOptions, Map<string, RegionalDateTimeFormat>>()
 
 /** Cached per options object (pass module constants) and rebuilt when the language, OS region or
@@ -249,8 +259,9 @@ export function regionalDateTimeFormat(
   locale?: string,
   timeZone?: string
 ): RegionalDateTimeFormat {
-  const zone = timeZone ?? (options.timeZone === undefined ? systemZoneKey() : '')
-  const key = `${locale}|${osDateTimeRegionKey()}|${zone}`
+  const systemZone = timeZone === undefined && options.timeZone === undefined
+  const zone = timeZone ?? (systemZone ? systemZoneKey() : '')
+  let key = `${locale}|${osDateTimeRegionKey()}|${zone}`
   let byKey = formats.get(options)
   if (!byKey) {
     byKey = new Map()
@@ -259,6 +270,9 @@ export function regionalDateTimeFormat(
   let formatter = byKey.get(key)
   if (!formatter) {
     formatter = createRegionalDateTimeFormat(timeZone ? { ...options, timeZone } : options, locale)
+    if (systemZone) {
+      key = `${locale}|${osDateTimeRegionKey()}|${builtZoneKey(formatter)}`
+    }
     if (byKey.size >= MAX_KEYS_PER_OPTIONS) {
       dropOldest(byKey)
     }
