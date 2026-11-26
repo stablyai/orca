@@ -21,8 +21,12 @@ import type { GlobalSettings } from '../../../../../shared/settings/global-setti
 
 export const NATIVE_CHAT_APPEARANCE_ROOT_CLASS = 'native-chat-appearance bg-chat-canvas'
 // One fixed bottom gap: the last row never hangs its controls; rail padding covers its 34px macOS overlay.
-export function nativeChatTranscriptOuterClass(railVisible: boolean): string {
-  return `native-chat-transcript-inset pt-10 pb-[calc(var(--spacing)*5+var(--native-chat-worker-pill-room,0px))] ${railVisible ? 'px-9' : 'px-3 sm:px-4'}`
+/** A subagent sheet's header already tops its transcript, so it pads like the sheet's body. */
+export function nativeChatTranscriptOuterClass(railVisible: boolean, inSheet = false): string {
+  if (inSheet) {
+    return 'px-4 py-3'
+  }
+  return `native-chat-transcript-inset pt-10 pb-5 ${railVisible ? 'px-9' : 'px-3 sm:px-4'}`
 }
 export const NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS =
   'mx-auto flex w-full max-w-(--chat-content-max-width) flex-col gap-5 px-[5px]'

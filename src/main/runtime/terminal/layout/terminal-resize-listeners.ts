@@ -16,16 +16,19 @@ import type {
 import {
   classifyIndexedWorkerTerminalProcessIncarnation,
   indexWorkerTerminalProcesses,
-  type WorkerTerminalProcessIndex
+  type WorkerTerminalHostInventory
 } from '../../orchestration/terminal-authority/release/worker-terminal-process-liveness'
+import { InProcessWorkerExitEvidence } from '../../orchestration/terminal-authority/release/in-process-worker-exit-evidence'
 import { parseWorkerTerminalHostScope } from '../../../../shared/orchestration/workers/worker-terminal-host-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import {
   LOCAL_EXECUTION_HOST_ID,
-  toSshExecutionHostId
+  toSshExecutionHostId,
+  type ExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
 
 export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApplyMobileDisplayMode {
+  private readonly inProcessWorkerExits = new InProcessWorkerExitEvidence()
   subscribeToTerminalResize(
     ptyId: string,
     listener: (event: {
@@ -66,7 +69,7 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
   async inspectTerminalProcessIncarnationLiveness(
     processIncarnation: string,
     serializedHostScope: string | null,
-    inventories?: Map<string, Promise<WorkerTerminalProcessIndex | null>>
+    inventories?: Map<string, Promise<WorkerTerminalHostInventory | null>>
   ): Promise<'live' | 'exited' | 'unverifiable'> {
     const structuredSessionId = sessionIdFromStructuredWorkerIncarnation(processIncarnation)
     if (structuredSessionId) {
@@ -74,24 +77,61 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
       return observeStructuredWorker({ sessionId: structuredSessionId }).status
     }
     const hostScope = parseWorkerTerminalHostScope(serializedHostScope)
-    const controller = this.ptyController
-    if (!hostScope || !controller?.listProcesses) {
+    if (!hostScope) {
       return 'unverifiable'
     }
     const hostId =
       hostScope.kind === 'ssh' ? toSshExecutionHostId(hostScope.targetId) : LOCAL_EXECUTION_HOST_ID
-    let listing = inventories?.get(hostId)
+    let listing = inventories?.get(hostId) ?? null
     if (!listing) {
-      listing = withTimeoutResult(
-        controller.listProcesses(hostId),
-        PTY_CONTROLLER_LIST_TIMEOUT_MS
-      ).then((listed) => (listed.ok ? indexWorkerTerminalProcesses(listed.value) : null))
+      listing = this.listHostInventoryForExitProof(hostId)
+      if (!listing) {
+        return 'unverifiable'
+      }
       inventories?.set(hostId, listing)
     }
-    const index = await listing
-    return index
-      ? classifyIndexedWorkerTerminalProcessIncarnation(processIncarnation, index)
-      : 'unverifiable'
+    const inventory = await listing
+    if (!inventory) {
+      return 'unverifiable'
+    }
+    // This process's own provider can vouch only for PTYs it saw exit; others may live in a daemon it never reached.
+    const absenceProvesExit =
+      !inventory.inProcessOwner ||
+      this.inProcessWorkerExits.has(this.getOrchestrationDbIfAvailable(), processIncarnation)
+    return classifyIndexedWorkerTerminalProcessIncarnation(
+      processIncarnation,
+      inventory.index,
+      absenceProvesExit
+    )
+  }
+
+  /** An SSH relay answers only for its own host; locally, the provider that answered decides what silence means. */
+  private listHostInventoryForExitProof(
+    hostId: ExecutionHostId
+  ): Promise<WorkerTerminalHostInventory | null> | null {
+    const controller = this.ptyController
+    const listed =
+      hostId === LOCAL_EXECUTION_HOST_ID
+        ? controller?.listLocalProcessesForExitProof?.()
+        : controller?.listProcesses?.(hostId).then((processes) => ({
+            processes,
+            inProcessOwner: false
+          }))
+    if (!listed) {
+      return null
+    }
+    return withTimeoutResult(listed, PTY_CONTROLLER_LIST_TIMEOUT_MS).then((result) =>
+      result.ok
+        ? {
+            index: indexWorkerTerminalProcesses(result.value.processes),
+            inProcessOwner: result.value.inProcessOwner
+          }
+        : null
+    )
+  }
+
+  recordInProcessPtyExit(processIncarnation: string): void {
+    this.inProcessWorkerExits.record(this.getOrchestrationDbIfAvailable(), processIncarnation)
   }
 
   protected getTerminalTopologyRevision(worktreeId: string): number {

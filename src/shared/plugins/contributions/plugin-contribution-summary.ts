@@ -6,6 +6,7 @@ import {
 } from './plugin-contribution-points'
 import type { PluginManifest } from '../manifest/plugin-manifest'
 import type { PluginFileMatch } from './plugin-file-match'
+import { pluginMcpServerListing } from './plugin-mcp-server-contribution'
 import { pluginFieldDoc, PLUGIN_MANIFEST_V2_SINCE } from '../manifest/plugin-schema-field-docs'
 
 export const PLUGIN_CONTRIBUTION_SUMMARY_LIMIT = 64
@@ -46,6 +47,14 @@ export const pluginContributionSummarySchema = z
     // Nothing readable is unknown, not "adds nothing".
     return known.length === 0 && items.length > 0 ? undefined : known
   })
+
+// Why clipped: the summary's detail holds 160 characters, and a command line can be longer.
+const pluginMcpServerSummaryDetail = (
+  server: PluginManifest['contributes']['mcpServers'][number]
+): string => {
+  const { detail } = pluginMcpServerListing(server)
+  return detail.length > 160 ? `${detail.slice(0, 159)}…` : detail
+}
 
 function fileMatchDetail(match: PluginFileMatch): string | undefined {
   return [...match.extensions, ...match.filenames].join(', ') || undefined
@@ -93,7 +102,8 @@ export function pluginContributionSummary(
       (newFile) => newFile.extension
     ),
     // Each item's text, or its id when it shows only an icon.
-    ...named('statusBarItems', c.statusBarItems, (item) => item.text || item.id)
+    ...named('statusBarItems', c.statusBarItems, (item) => item.text || item.id),
+    ...named('mcpServers', c.mcpServers, (server) => server.name, pluginMcpServerSummaryDetail)
   ].slice(0, PLUGIN_CONTRIBUTION_SUMMARY_LIMIT)
 }
 

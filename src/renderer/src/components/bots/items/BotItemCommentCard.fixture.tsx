@@ -15,7 +15,7 @@ const asker = { kind: 'bot' as const, botId: fixtureCos.id, chatId: 'chat-home' 
 const actions: BotItemQuickReplyActions = {
   send: () => {},
   edit: () => {},
-  recover: () => {},
+  restore: () => true,
   type: () => {}
 }
 

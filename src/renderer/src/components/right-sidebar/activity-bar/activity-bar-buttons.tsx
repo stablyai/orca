@@ -280,9 +280,11 @@ export function ActivityBarButton({
                 : 'text-muted-foreground hover:bg-foreground/5 hover:text-foreground'
             )
           : cn(
-              'shrink-0',
+              'shrink-0 [&>svg]:transition-opacity',
               isTop ? 'h-[36px] w-9' : 'w-10 h-10',
-              active ? 'text-foreground' : 'text-muted-foreground/60 hover:text-muted-foreground'
+              active
+                ? 'text-foreground'
+                : 'text-muted-foreground [&>svg]:opacity-60 hover:[&>svg]:opacity-100 forced-colors:[&>svg]:opacity-100'
             )
       )}
       // Enter and Space fire click with detail 0.

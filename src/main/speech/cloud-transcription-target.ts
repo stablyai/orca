@@ -8,9 +8,9 @@ import {
 import {
   canReadOpenAiCompatibleSpeechProvider,
   hasOpenAiCompatibleSpeechProvider,
-  openAiCompatibleTranscriptionUrl,
   readOpenAiCompatibleSpeechProvider
 } from './openai-compatible-speech-provider-store'
+import { openAiCompatibleTranscriptionUrl } from '../../shared/speech/openai-compatible-endpoint'
 
 export const OPENAI_TRANSCRIPTION_URL = 'https://api.openai.com/v1/audio/transcriptions'
 

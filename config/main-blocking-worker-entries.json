@@ -23,6 +23,7 @@
   "src/main/computer/computer-sidecar.ts": "Dedicated utility/child-process entry; blocking work stays off Electron main.",
   "src/main/ai-vault/scan-service/session-scanner-service-entry.ts": "Dedicated utility/child-process entry; blocking work stays off Electron main.",
   "src/main/native-chat/transcript-filesystem/process/wsl-transcript-fs-process-entry.ts": "Dedicated utility/child-process entry; blocking work stays off Electron main.",
+  "src/main/codex/configuration/settings/codex-config-sync-wsl-entry.ts": "WSL guest program (build-wsl-guest.mjs) run on Orca's pinned Node inside the distro; never loaded by Electron main.",
   "src/main/ipc/filesystem/watcher-process/parcel-watcher-process-entry.ts": "Dedicated utility/child-process entry; blocking work stays off Electron main.",
   "src/main/orcad/orcad-local-serve-selection-entry.ts": "Dedicated utility/child-process entry; blocking work stays off Electron main.",
   "src/main/bots/db-worker/bots-db-worker-entry.ts": "Dedicated worker-thread entry; bot store SQL stays off Electron main and orcad's loop.",
