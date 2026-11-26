@@ -11,6 +11,7 @@ import {
 import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/shell/launch/windows-terminal-shell'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { recognizeAgentLaunchCommand } from '../../../../shared/agent-launch/startup/agent-command-line-intent'
+import { readLaunchPosition } from '../../../../shared/agent-launch/startup/launch-position'
 import {
   readCodexDirectLaunch,
   withCodexDirectLaunchCommand
@@ -91,19 +92,30 @@ export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
     (configuredCommand && recordedCommand?.startsWith(configuredCommand)
       ? configuredCommand
       : undefined)
+  const authoredLaunch = authored && root && authoredCommand ? openCodeLaunch.command : undefined
+  const cwdLaunch =
+    authoredLaunch && shell === 'posix' && /^cd[ \t]/.test(authoredLaunch)
+      ? readLaunchPosition(authoredLaunch, shell)
+      : null
+  const cwdEnd =
+    authoredLaunch && cwdLaunch?.cwd
+      ? authoredLaunch.lastIndexOf('&&', cwdLaunch.invocationStart)
+      : -1
+  const commandStart = cwdEnd < 0 ? 0 : cwdEnd + 3
+  const agentAfterCwd = authoredLaunch?.slice(commandStart)
   const authoredPrefix =
     authoredCommand &&
-    !openCodeLaunch.command?.startsWith(authoredCommand) &&
+    !agentAfterCwd?.startsWith(authoredCommand) &&
     launchAgent === 'claude-agent-teams'
       ? [
           addClaudeTeammateModeAuto(authoredCommand),
           addClaudeTeammateModeInProcess(authoredCommand)
-        ].find((command) => openCodeLaunch.command?.startsWith(command))
+        ].find((command) => agentAfterCwd?.startsWith(command))
       : authoredCommand
   const authoredRootLaunch =
     authored && authoredPrefix
       ? planClaudeRootLaunch({
-          command: openCodeLaunch.command,
+          command: agentAfterCwd,
           agent: launchAgent,
           shell,
           isRoot: root,
@@ -111,7 +123,9 @@ export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
           authoredPrefix
         })
       : null
-  const beforeTeams = authoredRootLaunch?.command ?? openCodeLaunch.command
+  const beforeTeams = authoredRootLaunch
+    ? (authoredLaunch?.slice(0, commandStart) ?? '') + authoredRootLaunch.command
+    : openCodeLaunch.command
   const inlineImagesEnabled = applyTerminalImageEnvironment(
     env,
     input.envToDelete,

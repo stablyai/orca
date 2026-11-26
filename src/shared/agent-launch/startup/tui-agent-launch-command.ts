@@ -27,7 +27,7 @@ import {
   withManagedAgentProgram,
   type ManagedAgentCommands
 } from './managed-agent-launch-program'
-import { withAgentTerminalInputArgs } from './codex-startup-delivery'
+import { withAgentTerminalInputArgs } from './codex-terminal-input-args'
 import { antigravityModelArgs } from './antigravity-resume-model-args'
 import {
   STARTUP_UPDATE_PROMPT_SUPPRESSION_ARGS,

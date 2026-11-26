@@ -25318,6 +25318,10 @@
     "delete": "Delete"
   },
   "terminal": {
+    "agentStartup": {
+      "unavailable": "The agent could not be found on this host.",
+      "unknown": "The host could not verify the agent installation."
+    },
     "recentImages": {
       "pasted": "Pasted image",
       "open": "Open preview",

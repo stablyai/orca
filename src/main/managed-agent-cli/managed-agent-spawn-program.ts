@@ -33,9 +33,9 @@ import { resolveCommandOnLocalPath } from '../ipc/command-path/command-path-reso
 import { isExecutableFile } from '../ipc/command-path/command-path-directory'
 import {
   readLocalTerminalAgentProgram,
+  readWslTerminalAgentProgram,
   type TerminalAgentProgram
 } from '../preflight/agent-command-detection'
-import { probeWslCommandsOnPath } from '../ipc/preflight/preflight-wsl-agent-detection'
 import { prepareNativeChatSignIn } from './prepare-native-chat-sign-in'
 
 type SpawnSettings = Parameters<typeof prepareNativeChatSignIn>[1]
@@ -119,13 +119,7 @@ async function selectProgram(
   pinned: string | undefined
 ): Promise<TerminalAgentProgram> {
   if (spawn.codexRuntime === 'wsl') {
-    const found = await probeWslCommandsOnPath({ distro: spawn.expectedWslDistro ?? undefined }, [
-      program
-    ])
-    if (!found) {
-      return { kind: 'unknown' }
-    }
-    return found.has(program) ? { kind: 'by-name', path: program } : { kind: 'unavailable' }
+    return readWslTerminalAgentProgram({ distro: spawn.expectedWslDistro ?? undefined }, program)
   }
   if (spawn.sshTarget) {
     // SSH panes execute the name in the guest shell, with no desktop runtime paths.

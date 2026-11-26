@@ -32,7 +32,6 @@ export async function buildRuntimeAgentTeamsLaunchPlan(args: {
   )
   const plan =
     args.connectionId ||
-    process.platform === 'win32' ||
     (pickerTeams && recognizeAgentLaunchCommand(sourceCommand)?.agent === 'claude-agent-teams')
       ? undefined
       : await buildClaudeAgentTeamsLaunchPlan({

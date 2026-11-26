@@ -9,12 +9,23 @@ import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { alignManagedAgentLaunchAtSpawn } from '../../../../managed-agent-cli/managed-agent-spawn-program'
 import { detectInstalledAgentInventory } from '../../../../preflight/installed-agent-detection'
+import {
+  detectAgentCommandsOnHost,
+  readLocalTerminalAgentProgram,
+  readWslTerminalAgentProgram
+} from '../../../../preflight/agent-command-detection'
+import { invalidateWslGuestEnvironment } from '../../../../wsl/execution/wsl-guest-environment'
 import { refreshAgentsOnHost } from '../../../../preflight/workspace-agent-detection'
 import { resolveClaudeTeamsInvocation } from '../../../terminal/launch/claude-teams-invocation'
 
 const fixture = vi.hoisted(() => {
-  const pending: { installs?: Promise<void> } = {}
-  return Object.assign(pending, { root: '', path: '', enumerate: vi.fn(() => []) })
+  const pending: { installs?: Promise<void>; onScan?: () => void } = {}
+  return Object.assign(pending, {
+    root: '',
+    path: '',
+    enumerate: vi.fn(() => []),
+    wslProbe: vi.fn(async () => new Set(['claude']))
+  })
 })
 
 vi.mock('../../../../../shared/app-lifecycle/app-environment', async (original) => {
@@ -48,7 +59,9 @@ vi.mock(
       detectCommandsInInstallDirs: async (
         ...args: Parameters<typeof detection.detectCommandsInInstallDirs>
       ) => {
-        await fixture.installs
+        const pending = fixture.installs
+        fixture.onScan?.()
+        await pending
         return detection.detectCommandsInInstallDirs(...args)
       }
     }
@@ -63,7 +76,7 @@ vi.mock('../../../../ipc/preflight/preflight-runtime-target', async (original) =
 })
 vi.mock('../../../../ipc/preflight/preflight-wsl-agent-detection', async (original) => ({
   ...(await original<typeof WslAgentDetection>()),
-  detectWslCommandsOnPath: async () => new Set(['claude'])
+  probeWslCommandsOnPath: fixture.wslProbe
 }))
 
 const windows = process.platform === 'win32'
@@ -76,11 +89,13 @@ beforeEach(async () => {
   fixture.root = await mkdtemp(join(tmpdir(), 'orca-terminal-inventory-'))
   fixture.path = join(fixture.root, 'path')
   fixture.enumerate.mockClear()
+  fixture.wslProbe.mockClear()
 })
 
 afterEach(async () => {
   vi.useRealTimers()
   fixture.installs = undefined
+  fixture.onScan = undefined
   await rm(fixture.root, { recursive: true, force: true })
 })
 
@@ -245,6 +260,49 @@ it('keeps local install selection after a WSL inventory refresh', async () => {
   )
   expect(result.command).toBe(quoted(user))
   expect(fixture.enumerate).toHaveBeenCalledTimes(1)
+})
+
+it('shares guest inventory until that distro is invalidated', async () => {
+  const target = { distro: 'TestUbuntu' }
+  invalidateWslGuestEnvironment(target.distro)
+  await expect(
+    Promise.all([
+      readWslTerminalAgentProgram(target, 'claude'),
+      readWslTerminalAgentProgram(target, 'codex')
+    ])
+  ).resolves.toEqual([{ kind: 'by-name', path: 'claude' }, { kind: 'unavailable' }])
+  await readWslTerminalAgentProgram(target, 'claude')
+  expect(fixture.wslProbe).toHaveBeenCalledTimes(1)
+  invalidateWslGuestEnvironment(target.distro)
+  await readWslTerminalAgentProgram(target, 'claude')
+  expect(fixture.wslProbe).toHaveBeenCalledTimes(2)
+})
+
+it('uses the warm snapshot during refresh and releases a timed-out scan slot', async () => {
+  const user = await executable('.local', 'bin', claudeName)
+  await readLocalTerminalAgentProgram('claude', shell)
+  const entered = Promise.withResolvers<void>()
+  const held = Promise.withResolvers<void>()
+  fixture.onScan = entered.resolve
+  fixture.installs = held.promise
+  vi.useFakeTimers()
+  const refresh = detectAgentCommandsOnHost(['claude'], { refresh: true }).catch(() => null)
+  try {
+    await entered.promise
+    await expect(readLocalTerminalAgentProgram('claude', shell)).resolves.toEqual({
+      kind: 'full-path',
+      path: user
+    })
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(await refresh).toBeNull()
+    fixture.installs = undefined
+    await expect(readLocalTerminalAgentProgram('claude', shell, true)).resolves.toEqual({
+      kind: 'full-path',
+      path: user
+    })
+  } finally {
+    held.resolve()
+  }
 })
 
 it.skipIf(windows)('expands the executable head for standalone Agent Teams', async () => {

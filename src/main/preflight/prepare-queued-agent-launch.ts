@@ -100,7 +100,7 @@ async function prepareForPty(
     : process.platform === 'win32' && !wsl
       ? resolveWindowsShellStartupFamily(shellPreference)
       : 'posix'
-  const { command, launchConfig } = await alignManagedAgentLaunchAtSpawn(
+  const { command, launchConfig, blocked } = await alignManagedAgentLaunchAtSpawn(
     {
       launchCommand: launch.command,
       codexRuntime: wsl ? 'wsl' : 'host',
@@ -127,6 +127,7 @@ async function prepareForPty(
               shell,
               launch.images !== false && settings?.terminalInlineImages !== false
             ),
-    launchConfig
+    launchConfig,
+    blocked
   }
 }

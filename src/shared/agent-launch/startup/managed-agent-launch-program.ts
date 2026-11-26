@@ -1,7 +1,7 @@
 import { quoteWindowsCmdArgument } from '@orca/process-host/windows-command-line'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../catalog/tui-agent-config'
 import type { TuiAgent } from '../catalog/tui-agent'
-import { readLaunchArguments, readLaunchPosition, type LaunchPosition } from './launch-position'
+import { readLaunchArguments, type LaunchPosition } from './launch-position'
 import { clearEnvCommand, quoteStartupArg, type AgentStartupShell } from './tui-agent-startup-shell'
 
 /** Full paths to user-installed CLIs the terminal can't launch by name. */
@@ -122,9 +122,9 @@ export function withManagedAgentProgram(
   ) {
     return command
   }
-  const launch = readLaunchPosition(command, args.shell)
-  // A result for the bare stock program can't answer a lookup for an explicit executable.
-  return launch && matchesStockLaunchProgram(launch.executable, stock, args.platform)
-    ? replaceLaunchExecutable(command, args.shell, launch, path)
+  // These builders only substitute the stock head. The host parses saved shell prefixes.
+  const head = /^([ \t]*)([\w.-]+)(?=$|[ \t])/.exec(command)
+  return head && matchesStockLaunchProgram(head[2], stock, args.platform) && path !== head[2]
+    ? head[1] + launchProgramHead(path, args.shell) + command.slice(head[0].length)
     : command
 }

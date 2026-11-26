@@ -11,13 +11,6 @@ export type WslPreflightTarget = {
   distro?: string
 }
 
-export async function detectWslCommandsOnPath(
-  wslTarget: WslPreflightTarget,
-  commands: readonly string[]
-): Promise<Set<string>> {
-  return (await probeWslCommandsOnPath(wslTarget, commands)) ?? new Set()
-}
-
 export async function probeWslCommandsOnPath(
   wslTarget: WslPreflightTarget,
   commands: readonly string[]

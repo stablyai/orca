@@ -74,18 +74,18 @@ export function bindQueuedStartupCommandDelivery(session: ConnectPanePtySession)
         if (!isCurrent()) {
           return
         }
-        const { preparedCommand: command, launchConfig } = await prepareQueuedStartupCommand(
-          session,
-          ptyId,
-          startup,
-          isCurrent
-        )
+        const {
+          preparedCommand: command,
+          launchConfig,
+          blocked
+        } = await prepareQueuedStartupCommand(session, ptyId, startup, isCurrent)
         if (!isCurrent()) {
           return
         }
         if (command === null) {
           session.pendingStartupCommand = null
           session.withholdStartupDraftPaste()
+          session.notifyBlockedStartup(blocked ?? 'unknown')
           return
         }
         const submitted = session.shouldDeliverStartupViaTerminalPaste

@@ -143,7 +143,7 @@ export async function refreshShellPathAndDetectAgents(
   if (wslTarget) {
     // Discard cached guest PATH before detecting a newly installed WSL CLI.
     invalidateWslGuestEnvironment(wslTarget.distro)
-    const inventory = await detectInstalledAgentInventory(context, options)
+    const inventory = await detectInstalledAgentInventory(context, options, true)
     return {
       ...inventory,
       addedPathSegments: [],
@@ -155,7 +155,7 @@ export async function refreshShellPathAndDetectAgents(
 
   const hydration = await hydrateShellPath({ force: true })
   const added = hydration.ok ? mergePathSegments(hydration.segments) : []
-  const inventory = await detectInstalledAgentInventory(context, options)
+  const inventory = await detectInstalledAgentInventory(context, options, true)
   return {
     ...inventory,
     addedPathSegments: added,

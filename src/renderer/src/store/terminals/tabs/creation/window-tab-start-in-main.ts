@@ -2,7 +2,7 @@ import { replaceRecordEntries } from '@/store/record-transitions/keyed-record-tr
 // Main starts window-drawn tabs under their IDs after recording them; panes wait (D1b-1). Inputs main cannot carry retain window spawn (L252).
 
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { notifyBlockedAgentStartup } from '@/lib/agent-session/launch/prompt/launch-agent-paste-timeout-notice'
+import { notifyBlockedAgentStartup } from '@/lib/agent-session/launch/prompt/blocked-agent-startup-notice'
 import type { RuntimeTerminalCreate } from '../../../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'

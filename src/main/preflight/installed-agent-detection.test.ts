@@ -28,6 +28,7 @@ it("checks one agent in a WSL project by probing only that agent's commands in t
   ).resolves.toEqual(['claude'])
   expect(probed()).toEqual(['claude'])
   expect(vi.mocked(detectAgentCommandsOnHost).mock.calls[0]?.[1]).toEqual({
-    context: { wslDistro: 'Ubuntu' }
+    context: { wslDistro: 'Ubuntu' },
+    onlyRequested: true
   })
 })

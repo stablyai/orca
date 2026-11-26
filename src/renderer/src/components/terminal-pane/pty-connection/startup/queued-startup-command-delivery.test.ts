@@ -24,6 +24,7 @@ it('never delivers a withheld restore when further output arrives', async () => 
     transportStreamGeneration: 1,
     startupInjectTimer: null,
     withholdStartupDraftPaste: () => {},
+    notifyBlockedStartup: () => {},
     armStartupDraftReadinessObservation: () => {}
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: delivery reads only the fixture's pane, deps, transport and startup fields.

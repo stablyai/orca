@@ -64,7 +64,6 @@ type Props = {
   /** Opens tapped links in Orca's browser; absent where the host can't open a browser tab. */
   onOpenUrlInOrca?: (url: string) => void
   linkOpenMode: MobileLinkOpenMode
-  /** Opens a host terminal tab in this chat's workspace running `command`. */
   onRunInTerminal: NativeChatTerminalRunner
   hostOutage?: MobileNativeChatHostOutage | null
 }
@@ -288,7 +287,7 @@ function MobileNativeChatOverlayContent({
     >
       <MobileMarkdownLinksContext.Provider value={markdownLinks}>
         <MobileQueuedMessageComposerContext.Provider value={queuedComposerContext}>
-          <View style={styles.overlay}>
+          <View style={StyleSheet.absoluteFill}>
             <MobileNativeChatVisualContext.Provider value={visuals}>
               <MobileNativeChatRootItemSourceContext.Provider value={detailSource}>
                 <MobileNativeChatReplyRevealsContext.Provider value={replyReveals}>
@@ -411,7 +410,3 @@ function MobileNativeChatOverlayContent({
     </MobileMarkdownSlackPeopleContext.Provider>
   )
 }
-
-const styles = StyleSheet.create({
-  overlay: StyleSheet.absoluteFill
-})

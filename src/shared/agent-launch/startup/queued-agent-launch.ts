@@ -24,6 +24,7 @@ export type QueuedAgentLaunch = {
 export type PreparedAgentLaunch = {
   preparedCommand: string | null
   launchConfig?: SleepingAgentLaunchConfig
+  blocked?: 'unknown' | 'unavailable'
 }
 
 export function mayResolveQueuedAgentLaunch(

@@ -8,10 +8,8 @@ import {
 } from '../../../../../../shared/agent-launch/startup/setup-wait-output-gate'
 import { sendAgentDraftPasteContent } from '@/lib/agent-session/messaging/paste/agent-draft-paste-content'
 import { writeTerminalPastePtyInput } from '../../input/paste/terminal-pty-paste-writer'
-import {
-  createPasteReadinessTimeoutNotice,
-  notifyBlockedAgentStartup
-} from '@/lib/agent-session/launch/prompt/launch-agent-paste-timeout-notice'
+import { createPasteReadinessTimeoutNotice } from '@/lib/agent-session/launch/prompt/launch-agent-paste-timeout-notice'
+import { notifyBlockedAgentStartup } from '@/lib/agent-session/launch/prompt/blocked-agent-startup-notice'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 const STARTUP_DRAFT_PASTE_QUIET_MS = 1500
@@ -25,7 +23,9 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
           resumeSource: session.paneStartup.resumeSource,
           launchConfig: session.paneStartup.launchConfig,
           launchAgent: session.paneStartup.launchAgent,
-          restoring: Boolean(session.paneStartup.resumeProviderSession),
+          restoring: Boolean(
+            session.paneStartup.resumeProviderSession || session.paneStartup.resumeSource
+          ),
           nativeChatSignIn: session.paneStartup.nativeChatSignIn
         }
       : null

@@ -87,14 +87,16 @@ export async function prepareQueuedStartupCommand(
       if (reply?.preparedCommand === null || typeof reply?.preparedCommand === 'string') {
         return reply
       }
+      // Only a proven older host may use shell-native startup, and it cannot migrate a restore.
+      if (
+        reply !== null ||
+        (startup.restoring && !startup.launchConfig?.commandProvenance) ||
+        (!startup.nativeChatSignIn &&
+          mayResolveQueuedAgentLaunch({ command: startup.command, shell }))
+      ) {
+        return { preparedCommand: null }
+      }
     } catch {
-      // A host that cannot prepare the launch still accepts shell-native startup.
-    }
-    if (
-      !startup.nativeChatSignIn &&
-      mayResolveQueuedAgentLaunch({ command: startup.command, shell })
-    ) {
-      // An older host cannot verify and migrate a recorded Orca executable.
       return { preparedCommand: null }
     }
   }
@@ -111,7 +113,7 @@ async function requestQueuedLaunch(
   paired: ReturnType<typeof getRemoteRuntimePtyOwner>,
   launch: QueuedAgentLaunch,
   isCurrent: () => boolean
-): Promise<PreparedAgentLaunch | undefined> {
+): Promise<PreparedAgentLaunch | null | undefined> {
   if (!paired) {
     return !isRemoteRuntimePtyId(ptyId) && isCurrent()
       ? window.api.preflight.detectAgents({ launch })
@@ -121,8 +123,11 @@ async function requestQueuedLaunch(
     paired.target.environmentId,
     QUEUED_AGENT_LAUNCH_CAPABILITY
   )
-  if (!proof.supported || !isCurrent()) {
+  if (!isCurrent()) {
     return undefined
+  }
+  if (!proof.supported) {
+    return null
   }
   return callRuntimeRpc<PreparedAgentLaunch>(
     paired.target,

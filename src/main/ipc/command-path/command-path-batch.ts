@@ -1,5 +1,4 @@
 import path from 'node:path'
-import { readdir } from 'node:fs/promises'
 import {
   getExecutableNames,
   isQuotedWindowsPathEntry,
@@ -111,7 +110,6 @@ export async function findCommandsOnLocalPath(
         !isWin && remaining.size <= DIRECT_DETECTION_COMMAND_LIMIT
           ? null
           : await readDetectionDirectoryViaWorker(dir.dir)
-      let windowsNames: Promise<string[]> | undefined
       const hits = await Promise.all(
         [...remaining]
           .filter((command) => needsReplay || needsHit(command, dir))
@@ -123,29 +121,18 @@ export async function findCommandsOnLocalPath(
               if (names !== null && listed === undefined) {
                 continue
               }
-              const candidate = joinCandidatePath(
-                isWin,
-                dir.dir,
-                isWin ? (listed ?? wanted) : wanted
-              )
-              const key = isWin ? candidate.toLowerCase() : candidate
-              if (checked.has(key) || !remaining.has(command)) {
-                continue
-              }
-              checked.add(key)
-              if (await isExecutableFile(candidate, isWin)) {
-                if (isWin && names === null) {
-                  // The worker may be absent in a CLI/test run or decline a large directory.
-                  // A names-only read preserves the entry's spelling without following symlinks.
-                  windowsNames ??= readdir(dir.dir).catch(() => [])
-                  const actual = (await windowsNames).find(
-                    (name) => directoryNameKey(name) === directoryNameKey(wanted)
-                  )
-                  if (actual) {
-                    return [command, joinCandidatePath(isWin, dir.dir, actual)]
-                  }
+              // PATHEXT is often uppercase. A case-sensitive directory can still need its spelling.
+              const spellings =
+                isWin && !listed ? [command + ext.toLowerCase(), wanted] : [listed ?? wanted]
+              for (const spelling of spellings) {
+                if (checked.has(spelling) || !remaining.has(command)) {
+                  continue
                 }
-                return [command, candidate]
+                checked.add(spelling)
+                const candidate = joinCandidatePath(isWin, dir.dir, spelling)
+                if (await isExecutableFile(candidate, isWin)) {
+                  return [command, candidate]
+                }
               }
             }
             return undefined

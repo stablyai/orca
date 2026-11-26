@@ -6,7 +6,7 @@ import type {
 import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
 import { buildSleepingAgentLaunchConfig } from '../../agent-session/lifecycle/resume/sleeping-agent-launch-config'
 import { resolveAgentLaunchCommand } from './tui-agent-launch-command'
-import { withAgentTerminalInputArgs } from './codex-startup-delivery'
+import { withAgentTerminalInputArgs } from './codex-terminal-input-args'
 import type { ManagedAgentCommands } from './managed-agent-launch-program'
 import { startupUpdatePromptSuppression } from './agent-startup-update-prompt'
 import type { AgentStartupPlan } from './tui-agent-startup'
