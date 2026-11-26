@@ -105,8 +105,10 @@ function keywordsIn(text: string): ClaudeKeyword[] {
 function promptCharacters(doc: ProseMirrorNode): { text: string; positions: number[] } {
   let text = ''
   const positions: number[] = []
+  let textblocks = 0
   doc.descendants((node, pos) => {
-    if (node.isTextblock && text !== '') {
+    // Why: promptText puts a newline before every textblock but the first, empty ones included.
+    if (node.isTextblock && textblocks++ > 0) {
       text += '\n'
       positions.push(-1)
     }

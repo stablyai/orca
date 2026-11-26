@@ -1,13 +1,22 @@
 // @vitest-environment happy-dom
 import { createRef } from 'react'
 import { act, cleanup, render, within } from '@testing-library/react'
-import type { Editor } from '@tiptap/react'
+import { Editor } from '@tiptap/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { claudeKeywords } from './native-chat-claude-keywords'
 
 afterEach(cleanup)
+
+// Tiptap hangs the editor on its contenteditable element.
+function editorOf(container: HTMLElement): Editor {
+  const editor: unknown = Reflect.get(within(container).getByRole('textbox'), 'editor')
+  if (!(editor instanceof Editor)) {
+    throw new Error('textbox has no Tiptap editor')
+  }
+  return editor
+}
 
 const words = (text: string) => claudeKeywords(text).map(({ word, rainbow }) => [word, rainbow])
 
@@ -41,10 +50,10 @@ describe('claudeKeywords', () => {
 })
 
 describe('NativeChatPromptEditor keyword coloring', () => {
-  function mount(claudeKeywordsOn: boolean) {
+  function mount(claudeKeywordsOn: boolean, initialValue = 'please ultrathink and ultracode') {
     const props = {
       inputRef: createRef<NativeChatComposerInput>(),
-      initialValue: 'please ultrathink and ultracode',
+      initialValue,
       disabled: false,
       placeholder: 'Message',
       onChange: vi.fn(),
@@ -66,8 +75,7 @@ describe('NativeChatPromptEditor keyword coloring', () => {
 
   it('colors the right letters after a hard break and in a later paragraph', () => {
     const { view, colored } = mount(true)
-    const editor = (within(view.container).getByRole('textbox') as unknown as { editor: Editor })
-      .editor
+    const editor = editorOf(view.container)
     act(() => {
       editor.commands.setContent('<p>go<br>ultracode</p><p>x ultraplan</p>')
     })
@@ -76,8 +84,7 @@ describe('NativeChatPromptEditor keyword coloring', () => {
 
   it('reads the whole prompt: a quote across paragraphs and a side-chat command stay plain', () => {
     const { view, colored } = mount(true)
-    const editor = (within(view.container).getByRole('textbox') as unknown as { editor: Editor })
-      .editor
+    const editor = editorOf(view.container)
     act(() => {
       editor.commands.setContent('<p>"quoted</p><p>ultrathink" then ultracode</p>')
     })
@@ -97,6 +104,20 @@ describe('NativeChatPromptEditor keyword coloring', () => {
       })
     })
     expect(colored()).toEqual([])
+  })
+
+  it('joins paragraphs like the submitted prompt, so an empty first paragraph is still a newline', () => {
+    // An empty first paragraph, then a paragraph that looks like a slash command.
+    const { props, colored } = mount(true, '\n/command ultrathink')
+    // The editor's input value is promptText(doc): the text Claude receives.
+    const submitted = props.inputRef.current?.value ?? ''
+    expect(submitted).toBe('\n/command ultrathink')
+    // The leading newline means the prompt is not a slash command, so the word is colored.
+    const expected = claudeKeywords(submitted).flatMap(({ word, rainbow }) =>
+      rainbow ? [...word] : [word]
+    )
+    expect(expected).toEqual([...'ultrathink'])
+    expect(colored().map((span) => span.textContent)).toEqual(expected)
   })
 
   it('leaves other agents plain', () => {
