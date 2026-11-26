@@ -339,3 +339,26 @@ it.each([
   ])
   await after.quit()
 })
+
+describe.each([
+  ['desktop', desktop],
+  ['phone', phone]
+] as const)('%s comment box emptied while away', (app, open) => {
+  it('forgets the target, so a later draft started away names none', () => {
+    const uid = `${app}-emptied`
+    const start = { item: needsYou(A), events: [A] }
+    // The box's draft changed with the box closed: the desktop's store; the phone's is read on mount.
+    const away = (text: string): void => {
+      if (app === 'desktop') {
+        updateNativeChatComposerDraft(botItemCommentDraftScope(bot, uid), { text }, 'immediate')
+      }
+    }
+    open(uid, start).type('words')
+    cleanup()
+    away('')
+    open(uid, start, true)
+    cleanup()
+    away('other words')
+    expect(open(uid, start, false).line()).toBeNull()
+  })
+})
