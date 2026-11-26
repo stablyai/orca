@@ -26,6 +26,29 @@ import {
 
 const SNAP_ANIMATION_MS = 180
 
+type PaletteSizes = Pick<
+  PaletteLayout,
+  'boundsWidth' | 'boundsHeight' | 'paletteWidth' | 'paletteHeight'
+>
+
+function measurePaletteSizes(bounds: HTMLElement, palette: HTMLElement): PaletteSizes {
+  return {
+    boundsWidth: bounds.clientWidth,
+    boundsHeight: bounds.clientHeight,
+    paletteWidth: palette.offsetWidth,
+    paletteHeight: palette.offsetHeight
+  }
+}
+
+function samePaletteSizes(a: PaletteSizes, b: PaletteSizes): boolean {
+  return (
+    a.boundsWidth === b.boundsWidth &&
+    a.boundsHeight === b.boundsHeight &&
+    a.paletteWidth === b.paletteWidth &&
+    a.paletteHeight === b.paletteHeight
+  )
+}
+
 /**
  * Placement and drag for a palette inside a bounds element, on both axes.
  * Why the edges are anchored: switching tools changes the palette's size, and a palette that slides on every
@@ -70,13 +93,7 @@ export function usePaletteDrag({
   // A drag in progress reads the latest limit, so moving under the find bar mid-drag still clears it.
   const topMinRef = useRef(topMin)
   // The drag in progress and the sizes its clamp was computed for.
-  const dragRef = useRef<{
-    end: (commit: boolean) => void
-    boundsWidth: number
-    boundsHeight: number
-    paletteWidth: number
-    paletteHeight: number
-  } | null>(null)
+  const dragRef = useRef<{ end: (commit: boolean) => void; sizes: PaletteSizes } | null>(null)
 
   useLayoutEffect(() => {
     topMinRef.current = topMin
@@ -88,33 +105,25 @@ export function usePaletteDrag({
       return
     }
     const measure = (): void => {
-      const boundsWidth = bounds.clientWidth
-      const boundsHeight = bounds.clientHeight
-      const paletteWidth = palette.offsetWidth
-      const paletteHeight = palette.offsetHeight
+      const sizes = measurePaletteSizes(bounds, palette)
       // A hidden pane measures zero; keep the last layout so the saved position isn't recomputed from nothing.
-      if (boundsWidth === 0) {
+      if (sizes.boundsWidth === 0) {
         // Hidden mid-drag: end it so the pages get pointer input back.
         dragRef.current?.end(false)
         return
       }
       // The drag's clamp was computed for the old sizes (a resize, or a tool switch or capability change that
-      // reshaped the palette); give up the drag rather than move out of bounds or past where it can travel.
+      // reshaped the palette); give up the drag rather than move out of bounds or past where it can travel. The
+      // release checks the sizes again, for a resize it sees before this observer does.
       const drag = dragRef.current
       if (drag) {
-        if (
-          boundsWidth !== drag.boundsWidth ||
-          boundsHeight !== drag.boundsHeight ||
-          paletteWidth !== drag.paletteWidth ||
-          paletteHeight !== drag.paletteHeight
-        ) {
+        if (!samePaletteSizes(sizes, drag.sizes)) {
           drag.end(false)
         } else {
           // The drag owns the position until it ends; a re-render now would put the palette back mid-drag.
           return
         }
       }
-      const sizes = { boundsWidth, boundsHeight, paletteWidth, paletteHeight }
       setLayout((prev) => paletteMeasuredLayout(prev, sizes, { x, y }, topMin))
     }
     measure()
@@ -184,7 +193,7 @@ export function usePaletteDrag({
     gripProps: {
       onPointerDown: (event) => {
         const palette = paletteRef.current
-        if (event.button !== 0 || !layout || !canMove || !palette || dragRef.current) {
+        if (event.button !== 0 || !layout || !canMove || !bounds || !palette || dragRef.current) {
           return
         }
         event.preventDefault()
@@ -197,13 +206,15 @@ export function usePaletteDrag({
         // Pages would swallow the pointer once it crosses them; let the drag see every move.
         const releasePassthrough = acquireWebviewsDragPassthrough()
         const { boundsWidth, boundsHeight, paletteWidth, paletteHeight } = layout
+        const dragSizes = { boundsWidth, boundsHeight, paletteWidth, paletteHeight }
         const startX = event.clientX
         const startY = event.clientY
         const startLeft = layout.left
         const startTop = layout.top
         const dragStart = { ...layout, saved: position }
-        // Where the pointer is now, unclamped: the find bar can close between the last move and the release, so the
-        // clamp is applied again then (an axis the pointer isn't away from its start on keeps its saved place).
+        // Where the pointer is now, unclamped: the release's own point when it comes (it can differ from the last
+        // move), else the last held move. The find bar can close between the last move and the release, so the clamp
+        // is applied again then (an axis the pointer isn't away from its start on keeps its saved place).
         let endX = startX
         let endY = startY
         setDragging(true)
@@ -213,6 +224,8 @@ export function usePaletteDrag({
             return
           }
           if (moveEvent.buttons === 0) {
+            // The release was missed (outside the window): this hover is past it, so the last held move is where the
+            // palette was let go.
             endDrag(true)
             return
           }
@@ -235,6 +248,8 @@ export function usePaletteDrag({
         }
         const onUp = (upEvent: PointerEvent): void => {
           if (upEvent.pointerId === pointerId) {
+            endX = upEvent.clientX
+            endY = upEvent.clientY
             endDrag(true)
           }
         }
@@ -258,12 +273,17 @@ export function usePaletteDrag({
           removeAppKeyListener('keydown', onKeyDown)
           releasePassthrough()
           dragRef.current = null
+          // The page or palette can change size before the observer reports it (it runs after layout; a release can
+          // come first). The drag's clamp and fractions belong to the old sizes, so it ends as the observer would have
+          // ended it: nothing saved, laid out again for the sizes now.
+          const sizesNow = measurePaletteSizes(bounds, palette)
+          const resized = !samePaletteSizes(sizesNow, dragSizes)
           // A top limit raised mid-drag (the find bar opened) applies where the palette comes to rest too: the
           // measure effect skipped it while the drag owned the position.
           const restTopMin = topMinRef.current
           const rest = paletteDragRest(
             dragStart,
-            commit
+            commit && !resized
               ? {
                   left: endX === startX ? null : startLeft + endX - startX,
                   top: endY === startY ? null : startTop + endY - startY
@@ -271,9 +291,16 @@ export function usePaletteDrag({
               : null,
             restTopMin
           )
-          setLayout((prev) =>
-            prev ? { ...prev, left: rest.left, top: rest.top, topMin: restTopMin } : prev
-          )
+          setLayout((prev) => {
+            if (!prev) {
+              return prev
+            }
+            const restLayout = { ...prev, left: rest.left, top: rest.top, topMin: restTopMin }
+            // A hidden pane (width zero) keeps its last layout, as the observer does.
+            return resized && sizesNow.boundsWidth !== 0
+              ? paletteMeasuredLayout(restLayout, sizesNow, dragStart.saved, restTopMin)
+              : restLayout
+          })
           // The drag wrote the style directly, and React skips a value equal to its last render (a snap back to
           // where the drag started): write the resting place too.
           palette.style.left = `${rest.left}px`
@@ -289,7 +316,7 @@ export function usePaletteDrag({
         grip.addEventListener('lostpointercapture', onCancel)
         window.addEventListener('blur', onCancel)
         addAppKeyListener('keydown', onKeyDown, { first: true })
-        dragRef.current = { end: endDrag, boundsWidth, boundsHeight, paletteWidth, paletteHeight }
+        dragRef.current = { end: endDrag, sizes: dragSizes }
       },
       onDoubleClick: () => commitPosition(DEFAULT_ANNOTATE_PALETTE_POSITION, true),
       onKeyDown: (event) => {
