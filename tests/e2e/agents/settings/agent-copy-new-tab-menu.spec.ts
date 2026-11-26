@@ -75,10 +75,14 @@ test('an agent copy has its own submenu in the + menu and launches as the copy',
   await waitForTerminalOutput(page, 'COPY_ENV CLAUDE_CODE_EXPERIMENTAL_CODE_MODE=1 args: ', 30_000)
   await waitForTerminalOutput(page, 'haiku', 10_000)
 
-  // The row itself launches the copy on its default surface (CLI here).
+  // The row itself launches the copy on its default surface (CLI here), in a tab of its own.
+  const activeTab = page.locator('[data-tab-id][data-active="true"]').first()
+  const firstLaunchTab = (await activeTab.getAttribute('data-tab-id')) ?? ''
   await page.getByRole('button', { name: 'New tab' }).click({ force: true })
   const row = page.locator('[data-agent-launch-row]').filter({ hasText: 'Claude Code Mode' })
   await expect(row).toBeVisible({ timeout: 20_000 })
   await row.click({ force: true })
+  // A row that opened nothing would leave the first launch's tab active, and its output would pass.
+  await expect(activeTab).not.toHaveAttribute('data-tab-id', firstLaunchTab, { timeout: 30_000 })
   await waitForTerminalOutput(page, 'COPY_ENV CLAUDE_CODE_EXPERIMENTAL_CODE_MODE=1', 30_000)
 })

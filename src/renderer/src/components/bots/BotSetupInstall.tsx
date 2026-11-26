@@ -53,7 +53,9 @@ export function useBotSetupInstall(
   const signInStatus = useAntigravityChatSignIn(signsIn ? target : null).status
   const waiting = install !== null || signIn !== null
   // A sign-in the host has not reported yet could still be owed, so the retry waits for it.
-  const ready = installed && !changing && !waiting && (!signsIn || signInStatus === 'known')
+  // A copy with its own Command needs no managed runtime, so its setup retries without one.
+  const ready =
+    (installed || ownCommand) && !changing && !waiting && (!signsIn || signInStatus === 'known')
   const latestRetry = useRef(retry)
   useEffect(() => {
     latestRetry.current = retry
