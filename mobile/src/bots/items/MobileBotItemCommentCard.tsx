@@ -69,7 +69,11 @@ export function MobileBotItemCommentCard({
   const shape = botItemQuestionShape(event.data)
   const text = mobileBotItemCommentWords({ ...event.data, text: entry.beside ?? shape.body })
   // A question's lines too, as the agent wrote them.
-  const quoted = onQuote ? mobileBotItemCommentWords(event.data).trim() : ''
+  const quoted = onQuote
+    ? mobileBotItemCommentWords(
+        entry.beside === undefined ? event.data : { ...event.data, text: entry.beside }
+      ).trim()
+    : ''
   return (
     <View ref={ref} style={styles.row}>
       {flash ? <CommentFlash key={flash.at} still={flash.still} end={flash.end} /> : null}

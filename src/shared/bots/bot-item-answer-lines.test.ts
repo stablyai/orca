@@ -10,8 +10,10 @@ import {
   botItemAnswerWords,
   botItemAnswersText,
   botItemNamedAnswers,
-  botItemUnsentAnswers
+  botItemUnsentAnswers,
+  botItemWordsBesideAnswers
 } from './bot-item-answer-lines'
+import { botItemActivity } from './bot-item-activity'
 
 it('keeps each answer on its own line when two questions share a first line', () => {
   const shape: BotItemQuestionShape = {
@@ -161,4 +163,67 @@ it("keeps a line on the question it names when another's old line reads the same
     }
   })
   expect(botItemNamedAnswers(lead, 'Keep → x? → No')).toEqual([null, 'No'])
+})
+
+it("keeps only a comment's own words beside the lines it answered, bare places too", () => {
+  const two: BotItemQuestionShape = {
+    body: '',
+    decisions: [
+      { question: 'Build B?', replies: [] },
+      { question: 'Also later?', replies: [] }
+    ]
+  }
+  const text = `${botItemAnswersText(two, ['Yes', 'After B'])}\nwhat is the later part`
+  expect(botItemWordsBesideAnswers(two, text, [true, true])).toBe('what is the later part')
+  // A line another comment answered first stays with these words.
+  expect(botItemWordsBesideAnswers(two, text, [false, true])).toBe(
+    'Build B? → Yes\nwhat is the later part'
+  )
+  expect(
+    botItemWordsBesideAnswers(two, botItemAnswersText(two, ['Yes', null]), [true, false])
+  ).toBe(null)
+  expect(botItemWordsBesideAnswers(two, 'just words', [false, false])).toBe(null)
+  const shared: BotItemQuestionShape = {
+    body: '',
+    decisions: [
+      { question: '# Target?\nStaging hosts', replies: [] },
+      { question: 'Target?\nProduction hosts', replies: [] }
+    ]
+  }
+  const later = botItemAnswersText(shared, [null, 'Yes'])
+  expect(botItemWordsBesideAnswers(shared, `${later}\nexplain staging`, [false, true])).toBe(
+    'explain staging'
+  )
+  expect(botItemWordsBesideAnswers(shared, later, [false, true])).toBe(null)
+})
+
+it('shows a recorded answer of several questions whole, as older hosts wrote it', () => {
+  const asked: BotItemEvent = {
+    id: 'q',
+    kind: 'commented',
+    actor: { kind: 'bot', botId: 'agent', chatId: 'chat' },
+    data: {
+      text: 'q',
+      ask: {
+        questions: [
+          { prompt: 'Region?', options: [{ label: 'us-east' }] },
+          { prompt: 'Ship?', options: [{ label: 'Yes' }] }
+        ]
+      }
+    },
+    at: 1
+  }
+  const text = 'Region? → eu-west\nShip? → Yes\nthanks'
+  const recorded: BotItemEvent = {
+    id: 'r',
+    kind: 'commented',
+    actor: { kind: 'owner' },
+    data: { text, answers: 'q', decisions: [{ text: 'eu-west' }, { picks: [0] }] },
+    at: 2
+  }
+  const entry = botItemActivity({ links: [], question: null, status: 'working' }, [
+    asked,
+    recorded
+  ]).find((at) => at.key === 'r')
+  expect(entry?.kind === 'comment' && entry.beside).toBeFalsy()
 })

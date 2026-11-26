@@ -92,7 +92,13 @@ function readsOnAsk(event: BotItemEvent, pairing: BotItemQuestionPairing): boole
 function besideAnswers(event: BotItemEvent, pairing: BotItemQuestionPairing): string | null {
   const paired = pairing.replies.get(event.id)
   const ask = paired ? pairing.questions.get(paired.questionId) : undefined
-  if (!ask || ask.shape.decisions.length < 2 || typeof event.data.text !== 'string') {
+  // A recorded answer's free-text lines show only on its card (botItemAnswerWords reads them as null).
+  if (
+    !ask ||
+    ask.shape.decisions.length < 2 ||
+    typeof event.data.text !== 'string' ||
+    Array.isArray(event.data.decisions)
+  ) {
     return null
   }
   return botItemWordsBesideAnswers(

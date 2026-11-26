@@ -154,9 +154,16 @@ export function botItemWordsBesideAnswers(
   text: string,
   answered: readonly boolean[]
 ): string | null {
+  const named = botItemNamedAnswerLines(shape, text)
+  // A bare "Question →" only reserves its place for a later answered line with the same heading.
+  const reserves = (index: number): boolean =>
+    named[index]?.words === '' &&
+    named.some(
+      (other, later) => later > index && answered[later] && other?.head === named[index]?.head
+    )
   const taken = new Set(
-    botItemNamedAnswerLines(shape, text).flatMap((line, index) =>
-      line && answered[index] ? [line.lineIndex] : []
+    named.flatMap((line, index) =>
+      line && (answered[index] || reserves(index)) ? [line.lineIndex] : []
     )
   )
   if (taken.size === 0) {

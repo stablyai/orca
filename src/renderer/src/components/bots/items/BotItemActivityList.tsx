@@ -348,28 +348,27 @@ export function BotItemActivityList({
           const { event, failed, intent } = sending
           // Answers on their way show on their question's lines already; words or files beyond them
           // show here.
-          if (intent && botItemPendingAnswersOnly(sending)) {
-            const shown = quickReplies?.sent?.get(intent.askId)
-            const ask = entries.find(
-              (entry) => entry.kind === 'comment' && entry.event.id === intent.askId
+          const shown = intent && quickReplies?.sent?.get(intent.askId)
+          const ask = intent
+            ? entries.find((entry) => entry.kind === 'comment' && entry.event.id === intent.askId)
+            : undefined
+          const onLines =
+            intent &&
+            shown &&
+            ask?.kind === 'comment' &&
+            !ask.onAsk &&
+            ask.answers &&
+            intent.answers.every(
+              (words, index) =>
+                !words ||
+                (shown[index] === words &&
+                  (!ask.answers?.[index] ||
+                    (intent.shape.decisions.length > 1 && ask.byOrder?.[index])))
             )
-            if (
-              shown &&
-              ask?.kind === 'comment' &&
-              !ask.onAsk &&
-              ask.answers &&
-              intent.answers.every(
-                (words, index) =>
-                  !words ||
-                  (shown[index] === words &&
-                    (!ask.answers?.[index] ||
-                      (intent.shape.decisions.length > 1 && ask.byOrder?.[index])))
-              )
-            ) {
-              return null
-            }
+          if (onLines && botItemPendingAnswersOnly(sending)) {
+            return null
           }
-          const beside = botItemPendingWordsBesideAnswers(sending)
+          const beside = onLines ? botItemPendingWordsBesideAnswers(sending) : null
           return (
             <BotItemCommentCard
               key={event.id}
