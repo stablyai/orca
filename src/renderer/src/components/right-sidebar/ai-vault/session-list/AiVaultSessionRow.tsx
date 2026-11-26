@@ -193,8 +193,9 @@ export function VaultSessionRow({
     >
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1">
         <div
+          dir="auto"
           className={cn(
-            'min-w-0 text-[13px] font-medium leading-5 text-foreground',
+            'min-w-0 text-start text-[13px] font-medium leading-5 text-foreground',
             // Only the title drags; previews/details retain normal text selection.
             draggable && 'cursor-grab active:cursor-grabbing',
             detailsExpanded ? 'line-clamp-2 [overflow-wrap:anywhere]' : 'line-clamp-1'
@@ -246,13 +247,17 @@ export function VaultSessionRow({
       </div>
       {searchHit ? <AiVaultSearchEvidence hit={searchHit} /> : null}
       {!detailsExpanded && !searchHit ? (
-        <div className="mt-0.5 min-w-0 line-clamp-2 text-[12px] leading-4 text-muted-foreground">
+        <div
+          dir="auto"
+          className="mt-0.5 min-w-0 line-clamp-2 whitespace-pre-wrap text-start text-[12px] leading-4 text-muted-foreground [unicode-bidi:plaintext]"
+        >
           {latestTurn ? (
             <>
-              <span className="font-medium text-foreground/80">
+              <bdi className="font-medium text-foreground/80">
                 {conversationRoleLabel(latestTurn.role, t)}
-              </span>
-              <span>: {latestTurn.text}</span>
+              </bdi>
+              {': '}
+              {latestTurn.text}
             </>
           ) : (
             t(

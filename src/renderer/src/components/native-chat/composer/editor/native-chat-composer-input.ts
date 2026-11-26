@@ -49,6 +49,7 @@ export type NativeChatPromptEditorProps = Omit<
   HTMLAttributes<HTMLDivElement>,
   'onChange' | 'onSelect'
 > & {
+  textDirection?: 'auto' | 'ltr' | 'rtl'
   scopeKey?: string
   positionTarget?: string
   /** The composer's thumbnail ids, in order, which number its image chips. */

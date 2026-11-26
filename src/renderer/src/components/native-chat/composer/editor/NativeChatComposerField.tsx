@@ -1,7 +1,7 @@
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import { notifyNativeChatComposerState } from '../focus/native-chat-composer-mount'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
-import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { cn } from '@/lib/class-names'
 import { NativeChatComposerMenus } from '../pickers/NativeChatComposerMenus'
@@ -83,6 +83,7 @@ export function NativeChatComposerField({
   sideChat
 }: NativeChatComposerFieldProps): React.JSX.Element {
   const t = useTranslate()
+  const [textDirection, setTextDirection] = useState<'auto' | 'ltr' | 'rtl'>('auto')
   const draftNotSaved = useNativeChatComposerDraftUnsaved(draftScopeKey)
   const glowing = useNativeChatComposerGlow(draftScopeKey)
   const optionCount =
@@ -250,6 +251,7 @@ export function NativeChatComposerField({
               </div>
             ) : null}
             <NativeChatPromptEditor
+              textDirection={textDirection}
               key={draftScopeKey}
               scopeKey={draftScopeKey}
               positionTarget={positionTarget}
@@ -312,6 +314,8 @@ export function NativeChatComposerField({
               )}
             >
               <NativeChatComposerActions
+                textDirection={textDirection}
+                onTextDirectionChange={setTextDirection}
                 editSession={editSession}
                 attachDisabled={attachDisabled}
                 dictationDisabled={dictationDisabled}

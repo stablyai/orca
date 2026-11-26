@@ -197,7 +197,10 @@ export function FirstPromptCard({
             )}
           </p>
         ) : (
-          <p className="scrollbar-sleek max-h-48 select-text overflow-y-auto whitespace-pre-wrap text-[12px] leading-[1.35] text-foreground/90 [overflow-wrap:anywhere]">
+          <p
+            dir="auto"
+            className="scrollbar-sleek max-h-48 select-text overflow-y-auto whitespace-pre-wrap text-start text-[12px] leading-[1.35] text-foreground/90 [overflow-wrap:anywhere] [unicode-bidi:plaintext]"
+          >
             {displayText ||
               t(
                 'auto.components.right.sidebar.AiVaultSessionDetails.loadingFirstPrompt',

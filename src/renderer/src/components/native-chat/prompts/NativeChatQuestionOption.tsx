@@ -77,8 +77,11 @@ export function NativeChatQuestionOption({
         >
           {selected ? <Check className="size-3.5" strokeWidth={3} /> : badge}
         </span>
-        <span className="min-w-0">
-          <span className="block break-words text-sm font-medium">
+        <span className="min-w-0 flex-1">
+          <span
+            dir="auto"
+            className="block break-words text-start text-sm font-medium [unicode-bidi:plaintext]"
+          >
             {recommended ? <span className="sr-only">{label}</span> : null}
             <span aria-hidden={recommended || undefined}>{shown}</span>
             {recommended ? (
@@ -92,7 +95,10 @@ export function NativeChatQuestionOption({
             ) : null}
           </span>
           {description ? (
-            <span className="mt-px block whitespace-pre-wrap break-words text-[length:calc(var(--text-sm)*13/14)] leading-snug text-muted-foreground">
+            <span
+              dir="auto"
+              className="mt-px block whitespace-pre-wrap break-words text-start text-[length:calc(var(--text-sm)*13/14)] leading-snug text-muted-foreground [unicode-bidi:plaintext]"
+            >
               {description}
             </span>
           ) : null}
@@ -101,6 +107,7 @@ export function NativeChatQuestionOption({
       {/* Indented to the label column (padding + badge + gap) and pulled up against the description. */}
       {preview && selected ? (
         <pre
+          dir="ltr"
           ref={revealPreview}
           className="-mt-2 mr-3 mb-2.5 ml-[calc(var(--spacing)*11)] max-h-56 overflow-auto whitespace-pre rounded-md bg-chat-code-surface px-2.5 py-2 font-mono text-chat-code leading-snug text-chat-foreground scrollbar-sleek"
         >

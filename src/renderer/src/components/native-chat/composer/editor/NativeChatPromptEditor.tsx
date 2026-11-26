@@ -53,6 +53,7 @@ import { focusMountedNativeChatEditor, mountedEditorView } from './native-chat-m
 import { useNativeChatComposerMount } from '../focus/native-chat-composer-mount'
 import { useNativeChatPromptEditorHandle } from '../../native-chat-prompt-editor-handle'
 import { useAppStore } from '@/store'
+import './native-chat-prompt-direction.css'
 
 const NO_IMAGES: readonly string[] = []
 const NOT_COMPOSING = (): boolean => false
@@ -65,6 +66,7 @@ export const NativeChatPromptEditor = memo(
 )
 
 function NativePromptEditor({
+  textDirection = 'auto',
   scopeKey,
   positionTarget,
   imageRow = NO_IMAGES,
@@ -110,6 +112,7 @@ function NativePromptEditor({
     editorProps: {
       attributes: {
         'data-native-chat-prompt-editor': 'true',
+        'data-native-chat-text-direction': textDirection,
         role: 'textbox',
         'aria-multiline': 'true',
         'aria-label': placeholder,

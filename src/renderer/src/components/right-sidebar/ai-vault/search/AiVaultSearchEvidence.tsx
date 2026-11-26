@@ -65,11 +65,15 @@ export function AiVaultSearchEvidence({ hit }: { hit: AiVaultSearchHit }): React
   return (
     <div className="mt-0.5 min-w-0 text-[12px] leading-4 text-muted-foreground">
       {evidence ? (
-        <div className="line-clamp-2 [overflow-wrap:anywhere]">
-          <span className="font-medium text-foreground/80">
+        <div
+          dir="auto"
+          className="line-clamp-2 whitespace-pre-wrap text-start [overflow-wrap:anywhere] [unicode-bidi:plaintext]"
+        >
+          <bdi className="font-medium text-foreground/80">
             {conversationRoleLabel(evidence.role, t)}
-          </span>
-          <span>: {highlightedSearchSnippet(evidence.snippet)}</span>
+          </bdi>
+          {': '}
+          {highlightedSearchSnippet(evidence.snippet)}
         </div>
       ) : (
         <div className="line-clamp-1">

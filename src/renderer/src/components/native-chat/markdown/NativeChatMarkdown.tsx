@@ -117,14 +117,14 @@ function containsImage(children: ReactNode): boolean {
 // renderer gives them leading-relaxed), 10px between blocks and 3px between items at 13px.
 const NATIVE_CHAT_TEXT_BLOCK_COMPONENTS: CommentMarkdownExtension['components'] = {
   p: ({ children }) => <p className="my-2.5 first:mt-0 last:mb-0">{children}</p>,
-  ul: ({ children }) => <ul className="my-2.5 ml-5 list-disc space-y-0.75">{children}</ul>,
+  ul: ({ children }) => <ul className="my-2.5 mx-5 list-disc space-y-0.75">{children}</ul>,
   ol: ({ children, start }) => (
-    <ol start={start} className="my-2.5 ml-5 list-decimal space-y-0.75">
+    <ol start={start} className="my-2.5 mx-5 list-decimal space-y-0.75">
       {children}
     </ol>
   ),
   li: ({ children, value }) => (
-    <li value={value} className="[&>input]:pointer-events-none">
+    <li dir="auto" value={value} className="[&>input]:pointer-events-none">
       {children}
     </li>
   )
