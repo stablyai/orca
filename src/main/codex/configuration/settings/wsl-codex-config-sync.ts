@@ -7,6 +7,7 @@ import {
 } from '../../../wsl/filesystem/wsl-unc-access-gate'
 import { CodexHistoryPassQueue } from '../../history/shared-store/codex-history-pass-queue'
 import { reportCodexConfigSyncOutcome } from './config-sync-stall'
+import type { CodexConfigSyncStatus } from '../../../../shared/agent-accounts/codex/codex-config-sync-types'
 import {
   CODEX_CONFIG_SYNC_WSL_PROTOCOL,
   type CodexConfigSyncWslHomeResult,
@@ -135,7 +136,6 @@ function parseOutput(stdout: string): CodexConfigSyncWslHomeResult[] | null {
   return isHelperOutput(output) ? output.homes : null
 }
 
-// The bundle comes from the running install, so a matching protocol vouches for the home shape.
 function isHelperOutput(value: unknown): value is CodexConfigSyncWslOutput {
   return (
     !!value &&
@@ -158,14 +158,41 @@ function isHomeResult(value: unknown): value is CodexConfigSyncWslHomeResult {
     'complete' in value &&
     typeof value.complete === 'boolean' &&
     'status' in value &&
-    !!value.status &&
-    typeof value.status === 'object' &&
-    'state' in value.status &&
-    (value.status.state === 'synced' || value.status.state === 'stalled') &&
+    isSyncStatus(value.status) &&
     'error' in value &&
     (value.error === null || typeof value.error === 'string') &&
     'warnings' in value &&
     Array.isArray(value.warnings) &&
     value.warnings.every((warning) => typeof warning === 'string')
+  )
+}
+
+const STALL_REASONS: readonly unknown[] = [
+  'missing-source',
+  'blank-source',
+  'unreadable-source',
+  'managed-home-unavailable'
+]
+
+function isSyncStatus(value: unknown): value is CodexConfigSyncStatus {
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    !('systemConfigPath' in value) ||
+    typeof value.systemConfigPath !== 'string' ||
+    !('state' in value) ||
+    !('reason' in value)
+  ) {
+    return false
+  }
+  if (value.state === 'synced') {
+    return value.reason === null
+  }
+  return (
+    value.state === 'stalled' &&
+    STALL_REASONS.includes(value.reason) &&
+    (!('managedStatePath' in value) ||
+      value.managedStatePath === undefined ||
+      typeof value.managedStatePath === 'string')
   )
 }
