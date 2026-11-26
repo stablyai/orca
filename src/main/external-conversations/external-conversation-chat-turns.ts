@@ -276,7 +276,7 @@ export class ChatTurns {
       agent: linked.link.agent,
       emit: this.deps.emit,
       turnFor: chatTurnFor(origin, this.deps.actsForOf?.(news.sessionId)),
-      workersChecked: () => this.workers.check(paneKey, 'turn-ended'),
+      workersChecked: () => this.workers.check(paneKey, 'turn-ended', ended.turnId),
       current: live,
       leave: turnLeave(linked.link, ended.turnId, this.deps.leaveLines, live)
     }
@@ -315,7 +315,7 @@ export class ChatTurns {
         }
         return end.leave.settle()
       }
-      const [workLinks] = await Promise.all([links(), this.workers.check(paneKey, 'turn-ended')])
+      const [workLinks] = await Promise.all([links(), end.workersChecked()])
       if (generation !== this.generation) {
         return
       }

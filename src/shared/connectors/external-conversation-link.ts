@@ -54,6 +54,27 @@ export type SlackMirrorPost = {
 
 export type SlackMirrorHeld = { event: unknown; waiting: string[] }
 
+/** Orca's own status lines in a Slack thread whose work outlives the turn that started it. */
+export type ThreadStatusFact = {
+  /** Never reused for the thread: each line's reply id comes from it. */
+  seq: number
+  /** The UTC day (yyyy-mm-dd) `dayCount` counts lines for. */
+  day: string
+  dayCount: number
+  armed?: {
+    /** When this run of lines began; their elapsed time counts from here. */
+    at: number
+    /** The pane's latest heard turn end: lines stop 6 hours after it. */
+    turnEndAt: number
+    /** The thread's last visible line, Orca's or the bot's. */
+    lastLineAt: number
+    lastBotAt: number
+    dueStep: 0 | 1 | 2
+  }
+  /** A line decided and saved before it is sent, so a retry or restart sends the same one. */
+  pending?: { replyId: string; text: string; at: number; stop: boolean }
+}
+
 /** An outside thread's native chat, persisted on the workspace it runs in (system-owned). */
 export type ExternalConversationLink = {
   source: ConnectorSource
@@ -99,5 +120,8 @@ export type ExternalConversationLink = {
   /** The turn (as its conversation numbers it) whose "I've left this thread" line Orca still owes
    *  the thread, saved with the mute so a restart still posts it. Main-process data. */
   leaveLine?: number
+  /** Slack bot threads and DMs: Orca's status lines while work runs on after a turn. Main-process
+   *  data: clients ignore it. */
+  threadStatus?: ThreadStatusFact
   createdAt: number
 }
