@@ -329,6 +329,30 @@ describe('agent mail between paired Orca servers', () => {
     expect(notes).toEqual([])
   })
 
+  it('keeps local replies in the original thread with a stable subject', async () => {
+    const opened = await cli(
+      a,
+      'send',
+      '--from',
+      'term_a',
+      '--to',
+      'term_b',
+      '--subject',
+      'Check the build'
+    )
+    expect(opened).toMatchObject({ result: { message: { to: 'term_b' } } })
+    const [original] = mailFor(a, 'term_b')
+    await cli(a, 'reply', '--id', original!.id, '--body', 'Green.', '--from', 'term_b')
+    const [reply] = mailFor(a, 'term_a')
+    await cli(a, 'reply', '--id', reply!.id, '--body', 'Re: Thanks.', '--from', 'term_a')
+    const [followup] = mailFor(a, 'term_b')
+    expect(followup).toMatchObject({
+      subject: 'Re: Check the build',
+      body: 'Re: Thanks.',
+      thread_id: original!.id
+    })
+  })
+
   it('carries a terminal agent mail to the paired server and its flagless reply back', async () => {
     const sent = await cli(
       a,

@@ -24,6 +24,7 @@ import { listenerForClientEnvironment } from '../../../../orchestration/federati
 import { queueClientItem } from '../../../../orchestration/federation/client-asks/client-ask-queue'
 import type { ClientReplyPayload } from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import type { z } from 'zod'
+import { replySubject } from '../../../../../../shared/orchestration/mailbox/reply-subject'
 
 const NOTHING_SENT = { effectsApplied: false } as const
 
@@ -49,7 +50,7 @@ export async function replyOverPeerMail(args: {
   }
   const replier = args.orchestrationCaller?.address ?? params.from ?? original.to_handle
   const id = peerMailMessageId(args.orchestrationMutation)
-  const subject = original.subject.startsWith('Re: ') ? original.subject : `Re: ${original.subject}`
+  const subject = replySubject(original.subject)
   const threadId = original.thread_id ?? original.id
   const senderLabel = peerMailSenderLabel(runtime, replier)
 

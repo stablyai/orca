@@ -252,6 +252,35 @@ describe("worker mail, which the host delivers past a Stop and ahead of the pers
     }
   }
 
+  it('derives a readable subject from an existing queued envelope', () => {
+    const subject = `${'Re: '.repeat(42)}Check the build`
+    const body = 'Re: Re: Body text'
+    const text = `${subject}\n${body}`
+    const queued = card('mail', 1, { paused: true })
+    queued.body.blocks = [{ type: 'text', text }]
+    queued.body.from = {
+      ...mailNotice,
+      orchestration: {
+        message: 'mail-notice',
+        mailbox: 'orca_session_id:chat',
+        dispatchId: null,
+        messages: [
+          {
+            messageId: 'msg_1',
+            runId: '',
+            from: 'orca_session_id:worker',
+            content: { subject: [0, subject.length], body: [subject.length + 1, text.length] }
+          }
+        ]
+      }
+    }
+    const [projected] = projectQueuedMessageCards([queued], [], { queuePaused: true })
+    expect(projected).toMatchObject({
+      text,
+      displayText: `Re: Check the build\n\n${body}`
+    })
+  })
+
   it("after Stop goes solid as the host sends it, while the person's held follow-up keeps its card", () => {
     const queued = [personCard('follow-up', 1), card('mail', 2, {}, mailNotice)]
     expect(drawn({ queued, queuePaused: true })).toEqual({
