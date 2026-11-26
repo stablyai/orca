@@ -20,6 +20,10 @@ import type { BotShareDevice } from '../../runtime/rpc/server/pairing/bot-share-
 import { makeTestBot } from '../bot.test-fixture'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
 import { remoteRuntimeClientCapabilities } from '../../../shared/remote-runtime/remote-runtime-client-capabilities'
+import type { RpcContext, RpcMethod } from '../../runtime/rpc/core'
+import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/published-layout/workspace-layout-published'
+import type { WorkspaceLayoutStreamEvent } from '../../../shared/workspace-layout/published-layout/workspace-layout-stream-frames'
+import { admitTeammateCall } from './teammate-call-admission'
 
 // The owner's host: a shared bot whose home parents one worker worktree, and the owner's own repo,
 // worktree and folder beside it.
@@ -60,7 +64,12 @@ const worktree = (id: string, repoId: string) => ({
   childWorktreeIds: []
 })
 const folder = (id: string) => ({ id, projectGroupId: `group-${id}`, path: `/f/${id}`, name: id })
-const repo = (id: string, projectGroupId: string) => ({ id, path: `/r/${id}`, projectGroupId })
+const repo = (id: string, projectGroupId: string) => ({
+  id,
+  path: `/r/${id}`,
+  projectGroupId,
+  gitRemoteIdentity: { canonicalKey: `github.com/acme/gh-${id}` }
+})
 
 let directory: string
 let db: OrchestrationDb
@@ -387,6 +396,157 @@ describe('a workspace teammate on a shared agent', () => {
       { worktree: WORKER, removed: true }
     ])
     tabStream.close()
+  })
+})
+
+describe('what a workspace teammate’s call may name', () => {
+  /** Whether the tier admits `method` with `params`, before its handler runs. */
+  async function admits(method: string, params: unknown) {
+    const found = ALL_RPC_METHODS.find((candidate) => candidate.name === method)
+    if (!found) {
+      throw new Error(`no method ${method}`)
+    }
+    const context = fake<RpcContext>({ runtime, callerScope: TEAMMATE })
+    return !(
+      'refusal' in
+      (await admitTeammateCall(context, TEAMMATE, { method: fake<RpcMethod>(found), params }))
+    )
+  }
+
+  it('keeps every call a chats-only teammate already makes', async () => {
+    for (const method of ['pairing.getEndpoints', 'botShare.provisionPhone', 'bots.github.state']) {
+      expect(await call(TEAMMATE, method, {})).not.toMatchObject({ code: 'forbidden' })
+    }
+  })
+
+  it('starts a chat in the agent’s workspaces under a new id, and none in the owner’s', async () => {
+    const create = (worktree: string, sessionId: string) => ({
+      envelope: { sessionId },
+      worktree: `id:${worktree}`,
+      agent: 'codex'
+    })
+    expect(await admits('agentSession.create', create(WORKER, chat(9)))).toBe(true)
+    expect(await admits('agentSession.ensure', create(HOME, chat(9)))).toBe(true)
+    expect(await admits('agentSession.create', create(OWNERS, chat(9)))).toBe(false)
+    // An id the owner's chat already holds is not a new chat.
+    expect(await admits('agentSession.ensure', create(WORKER, OWNERS_OTHER_CHAT))).toBe(false)
+  })
+
+  it('reads an agent CLI session running in the agent’s workspaces, by its provider id', async () => {
+    vi.spyOn(runtime, 'getAgentProviderSessionRows').mockReturnValue(
+      fake([
+        { providerSession: { id: 'cli-agent' }, worktreeId: WORKER, paneKey: 'p1' },
+        { providerSession: { id: 'cli-owner' }, worktreeId: OWNERS, paneKey: 'p2' }
+      ])
+    )
+    expect(await admits('nativeChat.readSession', { sessionId: 'cli-agent' })).toBe(true)
+    expect(await admits('nativeChat.subscribe', { sessionId: 'cli-owner' })).toBe(false)
+    expect(await admits('nativeChat.readSession', { sessionId: 'cli-unknown' })).toBe(false)
+  })
+
+  it('works on GitHub repos the agent’s workspaces push to, by slug', async () => {
+    const slug = (name: string) => ({ owner: 'acme', repo: name, number: 1 })
+    expect(await admits('github.project.workItemDetailsBySlug', slug('gh-repo-agent'))).toBe(true)
+    expect(await admits('github.project.workItemDetailsBySlug', slug('gh-repo-owner'))).toBe(false)
+  })
+
+  it('refuses a call that names no workspace, page or terminal rather than act on the owner’s', async () => {
+    vi.spyOn(runtime, 'browserTabList').mockResolvedValue(
+      fake({ tabs: [{ browserPageId: 'page-agent' }] })
+    )
+    for (const [method, params] of [
+      ['browser.tabCurrent', {}],
+      ['browser.snapshot', { page: 'page-agent' }],
+      ['workspacePorts.scan', {}],
+      ['terminal.resolveActive', {}],
+      ['orchestration.workerStart', { task: 'task-1', from: 'term_coord', agent: 'codex' }],
+      ['session.tabs.list', { worktree: `id:${OWNERS}` }]
+    ] as const) {
+      expect(await admits(method, params), method).toBe(false)
+    }
+    expect(await admits('browser.snapshot', { page: 'page-agent', worktree: `id:${WORKER}` })).toBe(
+      true
+    )
+    expect(await admits('browser.snapshot', { page: 'page-owner', worktree: `id:${WORKER}` })).toBe(
+      false
+    )
+    expect(await admits('session.tabs.list', { worktree: `id:${WORKER}` })).toBe(true)
+  })
+
+  it('streams layouts of the agent’s workspaces in order, the home with only their own chats', async () => {
+    const layout = (worktreeId: string, sessionIds: string[]): PublishedWorkspaceLayout =>
+      fake({
+        worktreeId,
+        groups: [{ id: 'g', tabIds: [...sessionIds, 'term'] }],
+        tabs: [
+          ...sessionIds.map((id) => ({ id, kind: 'agent-session', entityId: id })),
+          { id: 'term', kind: 'terminal', entityId: 'pty' }
+        ],
+        editorFiles: [],
+        browserTabs: []
+      })
+    let feed: ((event: WorkspaceLayoutStreamEvent) => void) | undefined
+    vi.spyOn(runtime, 'subscribeWorkspaceLayouts').mockImplementation((listener) => {
+      feed = listener
+      return fake({
+        snapshot: [
+          { key: HOME, layout: layout(HOME, [ALICES_CHAT, OWNERS_CHAT]) },
+          { key: WORKER, layout: layout(WORKER, [OWNERS_WORKSPACE_CHAT]) },
+          { key: OWNERS, layout: layout(OWNERS, [OWNERS_OTHER_CHAT]) }
+        ],
+        seq: 1,
+        unsubscribe: () => {}
+      })
+    })
+    const Frame = z.looseObject({
+      type: z.string(),
+      key: z.string().optional(),
+      subscriptionId: z.string().optional(),
+      layout: z.looseObject({ tabs: z.array(z.looseObject({ id: z.string() })) }).optional(),
+      workspaces: z
+        .array(
+          z.looseObject({
+            key: z.string(),
+            layout: z.looseObject({ tabs: z.array(z.looseObject({ id: z.string() })) })
+          })
+        )
+        .optional()
+    })
+    const frames: z.infer<typeof Frame>[] = []
+    void dispatcher.dispatchStreamingObjects(
+      { id: 'l1', authToken: '', method: 'layout.subscribe', params: {} },
+      (response) => void (response.ok && frames.push(Frame.parse(response.result))),
+      { ...options(TEAMMATE), connectionId: 'c-layout' }
+    )
+    await vi.waitFor(() => expect(frames[0]?.type).toBe('snapshot'))
+    expect(
+      frames[0]?.workspaces?.map((entry) => [entry.key, entry.layout.tabs.map((tab) => tab.id)])
+    ).toEqual([
+      [HOME, [ALICES_CHAT]],
+      // A worker's workspace goes whole, as it does to the owner.
+      [WORKER, [OWNERS_WORKSPACE_CHAT, 'term']]
+    ])
+    const host = fake<{ emitClientEvent: (event: RuntimeClientEvent) => void }>(runtime)
+    // A new worker's first layout, judged after the re-read its announcement causes.
+    scanned = [...scanned, WORKER_2]
+    lineage = { ...lineage, [`worktree:${WORKER_2}`]: workerRecord(WORKER_2) }
+    host.emitClientEvent({ type: 'worktreesChanged', repoId: 'repo-agent' })
+    feed?.({ type: 'workspace', key: WORKER_2, layout: layout(WORKER_2, []) })
+    // A shown worker's removal, after the set dropped it.
+    scanned = scanned.filter((id) => id !== WORKER)
+    host.emitClientEvent({ type: 'worktreesChanged', repoId: 'repo-agent' })
+    feed?.({ type: 'removed', key: WORKER })
+    feed?.({ type: 'workspace', key: OWNERS, layout: layout(OWNERS, []) })
+    feed?.({ type: 'workspace', key: HOME, layout: layout(HOME, [OWNERS_CHAT, ALICES_CHAT]) })
+    await vi.waitFor(() => expect(frames).toHaveLength(4))
+    expect(frames.slice(1).map((frame) => `${frame.type}:${frame.key}`)).toEqual([
+      `workspace:${WORKER_2}`,
+      `removed:${WORKER}`,
+      `workspace:${HOME}`
+    ])
+    // The home goes out as they see it: the owner's chat and the home's terminal stay the owner's.
+    expect(frames[3]?.layout?.tabs.map((tab) => tab.id)).toEqual([ALICES_CHAT])
+    runtime.cleanupSubscription(`layout:c-layout:${frames[0]?.subscriptionId}`)
   })
 })
 

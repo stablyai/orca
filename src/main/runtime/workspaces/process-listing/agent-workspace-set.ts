@@ -21,6 +21,8 @@ export type AgentWorkspaceSet = {
   /** Its workspaces' paths, and its repos' paths and names, as selectors may name them. */
   paths: ReadonlySet<string>
   repoNames: ReadonlySet<string>
+  /** Its repos' remotes (`gitRemoteIdentity.canonicalKey`, lower case), for GitHub slugs. */
+  remoteKeys: ReadonlySet<string>
 }
 
 /** Null when the bot is not on this host. */
@@ -40,6 +42,7 @@ export function collectAgentWorkspaceSet(
   const groupIds = new Set<string>()
   const paths = new Set<string>()
   const repoNames = new Set<string>()
+  const remoteKeys = new Set<string>()
   for (const worktree of worktrees) {
     const key = worktreeWorkspaceKey(worktree.id)
     if (homeOf(key, worktree) === homeKey) {
@@ -59,12 +62,15 @@ export function collectAgentWorkspaceSet(
   for (const repo of store?.getRepos() ?? []) {
     if (repoIds.has(repo.id)) {
       repoNames.add(repo.path).add(repo.displayName)
+      if (repo.gitRemoteIdentity) {
+        remoteKeys.add(repo.gitRemoteIdentity.canonicalKey.toLowerCase())
+      }
       if (repo.projectGroupId) {
         groupIds.add(repo.projectGroupId)
       }
     }
   }
-  return { homeKey, keys, repoIds, groupIds, paths, repoNames }
+  return { homeKey, keys, repoIds, groupIds, paths, repoNames, remoteKeys }
 }
 
 /** Whether `id` (a row id, a bare worktree id or a workspace key) is one of the agent's workspaces. */
@@ -82,4 +88,10 @@ export function agentHasWorkspaceSelector(set: AgentWorkspaceSet, selector: stri
 export function agentHasRepoSelector(set: AgentWorkspaceSet, selector: string): boolean {
   const named = selector.replace(/^(id|path):/, '')
   return set.repoIds.has(named) || set.repoNames.has(named)
+}
+
+/** Whether a GitHub `owner/repo` is one of its repos' remotes. */
+export function agentHasGitHubSlug(set: AgentWorkspaceSet, owner: string, repo: string): boolean {
+  const tail = `/${owner}/${repo}`.toLowerCase()
+  return [...set.remoteKeys].some((key) => key.endsWith(tail))
 }

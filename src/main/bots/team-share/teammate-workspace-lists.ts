@@ -123,6 +123,8 @@ export const TEAMMATE_HANDLER_FILTERED: ReadonlySet<string> = new Set([
   'bots.roster',
   'bots.chats.own',
   'bots.agentChoices',
+  'bots.github.state',
+  'bots.linear.state',
   'google.status'
 ])
 

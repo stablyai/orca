@@ -22,6 +22,8 @@ export type MultiplexEmit = (result: unknown) => void
 
 export type TerminalMultiplexConnectionBase = {
   runtime: RpcContext['runtime']
+  /** Set for a workspace teammate: whether a handle is one of the shared agent's terminals. */
+  admitsTerminal?: (handle: string) => Promise<boolean>
   connectionId: string
   // The authenticated device, whose departure ends this connection's views.
   viewer: RemoteTerminalViewer

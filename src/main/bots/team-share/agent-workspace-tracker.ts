@@ -19,7 +19,8 @@ export const NO_WORKSPACES: AgentWorkspaceSet = {
   repoIds: new Set(),
   groupIds: new Set(),
   paths: new Set(),
-  repoNames: new Set()
+  repoNames: new Set(),
+  remoteKeys: new Set()
 }
 
 /** The workspace teammate's scope, or null for anyone else. */

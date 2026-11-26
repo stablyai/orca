@@ -6,6 +6,10 @@ import {
   TEAMMATE_LISTED_METHODS
 } from '../../../bots/team-share/teammate-workspace-lists'
 import { TEAMMATE_CLIENT_EVENT_DECISIONS } from '../../../bots/team-share/teammate-client-events'
+import {
+  TEAMMATE_HOST_FACT_METHODS,
+  TEAMMATE_TARGET_PARAMS
+} from '../../../bots/team-share/teammate-call-targets'
 
 const classified = Object.entries(TEAMMATE_METHOD_CLASS_TABLE).flatMap(([kind, names]) =>
   names.map((name: string) => ({ name, kind }))
@@ -21,10 +25,34 @@ describe('the workspace tier’s method table', () => {
     expect([...classOf.keys()].filter((name) => !registered.includes(name))).toEqual([])
   })
 
-  it('admits no settings, accounts, skills, host, pairing or desktop method', () => {
+  it('keeps every method a chats-only teammate already has', () => {
+    const lost = ALL_RPC_METHODS.filter(
+      (method) => method.share !== 'not-shared' && classOf.get(method.name) === 'refused'
+    ).map((method) => method.name)
+    expect(lost).toEqual([])
+  })
+
+  it('names a target in every scoped method’s params, or reads only host facts', () => {
+    const untargeted = ALL_RPC_METHODS.filter((method) => {
+      const shape = method.params && 'shape' in method.params ? method.params.shape : null
+      return (
+        classOf.get(method.name) === 'scoped' &&
+        // A shared method keeps its own share check (its bot, its chat).
+        method.share === 'not-shared' &&
+        shape !== null &&
+        typeof shape === 'object' &&
+        !Object.keys(shape).some((key) => TEAMMATE_TARGET_PARAMS.has(key)) &&
+        !TEAMMATE_HOST_FACT_METHODS.has(method.name)
+      )
+    }).map((method) => method.name)
+    expect(untargeted).toEqual([])
+  })
+
+  it('admits no settings, accounts, skills, host, pairing or desktop method beyond today’s share', () => {
     const admittedAdmin = ALL_RPC_METHODS.filter(
       (method) =>
         classOf.get(method.name) !== 'refused' &&
+        method.share === 'not-shared' &&
         method.permission !== 'workspace' &&
         method.permission !== 'device-self'
     ).map((method) => method.name)

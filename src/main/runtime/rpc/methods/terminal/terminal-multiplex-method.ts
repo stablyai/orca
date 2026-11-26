@@ -16,6 +16,7 @@ import { installMultiplexSlotFrames } from './terminal-multiplex-slot-frames'
 import { installMultiplexSubscribeFrame } from './terminal-multiplex-subscribe-frame'
 import { createMultiplexPtyWaitAdmission } from './terminal-multiplex-pty-wait-admission'
 import { TerminalMultiplexLinkEstimate } from './terminal-multiplex-link-estimate'
+import { teammateTerminalAdmission } from '../../../../bots/team-share/teammate-call-targets'
 
 export const TERMINAL_MULTIPLEX_METHODS = [
   defineStreamingMethod({
@@ -23,9 +24,8 @@ export const TERMINAL_MULTIPLEX_METHODS = [
     permission: 'workspace',
     share: 'not-shared',
     params: TerminalMultiplex,
-    handler: async (
-      _params,
-      {
+    handler: async (_params, context, emit) => {
+      const {
         runtime,
         connectionId,
         sendBinary,
@@ -33,9 +33,7 @@ export const TERMINAL_MULTIPLEX_METHODS = [
         signal,
         clientId,
         clientCapabilities
-      },
-      emit
-    ) => {
+      } = context
       if (!sendBinary || !registerBinaryStreamHandler || !connectionId) {
         throw new Error('binary_terminal_stream_required')
       }
@@ -47,6 +45,7 @@ export const TERMINAL_MULTIPLEX_METHODS = [
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: installers below fill every method synchronously, and no frame can arrive before the control handler is registered after them.
       const state = {
         runtime,
+        admitsTerminal: teammateTerminalAdmission(context),
         connectionId,
         viewer: remoteTerminalViewer(clientId, clientCapabilities),
         sendBinary,

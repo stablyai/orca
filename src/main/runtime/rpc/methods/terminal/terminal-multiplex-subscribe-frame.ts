@@ -15,6 +15,11 @@ export function installMultiplexSubscribeFrame(state: TerminalMultiplexConnectio
       return
     }
     const request = parsed.data
+    if (state.admitsTerminal && !(await state.admitsTerminal(request.terminal))) {
+      state.sendStreamError(request.streamId, 'terminal_not_found')
+      state.emit({ type: 'end', streamId: request.streamId })
+      return
+    }
     const resolution = resolveMultiplexSubscribePty(state, request)
     const ptyId =
       typeof resolution === 'string' || resolution === null ? resolution : await resolution
