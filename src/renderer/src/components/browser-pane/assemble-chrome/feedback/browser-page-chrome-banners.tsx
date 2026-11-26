@@ -20,20 +20,25 @@ export function CookiesImportedBanner({
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const countLabel = uiNumberFormat(COUNT_FORMAT, intlLocale).format(count)
+  const message = t(
+    'browser.cookieImport.notice.importedCount',
+    'Imported {{countLabel}} cookies',
+    {
+      count,
+      countLabel,
+      defaultValue_one: 'Imported {{countLabel}} cookie'
+    }
+  )
   return (
     // Why pl-3/pr-2: the check centers on the toolbar's back button, the × on its close button.
     <div className="flex min-h-9 items-center gap-2 border-b border-border/60 bg-background pl-3 pr-2 text-[13px] text-foreground">
       <CircleCheck className="size-4 shrink-0 text-status-success" aria-hidden />
-      <span className="min-w-0 flex-1 truncate">
-        {t('browser.cookieImport.notice.importedCount', 'Imported {{countLabel}} cookies', {
-          count,
-          countLabel,
-          defaultValue_one: 'Imported {{countLabel}} cookie'
-        })}
+      <span className="min-w-0 flex-1 truncate" title={message}>
+        {message}
       </span>
       <Button
-        size="xs"
-        className="shrink-0 rounded-sm px-2.5 text-[13px]"
+        size="xs-notice"
+        className="shrink-0"
         onClick={() => {
           onReloadPage()
           onDismiss()
