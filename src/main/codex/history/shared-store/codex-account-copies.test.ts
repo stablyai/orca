@@ -4,12 +4,13 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { zstdCompressSync } from 'node:zlib'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { cleanUpCodexAccountCopies } from './codex-account-copies-cleanup'
@@ -41,6 +42,8 @@ function run(
     beforeDelete?: () => void
     /** False: Codex's lock coordination can't be taken. */
     locks?: boolean
+    /** Copies carrying an ACL entry. */
+    acl?: (paths: string[]) => Set<string> | null
   } = {}
 ) {
   return cleanUpCodexAccountCopies({
@@ -52,6 +55,7 @@ function run(
     moveOutcome: () => options.outcome ?? 'moved',
     shouldStop: () => false,
     findOpen: async (paths) => (options.open ? options.open(paths) : new Set()),
+    findAcl: async (paths) => (options.acl ? options.acl([...paths]) : new Set()),
     holdLocks: async () =>
       options.locks === false ? null : { stillHeld: () => true, release: async () => {} },
     worker: {
@@ -171,6 +175,36 @@ describe('cleanUpCodexAccountCopies', () => {
       await run()
 
       expect(existsSync(copy)).toBe(true)
+    }
+  )
+
+  it('keeps a copy with an ACL entry, or when ACLs cannot be read', async () => {
+    put(storeFile(), LINE_1)
+    const copy = put(conflictCopy(), LINE_1)
+
+    await run({ acl: (paths) => new Set(paths) })
+    expect(existsSync(copy)).toBe(true)
+    await run({ acl: () => null })
+    expect(existsSync(copy)).toBe(true)
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps a copy whose folder became a link after its check',
+    async () => {
+      put(storeFile(), LINE_1)
+      const copy = put(conflictCopy(), LINE_1)
+      const folder = dirname(copy)
+      const moved = join(root, 'moved')
+
+      // The same file through a link: only the link checks tell the unlink would go elsewhere.
+      await run({
+        beforeDelete: () => {
+          renameSync(folder, moved)
+          symlinkSync(moved, folder)
+        }
+      })
+
+      expect(existsSync(join(moved, basename(copy)))).toBe(true)
     }
   )
 

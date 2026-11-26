@@ -20,8 +20,11 @@ export type CodexAccountCopiesRequest =
       /** Codex's thread-writer-locks folders whose coordination the caller holds right now. */
       lockFolders: string[]
     }
+  /** Removes the folders this run's deletes emptied, once per home after its batches. */
+  | { op: 'prune'; accountHome: string; storeHome: string }
 
 export type CodexAccountCopiesResponse =
   | { ok: true; op: 'verify'; verified: VerifiedCopy[]; tally: CopiesTally; bytesRead: number }
   | { ok: true; op: 'delete'; tally: CopiesTally }
+  | { ok: true; op: 'prune' }
   | { ok: false; message: string }

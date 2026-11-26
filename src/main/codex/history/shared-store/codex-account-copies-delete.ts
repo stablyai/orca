@@ -29,6 +29,23 @@ export function lstatOrNull(path: string): BigIntStats | null {
   }
 }
 
+/** No folder between the home and `path`, nor `path` itself, is a link (or a Windows junction). */
+export function hasNoLinkBelowHome(accountHome: string, path: string): boolean {
+  const parts = relative(accountHome, path).split(/[\\/]/)
+  if (parts.length === 0 || parts[0] === '..' || parts[0] === '') {
+    return false
+  }
+  let current = accountHome
+  for (const part of parts) {
+    current = join(current, part)
+    const stats = lstatOrNull(current)
+    if (!stats || stats.isSymbolicLink()) {
+      return false
+    }
+  }
+  return true
+}
+
 /** Whether `path`'s folder is where it says inside the home: no link anywhere above it. */
 export function isInsideHome(accountHome: string, path: string): boolean {
   try {
@@ -100,6 +117,11 @@ export function deleteCheckedCopies(
         !original ||
         fileKey(original) !== copy.originalKey
       ) {
+        tally.changed += 1
+        continue
+      }
+      // Checked last: a folder swapped for a link since would send the unlink elsewhere.
+      if (!hasNoLinkBelowHome(accountHome, copy.copy)) {
         tally.changed += 1
         continue
       }

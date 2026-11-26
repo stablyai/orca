@@ -36,6 +36,8 @@ const MERGE_FOLDER = new RegExp(
   `^(${HISTORY_FOLDERS.join('|')})(?:\\.\\d+)?${MERGE_PENDING_SUFFIX.replaceAll('.', '\\.')}$`
 )
 const ROLLOUT_FILE = /^rollout-.*\.jsonl(?:\.zst)?$/
+// What one launch's delete phase can get through; the rest is verified again next launch.
+const MAX_VERIFIED_PER_HOME = 5_000
 
 /**
  * `maxBytes`: what this home may still read of copies and originals together; `admitOversized`:
@@ -169,7 +171,7 @@ export async function verifyCodexAccountCopies(args: {
   scan: for (const root of listCopyRoots(args.accountHome, args.storeHome)) {
     for (const copy of rolloutFiles(root.root)) {
       const name = relative(args.accountHome, copy).split(/[\\/]/).join('/')
-      if (Date.now() > args.budget.deadline) {
+      if (Date.now() > args.budget.deadline || verified.length >= MAX_VERIFIED_PER_HOME) {
         // The rest waits for a later launch, unvisited: its cost stays within the deadline.
         outOfTime = true
         tally.deferred += 1
@@ -273,10 +275,18 @@ export async function verifyCodexAccountCopies(args: {
       }
     }
   }
+  // Only what can't become deletable in this streak: a differing, open or orphaned copy could.
   const settled =
     stamp !== null &&
     verified.length === 0 &&
-    tally.deferred + tally.changed + tally.error + tally.missing_original === 0
+    tally.deferred +
+      tally.changed +
+      tally.error +
+      tally.missing_original +
+      tally.differs +
+      tally.open +
+      tally.busy ===
+      0
   writeKeptCopies(args.accountHome, { differs: nextKept, settled: settled ? stamp : null })
   return { verified, tally, bytesRead }
 }
@@ -298,12 +308,14 @@ export async function runCodexAccountCopiesRequest(
   switch (request.op) {
     case 'verify':
       return { ok: true, op: 'verify', ...(await verifyCodexAccountCopies(request)) }
-    case 'delete': {
-      const tally = deleteCheckedCopies(request.accountHome, request.copies, request.lockFolders)
-      if (tally.deleted > 0) {
-        removeEmptiedCopyFolders(request.accountHome, request.storeHome)
+    case 'delete':
+      return {
+        ok: true,
+        op: 'delete',
+        tally: deleteCheckedCopies(request.accountHome, request.copies, request.lockFolders)
       }
-      return { ok: true, op: 'delete', tally }
-    }
+    case 'prune':
+      removeEmptiedCopyFolders(request.accountHome, request.storeHome)
+      return { ok: true, op: 'prune' }
   }
 }

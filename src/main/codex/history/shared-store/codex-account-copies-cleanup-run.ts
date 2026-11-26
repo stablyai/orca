@@ -67,6 +67,7 @@ export class CodexAccountCopiesCleanupRun {
     }
     const worker = startCodexAccountCopiesWorker()
     this.worker = worker
+    let deletedAny = false
     try {
       const tally = await cleanUpCodexAccountCopies({
         homes,
@@ -75,17 +76,21 @@ export class CodexAccountCopiesCleanupRun {
         shouldStop: () => this.worker !== worker || isCodexAccountHistoryWorkStopping(),
         worker,
         version: getAppEnvironment().getVersion(),
-        managedAccountsRoot: join(getAppEnvironment().getPath('userData'), 'codex-accounts')
+        managedAccountsRoot: join(getAppEnvironment().getPath('userData'), 'codex-accounts'),
+        onDeleted: () => {
+          deletedAny = true
+        }
       })
-      if (tally && tally.deleted > 0) {
-        forgetCodexHistoryDiskUsage()
-      }
       if (tally) {
         await reportCodexHistoryCopiesCleanup(this.deps.markerPath(), tally)
       }
     } catch (error) {
       console.warn('[codex-account-history] Old copies cleanup failed:', error)
     } finally {
+      // Also when stopped midway: whatever was deleted no longer counts toward disk usage.
+      if (deletedAny) {
+        forgetCodexHistoryDiskUsage()
+      }
       if (this.worker === worker) {
         this.worker = null
         await worker.stop()

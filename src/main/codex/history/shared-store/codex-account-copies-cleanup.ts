@@ -6,6 +6,7 @@ import {
 } from '../../../worker-threads/worker-thread-entry-path'
 import { join } from 'node:path'
 import { findOpenFiles } from '../../../filesystem/open-file-check'
+import { findFilesWithAcl } from '../../../filesystem/macos-file-acl'
 import { distinctFolders } from '../bridges/codex-legacy-session-copy-writer-locks'
 import { holdThreadLockFolders, WRITER_LOCKS } from './codex-thread-writer-locks'
 import { withTimeoutResult } from '../../../../shared/concurrency/promise-timeout-fallback'
@@ -21,6 +22,8 @@ const WORKER_FILENAME = 'codex-account-copies-worker-entry.js'
 // waits for later launches, so a heavy history costs a few idle minutes spread over runs.
 const MAX_BYTES_PER_LAUNCH = 4 * 1024 ** 3
 const MAX_MS_PER_LAUNCH = 3 * 60_000
+// Each home's deletes get their own time after its comparisons, so a long check still deletes.
+const DELETE_MS_PER_HOME = 60_000
 const GAP_BETWEEN_HOMES_MS = 1_000
 const STOP_WAIT_MS = 10_000
 // One lock hold and one `lsof` per batch: Codex waits on coordination for well under a second,
@@ -84,6 +87,9 @@ export async function cleanUpCodexAccountCopies(args: {
   findOpen?: typeof findOpenFiles
   /** Holds Codex's lock coordination in these folders; null when it can't be taken. */
   holdLocks?: typeof holdThreadLockFolders
+  findAcl?: typeof findFilesWithAcl
+  /** Called after any batch deleted a copy, so a stop midway still refreshes disk usage. */
+  onDeleted?: () => void
   platform?: NodeJS.Platform
   /** This Orca's version; each home settled under it is skipped. */
   version: string
@@ -97,6 +103,7 @@ export async function cleanUpCodexAccountCopies(args: {
   const moved = (home: string): boolean => args.moveOutcome(home) === 'moved'
   const findOpen = args.findOpen ?? findOpenFiles
   const holdLocks = args.holdLocks ?? holdThreadLockFolders
+  const findAcl = args.findAcl ?? findFilesWithAcl
   const total = { ...emptyTally(), homes: 0 }
   const deadline = Date.now() + MAX_MS_PER_LAUNCH
   let bytesLeft = MAX_BYTES_PER_LAUNCH
@@ -135,6 +142,8 @@ export async function cleanUpCodexAccountCopies(args: {
     bytesLeft = Math.max(0, bytesLeft - checked.bytesRead)
     addTally(total, checked.tally)
     // The account's lock folder is linked to the store's once its history moved: one folder.
+    const deleteDeadline = Date.now() + DELETE_MS_PER_HOME
+    let deletedHere = 0
     const lockFolders = await distinctFolders([
       join(args.storeHome, WRITER_LOCKS),
       join(accountHome, WRITER_LOCKS)
@@ -144,7 +153,7 @@ export async function cleanUpCodexAccountCopies(args: {
         return null
       }
       const batch = checked.verified.slice(start, start + OPEN_CHECK_BATCH)
-      if (!moved(accountHome) || Date.now() > deadline) {
+      if (!moved(accountHome) || Date.now() > deleteDeadline) {
         total.deferred += batch.length
         continue
       }
@@ -160,12 +169,17 @@ export async function cleanUpCodexAccountCopies(args: {
           batch.map((copy) => copy.copy),
           { shouldStop: args.shouldStop }
         )
+        // macOS: an ACL can let another user write without any mode bit, and lsof can't see them.
+        const withAcl =
+          open && platform === 'darwin'
+            ? await findAcl(batch.map((copy) => copy.copy))
+            : new Set<string>()
         if (args.shouldStop()) {
           return null
         }
         const closed =
-          open && hold.stillHeld() && moved(accountHome)
-            ? batch.filter((copy) => !open.has(copy.copy))
+          open && withAcl && hold.stillHeld() && moved(accountHome)
+            ? batch.filter((copy) => !open.has(copy.copy) && !withAcl.has(copy.copy))
             : []
         total.open += batch.length - closed.length
         if (closed.length === 0) {
@@ -180,6 +194,10 @@ export async function cleanUpCodexAccountCopies(args: {
         })
         if (deleted.ok && deleted.op === 'delete') {
           addTally(total, deleted.tally)
+          deletedHere += deleted.tally.deleted
+          if (deleted.tally.deleted > 0) {
+            args.onDeleted?.()
+          }
         } else {
           if (args.shouldStop()) {
             return null
@@ -189,6 +207,10 @@ export async function cleanUpCodexAccountCopies(args: {
       } finally {
         await hold.release()
       }
+    }
+    // Once per home and outside the locks: empty folders only, so Codex never waits on the walk.
+    if (deletedHere > 0 && !args.shouldStop()) {
+      await args.worker.call({ op: 'prune', accountHome, storeHome: args.storeHome })
     }
     await new Promise((resolve) => setTimeout(resolve, GAP_BETWEEN_HOMES_MS).unref?.())
   }
