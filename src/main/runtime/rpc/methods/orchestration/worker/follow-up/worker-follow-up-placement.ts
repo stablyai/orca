@@ -121,14 +121,15 @@ export function placedWorkerParty(
 }
 
 /** Bring a closed worker's chat back as a background tab in its own conversation; its next turn starts the agent at rest.
- *  Its custody identity comes from the worker, since its released row cannot vouch for it. */
+ *  Its custody identity comes from the worker when its row was released or stays external. */
 export async function reopenWorkerChat(
   runtime: Pick<
     OrcaRuntimeService,
     'ensureStructuredAgentSessionHost' | 'publishStructuredAgentSessionTab'
   >,
   db: OrchestrationDb,
-  handle: string
+  handle: string,
+  externalCustody = false
 ): Promise<ReopenedWorker> {
   const identity = resolveStructuredWorkerIdentity(handle, db)
   await runtime.ensureStructuredAgentSessionHost()
@@ -142,10 +143,11 @@ export async function reopenWorkerChat(
   // A `/clear` moved the conversation on; reopen the session that runs it now.
   const running = structuredWorkerSession(identity)
   const sessionId = running.kind === 'here' ? running.sessionId : identity.sessionId
-  // A chat Orca's release left asleep stays Orca's; a tab the user brought back or woke is theirs.
+  // A chat Orca's release left asleep stays Orca's; an external chat or a tab the user brought back stays theirs.
   const userOpened =
-    host.isSessionTabVisible(sessionId) &&
-    host.deps.store.getRecord(sessionId)?.sleptAt === undefined
+    externalCustody ||
+    (host.isSessionTabVisible(sessionId) &&
+      host.deps.store.getRecord(sessionId)?.sleptAt === undefined)
   await publishChatTabInBackground(runtime, host, sessionId)
   return {
     handle,

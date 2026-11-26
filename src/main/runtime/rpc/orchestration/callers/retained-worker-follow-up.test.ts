@@ -323,6 +323,46 @@ describe('follow-up custody for a closed retained worker chat', () => {
     expect(deliveredTo).toEqual([{ sessionId: SESSION_Y, expectedRuntimeFence: 7 }])
   })
 
+  it('reopens a closed external worker chat without claiming ownership', async () => {
+    const resource = h.db.getWorkerTerminalResourceByOwner(owner.id)!
+    h.db.db
+      .prepare(
+        `UPDATE worker_terminal_resources
+            SET ownership_state = 'external', release_state = 'retained',
+                retained_reason = 'external_terminal'
+          WHERE id = ?`
+      )
+      .run(resource.id)
+    const first = resultOf(await send())
+    expect(first).toMatchObject({ delivery: 'reopened', followUpOf: owner.id })
+    const firstFollowUpId = String(first.dispatchId)
+    expect(h.db.getWorkerTerminalResourceByOwner(firstFollowUpId)).toMatchObject({
+      ownership_state: 'external',
+      terminal_handle: handle
+    })
+    expect(
+      h.db.settleWorkerReport({
+        taskId: String(first.taskId),
+        dispatchId: firstFollowUpId,
+        outcome: 'succeeded',
+        result: 'Done'
+      })
+    ).toMatchObject({ action: 'settled' })
+    visible.delete(SESSION_Y)
+    const second = resultOf(await send('Continue external again'))
+    expect(second).toMatchObject({ delivery: 'reopened', followUpOf: firstFollowUpId })
+    expect(custodyRows()).toEqual([
+      expect.objectContaining({ ownership_state: 'external' }),
+      expect.objectContaining({ ownership_state: 'external' }),
+      expect.objectContaining({ ownership_state: 'external' })
+    ])
+    expect(
+      deliveredTo
+        .filter(({ sessionId }) => sessionId !== SESSION_X)
+        .map(({ sessionId }) => sessionId)
+    ).toEqual([SESSION_Y, SESSION_Y])
+  })
+
   it('stores a competing send on the follow-up that published the tab first', async () => {
     const entered = Promise.withResolvers<void>()
     const workspace = Promise.withResolvers<typeof worktree>()

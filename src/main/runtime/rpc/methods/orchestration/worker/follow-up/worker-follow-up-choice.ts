@@ -97,8 +97,8 @@ export async function chooseWorkerFollowUpPlacement(
       delivery: 'reopened',
       worktreeId,
       ...(options.agent ? { agent: options.agent } : {}),
-      ...(released(resource)
-        ? { reopen: () => reopenWorkerChat(runtime, db, handle) }
+      ...(released(resource) || resource.ownership_state !== 'owned'
+        ? { reopen: () => reopenWorkerChat(runtime, db, handle, !released(resource)) }
         : { retainedChat })
     }
   }
