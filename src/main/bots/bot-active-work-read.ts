@@ -1,14 +1,24 @@
 // Reads a bot's live work for any of its turns: open items and the work record, cached for a few
 // seconds per bot, since the work record checks each worker it lists.
-import type { BotItem } from '../../shared/bots/bot-items'
+import { isBotItemSnoozed, type BotItem } from '../../shared/bots/bot-items'
 import type { BotWorkerSummary } from '../../shared/bots/bot-work-list'
+import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { type BotActiveWorkSection, botActiveWorkSection } from './bot-active-work'
+import {
+  BOT_ACTIVE_WORK,
+  botActiveWorkSection,
+  nothingRuns,
+  type BotActiveWorkSection,
+  type BotIdleItem
+} from './bot-active-work'
+import type { BotItemLinkJoin } from './bot-items-link-join'
+import type { BotItemsRemote } from './bot-items-ops'
 import type { BotItemRecord } from './bot-items-schema'
+import { BOT_WORK_NOTE_TIMEOUT_MS } from './bot-work-record'
 
 const FRESH_MS = 15_000
 /** Items in progress or waiting read, newest first; the block shows at most 12 rows anyway. */
-const WORKING_READ = 12
+const WORKING_READ = BOT_ACTIVE_WORK.rows
 /** Needs you items are read whole, a page at a time, so the oldest ask is never the one cut. */
 const PAGE = 100
 
@@ -26,6 +36,37 @@ export type BotActiveWorkReads<R extends Listed = BotItemRecord> = {
 }
 
 type Cached = { at: number; section: Promise<BotActiveWorkSection> }
+
+export function readBotIdleItems(
+  botId: string,
+  store: () => Pick<BotItemsRemote, 'workingItems'>,
+  join: Pick<BotItemLinkJoin, 'readLinkedWorkers' | 'linkView'>,
+  owningChat: (item: Pick<BotItemRecord, 'chatId' | 'source'>) => BotItem['chat'],
+  now = Date.now()
+): Promise<BotIdleItem[]> {
+  const deadline = performance.now() + BOT_WORK_NOTE_TIMEOUT_MS
+  const read = async (): Promise<BotIdleItem[]> => {
+    const items = await store().workingItems(botId, WORKING_READ)
+    if (performance.now() >= deadline) {
+      return []
+    }
+    const candidates = items.filter((item) => !isBotItemSnoozed(item, now))
+    const refs = candidates.flatMap(({ links }) =>
+      links.flatMap((link) => (link.kind === 'dispatch' ? [link.ref] : []))
+    )
+    const workers = await join.readLinkedWorkers(refs, { pullRequests: false })
+    if (performance.now() >= deadline) {
+      return []
+    }
+    return candidates.flatMap((item) => {
+      const links = item.links.map((link) => join.linkView(link, workers.get(link.ref)))
+      return nothingRuns({ status: item.status, links })
+        ? [{ number: item.number, title: item.title, chat: owningChat(item) }]
+        : []
+    })
+  }
+  return withTimeout(read(), BOT_WORK_NOTE_TIMEOUT_MS, [])
+}
 
 /** A reader of the section, which rejects on a failure so the turn keeps what it last had. */
 export function createBotActiveWorkReader() {

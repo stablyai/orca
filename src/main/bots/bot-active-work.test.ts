@@ -44,6 +44,10 @@ describe('an In progress item nothing runs for', () => {
     expect(say('chat', [idle7])).toContain('Item 7 is In progress')
     expect(say('chat', [idle7])).toBeNull()
     const other = botActiveWorkSection([makeTestBotItem(7), makeTestBotItem(8)], [])
+    expect(other.idle).toEqual([
+      { number: 7, key: 'e10' },
+      { number: 8, key: 'e10' }
+    ])
     expect(say('chat', other.idle!)).toMatch(/^\[Orca: Item 8 /)
     expect(say('chat', [{ number: 7, key: 'e11' }])).toContain('Item 7')
     expect(say('other-chat', [idle7])).toContain('Item 7')

@@ -1,6 +1,5 @@
 import { expect, it } from 'vitest'
 import { makeTestBotItem } from '../../shared/bots/bot-item.test-fixture'
-import { botActiveWorkSection } from './bot-active-work'
 import { lookAroundPrompt } from './bot-look-around-prompt'
 
 it('keeps item and chat titles on one quoted line inside the facts fence', () => {
@@ -11,7 +10,7 @@ it('keeps item and chat titles on one quoted line inside the facts fence', () =>
   const prompt = lookAroundPrompt({
     focus: '',
     history: { open: [], started: [], dismissed: [] },
-    idleItems: botActiveWorkSection([item], []).idle ?? []
+    idleItems: [item]
   })
 
   expect(prompt).toContain(

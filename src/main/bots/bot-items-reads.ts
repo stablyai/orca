@@ -39,6 +39,11 @@ const CLOSE_LOOKBACK_EVENTS = 200
 
 export type BotItemClose = { actor: BotItemActor; actsFor: readonly BotRequestAsker[] | null }
 
+type WorkingItem = Pick<
+  BotItemRecord,
+  'chatId' | 'source' | 'number' | 'title' | 'status' | 'snoozedUntil'
+> & { links: BotItemLinkRecord[] }
+
 export class BotItemsReads extends BotItemsTables {
   /** Links of a kind to any of these refs, across items. */
   linksTo(kind: BotItemLinkKind, refs: readonly string[]): BotItemLinkRecord[] {
@@ -134,6 +139,30 @@ export class BotItemsReads extends BotItemsTables {
       )
       .map(itemRecordOf)
     return { items, counts }
+  }
+
+  /** The latest work candidates, by the owner/status/activity index, without counting other items. */
+  workingItems(botId: string, limit: number): WorkingItem[] {
+    return this.db
+      .prepare(
+        `SELECT * FROM items WHERE owner_bot_id = ? AND status = 'working'
+         ORDER BY last_activity_at DESC LIMIT ?`
+      )
+      .all(botId, limit)
+      .map((row) => {
+        const { uid, chatId, source, number, title, status, snoozedUntil } = itemRecordOf(row)
+        return {
+          chatId,
+          source,
+          number,
+          title,
+          status,
+          snoozedUntil,
+          links: this.links(uid).filter(
+            (link) => link.kind === 'dispatch' || link.kind === 'automation'
+          )
+        }
+      })
   }
 
   /** Every Needs you item's bot, last activity and snooze, so the bot list counts what needs the owner. */

@@ -14,6 +14,7 @@ const READ_OPS: ReadonlySet<BotItemsOp> = new Set<BotItemsOp>([
   'linkedDispatchRefs',
   'usageLimitWaitUids',
   'list',
+  'workingItems',
   'needsYou',
   'viewRows',
   'closes',

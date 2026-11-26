@@ -13,6 +13,7 @@ export const BOT_ITEMS_OPS = [
   'reportFact',
   'linkedDispatchRefs',
   'list',
+  'workingItems',
   'needsYou',
   'viewRows',
   'closes',

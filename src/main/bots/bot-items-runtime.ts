@@ -28,6 +28,7 @@ import type { BotItemMail, BotItemRecord, BotItemSource } from './bot-items-sche
 import type { BotWorkRuntime } from './bot-work-runtime'
 import type { BotsDbWorkerClient } from './db-worker/bots-db-worker-client'
 import { BotItemUsageLimitWaits } from './bot-item-usage-limit-wait'
+import { readBotIdleItems } from './bot-active-work-read'
 
 export type BotItemsHostDeps = {
   workRuntime: BotWorkRuntime
@@ -173,6 +174,15 @@ export class BotItemsHost {
   owningChat({ chatId: id, source }: Pick<BotItemRecord, 'chatId' | 'source'>): BotItem['chat'] {
     const gone = this.deps.chatExists(id) ? {} : { gone: true as const }
     return { id, kind: source.kind, title: this.deps.chatTitle(id) ?? source.title, ...gone }
+  }
+
+  idleItems(botId: string): ReturnType<typeof readBotIdleItems> {
+    return readBotIdleItems(
+      botId,
+      () => this.store(),
+      this.join,
+      (item) => this.owningChat(item)
+    )
   }
 
   /** These items changed: their bots' lists re-read just them, and one that is now In progress with
