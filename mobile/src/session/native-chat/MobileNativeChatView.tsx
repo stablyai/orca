@@ -410,6 +410,8 @@ export function MobileNativeChatView({
             <MobileNativeChatFloatingControls
               showJumpToTail={tail.showJumpToTail}
               onJumpToTail={jumpToTail}
+              showPreviousPrompt={tail.showPreviousPrompt}
+              onPreviousPrompt={tail.jumpToPreviousPrompt}
             />
           </GestureHandlerRootView>
         )}

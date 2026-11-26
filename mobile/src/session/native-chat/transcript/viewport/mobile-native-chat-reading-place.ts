@@ -12,13 +12,32 @@ type Tagged = {
   getAttribute: (name: string) => string | null
   querySelectorAll: (selector: string) => ArrayLike<Tagged>
 }
-type Sibling = Tagged & { nextElementSibling: Sibling | null }
-type RowBox = Sibling & { children: ArrayLike<Sibling> }
+type RowChild = Tagged & {
+  children: ArrayLike<Tagged>
+  nextElementSibling: RowChild | null
+}
+type RowBox = {
+  children: ArrayLike<RowChild>
+  nextElementSibling: RowChild | null
+}
 export type MobileNativeChatScrollNode = Tagged & {
   scrollTop: number
   scrollHeight: number
   clientHeight: number
   querySelector: (selector: string) => RowBox | null
+}
+
+type Listen = (type: string, listener: () => void, options: AddEventListenerOptions) => void
+export type MobileNativeChatPageScroller = MobileNativeChatScrollNode & {
+  addEventListener: Listen
+  removeEventListener: Listen
+}
+
+// RN 0.88 types these handles as native tags; on web they are the DOM nodes this list observes.
+export function isMobileNativeChatPageScroller(
+  node: unknown
+): node is MobileNativeChatPageScroller {
+  return typeof node === 'object' && node !== null && 'addEventListener' in node
 }
 
 type Keys = Pick<MobileNativeChatRowKeys, 'current' | 'placement'>
@@ -49,10 +68,9 @@ export function mobileNativeChatMemberId(id: string): string {
   return `${MEMBER}${id}`
 }
 
-// Compare ids directly; do not interpolate arbitrary ids into selectors.
-function tagged(node: Tagged, prefix: string): { id: string; node: Tagged }[] {
-  return Array.from(node.querySelectorAll(`[data-testid^="${prefix}"]`), (element) => ({
-    id: element.getAttribute('data-testid')?.slice(prefix.length) ?? '',
+function membersOf(row: Tagged): { id: string; node: Tagged }[] {
+  return Array.from(row.querySelectorAll(`[data-testid^="${MEMBER}"]`), (element) => ({
+    id: element.getAttribute('data-testid')?.slice(MEMBER.length) ?? '',
     node: element
   }))
 }
@@ -77,7 +95,7 @@ function unitsOf(
               ? `root:${mobileNativeChatScrollRootKey(node)}`
               : (node.getAttribute('data-testid')?.slice(MEMBER.length) ?? '')
         }))
-      : tagged(row, MEMBER)
+      : membersOf(row)
   for (const { id, node } of parts) {
     const box = node.getBoundingClientRect()
     if (box.top >= view.bottom) {
@@ -91,33 +109,51 @@ function unitsOf(
   return lines.length > 0 ? lines : [shown[0] ?? self]
 }
 
-function rowIdOf(node: Tagged): string | undefined {
-  const id = node.getAttribute('data-testid')
-  return id?.startsWith(ROW) ? id.slice(ROW.length) : undefined
+type DrawnRow = { id: string; node: Tagged }
+
+function taggedRow(node: Tagged): DrawnRow | undefined {
+  const tag = node.getAttribute('data-testid')
+  return tag?.startsWith(ROW) ? { id: tag.slice(ROW.length), node } : undefined
 }
 
-// The row box's children plus footer waiting rows after it; ids are read only where needed.
-function drawnRows(scroller: MobileNativeChatScrollNode): Sibling[] {
+function rowIn(child: RowChild): DrawnRow | undefined {
+  const row = taggedRow(child)
+  if (row) {
+    return row
+  }
+  // Activity join wrappers put the tagged row one level down.
+  for (let index = 0; index < child.children.length; index += 1) {
+    const wrapped = taggedRow(child.children[index]!)
+    if (wrapped) {
+      return wrapped
+    }
+  }
+  return undefined
+}
+
+// The row box's children plus footer waiting rows after it.
+function drawnRows(scroller: MobileNativeChatScrollNode): DrawnRow[] {
   const box = scroller.querySelector(`[${ROWS}]`)
   if (!box) {
     return []
   }
-  const rows = Array.from(box.children)
+  const rows = Array.from(box.children).flatMap((child) => rowIn(child) ?? [])
   for (let next = box.nextElementSibling; next; next = next.nextElementSibling) {
-    if (rowIdOf(next) !== undefined) {
-      rows.push(next)
+    const row = rowIn(next)
+    if (row) {
+      rows.push(row)
     }
   }
   return rows
 }
 
 // Binary-search ordered row bottoms to avoid measuring thousands of offscreen rows.
-function firstRowEndingBelow(rows: readonly Tagged[], y: number): number {
+function firstRowEndingBelow(rows: readonly DrawnRow[], y: number): number {
   let low = 0
   let high = rows.length
   while (low < high) {
     const middle = low + Math.floor((high - low) / 2)
-    if (rows[middle]!.getBoundingClientRect().bottom <= y) {
+    if (rows[middle]!.node.getBoundingClientRect().bottom <= y) {
       low = middle + 1
     } else {
       high = middle
@@ -126,28 +162,18 @@ function firstRowEndingBelow(rows: readonly Tagged[], y: number): number {
   return low
 }
 
-// Turn-status lines sit between rows untagged, so step past them to the nearest tagged row.
-function nearestRow(
-  rows: readonly Tagged[],
-  from: number,
-  step: 1 | -1
-): { id: string; node: Tagged } | undefined {
-  for (let at = from; at >= 0 && at < rows.length; at += step) {
-    const id = rowIdOf(rows[at]!)
-    if (id !== undefined) {
-      return { id, node: rows[at]! }
+/** Read drawn row tops relative to the view, indexing the DOM only if a row is queried. */
+export function mobileNativeChatRowOffsets(scroller: MobileNativeChatScrollNode) {
+  let rows: Map<string, Tagged> | undefined
+  let top: number
+  return (key: string): number | undefined => {
+    if (!rows) {
+      rows = new Map(drawnRows(scroller).map(({ id, node }) => [id, node]))
+      top = scroller.getBoundingClientRect().top
     }
+    const row = rows.get(key)
+    return row && row.getBoundingClientRect().top - top
   }
-  return undefined
-}
-
-/** How far the drawn row `key` starts below the view's top; undefined when it is not drawn. */
-export function mobileNativeChatRowOffset(
-  scroller: MobileNativeChatScrollNode,
-  key: string
-): number | undefined {
-  const row = drawnRows(scroller).find((node) => rowIdOf(node) === key)
-  return row && row.getBoundingClientRect().top - scroller.getBoundingClientRect().top
 }
 
 // The nearest row wholly more than `distance` above the view; it ends at or above that line.
@@ -157,7 +183,7 @@ export function mobileNativeChatRowAbove(
 ): string | undefined {
   const rows = drawnRows(scroller)
   const below = firstRowEndingBelow(rows, scroller.getBoundingClientRect().top - distance)
-  return nearestRow(rows, below - 1, -1)?.id
+  return rows[below - 1]?.id
 }
 
 export function mobileNativeChatReadingPlace(
@@ -168,20 +194,17 @@ export function mobileNativeChatReadingPlace(
   const rows = drawnRows(scroller)
   const low = firstRowEndingBelow(rows, view.top)
   let end = low
-  while (end < rows.length && rows[end]!.getBoundingClientRect().top < view.bottom) {
+  while (end < rows.length && rows[end]!.node.getBoundingClientRect().top < view.bottom) {
     end += 1
   }
-  const unit = ({ id, node }: { id: string; node: Tagged }): MobileNativeChatReadingUnit => ({
+  const unit = ({ id, node }: DrawnRow): MobileNativeChatReadingUnit => ({
     key: id,
     top: node.getBoundingClientRect().top - view.top,
     placed: placement(id)
   })
-  const units = rows.slice(low, end).flatMap((node) => {
-    const id = rowIdOf(node)
-    return id === undefined ? [] : unitsOf(node, view, unit({ id, node }))
-  })
+  const units = rows.slice(low, end).flatMap((row) => unitsOf(row.node, view, unit(row)))
   // The nearest rows off screen stand in when the update takes away all that was on it.
-  const nearest = [nearestRow(rows, end, 1), nearestRow(rows, low - 1, -1)]
+  const nearest = [rows[end], rows[low - 1]]
   return units.concat(nearest.flatMap((row) => (row ? [unit(row)] : [])))
 }
 
@@ -201,7 +224,7 @@ function drawn(
   }
   const row = rows.get(member === 'run' ? key : (keys.current(key) ?? ''))
   const paired = member.startsWith('result:') ? `call:${member.slice('result:'.length)}` : member
-  return row && tagged(row, MEMBER).find((m) => m.id === member || m.id === paired)?.node
+  return row && membersOf(row).find((m) => m.id === member || m.id === paired)?.node
 }
 
 /** How far the place's first still-drawn unit moved; undefined when none of it is drawn. */
@@ -211,12 +234,7 @@ export function mobileNativeChatReadingDrift(
   keys: Keys,
   roots?: MobileNativeChatScrollRoots
 ): number | undefined {
-  const rows = new Map(
-    drawnRows(scroller).flatMap((node) => {
-      const id = rowIdOf(node)
-      return id === undefined ? [] : [[id, node] as const]
-    })
-  )
+  const rows = new Map(drawnRows(scroller).map(({ id, node }) => [id, node]))
   for (const unit of place) {
     const node = drawn(unit, rows, keys, roots)
     if (node) {

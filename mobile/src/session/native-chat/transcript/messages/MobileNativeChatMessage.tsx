@@ -40,7 +40,7 @@ import { MobileNativeChatBackgroundTaskRun } from './MobileNativeChatBackgroundT
 import { withoutBackgroundTaskRows } from '../../../../../../src/shared/native-chat/input/task-lists/native-chat-background-task-row'
 import { ToolRun } from '../tool-results/MobileNativeChatToolRun'
 import type { NativeChatTurnStatus } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
-import { styles } from './mobile-native-chat-message-styles'
+import { styles, useMobileNativeChatUserBubbleStyle } from './mobile-native-chat-message-styles'
 import { MobileNativeChatAgentMessageCard } from '../agent-messages/MobileNativeChatAgentMessageCard'
 import { mobileAutomationRow } from '../MobileAutomationSavedRow'
 import { MobileNativeChatVisualContext } from '../../visual/mobile-native-chat-visual-context'
@@ -194,6 +194,7 @@ function MobileNativeChatMessageImpl({
     />
   ) : null
   const rowId = rowKey ?? message.id
+  const userBubble = useMobileNativeChatUserBubbleStyle(isUser ? rowId : undefined)
   const withStatus = (row: React.ReactNode) => (
     <>
       {turnStatusAbove ? statusRow : null}
@@ -303,7 +304,7 @@ function MobileNativeChatMessageImpl({
       {turnStatusAbove ? statusRow : null}
       <View style={[styles.row, isUser && styles.rowUser]} testID={mobileNativeChatRowId(rowId)}>
         <Marks.MobileNativeChatConnectorMarks message={message} tagged={!agentFrom} end={isUser} />
-        <Content onLongPress={onLongPress} style={[styles.content, isUser && styles.userBubble]}>
+        <Content onLongPress={onLongPress} style={[styles.content, isUser && userBubble]}>
           {agentFrom ? (
             <MobileNativeChatAgentMessageCard
               message={message}
