@@ -51,14 +51,29 @@ describe('wrapper-delivered startup command fallback', () => {
   it('types the command at ready timeout when zsh exec-ed into another program', () => {
     const foreground = { group: SHELL_PID, name: 'zsh' }
     const { barrier, writes } = createBarrier(foreground)
-    barrier.setExecFallback(() => 'claude\r')
+    const build = vi.fn(() => 'claude\r')
+    barrier.setExecFallback(build)
     barrier.ingestSubprocessData(IDENTITY)
-    // .zshrc ran `exec tmux`: same pid and process group, new program.
-    foreground.name = 'tmux'
+    // .zshrc ran `exec fish`: same pid and process group, new program.
+    foreground.name = '-fish'
 
     vi.advanceTimersByTime(1_000)
 
     expect(writes).toEqual(['claude\r'])
+    expect(build).toHaveBeenCalledWith('fish')
+  })
+
+  it('clears a line the user typed into the replacing shell before typing the command', () => {
+    const foreground = { group: SHELL_PID, name: 'zsh' }
+    const { barrier, writes } = createBarrier(foreground)
+    barrier.setExecFallback(() => 'claude\r')
+    barrier.ingestSubprocessData(IDENTITY)
+    barrier.observeTypedInput('echo pending')
+    foreground.name = 'bash'
+
+    vi.advanceTimersByTime(1_000)
+
+    expect(writes).toEqual([' \x15claude\r'])
   })
 
   it('leaves the command to the wrapper while zsh still owns the terminal', () => {
@@ -68,6 +83,8 @@ describe('wrapper-delivered startup command fallback', () => {
     })
     barrier.setExecFallback(() => 'claude\r')
     barrier.ingestSubprocessData(IDENTITY)
+    // Input for the rc file's own question stays where the user typed it.
+    barrier.observeTypedInput('y')
 
     vi.advanceTimersByTime(1_000)
 

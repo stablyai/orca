@@ -49,7 +49,7 @@ export class SessionShellReadyBarrier {
   private preReadyStdinQueue: string[] = []
   private typedAhead = false
   private shellPid: number | null = null
-  private execFallback: (() => string) | null = null
+  private execFallback: ((foregroundShell: string) => string) | null = null
   private readonly postReadyFlushGate: PostReadyFlushGate
 
   constructor(private readonly deps: SessionShellReadyBarrierDeps) {
@@ -100,13 +100,14 @@ export class SessionShellReadyBarrier {
   }
 
   /** The wrapper runs this startup command itself; type it at ready timeout only if zsh exec-ed into another program first. */
-  setExecFallback(build: () => string): void {
+  setExecFallback(build: (foregroundShell: string) => string): void {
     this.execFallback = build
   }
 
-  /** Track input typed while a startup command is held, so the flush can clear the line first. */
+  /** Track input typed while a startup command is held or armed, so its write can clear the line first. */
   observeTypedInput(data: string): void {
-    if (this.preReadyStdinQueue.length > 0 && !extractOnlyTerminalQueryReplies(data)) {
+    const holding = this.preReadyStdinQueue.length > 0 || this.execFallback !== null
+    if (holding && !extractOnlyTerminalQueryReplies(data)) {
       this.typedAhead = true
     }
   }
@@ -177,6 +178,7 @@ export class SessionShellReadyBarrier {
     this.execFallback = null
     this.clearReadyTimer()
     if (this.preReadyStdinQueue.length === 0) {
+      this.typedAhead = false
       return
     }
     this.postReadyFlushGate.arm(postMarkerBytesObserved)
@@ -210,28 +212,36 @@ export class SessionShellReadyBarrier {
     this.flushPreReadyQueue()
     const execFallback = this.execFallback
     this.execFallback = null
-    if (execFallback && this.shellExecedAway()) {
+    const foregroundShell = execFallback ? this.shellExecedAway() : null
+    if (execFallback && foregroundShell) {
       this.reportReadiness('startup-command-exec-fallback', {})
       this.deps.noteQueuedInputWritten?.()
-      this.deps.subprocess.write(execFallback())
+      // Stage for the program now reading the line, and clear what the user typed into it first.
+      this.deps.subprocess.write(
+        (this.typedAhead ? KILL_TYPED_LINE : '') + execFallback(foregroundShell)
+      )
     }
+    this.typedAhead = false
   }
 
   // exec keeps the shell's pid and process group, so a foreground group led by that pid under another name means
-  // .zshrc handed the terminal to tmux, fish or bash and the wrapper's line editor will never run.
-  private shellExecedAway(): boolean {
+  // .zshrc handed the terminal to tmux, fish or bash and the wrapper's line editor will never run. Returns that program.
+  private shellExecedAway(): string | null {
     const { subprocess } = this.deps
     if (this.shellPid === null || subprocess.readForegroundGroup?.() !== this.shellPid) {
-      return false
+      return null
     }
     const name = loginShellName(subprocess.getForegroundProcess({ rawFallback: true }))
     const shellName = loginShellName(subprocess.shellPath ? basename(subprocess.shellPath) : null)
-    return name !== null && shellName !== null && name !== shellName
+    return name !== null && shellName !== null && name !== shellName ? name : null
   }
 
   private flushPreReadyQueue(): void {
     const queued = this.preReadyStdinQueue
     this.preReadyStdinQueue = []
+    if (queued.length === 0) {
+      return
+    }
     if (this.typedAhead) {
       this.deps.subprocess.write(KILL_TYPED_LINE)
     }

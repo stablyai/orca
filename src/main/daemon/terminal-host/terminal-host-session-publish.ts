@@ -198,10 +198,10 @@ export async function spawnAndPublishSession(
   } catch {
     // Diagnostics must never turn a live PTY into a failed create.
   }
-  const buildStagedSubmission = (command: string): string => {
+  const buildStagedSubmission = (command: string, shellPath = subprocess.shellPath): string => {
     const staged = stageStartupCommand({
       command,
-      shellPath: subprocess.shellPath,
+      shellPath,
       orcaBuiltLine: opts.launchAgent !== undefined
     })
     staging.current = staged
@@ -227,7 +227,10 @@ export async function spawnAndPublishSession(
     session.writeStartupCommand(buildStagedSubmission(command))
   } else if (command && shellReadySupported) {
     // The zsh wrapper runs the command from its first line editor; an rc file that execs tmux or another shell never gets there.
-    session.armStartupCommandExecFallback(() => buildStagedSubmission(command))
+    // Stage for the program that replaced zsh: fish has no `.` builtin.
+    session.armStartupCommandExecFallback((foregroundShell) =>
+      buildStagedSubmission(command, foregroundShell)
+    )
   }
 
   return {

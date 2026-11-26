@@ -156,7 +156,7 @@ export class Session extends SessionProcessInspection {
   }
 
   /** A startup command the zsh wrapper runs itself, typed only if the shell exec-ed away before running it. */
-  armStartupCommandExecFallback(build: () => string): void {
+  armStartupCommandExecFallback(build: (foregroundShell: string) => string): void {
     this.shellReady.setExecFallback(build)
   }
 
