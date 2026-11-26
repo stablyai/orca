@@ -35,6 +35,36 @@ export function askerImageIds(text: string): string[] {
   return ids.slice(0, MAX_ASKER_IMAGES)
 }
 
+type ImageTarget = { ref: string; fileId: string }
+
+function askerImageTargets(asker: ConnectorAsker): ImageTarget[] {
+  const targets: ImageTarget[] = []
+  const add = (target: ImageTarget) => {
+    if (
+      targets.length < MAX_ASKER_IMAGES &&
+      !targets.some(({ ref, fileId }) => ref === target.ref && fileId === target.fileId)
+    ) {
+      targets.push(target)
+    }
+  }
+  for (const message of asker.earlierOwn?.messages ?? []) {
+    if (!message.messageRef) {
+      continue
+    }
+    for (const file of message.files ?? []) {
+      if (file.type?.startsWith('image/') === true) {
+        add({ ref: message.messageRef, fileId: file.id })
+      }
+    }
+  }
+  if (asker.messageRef) {
+    for (const fileId of askerImageIds(asker.text)) {
+      add({ ref: asker.messageRef, fileId })
+    }
+  }
+  return targets
+}
+
 // What an image's first bytes say it is; the agent is told this, never the name Slack gave.
 const SIGNATURES: readonly { extension: string; starts: readonly number[]; at?: number }[] = [
   { extension: '.png', starts: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] },
@@ -119,8 +149,8 @@ export function connectorAskerImages(deps: {
   budgetMs?: number
 }): AskerImages {
   return async ({ botId, conversation, asker, signal }) => {
-    const ids = asker.messageRef ? askerImageIds(asker.text) : []
-    if (ids.length === 0 || !asker.messageRef) {
+    const targets = askerImageTargets(asker)
+    if (targets.length === 0) {
       return []
     }
     const bounded = AbortSignal.any([
@@ -128,10 +158,10 @@ export function connectorAskerImages(deps: {
       AbortSignal.timeout(deps.budgetMs ?? ASKER_IMAGES_BUDGET_MS)
     ])
     const paths: string[] = []
-    for (const fileId of ids) {
+    for (const { ref, fileId } of targets) {
       try {
         const answer = await within(
-          deps.read({ botId, ref: asker.messageRef, fileId, conversation }, bounded),
+          deps.read({ botId, ref, fileId, conversation }, bounded),
           bounded
         )
         const told = answer?.ok && answer.value.ok ? answer.value.result.download : undefined
