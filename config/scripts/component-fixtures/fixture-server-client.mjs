@@ -173,7 +173,9 @@ export async function ensureFixtureServer({ onStart } = {}) {
     const state = readServerState()
     const health = child ? await readServerHealth(state, 1000).catch(() => null) : null
     if (
-      health?.pid === child?.pid &&
+      child &&
+      health &&
+      health.pid === child.pid &&
       !health.stopping &&
       health.codeStamp === fixtureServerCodeStamp()
     ) {
