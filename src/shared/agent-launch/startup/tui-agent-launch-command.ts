@@ -46,6 +46,7 @@ export type ResolvedAgentLaunchCommand =
         selectedExecutable?: string
       }
       appliedSessionOptions: Record<string, SessionOptionValue>
+      generatedCmdExecutable?: string
       startupEnv?: Readonly<Record<string, string>>
     }
   | { ok: false; error: string }
@@ -170,6 +171,12 @@ export function resolveAgentLaunchCommand(args: {
   return {
     ok: true,
     command: withArgs(launchArgs, launchHead),
+    ...(args.shell === 'cmd' && commandProvenance === 'generated'
+      ? {
+          generatedCmdExecutable:
+            program !== command ? args.managedAgentCommands?.[args.agent] : command.split(' ')[0]
+        }
+      : {}),
     resumeLaunch: {
       agentCommand: withArgs(resumeArgs),
       commandProvenance,

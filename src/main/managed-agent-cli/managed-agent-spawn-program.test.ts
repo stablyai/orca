@@ -6,6 +6,7 @@ import { withOmpDraftCleanup } from '../../shared/agent-launch/startup/omp-draft
 import { withFreshOmpLaunch } from '../../shared/agent-launch/startup/omp-fresh-launch'
 import { buildAgentStartupPlan } from '../../shared/agent-launch/startup/tui-agent-startup'
 import { tokenizeStartupCommand } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
+import { buildAiVaultLocalResumeStartup } from '../../shared/ai-vault/resume/ai-vault-resume-startup'
 import { detectInstalledAgentInventory } from '../preflight/installed-agent-detection'
 import { selectTerminalAgentProgram } from '../preflight/agent-command-detection'
 import { alignManagedAgentLaunchAtSpawn } from './managed-agent-spawn-program'
@@ -122,6 +123,78 @@ it.runIf(process.platform === 'win32')(
     } finally {
       await rm(dir, { recursive: true, force: true })
     }
+  }
+)
+
+it('rebuilds a generated cmd Claude launch whose original executable contains !', async () => {
+  const plan = buildAgentStartupPlan({
+    agent: 'claude',
+    platform: 'win32',
+    shell: 'cmd',
+    prompt: '',
+    allowEmptyPromptLaunch: true,
+    cmdOverrides: {},
+    agentArgs: '--verbose',
+    managedAgentCommands: { claude: 'C:\\Old Tools!\\Claude\\claude.exe' }
+  })
+  if (!plan) {
+    throw new Error('Expected a Claude plan')
+  }
+  expect(plan.launchCommand).toBe('"C:\\Old Tools!\\Claude\\claude.exe" "--verbose"')
+  vi.mocked(selectTerminalAgentProgram).mockResolvedValueOnce({
+    program: 'claude',
+    result: { kind: 'full-path', path: 'C:\\Verified Tools!\\Claude\\claude.exe' }
+  })
+  const result = await alignManagedAgentLaunchAtSpawn({ ...plan, launchAgent: 'claude' }, 'cmd')
+  expect(result.command).toBe('"C:\\Verified Tools!\\Claude\\claude.exe" "--verbose"')
+  expect(result.launchConfig?.selectedExecutable).toBe('C:\\Verified Tools!\\Claude\\claude.exe')
+
+  const changed = { ...plan, launchCommand: `${plan.launchCommand} "--debug"` }
+  expect((await alignManagedAgentLaunchAtSpawn(changed, 'cmd')).blocked).toBe('unknown')
+  expect((await alignManagedAgentLaunchAtSpawn({ ...plan, env: undefined }, 'cmd')).blocked).toBe(
+    'unknown'
+  )
+})
+
+it.each([
+  {
+    embedCwd: false,
+    cwd: 'C:\\Projects\\Demo!',
+    expected:
+      'set "CODEX_HOME=C:\\Users\\Bob!\\.codex" && "C:\\Verified Tools\\codex.exe" "-c" "check_for_update_on_startup=false" "-c" "tui.resume_cwd=current" "resume" "abc"'
+  },
+  {
+    embedCwd: true,
+    cwd: undefined,
+    expected:
+      'cd /d "C:\\Projects\\Demo!" && set "CODEX_HOME=C:\\Users\\Bob!\\.codex" && "C:\\Verified Tools\\codex.exe" "-c" "check_for_update_on_startup=false" "-c" "tui.resume_cwd=current" "resume" "abc"'
+  }
+])(
+  'rebuilds an AI Vault cmd resume with embedCwd=$embedCwd',
+  async ({ embedCwd, cwd, expected }) => {
+    const startup = buildAiVaultLocalResumeStartup({
+      session: {
+        agent: 'codex',
+        sessionId: 'abc',
+        cwd: 'C:\\Projects\\Demo!',
+        codexHome: 'C:\\Users\\Bob!\\.codex'
+      },
+      host: { platform: 'win32', liveShell: 'cmd', codexHome: 'C:\\Users\\Bob!\\.codex' },
+      settings: undefined,
+      agentArgs: '',
+      embedCwd
+    })
+    vi.mocked(selectTerminalAgentProgram).mockResolvedValueOnce({
+      program: 'codex',
+      result: { kind: 'full-path', path: 'C:\\Verified Tools\\codex.exe' }
+    })
+    const result = await alignManagedAgentLaunchAtSpawn(
+      { ...startup, launchCommand: startup.command, launchAgent: 'codex', restoring: true },
+      'cmd'
+    )
+    expect(startup.cwd).toBe(cwd)
+    expect(result.command).toBe(expected)
+    expect(result.launchConfig?.selectedExecutable).toBe('C:\\Verified Tools\\codex.exe')
   }
 )
 

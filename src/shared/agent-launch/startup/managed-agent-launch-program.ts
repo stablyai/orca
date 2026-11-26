@@ -50,7 +50,7 @@ export function replaceLaunchExecutable(
 /** The Windows setup gate evaluates its carried launch in PowerShell, including from cmd panes. */
 export function renderCmdLaunchForPowerShell(
   command: string,
-  launch: LaunchPosition,
+  launch: Pick<LaunchPosition, 'end' | 'cwd' | 'env'>,
   executable: string
 ): string | null {
   const args = readLaunchArguments(command, 'cmd', launch)

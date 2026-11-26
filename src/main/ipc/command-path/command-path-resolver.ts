@@ -13,8 +13,8 @@ export type ResolveCommandOptions = {
   env?: NodeJS.ProcessEnv
   /** CWD used only for the win32 "search current directory first" rule. */
   cwd?: string
-  /** Search Windows PATH entries without adding the launch directory first. */
-  pathOnly?: boolean
+  /** Search exactly these already resolved PATH entries. */
+  pathEntries?: readonly string[]
   /** Stop after this many matches; defaults to the complete list. */
   maxResults?: number
   signal?: AbortSignal
@@ -207,9 +207,7 @@ async function findLocalCommandPaths(
   // Separators bypass PATH; Windows searches cwd first.
   const searchDirs = hasPathSeparator
     ? ['']
-    : isWin && !options.pathOnly
-      ? [cwd, ...pathDirs]
-      : pathDirs
+    : (options.pathEntries ?? (isWin ? [cwd, ...pathDirs] : pathDirs))
   const extensions = isWin ? getWindowsPathSearchExtensions(env, command) : ['']
 
   const found: string[] = []

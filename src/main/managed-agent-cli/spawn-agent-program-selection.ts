@@ -101,6 +101,10 @@ export async function selectSpawnAgentProgram(
   if (selected.kind !== 'by-name') {
     return selection
   }
+  // Pin the selection when the agent's PATH differs from the host inventory's.
+  if (configuredEnv) {
+    return { program, result: { kind: 'full-path', path: selected.path } }
+  }
   if (process.platform === 'win32' && shell === 'cmd') {
     const first = await resolveCmdLaunchFolderProgram(
       program,
@@ -115,8 +119,7 @@ export async function selectSpawnAgentProgram(
       return { program, result: { kind: 'full-path', path: selected.path } }
     }
   }
-  // Pin the selection when the agent's PATH differs from the host inventory's.
-  return configuredEnv ? { program, result: { kind: 'full-path', path: selected.path } } : selection
+  return selection
 }
 
 function readPathEnv(env: NodeJS.ProcessEnv | undefined, key: string): string | undefined {
@@ -145,11 +148,10 @@ async function resolveAgentOnConfiguredPath(
   const entries = pathEnv?.split(delimiter) ?? []
   const dirs = windows ? entries.filter(Boolean).map(stripWindowsPathQuotes) : entries
   const cwd = dirs.some((dir) => !isAbsolute(dir)) ? await readCwd() : ''
-  const path = dirs
+  const pathEntries = dirs
     .map((dir) => resolve(cwd, dir))
     .filter((dir) => !isOrcaAgentRuntimePath(dir))
-    .join(delimiter)
-  const key = JSON.stringify([program, path, pathExt, cwd])
+  const key = JSON.stringify([program, pathEntries, pathExt])
   throwIfSignalAborted(signal)
   let pending = pendingLookups.get(key)
   if (!pending) {
@@ -160,8 +162,8 @@ async function resolveAgentOnConfiguredPath(
           return null
         }
         return resolveCommandOnLocalPath(program, {
-          env: { PATH: path, PATHEXT: pathExt },
-          pathOnly: true,
+          env: { PATHEXT: pathExt },
+          pathEntries,
           signal: controller.signal,
           probeCandidate: async (candidate) => {
             try {

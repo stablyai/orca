@@ -1,5 +1,4 @@
 import { win32 as pathWin32 } from 'node:path'
-import { applyPinnedCmdCodexHome } from '../../../shared/ai-vault/resume/ai-vault-resume-home-env'
 import {
   isWindowsGitBashShellPath,
   resolveWindowsGitBashShellPath
@@ -236,13 +235,6 @@ export function createPtyShellLaunchPlan(
     addWslEnvKeys(env, [POWERLEVEL10K_WIZARD_DISABLE_ENV])
   }
   finalizeDaemonPtyEnvironment(env, opts.env, opts.envToDelete)
-  applyPinnedCmdCodexHome(
-    env,
-    opts.env,
-    process.platform === 'win32' &&
-      pathWin32.basename(shellPath).toLowerCase() === 'cmd.exe' &&
-      Boolean(opts.command)
-  )
 
   return {
     shellPath,

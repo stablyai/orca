@@ -20,6 +20,15 @@ import { resolveAgentLaunchCommand } from './tui-agent-launch-command'
 import type { ManagedAgentCommands } from './managed-agent-launch-program'
 import { argvPromptSeparator } from './argv-prompt-separator'
 import { appliedSessionOptionProps, buildFlagPromptStartupPlan } from './flag-prompt-startup'
+import { generatedCmdLaunchEnv } from './generated-cmd-launch'
+
+function carryGeneratedCmdLaunch<T extends { launchCommand: string; env?: Record<string, string> }>(
+  plan: T,
+  executable: string | undefined
+): T {
+  const inputs = generatedCmdLaunchEnv(executable, plan.launchCommand)
+  return inputs ? { ...plan, env: { ...plan.env, ...inputs } } : plan
+}
 
 export type AgentStartupPlan = {
   agent: TuiAgent
@@ -93,12 +102,14 @@ export function buildAgentStartupPlan(args: {
   const agentEnv = baseCommand.startupEnv
     ? { ...args.agentEnv, ...baseCommand.startupEnv }
     : args.agentEnv
+  const withRebuildInputs = (plan: AgentStartupPlan): AgentStartupPlan =>
+    carryGeneratedCmdLaunch(plan, baseCommand.generatedCmdExecutable)
 
   if (!trimmedPrompt) {
     if (!allowEmptyPromptLaunch) {
       return null
     }
-    return {
+    return withRebuildInputs({
       agent,
       launchCommand,
       expectedProcess: config.expectedProcess,
@@ -106,14 +117,14 @@ export function buildAgentStartupPlan(args: {
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       ...(agentEnv ? { env: { ...agentEnv } } : {})
-    }
+    })
   }
 
   const quotedPrompt = quoteStartupArg(trimmedPrompt, shell)
 
   if (config.promptInjectionMode === 'argv') {
     const promptSeparator = argvPromptSeparator(agent, baseCommand.command, args.agentArgs, shell)
-    return {
+    return withRebuildInputs({
       agent,
       launchCommand:
         agent === 'omp'
@@ -125,20 +136,22 @@ export function buildAgentStartupPlan(args: {
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       ...(agent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
       ...(agentEnv ? { env: { ...agentEnv } } : {})
-    }
+    })
   }
 
   if (config.promptInjectionMode === 'flag-prompt') {
-    return buildFlagPromptStartupPlan({
-      agent,
-      launchCommand,
-      quotedPrompt,
-      prompt: trimmedPrompt,
-      shell,
-      launchConfig,
-      sessionOptions: baseCommand.appliedSessionOptions,
-      agentEnv
-    })
+    return withRebuildInputs(
+      buildFlagPromptStartupPlan({
+        agent,
+        launchCommand,
+        quotedPrompt,
+        prompt: trimmedPrompt,
+        shell,
+        launchConfig,
+        sessionOptions: baseCommand.appliedSessionOptions,
+        agentEnv
+      })
+    )
   }
 
   if (config.promptInjectionMode === 'hermes-query') {
@@ -168,7 +181,7 @@ export function buildAgentStartupPlan(args: {
   }
 
   if (config.promptInjectionMode === 'flag-prompt-interactive') {
-    return {
+    return withRebuildInputs({
       agent,
       launchCommand: `${launchCommand} --prompt-interactive ${quotedPrompt}`,
       expectedProcess: config.expectedProcess,
@@ -176,11 +189,11 @@ export function buildAgentStartupPlan(args: {
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       ...(agentEnv ? { env: { ...agentEnv } } : {})
-    }
+    })
   }
 
   if (config.promptInjectionMode === 'flag-interactive') {
-    return {
+    return withRebuildInputs({
       agent,
       launchCommand: `${launchCommand} -i ${quotedPrompt}`,
       expectedProcess: config.expectedProcess,
@@ -188,10 +201,10 @@ export function buildAgentStartupPlan(args: {
       launchConfig,
       ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
       ...(agentEnv ? { env: { ...agentEnv } } : {})
-    }
+    })
   }
 
-  return {
+  return withRebuildInputs({
     agent,
     launchCommand,
     expectedProcess: config.expectedProcess,
@@ -199,7 +212,7 @@ export function buildAgentStartupPlan(args: {
     launchConfig,
     ...appliedSessionOptionProps(baseCommand.appliedSessionOptions),
     ...(agentEnv ? { env: { ...agentEnv } } : {})
-  }
+  })
 }
 
 /** Predict the builder’s null-followupPrompt verdict before choosing a launch surface; derive from the same injection table.
@@ -295,5 +308,5 @@ export function buildAgentDraftLaunchPlan(args: {
   ) {
     return null
   }
-  return plan
+  return carryGeneratedCmdLaunch(plan, baseCommand.generatedCmdExecutable)
 }

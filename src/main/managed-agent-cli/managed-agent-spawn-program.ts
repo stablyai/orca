@@ -1,4 +1,4 @@
-import { basename, isAbsolute, join } from 'node:path'
+import { basename, isAbsolute, join, win32 } from 'node:path'
 import {
   matchesStockLaunchProgram,
   renderCmdLaunchForPowerShell,
@@ -13,9 +13,18 @@ import {
 import { readLaunchPosition } from '../../shared/agent-launch/startup/launch-position'
 import {
   buildHermesQueryCommand,
+  matchesGeneratedHermesQuery,
   ORCA_HERMES_STARTUP_QUERY_ARGV_ENV,
   readGeneratedHermesQueryArgv
 } from '../../shared/agent-launch/startup/hermes-startup-query'
+import {
+  GENERATED_AGENT_LAUNCH_ENV,
+  readGeneratedAgentLaunchInputs
+} from '../../shared/agent-launch/startup/generated-agent-launch-inputs'
+import {
+  generatedCmdLaunchPosition,
+  renderGeneratedCmdLaunch
+} from '../../shared/agent-launch/startup/generated-cmd-launch'
 import type { AgentStartupShell } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../shared/agent-launch/catalog/tui-agent-config'
@@ -131,15 +140,25 @@ async function rewriteLaunchExecutable(
   if (!convertCmd && !generated && !legacy) {
     return { command, launchConfig: config }
   }
-  const launch = readLaunchPosition(command, source)
+  const inputs = generated
+    ? readGeneratedAgentLaunchInputs(spawn.env?.[GENERATED_AGENT_LAUNCH_ENV])
+    : undefined
+  const cmd =
+    source === 'cmd' && inputs?.kind === 'cmd' && renderGeneratedCmdLaunch(inputs) === command
+      ? inputs
+      : undefined
   const hermesArgv =
     generated && (!spawn.launchAgent || spawn.launchAgent === 'hermes')
-      ? readGeneratedHermesQueryArgv(
-          spawn.env?.[ORCA_HERMES_STARTUP_QUERY_ARGV_ENV],
-          command,
-          source
-        )
+      ? inputs?.kind === 'hermes-query' && matchesGeneratedHermesQuery(inputs.argv, command, source)
+        ? inputs.argv
+        : readGeneratedHermesQueryArgv(
+            spawn.env?.[ORCA_HERMES_STARTUP_QUERY_ARGV_ENV],
+            command,
+            source
+          )
       : undefined
+  const launch = cmd || hermesArgv ? null : readLaunchPosition(command, source)
+  const originalExecutable = cmd?.executable ?? launch?.executable
   const guest = spawn.sshTarget || spawn.codexRuntime === 'wsl'
   const platform = guest ? 'linux' : process.platform
   const stock = (agent: TuiAgent) => stockLaunchProgram(agent, platform, guest)
@@ -150,12 +169,13 @@ async function rewriteLaunchExecutable(
   const nameFor = (agent: TuiAgent, program: string | undefined) =>
     namesFor(agent).find((name) => matchesStockLaunchProgram(program, name, platform))
   const sourceProgram =
-    launch &&
+    originalExecutable &&
     (spawn.codexRuntime === 'wsl'
-      ? (toWindowsWslDrivePath(launch.executable) ?? launch.executable)
+      ? (toWindowsWslDrivePath(originalExecutable) ?? originalExecutable)
       : process.platform === 'win32' && source === 'posix'
-        ? msysDrivePathToWindows(launch.executable)
-        : launch.executable)
+        ? msysDrivePathToWindows(originalExecutable)
+        : originalExecutable)
+  const isAbsoluteProgram = cmd ? win32.isAbsolute : isAbsolute
   const recorded = config?.agentCommand ? readLaunchPosition(config.agentCommand, source) : launch
   const bare =
     recorded &&
@@ -177,13 +197,13 @@ async function rewriteLaunchExecutable(
         ? 'hermes'
         : stockAgents.find(
             (candidate) =>
-              nameFor(candidate, launch?.executable) || nameFor(candidate, recorded?.executable)
+              nameFor(candidate, originalExecutable) || nameFor(candidate, recorded?.executable)
           )))
     : oldAgent
-  if (generated && (!agent || (!launch && !hermesArgv))) {
+  if (generated && (!agent || (!originalExecutable && !hermesArgv))) {
     return { command: undefined, launchConfig: config, blocked: 'unknown' }
   }
-  let executable = launch?.executable
+  let executable = originalExecutable
   let launchConfig = config
   if (agent) {
     const primary = stock(agent)
@@ -198,7 +218,7 @@ async function rewriteLaunchExecutable(
         spawn,
         receivingShell,
         [preferred, ...alternatives],
-        launch?.cwd,
+        cmd?.cwd || launch?.cwd,
         pinned,
         signal
       )
@@ -208,7 +228,7 @@ async function rewriteLaunchExecutable(
     }
     if (
       executable &&
-      (nameFor(agent, executable) || (sourceProgram && isAbsolute(sourceProgram)))
+      (nameFor(agent, executable) || (sourceProgram && isAbsoluteProgram(sourceProgram)))
     ) {
       executable =
         selected.kind === 'full-path'
@@ -243,6 +263,18 @@ async function rewriteLaunchExecutable(
         ),
         launchConfig
       }
+    }
+  }
+  if (cmd && executable) {
+    return {
+      command: convertCmd
+        ? (renderCmdLaunchForPowerShell(
+            command,
+            generatedCmdLaunchPosition(cmd, command),
+            executable
+          ) ?? command)
+        : renderGeneratedCmdLaunch(cmd, executable),
+      launchConfig
     }
   }
   if (!launch || !executable) {

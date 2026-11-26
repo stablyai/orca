@@ -12,6 +12,7 @@ import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/shell/l
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { recognizeAgentLaunchCommand } from '../../../../shared/agent-launch/startup/agent-command-line-intent'
 import { readLaunchPosition } from '../../../../shared/agent-launch/startup/launch-position'
+import { GENERATED_AGENT_LAUNCH_ENV } from '../../../../shared/agent-launch/startup/generated-agent-launch-inputs'
 import {
   ORCA_HERMES_STARTUP_QUERY_ARGV_ENV,
   ORCA_HERMES_STARTUP_QUERY_ENV
@@ -68,10 +69,22 @@ export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
     },
     shell
   )
+  let paneEnv = input.env
+  if (
+    paneEnv &&
+    (GENERATED_AGENT_LAUNCH_ENV in paneEnv || ORCA_HERMES_STARTUP_QUERY_ARGV_ENV in paneEnv)
+  ) {
+    paneEnv = { ...paneEnv }
+    delete paneEnv[GENERATED_AGENT_LAUNCH_ENV]
+    delete paneEnv[ORCA_HERMES_STARTUP_QUERY_ARGV_ENV]
+    if (blocked) {
+      delete paneEnv[ORCA_HERMES_STARTUP_QUERY_ENV]
+    }
+  }
   const openCodeLaunch = await prepareOpenCodePtyLaunch({
     command: startupCommand,
     agent: launchAgent,
-    env: input.env,
+    env: paneEnv,
     envToDelete: input.envToDelete,
     cwd: input.cwd,
     connectionId,
@@ -83,15 +96,6 @@ export async function preparePtyAgentLaunch(input: PtySpawnLaunchOptionsInput) {
   })
   const settings = input.getSettings?.()
   const env = { ...openCodeLaunch.env }
-  if (
-    launchConfig?.commandProvenance === 'generated' &&
-    input.env?.[ORCA_HERMES_STARTUP_QUERY_ARGV_ENV]
-  ) {
-    delete env[ORCA_HERMES_STARTUP_QUERY_ARGV_ENV]
-    if (blocked) {
-      delete env[ORCA_HERMES_STARTUP_QUERY_ENV]
-    }
-  }
   const local = !connectionId && input.codexRuntime !== 'wsl'
   const root = local && process.getuid?.() === 0
   const authored = launchConfig?.commandProvenance === 'authored'

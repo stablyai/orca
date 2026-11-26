@@ -4,10 +4,8 @@ import { isAntigravityReferenceSession } from '../../agent-session/lifecycle/pro
 import type { AiVaultSession } from '../contracts/ai-vault-types'
 import {
   buildAiVaultResumeCommand,
-  buildAiVaultResumeShellCommand,
   realHomeCodexResumeEnvDeletion
 } from './ai-vault-resume-command'
-import { withPinnedCmdCodexHome } from './ai-vault-resume-home-env'
 import {
   isResumableTuiAgent,
   type AgentProviderSessionMetadata,
@@ -145,11 +143,6 @@ export function buildAiVaultLocalResumeStartup(
 ): AiVaultResumeStartup {
   const { session, settings, embedCwd, clearEnvNames } = args
   const { platform, codexHome, liveShell } = args.host
-  // A spawned cmd pane gets the home before startup, so its resume head can be aligned.
-  const pinnedCmdHome =
-    !embedCwd && session.agent === 'codex' && platform === 'win32' && liveShell === 'cmd'
-      ? codexHome?.trim()
-      : undefined
   const resumeFilePath = normalizeAiVaultResumeFilePath(session.filePath, platform)
   // Why: Pi resumes by transcript path, spelled for the shell it runs in (#24408).
   const localProviderSession = getAiVaultAgentProviderSession({
@@ -160,7 +153,7 @@ export function buildAiVaultLocalResumeStartup(
   const shellOptions = {
     cwd,
     platform,
-    codexHome: pinnedCmdHome ? undefined : codexHome,
+    codexHome,
     shell: liveShell,
     clearEnvNames
   }
@@ -200,10 +193,10 @@ export function buildAiVaultLocalResumeStartup(
         ...managedDataAccountResumeEnv(session)
       },
       resumeInLaunchCwd: true,
+      ...(session.agent !== 'omp' ? { resumeShell: shellOptions } : {}),
       ...(session.agent === 'omp' && resumeFilePath ? { ompResumeFilePath: resumeFilePath } : {})
     })
     if (startupPlan) {
-      const env = withPinnedCmdCodexHome(startupPlan.env, pinnedCmdHome)
       return {
         command:
           session.agent === 'omp'
@@ -219,11 +212,8 @@ export function buildAiVaultLocalResumeStartup(
                 ),
                 ...shellOptions
               })
-            : buildAiVaultResumeShellCommand({
-                resumeCommand: startupPlan.launchCommand,
-                ...shellOptions
-              }),
-        ...(env ? { env } : {}),
+            : startupPlan.launchCommand,
+        ...(startupPlan.env ? { env: startupPlan.env } : {}),
         ...realHomeCodexResumeEnvDeletion(session),
         ...startupCwd,
         launchConfig: startupPlan.launchConfig,
@@ -242,7 +232,6 @@ export function buildAiVaultLocalResumeStartup(
       // Fallbacks also handle non-resumable agents; quote for the live Windows shell like startup plans.
       ...shellOptions
     }),
-    ...(pinnedCmdHome ? { env: withPinnedCmdCodexHome(undefined, pinnedCmdHome) } : {}),
     ...startupCwd,
     ...realHomeCodexResumeEnvDeletion(session)
   }
@@ -276,25 +265,15 @@ export function buildAiVaultForkStartup(
     ),
     agentEnv: resolveTuiAgentLaunchEnv(session.agent, settings, platform),
     resumeInLaunchCwd: true,
+    resumeShell: { cwd: null, codexHome, shell: liveShell },
     fork: true
   })
   if (!plan) {
     return null
   }
-  const pinnedCmdHome =
-    session.agent === 'codex' && platform === 'win32' && liveShell === 'cmd'
-      ? codexHome?.trim()
-      : undefined
-  const env = withPinnedCmdCodexHome(plan.env, pinnedCmdHome)
   return {
-    command: buildAiVaultResumeShellCommand({
-      resumeCommand: plan.launchCommand,
-      cwd: null,
-      platform,
-      codexHome: pinnedCmdHome ? undefined : codexHome,
-      shell: liveShell
-    }),
-    ...(env ? { env } : {}),
+    command: plan.launchCommand,
+    ...(plan.env ? { env: plan.env } : {}),
     ...realHomeCodexResumeEnvDeletion(session),
     ...(session.cwd ? { cwd: session.cwd } : {}),
     launchConfig: plan.launchConfig

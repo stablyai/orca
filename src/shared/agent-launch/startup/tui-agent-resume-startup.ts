@@ -21,6 +21,8 @@ import { buildAiVaultResumeShellCommand } from '../../ai-vault/resume/ai-vault-r
 import { normalizeRuntimePathForComparison } from '../../file-access/cross-platform-path'
 import { parseWslUncPath } from '../../file-access/wsl-paths'
 import { dropRecordedAgentPermissionArgs } from '../permissions/tui-agent-permission-lift'
+import { generatedCmdLaunchEnv } from './generated-cmd-launch'
+import { readLaunchPosition } from './launch-position'
 
 export function buildAgentResumeStartupPlan(args: {
   agent: ResumableTuiAgent
@@ -42,6 +44,11 @@ export function buildAgentResumeStartupPlan(args: {
   resumeInLaunchCwd?: boolean
   /** Folder the resume shell starts in; an agent recorded elsewhere is resumed from its own folder (#16960). */
   launchCwd?: string | null
+  /** AI Vault can pin the home and optionally change folders in the resume shell. */
+  resumeShell?: Omit<
+    Parameters<typeof buildAiVaultResumeShellCommand>[0],
+    'resumeCommand' | 'platform'
+  >
   /** Open a copy of the conversation instead of re-entering it; null for agents that cannot. */
   fork?: boolean
   /** OS that runs the agent when `platform` only picks quoting; null when unreported. */
@@ -80,6 +87,11 @@ export function buildAgentResumeStartupPlan(args: {
           shell
         ),
         resumeLaunch: { agentCommand: resolvedAgentCommand },
+        generatedCmdExecutable:
+          shell === 'cmd' && args.commandProvenance === 'generated'
+            ? (readLaunchPosition(resolvedAgentCommand, shell)?.executable ??
+              args.selectedExecutable)
+            : undefined,
         appliedSessionOptions: {}
       } as const)
     : resolveAgentLaunchCommand({
@@ -109,15 +121,21 @@ export function buildAgentResumeStartupPlan(args: {
   const resumeCommand = buildAgentResumeLaunchCommand(args.agent, suppressedCommand, argv, shell)
   const env = suppression.env ? { ...args.agentEnv, ...suppression.env } : args.agentEnv
   const agentCwd = args.providerSession.cwd
-  const launchCommand =
-    agentCwd && args.launchCwd && !args.resumeInLaunchCwd && !isSameFolder(agentCwd, args.launchCwd)
-      ? buildAiVaultResumeShellCommand({
-          resumeCommand,
-          cwd: agentCwd,
-          platform: args.platform,
-          shell
-        })
-      : resumeCommand
+  const resumeShell =
+    args.resumeShell ??
+    (agentCwd &&
+    args.launchCwd &&
+    !args.resumeInLaunchCwd &&
+    !isSameFolder(agentCwd, args.launchCwd)
+      ? { cwd: agentCwd, shell }
+      : undefined)
+  const launchCommand = resumeShell
+    ? buildAiVaultResumeShellCommand({ ...resumeShell, resumeCommand, platform: args.platform })
+    : resumeCommand
+  const rebuildEnv =
+    !resumeShell || (args.platform === 'win32' && resumeShell.shell === 'cmd')
+      ? generatedCmdLaunchEnv(baseCommand.generatedCmdExecutable, resumeCommand, resumeShell)
+      : undefined
   const applied = baseCommand.appliedSessionOptions
   return {
     agent: args.agent,
@@ -127,7 +145,7 @@ export function buildAgentResumeStartupPlan(args: {
     launchConfig,
     ...(args.agent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
     ...(Object.keys(applied).length > 0 ? { sessionOptions: { ...applied } } : {}),
-    ...(env ? { env: { ...env } } : {})
+    ...(env || rebuildEnv ? { env: { ...env, ...rebuildEnv } } : {})
   }
 }
 

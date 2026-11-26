@@ -266,7 +266,7 @@ export function readLaunchPosition(
 export function readLaunchArguments(
   command: string,
   shell: AgentStartupShell,
-  launch: LaunchPosition,
+  launch: Pick<LaunchPosition, 'end'>,
   maxChars = LAUNCH_ARGUMENT_SCAN_MAX_CHARS
 ): string[] | null {
   if (command.length > maxChars) {

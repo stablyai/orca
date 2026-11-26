@@ -1,4 +1,5 @@
 import { encodePowerShellCommand } from '../../shell/launch/powershell-command-encoding'
+import { generatedAgentLaunchEnv } from './generated-agent-launch-inputs'
 import {
   buildShellCommandFromArgv,
   isPosixStartupShell,
@@ -174,15 +175,25 @@ export function readGeneratedHermesQueryArgv(
     const argv: unknown = JSON.parse(value)
     return Array.isArray(argv) &&
       argv.every((arg): arg is string => typeof arg === 'string') &&
-      isHermesExecutableToken(argv[0] ?? '') &&
-      argv[1] === 'chat' &&
-      argv[2] === QUERY_ARG_PLACEHOLDER &&
-      buildHermesQueryCommand(argv, shell) === command
+      matchesGeneratedHermesQuery(argv, command, shell)
       ? argv
       : undefined
   } catch {
     return undefined
   }
+}
+
+export function matchesGeneratedHermesQuery(
+  argv: readonly string[],
+  command: string,
+  shell: AgentStartupShell
+): boolean {
+  return (
+    isHermesExecutableToken(argv[0] ?? '') &&
+    argv[1] === 'chat' &&
+    argv[2] === QUERY_ARG_PLACEHOLDER &&
+    buildHermesQueryCommand(argv, shell) === command
+  )
 }
 
 export function planHermesStartupQuery(args: {
@@ -209,7 +220,7 @@ export function planHermesStartupQuery(args: {
     ...args.agentEnv,
     [ORCA_HERMES_STARTUP_QUERY_ENV]: args.prompt,
     // Older hosts still receive the shell wrapper. The spawning host can render it with its selected executable.
-    ...(args.generated ? { [ORCA_HERMES_STARTUP_QUERY_ARGV_ENV]: JSON.stringify(argv) } : {})
+    ...(args.generated ? generatedAgentLaunchEnv({ kind: 'hermes-query', argv }) : {})
   }
   const envSize = Object.entries(env).reduce((total, [key, value]) => {
     if (args.platform === 'win32') {
