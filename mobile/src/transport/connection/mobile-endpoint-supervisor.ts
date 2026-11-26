@@ -62,6 +62,7 @@ export class MobileEndpointSupervisor {
       setForeground: (foreground) => this.setForeground(foreground),
       scheduleDirectProbe: () => this.directProbe.schedule(0),
       readLocalNetwork: dependencies.readLocalNetwork,
+      now: dependencies.now,
       onLocalNetworkArrival: () => this.directProbe.arrive()
     })
     this.leaseRotation = new RelayLeaseRotationTimer(dependencies, () => {

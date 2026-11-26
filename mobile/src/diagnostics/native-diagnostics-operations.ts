@@ -17,6 +17,7 @@ import { submitConnectionDiagnostics } from './connection-diagnostics-submission
 import type { DiagnosticsDeviceOperations } from './diagnostics-device-operations'
 import { BRIDGE_PROTOCOL_VERSION } from '../mobile-web-shell/bridge/protocol/bridge-frame-fields'
 import { readMobileRelayCredentialBundle } from '../host-credentials/mobile-relay-credential-bundle'
+import { withTimeout } from '../../../src/shared/concurrency/promise-timeout-fallback'
 
 export function createNativeDiagnosticsOperations(
   host: HostProfile | null,
@@ -42,8 +43,9 @@ export function createNativeDiagnosticsOperations(
         }
       }
       const snapshot = await readConnectionDiagnosticsSnapshot(context, connectionLogStore, host.id)
+      // The read queues behind every keychain mutation; a report must never wait on an unrelated write.
       const relayCredential = host.relay
-        ? await readMobileRelayCredentialBundle(host.id).catch(() => null)
+        ? await withTimeout(readMobileRelayCredentialBundle(host.id), 2_000, null)
         : undefined
       return {
         report: buildConnectionDiagnosticsReport({

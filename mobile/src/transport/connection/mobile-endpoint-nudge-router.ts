@@ -2,12 +2,15 @@ import type { RelayReconnectController } from '../relay/mobile-relay-reconnect-c
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ForegroundNudgeReason } from './connection-state'
 
+const GATED_NETWORK_NUDGE_WINDOW_MS = 30_000
+
 export class MobileEndpointNudgeRouter {
   // Undefined until read, so a join before the first read still counts as a change.
   private lastLocalNetwork: string | null | undefined
   // Reads can settle out of order; a result older than the last applied one is stale.
   private readsStarted = 0
   private lastAppliedRead = 0
+  private lastGateLiftAt = Number.NEGATIVE_INFINITY
 
   constructor(
     private readonly args: {
@@ -18,6 +21,7 @@ export class MobileEndpointNudgeRouter {
       setForeground: (foreground: boolean) => void
       scheduleDirectProbe: () => void
       readLocalNetwork: () => Promise<string | null>
+      now: () => number
       onLocalNetworkArrival: () => void
     }
   ) {
@@ -44,9 +48,19 @@ export class MobileEndpointNudgeRouter {
       }
       args.setForeground(true)
     }
-    // iOS repeats callbacks for an unchanged network; only a real move may lift a slow gate early.
+    // iOS repeats callbacks for an unchanged network, and cellular always reads as no network: under a
+    // slow gate, a Wi-Fi move lifts it at once, any other callback at most once per window.
     if (reason === 'network-change' && args.controller.holdsExternalSignalGate()) {
-      void this.routeNetworkChange(() => args.controller.handleActiveNudge(args.logical, reason))
+      const liftGate = () => {
+        this.lastGateLiftAt = args.now()
+        args.controller.handleActiveNudge(args.logical, reason)
+      }
+      if (args.now() - this.lastGateLiftAt >= GATED_NETWORK_NUDGE_WINDOW_MS) {
+        liftGate()
+        void this.routeNetworkChange()
+      } else {
+        void this.routeNetworkChange(liftGate)
+      }
       return
     }
     args.controller.handleActiveNudge(args.logical, reason)

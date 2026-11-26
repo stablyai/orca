@@ -102,7 +102,7 @@ export function formatConnectionLogHistory(entries: readonly ConnectionLogEntry[
 // Versions, expiries and pending state only: never the tokens or hashes.
 function formatRelayCredential(bundle: MobileRelayCredentialBundle | null, now: number): string {
   if (!bundle) {
-    return 'Relay credential: not found'
+    return 'Relay credential: not found or unreadable'
   }
   const lease = (credential: { version: number; expiresAt: number }) =>
     `v${credential.version} ${credential.expiresAt > now ? 'expires' : 'expired'} ${new Date(credential.expiresAt).toISOString()}`

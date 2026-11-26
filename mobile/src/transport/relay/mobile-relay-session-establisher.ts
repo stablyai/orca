@@ -147,8 +147,8 @@ export class MobileRelaySessionEstablisher {
   }): Promise<EstablishResult> {
     const { args } = this
     const bundle = args.bundle()
-    // Why: director resolution and grace fallback can finish after background/stop.
-    if (!args.isActive() || !bundle) {
+    // Why: director resolution and grace fallback can finish after background/stop or a direct win.
+    if (!args.isActive() || !bundle || directWon(args.logical)) {
       return { ok: false, error: new RelayDialAbortedError() }
     }
     let session: ReturnType<typeof args.openRelay>
