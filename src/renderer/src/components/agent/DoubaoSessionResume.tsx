@@ -1,12 +1,15 @@
 import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
+import { agentLaunchRecoveryMessage } from '@/lib/agent-session/launch/failure/agent-launch-failure'
 import { useAppStore } from '@/store/index'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { getPairedWebClientEnvironmentId } from '@/app-shell/platform/paired-web-client-host'
-import { runtimeTargetForWorktreeOwner } from '@/store/slices/worktrees/listing/worktree-owner-target'
+import {
+  runtimeTargetForWorktreeOwner,
+  tryRuntimeTargetForWorktreeOwner
+} from '@/store/slices/worktrees/listing/worktree-owner-target'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import { createWebRuntimeSessionTerminalOnHost } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
@@ -22,8 +25,12 @@ async function resumeDoubaoSession(
   executionHostId: ExecutionHostId | undefined,
   providerSession: AgentProviderSessionMetadata
 ): Promise<void> {
-  const target = runtimeTargetForWorktreeOwner(useAppStore.getState(), worktreeId, executionHostId)
-  if (target.kind === 'local' && !isPairedWebClientWindow()) {
+  const state = useAppStore.getState()
+  const paired = isPairedWebClientWindow()
+  const target = paired
+    ? tryRuntimeTargetForWorktreeOwner(state, worktreeId, executionHostId)
+    : runtimeTargetForWorktreeOwner(state, worktreeId, executionHostId)
+  if (target?.kind === 'local' && !paired) {
     await callRuntimeRpc(target, 'terminal.ensureAgentSession', {
       kind: 'explicit',
       worktree: toRuntimeWorktreeSelector(worktreeId),
@@ -33,13 +40,31 @@ async function resumeDoubaoSession(
     })
     return
   }
-  // The browser already knows its pairing while the renderer's host catalog is still loading.
-  const environmentId =
-    target.kind === 'environment'
-      ? target.environmentId
-      : getPairedWebClientEnvironmentId({
-          runtimeEnvironments: await window.api.runtimeEnvironments.list()
-        })
+  let environmentId = target?.kind === 'environment' ? target.environmentId : null
+  if (!environmentId) {
+    const runtimeEnvironments = await window.api.runtimeEnvironments.list()
+    if (!runtimeEnvironments.length) {
+      throw new Error(agentLaunchRecoveryMessage('reconnectServer'))
+    }
+    // Pick up newly loaded workspace rows without following a selection change during the lookup.
+    const owner = tryRuntimeTargetForWorktreeOwner(
+      {
+        ...useAppStore.getState(),
+        runtimeEnvironments,
+        activeWorktreeId: state.activeWorktreeId,
+        activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId
+      },
+      worktreeId,
+      executionHostId
+    )
+    environmentId =
+      owner?.kind === 'local'
+        ? getPairedWebClientEnvironmentId({ runtimeEnvironments })
+        : (owner?.environmentId ?? null)
+    if (!environmentId) {
+      throw new Error(agentLaunchRecoveryMessage('refreshProjects'))
+    }
+  }
   const result = await createWebRuntimeSessionTerminalOnHost(
     {
       worktreeId,
@@ -49,12 +74,7 @@ async function resumeDoubaoSession(
       providerSession,
       // An older owner cannot preserve the selected provider session and its launch settings.
       legacyAgentLaunch: async () => {
-        throw new Error(
-          translate(
-            'agentLaunch.updateServer',
-            'Update Orca on this workspace’s server, then try again.'
-          )
-        )
+        throw new Error(agentLaunchRecoveryMessage('updateServer'))
       },
       activate: true
     },

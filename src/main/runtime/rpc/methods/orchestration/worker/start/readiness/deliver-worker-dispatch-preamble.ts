@@ -52,9 +52,8 @@ export async function deliverWorkerDispatchPreamble(args: {
 }> {
   const { runtime, structuredSession, terminalHandle } = args
   // A reused structured worker is a chat too, though its handle is not an Orca session ID.
-  const chat = structuredSession
-    ? null
-    : chatAssigneeOf(resolveDispatchAssigneeParty(terminalHandle, args.db))
+  const assignee = structuredSession ? null : resolveDispatchAssigneeParty(terminalHandle, args.db)
+  const chat = assignee && chatAssigneeOf(assignee)
   const cliTarget = runtime.getTerminalOrchestrationCliTarget(terminalHandle)
   const preamble = buildDispatchPreamble({
     // Only depth gates nesting; resolve structured callers' workspace so they can dispatch like PTY workers.
@@ -74,8 +73,10 @@ export async function deliverWorkerDispatchPreamble(args: {
     devMode: args.devMode,
     ...cliTarget,
     cliLauncher:
-      args.launchedAgent === 'doubao' &&
       cliTarget.runsOnNativeWindows &&
+      assignee &&
+      !chat &&
+      (args.launchedAgent ?? runtime.orchestrationSenderNames.liveAgentOf(assignee)) === 'doubao' &&
       runtime.getOrchestrationDispatchAuthority(terminalHandle)?.hostScope.kind === 'local'
         ? getWindowsWorkerCliLauncher()
         : undefined,
