@@ -25617,6 +25617,7 @@
       "computerHint": "Où le bot s’exécute.",
       "computerAccountHint": "Où le bot s’exécute, connecté à Orca en tant que {{account}}.",
       "useChatDefaults": "Utiliser les réglages par défaut du chat",
+      "chatDefault": "Du chat",
       "agent": "Agent",
       "folder": "Dossier : {{path}}",
       "name": "Nom",

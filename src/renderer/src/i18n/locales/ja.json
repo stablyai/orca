@@ -26183,6 +26183,7 @@
       "computerHint": "ボットの実行場所です。",
       "computerAccountHint": "ボットの実行場所です。Orca には {{account}} としてサインインしています。",
       "useChatDefaults": "チャットのデフォルトを使用",
+      "chatDefault": "チャット既定",
       "agent": "Agent",
       "folder": "フォルダー: {{path}}",
       "name": "名前",

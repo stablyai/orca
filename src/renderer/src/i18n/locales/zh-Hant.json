@@ -26959,6 +26959,7 @@
       "computerHint": "機器人執行的位置。",
       "computerAccountHint": "機器人執行的位置，以 {{account}} 身分登入 Orca。",
       "useChatDefaults": "使用聊天預設設定",
+      "chatDefault": "聊天預設",
       "agent": "代理程式",
       "folder": "資料夾：{{path}}",
       "name": "名稱",

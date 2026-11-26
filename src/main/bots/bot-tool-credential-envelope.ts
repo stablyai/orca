@@ -2,31 +2,40 @@
 // belongs to, so editing the credentials file can't re-point a value or move it to another tool or bot.
 import { resolve } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { BotFailureError } from '../../shared/bots/bot-failure-copy'
 import { getSecretStore, hasSecretStore } from '../../shared/secure-storage/secret-store'
 
-const Envelope = z.string().regex(/^(?:sealed|plain):[A-Za-z0-9+/=]*$/)
-const Headers = z.record(z.string(), z.string())
-export const Entry = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('headers'), url: z.string(), headers: Headers }),
-  z.object({ kind: z.literal('source'), url: z.string(), source: z.string(), headers: Headers }),
-  z.object({
-    kind: z.literal('oauth'),
-    url: z.string(),
-    grant: z.number().int().nonnegative(),
-    revision: z.number().int().nonnegative(),
-    // Parsed on its own: an unreadable sign-in is one to make again, never a missing tool.
-    record: z.unknown()
-  })
-])
+const Envelope = lazyZodSchema(() => z.string().regex(/^(?:sealed|plain):[A-Za-z0-9+/=]*$/))
+const Headers = lazyZodSchema(() => z.record(z.string(), z.string()))
+export const Entry = lazyZodSchema(() =>
+  z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('headers'), url: z.string(), headers: Headers }),
+    z.object({ kind: z.literal('source'), url: z.string(), source: z.string(), headers: Headers }),
+    z.object({
+      kind: z.literal('oauth'),
+      url: z.string(),
+      grant: z.number().int().nonnegative(),
+      revision: z.number().int().nonnegative(),
+      // Parsed on its own: an unreadable sign-in is one to make again, never a missing tool.
+      record: z.unknown()
+    })
+  ])
+)
 export type Entry = z.infer<typeof Entry>
 /** What one envelope seals: the whole entry with the folder and id it belongs to. */
-const SealedEntry = z.object({ folder: z.string(), id: z.string(), entry: Entry })
-const CredentialsFile = z.object({
-  version: z.literal(2),
-  credentials: z.record(z.string(), Envelope)
-})
-const OlderLayout = z.object({ credentials: z.record(z.string(), z.unknown()) })
+const SealedEntry = lazyZodSchema(() =>
+  z.object({ folder: z.string(), id: z.string(), entry: Entry })
+)
+const CredentialsFile = lazyZodSchema(() =>
+  z.object({
+    version: z.literal(2),
+    credentials: z.record(z.string(), Envelope)
+  })
+)
+const OlderLayout = lazyZodSchema(() =>
+  z.object({ credentials: z.record(z.string(), z.unknown()) })
+)
 /** An entry as read: its envelope, kept as written, and what it holds, null when it doesn't open here. */
 export type Slot = { envelope: string; entry: Entry | null }
 export type Stored = Record<string, Slot>
