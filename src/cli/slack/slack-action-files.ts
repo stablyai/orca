@@ -62,6 +62,12 @@ const UPLOAD_FAILED = (name: string) =>
     `Slack didn't take ${name}; nothing was posted. Try again in a moment.`
   )
 
+// A page's bytes, unlike an image's, don't tell Slack what it is; untyped it shows as Binary.
+const UPLOAD_CONTENT_TYPES: Readonly<Record<string, string>> = {
+  '.html': 'text/html',
+  '.htm': 'text/html'
+}
+
 /** The file's bytes to the source's upload URL, read from disk as they go; the URL itself is the
  *  credential, so nothing else is sent. A file that changed size since staging is refused, as the
  *  slot was cut for the old size. */
@@ -70,7 +76,8 @@ export async function uploadFile(
   file: LocalFile,
   request: Fetch = (input, init) => fetch(input, init)
 ): Promise<void> {
-  const blob = await openAsBlob(file.path)
+  const type = UPLOAD_CONTENT_TYPES[extname(file.name).toLowerCase()]
+  const blob = await openAsBlob(file.path, type ? { type } : undefined)
   if (blob.size !== file.size) {
     throw new RuntimeClientError(
       'invalid_argument',
