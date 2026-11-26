@@ -283,11 +283,10 @@ it('preserves sibling usage published during a Kimchi retry credential check', a
       }
     })
 
-    await vi.waitFor(async () =>
-      expect((await service.getState()).claude?.session?.usedPercent).toBe(72)
-    )
+    await vi.waitFor(() => expect(resolveKimi).toBeDefined())
     resolveKimi?.(await unavailable('kimi')())
     await refreshing
+    expect((await service.getState()).claude?.session?.usedPercent).toBe(72)
   } finally {
     service.stop()
   }
