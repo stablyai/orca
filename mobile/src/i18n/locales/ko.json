@@ -5640,7 +5640,110 @@
     }
   },
   "bots": {
-    "section": {},
+    "search": {
+      "pausedMatches_one": "일치하는 일시 중지된 봇 {{count}}개",
+      "pausedMatches_other": "일치하는 일시 중지된 봇 {{count}}개",
+      "showPausedAction": "일시 중지된 봇 보기"
+    },
+    "list": {
+      "readFailed": "{{host}}의 봇을 불러오지 못했습니다."
+    },
+    "chat": {
+      "mentionOwnChats": "내 다른 채팅",
+      "mentionPaused": "일시 중지됨",
+      "mentionPlaceholder": "무엇이든 물어보세요. @로 봇이나 파일 멘션, /로 명령어 실행",
+      "mentionChatsLoadFailed": "채팅을 불러오지 못함"
+    },
+    "tabs": {
+      "homeTitle": "홈"
+    },
+    "lookAroundEvery": {
+      "every4h": "오전 8시~오후 8시, 4시간마다",
+      "every2h": "오전 8시~오후 8시, 2시간마다",
+      "twiceDaily": "하루 두 번, 오전 8시와 오후 1시",
+      "mornings": "매일 아침 오전 8시"
+    },
+    "host": {
+      "errors": {
+        "signedOut": "{{service}}을(를) 연결하려면 {{host}}에서 Orca Cloud에 로그인하세요.",
+        "accountChanged": "{{host}}의 Orca 로그인이 변경되었습니다. 다시 시작하세요.",
+        "notRouted": "{{host}}에서는 {{service}} 페이지를 Orca 브라우저에서 열어야 합니다. {{host}}을(를) 다시 연결한 다음 다시 시작하세요."
+      }
+    },
+    "cloudSignIn": {
+      "paused": "로그아웃되어 일시 중지됨",
+      "needsSignIn": "로그인 필요"
+    },
+    "setup": {
+      "for": "{{name}}용",
+      "copyHowToAsk": "{{text}} 복사"
+    },
+    "settingsView": {
+      "sharing": "공유",
+      "sharingOn": "켜짐"
+    },
+    "memory": {
+      "source": "출처: {{source}}",
+      "title": "메모리",
+      "cancel": "취소",
+      "save": "저장",
+      "fact": "메모리",
+      "topicLines_one": "{{count}}줄",
+      "topicLines_other": "{{count}}줄",
+      "topicFiles": "주제 파일",
+      "add": "메모리 추가",
+      "addPlaceholder": "새로 기억할 내용…",
+      "lines": "{{count}} / {{cap}}줄",
+      "empty": "아직 저장된 사실이 없습니다.",
+      "edit": "편집",
+      "forget": "잊기",
+      "tabFacts": "아는 것",
+      "tabHistory": "기록"
+    },
+    "homeFile": {
+      "offline": "{{host}}이(가) 다시 연결되면 {{file}}이(가) 열립니다.",
+      "retry": "다시 시도",
+      "reading": "{{file}} 읽는 중…"
+    },
+    "soul": {
+      "title": "소울",
+      "stats": "{{lines}}줄 · {{words}}단어",
+      "empty": "아직 지침이 없습니다.",
+      "changeInChat": "채팅에서 변경",
+      "changeDraft": "SOUL.md를 다음과 같이 바꿔 주세요: "
+    },
+    "skills": {
+      "count_one": "스킬 {{count}}개",
+      "count_other": "스킬 {{count}}개",
+      "none": "이 프로젝트에는 아직 스킬이 없습니다",
+      "own": "{{bot}}의 자체 스킬",
+      "title": "스킬",
+      "listedTitle": "{{agent}}은(는) 이 스킬을 직접 불러올 수 없습니다.",
+      "listedBody": "{{bot}}은(는) 지침에서 스킬 목록을 받아, 알맞을 때 하나를 읽습니다. / 메뉴에는 표시되지 않습니다.",
+      "reading": "스킬을 읽는 중…",
+      "nextChat": "스킬은 {{bot}}의 다음 채팅부터 불러옵니다.",
+      "ownNone": "아직 자체 스킬이 없습니다.",
+      "link": "프로젝트 연결",
+      "notYet": "아직 사용할 수 없음",
+      "noneShort": "스킬 없음",
+      "back": "스킬로 돌아가기",
+      "search": "프로젝트 검색",
+      "noMatch": "검색과 일치하는 프로젝트가 없습니다.",
+      "remoteShort": "다른 호스트에 있음",
+      "missingShort": "더 이상 Orca에 없음",
+      "remove": "제거",
+      "removeProject": "{{project}} 제거"
+    },
+    "upcoming": {
+      "needsSignIn": "로그인 필요"
+    },
+    "memoryHistory": {
+      "tidyUp": "정리"
+    },
+    "section": {
+      "reorderTitle": "봇 순서 변경",
+      "reorder": "순서 변경…"
+    },
     "link": {
       "pairTitle": "컴퓨터 페어링",
       "pairRequired": "이 링크를 열려면 이 휴대폰을 컴퓨터와 페어링한 다음 링크를 다시 여세요.",
@@ -5695,6 +5798,15 @@
       "effort": "추론 수준",
       "modelDefault": "기본값",
       "signInChanged": "Orca 로그인이 변경됨",
+      "whoCanAskName": "{{name}}에게 요청할 수 있는 사람",
+      "you": "나",
+      "owner": "소유자",
+      "soulAndMemory": "소울과 메모리",
+      "memoryFiles_one": "파일 {{count}}개",
+      "memoryFiles_other": "파일 {{count}}개",
+      "none": "없음",
+      "readFailed": "불러오지 못함",
+      "usingChatDefault": "채팅 기본값을 사용합니다.",
       "sameAsChatsDetail": "채팅 권한 설정을 사용합니다.",
       "needsPermissionDetail": "봇이나 워커가 내 승인을 필요로 할 때.",
       "taskCompleteDetail": "스레드, 자동화, 워커가 끝날 때.",
@@ -5720,14 +5832,16 @@
       "save": "저장",
       "lookNow": "지금 둘러보기",
       "notYet": "아직 없음",
-      "backToLookAround": "둘러보기로 돌아가기"
+      "backToLookAround": "둘러보기로 돌아가기",
+      "footer": "읽기 전용입니다. 둘러볼 때마다 에이전트 요금제 사용량이 듭니다."
     },
     "connectorOffer": {
       "slack": "Slack 채널과 다이렉트 메시지에서 봇과 채팅하세요.",
       "google": "봇이 Gmail, 캘린더, Drive에서 작업하게 하고, 새 메일로 자동화를 시작하세요.",
       "linear": "봇을 @멘션하거나 할당해 이슈를 맡기고, Linear 이벤트로 자동화를 시작하세요.",
       "github": "봇을 @멘션해 작업을 맡기고, GitHub 이벤트로 자동화를 시작하세요.",
-      "heading": "서비스 연결"
+      "heading": "서비스 연결",
+      "connect": "{{service}} 연결"
     },
     "groups": {
       "group": "그룹",
@@ -6161,9 +6275,17 @@
     "tidyUp": {
       "title": "메모리 관리",
       "never": "아직 없음",
-      "backToTidyUp": "메모리 관리로 돌아가기"
+      "backToTidyUp": "메모리 관리로 돌아가기",
+      "footerShort": "메모리 파일만 변경합니다. 에이전트 요금제 사용량이 듭니다.",
+      "undoNoteShort": "MEMORY.md를 이 정리 전 상태로 되돌립니다."
     },
     "items": {
+      "chat": {
+        "anotherAgent": "다른 에이전트"
+      },
+      "status": {
+        "waiting": "대기 중"
+      },
       "filter": {
         "clearAll": "필터 지우기"
       },
@@ -6172,16 +6294,34 @@
         "notSent": "보내지 않음.",
         "retry": "다시 시도",
         "discard": "버리기",
-        "mayHaveArrived": "전달되었을 수 있습니다."
+        "mayHaveArrived": "전달되었을 수 있습니다.",
+        "replyingTo": "답장 대상: {{question}}. 질문으로 이동"
       },
       "comment": {
-        "replyingTo": "답장 대상:"
+        "replyingTo": "답장 대상:",
+        "hideReplyingTo": "숨기기"
+      },
+      "link": {
+        "automation": "자동화",
+        "automationOn": "이 항목을 위해 에이전트를 깨웁니다",
+        "automationEnded": "종료됨"
       },
       "view": {
         "title": "항목",
         "placeOf": "{{total}}개 중 {{index}}번째",
         "previous": "이전 항목",
         "next": "다음 항목"
+      },
+      "wait": {
+        "titleOne": "{{title}}은(는) 무엇을 기다리고 있나요?",
+        "titleMany": "항목 {{count}}개는 무엇을 기다리고 있나요?",
+        "placeholder": "기다리는 대상",
+        "keep": "취소",
+        "confirm": "대기 중으로 설정",
+        "offline": "{{host}}이(가) 오프라인입니다. 입력한 내용은 그대로 남으며, 다시 연결되면 대기 중으로 설정할 수 있습니다."
+      },
+      "empty": {
+        "allClear": "확인이 필요한 것이 없습니다"
       },
       "write": {
         "offline": "{{host}}이(가) 오프라인입니다."
@@ -6199,7 +6339,13 @@
     },
     "needs": {
       "chat": "{{name}} 채팅",
-      "access": "{{person}}님이 접근 권한을 요청함"
+      "access": "{{person}}님이 접근 권한을 요청함",
+      "fixConnector": "{{name}} 열기",
+      "pairedAsk": "{{from}}이(가) {{name}}에게 메시지를 보내려고 합니다",
+      "connectorFix": "로그인하거나 문제를 해결하세요",
+      "questions": "질문 {{count}}개",
+      "signInApps": "앱 {{count}}개에 로그인",
+      "listSeparator": ", "
     },
     "templateSkills": {
       "nameWithFolder": "{{name}} ({{folder}})",
@@ -6436,8 +6582,20 @@
       "colorPink": "분홍색",
       "nameLabel": "봇 이름",
       "mascotN": "마스코트 {{total}}개 중 {{n}}",
+      "outfit": "의상",
+      "outfitNone": "의상 없음",
+      "outfitTie": "넥타이",
+      "outfitDetective": "탐정",
+      "outfitHardHat": "안전모",
+      "outfitReviewer": "리뷰어",
+      "outfitNightShift": "야간 근무",
+      "outfitArtist": "아티스트",
+      "outfitScientist": "과학자",
+      "outfitParty": "파티",
+      "outfitSecurity": "보안 요원",
       "tooBig": "이미지가 10MB를 넘습니다.",
       "tooSmall": "너무 작습니다. 128px 이상인 이미지를 사용하세요.",
+      "color": "색상",
       "colorLavender": "라벤더",
       "colorPeach": "피치",
       "colorButter": "버터",
@@ -6517,6 +6675,28 @@
       "readOnly": "여기서는 읽기 전용입니다. {{agent}}에서 변경하세요.",
       "fromYours": "내 {{agent}}에서 {{count}}개",
       "tryAgain": "다시 시도하세요",
+      "edit": "편집",
+      "editTitle": "도구 편집",
+      "save": "저장",
+      "reading": "도구 세부 정보를 읽는 중…",
+      "url": "서버 URL",
+      "urlPlaceholder": "https://example.com/mcp",
+      "headers": "헤더",
+      "executable": "실행 파일",
+      "commandPlaceholder": "npx",
+      "args": "인수",
+      "addArg": "인수 추가",
+      "env": "환경 변수",
+      "keyPlaceholder": "이름",
+      "valuePlaceholder": "값",
+      "savedPlaceholder": "저장된 값 · 바꾸려면 입력",
+      "addHeader": "헤더 추가",
+      "addVariable": "변수 추가",
+      "show": "표시",
+      "hide": "숨기기",
+      "nameTaken": "{{name}}(이)라는 도구가 이미 있습니다. 다른 이름을 선택하세요.",
+      "useName": "{{name}} 사용",
+      "checkUnfinished": "호스트에서 도구 확인을 마치지 못했습니다. 다시 확인하세요.",
       "signedInTo": "{{app}}에 로그인됨",
       "back": "도구로 돌아가기",
       "problem": "문제",
@@ -6543,7 +6723,8 @@
       "removeVariableRow": "변수 제거",
       "emptyArgument": "비어 있음",
       "valueNew": "새 값",
-      "valueSaved": "저장됨"
+      "valueSaved": "저장됨",
+      "hostMcpServers": "내 MCP 서버"
     },
     "handToBot": {
       "menu": "봇에게 넘기기…",
@@ -6587,6 +6768,8 @@
       "title": "다른 앱에서 가져오기",
       "newBot": "새 봇",
       "nameAnother": "새 봇 이름 지정",
+      "update": "{{bot}} 업데이트",
+      "updateDraft": "{{app}}의 {{name}}에서 새로 생긴 것을 모두 가져와 주세요.",
       "keysStay": "키와 로그인 정보는 남겨 둡니다",
       "chooseFolderTitle": "폴더 선택",
       "loadingFolders": "폴더 불러오는 중…",
@@ -6599,11 +6782,16 @@
       "chooseFolderRow": "폴더 선택…",
       "nudgeOne": "{{app}}에서 봇을 찾았습니다.",
       "nudgeMany": "{{app}}에서 봇 {{count}}개를 찾았습니다.",
-      "noFolders": "폴더 없음"
+      "noFolders": "폴더 없음",
+      "more": "추가 작업",
+      "makeNew": "대신 새 봇 만들기"
     },
     "saveFailed": "저장하지 못함",
     "chats": {
-      "readFailedTitle": "채팅을 불러오지 못함"
+      "readFailedTitle": "채팅을 불러오지 못함",
+      "needsYouCount": "확인 필요 {{count}}개",
+      "open": "열기",
+      "delete": "채팅 삭제"
     },
     "panel": {
       "backTo": "{{name}}(으)로 돌아가기"
@@ -6642,6 +6830,7 @@
       "toolCredentialsRaced": "다른 Orca에서 봇의 도구 자격 증명이 바뀌었습니다. 다시 시도하세요.",
       "toolSourceManaged": "이 도구는 Orca가 관리합니다. 설정한 곳에서 변경하세요.",
       "toolValuesUnmoved": "저장된 값을 아직 가진 도구가 있습니다. 봇의 도구를 다시 열어 옮기세요.",
+      "googleAccountsChanged": "계정 목록을 연 뒤 봇의 Google 계정이 바뀌었습니다. 확인하고 다시 저장하세요.",
       "toolCodexCheckFailed": "Codex가 도구를 확인하거나 연결하지 못했습니다. 설정을 확인하고 다시 시도하세요.",
       "toolCodexNoThread": "Codex가 도구를 확인할 스레드를 시작하지 않았습니다.",
       "toolSignInFolderFailed": "로그인 폴더를 준비하지 못했습니다: {{detail}}",
@@ -6697,9 +6886,13 @@
       "groupReplierNotMember": "방 답장에서 현재 방 멤버를 선택하세요.",
       "groupMailNeverStarted": "이 메일은 턴을 시작하지 못했습니다.",
       "groupRemoteUnreachable": "{{host}}에 연결할 수 없었습니다. {{detail}}",
-      "groupRemoteUnreachableRetry": "{{host}}에 연결할 수 없었습니다. {{detail}} 다시 시도하려면 다시 게시하세요."
+      "groupRemoteUnreachableRetry": "{{host}}에 연결할 수 없었습니다. {{detail}} 다시 시도하려면 다시 게시하세요.",
+      "composioKeyCantCreateSessions": "이 Composio 키로는 세션을 만들 수 없습니다. {{permission}} 권한이 필요합니다.",
+      "composioKeyNeedsPermission": "이 Composio 키에 권한이 하나 빠져 있습니다. {{permission}} 권한이 필요합니다.",
+      "composioKeyMissingPermission": "이 Composio 키에 Orca에 필요한 권한이 빠져 있습니다."
     },
     "automations": {
+      "viewRuns": "실행 기록 보기",
       "paused": "일시중지됨",
       "newDraft": "다음과 같은 자동화를 설정해 주세요: "
     },
@@ -6771,6 +6964,7 @@
     "settingsPage": {
       "off": "꺼짐",
       "lastLooked": "마지막 둘러보기 {{when}}",
+      "yesterdayAt": "어제 {{time}}",
       "today": "오늘",
       "yesterday": "어제",
       "lastTidied": "마지막 정리 {{when}}"
@@ -6781,7 +6975,11 @@
       "hitLimit": "한도 도달 · {{time}}에 초기화"
     },
     "new": {
-      "purposeTooLongForHost": "{{host}}의 Orca는 용도를 200자까지만 받을 수 있습니다. 줄이거나 {{host}}의 Orca를 업데이트하세요."
+      "purposeLabel": "정체성",
+      "purposeTooLongForHost": "{{host}}의 Orca는 용도를 200자까지만 받을 수 있습니다. 줄이거나 {{host}}의 Orca를 업데이트하세요.",
+      "purposePlaceholder": "어떤 봇이고 무엇을 하는지",
+      "noAgent": "없음",
+      "noChatAgents": "{{host}}에서 사용할 수 있는 채팅 에이전트가 없습니다."
     }
   },
   "sidebar": {
