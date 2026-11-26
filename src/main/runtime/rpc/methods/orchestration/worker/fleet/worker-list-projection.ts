@@ -127,7 +127,7 @@ export async function projectWorkerListFleet(
     completeProjection: options.completeProjection,
     observeSession: withSleptAgentWorkers(
       createSessionWorkerLivenessReader(db, statuses, undefined, {
-        includeAddressability: true
+        includeResumeGuidance: true
       }),
       statuses,
       (paneKey) => runtime.sleptAgentHandleForPane(paneKey)

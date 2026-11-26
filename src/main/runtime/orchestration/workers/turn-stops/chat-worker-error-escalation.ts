@@ -4,6 +4,7 @@ import {
   isOrcaSessionId
 } from '../../../../../shared/agent-session/identity/orca-session-address'
 import type { StructuredAgentSessionRequestFailure } from '../../../../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
+import { AgentSessionJournalError } from '../../../../native-chat/agent-session-journal/writing/journal-write-guards'
 import { resolveStructuredWorkerIdentityForSession } from '../../terminal-authority/structured-sessions/structured-worker-authority'
 import { canonicalOrcaSessionId } from '../../addressing/session-lineage/canonical-orca-session-id'
 import { isSenderOwnRejection } from './chat-worker-error-words'
@@ -69,6 +70,9 @@ export async function escalateChatWorkerError(
       targets.map(({ dispatch }) => [dispatch.id, readWorkerPresence(db, dispatch.id)?.generation])
     )
     const error = await readChatRequestError(request).catch((error: unknown) => {
+      if (error instanceof AgentSessionJournalError && error.code === 'journal_closed') {
+        return null
+      }
       if (!request.death?.rootGone) {
         throw error
       }

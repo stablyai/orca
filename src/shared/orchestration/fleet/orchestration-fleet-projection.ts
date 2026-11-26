@@ -89,7 +89,7 @@ export type FleetLiveness =
 export type FleetSessionObservation =
   /** `activity` is the session's own status row: its turn state and when it last changed. */
   | { status: 'live'; activity?: FleetAgentStatusEvidence }
-  | { status: 'exited'; addressable?: true }
+  | { status: 'exited'; canResume?: true }
   | { status: 'unverifiable'; detail: string }
 
 export type FleetResourceProjection =

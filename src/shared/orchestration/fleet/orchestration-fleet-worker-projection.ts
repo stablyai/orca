@@ -206,7 +206,7 @@ export function projectFleetNextAction(
     return {
       kind: 'recover',
       argv: canResume
-        ? ['orchestration', 'send', '--to', `dispatch:${worker.dispatchId}`]
+        ? ['orchestration', 'send', '--to', `dispatch:${worker.dispatchId}`, '--subject', 'Continue']
         : ['orchestration', 'worker-read', '--dispatch', worker.dispatchId]
     }
   }
@@ -270,7 +270,7 @@ export function projectOrchestrationFleetWorker(
   })
   const canResume =
     session?.status === 'exited' &&
-    session.addressable === true &&
+    session.canResume === true &&
     worker.workerState === 'ready' &&
     worker.dispatchStatus === 'dispatched' &&
     worker.terminalState !== 'released' &&

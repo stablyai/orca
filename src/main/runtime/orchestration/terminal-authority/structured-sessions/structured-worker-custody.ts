@@ -23,7 +23,12 @@ type SessionTabReader = Pick<
   NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>,
   'getPersistedVisibleSessionTabIndex'
 > &
-  Partial<Pick<NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>, 'isSessionTabVisible'>>
+  Partial<
+    Pick<
+      NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>,
+      'getSessionTabId' | 'isSessionTabVisible'
+    >
+  >
 
 type CustodySource =
   | ReturnType<typeof captureStructuredWorkerTabVisibility>
@@ -74,11 +79,9 @@ export function structuredSessionTabRetired(
 /** Retirement is the tab index: every path that ends a chat for good hides its tab. */
 function structuredSessionTabListed(host: SessionTabReader, sessionId: string): boolean {
   try {
-    return (
-      host.isSessionTabVisible?.(sessionId) ??
-      host.getPersistedVisibleSessionTabIndex?.().sessionIds.includes(sessionId) ??
-      false
-    )
+    return host.getSessionTabId && host.isSessionTabVisible
+      ? host.getSessionTabId(sessionId) !== null && host.isSessionTabVisible(sessionId)
+      : (host.getPersistedVisibleSessionTabIndex?.().sessionIds.includes(sessionId) ?? false)
   } catch {
     return false
   }

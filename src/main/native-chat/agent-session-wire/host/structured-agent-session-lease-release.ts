@@ -26,6 +26,7 @@ export async function releaseStoredStructuredAgentSessionOwnerAfterExit(input: {
   deathEvidenceKind?: 'kill-delivered'
   exitObservedAt?: number
   exitReason?: string
+  unexpectedExit?: true
 }): Promise<AgentSessionRecord> {
   const record = input.store.getRecord(input.sessionId)
   if (
@@ -41,7 +42,8 @@ export async function releaseStoredStructuredAgentSessionOwnerAfterExit(input: {
     now: input.now,
     ...(input.deathEvidenceKind ? { deathEvidenceKind: input.deathEvidenceKind } : {}),
     ...(input.exitObservedAt === undefined ? {} : { exitObservedAt: input.exitObservedAt }),
-    ...(input.exitReason ? { exitReason: input.exitReason } : {})
+    ...(input.exitReason ? { exitReason: input.exitReason } : {}),
+    ...(input.unexpectedExit ? { unexpectedExit: input.unexpectedExit } : {})
   })
 }
 
@@ -83,6 +85,7 @@ export async function releaseExitedStructuredAgentSessionOwner(
       now: context.now(),
       exitObservedAt: observedAt,
       exitReason: exit.reason,
+      ...(!exit.expected ? { unexpectedExit: true } : {}),
       ...(exit.deathEvidenceKind ? { deathEvidenceKind: exit.deathEvidenceKind } : {})
     })
     released = true

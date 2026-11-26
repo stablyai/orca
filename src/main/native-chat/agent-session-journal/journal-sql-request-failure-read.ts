@@ -8,6 +8,7 @@ import { JournalDomainRequestFailure } from './journal-domain-request-failure'
 import { JournalSqlStatusContext } from './journal-sql-status-context'
 import { journalDomainContextHead } from './journal-sql-continuation-context'
 import type { JournalRequestFailureRead, JournalRequestMark } from './journal-request-failure'
+import { SEND_ANSWERED_TURN_SQL } from './database/journal-submission-window-indexes'
 
 export type JournalRequestFailureResult =
   | { kind: 'request-failure'; snapshot: AgentJournalSnapshot }
@@ -31,7 +32,8 @@ export function readJournalSqlRequestFailure(
           ORDER BY sequence DESC,sequence_index DESC,ordinal DESC,item_id DESC LIMIT 1`)
             .get(...scope.prefix, operation.exit.observedAt, operation.exit.fence)
         : undefined
-    const itemId = running?.item.itemId ?? (typeof ended?.item_id === 'string' ? ended.item_id : null)
+    const itemId =
+      running?.item.itemId ?? (typeof ended?.item_id === 'string' ? ended.item_id : null)
     return {
       kind: operation.kind,
       request: itemId
@@ -101,8 +103,9 @@ export function readJournalSqlRequestFailure(
       }
       const rejected = db
         .prepare(`SELECT payload_json FROM journal_submission_attempts
-        INDEXED BY journal_submission_status_failed WHERE session_id=? AND epoch=? AND current=1 AND request_failure=1
-        AND json_extract(payload_json,'$.answeredInTurn.turnItemId')=?
+        INDEXED BY journal_submission_answered_turn
+        WHERE session_id=? AND epoch=? AND current=1 AND request_failure=1
+        AND ${SEND_ANSWERED_TURN_SQL}=?
         AND json_extract(payload_json,'$.answeredInTurn.via')='start' ORDER BY ordinal`)
         .all(...prefix, operation.id)
       submissions.push(

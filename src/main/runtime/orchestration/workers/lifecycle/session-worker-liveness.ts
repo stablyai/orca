@@ -17,13 +17,22 @@ import {
   observeStructuredWorker,
   resolveStructuredWorkerIdentity
 } from '../../terminal-authority/structured-sessions/structured-worker-authority'
-import { sessionIdFromStructuredWorkerIncarnation } from '../../terminal-authority/structured-sessions/structured-worker-identity'
+import {
+  sessionIdFromStructuredWorkerIncarnation,
+  structuredWorkerIdentities,
+  structuredWorkerIdentityFromRow
+} from '../../terminal-authority/structured-sessions/structured-worker-identity'
 import { structuredWorkerOwned } from '../../terminal-authority/structured-sessions/structured-worker-custody'
 import { chatAssigneeSessionId, observeChatAssignee } from './chat-assignee'
 
 export type SessionWorkerSubject = {
   agentTerminalHandle: string | null
-  resource?: { processIncarnation?: string | null; paneKey?: string | null } | null
+  resource?: {
+    processIncarnation?: string | null
+    paneKey?: string | null
+    worktreeId?: string | null
+    hostScope?: string | null
+  } | null
 }
 
 /** Agent-slept terminal workers read as live and idle; their pane's kept status row is their activity. */
@@ -83,7 +92,7 @@ export function createSessionWorkerLivenessReader(
     | readonly FleetAgentStatusEvidence[]
     | ((paneKey: string) => FleetAgentStatusEvidence | undefined),
   records: AgentSessionRecordReader | null = readAgentSessionRecordStore(),
-  options: { parties?: SessionPartyReader | null; includeAddressability?: true } = {}
+  options: { parties?: SessionPartyReader | null; includeResumeGuidance?: true } = {}
 ): (worker: SessionWorkerSubject) => FleetSessionObservation | undefined {
   // A chat assignee's party, from the database unless a caller read its rows already.
   const { parties = db } = options
@@ -123,10 +132,28 @@ export function createSessionWorkerLivenessReader(
     const observed = observeStructuredWorker({ sessionId }, { resolveSession })
     const running = resolveSession(sessionId)
     if (observed.status === 'exited') {
-      // The fleet owns the Dispatch and resource state; the host proves that the chat still routes.
-      const addressable =
-        options.includeAddressability && running.kind === 'here' && structuredWorkerOwned(running)
-      return addressable ? { status: 'exited', addressable: true } : { status: 'exited' }
+      if (
+        options.includeResumeGuidance &&
+        running.kind === 'here' &&
+        running.record.ownerObservation.deathEvidence?.unexpectedExit === true &&
+        structuredWorkerOwned(running)
+      ) {
+        const resource = worker.resource
+        const identity =
+          structuredWorkerIdentities.get(handle) ??
+          (resource &&
+            structuredWorkerIdentityFromRow({
+              terminal_handle: handle,
+              pane_key: resource.paneKey ?? null,
+              process_incarnation: resource.processIncarnation ?? null,
+              worktree_id: resource.worktreeId ?? null,
+              host_scope: resource.hostScope ?? null
+            }))
+        if (identity?.sessionId === sessionId) {
+          return { status: 'exited', canResume: true }
+        }
+      }
+      return { status: 'exited' }
     }
     return observed.status === 'live'
       ? live(running.kind === 'here' ? running.sessionId : sessionId)

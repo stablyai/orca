@@ -299,7 +299,7 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
       context,
       sessionId,
       child.fence,
-      exit,
+      { ...exit, expected },
       observedAt
     )
     endChild()

@@ -222,7 +222,7 @@ export function projectFleetWorkerPage(
     limit: 1,
     now,
     observeSession: createSessionWorkerLivenessReader(db, statuses, undefined, {
-      includeAddressability: true
+      includeResumeGuidance: true
     })
   })
 }
