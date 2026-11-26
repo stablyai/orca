@@ -16535,9 +16535,6 @@
             "remoteDescription": "\"{{value0}}\" will be deleted from {{value2}}. Once deleted, it will no longer be resumable from {{value1}}'s own command line either.",
             "confirm": "Delete"
           },
-          "FileExplorerNameFilter": {
-            "26fb73c6e3": "Find files"
-          },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "No file changes in this commit"
           },
@@ -25437,7 +25434,6 @@
       "scopeDetails": "About sparse checkout scope",
       "scopeExplanation": "The folder picker changes what you see, not which files are checked out. Repository root includes the checked-out root and ancestor files.",
       "searchExplanation": "Names filters the folder you are viewing. Contents searches across the workspace. Files omitted by sparse checkout are not searched.",
-      "findInFolder": "Find in {{path}}",
       "folderLoadError": "Could not load this folder:",
       "emptyFolder": "No files in this folder"
     },
@@ -25451,7 +25447,9 @@
       "filesIn": "Files in {{path}}",
       "files": "Files",
       "showAll": "Show all {{count}}",
-      "noResults": "No results"
+      "noResults": "No results",
+      "placeholder": "Search",
+      "placeholderScoped": "Search {{path}}"
     }
   },
   "sparsePreset": {

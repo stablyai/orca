@@ -15684,9 +15684,6 @@
             "remoteDescription": "“{{value0}}”将从 {{value2}} 删除。删除后，也无法再从 {{value1}} 自己的命令行恢复",
             "confirm": "删除"
           },
-          "FileExplorerNameFilter": {
-            "26fb73c6e3": "查找文件"
-          },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "此提交没有文件更改"
           },
@@ -24885,7 +24882,6 @@
       "scopeDetails": "关于稀疏检出范围",
       "scopeExplanation": "文件夹选择器只改变显示范围，不会改变检出的文件，仓库根目录视图也会显示根目录和上级文件夹中已检出的文件",
       "searchExplanation": "“名称”筛选当前查看的文件夹，“内容”搜索整个工作区，稀疏检出排除的文件不会被搜索",
-      "findInFolder": "在 {{path}} 中查找",
       "folderLoadError": "无法加载此文件夹：",
       "emptyFolder": "此文件夹中没有文件"
     },

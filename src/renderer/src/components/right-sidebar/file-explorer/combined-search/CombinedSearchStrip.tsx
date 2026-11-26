@@ -27,24 +27,24 @@ export function CombinedSearchStrip({
   const showOptions = shouldShowSearchOptions(focused, field.query)
   const activeFilterCount = countActiveSearchFilters(filters)
   // A set filter stays visible at rest so it never silently narrows text results.
-  const showFiltersRow = showOptions || filtersOpen || activeFilterCount > 0
+  const showToolbar = showOptions || filtersOpen || activeFilterCount > 0
   const hasQuery = field.query.trim().length > 0
-  const findFilesLabel = t(
-    'auto.components.right.sidebar.FileExplorerNameFilter.26fb73c6e3',
-    'Find files'
-  )
+  const searchLabel = t('fileExplorer.combinedSearch.placeholder', 'Search')
 
   return (
-    <div className="border-b border-border px-2 py-2" data-ignore-file-explorer-keys="true">
+    <div
+      className="border-b border-border px-2 py-2"
+      data-ignore-file-explorer-keys="true"
+      onFocus={() => setFocused(true)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setFocused(false)
+        }
+      }}
+    >
       <div
         className="flex h-8 items-center gap-1 rounded-md border border-border bg-input/50 px-[7px] focus-within:border-ring focus-within:ring-1 focus-within:ring-ring"
         data-combined-search-field=""
-        onFocus={() => setFocused(true)}
-        onBlur={(event) => {
-          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-            setFocused(false)
-          }
-        }}
       >
         <Search className="size-3.5 shrink-0 text-muted-foreground" />
         <ImeInput
@@ -55,14 +55,16 @@ export function CombinedSearchStrip({
           aria-controls={COMBINED_SEARCH_LISTBOX_ID}
           aria-autocomplete="list"
           aria-activedescendant={field.activeDescendantId}
-          aria-label={findFilesLabel}
+          aria-label={searchLabel}
           data-file-search-input="true"
           data-explorer-query-input="files"
           className="min-w-0 flex-1 bg-transparent py-1 text-xs text-foreground outline-none placeholder:text-muted-foreground"
           placeholder={
             scopeLabel
-              ? t('fileExplorer.root.findInFolder', 'Find in {{path}}', { path: scopeLabel })
-              : findFilesLabel
+              ? t('fileExplorer.combinedSearch.placeholderScoped', 'Search {{path}}', {
+                  path: scopeLabel
+                })
+              : searchLabel
           }
           value={field.query}
           onChange={(event) => field.onQueryChange(event.currentTarget.value)}
@@ -82,49 +84,41 @@ export function CombinedSearchStrip({
             </ToggleButton>
           </span>
         ) : null}
-        {showOptions ? (
-          // Keep focus in the field so the options do not hide mid-click.
-          <span
-            className="flex shrink-0 items-center gap-0.5"
-            data-search-options=""
-            onMouseDown={(event) => event.preventDefault()}
-          >
-            <ToggleButton
-              active={field.caseSensitive}
-              onClick={field.onToggleCaseSensitive}
-              title={t('auto.components.right.sidebar.SearchHeader.464ae3974f', 'Match Case')}
-            >
-              <CaseSensitive className="size-3.5" />
-            </ToggleButton>
-            <ToggleButton
-              active={field.wholeWord}
-              onClick={field.onToggleWholeWord}
-              title={t('auto.components.right.sidebar.SearchHeader.4567e6e0b6', 'Match Whole Word')}
-            >
-              <WholeWord className="size-3.5" />
-            </ToggleButton>
-            <ToggleButton
-              active={field.useRegex}
-              onClick={field.onToggleRegex}
-              title={t(
-                'auto.components.right.sidebar.SearchHeader.6234a5ef85',
-                'Use Regular Expression'
-              )}
-            >
-              <Regex className="size-3.5" />
-            </ToggleButton>
-          </span>
-        ) : null}
       </div>
-      {showFiltersRow ? (
-        // Why: at 220px a fourth icon in the field leaves too little room for the query.
+      {showToolbar ? (
+        // Why: options live under the field so a 220px field still shows the query.
         <div
-          className="flex h-6 items-center justify-end gap-1 pt-1"
-          data-search-filters-row=""
+          className="flex h-7 items-center gap-0.5 pt-1"
+          data-search-options=""
           onMouseDown={(event) => event.preventDefault()}
         >
+          <ToggleButton
+            active={field.caseSensitive}
+            onClick={field.onToggleCaseSensitive}
+            title={t('auto.components.right.sidebar.SearchHeader.464ae3974f', 'Match Case')}
+          >
+            <CaseSensitive className="size-3.5" />
+          </ToggleButton>
+          <ToggleButton
+            active={field.wholeWord}
+            onClick={field.onToggleWholeWord}
+            title={t('auto.components.right.sidebar.SearchHeader.4567e6e0b6', 'Match Whole Word')}
+          >
+            <WholeWord className="size-3.5" />
+          </ToggleButton>
+          <ToggleButton
+            active={field.useRegex}
+            onClick={field.onToggleRegex}
+            title={t(
+              'auto.components.right.sidebar.SearchHeader.6234a5ef85',
+              'Use Regular Expression'
+            )}
+          >
+            <Regex className="size-3.5" />
+          </ToggleButton>
+          <span className="flex-1" />
           {activeFilterCount > 0 ? (
-            <span className="text-2xs tabular-nums text-muted-foreground">
+            <span className="pr-1 text-2xs tabular-nums text-muted-foreground">
               {t('fileSearch.filters.active', '{{count}} active', { count: activeFilterCount })}
             </span>
           ) : null}

@@ -16369,9 +16369,6 @@
             "remoteDescription": "\"{{value0}}\", {{value2}} konumundan silinecek. Silindikten sonra artık {{value1}} aracının kendi komut satırından da devam ettirilemeyecek.",
             "confirm": "Sil"
           },
-          "FileExplorerNameFilter": {
-            "26fb73c6e3": "Dosya bul"
-          },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "Bu commit'te dosya değişikliği yok"
           },
@@ -25256,7 +25253,6 @@
       "scopeDetails": "Sparse checkout kapsamı hakkında",
       "scopeExplanation": "Klasör seçici, çalışma alanına alınan dosyaları değil, gördüklerinizi değiştirir. Repo kökü, çalışma alanına alınan kök ve üst klasörlerdeki dosyaları içerir.",
       "searchExplanation": "Adlar, görüntülediğiniz klasörü filtreler. İçerik, tüm çalışma alanında arama yapar. Sparse checkout dışında bırakılan dosyalar aranmaz.",
-      "findInFolder": "{{path}} içinde bul",
       "folderLoadError": "Bu klasör yüklenemedi:",
       "emptyFolder": "Bu klasörde dosya yok"
     },

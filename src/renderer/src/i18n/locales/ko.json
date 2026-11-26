@@ -15415,9 +15415,6 @@
             "remoteDescription": "\"{{value0}}\"이(가) {{value2}}에서 삭제됩니다. 삭제하면 {{value1}}의 자체 명령줄에서도 더 이상 재개할 수 없습니다.",
             "confirm": "삭제"
           },
-          "FileExplorerNameFilter": {
-            "26fb73c6e3": "파일 찾기"
-          },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "이 커밋에는 파일 변경 사항이 없습니다"
           },
@@ -24782,7 +24779,6 @@
       "scopeDetails": "스파스 체크아웃 범위 안내",
       "scopeExplanation": "폴더 선택은 표시 범위만 바꾸며 체크아웃된 파일은 바꾸지 않습니다. 저장소 루트에는 루트와 상위 폴더에 체크아웃된 파일도 표시됩니다.",
       "searchExplanation": "이름 검색은 현재 보고 있는 폴더를 필터링합니다. 내용 검색은 전체 워크스페이스를 검색합니다. 스파스 체크아웃에서 제외된 파일은 검색하지 않습니다.",
-      "findInFolder": "{{path}}에서 찾기",
       "folderLoadError": "이 폴더를 불러오지 못했습니다:",
       "emptyFolder": "이 폴더에 파일이 없습니다"
     },

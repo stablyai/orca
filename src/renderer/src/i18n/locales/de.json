@@ -15056,9 +15056,6 @@
             "remoteDescription": "„{{value0}}“ wird von {{value2}} gelöscht. Danach kann die Sitzung auch über die eigene Befehlszeile von {{value1}} nicht mehr fortgesetzt werden.",
             "confirm": "Löschen"
           },
-          "FileExplorerNameFilter": {
-            "26fb73c6e3": "Dateien suchen"
-          },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "Keine Dateiänderungen in diesem Commit"
           },
@@ -23081,7 +23078,6 @@
       "scopeDetails": "Zum Umfang des partiellen Checkouts",
       "scopeExplanation": "Die Ordnerauswahl ändert die Anzeige, nicht die Auswahl der ausgecheckten Dateien. Der Repository-Stamm umfasst die ausgecheckten Dateien im Stammverzeichnis und in übergeordneten Ordnern.",
       "searchExplanation": "„Namen“ filtert den angezeigten Ordner. „Inhalt“ durchsucht den gesamten Arbeitsbereich. Beim partiellen Checkout ausgelassene Dateien werden nicht durchsucht.",
-      "findInFolder": "In {{path}} suchen",
       "folderLoadError": "Dieser Ordner konnte nicht geladen werden:",
       "emptyFolder": "Keine Dateien in diesem Ordner"
     },

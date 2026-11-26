@@ -11877,9 +11877,6 @@
             "remoteDescription": "\"{{value0}}\" será excluída de {{value2}}. Depois de excluída, também não poderá mais ser retomada pela linha de comando do {{value1}}.",
             "confirm": "Excluir"
           },
-          "FileExplorerNameFilter": {
-            "26fb73c6e3": "Encontrar arquivos"
-          },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "Nenhuma alteração de arquivo neste commit"
           },
@@ -23983,7 +23980,6 @@
       "scopeDetails": "Sobre o escopo do checkout esparso",
       "scopeExplanation": "O seletor de pastas altera o que você vê, não quais arquivos estão no checkout. A raiz do repositório inclui os arquivos da raiz e das pastas ancestrais que estão no checkout.",
       "searchExplanation": "Nomes filtra a pasta que você está visualizando. Conteúdo pesquisa em todo o espaço de trabalho. Arquivos omitidos pelo checkout esparso não são pesquisados.",
-      "findInFolder": "Buscar em {{path}}",
       "folderLoadError": "Não foi possível carregar esta pasta:",
       "emptyFolder": "Nenhum arquivo nesta pasta"
     },

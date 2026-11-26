@@ -46,7 +46,10 @@ function getRowHeight(row: CombinedSearchRow | undefined, index: number): number
 function optionClassName(active: boolean): string {
   return cn(
     'flex w-full cursor-default items-center rounded-sm px-2 text-xs',
-    active ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
+    // Light accent nearly matches the sidebar, so the keyboard row mixes in foreground there.
+    active
+      ? 'bg-foreground/10 text-foreground dark:bg-accent dark:text-accent-foreground'
+      : 'hover:bg-foreground/5 dark:hover:bg-accent/50'
   )
 }
 
@@ -87,7 +90,7 @@ function HighlightedName({ match }: { match: NameMatch }): React.JSX.Element {
       parts.push(match.name.slice(cursor, start))
     }
     parts.push(
-      <mark key={start} className="rounded-sm bg-annotation-highlight/30 text-foreground">
+      <mark key={start} className="rounded-[2px] bg-annotation-highlight/30 px-0 text-foreground">
         {match.name.slice(start, end)}
       </mark>
     )
@@ -279,15 +282,13 @@ const CombinedSearchRowView = React.memo(function CombinedSearchRowView({
             title={`${row.fileResult.relativePath}:${row.match.line}`}
           >
             <span className="flex min-w-0 flex-1 items-baseline overflow-hidden whitespace-pre">
-              <span className="min-w-0 overflow-hidden text-ellipsis whitespace-pre text-muted-foreground">
-                {parts.before}
-              </span>
+              <span className="shrink-0 whitespace-pre text-muted-foreground">{parts.before}</span>
               {parts.match ? (
-                <span className="max-w-full shrink-0 truncate rounded-sm bg-annotation-highlight/30 text-foreground">
+                <span className="max-w-full shrink-0 truncate rounded-[2px] bg-annotation-highlight/30 px-0 text-foreground">
                   {parts.match}
                 </span>
               ) : null}
-              <span className="min-w-0 overflow-hidden text-ellipsis whitespace-pre text-muted-foreground">
+              <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-pre text-muted-foreground">
                 {parts.after}
               </span>
             </span>

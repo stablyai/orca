@@ -14673,9 +14673,6 @@
             "remoteDescription": "\"{{value0}}\" se eliminará de {{value2}}. Una vez eliminada, tampoco se podrá reanudar desde la línea de comandos de {{value1}}.",
             "confirm": "Eliminar"
           },
-          "FileExplorerNameFilter": {
-            "26fb73c6e3": "Buscar archivos"
-          },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "No hay cambios de archivos en este commit"
           },
@@ -22577,7 +22574,6 @@
       "scopeDetails": "Acerca del alcance del checkout disperso",
       "scopeExplanation": "El selector de carpetas cambia lo que ves, no los archivos del checkout. La raíz del repositorio incluye los archivos presentes en la raíz y en las carpetas superiores.",
       "searchExplanation": "Nombres filtra la carpeta que estás viendo. Contenido busca en todo el espacio de trabajo. No se buscan los archivos omitidos por el checkout disperso.",
-      "findInFolder": "Buscar en {{path}}",
       "folderLoadError": "No se pudo cargar esta carpeta:",
       "emptyFolder": "No hay archivos en esta carpeta"
     },

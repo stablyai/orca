@@ -136,12 +136,18 @@ const ROW_ACTIONS: NameMatchRowActions = {
 }
 
 /** Drives the real field, row model, keyboard model and list over an in-memory repo; no IPC. */
-function CombinedSearchHarness({ initialQuery }: { initialQuery: string }): React.JSX.Element {
+function CombinedSearchHarness({
+  initialQuery,
+  initialInclude = ''
+}: {
+  initialQuery: string
+  initialInclude?: string
+}): React.JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState(initialQuery)
   const [showAllQuery, setShowAllQuery] = useState<string | null>(null)
   const [options, setOptions] = useState({ caseSensitive: false, wholeWord: false, regex: false })
-  const [filters, setFilters] = useState({ includePattern: '', excludePattern: '' })
+  const [filters, setFilters] = useState({ includePattern: initialInclude, excludePattern: '' })
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
   const [opened, setOpened] = useState('')
   const hasQuery = query.trim().length > 0
@@ -297,4 +303,12 @@ export const longNamesNarrow = defineFixture({
 export const noResults = defineFixture({
   width: 300,
   render: () => <CombinedSearchHarness initialQuery="zebra42" />
+})
+export const filterActive = defineFixture({
+  width: 300,
+  render: () => <CombinedSearchHarness initialQuery="" initialInclude="src/**" />
+})
+export const shortMedium = defineFixture({
+  width: 300,
+  render: () => <CombinedSearchHarness initialQuery="cart" />
 })
