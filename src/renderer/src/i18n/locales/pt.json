@@ -26673,7 +26673,13 @@
       "teammatesFoot": "Roda em {{host}} com suas contas. Você vê as conversas deles com ele, e cada colega vê só as próprias.",
       "add": "Adicionar",
       "copyLink": "Link de cópia",
-      "noCopyLink": "Sem link de cópia"
+      "createCopyLink": "Criar link de cópia",
+      "anyoneCanCopy": "Qualquer pessoa com o link pode fazer uma cópia",
+      "linkActions": "Ações do link",
+      "changeIncluded": "Alterar o que está incluído…",
+      "stopSharing": "Parar de compartilhar…",
+      "allYourLinks": "Todos os seus links",
+      "alreadyUpToDate": "O link já está atualizado"
     }
   },
   "speechModelUpdate": {

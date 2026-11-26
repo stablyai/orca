@@ -28453,7 +28453,13 @@
       "teammatesFoot": "{{host}}에서 내 계정으로 실행됩니다. 팀원의 채팅은 내가 볼 수 있고, 각 팀원은 자신의 채팅만 봅니다.",
       "add": "추가",
       "copyLink": "복사 링크",
-      "noCopyLink": "복사 링크 없음"
+      "createCopyLink": "복사 링크 만들기",
+      "anyoneCanCopy": "링크가 있는 누구나 복사본을 만들 수 있습니다",
+      "linkActions": "링크 작업",
+      "changeIncluded": "포함 항목 변경…",
+      "stopSharing": "공유 중지…",
+      "allYourLinks": "내 링크 전체",
+      "alreadyUpToDate": "링크가 이미 최신 상태입니다"
     }
   },
   "plugins": {

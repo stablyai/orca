@@ -7725,7 +7725,6 @@
       "updatedAt": "更新于 {{date}}",
       "upToDate": "已是最新",
       "changedSince": "Bot 此后已更改",
-      "copy": "复制",
       "copyLink": "复制链接",
       "secretFoundTitle": "发现密钥",
       "secretWhere": "{{flag}}，位于 {{where}} 第 {{line}} 行",

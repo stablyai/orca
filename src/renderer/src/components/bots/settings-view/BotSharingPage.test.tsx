@@ -78,9 +78,9 @@ describe('Settings › Sharing and the Share dialog', () => {
       .getAllByRole('listitem')
       .map((row) => row.textContent)
     expect(pageRows).toEqual(['Jo (you)jo@acme.coOwner', 'Daradara@acme.co', 'sam@acme.coInvited'])
-    // Teammates have it, so the copy link group never says the agent is not shared.
+    // Teammates have it, so nothing on the page says the agent is not shared.
     expect(screen.queryByText('Not shared')).toBeNull()
-    expect(screen.getByText('No copy link')).toBeTruthy()
+    expect(screen.getByText('Create copy link')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Remove Dara' }))
     cleanup()
 

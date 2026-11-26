@@ -8262,7 +8262,6 @@
       "updatedAt": "Güncelleme: {{date}}",
       "upToDate": "Güncel",
       "changedSince": "Bot o zamandan beri değişti",
-      "copy": "Kopyala",
       "copyLink": "Bağlantıyı kopyala",
       "secretFoundTitle": "Gizli bilgi bulundu",
       "secretWhere": "{{where}}, satır {{line}}: {{flag}}",

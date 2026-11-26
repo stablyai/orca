@@ -12,6 +12,7 @@ const builder: Bot = {
   name: 'Release helper',
   hostId: 'local',
   folder: 'release-helper',
+  folderWorkspaceId: 'fw-release-helper',
   agent: 'claude',
   avatar: null,
   paused: false,
@@ -96,3 +97,13 @@ export const none = at(builder, false)
 export const teammates = at(withTeammates, false)
 export const link = at(builder, true)
 export const both = at(withTeammates, true)
+// The link's ⋯ open.
+export const linkMenu = {
+  ...link,
+  interact: async (frame: HTMLElement) => {
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    const more = frame.querySelector<HTMLButtonElement>('button[aria-label="Link actions"]')
+    more?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+    await new Promise((resolve) => setTimeout(resolve, 200))
+  }
+}

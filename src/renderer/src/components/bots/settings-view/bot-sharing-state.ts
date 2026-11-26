@@ -22,11 +22,6 @@ export function botSharingState(
   }
 }
 
-/** Shared with nobody and no live link: only then is the agent "Not shared". */
-export function botNotShared(state: BotSharingState): boolean {
-  return state.teammates.length === 0 && state.link === false
-}
-
 /** The Sharing row's value: the teammates' names, else On for a live link, else Off; null while unknown. */
 export function botSharingValue(
   state: BotSharingState,

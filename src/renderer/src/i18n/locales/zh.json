@@ -29035,7 +29035,6 @@
       "updating": "正在更新…",
       "publishing": "正在发布…",
       "previewChanged": "预览已更改。请先查看再发布",
-      "manageSharing": "管理分享…",
       "secretFoundTitle": "发现密钥",
       "secretWhere": "{{flag}}，位于 {{where}} 第 {{line}} 行",
       "view": "查看",
@@ -29076,10 +29075,8 @@
       "soul": "灵魂",
       "add": "添加",
       "binaryFile": "不是文本文件，因此不显示",
-      "isShared": "{{name}} 已分享",
       "updatedJustNow": "刚刚更新",
       "stopSharing": "停止分享",
-      "manageLinks": "管理链接",
       "done": "完成",
       "stopTitle": "要停止分享 {{name}} 吗？",
       "stopDescription": "链接将失效",
@@ -30596,7 +30593,13 @@
       "teammatesFoot": "在 {{host}} 上使用你的账户运行。你能看到队友与它的聊天，每位队友只能看到自己的聊天。",
       "add": "添加",
       "copyLink": "副本链接",
-      "noCopyLink": "没有副本链接"
+      "createCopyLink": "创建副本链接",
+      "anyoneCanCopy": "任何拥有链接的人都可以创建副本",
+      "linkActions": "链接操作",
+      "changeIncluded": "更改包含的内容…",
+      "stopSharing": "停止分享…",
+      "allYourLinks": "你的所有链接",
+      "alreadyUpToDate": "链接已是最新"
     }
   },
   "speechModelUpdate": {

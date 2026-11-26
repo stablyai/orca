@@ -7490,7 +7490,6 @@
       "updatedAt": "Updated {{date}}",
       "upToDate": "Up to date",
       "changedSince": "Bot changed since",
-      "copy": "Copy",
       "copyLink": "Copy link",
       "secretFoundTitle": "Secret found",
       "secretWhere": "{{flag}} in {{where}}, line {{line}}",

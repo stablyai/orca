@@ -25601,7 +25601,13 @@
       "teammatesFoot": "Läuft auf {{host}} mit deinen Konten. Du siehst ihre Chats damit, und jedes Teammitglied sieht nur seine eigenen.",
       "add": "Hinzufügen",
       "copyLink": "Kopierlink",
-      "noCopyLink": "Kein Kopierlink"
+      "createCopyLink": "Kopierlink erstellen",
+      "anyoneCanCopy": "Jeder mit dem Link kann eine Kopie erstellen",
+      "linkActions": "Link-Aktionen",
+      "changeIncluded": "Inhalt ändern…",
+      "stopSharing": "Teilen beenden…",
+      "allYourLinks": "Alle deine Links",
+      "alreadyUpToDate": "Der Link ist bereits aktuell"
     }
   },
   "plugins": {

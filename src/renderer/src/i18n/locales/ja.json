@@ -26751,7 +26751,13 @@
       "teammatesFoot": "{{host}} 上で、あなたのアカウントを使って動作します。チームメイトのチャットはあなたも見られますが、各チームメイトが見られるのは自分のチャットだけです。",
       "add": "追加",
       "copyLink": "コピー用リンク",
-      "noCopyLink": "コピー用リンクなし"
+      "createCopyLink": "コピー用リンクを作成",
+      "anyoneCanCopy": "リンクを知っている人は誰でもコピーを作成できます",
+      "linkActions": "リンクの操作",
+      "changeIncluded": "含める内容を変更…",
+      "stopSharing": "共有を停止…",
+      "allYourLinks": "すべてのリンク",
+      "alreadyUpToDate": "リンクはすでに最新です"
     }
   },
   "speechModelUpdate": {
