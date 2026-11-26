@@ -142,6 +142,35 @@ export const narrowMultiStep = defineFixture({
   )
 })
 
+export const veryNarrowMultiStep = defineFixture({
+  width: 220,
+  render: () => (
+    <div
+      className="native-chat-appearance bg-chat-canvas p-2"
+      style={nativeChatAppearanceStyle({})}
+    >
+      <NativeChatQuestionCard
+        prompt={{
+          questions: [
+            {
+              question: 'Which connection should the new workspace use before it starts?',
+              multiSelect: false,
+              options: [{ label: 'Current host' }, { label: 'Another host' }]
+            },
+            {
+              question: 'Which connection should it use next?',
+              multiSelect: false,
+              options: [{ label: 'Current host' }, { label: 'Another host' }]
+            }
+          ]
+        }}
+        onAnswer={() => {}}
+        onCancel={() => {}}
+      />
+    </div>
+  )
+})
+
 function PendingAsyncQuestion() {
   const [pending, setPending] = useState(false)
   const title = 'What would you most like to do this weekend?'
