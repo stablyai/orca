@@ -22,7 +22,7 @@ type TaskPageJiraSortControlsProps = {
   columns: readonly JiraListColumn[]
   direction: JiraIssueSortDirection
   onSort: (column: JiraIssueSortColumn) => void
-  orderBy: JiraIssueSortColumn
+  orderBy: JiraIssueSortColumn | null
 }
 
 export function TaskPageJiraSortControls({
@@ -90,7 +90,7 @@ export function TaskPageJiraSortControls({
           {sortByLabel}
         </span>
         <Select
-          value={orderBy}
+          value={orderBy ?? ''}
           onValueChange={(value) => {
             const column = visibleColumns.find((candidate) => candidate.id === value)
             if (column) {
@@ -103,7 +103,9 @@ export function TaskPageJiraSortControls({
             aria-label={sortByLabel}
             className="min-w-0 flex-1 border-border/50 bg-background text-xs shadow-none"
           >
-            <SelectValue />
+            <SelectValue
+              placeholder={t('auto.components.TaskPage.jiraSortJqlOrder', 'JQL order')}
+            />
           </SelectTrigger>
           <SelectContent>
             {columns.map((column) => (
@@ -113,26 +115,28 @@ export function TaskPageJiraSortControls({
             ))}
           </SelectContent>
         </Select>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label={toggleDirectionLabel}
-              onClick={() => onSort(orderBy)}
-            >
-              {direction === 'asc' ? (
-                <ArrowUp aria-hidden="true" className="size-3.5" />
-              ) : (
-                <ArrowDown aria-hidden="true" className="size-3.5" />
-              )}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={6}>
-            {toggleDirectionLabel}
-          </TooltipContent>
-        </Tooltip>
+        {orderBy ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label={toggleDirectionLabel}
+                onClick={() => onSort(orderBy)}
+              >
+                {direction === 'asc' ? (
+                  <ArrowUp aria-hidden="true" className="size-3.5" />
+                ) : (
+                  <ArrowDown aria-hidden="true" className="size-3.5" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              {toggleDirectionLabel}
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
       </div>
     </>
   )

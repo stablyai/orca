@@ -39,6 +39,8 @@ import {
 } from '@/runtime/rpc/targets/runtime-client-target'
 import { getEnvironmentRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
+import { hasJiraJqlOrderBy } from '../../../../../shared/jira/jira-jql-predicate'
+import { mayBeJql } from '../../../../../shared/jira/jira-search-input-jql'
 const EMPTY_JIRA_PRIORITIES: JiraPrioritiesBySite = new Map()
 
 export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
@@ -119,6 +121,16 @@ export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
   const [jiraOrderDirection, setJiraOrderDirection] = useState<JiraIssueSortDirection>(() =>
     jiraOrderBy === 'updated' ? 'desc' : 'asc'
   )
+  const [jiraSortedQuery, setJiraSortedQuery] = useState<string | null>(null)
+  const jiraRemoteQuery = jiraHasWorkspace
+    ? ''
+    : (favourites.jiraFavouriteFilter?.jql ?? appliedJiraSearch).trim()
+  const keepsJiraOrder =
+    !jiraJqlRejection &&
+    jiraSortedQuery !== jiraRemoteQuery &&
+    mayBeJql(jiraRemoteQuery) &&
+    hasJiraJqlOrderBy(jiraRemoteQuery)
+  const effectiveJiraOrderBy = keepsJiraOrder ? null : jiraOrderBy
   const [prioritySnapshot, setPrioritySnapshot] = useState<{
     scopeKey: string
     priorities: JiraPrioritiesBySite
@@ -157,7 +169,8 @@ export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
     jiraTaskSourceContext ? getTaskSourceCacheScope(jiraTaskSourceContext) : null,
     jiraPrioritySiteIdsKey
   ])
-  const prioritiesEnabled = taskSource === 'jira' && jiraConnected && jiraOrderBy === 'priority'
+  const prioritiesEnabled =
+    taskSource === 'jira' && jiraConnected && effectiveJiraOrderBy === 'priority'
   const jiraPrioritiesBySite: JiraPrioritiesBySite =
     prioritiesEnabled && owner && prioritySnapshot?.scopeKey === priorityScopeKey
       ? prioritySnapshot.priorities
@@ -190,14 +203,15 @@ export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
   }, [prioritiesEnabled, jiraPrioritySiteIdsKey, priorityScopeKey, owner])
   const handleJiraSort = useCallback(
     (column: JiraIssueSortColumn) => {
-      if (jiraOrderBy === column) {
+      setJiraSortedQuery(jiraRemoteQuery)
+      if (effectiveJiraOrderBy === column) {
         setJiraOrderDirection((prevDir) => (prevDir === 'asc' ? 'desc' : 'asc'))
       } else {
         setJiraOrderBy(column)
         setJiraOrderDirection(column === 'updated' || column === 'status' ? 'desc' : 'asc')
       }
     },
-    [jiraOrderBy]
+    [effectiveJiraOrderBy, jiraRemoteQuery]
   )
   return Object.assign(model, {
     jiraHasWorkspace,
@@ -233,7 +247,7 @@ export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
     setJiraRefreshNonce,
     jiraProjectStatusOrder,
     setJiraProjectStatusOrder,
-    jiraOrderBy,
+    jiraOrderBy: effectiveJiraOrderBy,
     setJiraOrderBy,
     jiraOrderDirection,
     setJiraOrderDirection,

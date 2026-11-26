@@ -52,10 +52,13 @@ export function getJiraPriorityWeight(
 
 export function sortJiraIssues(
   issues: readonly JiraIssue[],
-  orderBy: JiraIssueSortColumn,
+  orderBy: JiraIssueSortColumn | null,
   orderDirection: JiraIssueSortDirection,
   jiraPrioritiesBySite: JiraPrioritiesBySite = new Map()
 ): JiraIssue[] {
+  if (orderBy === null) {
+    return [...issues]
+  }
   const numericKeys = new Map<JiraIssue, number>()
   if (issues.length > 1 && (orderBy === 'priority' || orderBy === 'updated')) {
     for (const issue of issues) {

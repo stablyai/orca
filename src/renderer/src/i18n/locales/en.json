@@ -4545,7 +4545,8 @@
           "linearViewNotFound": "Saved Linear view was not found.",
           "linearViewRestoreFailed": "Failed to restore saved Linear view."
         },
-        "shownCount_one": "{{count}} shown"
+        "shownCount_one": "{{count}} shown",
+        "jiraSortJqlOrder": "JQL order"
       },
       "Terminal": {
         "73768427cf": "Close",
