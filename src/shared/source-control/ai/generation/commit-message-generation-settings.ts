@@ -12,12 +12,13 @@ export type CommitMessageGenerationSettings = Partial<
 
 // Hosts from before a text agent retired would still run a saved choice of it.
 function withoutRetiredTextAgents(
-  sourceControlAi: NonNullable<GlobalSettings['sourceControlAi']>
+  sourceControlAi: NonNullable<GlobalSettings['sourceControlAi']>,
+  defaultTuiAgent: GlobalSettings['defaultTuiAgent'] | undefined
 ): NonNullable<GlobalSettings['sourceControlAi']> {
   const actions = { ...sourceControlAi.actions }
   for (const actionId of AI_TEXT_ACTION_IDS) {
     const recipe = actions[actionId]
-    if (recipe && isRetiredTextAgent(recipe.agentId)) {
+    if (recipe && isRetiredTextAgent(recipe.agentId || defaultTuiAgent)) {
       const { agentArgs: _retiredArgs, ...rest } = recipe
       actions[actionId] = { ...rest, agentId: null }
     }
@@ -41,7 +42,12 @@ export function pickCommitMessageGenerationSettings(
         }
       : {}),
     ...(settings.sourceControlAi !== undefined
-      ? { sourceControlAi: withoutRetiredTextAgents(settings.sourceControlAi) }
+      ? {
+          sourceControlAi: withoutRetiredTextAgents(
+            settings.sourceControlAi,
+            settings.defaultTuiAgent
+          )
+        }
       : {}),
     ...(settings.agentCmdOverrides !== undefined
       ? { agentCmdOverrides: settings.agentCmdOverrides }

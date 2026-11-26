@@ -179,7 +179,8 @@ export function resolveSourceControlAiForOperation(
     ),
     commandInputTemplate: actionRecipe.commandInputTemplate,
     // A retired agent's arguments would reach the agent picked in its place.
-    ...(actionRecipe.agentArgs !== undefined && !isRetiredTextAgent(preferredAgent)
+    ...(actionRecipe.agentArgs !== undefined &&
+    !isRetiredTextAgent(preferredAgent || input.settings.defaultTuiAgent)
       ? { agentArgs: actionRecipe.agentArgs }
       : {})
   }
