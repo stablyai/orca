@@ -63,6 +63,10 @@ export function installMainProcessConnectorCloud(serve: boolean): void {
   // A share made while this window was in the background shows on return, not at the next idle read.
   let readOnFocusAt = 0
   app.on('browser-window-focus', () => {
+    // The invite wake already said whether anything changed.
+    if (mainProcessConnectorCloud()?.invites.up) {
+      return
+    }
     if (Date.now() - readOnFocusAt >= SHARED_BOT_HOSTS_FOCUS_READ_GAP_MS) {
       readOnFocusAt = Date.now()
       refreshSharedBotHosts()

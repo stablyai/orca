@@ -27,15 +27,16 @@ function minePath(wait: SharedBotOfferWait | undefined): string {
   return `${path}?${query.toString()}`
 }
 
-export function sharedBotsCloud(cloud: Pick<ConnectorCloud, 'call'>) {
+export function sharedBotsCloud(cloud: Pick<ConnectorCloud, 'call' | 'readShares'>) {
   return {
     /** With `wait`, the cloud holds the answer until the host's offer to that device is on the share
      *  (up to its cap); an older cloud ignores it and answers at once. */
     mine: (wait?: SharedBotOfferWait) =>
-      cloud.call(minePath(wait), undefined, ConnectorSharesMineSchema, {
-        method: 'GET',
-        ...(wait ? { timeoutMs: OFFER_WAIT_TIMEOUT_MS } : {})
-      }),
+      cloud.readShares(
+        minePath(wait),
+        ConnectorSharesMineSchema,
+        wait ? { timeoutMs: OFFER_WAIT_TIMEOUT_MS } : {}
+      ),
     accept: (shareId: string, request: ConnectorShareAcceptRequest) =>
       cloud.call(sharePath(shareId, 'accept'), request, ConnectorShareAcceptSchema),
     decline: (shareId: string) =>

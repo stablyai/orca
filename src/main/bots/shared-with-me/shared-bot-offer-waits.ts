@@ -31,7 +31,7 @@ export class SharedBotOfferWaits {
   }
 
   /** The next read's delay: at once while an accept is owed its wait, else the usual pace. */
-  nextReadMs(...usual: Parameters<typeof sharedBotsPollMs<SharedBotHostEntry>>): number {
+  nextReadMs(...usual: Parameters<typeof sharedBotsPollMs<SharedBotHostEntry>>): number | null {
     return this.owed.length > 0 ? 0 : sharedBotsPollMs(...usual)
   }
 }

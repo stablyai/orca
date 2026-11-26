@@ -11,7 +11,7 @@ import { resolveConnectorOrigin } from './connector-origin'
 import type { ConnectorGitHubInstallations } from './connector-github-installations'
 import type { ConnectorRuntimeKind } from './connector-machine'
 import { connectorBots, displayText, type ConnectorPlacesStore } from './connector-places'
-import { connectorAccount, desktopConnectorTokenMint } from './connector-token-mint'
+import { connectorAccount, desktopConnectorCredentials } from './connector-token-mint'
 import {
   acceptBotShare,
   answerBotShare,
@@ -123,7 +123,7 @@ export function createConnectorCloud({
     origin: resolveConnectorOrigin(process.env, environment.isPackaged()),
     isFenced,
     account: () => connectorAccount(userDataPath),
-    mintFor: (account) => desktopConnectorTokenMint(auth.config, userDataPath, account),
+    ...desktopConnectorCredentials(auth.config, userDataPath),
     onStatusChanged: () => runtime.notifyBotsChanged({ kinds: ['settings'] }),
     onAccountSwitched: cancelConnectorConnectsForAccountChange,
     replyJournal: () => getStructuredAgentSessionHost()?.deps.store.connectorReplies() ?? null,

@@ -99,7 +99,8 @@ export function sessionFromExchange(exchange: OrcaCloudSessionExchangeResponse):
     expiresAt: exchange.expiresAt,
     organizations: exchange.organizations,
     capabilities: exchange.capabilities,
-    identity: { userId: exchange.cloud.userId, cloudProfileId: exchange.cloud.cloudProfileId }
+    identity: { userId: exchange.cloud.userId, cloudProfileId: exchange.cloud.cloudProfileId },
+    wakeToken: exchange.wakeToken
   }
 }
 
@@ -189,7 +190,9 @@ export function commitCloudSessionRotation(
   const tokens = {
     accessToken: rotated.accessToken,
     refreshToken: rotated.refreshToken,
-    expiresAt: rotated.expiresAt
+    expiresAt: rotated.expiresAt,
+    // Replaced on every rotation: an older token's object may no longer be this sign-in's.
+    wakeToken: rotated.wakeToken
   }
   const linkUnmoved = owner.linkVersion === ticket.linkVersion
   const next = linkUnmoved

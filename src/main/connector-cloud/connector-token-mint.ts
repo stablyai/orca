@@ -8,6 +8,7 @@ import {
   runWithFreshOrcaCloudSession
 } from '../orca-profiles/cloud-session/profile-cloud-session-refresh'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
+import type { OrcaCloudWakeToken } from '../orca-profiles/cloud-session/profile-cloud-session-exchange'
 import { loadOrCreateHostInstallationId } from '../runtime/hosts/platform-probe/host-descriptor'
 import {
   requestConnector,
@@ -23,6 +24,7 @@ import {
   type ConnectorHostKey
 } from './connector-host-key'
 import type { ConnectorToken, ConnectorTokenMint } from './connector-transport'
+import type { ConnectorCloudOptions } from './connector-cloud'
 
 // The auth service's flag for accepting a host-key proof; servers without it refuse the field.
 export const CONNECTOR_HOST_KEY_CAPABILITY = 'connector.hostKey'
@@ -109,15 +111,42 @@ export function connectorAccountCloudCall(
   authConfig: OrcaCloudAuthConfig,
   userDataPath: string
 ): <T>(
-  operation: (accessToken: string, apiBaseUrl: string) => Promise<T>
+  operation: (accessToken: string, apiBaseUrl: string, session: OrcaCloudSession) => Promise<T>
 ) => Promise<{ status: 'ok'; value: T } | { status: 'reconnect-required' }> {
   return (operation) =>
     runWithFreshOrcaCloudSession(
       authConfig,
       ensureActiveOrcaProfile(userDataPath),
       userDataPath,
-      (session) => operation(session.accessToken, authConfig.apiBaseUrl)
+      (session) => operation(session.accessToken, authConfig.apiBaseUrl, session)
     )
+}
+
+function wakeTokenOf(session: OrcaCloudSession): OrcaCloudWakeToken | null {
+  const token = session.wakeToken
+  return typeof token?.token === 'string' && typeof token.expiresAt === 'number' ? token : null
+}
+
+/** This host's Orca sign-in as the connector cloud uses it: connector tokens for one account at a
+ *  time, and the sign-in's own share-list reads and invite wake. */
+export function desktopConnectorCredentials(
+  authConfig: OrcaCloudAuthConfig,
+  userDataPath: string
+): Pick<ConnectorCloudOptions, 'mintFor' | 'signIn'> {
+  // The sign-in's access token (refreshed once on a 401), this install's id, and its wake token.
+  const cloudCall = connectorAccountCloudCall(authConfig, userDataPath)
+  return {
+    mintFor: (account) => desktopConnectorTokenMint(authConfig, userDataPath, account),
+    signIn: {
+      call: (operation) => cloudCall((accessToken) => operation(accessToken)),
+      machineId: () => loadOrCreateHostInstallationId(userDataPath),
+      // The session's usual refresh runs first if its access token is about to expire.
+      freshWakeToken: async () => {
+        const read = await cloudCall(async (_token, _origin, session) => wakeTokenOf(session))
+        return read.status === 'ok' ? read.value : null
+      }
+    }
+  }
 }
 
 /** The account the connector serves, read like the relay's: the active profile's cloud user. */

@@ -208,7 +208,14 @@ describe('a share offered to this account', () => {
           },
           schema
         )
-      const cloud = reportingSharedBotsCloud(sharedBotsCloud({ call }), new SharedBotHostFailures())
+      const cloud = reportingSharedBotsCloud(
+        sharedBotsCloud({
+          call,
+          readShares: (path, schema, options) =>
+            call(path, undefined, schema, { ...options, method: 'GET' })
+        }),
+        new SharedBotHostFailures()
+      )
       const dir = mkdtempSync(join(tmpdir(), 'shared-bot-accept-'))
       dirs.push(dir)
       const service = new SharedBotHosts({

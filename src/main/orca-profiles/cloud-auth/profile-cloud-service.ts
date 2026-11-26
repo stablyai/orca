@@ -46,6 +46,7 @@ import {
   type CloudSessionCommitGuards
 } from '../cloud-session/profile-cloud-session-commit'
 import * as connectAttempts from './profile-cloud-connect-attempts'
+import { loadOrCreateHostInstallationId } from '../../runtime/hosts/platform-probe/host-descriptor'
 
 function invalidateOutstandingCloudConnectAttempts(): number {
   const epoch = connectAttempts.supersedeCloudConnectAttempts()
@@ -103,7 +104,9 @@ export async function connectCurrentOrcaProfile(
     }
     const exchange = await exchangeOrcaCloudAuthCode(configState.config, {
       ...code,
-      localProfileId: active.profile.id
+      localProfileId: active.profile.id,
+      // Created if missing: a first sign-in may come before anything else wrote it.
+      machineId: await loadOrCreateHostInstallationId(userDataPath).catch(() => null)
     })
     const outcome = await commitExchangedCloudSession({
       config: configState.config,

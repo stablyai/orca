@@ -83,6 +83,8 @@ export type ConnectorRequest = {
   /** Omitted for a GET or DELETE. */
   body?: unknown
   token?: string
+  /** Sent beside the content type and token. */
+  headers?: Record<string, string>
   timeoutMs?: number
   signal?: AbortSignal
 }
@@ -134,7 +136,8 @@ export async function requestConnector<TSchema extends z.ZodType>(
       method: request.method ?? 'POST',
       headers: {
         ...(request.body === undefined ? {} : { 'content-type': 'application/json' }),
-        ...(request.token ? { authorization: `Bearer ${request.token}` } : {})
+        ...(request.token ? { authorization: `Bearer ${request.token}` } : {}),
+        ...request.headers
       },
       // A redirect would replay the token to whatever origin it named.
       redirect: 'error',

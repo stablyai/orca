@@ -43,6 +43,7 @@ export function registerSharedBotHostsHandlers(args: {
       return cloud ? reportingSharedBotsCloud(sharedBotsCloud(cloud), failures) : null
     },
     failures,
+    invites: args.cloud()?.invites ?? null,
     account: () => args.cloud()?.signedInAccount() ?? null,
     connectorOrigin: () => args.cloud()?.origin() ?? null,
     publish: (state: SharedBotHostsState) => {

@@ -2,6 +2,7 @@
 import WebSocket, { type RawData } from 'ws'
 import {
   CONNECTOR_WAKE_CLOSE_CODE,
+  CONNECTOR_SHARES_CHANGED_FRAME,
   CONNECTOR_WAKE_FRAME,
   CONNECTOR_WAKE_GAP_HEADER,
   CONNECTOR_WAKE_KEEPALIVE_FRAME,
@@ -57,6 +58,8 @@ export const createConnectorWakeSocket: ConnectorWakeSocketFactory = (url, heade
 export type ConnectorWakeSocketHandlers = {
   opened(): void
   wake(): void
+  /** The account's shares changed: read the share list. */
+  sharesChanged(): void
   /** Called once. */
   ended(end: ConnectorWakeSocketEnd): void
 }
@@ -140,6 +143,8 @@ export function openConnectorWakeSocket(
     const frame = data.toString()
     if (frame === CONNECTOR_WAKE_FRAME && !done) {
       handlers.wake()
+    } else if (frame === CONNECTOR_SHARES_CHANGED_FRAME && !done) {
+      handlers.sharesChanged()
     }
     // Anything else (the keepalive ack, a newer cloud's frame) only proves the link.
   })
