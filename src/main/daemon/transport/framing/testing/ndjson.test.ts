@@ -181,4 +181,30 @@ describe('createNdjsonParser', () => {
     expect(rejected).toHaveLength(1)
     expect(records).toEqual([{}, { recovered: true }])
   })
+
+  it('preserves a pending suffix when feed drains queued records and the consumer pauses again', () => {
+    const records: unknown[] = []
+    const rejected: unknown[] = []
+    let paused = true
+    const framer = createIncrementalNdjsonFramer(
+      (record) => {
+        records.push(record)
+        if (records.length === 2) {
+          paused = true
+        }
+      },
+      (error) => rejected.push(error),
+      { shouldPause: () => paused }
+    )
+
+    framer.feed('{"index":0}\n{"index":1}\n{"index":2}\n{"index":')
+    paused = false
+    framer.feed('3}\n')
+    expect(records).toEqual([{ index: 0 }, { index: 1 }])
+    paused = false
+    framer.resume()
+
+    expect(records).toEqual([{ index: 0 }, { index: 1 }, { index: 2 }, { index: 3 }])
+    expect(rejected).toEqual([])
+  })
 })
