@@ -3,6 +3,7 @@ import type { DeviceEntry } from './device-entry'
 import type { BotShareCallerScope, RpcCallerScope } from '../../callers/rpc-caller-scope'
 import type { BotShareDevice, BotShareGrant } from './bot-share-device-store'
 import { createHash } from 'node:crypto'
+import { BOTS_SHARE_WORKSPACES_CAPABILITY } from '../../../../../shared/bot-runtime-capabilities'
 
 /** Socket revoke/close uses deviceId; per-client drivers, dictation and file grants use clientId. */
 export type DevicePrincipal = {
@@ -50,8 +51,21 @@ export function botSharePrincipalOf(
   }
 }
 
-export function botShareCallerScopeOf(device: BotShareDevice): BotShareCallerScope {
-  return { kind: 'bot-share', botId: device.botId, accountId: device.accountId, name: device.name }
+/** The one place a share device's scope is stamped: who it acts for, and whether its Orca (by the
+ *  capabilities its handshake sent) works in the agent's workspaces. */
+export function botShareCallerScopeOf(
+  device: BotShareDevice,
+  clientCapabilities: readonly string[] | undefined
+): BotShareCallerScope {
+  return {
+    kind: 'bot-share',
+    botId: device.botId,
+    accountId: device.accountId,
+    name: device.name,
+    ...(clientCapabilities?.includes(BOTS_SHARE_WORKSPACES_CAPABILITY)
+      ? { workspaces: true as const }
+      : {})
+  }
 }
 
 export function fingerprintAuthenticatedPairingCredential(token: string): string {

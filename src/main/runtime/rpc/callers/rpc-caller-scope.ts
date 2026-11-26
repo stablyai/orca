@@ -21,6 +21,9 @@ export type BotShareCallerScope = {
   botId: string
   accountId: string
   name: string
+  /** Their Orca works in the agent's workspaces (`bots.share-workspaces.v1`): it gets a pairing's
+   *  workspace tiers, with every list scoped to the agent (`teammateWorkspaceView`). */
+  workspaces?: true
 }
 
 export const OWNER_RPC_CALLER_SCOPE: RpcCallerScope = { kind: 'owner' }
@@ -34,6 +37,19 @@ const RUNTIME_PAIRED_STANDARD: ReadonlySet<RpcMethodPermission> = new Set([
   'skills-admin',
   'host-admin',
   'device-self'
+])
+
+// A workspace teammate is trusted as the owner within the agent's workspaces; nothing of the host's
+// settings, accounts, skills, pairing or desktop.
+const BOT_SHARE_WORKSPACE_TIERS: ReadonlySet<RpcMethodPermission> = new Set([
+  'workspace',
+  'device-self'
+])
+
+// The owner's own streams: their notifications and their agent accounts' usage.
+const OWNER_ONLY_WORKSPACE_METHODS: ReadonlySet<string> = new Set([
+  'notifications.subscribe',
+  'accounts.subscribe'
 ])
 
 // A Relay client's calls for its own Relay credential (installed and renewed through this host).
@@ -58,9 +74,13 @@ export function denyRpcMethodForCaller(
       : null
   }
   if (scope.kind === 'bot-share') {
-    return share !== undefined && share !== 'not-shared'
-      ? null
-      : `Method '${methodName}' is not available to a shared agent's teammates`
+    const allowed =
+      (share !== undefined && share !== 'not-shared') ||
+      (scope.workspaces === true &&
+        permission !== undefined &&
+        BOT_SHARE_WORKSPACE_TIERS.has(permission) &&
+        !OWNER_ONLY_WORKSPACE_METHODS.has(methodName))
+    return allowed ? null : `Method '${methodName}' is not available to a shared agent's teammates`
   }
   if (scope.kind === 'owner' || permission === undefined) {
     return null
