@@ -1372,6 +1372,8 @@
     },
     "mcp": {
       "inspectFailed": "Unable to inspect {{directory}}.",
+      "inspectConfigsFailed": "Unable to inspect MCP configs.",
+      "createConfigFailed": "Failed to create MCP config.",
       "unreadable": "Unreadable",
       "notFound": "Not found",
       "invalidJson": "Invalid JSON",
