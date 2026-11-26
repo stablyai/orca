@@ -42,6 +42,9 @@ export class QuestionReconciler {
   private readonly seenSinceUnverified = new Set<string>()
   /** What changed while each running decision read its facts (`party:`, `mailbox:`, `dispatch:`). */
   private readonly changing = new Set<Set<string>>()
+  /** Terminal takers that took with no agent in them (a script or a person at the shell), to the
+   *  pty they took from: no agent phase can show they stopped, so their pty's life does. */
+  private readonly agentless = new Map<string, string>()
   private readonly chains = new Map<string, Promise<void>>()
 
   constructor(
@@ -78,6 +81,10 @@ export class QuestionReconciler {
   }
 
   terminalChanged(party: string | null, working: boolean): void {
+    if (party && working) {
+      // An agent runs there now: its phase, not the pty, shows when it stops.
+      this.agentless.delete(party)
+    }
     if (party && this.watching()) {
       this.partyChanged(party, working)
     }
@@ -124,8 +131,15 @@ export class QuestionReconciler {
   private onEdge(edge: QuestionEdge): void {
     switch (edge.kind) {
       case 'take':
+        this.noteTake(edge.taker)
         this.request(edge.taker)
         return
+      case 'exit': {
+        // Its reader is gone, even when the pane starts again in place under the same pty id.
+        const party = `terminal:${edge.handle}`
+        this.agentless.delete(party)
+        return this.terminalChanged(party, false)
+      }
       case 'dispatch':
         this.changed(`dispatch:${edge.id}`)
         if (this.awaiting.size > 0) {
@@ -145,6 +159,20 @@ export class QuestionReconciler {
         if (this.watched.size > 0 || this.changing.size > 0) {
           this.mailboxesOf(edge.ids).forEach((mailbox) => this.mailboxChanged(mailbox))
         }
+    }
+  }
+
+  /** Read as the take commits, while the reader's own `check` still runs: an agent reading then
+   *  shows working (or takes input), a script or a person at the shell shows neither. */
+  private noteTake(taker: string): void {
+    if (!taker.startsWith('terminal:')) {
+      return
+    }
+    const terminal = this.deps.reads.terminal(taker.slice('terminal:'.length))
+    if (terminal && !terminal.working && !terminal.takesInput) {
+      this.agentless.set(taker, terminal.ptyId)
+    } else {
+      this.agentless.delete(taker)
     }
   }
 
@@ -190,6 +218,7 @@ export class QuestionReconciler {
     if (questions.length === 0) {
       this.forget(taker)
       this.unverified.delete(taker)
+      this.agentless.delete(taker)
       return
     }
     const dispatches = questions.flatMap((id) => linkedDispatches(this.db, id))
@@ -201,7 +230,9 @@ export class QuestionReconciler {
     this.changing.add(changes)
     let facts: QuestionPartyFacts
     try {
-      facts = await readQuestionPartyFacts(this.db, this.deps.reads, parties)
+      facts = await readQuestionPartyFacts(this.db, this.deps.reads, parties, (party) =>
+        this.agentless.get(party)
+      )
     } finally {
       this.changing.delete(changes)
     }

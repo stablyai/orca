@@ -10,6 +10,8 @@ export type QuestionEdge =
   | { kind: 'mailbox'; mailbox: string }
   /** A pointer typed into this terminal settled. */
   | { kind: 'pane'; ptyId: string }
+  /** This terminal's process ended. */
+  | { kind: 'exit'; handle: string }
   /** A Dispatch or its worker's start changed state. */
   | { kind: 'dispatch'; id: string }
   /** A paired computer answered a pull again: a notice it couldn't take before is sent again. */

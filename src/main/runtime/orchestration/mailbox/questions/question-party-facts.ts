@@ -41,11 +41,13 @@ function openDispatchMailboxes(db: OrchestrationDb, column: string, ids: string[
     .flatMap(({ id }) => (typeof id === 'string' ? [`dispatch:${id}`] : []))
 }
 
-/** Reads every fresh fact the parties need, then answers the decision synchronously. */
+/** Reads every fresh fact the parties need, then answers the decision synchronously.
+ *  `agentlessPty` names the pty a terminal taker took from with no agent in it. */
 export async function readQuestionPartyFacts(
   db: OrchestrationDb,
   reads: QuestionPartyReads,
-  parties: Iterable<string>
+  parties: Iterable<string>,
+  agentlessPty: (party: string) => string | undefined = () => undefined
 ): Promise<QuestionPartyFacts> {
   const running = new Map<string, boolean>()
   const mailboxes = new Map<string, readonly string[]>()
@@ -75,7 +77,15 @@ export async function readQuestionPartyFacts(
     } else if (party.startsWith('terminal:')) {
       const handle = party.slice('terminal:'.length)
       const terminal = reads.terminal(handle)
-      running.set(party, terminal?.working === true)
+      // An agent-less reader (a script or a person at the shell) answers between its own reads, so
+      // it counts as running while the pty it took from lives and still coordinates or works.
+      const agentlessReader =
+        terminal !== null &&
+        !terminal.takesInput &&
+        agentlessPty(party) === terminal.ptyId &&
+        (terminal.paneKeys.some((paneKey) => db.runsBoundToPane(paneKey).length > 0) ||
+          openDispatchMailboxes(db, 'assignee_handle', [handle]).length > 0)
+      running.set(party, terminal?.working === true || agentlessReader)
       if (terminal && !terminal.asking && terminal.takesInput) {
         ptys.set(party, terminal.ptyId)
         mailboxes.set(party, [
