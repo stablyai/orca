@@ -43,20 +43,12 @@ afterEach(async () => {
   }
 })
 
-it('accepts verified appends but refuses an edit to a discarded link', async () => {
-  const input = await transcript([entry('old', null), entry('lost', 'old'), entry('answer', 'old')])
+it('does not verify a candidate that has grown past the indexed length', async () => {
+  const input = await transcript([entry('old', null), entry('answer', 'old')])
   const result = await importClaudeTranscript(input)
   try {
     await appendFile(input.filePath, `${JSON.stringify(entry('append', 'answer'))}\n`)
-    await result.verify()
-    const file = [
-      entry('old', null),
-      entry('lost', 'xxx'),
-      entry('answer', 'old'),
-      entry('append', 'answer')
-    ]
-    await writeFile(input.filePath, file.map((row) => `${JSON.stringify(row)}\n`).join(''))
-    await expect(result.verify()).rejects.toThrow(ClaudeImportResourceError)
+    await expect(result.verify()).rejects.toThrow('Claude transcript grew during history import.')
   } finally {
     await result.close()
   }

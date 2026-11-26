@@ -48,8 +48,8 @@ export class ClaudeImportIndex {
     const progress = type === 'progress'
     const uuid = this.ids.intern(record.uuid)
     // A boundary with a null physical parent ends the chain unless its preserved segment rejoins it.
-    const compact =
-      uuid && type === 'system' && subtype === 'compact_boundary' ? this.compact(record) : 0
+    const boundary = uuid !== 0 && type === 'system' && subtype === 'compact_boundary'
+    const compact = boundary ? this.compact(record) : 0
     if (hidden || progress) {
       if (uuid) {
         const parent = this.parentKey(record, uuid)
@@ -102,11 +102,12 @@ export class ClaudeImportIndex {
       (queuedPrompt ? Flag.QueuedPrompt : 0) |
       (!(type === 'attachment' && attachment?.type === 'fork_briefing') ? Flag.Leaf : 0) |
       (record.isMeta ? Flag.Meta : 0) |
-      (result ? Flag.ToolResult : 0)
+      (result ? Flag.ToolResult : 0) |
+      (boundary ? Flag.CompactBoundary : 0) |
+      (uuid && type === 'user' && record.isCompactSummary === true ? Flag.CompactSummary : 0)
     const parent = this.parentKey(record, uuid)
-    const position = decode
-      ? this.positions.append(range.offset, range.legacyOffset, range.line)
-      : 0
+    const position =
+      decode || boundary ? this.positions.append(range.offset, range.legacyOffset, range.line) : 0
     if (position) {
       this.rangeData.append(range.length, range.digest)
     }
@@ -167,8 +168,29 @@ export class ClaudeImportIndex {
     return anchor && head && tail ? -this.links.append(anchor, this.links.append(head, tail)) : 0
   }
 
-  select(check: () => void): Promise<void> {
-    return selectClaudeImportRows(this.rows, this.keys, this.links, this.hasQueuedPrompts, check)
+  async select(check: () => void) {
+    const pair = await selectClaudeImportRows(
+      this.rows,
+      this.keys,
+      this.links,
+      this.hasQueuedPrompts,
+      check
+    )
+    if (pair) {
+      return { boundary: this.range(pair.boundary), summary: this.range(pair.summary) }
+    }
+    return undefined
+  }
+
+  private range(row: number): ClaudeRange {
+    const position = this.rows.get(row, Row.Range)
+    return {
+      offset: this.positions.get(position, Position.Offset),
+      legacyOffset: this.positions.get(position, Position.LegacyOffset),
+      line: this.positions.get(position, Position.Line),
+      length: this.rangeData.get(position, RangeData.Length),
+      digest: this.rangeData.get(position, RangeData.Digest)
+    }
   }
 
   *ranges(): Iterable<ClaudeRange> {
@@ -184,14 +206,7 @@ export class ClaudeImportIndex {
       const parentRow = this.keys.get(parent, Key.LatestRow)
       const unanchored = !uuid && (!parent || this.rows.get(parentRow, Row.Flags) & Flag.Selected)
       if (this.rows.get(row, Row.Flags) & Flag.Selected || unanchored) {
-        const position = this.rows.get(row, Row.Range)
-        yield {
-          offset: this.positions.get(position, Position.Offset),
-          legacyOffset: this.positions.get(position, Position.LegacyOffset),
-          line: this.positions.get(position, Position.Line),
-          length: this.rangeData.get(position, RangeData.Length),
-          digest: this.rangeData.get(position, RangeData.Digest)
-        }
+        yield this.range(row)
       }
     }
   }

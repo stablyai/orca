@@ -3,7 +3,10 @@ import { installWorkerSendLedger } from '../../../worker-threads/worker-send-led
 import { serializedWorkerReplyBytes } from '../../../utility-worker-host/utility-worker-reply-size'
 import { isAgentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { importClaudeTranscript } from './journal-claude-import'
-import { ClaudeImportResourceError } from './journal-claude-import-resource-error'
+import {
+  ClaudeImportGrowthError,
+  ClaudeImportResourceError
+} from './journal-claude-import-resource-error'
 import { claudeImportPages } from './journal-claude-import-pages'
 import {
   CLAUDE_IMPORT_PAGE_BYTES,
@@ -48,7 +51,7 @@ port.on('message', (request: ClaudeImportWorkerRequest) => {
         if (!source) {
           throw new ClaudeImportResourceError('Claude history source is unavailable.')
         }
-        send({ kind: 'verified', version: await source.verify(request.refresh) })
+        send({ kind: 'verified', version: await source.verify() })
       } else {
         const next = pages?.next()
         if (next?.done === false) {
@@ -76,6 +79,9 @@ function send(response: ClaudeImportWorkerResponse): void {
 }
 
 function failure(error: unknown): ClaudeImportWorkerResponse {
+  if (error instanceof ClaudeImportGrowthError) {
+    return { kind: 'growth', growth: error.growth }
+  }
   if (error instanceof ClaudeImportResourceError) {
     return { kind: 'resource', message: error.message }
   }

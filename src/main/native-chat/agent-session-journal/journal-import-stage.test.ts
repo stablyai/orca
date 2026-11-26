@@ -1,8 +1,11 @@
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
-import { appendFileSync, readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs'
+import { mkdtemp, readFile, rename, rm, stat, truncate, writeFile } from 'node:fs/promises'
+import { appendFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import Database from '../../sqlite/sync-database'
+import type { JournalOperationReceipt } from './writing/journal-row-writer'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it } from 'vitest'
 import type { JournalReplacementItem } from './context-epochs/journal-epoch-replacement'
 import {
   stageClaudeImport,
@@ -12,33 +15,87 @@ import { useClaudeImportWorker } from './history-import/journal-claude-import-wo
 import { JournalForkStages } from './journal-fork-stages'
 import { JournalSqlBatch } from './journal-sql-batch'
 import { JournalSqlCommand } from './journal-sql-command'
-import * as commandDispatch from './journal-sql-command-dispatch'
 import { journalSqlFailure, restoreJournalSqlFailure } from './journal-sql-failure'
-import { message, messageFixture, target } from './journal-sql-message.test-fixture'
+import {
+  message,
+  messageFixture,
+  target as fixtureTarget
+} from './journal-sql-message.test-fixture'
 import type { JournalSqlMaintenance } from './journal-sql-maintenance'
 import {
   applyJournalSqlWriteRequest,
   type JournalSqlWriteRequest
 } from './journal-sql-write-request'
 import type { JournalWriterCommand } from './journal-writer-command'
+import { applyJournalWriterEffect } from './journal-writer-effects'
 
-const authority = { sessionId: target.sessionId, operationId: 'adopt', fingerprint: 'source' }
-const suffix =
-  '\n{"type":"user","uuid":"later","parentUuid":"source","message":{"content":"later"}}\n'
-const appendDuringProof = `
-  const { Hash } = require('node:crypto')
-  const { appendFileSync } = require('node:fs')
-  const { workerData } = require('node:worker_threads')
-  const update = Hash.prototype.update
-  let sourceHashes = 0
-  Hash.prototype.update = function (bytes, ...args) {
-    const result = update.call(this, bytes, ...args)
-    if (Buffer.isBuffer(bytes) && bytes.includes('"uuid":"source"') && ++sourceHashes === 2) {
-      appendFileSync(workerData.filePath, ${JSON.stringify(suffix)})
-    }
-    return result
-  }
+const target = { ...fixtureTarget, sessionId: 'import-chat' }
+const authority = {
+  sessionId: target.sessionId,
+  operationId: '1764090000000-00000000000000000000000000000001',
+  fingerprint: 'source'
+}
+const user = '{"type":"user","uuid":"source","message":{"content":"question"}}'
+const answer =
+  '{"type":"assistant","uuid":"later","parentUuid":"source","message":{"content":"answer"}}'
+const suffix = `\n${answer}\n`
+const visibleAnswer = ['claude:source:source', 'claude:source:later']
+const compactBoundary = { type: 'system', subtype: 'compact_boundary', uuid: 'b', parentUuid: null }
+const compactSummary = {
+  type: 'user',
+  uuid: 's',
+  parentUuid: 'b',
+  isCompactSummary: true,
+  message: { content: [{ type: 'text', text: 'private summary' }] }
+}
+const compacted = (
+  boundary: Record<string, unknown> = compactBoundary,
+  summary: Record<string, unknown> = compactSummary
+) => [user, answer, JSON.stringify(boundary), JSON.stringify(summary)].join('\n')
+const rewrite = `
+  const saved = fs.statSync(workerData.filePath)
+  const captured = fs.readFileSync(workerData.filePath, 'utf8')
+  fs.writeFileSync(workerData.filePath, captured.replace('"uuid":"lost","parentUuid":"root"', '"uuid":"lost","parentUuid":"gone"'))
+  fs.utimesSync(workerData.filePath, saved.atime, saved.mtime)
+  fs.appendFileSync(workerData.filePath, ${JSON.stringify(suffix)})
 `
+function mutateWorker(barrier: 'scan' | 'proof' | 'open', mutation: string, everyAttempt = false) {
+  const action =
+    barrier === 'open'
+      ? `const open = fsp.open
+       fsp.open = async (...args) => {
+         const handle = await open(...args)
+         if (args[0] === workerData.filePath) {
+           const stat = handle.stat.bind(handle)
+           handle.stat = async (...options) => {
+             const witness = await stat(...options)
+             handle.stat = stat
+             ${mutation}
+             return witness
+           }
+         }
+         return handle
+       }`
+      : `const update = Hash.prototype.update
+       let sourceHashes = 0
+       Hash.prototype.update = function (bytes, ...args) {
+         const result = update.call(this, bytes, ...args)
+         if (Buffer.isBuffer(bytes) && bytes.includes('"uuid":"source"') && ++sourceHashes === ${barrier === 'scan' ? 1 : 2}) {
+           ${mutation}
+         }
+         return result
+       }`
+  return `
+    const { Hash } = require('node:crypto')
+    const fs = require('node:fs')
+    const fsp = require('node:fs/promises')
+    const { workerData } = require('node:worker_threads')
+    if (!workerData.growth || ${everyAttempt}) {
+      ${action}
+    }
+  `
+}
+const append = `fs.appendFileSync(workerData.filePath, ${JSON.stringify(suffix)})`
 const stagedItem = (clientMessageId: string): JournalReplacementItem => ({
   identity: { provider: 'orca', clientMessageId },
   body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: clientMessageId }] },
@@ -53,17 +110,21 @@ afterEach(async () => {
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'orca-journal-import-'))
   const filePath = join(root, 'source.jsonl')
-  await writeFile(filePath, '{"type":"user","uuid":"source","message":{"content":"source"}}')
-  const base = messageFixture()
+  await writeFile(filePath, user)
+  const dbPath = join(root, 'journal.sqlite')
+  const base = messageFixture(new Database(dbPath), target)
   const { db } = base
+  let closed = false
   clean = async () => {
-    db.close()
+    if (!closed) {
+      db.close()
+    }
     await rm(root, { recursive: true, force: true })
   }
   const seeded = await base.commit(message('prior history', 'prior'))
   expect(seeded.outcomes[0].committed).toBe(true)
-  const visible = () =>
-    db
+  const visible = (connection = db) =>
+    connection
       .prepare(
         'SELECT item_id FROM journal_items WHERE session_id=? AND epoch=? AND hidden=0 ORDER BY sequence'
       )
@@ -122,6 +183,9 @@ async function fixture() {
         device: source.dev,
         inode: source.ino,
         size: source.size,
+        digest: createHash('sha256')
+          .update(await readFile(filePath))
+          .digest('hex'),
         modified: source.mtimeNs,
         changed: source.ctimeNs
       },
@@ -148,11 +212,13 @@ async function fixture() {
     physicalCursor: cursor,
     async write(operation, prepare) {
       const preparation = await prepare?.({ savedAt: 100 })
+      const staged = await preparation?.receipt?.stage?.({ savedAt: 100 })
       const result = await dispatch({
         type: 'write',
         command: {
           target,
           operation,
+          effects: staged?.effects,
           claudeImport: preparation?.claudeImport,
           facts: {
             identity: {
@@ -171,9 +237,85 @@ async function fixture() {
       return result.commit
     }
   }
-  const prepare = () =>
-    stageClaudeImport({ maintain }, { filePath, agent: 'claude', sessionId: 'source' }, authority)
-  return { db, filePath, begin, page, maintain, install, visible, cursor, journal, prepare }
+  const prepare = (signal?: AbortSignal, stageWriter = { maintain }) =>
+    stageClaudeImport(
+      stageWriter,
+      { filePath, agent: 'claude', sessionId: 'source', signal },
+      authority
+    )
+  const request = {
+    sessionId: target.sessionId,
+    location: {
+      executionHostId: 'local',
+      wslDistro: null,
+      workspaceId: 'workspace',
+      workspaceKind: 'folder'
+    },
+    provider: 'claude',
+    accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: root },
+    expectedFence: null,
+    spawnToken: '',
+    claimKeyId: 'key-1',
+    handoffOperationId: null,
+    probe: { outcome: 'reservation-unused' },
+    operation: {
+      callerKey: 'caller',
+      operationId: authority.operationId,
+      fingerprint: authority.fingerprint
+    },
+    now: 1764090000000
+  } as const
+  const found = (refuseReplay: boolean) => ({
+    kind: 'store' as const,
+    mutation: {
+      input: {
+        kind: 'command' as const,
+        command: {
+          kind: 'found' as const,
+          request,
+          leaseTtlMs: 0,
+          legacyTabIds: [],
+          refuseReplay
+        }
+      }
+    }
+  })
+  const receipt: JournalOperationReceipt = {
+    stage: async () => ({ effects: [found(true)], settle() {} })
+  }
+  const receipts = (connection = db) =>
+    Number(
+      connection.prepare('SELECT COUNT(*) AS count FROM agent_session_operations').get()?.count
+    )
+  const reopen = (expected: string[]) => {
+    db.close()
+    closed = true
+    const reopened = new Database(dbPath)
+    try {
+      expect(applyJournalWriterEffect(reopened, root, found(false))).toMatchObject({
+        value: { disposition: 'replayed' }
+      })
+      expect(visible(reopened)).toEqual(expected)
+      expect(receipts(reopened)).toBe(1)
+    } finally {
+      reopened.close()
+    }
+  }
+  return {
+    db,
+    filePath,
+    begin,
+    page,
+    maintain,
+    install,
+    visible,
+    cursor,
+    journal,
+    prepare,
+    receipt,
+    receipts,
+    reopen
+  }
 }
 
 it('accepts only ordered bounded pages and installs split items in order once', async () => {
@@ -276,85 +418,249 @@ it('discards the private stage when forwarding a page fails', async () => {
   }
 })
 
-it('installs only the captured history when a complete record arrives during prefix hashing', async () => {
+it.each([
+  ['after opening the source', mutateWorker('open', append)],
+  ['during proof', mutateWorker('proof', append)],
+  [
+    'split across the original cutoff',
+    `${mutateWorker(
+      'open',
+      `
+    fs.appendFileSync(workerData.filePath, ${JSON.stringify(suffix.slice(10))})
+  `
+    )}`
+  ]
+])('restages an answer appended %s', async (barrier, preload) => {
   const writer = await fixture()
-  const restore = useClaudeImportWorker(undefined, appendDuringProof)
+  if (barrier === 'split across the original cutoff') {
+    await writeFile(writer.filePath, user + suffix.slice(0, 10))
+  }
+  const restore = useClaudeImportWorker(undefined, preload)
   let prepared: ClaudeImportStage | undefined
   try {
     prepared = await writer.prepare()
-    await prepared.install(writer.journal, 1)
-    expect(await readFile(writer.filePath, 'utf8')).toContain(suffix)
-    expect(writer.visible()).toEqual(['claude:source:source'])
+    await prepared.install(writer.journal, 1, writer.receipt)
+    expect(writer.visible()).toEqual(visibleAnswer)
+    writer.reopen(visibleAnswer)
   } finally {
     await prepared?.close()
     restore()
   }
 })
 
-it('refuses a same-size edit of an unselected link with restored mtime followed by an append', async () => {
+it.each(['scan', 'proof'] as const)(
+  'refuses a same-width unselected parent rewrite with mtime restored and appended bytes during %s',
+  async (barrier) => {
+    const writer = await fixture()
+    await writeFile(
+      writer.filePath,
+      [
+        '{"type":"user","uuid":"root","message":{"content":"root"}}',
+        '{"type":"assistant","uuid":"lost","parentUuid":"root","message":{"content":"lost"}}',
+        '{"type":"assistant","uuid":"source","parentUuid":"root","message":{"content":"source"}}'
+      ].join('\n')
+    )
+    const restore = useClaudeImportWorker(undefined, mutateWorker(barrier, rewrite))
+    const before = writer.cursor()
+    try {
+      await expect(writer.prepare()).rejects.toThrow(
+        'Claude transcript changed during history import.'
+      )
+      expect(await readFile(writer.filePath, 'utf8')).toContain('"uuid":"lost","parentUuid":"gone"')
+      expect(writer.visible()).toEqual(['orca:prior'])
+      expect(writer.cursor()).toEqual(before)
+      expect(writer.receipts()).toBe(0)
+    } finally {
+      restore()
+    }
+  }
+)
+
+function appendDuringSql(writer: Awaited<ReturnType<typeof fixture>>) {
+  let appended = false
+  writer.db.function('append_answer', () => {
+    if (!appended) {
+      appendFileSync(writer.filePath, suffix)
+      appended = true
+    }
+    return null
+  })
+  writer.db.exec(`CREATE TEMP TRIGGER append_answer AFTER INSERT ON agent_session_operations
+    BEGIN SELECT append_answer(); END`)
+}
+
+it('replaces the stale stage after growth during SQL and commits one founding receipt', async () => {
+  const writer = await fixture()
+  const restore = useClaudeImportWorker()
+  appendDuringSql(writer)
+  let prepared: ClaudeImportStage | undefined
+  try {
+    prepared = await writer.prepare()
+    await prepared.install(writer.journal, 1, writer.receipt)
+    expect(writer.visible()).toEqual(visibleAnswer)
+    writer.reopen(visibleAnswer)
+  } finally {
+    await prepared?.close()
+    restore()
+  }
+})
+
+it.each([
+  [
+    'cancel',
+    async (_writer: Awaited<ReturnType<typeof fixture>>, controller: AbortController) =>
+      controller.abort()
+  ],
+  [
+    'truncation',
+    async (writer: Awaited<ReturnType<typeof fixture>>) => truncate(writer.filePath, 0)
+  ],
+  [
+    'replacement',
+    async (writer: Awaited<ReturnType<typeof fixture>>) => {
+      await rename(writer.filePath, `${writer.filePath}.old`)
+      await writeFile(writer.filePath, user + suffix)
+    }
+  ]
+])(
+  'preserves history and discards staged pages on %s between attempts',
+  async (_kind, interrupt) => {
+    const writer = await fixture()
+    const restore = useClaudeImportWorker()
+    const controller = new AbortController()
+    appendDuringSql(writer)
+    const cursor = writer.cursor()
+    let token: string | undefined
+    const stages = {
+      async maintain(operation: JournalSqlMaintenance) {
+        const result = await writer.maintain(operation)
+        if (operation.kind === 'import-stage-page') {
+          token = operation.token
+        }
+        if (operation.kind === 'fork-abort') {
+          await interrupt(writer, controller)
+        }
+        return result
+      }
+    }
+    let prepared: ClaudeImportStage | undefined
+    try {
+      prepared = await writer.prepare(controller.signal, stages)
+      await expect(prepared.install(writer.journal, 1, writer.receipt)).rejects.toThrow(
+        /transcript changed|abort/i
+      )
+      expect(writer.visible()).toEqual(['orca:prior'])
+      expect(writer.cursor()).toEqual(cursor)
+      expect(writer.receipts()).toBe(0)
+      await expect(writer.page(token!, 1, Buffer.from('x'))).rejects.toThrow('page does not match')
+    } finally {
+      await prepared?.close()
+      restore()
+    }
+  }
+)
+
+it('refuses growth during both proof attempts and a fresh import succeeds once writes stop', async () => {
+  const writer = await fixture()
+  const restore = useClaudeImportWorker(
+    undefined,
+    mutateWorker('proof', "fs.appendFileSync(workerData.filePath, '\\n')", true)
+  )
+  try {
+    await expect(writer.prepare()).rejects.toThrow('Claude transcript grew during history import.')
+    expect(await readFile(writer.filePath, 'utf8')).toBe(`${user}\n\n`)
+    expect(writer.visible()).toEqual(['orca:prior'])
+    expect(writer.receipts()).toBe(0)
+  } finally {
+    restore()
+  }
+  const quietWorker = useClaudeImportWorker()
+  let prepared: ClaudeImportStage | undefined
+  try {
+    prepared = await writer.prepare()
+    await prepared.install(writer.journal, 1, writer.receipt)
+    writer.reopen(['claude:source:source'])
+  } finally {
+    await prepared?.close()
+    quietWorker()
+  }
+})
+
+it('does not stage a compaction notice for truncated summary JSON', async () => {
   const writer = await fixture()
   await writeFile(
     writer.filePath,
-    [
-      '{"type":"user","uuid":"root","message":{"content":"root"}}',
-      '{"type":"assistant","uuid":"lost","parentUuid":"root","message":{"content":"lost"}}',
-      '{"type":"assistant","uuid":"source","parentUuid":"root","message":{"content":"source"}}'
-    ].join('\n')
+    [JSON.stringify(compactBoundary), JSON.stringify(compactSummary).slice(0, -1)].join('\n')
   )
-  const restore = useClaudeImportWorker(undefined, appendDuringProof)
-  writer.db.function('rewrite_and_append', () => {
-    const { atime, mtime } = statSync(writer.filePath)
-    const captured = readFileSync(writer.filePath, 'utf8')
-    writeFileSync(
-      writer.filePath,
-      captured.replace('"uuid":"lost","parentUuid":"root"', '"uuid":"lost","parentUuid":"gone"')
-    )
-    utimesSync(writer.filePath, atime, mtime)
-    appendFileSync(writer.filePath, suffix)
-    return null
-  })
-  writer.db.exec(`CREATE TRIGGER mutate_after_install AFTER INSERT ON journal_items
-    WHEN NEW.item_id = 'claude:source:source' BEGIN SELECT rewrite_and_append(); END`)
+  const restore = useClaudeImportWorker()
   let prepared: ClaudeImportStage | undefined
   try {
     prepared = await writer.prepare()
-    const before = writer.cursor()
-    await expect(prepared.install(writer.journal, 1)).rejects.toThrow(
-      'Claude transcript changed during history import.'
-    )
-    expect(await readFile(writer.filePath, 'utf8')).toContain('"uuid":"lost","parentUuid":"gone"')
+    expect(prepared).toMatchObject({ count: 0, sourceEmpty: false })
     expect(writer.visible()).toEqual(['orca:prior'])
-    expect(writer.cursor()).toEqual(before)
   } finally {
     await prepared?.close()
     restore()
   }
 })
 
-it('rolls back the first write and installs the same stage after an append after SQL', async () => {
+it('reselects after the appended leaf supersedes an indexed answer', async () => {
   const writer = await fixture()
-  const restore = useClaudeImportWorker()
-  let appended = false
-  const run = commandDispatch.runJournalSqlCommand
-  const append = vi
-    .spyOn(commandDispatch, 'runJournalSqlCommand')
-    .mockImplementation(async (...args) => {
-      const result = await run(...args)
-      if (args[2].claudeImport && !appended) {
-        appended = true
-        appendFileSync(writer.filePath, suffix)
-      }
-      return result
-    })
+  await writeFile(writer.filePath, user + suffix)
+  const branch = `${JSON.stringify({
+    type: 'assistant',
+    uuid: 'newer',
+    parentUuid: 'source',
+    message: { content: 'new answer' }
+  })}\n`
+  const restore = useClaudeImportWorker(
+    undefined,
+    mutateWorker('scan', `fs.appendFileSync(workerData.filePath, ${JSON.stringify(branch)})`)
+  )
   let prepared: ClaudeImportStage | undefined
   try {
     prepared = await writer.prepare()
-    await prepared.install(writer.journal, 1)
-    expect(appended).toBe(true)
-    expect(writer.visible()).toEqual(['claude:source:source'])
+    await prepared.install(writer.journal, 1, writer.receipt)
+    writer.reopen(['claude:source:source', 'claude:source:newer'])
   } finally {
     await prepared?.close()
-    append.mockRestore()
+    restore()
+  }
+})
+
+it.each([
+  ['physical boundary', compacted()],
+  ['logical parent', compacted({ ...compactBoundary, logicalParentUuid: 'later' })],
+  ['meta summary', compacted(compactBoundary, { ...compactSummary, isMeta: true })],
+  [
+    'logical parent and meta summary',
+    compacted(
+      { ...compactBoundary, logicalParentUuid: 'later' },
+      { ...compactSummary, isMeta: true }
+    )
+  ]
+])('persists one boundary-keyed compaction notice with %s', async (_kind, transcript) => {
+  const writer = await fixture()
+  await writeFile(writer.filePath, transcript)
+  const restore = useClaudeImportWorker()
+  let prepared: ClaudeImportStage | undefined
+  try {
+    prepared = await writer.prepare()
+    await prepared.install(writer.journal, 1, writer.receipt)
+    const row = writer.db
+      .prepare('SELECT payload_json FROM journal_items WHERE item_id=? AND hidden=0')
+      .get('claude:source:b')
+    expect(JSON.parse(String(row?.payload_json))).toMatchObject({
+      body: {
+        kind: 'message',
+        role: 'system',
+        blocks: [{ type: 'text', presentation: 'compaction' }]
+      }
+    })
+    expect(row?.payload_json).not.toContain('private summary')
+    writer.reopen(['claude:source:b'])
+  } finally {
+    await prepared?.close()
     restore()
   }
 })

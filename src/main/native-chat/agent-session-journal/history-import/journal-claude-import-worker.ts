@@ -1,5 +1,5 @@
 import { assertAdoptedSourceIdentity } from './adopted-transcript-source'
-import type { ClaudeSourceVersion } from './journal-claude-import-source'
+import type { ClaudeSourceVersion } from './journal-claude-import-source-version'
 import { AgentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   retryHeavyWorkers,
@@ -10,7 +10,10 @@ import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath
 } from '../../../worker-threads/worker-thread-entry-path'
-import { ClaudeImportResourceError } from './journal-claude-import-resource-error'
+import {
+  ClaudeImportGrowthError,
+  ClaudeImportResourceError
+} from './journal-claude-import-resource-error'
 import type {
   ClaudeImportHeader,
   ClaudeImportWork,
@@ -64,7 +67,7 @@ async function takeSlot(pool: Slots, signal?: AbortSignal): Promise<() => void> 
 }
 
 export type ClaudeImportWorker = Omit<ClaudeImportHeader, 'identity'> & {
-  verify(refresh?: boolean): Promise<ClaudeSourceVersion>
+  verify(): Promise<ClaudeSourceVersion>
   close(): Promise<void>
 }
 
@@ -192,6 +195,16 @@ export async function importClaudeTranscriptInWorker(
       )
       check()
     }
+    const verify = async () => {
+      check()
+      const result = await request({ kind: 'verify' })
+      check()
+      if (result.kind !== 'verified') {
+        failImport(result)
+      }
+      return result.version
+    }
+    await verify()
     for (let ordinal = 0; header.count > 0; ordinal++) {
       const releasePage = await takeSlot(pageSlots, lifetime.signal)
       try {
@@ -215,16 +228,6 @@ export async function importClaudeTranscriptInWorker(
         }
       }
     }
-    const verify = async (refresh = false) => {
-      check()
-      const result = await request({ kind: 'verify', refresh })
-      check()
-      if (result.kind !== 'verified') {
-        failImport(result)
-      }
-      return result.version
-    }
-    await verify()
     releaseImport()
     return { count: header.count, sourceEmpty: header.sourceEmpty, verify, close }
   } catch (error) {
@@ -235,6 +238,8 @@ export async function importClaudeTranscriptInWorker(
 
 function failImport(response: ClaudeImportWorkerResponse): never {
   switch (response.kind) {
+    case 'growth':
+      throw new ClaudeImportGrowthError(response.growth)
     case 'resource':
     case 'failed':
       throw new ClaudeImportResourceError(response.message)

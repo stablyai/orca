@@ -1,7 +1,4 @@
-import {
-  AgentSessionRefusalError,
-  refuse
-} from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { ClaudeSourceCheckpoint } from './journal-claude-import-source-version'
 
 /** A bounded import could not verify or prepare history. The same source can be retried. */
 export class ClaudeImportResourceError extends Error {
@@ -11,16 +8,11 @@ export class ClaudeImportResourceError extends Error {
   }
 }
 
-/** The writer rolled back because the staged import's source witness moved. */
-export class ClaudeImportVersionChangedError extends AgentSessionRefusalError {
-  constructor() {
-    super(
-      refuse(
-        'agent_session_identity_required',
-        { reason: 'transcriptUnreadable' },
-        'Claude transcript changed during history import.'
-      )
-    )
-    this.name = 'ClaudeImportVersionChangedError'
+export type ClaudeImportGrowth = { prefix: ClaudeSourceCheckpoint; minimumSize: bigint }
+
+export class ClaudeImportGrowthError extends ClaudeImportResourceError {
+  constructor(readonly growth: ClaudeImportGrowth) {
+    super('Claude transcript grew during history import.')
+    this.name = 'ClaudeImportGrowthError'
   }
 }

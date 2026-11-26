@@ -246,17 +246,25 @@ class ClaudeImportSelection {
     return visible || any
   }
 
-  async select(hasQueuedPrompts: boolean, check: () => void): Promise<void> {
+  async select(hasQueuedPrompts: boolean, check: () => void) {
     await this.rewire(check)
     const { anchor, terminal } = await this.leaf(check)
     let visited = 0
     let root = 0
-    for (let row = anchor; row && !this.has(row, Flag.Selected); row = this.parent(row)) {
+    let pair: { boundary: number; summary: number } | undefined
+    let row = anchor
+    for (; row && !this.has(row, Flag.Selected); row = this.parent(row)) {
       if (++visited % SLAB_ROWS === 0) {
         await setImmediate()
         check()
       }
       this.flag(row, Flag.Selected)
+      if (!pair && this.has(row, Flag.CompactSummary)) {
+        const parent = this.parent(row)
+        if (this.has(parent, Flag.CompactBoundary)) {
+          pair = { boundary: parent, summary: row }
+        }
+      }
       this.rows.set(row, Row.Next, root)
       root = row
     }
@@ -271,5 +279,6 @@ class ClaudeImportSelection {
         check
       )
     }
+    return row ? undefined : pair
   }
 }

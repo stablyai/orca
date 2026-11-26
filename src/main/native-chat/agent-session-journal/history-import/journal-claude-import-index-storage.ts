@@ -208,7 +208,9 @@ export const enum Flag {
   QueuedPrompt = 1024,
   UnselectedTurnPath = 2048,
   TrailingReachable = 4096,
-  TrailingVisited = 8192
+  TrailingVisited = 8192,
+  CompactBoundary = 16384,
+  CompactSummary = 32768
 }
 export const enum Link {
   Key,

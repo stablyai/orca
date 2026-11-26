@@ -1,6 +1,6 @@
 import { statSync } from 'node:fs'
 import { agentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { ClaudeImportVersionChangedError } from './history-import/journal-claude-import-resource-error'
+import { ClaudeImportGrowthError } from './history-import/journal-claude-import-resource-error'
 import type {
   ClaudeImportAuthority,
   ClaudeImportInstall
@@ -85,6 +85,18 @@ export function assertJournalImportCurrent(install: ClaudeImportInstall): void {
   const { version } = install
   const path = statSync(version.path, { bigint: true, throwIfNoEntry: false })
   if (
+    path?.isFile() &&
+    path.dev === version.device &&
+    path.ino === version.inode &&
+    path.size > version.size
+  ) {
+    const { size, device, inode, digest } = version
+    throw new ClaudeImportGrowthError({
+      prefix: { size, device, inode, digest },
+      minimumSize: path.size
+    })
+  }
+  if (
     !path?.isFile() ||
     path.size !== version.size ||
     path.dev !== version.device ||
@@ -92,7 +104,11 @@ export function assertJournalImportCurrent(install: ClaudeImportInstall): void {
     path.mtimeNs !== version.modified ||
     path.ctimeNs !== version.changed
   ) {
-    throw new ClaudeImportVersionChangedError()
+    throw agentSessionRefusalError(
+      'agent_session_identity_required',
+      { reason: 'transcriptUnreadable' },
+      'Claude transcript changed during history import.'
+    )
   }
 }
 

@@ -4,36 +4,23 @@ import { constants, type BigIntStats } from 'node:fs'
 import { isUtf8 } from 'node:buffer'
 import { crc32 } from 'node:zlib'
 import { MAX_LEGACY_IMPORT_RECORD_BYTES as RECORD_BYTES } from './journal-legacy-transcript-stream'
-import { ClaudeImportResourceError } from './journal-claude-import-resource-error'
+import {
+  ClaudeImportGrowthError,
+  ClaudeImportResourceError,
+  type ClaudeImportGrowth
+} from './journal-claude-import-resource-error'
+
+import {
+  changed,
+  sameFile,
+  sameVersion,
+  validRestage,
+  type ClaudeSourceCheckpoint,
+  type ClaudeSourceVersion
+} from './journal-claude-import-source-version'
 
 const SLAB_BYTES = 512 * 1024
-const MAX_PROOF_ATTEMPTS = 3
-
-function changed(): never {
-  throw new ClaudeImportResourceError('Claude transcript changed during history import.')
-}
-
-function sameFile(left: BigIntStats, right: BigIntStats): boolean {
-  return left.isFile() && right.isFile() && left.dev === right.dev && left.ino === right.ino
-}
-
-function sameVersion(left: BigIntStats, right: BigIntStats): boolean {
-  return (
-    sameFile(left, right) &&
-    left.size === right.size &&
-    left.mtimeNs === right.mtimeNs &&
-    left.ctimeNs === right.ctimeNs
-  )
-}
-
-export type ClaudeSourceVersion = {
-  path: string
-  size: bigint
-  device: bigint
-  inode: bigint
-  modified: bigint
-  changed: bigint
-}
+const PROOF_STAT_BYTES = 8 * 1024 * 1024
 
 export type ClaudeRange = {
   offset: number
@@ -45,15 +32,14 @@ export type ClaudeRange = {
 
 export class ClaudeImportSource {
   private readonly size: number
-  private digest: Buffer | undefined
-  private terminatedLine = true
+  private checkpoint: ClaudeSourceCheckpoint | undefined
   private verified: BigIntStats | undefined
 
   private constructor(
     private readonly file: FileHandle,
     private readonly path: string,
     private readonly signal: AbortSignal | undefined,
-    initial: BigIntStats
+    private readonly initial: BigIntStats
   ) {
     this.size = Number(initial.size)
     if (!Number.isSafeInteger(this.size)) {
@@ -61,7 +47,11 @@ export class ClaudeImportSource {
     }
   }
 
-  static async open(path: string, signal?: AbortSignal): Promise<ClaudeImportSource> {
+  static async open(
+    path: string,
+    signal?: AbortSignal,
+    growth?: ClaudeImportGrowth
+  ): Promise<ClaudeImportSource> {
     const before = await stat(path, { bigint: true })
     if (!before.isFile()) {
       changed()
@@ -70,7 +60,7 @@ export class ClaudeImportSource {
     const file = await open(path, flags)
     try {
       const initial = await file.stat({ bigint: true })
-      if (!sameFile(before, initial)) {
+      if (!sameFile(before, initial) || (growth && !validRestage(initial, growth))) {
         changed()
       }
       return new ClaudeImportSource(file, path, signal, initial)
@@ -84,15 +74,28 @@ export class ClaudeImportSource {
     return this.file.close()
   }
 
-  async scan(onLine: (bytes: Buffer, range: ClaudeRange) => void): Promise<void> {
+  async scan(
+    onLine: (bytes: Buffer, range: ClaudeRange) => void,
+    prefix?: ClaudeSourceCheckpoint
+  ): Promise<void> {
     let offset = 0
     let legacyOffset = 0
     let line = 0
     let pending: Buffer[] = []
     let pendingBytes = 0
     const hash = createHash('sha256')
-    await this.readPrefix((slab) => {
-      hash.update(slab)
+    const prefixBytes = prefix ? Number(prefix.size) : -1
+    await this.readPrefix((slab, position) => {
+      if (prefix && position <= prefixBytes && prefixBytes < position + slab.length) {
+        const overlap = prefixBytes - position
+        hash.update(slab.subarray(0, overlap))
+        if (hash.copy().digest('hex') !== prefix.digest) {
+          changed()
+        }
+        hash.update(slab.subarray(overlap))
+      } else {
+        hash.update(slab)
+      }
       let start = 0
       for (let end = slab.indexOf(10); end !== -1; end = slab.indexOf(10, start)) {
         const part = slab.subarray(start, end)
@@ -110,11 +113,15 @@ export class ClaudeImportSource {
         retain(slab.subarray(start))
       }
     })
-    this.terminatedLine = pendingBytes === 0
     if (pendingBytes) {
       emit(Buffer.concat(pending, pendingBytes), false)
     }
-    this.digest = hash.digest()
+    this.checkpoint = {
+      size: this.initial.size,
+      device: this.initial.dev,
+      inode: this.initial.ino,
+      digest: hash.digest('hex')
+    }
 
     function retain(part: Buffer): void {
       pendingBytes += part.length
@@ -171,69 +178,66 @@ export class ClaudeImportSource {
     return { bytes, start, ranges }
   }
 
-  async verify(refresh = false): Promise<ClaudeSourceVersion> {
-    for (let attempt = 0; attempt < MAX_PROOF_ATTEMPTS; attempt++) {
-      this.signal?.throwIfAborted()
-      const before = await this.version()
-      if (!before) {
-        continue
-      }
-      // A matching stat can reuse a completed content proof on this handle.
-      if (refresh || !this.verified || !sameVersion(before, this.verified)) {
-        const matches = await this.verifyPrefix(before)
-        const after = await this.version()
-        if (!after || !sameVersion(before, after)) {
-          continue
-        }
-        if (!matches) {
-          changed()
-        }
-        this.verified = before
-      }
-      return {
-        path: this.path,
-        size: before.size,
-        device: before.dev,
-        inode: before.ino,
-        modified: before.mtimeNs,
-        changed: before.ctimeNs
-      }
-    }
-    changed()
-  }
-
-  private async verifyPrefix(before: BigIntStats): Promise<boolean> {
-    if (!this.terminatedLine && before.size > this.size) {
-      const delimiter = Buffer.allocUnsafe(1)
-      await this.read(delimiter, this.size)
-      if (delimiter[0] !== 10) {
-        return false
-      }
-    }
-    const hash = createHash('sha256')
-    const slab = Buffer.allocUnsafeSlow(Math.min(SLAB_BYTES, this.size))
-    for (let offset = 0; offset < this.size; offset += slab.length) {
-      const chunk = slab.subarray(0, Math.min(slab.length, this.size - offset))
-      await this.read(chunk, offset)
-      hash.update(chunk)
-    }
-    return this.digest?.equals(hash.digest()) ?? false
-  }
-
-  private async version(): Promise<BigIntStats | undefined> {
+  async indexedVersion(): Promise<BigIntStats> {
     const descriptor = await this.file.stat({ bigint: true })
     const path = await stat(this.path, { bigint: true }).catch(changed)
-    if (!sameFile(descriptor, path) || descriptor.size < this.size || path.size < this.size) {
+    this.checkSize(descriptor)
+    this.checkSize(path)
+    if (!sameVersion(descriptor, path)) {
       changed()
     }
-    return sameVersion(descriptor, path) ? descriptor : undefined
+    return descriptor
   }
 
-  private async readPrefix(visit: (buffer: Buffer) => void): Promise<void> {
+  async verify(): Promise<ClaudeSourceVersion> {
+    this.signal?.throwIfAborted()
+    const before = await this.indexedVersion()
+    if (!this.checkpoint) {
+      changed()
+    }
+    if (this.verified) {
+      if (!sameVersion(before, this.verified)) {
+        changed()
+      }
+    } else {
+      const hash = createHash('sha256')
+      const slab = Buffer.allocUnsafeSlow(Math.min(SLAB_BYTES, this.size))
+      for (let offset = 0; offset < this.size; offset += slab.length) {
+        const chunk = slab.subarray(0, Math.min(slab.length, this.size - offset))
+        await this.read(chunk, offset)
+        hash.update(chunk)
+        if (!offset || offset % PROOF_STAT_BYTES === 0) {
+          this.checkSize(await this.file.stat({ bigint: true }))
+        }
+      }
+      const after = await this.indexedVersion()
+      if (!sameVersion(before, after) || this.checkpoint.digest !== hash.digest('hex')) {
+        changed()
+      }
+      this.verified = before
+    }
+    return {
+      ...this.checkpoint,
+      path: this.path,
+      modified: before.mtimeNs,
+      changed: before.ctimeNs
+    }
+  }
+
+  private checkSize(current: BigIntStats): void {
+    if (!sameFile(this.initial, current) || current.size < this.initial.size) {
+      changed()
+    }
+    if (current.size > this.initial.size && this.checkpoint) {
+      throw new ClaudeImportGrowthError({ prefix: this.checkpoint, minimumSize: current.size })
+    }
+  }
+
+  private async readPrefix(visit: (buffer: Buffer, position: number) => void): Promise<void> {
     for (let offset = 0; offset < this.size; offset += SLAB_BYTES) {
       const slab = Buffer.allocUnsafeSlow(Math.min(SLAB_BYTES, this.size - offset))
       await this.read(slab, offset)
-      visit(slab)
+      visit(slab, offset)
     }
   }
 

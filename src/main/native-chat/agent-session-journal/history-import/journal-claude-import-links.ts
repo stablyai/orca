@@ -8,6 +8,7 @@ const fields: Fields = {
   subtype: true,
   isSidechain: true,
   isMeta: true,
+  isCompactSummary: true,
   teamName: true,
   agentId: true,
   sourceToolAssistantUUID: true,

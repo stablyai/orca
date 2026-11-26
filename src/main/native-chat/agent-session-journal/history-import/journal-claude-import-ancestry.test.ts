@@ -43,6 +43,27 @@ async function importedUuids(rows: readonly unknown[]) {
   }
 }
 
+const boundary = { type: 'system', subtype: 'compact_boundary', uuid: 'b', parentUuid: null }
+const summary = {
+  ...turn('s', 'b', 'user'),
+  isCompactSummary: true
+}
+
+it.each([
+  ['an orphaned summary', [boundary, { ...summary, parentUuid: 'missing' }]],
+  ['a sidechain boundary', [{ ...boundary, isSidechain: true }, summary]],
+  ['a cycle', [{ ...boundary, parentUuid: 's' }, summary]],
+  ['an unselected boundary', [boundary, summary, { ...summary, uuid: 'other', parentUuid: null }]]
+])('does not project a compaction notice for %s', async (_case, rows) => {
+  await expect(importedUuids(rows)).resolves.toEqual([])
+})
+
+it('shows ordinary history when there is a visible turn after compaction', async () => {
+  await expect(importedUuids([boundary, summary, turn('next', 's', 'user')])).resolves.toEqual([
+    'next'
+  ])
+})
+
 it.each([
   ['sidechain', { isSidechain: true }],
   ['team', { teamName: 'team-name' }]
