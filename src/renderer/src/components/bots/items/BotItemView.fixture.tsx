@@ -312,6 +312,46 @@ export const answeredQuestion = defineFixture({
   )
 })
 
+const withdrawnView = {
+  ...askingView,
+  item: answered,
+  events: [
+    ...askingView.events,
+    {
+      id: 'e53',
+      kind: 'status' as const,
+      actor: { kind: 'orca' as const, why: 'ask-withdrawn' },
+      data: {
+        from: 'needs_you',
+        to: 'working',
+        cause: 'withdrawn',
+        withdrawn: {
+          kind: 'dispatch',
+          ref: 'ctx_fixture',
+          state: 'completed',
+          title: 'Draft the launch post'
+        },
+        note: 'Ask withdrawn — worker "Draft the launch post" finished'
+      },
+      at: Date.now() - 5 * 60_000
+    }
+  ]
+}
+
+// Orca withdrew the question once the worker it was asked --while ended: the Activity row says why.
+export const withdrawnQuestion = defineFixture({
+  width: 360,
+  render: () => (
+    <div className="flex h-[680px] flex-col bg-sidebar">
+      <BotItemBody
+        bot={{ ...fixtureCos, name: 'Launch helper' }}
+        item={answered}
+        view={withdrawnView}
+      />
+    </div>
+  )
+})
+
 const waitSet = Date.now() - 50 * 60_000
 const waitingItem = makeTestBotItem(214, {
   title: 'Polish the Items empty state',

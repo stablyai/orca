@@ -20,10 +20,30 @@ import {
   type BotItemWriteOutcome
 } from './bot-items-input'
 import { eventRecordOf } from './bot-items-rows'
+import {
+  botItemAskWhileOf,
+  botItemAskWithdrawnNote,
+  type BotItemAskWhile,
+  type BotItemAskWithdrawn
+} from '../../shared/bots/bot-item-ask-while'
 import type { BotItemRecord } from './bot-items-schema'
 
 /** Orca's own wait: every worker on the item stopped on its agent's usage limit. */
 export const BOT_ITEM_USAGE_LIMIT_WAIT = 'usage-limit'
+
+/** Orca's own move: an ask whose `--while` settled is withdrawn. */
+export const BOT_ITEM_ASK_WITHDRAWN = 'ask-withdrawn'
+
+function parseJson(value: unknown): unknown {
+  if (typeof value !== 'string') {
+    return null
+  }
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
+}
 
 export class BotItemsWrites extends BotItemsEdits {
   /** `images` were admitted and claimed on the host first; attachments alone make a comment. */
@@ -192,6 +212,64 @@ export class BotItemsWrites extends BotItemsEdits {
       )
       .all(BOT_ITEM_USAGE_LIMIT_WAIT)
       .map((row) => String(row.uid))
+  }
+
+  /** Needs you items whose question names what keeps it open (`--while`), with that question. */
+  askWhileQuestions(): { uid: string; questionEvent: number; askWhile: BotItemAskWhile }[] {
+    return this.db
+      .prepare(
+        `SELECT items.uid, items.question_event, json_extract(item_events.data, '$.while') AS while_json
+           FROM items JOIN item_events ON item_events.id = items.question_event
+          WHERE items.status = 'needs_you'
+            AND json_extract(item_events.data, '$.while') IS NOT NULL`
+      )
+      .all()
+      .flatMap((row) => {
+        const askWhile = botItemAskWhileOf(parseJson(row.while_json))
+        return askWhile && typeof row.question_event === 'number'
+          ? [{ uid: String(row.uid), questionEvent: row.question_event, askWhile }]
+          : []
+      })
+  }
+
+  /** Orca withdraws an ask whose `--while` settled: back to In progress, its bot mailed. Only while
+   *  that question is still the item's, so an answer or a new ask that came first wins. */
+  withdrawAsk(
+    uid: string,
+    questionEvent: number,
+    withdrawn: BotItemAskWithdrawn,
+    now = Date.now()
+  ): number | null {
+    return this.transaction(() => {
+      const item = this.get(uid)
+      if (item?.status !== 'needs_you' || item.questionEvent !== questionEvent) {
+        return null
+      }
+      const actor: BotItemActor = { kind: 'orca', why: BOT_ITEM_ASK_WITHDRAWN }
+      this.writeStatus(uid, 'working', null, actor, now)
+      const data = {
+        from: 'needs_you',
+        to: 'working',
+        cause: 'withdrawn',
+        withdrawn,
+        note: botItemAskWithdrawnNote(withdrawn)
+      }
+      return this.appendEvent(uid, 'status', actor, data, true, now)
+    })
+  }
+
+  /** Of these events, the ones whose mail is still owed. */
+  stillOwed(eventIds: readonly number[]): number[] {
+    if (eventIds.length === 0) {
+      return []
+    }
+    return this.db
+      .prepare(
+        `SELECT id FROM item_events WHERE mail = 'owed'
+           AND id IN (SELECT value FROM json_each(?))`
+      )
+      .all(JSON.stringify(eventIds))
+      .map((row) => Number(row.id))
   }
 
   private moveToWorking(item: BotItemRecord, actor: BotItemActor, mail: boolean, now: number) {

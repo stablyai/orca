@@ -44,6 +44,9 @@ function noteBy(
   if (actor?.kind === 'owner') {
     return 'owner'
   }
+  if (actor?.kind === 'orca') {
+    return 'orca'
+  }
   if (actor?.kind !== 'bot') {
     return 'other-chat'
   }

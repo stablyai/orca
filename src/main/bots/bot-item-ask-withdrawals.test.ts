@@ -1,0 +1,209 @@
+import { afterEach, describe, expect, it } from 'vitest'
+import { parseBotItemAskWhile, type BotItemAskWhile } from '../../shared/bots/bot-item-ask-while'
+import type { BotItemAskWhileWorker } from './bot-item-ask-while-worker'
+import { BotItemAskWithdrawals, type BotItemAskWithdrawalStore } from './bot-item-ask-withdrawals'
+import type { BotItemBotActor, BotItemOwnerActor } from './bot-items-input'
+import { BotItemsStore } from './bot-items-store'
+
+const BOT: BotItemBotActor = { kind: 'bot', botId: 'bot', chatId: 'home' }
+const OWNER: BotItemOwnerActor = { kind: 'owner' }
+const NOW = Date.parse('2026-11-25T12:00:00Z')
+const LATER = Date.parse('2026-11-27T09:00:00Z')
+const ASK = {
+  context: 'The reviewer is out.',
+  questions: [{ prompt: 'Merge without review?', options: [] }]
+}
+
+describe('Needs you asks kept open --while', () => {
+  const stores: BotItemsStore[] = []
+  afterEach(() => stores.splice(0).forEach((store) => store.dispose()))
+
+  function open(): BotItemsStore {
+    const store = BotItemsStore.open(':memory:')
+    stores.push(store)
+    return store
+  }
+
+  function asked(store: BotItemsStore, askWhile: BotItemAskWhile): string {
+    const { uid } = store.add(
+      {
+        ownerBotId: BOT.botId,
+        chatId: BOT.chatId,
+        source: { kind: 'home', title: null },
+        title: 'Ship it',
+        status: 'working',
+        links: []
+      },
+      BOT
+    )
+    store.set(uid, { status: 'needs_you', ask: ASK, askWhile }, BOT, NOW)
+    return uid
+  }
+
+  function remote(store: BotItemsStore): BotItemAskWithdrawalStore {
+    return {
+      askWhileQuestions: async () => store.askWhileQuestions(),
+      withdrawAsk: async (...args) => store.withdrawAsk(...args),
+      stillOwed: async (ids) => store.stillOwed(ids),
+      viewRows: async (uids) => store.viewRows(uids)
+    }
+  }
+
+  function watcher(
+    store: BotItemsStore,
+    worker: (ref: string) => BotItemAskWhileWorker,
+    sendOwedMail: () => Promise<void> = async () => {}
+  ): BotItemAskWithdrawals {
+    return new BotItemAskWithdrawals({
+      store: () => remote(store),
+      worker,
+      workerTitle: async () => new Map(),
+      changed: () => {},
+      sendOwedMail
+    })
+  }
+
+  it('reads --while strictly: a zone on every time, only future times, only known kinds', () => {
+    expect(parseBotItemAskWhile('until:2026-11-27T09:00:00Z', NOW)).toEqual({
+      ok: true,
+      value: { kind: 'until', at: LATER }
+    })
+    expect(parseBotItemAskWhile('until:2026-11-27T10:00+01:00', NOW)).toEqual({
+      ok: true,
+      value: { kind: 'until', at: LATER }
+    })
+    expect(parseBotItemAskWhile('dispatch:ctx_ab12', NOW)).toEqual({
+      ok: true,
+      value: { kind: 'dispatch', ref: 'ctx_ab12' }
+    })
+    for (const value of [
+      'until:2026-11-27T09:00:00',
+      'until:2026-11-27',
+      'until:2026-11-24T09:00:00Z',
+      'until:2028-11-27T09:00:00Z',
+      'dispatch:',
+      'dispatch:ctx a',
+      'pr:acme/app#1',
+      'worktree:wt1',
+      ''
+    ]) {
+      expect(parseBotItemAskWhile(value, NOW).ok, value).toBe(false)
+    }
+  })
+
+  it('keeps the condition on the ask, through a later comment that asks nothing, until a new ask', () => {
+    const store = open()
+    const uid = asked(store, { kind: 'until', at: LATER })
+    expect(store.askWhileQuestions()).toEqual([
+      { uid, questionEvent: store.get(uid)!.questionEvent, askWhile: { kind: 'until', at: LATER } }
+    ])
+    store.set(uid, { status: 'needs_you', comment: 'Still blocked on the review.' }, BOT, NOW + 1)
+    const after = store.askWhileQuestions()
+    expect(after).toEqual([
+      { uid, questionEvent: store.get(uid)!.questionEvent, askWhile: { kind: 'until', at: LATER } }
+    ])
+    store.set(uid, { status: 'needs_you', ask: ASK }, BOT, NOW + 2)
+    expect(store.askWhileQuestions()).toEqual([])
+    expect(() =>
+      store.set(uid, { status: 'needs_you', askWhile: { kind: 'until', at: LATER } }, BOT)
+    ).toThrow(/--while goes with --status needs-you and an --ask/)
+  })
+
+  it('withdraws only the question still asked: an answer or a new ask first wins', () => {
+    const store = open()
+    const answered = asked(store, { kind: 'until', at: LATER })
+    const answeredQuestion = store.get(answered)!.questionEvent!
+    store.ownerComment(answered, 'Merge it.', OWNER, [], NOW + 1)
+    expect(
+      store.withdrawAsk(answered, answeredQuestion, { kind: 'until', at: LATER, state: 'passed' })
+    ).toBeNull()
+    expect(store.get(answered)!.status).toBe('working')
+
+    const reasked = asked(store, { kind: 'until', at: LATER })
+    const first = store.get(reasked)!.questionEvent!
+    store.set(reasked, { status: 'needs_you', ask: ASK }, BOT, NOW + 1)
+    expect(
+      store.withdrawAsk(reasked, first, { kind: 'until', at: LATER, state: 'passed' })
+    ).toBeNull()
+    expect(store.get(reasked)!.status).toBe('needs_you')
+  })
+
+  it('withdraws when the time passes or the worker ends, never while it runs or reads unknown', async () => {
+    const store = open()
+    const timed = asked(store, { kind: 'until', at: LATER })
+    const running = asked(store, { kind: 'dispatch', ref: 'ctx_run' })
+    const unread = asked(store, { kind: 'dispatch', ref: 'ctx_unknown' })
+    const ended = asked(store, { kind: 'dispatch', ref: 'ctx_done' })
+    const states: Record<string, BotItemAskWhileWorker> = {
+      ctx_run: 'running',
+      ctx_unknown: 'unknown',
+      ctx_done: 'completed'
+    }
+    const withdrawals = watcher(store, (ref) => states[ref] ?? 'unknown')
+
+    withdrawals.tick(LATER - 1)
+    await withdrawals.settled()
+    expect([timed, running, unread, ended].map((uid) => store.get(uid)!.status)).toEqual([
+      'needs_you',
+      'needs_you',
+      'needs_you',
+      'working'
+    ])
+
+    withdrawals.tick(LATER)
+    await withdrawals.settled()
+    expect([timed, running, unread].map((uid) => store.get(uid)!.status)).toEqual([
+      'working',
+      'needs_you',
+      'needs_you'
+    ])
+    const [move] = store.events(ended, store.get(ended)!.lastEventId - 1, 1)
+    expect(move).toMatchObject({
+      kind: 'status',
+      actor: { kind: 'orca', why: 'ask-withdrawn' },
+      data: {
+        from: 'needs_you',
+        to: 'working',
+        cause: 'withdrawn',
+        withdrawn: { kind: 'dispatch', ref: 'ctx_done', state: 'completed' }
+      }
+    })
+    expect(store.viewRows([ended], true).waitingAsks[ended]).toBeUndefined()
+  })
+
+  it('refuses an owner reply naming a withdrawn question, and still takes a plain comment', () => {
+    const store = open()
+    const uid = asked(store, { kind: 'until', at: LATER })
+    const question = store.get(uid)!.questionEvent!
+    store.withdrawAsk(uid, question, { kind: 'until', at: LATER, state: 'passed' }, LATER)
+    expect(() => store.ownerComment(uid, 'Yes', OWNER, [], LATER + 1, undefined, question)).toThrow(
+      /Orca withdrew this question on item \d+/
+    )
+    expect(store.ownerComment(uid, 'Noted.', OWNER, [], LATER + 2).eventId).not.toBeNull()
+  })
+
+  it('sends the withdrawal’s mail with no other write, and tries a failed send again next minute', async () => {
+    const store = open()
+    const uid = asked(store, { kind: 'until', at: LATER })
+    let attempts = 0
+    const withdrawals = watcher(
+      store,
+      () => 'unknown',
+      async () => {
+        attempts++
+        if (attempts === 1) {
+          return
+        }
+        const { mails } = store.owedMail(0)
+        store.markMailSent(mails.flatMap((mail) => mail.changes.map(({ event }) => event.id)))
+      }
+    )
+    withdrawals.tick(LATER)
+    await withdrawals.settled()
+    const withdrawal = store.get(uid)!.lastEventId
+    expect(store.stillOwed([withdrawal])).toEqual([withdrawal])
+    withdrawals.tick(LATER + 60_000)
+    await withdrawals.settled()
+    expect(store.stillOwed([withdrawal])).toEqual([])
+  })
+})

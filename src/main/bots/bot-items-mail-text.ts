@@ -16,6 +16,10 @@ import {
   remapSentImagePromptMarkers
 } from '../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import { statusOf } from './bot-items-rows'
+import {
+  botItemAskWithdrawnOf,
+  botItemAskWithdrawnWords
+} from '../../shared/bots/bot-item-ask-while'
 import type { BotItemEventRecord, BotItemRecord } from './bot-items-schema'
 
 const STATUS_WORDS: Record<BotItemStatus, string> = {
@@ -105,8 +109,11 @@ export function botItemChangeMail(
   const movedByReply = (event: BotItemEventRecord, item: BotItemRecord) =>
     movedWith(repliedOn, event, item) || movedWith(answeredOn, event, item)
   const replied = lines.some(({ event, item }) => movedWith(repliedOn, event, item))
+  const withdrew = lines.some(({ event }) => isWithdrawal(event))
   const tos = lines.flatMap(({ event, item }) =>
-    event.kind === 'status' && !movedByReply(event, item) ? [statusOf(event.data.to)] : []
+    event.kind === 'status' && !movedByReply(event, item) && !isWithdrawal(event)
+      ? [statusOf(event.data.to)]
+      : []
   )
   const answered = lines.some(({ event }) => isAnswer(event))
   const next = [
@@ -115,6 +122,9 @@ export function botItemChangeMail(
       : null,
     replied
       ? 'Your owner replied to your question, so the item moved to In progress. A new set of questions replaces any earlier ones still unanswered, so include an earlier question again only if it still matters.'
+      : null,
+    withdrew
+      ? 'What kept your question open has settled, so your owner no longer sees it. Close the item if nothing is left to do, or ask again if it still matters.'
       : null,
     tos.some(isClosed)
       ? 'If something linked to a closed item is still running, stop or redirect it.'
@@ -225,11 +235,19 @@ export function botItemMailWithoutExpiredImages(
   })
 }
 
+function isWithdrawal(event: BotItemEventRecord): boolean {
+  return event.kind === 'status' && event.actor.kind === 'orca' && event.data.cause === 'withdrawn'
+}
+
 function changeWords(event: BotItemEventRecord): string | null {
   switch (event.kind) {
     case 'commented':
       return isAnswer(event) ? `answered your question ${str(event.data.answers)}` : 'commented'
     case 'status': {
+      const withdrawn = isWithdrawal(event) ? botItemAskWithdrawnOf(event.data.withdrawn) : null
+      if (withdrawn) {
+        return `withdrew your open question because ${inlineUntrusted(botItemAskWithdrawnWords(withdrawn), 400)}, and moved it to In progress`
+      }
       const note = str(event.data.note)
       const words = statusWords(statusOf(event.data.from), statusOf(event.data.to))
       return `${words}${note ? `: "${inlineUntrusted(note, 400)}"` : ''}`

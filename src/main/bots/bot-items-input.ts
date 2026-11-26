@@ -9,6 +9,7 @@ import {
 } from '../../shared/bots/bot-items'
 import { BotItemAskSchema, botItemAskText, type BotItemAsk } from '../../shared/bots/bot-item-ask'
 import type { BotRequestAsker } from '../../shared/bots/bot-acts-for'
+import type { BotItemAskWhile } from '../../shared/bots/bot-item-ask-while'
 import { BotItemError } from './bot-item-error'
 import type { BotItemMadeBy, BotItemRecord, BotItemSource } from './bot-items-schema'
 
@@ -58,6 +59,10 @@ export type BotItemSetInput = {
   /** Set by the host, never a client: whom the chat that closes the item acts for, kept on the
    *  close so the journal says whose work it was. */
   closedFor?: readonly BotRequestAsker[]
+  /** With `ask`: what keeps it open (`--while`), checked by the host before the write. */
+  askWhile?: BotItemAskWhile
+  /** Set by the host with `askWhile`: the worker it names, linked in the same write. */
+  askWhileLinks?: readonly BotItemLinkInput[]
 }
 
 /** What a write did. */

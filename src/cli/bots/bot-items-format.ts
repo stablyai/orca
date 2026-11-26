@@ -1,4 +1,5 @@
 // `orca bot item`: one short line per write, one row per item, and an item with its activity.
+import { botItemAskWhileOf, botItemAskWhileWords } from '../../shared/bots/bot-item-ask-while'
 import { formatLocalTime } from '../output/local-time'
 import {
   botItemCommentImages,
@@ -16,6 +17,8 @@ export type BotItemWriteView = {
   created?: boolean
   unchanged?: boolean
   advice?: { codes: string[]; tip: string }
+  /** What keeps the ask open, as the host kept it. */
+  askWhile?: unknown
 }
 
 export type BotItemListView = {
@@ -66,6 +69,10 @@ export function formatBotItemWrite(view: BotItemWriteView): string {
       ...(view.unchanged ? ['nothing changed'] : [])
     ].join(' · ')
   ]
+  const askWhile = botItemAskWhileOf(view.askWhile)
+  if (askWhile) {
+    lines.push(`Orca withdraws the question ${botItemAskWhileWords(askWhile)}.`)
+  }
   if (view.advice) {
     lines.push(view.advice.tip)
   }

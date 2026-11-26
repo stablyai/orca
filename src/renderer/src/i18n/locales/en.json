@@ -30641,7 +30641,11 @@
         "snoozedBare": "snoozed this",
         "unsnoozed": "unsnoozed this",
         "snoozeEnded": "Back from snooze early",
-        "waitingOn": "Waiting on"
+        "waitingOn": "Waiting on",
+        "withdrawnTimePassed": "Ask withdrawn — {{time}} passed",
+        "withdrawnWorkerFinished": "Ask withdrawn — worker {{name}} finished",
+        "withdrawnWorkerFailed": "Ask withdrawn — worker {{name}} failed",
+        "withdrawnWorkerStopped": "Ask withdrawn — worker {{name}} was stopped"
       },
       "cancel": {
         "confirmMany": "Cancel {{count}}",
