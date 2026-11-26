@@ -13,6 +13,9 @@ export type KeptProviderRelay = { channel: ProviderRelayChannel; info: ProviderR
 
 /** Relays the daemons kept for chats while no app was attached, found once per launch. */
 const listed = new Map<string, KeptProviderRelay>()
+/** The listing attempt that last placed each chat; a chat this app handed back carries none. */
+const listedBy = new Map<string, number>()
+let attempt = 0
 let listing: Promise<void> | null = null
 let firstListing: Promise<void> | null = null
 let complete = false
@@ -89,7 +92,11 @@ export function keptProviderRelayAttachable(
  * reattach (left by a newer build) is ended, so its chat recovers as today and never gets a second
  * agent beside the kept one.
  */
-async function keep(channel: ProviderRelayChannel, relays: readonly ProviderRelayInfo[]) {
+async function keep(
+  channel: ProviderRelayChannel,
+  relays: readonly ProviderRelayInfo[],
+  by: number
+) {
   for (const info of relays) {
     // A daemon from before agents were named lists none (undefined): its relays stay listed.
     if (!info.attached && typeof info.agent === 'string' && !reattachableAgents.has(info.agent)) {
@@ -98,6 +105,7 @@ async function keep(channel: ProviderRelayChannel, relays: readonly ProviderRela
     }
     if (!info.attached && info.chatKey) {
       listed.set(info.chatKey, { channel, info })
+      listedBy.set(info.chatKey, by)
       if (info.exit?.idleStopped) {
         idleStoppedThisRun.add(info.chatKey)
       }
@@ -121,7 +129,7 @@ export function keptProviderRelaySpawnToken(chatKey: string): string | null {
   return listed.has(chatKey) ? (spawnTokens.get(chatKey) ?? null) : null
 }
 
-async function listOne(client: DaemonClient): Promise<boolean> {
+async function listOne(client: DaemonClient, by: number): Promise<boolean> {
   const identity = client.getDaemonIdentity()
   // A disconnected client's daemon is unknown, not one without relays.
   if (!identity?.providerRelay) {
@@ -134,7 +142,7 @@ async function listOne(client: DaemonClient): Promise<boolean> {
     null
   )
   if (result) {
-    await keep(channel, result.relays)
+    await keep(channel, result.relays, by)
   }
   return result !== null
 }
@@ -150,15 +158,24 @@ export function listKeptProviderRelays(
 ): Promise<void> {
   if (!listing && !complete && (retryNow || Date.now() >= retryAt)) {
     listing = (async () => {
+      const by = ++attempt
       const all = await withTimeout(
         clients().catch(() => null),
         DAEMON_WAIT_MS,
         null
       )
-      const answered = all ? await Promise.all(all.map(listOne)) : [false]
+      const answered = all ? await Promise.all(all.map((client) => listOne(client, by))) : [false]
       if (answered.includes(false)) {
         retryAt = Date.now() + RETRY_AFTER_MS
       } else {
+        // Every daemon answered: a relay an earlier, partial listing placed and none listed now is gone.
+        for (const [chatKey, placedBy] of listedBy) {
+          if (placedBy !== by) {
+            listed.delete(chatKey)
+            listedBy.delete(chatKey)
+            spawnTokens.delete(chatKey)
+          }
+        }
         complete = true
         markComplete()
       }
@@ -218,6 +235,7 @@ export function liveKeptProviderRelayChats(): ReadonlySet<string> {
 
 export function rememberKeptProviderRelay(chatKey: string, relay: KeptProviderRelay): void {
   listed.set(chatKey, relay)
+  listedBy.delete(chatKey)
 }
 
 export function forgetKeptProviderRelay(chatKey: string, relay: KeptProviderRelay): void {

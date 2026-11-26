@@ -322,3 +322,35 @@ it.skipIf(process.platform === 'win32')(
     expect(settle).toHaveBeenCalledTimes(1)
   }
 )
+
+// A relay a partial listing placed that has since ended must not read as kept once every daemon
+// answers, or the chat's gone run would never settle.
+it('a complete listing drops a relay an earlier partial listing placed and no daemon lists now', async () => {
+  vi.resetModules()
+  const inventory = await import('../../../../provider-relay/provider-relay-launch-inventory')
+  inventory.registerReattachableProviderRelayAgent('codex-test', { provider: 'codex' })
+  let firstAnswer = true
+  let otherUp = false
+  const daemon = (relayList: () => Promise<unknown>) =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the inventory calls only these members
+    ({
+      getDaemonIdentity: () => ({ providerRelay: true, pid: 1 }),
+      onEvent: () => () => {},
+      onDisconnected: () => () => {},
+      request: (type: string) => (type === 'relayList' ? relayList() : Promise.resolve({}))
+    }) as unknown as DaemonClient
+  const holder = daemon(async () => {
+    const relays = firstAnswer ? [keptRelay(SESSION, null)] : []
+    firstAnswer = false
+    return { relays }
+  })
+  const other = daemon(() =>
+    otherUp ? Promise.resolve({ relays: [] }) : Promise.reject(new Error('daemon down'))
+  )
+  await inventory.listKeptProviderRelays(async () => [holder, other], true)
+  expect(inventory.keptProviderRelay(SESSION)).toBeDefined()
+  otherUp = true
+  await inventory.listKeptProviderRelays(async () => [holder, other], true)
+  expect(inventory.providerRelayInventoryComplete()).toBe(true)
+  expect(inventory.keptProviderRelay(SESSION)).toBeUndefined()
+})
