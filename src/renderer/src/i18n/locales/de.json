@@ -12858,6 +12858,8 @@
             "unverifiable": "Nicht abgeschlossen: Orca konnte nicht feststellen, was auf diesem Server läuft. Erneut versuchen, sobald der Host erreichbar ist.",
             "migration": "Nicht abgeschlossen: Eine Verschiebung auf diesen Server ist noch nicht abgeschlossen. Diese zuerst fortsetzen.",
             "deferred": "Noch nicht abgeschlossen: Der Server ist dafür noch nicht bereit. Später erneut versuchen.",
+            "stopIncomplete": "Nicht abgeschlossen: Orca konnte nicht bestätigen, dass der aktuelle Server beendet wurde, und hat das Update daher nicht gestartet. Vor einem erneuten Versuch orcad.log im Installationsordner des Servers unter ~/.orca-remote auf dem Host prüfen.",
+            "rollbackStopIncomplete": "Nicht abgeschlossen: Orca konnte nicht bestätigen, dass der aktuelle Server beendet wurde, und hat daher nicht zurückgesetzt. Vor einem erneuten Versuch orcad.log im Installationsordner des Servers unter ~/.orca-remote auf dem Host prüfen.",
             "failed": "Orca konnte diesen Vorgang auf dem Server nicht abschließen. Erneut versuchen.",
             "defaultServer": "Nicht abgeschlossen: Dieser Server ist der Standard-Host für neue Projekte. Vor dem Stoppen unter „Neue Projekte öffnen auf“ einen anderen Host auswählen.",
             "wslMoveRunning": "Nicht abgeschlossen: Ein Projekt wird auf diesen Server verschoben. Orca aktualisiert ihn, sobald der Vorgang abgeschlossen ist."

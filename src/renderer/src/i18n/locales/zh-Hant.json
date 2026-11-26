@@ -13793,6 +13793,8 @@
             "unverifiable": "未完成：Orca 無法確認此伺服器上正在執行什麼。請在可連線至主機時重試。",
             "migration": "未完成：遷移到此伺服器的操作尚未完成。請先繼續該操作。",
             "deferred": "尚未完成：伺服器尚未準備好執行此操作。請稍後重試。",
+            "stopIncomplete": "未完成：Orca 無法確認目前的伺服器已結束，因此沒有開始更新。請先檢查主機上 ~/.orca-remote 中伺服器安裝資料夾內的 orcad.log，再重試。",
+            "rollbackStopIncomplete": "未完成：Orca 無法確認目前的伺服器已結束，因此沒有回復舊版。請先檢查主機上 ~/.orca-remote 中伺服器安裝資料夾內的 orcad.log，再重試。",
             "failed": "Orca 無法在伺服器上完成此操作。請重試。",
             "defaultServer": "未完成：此伺服器是新專案的預設主機。停止前，請先在「新專案開啟位置」選擇其他主機。",
             "wslMoveRunning": "未完成：有專案正在移至此伺服器。移動完成後，Orca 會更新它。"
