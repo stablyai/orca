@@ -27,7 +27,8 @@ export function BrowserPageContextMenu({
   webviewRef,
   onReload,
   remoteRoutedNetwork = false,
-  externalUrl
+  externalUrl,
+  openExternal
 }: {
   browserPageId: string
   worktreeId: string
@@ -39,6 +40,8 @@ export function BrowserPageContextMenu({
   remoteRoutedNetwork?: boolean
   /** Overrides what the system browser opens, e.g. an SSH host's localhost through its port forward. */
   externalUrl?: (url: string) => string | null
+  /** Opens what externalUrl returned, e.g. through the forward it names. */
+  openExternal?: (url: string) => void
 }): React.JSX.Element | null {
   const [contextMenu, setContextMenu] = useState<BrowserPageContextMenuState | null>(null)
   const contextMenuRef = useRef<HTMLDivElement>(null)
@@ -194,6 +197,7 @@ export function BrowserPageContextMenu({
     externalUrl:
       externalUrl ??
       (remoteRoutedNetwork ? getRemoteRoutedOpenableExternalUrl : normalizeExternalBrowserUrl),
+    openExternal,
     // Use guest download rules for local Downloads or the client-hosted remote workspace.
     saveImage: (url) => webviewRef.current?.downloadURL(url),
     copyImage: () => void window.api.browser.copyImageAt({ browserPageId, point: pagePoint }),

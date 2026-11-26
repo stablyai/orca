@@ -1,8 +1,12 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../../shared/bot-types'
-import { botItemNamedAnswers } from '../../../../../shared/bots/bot-item-answer-lines'
+import {
+  botItemHeldAnswer,
+  botItemHeldAnswersComment
+} from '../../../../../shared/bots/bot-item-held-answers'
+import { imageReferenceToken } from '../../../../../shared/native-chat/attachments/native-chat-image-reference'
 import { botItemAskText } from '../../../../../shared/bots/bot-item-ask'
 import type {
   BotItem,
@@ -14,10 +18,13 @@ import type {
   BotItemPendingIntent
 } from '../../../../../shared/bots/bot-item-pending-comments'
 import { botItemRefusedReplyText } from '../../../../../shared/bots/bot-item-refused-reply'
-import { updateNativeChatComposerDraft } from '../../native-chat/drafts/native-chat-composer-draft-store'
+import {
+  readNativeChatComposerDraft,
+  updateNativeChatComposerDraft
+} from '../../native-chat/drafts/native-chat-composer-draft-store'
 import { readNativeChatDraftCache } from '../../native-chat/drafts/native-chat-draft-views'
 import { botItemCommentDraftScope } from './bot-item-comment-draft'
-import { botItemClearDeliveredAnswers, botItemHeldAnswersScope } from './bot-item-held-answers'
+import { botItemHeldAnswersScope, returnBotItemHeldAnswer } from './bot-item-held-answers'
 import { useBotItemQuestionSteps } from './use-bot-item-question-steps'
 
 afterEach(cleanup)
@@ -88,6 +95,7 @@ function steps(uid: string, own = asking, shown = item) {
     paths: readonly string[]
     questionId?: string
     plain?: boolean
+    skills?: readonly BotItemCommentSkill[]
     skipped?: readonly number[]
     intent?: BotItemPendingIntent
   }[] = []
@@ -96,11 +104,11 @@ function steps(uid: string, own = asking, shown = item) {
     paths: readonly string[] = [],
     questionId?: string,
     plain?: boolean,
-    _skills?: readonly BotItemCommentSkill[],
+    skills?: readonly BotItemCommentSkill[],
     skipped?: readonly number[],
     intent?: BotItemPendingIntent
   ): void => {
-    posted.push({ text, paths, questionId, plain, skipped, intent })
+    posted.push({ text, paths, questionId, plain, skills, skipped, intent })
   }
   // Its own item, so answers held on this device by another case don't carry over.
   const initialProps: {
@@ -133,7 +141,7 @@ it('swaps a pick for another, and clears it when picked again', () => {
   const { hook } = steps('swap')
   act(() => hook.result.current.steps!.pick(0, 'Yes'))
   act(() => hook.result.current.steps!.pick(0, 'No'))
-  expect(hook.result.current.steps!.picks).toEqual(['No', null])
+  expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual(['No', null])
   act(() => hook.result.current.steps!.pick(0, 'No'))
   expect(hook.result.current.steps!.picks).toEqual([null, null])
   let outcome = ''
@@ -149,52 +157,71 @@ it("holds a typed answer as its line's pick, and names the next open line", () =
   expect(first.line).toBe(HOSTS)
   act(() => hook.result.current.fromBox('the internal ones', [], first.id))
   expect(posted).toEqual([])
-  expect(hook.result.current.steps!.picks).toEqual(['the internal ones', null])
+  expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual([
+    'the internal ones',
+    null
+  ])
   expect(hook.result.current.waitingLine?.line).toBe(GO)
   act(() => hook.result.current.steps!.send())
   expect(posted.map(({ text }) => text)).toEqual([`${HOSTS} → the internal ones`])
   expect(posted[0]?.skipped).toEqual([1])
 })
 
-it('posts a typed answer with files at once, with the picks so far', () => {
+it('holds an answer with images, files and skills like a pick; Send posts them all as one comment', () => {
   const { hook, posted } = steps('files')
-  act(() => hook.result.current.steps!.pick(0, 'Yes'))
-  const line = hook.result.current.waitingLine!
-  act(() => hook.result.current.fromBox('see the shot', ['/tmp/shot.png'], line.id))
-  expect(posted.map(({ text, paths }) => ({ text, paths }))).toEqual([
-    { text: `${HOSTS} → Yes\n${GO} → see the shot`, paths: ['/tmp/shot.png'] }
-  ])
-})
-
-it('posts images alone on the line the box names, by their marks', () => {
-  const { hook, posted } = steps('image-only')
-  act(() => hook.result.current.steps!.bind(1))
-  const line = hook.result.current.waitingLine!
-  expect(line.line).toBe(GO)
-  act(() => hook.result.current.fromBox('', ['/tmp/a.png', '/tmp/b.png'], line.id))
-  expect(posted.map(({ text, paths }) => ({ text, paths }))).toEqual([
-    { text: `${GO} → [Image #1] [Image #2]`, paths: ['/tmp/a.png', '/tmp/b.png'] }
-  ])
-  expect(posted[0]!.intent?.answers).toEqual([null, '[Image #1] [Image #2]'])
-})
-
-it('posts a typed answer naming a file at once, holding nothing', () => {
-  const { hook, posted } = steps('file-pill')
-  const line = hook.result.current.waitingLine!
+  const skill = { name: 'review', path: '/skills/review/SKILL.md' }
   const pill = '@/tmp/agent-session-attachments/0123abcd-0123-4567-89ab-0123456789ab/notes.txt'
-  act(() => hook.result.current.fromBox(`see ${pill}`, [], line.id))
-  expect(posted.map(({ text }) => text)).toEqual([`${HOSTS} → see ${pill}`])
-  expect(hook.result.current.steps!.picks).toEqual([null, null])
+  act(() => hook.result.current.fromBox('[Image #1] first', ['/tmp/a.png'], `e2:0`, [skill]))
+  act(() =>
+    hook.result.current.fromBox(
+      `[Image #1] and [Image #2], ${pill} /review`,
+      ['/tmp/b.png', '/tmp/c.png'],
+      `e2:1`,
+      [skill]
+    )
+  )
+  // Held, both: nothing posts until Send.
+  expect(posted).toEqual([])
+  expect(hook.result.current.steps!.picks.map((pick) => pick?.images)).toEqual([
+    ['/tmp/a.png'],
+    ['/tmp/b.png', '/tmp/c.png']
+  ])
+  act(() => hook.result.current.steps!.send())
+  expect(posted).toHaveLength(1)
+  // The second line's images number after the first's.
+  expect(posted[0]!.text).toBe(
+    `${HOSTS} → [Image #1] first\n${GO} → [Image #2] and [Image #3], ${pill} /review`
+  )
+  expect(posted[0]!.paths).toEqual(['/tmp/a.png', '/tmp/b.png', '/tmp/c.png'])
+  expect(posted[0]!.skills).toEqual([skill])
 })
 
-it('posts a file pill on the last open line at once, the other picks along', () => {
-  const { hook, posted } = steps('file-pill-last')
+it('replaces an image answer whose words match a quick reply with the reply alone, never clearing it', () => {
+  const { hook } = steps('replace-image')
+  act(() => hook.result.current.fromBox('Yes [Image #1]', ['/tmp/a.png'], `e2:0`))
+  act(() => hook.result.current.fromBox('Yes', ['/tmp/b.png'], `e2:1`))
+  // Line 1 holds "Yes" with an image: picking the Yes reply replaces it, as for typed words.
   act(() => hook.result.current.steps!.pick(1, 'Yes'))
-  const line = hook.result.current.waitingLine!
-  expect(line.line).toBe(HOSTS)
-  const pill = '@/tmp/agent-session-attachments/0123abcd-0123-4567-89ab-0123456789ab/notes.txt'
-  act(() => hook.result.current.fromBox(pill, [], line.id))
-  expect(posted.map(({ text }) => text)).toEqual([`${HOSTS} → ${pill}\n${GO} → Yes`])
+  expect(hook.result.current.steps!.picks[1]).toEqual(botItemHeldAnswer('Yes'))
+  // The reply alone, picked again, clears.
+  act(() => hook.result.current.steps!.pick(1, 'Yes'))
+  expect(hook.result.current.steps!.picks[1]).toBeNull()
+})
+
+it('keeps in the box an answer whose images the held ones would take past one comment', () => {
+  const { hook, posted } = steps('too-many')
+  const images = (prefix: string, count: number) =>
+    Array.from({ length: count }, (_, at) => `/tmp/${prefix}-${at}.png`)
+  act(() => hook.result.current.fromBox('first', images('a', 12), `e2:0`))
+  let refused: unknown = null
+  act(() => {
+    refused = hook.result.current.fromBox('second', images('b', 9), `e2:1`)
+  })
+  expect(refused).toEqual({ kind: 'images', max: 20 })
+  expect(hook.result.current.steps!.picks[1]).toBeNull()
+  // The box still names the line it answers.
+  expect(hook.result.current.waitingLine?.line).toBe(GO)
+  expect(posted).toEqual([])
 })
 
 it('posts words with no line named at once, the picks along, never answering a line', () => {
@@ -235,7 +262,7 @@ it('binds a new draft to the displayed question after another client answers its
     updateNativeChatComposerDraft(botItemCommentDraftScope(bot, uid), { text: words }, 'immediate')
   )
   act(() => hook.result.current.fromBox(words, [], hook.result.current.waitingLine?.id ?? null))
-  expect(hook.result.current.steps!.picks).toEqual([null, words])
+  expect(hook.result.current.steps!.picks).toEqual([null, botItemHeldAnswer(words)])
   expect(posted).toEqual([])
 })
 
@@ -292,59 +319,38 @@ it('posts a typed answer to a single question at once, naming the question it an
   expect(posted.map(({ questionId }) => questionId)).toEqual(['e2'])
 })
 
-it('clears only the delivered answers still as sent, keeping lines added since', () => {
-  const scope = 'bot-item-answers:test:delivered'
-  const two = {
-    body: '',
-    decisions: [HOSTS, GO].map((question) => ({ question, replies: [] }))
-  }
-  // Sent: the first line. Since then the second was picked, and the ask gained a third, picked too.
-  updateNativeChatComposerDraft(
-    scope,
-    { text: `${HOSTS} → Yes\n${GO} → No\nAnd later? → Soon` },
-    'immediate'
-  )
-  botItemClearDeliveredAnswers(scope, { askId: 'e2', shape: two, answers: ['Yes', null] })
-  expect(readNativeChatDraftCache(scope)).toBe(`${GO} → No\nAnd later? → Soon`)
-  // A line changed since it was sent stays.
-  botItemClearDeliveredAnswers(scope, { askId: 'e2', shape: two, answers: [null, 'Yes'] })
-  expect(readNativeChatDraftCache(scope)).toBe(`${GO} → No\nAnd later? → Soon`)
+it('puts unsent held answers back in the box with their images and skills, as one comment', () => {
+  const scope = botItemCommentDraftScope(bot, 'recover')
+  const skill = { name: 'review', path: '/skills/review/SKILL.md' }
+  const held = [
+    botItemHeldAnswer('[Image #1] first', ['/tmp/a.png']),
+    botItemHeldAnswer('[Image #1] then /review', ['/tmp/b.png'], [skill])
+  ]
+  const shape = { body: '', decisions: [HOSTS, GO].map((question) => ({ question, replies: [] })) }
+  const { text, paths, skills } = botItemHeldAnswersComment(shape, held)
+  returnBotItemHeldAnswer(scope, { words: text, images: paths, skills })
+  const box = readNativeChatComposerDraft(scope)
+  // Each image's chip sits where its line named it, and the skill is a pill again.
+  expect(box.images.map(({ path }) => path)).toEqual(['/tmp/a.png', '/tmp/b.png'])
+  const [first, second] = box.images.map(({ id }) => imageReferenceToken(id))
+  expect(box.text).toBe(`${HOSTS} → ${first} first\n${GO} → ${second} then /review`)
+  expect(JSON.stringify(box.document)).toContain(skill.path)
 })
 
-it('clears only the sent question when two that share a first line hold the same answer', () => {
-  const scope = 'bot-item-answers:test:shared-lead'
-  const shared = {
-    body: '',
-    decisions: ['# Target?\nStaging hosts', 'Target?\nProduction hosts'].map((question) => ({
-      question,
-      replies: []
-    }))
-  }
-  updateNativeChatComposerDraft(scope, { text: 'Target? → Yes\nTarget? → Yes' }, 'immediate')
-  botItemClearDeliveredAnswers(scope, { askId: 'e2', shape: shared, answers: ['Yes', null] })
-  // The first keeps its place, so the second's unsent Yes still reads as the second's.
-  expect(readNativeChatDraftCache(scope)).toBe('Target? →\nTarget? → Yes')
-  botItemClearDeliveredAnswers(scope, { askId: 'e2', shape: shared, answers: [null, 'Yes'] })
-  expect(readNativeChatDraftCache(scope)).toBe('')
-})
-
-it('keeps a newer pick on its own question when it shares the delivered answer’s heading', () => {
-  const scope = 'bot-item-answers:test:appended-shared-lead'
-  const first = { question: '# Target?\nStaging hosts', replies: [] }
-  const second = { question: GO, replies: [] }
-  const appended = { question: 'Target?\nProduction hosts', replies: [] }
-  updateNativeChatComposerDraft(scope, { text: 'Target? → Yes\nTarget? → No' }, 'immediate')
-  botItemClearDeliveredAnswers(scope, {
-    askId: 'e2',
-    shape: { body: '', decisions: [first, second] },
-    answers: ['Yes', null]
+it('says a held answer put back in the box is not saved while storage refuses it', () => {
+  const answer = botItemHeldAnswer('[Image #1] first', ['/tmp/a.png'])
+  expect(returnBotItemHeldAnswer(botItemCommentDraftScope(bot, 'restore-saved'), answer)).toBe(true)
+  // A full localStorage: the draft lives in memory only, so its held copy must stay.
+  const setItem = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+    throw new DOMException('full', 'QuotaExceededError')
   })
-  expect(
-    botItemNamedAnswers(
-      { body: '', decisions: [first, second, appended] },
-      readNativeChatDraftCache(scope)
+  try {
+    expect(returnBotItemHeldAnswer(botItemCommentDraftScope(bot, 'restore-refused'), answer)).toBe(
+      false
     )
-  ).toEqual([null, null, 'No'])
+  } finally {
+    setItem.mockRestore()
+  }
 })
 
 it('gives back the words of a refused send that its held picks do not keep', () => {
@@ -362,7 +368,7 @@ it('gives back the words of a refused send that its held picks do not keep', () 
       readNativeChatDraftCache(scope)
     )
   ).toBe('')
-  // A line's words posted with files: they were never held.
+  // A line's words the held picks don't keep go back.
   expect(
     botItemRefusedReplyText(
       { askId: 'e2', shape: two, answers: ['Yes', 'see the shot'] },
@@ -389,7 +395,6 @@ it('restores the exact freeform draft after a refused send with a held answer', 
   const [post] = posted
   expect(post?.text).toBe(`${HOSTS} → Yes\n> ${GO} → later\n> Keep this quote`)
   const scope = botItemHeldAnswersScope(bot, uid, 'e2')
-  expect(readNativeChatDraftCache(scope)).toBe(`${HOSTS} → Yes`)
   expect(botItemRefusedReplyText(post!.intent!, post!.text, readNativeChatDraftCache(scope))).toBe(
     text
   )

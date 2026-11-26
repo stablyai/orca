@@ -1,36 +1,41 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { ORCA_VM_RECIPE_ID_PATTERN, ORCA_VM_RECIPE_ID_RULE } from '../../workspace-setup/orca-yaml'
 import type { OrcaVmRecipe } from '../../workspace-setup/orca-yaml-hook-types'
 
-const recipeCommandSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .max(32 * 1024)
-  .refine((value) => !value.includes('\0'), 'must not contain NUL bytes')
+const recipeCommandSchema = lazyZodSchema(() =>
+  z
+    .string()
+    .trim()
+    .min(1)
+    .max(32 * 1024)
+    .refine((value) => !value.includes('\0'), 'must not contain NUL bytes')
+)
 
-const pluginVmRecipeArtifactSchema = z
-  .object({
-    schemaVersion: z.literal(1),
-    id: z.string().regex(ORCA_VM_RECIPE_ID_PATTERN, ORCA_VM_RECIPE_ID_RULE),
-    name: z.string().trim().min(1).max(128),
-    description: z.string().trim().min(1).max(1024).optional(),
-    checkoutMode: z.enum(['orca-worktree', 'provisioned-root']).optional(),
-    create: recipeCommandSchema,
-    suspend: recipeCommandSchema.optional(),
-    resume: recipeCommandSchema.optional(),
-    destroy: z.union([recipeCommandSchema, z.literal('none')]).optional()
-  })
-  .strict()
-  .superRefine((recipe, ctx) => {
-    if (Boolean(recipe.suspend) !== Boolean(recipe.resume)) {
-      ctx.addIssue({
-        code: 'custom',
-        path: recipe.suspend ? ['resume'] : ['suspend'],
-        message: 'suspend and resume must be declared together'
-      })
-    }
-  })
+const pluginVmRecipeArtifactSchema = lazyZodSchema(() =>
+  z
+    .object({
+      schemaVersion: z.literal(1),
+      id: z.string().regex(ORCA_VM_RECIPE_ID_PATTERN, ORCA_VM_RECIPE_ID_RULE),
+      name: z.string().trim().min(1).max(128),
+      description: z.string().trim().min(1).max(1024).optional(),
+      checkoutMode: z.enum(['orca-worktree', 'provisioned-root']).optional(),
+      create: recipeCommandSchema,
+      suspend: recipeCommandSchema.optional(),
+      resume: recipeCommandSchema.optional(),
+      destroy: z.union([recipeCommandSchema, z.literal('none')]).optional()
+    })
+    .strict()
+    .superRefine((recipe, ctx) => {
+      if (Boolean(recipe.suspend) !== Boolean(recipe.resume)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: recipe.suspend ? ['resume'] : ['suspend'],
+          message: 'suspend and resume must be declared together'
+        })
+      }
+    })
+)
 
 export type PluginVmRecipeCommand = {
   phase: 'create' | 'suspend' | 'resume' | 'destroy'

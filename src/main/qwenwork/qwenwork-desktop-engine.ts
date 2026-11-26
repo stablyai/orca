@@ -2,7 +2,7 @@ import { readdir, realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { isPathInsideOrEqual } from '../../shared/file-access/cross-platform-path'
-import { stat as statNative } from '../filesystem/asar-transparent-fs'
+import { statWithoutArchiveLock } from '../filesystem/asar-transparent-fs'
 import { loadWindowsNativeRegistry } from '../windows/windows-native-registry'
 
 const versionsByNumber = new Intl.Collator('en', { numeric: true })
@@ -75,7 +75,7 @@ async function windowsExecutableAt(folder: string) {
     if (
       isPathInsideOrEqual(root, command) &&
       (await stat(command)).isFile() &&
-      (await statNative(join(root, 'resources', 'app.asar'))).isFile()
+      (await statWithoutArchiveLock(join(root, 'resources', 'app.asar'))).isFile()
     ) {
       return command
     }

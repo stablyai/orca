@@ -53,7 +53,7 @@ export function AgentCliUpdateButton({
       </span>
     )
   }
-  const running = run?.phase === 'running'
+  const running = run?.phase === 'running' || run?.phase === 'queued'
   return (
     <Tooltip>
       <TooltipTrigger asChild>

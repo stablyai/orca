@@ -1,0 +1,141 @@
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
+import { RateLimitService } from './rate-limit-service'
+
+const { claudeFetch, codexFetch } = vi.hoisted(() => ({
+  claudeFetch: vi.fn(),
+  codexFetch: vi.fn()
+}))
+
+vi.mock('../providers/claude/claude-active-usage-fetch', () => ({
+  fetchActiveClaudeRateLimits: claudeFetch
+}))
+vi.mock('../providers/codex/codex-fetcher', () => ({
+  fetchCodexRateLimits: codexFetch,
+  consumeCodexRateLimitResetCredit: vi.fn()
+}))
+vi.mock('../providers/grok/grok-auth', () => ({
+  readGrokAuthSession: () => ({ status: 'missing' })
+}))
+vi.mock('../../minimax/minimax-cookie-store', () => ({
+  hasMiniMaxSessionCookie: async () => false
+}))
+vi.mock('../../minimax/minimax-api-key-store', () => ({ hasMiniMaxApiKey: async () => false }))
+vi.mock('../../zcode/zcode-plan-api-key-store', () => ({ hasZcodePlanApiKey: async () => false }))
+
+function ok(provider: 'claude' | 'codex', usedPercent: number): ProviderRateLimits {
+  return {
+    provider,
+    session: { usedPercent, windowMinutes: 300, resetsAt: null, resetDescription: null },
+    weekly: null,
+    updatedAt: 1,
+    error: null,
+    status: 'ok'
+  }
+}
+
+const preparation: ClaudeRuntimeAuthPreparation = {
+  configDir: '/home/u/.claude',
+  envPatch: {},
+  provenance: 'wsl:Ubuntu'
+}
+
+const ubuntu = { runtime: 'wsl', wslDistro: 'Ubuntu' } as const
+const both = ['claude', 'codex'] as const
+const realPlatform = process.platform
+
+function setPlatform(platform: NodeJS.Platform): void {
+  Object.defineProperty(process, 'platform', { value: platform, configurable: true })
+}
+
+beforeEach(() => setPlatform('win32'))
+afterEach(() => setPlatform(realPlatform))
+
+it('reads a WSL distro usage without switching the desktop fetch target or publishing state', async () => {
+  claudeFetch.mockResolvedValue(ok('claude', 42))
+  codexFetch.mockResolvedValue(ok('codex', 24))
+  const claudeTargets: unknown[] = []
+  const codexTargets: unknown[] = []
+  const service = new RateLimitService()
+  service.setClaudeAuthPreparationResolver(async (target) => {
+    claudeTargets.push(target)
+    return preparation
+  })
+  service.setCodexHomePathResolver(async (target) => {
+    codexTargets.push(target)
+    return { kind: 'ready', codexHomePath: '/home/u/.codex' }
+  })
+
+  const read = await service.readUsageForRuntimeTarget(ubuntu, both, () => ({
+    claude: 'a',
+    codex: null
+  }))
+  expect(read.claude).toEqual({ accountId: 'a', reading: ok('claude', 42) })
+  expect(read.codex).toEqual({ accountId: null, reading: ok('codex', 24) })
+  expect(claudeTargets).toEqual([ubuntu])
+  expect(codexTargets).toEqual([ubuntu])
+
+  // The desktop's own fetch target and published state stay untouched by the read.
+  const state = await service.getState()
+  expect(state.claude).toBeNull()
+  expect(state.codex).toBeNull()
+  expect(state.claudeTarget).toEqual({ runtime: 'host', wslDistro: null })
+  expect(state.codexTarget).toEqual({ runtime: 'host', wslDistro: null })
+})
+
+it('labels a reading taken across a switch with the account actually read, or drops it', async () => {
+  claudeFetch.mockResolvedValue(ok('claude', 42))
+  codexFetch.mockResolvedValue(ok('codex', 24))
+  const service = new RateLimitService()
+  // The resolvers re-read settings after the switch, so they read account B.
+  service.setClaudeAuthPreparationResolver(async () => ({
+    ...preparation,
+    readingAccount: { accountId: 'b', ...ubuntu }
+  }))
+  service.setCodexHomePathResolver(async () => ({ kind: 'ready', codexHomePath: '/shared' }))
+  const selections = [
+    { claude: 'a', codex: 'a' },
+    { claude: 'b', codex: 'b' }
+  ]
+
+  const read = await service.readUsageForRuntimeTarget(ubuntu, both, () => selections.shift()!)
+  expect(read.claude?.accountId).toBe('b')
+  // Codex names no reading account, so a reading across the switch belongs to nobody.
+  expect(read.codex).toBeUndefined()
+})
+
+it('fails a WSL read closed off Windows but leaves a Windows distro-less target to the resolvers', async () => {
+  claudeFetch.mockResolvedValue(ok('claude', 42))
+  const claudeTargets: unknown[] = []
+  const service = new RateLimitService()
+  service.setClaudeAuthPreparationResolver(async (target) => {
+    claudeTargets.push(target)
+    return preparation
+  })
+  const selection = () => ({ claude: null, codex: null })
+  const anyDistro = { runtime: 'wsl', wslDistro: null } as const
+
+  const windows = await service.readUsageForRuntimeTarget(anyDistro, ['claude'], selection)
+  expect(windows.claude?.reading?.session?.usedPercent).toBe(42)
+  expect(claudeTargets).toEqual([anyDistro])
+
+  setPlatform('darwin')
+  const mac = await service.readUsageForRuntimeTarget(ubuntu, ['claude'], selection)
+  expect(mac.claude?.reading?.status).toBe('error')
+  expect(mac.claude?.reading?.session).toBeNull()
+  expect(claudeTargets).toHaveLength(1)
+})
+
+it('reads only the providers it knows', async () => {
+  const service = new RateLimitService()
+  const probed: unknown[] = []
+  service.setCodexHomePathResolver(async (target) => {
+    probed.push(target)
+    return { kind: 'skip' }
+  })
+  const untrusted: unknown = ['grok']
+  const providers = Array.isArray(untrusted) ? untrusted : []
+  await service.readUsageForRuntimeTarget(ubuntu, providers, () => ({ claude: null, codex: null }))
+  expect(probed).toEqual([])
+})

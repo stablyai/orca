@@ -1,5 +1,6 @@
 import { watch, type FSWatcher } from 'node:fs'
 import { basename, dirname } from 'node:path'
+import { watchedDirectoryDeletionCheck } from '../../file-watch/windows-deleted-directory-watch'
 
 export type TranscriptNativeWatcher = {
   /** Best-effort bind; false keeps the caller in reconciliation-only mode. */
@@ -36,35 +37,41 @@ export function createTranscriptNativeWatcher(
       if (disposed || watcher) {
         return watcher !== null
       }
+      // Parent watches survive replacement; append-only readers can watch one file to avoid sibling events.
+      const watchParent = options.watchParent !== false
+      const watchedPath = watchParent ? dirname(filePath) : filePath
+      // libuv's deleted-directory loop only affects directory watches.
+      const isParentDeleted = watchParent ? watchedDirectoryDeletionCheck(watchedPath) : null
       let nextWatcher: FSWatcher
+      const onWatcherError = (): void => {
+        if (disposed || watcher !== nextWatcher) {
+          return
+        }
+        invalidateCandidate(nextWatcher)
+        onError()
+      }
       try {
-        // Parent watches survive replacement; append-only readers can watch one file to avoid sibling events.
-        nextWatcher = watch(
-          options.watchParent === false ? filePath : dirname(filePath),
-          (event, changedName) => {
-            if (changedName !== null && changedName.toString() !== watchedName) {
-              return
-            }
-            // Why: a parent replacement may emit rename without a watcher error.
-            if (event === 'rename') {
-              invalidateCandidate(nextWatcher)
-            }
-            onEvent()
+        nextWatcher = watch(watchedPath, (event, changedName) => {
+          if (isParentDeleted?.(event, changedName)) {
+            onWatcherError()
+            return
           }
-        )
+          if (changedName !== null && changedName.toString() !== watchedName) {
+            return
+          }
+          // Why: a parent replacement may emit rename without a watcher error.
+          if (event === 'rename') {
+            invalidateCandidate(nextWatcher)
+          }
+          onEvent()
+        })
       } catch {
         rebindNeeded = true
         return false
       }
       // Why: an active tail should not keep a headless runtime alive during shutdown.
       nextWatcher.unref?.()
-      nextWatcher.on('error', () => {
-        if (disposed || watcher !== nextWatcher) {
-          return
-        }
-        invalidateCandidate(nextWatcher)
-        onError()
-      })
+      nextWatcher.on('error', onWatcherError)
       watcher = nextWatcher
       rebindNeeded = false
       return true

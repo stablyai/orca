@@ -40,6 +40,14 @@ function choice(hosts: BotCreateHost[]): BotCreateHostChoice {
     otherAccountOf: (hostId: ExecutionHostId) =>
       hostId === 'runtime:g16' ? 'team@acme.dev' : null,
     setListing: () => {},
+    wslSetup: {
+      state: { phase: 'idle' },
+      start: () => {},
+      retry: () => {},
+      cancel: () => {},
+      finish: () => {}
+    },
+    busy: false,
     reset: () => {}
   }
 }

@@ -69,7 +69,7 @@ orca orchestration send \
   --files-modified "src/app/settings/Billing.tsx"
 ```
 
-`worker_done` requires `--outcome succeeded|failed`.
+`worker_done` requires `--outcome succeeded|failed`. `failed` means only that the worker could not finish (e.g. no access to the repo). Finished work is `succeeded` even when results are bad (e.g. tests found bugs); list the problems in the body.
 
 Inspect / recover:
 

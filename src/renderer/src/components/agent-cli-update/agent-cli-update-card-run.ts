@@ -10,17 +10,38 @@ export type RunTarget = {
   from: string
   to: string
 }
-export type TargetPhase = 'running' | 'failed' | 'done'
+export type TargetPhase = 'queued' | 'running' | 'failed' | 'done'
+
+/** One CLI on one host. */
+export function agentCliUpdateRowKey({
+  hostKey,
+  agent
+}: {
+  hostKey: string
+  agent: AgentCliUpdateAgent
+}): string {
+  return `${hostKey}\n${agent}`
+}
+
+/** Built once per row list, so following a run looks each target up instead of scanning every row. */
+export function agentCliUpdateRowsByKey(
+  rows: readonly AgentCliUpdateRow[]
+): ReadonlyMap<string, AgentCliUpdateRow> {
+  return new Map(rows.map((row) => [agentCliUpdateRowKey(row), row]))
+}
 
 export function rowFor(
   target: RunTarget,
-  rows: readonly AgentCliUpdateRow[]
+  rowsByKey: ReadonlyMap<string, AgentCliUpdateRow>
 ): AgentCliUpdateRow | null {
-  return rows.find((row) => row.hostKey === target.hostKey && row.agent === target.agent) ?? null
+  return rowsByKey.get(agentCliUpdateRowKey(target)) ?? null
 }
 
 // A finished update drops its row from the store, so a missing run means it landed.
-export function targetPhase(target: RunTarget, rows: readonly AgentCliUpdateRow[]): TargetPhase {
-  const phase = rowFor(target, rows)?.run?.phase
-  return phase === 'running' ? 'running' : phase === 'failed' ? 'failed' : 'done'
+export function targetPhase(
+  target: RunTarget,
+  rowsByKey: ReadonlyMap<string, AgentCliUpdateRow>
+): TargetPhase {
+  const phase = rowFor(target, rowsByKey)?.run?.phase
+  return phase === 'queued' || phase === 'running' || phase === 'failed' ? phase : 'done'
 }

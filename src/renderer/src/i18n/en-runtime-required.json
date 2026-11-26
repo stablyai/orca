@@ -22,18 +22,12 @@
     "heading_other": "{{count}} CLI updates available",
     "statusCount_one": "{{count}} CLI update",
     "statusCount_other": "{{count}} CLI updates",
-    "cardNamesSome_one": "{{first}}, {{second}} and {{count}} more",
-    "cardNamesSome_other": "{{first}}, {{second}} and {{count}} more",
-    "cardNamesMany_one": "{{first}} and {{count}} more",
-    "cardNamesMany_other": "{{first}} and {{count}} more",
-    "cardHostsTitle_one": "{{count}} CLI update on {{hosts}} hosts",
-    "cardHostsTitle_other": "{{count}} CLI updates on {{hosts}} hosts",
-    "cardUpdateSome_one": "Update {{count}} CLI",
-    "cardUpdateSome_other": "Update {{count}} CLIs",
-    "cardDone_one": "{{count}} CLI is up to date",
-    "cardDone_other": "All {{count}} CLIs are up to date",
-    "cardFailed_one": "{{count}} CLI didn’t update",
-    "cardFailed_other": "{{count}} CLIs didn’t update"
+    "toastDone_one": "{{count}} CLI updated",
+    "toastDone_other": "{{count}} CLIs updated",
+    "toastFailedCount_one": "{{count}} update failed",
+    "toastFailedCount_other": "{{count}} updates failed",
+    "toastUpdating_one": "Updating {{current}} of {{count}} CLI",
+    "toastUpdating_other": "Updating {{current}} of {{count}} CLIs"
   },
   "agentLaunch": {
     "opencode": {
@@ -436,12 +430,6 @@
           "BulkActionBar": {
             "selectedCount_one": "{{count}} selected",
             "selectedCount_other": "{{count}} selected"
-          },
-          "Search": {
-            "fileCount_one": "{{count}} file",
-            "fileCount_other": "{{count}} files",
-            "resultCount_one": "{{count}} result",
-            "resultCount_other": "{{count}} results"
           },
           "SourceControl": {
             "branchFilesChangedVsBase_one": "{{count}} file changed vs {{ref}}",
@@ -1673,6 +1661,9 @@
       "commentImageNotStored": "Only pasted or attached images can go on a comment.",
       "commentImagesTooLarge": "These images add up to {{totalMb}} MB. A comment takes up to {{maxMb}} MB.",
       "commentImagesTooMany": "Comments take up to {{max}} images.",
+      "composioKeyCantCreateSessions": "This Composio key can’t create sessions. It needs {{permission}}.",
+      "composioKeyMissingPermission": "This Composio key is missing a permission Orca needs.",
+      "composioKeyNeedsPermission": "This Composio key is missing a permission. It needs {{permission}}.",
       "googleAccountsChanged": "Its Google accounts changed since you opened them. Check them and save again.",
       "groupAttachFailed": "Couldn't attach the files. Try sending again in a moment.",
       "groupAttachmentsUnavailable": "This computer can't take attachments right now. Try sending again in a moment.",
@@ -3626,6 +3617,22 @@
     "mcp": {
       "serverCount_one": "{{count}} server",
       "serverCount_other": "{{count}} servers"
+    },
+    "mcpServers": {
+      "toast": {
+        "restart_one": "Restart {{count}} session",
+        "restart_other": "Restart {{count}} sessions",
+        "staleTerminalsOnHost_one": "{{count}} agent terminal on {{host}} uses an older MCP setup",
+        "staleTerminalsOnHost_other": "{{count}} agent terminals on {{host}} use an older MCP setup",
+        "staleTerminalsRestartManual_one": "Restart it yourself to reconnect Orca’s MCP servers.",
+        "staleTerminalsRestartManual_other": "Restart them yourself to reconnect Orca’s MCP servers.",
+        "staleTerminalsRestartSome_one": "{{restartable}} can be resumed here. Restart the other one yourself.",
+        "staleTerminalsRestartSome_other": "{{restartable}} can be resumed here. Restart the other {{count}} yourself.",
+        "staleTerminalsRestart_one": "Restart it to reconnect Orca’s MCP servers.",
+        "staleTerminalsRestart_other": "Restart them to reconnect Orca’s MCP servers.",
+        "staleTerminals_one": "{{count}} agent terminal uses an older MCP setup",
+        "staleTerminals_other": "{{count}} agent terminals use an older MCP setup"
+      }
     },
     "network": {
       "proxyUrlErrors": {
