@@ -1,19 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   resolveClaudeAccountRotationSettings,
-  type ClaudeAccountRotationSettings,
-  type ClaudeAccountRotationStatus
+  type ClaudeAccountRotationSettings
 } from '../../../../../../shared/agent-accounts/claude/claude-account-rotation'
 import { useTranslate } from '@/i18n/use-translate'
-import { Checkbox } from '../../../ui/checkbox'
 import { Input } from '../../../ui/input'
-import { Label } from '../../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { Switch } from '../../../ui/switch'
 import { SettingsRow } from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { SettingsGroupNestedRows } from '../../section-layout/SettingsGroup'
 import type { AccountsPaneSectionModel } from '../accounts-pane-types'
+import {
+  ClaudeAccountRotationAccounts,
+  type RotationSave
+} from './claude-account-rotation-accounts'
 import {
   ClaudeAccountRotationStatusLines,
   useClaudeAccountRotationStatus
@@ -75,64 +76,6 @@ function PercentRow({
   )
 }
 
-function matchesAccount(entry: string, account: string): boolean {
-  return account.startsWith(entry) || entry.startsWith(account)
-}
-
-function PreferredAccountsRow({
-  status,
-  rotation,
-  save
-}: {
-  status: ClaudeAccountRotationStatus
-  rotation: ClaudeAccountRotationSettings
-  save: (patch: Partial<ClaudeAccountRotationSettings>) => void
-}): React.JSX.Element | null {
-  const t = useTranslate()
-  const folders = status.folders.filter((folder) => folder.claudeAccount !== null)
-  if (folders.length === 0) {
-    return null
-  }
-  return (
-    <SettingsRow
-      alignTop
-      label={t('accounts.claude.rotation.preferredTitle', 'Preferred accounts')}
-      description={t(
-        'accounts.claude.rotation.preferredDescription',
-        'Used first, in the order you check them. Orca also switches back to one once its 5-hour use is under half.'
-      )}
-      control={
-        <div className="space-y-1.5">
-          {folders.map((folder) => {
-            const account = folder.claudeAccount ?? ''
-            const id = `claude-rotation-preferred-${folder.accountId}`
-            return (
-              <div key={folder.accountId} className="flex items-center gap-2">
-                <Checkbox
-                  id={id}
-                  // From the saved list, not the polled status, so a click shows at once.
-                  checked={rotation.preferredAccounts.some((entry) =>
-                    matchesAccount(entry, account)
-                  )}
-                  onCheckedChange={(checked) => {
-                    const rest = rotation.preferredAccounts.filter(
-                      (entry) => !matchesAccount(entry, account)
-                    )
-                    save({ preferredAccounts: checked === true ? [...rest, account] : rest })
-                  }}
-                />
-                <Label htmlFor={id} variant="control">
-                  {folder.label ?? account}
-                </Label>
-              </div>
-            )
-          })}
-        </div>
-      }
-    />
-  )
-}
-
 export function ClaudeAccountRotationSetting({
   settings,
   updateSettings
@@ -148,8 +91,10 @@ export function ClaudeAccountRotationSetting({
   if (!status?.supported) {
     return null
   }
-  const save = (patch: Partial<ClaudeAccountRotationSettings>): void => {
-    const next = { ...(pending.current ?? settings.claudeAccountRotation), ...patch }
+  const save: RotationSave = (change) => {
+    const base = pending.current ?? settings.claudeAccountRotation ?? {}
+    const current = resolveClaudeAccountRotationSettings({ claudeAccountRotation: base })
+    const next = { ...base, ...change(current) }
     pending.current = next
     void Promise.resolve(updateSettings({ claudeAccountRotation: next })).finally(() => {
       if (pending.current === next) {
@@ -176,7 +121,7 @@ export function ClaudeAccountRotationSetting({
           <Switch
             id="claude-account-rotation"
             checked={rotation.enabled}
-            onCheckedChange={(checked) => save({ enabled: checked })}
+            onCheckedChange={(checked) => save(() => ({ enabled: checked }))}
           />
         }
       />
@@ -194,20 +139,22 @@ export function ClaudeAccountRotationSetting({
             id="claude-rotation-five-hour"
             label={t('accounts.claude.rotation.fiveHour', 'Switch at 5-hour use')}
             value={rotation.fiveHourPercent}
-            onCommit={(value) => save({ fiveHourPercent: value })}
+            onCommit={(value) => save(() => ({ fiveHourPercent: value }))}
           />
           <PercentRow
             id="claude-rotation-weekly"
             label={t('accounts.claude.rotation.weekly', 'Switch at weekly use')}
             value={rotation.weeklyPercent}
-            onCommit={(value) => save({ weeklyPercent: value })}
+            onCommit={(value) => save(() => ({ weeklyPercent: value }))}
           />
           <SettingsRow
             label={t('accounts.claude.rotation.orderTitle', 'Switch to')}
             control={
               <Select
                 value={rotation.order}
-                onValueChange={(value) => save({ order: value === 'reset' ? 'reset' : 'prefer' })}
+                onValueChange={(value) =>
+                  save(() => ({ order: value === 'reset' ? 'reset' : 'prefer' }))
+                }
               >
                 <SelectTrigger
                   size="sm"
@@ -218,7 +165,7 @@ export function ClaudeAccountRotationSetting({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="prefer">
-                    {t('accounts.claude.rotation.orderPrefer', 'Preferred accounts first')}
+                    {t('accounts.claude.rotation.orderPrefer', 'Highest priority first')}
                   </SelectItem>
                   <SelectItem value="reset">
                     {t('accounts.claude.rotation.orderReset', 'Soonest weekly reset')}
@@ -227,7 +174,7 @@ export function ClaudeAccountRotationSetting({
               </Select>
             }
           />
-          <PreferredAccountsRow status={status} rotation={rotation} save={save} />
+          <ClaudeAccountRotationAccounts status={status} rotation={rotation} save={save} />
           <ClaudeAccountRotationStatusLines status={status} />
         </SettingsGroupNestedRows>
       ) : null}

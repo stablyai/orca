@@ -66,6 +66,12 @@ function pauseLine(status: ClaudeAccountRotationStatus, t: Translate): string | 
       'Checking the last switch. New switches wait until it is confirmed.'
     )
   }
+  if (status.lastNote === 'account_off') {
+    return t(
+      'accounts.claude.rotation.status.accountOff',
+      'The selected account is turned off below, so Orca leaves it as it is.'
+    )
+  }
   if (status.lastNote === 'over_no_candidate') {
     return t(
       'accounts.claude.rotation.status.noCandidate',

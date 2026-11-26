@@ -1,7 +1,8 @@
 import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
-import type {
-  ClaudeAccountRotationLimit,
-  ClaudeAccountRotationSettings
+import {
+  rotationAccountSettings,
+  type ClaudeAccountRotationLimit,
+  type ClaudeAccountRotationSettings
 } from '../../../shared/agent-accounts/claude/claude-account-rotation'
 
 // Timings mirror the external claude_rotate.py defaults so both behave alike.
@@ -113,6 +114,13 @@ export function effectiveUsage(record: RotationUsageRecord, now: number): Rotati
   }
 }
 
+/** The priority list without the accounts taken out of rotation. */
+export function rankedAccounts(settings: ClaudeAccountRotationSettings): string[] {
+  return settings.preferredAccounts.filter(
+    (entry) => rotationAccountSettings(settings, entry).enabled
+  )
+}
+
 /** Position in the preferred list; unlisted accounts sort after every listed one. */
 export function preferRank(preferred: string[], account: string | null): number {
   if (account) {
@@ -157,7 +165,7 @@ function orderKey(
     key.push(upcomingWeekReset(usage, now) ?? Number.POSITIVE_INFINITY)
   }
   key.push(
-    preferRank(settings.preferredAccounts, candidate.claudeAccount),
+    preferRank(rankedAccounts(settings), candidate.claudeAccount),
     usage?.week ?? 0,
     usage?.five ?? 0
   )
@@ -203,26 +211,30 @@ export function returnRule(
       at !== null && (mine === null || at <= mine - RESET_MIN_LEAD_MS)
     return {
       // An account never read yet may reset sooner, so it is asked about too.
-      wants: (_, stored) =>
+      wants: (account, stored) =>
         stored === undefined ||
         (sooner(upcomingWeekReset(stored, now)) &&
-          overReasons(effectiveUsage(stored, now), settings).length === 0),
+          overReasons(effectiveUsage(stored, now), rotationAccountSettings(settings, account))
+            .length === 0),
       choose: (sorted) =>
         sorted.find(
           (candidate) =>
             candidate.known &&
             sooner(upcomingWeekReset(candidate.usage, now)) &&
             (candidate.usage?.five ?? 0) <= PREFER_RETURN_FIVE_PERCENT &&
-            (candidate.usage?.week ?? 0) <= settings.weeklyPercent - RESET_RETURN_WEEK_ROOM
+            (candidate.usage?.week ?? 0) <=
+              rotationAccountSettings(settings, candidate.claudeAccount).weeklyPercent -
+                RESET_RETURN_WEEK_ROOM
         ) ?? null
     }
   }
-  const mine = preferRank(settings.preferredAccounts, current.claudeAccount)
+  const ranked = rankedAccounts(settings)
+  const mine = preferRank(ranked, current.claudeAccount)
   if (mine === 0) {
     return null
   }
   return {
-    wants: (account) => preferRank(settings.preferredAccounts, account) < mine,
+    wants: (account) => preferRank(ranked, account) < mine,
     choose: (sorted) =>
       sorted.find(
         (candidate) => candidate.known && (candidate.usage?.five ?? 0) <= PREFER_RETURN_FIVE_PERCENT

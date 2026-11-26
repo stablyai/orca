@@ -48,7 +48,7 @@ export function rotationNotice(input: RotationNoticeInput): RotationNotice {
         : input.kind === 'prefer'
           ? translateMain(
               'accounts.claude.rotation.notice.switchedPreferred',
-              'Claude moved from {{from}} back to the preferred account {{to}}.',
+              'Claude moved from {{from}} back to {{to}}, which has a higher priority.',
               vars
             )
           : translateMain(

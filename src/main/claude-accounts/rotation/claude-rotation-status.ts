@@ -1,8 +1,9 @@
-import type {
-  ClaudeAccountRotationFolder,
-  ClaudeAccountRotationPause,
-  ClaudeAccountRotationSettings,
-  ClaudeAccountRotationStatus
+import {
+  rotationAccountSettings,
+  type ClaudeAccountRotationFolder,
+  type ClaudeAccountRotationPause,
+  type ClaudeAccountRotationSettings,
+  type ClaudeAccountRotationStatus
 } from '../../../shared/agent-accounts/claude/claude-account-rotation'
 import { claudeAccountOf, type RotationCheckDeps } from './claude-rotation-candidates'
 import { accessTokenOf, accessUsable, hasRefreshToken, oauthOf } from './claude-rotation-keychain'
@@ -108,8 +109,9 @@ export async function buildRotationStatus(args: {
     ) {
       continue
     }
+    const own = rotationAccountSettings(rotation, folder.claudeAccount)
     const usage = record ? effectiveUsage(record, now) : null
-    if (usage && overReasons(usage, rotation).length > 0) {
+    if (!own.enabled || (usage && overReasons(usage, own).length > 0)) {
       continue
     }
     candidates.push({

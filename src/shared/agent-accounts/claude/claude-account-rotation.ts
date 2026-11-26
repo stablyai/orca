@@ -1,13 +1,23 @@
 /** 'prefer': preferred accounts, then lowest weekly use. 'reset': the account whose weekly limit resets soonest. */
 export type ClaudeAccountRotationOrder = 'prefer' | 'reset'
 
+/** One Claude account's own choices; a null limit uses the shared one. */
+export type ClaudeAccountRotationAccountSettings = {
+  /** False takes the account out: Orca never switches to it or away from it. */
+  enabled: boolean
+  fiveHourPercent: number | null
+  weeklyPercent: number | null
+}
+
 export type ClaudeAccountRotationSettings = {
   enabled: boolean
   fiveHourPercent: number
   weeklyPercent: number
   order: ClaudeAccountRotationOrder
-  /** Claude account uuids (or their prefixes), most preferred first. */
+  /** Claude account uuids (or their prefixes), highest priority first; unlisted ones come last. */
   preferredAccounts: string[]
+  /** Keyed by the first 8 characters of the Claude account uuid. */
+  accounts: Record<string, ClaudeAccountRotationAccountSettings>
 }
 
 export type ClaudeAccountRotationGlobalSettings = {
@@ -20,13 +30,50 @@ export const CLAUDE_ACCOUNT_ROTATION_DEFAULTS: ClaudeAccountRotationSettings = {
   fiveHourPercent: 90,
   weeklyPercent: 97,
   order: 'prefer',
-  preferredAccounts: []
+  preferredAccounts: [],
+  accounts: {}
 }
 
 function clampPercent(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value)
     ? Math.min(100, Math.max(1, Math.round(value)))
     : fallback
+}
+
+function optionalPercent(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? clampPercent(value, 0) : null
+}
+
+function resolveAccounts(value: unknown): Record<string, ClaudeAccountRotationAccountSettings> {
+  const out: Record<string, ClaudeAccountRotationAccountSettings> = {}
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return out
+  }
+  for (const [account, entry] of Object.entries(value)) {
+    if (account === '' || typeof entry !== 'object' || entry === null) {
+      continue
+    }
+    const saved: Record<string, unknown> = { ...entry }
+    out[account.slice(0, 8)] = {
+      enabled: saved.enabled !== false,
+      fiveHourPercent: optionalPercent(saved.fiveHourPercent),
+      weeklyPercent: optionalPercent(saved.weeklyPercent)
+    }
+  }
+  return out
+}
+
+/** The choices that apply to one Claude account: its own, or the shared ones. */
+export function rotationAccountSettings(
+  settings: ClaudeAccountRotationSettings,
+  account: string | null
+): { enabled: boolean; fiveHourPercent: number; weeklyPercent: number } {
+  const own = account ? settings.accounts[account.slice(0, 8)] : undefined
+  return {
+    enabled: own?.enabled !== false,
+    fiveHourPercent: own?.fiveHourPercent ?? settings.fiveHourPercent,
+    weeklyPercent: own?.weeklyPercent ?? settings.weeklyPercent
+  }
 }
 
 export function resolveClaudeAccountRotationSettings(
@@ -41,7 +88,8 @@ export function resolveClaudeAccountRotationSettings(
     order: saved.order === 'reset' ? 'reset' : 'prefer',
     preferredAccounts: Array.isArray(saved.preferredAccounts)
       ? saved.preferredAccounts.filter((id): id is string => typeof id === 'string' && id !== '')
-      : []
+      : [],
+    accounts: resolveAccounts(saved.accounts)
   }
 }
 

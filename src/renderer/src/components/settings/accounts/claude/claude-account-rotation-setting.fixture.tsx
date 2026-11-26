@@ -43,7 +43,11 @@ const folders: ClaudeAccountRotationFolder[] = [
 const rotation = {
   ...CLAUDE_ACCOUNT_ROTATION_DEFAULTS,
   enabled: true,
-  preferredAccounts: ['4b4aac33']
+  preferredAccounts: ['4b4aac33', '803d0c1f'],
+  accounts: {
+    '803d0c1f': { enabled: true, fiveHourPercent: 80, weeklyPercent: null },
+    '1c9e77d0': { enabled: false, fiveHourPercent: null, weeklyPercent: null }
+  }
 }
 
 const status: ClaudeAccountRotationStatus = {
@@ -91,7 +95,7 @@ function Setting({ on }: { on: boolean }): React.JSX.Element {
   )
 }
 
-/** On, with a past switch and the account it would switch to next. */
+/** On, with a past switch, the account it would switch to next, and each account's own choices. */
 export const enabled = defineFixture({
   width: 760,
   setup: stubStatus(status),

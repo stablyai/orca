@@ -354,7 +354,8 @@ const settings: ClaudeAccountRotationSettings = {
   fiveHourPercent: 90,
   weeklyPercent: 97,
   order: 'prefer',
-  preferredAccounts: [ACCOUNT.b]
+  preferredAccounts: [ACCOUNT.b],
+  accounts: {}
 }
 
 function usage(five: number): RotationUsage {
@@ -430,4 +431,44 @@ it('never takes the login of a folder with running Claude sessions', async () =>
   })
   expect(result?.note).toBe('over_no_candidate')
   expect(unknown.keychain.slots.get('svc-b')).toEqual(slotOf('b'))
+})
+
+it("follows each account's own switch, limits and priority", async () => {
+  const { folders, keychain, deps, files } = setup(['a', 'b', 'c'])
+  const five: Record<string, number> = { 'access-a': 95, 'access-b': 70, 'access-c': 5 }
+  deps.fetchUsage = async (token) => ({ status: 'ok', usage: usage(five[token] ?? 0) })
+  const check = async (rotation: ClaudeAccountRotationSettings) =>
+    checkRotationFolder({
+      target: folder(folders, 'a'),
+      folders: [...folders.values()],
+      sessions: new Map(),
+      state: await files.loadState(),
+      settings: rotation,
+      deps
+    })
+  const own = (enabled: boolean, fiveHourPercent: number | null = null) => ({
+    enabled,
+    fiveHourPercent,
+    weeklyPercent: null
+  })
+
+  // a's own 5-hour limit is 98%, so 95% is no reason to switch yet.
+  expect((await check({ ...settings, accounts: { [ACCOUNT.a]: own(true, 98) } }))?.note).toBe('ok')
+  // An account taken out of rotation is left alone, even past its limit.
+  expect((await check({ ...settings, accounts: { [ACCOUNT.a]: own(false) } }))?.note).toBe(
+    'account_off'
+  )
+  // b is over its own 60% and c is off, so nothing can come in.
+  const none = await check({
+    ...settings,
+    accounts: { [ACCOUNT.b]: own(true, 60), [ACCOUNT.c]: own(false) }
+  })
+  expect(none && 'skipped' in none ? none.skipped : null).toEqual([
+    { accountId: 'b', reason: 'also_near_limit' },
+    { accountId: 'c', reason: 'account_off' }
+  ])
+  expect(keychain.slots.get('svc-a')).toEqual(slotOf('a'))
+  // Priority beats use: b (70%) ranks above c (5%).
+  expect((await check(settings))?.note).toBe('swapped')
+  expect(keychain.slots.get('svc-a')?.claudeAiOauth).toEqual(login('b'))
 })

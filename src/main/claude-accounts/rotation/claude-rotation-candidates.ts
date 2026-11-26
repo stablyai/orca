@@ -1,4 +1,7 @@
-import type { ClaudeAccountRotationSettings } from '../../../shared/agent-accounts/claude/claude-account-rotation'
+import {
+  rotationAccountSettings,
+  type ClaudeAccountRotationSettings
+} from '../../../shared/agent-accounts/claude/claude-account-rotation'
 import type { RotationUsageFetch } from './claude-rotation-api'
 import {
   accessTokenOf,
@@ -166,6 +169,11 @@ export async function rotationCandidates(args: {
       skip('same_account')
       continue
     }
+    const own = rotationAccountSettings(settings, account)
+    if (!own.enabled) {
+      skip('account_off')
+      continue
+    }
     if (args.only && !args.only(account, state.accounts[account])) {
       continue
     }
@@ -190,7 +198,7 @@ export async function rotationCandidates(args: {
     if (!usage && stored) {
       usage = effectiveUsage(stored, now)
     }
-    if (usage && overReasons(usage, settings).length > 0) {
+    if (usage && overReasons(usage, own).length > 0) {
       skip('also_near_limit')
       continue
     }

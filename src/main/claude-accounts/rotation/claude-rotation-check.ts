@@ -1,4 +1,7 @@
-import type { ClaudeAccountRotationSettings } from '../../../shared/agent-accounts/claude/claude-account-rotation'
+import {
+  rotationAccountSettings,
+  type ClaudeAccountRotationSettings
+} from '../../../shared/agent-accounts/claude/claude-account-rotation'
 import {
   claudeAccountOf,
   recordUsage,
@@ -97,7 +100,12 @@ export async function checkRotationFolder(args: {
     return done({ note: 'account_unconfirmed' })
   }
   recordUsage(state, account, usage, now)
-  const over = overReasons(usage, settings)
+  const own = rotationAccountSettings(settings, account)
+  if (!own.enabled) {
+    // Taken out of rotation: Orca neither moves it out nor brings another account in.
+    return done({ note: 'account_off' })
+  }
+  const over = overReasons(usage, own)
   const sinceSwap = now - (state.lastSwapAt ?? 0)
   const shared = {
     folders: args.folders,
