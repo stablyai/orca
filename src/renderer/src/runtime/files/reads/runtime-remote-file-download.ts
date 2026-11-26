@@ -10,6 +10,7 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import { captureRuntimeEnvironmentRequestRevision } from '../../rpc/environment-revisions/runtime-environment-revision'
 import { showDownloadProgressToast } from '@/lib/files/download/download-progress-toast'
+import { waitForPromiseWithSignal } from '../../../../../shared/concurrency/abort-signal-reason'
 
 const REMOTE_DOWNLOAD_CHUNK_BYTES = 384 * 1024
 const REMOTE_DOWNLOAD_UPDATE_REQUIRED_MESSAGE =
@@ -140,7 +141,8 @@ export async function streamDownloadedFile(
     let offset = 0
     for (;;) {
       progress.signal.throwIfAborted()
-      const chunk = await readChunk(offset)
+      // Why: Cancel stops the wait on a slow read at once, and a chunk that lands after it is dropped.
+      const chunk = await waitForPromiseWithSignal(readChunk(offset), progress.signal)
       if (chunk.bytesRead > 0) {
         await window.api.fs.appendDownloadedFileChunk({
           transferId: download.transferId,
