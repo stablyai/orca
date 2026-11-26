@@ -245,7 +245,7 @@ export class RelayReconnectController {
       error instanceof RelayOuterError && error.code === MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE
     const credentialRejected = isExplicitCredentialRejection(error)
     if (
-      this.recoveryGate === 'fresh-credential' ||
+      (this.recoveryGate === 'fresh-credential' && !hostOffline) ||
       (this.recoveryGate === 'external-signal' && !credentialRejected && !hostOffline)
     ) {
       // Keep slow gated reprobes running only while active; foreground restores cadence.
@@ -262,10 +262,10 @@ export class RelayReconnectController {
       : this.delays.transportDelayMs(failureCount, relayDirectorRetryAfterMs(error))
     this.nextAttemptAt = now + delay
     // Without scheduleRetry (lease refresh) the caller owns the retry and needs retryDelayMs, not a gate.
-    const speculative = scheduleRetry && unconfirmed && !credentialRejected && !hostOffline
+    const speculative = scheduleRetry && unconfirmed && !hostOffline
     if (error instanceof MobileE2EEAuthenticationError || speculative) {
-      // E2EE rejection can be transient during credential commit, and an unconfirmed token may be dead (a 4404 passed
-      // the cell's credential check); gate slow reprobes plus one retry per network change or resume.
+      // E2EE rejection can be transient during credential commit, and an unconfirmed token (even a refused pending,
+      // whose install may still commit) may be dead; gate slow reprobes plus a retry per network change or resume.
       this.holdGate(scheduleRetry, 'external-signal')
       return
     }

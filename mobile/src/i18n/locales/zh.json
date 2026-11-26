@@ -1846,6 +1846,7 @@
       "labelWithHint": "{{label}} — {{hint}}",
       "pairingInvalid": "配对无效，请重新与桌面配对",
       "relayAccessRefreshDetail": "请在与 {{host}} 相同的网络上连接一次以刷新 Relay 访问权限。如果 Relay 仍然拒绝，请重新配对",
+      "rePairDetail": "请重新与桌面配对",
       "reconnecting": "正在重新连接…",
       "relayAccessRefused": "Relay 拒绝了对 {{host}} 的访问",
       "relayConnectFailed": "无法通过 Relay 连接",

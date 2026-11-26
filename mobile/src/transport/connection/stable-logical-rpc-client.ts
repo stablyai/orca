@@ -208,9 +208,9 @@ export function createStableLogicalRpcClient(
         session: nextSession,
         snapshot: () => ({ state, suspended }),
         // Ignore late dial phases after close so they cannot revive the disconnected state, and while
-        // a refusal verdict stands: it outranks dial phases, and each would re-project every Home host.
+        // a refused or host-offline verdict stands: it outranks them, and each would re-project Home.
         publish: (next) => {
-          if (!closed && connectionPath.getRelayHostReachability() !== 'credential-refused') {
+          if (!closed && !connectionPath.holdsSteadyVerdict()) {
             publishState(next)
           }
         }

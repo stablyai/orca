@@ -262,6 +262,7 @@ export class MobileEndpointSupervisor {
         bundle: this.bundle,
         controller: this.relayReconnect,
         readBundle: () => this.dependencies.readBundle(this.hostId),
+        pendingProven: this.sessionEstablisher.pendingProven,
         onAdoptedFresherBundle: () => this.logRelay('adopted fresher durable credential bundle')
       })
       this.bundle = selection.bundle

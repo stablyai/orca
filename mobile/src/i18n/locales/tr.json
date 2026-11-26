@@ -1965,6 +1965,7 @@
       "labelWithHint": "{{label}} — {{hint}}",
       "pairingInvalid": "Eşleştirme geçersiz — bilgisayarınızla yeniden eşleştirin",
       "relayAccessRefreshDetail": "Relay erişimini yenilemek için {{host}} ile aynı ağda bir kez bağlanın. Relay hâlâ reddederse yeniden eşleştirin",
+      "rePairDetail": "Bilgisayarınızla yeniden eşleştirin",
       "reconnecting": "Yeniden bağlanılıyor…",
       "relayAccessRefused": "Relay, {{host}} için erişimi reddetti",
       "relayConnectFailed": "Relay üzerinden bağlanılamadı",

@@ -1106,6 +1106,7 @@
       "hostOfflineDetail": "Check it's awake, Orca is running, and you're signed in",
       "relayAccessRefused": "Relay refused access for {{host}}",
       "relayAccessRefreshDetail": "Connect once on the same network as {{host}} to refresh Relay access. If Relay still refuses, re-pair",
+      "rePairDetail": "Re-pair with your desktop",
       "relayUnreachable": "Can't reach Relay",
       "checkConnection": "Check your connection",
       "tailscaleHint": "check Tailscale",

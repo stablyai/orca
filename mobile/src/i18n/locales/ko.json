@@ -1612,6 +1612,7 @@
       "labelWithHint": "{{label}} — {{hint}}",
       "pairingInvalid": "페어링이 유효하지 않습니다. 데스크톱과 다시 페어링하세요.",
       "relayAccessRefreshDetail": "{{host}}와(과) 같은 네트워크에서 한 번 연결해 Relay 액세스를 갱신하세요. 계속 거부되면 다시 페어링하세요",
+      "rePairDetail": "데스크톱과 다시 페어링하세요.",
       "reconnecting": "다시 연결 중…",
       "relayAccessRefused": "Relay가 {{host}}에 대한 액세스를 거부했습니다",
       "relayConnectFailed": "Relay를 통해 연결할 수 없음",

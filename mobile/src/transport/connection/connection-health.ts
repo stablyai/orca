@@ -19,7 +19,13 @@ export function isEarlyConnectRetry(
 }
 
 // Relay verdicts describe the desktop directly; Tailscale advice would misdiagnose offline/signed-out hosts.
-function relayHostCopy(): Record<
+// A link-local endpoint (169.254/16, fe80::/10) is never dialed, so only re-pairing refreshes its
+// Relay access. A literal-prefix check: the full shared parser costs the web bundle's size budget.
+export function isUndialableLinkLocal(endpoint: string | null | undefined): boolean {
+  return /^\w+:\/\/(169\.254\.|\[fe[89ab])/i.test(endpoint ?? '')
+}
+
+function relayHostCopy(directRefreshUnavailable: boolean): Record<
   Exclude<RelayHostReachability, 'connecting'>,
   {
     kind: 'warning' | 'unreachable'
@@ -62,11 +68,13 @@ function relayHostCopy(): Record<
           }
         ),
       detail: (host) =>
-        translate(
-          'connection.connectionHealth.relayAccessRefreshDetail',
-          'Connect once on the same network as {{host}} to refresh Relay access. If Relay still refuses, re-pair',
-          { host }
-        )
+        directRefreshUnavailable
+          ? translate('connection.connectionHealth.rePairDetail', 'Re-pair with your desktop')
+          : translate(
+              'connection.connectionHealth.relayAccessRefreshDetail',
+              'Connect once on the same network as {{host}} to refresh Relay access. If Relay still refuses, re-pair',
+              { host }
+            )
     },
     // Cell reachability failure says nothing about desktop health, so keep it amber.
     unreachable: {
@@ -141,7 +149,7 @@ export function classifyConnection(args: {
   // Revoked pairing outranks sign-in advice; explicit relay verdicts must survive a cleared pending path.
   const reachability = args.relayHostReachability ?? 'connecting'
   if (reachability !== 'connecting') {
-    const copy = relayHostCopy()[reachability]
+    const copy = relayHostCopy(isUndialableLinkLocal(args.endpoint))[reachability]
     return copy.kind === 'warning'
       ? { kind: 'warning', label: copy.label(host), detail: copy.detail(host), relay: reachability }
       : {

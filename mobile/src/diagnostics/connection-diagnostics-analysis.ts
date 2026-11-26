@@ -1,4 +1,5 @@
 import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime/remote-runtime-tailscale-hint'
+import { isUndialableLinkLocal } from '../transport/connection/connection-health'
 import {
   relayHostReachabilityForCloseCode,
   type RelayHostReachabilityFromCloseCode
@@ -71,7 +72,7 @@ function diagnoseFailure(
   }
 
   // After the director branches: a director error also arrives as a relay dial failure.
-  const relayDial = relayDialFailure(failure)
+  const relayDial = relayDialFailure(failure, args.endpoint)
   if (relayDial) {
     return relayDial
   }
@@ -192,7 +193,10 @@ const RELAY_DIAL_ADVICE: Record<
 }
 
 // The relay code names desktop state; a direct timeout may only mean the phone is off LAN. Neither cause is reportable as a relay fault.
-function relayDialFailure(failure: ConnectionLogEntry | undefined): ConnectionDiagnosis | null {
+function relayDialFailure(
+  failure: ConnectionLogEntry | undefined,
+  endpoint: string
+): ConnectionDiagnosis | null {
   if (failure?.code !== 'relay-dial-failed') {
     return null
   }
@@ -209,7 +213,11 @@ function relayDialFailure(failure: ConnectionLogEntry | undefined): ConnectionDi
     failure.relayCredentialRejected === true
   )
   const advice = RELAY_DIAL_ADVICE[reachability]
-  return { likelyCause: advice.likelyCause(code), nextStep: advice.nextStep, reportability: 'none' }
+  const nextStep =
+    reachability === 'credential-refused' && isUndialableLinkLocal(endpoint)
+      ? 'Re-pair this phone with the desktop.'
+      : advice.nextStep
+  return { likelyCause: advice.likelyCause(code), nextStep, reportability: 'none' }
 }
 
 // Prefer current-window failures, then mark older evidence stale; frequent iOS resumes must not erase the only known cause.

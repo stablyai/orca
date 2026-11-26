@@ -73,6 +73,13 @@ export class LogicalClientConnectionPath {
     })
   }
 
+  holdsSteadyVerdict(): boolean {
+    return (
+      this.relayHostReachability === 'credential-refused' ||
+      this.relayHostReachability === 'host-offline'
+    )
+  }
+
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
@@ -84,14 +91,14 @@ export class LogicalClientConnectionPath {
     const previousRejected = this.pairingRejected
     const previousReachability = this.relayHostReachability
     apply()
-    // A refused-credential verdict outranks path and attempt, so slow reprobes that dial under it
-    // must not refresh every listener (Home re-projects all hosts) when nothing visible changed.
-    const refusedThroughout =
-      previousReachability === 'credential-refused' &&
-      this.relayHostReachability === 'credential-refused' &&
+    // A steady refused or host-offline verdict outranks path and attempt, so retries under it must not
+    // refresh every listener (Home re-projects all hosts) when nothing visible changed.
+    const verdictHeld =
+      this.holdsSteadyVerdict() &&
+      previousReachability === this.relayHostReachability &&
       previousRejected === this.pairingRejected
     if (
-      refusedThroughout ||
+      verdictHeld ||
       (previousPath === this.pending() &&
         previousAttempt === this.reconnectAttempt(0) &&
         previousRejected === this.pairingRejected &&

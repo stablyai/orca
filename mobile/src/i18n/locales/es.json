@@ -1258,6 +1258,7 @@
       "labelWithHint": "{{label}} — {{hint}}",
       "pairingInvalid": "Emparejamiento no válido — vuelve a emparejar tu escritorio",
       "relayAccessRefreshDetail": "Conéctate una vez en la misma red que {{host}} para renovar el acceso a Relay. Si Relay sigue rechazándolo, vuelve a emparejar",
+      "rePairDetail": "Vuelve a emparejar tu escritorio.",
       "reconnecting": "Reconectando…",
       "relayAccessRefused": "Relay rechazó el acceso a {{host}}",
       "relayConnectFailed": "No se puede conectar a través de Relay",

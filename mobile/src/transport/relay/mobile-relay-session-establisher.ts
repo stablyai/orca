@@ -52,6 +52,8 @@ export class MobileRelaySessionEstablisher {
   // Pending is speculative: it gets a few failed dials, then pauses until a resume or network change
   // refills the budget, so failures behind an unchanged state cost a bounded number of dials.
   private pendingFailures = 0
+  // The last pending dial got a 4404: the cell accepted it, so selection need not reread the keychain.
+  pendingProven = false
   private pendingPausedUntil = 0
   private pendingPauseMs = PENDING_PAUSE_MIN_MS
   private resolvedThisAttempt = false
@@ -154,7 +156,10 @@ export class MobileRelaySessionEstablisher {
         this.directorTried.set(credential.token, ++this.directorTrySeq)
       }
       // A 4404 comes after the cell accepted the credential, so it proves pending rather than spends it.
-      if (usedPending && !isHostOffline(result.error)) {
+      if (usedPending) {
+        this.pendingProven = isHostOffline(result.error)
+      }
+      if (usedPending && !this.pendingProven) {
         if (++this.pendingFailures === PENDING_DIAL_BUDGET) {
           this.pendingPausedUntil = this.args.now() + this.pendingPauseMs
           this.pendingPauseMs = Math.min(this.pendingPauseMs * 2, PENDING_PAUSE_MAX_MS)
