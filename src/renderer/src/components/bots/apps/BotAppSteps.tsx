@@ -100,10 +100,9 @@ export function ComposioAccountStep({
           setError(null)
           void saveComposioKey(trimmed, { hostId: bot.hostId })
             .then(onSaved)
-            .catch((caught: unknown) => {
-              setError(botToolErrorMessage(caught))
-              setBusy(false)
-            })
+            .catch((caught: unknown) => setError(botToolErrorMessage(caught)))
+            // Some continuations keep this form open (an app set up in Composio's own page).
+            .finally(() => setBusy(false))
         }}
       >
         <BotAppStepHeading
