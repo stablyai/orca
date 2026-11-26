@@ -88,7 +88,10 @@ async function clearEarlierRuns(root: string, remove: (path: string) => Promise<
     const batch = gone
       .slice(at, at + REMOVE_BATCH)
       .filter((name) => older.has(name) || !keptBy(name))
-    await Promise.all(batch.map((name) => removeTracked(root, name.slice(0, length), name, remove)))
+    // One failed removal doesn't end the sweep while others still run.
+    await Promise.allSettled(
+      batch.map((name) => removeTracked(root, name.slice(0, length), name, remove))
+    )
   }
   return true
 }
@@ -103,12 +106,15 @@ function removeTracked(
   const key = `${root}\0${chat}`
   const inFlight = removing.get(key) ?? new Set<Promise<void>>()
   removing.set(key, inFlight)
-  const removal = remove(join(root, name)).finally(() => {
-    inFlight.delete(removal)
-    if (inFlight.size === 0) {
-      removing.delete(key)
-    }
-  })
+  // A waiting launch only needs the removal over; its failure is the sweep's, not the launch's.
+  const removal: Promise<void> = remove(join(root, name))
+    .catch(() => undefined)
+    .finally(() => {
+      inFlight.delete(removal)
+      if (inFlight.size === 0) {
+        removing.delete(key)
+      }
+    })
   inFlight.add(removal)
   return removal
 }
@@ -124,10 +130,15 @@ export function clearEarlierRunsOnce(
   remove: (path: string) => Promise<void>,
   folder?: string
 ): Promise<void> {
-  if (cleared.has(root)) {
-    return Promise.resolve()
-  }
   const chat = nativeChatScratchFolderName(sessionId)
+  // Even after the clear: a removal it started may still be under way.
+  const removalsOfChat = (): Promise<void> => {
+    const inFlight: Promise<void>[] = Array.from(removing.get(`${root}\0${chat}`) ?? [])
+    return Promise.all(inFlight).then(() => undefined)
+  }
+  if (cleared.has(root)) {
+    return removalsOfChat()
+  }
   const names = launched.get(root) ?? new Set<string>()
   names.add(chat)
   launched.set(root, names)
@@ -151,6 +162,5 @@ export function clearEarlierRunsOnce(
       })
     clearing.set(root, attempt)
   }
-  const inFlight: Promise<void>[] = Array.from(removing.get(`${root}\0${chat}`) ?? [])
-  return Promise.all(inFlight).then(() => undefined)
+  return removalsOfChat()
 }
