@@ -107,6 +107,7 @@ export function MobileBotComposioConnect(
       openConnectorLink(url)
     } catch (caught) {
       setError(errorMessage(caught))
+      rereadMobileComposio(props.hostKey, props.botId)
     } finally {
       setBusy(false)
     }
@@ -126,11 +127,18 @@ export function MobileBotComposioConnect(
     }
   })
 
+  const [replacingKey, setReplacingKey] = useState(false)
+
   if (composio.status === null) {
     return <MobileStateView loading title={t('bots.composio.reading', 'Reading Composio…')} />
   }
-  if (!keyReady) {
-    return <MobileBotComposioKey {...props} />
+  if (!keyReady || replacingKey) {
+    return (
+      <MobileBotComposioKey
+        {...props}
+        onClose={replacingKey ? () => setReplacingKey(false) : props.onClose}
+      />
+    )
   }
   const header = (
     <SheetHeader
@@ -180,6 +188,9 @@ export function MobileBotComposioConnect(
     (ended
       ? t('bots.composio.signInEnded', 'The sign-in was turned down, failed, or took too long.')
       : null)
+  const keyRejected =
+    composio.status?.key === 'rejected' ||
+    (failure !== null && /permission|write access|api.?key|rejected|unauthorized/i.test(failure))
   const again = () => {
     setOpened(null)
     void connect()
@@ -203,11 +214,25 @@ export function MobileBotComposioConnect(
         }
       >
         {failure ? (
-          <SheetPrimaryButton
-            label={t('bots.composio.tryAgain', 'Try again')}
-            disabled={busy || !props.online}
-            onPress={again}
-          />
+          keyRejected ? (
+            <>
+              <SheetPrimaryButton
+                label={t('chat.botCards.composio.replaceKey', 'Replace key')}
+                onPress={() => setReplacingKey(true)}
+              />
+              <MobileStateButton
+                label={t('bots.composio.tryAgain', 'Try again')}
+                disabled={busy || !props.online}
+                onPress={again}
+              />
+            </>
+          ) : (
+            <SheetPrimaryButton
+              label={t('bots.composio.tryAgain', 'Try again')}
+              disabled={busy || !props.online}
+              onPress={again}
+            />
+          )
         ) : (
           <>
             <View style={styles.waiting}>

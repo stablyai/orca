@@ -3,8 +3,11 @@ import { z } from 'zod'
 
 /** Composio refused the key: deleted, regenerated, or not a project key. */
 export class ComposioKeyRejectedError extends Error {
-  constructor() {
-    super('Composio didn’t accept this key. Copy a project API key from Composio and try again.')
+  constructor(message?: string) {
+    super(
+      message ??
+        'Composio didn’t accept this key. Copy a project API key from Composio and try again.'
+    )
   }
 }
 
@@ -67,6 +70,19 @@ export function isComposioLimit(status: number, slug?: string, message?: string)
     /quota|usage.?limit|plan.?limit|limit.?(exceeded|reached)|rate.?limit/i.test(
       `${slug ?? ''} ${message ?? ''}`
     )
+  )
+}
+
+/** A 403 where the key itself lacks the required scopes (e.g. session_management write access). */
+export function isComposioKeyPermissionError(
+  status: number,
+  slug?: string,
+  message?: string
+): boolean {
+  return (
+    status === 403 &&
+    (slug === 'APIKey_InsufficientPermissions' ||
+      /permission|write access|api.?key/i.test(`${slug ?? ''} ${message ?? ''}`))
   )
 }
 

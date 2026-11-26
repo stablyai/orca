@@ -219,6 +219,7 @@ export function BotAppsCatalog({
           connectError={step.error}
           onDone={manage}
           onRetry={() => connectComposio(app, attempt + 1)}
+          onChangeKey={() => setStep({ kind: 'composio-account', app })}
           onClose={close}
         />
       </>

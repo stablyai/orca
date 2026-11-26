@@ -41,6 +41,7 @@ import {
   ComposioNotFoundError,
   ComposioUnavailableError,
   composioErrorOf,
+  isComposioKeyPermissionError,
   isComposioLimit,
   isComposioPlanLimit,
   parseJson,
@@ -83,7 +84,7 @@ export class ComposioApi {
       throw new ComposioUnavailableError('Composio didn’t answer. Check your connection.')
     }
     const json = parseJson(await response.text())
-    // 403 is one endpoint the key may not use; only 401 says the key itself is refused.
+    // 401 or key permission 403 says the key itself is refused; other 403s are endpoint-specific.
     if (response.status === 401) {
       throw new ComposioKeyRejectedError()
     }
@@ -94,6 +95,11 @@ export class ComposioApi {
       const error = composioErrorOf(json)
       if (error?.slug === 'ToolRouterV2_NoManagedAuth') {
         throw new ComposioNeedsOwnSignInError(path)
+      }
+      if (isComposioKeyPermissionError(response.status, error?.slug, error?.message)) {
+        throw new ComposioKeyRejectedError(
+          error?.message ? `Composio: ${error.message}` : undefined
+        )
       }
       if (isComposioLimit(response.status, error?.slug, error?.message)) {
         const wait = retryAfterMs(response.headers.get('retry-after'), Date.now())

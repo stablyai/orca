@@ -17,6 +17,7 @@ export function ComposioSignInWait({
   connectError,
   onDone,
   onRetry,
+  onChangeKey,
   onClose
 }: {
   bot: Bot
@@ -25,6 +26,7 @@ export function ComposioSignInWait({
   connectError: string | null
   onDone: () => void
   onRetry: () => void
+  onChangeKey?: () => void
   /** Leaves the sign-in running in the browser. */
   onClose: () => void
 }): React.JSX.Element {
@@ -43,6 +45,10 @@ export function ComposioSignInWait({
     setSeenWaiting(true)
   }
   const failed = connectError !== null || (seenWaiting && !waiting && !connected)
+  const keyRejected =
+    view.status?.key === 'rejected' ||
+    (connectError !== null &&
+      /permission|write access|api.?key|rejected|unauthorized/i.test(connectError))
   // The host says when the browser sign-in finishes; the dialog then hands over to the new row.
   useEffect(() => {
     if (connected && seenWaiting) {
@@ -65,9 +71,20 @@ export function ComposioSignInWait({
             <Button variant="ghost" size="sm" onClick={onClose}>
               {t('bots.apps.close', 'Close')}
             </Button>
-            <Button size="sm" onClick={onRetry}>
-              {t('bots.composio.tryAgain', 'Try again')}
-            </Button>
+            {keyRejected && onChangeKey ? (
+              <>
+                <Button variant="outline" size="sm" onClick={onRetry}>
+                  {t('bots.composio.tryAgain', 'Try again')}
+                </Button>
+                <Button size="sm" onClick={onChangeKey}>
+                  {t('bots.composio.key.replace', 'Replace key')}
+                </Button>
+              </>
+            ) : (
+              <Button size="sm" onClick={onRetry}>
+                {t('bots.composio.tryAgain', 'Try again')}
+              </Button>
+            )}
           </>
         }
       />
