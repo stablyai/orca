@@ -3,6 +3,7 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import type { WorkerStartInput } from '../../rpc/methods/orchestration/worker/start/worker-start-input'
 import type { WorkerStartMutation } from '../../rpc/methods/orchestration/worker/start/worker-start-mutation'
+import type { OrchestrationWorkerLaunchDefaultsApplied } from '../../rpc/methods/orchestration/worker/start/launch/worker-launch-preferences'
 
 export type FederatedWorkerStartRequest = {
   params: WorkerStartInput
@@ -15,4 +16,5 @@ export type FederatedWorkerStartRequest = {
   orchestrationMutation?: WorkerStartMutation
   /** The coordinator's resolved session, when it is one; recorded as the Dispatch creator. */
   callerSession?: OrchestrationEntryCaller
+  defaultsApplied?: OrchestrationWorkerLaunchDefaultsApplied
 }

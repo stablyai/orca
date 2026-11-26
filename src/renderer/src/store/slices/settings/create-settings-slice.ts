@@ -31,6 +31,7 @@ import {
   normalizeMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddresses
 } from '../../../../../shared/remote-runtime/pairing/mobile-pairing-custom-address'
+import { normalizeOrchestrationWorkerSettingsUpdates } from '../../../../../shared/orchestration/workers/orchestration-worker-model-settings'
 import {
   hydrateOwnerWorktreeVisibilityDefaults,
   type WorktreeVisibilityDefaultsByHost
@@ -111,6 +112,10 @@ function normalizeSettingsUpdates(
     sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
   }
   sanitizeAgentLaunchProfileUpdates(sanitizedUpdates, updates)
+  Object.assign(
+    sanitizedUpdates,
+    normalizeOrchestrationWorkerSettingsUpdates(updates, currentSettings)
+  )
   if ('uiLanguage' in updates) {
     sanitizedUpdates.uiLanguage = normalizeUiLanguage(updates.uiLanguage)
   }

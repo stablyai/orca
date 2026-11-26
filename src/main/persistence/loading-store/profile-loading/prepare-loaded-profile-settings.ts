@@ -15,6 +15,8 @@ import { normalizeSourceControlGroupOrder } from '../../../../shared/source-cont
 import { normalizeProjectGroups } from '../../../../shared/project/groups/project-groups'
 import { normalizeDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { hasUnsupportedTuiAgentArgs } from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import { prepareLoadedOrchestrationWorkerPreferences } from './orchestration-worker-load-repair'
+import type { LoadedOrchestrationWorkerPreferences } from './orchestration-worker-load-repair'
 import { normalizeTerminalCursorStyleDefault } from '../../../../shared/terminal/appearance/terminal-cursor-style-settings'
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal/appearance/terminal-line-height-settings'
 import { migratePortugueseUiLanguageOnLoad } from '../../../../shared/i18n/portuguese-ui-language-migration'
@@ -27,7 +29,7 @@ import {
   persistedNotificationSettingsRepaired
 } from '../../applying-settings/onboarding-normalization'
 
-export type PreparedLoadedProfileSettings = {
+export type PreparedLoadedProfileSettings = LoadedOrchestrationWorkerPreferences & {
   migratedPortugueseUiLanguage: Pick<
     GlobalSettings,
     'uiLanguage' | 'uiLanguagePortugueseMigrationApplied'
@@ -289,6 +291,7 @@ export function prepareLoadedProfileSettings(
     migratePrimarySelectionPlatformDefault,
     stampPrimarySelectionTerminalDefaults,
     migratedDisabledTuiAgents,
+    ...prepareLoadedOrchestrationWorkerPreferences(parsed.settings, markNeedsSave),
     migratedAgentYoloDefaults,
     migratedAgentPermission,
     migratedWindowsRuntimeDefault,

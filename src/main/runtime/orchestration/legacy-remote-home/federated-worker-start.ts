@@ -1,5 +1,4 @@
 import type { FederatedWorkerStartRequest } from './federated-worker-start-request'
-import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
@@ -15,7 +14,7 @@ import { OrchestrationError } from '../orchestration-error'
 import {
   assertWorkerLaunchPreferencesRuntimeSupported,
   assertWorkerLaunchPreferencesCreateTerminal,
-  createPendingWorkerLaunchReceipt,
+  resolveFederatedWorkerLaunch,
   resolveFederatedWorkerLaunchReceipt
 } from '../../rpc/methods/orchestration/worker/start/launch/worker-launch-preferences'
 import { validateFederatedWorkerStartPlacement } from '../../rpc/methods/orchestration/worker/start/launch/worker-start-validation'
@@ -68,11 +67,6 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
   const createsWorktree = createMode !== undefined
   assertWorkerLaunchPreferencesCreateTerminal(params)
   validateFederatedWorkerStartPlacement(params, createsWorktree)
-  const requestedLaunch = createPendingWorkerLaunchReceipt({
-    agent: isTuiAgent(params.agent) ? params.agent : null,
-    model: params.model,
-    effort: params.effort
-  })
   const server = await runtime.resolveOrchestrationWorkerServer(params.on as string)
   const pairingFence = { expectedEnvironmentPairingRevision: server.pairingRevision }
   const budgets = resolveFederatedWorkerStartBudgets(params.timeoutMs)
@@ -97,9 +91,14 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
       `Connected server ${server.name} does not support orchestration federation.`
     )
   }
+  const { params: launchParams, requested: requestedLaunch } = resolveFederatedWorkerLaunch({
+    params,
+    capabilities: status.capabilities,
+    defaultsApplied: args.defaultsApplied
+  })
   assertWorkerLaunchPreferencesRuntimeSupported({
-    model: params.model,
-    effort: params.effort,
+    model: launchParams.model,
+    effort: launchParams.effort,
     capabilities: status.capabilities,
     serverName: server.name
   })
@@ -144,7 +143,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
       repo: params.repo ?? null,
       baseBranch: params.baseBranch ?? null,
       terminal: params.terminal ?? null,
-      agent: params.agent ?? null,
+      agent: launchParams.agent ?? null,
       launch: requestedLaunch,
       timeoutMs: budgets.readinessTimeoutMs,
       setup: setupDecision,
@@ -207,9 +206,9 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
               : 'orchestration_default'
             : undefined,
           terminal: params.terminal,
-          agent: params.agent,
-          model: params.model,
-          effort: params.effort,
+          agent: launchParams.agent,
+          model: launchParams.model,
+          effort: launchParams.effort,
           timeoutMs: budgets.readinessTimeoutMs,
           devMode: params.devMode
         },
