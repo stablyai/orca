@@ -62,7 +62,12 @@ export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
   const [jiraErrorDetailsOpen, setJiraErrorDetailsOpen] = useState(false)
   const [jiraJqlRejection, setJiraJqlRejection] = useState<JiraJqlRejection | null>(null)
   const [jiraSearchInput, setRawJiraSearchInput] = useState('')
-  const [appliedJiraSearch, setAppliedJiraSearch] = useState('')
+  const [appliedJiraSearch, setRawAppliedJiraSearch] = useState('')
+  const [jiraSortedQuery, setJiraSortedQuery] = useState<string | null>(null)
+  const setAppliedJiraSearch = useCallback((query: string) => {
+    setJiraSortedQuery(null)
+    setRawAppliedJiraSearch(query)
+  }, [])
   const [jiraHasWorkspace, setJiraLinkedView] = useState(loadJiraLinkedView)
   const setJiraHasWorkspace = useCallback((enabled: boolean) => {
     setJiraLinkedView(enabled)
@@ -121,7 +126,6 @@ export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
   const [jiraOrderDirection, setJiraOrderDirection] = useState<JiraIssueSortDirection>(() =>
     jiraOrderBy === 'updated' ? 'desc' : 'asc'
   )
-  const [jiraSortedQuery, setJiraSortedQuery] = useState<string | null>(null)
   const jiraRemoteQuery = jiraHasWorkspace
     ? ''
     : (favourites.jiraFavouriteFilter?.jql ?? appliedJiraSearch).trim()
