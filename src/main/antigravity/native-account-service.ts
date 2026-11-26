@@ -126,28 +126,28 @@ export class AntigravityAccountService {
   prepareForLaunch(): Promise<void> {
     return this.serialize(async () => {
       const { vault, current } = await this.reconcile()
-      if (!vault.selectedAccountId) {
-        return
-      }
       const selected = vault.accounts.find((account) => account.id === vault.selectedAccountId)
-      if (selected && current && this.matches(selected, current)) {
+      if (!vault.selectedAccountId || (selected && current && this.matches(selected, current))) {
         return
       }
       // Each running agy writes its own login back to the one native slot on every token refresh.
-      // When that login is saved (reconcile just refreshed its snapshot), restoring the selection
-      // loses nothing; an unsaved login or a sign-out is never overwritten.
-      if (!selected || !current || !vault.accounts.some((entry) => this.matches(entry, current))) {
+      // Exactly one saved account holding it (reconcile just saved it) restores the selection, as
+      // best effort as selecting: the native store has no compare-and-swap.
+      const holders = current ? vault.accounts.filter((entry) => this.matches(entry, current)) : []
+      if (!selected || holders.length !== 1) {
         throw new Error(
           'The native Antigravity account changed. Select the account again in Accounts before launching agy.'
         )
       }
-      await this.applySelection(selected, current)
+      await this.applySelection(selected, current, true)
     })
   }
 
+  /** `restoring` keeps the saved selection: another Orca process selecting meanwhile wins. */
   private async applySelection(
     selected: StoredAntigravityAccount,
-    current: AntigravityNativeCredential | null
+    current: AntigravityNativeCredential | null,
+    restoring = false
   ) {
     const switching = !current || !this.matches(selected, current)
     if (switching) {
@@ -161,6 +161,7 @@ export class AntigravityAccountService {
     }
     const latest = await this.store.read()
     if (
+      (restoring && latest.selectedAccountId !== selected.id) ||
       !latest.accounts.some(
         (account) => account.id === selected.id && this.matches(account, readback)
       )
