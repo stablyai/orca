@@ -104,6 +104,8 @@ export const OURO_LAUNCH_SPEC: AcpLaunchSpec = {
   account: OURO_ACCOUNT,
   // The `ouro` launcher that `npx ouro.bot` installs.
   installDirectories: ({ homePath }) => [join(homePath, '.ouro-cli', 'bin')],
+  // The first release that advertises loadSession, so saved chats reopen.
+  minimumVersions: ['0.1.0-alpha.1632'],
   // Each agent names itself, so no listing names one as the default: an unpicked chat runs none.
   modelDiscovery: {
     kind: 'command',

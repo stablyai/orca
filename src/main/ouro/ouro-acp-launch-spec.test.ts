@@ -1,6 +1,8 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { agentCliMinimumVersion } from '../agent-launch/preflight/agent-cli-minimum-version'
+import { compareAppVersions } from '../../shared/app-lifecycle/identity/app-version'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import { createAcpStructuredLaunchResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
@@ -28,7 +30,7 @@ function status(agents: unknown[]): string {
   return JSON.stringify(
     {
       overview: { daemon: 'running', health: 'ok', version: '0.1.0-alpha.1625' },
-      workers: [{ agent: 'slugger', worker: 'private-runtime', status: 'stopped' }],
+      workers: [{ agent: 'ada', worker: 'private-runtime', status: 'stopped' }],
       senses: [],
       agents,
       providers: []
@@ -41,29 +43,29 @@ function status(agents: unknown[]): string {
 describe('the Ouro agent listing', () => {
   it('lists each enabled agent this machine serves, named with a capital', () => {
     const stdout = status([
-      { name: 'slugger', enabled: true, homeState: 'here', homeMachine: 'desk (0123abcd)' },
-      { name: 'ouroboros', enabled: true, homeState: 'here', homeMachine: 'desk (0123abcd)' },
+      { name: 'ada', enabled: true, homeState: 'here', homeMachine: 'desk (0123abcd)' },
+      { name: 'atlas', enabled: true, homeState: 'here', homeMachine: 'desk (0123abcd)' },
       { name: 'wanderer', enabled: true, homeState: 'fallback', homeMachine: 'laptop (89ef)' }
     ])
     expect(parseOuroAgentListing(stdout)).toEqual([
-      { id: 'slugger', label: 'Slugger', isDefault: false, efforts: [] },
-      { id: 'ouroboros', label: 'Ouroboros', isDefault: false, efforts: [] },
+      { id: 'ada', label: 'Ada', isDefault: false, efforts: [] },
+      { id: 'atlas', label: 'Atlas', isDefault: false, efforts: [] },
       { id: 'wanderer', label: 'Wanderer', isDefault: false, efforts: [] }
     ])
   })
 
   it('leaves out disabled agents, those at home elsewhere, and rows it cannot read', () => {
     const stdout = status([
-      { name: 'slugger', enabled: true, homeState: 'here' },
+      { name: 'ada', enabled: true, homeState: 'here' },
       { name: 'sleeper', enabled: false, homeState: 'here' },
       { name: 'traveller', enabled: true, homeState: 'elsewhere', homeMachine: 'laptop (89ef)' },
       { name: 'stray', enabled: true, homeState: 'unclaimed' },
       { name: '', enabled: true, homeState: 'here' },
       { enabled: true, homeState: 'here' },
-      'slugger',
+      'ada',
       null
     ])
-    expect(parseOuroAgentListing(stdout).map((model) => model.id)).toEqual(['slugger'])
+    expect(parseOuroAgentListing(stdout).map((model) => model.id)).toEqual(['ada'])
   })
 
   it.each([
@@ -92,8 +94,8 @@ describe('the Ouro agent listing', () => {
     ['output that is not JSON', 'Segmentation fault'],
     ['empty output', ''],
     ['no agents list', JSON.stringify({ overview: { daemon: 'stopped' } })],
-    ['agents that is not a list', JSON.stringify({ agents: { slugger: true } })],
-    ['a bare list', JSON.stringify([{ name: 'slugger', enabled: true, homeState: 'here' }])],
+    ['agents that is not a list', JSON.stringify({ agents: { ada: true } })],
+    ['a bare list', JSON.stringify([{ name: 'ada', enabled: true, homeState: 'here' }])],
     ['a failure with no reason', JSON.stringify({ ok: false })]
   ])('lists none from %s', (_case, stdout) => {
     expect(parseOuroAgentListing(stdout)).toEqual([])
@@ -112,15 +114,15 @@ describe('the Ouro launch', () => {
 
   it('serves the picked agent, and with none picked leaves acp-serve to refuse on its own', () => {
     const base = { fullAccess: false, pluginDirs: [] }
-    expect(OURO_LAUNCH_SPEC.args({ ...base, model: 'slugger' })).toEqual([
+    expect(OURO_LAUNCH_SPEC.args({ ...base, model: 'ada' })).toEqual([
       'acp-serve',
       '--agent',
-      'slugger'
+      'ada'
     ])
-    expect(OURO_LAUNCH_SPEC.args({ ...base, fullAccess: true, model: 'slugger' })).toEqual([
+    expect(OURO_LAUNCH_SPEC.args({ ...base, fullAccess: true, model: 'ada' })).toEqual([
       'acp-serve',
       '--agent',
-      'slugger'
+      'ada'
     ])
     expect(OURO_LAUNCH_SPEC.args(base)).toEqual(['acp-serve'])
     expect(OURO_LAUNCH_SPEC.args({ ...base, model: '' })).toEqual(['acp-serve'])
@@ -142,12 +144,20 @@ describe('the Ouro launch', () => {
       '/home/user/.ouro-cli/bin'
     ])
   })
+
+  it('needs the first release that reopens saved chats', () => {
+    const floor = agentCliMinimumVersion('0.1.0-alpha.1631', OURO_LAUNCH_SPEC.minimumVersions ?? [])
+    expect(floor).toBe('0.1.0-alpha.1632')
+    expect(compareAppVersions('0.1.0-alpha.1631', floor!)).toBeLessThan(0)
+    expect(compareAppVersions('0.1.0-alpha.1632', floor!)).toBe(0)
+    expect(compareAppVersions('0.1.0-alpha.10000', floor!)).toBeGreaterThan(0)
+  })
 })
 
 describe('an Ouro chat launch', () => {
   function launch(
     record: Partial<AgentSessionRecord>,
-    options: { instructions?: string } = {}
+    options: { instructions?: string; version?: string } = {}
   ): ReturnType<ReturnType<typeof createAcpStructuredLaunchResolver>> {
     const full: AgentSessionRecord = {
       ...agentSessionRecordFixture(),
@@ -165,7 +175,7 @@ describe('an Ouro chat launch', () => {
       resolveCommand: (command) => `/resolved/${command}`,
       inheritedEnv: {},
       dataDirectory: '/home/user/orca-data',
-      probeVersion: async () => ({ version: '0.1.0-alpha.1625' }),
+      probeVersion: async () => ({ version: options.version ?? '0.1.0-alpha.1632' }),
       ...(options.instructions === undefined
         ? {}
         : { resolveInstructions: async () => options.instructions ?? null })
@@ -193,27 +203,33 @@ describe('an Ouro chat launch', () => {
     ]
   }
 
+  it('refuses a CLI older than the first release that reopens saved chats', async () => {
+    await expect(
+      launch({ options: { model: 'ada' } }, { version: '0.1.0-alpha.1631' })
+    ).rejects.toThrow('Chats need 0.1.0-alpha.1632 or newer.')
+  })
+
   it('runs acp-serve for the chat’s agent, leaving the environment as Ouro reads it', async () => {
-    const resolved = await launch({ options: { model: 'slugger' } })
-    expect(resolved.args).toEqual(['acp-serve', '--agent', 'slugger'])
+    const resolved = await launch({ options: { model: 'ada' } })
+    expect(resolved.args).toEqual(['acp-serve', '--agent', 'ada'])
     expect(resolved.env.OURO_AGENT_BUNDLES).toBeUndefined()
   })
 
   it('serves the same agent when the chat reopens its conversation', async () => {
-    const resolved = await launch({ ...reopened, options: { model: 'slugger' } })
-    expect(resolved.args).toEqual(['acp-serve', '--agent', 'slugger'])
+    const resolved = await launch({ ...reopened, options: { model: 'ada' } })
+    expect(resolved.args).toEqual(['acp-serve', '--agent', 'ada'])
   })
 
   it('refuses a chat with standing instructions, which Ouro has no way to take', async () => {
     await expect(
-      launch({ options: { model: 'slugger' } }, { instructions: 'You are a bot in Orca.' })
+      launch({ options: { model: 'ada' } }, { instructions: 'You are a bot in Orca.' })
     ).rejects.toThrow(/cannot take this chat's standing instructions/)
   })
 })
 
 describe('switching agent on an Ouro chat', () => {
-  const SLUGGER = { id: 'slugger', label: 'Slugger', isDefault: false, efforts: [] }
-  const OUROBOROS = { id: 'ouroboros', label: 'Ouroboros', isDefault: false, efforts: [] }
+  const ADA = { id: 'ada', label: 'Ada', isDefault: false, efforts: [] }
+  const ATLAS = { id: 'atlas', label: 'Atlas', isDefault: false, efforts: [] }
 
   function picker(sessionNeverStarted: boolean, holdsProviderConversation: boolean) {
     const seed = structuredAgentSessionSeedCatalog('ouro')
@@ -221,15 +237,15 @@ describe('switching agent on an Ouro chat', () => {
       createStructuredAgentSessionOptionState('ouro', seed),
       seed,
       {
-        models: [SLUGGER, OUROBOROS],
-        listedModelIds: ['slugger', 'ouroboros'],
-        current: { model: 'slugger' },
+        models: [ADA, ATLAS],
+        listedModelIds: ['ada', 'atlas'],
+        current: { model: 'ada' },
         sessionNeverStarted,
         holdsProviderConversation
       }
     )
     const model = structuredAgentSessionOptionSnapshot(state).find((entry) => entry.id === 'model')
-    return { model, canSwitch: canSetStructuredAgentSessionOption(state, 'model', 'ouroboros') }
+    return { model, canSwitch: canSetStructuredAgentSessionOption(state, 'model', 'atlas') }
   }
 
   it('is offered before the chat starts', () => {
@@ -248,7 +264,7 @@ describe('switching agent on an Ouro chat', () => {
   it('is shown read-only once an agent holds the conversation, naming that agent', () => {
     const { model, canSwitch } = picker(false, true)
     expect(model).toMatchObject({ settable: false, disabledReason: 'set-when-session-starts' })
-    expect(model?.kind).toMatchObject({ currentValue: 'slugger' })
+    expect(model?.kind).toMatchObject({ currentValue: 'ada' })
     expect(canSwitch).toBe(false)
   })
 
@@ -266,7 +282,7 @@ describe('switching agent on an Ouro chat', () => {
   ): AgentSessionRecord => ({
     ...agentSessionRecordFixture(),
     provider: 'ouro',
-    options: { model: 'slugger' },
+    options: { model: 'ada' },
     providerHandleChain
   })
   const held = [
@@ -282,7 +298,7 @@ describe('switching agent on an Ouro chat', () => {
   it('is refused by the host once an agent holds the conversation', () => {
     let refusal: unknown
     try {
-      pick(chat([...held]), 'ouroboros')
+      pick(chat([...held]), 'atlas')
     } catch (error) {
       refusal = error
     }
@@ -291,14 +307,14 @@ describe('switching agent on an Ouro chat', () => {
       refusal: {
         code: 'agent_session_operation_invalid',
         details: { reason: 'optionRejected' },
-        message: expect.stringContaining('stays with slugger')
+        message: expect.stringContaining('stays with ada')
       }
     })
-    expect(pick(chat([...held]), 'slugger').options).toEqual({ model: 'slugger' })
+    expect(pick(chat([...held]), 'ada').options).toEqual({ model: 'ada' })
   })
 
   it('is saved by the host while no agent holds a conversation yet, even after a launch', () => {
-    expect(pick(chat([]), 'ouroboros').options).toEqual({ model: 'ouroboros' })
+    expect(pick(chat([]), 'atlas').options).toEqual({ model: 'atlas' })
     // The fixture's lease is live at fence 7: the chat launched, and no agent took it up.
     expect(agentSessionNeverStarted(chat([]))).toBe(false)
   })
