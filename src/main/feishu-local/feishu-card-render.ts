@@ -3,6 +3,14 @@ import type { FeishuCardData } from './feishu-card-data'
 
 export function feishuControlCard(data: FeishuCardData, botName: string, open: boolean) {
   const options = open ? data.options : []
+  const status =
+    data.kind === 'status'
+      ? '工作状态'
+      : data.note?.startsWith('已选择：')
+        ? '已选择'
+        : data.note
+          ? '已处理'
+          : '等待你的选择'
   return {
     schema: '2.0',
     config: {
@@ -11,18 +19,7 @@ export function feishuControlCard(data: FeishuCardData, botName: string, open: b
       summary: { content: (data.note ?? data.text).slice(0, 160) }
     },
     header: {
-      title: { tag: 'plain_text', content: botName },
-      subtitle: {
-        tag: 'plain_text',
-        content:
-          data.kind === 'status'
-            ? '工作状态'
-            : data.note?.startsWith('已选择：')
-              ? '已选择'
-              : data.note
-                ? '已处理'
-                : '等待你的选择'
-      },
+      title: { tag: 'plain_text', content: `${botName} · ${status}` },
       template: data.note?.startsWith('已选择：') ? 'green' : data.note ? 'grey' : 'default',
       icon: { tag: 'standard_icon', token: 'ai-common_colorful' }
     },

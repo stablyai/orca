@@ -70,6 +70,13 @@ export function feishuResponseCard(data: FeishuCardData, botName: string, stream
       element_id: 'answer'
     })
   }
+  const status = complete
+    ? `${data.text}${elapsed === undefined ? '' : ` · ${formatElapsed(elapsed)}`}`
+    : tools.some((t) => t.status === 'running')
+      ? '正在执行工具'
+      : text
+        ? '正在生成回复'
+        : '正在准备回复'
   return {
     schema: '2.0',
     config: {
@@ -88,17 +95,7 @@ export function feishuResponseCard(data: FeishuCardData, botName: string, stream
       summary: { content: (response.final || text || data.text).slice(0, 160) }
     },
     header: {
-      title: { tag: 'plain_text', content: botName },
-      subtitle: {
-        tag: 'plain_text',
-        content: complete
-          ? `${data.text}${elapsed === undefined ? '' : ` · ${formatElapsed(elapsed)}`}`
-          : tools.some((t) => t.status === 'running')
-            ? '正在执行工具'
-            : text
-              ? '正在生成回复'
-              : '正在准备回复'
-      },
+      title: { tag: 'plain_text', content: `${botName} · ${status}` },
       template: response.phase === 'failed' ? 'red' : complete ? 'green' : 'blue',
       icon: { tag: 'standard_icon', token: 'ai-common_colorful' }
     },
