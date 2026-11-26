@@ -209,6 +209,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
     refreshSnapshot(getUpdateCheckClickOptions(event))
   }
   const checkLabel = t('settings.about.action.checkForUpdates', 'Check for updates')
+  const updatingLabel = t('settings.about.servers.updating', 'Updating')
   const action =
     eligible.length > 0 ? (
       <div className="flex items-center gap-1">
@@ -218,11 +219,11 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
               type="button"
               variant="ghost-muted"
               size="icon-sm"
-              aria-label={checkLabel}
+              aria-label={running ? updatingLabel : checkLabel}
               disabled={busy}
               onClick={check}
             >
-              {checking ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+              {busy ? <Loader2 className="animate-spin" /> : <RefreshCw />}
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4} className="max-w-xs">
@@ -235,6 +236,13 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
           label={t('settings.about.servers.updateAll', 'Update all')}
           variant="outline"
           disabled={open ? updatesBlocked : busy}
+          disabledReason={
+            running
+              ? updatingLabel
+              : checking
+                ? t('settings.about.status.checking', 'Checking…')
+                : checkLabel
+          }
           expansion={{
             expanded: open,
             failed: snapshot.phase === 'failed',
@@ -247,7 +255,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
     ) : running ? (
       <Button type="button" variant="outline" size="sm" disabled>
         <Loader2 className="animate-spin" />
-        {t('settings.about.servers.updating', 'Updating')}
+        {updatingLabel}
       </Button>
     ) : (
       <Button

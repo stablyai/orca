@@ -13,6 +13,7 @@ export function ServerRestartConfirm({
   label,
   variant,
   disabled,
+  disabledReason,
   expansion,
   onConfirm,
   focusAfterConfirm
@@ -21,6 +22,7 @@ export function ServerRestartConfirm({
   label: string
   variant: 'default' | 'outline'
   disabled: boolean
+  disabledReason?: string
   expansion?: { expanded: boolean; failed: boolean; expand: () => void }
   /** Receives exactly the servers the question named. */
   onConfirm: (environmentIds: string[]) => void
@@ -33,6 +35,8 @@ export function ServerRestartConfirm({
   const key = ids.join('\n')
   // Bound to the servers it named: if the set changes while open, the question closes unanswered.
   const [openKey, setOpenKey] = useState<string | typeof WAIT_FOR_EXPANSION | null>(null)
+  const awaitingExpansion = openKey === WAIT_FOR_EXPANSION
+  const unavailable = expansion && disabled && !awaitingExpansion
   // Invalidation is durable: once the set changes or updates block, the question is dropped and
   // never reopens by itself.
   if (openKey === WAIT_FOR_EXPANSION) {
@@ -56,17 +60,47 @@ export function ServerRestartConfirm({
     <Popover
       open={open}
       onOpenChange={(next) => {
-        if (next && expansion?.expanded === false) {
+        if (!next || awaitingExpansion) {
+          setOpenKey(null)
+          return
+        }
+        if (disabled) {
+          return
+        }
+        if (expansion?.expanded === false) {
           setOpenKey(WAIT_FOR_EXPANSION)
           expansion.expand()
           return
         }
-        setOpenKey(next ? key : null)
+        setOpenKey(key)
       }}
     >
-      <span className="relative inline-flex">
+      <span
+        className="relative inline-flex data-disabled:opacity-50"
+        data-disabled={unavailable ? '' : undefined}
+      >
         <PopoverTrigger asChild>
-          <Button type="button" variant={variant} size="sm" disabled={disabled}>
+          <Button
+            type="button"
+            variant={variant}
+            size="sm"
+            disabled={!expansion && disabled}
+            aria-disabled={unavailable || undefined}
+            aria-busy={awaitingExpansion || undefined}
+            aria-description={disabled ? disabledReason : undefined}
+            title={disabled ? disabledReason : undefined}
+            onBlur={() => {
+              if (awaitingExpansion) {
+                setOpenKey(null)
+              }
+            }}
+            onKeyDown={(event) => {
+              if (awaitingExpansion && event.key === 'Escape') {
+                event.preventDefault()
+                setOpenKey(null)
+              }
+            }}
+          >
             {label}
           </Button>
         </PopoverTrigger>
@@ -103,7 +137,7 @@ export function ServerRestartConfirm({
                   {' '}
                   {t('settings.about.servers.liveMayDrop', 'Live sessions may drop.')}
                 </span>
-                <span className="@min-[27rem]/server-confirm:hidden">
+                <span className="text-xs @min-[27rem]/server-confirm:hidden">
                   {t('settings.about.servers.sessionsMayDrop', 'Sessions may drop')}
                 </span>
               </span>
