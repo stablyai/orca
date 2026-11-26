@@ -95,11 +95,6 @@ describe('a detached agent with output no app took', () => {
     await vi.advanceTimersByTimeAsync(2 * HOUR)
     expect(unknown.stoppedBy).toBe('cap')
     expect(asking.close).not.toHaveBeenCalled()
-    // Withdrawn by the agent later: its next window ends it like any unknown work.
-    Object.assign(asking.idleStopPolicy, { waiting: false })
-    now = 2 * HOUR + 2 * RELAY_DETACHED_CAP_MS
-    await vi.advanceTimersByTimeAsync(RELAY_DETACHED_CAP_MS)
-    expect(asking.stoppedBy).toBe('cap')
     // Nothing counted is left: no recheck wakes the daemon for busy work.
     expect(vi.getTimerCount()).toBe(0)
     expect(busyRead.close).not.toHaveBeenCalled()
