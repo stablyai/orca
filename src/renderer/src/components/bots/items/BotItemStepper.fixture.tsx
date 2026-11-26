@@ -7,6 +7,8 @@ import { BotItemCommentBox } from './BotItemCommentBox'
 import { BotItemNavRow, BotItemStepper } from './BotItemStepper'
 import type { BotItemWaitingQuestion } from './BotItemReplyingTo'
 import { botRefKey } from '@/lib/bot-hosts'
+import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
 import { updateNativeChatComposerDraft } from '../../native-chat/drafts/native-chat-composer-draft-store'
 
 const item = makeTestBotItem(7, { title: 'Fix the share dialog' })
@@ -172,8 +174,30 @@ const ASK: BotItemWaitingQuestion = {
   asker: 'CoS'
 }
 
-/** The agent's question waiting, in a pane `width` wide, with `text` typed. */
-function asking(width: number, text = ''): ComponentFixture {
+const paint = (): Promise<void> => new Promise((resolve) => requestAnimationFrame(() => resolve()))
+
+/** Switches the frame to `locale` from the saved preference, as the app does. */
+async function switchLocale(locale: 'en' | 'tr' | 'zh'): Promise<void> {
+  await loadRendererUiLanguage(locale)
+  useAppStore.setState(({ settings }) =>
+    settings ? { settings: { ...settings, uiLanguage: locale } } : {}
+  )
+  for (let attempt = 0; i18n.language !== locale && attempt < 120; attempt++) {
+    await paint()
+  }
+  await paint()
+  await paint()
+}
+
+/** The agent's question waiting, in a pane `width` wide, with `text` typed, at item `total - 2` of `total`. */
+function asking(
+  width: number,
+  {
+    text = '',
+    total = 13,
+    locale
+  }: { text?: string; total?: number; locale?: 'en' | 'tr' | 'zh' } = {}
+): ComponentFixture {
   return defineFixture({
     width: width + 32,
     setup: () =>
@@ -182,16 +206,25 @@ function asking(width: number, text = ''): ComponentFixture {
         { text, images: [] },
         'immediate'
       ),
-    render: () => <Row width={width} total={13} attach question={ASK} />
+    render: () => <Row width={width} total={total} attach question={ASK} />,
+    interact: async () => switchLocale(locale ?? 'en')
   })
 }
 const ASK_LONG =
   'Yes, merge it once CI is green and the review has passed on the latest commit. Also add the screenshots to the PR description before you do. Thanks!'
-export const askWide = asking(480)
+export const askWide = asking(560)
 export const askMid = asking(340)
 export const askNarrow = asking(220)
-export const askBreak = asking(439)
-export const askAboveBreak = asking(440)
-export const askLong = asking(480, ASK_LONG)
-export const askLongNarrow = asking(260, ASK_LONG)
-export const askVeryLong = asking(480, Array(6).fill(ASK_LONG).join('\n'))
+export const askBreak = asking(519)
+export const askAboveBreak = asking(520)
+export const askLong = asking(560, { text: ASK_LONG })
+export const askLongNarrow = asking(260, { text: ASK_LONG })
+export const askVeryLong = asking(560, { text: Array(6).fill(ASK_LONG).join('\n') })
+export const askEn520ThreeDigits = asking(520, { total: 105 })
+export const askEn520FourDigits = asking(520, { total: 1204 })
+export const askTr440 = asking(440, { locale: 'tr' })
+export const askTr480 = asking(480, { locale: 'tr' })
+export const askTr520 = asking(520, { locale: 'tr', total: 105 })
+export const askZh440 = asking(440, { locale: 'zh' })
+export const askZh480 = asking(480, { locale: 'zh' })
+export const askZh520 = asking(520, { locale: 'zh', total: 105 })

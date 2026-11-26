@@ -348,7 +348,8 @@ function BotItemCommentField({
         <BotItemReplyingTo mark={reply} />
         {images.length > 0 ? (
           // Two rows of chips (fewer in a short pane), then they scroll; the padding keeps rings and × in view.
-          <div className="scrollbar-sleek mb-1.5 flex max-h-[min(128px,14cqh)] flex-wrap gap-2 overflow-y-auto px-1 pb-0.5 pr-2 pt-2">
+          // Their left edge is the chip's and the text's.
+          <div className="scrollbar-sleek mb-1.5 flex max-h-[min(128px,14cqh)] flex-wrap gap-2 overflow-y-auto pb-0.5 pr-2 pt-2">
             {images.map((attachment, index) => (
               <NativeChatImageAttachmentPreview
                 key={attachment.id}
@@ -362,14 +363,14 @@ function BotItemCommentField({
         ) : null}
         <div className={cn('flex flex-wrap items-end gap-0.5', nav && BOT_ITEM_TOOL_ROW_TOUCH_FIT)}>
           {access.session ? <NativeChatAttachButton onAttach={fileDrops.pickAttachments} /> : null}
-          {/* A narrow pane leaves the text too little room beside the controls, so it takes its own row. */}
+          {/* Under 520px the text, and a question's placeholder, would not fit beside the controls: own row. */}
           <div
             ref={field}
             className={cn(
               'min-w-0 flex-1',
               stacked
                 ? 'order-first basis-full'
-                : '@max-[440px]/item-pane:order-first @max-[440px]/item-pane:basis-full'
+                : '@max-[520px]/item-pane:order-first @max-[520px]/item-pane:basis-full'
             )}
           >
             <NativeChatPromptEditor
@@ -394,7 +395,7 @@ function BotItemCommentField({
               // On its own row the text starts on the chip's and the buttons' left edge.
               className={cn(
                 'scrollbar-sleek block overflow-y-auto bg-transparent py-1.5 text-[13px] leading-5 text-chat-foreground-strong outline-none [&_p.is-editor-empty:only-child]:before:!h-auto [&_p.is-editor-empty:only-child]:before:mr-[-100%] [&_p.is-editor-empty:only-child]:before:w-full [&_p.is-editor-empty:only-child]:before:truncate',
-                stacked ? 'px-0' : 'px-1 @max-[440px]/item-pane:px-0',
+                stacked ? 'px-0' : 'px-1 @max-[520px]/item-pane:px-0',
                 height
               )}
             />
@@ -405,7 +406,7 @@ function BotItemCommentField({
             <div
               className={cn(
                 'flex h-8 min-w-0 items-center pointer-coarse:h-11',
-                stacked ? 'flex-1' : 'shrink-0 @max-[440px]/item-pane:flex-1'
+                stacked ? 'flex-1' : 'shrink-0 @max-[520px]/item-pane:flex-1'
               )}
             >
               {nav}
