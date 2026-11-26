@@ -4,14 +4,8 @@ import { prWatchStorage } from '../../../github/pr-watch/pr-watch-storage'
 // other unhanded sends are rejected (journal-unsent-send-hold.ts / queued-message-pause.ts).
 // Settlement needs no lease and starts no provider child.
 
-import {
-  keptRunningProviderRelayPid,
-  listProviderRelaysAtLaunchWithin,
-  noteProviderRelayKeptUnverified,
-  providerRelayMayKeepChat
-} from '../../../provider-relay/app-provider-relays'
-import { providerOwnerHeldElsewhere } from '../../../provider-relay/provider-relay-owner-ancestry'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import { keptRunningProviderRelayPid } from '../../../provider-relay/app-provider-relays'
+import { structuredAgentSessionKeptAtOpen } from './structured-agent-session-kept-at-open'
 import type { JournalSqlDatabase } from '../../agent-session-journal/database/journal-sql-database'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import { openAgentSessionJournal } from '../../agent-session-journal/journal-store-factory'
@@ -107,7 +101,7 @@ export async function openStructuredAgentSessionConversationJournal(
   const { store } = deps
   // An agent the terminal host kept running is not gone: its turn, sends and queue go on once it
   // reattaches, so nothing of the last run is recovered or settled here.
-  const kept = !options.acquisition && (await agentKeptRunning(record))
+  const kept = !options.acquisition && (await structuredAgentSessionKeptAtOpen(record))
   // A reattach's own open comes after the launch listing it reattaches from, so no wait here.
   const keptWriter =
     kept || (options.acquisition && keptRunningProviderRelayPid(sessionId) !== null)
@@ -169,30 +163,6 @@ export async function resettleOpenStructuredAgentSessionConversation(
   if (session && record?.ownerObservation.deathEvidence) {
     await settleGoneGeneration(deps, record, session.journal)
   }
-}
-
-/** A chat's history never waits long on a late terminal host; its first send waits instead. */
-const KEPT_LISTING_OPEN_WAIT_MS = 1_500
-
-async function agentKeptRunning(record: AgentSessionConversationView): Promise<boolean> {
-  const { sessionId, provider, location } = record
-  const owner = record.ownerObservation.ownerProcess
-  if (
-    !owner ||
-    !providerRelayMayKeepChat(provider, location.executionHostId === LOCAL_EXECUTION_HOST_ID)
-  ) {
-    return false
-  }
-  const listed = await listProviderRelaysAtLaunchWithin(KEPT_LISTING_OPEN_WAIT_MS)
-  if (listed || keptRunningProviderRelayPid(sessionId) !== null) {
-    return keptRunningProviderRelayPid(sessionId) !== null
-  }
-  // Still under a terminal host's provider owner: maybe kept, so nothing of its run is settled yet.
-  const held = (await providerOwnerHeldElsewhere(owner.pid).catch(() => null)) !== false
-  if (held) {
-    noteProviderRelayKeptUnverified(sessionId)
-  }
-  return held
 }
 
 /** A kept agent ended before it could be reattached; its turn settles as any gone one does. */
