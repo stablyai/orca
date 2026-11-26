@@ -28,7 +28,10 @@ const WORKER_ENV_ALLOWLIST = [
   'COMSPEC',
   'PATHEXT',
   'PROCESSOR_ARCHITECTURE',
-  'NUMBER_OF_PROCESSORS'
+  'NUMBER_OF_PROCESSORS',
+  // Windows profile folders (paths, not credentials): the `orca` CLI finds the running app under %APPDATA%.
+  'APPDATA',
+  'LOCALAPPDATA'
 ] as const
 
 export function buildPluginWorkerEnv(

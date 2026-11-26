@@ -73,4 +73,16 @@ describe('buildPluginWorkerEnv', () => {
       ELECTRON_RUN_AS_NODE: '1'
     })
   })
+
+  it('passes Windows profile folders so a worker can run the orca CLI', () => {
+    const env = buildPluginWorkerEnv(
+      {
+        AppData: 'C:\\Users\\ada\\AppData\\Roaming',
+        LOCALAPPDATA: 'C:\\Users\\ada\\AppData\\Local'
+      },
+      'win32'
+    )
+    expect(env.APPDATA).toBe('C:\\Users\\ada\\AppData\\Roaming')
+    expect(env.LOCALAPPDATA).toBe('C:\\Users\\ada\\AppData\\Local')
+  })
 })

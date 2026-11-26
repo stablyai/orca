@@ -203,9 +203,17 @@ A worker does not inherit Orca's full environment: tokens, shell-rc variables an
 `LOGNAME`, `USERNAME`), locale and temp-dir variables, plus `XDG_RUNTIME_DIR`,
 `DBUS_SESSION_BUS_ADDRESS` and `SSH_AUTH_SOCK` from Orca's launch
 environment, so `git` credential helpers (such as libsecret) and ssh-agent can reach the session
-Orca started in. `GIT_TERMINAL_PROMPT=0` is set, so `git` fails instead of asking for a password.
+Orca started in. On Windows it also keeps `APPDATA` and `LOCALAPPDATA`, which the `orca` CLI
+needs to find the running app. `GIT_TERMINAL_PROMPT=0` is set, so `git` fails instead of asking
+for a password.
 This filter only keeps secrets held in Orca's environment out of plugins; it is not a sandbox. A
 worker runs as you and can read your files, saved logins and SSH keys like any other program.
+
+The worker always runs on the desktop machine, even when a workspace lives on a WSL or SSH host.
+An agent there cannot run scripts by their desktop paths or reach a socket the worker opens, so a
+hook that adds such paths to an agent's command should first look the workspace up in
+`workspace.list` and leave it unchanged unless `hostId` is `local` and `path` is not a
+`\\wsl.localhost\` or `\\wsl$\` path.
 
 ### Panels, workers and data
 
