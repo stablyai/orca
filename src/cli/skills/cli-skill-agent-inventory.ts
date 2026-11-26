@@ -32,7 +32,6 @@ export async function readCliSkillAgentInventory(
       reject(new Error(typeof reply === 'string' ? reply : 'Invalid local agent inventory'))
     }
   })
-  // A synchronous directory read can prevent the child from handling its own deadline.
   const timer = setTimeout(
     () => reject(new AgentInventoryDeadlineError()),
     INVENTORY_COMPLETION_WAIT_MS

@@ -1,6 +1,13 @@
-import { opendirSync, readdirSync, type Dir } from 'node:fs'
-import { opendir } from 'node:fs/promises'
+import {
+  opendirSync,
+  readdir as readdirCallback,
+  readdirSync,
+  type Dir,
+  type Dirent
+} from 'node:fs'
+import { lstat, opendir, readdir } from 'node:fs/promises'
 import path from 'node:path'
+import { promisify } from 'node:util'
 import {
   isMissingPathError,
   isPathPermissionError,
@@ -41,30 +48,6 @@ export function detectionDirectoryKey(dir: string, isWin: boolean): string {
     : dir
 }
 
-export async function scanDetectionDirectories<T, Hit>(
-  directories: T[],
-  concurrency: number,
-  scan: (dir: T) => Promise<Hit>,
-  commit: (dir: T, hits: Hit) => void,
-  isDone: () => boolean
-): Promise<void> {
-  // Start the first entry on its own. Later reads overlap, but commit strictly in PATH order.
-  if (directories.length === 0) {
-    return
-  }
-  commit(directories[0], await scan(directories[0]))
-  for (let index = 1; index < directories.length && !isDone(); index += concurrency) {
-    const wave = directories.slice(index, index + concurrency)
-    const pending = wave.map((dir) => scan(dir))
-    for (const [offset, dir] of wave.entries()) {
-      commit(dir, await pending[offset])
-      if (isDone()) {
-        return
-      }
-    }
-  }
-}
-
 export async function readDetectionDirectory(
   dir: string,
   inventory = false
@@ -101,8 +84,66 @@ export async function readDetectionDirectory(
   }
 }
 
+export async function readInlineDetectionDirectory(
+  dir: string,
+  inventory: boolean
+): Promise<DetectionDirectoryListing> {
+  try {
+    // Dir iteration can lstat unknown entry types synchronously.
+    const entries = await readdir(dir)
+    if (
+      entries.length > MAX_DETECTION_DIRECTORY_ENTRIES ||
+      entries.some((name) => /[^\p{ASCII}]/u.test(name))
+    ) {
+      return null
+    }
+    return new Map(entries.map((name) => [directoryNameKey(name), name]))
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return new Map()
+    }
+    return !inventory || isPathPermissionError(error) ? null : 'unverified'
+  }
+}
+
 function isDirentLookupError(error: unknown): error is { syscall: 'lstat'; code?: unknown } {
   return !!error && typeof error === 'object' && 'syscall' in error && error.syscall === 'lstat'
+}
+
+// The callback API resolves DT_UNKNOWN entries with async lstat.
+const readdirEntries = promisify<string, { withFileTypes: true }, Dirent[]>(readdirCallback)
+
+export async function readInlineInstallSubdirectories(
+  dir: string
+): Promise<InstallDirectoryListing> {
+  const names: string[] = []
+  let uncertain = false
+  try {
+    const entries = await readdirEntries(dir, { withFileTypes: true })
+    return {
+      names: entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name),
+      uncertain
+    }
+  } catch (error) {
+    if (!isDirentLookupError(error)) {
+      return { names, uncertain: !isMissingPathError(error) && !isPathPermissionError(error) }
+    }
+    uncertain = !isMissingPathError(error)
+  }
+  try {
+    for (const name of await readdir(dir)) {
+      try {
+        if ((await lstat(path.join(dir, name))).isDirectory()) {
+          names.push(name)
+        }
+      } catch (error) {
+        uncertain ||= !isMissingPathError(error)
+      }
+    }
+  } catch (error) {
+    uncertain ||= !isMissingPathError(error) && !isPathPermissionError(error)
+  }
+  return { names, uncertain }
 }
 
 export function readInstallSubdirectories(dir: string): InstallDirectoryListing {

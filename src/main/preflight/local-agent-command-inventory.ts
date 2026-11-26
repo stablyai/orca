@@ -128,11 +128,11 @@ export async function scanLocalAgentCommandInventory(
       signal: pathSignal,
       inventoryCommandCount: commands.size,
       onMatch: onChange,
-      onCommandComplete: (command, uncertain) => {
-        if (!found.has(command) && !hasPathSeparatorToken(command)) {
+      onCommandComplete: (command, uncertain, verified) => {
+        if (!verified && !hasPathSeparatorToken(command)) {
           pathMisses.push(command)
         } else {
-          resolveCommand(command, uncertain)
+          resolveCommand(command, uncertain && !verified)
         }
       },
       unverified: unverifiedPath

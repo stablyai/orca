@@ -14,7 +14,6 @@ type ProbeValues = {
   dirs: InstallDirectoryListing
   listing: Map<string, string>
   file: string
-  realpath: string
 }
 type ProbeKind = keyof ProbeValues
 type ProbeValue = ProbeValues[ProbeKind] | null

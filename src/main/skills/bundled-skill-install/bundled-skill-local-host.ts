@@ -37,9 +37,12 @@ async function detectBundledSkillAgents(signal?: AbortSignal): Promise<SkillInst
 
 export async function sendCliSkillAgentInventory(): Promise<void> {
   const stop = (): void => {
-    killActiveShellProbes()
-    // Node can hang joining native filesystem work.
-    process.kill(process.pid, 'SIGKILL')
+    try {
+      killActiveShellProbes()
+    } finally {
+      // Node can hang joining native filesystem work.
+      process.kill(process.pid, 'SIGKILL')
+    }
   }
   process.once('disconnect', stop)
   if (!process.connected) {

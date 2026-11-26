@@ -246,10 +246,15 @@ describe('win32 PATH lookup', () => {
   it('selects the first Windows PATH hit when a later stat finishes first', async () => {
     const earlier = path.join(quotedBin, 'tool.cmd')
     const later = path.join(dotBin, 'tool.cmd')
+    const earlierStarted = Promise.withResolvers<void>()
     const laterChecked = Promise.withResolvers<void>()
     vi.mocked(stat).mockImplementation(async (candidate) => {
       if (candidate === earlier) {
+        earlierStarted.resolve()
         await laterChecked.promise
+      }
+      if (candidate === later) {
+        await earlierStarted.promise
       }
       const result = await filesystem.realStat!(candidate)
       if (candidate === later) {
@@ -271,15 +276,12 @@ describe('win32 PATH lookup', () => {
     }
   })
 
-  it('scans Windows PATH spellings once, retaining shell precedence and stopping before a pending tail', async () => {
-    const runtime = path.join(root, 'orca-runtime')
+  it('stops at a verified quoted PATH hit when CWD is the same directory', async () => {
     const late = path.join(root, 'late')
     const programs = ['claude', 'codex', 'grok', 'omp', 'opencode']
-    await mkdir(runtime)
-    await Promise.all([
-      writeFile(path.join(runtime, 'claude.cmd'), ''),
-      ...programs.map((program) => writeFile(path.join(dotBin, `${program}.cmd`), ''))
-    ])
+    await Promise.all(
+      programs.map((program) => writeFile(path.join(quotedBin, `${program}.cmd`), ''))
+    )
     const held = Promise.withResolvers<Map<string, string> | null>()
     const listings = vi.mocked(readDetectionDirectoryViaWorker)
     listings.mockClear()
@@ -292,20 +294,18 @@ describe('win32 PATH lookup', () => {
       await expect(
         findCommandsOnLocalPath(programs, {
           platform: 'win32',
-          env: { PATH: `"${runtime}/";${runtime};${dotBin};${late}`, PATHEXT: '.cmd' },
-          inventory: { isRuntimePath: (dir) => dir === runtime || dir === `${runtime}/`, matches }
+          cwd: quotedBin,
+          env: { PATH: `"${quotedBin}/";${late}`, PATHEXT: '.cmd' },
+          inventory: { isRuntimePath: () => false, matches }
         })
       ).resolves.toEqual(new Set(programs))
       expect(matches.get('claude')).toEqual({
-        first: path.join(runtime, 'claude.cmd'),
-        unquoted: path.join(runtime, 'claude.cmd'),
-        user: path.join(dotBin, 'claude.cmd')
+        first: path.join(quotedBin, 'claude.cmd'),
+        user: path.join(quotedBin, 'claude.cmd')
       })
+      expect(listings.mock.calls).toEqual([[quotedBin, false]])
       expect(
-        listings.mock.calls.filter(([dir]) => dir === runtime || dir === `${runtime}/`)
-      ).toHaveLength(1)
-      expect(
-        vi.mocked(stat).mock.calls.filter(([file]) => file === path.join(runtime, 'claude.cmd'))
+        vi.mocked(stat).mock.calls.filter(([file]) => file === path.join(quotedBin, 'claude.cmd'))
       ).toHaveLength(1)
     } finally {
       held.resolve(new Map())

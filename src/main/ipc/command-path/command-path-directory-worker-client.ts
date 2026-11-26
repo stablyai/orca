@@ -1,7 +1,10 @@
 import { existsSync } from 'node:fs'
 import type { Worker } from 'node:worker_threads'
 import type { InstallDirectoryListing } from '../../../shared/shell/command-resolution/inventory-fs-probes'
-import { readDetectionDirectory, readInstallSubdirectories } from './command-path-directory'
+import {
+  readInlineDetectionDirectory,
+  readInlineInstallSubdirectories
+} from './command-path-directory'
 import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
 import { LazyWorkerThreadHost } from '../../worker-threads/lazy-worker-thread-host'
 import type { WorkerThreadFactory } from '../../worker-threads/worker-thread-transport'
@@ -119,7 +122,7 @@ export async function readInstallDirectoriesViaWorker(
   dir: string
 ): Promise<InstallDirectoryListing | null> {
   if (inlineReads) {
-    return readInstallSubdirectories(dir)
+    return readInlineInstallSubdirectories(dir)
   }
   installClient ??= new DetectionDirectoryWorkerClient(createWorker, 'install')
   const listing = await installClient.read(dir)
@@ -131,7 +134,7 @@ export async function readDetectionDirectoryViaWorker(
   inventory = false
 ): Promise<DetectionDirectoryListing> {
   if (inlineReads) {
-    return readDetectionDirectory(dir, inventory)
+    return readInlineDetectionDirectory(dir, inventory)
   }
   const workerClient = inventory
     ? (inventoryClient ??= new DetectionDirectoryWorkerClient(createWorker, 'inventory'))
