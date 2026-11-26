@@ -19,7 +19,7 @@ import { CONNECTOR_ACT_METHOD } from '../connector-act'
 import { connectorPostAttempts } from '../../../../external-conversations/connector-post-attempts'
 import { CONNECTOR_REACT_METHOD } from '../connector-react'
 import { CONNECTOR_LEAVE_THREAD_METHOD } from '../connector-leave-thread'
-import { splitHtmlDocumentFences } from '../../../../../shared/markdown/html-document-fences'
+import { splitSlackHtmlReply } from '../../../../../shared/connectors/slack-html-reply'
 import type { ConnectorCloudFeature } from '../../../../../shared/connector-cloud-features'
 import { botOfSession } from '../../../../bots/bot-session-tabs'
 
@@ -80,7 +80,7 @@ export const CONNECTOR_METHODS = [
           (feature) => features?.has(feature)
         ) &&
         botOfSession(context.runtime.bots, params.sessionId) &&
-        splitHtmlDocumentFences(text).documents.length > 0
+        splitSlackHtmlReply(text) !== null
       ) {
         throw new Error(CONNECTOR_REPLY_HTML_PAGE_AS_FILE)
       }
