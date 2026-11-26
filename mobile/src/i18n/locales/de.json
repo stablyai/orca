@@ -1084,10 +1084,9 @@
       "openHost": "{{title}} öffnen",
       "pairingInvalid": "Kopplung ungültig",
       "pairingTemporarilyUnavailable": "Kopplung vorübergehend nicht verfügbar",
-      "repairHint": "Zum erneuten Koppeln mit dem Desktop tippen",
-      "sameNetworkOnlyHint": "Verbindet sich nur im selben WLAN oder über Tailscale. Für Verbindungen von überall auf dem Desktop anmelden und erneut koppeln",
       "unlockHint": "Telefon entsperren, dann zum erneuten Versuch tippen",
-      "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} aktiv"
+      "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} aktiv",
+      "tapToPairAgain": "Zum erneuten Koppeln mit dem Desktop tippen"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Host-Kompatibilität wird geprüft"
@@ -1150,7 +1149,6 @@
       "startFrom": "Ausgangspunkt",
       "loadingProjects": "Projekte werden geladen…",
       "connectTargetFirst": "Zuerst mit dem Ziel verbinden",
-      "createWorktree": "Worktree erstellen",
       "noProjectsFound": "Keine Projekte gefunden",
       "note": "Notiz",
       "notePlaceholder": "Notiz schreiben",
@@ -1799,24 +1797,25 @@
       "connectDesktop": "{{desktop}} verbinden, um Automatisierungen anzuzeigen und auszuführen.",
       "emptyTitle": "Agentenarbeit planen",
       "newAutomation": "Neue Automatisierung",
-      "pairDesktop": "Einen Desktop koppeln, um Automatisierungen anzuzeigen und auszuführen.",
       "scheduled": "Geplant",
       "showFor": "Automatisierungen anzeigen für",
       "toggleFailed": "{{name}} konnte nicht aktualisiert werden",
-      "updateDesktop": "Orca auf {{desktop}} aktualisieren, um Automatisierungen zu nutzen."
+      "updateDesktop": "Orca auf {{desktop}} aktualisieren, um Automatisierungen zu nutzen.",
+      "pairComputer": "Einen Desktop koppeln, um Automatisierungen anzuzeigen und auszuführen."
     },
     "listFooter": {
-      "hostPickerTitle": "Aufgaben auf Host öffnen"
+      "openTasksOn": "Aufgaben auf Host öffnen"
     },
     "listHeader": {
-      "desktopsHeading": "Desktop-Computer"
+      "computersHeading": "Desktop-Computer"
     },
     "screen": {
       "pairingCheckFailed": "Kopplung konnte nicht geprüft werden",
-      "removeHostFailed": "Host konnte nicht entfernt werden",
-      "removeHostMessage": "„{{name}}“ entfernen? Eine erneute Kopplung ist später möglich.",
-      "removeHostTitle": "Host entfernen",
-      "tryAgain": "Bitte erneut versuchen."
+      "tryAgain": "Bitte erneut versuchen.",
+      "removeComputerFailed": "Host konnte nicht entfernt werden",
+      "removeComputerTitle": "Host entfernen",
+      "removeComputerMessage": "„{{name}}“ entfernen? Eine erneute Kopplung ist später möglich.",
+      "sameNetworkOnly": "Verbindet sich nur im selben WLAN oder über Tailscale. Für Verbindungen von überall auf dem Desktop anmelden und erneut koppeln"
     },
     "stats": {
       "agentTime": "Agentenzeit",
@@ -1829,21 +1828,21 @@
     },
     "tabs": {
       "automations": "Automatisierungen",
-      "chooseDesktop": "{{desktop}}, anderen Desktop auswählen",
       "feed": "Feed",
-      "usage": "Nutzung"
+      "usage": "Nutzung",
+      "chooseComputer": "{{desktop}}, anderen Desktop auswählen"
     },
     "usage": {
       "active": "Aktiv",
-      "addAccounts": "Konten auf dem Desktop unter Einstellungen → Konten hinzufügen.",
       "connectDesktop": "{{desktop}} verbinden, um die Nutzung der Agentenkonten zu sehen.",
       "emptyTitle": "Noch keine Nutzung",
-      "openAccountsHint": "Öffnet die Konten dieses Desktops",
-      "pairDesktop": "Einen Desktop koppeln, um die Nutzung der Agentenkonten zu sehen.",
       "refresh": "Nutzung aktualisieren",
       "showUsageFor": "Nutzung anzeigen für",
       "updatedAgo": "Vor {{time}} aktualisiert",
-      "updatedJustNow": "Gerade eben aktualisiert"
+      "updatedJustNow": "Gerade eben aktualisiert",
+      "pairComputer": "Einen Desktop koppeln, um die Nutzung der Agentenkonten zu sehen.",
+      "addAccountsOnComputer": "Konten auf dem Desktop unter Einstellungen → Konten hinzufügen.",
+      "openComputerAccountsHint": "Öffnet die Konten dieses Desktops"
     }
   },
   "hooks": {
@@ -1870,14 +1869,12 @@
       "updateStepsServer": "Orca auf dem Server aktualisieren und anschließend neu starten.",
       "orcaVersion": "Orca-Version",
       "goBack": "Zurück navigieren",
-      "hostNamePlaceholder": "Host-Name",
-      "hostRemoved": "Dieser Host wurde von diesem Smartphone entfernt.",
-      "loadFailed": "Host konnte nicht geladen werden.",
-      "missingHost": "Host fehlt.",
       "name": "Name",
-      "saveFailed": "Host konnte nicht gespeichert werden.",
-      "saveHost": "Host speichern",
-      "title": "Host bearbeiten",
+      "editComputer": "Host bearbeiten",
+      "computerRemoved": "Dieser Host wurde von diesem Smartphone entfernt.",
+      "couldNotLoad": "Host konnte nicht geladen werden.",
+      "couldNotSave": "Host konnte nicht gespeichert werden.",
+      "save": "Speichern",
       "removeHost": "Host entfernen"
     }
   },
@@ -1885,9 +1882,9 @@
     "hostListActionSheetActions": {
       "connect": "Verbinden",
       "disconnect": "Verbindung trennen",
-      "editHost": "Host bearbeiten",
       "networkDiagnostics": "Netzwerkdiagnose",
-      "reconnect": "Erneut verbinden"
+      "reconnect": "Erneut verbinden",
+      "editComputer": "Host bearbeiten"
     },
     "hostPendingCreationRow": {
       "creatingWorkspace": "Arbeitsbereich wird erstellt…"
@@ -1975,7 +1972,6 @@
       "accounts": "Konten",
       "agentSessionHistory": "Verlauf der Agentensitzungen",
       "changes": "Änderungen",
-      "editHost": "Host bearbeiten",
       "host": "Host",
       "pullRequest": "Pull Request",
       "sourceControl": "Quellcodeverwaltung",
@@ -1983,12 +1979,13 @@
       "terminal": "Terminal",
       "workspace": "Arbeitsbereich",
       "automations": "Automatisierungen",
+      "editComputer": "Host bearbeiten",
       "mcpServers": "MCP-Server"
     }
   },
   "newWorkspace": {
     "hostPicker": {
-      "title": "Arbeitsbereich auf Host erstellen"
+      "newWorkspaceOn": "Arbeitsbereich auf Host erstellen"
     },
     "loadingDrawer": {
       "downloadProgress": "Wird heruntergeladen… {{progress}}",

@@ -1080,10 +1080,9 @@
       "openHost": "「{{title}}」を開く",
       "pairingInvalid": "ペアリングが無効",
       "pairingTemporarilyUnavailable": "ペアリングが一時的に利用できません",
-      "repairHint": "タップしてデスクトップと再ペアリングしてください。",
-      "sameNetworkOnlyHint": "同じ Wi-Fi または Tailscale でのみ接続できます。どこからでも接続するには、デスクトップでサインインしてもう一度ペアリングしてください",
       "unlockHint": "スマートフォンのロックを解除してから、タップして再試行してください。",
-      "worktreeAccessibilitySummary": "{{summary}}、{{activeCount}} 件がアクティブ"
+      "worktreeAccessibilitySummary": "{{summary}}、{{activeCount}} 件がアクティブ",
+      "tapToPairAgain": "タップしてデスクトップと再ペアリングしてください。"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "ホストの互換性を確認中"
@@ -1146,7 +1145,6 @@
       "startFrom": "作成元",
       "loadingProjects": "プロジェクトを読み込み中…",
       "connectTargetFirst": "先に接続先へ接続",
-      "createWorktree": "ワークツリーを作成する",
       "noProjectsFound": "プロジェクトが見つかりません",
       "note": "注記",
       "notePlaceholder": "メモを書く",
@@ -1795,24 +1793,25 @@
       "connectDesktop": "自動化を表示・実行するには、{{desktop}} に接続してください。",
       "emptyTitle": "Agent の作業を予定",
       "newAutomation": "新しい自動化",
-      "pairDesktop": "自動化を表示・実行するには、デスクトップとペアリングしてください。",
       "scheduled": "スケジュール実行",
       "showFor": "自動化を表示するデスクトップ",
       "toggleFailed": "{{name}} を更新できませんでした",
-      "updateDesktop": "自動化を使用するには、{{desktop}} の Orca を更新してください。"
+      "updateDesktop": "自動化を使用するには、{{desktop}} の Orca を更新してください。",
+      "pairComputer": "自動化を表示・実行するには、デスクトップとペアリングしてください。"
     },
     "listFooter": {
-      "hostPickerTitle": "タスクを開くホスト"
+      "openTasksOn": "タスクを開くホスト"
     },
     "listHeader": {
-      "desktopsHeading": "デスクトップ"
+      "computersHeading": "デスクトップ"
     },
     "screen": {
       "pairingCheckFailed": "ペアリングを確認できませんでした",
-      "removeHostFailed": "ホストを削除できませんでした",
-      "removeHostMessage": "「{{name}}」を削除しますか？後で再度ペアリングできます。",
-      "removeHostTitle": "ホストを削除",
-      "tryAgain": "再試行してください。"
+      "tryAgain": "再試行してください。",
+      "removeComputerFailed": "ホストを削除できませんでした",
+      "removeComputerTitle": "ホストを削除",
+      "removeComputerMessage": "「{{name}}」を削除しますか？後で再度ペアリングできます。",
+      "sameNetworkOnly": "同じ Wi-Fi または Tailscale でのみ接続できます。どこからでも接続するには、デスクトップでサインインしてもう一度ペアリングしてください"
     },
     "stats": {
       "agentTime": "Agent 時間",
@@ -1825,21 +1824,21 @@
     },
     "tabs": {
       "automations": "自動化",
-      "chooseDesktop": "{{desktop}}、別のデスクトップを選択",
       "feed": "フィード",
-      "usage": "使用状況"
+      "usage": "使用状況",
+      "chooseComputer": "{{desktop}}、別のデスクトップを選択"
     },
     "usage": {
       "active": "使用中",
-      "addAccounts": "デスクトップの「設定」→「アカウント」からアカウントを追加してください。",
       "connectDesktop": "Agent アカウントの使用状況を表示するには、{{desktop}} に接続してください。",
       "emptyTitle": "使用状況はまだありません",
-      "openAccountsHint": "このデスクトップのアカウントを開きます",
-      "pairDesktop": "Agent アカウントの使用状況を表示するには、デスクトップとペアリングしてください。",
       "refresh": "使用状況を更新",
       "showUsageFor": "使用状況を表示するデスクトップ",
       "updatedAgo": "{{time}}前に更新",
-      "updatedJustNow": "たった今更新"
+      "updatedJustNow": "たった今更新",
+      "pairComputer": "Agent アカウントの使用状況を表示するには、デスクトップとペアリングしてください。",
+      "addAccountsOnComputer": "デスクトップの「設定」→「アカウント」からアカウントを追加してください。",
+      "openComputerAccountsHint": "このデスクトップのアカウントを開きます"
     }
   },
   "hooks": {
@@ -1866,14 +1865,12 @@
       "updateStepsServer": "サーバーで Orca を更新してから、再起動してください。",
       "orcaVersion": "Orca のバージョン",
       "goBack": "戻る",
-      "hostNamePlaceholder": "ホスト名",
-      "hostRemoved": "このホストはこのスマートフォンから削除されました。",
-      "loadFailed": "ホストの読み込みに失敗しました。",
-      "missingHost": "ホストが指定されていません。",
       "name": "名前",
-      "saveFailed": "ホストの保存に失敗しました。",
-      "saveHost": "ホストを保存",
-      "title": "ホストを編集",
+      "editComputer": "ホストを編集",
+      "computerRemoved": "このホストはこのスマートフォンから削除されました。",
+      "couldNotLoad": "ホストの読み込みに失敗しました。",
+      "couldNotSave": "ホストの保存に失敗しました。",
+      "save": "保存",
       "removeHost": "ホストを削除"
     }
   },
@@ -1881,9 +1878,9 @@
     "hostListActionSheetActions": {
       "connect": "接続",
       "disconnect": "切断",
-      "editHost": "ホストを編集",
       "networkDiagnostics": "ネットワーク診断",
-      "reconnect": "再接続"
+      "reconnect": "再接続",
+      "editComputer": "ホストを編集"
     },
     "hostPendingCreationRow": {
       "creatingWorkspace": "ワークスペースを作成中…"
@@ -1973,7 +1970,6 @@
       "accounts": "アカウント",
       "agentSessionHistory": "Agent セッション履歴",
       "changes": "変更点",
-      "editHost": "ホストを編集",
       "host": "ホスト",
       "pullRequest": "PR",
       "sourceControl": "ソース管理",
@@ -1981,12 +1977,13 @@
       "terminal": "ターミナル",
       "workspace": "ワークスペース",
       "automations": "自動化",
+      "editComputer": "ホストを編集",
       "mcpServers": "MCP サーバー"
     }
   },
   "newWorkspace": {
     "hostPicker": {
-      "title": "ワークスペースの作成先ホスト"
+      "newWorkspaceOn": "ワークスペースの作成先ホスト"
     },
     "loadingDrawer": {
       "downloadProgress": "ダウンロード中… {{progress}}",

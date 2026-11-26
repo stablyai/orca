@@ -31,14 +31,14 @@ type MobileHomeHostListProps = {
   onPairDesktop: () => void
 }
 
-/** Home's Desktops section: one row per paired desktop, then "Pair a desktop". */
+/** Home's Computers section: one row per paired computer, then "Pair a computer". */
 export function MobileHomeHostList(props: MobileHomeHostListProps) {
   const t = useMobileTranslation()
   useMobileColorScheme()
   return (
     <>
       <MobileHomeSectionHeading
-        title={t('home.listHeader.desktopsHeading', 'Desktops')}
+        title={t('home.listHeader.computersHeading', 'Computers')}
         first={props.first}
       />
       <View style={homeListStyles.group}>
@@ -59,7 +59,6 @@ export function MobileHomeHostList(props: MobileHomeHostListProps) {
             <View
               style={[
                 homeListStyles.separator,
-                homeListStyles.tileSeparator,
                 index === props.hosts.length - 1 && homeListStyles.fullSeparator
               ]}
             />
@@ -67,12 +66,18 @@ export function MobileHomeHostList(props: MobileHomeHostListProps) {
         ))}
         <Pressable
           accessibilityRole="button"
-          style={({ pressed }) => [homeListStyles.actionRow, pressed && homeListStyles.rowPressed]}
+          style={({ pressed }) => [
+            homeListStyles.actionRow,
+            homeListStyles.columnActionRow,
+            pressed && homeListStyles.rowPressed
+          ]}
           onPress={props.onPairDesktop}
         >
-          <Plus size={18} color={colors.accentBlue} />
+          <View style={homeListStyles.actionColumn}>
+            <Plus size={18} color={colors.accentBlue} />
+          </View>
           <Text style={homeListStyles.actionLabel}>
-            {t('home.desktops.pairDesktop', 'Pair a desktop')}
+            {t('home.computers.pairComputer', 'Pair a computer')}
           </Text>
         </Pressable>
       </View>
