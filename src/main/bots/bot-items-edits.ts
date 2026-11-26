@@ -197,7 +197,7 @@ export function assertBotItemVersion(
   if (expectedVersion !== undefined && item.version !== expectedVersion) {
     throw new BotItemError(
       'item_changed',
-      `Item ${item.number} changed since you looked. Read it with \`orca bot item show ${item.number}\` and decide whether the change still applies.`
+      `Item ${item.number} changed since you looked. Read it with \`orca bot item show ${item.number}\` and decide whether your update still applies.`
     )
   }
 }

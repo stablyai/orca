@@ -19,18 +19,18 @@ it('keeps an owner answer, item history, and outgoing mail intact when an older 
     )
     const ask = { status: 'needs_you', comment: 'Which of the original designs?' } as const
     store.set(uid, ask, itemChat)
-    const observedVersion = store.get(uid)!.version
+    const observed = store.showRows(uid, 0, 100)
+    const observedVersion = observed.rows.items[0]!.version
     store.ownerComment(uid, 'Redo the design.', { kind: 'owner' })
-    const item = store.get(uid)!
-    const events = store.events(uid, 0, 100)
+    const current = store.showRows(uid, 0, 100)
+    const item = current.rows.items[0]!
     const mail = store.owedMail(0)
     expect(item).toMatchObject({ status: 'working', questionEvent: null })
 
     expect(() => store.set(uid, { ...ask, expectedVersion: observedVersion }, otherChat)).toThrow(
       expect.objectContaining({ code: 'item_changed' })
     )
-    expect(store.get(uid)).toEqual(item)
-    expect(store.events(uid, 0, 100)).toEqual(events)
+    expect(store.showRows(uid, 0, 100)).toEqual(current)
     expect(store.owedMail(0)).toEqual(mail)
 
     store.set(
