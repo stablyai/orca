@@ -10,10 +10,12 @@ import {
   appendToNativeChatComposerDraft,
   readNativeChatComposerDraft
 } from '../../drafts/native-chat-composer-draft-store'
-import { readNativeChatAttachmentNotes } from './native-chat-attachment-notes'
 import { useNativeChatGeneratedImageAttach } from '../../paste/use-native-chat-generated-image-attach'
 import { NativeChatImageAttachmentPreview } from '../../attachments/chips/NativeChatImageAttachmentPreview'
-import { setNativeChatAttachmentNotes } from './native-chat-attachment-notes'
+import {
+  readNativeChatAttachmentNotes,
+  setNativeChatAttachmentNotes
+} from './native-chat-attachment-notes'
 
 const load = vi.hoisted(() => ({ loadLocalImageSrc: vi.fn() }))
 vi.mock('@/components/editor/document-images/useLocalImageSrc', () => ({

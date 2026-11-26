@@ -2,7 +2,6 @@
 // After a restart that cut short a launch draft's move (its notes copy was refused), the session's
 // marked image still shows its words, and once storage takes them the stranded source retires.
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { updateNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
 import { clearNativeChatComposerDraftsForTests } from '../../drafts/native-chat-draft-reset'
 import { hydrateNativeChatComposerDrafts } from '../../drafts/native-chat-composer-draft-load'
 import { nativeChatComposerDraftSaved } from '../../drafts/native-chat-composer-draft-saved'
@@ -21,7 +20,8 @@ import {
 import { readHeldNativeChatNotes, resetNativeChatHeldNotesForTests } from './native-chat-held-notes'
 import {
   appendToNativeChatComposerDraft,
-  readNativeChatComposerDraft
+  readNativeChatComposerDraft,
+  updateNativeChatComposerDraft
 } from '../../drafts/native-chat-composer-draft-store'
 import { createNativeChatNotesStorage } from './native-chat-notes-storage'
 
