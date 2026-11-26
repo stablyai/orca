@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { closeSync, openSync, readFileSync, writeFileSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
@@ -54,14 +55,14 @@ function isProcessAlive(pid) {
   }
 }
 
-function startServerProcess() {
+function startServerProcess(cancelPath) {
   const log = openSync(serverLogPath, 'w')
   const child = spawn(process.execPath, [serverScriptPath], {
     cwd: repoRoot,
     detached: true,
     windowsHide: true,
     stdio: ['ignore', log, log],
-    env: process.env
+    env: { ...process.env, ORCA_FIXTURES_CANCEL_FILE: cancelPath }
   })
   child.unref()
   closeSync(log)
@@ -104,6 +105,7 @@ export async function ensureFixtureServer({ onStart } = {}) {
   // Held while this call decides on and starts a server, until that server is up or gone.
   let startLock = null
   let child
+  let childCancelPath
   let retiringPid
   // The last server this call saw answer as itself; it must exit before a replacement starts.
   let seen
@@ -160,22 +162,42 @@ export async function ensureFixtureServer({ onStart } = {}) {
           await stopPreviousServer(previous, deadline)
         }
         onStart?.()
-        child = startServerProcess()
+        // A path unique to this start, so a cancel request can never be mistaken for a stale one.
+        childCancelPath = path.join(fixtureCacheDir, `cancel-${randomUUID()}`)
+        child = startServerProcess(childCancelPath)
       }
       waited = true
       await delay(150)
     }
+    // Why: another caller may already have returned our server just before the deadline.
+    const state = readServerState()
+    const health = child ? await readServerHealth(state, 1000).catch(() => null) : null
+    if (
+      health?.pid === child?.pid &&
+      !health.stopping &&
+      health.codeStamp === fixtureServerCodeStamp()
+    ) {
+      readyPid = child.pid
+      return { url: state.url, started: true }
+    }
     throw new Error(`Fixture server did not start in time. Log tail:\n${readLogTail()}`)
   } finally {
-    if (child && child.pid !== readyPid && child.exitCode === null && child.signalCode === null) {
-      // Why: a server this call started but is not returning holds, or waits for, the guard.
-      // The file asks it to run its own teardown; on Windows kill() would skip that teardown.
-      writeFileSync(path.join(fixtureCacheDir, `cancel-${child.pid}`), '')
-      if (process.platform !== 'win32') {
-        child.kill()
+    try {
+      if (child && child.pid !== readyPid && child.exitCode === null && child.signalCode === null) {
+        // Why: a server this call started but is not returning holds, or waits for, the guard.
+        // SIGTERM runs its own teardown on POSIX. On Windows kill() would skip that teardown, so
+        // the server is asked through its cancel file instead.
+        if (process.platform !== 'win32') {
+          child.kill()
+        } else {
+          try {
+            writeFileSync(childCancelPath, '')
+          } catch {}
+        }
       }
+    } finally {
+      startLock?.release()
     }
-    startLock?.release()
   }
 }
 

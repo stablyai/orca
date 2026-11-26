@@ -28,6 +28,9 @@ const GUARD_WAIT_MS = 20_000
 // Module scope keeps the guard connection open; a collected connection would drop the lock.
 let serverGuard = null
 let browserPromise = Promise.resolve(null)
+// Set as soon as the browser process exists, so retirement never waits on connect().
+let launchedServer = null
+const CONNECT_TIMEOUT_MS = 30_000
 
 process.chdir(repoRoot)
 
@@ -64,10 +67,13 @@ async function launchHeadlessBrowser() {
         handleSIGHUP: false,
         ...attempt.options
       })
-      const browser = await chromium.connect(server.wsEndpoint()).catch(async (error) => {
-        await server.kill()
-        throw error
-      })
+      launchedServer = server
+      const browser = await chromium
+        .connect(server.wsEndpoint(), { timeout: CONNECT_TIMEOUT_MS })
+        .catch(async (error) => {
+          await server.kill()
+          throw error
+        })
       console.log(`[fixtures] browser: ${attempt.label}`)
       return { server, browser }
     } catch (error) {
@@ -185,7 +191,7 @@ function createFixtureApiPlugin(session) {
 // Exits only once the browser process is confirmed gone. Until then this process keeps the
 // server guard, so a successor waits for it (or gives up) instead of starting beside it.
 async function exitAfterBrowser(browserPromise, code) {
-  const child = (await browserPromise.catch(() => null))?.server.process()
+  const child = (launchedServer ?? (await browserPromise.catch(() => null))?.server)?.process()
   if (child) {
     while (child.exitCode === null && child.signalCode === null) {
       try {
@@ -198,6 +204,9 @@ async function exitAfterBrowser(browserPromise, code) {
       await delay(100)
     }
   }
+  if (process.env.ORCA_FIXTURES_CANCEL_FILE) {
+    rmSync(process.env.ORCA_FIXTURES_CANCEL_FILE, { force: true })
+  }
   process.exit(code)
 }
 
@@ -208,6 +217,7 @@ async function main() {
   serverGuard = tryHoldLock(serverGuardPath, GUARD_WAIT_MS)
   if (!serverGuard) {
     console.error('[fixtures] another fixture server owns this checkout')
+    rmSync(process.env.ORCA_FIXTURES_CANCEL_FILE ?? '', { force: true })
     process.exit(SERVER_BUSY_EXIT_CODE)
   }
   const port = await findFreePort()
@@ -256,10 +266,10 @@ async function main() {
   })
   // Why a file: on Windows a client cannot signal this process into its teardown, so a client
   // that gives up on it asks through this file instead (POSIX clients also send SIGTERM).
-  const cancelPath = path.join(fixtureCacheDir, `cancel-${process.pid}`)
-  rmSync(cancelPath, { force: true })
+  // The path is unique to this start, so a request already there is consumed, not stale.
+  const cancelPath = process.env.ORCA_FIXTURES_CANCEL_FILE
   setInterval(() => {
-    if (existsSync(cancelPath)) {
+    if (cancelPath && existsSync(cancelPath)) {
       rmSync(cancelPath, { force: true })
       session.stop()
     }
@@ -294,7 +304,10 @@ async function main() {
 
   const pendingState = `${serverStatePath}.${process.pid}.tmp`
   await writeFile(pendingState, JSON.stringify({ pid: process.pid, port, url: baseUrl, codeStamp }))
-  await rename(pendingState, serverStatePath)
+  await rename(pendingState, serverStatePath).catch((error) => {
+    rmSync(pendingState, { force: true })
+    throw error
+  })
   console.log(`[fixtures] ready at ${baseUrl}/fixtures.html`)
 }
 
