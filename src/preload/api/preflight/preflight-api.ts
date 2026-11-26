@@ -39,6 +39,7 @@ export type AgentDetectionArgs = PreflightRuntimeContext & {
 
 export type AgentInventoryReply = {
   agents: string[]
+  incomplete?: boolean
   managedAgentCommands?: Record<string, string>
   outsidePath?: Record<string, string>
 }

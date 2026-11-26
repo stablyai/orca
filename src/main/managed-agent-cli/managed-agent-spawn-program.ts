@@ -1,4 +1,4 @@
-import { basename, isAbsolute, join, resolve, win32 } from 'node:path'
+import { basename, isAbsolute, join, resolve } from 'node:path'
 import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
@@ -32,7 +32,7 @@ import type { NativeChatSignInRequest } from '../../shared/agent-session/lifecyc
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { MANAGED_AGENT_CLI_IDS, managedAgentCli } from './managed-agent-cli-registry'
 import { isOrcaAgentRuntimePath } from './managed-agent-cli-path'
-import { resolveCommandOnLocalPath } from '../ipc/command-path/command-path-resolver'
+import { resolveCmdLaunchFolderProgram } from '../ipc/command-path/cmd-launch-folder-program'
 import { isExecutableFile } from '../ipc/command-path/command-path-directory'
 import {
   readLocalTerminalAgentProgram,
@@ -94,26 +94,6 @@ function managedPathAgent(program: string): TuiAgent | undefined {
   })
 }
 
-const cmdFolderLookups = new Map<string, Promise<string | null>>()
-
-function cmdFolderProgram(
-  program: string,
-  cwd: string,
-  pathExt: string | undefined
-): Promise<string | null> {
-  const key = JSON.stringify([win32.resolve(cwd).toLowerCase(), program.toLowerCase(), pathExt])
-  const pending = cmdFolderLookups.get(key)
-  if (pending) {
-    return pending
-  }
-  const lookup = resolveCommandOnLocalPath(program, {
-    cwd,
-    env: { PATH: '', PATHEXT: pathExt }
-  }).finally(() => cmdFolderLookups.delete(key))
-  cmdFolderLookups.set(key, lookup)
-  return lookup
-}
-
 async function selectProgram(
   spawn: SpawnLaunch,
   shell: AgentStartupShell,
@@ -167,7 +147,7 @@ async function selectProgram(
   const pathExt =
     Object.entries(spawn.env ?? {}).find(([key]) => key.toLowerCase() === 'pathext')?.[1] ??
     process.env.PATHEXT
-  const first = await waitForPromiseWithSignal(cmdFolderProgram(program, cwd, pathExt), signal)
+  const first = await resolveCmdLaunchFolderProgram(program, cwd, pathExt, signal)
   return first &&
     normalizeRuntimePathForComparison(first) !== normalizeRuntimePathForComparison(selected.path)
     ? { kind: 'full-path', path: selected.path }

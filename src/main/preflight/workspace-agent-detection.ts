@@ -206,21 +206,37 @@ export async function refreshAgentsOnHost(
   }
   const wsl = getPreflightWslTarget(host.context)
   return withAgentInventoryDeadline(async (signal) => {
-    const preparePath = () => refreshAgentShellPath(host.context, signal)
-    const path = wsl
-      ? await preparePath()
-      : await waitForPromiseWithSignal(
-          refreshAtRestCommandContext(() => {
-            throwIfSignalAborted(signal)
-            return captureHostShellEnvironment(preparePath)
-          }),
-          signal
-        )
-    // Keep filesystem scans out of the serialized shell environment refresh.
-    const inventory = await detectInstalledAgentInventory(host.context, options, true, signal)
-    throwIfSignalAborted(signal)
-    notifyAgentsRefreshedOnHost(userInitiated && !wsl)
-    return { ...inventory, ...path }
+    let path: Awaited<ReturnType<typeof refreshAgentShellPath>> | undefined
+    const inventory = await detectInstalledAgentInventory(
+      host.context,
+      options,
+      true,
+      signal,
+      async () => {
+        const preparePath = () => refreshAgentShellPath(host.context, signal)
+        path = wsl
+          ? await preparePath()
+          : await waitForPromiseWithSignal(
+              refreshAtRestCommandContext(() => {
+                throwIfSignalAborted(signal)
+                return captureHostShellEnvironment(preparePath)
+              }),
+              signal
+            )
+      }
+    )
+    if (!signal.aborted) {
+      notifyAgentsRefreshedOnHost(userInitiated && !wsl)
+    }
+    return {
+      ...inventory,
+      ...(path ?? {
+        addedPathSegments: [],
+        shellHydrationOk: false,
+        pathSource: 'sync_seed_only',
+        pathFailureReason: 'timeout'
+      })
+    }
   })
 }
 

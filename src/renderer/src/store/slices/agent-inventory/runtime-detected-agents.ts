@@ -10,8 +10,10 @@ export {
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
-  agentDetectionReader,
+  beginAgentDetection,
   forgetRuntimeManagedAgentCommands,
+  isIncompleteAgentInventory,
+  mergeAgentDetection,
   runtimeManagedAgentHost,
   type AgentDetectionReply
 } from './managed-agent-launch-commands'
@@ -144,7 +146,7 @@ export const createRuntimeDetectedAgentsSlice: (
 
   // Commits a settled detection; an old host commits an empty list, never its default.
   const commitDetection = (key: string, agents: TuiAgent[], needsServerUpdate: boolean): void => {
-    latestOutcome.set(key, 'successful')
+    latestOutcome.set(key, isIncompleteAgentInventory(agents) ? 'pending' : 'successful')
     set((s) => ({
       runtimeDetectedAgentIds: { ...s.runtimeDetectedAgentIds, [key]: agents },
       isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [key]: false },
@@ -169,8 +171,8 @@ export const createRuntimeDetectedAgentsSlice: (
         return inflightRefresh
       }
       const existing = get().runtimeDetectedAgentIds[key]
-      // Retry empty results so installs/PATH fixes appear without reconnect; nonempty results remain cached.
-      if (existing?.length) {
+      // Retry empty or incomplete results so installs and PATH fixes appear without reconnect.
+      if (existing?.length && !isIncompleteAgentInventory(existing)) {
         return Promise.resolve(existing)
       }
       const inflight = runtimeDetectPromises.get(key)
@@ -185,7 +187,7 @@ export const createRuntimeDetectedAgentsSlice: (
 
       const target = { kind: 'environment', environmentId } as const
       const fence = capturePairingFence(environmentId)
-      const detection = agentDetectionReader(runtimeManagedAgentHost(environmentId))
+      const read = beginAgentDetection(runtimeManagedAgentHost(environmentId))
       const pending = callRuntimeAgentDetection(
         environmentId,
         worktreeId,
@@ -195,13 +197,15 @@ export const createRuntimeDetectedAgentsSlice: (
             'preflight.detectAgents',
             { ...params, withManagedAgentCommands: true },
             fence
-          ).then(detection.read),
+          ),
         nestedSshDetection(target, worktreeId, fence)
       )
-        .then((typed) => {
+        .then((reply) => {
+          const { agents, incomplete, keepManagedAgentCommands } = read(reply)
+          const typed = mergeAgentDetection(agents, incomplete, get().runtimeDetectedAgentIds[key])
           // Removed or re-paired environments must not regain stale entries from in-flight detection.
           if (runtimeDetectPromises.get(key) === pending) {
-            detection.keep()
+            keepManagedAgentCommands()
             commitDetection(key, typed, false)
           }
           return typed
@@ -251,7 +255,7 @@ export const createRuntimeDetectedAgentsSlice: (
 
       const target = { kind: 'environment', environmentId } as const
       const fence = capturePairingFence(environmentId)
-      const detection = agentDetectionReader(runtimeManagedAgentHost(environmentId))
+      const read = beginAgentDetection(runtimeManagedAgentHost(environmentId))
       const request = () =>
         callRuntimeAgentDetection(
           environmentId,
@@ -262,15 +266,13 @@ export const createRuntimeDetectedAgentsSlice: (
               'preflight.refreshAgents',
               options.userInitiated ? { ...params, userInitiated: true } : params,
               fence
-            )
-              .then(detection.read)
-              .catch((error) => {
-                if (!isRuntimeMethodNotFoundError(error)) {
-                  throw error
-                }
-                // Fallback only for old servers; repeating disconnect/runtime failures just doubles remote work.
-                return callRuntimeRpc<TuiAgent[]>(target, 'preflight.detectAgents', params, fence)
-              }),
+            ).catch((error) => {
+              if (!isRuntimeMethodNotFoundError(error)) {
+                throw error
+              }
+              // Fallback only for old servers; repeating disconnect/runtime failures just doubles remote work.
+              return callRuntimeRpc<TuiAgent[]>(target, 'preflight.detectAgents', params, fence)
+            }),
           nestedSshDetection(target, worktreeId, fence)
         )
       const pending = (
@@ -282,10 +284,12 @@ export const createRuntimeDetectedAgentsSlice: (
             )
           : request()
       )
-        .then((typed) => {
+        .then((reply) => {
+          const { agents, incomplete, keepManagedAgentCommands } = read(reply)
+          const typed = mergeAgentDetection(agents, incomplete, get().runtimeDetectedAgentIds[key])
           // Ignore refreshes detached by environment removal or re-pair.
           if (runtimeRefreshPromises.get(key) === pending) {
-            detection.keep()
+            keepManagedAgentCommands()
             commitDetection(key, typed, false)
           }
           return typed

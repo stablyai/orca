@@ -2,7 +2,10 @@ import { haveSameDisabledTuiAgents } from '../../../../../shared/agent-launch/ca
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import { getLocalAgentPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { localAgentInventoryContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
-import { dropEnabledLocalAgentInventories } from './local-agent-inventory-invalidation'
+import {
+  dropEnabledLocalAgentInventories,
+  haveAgentCommandOverridesChanged
+} from './local-agent-inventory-invalidation'
 import * as contextEviction from './local-agent-context-eviction'
 import { getLegacyLoadingPatch } from './local-agent-legacy-loading'
 import { markLocalAgentRefusal, refreshLocalAgentInventory } from './local-agent-inventory-refresh'
@@ -17,17 +20,6 @@ import { readLocalAgentInventoryOutcome } from './local-agent-inventory-outcome'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-
-function haveSameCommandOverrides(
-  a: Partial<Record<string, string>> | undefined,
-  b: Partial<Record<string, string>> | undefined
-): boolean {
-  if (a === b) {
-    return true
-  }
-  const keys = new Set([...Object.keys(a ?? {}), ...Object.keys(b ?? {})])
-  return [...keys].every((key) => (a?.[key]?.trim() ?? '') === (b?.[key]?.trim() ?? ''))
-}
 
 type LocalDetectedAgentStateCreator = StateCreator<AppState, [], [], LocalDetectedAgentState>
 
@@ -99,7 +91,11 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
         }
         return inflightRefresh
       }
-      if (existing != null && !lifecycle.failedDetectContextKeys.has(contextKey)) {
+      if (
+        existing != null &&
+        !lifecycle.failedDetectContextKeys.has(contextKey) &&
+        !managedCommands.isIncompleteAgentInventory(existing)
+      ) {
         if (!isolatedInventory) {
           lifecycle.detectedContextKey = contextKey
           const state = get()
@@ -158,7 +154,12 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
           withManagedAgentCommands: true
         })
         .then((reply) => {
-          const { agents: typed, keepManagedAgentCommands } = read(reply)
+          const { agents, incomplete, keepManagedAgentCommands } = read(reply)
+          const typed = managedCommands.mergeAgentDetection(
+            agents,
+            incomplete,
+            get().localDetectedAgentIdsByContext[contextKey]
+          )
           if (
             requestGeneration === lifecycle.localDetectionGeneration &&
             lifecycle.detectPromises.get(contextKey) === pending
@@ -186,6 +187,9 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
           return typed
         })
         .catch((error: unknown): TuiAgent[] => {
+          const previous = get().localDetectedAgentIdsByContext[contextKey]
+          const fallback =
+            previous && managedCommands.isIncompleteAgentInventory(previous) ? previous : []
           if (
             requestGeneration === lifecycle.localDetectionGeneration &&
             lifecycle.detectPromises.get(contextKey) === pending
@@ -197,10 +201,10 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
               lifecycle.legacyDetectContextKey = null
             }
             set((state) => ({
-              ...(exposeToLegacy ? { detectedAgentIds: [], isDetectingAgents: false } : {}),
+              ...(exposeToLegacy ? { detectedAgentIds: fallback, isDetectingAgents: false } : {}),
               localDetectedAgentIdsByContext: {
                 ...state.localDetectedAgentIdsByContext,
-                [contextKey]: []
+                [contextKey]: fallback
               },
               isDetectingLocalAgentsByContext: contextEviction.removeLocalAgentContextEntry(
                 state.isDetectingLocalAgentsByContext,
@@ -208,7 +212,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
               )
             }))
           }
-          return []
+          return fallback
         })
         .finally(() => {
           if (lifecycle.detectPromises.get(contextKey) === pending) {
@@ -276,13 +280,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
     }
   }
   store.subscribe((state, previous) => {
-    // Settings hydration is not an edit; detection already ran with the persisted overrides.
-    const overridesChanged =
-      previous.settings != null &&
-      !haveSameCommandOverrides(
-        state.settings?.agentCmdOverrides,
-        previous.settings?.agentCmdOverrides
-      )
+    const overridesChanged = haveAgentCommandOverridesChanged(state, previous)
     if (
       !overridesChanged &&
       state.settings?.disabledTuiAgents === previous.settings?.disabledTuiAgents

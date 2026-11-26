@@ -13,7 +13,7 @@ import {
   getPreflightWslTarget,
   type PreflightRuntimeContext
 } from '../ipc/preflight/preflight-runtime-target'
-import { detectAgentCommandsOnHost, withAgentInventoryDeadline } from './agent-command-detection'
+import { detectAgentCommandInventoryOnHost } from './agent-command-detection'
 import { normalizeDisabledTuiAgents } from '../../shared/agent-launch/catalog/tui-agent-selection'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { TuiAgentDetectionRuntime } from '../../shared/agent-launch/catalog/tui-agent-config-types'
@@ -108,6 +108,7 @@ function overrideProbeCommands(
 
 export type InstalledAgentInventory = {
   agents: string[]
+  incomplete?: boolean
   /** Legacy wire name for the user's CLI paths outside the terminal PATH. */
   managedAgentCommands?: ManagedAgentCommands
   outsidePath?: ManagedAgentCommands
@@ -117,7 +118,8 @@ export async function detectInstalledAgentInventory(
   context?: PreflightRuntimeContext,
   options?: InstalledAgentDetectionOptions,
   refresh = false,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  prepare?: (signal: AbortSignal) => Promise<void>
 ): Promise<InstalledAgentInventory> {
   const runtime = getPreflightWslTarget(context) ? 'wsl' : process.platform
   const commands = activeDetectionCommands(options)
@@ -130,12 +132,13 @@ export async function detectInstalledAgentInventory(
     ])
   ]
   const foundOutsidePath = new Map<string, string>()
-  const found = await detectAgentCommandsOnHost(probeCommands, {
+  const { found, incomplete } = await detectAgentCommandInventoryOnHost(probeCommands, {
     context,
     ...(runtime === 'wsl' ? {} : { outsidePath: foundOutsidePath }),
     ...(options?.onlyTuiAgent ? { onlyRequested: true } : {}),
     ...(refresh ? { refresh: true } : {}),
-    ...(signal ? { signal } : {})
+    ...(signal ? { signal } : {}),
+    ...(prepare ? { prepare } : {})
   })
   const detected = resolveDetectedTuiAgentIds(commands, found, runtime)
   // A terminal can't run by name a CLI found only in its installer's folder, so launches name its path.
@@ -156,9 +159,11 @@ export async function detectInstalledAgentInventory(
       detected.push(id)
     }
   }
-  return runtime === 'wsl'
-    ? { agents: detected }
-    : { agents: detected, outsidePath, managedAgentCommands: outsidePath }
+  return {
+    agents: detected,
+    ...(incomplete ? { incomplete: true } : {}),
+    ...(runtime === 'wsl' ? {} : { outsidePath, managedAgentCommands: outsidePath })
+  }
 }
 
 export async function detectInstalledAgents(
@@ -175,10 +180,9 @@ export async function detectInstalledAgentInventoryWithShellPathHydration(
   options?: InstalledAgentDetectionOptions,
   signal?: AbortSignal
 ): Promise<InstalledAgentInventory> {
-  return withAgentInventoryDeadline(async (waitSignal) => {
-    await hydrateShellPathForAgentDetection(context, false, waitSignal)
-    return detectInstalledAgentInventory(context, options, false, waitSignal)
-  }, signal)
+  return detectInstalledAgentInventory(context, options, false, signal, (waitSignal) =>
+    hydrateShellPathForAgentDetection(context, false, waitSignal)
+  )
 }
 
 export async function detectInstalledAgentsWithShellPathHydration(

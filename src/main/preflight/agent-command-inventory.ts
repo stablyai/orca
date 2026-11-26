@@ -13,7 +13,6 @@ import {
   findCommandsOnLocalPath,
   type AgentPathMatch
 } from '../ipc/command-path/command-path-batch'
-import { buildLocalPreflightEnv } from '../ipc/preflight/preflight-local-env'
 import { hasPathSeparatorToken } from '../../shared/agent-launch/installation/managed-agent-command-token'
 import { isOrcaAgentRuntimePath } from '../managed-agent-cli/managed-agent-cli-path'
 import {
@@ -41,7 +40,8 @@ const WSL_INVENTORY_RETRY_MS = 5_000
 
 type InventoryMode = 'read' | 'detect' | 'revalidate' | 'refresh'
 type InventoryScan = {
-  sequence: number
+  result: PromiseWithResolvers<CommandInventory | null>
+  started: boolean
   commands: Set<string>
   mode: InventoryMode
   targeted: boolean
@@ -49,16 +49,14 @@ type InventoryScan = {
 }
 type PendingInventory = {
   active: InventoryScan
-  startedSequence: number
   queued?: InventoryScan
-  result: Promise<CommandInventory | null>
 }
 type InventorySlot = {
   distro?: string
-  generation?: number
+  localEnv?: () => NodeJS.ProcessEnv | undefined
   pending?: PendingInventory
-  current?: CommandInventory
-  retryAfter?: number
+  published?: { inventory: CommandInventory; generation: number | undefined }
+  retry?: { after: number; generation: number | undefined }
 }
 const scanPriority: Record<InventoryMode, number> = {
   read: 0,
@@ -66,13 +64,13 @@ const scanPriority: Record<InventoryMode, number> = {
   revalidate: 1,
   refresh: 2
 }
-let local: InventorySlot = {}
+let local: InventorySlot | undefined
 let profile: string | undefined
 
-export function localInventory(): InventorySlot {
+export function localInventory(localEnv: NonNullable<InventorySlot['localEnv']>): InventorySlot {
   const key = hasAppEnvironment() ? getProfileUserDataPath() : undefined
-  if (key !== profile) {
-    local = {}
+  if (!local || key !== profile) {
+    local = { localEnv }
     profile = key
   }
   return local
@@ -92,9 +90,9 @@ const wslStockCommands = stockCommands('linux', 'wsl')
 
 async function scanLocalInventory(
   probed: ReadonlySet<string>,
-  readLoginPath: boolean
+  readLoginPath: boolean,
+  localEnv: NodeJS.ProcessEnv | undefined
 ): Promise<CommandInventory> {
-  const localEnv = buildLocalPreflightEnv()
   const env = localEnv ?? (readLoginPath ? await resolveLoginShellEnvironment() : process.env)
   const pathEnv = env.PATH ?? Object.entries(env).find(([key]) => key.toLowerCase() === 'path')?.[1]
   const matches = new Map<string, AgentPathMatch>()
@@ -141,7 +139,8 @@ async function scanInventory(
   }
   return scanLocalInventory(
     scan.commands,
-    !scan.targeted && (scan.mode === 'read' || scan.mode === 'revalidate')
+    !scan.targeted && (scan.mode === 'read' || scan.mode === 'revalidate'),
+    slot.localEnv?.()
   )
 }
 
@@ -150,9 +149,12 @@ function publishInventory(
   result: CommandInventory,
   scan: InventoryScan
 ): void {
-  const previous = scan.targeted && slot.generation === scan.generation ? slot.current : undefined
+  const previous =
+    scan.targeted && slot.published?.generation === scan.generation
+      ? slot.published?.inventory
+      : undefined
   const notScanned = (command: string) => !scan.commands.has(command)
-  slot.current = previous
+  const inventory = previous
     ? {
         ...result,
         found: new Set([...result.found, ...[...previous.found].filter(notScanned)]),
@@ -163,7 +165,66 @@ function publishInventory(
         probed: new Set([...result.probed, ...[...previous.probed].filter(notScanned)])
       }
     : result
-  slot.generation = scan.generation
+  slot.published = { inventory, generation: scan.generation }
+}
+
+function createScan(
+  commands: Iterable<string>,
+  mode: InventoryMode,
+  targeted: boolean,
+  generation: number | undefined
+): InventoryScan {
+  return {
+    result: Promise.withResolvers(),
+    started: false,
+    commands: new Set(commands),
+    mode,
+    targeted,
+    generation
+  }
+}
+
+function addScanRequest(
+  scan: InventoryScan,
+  commands: readonly string[],
+  mode: InventoryMode,
+  targeted: boolean
+): Promise<CommandInventory | null> {
+  for (const command of commands) {
+    scan.commands.add(command)
+  }
+  if (scanPriority[mode] > scanPriority[scan.mode]) {
+    scan.mode = mode
+  }
+  scan.targeted &&= targeted
+  return scan.result.promise
+}
+
+async function runInventoryScans(slot: InventorySlot, pending: PendingInventory): Promise<void> {
+  for (;;) {
+    const scan = pending.active
+    scan.started = true
+    const result = await scanInventory(slot, scan).catch(() => null)
+    if (scan.generation !== inventoryGeneration(slot)) {
+      continue
+    }
+    if (slot.distro && (!result || result.incomplete)) {
+      slot.retry = { after: Date.now() + WSL_INVENTORY_RETRY_MS, generation: scan.generation }
+    } else {
+      delete slot.retry
+    }
+    if (result) {
+      publishInventory(slot, result, scan)
+    }
+    // Active waiters receive this publication even when later requests need a successor.
+    scan.result.resolve(result)
+    if (!pending.queued) {
+      delete slot.pending
+      return
+    }
+    pending.active = pending.queued
+    delete pending.queued
+  }
 }
 
 export function readInventory(
@@ -173,12 +234,13 @@ export function readInventory(
   targeted = false
 ): Promise<CommandInventory | null> {
   const generation = inventoryGeneration(slot)
-  const current = slot.generation === generation ? slot.current : undefined
+  const current = slot.published?.generation === generation ? slot.published?.inventory : undefined
   if (
     mode === 'read' &&
     current &&
-    !current.incomplete &&
-    requested.every((cmd) => current.probed.has(cmd))
+    requested.every(
+      (cmd) => current.probed.has(cmd) && (!current.incomplete || current.found.has(cmd))
+    )
   ) {
     return Promise.resolve(current)
   }
@@ -189,69 +251,30 @@ export function readInventory(
   const pending = slot.pending
   if (pending) {
     const { active } = pending
+    if (!active.started) {
+      return addScanRequest(active, commands, mode, targeted)
+    }
     if (
-      pending.queued ||
-      active.generation !== generation ||
+      mode === 'refresh' ||
       scanPriority[mode] > scanPriority[active.mode] ||
-      (mode === 'refresh' && active.sequence === pending.startedSequence) ||
       !commands.every((cmd) => active.commands.has(cmd))
     ) {
-      const queued = pending.queued ?? {
-        sequence: active.sequence + 1,
-        commands: new Set(active.commands),
-        mode,
-        targeted: active.targeted,
-        generation
-      }
-      for (const command of commands) {
-        queued.commands.add(command)
-      }
-      if (scanPriority[mode] > scanPriority[queued.mode]) {
-        queued.mode = mode
-      }
-      queued.targeted &&= targeted
-      pending.queued = queued
+      pending.queued ??= createScan(active.commands, mode, active.targeted, generation)
+      return addScanRequest(pending.queued, commands, mode, targeted)
     }
-    return pending.result
+    return active.result.promise
   }
-  if (mode !== 'refresh' && slot.generation === generation && Date.now() < (slot.retryAfter ?? 0)) {
+  const retry = slot.retry
+  if (mode !== 'refresh' && retry && retry.generation === generation && Date.now() < retry.after) {
     return Promise.resolve(current ?? null)
   }
 
-  // The same promise carries all waiters through a queued scan. Caller deadlines never retire it.
   const batch: PendingInventory = {
-    active: { sequence: 1, commands: new Set(commands), mode, targeted, generation },
-    startedSequence: 0,
-    result: Promise.resolve().then(async () => {
-      for (;;) {
-        const scan = batch.active
-        batch.startedSequence = scan.sequence
-        const result = await scanInventory(slot, scan).catch(() => null)
-        if (batch.queued) {
-          batch.active = batch.queued
-          delete batch.queued
-        } else if (scan.generation === inventoryGeneration(slot)) {
-          delete slot.pending
-          if (slot.distro && (!result || result.incomplete)) {
-            slot.retryAfter = Date.now() + WSL_INVENTORY_RETRY_MS
-          } else {
-            delete slot.retryAfter
-          }
-          if (result) {
-            publishInventory(slot, result, scan)
-          } else if (slot.distro) {
-            delete slot.current
-            slot.generation = scan.generation
-          }
-          return result
-        } else {
-          batch.active = { ...scan, sequence: scan.sequence + 1 }
-        }
-      }
-    })
+    active: createScan(commands, mode, targeted, generation)
   }
   slot.pending = batch
-  return batch.result
+  void Promise.resolve().then(() => runInventoryScans(slot, batch))
+  return batch.active.result.promise
 }
 
 const wsl = new Map<string, InventorySlot>()

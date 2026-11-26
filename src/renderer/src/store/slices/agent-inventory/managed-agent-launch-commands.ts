@@ -6,6 +6,7 @@ import type { ManagedAgentCommands } from '../../../../../shared/agent-launch/st
 // workspace, so the map is bounded by the paired hosts and drops with them.
 const byHost = new Map<string, { started: number; commands: ManagedAgentCommands }>()
 const listeners = new Set<() => void>()
+const incompleteInventories = new WeakSet<TuiAgent[]>()
 let lastStarted = 0
 
 export const LOCAL_MANAGED_AGENT_HOST = 'local'
@@ -19,12 +20,14 @@ export type AgentDetectionReply =
   | readonly string[]
   | {
       agents: readonly string[]
+      incomplete?: boolean
       outsidePath?: Record<string, string>
       managedAgentCommands?: Record<string, string>
     }
 
 export type AgentDetectionReading = {
   agents: TuiAgent[]
+  incomplete: boolean
   /** Called once the reply is current; a reply started before the one already kept is dropped. */
   keepManagedAgentCommands: () => void
 }
@@ -37,14 +40,17 @@ export function beginAgentDetection(
   return (reply) => {
     // Legacy replies don't identify the host's data root, so their paths may be user installs.
     const paths = 'agents' in reply ? (reply.outsidePath ?? reply.managedAgentCommands) : undefined
+    const incomplete = 'agents' in reply && reply.incomplete === true
     return {
       agents: ('agents' in reply ? reply.agents : reply).filter(isTuiAgent),
+      incomplete,
       keepManagedAgentCommands: () => {
         const kept = byHost.get(host)
         if (!paths || started <= (kept?.started ?? 0)) {
           return
         }
-        const commands = typedCommands(paths)
+        const found = typedCommands(paths)
+        const commands = incomplete ? { ...kept?.commands, ...found } : found
         const changed = !kept || !sameCommands(kept.commands, commands)
         // An unchanged reply keeps the same object, so readers see no change.
         byHost.set(host, { started, commands: changed ? commands : kept.commands })
@@ -56,20 +62,21 @@ export function beginAgentDetection(
   }
 }
 
-/** One detection's reader for promise chains: `read` maps a reply to agents, `keep` keeps its paths. */
-export function agentDetectionReader(host: string): {
-  read: (reply: AgentDetectionReply) => TuiAgent[]
-  keep: () => void
-} {
-  const begin = beginAgentDetection(host)
-  let reading: AgentDetectionReading | null = null
-  return {
-    read: (reply) => {
-      reading = begin(reply)
-      return reading.agents
-    },
-    keep: () => reading?.keepManagedAgentCommands()
+export function mergeAgentDetection(
+  agents: TuiAgent[],
+  incomplete: boolean,
+  previous: TuiAgent[] | null | undefined
+): TuiAgent[] {
+  if (!incomplete) {
+    return agents
   }
+  const merged = [...new Set([...(previous ?? []), ...agents])]
+  incompleteInventories.add(merged)
+  return merged
+}
+
+export function isIncompleteAgentInventory(agents: TuiAgent[] | null | undefined): boolean {
+  return !!agents && incompleteInventories.has(agents)
 }
 
 function sameCommands(a: ManagedAgentCommands, b: ManagedAgentCommands): boolean {

@@ -2,6 +2,7 @@ import { statSync, type Stats } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
+import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-reason'
 import { stripWindowsPathQuotes } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import { isExecutableFile } from './command-path-directory'
 
@@ -14,6 +15,7 @@ export type ResolveCommandOptions = {
   cwd?: string
   /** Stop after this many matches; defaults to the complete list. */
   maxResults?: number
+  signal?: AbortSignal
 }
 
 // Windows environment keys are case-insensitive even though this Record is not.
@@ -213,6 +215,7 @@ async function findLocalCommandPaths(
         continue
       }
       seen.add(candidateKey)
+      throwIfSignalAborted(options.signal)
       if (await isExecutableFile(candidate, isWin)) {
         found.push(candidate)
         if (stopAtFirst || found.length >= (options.maxResults ?? Infinity)) {

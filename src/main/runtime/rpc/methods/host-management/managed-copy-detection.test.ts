@@ -186,7 +186,9 @@ it('keeps a cold scan alive through launch timeouts and publishes the result for
     expect(await fresh).toEqual({ command: undefined, launchConfig: generated, blocked: 'unknown' })
     const retry = launch()
     gate.resolve()
-    expect(await inventory).toEqual(new Error('Agent inventory is still running. Try again.'))
+    expect(await inventory).toMatchObject({
+      message: 'Agent inventory is still running. Try again.'
+    })
     expect((await retry).command).toBe(`${quoted(user)} --verbose`)
     expect((await launch()).command).toBe(`${quoted(user)} --verbose`)
     expect(fixture.enumerate).toHaveBeenCalledTimes(1)
@@ -336,30 +338,66 @@ it('shares guest inventory until that distro is invalidated', async () => {
   expect(fixture.wslProcess).toHaveBeenCalledTimes(3)
 })
 
-it('returns the queued refresh result to the cold waiter and overlapping refreshes', async () => {
+it('publishes a completed scan and resolves its early waiter while a successor runs', async () => {
+  const user = await executable('path', claudeName)
+  const replacement = await executable('new-path', claudeName)
+  const entered = Promise.withResolvers<void>()
+  const held = Promise.withResolvers<void>()
+  const successorEntered = Promise.withResolvers<void>()
+  const successorHeld = Promise.withResolvers<void>()
+  fixture.onScan = entered.resolve
+  fixture.installs = held.promise
+  const early = readLocalTerminalAgentProgram('claude', shell)
+  let earlyResult: Awaited<typeof early> | undefined
+  void early.then((result) => {
+    earlyResult = result
+  })
+  try {
+    await entered.promise
+    fixture.path = dirname(replacement)
+    fixture.onScan = successorEntered.resolve
+    fixture.installs = successorHeld.promise
+    const refresh = detectAgentCommandsOnHost(['claude'], { refresh: true })
+    held.resolve()
+    await successorEntered.promise
+    const published = await Promise.race([
+      readLocalTerminalAgentProgram('claude', shell),
+      new Promise((resolve) => setImmediate(() => resolve('pending')))
+    ])
+    const settledWhileSuccessorRan = earlyResult
+    successorHeld.resolve()
+    await expect(refresh).resolves.toEqual(new Set(['claude']))
+    expect(settledWhileSuccessorRan).toEqual({ kind: 'by-name', path: user })
+    expect(published).toEqual({ kind: 'by-name', path: user })
+    await expect(readLocalTerminalAgentProgram('claude', shell)).resolves.toEqual({
+      kind: 'by-name',
+      path: replacement
+    })
+    expect(fixture.enumerate).toHaveBeenCalledTimes(2)
+  } finally {
+    held.resolve()
+    successorHeld.resolve()
+    await early
+  }
+})
+
+it('returns the published agents as incomplete when a detect wait expires', async () => {
+  await executable('path', claudeName)
+  await detectInstalledAgentInventory()
   const entered = Promise.withResolvers<void>()
   const held = Promise.withResolvers<void>()
   fixture.onScan = entered.resolve
   fixture.installs = held.promise
-  const launch = readLocalTerminalAgentProgram('claude', shell)
+  vi.useFakeTimers()
+  const detect = detectInstalledAgentInventory().catch((error: unknown) => error)
   try {
     await entered.promise
-    const user = await executable('path', claudeName)
-    const refresh = () => detectAgentCommandsOnHost(['claude'], { refresh: true })
-    const revalidate = readLocalTerminalAgentProgram('claude', shell, true)
-    const first = refresh()
-    const second = refresh()
-    held.resolve()
-    await expect(Promise.all([launch, revalidate, first, second])).resolves.toEqual([
-      { kind: 'by-name', path: user },
-      { kind: 'by-name', path: user },
-      new Set(['claude']),
-      new Set(['claude'])
-    ])
-    expect(fixture.enumerate).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(await detect).toMatchObject({ agents: ['claude'], incomplete: true })
   } finally {
+    const completion = detectInstalledAgentInventory()
     held.resolve()
-    await launch
+    await completion
   }
 })
 
@@ -407,7 +445,7 @@ it('coalesces refreshes requested during an active WSL refresh into one successo
     const third = refresh()
     held.resolve({ code: 0, stdout: '', stderr: '', timedOut: false, environmentResolved: true })
     await expect(Promise.all([first, second, third])).resolves.toEqual([
-      new Set(['claude']),
+      new Set(),
       new Set(['claude']),
       new Set(['claude'])
     ])
