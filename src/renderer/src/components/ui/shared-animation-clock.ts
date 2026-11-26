@@ -32,6 +32,20 @@ export function handleShimmerAnimationStart(event: React.AnimationEvent<HTMLElem
   anchorToDocumentClock(event, SHIMMER_ANIMATION_NAME)
 }
 
+// Handled on the grid: the first (undelayed) cell's start anchors all nine at once, so a later cell
+// never snaps to the shared phase when its own delayed start fires.
 export function handleDotWaveAnimationStart(event: React.AnimationEvent<HTMLElement>): void {
-  anchorToDocumentClock(event, DOT_WAVE_ANIMATION_NAME)
+  const grid = event.currentTarget
+  if (event.animationName !== DOT_WAVE_ANIMATION_NAME || typeof grid.getAnimations !== 'function') {
+    return
+  }
+  for (const animation of grid.getAnimations({ subtree: true })) {
+    if (
+      'animationName' in animation &&
+      animation.animationName === DOT_WAVE_ANIMATION_NAME &&
+      animation.startTime !== 0
+    ) {
+      animation.startTime = 0
+    }
+  }
 }

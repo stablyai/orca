@@ -30,9 +30,9 @@ function WorkerDockDotGrid() {
 }
 
 /** One 12px status mark: amber question, red dot, yellow spinner, grey ring or green dot. The row's
- *  label carries the state for assistive technology, so the mark itself is decorative. `still`
+ *  label carries the state for assistive technology, so the mark itself is decorative. `chip`
  *  draws running as a quiet dot grid instead of the spinner, for the always-visible chip. */
-export function WorkerDockGlyph({ glyph, still = false }: { glyph: Glyph; still?: boolean }) {
+export function WorkerDockGlyph({ glyph, chip = false }: { glyph: Glyph; chip?: boolean }) {
   return (
     <span
       aria-hidden="true"
@@ -41,7 +41,7 @@ export function WorkerDockGlyph({ glyph, still = false }: { glyph: Glyph; still?
     >
       {glyph === 'ask' ? (
         <AgentQuestionIcon className="size-3" />
-      ) : glyph === 'running' && still ? (
+      ) : glyph === 'running' && chip ? (
         <WorkerDockDotGrid />
       ) : glyph === 'running' ? (
         <AgentWorkingSpinner className="size-2.5" />
