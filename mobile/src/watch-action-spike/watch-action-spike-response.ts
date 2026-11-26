@@ -58,7 +58,7 @@ async function handleWatchActionSpikeResponse(
   }
   handledResponses.add(key)
   const startedAt = Date.now()
-  const appState = AppState.currentState
+  const appState = AppState.currentState ?? 'unknown'
   const tappedAt = await nativeTapAt(request.identifier)
   const nativeToJsMs = tappedAt === null ? null : startedAt - tappedAt
   const hostId = readSpikeHostId(request.content.data)

@@ -12,9 +12,9 @@ import { troubleshootScreenStyles as styles } from '../diagnostics/troubleshoot-
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { ensureNotificationPermissions } from '../notifications/notification-permissions'
-import { loadHosts } from '../transport/hosts/host-store'
-import type { HostProfile } from '../transport/hosts/host-profile'
+import { ensureNotificationPermissions } from '../notifications/delivery-policy/notification-permissions'
+import { loadHosts } from '../host-catalog/host-store'
+import type { HostProfile } from '../host-catalog/host-profile'
 import { armWatchActionSpike } from './watch-action-spike-notifications'
 import {
   clearWatchActionSpikeResults,

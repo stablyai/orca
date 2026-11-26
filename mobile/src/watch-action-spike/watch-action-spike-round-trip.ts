@@ -4,7 +4,7 @@ import {
   hostStatusProbe
 } from '../transport/connection/host-status-probe-operations'
 import { openHostLogicalClient } from '../transport/connection/host-logical-client'
-import { loadHostCatalog } from '../transport/hosts/host-store'
+import { loadHostCatalog } from '../host-catalog/host-store'
 import type { WatchActionSpikeStep } from './watch-action-spike-results'
 
 const HOST_ANSWER_TIMEOUT_MS = 20_000
