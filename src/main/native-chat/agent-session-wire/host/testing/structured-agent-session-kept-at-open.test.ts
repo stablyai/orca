@@ -106,6 +106,13 @@ async function settleTurns(): Promise<void> {
   }
 }
 
+/** Waits (real time, bounded) until `done` holds; the listing reads processes, so turns aren't enough. */
+async function until(done: () => boolean): Promise<void> {
+  for (let waited = 0; !done() && waited < 5_000; waited += 10) {
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+}
+
 async function openKept(
   fresh: Fresh,
   sessionId: string,
@@ -130,7 +137,8 @@ it.skipIf(process.platform === 'win32')(
     const { opens, settle } = keptOpens(fresh, new Map([[SESSION, session]]), () => process.pid)
     opens.adopted(SESSION, session as never)
     late.answer([keptRelay('another-chat')])
-    await settleTurns()
+    await fresh.relays.providerRelayListingSettled()
+    await until(() => settle.mock.calls.length > 0)
     expect(settle).toHaveBeenCalledTimes(1)
     expect(settle).toHaveBeenCalledWith(SESSION, session, 3, 6)
   }
@@ -214,6 +222,7 @@ it.skipIf(process.platform === 'win32')(
     }
     daemon.recover()
     await inventory.listKeptProviderRelays(async () => [daemon.client], true)
+    await until(() => settle.mock.calls.length > 0)
     await settleTurns()
     expect(settle).toHaveBeenCalledTimes(1)
     expect(settle.mock.calls[0]?.[0]).toBe('chat-0')
