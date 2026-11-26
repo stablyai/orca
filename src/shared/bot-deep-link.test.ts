@@ -9,14 +9,7 @@ describe('bot item links', () => {
 
     expect(parseBotDeepLink(url)).toEqual({ botId: 'bot-1', botItemUid: UID })
     expect(formatBotDeepLink({ botId: 'bot-1', botItemUid: UID })).toBe(url)
-  })
-
-  // A host reads an all-digit ref as an item number, which names another item on another computer.
-  it.each(['12', '', 'a/b', '..%2Fx', 'a%20b', 'x'.repeat(129)])('refuses botItem=%s', (value) => {
-    expect(parseBotDeepLink(`orca://bot/bot-1?botItem=${value}`)).toBeNull()
-  })
-
-  it('leaves conversation links as they were, whose item is a transcript entry', () => {
+    // Conversation links are unchanged: their `item` is a chat transcript entry.
     expect(
       parseBotDeepLink(
         `orca://bot/bot-1?conversation=slack:C1&session=s1&item=entry-1&botItem=${UID}`
@@ -28,5 +21,10 @@ describe('bot item links', () => {
       itemId: 'entry-1'
     })
     expect(parseBotDeepLink('orca://bot/bot-1?item=entry-1')).toEqual({ botId: 'bot-1' })
+  })
+
+  // A host reads an all-digit ref as an item number, which names another item on another computer.
+  it.each(['12', '', 'a/b', '..%2Fx', 'a%20b', 'x'.repeat(129)])('refuses botItem=%s', (value) => {
+    expect(parseBotDeepLink(`orca://bot/bot-1?botItem=${value}`)).toBeNull()
   })
 })
