@@ -52,7 +52,7 @@ export function SourceControlFilterToggle({
     >
       <Search className="size-3.5" />
       {normalizedFilter ? (
-        <span className="absolute right-1 top-1 size-1.5 rounded-full bg-foreground" />
+        <span className="absolute right-0.5 top-0.5 size-1.5 rounded-full bg-foreground" />
       ) : null}
     </button>
   )

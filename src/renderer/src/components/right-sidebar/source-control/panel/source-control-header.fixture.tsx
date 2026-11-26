@@ -300,13 +300,20 @@ function Panel(scenario: Scenario) {
   )
 }
 
+// The fixture frame pads 16px per side; widths below are the panel's own.
+const FRAME_PADDING = 32
+function panelWidth(width: number): number {
+  return width + FRAME_PADDING
+}
+
 const LONG_BRANCH = 'someone/very-long-branch-name-for-the-onboarding-flow-v2'
 
 function variants(scenario: Scenario) {
   return {
-    narrow: defineFixture({ width: 240, render: () => <Panel {...scenario} /> }),
-    standard: defineFixture({ width: 264, render: () => <Panel {...scenario} /> }),
-    wide: defineFixture({ width: 400, render: () => <Panel {...scenario} /> })
+    narrow: defineFixture({ width: panelWidth(240), render: () => <Panel {...scenario} /> }),
+    standard: defineFixture({ width: panelWidth(264), render: () => <Panel {...scenario} /> }),
+    minimum: defineFixture({ width: panelWidth(220), render: () => <Panel {...scenario} /> }),
+    wide: defineFixture({ width: panelWidth(400), render: () => <Panel {...scenario} /> })
   }
 }
 
@@ -331,6 +338,7 @@ export const longBranchStandard = longBranch.standard
 export const longBranchWide = longBranch.wide
 
 const longBranchCreate = variants({ branch: LONG_BRANCH, behind: 128 })
+export const longBranchCreatePrMinimum = longBranchCreate.minimum
 export const longBranchCreatePrNarrow = longBranchCreate.narrow
 export const longBranchCreatePrWide = longBranchCreate.wide
 
@@ -343,47 +351,47 @@ export const remoteOldHostNarrow = remoteOldHost.narrow
 export const remoteOldHostWide = remoteOldHost.wide
 
 export const compareLoading = defineFixture({
-  width: 264,
+  width: panelWidth(264),
   render: () => <Panel compare="loading" />
 })
 export const compareFailed = defineFixture({
-  width: 264,
+  width: panelWidth(264),
   render: () => <Panel compare="error" />
 })
 export const nothingToShow = defineFixture({
-  width: 264,
+  width: panelWidth(264),
   render: () => <Panel lines={null} />
 })
 export const creatingPr = defineFixture({
-  width: 240,
+  width: panelWidth(240),
   render: () => <Panel review="creating" behind={45} />
 })
 export const createPrDisabled = defineFixture({
-  width: 264,
+  width: panelWidth(264),
   render: () => <Panel review="disabled" />
 })
 export const unlinkedPr = defineFixture({
-  width: 264,
+  width: panelWidth(264),
   render: () => <Panel review="unlinked" />
 })
 export const rebasePaused = defineFixture({
-  width: 264,
+  width: panelWidth(264),
   render: () => <Panel rebasePaused detached review={null} />
 })
 export const filterExpanded = defineFixture({
-  width: 240,
+  width: panelWidth(240),
   render: () => <Panel filterExpanded filterQuery="settings" behind={45} />
 })
 export const filterActive = defineFixture({
-  width: 240,
+  width: panelWidth(240),
   render: () => <Panel filterQuery="settings" behind={45} />
 })
 export const uncommittedScope = defineFixture({
-  width: 240,
+  width: panelWidth(240),
   render: () => <Panel scope={{ kind: 'uncommitted' }} behind={45} />
 })
 export const commitScope = defineFixture({
-  width: 240,
+  width: panelWidth(240),
   render: () => (
     <Panel
       scope={{ kind: 'commit', commit: COMMIT, pickedBaseOid: 'b1', pickedFromBranchPage: true }}
@@ -391,7 +399,7 @@ export const commitScope = defineFixture({
   )
 })
 export const overflowOpen = defineFixture({
-  width: 264,
+  width: panelWidth(264),
   render: () => <Panel behind={45} />,
   interact: (frame) => {
     frame

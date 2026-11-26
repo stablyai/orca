@@ -1,8 +1,10 @@
+import { useId } from 'react'
 import type React from 'react'
 import { GitPullRequestArrow, Loader2 } from 'lucide-react'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { PrimaryAction } from '../review/source-control-primary-action-types'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { PrimaryActionTooltip } from '../review/source-control-primary-action-tooltip'
@@ -64,6 +66,7 @@ export function CreatePrHeaderButton({
   )
 }
 
+// Shares the branch row, so the unlinked status rides in the button's tooltip and description.
 export function SuppressedGitHubPRToolbar({
   number,
   onRelink
@@ -72,15 +75,31 @@ export function SuppressedGitHubPRToolbar({
   onRelink: () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const statusId = useId()
+  const status = t('sourceControl.unlinkedPr.status', 'PR #{{number}} unlinked', { number })
   return (
-    <div className="flex min-w-0 items-center gap-1.5">
-      <span className="truncate text-[11.5px] text-muted-foreground">
-        {t('sourceControl.unlinkedPr.status', 'PR #{{number}} unlinked', { number })}
+    <>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            onClick={onRelink}
+            className="shrink-0"
+            aria-describedby={statusId}
+          >
+            <GitPullRequestArrow className="size-3.5" aria-hidden="true" />
+            {t('checksPanel.unlinked.relink', 'Link PR #{{number}}', { number })}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={6}>
+          {status}
+        </TooltipContent>
+      </Tooltip>
+      <span id={statusId} className="sr-only">
+        {status}
       </span>
-      <Button type="button" variant="outline" size="xs" onClick={onRelink} className="shrink-0">
-        <GitPullRequestArrow className="size-3.5" aria-hidden="true" />
-        {t('checksPanel.unlinked.relink', 'Link PR #{{number}}', { number })}
-      </Button>
-    </div>
+    </>
   )
 }
