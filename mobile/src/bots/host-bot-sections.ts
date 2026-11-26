@@ -114,6 +114,10 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
       }
     ])
   )
+  // The paired computer's Bot options order and filter every computer's bots: Manual keeps this
+  // computer's, then each server's, in their saved orders. Show paused lifts its filter for a search.
+  const saved = local?.kind === 'listed' ? local.view : DEFAULT_BOT_SIDEBAR_VIEW
+  const view = searching && inputs.showPaused ? { ...saved, hidePausedBots: false } : saved
   const drawn: DrawnBotEntry[] = []
   let total = 0
   let shownTotal = 0
@@ -147,7 +151,14 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
       continue
     }
     const hostRows = inputs.rows.filter((row) => hostOf(row) === listing.hostId)
-    const drawnHost = drawHostBotEntries(listing, hostRows, inputs, lineageOf, hosts)
+    const drawnHost = drawHostBotEntries(
+      listing,
+      hostRows,
+      inputs,
+      lineageOf,
+      hosts,
+      view.hidePausedBots
+    )
     drawn.push(...drawnHost.drawn)
     drawnHost.listed.forEach((identity) => listedIdentities.add(identity))
     total += drawnHost.total
@@ -158,10 +169,6 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
   if (total === 0 && !newBotHostId && endLines.length === 0) {
     return { sections: [], listedIdentities }
   }
-  // The paired computer's Bot options order and filter every computer's bots: Manual keeps this
-  // computer's, then each server's, in their saved orders. Show paused lifts its filter for a search.
-  const saved = local?.kind === 'listed' ? local.view : DEFAULT_BOT_SIDEBAR_VIEW
-  const view = searching && inputs.showPaused ? { ...saved, hidePausedBots: false } : saved
   const arranged = arrangeBotSidebarEntries(
     drawn.map((entry) => ({ ...entry.entry, drawn: entry })),
     view,
