@@ -3,6 +3,7 @@ import {
   sanitizeAgentSessionAttachmentName
 } from '../agent-session/agent-session-attachments'
 import { z } from 'zod'
+import { FeishuGroupPolicy } from '../bots/feishu-local'
 export const FeishuLocalBot = z.strictObject({ botId: z.string().min(1) })
 export const FeishuLocalConnect = z.union([
   FeishuLocalBot.extend({ profile: z.string().min(1).max(128) }),
@@ -12,7 +13,8 @@ export const FeishuLocalConnect = z.union([
       .string()
       .min(1)
       .max(256)
-      .regex(/^[\x21-\x7e]+$/)
+      .regex(/^[\x21-\x7e]+$/),
+    group: FeishuGroupPolicy.optional()
   })
 ])
 

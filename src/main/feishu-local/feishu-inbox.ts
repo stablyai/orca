@@ -2,48 +2,16 @@ import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import Database from '../sqlite/sync-database'
 import type { FeishuProfile } from './feishu-cli'
-import type { FeishuMessage } from './feishu-message'
-import { binding, type Binding } from './feishu-binding'
+import { FeishuGroupPolicy } from '../../shared/bots/feishu-local'
+import { FeishuGroupRoute, type FeishuInboundMessage, type FeishuMessage } from './feishu-message'
+import { binding, groupKey, type Binding } from './feishu-binding'
+import { initializeFeishuInbox } from './feishu-inbox-schema'
 /** One database per installation. A CLI app can belong to just one Orca profile and bot. */
 export class FeishuInbox {
   private db: Database.Database
   constructor(path: string) {
     this.db = new Database(path)
-    this.db.exec(`PRAGMA foreign_keys=ON;
-      CREATE TABLE IF NOT EXISTS bindings(account TEXT PRIMARY KEY, scope TEXT NOT NULL,bot TEXT NOT NULL,profile TEXT NOT NULL,app TEXT NOT NULL UNIQUE,owner TEXT,chat TEXT,pairedAt INTEGER,UNIQUE(scope,bot));
-      CREATE TABLE IF NOT EXISTS inbox(account TEXT NOT NULL REFERENCES bindings(account) ON DELETE CASCADE,mid TEXT NOT NULL,event TEXT NOT NULL,body TEXT,first_post INTEGER,review INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(account,mid),UNIQUE(account,event));
-      CREATE INDEX IF NOT EXISTS pending_feishu_messages ON inbox(account) WHERE body IS NOT NULL AND review=0;
-      CREATE TABLE IF NOT EXISTS reply_files(account TEXT NOT NULL,mid TEXT NOT NULL,name TEXT NOT NULL,bytes BLOB,sha256 TEXT,file_key TEXT,posted INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(account,mid),FOREIGN KEY(account,mid) REFERENCES inbox(account,mid) ON DELETE CASCADE);
-      CREATE INDEX IF NOT EXISTS review_feishu_messages ON inbox(account) WHERE review=1;`)
-    if (
-      !this.db
-        .prepare('PRAGMA table_info(reply_files)')
-        .all()
-        .some((c) => c.name === 'sha256')
-    ) {
-      this.db.exec('ALTER TABLE reply_files ADD COLUMN sha256 TEXT')
-    }
-    if (
-      !this.db
-        .prepare('PRAGMA table_info(bindings)')
-        .all()
-        .some((c) => c.name === 'sealed_secret')
-    ) {
-      this.db.exec('ALTER TABLE bindings ADD COLUMN sealed_secret TEXT')
-    }
-    const columns = this.db.prepare('PRAGMA table_info(inbox)').all()
-    if (!columns.some((c) => c.name === 'reply_done')) {
-      this.db.exec('ALTER TABLE inbox ADD COLUMN reply_done INTEGER NOT NULL DEFAULT 0')
-    }
-    if (!columns.some((c) => c.name === 'progress')) {
-      this.db.exec('ALTER TABLE inbox ADD COLUMN progress INTEGER NOT NULL DEFAULT 0')
-    }
-    if (!columns.some((c) => c.name === 'kind')) {
-      this.db.exec("ALTER TABLE inbox ADD COLUMN kind TEXT NOT NULL DEFAULT 'text'")
-    }
-    if (!columns.some((c) => c.name === 'stored_path')) {
-      this.db.exec('ALTER TABLE inbox ADD COLUMN stored_path TEXT')
-    }
+    initializeFeishuInbox(this.db)
   }
   close(): void {
     this.db.close()
@@ -51,15 +19,22 @@ export class FeishuInbox {
   bindings(scope: string): Binding[] {
     return this.db
       .prepare(
-        'SELECT account,bot,CASE WHEN sealed_secret IS NULL THEN profile END AS profile,app,owner,chat,pairedAt FROM bindings WHERE scope=?'
+        'SELECT account,bot,CASE WHEN sealed_secret IS NULL THEN profile END AS profile,app,owner,chat,pairedAt,group_policy FROM bindings WHERE scope=?'
       )
       .all(scope)
-      .map((row) => binding.parse(row))
+      .map((row) =>
+        binding.parse({
+          ...row,
+          ...(typeof row.group_policy === 'string'
+            ? { group: FeishuGroupPolicy.parse(JSON.parse(row.group_policy)) }
+            : {})
+        })
+      )
   }
   add(
     scope: string,
     bot: string,
-    setup: FeishuProfile | { appId: string; sealedSecret: string }
+    setup: FeishuProfile | { appId: string; sealedSecret: string; group?: FeishuGroupPolicy }
   ): Binding {
     const sealed = 'sealedSecret' in setup ? setup.sealedSecret : null
     if (sealed === '') {
@@ -72,13 +47,22 @@ export class FeishuInbox {
       app: setup.appId,
       owner: null,
       chat: null,
-      pairedAt: null
+      pairedAt: null,
+      ...('group' in setup && setup.group ? { group: setup.group } : {})
     }
     this.db
       .prepare(
-        'INSERT INTO bindings(account,scope,bot,profile,app,sealed_secret) VALUES(?,?,?,?,?,?)'
+        'INSERT INTO bindings(account,scope,bot,profile,app,sealed_secret,group_policy) VALUES(?,?,?,?,?,?,?)'
       )
-      .run(b.account, scope, bot, b.profile ?? b.app, b.app, sealed)
+      .run(
+        b.account,
+        scope,
+        bot,
+        b.profile ?? b.app,
+        b.app,
+        sealed,
+        b.group ? JSON.stringify(b.group) : null
+      )
     return b
   }
   credential(account: string): string | null {
@@ -112,23 +96,55 @@ export class FeishuInbox {
       throw error
     }
   }
-  accept(b: Binding, m: FeishuMessage): void {
-    if (
-      m.sender_id !== b.owner ||
-      m.chat_id !== b.chat ||
-      b.pairedAt === null ||
-      Number(m.create_time) <= b.pairedAt
-    ) {
-      return
+  accept(b: Binding, m: FeishuInboundMessage): boolean {
+    if (!b.owner || b.pairedAt === null || Number(m.create_time) <= b.pairedAt) {
+      return false
     }
-    this.db
-      .prepare('INSERT OR IGNORE INTO inbox(account,mid,event,body,kind) VALUES(?,?,?,?,?)')
-      .run(b.account, m.message_id, m.event_id, m.content, m.message_type)
+    const group = m.chat_type === 'p2p' ? undefined : m.group
+    if (m.chat_type === 'p2p') {
+      if (m.sender_id !== b.owner || m.chat_id !== b.chat) {
+        return false
+      }
+    } else if (
+      b.profile !== null ||
+      b.group?.chatId !== m.chat_id ||
+      !b.group.members.includes(m.sender_id) ||
+      m.group.chatId !== m.chat_id ||
+      m.group.sender !== m.sender_id ||
+      m.message_type !== 'text'
+    ) {
+      return false
+    }
+    // Older DM-only builds treat every non-null body as private mail.
+    const accepted = this.db
+      .prepare(
+        'INSERT OR IGNORE INTO inbox(account,mid,event,body,kind,group_route,group_key,group_body) VALUES(?,?,?,?,?,?,?,?)'
+      )
+      .run(
+        b.account,
+        m.message_id,
+        m.event_id,
+        group ? null : m.content,
+        m.message_type,
+        group ? JSON.stringify(group) : null,
+        group ? groupKey(b, group).externalId : null,
+        group ? m.content : null
+      )
+    return accepted.changes !== 0
   }
   next(account: string) {
+    // The native outbox attaches a turn's answer to its first delivery.
     const row = this.db
       .prepare(
-        'SELECT mid,body,kind,stored_path AS path FROM inbox WHERE account=? AND body IS NOT NULL AND review=0 ORDER BY rowid LIMIT 1'
+        `SELECT mid,COALESCE(body,group_body) AS body,kind,stored_path AS path,group_route AS route
+          FROM inbox AS pending
+          WHERE account=? AND (body IS NOT NULL OR group_body IS NOT NULL) AND review=0
+            AND (group_key IS NULL OR NOT EXISTS (
+              SELECT 1 FROM inbox AS prior WHERE prior.account=pending.account
+                AND prior.group_key IS NOT NULL AND prior.group_key=pending.group_key
+                AND prior.reply_done=0 AND prior.rowid<pending.rowid
+            ))
+          ORDER BY rowid LIMIT 1`
       )
       .get(account)
     return (
@@ -138,10 +154,21 @@ export class FeishuInbox {
           mid: z.string(),
           body: z.string(),
           kind: z.enum(['text', 'image', 'file', 'post']),
-          path: z.string().nullable()
+          path: z.string().nullable(),
+          route: z.string().nullable()
         })
+        .transform(({ route, ...value }) => ({
+          ...value,
+          ...(route ? { group: FeishuGroupRoute.parse(JSON.parse(route)) } : {})
+        }))
         .parse(row)
     )
+  }
+  groupRoute(account: string, mid: string): FeishuGroupRoute | undefined {
+    const route = this.db
+      .prepare('SELECT group_route FROM inbox WHERE account=? AND mid=?')
+      .get(account, mid)?.group_route
+    return typeof route === 'string' ? FeishuGroupRoute.parse(JSON.parse(route)) : undefined
   }
   stored(account: string, mid: string, path: string): void {
     this.db
@@ -164,7 +191,7 @@ export class FeishuInbox {
     }
     const inserted = this.db
       .prepare(`INSERT INTO reply_files(account,mid,name,bytes)
-      SELECT account,mid,?,? FROM inbox WHERE account=? AND mid=? AND reply_done=0 AND review=0`)
+      SELECT account,mid,?,? FROM inbox WHERE account=? AND mid=? AND group_route IS NULL AND reply_done=0 AND review=0`)
       .run(name, bytes, account, mid)
     if (!inserted.changes) {
       throw new Error('This Feishu delivery cannot receive another file')
@@ -213,7 +240,9 @@ export class FeishuInbox {
   }
   admitted(account: string, mid: string): void {
     this.db
-      .prepare('UPDATE inbox SET body=NULL,stored_path=NULL WHERE account=? AND mid=?')
+      .prepare(
+        'UPDATE inbox SET body=NULL,group_body=NULL,stored_path=NULL WHERE account=? AND mid=?'
+      )
       .run(account, mid)
   }
   review(account: string, mid: string): boolean {

@@ -135,7 +135,11 @@ export class FeishuLocalHost {
       }
       const encrypted = await (store.encryptStringAsync?.(setup.appSecret) ??
         store.encryptString(setup.appSecret))
-      reservation = { appId: setup.appId, sealedSecret: encrypted.toString('base64') }
+      reservation = {
+        appId: setup.appId,
+        sealedSecret: encrypted.toString('base64'),
+        ...(setup.group ? { group: setup.group } : {})
+      }
     }
     let binding: Binding
     try {

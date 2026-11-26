@@ -1,7 +1,8 @@
 import type { ConnectorReplyJournal } from '../connector-cloud/connector-reply-outbox'
 import { outcomeSentence } from '../connector-cloud/connector-reply-outcome-sentence'
 import type { JournalConnectorReplyRow } from '../../shared/agent-session/journal/journal-connector-reply'
-import { dmKey, type Binding } from './feishu-binding'
+import { dmKey, groupKey, type Binding } from './feishu-binding'
+import type { FeishuGroupRoute } from './feishu-message'
 import type { FeishuTransport } from './feishu-transport'
 import { FeishuReplyTargetGone, FeishuUploadPermissionError } from './feishu-transport'
 import { replyFeishu, finalFeishuMessage } from './feishu-replies'
@@ -21,12 +22,17 @@ export async function drainFeishuOutbox(
   active: () => boolean,
   changed: () => void
 ): Promise<void> {
-  const chat = b.chat
-  if (!chat) {
+  if (!b.chat) {
     return
   }
   const conversation = dmKey(b)
-  const post = async (mid: string, fill: Reply, firstPost: number | null) => {
+  const post = async (
+    mid: string,
+    fill: Reply,
+    firstPost: number | null,
+    chat: string,
+    group?: FeishuGroupRoute
+  ) => {
     let start = firstPost
     const requireSendWindow = () => {
       if (!active()) {
@@ -46,10 +52,10 @@ export async function drainFeishuOutbox(
         }
       }
       requireSendWindow()
-      await replyFeishu(api, b.account, mid, chat, message, part)
+      await replyFeishu(api, b.account, mid, chat, message, part, group)
     }
     const artifact =
-      fill.outcome === 'answered' || fill.outcome === 'no_answer'
+      !group && (fill.outcome === 'answered' || fill.outcome === 'no_answer')
         ? await inbox.artifact(b.account, mid)
         : undefined
     if (artifact?.posted && fill.outcome === 'no_answer') {
@@ -74,18 +80,16 @@ export async function drainFeishuOutbox(
         return
       }
     }
-    await reply(
-      finalFeishuMessage(fill.prose || outcomeSentence(fill.outcome, 'Orca', fill.toolsRan)),
-      'final'
-    )
+    const text = fill.prose || outcomeSentence(fill.outcome, 'Orca', fill.toolsRan)
+    await reply(group ? { type: 'text', content: { text } } : finalFeishuMessage(text), 'final')
   }
-  const settle = async (mid: string, fill: Reply) => {
+  const settle = async (mid: string, fill: Reply, chat: string, group?: FeishuGroupRoute) => {
     const state = await inbox.replyState(b.account, mid)
     if (state && !state.done) {
       let review = state.review
       if (!review && fill.answerDeliveryId === mid && fill.outcome !== 'quiet') {
         try {
-          await post(mid, fill, state.firstPost)
+          await post(mid, fill, state.firstPost, chat, group)
         } catch (error) {
           if (!(error instanceof PostWindowClosed || error instanceof FeishuReplyTargetGone)) {
             throw error
@@ -109,16 +113,34 @@ export async function drainFeishuOutbox(
       if (!active()) {
         return
       }
-      if (
-        !row.fill ||
-        row.account !== b.account ||
-        row.conversation.source !== conversation.source ||
-        row.conversation.externalId !== conversation.externalId
-      ) {
+      const { deliveryId, fill } = row
+      if (!fill || row.account !== b.account) {
         continue
       }
       try {
-        await settle(row.deliveryId, row.fill)
+        if (
+          row.conversation.source !== 'feishu-local' &&
+          row.conversation.source !== 'feishu-group'
+        ) {
+          continue
+        }
+        const group = await inbox.groupRoute(b.account, deliveryId)
+        if (
+          !group &&
+          row.conversation.source === conversation.source &&
+          row.conversation.externalId === conversation.externalId
+        ) {
+          await settle(deliveryId, fill, b.chat)
+        } else if (
+          row.conversation.source === 'feishu-group' &&
+          b.profile === null &&
+          b.group &&
+          group?.chatId === b.group.chatId &&
+          b.group.members.includes(group.sender) &&
+          groupKey(b, group).externalId === row.conversation.externalId
+        ) {
+          await settle(deliveryId, fill, group.chatId, group)
+        }
       } catch (error) {
         if (error instanceof DeliveryPaused || !active()) {
           return

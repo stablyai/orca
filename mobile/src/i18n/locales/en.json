@@ -6359,6 +6359,8 @@
       "fromClosedChatInline": "from closed chat",
       "statusUnknown": "Status unknown",
       "kindSlack": "Slack thread",
+      "kindFeishuDm": "Feishu DM",
+      "kindFeishuGroup": "Feishu group topic",
       "kindLinear": "Linear issue",
       "kindGithub": "GitHub thread",
       "kindAutomation": "Automation run",

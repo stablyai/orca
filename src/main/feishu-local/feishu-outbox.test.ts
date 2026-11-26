@@ -3,7 +3,9 @@ import type { JournalConnectorReplyRow } from '../../shared/agent-session/journa
 import { BotsDbWorkerClient } from '../bots/db-worker/bots-db-worker-client'
 import { closeBotsDbStores, handleBotsDbRequest } from '../bots/db-worker/bots-db-worker-entry'
 import { inProcessWorker } from '../worker-threads/in-process-worker.test-fixture'
-import { dmKey, type Binding } from './feishu-binding'
+import { dmKey, groupKey, type Binding } from './feishu-binding'
+import type { FeishuGroupMessage } from './feishu-message'
+import { acknowledgeFeishuMessage } from './feishu-replies'
 import type { FeishuTransport } from './feishu-transport'
 import { FeishuReplyTargetGone, FeishuUploadPermissionError } from './feishu-transport'
 import { drainFeishuOutbox } from './feishu-outbox'
@@ -16,7 +18,11 @@ const api = { reply: vi.fn<FeishuTransport['reply']>(), upload: vi.fn<FeishuTran
 beforeEach(async () => {
   client = new BotsDbWorkerClient(inProcessWorker(handleBotsDbRequest).factory)
   inbox = feishuStore(client, ':memory:')
-  const b = await inbox.add('scope', 'bot', { appId: 'cli_demo', sealedSecret: 'sealed' })
+  const b = await inbox.add('scope', 'bot', {
+    appId: 'cli_demo',
+    sealedSecret: 'sealed',
+    group: { chatId: 'oc_group', members: ['ou_member'] }
+  })
   await inbox.pair('scope', b, {
     chat_type: 'p2p',
     message_type: 'text',
@@ -79,6 +85,83 @@ const drain = (beforeSettle: (mid: string) => void = () => {}) =>
     () => true,
     changed
   )
+
+it('settles a group message independently and releases only its topic queue', async () => {
+  const first: FeishuGroupMessage = {
+    chat_type: 'topic_group',
+    message_type: 'text',
+    sender_id: 'ou_member',
+    chat_id: 'oc_group',
+    message_id: 'om_first',
+    event_id: 'e_first',
+    create_time: '1800000000001',
+    content: 'first',
+    group: {
+      chatId: 'oc_group',
+      tenant: 'tenant',
+      rootId: 'om_root',
+      inThread: true,
+      sender: 'ou_member'
+    }
+  }
+  const followUp = { ...first, message_id: 'om_second', event_id: 'e_second' }
+  const other = {
+    ...first,
+    message_id: 'om_elsewhere',
+    event_id: 'e_elsewhere',
+    group: { ...first.group, rootId: 'om_elsewhere' }
+  }
+  await inbox.accept(binding, first)
+  await inbox.admitted(binding.account, first.message_id)
+  await inbox.accept(binding, followUp)
+  await inbox.accept(binding, other)
+  await inbox.accept(binding, { ...first, event_id: 'e_replayed' })
+  expect((await inbox.next(binding.account))?.mid).toBe('om_elsewhere')
+  await inbox.admitted(binding.account, other.message_id)
+  expect(await inbox.next(binding.account)).toBeUndefined()
+  const progress = () =>
+    acknowledgeFeishuMessage(
+      api,
+      inbox,
+      binding,
+      first.message_id,
+      AbortSignal.timeout(1_000),
+      () => true,
+      first.group
+    )
+  await progress()
+  await progress()
+  owed.push({
+    account: binding.account,
+    conversation: groupKey(binding, first.group),
+    deliveryId: first.message_id,
+    sessionId: 'topic-session',
+    epoch: 'one',
+    messageId: first.message_id,
+    queued: false,
+    fill: { outcome: 'answered', answerDeliveryId: first.message_id, filledAt: 1, prose: 'Answer' }
+  })
+  api.reply.mockRejectedValueOnce(new Error('lost response'))
+  await expect(drain()).rejects.toThrow('another attempt')
+  expect(await inbox.next(binding.account)).toBeUndefined()
+  await drain()
+  await drain()
+  const receipts = api.reply.mock.calls.map(([mid, chat, reply, uuid, thread]) => ({
+    mid,
+    chat,
+    kind: reply.type,
+    uuid,
+    root: thread?.rootId
+  }))
+  expect(receipts).toEqual([
+    { mid: 'om_first', chat: 'oc_group', kind: 'text', uuid: expect.any(String), root: 'om_root' },
+    { mid: 'om_first', chat: 'oc_group', kind: 'text', uuid: expect.any(String), root: 'om_root' },
+    { mid: 'om_first', chat: 'oc_group', kind: 'text', uuid: expect.any(String), root: 'om_root' }
+  ])
+  expect(receipts[0].uuid).not.toBe(receipts[1].uuid)
+  expect(receipts[1].uuid).toBe(receipts[2].uuid)
+  expect((await inbox.next(binding.account))?.mid).toBe('om_second')
+})
 
 it.each(['upload', 'file reply'])(
   'stops further posts if the retry window expires during the %s',

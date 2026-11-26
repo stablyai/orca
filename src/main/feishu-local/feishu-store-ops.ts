@@ -8,6 +8,7 @@ const OPS = [
   'pair',
   'accept',
   'next',
+  'groupRoute',
   'stageFile',
   'artifact',
   'uploaded',

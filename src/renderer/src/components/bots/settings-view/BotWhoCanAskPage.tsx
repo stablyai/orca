@@ -104,10 +104,15 @@ export function BotWhoCanAskPage({ bot }: { bot: Bot }): React.JSX.Element {
             {t('bots.feishu.name', 'Feishu')}
           </h3>
           <p className="text-sm">
-            {t(
-              'bots.feishu.who',
-              'Only the owner can ask, from the direct message verified in connection settings.'
-            )}
+            {feishu.state.groupChatId
+              ? t(
+                  'bots.feishu.whoGroup',
+                  'The owner can ask in their verified DM. Allowed members can mention the app in the test group.'
+                )
+              : t(
+                  'bots.feishu.who',
+                  'Only the owner can ask, from the direct message verified in connection settings.'
+                )}
           </p>
         </section>
       ) : null}

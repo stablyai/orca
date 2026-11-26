@@ -6,6 +6,7 @@ import { it, expect } from 'vitest'
 import { eligibleProfiles, readFeishuMessage } from './feishu-cli'
 import { dmKey } from './feishu-binding'
 import { FeishuInbox } from './feishu-inbox'
+import { readFeishuGroupMessage } from './feishu-message'
 import { cloudConversation } from '../../shared/connectors/connector-cloud-contract'
 
 const profile = { name: 'example', appId: 'cli_example', brand: 'feishu' }
@@ -31,12 +32,114 @@ it('drops unsupported streams and rejects an alias that shadows a pinned app', (
   ).not.toContainEqual(profile)
 })
 
+it('accepts only a human in the configured test group explicitly mentioning this SDK bot', () => {
+  const policy = { chatId: 'oc_group', members: ['ou_member'] }
+  const input = {
+    app_id: 'cli_example',
+    event_id: 'ev_group',
+    tenant_key: 'tenant',
+    sender: {
+      sender_type: 'user',
+      sender_id: { open_id: 'ou_member' },
+      tenant_key: 'tenant'
+    },
+    message: {
+      chat_type: 'topic_group',
+      chat_id: 'oc_group',
+      message_id: 'om_follow_up',
+      root_id: 'om_root',
+      message_type: 'text',
+      create_time: '1800000000001',
+      mentions: [
+        { key: '@_user_1', id: { open_id: 'ou_bot' } },
+        { key: '@_user_10', id: { open_id: 'ou_another' } }
+      ],
+      content: '{"text":"@_user_1 Compare @_user_10"}'
+    }
+  }
+  const read = (value: unknown) => readFeishuGroupMessage(value, 'cli_example', 'ou_bot', policy)
+  expect(read(input)).toMatchObject({
+    message_id: 'om_follow_up',
+    content: 'Compare @_user_10',
+    group: {
+      chatId: 'oc_group',
+      tenant: 'tenant',
+      rootId: 'om_root',
+      inThread: true,
+      sender: 'ou_member'
+    }
+  })
+  for (const rejected of [
+    { ...input, app_id: 'cli_other' },
+    { ...input, sender: { ...input.sender, sender_type: 'app' } },
+    { ...input, sender: { ...input.sender, tenant_key: 'outside' } },
+    { ...input, sender: { ...input.sender, sender_id: { open_id: 'ou_other' } } },
+    { ...input, message: { ...input.message, chat_id: 'oc_other' } },
+    { ...input, message: { ...input.message, message_type: 'post' } },
+    { ...input, message: { ...input.message, mentions: input.message.mentions.slice(1) } }
+  ]) {
+    expect(read(rejected)).toBeNull()
+  }
+})
+
 it('offers a shared app once under the profile the CLI actually resolves for its ID', () => {
   const alias = { ...profile, name: 'second-name' }
   expect(eligibleProfiles([profile, alias])).toEqual([profile])
   expect(eligibleProfiles([alias, profile])).toEqual([alias])
   expect(eligibleProfiles([profile, { ...alias, name: profile.appId }])).not.toContainEqual(profile)
   expect(eligibleProfiles([profile, { ...alias, name: profile.name }])).toEqual([])
+})
+
+it('keeps a pending group delivery out of the inbox read by a DM-only build', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'feishu-group-downgrade-'))
+  const file = join(dir, 'inbox.sqlite')
+  const inbox = new FeishuInbox(file)
+  try {
+    const b = inbox.add('scope', 'bot', {
+      appId: 'cli_example',
+      sealedSecret: 'sealed',
+      group: { chatId: 'oc_group', members: ['ou_member'] }
+    })
+    expect(inbox.pair('scope', b, event)).toBe(true)
+    const [paired] = inbox.bindings('scope')
+    inbox.accept(paired, {
+      ...event,
+      chat_type: 'group',
+      chat_id: 'oc_group',
+      sender_id: 'ou_member',
+      message_id: 'om_group',
+      event_id: 'e_group',
+      create_time: '1800000000001',
+      group: {
+        chatId: 'oc_group',
+        tenant: 'tenant',
+        rootId: 'om_group',
+        inThread: false,
+        sender: 'ou_member'
+      }
+    })
+    inbox.accept(paired, {
+      ...event,
+      message_id: 'om_dm',
+      event_id: 'e_dm',
+      create_time: '1800000000002'
+    })
+    expect(inbox.next(b.account)?.mid).toBe('om_group')
+    const oldReader = new Database(file)
+    try {
+      const legacyRead = oldReader
+        .prepare(
+          'SELECT mid FROM inbox WHERE account=? AND body IS NOT NULL AND review=0 ORDER BY rowid LIMIT 1'
+        )
+        .get(b.account)
+      expect(legacyRead).toEqual({ mid: 'om_dm' })
+    } finally {
+      oldReader.close()
+    }
+  } finally {
+    inbox.close()
+    await rm(dir, { recursive: true, force: true })
+  }
 })
 
 it('keeps the pairing, actor, original DM and both replay keys bound across a restart', async () => {

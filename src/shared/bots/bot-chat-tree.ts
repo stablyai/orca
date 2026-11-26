@@ -5,6 +5,7 @@ import { isBotGroupMemberSession } from './bot-group'
 export type BotChatOrigin =
   | 'home'
   | 'feishu-local'
+  | 'feishu-group'
   | 'slack'
   | 'linear'
   | 'github'

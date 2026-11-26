@@ -1,20 +1,24 @@
 import { createHash } from 'node:crypto'
 import type { Binding } from './feishu-binding'
 import type { FeishuStore } from './feishu-store-ops'
-import type { FeishuReply, FeishuTransport } from './feishu-transport'
+import type { FeishuGroupRoute } from './feishu-message'
+import type { FeishuReply, FeishuReplyThread, FeishuTransport } from './feishu-transport'
 export async function replyFeishu(
   api: Pick<FeishuTransport, 'reply'>,
   account: string,
   original: string,
   chat: string,
   message: FeishuReply,
-  part: 'final' | 'progress' | 'file'
+  part: 'final' | 'progress' | 'file',
+  thread?: FeishuReplyThread
 ): Promise<void> {
   const uuid = createHash('sha256')
     .update(JSON.stringify(part === 'final' ? [account, original] : [account, original, part]))
     .digest('hex')
     .slice(0, 48)
-  await api.reply(original, chat, message, uuid)
+  await (thread
+    ? api.reply(original, chat, message, uuid, thread)
+    : api.reply(original, chat, message, uuid))
 }
 
 /** Raw post content keeps external image references from being fetched. */
@@ -31,10 +35,12 @@ export async function acknowledgeFeishuMessage(
   b: Binding,
   mid: string,
   signal: AbortSignal,
-  active: () => boolean
+  active: () => boolean,
+  group?: FeishuGroupRoute
 ): Promise<void> {
+  const chat = group?.chatId ?? b.chat
   if (
-    !b.chat ||
+    !chat ||
     signal.aborted ||
     !active() ||
     !(await inbox.takeProgress(b.account, mid)) ||
@@ -46,8 +52,16 @@ export async function acknowledgeFeishuMessage(
     api,
     b.account,
     mid,
-    b.chat,
-    { type: 'text', content: { text: 'Received in Orca. I’m working on this.' } },
-    'progress'
+    chat,
+    {
+      type: 'text',
+      content: {
+        text: group
+          ? 'Orca 已接收，处理完成后会回复这条消息。'
+          : 'Received in Orca. I’m working on this.'
+      }
+    },
+    'progress',
+    group
   ).catch(() => {})
 }

@@ -27,7 +27,8 @@ import { addAbortSignal, type Readable } from 'node:stream'
 import type { Cache, Client, HttpInstance } from '@larksuiteoapi/node-sdk'
 import { z } from 'zod'
 import { sanitizeAgentSessionAttachmentName } from '../../shared/agent-session/agent-session-attachments'
-import { FEISHU_MESSAGE_EVENT, readFeishuMessage, type FeishuMessage } from './feishu-message'
+import { FeishuOpenId, type FeishuGroupPolicy } from '../../shared/bots/feishu-local'
+import { FEISHU_MESSAGE_EVENT, readFeishuGroupMessage, readFeishuMessage } from './feishu-message'
 
 const quiet = () => {}
 const logger = { error: quiet, warn: quiet, info: quiet, debug: quiet, trace: quiet }
@@ -35,12 +36,13 @@ const REQUEST_TIMEOUT = 20_000
 
 import { FeishuReplyTargetGone, FeishuUploadPermissionError } from './feishu-transport'
 
-import type { FeishuReply, FeishuTransport } from './feishu-transport'
+import type { FeishuReply, FeishuReplyThread, FeishuTransport } from './feishu-transport'
 
 export async function openFeishuSdk(
   appId: string,
   appSecret: string,
-  signal: AbortSignal
+  signal: AbortSignal,
+  group?: FeishuGroupPolicy
 ): Promise<FeishuTransport> {
   const { Client, Domain, EventDispatcher, WSClient, defaultHttpInstance } =
     await import('@larksuiteoapi/node-sdk')
@@ -74,15 +76,19 @@ export async function openFeishuSdk(
     }
   })
 
-  async function listen(
-    ready: () => void,
-    reconnecting: () => void,
-    receive: (message: FeishuMessage) => Promise<void>
-  ): Promise<void> {
+  const listen: FeishuTransport['listen'] = async (ready, reconnecting, receive) => {
     signal.throwIfAborted()
+    const botOpenId = group
+      ? z
+          .object({ code: z.literal(0), bot: z.object({ open_id: FeishuOpenId }) })
+          .parse(await client.request<unknown>({ method: 'GET', url: '/open-apis/bot/v3/info' }))
+          .bot.open_id
+      : null
     const dispatcher = new EventDispatcher({ logger }).register({
       [FEISHU_MESSAGE_EVENT]: async (event: unknown) => {
-        const message = readFeishuMessage(event, appId)
+        const message =
+          readFeishuMessage(event, appId) ??
+          (group && botOpenId ? readFeishuGroupMessage(event, appId, botOpenId, group) : null)
         if (message && !signal.aborted) {
           await receive(message)
         }
@@ -129,8 +135,8 @@ export async function openFeishuSdk(
       }
       return result.data?.items
     },
-    async reply(mid: string, chat: string, message: FeishuReply, uuid: string) {
-      await replyToOriginal(client, mid, chat, message, uuid)
+    async reply(mid, chat, message, uuid, thread) {
+      await replyToOriginal(client, mid, chat, message, uuid, thread)
     },
     async upload(name: string, bytes: Uint8Array) {
       const dir = await mkdtemp(join(tmpdir(), 'orca-feishu-'))
@@ -199,13 +205,19 @@ async function replyToOriginal(
   mid: string,
   chat: string,
   message: FeishuReply,
-  uuid: string
+  uuid: string,
+  thread?: FeishuReplyThread
 ) {
   let result: Awaited<ReturnType<Client['im']['v1']['message']['reply']>>
   try {
     result = await client.im.v1.message.reply({
       path: { message_id: mid },
-      data: { msg_type: message.type, content: JSON.stringify(message.content), uuid }
+      data: {
+        msg_type: message.type,
+        content: JSON.stringify(message.content),
+        uuid,
+        ...(thread?.inThread ? { reply_in_thread: true } : {})
+      }
     })
   } catch (error) {
     const code = z
@@ -219,10 +231,13 @@ async function replyToOriginal(
   if (replyTargetGone(result.code)) {
     throw new FeishuReplyTargetGone('The Feishu reply target is unavailable')
   }
+  // Feishu reports the topic root as parent for replies within a topic.
+  const parent = result.data?.parent_id
   if (
     result.code !== 0 ||
     result.data?.chat_id !== chat ||
-    (result.data?.parent_id && result.data.parent_id !== mid) ||
+    (parent && parent !== mid && parent !== thread?.rootId) ||
+    (thread && result.data?.root_id && result.data.root_id !== thread.rootId) ||
     !/^om_[a-zA-Z0-9_-]+$/.test(result.data?.message_id ?? '')
   ) {
     throw new Error('Could not verify the Feishu reply')

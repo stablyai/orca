@@ -4,7 +4,10 @@ import { botTarget } from '@/lib/bot-hosts'
 import { openOwnedHttpLink } from '@/lib/browser/navigation/http-link-routing'
 import { BotAppBrandLogo } from '../apps/BotAppBrandLogo'
 import { botHostHas } from '@/lib/bot-host-status'
-import { BOTS_FEISHU_SDK_CAPABILITY } from '../../../../../shared/bot-runtime-capabilities'
+import {
+  BOTS_FEISHU_GROUP_CAPABILITY,
+  BOTS_FEISHU_SDK_CAPABILITY
+} from '../../../../../shared/bot-runtime-capabilities'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -19,7 +22,9 @@ import {
 } from '@/components/ui/select'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../../shared/bot-types'
-import { FEISHU_CLI_MISSING, type FeishuLocalState } from '../../../../../shared/bots/feishu-local'
+import { FEISHU_CLI_MISSING, FeishuGroupPolicy } from '../../../../../shared/bots/feishu-local'
+import { feishuSetupStatus } from './feishu-setup-status'
+import { BotFeishuGroupFields } from './BotFeishuGroupFields'
 import { feishuCall, useFeishuState } from './feishu-local-client'
 
 export function BotFeishuSetup({
@@ -40,6 +45,16 @@ export function BotFeishuSetup({
   const [appId, setAppId] = useState('')
   const [secret, setSecret] = useState('')
   const sdk = sdkAvailable && method === 'sdk'
+  const groupAvailable = sdk && botHostHas(bot.hostId, BOTS_FEISHU_GROUP_CAPABILITY)
+  const [groupChat, setGroupChat] = useState('')
+  const [groupMembers, setGroupMembers] = useState('')
+  const group =
+    groupAvailable && (groupChat.trim() || groupMembers.trim())
+      ? FeishuGroupPolicy.safeParse({
+          chatId: groupChat.trim(),
+          members: [...new Set(groupMembers.split(/[\s,，]+/).filter(Boolean))]
+        })
+      : null
   const [cliMissing, setCliMissing] = useState(false)
   const [profiles, setProfiles] = useState<string[]>([])
   const [selected, select] = useState('')
@@ -84,7 +99,12 @@ export function BotFeishuSetup({
         off ? 'connect' : 'remove',
         off
           ? sdk
-            ? { botId: bot.id, appId: appId.trim(), appSecret: secret }
+            ? {
+                botId: bot.id,
+                appId: appId.trim(),
+                appSecret: secret,
+                ...(group?.success ? { group: group.data } : {})
+              }
             : { botId: bot.id, profile: selected }
           : { botId: bot.id }
       )
@@ -94,93 +114,7 @@ export function BotFeishuSetup({
     }
     setBusy(false)
   }
-  const status = (s: FeishuLocalState['status']): string => {
-    switch (s) {
-      case 'upload-permission':
-        return t(
-          'bots.feishu.uploadPermission',
-          'Enable IM file upload under App identity (tenant), then publish the permission. A user-only grant cannot authorize bot uploads.'
-        )
-      case 'disconnect-failed':
-        return t(
-          'bots.feishu.disconnectFailed',
-          'The listener has stopped. Disconnect again to release this app.'
-        )
-      case 'credentials-required':
-        return t(
-          'bots.feishu.credentialsRequired',
-          'The host could not open the stored app secret. Disconnect and enter the credentials again.'
-        )
-      case 'off':
-        if (sdk) {
-          return t(
-            'bots.feishu.sdkHelp',
-            'Use the credentials from your Feishu app’s developer console. Orca stores the secret on the bot’s host.'
-          )
-        }
-        return t(
-          'bots.feishu.choose',
-          'Choose a Feishu CLI profile on the computer that runs this bot.'
-        )
-      case 'cli-missing':
-        if (!off || sdk) {
-          return t(
-            'bots.feishu.installReconnect',
-            'Install lark-cli on the computer running this bot. Orca will retry the connection automatically.'
-          )
-        }
-        return t(
-          'bots.feishu.cliMissing',
-          'Install lark-cli on the computer running this bot, then refresh profiles.'
-        )
-      case 'permission':
-        return t(
-          'bots.feishu.permission',
-          'Grant the app permission to receive private messages and publish the updated app version. Orca will retry.'
-        )
-      case 'subscription':
-        return t(
-          'bots.feishu.subscription',
-          'Subscribe to Receive message (im.message.receive_v1) using a long connection and publish the updated app version. Orca will retry.'
-        )
-      case 'profile-changed':
-        return t(
-          'bots.feishu.profileChanged',
-          'The selected CLI profile no longer resolves to the paired app. Restore it or disconnect to choose another profile.'
-        )
-      case 'connecting':
-        return t('bots.feishu.connecting', 'Starting the Feishu listener…')
-      case 'verification-failed':
-        return t(
-          'bots.feishu.verificationFailed',
-          'Could not verify the original DM. Check the app’s permission to read private messages, then send the code again.'
-        )
-      case 'pairing':
-        return t(
-          'bots.feishu.pairing',
-          'Send this code from your own Feishu account in a direct message to the app. It expires in five minutes.'
-        )
-      case 'listening':
-        return t(
-          'bots.feishu.listening',
-          'Listening for messages, images and files in your verified Feishu DM.'
-        )
-      case 'retrying':
-        return t(
-          'bots.feishu.retrying',
-          'Retrying. Check the connection settings, app permissions and long-connection subscription.'
-        )
-      case 'paused':
-        return t('bots.feishu.paused', 'This bot is paused or disabled.')
-      case 'expired':
-        return t('bots.feishu.expired', 'Pairing expired. Disconnect and pair again.')
-      case 'review':
-        return t(
-          'bots.feishu.review',
-          'A delivery could not be confirmed. Check the original DM and the native chat before resending.'
-        )
-    }
-  }
+
   return (
     <Dialog
       open
@@ -217,7 +151,11 @@ export function BotFeishuSetup({
         ) : null}
         <p className="text-sm text-muted-foreground" role="status">
           {state
-            ? status(off && !sdk && cliMissing ? 'cli-missing' : state.status)
+            ? feishuSetupStatus(t, off && !sdk && cliMissing ? 'cli-missing' : state.status, {
+                sdk,
+                off,
+                groupEnabled: Boolean(state.groupChatId)
+              })
             : state === null
               ? t('bots.feishu.hostError', 'Could not read the bot’s host.')
               : t('bots.feishu.loading', 'Checking the host…')}
@@ -246,6 +184,16 @@ export function BotFeishuSetup({
                 disabled={busy}
               />
             </div>
+            {groupAvailable ? (
+              <BotFeishuGroupFields
+                chatId={groupChat}
+                members={groupMembers}
+                onChatId={setGroupChat}
+                onMembers={setGroupMembers}
+                disabled={busy}
+                invalid={group?.success === false}
+              />
+            ) : null}
           </div>
         ) : null}
         {off && !sdk ? (
@@ -357,7 +305,8 @@ export function BotFeishuSetup({
                 (off &&
                   (sdk
                     ? !/^cli_[a-fA-F0-9]{16}$/.test(appId.trim()) ||
-                      !/^[\x21-\x7e]{1,256}$/.test(secret)
+                      !/^[\x21-\x7e]{1,256}$/.test(secret) ||
+                      group?.success === false
                     : !selected))
               }
               onClick={() => void change()}

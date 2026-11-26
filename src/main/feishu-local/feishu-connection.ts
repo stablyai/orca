@@ -1,4 +1,3 @@
-import { acknowledgeFeishuMessage } from './feishu-replies'
 import { FeishuPairing } from './feishu-pairing'
 import { setTimeout as delay } from 'node:timers/promises'
 import type { FeishuLocalState } from '../../shared/bots/feishu-local'
@@ -6,13 +5,13 @@ import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { runtimeConversationHost } from '../external-conversations/external-conversation-runtime-host'
 import { drainFeishuOutbox } from './feishu-outbox'
-import type { FeishuMessage } from './feishu-message'
+import type { FeishuInboundMessage, FeishuMessage } from './feishu-message'
 import { feishuCliTransport } from './feishu-cli-transport'
 import { feishuProblem } from './feishu-cli-status'
 import { FeishuUploadPermissionError } from './feishu-transport'
 import { openFeishuSdk } from './feishu-sdk'
 import type { FeishuTransport } from './feishu-transport'
-import { startFeishuDm } from './feishu-dm-delivery'
+import { deliverFeishuInboxRow } from './feishu-delivery'
 import type { Binding } from './feishu-binding'
 import type { FeishuStore } from './feishu-store-ops'
 
@@ -65,7 +64,7 @@ export class FeishuConnection {
     this.transport =
       this.binding.profile !== null
         ? Promise.resolve(feishuCliTransport(this.binding.app, this.binding.profile, this.signal))
-        : openFeishuSdk(this.binding.app, secret!, this.signal)
+        : openFeishuSdk(this.binding.app, secret!, this.signal, this.binding.group)
     this.consumer = this.listen(this.transport)
     this.wake()
   }
@@ -75,7 +74,11 @@ export class FeishuConnection {
       this.release = this.runtime
         .getExternalConversationSeam()
         ?.watch(runtimeConversationHost(this.runtime), (event) => {
-          if (event.kind === 'turn-ended' && event.conversation.source === 'feishu-local') {
+          if (
+            event.kind === 'turn-ended' &&
+            (event.conversation.source === 'feishu-local' ||
+              event.conversation.source === 'feishu-group')
+          ) {
             this.wake()
           }
         })
@@ -97,6 +100,7 @@ export class FeishuConnection {
       method: this.binding.profile === null ? 'sdk' : 'cli',
       ...(this.binding.profile === null ? {} : { profile: this.binding.profile }),
       appId: this.binding.app,
+      ...(this.binding.group ? { groupChatId: this.binding.group.chatId } : {}),
       status,
       ...((status === 'pairing' || status === 'verification-failed') && this.pairing
         ? { pairingText: this.pairing.text }
@@ -153,18 +157,20 @@ export class FeishuConnection {
       backoff = Math.min(backoff * 2, 30_000)
     }
   }
-  private async receive(api: FeishuTransport, m: FeishuMessage): Promise<void> {
+  private async receive(api: FeishuTransport, m: FeishuInboundMessage): Promise<void> {
     if (!this.bot()) {
       return
     }
     const b = this.binding
     if (b.owner) {
-      if (b.owner !== m.sender_id || b.chat !== m.chat_id) {
-        return
+      if (await this.inbox.accept(b, m)) {
+        this.wake()
       }
-      await this.inbox.accept(b, m)
-      this.wake()
-    } else if (m.message_type === 'text' && this.pairing?.matches(m.content)) {
+    } else if (
+      m.chat_type === 'p2p' &&
+      m.message_type === 'text' &&
+      this.pairing?.matches(m.content)
+    ) {
       await this.confirm(api, m, this.pairing)
     }
   }
@@ -251,7 +257,7 @@ export class FeishuConnection {
       if (!bot) {
         return
       }
-      const initial = await startFeishuDm(
+      const delivery = await deliverFeishuInboxRow(
         this.runtime,
         api,
         this.inbox,
@@ -261,22 +267,16 @@ export class FeishuConnection {
         this.signal,
         () => Boolean(this.bot())
       )
-      if (!initial || this.signal.aborted) {
+      if (!delivery || this.signal.aborted) {
         return
       }
-      if (initial.outcome === 'refused' && initial.reason === 'delivery_backlog_full') {
+      if (delivery === 'backlog') {
         this.retryWork()
         break
       }
-      if (initial.outcome === 'accepted') {
-        await acknowledgeFeishuMessage(api, this.inbox, b, row.mid, this.signal, () =>
-          Boolean(this.bot())
-        )
-      } else {
-        await this.inbox.review(b.account, row.mid)
+      if (delivery === 'review') {
         this.changed()
       }
-      await this.inbox.admitted(b.account, row.mid)
       row = await this.inbox.next(b.account)
     }
     if (row && !this.retry && !this.signal.aborted) {
@@ -297,5 +297,8 @@ export class FeishuConnection {
       () => !this.signal.aborted && Boolean(this.bot()),
       () => this.changed()
     )
+    if (b.group && (await this.inbox.next(b.account))) {
+      this.again = true
+    }
   }
 }

@@ -23,7 +23,7 @@ export const JOURNAL_CONNECTOR_REPLY_PROSE_BYTES = 32 * 1024
 export type JournalConnectorReplyKey = { account: string; deliveryId: string }
 
 export const answersThroughOutbox = (source: string): boolean =>
-  source === 'slack' || source === 'feishu-local'
+  source === 'slack' || source === 'feishu-local' || source === 'feishu-group'
 
 /** Who may still settle a row (Phase 1): a cut a continuation is owed, and the committed
  *  continuation message that claimed it. A restart cut names a turn or a send; a usage-limit cut
