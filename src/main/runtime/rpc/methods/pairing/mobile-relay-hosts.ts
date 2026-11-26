@@ -15,8 +15,11 @@ function capablePhone(ctx: RpcContext, key: string): RelayPhoneReader | undefine
     ctx.clientCapabilities?.includes(MOBILE_RELAY_HOST_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY)
     ? {
         connectionId,
+        // A phone that left while the read awaited is already cleaned up, so it releases now.
         onClose: (release) =>
-          runtime.registerSubscriptionCleanup(`${key}:${connectionId}`, release, connectionId)
+          ctx.signal?.aborted
+            ? release()
+            : runtime.registerSubscriptionCleanup(`${key}:${connectionId}`, release, connectionId)
       }
     : undefined
 }

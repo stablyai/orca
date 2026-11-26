@@ -118,7 +118,7 @@ describe('relayed server agents on Home', () => {
   })
 
   it('reads no agents from a relayed server that is not available', () => {
-    const picks = pickRelayedServers(['desk-a'], { 'desk-a': relaying([server('unavailable')]) })
+    const picks = pickRelayedServers(['desk-a'], { 'desk-a': relaying([server('disconnected')]) })
     expect(picks).toEqual([])
   })
 })

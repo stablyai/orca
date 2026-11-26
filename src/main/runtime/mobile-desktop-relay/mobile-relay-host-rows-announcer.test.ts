@@ -155,6 +155,15 @@ describe('RelayHostRowsAnnouncer', () => {
     watches[0]?.callbacks.onChange({ catalog: true })
     await vi.advanceTimersByTimeAsync(2000)
     expect(changed).toHaveBeenCalledTimes(1)
+
+    // A stream that drops and is reopened by the next read announces no ready again.
+    watches[0]?.callbacks.onClose()
+    announcer.hold(host, reader('phone-1').reader)
+    announcer.refreshed('env-1')
+    await vi.runAllTimersAsync()
+    watches[1]?.callbacks.onChange({ catalog: true })
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(changed).toHaveBeenCalledTimes(1)
   })
 
   it('watches no server that publishes no row notices', () => {

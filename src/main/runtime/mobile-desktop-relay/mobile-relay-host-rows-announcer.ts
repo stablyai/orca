@@ -52,6 +52,8 @@ type WatchedServer = {
   connections: Set<string>
   // Null while the server's stream is down: the holds stay, and the watch reopens when it is back.
   open: OpenWatch | null
+  // Spent once per hold, so a stream that readies then drops can't loop read, reopen, announce.
+  earlyReadAnnounced: boolean
 }
 
 /**
@@ -83,7 +85,7 @@ export class RelayHostRowsAnnouncer {
     const key = host.environmentId
     let server = this.servers.get(key)
     if (!server) {
-      server = { host, connections: new Set(), open: null }
+      server = { host, connections: new Set(), open: null, earlyReadAnnounced: false }
       this.servers.set(key, server)
       this.stopStatusWatch ??= this.sources.onStatusChanged((contact) =>
         this.reopenReturned(contact)
@@ -109,9 +111,10 @@ export class RelayHostRowsAnnouncer {
 
   /** The phone's read fetched this server's rows: one that landed before the stream was ready may miss a change. */
   refreshed(environmentId: string): void {
-    const open = this.servers.get(environmentId)?.open
-    if (open && !open.ready) {
-      open.announceReady = true
+    const server = this.servers.get(environmentId)
+    if (server?.open && !server.open.ready && !server.earlyReadAnnounced) {
+      server.earlyReadAnnounced = true
+      server.open.announceReady = true
     }
   }
 

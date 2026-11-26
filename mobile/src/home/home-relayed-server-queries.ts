@@ -73,24 +73,28 @@ const homeServerRowSnapshots = {
   full: new ServerRowSnapshots(false)
 }
 
-/** One relayed server's rows through one desktop; re-read only when that server's rows change. */
-export const homeRelayedServerRowsQuery = defineHostQuery<{ deltas: boolean }, readonly Worktree[]>(
-  {
-    family: 'relayHosts.homeServerRows',
-    fetch: async (client, target, input, previous) => {
-      const snapshots = input.deltas ? homeServerRowSnapshots.deltas : homeServerRowSnapshots.full
-      // A failed read keeps the last rows; Home hides them once the server is not available.
-      return (await snapshots.readOne(client, target.exec)) ?? previous ?? []
-    },
-    staleTime: HOME_RELAYED_REFRESH_FLOOR_MS,
-    gcTime: 30 * 60_000,
-    refetchOnWindowFocus: true,
-    // A server that comes back mounts its read again, so a host list change re-reads no other server.
-    signal: {
-      events: ['relayHostRowsChanged'],
-      floorMs: HOME_RELAYED_REFRESH_FLOOR_MS,
-      matches: (event, target) =>
-        event.type === 'relayHostRowsChanged' && event.hostId === target.exec
-    }
+/**
+ * One relayed server's rows through one desktop; re-read only when that server's rows change. `rowChanges`
+ * keys the read, so a server upgraded in place to publish them is read once more and watched.
+ */
+export const homeRelayedServerRowsQuery = defineHostQuery<
+  { deltas: boolean; rowChanges: boolean },
+  readonly Worktree[]
+>({
+  family: 'relayHosts.homeServerRows',
+  fetch: async (client, target, input, previous) => {
+    const snapshots = input.deltas ? homeServerRowSnapshots.deltas : homeServerRowSnapshots.full
+    // A failed read keeps the last rows; Home hides them once the server is not available.
+    return (await snapshots.readOne(client, target.exec)) ?? previous ?? []
+  },
+  staleTime: HOME_RELAYED_REFRESH_FLOOR_MS,
+  gcTime: 30 * 60_000,
+  refetchOnWindowFocus: true,
+  // A server that comes back mounts its read again, so a host list change re-reads no other server.
+  signal: {
+    events: ['relayHostRowsChanged'],
+    floorMs: HOME_RELAYED_REFRESH_FLOOR_MS,
+    matches: (event, target) =>
+      event.type === 'relayHostRowsChanged' && event.hostId === target.exec
   }
-)
+})

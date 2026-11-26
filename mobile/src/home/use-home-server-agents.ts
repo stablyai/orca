@@ -72,7 +72,7 @@ export function useHomeServerAgents(
         clients.get(pick.desktopHostId) ?? null,
         pick.desktopHostId,
         { exec: pick.server.hostId },
-        { deltas: pick.deltas }
+        { deltas: pick.deltas, rowChanges: pick.server.rowChanges === true }
       ),
       refetchInterval: relayedServerRowsPollMs(pick.server)
     }))
