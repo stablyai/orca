@@ -194,7 +194,7 @@ export async function loadAutomationAgents(
     const detected = refresh
       ? preflightRefreshAgentsRead.interpret(detectedReply)
       : preflightDetectAgentsRead.interpret(detectedReply)
-    return buildMobileNewTabAgentOptions(settings, detected)
+    return buildMobileNewTabAgentOptions(settings, detected.agents)
   } finally {
     if (pending.get(key) === token) {
       pending.delete(key)

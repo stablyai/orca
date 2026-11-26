@@ -8,6 +8,7 @@ import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views
 import { signInToClaudeAccount } from '@/lib/provider-accounts/claude-account-sign-in'
 import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
 import { readAgentInventoryForTarget } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
+import { isIncompleteAgentInventory } from '@/store/slices/agent-inventory/managed-agent-launch-commands'
 import { runtimeHostPlatform } from '@/components/terminal-pane/pty-transport/host-ownership/pty-owner-machine-platform'
 import {
   agentSessionInstallCommand,
@@ -219,10 +220,10 @@ function useNativeChatInstall(
   input: NativeChatHostSetupInput,
   terminal: NativeChatHostCommandTerminal | null
 ): NativeChatInstall | null {
-  const { worktreeId, onRechecked } = input
+  const { agent, worktreeId, onRechecked } = input
   const environmentId = input.target.kind === 'environment' ? input.target.environmentId : null
   const command = agentSessionInstallCommand(
-    input.agent,
+    agent,
     useAppStoreWithHostStatuses((_s, statuses) =>
       environmentId ? runtimeHostPlatform(statuses, environmentId) : getRendererAppPlatform()
     )
@@ -252,7 +253,12 @@ function useNativeChatInstall(
             ? { kind: 'runtime', environmentId, worktreeId }
             : { kind: 'local', worktreeId }
         )
-        if (inventory.state === 'successful') {
+        if (
+          inventory.state === 'successful' ||
+          (inventory.state === 'pending' &&
+            isIncompleteAgentInventory(inventory.ids) &&
+            inventory.ids?.includes(agent))
+        ) {
           setOpened(false)
           onRechecked()
         } else {
@@ -261,7 +267,7 @@ function useNativeChatInstall(
       })
       .catch(reportFailure)
       .finally(() => setRechecking(false))
-  }, [environmentId, worktreeId, onRechecked])
+  }, [agent, environmentId, worktreeId, onRechecked])
   return useMemo(
     () =>
       command && terminal

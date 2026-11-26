@@ -130,9 +130,10 @@ export async function detectAgentCommandInventoryOnHost(
   const ordinaryMode = targeted ? 'read' : 'detect'
   const refreshMode = targeted ? 'revalidate' : 'refresh'
   const { slot, inventory } = await withAgentInventoryDeadline(async (waitSignal) => {
-    const slot = wslTarget ? await wslInventory(wslTarget, waitSignal) : getLocalInventory()
-    const before = slot?.published
+    let slot: Awaited<ReturnType<typeof wslInventory>>
     try {
+      slot = wslTarget ? await wslInventory(wslTarget, waitSignal) : getLocalInventory()
+      const before = slot?.published
       throwIfSignalAborted(waitSignal)
       if (options.prepare) {
         await options.prepare(waitSignal)
@@ -158,12 +159,15 @@ export async function detectAgentCommandInventoryOnHost(
       return { slot, inventory }
     } catch (error) {
       const latest = slot?.published?.inventory
-      if (
-        latest &&
-        error instanceof AgentInventoryDeadlineError &&
-        isAbortSignalReason(waitSignal, error)
-      ) {
-        return { slot, inventory: { ...latest, incomplete: true } }
+      if (error instanceof AgentInventoryDeadlineError && isAbortSignalReason(waitSignal, error)) {
+        return {
+          slot,
+          inventory: {
+            found: latest?.found ?? new Set<string>(),
+            matches: latest?.matches ?? new Map<string, AgentPathMatch>(),
+            incomplete: true
+          }
+        }
       }
       throw error
     }

@@ -67,7 +67,7 @@ const agentsQuery = defineHostQuery({
   family: 'mcpServers.agents',
   fetch: async (client) => {
     const detected = new Set(
-      preflightDetectAgentsRead.interpret(await preflightDetectAgentsRead.request(client))
+      preflightDetectAgentsRead.interpret(await preflightDetectAgentsRead.request(client)).agents
     )
     return MOBILE_AGENT_CATALOG.filter((agent) => detected.has(agent.id)).map((agent) => agent.id)
   },

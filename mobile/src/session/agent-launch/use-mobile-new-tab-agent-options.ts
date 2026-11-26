@@ -88,8 +88,8 @@ export function useMobileNewTabAgentOptions(args: {
     const targetKey = hashKey(queryKey)
     const reread = () =>
       void queryClient.invalidateQueries({ queryKey, exact: true }, { cancelRefetch: false })
-    if (cached?.data?.kind !== 'detected') {
-      // No list yet, a failed read or another runtime's answer: every open asks again.
+    if (cached?.data?.kind !== 'detected' || cached.data.incomplete) {
+      // Missing or inconclusive inventory retries on each open.
       reread()
       return
     }

@@ -215,6 +215,13 @@ async function runInventoryScans(slot: InventorySlot, pending: PendingInventory)
     }
     if (result) {
       publishInventory(slot, result, scan)
+    } else if (slot.distro && slot.published) {
+      // Preserve the display list but require a new probe before answering a launch.
+      slot.published.inventory = {
+        ...slot.published.inventory,
+        probed: new Set(),
+        incomplete: true
+      }
     }
     // Active waiters receive this publication even when later requests need a successor.
     scan.result.resolve(result)

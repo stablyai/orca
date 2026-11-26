@@ -94,6 +94,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
       if (
         existing != null &&
         !lifecycle.failedDetectContextKeys.has(contextKey) &&
+        !lifecycle.keptThroughFailure.has(existing) &&
         !managedCommands.isIncompleteAgentInventory(existing)
       ) {
         if (!isolatedInventory) {
@@ -187,9 +188,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
           return typed
         })
         .catch((error: unknown): TuiAgent[] => {
-          const previous = get().localDetectedAgentIdsByContext[contextKey]
-          const fallback =
-            previous && managedCommands.isIncompleteAgentInventory(previous) ? previous : []
+          const fallback = get().localDetectedAgentIdsByContext[contextKey] ?? []
           if (
             requestGeneration === lifecycle.localDetectionGeneration &&
             lifecycle.detectPromises.get(contextKey) === pending

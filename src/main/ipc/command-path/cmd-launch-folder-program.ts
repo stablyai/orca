@@ -24,6 +24,7 @@ export function resolveCmdLaunchFolderProgram(
     const controller = new AbortController()
     const waiters = new PromiseSettlementWaiters(
       resolveCommandOnLocalPath(program, {
+        platform: 'win32',
         cwd,
         env: { PATH: '', PATHEXT: pathExt },
         signal: controller.signal
@@ -43,7 +44,7 @@ export function resolveCmdLaunchFolderProgram(
     createAbortError: () => abortSignalReason(signal),
     onAbandon: () => {
       if (waiters.waiterCount === 0) {
-        cmdFolderLookups.delete(key)
+        // The outstanding stat is uncancellable; retain its key until it settles.
         controller.abort()
       }
     }

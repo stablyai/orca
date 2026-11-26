@@ -77,8 +77,7 @@ export async function refuseUninstalledWorkerAgent(
       signal
     )
   ).catch(() => null)
-  const installed = context?.agents
-  if (installed && !installed.includes(agent)) {
+  if (context && !context.incomplete && !context.agents.includes(agent)) {
     throw new OrchestrationError(
       WORKER_AGENT_UNAVAILABLE,
       workerAgentNotInstalledMessage(agent, THIS_COMPUTER),

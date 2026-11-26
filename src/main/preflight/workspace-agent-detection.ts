@@ -41,7 +41,6 @@ import {
   agentCommandOverrideDetectionOptions,
   detectInstalledAgentInventory,
   detectInstalledAgentInventoryWithShellPathHydration,
-  detectInstalledAgents,
   type InstalledAgentDetectionOptions,
   type InstalledAgentInventory
 } from './installed-agent-detection'
@@ -180,12 +179,13 @@ export async function detectAgentsOnHost(
 /** The host's terminal agents and user CLI paths outside PATH. */
 export async function detectAgentInventoryOnHost(
   host: AgentDetectionHost,
-  options?: InstalledAgentDetectionOptions
+  options?: InstalledAgentDetectionOptions,
+  signal?: AbortSignal
 ): Promise<InstalledAgentInventory> {
   if (host.kind === 'ssh') {
     throw new SshHostNotServedError(host.connectionId)
   }
-  return detectInstalledAgentInventoryWithShellPathHydration(host.context, options)
+  return detectInstalledAgentInventoryWithShellPathHydration(host.context, options, signal)
 }
 
 /** Background detection in a WSL runtime refuses a stopped distro (E9); a user act for it passes. */
@@ -245,10 +245,7 @@ export async function detectProjectLaunchContext(
   store: WorkspaceAgentDetectionStore,
   repo: Repo,
   onlyTuiAgent?: TuiAgent,
-  {
-    detect = detectAgentsOnHost,
-    signal
-  }: { detect?: typeof detectAgentsOnHost; signal?: AbortSignal } = {}
+  { detect, signal }: { detect?: typeof detectAgentsOnHost; signal?: AbortSignal } = {}
 ): Promise<ProjectLaunchContext> {
   const host = getRepoExecutionHostId(repo)
   const ssh = getSshTargetIdForExecutionHost(host)
@@ -262,18 +259,20 @@ export async function detectProjectLaunchContext(
   const overrides = agentCommandOverrideDetectionOptions(store.getSettings?.().agentCmdOverrides)
   const options = onlyTuiAgent ? { ...overrides, onlyTuiAgent } : overrides
   const context = { projectRuntime }
-  const agents = await withAgentInventoryDeadline(async (waitSignal) => {
-    const detected = await detect(
-      ssh ? { kind: 'ssh', connectionId: ssh } : { kind: 'local', context },
-      options,
-      waitSignal
-    )
-    return !ssh && onlyTuiAgent && !detected.includes(onlyTuiAgent)
-      ? detectInstalledAgents(context, options, true, waitSignal)
+  const { agents, incomplete } = await withAgentInventoryDeadline(async (waitSignal) => {
+    const target: AgentDetectionHost = ssh
+      ? { kind: 'ssh', connectionId: ssh }
+      : { kind: 'local', context }
+    const detected: InstalledAgentInventory = detect
+      ? { agents: await detect(target, options, waitSignal) }
+      : await detectAgentInventoryOnHost(target, options, waitSignal)
+    return !ssh && onlyTuiAgent && !detected.incomplete && !detected.agents.includes(onlyTuiAgent)
+      ? detectInstalledAgentInventory(context, options, true, waitSignal)
       : detected
   }, signal)
   return {
     agents: agents.filter(isTuiAgent),
+    ...(incomplete ? { incomplete: true } : {}),
     workspaceKind: isFolderRepo(repo) ? 'folder' : 'git-worktree',
     executionContext: projectRuntime ? { kind: 'host', projectRuntime } : { kind: 'ssh' }
   }

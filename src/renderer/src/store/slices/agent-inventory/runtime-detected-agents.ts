@@ -171,8 +171,8 @@ export const createRuntimeDetectedAgentsSlice: (
         return inflightRefresh
       }
       const existing = get().runtimeDetectedAgentIds[key]
-      // Retry empty or incomplete results so installs and PATH fixes appear without reconnect.
-      if (existing?.length && !isIncompleteAgentInventory(existing)) {
+      // Retry failed, empty or incomplete results so installs and PATH fixes appear without reconnect.
+      if (existing?.length && latestOutcome.get(key) === 'successful') {
         return Promise.resolve(existing)
       }
       const inflight = runtimeDetectPromises.get(key)

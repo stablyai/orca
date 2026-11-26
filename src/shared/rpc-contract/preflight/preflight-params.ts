@@ -89,6 +89,7 @@ export const PreflightProjectAgentDetection = PreflightAgentDetection.safeExtend
 /** Facts resolved by the same project owner that creates the workspace. */
 export type ProjectLaunchContext = {
   agents: TuiAgent[]
+  incomplete?: boolean
   workspaceKind: WorkspaceLaunchKind
   executionContext:
     | { kind: 'host'; projectRuntime: ProjectExecutionRuntimeResolution }

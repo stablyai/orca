@@ -20,6 +20,7 @@ import { readDetectionDirectoryViaWorker } from './command-path-directory-worker
 import { readDetectionDirectory } from './command-path-directory'
 import { findCommandsOnLocalPath, type AgentPathMatch } from './command-path-batch'
 import { isCommandOnLocalPath, resolveCommandOnLocalPath } from './command-path-resolver'
+import { resolveCmdLaunchFolderProgram } from './cmd-launch-folder-program'
 
 describe('isCommandOnLocalPath', () => {
   // POSIX semantics: executable bit + absolute-only + symlink follow.
@@ -85,6 +86,32 @@ describe('win32 PATH lookup', () => {
   })
   afterAll(async () => {
     await rm(root, { recursive: true, force: true })
+  })
+
+  it('shares a stalled cmd folder stat across expired callers and drops the lookup on settle', async () => {
+    const held = Promise.withResolvers<Awaited<ReturnType<typeof stat>>>()
+    const statFile = vi.mocked(stat)
+    statFile.mockClear()
+    statFile.mockImplementationOnce(() => held.promise)
+    const firstCaller = new AbortController()
+    const retryCaller = new AbortController()
+    const lookup = (signal: AbortSignal) =>
+      resolveCmdLaunchFolderProgram('tool', quotedBin, '.EXE;.cmd', signal)
+    const first = lookup(firstCaller.signal).catch((error: unknown) => error)
+    try {
+      firstCaller.abort()
+      expect(await first).toMatchObject({ name: 'AbortError' })
+      const retry = lookup(retryCaller.signal).catch((error: unknown) => error)
+      held.reject(new Error('Missing executable'))
+      expect(await retry).toMatchObject({ name: 'AbortError' })
+      expect(statFile.mock.calls).toEqual([[path.join(quotedBin, 'tool.EXE')]])
+      await expect(lookup(new AbortController().signal)).resolves.toBe(
+        path.join(quotedBin, 'tool.cmd')
+      )
+    } finally {
+      held.reject(new Error('Missing executable'))
+      statFile.mockReset()
+    }
   })
 
   it('resolves commands from quoted Windows PATH entries in single and batch lookups', async () => {

@@ -381,6 +381,29 @@ it('publishes a completed scan and resolves its early waiter while a successor r
   }
 })
 
+it('returns an incomplete empty inventory on a cold deadline and publishes the scan for later reads', async () => {
+  await executable('path', claudeName)
+  const entered = Promise.withResolvers<void>()
+  const held = Promise.withResolvers<void>()
+  fixture.onScan = entered.resolve
+  fixture.installs = held.promise
+  vi.useFakeTimers()
+  const detect = detectInstalledAgentInventory().catch((error: unknown) => error)
+  try {
+    await entered.promise
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(await detect).toMatchObject({ agents: [], incomplete: true })
+  } finally {
+    const completion = readLocalTerminalAgentProgram('claude', shell)
+    held.resolve()
+    await completion
+  }
+  await expect(
+    detectInstalledAgentInventory(undefined, { onlyTuiAgent: 'claude' })
+  ).resolves.toMatchObject({ agents: ['claude'] })
+  expect(fixture.enumerate).toHaveBeenCalledTimes(1)
+})
+
 it('returns the published agents as incomplete when a detect wait expires', async () => {
   await executable('path', claudeName)
   await detectInstalledAgentInventory()

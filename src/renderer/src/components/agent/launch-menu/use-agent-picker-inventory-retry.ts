@@ -24,7 +24,10 @@ export function useAgentPickerInventoryRetry(
   const retriedKey = useRef<string | null>(null)
   const shouldRetry = useAppStateValue((state) => {
     if (runtimeKey) {
-      return isIncompleteAgentInventory(state.runtimeDetectedAgentIds[runtimeKey])
+      return (
+        state.runtimeAgentInventoryOutcome(runtimeKey) === 'failed' ||
+        isIncompleteAgentInventory(state.runtimeDetectedAgentIds[runtimeKey])
+      )
     }
     if (worktreeId === undefined) {
       return false
@@ -32,9 +35,8 @@ export function useAgentPickerInventoryRetry(
     const inventory = state.readLocalAgentInventory(worktreeId)
     return (
       isIncompleteAgentInventory(inventory.ids) ||
-      (wakeWslDistro &&
-        inventory.state === 'failed' &&
-        state.isLocalAgentInventoryRefused(worktreeId))
+      (inventory.state === 'failed' &&
+        (wakeWslDistro || !state.isLocalAgentInventoryRefused(worktreeId)))
     )
   })
   useEffect(() => {
