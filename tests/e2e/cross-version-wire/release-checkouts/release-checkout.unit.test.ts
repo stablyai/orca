@@ -318,7 +318,8 @@ describe('release checkout materialization', () => {
     } finally {
       await stopMaterializerChild(crashed)
     }
-  }, 30_000)
+    // Real child processes and lock contention exceed 30s on a loaded host, like the sibling test above.
+  }, 120_000)
 })
 
 describe('release checkout module importer', () => {

@@ -78,6 +78,11 @@ export function createChildTerminationExpectation(
   }
 }
 
+/** The Windows shell joins the probe argv into one cmd.exe command line; match the standalone mcp verb in both shapes without catching mcp_servers agent config. */
+export function isMcpProbeSpawnArgv(argv: readonly unknown[]): boolean {
+  return argv.some((part) => /(?:^|[\s"'])mcp(?:$|[\s"'])/.test(String(part)))
+}
+
 /** Unwrap supervisor -- before inspecting the actual agent argv. */
 export function spawnedAgentArgv([file, args]: readonly unknown[]): unknown[] {
   const argv: unknown[] = Array.isArray(args) ? args : []

@@ -1,7 +1,8 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
+import { removeTreeSync } from '../../../shared/file-write/windows-transient-lock-removal'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import { createHookListenerState } from '../../../shared/agent-hook-listener/listener-state'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
@@ -79,7 +80,8 @@ class IdentityTestServer extends AgentHookServer {
 
 function directory(): string {
   const path = mkdtempSync(join(tmpdir(), 'agent-read-fence-'))
-  cleanups.push(() => rmSync(path, { recursive: true, force: true }))
+  // Bun ignores rmSync maxRetries; removeTreeSync retries itself with a sync sleep.
+  cleanups.push(() => removeTreeSync(path))
   return path
 }
 

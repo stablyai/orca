@@ -1,9 +1,11 @@
 import { mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import { getDiff } from './file-diff'
+// Real git on a loaded Windows host exceeds the 30s global budget.
+vi.setConfig({ testTimeout: 120_000 })
 import { invalidateGitReadCaches } from '../git-read-cache-invalidation'
 
 const OLD_PATH = 'old.txt'

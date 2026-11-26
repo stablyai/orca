@@ -5,7 +5,7 @@ import { createWebSparsePresetsApi } from './web-sparse-presets-api'
 
 const { callRuntimeResult } = vi.hoisted(() => ({ callRuntimeResult: vi.fn() }))
 
-vi.mock('./web-runtime-calls', () => ({ callRuntimeResult }))
+vi.mock('../runtime/client/web-runtime-calls', () => ({ callRuntimeResult }))
 
 describe('runtime-backed project preload APIs', () => {
   beforeEach(() => {

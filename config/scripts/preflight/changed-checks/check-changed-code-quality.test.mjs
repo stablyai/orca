@@ -1,7 +1,10 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+// Why a dozen sync git spawns blow the 30s budget on a loaded Windows host.
+vi.setConfig({ testTimeout: 120_000 })
 import { runProcessSync } from '@orca/process-host'
 import { collectBaseLineBlocks, collectAddedLineRanges } from './check-changed-code-quality.mjs'
 

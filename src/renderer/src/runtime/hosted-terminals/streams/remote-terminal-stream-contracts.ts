@@ -34,7 +34,7 @@ export type RemoteRuntimeMultiplexedTerminalCallbacks = {
   onOutputPauseCapability?: () => void
   /** The host discarded output while this stream was paused (negotiated streams only). */
   onPausedOutputDropped?: () => void
-  onEnd?: (verdict: TerminalStreamEndVerdict) => void
+  onEnd?: (verdict: TerminalStreamEndVerdict, exitCode?: number) => void
   onError?: (message: string) => void
   onFitOverrideChanged?: (event: {
     mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit'

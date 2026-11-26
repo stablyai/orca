@@ -68,87 +68,95 @@ afterEach(async () => {
 })
 
 describe('private Git marketplace integration', () => {
-  it('uses the caller SSH environment for marketplace preview and install', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-private-marketplace-'))
-    temporaryRoots.push(root)
-    const pluginKey = 'private.private-locale'
-    const pluginUrl = 'ssh://git@example.invalid/private/locale.git'
-    const marketplaceUrl = 'ssh://git@example.invalid/private/marketplace.git'
-    const pluginRepository = await createGitRepository(root, 'locale-source', {
-      'orca-plugin.json': JSON.stringify({
-        manifestVersion: 1,
-        id: 'private-locale',
-        publisher: 'private',
-        name: 'Private Locale',
-        version: '1.0.0',
-        engines: { orca: '>=1.4.0' },
-        pluginApi: 1,
-        contributes: {
-          languagePacks: [{ locale: 'pt-BR', path: 'locale.json' }]
-        },
-        capabilities: []
-      }),
-      'locale.json': JSON.stringify({
-        settings: { title: 'Ajustes' }
+  it(
+    'uses the caller SSH environment for marketplace preview and install',
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-private-marketplace-'))
+      temporaryRoots.push(root)
+      const pluginKey = 'private.private-locale'
+      const pluginUrl = 'ssh://git@example.invalid/private/locale.git'
+      const marketplaceUrl = 'ssh://git@example.invalid/private/marketplace.git'
+      const pluginRepository = await createGitRepository(root, 'locale-source', {
+        'orca-plugin.json': JSON.stringify({
+          manifestVersion: 1,
+          id: 'private-locale',
+          publisher: 'private',
+          name: 'Private Locale',
+          version: '1.0.0',
+          engines: { orca: '>=1.4.0' },
+          pluginApi: 1,
+          contributes: {
+            languagePacks: [{ locale: 'pt-BR', path: 'locale.json' }]
+          },
+          capabilities: []
+        }),
+        'locale.json': JSON.stringify({
+          settings: { title: 'Ajustes' }
+        })
       })
-    })
-    const marketplaceRepository = await createGitRepository(root, 'marketplace-source', {
-      'orca-marketplace.json': JSON.stringify({
-        name: 'Private Team Plugins',
-        owner: 'private-team',
-        plugins: [
-          {
-            id: pluginKey,
-            source: { kind: 'git', url: pluginUrl, ref: 'main' },
-            categories: ['languages']
-          }
-        ]
+      const marketplaceRepository = await createGitRepository(root, 'marketplace-source', {
+        'orca-marketplace.json': JSON.stringify({
+          name: 'Private Team Plugins',
+          owner: 'private-team',
+          plugins: [
+            {
+              id: pluginKey,
+              source: { kind: 'git', url: pluginUrl, ref: 'main' },
+              categories: ['languages']
+            }
+          ]
+        })
       })
-    })
-    const sshShim = join(root, 'git-ssh-shim.cjs')
-    await writeFile(
-      sshShim,
-      await readFile(join(import.meta.dirname, 'plugin-private-marketplace-ssh-shim.cjs'), 'utf8'),
-      'utf8'
-    )
-    process.env.GIT_SSH_COMMAND = `${shellQuote(process.execPath.replaceAll('\\', '/'))} ${shellQuote(sshShim.replaceAll('\\', '/'))}`
-    process.env.GIT_SSH_VARIANT = 'ssh'
-    process.env.ORCA_TEST_SSH_REPOSITORIES = JSON.stringify({
-      '/private/locale.git': pluginRepository,
-      '/private/marketplace.git': marketplaceRepository
-    })
+      const sshShim = join(root, 'git-ssh-shim.cjs')
+      await writeFile(
+        sshShim,
+        await readFile(
+          join(import.meta.dirname, 'plugin-private-marketplace-ssh-shim.cjs'),
+          'utf8'
+        ),
+        'utf8'
+      )
+      process.env.GIT_SSH_COMMAND = `${shellQuote(process.execPath.replaceAll('\\', '/'))} ${shellQuote(sshShim.replaceAll('\\', '/'))}`
+      process.env.GIT_SSH_VARIANT = 'ssh'
+      process.env.ORCA_TEST_SSH_REPOSITORIES = JSON.stringify({
+        '/private/locale.git': pluginRepository,
+        '/private/marketplace.git': marketplaceRepository
+      })
 
-    const userDataPath = join(root, 'user-data')
-    const marketplace = new PluginMarketplaceService({
-      pluginsDataDir: join(userDataPath, 'plugins-data')
-    })
-    const source: PluginMarketplaceGitSource = {
-      kind: 'git',
-      url: marketplaceUrl,
-      ref: 'main'
-    }
-    const registered = await marketplace.addSource(source)
-    const installer = new PluginMarketplaceInstaller({
-      marketplace,
-      userDataPath,
-      hostVersion: '1.4.0',
-      revokeConsent: async () => undefined
-    })
+      const userDataPath = join(root, 'user-data')
+      const marketplace = new PluginMarketplaceService({
+        pluginsDataDir: join(userDataPath, 'plugins-data')
+      })
+      const source: PluginMarketplaceGitSource = {
+        kind: 'git',
+        url: marketplaceUrl,
+        ref: 'main'
+      }
+      const registered = await marketplace.addSource(source)
+      const installer = new PluginMarketplaceInstaller({
+        marketplace,
+        userDataPath,
+        hostVersion: '1.4.0',
+        revokeConsent: async () => undefined
+      })
 
-    const preview = await installer.preview(registered.id, pluginKey)
-    const installed = await installer.install(preview)
+      const preview = await installer.preview(registered.id, pluginKey)
+      const installed = await installer.install(preview)
 
-    expect(registered).toMatchObject({
-      stale: false,
-      marketplace: { name: 'Private Team Plugins' }
-    })
-    expect(preview).toMatchObject({ pluginKey, official: false, source: { url: pluginUrl } })
-    expect(installed).toMatchObject({ ok: true, pluginKey })
-    const lock = await readPluginLockfile(getUserPluginsDir(userDataPath))
-    expect(lock.plugins[pluginKey]?.source).toMatchObject({
-      kind: 'marketplace',
-      marketplace: { url: marketplaceUrl },
-      plugin: { url: pluginUrl }
-    })
-  })
+      expect(registered).toMatchObject({
+        stale: false,
+        marketplace: { name: 'Private Team Plugins' }
+      })
+      expect(preview).toMatchObject({ pluginKey, official: false, source: { url: pluginUrl } })
+      expect(installed).toMatchObject({ ok: true, pluginKey })
+      const lock = await readPluginLockfile(getUserPluginsDir(userDataPath))
+      expect(lock.plugins[pluginKey]?.source).toMatchObject({
+        kind: 'marketplace',
+        marketplace: { url: marketplaceUrl },
+        plugin: { url: pluginUrl }
+      })
+    },
+    // Why: preview plus install over the SSH shim takes ~24s unloaded, past 30s on gates.
+    90000
+  )
 })

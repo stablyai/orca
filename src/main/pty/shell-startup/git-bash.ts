@@ -92,18 +92,25 @@ export function getGitBashCandidatePaths(env: NodeJS.ProcessEnv = process.env): 
   return candidates
 }
 
+/** The install-dir name alone proves the launcher shape; no filesystem probe needed. */
+function isLauncherShapedBashPath(shellPath: string): boolean {
+  const normalized = pathWin32.normalize(shellPath).toLowerCase()
+  return /(?:^|\\)(?:git|portablegit)\\bin\\bash\.exe$/.test(normalized)
+}
+
 export function resolveGitBashPath(options: GitBashPathOptions = {}): string | null {
   const platform = options.platform ?? process.platform
   if (platform !== 'win32') {
     return null
   }
   const exists = options.exists ?? existsSync
-  for (const candidate of getGitBashCandidatePaths(options.env ?? process.env)) {
-    if (isGitForWindowsBashPath(candidate) && exists(candidate)) {
-      return candidate
-    }
-  }
-  return null
+  const candidates = getGitBashCandidatePaths(options.env ?? process.env).filter(
+    (candidate) => isGitForWindowsBashPath(candidate) && exists(candidate)
+  )
+  // bin\bash.exe launches usr\bin\bash.exe; prefer the launcher so the PTY starts a login shell.
+  return (
+    candidates.find((candidate) => isLauncherShapedBashPath(candidate)) ?? candidates[0] ?? null
+  )
 }
 
 export function isGitBashAvailable(): boolean {
@@ -148,7 +155,7 @@ export function isGitForWindowsBashLauncherPath(
   options: Pick<GitBashPathOptions, 'exists'> = {}
 ): boolean {
   const normalized = pathWin32.normalize(shellPath)
-  if (/(?:^|\\)(?:git|portablegit)\\bin\\bash\.exe$/.test(normalized.toLowerCase())) {
+  if (isLauncherShapedBashPath(normalized)) {
     return true
   }
   const binDirectory = pathWin32.dirname(normalized)

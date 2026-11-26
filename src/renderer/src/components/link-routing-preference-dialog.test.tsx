@@ -40,7 +40,7 @@ describe('LinkRoutingPreferenceDialogProvider', () => {
       </LinkRoutingPreferenceDialogProvider>
     )
     await userEvent.click(screen.getByRole('button', { name: 'Ask' }))
-    expect(screen.getByText('example.test')).toBeTruthy()
+    // Why: the unified confirm layout no longer echoes the link host; the choice and blocking contract is the behavior under test.
     expect(mocks.setBlocking).toHaveBeenLastCalledWith(true)
     await userEvent.click(screen.getByRole('button', { name: 'Open in Orca' }))
     await waitFor(() => expect(onSettled).toHaveBeenCalledWith(true))

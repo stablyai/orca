@@ -35,6 +35,13 @@ import { WslOrcadConnectionSupersededError } from './wsl-orcad-connection-errors
 import type { WslOrcadLaunch } from './wsl-orcad-launch-contract'
 import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { listenWslOrcadStdioBridge } from './wsl-orcad-stdio-bridge'
+import type * as WslUncAccessGate from '../filesystem/wsl-unc-access-gate'
+
+// Why: E9 refuses dials while the distro is stopped; these specs pin the bridge, not the gate.
+vi.mock('../filesystem/wsl-unc-access-gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslUncAccessGate>()),
+  assertWslUncPathRunning: async () => {}
+}))
 
 let first: { server: Server; port: number }
 let second: { server: Server; port: number }

@@ -7,7 +7,12 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { wslMoveJournalKey } from '../../../../shared/wsl-move/wsl-move-cutover'
-import { createStore, testState } from '../../persistence-test-harness'
+import {
+  closeTestStore,
+  closeTestStores,
+  createStore,
+  testState
+} from '../../persistence-test-harness'
 import type { Store } from '../../loading-store/store'
 import {
   listWslMoveCutoverChain,
@@ -68,9 +73,11 @@ export function wslMoveRigTempDir(prefix: string): string {
   return dir
 }
 
-export function removeWslMoveRigDirs(): void {
+export async function removeWslMoveRigDirs(): Promise<void> {
+  // Stores keep their SQLite handles after a flush; deletion on Windows requires the close.
+  await closeTestStores()
   for (const dir of dirs.splice(0)) {
-    rmSync(dir, { recursive: true, force: true })
+    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   }
 }
 
@@ -137,7 +144,8 @@ export function wslMoveRigRetentionStore(rig: WslMoveRig) {
 
 /** orcad stopped and started again over the same disk, as an update or a distro restart does. */
 export async function restartWslMoveRigHost(rig: WslMoveRig): Promise<void> {
-  await rig.host.flushPendingOrThrowAsync().catch(() => {})
+  // closeTestStore still releases the handle when the freeze throws at a kill point.
+  await closeTestStore(rig.host).catch(() => {})
   rig.host = createStore()
 }
 

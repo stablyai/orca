@@ -2,16 +2,19 @@ import { copyFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { runProcessSync } from '@orca/process-host'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { getStatus } from './status-read'
 import { invalidateGitReadCaches } from '../git-read-cache-invalidation'
+
+// Real git spawns stall under gate load; the default 30s budget flakes.
+vi.setConfig({ testTimeout: 120_000 })
 
 let root: string | undefined
 
 afterEach(async () => {
   invalidateGitReadCaches()
   if (root) {
-    await rm(root, { recursive: true, force: true })
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   }
 })
 

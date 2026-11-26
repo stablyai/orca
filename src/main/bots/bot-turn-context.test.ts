@@ -27,10 +27,14 @@ function home(
   ])
   const fs = {
     readText: async (path: string) => files.get(path) ?? null,
-    listNames: async (dir: string) =>
-      [...files.keys()].flatMap((path) =>
-        path.startsWith(`${dir}/`) ? [path.slice(dir.length + 1)] : []
-      ),
+    // The impl builds dir and entries with path.join (native separators); match either.
+    listNames: async (dir: string) => {
+      const slashDir = dir.replaceAll('\\', '/')
+      return [...files.keys()].flatMap((path) => {
+        const slashPath = path.replaceAll('\\', '/')
+        return slashPath.startsWith(`${slashDir}/`) ? [slashPath.slice(slashDir.length + 1)] : []
+      })
+    },
     replaceText: async () => false,
     writeText: async () => false
   }

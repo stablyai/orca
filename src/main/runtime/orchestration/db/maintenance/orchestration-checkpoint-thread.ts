@@ -1,4 +1,5 @@
 import { spawnWorkerThread } from '../../../../worker-threads/worker-thread-spawn'
+import { stopWorkerGracefully } from '../../../../worker-threads/worker-thread-transport'
 import type { OrchestrationDb } from '../orchestration-db'
 
 // Checks often while other connections commit, rarely while none do, so an idle database barely wakes it.
@@ -16,7 +17,7 @@ export const MAIN_CHECKPOINT_BACKSTOP_PAGES = 10_000
 // Older SQLite runs NOOP as a real checkpoint, and 3.51.0-3.51.2 can corrupt a WAL reset that overlaps
 // one, so those are refused here; the exit hands checkpoints back to main.
 const checkpointWorkerSource = `
-const { workerData } = require('node:worker_threads');
+const { workerData, parentPort } = require('node:worker_threads');
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(workerData.filename);
 if (db.prepare('PRAGMA journal_mode').get().journal_mode !== 'wal') {
@@ -71,9 +72,19 @@ const tick = () => {
     // Exiting hands checkpoints back to main rather than letting the WAL grow.
     if (++failures >= 3) throw error;
   }
-  setTimeout(tick, interval);
+  timer = setTimeout(tick, interval);
 };
-setTimeout(tick, interval);
+let timer = setTimeout(tick, interval);
+// Main asks for this before it closes: terminate() would orphan the thread's connection,
+// whose Windows file lock would then outlive the database it checkpoints.
+parentPort?.once('message', () => {
+  clearTimeout(timer);
+  try {
+    db.close();
+  } finally {
+    parentPort.close();
+  }
+});
 `
 
 /**
@@ -129,7 +140,9 @@ export function checkpointOffMainThread(orchestrationDb: OrchestrationDb): () =>
     if (!stopped) {
       stopped = true
       forget()
-      worker.terminate().catch(() => {})
+      // terminate() would orphan the thread's connection, whose Windows file lock would
+      // then block the database's own removal; let it close first and exit on its own.
+      stopWorkerGracefully(worker, () => {})
       restore()
     }
   }

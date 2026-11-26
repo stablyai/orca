@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -12,10 +12,26 @@ import { loadGitHistoryFromExecutor } from './git-history-execution'
 const repositories: string[] = []
 const gitBinary = resolveExecutableCommand(process.env.ORCA_TEST_GIT_BINARY ?? 'git')
 
+// Real git spawns stall under gate load; the default 30s budget flakes.
+vi.setConfig({ testTimeout: 120_000 })
+
 afterEach(async () => {
-  await Promise.all(
-    repositories.splice(0).map((repo) => rm(repo, { recursive: true, force: true }))
-  )
+  for (const repo of repositories.splice(0)) {
+    // Windows releases git's file locks after the child fully exits; rm alone loses that race.
+    // ast-grep-ignore: test-no-polling-loop -- the OS releases file locks on real process exit; no condition to poll.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await rm(repo, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+        break
+      } catch (error) {
+        if (attempt >= 5) {
+          throw error
+        }
+        // ast-grep-ignore: test-no-real-time-wait -- the OS releases file locks on real process exit; fake timers cannot advance it.
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+      }
+    }
+  }
 })
 
 async function createRepository(inheritedEnv: NodeJS.ProcessEnv = process.env) {

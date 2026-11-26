@@ -142,7 +142,8 @@ function stopLoopbackForward(
     return
   }
   // Why: Windows does not end a killed ssh's ProxyCommand child, which would keep the proxy tunnel open.
-  void signalProcessTree(forwardProcess).catch(killForward)
+  // Release the root handle once the tree settles so teardown disposes the forward on every platform.
+  void signalProcessTree(forwardProcess).then(killForward, killForward)
 }
 
 function probeLoopbackRoute(

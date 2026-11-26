@@ -33,7 +33,7 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipContent: ({ children }: { children: ReactNode }) => <div>{children}</div>
 }))
 
-vi.mock('@/components/tab-bar/QuickLaunchButton', () => ({
+vi.mock('@/components/agent/launch-menu/AgentMenuItems', () => ({
   QuickLaunchAgentMenuItems: (props: QuickLaunchItemsProps) => {
     mocks.itemsProps = props
     return <div data-testid="agent-items" />
@@ -49,22 +49,27 @@ vi.mock('@/lib/agent-catalog', () => ({
   AgentIcon: () => <span data-testid="agent-icon" />
 }))
 
-vi.mock('./use-native-chat-tab-owner', () => ({
+vi.mock('./pane/ownership/use-native-chat-tab-owner', () => ({
   useNativeChatTabOwnerWorktreeId: () => 'worktree-1'
 }))
 
 vi.mock('@/i18n/i18n', () => ({
+  i18n: { language: 'en' },
   translate: (_key: string, fallback: string) => fallback
-}))
-
-const focusMock = vi.hoisted(() => vi.fn())
-vi.mock('@/lib/focus-terminal-tab-surface', () => ({
-  focusTerminalTabSurface: focusMock
 }))
 
 const activateLaunchTabMock = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/activate-native-chat-agent-launch-tab', () => ({
   activateNativeChatAgentLaunchTab: activateLaunchTabMock
+}))
+
+vi.mock('@/store', () => ({
+  useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({
+      getTab: () => ({ groupId: 'group-1' }),
+      activeGroupIdByWorktree: {},
+      groupsByWorktree: {}
+    })
 }))
 
 import { NativeChatAgentLaunchMenu } from './NativeChatAgentLaunchMenu'
@@ -83,9 +88,9 @@ describe('NativeChatAgentLaunchMenu', () => {
     )
     expect(mocks.itemsProps).toMatchObject({
       worktreeId: 'worktree-1',
+      groupId: 'group-1',
       launchSource: 'native_chat'
     })
-    expect(mocks.itemsProps?.onFocusTerminal).toBe(focusMock)
-    expect(mocks.itemsProps?.onTabOpened).toBe(activateLaunchTabMock)
+    expect(mocks.itemsProps?.onFocusTerminal).toBe(activateLaunchTabMock)
   })
 })

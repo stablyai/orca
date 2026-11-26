@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { parseWorktreeList } from '../../git/worktrees/git-worktree-porcelain-parser'
 import {
   fastForwardCheckedOutLocalBaseBranch,
@@ -12,6 +12,9 @@ import {
 } from './local-base-branch-fast-forward'
 
 const tempRoots: string[] = []
+
+// Real git spawns stall under gate load; the default 30s budget flakes.
+vi.setConfig({ testTimeout: 120_000 })
 
 // Why: keep the user's global/system config (hooksPath, autocrlf, signing) out of these repos.
 function isolatedGitEnv(root: string): NodeJS.ProcessEnv {
@@ -103,7 +106,22 @@ function fastForward(fixture: Fixture, git: LocalBaseBranchGit) {
 }
 
 afterEach(async () => {
-  await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  for (const root of tempRoots.splice(0)) {
+    // Windows releases git's file locks after the child fully exits; rm alone loses that race.
+    // ast-grep-ignore: test-no-polling-loop -- the OS releases file locks on real process exit; no condition to poll.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+        break
+      } catch (error) {
+        if (attempt >= 5) {
+          throw error
+        }
+        // ast-grep-ignore: test-no-real-time-wait -- the OS releases file locks on real process exit; fake timers cannot advance it.
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+      }
+    }
+  }
 })
 
 describe('fastForwardLocalBaseBranch against real Git', () => {

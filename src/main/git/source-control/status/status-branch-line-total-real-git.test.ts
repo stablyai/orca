@@ -1,11 +1,15 @@
 import { execFileSync } from 'node:child_process'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { removeTempDirs } from '../../../../shared/testing/remove-temp-dirs.test-support'
 import { invalidateGitBranchLineTotalInFlight } from '../../../../shared/git/status/git-branch-line-total'
 import { getStatus } from './status-read'
 import { invalidateGitReadCaches } from '../git-read-cache-invalidation'
+
+// Real git on a loaded Windows host exceeds the 30s global budget.
+vi.setConfig({ testTimeout: 120_000 })
 
 const tempRoots: string[] = []
 
@@ -50,7 +54,8 @@ beforeEach(() => {
 afterEach(async () => {
   invalidateGitReadCaches()
   invalidateGitBranchLineTotalInFlight()
-  await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  // Bun ignores rm maxRetries; removeTempDirs retries the whole pass itself.
+  await removeTempDirs(tempRoots.splice(0))
 })
 
 describe('branch line total against a real repository', () => {
@@ -65,17 +70,25 @@ describe('branch line total against a real repository', () => {
 
     const result = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
 
-    expect(result.branchLineTotal).toEqual({
-      added: 1,
-      removed: 0,
-      mergeBase,
-      test: NO_LINES,
-      generated: NO_LINES
-    })
     expect(result.entries.map((entry) => [entry.area, entry.added, entry.removed])).toEqual([
       ['staged', 1, 0],
       ['unstaged', 1, 1]
     ])
+    // Slow hosts exceed the 500ms branch-total soft deadline; the late diff backfills the cache for a later pass.
+    await vi.waitFor(
+      async () => {
+        expect(
+          (await getStatus(repo, { branchLineTotalMergeBase: mergeBase })).branchLineTotal
+        ).toEqual({
+          added: 1,
+          removed: 0,
+          mergeBase,
+          test: NO_LINES,
+          generated: NO_LINES
+        })
+      },
+      { timeout: 100_000, interval: 1_000 }
+    )
   })
 
   it('keeps the total across a commit and updates it on the next status call after an edit', async () => {
@@ -84,33 +97,52 @@ describe('branch line total against a real repository', () => {
     const mergeBase = commitAll(repo, 'base')
     await write(repo, 'f.txt', 'a\nb\nc\n')
 
-    const beforeCommit = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
-    expect(beforeCommit.branchLineTotal).toEqual({
-      added: 2,
-      removed: 0,
-      mergeBase,
-      test: NO_LINES,
-      generated: NO_LINES
-    })
+    // Slow hosts exceed the 500ms branch-total soft deadline; the late diff backfills the cache for a later pass.
+    await vi.waitFor(
+      async () => {
+        expect(
+          (await getStatus(repo, { branchLineTotalMergeBase: mergeBase })).branchLineTotal
+        ).toEqual({
+          added: 2,
+          removed: 0,
+          mergeBase,
+          test: NO_LINES,
+          generated: NO_LINES
+        })
+      },
+      { timeout: 100_000, interval: 1_000 }
+    )
 
     commitAll(repo, 'commit the edit')
-    const afterCommit = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
-    expect(afterCommit.branchLineTotal).toEqual({
-      added: 2,
-      removed: 0,
-      mergeBase,
-      test: NO_LINES,
-      generated: NO_LINES
-    })
+    await vi.waitFor(
+      async () => {
+        expect(
+          (await getStatus(repo, { branchLineTotalMergeBase: mergeBase })).branchLineTotal
+        ).toEqual({
+          added: 2,
+          removed: 0,
+          mergeBase,
+          test: NO_LINES,
+          generated: NO_LINES
+        })
+      },
+      { timeout: 100_000, interval: 1_000 }
+    )
 
     await write(repo, 'f.txt', 'a\nb\nc\nd\n')
-    const afterSecondEdit = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
-    expect(afterSecondEdit.branchLineTotal).toEqual({
-      added: 3,
-      removed: 0,
-      mergeBase,
-      test: NO_LINES,
-      generated: NO_LINES
-    })
+    await vi.waitFor(
+      async () => {
+        expect(
+          (await getStatus(repo, { branchLineTotalMergeBase: mergeBase })).branchLineTotal
+        ).toEqual({
+          added: 3,
+          removed: 0,
+          mergeBase,
+          test: NO_LINES,
+          generated: NO_LINES
+        })
+      },
+      { timeout: 100_000, interval: 1_000 }
+    )
   })
 })

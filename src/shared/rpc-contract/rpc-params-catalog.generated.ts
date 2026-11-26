@@ -2045,6 +2045,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'ssh.listRemovedTargetLabels': null,
   'ssh.listTargetSummaries': null,
   'ssh.listTargets': null,
+  'ssh.needsPassphrasePrompt': SshTarget,
   'ssh.removeTarget': SshTarget,
   'ssh.resizeLegacyRelayBridgedPane': SshLegacyRelayPaneResize,
   'ssh.setLegacyRelayBridgedPaneOutputPaused': SshLegacyRelayPaneOutputPaused,

@@ -6,6 +6,7 @@ import {
   setAppEnvironment,
   type AppEnvironment
 } from '../../../../src/shared/app-lifecycle/app-environment'
+import { errnoCodeOrUnknown } from '../../../../src/shared/errors/errno-code'
 import { setSecretStore } from '../../../../src/shared/secure-storage/secret-store'
 
 // The harness owns its directory even when a suite replaces the fs module.
@@ -20,9 +21,35 @@ function userDataPath(): string {
   return (userData ??= mkdtempSync(join(tmpdir(), 'orca-vitest-userdata-')))
 }
 
-afterAll(() => {
+afterAll(async () => {
   if (userData) {
-    rmSync(userData, { recursive: true, force: true })
+    // Suites that route through the structured agent-session host install its
+    // process-wide record-store slot against userData; retire it so the
+    // worker-owned journal releases the database files before removal.
+    try {
+      const slot =
+        await import('../../../../src/main/runtime/agent-session/records/agent-session-record-store-slot')
+      await slot.retireAgentSessionRecordStore((opened) =>
+        slot.closeAgentSessionRecordStoreDatabase(opened?.journalDatabase)
+      )
+    } catch (error) {
+      console.log(`vitest userdata teardown: record-store retire skipped (${String(error)})`)
+    }
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        rmSync(userData, { recursive: true, force: true })
+        return
+      } catch (error) {
+        if (
+          attempt >= 16 ||
+          process.platform !== 'win32' ||
+          !['EBUSY', 'ENOTEMPTY', 'EPERM'].includes(errnoCodeOrUnknown(error))
+        ) {
+          throw error
+        }
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250)
+      }
+    }
   }
 })
 
@@ -32,7 +59,15 @@ const SEAL_PREFIX = 'vitest-sealed:'
 // Let suites specify only relevant fake-host members rather than duplicate entire environment.
 export function fakeAppEnvironment(overrides: Partial<AppEnvironment> = {}): AppEnvironment {
   return {
-    getPath: (name) => (name === 'home' ? homedir() : name === 'temp' ? tmpdir() : userDataPath()),
+    getPath: (name) => {
+      if (name === 'home') {
+        return homedir()
+      }
+      if (name === 'temp') {
+        return tmpdir()
+      }
+      return userDataPath()
+    },
     getAppPath: () => process.cwd(),
     getVersion: () => '0.0.0-test',
     isPackaged: () => false,

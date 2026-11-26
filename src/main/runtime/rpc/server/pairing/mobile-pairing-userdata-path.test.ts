@@ -44,8 +44,21 @@ describe('mobile pairing userData path stability', () => {
     vi.resetModules()
   })
 
-  afterEach(() => {
-    rmSync(root, { recursive: true, force: true })
+  afterEach(async () => {
+    // Windows releases copied files' locks after the module registry settles; rmSync alone loses that race.
+    // ast-grep-ignore: test-no-polling-loop -- the OS releases file locks on real module teardown; no condition to poll.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+        break
+      } catch (error) {
+        if (attempt >= 5) {
+          throw error
+        }
+        // ast-grep-ignore: test-no-real-time-wait -- the OS releases file locks on real module teardown; fake timers cannot advance it.
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+      }
+    }
     vi.resetModules()
   })
 

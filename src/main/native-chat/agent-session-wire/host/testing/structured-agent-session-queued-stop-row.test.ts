@@ -57,9 +57,12 @@ function journal(sessionId = HOST_TEST_SESSION) {
 async function expectHeld(reason: string | null, ...draftIds: string[]): Promise<void> {
   await vi.advanceTimersByTimeAsync(250)
   for (const draftId of draftIds) {
-    expect(await rig.handoff(draftId)).toBeUndefined()
+    // A settle cascade still committing mid-read refuses once; the read is retryable.
+    await eventually(async () => expect(await rig.handoff(draftId)).toBeUndefined())
   }
-  expect(await rig.queuePause()).toEqual(reason === null ? null : { reason })
+  await eventually(async () =>
+    expect(await rig.queuePause()).toEqual(reason === null ? null : { reason })
+  )
 }
 
 /** A Stop's withdrawal as the provider writes it, naming the turn it was answered into if any. */

@@ -1,9 +1,13 @@
 import { runProcessSync } from '@orca/process-host'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { removeTreeSync } from '../../../../src/shared/file-write/windows-transient-lock-removal.ts'
 import { highestRcForBase } from './release-rc-history.mjs'
+
+// Why real git spawns stall under gate load; the default 30s budget flakes.
+vi.setConfig({ testTimeout: 120_000 })
 
 function git(cwd, args) {
   const result = runProcessSync({ program: 'git', args, cwd, timeoutMs: 10_000 })
@@ -22,7 +26,7 @@ function withGitRepo(run) {
     git(dir, ['config', 'tag.gpgsign', 'false'])
     run(dir)
   } finally {
-    rmSync(dir, { recursive: true, force: true })
+    removeTreeSync(dir)
   }
 }
 

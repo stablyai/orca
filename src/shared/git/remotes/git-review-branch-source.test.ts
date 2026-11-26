@@ -3,8 +3,11 @@ import { promisify } from 'node:util'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { readGitReviewBranchSources } from './git-review-branch-source'
+
+// Real git spawns stall under gate load; the default 30s budget flakes.
+vi.setConfig({ testTimeout: 120_000 })
 const exec = promisify(execFile)
 it('resolves real Git tracking, triangular publication, local tracking and explicit branch mappings', async () => {
   const repo = await mkdtemp(path.join(tmpdir(), 'gitlab-review-parity-1108-'))
@@ -94,6 +97,6 @@ it('resolves real Git tracking, triangular publication, local tracking and expli
     await git(['config', '--replace-all', 'remote.origin.push', 'refs/heads/feature:refs/tags/v1'])
     expect((await snapshot()).get('feature')).toBeInstanceOf(Error)
   } finally {
-    await rm(repo, { recursive: true, force: true })
+    await rm(repo, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   }
 })

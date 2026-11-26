@@ -18,7 +18,7 @@ export function installInProcessSessionSearchService(args: {
   settings: AiVaultSearchSettings
   getScopeCatalog: SessionSearchScopeCatalogSource
   onError?: (error: unknown) => void
-}): { apply(settings: AiVaultSearchSettings): void; dispose(): void } | null {
+}): { apply(settings: AiVaultSearchSettings): void; dispose(): Promise<void> } | null {
   if (!isSqliteAvailable()) {
     return null
   }
@@ -40,7 +40,7 @@ export function installInProcessSessionSearchService(args: {
     dispose: () => {
       setSessionSearchService(null)
       installSessionSearchScopeCatalogSource(null)
-      instance.close()
+      return instance.close()
     }
   }
 }

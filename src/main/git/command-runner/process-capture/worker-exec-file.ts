@@ -36,8 +36,8 @@ export function workerExecFile(
       program: command,
       args,
       cwd: options.cwd instanceof URL ? fileURLToPath(options.cwd) : options.cwd,
-      // The worker's env is a copy from its start; send main's current one (PATH refreshes after launch).
-      env: options.env ?? process.env,
+      // Bun's structured clone rejects process.env itself; send a plain copy (PATH refreshes after launch).
+      env: { ...(options.env ?? process.env) },
       ...(options.ownedPosixGroup ? { terminationBarrier: true as const } : {})
     })
   )

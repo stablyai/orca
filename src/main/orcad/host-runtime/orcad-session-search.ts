@@ -14,7 +14,7 @@ export async function installOrcadSessionSearchService(args: {
   userDataPath: string
   getSettings: () => Pick<GlobalSettings, 'aiVaultSearch'>
   getScopeCatalog: SessionSearchScopeCatalogSource
-}): Promise<{ apply(settings: AiVaultSearchSettings): void; dispose(): void } | null> {
+}): Promise<{ apply(settings: AiVaultSearchSettings): void; dispose(): Promise<void> } | null> {
   return installInProcessSessionSearchService({
     dataRoot: args.userDataPath,
     roots: { executionHostId: LOCAL_EXECUTION_HOST_ID },

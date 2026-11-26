@@ -1,10 +1,11 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import SyncDatabase from '../sqlite/sync-database'
 import type { BotItemAddInput, BotItemBotActor } from './bot-items-input'
 import { BotItemsStore } from './bot-items-store'
+import { removeTreeSync } from '../../shared/file-write/windows-transient-lock-removal'
 
 const owner: BotItemBotActor = { kind: 'bot', botId: 'bot-a', chatId: 'chat-home' }
 const otherChat: BotItemBotActor = { kind: 'bot', botId: 'bot-a', chatId: 'chat-side' }
@@ -332,26 +333,27 @@ describe('bot items store', () => {
   })
   it('fills who last wrote besides the owner on items an older file holds', () => {
     const dir = mkdtempSync(join(tmpdir(), 'bot-items-migrate-'))
-    try {
-      const path = join(dir, 'bot-items.sqlite')
-      const first = BotItemsStore.open(path)
-      const { uid } = first.add(input(), owner)
-      const { eventId } = first.comment(uid, 'Switched to outline.', owner)
-      first.ownerComment(uid, 'Use the outline button.', { kind: 'owner' })
-      const quiet = first.add(input(), owner).uid
-      first.dispose()
-      const older = new SyncDatabase(path)
-      older.exec(`DROP INDEX idx_items_needs_you; ALTER TABLE items DROP COLUMN others_last_event_id;
-        ALTER TABLE items DROP COLUMN snoozed_until; PRAGMA user_version = 1`)
-      older.close()
+    const path = join(dir, 'bot-items.sqlite')
+    const first = BotItemsStore.open(path)
+    const { uid } = first.add(input(), owner)
+    const { eventId } = first.comment(uid, 'Switched to outline.', owner)
+    first.ownerComment(uid, 'Use the outline button.', { kind: 'owner' })
+    const quiet = first.add(input(), owner).uid
+    first.dispose()
+    const older = new SyncDatabase(path)
+    older.exec(`DROP INDEX idx_items_needs_you; ALTER TABLE items DROP COLUMN others_last_event_id;
+      ALTER TABLE items DROP COLUMN snoozed_until; PRAGMA user_version = 1`)
+    older.close()
 
-      const store = BotItemsStore.open(path)
-      stores.push(store)
+    const store = BotItemsStore.open(path)
+    try {
       const made = store.events(quiet, 0, 1)[0]?.id
 
       expect(store.viewRows([uid, quiet]).othersLast).toEqual({ [uid]: eventId, [quiet]: made })
     } finally {
-      rmSync(dir, { recursive: true, force: true })
+      // Why: Windows refuses to remove a folder while its sqlite file is still open.
+      store.dispose()
+      removeTreeSync(dir)
     }
   })
 

@@ -86,6 +86,7 @@ type FaultOwnershipDeps = {
   readTable?: ProcessTableReader
   readProcessRow?: ProviderProcessRowReader
   sendSignal?: SignalSender
+  platform?: NodeJS.Platform
 }
 
 /** Capture while P still owns its children; fd6 EOF alone does not reserve its PID. */
@@ -96,6 +97,12 @@ export async function terminateProviderFaultDescendants(
   const expected = identity.leader
   const readRow = deps.readProcessRow ?? readPosixProcessRow
   const readTable = deps.readTable ?? readProcessTable
+  // Why: win32 has no POSIX table, but injected readers still prove ancestry in tests.
+  const capturePlatform =
+    (deps.platform ?? process.platform) === 'win32' &&
+    (deps.readTable !== undefined || deps.readProcessRow !== undefined)
+      ? 'linux'
+      : (deps.platform ?? process.platform)
   let rootRetired = false
   let readSequence = 0
   let ownedPids: ReadonlySet<number> = new Set()
@@ -149,7 +156,10 @@ export async function terminateProviderFaultDescendants(
   // The table keeps its own budget; the two bounded identity reads surround it.
   ownedTable.deadlineAllowanceMs = (timeoutMs) =>
     2 * PROCESS_ROW_TIMEOUT_MS + (readTable.deadlineAllowanceMs?.(timeoutMs) ?? 0)
-  const snapshot = await captureDescendantSnapshot(expected.pid, { readTable: ownedTable })
+  const snapshot = await captureDescendantSnapshot(expected.pid, {
+    readTable: ownedTable,
+    platform: capturePlatform
+  })
   if (!snapshot?.root || rootRetired) {
     return 'unverifiable'
   }

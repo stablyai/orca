@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { installBrowserGlobals } from './testing/web-preload-api-test-harness'
 
-vi.mock('./preload-api/web-runtime-api', () => ({
+vi.mock('./preload-api/runtime/web-runtime-api', () => ({
   createWebRuntimeApi: () => ({
     subscribe: vi.fn(async (_request, onResponse) => {
       onResponse({

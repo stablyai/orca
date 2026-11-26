@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { callTauriPtyHost } from './web-tauri-pty-host'
 
 const { callEnvironmentEnvelope } = vi.hoisted(() => ({ callEnvironmentEnvelope: vi.fn() }))
-vi.mock('./web-runtime-calls', () => ({ callEnvironmentEnvelope }))
+vi.mock('../runtime/client/web-runtime-calls', () => ({ callEnvironmentEnvelope }))
 
 describe('Tauri terminal execution-host routing', () => {
   beforeEach(() => callEnvironmentEnvelope.mockReset())

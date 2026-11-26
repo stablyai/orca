@@ -75,6 +75,8 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ipc/command-path/command-path-directory-worker.test.ts',
   // Asserts Node's spawn-failure close signal and that a dead worker closes its children's pipes.
   'src/main/worker-thread-child-process/worker-thread-child-process.test.ts',
+  // The admitted-kill proof observes taskkill through Node's diagnostics_channel feed, which Bun never emits.
+  'src/main/pty/process-retirement/windows-live-tree-kill.win32.test.ts',
   'src/main/git/command-runner/process-capture/worker-exec-file.test.ts',
   'src/main/git/worktrees/removal/worktree-removal-real-git.test.ts',
   'src/main/git/worktrees/catalog/worktree-list-paths.test.ts',
@@ -119,7 +121,9 @@ const NODE_RUNTIME_INCLUDE = [
   'config/scripts/test-runtime/node-worker/vitest-node-runtime-pool.test.ts',
   // Reopen WAL-backed row caches read-only, which Bun on macOS cannot.
   'tests/e2e/desktop/electron-fixtures/persisted-profile-state.unit.test.ts',
-  'src/main/runtime/push/notifications/mobile-notification-dismissal-store.test.ts'
+  'src/main/runtime/push/notifications/mobile-notification-dismissal-store.test.ts',
+  // userInfo().homedir is the token profile dir only under Node; Bun follows USERPROFILE.
+  'config/scripts/test-runtime/environment/vitest-real-agent-home-write-guard.test.ts'
 ]
 
 /** `filters` limits the SQLite import scan to the tests a filtered CLI run can select. */

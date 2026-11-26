@@ -46,7 +46,7 @@ export async function gitFileProvesOrphanedWorktreeDirectory(args: {
   }
 }
 
-function isGitFileStat(stat: unknown): boolean {
+export function isGitFileStat(stat: unknown): boolean {
   const fileStat =
     stat && typeof stat === 'object' ? (stat as { isFile?: () => boolean; type?: unknown }) : null
   return !!fileStat && (fileStat.isFile?.() === true || fileStat.type === 'file')

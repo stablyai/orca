@@ -57,11 +57,11 @@ beforeEach(() => {
   }
 })
 
-afterEach(() => {
+afterEach(async () => {
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
   resetWslMoveDesktopRewriteStoresForTests()
-  removeWslMoveRigDirs()
+  await removeWslMoveRigDirs()
 })
 
 describe('moving a project saved under a mapped drive', () => {

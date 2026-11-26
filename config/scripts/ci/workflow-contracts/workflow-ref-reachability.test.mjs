@@ -5,6 +5,10 @@ import { pathToFileURL } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { runProcess } from '@orca/process-host'
+import { findGitBash } from '../../../../src/main/agent-hooks/installation/commands/testing/windows-git-bash-path.test-fixture'
+
+// WSL's bash.exe shadows Git Bash on PATH and cannot reach Windows paths.
+const shell = process.platform === 'win32' ? findGitBash() : 'bash'
 
 const readWorkflow = (name) => parse(readFileSync(`.github/workflows/${name}.yml`, 'utf8'))
 const windowsVet = readWorkflow('dev-channel-win-build').jobs['build-win'].steps.find(
@@ -60,7 +64,7 @@ async function vet(step, ref) {
   const output = join(scratch, 'output')
   writeFileSync(output, '')
   const result = await runProcess({
-    program: 'bash',
+    program: shell,
     args: [script],
     env: {
       ...identity,

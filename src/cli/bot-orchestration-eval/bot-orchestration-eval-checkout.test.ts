@@ -30,7 +30,8 @@ describe('bot orchestration eval checkouts', () => {
   })
 
   afterEach(async () => {
-    await rm(root, { recursive: true, force: true })
+    // Fresh git children and scanners briefly lock new checkouts on Windows.
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   })
 
   it('clones without any remote', async () => {
@@ -55,7 +56,7 @@ describe('bot orchestration eval checkouts', () => {
     const clone = join(root, 'clone')
     await cloneCheckout(source, clone)
     const before = await checkoutSnapshot(clone)
-    await rm(join(clone, '.git'), { recursive: true, force: true })
+    await rm(join(clone, '.git'), { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
     expect(await checkoutChanged(clone, before)).toBe(true)
   })
 

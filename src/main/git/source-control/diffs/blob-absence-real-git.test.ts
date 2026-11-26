@@ -3,7 +3,10 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+// Why real-git spawns across three tests blow the 30s budget on a loaded Windows host.
+vi.setConfig({ testTimeout: 120_000 })
 import { runProcess } from '@orca/process-host'
 import { readGitBlobAtIndexPath, readGitBlobAtOidPath } from './git-blob-read'
 import { getCommitDiff } from '../comparisons/commit-diff'

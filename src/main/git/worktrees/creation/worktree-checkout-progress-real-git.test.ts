@@ -5,6 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { addWorktree } from './worktree-add'
 
+// Real `git worktree add` of 150 files stalls under gate load; the default 30s budget flakes.
+vi.setConfig({ testTimeout: 120_000 })
+
 const FILE_COUNT = 150
 
 let root = ''
@@ -30,7 +33,7 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.unstubAllEnvs()
   vi.restoreAllMocks()
-  await rm(root, { recursive: true, force: true })
+  await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
 })
 
 describe('checkout progress from a real `git worktree add`', () => {

@@ -11,7 +11,7 @@ import {
 } from '../../git/source-control/submodules/submodule-paths'
 import { execFileSync } from 'node:child_process'
 import '../orca-runtime-test-mocks/setup.spec'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import 'node:fs'
 import '../../../shared/project/host-setup/project-host-setup-projection'
 import { tmpdir } from 'node:os'
@@ -160,16 +160,15 @@ describe('OrcaRuntimeService', () => {
         'init'
       ])
       firstProc.emit('close', 0, null)
-      await expect(firstClonePromise).resolves.toMatchObject({
-        path: join(destination, 'repo-badge-color')
-      })
-      await expect(secondClonePromise).resolves.toMatchObject({
-        path: join(destination, 'repo-badge-color')
-      })
+      const [first, second] = await Promise.all([firstClonePromise, secondClonePromise])
+      // Why: Git reports its toplevel with forward slashes; the marker fallback keeps native ones.
+      expect(first.path.split(/[\\/]/)).toEqual(join(destination, 'repo-badge-color').split(sep))
+      expect(second.path).toBe(first.path)
       expect(spawnSpy).toHaveBeenCalledTimes(1)
     } finally {
       spawnSpy.mockRestore()
-      await rm(destination, { recursive: true, force: true })
+      // Why: Windows can keep a just-committed git dir busy briefly.
+      await rm(destination, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
     }
   })
 })

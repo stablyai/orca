@@ -4,7 +4,6 @@ import {
   mkdtemp,
   readdir,
   readFile,
-  rm,
   symlink,
   utimes,
   writeFile
@@ -12,8 +11,9 @@ import {
 import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { lock } from 'proper-lockfile'
+import { removeTree } from '../../../src/shared/file-write/windows-transient-lock-removal.ts'
 import { reclaimReleaseTestCaches } from './reclaim-release-test-caches.mjs'
 import { withReleaseSourceLease } from '../../../tests/e2e/cross-version-wire/release-checkouts/release-source-retention'
 import { CHECKOUT_FORMAT } from '../../../tests/e2e/cross-version-wire/release-checkouts/release-checkout-publication'
@@ -23,9 +23,12 @@ const commit = 'c'.repeat(40)
 const nowMs = Date.now()
 const day = 24 * 60 * 60 * 1000
 
+// Why bun on Windows spawns git in seconds each: the fixture plus idle checks shell out per reclaim.
+vi.setConfig({ testTimeout: 120_000 })
+
 afterEach(async () => {
   for (const root of roots.splice(0)) {
-    await rm(root, { recursive: true, force: true })
+    await removeTree(root)
   }
 })
 

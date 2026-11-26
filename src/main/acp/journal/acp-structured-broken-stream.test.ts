@@ -162,7 +162,10 @@ describe('ACP connection to a directly launched agent that closes stdout but kee
       { timeout: 10_000, interval: 20 }
     )
     const pid = Number(readFileSync(pidFile, 'utf8'))
-    await vi.waitFor(() => expect(stdoutEnded).toBe(true), { timeout: 2_000, interval: 20 })
+    // Why: Windows never EOFs a pipe the agent closed, so only POSIX can observe the close.
+    if (process.platform !== 'win32') {
+      await vi.waitFor(() => expect(stdoutEnded).toBe(true), { timeout: 2_000, interval: 20 })
+    }
     expect((await turns()).at(-1)).toMatchObject({ state: 'running' })
     expect(rig.ended).toEqual([])
     expect(alive(pid)).toBe(true)

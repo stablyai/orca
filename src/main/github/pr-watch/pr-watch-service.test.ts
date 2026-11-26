@@ -1,4 +1,7 @@
-import { openTestAgentSessionDatabase } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import {
+  closeTestAgentSessionDatabase,
+  openTestAgentSessionDatabase
+} from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { withTestAgentSessionDatabase } from '../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
 import { prWatchStorage, type PRWatchStorage } from './pr-watch-storage'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -168,7 +171,9 @@ describe('PRWatchService startup retirement', () => {
   afterEach(async () => {
     vi.useRealTimers()
     await journals.closeAll()
-    await rm(root, { recursive: true, force: true })
+    // prWatchStorage shares the worker-backed database; Windows refuses the rm while it is open.
+    await closeTestAgentSessionDatabase(root)
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   })
 
   it.each([false, true])(

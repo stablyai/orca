@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-poc-web-bots-get-state"
+description = "Enables the poc_web_bots_get_state command without any pre-configured scope."
+commands.allow = ["poc_web_bots_get_state"]
+
+[[permission]]
+identifier = "deny-poc-web-bots-get-state"
+description = "Denies the poc_web_bots_get_state command without any pre-configured scope."
+commands.deny = ["poc_web_bots_get_state"]

@@ -80,7 +80,7 @@ describe('tauri native crash reports copy', () => {
     })
     expect(result).toEqual({ ok: true })
     expect(host.invoke).toHaveBeenCalledWith('poc_crash_reports_get_requested', {
-      reportId: 'report-1'
+      args: { reportId: 'report-1' }
     })
     const text = writtenText(host.invoke)
     expect(text).toContain('Report ID: report-1')

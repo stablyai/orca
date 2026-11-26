@@ -1,7 +1,10 @@
 import { setTimeout, clearTimeout } from 'node:timers'
 import { spawnWorkerThread } from '../../../worker-threads/worker-thread-spawn'
 import type Database from '../../../sqlite/sync-database'
-import type { WorkerRequestTransport } from '../../../worker-threads/worker-thread-transport'
+import {
+  stopWorkerGracefully,
+  type WorkerRequestTransport
+} from '../../../worker-threads/worker-thread-transport'
 import { journalCheckpointWorkerSource } from './journal-checkpoint-worker-source'
 import { JOURNAL_SIZE_LIMIT_BYTES } from './journal-database'
 
@@ -255,12 +258,8 @@ export class JournalCheckpointOwner {
     }
     this.wake()
     this.warn(error)
-    if (first) {
-      try {
-        void this.worker?.terminate().catch((cause: unknown) => this.warn(cause))
-      } catch (cause) {
-        this.warn(cause)
-      }
+    if (first && this.worker) {
+      stopWorkerGracefully(this.worker, (cause) => this.warn(cause))
     }
   }
 
@@ -317,7 +316,7 @@ export class JournalCheckpointOwner {
     }
     const worker = this.worker
     if (worker) {
-      await worker.terminate()
+      stopWorkerGracefully(worker, (cause) => this.warn(cause))
       await this.exited
       this.worker = undefined
     }

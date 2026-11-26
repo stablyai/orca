@@ -22,6 +22,9 @@ import {
 } from './runtime-environment-store-records'
 
 const roots: string[] = []
+
+// A thousand parallel resolves stall under gate load; the default 30s budget flakes.
+vi.setConfig({ testTimeout: 120_000 })
 function profile(): string {
   const root = mkdtempSync(join(tmpdir(), 'orca-environment-owner-'))
   roots.push(root)
@@ -37,7 +40,7 @@ function pairing(seed: number): string {
 }
 afterEach(() => {
   for (const root of roots.splice(0)) {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   }
 })
 

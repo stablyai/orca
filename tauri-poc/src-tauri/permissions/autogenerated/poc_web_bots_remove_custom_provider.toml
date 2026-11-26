@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-poc-web-bots-remove-custom-provider"
+description = "Enables the poc_web_bots_remove_custom_provider command without any pre-configured scope."
+commands.allow = ["poc_web_bots_remove_custom_provider"]
+
+[[permission]]
+identifier = "deny-poc-web-bots-remove-custom-provider"
+description = "Denies the poc_web_bots_remove_custom_provider command without any pre-configured scope."
+commands.deny = ["poc_web_bots_remove_custom_provider"]

@@ -1,5 +1,5 @@
 import type * as ForegroundModule from './terminal-process-rows'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { observePtyForeground, readPtyForegroundGroup } from './pty-master-foreground-observation'
 const mocks = vi.hoisted(() => ({ rows: vi.fn(), tty: vi.fn(), ps: vi.fn() }))
 vi.mock('./terminal-process-rows', async (importOriginal) => ({
@@ -22,11 +22,17 @@ const proc = () => ({
   ptsName: '/dev/pts/5',
   getForegroundProcessGroup: vi.fn((): number | null | undefined => 200)
 })
+const HOST_PLATFORM = process.platform
 beforeEach(() => {
   vi.clearAllMocks()
+  // Why: rows/tty/ps mocks prove POSIX foreground; keep Windows hosts off the ConPTY path.
+  Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
   mocks.rows.mockResolvedValue([row('claude')])
   mocks.tty.mockResolvedValue('pts/5')
   mocks.ps.mockResolvedValue('200 pts/5')
+})
+afterEach(() => {
+  Object.defineProperty(process, 'platform', { configurable: true, value: HOST_PLATFORM })
 })
 describe('physical PTY observations', () => {
   it('never queries a retired/reused fd or rescues a supported failure with a cached name', async () => {

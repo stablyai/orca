@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import type { JournalRow } from '../durable-rows/journal-row-schema'
 import {
+  closeTestJournalHostDatabase,
   createTrackedJournalOpener,
   openTestJournalHostDatabase
 } from '../store-lifecycle/journal-host-database-test-support'
@@ -59,7 +60,9 @@ beforeEach(async () => {
 })
 afterEach(async () => {
   await journals.closeAll()
-  await rm(root, { recursive: true, force: true })
+  // source() opens outside the tracked opener (this test never calls open()), so release it here.
+  await closeTestJournalHostDatabase(root)
+  await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
 })
 
 it.each([false, true])(

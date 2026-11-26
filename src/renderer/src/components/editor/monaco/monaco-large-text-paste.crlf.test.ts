@@ -8,6 +8,8 @@ const models: monacoEditor.ITextModel[] = []
 
 function makeEditor() {
   const model = monacoEditor.createModel('', 'plaintext')
+  // Windows models default to CRLF; pin LF so chunking asserts the same everywhere.
+  model.setEOL(monacoEditor.EndOfLineSequence.LF)
   models.push(model)
   let selection = new Selection(1, 1, 1, 1)
   const editor: MonacoPasteEditor = {

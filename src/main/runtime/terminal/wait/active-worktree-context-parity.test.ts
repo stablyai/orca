@@ -1,6 +1,6 @@
 // #38653: the remote fallback must leave a focused local or SSH workspace's context exactly as the catalog answered it.
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -56,7 +56,8 @@ beforeAll(() => {
   repoPath = join(root, 'repo')
   linkedPath = join(root, 'linked')
   folderPath = join(root, 'folder')
-  execFileSync('mkdir', ['-p', repoPath, folderPath])
+  mkdirSync(repoPath, { recursive: true })
+  mkdirSync(folderPath, { recursive: true })
   git(repoPath, 'init', '-q', '-b', 'main')
   git(
     repoPath,

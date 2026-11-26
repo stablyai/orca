@@ -1,8 +1,9 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { removeTree } from '../../../shared/file-write/windows-transient-lock-removal'
 import { gitPush } from './remote'
 import { getCurrentBranchAndHead } from '../../source-control/hosted-review-creation-git-state'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
@@ -10,9 +11,18 @@ import { installRealWorkerThreadChildProcesses } from '../../worker-thread-child
 
 let directory: string | null = null
 
+beforeEach(() => {
+  // Push is network-classed, so every gitPush first probes core.sshCommand with a 2.5s
+  // budget that flakes under parallel-test spawn load. Local-path remotes never invoke
+  // SSH, so short-circuiting that probe is behavior-preserving here.
+  vi.stubEnv('GIT_SSH_COMMAND', 'ssh')
+})
+
 afterEach(async () => {
+  vi.unstubAllEnvs()
   if (directory) {
-    await rm(directory, { recursive: true, force: true })
+    // Bun ignores rm maxRetries; removeTree retries the whole pass itself.
+    await removeTree(directory)
     directory = null
   }
 })
@@ -39,6 +49,7 @@ async function createBranchSharingTagName() {
   return { repo, git }
 }
 
+// Cold node:child_process spawns inside a Bun worker thread cost seconds each; this first test pays for all of them.
 it('reads the branch for Create PR when a tag shares the branch name', async () => {
   const { repo, git } = await createBranchSharingTagName()
 
@@ -46,7 +57,7 @@ it('reads the branch for Create PR when a tag shares the branch name', async () 
     branch: 'release',
     headOid: await git(['rev-parse', 'HEAD'])
   })
-})
+}, 90_000)
 
 it('pushes to the configured branch target when a tag shares the branch name', async () => {
   const { repo, git } = await createBranchSharingTagName()

@@ -31,6 +31,7 @@ const TURN = { botId: 'bot-1', address: { source: 'slack', externalId: 'T1:C1:1.
 
 describe("a bot's worker-start --on a server that owns its workers", () => {
   let db: OrchestrationDb
+  let disposeWork: (() => void) | undefined
 
   beforeEach(() => {
     userData = mkdtempSync(join(tmpdir(), 'bot-work-server-owned-'))
@@ -39,7 +40,10 @@ describe("a bot's worker-start --on a server that owns its workers", () => {
 
   afterEach(() => {
     db.close()
-    rmSync(userData, { recursive: true, force: true })
+    // The work store memoizes an open SQLite file under userData; Windows refuses the rm while it is open.
+    disposeWork?.()
+    disposeWork = undefined
+    rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   })
 
   it('keeps the row on that server while the worker runs, brings its report home, and closes when it stops', async () => {
@@ -58,6 +62,7 @@ describe("a bot's worker-start --on a server that owns its workers", () => {
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a server-owned worker reads only these members.
     const botWork = runtimeBotWork(runtime as unknown as Parameters<typeof runtimeBotWork>[0])
+    disposeWork = () => botWork.store().dispose()
 
     const recordStart = prepareBotWorkerStart(
       {

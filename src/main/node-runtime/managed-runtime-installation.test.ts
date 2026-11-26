@@ -21,6 +21,9 @@ vi.mock('./managed-runtime-release', async (importOriginal) => {
   return { ...actual, reclaimRuntimeReleases: vi.fn(actual.reclaimRuntimeReleases) }
 })
 
+// Why a tar.gz install shells to tar twice plus hashing: the settle poll below exceeds 10s on a loaded host.
+vi.setConfig({ testTimeout: 120_000 })
+
 const sha256 = (bytes: string | Uint8Array) => createHash('sha256').update(bytes).digest('hex')
 const ARCHIVE = zipSync({ server: strToU8('server bytes') })
 const roots: string[] = []
@@ -273,7 +276,8 @@ it.each([
     await vi.waitFor(
       async () =>
         expect(['succeeded', 'failed']).toContain((await installation.status()).operation?.phase),
-      { timeout: 10_000 }
+      // Why packing plus extracting a tar.gz spans two slow process spawns on a loaded host.
+      { timeout: 60_000 }
     )
     expect(await installation.status()).toMatchObject({ installedVersion })
     if (installedVersion) {

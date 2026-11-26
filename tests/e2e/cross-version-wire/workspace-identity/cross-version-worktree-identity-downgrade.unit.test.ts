@@ -5,7 +5,8 @@ import {
 } from '../release-checkouts/release-checkout'
 
 // Pin the pre-change reader: renamed session rows written by a new build must survive rollback and further renames.
-const PRE_STACK_REF = 'v1.4.199'
+// Why: pin the newest pre-stack release this checkout resolves; the v1.4.199 tag is absent here.
+const PRE_STACK_REF = 'v1.4.190'
 const SUITE_TIMEOUT_MS = 180_000
 
 const OLD_ID = 'repo::/worktrees/before'

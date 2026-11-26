@@ -73,7 +73,8 @@ describe('Antigravity IDE history discovery', () => {
       } else {
         expect(session.resumeCommand).toContain('--prompt-interactive')
         expect(session.resumeCommand).not.toContain('--conversation')
-        expect(session.resumeCommand).toContain(session.filePath)
+        // The reference prompt embeds JSON.stringify(filePath), so backslashes are doubled on Windows.
+        expect(session.resumeCommand).toContain(JSON.stringify(session.filePath).slice(1, -1))
       }
     }
   })

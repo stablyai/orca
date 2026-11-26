@@ -138,3 +138,4 @@ export type TopLevelView =
   | 'workbench'
   | 'mobile'
   | 'rooms'
+  | 'web-bots'

@@ -1,9 +1,10 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import SyncDatabase from '../sqlite/sync-database'
 import { BotWorkStore, botWorkStoreFile, type BotWorkBind } from './bot-work-store'
+import { removeTreeSync } from '../../shared/file-write/windows-transient-lock-removal'
 
 const THREAD = { source: 'slack', externalId: 'T1:C1:1.0' } as const
 
@@ -20,9 +21,12 @@ function bind(overrides: Partial<BotWorkBind> = {}): BotWorkBind {
 
 describe('BotWorkStore', () => {
   const dirs: string[] = []
+  const fileStores: BotWorkStore[] = []
   afterEach(() => {
+    // Why: Windows refuses to remove a folder while its sqlite file is still open.
+    fileStores.splice(0).forEach((store) => store.dispose())
     for (const dir of dirs.splice(0)) {
-      rmSync(dir, { recursive: true, force: true })
+      removeTreeSync(dir)
     }
   })
 
@@ -86,8 +90,11 @@ describe('BotWorkStore', () => {
     const dir = mkdtempSync(join(tmpdir(), 'bot-work-'))
     dirs.push(dir)
     const path = botWorkStoreFile(dir)
-    BotWorkStore.open(path).bind(bind())
+    const first = BotWorkStore.open(path)
+    fileStores.push(first)
+    first.bind(bind())
     const reopened = BotWorkStore.open(path)
+    fileStores.push(reopened)
     expect(reopened.live('bot-1', THREAD)?.generation).toBe(1)
     expect(reopened.bind(bind())).toBeNull()
   })
@@ -111,6 +118,7 @@ describe('BotWorkStore', () => {
     old.close()
 
     const store = BotWorkStore.open(path)
+    fileStores.push(store)
     const row = store.live('bot-1', THREAD)
     expect(row).toMatchObject({ rowId: 'old-row', current: true })
     expect(store.bind(bind({ dispatchId: 'dispatch-2' }))).toBeNull()

@@ -48,14 +48,18 @@ function TooltipTrigger({
   )
 }
 
-const TAB_PREVIEW_CLASSES =
-  'w-64 max-w-[calc(100vw-1rem)] border border-border bg-popover p-3 text-popover-foreground shadow-floating motion-safe:animate-in motion-safe:fade-in-0 data-[state=closed]:animate-none'
+const FLOATING_SURFACE_CLASSES =
+  'border border-black/14 bg-[rgba(255,255,255,0.82)] text-black shadow-[0_12px_28px_rgba(0,0,0,0.22),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl dark:border-white/14 dark:bg-[rgba(0,0,0,0.72)] dark:text-white dark:shadow-[0_16px_34px_rgba(0,0,0,0.40),inset_0_1px_0_rgba(255,255,255,0.04)]'
+
+const TAB_PREVIEW_CLASSES = cn(
+  'w-64 max-w-[calc(100vw-1rem)] p-3 motion-safe:animate-in motion-safe:fade-in-0 data-[state=closed]:animate-none',
+  FLOATING_SURFACE_CLASSES
+)
 
 const tooltipContentVariants = cva('z-[90] rounded-md text-xs', {
   variants: {
     variant: {
-      default:
-        'pointer-events-none w-fit origin-(--radix-tooltip-content-transform-origin) animate-in bg-foreground px-3 py-1.5 text-balance text-background fade-in-0 zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95',
+      default: `pointer-events-none w-fit origin-(--radix-tooltip-content-transform-origin) animate-in px-3 py-1.5 text-balance shadow-[0_12px_28px_rgba(0,0,0,0.22),inset_0_1px_0_rgba(255,255,255,0.14)] fade-in-0 zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 ${FLOATING_SURFACE_CLASSES}`,
       'tab-preview': ['pointer-events-none', TAB_PREVIEW_CLASSES],
       // Why: a preview with its own controls takes the pointer; pair it with hoverable content.
       'tab-preview-interactive': TAB_PREVIEW_CLASSES
@@ -91,7 +95,7 @@ function TooltipContent({
         >
           {children}
           {showArrow ? (
-            <TooltipPrimitive.Arrow className="size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px] bg-foreground fill-foreground" />
+            <TooltipPrimitive.Arrow className="size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px] border border-black/14 bg-[rgba(255,255,255,0.82)] fill-[rgba(255,255,255,0.82)] dark:border-white/14 dark:bg-[rgba(0,0,0,0.72)] dark:fill-[rgba(0,0,0,0.72)]" />
           ) : null}
         </TooltipPrimitive.Content>
       </TooltipPrimitive.Portal>

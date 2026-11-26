@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-poc-web-bots-clear-group-messages"
+description = "Enables the poc_web_bots_clear_group_messages command without any pre-configured scope."
+commands.allow = ["poc_web_bots_clear_group_messages"]
+
+[[permission]]
+identifier = "deny-poc-web-bots-clear-group-messages"
+description = "Denies the poc_web_bots_clear_group_messages command without any pre-configured scope."
+commands.deny = ["poc_web_bots_clear_group_messages"]

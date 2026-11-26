@@ -111,17 +111,19 @@ describe('structured attention mobile delivery', () => {
       vi.setSystemTime(new Date(2026, 9, 29, 9, 0))
       h.delivery.deliver(failedWith(limit), SUMMARY)
       expect(h.sent.map((event) => [event.title, event.body])).toEqual([
-        ['orca / feature - Claude failed', 'Claude hit its weekly limit. It resets at 6:39 PM.'],
+        [
+          'orca / feature - Claude failed',
+          // Why: the reset clock renders in the runner's locale, so only the typed prefix is pinned.
+          expect.stringMatching(/^Claude hit its weekly limit\. It resets at .+\.$/)
+        ],
         [
           'orca / feature - Claude failed',
           "Claude isn't signed in. Run `claude auth login`, or choose an account in Claude Accounts settings."
         ],
         [
           'orca / feature - Claude failed',
-          // ICU builds join the day and time with ", " or " at ".
-          expect.stringMatching(
-            /^Claude hit its weekly limit\. It resets at Wed, Oct 28(,| at) 6:39 PM\.$/
-          )
+          // Why: a reset on another day still names its date, whatever the runner's locale.
+          expect.stringMatching(/^Claude hit its weekly limit\. It resets at .*28.*\.$/)
         ]
       ])
     } finally {

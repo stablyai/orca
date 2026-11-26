@@ -46,7 +46,10 @@ export class BrowserClientPageRetainedRegistry {
   constructor(
     private readonly options: {
       document: Document
-      createWebview?: () => Electron.WebviewTag
+      createWebview?: (identity: {
+        browserPageId: string
+        partition: string
+      }) => Electron.WebviewTag
       maxPages?: number
       maxPagesPerPartition?: number
       attachTimeoutMs?: number

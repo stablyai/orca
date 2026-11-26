@@ -10,6 +10,7 @@ import type * as SystemSshCommand from '../../system-transport/system-ssh-comman
 import type * as SystemSshFileBinaryTransfer from '../../system-transport/file-transfer/system-ssh-file-binary-transfer'
 import type * as SystemSshFileTransfer from '../../system-transport/file-transfer/system-ssh-file-transfer'
 import type * as SshGConfigResolution from '../../config/ssh-g-config-resolution'
+import type * as SshAuthResolution from '../../authentication/ssh-auth-resolution'
 import { resetSsh2ClientState, ssh2Mock } from './ssh-connection-test-client'
 import { resetSshCredentialDeclinesForTests } from '../../authentication/ssh-credential-decline'
 import { resetSshUserDisconnectsForTests } from '../ssh-user-disconnect'
@@ -110,6 +111,16 @@ export function createSshConfigParserModule(): Record<string, never> {
 
 export function withSshGConfigResolutionMocks(actual: typeof SshGConfigResolution) {
   return { ...actual, resolveWithSshG: resolveWithSshGMock }
+}
+
+// SSH_AUTH_SOCK='' still leaves the Windows agent pipe plus real ~/.ssh default
+// keys, which would divert password-ladder tests into key auth.
+export function withNoAmbientAuthMocks(actual: typeof SshAuthResolution) {
+  return {
+    ...actual,
+    resolveAgentSocket: () => undefined,
+    resolvePrivateKeys: () => []
+  }
 }
 
 export function resetSshConnectionMocks(): void {

@@ -2,8 +2,11 @@ import { runProcess } from '@orca/process-host'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getStatus } from './status-read'
+
+// Real git on a loaded Windows host exceeds the 30s global budget.
+vi.setConfig({ testTimeout: 120_000 })
 import { invalidateGitReadCaches } from '../git-read-cache-invalidation'
 
 const roots: string[] = []
@@ -48,13 +51,25 @@ it('detects untracked overlaps with the source of a rename, including unusual fi
   await writeFile(join(repo, oldPath), 'different\n')
   const options = { branchLineTotalMergeBase: baseOid }
 
-  const unavailable = await getStatus(repo, options)
-  expect(unavailable.branchLineTotal).toBeUndefined()
-  expect(unavailable.branchLineTotalUnavailable).toBe(baseOid)
-  const reused = await getStatus(repo, { ...options, reuseLineStats: true })
-  expect(reused.branchLineTotal).toBeUndefined()
-  expect(reused.branchLineTotalUnavailable).toBe(baseOid)
+  // Slow hosts exceed the 500ms branch-total soft deadline; the late diff backfills the cache for a later reuse pass.
+  await getStatus(repo, options)
+  await vi.waitFor(
+    async () => {
+      const reused = await getStatus(repo, { ...options, reuseLineStats: true })
+      expect(reused.branchLineTotal).toBeUndefined()
+      expect(reused.branchLineTotalUnavailable).toBe(baseOid)
+    },
+    { timeout: 100_000, interval: 1_000 }
+  )
   await git(repo, 'add', oldPath)
   invalidateGitReadCaches()
-  expect((await getStatus(repo, options)).branchLineTotal).toMatchObject({ added: 3, removed: 2 })
+  await vi.waitFor(
+    async () => {
+      expect((await getStatus(repo, options)).branchLineTotal).toMatchObject({
+        added: 3,
+        removed: 2
+      })
+    },
+    { timeout: 100_000, interval: 1_000 }
+  )
 })

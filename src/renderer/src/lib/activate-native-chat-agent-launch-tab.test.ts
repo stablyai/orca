@@ -11,15 +11,15 @@ vi.mock('@/store', () => ({
   useAppStore: { getState: mocks.getState }
 }))
 
-vi.mock('./worktree-activation', () => ({
+vi.mock('./workspace/activation/worktree-activation', () => ({
   activateAndRevealWorkspace: mocks.activateAndRevealWorkspace
 }))
 
-vi.mock('./focus-terminal-tab-surface', () => ({
+vi.mock('../components/terminal-pane/input/focus/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: mocks.focusTerminalTabSurface
 }))
 
-vi.mock('@/components/tab-bar/terminal-tab-rename-request', () => ({
+vi.mock('@/components/tab-bar/terminal-tabs/terminal-tab-rename-request', () => ({
   requestTerminalTabRenameWhenMounted: mocks.requestTerminalTabRenameWhenMounted
 }))
 

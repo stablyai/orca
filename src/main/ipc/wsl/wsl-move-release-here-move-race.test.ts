@@ -56,14 +56,14 @@ beforeEach(() => {
   rig = createWslMoveKillRig()
 })
 
-afterEach(() => {
+afterEach(async () => {
   for (const [distro, run] of claimed.splice(0)) {
     releaseWslMoveRun(distro, run)
   }
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
   resetWslMoveDesktopRewriteStoresForTests()
-  removeWslMoveRigDirs()
+  await removeWslMoveRigDirs()
 })
 
 async function movedProject(): Promise<void> {

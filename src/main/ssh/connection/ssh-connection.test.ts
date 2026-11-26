@@ -52,6 +52,15 @@ vi.mock('../config/ssh-g-config-resolution', async (importOriginal) =>
     await importOriginal()
   )
 )
+vi.mock('../authentication/ssh-auth-resolution', async (importOriginal) =>
+  (await import('./testing/ssh-connection-test-harness')).withNoAmbientAuthMocks(
+    await importOriginal()
+  )
+)
+
+// The per-second worker-alive probe issues a sync process.kill that can stall this loop for
+// seconds under Bun on Windows; wait past the stall instead of failing the file.
+const waitForSsh = (assertion: () => unknown) => vi.waitFor(assertion, { timeout: 15_000 })
 
 describe('SshConnection', () => {
   beforeEach(() => {
@@ -177,7 +186,7 @@ describe('SshConnection', () => {
       const conn = new SshConnection(createTarget(), createCallbacks({ onCredentialRequest }))
 
       const connectPromise = conn.connect()
-      await vi.waitFor(() => {
+      await waitForSsh(() => {
         expect(eventHandlers.get('keyboard-interactive')?.size ?? 0).toBeGreaterThan(0)
         expect(clientInstances).toHaveLength(2)
       })
@@ -190,7 +199,7 @@ describe('SshConnection', () => {
         [{ prompt: 'Passcode or option (1-2):', echo: true }],
         finish
       )
-      await vi.waitFor(() => expect(finish).toHaveBeenCalledWith(['1']))
+      await waitForSsh(() => expect(finish).toHaveBeenCalledWith(['1']))
       emitSshEvent('ready')
       await connectPromise
 
@@ -225,7 +234,7 @@ describe('SshConnection', () => {
       const conn = new SshConnection(createTarget(), createCallbacks({ onCredentialRequest }))
 
       const connectPromise = conn.connect()
-      await vi.waitFor(() => {
+      await waitForSsh(() => {
         expect(eventHandlers.get('keyboard-interactive')?.size ?? 0).toBeGreaterThan(0)
         expect(clientInstances).toHaveLength(2)
       })
@@ -238,7 +247,7 @@ describe('SshConnection', () => {
         [{ prompt: 'Password: ', echo: false }],
         finish
       )
-      await vi.waitFor(() => expect(finish).toHaveBeenCalledWith(['password-123']))
+      await waitForSsh(() => expect(finish).toHaveBeenCalledWith(['password-123']))
       emitSshEvent('ready')
       await connectPromise
 
@@ -255,7 +264,7 @@ describe('SshConnection', () => {
       const conn = new SshConnection(createTarget(), createCallbacks({ onCredentialRequest }))
 
       const connectPromise = conn.connect()
-      await vi.waitFor(() =>
+      await waitForSsh(() =>
         expect(eventHandlers.get('keyboard-interactive')?.size ?? 0).toBeGreaterThan(0)
       )
       const finish = vi.fn()
@@ -270,7 +279,7 @@ describe('SshConnection', () => {
         ],
         finish
       )
-      await vi.waitFor(() => expect(finish).toHaveBeenCalledWith(['password-123', '654321']))
+      await waitForSsh(() => expect(finish).toHaveBeenCalledWith(['password-123', '654321']))
       emitSshEvent('ready')
       await connectPromise
 
@@ -294,7 +303,7 @@ describe('SshConnection', () => {
       ssh2Mock.connectSequence = ['silent']
       const privateConn = conn as unknown as { attemptConnect: () => Promise<void> }
       const reconnectPromise = privateConn.attemptConnect()
-      await vi.waitFor(() =>
+      await waitForSsh(() =>
         expect(eventHandlers.get('keyboard-interactive')?.size ?? 0).toBeGreaterThan(0)
       )
       const finish2 = vi.fn()
@@ -306,7 +315,7 @@ describe('SshConnection', () => {
         [{ prompt: 'One-time password:', echo: false }],
         finish2
       )
-      await vi.waitFor(() => expect(finish2).toHaveBeenCalledWith(['654321']))
+      await waitForSsh(() => expect(finish2).toHaveBeenCalledWith(['654321']))
       // OTP-only rounds must always ask; password caching cannot answer them.
       expect(onCredentialRequest).toHaveBeenCalledWith(
         'target-1',
@@ -326,7 +335,7 @@ describe('SshConnection', () => {
       const conn = new SshConnection(createTarget(), createCallbacks({ onCredentialRequest }))
 
       const connectPromise = conn.connect()
-      await vi.waitFor(() =>
+      await waitForSsh(() =>
         expect(eventHandlers.get('keyboard-interactive')?.size ?? 0).toBeGreaterThan(0)
       )
       const finish = vi.fn()
@@ -338,7 +347,7 @@ describe('SshConnection', () => {
         [{ prompt: 'Password: ', echo: false }],
         finish
       )
-      await vi.waitFor(() => expect(finish).toHaveBeenCalledWith(['password-123']))
+      await waitForSsh(() => expect(finish).toHaveBeenCalledWith(['password-123']))
       expect(onCredentialRequest).toHaveBeenCalledTimes(1)
 
       // A fresh password round means the cached value failed; do not replay it to the prompt cap.
@@ -352,7 +361,7 @@ describe('SshConnection', () => {
         [{ prompt: 'Password: ', echo: false }],
         finish2
       )
-      await vi.waitFor(() => expect(finish2).toHaveBeenCalledWith(['password-123']))
+      await waitForSsh(() => expect(finish2).toHaveBeenCalledWith(['password-123']))
       expect(onCredentialRequest).toHaveBeenCalledWith(
         'target-1',
         'password',
@@ -373,7 +382,7 @@ describe('SshConnection', () => {
 
       const connectPromise = conn.connect()
       connectPromise.catch(() => {})
-      await vi.waitFor(() =>
+      await waitForSsh(() =>
         expect(eventHandlers.get('keyboard-interactive')?.size ?? 0).toBeGreaterThan(0)
       )
       const finish = vi.fn()
@@ -385,7 +394,7 @@ describe('SshConnection', () => {
         [{ prompt: 'Duo passcode:', echo: false }],
         finish
       )
-      await vi.waitFor(() => expect(finish).toHaveBeenCalledWith([]))
+      await waitForSsh(() => expect(finish).toHaveBeenCalledWith([]))
 
       await expect(connectPromise).rejects.toThrow('Keyboard-interactive authentication cancelled')
       expect(onCredentialRequest).toHaveBeenCalledTimes(1)
@@ -405,7 +414,7 @@ describe('SshConnection', () => {
       const conn = new SshConnection(createTarget(), createCallbacks({ onCredentialRequest }))
       const connecting = conn.connect()
       connecting.catch(() => {})
-      await vi.waitFor(() => expect(eventHandlers.has('keyboard-interactive')).toBe(true))
+      await waitForSsh(() => expect(eventHandlers.has('keyboard-interactive')).toBe(true))
       const finish = vi.fn()
       emitSshEvent(
         'keyboard-interactive',
@@ -415,10 +424,10 @@ describe('SshConnection', () => {
         [{ prompt: 'Password:', echo: false }],
         finish
       )
-      await vi.waitFor(() => expect(onCredentialRequest).toHaveBeenCalledOnce())
+      await waitForSsh(() => expect(onCredentialRequest).toHaveBeenCalledOnce())
       await conn.disconnect()
       answer('obsolete-password')
-      await vi.waitFor(() => expect(finish).toHaveBeenCalledWith([]))
+      await waitForSsh(() => expect(finish).toHaveBeenCalledWith([]))
       expect(conn.hasCachedCredential()).toBe(false)
       expect(conn.getState().status).toBe('disconnected')
       await expect(connecting).rejects.toThrow()
@@ -430,10 +439,10 @@ describe('SshConnection', () => {
       const conn = new SshConnection(createTarget(), createCallbacks())
       const connecting = conn.connect()
       connecting.catch(() => {})
-      await vi.waitFor(() => expect(eventHandlers.has('keyboard-interactive')).toBe(true))
+      await waitForSsh(() => expect(eventHandlers.has('keyboard-interactive')).toBe(true))
       const finish = vi.fn()
       emitSshEvent('keyboard-interactive', '', '', '', [{ prompt: 'Code:', echo: false }], finish)
-      await vi.waitFor(() => expect(finish).toHaveBeenCalledWith([]))
+      await waitForSsh(() => expect(finish).toHaveBeenCalledWith([]))
       emitSshEvent('error', new Error('All configured authentication methods failed'))
       await expect(connecting).rejects.toThrow('All configured authentication methods failed')
       conn.disconnect()
@@ -450,7 +459,7 @@ describe('SshConnection', () => {
 
       const connectPromise = conn.connect()
       connectPromise.catch(() => {})
-      await vi.waitFor(() =>
+      await waitForSsh(() =>
         expect(eventHandlers.get('keyboard-interactive')?.size ?? 0).toBeGreaterThan(0)
       )
       const finish = vi.fn()
@@ -462,7 +471,7 @@ describe('SshConnection', () => {
         [{ prompt: 'Verification code:', echo: false }],
         finish
       )
-      await vi.waitFor(() => expect(finish).toHaveBeenCalledWith(['000000']))
+      await waitForSsh(() => expect(finish).toHaveBeenCalledWith(['000000']))
       // Reject an answered OTP through auth failure, distinct from explicit prompt cancellation.
       emitSshEvent('error', new Error('All configured authentication methods failed'))
 

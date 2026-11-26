@@ -55,12 +55,16 @@ describe('grantClaudeFolderTrust', () => {
     })
   })
 
-  it('keeps an owner-only mode through the rewrite', async () => {
-    const file = join(root, '.claude.json')
-    writeConfig(file, {}, 0o600)
-    await grantClaudeFolderTrust({ configFile: file, folderKeys: ['/wt'] })
-    expect(statSync(file).mode & 0o777).toBe(0o600)
-  })
+  // Windows files report 0o666 no matter the chmod, so mode preservation is POSIX-only.
+  it.skipIf(process.platform === 'win32')(
+    'keeps an owner-only mode through the rewrite',
+    async () => {
+      const file = join(root, '.claude.json')
+      writeConfig(file, {}, 0o600)
+      await grantClaudeFolderTrust({ configFile: file, folderKeys: ['/wt'] })
+      expect(statSync(file).mode & 0o777).toBe(0o600)
+    }
+  )
 
   it('leaves a corrupt file byte-for-byte untouched', async () => {
     const file = join(root, '.claude.json')

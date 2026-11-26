@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import '../../../../shared/agent-status/identity/agent-kind'
 import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
@@ -60,6 +60,14 @@ const settings = {
 }
 
 describe('buildWorktreeStartupForAgent prompt carry', () => {
+  // The fixture fabricates a Linux launch runtime; pin the host so carry reads it everywhere.
+  const hostPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
+  beforeEach(() => {
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+  })
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', hostPlatform)
+  })
   const build = (onPromptCarry?: (carried: boolean) => void, terminalDefaultShell = '/bin/bash') =>
     buildWorktreeStartupForAgent({
       repo: makeRepo({}),

@@ -101,6 +101,10 @@ class ControlledCheckpoint extends EventEmitter {
   }
   postMessage(message: { type: string; id?: number; generation?: number }) {
     this.sent.push(message)
+    if (message.type === 'close') {
+      // A real worker closes its connection and exits on its own after a close message.
+      queueMicrotask(() => this.emit('exit', 0))
+    }
   }
   terminate(): Promise<number> {
     return new Promise((resolve) => {
@@ -111,7 +115,7 @@ class ControlledCheckpoint extends EventEmitter {
     })
   }
   exited() {
-    this.finish!()
+    this.finish?.()
   }
 }
 

@@ -26,7 +26,8 @@ vi.mock('../../trust/hooks/codex-hook-trust-derivation', async (importOriginal) 
 vi.mock('../../trust/identity/codex-trust-identity', async (importOriginal) => ({
   ...(await importOriginal<typeof ConfigTomlTrust>()),
   getExplicitHomeCodexHookSourcePath: (hooksJsonPath: string) =>
-    `C:${hooksJsonPath.replace(/\//g, '\\')}`
+    // Strip a real drive root so the asserted C: fixture stays well-formed when tmpdir is not on C:.
+    `C:${hooksJsonPath.replace(/\//g, '\\').replace(/^[A-Za-z]:/, '')}`
 }))
 
 import './hook-service'
@@ -62,7 +63,9 @@ describe('a managed home on Windows', () => {
     expect(readFileSync(tomlPath, 'utf-8').match(/^\[hooks\.state\.'C:\\[^\n]*$/gm)).toEqual(
       backslashTables
     )
-    const source = `C:${join(home, 'hooks.json').replace(/\//g, '\\')}`
+    const source = `C:${join(home, 'hooks.json')
+      .replace(/\//g, '\\')
+      .replace(/^[A-Za-z]:/, '')}`
     const canonical = `[hooks.state.'${source}:permission_request:0:0']`
     const legacy = `[hooks.state."${source.replace(/\\/g, '/')}:permission_request:0:0"]`
     const restored = readFileSync(tomlPath, 'utf-8')

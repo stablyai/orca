@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { readTauriPtyCwd } from './web-tauri-pty-cwd'
 
 const { callEnvironmentEnvelope } = vi.hoisted(() => ({ callEnvironmentEnvelope: vi.fn() }))
-vi.mock('./web-runtime-calls', () => ({ callEnvironmentEnvelope }))
+vi.mock('../runtime/client/web-runtime-calls', () => ({ callEnvironmentEnvelope }))
 
 function binding(incarnationId: string | null = 'inc-1') {
   return { handle: 'term-1', cwd: '/repo', endpoint: { handle: 'term-1', incarnationId } }

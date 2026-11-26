@@ -1,11 +1,12 @@
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, realpath, rename } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath } from 'node:fs/promises'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { cloneMacTree } from '../../../filesystem/macos-tree-clone'
 import { rm } from '../../../filesystem/asar-transparent-fs'
 import { ensurePrivateDir } from '../../endpoint/publication/daemon-private-file-modes'
 import { inspectMacProcessCodeIdentity } from './daemon-mac-code-identity'
+import { renameFileWithWindowsRetryAsync } from '../../../../shared/file-write/windows-retry-file-operations'
 
 /** Plain Node helper packaged by config/scripts/macos/terminal-host-bundle/macos-terminal-host-bundle.cjs. */
 export const MAC_TERMINAL_HOST_BUNDLE = 'Orca Agents.app'
@@ -114,7 +115,8 @@ export async function materializeMacDaemonBundle(
     if (verified.code !== 0 || verified.timedOut) {
       throw new Error("The macOS terminal host copy does not satisfy the app's signature")
     }
-    await rename(staging, copy.directory).catch((error: unknown) => {
+    // Why Windows AV/indexer handles transiently lock fresh staging trees, surfacing as EPERM.
+    await renameFileWithWindowsRetryAsync(staging, copy.directory).catch((error: unknown) => {
       // A competing publisher verified the same helper before publishing.
       if (!existsSync(copy.directory)) {
         throw error

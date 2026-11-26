@@ -56,45 +56,49 @@ function expectPromptRetryBlockedJson(error: unknown, requestId: string): void {
   expect(output.error.data).not.toHaveProperty('orchestrationRequestId')
 }
 
-describe('RuntimeClient orchestration recovery identity', () => {
-  it('blocks retry when a downgraded runtime loses the prompt reply', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-lost-prompt-reply-'))
-    const endpoint = join(userDataPath, 'runtime.sock')
-    let receivedRequest: Record<string, unknown> | undefined
-    const server = createServer((socket) => {
-      socket.once('data', (data) => {
-        const request = JSON.parse(String(data).trim()) as Record<string, unknown>
-        receivedRequest = request
-        socket.destroy()
+// Temp-path Unix sockets fail with EACCES on Windows.
+describe.skipIf(process.platform === 'win32')(
+  'RuntimeClient orchestration recovery identity',
+  () => {
+    it('blocks retry when a downgraded runtime loses the prompt reply', async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-lost-prompt-reply-'))
+      const endpoint = join(userDataPath, 'runtime.sock')
+      let receivedRequest: Record<string, unknown> | undefined
+      const server = createServer((socket) => {
+        socket.once('data', (data) => {
+          const request = JSON.parse(String(data).trim()) as Record<string, unknown>
+          receivedRequest = request
+          socket.destroy()
+        })
       })
+      servers.add(server)
+      await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+      writeRuntimeConnection(userDataPath, endpoint, 'runtime-after-downgrade')
+
+      const client = new RuntimeClient(userDataPath, 500, null, null, 'orca')
+      const error = await client
+        .call(
+          'terminal.send',
+          {
+            terminal: 'term-downgraded',
+            text: 'review',
+            enter: true,
+            interrupt: false,
+            agentPrompt: true,
+            client: { id: 'orca-cli', type: 'desktop' }
+          },
+          {
+            terminalPromptPreflight: { runtimeId: 'runtime-before-downgrade' },
+            orchestrationRequestId: 'prompt-downgraded-lost-reply'
+          }
+        )
+        .then(() => undefined)
+        .catch((caught: unknown) => caught)
+
+      expect(receivedRequest?.orchestrationRequestId).toBe('prompt-downgraded-lost-reply')
+      expect(error).toBeInstanceOf(RuntimeClientError)
+      expect(error).not.toBeInstanceOf(RuntimeRpcFailureError)
+      expectPromptRetryBlockedJson(error, 'prompt-downgraded-lost-reply')
     })
-    servers.add(server)
-    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
-    writeRuntimeConnection(userDataPath, endpoint, 'runtime-after-downgrade')
-
-    const client = new RuntimeClient(userDataPath, 500, null, null, 'orca')
-    const error = await client
-      .call(
-        'terminal.send',
-        {
-          terminal: 'term-downgraded',
-          text: 'review',
-          enter: true,
-          interrupt: false,
-          agentPrompt: true,
-          client: { id: 'orca-cli', type: 'desktop' }
-        },
-        {
-          terminalPromptPreflight: { runtimeId: 'runtime-before-downgrade' },
-          orchestrationRequestId: 'prompt-downgraded-lost-reply'
-        }
-      )
-      .then(() => undefined)
-      .catch((caught: unknown) => caught)
-
-    expect(receivedRequest?.orchestrationRequestId).toBe('prompt-downgraded-lost-reply')
-    expect(error).toBeInstanceOf(RuntimeClientError)
-    expect(error).not.toBeInstanceOf(RuntimeRpcFailureError)
-    expectPromptRetryBlockedJson(error, 'prompt-downgraded-lost-reply')
-  })
-})
+  }
+)

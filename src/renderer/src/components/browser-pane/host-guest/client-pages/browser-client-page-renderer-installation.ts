@@ -5,6 +5,7 @@ import type {
 import { BrowserClientPageRetainedRegistry } from './browser-client-page-retained-registry'
 import type { BrowserClientPageRendererMemoryProfile } from './browser-client-page-retained-memory-profile'
 import type { BrowserClientPageVisibleAttachment } from './browser-client-page-visible-attachment'
+import { createTauriNativeBrowserWebview, isTauriNativeHost } from '@/web/tauri-native-bridge'
 
 type RendererPageRegistry = {
   attachPage?(
@@ -48,9 +49,11 @@ export function installBrowserClientPageRenderer(
     subscribe?: RendererRequestSubscriber
   } = {}
 ): BrowserClientPageRendererInstallation | null {
+  // The web entry has no native factory, unless a Tauri native host bridges it.
   if (
     typeof window !== 'undefined' &&
-    (window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ === true
+    (window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ === true &&
+    !isTauriNativeHost()
   ) {
     return null
   }
@@ -64,7 +67,19 @@ export function installBrowserClientPageRenderer(
   }
   const registry =
     options.registry ??
-    new BrowserClientPageRetainedRegistry({ document: options.document ?? document })
+    new BrowserClientPageRetainedRegistry({
+      document: options.document ?? document,
+      // Tauri webviews carry their own guest id, so the default Electron tag cannot attach them.
+      createWebview: isTauriNativeHost()
+        ? (identity) =>
+            createTauriNativeBrowserWebview({
+              browserPageId: identity.browserPageId,
+              partition: identity.partition,
+              visible: false,
+              appendToContainer: false
+            })
+        : undefined
+    })
   const unsubscribe = subscribe((request) => handleRequest(registry, request))
   activeRendererPageRegistry = registry
   let disposed = false

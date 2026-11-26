@@ -19,6 +19,15 @@ import {
 const INHERITED_ACE = 0x10
 import { removeTreeSync } from '../file-write/windows-transient-lock-removal'
 
+// The metadata oracle needs a real interpreter; the Store stub exits nonzero.
+function hasUsablePython(): boolean {
+  try {
+    return runProcessSync({ program: 'python', args: ['--version'], timeoutMs: 15_000 }).code === 0
+  } catch {
+    return false
+  }
+}
+
 /** Verify Orca’s native addon against real NTFS DACLs; upstream tests cannot establish our secure-file assumptions. */
 const describeOnWindows = process.platform === 'win32' ? describe : describe.skip
 
@@ -80,92 +89,96 @@ describeOnWindows('native windows-security addon against a real filesystem', () 
   })
 
   // Covers two cold Python starts, each allowed 30s on a fresh hosted Windows runner.
-  it('preserves disposable-item metadata, counted UTF-8/subarrays, and the native cap', () => {
-    const target = `orca-sta11846-test:${randomUUID()}`
-    expect(target).not.toBe('gemini:antigravity')
-    expect(addon.readGenericCredential(target), 'initial disposable-target absence').toBeNull()
-    const fixture = readFileSync(
-      new URL('./windows-generic-credential.test-fixture.py', import.meta.url),
-      'utf8'
-    )
-    const diagnostics: string[] = []
-    const failures: Error[] = []
-    const processDetails = (phase: string, result: ReturnType<typeof runProcessSync>) => {
-      const details = JSON.stringify({
-        phase,
-        code: result.code,
-        signal: result.signal,
-        timedOut: result.timedOut,
-        stdout: result.stdout.slice(0, 2048),
-        stderr: result.stderr.slice(0, 2048)
-      })
-      diagnostics.push(details)
-      return details
-    }
-    const metadata = (phase: string) => {
-      const result = runProcessSync({
-        program: 'python',
-        args: ['-c', fixture, phase, target],
-        // A cold Python start on a fresh hosted Windows runner can exceed 5s.
-        timeoutMs: 30_000
-      })
-      expect(result.code, processDetails(phase, result)).toBe(0)
-    }
-    let phase = 'seed'
-    try {
-      metadata('seed')
-      const bytes = Buffer.from('{"access_token":"fixture-only-テスト"}')
-      const backing = Buffer.concat([Buffer.from('prefix'), bytes, Buffer.from('suffix')])
-      phase = 'native counted UTF-8/subarray'
-      addon.writeGenericCredential(target, 'antigravity', backing.subarray(6, 6 + bytes.length))
-      expect(addon.readGenericCredential(target)).toEqual(bytes)
-      phase = 'native replacement'
-      addon.writeGenericCredential(target, 'antigravity', Buffer.from('replacement-fixture'))
-      expect(new TextDecoder().decode(addon.readGenericCredential(target) ?? undefined)).toBe(
-        'replacement-fixture'
+  it.skipIf(!hasUsablePython())(
+    'preserves disposable-item metadata, counted UTF-8/subarrays, and the native cap',
+    () => {
+      const target = `orca-sta11846-test:${randomUUID()}`
+      expect(target).not.toBe('gemini:antigravity')
+      expect(addon.readGenericCredential(target), 'initial disposable-target absence').toBeNull()
+      const fixture = readFileSync(
+        new URL('./windows-generic-credential.test-fixture.py', import.meta.url),
+        'utf8'
       )
-      phase = 'verify'
-      metadata('verify')
-      phase = 'native over-cap rejection and unchanged bytes'
-      expect(() =>
-        addon.writeGenericCredential(target, 'antigravity', Buffer.alloc(2561))
-      ).toThrow()
-      expect(new TextDecoder().decode(addon.readGenericCredential(target) ?? undefined)).toBe(
-        'replacement-fixture'
-      )
-      phase = 'native exact-cap write/readback'
-      addon.writeGenericCredential(target, 'antigravity', Buffer.alloc(2560, 65))
-      expect(addon.readGenericCredential(target)).toEqual(Buffer.alloc(2560, 65))
-    } catch (error) {
-      failures.push(new Error(`Disposable credential ${phase} failed`, { cause: error }))
-    } finally {
-      try {
-        const result = runProcessSync({
-          program: 'cmdkey.exe',
-          args: [`/delete:${target}`],
-          timeoutMs: 5000
+      const diagnostics: string[] = []
+      const failures: Error[] = []
+      const processDetails = (phase: string, result: ReturnType<typeof runProcessSync>) => {
+        const details = JSON.stringify({
+          phase,
+          code: result.code,
+          signal: result.signal,
+          timedOut: result.timedOut,
+          stdout: result.stdout.slice(0, 2048),
+          stderr: result.stderr.slice(0, 2048)
         })
-        expect(result.code, processDetails('delete', result)).toBe(0)
-      } catch (error) {
-        failures.push(new Error('Disposable credential deletion failed', { cause: error }))
+        diagnostics.push(details)
+        return details
       }
+      const metadata = (phase: string) => {
+        const result = runProcessSync({
+          program: 'python',
+          args: ['-c', fixture, phase, target],
+          // A cold Python start on a fresh hosted Windows runner can exceed 5s.
+          timeoutMs: 30_000
+        })
+        expect(result.code, processDetails(phase, result)).toBe(0)
+      }
+      let phase = 'seed'
       try {
-        expect(addon.readGenericCredential(target)).toBeNull()
-        diagnostics.push('cleanup disposable-target absence confirmed')
+        metadata('seed')
+        const bytes = Buffer.from('{"access_token":"fixture-only-テスト"}')
+        const backing = Buffer.concat([Buffer.from('prefix'), bytes, Buffer.from('suffix')])
+        phase = 'native counted UTF-8/subarray'
+        addon.writeGenericCredential(target, 'antigravity', backing.subarray(6, 6 + bytes.length))
+        expect(addon.readGenericCredential(target)).toEqual(bytes)
+        phase = 'native replacement'
+        addon.writeGenericCredential(target, 'antigravity', Buffer.from('replacement-fixture'))
+        expect(new TextDecoder().decode(addon.readGenericCredential(target) ?? undefined)).toBe(
+          'replacement-fixture'
+        )
+        phase = 'verify'
+        metadata('verify')
+        phase = 'native over-cap rejection and unchanged bytes'
+        expect(() =>
+          addon.writeGenericCredential(target, 'antigravity', Buffer.alloc(2561))
+        ).toThrow()
+        expect(new TextDecoder().decode(addon.readGenericCredential(target) ?? undefined)).toBe(
+          'replacement-fixture'
+        )
+        phase = 'native exact-cap write/readback'
+        addon.writeGenericCredential(target, 'antigravity', Buffer.alloc(2560, 65))
+        expect(addon.readGenericCredential(target)).toEqual(Buffer.alloc(2560, 65))
       } catch (error) {
-        failures.push(new Error('Disposable credential cleanup absence failed', { cause: error }))
+        failures.push(new Error(`Disposable credential ${phase} failed`, { cause: error }))
+      } finally {
+        try {
+          const result = runProcessSync({
+            program: 'cmdkey.exe',
+            args: [`/delete:${target}`],
+            timeoutMs: 5000
+          })
+          expect(result.code, processDetails('delete', result)).toBe(0)
+        } catch (error) {
+          failures.push(new Error('Disposable credential deletion failed', { cause: error }))
+        }
+        try {
+          expect(addon.readGenericCredential(target)).toBeNull()
+          diagnostics.push('cleanup disposable-target absence confirmed')
+        } catch (error) {
+          failures.push(new Error('Disposable credential cleanup absence failed', { cause: error }))
+        }
       }
-    }
-    if (failures.length) {
-      const errors = failures.map(
-        (cause) =>
-          new Error(`Disposable credential diagnostics:\n${diagnostics.join('\n')}`, { cause })
-      )
-      throw errors.length === 1
-        ? errors[0]
-        : new AggregateError(errors, 'Disposable credential body/cleanup failures')
-    }
-  }, 90_000)
+      if (failures.length) {
+        const errors = failures.map(
+          (cause) =>
+            new Error(`Disposable credential diagnostics:\n${diagnostics.join('\n')}`, { cause })
+        )
+        throw errors.length === 1
+          ? errors[0]
+          : new AggregateError(errors, 'Disposable credential body/cleanup failures')
+      }
+    },
+    90_000
+  )
 
   it('marks a native read failure with its syscall origin', () => {
     const invalidTarget = `orca-sta11846-invalid:${'x'.repeat(32768)}`

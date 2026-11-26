@@ -175,10 +175,12 @@ describe('tauri native shell open ownership', () => {
   it('openFileUri stays silent on remote hosts, missing files and bad uris', async () => {
     existing.add('C:\\dl\\a.txt')
     const shell = requireShell()
-    await shell.openFileUri('file://remote-host/C:/dl/a.txt', 'local')
-    await shell.openFileUri('file:///C:/missing/a.txt', 'local')
-    await expect(shell.openFileUri('ftp://example.com/a.txt', 'local')).resolves.toBeUndefined()
-    await expect(shell.openFileUri('::not-a-uri::', 'local')).resolves.toBeUndefined()
+    await expect(shell.openFileUri('file://remote-host/C:/dl/a.txt', 'local')).resolves.toBe(
+      'failed'
+    )
+    await expect(shell.openFileUri('file:///C:/missing/a.txt', 'local')).resolves.toBe('failed')
+    await expect(shell.openFileUri('ftp://example.com/a.txt', 'local')).resolves.toBe('failed')
+    await expect(shell.openFileUri('::not-a-uri::', 'local')).resolves.toBe('failed')
     expect(native.plugin).not.toHaveBeenCalled()
   })
 

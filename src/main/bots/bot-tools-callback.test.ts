@@ -1,5 +1,5 @@
 import { createServer } from 'node:http'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { expect, it, onTestFinished, vi } from 'vitest'
@@ -12,6 +12,7 @@ import {
 import { writeBotToolServers, readBotToolServers } from './bot-tools-file'
 import type { BotToolsCli } from './bot-tools-host'
 import { removeBotTool } from './bot-tools-removal'
+import { removeTree } from '../../shared/file-write/windows-transient-lock-removal'
 import { useBotToolCredentialsRoot } from './bot-tool-credentials'
 
 // Native sign-in polls every two seconds and tears down a CLI child.
@@ -51,8 +52,9 @@ it('keeps native Connect, callback paste-back and Remove for a tool that signs i
       finishBotToolSignIn(cli, 'docs', 'https://other.example/callback?code=synthetic')
     ).rejects.toThrow("isn't the address")
     await finishBotToolSignIn(cli, 'docs', `${redirect}?code=synthetic`)
+    // Why the native sign-in poll plus a loaded-host CLI spawn outlasts a 5s wait.
     await vi.waitFor(() => expect(botToolSignInStatus(cli.botId, 'docs')).toBe('done'), {
-      timeout: 5000
+      timeout: 60_000
     })
     await removeBotTool(cli, 'docs')
     expect(await readBotToolServers(root)).toEqual([])
@@ -60,6 +62,7 @@ it('keeps native Connect, callback paste-back and Remove for a tool that signs i
     forgetBotToolSignIns(cli.botId)
     callback.closeAllConnections()
     await new Promise<void>((resolve) => callback.close(() => resolve()))
-    await rm(root, { recursive: true, force: true })
+    await removeTree(root)
   }
-}, 10_000)
+  // Why the 10s budget cannot cover loaded-host CLI spawns plus 2s poll cycles.
+}, 120_000)

@@ -5,20 +5,24 @@ import path from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { readGitReviewBranchSources } from '../../../../shared/git/remotes/git-review-branch-source'
 
+// Git for Windows mangles \\.\NUL into an unreadable path; NUL is its null config.
+const nullConfig = process.platform === 'win32' ? 'NUL' : devNull
+
 vi.mock('./tracked-upstream-branch', () => ({
   getTrackedUpstreamBranch: async () => null,
   getReviewBranchSource: async (repoPath: string, branch: string) => {
     const { readGitReviewBranchSources } =
       await import('../../../../shared/git/remotes/git-review-branch-source')
     const { runProcess } = await import('@orca/process-host')
-    const { devNull } = await import('node:os')
+    const { devNull, platform } = await import('node:os')
+    const config = platform() === 'win32' ? 'NUL' : devNull
     const sources = await readGitReviewBranchSources(
       async (args) => {
         const result = await runProcess({
           program: 'git',
           args,
           cwd: repoPath,
-          env: { ...process.env, GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_NOSYSTEM: '1' }
+          env: { ...process.env, GIT_CONFIG_GLOBAL: config, GIT_CONFIG_NOSYSTEM: '1' }
         })
         if (result.code !== 0) {
           throw new Error(result.stderr)
@@ -221,7 +225,7 @@ it.for(cases)(
         program: 'git',
         args,
         cwd,
-        env: { ...process.env, GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_NOSYSTEM: '1' }
+        env: { ...process.env, GIT_CONFIG_GLOBAL: nullConfig, GIT_CONFIG_NOSYSTEM: '1' }
       })
     const git = async (args: string[]) => {
       const result = await run(repo, args)

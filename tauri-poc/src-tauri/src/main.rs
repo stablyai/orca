@@ -71,6 +71,7 @@ mod workflow_command;
 // mod system_tray;
 // mod terminal_desync;
 // mod updater;
+mod web_bots;
 mod window_state;
 // mod windows_admin;
 // mod workspace_space;
@@ -1260,6 +1261,40 @@ fn main() {
             code_lsp::poc_lsp_apply_workspace_edit,
             code_lsp::poc_lsp_server_statuses,
             code_lsp::poc_lsp_install_server,
+            web_bots::poc_web_bots_get_state,
+            web_bots::poc_web_bots_select_provider,
+            web_bots::poc_web_bots_add_custom_provider,
+            web_bots::poc_web_bots_remove_custom_provider,
+            web_bots::poc_web_bots_add_account,
+            web_bots::poc_web_bots_update_account,
+            web_bots::poc_web_bots_remove_account,
+            web_bots::poc_web_bots_reorder_accounts,
+            web_bots::poc_web_bots_switch_account,
+            web_bots::poc_web_bots_reload_account,
+            web_bots::poc_web_bots_clear_account_data,
+            web_bots::poc_web_bots_set_viewport,
+            web_bots::poc_web_bots_import_cookies,
+            web_bots::poc_web_bots_export_cookies,
+            web_bots::poc_web_bots_test_proxy,
+            web_bots::poc_web_bots_update_settings,
+            web_bots::poc_web_bots_upsert_external_agent,
+            web_bots::poc_web_bots_delete_external_agent,
+            web_bots::poc_web_bots_get_site_adapters,
+            web_bots::poc_web_bots_save_site_adapter_overrides,
+            web_bots::poc_web_bots_reset_site_adapter_overrides,
+            web_bots::poc_web_bots_create_group,
+            web_bots::poc_web_bots_update_group,
+            web_bots::poc_web_bots_delete_group,
+            web_bots::poc_web_bots_send_group_message,
+            web_bots::poc_web_bots_clear_group_messages,
+            web_bots::poc_web_bots_new_group_topic,
+            web_bots::poc_web_bots_retry_group_message,
+            web_bots::poc_web_bots_sync_account,
+            web_bots::poc_web_bots_sync_all,
+            web_bots::poc_web_bots_navigate,
+            web_bots::poc_web_bots_append_group_context,
+            web_bots::poc_web_bots_export_sync_bundle,
+            web_bots::poc_web_bots_import_sync_bundle,
             // Updater and Workspace Space window removed.
             // updater::poc_updater_get_version,
             // updater::poc_updater_get_status,
@@ -1300,6 +1335,9 @@ fn main() {
             }
             app.manage(debug_dap::DebugDapState::new(app.handle().clone()));
             app.manage(code_lsp::CodeLspState::new(app.handle().clone()));
+            let web_bots_state = web_bots::WebBotsState::new(app.handle());
+            app.manage(web_bots_state.clone());
+            web_bots::start_background_sync_loop(app.handle().clone(), web_bots_state);
             let resource_root = app.path().resource_dir().ok();
             app.manage(Arc::new(OrcadRuntime::new(resource_root)));
 

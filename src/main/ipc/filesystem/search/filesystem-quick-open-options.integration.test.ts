@@ -1,8 +1,11 @@
 import { mkdtemp, mkdir, writeFile, symlink, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import type { Store } from '../../../persistence/loading-store/store'
+
+// Real processes on a loaded Windows host exceed the 30s global budget.
+vi.setConfig({ testTimeout: 120_000 })
 import { listQuickOpenFiles } from './filesystem-list-files'
 import { searchQuickOpenFilePaths } from './filesystem-search-file-paths'
 
@@ -88,4 +91,5 @@ it('honors inherited ignores, opt-in links, cycles, and retargets in real proces
   )
   expect(reopened).toContain('linked/api/.env')
   expect(reopened).not.toContain('linked/fresh.md')
-}, 30_000)
+  // The file-level 120s budget governs: this fan-out exceeds the default 30s per-test budget under load.
+}, 120_000)

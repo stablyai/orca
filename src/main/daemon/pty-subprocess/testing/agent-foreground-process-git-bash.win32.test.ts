@@ -53,6 +53,8 @@ async function proveIdlePromptCycle(
     })
 
     // Interrupt only after the child is ready, not during a transient shell fork.
+    // Why: ConPTY can leak its DA1 handshake reply (61;4c) onto the fresh prompt; clear the line first.
+    proc.write('\x15')
     proc.write(
       "node -e \"console.log(['ORCA','FOREGROUND_READY'].join('_')); setInterval(() => {}, 1000)\"\r"
     )

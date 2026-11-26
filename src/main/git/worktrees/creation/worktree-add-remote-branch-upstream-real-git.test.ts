@@ -1,7 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { addWorktree } from './worktree-add'
 import { getBranchConflictKind } from '../../refs/resolution/repo-branch-conflict'
@@ -9,7 +9,14 @@ import './worktree-create-preparation'
 import { _resetPreparationPoolForTests } from '../../../workspaces/creation/preparation/worktree-create-preparation-pool'
 
 const roots: string[] = []
+beforeEach(() => {
+  // Clone/fetch are network-classed, so each first probes core.sshCommand with a
+  // 2.5s budget that flakes under parallel-test spawn load. Local-path remotes
+  // never invoke SSH, so short-circuiting that probe is behavior-preserving here.
+  vi.stubEnv('GIT_SSH_COMMAND', 'ssh')
+})
 afterEach(async () => {
+  vi.unstubAllEnvs()
   await _resetPreparationPoolForTests()
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
@@ -65,6 +72,7 @@ async function cloneWithRemoteOnlyBranch(): Promise<{ root: string; repo: string
   return { root, repo }
 }
 
+// Cold node:child_process spawns inside a Bun worker thread cost seconds each; real-git clone/fetch tests pay for all of them.
 it('tracks the remote branch it was created from, and nothing else', async () => {
   const { root, repo } = await cloneWithRemoteOnlyBranch()
 
@@ -83,4 +91,4 @@ it('tracks the remote branch it was created from, and nothing else', async () =>
   const otherPath = join(root, 'other')
   await addWorktree(repo, otherPath, 'feature/new', 'origin/main')
   expect(await upstreamOf(otherPath, 'feature/new')).toBeNull()
-})
+}, 90_000)

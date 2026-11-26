@@ -10,7 +10,7 @@ const { subscribe, callRuntimeResult } = vi.hoisted(() => ({
 vi.mock('../../runtime/rpc/environment-revisions/runtime-environment-pairing-refresh', () => ({
   subscribeRuntimeEnvironment: subscribe
 }))
-vi.mock('./web-runtime-calls', () => ({ callRuntimeResult }))
+vi.mock('../runtime/client/web-runtime-calls', () => ({ callRuntimeResult }))
 
 function deliver(result: unknown): void {
   const callbacks = subscribe.mock.calls[0]?.[1]

@@ -8,7 +8,7 @@ import '../../../git/worktrees/catalog/worktree-listing'
 import '../../../workspaces/removal/local-worktree-filesystem'
 
 import { removeWorktree } from '../../../git/worktrees/removal/worktree-removal'
-import '../../orca-runtime-test-mocks/setup.spec'
+import { setPlatform } from '../../orca-runtime-test-mocks/setup.spec'
 import { tmpdir } from 'node:os'
 import {
   TEST_REPO_ID,
@@ -90,6 +90,8 @@ describe('runtime Delete on a failed delete’s leftover', () => {
   })
 
   it('keeps the failure after manual folder removal until explicit retry finishes cleanup', async () => {
+    // Why: this pins the Linux retry path; Windows re-runs native removal instead.
+    setPlatform('linux')
     const runtime = createWorktreeRemovalRuntime()
     await rm(leftover, { recursive: true, force: true })
 

@@ -1,7 +1,7 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { resolveConfig } from 'electron-vite'
 import { build } from 'vite'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -38,6 +38,20 @@ beforeAll(async () => {
     }
   })
   await stagePackagedProcessHost(outputDir)
+  if (process.platform === 'win32') {
+    // The packaged desktop ships @orca/windows-security beside the bundle; copy
+    // the loadable files (never a symlink: the loader refuses packages outside the app).
+    const securityDir = dirname(require.resolve('@orca/windows-security/package.json'))
+    const stagedSecurityDir = join(outputDir, 'node_modules', '@orca', 'windows-security')
+    mkdirSync(join(stagedSecurityDir, 'build', 'Release'), { recursive: true })
+    for (const file of [
+      'package.json',
+      'index.js',
+      join('build', 'Release', 'orca_windows_security.node')
+    ]) {
+      copyFileSync(join(securityDir, file), join(stagedSecurityDir, file))
+    }
+  }
   mkdirSync(join(outputDir, 'source', 'devin'), { recursive: true })
   writeFileSync(
     join(outputDir, 'source', 'devin', 'credentials.toml'),

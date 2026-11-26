@@ -15,6 +15,9 @@ import {
 // Across downgrade, preserve keyed rows inertly and keep token auth; refuse unsupported key auth with bad_auth so clients retain their keys.
 const SUITE_TIMEOUT_MS = 180_000
 
+// Why each registry save spawns PowerShell synchronously on Windows, blowing the 30s budget on a loaded gate host.
+vi.setConfig({ testTimeout: 120_000 })
+
 type RegistryLike = {
   validateToken(token: string): { deviceId: string } | null
   updateLastSeen(deviceId: string): void

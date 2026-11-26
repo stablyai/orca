@@ -1,6 +1,7 @@
-import { mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { once } from 'node:events'
 import { build } from 'esbuild'
 import { spawnProcess } from '@orca/process-host'
@@ -52,7 +53,19 @@ let pidFiles = 0
 
 beforeAll(async () => {
   if (process.platform === 'win32') {
-    symlinkSync(join(process.cwd(), 'node_modules'), join(root, 'node_modules'), 'junction')
+    // pnpm links workspace packages with relative targets, so a whole-node_modules
+    // junction resolves them against the temp dir; link the bundled supervisor's
+    // externals to their absolute paths instead. The entry sits one level below
+    // its package root in both dist/ and src/ layouts.
+    const hostPackage = dirname(
+      dirname(createRequire(import.meta.url).resolve('@orca/process-host'))
+    )
+    const nodePtyPackage = dirname(createRequire(import.meta.url).resolve('node-pty/package.json'))
+    mkdirSync(join(root, 'node_modules', '@orca'), { recursive: true })
+    symlinkSync(hostPackage, join(root, 'node_modules', '@orca', 'process-host'), 'junction')
+    // The bundled supervisor requires node-pty at runtime for its strict job
+    // ownership check; link it absolutely for the same pnpm reason.
+    symlinkSync(nodePtyPackage, join(root, 'node_modules', 'node-pty'), 'junction')
     await build({
       entryPoints: [
         join(

@@ -2,8 +2,11 @@ import { execFileSync } from 'node:child_process'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { bulkStageFiles, bulkUnstageFiles, stageFile, unstageFile } from './staging'
+
+// Real git on a loaded Windows host exceeds the 30s global budget.
+vi.setConfig({ testTimeout: 120_000 })
 
 const tempRoots: string[] = []
 const globNamedFile = '[k]eep.log'

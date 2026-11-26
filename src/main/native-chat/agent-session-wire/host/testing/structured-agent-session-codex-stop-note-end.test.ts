@@ -15,6 +15,7 @@ import {
   fakeCodex
 } from '../../../../codex/structured/session-lifecycle/codex-structured-session-adapter-fixture'
 import {
+  closeTestAgentSessionDatabase,
   openTestAgentSessionRecordStore,
   openTestAgentSessionDatabase
 } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
@@ -74,7 +75,9 @@ beforeEach(async () => {
 afterEach(async () => {
   await adapter.closeAll()
   await host.flushAllStreamedEvents()
-  await rm(root, { recursive: true, force: true })
+  // The record store shares a worker-backed database per directory; Windows refuses the rm while it is open.
+  await closeTestAgentSessionDatabase(root)
+  await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
 })
 
 it('isolates legacy acquired history from live matching and saves exact proof before optional overflow', async () => {

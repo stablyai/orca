@@ -225,7 +225,10 @@ process.stdout.write(JSON.stringify({ content: Buffer.concat(files.map(file => B
   }
 }
 
-it.each(['', tricky.repeat(12), `${'x'.repeat(5 * 1024 * 1024 - 4)}🌊﻿GIF89a${tricky}`])(
+// The guest materialization below runs under /bin/sh and asserts POSIX-only modes.
+it
+  .skipIf(process.platform === 'win32')
+  .each(['', tricky.repeat(12), `${'x'.repeat(5 * 1024 * 1024 - 4)}🌊﻿GIF89a${tricky}`])(
   'materializes exact native text with private modes across encoding and file boundaries',
   async (content) => {
     const result = await shellFixture(content)
@@ -240,15 +243,17 @@ it.each(['', tricky.repeat(12), `${'x'.repeat(5 * 1024 * 1024 - 4)}🌊﻿GIF89a
   }
 )
 
-it.each([
-  'collision',
-  'partial-data',
-  'wrong-end',
-  'missing-end',
-  'partial-execute',
-  'extra-data',
-  'wrong-ack'
-] as const)('does not execute on %s, and never adopts/deletes a collision', async (route) => {
+it
+  .skipIf(process.platform === 'win32')
+  .each([
+    'collision',
+    'partial-data',
+    'wrong-end',
+    'missing-end',
+    'partial-execute',
+    'extra-data',
+    'wrong-ack'
+  ] as const)('does not execute on %s, and never adopts/deletes a collision', async (route) => {
   const result = await shellFixture(
     'private data',
     (records, nonce) => {
@@ -290,14 +295,17 @@ it.each([
   }
 })
 
-it('fails a real post-proof storage redirect without running a partial request', async () => {
-  const result = await shellFixture('private data', undefined, undefined, (directory) =>
-    mkdirSync(join(directory, 'prompt-1.txt'))
-  )
-  expect(result.code).not.toBe(0)
-  expect(result.stdout).toBe('')
-  expect(result.existed).toBe(true)
-})
+it.skipIf(process.platform === 'win32')(
+  'fails a real post-proof storage redirect without running a partial request',
+  async () => {
+    const result = await shellFixture('private data', undefined, undefined, (directory) =>
+      mkdirSync(join(directory, 'prompt-1.txt'))
+    )
+    expect(result.code).not.toBe(0)
+    expect(result.stdout).toBe('')
+    expect(result.existed).toBe(true)
+  }
+)
 
 it.each([
   { boundary: 'data', stopping: 'cancel' },
@@ -334,55 +342,58 @@ it.each([
   }
 )
 
-it('delivers a plain UTF-8 policy module and preserves the stdin task after guest materialization', async () => {
-  const guest = prepareWslPrompt(
-    {
-      binary: process.execPath,
-      args: ['{module}'],
-      label: 'Policy fixture',
-      stdinPayload: 'Name this chat 🌊\nlast line',
-      taskFiles: [
-        { name: 'task-policy.mjs', content: 'export const text = "policy 🌊"\n', argIndex: 0 }
-      ]
-    },
-    'Actual'
-  )
-  const directory = `/tmp/orca-generation-${guest.preparation.args[0]}`
-  const child = spawnProcess({
-    program: '/bin/sh',
-    args: [
-      '-c',
-      guest.preparation.script,
-      'fixture',
-      ...guest.preparation.args,
-      process.execPath,
-      '-e',
-      `const fs = require('node:fs'); const {pathToFileURL}=require('node:url'); import(pathToFileURL(process.argv[1])).then(module => process.stdout.write(JSON.stringify({ text: module.text, task: fs.readFileSync(0,'utf8'), prefix: fs.readFileSync(process.argv[1]).subarray(0,3).toString('hex') })))`,
-      '--',
-      ...guest.plan.args
-    ],
-    stdio: 'pipe'
-  })
-  let stdout = ''
-  child.stdout.on('data', (chunk) => (stdout += chunk.toString()))
-  child.stdin.on('error', () => {})
-  child.stderr.on('data', (chunk) => {
-    if (guest.observe(chunk)) {
-      child.stdin.end([...guest.records()].join(''))
+it.skipIf(process.platform === 'win32')(
+  'delivers a plain UTF-8 policy module and preserves the stdin task after guest materialization',
+  async () => {
+    const guest = prepareWslPrompt(
+      {
+        binary: process.execPath,
+        args: ['{module}'],
+        label: 'Policy fixture',
+        stdinPayload: 'Name this chat 🌊\nlast line',
+        taskFiles: [
+          { name: 'task-policy.mjs', content: 'export const text = "policy 🌊"\n', argIndex: 0 }
+        ]
+      },
+      'Actual'
+    )
+    const directory = `/tmp/orca-generation-${guest.preparation.args[0]}`
+    const child = spawnProcess({
+      program: '/bin/sh',
+      args: [
+        '-c',
+        guest.preparation.script,
+        'fixture',
+        ...guest.preparation.args,
+        process.execPath,
+        '-e',
+        `const fs = require('node:fs'); const {pathToFileURL}=require('node:url'); import(pathToFileURL(process.argv[1])).then(module => process.stdout.write(JSON.stringify({ text: module.text, task: fs.readFileSync(0,'utf8'), prefix: fs.readFileSync(process.argv[1]).subarray(0,3).toString('hex') })))`,
+        '--',
+        ...guest.plan.args
+      ],
+      stdio: 'pipe'
+    })
+    let stdout = ''
+    child.stdout.on('data', (chunk) => (stdout += chunk.toString()))
+    child.stdin.on('error', () => {})
+    child.stderr.on('data', (chunk) => {
+      if (guest.observe(chunk)) {
+        child.stdin.end([...guest.records()].join(''))
+      }
+    })
+    try {
+      const code = await new Promise<number | null>((resolve, reject) => {
+        child.once('close', resolve)
+        child.once('error', reject)
+      })
+      expect(code).toBe(0)
+      expect(JSON.parse(stdout)).toEqual({
+        text: 'policy 🌊',
+        task: 'Name this chat 🌊\nlast line',
+        prefix: '657870'
+      })
+    } finally {
+      await rm(directory, { recursive: true, force: true })
     }
-  })
-  try {
-    const code = await new Promise<number | null>((resolve, reject) => {
-      child.once('close', resolve)
-      child.once('error', reject)
-    })
-    expect(code).toBe(0)
-    expect(JSON.parse(stdout)).toEqual({
-      text: 'policy 🌊',
-      task: 'Name this chat 🌊\nlast line',
-      prefix: '657870'
-    })
-  } finally {
-    await rm(directory, { recursive: true, force: true })
   }
-})
+)

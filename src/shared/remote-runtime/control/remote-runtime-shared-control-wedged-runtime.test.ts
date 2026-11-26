@@ -11,6 +11,9 @@ import {
   createSharedControlTestServer as createServer
 } from './remote-runtime-shared-control-test-server'
 
+// Why reconnects plus real-time probe/request deadlines blow the 30s budget on a loaded gate.
+vi.setConfig({ testTimeout: 120_000 })
+
 // Fake only the heartbeat's interval and clock; socket I/O and request deadlines stay real.
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
@@ -20,7 +23,10 @@ afterEach(async () => {
   await closeSharedControlTestServers()
 })
 
-const heartbeat = { intervalMs: 1_000, timeoutMs: 5_000 }
+// Why the probe deadline is real time: event-loop lag on a loaded gate must not retire a healthy socket.
+const heartbeat = { intervalMs: 1_000, timeoutMs: 30_000 }
+// Why sequencing scaffolding, not deadline testing: slow dials on a loaded gate must not fail the requests.
+const requestTimeoutMs = 10_000
 
 it('retires a ready socket whose runtime still answers pings but not requests, and reconnects (#39785)', async () => {
   // Wedged host: ws pongs keep the transport "alive" while status.get is never answered.
@@ -38,7 +44,7 @@ it('retires a ready socket whose runtime still answers pings but not requests, a
     onDiagnosticsChanged: (diagnostics) => published.push(diagnostics)
   })
   try {
-    await connection.request('worktree.ps', undefined, 1000)
+    await connection.request('worktree.ps', undefined, requestTimeoutMs)
     const reconnected = new Promise<void>((resolve) => {
       onReady = resolve
     })
@@ -66,11 +72,11 @@ it('keeps a socket whose runtime answers the heartbeat', async () => {
     onSocketClosed: (record) => closes.push(record)
   })
   try {
-    await connection.request('worktree.ps', undefined, 1000)
+    await connection.request('worktree.ps', undefined, requestTimeoutMs)
     for (let round = 0; round < 2; round += 1) {
       await vi.advanceTimersByTimeAsync(heartbeat.intervalMs)
       // Replies arrive in order, so the probe has been answered once this one is.
-      await connection.request('worktree.ps', undefined, 1000)
+      await connection.request('worktree.ps', undefined, requestTimeoutMs)
     }
     const probes = server.requests.filter((r) => r.method === 'status.get')
     expect(probes.map((r) => r.params)).toEqual([{ probe: true }, { probe: true }])
@@ -91,15 +97,15 @@ it('never probes an asleep host or a connection that did not opt in', async () =
     prepareSleepCheck: () => () => sleeping
   })
   const legacy = new RemoteRuntimeSharedControlConnection(server.pairing)
-  await asleep.request('worktree.ps', undefined, 1000)
-  await legacy.request('worktree.ps', undefined, 1000)
+  await asleep.request('worktree.ps', undefined, requestTimeoutMs)
+  await legacy.request('worktree.ps', undefined, requestTimeoutMs)
 
   sleeping = true
   await vi.advanceTimersByTimeAsync(heartbeat.intervalMs * 5)
   sleeping = false
   // The socket delivers in order, so a probe sent while idle would reach the host before these.
-  await asleep.request('worktree.ps', undefined, 1000)
-  await legacy.request('worktree.ps', undefined, 1000)
+  await asleep.request('worktree.ps', undefined, requestTimeoutMs)
+  await legacy.request('worktree.ps', undefined, requestTimeoutMs)
   expect(server.requests.some((r) => r.method === 'status.get')).toBe(false)
   expect(asleep.isReady()).toBe(true)
   expect(legacy.isReady()).toBe(true)

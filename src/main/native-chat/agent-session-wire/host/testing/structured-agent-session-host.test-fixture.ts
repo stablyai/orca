@@ -2,7 +2,7 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
 } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, vi, type Mock } from 'vitest'
@@ -36,6 +36,7 @@ import {
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data.test-fixture'
 import { recordingProductionStructuredAgentSessionLogger } from './structured-agent-session-logger.test-fixture'
+import { removeTree } from '../../../../../shared/file-write/windows-transient-lock-removal'
 import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { claudeAndCodexDeclared } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
 import { startsWhenPublished } from './structured-agent-session-instant-start.test-fixture'
@@ -191,7 +192,8 @@ afterEach(async () => {
   await closeTestJournalHostDatabase(root)
   // Replaced hosts may still hold recovery-capsule locks under root.
   await recoveryCapsule.settled()
-  await rm(root, { recursive: true, force: true })
+  // Bun ignores rm maxRetries; removeTree retries the whole pass itself.
+  await removeTree(root)
 })
 
 /** Drain recovery work from current and replaced hosts. */

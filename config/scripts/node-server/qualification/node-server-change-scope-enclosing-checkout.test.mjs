@@ -1,11 +1,15 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
+import { removeTreeSync } from '../../../../src/shared/file-write/windows-transient-lock-removal.ts'
 import { collectNodeServerInputs } from './node-server-change-scope.mjs'
 
+// Why temp-fixture IO stalls past the 30s global budget on a loaded gate host.
+vi.setConfig({ testTimeout: 120_000 })
+
 let outer
-afterEach(() => rmSync(outer, { recursive: true, force: true }))
+afterEach(() => removeTreeSync(outer))
 
 it('ignores warnings from an enclosing checkout but not from the repo', async () => {
   const duplicateKey = '{ "name": "x", "name": "y" }'

@@ -1,8 +1,9 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { mkdtempSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { removeTreeSync } from '../../../../shared/file-write/windows-transient-lock-removal'
 import { collectLocalWorktreeBaseChanges } from './worktree-base-directory-change-collector'
 import {
   scheduleWorktreeBaseNotification,
@@ -91,7 +92,8 @@ function channels(watch: ReturnType<typeof createWatch>): string[] {
 
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { recursive: true, force: true })
+    // Bun ignores rmSync maxRetries; removeTreeSync retries itself with a sync sleep.
+    removeTreeSync(dir)
   }
 })
 
@@ -111,7 +113,10 @@ describe('linked HEAD-only watcher bursts', () => {
         channel: 'worktrees:headIdentitiesChanged',
         payload: {
           repoId: REPO_ID,
-          identities: [{ worktreePath: linkedPath, head: movedHead, branch: null }]
+          // The identity read republishes Git's path, which uses forward slashes on Windows.
+          identities: [
+            { worktreePath: linkedPath.split(sep).join('/'), head: movedHead, branch: null }
+          ]
         }
       })
     )

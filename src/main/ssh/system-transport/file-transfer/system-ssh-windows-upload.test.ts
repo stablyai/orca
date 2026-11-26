@@ -181,8 +181,11 @@ describe('Windows upload over sftp', () => {
 
     expect(seen).toHaveLength(1)
     expect(seen[0]!.contents.toString()).toBe('1.2.3')
-    // Repository payloads in shared temp directories must be private from creation.
-    expect(seen[0]!.mode).toBe(0o600)
+    // Repository payloads in shared temp directories must be private from creation;
+    // stat() cannot observe Windows DACLs, where a writable file always reports 0o666.
+    if (process.platform !== 'win32') {
+      expect(seen[0]!.mode).toBe(0o600)
+    }
     await expect(readFile(seen[0]!.path)).rejects.toThrow()
   })
 

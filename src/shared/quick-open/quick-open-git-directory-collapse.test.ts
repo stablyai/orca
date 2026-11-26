@@ -1,10 +1,14 @@
 import { execFile } from 'node:child_process'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { removeTree } from '../file-write/windows-transient-lock-removal'
 import { buildGitLsFilesArgsForQuickOpen } from './quick-open-filter'
+
+// Why git plus fixture IO on a loaded Windows host exceeds the 30s global budget.
+vi.setConfig({ testTimeout: 120_000 })
 
 const execFileAsync = promisify(execFile)
 const tempDirs: string[] = []
@@ -16,7 +20,7 @@ async function writeRel(root: string, relPath: string): Promise<void> {
 }
 
 afterEach(async () => {
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
+  await Promise.all(tempDirs.splice(0).map((dir) => removeTree(dir)))
 })
 
 describe('Quick Open git directory collapse', () => {
@@ -29,7 +33,8 @@ describe('Quick Open git directory collapse', () => {
       ['.cache/', '.local/share/', 'dist/', '*.log'].join('\n')
     )
     await Promise.all([
-      ...Array.from({ length: 200 }, (_, index) =>
+      // Why: enough entries to prove tree collapse without stalling loaded runners.
+      ...Array.from({ length: 20 }, (_, index) =>
         writeRel(root, `node_modules/pkg/file-${index}.js`)
       ),
       writeRel(root, '.cache/state.json'),

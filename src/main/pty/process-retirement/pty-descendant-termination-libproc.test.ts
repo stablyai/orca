@@ -79,7 +79,8 @@ describe('descendant teardown over the in-process process table', () => {
         readProcessCwd: async () => null,
         readProcessPath: async () => null
       })
-      expect(await captureDescendantSnapshot(100, { timeoutMs: 10 })).toBeNull()
+      // Why: the mocked libproc addon stands in for darwin reads; pin POSIX routing on Windows hosts.
+      expect(await captureDescendantSnapshot(100, { timeoutMs: 10, platform: 'darwin' })).toBeNull()
 
       vi.setSystemTime(WALL_CLOCK + stepMs)
       const sendSignal = vi.fn()
@@ -87,7 +88,8 @@ describe('descendant teardown over the in-process process table', () => {
       const teardown = killWithDescendantSweep(100, killRoot, {
         sendSignal,
         timeoutMs: 1_000,
-        graceMs: 60_000
+        graceMs: 60_000,
+        platform: 'darwin'
       })
       finishAbandoned([row(1, 0), row(100, 1), row(200, 100)])
       await teardown

@@ -200,7 +200,7 @@ export function createTauriNativeBrowserWebview({
   appendToContainer = true
 }: {
   browserPageId: string
-  container: HTMLDivElement
+  container?: HTMLDivElement
   partition: string
   visible: boolean
   appendToContainer?: boolean
@@ -232,7 +232,7 @@ export function createTauriNativeBrowserWebview({
     ready: Promise.resolve()
   }
   nativePages.set(browserPageId, page)
-  if (appendToContainer) {
+  if (appendToContainer && container) {
     container.appendChild(element)
   }
   page.ready = invokeNative<{ url: string }>('poc_browser_create', {

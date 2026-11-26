@@ -116,6 +116,11 @@ describe('orchestration mutation recovery', () => {
         disposition: 'in_progress'
       }
     })
-    expect(result.message).toContain('--retry-request request_slow')
+    // renderCommand quotes per arg for the user's shell: bare on POSIX, quoted on Windows cmd.
+    expect(result.message).toContain(
+      process.platform === 'win32'
+        ? '"--retry-request" "request_slow"'
+        : '--retry-request request_slow'
+    )
   })
 })

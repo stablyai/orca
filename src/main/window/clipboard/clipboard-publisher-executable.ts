@@ -21,7 +21,16 @@ export async function stageClipboardPublisher(source: string, userData: string):
   const temporary = join(directory, `${fingerprint}-${randomUUID()}`)
   try {
     await writeFile(temporary, contents, { flag: 'wx', mode: 0o700 })
-    await rename(temporary, executable)
+    try {
+      await rename(temporary, executable)
+    } catch (error) {
+      // Why a lost rename still publishes: the same fingerprint means identical bytes, so the winner already staged this executable.
+      const staged = await readFile(executable).catch(() => null)
+      if (staged !== null && staged.equals(contents)) {
+        return executable
+      }
+      throw error
+    }
   } finally {
     await rm(temporary, { force: true })
   }

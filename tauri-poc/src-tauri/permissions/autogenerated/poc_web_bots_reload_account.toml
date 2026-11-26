@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-poc-web-bots-reload-account"
+description = "Enables the poc_web_bots_reload_account command without any pre-configured scope."
+commands.allow = ["poc_web_bots_reload_account"]
+
+[[permission]]
+identifier = "deny-poc-web-bots-reload-account"
+description = "Denies the poc_web_bots_reload_account command without any pre-configured scope."
+commands.deny = ["poc_web_bots_reload_account"]

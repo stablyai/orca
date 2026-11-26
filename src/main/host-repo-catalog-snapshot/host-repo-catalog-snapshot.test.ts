@@ -34,6 +34,7 @@ vi.mock('../ssh/config/ssh-config-parser', () => ({
 
 const directories: string[] = []
 const stores: Store[] = []
+const authorities: ProfileStateSqliteAuthority[] = []
 
 beforeEach(() => {
   setSecretStore({
@@ -50,8 +51,12 @@ afterEach(async () => {
     store.freezeWrites()
     await store.flushAsync()
   }
+  // Authorities hold profile-state.db open; Windows refuses the rm while it is open.
+  for (const authority of authorities.splice(0)) {
+    authority.close()
+  }
   for (const directory of directories.splice(0)) {
-    rmSync(directory, { recursive: true, force: true })
+    rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   }
   vi.restoreAllMocks()
 })
@@ -61,7 +66,9 @@ function profile(savedSnapshots: Record<string, unknown> = {}) {
   directories.push(directory)
   const databasePath = join(directory, 'profile-state.db')
   const profileId = 'host-repo-catalog'
-  new ProfileStateSqliteAuthority(databasePath, profileId).writeSerializedState(
+  const seed = new ProfileStateSqliteAuthority(databasePath, profileId)
+  authorities.push(seed)
+  seed.writeSerializedState(
     Buffer.from(
       JSON.stringify({
         ...getDefaultPersistedState(directory),
@@ -70,9 +77,11 @@ function profile(savedSnapshots: Record<string, unknown> = {}) {
     )
   )
   const open = () => {
+    const authority = new ProfileStateSqliteAuthority(databasePath, profileId)
+    authorities.push(authority)
     const store = new Store({
       dataFile: join(directory, 'orca-data.json'),
-      profileStateAuthority: new ProfileStateSqliteAuthority(databasePath, profileId)
+      profileStateAuthority: authority
     })
     stores.push(store)
     return store

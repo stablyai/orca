@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync } fr
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { removeTree } from '../../shared/file-write/windows-transient-lock-removal'
 import type { AutomationRunEvent } from '../../shared/automation-event-triggers'
 import type { Automation } from '../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../shared/automations/history/automation-run'
@@ -103,9 +104,10 @@ beforeEach(() => {
   botFolder = mkdtempSync(join(tmpdir(), 'orca-webhook-bot-'))
 })
 
-afterEach(() => {
-  rmSync(userDataPath, { recursive: true, force: true })
-  rmSync(botFolder, { recursive: true, force: true })
+afterEach(async () => {
+  // Bun ignores rm maxRetries; removeTree retries the whole pass itself.
+  await removeTree(userDataPath)
+  await removeTree(botFolder)
 })
 
 function setup(options: {

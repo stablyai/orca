@@ -11,6 +11,10 @@ afterEach(closeSharedControlTestServers)
 // Longer than the first reconnect delay, so a scheduled retry would have dialed again.
 const PAST_FIRST_RETRY_MS = 600
 
+// Bun-on-Windows can freeze the event loop for seconds; budgets must outlast that, not the retry delays.
+const REFUSAL_WAIT_MS = 10_000
+const RETRY_WAIT_MS = 15_000
+
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
@@ -29,7 +33,9 @@ describe('a shared control socket whose token the server refuses', () => {
       onAuthenticationRejected
     })
 
-    const refused = await connection.request('status.get', undefined, 1_000).catch((e) => e)
+    const refused = await connection
+      .request('status.get', undefined, REFUSAL_WAIT_MS)
+      .catch((e) => e)
     // Waiting callers see a connection that will return, not a refusal, while it re-pairs.
     expect(isRecoverableRemoteRuntimeConnectionError(refused)).toBe(true)
     expect(onAuthenticationRejected).toHaveBeenCalledOnce()
@@ -49,7 +55,7 @@ describe('a shared control socket whose token the server refuses', () => {
 
     await connection.request('status.get', undefined, 1_000).catch(() => undefined)
     await vi.waitFor(() => expect(server.connectionCount()).toBeGreaterThan(1), {
-      timeout: 2_000
+      timeout: RETRY_WAIT_MS
     })
     connection.close()
   })
@@ -60,10 +66,12 @@ describe('a shared control socket whose token the server refuses', () => {
       onAuthenticationRejected: () => null
     })
 
-    const refused = await connection.request('status.get', undefined, 1_000).catch((e) => e)
+    const refused = await connection
+      .request('status.get', undefined, REFUSAL_WAIT_MS)
+      .catch((e) => e)
     expect(refused).toMatchObject({ code: 'unauthorized' })
     await vi.waitFor(() => expect(server.connectionCount()).toBeGreaterThan(1), {
-      timeout: 2_000
+      timeout: RETRY_WAIT_MS
     })
     connection.close()
   })

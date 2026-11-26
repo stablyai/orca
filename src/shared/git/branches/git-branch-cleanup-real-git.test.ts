@@ -3,13 +3,16 @@ import { mkdir, mkdtemp, realpath, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   branchHasNoUnmergedChangesOnAnyTarget,
   type GitBranchCleanupExec
 } from './git-branch-cleanup'
 import { GitCapabilityCache } from '../commands/git-capability-cache'
 import { removeTree } from '../../file-write/windows-transient-lock-removal'
+
+// Why a 120s budget: ~15 real-git spawns plus patch-id searches overrun the 30s budget on a loaded Windows host.
+vi.setConfig({ testTimeout: 120_000 })
 
 const execFileAsync = promisify(execFile)
 

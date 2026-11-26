@@ -102,6 +102,9 @@ async function bootOrcad(serverDataPath: string, keyPair: KeyPair) {
   return { pairingCode: encodePairingOffer(server.offer) }
 }
 
+// Why a 120s budget: setup spawns (registry secure-saves, store worker) stall localhost dials for seconds on a loaded Windows host.
+vi.setConfig({ testTimeout: 120_000 })
+
 /** The desktop's own status probe of the environment's saved pairing, as its status owner sends it. */
 async function probe(environmentId: string) {
   const connection = getPreferredPairedRuntimeConnection(
@@ -112,7 +115,8 @@ async function probe(environmentId: string) {
       connection,
       'status.get',
       undefined,
-      2_000,
+      // Why 30s: a fresh localhost dial after setup spawns can stall ~9s on a loaded Windows host.
+      30_000,
       undefined,
       undefined,
       undefined,

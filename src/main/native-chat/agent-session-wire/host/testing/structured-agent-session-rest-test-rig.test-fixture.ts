@@ -1,6 +1,7 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeTree } from '../../../../../shared/file-write/windows-transient-lock-removal'
 import { expect, vi, type Mock } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import type { AgentJournalMessageItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -218,7 +219,8 @@ export async function createRestTestRig(
     dispose: async () => {
       await rig.host.flushAllStreamedEvents().catch(() => undefined)
       await closeTestAgentSessionRecordStores()
-      await rm(root, { recursive: true, force: true })
+      // Bun ignores rm maxRetries; removeTree retries the whole pass itself.
+      await removeTree(root)
     }
   }
   rig.host.subscribeStatus({ id: 'status', emit: (event) => statusEvents.push(event) })

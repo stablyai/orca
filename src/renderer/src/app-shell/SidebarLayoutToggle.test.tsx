@@ -26,9 +26,15 @@ const mocks = vi.hoisted(
   })
 )
 
-vi.mock('../store', () => ({
-  useAppStore: (selector: (state: typeof mocks.state) => unknown) => selector(mocks.state)
-}))
+vi.mock('../store', () => {
+  const useAppStore = (selector: (state: typeof mocks.state) => unknown) => selector(mocks.state)
+  // The mode switch reads live layout ownership off the store, not the snapshot.
+  return {
+    useAppStore: Object.assign(useAppStore, {
+      getState: () => ({ layoutByWorktree: {}, groupsByWorktree: {} })
+    })
+  }
+})
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 
 afterEach(cleanup)

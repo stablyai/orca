@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { removeTree } from '../../../../shared/file-write/windows-transient-lock-removal'
 import * as gitRunner from '../../command-runner/git-exec-file'
 import { refreshLocalBaseRefForWorktreeCreate } from './worktree-base-refresh'
 
@@ -117,10 +118,12 @@ beforeEach(() => {
 afterEach(async () => {
   vi.unstubAllEnvs()
   vi.restoreAllMocks()
-  await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  // Bun ignores rm maxRetries; removeTree retries the whole pass itself.
+  await Promise.all(tempRoots.splice(0).map((root) => removeTree(root)))
 })
 
 describe('local base refresh of a checked-out branch with real Git', () => {
+  // Cold node:child_process spawns inside a Bun worker thread cost seconds each; this first test pays for all of them.
   it('leaves it alone while another Git process holds its index.lock', async () => {
     const { repoPath, lockPath, localOid } = await createBehindRepo('index')
     const spy = spyOnFastForwards()
@@ -130,7 +133,7 @@ describe('local base refresh of a checked-out branch with real Git', () => {
     expect(spy.writes()).toBe(0)
     expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
     expect(await readFile(lockPath, 'utf8')).toBe('')
-  })
+  }, 90_000)
 })
 
 describe('local base refresh of a branch a rebase has reserved with real Git', () => {

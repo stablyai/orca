@@ -28,11 +28,13 @@ describe("a Claude Code bot's tools", () => {
     const configDir = mkdtempSync(join(tmpdir(), 'bot-tools-claude-'))
     dirs.push(configDir)
     const signIn = join(configDir, 'bot-tool-sign-in', 'bot-1')
+    // Claude looks up NFC path.normalize output, with / separators on Windows.
+    const projectKey = signIn.replaceAll('\\', '/')
     writeFileSync(
       join(configDir, '.claude.json'),
       JSON.stringify({
         mcpServers: { github: { command: 'gh-mcp' } },
-        projects: { [signIn]: { mcpServers: { notion: { type: 'http', url: notion.url } } } }
+        projects: { [projectKey]: { mcpServers: { notion: { type: 'http', url: notion.url } } } }
       })
     )
     writeFileSync(

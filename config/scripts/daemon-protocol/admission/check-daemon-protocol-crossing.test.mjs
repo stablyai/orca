@@ -62,7 +62,9 @@ describe('checkDaemonProtocolCrossing', () => {
       expect(result).toMatchObject({ upgrade: true, rollback: false })
       expect(result.lines[0]).toBe('release v1.0.0: daemon protocol 5')
       expect(result.lines[1]).toBe('candidate (working tree): daemon protocol 6')
-    }
+    },
+    // Why: temp git checkouts stall past the 30s default on loaded Windows gates.
+    60000
   )
 
   const env = {}

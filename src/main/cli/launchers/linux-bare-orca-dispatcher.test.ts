@@ -78,7 +78,8 @@ afterEach(async () => {
   await Promise.all(created.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
 })
 
-describe('installLinuxBareOrcaDispatcher', () => {
+// Why: AppImage extraction and hard-link publication are Linux-only; Windows resolves no launcher here.
+describe.skipIf(process.platform !== 'linux')('installLinuxBareOrcaDispatcher', () => {
   it('restores a displaced foreign dispatcher when hard links are unsupported', async () => {
     const { homePath, resourcesPath } = await makeFixture()
     await installLinuxBareOrcaDispatcher({ resourcesPath, homePath, appImagePath: null })

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { join } from 'node:path'
 
 const { lstatMock, opendirMock } = vi.hoisted(() => ({
   lstatMock: vi.fn(),
@@ -17,7 +18,8 @@ const capture = vi.fn(async (args: readonly string[]) =>
   args[1].includes('tdev=') ? raw : canonical
 )
 const validate = (stdout: string): string => stdout
-const candidatePath = '/dev/ttys009'
+const candidatePath = join('/dev', 'ttys009')
+const entryPath = (name: string): string => join('/dev', name)
 const missingCandidate = (): Promise<never> => Promise.reject(new Error('ENOENT'))
 
 function deferred<T>() {
@@ -48,7 +50,7 @@ describe('Darwin inventory drain admission', () => {
       if (path === candidatePath) {
         return missingCandidate()
       }
-      if (path === '/dev/entry-0') {
+      if (path === entryPath('entry-0')) {
         throw new Error('stat invocation failed')
       }
       return pending.promise

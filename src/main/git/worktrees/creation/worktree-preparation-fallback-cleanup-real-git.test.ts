@@ -1,9 +1,11 @@
 import type * as FilePromises from 'node:fs/promises'
+import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { removeTree } from '../../../../shared/file-write/windows-transient-lock-removal'
 import { createWorktreePreparationLockReason } from '../../../../shared/worktree/creation/create-preparation'
 import {
   clearGitCapabilityStateForTests,
@@ -16,6 +18,7 @@ import {
   listPreparations,
   _resetPreparationPoolForTests
 } from '../../../workspaces/creation/preparation/worktree-create-preparation-pool'
+import { resetPendingPreparationDiscardsForTests } from '../../../workspaces/creation/preparation/worktree-preparation-discard-retry'
 
 const lockWrite = vi.hoisted((): { after: (() => void) | undefined } => ({ after: undefined }))
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -42,11 +45,13 @@ afterEach(async () => {
   lockWrite.after = undefined
   await _resetPreparationPoolForTests()
   clearGitCapabilityStateForTests()
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  // Bun ignores rm maxRetries; removeTree retries the whole pass itself.
+  await Promise.all(roots.splice(0).map((root) => removeTree(root)))
 })
 
-async function git(cwd: string, args: string[]): Promise<string> {
-  return (await runner.gitExecFileAsync(args, { cwd })).stdout.trim()
+// Fixture setup spawns git directly: worker-thread spawns cost seconds each when cold under Bun.
+function git(cwd: string, args: string[]): string {
+  return execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
 }
 
 async function fixture() {
@@ -54,11 +59,11 @@ async function fixture() {
   roots.push(root)
   const repo = join(root, 'repo')
   const prepared = join(root, 'prepared')
-  await git(root, ['init', '--quiet', repo])
-  await git(repo, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
+  git(root, ['init', '--quiet', repo])
+  git(repo, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
   await writeFile(join(repo, 'tracked.txt'), 'original\n')
-  await git(repo, ['add', 'tracked.txt'])
-  await git(repo, [
+  git(repo, ['add', 'tracked.txt'])
+  git(repo, [
     '-c',
     'user.name=Test',
     '-c',
@@ -71,6 +76,7 @@ async function fixture() {
   return { repo, prepared }
 }
 
+// Cold node:child_process spawns inside a Bun worker thread cost seconds each; this first test pays for all of them.
 it('preserves a pre-existing empty target if its cached fallback lock-path probe fails', async () => {
   const { repo, prepared } = await fixture()
   await mkdir(prepared)
@@ -87,8 +93,10 @@ it('preserves a pre-existing empty target if its cached fallback lock-path probe
     failure
   )
   expect(existsSync(join(prepared, '.git'))).toBe(true)
-  expect((await run(['worktree', 'list', '--porcelain'], { cwd: repo })).stdout).toContain(prepared)
-})
+  // Git prints worktree paths with forward slashes on Windows.
+  const gitPath = prepared.split(sep).join('/')
+  expect((await run(['worktree', 'list', '--porcelain'], { cwd: repo })).stdout).toContain(gitPath)
+}, 90_000)
 
 it('removes its completed fallback lock when cancellation arrives during the filesystem write', async () => {
   const { repo, prepared } = await fixture()
@@ -106,7 +114,10 @@ it('removes its completed fallback lock when cancellation arrives during the fil
     )
   ).rejects.toBe(failure)
   expect(existsSync(prepared)).toBe(false)
-  expect(await git(repo, ['worktree', 'list', '--porcelain'])).not.toContain(prepared)
+  // Git prints worktree paths with forward slashes on Windows; a backslash needle never matches.
+  expect(git(repo, ['worktree', 'list', '--porcelain'])).not.toContain(
+    prepared.split(sep).join('/')
+  )
 })
 
 it('discards a ready available checkout when its preparation caller cancels', async () => {
@@ -122,5 +133,10 @@ it('discards a ready available checkout when its preparation caller cancels', as
   const [entry] = listPreparations()
   controller.abort()
   await vi.waitFor(() => expect(existsSync(entry.preparedPath)).toBe(false), { timeout: 5000 })
-  expect(await git(repo, ['worktree', 'list', '--porcelain'])).not.toContain(entry.preparedPath)
+  // Why the unregister rides a background discard: dir removal alone races the worktree admin cleanup.
+  await resetPendingPreparationDiscardsForTests()
+  // Git prints worktree paths with forward slashes on Windows; a backslash needle never matches.
+  expect(git(repo, ['worktree', 'list', '--porcelain'])).not.toContain(
+    entry.preparedPath.split(sep).join('/')
+  )
 })

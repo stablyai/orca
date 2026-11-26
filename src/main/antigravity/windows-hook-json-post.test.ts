@@ -2,7 +2,7 @@ import { createServer } from 'node:http'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, expect, it } from 'vitest'
+import { afterAll, expect, it, vi } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
 import { WINDOWS_ANTIGRAVITY_JSON_POST_SCRIPT } from './windows-hook-json-post'
 
@@ -74,6 +74,14 @@ it('delivers exact split UTF-8 JSON without EOF and bounds empty or partial inpu
           expect(await closed).toBe(0)
           expect(stdout).toBe('')
           expect(stderr).toBe('')
+          // A loaded runner starves the loopback server past the hook's 1.5 s
+          // post timer, so the post lands after the child exits; poll for it.
+          await vi.waitFor(
+            () => {
+              expect(posts.filter((post) => post.get('version') === version)).toHaveLength(1)
+            },
+            { timeout: 10_000 }
+          )
           const matching = posts.filter((post) => post.get('version') === version)
           expect(matching).toHaveLength(1)
           expect(matching[0].get('payload')).toBe(input || '{}')

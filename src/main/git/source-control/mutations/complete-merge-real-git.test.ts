@@ -2,10 +2,13 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { completeMerge } from './commit-changes'
 import { detectConflictOperation } from './git-conflict-operation'
 import { resolveConflict } from './staging'
+
+// Real git on a loaded Windows host exceeds the 30s global budget.
+vi.setConfig({ testTimeout: 120_000 })
 
 describe('delete/modify merge resolved through resolveConflict and completeMerge', () => {
   const tempPaths: string[] = []

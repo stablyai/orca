@@ -1,7 +1,7 @@
 // Which bots other apps keep on this host, for "Import from another app" and the first-bot nudge. Reads
 // folder names and a workspace's IDENTITY.md name line only; config, keys and databases are never opened.
 import { readdir, readFile, stat } from 'node:fs/promises'
-import { join, sep } from 'node:path'
+import { join } from 'node:path'
 import type { Bot } from '../../shared/bot-types'
 import {
   botNameFromId,
@@ -39,12 +39,14 @@ async function childFolders(path: string): Promise<string[]> {
     .sort()
 }
 
+// Why: display only, shown on any host: always '/'-separated, like the UI copy's `~/.openclaw`.
 function tilde(path: string, home: string): string {
-  return path === home
-    ? '~'
-    : path.startsWith(`${home}${sep}`)
-      ? `~${path.slice(home.length)}`
-      : path
+  if (path === home) {
+    return '~'
+  }
+  const remainder =
+    path.startsWith(`${home}/`) || path.startsWith(`${home}\\`) ? path.slice(home.length + 1) : null
+  return remainder === null ? path : `~/${remainder.replace(/\\/g, '/')}`
 }
 
 /** The name OpenClaw's IDENTITY.md gives the agent ("- **Name:** Molty"), if it has one. */

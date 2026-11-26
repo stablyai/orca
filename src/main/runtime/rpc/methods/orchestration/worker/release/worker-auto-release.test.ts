@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -6,6 +6,7 @@ import { reconcileRequestedWorkerTerminalReleases } from '../../../../../orchest
 import { getWorkerTerminalAutoReleaseScheduler } from '../../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-scheduler'
 import { createOrchestrationWorkerReleaseHarness } from '../testing/worker-release.test-support'
 import { WorkerAutoReleaseActivity } from '../../../../../orchestration/terminal-authority/release/worker-auto-release-activity'
+import { removeTree } from '../../../../../../../shared/file-write/windows-transient-lock-removal'
 import type { AgentPhase } from '../../../../../../../shared/agent-status/lifecycle/agent-transitions'
 
 const GRACE_MS = 2 * 60_000
@@ -198,12 +199,14 @@ describe('orchestration worker automatic release', () => {
     beforeEach(() => {
       userDataDir = mkdtempSync(join(tmpdir(), 'orca-auto-release-restart-'))
     })
-    afterEach(() => {
+    afterEach(async () => {
       // Inner hooks run before the outer harness cleanup, so close the file-backed
-      // database first: Windows locks open SQLite files and rmSync would hit EBUSY.
+      // database first: Windows locks open SQLite files and removal would hit EBUSY.
       h.cleanup()
-      // Transient Windows locks (AV scan, lazy handle release) fail a single unlink pass.
-      rmSync(userDataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+      // Fake timers would stall removeTree's backoff; the outer hook restores real timers anyway.
+      vi.useRealTimers()
+      // Bun ignores rm maxRetries; removeTree retries the whole pass itself.
+      await removeTree(userDataDir)
     })
 
     function setupFileBacked(): void {

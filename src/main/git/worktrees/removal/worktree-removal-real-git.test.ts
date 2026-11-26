@@ -178,8 +178,9 @@ describe('worktree removal against the real Git binary', () => {
     const adminPath = marker.trim().replace(/^gitdir: /, '')
     await writeFile(join(adminPath, 'gitdir'), `${join(markerPath, '.git')}\n`)
     await writeFile(join(worktreePath, 'untracked.txt'), 'keep this work\n')
+    // Git reports the admin gitdir target verbatim, so the malformed row carries one extra `.git`.
     const row = (await listWorktreesStrict(repoPath)).find((entry) =>
-      areWorktreePathsEqual(entry.path, markerPath)
+      areWorktreePathsEqual(entry.path, join(markerPath, '.git'))
     )
     if (!row) {
       throw new Error('Missing malformed registration')

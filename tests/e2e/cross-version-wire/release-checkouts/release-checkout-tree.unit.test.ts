@@ -11,12 +11,15 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as currentProcessHost from '@orca/process-host'
 import { importReleaseCheckoutModule } from './release-checkout'
 import { extractReleaseCheckoutTree, OPTIONAL_ARCHIVE_PATHS } from './release-checkout-tree'
 import { prepareReleaseSnapshotSource } from './release-checkout-prefetch'
 import { LOCAL_RELEASE_GIT_ENV } from './release-checkout-process'
+
+// Partial clones fetch blobs under gate load; the default 30s budget flakes.
+vi.setConfig({ testTimeout: 120_000 })
 
 const temporaryRoots: string[] = []
 
@@ -29,9 +32,22 @@ describe('release checkout contents', () => {
   })
 })
 
-afterEach(() => {
+afterEach(async () => {
   for (const root of temporaryRoots.splice(0)) {
-    rmSync(root, { recursive: true, force: true })
+    // Windows releases git's file locks after the child fully exits; rmSync alone loses that race.
+    // ast-grep-ignore: test-no-polling-loop -- the OS releases file locks on real process exit; no condition to poll.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+        break
+      } catch (error) {
+        if (attempt >= 5) {
+          throw error
+        }
+        // ast-grep-ignore: test-no-real-time-wait -- the OS releases file locks on real process exit; fake timers cannot advance it.
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+      }
+    }
   }
 })
 

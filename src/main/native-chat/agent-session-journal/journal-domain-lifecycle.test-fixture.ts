@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import Database from '../../sqlite/sync-database'
@@ -9,6 +9,7 @@ import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/pro
 import { migrateJournalDomainSchema } from './journal-domain-schema'
 import { JOURNAL_ENDED_TURN_COUNTS_SCHEMA } from './database/journal-ended-turn-counts'
 import { JournalSqlCommand } from './journal-sql-command'
+import { removeTreeSync } from '../../../shared/file-write/windows-transient-lock-removal'
 import { JournalSqlBatch } from './journal-sql-batch'
 
 export const lifecycleTarget = { sessionId: 'chat', epoch: 'epoch', ownerToken: 'owner' }
@@ -41,7 +42,7 @@ export function domainLifecycleFixture(cleanups: (() => void)[], sessionId = 'ch
   ).run(sessionId)
   cleanups.push(() => {
     db.close()
-    rmSync(directory, { recursive: true, force: true })
+    removeTreeSync(directory)
   })
   return {
     directory,

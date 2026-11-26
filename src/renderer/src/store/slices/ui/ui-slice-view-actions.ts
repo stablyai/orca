@@ -153,6 +153,19 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
         activeView: state.previousViewBeforeRooms,
         worktreeNavHistoryIndex: rewindHistoryIndexPastView(state, 'rooms')
       })),
+    openWebBotsPage: () => {
+      get().recordViewVisit('web-bots')
+      set((state) => ({
+        activeView: 'web-bots',
+        previousViewBeforeWebBots:
+          state.activeView === 'web-bots' ? state.previousViewBeforeWebBots : state.activeView
+      }))
+    },
+    closeWebBotsPage: () =>
+      set((state) => ({
+        activeView: state.previousViewBeforeWebBots,
+        worktreeNavHistoryIndex: rewindHistoryIndexPastView(state, 'web-bots')
+      })),
     openMobilePage: () =>
       set((state) => ({
         activeView: 'mobile',

@@ -1,9 +1,17 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { runProcess } from '@orca/process-host'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { parse } from 'yaml'
+import { removeTree } from '../../../../src/shared/file-write/windows-transient-lock-removal.ts'
+import { findGitBash } from '../../../../src/main/agent-hooks/installation/commands/testing/windows-git-bash-path.test-fixture'
+
+// Why bun on Windows spawns git/bash in seconds each: the fixture shells out a dozen times.
+vi.setConfig({ testTimeout: 120_000 })
+
+// WSL's bash.exe shadows Git Bash on PATH and cannot reach Windows paths.
+const shell = process.platform === 'win32' ? findGitBash() : 'bash'
 
 it('extracts release data while excluding executable package and Cargo configuration', async () => {
   const root = mkdtempSync(join(tmpdir(), 'release audit data '))
@@ -71,7 +79,7 @@ it('extracts release data while excluding executable package and Cargo configura
     const action = parse(
       readFileSync('.github/actions/prepare-dependency-audit/action.yml', 'utf8')
     )
-    await run('bash', ['-c', action.runs.steps[0].run], tooling, {
+    await run(shell, ['-c', action.runs.steps[0].run], tooling, {
       ...process.env,
       RELEASE_REF: 'HEAD'
     })
@@ -81,7 +89,7 @@ it('extracts release data while excluding executable package and Cargo configura
     for (const file of configuration) {
       expect(existsSync(join(tooling, 'candidate', file)), file).toBe(false)
     }
-    rmSync(join(tooling, 'candidate'), { recursive: true })
+    await removeTree(join(tooling, 'candidate'))
     await run('git', ['rm', '--quiet', 'pnpm-workspace.yaml'], source)
     await run(
       'git',
@@ -98,13 +106,13 @@ it('extracts release data while excluding executable package and Cargo configura
       source
     )
     const missing = await runProcess({
-      program: 'bash',
+      program: shell,
       args: ['-c', action.runs.steps[0].run],
       cwd: tooling,
       env: { ...process.env, RELEASE_REF: 'HEAD' }
     })
     expect(missing.code).not.toBe(0)
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    await removeTree(root)
   }
 })

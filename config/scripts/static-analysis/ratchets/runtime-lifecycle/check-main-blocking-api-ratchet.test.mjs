@@ -1,8 +1,9 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { removeTreeSync } from '../../../../../src/shared/file-write/windows-transient-lock-removal.ts'
 import { main as fsMain } from './check-main-sync-fs-ratchet.mjs'
 import '../../process-boundaries/check-main-sync-spawn-ratchet.mjs'
 import { countBlockingApis, main } from './check-main-blocking-api-ratchet.mjs'
@@ -19,10 +20,12 @@ const counts = (source, name = file) =>
     ])
   )
 const roots = []
+// Why bun on Windows spawns git in seconds each: the fixture plus five esbuild-backed scans shell out repeatedly.
+vi.setConfig({ testTimeout: 120_000 })
 afterEach(() => {
   vi.restoreAllMocks()
   for (const root of roots.splice(0)) {
-    rmSync(root, { recursive: true, force: true })
+    removeTreeSync(root)
   }
 })
 

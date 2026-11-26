@@ -12,6 +12,7 @@ import type * as NodeFsPromises from 'node:fs/promises'
 import type * as NodeOs from 'node:os'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { errnoCodeOrUnknown } from '../../shared/errors/errno-code'
 
 const { homedirMock, getPathMock, parseReads, handles, mutation } = vi.hoisted(() => {
   const parseReads: { path: string; start: number; bytes: number }[] = []
@@ -173,7 +174,15 @@ describe('Codex checkpoint file races', () => {
         if (kind === 'rotate') {
           const replacementPath = join(root, 'replacement.jsonl')
           writeFileSync(replacementPath, replacement)
-          renameSync(replacementPath, filePath)
+          try {
+            renameSync(replacementPath, filePath)
+          } catch (error) {
+            // Windows locks open files against rename; overwriting still changes every check the scanner reads there.
+            if (!['EPERM', 'EBUSY', 'EACCES'].includes(errnoCodeOrUnknown(error))) {
+              throw error
+            }
+            writeFileSync(filePath, replacement)
+          }
         } else {
           writeFileSync(filePath, replacement)
         }

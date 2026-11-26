@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
+import type * as WslUncAccessGateModule from '../../../wsl/filesystem/wsl-unc-access-gate'
 
 const mocks = vi.hoisted(() => ({ graph: vi.fn(), runtimes: vi.fn(), realpath: vi.fn() }))
 vi.mock('node:fs', () => ({ realpathSync: (path: string) => path }))
@@ -13,6 +14,11 @@ vi.mock('../../../workspaces/catalog/repo-worktrees', () => ({
 }))
 vi.mock('../../../workspaces/execution-host/local-project-runtime-resolution', () => ({
   resolveLocalProjectRuntimesForRepos: mocks.runtimes
+}))
+// A stopped distro defers background listing; pretend Ubuntu runs so the relist path is exercised.
+vi.mock('../../../wsl/filesystem/wsl-unc-access-gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslUncAccessGateModule>()),
+  blockedWslDistroForPath: async () => null
 }))
 import { resolveAuthorizedPath } from '../../filesystem/access/filesystem-auth'
 import {

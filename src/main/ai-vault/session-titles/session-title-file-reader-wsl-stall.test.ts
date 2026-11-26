@@ -7,6 +7,11 @@ const LOCAL_SESSION_ID = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff'
 
 const mocks = vi.hoisted(() => ({ lstat: vi.fn() }))
 
+// Stall the gate timeout, not distro admission: real wsl.exe hangs wedge this box.
+vi.mock('../../native-chat/transcript-filesystem/wsl-transcript-running-admission', () => ({
+  admitWslTranscriptPath: async () => {}
+}))
+
 vi.mock('node:fs/promises', async (importOriginal) => {
   const original = await importOriginal<typeof NodeFsPromisesModule>()
   return {
@@ -18,15 +23,19 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   }
 })
 
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeTree } from '../../../shared/file-write/windows-transient-lock-removal'
 import { readAiVaultSessionTitlesFromFiles } from './session-title-file-reader'
 import { resetSessionParseCacheForTests } from '../parse-cache/session-parse-cache-store'
 import {
   resetWslTranscriptFsGateForTests,
   WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS
 } from '../../native-chat/transcript-filesystem/wsl-transcript-fs-gate'
+
+// Why advancing the WSL gate timeout under fake timers stalls past 30s on a loaded gate host.
+vi.setConfig({ testTimeout: 120_000 })
 
 let releaseStall: (() => void) | undefined
 let tempRoot: string | undefined
@@ -62,7 +71,7 @@ afterEach(async () => {
   await vi.advanceTimersByTimeAsync(0)
   vi.useRealTimers()
   if (tempRoot) {
-    await rm(tempRoot, { recursive: true, force: true })
+    await removeTree(tempRoot)
     tempRoot = undefined
   }
 })

@@ -56,7 +56,8 @@ import {
 import {
   computeCodexTrustKey as computeTrustKey,
   getExplicitHomeCodexHookSourcePath as getCodexExplicitHomeHookSourcePath,
-  computeCodexTrustedHash as computeTrustedHash
+  computeCodexTrustedHash as computeTrustedHash,
+  normalizeCodexHookTrustLookupKey as normalizeTrustLookupKey
 } from '../../trust/identity/codex-trust-identity'
 import {
   CODEX_EVENTS,
@@ -266,7 +267,9 @@ describe('managed-home Codex hook approval', () => {
       writeCodexTrustGrantLedgerHome(managedHome(), {
         binary: null,
         entries: {
-          [computeTrustKey(entry)]: {
+          // Ledger entries are keyed by lookup key (folded separators and case); the raw
+          // computeTrustKey only matches on POSIX, so Windows misses the grant without this.
+          [normalizeTrustLookupKey(computeTrustKey(entry))]: {
             signature: getCodexHookTrustSignature(entry),
             trustedHash: 'sha256:main-granted'
           }

@@ -20,7 +20,7 @@ vi.mock('../ai-vault/discovery/ai-vault-scan-roots', async (importOriginal) => (
 }))
 
 let harness: SessionSearchIndexerHarness
-let installed: { apply?(settings: AiVaultSearchSettings): void; dispose(): void } | null
+let installed: { apply?(settings: AiVaultSearchSettings): void; dispose(): unknown } | null
 
 beforeEach(async () => {
   resetSessionParseCacheForTests()
@@ -31,7 +31,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  installed?.dispose()
+  await installed?.dispose()
   const { setSessionSearchService } = await import('./session-search-service-registry')
   setSessionSearchService(null)
   resetSessionSearchPolicyForTests()
@@ -50,7 +50,7 @@ it('orcad resolves no roots while disabled and discovers late roots when enabled
     getScopeCatalog: () => null
   })
   expect(localAiVaultScanRoots).not.toHaveBeenCalled()
-  installed?.dispose()
+  await installed?.dispose()
   installed = await installOrcadSessionSearchService({
     userDataPath: harness.root,
     getSettings: () => ({ aiVaultSearch: { enabled: true, historyDays: null } }),

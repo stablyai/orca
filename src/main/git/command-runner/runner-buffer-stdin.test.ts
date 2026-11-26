@@ -1,12 +1,16 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
+import { removeTree } from '../../../shared/file-write/windows-transient-lock-removal'
 import { gitExecFileAsync, gitExecFileAsyncBuffer } from './git-exec-file'
+
+// Why real git spawns stall under gate load; the default 30s budget flakes.
+vi.setConfig({ testTimeout: 120_000 })
 
 const roots: string[] = []
 afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  await Promise.all(roots.splice(0).map((root) => removeTree(root)))
 })
 
 it('delivers stdin to buffered Git reads', async () => {

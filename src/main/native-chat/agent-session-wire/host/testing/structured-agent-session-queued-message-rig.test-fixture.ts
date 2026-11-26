@@ -1,4 +1,5 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
+import { removeTree } from '../../../../../shared/file-write/windows-transient-lock-removal'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect } from 'vitest'
@@ -285,7 +286,8 @@ export async function createQueuedMessageTestRig(
   async function dispose(): Promise<void> {
     await host.flushAllStreamedEvents()
     await closeTestJournalHostDatabase(root)
-    await rm(root, { recursive: true, force: true })
+    // Bun ignores rm maxRetries; removeTree retries the whole pass itself.
+    await removeTree(root)
   }
 
   return {

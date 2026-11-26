@@ -105,15 +105,19 @@ describe('guarded Grok hook config mutation', () => {
     await expect(cleanup).resolves.toBe(false)
   })
 
-  it('preserves the existing file mode on replacement', async () => {
-    const configPath = makeConfigPath()
-    const installed = '{"hooks":{"SessionStart":[]}}\n'
-    writeFileSync(configPath, installed)
-    chmodSync(configPath, 0o600)
+  // Windows files report 0o666 no matter the chmod, so mode preservation is POSIX-only.
+  it.skipIf(process.platform === 'win32')(
+    'preserves the existing file mode on replacement',
+    async () => {
+      const configPath = makeConfigPath()
+      const installed = '{"hooks":{"SessionStart":[]}}\n'
+      writeFileSync(configPath, installed)
+      chmodSync(configPath, 0o600)
 
-    await expect(
-      writeGrokHookConfigIfUnchanged(configPath, installed, '{"hooks":{}}\n')
-    ).resolves.toBe(true)
-    expect(statSync(configPath).mode & 0o777).toBe(0o600)
-  })
+      await expect(
+        writeGrokHookConfigIfUnchanged(configPath, installed, '{"hooks":{}}\n')
+      ).resolves.toBe(true)
+      expect(statSync(configPath).mode & 0o777).toBe(0o600)
+    }
+  )
 })

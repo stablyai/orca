@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../../../../shared/git/fetch/git-fetch-auto-maintenance'
 import {
   measureRetargetDivergence,
@@ -10,6 +10,9 @@ import {
 } from './worktree-base-divergence'
 
 const tempRoots: string[] = []
+
+// Real git on a loaded Windows host exceeds both the 30s global budget and the 2s probe budget.
+vi.setConfig({ testTimeout: 120_000 })
 
 // Disable detached maintenance so commit-graph writes cannot race fixture teardown.
 function git(cwd: string, args: string[]): string {
@@ -57,7 +60,9 @@ describe('measureRetargetDivergence with real Git', () => {
     git(repoPath, ['reset', '--hard', '--quiet', 'HEAD~3'])
 
     await expect(
-      measureRetargetDivergence(repoPath, 'refs/heads/main', 'refs/remotes/origin/main')
+      measureRetargetDivergence(repoPath, 'refs/heads/main', 'refs/remotes/origin/main', {
+        budgetMsForTest: 120_000
+      })
     ).resolves.toBe('within')
   })
 
@@ -70,7 +75,9 @@ describe('measureRetargetDivergence with real Git', () => {
     commitEmpty(repoPath, 1)
 
     await expect(
-      measureRetargetDivergence(repoPath, 'refs/heads/main', 'refs/remotes/origin/main')
+      measureRetargetDivergence(repoPath, 'refs/heads/main', 'refs/remotes/origin/main', {
+        budgetMsForTest: 120_000
+      })
     ).resolves.toBe('exceeded')
   })
 
@@ -80,7 +87,9 @@ describe('measureRetargetDivergence with real Git', () => {
     git(repoPath, ['commit', '--quiet', '--allow-empty', '-m', 'unrelated root'])
 
     await expect(
-      measureRetargetDivergence(repoPath, 'refs/heads/main', 'refs/heads/unrelated')
+      measureRetargetDivergence(repoPath, 'refs/heads/main', 'refs/heads/unrelated', {
+        budgetMsForTest: 120_000
+      })
     ).resolves.toBe('exceeded')
   })
 
@@ -88,7 +97,9 @@ describe('measureRetargetDivergence with real Git', () => {
     const repoPath = await createRepo()
 
     await expect(
-      measureRetargetDivergence(repoPath, 'refs/heads/main', 'refs/heads/missing')
+      measureRetargetDivergence(repoPath, 'refs/heads/main', 'refs/heads/missing', {
+        budgetMsForTest: 120_000
+      })
     ).resolves.toBe('unknown')
   })
 })

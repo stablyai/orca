@@ -20,9 +20,12 @@ import { writeHooksJson } from '../configuration/hooks-json-write'
 import type { HooksConfig } from '../configuration/hook-config-schema'
 import '../scripts/hook-post-command'
 import { wrapRuntimeHomeHookCommand } from '../commands/runtime-home-hook-command'
+import { findGitBash } from '../commands/testing/windows-git-bash-path.test-fixture'
 
 let tmpDir: string
 let configPath: string
+// Why shell spawns stall past 5s on a loaded gate; the exit code is what's asserted, not the speed.
+const spawnTimeoutMs = 30_000
 
 beforeEach(() => {
   tmpDir = mkdtempSync(join(tmpdir(), 'orca-installer-utils-test-'))
@@ -112,7 +115,7 @@ describe('wrapPosixHookCommand', () => {
         program: '/bin/sh',
         args: ['-c', wrapPosixHookCommand(scriptPath)],
         env: paneEnv,
-        timeoutMs: 5000
+        timeoutMs: spawnTimeoutMs
       })
       expect(result.code).toBe(0)
       expect(result.stdout).toBe('quoted-path\n')
@@ -133,7 +136,7 @@ describe('wrapPosixHookCommand', () => {
         program: '/bin/sh',
         args: ['-c', `${command}; printf '\n%s' "$ORCA_COPILOT_HOOK_EVENT"`],
         env: { ...paneEnv, ORCA_COPILOT_HOOK_EVENT: 'parent-value' },
-        timeoutMs: 5000
+        timeoutMs: spawnTimeoutMs
       })
       expect(result.code).toBe(0)
       expect(result.stdout).toBe(`${event}\nparent-value`)
@@ -149,7 +152,7 @@ describe('wrapPosixHookCommand', () => {
         program: '/bin/sh',
         args: ['-c', cmd],
         input: 'x'.repeat(1_000_000),
-        timeoutMs: 5000
+        timeoutMs: spawnTimeoutMs
       })
       expect(result.code).toBe(0)
       expect(result.stdout).toBe('{"a":"b"}\n')
@@ -168,7 +171,7 @@ describe('wrapPosixHookCommand', () => {
         program: '/bin/sh',
         args: ['-c', cmd],
         env: paneEnv,
-        timeoutMs: 5000
+        timeoutMs: spawnTimeoutMs
       })
       expect(result.code).toBe(7)
     }
@@ -190,7 +193,7 @@ describe('wrapWindowsHookCommand', () => {
         program: 'cmd.exe',
         args: ['/d', '/c', wrapWindowsHookCommand(scriptPath)],
         env: { ...process.env, ORCA_WRAP_TEST: 'expanded' },
-        timeoutMs: 5000
+        timeoutMs: spawnTimeoutMs
       })
 
       expect(result.code).toBe(7)
@@ -199,10 +202,8 @@ describe('wrapWindowsHookCommand', () => {
 })
 
 describe('wrapRuntimeHomeHookCommand', () => {
-  const shell =
-    process.platform === 'win32'
-      ? join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Git', 'bin', 'bash.exe')
-      : '/bin/sh'
+  // WSL's bash.exe shadows Git Bash on PATH; resolve the MSYS shell explicitly.
+  const shell = process.platform === 'win32' ? findGitBash() : '/bin/sh'
 
   // Grok rejects unresolved bare variables even in untaken branches.
 
@@ -237,7 +238,7 @@ describe('wrapRuntimeHomeHookCommand', () => {
         HOME: destinationHome.replaceAll('\\', '/'),
         USERPROFILE: destinationHome
       },
-      timeoutMs: 5000
+      timeoutMs: spawnTimeoutMs
     })
 
     expect(result.timedOut).toBe(false)
@@ -253,7 +254,7 @@ describe('wrapRuntimeHomeHookCommand', () => {
       ],
       env: { ...process.env, HOME: tmpDir.replaceAll('\\', '/') },
       input: 'x'.repeat(1_000_000),
-      timeoutMs: 5000
+      timeoutMs: spawnTimeoutMs
     })
 
     expect(result.timedOut).toBe(false)

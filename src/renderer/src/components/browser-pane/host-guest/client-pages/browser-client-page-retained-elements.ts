@@ -59,12 +59,13 @@ export function registerBrowserClientPageGuestMessageHandler(
 }
 
 export function createBrowserClientPageWebview(options: {
-  createWebview?: () => Electron.WebviewTag
+  createWebview?: (identity: { browserPageId: string; partition: string }) => Electron.WebviewTag
   document: Document
   identity: { browserPageId: string; partition: string }
 }): Electron.WebviewTag {
   const webview =
-    options.createWebview?.() ?? (options.document.createElement('webview') as Electron.WebviewTag)
+    options.createWebview?.(options.identity) ??
+    (options.document.createElement('webview') as Electron.WebviewTag)
   webview.setAttribute('partition', options.identity.partition)
   webview.setAttribute('allowpopups', '')
   webview.setAttribute('webpreferences', ORCA_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE)

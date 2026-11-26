@@ -201,129 +201,161 @@ async function approvalOf(promise: Promise<unknown>): Promise<PluginApprovalRequ
 }
 
 describe('orca plugin install and update over Git', () => {
-  it('refuses code without --approve, writes nothing, and installs with the shown fingerprint', async () => {
-    const { deps, lock } = await harness()
-    const source = { kind: 'git' as const, input: NOTES_URL }
+  it(
+    'refuses code without --approve, writes nothing, and installs with the shown fingerprint',
+    async () => {
+      const { deps, lock } = await harness()
+      const source = { kind: 'git' as const, input: NOTES_URL }
 
-    const required = await approvalOf(installPluginFromCli(deps, source, undefined))
-    expect(required.data.grants.execution).toBe('trusted-worker')
-    expect(await lock()).toEqual({})
+      const required = await approvalOf(installPluginFromCli(deps, source, undefined))
+      expect(required.data.grants.execution).toBe('trusted-worker')
+      expect(await lock()).toEqual({})
 
-    await approvalOf(installPluginFromCli(deps, source, 'ap1-wrong'))
+      await approvalOf(installPluginFromCli(deps, source, 'ap1-wrong'))
 
-    const outcome = await installPluginFromCli(deps, source, required.data.approvalFingerprint)
-    expect(outcome).toMatchObject({
-      pluginKey: 'acme.notes',
-      version: '1.0.0',
-      approval: 'approve-flag'
-    })
-  })
+      const outcome = await installPluginFromCli(deps, source, required.data.approvalFingerprint)
+      expect(outcome).toMatchObject({
+        pluginKey: 'acme.notes',
+        version: '1.0.0',
+        approval: 'approve-flag'
+      })
+    },
+    // Why: the git-over-SSH harness blows the 30s budget even on an idle box.
+    90000
+  )
 
-  it('keeps approval across an update that asks for nothing new', async () => {
-    const { deps, notes } = await harness()
-    const first = await approvalOf(
-      installPluginFromCli(deps, { kind: 'git', input: NOTES_URL }, undefined)
-    )
-    await installPluginFromCli(
-      deps,
-      { kind: 'git', input: NOTES_URL },
-      first.data.approvalFingerprint
-    )
-    await commitTag(
-      notes,
-      {
-        'orca-plugin.json': workerManifest('1.0.1', [{ kind: 'terminal:send' }]),
-        'main.mjs': 'export const v = 2\n'
-      },
-      'v1.0.1'
-    )
-
-    const outcome = await updatePluginFromCli(deps, 'acme.notes', undefined)
-
-    expect(outcome).toMatchObject({ status: 'updated', version: '1.0.1', approval: 'kept' })
-    await expect(updatePluginFromCli(deps, 'acme.notes', undefined)).resolves.toMatchObject({
-      status: 'up-to-date'
-    })
-  })
-
-  it('holds an update that grows access until it is approved, leaving the running version', async () => {
-    const { deps, notes, lock } = await harness()
-    const first = await approvalOf(
-      installPluginFromCli(deps, { kind: 'git', input: NOTES_URL }, undefined)
-    )
-    await installPluginFromCli(
-      deps,
-      { kind: 'git', input: NOTES_URL },
-      first.data.approvalFingerprint
-    )
-    await commitTag(
-      notes,
-      {
-        'orca-plugin.json': workerManifest('1.1.0', [
-          { kind: 'terminal:send' },
-          { kind: 'notifications:show' }
-        ])
-      },
-      'v1.1.0'
-    )
-
-    const required = await approvalOf(updatePluginFromCli(deps, 'acme.notes', undefined))
-    expect(required.data.action).toBe('update')
-    expect(required.data.update?.growth?.capabilities).toEqual(['notifications:show'])
-    expect((await lock())['acme.notes']?.version).toBe('1.0.0')
-
-    const outcome = await updatePluginFromCli(deps, 'acme.notes', required.data.approvalFingerprint)
-    expect(outcome).toMatchObject({ status: 'updated', version: '1.1.0', approval: 'approve-flag' })
-  })
-
-  it('asks again before a catalog update moves even a content-only plugin to another repository', async () => {
-    const { root, deps, locale, repositories, consents, lock } = await harness()
-    const catalog = join(root, 'catalog')
-    const moved = join(root, 'moved-locale')
-    await mkdir(catalog, { recursive: true })
-    await git(catalog, ['init', '--quiet', '--initial-branch=master'])
-    const listCatalog = (url: string, tag: string) =>
-      commitTag(
-        catalog,
-        {
-          'orca-marketplace.json': JSON.stringify({
-            name: 'Team Plugins',
-            owner: 'team',
-            plugins: [{ id: 'acme.locale', source: { kind: 'git', url, ref: 'v1.0.0' } }]
-          })
-        },
-        tag
+  it(
+    'keeps approval across an update that asks for nothing new',
+    async () => {
+      const { deps, notes } = await harness()
+      const first = await approvalOf(
+        installPluginFromCli(deps, { kind: 'git', input: NOTES_URL }, undefined)
       )
-    await listCatalog(LOCALE_URL, 'c1')
-    await execFileAsync('git', ['clone', '--quiet', locale, moved])
-    await commitTag(moved, { 'locale.json': JSON.stringify({ settings: { title: 'Def' } }) }, 'v9')
-    await git(moved, ['tag', '--force', 'v1.0.0'])
-    await sshShim(root, {
-      ...repositories,
-      '/team/catalog.git': catalog,
-      '/someone-else/locale.git': moved
-    })
-    await deps.catalogs.marketplace.addSource({
-      kind: 'git',
-      url: 'ssh://git@example.invalid/team/catalog.git',
-      ref: 'master'
-    })
-    await installPluginFromCli(deps, { kind: 'catalog', pluginKey: 'acme.locale' }, undefined)
-    const approved = consents['acme.locale']
+      await installPluginFromCli(
+        deps,
+        { kind: 'git', input: NOTES_URL },
+        first.data.approvalFingerprint
+      )
+      await commitTag(
+        notes,
+        {
+          'orca-plugin.json': workerManifest('1.0.1', [{ kind: 'terminal:send' }]),
+          'main.mjs': 'export const v = 2\n'
+        },
+        'v1.0.1'
+      )
 
-    await listCatalog('ssh://git@example.invalid/someone-else/locale.git', 'c2')
-    const required = await approvalOf(updatePluginFromCli(deps, 'acme.locale', undefined))
+      const outcome = await updatePluginFromCli(deps, 'acme.notes', undefined)
 
-    expect(required.data.update?.repositoryMoved?.to).toContain('someone-else/locale')
-    expect(consents['acme.locale']).toBe(approved)
-    const installedCommit = (await lock())['acme.locale']?.resolvedCommit
-    const outcome = await updatePluginFromCli(
-      deps,
-      'acme.locale',
-      required.data.approvalFingerprint
-    )
-    expect(outcome).toMatchObject({ status: 'updated', approval: 'content-only' })
-    expect((await lock())['acme.locale']?.resolvedCommit).not.toBe(installedCommit)
-    // Dropped before the moved files published, then granted again by this explicit approval.
-  })
+      expect(outcome).toMatchObject({ status: 'updated', version: '1.0.1', approval: 'kept' })
+      await expect(updatePluginFromCli(deps, 'acme.notes', undefined)).resolves.toMatchObject({
+        status: 'up-to-date'
+      })
+    },
+    // Why: the git-over-SSH harness blows the 30s budget even on an idle box.
+    90000
+  )
+
+  it(
+    'holds an update that grows access until it is approved, leaving the running version',
+    async () => {
+      const { deps, notes, lock } = await harness()
+      const first = await approvalOf(
+        installPluginFromCli(deps, { kind: 'git', input: NOTES_URL }, undefined)
+      )
+      await installPluginFromCli(
+        deps,
+        { kind: 'git', input: NOTES_URL },
+        first.data.approvalFingerprint
+      )
+      await commitTag(
+        notes,
+        {
+          'orca-plugin.json': workerManifest('1.1.0', [
+            { kind: 'terminal:send' },
+            { kind: 'notifications:show' }
+          ])
+        },
+        'v1.1.0'
+      )
+
+      const required = await approvalOf(updatePluginFromCli(deps, 'acme.notes', undefined))
+      expect(required.data.action).toBe('update')
+      expect(required.data.update?.growth?.capabilities).toEqual(['notifications:show'])
+      expect((await lock())['acme.notes']?.version).toBe('1.0.0')
+
+      const outcome = await updatePluginFromCli(
+        deps,
+        'acme.notes',
+        required.data.approvalFingerprint
+      )
+      expect(outcome).toMatchObject({
+        status: 'updated',
+        version: '1.1.0',
+        approval: 'approve-flag'
+      })
+    },
+    // Why: the git-over-SSH harness blows the 30s budget even on an idle box.
+    90000
+  )
+
+  it(
+    'asks again before a catalog update moves even a content-only plugin to another repository',
+    async () => {
+      const { root, deps, locale, repositories, consents, lock } = await harness()
+      const catalog = join(root, 'catalog')
+      const moved = join(root, 'moved-locale')
+      await mkdir(catalog, { recursive: true })
+      await git(catalog, ['init', '--quiet', '--initial-branch=master'])
+      const listCatalog = (url: string, tag: string) =>
+        commitTag(
+          catalog,
+          {
+            'orca-marketplace.json': JSON.stringify({
+              name: 'Team Plugins',
+              owner: 'team',
+              plugins: [{ id: 'acme.locale', source: { kind: 'git', url, ref: 'v1.0.0' } }]
+            })
+          },
+          tag
+        )
+      await listCatalog(LOCALE_URL, 'c1')
+      await execFileAsync('git', ['clone', '--quiet', locale, moved])
+      await commitTag(
+        moved,
+        { 'locale.json': JSON.stringify({ settings: { title: 'Def' } }) },
+        'v9'
+      )
+      await git(moved, ['tag', '--force', 'v1.0.0'])
+      await sshShim(root, {
+        ...repositories,
+        '/team/catalog.git': catalog,
+        '/someone-else/locale.git': moved
+      })
+      await deps.catalogs.marketplace.addSource({
+        kind: 'git',
+        url: 'ssh://git@example.invalid/team/catalog.git',
+        ref: 'master'
+      })
+      await installPluginFromCli(deps, { kind: 'catalog', pluginKey: 'acme.locale' }, undefined)
+      const approved = consents['acme.locale']
+
+      await listCatalog('ssh://git@example.invalid/someone-else/locale.git', 'c2')
+      const required = await approvalOf(updatePluginFromCli(deps, 'acme.locale', undefined))
+
+      expect(required.data.update?.repositoryMoved?.to).toContain('someone-else/locale')
+      expect(consents['acme.locale']).toBe(approved)
+      const installedCommit = (await lock())['acme.locale']?.resolvedCommit
+      const outcome = await updatePluginFromCli(
+        deps,
+        'acme.locale',
+        required.data.approvalFingerprint
+      )
+      expect(outcome).toMatchObject({ status: 'updated', approval: 'content-only' })
+      expect((await lock())['acme.locale']?.resolvedCommit).not.toBe(installedCommit)
+      // Dropped before the moved files published, then granted again by this explicit approval.
+    },
+    // Why: the git-over-SSH harness blows the 30s budget even on an idle box.
+    90000
+  )
 })

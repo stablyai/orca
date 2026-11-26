@@ -1,9 +1,13 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { removeTreeSync } from '../../shared/file-write/windows-transient-lock-removal'
 import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
 import { readIssueCommandUnlessWslStopped, writeIssueCommand } from './issue-command-file'
+
+// Why real git on a loaded Windows host exceeds the 30s global budget.
+vi.setConfig({ testTimeout: 120_000 })
 
 describe('issue command ignore rules', () => {
   let root: string
@@ -28,7 +32,7 @@ describe('issue command ignore rules', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs()
-    rmSync(root, { recursive: true, force: true })
+    removeTreeSync(root)
   })
 
   it('respects shared repository excludes from a linked worktree', async () => {

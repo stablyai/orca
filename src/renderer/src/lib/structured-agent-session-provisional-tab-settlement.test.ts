@@ -16,11 +16,12 @@ vi.mock('@/store', () => ({
       unifiedTabsByWorktree: {},
       activeGroupIdByWorktree: {},
       createUnifiedTab: mocks.createUnifiedTab,
+      getTab: vi.fn((id: string) => ({ id })),
       setActiveTabType: vi.fn()
     })
   }
 }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('@/runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: (_target: unknown, method: string) =>
     method === 'agentSession.createSupport' ? mocks.createSupport() : new Promise(() => undefined)
 }))

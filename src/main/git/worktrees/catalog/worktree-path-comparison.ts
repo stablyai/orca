@@ -137,5 +137,7 @@ export function translateWorktreePath(
 ): string {
   const prefix = 'worktree '
   const translated = translateWslOutputPaths(`${prefix}${worktreePath}`, repoPath, options)
-  return translated.startsWith(prefix) ? translated.slice(prefix.length) : worktreePath
+  const pathValue = translated.startsWith(prefix) ? translated.slice(prefix.length) : worktreePath
+  // Git prints Windows paths with forward slashes; match join/realpath spelling for strict consumers.
+  return looksLikeWindowsPath(pathValue) ? win32.normalize(pathValue) : pathValue
 }

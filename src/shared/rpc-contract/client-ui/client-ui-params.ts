@@ -118,7 +118,8 @@ export const TopLevelViewSchema = z
     'artifacts',
     'workbench',
     'mobile',
-    'rooms'
+    'rooms',
+    'web-bots'
   ])
   .transform((view) => (view === 'botTemplates' ? 'terminal' : view))
 

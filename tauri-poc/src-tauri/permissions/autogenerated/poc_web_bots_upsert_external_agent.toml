@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-poc-web-bots-upsert-external-agent"
+description = "Enables the poc_web_bots_upsert_external_agent command without any pre-configured scope."
+commands.allow = ["poc_web_bots_upsert_external_agent"]
+
+[[permission]]
+identifier = "deny-poc-web-bots-upsert-external-agent"
+description = "Denies the poc_web_bots_upsert_external_agent command without any pre-configured scope."
+commands.deny = ["poc_web_bots_upsert_external_agent"]

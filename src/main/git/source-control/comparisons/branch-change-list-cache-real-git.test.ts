@@ -2,8 +2,11 @@ import { execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, realpath, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getBranchCompare } from './branch-compare'
+
+// Real git on a loaded Windows host exceeds the 30s global budget.
+vi.setConfig({ testTimeout: 120_000 })
 
 // Old mtimes put every input past the racy-write margin, so only stamp contents decide reuse.
 const aged = new Date('2020-01-01T00:00:00Z')

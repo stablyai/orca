@@ -28,7 +28,10 @@ vi.mock('../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal
   return {
     ...(await importOriginal<typeof WorktreeScanCacheModule>()),
     listWorktrees: facade.listWorktrees,
-    listWorktreesSharedStrict: (await getWorktreeOwnerMocks()).listWorktreesSharedStrict
+    listWorktreesSharedStrict: facade.listWorktreesSharedStrict,
+    // The graph read is the same strict authority; share the mock so the lifecycle
+    // delegation to listWorktrees covers both.
+    listWorktreeGraphSharedStrict: facade.listWorktreesSharedStrict
   }
 })
 

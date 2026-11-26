@@ -100,7 +100,9 @@ async function readSkills(
   }
   const root = await ownPath(home, ...relative(home.path, scanned.skillsDir).split(sep))
   if (root === null || root === 'linked') {
-    leftOut.push({ kind: 'skill', name: relative(home.path, scanned.skillsDir), why: 'linked' })
+    // Forward slashes like every other shareable name; relative() yields backslashes on Windows.
+    const name = relative(home.path, scanned.skillsDir).split(sep).join('/')
+    leftOut.push({ kind: 'skill', name, why: 'linked' })
     return []
   }
   const skills: BotShareable['skills'] = []

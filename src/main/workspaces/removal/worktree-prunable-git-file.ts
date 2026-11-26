@@ -1,10 +1,14 @@
+import { dirname } from 'node:path'
+
 import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
+import { errnoCodeOrUnknown } from '../../../shared/errors/errno-code'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 
 import {
   type LocalWorktreeFilesystemOptions,
   getLocalWorktreePathAccess
 } from './local-worktree-filesystem'
+import { isGitFileStat, type WorktreeProofAccess } from './worktree-orphan-gitdir-proof'
 
 /** Malformed .git paths must never resolve cleanup to a parent checkout. */
 export async function isPrunableGitFileWorktree(
@@ -27,10 +31,17 @@ export async function isPrunableGitFileWorktree(
   const entry = await access.statPath(worktree.path).catch((error: unknown) => {
     // A vanished marker leaves missing-path recovery to its existing stricter gate.
     if (isENOENT(error)) {
-      return null
+      return malformedFileParent(worktree.path, access)
+    }
+    // ENOTDIR proves an ancestor is a file, so the registration points inside .git data rather than a checkout.
+    if (errnoCodeOrUnknown(error) === 'ENOTDIR') {
+      return true
     }
     throw error
   })
+  if (entry === true) {
+    return true
+  }
   if (!entry || typeof entry !== 'object') {
     return false
   }
@@ -39,4 +50,13 @@ export async function isPrunableGitFileWorktree(
     ('type' in entry && entry.type === 'file') ||
     ('isFile' in entry && typeof entry.isFile === 'function' && entry.isFile() === true)
   )
+}
+
+// Windows reports a path through a file as ENOENT, so a file parent proves the registration points inside .git data.
+async function malformedFileParent(
+  path: string,
+  access: WorktreeProofAccess
+): Promise<true | null> {
+  const parent = await access.statPath(dirname(path)).catch(() => null)
+  return isGitFileStat(parent) ? true : null
 }

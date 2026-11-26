@@ -1,10 +1,14 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it, vi } from 'vitest'
+import { removeTreeSync } from '../../../../shared/file-write/windows-transient-lock-removal'
 import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { admitSystemSshLoopbackRoute } from './system-ssh-loopback-route-admission'
 import { findSystemSsh } from '../system-ssh-binary'
+
+// Why real ssh -G spawns stall under gate load; the default 30s budget flakes.
+vi.setConfig({ testTimeout: 120_000 })
 
 const target: SshTarget = {
   id: 'target-1',
@@ -18,7 +22,7 @@ const target: SshTarget = {
 // Real OpenSSH: the drift is in how ssh_config matches, which only OpenSSH can answer.
 describe.skipIf(findSystemSsh() === null)('admitSystemSshLoopbackRoute with real ssh -G', () => {
   const dir = mkdtempSync(join(tmpdir(), 'orca-loopback-admission-'))
-  afterAll(() => rmSync(dir, { recursive: true, force: true }))
+  afterAll(() => removeTreeSync(dir))
 
   function writeConfig(name: string, body: string): string {
     const path = join(dir, name)

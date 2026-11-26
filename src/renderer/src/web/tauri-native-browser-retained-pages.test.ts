@@ -76,21 +76,31 @@ describe('Tauri retained browser pages', () => {
   })
 
   it('passes page identity to the factory and syncs bounds only after insertion', async () => {
-    const createWebview = vi.fn(() =>
-      createTauriNativeBrowserWebview({
+    const created: Electron.WebviewTag[] = []
+    const createWebview = vi.fn(() => {
+      const webview = createTauriNativeBrowserWebview({
         ...PAGE,
         container: document.createElement('div'),
         visible: false,
         appendToContainer: false
       })
-    )
+      created.push(webview)
+      return webview
+    })
     const registry = new BrowserClientPageRetainedRegistry({
       document,
       createWebview
     })
     registries.push(registry)
 
-    await registry.mountPage(PAGE)
+    const mounting = registry.mountPage(PAGE)
+    // Why: attachment only finishes after the guest's load stops; the mocked native layer never emits it.
+    await vi.waitFor(() => expect(created.length).toBe(1))
+    for (const webview of created) {
+      webview.dispatchEvent(new Event('did-finish-load'))
+      webview.dispatchEvent(new Event('did-stop-loading'))
+    }
+    await mounting
     expect(createWebview).toHaveBeenCalledOnce()
     const nextPage = { ...PAGE, pageHostGeneration: 2 }
     registry.rekeyPage(PAGE, nextPage)
@@ -122,7 +132,17 @@ describe('Tauri retained browser pages', () => {
       throw new Error('Tauri native page renderer was not installed')
     }
     installations.push(installation)
-    const mounted = await callback({ requestId: 'mount-native', type: 'mountPage', page: PAGE })
+    const mounting = callback({ requestId: 'mount-native', type: 'mountPage', page: PAGE })
+    // Why: attachment only finishes after the guest's load stops; the mocked native layer never emits it.
+    const webview = await vi.waitFor(() => {
+      const element = document.querySelector('[data-tauri-browser-page-id]')
+      expect(element).toBeInstanceOf(HTMLElement)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the expect above throws unless this is an HTMLElement.
+      return element as HTMLElement
+    })
+    webview.dispatchEvent(new Event('did-finish-load'))
+    webview.dispatchEvent(new Event('did-stop-loading'))
+    const mounted = await mounting
     expect(mounted).toEqual({ type: 'mounted', webContentsId: expect.any(Number) })
     expect(native.invoke).toHaveBeenCalledWith('poc_browser_create', {
       args: expect.objectContaining({

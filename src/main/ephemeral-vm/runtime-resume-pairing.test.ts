@@ -20,6 +20,9 @@ const hostKey = Buffer.alloc(32, 7).toString('base64')
 const rotatedHostKey = Buffer.alloc(32, 9).toString('base64')
 const unpaddedHostKey = Buffer.alloc(32, 7).toString('base64url')
 
+// Why twenty worker-thread store round trips exceed the 30s global budget on a loaded host.
+vi.setConfig({ testTimeout: 120_000 })
+
 /** Stands in for the VM's server: its state dir survives suspend, and each boot prints a startup offer. */
 function bootVm(serverDataPath: string, endpoint: string, publicKeyB64 = hostKey): string {
   const offer = new DeviceRegistry(serverDataPath).getOrCreatePendingDevice('CLI', 'runtime')

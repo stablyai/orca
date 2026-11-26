@@ -110,7 +110,7 @@ describe('native-chat paste folder on disk', () => {
     const deep = path.join(workspace, ...Array.from({ length: depth }, (_, i) => `d${i}`))
     mkdirSync(deep, { recursive: true })
     symlinkSync(deep, path.join(workspace, 's'))
-    const tail = secret.slice(1)
+    const tail = secret.slice(path.parse(secret).root.length)
     mkdirSync(path.dirname(path.join(workspace, tail)), { recursive: true })
     symlinkSync(paste, path.join(workspace, tail))
     const crafted = `${workspace}/s/${'../'.repeat(depth)}${tail}`
@@ -136,10 +136,15 @@ describe('native-chat paste folder on disk', () => {
     symlinkSync(path.join(sub, 'deeper'), path.join(folder, 'link'))
     symlinkSync(secret, path.join(folder, 'orca-paste-y.png'))
     const restored = `${folder}/link/../orca-paste-y.png`
-    expect(realpathSync.native(restored)).toBe(realpathSync(path.join(sub, 'orca-paste-y.png')))
+    // Windows collapses `link/..` to the link's parent, so the real path is the
+    // secret the stored spelling names; POSIX follows the link into the sub paste.
+    const windowsRealPath = process.platform === 'win32'
+    expect(realpathSync.native(restored)).toBe(
+      windowsRealPath ? realpathSync(secret) : realpathSync(path.join(sub, 'orca-paste-y.png'))
+    )
 
     await expect(restoreNativeChatPastes([restored])).resolves.toEqual([
-      { path: restored, kept: true, exists: true }
+      { path: restored, kept: !windowsRealPath, exists: !windowsRealPath }
     ])
     expect(await chatImageReadable(secret)).toBe(false)
     expect(await chatImageReadable(realpathSync(secret))).toBe(false)

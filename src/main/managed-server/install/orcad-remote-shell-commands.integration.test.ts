@@ -65,7 +65,8 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true })
 })
 
-describe('state snapshot commands, run for real', () => {
+// The generated commands target a Linux remote; without a local /bin/sh there is nothing to run them for real.
+describe.runIf(existsSync('/bin/sh'))('state snapshot commands, run for real', () => {
   it('requires an intact comparison snapshot before an older build can restart', () => {
     expect(
       orcadSnapshotIsUnchanged(
@@ -193,7 +194,7 @@ describe('state snapshot commands, run for real', () => {
   })
 })
 
-describe('liveness and stop commands, run for real', () => {
+describe.runIf(existsSync('/bin/sh'))('liveness and stop commands, run for real', () => {
   it('reports a reused PID running something other than this slot as DEAD', () => {
     const stranger = spawn('/bin/sh', ['-c', 'sleep 30'], { stdio: 'ignore' })
     try {

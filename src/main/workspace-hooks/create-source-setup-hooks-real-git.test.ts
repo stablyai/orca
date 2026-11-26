@@ -1,14 +1,22 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repository/repo-types'
 import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
 import { RuntimeRemoteFetchController } from '../runtime/repositories/runtime-remote-fetch-controller'
 import { readCreateSourceSetupHooks } from './create-source-setup-hooks'
 
 const roots: string[] = []
+beforeEach(() => {
+  // Base-branch reads fetch, which is network-classed, so every fetch first probes
+  // core.sshCommand with a 2.5s budget that flakes under parallel-test spawn load.
+  // Local-path remotes never invoke SSH, so short-circuiting that probe is
+  // behavior-preserving here.
+  vi.stubEnv('GIT_SSH_COMMAND', 'ssh')
+})
 afterEach(async () => {
+  vi.unstubAllEnvs()
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
@@ -55,14 +63,19 @@ function read(repo: Repo, source: Parameters<typeof readCreateSourceSetupHooks>[
   })
 }
 
+// Cold node:child_process spawns inside a Bun worker thread cost seconds each; real-git fetch tests pay for all of them.
 it('reads the refreshed base instead of the stale project checkout', async () => {
   const { repo } = await staleCheckout()
 
-  const result = await read(repo, { kind: 'base', baseBranch: 'origin/main' })
+  // The 8s create-source read deadline can lose to cold git spawns under parallel-test load; this
+  // fixture guarantees a defined answer, so retry the whole read (each attempt gets a fresh deadline).
+  await vi.waitFor(async () => {
+    const result = await read(repo, { kind: 'base', baseBranch: 'origin/main' })
+    expect(result?.hooks?.scripts.setup).toBe('node new-setup.mjs')
+  }, 90_000)
+}, 90_000)
 
-  expect(result?.hooks?.scripts.setup).toBe('node new-setup.mjs')
-})
-
+// Cold node:child_process spawns inside a Bun worker thread cost seconds each; real-git fetch tests pay for all of them.
 it('reads an explicitly reused local branch, and the base when that branch is absent', async () => {
   const { repo } = await staleCheckout()
   await git(repo.path, 'branch', 'feature', 'main')
@@ -72,4 +85,4 @@ it('reads an explicitly reused local branch, and the base when that branch is ab
 
   expect(reused?.hooks?.scripts.setup).toBe('node old-setup.mjs')
   expect(created?.hooks?.scripts.setup).toBe('node new-setup.mjs')
-})
+}, 90_000)

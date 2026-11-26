@@ -61,7 +61,8 @@ export function providerOwnershipBootId(): string | null {
       accessSync(directory, constants.R_OK | constants.W_OK | constants.X_OK)
       available =
         info.isDirectory() &&
-        (info.mode & 0o077) === 0 &&
+        // Why: Windows mode bits are always 0o666, so DACL-based privacy applies there instead.
+        (process.platform === 'win32' || (info.mode & 0o077) === 0) &&
         (!process.getuid || info.uid === process.getuid())
           ? bootId
           : null
@@ -146,9 +147,10 @@ export function recoverProviderOwnership(directory: string, bootId: string): Pro
 async function scanOwnership(directory: string, bootId: string): Promise<void> {
   await mkdir(directory, { recursive: true, mode: 0o700 })
   const info = await lstat(directory)
+  // Why: Windows mode bits are always 0o666, so DACL-based privacy applies there instead.
   if (
     !info.isDirectory() ||
-    (info.mode & 0o077) !== 0 ||
+    (process.platform !== 'win32' && (info.mode & 0o077) !== 0) ||
     (process.getuid && info.uid !== process.getuid())
   ) {
     throw new Error('Provider ownership directory is not private')
@@ -225,7 +227,8 @@ async function readRecord(path: string): Promise<z.infer<typeof recordSchema> | 
       if (
         !info.isFile() ||
         info.size > MAX_RECORD_BYTES ||
-        (info.mode & 0o077) !== 0 ||
+        // Why: Windows mode bits are always 0o666, so DACL-based privacy applies there instead.
+        (process.platform !== 'win32' && (info.mode & 0o077) !== 0) ||
         (process.getuid && info.uid !== process.getuid())
       ) {
         return null

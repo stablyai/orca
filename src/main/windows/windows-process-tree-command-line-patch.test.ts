@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -13,11 +13,24 @@ type Addon = {
 
 const addonRequire = createRequire(import.meta.url)
 
-function loadAddon(): Addon {
+// Same resolution as the patched lib/index.js: the per-ABI build wins over build/Release.
+function addonPath(): string {
   const packageEntry = addonRequire.resolve('@vscode/windows-process-tree')
-  return addonRequire(
-    join(packageEntry, '..', '..', 'build', 'Release', 'windows_process_tree.node')
-  ) as Addon
+  const packageDir = join(packageEntry, '..', '..')
+  const perAbi = join(
+    packageDir,
+    'build',
+    `orca-napi-win32-${process.arch}`,
+    'windows_process_tree.node'
+  )
+  return existsSync(perAbi)
+    ? perAbi
+    : join(packageDir, 'build', 'Release', 'windows_process_tree.node')
+}
+
+function loadAddon(): Addon {
+  const addon: Addon = addonRequire(addonPath())
+  return addon
 }
 
 // Windows must load our binary: the unpatched prebuilt emits identical text and would pass if skipped.
@@ -46,10 +59,7 @@ describe.runIf(process.platform === 'win32')('windows-process-tree command line 
 
   it('was built from the patched source, not the published prebuild', () => {
     // Import inspection distinguishes patched binaries; successful require and matching output cannot.
-    const packageEntry = addonRequire.resolve('@vscode/windows-process-tree')
-    const binary = readFileSync(
-      join(packageEntry, '..', '..', 'build', 'Release', 'windows_process_tree.node')
-    )
+    const binary = readFileSync(addonPath())
     expect(binary.includes('ReadProcessMemory')).toBe(false)
   })
 

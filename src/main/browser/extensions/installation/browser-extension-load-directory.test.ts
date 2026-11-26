@@ -1,12 +1,4 @@
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  statSync,
-  writeFileSync
-} from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -138,14 +130,23 @@ describe('extension load directories', () => {
       web_accessible_resources: [{ resources, matches: ['<all_urls>'] }]
     })
     await prepareBrowserExtensionDirectory({ source: 'webstore', path: directory })
-    const token = statSync(join(directory, 'orca-extension-api-token.json'))
+    // Why dev:ino like the product: a bare Number ino is lossy on Windows and can alias distinct files.
+    const identityOf = (path: string): string | null => {
+      try {
+        const stats = statSync(path, { bigint: true })
+        return `${stats.dev}:${stats.ino}`
+      } catch {
+        return null
+      }
+    }
+    const token = identityOf(join(directory, 'orca-extension-api-token.json'))
     const listed = z
       .object({ web_accessible_resources: z.tuple([z.object({ resources: z.array(z.string()) })]) })
       .parse(readJson(join(directory, 'manifest.json'))).web_accessible_resources[0].resources
     expect(listed).toContain('bg.js')
     for (const resource of listed) {
       const path = join(directory, resource)
-      expect(existsSync(path) && statSync(path).ino === token.ino, resource).toBe(false)
+      expect(token !== null && identityOf(path) === token, resource).toBe(false)
     }
   })
 })

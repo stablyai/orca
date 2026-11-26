@@ -114,7 +114,8 @@ it('previews and removes old root/nested generated files while preserving dirty 
   expect(await readFile(join(f.sibling, 'source.js'), 'utf8')).toBe('uncommitted source')
   expect(await readFile(join(f.sibling, '.context', 'report.md'), 'utf8')).toBe('keep this report')
   expect((await lstat(join(f.sibling, '.git'))).isFile()).toBe(true)
-})
+  // Git worktree setup plus five generated-tree scans exceeds the 30 s default on a loaded Windows runner.
+}, 60_000)
 
 it('retains recent directories, tracked output, and ignored files outside recognized package roots', async () => {
   const f = await fixture()

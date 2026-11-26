@@ -1,4 +1,5 @@
 import { createWatcherSender } from './filesystem-watcher-test-sender'
+import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ParcelWatcherProcess from '../watcher-process/parcel-watcher-process'
 
@@ -122,7 +123,10 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
       { sender: firstSender },
       { worktreePath: '/tmp/repo' }
     ) as Promise<unknown>
-    await vi.waitFor(() => expect(subscribeViaWatcherProcess).toHaveBeenCalledTimes(1))
+    // Loaded runners stall the abort-listener and resubscribe chain past the 1 s default.
+    await vi.waitFor(() => expect(subscribeViaWatcherProcess).toHaveBeenCalledTimes(1), {
+      timeout: 10_000
+    })
 
     handlers['fs:unwatchWorktree']({ sender: firstSender }, { worktreePath: '/tmp/repo' })
     const replacementWatch = handlers['fs:watchWorktree'](
@@ -132,11 +136,17 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
 
     await Promise.all([firstWatch, replacementWatch])
     replacementCallback(null, [{ type: 'update', path: '/tmp/repo/retry.txt' }] as never)
-    await vi.waitFor(() =>
-      expect(replacementSender.send).toHaveBeenCalledWith('fs:changed', {
-        worktreePath: '/tmp/repo',
-        events: [{ kind: 'update', absolutePath: '/tmp/repo/retry.txt', isDirectory: true }]
-      })
+    // The handler republishes Git-style paths with the host drive; resolve matches on every platform.
+    const worktreePath = resolve('/tmp/repo')
+    await vi.waitFor(
+      () =>
+        expect(replacementSender.send).toHaveBeenCalledWith('fs:changed', {
+          worktreePath,
+          events: [
+            { kind: 'update', absolutePath: resolve(worktreePath, 'retry.txt'), isDirectory: true }
+          ]
+        }),
+      { timeout: 10_000 }
     )
   })
 

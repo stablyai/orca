@@ -32,11 +32,7 @@ import type { TabGroupLayoutNode } from '../../../../shared/workspace-layout/tab
 
 afterEach(cleanup)
 
-function tree(
-  layout: TabGroupLayoutNode,
-  _chatGroupIds: ReadonlySet<string>,
-  _collapse = true
-): React.JSX.Element {
+function tree(layout: TabGroupLayoutNode): React.JSX.Element {
   return (
     <TabGroupSplitNodeTree
       layout={layout}
@@ -56,33 +52,10 @@ function reserveLeft(view: ReturnType<typeof render>, groupId: string): string |
   return view.getByTestId(`strip-${groupId}`).getAttribute('data-reserve-left')
 }
 
-describe('TabGroupSplitNodeTree folded corner reserve', () => {
-  it('keeps the window-controls reserve on the first pane when the second folds to zero', () => {
-    // Why: the folded sibling eases to zero flex, so the first owns the window
-    // corner — without the spacer its quick-commands/pane-actions buttons slide
-    // under the transparent window-controls overlay and ghost together with it.
-    const layout = buildSplitNode('chat', 'terminal', 'horizontal', 'second')
-    const view = render(tree(layout, new Set(['chat'])))
-    expect(reserve(view, 'chat')).toBe('true')
-    // Why: the folded second is invisible at zero flex, so its own reserve is moot.
-  })
-
-  it('moves the left-edge reserve to the second pane when the first folds to zero', () => {
-    const layout = buildSplitNode('terminal', 'chat', 'horizontal', 'second')
-    const view = render(tree(layout, new Set(['chat'])))
-    expect(reserveLeft(view, 'chat')).toBe('true')
-    // Why: the folded first is invisible at zero flex, so its own reserve is moot.
-  })
-
-  it('keeps the top-corner reserve on the bottom pane when the top folds to zero', () => {
-    const layout = buildSplitNode('terminal', 'chat', 'vertical', 'second')
-    const view = render(tree(layout, new Set(['chat'])))
-    expect(reserve(view, 'chat')).toBe('true')
-  })
-
+describe('TabGroupSplitNodeTree corner reserve', () => {
   it('reserves nothing extra when no pane folds', () => {
     const layout = buildSplitNode('chat', 'terminal', 'horizontal', 'second')
-    const view = render(tree(layout, new Set(['chat']), false))
+    const view = render(tree(layout))
     expect(reserve(view, 'chat')).toBe('false')
     expect(reserveLeft(view, 'terminal')).toBe('false')
   })

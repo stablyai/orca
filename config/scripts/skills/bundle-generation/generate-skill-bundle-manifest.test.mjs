@@ -12,8 +12,11 @@ import {
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { collectPackageFiles } from './generate-skill-bundle-manifest.mjs'
+
+// Why git plus node subprocess spawns blow the 30s budget on a loaded Windows host.
+vi.setConfig({ testTimeout: 120_000 })
 
 const temporaryDirectories = []
 

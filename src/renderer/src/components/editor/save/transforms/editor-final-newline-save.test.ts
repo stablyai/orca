@@ -218,7 +218,9 @@ describe('saving with Insert Final Newline', () => {
 
     const files = await save(store, fileId)
 
-    expect(files.get(PATH)).toBe('captured\n')
+    // Why model EOL, not '\n': Monaco defaults EOL-less models to the OS
+    // line ending (CRLF on Windows), and the final newline follows the model.
+    expect(files.get(PATH)).toBe(`captured${model.getEOL()}`)
     expect(model.getValue()).toBe('typed meanwhile')
     expect(store.getState().editorDrafts[fileId]).toBe('captured')
     expect(store.getState().openFiles[0]?.isDirty).toBe(true)
@@ -274,8 +276,8 @@ describe('saving with Insert Final Newline', () => {
       await expect(requestEditorFileSave({ fileId })).rejects.toThrow(/changed on disk/)
 
       expect(disk.files.get(PATH)).toBe('external change')
-      expect(model.getValue()).toBe('my edit\n')
-      expect(store.getState().editorDrafts[fileId]).toBe('my edit\n')
+      expect(model.getValue()).toBe(`my edit${model.getEOL()}`)
+      expect(store.getState().editorDrafts[fileId]).toBe(`my edit${model.getEOL()}`)
       expect(store.getState().openFiles[0]?.isDirty).toBe(true)
     } finally {
       cleanup()

@@ -7,10 +7,23 @@ import { dirname, join } from 'node:path'
 import { MANAGED_HOOK_TIMEOUT_SECONDS } from '../../../agent-hooks/installation/configuration/hook-config-schema'
 import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from '../../../agent-hooks/installation/scripts/hook-stdin-contract'
 import { readHookTrustEntries, type CodexTrustEntry } from '../../trust/toml/config-toml-trust'
+import type * as WslUncAccessGateModule from '../../../wsl/filesystem/wsl-unc-access-gate'
+import type * as CodexHookTrustGrantModule from '../../trust/grants/codex-hook-trust-grant'
 import {
   computeCodexTrustKey as computeTrustKey,
   computeCodexTrustedHash as computeTrustedHash
 } from '../../trust/identity/codex-trust-identity'
+// A stopped distro skips background installs; pretend Ubuntu runs so the install path is exercised.
+vi.mock('../../../wsl/filesystem/wsl-unc-access-gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslUncAccessGateModule>()),
+  blockedWslDistroForPath: async () => null
+}))
+// Hash authority needs Codex in a running distro; fallback upserts the computed entries under test.
+vi.mock('../../trust/grants/codex-hook-trust-grant', async (importOriginal) => ({
+  ...(await importOriginal<typeof CodexHookTrustGrantModule>()),
+  grantManagedCodexHookTrust: async () => ({ lane: 'fallback', reason: 'unavailable' })
+}))
+
 import { _internals } from './hook-service'
 import type { CodexWslRuntimeHookInstallPlan } from './codex-wsl-hook-install-plan'
 

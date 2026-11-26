@@ -79,6 +79,18 @@ export async function closeTestStores(): Promise<void> {
   }
 }
 
+/** Release one store's SQLite handle; the rig closes a replaced host this way so its directory can be removed. */
+export async function closeTestStore(store: Store): Promise<void> {
+  stores.delete(store)
+  const authority = storeAuthorities.get(store)
+  storeAuthorities.delete(store)
+  try {
+    await store.freezeWritesAsync()
+  } finally {
+    authority?.close()
+  }
+}
+
 export function readPersistedStateJson(path = dataFile(), profileId = 'persistence-test'): string {
   const databaseFile = profileStateDatabaseFile(dirname(path))
   if (!existsSync(databaseFile)) {

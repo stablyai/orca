@@ -1,9 +1,12 @@
 import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import { getElectronPlatformPath } from '../electron-installation/platform-layout/electron-platform-path.mjs'
+
+// Why git plus node subprocess spawns blow the 30s budget on a loaded gate.
+vi.setConfig({ testTimeout: 120_000 })
 
 const roots: string[] = []
 afterEach(async () => {

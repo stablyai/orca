@@ -1,4 +1,13 @@
-import { app, BaseWindow, BrowserWindow, protocol, ipcMain, session, webContents } from 'electron'
+import {
+  app,
+  BaseWindow,
+  BrowserWindow,
+  protocol,
+  ipcMain,
+  screen,
+  session,
+  webContents
+} from 'electron'
 import { renameSync, writeFileSync } from 'node:fs'
 import '../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_PARTITION } from '../../../../shared/browser/browser-session-partition'
@@ -34,6 +43,9 @@ const fixtureExtensionDirectory = extensionDirectory
 
 // Orca's preflight registers this before ready; the worker shim calls main through it.
 protocol.registerSchemesAsPrivileged([BROWSER_EXTENSION_API_CUSTOM_SCHEME])
+
+// Exact-pixel popup assertions need integral CSS pixels; developer hosts may run above 100% scale.
+app.commandLine.appendSwitch('force-device-scale-factor', '1')
 
 const presentationCalls: string[] = []
 for (const method of ['show', 'showInactive', 'focus', 'moveTop'] as const) {
@@ -84,7 +96,8 @@ function fail(error: unknown): void {
 process.on('uncaughtException', fail)
 process.on('unhandledRejection', fail)
 
-async function waitFor<T>(read: () => T | null, timeoutMs = 15_000): Promise<T> {
+// Hidden Electron renderers on a loaded host need longer than 15s to size and report.
+async function waitFor<T>(read: () => T | null, timeoutMs = 60_000): Promise<T> {
   const deadline = Date.now() + timeoutMs
   for (;;) {
     const value = read()
@@ -128,6 +141,10 @@ async function run(): Promise<void> {
     webPreferences: { contextIsolation: true, sandbox: true, webviewTag: true }
   })
   trackBrowserExtensionMainWindow(host)
+  // The OS cascades default window positions; a host near the work-area bottom flips the popup
+  // above the button. Pinning top-left keeps `above < workArea.y`, so placement is always below.
+  const workArea = screen.getPrimaryDisplay().workArea
+  host.setBounds({ x: workArea.x, y: workArea.y, width: 800, height: 600 })
   status.hostWindowId = host.id
   // Stands in for the renderer's tab model: activation requests make the page active and reply.
   const send = host.webContents.send.bind(host.webContents)

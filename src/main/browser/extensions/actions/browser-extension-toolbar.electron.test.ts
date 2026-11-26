@@ -9,7 +9,8 @@ import { bundleBrowserExtensionWorkerShim } from '../../../../../config/build-pl
 import { BROWSER_EXTENSION_WORKER_SHIM_FILE } from '../../../../shared/browser/extensions/browser-extension-worker-api'
 import { resolveElectronProbeLaunch } from '../../electron-fixtures/electron-probe-display-launch'
 
-vi.setConfig({ expect: { poll: { timeout: 45_000, interval: 200 } } })
+// The fixture runs six sequential bounded waits; 45s trips on a loaded host before status.done lands.
+vi.setConfig({ expect: { poll: { timeout: 110_000, interval: 200 } } })
 
 // Runs inside the extension; reports through console.log, which the fixture captures.
 const REPORT = `
@@ -114,10 +115,12 @@ beforeAll(async () => {
     join(extensionDir, 'late.html'),
     '<!doctype html><style>html,body{margin:0}</style><script src="late.js"></script>'
   )
-  // No doctype: html and body stretch to the window in quirks mode; 8px body margins around 154x30.
+  // No doctype: html and body stretch to the window in quirks mode; 8px body margins around
+  // 154x64. The 64px height keeps the expected 80px clear of the OS minimum window height (~48px),
+  // which even hidden frameless windows cannot shrink below.
   writeFileSync(
     join(extensionDir, 'quirks.html'),
-    '<html><body><div style="width:154px;height:30px">Vue.js not detected</div></body></html>'
+    '<html><body><div style="width:154px;height:64px">Vue.js not detected</div></body></html>'
   )
   writeFileSync(join(extensionDir, 'veto.html'), '<!doctype html><script src="veto.js"></script>')
   writeFileSync(
@@ -179,7 +182,20 @@ afterAll(async () => {
     fixture.kill('SIGTERM')
     await exited
   }
-  rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+  // Windows releases Electron's profile file locks after the tree fully exits; rmSync alone loses that race.
+  // ast-grep-ignore: test-no-polling-loop -- the OS releases file locks on real process exit; no condition to poll.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+      break
+    } catch (error) {
+      if (attempt >= 5) {
+        throw error
+      }
+      // ast-grep-ignore: test-no-real-time-wait -- the OS releases file locks on real process exit; fake timers cannot advance it.
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+    }
+  }
 })
 
 describe('extension toolbar, action popup and tab activation in a real Electron session', () => {
@@ -243,7 +259,7 @@ describe('extension toolbar, action popup and tab activation in a real Electron 
     expect(status.secondClick).toEqual({ ok: true })
     expect(status.openAfterSecondClick).toBeNull()
     expect(status.latePopupBounds).toEqual({ width: 300, height: 180 })
-    expect(status.quirksPopupBounds).toEqual({ width: 170, height: 46 })
+    expect(status.quirksPopupBounds).toEqual({ width: 170, height: 80 })
     expect(status.vetoPopupClosed).toBe(true)
 
     expect(status.windowsHidden).toBe(true)

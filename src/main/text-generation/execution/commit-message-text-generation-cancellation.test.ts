@@ -9,6 +9,7 @@ import {
 import {
   createChildTerminationExpectation,
   createMockDiscoveryChild,
+  isMcpProbeSpawnArgv,
   spawnedAgentArgv
 } from './commit-message-text-generation-test-harness'
 
@@ -50,7 +51,7 @@ beforeEach(() => {
 })
 
 function generationSpawns() {
-  return spawnMock.mock.calls.filter((call) => !spawnedAgentArgv(call).includes('mcp'))
+  return spawnMock.mock.calls.filter((call) => !isMcpProbeSpawnArgv(spawnedAgentArgv(call)))
 }
 
 function policyProbeChild() {
@@ -75,7 +76,7 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
       const laterSpawned = Promise.withResolvers<void>()
       spawnMock.mockImplementationOnce(() => probe)
       spawnMock.mockImplementation((...args) => {
-        if (spawnedAgentArgv(args).includes('mcp')) {
+        if (isMcpProbeSpawnArgv(spawnedAgentArgv(args))) {
           return policyProbeChild()
         }
         laterSpawned.resolve()

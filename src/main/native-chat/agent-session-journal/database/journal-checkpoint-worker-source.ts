@@ -44,6 +44,16 @@ try {
   };
   parentPort.on('message', (request) => {
     clearTimeout(idle);
+    // Main asks for this before it closes: terminate() would orphan the thread's connection,
+    // whose Windows file lock would then outlive the database it checkpoints.
+    if (request.type === 'close') {
+      try {
+        db.close();
+      } finally {
+        parentPort.close();
+      }
+      return;
+    }
     if (request.type === 'truncate') {
       if (!pendingTruncate || request.truncateId !== pendingTruncate.truncateId) return;
       const pending = pendingTruncate;

@@ -1,6 +1,6 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import { expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import { buildAgentStartupPlan } from './tui-agent-startup'
@@ -13,6 +13,9 @@ it.skipIf(process.platform !== 'win32')(
     try {
       const config = join(root, 'fresh %ORCA_EXPANSION_PROBE% & settings!.yml')
       const capture = join(root, 'argv.json')
+      // Hardened hosts set NoDefaultCurrentDirectoryInExePath, so cmd skips the cwd when
+      // resolving the fixture; expose it through PATH instead, which cmd still searches.
+      const pathKey = Object.keys(process.env).find((key) => key.toLowerCase() === 'path') ?? 'PATH'
       const script =
         'require("fs").writeFileSync(process.env.CAPTURE, JSON.stringify(process.argv.slice(2)))'
       await writeFile(join(root, 'argv.js'), `${script}\nprocess.exit(17)\n`)
@@ -40,6 +43,7 @@ it.skipIf(process.platform !== 'win32')(
             cwd: root,
             env: {
               ...process.env,
+              [pathKey]: `${root}${delimiter}${process.env[pathKey] ?? ''}`,
               CAPTURE: capture,
               ORCA_EXPANSION_PROBE: 'unexpected',
               ORCA_OMP_FRESH_CONFIG: config,

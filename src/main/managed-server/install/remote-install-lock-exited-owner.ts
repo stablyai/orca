@@ -81,7 +81,7 @@ function windowsMutationAdmission(exitedOwner: InstallLockExitedOwner | undefine
   return [
     '$heldMutation = $null',
     'if ($currentExited) { $currentExited = $false; try {',
-    `$null = New-Item -ItemType Directory -Force -Path ${mutation} -ErrorAction Stop`,
+    `$null = New-Item -ItemType Directory -Path ${mutation} -ErrorAction Stop`,
     `$mutationOwnerTemp = Join-Path ${mutation} "owner.json.$PID.tmp"`,
     "[System.IO.File]::WriteAllText($mutationOwnerTemp, '{\"pid\":' + $PID + '}')",
     `[System.IO.File]::Move($mutationOwnerTemp, (Join-Path ${mutation} 'owner.json'))`,

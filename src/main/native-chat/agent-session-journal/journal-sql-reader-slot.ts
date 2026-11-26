@@ -30,6 +30,7 @@ import type {
   JournalReaderReplyCredit,
   JournalReaderReplyCreditClaim
 } from './journal-sql-reader-reply-credit'
+import { stopWorkerGracefully } from '../../worker-threads/worker-thread-transport'
 
 export class ReaderSlot {
   private readonly worker: JournalSqlReaderWorker
@@ -270,7 +271,9 @@ export class ReaderSlot {
         const error = new AgentSessionJournalError('journal_closed', 'journal SQL reader is closed')
         this.ready.reject(error)
         this.rejectPending(error)
-        return this.worker.terminate()
+        // terminate() would orphan the thread's connection, whose Windows file lock
+        // then outlives the database; it only fires when graceful close hangs.
+        stopWorkerGracefully(this.worker, () => {})
       })
       .then(() => this.exited.promise))
   }

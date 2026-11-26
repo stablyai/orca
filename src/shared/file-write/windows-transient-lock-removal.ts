@@ -7,7 +7,8 @@ import { setTimeout as delay } from 'node:timers/promises'
 
 export const WINDOWS_RM_MAX_RETRIES = 8
 export const WINDOWS_RM_RETRY_DELAY_MS = 150
-const WINDOWS_REMOVE_PASS_DELAYS_MS = [250, 500, 1_000, 2_000]
+// A loaded gate can hold a lock past 3.75s (AV/indexer scans of fresh sqlite files).
+const WINDOWS_REMOVE_PASS_DELAYS_MS = [250, 500, 1_000, 2_000, 4_000]
 
 /** For `rmSync` only: its native retry loop is top-level, but async `rm` retries per entry and multiplies. */
 export function transientLockRemovalOptions(): RmOptions {

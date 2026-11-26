@@ -17,6 +17,7 @@ import {
   grantClaudeWorkspaceTrust
 } from '../../claude/configuration/claude-folder-trust-file'
 import { isTooBroadToPreTrust } from '../../../shared/agent-launch/permissions/workspace-pretrust-scope'
+import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 
 /** Resolve trust on the agent’s execution host, including WSL guests and SSH relays. */
 export type WorkspaceTrustHost = {
@@ -74,11 +75,16 @@ export const AGENT_TRUST_KEYED_BY_START_FOLDER: Record<AgentTrustPreset, boolean
 }
 
 // Claude stores resolved paths; resolve also collapses .. when realpath fails.
+// Why: host realpath cannot cross into the guest and stalls on unreachable shares.
 function withResolvedForm(path: string): string[] {
+  const resolved = [path, resolve(path)]
+  if (parseWslUncPath(path)) {
+    return resolved
+  }
   try {
-    return [path, resolve(path), realpathSync.native(path)]
+    return [...resolved, realpathSync.native(path)]
   } catch {
-    return [path, resolve(path)]
+    return resolved
   }
 }
 

@@ -20,6 +20,9 @@ const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
 }))
 
+// Real fs on a loaded Windows host exceeds the 30s global budget.
+vi.setConfig({ testTimeout: 120_000 })
+
 vi.mock('node:fs', async () => {
   const mocks = await import('./codex-session-backfill-fs-mocks')
   return mocks.createNodeFsMock(await vi.importActual<typeof NodeFs>('node:fs'))

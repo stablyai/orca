@@ -172,10 +172,11 @@ describe('bot Home tab placement', () => {
     expect(strips()[0]).toEqual(['tab-home', 'tab-side-1', 'tab-side-2'])
   })
 
-  it('keeps Home first when the host window adds a page to its group', () => {
+  it('opens a host-window page beside the chat group and keeps Home first', () => {
     open('home')
     open('side-1')
-    // A pinned tab enters at the front of its group.
+    // The fixed panel never mixes content into a chat group, so a pinned tab targeting
+    // Home's group opens in a content split beside it instead.
     store.getState().createUnifiedTab(WT, 'browser', {
       id: 'tab-page',
       entityId: 'page',
@@ -183,7 +184,7 @@ describe('bot Home tab placement', () => {
       isPinned: true,
       targetGroupId: groupOf('tab-home')
     })
-    expect(strips()).toEqual([['tab-home', 'tab-page', 'tab-side-1']])
+    expect(strips()).toEqual([['tab-home', 'tab-side-1'], ['tab-page']])
   })
 
   it('keeps Home first when a paired client takes the host order with a page before Home', () => {

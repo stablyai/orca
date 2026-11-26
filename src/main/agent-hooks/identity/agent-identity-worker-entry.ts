@@ -307,11 +307,15 @@ function keyBindings(key: AgentProviderKey): string[] {
 }
 
 let store: { path: string; store: AgentIdentityStore } | null = null
+// In-process embeds share this store; their client calls this on dispose (a worker's exit releases its own).
+export function closeAgentIdentityStore(): void {
+  store?.store.close()
+  store = null
+}
 
 function storeFor(path: string): AgentIdentityStore {
   if (store?.path !== path) {
     store?.store.close()
-    store = null
     store = { path, store: new AgentIdentityStore(path) }
   }
   return store.store
@@ -349,9 +353,6 @@ export function handleAgentIdentityRequest(
   }
 }
 
-const port = parentPort
-if (port) {
-  port.on('message', (request: AgentIdentityWorkerRequest) => {
-    port.postMessage(handleAgentIdentityRequest(request))
-  })
-}
+parentPort?.on('message', (request: AgentIdentityWorkerRequest) => {
+  parentPort?.postMessage(handleAgentIdentityRequest(request))
+})

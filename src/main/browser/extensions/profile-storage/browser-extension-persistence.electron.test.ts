@@ -1,5 +1,5 @@
 import { spawnProcess } from '@orca/process-host'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,6 +8,7 @@ import { build as buildVite } from 'vite'
 import { bundleBrowserExtensionWorkerShim } from '../../../../../config/build-plugins/sandboxed-script-bundles'
 import { BROWSER_EXTENSION_WORKER_SHIM_FILE } from '../../../../shared/browser/extensions/browser-extension-worker-api'
 import { resolveElectronProbeLaunch } from '../../electron-fixtures/electron-probe-display-launch'
+import { removeTree } from '../../../../shared/file-write/windows-transient-lock-removal'
 
 vi.setConfig({ expect: { poll: { timeout: 45_000, interval: 200 } } })
 
@@ -163,7 +164,7 @@ afterAll(async () => {
     running.kill('SIGTERM')
     await exited
   }
-  rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+  await removeTree(root)
 })
 
 describe('browser extension state across a restart', () => {

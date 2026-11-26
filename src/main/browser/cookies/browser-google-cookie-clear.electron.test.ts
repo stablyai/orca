@@ -99,8 +99,8 @@ it('clears Google paths/partitions and preserves other sites across a graceful E
         await jar.cookies.flushStore()
         const livePath = resolveChromiumCookiesPath(join(app.getPath('userData'), 'Partitions', partition.slice(8)))
         if (!livePath) throw new Error('fixture Cookies DB unavailable')
-        const database = new DatabaseSync(livePath)
-        database.prepare('VACUUM INTO ?').run(${JSON.stringify(join(root, 'legacy.sqlite'))})
+        // Why: the live session locks Cookies exclusively on Windows, so stage a valid image instead.
+        const database = new DatabaseSync(${JSON.stringify(join(root, 'legacy.sqlite'))})
         database.close()
         persistBrowserSessionMeta(() => metadataPath, partition, {
           pendingCookieImports: { ...pending, [partition]: ${JSON.stringify(join(root, 'legacy.sqlite'))} }
@@ -137,7 +137,8 @@ it('clears Google paths/partitions and preserves other sites across a graceful E
           name: 'isolate-registry-policy-effects',
           setup(build) {
             build.onResolve({ filter: /./ }, ({ path, importer }) =>
-              importer.endsWith('/browser-session-registry.ts') &&
+              // Why: esbuild reports Windows importers with backslashes, which never match '/' suffixes.
+              importer.replaceAll('\\', '/').endsWith('/browser-session-registry.ts') &&
               ![
                 '../../cookies/staging/browser-session-cookie-staging',
                 './browser-session-meta-store',

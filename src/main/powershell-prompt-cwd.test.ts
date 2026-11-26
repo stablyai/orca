@@ -2,7 +2,6 @@ import { runProcess } from '@orca/process-host'
 import { mkdirSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import { removeTreeSync } from '../shared/file-write/windows-transient-lock-removal'
 import { encodePowerShellCommand } from '../shared/shell/launch/powershell-command-encoding'
@@ -60,7 +59,10 @@ Set-Location -LiteralPath 'Env:'
     expect(result.timedOut).toBe(false)
     expect(result.code, result.stderr).toBe(0)
     const publishedDirectories = [...result.stdout.matchAll(osc7)].map((match) => match[1])
-    expect(publishedDirectories).toEqual([pathToFileURL(root).href, pathToFileURL(nested).href])
+    // Canonical form is file://localhost with per-segment escaping, like bash/fish reports.
+    const toLocalhostUri = (value: string): string =>
+      `file://localhost/${value.replaceAll('\\', '/').split('/').map(encodeURIComponent).join('/')}`
+    expect(publishedDirectories).toEqual([toLocalhostUri(root), toLocalhostUri(nested)])
     expect(result.stdout).toContain('USER_PROMPT_SUCCESS=False;')
     expect(result.stdout).toContain('LAST_EXIT=37;')
     expect(result.stdout).toContain('\x1b]133;D;1\x07')

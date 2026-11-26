@@ -49,6 +49,11 @@ vi.mock('../config/ssh-g-config-resolution', async (importOriginal) =>
     await importOriginal()
   )
 )
+vi.mock('../authentication/ssh-auth-resolution', async (importOriginal) =>
+  (await import('./testing/ssh-connection-test-harness')).withNoAmbientAuthMocks(
+    await importOriginal()
+  )
+)
 
 const authFailure = (): Error => new Error('All configured authentication methods failed')
 

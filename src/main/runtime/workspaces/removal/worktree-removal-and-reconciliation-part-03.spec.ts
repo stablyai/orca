@@ -9,7 +9,8 @@ import {
   closeLocalWatcherForWorktreePathMock,
   deleteWorktreeHistoryDirMock,
   forceDeleteLocalBranchMock,
-  invalidateAuthorizedRootsCacheMock
+  invalidateAuthorizedRootsCacheMock,
+  setPlatform
 } from '../../orca-runtime-test-mocks/setup.spec'
 import { join } from 'node:path'
 import { listWorktrees } from '../../../git/worktrees/catalog/worktree-scan-cache'
@@ -63,6 +64,8 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('force-removes a legacy Orca-created runtime orphaned worktree directory after Git tracking is gone', async () => {
+    // Why: this pins the Linux removal path; Windows takes native removal instead (see part-02).
+    setPlatform('linux')
     const parentDir = await mkdtemp(join(tmpdir(), 'orca-runtime-orphan-'))
     const repoPath = join(parentDir, 'repo')
     const orphanPath = join(parentDir, 'orphan')
@@ -125,6 +128,8 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('refuses an Orca-created runtime unregistered directory with no git marker, even forced, until the user removes it', async () => {
+    // Why: this pins the Linux refusal; Windows reports the leftover folder instead (see part-02).
+    setPlatform('linux')
     const parentDir = await mkdtemp(join(tmpdir(), 'orca-runtime-leftover-'))
     const repoPath = join(parentDir, 'repo')
     const leftoverPath = join(parentDir, 'leftover')

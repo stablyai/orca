@@ -164,6 +164,8 @@ export default function WebConnect({
             value={pairingCode}
             onChange={(event) => setPairingCode(event.target.value)}
             placeholder={t('auto.web.WebConnect.27393856e4', 'orca://pair?code=...')}
+            autoCapitalize="none"
+            autoCorrect="off"
             autoComplete="off"
             spellCheck={false}
           />

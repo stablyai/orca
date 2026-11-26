@@ -82,7 +82,12 @@ it('retains every sampled thread and image identity while removing full spaced p
   expect(capture?.artifact.report).not.toMatch(
     /Test User|Secret Project|Private Project|Client List|Private Tools|fixture-private-value/
   )
-  expect((await fs.stat(capture!.path)).mode & 0o777).toBe(0o600)
+  // Why: Windows mode bits are always 0o666; privacy there rides on the directory DACL instead.
+  if (process.platform !== 'win32') {
+    expect((await fs.stat(capture!.path)).mode & 0o777).toBe(0o600)
+  } else {
+    expect(capture!.path.endsWith('.json')).toBe(true)
+  }
 })
 
 it('withholds complete-artifact admission for a cut report or unsafe image row', () => {

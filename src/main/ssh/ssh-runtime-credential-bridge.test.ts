@@ -7,7 +7,7 @@ import {
 
 const decline = vi.hoisted(() => vi.fn())
 
-vi.mock('./ssh-credential-decline', () => ({
+vi.mock('./authentication/ssh-credential-decline', () => ({
   recordSshCredentialDeclined: decline
 }))
 

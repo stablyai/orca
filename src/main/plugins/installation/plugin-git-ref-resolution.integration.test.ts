@@ -1,7 +1,8 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
+import { removeTree } from '../../../shared/file-write/windows-transient-lock-removal'
 import { serveRepositoriesOverTestSsh } from '../__mocks__/plugin-git-ssh-remote-fixture'
 import { runPluginGit } from './plugin-git-repository'
 import { resolvePluginGitSource } from './plugin-git-ref-resolution'
@@ -9,9 +10,12 @@ import { resolvePluginGitSource } from './plugin-git-ref-resolution'
 const URL = 'ssh://git@plugins.example.invalid/sample.git'
 const roots: string[] = []
 
+// Why bun on Windows spawns git and the SSH shim's node in seconds each: resolving one ref shells out repeatedly.
+vi.setConfig({ testTimeout: 120_000 })
+
 afterEach(async () => {
   vi.unstubAllEnvs()
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  await Promise.all(roots.splice(0).map((root) => removeTree(root)))
 })
 
 async function fixture() {

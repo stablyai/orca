@@ -5,6 +5,9 @@ import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createWorktreePreparationLockReason } from '../../../../shared/worktree/creation/create-preparation'
 import * as runner from '../../command-runner/git-exec-file'
+
+// Real git on a loaded Windows host exceeds the 30s global budget.
+vi.setConfig({ testTimeout: 120_000 })
 import {
   finalizePreparedWorktree,
   prepareWorktreeCreateCheckout

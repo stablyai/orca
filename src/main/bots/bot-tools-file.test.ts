@@ -182,28 +182,32 @@ describe('saving a tool', () => {
     ).rejects.toThrow('Tools changed')
   })
 
-  it('leaves the saved values as they were when the file write throws', async () => {
-    const folder = tempDir('bot-tools-file-')
-    await writeBotToolServers(folder, [
-      { ...notion, url: 'https://old.test/mcp', headers: { authorization: 'old' } }
-    ])
-    const [server] = await readBotToolServers(folder)
-    const id = server && 'credential' in server ? server.credential! : ''
-    chmodSync(join(folder, '.orca'), 0o500)
-    try {
-      await expect(
-        changeBotToolServers(folder, () => [
-          { ...notion, url: 'https://new.test/mcp', headers: { authorization: 'new' } }
-        ])
-      ).rejects.toThrow()
-    } finally {
-      chmodSync(join(folder, '.orca'), 0o700)
+  // A read-only directory still accepts new files on Windows, and root ignores the mode bits.
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'leaves the saved values as they were when the file write throws',
+    async () => {
+      const folder = tempDir('bot-tools-file-')
+      await writeBotToolServers(folder, [
+        { ...notion, url: 'https://old.test/mcp', headers: { authorization: 'old' } }
+      ])
+      const [server] = await readBotToolServers(folder)
+      const id = server && 'credential' in server ? server.credential! : ''
+      chmodSync(join(folder, '.orca'), 0o500)
+      try {
+        await expect(
+          changeBotToolServers(folder, () => [
+            { ...notion, url: 'https://new.test/mcp', headers: { authorization: 'new' } }
+          ])
+        ).rejects.toThrow()
+      } finally {
+        chmodSync(join(folder, '.orca'), 0o700)
+      }
+      expect(readBotToolCredential(folder, id)).toEqual({
+        url: 'https://old.test/mcp',
+        headers: { authorization: 'old' }
+      })
     }
-    expect(readBotToolCredential(folder, id)).toEqual({
-      url: 'https://old.test/mcp',
-      headers: { authorization: 'old' }
-    })
-  })
+  )
 })
 
 describe('the tools a chat launched with', () => {

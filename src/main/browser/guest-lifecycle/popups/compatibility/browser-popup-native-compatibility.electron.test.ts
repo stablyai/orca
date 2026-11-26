@@ -511,12 +511,17 @@ describe('hidden Chromium native popup request compatibility', () => {
         })
         .toBeLessThanOrEqual(1)
       await child.evaluate('window.resizeTo(100, 100)')
+      // Why: Chromium clamps the content above our 360x200 minimum (361x202 on Windows).
       await expect
         .poll(async () => {
           await refreshStatus()
-          return status().native.windows.at(-1)?.contentSize
+          const contentSize = status().native.windows.at(-1)?.contentSize
+          if (!contentSize) {
+            return Number.POSITIVE_INFINITY
+          }
+          return Math.max(Math.abs(contentSize[0] - 360), Math.abs(contentSize[1] - 200))
         })
-        .toEqual([360, 200])
+        .toBeLessThanOrEqual(2)
       await closeChildren(page)
       await page.locator('#shift').evaluate((link) => link.setAttribute('href', '/shift'))
     }

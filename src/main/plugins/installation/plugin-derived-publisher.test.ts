@@ -59,31 +59,38 @@ afterEach(async () => {
 })
 
 describe('derived plugin publishers', () => {
-  it('keeps the key of an install made before publishers were derived', async () => {
-    const source = await tempRoot('orca-derived-git-')
-    const pluginsDir = await tempRoot('orca-derived-installs-')
-    await writeThemePlugin(source, 'brand-name')
-    await commitRepository(source)
-    await serveRepositoriesOverTestSsh(await tempRoot('orca-derived-ssh-'), {
-      '/acme/dusk.git': source
-    })
-    const url = 'ssh://git@plugin.test/acme/dusk.git'
-    // Why staged directly: it records `brand-name.dusk` from a Git source, as older Orca did.
-    const legacy = await installStagedPluginTree({
-      pluginsDir,
-      stagingDir: source,
-      hostVersion: HOST,
-      source: { kind: 'git', url, ref: '' },
-      resolvedCommit: null,
-      identity: { publisher: 'brand-name' }
-    })
-    expect(legacy).toMatchObject({ ok: true, pluginKey: 'brand-name.dusk' })
+  it(
+    'keeps the key of an install made before publishers were derived',
+    async () => {
+      const source = await tempRoot('orca-derived-git-')
+      const pluginsDir = await tempRoot('orca-derived-installs-')
+      await writeThemePlugin(source, 'brand-name')
+      await commitRepository(source)
+      await serveRepositoriesOverTestSsh(await tempRoot('orca-derived-ssh-'), {
+        '/acme/dusk.git': source
+      })
+      const url = 'ssh://git@plugin.test/acme/dusk.git'
+      // Why staged directly: it records `brand-name.dusk` from a Git source, as older Orca did.
+      const legacy = await installStagedPluginTree({
+        pluginsDir,
+        stagingDir: source,
+        hostVersion: HOST,
+        source: { kind: 'git', url, ref: '' },
+        resolvedCommit: null,
+        identity: { publisher: 'brand-name' }
+      })
+      expect(legacy).toMatchObject({ ok: true, pluginKey: 'brand-name.dusk' })
 
-    const result = await installPluginFromGit({ pluginsDir, url, ref: '', hostVersion: HOST })
+      const result = await installPluginFromGit({ pluginsDir, url, ref: '', hostVersion: HOST })
 
-    expect(result).toMatchObject({ ok: true, pluginKey: 'brand-name.dusk' })
-    expect(Object.keys((await readPluginLockfile(pluginsDir)).plugins)).toEqual(['brand-name.dusk'])
-  })
+      expect(result).toMatchObject({ ok: true, pluginKey: 'brand-name.dusk' })
+      expect(Object.keys((await readPluginLockfile(pluginsDir)).plugins)).toEqual([
+        'brand-name.dusk'
+      ])
+    },
+    // Why: git-over-SSH setup stalls past the 30s default on loaded Windows gates.
+    60000
+  )
 
   it('discovers installed and development plugins under their derived publisher', async () => {
     const installedSource = await tempRoot('orca-derived-installed-')

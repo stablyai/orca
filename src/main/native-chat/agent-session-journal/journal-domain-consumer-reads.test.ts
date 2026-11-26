@@ -714,19 +714,24 @@ it('creates the ended-turn counts once when another process opens the journal at
     DROP TRIGGER journal_ended_turns_update_old; DROP TRIGGER journal_ended_turns_update_new`)
   const first = new Database(filename)
   const second = new Database(filename)
-  cleanup.push(() => (first.close(), second.close()))
-  createEndedTurnCounts(first)
-  await f.run({
-    kind: 'item',
-    identity: identity('t3-turn'),
-    options,
-    body: { kind: 'turn', turnId: 't3', state: 'completed', completedAt: 5 }
-  })
+  try {
+    createEndedTurnCounts(first)
+    await f.run({
+      kind: 'item',
+      identity: identity('t3-turn'),
+      options,
+      body: { kind: 'turn', turnId: 't3', state: 'completed', completedAt: 5 }
+    })
 
-  expect(() => createEndedTurnCounts(second)).not.toThrow()
-  expect(
-    first.prepare(`SELECT count FROM journal_ended_turn_counts WHERE session_id='chat'`).get()
-  ).toEqual({ count: 4 })
+    expect(() => createEndedTurnCounts(second)).not.toThrow()
+    expect(
+      first.prepare(`SELECT count FROM journal_ended_turn_counts WHERE session_id='chat'`).get()
+    ).toEqual({ count: 4 })
+  } finally {
+    // Why: the fixture removes the folder on cleanup, which Windows refuses while these are open.
+    first.close()
+    second.close()
+  }
 })
 
 /** The journal SQL worker's open step. */

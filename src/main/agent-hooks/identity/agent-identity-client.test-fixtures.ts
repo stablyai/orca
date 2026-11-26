@@ -8,7 +8,7 @@ import {
 } from './agent-identity-worker-protocol'
 import type { WorkerRequestTransport } from '../../worker-threads/worker-thread-transport'
 import type { AgentIdentityClient, AgentIdentityLookup } from './agent-identity-worker-client'
-import { handleAgentIdentityRequest } from './agent-identity-worker-entry'
+import { closeAgentIdentityStore, handleAgentIdentityRequest } from './agent-identity-worker-entry'
 import {
   isOrcaSessionId,
   type OrcaSessionId
@@ -97,7 +97,10 @@ export class InProcessAgentIdentityClient implements AgentIdentityClient {
     return Promise.resolve()
   }
 
-  dispose(): void {}
+  dispose(): void {
+    // The requests above share the module's store; release it so temp dirs delete on Windows.
+    closeAgentIdentityStore()
+  }
 }
 
 type ScriptedAnswer = AgentIdentityWorkerResponse | 'never'

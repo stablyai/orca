@@ -61,11 +61,6 @@ ${getPowerShellAgentWrappers()}
         }
         $Global:__OrcaOsc133State.HasSeenPrompt = $true
 
-        # Windows has no process-cwd query; publish filesystem paths as escaped file URIs.
-        if ($PWD.Provider.Name -eq 'FileSystem') {
-            $cwdUri = [System.Uri]::new($PWD.ProviderPath, [System.UriKind]::Absolute)
-            $result += "$($Global:__OrcaOsc133State.Esc)]7;$($cwdUri.AbsoluteUri)$($Global:__OrcaOsc133State.Bel)"
-        }
         $result += "$($Global:__OrcaOsc133State.Esc)]133;A$($Global:__OrcaOsc133State.Bel)"
         # Preserve the previous success/failure value for prompts that inspect it.
         if ($fakeExitCode -ne 0) { Write-Error "failure" -ea ignore }

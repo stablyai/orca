@@ -32,6 +32,7 @@ import {
   SshTargetUpdate
 } from '../../../../../shared/rpc-contract/ssh/ssh-params'
 import { SSH_LEGACY_RELAY_BRIDGE_METHODS } from '../../../../ipc/pty/runtime/kill'
+import { SSH_NEEDS_PASSPHRASE_METHODS } from '../ssh-needs-passphrase'
 
 // Keep generation optional so older server rows still key by target id.
 function toSshTargetSummary(
@@ -197,5 +198,7 @@ export const SSH_METHODS = [
       }
       return browseSshDirectory(manager, params.targetId, params.dirPath)
     }
-  })
+  }),
+  // Desktop answers over IPC; paired clients ask the runtime instead.
+  ...SSH_NEEDS_PASSPHRASE_METHODS
 ]

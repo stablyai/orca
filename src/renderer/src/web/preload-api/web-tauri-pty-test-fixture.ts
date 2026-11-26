@@ -29,9 +29,9 @@ const { callRuntimeResult, callTauriPtyHost, requireActiveEnvironment, subscribe
       >()
   }))
 
-vi.mock('./web-runtime-calls', () => ({ callRuntimeResult }))
+vi.mock('../runtime/client/web-runtime-calls', () => ({ callRuntimeResult }))
 vi.mock('./web-tauri-pty-host', () => ({ callTauriPtyHost }))
-vi.mock('./web-runtime-session', () => ({ requireActiveEnvironment }))
+vi.mock('../runtime/client/web-runtime-session', () => ({ requireActiveEnvironment }))
 vi.mock(
   '../../runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry',
   () => ({

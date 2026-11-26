@@ -24,6 +24,11 @@ vi.mock('node:path', async (importOriginal) => {
   return { ...actual.win32, default: actual.win32 }
 })
 
+// Stall the gate timeout, not distro admission: real wsl.exe hangs wedge this box.
+vi.mock('../../native-chat/transcript-filesystem/wsl-transcript-running-admission', () => ({
+  admitWslTranscriptPath: async () => {}
+}))
+
 import { parseAgentSessionFileCached } from '../parse-cache/session-scanner-parse-cache'
 import { resetSessionParseCacheForTests } from '../parse-cache/session-parse-cache-store'
 import {

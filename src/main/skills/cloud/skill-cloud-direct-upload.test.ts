@@ -6,9 +6,16 @@ import { uploadSkillPackageToSignedPolicy } from './skill-cloud-direct-upload'
 
 const roots: string[] = []
 
+// Virtual-time advances stall under gate load; the default 30s budget flakes.
+vi.setConfig({ testTimeout: 120_000 })
+
 afterEach(async () => {
   vi.useRealTimers()
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  await Promise.all(
+    roots
+      .splice(0)
+      .map((root) => rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }))
+  )
 })
 
 describe('uploadSkillPackageToSignedPolicy', () => {
@@ -75,7 +82,19 @@ describe('uploadSkillPackageToSignedPolicy', () => {
     await waitForChunk(4)
     await vi.advanceTimersByTimeAsync(30_000)
     await waitForChunk(5)
-    await vi.advanceTimersByTimeAsync(30_000)
+    // Why: file streams split the archive into a load-dependent chunk count, so pump virtual time until the upload settles instead of assuming a fixed tail.
+    let settled = false
+    void upload.then(
+      () => {
+        settled = true
+      },
+      () => {
+        settled = true
+      }
+    )
+    for (let i = 0; i < 32 && !settled; i++) {
+      await vi.advanceTimersByTimeAsync(30_000)
+    }
 
     await expect(upload).resolves.toBeUndefined()
   })

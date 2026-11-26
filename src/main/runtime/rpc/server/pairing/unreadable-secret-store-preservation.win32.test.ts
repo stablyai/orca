@@ -32,7 +32,11 @@ function canDenyReads(): boolean {
     lockAgainstThisProcess(probe)
     return readDenied(probe)
   } finally {
-    removeTreeSync(probeRoot)
+    try {
+      removeTreeSync(probeRoot)
+    } catch {
+      // Why: the probe answer is already recorded, so a transient lock must not fail collection.
+    }
   }
 }
 
@@ -47,9 +51,9 @@ function addon(): WindowsSecurity['addon'] {
   return loaded.addon
 }
 
-/** Block inheritance and implicit owner ACL rights to model foreign-owned restored data; retain parent deletion rights. */
+/** Block inheritance and limit the owner to delete-only, which keeps the file unreadable but removable; an Owner Rights ACE strips the owner's implicit DACL-write, so no later restore is possible. */
 function lockAgainstThisProcess(filePath: string): void {
-  addon().setDaclSddl(filePath, `D:P(A;;FA;;;${FOREIGN_SID})(A;;0x100000;;;OW)`)
+  addon().setDaclSddl(filePath, `D:P(A;;FA;;;${FOREIGN_SID})(A;;0x110000;;;OW)`)
 }
 
 /** The on-disk state a successful harden leaves for a SID this process does not hold. */

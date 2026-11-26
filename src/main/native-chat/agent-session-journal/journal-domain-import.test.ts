@@ -501,7 +501,13 @@ it('imports history from the separate original after interruption, taking the cu
     ])
     original.close()
     originalClosed = true
+    // Windows cannot delete a file worker readers still hold open; the ready
+    // cache means no source read follows, so release the lease at once.
+    const lease = await pool.recycleSourceReaders()
     rmSync(originalFilename)
+    if (lease) {
+      pool.releaseSourceReaders(lease)
+    }
     expect(await conversions.ensure('session')).toBe('current-original')
     expect(maintain(db, { kind: 'import-discard', sessionId: 'session' })).toEqual({
       more: false,

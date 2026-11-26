@@ -1,15 +1,19 @@
 import { runProcessSync } from '@orca/process-host'
-import { mkdtempSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, renameSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
+import { removeTreeSync } from '../../../../src/shared/file-write/windows-transient-lock-removal.ts'
 import { readGitBaselineSources } from './git-baseline-sources.mjs'
+
+// Why real git spawns stall under gate load; the default 30s budget flakes.
+vi.setConfig({ testTimeout: 120_000 })
 
 let repo
 
 afterEach(() => {
   if (repo) {
-    rmSync(repo, { recursive: true, force: true })
+    removeTreeSync(repo)
   }
 })
 

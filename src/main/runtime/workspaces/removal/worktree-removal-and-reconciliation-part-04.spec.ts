@@ -4,7 +4,8 @@ import '../../construction/test-context/runtime-test-module-registration.spec'
 import {
   MOCK_GIT_WORKTREES,
   restoreLocalWatcherAfterFailedRemovalMock,
-  removeWorktreeLinkedPathsMock
+  removeWorktreeLinkedPathsMock,
+  setPlatform
 } from '../../orca-runtime-test-mocks/setup.spec'
 import { assertWorktreeCleanForRemoval } from '../../../git/worktrees/removal/worktree-removal-preflight'
 import { getEffectiveHooks, runHook } from '../../../workspace-hooks/hooks'
@@ -78,6 +79,8 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('rechecks a runtime Git lock after the archive hook before teardown', async () => {
+    // Why: Windows skips archive hooks for markerless paths, so the lock surfaces before the hook.
+    setPlatform('linux')
     const repo = { ...store.getRepos()[0], symlinkPaths: ['node_modules'] }
     const runtimeStore = {
       ...store,
@@ -118,6 +121,8 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('retains metadata when an unproven orphan directory survives cleanup', async () => {
+    // Why: this pins the Linux orphan translation; Windows retries natively instead.
+    setPlatform('linux')
     const parentDir = await mkdtemp(join(tmpdir(), 'orca-runtime-orphan-retention-'))
     const repoPath = join(parentDir, 'repo')
     const orphanPath = join(parentDir, 'orphan')

@@ -42,7 +42,8 @@ function probeOptions(
     ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
     ...(options.admissionTier ? { admissionTier: options.admissionTier } : {}),
     signal,
-    timeout: RETARGET_DIVERGENCE_BUDGET_MS
+    // The test budget sizes the whole probe; per-probe timeouts must match or slow hosts always answer unknown.
+    timeout: options.budgetMsForTest ?? RETARGET_DIVERGENCE_BUDGET_MS
   }
 }
 

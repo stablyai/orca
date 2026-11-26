@@ -6,8 +6,8 @@ const { callEnvironmentEnvelope, requireActiveEnvironment } = vi.hoisted(() => (
   callEnvironmentEnvelope: vi.fn(),
   requireActiveEnvironment: vi.fn(() => ({ id: 'selected-environment' }))
 }))
-vi.mock('./web-runtime-calls', () => ({ callEnvironmentEnvelope }))
-vi.mock('./web-runtime-session', () => ({ requireActiveEnvironment }))
+vi.mock('../runtime/client/web-runtime-calls', () => ({ callEnvironmentEnvelope }))
+vi.mock('../runtime/client/web-runtime-session', () => ({ requireActiveEnvironment }))
 
 const completeScope = { hostIds: ['local'], omittedHostIds: [] }
 

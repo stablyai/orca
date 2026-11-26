@@ -101,7 +101,12 @@ describe('Bitbucket credential store', () => {
     save('second')
 
     for (const file of ['bitbucket-credential.enc', 'bitbucket-credential.json']) {
-      expect(statSync(join(tempHome, '.orca', file)).mode & 0o777).toBe(0o600)
+      // Why: Windows mode bits are always 0o666; privacy there rides on the file DACL instead.
+      if (process.platform !== 'win32') {
+        expect(statSync(join(tempHome, '.orca', file)).mode & 0o777).toBe(0o600)
+      } else {
+        expect(existsSync(join(tempHome, '.orca', file))).toBe(true)
+      }
     }
   })
 

@@ -48,7 +48,8 @@ vi.mock(import('node:os'), async (importOriginal) => {
   }
 })
 
-describe('CodexRuntimeHomeService', () => {
+// Why: these specs drive real \\wsl.localhost\Ubuntu UNC I/O and need an installed Ubuntu distro.
+describe.skipIf(process.platform === 'win32')('CodexRuntimeHomeService', () => {
   beforeEach(() => {
     setupRuntimeHomeTest()
   })

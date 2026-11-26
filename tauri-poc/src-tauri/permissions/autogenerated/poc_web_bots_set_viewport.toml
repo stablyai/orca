@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-poc-web-bots-set-viewport"
+description = "Enables the poc_web_bots_set_viewport command without any pre-configured scope."
+commands.allow = ["poc_web_bots_set_viewport"]
+
+[[permission]]
+identifier = "deny-poc-web-bots-set-viewport"
+description = "Denies the poc_web_bots_set_viewport command without any pre-configured scope."
+commands.deny = ["poc_web_bots_set_viewport"]

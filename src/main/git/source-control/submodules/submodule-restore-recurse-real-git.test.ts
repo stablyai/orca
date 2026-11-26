@@ -1,8 +1,9 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { removeTempDirs } from '../../../../shared/testing/remove-temp-dirs.test-support'
 import { canDiscardStatusEntry } from '../../../../shared/source-control/listing/source-control-entry-actions'
 import { discardChanges } from '../mutations/discard-changes'
 import { getStatus } from '../status/status-read'
@@ -11,10 +12,12 @@ const directories: string[] = []
 
 afterEach(async () => {
   vi.unstubAllEnvs()
-  await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true })))
+  // Bun ignores rm maxRetries; removeTempDirs retries the whole pass itself.
+  await removeTempDirs(directories.splice(0))
 })
 
 describe('submodule discard eligibility with real Git', () => {
+  // Cold node:child_process spawns inside a Bun worker thread cost seconds each; this first test pays for all of them.
   it('offers discard for a dirty submodule only when submodule.recurse makes restore work', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-submodule-recurse-'))
     directories.push(root)
@@ -60,5 +63,5 @@ describe('submodule discard eligibility with real Git', () => {
 
     await discardChanges(parent, 'sub')
     expect(await subEntry()).toBeUndefined()
-  })
+  }, 90_000)
 })

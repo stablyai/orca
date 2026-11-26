@@ -21,7 +21,8 @@ import { getDaemonSocketPath, getDaemonTokenPath } from '../../../launch/daemon-
 import { ensureDaemonSocketDir, shortDaemonSocketDir } from '../daemon-socket-endpoint-path'
 
 describe.skipIf(process.platform === 'win32')('relocated endpoint binds (#17840)', () => {
-  const uid = process.getuid!()
+  // Why: the skipped body still evaluates at collection, and getuid is absent on Windows.
+  const uid = process.getuid?.() ?? 0
   let base = ''
   let runtimeDir = ''
 

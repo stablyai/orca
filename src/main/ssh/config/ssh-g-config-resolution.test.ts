@@ -112,17 +112,21 @@ describe('siteConfigMayRestrictHostKeys', () => {
     await expect(siteConfigMayRestrictHostKeys([a])).resolves.toBe(false)
   })
 
-  it('treats an unreadable config as doubt rather than permission', async () => {
-    const file = join(dir, 'ssh_config')
-    await writeFile(file, 'Host *\n', 'utf-8')
-    await chmod(file, 0o000)
+  // chmod cannot revoke an owner's reads on Windows, and root bypasses permission checks.
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'treats an unreadable config as doubt rather than permission',
+    async () => {
+      const file = join(dir, 'ssh_config')
+      await writeFile(file, 'Host *\n', 'utf-8')
+      await chmod(file, 0o000)
 
-    try {
-      await expect(siteConfigMayRestrictHostKeys([file])).resolves.toBe(true)
-    } finally {
-      await chmod(file, 0o600)
+      try {
+        await expect(siteConfigMayRestrictHostKeys([file])).resolves.toBe(true)
+      } finally {
+        await chmod(file, 0o600)
+      }
     }
-  })
+  )
 })
 
 /** Vectors measured against POSIX OpenSSH10.2p1 and Windows OpenSSH; tokenizer drift can turn existing policy into apparent absence. */

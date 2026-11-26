@@ -4,7 +4,7 @@ import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { SSH_METHODS } from './ssh/ssh'
+import { SSH_NEEDS_PASSPHRASE_METHODS } from './ssh-needs-passphrase'
 
 const { listRegisteredSshTargetsMock, getSshConnectionManagerMock, isSshCredentialDeclinedMock } =
   vi.hoisted(() => ({
@@ -23,7 +23,7 @@ vi.mock('../../../ssh/targets/ssh-target-registry', () => ({
   unmarkSshTestProbe: vi.fn()
 }))
 
-vi.mock('../../../ssh/ssh-credential-decline', () => ({
+vi.mock('../../../ssh/authentication/ssh-credential-decline', () => ({
   isSshCredentialDeclined: isSshCredentialDeclinedMock
 }))
 
@@ -41,7 +41,7 @@ function makeTarget(overrides?: Partial<SshTarget>): SshTarget {
 function dispatchNeedsPrompt(targetId: string): Promise<unknown> {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Test-only stub; the exercised handlers never read runtime fields.
   const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
-  const dispatcher = new RpcDispatcher({ runtime, methods: SSH_METHODS })
+  const dispatcher = new RpcDispatcher({ runtime, methods: SSH_NEEDS_PASSPHRASE_METHODS })
   return dispatcher.dispatch({
     id: 'req-1',
     authToken: 'tok',

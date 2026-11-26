@@ -7,8 +7,10 @@ import type { WslSpec } from '../wsl/execution/wsl-runner'
 import { credential } from './native-account-test-fixtures'
 import { createAntigravityWslCredentialBackend } from './native-wsl-credentials'
 
-// The guest scripts need GNU stat; run them where the local sh has it (Linux CI).
-const gnuStat = spawnSync('stat', ['-c', '%a', '/'], { encoding: 'utf8' }).status === 0
+// The guest scripts need GNU stat with POSIX modes; Git Bash has stat but Windows ACLs never report 600.
+const gnuStat =
+  process.platform !== 'win32' &&
+  spawnSync('stat', ['-c', '%a', '/'], { encoding: 'utf8' }).status === 0
 
 function guestIn(home: string) {
   return vi.fn(async (spec: WslSpec) => {

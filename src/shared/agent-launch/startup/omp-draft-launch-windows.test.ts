@@ -1,6 +1,6 @@
 import { mkdtemp, writeFile, readFile, rm, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import { expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import { buildAgentDraftLaunchPlan } from './tui-agent-startup'
@@ -12,6 +12,9 @@ it.skipIf(process.platform !== 'win32').each(['cmd', 'powershell'] as const)(
     try {
       const config = join(root, 'fresh (%ORCA_EXPANSION_PROBE%) & settings!.yml')
       const calls = join(root, 'calls')
+      // Hardened hosts set NoDefaultCurrentDirectoryInExePath, so cmd skips the cwd when
+      // resolving the fixture; expose it through PATH instead, which cmd still searches.
+      const pathKey = Object.keys(process.env).find((key) => key.toLowerCase() === 'path') ?? 'PATH'
       await writeFile(
         join(root, 'omp.cmd'),
         '@echo off\r\necho %ORCA_OMP_PREFILL%>>"%CAPTURE%"\r\nexit /b 17\r\n'
@@ -38,6 +41,7 @@ it.skipIf(process.platform !== 'win32').each(['cmd', 'powershell'] as const)(
         const env = {
           ...process.env,
           ...plan.env,
+          [pathKey]: `${root}${delimiter}${process.env[pathKey] ?? ''}`,
           ORCA_OMP_FRESH_CONFIG: state === 'unset' ? undefined : config,
           CAPTURE: calls,
           ORCA_EXPANSION_PROBE: 'unexpected'

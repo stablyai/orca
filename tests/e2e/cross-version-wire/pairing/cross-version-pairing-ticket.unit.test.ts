@@ -17,7 +17,8 @@ import {
 // Single-use pairing must survive a downgrade, accept rows an older host made, and stay invisible to old clients.
 const SUITE_TIMEOUT_MS = 180_000
 const EXCHANGED = 'e'.repeat(48)
-const PRE_TICKET_RELEASE_REF = 'v1.4.253'
+// Why: pin the newest pre-ticket release this checkout resolves; the v1.4.253 tag is absent here.
+const PRE_TICKET_RELEASE_REF = 'v1.4.224'
 
 type ReleasedRegistryLike = {
   addDevice(name: string, scope: 'mobile' | 'runtime'): { deviceId: string; token: string }
@@ -37,7 +38,8 @@ beforeAll(async () => {
     importReleaseCheckoutModule(checkout, 'src/main/runtime/rpc/server/pairing/device-registry.ts'),
     importReleaseCheckoutModule(
       preTicketCheckout,
-      'src/main/runtime/rpc/server/pairing/device-registry.ts'
+      // Why: the registry moved to rpc/server/pairing after this release.
+      'src/main/runtime/device-registry.ts'
     )
   ])
   ReleasedRegistry = releaseModuleExport<typeof ReleasedRegistry>(registryModule, 'DeviceRegistry')

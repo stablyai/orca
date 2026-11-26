@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { join } from 'node:path'
 
 import type * as NodeFsPromisesModule from 'node:fs/promises'
 import type { AiVaultScanIssue } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+// Stall the gate timeout, not distro admission: real wsl.exe hangs wedge this box.
+vi.mock('../../../native-chat/transcript-filesystem/wsl-transcript-running-admission', () => ({
+  admitWslTranscriptPath: async () => {}
+}))
 
 const WSL_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\ada'
 
@@ -70,7 +75,9 @@ describe('OpenCode source discovery with a stalled WSL data directory', () => {
 
       await expect(discoveries).resolves.toHaveLength(2)
       expect(
-        issues.some((issue) => issue.agent === 'opencode' && issue.path === `${WSL_HOME}/opencode`)
+        issues.some(
+          (issue) => issue.agent === 'opencode' && issue.path === join(WSL_HOME, 'opencode')
+        )
       ).toBe(true)
     } finally {
       restoreEnv('XDG_DATA_HOME', previousXdg)

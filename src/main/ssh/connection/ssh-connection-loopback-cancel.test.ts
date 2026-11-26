@@ -37,6 +37,11 @@ vi.mock('../config/ssh-g-config-resolution', async (importOriginal) =>
     await importOriginal()
   )
 )
+vi.mock('../authentication/ssh-auth-resolution', async (importOriginal) =>
+  (await import('./testing/ssh-connection-test-harness')).withNoAmbientAuthMocks(
+    await importOriginal()
+  )
+)
 // Keep admission from invoking this machine's real ssh -G/ssh-add.
 vi.mock('../system-transport/forwarding/system-ssh-loopback-route-admission', () => ({
   admitSystemSshLoopbackRoute: async () => ({
@@ -53,6 +58,10 @@ vi.mock('../system-transport/forwarding/system-ssh-forward-process', () => ({
   startSystemSshPortForwardProcess: startForwardMock,
   waitForSystemSshForwardStartup: waitForwardMock
 }))
+
+// The per-second worker-alive probe issues a sync process.kill that can stall this loop for
+// seconds under Bun on Windows; wait past the stall instead of failing the file.
+const waitForSsh = (assertion: () => unknown) => vi.waitFor(assertion, { timeout: 15_000 })
 
 describe('pending real loopback route startup ownership', () => {
   beforeEach(() => {
@@ -82,11 +91,11 @@ describe('pending real loopback route startup ownership', () => {
       createCallbacks()
     )
     await conn.connect()
-    await vi.waitFor(() => expect(waitForwardMock).toHaveBeenCalled())
+    await waitForSsh(() => expect(waitForwardMock).toHaveBeenCalled())
     await conn.disconnect()
     const stoppedAtDisconnect = dispose.mock.calls.length
     failStartup(new Error('review cleanup: interrupted slow handshake'))
-    await vi.waitFor(() => expect(dispose).toHaveBeenCalled())
+    await waitForSsh(() => expect(dispose).toHaveBeenCalled())
     expect(stoppedAtDisconnect).toBeGreaterThan(0)
   })
   it('cancels the superseded forward while keeping the new startup owned', async () => {
@@ -111,9 +120,9 @@ describe('pending real loopback route startup ownership', () => {
       createCallbacks()
     )
     await conn.connect()
-    await vi.waitFor(() => expect(waitForwardMock).toHaveBeenCalledTimes(1))
+    await waitForSsh(() => expect(waitForwardMock).toHaveBeenCalledTimes(1))
     await conn.reconnect()
-    await vi.waitFor(() => expect(waitForwardMock).toHaveBeenCalledTimes(2))
+    await waitForSsh(() => expect(waitForwardMock).toHaveBeenCalledTimes(2))
     expect(stale.dispose).toHaveBeenCalledTimes(1)
     expect(current.dispose).not.toHaveBeenCalled()
     failures[0]?.(new Error('superseded handshake'))

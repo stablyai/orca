@@ -87,7 +87,10 @@ import {
 } from '../definitions/codex-hook-definition'
 import type { CodexHookHashes } from '../../trust/hooks/codex-hook-trust-derivation'
 import { readHookTrustEntries, upsertHookTrustEntries } from '../../trust/toml/config-toml-trust'
-import { computeCodexTrustKey as computeTrustKey } from '../../trust/identity/codex-trust-identity'
+import {
+  computeCodexTrustKey as computeTrustKey,
+  normalizeCodexHookTrustLookupKey as normalizeTrustLookupKey
+} from '../../trust/identity/codex-trust-identity'
 
 let root: string
 let home: string
@@ -468,7 +471,9 @@ describe('an app start whose lookup has not answered within its wait', () => {
     writeCodexTrustGrantLedgerHome(codexHome(), {
       binary: null,
       entries: {
-        [computeTrustKey(stop)]: {
+        // Ledger entries are keyed by lookup key (folded separators and case); the raw
+        // computeTrustKey only matches on POSIX, so Windows misses the grant without this.
+        [normalizeTrustLookupKey(computeTrustKey(stop))]: {
           signature: getCodexHookTrustSignature(stop),
           trustedHash: 'sha256:main-granted'
         }

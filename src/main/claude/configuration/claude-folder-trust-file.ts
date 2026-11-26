@@ -269,10 +269,13 @@ export function claudeTrustKeysForHostPath(
   toClaudePath: (hostPath: string) => string | null = (hostPath) => hostPath
 ): string[] {
   const forms = [resolve(workspacePath)]
-  try {
-    forms.push(realpathSync.native(workspacePath))
-  } catch {
-    // The resolved form alone still matches an unsymlinked path.
+  // Why: host realpath cannot cross into the guest and stalls on unreachable shares.
+  if (!parseWslUncPath(workspacePath)) {
+    try {
+      forms.push(realpathSync.native(workspacePath))
+    } catch {
+      // The resolved form alone still matches an unsymlinked path.
+    }
   }
   const keys = new Set<string>()
   for (const form of forms) {

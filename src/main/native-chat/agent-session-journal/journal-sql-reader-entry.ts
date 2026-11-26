@@ -121,7 +121,13 @@ try {
   db = undefined
   port.close()
 }
-port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
+port.on('message', (request: JournalSqlReaderRequest | { type: 'close' }) => {
+  // terminate() orphans this thread's connection, whose Windows lock outlives the database.
+  if ('type' in request) {
+    closeReader()
+    return
+  }
+  const { id, operation } = request
   try {
     if (!db) {
       throw new Error('journal SQL reader is unavailable')
@@ -251,6 +257,25 @@ function openOriginal(): Database.Database | undefined {
     original = openJournalLegacySource(workerData.originalFilename, { timeout: 5000 })
   }
   return original
+}
+
+/** Release every handle before the thread exits so no lock outlives this reader. */
+function closeReader(): void {
+  try {
+    fork?.preparation.close()
+  } catch {}
+  fork = undefined
+  conversions.clear()
+  try {
+    original?.close()
+  } catch {}
+  try {
+    db?.close()
+  } finally {
+    original = undefined
+    db = undefined
+    port.close()
+  }
 }
 
 /** Preserve empty saved epochs independently of legacy-source retirement. */

@@ -1,5 +1,15 @@
 import React from 'react'
-import { BookOpen, CalendarClock, EyeOff, Files, Bot, Search, Smartphone } from 'lucide-react'
+import {
+  BookOpen,
+  CalendarClock,
+  EyeOff,
+  Files,
+  Bot,
+  Layers,
+  Search,
+  Smartphone
+} from 'lucide-react'
+import { isTauriNativeHost } from '@/web/tauri-native-host'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store/index'
 import { cn } from '@/lib/class-names'
@@ -63,6 +73,7 @@ const SidebarNav = React.memo(function SidebarNav() {
   const openMobilePage = useAppStore((s) => s.openMobilePage)
   const openArtifactsPage = useAppStore((s) => s.openArtifactsPage)
   const openRoomsPage = useAppStore((s) => s.openRoomsPage)
+  const openWebBotsPage = useAppStore((s) => s.openWebBotsPage)
   const openSkillsPage = useAppStore((s) => s.openSkillsPage)
   const openModal = useAppStore((s) => s.openModal)
   const updateSettings = useAppStore((s) => s.updateSettings)
@@ -76,6 +87,8 @@ const SidebarNav = React.memo(function SidebarNav() {
   const mobileActive = activeView === 'mobile'
   const artifactsActive = activeView === 'artifacts'
   const roomsActive = activeView === 'rooms'
+  const webBotsActive = activeView === 'web-bots'
+  const tauriNative = isTauriNativeHost()
   const skillsActive = activeView === 'skills'
   const mobileOnboardingBadge = useMobileSidebarOnboardingBadge(showMobileButton)
   const hideAutomationsButton = React.useCallback(() => {
@@ -179,6 +192,30 @@ const SidebarNav = React.memo(function SidebarNav() {
         />
         <span className="flex-1">{t('auto.components.sidebar.SidebarNav.rooms', 'Bots')}</span>
       </button>
+      {tauriNative ? (
+        <button
+          type="button"
+          onClick={openWebBotsPage}
+          aria-current={webBotsActive ? 'page' : undefined}
+          className={cn(
+            'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
+            webBotsActive
+              ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
+              : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
+          )}
+        >
+          <Layers
+            className={cn(
+              'size-4 shrink-0',
+              !webBotsActive && 'text-worktree-sidebar-foreground/30'
+            )}
+            strokeWidth={webBotsActive ? 2.25 : 1.75}
+          />
+          <span className="flex-1">
+            {t('auto.components.sidebar.SidebarNav.webBots', 'Web Bots')}
+          </span>
+        </button>
+      ) : null}
       {showSkillsButton ? (
         <ContextMenu>
           <ContextMenuTrigger asChild>

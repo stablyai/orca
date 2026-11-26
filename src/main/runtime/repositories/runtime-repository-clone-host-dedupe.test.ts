@@ -1,9 +1,10 @@
 import { runProcessSync } from '@orca/process-host'
-import { mkdir, mkdtemp, realpath, rm, stat, symlink } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, stat, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { removeTree } from '../../../shared/file-write/windows-transient-lock-removal'
 import type { Repo } from '../../../shared/repository/repo-types'
 import { RuntimeRepositoryCloneController } from './runtime-repository-clone-controller'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
@@ -86,7 +87,8 @@ describe('clone reuses only a project on this machine', () => {
   })
 
   afterEach(async () => {
-    await rm(root, { recursive: true, force: true })
+    // Bun ignores rm maxRetries; removeTree retries the whole pass itself.
+    await removeTree(root)
   })
 
   it.each([
@@ -108,7 +110,9 @@ describe('clone reuses only a project on this machine', () => {
       expect(cloned.id).not.toBe('existing-row')
       expect(repos).toHaveLength(2)
       expect(remote.kind).toBe('folder')
-    }
+    },
+    // Cold git spawns cost seconds each under parallel-test load; the first clone pays for all of them.
+    90_000
   )
 
   describe('through a symlinked destination', () => {
@@ -129,7 +133,8 @@ describe('clone reuses only a project on this machine', () => {
 
       expect(second.id).toBe(first.id)
       expect(repos).toHaveLength(1)
-      expect(first.path).toBe(join(root, 'real', 'source'))
+      // Clone saves Git's resolved path, and Git reports forward slashes on Windows.
+      expect(first.path.split(/[\\/]/)).toEqual(join(root, 'real', 'source').split(/[\\/]/))
     })
 
     it('refuses a different repository at a saved project whose folder is gone', async () => {
