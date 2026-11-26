@@ -6,7 +6,7 @@ import type { FeishuStore } from './feishu-store-ops'
 import type { FeishuCardDelivery } from './feishu-card-delivery'
 import { drainFeishuTextOutbox } from './feishu-text-outbox'
 
-/** Only the delivery named by the native turn's stamps owns the answer. */
+/** The journal owns one answer; the response store follows its latest accepted continuation. */
 export async function drainFeishuOutbox(
   journal: ConnectorReplyJournal,
   inbox: FeishuStore,
@@ -23,6 +23,7 @@ export async function drainFeishuOutbox(
   }
   cards.name = botName
   await drainFeishuTextOutbox(inbox, b, active, checkProfile, changed, cards)
+  const handedOff = new Set<string>()
   let after: string | null = null
   do {
     const rows = await journal.readOwed(b.account, after, 32)
@@ -44,6 +45,37 @@ export async function drainFeishuOutbox(
         continue
       }
       if (await inbox.pendingChoice(b.account, row.deliveryId)) {
+        continue
+      }
+      if (fill.turnItemId && !handedOff.has(fill.answerDeliveryId)) {
+        const siblings = await journal.read(row.sessionId)
+        for (const sibling of siblings) {
+          if (
+            sibling.account === b.account &&
+            sibling.conversation.source === 'feishu-local' &&
+            sibling.conversation.externalId === row.conversation.externalId &&
+            sibling.fill?.answerDeliveryId === fill.answerDeliveryId &&
+            sibling.fill.turnItemId === fill.turnItemId &&
+            sibling.deliveryId !== fill.answerDeliveryId
+          ) {
+            await inbox.updateResponse(
+              b.account,
+              row.conversation.externalId,
+              sibling.deliveryId,
+              chat,
+              {
+                kind: 'handoff',
+                from: fill.answerDeliveryId,
+                turnItemId: fill.turnItemId,
+                at: Date.now()
+              }
+            )
+          }
+        }
+        handedOff.add(fill.answerDeliveryId)
+      }
+      if (fill.answerDeliveryId !== row.deliveryId) {
+        await journal.sent([{ account: b.account, deliveryId: row.deliveryId }])
         continue
       }
       if (fill.answerDeliveryId === row.deliveryId && fill.outcome !== 'quiet') {

@@ -8,6 +8,80 @@ export class FeishuResponseStore {
     private readonly cards: FeishuCardStore
   ) {}
 
+  private destination(account: string, id: string, external: string, chat: string) {
+    const seen = new Set<string>()
+    while (!seen.has(id)) {
+      seen.add(id)
+      const card = this.cards.get(account, id)
+      if (!card || card.external !== external || card.chat !== chat) {
+        return null
+      }
+      const next = cardData.parse(JSON.parse(card.body)).response?.supersededBy
+      if (!next) {
+        return card
+      }
+      id = next
+    }
+    return null
+  }
+
+  private handoff(
+    account: string,
+    id: string,
+    external: string,
+    chat: string,
+    change: Extract<FeishuResponseChange, { kind: 'handoff' }>
+  ) {
+    const target = this.cards.get(account, id)
+    const previous = this.destination(account, `response:${change.from}`, external, chat)
+    const newer =
+      previous &&
+      this.db
+        .prepare(
+          'SELECT 1 FROM feishu_cards WHERE account=? AND id=? AND rowid>(SELECT rowid FROM feishu_cards WHERE account=? AND id=?)'
+        )
+        .get(account, id, account, previous.id)
+    if (
+      !newer ||
+      !target ||
+      !previous ||
+      previous.id === id ||
+      target.external !== external ||
+      target.chat !== chat
+    ) {
+      return id
+    }
+    const data = cardData.parse(JSON.parse(target.body))
+    const before = cardData.parse(JSON.parse(previous.body))
+    if (
+      !data.response ||
+      data.response.supersededBy ||
+      data.response.final !== undefined ||
+      !before.response ||
+      before.response.final !== undefined ||
+      (data.response.native && data.response.native.turnItemId !== change.turnItemId) ||
+      (before.response.native && before.response.native.turnItemId !== change.turnItemId)
+    ) {
+      return id
+    }
+    data.response.turn = before.response.turn
+    data.response.native = before.response.native
+    data.response.baseline = before.response.native
+    before.response.supersededBy = id
+    before.response.stoppedAt = change.at
+    before.text = '已转至最新提问'
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      this.cards.put(account, previous.id, external, previous.original, chat, before)
+      this.cards.put(account, id, external, target.original, chat, data)
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+    return id
+  }
+
   update(
     account: string,
     external: string,
@@ -29,7 +103,17 @@ export class FeishuResponseStore {
     if (!id) {
       return null
     }
-    const card = this.cards.get(account, id)
+    if (change.kind === 'handoff') {
+      return this.handoff(account, id, external, chat, change)
+    }
+    let card = this.cards.get(account, id)
+    if (card && change.kind !== 'begin') {
+      card = this.destination(account, id, external, chat)
+      if (!card) {
+        return null
+      }
+      id = card.id
+    }
     if (!card && !original) {
       return null
     }
@@ -46,7 +130,7 @@ export class FeishuResponseStore {
       return null
     }
     // A late activity, reconnect snapshot or retried progress must never reopen a final answer.
-    if (response.final !== undefined && change.kind !== 'native') {
+    if (response.supersededBy || (response.final !== undefined && change.kind !== 'native')) {
       return id
     }
     switch (change.kind) {

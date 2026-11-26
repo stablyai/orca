@@ -22,9 +22,20 @@ function folded(title: string, elements: CardElement[]): CardElement {
 }
 export function feishuResponseText(data: FeishuCardData): string {
   const response = data.response!
-  const texts = [...response.progress, ...(response.native?.messages ?? [])].map(
-    (entry) => entry.text
-  )
+  const baseline =
+    response.baseline?.turnItemId === response.native?.turnItemId ? response.baseline : undefined
+  const texts = [
+    ...response.progress.map((entry) => entry.text),
+    ...(response.native?.messages ?? []).flatMap((entry) => {
+      if (response.final?.trim() === entry.text.trim()) {
+        return []
+      }
+      const before = baseline?.messages.find((m) => m.id === entry.id)?.text
+      const text =
+        before && entry.text.startsWith(before) ? entry.text.slice(before.length) : entry.text
+      return text.trim() ? [text] : []
+    })
+  ]
   if (response.final) {
     texts.push(response.final)
   }
@@ -33,15 +44,23 @@ export function feishuResponseText(data: FeishuCardData): string {
 export function feishuResponseCard(data: FeishuCardData, botName: string, streaming = false) {
   const response = data.response!
   const complete = response.final !== undefined
+  const superseded = Boolean(response.supersededBy)
+  const stopped = complete || superseded
   const native = response.native
   const text = feishuResponseText(data)
-  const tools = native?.tools ?? []
+  const tools = (native?.tools ?? []).filter(
+    (tool) =>
+      response.baseline?.turnItemId !== native?.turnItemId ||
+      !response.baseline?.tools.some(
+        (previous) => previous.id === tool.id && previous.status !== 'running'
+      )
+  )
   const elapsed = native
-    ? Math.max(0, (native.completedAt ?? Date.now()) - native.startedAt)
+    ? Math.max(0, (response.stoppedAt ?? native.completedAt ?? Date.now()) - native.startedAt)
     : undefined
   const elements: CardElement[] = []
   if (tools.length) {
-    const visible = complete ? tools : tools.slice(-3)
+    const visible = stopped ? tools : tools.slice(-3)
     const panel = buildStreamingToolUseActivePanel({
       steps: visible.map((tool) => ({
         ...tool,
@@ -53,30 +72,32 @@ export function feishuResponseCard(data: FeishuCardData, botName: string, stream
       elapsedMs: elapsed,
       totalSteps: tools.length
     })
-    panel.expanded = !complete
+    panel.expanded = !stopped
     elements.push(panel)
   } else if (response.trace.length) {
-    const trace = (complete ? response.trace : response.trace.slice(-3)).map((content) => ({
+    const trace = (stopped ? response.trace : response.trace.slice(-3)).map((content) => ({
       tag: 'div',
       text: { tag: 'plain_text', content }
     }))
-    elements.push({ ...folded('执行记录', trace), expanded: !complete })
+    elements.push({ ...folded('执行记录', trace), expanded: !stopped })
   }
-  if (complete) {
-    elements.push(prose(text || '已处理'))
+  if (stopped) {
+    elements.push(prose(text || (superseded ? '后续内容见最新提问下的回复' : '已处理')))
   } else {
     elements.push({
       ...prose(text || (tools.length ? '正在执行上述步骤…' : '等待 Agent 生成回复…')),
       element_id: 'answer'
     })
   }
-  const status = complete
-    ? `${data.text}${elapsed === undefined ? '' : ` · ${formatElapsed(elapsed)}`}`
-    : tools.some((t) => t.status === 'running')
-      ? '正在执行工具'
-      : text
-        ? '正在生成回复'
-        : '正在准备回复'
+  const status = superseded
+    ? '已转至最新提问'
+    : complete
+      ? `${data.text}${elapsed === undefined ? '' : ` · ${formatElapsed(elapsed)}`}`
+      : tools.some((t) => t.status === 'running')
+        ? '正在执行工具'
+        : text
+          ? '正在生成回复'
+          : '正在准备回复'
   return {
     schema: '2.0',
     config: {
@@ -84,7 +105,7 @@ export function feishuResponseCard(data: FeishuCardData, botName: string, stream
       width_mode: 'default',
       ...(streaming
         ? {
-            streaming_mode: !complete,
+            streaming_mode: !stopped,
             streaming_config: {
               print_frequency_ms: { default: 70 },
               print_step: { default: 1 },
@@ -96,7 +117,13 @@ export function feishuResponseCard(data: FeishuCardData, botName: string, stream
     },
     header: {
       title: { tag: 'plain_text', content: `${botName} · ${status}` },
-      template: response.phase === 'failed' ? 'red' : complete ? 'green' : 'blue',
+      template: superseded
+        ? 'grey'
+        : response.phase === 'failed'
+          ? 'red'
+          : complete
+            ? 'green'
+            : 'blue',
       icon: { tag: 'standard_icon', token: 'ai-common_colorful' }
     },
     body: { direction: 'vertical', padding: '12px', vertical_spacing: '8px', elements }

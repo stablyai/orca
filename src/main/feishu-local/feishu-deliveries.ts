@@ -4,6 +4,7 @@ import { runtimeConversationHost } from '../external-conversations/external-conv
 import { dmKey, type Binding } from './feishu-binding'
 import type { FeishuStore } from './feishu-store-ops'
 import { feishuInput } from './feishu-resources'
+import { handoffFeishuResponse } from './feishu-response-handoff'
 
 export async function deliverFeishuMessages(
   runtime: OrcaRuntimeService,
@@ -77,13 +78,14 @@ export async function deliverFeishuMessages(
       await inbox.review(b.account, row.mid)
       changed()
     }
-    await inbox.admitted(b.account, row.mid)
     if (initial.outcome === 'accepted') {
+      await handoffFeishuResponse(runtime, inbox, b, key.externalId, row.mid, route?.chat ?? b.chat)
       await inbox.updateResponse(b.account, key.externalId, row.mid, route?.chat ?? b.chat, {
         kind: 'status',
         text: '正在处理'
       })
     }
+    await inbox.admitted(b.account, row.mid)
     row = await inbox.next(b.account)
   }
 }

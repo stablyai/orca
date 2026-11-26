@@ -17,7 +17,10 @@ export const cardData = z.object({
       progress: z.array(z.object({ id: z.string(), text: z.string() })),
       trace: z.array(z.string()),
       final: z.string().optional(),
-      native: nativeResponse.optional()
+      native: nativeResponse.optional(),
+      baseline: nativeResponse.optional(),
+      supersededBy: z.string().optional(),
+      stoppedAt: z.number().optional()
     })
     .optional()
 })
@@ -25,6 +28,7 @@ export type FeishuCardData = z.infer<typeof cardData>
 
 export type FeishuResponseChange =
   | { kind: 'begin' }
+  | { kind: 'handoff'; from: string; turnItemId: string; at: number }
   | { kind: 'native'; value: FeishuNativeResponse }
   | { kind: 'start'; turn: number }
   | { kind: 'status'; text: string; turn?: number | null }
