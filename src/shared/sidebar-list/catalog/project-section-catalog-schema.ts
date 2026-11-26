@@ -34,6 +34,10 @@ const repoSchema = z.object({
   id: z.string(),
   displayName: z.string(),
   path: z.string(),
+  chatWorkspace: salvagedOptional(
+    'chatWorkspace',
+    z.object({ initialName: z.string(), autoName: z.boolean() })
+  ),
   badgeColor: salvagedOptional('badgeColor', z.string()),
   addedAt: salvagedOptional('addedAt', z.number()),
   connectionId: salvagedOptional('connectionId', z.string().nullable()),

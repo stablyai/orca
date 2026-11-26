@@ -1802,6 +1802,10 @@
       "downloadProgress": "다운로드 중… {{progress}}",
       "downloading": "다운로드 중",
       "loading": "로드 중"
+    },
+    "kind": {
+      "worktree": "워크트리",
+      "chat": "채팅"
     }
   },
   "notifications": {
@@ -5797,5 +5801,16 @@
   },
   "mcpServers": {
     "agentBlocked": "조직의 Claude 설정에 의해 차단됨"
+  },
+  "chats": {
+    "remove": "채팅 제거",
+    "newProjectDate": "새 프로젝트-{{date}}",
+    "createdNotOpened": "채팅이 생성되었습니다. 채팅에서 여세요.",
+    "createFailed": "채팅을 생성할 수 없습니다",
+    "create": "채팅 생성",
+    "title": "채팅",
+    "noteFailed": "메모를 저장할 수 없습니다",
+    "agentFailed": "에이전트를 시작할 수 없습니다. 다시 시작하기 전에 채팅을 확인하세요.",
+    "updateHost": "채팅 작업 공간을 만들려면 선택한 호스트의 Orca를 업데이트하세요."
   }
 }

@@ -319,6 +319,16 @@
       "detailsRow": "Details row",
       "workspaceUnread": "Unread in this workspace",
       "unreadTab": "Unread tab"
+    },
+    "chats": {
+      "title": "Chats",
+      "create": "New chat workspace",
+      "expand": "Expand Chats",
+      "collapse": "Collapse Chats",
+      "newProjectDate": "New project-{{date}}",
+      "updateHost": "Update Orca on the selected host to create a chat workspace.",
+      "hostRequired": "Choose this computer or a paired Orca server",
+      "createdNotOpened": "Chat workspace was created but could not be opened. Find it under Chats."
     }
   },
   "app": {

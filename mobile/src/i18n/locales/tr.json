@@ -2647,6 +2647,10 @@
       "hostUnsupported": "Onaylandı. Mevcut çalışma alanında kurulumu çalıştırmak için alanın bulunduğu bilgisayarda Orca’yı güncelleyin.",
       "changedAgain": "Kurulum çalıştırılmadı: Bu çalışma alanının orca.yaml dosyası, siz inceledikten sonra yeniden değişti.",
       "runFailed": "Kurulum başlatılamadı."
+    },
+    "kind": {
+      "worktree": "Worktree",
+      "chat": "Sohbet"
     }
   },
   "notifications": {
@@ -8490,7 +8494,16 @@
       "groupRoom": "Grup odasının sohbeti silinemez",
       "home": "Yönetilen bir ajanın Ana sohbeti silinemez",
       "workerOwed": "Bir orkestrasyon hâlâ bu sohbeti bekliyor"
-    }
+    },
+    "remove": "Sohbeti kaldır",
+    "newProjectDate": "Yeni proje-{{date}}",
+    "createdNotOpened": "Sohbet oluşturuldu. Sohbetler bölümünden açın.",
+    "createFailed": "Sohbet oluşturulamadı",
+    "create": "Sohbet oluştur",
+    "title": "Sohbetler",
+    "noteFailed": "Not kaydedilemedi",
+    "agentFailed": "Aracı başlatılamadı. Yeniden başlatmadan önce sohbeti kontrol edin.",
+    "updateHost": "Sohbet çalışma alanı oluşturmak için seçili ana bilgisayardaki Orca’yı güncelleyin."
   },
   "hostMutation": {
     "renameOffline": "{{host}} çevrimdışı. Metniniz, kaydedebilene kadar burada kalır.",

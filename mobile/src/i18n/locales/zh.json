@@ -2518,6 +2518,10 @@
       "hostUnsupported": "已批准，请更新工作区主机上的 Orca，以便为现有工作区运行设置脚本",
       "changedAgain": "设置脚本未运行：在你审查之后，此工作区的 orca.yaml 再次发生了更改",
       "runFailed": "无法启动设置脚本"
+    },
+    "kind": {
+      "worktree": "工作区",
+      "chat": "对话"
     }
   },
   "notifications": {
@@ -8334,5 +8338,16 @@
   },
   "mcpServers": {
     "agentBlocked": "已被你所在组织的 Claude 设置阻止"
+  },
+  "chats": {
+    "remove": "移除对话",
+    "newProjectDate": "新项目-{{date}}",
+    "createdNotOpened": "对话已创建，请从「对话」中打开。",
+    "createFailed": "无法创建对话",
+    "create": "创建对话",
+    "title": "对话",
+    "noteFailed": "无法保存备注",
+    "agentFailed": "无法确认智能体是否启动，请先检查对话。",
+    "updateHost": "请更新所选主机上的 Orca，以创建对话工作区。"
   }
 }

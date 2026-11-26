@@ -33,6 +33,7 @@ export function useNewWorkspaceRepositories(args: {
   selectedRepo: MobileWorkspaceRepo | null
   setSelectedRepo: (repo: MobileWorkspaceRepo | null) => void
   loading: boolean
+  presentationReady: boolean
   /** Set when the project list failed to load and nothing is cached to show. */
   loadError: string | null
   retryLoad: () => void
@@ -44,7 +45,7 @@ export function useNewWorkspaceRepositories(args: {
   const [desktopRepos, setDesktopRepos] = useState<MobileWorkspaceRepo[]>(initialRepos ?? [])
   const serverRepos = useServerRepos<MobileWorkspaceRepo>(serverClients, visible)
   const [pickedRepo, setSelectedRepo] = useState<MobileWorkspaceRepo | null>(null)
-  const [loading, setLoading] = useState(initialRepos == null)
+  const [loading, setLoading] = useState(true)
   // Null until a read fails; an empty string is a refusal with no reason to show.
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loadAttempt, setLoadAttempt] = useState(0)
@@ -139,12 +140,21 @@ export function useNewWorkspaceRepositories(args: {
     }
   }, [visible, client, hostId, loadAttempt])
 
+  const selectingInitialRepo =
+    selectedRepo === null &&
+    (initialRepoId
+      ? repos.some(
+          (repo) => repo.id === initialRepoId && getRepoExecutionHostId(repo) === initialRepoHost
+        )
+      : repos.length > 0)
+
   return {
     repos,
     allRepos,
     selectedRepo,
     setSelectedRepo,
     loading: loading && repos.length === 0,
+    presentationReady: !(loading && repos.length === 0) && !selectingInitialRepo,
     // Cached rows stay usable, so a failed refresh only matters when there is nothing to pick.
     loadError: repos.length === 0 ? loadError : null,
     retryLoad: () => setLoadAttempt((attempt) => attempt + 1)

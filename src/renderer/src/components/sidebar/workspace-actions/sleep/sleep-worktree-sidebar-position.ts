@@ -34,19 +34,29 @@ function findSidebarWorktreeRow(worktreeId: string, rowKey?: string): HTMLElemen
   return option?.closest<HTMLElement>('[data-worktree-virtual-row]') ?? null
 }
 
+function sidebarWorkspaceSection(element: HTMLElement): string | undefined {
+  return element.closest<HTMLElement>('[data-sidebar-workspace-section]')?.dataset
+    .sidebarWorkspaceSection
+}
+
 export function preserveSidebarWorktreePosition(worktreeId: string): () => void {
   if (typeof document === 'undefined') {
     return () => {}
   }
-  const getScroller = (): HTMLElement | null =>
-    document.querySelector<HTMLElement>('[data-worktree-sidebar]')
-  const scroller = getScroller()
   const activeOption = findPrimarySidebarWorktreeOption(worktreeId)
+  const scroller = activeOption?.closest<HTMLElement>('[data-worktree-sidebar]')
   const activeRowKey = activeOption?.dataset.worktreeRowKey
   const row = activeOption?.closest<HTMLElement>('[data-worktree-virtual-row]') ?? null
   if (!scroller || !row) {
     return () => {}
   }
+  const section = sidebarWorkspaceSection(scroller)
+  const getScroller = (): HTMLElement | null =>
+    scroller.isConnected
+      ? scroller
+      : (Array.from(document.querySelectorAll<HTMLElement>('[data-worktree-sidebar]')).find(
+          (element) => section !== undefined && sidebarWorkspaceSection(element) === section
+        ) ?? null)
   const previousScrollTop = scroller.scrollTop
   const previousScrollHeight = scroller.scrollHeight
   const previousTop = row.getBoundingClientRect().top

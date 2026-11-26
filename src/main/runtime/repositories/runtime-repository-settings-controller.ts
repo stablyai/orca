@@ -89,6 +89,12 @@ function omitUndefined<T extends Record<string, unknown>>(value: T): Partial<T> 
 export class RuntimeRepositorySettingsController {
   constructor(private readonly deps: RuntimeRepositorySettingsDependencies) {}
 
+  publishNameChange(repoId: string): void {
+    this.deps.invalidateResolvedWorktrees()
+    this.deps.notifyReposChanged()
+    this.deps.notifyWorktreesChanged(repoId, { invalidateGitScans: false })
+  }
+
   async show(repoSelector: RuntimeRepoSelector): Promise<Repo> {
     return await this.deps.resolveRepo(repoSelector)
   }

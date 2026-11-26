@@ -4,17 +4,26 @@ import { HostProtocolGate } from '../components/host-connection/HostProtocolGate
 import { MobileWebShellScreen } from '../mobile-web-shell/MobileWebShellScreen'
 import type { ShellOverlayLoad } from '../mobile-web-shell/presentation/shell-overlay-load'
 import { shellScreenRoute } from '../mobile-web-shell/routing/shell-screen-route'
-import { NewWorkspaceLoadingDrawer } from './NewWorkspaceLoadingDrawer'
+import { NewWorkspaceLoadingCover } from './NewWorkspaceLoadingCover'
 import { OpenHostListInstead } from './open-host-list-instead'
 
 const LOADING: ShellOverlayLoad = { kind: 'loading', download: null }
 
-export function NewWorkspaceOverlay({ hostId }: { hostId: string }) {
+export function NewWorkspaceOverlay({
+  hostId,
+  creationKind = 'worktree'
+}: {
+  hostId: string
+  creationKind?: 'worktree' | 'chat'
+}) {
   const router = useRouter()
   const [load, setLoad] = useState(LOADING)
   // Keep the drag handler stable across download rerenders.
   const cancel = useCallback(() => router.back(), [router])
-  const route = shellScreenRoute({ pathname: `/h/${encodeURIComponent(hostId)}/new-workspace` })
+  const route = shellScreenRoute({
+    pathname: `/h/${encodeURIComponent(hostId)}/new-workspace`,
+    params: { creationKind }
+  })
   if (route === null || load.kind === 'unavailable') {
     return <OpenHostListInstead hostId={hostId} />
   }
@@ -28,7 +37,7 @@ export function NewWorkspaceOverlay({ hostId }: { hostId: string }) {
       >
         <MobileWebShellScreen hostId={hostId} route={route} onOverlayLoad={setLoad} />
       </HostProtocolGate>
-      <NewWorkspaceLoadingDrawer
+      <NewWorkspaceLoadingCover
         visible={load.kind === 'loading'}
         download={load.kind === 'loading' ? load.download : null}
         onCancel={cancel}

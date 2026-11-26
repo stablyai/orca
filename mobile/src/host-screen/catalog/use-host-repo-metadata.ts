@@ -30,6 +30,7 @@ function desktopSectionRepo(
       : repo.repoIcon
   return {
     id: repo.id,
+    ...(repo.chatWorkspace ? { chatWorkspace: repo.chatWorkspace } : {}),
     displayName: repo.displayName,
     path: repo.path ?? repo.id,
     executionHostId: getRepoExecutionHostId(repo),

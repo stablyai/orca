@@ -43,7 +43,11 @@ export type NewWorktreeFolderSubmit = {
   presenting: () => boolean
 }
 
+export type WorkspaceCreationKind = 'worktree' | 'chat'
+
 export type NewWorktreeModalProps = {
+  creationKind?: WorkspaceCreationKind
+  onCreationKindChange?: (kind: WorkspaceCreationKind) => void
   visible: boolean
   client: RpcClient | null
   /** The desktop's servers this phone can reach now; their repos are offered and created there. */

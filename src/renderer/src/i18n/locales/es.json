@@ -23093,6 +23093,16 @@
     "cardSlot": {
       "needYouCount": "{{count}} te necesitan",
       "needsYou": "Te necesita"
+    },
+    "chats": {
+      "title": "Chats",
+      "create": "Nuevo espacio de chat",
+      "expand": "Expandir chats",
+      "collapse": "Contraer chats",
+      "newProjectDate": "Nuevo proyecto-{{date}}",
+      "updateHost": "Actualiza Orca en el equipo seleccionado para crear un espacio de chat.",
+      "hostRequired": "Elige este equipo o un servidor Orca enlazado",
+      "createdNotOpened": "Se creó el espacio de chat, pero no se pudo abrir. Búscalo en Chats."
     }
   },
   "rendererRecovery": {

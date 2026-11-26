@@ -1853,6 +1853,10 @@
       "downloadProgress": "Téléchargement… {{progress}}",
       "downloading": "Téléchargement",
       "loading": "Chargement"
+    },
+    "kind": {
+      "worktree": "Worktree",
+      "chat": "Chat"
     }
   },
   "notifications": {
@@ -5312,5 +5316,16 @@
   },
   "mcpServers": {
     "agentBlocked": "Bloqué par les paramètres Claude de votre organisation"
+  },
+  "chats": {
+    "remove": "Retirer le chat",
+    "newProjectDate": "Nouveau projet-{{date}}",
+    "createdNotOpened": "Chat créé. Ouvrez-le depuis Chats.",
+    "createFailed": "Impossible de créer le chat",
+    "create": "Créer un chat",
+    "title": "Chats",
+    "noteFailed": "Impossible d’enregistrer la note",
+    "agentFailed": "Impossible de démarrer l’agent. Vérifiez le chat avant de réessayer.",
+    "updateHost": "Mettez à jour Orca sur l’hôte sélectionné pour créer un espace de travail de discussion."
   }
 }

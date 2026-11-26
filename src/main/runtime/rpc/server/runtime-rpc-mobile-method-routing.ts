@@ -239,6 +239,8 @@ export const EXECUTION_HOST_METHODS = [
   'repo.gitAvailable',
   'repo.hooks',
   'repo.list',
+  'repo.createChatWorkspace',
+  'repo.rm',
   'repo.saveSparsePreset',
   'repo.searchRefs',
   'repo.sparsePresets',

@@ -15,8 +15,9 @@ type SidebarHeaderProps = {
   activityBadgeTarget?: React.Ref<HTMLSpanElement>
   onWorkspaceBoardMenuOpenChange: (open: boolean) => void
   activityOptionsTarget?: React.Ref<HTMLDivElement>
-  /** Only with Bots present, so the sidebar never folds down to nothing. */
+  /** Another section keeps the sidebar useful while Projects are folded. */
   collapsible?: boolean
+  reorderable?: boolean
   projectsCollapseTarget?: React.Ref<HTMLDivElement>
 }
 
@@ -25,6 +26,7 @@ const SidebarHeader = React.memo(function SidebarHeader({
   onWorkspaceBoardMenuOpenChange,
   activityOptionsTarget,
   collapsible = false,
+  reorderable = collapsible,
   projectsCollapseTarget
 }: SidebarHeaderProps) {
   const t = useTranslate()
@@ -76,7 +78,7 @@ const SidebarHeader = React.memo(function SidebarHeader({
     <SidebarSectionHeader
       title={sidebarTitle}
       sectionId={groupBy === 'repo' ? 'projects' : 'workspaces'}
-      reorderable={collapsible}
+      reorderable={reorderable}
       fold={fold}
       tourTarget={groupBy === 'repo' ? 'projects-collapse-all' : undefined}
       // WorktreeList portals the collapse-all toggle here; it owns the rendered project rows.

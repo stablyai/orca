@@ -16,8 +16,7 @@ import SidebarNav from './chrome/SidebarNav'
 import { setSidebarLiveWidth } from './chrome/sidebar-live-width'
 import SetupScriptPromptCard from './setup-script-prompts/SetupScriptPromptCard'
 import WorktreeList from './worktree-list/listing/WorktreeList'
-import WslMovedProjectsSection from '../wsl-move/WslMovedProjectsSection'
-import HiddenProjectsSection from './hidden-projects/HiddenProjectsSection'
+import { SidebarProjectWorkspaces } from './SidebarProjectWorkspaces'
 import SidebarToolbar from './chrome/SidebarToolbar'
 import WorkspaceKanbanDrawer from './workspace-board/surface/WorkspaceKanbanDrawer'
 import type { VirtualizedScrollAnchor } from '@/lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
@@ -48,6 +47,7 @@ import {
 import { useRailPageListFocusRelease } from '@/components/app-rail/rail-page-list-focus-loss'
 import { setWorkspaceListRegionPresent } from '@/components/app-rail/workspace-list-region-presence'
 import { WorktreeCardsUpdateNotice } from './workspace-card/template/WorktreeCardsUpdateNotice'
+import * as Chats from './chat-workspaces/ChatWorkspaceSection'
 
 // Load the shared Activity badge/list pipeline after the sidebar shell.
 const SidebarAgentsList = lazyWithRetry(() => import('../activity/sidebar/SidebarAgentsList'))
@@ -135,6 +135,7 @@ function Sidebar({
   )
   const [agentBadgeTarget, setAgentBadgeTarget] = React.useState<HTMLSpanElement | null>(null)
   const agentsScrollTopRef = React.useRef(0)
+  const chatScroll = Chats.useChatWorkspaceScroll()
   // Retain collapse state and scroll geometry across Agents-list unmounts.
   const [agentsCollapsedGroupKeys, setAgentsCollapsedGroupKeys] = React.useState<
     ReadonlySet<string>
@@ -219,8 +220,9 @@ function Sidebar({
   )
   const botsShown = sidebarBody !== 'agents' && botsEnabled
   // Projects folds only when Bots is shown, so turning bots off always brings the list back.
+  const projectsCollapsible = botsShown || sidebarBody !== 'agents'
   const projectsCollapsed = useAppStore(
-    (s) => botsShown && s.collapsedGroups.has(PROJECTS_SECTION_GROUP_KEY)
+    (s) => projectsCollapsible && s.collapsedGroups.has(PROJECTS_SECTION_GROUP_KEY)
   )
   const sidebarRef = React.useCallback(
     (node: HTMLDivElement | null) => {
@@ -246,7 +248,8 @@ function Sidebar({
         activityBadgeTarget={setAgentBadgeTarget}
         onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen}
         activityOptionsTarget={setAgentOptionsTarget}
-        collapsible={botsShown}
+        collapsible={projectsCollapsible}
+        reorderable={botsShown}
         projectsCollapseTarget={setProjectsCollapseTarget}
       />
       <SeveredTerminalDaemonBanner />
@@ -279,20 +282,22 @@ function Sidebar({
               <WorktreeCardsIntroNotice />
             </>
           )}
-          <SidebarProjectsListSlot botsShown={botsShown} collapsed={projectsCollapsed}>
-            <WorktreeList
-              scrollOffsetRef={worktreeScrollOffsetRef}
-              scrollAnchorRef={worktreeScrollAnchorRef}
-              workspaceBoardOpen={workspaceBoardOpen}
-              onWorktreeCardClick={closeWorkspaceBoard}
-              onWorkspaceBoardDragPreviewStart={previewWorkspaceBoardFromDrag}
-              onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
-              onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
-              projectsCollapseTarget={projectsCollapseTarget}
-            />
+          <SidebarProjectsListSlot botsShown={botsShown} fill={!projectsCollapsed} contentSized>
+            <SidebarProjectWorkspaces collapsed={projectsCollapsed}>
+              <WorktreeList
+                contentSized
+                scrollOffsetRef={worktreeScrollOffsetRef}
+                scrollAnchorRef={worktreeScrollAnchorRef}
+                workspaceBoardOpen={workspaceBoardOpen}
+                onWorktreeCardClick={closeWorkspaceBoard}
+                onWorkspaceBoardDragPreviewStart={previewWorkspaceBoardFromDrag}
+                onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
+                onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
+                projectsCollapseTarget={projectsCollapseTarget}
+              />
+            </SidebarProjectWorkspaces>
+            <Chats.ChatWorkspaceSection {...chatScroll} onWorktreeCardClick={closeWorkspaceBoard} />
           </SidebarProjectsListSlot>
-          {projectsCollapsed ? null : <WslMovedProjectsSection />}
-          {projectsCollapsed ? null : <HiddenProjectsSection />}
         </>
       )}
     </React.Fragment>

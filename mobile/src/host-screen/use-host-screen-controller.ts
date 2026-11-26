@@ -116,19 +116,6 @@ export function useHostScreenController({
     subscribed: catalog.subscribed,
     feedCarriesCatalog: feed?.kind === 'ready' && feed.domains.projectCatalog !== null
   })
-  const actions = useHostWorktreeActions({
-    client,
-    connState,
-    embedded,
-    fetchWorktrees: catalog.fetchWorktrees,
-    forgetHostClient,
-    hostCapabilities,
-    hostId,
-    pathname,
-    router,
-    state
-  })
-
   const hostPlatform = useResolvedHostPlatform(state, hostId)
   const { worktrees: displayWorktrees, hostContextOf } = useHostDisplayWorktrees(
     connState,
@@ -164,6 +151,19 @@ export function useHostScreenController({
     hostCapabilities,
     state,
     bots
+  })
+  const actions = useHostWorktreeActions({
+    client,
+    connState,
+    embedded,
+    fetchWorktrees: catalog.fetchWorktrees,
+    forgetHostClient,
+    hostCapabilities,
+    hostId,
+    pathname,
+    router,
+    state,
+    chatRepos: sectionsResult.chatRepos
   })
   const { collapsedGroups, projectOrderBy } = sectionsResult
   const { uniqueRepos } = sectionsResult

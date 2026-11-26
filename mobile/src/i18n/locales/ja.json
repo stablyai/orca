@@ -1802,6 +1802,10 @@
       "downloadProgress": "ダウンロード中… {{progress}}",
       "downloading": "ダウンロード中",
       "loading": "読み込み中"
+    },
+    "kind": {
+      "worktree": "ワークツリー",
+      "chat": "チャット"
     }
   },
   "notifications": {
@@ -5274,5 +5278,16 @@
   },
   "mcpServers": {
     "agentBlocked": "組織の Claude 設定によりブロックされています"
+  },
+  "chats": {
+    "remove": "チャットを削除",
+    "newProjectDate": "新規プロジェクト-{{date}}",
+    "createdNotOpened": "チャットを作成しました。「チャット」から開いてください。",
+    "createFailed": "チャットを作成できませんでした",
+    "create": "チャットを作成",
+    "title": "チャット",
+    "noteFailed": "メモを保存できませんでした",
+    "agentFailed": "Agent を開始できませんでした。再度開始する前にチャットを確認してください。",
+    "updateHost": "チャット用ワークスペースを作成するには、選択したホストの Orca を更新してください。"
   }
 }

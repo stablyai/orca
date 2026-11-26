@@ -22,6 +22,7 @@ export type MobileProjectSectionRepo = Pick<Repo, 'id' | 'displayName' | 'path' 
       | 'projectGroupId'
       | 'projectGroupOrder'
       | 'hiddenAt'
+      | 'chatWorkspace'
     >
   > & { repoIcon?: RepoIcon }
 
@@ -45,6 +46,7 @@ function sectionRepo(repo: Repo): MobileProjectSectionRepo {
     path: repo.path,
     badgeColor: repo.badgeColor,
     addedAt: repo.addedAt,
+    ...(repo.chatWorkspace ? { chatWorkspace: repo.chatWorkspace } : {}),
     ...(repo.connectionId !== undefined ? { connectionId: repo.connectionId } : {}),
     ...(repo.executionHostId ? { executionHostId: repo.executionHostId } : {}),
     // Why: the phone's list files a project under its group, in the group's order.

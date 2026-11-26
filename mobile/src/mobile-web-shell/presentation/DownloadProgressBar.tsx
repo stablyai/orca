@@ -46,13 +46,17 @@ export function DownloadProgressBar({
   receivedBytes,
   totalBytes,
   accessibilityLabel,
-  testID
+  testID,
+  color,
+  trackColor
 }: {
   feed: DownloadProgressFeed
   receivedBytes: number
   totalBytes: number
   accessibilityLabel: string
   testID?: string
+  color?: string
+  trackColor?: string
 }) {
   useMobileColorScheme()
   const [fill] = useState(() => new Animated.Value(feed.current()))
@@ -104,7 +108,7 @@ export function DownloadProgressBar({
   }, [feed, fill])
   return (
     <View
-      style={styles.track}
+      style={[styles.track, trackColor === undefined ? null : { backgroundColor: trackColor }]}
       accessibilityRole="progressbar"
       accessibilityLabel={accessibilityLabel}
       accessibilityValue={{
@@ -114,7 +118,13 @@ export function DownloadProgressBar({
       }}
       testID={testID}
     >
-      <Animated.View style={[styles.fill, { transform: [{ scaleX: fill }] }]} />
+      <Animated.View
+        style={[
+          styles.fill,
+          color === undefined ? null : { backgroundColor: color },
+          { transform: [{ scaleX: fill }] }
+        ]}
+      />
     </View>
   )
 }

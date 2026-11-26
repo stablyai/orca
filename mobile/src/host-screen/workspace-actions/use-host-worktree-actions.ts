@@ -22,7 +22,7 @@ import {
 } from '../../worktree/row-presentation/worktree-host-row-identity'
 import { noteLastVisitedWorktree } from '../../worktree/navigation/last-visited-worktree-by-host'
 import { isWorktreePinned } from '../../worktree/workspace-list/workspace-list-sections'
-import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
+import type { SectionRepo, Worktree } from '../../worktree/workspace-list/workspace-list-types'
 import { worktreeActivate, worktreePinWrite, worktreeSleep } from '../host-screen-operations'
 import type { HostScreenState } from '../use-host-screen-state'
 import { useHostWorktreeDelete } from './use-host-worktree-delete'
@@ -41,6 +41,7 @@ export function useHostWorktreeActions(args: {
   pathname: string
   router: ReturnType<typeof useRouter>
   state: HostScreenState
+  chatRepos: readonly SectionRepo[]
 }) {
   const {
     client,
@@ -210,7 +211,7 @@ export function useHostWorktreeActions(args: {
     [mutateWorkspaceName, hostCapabilities, fetchWorktrees]
   )
 
-  const worktreeDelete = useHostWorktreeDelete({ client, clientForRow, fetchWorktrees, state })
+  const worktreeDelete = useHostWorktreeDelete({ ...args, clientForRow })
   const rowWrites = useHostWorktreeRowWrites({ clientForRow, state })
 
   const handleRemoveHost = useCallback(async () => {

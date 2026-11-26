@@ -101,7 +101,7 @@ export type Section = {
   /** The view's collapse key when it differs from `key`; a header's copies share it. */
   collapseKey?: string
   title: string
-  icon?: 'pin'
+  icon?: 'pin' | 'chat'
   repo?: SectionRepo
   isProjectGroup?: boolean
   projectGroupDepth?: number

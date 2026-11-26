@@ -6,23 +6,22 @@ import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts
 import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
 import { getRenderedWorkspaceRowsInSidebarOrder } from './worktree-sidebar-row-preference'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
-import {
-  setVisibleWorktreeIds,
-  setVisibleWorktreeShortcutTargets
-} from '../listing/visible-worktrees'
+import { setVisibleWorktreeSection } from '../listing/visible-worktrees'
 import { useListMultiSelection } from '@/lib/list-interaction/use-list-multi-selection'
 import { useReusedArrayIdentity } from '../listing/use-reused-array-identity'
 import { useAppStore } from '@/store'
 import { focusActiveWorkspaceSurfaceFromSidebar } from './focus-workspace-surface'
 
-const getSidebarContainer = (): Element | null =>
-  document.querySelector('[data-worktree-sidebar-container]')
-
 export function useSidebarWorktreeSelection(args: {
+  workspaceSection: 'projects' | 'chats'
   sectionRows: HostSectionRow[]
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
 }) {
-  const { sectionRows, pinnedDisplayPolicy } = args
+  const { sectionRows, pinnedDisplayPolicy, workspaceSection } = args
+  const getSidebarContainer = useCallback(
+    () => document.querySelector(`[data-sidebar-workspace-section="${workspaceSection}"]`),
+    [workspaceSection]
+  )
   // Built rows include grouping/pinning reorder; use their order for selection and Cmd+1–9 parity.
   const renderedRows = useMemo(
     () => getRenderedWorkspaceRowsInSidebarOrder(sectionRows, pinnedDisplayPolicy),
@@ -105,9 +104,9 @@ export function useSidebarWorktreeSelection(args: {
         chipKeysByIdentity.set(getWorktreeHostIdentity(row.worktree), row.lineageGroupKey)
       }
     }
-    setVisibleWorktreeIds(renderedWorktreeIds)
-    setVisibleWorktreeShortcutTargets(
-      renderedWorktrees.map((worktree) => {
+    setVisibleWorktreeSection(workspaceSection, {
+      ids: renderedWorktreeIds,
+      targets: renderedWorktrees.map((worktree) => {
         const lineageGroupKey = chipKeysByIdentity.get(getWorktreeHostIdentity(worktree))
         return {
           id: worktree.id,
@@ -115,13 +114,12 @@ export function useSidebarWorktreeSelection(args: {
           ...(lineageGroupKey ? { lineageGroupKey } : {})
         }
       })
-    )
+    })
     // Why null, not []: [] is a real rendered order (all collapsed/filtered); null tells shortcuts the list is unmounted.
     return () => {
-      setVisibleWorktreeIds(null)
-      setVisibleWorktreeShortcutTargets(null)
+      setVisibleWorktreeSection(workspaceSection, null)
     }
-  }, [renderedWorktreeIds, renderedWorktrees, sectionRows])
+  }, [renderedWorktreeIds, renderedWorktrees, sectionRows, workspaceSection])
 
   return {
     renderedWorktreeIds,

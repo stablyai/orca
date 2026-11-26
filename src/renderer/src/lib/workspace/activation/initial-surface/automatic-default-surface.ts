@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store'
 import { shouldAutoCreateInitialTerminal } from '@/lib/workspace/activation/initial-surface/initial-terminal'
+import { isChatWorkspace } from '../../ownership/chat-workspace-owner'
 import { hasSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
 
 /** Automatic default-surface creation; a waiting split chooser is the surface the user left. Recovery inventory keeps the plain count. */
@@ -10,6 +11,7 @@ export function shouldSeedDefaultSurface(
 ): boolean {
   return (
     shouldAutoCreateInitialTerminal(renderableTabCount, hasPersistedTerminalState) &&
-    !hasSplitLandingGroup(useAppStore.getState(), worktreeId)
+    !hasSplitLandingGroup(useAppStore.getState(), worktreeId) &&
+    !isChatWorkspace(useAppStore.getState(), worktreeId)
   )
 }

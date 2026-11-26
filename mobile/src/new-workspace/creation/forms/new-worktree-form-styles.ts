@@ -6,7 +6,7 @@ export const newWorktreeFormStyles = themedStyleSheet(() => ({
   header: {
     marginTop: -spacing.xs
   },
-  // About the loaded form's height, so the sheet slides up once instead of growing when projects arrive.
+  // Reserve space for an in-place refresh; first presentation waits for real content.
   formPlaceholder: {
     minHeight: 440
   },

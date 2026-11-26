@@ -23,6 +23,7 @@ import {
 import {
   RepoClone,
   RepoCreate,
+  ChatWorkspaceCreate,
   RepoHooksCheck,
   RepoHooksRead,
   RepoIssueCommandWrite,
@@ -117,6 +118,16 @@ export const REPO_METHODS = [
         context
       )
   }),
+  defineMethod({
+    name: 'repo.createChatWorkspace',
+    permission: 'workspace',
+    params: ChatWorkspaceCreate,
+    handler: async (params, context) =>
+      projectRepoResultVisibilityForClient(
+        await context.runtime.createChatWorkspace(params.name, params.displayName),
+        context
+      )
+  }),
   // Older hosts answer method_not_found; clients then fall back to <host home>/orca/projects.
   defineMethod({
     name: 'repo.defaultCreateParent',
@@ -196,8 +207,11 @@ export const REPO_METHODS = [
   defineMethod({
     name: 'repo.rm',
     permission: 'workspace',
-    params: RepoSelector,
-    handler: async (params, { runtime }) => runtime.removeProject(params.repo)
+    params: RepoShow,
+    handler: async (params, { runtime }) =>
+      runtime.removeProject(
+        await runtime.showRepo(hostQualifiedRepoSelector(params.repo, params.repoHostId))
+      )
   }),
   defineMethod({
     name: 'repo.reorder',

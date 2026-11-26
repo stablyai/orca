@@ -7,10 +7,11 @@ import { triggerError, triggerSuccess } from '../../platform/haptics/haptics'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { requestWorktreeRemove } from './worktree-remove-request'
 import { removeWorktreeRow } from '../../worktree/row-presentation/worktree-host-row-identity'
-import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
+import type { SectionRepo, Worktree } from '../../worktree/workspace-list/workspace-list-types'
 import type { HostScreenState } from '../use-host-screen-state'
 import { useWorktreeDeleteFailure } from './use-worktree-delete-failure'
 import { decideArchiveHookRun } from './archive-hook-run-decision'
+import { chatWorkspaceRemovalTarget } from '../../../../src/shared/repository/chat-workspace-removal-target'
 
 // Keep the clients the delete started on, so a host switch cannot redirect a pending approval.
 export type RowClients = { rowClient: RpcClient; desktopClient: RpcClient }
@@ -38,8 +39,13 @@ export function useHostWorktreeDelete(args: {
   clientForRow: (item: Worktree) => RpcClient | null
   fetchWorktrees: () => Promise<void>
   state: HostScreenState
+  chatRepos: readonly SectionRepo[]
 }) {
-  const { client, clientForRow, fetchWorktrees, state } = args
+  const { client, clientForRow, fetchWorktrees, state, chatRepos } = args
+  const chatRemovalTarget = useCallback(
+    (row: Worktree) => chatWorkspaceRemovalTarget(row, chatRepos),
+    [chatRepos]
+  )
   const { reportDeleteFailure, ...deleteFailure } = useWorktreeDeleteFailure(client)
   const { desktopRepos, serverWorkspaces, setActionError, setLastKnownWorktrees, setWorktrees } =
     state
@@ -83,7 +89,12 @@ export function useHostWorktreeDelete(args: {
     ) => {
       hideRow(item)
       try {
-        const result = await requestWorktreeRemove(clients.rowClient, item, hooks)
+        const result = await requestWorktreeRemove(
+          clients.rowClient,
+          item,
+          hooks,
+          chatRemovalTarget(item)
+        )
         if (result.accepted) {
           triggerSuccess()
           return
@@ -113,7 +124,7 @@ export function useHostWorktreeDelete(args: {
         void fetchWorktrees()
       }
     },
-    [fetchWorktrees, hideRow, reportDeleteFailure, restoreRow]
+    [chatRemovalTarget, fetchWorktrees, hideRow, reportDeleteFailure, restoreRow]
   )
 
   // Every attempt, Delete Anyway included, re-reads the script: it may have changed since approval.
@@ -178,10 +189,15 @@ export function useHostWorktreeDelete(args: {
     async (item: Worktree) => {
       const rowClient = clientForRow(item)
       if (client && rowClient) {
-        await deleteWithArchiveTrust(item, { rowClient, desktopClient: client }, {})
+        const clients = { rowClient, desktopClient: client }
+        if (chatRemovalTarget(item)) {
+          await removeWorktree(item, clients, { runHooks: false })
+        } else {
+          await deleteWithArchiveTrust(item, clients, {})
+        }
       }
     },
-    [client, clientForRow, deleteWithArchiveTrust]
+    [chatRemovalTarget, client, clientForRow, deleteWithArchiveTrust, removeWorktree]
   )
 
   // Taken synchronously so a second tap on the drawer finds nothing to act on.
@@ -253,6 +269,7 @@ export function useHostWorktreeDelete(args: {
   const dismissArchiveHookFailure = useCallback(() => setArchiveHookFailure(null), [])
 
   return {
+    chatRemovalTarget,
     ...deleteFailure,
     archiveHookFailure: visibleFailure,
     archiveTrustRequest: onThisDesktop(archiveTrustRequest),

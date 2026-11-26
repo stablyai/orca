@@ -38,8 +38,7 @@ import { localAgentSessionRecordStoreLocation } from '../../agent-session/record
 import type { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
 import { maybeAutoRenameWorkspaceOnFirstStructuredTurn } from '../../../agent-hooks/first-work/first-work-structured-session-rename'
 import { firstWorkRenameDeps } from '../../../agent-hooks/first-work/first-work-rename-runtime'
-import { createStructuredChatNamingHandler } from '../../../native-chat/structured-chat-naming'
-import { structuredChatNamingDeps } from '../../agent-session/naming/structured-chat-naming-runtime'
+import { createRuntimeStructuredChatNamingHandler } from '../../agent-session/naming/structured-chat-naming-runtime'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { chatWorkerTurnStopReporter } from '../../orchestration/workers/turn-stops/chat-worker-turn-stops'
@@ -240,24 +239,23 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
     // Built only when this call installs: deps run install-time work such as each bot's tool-secret sweep.
     await installStructuredAgentSessionHost(() => {
       const logger = createStructuredAgentSessionLogger()
-      const nameChat = createStructuredChatNamingHandler(
-        structuredChatNamingDeps(
-          () => this.requireStore(),
-          {
-            resolveWorkspace: async (workspaceId) => {
-              const target = await this.resolveRuntimeFileTarget(`id:${workspaceId}`)
-              return { path: target.worktree.path, executionHostId: target.executionHostId }
-            },
-            getAgentEnvResolvers: () => this.getCommitMessageAgentEnvironmentResolvers(),
-            resolveNamingEnvironment: (agent) =>
-              resolveHostStructuredAgentLaunchEnvironment(agent, this.requireStore().getSettings()),
-            workerTaskTitle: (record) =>
-              structuredWorkerOpenTaskTitle(this.getOrchestrationDbIfAvailable?.() ?? null, record),
-            retitleOpenTab: (workspaceId, sessionId) =>
-              this.refreshStructuredConversationTabTitle(workspaceId, sessionId)
+      const nameChat = createRuntimeStructuredChatNamingHandler(
+        () => this.requireStore(),
+        {
+          resolveWorkspace: async (workspaceId) => {
+            const target = await this.resolveRuntimeFileTarget(`id:${workspaceId}`)
+            return { path: target.worktree.path, executionHostId: target.executionHostId }
           },
-          logger
-        )
+          getAgentEnvResolvers: () => this.getCommitMessageAgentEnvironmentResolvers(),
+          resolveNamingEnvironment: (agent) =>
+            resolveHostStructuredAgentLaunchEnvironment(agent, this.requireStore().getSettings()),
+          workerTaskTitle: (record) =>
+            structuredWorkerOpenTaskTitle(this.getOrchestrationDbIfAvailable?.() ?? null, record),
+          refreshProjectCatalog: (repoId) => this.publishProjectNameChange(repoId),
+          retitleOpenTab: (workspaceId, sessionId) =>
+            this.refreshStructuredConversationTabTitle(workspaceId, sessionId)
+        },
+        logger
       )
       return {
         legacySessionTabIds: this.legacyStructuredSessionTabIds,

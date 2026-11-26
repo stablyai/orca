@@ -93,6 +93,7 @@ export class RepoUpdatePersistenceOperations {
       Pick<
         Repo,
         | 'displayName'
+        | 'chatWorkspace'
         | 'badgeColor'
         | 'repoIcon'
         | 'upstream'
@@ -141,6 +142,9 @@ export class RepoUpdatePersistenceOperations {
     assertKindChangeKeepsFolderWorkspaces(repo, updates.kind, this.state.worktreeMeta)
     const previousGhAccount = repo.ghAccount
     const sanitizedUpdates = sanitizeRepoUpdatesForPersistence(updates)
+    if ('displayName' in updates && repo.chatWorkspace && !('chatWorkspace' in updates)) {
+      sanitizedUpdates.chatWorkspace = { ...repo.chatWorkspace, autoName: false }
+    }
     if (
       'executionHostId' in updates &&
       getRepoExecutionHostId({ ...repo, ...updates }) !== getRepoExecutionHostId(repo)

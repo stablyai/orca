@@ -1806,6 +1806,10 @@
       "downloadProgress": "Wird heruntergeladen… {{progress}}",
       "downloading": "Wird heruntergeladen",
       "loading": "Wird geladen"
+    },
+    "kind": {
+      "worktree": "Worktree",
+      "chat": "Chat"
     }
   },
   "notifications": {
@@ -5200,5 +5204,16 @@
   },
   "mcpServers": {
     "agentBlocked": "Durch die Claude-Einstellungen deiner Organisation blockiert"
+  },
+  "chats": {
+    "remove": "Chat entfernen",
+    "newProjectDate": "Neues Projekt-{{date}}",
+    "createdNotOpened": "Chat erstellt. Öffne ihn unter Chats.",
+    "createFailed": "Chat konnte nicht erstellt werden",
+    "create": "Chat erstellen",
+    "title": "Chats",
+    "noteFailed": "Notiz konnte nicht gespeichert werden",
+    "agentFailed": "Agent konnte nicht gestartet werden. Prüfe den Chat vor einem weiteren Start.",
+    "updateHost": "Aktualisiere Orca auf dem ausgewählten Host, um einen Chat-Arbeitsbereich zu erstellen."
   }
 }

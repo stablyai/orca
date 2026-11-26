@@ -805,6 +805,7 @@ import {
   ProjectUpdate
 } from './projects/project-runtime-params'
 import {
+  ChatWorkspaceCreate,
   ProjectGroupCreate,
   ProjectGroupHooksCheck,
   ProjectGroupImportNested,
@@ -2110,6 +2111,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'repo.checkCloneTarget': RepoClone,
   'repo.clone': RepoClone,
   'repo.create': RepoCreate,
+  'repo.createChatWorkspace': ChatWorkspaceCreate,
   'repo.defaultCreateParent': null,
   'repo.gitAvailable': null,
   'repo.hooks': RepoHooksRead,
@@ -2119,7 +2121,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'repo.list': RepoList,
   'repo.removeSparsePreset': RepoSparsePresetRemove,
   'repo.reorder': RepoReorder,
-  'repo.rm': RepoSelector,
+  'repo.rm': RepoShow,
   'repo.saveSparsePreset': RepoSparsePresetSave,
   'repo.searchRefs': RepoSearchRefs,
   'repo.setBaseRef': RepoSetBaseRef,

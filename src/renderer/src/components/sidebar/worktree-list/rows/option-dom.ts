@@ -46,8 +46,10 @@ export function markSidebarWorktreeActiveImmediately(
   worktreeId: string,
   primaryRowKey?: string
 ): void {
-  const sidebar = document.querySelector<HTMLElement>('[data-worktree-sidebar]')
-  const matchingIdOptions = getMountedWorktreeOptions(worktreeId, sidebar)
+  const sidebars = Array.from(document.querySelectorAll<HTMLElement>('[data-worktree-sidebar]'))
+  const matchingIdOptions = sidebars.flatMap((sidebar) =>
+    getMountedWorktreeOptions(worktreeId, sidebar)
+  )
   const primaryOption = primaryRowKey
     ? matchingIdOptions.find((option) => option.dataset.worktreeRowKey === primaryRowKey)
     : matchingIdOptions[0]
@@ -62,20 +64,24 @@ export function markSidebarWorktreeActiveImmediately(
     return
   }
 
-  sidebar
-    ?.querySelectorAll<HTMLElement>('[role="option"][aria-current="page"]')
-    .forEach((option) => option.removeAttribute('aria-current'))
+  for (const sidebar of sidebars) {
+    sidebar
+      .querySelectorAll<HTMLElement>('[role="option"][aria-current="page"]')
+      .forEach((option) => option.removeAttribute('aria-current'))
+  }
 
   for (const option of nextOptions) {
     option.setAttribute('aria-current', 'page')
   }
-  sidebar
-    ?.querySelectorAll<HTMLElement>('[data-worktree-card-surface][data-worktree-card-active]')
-    .forEach((surface) => {
-      if (!nextOptions.some((option) => option.contains(surface))) {
-        surface.removeAttribute('data-worktree-card-active')
-      }
-    })
+  for (const sidebar of sidebars) {
+    sidebar
+      .querySelectorAll<HTMLElement>('[data-worktree-card-surface][data-worktree-card-active]')
+      .forEach((surface) => {
+        if (!nextOptions.some((option) => option.contains(surface))) {
+          surface.removeAttribute('data-worktree-card-active')
+        }
+      })
+  }
   for (const option of nextOptions) {
     const activeSurfaceVariant =
       primaryRowKey !== undefined

@@ -7,7 +7,7 @@ import type { Worktree } from '../../../../../shared/worktree/types'
 
 export type WorktreeRuntimeOwnerState = {
   repos?: readonly (Pick<Repo, 'id' | 'connectionId' | 'executionHostId'> &
-    Partial<Pick<Repo, 'path' | 'projectGroupId'>>)[]
+    Partial<Pick<Repo, 'path' | 'projectGroupId' | 'chatWorkspace'>>)[]
   settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
   worktreesByRepo?: Record<
     string,

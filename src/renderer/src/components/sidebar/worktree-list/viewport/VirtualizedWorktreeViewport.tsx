@@ -27,6 +27,10 @@ import { withKeyboardPreview } from '../navigation/use-keyboard'
 import { useWorktreeViewportKeyboardNavigation } from './use-keyboard-navigation'
 import { useWorktreeRowGeometry } from './use-row-geometry'
 import { useWorktreeListVirtualizer } from './use-virtualizer'
+import {
+  WORKTREE_SIDEBAR_SCROLL_STYLE,
+  worktreeViewportContainerLayout
+} from './worktree-viewport-layout'
 import { useWorktreeNativeDrag } from '../drag/use-native-drag'
 import { useWorktreePointerDrag } from '../drag/use-pointer-drag'
 import { useWorktreeSidebarHeaderDrag } from '../drag/use-header-drag'
@@ -40,11 +44,6 @@ import { renderWorktreeVirtualRow } from '../rows/virtual-row-dispatch'
 import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
 
 const EMPTY_HOST_OPTIONS: NonNullable<VirtualizedWorktreeViewportProps['hostOptions']> = []
-
-const WORKTREE_SIDEBAR_SCROLL_STYLE: React.CSSProperties = {
-  // Why: TanStack Virtual owns scroll correction; native overflow anchoring fights it and causes jumps.
-  overflowAnchor: 'none'
-}
 
 export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewport(
   props: VirtualizedWorktreeViewportProps
@@ -369,8 +368,11 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   return (
     <div
       data-worktree-sidebar-container
-      data-contextual-tour-target="workspace-list"
-      className="relative min-h-0 flex-1"
+      data-sidebar-workspace-section={props.workspaceSection ?? 'projects'}
+      data-contextual-tour-target={
+        props.workspaceSection === 'chats' ? undefined : 'workspace-list'
+      }
+      {...worktreeViewportContainerLayout(props.contentSized, virtualization.virtualizer)}
     >
       <div
         ref={setScrollRootRef}

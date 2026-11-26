@@ -5,7 +5,6 @@ import type { SetupDecision as WorkspaceCreateSetupDecision } from '../../../../
 import type { WorkspaceSshGate } from '../workspace-ssh-gate'
 import type { useMobileComposerSource } from '../../source-selection/use-mobile-composer-source'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import { BottomDrawer } from '../../../components/bottom-drawer/BottomDrawer'
 import { MobileLoadErrorState, MobileStateView } from '../../../components/feedback/MobileStateView'
 import { MobileAgentIcon } from '../../../components/icons/MobileAgentIcon'
 import {
@@ -17,18 +16,20 @@ import {
 import { SheetHeader } from '../../../components/nav-bar/SheetHeader'
 import type { NewWorktreeAgentOption } from '../runtime/new-worktree-agent-selection'
 import { newWorktreeFormStyles as styles } from './new-worktree-form-styles'
-import type { SetupRunPolicy } from './new-worktree-modal-types'
+import type { WorkspaceCreationKind, SetupRunPolicy } from './new-worktree-modal-types'
 import { NewWorktreeFormOptions } from './NewWorktreeFormOptions'
 import { NewWorktreeProjectTargetFields } from './NewWorktreeProjectTargetFields'
 import { NewWorkspaceSshConnectionField } from './NewWorkspaceSshConnectionField'
 import { SheetPrimaryButton } from '../../../components/sheets/SheetPrimaryButton'
+import { WorkspaceCreationTabs } from '../../WorkspaceCreationTabs'
 import { SmartWorkspaceSourceField } from '../../source-selection/presentation/SmartWorkspaceSourceField'
 
 type Composer = ReturnType<typeof useMobileComposerSource>
 type Selection = { label: string; detail?: string }
 
-export function NewWorktreeFormSheet(props: {
-  visible: boolean
+export function NewWorktreeForm(props: {
+  creationKind?: WorkspaceCreationKind
+  onCreationKindChange?: (kind: WorkspaceCreationKind) => void
   interactive: boolean
   loading: boolean
   hasRepos: boolean
@@ -80,10 +81,19 @@ export function NewWorktreeFormSheet(props: {
     ? t('components.newWorktreeFormSheet.connectTargetFirst', 'Connect target first')
     : props.selectedAgent.label
   return (
-    <BottomDrawer visible={props.visible} interactive={props.interactive} onClose={props.onClose}>
+    <>
       <View style={styles.header}>
         <SheetHeader
           title={title}
+          titleControl={
+            props.onCreationKindChange ? (
+              <WorkspaceCreationTabs
+                selected={props.creationKind ?? 'worktree'}
+                disabled={props.creating}
+                onSelect={props.onCreationKindChange}
+              />
+            ) : undefined
+          }
           leading={{
             label: t('common.cancel', 'Cancel'),
             onPress: props.onClose,
@@ -188,6 +198,6 @@ export function NewWorktreeFormSheet(props: {
           </View>
         </>
       )}
-    </BottomDrawer>
+    </>
   )
 }

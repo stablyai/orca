@@ -68,6 +68,8 @@ export type RuntimeRepositoryCommandSurface = {
   removeSparsePreset: RuntimeRepositorySparsePresets['remove']
   addRepo: RuntimeRepositoryRegistrationController['add']
   createRepo: RuntimeRepositoryRegistrationController['create']
+  createChatWorkspace: RuntimeRepositoryRegistrationController['createChatWorkspace']
+  publishProjectNameChange: RuntimeRepositorySettingsController['publishNameChange']
   getDefaultCreateProjectParent: RuntimeRepositoryRegistrationController['defaultCreateParent']
   cloneRepo: RuntimeRepositoryCloneController['clone']
   checkCloneTarget: RuntimeRepositoryCloneController['checkTarget']
@@ -165,6 +167,8 @@ export function installRuntimeRepositoryCommandSurface(
       return result
     },
     getDefaultCreateProjectParent: registrations.defaultCreateParent.bind(registrations),
+    createChatWorkspace: registrations.createChatWorkspace.bind(registrations),
+    publishProjectNameChange: settings.publishNameChange.bind(settings),
     cloneRepo: async (...args: Parameters<typeof clones.clone>) => {
       const repo = await clones.clone(...args)
       void target.repositoryForkBackfill.enqueue([repo])

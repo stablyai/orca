@@ -1,3 +1,4 @@
+import { isChatWorkspace } from '@/lib/workspace/ownership/chat-workspace-owner'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import type { TabSplitTarget, TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { activeSurfacePatchMatchesState, buildActiveSurfacePatch } from './tabs-surface'
@@ -73,11 +74,24 @@ export function createTabsGroupActions(
   TabsSlice,
   'ensureWorktreeRootGroup' | 'focusGroup' | 'closeEmptyGroup' | 'createEmptySplitGroup'
 > {
+  const markChatLanding = (worktreeId: string, groupId: string): void => {
+    const state = get()
+    const group = state.groupsByWorktree[worktreeId]?.find((entry) => entry.id === groupId)
+    if (
+      group?.tabOrder.length === 0 &&
+      state.splitLandingGroupIds[groupId] !== worktreeId &&
+      isChatWorkspace(state, worktreeId)
+    ) {
+      set({ splitLandingGroupIds: { ...state.splitLandingGroupIds, [groupId]: worktreeId } })
+    }
+  }
   return {
     ensureWorktreeRootGroup: (worktreeId, orderSlot) => {
       const existingGroups = get().groupsByWorktree[worktreeId] ?? []
       if (!orderSlot && existingGroups.length > 0) {
-        return get().activeGroupIdByWorktree[worktreeId] ?? existingGroups[0].id
+        const groupId = get().activeGroupIdByWorktree[worktreeId] ?? existingGroups[0].id
+        markChatLanding(worktreeId, groupId)
+        return groupId
       }
 
       let groupId = workspaceRootGroupId(worktreeId)
@@ -136,6 +150,9 @@ export function createTabsGroupActions(
               }
             ]
           ]),
+          ...(nextGroup.tabOrder.length === 0 && isChatWorkspace(state, worktreeId)
+            ? { splitLandingGroupIds: { ...state.splitLandingGroupIds, [groupId]: worktreeId } }
+            : {}),
           activeGroupIdByWorktree: groups.length
             ? state.activeGroupIdByWorktree
             : replaceRecordEntries(state.activeGroupIdByWorktree, [[worktreeId, groupId]])

@@ -4,6 +4,16 @@ import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rp
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
 import { hostScreenUnreadReplySchema } from '../host-screen-reply-schema'
 
+export const chatWorkspaceRemove = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'repo.remove-chat-workspace',
+    method: 'repo.rm',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('chat-workspace-removed', z.object({ removed: z.literal(true) }))
+  })
+)
+
 // Null: a desktop from before per-workspace mute, whose strict ui.set would refuse the field.
 const notificationMutesSchema = z
   .looseObject({

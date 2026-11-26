@@ -85,6 +85,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
           {state.confirmDelete ? (
             <WorkspaceDeleteConfirmSheet
               row={state.confirmDelete}
+              chatWorkspace={actions.chatRemovalTarget(state.confirmDelete) !== null}
               hostId={hostId ?? ''}
               rowClient={
                 actionServer.routeHost === undefined

@@ -4,12 +4,8 @@ import { createPortal } from 'react-dom'
 import { useAppStore } from '@/store'
 import { selectSidebarChildrenByParentIdentity } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { useShallow } from 'zustand/react/shallow'
-import {
-  useAllWorktrees,
-  useWorktreeMap
-} from '@/store/slices/worktrees/listing/use-worktree-catalog'
-import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
-import { useRepoMap } from '@/store/repos/use-repository-catalog'
+import { useProjectSectionScope } from './use-project-section-scope'
+import { useWorkspaceSectionFolds } from '../controls/use-workspace-section-folds'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { openHeaderCreateComposer } from '../rows/header-create-workspace-target'
@@ -29,7 +25,6 @@ import { SidebarWorktreeListDialogs } from '../rows/ProjectGroupDialogs'
 import { SidebarWorktreeListEmptyState } from './EmptyState'
 import { VirtualizedWorktreeViewport } from '../viewport/VirtualizedWorktreeViewport'
 import { markSidebarWorktreeActiveImmediately } from '../rows/option-dom'
-import { EMPTY_PROJECT_GROUPS } from '../viewport/viewport-props'
 import { NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK } from '../drag/drop-commit-context'
 import { useAgentSendTargetWorktreeId } from './use-agent-send-target'
 import { useProjectGroupDialogs } from '../rows/use-project-group-dialogs'
@@ -49,15 +44,15 @@ import { useProjectsCollapseShortcut } from '../controls/use-projects-collapse-s
 import { useProjectsCollapseAllAnnouncement } from '../controls/use-projects-collapse-all-announcement'
 import {
   areAllProjectsCollapsed,
+  getOwnedProjectCollapseKeys,
   getRenderedProjectCollapseKeys,
   setAllProjectsCollapsed
 } from './project-collapse-all'
-import {
-  selectDetectedWorktreesByRepo,
-  selectFolderWorkspaces
-} from '@/store/workspaces/catalog/workspace-record-fields'
+import { selectDetectedWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type WorktreeListProps = {
+  workspaceSection?: 'projects' | 'chats'
+  contentSized?: boolean
   scrollOffsetRef: React.MutableRefObject<number>
   scrollAnchorRef: React.MutableRefObject<VirtualizedScrollAnchor>
   workspaceBoardOpen?: boolean
@@ -75,6 +70,8 @@ const useSidebarListModel =
     : useWindowSidebarListModel
 
 const WorktreeList = React.memo(function WorktreeList({
+  workspaceSection = 'projects',
+  contentSized,
   scrollOffsetRef,
   scrollAnchorRef,
   workspaceBoardOpen = false,
@@ -84,10 +81,17 @@ const WorktreeList = React.memo(function WorktreeList({
   onWorkspaceBoardDragPreviewCancel = NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK,
   projectsCollapseTarget
 }: WorktreeListProps) {
-  const allWorktrees = useAllWorktrees()
-  const repoMap = useRepoMap()
-  const worktreeMap = useWorktreeMap()
-  const repos = useAppStore((s) => s.repos)
+  const {
+    allWorktrees,
+    allRepoIds,
+    repoMap,
+    worktreeMap,
+    repos,
+    projectGroups,
+    folderWorkspaces,
+    projectGrouping,
+    ownsWorktree
+  } = useProjectSectionScope(workspaceSection)
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
   const childrenByParentIdentity = useAppStoreWithHostStatuses(
     selectSidebarChildrenByParentIdentity
@@ -113,11 +117,8 @@ const WorktreeList = React.memo(function WorktreeList({
   const pendingRevealSidebarRow = useAppStore((s) => s.pendingRevealSidebarRow)
   const clearPendingRevealWorktreeId = useAppStore((s) => s.clearPendingRevealWorktreeId)
   const clearPendingRevealSidebarRow = useAppStore((s) => s.clearPendingRevealSidebarRow)
-  const collapsedGroups = useAppStore((s) => s.collapsedGroups)
-  const toggleGroup = useAppStore((s) => s.toggleCollapsedGroup)
-  const setCollapsedGroups = useAppStore((s) => s.setCollapsedGroups)
-  const projectGroups = useAppStore((s) => s.projectGroups ?? EMPTY_PROJECT_GROUPS)
-  const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
+  const { collapsedGroups, toggleGroup, setCollapsedGroups } =
+    useWorkspaceSectionFolds(workspaceSection)
   const settings = useAppStore((s) => s.settings)
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
   const { prCache, hostedReviewCache } = useAppStore(
@@ -125,14 +126,6 @@ const WorktreeList = React.memo(function WorktreeList({
   )
   const pinnedDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings)
   const defaultHostId = getSettingsFocusedExecutionHostId(settings)
-  const projectHostSetupProjection = useProjectHostSetupProjection()
-  const projectGrouping = useMemo(
-    () => ({
-      projects: projectHostSetupProjection.projects,
-      projectHostSetups: projectHostSetupProjection.setups
-    }),
-    [projectHostSetupProjection]
-  )
 
   const agentSendTargetWorktreeId = useAgentSendTargetWorktreeId()
   const { filterState, hasFilters, clearFilters, revealWorkspaceFilters } =
@@ -142,6 +135,8 @@ const WorktreeList = React.memo(function WorktreeList({
     [allWorktrees, folderWorkspaces]
   )
   const { visibleWorktrees, visibleScope, externalWorktreeCards, rowModel } = useSidebarListModel({
+    workspaceSection,
+    ownsWorktree,
     filterState,
     sortBy,
     groupBy,
@@ -187,15 +182,16 @@ const WorktreeList = React.memo(function WorktreeList({
   const handleToggleAllProjects = useCallback(() => {
     void useAppStore.getState().recordFeatureInteraction('projects-collapse-all')
     // Direction follows what is displayed, which may differ from stored state while a picker forces sections open.
-    setCollapsedGroups(
+    setCollapsedGroups((current) =>
       setAllProjectsCollapsed(
-        useAppStore.getState().collapsedGroups,
-        projectCollapseKeys,
+        current,
+        getOwnedProjectCollapseKeys(rowModel.occurrencePlan.sections),
         !allProjectsCollapsed
       )
     )
-  }, [allProjectsCollapsed, projectCollapseKeys, setCollapsedGroups])
+  }, [allProjectsCollapsed, rowModel.occurrencePlan.sections, setCollapsedGroups])
   const selection = useSidebarWorktreeSelection({
+    workspaceSection,
     sectionRows: rowModel.sectionRows,
     pinnedDisplayPolicy
   })
@@ -236,13 +232,12 @@ const WorktreeList = React.memo(function WorktreeList({
   )
   const handleCreateFolderWorkspace = useCallback(
     (projectGroup: ProjectGroup) => {
-      if (!projectGroup.parentPath) {
-        return
+      if (projectGroup.parentPath) {
+        openModal('new-workspace-composer', {
+          initialProjectGroupId: projectGroup.id,
+          telemetrySource: 'sidebar'
+        })
       }
-      openModal('new-workspace-composer', {
-        initialProjectGroupId: projectGroup.id,
-        telemetrySource: 'sidebar'
-      })
     },
     [openModal]
   )
@@ -269,7 +264,7 @@ const WorktreeList = React.memo(function WorktreeList({
     importedWorktreeCardCount: externalWorktreeCards.importedWorktreesByRepo.size
   })
   useProjectsCollapseShortcut(
-    projectCollapseKeys.length > 0 && !filtersHideAllRows,
+    workspaceSection === 'projects' && projectCollapseKeys.length > 0 && !filtersHideAllRows,
     handleToggleAllProjects
   )
   const announceProjectCollapse = useProjectsCollapseAllAnnouncement(
@@ -287,7 +282,13 @@ const WorktreeList = React.memo(function WorktreeList({
   )
   // Clear Filters must outrank empty project headers when filtering hides every workspace.
   if (rowModel.rows.length === 0 || filtersHideAllRows) {
-    return <SidebarWorktreeListEmptyState hasFilters={hasFilters} onClearFilters={clearFilters} />
+    return (
+      <SidebarWorktreeListEmptyState
+        workspaceSection={workspaceSection}
+        hasFilters={hasFilters}
+        onClearFilters={clearFilters}
+      />
+    )
   }
 
   return (
@@ -320,6 +321,8 @@ const WorktreeList = React.memo(function WorktreeList({
         onOpenWorktreeVisibility={handleOpenWorktreeVisibility}
       />
       <VirtualizedWorktreeViewport
+        workspaceSection={workspaceSection}
+        contentSized={contentSized}
         // Wake moves status headers; preserve viewport identity across those changes.
         key={`group:${groupBy}:host:${filterState.visibleWorkspaceHostIds?.join(',') ?? 'all'}:lineage`}
         rows={rowModel.sectionRows}
@@ -379,7 +382,7 @@ const WorktreeList = React.memo(function WorktreeList({
         worktreeMap={worktreeMap}
         worktreeLineageById={worktreeLineageById}
         childrenByParentIdentity={childrenByParentIdentity}
-        allRepoIds={rowModel.allRepoIds}
+        allRepoIds={allRepoIds}
         onReorderHostSections={rowModel.handleReorderHostSections}
         onHostDragActiveChange={rowModel.setHostDragActive}
         prCache={prCache}

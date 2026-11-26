@@ -26,6 +26,11 @@ export const RepoCreate = z.object({
   kind: z.enum(['git', 'folder']).optional()
 })
 
+export const ChatWorkspaceCreate = z.object({
+  name: z.string().max(64),
+  displayName: z.string().trim().min(1).max(128)
+})
+
 export const RepoClone = z.object({
   url: requiredString('Missing clone URL'),
   destination: requiredString('Missing clone destination'),

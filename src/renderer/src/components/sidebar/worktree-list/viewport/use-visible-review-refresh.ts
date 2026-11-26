@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useId } from 'react'
 import type React from 'react'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
@@ -66,6 +66,7 @@ export function useVisiblePrRefreshReporting(args: {
   virtualItems: readonly VirtualItem[]
   scrollRef: React.RefObject<HTMLDivElement | null>
 }): void {
+  const owner = useId()
   const publish = useAppStore((s) => s.setVisibleReviewCardWorktreeIds)
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
   const enabled =
@@ -78,7 +79,7 @@ export function useVisiblePrRefreshReporting(args: {
     const update = (): void => {
       const scroll = args.scrollRef.current
       if (!enabled || !scroll || document.visibilityState !== 'visible') {
-        publish([])
+        publish([], owner)
         return
       }
       const candidates = visibleReviewCardIds({
@@ -88,7 +89,7 @@ export function useVisiblePrRefreshReporting(args: {
         viewportHeight: scroll.clientHeight
       })
       if (candidates.length === 0) {
-        publish([])
+        publish([], owner)
         return
       }
       const viewport = scroll.getBoundingClientRect()
@@ -100,7 +101,8 @@ export function useVisiblePrRefreshReporting(args: {
             const bounds = (surface?.firstElementChild ?? option).getBoundingClientRect()
             return bounds.height > 0 && bounds.top < viewport.bottom && bounds.bottom > viewport.top
           })
-        )
+        ),
+        owner
       )
     }
     update()
@@ -111,7 +113,7 @@ export function useVisiblePrRefreshReporting(args: {
       stopVisibility()
       stopScroll()
     }
-  }, [enabled, args.renderRows, args.virtualItems, args.scrollRef, publish])
+  }, [enabled, args.renderRows, args.virtualItems, args.scrollRef, publish, owner])
 
-  useEffect(() => () => publish([]), [publish])
+  useEffect(() => () => publish([], owner), [publish, owner])
 }

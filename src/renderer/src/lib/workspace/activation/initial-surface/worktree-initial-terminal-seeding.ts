@@ -27,6 +27,7 @@ import { applyDefaultTerminalTabs } from '@/lib/workspace/activation/initial-sur
 import { openDefaultAgentChatInEmptyWorkspace } from '@/lib/workspace/activation/initial-surface/empty-workspace-default-agent-chat'
 import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/workspace/activation/initial-surface/empty-workspace-default-surface-claims'
 import { findPendingWorktreeCreationId } from '../../creation/pending-worktree-creation'
+import { isChatWorkspace } from '../../ownership/chat-workspace-owner'
 
 function getSetupRunnerCommandPlatformForLaunch(setup: WorktreeSetupLaunch): 'windows' | 'posix' {
   return getSetupRunnerCommandPlatformForPath(
@@ -88,6 +89,16 @@ export function ensureWorktreeHasInitialTerminal(
       ? store
       : useAppStore.getState()
   let sequencedStartup = startup
+  if (
+    renderableTabCount === 0 &&
+    !startup &&
+    !setup &&
+    !issueCommand &&
+    !defaultTabs?.tabs.length &&
+    isChatWorkspace(ownerState, worktreeId, opts?.executionHostId)
+  ) {
+    return null
+  }
   let wrappedSetupCommandStr: string | undefined
 
   if (startup && setup?.waitForAgentStartup === true) {

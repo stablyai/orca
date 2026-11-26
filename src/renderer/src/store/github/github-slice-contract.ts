@@ -68,7 +68,7 @@ export type GitHubSlice = {
   prVisibleRefreshGeneration: number
   visibleReviewWorktreeIds: readonly string[]
   visibleReviewCardWorktreeIds: readonly string[]
-  setVisibleReviewCardWorktreeIds: (ids: readonly string[]) => void
+  setVisibleReviewCardWorktreeIds: (ids: readonly string[], owner: string) => void
   /** Workspaces whose PRs an open item page shows; refreshed as visible sidebar rows are. */
   visibleItemPageReviewWorktreeIds: readonly string[]
   setVisibleItemPageReviewWorktreeIds: (ids: readonly string[]) => void
