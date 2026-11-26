@@ -1,3 +1,4 @@
+import { undeliveredInboxQuery, type UndeliveredInboxOptions } from './undelivered-inbox-query'
 import { noteQuestionEdge } from './question-edges'
 import type { MessageType, MessageRow } from '../orchestration-records'
 import { exposeMessageTimestamps, exposeMessageListTimestamps } from '../utc-timestamp'
@@ -6,8 +7,8 @@ import type { OrchestrationDb } from '../orchestration-db'
 import { MESSAGE_COLUMN_LIST } from '../row-column-lists'
 import { runOwnsDirectMessageSql } from '../runs/run-coordinator-mail-routing'
 import { stampQuestionTakes, type MailTaker } from './mail-taker'
+import { MESSAGE_ID_UPDATE_BATCH_SIZE, unreadMailboxesOf } from './message-read-mailboxes'
 
-const MESSAGE_ID_UPDATE_BATCH_SIZE = 500
 const MESSAGE_MUTATION_SAVEPOINT = 'message_id_mutation'
 
 function runBatchedMessageMutation(
@@ -15,11 +16,14 @@ function runBatchedMessageMutation(
   ids: string[],
   sqlForPlaceholders: (placeholders: string) => string,
   leadingBindings: string[] = [],
-  beforeBatch: (batch: string[]) => void = () => {}
+  beforeBatch: (batch: string[]) => void = () => {},
+  consuming = false
 ): void {
   if (ids.length === 0) {
     return
   }
+  const readMailboxes =
+    consuming && db.mailReadListener && db.mailReadWanted() ? unreadMailboxesOf(db, ids) : []
   db.db.exec(`SAVEPOINT ${MESSAGE_MUTATION_SAVEPOINT}`)
   try {
     for (let offset = 0; offset < ids.length; offset += MESSAGE_ID_UPDATE_BATCH_SIZE) {
@@ -33,6 +37,13 @@ function runBatchedMessageMutation(
     db.db.exec(`ROLLBACK TO ${MESSAGE_MUTATION_SAVEPOINT}`)
     db.db.exec(`RELEASE ${MESSAGE_MUTATION_SAVEPOINT}`)
     throw error
+  }
+  if (readMailboxes.length > 0) {
+    try {
+      db.mailReadListener?.(readMailboxes)
+    } catch {
+      // A listener fault cannot undo a committed read.
+    }
   }
 }
 
@@ -92,47 +103,27 @@ export function getUndeliveredUnreadMessages(
   this: OrchestrationDb,
   toHandle: string,
   types?: MessageType[],
-  options?: {
-    excludeTypes?: readonly string[]
-    excludeIds?: readonly string[]
-    excludeRunOwnedDirect?: boolean
-    limit?: number
-  }
+  options?: UndeliveredInboxOptions
 ): MessageRow[] {
-  const conditions = [
-    'to_handle = ?',
-    'read = 0',
-    'delivered_at IS NULL',
-    'pointer_enter_pending = 0',
-    "delivery_contract = 'current_delivery'",
-    ...(options?.excludeRunOwnedDirect ? [`NOT ${runOwnsDirectMessageSql('messages')}`] : [])
-  ]
-  const params: (string | number)[] = [toHandle]
-  if (types?.length) {
-    conditions.push(`type IN (${types.map(() => '?').join(',')})`)
-    params.push(...types)
-  }
-  if (options?.excludeTypes?.length) {
-    conditions.push(`type NOT IN (${options.excludeTypes.map(() => '?').join(',')})`)
-    params.push(...options.excludeTypes)
-  }
-  if (options?.excludeIds?.length) {
-    conditions.push(`id NOT IN (${options.excludeIds.map(() => '?').join(',')})`)
-    params.push(...options.excludeIds)
-  }
-  const limitSql = options?.limit === undefined ? '' : ' LIMIT ?'
-  if (options?.limit !== undefined) {
-    params.push(Math.max(1, Math.floor(options.limit)))
-  }
+  const query = undeliveredInboxQuery(toHandle, types, options)
   return exposeMessageListTimestamps(
-    this.db
-      .prepare(
-        `SELECT * FROM messages
-         WHERE ${conditions.join(' AND ')}
-         ORDER BY sequence${limitSql}`
-      )
-      .all(...params) as MessageRow[]
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared predicate changes selection only; SELECT * still returns the messages schema.
+    this.db.prepare(`SELECT * ${query.sql}`).all(...query.params) as MessageRow[]
   )
+}
+
+export function getUndeliveredUnreadSequence(
+  this: OrchestrationDb,
+  toHandle: string,
+  options: UndeliveredInboxOptions
+): number | undefined {
+  const query = undeliveredInboxQuery(toHandle, undefined, {
+    ...options,
+    newestFirst: true,
+    limit: 1
+  })
+  const row = this.db.prepare(`SELECT sequence ${query.sql}`).get(...query.params)
+  return typeof row?.sequence === 'number' ? row.sequence : undefined
 }
 
 export function getUndeliveredUnreadMailboxHandles(this: OrchestrationDb): string[] {
@@ -228,7 +219,8 @@ function markRead(db: OrchestrationDb, ids: string[], taker: MailTaker, delivere
            pointer_process_incarnation = NULL
        WHERE id IN (${placeholders})`,
     [],
-    (batch) => stampQuestionTakes(db, batch, taker)
+    (batch) => stampQuestionTakes(db, batch, taker),
+    true
   )
 }
 
@@ -291,6 +283,7 @@ export function getThreadMessagesFor(
 export type MessageInboxMethods = {
   getUnreadMessages: typeof getUnreadMessages
   convertLifecycleMessageToRejection: typeof convertLifecycleMessageToRejection
+  getUndeliveredUnreadSequence: typeof getUndeliveredUnreadSequence
   getUndeliveredUnreadMessages: typeof getUndeliveredUnreadMessages
   getUndeliveredUnreadMailboxHandles: typeof getUndeliveredUnreadMailboxHandles
   getAllMessages: typeof getAllMessages
@@ -309,6 +302,7 @@ export function attachMessageInbox(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     getUnreadMessages,
     convertLifecycleMessageToRejection,
+    getUndeliveredUnreadSequence,
     getUndeliveredUnreadMessages,
     getUndeliveredUnreadMailboxHandles,
     getAllMessages,

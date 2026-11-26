@@ -2,7 +2,7 @@
 // signed with the connector's wake admin key, with its own purpose and audience (desktops never
 // receive one) and the SHA-256 of the exact request body, so a token cannot authorise a different
 // payload.
-//   POST /__admin/wake  { hosts: [hostId, ...] }  -> { delivered, noSocket, error }
+//   POST /__admin/wake  { hosts: [hostId, ...], kind?: 'shares_changed' }  -> { delivered, noSocket, error }
 // No jti: a replay inside the token's life only repeats a wake, which is idempotent.
 // Key rotation (either key verifies):
 //   1. set WAKE_ADMIN_KEY_NEXT (new key) on the Worker and deploy;

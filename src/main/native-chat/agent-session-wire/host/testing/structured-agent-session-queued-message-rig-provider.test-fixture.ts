@@ -240,4 +240,6 @@ export type RigSendOptions = {
   internal?: true
   from?: AgentMessageSource
   carried?: Readonly<Record<string, string>>
+  /** The runtime fence the client last saw; the rig's first one otherwise. */
+  fence?: number
 }

@@ -192,8 +192,11 @@ export const fsApi = {
     wakeWslDistro?: boolean
   }): Promise<{ size: number; isDirectory: boolean; mtime: number }> =>
     ipcRenderer.invoke('fs:stat', args),
-  hasSymlinkBelowRoot: (args: { rootPath: string; path: string }): Promise<boolean> =>
-    ipcRenderer.invoke('fs:hasSymlinkBelowRoot', args),
+  findSymlinkBelowRoot: (args: {
+    rootPath: string
+    path: string
+    which: 'first' | 'deepest'
+  }): Promise<string | null> => ipcRenderer.invoke('fs:findSymlinkBelowRoot', args),
   pathsExist: (args: {
     filePaths: string[]
     connectionId?: string

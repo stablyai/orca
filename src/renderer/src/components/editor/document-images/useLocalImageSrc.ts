@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useState } from 'react'
+import { useEffect, useEffectEvent, useState, useSyncExternalStore } from 'react'
 import { resolveImageAbsolutePath } from '../markdown/link-routing/markdown-preview-links'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { readLocalImagePreview } from './local-image-src-reader'
@@ -103,7 +103,8 @@ export function useLocalImageSrcResult(
   access?: LocalFileAccess,
   retryKey?: number
 ): { src: string | undefined; status: LocalImageSrcStatus } {
-  const [generation, setGeneration] = useState(getLocalImageCacheGeneration())
+  // Read live: a pane hidden by <Activity> drops its listener and would come back on a stale generation.
+  const generation = useSyncExternalStore(onImageCacheInvalidated, getLocalImageCacheGeneration)
   const externalSrc =
     rawSrc && runtimeContext !== null && isExternalUrl(rawSrc) ? rawSrc : undefined
   // Key leases by semantic identity; equal rebuilt context objects must not revoke a still-displayed image URL.
@@ -125,10 +126,6 @@ export function useLocalImageSrcResult(
     pinLocalImageCache(cacheKey)
     return () => unpinLocalImageCache(cacheKey)
   }, [cacheKey])
-
-  useEffect(() => {
-    return onImageCacheInvalidated(() => setGeneration(getLocalImageCacheGeneration()))
-  }, [])
 
   const [displaySrc, setDisplaySrc] = useState<string | undefined>(
     () => externalSrc ?? (cacheKey ? blobUrlCache.get(cacheKey) : undefined)
@@ -180,7 +177,7 @@ export function useLocalImageSrcResult(
     external: Boolean(externalSrc),
     cacheKey,
     outcome,
-    generation: Math.max(generation, getLocalImageCacheGeneration()),
+    generation,
     owned: Boolean(cacheKey && displaySrc && blobUrlCache.get(cacheKey) === displaySrc)
   })
   return { src: displaySrc, status }

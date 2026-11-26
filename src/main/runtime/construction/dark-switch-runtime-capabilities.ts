@@ -6,6 +6,8 @@ import {
   LAYOUT_REOPEN_HELD_PANES_CAPABILITY
 } from '../../../shared/workspace-layout/published-layout/layout-intents-capability'
 import { WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY } from '../../../shared/worktree/metadata/workspace-unread-raise-capability'
+import { MCP_SERVERS_RUNTIME_CAPABILITY } from '../../../shared/mcp-servers/mcp-servers'
+import { isMcpServersFeatureEnabled } from '../../mcp-servers/mcp-servers-feature'
 
 export function darkSwitchRuntimeCapabilities(): RuntimeCapability[] {
   const capabilities: RuntimeCapability[] = []
@@ -16,6 +18,10 @@ export function darkSwitchRuntimeCapabilities(): RuntimeCapability[] {
   // Switch point: paired desktops may submit layout intents (layout-intents-capability.ts).
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     capabilities.push(LAYOUT_INTENTS_RUNTIME_CAPABILITY, LAYOUT_REOPEN_HELD_PANES_CAPABILITY)
+  }
+  // Switch point: mcpServers.* answer only while the host's switch is on (mcp-servers-feature.ts).
+  if (isMcpServersFeatureEnabled()) {
+    capabilities.push(MCP_SERVERS_RUNTIME_CAPABILITY)
   }
   return capabilities
 }

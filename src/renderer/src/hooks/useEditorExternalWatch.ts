@@ -18,10 +18,8 @@ import {
   releaseWatchRoot,
   type HeldWatchRoots
 } from '../components/editor/external-changes/watching/editor-external-watch-local-roots'
-import {
-  selectLocalTabFoldersKey,
-  SymlinkedTabFolderWatches
-} from '../components/editor/external-changes/watching/editor-external-watch-symlink-folders'
+import { SymlinkedTabFolderWatches } from '../components/editor/external-changes/watching/editor-external-watch-symlink-folders'
+import { selectLocalTabFoldersKey } from '../components/editor/external-changes/watching/editor-external-watch-tab-folders-key'
 
 type FsChangedHandler = (
   payload: FsChangedPayload,

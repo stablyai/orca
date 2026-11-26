@@ -8,6 +8,17 @@ import { normalizeSubagentState } from '../../../../../shared/native-chat/transc
 import type { NativeChatSubagentHandoff } from './native-chat-subagent-handoff'
 import type { NativeChatSubagentHistory } from './native-chat-subagent-history'
 
+/** Marks the ending row that draws a reply under "Result" and an error under "Failed". */
+export const NATIVE_CHAT_SUBAGENT_RESULT_PRESENTATION = 'subagent-result'
+export const NATIVE_CHAT_SUBAGENT_FAILURE_PRESENTATION = 'subagent-failure'
+
+export function isNativeChatSubagentEndingPresentation(presentation: string | undefined): boolean {
+  return (
+    presentation === NATIVE_CHAT_SUBAGENT_RESULT_PRESENTATION ||
+    presentation === NATIVE_CHAT_SUBAGENT_FAILURE_PRESENTATION
+  )
+}
+
 /** A quiet line in the transcript's notice style. */
 export type NativeChatSubagentAside = 'no-steps' | 'cleared' | 'stopped' | 'no-reply'
 
@@ -70,7 +81,7 @@ export function nativeChatSubagentEnding({
   }
 }
 
-/** The ending as the view's last row: the reply as the agent's message, the rest as notices. */
+/** The ending as the view's last row: the reply and error under their headings, the rest as notices. */
 export function nativeChatSubagentEndingMessage(
   agentId: string,
   ending: Exclude<NativeChatSubagentEnding, null>,
@@ -84,14 +95,58 @@ export function nativeChatSubagentEndingMessage(
   } as const
   switch (ending.kind) {
     case 'reply':
-      return { ...base, role: 'assistant', blocks: [{ type: 'text', text: ending.text }] }
+      return {
+        ...base,
+        role: 'system',
+        blocks: [
+          {
+            type: 'text',
+            text: ending.text,
+            presentation: NATIVE_CHAT_SUBAGENT_RESULT_PRESENTATION
+          }
+        ]
+      }
     case 'error':
       return {
         ...base,
         role: 'system',
-        blocks: [{ type: 'text', text: ending.text, tone: 'error' }]
+        blocks: [
+          {
+            type: 'text',
+            text: ending.text,
+            tone: 'error',
+            presentation: NATIVE_CHAT_SUBAGENT_FAILURE_PRESENTATION
+          }
+        ]
       }
     case 'aside':
       return { ...base, role: 'system', blocks: [{ type: 'text', text: asideText }] }
   }
+}
+
+const ASIDES = [
+  'no-steps',
+  'cleared',
+  'stopped',
+  'no-reply'
+] as const satisfies readonly NativeChatSubagentAside[]
+
+/** An ending as a string, so a view can keep one ending row while the result is the same. */
+export function nativeChatSubagentEndingKey(ending: NativeChatSubagentEnding): string {
+  return ending === null
+    ? ''
+    : ending.kind === 'aside'
+      ? `aside\n${ending.aside}`
+      : `${ending.kind}\n${ending.text}`
+}
+
+export function nativeChatSubagentEndingFromKey(key: string): NativeChatSubagentEnding {
+  const at = key.indexOf('\n')
+  const kind = key.slice(0, at)
+  const rest = key.slice(at + 1)
+  if (kind === 'reply' || kind === 'error') {
+    return { kind, text: rest }
+  }
+  const aside = ASIDES.find((candidate) => candidate === rest)
+  return kind === 'aside' && aside ? { kind, aside } : null
 }

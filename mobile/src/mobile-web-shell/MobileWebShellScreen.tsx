@@ -21,8 +21,13 @@ import { playPageHaptic } from './native-capabilities/page-haptics'
 import { useMobileWebShellBridge } from './page-document/use-mobile-web-shell-bridge'
 import type { MobileWebShellRuntime } from './session/mobile-web-shell-runtime'
 import { useKeyboardOcclusion } from '../platform/keyboard/keyboard-occlusion'
+import { useNativeDeviceVerbs } from '../platform/use-native-device-verbs'
+import { useNativePdfViewer } from '../platform/pdf-viewing/native-pdf-view'
+import { useNativeImageActions } from '../platform/image-actions/native-image-actions'
+import { processDeviceStore } from '../device-store/device-store'
+import { serveDeviceStoreVerb } from './native-capabilities/device-store-verb-server'
+import { BRIDGE_STORE_VERB } from './bridge/native-capabilities/bridge-store-verb'
 import { useShellPageBack } from './routing/use-shell-page-back'
-import { useShellNativeVerbServer } from './native-capabilities/use-shell-native-verb-server'
 import { useShellStackPop } from './routing/use-shell-stack-pop'
 import { usePageLocationOnFold } from './page-geometry/page-location-on-fold'
 import { usePageOpenTarget } from './routing/page-open-target'
@@ -34,7 +39,11 @@ import { isHostRouteOf } from './routing/page-route-policy'
 import { isStandaloneSessionHref } from '../navigation/host-stack-navigation'
 import { nativeSessionReturn, nativeStackReturn } from './routing/native-stack-return'
 import { useResponsiveLayout } from '../layout/responsive-layout'
-import { SHELL_OPENING_LABEL, ShellPageCover } from './presentation/ShellWaitingFrame'
+import {
+  storageReadParamsSchema,
+  type BridgeNativeVerb
+} from './bridge/native-capabilities/bridge-native-verbs'
+import { ShellPageCover } from './presentation/ShellWaitingFrame'
 import { ShellStateScreen } from './presentation/ShellStateScreen'
 import {
   useReportedShellOverlayLoad,
@@ -114,8 +123,7 @@ export function MobileWebShellScreen({
     pageFrame,
     backClaimed,
     ownsHostArea,
-    hostStatus,
-    store
+    hostStatus
   } = useMobileWebShellSession({
     hostId,
     routePathname: route.pathname,
@@ -154,13 +162,20 @@ export function MobileWebShellScreen({
     readWorkspaceKey
   } = usePageHostSnapshot(hostId, route.pathname, ownsHostArea)
   // Create the media registry before the bridge; staged files belong to this page session.
-  const serveNativeVerb = useShellNativeVerbServer({
-    hostId,
-    sessionId: readySessionId,
-    buildId: state.kind === 'ready' ? state.buildId : null,
-    store,
-    readWorkspaceKey
-  })
+  const serveDeviceVerb = useNativeDeviceVerbs(readySessionId)
+  const servePdfView = useNativePdfViewer(hostId, readySessionId)
+  const serveImageAction = useNativeImageActions(readySessionId)
+  // Read the shell's storage for this host.
+  const serveNativeVerb = (verb: BridgeNativeVerb, params: unknown): Promise<unknown> =>
+    verb === 'native.storage.read'
+      ? readWorkspaceKey(storageReadParamsSchema.parse(params).key).then((value) => ({ value }))
+      : verb === 'native.pdf.view'
+        ? servePdfView(params)
+        : verb === 'native.image.act'
+          ? serveImageAction(params)
+          : verb === BRIDGE_STORE_VERB
+            ? serveDeviceStoreVerb(processDeviceStore(), hostId, params)
+            : serveDeviceVerb(verb, params)
   // Both externalLink and cancelled navigation use this filtered opener. Report device-handler failure without throwing from a native frame callback; neither path has a reply.
   const openUrlForPage = (url: string) => {
     void Linking.openURL(url).catch((error: unknown) => {
@@ -411,9 +426,7 @@ export function MobileWebShellScreen({
           }
         }}
       />
-      {overlay ? null : (
-        <ShellPageCover label={SHELL_OPENING_LABEL} visible={pageFrame === 'unpainted'} />
-      )}
+      {overlay ? null : <ShellPageCover visible={pageFrame === 'unpainted'} />}
       <ShellDevFacts state={state} droppedBinaryFrames={droppedBinaryFrames} />
     </View>
   )
