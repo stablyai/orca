@@ -187,6 +187,13 @@ export default function SortableTab({
   const slotProps = useTabStripSlotProps(tab.id, isActive, sizing)
   const tabTitle = tab.customTitle ?? tab.title
   const hasDownServer = useTabHasDownServer(tab.id)
+  const identityLabel = identityDetail ? `${tabTitle}, ${identityDetail}` : undefined
+  const outageStatus = hasDownServer
+    ? t('auto.components.sidebar.WorktreeCard.runtimeHostDisconnected', 'Server disconnected')
+    : null
+  const accessibleLabel = outageStatus
+    ? `${identityLabel ?? fork?.markedTitle ?? displayTitle}, ${outageStatus}`
+    : identityLabel
   const titleNode = fork ? <ForkMarkedName name={displayTitle} narrowIcon /> : displayTitle
   const tabRoot = (
     <div
@@ -200,7 +207,7 @@ export default function SortableTab({
       data-agent-activity-status={activityStatus}
       data-bot-home={isBotHome ? '' : undefined}
       // The drag handle's describedby owns the description, so the names join the tab's name.
-      aria-label={identityDetail ? `${tabTitle}, ${identityDetail}` : undefined}
+      aria-label={accessibleLabel}
       {...attributes}
       {...dragListeners}
       className={`${fork ? '@container/tab ' : ''}w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}

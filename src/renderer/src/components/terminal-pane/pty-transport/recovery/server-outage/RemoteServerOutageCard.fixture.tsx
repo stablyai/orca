@@ -298,7 +298,7 @@ function LiveSurface({
   const notice = useRemoteServerNoticeClaim(environmentId, down, visible)
   useReportRemoteServerPaneRetries(environmentId, down ? (stopped ? 'latched' : 'retrying') : null)
   const veiled = down && notice.showing
-  usePublishRemoteServerDownTab(tabId, veiled)
+  usePublishRemoteServerDownTab(tabId, down)
   const tabDown = useTabHasDownServer(tabId)
   return (
     <FixtureGroup

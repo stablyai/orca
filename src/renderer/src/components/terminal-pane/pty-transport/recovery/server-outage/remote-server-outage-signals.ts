@@ -27,7 +27,7 @@ export function useRemoteServerOutageNudge(environmentId: string): number {
   return useSyncExternalStore(subscribe, () => nudges.get(environmentId) ?? 0)
 }
 
-/** Marks a tab while one of its panes sits under a down server's veil. */
+/** Marks a tab while at least one of its panes is on a down server. */
 export function usePublishRemoteServerDownTab(tabId: string, down: boolean): void {
   useEffect(() => {
     if (!down) {

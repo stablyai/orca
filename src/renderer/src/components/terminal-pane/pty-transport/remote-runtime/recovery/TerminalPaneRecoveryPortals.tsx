@@ -153,7 +153,10 @@ export function TerminalPaneRecoveryPortals({
   )
   // Why gated on the card: a veil must never appear without the card that explains it.
   const veilServerPanes = serverDown && notice.showing && !showSshReconnectOverlay
-  usePublishRemoteServerDownTab(controller.tabId, veilServerPanes && serverPanes.length > 0)
+  usePublishRemoteServerDownTab(
+    controller.tabId,
+    serverDown && !showSshReconnectOverlay && serverPanes.length > 0
+  )
   if (showSshReconnectOverlay) {
     return null
   }
