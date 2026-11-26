@@ -54,18 +54,33 @@ export function connectorSnapshot(
     .sort((a, b) => b.activeAt - a.activeAt)
   let conversations: Snapshot['conversations'] = recent
     .slice(0, CONNECTOR_CLIENT_LIMITS.maxSnapshotConversations)
-    .map(({ conversation, paneKey, agent, working, prompt, turnId, workersRunning }) => ({
-      conversation,
-      paneKey,
-      agent,
-      working,
-      prompt:
-        prompt?.raisedBy === 'orca' && !cloudFeatures.has(CONNECTOR_CLOUD_PROMPTS_AUDIENCE_FEATURE)
-          ? null
-          : prompt,
-      ...(turnId === null ? {} : { turnId }),
-      ...(workersRunning === undefined ? {} : { workersRunning })
-    }))
+    .map(
+      ({
+        conversation,
+        paneKey,
+        agent,
+        working,
+        prompt,
+        turnId,
+        workersRunning,
+        switchedAgent
+      }) => ({
+        conversation,
+        paneKey,
+        agent,
+        working,
+        prompt:
+          prompt?.raisedBy === 'orca' &&
+          !cloudFeatures.has(CONNECTOR_CLOUD_PROMPTS_AUDIENCE_FEATURE)
+            ? null
+            : prompt,
+        ...(turnId === null ? {} : { turnId }),
+        ...(turnId !== null && conversation.source === 'slack' && switchedAgent
+          ? { switchedAgent }
+          : {}),
+        ...(workersRunning === undefined ? {} : { workersRunning })
+      })
+    )
   const fits = (): boolean =>
     jsonBytes({ kind: 'snapshot', conversations }) <= CONNECTOR_CLIENT_LIMITS.maxEventBytes
   const downgraded = new Set<string>()

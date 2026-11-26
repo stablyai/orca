@@ -1,3 +1,4 @@
+import { lookAroundSupported } from '../../../../shared/bots/bot-look-around'
 // Loaded on first host install: the host, router and every provider adapter stay out of startup.
 
 import { writeStructuredAgentSessionOrcaNote } from '../../../native-chat/agent-session-wire/structured-agent-session-orca-note'
@@ -108,6 +109,8 @@ export async function installOnJournal(
     ...(deps.resolveProviderSwitchAccount
       ? { resolveProviderSwitchAccount: deps.resolveProviderSwitchAccount }
       : {}),
+    canSwitchProvider: (sessionId, agent) =>
+      !deps.readOnlySession?.(sessionId) || lookAroundSupported(agent),
     ...(deps.botHomeDefault ? { botHomeDefault: deps.botHomeDefault } : {}),
     ...(deps.launchTools ? { launchTools: deps.launchTools } : {}),
     ...(deps.assertNoTerminalWriter ? { assertNoTerminalWriter: deps.assertNoTerminalWriter } : {}),

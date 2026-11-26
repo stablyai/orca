@@ -208,6 +208,16 @@ export function mutateWithChatStop<TValue>(
     if (!accepted.ok) {
       return accepted
     }
+    if (
+      turnId === undefined &&
+      context.deps.store.getRecord(sessionId)?.selectedProvider?.consent
+    ) {
+      await context.deps.store.updateRecord(sessionId, {
+        kind: 'select-provider',
+        selection: null,
+        now: context.now()
+      })
+    }
     for (const abort of operations) {
       abort()
       reached = true

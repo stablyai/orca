@@ -1,4 +1,4 @@
-import { selectableStructuredSubmission } from './structured-agent-session-input-selection'
+import { createStructuredDeliveryWake } from './structured-agent-session-delivery-wake'
 // Open conversations with queued sends always need delivery; opening also wakes leftover recovery.
 
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
@@ -17,7 +17,6 @@ import type { StructuredAgentSessionDeliveryOrder } from './structured-agent-ses
 import { StructuredAgentSessionDeliveryLoop } from './structured-agent-session-delivery-loop'
 
 import type { StructuredAgentSessionDeliveryLoopDeps } from './structured-agent-session-delivery-loop-deps'
-import { structuredAgentSessionCommandRunning } from '../operations/structured-agent-session-command-turn'
 import type { StructuredAgentSessionStartClaim } from '../startup/structured-agent-session-agent-start'
 import type { StructuredAgentSessionStartReadiness } from '../startup/structured-agent-session-start-readiness'
 import type {
@@ -41,12 +40,7 @@ import { closeWhatTheUserClosed } from '../structured-agent-session-user-closed-
 import type { StructuredAgentSessionAcquireAborts } from '../startup/structured-agent-session-acquire-aborts'
 import { settleStructuredAgentSessionLeftovers } from '../termination/structured-agent-session-leftover-settlement'
 import { createStructuredAgentSessionRanRecorder } from '../options/structured-agent-session-ran-options'
-import {
-  prepareStructuredChatProviderSwitch,
-  readStructuredChatProviderSwitchPrompt,
-  recordProviderHandoff,
-  setProviderSwitchSessionParams
-} from './structured-agent-session-provider-switch'
+import { wireStructuredChatProviderSwitch } from './structured-agent-session-provider-switch'
 
 export type StructuredAgentSessionConversationDelivery = {
   loop: StructuredAgentSessionDeliveryLoop
@@ -115,9 +109,6 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   const owesWork = async (sessionId: string, id: string): Promise<boolean> =>
     sessions.has(sessionId) &&
     (await structuredAgentSessionChildOwesWork(retainedWork(sessionId, id)))
-  const publishSwitch = (sessionId: string) =>
-    input.clientDelivery.publishStatusAndSettlement(sessionId)
-  const providerSwitchHost = { deps, publish: publishSwitch, now: () => deps.now?.() ?? Date.now() }
   const loop = new StructuredAgentSessionDeliveryLoop({
     activityChanged: (id) => sessions.get(id)?.workChanged?.(),
     sessions,
@@ -127,44 +118,18 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     trackStart: input.trackStart,
     startProviderChild: input.startProviderChild,
     stopPermissionTransitionChild: input.stopPermissionTransitionChild,
-    prepareProviderSwitch: (session, submission) => {
-      const id = session.params.envelope.sessionId
-      return prepareStructuredChatProviderSwitch(
-        providerSwitchHost,
-        session,
-        submission,
-        async () =>
-          (await input.clientDelivery.readStopping(id)) ||
-          (await structuredAgentSessionChildOwesWork({
-            ...retainedWork(id, submission.clientMessageId),
-            hasOpenDispatch: () => false
-          })),
-        () => input.stopOutgrownAgent(id)
-      )
-    },
-    settleProviderSwitch: async (session, clientMessageId, outcome) => {
-      const id = session.params.envelope.sessionId
-      const current = deps.store.getRecord(id)
-      if (current?.providerSwitch?.clientMessageId !== clientMessageId) {
-        return
-      }
-      if (outcome === 'failed' && session.child) {
-        await input.stopOutgrownAgent(id)
-      }
-      const record = await deps.store.updateRecord(id, {
-        kind: 'settle-provider-switch',
-        clientMessageId,
-        outcome,
-        now: providerSwitchHost.now()
-      })
-      setProviderSwitchSessionParams(session, record)
-      if (outcome === 'failed') {
-        await recordProviderHandoff(session, current, record.lease.runtimeFence, true)
-      }
-      publishSwitch(id)
-    },
-    providerSwitchPrompt: (session, clientMessageId) =>
-      readStructuredChatProviderSwitchPrompt(deps, session, clientMessageId),
+    ...wireStructuredChatProviderSwitch({
+      deps,
+      publish: input.clientDelivery.publishStatusAndSettlement,
+      now: () => deps.now?.() ?? Date.now(),
+      hasWork: async (id, submission) =>
+        (await input.clientDelivery.readStopping(id)) ||
+        (await structuredAgentSessionChildOwesWork({
+          ...retainedWork(id, submission.clientMessageId),
+          hasOpenDispatch: () => false
+        })),
+      stop: input.stopOutgrownAgent
+    }),
     retireOutgrownChild: async (sessionId, continuingId, next) => {
       // Defer retirement while personal Stop holds handover; its next step decides.
       const session = (await input.clientDelivery.readStopping(sessionId))
@@ -290,37 +255,13 @@ export function createStructuredAgentSessionConversationDelivery(input: {
       loop.wake(sessionId)
     }
   }
-  const wakesQueued = new Set<string>()
-  const afterCommit = (sessionId: string, journal: AgentSessionJournal): void => {
-    if (wakesQueued.has(sessionId)) {
-      return
-    }
-    wakesQueued.add(sessionId)
-    void input
-      .serialize(sessionId, async () => {
-        wakesQueued.delete(sessionId)
-        await input.deliveryOrder.reconcile(sessionId, journal)
-        const work = await hostStructuredAgentSessionCurrentWork(
-          { store: deps.store, sessions },
-          sessionId
-        )
-        if (
-          work &&
-          !structuredAgentSessionCommandRunning(work) &&
-          (await selectableStructuredSubmission(journal, work))
-        ) {
-          void loop.wake(sessionId)
-        }
-      })
-      .catch((error: unknown) => {
-        wakesQueued.delete(sessionId)
-        deps.logger.warn('waking the delivery loop after a commit failed', {
-          scope: 'delivery-wake',
-          sessionId,
-          error
-        })
-      })
-  }
+  const afterCommit = createStructuredDeliveryWake({
+    serialize: input.serialize,
+    reconcile: (id, journal) => input.deliveryOrder.reconcile(id, journal),
+    currentWork: (id) => hostStructuredAgentSessionCurrentWork(workHost, id),
+    wake: (id) => loop.wake(id),
+    logger: deps.logger
+  })
   // Queue death-proof revisions without awaiting: the writer may already hold session serialization.
   const stopResettling = deps.store.onDeathEvidence((sessionId) => {
     const session = sessions.get(sessionId)

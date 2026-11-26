@@ -27,15 +27,16 @@ export function conversationFamily(agent: string): string {
 }
 
 export function recordConversationKey(
-  record: Pick<AgentSessionRecord, 'provider' | 'accountHome'>,
+  record: Pick<AgentSessionRecord, 'accountHome'>,
   link: AgentSessionProviderHandleLink
 ): ConversationKey | null {
-  const history = structuredAgentRuntimeMetadata(record.provider)?.sessionHistory
+  const { agent } = link.handle
+  const history = structuredAgentRuntimeMetadata(agent)?.sessionHistory
   return history
     ? {
-        family: conversationFamily(record.provider),
+        family: conversationFamily(agent),
         id: history.rowSessionId(link),
-        home: record.accountHome
+        home: link.accountHome ?? record.accountHome
       }
     : null
 }

@@ -11,7 +11,6 @@ import { translate } from '../../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { useMoreModelsShown } from './use-more-models-shown'
 import {
-  isReadOnlySessionOptionValue,
   sessionOptionDispatchUnconfirmed,
   type SessionOptionDescriptor,
   type SessionOptionValue
@@ -23,16 +22,13 @@ import {
   nativeChatSessionOptionLabel
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-labels'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
-import {
-  mobileDeferredPermissionSummary,
-  mobileSessionOptionSummaryValue
-} from './mobile-native-chat-session-option-labels'
+import { mobileDeferredPermissionSummary } from './mobile-native-chat-session-option-labels'
 import {
   descriptorRowElements,
   ModelPill,
   SessionOptionCaption,
   SessionOptionSummaryRow,
-  showsSessionOptionAsSwitch
+  SessionOptionSummaryRows
 } from './MobileNativeChatSessionOptionRows'
 import {
   SessionOptionSegments,
@@ -383,7 +379,7 @@ export function MobileNativeChatSessionOptionPickers({
                     onSetOption={(value) => applyOption(descriptor, value)}
                   />
                 ))}
-                <OptionRows
+                <SessionOptionSummaryRows
                   descriptors={[...rowOptions, ...(permission ? [permission] : [])]}
                   permission={permission}
                   permissionColor={permissionColor}
@@ -397,69 +393,5 @@ export function MobileNativeChatSessionOptionPickers({
         ) : null}
       </BottomDrawer>
     </View>
-  )
-}
-
-function OptionRows({
-  descriptors,
-  permission,
-  permissionColor,
-  locked,
-  onNavigate,
-  onSetOption
-}: {
-  descriptors: readonly SessionOptionDescriptor[]
-  permission: SessionOptionDescriptor | undefined
-  permissionColor: string | undefined
-  locked: (descriptor: SessionOptionDescriptor) => boolean
-  onNavigate: (page: string) => void
-  onSetOption: (descriptor: SessionOptionDescriptor, value: SessionOptionValue) => void
-}): React.JSX.Element | null {
-  const t = useMobileTranslation()
-  if (descriptors.length === 0) {
-    return null
-  }
-  return (
-    <>
-      <SectionHeader title={t('chat.sessionOptionPickers.optionsSection', 'Options')} />
-      <ListGroup>
-        {descriptors.flatMap((descriptor) => {
-          const isPermission = descriptor === permission
-          const deferred = isPermission ? mobileDeferredPermissionSummary(descriptor) : null
-          const disabled = locked(descriptor) || !descriptor.settable
-          if (showsSessionOptionAsSwitch(descriptor)) {
-            return descriptorRowElements(
-              {
-                descriptor,
-                disabled,
-                onSetOption: (value) => onSetOption(descriptor, value),
-                onInvokeAction: () => onNavigate(descriptor.id)
-              },
-              t
-            )
-          }
-          return [
-            <SessionOptionSummaryRow
-              key={descriptor.id}
-              label={
-                isPermission
-                  ? t('chat.sessionOptionPickers.permissions', 'Permissions')
-                  : nativeChatSessionOptionLabel(descriptor, say)
-              }
-              value={deferred?.saved ?? mobileSessionOptionSummaryValue(descriptor)}
-              subtitle={deferred?.timing}
-              accessibleValue={deferred?.full}
-              valueColor={isPermission ? permissionColor : undefined}
-              disabled={disabled}
-              onPress={
-                isReadOnlySessionOptionValue(descriptor)
-                  ? undefined
-                  : () => onNavigate(descriptor.id)
-              }
-            />
-          ]
-        })}
-      </ListGroup>
-    </>
   )
 }

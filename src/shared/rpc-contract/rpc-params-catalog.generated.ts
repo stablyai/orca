@@ -138,6 +138,7 @@ import {
   AutomationRuns,
   AutomationUpdate
 } from './automations/automation-params'
+import { BotAgentSwitchPreview } from './bot-agent-switch-params'
 import {
   BotAvatarRead,
   BotAvatarUpload,
@@ -211,7 +212,6 @@ import {
   BotAccessDecide,
   BotAccessRedeem,
   BotActivityRead,
-  BotAgentSwitchPreview,
   BotChat,
   BotChatReset,
   BotChatSearch,

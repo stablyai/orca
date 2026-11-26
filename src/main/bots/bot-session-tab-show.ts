@@ -14,7 +14,8 @@ export function showBotSessionTab(
   return runtime.publishStructuredAgentSessionTab({
     workspaceId: folderWorkspaceKey(bot.folderWorkspaceId),
     sessionId,
-    agent: getStructuredAgentSessionHost()?.sessionAgent(sessionId) ?? bot.agent,
+    agent:
+      getStructuredAgentSessionHost()?.deps.store.getConversation(sessionId)?.provider ?? bot.agent,
     activate: false
   })
 }

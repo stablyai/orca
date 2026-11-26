@@ -114,6 +114,7 @@ export function applyAgentSessionRecordCommand(
     case 'select-provider':
     case 'begin-provider-switch':
     case 'settle-provider-switch':
+    case 'deliver-deferred-provider-context':
       next = applyAgentSessionProviderCommand(record, command)
       break
     case 'name':

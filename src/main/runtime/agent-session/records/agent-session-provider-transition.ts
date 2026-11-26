@@ -21,8 +21,10 @@ export type AgentSessionProviderCommand =
       kind: 'settle-provider-switch'
       clientMessageId: string
       outcome: 'delivered' | 'failed'
+      deferContext?: true
       now: number
     }
+  | { kind: 'deliver-deferred-provider-context'; marker: string; clientMessageId?: string }
 
 export function applyAgentSessionProviderCommand(
   record: AgentSessionRecord,
@@ -40,6 +42,21 @@ export function applyAgentSessionProviderCommand(
       return beginProviderSwitch(record, command)
     case 'settle-provider-switch':
       return settleProviderSwitch(record, command)
+    case 'deliver-deferred-provider-context': {
+      const { deferredProviderContext, ...retained } = record
+      if (deferredProviderContext?.marker !== command.marker) {
+        return record
+      }
+      return command.clientMessageId
+        ? {
+            ...retained,
+            deferredProviderContext: {
+              ...deferredProviderContext,
+              attachedTo: command.clientMessageId
+            }
+          }
+        : retained
+    }
   }
 }
 
@@ -49,13 +66,14 @@ function beginProviderSwitch(
 ): AgentSessionRecord {
   if (
     record.selectedProvider?.agent !== command.target.provider ||
+    record.provider === command.target.provider ||
     record.providerSwitch ||
     !agentSessionLeaseIsReleased(record.lease)
   ) {
     throw new Error('agent_session_provider_switch_superseded')
   }
   const {
-    selectedProvider: _selection,
+    selectedProvider,
     provider,
     accountHome,
     options,
@@ -86,6 +104,9 @@ function beginProviderSwitch(
       clientMessageId: command.clientMessageId,
       hostRunId: command.hostRunId,
       through: command.through,
+      ...(selectedProvider.botDefault && !selectedProvider.consent
+        ? { retryHome: selectedProvider }
+        : {}),
       ...(head ? { fromLinkId: head.linkId } : {}),
       from: {
         provider,
@@ -111,7 +132,21 @@ function settleProviderSwitch(
     return record
   }
   if (command.outcome === 'delivered') {
-    return { ...rest, updatedAt: command.now }
+    const { deferredProviderContext: _previous, ...active } = rest
+    return {
+      ...active,
+      ...(command.deferContext
+        ? {
+            deferredProviderContext: {
+              marker: command.clientMessageId,
+              from: providerSwitch.from.provider,
+              through: providerSwitch.through,
+              clearKey: record.providerContextBoundary?.operationId ?? null
+            }
+          }
+        : {}),
+      updatedAt: command.now
+    }
   }
   if (!agentSessionLeaseIsReleased(record.lease)) {
     throw new Error('agent_session_provider_switch_owner_not_released')
@@ -124,14 +159,19 @@ function settleProviderSwitch(
     rewind: _rewind,
     acquiredAccount: _acquiredAccount,
     launchedAccount: _launchedAccount,
+    selectedProvider: nextSelection,
     ...previous
   } = rest
   const through = record.providerHandleChain.findIndex(
     ({ linkId }) => linkId === providerSwitch.fromLinkId
   )
+  const selected = nextSelection ?? providerSwitch.retryHome
   return {
     ...previous,
     ...providerSwitch.from,
+    ...(selected && selected.agent !== providerSwitch.from.provider
+      ? { selectedProvider: selected }
+      : {}),
     providerHandleChain: record.providerHandleChain.slice(0, through + 1),
     lease: { ...record.lease, provenHandleLinkId: null },
     updatedAt: command.now

@@ -24,6 +24,7 @@ export type StructuredAgentSessionAdoptionOwnership = {
   providerSessionId: string
   ownerObservation: AgentSessionOwnerObservation
   role: 'head' | 'earlier'
+  retainedForSwitch?: true
 }
 
 export type StructuredAgentSessionAdoption = {
@@ -83,7 +84,7 @@ export function findConflictingStructuredAdoption(input: {
     input.ownership.find(
       (owner) =>
         owner.sessionId !== input.selfSessionId &&
-        owner.role === 'head' &&
+        (owner.role === 'head' || owner.retainedForSwitch) &&
         chatAgentsShareConversations(owner.provider, input.agent) &&
         owner.providerSessionId === input.providerSessionId
     ) ?? null

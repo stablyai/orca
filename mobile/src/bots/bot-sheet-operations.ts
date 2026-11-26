@@ -10,7 +10,7 @@ import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import { phoneBotReply, type PhoneBot } from './host-bots-operations'
 import { botMemberSource, type BotMember } from '../../../src/shared/bot-types'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import { BotAgentSwitchPreviewResultSchema } from '../../../src/shared/rpc-contract/bots-params'
+import { BotAgentSwitchPreviewResultSchema } from '../../../src/shared/rpc-contract/bot-agent-switch-params'
 
 export type SheetBot = PhoneBot
 

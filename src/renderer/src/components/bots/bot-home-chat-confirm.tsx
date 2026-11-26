@@ -1,3 +1,5 @@
+import { botSwitchPermissionCopy } from '../../../../shared/agent-session/options/permissions/provider-switch-permission-copy'
+import type { BotAgentSwitchPreviewResult } from '../../../../shared/rpc-contract/bot-agent-switch-params'
 import { useCallback } from 'react'
 import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { persistConfirmationSkipPreference } from '@/components/dismiss/confirmation/confirmation-skip-preference'
@@ -45,12 +47,12 @@ export function useConfirmNewHomeChat(): (bot: Pick<Bot, 'name'>) => Promise<boo
 export function useConfirmBotAgentSwitch(): (
   bot: Pick<Bot, 'name' | 'agent'>,
   next: BotAgent,
-  broaderAccess?: boolean,
+  consent?: BotAgentSwitchPreviewResult['consent'],
   inPlace?: boolean
 ) => Promise<boolean> {
   const confirm = useConfirmationDialog()
   return useCallback(
-    (bot, next, broaderAccess, inPlace = true) => {
+    (bot, next, consent, inPlace = true) => {
       const agent = botAgentLabel(next)
       return confirm({
         title: translate('bots.agentSwitch.title', 'Switch {{name}} to {{agent}}?', {
@@ -93,18 +95,23 @@ export function useConfirmBotAgentSwitch(): (
             <li>
               {translate('bots.agentSwitch.kept', 'Kept: soul, memory, automations, connectors')}
             </li>
-            {broaderAccess ? (
-              <li>
-                {translate(
-                  'bots.agentSwitch.broaderAccess',
-                  'Orca can’t require {{agent}} to ask before using tools. Allowing this applies to Home Chat and new work on this default.',
-                  { agent }
-                )}
-              </li>
-            ) : null}
+            {consent ? <li>{botSwitchPermissionCopy(consent, translate).join(' ')}</li> : null}
           </ul>
-        ) : undefined,
-        confirmLabel: broaderAccess
+        ) : (
+          <ul className="list-disc space-y-1 pl-5 text-sm">
+            <li>
+              {translate('bots.agentSwitch.kept', 'Kept: soul, memory, automations, connectors')}
+            </li>
+            <li>{translate('bots.agentSwitch.notKept', 'Not kept: the current conversation')}</li>
+            <li>
+              {translate(
+                'bots.agentSwitch.threads',
+                "Slack threads with an existing Orca chat keep that chat's agent"
+              )}
+            </li>
+          </ul>
+        ),
+        confirmLabel: consent
           ? translate('bots.agentSwitch.allowAction', 'Allow access and switch')
           : translate('bots.agentSwitch.action', 'Switch to {{agent}}', { agent })
       })

@@ -386,6 +386,7 @@ export type ConnectorEvent =
       conversations: (PaneEvent & {
         agent: string
         working: boolean
+        switchedAgent?: string
         prompt: ConnectorPrompt | null
         // The pane's latest turn; a turn end older than it changes nothing.
         turnId?: number

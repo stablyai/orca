@@ -46,7 +46,7 @@ export async function structuredAgentSessionStartParams(
   }
   if (
     !hostCanStartRecord(context.deps, record) ||
-    (record.providerSwitch && !isCurrentProviderSwitch(record, startedFor))
+    (record.providerSwitch && !isCurrentProviderSwitch(context.deps, record, startedFor))
   ) {
     return refusedStructuredAgentSessionStart(
       'structured_agent_session_unsupported',

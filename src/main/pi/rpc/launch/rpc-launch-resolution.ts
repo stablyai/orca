@@ -2,9 +2,9 @@ import { readPiSessionHeader, samePiDirectory } from './pi-session-header'
 export { readPiSessionHeader, samePiDirectory } from './pi-session-header'
 import { isAbsolute } from 'node:path'
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import {
-  type AgentSessionProviderHandleChain,
-  type AgentSessionProviderHandleLink
+import type {
+  AgentSessionProviderHandleChain,
+  AgentSessionProviderHandleLink
 } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { activeProviderContext } from '../../../../shared/agent-session/conversation-context/agent-session-provider-context'
 import { agentSessionProviderHandleKey } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'

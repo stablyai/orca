@@ -1,3 +1,4 @@
+import { botSwitchPermissionCopy } from '../../../src/shared/agent-session/options/permissions/provider-switch-permission-copy'
 // Agent and model: the agents this bot's computer can run; switching asks first, as the desktop does,
 // because the Home Chat starts over on the new agent.
 import { useState, type ReactNode } from 'react'
@@ -26,7 +27,7 @@ import type { SheetBot } from './bot-sheet-operations'
 import { botAgentLabel } from './mobile-bot-sheet-copy'
 import { useNewBotAgentChoices } from './MobileNewBotPickers'
 import { useBotModelChoices } from './use-bot-model-choices'
-import type { BotAgentSwitchPreviewResult } from '../../../src/shared/rpc-contract/bots-params'
+import type { BotAgentSwitchPreviewResult } from '../../../src/shared/rpc-contract/bot-agent-switch-params'
 
 export function MobileBotAgentPage(props: {
   bot: SheetBot
@@ -148,20 +149,17 @@ export function MobileBotAgentPage(props: {
             'New Slack threads, automation runs and chats you open later start on {{agent}}',
             { agent }
           ),
-          t(
-            'bots.agentSwitch.threads',
-            'Slack threads with an existing Orca chat keep that chat’s agent'
-          ),
-          ...(switching.consent
-            ? [
-                '',
-                t(
-                  'bots.agentSwitch.broaderAccess',
-                  'Orca can’t require {{agent}} to ask before using tools. Allowing this applies to Home Chat and new work on this default.',
-                  { agent }
-                )
-              ]
-            : [])
+          props.inPlaceSwitch
+            ? t(
+                'bots.agentSwitch.existingSlackChats',
+                'Slack threads with an existing Orca chat keep that chat’s agent'
+              )
+            : t(
+                'bots.agentSwitch.threads',
+                'Slack threads already running stay on {{agent}} until they finish',
+                { agent: botAgentLabel(bot.agent) }
+              ),
+          ...(switching.consent ? ['', ...botSwitchPermissionCopy(switching.consent, t)] : [])
         ].join('\n')}
         confirmLabel={
           switching.consent

@@ -193,7 +193,7 @@ export const SelectProviderParams = z.strictObject({
   consent: z
     .strictObject({
       from: Identifier('Invalid source agent'),
-      fromPermission: z.enum(['ask', 'accept-edits', 'auto', 'full-access']),
+      fromPermission: z.enum(['ask', 'accept-edits', 'auto', 'full-access', 'own']),
       permission: z.literal('full-access')
     })
     .optional()

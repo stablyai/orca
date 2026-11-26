@@ -1,3 +1,4 @@
+import { chatSwitchPermissionCopy } from '../../../../../../src/shared/agent-session/options/permissions/provider-switch-permission-copy'
 import { useState } from 'react'
 import { ConfirmContent } from '../../../../components/sheets/ConfirmModal'
 import { ListGroup, ListRow, SectionHeader } from '../../../../components/list/ListGroup'
@@ -26,7 +27,12 @@ export function MobileChatProviderChoices({
   const status = useOptionalHostProtocolGates()
   const [pending, setPending] = useState(false)
   const [moreModels, setMoreModels] = useState(false)
-  const [confirming, setConfirming] = useState<AgentSessionSelectProviderParams | null>(null)
+  const [confirming, setConfirming] = useState<
+    | (AgentSessionSelectProviderParams & {
+        consent: NonNullable<AgentSessionSelectProviderParams['consent']>
+      })
+    | null
+  >(null)
   const { client, sessionId, worktreeId, hostId, selection } = scope
   const { model: selectedModel, ...selectedOptions } = selection?.options ?? {}
   const catalog = useMobileChatModelChoices(
@@ -88,13 +94,15 @@ export function MobileChatProviderChoices({
     return (
       <ConfirmContent
         title={t(
-          'chat.providerSwitch.allowTitle',
-          'Let {{agent}} use tools without Orca approval?',
+          'chat.providerSwitch.closestPermissionTitle',
+          'Use the closest permission on {{agent}}?',
           { agent: tuiAgentDisplayName(confirming.agent) ?? confirming.agent }
         )}
-        message={t(
-          'chat.providerSwitch.allowDescription',
-          'Orca can’t require this agent to ask before using tools. The current reply and messages already queued keep their permissions.'
+        message={chatSwitchPermissionCopy(
+          confirming.consent.from,
+          confirming.consent.fromPermission,
+          confirming.agent,
+          t
         )}
         confirmLabel={t('chat.providerSwitch.allow', 'Allow and switch')}
         onCancel={() => setConfirming(null)}

@@ -14,6 +14,9 @@ import {
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
+import { PI_RPC_AGENT } from '../../../../pi/rpc-agent-definition'
+import { CODEX_STRUCTURED_AGENT } from '../../../../codex/structured/launch/codex-structured-agent-definition'
+import { structuredAgentsDeclaringNothing } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
 
 let rig: QueuedMessageTestRig | undefined
 afterEach(() => rig?.dispose())
@@ -93,4 +96,36 @@ it('finishes the current reply before carrying its history into the next agent o
   const handoffId = await chat.handoffId(queued)
   const saved = await journal.reads.itemBody(agentJournalSubmissionKey(handoffId))
   expect(saved).toMatchObject({ blocks: [{ type: 'text', text: 'Add the shortcut to the note' }] })
+})
+
+it('requires fresh consent after the host restarts before the first switched turn', async () => {
+  const chat = await createQueuedMessageTestRig({
+    hostDeps: {
+      agents: structuredAgentsDeclaringNothing([CODEX_STRUCTURED_AGENT, PI_RPC_AGENT]),
+      resolveProviderSwitchAccount: async () => ({
+        variable: 'PI_CODING_AGENT_DIR',
+        path: '/test/pi'
+      })
+    }
+  })
+  rig = chat
+  const pick = { sessionId: SESSION, agent: 'pi' }
+  const required = { status: 'consent-required', from: 'codex', fromPermission: 'ask' }
+  expect(await chat.host.selectProvider(pick)).toEqual(required)
+  expect(
+    await chat.host.selectProvider({
+      ...pick,
+      consent: { from: 'codex', fromPermission: 'ask', permission: 'full-access' }
+    })
+  ).toEqual({ status: 'selected' })
+
+  await chat.quitRestartHostProcess()
+  expect(await chat.host.selectProvider(pick)).toEqual(required)
+  const { id, result } = chat.send('Read the note')
+  await result
+  await eventually(async () => {
+    expect((await chat.submission(id))?.dispatchState).toBe('rejected')
+  })
+  expect(chat.store.getRecord(SESSION)?.provider).toBe('codex')
+  expect(chat.dispatch).not.toHaveBeenCalled()
 })

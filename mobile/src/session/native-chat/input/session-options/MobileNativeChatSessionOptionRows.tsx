@@ -1,3 +1,9 @@
+import { ListGroup, SectionHeader } from '../../../../components/list/ListGroup'
+import { isReadOnlySessionOptionValue } from '../../../../../../src/shared/native-chat/input/native-chat-session-options'
+import {
+  mobileDeferredPermissionSummary,
+  mobileSessionOptionSummaryValue
+} from './mobile-native-chat-session-option-labels'
 import type { ReactElement, ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ShieldAlert, type LucideIcon } from 'lucide-react-native'
@@ -309,3 +315,67 @@ const styles = themedStyleSheet(() => ({
     maxWidth: 180
   }
 }))
+
+export function SessionOptionSummaryRows({
+  descriptors,
+  permission,
+  permissionColor,
+  locked,
+  onNavigate,
+  onSetOption
+}: {
+  descriptors: readonly SessionOptionDescriptor[]
+  permission: SessionOptionDescriptor | undefined
+  permissionColor: string | undefined
+  locked: (descriptor: SessionOptionDescriptor) => boolean
+  onNavigate: (page: string) => void
+  onSetOption: (descriptor: SessionOptionDescriptor, value: SessionOptionValue) => void
+}): React.JSX.Element | null {
+  const t = useMobileTranslation()
+  if (descriptors.length === 0) {
+    return null
+  }
+  return (
+    <>
+      <SectionHeader title={t('chat.sessionOptionPickers.optionsSection', 'Options')} />
+      <ListGroup>
+        {descriptors.flatMap((descriptor) => {
+          const isPermission = descriptor === permission
+          const deferred = isPermission ? mobileDeferredPermissionSummary(descriptor) : null
+          const disabled = locked(descriptor) || !descriptor.settable
+          if (showsSessionOptionAsSwitch(descriptor)) {
+            return descriptorRowElements(
+              {
+                descriptor,
+                disabled,
+                onSetOption: (value) => onSetOption(descriptor, value),
+                onInvokeAction: () => onNavigate(descriptor.id)
+              },
+              t
+            )
+          }
+          return [
+            <SessionOptionSummaryRow
+              key={descriptor.id}
+              label={
+                isPermission
+                  ? t('chat.sessionOptionPickers.permissions', 'Permissions')
+                  : nativeChatSessionOptionLabel(descriptor, say)
+              }
+              value={deferred?.saved ?? mobileSessionOptionSummaryValue(descriptor)}
+              subtitle={deferred?.timing}
+              accessibleValue={deferred?.full}
+              valueColor={isPermission ? permissionColor : undefined}
+              disabled={disabled}
+              onPress={
+                isReadOnlySessionOptionValue(descriptor)
+                  ? undefined
+                  : () => onNavigate(descriptor.id)
+              }
+            />
+          ]
+        })}
+      </ListGroup>
+    </>
+  )
+}

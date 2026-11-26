@@ -76,7 +76,15 @@ export function resolveJournalWriterStoreMutation(
   ]
   const extraPredicates: string[] = []
   if (identity.adoptedNativeId !== undefined) {
-    extraPredicates.push('adopted_native_id = ?')
+    extraPredicates.push(`adopted_native_id = ? OR EXISTS (
+      SELECT 1 FROM json_each(
+        CASE WHEN json_valid(record_json) THEN record_json END, '$.inactiveProviderHandleLinks'
+      ) WHERE CASE WHEN type = 'object' THEN COALESCE(
+        json_extract(value, '$.handle.nativeId'),
+        json_extract(value, '$.handle.sessionId'),
+        json_extract(value, '$.handle.threadId')
+      ) END = ?
+    )`)
   }
   if (identity.missingPermission) {
     extraPredicates.push(`CASE WHEN json_valid(record_json)
@@ -88,7 +96,9 @@ export function resolveJournalWriterStoreMutation(
         ${extraPredicates.map((predicate) => `OR (${predicate})`).join(' ')} ORDER BY rowid`)
     .all(
       JSON.stringify(recordIds),
-      ...(identity.adoptedNativeId !== undefined ? [identity.adoptedNativeId] : [])
+      ...(identity.adoptedNativeId !== undefined
+        ? [identity.adoptedNativeId, identity.adoptedNativeId]
+        : [])
     )) {
     loadAgentSessionStoreRecordRow(state, String(row.session_id), String(row.record_json), false)
   }

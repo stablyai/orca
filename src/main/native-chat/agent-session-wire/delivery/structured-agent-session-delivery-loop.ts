@@ -1,3 +1,7 @@
+import {
+  failStructuredDelivery,
+  observeDeliveryStart
+} from './structured-agent-session-delivery-failure'
 import type { StructuredAgentSessionDeliveryLoopDeps } from './structured-agent-session-delivery-loop-deps'
 // Accept sends separately, then derive each delivery step from journal/child state. Wait outside
 // serialization for startup/readiness/provider calls so acceptance and Stop stay responsive.
@@ -9,7 +13,6 @@ import type { StructuredAgentSessionStartClaim } from '../startup/structured-age
 import type { StructuredAgentSessionProviderChildIdentity } from '../host/structured-agent-session-host-types'
 import {
   oldestQueuedSubmission,
-  recordStructuredAgentSessionDeliveryFailure,
   startThatFailedWhileQueued
 } from '../startup/structured-agent-session-start-failure-row'
 import type { StructuredAgentSessionPendingHandover } from './structured-agent-session-handover'
@@ -22,7 +25,6 @@ import { waitsForCodexTurnOptions } from '../options/structured-agent-session-me
 import { sameProviderChild } from '../host/structured-agent-session-provider-child'
 import { DeliveryProgress } from './structured-agent-session-delivery-progress'
 import { selectableStructuredSubmission } from './structured-agent-session-input-selection'
-import { isCurrentProviderSwitch } from './structured-agent-session-provider-switch'
 
 type Prepared =
   | 'stop'
@@ -35,8 +37,6 @@ type Prepared =
       readiness: StructuredAgentSessionStartReadiness | null
       before: Promise<void>
     }
-
-type StartFailure = NonNullable<Awaited<ReturnType<typeof startThatFailedWhileQueued>>>
 
 export class StructuredAgentSessionDeliveryLoop {
   private readonly running = new Map<string, DeliveryProgress>()
@@ -98,17 +98,7 @@ export class StructuredAgentSessionDeliveryLoop {
         }
         if ('start' in prepared) {
           // Outside the serialize: sends are accepted while the agent starts.
-          const completed = await prepared.start.outcome.then(
-            () => true,
-            (error: unknown) => {
-              this.deps.logger.warn('waiting for an agent start failed', {
-                scope: 'delivery-loop-start',
-                sessionId,
-                error
-              })
-              return false
-            }
-          )
+          const completed = await observeDeliveryStart(prepared.start, sessionId, this.deps.logger)
           if (!completed) {
             await owned(async () => this.stop(sessionId)).catch((error: unknown) =>
               this.deps.logger.warn('parking delivery after a failed start failed', {
@@ -155,7 +145,12 @@ export class StructuredAgentSessionDeliveryLoop {
         try {
           const session = this.deps.sessions.get(sessionId)
           const selected = session && (await oldestQueuedSubmission(session))
-          await this.fail(sessionId, { startKey: null, cause }, selected?.clientMessageId ?? null)
+          await failStructuredDelivery(
+            this.deps,
+            sessionId,
+            { startKey: null, cause },
+            selected?.clientMessageId ?? null
+          )
         } finally {
           this.stop(sessionId)
         }
@@ -190,27 +185,15 @@ export class StructuredAgentSessionDeliveryLoop {
     // Commands block while their child lives; ended command commits wake delivery again.
     const work = await this.deps.currentWork(sessionId)
     const oldest = await selectableStructuredSubmission(session.journal, work)
-    const record = this.deps.record(sessionId)
-    const switching = record?.providerSwitch
-    if (record && switching && !isCurrentProviderSwitch(record, oldest?.clientMessageId)) {
-      const original = await session.journal.reads.submission(switching.clientMessageId)
-      if (
-        original?.dispatchState === 'pending' &&
-        original.handedOverAt !== undefined &&
-        isCurrentProviderSwitch(record, switching.clientMessageId) &&
-        session.child &&
-        !session.child.close
-      ) {
-        return this.stop(sessionId)
-      }
-      await this.deps.settleProviderSwitch?.(
-        session,
-        switching.clientMessageId,
-        original?.dispatchState === 'accepted' ? 'delivered' : 'failed'
-      )
+    const switchState = await this.deps.reconcileProviderSwitch?.(session, oldest?.clientMessageId)
+    if (switchState === 'settled') {
       return 'continue'
     }
-    if (!oldest || (session.child && work && structuredAgentSessionCommandRunning(work))) {
+    if (
+      switchState === 'park' ||
+      !oldest ||
+      (session.child && work && structuredAgentSessionCommandRunning(work))
+    ) {
       return this.stop(sessionId)
     }
     if (this.deps.startFlights?.get(sessionId)) {
@@ -218,7 +201,7 @@ export class StructuredAgentSessionDeliveryLoop {
     }
     const failedStart = await startThatFailedWhileQueued(session, oldest)
     if (failedStart) {
-      return this.fail(sessionId, failedStart, oldest.clientMessageId)
+      return failStructuredDelivery(this.deps, sessionId, failedStart, oldest.clientMessageId)
     }
     if ((await this.deps.prepareProviderSwitch?.(session, oldest)) === 'blocked') {
       return this.stop(sessionId)
@@ -257,7 +240,8 @@ export class StructuredAgentSessionDeliveryLoop {
       if (endedFailure === null) {
         return 'continue'
       }
-      return this.fail(
+      return failStructuredDelivery(
+        this.deps,
         sessionId,
         {
           startKey: awaited.generation,
@@ -324,26 +308,6 @@ export class StructuredAgentSessionDeliveryLoop {
       () => this.disposed
     )
     return pending ?? 'continue'
-  }
-
-  private async fail(
-    sessionId: string,
-    failure: StartFailure,
-    clientMessageId: string | null
-  ): Promise<'continue'> {
-    const session = this.deps.sessions.get(sessionId)
-    if (session) {
-      await recordStructuredAgentSessionDeliveryFailure(
-        { journal: session.journal, fence: this.deps.conversationFence(sessionId) },
-        failure,
-        await this.deps.failureTextContext(sessionId),
-        clientMessageId
-      )
-      if (clientMessageId) {
-        await this.deps.settleProviderSwitch?.(session, clientMessageId, 'failed')
-      }
-    }
-    return 'continue'
   }
 
   /** Clear under serialization so the next accept can wake a new loop. */

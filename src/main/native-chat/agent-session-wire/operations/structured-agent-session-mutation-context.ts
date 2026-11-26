@@ -29,6 +29,10 @@ export type StructuredAgentSessionMutationContext = {
   deps: StructuredAgentSessionHostDeps
   sessions: Map<string, StructuredAgentSessionHostSession>
   publish: (sessionId: string, journal: StructuredAgentSessionHostSession['journal']) => void
+  afterProviderSelection?: (
+    id: string,
+    journal: StructuredAgentSessionHostSession['journal']
+  ) => void
   publishConversationName?: (sessionId: string) => void
   /** A guess at the next prompt in the old context no longer fits once it is gone. */
   clearPromptSuggestion?: (sessionId: string) => void

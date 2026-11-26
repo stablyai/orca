@@ -2,12 +2,13 @@ import type { Bot, BotAgent } from '../../shared/bot-types'
 import {
   AGENT_CHAT_PERMISSION_MODES,
   isAgentChatPermissionMode,
+  isAgentChatPermissionChoice,
   newChatPermissionModeForSettings
 } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { providerSwitchPermission } from '../../shared/agent-session/lifecycle/records/agent-session-provider-selection'
 import { botLaunchSeedOptions } from '../../shared/bots/bot-launch'
-import type { BotAgentSwitchPreviewResult } from '../../shared/rpc-contract/bots-params'
-import { providerSwitchSourcePermission } from '../native-chat/agent-session-wire/delivery/structured-agent-session-provider-switch'
+import type { BotAgentSwitchPreviewResult } from '../../shared/rpc-contract/bot-agent-switch-params'
+import { providerSwitchSourcePermission } from '../native-chat/agent-session-wire/delivery/structured-agent-session-provider-selection'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
 
@@ -20,7 +21,7 @@ export function previewBotAgentSwitch(
   const choice =
     bot.permissionMode ??
     newChatPermissionModeForSettings(bot.agent, runtime.requireStore().getSettings())
-  const defaultPermission = isAgentChatPermissionMode(choice) ? choice : 'ask'
+  const defaultPermission = isAgentChatPermissionChoice(choice) ? choice : 'ask'
   const record = bot.chatSessionId ? host.deps.store.getConversation(bot.chatSessionId) : null
   const home = record
     ? {

@@ -1,3 +1,4 @@
+import type { BotAgentSwitchPreviewResult } from '../../../../../shared/rpc-contract/bot-agent-switch-params'
 // A bot's general settings, one subpage each: its agent and model, and its permissions.
 import { Check } from 'lucide-react'
 import { toast } from 'sonner'
@@ -29,10 +30,7 @@ import {
   savedChatPermissionMode
 } from '../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import type { Bot } from '../../../../../shared/bot-types'
-import type {
-  BotAgentSwitchPreviewResult,
-  BotUpdateParams
-} from '../../../../../shared/rpc-contract/bots-params'
+import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { useBotSettingsModel } from './use-bot-settings-model'
 
@@ -61,7 +59,7 @@ export function BotAgentSettings({ bot, update }: { bot: Bot; update: Update }):
     try {
       if (!inPlace) {
         if (
-          (await confirmAgentSwitch(bot, agent, false, false)) &&
+          (await confirmAgentSwitch(bot, agent, null, false)) &&
           (await update({ agent, launch: launch ?? null }))
         ) {
           await openBotChat(bot)
@@ -73,7 +71,7 @@ export function BotAgentSettings({ bot, update }: { bot: Bot; update: Update }):
         'bots.agentSwitchPreview',
         { botId: bot.id, agent }
       )
-      if (await confirmAgentSwitch(bot, agent, consent !== null)) {
+      if (await confirmAgentSwitch(bot, agent, consent)) {
         await update({
           agent,
           launch: launch ?? null,

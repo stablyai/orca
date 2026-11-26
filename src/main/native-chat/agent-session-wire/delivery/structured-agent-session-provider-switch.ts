@@ -1,18 +1,11 @@
-import { randomUUID } from 'node:crypto'
 import {
-  AGENT_CHAT_PERMISSION_MODES,
-  isAgentChatPermissionMode,
-  type AgentChatPermissionMode
-} from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
-import {
-  providerSwitchPermission,
-  type AgentSessionSelectProviderParams,
-  type AgentSessionSelectProviderResult
-} from '../../../../shared/agent-session/lifecycle/records/agent-session-provider-selection'
-import {
-  AgentSessionRefusalError,
-  agentSessionRefusalError
-} from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+  isNativeProviderCommand,
+  readStructuredChatProviderSwitchPrompt
+} from './structured-agent-session-provider-handover'
+import type { StructuredAgentSessionDeliveryLoopDeps } from './structured-agent-session-delivery-loop-deps'
+import { AGENT_CHAT_PERMISSION_MODES } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import { providerSwitchPermission } from '../../../../shared/agent-session/lifecycle/records/agent-session-provider-selection'
+import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
@@ -20,99 +13,16 @@ import type {
   StructuredAgentSessionHostSession
 } from '../host/structured-agent-session-host-types'
 import { adapterSupportsCreateIfDeclared } from '../providers/structured-agent-session-provider-support'
-import { structuredAgentSessionOptionOverridesRefusal } from '../options/structured-agent-session-option-intent'
 import { attachParamsForRecord } from '../host/structured-agent-session-conversation-open'
-import { continuationContextReader } from '../recovery/structured-agent-session-continuation-context'
-import { buildAgentSessionContinuationPrompt } from '../../../../shared/agent-session/conversation-context/agent-session-continuation'
-import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { tuiAgentDisplayName } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isUnsettledQueuedMessage } from '../../agent-session-journal/queued-messages/queued-message-table'
 
-// A crash before the handoff must leave the next send subject to a fresh confirmation.
-const hostRunId = randomUUID()
-
-type ProviderSelectionHost = {
-  deps: StructuredAgentSessionHostDeps
-  publish: (sessionId: string) => void
-  now: () => number
-}
-
-export function providerSwitchSourcePermission(
-  record: Pick<AgentSessionRecord, 'permissionMode'>
-): AgentChatPermissionMode {
-  return isAgentChatPermissionMode(record.permissionMode) ? record.permissionMode : 'ask'
-}
-
-/** The current reply owns the child until delivery chooses a fresh turn. */
-export async function selectStructuredChatProvider(
-  host: ProviderSelectionHost,
-  session: StructuredAgentSessionHostSession,
-  { sessionId, agent, options, consent }: AgentSessionSelectProviderParams,
-  botDefault?: string
-): Promise<AgentSessionSelectProviderResult> {
-  const { deps } = host
-  const record = deps.store.requireWritableRecord(sessionId)
-  const selection = {
-    agent,
-    ...(options ? { options } : {}),
-    ...(botDefault ? { botDefault } : {})
-  }
-  if (agent !== record.provider) {
-    if (
-      !deps.resolveProviderSwitchAccount ||
-      !deps.agents.definition(agent) ||
-      !adapterSupportsCreateIfDeclared(deps.adapter, record.location, agent)
-    ) {
-      throw agentSessionRefusalError('structured_agent_session_unsupported', {
-        reason: 'hostUnsupported'
-      })
-    }
-    const refusal =
-      options && structuredAgentSessionOptionOverridesRefusal(deps.agents, agent, options)
-    if (refusal) {
-      throw new AgentSessionRefusalError(refusal)
-    }
-    const fromPermission = providerSwitchSourcePermission(record)
-    if (providerSwitchPermission(fromPermission, agent).requiresConsent) {
-      const previous = record.selectedProvider
-      const previousConsent = previous?.consent
-      const cursor = await session.journal.reads.cursor()
-      if (
-        !consent &&
-        previous?.agent === agent &&
-        previousConsent?.from === record.provider &&
-        previousConsent.fromPermission === fromPermission &&
-        previousConsent.through.epoch === cursor.epoch
-      ) {
-        await deps.store.updateRecord(sessionId, {
-          kind: 'select-provider',
-          selection: { ...selection, consent: previousConsent },
-          now: host.now()
-        })
-        return { status: 'selected' }
-      }
-      if (
-        consent?.from !== record.provider ||
-        consent.fromPermission !== fromPermission ||
-        consent.permission !== 'full-access'
-      ) {
-        return { status: 'consent-required', from: record.provider, fromPermission }
-      }
-      await deps.store.updateRecord(sessionId, {
-        kind: 'select-provider',
-        selection: {
-          ...selection,
-          consent: { from: record.provider, fromPermission, through: cursor }
-        },
-        now: host.now()
-      })
-      return { status: 'selected' }
-    }
-  }
-  await deps.store.updateRecord(sessionId, { kind: 'select-provider', selection, now: host.now() })
-  return { status: 'selected' }
-}
+import {
+  providerSwitchHostRunId,
+  providerSwitchSourcePermission,
+  type ProviderSelectionHost
+} from './structured-agent-session-provider-selection'
 
 export async function prepareStructuredChatProviderSwitch(
   host: ProviderSelectionHost,
@@ -144,6 +54,9 @@ export async function prepareStructuredChatProviderSwitch(
   if (body?.kind !== 'message' || body.command) {
     return 'none'
   }
+  if (await hasWork()) {
+    return 'blocked'
+  }
   const fromPermission = providerSwitchSourcePermission(record)
   const previous = record.providerHandleChain.findLast(
     ({ handle }) => handle.agent === selection.agent
@@ -162,6 +75,7 @@ export async function prepareStructuredChatProviderSwitch(
     if (
       consent?.from !== record.provider ||
       consent.fromPermission !== fromPermission ||
+      consent.hostRunId !== providerSwitchHostRunId(deps) ||
       consent.through.epoch !== cursor.epoch
     ) {
       await deps.store.updateRecord(sessionId, {
@@ -191,46 +105,57 @@ export async function prepareStructuredChatProviderSwitch(
       ) ||
       pending.some((submission) => (submission.submittedSequence ?? 0) <= consent.through.sequence)
     ) {
-      throw new Error(
-        'Earlier queued messages must be sent or removed before switching to broader access.'
-      )
+      return 'blocked'
     }
-  }
-  if (await hasWork()) {
-    return 'blocked'
   }
   if (record.provider === 'claude' && record.options?.interactionMode === 'plan') {
     throw new Error('Exit plan mode before switching agents.')
   }
-  if (!adapterSupportsCreateIfDeclared(deps.adapter, record.location, selection.agent)) {
-    throw agentSessionRefusalError('structured_agent_session_unsupported', {
-      reason: 'hostUnsupported'
+  let switched: AgentSessionRecord
+  try {
+    if (
+      deps.canSwitchProvider?.(sessionId, selection.agent) === false ||
+      !adapterSupportsCreateIfDeclared(deps.adapter, record.location, selection.agent)
+    ) {
+      throw agentSessionRefusalError('structured_agent_session_unsupported', {
+        reason: 'hostUnsupported'
+      })
+    }
+    if (session.child) {
+      await stop()
+    }
+    const accountHome =
+      previous?.accountHome ??
+      (await deps.resolveProviderSwitchAccount?.(record, selection.agent, returningPermission))
+    if (!accountHome) {
+      throw new Error('agent_session_provider_switch_unavailable')
+    }
+    const through = await session.journal.reads.cursor()
+    switched = await deps.store.updateRecord(sessionId, {
+      kind: 'begin-provider-switch',
+      clientMessageId: next.clientMessageId,
+      hostRunId: providerSwitchHostRunId(deps),
+      through,
+      target: {
+        provider: selection.agent,
+        accountHome,
+        ...(selection.options ? { options: selection.options } : {}),
+        // A grant meant for a provider with no Orca permission control does not widen the retained preference.
+        permissionMode: requiresConsent ? fromPermission : returningPermission
+      },
+      now: host.now()
     })
+  } catch (error) {
+    if (requiresConsent) {
+      await deps.store.updateRecord(sessionId, {
+        kind: 'select-provider',
+        selection: null,
+        now: host.now()
+      })
+      host.publish(sessionId)
+    }
+    throw error
   }
-  if (session.child) {
-    await stop()
-  }
-  const accountHome =
-    previous?.accountHome ??
-    (await deps.resolveProviderSwitchAccount?.(record, selection.agent, returningPermission))
-  if (!accountHome) {
-    throw new Error('agent_session_provider_switch_unavailable')
-  }
-  const through = await session.journal.reads.cursor()
-  const switched = await deps.store.updateRecord(sessionId, {
-    kind: 'begin-provider-switch',
-    clientMessageId: next.clientMessageId,
-    hostRunId,
-    through,
-    target: {
-      provider: selection.agent,
-      accountHome,
-      ...(selection.options ? { options: selection.options } : {}),
-      // A grant meant for a provider with no Orca permission control does not widen the retained preference.
-      permissionMode: requiresConsent ? fromPermission : returningPermission
-    },
-    now: host.now()
-  })
   setProviderSwitchSessionParams(session, switched)
   await recordProviderHandoff(session, switched, switched.lease.runtimeFence, false)
   host.publish(sessionId)
@@ -262,11 +187,12 @@ export async function recordProviderHandoff(
 }
 
 export function isCurrentProviderSwitch(
+  deps: StructuredAgentSessionHostDeps,
   record: Pick<AgentSessionRecord, 'providerSwitch'>,
   clientMessageId: string | undefined
 ): boolean {
   return (
-    record.providerSwitch?.hostRunId === hostRunId &&
+    record.providerSwitch?.hostRunId === providerSwitchHostRunId(deps) &&
     record.providerSwitch.clientMessageId === clientMessageId
   )
 }
@@ -281,39 +207,82 @@ export function setProviderSwitchSessionParams(
   })
 }
 
-export async function readStructuredChatProviderSwitchPrompt(
-  deps: StructuredAgentSessionHostDeps,
-  session: StructuredAgentSessionHostSession,
-  clientMessageId: string
-): Promise<string | null> {
-  const sessionId = session.params.envelope.sessionId
-  const record = deps.store.getRecord(sessionId)
-  const switching = record?.providerSwitch
-  if (!switching || switching.clientMessageId !== clientMessageId) {
-    return null
+export function wireStructuredChatProviderSwitch(
+  host: ProviderSelectionHost & {
+    hasWork: (id: string, submission: AgentJournalSubmission) => Promise<boolean>
+    stop: (id: string) => Promise<void>
   }
-  const previous = record.providerHandleChain.findLast(
-    ({ handle, seenThrough }) => handle.agent === record.provider && seenThrough !== undefined
-  )
-  const read = continuationContextReader(deps, () => Promise.resolve(session))
-  const context = await read({
-    sessionId,
-    workspaceId: record.location.workspaceId,
-    expectedCursor: switching.through,
-    inPlace: previous?.seenThrough ? { after: previous.seenThrough } : {}
-  })
-  if (context.status !== 'current') {
-    throw new Error('agent_session_provider_switch_context_superseded')
+): Pick<
+  StructuredAgentSessionDeliveryLoopDeps,
+  | 'prepareProviderSwitch'
+  | 'settleProviderSwitch'
+  | 'providerSwitchPrompt'
+  | 'reconcileProviderSwitch'
+> {
+  const settleProviderSwitch: NonNullable<
+    StructuredAgentSessionDeliveryLoopDeps['settleProviderSwitch']
+  > = async (session, clientMessageId, outcome) => {
+    const id = session.params.envelope.sessionId
+    const current = host.deps.store.getRecord(id)
+    if (current?.providerSwitch?.clientMessageId !== clientMessageId) {
+      return
+    }
+    if (outcome === 'failed' && session.child) {
+      await host.stop(id)
+    }
+    const body =
+      outcome === 'delivered'
+        ? await session.journal.reads.itemBody(agentJournalSubmissionKey(clientMessageId))
+        : undefined
+    const record = await host.deps.store.updateRecord(id, {
+      kind: 'settle-provider-switch',
+      clientMessageId,
+      outcome,
+      now: host.now(),
+      ...(body?.kind === 'message' && isNativeProviderCommand(body) ? { deferContext: true } : {})
+    })
+    setProviderSwitchSessionParams(session, record)
+    if (outcome === 'failed') {
+      await recordProviderHandoff(session, current, record.lease.runtimeFence, true)
+    }
+    host.publish(id)
   }
-  const source = switching.from.provider
-  return buildAgentSessionContinuationPrompt(
-    {
-      sourceAgent: isTuiAgent(source) ? source : null,
-      sourceKind: 'chat',
-      capturedText: context.capturedText ?? '',
-      sourceTitle: record.conversationName,
-      transcriptPath: context.transcriptPath
+  return {
+    reconcileProviderSwitch: async (session, clientMessageId) => {
+      const record = host.deps.store.getRecord(session.params.envelope.sessionId)
+      const switching = record?.providerSwitch
+      if (!switching || isCurrentProviderSwitch(host.deps, record, clientMessageId)) {
+        return 'current'
+      }
+      const original = await session.journal.reads.submission(switching.clientMessageId)
+      if (
+        original?.dispatchState === 'pending' &&
+        original.handedOverAt !== undefined &&
+        isCurrentProviderSwitch(host.deps, record, switching.clientMessageId) &&
+        session.child &&
+        !session.child.close
+      ) {
+        return 'park'
+      }
+      await settleProviderSwitch(
+        session,
+        switching.clientMessageId,
+        original?.dispatchState === 'accepted' ? 'delivered' : 'failed'
+      )
+      return 'settled'
     },
-    'in-place'
-  )
+    prepareProviderSwitch: (session, submission) => {
+      const id = session.params.envelope.sessionId
+      return prepareStructuredChatProviderSwitch(
+        host,
+        session,
+        submission,
+        () => host.hasWork(id, submission),
+        () => host.stop(id)
+      )
+    },
+    settleProviderSwitch,
+    providerSwitchPrompt: (session, clientMessageId) =>
+      readStructuredChatProviderSwitchPrompt(host.deps, session, clientMessageId)
+  }
 }

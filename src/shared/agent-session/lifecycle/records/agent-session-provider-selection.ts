@@ -4,7 +4,7 @@ import type { AgentJournalCursor } from '../../journal/agent-session-journal-ide
 import {
   AGENT_CHAT_PERMISSION_MODES,
   isAgentChatPermissionMode,
-  type AgentChatPermissionMode
+  type AgentChatPermissionChoice
 } from '../../../agent-launch/permissions/agent-chat-permission-mode'
 import { agentChatPermissionModes } from '../../../agent-launch/permissions/agent-chat-permission-support'
 
@@ -15,7 +15,8 @@ export type AgentSessionProviderSelection = {
   /** Older queued messages retain their authorization if the new agent requires broader access. */
   consent?: {
     from: string
-    fromPermission: AgentChatPermissionMode
+    fromPermission: AgentChatPermissionChoice
+    hostRunId?: string
     through: AgentJournalCursor
   }
 }
@@ -25,7 +26,7 @@ export const AgentSessionSelectProviderResultSchema = z.discriminatedUnion('stat
   z.strictObject({
     status: z.literal('consent-required'),
     from: z.string().min(1),
-    fromPermission: z.enum(AGENT_CHAT_PERMISSION_MODES)
+    fromPermission: z.enum([...AGENT_CHAT_PERMISSION_MODES, 'own'])
   })
 ])
 
@@ -39,7 +40,7 @@ export type AgentSessionSelectProviderParams = {
   options?: Record<string, string>
   consent?: {
     from: string
-    fromPermission: AgentChatPermissionMode
+    fromPermission: AgentChatPermissionChoice
     permission: 'full-access'
   }
 }
@@ -78,4 +79,14 @@ export type AgentSessionProviderSwitch = {
   from: AgentSessionProviderSetup
   fromLinkId?: string
   through: AgentJournalCursor
+  retryHome?: AgentSessionProviderSelection
+}
+
+/** A provider command goes through as-is. Its first prose message carries the saved handoff. */
+export type DeferredProviderContext = {
+  marker: string
+  from: string
+  through: AgentJournalCursor
+  clearKey: string | null
+  attachedTo?: string
 }

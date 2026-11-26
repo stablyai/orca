@@ -18,7 +18,6 @@ import { useMobileNativeChatPromptController } from './input/prompts/use-mobile-
 import { nativeChatPendingSendPlacement } from '../../../../src/shared/native-chat/transcript/pending-sends/native-chat-pending-sends'
 import { mobileNativeChatScopeKey } from './conversation/mobile-native-chat-scope-key'
 import { useMobileNativeChatCiResultLines } from './preferences/use-mobile-native-chat-ci-result-lines'
-import { useMobileChatProviderPicker } from './input/session-options/use-mobile-chat-provider-picker'
 
 export function useMobileNativeChatController(args: {
   itemLink?: Parameters<typeof useMobileNativeChatSessionLane>[0]['itemLink']
@@ -70,14 +69,9 @@ export function useMobileNativeChatController(args: {
     showNativeChatRef,
     sourceIdentity,
     streamIdentity,
+    providerPicker,
     toggleTabChatView
   } = useMobileNativeChatActiveResolution(args)
-  const providerPicker = useMobileChatProviderPicker(
-    client,
-    activeChatStructured && agentSessionHostSupport?.selectProvider ? activeChatSessionId : null,
-    worktreeId,
-    hostId
-  )
 
   // Fixed hook order mounts the lane before drafts; defer Edit’s append through a ref and delete nothing until copying succeeds.
   const appendComposerTextRef = useRef<(text: string) => boolean>(() => false)
@@ -258,6 +252,7 @@ export function useMobileNativeChatController(args: {
     appendComposerTextRef.current = appendComposerText
   }, [appendComposerText, recordNativeChatSessionOptionCommand])
 
+  const { interruptedContinue } = structuredNativeChat
   return {
     reportQueuedEditError: onSendError,
     chatComposerScopeKey: mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId),
@@ -303,9 +298,7 @@ export function useMobileNativeChatController(args: {
     nativeChatQueued: structuredNativeChat.queued,
     nativeChatBackgroundTasks: activeChatStructured ? structuredNativeChat.backgroundTasks : null,
     nativeChatContextUsage: activeChatStructured ? structuredNativeChat.contextUsage : null,
-    nativeChatInterruptedContinue: activeChatStructured
-      ? structuredNativeChat.interruptedContinue
-      : null,
+    nativeChatInterruptedContinue: activeChatStructured ? interruptedContinue : null,
     nativeChatThreadGoal: activeChatStructured ? structuredNativeChat.threadGoal : null,
     nativeChatMcpPanel: activeChatStructured ? structuredNativeChat.mcpPanel : null,
     nativeChatAccountUsage: activeChatStructured ? structuredNativeChat.accountUsage : null,

@@ -3,8 +3,8 @@ import type {
   AgentSessionConversationView
 } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
+import { retainedProviderHandles } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-retained-handles'
 import { agentSessionOwnerObservationVerdict } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
-import { structuredAgentRuntimeMetadata } from '../../../runtime/agent-session/installation/structured-agent-runtime-metadata'
 import {
   keysMayMatch,
   recordConversationKey,
@@ -21,6 +21,7 @@ export type StructuredProviderSessionOwnership = {
   ownerObservation: AgentSessionOwnerObservation
   /** `head`: the conversation the chat continues now; `earlier`: one its chain held before. */
   role: 'head' | 'earlier'
+  retainedForSwitch?: true
   key: ConversationKey
 }
 
@@ -29,30 +30,31 @@ export function listStructuredProviderSessionOwnership(
   records: readonly AgentSessionConversationView[]
 ): StructuredProviderSessionOwnership[] {
   return records.flatMap((record) => {
-    const history = structuredAgentRuntimeMetadata(record.provider)?.sessionHistory
     const head = record.providerHandleChain.at(-1)
-    const headKey = head ? recordConversationKey(record, head) : null
-    return history && headKey
-      ? record.providerHandleChain.flatMap((link) => {
-          const key = recordConversationKey(record, link)
-          return key
-            ? [
-                {
-                  sessionId: record.sessionId,
-                  wslDistro: record.location.wslDistro,
-                  workspaceId: record.location.workspaceId,
-                  provider: record.provider,
-                  providerSessionId: history.rowSessionId(link),
-                  conversationName: record.conversationName,
-                  ownerObservation: record.ownerObservation,
-                  // A repeat resume link of the head's id is the head too.
-                  role: keysMayMatch(key, headKey) ? ('head' as const) : ('earlier' as const),
-                  key
-                }
-              ]
-            : []
-        })
-      : []
+    const headKey =
+      head?.handle.agent === record.provider ? recordConversationKey(record, head) : null
+    const held = new Set(retainedProviderHandles(record))
+    return record.providerHandleChain.flatMap((link): StructuredProviderSessionOwnership[] => {
+      const key = recordConversationKey(record, link)
+      if (!key?.id) {
+        return []
+      }
+      const role = headKey && keysMayMatch(key, headKey) ? 'head' : 'earlier'
+      return [
+        {
+          sessionId: record.sessionId,
+          wslDistro: record.location.wslDistro,
+          workspaceId: record.location.workspaceId,
+          provider: link.handle.agent,
+          providerSessionId: key.id,
+          conversationName: record.conversationName,
+          ownerObservation: record.ownerObservation,
+          role,
+          ...(role === 'earlier' && held.has(link) ? { retainedForSwitch: true } : {}),
+          key
+        }
+      ]
+    })
   })
 }
 

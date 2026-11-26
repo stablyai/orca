@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { chatSwitchPermissionCopy } from '../../../../../../shared/agent-session/options/permissions/provider-switch-permission-copy'
+import { useMemo, useRef, useState } from 'react'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import { chatAgentPickerEntry } from '@/components/agent/chat-agent-picker-entry'
 import { useAgentMenuObservation } from '@/components/agent/launch-menu/use-new-tab-agent-menu-rows'
@@ -52,7 +53,7 @@ export function NativeChatProviderPicker({
   const confirm = useConfirmationDialog()
   const [open, setOpen] = useState(false)
   const [catalogAgent, setCatalogAgent] = useState<AgentPickerEntry['agent']>()
-  const [confirming, setConfirming] = useState(false)
+  const selecting = useRef(false)
   const agent = selected?.agent ?? active
   const detection = useAgentDetectionTargetForWorktree(workspaceId)
   const { model } = useAgentMenuObservation(workspaceId, open, detection)
@@ -80,7 +81,7 @@ export function NativeChatProviderPicker({
     : undefined
   const pick = async (next: AgentPickerEntry['agent'], draft?: AgentPickerDraft) => {
     const entry = entries.find((candidate) => candidate.agent === next)
-    if (confirming || !entry?.surfaces.includes('chat')) {
+    if (selecting.current || !entry?.surfaces.includes('chat')) {
       return
     }
     const choices =
@@ -89,6 +90,7 @@ export function NativeChatProviderPicker({
       ...choices?.options,
       ...(choices?.model ? { model: choices.model } : {})
     }
+    selecting.current = true
     try {
       if (next === active && next === agent) {
         for (const key of keys) {
@@ -112,52 +114,46 @@ export function NativeChatProviderPicker({
         params
       )
       if (result.status === 'consent-required') {
-        setConfirming(true)
-        try {
-          const name = tuiAgentDisplayName(next) ?? next
-          const allowed = await confirm({
-            surface: 'security',
-            title: t(
-              'chat.providerSwitch.allowTitle',
-              'Let {{agent}} use tools without Orca approval?',
-              { agent: name }
-            ),
-            description: t(
-              'chat.providerSwitch.allowDescription',
-              'Orca can’t require this agent to ask before using tools. The current reply and messages already queued keep their permissions.'
-            ),
-            confirmLabel: t('chat.providerSwitch.allow', 'Allow and switch'),
-            initialFocus: 'cancel',
-            ignoresOpeningGesture: true
-          })
-          if (allowed) {
-            const confirmed = await callStructuredAgentSession<AgentSessionSelectProviderResult>(
-              target,
-              'agentSession.selectProvider',
-              {
-                ...params,
-                consent: {
-                  from: result.from,
-                  fromPermission: result.fromPermission,
-                  permission: 'full-access'
-                }
+        const name = tuiAgentDisplayName(next) ?? next
+        const allowed = await confirm({
+          surface: 'security',
+          title: t(
+            'chat.providerSwitch.closestPermissionTitle',
+            'Use the closest permission on {{agent}}?',
+            { agent: name }
+          ),
+          description: chatSwitchPermissionCopy(result.from, result.fromPermission, next, t),
+          confirmLabel: t('chat.providerSwitch.allow', 'Allow and switch'),
+          initialFocus: 'cancel',
+          ignoresOpeningGesture: true
+        })
+        if (allowed) {
+          const confirmed = await callStructuredAgentSession<AgentSessionSelectProviderResult>(
+            target,
+            'agentSession.selectProvider',
+            {
+              ...params,
+              consent: {
+                from: result.from,
+                fromPermission: result.fromPermission,
+                permission: 'full-access'
               }
-            )
-            if (confirmed.status !== 'selected') {
-              onError(
-                t(
-                  'chat.providerSwitch.changed',
-                  'Chat permissions changed. Pick the agent again to continue.'
-                )
-              )
             }
+          )
+          if (confirmed.status !== 'selected') {
+            onError(
+              t(
+                'chat.providerSwitch.changed',
+                'Chat permissions changed. Pick the agent again to continue.'
+              )
+            )
           }
-        } finally {
-          setConfirming(false)
         }
       }
     } catch {
       onError(t('chat.providerSwitch.failed', 'Couldn’t select this agent.'))
+    } finally {
+      selecting.current = false
     }
   }
   return (

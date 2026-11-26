@@ -2,7 +2,8 @@ import {
   type BotStore,
   persistBotStore,
   requireBotStore,
-  requireStoredBot
+  requireStoredBot,
+  saveBotUpdate
 } from './bot-controller-store'
 // The bots on this computer, each homed in a folder workspace of the hidden Bots project group.
 import { BOT_IMPORT_REPLY_FILE } from '../../shared/bots/bot-import'
@@ -248,20 +249,8 @@ export class BotController {
         updated.avatarRevision = revision + 1
       }
       const next = stampBotLinkOwners(bot, updated, () => this.deps.accountUserId?.() ?? null)
-      const save = async () => {
-        if (home.known || pictureChoice) {
-          await writeBotHome(this.deps.filesystem, botHomeFolder(next, this.deps.botsRoot()), next)
-        }
-        if (next.name !== bot.name) {
-          store.updateFolderWorkspace(bot.folderWorkspaceId, { name: next.name })
-        }
-        store.saveBot(next)
-      }
-      if (changeAgent && next.agent !== bot.agent) {
-        await changeAgent(bot, next, save)
-      } else {
-        await save()
-      }
+      const save = () => saveBotUpdate(store, this.deps, bot, next, home.known || pictureChoice)
+      await (changeAgent && next.agent !== bot.agent ? changeAgent(bot, next, save) : save())
       this.deps.notifyBotsWritten(next.name !== bot.name)
       if (next.agent !== bot.agent) {
         this.deps.botAgentChanged?.(next)

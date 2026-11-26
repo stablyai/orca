@@ -43,6 +43,10 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   ) => Promise<void>
   immediatePermission?: (sessionId: string) => AgentChatPermissionChoice | null
   stopPermissionTransitionChild?: (sessionId: string) => Promise<void>
+  reconcileProviderSwitch?: (
+    session: StructuredAgentSessionHostSession,
+    clientMessageId: string | undefined
+  ) => Promise<'settled' | 'park' | 'current'>
   prepareProviderSwitch?: (
     session: StructuredAgentSessionHostSession,
     submission: AgentJournalSubmission
