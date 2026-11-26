@@ -41,8 +41,30 @@ describe('forwardedFederatedChatLineage', () => {
   })
 
   it('accepts the attached lineage only from an authenticated paired transport', () => {
-    expect(federatedAttachmentChatLineage(true, true)).toBe(true)
-    expect(federatedAttachmentChatLineage(true, false)).toBe(false)
-    expect(federatedAttachmentChatLineage(undefined, true)).toBe(false)
+    const pairedRuntime = {
+      clientKind: 'runtime' as const,
+      pairedDeviceId: 'device',
+      authenticatedCallerFingerprint: 'fingerprint'
+    }
+    expect(federatedAttachmentChatLineage(true, pairedRuntime)).toBe(true)
+    expect(
+      federatedAttachmentChatLineage(true, {
+        ...pairedRuntime,
+        pairedDeviceId: undefined
+      })
+    ).toBe(false)
+    expect(
+      federatedAttachmentChatLineage(true, {
+        ...pairedRuntime,
+        authenticatedCallerFingerprint: undefined
+      })
+    ).toBe(false)
+    expect(
+      federatedAttachmentChatLineage(true, {
+        ...pairedRuntime,
+        clientKind: undefined
+      })
+    ).toBe(false)
+    expect(federatedAttachmentChatLineage(undefined, pairedRuntime)).toBe(false)
   })
 })

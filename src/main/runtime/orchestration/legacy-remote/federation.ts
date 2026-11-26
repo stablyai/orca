@@ -45,7 +45,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
     permission: 'workspace',
     params: FederationAttachStartParams,
     handler: async (params, context) => {
-      const { runtime, orchestrationMutation, authenticatedCallerFingerprint } = context
+      const { runtime, orchestrationMutation } = context
       if (!orchestrationMutation) {
         throw new OrchestrationError(
           'invalid_argument',
@@ -86,10 +86,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
       }
 
       const db = runtime.getOrchestrationDb()
-      const chatLineage = federatedAttachmentChatLineage(
-        params.chatLineage,
-        Boolean(authenticatedCallerFingerprint)
-      )
+      const chatLineage = federatedAttachmentChatLineage(params.chatLineage, context)
       // Synchronous through the insert, so a racing start on the same terminal is refused before any wait.
       const releaseTerminalClaim = claimTerminalForRemoteAttach(db, params.terminal, runtime, {
         dispatchId: params.dispatchId,

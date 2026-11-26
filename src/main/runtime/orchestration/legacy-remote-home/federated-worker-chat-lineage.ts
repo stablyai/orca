@@ -2,6 +2,12 @@ import { ORCHESTRATION_FEDERATION_CHAT_LINEAGE_RUNTIME_CAPABILITY } from '../../
 import { startsInChatLineage } from '../../rpc/methods/orchestration/worker/start/worker-chat-lineage'
 import type { OrchestrationDb } from '../db/orchestration-db'
 
+type AuthenticatedRuntimeTransport = {
+  clientKind: 'mobile' | 'runtime' | undefined
+  pairedDeviceId: string | undefined
+  authenticatedCallerFingerprint: string | undefined
+}
+
 export function forwardedFederatedChatLineage(
   chatLineage: boolean,
   capabilities: readonly string[] | undefined
@@ -25,7 +31,12 @@ export function federatedWorkerChatLineage(
 /** Only the paired runtime transport, not a local mutation receipt, may stamp remote bot lineage. */
 export function federatedAttachmentChatLineage(
   chatLineage: true | undefined,
-  authenticatedTransport: boolean
+  transport: AuthenticatedRuntimeTransport
 ): boolean {
-  return authenticatedTransport && chatLineage === true
+  return (
+    chatLineage === true &&
+    transport.clientKind === 'runtime' &&
+    transport.pairedDeviceId !== undefined &&
+    Boolean(transport.authenticatedCallerFingerprint)
+  )
 }
