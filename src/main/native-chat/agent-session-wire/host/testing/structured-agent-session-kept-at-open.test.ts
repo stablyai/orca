@@ -6,11 +6,11 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/ex
 
 const SESSION = 'chat-with-held-approval'
 
-const keptRelay = (chatKey: string): ProviderRelayInfo => ({
+const keptRelay = (chatKey: string, pid: number | null = process.pid): ProviderRelayInfo => ({
   relayId: `r-${chatKey}`,
   chatKey,
   agent: 'codex-test',
-  pid: process.pid,
+  pid,
   spawnedAtMs: 1,
   attached: false,
   exit: null,
@@ -85,21 +85,26 @@ beforeEach(() => {
 type Fresh = Awaited<ReturnType<typeof freshRelays>>
 
 /** One host's kept opens over the given open sessions; settle is the spy that a settle happened. */
-function keptOpens(fresh: Fresh, sessions: Map<string, unknown>, ownerPid: () => number) {
+/** `ownerOf` null keeps the reconciler from probing processes, so nothing runs behind the test. */
+function keptOpens(
+  fresh: Fresh,
+  sessions: Map<string, unknown>,
+  ownerOf: () => ReturnType<typeof owner> | null = () => null
+) {
   const settle = vi.fn(async (_id: string, _open: unknown, _fence: number, _since: number) => {})
   const opens = new fresh.StructuredAgentSessionKeptOpens({
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reconciler reads only child and journal.cursor
     sessions: sessions as never,
     serialize: (_id, task) => task(),
     trackStart: (start) => start,
-    owner: () => owner(ownerPid()),
+    owner: ownerOf,
     fence: () => 3,
     settle,
     logger: { warn: () => {} }
   })
   const adopt = (id: string, session: ReturnType<typeof openSession>): void =>
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reconciler reads only child and journal.cursor
-    adopt(id, session)
+    opens.adopted(id, session as never)
   return { opens, settle, adopt }
 }
 
@@ -108,9 +113,10 @@ const openSession = () => ({
   journal: { cursor: () => ({ epoch: 'e', sequence: 5 }) }
 })
 
+/** Lets the promise chains the fakes started run out; every fake answers without real I/O. */
 async function settleTurns(): Promise<void> {
-  for (let i = 0; i < 20; i += 1) {
-    await new Promise((resolve) => setImmediate(resolve))
+  for (let i = 0; i < 50; i += 1) {
+    await Promise.resolve()
   }
 }
 
@@ -135,12 +141,13 @@ it.skipIf(process.platform === 'win32')(
     const fresh = await freshRelays(late.client)
     expect(await openKept(fresh, SESSION, process.pid, 10)).toBe(true)
     const session = openSession()
-    const { adopt, settle } = keptOpens(fresh, new Map([[SESSION, session]]), () => process.pid)
+    const { adopt, settle } = keptOpens(fresh, new Map([[SESSION, session]]))
     adopt(SESSION, session)
-    late.answer([keptRelay('another-chat')])
+    // Another chat's relay with no process, so the listing reads no process before it settles.
+    late.answer([keptRelay('another-chat', null)])
     await fresh.relays.providerRelayListingSettled()
-    // The listing reads the listed relay's process, so the settle lands after real I/O.
-    await vi.waitFor(() => expect(settle).toHaveBeenCalledTimes(1), { timeout: 5_000 })
+    await settleTurns()
+    expect(settle).toHaveBeenCalledTimes(1)
     expect(settle).toHaveBeenCalledWith(SESSION, session, 3, 6)
   }
 )
@@ -152,7 +159,7 @@ it.skipIf(process.platform === 'win32')(
     const fresh = await freshRelays(late.client)
     expect(await openKept(fresh, SESSION, process.pid, 10)).toBe(true)
     const session = openSession()
-    const { adopt, settle } = keptOpens(fresh, new Map([[SESSION, session]]), () => process.pid)
+    const { adopt, settle } = keptOpens(fresh, new Map([[SESSION, session]]))
     adopt(SESSION, session)
     late.answer([keptRelay(SESSION)])
     await settleTurns()
@@ -223,7 +230,7 @@ it.skipIf(process.platform === 'win32')(
     const fresh = await freshRelays(daemon.client)
     const inventory = await import('../../../../provider-relay/provider-relay-launch-inventory')
     const sessions = new Map<string, unknown>()
-    const { adopt, settle } = keptOpens(fresh, sessions, () => process.pid)
+    const { adopt, settle } = keptOpens(fresh, sessions)
     const chats = Array.from({ length: 1_000 }, (_, i) => `chat-${i}`)
     for (const id of chats) {
       expect(await openKept(fresh, id, process.pid)).toBe(true)
@@ -240,7 +247,6 @@ it.skipIf(process.platform === 'win32')(
     }
     daemon.recover()
     await inventory.listKeptProviderRelays(async () => [daemon.client], true)
-    await vi.waitFor(() => expect(settle).toHaveBeenCalledTimes(1), { timeout: 5_000 })
     await settleTurns()
     expect(settle).toHaveBeenCalledTimes(1)
     expect(settle).toHaveBeenCalledWith('chat-0', expect.anything(), 3, 6)
@@ -254,12 +260,12 @@ it.skipIf(process.platform === 'win32')(
     const fresh = await freshRelays(daemon.client)
     expect(await openKept(fresh, SESSION, process.pid)).toBe(true)
     const session = openSession()
-    let ownerPid = process.pid
-    const { adopt, settle } = keptOpens(fresh, new Map([[SESSION, session]]), () => ownerPid)
+    let ownerNow: ReturnType<typeof owner> | null = null
+    const { adopt, settle } = keptOpens(fresh, new Map([[SESSION, session]]), () => ownerNow)
     adopt(SESSION, session)
     await settleTurns()
     expect(settle).not.toHaveBeenCalled()
-    ownerPid = exitedPid()
+    ownerNow = owner(exitedPid())
     const launched = fresh.relays.launchRelayedProviderProcess(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a refused or proven-gone launch reads no launch field
       {} as never,
