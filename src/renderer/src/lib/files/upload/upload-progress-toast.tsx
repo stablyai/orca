@@ -53,6 +53,9 @@ export function showUploadProgressToast(title: string): UploadProgressToast {
   let renderedAt = 0
   let closed = false
 
+  // Created on first use by either side, so an X clicked while a file waits still reaches its upload.
+  const sourceController = (index: number): AbortController =>
+    (sourceControllers[index] ??= new AbortController())
   const isPending = (row: UploadRow | undefined): row is UploadRow =>
     row?.status === 'waiting' || row?.status === 'uploading'
   const updateRow = (index: number, patch: Partial<UploadRow>): void => {
@@ -76,7 +79,7 @@ export function showUploadProgressToast(title: string): UploadProgressToast {
       return
     }
     updateRow(index, { status: 'cancelled' })
-    sourceControllers[index]?.abort()
+    sourceController(index).abort()
     render()
   }
   const render = (): void => {
@@ -112,7 +115,7 @@ export function showUploadProgressToast(title: string): UploadProgressToast {
       rows = sources.map((source) => ({ ...source, sent: 0, status: 'waiting' }))
       render()
     },
-    sourceSignal: (index) => (sourceControllers[index] ??= new AbortController()).signal,
+    sourceSignal: (index) => sourceController(index).signal,
     onProgress: (index, sentBytes) => {
       const row = rows[index]
       if (!isPending(row)) {
