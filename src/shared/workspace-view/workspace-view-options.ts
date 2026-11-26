@@ -65,7 +65,8 @@ export const WORKSPACE_CARD_PROPERTY_CHOICES = [
   { id: 'comment', label: 'Notes' },
   { id: 'ports', label: 'Ports' },
   { id: 'inline-agents', label: 'Agent activity' },
-  { id: 'host', label: 'Host' }
+  { id: 'host', label: 'Host' },
+  { id: 'project-name', label: 'Project name' }
 ] as const satisfies readonly WorkspaceViewChoice<WorktreeCardProperty>[]
 
 /** "Card display" (the experimental card style). */
@@ -79,7 +80,8 @@ export const WORKSPACE_CARD_DISPLAY_CHOICES = [
   { id: 'ports', label: 'Ports' },
   { id: 'inline-agents', label: 'Agent statuses' },
   { id: 'host', label: 'Host' },
-  { id: 'branch', label: 'Branch name' }
+  { id: 'branch', label: 'Branch name' },
+  { id: 'project-name', label: 'Project name' }
 ] as const satisfies readonly WorkspaceViewChoice<WorktreeCardProperty>[]
 
 /** Return "hover" for compact properties, otherwise the shown count or null for none. */

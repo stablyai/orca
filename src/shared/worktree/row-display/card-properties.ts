@@ -53,7 +53,8 @@ export const WORKTREE_CARD_PROPERTIES = [
   'comment',
   'ports',
   'inline-agents',
-  'host'
+  'host',
+  'project-name'
 ] as const satisfies readonly WorktreeCardProperty[]
 
 export function normalizeWorktreeCardProperties(

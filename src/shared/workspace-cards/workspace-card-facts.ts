@@ -19,6 +19,7 @@ export type WorkspaceCardShowOptions = {
   ports: boolean
   inlineAgents: boolean
   host: boolean
+  projectName: boolean
 }
 
 /** What a card template can read about one workspace. Host-neutral: SSH and server workspaces

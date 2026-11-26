@@ -8,6 +8,7 @@
     "folder": "ws.kind == 'folder'",
     "pinnedRepo": "place.inPinnedSection && repo != null && !place.showProjectName",
     "inlineRepo": "repo != null && !place.hideRepoBadge && (!vars.folder || vars.classic) && !vars.pinnedRepo && !place.compactLine",
+    "showProjectName": "options.show.projectName && (vars.pinnedRepo || vars.inlineRepo)",
     "lineRepo": "place.compactLine && repo != null && !vars.folder",
     "hostLabel": "options.show.host ? host.contextLabel : null",
     "hostBadge": "vars.hostLabel != null && (!vars.compact || place.showProjectName)",
@@ -56,6 +57,10 @@
                   "el": "RepoChip",
                   "when": "vars.pinnedRepo || vars.inlineRepo",
                   "props": { "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming" }
+                },
+                {
+                  "el": "ProjectName",
+                  "when": "vars.showProjectName"
                 },
                 {
                   "el": "SshControl",
