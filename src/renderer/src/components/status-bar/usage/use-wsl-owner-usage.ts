@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { isOrcaWindowForegroundFocused } from '@/attention/orca-window-foreground-focus'
 import {
+  isUnattributedRetryPending,
   readWslProviderUsage,
   requestWslOwnerUsage,
   subscribeWslOwnerUsage,
@@ -54,8 +55,12 @@ function selectedAccount(
 }
 
 function useEntry(key: string | null): WslProviderUsageEntry | null {
+  const subscribe = useCallback(
+    (listener: () => void) => (key ? subscribeWslOwnerUsage(key, listener) : () => undefined),
+    [key]
+  )
   const read = useCallback(() => readWslProviderUsage(key), [key])
-  return useSyncExternalStore(subscribeWslOwnerUsage, read, read)
+  return useSyncExternalStore(subscribe, read, read)
 }
 
 function providerState(
@@ -114,13 +119,29 @@ export function useWslOwnerUsage(
     return () => window.removeEventListener('focus', read)
   }, [distro, claudeKey, codexKey, selection])
 
-  // Why: re-read when the soonest reading expires, so a window that stays focused never freezes.
-  const expiresAt = Math.min(claudeEntry?.expiresAt ?? Infinity, codexEntry?.expiresAt ?? Infinity)
+  // Why: piggyback on the desktop poller's updates instead of running a separate idle timer.
+  const localPollStamp = Math.max(local.claude?.updatedAt ?? 0, local.codex?.updatedAt ?? 0)
+  const lastPollStampRef = useRef(localPollStamp)
   useEffect(() => {
-    if (!distro || !Number.isFinite(expiresAt)) {
+    if (localPollStamp === lastPollStampRef.current) {
       return
     }
-    const delay = Math.max(0, expiresAt - Date.now()) + EXPIRY_SLACK_MS
+    lastPollStampRef.current = localPollStamp
+    if (distro && (claudeKey || codexKey) && isOrcaWindowForegroundFocused()) {
+      void requestWslOwnerUsage(distro, selection)
+    }
+  }, [distro, claudeKey, codexKey, selection, localPollStamp])
+
+  // Why: retry only when main could not attribute a mid-switch read, never on a settled reading.
+  const retryAt = Math.min(
+    isUnattributedRetryPending(claudeEntry) ? (claudeEntry?.expiresAt ?? Infinity) : Infinity,
+    isUnattributedRetryPending(codexEntry) ? (codexEntry?.expiresAt ?? Infinity) : Infinity
+  )
+  useEffect(() => {
+    if (!distro || !Number.isFinite(retryAt)) {
+      return
+    }
+    const delay = Math.max(0, retryAt - Date.now()) + EXPIRY_SLACK_MS
     // Why skip in the background: the focus listener re-reads when the window comes back.
     const reread = (): void => {
       if (isOrcaWindowForegroundFocused()) {
@@ -129,7 +150,7 @@ export function useWslOwnerUsage(
     }
     const timer = setTimeout(reread, delay)
     return () => clearTimeout(timer)
-  }, [distro, selection, expiresAt])
+  }, [distro, selection, retryAt])
 
   const state = useMemo<OwnerUsageState | null>(() => {
     if (!distro) {
