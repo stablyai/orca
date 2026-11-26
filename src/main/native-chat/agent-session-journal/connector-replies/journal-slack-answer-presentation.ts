@@ -6,6 +6,19 @@ import {
   type SlackAnswerPresentation
 } from '../../../../shared/connectors/slack-answer-presentation'
 
+const hasPreparedAnswer = new WeakMap<Database.Database, boolean>()
+
+export function journalHasSlackAnswerPresentations(db: Database.Database): boolean {
+  const known = hasPreparedAnswer.get(db)
+  if (known !== undefined) {
+    return known
+  }
+  const present =
+    db.prepare('SELECT 1 FROM journal_slack_answer_presentations LIMIT 1').get() !== undefined
+  hasPreparedAnswer.set(db, present)
+  return present
+}
+
 export function readSlackAnswerPresentation(value: unknown): SlackAnswerPresentation | undefined {
   if (typeof value !== 'string' || value.length > SLACK_ANSWER_MAX_BYTES) {
     return undefined
@@ -24,7 +37,7 @@ export function prepareSlackAnswerPresentation(
   presentation: SlackAnswerPresentation,
   now = Date.now()
 ): boolean {
-  return (
+  const prepared =
     Number(
       db
         .prepare(`INSERT INTO journal_slack_answer_presentations
@@ -36,7 +49,10 @@ export function prepareSlackAnswerPresentation(
       presentation_json=excluded.presentation_json,check_at=excluded.check_at`)
         .run(JSON.stringify(presentation), now, sessionId, epoch, turnItemId).changes
     ) > 0
-  )
+  if (prepared) {
+    hasPreparedAnswer.set(db, true)
+  }
+  return prepared
 }
 
 /** A journal sweep can release finished drafts once no pending reply can still need them. */
@@ -75,6 +91,9 @@ export function pruneSlackAnswerPresentations(
     } else {
       postpone.run(now, ...key)
     }
+  }
+  if (deleted > 0) {
+    hasPreparedAnswer.delete(db)
   }
   return { deleted, more: due.length === 50 }
 }

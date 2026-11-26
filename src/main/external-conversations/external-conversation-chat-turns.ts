@@ -18,10 +18,10 @@ import {
   endRepliedTurn,
   legacyTurnWords,
   readOnce,
-  turnFailure,
   turnReply,
   type ChatTurnEnd
 } from './external-conversation-turn-ends'
+import { tellCompletedTurn } from './external-conversation-completed-turn'
 
 import { chatTurnFor, conversationOwnsTurn, leadOf } from './external-conversation-turn-state'
 export { conversationOwnsTurn, leadOf }
@@ -315,20 +315,15 @@ export class ChatTurns {
         }
         return end.leave.settle()
       }
-      const [workLinks] = await Promise.all([links(), this.workers.check(paneKey, 'turn-ended')])
-      if (generation !== this.generation) {
-        return
-      }
-      // Owner words steered in and posted to the thread go before the answer.
-      ;(mirrored ? mirrored.release : this.deps.emit)({
-        ...ended,
-        ...end.turnFor(turn),
-        origin: reported ? 'delivery' : origin,
-        ...(words ? { lastAssistantMessage: words } : {}),
-        ...turnFailure(end, turn),
-        ...(workLinks.length > 0 ? { links: workLinks } : {})
-      })
-      end.leave.settle(mirrored ? 'held' : 'end')
+      await tellCompletedTurn(
+        end,
+        linked.link,
+        turn,
+        reported ? 'delivery' : origin,
+        words,
+        links,
+        mirrored ?? null
+      )
     })
   }
 

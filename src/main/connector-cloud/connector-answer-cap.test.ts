@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ConnectorEvent } from '../../shared/connectors/connector-cloud-contract'
-import { answerFor } from './connector-event-wire'
+import { answerFor, toConnectorEvent } from './connector-event-wire'
 import { capAnswer } from './connector-snapshot'
 import {
   CONNECTOR_SLACK_PRESENTATION_FEATURE,
@@ -86,5 +86,31 @@ describe('answerFor', () => {
       ...reply,
       prose: SLACK_PRESENTATION_UNCONFIRMED
     })
+
+    const ended = toConnectorEvent(
+      {
+        kind: 'turn-ended',
+        conversation: reply.conversation,
+        paneKey: 'p',
+        worktreeId: 'w',
+        turnId: 1,
+        at: 2,
+        stopReason: 'success',
+        origin: 'delivery',
+        lastAssistantMessage: slackAnswerText(presentation),
+        presentation
+      },
+      new Set()
+    )
+    expect(ended).toMatchObject({
+      lastAssistantMessage: SLACK_PRESENTATION_UNCONFIRMED,
+      presentation
+    })
+    expect(answerFor(ended!, new Set([CONNECTOR_SLACK_PRESENTATION_TEXT_FEATURE]))).toMatchObject({
+      turnId: 1,
+      lastAssistantMessage: slackAnswerText(presentation),
+      presentation
+    })
+    expect(answerFor(ended!, new Set())).not.toHaveProperty('presentation')
   })
 })

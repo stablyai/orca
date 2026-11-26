@@ -6,7 +6,10 @@ import {
   SLACK_PRESENTATION_UNCONFIRMED,
   slackAnswerText
 } from '../../../../shared/connectors/slack-answer-presentation'
-import { journalSlackAnswerPresentation } from './journal-slack-answer-presentation'
+import {
+  journalHasSlackAnswerPresentations,
+  journalSlackAnswerPresentation
+} from './journal-slack-answer-presentation'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   answersThroughOutbox,
@@ -137,7 +140,8 @@ export function fillJournalConnectorReplies(
       row.outcome === 'answered' &&
       prose &&
       prose.length <= SLACK_ANSWER_MAX_TEXT &&
-      prose.includes('\nSource: ')
+      prose.includes('\nSource: ') &&
+      journalHasSlackAnswerPresentations(db)
     ) {
       const key = JSON.stringify(presentationTurn)
       if (!answerText.has(key)) {

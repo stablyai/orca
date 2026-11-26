@@ -173,7 +173,11 @@ export function createBotAutomationDispatcher(
       saved === 'thread' ? await threadRoute(threads, run, runsIn) : { kind: 'take' }
     const slackAnswer =
       (typeof saved === 'object' && 'channel' in saved) ||
-      (route.kind !== 'take' && route.conversation.source === 'slack')
+      (route.kind !== 'take' && route.conversation.source === 'slack') ||
+      (saved === 'thread' &&
+        run.trigger === 'event' &&
+        run.event?.conversation?.source === 'slack' &&
+        threads !== undefined)
     const asker = run.event ? automationEventAsker(run.event, target.bot.members) : null
     const text =
       automation.once?.by !== undefined && run.trigger === 'scheduled'

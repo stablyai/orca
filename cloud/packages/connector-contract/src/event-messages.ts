@@ -175,6 +175,44 @@ export const ConnectorActivityEventSchema = z.object({
 })
 export type ConnectorActivityEvent = z.infer<typeof ConnectorActivityEventSchema>
 
+const ConnectorTurnEndedEventSchema = z.object({
+  ...PaneEvent,
+  kind: z.literal('turn-ended'),
+  // The turn-started `at` of the turn that ended, so start, end and replies share one id.
+  turnId: EpochMsSchema,
+  at: EpochMsSchema,
+  // The host's turn verdict; null when none was recorded.
+  stopReason: z.string().min(1).nullable(),
+  lastAssistantMessage: z
+    .string()
+    .refine((text) => utf8Bytes(text) <= CONNECTOR_LIMITS.maxLongAnswerBytes)
+    .optional(),
+  // A chat turn's cause; someone typing in Orca ('local') is not mirrored back.
+  origin: z.enum(['delivery', 'local']).optional(),
+  // Why a failed turn failed; absent from older machines and turns that didn't fail.
+  failure: OptionalConnectorFailureSchema,
+  links: OptionalWorkLinksSchema,
+  // The thread's turn state only: its answer goes as a `reply` (or through replies), never this.
+  stateOnly: z.literal(true).optional(),
+  // Whom a turn no delivery started acts for; its final post counts as that person on Slack.
+  turnFor: ConnectorTurnForSchema.optional(),
+  // With a usage-limit failure that has a reset: the machine continues the turn's requests by
+  // itself then. Sent only to a cloud that lists replies.paused.
+  resumes: z.literal(true).optional().catch(undefined)
+})
+
+const ConnectorPresentedTurnEndSchema = ConnectorTurnEndedEventSchema.safeExtend({
+  presentation: SlackAnswerPresentationSchema.optional()
+}).refine(
+  ({ presentation, conversation, stopReason, stateOnly, origin, lastAssistantMessage }) =>
+    !presentation ||
+    (conversation.source === 'slack' &&
+      stopReason === 'success' &&
+      origin === 'delivery' &&
+      !stateOnly &&
+      lastAssistantMessage === slackAnswerText(presentation))
+)
+
 // Identities: linked by pane, prompt by pane + promptId, a turn by pane + its turn-started `at` (turnId).
 // actsFor: whom the linked chat acts for, once recorded; an older machine leaves it out.
 const ConnectorNonReplyEvents = [
@@ -209,31 +247,6 @@ const ConnectorNonReplyEvents = [
     // The delivery the turn answers, when exactly one started it; an older machine leaves it out.
     deliveryId: OpaqueIdSchema.optional()
   }),
-  z.object({
-    ...PaneEvent,
-    kind: z.literal('turn-ended'),
-    // The turn-started `at` of the turn that ended, so start, end and replies share one id.
-    turnId: EpochMsSchema,
-    at: EpochMsSchema,
-    // The host's turn verdict; null when none was recorded.
-    stopReason: z.string().min(1).nullable(),
-    lastAssistantMessage: z
-      .string()
-      .refine((text) => utf8Bytes(text) <= CONNECTOR_LIMITS.maxLongAnswerBytes)
-      .optional(),
-    // A chat turn's cause; someone typing in Orca ('local') is not mirrored back.
-    origin: z.enum(['delivery', 'local']).optional(),
-    // Why a failed turn failed; absent from older machines and turns that didn't fail.
-    failure: OptionalConnectorFailureSchema,
-    links: OptionalWorkLinksSchema,
-    // The thread's turn state only: its answer goes as a `reply` (or through replies), never this.
-    stateOnly: z.literal(true).optional(),
-    // Whom a turn no delivery started acts for; its final post counts as that person on Slack.
-    turnFor: ConnectorTurnForSchema.optional(),
-    // With a usage-limit failure that has a reset: the machine continues the turn's requests by
-    // itself then. Sent only to a cloud that lists replies.paused.
-    resumes: z.literal(true).optional().catch(undefined)
-  }),
   // Whether orchestration workers the conversation's agent started still run, sent only to a cloud
   // whose hello answer lists `workers`. Running keeps the conversation working after its turn ends.
   z.object({ ...PaneEvent, kind: z.literal('workers'), running: z.boolean() }),
@@ -266,10 +279,12 @@ const ConnectorNonReplyEvents = [
 // The answer delivery keys the outbox result across every replay.
 export const ConnectorEventSchema = z.discriminatedUnion('kind', [
   ...ConnectorNonReplyEvents,
+  ConnectorPresentedTurnEndSchema,
   ConnectorReplyEventSchema
 ])
 const ConnectorTextEventSchema = z.discriminatedUnion('kind', [
   ...ConnectorNonReplyEvents,
+  ConnectorTurnEndedEventSchema.safeExtend({ presentation: z.never().optional() }),
   ConnectorReplyEventSchema.safeExtend({ presentation: z.never().optional() })
 ])
 
@@ -308,7 +323,7 @@ const PresentationEvents = z
     v: z.literal(SLACK_PRESENTATION_EVENT_VERSION),
     events: z.array(ConnectorEventSchema.refine(fitsOneEvent)).min(1)
   })
-  .refine(({ events }) => events.some((event) => event.kind === 'reply' && event.presentation))
+  .refine(({ events }) => events.some((event) => (event.kind === 'reply' || event.kind === 'turn-ended') && event.presentation))
 
 export const ConnectorEventsRequestSchema = z.discriminatedUnion('v', [
   TextEvents,

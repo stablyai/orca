@@ -350,6 +350,7 @@ export type ConnectorEvent =
       at: number
       stopReason: string | null
       lastAssistantMessage?: string
+      presentation?: SlackAnswerPresentation
       /** Chats only; terminal turns omit it. */
       origin?: ConnectorTurnOrigin
       /** Why a failed chat turn failed. */

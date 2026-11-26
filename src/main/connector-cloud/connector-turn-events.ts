@@ -35,6 +35,7 @@ import {
 } from './connector-reply-outbox'
 
 const TURN_OUTBOX_FILE = 'connector-turn-outbox.json'
+const NO_CLOUD_FEATURES: ReadonlySet<string> = new Set()
 /** The reply outbox's journal, the kill switch's /replies post, and a cold start's wake. */
 export type ConnectorTurnEventsReplies = Pick<ConnectorReplyClient, 'post' | 'hostName'> & {
   journal: () => ConnectorReplyJournal | null
@@ -63,7 +64,7 @@ export class ConnectorTurnEvents {
   private dropped = false
   private warnedTrimmed = false
   // From the current hello's answer; empty before one.
-  private cloudFeatures: ReadonlySet<string> = new Set()
+  private cloudFeatures = NO_CLOUD_FEATURES
   private readonly requestVersions = new Map<number, 1 | 2>()
   private readonly replies: ConnectorReplyOutbox
   // Flushes the running client's events; null while none runs.
@@ -108,6 +109,10 @@ export class ConnectorTurnEvents {
         this.trace.dropped(item, stamp)
         // A turn end the cloud won't take lets its leave's line go.
         if (isTurnEnded(item)) {
+          if (failure?.status === 400 && item.presentation) {
+            this.outbox.push(answerFor(item, NO_CLOUD_FEATURES))
+            return
+          }
           installedLeaveLines()?.turnEndsTaken([item])
         }
         // A reply refused as invalid can't succeed as sent under this hello: it stays in flight
@@ -115,6 +120,10 @@ export class ConnectorTurnEvents {
         // that doesn't stand yet) goes again later.
         if (failure?.status === 400) {
           const ids = replyDeliveryIds([item])
+          if (isReplyEvent(item) && item.presentation) {
+            this.replies.released(ids, true)
+            return
+          }
           ids.forEach((id) => this.setAside.add(id))
           this.replies.released(ids, false)
           return

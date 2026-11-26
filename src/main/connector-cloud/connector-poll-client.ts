@@ -47,8 +47,7 @@ export class ConnectorPollClient {
   private botsSaid = false
   // Hellos go one at a time, so a late answer never replaces a newer revision.
   private saying: Promise<ConnectorFailure | null> = Promise.resolve(null)
-  private postRefresh: { rev: number | null; result: Promise<ConnectorFailure | null> } | null =
-    null
+  private postRefresh: Promise<ConnectorFailure | null> | null = null
   private failures = 0
   private readonly respread = new pollControl.ConnectorRehelloSpread()
   // When the last answered poll went out; failed ones don't count.
@@ -141,14 +140,13 @@ export class ConnectorPollClient {
       if (this.helloRev !== null && this.helloRev !== helloRev) {
         return Promise.resolve(null)
       }
-      if (this.helloRev === null && this.postRefresh?.rev === helloRev) {
-        return this.postRefresh.result
+      if (this.helloRev === null && this.postRefresh) {
+        return this.postRefresh
       }
       this.helloRev = this.snapshots.drop('post-409')
       this.wake.helloDropped()
-      const result = this.sayHello()
-      this.postRefresh = { rev: helloRev, result }
-      return result
+      this.postRefresh = this.sayHello()
+      return this.postRefresh
     }
   })
 

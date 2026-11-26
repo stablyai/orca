@@ -12,6 +12,7 @@ import {
   type ConnectorEvent
 } from '../../shared/connectors/connector-cloud-contract'
 import { ConnectorWorkLink } from '../../shared/connector-work-link-contract'
+import { SlackAnswerPresentationSchema } from '../../shared/connectors/slack-answer-presentation'
 import { CoalescingFileWriter } from '../filesystem/coalescing-file-writer'
 import { removeStaleDurableWriteTempFiles } from '../filesystem/durable-file-write'
 import {
@@ -34,6 +35,7 @@ const StoredOutbox = z.object({
       at: z.number(),
       stopReason: z.string().min(1).nullable(),
       lastAssistantMessage: z.string().optional(),
+      presentation: SlackAnswerPresentationSchema.optional().catch(undefined),
       origin: z.enum(CONNECTOR_TURN_ORIGINS).optional(),
       failure: ConnectorFailure.optional().catch(undefined),
       links: z.array(ConnectorWorkLink).optional().catch(undefined),
