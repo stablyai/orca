@@ -55,10 +55,17 @@ const REASONS = [
 
 const ROWS = Object.entries(CASES)
 
+// A catalog level read as named children, so a dotted key walks the real en.json tree.
+type CatalogLevel = ReadonlyMap<string, unknown>
+
+function catalogLevel(node: unknown): CatalogLevel | undefined {
+  return typeof node === 'object' && node !== null
+    ? new Map<string, unknown>(Object.entries(node))
+    : undefined
+}
+
 function englishCatalogValue(key: string): unknown {
-  return key.split('.').reduce<unknown>((node, part) => {
-    return typeof node === 'object' && node !== null ? Reflect.get(node, part) : undefined
-  }, en)
+  return key.split('.').reduce<unknown>((node, part) => catalogLevel(node)?.get(part), en)
 }
 
 describe('browserExtensionFailureMessage mapping', () => {
