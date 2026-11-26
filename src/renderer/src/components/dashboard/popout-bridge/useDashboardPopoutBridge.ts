@@ -17,6 +17,11 @@ import {
 } from '../snapshot/build-dashboard-snapshot'
 import { createDashboardSnapshotReuse } from '../snapshot/dashboard-snapshot-reuse'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import {
+  readDashboardBotAsks,
+  subscribeToDashboardBotAsks
+} from '../bot-asks/dashboard-bot-asks-feed'
+import { openRelayedDashboardBotAsk } from '../bot-asks/DashboardBotAsks'
 
 // Throttle cross-worktree snapshot rebuilds to 4Hz during agent-status bursts.
 const PUBLISH_THROTTLE_MS = 250
@@ -107,6 +112,15 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
     })
   }, [enabled])
 
+  useEffect(() => {
+    if (!enabled) {
+      return
+    }
+    return window.api.dashboard.onOpenBotItem?.((args) => {
+      openRelayedDashboardBotAsk(args)
+    })
+  }, [enabled])
+
   // Apply shared read acknowledgments here; optional IPC tolerates dev-HMR preload skew until restart.
   useEffect(() => {
     if (!enabled) {
@@ -133,7 +147,7 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
     const publishNow = (withIcons: boolean): void => {
       lastPublishAt = Date.now()
       const state = useAppStore.getState()
-      const snapshot = buildDashboardSnapshot(
+      const built = buildDashboardSnapshot(
         {
           ...state,
           runtimeStatusByEnvironmentId: readRuntimeStatuses(),
@@ -142,6 +156,8 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
         lastPublishAt,
         { reuse }
       )
+      // Bot items come from the bot catalog, not the store the snapshot is built from.
+      const snapshot = { ...built, botAsks: readDashboardBotAsks() }
       const icons = snapshot.repoIconsByRepoId ?? {}
       if (!withIcons && repoIconsUnchanged(icons, lastPublishedRepoIcons)) {
         const { repoIconsByRepoId: _omitted, ...withoutIcons } = snapshot
@@ -196,9 +212,11 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
               publishThrottled()
             }
           })
+          const stopBotAsks = subscribeToDashboardBotAsks(publishThrottled)
           unsubscribeStore = () => {
             stopInputs()
             stopStatuses()
+            stopBotAsks()
           }
         }
         publishNow(true)

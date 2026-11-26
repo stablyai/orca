@@ -1,4 +1,5 @@
 import type {
+  DashboardOpenBotItemArgs,
   DashboardRevealAgentArgs,
   DashboardSnapshot
 } from '../../../shared/agent-status/presentation/dashboard-snapshot'
@@ -20,6 +21,9 @@ export type DashboardApi = {
   onSnapshot: (callback: (snapshot: DashboardSnapshot) => void) => () => void
   revealAgent: (args: DashboardRevealAgentArgs) => Promise<void>
   ackAgent: (paneKey: string, intent: 'view' | 'explicit') => Promise<void>
+  /** Pop-out → main: open a bot item in its bot's panel. */
+  openBotItem: (args: DashboardOpenBotItemArgs) => Promise<void>
+  onOpenBotItem: (callback: (args: DashboardOpenBotItemArgs) => void) => () => void
 }
 
 export type TerminalPreviewApi = {

@@ -1,5 +1,6 @@
 import { ipcRenderer } from 'electron'
 import type {
+  DashboardOpenBotItemArgs,
   DashboardRevealAgentArgs,
   DashboardSnapshot
 } from '../../../shared/agent-status/presentation/dashboard-snapshot'
@@ -46,5 +47,13 @@ export const dashboardApi = {
   revealAgent: (args: DashboardRevealAgentArgs): Promise<void> =>
     ipcRenderer.invoke('dashboardPopout:revealAgent', args),
   ackAgent: (paneKey: string, intent: 'view' | 'explicit'): Promise<void> =>
-    ipcRenderer.invoke('dashboardPopout:ackAgent', { paneKey, intent })
+    ipcRenderer.invoke('dashboardPopout:ackAgent', { paneKey, intent }),
+  openBotItem: (args: DashboardOpenBotItemArgs): Promise<void> =>
+    ipcRenderer.invoke('dashboardPopout:openBotItem', args),
+  onOpenBotItem: (callback: (args: DashboardOpenBotItemArgs) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, args: DashboardOpenBotItemArgs): void =>
+      callback(args)
+    ipcRenderer.on('ui:openDashboardBotItem', listener)
+    return () => ipcRenderer.removeListener('ui:openDashboardBotItem', listener)
+  }
 } satisfies PreloadApi['dashboard']
