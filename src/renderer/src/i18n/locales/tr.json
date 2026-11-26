@@ -1080,7 +1080,7 @@
         "importInvalid": "{{count}} satır okunamadı",
         "importUndecryptable": "{{count}} kayıt tarayıcı tarafından korunuyor. Bu kayıtları tarayıcıdan CSV olarak dışa aktarın.",
         "imported": "{{count}} parola içe aktarıldı",
-        "deleteAllConfirmDescription": "{{profile}} profilinde kayıtlı tüm parolalar kalıcı olarak silinecek. Bu işlem geri alınamaz.",
+        "deleteAllConfirmDescription": "{{profile}} profilindeki tüm kayıtlı parolalar, notlar ve parolası hiç kaydedilmeyecek siteler kalıcı olarak silinecek. Bu işlem geri alınamaz.",
         "deletedAll": "Parola verileri silindi",
         "form": {
           "invalidSite": "example.com gibi bir web sitesi adresi girin.",
@@ -1572,6 +1572,7 @@
           "claude": "Claude",
           "gsd": "GSD",
           "tabs": "sekmeler",
+          "tab_characters": "sekme karakterleri",
           "command_line": "komut satırı",
           "about": "hakkında",
           "update": "güncelleme",
@@ -2033,6 +2034,11 @@
       "results": "Ayar arama sonuçları",
       "noResults": "“{{value0}}” ile eşleşen ayar yok",
       "moreResults": "{{value0}} sonuç daha var · daraltmak için yazmaya devam edin"
+    },
+    "mcpServers": {
+      "agents": {
+        "blocked": "Kuruluşunuzun Claude ayarları tarafından engellendi"
+      }
     }
   },
   "menu": {
@@ -14048,6 +14054,8 @@
             "unverifiable": "Tamamlanamadı: Orca bu sunucuda nelerin çalıştığını doğrulayamadı. Ana makineye erişilebildiğinde yeniden deneyin.",
             "migration": "Tamamlanamadı: bu sunucuya taşıma işlemi henüz bitmedi. Önce bu işlemi sürdürün.",
             "deferred": "Henüz tamamlanamadı: sunucu bu işleme hazır değil. Daha sonra yeniden deneyin.",
+            "stopIncomplete": "Tamamlanamadı: Orca mevcut sunucunun kapandığını doğrulayamadığı için güncellemeyi başlatmadı. Yeniden denemeden önce ana makinede ~/.orca-remote altındaki sunucu kurulum klasöründe bulunan orcad.log dosyasını kontrol edin.",
+            "rollbackStopIncomplete": "Tamamlanamadı: Orca mevcut sunucunun kapandığını doğrulayamadığı için önceki sürüme dönmedi. Yeniden denemeden önce ana makinede ~/.orca-remote altındaki sunucu kurulum klasöründe bulunan orcad.log dosyasını kontrol edin.",
             "failed": "Orca bu işlemi sunucuda tamamlayamadı. Yeniden deneyin.",
             "defaultServer": "Tamamlanamadı: bu sunucu yeni projeler için varsayılan ana makine. Durdurmadan önce Yeni projelerin açılacağı yer bölümünden başka bir ana makine seçin.",
             "wslMoveRunning": "Tamamlanamadı: bu sunucuya bir proje taşınıyor. Taşıma bittiğinde Orca sunucuyu günceller."
@@ -24296,6 +24304,9 @@
       "fileRenameFailed": "“{{name}}” yeniden adlandırılamadı.",
       "worktreeCreateFailed": "Worktree oluşturulamadı.",
       "missingBaseBranchHelp": "İlk commit’i oluşturun (örneğin main üzerinde) veya kaynak branch seçiminden mevcut bir branch'i seçip yeniden deneyin.",
+      "baseBranchLookupFailedTitle": "Temel branch belirlenemedi",
+      "baseBranchLookupFailedMessage": "Bu deponun varsayılan temel branch'i aranırken Git başarısız oldu veya zaman aşımına uğradı.",
+      "baseBranchLookupFailedHelp": "Yeniden deneyin veya kaynak branch seçiminden bir temel branch seçin.",
       "dropTooManyPaths": "Tek seferde çok fazla dosya veya klasör bıraktınız.",
       "dropPathsTooLarge": "Bırakma yolu listesi çok büyük.",
       "fileOwnerResolveFailed": "Dosyanın sahibi belirlenemedi."
@@ -28199,10 +28210,7 @@
         "place": "{{index}} / {{total}}",
         "deleted": "Bu öğe silindi.",
         "loading": "Öğe yükleniyor…",
-        "linkCount": "{{count}} bağlantı",
-        "reply": "Yanıtla",
-        "replyAbove": "Yukarıdaki soruyu yanıtla",
-        "replyBelow": "Aşağıdaki soruyu yanıtla"
+        "subWhere": "Öğe {{number}} · {{chat}}"
       },
       "activity": {
         "linked": "{{links}} bağlantılarını bağladı",
@@ -28241,7 +28249,9 @@
         "sending": "Gönderiliyor…",
         "sendSome": "{{count}}/{{total}} gönder",
         "sendSomeLabel": "{{total}} yanıttan {{count}} tanesini gönder",
-        "changeAnswer": "{{question}}: {{answer}}. Yanıtı değiştir"
+        "changeAnswer": "{{question}}: {{answer}}. Yanıtı değiştir",
+        "heldImagesLimit": "Yanıtların tek bir yorum olarak gider ve bir yorum en fazla {{max}} görsel alır. Önce şimdiye kadar bekleyen yanıtları gönder ya da birkaçını kaldır.",
+        "heldSkillsLimit": "Yanıtların tek bir yorum olarak gider ve bir yorum en fazla {{max}} beceri alır. Önce şimdiye kadar bekleyen yanıtları gönder ya da birkaçını kaldır."
       },
       "chat": {
         "moreItems": "+{{count}} tane daha",
@@ -29998,7 +30008,6 @@
         "cancel": "İptal",
         "cancelRunning": "Oluşturmayı iptal et",
         "edit": "Açıklamayı düzenle",
-        "realPerson": "Avatarlar gerçek kişileri gösteremez. Bunun yerine bir karakter tarif edin.",
         "signedOut": "{{agent}} oturumu açık değil. Oturum açıp yeniden deneyin.",
         "usageLimit": "{{agent}} kullanım sınırına ulaştı. Daha sonra yeniden deneyin.",
         "noImage": "{{agent}} bir görsel oluşturmadı. Açıklamanızı farklı sözcüklerle yazmayı deneyin.",

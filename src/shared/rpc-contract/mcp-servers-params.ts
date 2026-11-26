@@ -67,6 +67,11 @@ export const McpServerDiscover = z.object({})
 
 // `key`: a discovered server's, from mcpServers.discover.
 export const McpServerImport = z.object({ key: z.string().min(1).max(512) })
+// `agents`: the ones its confirm said it leaves; the host takes it out of no other agent's files.
+// Absent from older clients.
+export const McpServerMove = McpServerImport.extend({
+  agents: z.array(z.string().min(1).max(64)).max(64).optional()
+})
 
 // The agents whose own MCP file Orca keeps its servers in, with the user's consent.
 export const McpServerAgentFilesAllow = z.object({
@@ -92,9 +97,12 @@ export const McpServerSetAgentEnabled = z.object({
   enabled: z.boolean()
 })
 
+// `base` is the choice the edit was made from, so the host writes only what changed; an older host
+// drops it and stores `workspaces` whole.
 export const McpServerSetWorkspaces = z.object({
   id: ServerId,
-  workspaces: McpServerWorkspacesSchema
+  workspaces: McpServerWorkspacesSchema,
+  base: McpServerWorkspacesSchema.optional()
 })
 
 export const McpServerSetSharedProcess = z.object({ id: ServerId, enabled: z.boolean() })

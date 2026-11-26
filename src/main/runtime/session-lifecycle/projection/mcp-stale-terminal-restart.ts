@@ -13,7 +13,7 @@ import {
 } from '../../../../shared/agent-status/process/agent-process-recognition'
 import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 import { terminalMcpPanes } from '../../../mcp-servers/terminal/terminal-mcp-panes'
-import { currentTerminalMcpFingerprint } from '../../../mcp-servers/terminal/terminal-mcp-launch'
+import { currentTerminalMcpFingerprints } from '../../../mcp-servers/terminal/terminal-mcp-launch'
 import type { TerminalMcpPaneLaunch } from '../../../mcp-servers/terminal/terminal-mcp-launch'
 
 type StaleTerminal = {
@@ -30,22 +30,25 @@ const RESTARTS_AT_ONCE = 3
  *  restarting them in place, their conversation resumed. Chats pick a change up on their next turn. */
 export abstract class OrcaRuntimeWithMcpStaleTerminals extends OrcaRuntimeWithClaudeRunningPaneAccountMove {
   private async staleMcpTerminals(): Promise<StaleTerminal[]> {
-    const panes = await terminalMcpPanes.all()
-    const stale: StaleTerminal[] = []
-    for (const [ptyId, pane] of panes) {
+    const live: { pty: RuntimePtyWorktreeRecord; pane: TerminalMcpPaneLaunch }[] = []
+    for (const [ptyId, pane] of await terminalMcpPanes.all()) {
       const pty = this.ptysById.get(ptyId)
       if (
-        !pty?.connected ||
-        pty.connectionId !== null ||
-        isRemoteRuntimePtyId(ptyId) ||
-        pane.fingerprint === null ||
+        pty?.connected &&
+        pty.connectionId === null &&
+        !isRemoteRuntimePtyId(ptyId) &&
+        pane.fingerprint !== null &&
         // Its agent exited to the shell: nothing there uses the servers any more.
-        pty.launchEvidence?.kind === 'gone'
+        pty.launchEvidence?.kind !== 'gone'
       ) {
-        continue
+        live.push({ pty, pane })
       }
-      // Read per pane: a pane's workspace and agent decide which servers it would get now.
-      const now = await currentTerminalMcpFingerprint(pane).catch(() => null)
+    }
+    // A pane's workspace and agent decide which servers it would get now.
+    const current = await currentTerminalMcpFingerprints(live.map(({ pane }) => pane))
+    const stale: StaleTerminal[] = []
+    for (const { pty, pane } of live) {
+      const now = current.get(pane) ?? null
       if (now === null || now === pane.fingerprint) {
         continue
       }
@@ -143,7 +146,7 @@ export abstract class OrcaRuntimeWithMcpStaleTerminals extends OrcaRuntimeWithCl
           }
           const live = await this.mcpTerminalSession(current)
           // An unreadable list gives no replacement config, so the agent keeps running as it is.
-          const now = await currentTerminalMcpFingerprint(pane).catch(() => null)
+          const now = (await currentTerminalMcpFingerprints([pane])).get(pane) ?? null
           return (
             live?.providerSession.id === session!.providerSession.id &&
             now !== null &&

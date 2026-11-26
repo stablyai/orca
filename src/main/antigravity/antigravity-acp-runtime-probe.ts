@@ -9,6 +9,10 @@ import {
 } from '../acp/process/acp-agent-connection'
 import type { InitializeResponse } from '../acp/generated/acp-protocol.generated'
 import { runAgentModelCatalogSession } from '../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
+import { waitForProviderExitUntil } from '../provider-process/provider-process-exit-deadline'
+
+// A close can return before agy's exit is seen; a check that answered still waits for that proof.
+const EXIT_PROOF_WAIT_MS = 5_000
 
 type ProbeLaunch = {
   command: string
@@ -55,6 +59,9 @@ async function initializeFromDisposableFolder(
   } catch (error) {
     outcome.failed = true
     outcome.failure = error
+  }
+  if (connection && !connection.exited) {
+    await waitForProviderExitUntil(connection, EXIT_PROOF_WAIT_MS)
   }
   if (connection && !connection.exited) {
     outcome.failure = new Error(

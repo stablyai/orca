@@ -2352,7 +2352,7 @@
     "failure": {
       "accountSwitchInProgress": "이 호스트에서 {{agent}} 설정을 변경하는 중입니다. 완료된 후 다시 시도하세요.",
       "agentCommandNotRunnable": "{{agent}}의 설정 → 에이전트 → 명령은 Orca가 찾을 수 있는 프로그램 경로나 이름이어야 하며, 인수나 변수를 포함할 수 없습니다. 변경하거나 재설정하세요.",
-      "agentCommandFailed": "설정 → 에이전트에서 {{agent}}의 명령이 {{agent}}를 시작하지 못했습니다: {{detail}}. 명령을 변경하거나 초기화하세요.",
+      "agentCommandFailed": "설정 → 에이전트에서 {{agent}}의 명령이 {{agent}}을(를) 시작하지 못했습니다: {{detail}}. 명령을 변경하거나 초기화하세요.",
       "agentCommandNotSignedIn": "이 채팅을 실행하는 컴퓨터에서 `{{loginCommand}}`으로 {{agent}}에 로그인하세요.",
       "agentNotSignedIn": "{{agent}}에 로그인하세요.",
       "agentStarting": "에이전트가 아직 시작 중입니다.",
@@ -2390,8 +2390,8 @@
       "claudeEffortInvalid": "Claude의 추론 수준이 올바르지 않습니다. low, medium, high, xhigh, max 중에서 선택한 후 다시 보내세요.",
       "claudeManagedNotSignedIn": "이 Claude 계정에 로그인하지 않았습니다. Claude 계정 설정에서 다시 로그인하세요.",
       "claudeSystemNotSignedIn": "Claude에 로그인되어 있지 않습니다. `{{loginCommand}}`을 실행하거나 Claude 계정 설정에서 계정을 선택하세요.",
-      "cliMissing": "이 채팅을 실행하는 컴퓨터에서 {{agent}}를 찾을 수 없습니다. 설치하거나 설정 → 에이전트에서 명령을 확인하세요.",
-      "cliMissingInWslDistro": "WSL 배포판 {{distro}}에 {{agent}}가 설치되어 있지 않습니다. {{distro}} 안에 설치하거나 설정 → 에이전트에서 명령을 확인하세요.",
+      "cliMissing": "이 채팅을 실행하는 컴퓨터에서 {{agent}}을(를) 찾을 수 없습니다. 설치하거나 설정 → 에이전트에서 명령을 확인하세요.",
+      "cliMissingInWslDistro": "WSL 배포판 {{distro}}에 {{agent}}이(가) 설치되어 있지 않습니다. {{distro}} 안에 설치하거나 설정 → 에이전트에서 명령을 확인하세요.",
       "cliTooOld": "{{agent}} {{installedVersion}}은 채팅에 사용하기에는 너무 오래된 버전입니다. {{minimumVersion}} 이상으로 업데이트하세요.",
       "codexManagedNotSignedIn": "이 Codex 계정에 로그인하지 않았습니다. Codex 계정 설정에서 다시 로그인하세요.",
       "codexSystemNotSignedIn": "Codex에 로그인하지 않았습니다. `{{loginCommand}}`을 실행하세요.",
@@ -5193,7 +5193,9 @@
       "ask": {
         "replaced": "에이전트가 새 질문을 했습니다. 읽은 다음 답장하세요.",
         "replacedByNewer": "새 질문으로 대체됨",
-        "skipped": "건너뜀"
+        "skipped": "건너뜀",
+        "heldImagesLimit": "답변은 댓글 하나로 보내지며, 사진은 최대 {{max}}장까지 담을 수 있어요. 일부를 빼고 다시 시도해 주세요.",
+        "heldSkillsLimit": "답변은 댓글 하나로 보내지며, 스킬은 최대 {{max}}개까지 담을 수 있어요. 일부를 빼고 다시 시도해 주세요."
       }
     },
     "needs": {
@@ -5787,5 +5789,8 @@
     "cardSlot": {
       "working": "작업 중"
     }
+  },
+  "mcpServers": {
+    "agentBlocked": "조직의 Claude 설정에 의해 차단됨"
   }
 }

@@ -1239,6 +1239,11 @@
       "keywordDelay": "Verzögerung",
       "keywordCooldown": "Wartezeit",
       "keywordSecurity": "Sicherheit"
+    },
+    "mcpServers": {
+      "agents": {
+        "blocked": "Durch die Claude-Einstellungen deiner Organisation blockiert"
+      }
     }
   },
   "menu": {
@@ -12853,6 +12858,8 @@
             "unverifiable": "Nicht abgeschlossen: Orca konnte nicht feststellen, was auf diesem Server läuft. Erneut versuchen, sobald der Host erreichbar ist.",
             "migration": "Nicht abgeschlossen: Eine Verschiebung auf diesen Server ist noch nicht abgeschlossen. Diese zuerst fortsetzen.",
             "deferred": "Noch nicht abgeschlossen: Der Server ist dafür noch nicht bereit. Später erneut versuchen.",
+            "stopIncomplete": "Nicht abgeschlossen: Orca konnte nicht bestätigen, dass der aktuelle Server beendet wurde, und hat das Update daher nicht gestartet. Vor einem erneuten Versuch orcad.log im Installationsordner des Servers unter ~/.orca-remote auf dem Host prüfen.",
+            "rollbackStopIncomplete": "Nicht abgeschlossen: Orca konnte nicht bestätigen, dass der aktuelle Server beendet wurde, und hat daher nicht zurückgesetzt. Vor einem erneuten Versuch orcad.log im Installationsordner des Servers unter ~/.orca-remote auf dem Host prüfen.",
             "failed": "Orca konnte diesen Vorgang auf dem Server nicht abschließen. Erneut versuchen.",
             "defaultServer": "Nicht abgeschlossen: Dieser Server ist der Standard-Host für neue Projekte. Vor dem Stoppen unter „Neue Projekte öffnen auf“ einen anderen Host auswählen.",
             "wslMoveRunning": "Nicht abgeschlossen: Ein Projekt wird auf diesen Server verschoben. Orca aktualisiert ihn, sobald der Vorgang abgeschlossen ist."
@@ -22132,7 +22139,10 @@
     },
     "toastFallbacks": {
       "worktreeCreateFailed": "Worktree konnte nicht erstellt werden.",
-      "missingBaseBranchHelp": "Erstellen Sie einen ersten Commit (zum Beispiel auf main) oder wählen Sie unter „Erstellen von“ einen vorhandenen Branch aus und versuchen Sie es erneut."
+      "missingBaseBranchHelp": "Erstellen Sie einen ersten Commit (zum Beispiel auf main) oder wählen Sie unter „Erstellen von“ einen vorhandenen Branch aus und versuchen Sie es erneut.",
+      "baseBranchLookupFailedTitle": "Basis-Branch konnte nicht ermittelt werden",
+      "baseBranchLookupFailedMessage": "Git ist beim Ermitteln des Standard-Basis-Branches dieses Repositorys fehlgeschlagen oder hat das Zeitlimit überschritten.",
+      "baseBranchLookupFailedHelp": "Versuchen Sie es erneut oder wählen Sie unter „Erstellen von“ einen Basis-Branch aus."
     },
     "crash": {
       "report": {
@@ -25186,10 +25196,7 @@
         "lastItem": "Letztes Element",
         "previous": "Vorheriges Element",
         "next": "Nächstes Element",
-        "linkCount": "{{count}} Links",
-        "reply": "Antworten",
-        "replyAbove": "Antworten, weiter oben",
-        "replyBelow": "Antworten, weiter unten"
+        "subWhere": "Element {{number}} · {{chat}}"
       },
       "activity": {
         "linked": "hat {{links}} verknüpft",
@@ -25227,7 +25234,9 @@
         "notSentYet": "noch nicht gesendet",
         "replaced": "Der Agent hat eine neue Frage gestellt. Lies sie und antworte dann.",
         "replacedByNewer": "Durch eine neuere Frage ersetzt",
-        "skipped": "Übersprungen"
+        "skipped": "Übersprungen",
+        "heldImagesLimit": "Deine Antworten gehen als ein Kommentar, der höchstens {{max}} Bilder aufnimmt. Sende zuerst die bisher gehaltenen Antworten oder entferne einige.",
+        "heldSkillsLimit": "Deine Antworten gehen als ein Kommentar, der höchstens {{max}} Skills aufnimmt. Sende zuerst die bisher gehaltenen Antworten oder entferne einige."
       },
       "readMoreClosedFailed": "Weitere geschlossene Einträge konnten nicht gelesen werden"
     },

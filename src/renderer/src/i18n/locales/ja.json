@@ -388,7 +388,7 @@
         "importInvalid": "読み取れない行 {{count}} 件",
         "importUndecryptable": "{{count}} 件はブラウザで保護されているため、そのブラウザから CSV をエクスポートしてください",
         "imported": "{{count}} 件のパスワードをインポートしました",
-        "deleteAllConfirmDescription": "{{profile}} プロファイルに保存されているすべてのパスワードが完全に削除されます。この操作は元に戻せません。",
+        "deleteAllConfirmDescription": "{{profile}} プロファイルの保存済みパスワード、メモ、保存しないサイトがすべて完全に削除されます。この操作は元に戻せません。",
         "deletedAll": "パスワードデータを削除しました",
         "form": {
           "invalidSite": "example.com のようなウェブサイトのアドレスを入力してください。",
@@ -658,6 +658,7 @@
           "spaces": "スペース",
           "link": "リンク",
           "tabs": "タブ",
+          "tab_characters": "タブ文字",
           "trim": "トリム",
           "root": "ルート",
           "word_wrap": "行の折り返し",
@@ -932,6 +933,11 @@
     },
     "artifacts": {
       "teamDisabled": "アーティファクトの共有はチームによってオフにされています。"
+    },
+    "mcpServers": {
+      "agents": {
+        "blocked": "組織の Claude 設定によりブロックされています"
+      }
     }
   },
   "menu": {
@@ -12840,6 +12846,8 @@
             "unverifiable": "未完了: Orca はこのサーバーで何が実行中かを確認できませんでした。ホストに到達できるときに、もう一度お試しください。",
             "migration": "未完了: このサーバーへの移動が終わっていません。先に再開してください。",
             "deferred": "まだ未完了です: サーバーはこの操作の準備ができていません。しばらくしてから、もう一度お試しください。",
+            "stopIncomplete": "未完了: Orca は現在のサーバーが終了したことを確認できなかったため、更新を開始しませんでした。もう一度試す前に、ホストの ~/.orca-remote 内にあるサーバーのインストールフォルダーで orcad.log を確認してください。",
+            "rollbackStopIncomplete": "未完了: Orca は現在のサーバーが終了したことを確認できなかったため、ロールバックしませんでした。もう一度試す前に、ホストの ~/.orca-remote 内にあるサーバーのインストールフォルダーで orcad.log を確認してください。",
             "failed": "Orca はサーバー上でこれを完了できませんでした。もう一度お試しください。",
             "defaultServer": "実行されませんでした: このサーバーは新しいプロジェクトの既定のホストです。停止する前に「新しいプロジェクトを開く場所」で別のものを選んでください。",
             "wslMoveRunning": "未完了: このサーバーへプロジェクトを移動中です。移動が完了すると Orca が更新します。"
@@ -22361,6 +22369,9 @@
       "fileRenameFailed": "「{{name}}」の名前を変更できませんでした。",
       "worktreeCreateFailed": "ワークツリーを作成できませんでした。",
       "missingBaseBranchHelp": "初回コミットを作成する（例: main 上で）か、「作成元」で既存のブランチを選択してから、もう一度お試しください。",
+      "baseBranchLookupFailedTitle": "ベースブランチを確認できませんでした",
+      "baseBranchLookupFailedMessage": "このリポジトリの既定のベースブランチを確認中に Git が失敗したか、タイムアウトしました。",
+      "baseBranchLookupFailedHelp": "もう一度お試しいただくか、「作成元」でベースブランチを選択してください。",
       "dropTooManyPaths": "ドロップされたパスが多すぎます。",
       "dropPathsTooLarge": "ドロップされたパスのリストが大きすぎます。",
       "fileOwnerResolveFailed": "ファイルの所有者を解決できませんでした。"
@@ -26339,10 +26350,7 @@
         "lastItem": "最後の項目",
         "previous": "前の項目",
         "next": "次の項目",
-        "linkCount": "リンク{{count}}件",
-        "reply": "返信",
-        "replyAbove": "上の質問に返信",
-        "replyBelow": "下の質問に返信"
+        "subWhere": "項目 {{number}} · {{chat}}"
       },
       "activity": {
         "linked": "が {{links}} をリンクしました",
@@ -26380,7 +26388,9 @@
         "notSentYet": "まだ送信されていません",
         "replaced": "Agent が新たな質問をしました。確認してから返信してください。",
         "replacedByNewer": "新しい質問に置き換えられました",
-        "skipped": "スキップ済み"
+        "skipped": "スキップ済み",
+        "heldImagesLimit": "回答は1件のコメントとして送信され、画像は{{max}}枚までです。保留中の回答を先に送信するか、いくつか削除してください。",
+        "heldSkillsLimit": "回答は1件のコメントとして送信され、スキルは{{max}}個までです。保留中の回答を先に送信するか、いくつか削除してください。"
       },
       "readMoreClosedFailed": "クローズ済みの項目をさらに読み込めませんでした"
     },

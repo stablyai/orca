@@ -6624,7 +6624,9 @@
         "replaced": "The agent asked a new question. Read it, then reply.",
         "replacedByNewer": "Replaced by a newer question",
         "skipped": "Skipped",
-        "notNow": "Not now"
+        "notNow": "Not now",
+        "heldImagesLimit": "Your answers go as one comment, which takes up to {{max}} photos. Remove some and try again.",
+        "heldSkillsLimit": "Your answers go as one comment, which takes up to {{max}} skills. Remove some and try again."
       },
       "readFailedClosedPage": "Couldn’t read more closed items.",
       "skillLimit": "Message not sent. Keep at most {{limit}} selected skill files and try again."
@@ -8626,6 +8628,7 @@
     "agents": "Agents",
     "turnAllOn": "Turn all on",
     "agentsUnread": "Couldn’t read the agents on this computer.",
+    "agentBlocked": "Blocked by your organization’s Claude settings",
     "advanced": "Advanced",
     "sharedProcess": "Share one process across agents",
     "sharedProcessNote": "Uses less memory. Runs outside the workspace folder.",

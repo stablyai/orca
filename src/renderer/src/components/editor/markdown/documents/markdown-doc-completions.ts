@@ -1,5 +1,6 @@
 import type { MarkdownDocument } from '../../../../../../shared/file-listing/file-document'
 import { isClipboardTextByteLengthOverLimit } from '../../../../../../shared/clipboard/clipboard-text'
+import { composeQuickOpenText } from '../../../../../../shared/quick-open/quick-open-path-search'
 
 export type MarkdownDocCompletionContext = {
   partial: string
@@ -16,6 +17,39 @@ export function isMarkdownDocCompletionQueryTooLarge(
 
 function normalizeCompletionText(value: string): string {
   return value.trim().replaceAll('\\', '/').toLowerCase()
+}
+
+type CompletionEntry = {
+  document: MarkdownDocument
+  name: string
+  relativePath: string
+  composedName: string
+  composedRelativePath: string
+}
+
+// Why: completion filtering runs per keystroke over up to 20k documents, so the normalized keys and
+// sort order are built once per listing instead of on every keystroke.
+const completionEntriesByDocuments = new WeakMap<readonly MarkdownDocument[], CompletionEntry[]>()
+
+function getCompletionEntries(documents: readonly MarkdownDocument[]): CompletionEntry[] {
+  let entries = completionEntriesByDocuments.get(documents)
+  if (!entries) {
+    entries = documents
+      .map((document) => {
+        const name = normalizeCompletionText(document.name)
+        const relativePath = normalizeCompletionText(document.relativePath)
+        return {
+          document,
+          name,
+          relativePath,
+          composedName: composeQuickOpenText(name),
+          composedRelativePath: composeQuickOpenText(relativePath)
+        }
+      })
+      .sort((a, b) => a.document.relativePath.localeCompare(b.document.relativePath))
+    completionEntriesByDocuments.set(documents, entries)
+  }
+  return entries
 }
 
 export function getMarkdownDocCompletionContext(
@@ -50,15 +84,19 @@ export function getMarkdownDocCompletionDocuments(
   }
 
   const normalizedPartial = normalizeCompletionText(partial)
-  return documents
-    .filter((document) => {
-      if (!normalizedPartial) {
-        return true
-      }
-      return (
-        normalizeCompletionText(document.name).startsWith(normalizedPartial) ||
-        normalizeCompletionText(document.relativePath).startsWith(normalizedPartial)
-      )
-    })
-    .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
+  // Why: macOS lists names as stored, often decomposed (NFD), while typed text is usually composed
+  // (NFC). Compare as stored first so every earlier match stays, then compare both sides composed.
+  const composedPartial = composeQuickOpenText(normalizedPartial)
+  const matches: MarkdownDocument[] = []
+  for (const entry of getCompletionEntries(documents)) {
+    if (
+      entry.name.startsWith(normalizedPartial) ||
+      entry.relativePath.startsWith(normalizedPartial) ||
+      entry.composedName.startsWith(composedPartial) ||
+      entry.composedRelativePath.startsWith(composedPartial)
+    ) {
+      matches.push(entry.document)
+    }
+  }
+  return matches
 }

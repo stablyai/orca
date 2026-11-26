@@ -12,10 +12,36 @@ import type { MobileNativeChatAskDraft } from '../../session/native-chat/input/p
 // Each item's unsent answer card, for this app session: leaving the item and opening it again shows
 // the picks and typed words as they were. One per item, for the ask it answers: it goes when the
 // host's read names a newer ask or the item closes, and a newer ask's card takes its place.
+// An open item page reads the host for its own card; the bot's item list reads every item's state,
+// so a card whose item closed elsewhere after you left it goes with the next list read. No count
+// cap: a card can only drop on the host's word, so an open item's unsent words are never lost, and
+// what stays is one card per item still open when last read.
+// What the list can't retire, as it holds no waiting ask: a card whose ask was answered or replaced
+// elsewhere on an item that stays open (until that item's page opens again or it closes), and cards
+// of items closed past the Closed pages read since, deleted, or on a host removed.
+// Each is one entry per item ever typed into (about 1 KiB), in memory for this app session only.
+// The clock counts what the phone saw in order, not the host's: a slow page read that still shows
+// the ask waiting re-stamps its card, so a list read asked before that can't drop it.
 const drafts = new Map<
   string,
-  { askId: string; questions: Readonly<Record<string, MobileNativeChatAskDraft>> }
+  {
+    askId: string
+    questions: Readonly<Record<string, MobileNativeChatAskDraft>>
+    /** When the card was last saved or shown waiting, so a list read asked earlier can't drop it. */
+    at: number
+  }
 >()
+let clock = 0
+
+/** The key of an item's card: the item on its host, as two hosts can hold the same ids. */
+export function botItemAskCardKey(hostKey: string, botId: string, uid: string): string {
+  return `${hostKey}\0${botId}\0${uid}`
+}
+
+/** Taken before a list read is asked: cards saved after it are newer than what the read says. */
+export function botItemAskCardDraftsClock(): number {
+  return clock
+}
 
 /** The card's answers for `askId` on the item `itemKey` names on its host. */
 export function readBotItemAskCardDraft(
@@ -36,7 +62,7 @@ export function saveBotItemAskCardDraft(
     Object.entries(questions).filter(([, { picks, other }]) => picks.length > 0 || other)
   )
   if (Object.keys(kept).length > 0) {
-    drafts.set(itemKey, { askId, questions: kept })
+    drafts.set(itemKey, { askId, questions: kept, at: ++clock })
   } else {
     drafts.delete(itemKey)
   }
@@ -64,5 +90,32 @@ export function retireBotItemAskCardDraft(
       : botItemQuestionPairing(item, events).questions.get(draft.askId)?.waiting === false)
   if (over) {
     drafts.delete(itemKey)
+  } else {
+    // Still waiting, on a page open now: a list read asked before this one can't drop it.
+    draft.at = ++clock
+  }
+}
+
+/** Drops the cards of the bot's items a list read shows closed. The list holds no waiting ask, so
+ *  an open item's card stays for its page's read to judge; a card saved or shown waiting after the
+ *  read was asked (`askedAt`, from `botItemAskCardDraftsClock`) stays, as the item may have reopened. */
+export function retireClosedBotItemAskCardDrafts(
+  hostKey: string,
+  botId: string,
+  items: readonly Pick<BotItem, 'uid' | 'status'>[],
+  askedAt: number
+): void {
+  if (drafts.size === 0) {
+    return
+  }
+  for (const item of items) {
+    if (item.status !== 'done' && item.status !== 'canceled') {
+      continue
+    }
+    const key = botItemAskCardKey(hostKey, botId, item.uid)
+    const draft = drafts.get(key)
+    if (draft && draft.at <= askedAt) {
+      drafts.delete(key)
+    }
   }
 }

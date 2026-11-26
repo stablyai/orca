@@ -642,6 +642,11 @@
       "keywordDelay": "retraso",
       "keywordCooldown": "espera",
       "keywordSecurity": "seguridad"
+    },
+    "mcpServers": {
+      "agents": {
+        "blocked": "Bloqueado por la configuración de Claude de tu organización"
+      }
     }
   },
   "menu": {
@@ -12498,6 +12503,8 @@
             "unverifiable": "No se hizo: Orca no pudo confirmar qué se ejecuta en este servidor. Inténtalo de nuevo cuando el host esté disponible.",
             "migration": "No se hizo: un movimiento a este servidor quedó sin terminar. Reanúdalo primero.",
             "deferred": "Aún no se hizo: el servidor no está listo para esto. Inténtalo más tarde.",
+            "stopIncomplete": "No se hizo: Orca no pudo confirmar que el servidor actual se cerró, así que no inició la actualización. Revisa orcad.log en la carpeta de instalación del servidor, dentro de ~/.orca-remote en el host, antes de volver a intentarlo.",
+            "rollbackStopIncomplete": "No se hizo: Orca no pudo confirmar que el servidor actual se cerró, así que no hizo la reversión. Revisa orcad.log en la carpeta de instalación del servidor, dentro de ~/.orca-remote en el host, antes de volver a intentarlo.",
             "failed": "Orca no pudo completar esto en el servidor. Inténtalo de nuevo.",
             "defaultServer": "No se hizo: este servidor es el host predeterminado para proyectos nuevos. Elige otro en «Los proyectos nuevos se abren en» antes de detenerlo.",
             "wslMoveRunning": "No se hizo: un proyecto se está moviendo a este servidor. Orca lo actualizará cuando termine el traslado."
@@ -25755,10 +25762,7 @@
         "lastItem": "Último elemento",
         "previous": "Elemento anterior",
         "next": "Elemento siguiente",
-        "linkCount": "{{count}} enlaces",
-        "reply": "Responder",
-        "replyAbove": "Responder, arriba",
-        "replyBelow": "Responder, abajo"
+        "subWhere": "Elemento {{number}} · {{chat}}"
       },
       "activity": {
         "linked": "enlazó {{links}}",
@@ -25796,7 +25800,9 @@
         "notSentYet": "aún no enviado",
         "replaced": "El agente ha hecho una nueva pregunta. Léela y luego responde.",
         "replacedByNewer": "Sustituida por una pregunta más reciente",
-        "skipped": "Omitidas"
+        "skipped": "Omitidas",
+        "heldImagesLimit": "Tus respuestas van en un solo comentario, que admite hasta {{max}} imágenes. Envía primero las respuestas guardadas hasta ahora o quita algunas.",
+        "heldSkillsLimit": "Tus respuestas van en un solo comentario, que admite hasta {{max}} habilidades. Envía primero las respuestas guardadas hasta ahora o quita algunas."
       },
       "readMoreClosedFailed": "No se pudieron leer más elementos cerrados"
     },

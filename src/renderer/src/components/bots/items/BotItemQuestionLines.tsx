@@ -13,10 +13,10 @@ import {
   type BotItemQuestionShape
 } from '../../../../../shared/bots/bot-item-ask'
 import {
-  botItemAnswersText,
   botItemAnswerWords,
   botItemUnsentAnswers
 } from '../../../../../shared/bots/bot-item-answer-lines'
+import { botItemHeldAnswersComment } from '../../../../../shared/bots/bot-item-held-answers'
 import {
   botItemShownAskEnd,
   type BotItemAskEnd
@@ -32,6 +32,7 @@ import {
   BOT_ITEM_OPEN_QUESTION,
   BotItemQuestionStep
 } from './BotItemQuestionStep'
+import { BotItemHeldAnswerAttachments, botItemShownAnswer } from './BotItemFoldedAnswer'
 import { useBotItemHeldAnswers } from './bot-item-held-answers'
 import type { BotItemQuickReplyActions } from './use-bot-item-question-steps'
 
@@ -115,17 +116,23 @@ export function BotItemQuestionLines({
             )
           }
           if (held && actions && unsent) {
+            const shown = botItemShownAnswer(held)
             return (
-              <BotItemAnswerLine
-                key={decision.question}
-                question={decision.question}
-                words={held}
-                // Not sent: into the box, to send as a comment.
-                onClick={() => {
-                  actions.recover(botItemAnswersText(shape, unsent))
-                  stored.hold(stored.held.map((entry, index) => (sent?.[index] ? entry : null)))
-                }}
-              />
+              <div key={decision.question}>
+                <BotItemAnswerLine
+                  question={decision.question}
+                  words={shown.words}
+                  // Not sent: into the box, its files and skills too, to send as a comment.
+                  onClick={() => {
+                    const { text, paths, skills } = botItemHeldAnswersComment(shape, unsent)
+                    // Held until the box's draft is saved, so a reload can't lose them.
+                    if (actions.restore({ words: text, images: paths, skills }, true)) {
+                      stored.hold(stored.held.map((entry, index) => (sent?.[index] ? entry : null)))
+                    }
+                  }}
+                />
+                <BotItemHeldAnswerAttachments images={shown.images} files={shown.files} />
+              </div>
             )
           }
           return (
