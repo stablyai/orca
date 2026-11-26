@@ -101,7 +101,7 @@ export function useCombinedSearch({
     updateActiveSearchState
   })
 
-  const { deferredResults, deferredIsLive, textRows, textError, textPending } =
+  const { deferredResults, deferredIsLive, textRows, textError, textNotice, textPending } =
     useCombinedTextResults({
       query,
       forcedShortQuery,
@@ -120,7 +120,8 @@ export function useCombinedSearch({
         textRows,
         textPending,
         namesError: hasQuery ? namesError : null,
-        textError
+        textError,
+        textNotice
       }),
     [
       deferredResults.results,
@@ -128,6 +129,7 @@ export function useCombinedSearch({
       nameMatches,
       namesError,
       textError,
+      textNotice,
       textPending,
       deferredIsLive,
       textRows

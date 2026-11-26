@@ -14,7 +14,7 @@ export type CombinedSearchHeadRow =
   | { type: 'name'; match: NameMatch }
   | { type: 'show-all'; total: number }
   | { type: 'no-results' }
-  | { type: 'error'; section: 'files' | 'text'; message: string }
+  | { type: 'error'; section: 'files' | 'text'; message: string; muted?: boolean }
   /** A capped source returned no rows it can show; more specific text would find them. */
   | { type: 'refine'; section: 'files' | 'text' }
 
@@ -42,7 +42,8 @@ export function createCombinedSearchRows({
   textRows,
   textPending,
   namesError = null,
-  textError = null
+  textError = null,
+  textNotice = null
 }: {
   /** null while the name listing is still loading. */
   names: (NameMatchResults & { truncated?: boolean }) | null
@@ -53,6 +54,8 @@ export function createCombinedSearchRows({
   textPending: boolean
   namesError?: string | null
   textError?: string | null
+  /** A known limit (scan skipped), shown muted rather than as a failure. */
+  textNotice?: string | null
 }): CombinedSearchRowModel {
   const head: CombinedSearchHeadRow[] = []
   if (namesError) {
@@ -75,15 +78,19 @@ export function createCombinedSearchRows({
       head.push({ type: 'show-all', total: names.total })
     }
   }
-  const tail = !textError && textResult && textRows.length > 0 ? textRows : []
-  if (textError) {
+  const textMessage = textError ?? textNotice
+  const tail = !textMessage && textResult && textRows.length > 0 ? textRows : []
+  if (textMessage) {
     head.push({ type: 'section', section: 'text', count: '' })
-    head.push({ type: 'error', section: 'text', message: textError })
+    head.push({ type: 'error', section: 'text', message: textMessage, muted: !textError })
   } else if (tail.length > 0 && textResult) {
     head.push({ type: 'section', section: 'text', count: formatTextMatchCount(textResult) })
   } else if (textResult?.truncated) {
     head.push({ type: 'section', section: 'text', count: '' })
     head.push({ type: 'refine', section: 'text' })
+  } else if (textPending) {
+    // Keep the header while a scan runs so the section never vanishes and nudges rows below it.
+    head.push({ type: 'section', section: 'text', count: '' })
   }
   // A capped or still-loading source may hide matches, so only a settled, complete miss says No results.
   if (head.length === 0 && names !== null && !names.truncated && !textPending) {

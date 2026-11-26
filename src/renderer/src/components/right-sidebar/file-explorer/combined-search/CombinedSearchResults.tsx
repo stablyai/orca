@@ -233,7 +233,12 @@ const CombinedSearchRowView = React.memo(function CombinedSearchRowView({
         </div>
       )
     case 'error':
-      return (
+      // A known limit reads like No results; only real failures are red.
+      return row.muted ? (
+        <div role="status" className="flex h-6 items-center px-2 text-xs text-muted-foreground">
+          {row.message}
+        </div>
+      ) : (
         <div
           role="alert"
           className="whitespace-pre-wrap break-words px-2 py-1 text-xs text-destructive"

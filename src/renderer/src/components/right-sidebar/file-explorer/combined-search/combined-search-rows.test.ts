@@ -106,7 +106,10 @@ describe('createCombinedSearchRows', () => {
     expect(keys(createCombinedSearchRows({ ...settled, textPending: false }))).toEqual([
       'no-results'
     ])
-    expect(createCombinedSearchRows({ ...settled, textPending: true }).count).toBe(0)
+    // The Text header stays while a scan runs, so the section never jumps; no global miss yet.
+    expect(keys(createCombinedSearchRows({ ...settled, textPending: true }))).toEqual([
+      'section:text'
+    ])
     expect(createCombinedSearchRows({ ...settled, names: null, textPending: false }).count).toBe(0)
   })
 })

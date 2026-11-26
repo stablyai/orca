@@ -45,12 +45,12 @@ export function useCombinedTextResults({
     () => buildSearchRows(deferredResults.results, collapsedFiles),
     [collapsedFiles, deferredResults.results]
   )
-  // A skipped scan settles its reason without an owner; any other error must come from the current owner.
-  const errorOwnerIsLive = storedResultOwner === null || isCurrentOwner(storedResultOwner)
-  const textError =
-    textQueryActive && committedQuery === query && errorOwnerIsLive
-      ? (searchState?.error ?? null)
-      : null
+  // A skipped scan settles its reason without an owner (a known limit, shown muted); any other error
+  // must come from the current owner.
+  const settledError =
+    textQueryActive && committedQuery === query ? (searchState?.error ?? null) : null
+  const textNotice = settledError && storedResultOwner === null ? settledError : null
+  const textError = settledError && isCurrentOwner(storedResultOwner) ? settledError : null
   // Results are null only before a scan settles (a settled miss is an empty result), so that is pending too.
   const textPending =
     textQueryActive &&
@@ -59,5 +59,5 @@ export function useCombinedTextResults({
       (storedResults === null && !searchState?.error) ||
       deferredLagging)
 
-  return { deferredResults, deferredIsLive, textRows, textError, textPending }
+  return { deferredResults, deferredIsLive, textRows, textError, textNotice, textPending }
 }

@@ -187,7 +187,7 @@ function CombinedSearchHarness({
         textResult: cappedNames || textUnavailable ? null : text,
         textRows: buildSearchRows(text, collapsed),
         textPending: false,
-        textError: textUnavailable ? 'Not available here' : null
+        textNotice: textUnavailable ? 'Not available here' : null
       }),
     [cappedNames, collapsed, names, text, textUnavailable]
   )
