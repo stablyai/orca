@@ -15236,8 +15236,7 @@
             "741ff8a0d2": "Push & Create {{value0}}"
           },
           "FileExplorer": {
-            "79b1537dd3": "Select a workspace to browse files",
-            "2f4483d6c4": "No files match this filter"
+            "79b1537dd3": "Select a workspace to browse files"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "New Folder",
@@ -15280,7 +15279,6 @@
             "31b4c3195d": "More Explorer Actions",
             "d95e30fe28": "Refresh Explorer",
             "6026b16950": "Collapse All",
-            "c1f3f3ec70": "Search file contents",
             "openInApp": "Open in {{app}}"
           },
           "FileExplorerTreeStatus": {
@@ -15393,17 +15391,6 @@
             "localPortInUse": "Port {{port}} is already in use. Choose a different local port.",
             "localPortRequiresPrivileges": "Port {{port}} requires elevated privileges. Use a local port ≥ 1024."
           },
-          "Search": {
-            "1abfb25a66": "Type to search in files",
-            "d56d140747": "Press Enter to search",
-            "98c8435e36": "Select a workspace to search",
-            "dcc294f28d": "(results truncated)",
-            "resultsInFiles": "{{results}} in {{files}}",
-            "resultCount_one": "{{count}} result",
-            "resultCount_other": "{{count}} results",
-            "fileCount_one": "{{count}} file",
-            "fileCount_other": "{{count}} files"
-          },
           "SearchFilters": {
             "01e4671ccf": "e.g. *.min.js, dist/**",
             "0a6412a895": "files to exclude",
@@ -15413,11 +15400,9 @@
           "SearchHeader": {
             "6234a5ef85": "Use Regular Expression",
             "4567e6e0b6": "Match Whole Word",
-            "464ae3974f": "Match Case",
-            "693cbeadd0": "Search"
+            "464ae3974f": "Match Case"
           },
           "SearchQueryRow": {
-            "queryLabel": "Search files",
             "clearLabel": "Clear search"
           },
           "SearchResultItems": {
@@ -16574,16 +16559,6 @@
             "description": "\"{{value0}}\" will be deleted. Once deleted, it will no longer be resumable from {{value1}}'s own command line either.",
             "remoteDescription": "\"{{value0}}\" will be deleted from {{value2}}. Once deleted, it will no longer be resumable from {{value1}}'s own command line either.",
             "confirm": "Delete"
-          },
-          "FileExplorerNameFilter": {
-            "26fb73c6e3": "Find files",
-            "4d5a6b2a49": "Clear file filter",
-            "7a9fb1e6aa": "Contents"
-          },
-          "FileExplorerViewSwitch": {
-            "c4e9a2b713": "Names",
-            "b3c8f1a902": "Filter files by name",
-            "f8a2c4d1e0": "Explorer search mode"
           },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "No file changes in this commit"
@@ -25478,20 +25453,29 @@
       "label": "Explorer root",
       "full": "Repository root",
       "back": "Back to {{path}}",
-      "searchScope": "Search scope: workspace files",
       "retry": "Retry",
       "sparseStatus": "Sparse checkout",
       "scopeDetails": "About sparse checkout scope",
       "scopeExplanation": "The folder picker changes what you see, not which files are checked out. Repository root includes the checked-out root and ancestor files.",
-      "searchExplanation": "Names filters the folder you are viewing. Contents searches across the workspace. Files omitted by sparse checkout are not searched.",
-      "findInFolder": "Find in {{path}}",
       "folderLoadError": "Could not load this folder:",
-      "emptyFolder": "No files in this folder"
+      "emptyFolder": "No files in this folder",
+      "combinedSearchExplanation": "Search finds file names in the folder you are viewing and text across the workspace. Files omitted by sparse checkout are not searched."
     },
     "trashFailed": {
       "titleRecycleBin": "Couldn't move '{{name}}' to the Recycle Bin. Delete it permanently?",
       "titleTrash": "Couldn't move '{{name}}' to the Trash. Delete it permanently?",
       "description": "This cannot be undone."
+    },
+    "combinedSearch": {
+      "text": "Text",
+      "filesIn": "Files in {{path}}",
+      "files": "Files",
+      "showAll": "Show all {{count}}",
+      "noResults": "No results",
+      "placeholder": "Search",
+      "placeholderScoped": "Search {{path}}",
+      "textInWorkspace": "Text in workspace",
+      "refine": "Too many matches"
     }
   },
   "sparsePreset": {
@@ -25765,7 +25749,7 @@
       "toggle": "Toggle search details",
       "active": "{{count}} active"
     },
-    "noResults": "No results. Try another search or adjust your filters."
+    "unavailable": "Not available here"
   },
   "workspaceDeletion": {
     "preferenceSaveFailed": "Could not save deletion preference",

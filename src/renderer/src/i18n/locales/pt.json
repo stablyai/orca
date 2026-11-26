@@ -11744,19 +11744,6 @@
             "archivedFolder": "Pasta arquivada",
             "activeFolder": "Pasta"
           },
-          "Search": {
-            "1abfb25a66": "Digite para buscar nos arquivos",
-            "d56d140747": "Pressione Enter para buscar",
-            "98c8435e36": "Selecione um espaço de trabalho para buscar",
-            "dcc294f28d": "(resultados truncados)",
-            "resultsInFiles": "{{results}} em {{files}}",
-            "resultCount_one": "{{count}} resultado",
-            "resultCount_other": "{{count}} resultados",
-            "resultCount_many": "{{count}} resultados",
-            "fileCount_one": "{{count}} arquivo",
-            "fileCount_other": "{{count}} arquivos",
-            "fileCount_many": "{{count}} arquivos"
-          },
           "SourceControlTextGenerationDialogForm": {
             "25fcd8e49a": "Salvar padrões",
             "d91b0a189d": "Salvar receita",
@@ -11789,7 +11776,6 @@
             "31b4c3195d": "Mais Ações do Explorador",
             "d95e30fe28": "Atualizar Explorador",
             "6026b16950": "Recolher Tudo",
-            "c1f3f3ec70": "Buscar no conteúdo dos arquivos",
             "openInApp": "Abrir em {{app}}"
           },
           "AiVaultSessionLimitMenu": {
@@ -11812,8 +11798,7 @@
             "startAgent": "Iniciar agente"
           },
           "FileExplorer": {
-            "79b1537dd3": "Selecione um espaço de trabalho para navegar pelos arquivos",
-            "2f4483d6c4": "Nenhum arquivo corresponde a este filtro"
+            "79b1537dd3": "Selecione um espaço de trabalho para navegar pelos arquivos"
           },
           "SearchFilters": {
             "01e4671ccf": "arquivos a excluir (ex.: *.min.js, dist/**)",
@@ -11824,8 +11809,7 @@
           "SearchHeader": {
             "6234a5ef85": "Usar Expressão Regular",
             "4567e6e0b6": "Corresponder Palavra Completa",
-            "464ae3974f": "Diferenciar Maiúsculas/Minúsculas",
-            "693cbeadd0": "Buscar"
+            "464ae3974f": "Diferenciar Maiúsculas/Minúsculas"
           },
           "SourceControlTextGenerationDialog": {
             "c5b7fa7cb6": "Salvar como padrão global",
@@ -11893,16 +11877,6 @@
             "remoteDescription": "\"{{value0}}\" será excluída de {{value2}}. Depois de excluída, também não poderá mais ser retomada pela linha de comando do {{value1}}.",
             "confirm": "Excluir"
           },
-          "FileExplorerNameFilter": {
-            "26fb73c6e3": "Encontrar arquivos",
-            "4d5a6b2a49": "Limpar filtro de arquivos",
-            "7a9fb1e6aa": "Conteúdo"
-          },
-          "FileExplorerViewSwitch": {
-            "c4e9a2b713": "Nomes",
-            "b3c8f1a902": "Filtrar arquivos por nome",
-            "f8a2c4d1e0": "Modo de busca do Explorador"
-          },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "Nenhuma alteração de arquivo neste commit"
           },
@@ -11929,7 +11903,6 @@
             "c76693e456": "Não foi possível carregar os arquivos deste espaço de trabalho:"
           },
           "SearchQueryRow": {
-            "queryLabel": "Buscar arquivos",
             "clearLabel": "Limpar busca"
           },
           "SearchResultItems": {
@@ -23996,13 +23969,10 @@
       "label": "Raiz do explorador",
       "full": "Raiz do repositório",
       "back": "Voltar para {{path}}",
-      "searchScope": "Escopo da busca: arquivos do espaço de trabalho",
       "retry": "Tentar novamente",
       "sparseStatus": "Checkout esparso",
       "scopeDetails": "Sobre o escopo do checkout esparso",
       "scopeExplanation": "O seletor de pastas altera o que você vê, não quais arquivos estão no checkout. A raiz do repositório inclui os arquivos da raiz e das pastas ancestrais que estão no checkout.",
-      "searchExplanation": "Nomes filtra a pasta que você está visualizando. Conteúdo pesquisa em todo o espaço de trabalho. Arquivos omitidos pelo checkout esparso não são pesquisados.",
-      "findInFolder": "Buscar em {{path}}",
       "folderLoadError": "Não foi possível carregar esta pasta:",
       "emptyFolder": "Nenhum arquivo nesta pasta"
     },
@@ -24231,8 +24201,7 @@
     "filters": {
       "toggle": "Alternar detalhes da busca",
       "active": "Filtros ativos: {{count}}"
-    },
-    "noResults": "Nenhum resultado. Tente outra busca ou ajuste os filtros."
+    }
   },
   "workspaceDeletion": {
     "preferenceSaveFailed": "Não foi possível salvar a preferência de exclusão",
