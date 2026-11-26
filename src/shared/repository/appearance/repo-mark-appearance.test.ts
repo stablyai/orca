@@ -58,4 +58,28 @@ describe('resolveRepoMarkAppearances', () => {
     const marks = resolveRepoMarkAppearances([repo('b', 2, { repoIcon: rocket })])
     expect(markOf(marks, 'b', 2)).toEqual({ icon: rocket, color: '#ef4444' })
   })
+
+  it('renders uncustomized projects as neutral folders when defaultStyle is folder, keeping custom icons and colors', () => {
+    const rocket = { type: 'lucide', name: 'Rocket' }
+    const marks = resolveRepoMarkAppearances(
+      [
+        repo('cityuhk', 1),
+        repo('research-platform', 2, { badgeColor: '#14b8a6' }),
+        repo('api', 3, { repoIcon: rocket })
+      ],
+      { defaultStyle: 'folder' }
+    )
+    expect(markOf(marks, 'cityuhk', 1)).toEqual({
+      icon: { type: 'lucide', name: 'Folder' },
+      color: '#737373'
+    })
+    expect(markOf(marks, 'research-platform', 2)).toEqual({
+      icon: { type: 'lucide', name: 'Folder' },
+      color: '#14b8a6'
+    })
+    expect(markOf(marks, 'api', 3)).toEqual({
+      icon: rocket,
+      color: '#ef4444'
+    })
+  })
 })

@@ -18,7 +18,7 @@ import {
   resolveRepoMarkAppearances
 } from '../../../../../shared/repository/appearance/repo-mark-appearance'
 import { getRepoLucideIconOptions, RepoIconGlyph } from '../repo-icon'
-import { useRepoMarkAppearance } from '../RepoMark'
+import { selectDefaultProjectBadgeStyle, useRepoMarkAppearance } from '../RepoMark'
 import type { ProjectRemoteDisplay } from './project-remote-display'
 import { ProjectIconSourcePanel } from './ProjectIconSourcePanel'
 
@@ -65,16 +65,17 @@ export function IconTile({
 /** Letters other projects already show, chosen or default, so suggestions stay distinct. */
 function useTakenMonograms(repo: Repo): string[] {
   const repos = useAppStore((state) => state.repos)
+  const defaultStyle = useAppStore(selectDefaultProjectBadgeStyle)
   const key = repoMarkKey(repo)
   return React.useMemo(() => {
     const taken: string[] = []
-    for (const [otherKey, appearance] of resolveRepoMarkAppearances(repos)) {
+    for (const [otherKey, appearance] of resolveRepoMarkAppearances(repos, { defaultStyle })) {
       if (otherKey !== key && appearance.icon.type === 'letters') {
         taken.push(appearance.icon.text)
       }
     }
     return taken
-  }, [repos, key])
+  }, [repos, defaultStyle, key])
 }
 
 export function useSuggestedMonogram(repo: Repo): string {

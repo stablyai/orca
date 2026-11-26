@@ -38,6 +38,7 @@ import { SidebarGroupByToggle } from './SidebarGroupByToggle'
 import { HideBotCreatedFilterRow } from '@/components/bots/HideBotCreatedFilterRow'
 import { withoutHiddenRepos } from '../../../../../../shared/project/catalog/hidden-projects'
 import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
+import { selectDefaultProjectBadgeStyle } from '@/components/repo/RepoMark'
 import { trackWorktreeCardStyleChanged } from '../../workspace-card/template/worktree-card-style-telemetry'
 
 export function useWorkspaceOptionsFilterBadge(): {
@@ -112,6 +113,49 @@ function CardStyleOption({ preserveWorkspaceBoardOpen }: OptionItemProps): JSX.E
         >
           <DropdownMenuRadioItem value="classic">{classicLabel}</DropdownMenuRadioItem>
           <DropdownMenuRadioItem value="experimental">{experimentalLabel}</DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  )
+}
+
+function ProjectBadgesOption({
+  preserveWorkspaceBoardOpen
+}: Pick<OptionItemProps, 'preserveWorkspaceBoardOpen'>): JSX.Element {
+  const t = useTranslate()
+  const style = useAppStore(selectDefaultProjectBadgeStyle)
+  const updateSettings = useAppStore((s) => s.updateSettings)
+  const lettersLabel = t('auto.components.repo.ProjectPeek.styleLetters', 'Letters')
+  const folderLabel = t('auto.components.repo.repo.icon.bed2674f9d', 'Folder')
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger>
+        <span className="flex flex-1 items-center justify-between gap-3">
+          <span>
+            {t(
+              'auto.components.sidebar.SidebarWorkspaceOptionsMenu.projectBadges',
+              'Project badges'
+            )}
+          </span>
+          <span className="text-2xs font-medium text-muted-foreground">
+            {style === 'folder' ? folderLabel : lettersLabel}
+          </span>
+        </span>
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent
+        className="w-44"
+        data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
+      >
+        <DropdownMenuRadioGroup
+          value={style}
+          onValueChange={(value) => {
+            if (value === 'letters' || value === 'folder') {
+              void updateSettings({ defaultProjectBadgeStyle: value })
+            }
+          }}
+        >
+          <DropdownMenuRadioItem value="letters">{lettersLabel}</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="folder">{folderLabel}</DropdownMenuRadioItem>
         </DropdownMenuRadioGroup>
       </DropdownMenuSubContent>
     </DropdownMenuSub>
@@ -269,10 +313,17 @@ export function WorkspaceOptionsMenuItems({
             return (
               <Fragment key={option.key}>
                 {(option.key === 'cardLayout' || option.key === 'cardDisplay') && (
-                  <CardStyleOption
-                    preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
-                    hostOptions={hostOptions}
-                  />
+                  <>
+                    <CardStyleOption
+                      preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
+                      hostOptions={hostOptions}
+                    />
+                    {repoCount > 0 && (
+                      <ProjectBadgesOption
+                        preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
+                      />
+                    )}
+                  </>
                 )}
                 <OptionItem
                   preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}

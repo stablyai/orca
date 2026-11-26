@@ -403,6 +403,10 @@
           "repositories_other": "{{count}} repositories",
           "seconds_one": "{{count}} second",
           "seconds_other": "{{count}} seconds"
+        },
+        "ProjectPeek": {
+          "appliedToAll_one": "Applied to {{count}} project",
+          "appliedToAll_other": "Applied to {{count}} projects"
         }
       },
       "right": {

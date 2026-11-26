@@ -1,18 +1,22 @@
 import React from 'react'
 import { toast } from 'sonner'
-import { RotateCcw } from 'lucide-react'
+import { Layers, RotateCcw } from 'lucide-react'
+import { useAppStore } from '@/store'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Repo } from '../../../../../shared/repository/repo-types'
+import type { DefaultProjectBadgeStyle } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
 import { explicitRepoMarkColor } from '../../../../../shared/repository/appearance/repo-mark-appearance'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../../../shared/repository/appearance/repo-badge-color'
 import { RepositoryIconColorSection } from '../../settings/repository/identity/RepositoryIconColorSection'
+import { useBulkRepoAppearance } from '../../settings/repository/identity/use-bulk-repo-appearance'
 import {
   useRepositoryIconActions,
   type RepoAppearanceUpdate
 } from '../../settings/repository/identity/use-repository-icon-actions'
+import { selectDefaultProjectBadgeStyle } from '../RepoMark'
 import type { ProjectRemoteDisplay } from './project-remote-display'
 import {
   GlyphPanel,
@@ -32,9 +36,14 @@ function autoColorFor(repo: Repo, autoColor: string): string {
   return explicitRepoMarkColor(repo.badgeColor) ?? autoColor
 }
 
-function iconStyleOf(repoIcon: Repo['repoIcon']): IconStyle {
-  // No chosen icon means the default letters.
-  if (repoIcon == null || repoIcon.type === 'letters') {
+function iconStyleOf(
+  repoIcon: Repo['repoIcon'],
+  defaultStyle: DefaultProjectBadgeStyle
+): IconStyle {
+  if (repoIcon == null) {
+    return defaultStyle === 'folder' ? 'icon' : 'letters'
+  }
+  if (repoIcon.type === 'letters') {
     return 'letters'
   }
   return repoIcon.type === 'image' ? 'picture' : 'icon'
@@ -52,8 +61,12 @@ export function ProjectAppearanceEditor({
   updateRepo: (repoId: string, updates: RepoAppearanceUpdate) => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const defaultStyle = useAppStore(selectDefaultProjectBadgeStyle)
   const actions = useRepositoryIconActions(repo, updateRepo)
-  const [style, setStyle] = React.useState<IconStyle>(() => iconStyleOf(repo.repoIcon))
+  const { canApplyToAll, applyToAll } = useBulkRepoAppearance(repo)
+  const [style, setStyle] = React.useState<IconStyle>(() =>
+    iconStyleOf(repo.repoIcon, defaultStyle)
+  )
   const suggestedLetters = useSuggestedMonogram(repo)
   // Why: opening Letters previews a suggestion; browsing away untouched must give the old icon back.
   const previewedFromRef = React.useRef<{ icon: RepoIcon | null } | null>(null)
@@ -65,7 +78,11 @@ export function ProjectAppearanceEditor({
   const chooseStyle = (next: IconStyle): void => {
     setStyle(next)
     // Letters need no further input, so switching to them previews the smart pick right away.
-    if (next === 'letters' && repo.repoIcon != null && repo.repoIcon.type !== 'letters') {
+    if (
+      next === 'letters' &&
+      repo.repoIcon?.type !== 'letters' &&
+      (repo.repoIcon != null || defaultStyle === 'folder')
+    ) {
       const previous = repo.repoIcon ?? null
       setIcon({ type: 'letters', text: suggestedLetters })
       previewedFromRef.current = { icon: previous }
@@ -146,10 +163,20 @@ export function ProjectAppearanceEditor({
           </TabsContent>
         </Tabs>
       </div>
-      <div className="flex items-center px-1.5 pb-2">
+      <div className="flex items-center justify-between gap-1 px-1.5 pb-2">
         <Button type="button" variant="ghost" size="xs" disabled={isDefault} onClick={reset}>
           <RotateCcw />
           {t('auto.components.repo.ProjectPeek.resetAppearance', 'Reset icon & color')}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          disabled={!canApplyToAll}
+          onClick={applyToAll}
+        >
+          <Layers />
+          {t('auto.components.repo.ProjectPeek.applyToAll', 'Apply to all')}
         </Button>
       </div>
     </>

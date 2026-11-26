@@ -1,14 +1,20 @@
 import { getRepoExecutionHostId } from '../../execution-host/execution-host'
+import type { DefaultProjectBadgeStyle } from '../../ui-chrome/ui-chrome-types'
 import type { Repo } from '../repo-types'
 import type { RepoIcon } from './repo-icon'
 import { suggestRepoMonogram } from './repo-monogram'
 import { DEFAULT_REPO_BADGE_COLOR, REPO_COLORS, normalizeRepoBadgeColor } from './repo-badge-color'
 
 export type RepoMarkAppearance = {
-  /** What the mark shows: the chosen icon, or default letters when none is set. */
+  /** What the mark shows: the chosen icon, or the configured fallback when none is set. */
   icon: RepoIcon
   /** Tint for lucide glyphs and the fill behind letters; images and emoji keep their own colors. */
   color: string
+}
+
+export type ProjectBadgeAppearanceSettings = {
+  /** Fallback badge for projects without a chosen icon: distinct letters (default) or a neutral folder icon. */
+  defaultProjectBadgeStyle?: DefaultProjectBadgeStyle
 }
 
 type RepoMarkInput = Pick<Repo, 'id' | 'badgeColor' | 'repoIcon' | 'addedAt' | 'displayName'> & {
@@ -24,6 +30,7 @@ export function repoMarkKey(
 }
 
 const LETTERS_GROUP = '\0letters'
+const DEFAULT_FOLDER_ICON: RepoIcon = { type: 'lucide', name: 'Folder' }
 
 function glyphKey(icon: RepoIcon): string | null {
   // Images and emoji render in their own colors, so only tintable glyphs join a color group.
@@ -37,13 +44,23 @@ function glyphKey(icon: RepoIcon): string | null {
   return icon.name
 }
 
-type MarkEntry = { repo: RepoMarkInput; icon: RepoIcon }
+type MarkEntry = { repo: RepoMarkInput; icon: RepoIcon; neutralFallback?: boolean }
 
 /**
- * Projects without a chosen icon show letters from their name, kept distinct from the letters
- * other projects show. Oldest first, so adding a project never relabels ones the user knows.
+ * Projects without a chosen icon show distinct letters by default, or a neutral folder icon when
+ * configured. Oldest first, so adding a project never relabels ones the user knows.
  */
-function withDefaultIcons(ordered: readonly RepoMarkInput[]): MarkEntry[] {
+function withDefaultIcons(
+  ordered: readonly RepoMarkInput[],
+  defaultStyle: DefaultProjectBadgeStyle
+): MarkEntry[] {
+  if (defaultStyle === 'folder') {
+    return ordered.map((repo) =>
+      repo.repoIcon
+        ? { repo, icon: repo.repoIcon }
+        : { repo, icon: DEFAULT_FOLDER_ICON, neutralFallback: true }
+    )
+  }
   const taken = new Set<string>()
   for (const repo of ordered) {
     if (repo.repoIcon?.type === 'letters') {
@@ -71,14 +88,16 @@ export function explicitRepoMarkColor(badgeColor: unknown): string | null {
  * auto-colored members of a glyph group take palette colors the group isn't using yet.
  */
 export function resolveRepoMarkAppearances(
-  repos: readonly RepoMarkInput[]
+  repos: readonly RepoMarkInput[],
+  options?: { defaultStyle?: DefaultProjectBadgeStyle }
 ): Map<string, RepoMarkAppearance> {
+  const defaultStyle = options?.defaultStyle ?? 'letters'
   const groups = new Map<string, MarkEntry[]>()
   const result = new Map<string, RepoMarkAppearance>()
   // Oldest first so adding a project never recolors the ones the user already knows.
   const ordered = [...repos].sort((a, b) => a.addedAt - b.addedAt || a.id.localeCompare(b.id))
-  for (const entry of withDefaultIcons(ordered)) {
-    const key = glyphKey(entry.icon)
+  for (const entry of withDefaultIcons(ordered, defaultStyle)) {
+    const key = entry.neutralFallback ? null : glyphKey(entry.icon)
     if (key === null) {
       result.set(repoMarkKey(entry.repo), {
         icon: entry.icon,

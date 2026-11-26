@@ -16,6 +16,9 @@ export type SourceControlGroupOrder = 'changes-first' | 'staged-first' | 'untrac
 // this version's sidebar treats it as 'default'.
 export type LeftSidebarAppearanceMode = 'default' | 'match-terminal' | 'tinted'
 
+/** Fallback badge shown when a project has no chosen icon. */
+export type DefaultProjectBadgeStyle = 'letters' | 'folder'
+
 /** Strategy for the prefix prepended to worktree branch names. */
 export type BranchPrefixStrategy = 'git-username' | 'custom' | 'none'
 

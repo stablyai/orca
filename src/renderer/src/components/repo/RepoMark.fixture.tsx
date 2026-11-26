@@ -1,4 +1,5 @@
 import type { Repo } from '../../../../shared/repository/repo-types'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { ProjectPeekPopover } from './project-peek/ProjectPeekPopover'
 import { RepoMark } from './RepoMark'
@@ -29,6 +30,25 @@ const REPOS: Repo[] = [
 export const disambiguated = defineFixture({
   width: 320,
   store: { repos: REPOS },
+  render: () => (
+    <div className="flex flex-col gap-2 p-3 text-xs">
+      {REPOS.map((r) => (
+        <div key={r.id} className="flex items-center gap-2">
+          <RepoMark repo={r} />
+          <span className="text-muted-foreground">{r.displayName}</span>
+        </div>
+      ))}
+    </div>
+  )
+})
+
+/** Uncustomized projects switch to neutral folder badges when defaultProjectBadgeStyle is folder. */
+export const folderDefault = defineFixture({
+  width: 320,
+  store: {
+    repos: REPOS,
+    settings: { ...getDefaultSettings('/Users/dev'), defaultProjectBadgeStyle: 'folder' }
+  },
   render: () => (
     <div className="flex flex-col gap-2 p-3 text-xs">
       {REPOS.map((r) => (
