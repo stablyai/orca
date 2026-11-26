@@ -42,7 +42,10 @@ export function closeOtherTerminalTabs(tabId: string, activeWorktreeId: string |
     }
     if (closeHostTerminalTabs) {
       // Why: prune the mirror immediately, then close on its authoritative host so snapshots converge.
-      closeLocalTerminalTabState(tab.id, { remoteCloseOwnedByHost: true })
+      closeLocalTerminalTabState(tab.id, {
+        remoteCloseOwnedByHost: true,
+        reopenEnvironmentId: runtimeEnvironmentId ?? undefined
+      })
       void closeWebRuntimeSessionTab({
         worktreeId: activeWorktreeId,
         tabId: tab.id,

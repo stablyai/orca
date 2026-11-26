@@ -10,6 +10,7 @@ export function closeLocalTerminalTabState(
     reason?: TerminalTabCloseReason
     captureRecentlyClosed?: boolean
     remoteCloseOwnedByHost?: boolean
+    reopenEnvironmentId?: string
     preserveWorktreeSelection?: boolean
     localPtyTeardownOwnedExternally?: boolean
     precomputedRetirementPlan?: TerminalTabRetirementPlan
