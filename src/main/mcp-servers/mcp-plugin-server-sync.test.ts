@@ -6,13 +6,13 @@ import { useBotToolCredentialsRoot } from '../bots/bot-tool-credentials'
 import { botToolsPath } from '../bots/bot-tools-file'
 import { botToolsEpoch } from '../bots/bot-tools-revision'
 import {
-  addMcpServer,
   listMcpServers,
   removeMcpServer,
   setMcpServerAgentEnabled,
   setMcpServerWorkspaces,
   updateMcpServer
 } from './mcp-host-list'
+import { addMcpServers } from './mcp-host-list-add'
 import { syncPluginMcpServers, type PluginMcpServer } from './mcp-plugin-server-sync'
 
 const dirs: string[] = []
@@ -40,8 +40,8 @@ const only = (...declared: PluginMcpServer[]) => ({ declared, held: new Set<stri
 
 it('keeps the user’s switches across plugin updates, writes nothing unchanged, and leaves their own servers alone', async () => {
   const folder = tempDir('mcp-plugin-servers-')
-  const yours = await addMcpServer(
-    { name: 'acme', command: 'acme-mcp', args: [] },
+  const [yours] = await addMcpServers(
+    [{ name: 'acme', command: 'acme-mcp', args: [] }],
     { nameGiven: true },
     folder
   )

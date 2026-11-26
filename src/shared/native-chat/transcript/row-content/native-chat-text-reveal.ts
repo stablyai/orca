@@ -15,6 +15,14 @@ export type NativeChatTextReveal = {
   source: string
   shown: number
   arrivals: TextArrival[]
+  /** The reply redraws whole each step, so for the rest of it, it shows only its saves, as main does. */
+  drawsWhole?: true
+  /** The save revision such a reply's text is from, so a remount takes any save made since. */
+  savedAt?: number
+  /** For such a reply, the time between its last two saves, which paces how each save is shown. */
+  saveGapMs?: number
+  /** The arrival time of the save whose first half is drawn, so a remount doesn't draw it again. */
+  halfDrawnAt?: number
 }
 
 /** The surface's frame clock; the reveal steps once a frame. */
@@ -22,6 +30,10 @@ export type NativeChatTextRevealFrames = {
   now: () => number
   request: (step: () => void) => number
   cancel: (frame: number) => void
+  /** How long the last step took to render, timed by the surface around that render alone. */
+  stepCost?: (ms: number) => void
+  /** Whether this reply's steps have been slow enough to show it redrawn whole each step. */
+  redrawsWhole?: () => boolean
 }
 
 function endsWord(char: string): boolean {
@@ -47,6 +59,15 @@ export function pacedTextEnd(text: string, position: number, holdPartialWord: bo
   return start
 }
 
+/** A reply redrawn whole stays so when its text is replaced. */
+function keptMode(
+  previous: NativeChatTextReveal
+): Pick<NativeChatTextReveal, 'drawsWhole' | 'savedAt' | 'saveGapMs'> {
+  return previous.drawsWhole
+    ? { drawsWhole: true, savedAt: previous.savedAt, saveGapMs: previous.saveGapMs }
+    : {}
+}
+
 export function arriveNativeChatText(
   previous: NativeChatTextReveal,
   source: string,
@@ -56,7 +77,7 @@ export function arriveNativeChatText(
     return previous
   }
   if (!source.startsWith(previous.source)) {
-    return { source, shown: source.length, arrivals: [] }
+    return { ...keptMode(previous), source, shown: source.length, arrivals: [] }
   }
   return {
     ...previous,
@@ -97,12 +118,28 @@ export function startNativeChatTextReveal(
   now: number,
   revealMs = NATIVE_CHAT_TEXT_REVEAL_DELAY_MS
 ): NativeChatTextReveal {
+  // A reply shown only at its saves resumes its save's reveal; newer live text waits for a save.
+  // One paced by its save gap resumes where it was, and its drawing times the rest.
+  if (remembered?.drawsWhole && streaming && text.startsWith(remembered.source)) {
+    return remembered.saveGapMs === undefined
+      ? advanceNativeChatText(remembered, now, revealMs)
+      : remembered
+  }
   // Text received while unmounted has no arrival timestamp: show it without adding latency.
   if (remembered?.source === text && streaming) {
     return advanceNativeChatText(remembered, now, revealMs)
   }
   const shown = streaming && !remembered && begun ? 0 : text.length
-  return arriveNativeChatText({ source: text.slice(0, shown), shown, arrivals: [] }, text, now)
+  return arriveNativeChatText(
+    {
+      ...(remembered ? keptMode(remembered) : {}),
+      source: text.slice(0, shown),
+      shown,
+      arrivals: []
+    },
+    text,
+    now
+  )
 }
 
 export function nativeChatTextAppended(previous: NativeChatTextReveal, text: string): boolean {
@@ -118,13 +155,17 @@ export function receiveNativeChatText(
   now: number,
   revealMs = NATIVE_CHAT_TEXT_REVEAL_DELAY_MS
 ): NativeChatTextReveal {
+  // Unchanged text whose reveal only its drawing steps (no delay to run out) needs no work.
+  if (revealMs === Infinity && !reducedMotion && text === previous.source) {
+    return previous
+  }
   const immediate =
     reducedMotion ||
     (!streaming &&
       !nativeChatTextAppended(previous, text) &&
       previous.shown === previous.source.length)
   return immediate
-    ? { source: text, shown: text.length, arrivals: [] }
+    ? { ...keptMode(previous), source: text, shown: text.length, arrivals: [] }
     : advanceNativeChatText(arriveNativeChatText(previous, text, now), now, revealMs)
 }
 
@@ -155,4 +196,108 @@ export function playNativeChatTextReveal(
     frames.cancel(frame)
     clearTimeout(deadline)
   }
+}
+
+/** A reply shown at its saves, once it has received text: the save it is at, and while paced by
+ *  its save gap, only its last arrival, which alone times the next draw. Unchanged text keeps its
+ *  object unless the save moved on (a save can keep the text and change only its attribution). */
+export function nativeChatSaveReceived(
+  next: NativeChatTextReveal,
+  previous: NativeChatTextReveal,
+  savedAt: number | undefined,
+  saveGapMs: number | undefined,
+  paced: boolean
+): NativeChatTextReveal {
+  if (next === previous) {
+    return next.savedAt === savedAt ? next : { ...next, savedAt }
+  }
+  return { ...next, arrivals: paced ? next.arrivals.slice(-1) : next.arrivals, savedAt, saveGapMs }
+}
+
+/** A save's redraw waits this long, a few times at most, while a key or click is waiting, so
+ *  typing is handled before a whole-reply redraw rather than after it. */
+const INPUT_WAIT_MS = 50
+const INPUT_WAITS = 4
+
+/** A reply shown at its saves shows each this long after the one before, at most, so a slow
+ *  stream doesn't hold its text back for longer. */
+const MAX_SAVE_GAP_MS = 8000
+
+/** Shows a save of a reply drawn whole in two redraws: half its unshown text at once and the rest
+ *  half the gap between saves after the save came, so its text keeps moving between saves instead
+ *  of jumping once and waiting. A save that comes sooner replaces the second redraw. Without a gap
+ *  (the first save, or the turn's last) the rest follows after the usual reveal delay. */
+export function playNativeChatSaveReveal(
+  reveal: NativeChatTextReveal,
+  onScreen: number,
+  step: (next: NativeChatTextReveal) => void,
+  /** Paced by the gap between saves while streaming; otherwise the usual reveal delay. */
+  paced: boolean,
+  inputPending: () => boolean = () => false,
+  now = performance.now()
+): () => void {
+  const gapMs = paced ? reveal.saveGapMs : undefined
+  const end = reveal.source.length
+  let current = reveal
+  const draw = (to: number, halfDrawnAt = current.halfDrawnAt): void => {
+    const shown = Math.max(to, current.shown)
+    const arrivals = shown < end ? current.arrivals : []
+    current = { ...current, shown, arrivals, halfDrawnAt }
+    step(current)
+  }
+  const timers = new Set<ReturnType<typeof setTimeout>>()
+  const later = (run: () => void, ms: number): void => {
+    const timer = setTimeout(() => {
+      timers.delete(timer)
+      run()
+    }, ms)
+    timers.add(timer)
+  }
+  const stop = (): void => timers.forEach(clearTimeout)
+  // A whole-reply redraw lets a waiting key or click go first.
+  const drawAfterInput = (to: number, halfDrawnAt?: number, waits = 0): void => {
+    if (waits < INPUT_WAITS && inputPending()) {
+      later(() => drawAfterInput(to, halfDrawnAt, waits + 1), INPUT_WAIT_MS)
+    } else {
+      draw(to, halfDrawnAt)
+    }
+  }
+  // Never back: the reveal may already show more than the screen does, or all of it.
+  const from = Math.max(onScreen, reveal.shown)
+  if (from >= end) {
+    return () => {}
+  }
+  const savedAt = reveal.arrivals.at(-1)?.at ?? now
+  const halfGap =
+    gapMs === undefined ? NATIVE_CHAT_TEXT_REVEAL_DELAY_MS : Math.min(MAX_SAVE_GAP_MS, gapMs) / 2
+  const wait = savedAt + Math.max(NATIVE_CHAT_TEXT_REVEAL_DELAY_MS, halfGap) - now
+  if (wait <= 0) {
+    drawAfterInput(end)
+    return stop
+  }
+  if (reveal.halfDrawnAt !== savedAt) {
+    // Recorded even when the midpoint adds nothing (one unfinished word), so it isn't sought again.
+    const middle = Math.max(from, pacedTextEnd(reveal.source, from + (end - from) / 2, true))
+    drawAfterInput(middle, savedAt)
+  }
+  later(() => drawAfterInput(end), wait)
+  return stop
+}
+
+/** Steps only when a clock that spaces its own steps fires (see `nativeChatRevealStepFrames`). */
+export function playNativeChatTextRevealOnClock(
+  current: () => NativeChatTextReveal,
+  step: (next: NativeChatTextReveal) => void,
+  frames: NativeChatTextRevealFrames,
+  revealMs = NATIVE_CHAT_TEXT_REVEAL_DELAY_MS
+): () => void {
+  const tick = (): void => {
+    const next = advanceNativeChatText(current(), frames.now(), revealMs)
+    step(next)
+    if (next.shown < next.source.length) {
+      frame = frames.request(tick)
+    }
+  }
+  let frame = frames.request(tick)
+  return () => frames.cancel(frame)
 }
