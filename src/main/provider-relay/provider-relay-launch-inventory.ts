@@ -244,40 +244,54 @@ export function forgetListedProviderRelayChat(chatKey: string): void {
   spawnTokens.delete(chatKey)
 }
 
-/** Chats whose last run's daemon start couldn't say at their last ask; a close forgets one. */
+/** Chats whose current run's daemon start couldn't say at their newest applied ask. */
 const unknownRuns = new Set<string>()
-/** Asks in flight per chat, and chats closed during one: a late `unknown` never outlives its close. */
-const asking = new Map<string, number>()
-const closedWhileAsking = new Set<string>()
+let askSeq = 0
+/**
+ * Per chat with an ask in flight: how many, and the newest ask a later answer, close, deletion or
+ * new run fenced off. An ask's verdict applies only when it started after that floor.
+ */
+const asks = new Map<string, { inFlight: number; floor: number }>()
 
-export function beginProviderRelayRunAsk(chatKey: string): void {
-  asking.set(chatKey, (asking.get(chatKey) ?? 0) + 1)
-  closedWhileAsking.delete(chatKey)
+/** Starts one ask; its number is passed back with its verdict. */
+export function beginProviderRelayRunAsk(chatKey: string): number {
+  const ask = asks.get(chatKey) ?? { inFlight: 0, floor: 0 }
+  ask.inFlight += 1
+  asks.set(chatKey, ask)
+  askSeq += 1
+  return askSeq
 }
 
-/** Ends one ask; a thrown ask (null) leaves the last verdict as it was. */
+/** Ends one ask; a thrown ask (null) or one older than the floor leaves the verdict as it was. */
 export function noteProviderRelayRunVerdict(
   chatKey: string,
+  seq: number,
   verdict: 'kept' | 'gone' | 'unknown' | null
 ): void {
-  if (verdict === 'unknown' && !closedWhileAsking.has(chatKey)) {
-    unknownRuns.add(chatKey)
-  } else if (verdict === 'kept' || verdict === 'gone') {
-    unknownRuns.delete(chatKey)
+  const ask = asks.get(chatKey)
+  if (!ask) {
+    return
   }
-  const left = (asking.get(chatKey) ?? 1) - 1
-  if (left > 0) {
-    asking.set(chatKey, left)
-  } else {
-    asking.delete(chatKey)
-    closedWhileAsking.delete(chatKey)
+  if (verdict !== null && seq > ask.floor) {
+    ask.floor = seq
+    if (verdict === 'unknown') {
+      unknownRuns.add(chatKey)
+    } else {
+      unknownRuns.delete(chatKey)
+    }
+  }
+  ask.inFlight -= 1
+  if (ask.inFlight <= 0) {
+    asks.delete(chatKey)
   }
 }
 
+/** Its chat closed or was deleted, or a new run replaced the one asked about. */
 export function forgetProviderRelayRunVerdict(chatKey: string): void {
   unknownRuns.delete(chatKey)
-  if (asking.has(chatKey)) {
-    closedWhileAsking.add(chatKey)
+  const ask = asks.get(chatKey)
+  if (ask) {
+    ask.floor = askSeq
   }
 }
 
@@ -302,6 +316,9 @@ export function keptRunningProviderRelayPid(chatKey: string): number | null {
 /** Ended relays found at launch are dropped once their chat cold-resumes. */
 /** `keepUnread`: output no app took stays with the daemon (it expires there); a deleted chat drops it. */
 export function dropListedProviderRelay(chatKey: string, keepUnread = false): void {
+  if (!keepUnread) {
+    forgetProviderRelayRunVerdict(chatKey)
+  }
   const relay = keptProviderRelay(chatKey)
   if (relay) {
     forgetKeptProviderRelay(chatKey, relay)

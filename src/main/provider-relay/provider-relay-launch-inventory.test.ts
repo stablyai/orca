@@ -6,6 +6,7 @@ import {
   listKeptProviderRelays,
   registerReattachableProviderRelayAgent,
   beginProviderRelayRunAsk,
+  dropListedProviderRelay,
   forgetProviderRelayRunVerdict,
   noteProviderRelayRunVerdict,
   providerRelayRunUnknown
@@ -63,23 +64,25 @@ describe('kept relays whose agent ended while no app was attached', () => {
 })
 
 describe("a chat's unknown run verdict", () => {
-  it('is never written back by an ask that ends after its chat closed, while a reopened ask still records it', () => {
-    beginProviderRelayRunAsk('c')
+  it('comes only from the newest ask that started after the last close, deletion or new run', () => {
+    // A starts, the chat closes, B starts and answers gone, then A answers unknown.
+    const a = beginProviderRelayRunAsk('c')
     forgetProviderRelayRunVerdict('c')
-    noteProviderRelayRunVerdict('c', 'unknown')
+    const b = beginProviderRelayRunAsk('c')
+    noteProviderRelayRunVerdict('c', b, 'gone')
+    noteProviderRelayRunVerdict('c', a, 'unknown')
     expect(providerRelayRunUnknown('c')).toBe(false)
 
-    beginProviderRelayRunAsk('c')
-    forgetProviderRelayRunVerdict('c')
-    beginProviderRelayRunAsk('c')
-    noteProviderRelayRunVerdict('c', 'unknown')
-    noteProviderRelayRunVerdict('c', 'unknown')
+    const c = beginProviderRelayRunAsk('c')
+    noteProviderRelayRunVerdict('c', c, 'unknown')
+    expect(providerRelayRunUnknown('c')).toBe(true)
+    const thrown = beginProviderRelayRunAsk('c')
+    noteProviderRelayRunVerdict('c', thrown, null)
     expect(providerRelayRunUnknown('c')).toBe(true)
 
-    beginProviderRelayRunAsk('c')
-    noteProviderRelayRunVerdict('c', null)
-    expect(providerRelayRunUnknown('c')).toBe(true)
-    forgetProviderRelayRunVerdict('c')
+    const late = beginProviderRelayRunAsk('c')
+    dropListedProviderRelay('c')
+    noteProviderRelayRunVerdict('c', late, 'unknown')
     expect(providerRelayRunUnknown('c')).toBe(false)
   })
 })
