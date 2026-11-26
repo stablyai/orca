@@ -30,7 +30,7 @@ export async function readBotTurnOrigin(
       conversationWorkspaceId: key ? workspaceOf(key.externalId) : null
     },
     undefined,
-    false
+    'newest'
   )
   return turn.originPlace ?? null
 }

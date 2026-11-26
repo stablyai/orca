@@ -81,6 +81,8 @@ export type BotActingTurnLookups = {
   automationPlace?: (run?: AutomationRunMessage) => BotWakingPlace | null
   /** The workspace of the conversation this session answers, from its link. */
   conversationWorkspaceId: string | null
+  /** Only whom the turn acts for: no preview of the person's message is made. */
+  askersOnly?: true
 }
 
 /** The people Orca recorded on a bot request: whom the chain acts for, who asked at its start, and
@@ -335,7 +337,7 @@ export function readBotActingTurnWithin(
           ...carried
         ]),
         askedBy: distinctAskers(askedBy),
-        request: requestTextOf(opener.item.body),
+        request: lookups.askersOnly ? null : requestTextOf(opener.item.body),
         actingOnRequestId: null,
         requestIds: [],
         wokenAt: opener.reading.wokenAt ?? null,

@@ -1,26 +1,62 @@
-// Whom a bot's closing chat acts for, kept on the close so the journal says whose work it was.
-import type { BotRequestAsker } from '../../../../shared/bots/bot-acts-for'
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import type { RpcContext } from '../core'
+// Whom a bot's closing turn acts for, kept on the close so the journal says whose work it was.
+import {
+  distinctAskers,
+  OWNER_ACTS_FOR,
+  type BotRequestAsker
+} from '../../../../shared/bots/bot-acts-for'
+import { turnActsForOwner } from '../../../bots/bot-request-asker'
+import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { BotItemWriter } from './bots-items-caller'
+import { readBotTurn } from './orchestration/messaging/bot-recipient'
 import { readFirstMessageActsFor } from './orchestration/messaging/bot-first-message-acts-for'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
-/** Whom the writer's chat acts for, kept on a close so the journal says whose work it was: its
- *  record, else its /clear root's first message when that conversation is already open (never
- *  opening one); unknown, never the owner, when neither says. Only who, not where they asked. */
+/** Whom the writer's running turn acts for, kept on a close so the journal says whose work it was:
+ *  read as every check reads a turn, so a teammate's request taken in the owner's own chat is
+ *  theirs, but by index alone from a chat already open, so a close costs the same however long the
+ *  chat ran. A turn that read can't place (a chat at rest, a crowded window, a failed read) keeps
+ *  whom the chat acts for, as closes did before they read turns. Only who, not where they asked. */
+export async function closingTurnActsFor(
+  runtime: OrcaRuntimeService,
+  writer: Pick<BotItemWriter, 'sessionId'> & { actor: Pick<BotItemWriter['actor'], 'chatId'> }
+): Promise<BotRequestAsker[]> {
+  // Read once, for the turn read and as its fallback.
+  const chat = await chatActsFor(runtime, writer.actor.chatId)
+  return whoOnly((await closingAskers(runtime, writer, chat)) ?? chat)
+}
+
+/** Whom the writer's chat acts for, as closes read it before they read turns. For a write that most
+ *  likely closes nothing, so it reads no turn. */
 export async function closingChatActsFor(
-  context: { runtime: Pick<RpcContext['runtime'], 'getOrchestrationDb'> },
+  runtime: OrcaRuntimeService,
   writer: { actor: Pick<BotItemWriter['actor'], 'chatId'> }
 ): Promise<BotRequestAsker[]> {
+  return whoOnly(await chatActsFor(runtime, writer.actor.chatId))
+}
+
+/** The chat's record, else its /clear root's first message when that conversation is already open
+ *  (never opening one); unknown, never the owner, when neither says. */
+async function chatActsFor(
+  runtime: OrcaRuntimeService,
+  root: string
+): Promise<readonly BotRequestAsker[]> {
   try {
-    const db = context.runtime.getOrchestrationDb()
-    const root = writer.actor.chatId
+    const db = runtime.getOrchestrationDb()
     const recorded = db.getBotConversationActsFor(root)?.actsFor
     const host = getStructuredAgentSessionHost()
     // Started in the same tick as the check, so it takes the open handle and can't reopen one.
     const reads = !recorded && host?.hasSession(root) ? host.journalReads(root) : null
-    const askers = recorded ?? (reads ? await readFirstMessageActsFor(db, reads, null) : null)
-    return (askers ?? [{ kind: 'unknown' }]).map((asker): BotRequestAsker =>
+    return recorded ?? (reads ? await readFirstMessageActsFor(db, reads, null) : null) ?? UNKNOWN
+  } catch (error) {
+    console.warn('[bots] could not read whom a closing chat acts for', error)
+    return UNKNOWN
+  }
+}
+
+function whoOnly(askers: readonly BotRequestAsker[]): BotRequestAsker[] {
+  // Without where they asked, the same person stamped in two workspaces is one.
+  return distinctAskers(
+    askers.map((asker): BotRequestAsker =>
       asker.kind === 'person'
         ? {
             kind: 'person',
@@ -32,8 +68,34 @@ export async function closingChatActsFor(
           }
         : asker
     )
+  )
+}
+
+async function closingAskers(
+  runtime: OrcaRuntimeService,
+  writer: Pick<BotItemWriter, 'sessionId'> & { actor: Pick<BotItemWriter['actor'], 'chatId'> },
+  chat: readonly BotRequestAsker[]
+): Promise<readonly BotRequestAsker[] | null> {
+  try {
+    const db = runtime.getOrchestrationDb()
+    const { turn } = await readBotTurn(runtime, db, writer.sessionId, undefined, {
+      indexedOnly: true,
+      root: writer.actor.chatId,
+      conversationActsFor: chat
+    })
+    // A device Orca can't place as the owner typed in it: the owner's chat, but not known to be them.
+    return turnActsForOwner(turn)
+      ? OWNER_ACTS_FOR
+      : turn.typedByAnother
+        ? [...turn.askers, { kind: 'unknown' }]
+        : turn.askers
   } catch (error) {
-    console.warn('[bots] could not read whom a closing chat acts for', error)
-    return [{ kind: 'unknown' }]
+    // A chat at rest, or a turn only the whole chat could place, is not read: an expected answer.
+    if (!(error instanceof Error && error.name === 'JournalWindowNotIndexed')) {
+      console.warn('[bots] could not read whom a closing turn acts for', error)
+    }
+    return null
   }
 }
+
+const UNKNOWN: readonly BotRequestAsker[] = [{ kind: 'unknown' }]

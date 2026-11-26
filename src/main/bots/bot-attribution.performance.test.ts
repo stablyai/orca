@@ -153,3 +153,22 @@ describe('STA-18558: attribution reads each submission once per read', () => {
     expect(read.typedByReads).toBe(126)
   })
 })
+
+// #49889: a close reads only whom its turn acts for, so it never builds a preview of the person's
+// message: the opener's text is read no times, however long it is.
+it('reads no text of the opener for an askers-only read', () => {
+  let textReads = 0
+  const block = Object.defineProperty({ type: 'text' as const, text: '' }, 'text', {
+    enumerable: true,
+    get: () => {
+      textReads += 1
+      return 'x'.repeat(1024 * 1024)
+    }
+  })
+  const opener: AgentJournalItemBody = { kind: 'message', role: 'user', blocks: [block] }
+  const items = runningTurn(opener)
+  const askers = readBotActingTurn(items, { ...lookups, askersOnly: true }, sendsOf(items))
+  expect([askers.request, textReads]).toEqual([null, 0])
+  // A reader that records the request still previews it.
+  expect(readBotActingTurn(items, lookups, sendsOf(items)).request).toHaveLength(500)
+})

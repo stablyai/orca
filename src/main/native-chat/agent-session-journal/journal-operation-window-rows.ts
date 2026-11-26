@@ -13,7 +13,13 @@ const WITHOUT_TOOL_OUTPUT = `CASE WHEN kind='tool-call' AND json_valid(payload_j
     '$.body.output.stored')
   ELSE payload_json END`
 
-const TURN_SHAPE = `AND (kind IN ('message','turn','status') OR turn_scope_kind='unknown')`
+// Whom a turn acts for is in its people's messages: the agent's prose and reasoning are left out by
+// their indexed role, unread. A row of no known turn stays (it ends a turn's reach), its text emptied.
+const AGENT_PROSE = `kind='message' AND message_role IN ('assistant','reasoning')`
+const TURN_SHAPE = `AND ((kind IN ('message','turn','status') AND NOT (${AGENT_PROSE}))
+  OR turn_scope_kind='unknown')`
+const withoutProse = (projected: string) => `CASE WHEN ${AGENT_PROSE} AND json_valid(payload_json)
+  THEN json_set(payload_json,'$.body.blocks',json('[]')) ELSE ${projected} END`
 
 // Rows share one reply: past this total, the largest have their tool output or patch cut.
 const WINDOW_BYTES = JOURNAL_READER_REPLY_BYTE_LIMIT / 2
@@ -35,7 +41,8 @@ export function readOperationWindowItems(
   /** Rows before this sequence only; null runs to the head. */
   end: number | null = null
 ): AgentJournalRenderItem[] {
-  const projected = anchors.withoutToolOutput ? WITHOUT_TOOL_OUTPUT : 'payload_json'
+  const stored = anchors.withoutToolOutput ? WITHOUT_TOOL_OUTPUT : 'payload_json'
+  const projected = anchors.turnShape ? withoutProse(stored) : stored
   const rows = `FROM journal_items INDEXED BY journal_items_visible_position
     WHERE session_id=? AND epoch=? AND hidden=0 AND sequence>=? AND sequence<? ${anchors.turnShape ? TURN_SHAPE : ''}`
   const range = [start, end ?? Number.MAX_SAFE_INTEGER] as const
@@ -52,7 +59,10 @@ export function readOperationWindowItems(
   }
   // Plain sizes cost no parse; only a window past the budget sizes rows as projected.
   const sizes = scope.db
-    .prepare(`SELECT item_id, octet_length(payload_json) AS bytes, ${CUTTABLE} AS cuttable ${rows}`)
+    .prepare(
+      `SELECT item_id, octet_length(${anchors.turnShape ? projected : 'payload_json'}) AS bytes,
+        ${CUTTABLE} AS cuttable ${rows}`
+    )
     .all(...scope.prefix, ...range)
     .map((row) => ({
       itemId: String(row.item_id),

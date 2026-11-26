@@ -8,6 +8,7 @@ import { automationPlace } from './bot-automation-place'
 import { botOfAddress, parseBotAddress } from '../../../../../../shared/bot-roster'
 import { botOfSession } from '../../../../../bots/bot-session-tabs'
 import { requireStructuredHost } from '../../../../../bots/bot-chat-session'
+import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { readBotConversationActsFor } from '../../../../../bots/bot-conversation-acts-for'
 import {
   readBotActingTurn,
@@ -252,13 +253,31 @@ export async function readActingSender(
       }
 }
 
+const atRest = () =>
+  Object.assign(new Error('the chat is at rest'), { name: 'JournalWindowNotIndexed' })
+
 /** What a bot's chat is doing now: who its running turn is for, and the conversation it answers.
  *  With `opening`, the turn that message is about to open, read from it alone, not the journal. */
 export async function readBotTurn(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
   sessionId: string,
-  opening?: AgentJournalMessageItem
+  opening?: AgentJournalMessageItem,
+  /** Only whom the turn acts for, by index alone: where an automation's run happened is not read,
+   *  the conversation's record is taken as saved, a chat or /clear root at rest is not opened, and a
+   *  turn only the whole chat could place throws `JournalWindowNotIndexed`, as does a chat at rest,
+   *  so the read's cost never grows with the chat's history. */
+  {
+    indexedOnly = false,
+    root: knownRoot,
+    conversationActsFor
+  }: {
+    indexedOnly?: boolean
+    /** The session's /clear root when the caller already resolved it, so it isn't walked again. */
+    root?: string
+    /** Whom the conversation acts for when the caller already read it, so it isn't read again. */
+    conversationActsFor?: readonly BotRequestAsker[]
+  } = {}
 ): Promise<{
   turn: BotActingTurn
   conversation: BotRequestConversation | null
@@ -266,18 +285,34 @@ export async function readBotTurn(
   actsFor: BotRequestAsker[]
   triggeredBy: AutomationTriggeredBy | null
 }> {
-  const key = runtime.getExternalConversationSeam()?.replyTarget(chatPaneKey(sessionId))?.key
+  // Index-only skips the reply target: finding it can walk every conversation link.
+  const key = indexedOnly
+    ? undefined
+    : runtime.getExternalConversationSeam()?.replyTarget(chatPaneKey(sessionId))?.key
   const conversation = key ? { source: key.source, externalId: key.externalId } : null
   const workspaceId = conversation ? workspaceOf(conversation.externalId) : null
-  const host = await requireStructuredHost(runtime)
-  const root = isOrcaSessionId(sessionId) ? canonicalOrcaSessionId(sessionId) : sessionId
-  let recorded = readBotConversationActsFor(runtime, root)
-  if (!recorded) {
+  // Index-only takes the host as it is: installing one, perhaps just retired, is no optional read's.
+  const host = indexedOnly ? getStructuredAgentSessionHost() : await requireStructuredHost(runtime)
+  if (!host) {
+    throw atRest()
+  }
+  const root =
+    knownRoot ?? (isOrcaSessionId(sessionId) ? canonicalOrcaSessionId(sessionId) : sessionId)
+  // Index-only takes the record as saved: an old automation run's repair looks through every run.
+  let recorded = conversationActsFor
+    ? { actsFor: [...conversationActsFor] }
+    : indexedOnly
+      ? db.getBotConversationActsFor(root)
+      : readBotConversationActsFor(runtime, root)
+  if (!recorded && (!indexedOnly || host.hasSession(root))) {
     // Conversations from before Orca recorded this, and ones a person opened: their first message
     // says, and is kept as the record.
     const first = await readFirstMessageActsFor(db, host.journalReads(root), workspaceId)
     if (first) {
-      db.recordBotConversationActsFor(root, { actsFor: first })
+      // Not kept from an index-only read, which doesn't know the conversation's workspace.
+      if (!indexedOnly) {
+        db.recordBotConversationActsFor(root, { actsFor: first })
+      }
       recorded = { actsFor: first }
     }
   }
@@ -286,13 +321,27 @@ export async function readBotTurn(
     isBotRequest: (messageId: string) => db.getBotRequest(messageId) !== undefined,
     botRequestActsFor: (messageId: string) => botRequestActsFor(db, messageId),
     conversationActsFor: actsFor,
-    automationPlace: (run?: AutomationRunMessage) =>
-      automationPlace(runtime, sessionId, run, conversation),
-    conversationWorkspaceId: workspaceId
+    ...(indexedOnly
+      ? {}
+      : {
+          automationPlace: (run?: AutomationRunMessage) =>
+            automationPlace(runtime, sessionId, run, conversation)
+        }),
+    conversationWorkspaceId: workspaceId,
+    ...(indexedOnly ? { askersOnly: true as const } : {})
+  }
+  if (!opening && indexedOnly && !host.hasSession(sessionId)) {
+    // Opening a chat at rest can convert its whole history first. Checked in the tick that reads.
+    throw atRest()
   }
   const turn = opening
     ? readBotActingTurn([openingItem(opening)], lookups, [])
-    : await readNewestBotActingTurn(await host.journalReads(sessionId), lookups)
+    : await readNewestBotActingTurn(
+        await host.journalReads(sessionId),
+        lookups,
+        undefined,
+        indexedOnly ? 'indexed' : 'widening'
+      )
   // The prompt that opened the turn names its event; a conversation an automation or request started keeps it.
   const triggeredBy = turn.triggeredBy ?? recorded?.triggeredBy ?? null
   return { turn, conversation, actsFor, triggeredBy }

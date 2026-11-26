@@ -18,6 +18,8 @@ import { codexTurnLifecycleIdentity } from '../../codex/structured/journal/codex
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { readNewestBotActingTurn } from '../../bots/bot-acting-turn-read'
+import { OWNER_ACTS_FOR } from '../../../shared/bots/bot-acts-for'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 // #47529: opening one ended turn of a bot group room reads it through the operation window. Guards
@@ -60,7 +62,9 @@ function chat(
   /** Every send in one family: a chain (each shares a provider id with one neighbour and a card with
    *  the other), one queued card they all carry, or one answering turn they all name (the newest).
    *  Or `unsettled`: every send before the newest ten handed over, and never known answered. */
-  family?: 'chain' | 'card' | 'answered' | 'unsettled'
+  family?: 'chain' | 'card' | 'answered' | 'unsettled',
+  /** What each message the last turn wrote says. */
+  lastTurnText = 'note'
 ): Database {
   const chained = family === 'chain'
   const directory = mkdtempSync(join(tmpdir(), 'orca-operation-window-'))
@@ -181,7 +185,11 @@ function chat(
       {
         kind: 'item',
         identity: { provider: 'orca', clientMessageId: `note-${message}` },
-        body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'note' }] },
+        body: {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'text', text: lastTurnText }]
+        },
         options: { turnScope: { kind: 'thread' }, fence: 1 }
       },
       now++
@@ -536,7 +544,7 @@ it('stops its look back for the turn ahead at the nearest match, however long th
     })
     const prepare = db.prepare.bind(db)
     db.prepare = (sql: string) => {
-      probes += sql.includes('OFFSET') ? 1 : 0
+      probes += sql.includes('DESC LIMIT 1 OFFSET') ? 1 : 0
       const prompt = "kind='message' AND message_role='user'"
       return prepare(sql.replaceAll(prompt, `tested(${prompt})`))
     }
@@ -552,4 +560,112 @@ it('stops its look back for the turn ahead at the nearest match, however long th
     { found: true, tested: 1, probes: 0 },
     { found: true, tested: 1, probes: 0 }
   ])
+})
+
+// #49889: a bot's close reads whom its turn acts for by index alone. An unanswered send at the
+// chat's start would pin a widening read back to the whole chat; this one examines the same rows.
+it("reads a closing turn's askers with the same work however long the chat ran, an old unanswered send included", async () => {
+  const examined = async (turns: number) => {
+    const db = chat(turns, () => true, 0)
+    const scope = new JournalSqlScope(db, 'chat', 'epoch')
+    const turn = await readNewestBotActingTurn(
+      { operationWindow: async (anchors) => readJournalDomainOperationWindow(scope, anchors) },
+      {
+        isBotRequest: () => false,
+        botRequestActsFor: () => null,
+        conversationActsFor: OWNER_ACTS_FOR,
+        conversationWorkspaceId: null
+      },
+      undefined,
+      'indexed'
+    )
+    db.close()
+    return { rows: scope.work.rows, opener: turn.rootItemId !== null }
+  }
+  expect([await examined(500), await examined(5_000)]).toEqual([
+    { rows: 18, opener: true },
+    { rows: 18, opener: true }
+  ])
+})
+
+// #49889: the close's newest-turn lookup once tested every turn row behind the newest root turn. A
+// subagent's lifecycle rows (kept from older builds) are turn rows but no root turn; it now tests no
+// more than an admitted window could hold, and refuses past that.
+it('finds the newest root turn testing no more turn rows than a window holds, however many a subagent wrote', () => {
+  const look = (subagentTurns: number) => {
+    const db = chat(1)
+    const turn = db
+      .prepare(
+        `SELECT * FROM journal_items WHERE kind='turn' AND root=1 ORDER BY sequence DESC LIMIT 1`
+      )
+      .get()
+    if (!turn) {
+      throw new Error('the chat has no root turn')
+    }
+    const columns = Object.keys(turn)
+    const insert = db.prepare(
+      `INSERT INTO journal_items (${columns.join(',')}) VALUES (${columns.map(() => '?').join(',')})`
+    )
+    db.pragma('synchronous = OFF')
+    db.exec('BEGIN')
+    for (let index = 1; index <= subagentTurns; index += 1) {
+      const row = { ...turn, item_id: `subagent-${index}`, turn_id: `subagent-${index}`, root: 0 }
+      insert.run(
+        ...columns.map((column) =>
+          column === 'sequence' ? Number(turn.sequence) + index : row[column]
+        )
+      )
+    }
+    db.exec('COMMIT')
+    let tested = 0
+    db.function('tested', (root) => ((tested += 1), root))
+    const prepare = db.prepare.bind(db)
+    db.prepare = (sql: string) => prepare(sql.replaceAll('root=1', 'tested(root)=1'))
+    const scope = new JournalSqlScope(db, 'chat', 'epoch')
+    let refused = false
+    try {
+      readJournalDomainOperationWindow(scope, {
+        latestTurns: 1,
+        anchorsOnly: true,
+        indexedOnly: true
+      })
+    } catch (error) {
+      refused = error instanceof JournalWindowNotIndexed
+    }
+    db.close()
+    return { refused, bounded: tested <= 4097 }
+  }
+  expect([look(5_000), look(50_000)]).toEqual([
+    { refused: true, bounded: true },
+    { refused: true, bounded: true }
+  ])
+})
+
+// #49889: whom a turn acts for is in its people's messages, so its read leaves out the agent's prose
+// by its indexed role: SQLite never parses it, and the bytes decoded stay the same however much the
+// newest turn wrote. The tally counts the payload bytes SQLite parses, through a wrapped json_valid.
+it("reads a turn's askers without the agent's prose, however much it wrote", () => {
+  const decoded = (bytes: number) => {
+    const db = chat(10, () => true, undefined, 0, 0, 1, undefined, 'x'.repeat(bytes))
+    let parsed = 0
+    db.function('parsed', (json) => ((parsed += String(json).length), 1))
+    const prepare = db.prepare.bind(db)
+    db.prepare = (sql: string) =>
+      prepare(sql.replaceAll('json_valid(payload_json)', 'parsed(payload_json)'))
+    const scope = new JournalSqlScope(db, 'chat', 'epoch')
+    const { snapshot } = readJournalDomainOperationWindow(scope, {
+      latestTurns: 1,
+      turnShape: true,
+      anchorsOnly: true,
+      indexedOnly: true
+    })
+    db.close()
+    const prose = snapshot.items.find(
+      (item) => item.body.kind === 'message' && item.body.role === 'assistant'
+    )
+    return { bytes: scope.work.decodedBytes, parsed, prose: prose !== undefined }
+  }
+  const short = decoded(1024 * 1024)
+  expect(decoded(10 * 1024 * 1024)).toEqual(short)
+  expect(short.prose).toBe(false)
 })

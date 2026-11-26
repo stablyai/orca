@@ -8,7 +8,7 @@ import { journalDomainContextHead } from './journal-sql-continuation-context'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import { readOperationWindowItems } from './journal-operation-window-rows'
-import { marginBefore } from './journal-operation-window-turn-ahead'
+import { marginBefore, newestRootTurn } from './journal-operation-window-turn-ahead'
 import { marginAfter } from './journal-operation-window-end'
 import {
   type Send,
@@ -62,7 +62,8 @@ export type JournalOperationWindowAnchors = {
    *  its cost never grows with the chat after them. Unanswered sends outside it do not come along. */
   throughAnchoredTurns?: boolean
   /** Only the rows that say who opened and ran each turn: messages, turn and status rows, and any
-   *  row of no known turn (it ends a turn's reach); never tool calls or diffs. */
+   *  row of no known turn (it ends a turn's reach); never tool calls, diffs, or the agent's prose
+   *  and reasoning (one of no known turn comes without its text). */
   turnShape?: boolean
 }
 
@@ -281,7 +282,9 @@ function anchorPositions(scope: JournalSqlScope, anchors: JournalOperationWindow
       typeof row.opener_item_id === 'string' ? itemAt(row.opener_item_id)?.sequence : undefined
     return [Number(row.sequence), ...(opener === undefined ? [] : [Number(opener)])]
   })
-  if (anchors.latestTurns !== undefined) {
+  if (anchors.latestTurns !== undefined && anchors.indexedOnly) {
+    positions.push(newestRootTurn(scope, anchors.latestTurns))
+  } else if (anchors.latestTurns !== undefined) {
     const turns = scope.db
       .prepare(`SELECT sequence FROM journal_items INDEXED BY journal_items_status_turn
       WHERE session_id=? AND epoch=? AND hidden=0 AND turn_id IS NOT NULL AND root=1

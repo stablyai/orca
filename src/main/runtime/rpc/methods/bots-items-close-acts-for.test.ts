@@ -1,26 +1,37 @@
-// Security invariant: a close keeps whom its chat acts for, read without opening a conversation,
-// and never the owner when Orca can't tell.
+// Security invariant: a close keeps whom its closing turn acted for, so a teammate's request taken
+// in the owner's own chat is never journaled as the owner's work, and never the owner when Orca
+// can't tell.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { BotRequestAsker } from '../../../../shared/bots/bot-acts-for'
+import { OWNER_ACTS_FOR, type BotRequestAsker } from '../../../../shared/bots/bot-acts-for'
+import type { BotConversationActsFor } from '../../orchestration/db/bot-requests/bot-conversation-acts-for-store'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
-import { closingChatActsFor } from './bots-items-close-acts-for'
+import type { OrcaRuntimeService } from '../../orca-runtime'
+import { closingChatActsFor, closingTurnActsFor } from './bots-items-close-acts-for'
 
+const CHAT = '11111111-1111-4111-8111-111111111111'
 const host = {
-  open: new Set<string>(),
-  firsts: new Map<string, AgentJournalRenderItem>(),
-  reads: new Array<string>(),
-  hasSession: (id: string) => host.open.has(id),
+  deps: {},
+  journals: new Map<string, AgentJournalRenderItem[]>(),
+  /** Whether the host is installed, and how many times a read asked to install it. */
+  installed: true,
+  installs: 0,
+  /** Chats a read opened from rest. */
+  opened: new Array<string>(),
+  hasSession: (id: string) => host.journals.has(id),
   journalReads: async (id: string) => {
-    host.reads.push(id)
-    if (!host.open.has(id)) {
-      throw new Error('opened a conversation')
+    if (!host.journals.has(id)) {
+      host.opened.push(id)
     }
-    return { promptItem: async () => host.firsts.get(id) ?? null }
+    const items = host.journals.get(id) ?? []
+    return {
+      operationWindow: async () => ({ complete: true, snapshot: { items, submissions: [] } }),
+      promptItem: async () => items[0] ?? null
+    }
   }
 }
 vi.mock('../../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
-  getStructuredAgentSessionHost: () => host
+  getStructuredAgentSessionHost: () => (host.installed ? host : undefined)
 }))
 
 const DANA: BotRequestAsker = {
@@ -41,57 +52,175 @@ const KEPT = {
   role: 'member'
 }
 
-function closing(root: string, records: Record<string, BotRequestAsker[]> = {}) {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the close reads only these two of the DB's methods.
-  const db = {
-    getBotConversationActsFor: (id: string) => (records[id] ? { actsFor: records[id] } : undefined),
-    getBotRequest: () => undefined
-  } as unknown as OrchestrationDb
-  return closingChatActsFor(
-    { runtime: { getOrchestrationDb: () => db } },
-    { actor: { chatId: root } }
-  )
+let sequence = 0
+function message(itemId: string, body: Record<string, unknown> = {}): AgentJournalRenderItem {
+  sequence += 1
+  return {
+    itemId,
+    revision: 0,
+    sequence,
+    observedAt: sequence,
+    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: itemId }], ...body }
+  }
 }
 
-describe('whom a close keeps its chat acting for', () => {
+/** Mail delivering the bot request `messageId` into the chat. */
+const requestMail = (messageId: string) =>
+  message(`mail-${messageId}`, {
+    from: {
+      kind: 'agent',
+      senders: [],
+      orchestration: {
+        message: 'mail-notice',
+        mailbox: 'asker',
+        dispatchId: null,
+        messages: [{ messageId, runId: 'run-1', from: 'asker' }]
+      }
+    }
+  })
+
+function closing(input: {
+  record?: BotConversationActsFor
+  journal?: AgentJournalRenderItem[]
+  requests?: Record<string, BotRequestAsker[]>
+}) {
+  host.journals.set(CHAT, input.journal ?? [])
+  const records = new Map<string, BotConversationActsFor>(
+    input.record ? [[CHAT, input.record]] : []
+  )
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the read uses only these of the DB's methods.
+  const db = {
+    getBotConversationActsFor: (id: string) => records.get(id),
+    recordBotConversationActsFor: (id: string, record: BotConversationActsFor) =>
+      records.has(id) || records.set(id, record),
+    getBotRequest: (id: string) => {
+      const askers = input.requests?.[id]
+      return askers ? { record: JSON.stringify({ askers }) } : undefined
+    }
+  } as unknown as OrchestrationDb
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the read uses only these of the runtime's methods.
+  const runtime = {
+    ensureStructuredAgentSessionHost: async () => {
+      host.installs += 1
+    },
+    getExternalConversationSeam: () => null,
+    getOrchestrationDb: () => db
+  } as unknown as OrcaRuntimeService
+  return {
+    close: () => closingTurnActsFor(runtime, { sessionId: CHAT, actor: { chatId: CHAT } }),
+    closeWithoutTurn: () => closingChatActsFor(runtime, { actor: { chatId: CHAT } }),
+    records
+  }
+}
+
+describe('whom a close keeps its closing turn acting for', () => {
   beforeEach(() => {
-    host.open.clear()
-    host.firsts.clear()
-    host.reads.length = 0
+    host.journals.clear()
+    host.opened.length = 0
+    host.installed = true
+    host.installs = 0
   })
 
-  it('keeps the record, naming who but not where', async () => {
-    expect(await closing('root', { root: [DANA] })).toEqual([KEPT])
-    expect(host.reads).toEqual([])
+  it("keeps a teammate's request taken in the owner's own chat as theirs, naming who but not where", async () => {
+    const { close } = closing({
+      record: { actsFor: [...OWNER_ACTS_FOR] },
+      journal: [requestMail('req-1')],
+      requests: { 'req-1': [DANA] }
+    })
+    expect(await close()).toEqual([{ kind: 'owner' }, KEPT])
   })
 
-  it("reads an open root's first message when there is no record", async () => {
-    host.open.add('root')
-    host.firsts.set('root', {
-      itemId: 'm1',
-      revision: 0,
-      sequence: 1,
-      observedAt: 1,
-      body: {
-        kind: 'message',
-        role: 'user',
-        blocks: [{ type: 'text', text: 'hi' }],
-        origin: 'connector',
-        asker: {
-          source: 'slack',
-          userId: 'U_DANA',
-          name: 'Dana',
-          role: 'member',
-          place: { kind: 'public_channel', id: 'C1' }
-        }
+  it("keeps the owner's own turn in the owner's chat as the owner's", async () => {
+    const { close } = closing({
+      record: { actsFor: [...OWNER_ACTS_FOR] },
+      journal: [message('typed')]
+    })
+    expect(await close()).toEqual([{ kind: 'owner' }])
+  })
+
+  it("never keeps a turn a device Orca can't place typed in as the owner's", async () => {
+    const { close } = closing({
+      record: { actsFor: [...OWNER_ACTS_FOR] },
+      journal: [message('typed', { typedBy: { by: 'device', deviceId: 'phone' } })]
+    })
+    expect(await close()).toEqual([{ kind: 'owner' }, { kind: 'unknown' }])
+  })
+
+  it("keeps a teammate chat's turn as the teammate's, by its first message when there is no record", async () => {
+    const { close, closeWithoutTurn, records } = closing({
+      journal: [
+        message('asked', {
+          origin: 'connector',
+          asker: {
+            source: 'slack',
+            userId: 'U_DANA',
+            name: 'Dana',
+            role: 'member',
+            place: { kind: 'public_channel', id: 'C1' }
+          }
+        })
+      ]
+    })
+    // A set to the status the item already has reads no turn, but still its chat's first message.
+    expect(await closeWithoutTurn()).toEqual([KEPT])
+    expect(await close()).toEqual([KEPT])
+    // A close names no workspace, so what it read is not kept as the chat's record.
+    expect(records.size).toBe(0)
+    // With no record and the chat at rest, unknown, and nothing opened.
+    const atRest = closing({})
+    host.journals.clear()
+    expect([await atRest.closeWithoutTurn(), host.opened]).toEqual([[{ kind: 'unknown' }], []])
+  })
+
+  it('keeps whom the chat acts for when only the whole chat could place the turn', async () => {
+    const reads = host.journalReads
+    host.journalReads = async (id: string) => ({
+      ...(await reads(id)),
+      operationWindow: async () => {
+        throw Object.assign(new Error('not indexed'), { name: 'JournalWindowNotIndexed' })
       }
     })
-    expect(await closing('root')).toEqual([KEPT])
+    const asked = message('asked', {
+      origin: 'connector',
+      asker: {
+        source: 'slack',
+        userId: 'U_DANA',
+        name: 'Dana',
+        role: 'member',
+        place: { kind: 'public_channel', id: 'C1' }
+      }
+    })
+    const results = [
+      await closing({ record: { actsFor: [DANA] }, journal: [message('typed')] }).close(),
+      // No record: the open chat's first message, as closes read it before they read turns.
+      await closing({ journal: [asked] }).close()
+    ]
+    host.journalReads = reads
+    expect(results).toEqual([[KEPT], [KEPT]])
   })
 
-  it('is unknown, opening nothing, when the root has no record and is not open', async () => {
-    host.open.add('continuation')
-    expect(await closing('root')).toEqual([{ kind: 'unknown' }])
-    expect(host.reads).toEqual([])
+  it("keeps the chat's record, opening nothing, when the chat is at rest", async () => {
+    const { close } = closing({ record: { actsFor: [DANA] }, journal: [requestMail('req-1')] })
+    host.journals.clear()
+    expect(await close()).toEqual([KEPT])
+    expect(host.opened).toEqual([])
+  })
+
+  it("keeps the chat's record when the read fails, and unknown when there is none", async () => {
+    const reads = host.journalReads
+    host.journalReads = async () => {
+      throw new Error('unreadable')
+    }
+    const results = await Promise.all([
+      closing({ record: { actsFor: [DANA] } }).close(),
+      closing({}).close()
+    ]).finally(() => (host.journalReads = reads))
+    expect(results).toEqual([[KEPT], [{ kind: 'unknown' }]])
+  })
+
+  it("keeps the chat's record, installing no host, when none is installed", async () => {
+    const { close } = closing({ record: { actsFor: [DANA] }, journal: [requestMail('req-1')] })
+    host.installed = false
+    expect([await close(), host.installs]).toEqual([[KEPT], 0])
   })
 })
