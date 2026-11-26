@@ -1,4 +1,5 @@
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
+import { once } from 'node:events'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { DaemonClient } from '../../../../daemon/transport/client/daemon-client'
 import type { ProviderRelayInfo } from '../../../../daemon/protocol/daemon-provider-relay-protocol'
@@ -58,11 +59,12 @@ const owner = (pid: number, processStartTimeMs: number | null = null) => ({
   spawnToken: 'kept-agent-token'
 })
 
-const chat = (ownerProcess: ReturnType<typeof owner>) => ({
+const chat = (ownerProcess: ReturnType<typeof owner> | null, deathEvidence: unknown = null) => ({
   sessionId: SESSION,
   provider: 'codex',
   location: { executionHostId: LOCAL_EXECUTION_HOST_ID },
-  ownerObservation: { ownerProcess }
+  neverStarted: false,
+  ownerObservation: { ownerProcess, deathEvidence }
 })
 
 function exitedPid(): number {
@@ -84,7 +86,8 @@ type Fresh = Awaited<ReturnType<typeof freshRelays>>
 function keptOpens(
   fresh: Fresh,
   sessions: Map<string, unknown>,
-  ownerOf: () => ReturnType<typeof owner> | null = () => null
+  ownerOf: () => ReturnType<typeof owner> | null = () => null,
+  fenceOf: () => number = () => 3
 ) {
   const settle = vi.fn(async (_id: string, _open: unknown, _fence: number, _since: number) => {})
   const opens = new fresh.StructuredAgentSessionKeptOpens({
@@ -93,7 +96,7 @@ function keptOpens(
     serialize: (_id, task) => task(),
     trackStart: (start) => start,
     owner: ownerOf,
-    fence: () => 3,
+    fence: fenceOf,
     settle,
     logger: { warn: () => {} }
   })
@@ -171,11 +174,25 @@ it.skipIf(process.platform === 'win32')(
     const fresh = await freshRelays(late.client)
     late.answer([keptRelay(SESSION)])
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the verdict reads only these fields
-    const record = {
-      ...chat(owner(process.pid)),
-      ownerObservation: { ownerProcess: null }
-    } as unknown as Parameters<typeof fresh.open.structuredAgentSessionKeptAtOpen>[0]
+    const record = chat(null) as unknown as Parameters<
+      typeof fresh.open.structuredAgentSessionKeptAtOpen
+    >[0]
     expect(await fresh.open.structuredAgentSessionKeptAtOpen(record, 5_000)).toBe(true)
+  }
+)
+
+// The same released owner with the listing late: nothing proves the agent gone, so nothing settles.
+it.skipIf(process.platform === 'win32')(
+  'keeps a chat whose owner was released without proof while the listing is late',
+  async () => {
+    const fresh = await freshRelays(lateDaemon().client)
+    const verdict = (record: ReturnType<typeof chat>) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the verdict reads only these fields
+      fresh.open.structuredAgentSessionKeptAtOpen(record as never, 10)
+    expect(await verdict(chat(null))).toBe(true)
+    expect(await verdict({ ...chat(null, { kind: 'exit-observed' }), sessionId: 'exited' })).toBe(
+      false
+    )
   }
 )
 
@@ -248,19 +265,34 @@ it.skipIf(process.platform === 'win32')(
   }
 )
 
+// A send reserves the next run first, clearing the store's owner and moving its fence; the proof
+// must still probe the owner the open saw and settle that run, never the send's own.
 it.skipIf(process.platform === 'win32')(
-  'lets a send start a fresh agent once the owner is proven gone, though no listing ever answers',
+  'lets a send start a fresh agent once the owner the open saw is gone, though no listing ever answers',
   async () => {
     const daemon = downDaemon()
     const fresh = await freshRelays(daemon.client)
-    expect(await openKept(fresh, SESSION, process.pid)).toBe(true)
+    const agent = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60_000)'])
+    const pid = agent.pid
+    if (pid === undefined) {
+      throw new Error('no child pid')
+    }
+    expect(await openKept(fresh, SESSION, pid)).toBe(true)
     const session = openSession()
-    let ownerNow: ReturnType<typeof owner> | null = null
-    const { adopt, settle } = keptOpens(fresh, new Map([[SESSION, session]]), () => ownerNow)
+    let reserved = false
+    const { adopt, settle } = keptOpens(
+      fresh,
+      new Map([[SESSION, session]]),
+      () => (reserved ? null : owner(pid)),
+      () => (reserved ? 4 : 3)
+    )
     adopt(SESSION, session)
     await settleTurns()
     expect(settle).not.toHaveBeenCalled()
-    ownerNow = owner(exitedPid())
+    const exited = once(agent, 'exit')
+    agent.kill('SIGKILL')
+    await exited
+    reserved = true
     const launched = fresh.relays.launchRelayedProviderProcess(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a refused or proven-gone launch reads no launch field
       {} as never,
@@ -269,5 +301,6 @@ it.skipIf(process.platform === 'win32')(
     )
     await expect(launched).resolves.toBeNull()
     expect(settle).toHaveBeenCalledTimes(1)
+    expect(settle).toHaveBeenCalledWith(SESSION, session, 3, 6)
   }
 )

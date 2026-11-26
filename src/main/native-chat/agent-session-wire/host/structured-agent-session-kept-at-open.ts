@@ -30,12 +30,12 @@ const KEPT_LISTING_OPEN_WAIT_MS = 1_500
 /**
  * Whether the last run's agent may still run under the terminal host, so its open settles nothing.
  * Only proof ends it: a complete listing without it, or its owner process gone. A late listing is
- * unknown, so the chat opens as kept and reconciles once the listing answers.
+ * unknown, so the chat opens as kept and reconciles once the listing answers, even with no owner.
  */
 export async function structuredAgentSessionKeptAtOpen(
   record: Pick<
     AgentSessionConversationView,
-    'sessionId' | 'provider' | 'location' | 'ownerObservation'
+    'sessionId' | 'provider' | 'location' | 'ownerObservation' | 'neverStarted'
   >,
   waitMs = KEPT_LISTING_OPEN_WAIT_MS
 ): Promise<boolean> {
@@ -49,7 +49,14 @@ export async function structuredAgentSessionKeptAtOpen(
   if (keptRunningProviderRelayPid(sessionId) !== null) {
     return true
   }
-  if (listed || !owner || (await ownerProvenGone(owner))) {
+  if (listed) {
+    return false
+  }
+  // An owner released without proof (launch recovery) leaves only the listing to prove it gone.
+  const gone = owner
+    ? await ownerProvenGone(owner)
+    : record.neverStarted || record.ownerObservation.deathEvidence !== null
+  if (gone) {
     return false
   }
   noteProviderRelayKeptUnverified(sessionId)

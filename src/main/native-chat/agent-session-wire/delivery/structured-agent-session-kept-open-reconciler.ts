@@ -26,19 +26,26 @@ export type StructuredAgentSessionKeptOpensInput = {
   logger: Pick<StructuredAgentSessionLogger, 'warn'>
 }
 
+/** The gone run as the open saw it: a send reserves the next run, clearing its owner and fence. */
+type KeptOpen = {
+  since: number
+  owner: AgentSessionProcessIdentity | null
+  fence: number | undefined
+}
+
 /**
  * Chats opened as kept while the relay listing was late. Only proof settles one: a complete listing
- * without its agent, or its owner proven gone. Nothing per chat outlives its close but its open's
- * boundary; one subscription waits for the inventory, then settles whichever of them is open.
+ * without its agent, or its owner proven gone. What the open saw lives on its session, so a closed
+ * chat keeps nothing; one subscription waits for the inventory, then settles whichever are open.
  */
 export class StructuredAgentSessionKeptOpens {
-  private readonly openedSince = new Map<string, number>()
+  private readonly opened = new WeakMap<StructuredAgentSessionHostSession, KeptOpen>()
   private waiting = false
 
   constructor(private readonly input: StructuredAgentSessionKeptOpensInput) {
     // A send to a chat no listing has placed: an owner proven gone since settles it inside that start.
     installProviderRelayKeptUnverifiedProof(async (chatKey) => {
-      const owner = input.owner(chatKey)
+      const owner = this.keptOpen(chatKey)?.owner
       if (!owner || !(await ownerProvenGone(owner))) {
         return false
       }
@@ -51,31 +58,37 @@ export class StructuredAgentSessionKeptOpens {
     if (!providerRelayKeptUnverified(sessionId)) {
       return
     }
-    this.openedSince.set(sessionId, session.journal.cursor().sequence + 1)
+    this.opened.set(session, {
+      since: session.journal.cursor().sequence + 1,
+      owner: this.input.owner(sessionId),
+      fence: this.input.fence(sessionId)
+    })
     void this.reconcile(sessionId).catch((error: unknown) => this.warn(sessionId, error))
   }
 
   dispose(): void {
-    this.openedSince.clear()
     installProviderRelayKeptUnverifiedProof(null)
+  }
+
+  private keptOpen(sessionId: string): KeptOpen | undefined {
+    const session = this.input.sessions.get(sessionId)
+    return session ? this.opened.get(session) : undefined
   }
 
   private async reconcile(sessionId: string): Promise<void> {
     if (await providerRelayListingSettled()) {
       return this.settleIfNotKept(sessionId)
     }
-    const owner = this.input.owner(sessionId)
+    const owner = this.keptOpen(sessionId)?.owner
     if (owner && (await ownerProvenGone(owner))) {
       return this.settleSerialized(sessionId)
     }
     if (!this.waiting) {
       this.waiting = true
       void providerRelayInventoryCompleted().then(() => {
-        for (const id of this.openedSince.keys()) {
-          if (this.input.sessions.has(id)) {
+        for (const [id, session] of this.input.sessions) {
+          if (this.opened.has(session)) {
             void this.settleIfNotKept(id).catch((error: unknown) => this.warn(id, error))
-          } else {
-            this.openedSince.delete(id)
           }
         }
       })
@@ -83,9 +96,14 @@ export class StructuredAgentSessionKeptOpens {
   }
 
   private settleIfNotKept(sessionId: string): Promise<void> {
-    return providerRelayKeptUnverified(sessionId) && !providerRelayKeptFromLastRun(sessionId)
-      ? this.settleSerialized(sessionId)
-      : Promise.resolve()
+    if (providerRelayKeptUnverified(sessionId) && !providerRelayKeptFromLastRun(sessionId)) {
+      return this.settleSerialized(sessionId)
+    }
+    const session = this.input.sessions.get(sessionId)
+    if (session) {
+      this.opened.delete(session)
+    }
+    return Promise.resolve()
   }
 
   /** Quit waits only for the settle itself, never for a listing. */
@@ -95,11 +113,13 @@ export class StructuredAgentSessionKeptOpens {
 
   private async settleNow(sessionId: string): Promise<void> {
     const open = this.input.sessions.get(sessionId)
-    const fence = this.input.fence(sessionId)
-    const since = this.openedSince.get(sessionId)
-    this.openedSince.delete(sessionId)
-    if (open && !open.child && fence !== undefined && since !== undefined) {
-      await this.input.settle(sessionId, open, fence, since)
+    const kept = open ? this.opened.get(open) : undefined
+    if (!open || !kept) {
+      return
+    }
+    this.opened.delete(open)
+    if (!open.child && kept.fence !== undefined) {
+      await this.input.settle(sessionId, open, kept.fence, kept.since)
     }
   }
 
