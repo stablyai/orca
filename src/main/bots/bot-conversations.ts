@@ -1,5 +1,5 @@
 // Where a connector conversation for a bot runs: a native chat in the bot's home, while the bot takes conversations.
-import type { Bot } from '../../shared/bot-types'
+import { isBotAgent, type Bot } from '../../shared/bot-types'
 import {
   CONNECTOR_MAX_WORK_LINKS,
   ConnectorWorkLink
@@ -9,6 +9,7 @@ import type {
   ConversationBots,
   ConversationChatOpening
 } from '../external-conversations/external-conversation-bots'
+import type { LinkableChat } from '../external-conversations/external-conversation-chat-delivery'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { forgetExpiredBotThread } from './bot-thread-expired-start'
 import { runtimeBotChats, startBotSession } from './bot-chat-session'
@@ -21,7 +22,7 @@ export function botConversations(deps: {
   /** The bot's Chat, created on first use. */
   ensureChat: (botId: string) => Promise<string>
   /** A new native chat in the bot's home. */
-  startSession: (bot: Bot, opening?: ConversationChatOpening) => Promise<string>
+  startSession: (bot: Bot, opening?: ConversationChatOpening) => Promise<LinkableChat>
   botWork: Pick<BotWorkRecord, 'pullRequests'>
 }): ConversationBots {
   const find = (botId: string) => deps.bots.list().find((entry) => entry.id === botId)
@@ -36,9 +37,11 @@ export function botConversations(deps: {
       if (!bot) {
         throw new Error('bot_not_found')
       }
-      const sessionId =
-        kind === 'bot-chat' ? await deps.ensureChat(botId) : await deps.startSession(bot, opening)
-      return { worktreeId: folderWorkspaceKey(bot.folderWorkspaceId), sessionId, agent: bot.agent }
+      if (kind === 'bot-chat') {
+        const sessionId = await deps.ensureChat(botId)
+        return { worktreeId: folderWorkspaceKey(bot.folderWorkspaceId), sessionId, agent: bot.agent }
+      }
+      return deps.startSession(bot, opening)
     },
     workLinks: async ({ bot, source, externalId }) =>
       bot
@@ -71,13 +74,26 @@ export function runtimeBotConversations(runtime: OrcaRuntimeService): Conversati
       if (sessionId) {
         await runtime.ensureStructuredAgentSessionHost()
         signal?.throwIfAborted()
-        if (getStructuredAgentSessionHost()?.deps.store.getConversation(sessionId)) {
-          return sessionId
+        const existing = getStructuredAgentSessionHost()?.deps.store.getConversation(sessionId)
+        if (existing) {
+          if (!isBotAgent(existing.provider)) {
+            throw new Error('unsupported_agent')
+          }
+          return {
+            sessionId,
+            agent: existing.provider,
+            worktreeId: existing.location.workspaceId
+          }
         }
       }
       await opening?.beforeCreate?.(bot.agent)
       signal?.throwIfAborted()
-      return await startBotSession(runtime, bot, { background: true, sessionId, signal })
+      const created = await startBotSession(runtime, bot, { background: true, sessionId, signal })
+      return {
+        sessionId: created,
+        agent: bot.agent,
+        worktreeId: folderWorkspaceKey(bot.folderWorkspaceId)
+      }
     },
     botWork: runtime.botWork
   })

@@ -69,13 +69,15 @@ it.each([10, 100])('retains no unadmitted uploads after %i retired starts', asyn
   try {
     for (let delivery = 0; delivery < count; delivery++) {
       const poll = new AbortController()
+      const preparation = new DeliveryPreparation(poll.signal)
       const result = await startConnectorConversation(
         {
           store,
           receipts,
           askerImages,
           enqueue: (run: (signal: AbortSignal) => Promise<Delivery>) => run(signal),
-          deliver: (chat, message) => deliveries.deliver(undefined, KEY, chat, message),
+          deliver: (chat, message) =>
+            deliveries.deliver(undefined, KEY, chat, { ...message, preparation }),
           link: () => {}
         },
         {
@@ -97,7 +99,7 @@ it.each([10, 100])('retains no unadmitted uploads after %i retired starts', asyn
         KEY,
         `delivery-${delivery}`,
         INPUT,
-        new DeliveryPreparation(poll.signal)
+        preparation
       )
       expect(result.initial).toEqual({ outcome: 'refused', reason: 'connectors_disabled' })
     }

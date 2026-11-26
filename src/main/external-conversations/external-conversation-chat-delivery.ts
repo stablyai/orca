@@ -74,7 +74,7 @@ export class ChatDeliveries {
 
   /** A watch gap leaves no proof these deliveries still belong to the current turn. */
   clear(): void {
-    connectorImageProbes.clearMissing()
+    connectorImageProbes.clearRetries()
     this.returnedImageProgress.clear()
     this.generations.clear()
     this.sending.clear()

@@ -138,25 +138,21 @@ export async function carriedMessages(
         continue
       }
       const path = block.url ? undefined : block.path
-      const stored =
+      const probe =
         path && inspection && (inspection.allPaths || positioned)
           ? await inspection.image(path)
           : undefined
-      if (stored === 'limit') {
+      if (probe === 'limit') {
         break cards
       }
       // An older, unreadable card can still be edited. It needn't hold up the later ones.
-      if (stored === 'unreadable') {
-        continue cards
-      }
-      if (stored && 'missingUntil' in stored) {
+      const retry = probe && 'retryAt' in probe ? probe : undefined
+      const stored = retry ? retry.readableImage : probe && 'bytes' in probe ? probe : undefined
+      if (retry && (positioned || !stored)) {
         if (index === missingPrefix && !inspection?.signal.aborted) {
           missingPrefix += 1
-          missingUntil = Math.min(missingUntil, stored.missingUntil)
+          missingUntil = Math.min(missingUntil, retry.retryAt)
         }
-        continue cards
-      }
-      if (stored?.identityUnreadable && positioned) {
         continue cards
       }
       const fileId = stored?.fileId

@@ -7,7 +7,7 @@ const OPENER = /^<{3,}$/
 const POSITIONED_IMAGE = '; attached to this turn as image '
 const UNATTACHED_IMAGE = '; from an earlier delivery; not attached to this turn]'
 const ATTACHED_IMAGE_LINE =
-  /^\[Orca: file ([A-Za-z0-9]{1,64}): .*; (?:attached to this turn as image \d+|from an earlier delivery; not attached to this turn)\]$/
+  /^\[Orca: file ([A-Za-z0-9_-]{1,64}): .*; (?:attached to this turn as image \d+|from an earlier delivery; not attached to this turn)\]$/
 export const CONNECTOR_SENT_LINE = /^\[Orca: sent [^\n\]]+\]\n/
 
 function closeFence(

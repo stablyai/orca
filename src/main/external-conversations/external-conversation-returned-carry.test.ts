@@ -451,7 +451,7 @@ it('carries the oldest cards whose images fit one message; the rest wait for the
   expect(returnedIds()).toEqual(['c'])
 })
 
-it('keeps a failed request and stages only new earlier images that fit the byte budget', async () => {
+it.each([20, 200])('carries healthy files after %i unavailable images and retries restored files', async (unavailableCount) => {
   const byteLength = 9 * 1024 * 1024
   const oldIds = ['F0', 'F1', 'F2', 'F3']
   const failed = asked('d-failed', 'four images')
@@ -470,7 +470,7 @@ it('keeps a failed request and stages only new earlier images that fit the byte 
     )
     failed.blocks.push({ type: 'image-ref', path })
   }
-  for (let index = 0; index < 20; index += 1) {
+  for (let index = 0; index < unavailableCount; index += 1) {
     const id = `missing-${index}`
     failedStart(
       id,
@@ -479,14 +479,14 @@ it('keeps a failed request and stages only new earlier images that fit the byte 
       NOW + index
     )
   }
-  failedStart('failed', failed, 'notSignedIn', NOW + 20)
-  let probeNow = NOW + 30
+  failedStart('failed', failed, 'notSignedIn', NOW + unavailableCount)
+  let probeNow = NOW + unavailableCount + 30
   const images = new ConnectorImageProbes(undefined, () => probeNow)
   const progress = new ReturnedImageProgress()
   const carry = () =>
     carriedMessages(
       THREAD,
-      readJournalDomainReturnedCards(db, target, NOW + 30),
+      readJournalDomainReturnedCards(db, target, NOW + unavailableCount + 30),
       ACCOUNT,
       probeNow,
       [],
@@ -497,8 +497,11 @@ it('keeps a failed request and stages only new earlier images that fit the byte 
     )
   expect((await carry()).cards).toEqual([])
   // Interleaved conversations may evict all path misses. The returned queue can still advance.
-  images.clearMissing()
-  const carried = await carry()
+  images.clearRetries()
+  let carried = await carry()
+  for (let batch = 1; batch < unavailableCount / 20; batch += 1) {
+    carried = await carry()
+  }
 
   const reads: string[] = []
   const stage = connectorAskerImages({

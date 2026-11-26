@@ -8,6 +8,8 @@ import { createQueuedMessageTestRig } from '../native-chat/agent-session-wire/ho
 import { HOST_TEST_LOCATION } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { runtimeBotConversations } from '../bots/bot-conversations'
 import { deliveryChatId } from './external-conversation-bots'
 import { recoverConnectorAdmission } from './external-conversation-delivery-preparation'
 import { DeliveryPreparation, DeliveryReceipts } from './external-conversation-delivery-receipts'
@@ -24,6 +26,29 @@ const TARGET = { kind: 'bot' as const, botId: 'bot-1' }
 const INPUT = { agent: 'codex', target: TARGET, prompt: 'request' }
 const HOME_ID = 'fixture-home'
 const TITLE = 'Look at <https://example.invalid|literal-label> in the image'
+
+it('reuses the persisted agent and workspace when a thread start is retried', async () => {
+  const sessionId = deliveryChatId(KEY, TARGET, ID)
+  const worktreeId = folderWorkspaceKey(HOME_ID)
+  const rig = await createQueuedMessageTestRig({
+    sessionId,
+    location: { ...HOST_TEST_LOCATION, workspaceId: worktreeId, workspaceKind: 'folder' }
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the existing thread uses the installed test host and bot list.
+  const runtime = {
+    bots: { list: () => [{ id: TARGET.botId, folderWorkspaceId: 'new-home', agent: 'pi' }] },
+    ensureStructuredAgentSessionHost: async () => setStructuredAgentSessionHost(rig.host)
+  } as unknown as OrcaRuntimeService
+  try {
+    const botChats = runtimeBotConversations(runtime)
+    await expect(
+      botChats.open(TARGET, { sessionId, signal: new AbortController().signal })
+    ).resolves.toEqual({ sessionId, worktreeId, agent: 'codex' })
+  } finally {
+    setStructuredAgentSessionHost(null)
+    await rig.dispose()
+  }
+})
 
 it.each(['accepted', 'unknown', 'rejected'] as const)(
   'recovers a %s admission that was interrupted before writing the thread link',

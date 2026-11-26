@@ -62,15 +62,16 @@ async function storedConnectorImageId(
   }
 }
 
-type StoredImage = { bytes: number; fileId: string | undefined; identityUnreadable?: true }
-type MissingImage = { missingUntil: number }
-type ImageProbe = StoredImage | MissingImage | 'unreadable' | 'limit'
+type StoredImage = { bytes: number; fileId: string | undefined }
+type UnavailableImage = { readableImage?: StoredImage }
+type ImageRetry = UnavailableImage & { retryAt: number }
+type ImageProbe = StoredImage | ImageRetry | 'limit'
 export const RETURNED_IMAGE_RETRY_MS = 5 * 60_000
 const MAX_ACTIVE_IMAGE_PROBES = 8
 const MAX_MISSING_IMAGES = 4096
 
 export class ConnectorImageProbes {
-  private readonly missing = new Map<string, MissingImage>()
+  private readonly unavailable = new Map<string, ImageRetry>()
   private readonly active = new Map<string, Promise<ImageProbe>>()
   private readonly slots = new PrioritySemaphore(MAX_ACTIVE_IMAGE_PROBES)
 
@@ -79,13 +80,13 @@ export class ConnectorImageProbes {
     private readonly now = Date.now
   ) {}
 
-  cachedMissing(path: string): MissingImage | undefined {
-    const missing = this.missing.get(path)
-    if (missing && missing.missingUntil <= this.now()) {
-      this.missing.delete(path)
+  cachedRetry(path: string): ImageRetry | undefined {
+    const retry = this.unavailable.get(path)
+    if (retry && retry.retryAt <= this.now()) {
+      this.unavailable.delete(path)
       return undefined
     }
-    return missing
+    return retry
   }
 
   async read(root: string | undefined, path: string, signal: AbortSignal): Promise<ImageProbe> {
@@ -93,25 +94,25 @@ export class ConnectorImageProbes {
     if (!pending) {
       const release = await this.slots.acquire(0, signal)
       pending = this.active.get(path)
-      const missing = this.cachedMissing(path)
-      if (pending || signal.aborted || missing) {
+      const retry = this.cachedRetry(path)
+      if (pending || signal.aborted || retry) {
         release()
         if (!pending) {
-          return missing ?? 'limit'
+          return retry ?? 'limit'
         }
       } else {
         pending = this.lookup(root, path)
           .then((result) => {
-            if (result === 'missing') {
-              const absent = { missingUntil: this.now() + RETURNED_IMAGE_RETRY_MS }
-              this.missing.set(path, absent)
-              if (this.missing.size > MAX_MISSING_IMAGES) {
-                const oldest = this.missing.keys().next()
+            if (!('bytes' in result)) {
+              const next = { ...result, retryAt: this.now() + RETURNED_IMAGE_RETRY_MS }
+              this.unavailable.set(path, next)
+              if (this.unavailable.size > MAX_MISSING_IMAGES) {
+                const oldest = this.unavailable.keys().next()
                 if (!oldest.done) {
-                  this.missing.delete(oldest.value)
+                  this.unavailable.delete(oldest.value)
                 }
               }
-              return absent
+              return next
             }
             return result
           })
@@ -125,8 +126,8 @@ export class ConnectorImageProbes {
     return waitForPromiseWithSignal(pending, signal)
   }
 
-  clearMissing(): void {
-    this.missing.clear()
+  clearRetries(): void {
+    this.unavailable.clear()
   }
 }
 
@@ -149,9 +150,9 @@ export function connectorImageInspection(
         if (signal.aborted) {
           return Promise.resolve('limit')
         }
-        const missing = probes.cachedMissing(path)
-        if (missing) {
-          return Promise.resolve(missing)
+        const retry = probes.cachedRetry(path)
+        if (retry) {
+          return Promise.resolve(retry)
         }
         if (images.size >= AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT) {
           return Promise.resolve('limit')
@@ -172,20 +173,15 @@ export function connectorImageInspection(
 async function inspectConnectorImage(
   root: string | undefined,
   path: string
-): Promise<StoredImage | 'missing' | 'unreadable'> {
-  const info = await stat(path).catch((error): 'missing' | 'unreadable' =>
-    isMissingPath(error) ? 'missing' : 'unreadable'
-  )
-  if (typeof info === 'string') {
-    return info
-  }
-  if (!info.isFile() || info.size === 0) {
-    return 'missing'
+): Promise<StoredImage | UnavailableImage> {
+  const info = await stat(path).catch(() => null)
+  if (!info?.isFile() || info.size === 0) {
+    return {}
   }
   try {
     return { bytes: info.size, fileId: await storedConnectorImageId(root, path) }
   } catch {
-    return { bytes: info.size, fileId: undefined, identityUnreadable: true }
+    return { readableImage: { bytes: info.size, fileId: undefined } }
   }
 }
 
