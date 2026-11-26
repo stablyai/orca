@@ -42,14 +42,25 @@ import type { UsageHistoryRecorder } from '../usage-history/usage-history-record
 export class RateLimitService extends RateLimitServiceTargetUsageRead {
   private lastOwnerReturnAt = Number.NEGATIVE_INFINITY
   private usageLastGood: UsageLastGoodStore | null = null
+  /** Set when startup picks a target other than the host default before last-good loads. */
+  private antigravityTargetMoved = false
 
   /** Shows each provider's persisted last windows until a poll replaces them. Loads well inside
    *  the deferred startup poll; a provider already read by then keeps its own reading. */
   setUsageLastGoodStore(store: UsageLastGoodStore): Promise<void> {
     this.usageLastGood = store
     return store.loaded.then((restored) => {
+      const currentTarget = localAccountRuntimeTargetKey(this.antigravityFetchTarget)
+      const savedTarget = store.savedAntigravityTarget
+      // A reading saved for another target, or an old file with no target after startup already
+      // switched off the host default, must not fill the slot the target change just cleared.
+      const skipAntigravity =
+        savedTarget === null ? this.antigravityTargetMoved : savedTarget !== currentTarget
       const seeded = { ...this.state }
       for (const key of USAGE_PROVIDER_KEYS) {
+        if (key === 'antigravity' && skipAntigravity) {
+          continue
+        }
         seeded[key] ??= restored[key] ?? null
       }
       this.updateState(seeded)
@@ -58,7 +69,7 @@ export class RateLimitService extends RateLimitServiceTargetUsageRead {
 
   protected override updateState(next: InternalRateLimitState): void {
     super.updateState(next)
-    this.usageLastGood?.record(next)
+    this.usageLastGood?.record(next, localAccountRuntimeTargetKey(this.antigravityFetchTarget))
   }
 
   refreshOnOwnerReturn(): Promise<void> {
@@ -145,6 +156,7 @@ export class RateLimitService extends RateLimitServiceTargetUsageRead {
       return
     }
     this.antigravityFetchTarget = { ...target }
+    this.antigravityTargetMoved = true
     this.antigravityFetchGeneration += 1
     this.antigravityAccounts = []
     this.activeFailureStreakByProvider.antigravity = 0

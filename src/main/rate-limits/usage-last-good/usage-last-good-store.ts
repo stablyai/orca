@@ -90,6 +90,7 @@ export function parseUsageLastGood(raw: unknown, now: number): UsageLastGoodSnap
  *  until a fresh poll replaces them. */
 export class UsageLastGoodStore {
   private snapshot: UsageLastGoodSnapshot = {}
+  private antigravityTarget: string | null = null
   private isLoaded = false
   private saving: Promise<void> | null = null
   private dirty = false
@@ -97,14 +98,22 @@ export class UsageLastGoodStore {
   readonly loaded: Promise<UsageLastGoodSnapshot>
 
   constructor(private readonly filePath: string | null) {
-    this.loaded = (filePath ? readSnapshot(filePath) : Promise.resolve({})).then((saved) => {
-      this.snapshot = saved
-      this.isLoaded = true
-      return parseUsageLastGood(saved, Date.now())
-    })
+    this.loaded = (filePath ? readLastGood(filePath) : Promise.resolve(emptyLastGood())).then(
+      (saved) => {
+        this.snapshot = saved.snapshot
+        this.antigravityTarget = saved.antigravityTarget
+        this.isLoaded = true
+        return saved.snapshot
+      }
+    )
   }
 
-  record(state: InternalRateLimitState): void {
+  /** Runtime target stored with the Antigravity reading. Null in files saved before targets were. */
+  get savedAntigravityTarget(): string | null {
+    return this.antigravityTarget
+  }
+
+  record(state: InternalRateLimitState, antigravityTarget?: string): void {
     // Before the load, the empty startup state must not overwrite what was saved.
     if (!this.isLoaded) {
       return
@@ -116,20 +125,40 @@ export class UsageLastGoodStore {
         limits && (limits.status === 'ok' || limits.status === 'error') && hasUsageWindows(limits)
           ? limits
           : undefined
-      if (keep === this.snapshot[key]) {
+      // A null Antigravity slot after a target change must not erase the other target's reading.
+      if (key === 'antigravity' && !keep && this.holdsOtherAntigravityTarget(antigravityTarget)) {
         continue
       }
-      // A reading without windows (unavailable, switched account, expired) clears the seed too.
+      const targetChanged =
+        key === 'antigravity' &&
+        keep !== undefined &&
+        antigravityTarget !== undefined &&
+        this.antigravityTarget !== antigravityTarget
+      if (keep === this.snapshot[key] && !targetChanged) {
+        continue
+      }
       if (keep) {
         this.snapshot[key] = keep
       } else {
         delete this.snapshot[key]
+      }
+      if (key === 'antigravity' && antigravityTarget !== undefined) {
+        this.antigravityTarget = keep ? antigravityTarget : null
       }
       changed = true
     }
     if (changed) {
       void this.save()
     }
+  }
+
+  private holdsOtherAntigravityTarget(target: string | undefined): boolean {
+    return (
+      target !== undefined &&
+      this.antigravityTarget !== null &&
+      this.antigravityTarget !== target &&
+      this.snapshot.antigravity !== undefined
+    )
   }
 
   /** Settles once every recorded change is on disk. */
@@ -151,8 +180,11 @@ export class UsageLastGoodStore {
     this.saving = (async () => {
       do {
         this.dirty = false
-        await writePluginFileAtomically(filePath, JSON.stringify(this.snapshot)).catch(
-          (error: unknown) => console.warn('[rate-limits] Failed to save last usage', error)
+        const body = this.antigravityTarget
+          ? { ...this.snapshot, antigravityTarget: this.antigravityTarget }
+          : this.snapshot
+        await writePluginFileAtomically(filePath, JSON.stringify(body)).catch((error: unknown) =>
+          console.warn('[rate-limits] Failed to save last usage', error)
         )
       } while (this.dirty)
     })()
@@ -161,10 +193,28 @@ export class UsageLastGoodStore {
   }
 }
 
-async function readSnapshot(filePath: string): Promise<UsageLastGoodSnapshot> {
+function emptyLastGood(): { snapshot: UsageLastGoodSnapshot; antigravityTarget: string | null } {
+  return { snapshot: {}, antigravityTarget: null }
+}
+
+function readAntigravityTarget(raw: unknown): string | null {
+  if (typeof raw !== 'object' || raw === null || !('antigravityTarget' in raw)) {
+    return null
+  }
+  const value = raw.antigravityTarget
+  return typeof value === 'string' && value.length > 0 ? value : null
+}
+
+async function readLastGood(
+  filePath: string
+): Promise<{ snapshot: UsageLastGoodSnapshot; antigravityTarget: string | null }> {
   try {
-    return parseUsageLastGood(JSON.parse(await readFile(filePath, 'utf8')), Date.now())
+    const raw: unknown = JSON.parse(await readFile(filePath, 'utf8'))
+    return {
+      snapshot: parseUsageLastGood(raw, Date.now()),
+      antigravityTarget: readAntigravityTarget(raw)
+    }
   } catch {
-    return {}
+    return emptyLastGood()
   }
 }
