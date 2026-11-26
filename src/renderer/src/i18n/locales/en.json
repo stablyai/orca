@@ -24509,6 +24509,9 @@
         "filesStayLine": "Its files stay on {{host}}.",
         "removing": "Removing…"
       }
+    },
+    "tabBar": {
+      "newTabWithDefaultAgentHint": "New tab ({{modifier}}-click for default agent)"
     }
   },
   "dashboardPopout": {
