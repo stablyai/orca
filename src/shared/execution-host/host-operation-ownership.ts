@@ -54,6 +54,7 @@ export const HOST_OPERATION_OWNERSHIP = {
   orcad: 'host',
   orchestration: 'host',
   pairing: 'host',
+  perforce: 'host',
   plugins: 'host',
   preflight: 'host',
   project: 'host',

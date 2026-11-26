@@ -92,7 +92,8 @@ function RightSidebarInner(): React.JSX.Element {
     pluginSystemEnabled,
     pluginFetchStatus,
     installedPluginTabKeys,
-    isBotPage
+    isBotPage,
+    redetectPerforce
   } = useRightSidebarActivityItems({ rightSidebarOpen })
   const { effectiveTab, selectActivityTab } = useRightSidebarTabRouting({
     visibleItems: availableItems,
@@ -326,6 +327,7 @@ function RightSidebarInner(): React.JSX.Element {
               closeButton={closeButton}
               activityBarPosition={activityBarPosition}
               onChangeActivityBarPosition={setActivityBarPosition}
+              onDetectPerforce={redetectPerforce}
               arrangementItems={orderedItems}
               hiddenActiveItem={hiddenActiveItem}
               isBotPage={isBotPage}
@@ -387,6 +389,7 @@ function RightSidebarInner(): React.JSX.Element {
             <ActivityBarPositionMenu
               currentPosition={activityBarPosition}
               onChangePosition={setActivityBarPosition}
+              onDetectPerforce={redetectPerforce}
               pluginKey={contextPlugin.pluginKey}
               itemId={contextPlugin.itemId}
               items={orderedItems}

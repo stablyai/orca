@@ -4,6 +4,8 @@ import { useRepoById } from '@/store/repos/use-repository-catalog'
 import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { getVisibleRightSidebarActivityItems } from './right-sidebar-activity-visibility'
+import { usePerforceWorkspace } from '../perforce/use-perforce-workspace'
+import { usePerforceWorkspaceTarget } from '@/lib/perforce-workspace-target'
 import {
   builtInTabNames,
   getPluginPanelActivityItems,
@@ -40,6 +42,8 @@ export type RightSidebarActivityItems = {
   pluginFetchStatus: PluginPanelsFetchStatus
   installedPluginTabKeys: Set<string>
   isBotPage: boolean
+  /** Set only for folder projects not yet detected as Perforce. */
+  redetectPerforce?: () => void
 }
 
 export function useRightSidebarActivityItems({
@@ -62,6 +66,15 @@ export function useRightSidebarActivityItems({
   const activeWorkspaceScope = parseWorkspaceKey(activeWorktreeId ?? '')
   const isFolderWorkspace = activeWorkspaceScope?.type === 'folder'
   const isFolder = isFolderWorkspace || (activeRepo ? isFolderRepo(activeRepo) : false)
+  const perforceTarget = usePerforceWorkspaceTarget(
+    activeWorktreeId,
+    activeWorktree?.path,
+    activeRepo?.connectionId
+  )
+  const { isPerforce, redetect: redetectPerforce } = usePerforceWorkspace(
+    perforceTarget,
+    isFolder && !isFolderWorkspace
+  )
   const bot = useBotForWorkspace(isFolderWorkspace ? activeWorktreeId : null)
   const isBot = bot !== null
   const group = useBotGroupForWorkspace(isFolderWorkspace ? activeWorktreeId : null)
@@ -155,7 +168,8 @@ export function useRightSidebarActivityItems({
           hasRemoteHost,
           isBot,
           isGroupHome,
-          hasChatWorkers
+          hasChatWorkers,
+          isPerforce
         }),
         (item) => item.statusIndicator ?? (item.id === 'checks' ? checksStatus : null)
       ),
@@ -167,7 +181,8 @@ export function useRightSidebarActivityItems({
       isBot,
       isGroupHome,
       hasChatWorkers,
-      checksStatus
+      checksStatus,
+      isPerforce
     ]
   )
 
@@ -179,6 +194,7 @@ export function useRightSidebarActivityItems({
     pluginSystemEnabled,
     pluginFetchStatus,
     installedPluginTabKeys,
-    isBotPage: isBot
+    isBotPage: isBot,
+    redetectPerforce: isFolder && !isFolderWorkspace && !isPerforce ? redetectPerforce : undefined
   }
 }

@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
+import { PERFORCE_REPO_ICON } from '../../../../../../shared/repository/appearance/perforce-repo-icon'
+import { isPerforceRepo } from '../../../../../../shared/repository/repo-kind'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import {
   getRepoExecutionHostId,
@@ -74,9 +76,10 @@ export function useRepositoryIconActions(
     }
   }
 
-  // The default mark is the project's letters, so resetting just clears the chosen icon.
+  // The default mark is the project's letters, so resetting just clears the chosen icon;
+  // a Perforce project's default is the Perforce mark.
   const resetToDefault = (): void => {
-    updateRepo(repo.id, { repoIcon: null })
+    updateRepo(repo.id, { repoIcon: isPerforceRepo(repo) ? PERFORCE_REPO_ICON : null })
   }
 
   return { loadingGitHub, applyGitHubAvatar, resetToDefault }

@@ -8,7 +8,10 @@ import {
   WORKTREE_CREATE_HOST_OWNED_SETTINGS_RUNTIME_CAPABILITY
 } from '../../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import type { CreateWorktreeResult } from '../../../../../../shared/worktree/create-types'
-import type { ClientWorktreeCreateSettings } from './client-worktree-create-settings'
+import { PERFORCE_COPY_REQUEST_TIMEOUT_MS } from '../../../../../../shared/perforce/workspace-copy/workspace-copy-operations'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
+import { assertPerforceRuntime, remotePerforceSettings } from '@/runtime/runtime-perforce-client'
+import { pickClientWorktreeCreateSettings } from './client-worktree-create-settings'
 import {
   buildRuntimeWorktreeCreateParams,
   type CreatedWorktreeResult,
@@ -17,13 +20,23 @@ import {
   type WorktreeCreateRequest
 } from './worktree-create-payload'
 
+/** The client's settings; a paired host applies the ones a create needs instead of its own. */
+export type HostCreateSettings = GlobalSettings | null | undefined
+
 /** Choose one planner for paired-host create: capable host settings or universally accepted desktop-built command. */
 export async function createWorktreeOnRuntimeHost(
   environmentId: string,
-  request: WorktreeCreateRequest,
+  hostRequest: WorktreeCreateRequest,
   attempt: WorktreeCreateAttempt,
-  clientCreateSettings: ClientWorktreeCreateSettings
+  settings: HostCreateSettings
 ): Promise<CreatedWorktreeResult> {
+  let request = hostRequest
+  if (request.options?.perforceCopy) {
+    // Why: a host without Perforce copies would ignore the request and share the project folder.
+    await assertPerforceRuntime({ kind: 'environment', environmentId })
+    request = { ...request, perforceSettings: remotePerforceSettings(settings) }
+  }
+  const clientCreateSettings = pickClientWorktreeCreateSettings(settings)
   // A host that owns these settings is edited from Settings; sending ours would override what the user set there.
   const hostOwnsCreateSettings = await hostSupportsCapability(
     environmentId,
@@ -42,7 +55,10 @@ export async function createWorktreeOnRuntimeHost(
         ...(hostOwnsCreateSettings ? {} : clientCreateSettings)
       },
       // Creating a workspace is the user's act: it may wake an idle-stopped WSL host (#46567).
-      { timeoutMs: 10 * 60_000, wake: true }
+      {
+        timeoutMs: request.options?.perforceCopy ? PERFORCE_COPY_REQUEST_TIMEOUT_MS : 10 * 60_000,
+        wake: true
+      }
     )),
     ...(hostOwnsCreateSettings ? { hostOwnsCreateSettings: true as const } : {})
   })

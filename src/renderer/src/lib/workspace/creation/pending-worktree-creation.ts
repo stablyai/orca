@@ -70,6 +70,8 @@ export type WorktreeCreationRequest = {
   nameWasGenerated?: boolean
   displayName?: string
   displayNameKind?: 'generated' | 'user'
+  /** "Use worktree" in a Perforce folder project: make the workspace a Perforce copy. */
+  perforceCopy?: CreateWorktreeArgs['perforceCopy']
   baseBranch?: string
   compareBaseRef?: string
   setupDecision: SetupDecision
@@ -164,6 +166,8 @@ export type PendingWorktreeCreation = {
   loaderVisible: boolean
   error?: string
   provisioningLog?: string
+  /** A step within the current phase reported by main (a Perforce copy's stages). */
+  progressDetail?: string
   /** VM creates: the provisioned VM's environment checks, run before the workspace is created. */
   environmentCheck?: PendingVmEnvironmentCheck
   // Local git checkout meter; absent when git emits none or creation runs over SSH/runtime.
@@ -282,7 +286,13 @@ export function getVisibleCheckoutProgress(
 export function getCreationProgressLabel(
   entry: Pick<
     PendingWorktreeCreation,
-    'status' | 'phase' | 'indeterminate' | 'request' | 'checkoutProgress' | 'environmentCheck'
+    | 'status'
+    | 'phase'
+    | 'indeterminate'
+    | 'request'
+    | 'checkoutProgress'
+    | 'progressDetail'
+    | 'environmentCheck'
   >,
   t: Translate = translate
 ): string {
@@ -301,6 +311,9 @@ export function getCreationProgressLabel(
     return entry.environmentCheck
       ? t('auto.lib.pendingWorktreeCreation.checkingVmEnvironment', 'Checking VM environment…')
       : t('auto.lib.pendingWorktreeCreation.provisioningVm', 'Provisioning VM…')
+  }
+  if (entry.progressDetail && entry.phase === 'creating') {
+    return entry.progressDetail
   }
   if (entry.indeterminate) {
     return t('auto.lib.pendingWorktreeCreation.settingUpWorkspace', 'Setting up your workspace…')

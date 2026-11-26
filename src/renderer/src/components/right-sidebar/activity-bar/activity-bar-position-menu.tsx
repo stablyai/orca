@@ -6,9 +6,9 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuLabel,
+  ContextMenuSeparator,
   ContextMenuRadioGroup,
-  ContextMenuRadioItem,
-  ContextMenuSeparator
+  ContextMenuRadioItem
 } from '@/components/ui/context-menu'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
@@ -72,6 +72,7 @@ export function useActivityBarContextPlugin(): {
 export function ActivityBarPositionMenu({
   currentPosition,
   onChangePosition,
+  onDetectPerforce,
   pluginKey,
   itemId,
   items,
@@ -80,6 +81,7 @@ export function ActivityBarPositionMenu({
 }: {
   currentPosition: ActivityBarPosition
   onChangePosition: (pos: ActivityBarPosition) => void
+  onDetectPerforce?: () => void
   pluginKey?: string | null
   itemId?: string | null
   items: ActivityBarItem[]
@@ -214,6 +216,14 @@ export function ActivityBarPositionMenu({
           {t('auto.components.right.sidebar.index.70893f017b', 'Side')}
         </ContextMenuRadioItem>
       </ContextMenuRadioGroup>
+      {onDetectPerforce && (
+        <>
+          <ContextMenuSeparator />
+          <ContextMenuItem onSelect={onDetectPerforce}>
+            {t('auto.components.right.sidebar.index.detectPerforce', 'Detect Perforce workspace')}
+          </ContextMenuItem>
+        </>
+      )}
     </ContextMenuContent>
   )
 }

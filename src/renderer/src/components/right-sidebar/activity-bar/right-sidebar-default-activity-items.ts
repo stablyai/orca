@@ -111,7 +111,8 @@ export function getDefaultRightSidebarActivityItems({
       icon: GitBranch,
       title: t('auto.components.right.sidebar.index.0314901467', 'Source Control'),
       shortcut: sourceControlShortcut === 'Unassigned' ? '' : sourceControlShortcut,
-      gitOnly: true
+      gitOnly: true,
+      perforceCapable: true
     },
     {
       id: 'checks',

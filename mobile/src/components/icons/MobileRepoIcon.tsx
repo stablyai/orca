@@ -20,15 +20,21 @@ import {
   Shapes,
   Sparkles,
   SquareTerminal,
-  Wrench
+  Wrench,
+  createLucideIcon
 } from 'lucide-react-native'
 import { useState } from 'react'
 import { Image, StyleSheet, Text, View } from 'react-native'
 import type { MobileRenderableRepoIcon } from '../../host-screen/host-screen-reply-schema'
+import { PERFORCE_MARK_PATH } from '../../../../src/shared/repository/appearance/perforce-repo-icon'
 import { softMarkColors } from '../../../../src/shared/repository/appearance/repo-badge-color'
 import { monogramFontScale } from '../../../../src/shared/repository/appearance/repo-monogram'
 import { colors, radii } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+
+const PerforceMark = createLucideIcon('Perforce', [
+  ['path', { d: PERFORCE_MARK_PATH, fill: 'currentColor', stroke: 'none', key: 'mark' }]
+])
 
 // Match desktop repo-icon picker’s lucide glyphs so mobile project headers retain chosen icons.
 const REPO_LUCIDE_ICONS: Record<string, LucideIcon> = {
@@ -51,7 +57,8 @@ const REPO_LUCIDE_ICONS: Record<string, LucideIcon> = {
   Rocket,
   Shapes,
   Sparkles,
-  Wrench
+  Wrench,
+  Perforce: PerforceMark
 }
 
 type Props = {

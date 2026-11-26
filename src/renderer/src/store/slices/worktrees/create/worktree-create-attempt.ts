@@ -1,6 +1,5 @@
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import type { ClientWorktreeCreateSettings } from './client-worktree-create-settings'
-import { createWorktreeOnRuntimeHost } from './host-planned-agent-launch'
+import { createWorktreeOnRuntimeHost, type HostCreateSettings } from './host-planned-agent-launch'
 import { adoptRuntimeProvisionedRoot } from './runtime-provisioned-root-adoption'
 import { isRuntimeLineageParentMissingError } from '../listing/runtime-worktree-rpc-errors'
 import {
@@ -17,7 +16,7 @@ export async function runCreateAttempt(
   request: WorktreeCreateRequest,
   attempt: WorktreeCreateAttempt,
   target: RuntimeClientTarget,
-  clientCreateSettings: ClientWorktreeCreateSettings = {}
+  settings: HostCreateSettings
 ): Promise<CreateAttemptOutcome> {
   const provisionedRoot = request.options?.provisionedRoot
   const create = async (
@@ -44,14 +43,14 @@ export async function runCreateAttempt(
             target.environmentId,
             request,
             { ...attempt, parentWorkspace },
-            clientCreateSettings
+            settings
           )
   try {
     return { result: await create(attempt.parentWorkspace), droppedParent: false }
   } catch (error) {
     const unnested = withoutRefusedInferredParent(attempt, error)
     if (unnested) {
-      return await runCreateAttempt(request, unnested, target, clientCreateSettings)
+      return await runCreateAttempt(request, unnested, target, settings)
     }
     if (!attempt.parentWorkspace || !isRuntimeLineageParentMissingError(error)) {
       throw error

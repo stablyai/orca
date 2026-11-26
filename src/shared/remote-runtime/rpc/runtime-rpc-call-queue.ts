@@ -1,5 +1,9 @@
 import { abortSignalReason } from '../../concurrency/abort-signal-reason'
 import { REMOTE_RUNTIME_MAX_PREPARED_RPC_BYTES } from '../remote-runtime-memory-limits'
+import {
+  isPerforceBackgroundRuntimeMethod,
+  isPerforceRuntimeMethod
+} from './runtime-rpc-perforce-lane'
 
 const DEFAULT_REMOTE_RUNTIME_CALL_CONCURRENCY = 8
 const DEFAULT_REMOTE_RUNTIME_BACKGROUND_CALL_CONCURRENCY = 2
@@ -49,6 +53,7 @@ export function isBackgroundRuntimeMethod(method: string): boolean {
     method === 'git.conflictOperation' ||
     method === 'git.branchCompare' ||
     method === 'git.upstreamStatus' ||
+    isPerforceBackgroundRuntimeMethod(method) ||
     method === 'worktree.prefetchCreateBase'
   )
 }
@@ -124,9 +129,11 @@ export class RuntimeRpcCallQueuePool {
         ? `${selector}\u0000stream-control`
         : bulkRead
           ? `${selector}\u0000bulk-read`
-          : timedPR
-            ? timedKey
-            : selector
+          : isPerforceRuntimeMethod(method)
+            ? `${selector}\u0000perforce`
+            : timedPR
+              ? timedKey
+              : selector
     if (this.queuedCallCount >= this.maxQueuedTotal) {
       return Promise.reject(new RuntimeRpcCallQueueOverloadError('global'))
     }

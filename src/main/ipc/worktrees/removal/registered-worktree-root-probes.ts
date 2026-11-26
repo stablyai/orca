@@ -1,7 +1,16 @@
 import { stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
+import { readAllWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'
 import type { Repo } from '../../../../shared/repository/repo-types'
+import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
+import { splitWorktreeId } from '../../../../shared/worktree/id'
+import { isPerforceCopyWorktreeIdForRepo } from '../../../../shared/worktree/perforce-copy-worktree'
 import { getErrorCode } from '../../../git/worktrees/worktree-operation-options'
 import { resolveLocalProjectRuntimesForRepos } from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import type { RegisteredWorktreeRootStore as RootStore } from './registered-worktree-root-store'
@@ -32,6 +41,7 @@ export async function listWorktreeRootsWithConcurrency(
   repos: readonly Repo[]
 ): Promise<ListedRoots[]> {
   const runtimes = resolveLocalProjectRuntimesForRepos(store, repos)
+  const copyMetaByHost = new Map<ExecutionHostId, Record<string, WorktreeMeta>>()
   const results: ListedRoots[] = []
   let nextIndex = 0
   await Promise.all(
@@ -60,6 +70,9 @@ export async function listWorktreeRootsWithConcurrency(
             )) {
               roots.add(resolve(worktree.path))
             }
+            for (const copyPath of perforceCopyPaths(store, repo, copyMetaByHost)) {
+              roots.add(resolve(copyPath))
+            }
           } catch (error) {
             console.warn(
               `[filesystem-auth] skipping repo ${repo.path} during cache rebuild:`,
@@ -73,6 +86,36 @@ export async function listWorktreeRootsWithConcurrency(
     )
   )
   return results
+}
+
+// Perforce copies of folder projects are known only from metadata.
+function perforceCopyPaths(
+  store: RootStore,
+  repo: Repo,
+  metaByHost: Map<ExecutionHostId, Record<string, WorktreeMeta>>
+): string[] {
+  if (!isFolderRepo(repo)) {
+    return []
+  }
+  const hostId = getRepoExecutionHostId(repo)
+  // Why per host: a same-id repo on another host may record copy paths that exist only there.
+  const worktreeMeta =
+    metaByHost.get(hostId) ??
+    store.getAllWorktreeMetaForHost?.(hostId) ??
+    readAllWorktreeMetaForHost(
+      { getAllWorktreeMeta: () => store.getAllWorktreeMeta?.() ?? {} },
+      hostId
+    )
+  metaByHost.set(hostId, worktreeMeta)
+  return Object.entries(worktreeMeta).flatMap(([worktreeId, meta]) => {
+    // Why: main stamps a copy it records with creation provenance, which renderer meta writes cannot
+    // set, so a copy-shaped id written through `worktrees:updateMeta` never authorizes its folder.
+    const path =
+      meta.orcaCreatedAt !== undefined && isPerforceCopyWorktreeIdForRepo(repo, worktreeId)
+        ? splitWorktreeId(worktreeId)?.worktreePath
+        : undefined
+    return path ? [path] : []
+  })
 }
 
 /** An unavailable mount is not evidence that a recovered worktree disappeared. */

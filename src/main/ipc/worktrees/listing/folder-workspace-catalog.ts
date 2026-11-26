@@ -25,7 +25,7 @@ import { getProjectHostSetupMetaUpdates } from './worktree-discovery-metadata'
 import {
   getFolderWorkspaceInstanceIdentity,
   getFolderWorkspaceRootId,
-  isFolderWorkspaceIdForRepo,
+  isFolderRepoWorktreeIdForRepo,
   mergeFolderWorkspace
 } from '../folder-workspace-model'
 
@@ -55,7 +55,7 @@ export function listFolderWorkspaces(store: Store, repo: Repo): Worktree[] {
   const rootId = getFolderWorkspaceRootId(repo)
   const allMeta = store.getAllWorktreeMeta()
   const ids = Object.keys(allMeta).filter((worktreeId) =>
-    isFolderWorkspaceIdForRepo(repo, worktreeId)
+    isFolderRepoWorktreeIdForRepo(repo, worktreeId)
   )
   if (!ids.includes(rootId)) {
     ids.unshift(rootId)

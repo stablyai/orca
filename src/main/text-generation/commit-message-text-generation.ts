@@ -93,9 +93,16 @@ export function cancelGeneratePullRequestFieldsLocal(cwd: string): void {
 export function generateCommitMessageFromContext(
   context: CommitMessageDraftContext,
   params: ResolvedSourceControlAiGenerationParams,
-  target: CommitMessageGenerationTarget
+  target: CommitMessageGenerationTarget,
+  promptOverride?: string
 ): Promise<GenerateCommitMessageResult> {
-  return generateCommitMessage({ context, params, target, spawnAgent: spawnSourceControlAgent })
+  return generateCommitMessage({
+    context,
+    params,
+    target,
+    spawnAgent: spawnSourceControlAgent,
+    ...(promptOverride !== undefined ? { promptOverride } : {})
+  })
 }
 
 export function generatePullRequestFieldsFromContext(

@@ -9,7 +9,6 @@ import {
 import { adoptFromEndpoint } from '../../../host-catalog/endpoint-catalog-adoption'
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
-import { pickClientWorktreeCreateSettings } from './client-worktree-create-settings'
 import {
   CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS,
   getClientWorktreeCreateCandidate,
@@ -25,6 +24,7 @@ import {
   WORKTREE_OPEN_EXISTING_BRANCH_V2_RUNTIME_CAPABILITY,
   WORKTREE_OPEN_EXISTING_BRANCH_V2_REQUEST_RUNTIME_CAPABILITY
 } from '../../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
+import { announcePerforceCopy } from '@/components/perforce-copies/perforce-copy-announcement'
 import { showCreatedWorktreeBaseRefNotices } from './created-worktree-base-ref-notices'
 import { applyCreatedWorktree } from './created-worktree-state-merge'
 import type { WorktreeCreateRequest } from './worktree-create-payload'
@@ -192,7 +192,7 @@ export function createCreateWorktree(
               manualOrder
             },
             target,
-            pickClientWorktreeCreateSettings(get().settings)
+            get().settings
           )
           if (lostRequestedParent(outcome, parent, target)) {
             warnParentDroppedOnce()
@@ -213,6 +213,7 @@ export function createCreateWorktree(
             options?.hookTrustContext
           )
           showCreatedWorktreeBaseRefNotices(result, target, creationHostId, get)
+          announcePerforceCopy(result.perforceCopy)
           return result
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)

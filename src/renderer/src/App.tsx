@@ -34,6 +34,7 @@ import { runWslDriveUncRendererStoreRewrites } from './lib/workspace/persistence
 import { useDocumentAppearance } from './app-shell/appearance/use-document-appearance'
 import { useFloatingWorkspacePanel } from './components/floating-terminal/workspace/use-floating-workspace-panel'
 import { useGlobalKeybindings } from './hooks/app-commands/use-global-keybindings'
+import { usePerforceFileChords } from './app-shell/use-perforce-file-chords'
 import { useOnboardingAndFeatureTips } from './app-shell/startup/use-onboarding-and-feature-tips'
 import { usePersistedUIWriter } from './app-shell/storage/use-persisted-ui-writer'
 import { useRuntimeGraphSync } from './runtime/sync-runtime-graph/use-runtime-graph-sync'
@@ -44,6 +45,11 @@ import { PluginShotReplayMount } from './components/plugins/view/PluginShotRepla
 import { AddToChatPointMenuHost } from './components/native-chat/selection-quotes/AddToChatMenu'
 import { installActiveWorktreeRemovalSuccessor } from './lib/workspace/activation/active-worktree-removal-successor'
 import { useAppStore } from './store'
+import { setRuntimeFileWriteGuard } from './runtime/files/mutations/runtime-file-mutation-client'
+import { checkoutPerforceFileBeforeWrite } from './lib/perforce-checkout-before-write'
+
+// Both the desktop and the web entry load App, so every save in either one passes this guard.
+setRuntimeFileWriteGuard(checkoutPerforceFileBeforeWrite)
 
 function App(): React.JSX.Element {
   const layout = useAppChromeLayout()
@@ -76,6 +82,7 @@ function App(): React.JSX.Element {
   useDocumentAppearance()
   useWindowVisibilityEffects()
   useGlobalKeybindings({ layout, floatingWorkspace })
+  usePerforceFileChords()
   // App owns active-selection removal; the Space window only mirrors selection.
   useEffect(() => installActiveWorktreeRemovalSuccessor(), [])
 

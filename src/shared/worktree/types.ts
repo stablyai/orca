@@ -167,6 +167,8 @@ export type Worktree = {
   mobileDiffReview?: MobileDiffReviewState
   automationProvenance?: AutomationWorkspaceProvenance
   cliProvenance?: CliWorkspaceProvenance
+  /** Stream of a Perforce copy; shown where Git worktrees show their branch. */
+  perforceStream?: string
 } & GitWorktreeInfo
 
 /** Only CLI-created workspaces carry this; missing means not CLI-created, including older rows. */

@@ -29,6 +29,8 @@ import { useWorkspaceBoardPanel } from './workspace-board/surface/useWorkspaceBo
 import { useWorkspaceRevealBodyRedirect } from './worktree-list/navigation/use-workspace-reveal-body-redirect'
 import { resolveLeftSidebarStyleVariables } from '@/app-shell/appearance/left-sidebar-appearance'
 import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
+import { usePerforceCopySync } from '../perforce-copies/use-perforce-copy-sync'
+import { PerforceSidebarModals } from '../perforce-copies/PerforceSidebarModals'
 import { LocalGitToolchainScanBanner } from '../repo/toolchain/LocalGitToolchainScanBanner'
 import { SeveredTerminalDaemonBanner } from '../maintenance/terminal-daemon/SeveredTerminalDaemonBanner'
 import { StalledTerminalDaemonBanner } from '../maintenance/terminal-daemon/StalledTerminalDaemonBanner'
@@ -157,6 +159,7 @@ function Sidebar({
   )
   const fetchAllWorktrees = useAppStore((s) => s.fetchAllWorktrees)
   const activeModal = useAppStore((s) => s.activeModal)
+  usePerforceCopySync()
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const leftSidebarStyle = useMemo(() => resolveLeftSidebarStyleVariables(settings), [settings])
   const { dropOwnerRef, dropHandlers, affordance } = useSidebarProjectDrop()
@@ -394,6 +397,7 @@ function Sidebar({
         {activeModal === 'worktree-visibility' ? <WorktreeVisibilityDialog /> : null}
         {activeModal === 'confirm-orca-yaml-hooks' ? <OrcaYamlTrustDialog /> : null}
         {activeModal === 'forget-ssh-workspace' ? <ForgetSshWorkspaceDialog /> : null}
+        <PerforceSidebarModals />
       </React.Suspense>
       {sidebarOpen ? (
         <WorkspaceKanbanDrawer
