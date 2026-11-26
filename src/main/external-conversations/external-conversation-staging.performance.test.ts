@@ -126,7 +126,8 @@ it.each([100, 1000])(
         const inspection = connectorImageInspection(undefined, poll.signal, { probes })
         const first = inspection.image('same-file')
         const second = inspection.image(`file-${index}`)
-        await Promise.resolve()
+        // Let a free permit reach the filesystem before retiring its delivery.
+        await new Promise<void>((resolve) => setImmediate(resolve))
         poll.abort()
         expect(await first).toBe('limit')
         expect(await second).toBe('limit')
