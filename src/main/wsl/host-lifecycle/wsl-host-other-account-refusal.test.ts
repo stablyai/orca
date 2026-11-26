@@ -9,7 +9,12 @@ import type { WslOrcadConnectionStatus } from '../orcad/wsl-orcad-connection-sta
 import { UNVERIFIABLE_ORCAD_TERMINAL_CENSUS } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 import { retryableConnectFailure } from './wsl-host-connect-failure'
 import { OrcadManagedIdentityError } from '../../managed-server/lifecycle/orcad-managed-tunnel-identity'
-import { accountHoldingKey, connectAsPairedWslAccount } from './wsl-host-account-migration'
+import {
+  accountHoldingKey,
+  connectAsPairedWslAccount,
+  WSL_ACCOUNT_KEYS_COMMAND
+} from './wsl-host-account-migration'
+import { execFileSync } from 'node:child_process'
 
 const changed = new WslHostAccountChangedError('Ubuntu-24.04', { uid: '1001', name: 'qauser' })
 const offer: PairingOffer = {
@@ -89,6 +94,11 @@ describe('a WSL host whose default account no longer serves its pairing', () => 
 
 describe('pinning the account behind an unpinned host', () => {
   afterEach(() => pinWslHostLinuxUsers([]))
+
+  // The root probe's quoting (timeout wrapper around the script) must stay valid sh.
+  it.skipIf(process.platform === 'win32')('keeps the root probe valid sh', () => {
+    expect(() => execFileSync('sh', ['-n', '-c', WSL_ACCOUNT_KEYS_COMMAND])).not.toThrow()
+  })
 
   it('pins only the one account whose orcad holds the paired key', () => {
     const keys = 'root AAAA\nqauser BBBB\n'
