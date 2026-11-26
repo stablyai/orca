@@ -147,6 +147,18 @@ it.each(['accepted', 'unknown', 'rejected'] as const)(
           opener: { role: 'owner', name: 'Fixture Owner' },
           mirror: true
         })
+        const history = await rig.host.history({ sessionId, direction: 'tail' })
+        expect(history).toMatchObject({
+          ok: true,
+          page: {
+            queuedMessages: expect.arrayContaining([
+              expect.objectContaining({
+                state: 'waiting',
+                body: { blocks: [{ type: 'text', text: 'next' }] }
+              })
+            ])
+          }
+        })
       } else {
         const recovered = await seam.start(host, KEY, ID, INPUT, new DeliveryPreparation())
         expect(recovered.initial.outcome).toBe(outcome === 'rejected' ? 'refused' : 'accepted')
@@ -162,9 +174,7 @@ it.each(['accepted', 'unknown', 'rejected'] as const)(
           failure: { category: 'signed_out' }
         })
       }
-      expect(await (await rig.host.journalReads(sessionId)).sendFingerprints()).toHaveLength(
-        outcome === 'unknown' ? 2 : 1
-      )
+      expect(await (await rig.host.journalReads(sessionId)).sendFingerprints()).toHaveLength(1)
       seam.dispose('connectors_disabled')
     } finally {
       setStructuredAgentSessionHost(null)
