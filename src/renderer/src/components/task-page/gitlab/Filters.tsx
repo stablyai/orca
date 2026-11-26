@@ -1,13 +1,12 @@
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { cn } from '@/lib/class-names'
-import TaskProjectSourceCombobox from '@/components/task-page/source-selection/task-project-source-combobox'
-import { normalizeTaskRepoSelection } from '../../../../../shared/work-items/task-repo-selection'
-import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { Button } from '@/components/ui/button'
-import { LoaderCircle, RefreshCw } from 'lucide-react'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { RailPageRefreshButton } from '@/components/rail-page/RailPageHeader'
+import { RailPageFilterButton, RailPageViews } from '@/components/rail-page/RailPageToolbar'
 import { getGitLabMRInvolvementFilters } from '@/components/task-page/task-page-localized-options'
+import { TaskPageListBands } from '../ListBands'
+import { TaskPageRepositoryScope } from '../RepositoryScope'
 
 function FilterChip({
   label,
@@ -42,15 +41,8 @@ export function TaskPageGitLabFilters({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const {
-    updateSettings,
-    eligibleRepos,
-    repoSelection,
-    setRepoSelection,
-    taskPickerGroups,
-    taskPickerRepos,
     gitLabIssueFilters,
     gitLabMRFilters,
-    getTaskPickerRepoHostLabel,
     setGitlabFilter,
     gitlabLoading,
     setGitlabRefreshNonce,
@@ -61,88 +53,44 @@ export function TaskPageGitLabFilters({
     gitlabMRInvolvement,
     setGitlabMRInvolvement
   } = model
-  return (
-    <>
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <div className="flex items-center gap-1 text-xs">
-          {(['issues', 'mrs', 'todos'] as const).map((view) => {
-            const active = gitlabView === view
-            const label =
-              view === 'issues'
-                ? t('auto.components.TaskPage.gitlabViewIssues', 'Issues')
-                : view === 'mrs'
-                  ? t('auto.components.TaskPage.gitlabViewMrs', 'MRs')
-                  : t('auto.components.TaskPage.gitlabViewTodos', 'My Todos')
-            return (
-              <button
-                key={view}
-                type="button"
-                onClick={() => setGitlabView(view)}
-                className={cn(
-                  'rounded-md border px-2.5 py-1 text-xs transition',
-                  active
-                    ? 'border-foreground/40 bg-foreground/90 text-background'
-                    : 'border-border/50 bg-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground'
-                )}
-              >
-                {label}
-              </button>
-            )
-          })}
-        </div>
-        <div className="min-w-0 w-full sm:w-[200px]">
-          <TaskProjectSourceCombobox
-            groups={taskPickerGroups}
-            selected={repoSelection}
-            getRepoHostLabel={getTaskPickerRepoHostLabel}
-            onChange={(next) => {
-              const normalized = normalizeTaskRepoSelection(eligibleRepos, next)
-              setRepoSelection(normalized)
-              void updateSettings({
-                defaultRepoSelection: [...normalized]
-              }).catch(() => {
-                toast.error(
-                  t('auto.components.TaskPage.dfd72673e7', 'Failed to save project selection.')
-                )
-              })
-            }}
-            onSelectAll={() => {
-              const allIds = new Set(taskPickerRepos.map((r) => r.id))
-              setRepoSelection(allIds)
-              void updateSettings({
-                defaultRepoSelection: null
-              }).catch(() => {
-                toast.error(
-                  t('auto.components.TaskPage.dfd72673e7', 'Failed to save project selection.')
-                )
-              })
-            }}
-            triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
+  const refresh = (
+    <RailPageRefreshButton
+      label={
+        gitlabView === 'todos'
+          ? t('auto.components.TaskPage.c679af7ad9', 'Refresh My Todos')
+          : t('auto.components.TaskPage.d4c2830063', 'Refresh GitLab work items')
+      }
+      busy={gitlabLoading || gitlabTodosLoading}
+      onRefresh={() => setGitlabRefreshNonce((n) => n + 1)}
+    />
+  )
+  const controls =
+    gitlabView !== 'todos' ? (
+      <Popover>
+        <PopoverTrigger asChild>
+          <RailPageFilterButton
+            activeCount={
+              Number(activeGitlabFilter !== 'opened') +
+              Number(gitlabView === 'mrs' && gitlabMRInvolvement !== null)
+            }
           />
-        </div>
-      </div>
-      <div
-        className="min-w-0 rounded-md rounded-b-none border border-border/50 bg-muted/50 px-3 pt-2 pb-0 shadow-sm"
-        data-contextual-tour-target="tasks-search-presets"
-      >
-        <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
+        </PopoverTrigger>
+        <PopoverContent align="end">
+          <div className="flex flex-wrap items-center gap-2 p-2">
             <div className="flex flex-wrap gap-2">
-              {gitlabView === 'issues' || gitlabView === 'mrs'
-                ? (gitlabView === 'issues' ? gitLabIssueFilters : gitLabMRFilters).map(
-                    ({ id, label }) => (
-                      <FilterChip
-                        key={id}
-                        label={label}
-                        active={activeGitlabFilter === id}
-                        onSelect={() => {
-                          setGitlabFilter(id)
-                          setGitlabRefreshNonce((n) => n + 1)
-                        }}
-                      />
-                    )
-                  )
-                : null}
+              {(gitlabView === 'issues' ? gitLabIssueFilters : gitLabMRFilters).map(
+                ({ id, label }) => (
+                  <FilterChip
+                    key={id}
+                    label={label}
+                    active={activeGitlabFilter === id}
+                    onSelect={() => {
+                      setGitlabFilter(id)
+                      setGitlabRefreshNonce((n) => n + 1)
+                    }}
+                  />
+                )
+              )}
             </div>
             {gitlabView === 'mrs' ? (
               <>
@@ -163,40 +111,28 @@ export function TaskPageGitLabFilters({
               </>
             ) : null}
           </div>
-          <div
-            className="flex shrink-0 items-center gap-2"
-            data-contextual-tour-target="tasks-actions"
-          >
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setGitlabRefreshNonce((n) => n + 1)}
-                  disabled={gitlabLoading || gitlabTodosLoading}
-                  aria-label={
-                    gitlabView === 'todos'
-                      ? t('auto.components.TaskPage.c679af7ad9', 'Refresh My Todos')
-                      : t('auto.components.TaskPage.d4c2830063', 'Refresh GitLab work items')
-                  }
-                  className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
-                >
-                  {gitlabLoading || gitlabTodosLoading ? (
-                    <LoaderCircle className="size-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="size-4" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6}>
-                {gitlabView === 'todos'
-                  ? t('auto.components.TaskPage.c679af7ad9', 'Refresh My Todos')
-                  : t('auto.components.TaskPage.d4c2830063', 'Refresh GitLab work items')}
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        </div>
-      </div>
-    </>
+        </PopoverContent>
+      </Popover>
+    ) : null
+  return (
+    <TaskPageListBands
+      model={model}
+      scope={<TaskPageRepositoryScope model={model} />}
+      views={
+        <RailPageViews
+          label={t('auto.components.TaskPage.11a828abf8', 'GitLab')}
+          value={gitlabView}
+          onValueChange={setGitlabView}
+          onReselect={setGitlabView}
+          items={[
+            { value: 'issues', label: t('auto.components.TaskPage.gitlabViewIssues', 'Issues') },
+            { value: 'mrs', label: t('auto.components.TaskPage.gitlabViewMrs', 'MRs') },
+            { value: 'todos', label: t('auto.components.TaskPage.gitlabViewTodos', 'My Todos') }
+          ]}
+        />
+      }
+      actions={refresh}
+      controls={controls}
+    />
   )
 }

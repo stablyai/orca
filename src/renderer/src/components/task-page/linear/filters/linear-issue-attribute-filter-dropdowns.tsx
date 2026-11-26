@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { ListFilter, X } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { X } from 'lucide-react'
+import { RailPageFilterButton } from '@/components/rail-page/RailPageToolbar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -39,6 +39,7 @@ import {
 } from './linear-issue-attribute-filter-team-ids'
 
 type Props = {
+  enabled: boolean
   value: LinearIssueAttributeFilter
   onChange: (next: LinearIssueAttributeFilter) => void
   /** `null` or `all` means no single workspace owns the facet ids. */
@@ -50,6 +51,7 @@ type Props = {
   /** False while `availableTeams` is still the issue-scraped fallback, not the real fetch. */
   teamsSettled: boolean
   settings?: RuntimeLinearSettings
+  render: (filter: React.ReactNode, pills: React.ReactNode) => React.JSX.Element
 }
 
 function ActivePill({
@@ -107,6 +109,7 @@ function ActivePill({
 }
 
 export default function LinearIssueAttributeFilterDropdowns({
+  enabled,
   value,
   onChange,
   workspaceId,
@@ -114,7 +117,8 @@ export default function LinearIssueAttributeFilterDropdowns({
   selectedTeamIds,
   availableTeams,
   teamsSettled,
-  settings
+  settings,
+  render
 }: Props): React.JSX.Element {
   const t = useTranslate()
   const [popoverOpen, setPopoverOpen] = useState(false)
@@ -126,10 +130,11 @@ export default function LinearIssueAttributeFilterDropdowns({
   const labelsTruncated = isLinearMetadataTruncated(labelIdsTruncation, value.labelIds)
   const activeCount = countLinearIssueAttributeFilters(value)
   const metadataNeeded =
-    popoverOpen ||
-    value.stateIds.length > 0 ||
-    value.labelIds.length > 0 ||
-    value.assignee?.kind === 'user'
+    enabled &&
+    (popoverOpen ||
+      value.stateIds.length > 0 ||
+      value.labelIds.length > 0 ||
+      value.assignee?.kind === 'user')
 
   // Unresolved and all-workspace contexts cannot own facet ids; offer a workspace choice instead.
   const scopedWorkspaceId = workspaceId && workspaceId !== 'all' ? workspaceId : null
@@ -154,6 +159,13 @@ export default function LinearIssueAttributeFilterDropdowns({
 
   // Prune only after successful nonempty metadata for the same team set; loading/errors must preserve selections.
   const pruneTeamKeyRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!enabled) {
+      setPopoverOpen(false)
+      setOpenSection(null)
+      pruneTeamKeyRef.current = null
+    }
+  }, [enabled])
   useEffect(() => {
     if (activeTeamIds.length === 0 || !concreteWorkspaceId) {
       return
@@ -295,6 +307,10 @@ export default function LinearIssueAttributeFilterDropdowns({
     onChange(bounded)
   }
 
+  if (!enabled) {
+    return render(null, null)
+  }
+
   const teamRequiredMessage = !primaryTeam
     ? t(
         'auto.components.linear-issue-attribute-filter-dropdowns.teamRequired',
@@ -302,118 +318,104 @@ export default function LinearIssueAttributeFilterDropdowns({
       )
     : null
 
-  return (
-    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-      <Popover
-        open={popoverOpen}
-        onOpenChange={(open) => {
-          setPopoverOpen(open)
-          if (!open) {
-            setOpenSection(null)
-          }
-        }}
-      >
-        <PopoverTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-7 gap-1.5 px-2 text-xs"
-            aria-label={t(
-              'auto.components.linear-issue-attribute-filter-dropdowns.filters',
-              'Filters'
-            )}
-          >
-            <ListFilter className="size-3.5" />
-            {t('auto.components.linear-issue-attribute-filter-dropdowns.filters', 'Filters')}
-            {activeCount > 0 ? (
-              <span className="rounded-full bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">
-                {activeCount}
-              </span>
-            ) : null}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent align="start" className="w-72 p-0">
-          {!scopedWorkspaceId ? (
-            <div className="space-y-2 p-3 text-xs">
-              <p className="font-medium text-foreground">
-                {t(
-                  'auto.components.linear-issue-attribute-filter-dropdowns.allWorkspacesTitle',
-                  'Select one workspace'
-                )}
-              </p>
-              <p className="text-muted-foreground">
-                {t(
-                  'auto.components.linear-issue-attribute-filter-dropdowns.allWorkspacesBody',
-                  'Status, assignee, and label filters use ids from a single Linear workspace. Choose one workspace to filter by those attributes.'
-                )}
-              </p>
-            </div>
-          ) : (
-            <>
-              {openSection ? (
-                <LinearIssueFilterSectionDetail
-                  section={openSection}
-                  value={value}
-                  onChange={applyPickedFilter}
-                  statusOptions={statusOptions}
-                  assigneeOptions={assigneeOptions}
-                  labelOptions={labelOptions}
-                  statusLoading={states.loading}
-                  statusError={states.error}
-                  assigneeLoading={members.loading}
-                  assigneeError={members.error}
-                  labelLoading={labels.loading}
-                  labelError={labels.error}
-                  statusTruncated={statusTruncated}
-                  labelsTruncated={labelsTruncated}
-                  teamRequiredMessage={teamRequiredMessage}
-                  onBack={() => setOpenSection(null)}
-                />
-              ) : (
-                <LinearIssueFilterSectionMenu
-                  value={value}
-                  statusOptions={statusOptions}
-                  labelOptions={labelOptions}
-                  statusTruncated={statusTruncated}
-                  labelsTruncated={labelsTruncated}
-                  onOpenSection={setOpenSection}
-                />
+  const filter = (
+    <Popover
+      open={popoverOpen}
+      onOpenChange={(open) => {
+        setPopoverOpen(open)
+        if (!open) {
+          setOpenSection(null)
+        }
+      }}
+    >
+      <PopoverTrigger asChild>
+        <RailPageFilterButton activeCount={activeCount} />
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-72">
+        {!scopedWorkspaceId ? (
+          <div className="space-y-2 p-3 text-xs">
+            <p className="font-medium text-foreground">
+              {t(
+                'auto.components.linear-issue-attribute-filter-dropdowns.allWorkspacesTitle',
+                'Select one workspace'
               )}
-              {activeCount > 0 ? (
-                <div className="border-t border-border/50 p-2">
-                  <button
-                    type="button"
-                    className="w-full rounded-md px-2 py-1.5 text-left text-xs text-muted-foreground transition hover:bg-muted/50 hover:text-foreground"
-                    onClick={() => onChange(emptyLinearIssueAttributeFilter())}
-                  >
-                    {t(
-                      'auto.components.linear-issue-attribute-filter-dropdowns.clearAll',
-                      'Clear all filters'
-                    )}
-                  </button>
-                </div>
-              ) : null}
-            </>
-          )}
-        </PopoverContent>
-      </Popover>
-
-      {pills.map((pill) => (
-        <ActivePill
-          key={pill.key}
-          label={pill.label}
-          value={pill.value}
-          partial={pill.partial}
-          onClear={() =>
-            onChange(
-              canonicalizeLinearIssueAttributeFilter(
-                clearLinearIssueAttributeFacet(value, pill.key)
-              )
-            )
-          }
-        />
-      ))}
-    </div>
+            </p>
+            <p className="text-muted-foreground">
+              {t(
+                'auto.components.linear-issue-attribute-filter-dropdowns.allWorkspacesBody',
+                'Status, assignee, and label filters use ids from a single Linear workspace. Choose one workspace to filter by those attributes.'
+              )}
+            </p>
+          </div>
+        ) : (
+          <>
+            {openSection ? (
+              <LinearIssueFilterSectionDetail
+                section={openSection}
+                value={value}
+                onChange={applyPickedFilter}
+                statusOptions={statusOptions}
+                assigneeOptions={assigneeOptions}
+                labelOptions={labelOptions}
+                statusLoading={states.loading}
+                statusError={states.error}
+                assigneeLoading={members.loading}
+                assigneeError={members.error}
+                labelLoading={labels.loading}
+                labelError={labels.error}
+                statusTruncated={statusTruncated}
+                labelsTruncated={labelsTruncated}
+                teamRequiredMessage={teamRequiredMessage}
+                onBack={() => setOpenSection(null)}
+              />
+            ) : (
+              <LinearIssueFilterSectionMenu
+                value={value}
+                statusOptions={statusOptions}
+                labelOptions={labelOptions}
+                statusTruncated={statusTruncated}
+                labelsTruncated={labelsTruncated}
+                onOpenSection={setOpenSection}
+              />
+            )}
+            {activeCount > 0 ? (
+              <div className="border-t border-border/50 p-2">
+                <button
+                  type="button"
+                  className="w-full rounded-md px-2 py-1.5 text-left text-xs text-muted-foreground transition hover:bg-muted/50 hover:text-foreground"
+                  onClick={() => onChange(emptyLinearIssueAttributeFilter())}
+                >
+                  {t(
+                    'auto.components.linear-issue-attribute-filter-dropdowns.clearAll',
+                    'Clear all filters'
+                  )}
+                </button>
+              </div>
+            ) : null}
+          </>
+        )}
+      </PopoverContent>
+    </Popover>
   )
+  const notices =
+    pills.length > 0 ? (
+      <div className="flex flex-wrap items-center gap-1.5">
+        {pills.map((pill) => (
+          <ActivePill
+            key={pill.key}
+            label={pill.label}
+            value={pill.value}
+            partial={pill.partial}
+            onClear={() =>
+              onChange(
+                canonicalizeLinearIssueAttributeFilter(
+                  clearLinearIssueAttributeFacet(value, pill.key)
+                )
+              )
+            }
+          />
+        ))}
+      </div>
+    ) : null
+  return render(filter, notices)
 }

@@ -31,12 +31,12 @@ export function TaskPageLinearIssueList({
     linearIssueGridStyle
   } = model
   return (
-    <div className="flex min-h-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm">
+    <div className="flex min-h-0 max-h-full flex-col overflow-hidden bg-background">
       <TaskPageLinearIssueToolbar model={model} />
 
       {linearViewMode === 'list' && linearGroupBy === 'none' ? (
         <div
-          className="grid h-8 flex-none items-center gap-3 border-b border-border/50 bg-muted/25 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground max-lg:!hidden lg:grid-cols-[var(--linear-grid-template)] [&>span]:min-w-0 [&>span]:truncate"
+          className="grid h-8 flex-none items-center gap-3 border-b border-border/50 bg-muted/25 px-(--rail-page-gutter) text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground max-lg:!hidden lg:grid-cols-[var(--linear-grid-template)] [&>span]:min-w-0 [&>span]:truncate"
           style={linearIssueGridStyle}
         >
           <span>{t('auto.components.TaskPage.37e7ee311e', 'Key')}</span>

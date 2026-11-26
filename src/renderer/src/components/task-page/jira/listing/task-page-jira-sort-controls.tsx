@@ -53,7 +53,7 @@ export function TaskPageJiraSortControls({
 
   return (
     <>
-      <div className="sticky top-0 z-10 grid h-8 flex-none grid-cols-(--jira-cols-md) @3xl:min-w-(--jira-min-md) items-center gap-3 border-b border-border/50 bg-background px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground @max-3xl:!hidden @5xl:grid-cols-(--jira-cols-lg) @5xl:min-w-(--jira-min-lg) @7xl:grid-cols-(--jira-cols-xl) @7xl:min-w-(--jira-min-xl)">
+      <div className="sticky top-0 z-10 grid h-8 flex-none grid-cols-(--jira-cols-md) @3xl:min-w-(--jira-min-md) items-center gap-3 border-b border-border/50 bg-background rail-page-row-gutter text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground @max-3xl:!hidden @5xl:grid-cols-(--jira-cols-lg) @5xl:min-w-(--jira-min-lg) @7xl:grid-cols-(--jira-cols-xl) @7xl:min-w-(--jira-min-xl)">
         {columns.map((column) => (
           <button
             key={column.id}

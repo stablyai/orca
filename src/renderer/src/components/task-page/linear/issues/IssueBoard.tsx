@@ -1,3 +1,4 @@
+import { RailPageScroll } from '@/components/rail-page/RailPage'
 import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
 import { useTranslate } from '@/i18n/use-translate'
 import {
@@ -42,12 +43,7 @@ export function TaskPageLinearIssueBoard({
     Boolean(linearError) &&
     isIntegrationCredentialDecryptionError(linearError)
   return (
-    <div
-      className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek"
-      style={{
-        scrollbarGutter: 'stable'
-      }}
-    >
+    <RailPageScroll className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
       {linearLoginUnreadable ? (
         <div className="m-4 flex flex-col items-center justify-center rounded-md border border-border/50 bg-muted/50 px-6 py-14 text-center shadow-sm">
           <LinearIcon className="mb-4 size-8 text-muted-foreground/60" />
@@ -72,7 +68,7 @@ export function TaskPageLinearIssueBoard({
           {Array.from({
             length: 12
           }).map((_, i) => (
-            <div key={i} className="px-3 py-3">
+            <div key={i} className="rail-page-row-gutter py-3">
               <div className="h-4 w-4/5 animate-pulse rounded bg-muted/70" />
               <div className="mt-2 h-3 w-3/5 animate-pulse rounded bg-muted/60" />
             </div>
@@ -197,6 +193,6 @@ export function TaskPageLinearIssueBoard({
       ) : (
         <TaskPageLinearIssueTable model={model} />
       )}
-    </div>
+    </RailPageScroll>
   )
 }

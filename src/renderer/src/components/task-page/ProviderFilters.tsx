@@ -2,6 +2,7 @@ import type { TaskPageComposerActionsModel } from './use-task-page-composer-acti
 import { TaskPageLinearFilters } from './linear/Filters'
 import { TaskPageJiraFilters } from './jira/Filters'
 import { TaskPageGitLabFilters } from './gitlab/Filters'
+import { TaskPageListBands } from './ListBands'
 export function TaskPageProviderFilters({
   model
 }: {
@@ -14,5 +15,7 @@ export function TaskPageProviderFilters({
     <TaskPageJiraFilters model={model} />
   ) : taskSource === 'gitlab' ? (
     <TaskPageGitLabFilters model={model} />
-  ) : null
+  ) : (
+    <TaskPageListBands model={model} />
+  )
 }

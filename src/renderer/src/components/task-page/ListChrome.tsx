@@ -2,7 +2,6 @@ import type { TaskPageComposerActionsModel } from './use-task-page-composer-acti
 import { cn } from '@/lib/class-names'
 import { TaskPageGitHubListChrome } from './github/listing/Filters'
 import { TaskPageProviderFilters } from './ProviderFilters'
-import { TaskPageListBands } from './ListBands'
 
 type Props = { model: TaskPageComposerActionsModel }
 
@@ -12,10 +11,7 @@ export function TaskPageListChrome({ model }: Props): React.JSX.Element {
       {model.taskSource === 'github' ? (
         <TaskPageGitHubListChrome model={model} />
       ) : (
-        <>
-          <TaskPageListBands model={model} />
-          <TaskPageProviderFilters model={model} />
-        </>
+        <TaskPageProviderFilters model={model} />
       )}
     </div>
   )

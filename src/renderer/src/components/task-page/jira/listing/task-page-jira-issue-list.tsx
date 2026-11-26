@@ -144,7 +144,7 @@ function JiraIssueRow({
           }
         }}
         className={cn(
-          'group/row grid min-h-12 cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 text-left transition hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring @3xl:grid-cols-(--jira-cols-md) @3xl:min-w-(--jira-min-md) @5xl:grid-cols-(--jira-cols-lg) @5xl:min-w-(--jira-min-lg) @7xl:grid-cols-(--jira-cols-xl) @7xl:min-w-(--jira-min-xl)',
+          'group/row grid min-h-12 cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rail-page-row-gutter py-2 text-left transition hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring @3xl:grid-cols-(--jira-cols-md) @3xl:min-w-(--jira-min-md) @5xl:grid-cols-(--jira-cols-lg) @5xl:min-w-(--jira-min-lg) @7xl:grid-cols-(--jira-cols-xl) @7xl:min-w-(--jira-min-xl)',
           selected && 'bg-accent'
         )}
       >
@@ -310,25 +310,23 @@ export function TaskPageJiraIssueList({
               })
             }}
           >
-            <CollapsibleTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                className="h-9 w-full justify-start rounded-none bg-muted/35 px-3 text-left font-normal transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
-              >
-                {open ? (
-                  <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
-                ) : (
-                  <ChevronRight className="size-3 shrink-0 text-muted-foreground" />
-                )}
-                <span className="min-w-0 truncate text-[13px] font-medium text-foreground">
-                  {section.label}
+            <div className="bg-muted/35">
+              <CollapsibleTrigger type="button" variant="full-bleed-row" className="h-9">
+                <span className="flex w-full min-w-0 items-center gap-2 rail-page-row-gutter">
+                  {open ? (
+                    <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
+                  ) : (
+                    <ChevronRight className="size-3 shrink-0 text-muted-foreground" />
+                  )}
+                  <span className="min-w-0 truncate text-[13px] font-medium text-foreground">
+                    {section.label}
+                  </span>
+                  <span className="shrink-0 text-2xs font-normal text-muted-foreground">
+                    {section.issues.length}
+                  </span>
                 </span>
-                <span className="shrink-0 text-[11px] text-muted-foreground">
-                  {section.issues.length}
-                </span>
-              </Button>
-            </CollapsibleTrigger>
+              </CollapsibleTrigger>
+            </div>
             <CollapsibleContent className="divide-y divide-border/50 border-t border-border/50">
               {section.issues.map((issue) => (
                 <JiraIssueRow

@@ -11,12 +11,16 @@ function Collapsible({
   return <CollapsiblePrimitive.Root data-slot="collapsible" {...props} />
 }
 
+const collapsibleRowClass =
+  'group flex w-full cursor-pointer items-center justify-between gap-4 bg-transparent py-2 text-left text-sm font-medium outline-none hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50'
+
 const collapsibleTriggerVariants = cva('', {
   variants: {
     variant: {
       default: '',
       chat: 'group flex max-w-full items-start gap-1 rounded-md py-0.5 text-left text-sm text-chat-foreground-faint hover:text-chat-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-      row: 'group flex w-full cursor-pointer items-center justify-between gap-4 rounded-md bg-transparent py-2 text-left text-sm font-medium outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:hover:bg-accent/50',
+      row: `${collapsibleRowClass} rounded-md focus-visible:ring-[3px] focus-visible:ring-ring/50`,
+      'full-bleed-row': `${collapsibleRowClass} focus-visible:bg-accent focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring`,
       // A one-line summary of settings inside a bordered box, opening to edit them.
       summary:
         'group flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-muted-foreground outline-none hover:bg-accent/50 focus-visible:ring-[3px] focus-visible:ring-ring/50'
