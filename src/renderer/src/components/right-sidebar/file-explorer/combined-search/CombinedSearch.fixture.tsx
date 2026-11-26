@@ -105,7 +105,11 @@ function FixtureTree(): React.JSX.Element {
             <span className="size-3 shrink-0" />
           )}
           {isDir ? (
-            <FolderIcon folderPath={name} className="size-3 shrink-0 text-muted-foreground" />
+            <FolderIcon
+              folderPath={name}
+              open={false}
+              className="size-3 shrink-0 text-muted-foreground"
+            />
           ) : (
             <FileTypeIcon filePath={name} className="size-3 shrink-0 text-muted-foreground" />
           )}
