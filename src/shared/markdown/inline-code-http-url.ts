@@ -1,6 +1,11 @@
 /** A code span supplies both URL boundaries, so parentheses and trailing punctuation can be literal. */
 export function isInlineCodeHttpUrl(value: string): boolean {
-  return (
-    /^https?:\/\/[^/?#]/i.test(value) && !/[\s\p{Cc}\\<>"`{}]/u.test(value) && URL.canParse(value)
-  )
+  if (!/^https?:\/\/[^/?#]/i.test(value) || /[\s\p{Cc}\\<>"`{}]/u.test(value)) {
+    return false
+  }
+  try {
+    return new URL(value).hostname.length > 0
+  } catch {
+    return false
+  }
 }
