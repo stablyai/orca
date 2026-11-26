@@ -5,6 +5,7 @@ import { getFnmDefaultAliasDirectories } from './fnm-default-alias-dirs'
 import { getNvmVersionDirectories, nvmVersionDirectories } from './nvm-version-directories'
 import { runCliFsReadsSync, type CliFsReads } from './cli-fs-reads'
 import { getSystemCliInstallDirectories } from './system-cli-install-dirs'
+import { codexAppBinDirectories } from './macos-codex-app-launcher'
 
 export type ResolveCommandOptions = {
   pathEnv?: string | null
@@ -12,6 +13,8 @@ export type ResolveCommandOptions = {
   homePath?: string
   /** Skip the PATH scan; the caller already established absence there (agent detection batches it). */
   skipPathSearch?: boolean
+  /** Include the desktop app when detecting or launching Codex. */
+  codexAppFallback?: boolean
 }
 
 export function getExecutableNames(platform: NodeJS.Platform, commandName: string): string[] {
@@ -187,6 +190,16 @@ function getCliInstallDirectories(platform: NodeJS.Platform, homePath: string): 
   return runCliFsReadsSync(cliInstallDirectories(platform, homePath))
 }
 
+function withCodexAppFallback(
+  directories: string[],
+  commandName: string,
+  options: ResolveCommandOptions
+): string[] {
+  return options.codexAppFallback && commandName === 'codex'
+    ? [...directories, ...codexAppBinDirectories(options.platform, options.homePath)]
+    : directories
+}
+
 /** PATH entries first; install dirs are listed only once PATH misses. Run with cli-fs-reads. */
 export function* cliCommandLookup(
   commandName: string,
@@ -199,7 +212,11 @@ export function* cliCommandLookup(
     (yield* firstRunnable(platform, splitPath(pathEnv, platform), names)) ??
     (yield* firstRunnable(
       platform,
-      yield* cliInstallDirectories(platform, options.homePath ?? homedir()),
+      withCodexAppFallback(
+        yield* cliInstallDirectories(platform, options.homePath ?? homedir()),
+        commandName,
+        options
+      ),
       names
     )) ??
     commandName
@@ -270,8 +287,9 @@ export function resolveCliCommands(
     const pathCandidate = options.skipPathSearch
       ? undefined
       : findFirstExecutable(platform, pathDirectories, executableNames)
+    const directories = withCodexAppFallback(installDirectories, commandName, options)
     const installCandidate =
-      pathCandidate ?? findFirstExecutable(platform, installDirectories, executableNames)
+      pathCandidate ?? findFirstExecutable(platform, directories, executableNames)
     resolved.set(commandName, installCandidate ?? commandName)
   }
 

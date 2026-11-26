@@ -12,7 +12,7 @@ import { wslHookRelayManager } from '../../../agent-hooks/wsl-relay/wsl-hook-rel
 import { wslInteropHealthMonitor } from '../../../wsl/execution/wsl-interop-health'
 import { piTitlebarExtensionService } from '../../../pi/managed-extensions/titlebar-extension-service'
 import { prependOrcaCliDirToChildPath } from '../../../cli/launchers/orca-cli-child-path'
-import { appendManagedAgentDirsToChildPath } from '../../../managed-agent-cli/managed-agent-cli-registry'
+import { appendAgentFallbackDirsToChildPath } from '../../../managed-agent-cli/managed-agent-cli-registry'
 import { resolveTerminalBrowserCommand } from './terminal-browser-command'
 import { getManagedWslCliDir, getWslCliCommandName } from '../../../cli/wsl/wsl-managed-cli'
 import { stripLegacyTerminalShimEnv } from '../../../pty/shell-startup/legacy-terminal-shim-dir'
@@ -40,11 +40,11 @@ import { applyOpenCodeStatusPluginEnv, captureOpenCodeSourceConfig } from './ope
 import { applyRemoteViewerClipboardEnv } from './remote-viewer-clipboard-env'
 
 /** Mutate host-local PTY environment only for local execution; SSH cannot use these loopback endpoints or filesystem paths. */
-export function buildPtyHostEnv(
+export async function buildPtyHostEnv(
   id: string,
   baseEnv: Record<string, string>,
   opts: BuildPtyHostEnvOptions
-): Record<string, string> {
+): Promise<Record<string, string>> {
   mergePersistedWindowsPath(baseEnv)
   Object.assign(baseEnv, buildConfiguredProxyEnv(opts.networkProxySettings))
 
@@ -302,7 +302,7 @@ export function buildPtyHostEnv(
     userDataPath: opts.userDataPath,
     resourcesPath: opts.resourcesPath
   })
-  appendManagedAgentDirsToChildPath(baseEnv)
+  await appendAgentFallbackDirsToChildPath(baseEnv)
 
   if (
     opts.routeBrowserOpensToClient === true &&

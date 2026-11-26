@@ -1,5 +1,6 @@
 import { resolveCliCommandAsync } from '../../shared/shell/command-resolution/node-cli-command-async-resolution'
 import { resolveCliCommand } from '../../shared/shell/command-resolution/node-cli-command-resolution'
+import { isCodexAppFallback } from '../../shared/shell/command-resolution/macos-codex-app-launcher'
 import { resolveGuestNativeProgram } from '../wsl/filesystem/wsl-guest-windows-drive-path'
 import { WINDOWS_ONLY_AGENT_CLI_DIR } from './windows-only-agent-cli'
 import { isAbsolute } from 'node:path'
@@ -43,7 +44,11 @@ function orUseManagedCopy(agent: ManagedAgentCliId, resolved: string): string {
 }
 
 export function resolveCodexCommand(options: ResolveCommandOptions = {}): string {
-  return orUseManagedCopy('codex', resolveGuestNativeAgentCommand('codex', options))
+  const command = resolveGuestNativeAgentCommand('codex', { ...options, codexAppFallback: true })
+  if (isCodexAppFallback(command, options.pathEnv)) {
+    return managedAgentCommand('codex') ?? command
+  }
+  return orUseManagedCopy('codex', command)
 }
 
 /** Per-spawn lookup (#35565): only Windows' per-candidate stats are slow enough to move off the event loop. */
