@@ -20005,6 +20005,10 @@
       "copyCode": "Copiar código",
       "wrapLines": "Ajustar líneas",
       "disableLineWrap": "Desactivar ajuste de línea",
+      "htmlPreview": "Vista previa HTML",
+      "htmlView": "Vista HTML",
+      "htmlViewCode": "Código",
+      "htmlViewPreview": "Vista previa",
       "context": {
         "unavailable": "El uso del contexto aún no se conoce. Estará disponible cuando el agente vuelva a responder.",
         "summary": "Contexto: {{used}} / {{window}} tokens ({{percent}} %), estimado a partir de la última respuesta.",
@@ -21131,6 +21135,17 @@
           "selectionWithheldCount_other": "{{count}} espacios de trabajo seleccionados están ocultos por los filtros actuales y se han deseleccionado.",
           "selectionWithheldCount_many": "{{count}} espacios de trabajo seleccionados están ocultos por los filtros actuales y se han deseleccionado.",
           "lastActive": "Última actividad: {{value0}}",
+          "projectNamed": "Proyecto: {{value0}}",
+          "pathLabel": "Ruta",
+          "copyPath": "Copiar ruta",
+          "gitNotChecked": "Sin comprobar",
+          "workspaceCount_one": "{{count}} espacio de trabajo",
+          "workspaceCount_other": "{{count}} espacios de trabajo",
+          "workspaceCount_many": "{{count}} espacios de trabajo",
+          "restoreFailed": "No se pudo dejar de ignorar {{value0}}",
+          "ignoreTooltip": "Ignorar: omitir en la eliminación masiva",
+          "stopIgnoring": "Dejar de ignorar",
+          "stopIgnoringNamed": "Dejar de ignorar {{value0}}",
           "sortAscending": "ascendente",
           "sortDescending": "descendente"
         },
@@ -21265,7 +21280,8 @@
           "checking": "Comprobando si hay cambios…",
           "checkingDetails": "Comprobando…",
           "unavailableDetails": "Detalles no disponibles",
-          "none": "No hay cambios sin confirmar"
+          "none": "No hay cambios sin confirmar",
+          "noUnsaved": "No hay archivos sin guardar"
         },
         "unsavedEdits": {
           "discarded_one": "Se descartarán las ediciones sin guardar de {{count}} archivo:",
@@ -21284,9 +21300,25 @@
           "line_other": "Se descartarán las ediciones sin guardar de {{count}} archivos: {{files}}",
           "line_many": "Se descartarán las ediciones sin guardar de {{count}} archivos: {{files}}"
         },
-        "ignoredFilesUnchecked": "No se pudieron comprobar todos los archivos ignorados"
+        "ignoredFilesUnchecked": "No se pudieron comprobar todos los archivos ignorados",
+        "ignoredFiles": {
+          "none": "No hay archivos locales ignorados",
+          "unavailable": "Archivos ignorados sin comprobar",
+          "checking": "Comprobando archivos ignorados…",
+          "lost_one": "Se perderá {{count}} archivo ignorado",
+          "lost_other": "Se perderán {{count}} archivos ignorados",
+          "lost_many": "Se perderán {{count}} archivos ignorados",
+          "lostIncomplete": "Se perderán {{count}}+ archivos ignorados",
+          "showPaths": "Mostrar rutas ignoradas",
+          "morePaths_one": "y {{count}} ruta ignorada más",
+          "morePaths_other": "y {{count}} rutas ignoradas más",
+          "morePaths_many": "y {{count}} rutas ignoradas más",
+          "listLabel": "Archivos locales ignorados que se perderán",
+          "incompleteNotice": "La comprobación se detuvo antes de tiempo; es posible que también se eliminen más archivos ignorados de este worktree."
+        }
       },
       "atRiskLocalFiles": {
+        "namesWithCount": "{{names}} +{{value0}}",
         "namesAndMore": "{{names}} y más"
       }
     },
@@ -21323,10 +21355,17 @@
         "copySessionId": "Copiar ID de sesión",
         "copySessionIdSuccess": "ID de sesión copiado",
         "copySessionIdError": "No se pudo copiar el ID de sesión",
-        "copySessionIdUnavailable": "No hay ningún ID de sesión para copiar"
+        "copySessionIdUnavailable": "No hay ningún ID de sesión para copiar",
+        "copyOrcaSessionId": "Copiar ID de sesión de Orca",
+        "orcaSessionIdTooltip": "El ID de Orca para este agente, distinto del ID de sesión propio de la CLI del agente. Los agentes lo usan para referirse entre sí a través de Orca.",
+        "orcaSessionIdCopied": "ID de sesión de Orca copiado",
+        "orcaSessionIdCopyFailed": "No se pudo copiar el ID de sesión de Orca"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "Actualiza Orca en {{value0}} para abrir archivos fuera de sus espacios de trabajo"
+      },
+      "paste": {
+        "clipboardUnpastable": "No se pudo pegar el archivo copiado. Prueba a arrastrarlo al terminal."
       }
     },
     "agentChildRow": {
@@ -21353,11 +21392,22 @@
         "shellEnvSearchVariables": "variables de entorno",
         "shellEnvSearchPath": "PATH",
         "shellEnvSearchProxy": "proxy",
+        "linkPreviewsToggleLabel": "Activar o desactivar las vistas previas de enlaces",
+        "linkPreviewsTitle": "Vistas previas de enlaces",
+        "linkPreviewsCopy": "Al pasar el cursor por un enlace web se muestra una tarjeta de vista previa. Orca obtiene la página para crearla, así que el sitio puede ver la solicitud.",
+        "linkPreviewsSearchUnfurl": "desplegar",
+        "linkPreviewsSearchHover": "tarjeta al pasar el cursor",
+        "composerSpellcheckTitle": "Corrector ortográfico y autocorrección",
+        "composerSpellcheckCopy": "Subraya las palabras mal escritas y aplica los reemplazos de texto del sistema en el cuadro de mensaje. Desactívalo para detener ambos aquí sin cambiarlos en todo el sistema.",
+        "composerSpellcheckSearchSpelling": "corrector ortográfico",
+        "composerSpellcheckSearchAutocorrect": "autocorrección",
         "usageLimitContinueTitle": "Continuar los chats automáticamente cuando se restablezca un límite de uso",
         "usageLimitContinueCopy": "Orca envía \"Continue where you left off.\" cuando se restablece el límite. Se aplica a todos los chats con una hora de restablecimiento conocida.",
         "usageLimitContinueSearchLimit": "límite de uso",
         "usageLimitContinueSearchReset": "restablecer",
         "usageLimitContinueToggleLabel": "Activar o desactivar la continuación de chats al restablecerse un límite de uso",
+        "usageLimitContinueUnsupported": "Actualiza Orca en {{host}} para cambiar este ajuste allí.",
+        "usageLimitContinueUpdateFailed": "No se pudo actualizar el ajuste en {{host}}.",
         "idleStopTitle": "Detener agentes inactivos tras",
         "idleStopCopy": "Cierra el agente de un chat cuando el chat lleva este tiempo inactivo, para liberar memoria. El chat se conserva y tu siguiente mensaje vuelve a iniciar el agente. Elige Nunca para agentes que siguen trabajando en segundo plano entre turnos.",
         "idleStopSearchIdle": "idle",
@@ -21366,7 +21416,12 @@
         "idleStopNever": "Nunca",
         "openedPullRequestsTitle": "Solicitudes de extracción creadas",
         "openedPullRequestsCopy": "Muestra debajo de la respuesta las solicitudes de extracción creadas en cada turno, con títulos y número de líneas.",
+        "openedPullRequestsSearchPr": "PR",
         "openedPullRequestsSearchCard": "tarjeta de solicitud de extracción",
+        "ciResultLinesTitle": "Líneas de resultado de CI",
+        "ciResultLinesCopy": "Una línea en el chat cuando CI termina en un pull request que el agente abrió o al que hizo push.",
+        "ciResultLinesSearchChecks": "checks",
+        "ciResultLinesSearchPr": "PR",
         "turnActivityTitle": "Actividad de turnos",
         "turnDiffsTitle": "Diferencias de turnos",
         "turnDiffsCopy": "Muestra debajo de la respuesta los archivos modificados en cada turno, con el número de líneas.",
@@ -21406,6 +21461,11 @@
           "scrollback": "historial",
           "snap": "ajustar",
           "position": "posición"
+        },
+        "claudeCodeThemeSync": {
+          "description": "Claude Code en este equipo usa los colores de tu terminal y sigue los cambios de tema en directo, también fuera de Orca. Al desactivarlo se restaura tu tema anterior de Claude Code. Elegir un tema en Claude Code detiene la sincronización.",
+          "claude": "claude",
+          "9353305ea6": "Ajustar Claude Code al tema del terminal"
         }
       },
       "voice": {
@@ -21422,6 +21482,24 @@
         "fillerWords": {
           "0134406785": "Quitar muletillas",
           "short": "Quita «ehm» y «em»."
+        },
+        "openAiCompatible": {
+          "updateFailed": "No se pudo actualizar el proveedor",
+          "title": "Proveedor compatible con OpenAI",
+          "description": "El audio va a este servicio solo mientras está seleccionado el modelo compatible con OpenAI. Funciona con Groq, Mistral, OpenAI y servidores locales.",
+          "baseUrl": "URL base",
+          "baseUrlPlaceholder": "https://api.groq.com/openai/v1",
+          "model": "Modelo",
+          "modelPlaceholder": "whisper-large-v3-turbo",
+          "apiKey": "Clave de API",
+          "keySaved": "Se conserva la clave guardada",
+          "keyOptional": "Opcional para servidores locales",
+          "save": "Guardar",
+          "rowConfigured": "URL base y modelo guardados para el modelo compatible con OpenAI.",
+          "rowMissing": "Agrega una URL base y un modelo antes de seleccionar el modelo compatible con OpenAI.",
+          "edit": "Editar",
+          "removeLabel": "Quitar el proveedor compatible con OpenAI",
+          "setUp": "Configurar"
         },
         "input": {
           "title": "Entrada",
@@ -21580,6 +21658,7 @@
           "correctionWordDescription": "Dila para rectificar lo que acabas de decir: «a las cuatro, {{word}}, a las cinco».",
           "correctionWordOff": "Ninguna"
         },
+        "localOnlyNotice": "Habla en lugar de escribir en cualquier panel. Estos ajustes solo se aplican a este equipo; {{host}} conserva los suyos.",
         "keepLoaded": {
           "label": "Mantener el modelo cargado",
           "description": "El dictado empieza al instante mientras está cargado.",
@@ -21589,6 +21668,246 @@
       },
       "repositoryHooks": {
         "availableEnvVars": "Variables de entorno disponibles"
+      },
+      "RepositoryHooksSection": {
+        "folderRunPolicyDescription": "Comportamiento predeterminado al crear un espacio de trabajo nuevo.",
+        "folderTitle": "Hooks del espacio de trabajo",
+        "folderDescription": "Scripts que se ejecutan en esta carpeta cuando se crea o elimina un espacio de trabajo. Todos los espacios de trabajo comparten la carpeta. Los scripts locales se guardan en este equipo; los scripts de `orca.yaml` se comparten con tu equipo.",
+        "folderSetupDescription": "Scripts locales y compartidos que se ejecutan después de crear un espacio de trabajo nuevo.",
+        "folderArchiveDescription": "Scripts locales y compartidos que se ejecutan antes de eliminar un espacio de trabajo.",
+        "folderSetupFieldDescription": "Se ejecuta después de crear un espacio de trabajo nuevo; crea worktrees hijos, instala dependencias y copia archivos de entorno.",
+        "folderArchiveFieldDescription": "Se ejecuta antes de eliminar un espacio de trabajo."
+      },
+      "workspaceCleanup": {
+        "title": "Limpieza de espacios de trabajo",
+        "description": "Elimina los espacios de trabajo con los que ya terminaste. Antes de eliminar nada, Orca vuelve a comprobar si hay trabajo sin guardar.",
+        "unsupportedHost": "Este host ejecuta una versión de Orca sin limpieza automática. Actualiza Orca en él para usar estos ajustes.",
+        "previewFailed": "No se pudo comprobar con qué espacios de trabajo coincide este cambio.",
+        "pinFailed": "No se pudo conservar {{name}}.",
+        "rules": {
+          "branchNote": "Las ramas fusionadas se eliminan con su espacio de trabajo. Las ramas sin fusionar se conservan.",
+          "recommended": "Recomendado",
+          "inactiveDescription": "Sin actividad durante {{count}} días.",
+          "advancedDescription": "Espacios de trabajo de automatizaciones y de trabajadores de orquestación",
+          "inactiveFor": "Inactivo durante",
+          "days": "días",
+          "then": "Luego",
+          "archiveDescription": "Archivar libera espacio en disco y mantiene el espacio de trabajo en la barra lateral.",
+          "deleteDescription": "Eliminar quita el espacio de trabajo y su carpeta.",
+          "archive": "Archivar",
+          "delete": "Eliminar",
+          "matchesCount": "Coincide ahora con {{count}} espacios de trabajo",
+          "hideMatches": "Ocultar",
+          "showMatches": "Mostrar",
+          "merged": "Eliminar espacios de trabajo fusionados",
+          "mergedDescription": "El pull request está fusionado y todo lo del espacio de trabajo está incluido en él.",
+          "unchanged": "Eliminar espacios de trabajo sin cambios",
+          "unchangedDescription": "Sin confirmaciones más allá de la rama predeterminada y sin ediciones.",
+          "inactiveCleanUp": "Limpiar espacios de trabajo inactivos",
+          "inactive": "Eliminar espacios de trabajo inactivos",
+          "automationRuns": "Eliminar espacios de trabajo de automatizaciones terminadas",
+          "automationRunsDescription": "Espacios de trabajo que creó una ejecución de automatización, una vez terminada la ejecución.",
+          "orchestrationWorkers": "Eliminar espacios de trabajo de trabajadores de orquestación liberados",
+          "orchestrationWorkersDescription": "Espacios de trabajo que usó un trabajador de orquestación, una vez que el coordinador lo liberó.",
+          "inactiveDescription_one": "Sin actividad durante 1 día.",
+          "inactiveDescription_other": "Sin actividad durante {{count}} días.",
+          "inactiveDescription_many": "Sin actividad durante {{count}} días.",
+          "matchesCount_one": "Coincide ahora con 1 espacio de trabajo",
+          "matchesCount_other": "Coincide ahora con {{count}} espacios de trabajo",
+          "matchesCount_many": "Coincide ahora con {{count}} espacios de trabajo",
+          "checking": "Comprobando qué espacios de trabajo coinciden…",
+          "checkFailed": "No se pudo comprobar qué espacios de trabajo coinciden."
+        },
+        "protection": {
+          "title": "Protección",
+          "keepIgnoredFiles": "Conservar espacios de trabajo con archivos ignorados",
+          "keepIgnoredFilesDescription": "Los archivos como .env y la configuración local no se pueden recuperar. node_modules y la salida de compilación no cuentan.",
+          "alwaysKeptLabel": "Siempre se conservan",
+          "alwaysKeptList": "Espacios de trabajo fijados, agentes o terminales en ejecución, cambios sin guardar en el editor, cambios sin confirmar y confirmaciones sin enviar."
+        },
+        "activity": {
+          "loadFailed": "No se pudo cargar la actividad: {{error}}",
+          "empty": "La limpieza aún no se ha ejecutado.",
+          "unfinished": "No se pudo terminar",
+          "nothingRemoved": "Nada que limpiar",
+          "removedCount": "Quitados: {{count}}",
+          "keptCount": "Conservados: {{count}}",
+          "failedCount": "Fallidos: {{count}}",
+          "removed": "Quitados · {{count}}",
+          "failed": "Fallidos · {{count}}",
+          "archived": "Archivado",
+          "deleted": "Eliminado",
+          "kept": "Conservados · {{count}}",
+          "showMore": "Mostrar {{count}} más",
+          "waiting": "Inactivo {{elapsed}} de {{after}} días",
+          "title": "Actividad",
+          "notListed_one": "1 espacio de trabajo conservado más no aparece en la lista.",
+          "notListed_other": "{{count}} espacios de trabajo conservados más no aparecen en la lista.",
+          "notListed_many": "{{count}} espacios de trabajo conservados más no aparecen en la lista.",
+          "chatsDeletedCount_one": "1 chat eliminado",
+          "chatsDeletedCount_other": "{{count}} chats eliminados",
+          "chatsDeletedCount_many": "{{count}} chats eliminados",
+          "chatsDeleted_one": "Se eliminó 1 chat de un espacio de trabajo eliminado",
+          "chatsDeleted_other": "Se eliminaron {{count}} chats de espacios de trabajo eliminados",
+          "chatsDeleted_many": "Se eliminaron {{count}} chats de espacios de trabajo eliminados",
+          "chatsFailed_one": "No se pudo eliminar 1 chat",
+          "chatsFailed_other": "No se pudieron eliminar {{count}} chats",
+          "chatsFailed_many": "No se pudieron eliminar {{count}} chats"
+        },
+        "runFailed": "No se pudo ejecutar la limpieza.",
+        "updateFailed": "No se pudieron guardar las reglas de limpieza.",
+        "enable": {
+          "title": "¿Activar {{rule}}?",
+          "description_one": "1 espacio de trabajo coincide ahora mismo. Se eliminará unos segundos después de activar esto.",
+          "description_other": "{{count}} espacios de trabajo coinciden ahora mismo. Se eliminarán unos segundos después de activar esto.",
+          "description_many": "{{count}} espacios de trabajo coinciden ahora mismo. Se eliminarán unos segundos después de activar esto.",
+          "summary": "Se eliminarán: {{count}}",
+          "cancel": "Cancelar",
+          "turnOn": "Activar"
+        },
+        "reason": {
+          "merged": "Fusionado",
+          "unchanged": "Sin cambios",
+          "inactive": "Inactivo",
+          "automationRun": "Ejecución de automatización",
+          "orchestrationWorker": "Trabajador de orquestación",
+          "mergedNumber": "{{label}} · #{{number}}"
+        },
+        "keep": {
+          "pinned": "Fijado",
+          "noRuleMatched": "Ninguna regla coincidió",
+          "recentlyActive": "Usado en la última hora",
+          "activeWorkspace": "Abierto ahora mismo",
+          "agentRunning": "Agente en ejecución",
+          "terminalRunning": "Terminal ejecutando un proceso",
+          "terminalUnknown": "Estado del terminal desconocido",
+          "unsavedEditorChanges": "Cambios sin guardar en el editor",
+          "uncommittedChanges": "Cambios sin confirmar",
+          "unpushedCommits": "Confirmaciones sin enviar",
+          "ignoredFiles": "Archivos ignorados",
+          "gitUnknown": "No se pudo leer el estado de Git",
+          "archiveUnavailable": "Archivado no disponible",
+          "archiveScript": "Tiene un script de archivado",
+          "removing": "Ya se está eliminando",
+          "folderWorkspaceSibling": "Otro repositorio de este espacio de trabajo sigue en uso",
+          "waiting": "En espera",
+          "notRemovable": "Espacio de trabajo principal o proyecto de carpeta",
+          "projectOff": "Limpieza desactivada para este proyecto",
+          "rulesOff": "Ninguna regla activada",
+          "withDetail": "{{cause}} · {{detail}}"
+        },
+        "trigger": {
+          "startup": "Al iniciar",
+          "hourly": "Cada hora",
+          "settings": "Tras un cambio de regla",
+          "runNow": "Ejecutar reglas ahora",
+          "cli": "Desde la CLI"
+        },
+        "search": {
+          "cleanup": "limpieza",
+          "cleanUp": "limpiar",
+          "delete": "eliminar",
+          "automatic": "automático",
+          "pullRequest": "PR",
+          "inactiveDescription": "Sin actividad durante un número de días.",
+          "stale": "obsoleto",
+          "days": "días",
+          "automations": "automatizaciones",
+          "orchestration": "orquestación",
+          "protection": "protección",
+          "activityDescription": "Lo que quitó y conservó cada ejecución de limpieza.",
+          "history": "historial",
+          "runs": "ejecuciones",
+          "envFile": ".env",
+          "manual": "manual",
+          "automaticDescription": "Si la limpieza automática está activada, cuándo se ejecuta la próxima vez y ejecutar las reglas ahora.",
+          "runRulesNow": "ejecutar reglas ahora",
+          "cleanUpNow": "limpiar ahora",
+          "schedule": "programación"
+        },
+        "status": {
+          "lastRunFailed": "La última ejecución ({{when}}) no pudo terminar: {{error}}",
+          "lastRunNothing": "La última ejecución ({{when}}) no quitó nada.",
+          "lastRunFreed_one": "La última ejecución ({{when}}) quitó 1 espacio de trabajo y liberó {{size}}.",
+          "lastRunFreed_other": "La última ejecución ({{when}}) quitó {{count}} espacios de trabajo y liberó {{size}}.",
+          "lastRunFreed_many": "La última ejecución ({{when}}) quitó {{count}} espacios de trabajo y liberó {{size}}.",
+          "lastRunRemoved_one": "La última ejecución ({{when}}) quitó 1 espacio de trabajo.",
+          "lastRunRemoved_other": "La última ejecución ({{when}}) quitó {{count}} espacios de trabajo.",
+          "lastRunRemoved_many": "La última ejecución ({{when}}) quitó {{count}} espacios de trabajo.",
+          "nextRun": "Próxima ejecución {{when}}.",
+          "justNow": "justo ahora",
+          "inUnderAMinute": "en menos de un minuto",
+          "lastRunChats_one": "La última ejecución ({{when}}) eliminó 1 chat de un espacio de trabajo eliminado.",
+          "lastRunChats_other": "La última ejecución ({{when}}) eliminó {{count}} chats de espacios de trabajo eliminados.",
+          "lastRunChats_many": "La última ejecución ({{when}}) eliminó {{count}} chats de espacios de trabajo eliminados."
+        },
+        "change": {
+          "title": "¿Cambiar {{rule}}?",
+          "description_one": "Con este cambio, 1 espacio de trabajo más coincide ahora mismo. Se eliminará unos segundos después de aplicarlo.",
+          "description_other": "Con este cambio, {{count}} espacios de trabajo más coinciden ahora mismo. Se eliminarán unos segundos después de aplicarlo.",
+          "description_many": "Con este cambio, {{count}} espacios de trabajo más coinciden ahora mismo. Se eliminarán unos segundos después de aplicarlo.",
+          "apply": "Aplicar"
+        },
+        "rulesLoadFailed": "No se pudieron cargar las reglas de limpieza de este host: {{error}}",
+        "retry": "Volver a intentarlo",
+        "listSeparator": ", ",
+        "summary": {
+          "merged": "Eliminar fusionados",
+          "unchanged": "Eliminar sin cambios",
+          "inactiveCleanUp": "Limpiar inactivos",
+          "inactive": "Eliminar inactivos",
+          "automationRuns": "Espacios de trabajo de automatizaciones",
+          "orchestrationWorkers": "Trabajadores de orquestación",
+          "off": "Desactivado"
+        },
+        "disableIgnoredFiles": {
+          "title": "¿Desactivar la protección de archivos ignorados?",
+          "description": "En los proyectos que usan estas reglas de limpieza, los archivos ignorados ya no impedirán la limpieza automática. Los archivos como .env y la configuración local pueden eliminarse y no se pueden recuperar.",
+          "matches_one": "Si no lo fijas, {{count}} espacio de trabajo más se eliminará unos segundos después de desactivar la protección.",
+          "matches_other": "Si no los fijas, {{count}} espacios de trabajo más se eliminarán unos segundos después de desactivar la protección.",
+          "matches_many": "Si no los fijas, {{count}} espacios de trabajo más se eliminarán unos segundos después de desactivar la protección.",
+          "noMatches": "Ahora mismo no coincide ningún espacio de trabajo más. Este ajuste afecta a las limpiezas futuras de los proyectos que usan estas reglas.",
+          "turnOff": "Desactivar la protección"
+        },
+        "pinAndKeep": {
+          "description": "Los espacios de trabajo seleccionados se fijarán cuando confirmes. Los espacios de trabajo fijados quedan excluidos de la limpieza automática hasta que los desfijes.",
+          "named": "Fijar y conservar {{name}}",
+          "label": "Fijar y conservar"
+        },
+        "chatHistory": {
+          "title": "Historial de chat"
+        },
+        "manual": {
+          "title": "Limpieza manual",
+          "label": "Eliminar los espacios de trabajo que elijas",
+          "review": "Revisar espacios de trabajo",
+          "description": "Ve todos los espacios de trabajo y elige cuáles eliminar."
+        },
+        "automatic": {
+          "offDetail": "Activa una regla para eliminar espacios de trabajo según una programación.",
+          "running": "Quitando lo que coincide con tus reglas…",
+          "title": "Limpieza automática",
+          "on": "Activada",
+          "off": "Desactivada",
+          "runningButton": "Ejecutando…",
+          "runNow": "Ejecutar reglas ahora"
+        }
+      },
+      "repository": {
+        "workspaceCleanup": {
+          "title": "Limpieza de espacios de trabajo",
+          "description": "Reglas solo para {{name}}. Usar global sigue Ajustes / Limpieza de espacios de trabajo.",
+          "usingGlobal": "Usando global: {{rules}}",
+          "globalDefault": "Valor global predeterminado: {{rules}}",
+          "useGlobal": "Usar global",
+          "off": "Desactivado",
+          "custom": "Personalizado",
+          "rules": "Reglas de limpieza",
+          "rulesDescription": "Qué reglas de limpieza de espacios de trabajo se aplican a este proyecto.",
+          "keywordCleanup": "limpieza",
+          "keywordDelete": "eliminar",
+          "keywordMerged": "fusionado"
+        }
       },
       "bitbucket": {
         "credentials": {
@@ -21612,6 +21931,51 @@
         "confirmCheckHomeFolder": "Ninguna otra máquina que comparta esta carpeta personal está ejecutando Orca",
         "details": "Detalles",
         "clearing": "Quitando…"
+      },
+      "agents": {
+        "deleteHistoryWithWorkspace": {
+          "updateFailed": "No se pudo actualizar el ajuste en {{host}}.",
+          "recommended": "Recomendado",
+          "unsupported": "Actualiza Orca en {{host}} para usar este ajuste allí.",
+          "confirmTitle": "¿Eliminar el historial de agentes de los espacios de trabajo eliminados?",
+          "confirmDescription": "Orca eliminará los chats de Orca, Claude Code y Codex de los espacios de trabajo que ya no existen, incluidos los eliminados antes de hoy. Los chats de los espacios de trabajo que aún tienes se conservan. Los chats eliminados no se pueden recuperar.",
+          "cancel": "Cancelar",
+          "turnOn": "Activar",
+          "title": "Eliminar el historial de agentes al eliminar un espacio de trabajo",
+          "description": "Los chats de Orca, Claude Code y Codex de los espacios de trabajo eliminados se quitan automáticamente para liberar espacio en disco. No se pueden recuperar.",
+          "codexHistoryBadge": "Historial de Codex: {{size}}",
+          "codexHistoryBadgeAtLeast": "Historial de Codex: {{size}}+",
+          "codexHistoryTooltip": "Espacio que usa Codex para su propio historial de chat en {{host}}, incluidos los chats de los espacios de trabajo que aún tienes.",
+          "codexHistoryTooltipAtLeast": "Codex usa al menos este espacio para su propio historial de chat en {{host}}, incluidos los chats de los espacios de trabajo que aún tienes.",
+          "chat": "chat",
+          "transcripts": "transcripciones",
+          "diskSpace": "espacio en disco",
+          "cleanup": "limpieza",
+          "chatHistory": "eliminar historial de chat"
+        }
+      },
+      "notifications": {
+        "server": {
+          "fallbackHost": "este servidor",
+          "updateFailed": "No se pudieron actualizar las notificaciones en {{host}}.",
+          "unsupported": "Actualiza Orca en {{host}} para cambiar aquí sus notificaciones.",
+          "enabledDescription": "Alertas que envía {{host}} para sus agentes y terminales, incluidas las notificaciones push a tus teléfonos.",
+          "sectionDescription": "Alertas que envía {{host}} para sus agentes y terminales."
+        }
+      },
+      "orcaAccount": {
+        "server": {
+          "sectionDescription": "La cuenta de Orca con la que se ejecuta {{host}}, para Slack, GitHub, Linear y los webhooks de sus bots.",
+          "unread": "No se puede leer la cuenta de Orca de {{host}}. Actualiza o vuelve a conectar {{host}}.",
+          "signInThere": "Ejecuta `orca auth login` en {{host}} para iniciar sesión allí."
+        }
+      },
+      "hostScope": {
+        "updateHostToChange": "Actualiza Orca en {{host}} para cambiar este ajuste allí.",
+        "updateFailed": "No se pudo actualizar el ajuste en {{host}}."
+      },
+      "git": {
+        "branchPrefixHostGitUsername": "Nombre de usuario de Git en {{host}}"
       }
     },
     "onboarding": {
@@ -21621,12 +21985,23 @@
           "addFirstProject": "Añade tu primer proyecto",
           "openingAddProject": "Abriendo Añadir proyecto..."
         },
+        "agentSurface": {
+          "title": "¿Cómo quieres trabajar con los agentes?",
+          "pickWhereAgentsOpen": "Elige dónde se abren los agentes nuevos."
+        },
+        "agentChat": {
+          "subtitle": "Elige un agente para la interfaz de chat. Los agentes sin soporte de chat se abren en un terminal."
+        },
+        "agentTerminal": {
+          "subtitle": "Orca funciona con cualquier agente de CLI. Elige el que vayas a usar más."
+        },
         "stepTooltip": {
           "agent": "Agente predeterminado",
           "theme": "Apariencia",
           "windowsTerminal": "Terminal de Windows",
           "notifications": "Notificaciones",
-          "integrations": "Integraciones"
+          "integrations": "Integraciones",
+          "agentSurface": "Chat o terminal"
         }
       },
       "skipConfirmation": {
@@ -21660,7 +22035,8 @@
           "sourceBuiltIn": "Integrado",
           "sourceCommunity": "Paleta de terminal",
           "themes": "Tema"
-        }
+        },
+        "changeAnyTime": "Puedes cambiarlo cuando quieras en Ajustes."
       },
       "integrations": {
         "capabilities": {
@@ -21669,6 +22045,57 @@
           "reviewStatus": "Consulta el estado de la incidencia, la revisión y las verificaciones de CI en cada árbol de trabajo",
           "managePullRequests": "Lee, comenta y fusiona pull requests sin salir de Orca"
         }
+      },
+      "yoloPermissions": {
+        "overrideDescription": "Estos agentes aún pueden ejecutar comandos y editar archivos sin preguntar. Sus ajustes individuales tienen prioridad sobre el modo Yolo.",
+        "fullAccessOverride": "{{agent}} sigue teniendo acceso total",
+        "useAgentOwnSettings": "Usar los ajustes propios de {{agent}}",
+        "useOwnSettings": "Usar ajustes propios",
+        "saveError": "No se pudieron cambiar los permisos. Vuelve a intentarlo.",
+        "ownSettingsDescription": "Desactivado usa los ajustes propios de cada agente. Los permisos individuales de un agente pueden tener prioridad sobre este interruptor."
+      },
+      "agentStep": {
+        "worksInChat": "Funciona en la interfaz de chat",
+        "chatAgents": "Agentes de la interfaz de chat",
+        "terminalAgents": "Disponibles como agentes de terminal",
+        "terminalAgentsHint": "Sin soporte para la interfaz de chat, así que se abren en un terminal.",
+        "chatAvailable": "Chat disponible",
+        "agentsOpenIn": "Los agentes se abren en",
+        "terminalUi": "Interfaz de terminal",
+        "noAgentsForChat": "<em>No se encontraron agentes en tu PATH.</em> La interfaz de chat funciona con {{agents}}. Instala uno, o continúa y agrega un agente más tarde.",
+        "noChatAgentsDetected": "<em>Ninguno de tus agentes funciona en la interfaz de chat.</em> Todos se abrirían en un terminal, así que Terminal encaja mejor.",
+        "opensInTerminalFit": "<em>{{agent}} se abre en un terminal</em>, así que Terminal encaja mejor.",
+        "useTerminalInstead": "Usar Terminal en su lugar",
+        "terminalTipHow": "Mostrar cómo iniciar un agente en un terminal",
+        "terminalTip": "Puedes volver a cambiarlo cuando quieras en <em>Ajustes → Interfaz de chat</em>. También puedes iniciar cualquier agente en un terminal desde el menú <em>+</em>.",
+        "terminalTipWeb": "Puedes volver a cambiarlo cuando quieras en <em>Ajustes → Lista de configuración inicial</em>. También puedes iniciar cualquier agente en un terminal desde el menú <em>+</em>.",
+        "terminalTipCaption": "Haz clic en <em>+</em> en la barra de pestañas y elige un agente marcado como <em>(CLI)</em>. Si la CLI de un agente de chat está instalada, pasa el cursor por su fila y haz clic en el icono del terminal para usar la CLI.",
+        "chatTip": "¿También quieres chat? Actívalo cuando quieras en <em>Ajustes → Interfaz de chat</em>.",
+        "turnOnChat": "Activar ahora"
+      },
+      "agentSurface": {
+        "chat": {
+          "label": "Interfaz de chat",
+          "description": "Los agentes responden en un chat, con mensajes y diffs renderizados.",
+          "recommended": "Recomendado",
+          "terminalFallback": "Los agentes sin soporte de chat se abren en un terminal.",
+          "noneDetected": "Ninguno de los agentes detectados funciona en la interfaz de chat."
+        },
+        "terminal": {
+          "label": "Terminal",
+          "description": "La propia CLI de cada agente, tal como se distribuye. Funciona con cualquier agente de CLI."
+        },
+        "switchNote": "No es una elección permanente. Cámbiala cuando quieras en <em>Ajustes → Interfaz de chat</em>.",
+        "preview": {
+          "userMessage": "Agrega reintentos a fetchUser",
+          "agentMessage": "Las solicitudes fallidas ahora se reintentan hasta 3 veces.",
+          "composerPlaceholder": "Haz una pregunta de seguimiento…"
+        }
+      },
+      "launchDemo": {
+        "userMessage": "Arregla la prueba de subida inestable",
+        "agentMessage": "Lo encontré. El temporizador de reintentos no estaba simulado.",
+        "cliReady": "CLI de {{agent}} lista."
       }
     },
     "jiraUserPicker": {
@@ -21727,6 +22154,7 @@
     "newWorkspace": {
       "agentOptional": "Agente [Opcional]",
       "createDescription": "Elige el proyecto y el nombre del espacio de trabajo. Selecciona un agente si quieres iniciar uno.",
+      "setupCheckFailed": "No se pudo comprobar la configuración inicial. Vuelve a intentarlo.",
       "directSetup": {
         "run": "Run setup",
         "skip": "Skip setup",
@@ -21764,6 +22192,18 @@
       "keywordDefaultProject": "proyecto predeterminado",
       "keywordIssuePicker": "selector de incidencias"
     },
+    "RepositoryBrowserProfileSection": {
+      "title": "Perfil del navegador",
+      "description": "Las pestañas nuevas del navegador en este proyecto, incluidas las que abren los agentes, usan este perfil. Apunta varios proyectos a un mismo perfil para compartir un inicio de sesión.",
+      "keywordProfile": "perfil del navegador",
+      "keywordCookies": "cookies",
+      "keywordSignIn": "iniciar sesión",
+      "selectLabel": "Perfil para pestañas nuevas",
+      "inherit": "Ajuste del navegador ({{scope}})",
+      "deletedOption": "Perfil eliminado",
+      "deleted": "Se eliminó el perfil elegido para este proyecto, así que las pestañas nuevas siguen el ajuste del navegador.",
+      "saveFailed": "No se pudo guardar el perfil del navegador. Puede que el Orca del host de este proyecto necesite una actualización."
+    },
     "managed-runtime": {
       "cancelled": "Instalación cancelada.",
       "cancelling": "Cancelando…",
@@ -21778,6 +22218,7 @@
       "failed": "La instalación falló. Inténtalo de nuevo.",
       "cancelFailed": "No se pudo cancelar la instalación. Inténtalo de nuevo.",
       "install": "Instalar {{agent}}",
+      "installedByOrca": "Instalado por Orca · {{version}}",
       "notInstalled": "No instalado.",
       "progress": "Descarga de {{agent}}",
       "readFailed": "No se pudo comprobar {{agent}} en este host. Reintentando.",
@@ -21794,6 +22235,7 @@
       "thisComputer": "este equipo",
       "unavailable": "{{agent}} no está disponible en este host.",
       "update": "Actualizar",
+      "updateTo": "Actualizar a {{version}}",
       "verifying": "Verificando…",
       "verifyingAgent": "Verificando {{agent}}…",
       "installTitle": "Instala {{agent}} para empezar a chatear",
@@ -21817,6 +22259,45 @@
       "stepDownload": "Descargar",
       "stepUnpack": "Descomprimir",
       "stepCheck": "Comprobar"
+    },
+    "orchestrationCrew": {
+      "mentionAll": "Mencionar a todos",
+      "mentionAgent": "Mencionar a {{name}}:",
+      "mentionInMessage": "Mencionar en el mensaje",
+      "mentionRejected": "El terminal no aceptó la referencia al agente. Vuelve a intentarlo.",
+      "title": "Orquestación",
+      "sendingUnavailable": "Envío no disponible",
+      "workers_one": "{{count}} trabajador",
+      "workers_other": "{{count}} trabajadores",
+      "workers_many": "{{count}} trabajadores",
+      "managedBy": "Gestionado por",
+      "managing": "Gestionando",
+      "talkingWith": "Hablando con",
+      "collapse": "Contraer el panel de orquestación",
+      "show": "Mostrar orquestación: {{counts}}",
+      "summary": "Orquestación: {{counts}}",
+      "needsYou_one": "{{count}} te necesita",
+      "needsYou_other": "{{count}} te necesitan",
+      "needsYou_many": "{{count}} te necesitan",
+      "waitingPrefix": "Esperándote · ",
+      "noTask": "Ninguna tarea compartida",
+      "open": "Abrir {{name}}",
+      "more": "Más opciones para {{name}}",
+      "openChat": "Abrir su chat",
+      "copiedAddress": "Dirección de {{name}} copiada",
+      "copyAddress": "Copiar dirección",
+      "showDetails": "Mostrar la tarea y la respuesta de {{name}}",
+      "task": "Tarea",
+      "openFailed": "{{name}}: {{detail}}",
+      "terminalExited": "Este terminal ha terminado.",
+      "openOnHost": "Abre este agente en {{host}}.",
+      "cannotLocate": "Este host no puede localizar este agente. Vuelve a intentarlo.",
+      "reply": "Respuesta",
+      "noReply": "Aún no hay respuesta",
+      "taskFailed": "Fallida",
+      "youPreview": "Tú: {{preview}}",
+      "composerUnavailable": "El cuadro de mensaje no puede aceptar una mención ahora",
+      "mentionTip": "Mencionar a {{name}}"
     },
     "linearWorkspacePicker": {
       "search": "Buscar espacios de trabajo de Linear",
@@ -21846,16 +22327,84 @@
     },
     "tabGroup": {
       "splitPaneLanding": {
+        "agents": "Agentes",
+        "browser": "Navegador",
+        "chooseAgent": "Elegir agente",
+        "closePane": "Cerrar panel",
+        "files": "Archivos",
+        "markdown": "Markdown",
+        "mobileEmulator": "Emulador móvil",
+        "new": "Nuevo",
         "newAgent": "Nuevo agente",
+        "newNamedAgent": "Nuevo agente {{agent}}",
+        "noMatches": "Sin coincidencias",
         "searchAgentsAndFiles": "Buscar agentes y archivos",
-        "searchShort": "Buscar"
+        "searchShort": "Buscar",
+        "terminal": "Terminal"
       }
+    },
+    "toastFallbacks": {
+      "filesDropFailed": "No se pudieron soltar los archivos.",
+      "filesUploadFailed": "No se pudieron subir los archivos.",
+      "filesResolveDroppedFailed": "No se pudieron resolver los archivos soltados.",
+      "markdownCreateFailed": "No se pudo crear el archivo markdown sin título.",
+      "markdownOpenFailed": "No se pudo abrir el archivo markdown.",
+      "fileDuplicateFailed": "No se pudo duplicar '{{name}}'.",
+      "fileCreateFailed": "No se pudo crear '{{name}}'.",
+      "fileMoveFailed": "No se pudo mover '{{name}}'.",
+      "fileRenameFailed": "No se pudo cambiar el nombre de '{{name}}'.",
+      "worktreeCreateFailed": "No se pudo crear el worktree.",
+      "missingBaseBranchHelp": "Crea un commit inicial (por ejemplo, en main) o selecciona una rama existente en Crear desde y vuelve a intentarlo.",
+      "baseBranchLookupFailedTitle": "No se pudo buscar la rama base",
+      "baseBranchLookupFailedMessage": "Git falló o se agotó el tiempo de espera al buscar la rama base predeterminada de este repositorio.",
+      "baseBranchLookupFailedHelp": "Vuelve a intentarlo o selecciona una rama base en Crear desde.",
+      "dropTooManyPaths": "Lo soltado contiene demasiadas rutas.",
+      "dropPathsTooLarge": "La lista de rutas soltadas es demasiado grande.",
+      "fileOwnerResolveFailed": "No se pudo resolver el propietario del archivo."
+    },
+    "agentNotes": {
+      "targetSelected": "seleccionado",
+      "targetActive": "activo",
+      "empty": "No hay notas que enviar.",
+      "selectedTerminalUnavailable": "El terminal seleccionado ya no está disponible.",
+      "activeTerminalUnavailable": "Abre el terminal del agente en este worktree y vuelve a enviar las notas.",
+      "notAgentSession": "El terminal {{target}} no es una sesión de agente reconocida.",
+      "selectedAgentNeedsPermission": "El agente seleccionado necesita permiso.",
+      "activeAgentNeedsPermission": "El agente activo necesita permiso.",
+      "statusUnverified": "No se pudo verificar el estado del agente {{target}}.",
+      "approvalUnseen": "Puede que el agente {{target}} esté esperando una aprobación. Envía las notas cuando termine su turno.",
+      "hostUpdateRequired": "Actualiza Orca en el host del agente {{target}} para enviarle notas.",
+      "notReady": "El agente {{target}} aún no estaba listo para recibir entrada.",
+      "notWritable": "El agente {{target}} no aceptó las notas.",
+      "selectedSubmitFailed": "Puede que las notas ya estén pegadas en el terminal seleccionado, pero Orca no pudo enviarlas.",
+      "activeSubmitFailed": "Puede que las notas ya estén pegadas en el terminal activo, pero Orca no pudo enviarlas.",
+      "notWritableSelection": "El agente {{target}} no aceptó la selección."
     },
     "contextualTours": {
       "agentSessions": {
+        "newTab": {
+          "title": "Los agentes nuevos empiezan aquí",
+          "body": "Haz clic en + para iniciar un agente, un terminal o una pestaña del navegador."
+        },
+        "splitChat": {
+          "body": "Pulsa {terminal.splitRight} o haz clic en el botón de dividir en la parte superior del chat. Cada lado tiene sus propias pestañas.",
+          "bodyWithoutShortcut": "Haz clic en el botón de dividir en la parte superior del chat. Cada lado tiene sus propias pestañas."
+        },
+        "split": {
+          "bodyWithoutShortcut": "Haz clic derecho en el panel para ver las opciones de división."
+        },
         "splitChatPane": {
           "title": "Abre un panel junto al chat",
           "action": "Dividir panel"
+        }
+      },
+      "badgeNew": "Nuevo",
+      "projectsCollapseAll": {
+        "intro": {
+          "title": "Contraer todos los proyectos a la vez",
+          "body": "Pulsa {sidebar.projects.toggleCollapse}, haz clic en este botón o haz clic con {{modifier}} en el encabezado de cualquier proyecto.",
+          "bodyWithoutShortcut": "Haz clic en este botón o haz clic con {{modifier}} en el encabezado de cualquier proyecto.",
+          "action": "Entendido"
         }
       }
     },
