@@ -98,6 +98,8 @@ export const BotItemsList = z.object({
   here: OptionalBoolean,
   /** Only items linking this PR, URL or file (a PR URL and `owner/repo#n` match). */
   link: OptionalString,
+  /** Every person's items, not only those of whom the calling chat is for. */
+  everyone: OptionalBoolean,
   limit: OptionalPositiveInt,
   cursor: OptionalString
 })

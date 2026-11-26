@@ -24,6 +24,7 @@ import {
   writerOf,
   type BotItemWriteResult
 } from './bots-items-write-support'
+import { botItemPeopleOfChat } from '../../../bots/bot-item-access'
 
 export async function addItem(
   params: BotItemsAddParams,
@@ -48,24 +49,32 @@ export async function addItem(
   }
   if (target.id === writer.bot.id && params.chat === undefined) {
     const outcome = await store.add(
-      { ...fields, ownerBotId: writer.bot.id, chatId: writer.actor.chatId, source: writer.source },
+      {
+        ...fields,
+        ownerBotId: writer.bot.id,
+        chatId: writer.actor.chatId,
+        source: writer.source,
+        actsForAccounts: writer.actsForAccounts
+      },
       writer.actor
     )
     return writeResult(context, outcome, writer)
   }
   assertBotItemAddable(fields)
   const uid = randomUUID()
+  const to = params.chat
+    ? await botChatAddress(runtime, `bot:${target.name}`, params.chat)
+    : `bot:${target.name}`
   const sent = await sendItemRequest(context, {
     type: 'handoff',
-    to: params.chat
-      ? await botChatAddress(runtime, `bot:${target.name}`, params.chat)
-      : `bot:${target.name}`,
+    to,
     messageId: `msg_item_${uid.replaceAll('-', '')}`,
     ...botItemRequestMail({ uid, ...fields, doneMeans: params.doneMeans ?? null })
   })
   try {
     const chatId = runtime.botItems.chatRootOf(sent.landed)
     const title = runtime.botItems.chatTitleOf(chatId)
+    const actsForAccounts = botItemPeopleOfChat(runtime, chatId)
     const outcome = await store.add(
       {
         ...fields,
@@ -78,7 +87,8 @@ export async function addItem(
           (id) => runtime.botItems.chatRootOf(id),
           title
         ),
-        madeBy: { botId: writer.bot.id, chatId: writer.actor.chatId }
+        madeBy: { botId: writer.bot.id, chatId: writer.actor.chatId },
+        actsForAccounts
       },
       writer.actor
     )

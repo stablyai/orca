@@ -128,7 +128,7 @@ export const BOT_ITEM_COMMAND_SPECS: CommandSpec[] = [
     hidden: true,
     summary: "List a bot's items, newest change first",
     usage:
-      'orca bot item list [--bot <name>] [--status <s>[,<s>]] [--all] [--chat <id>|--here] [--link <ref>] [--limit <n>] [--cursor <c>] [--json]',
+      'orca bot item list [--bot <name>] [--status <s>[,<s>]] [--all] [--chat <id>|--here] [--link <ref>] [--everyone] [--limit <n>] [--cursor <c>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'bot',
@@ -137,10 +137,12 @@ export const BOT_ITEM_COMMAND_SPECS: CommandSpec[] = [
       'chat',
       'here',
       'link',
+      'everyone',
       'limit',
       'cursor'
     ],
     notes: [
+      "A teammate's chat lists that person's items by default; --everyone lists every person's. Any item can still be shown or changed by its number.",
       'Open items (Needs you, In progress, Waiting, Planned) by default; --all adds closed ones; --status picks exact statuses and wins over --all.',
       '--link <ref> lists only items linking that PR, URL or file; a PR URL and pr:<owner/repo#n> match.',
       '50 a page (at most 100 with --limit); pass the printed --cursor for the next page.'

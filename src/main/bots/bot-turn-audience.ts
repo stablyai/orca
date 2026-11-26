@@ -1,12 +1,7 @@
 // Whom a bot chat's turns are for, from Orca's acting-for record: the one place that decides what of
 // the owner's a turn hears, and who it is told is asking.
 import { isOrcaSessionId } from '../../shared/agent-session/identity/orca-session-address'
-import {
-  actsForOwner,
-  distinctAskers,
-  type BotRequestAsker,
-  type BotRequestPerson
-} from '../../shared/bots/bot-acts-for'
+import { actsForOwner, type BotRequestAsker } from '../../shared/bots/bot-acts-for'
 import { inlineUntrusted } from '../../shared/quoted-text-fence'
 import { canonicalOrcaSessionId } from '../runtime/orchestration/addressing/session-lineage/canonical-orca-session-id'
 import {
@@ -15,15 +10,20 @@ import {
 } from './bot-conversation-acts-for'
 import type { BotLookAroundStore } from './bot-look-around-store'
 
+export type BotTurnTeammate = { accountId: string; name: string }
+
 export type BotTurnAudience =
   | { kind: 'owner' }
-  /** People the owner shared the bot with, in their own chat. */
-  | { kind: 'teammate'; names: string[] }
-  /** Anyone else (a Slack or GitHub asker, a look-around run), or not recorded yet. */
+  /** People the owner shared the bot with, by Orca account, however they asked (in Orca, or from
+   *  a Slack login linked to that account); one each, in account order. */
+  | { kind: 'teammates'; people: readonly BotTurnTeammate[] }
+  /** No teammate and not only the owner (a Slack or GitHub asker who isn't one, a look-around
+   *  run), or not recorded yet. */
   | { kind: 'other' }
 
-/** What a turn hears: `ownerWork` the owner's live work and other chats, `ownerAsks` the owner's
- *  questions, and `asker` the line naming who asks when it isn't the owner. */
+/** What a turn hears besides its person's items: `ownerWork` the owner's other chats and the bot's
+ *  workers, `ownerAsks` the owner's questions, and `asker` the line naming who asks when it isn't
+ *  the owner. */
 export type BotTurnScope = { ownerWork: boolean; ownerAsks: boolean; asker: string | null }
 
 const NAME_CHARS = 80
@@ -32,22 +32,33 @@ export function botTurnScope(audience: BotTurnAudience): BotTurnScope {
   switch (audience.kind) {
     case 'owner':
       return { ownerWork: true, ownerAsks: true, asker: null }
-    case 'teammate':
-      return { ownerWork: false, ownerAsks: false, asker: teammateLine(audience.names) }
+    case 'teammates':
+      return { ownerWork: false, ownerAsks: false, asker: teammatesLine(audience.people) }
     case 'other':
       return { ownerWork: true, ownerAsks: false, asker: null }
   }
 }
 
-function teammateLine(names: readonly string[]): string {
-  const who = names.map((name) => JSON.stringify(inlineUntrusted(name, NAME_CHARS))).join(', ')
-  return `[Orca: this chat is ${who}'s, a teammate your owner shared you with. Messages here are from ${who}, not your owner.]`
+function teammatesLine(people: readonly BotTurnTeammate[]): string {
+  const who = people.map(({ name }) => JSON.stringify(inlineUntrusted(name, NAME_CHARS))).join(', ')
+  return people.length === 1
+    ? `[Orca: this chat is ${who}'s, a teammate your owner shared you with. Messages here are from ${who}, not your owner.]`
+    : `[Orca: this chat is for ${who}, teammates your owner shared you with. Messages here are from them, not your owner.]`
 }
 
-const isTeammate = (asker: BotRequestAsker): asker is BotRequestPerson =>
-  asker.kind === 'person' && asker.source === 'orca' && asker.role !== 'owner'
+/** The teammate an asker is, by Orca account: in Orca, or through a Slack login linked to it (as
+ *  `shareOwnsChat` reads them); null for the owner or anyone else. */
+function teammateOf(asker: BotRequestAsker): BotTurnTeammate | null {
+  if (asker.kind !== 'person' || asker.role === 'owner') {
+    return null
+  }
+  const accountId =
+    asker.source === 'orca' ? asker.userId : asker.source === 'slack' ? asker.viaAccount : undefined
+  return accountId ? { accountId, name: asker.name ?? accountId } : null
+}
 
-/** From a chat's acting-for record; undefined when Orca hasn't recorded one. */
+/** From a chat's acting-for record, the same for every channel; undefined when Orca hasn't
+ *  recorded one. A chat naming any teammate is theirs, never the owner's. */
 export function botTurnAudienceOf(
   actsFor: readonly BotRequestAsker[] | undefined
 ): BotTurnAudience {
@@ -57,9 +68,17 @@ export function botTurnAudienceOf(
   if (actsForOwner(actsFor)) {
     return { kind: 'owner' }
   }
-  const people = distinctAskers(actsFor)
-  return people.every(isTeammate)
-    ? { kind: 'teammate', names: people.map((person) => person.name ?? person.userId) }
+  const people = new Map<string, BotTurnTeammate>()
+  for (const teammate of actsFor.map(teammateOf)) {
+    if (teammate && !people.has(teammate.accountId)) {
+      people.set(teammate.accountId, teammate)
+    }
+  }
+  return people.size > 0
+    ? {
+        kind: 'teammates',
+        people: [...people.values()].toSorted((a, b) => a.accountId.localeCompare(b.accountId))
+      }
     : { kind: 'other' }
 }
 

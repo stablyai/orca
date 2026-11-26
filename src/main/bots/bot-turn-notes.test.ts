@@ -5,7 +5,9 @@ import { afterEach, beforeEach, expect, it } from 'vitest'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { OWNER_ACTS_FOR } from '../../shared/bots/bot-acts-for'
 import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
-import { botActiveWorkSection } from './bot-active-work'
+import { readBotActiveWork } from './bot-active-work-read'
+import type { BotItemRecord } from './bot-items-schema'
+import { BotItemsStore } from './bot-items-store'
 import { localBotHomeFilesystem } from './bot-home'
 import { botRecentChatsSection } from './bot-recent-chats'
 import { botShareAsker } from './team-share/bot-share-chats'
@@ -20,6 +22,7 @@ const NOW = 1_800_000_000_000
 
 let directory = ''
 let db: OrchestrationDb
+let items: BotItemsStore
 
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'orca-bot-turn-notes-'))
@@ -33,24 +36,44 @@ beforeEach(() => {
       botShareAsker({ kind: 'bot-share', botId: BOT, accountId: 'acct-2', name: 'kim@example.com' })
     ]
   })
+  items = BotItemsStore.open(':memory:')
+  for (const [chatId, title, actsForAccounts] of [
+    [OWNER_CHAT, 'Owner invite delay', null],
+    [TEAMMATE_CHAT, 'Teammate report draft', ['acct-2']]
+  ] as const) {
+    items.add(
+      {
+        ownerBotId: BOT,
+        chatId,
+        source: { kind: 'home', title: null },
+        actsForAccounts,
+        title,
+        status: 'working',
+        links: []
+      },
+      { kind: 'bot', botId: BOT, chatId }
+    )
+  }
 })
 afterEach(() => {
+  items.dispose()
   db.close()
   rmSync(directory, { recursive: true, force: true })
 })
 
-const ownerItem = {
-  number: 506,
-  title: 'Owner invite delay',
-  status: 'needs_you' as const,
-  lastActivityAt: NOW - 1_000,
-  lastEventId: 'e1',
-  snoozedUntil: null,
-  links: [],
-  wait: null,
-  chat: { id: OWNER_CHAT },
-  question: { gist: 'Build the email button?' }
-}
+// The runtime members the live-work read uses: the real item store, and no workers.
+const runtime = () =>
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: readBotActiveWork reads only these members
+  ({
+    botItems: {
+      store: () => ({
+        list: async (query: Parameters<BotItemsStore['list']>[0]) => items.list(query)
+      }),
+      views: async (records: BotItemRecord[]) =>
+        records.map((record) => ({ ...record, links: [], wait: null, chat: { id: record.chatId } }))
+    },
+    botWork: { list: async () => [] }
+  }) as never
 
 async function turnText(sessionId: string): Promise<string> {
   const notes = createBotTurnNotes({
@@ -77,8 +100,7 @@ async function turnText(sessionId: string): Promise<string> {
         ],
         NOW
       ),
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the section reads only these item fields
-    activeWork: async () => botActiveWorkSection([ownerItem as never], [], { now: NOW }),
+    activeWork: (botId, scope) => readBotActiveWork(runtime(), botId, scope),
     endedTurns: async () => 0
   })
   const context = createBotTurnContext(
@@ -107,16 +129,18 @@ async function turnText(sessionId: string): Promise<string> {
   return plan?.text ?? ''
 }
 
-it("tells a teammate's turn who asks and gives it none of the owner's work or chats", async () => {
+it("tells a teammate's turn who asks, and lists each person only their own items", async () => {
   const teammate = await turnText(TEAMMATE_CHAT)
   expect(teammate).toContain('"kim@example.com"')
   expect(teammate).toContain('not your owner')
-  for (const owners of ['Owner invite delay', 'Build the email button?', 'Owner debugging chat']) {
+  expect(teammate).toContain('Teammate report draft')
+  for (const owners of ['Owner invite delay', 'Owner debugging chat']) {
     expect(teammate).not.toContain(owners)
   }
 
   const owner = await turnText(OWNER_CHAT)
   expect(owner).toContain('Owner invite delay')
   expect(owner).toContain('Owner debugging chat')
+  expect(owner).not.toContain('Teammate report draft')
   expect(owner).not.toContain('not your owner')
 })
