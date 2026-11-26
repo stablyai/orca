@@ -211,19 +211,18 @@ export function createStructuredAgentSessionConversationDelivery(input: {
       sessionId,
       deps.logger,
       () => deps.store.getConversation(sessionId)?.ownerObservation.ownerProcess ?? null,
+      // Holds no session: whichever is open when the listing answers is the one settled.
       () =>
-        sessions.get(sessionId) === session
-          ? input.trackStart(
-              input.serialize(sessionId, async () => {
-                const open = sessions.get(sessionId)
-                const fence = deps.store.getConversation(sessionId)?.currentFence
-                if (open === session && !open.child && fence !== undefined) {
-                  await settleGoneStructuredAgentSessionGeneration(deps, sessionId, open)
-                  await recoverStructuredAgentSessionKeptOpen(open.journal, fence)
-                }
-              })
-            )
-          : Promise.resolve()
+        input.trackStart(
+          input.serialize(sessionId, async () => {
+            const open = sessions.get(sessionId)
+            const fence = deps.store.getConversation(sessionId)?.currentFence
+            if (open && !open.child && fence !== undefined) {
+              await settleGoneStructuredAgentSessionGeneration(deps, sessionId, open)
+              await recoverStructuredAgentSessionKeptOpen(open.journal, fence)
+            }
+          })
+        )
     )
     await settleInterruptedStructuredAgentSessionCommands(deps, sessionId, session)
     input.clientDelivery.publishRestored(sessionId)

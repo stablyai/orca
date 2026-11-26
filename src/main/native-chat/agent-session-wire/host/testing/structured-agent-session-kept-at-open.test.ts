@@ -148,3 +148,62 @@ it.skipIf(process.platform === 'win32')(
     expect(await open.structuredAgentSessionKeptAtOpen(record, 10)).toBe(false)
   }
 )
+
+it.skipIf(process.platform === 'win32')(
+  'holds one waiter per chat through a daemon outage, however often the chat reopens',
+  async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    try {
+      let lists = 0
+      const client = {
+        getDaemonIdentity: () => ({ providerRelay: true, pid: 1 }),
+        onEvent: () => () => {},
+        onDisconnected: () => () => {},
+        request: (type: string) => {
+          if (type !== 'relayList') {
+            return Promise.resolve({})
+          }
+          lists += 1
+          // The first listing never answers; a later one hears the daemon, without this chat.
+          return lists === 1 ? new Promise(() => {}) : Promise.resolve({ relays: [] })
+        }
+      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the inventory calls only these members
+      const { relays, open } = await freshRelays(client as unknown as DaemonClient)
+      const turn = () => new Promise((resolve) => setImmediate(resolve))
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the verdict reads only these fields
+      const record = chat(owner(process.pid)) as unknown as Parameters<
+        typeof open.structuredAgentSessionKeptAtOpen
+      >[0]
+      const opened = open.structuredAgentSessionKeptAtOpen(record, 10)
+      await vi.advanceTimersByTimeAsync(10)
+      expect(await opened).toBe(true)
+
+      const settles = Array.from({ length: 1_000 }, () => vi.fn(async () => {}))
+      const reconciles = settles.map((settle) =>
+        open.reconcileStructuredAgentSessionKeptAtOpen(
+          SESSION,
+          { warn: () => {} },
+          () => owner(process.pid),
+          settle
+        )
+      )
+      await vi.advanceTimersByTimeAsync(11_000)
+      for (let i = 0; i < 20; i += 1) {
+        await turn()
+      }
+      await Promise.all(reconciles)
+      expect(settles.every((settle) => settle.mock.calls.length === 0)).toBe(true)
+
+      await vi.advanceTimersByTimeAsync(31_000)
+      await relays.providerRelayListingSettled()
+      for (let i = 0; i < 20; i += 1) {
+        await turn()
+      }
+      expect(settles.reduce((calls, settle) => calls + settle.mock.calls.length, 0)).toBe(1)
+      expect(settles.at(-1)).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  }
+)

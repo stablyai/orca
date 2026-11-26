@@ -74,13 +74,24 @@ export function reconcileStructuredAgentSessionKeptAtOpen(
   owner: () => AgentSessionProcessIdentity | null,
   settleGone: () => Promise<void>
 ): Promise<void> {
-  return reconcile(sessionId, owner, settleGone).catch((error: unknown) =>
-    logger.warn('settling a chat whose agent turned out not kept failed', {
+  const settleLogged = (): Promise<void> =>
+    settleGone().catch((error: unknown) =>
+      logger.warn('settling a chat whose agent turned out not kept failed', {
+        scope: 'kept-open-reconcile',
+        sessionId,
+        error
+      })
+    )
+  return reconcile(sessionId, owner, settleLogged).catch(settleFailed(logger, sessionId))
+}
+
+function settleFailed(logger: Pick<StructuredAgentSessionLogger, 'warn'>, sessionId: string) {
+  return (error: unknown): void =>
+    logger.warn('reconciling a chat opened as kept failed', {
       scope: 'kept-open-reconcile',
       sessionId,
       error
     })
-  )
 }
 
 async function reconcile(
@@ -94,12 +105,33 @@ async function reconcile(
   if (!(await providerRelayListingSettled())) {
     const ownerNow = owner()
     if (ownerNow === null || !(await ownerProvenGone(ownerNow))) {
-      await providerRelayInventoryCompleted()
+      waitForInventory(sessionId, settleGone)
+      return
     }
   }
   if (!providerRelayKeptFromLastRun(sessionId)) {
     await settleGone()
   }
+}
+
+/** One waiter per chat, the latest open's, so an outage holds at most one per chat, never per open. */
+const waitingForInventory = new Map<string, () => Promise<void>>()
+
+function waitForInventory(sessionId: string, settleGone: () => Promise<void>): void {
+  const first = waitingForInventory.size === 0
+  waitingForInventory.set(sessionId, settleGone)
+  if (!first) {
+    return
+  }
+  void providerRelayInventoryCompleted().then(async () => {
+    const waiting = [...waitingForInventory]
+    waitingForInventory.clear()
+    for (const [chat, settle] of waiting) {
+      if (!providerRelayKeptFromLastRun(chat)) {
+        await settle()
+      }
+    }
+  })
 }
 
 /** The open recovery a kept open skipped: handed-over sends become unknown, a stopped queue awaits reopen. */
