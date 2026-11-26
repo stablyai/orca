@@ -20,7 +20,10 @@ function renderGrid() {
   const { container } = render(<WorkerDockGlyph glyph="running" chip />)
   const grid = container.querySelector<HTMLElement>('[data-worker-dock-dot-grid]')
   expect(grid).not.toBeNull()
-  return { grid: grid!, cells: [...grid!.children] as HTMLElement[] }
+  return {
+    grid: grid!,
+    cells: [...container.querySelectorAll<HTMLElement>('[data-worker-dock-dot-grid] > span')]
+  }
 }
 
 it('lights the chip running grid along its diagonals, top-left first', () => {
@@ -45,10 +48,11 @@ it('anchors all nine cells to the shared clock as soon as the first cell starts'
   const wave = cells.map(() => ({ animationName: 'worker-dock-dot-wave', startTime: 1234 }))
   const other = { animationName: 'agent-spinner-rotate', startTime: 1234 }
   // As in a browser: the grid itself runs no animation; its cells' come back only with subtree.
-  grid.getAnimations = ((options?: GetAnimationsOptions) =>
-    options?.subtree ? [...wave, other] : []) as unknown as Element['getAnimations']
+  Object.defineProperty(grid, 'getAnimations', {
+    value: (options?: GetAnimationsOptions) => (options?.subtree ? [...wave, other] : [])
+  })
   cells.forEach((cell, index) => {
-    cell.getAnimations = (() => [wave[index]]) as unknown as Element['getAnimations']
+    Object.defineProperty(cell, 'getAnimations', { value: () => [wave[index]] })
   })
   fireEvent.animationStart(cells[0], { animationName: 'worker-dock-dot-wave' })
   expect(wave.map((animation) => animation.startTime)).toEqual(Array(9).fill(0))
