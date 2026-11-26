@@ -11,7 +11,7 @@ import type { SendRecipientWarning } from './recipient-routing'
 /** The receipt line for mail the delivery gate would hold right now; null when it would deliver.
  *  Never throws: the mail is already stored, so a failed read must not fail the send. */
 export async function sendDeliveryHoldWarning(
-  runtime: Pick<OrcaRuntimeService, 'readTerminalMailHold' | 'getTerminalOrchestrationCliCommand'> &
+  runtime: Pick<OrcaRuntimeService, 'readTerminalMailHold' | 'getTerminalOrchestrationCliTarget'> &
     Partial<Pick<OrcaRuntimeService, 'readSleepingMailHold'>>,
   db: OrchestrationDb,
   recipient: string
@@ -25,7 +25,7 @@ export async function sendDeliveryHoldWarning(
 }
 
 async function readDeliveryHoldWarning(
-  runtime: Pick<OrcaRuntimeService, 'readTerminalMailHold' | 'getTerminalOrchestrationCliCommand'> &
+  runtime: Pick<OrcaRuntimeService, 'readTerminalMailHold' | 'getTerminalOrchestrationCliTarget'> &
     Partial<Pick<OrcaRuntimeService, 'readSleepingMailHold'>>,
   db: OrchestrationDb,
   recipient: string
@@ -56,7 +56,7 @@ async function readDeliveryHoldWarning(
           hold,
           // The receiver runs the command, so name the CLI its own terminal resolves.
           hold.kind === 'unverified'
-            ? runtime.getTerminalOrchestrationCliCommand(hold.terminal)
+            ? runtime.getTerminalOrchestrationCliTarget(hold.terminal).cliCommand
             : undefined
         )
       }
@@ -67,7 +67,7 @@ async function readDeliveryHoldWarning(
  *  a waiting `check --wait` took is read by that call, so no hold applies to it. */
 export async function withDeliveryHoldWarning<T>(
   sent: T,
-  runtime: Pick<OrcaRuntimeService, 'readTerminalMailHold' | 'getTerminalOrchestrationCliCommand'> &
+  runtime: Pick<OrcaRuntimeService, 'readTerminalMailHold' | 'getTerminalOrchestrationCliTarget'> &
     Partial<Pick<OrcaRuntimeService, 'readSleepingMailHold'>>,
   db: OrchestrationDb,
   recipient: string,

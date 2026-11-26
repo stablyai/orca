@@ -44,6 +44,11 @@ export function acquireWatchRoot(
   return root.installed
 }
 
+/** Settles once the root's latest watch request has, including a retry. */
+export function watchRootInstalled(roots: HeldWatchRoots, target: WatchRootArgs): Promise<void> {
+  return roots.get(getWatchRootKey(target))?.installed ?? Promise.resolve()
+}
+
 /** Whether the root's latest watch request failed; a pending one counts as working. */
 export function isWatchRootFailed(roots: HeldWatchRoots, target: WatchRootArgs): boolean {
   return roots.get(getWatchRootKey(target))?.failed === true
