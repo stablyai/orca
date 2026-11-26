@@ -9,6 +9,7 @@ import {
   settlePeerQuestionsOut,
   tellUnpairedPeerQuestions
 } from '../../federation/peer-mail/peer-questions-out'
+import { storePeerReply } from '../../federation/peer-mail/peer-reply-store'
 import { OrchestrationDb } from '../orchestration-db'
 import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import { sessionAwaitsMail, sessionAwaitsMailSql } from './bot-request-sender-pending'
@@ -229,4 +230,46 @@ it('a chat waits on mail from its open requests, paired asks and undelivered mai
     .all('x', 'y', 'x', 'y', 'x', 'y', 'x', 'y', 'x', 'y', 'x', 'y', 'x', 'y')
     .map((row) => String(row.detail))
   expect(plan.filter((detail) => detail.startsWith('SCAN'))).toEqual([])
+})
+
+it('a replayed reply naming only its thread settles one paired handoff, not the next', () => {
+  const conversation = db.openHomePeerMailConversation({
+    environmentId: 'server',
+    peerFingerprint: 'fingerprint',
+    localParty: 'orca_session_id:handing',
+    localPaneKey: null
+  })
+  for (const [messageId, threadId] of [
+    ['msg_first', undefined],
+    ['msg_second', 'msg_first']
+  ] as const) {
+    recordPeerHandoffOut(db, {
+      messageId,
+      conversationId: conversation.conversation_id,
+      environmentId: 'server',
+      peerFingerprint: 'fingerprint',
+      asker: 'orca_session_id:handing',
+      threadId
+    })
+  }
+  const reply = (messageId: string) =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a conversation with no pane key reads nothing from the runtime.
+    storePeerReply({} as never, db, conversation, messageId, {
+      senderLabel: 'Server',
+      fromAddress: 'term_remote',
+      subject: 'Re: work',
+      body: 'Done',
+      threadId: 'msg_first'
+    })
+  // The replies themselves wait as mail for the chat; only the handoffs still out are counted here.
+  const out = () =>
+    db.db
+      .prepare('SELECT message_id FROM peer_handoffs_out')
+      .all()
+      .map((row) => row.message_id)
+  reply('peer_reply_1')
+  reply('peer_reply_1')
+  expect(out()).toEqual(['msg_second'])
+  reply('peer_reply_2')
+  expect(out()).toEqual([])
 })

@@ -36,6 +36,8 @@ export abstract class OrcaRuntimeWithOrchestrationDatabaseBinding extends OrcaRu
       }
     }
     db.sessionWorkersListener = (sessionId) => {
+      // A worker that ended without a report (stopped, failed to start) no longer holds its chat.
+      this.botRunChatCloser?.wake([sessionId])
       this.notifier?.orchestrationSessionWorkersChanged?.(sessionId)
       this.emitClientEvent({ type: 'orchestrationSessionWorkersChanged', sessionId })
     }
