@@ -116,6 +116,13 @@ export async function listDetectedGitWorktrees(
     },
     {
       scan: async () => {
+        // Why: WSL/UNC stat can report a false ENOENT, so those routes keep their own checks.
+        const checksFolder = !wslDistroForPath(repo.path, localWorktreeGitOptions.wslDistro)
+        // Why failed: a vanished folder is usually an unmounted volume, so rows must not be pruned or hidden.
+        // Checked before Git too, so a volume that mounts mid-scan cannot turn an absent folder into an empty list.
+        if (checksFolder && (await isRepoFolderAbsent(repo.path))) {
+          return { kind: 'failed', error: new RepoFolderMissingError(repo.path) }
+        }
         const worktrees = await withRepositoryGitCause(
           repo.path,
           localWorktreeGitOptions,
@@ -125,10 +132,8 @@ export async function listDetectedGitWorktrees(
         if (worktrees.length > 0) {
           return { kind: 'rows', worktrees }
         }
-        // Why failed: a vanished folder is usually an unmounted volume, so rows must not be pruned or hidden.
-        // WSL/UNC stat can report a false ENOENT, so those routes keep their own checks.
-        return !wslDistroForPath(repo.path, localWorktreeGitOptions.wslDistro) &&
-          (await isRepoFolderAbsent(repo.path))
+        // A folder that vanished during the scan is the same failure.
+        return checksFolder && (await isRepoFolderAbsent(repo.path))
           ? { kind: 'failed', error: new RepoFolderMissingError(repo.path) }
           : { kind: 'true-empty' }
       },

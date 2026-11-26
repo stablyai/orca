@@ -126,7 +126,8 @@ export function FileExplorerFilesTreePane({
   const hasError = isEmptyState && !isLoading && treeError !== null
   useMissingRootFolderRetry({
     rootPath: displayRootPath,
-    error: hasError ? treeError : null,
+    // Why not hasError: a failed refresh can leave rows visible beside the error, and the folder is still missing.
+    error: hasNameFilter || isLoading ? null : treeError,
     isLocal: !activeRepo?.connectionId && !runtimeDownloadContext,
     reload: (rootPath) => void tree.refreshDir(rootPath)
   })
