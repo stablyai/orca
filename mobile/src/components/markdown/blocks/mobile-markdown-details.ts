@@ -1,5 +1,5 @@
 import type { Details, Parent, PhrasingContent, RootContent } from 'mdast'
-import { isCenteredImageRow } from '../parsing/mobile-markdown-centered-image-row'
+import { splitCenteredImageRows } from '../parsing/mobile-markdown-centered-image-row'
 
 // GitHub's `<details>` sections, which desktop draws as native disclosure widgets.
 
@@ -115,10 +115,9 @@ export function appendHtmlBlock(
     } else if (piece.kind === 'summary' && details?.summary.length === 0) {
       details.summary = summaryPhrasing(piece.value)
     } else {
-      const child = { type: 'html' as const, value: piece.value }
-      current.children.push(
-        isCenteredImageRow(piece.value) ? { type: 'imageRow', children: [child] } : child
-      )
+      for (const block of splitCenteredImageRows(piece.value)) {
+        current.children.push(block)
+      }
     }
   }
 }

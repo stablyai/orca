@@ -1,6 +1,6 @@
 import { MarkdownImageLayout } from '../../components/markdown/blocks/MobileMarkdownImageRow'
 import { useContext, useEffect, useState } from 'react'
-import { ActivityIndicator, Image, Pressable, Text, View } from 'react-native'
+import { ActivityIndicator, Dimensions, Image, Pressable, Text, View } from 'react-native'
 import { colors, spacing, typography, pressedStyle } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -34,7 +34,7 @@ export function MobileMarkdownPreviewImage({
   const inRow = useContext(MarkdownImageLayout) === 'row'
   const [load, setLoad] = useState<{ uri?: string; error?: string }>({})
   const [attempt, setAttempt] = useState(0)
-  const [size, setSize] = useState<{ width: number; height: number }>()
+  const [size, setSize] = useState<{ width: number; height: number } | null>()
   const [expanded, setExpanded] = useState(false)
   useEffect(() => {
     let cancelled = false
@@ -45,11 +45,15 @@ export function MobileMarkdownPreviewImage({
           Image.getSize(
             uri,
             (width, height) => {
-              if (!cancelled && width > 0 && height > 0) {
-                setSize({ width, height })
+              if (!cancelled) {
+                setSize(width > 0 && height > 0 ? { width, height } : null)
               }
             },
-            () => {}
+            () => {
+              if (!cancelled) {
+                setSize(null)
+              }
+            }
           )
         }
       },
@@ -69,13 +73,10 @@ export function MobileMarkdownPreviewImage({
     }
   }, [client, worktreeId, documentPath, href, attempt])
 
+  // A failed size probe can still leave a drawable image. Give it the available column.
+  const rowWidth = width ?? (size === null ? Dimensions.get('window').width : size?.width)
   return (
-    <View
-      style={[
-        styles.frame,
-        inRow && !load.error && { width: width ?? size?.width, maxWidth: '100%' }
-      ]}
-    >
+    <View style={[styles.frame, inRow && !load.error && { width: rowWidth, maxWidth: '100%' }]}>
       {load.error ? (
         <MobileLoadErrorState
           error={load.error}

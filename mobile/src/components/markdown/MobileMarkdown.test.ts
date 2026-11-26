@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { plainText } from './parsing/mobile-markdown-plain-text'
 import { parseMobileMarkdownTree } from './parsing/mobile-markdown-tree'
 import { normalizeMobileMarkdownPreviewHtml } from './parsing/mobile-markdown-preview-html'
 
@@ -236,5 +237,24 @@ it('keeps a centered HTML image row together without absorbing the next block im
       ]
     },
     { type: 'paragraph', children: [{ type: 'image', url: 'cover.png' }] }
+  ])
+})
+
+it('keeps adjacent image rows in one HTML block separate from surrounding prose', () => {
+  const tree = parseMobileMarkdownTree(
+    [
+      '<p>Before</p>',
+      '<p align="center"><img src="https://example.org/a" alt="A"><img src="https://example.org/b" alt="B"></p>',
+      '<p align="center"><img src="https://example.org/c" alt="C"><img src="https://example.org/d" alt="D"></p>',
+      '<p>After</p>'
+    ].join('\n'),
+    false
+  )
+
+  expect(tree.children.map((node) => [node.type, plainText(node)])).toEqual([
+    ['paragraph', 'Before'],
+    ['imageRow', 'AB'],
+    ['imageRow', 'CD'],
+    ['paragraph', 'After']
   ])
 })

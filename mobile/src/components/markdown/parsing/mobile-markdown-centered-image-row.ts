@@ -1,7 +1,52 @@
-import { TAG as htmlTag } from './mobile-markdown-html-images'
+import type { Html, ImageRow } from 'mdast'
+import { TAG as htmlTag, VOID_TAGS } from './mobile-markdown-html-images'
 import { attrValue } from './mobile-markdown-preview-html'
 
-export function isCenteredImageRow(html: string): boolean {
+const markup = new RegExp(`<!--[\\s\\S]*?(?:-->|$)|${htmlTag.source}`, htmlTag.flags)
+
+export function splitCenteredImageRows(html: string): (Html | ImageRow)[] {
+  const blocks: (Html | ImageRow)[] = []
+  const open: string[] = []
+  let start = 0
+  let from = 0
+  for (const match of html.matchAll(markup)) {
+    const name = match[2]?.toLowerCase()
+    if (!name || VOID_TAGS.has(name) || match[0].endsWith('/>')) {
+      continue
+    }
+    if (!match[1]) {
+      if (open.length === 0) {
+        start = match.index
+      }
+      open.push(name)
+      continue
+    }
+    if (open.at(-1) !== name) {
+      continue
+    }
+    open.pop()
+    if (open.length > 0) {
+      continue
+    }
+    const end = match.index + match[0].length
+    const wrapper = html.slice(start, end)
+    if (isCenteredImageRow(wrapper)) {
+      const before = html.slice(from, start)
+      if (before.trim()) {
+        blocks.push({ type: 'html', value: before })
+      }
+      blocks.push({ type: 'imageRow', children: [{ type: 'html', value: wrapper }] })
+      from = end
+    }
+  }
+  const rest = html.slice(from)
+  if (rest.trim()) {
+    blocks.push({ type: 'html', value: rest })
+  }
+  return blocks
+}
+
+function isCenteredImageRow(html: string): boolean {
   const source = html.trim()
   const tags = source.matchAll(htmlTag)
   const first = tags.next().value
