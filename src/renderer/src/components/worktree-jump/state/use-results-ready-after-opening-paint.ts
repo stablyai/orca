@@ -13,6 +13,14 @@ export function useResultsReadyAfterOpeningPaint(visible: boolean): {
   revealResultsNow: () => void
 } {
   const [ready, setReady] = useState(false)
+  const [wasVisible, setWasVisible] = useState(visible)
+  // A reopen during the close linger opens like a fresh mount; closing keeps results for the exit animation.
+  if (visible !== wasVisible) {
+    setWasVisible(visible)
+    if (visible) {
+      setReady(false)
+    }
+  }
   useEffect(() => {
     if (!visible || ready) {
       return

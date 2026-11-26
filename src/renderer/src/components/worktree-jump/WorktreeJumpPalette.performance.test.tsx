@@ -73,3 +73,29 @@ it('mounts no result rows in the opening commit and fills them in after the pain
   expect(resultRowCount()).toBe(11)
   expect(documentsBuilt.count).toBe(WORKSPACE_COUNT)
 })
+
+it('defers results again when the palette reopens during its close linger', async () => {
+  render(<WorktreeJumpPalette />)
+  act(() => {
+    useAppStore.setState({ activeModal: 'worktree-palette' })
+  })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(200)
+  })
+  act(() => {
+    useAppStore.setState({ activeModal: 'none' })
+  })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(100)
+  })
+
+  act(() => {
+    useAppStore.setState({ activeModal: 'worktree-palette' })
+  })
+  expect(resultRowCount()).toBe(0)
+
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(200)
+  })
+  expect(resultRowCount()).toBe(11)
+})
