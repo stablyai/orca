@@ -53,3 +53,32 @@ it.each([10, 100])('uses no synchronous account reads for %d file actions', asyn
     connector.fence()
   }
 })
+
+it('still offers reconnection when a refresh is rejected and polling can retry', async () => {
+  const { fake } = harness
+  const seam = fakeSeam()
+  let fenced = false
+  const connector = new ConnectorCloud({
+    userDataPath: harness.userDataPath,
+    origin: fake.origin,
+    machine: fakeMachine(() => seam),
+    account: () => 'ada',
+    isFenced: () => fenced,
+    mintFor: (account) => fake.mintFor(account),
+    fetchImpl: fake.fetch
+  })
+  try {
+    connector.connect()
+    await settle()
+    fake.mintSessionRefused = true
+    fake.answerPoll({ status: 401, body: { error: 'invalid_token' } })
+    await settle()
+    expect(connector.botListFacts()).toMatchObject({
+      connectorStatus: 'needs-sign-in',
+      connectorNeedsSignIn: true
+    })
+  } finally {
+    fenced = true
+    connector.fence()
+  }
+})

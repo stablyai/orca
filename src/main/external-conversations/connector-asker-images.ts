@@ -15,6 +15,7 @@ export type EarlierImageBudget = {
   count: number
   bytes: number
   fileIds: ReadonlySet<string>
+  maxImageBytes?: number
 }
 
 /** The images on a request, saved where a chat's attachments live; each path is one the agent can
@@ -236,7 +237,10 @@ export function connectorAskerImages(deps: {
         }
         seen.add(target.fileId)
         slots -= 1
-        bytes -= await stage(target, Math.min(MAX_ASKER_IMAGE_BYTES, bytes))
+        bytes -= await stage(
+          target,
+          Math.min(budget?.maxImageBytes ?? MAX_ASKER_IMAGE_BYTES, bytes)
+        )
       }
     }
     return images

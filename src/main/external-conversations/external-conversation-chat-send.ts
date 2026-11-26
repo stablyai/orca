@@ -26,6 +26,9 @@ import {
 import { getAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import type { DeliveryPreparation } from './external-conversation-delivery-receipts'
 import type { CapabilityProbeCache } from '../../shared/concurrency/capability-probe-cache'
+import { AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES } from '../../shared/agent-session/agent-session-attachments'
+import { PI_UNSHRUNK_IMAGE_LIMITS } from '../pi/rpc/prompts/pi-rpc-image-limits'
+import type { EarlierImageBudget } from './connector-asker-images'
 
 /** Sent as a person's message would be: a busy chat takes it into the running turn. A bot's is
  *  labelled with who asked, where and what came before; the chat shows the message alone. Its
@@ -66,6 +69,8 @@ export async function deliverToChat(
     let firstCarry: Promise<CarriedMessages> | undefined
     const readCarry = (direct: readonly ConnectorImage[]) =>
       readCarriedMessages(chat, link, delivery.reply?.account, direct, delivery.signal, inspection)
+    const earlierBudget = (carried: CarriedMessages, direct: readonly ConnectorImage[]) =>
+      budgetForEarlierImages(link.agent, carried.earlierBudget, direct)
     let carried: CarriedMessages | undefined
     let directCount: number | undefined
     const images =
@@ -84,7 +89,7 @@ export async function deliverToChat(
                   delivery.missingImages
                 )
                 firstCarry = readCarry(direct)
-                return (await firstCarry).earlierBudget
+                return earlierBudget(await firstCarry, direct)
               }
             })
             .catch(() => [])
@@ -100,7 +105,7 @@ export async function deliverToChat(
       if (!chat.deps.store.getConversation(link.sessionId)) {
         return refused(CHAT_GONE_REFUSAL)
       }
-      const fitting = earlierImagesThatFit(earlier, carried)
+      const fitting = earlierImagesThatFit(earlier, earlierBudget(carried, direct))
       const outcome = await sendConnectorTurn(
         chat,
         link,
@@ -147,13 +152,36 @@ export async function deliverToChat(
 // Reads of the carried cards before the message goes alone: each retry follows a person's change.
 const CARRY_READS = 3
 
-function earlierImagesThatFit(
-  images: readonly ConnectorImage[],
-  { earlierBudget }: CarriedMessages
-) {
-  let { count, bytes } = earlierBudget
+function budgetForEarlierImages(
+  agent: ExternalConversationLink['agent'],
+  budget: EarlierImageBudget,
+  direct: readonly ConnectorImage[]
+): EarlierImageBudget {
+  if (agent !== 'pi') {
+    return budget
+  }
+  // Before launch we do not know whether this Pi shrinks images. Keep automatic attachments safe
+  // on older versions and leave larger files available through the existing download instructions.
+  const { image, total } = PI_UNSHRUNK_IMAGE_LIMITS
+  return {
+    ...budget,
+    maxImageBytes: image,
+    bytes: Math.min(
+      budget.bytes - (AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES - total),
+      total - direct.reduce((bytes, image) => bytes + image.bytes, 0)
+    )
+  }
+}
+
+function earlierImagesThatFit(images: readonly ConnectorImage[], budget: EarlierImageBudget) {
+  let { count, bytes } = budget
   return images.filter((image) => {
-    if (count <= 0 || image.bytes > bytes || earlierBudget.fileIds.has(image.fileId)) {
+    if (
+      count <= 0 ||
+      image.bytes > bytes ||
+      (budget.maxImageBytes !== undefined && image.bytes > budget.maxImageBytes) ||
+      budget.fileIds.has(image.fileId)
+    ) {
       return false
     }
     count -= 1

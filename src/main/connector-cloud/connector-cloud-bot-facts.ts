@@ -18,6 +18,8 @@ export function connectorBotListFacts(
     ...((connectorStatus === 'refused' || connectorStatus === 'needs-sign-in') && refusal
       ? { connectorMessage: refusal }
       : {}),
-    ...(needsSignIn ? { connectorNeedsSignIn: true as const } : {})
+    ...(needsSignIn || connectorStatus === 'needs-sign-in'
+      ? { connectorNeedsSignIn: true as const }
+      : {})
   }
 }

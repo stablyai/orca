@@ -11,7 +11,7 @@ import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { ChatDeliveries, type LinkableChat } from './external-conversation-chat-delivery'
 import type { ConversationChat, ConversationChatHost } from './external-conversation-chat'
-import type { ConnectorImage } from './connector-asker-images'
+import { connectorAskerImages, type ConnectorImage } from './connector-asker-images'
 
 // The real chat host and journal: a connector message whose start failed, then the conversation's next.
 const KEY = { source: 'slack' as const, externalId: 'T1:C1:1.2:UBOT' }
@@ -161,6 +161,69 @@ it('returns chat gone when its destination is deleted during attachment preparat
   }
   expect(forgotten).toBe(true)
   await expect(result).resolves.toEqual({ outcome: 'refused', reason: CHAT_GONE_REFUSAL })
+})
+
+it('delivers the request as text when an automatic attachment exceeds legacy Pi limits', async () => {
+  rig = await createQueuedMessageTestRig({ starting: true })
+  const deliveries = new ChatDeliveries(vi.fn())
+  const fetch = vi.fn(async () => {
+    const png = new Uint8Array(4 * 1024 * 1024)
+    png.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    return new Response(png)
+  })
+  const ref = 'slack:T1:C1:1.2:1.2'
+  const result = await deliveries.deliver(
+    chatHost(rig.host),
+    KEY,
+    { ...CHAT, agent: 'pi' },
+    {
+      deliveryId: 'd-pi',
+      text: '@bot',
+      signal: new AbortController().signal,
+      asker: {
+        userId: 'U1',
+        role: 'owner',
+        place: { kind: 'public_channel', id: 'C1' },
+        context: [],
+        text: '@bot',
+        earlierOwn: {
+          messages: [
+            {
+              at: 0,
+              text: 'Earlier request',
+              messageRef: ref,
+              files: [{ id: 'FIMAGE', name: 'earlier.png', type: 'image/png' }]
+            }
+          ]
+        }
+      },
+      askerImages: connectorAskerImages({
+        reader: () => async () => ({
+          ok: true,
+          value: {
+            ok: true,
+            result: {
+              download: {
+                url: 'https://fixture.invalid/image',
+                ticket: 'fixture',
+                size: 4 * 1024 * 1024
+              }
+            }
+          }
+        }),
+        fetch,
+        store: async () => '/attachments/image.png'
+      })
+    }
+  )
+  expect(result).toEqual({ outcome: 'accepted' })
+  expect((await lastSent()).body.blocks).toEqual([
+    {
+      type: 'text',
+      text: expect.stringContaining(`orca slack read ${ref} --download FIMAGE`)
+    }
+  ])
+  expect(fetch).not.toHaveBeenCalled()
 })
 
 it('a Retry racing the send leaves the delivery its own turn, not the Retry’s', async () => {

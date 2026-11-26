@@ -6,7 +6,10 @@ import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-
 import { CapabilityProbeCache } from '../../shared/concurrency/capability-probe-cache'
 import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import { parseAgentSessionAttachmentStorePath } from '../native-chat/agent-session-attachments/agent-session-attachment-references'
-import type { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
+import {
+  removeQuietly,
+  type AgentSessionAttachmentStore
+} from '../native-chat/agent-session-attachments/agent-session-attachment-store'
 
 // Keep connector metadata with the upload so older Orca versions can read the same chat journal.
 const CONNECTOR_FILE_ID = '.connector-file-id'
@@ -19,7 +22,12 @@ export async function storeConnectorImage(
 ): Promise<string> {
   const path = await store.storeFile(name, bytes)
   if (fileId !== undefined) {
-    await writeFile(join(dirname(path), CONNECTOR_FILE_ID), fileId, { flag: 'wx' })
+    try {
+      await writeFile(join(dirname(path), CONNECTOR_FILE_ID), fileId, { flag: 'wx' })
+    } catch (error) {
+      await removeQuietly(dirname(path))
+      throw error
+    }
   }
   return path
 }
