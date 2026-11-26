@@ -238,6 +238,32 @@ describe('file open absolute paths outside the selected worktree', () => {
     ])
   })
 
+  it('does not list worktrees when show fails after the cwd workspace resolves', async () => {
+    const paths = COMMAND_SPECS.flatMap((spec) => specPaths(spec))
+    const argv = ['file', 'open', '/repos/feature/README.md', '--json']
+    const parsed = normalizeCommandPositionals(COMMAND_SPECS, parseArgs(argv, paths, COMMAND_SPECS))
+    const call = vi.fn(async (method: string) => {
+      if (method === 'worktree.show') {
+        throw new RuntimeClientError('selector_not_found', 'missing worktree')
+      }
+      if (method === 'worktree.list') {
+        return { result: { worktrees: catalog } }
+      }
+      throw new Error(`unexpected ${method}`)
+    })
+    await expect(
+      FILE_HANDLERS['file open']({
+        flags: parsed.flags,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: file open only reads client.call and client.isRemote.
+        client: { call, isRemote: false } as unknown as HandlerContext['client'],
+        cwd: '/repos/current',
+        json: true,
+        rawArgs: argv
+      })
+    ).rejects.toMatchObject({ code: 'selector_not_found', message: 'missing worktree' })
+    expect(call.mock.calls.map((entry) => entry[0])).toEqual(['worktree.show'])
+  })
+
   it('opens a nested worktree instead of its parent', async () => {
     const call = await run(
       'file open',

@@ -63,16 +63,17 @@ async function resolveFileOpenOrDiffTarget(
 ): Promise<FileOpenTarget> {
   const explicit = ctx.flags.has('worktree')
   if (!explicit && !ctx.client.isRemote && isRuntimePathAbsolute(path)) {
+    let worktree: string
     try {
-      const worktree = await getFileWorktreeSelector(ctx)
-      return await resolveFileOpenTarget(ctx, worktree, path, false)
+      worktree = await getFileWorktreeSelector(ctx)
     } catch (error) {
-      // The cwd miss happens before the containing-worktree lookup.
+      // Only the cwd miss skips ahead. A later show failure keeps its own error.
       if (error instanceof RuntimeClientError && error.code === 'selector_not_found') {
         return resolveAbsoluteFileOpenWithoutCwdWorktree(ctx, path)
       }
       throw error
     }
+    return resolveFileOpenTarget(ctx, worktree, path, false)
   }
   const worktree = await getFileWorktreeSelector(ctx)
   return resolveFileOpenTarget(ctx, worktree, path, explicit)
