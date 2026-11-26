@@ -12,6 +12,7 @@ import {
   insideString,
   isCompletionWordChar,
   matchCompletions,
+  normalizeLineBreaks,
   type PluginCodeInputCompletion
 } from './plugin-declarative-code-input-text'
 
@@ -23,8 +24,11 @@ const PADDING_PX = 16
 const TEXT_LAYOUT =
   'm-0 block w-full border-0 px-3 py-2 font-mono text-xs leading-5 [overflow-wrap:anywhere] whitespace-pre-wrap [tab-size:2]'
 
-/** Suggestions for the word `from`..`to`, offered while the caret stays at `to`. */
-type Menu = { from: number; to: number; word: string }
+/**
+ * Suggestions matching `filter` that replace `from`..`to` of `text`, offered while the caret stays at
+ * `to` and the field still holds `text`.
+ */
+type Menu = { from: number; to: number; filter: string; text: string }
 
 export function PluginDeclarativeCodeInput({
   props,
@@ -34,7 +38,12 @@ export function PluginDeclarativeCodeInput({
   emit: PluginDeclarativeEmit
 }): React.JSX.Element {
   const id = useId()
-  const { value, change, readOnly, caughtUp } = usePluginDeclarativeHostValue({
+  const {
+    value: stored,
+    change,
+    readOnly,
+    caughtUp
+  } = usePluginDeclarativeHostValue({
     value: props.value,
     defaultValue: props.defaultValue,
     fallback: '',
@@ -43,6 +52,8 @@ export function PluginDeclarativeCodeInput({
     callback: props.onChange?.$callback,
     send: sendValue(emit)
   })
+  // The textarea reports its value and caret with `\n` breaks only; offsets must count the same way.
+  const value = normalizeLineBreaks(stored)
   const submit = props.onSubmit?.$callback
   const rows = props.rows ?? 1
   const maxRows = Math.max(rows, props.maxRows ?? rows)
@@ -55,13 +66,15 @@ export function PluginDeclarativeCodeInput({
   const [active, setActive] = useState(0)
 
   const editable = !readOnly && !props.disabled
-  const items = menu && editable ? matchCompletions(props.completions ?? [], menu.word) : []
+  // A menu opened on other text (the guest replaced it since) would replace the wrong range.
+  const liveMenu = menu && editable && menu.text === value ? menu : null
+  const items = liveMenu ? matchCompletions(props.completions ?? [], liveMenu.filter) : []
   const open = items.length > 0
   const shown = Math.min(active, Math.max(0, items.length - 1))
   // Ranges were computed for the text the guest last saw; while typing runs ahead of it (or with no
   // onChange, after any edit) they point elsewhere.
   const diagnostics =
-    caughtUp && (props.value === undefined || props.value === value)
+    caughtUp && (props.value === undefined || props.value === stored)
       ? (props.diagnostics ?? [])
       : []
   const segments = codeInputSegments(value, diagnostics, caret)
@@ -86,7 +99,8 @@ export function PluginDeclarativeCodeInput({
       setMenu(null)
       return
     }
-    setMenu({ ...word, to: cursor })
+    // Ctrl+Space offers every completion; the typed word is still what gets replaced.
+    setMenu({ from: word.from, to: cursor, filter: explicit ? '' : word.word, text })
     setActive(0)
   }
 
@@ -115,8 +129,13 @@ export function PluginDeclarativeCodeInput({
     if (!element || !menu) {
       return
     }
-    // The range belongs to where the menu opened; a caret that moved since would cut other text.
-    if (element.selectionStart === menu.to && element.selectionEnd === menu.to) {
+    // The range belongs to the text and caret the menu opened on; either moving since would cut
+    // other text.
+    const same =
+      element.value === menu.text &&
+      element.selectionStart === menu.to &&
+      element.selectionEnd === menu.to
+    if (same) {
       replaceRange(element, menu.from, menu.to, item.insert ?? item.label)
     }
     setMenu(null)

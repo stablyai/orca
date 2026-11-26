@@ -3,7 +3,8 @@ import {
   codeInputSegments,
   completionWordAt,
   insideString,
-  matchCompletions
+  matchCompletions,
+  normalizeLineBreaks
 } from './plugin-declarative-code-input-text'
 
 describe('completionWordAt', () => {
@@ -11,6 +12,19 @@ describe('completionWordAt', () => {
     expect(completionWordAt('{ a: { $g', 9)).toEqual({ from: 7, word: '$g' })
     expect(completionWordAt('{ address.ci', 12)).toEqual({ from: 2, word: 'address.ci' })
     expect(completionWordAt('{ ', 2)).toEqual({ from: 2, word: '' })
+  })
+
+  it('steps back over whole code points outside the BMP, with UTF-16 offsets', () => {
+    expect(completionWordAt('\u{10400}na', 4)).toEqual({ from: 0, word: '\u{10400}na' })
+    expect(completionWordAt('{ a.\u{10400}$g', 8)).toEqual({ from: 2, word: 'a.\u{10400}$g' })
+    // A lone surrogate is no letter, so the word stops after it.
+    expect(completionWordAt('\udc00na', 3)).toEqual({ from: 1, word: 'na' })
+  })
+})
+
+describe('normalizeLineBreaks', () => {
+  it('turns CRLF and lone CR into LF, as a textarea reports its value', () => {
+    expect(normalizeLineBreaks('a\r\n$g\rb\nc')).toBe('a\n$g\nb\nc')
   })
 })
 

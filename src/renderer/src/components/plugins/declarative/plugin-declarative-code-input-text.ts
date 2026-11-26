@@ -12,11 +12,30 @@ export function isCompletionWordChar(character: string): boolean {
   return WORD_CHAR.test(character)
 }
 
-/** The word that ends at `cursor`, which a completion replaces. */
+/** `\r\n` and lone `\r` as `\n`, as a textarea reports its value and its selection offsets. */
+export function normalizeLineBreaks(text: string): string {
+  return text.replace(/\r\n?/g, '\n')
+}
+
+const isLowSurrogate = (unit: number): boolean => unit >= 0xdc00 && unit <= 0xdfff
+const isHighSurrogate = (unit: number): boolean => unit >= 0xd800 && unit <= 0xdbff
+
+/**
+ * The word that ends at `cursor`, which a completion replaces. It steps back by whole code points
+ * so a letter outside the BMP stays in the word; `from` is in UTF-16 units, like the selection.
+ */
 export function completionWordAt(text: string, cursor: number): { from: number; word: string } {
   let from = cursor
-  while (from > 0 && isCompletionWordChar(text[from - 1]!)) {
-    from -= 1
+  while (from > 0) {
+    const pair =
+      from > 1 &&
+      isLowSurrogate(text.charCodeAt(from - 1)) &&
+      isHighSurrogate(text.charCodeAt(from - 2))
+    const width = pair ? 2 : 1
+    if (!isCompletionWordChar(text.slice(from - width, from))) {
+      break
+    }
+    from -= width
   }
   return { from, word: text.slice(from, cursor) }
 }

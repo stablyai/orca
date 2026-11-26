@@ -28,14 +28,18 @@ beforeEach(() => {
 
 afterEach(cleanup)
 
-function field(props: Props): { textarea: HTMLTextAreaElement; emit: ReturnType<typeof vi.fn> } {
-  const emit = vi.fn()
-  render(<PluginDeclarativeCodeInput props={props} emit={emit} />)
+function rendered(): HTMLTextAreaElement {
   const textarea = screen.getByRole('combobox')
   if (!(textarea instanceof HTMLTextAreaElement)) {
     throw new Error('CodeInput did not render a textarea')
   }
-  return { textarea, emit }
+  return textarea
+}
+
+function field(props: Props): { textarea: HTMLTextAreaElement; emit: ReturnType<typeof vi.fn> } {
+  const emit = vi.fn()
+  render(<PluginDeclarativeCodeInput props={props} emit={emit} />)
+  return { textarea: rendered(), emit }
 }
 
 function placeCaret(textarea: HTMLTextAreaElement, at: number): void {
@@ -135,4 +139,47 @@ it('numbers edits past what the guest saw before a remount', () => {
   expect(emit).toHaveBeenCalledWith('change', ['abcd'], { edit: 6 })
   rerender(<PluginDeclarativeCodeInput props={{ ...props }} emit={emit} />)
   expect(container.querySelectorAll('[data-tone]').length).toBe(0)
+})
+
+it('counts offsets on CRLF text the way the textarea does', () => {
+  const { textarea } = field({ ...base, completions: [{ label: '$gt' }], defaultValue: 'a\r\n$g' })
+  suggest(textarea, 4)
+  fireEvent.keyDown(textarea, { key: 'Tab' })
+  expect(textarea.value).toBe('a\n$gt')
+})
+
+it('offers every suggestion on Ctrl+Space and still replaces the typed word', () => {
+  const { textarea } = field({
+    ...base,
+    completions: [{ label: 'name' }, { label: 'total' }],
+    defaultValue: 'zz'
+  })
+  suggest(textarea, 2)
+  expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
+    'name',
+    'total'
+  ])
+  fireEvent.keyDown(textarea, { key: 'Tab' })
+  expect(textarea.value).toBe('name')
+})
+
+it('still filters suggestions while typing', () => {
+  const { textarea } = field({ ...base, completions: [{ label: 'name' }, { label: 'total' }] })
+  textarea.focus()
+  fireEvent.input(textarea, { target: { value: 'na' }, inputType: 'insertText', data: 'a' })
+  expect(screen.queryAllByRole('option').map((option) => option.textContent)).toEqual(['name'])
+})
+
+it('drops suggestions opened on text the guest has since replaced', () => {
+  const props: Props = { ...base, completions: [{ label: 'name' }], value: 'na' }
+  const emit = vi.fn()
+  const { rerender } = render(<PluginDeclarativeCodeInput props={props} emit={emit} />)
+  const textarea = rendered()
+  suggest(textarea, 2)
+  expect(screen.getByRole('option').textContent).toBe('name')
+  rerender(<PluginDeclarativeCodeInput props={{ ...props, value: '{}' }} emit={emit} />)
+  placeCaret(textarea, 2)
+  expect(screen.queryByRole('option')).toBeNull()
+  fireEvent.keyDown(textarea, { key: 'Tab' })
+  expect(textarea.value).toBe('{}')
 })
