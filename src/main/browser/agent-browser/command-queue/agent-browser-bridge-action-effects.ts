@@ -2,7 +2,10 @@ import { BrowserError } from '../../browser-error'
 import { AgentBrowserBridgeShutdown } from '../session-lifecycle/agent-browser-bridge-shutdown'
 import type { ResolvedBrowserCommandTarget } from '../session-routing/agent-browser-command-target'
 import { assertRemoteCliPageAccess } from '../../routing/input-ownership/remote-cli-page-admission'
-import type { ActionEffectsHost } from '../observation/agent-browser-action-effects'
+import {
+  runWithActionEffects,
+  type ActionEffectsHost
+} from '../observation/agent-browser-action-effects'
 import { isPageTextWithheld } from '../agent-browser-withheld-page-text'
 
 const EFFECTS_SNAPSHOT_TIMEOUT_MS = 5_000
@@ -72,6 +75,18 @@ export abstract class AgentBrowserBridgeActionEffects extends AgentBrowserBridge
         this.browserManager.observePageEvents(browserPageId, listener),
       admit: (webContentsId) => assertRemoteCliPageAccess(webContentsId)
     }
+  }
+
+  /** An agent's action with the effects it caused; `skip` (`--no-effects`) runs the action only. */
+  protected runWithEffects<T>(
+    worktreeId: string | undefined,
+    browserPageId: string,
+    sessionName: string,
+    action: () => Promise<T>,
+    skip: boolean
+  ): Promise<T> {
+    const host = this.actionEffectsHost(worktreeId, browserPageId, sessionName)
+    return runWithActionEffects(host, action, { skip })
   }
 
   /** The daemon's delta baseline is no longer the page the agent last saw. */

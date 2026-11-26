@@ -66,7 +66,9 @@ export const ExpectUrlBrowserTarget = BrowserTarget.extend({
     .custom<string>((v) => typeof v === 'string' && isAbsoluteBrowserUrl(v), {
       message: '--expect-url must be an absolute URL, like https://example.com/chat/a'
     })
-    .optional()
+    .optional(),
+  // Action commands then skip the post-action settle and return no `effects`; older hosts drop it and still settle.
+  noEffects: z.boolean().optional()
 })
 
 export const requiredString = memoizeStringResult(

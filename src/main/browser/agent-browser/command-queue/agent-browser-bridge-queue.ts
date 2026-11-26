@@ -5,7 +5,7 @@ import { ORCA_TAB_SESSION_PREFIX } from '../session-lifecycle/agent-browser-sess
 import type { EnqueueTargetedCommandOptions } from './agent-browser-queued-command'
 import type { ResolvedBrowserCommandTarget } from '../session-routing/agent-browser-command-target'
 import { runWithRemoteCliPageAdmission } from '../../routing/input-ownership/remote-cli-page-admission'
-import { runWithActionEffects } from '../observation/agent-browser-action-effects'
+import { isActionEffectsOptOut } from '../observation/agent-browser-effects-opt-out'
 import { getRequestedPageUrl, runExpectingPageUrl } from '../../cdp/input/browser-expected-page-url'
 import { AGENT_BROWSER_CLEANUP_TIMEOUT_MS } from '../session-lifecycle/agent-browser-cleanup-options'
 import { releaseHeldPageInput } from '../../cdp/input/guest-direct-key-input'
@@ -111,7 +111,11 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeActionEf
     // Fail before queueing: the turn ahead may be a command waiting on this very dialog.
     assertNoJavaScriptDialog(webContentsId, pageId, assertNotRevoked)
     const sessionName = `${ORCA_TAB_SESSION_PREFIX}${pageId}`
-    const agentCommand = this.browserManager.beginAgentCommand(pageId)
+    const skipEffects = isActionEffectsOptOut()
+    // `--no-effects` asks for speed: its input still draws the cursor but waits on nothing the page shows.
+    const agentCommand = this.browserManager.beginAgentCommand(pageId, {
+      skipInputWaits: skipEffects
+    })
     // Queued commands run under the caller ahead of them, so read this one's caller now
     // and re-enter its call, or what it marks would count as that other chat's.
     const caller = getActiveRpcCaller()
@@ -183,10 +187,7 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeActionEf
                       )
                 const act = (): Promise<T> =>
                   reportEffects
-                    ? runWithActionEffects(
-                        this.actionEffectsHost(worktreeId, pageId, session),
-                        guarded
-                      )
+                    ? this.runWithEffects(worktreeId, pageId, session, guarded, skipEffects)
                     : guarded()
                 return origin.bridged
                   ? this.runHostCommand(session, target.webContentsId, gate, origin, act)

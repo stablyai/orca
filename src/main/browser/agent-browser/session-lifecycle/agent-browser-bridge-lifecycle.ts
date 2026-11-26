@@ -142,7 +142,10 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
         wc,
         () => this.browserManager.holdPaintForCapture(webContentsId),
         () => this.browserManager.guardUserFocusForAgentInput(webContentsId),
-        (input) => this.browserManager.showAgentPointer(wc, input)
+        {
+          show: (input) => this.browserManager.showAgentPointer(wc, input),
+          skipsInputWaits: () => this.browserManager.agentSkipsInputWaits(wc.id)
+        }
       )
       const cdpEndpoint = await proxy.start()
 

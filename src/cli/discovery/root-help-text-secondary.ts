@@ -153,6 +153,7 @@ export const ROOT_HELP_TEXT_SECONDARY = [
   '  --index <n>               Tab index (from `tab list`)',
   '  --page <id>               Stable browser page id (preferred for concurrent workflows)',
   '  --expect-url <url>        Fail before acting unless the page is at this exact absolute URL',
+  '  --no-effects              Skip the post-action settle and `effects`, for fast runs you wait/snapshot yourself',
   '  --profile <id>            Browser profile id',
   "  --show-profile            Include the tab's browser profile in text output",
   '  --format <png|jpeg>       Screenshot image format',

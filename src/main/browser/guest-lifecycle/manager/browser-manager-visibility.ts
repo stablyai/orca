@@ -48,8 +48,11 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
   }
 
   /** Holds the page's agent marking for one queued command, from queueing until it settles. */
-  beginAgentCommand(browserPageId: string): AgentCommandLease {
-    const lease = this.agentActivity.beginCommand(browserPageId)
+  beginAgentCommand(
+    browserPageId: string,
+    options?: { skipInputWaits?: boolean }
+  ): AgentCommandLease {
+    const lease = this.agentActivity.beginCommand(browserPageId, options)
     if (!lease.agent) {
       return lease
     }
@@ -270,6 +273,10 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     listener: Parameters<BrowserAgentActivity['watchCursor']>[1]
   ): () => void {
     return this.agentActivity.watchCursor(browserPageId, listener)
+  }
+
+  agentSkipsInputWaits(guestWebContentsId: number): boolean {
+    return this.agentActivity.skipsInputWaits(guestWebContentsId)
   }
 
   // Show the agent's pointer landing before the input it precedes reaches the page.

@@ -38,11 +38,23 @@ export type ActionEffectsHost = {
   admit: (webContentsId: number) => void
 }
 
-/** Runs an agent action and adds what it caused, settled within NAVIGATION_SETTLE_MS + QUIET_BUDGET_MS. */
+/**
+ * Runs an agent action and adds what it caused, settled within NAVIGATION_SETTLE_MS + QUIET_BUDGET_MS.
+ * With `skip`, runs only the action: no baseline, settle or delta snapshot, and no `effects`.
+ */
 export async function runWithActionEffects<T>(
   host: ActionEffectsHost,
-  action: () => Promise<T>
+  action: () => Promise<T>,
+  options: { skip?: boolean } = {}
 ): Promise<T> {
+  if (options.skip) {
+    try {
+      return await action()
+    } finally {
+      // The agent did not see what this action changed, so the next effects must not diff against it.
+      host.forgetDeltaBaseline()
+    }
+  }
   const guest = host.guest()
   if (!guest) {
     return action()

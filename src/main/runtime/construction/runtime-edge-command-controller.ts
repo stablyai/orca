@@ -1,6 +1,7 @@
 import type { RuntimeTerminalDriverState } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { BrowserScreencastResult } from '../../../shared/browser/runtime/runtime-browser-contracts'
 import { runWithRequestedPageUrl } from '../../browser/cdp/input/browser-expected-page-url'
+import { runWithRequestedActionEffects } from '../../browser/agent-browser/observation/agent-browser-effects-opt-out'
 import type { RuntimeBrowserCommandHost } from '../browser/commands/browser-command-contracts'
 import type { RuntimeBrowserCommands } from '../browser/commands/browser-commands'
 import { RuntimeEmulatorCommands } from '../emulator/runtime-emulator-commands'
@@ -161,7 +162,13 @@ function bindBrowserMethods<T extends object>(
     names.map((name) => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every name in BROWSER_COMMAND_NAMES is checked against RuntimeBrowserCommands, whose members are all methods.
       const method = (instance[name] as (...args: unknown[]) => unknown).bind(instance)
-      return [name, (...args: unknown[]) => runWithRequestedPageUrl(args[0], () => method(...args))]
+      return [
+        name,
+        (...args: unknown[]) =>
+          runWithRequestedPageUrl(args[0], () =>
+            runWithRequestedActionEffects(args[0], () => method(...args))
+          )
+      ]
     })
   ) as Partial<PublicMethods<T>>
 }
