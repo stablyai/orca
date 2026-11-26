@@ -86,6 +86,17 @@ export const BridgeUiLocaleSchema = z.enum(SUPPORTED_UI_LOCALES)
 
 export type BridgeUiLocale = z.infer<typeof BridgeUiLocaleSchema>
 
+// The phone's Region setting and 12/24-hour clock, which page dates follow instead of the language's.
+export const BridgeDateTimeRegionSchema = z.object({
+  region: z
+    .string()
+    .regex(/^(?:[A-Za-z]{2}|\d{3})$/)
+    .nullable(),
+  hourCycle: z.enum(['h12', 'h23']).nullable()
+})
+
+export type BridgeDateTimeRegion = z.infer<typeof BridgeDateTimeRegionSchema>
+
 export const BridgeInitStorageSchema = z
   .record(
     z.string().min(1).max(PAGE_STORAGE_MAX_KEY_CHARS).refine(isPageStorageKey),
@@ -279,6 +290,8 @@ const BridgeHostMessageSchema = z.union([
     terminalKeyRail: salvagedOptional('terminalKeyRail', BridgeTerminalKeyRailSchema).optional(),
     // Older pages strip this key; a locale this page does not ship is salvaged rather than refusing init.
     uiLocale: salvagedOptional('uiLocale', BridgeUiLocaleSchema).optional(),
+    // Older pages strip this key; an unreadable value drops the field, not `init`.
+    dateTimeRegion: salvagedOptional('dateTimeRegion', BridgeDateTimeRegionSchema).optional(),
     host: BridgeInitHostSchema.optional(),
     // The status the shell's compatibility gate already read; older shells omit it and the page asks.
     // Opaque here: the page's status gate validates it with the reader it already loads.

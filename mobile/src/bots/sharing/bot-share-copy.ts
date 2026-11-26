@@ -6,8 +6,12 @@ import {
 import type { BotShareFlag } from '../../../../src/shared/bots/bot-package'
 import type { BotShareFlagSpot } from '../../../../src/shared/bots/bot-share-flag-spots'
 import { translate } from '../../i18n/mobile-i18n'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
+import { uiDateTimeFormat } from '../../i18n/ui-intl-locale'
 import { botShareErrorCode } from './bot-share-operations'
+import {
+  SHORT_MONTH_DAY,
+  SHORT_MONTH_DAY_TIME
+} from '../../../../src/shared/i18n/regional-date-time-format'
 
 function copyFor(code: BotShareErrorCode): string {
   switch (code) {
@@ -127,11 +131,7 @@ export function botShareLines(count: number): string {
 export function botShareDate(iso: string | null, time = false): string {
   const date = iso ? new Date(iso) : null
   return date && !Number.isNaN(date.getTime())
-    ? new Intl.DateTimeFormat(getUiIntlLocale(), {
-        month: 'short',
-        day: 'numeric',
-        ...(time ? { hour: 'numeric', minute: '2-digit' } : {})
-      }).format(date)
+    ? uiDateTimeFormat(time ? SHORT_MONTH_DAY_TIME : SHORT_MONTH_DAY).format(date)
     : ''
 }
 

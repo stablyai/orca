@@ -1,4 +1,5 @@
 import type { UiLanguageDetection } from '../../shared/i18n/ui-locale'
+import type { OsDateTimeRegion } from '../../shared/i18n/regional-date-time-format'
 import type { WindowMaterial } from '../../shared/app-lifecycle/windows/window-material'
 import type { AppIdentity } from '../../shared/app-lifecycle/identity/app-identity'
 import type { MacosUpgradeSupport } from '../../shared/updater/requirements/macos-upgrade-support'
@@ -21,6 +22,8 @@ export type AppApi = {
   getSystemLanguageDetection?: (
     browserPreferences?: readonly string[]
   ) => Promise<UiLanguageDetection | null>
+  /** OS region and 12/24-hour override for dates and times; optional for older bridges. */
+  getOsDateTimeRegion?: () => Promise<OsDateTimeRegion | null>
   isProfileStateSaveDelayed: () => Promise<boolean>
   onProfileStateSaveDelayChanged: (callback: (delayed: boolean) => void) => () => void
   getIdentity: () => Promise<AppIdentity>

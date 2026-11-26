@@ -27,6 +27,7 @@ import {
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 export { getStatsPaneSearchEntries } from './stats-search'
 
 function formatDuration(ms: number): string {
@@ -49,6 +50,12 @@ function formatDuration(ms: number): string {
   return `${totalMinutes}m`
 }
 
+const TRACKING_SINCE_DAY: Intl.DateTimeFormatOptions = {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric'
+}
+
 function formatTrackingSince(
   timestamp: number | null,
   t: Translate = translate,
@@ -59,11 +66,7 @@ function formatTrackingSince(
   }
   const date = new Date(timestamp)
   return t('auto.components.stats.StatsPane.trackingSince', 'Tracking since {{value0}}', {
-    value0: date.toLocaleDateString(intlLocale, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    })
+    value0: uiDateTimeFormat(TRACKING_SINCE_DAY, intlLocale).format(date)
   })
 }
 

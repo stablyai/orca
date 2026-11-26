@@ -169,24 +169,27 @@ export function selectBotRowLine<R>(
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const CLOCK = { hour: 'numeric', minute: '2-digit' } as const
+// Constants, so formatter caches keyed by options identity reuse one formatter per shape.
+const WAIT_TIMES = [{ ...CLOCK, second: '2-digit' }, { hour: 'numeric' }, CLOCK] as const
+const WAIT_FORMATS: readonly (readonly Intl.DateTimeFormatOptions[])[] = [
+  WAIT_TIMES,
+  WAIT_TIMES.map((time) => ({ weekday: 'short', ...time })),
+  WAIT_TIMES.map((time) => ({ month: 'short', day: 'numeric', ...time }))
+]
 
 /** How a wait's deadline reads: "2:14 AM" today, "Fri 5 PM" within the week, "Nov 14, 5 PM"
  *  further; minutes only off the hour. Each app formats with its own locale. */
 export function botWaitTimeFormat(at: number, now: number): Intl.DateTimeFormatOptions {
   const date = new Date(at)
   // A reminder set to the second keeps its seconds; a whole hour stays short ("5 PM").
-  const time =
-    date.getSeconds() !== 0
-      ? { ...CLOCK, second: '2-digit' as const }
-      : date.getMinutes() === 0
-        ? { hour: 'numeric' as const }
-        : CLOCK
-  if (date.toDateString() === new Date(now).toDateString()) {
-    return time
-  }
-  return Math.abs(at - now) < 6 * DAY_MS
-    ? { weekday: 'short', ...time }
-    : { month: 'short', day: 'numeric', ...time }
+  const time = date.getSeconds() !== 0 ? 0 : date.getMinutes() === 0 ? 1 : 2
+  const day =
+    date.toDateString() === new Date(now).toDateString()
+      ? 0
+      : Math.abs(at - now) < 6 * DAY_MS
+        ? 1
+        : 2
+  return WAIT_FORMATS[day][time]
 }
 
 type Translate = (key: string, fallback: string, values?: Record<string, unknown>) => string

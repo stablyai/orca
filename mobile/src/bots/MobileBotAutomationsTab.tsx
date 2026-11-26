@@ -13,7 +13,7 @@ import {
 } from 'lucide-react-native'
 import { hasAutomationSchedule } from '../../../src/shared/automation-event-triggers'
 import { useNow } from '../hooks/use-now'
-import { getUiIntlLocale } from '../i18n/ui-intl-locale'
+import { uiDateTimeFormat } from '../i18n/ui-intl-locale'
 import { botWaitTimeFormat } from '../../../src/shared/bots/bot-row-line'
 import { MobileStateButton, MobileStateView } from '../components/feedback/MobileStateView'
 import { MobileSwitch } from '../components/controls/MobileSwitch'
@@ -175,10 +175,7 @@ function WaitRow(props: {
         by === undefined
           ? t('bots.waits.noDeadline', 'No deadline')
           : t('bots.waits.until', 'Until {{time}}', {
-              time: new Intl.DateTimeFormat(
-                getUiIntlLocale(),
-                botWaitTimeFormat(by, props.now)
-              ).format(by)
+              time: uiDateTimeFormat(botWaitTimeFormat(by, props.now)).format(by)
             })
       }
       accessory={

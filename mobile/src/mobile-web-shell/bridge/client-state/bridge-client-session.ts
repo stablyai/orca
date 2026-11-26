@@ -1,5 +1,6 @@
 import type {
   BridgeColorScheme,
+  BridgeDateTimeRegion,
   BridgeGrants,
   BridgeHostMessage,
   BridgeInitHost,
@@ -34,6 +35,8 @@ export type BridgeShellSession = {
   terminalKeyRail: BridgeTerminalKeyRail
   // Null means an older shell sent no language; the page then follows the WebView's languages.
   uiLocale: BridgeUiLocale | null
+  // Null when the shell is too old to send it or the phone names no region; dates keep the language's format.
+  dateTimeRegion: BridgeDateTimeRegion | null
   /** Null for a shell too old to name it; the page's own `loadHosts()` then answers with nothing. */
   host: BridgeInitHost | null
   storage: Readonly<Record<string, string>>
@@ -62,6 +65,7 @@ export function readShellSession(
     terminalKeyRail: message.terminalKeyRail ?? [],
     colorScheme: message.colorScheme ?? 'dark',
     uiLocale: message.uiLocale ?? null,
+    dateTimeRegion: message.dateTimeRegion ?? null,
     host: message.host ?? null,
     storage: message.storage ?? {},
     storageOversize: message.storageOversize ?? [],

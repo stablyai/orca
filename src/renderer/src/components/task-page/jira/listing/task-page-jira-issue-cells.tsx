@@ -11,6 +11,8 @@ import {
   type JiraListColumnId
 } from './jira-list-columns'
 import { getJiraPriorityTone } from './task-page-jira-status-tone'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { DATE_TIME_NUMERIC } from '../../../../../../shared/i18n/regional-date-time-format'
 
 const MUTED_CELL = 'block truncate text-[12px] text-muted-foreground'
 
@@ -141,7 +143,7 @@ export function JiraIssueCell({
             </div>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={6}>
-            {new Date(issue.updatedAt).toLocaleString(intlLocale)}
+            {uiDateTimeFormat(DATE_TIME_NUMERIC, intlLocale).format(new Date(issue.updatedAt))}
           </TooltipContent>
         </Tooltip>
       )

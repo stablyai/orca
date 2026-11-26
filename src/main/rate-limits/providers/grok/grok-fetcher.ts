@@ -12,6 +12,7 @@ import {
   type GrokAuthReadResult,
   type GrokAuthSession
 } from './grok-auth'
+import { formatTimeOrWeekdayTime } from '../../../../shared/i18n/regional-date-time-format'
 
 // xAI requires the billing endpoint/headers used by Grok CLI.
 const GROK_CLI_PROXY_BASE =
@@ -72,10 +73,7 @@ function parseResetDescription(isoString: string | undefined): string | null {
   if (Number.isNaN(date.getTime())) {
     return null
   }
-  const isToday = date.toDateString() === new Date().toDateString()
-  return isToday
-    ? date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
-    : date.toLocaleDateString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })
+  return formatTimeOrWeekdayTime(date)
 }
 
 function timestampsMatch(left: string | undefined, right: string | undefined): boolean {

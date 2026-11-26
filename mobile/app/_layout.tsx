@@ -39,6 +39,8 @@ import { BotLinkRouter } from '../src/bots/BotLinkRouter'
 import { SideRailProvider } from '../src/layout/side-rail'
 import { useFollowDeviceUiLocale } from '../src/i18n/use-follow-device-ui-locale'
 import { startMobileUiLanguage } from '../src/i18n/ui-language-preference'
+import { readDeviceDateTimeRegion } from '../src/i18n/device-date-time-region'
+import { setOsDateTimeRegion } from '../../src/shared/i18n/regional-date-time-format'
 import { subscribeMobileUiLanguage } from '../src/i18n/mobile-i18n'
 import { startDeviceStore } from '../src/device-store/device-store'
 
@@ -50,6 +52,8 @@ SplashScreen.preventAutoHideAsync()
 const appearanceReady = startMobileAppearance()
 // Likewise the UI language: the saved choice and its catalog load under the splash.
 const languageReady = startMobileUiLanguage()
+// Before any screen formats a date; pages get it in their init.
+setOsDateTimeRegion(readDeviceDateTimeRegion())
 
 // Create orca-desktop channel at boot: background FCM can arrive before socket subscription, and Android drops unknown-channel pushes.
 void ensureDesktopNotificationChannel().catch(() => {})

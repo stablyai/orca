@@ -20,6 +20,7 @@ import { translate } from '../i18n/mobile-i18n'
 import { agentDotState, agentRowTimeAt } from '../worktree/agent-lineage/agent-row-display'
 import type { MobileBotRowFacts } from './host-bot-row-facts'
 import { mobileUsageLimitStopText } from './mobile-usage-limit-copy'
+import { regionalDateTimeFormat } from '../../../src/shared/i18n/regional-date-time-format'
 
 const PHONE_ROWS: BotRowLineReader<RuntimeWorktreeAgentRow> = {
   paneKey: (row) => row.paneKey,
@@ -88,7 +89,7 @@ export function mobileBotRowLine(
 /** The line's words, as the desktop's row says them. */
 export function mobileBotRowLineText(line: BotRowLine, now: number): string {
   return botRowLineText(line, translate, (by) =>
-    new Intl.DateTimeFormat(undefined, botWaitTimeFormat(by, now)).format(by)
+    regionalDateTimeFormat(botWaitTimeFormat(by, now)).format(by)
   )
 }
 

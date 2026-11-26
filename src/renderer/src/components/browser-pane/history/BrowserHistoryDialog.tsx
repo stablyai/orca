@@ -37,6 +37,7 @@ import {
   listBrowserHistoryRows,
   type BrowserHistoryClearRange
 } from './browser-history-view-rows'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 
 type BrowserHistoryDialogProps = {
   pageId: string
@@ -52,25 +53,17 @@ export default function BrowserHistoryDialog(
   return open ? <BrowserHistoryDialogContent {...props} /> : null
 }
 
-// Why cached per locale: the UI language can change while the app runs.
-let historyFormats: {
-  locale: string
+const HISTORY_DAY: Intl.DateTimeFormatOptions = { dateStyle: 'full' }
+const HISTORY_TIME: Intl.DateTimeFormatOptions = { timeStyle: 'short' }
+
+function getHistoryFormats(intlLocale: string = getIntlLocale()): {
   dateFormat: Intl.DateTimeFormat
   timeFormat: Intl.DateTimeFormat
-} | null = null
-
-function getHistoryFormats(
-  intlLocale: string = getIntlLocale()
-): NonNullable<typeof historyFormats> {
-  const locale = intlLocale
-  if (historyFormats?.locale !== locale) {
-    historyFormats = {
-      locale,
-      dateFormat: new Intl.DateTimeFormat(locale, { dateStyle: 'full' }),
-      timeFormat: new Intl.DateTimeFormat(locale, { timeStyle: 'short' })
-    }
+} {
+  return {
+    dateFormat: uiDateTimeFormat(HISTORY_DAY, intlLocale),
+    timeFormat: uiDateTimeFormat(HISTORY_TIME, intlLocale)
   }
-  return historyFormats
 }
 
 function formatDayHeading(

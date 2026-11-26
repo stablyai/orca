@@ -8,6 +8,8 @@ import {
   shownPluginCapabilities
 } from '../presentation/plugin-capability-presentation'
 import type { PluginLogsState } from '../state/use-plugin-logs'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { TIME_NUMERIC } from '../../../../../shared/i18n/regional-date-time-format'
 
 export function DetailSection({
   title,
@@ -134,7 +136,7 @@ export function PluginLogsSection({
   const text = lines
     .map(
       (entry) =>
-        `${new Date(entry.ts).toLocaleTimeString(intlLocale)} ${entry.level.padEnd(5)} ${entry.line}`
+        `${uiDateTimeFormat(TIME_NUMERIC, intlLocale).format(new Date(entry.ts))} ${entry.level.padEnd(5)} ${entry.line}`
     )
     .join('\n')
   return (

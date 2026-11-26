@@ -21,7 +21,7 @@ import {
 } from '../../components/list/ListGroup'
 import { SwipeRowActions } from '../../components/list/SwipeRowActions'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
+import { uiDateTimeFormat } from '../../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { SettingsEmptyRow, SettingsSection } from '../../settings/settings-screen-frame'
 import { colors, radii, spacing } from '../../theme/mobile-theme'
@@ -32,6 +32,7 @@ import { MobileBotTextButton } from '../MobileBotTextButton'
 import { botMemoryEdit, botMemoryForget } from './bot-memory-operations'
 import { MobileBotMemoryHistory } from './MobileBotMemoryHistory'
 import type { BotMemoryTopic, BotMemoryTopics } from './use-bot-home-files'
+import { SHORT_MONTH_DAY } from '../../../../src/shared/i18n/regional-date-time-format'
 
 // A file name, never translated.
 const MEMORY_FILE = 'MEMORY.md'
@@ -45,9 +46,7 @@ export type MemoryActions = {
 
 function shortDate(date: string): string {
   const [year, month, day] = date.split('-').map(Number)
-  return new Intl.DateTimeFormat(getUiIntlLocale(), { month: 'short', day: 'numeric' }).format(
-    new Date(year, month - 1, day)
-  )
+  return uiDateTimeFormat(SHORT_MONTH_DAY).format(new Date(year, month - 1, day))
 }
 
 function factMeta(t: ReturnType<typeof useMobileTranslation>, fact: BotMemoryFact) {

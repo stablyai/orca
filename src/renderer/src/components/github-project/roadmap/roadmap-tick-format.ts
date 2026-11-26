@@ -4,32 +4,16 @@ import {
   type RoadmapZoom,
   ROADMAP_DAY_MS
 } from '../../../../../shared/github/projects/project-roadmap-timeline'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 
 export type RoadmapTickLabel = { label: string; sublabel: string | null }
 
-// Cache formatters per locale because ticks and bars reuse fixed options on every render.
-const monthFormatters = new Map<string, Intl.DateTimeFormat>()
-const dayFormatters = new Map<string, Intl.DateTimeFormat>()
-const MAX_FORMATTER_LOCALES = 32
-
-function cachedFormatter(
-  cache: Map<string, Intl.DateTimeFormat>,
-  locale: string,
-  options: Intl.DateTimeFormatOptions
-): Intl.DateTimeFormat {
-  let formatter = cache.get(locale)
-  if (!formatter) {
-    formatter = new Intl.DateTimeFormat(locale, options)
-    cache.set(locale, formatter)
-    while (cache.size > MAX_FORMATTER_LOCALES) {
-      const oldest = cache.keys().next()
-      if (oldest.done) {
-        break
-      }
-      cache.delete(oldest.value)
-    }
-  }
-  return formatter
+const TICK_MONTH: Intl.DateTimeFormatOptions = { month: 'short', timeZone: 'UTC' }
+const SPAN_DAY: Intl.DateTimeFormatOptions = {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+  timeZone: 'UTC'
 }
 
 export function formatRoadmapTick(
@@ -46,22 +30,14 @@ export function formatRoadmapTick(
   if (zoom === 'quarter') {
     return { label: `Q${Math.floor(date.getUTCMonth() / 3) + 1}`, sublabel: year }
   }
-  const month = cachedFormatter(monthFormatters, locale, {
-    month: 'short',
-    timeZone: 'UTC'
-  }).format(date)
+  const month = uiDateTimeFormat(TICK_MONTH, locale).format(date)
   // Show the year at the grid’s start and each January instead of repeating it monthly.
   return { label: month, sublabel: index === 0 || date.getUTCMonth() === 0 ? year : null }
 }
 
 /** Format the inclusive calendar span GitHub displays, rather than the geometry’s exclusive end. */
 export function formatRoadmapSpan(span: RoadmapSpan, locale: string): string {
-  const format = cachedFormatter(dayFormatters, locale, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC'
-  })
+  const format = uiDateTimeFormat(SPAN_DAY, locale)
   const start = format.format(new Date(span.startMs))
   if (span.point) {
     return start

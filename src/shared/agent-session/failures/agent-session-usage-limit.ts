@@ -1,3 +1,4 @@
+import { CLOCK_TIME, regionalDateTimeFormat } from '../../i18n/regional-date-time-format'
 // Carry provider usage-limit facts; each reader formats resets in its own clock.
 
 /** `session`: the rolling few-hour limit. `weekly`: the account's weekly limit. `weeklyModel`: a
@@ -45,6 +46,14 @@ export function readAgentSessionUsageLimit(value: unknown): AgentSessionUsageLim
     : undefined
 }
 
+const RESET_DAY_CLOCK: Intl.DateTimeFormatOptions = {
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit'
+}
+
 /** A reset time in the reader's own clock: the time alone today, else with its day. */
 export function formatUsageLimitResetClock(
   resetsAt: number,
@@ -53,10 +62,5 @@ export function formatUsageLimitResetClock(
 ): string {
   const at = new Date(resetsAt)
   const today = at.toDateString() === new Date(now).toDateString()
-  return new Intl.DateTimeFormat(
-    locale,
-    today
-      ? { hour: 'numeric', minute: '2-digit' }
-      : { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }
-  ).format(at)
+  return regionalDateTimeFormat(today ? CLOCK_TIME : RESET_DAY_CLOCK, locale).format(at)
 }

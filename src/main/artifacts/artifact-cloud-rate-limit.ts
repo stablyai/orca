@@ -1,5 +1,10 @@
 import { ARTIFACT_RATE_LIMITED_CODE } from '../../shared/artifacts/artifacts'
 import { OrcaCloudRequestError } from '../orca-profiles/cloud-auth/profile-cloud-client'
+import {
+  regionalDateTimeFormat,
+  CLOCK_TIME,
+  SHORT_MONTH_DAY_TIME
+} from '../../shared/i18n/regional-date-time-format'
 
 const MAX_SERVER_MESSAGE_LENGTH = 300
 
@@ -65,11 +70,7 @@ function sanitizeServerMessage(value: unknown): string | null {
 
 function formatLocalResetTime(resetAt: Date, now: Date): string {
   const sameDay = resetAt.toDateString() === now.toDateString()
-  return new Intl.DateTimeFormat(undefined, {
-    ...(sameDay ? {} : { month: 'short', day: 'numeric' }),
-    hour: 'numeric',
-    minute: '2-digit'
-  }).format(resetAt)
+  return regionalDateTimeFormat(sameDay ? CLOCK_TIME : SHORT_MONTH_DAY_TIME).format(resetAt)
 }
 
 function formatWait(seconds: number): string {

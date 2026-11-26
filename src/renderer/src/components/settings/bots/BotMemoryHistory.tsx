@@ -3,7 +3,7 @@ import { ChevronRight, Minus, Pencil, Plus, RotateCcw, Sparkles, Undo2 } from 'l
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { SettingsInsetGroup } from '@/components/bots/settings-view/BotSettingsRows'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { botErrorMessage } from '@/components/bots/bot-presentation'
 import { cn } from '@/lib/class-names'
@@ -15,6 +15,8 @@ import {
   botMemoryHistorySummary,
   type BotMemoryHistoryKind
 } from '../../../../../shared/bots/bot-memory-history-copy'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { CLOCK_TIME, SHORT_MONTH_DAY } from '../../../../../shared/i18n/regional-date-time-format'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -26,7 +28,7 @@ function dayLabel(at: number, now: Date): string {
   if (at >= today - DAY_MS) {
     return translate('settings.bots.memoryHistory.yesterday', 'Yesterday')
   }
-  return new Date(at).toLocaleDateString(getIntlLocale(), { month: 'short', day: 'numeric' })
+  return uiDateTimeFormat(SHORT_MONTH_DAY).format(at)
 }
 
 const ROW_ICONS: Record<BotMemoryHistoryKind, React.JSX.Element> = {
@@ -50,10 +52,7 @@ function Row({
 }): React.JSX.Element {
   const intlLocale = useIntlLocale()
   const t = useTranslate()
-  const time = new Date(row.at).toLocaleTimeString(intlLocale, {
-    hour: 'numeric',
-    minute: '2-digit'
-  })
+  const time = uiDateTimeFormat(CLOCK_TIME, intlLocale).format(row.at)
   const subtitle = botMemoryHistoryAuthor(translate, row)
   return (
     <div data-row-icon="" className="px-3 py-2.5 transition-colors hover:bg-accent/40">

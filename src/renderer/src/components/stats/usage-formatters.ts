@@ -1,5 +1,10 @@
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import {
+  DATE_TIME_NUMERIC,
+  SHORT_MONTH_DAY_TIME
+} from '../../../../shared/i18n/regional-date-time-format'
 
 export function formatTokens(value: number, intlLocale: string = getIntlLocale()): string {
   if (value >= 1_000_000) {
@@ -27,7 +32,7 @@ export function formatUpdatedAt(
     return t('auto.components.stats.usageFormatters.notScannedYet', 'Not scanned yet')
   }
   return t('auto.components.stats.usageFormatters.updatedAt', 'Updated {{time}}', {
-    time: new Date(timestamp).toLocaleString(intlLocale)
+    time: uiDateTimeFormat(DATE_TIME_NUMERIC, intlLocale).format(new Date(timestamp))
   })
 }
 
@@ -47,10 +52,5 @@ export function formatSessionTime(timestamp: string, intlLocale: string = getInt
   if (Number.isNaN(parsed.getTime())) {
     return timestamp
   }
-  return parsed.toLocaleString(intlLocale, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit'
-  })
+  return uiDateTimeFormat(SHORT_MONTH_DAY_TIME, intlLocale).format(parsed)
 }

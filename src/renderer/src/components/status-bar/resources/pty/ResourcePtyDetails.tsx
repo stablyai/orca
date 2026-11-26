@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import type { ResourcePtyRow } from './resource-pty-view-model'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { DATE_TIME_NUMERIC } from '../../../../../../shared/i18n/regional-date-time-format'
 
 export function resourcePtyBindingLabel(
   binding: ResourcePtyRow['binding'],
@@ -52,7 +54,9 @@ export function ResourcePtyDetails({
     [t('resourceManager.pty.agentOwnership', 'Agent ownership evidence'), ownership],
     [
       t('resourceManager.pty.observationTime', 'Observation time'),
-      observedAt === null ? unavailable : new Date(observedAt).toLocaleString(intlLocale)
+      observedAt === null
+        ? unavailable
+        : uiDateTimeFormat(DATE_TIME_NUMERIC, intlLocale).format(new Date(observedAt))
     ],
     [t('resourceManager.pty.pid', 'PID'), row.session.rootProcessId?.toString() || unavailable]
   ]

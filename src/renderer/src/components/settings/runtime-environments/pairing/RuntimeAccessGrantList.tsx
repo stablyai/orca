@@ -6,14 +6,18 @@ import { cn } from '@/lib/class-names'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { LegacyEncryptionNotice } from '../../legacy-encryption-notice'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { SHORT_MONTH_DAY } from '../../../../../../shared/i18n/regional-date-time-format'
+
+const ACCESS_TIMESTAMP: Intl.DateTimeFormatOptions = {
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit'
+}
 
 function formatAccessTimestamp(timestamp: number, intlLocale: string = getIntlLocale()): string {
-  return new Intl.DateTimeFormat(intlLocale, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit'
-  }).format(new Date(timestamp))
+  return uiDateTimeFormat(ACCESS_TIMESTAMP, intlLocale).format(new Date(timestamp))
 }
 
 // Why: main names each link "Runtime <date>"; show it as a link, not a runtime.
@@ -24,9 +28,7 @@ function grantDisplayName(
 ): string {
   return /^Runtime \d/.test(grant.name)
     ? t('auto.components.settings.RuntimeAccessGrantList.linkName', 'Link · {{value0}}', {
-        value0: new Intl.DateTimeFormat(intlLocale, { month: 'short', day: 'numeric' }).format(
-          new Date(grant.createdAt)
-        )
+        value0: uiDateTimeFormat(SHORT_MONTH_DAY, intlLocale).format(new Date(grant.createdAt))
       })
     : grant.name
 }

@@ -6,6 +6,7 @@ import {
 } from './automation-schedule-parsing'
 import { cronHasPossibleOccurrence } from './automation-cron-occurrence'
 import { escapeTerminalControlCharacters } from '../../terminal/output/terminal-control-character-escape'
+import { CLOCK_TIME, regionalDateTimeFormat } from '../../i18n/regional-date-time-format'
 
 export type AutomationCronScheduleClassification =
   | { kind: 'hourly'; minute: number; label: string }
@@ -44,10 +45,7 @@ export function formatAutomationScheduleTime(hour: number, minute: number): stri
 function formatTime(hour: number, minute: number): string {
   const date = new Date()
   date.setHours(hour, minute, 0, 0)
-  return new Intl.DateTimeFormat(undefined, {
-    hour: 'numeric',
-    minute: '2-digit'
-  }).format(date)
+  return regionalDateTimeFormat(CLOCK_TIME).format(date)
 }
 
 function getSingleSetValue(values: Set<number>): number | null {

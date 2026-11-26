@@ -18,6 +18,14 @@ import {
   parseDevBuildStamp,
   type ReleaseBuild
 } from '../../../../../shared/updater/release-channel'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+
+const BUILD_STAMP: Intl.DateTimeFormatOptions = {
+  month: 'short',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit'
+}
 
 function formatBuildLabel(build: ReleaseBuild, intlLocale: string = getIntlLocale()): string {
   if (build.name) {
@@ -27,12 +35,7 @@ function formatBuildLabel(build: ReleaseBuild, intlLocale: string = getIntlLocal
   if (!stamp) {
     return build.version
   }
-  return `${build.version.split('-')[0]} · ${stamp.toLocaleString(intlLocale, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })}`
+  return `${build.version.split('-')[0]} · ${uiDateTimeFormat(BUILD_STAMP, intlLocale).format(stamp)}`
 }
 
 export function ReleaseBuildPicker({

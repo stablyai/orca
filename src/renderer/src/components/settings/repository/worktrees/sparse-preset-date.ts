@@ -1,4 +1,7 @@
 import { getIntlLocale } from '@/i18n/i18n'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+const PRESET_DAY: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' }
+
 export function formatSparsePresetUpdatedAt(
   timestamp: number,
   intlLocale: string = getIntlLocale()
@@ -12,9 +15,5 @@ export function formatSparsePresetUpdatedAt(
     return null
   }
 
-  return new Intl.DateTimeFormat(intlLocale, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric'
-  }).format(date)
+  return uiDateTimeFormat(PRESET_DAY, intlLocale).format(date)
 }

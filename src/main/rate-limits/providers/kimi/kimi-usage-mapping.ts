@@ -2,6 +2,7 @@ import type {
   ProviderRateLimits,
   RateLimitWindow
 } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { formatTimeOrWeekdayTime } from '../../../../shared/i18n/regional-date-time-format'
 
 const SESSION_WINDOW_MINUTES = 300
 const WEEKLY_WINDOW_MINUTES = 10080
@@ -76,10 +77,7 @@ function parseResetDescription(isoString: string | undefined): string | null {
   if (Number.isNaN(date.getTime())) {
     return null
   }
-  const isToday = date.toDateString() === new Date().toDateString()
-  return isToday
-    ? date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
-    : date.toLocaleDateString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })
+  return formatTimeOrWeekdayTime(date)
 }
 
 function toWindow(

@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { SettingsInsetGroup } from '@/components/bots/settings-view/BotSettingsRows'
-import { getIntlLocale } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   BOT_MEMORY_INDEX_LINE_CAP,
@@ -19,13 +18,12 @@ import { toast } from 'sonner'
 import { botErrorMessage } from '@/components/bots/bot-presentation'
 import type { BotHomeFile } from './use-bot-home-file'
 import { useSaveOnClose } from './use-save-on-close'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { SHORT_MONTH_DAY } from '../../../../../shared/i18n/regional-date-time-format'
 
 function shortDate(date: string): string {
   const [year, month, day] = date.split('-').map(Number)
-  return new Date(year, month - 1, day).toLocaleDateString(getIntlLocale(), {
-    month: 'short',
-    day: 'numeric'
-  })
+  return uiDateTimeFormat(SHORT_MONTH_DAY).format(new Date(year, month - 1, day))
 }
 
 function FactSource({ source }: { source: string }): React.JSX.Element {

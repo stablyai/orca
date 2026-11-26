@@ -9,7 +9,7 @@ import { PullDownMenu } from '../../components/nav-bar/PullDownMenu'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { SheetPrimaryButton } from '../../components/sheets/SheetPrimaryButton'
 import { useNow } from '../../hooks/use-now'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
+import { uiDateTimeFormat } from '../../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useClipboardWriter } from '../../platform/clipboard/clipboard'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
@@ -28,6 +28,7 @@ import {
 import type { PhoneWebhook, PhoneWebhookCall } from './mobile-webhook-operations'
 import { usePhoneWebhookCalls } from './use-phone-webhooks'
 import { copyPhoneWebhookUrl } from './mobile-webhook-url-copy'
+import { CLOCK_TIME } from '../../../../src/shared/i18n/regional-date-time-format'
 
 const URL_KEY_MASK = '••••••••'
 // Closed lists show this many; Show all reveals the rest the host returned.
@@ -237,8 +238,7 @@ export function MobileBotWebhookDetail(props: DetailProps) {
 
 function callTime(row: PhoneWebhookCall): string {
   const at = row.kind === 'call' ? row.receivedAt : row.minute
-  const format = new Intl.DateTimeFormat(getUiIntlLocale(), { hour: 'numeric', minute: '2-digit' })
-  return format.format(at)
+  return uiDateTimeFormat(CLOCK_TIME).format(at)
 }
 
 /** Recent calls: the cloud's verdict for each call, then what the bot's computer did with it. */

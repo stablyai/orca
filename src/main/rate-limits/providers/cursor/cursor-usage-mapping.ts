@@ -9,6 +9,10 @@ import type {
   RateLimitBucket,
   RateLimitWindow
 } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import {
+  regionalDateTimeFormat,
+  SHORT_MONTH_DAY
+} from '../../../../shared/i18n/regional-date-time-format'
 
 const MONTHLY_WINDOW_MINUTES = 43_200
 
@@ -109,7 +113,7 @@ function resetDescription(resetsAtMs: number | null): string | null {
   if (Number.isNaN(date.getTime())) {
     return null
   }
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  return regionalDateTimeFormat(SHORT_MONTH_DAY).format(date)
 }
 
 function windowMinutesFor(startMs: number | null, endMs: number | null): number {

@@ -44,6 +44,8 @@ import {
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Button } from '@/components/ui/button'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { DATE_TIME_NUMERIC } from '../../../../../../shared/i18n/regional-date-time-format'
 export function TaskPageGitHubRows({
   model
 }: {
@@ -264,7 +266,7 @@ export function TaskPageGitHubRows({
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  {new Date(item.updatedAt).toLocaleString(intlLocale)}
+                  {uiDateTimeFormat(DATE_TIME_NUMERIC, intlLocale).format(new Date(item.updatedAt))}
                 </TooltipContent>
               </Tooltip>
 

@@ -1,5 +1,6 @@
 import { translate } from '../../i18n/mobile-i18n'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
+import { getUiIntlLocale, uiDateTimeFormat } from '../../i18n/ui-intl-locale'
+import { CLOCK_TIME, SHORT_MONTH_DAY } from '../../../../src/shared/i18n/regional-date-time-format'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -14,7 +15,7 @@ export function formatOfflineAsOfTime(at: number, now: number = Date.now()): str
   const locale = getUiIntlLocale()
   // Rounded so a daylight-saving day still counts as one.
   const daysAgo = Math.round((startOfDay(now) - startOfDay(at)) / DAY_MS)
-  const time = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(at)
+  const time = uiDateTimeFormat(CLOCK_TIME).format(at)
   if (daysAgo <= 0) {
     return time
   }
@@ -24,5 +25,5 @@ export function formatOfflineAsOfTime(at: number, now: number = Date.now()): str
   if (daysAgo < 7) {
     return new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(at)
   }
-  return new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }).format(at)
+  return uiDateTimeFormat(SHORT_MONTH_DAY).format(at)
 }

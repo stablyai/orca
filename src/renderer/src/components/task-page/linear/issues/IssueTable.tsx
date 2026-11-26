@@ -11,6 +11,8 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { formatRelativeTime } from '../../task-page-source-context'
 import { Button } from '@/components/ui/button'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { DATE_TIME_NUMERIC } from '../../../../../../shared/i18n/regional-date-time-format'
 export function TaskPageLinearIssueTable({
   model
 }: {
@@ -223,7 +225,9 @@ export function TaskPageLinearIssueTable({
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  {new Date(issue.updatedAt).toLocaleString(intlLocale)}
+                  {uiDateTimeFormat(DATE_TIME_NUMERIC, intlLocale).format(
+                    new Date(issue.updatedAt)
+                  )}
                 </TooltipContent>
               </Tooltip>
             ) : null}

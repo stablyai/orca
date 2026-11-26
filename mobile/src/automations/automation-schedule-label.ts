@@ -3,7 +3,8 @@ import {
   type AutomationScheduleDescriptor
 } from '../../../src/shared/automations/scheduling/automation-schedules'
 import { translate } from '../i18n/mobile-i18n'
-import { getUiIntlLocale } from '../i18n/ui-intl-locale'
+import { getUiIntlLocale, uiDateTimeFormat } from '../i18n/ui-intl-locale'
+import { CLOCK_TIME } from '../../../src/shared/i18n/regional-date-time-format'
 
 // Translate whole sentences; the shared English formatter also serves the CLI.
 export function formatAutomationScheduleDescriptor(
@@ -31,10 +32,9 @@ export function formatAutomationScheduleDescriptor(
       { minute: String(descriptor.minute).padStart(2, '0') }
     )
   }
-  const time = new Intl.DateTimeFormat(getUiIntlLocale(), {
-    hour: 'numeric',
-    minute: '2-digit'
-  }).format(new Date(2024, 0, 1, descriptor.hour, descriptor.minute))
+  const time = uiDateTimeFormat(CLOCK_TIME).format(
+    new Date(2024, 0, 1, descriptor.hour, descriptor.minute)
+  )
   if (descriptor.kind === 'daily') {
     return translate(
       'auto.components.automations.automation.schedule.label.280ccd2701',

@@ -1,7 +1,8 @@
 import { translate } from '../i18n/mobile-i18n'
-import { getUiIntlLocale } from '../i18n/ui-intl-locale'
+import { getUiIntlLocale, uiDateTimeFormat } from '../i18n/ui-intl-locale'
 import type { MobileAutomationRow } from './automation-reply-schema'
 import { automationDate } from './automation-run-presentation'
+import { CLOCK_TIME } from '../../../src/shared/i18n/regional-date-time-format'
 
 type NextRunFields = Pick<MobileAutomationRow['automation'], 'enabled' | 'nextRunAt' | 'timezone'>
 
@@ -28,7 +29,7 @@ export function automationNextRunShortLabel(automation: NextRunFields, now = Dat
   }
   const at = new Date(automation.nextRunAt)
   const locale = getUiIntlLocale()
-  const time = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(at)
+  const time = uiDateTimeFormat(CLOCK_TIME).format(at)
   const days = localDay(automation.nextRunAt) - localDay(now)
   if (days === 0) {
     return translate('automations.mobile.nextRunToday', 'Next run today at {{time}}', { time })

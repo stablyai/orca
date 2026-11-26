@@ -12,6 +12,8 @@ import {
   type LocalAccountRuntime,
   getHostRuntimeLabel
 } from '../../../../lib/provider-accounts/account-runtime-label'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { SHORT_MONTH_DAY_TIME } from '../../../../../../shared/i18n/regional-date-time-format'
 
 export const EMPTY_WSL_DISTROS: string[] = []
 
@@ -116,12 +118,7 @@ export function formatAccountTimestamp(
   timestamp: number,
   intlLocale: string = getIntlLocale()
 ): string {
-  return new Date(timestamp).toLocaleString(intlLocale, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit'
-  })
+  return uiDateTimeFormat(SHORT_MONTH_DAY_TIME, intlLocale).format(new Date(timestamp))
 }
 
 /** One secondary line from whichever account details are known. */

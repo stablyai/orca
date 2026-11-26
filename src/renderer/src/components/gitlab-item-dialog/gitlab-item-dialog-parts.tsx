@@ -13,6 +13,8 @@ import type {
   MRComment
 } from '../../../../shared/gitlab/gitlab-types'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { DATE_NUMERIC } from '../../../../shared/i18n/regional-date-time-format'
 
 export type JobTraceState = {
   loading: boolean
@@ -170,7 +172,9 @@ export function CommentCard({
             </Button>
           ) : null}
           <span>
-            {comment.createdAt ? new Date(comment.createdAt).toLocaleDateString(intlLocale) : ''}
+            {comment.createdAt
+              ? uiDateTimeFormat(DATE_NUMERIC, intlLocale).format(new Date(comment.createdAt))
+              : ''}
           </span>
         </div>
       </div>

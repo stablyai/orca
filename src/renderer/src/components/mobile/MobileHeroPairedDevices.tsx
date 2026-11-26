@@ -1,6 +1,8 @@
 import { Smartphone, Trash2 } from 'lucide-react'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { PairedMobileDevice } from './paired-mobile-devices'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { DATE_NUMERIC } from '../../../../shared/i18n/regional-date-time-format'
 
 type HeroPairedProps = {
   devices: readonly PairedMobileDevice[]
@@ -47,7 +49,7 @@ export function HeroPaired({
                 <div className="mp-paired-name">{device.name}</div>
                 <div className="mp-paired-meta">
                   {t('auto.components.mobile.MobileHero.94829abdb1', 'Paired')}{' '}
-                  {new Date(device.pairedAt).toLocaleDateString(intlLocale)}
+                  {uiDateTimeFormat(DATE_NUMERIC, intlLocale).format(new Date(device.pairedAt))}
                 </div>
               </div>
               <button

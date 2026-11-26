@@ -5,6 +5,7 @@ import {
   type UiLanguageDetection
 } from '../../../shared/i18n/ui-locale'
 import { isWebClientLocation } from '../app-shell/platform/web-client-location'
+import { setRendererOsDateTimeRegion } from './i18n'
 import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 
 export const useLanguageReadiness = create<{
@@ -32,6 +33,15 @@ function publishLanguageDetection(detection: UiLanguageDetection): UiLanguageDet
   return detection
 }
 
+async function loadOsDateTimeRegion(): Promise<void> {
+  try {
+    const region = window.api?.app?.getOsDateTimeRegion?.()
+    setRendererOsDateTimeRegion(region ? await withTimeout(region, 1000, null) : null)
+  } catch {
+    // Older bridges keep dates in the UI language's own conventions.
+  }
+}
+
 export function initializeLanguageDetection(): Promise<UiLanguageDetection> {
   const currentDetection = useLanguageReadiness.getState().detection
   if (currentDetection) {
@@ -44,6 +54,8 @@ export function initializeLanguageDetection(): Promise<UiLanguageDetection> {
       browserClient ? 'browser' : 'browser-fallback'
     )
     if (!browserClient) {
+      // Formats read it synchronously, so it must land before the first render.
+      const osRegion = loadOsDateTimeRegion()
       try {
         const snapshot = window.api?.app?.getSystemLanguageDetection?.(
           browserDetection.detectedTag ? [browserDetection.detectedTag] : []
@@ -60,6 +72,7 @@ export function initializeLanguageDetection(): Promise<UiLanguageDetection> {
       } catch {
         // Older local bridges do not provide the optional snapshot.
       }
+      await osRegion
     }
     detection ??= useLanguageReadiness.getState().detection ?? browserDetection
     return publishLanguageDetection(detection)
