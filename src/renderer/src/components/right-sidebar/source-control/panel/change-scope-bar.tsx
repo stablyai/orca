@@ -175,10 +175,7 @@ export function SourceControlChangeScopeBar({
       type="button"
       variant="outline"
       size="xs"
-      className={cn(
-        'aria-disabled:cursor-default',
-        !(openDiffDisabled && !branchCompareLoading) && 'mx-0.5'
-      )}
+      className="aria-disabled:cursor-default"
       disabled={openDiffDisabled && !branchCompareLoading}
       // Stays focusable while loading so the tooltip can say why.
       aria-disabled={branchCompareLoading || undefined}
@@ -187,7 +184,17 @@ export function SourceControlChangeScopeBar({
       data-testid="source-control-change-scope-open-diff"
     >
       <FileDiff className="size-3.5" />
-      {t('auto.components.right.sidebar.SourceControl.scopeDiffButton', 'Diff')}
+      {/* Yields to the scope name below the 240px panel (or a narrower scope row beside a scrollbar);
+          aria-label and tooltip keep "Open diff". Longer scope names need the room sooner. */}
+      <span
+        className={
+          changeScope.kind === 'all'
+            ? '@max-[204px]/change-scope:hidden'
+            : '@max-[216px]/change-scope:hidden'
+        }
+      >
+        {t('auto.components.right.sidebar.SourceControl.scopeDiffButton', 'Diff')}
+      </span>
     </Button>
   )
   const showAllLabel = t(
@@ -222,7 +229,7 @@ export function SourceControlChangeScopeBar({
                   <button
                     ref={scopeTriggerRef}
                     type="button"
-                    className="-ml-1 inline-flex h-6 min-w-0 shrink items-center gap-0.5 rounded-md px-1 text-xs font-medium text-foreground outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    className="-ml-0.5 inline-flex h-6 min-w-0 shrink items-center rounded-md px-0.5 text-xs font-medium text-foreground outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
                     data-testid="source-control-change-scope-trigger"
                   >
                     <span className="min-w-0 truncate">{scopeLabel}</span>
@@ -237,32 +244,41 @@ export function SourceControlChangeScopeBar({
                 {countTitle ? <div className="text-muted-foreground">{countTitle}</div> : null}
               </TooltipContent>
             </Tooltip>
+            {/* Hidden when narrow: the scope menu's All changes item does the same, and the label needs the room. */}
             {changeScope.kind !== 'all' ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    className="-ml-1 size-5 shrink-0"
-                    aria-label={showAllLabel}
-                    onClick={() => {
-                      scopeTriggerRef.current?.focus()
-                      setChangeScope(ALL_CHANGES_SCOPE)
-                    }}
-                  >
-                    <X className="size-3" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{showAllLabel}</TooltipContent>
-              </Tooltip>
+              <span className="contents @max-[232px]/change-scope:hidden">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      className="-ml-1 size-5 shrink-0"
+                      aria-label={showAllLabel}
+                      onClick={() => {
+                        scopeTriggerRef.current?.focus()
+                        setChangeScope(ALL_CHANGES_SCOPE)
+                      }}
+                    >
+                      <X className="size-3" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{showAllLabel}</TooltipContent>
+                </Tooltip>
+              </span>
             ) : null}
             {/* The number yields first when narrow (or a scrollbar takes width); its text equivalent stays. */}
             {scoped && countTitle ? (
               <>
                 <span
                   aria-hidden="true"
-                  className="ml-0.5 shrink-0 text-2xs tabular-nums text-muted-foreground @max-[228px]/change-scope:hidden"
+                  className={cn(
+                    'ml-0.5 shrink-0 text-2xs tabular-nums text-muted-foreground',
+                    // The × beside a picked scope needs the room first.
+                    changeScope.kind === 'all'
+                      ? '@max-[228px]/change-scope:hidden'
+                      : '@max-[256px]/change-scope:hidden'
+                  )}
                   data-testid="source-control-change-scope-count"
                 >
                   {scoped.files.toLocaleString(intlLocale)}
@@ -290,7 +306,7 @@ export function SourceControlChangeScopeBar({
               <Tooltip>
                 <TooltipTrigger asChild>
                   {openDiffDisabled && !branchCompareLoading ? (
-                    <span className="mx-0.5 inline-flex">{openDiffButton}</span>
+                    <span className="inline-flex">{openDiffButton}</span>
                   ) : (
                     openDiffButton
                   )}

@@ -322,11 +322,13 @@ export const behindStandard = behind.standard
 export const behindWide = behind.wide
 
 const upToDate = variants({})
+export const upToDateMinimum = upToDate.minimum
 export const upToDateNarrow = upToDate.narrow
 export const upToDateStandard = upToDate.standard
 export const upToDateWide = upToDate.wide
 
 const prOpen = variants({ review: 'open', ahead: 3 })
+export const prOpenMinimum = prOpen.minimum
 export const prOpenNarrow = prOpen.narrow
 export const prOpenStandard = prOpen.standard
 export const prOpenWide = prOpen.wide
@@ -343,7 +345,9 @@ export const longBranchCreatePrNarrow = longBranchCreate.narrow
 export const longBranchCreatePrWide = longBranchCreate.wide
 
 const detached = variants({ detached: true, review: null, behind: 2 })
+export const detachedMinimum = detached.minimum
 export const detachedNarrow = detached.narrow
+export const detachedStandard = detached.standard
 export const detachedWide = detached.wide
 
 const remoteOldHost = variants({ behind: 4, graphSupported: false })
@@ -378,18 +382,23 @@ export const rebasePaused = defineFixture({
   width: panelWidth(264),
   render: () => <Panel rebasePaused detached review={null} />
 })
-export const filterExpanded = defineFixture({
-  width: panelWidth(240),
-  render: () => <Panel filterExpanded filterQuery="settings" behind={45} />
-})
+const filterOpen = variants({ filterExpanded: true, filterQuery: 'settings', behind: 45 })
+export const filterOpenMinimum = filterOpen.minimum
+export const filterOpenNarrow = filterOpen.narrow
+export const filterOpenStandard = filterOpen.standard
+export const filterOpenWide = filterOpen.wide
+
 export const filterActive = defineFixture({
   width: panelWidth(240),
   render: () => <Panel filterQuery="settings" behind={45} />
 })
-export const uncommittedScope = defineFixture({
-  width: panelWidth(240),
-  render: () => <Panel scope={{ kind: 'uncommitted' }} behind={45} />
-})
+
+const uncommitted = variants({ scope: { kind: 'uncommitted' }, behind: 45 })
+export const uncommittedMinimum = uncommitted.minimum
+export const uncommittedNarrow = uncommitted.narrow
+export const uncommittedStandard = uncommitted.standard
+export const uncommittedWide = uncommitted.wide
+
 export const commitScope = defineFixture({
   width: panelWidth(240),
   render: () => (
