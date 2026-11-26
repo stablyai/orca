@@ -23,8 +23,6 @@ let launchListed = false
 let retryAt = 0
 const RETRY_AFTER_MS = 30_000
 
-/** Chats any daemon listed with a live or unread agent, by its spawn time: their files stay. */
-const keptThisRun = new Map<string, number>()
 /** Chats whose detached agent the daemon idle-stopped: it stops only work that had ended, so
  *  nothing of theirs was cut and restart offers leave them alone. */
 const idleStoppedThisRun = new Set<string>()
@@ -92,9 +90,6 @@ async function keep(channel: ProviderRelayChannel, relays: readonly ProviderRela
     if (!info.attached && typeof info.agent === 'string' && !reattachableAgents.has(info.agent)) {
       await channel.close(info.relayId).catch(() => {})
       continue
-    }
-    if (!info.attached && info.chatKey && keptProviderRelayOutstanding(info)) {
-      keptThisRun.set(info.chatKey, info.spawnedAtMs)
     }
     if (!info.attached && info.chatKey && info.exit?.idleStopped) {
       idleStoppedThisRun.add(info.chatKey)
@@ -214,16 +209,6 @@ export function listKeptProviderRelays(clients: () => Promise<DaemonClient[]>): 
     firstListing ??= listing
   }
   return firstListing ?? Promise.resolve()
-}
-
-/** Every daemon answered the launch pass, so a chat none listed has no agent kept anywhere. */
-export function providerRelayLaunchListed(): boolean {
-  return launchListed
-}
-
-/** Chats the launch pass found an agent kept for, reattached since or not, by spawn time. */
-export function providerRelayChatsKeptThisRun(): ReadonlyMap<string, number> {
-  return keptThisRun
 }
 
 /** Only a local chat of a keepable provider that had an agent at its last run can have one kept. */

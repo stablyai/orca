@@ -20,7 +20,6 @@ import {
   noteProviderRelayReattachedFromLastRun,
   keptProviderRelay,
   listKeptProviderRelays,
-  providerRelayLaunchListed as launchListed,
   providerRelayMayKeep
 } from './provider-relay-launch-inventory'
 import { providerRelayRoute } from './provider-relay-route'
@@ -118,11 +117,6 @@ function policyFor(
 export function listProviderRelaysAtLaunch(): Promise<void> {
   const installed = providerRelayRoute()
   return installed ? listKeptProviderRelays(() => installed.all()) : Promise.resolve()
-}
-
-/** Every daemon answered the launch pass; with no relay route there is none to ask. */
-export function providerRelayLaunchListed(): boolean {
-  return !providerRelayRoute() || launchListed()
 }
 
 /** Whether this chat could have an agent kept here; no other chat waits on a daemon. */
