@@ -90,13 +90,12 @@ export function useAiVaultOriginalPaneActions(): {
   )
 
   const jumpToOriginalPane = useCallback(
-    async (session: AiVaultSession): Promise<boolean> => {
+    async function jumpToOriginalPane(session: AiVaultSession): Promise<boolean> {
       if (session.structuredSession && isStructuredSessionOpen(session)) {
-        const result = await openDesktopStructuredSession({
-          kind: 'history',
-          structuredSession: session.structuredSession,
-          agent: session.agent
-        })
+        const result = await openDesktopStructuredSession(
+          { kind: 'history', structuredSession: session.structuredSession, agent: session.agent },
+          { retry: () => jumpToOriginalPane(session) }
+        )
         if (result.kind !== 'opened') {
           return false
         }

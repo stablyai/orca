@@ -2,26 +2,25 @@
  * chat coordinates. Orca resolves the receiving bot first, then reads who the sending turn is for from
  * its own record, never the model's. */
 
+import type { AutomationRunMessage } from '../../../../../../shared/automations/automation-run-message'
 import type { Bot } from '../../../../../../shared/bot-types'
+import { automationPlace } from './bot-automation-place'
 import { botOfAddress, parseBotAddress } from '../../../../../../shared/bot-roster'
-import { isFinalAutomationRunStatus } from '../../../../../../shared/automations/history/automation-run'
-import { isConnectorSource } from '../../../../../../shared/automation-event-triggers'
 import { botOfSession } from '../../../../../bots/bot-session-tabs'
 import { requireStructuredHost } from '../../../../../bots/bot-chat-session'
 import { readBotConversationActsFor } from '../../../../../bots/bot-conversation-acts-for'
 import {
-  firstMessageActsFor,
   readBotActingTurn,
   type BotActingTurn,
-  type BotRequestConversation,
-  type BotWakingPlace
+  type BotRequestConversation
 } from '../../../../../bots/bot-request-asker'
 import { readNewestBotActingTurn } from '../../../../../bots/bot-acting-turn-read'
 import type {
   AutomationTriggeredBy,
   BotRequestAsker
 } from '../../../../../../shared/bots/bot-acts-for'
-import { botRequestActsFor, botRequestRecord } from './bot-request-record'
+import { botRequestActsFor } from './bot-request-record'
+import { readFirstMessageActsFor } from './bot-first-message-acts-for'
 import type {
   AgentJournalMessageItem,
   AgentJournalRenderItem
@@ -181,26 +180,8 @@ export function creatorSession(
   }
 }
 
-/** The one automation run in progress in this chat, if exactly one is: where its event happened, never
- *  whom the chat acts for, which the conversation's own record says. */
-function runningAutomationRun(runtime: OrcaRuntimeService, sessionId: string) {
-  const running = runtime
-    .listAutomationRuns()
-    .filter((run) => run.chatSessionId === sessionId && !isFinalAutomationRunStatus(run.status))
-  return running.length === 1 ? running[0] : undefined
-}
-
-/** The thread, issue or pull request a running automation run's event happened on. */
-function automationPlace(runtime: OrcaRuntimeService, sessionId: string): BotWakingPlace | null {
-  const run = runningAutomationRun(runtime, sessionId)
-  const event = run?.trigger === 'event' ? run.event : undefined
-  return event?.subject && isConnectorSource(event.source)
-    ? { source: event.source, placeId: event.subject, ...(event.url ? { url: event.url } : {}) }
-    : null
-}
-
 // Every source's conversation id starts with its workspace (the cloud's botConversationId).
-function workspaceOf(externalId: string): string | null {
+export function workspaceOf(externalId: string): string | null {
   return externalId.split(':')[0] || null
 }
 
@@ -293,12 +274,8 @@ export async function readBotTurn(
   let recorded = readBotConversationActsFor(runtime, root)
   if (!recorded) {
     // Conversations from before Orca recorded this, and ones a person opened: their first message
-    // says, and is kept as the record. A cleared chat reads its root's.
-    const firstPrompt = await (await host.journalReads(root)).promptItem('first')
-    const first = firstMessageActsFor(firstPrompt ? [firstPrompt] : [], {
-      botRequestAskers: (messageId) => botRequestRecord(db, messageId)?.askers ?? null,
-      conversationWorkspaceId: workspaceId
-    })
+    // says, and is kept as the record.
+    const first = await readFirstMessageActsFor(db, host.journalReads(root), workspaceId)
     if (first) {
       db.recordBotConversationActsFor(root, { actsFor: first })
       recorded = { actsFor: first }
@@ -309,7 +286,8 @@ export async function readBotTurn(
     isBotRequest: (messageId: string) => db.getBotRequest(messageId) !== undefined,
     botRequestActsFor: (messageId: string) => botRequestActsFor(db, messageId),
     conversationActsFor: actsFor,
-    automationPlace: () => automationPlace(runtime, sessionId),
+    automationPlace: (run?: AutomationRunMessage) =>
+      automationPlace(runtime, sessionId, run, conversation),
     conversationWorkspaceId: workspaceId
   }
   const turn = opening

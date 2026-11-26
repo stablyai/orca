@@ -20,6 +20,7 @@ import { startGoogleSetupInChat } from '../bots/google/setup-cards/google-setup-
 import { useGoogleNewApp } from '../bots/google/use-google-new-app'
 import { useGoogleSignIn } from '../bots/google/use-google-sign-in'
 import { useTurnOnBotGoogle } from '../bots/google/use-turn-on-bot-google'
+import { giveBotGoogleAccount, readFreshBot } from '../bots/google/give-bot-google-account'
 import type { Bot } from '../../../../shared/bot-types'
 import {
   NativeChatCardActions,
@@ -55,7 +56,10 @@ export function NativeChatGoogleOfferCard({
 
   const signInThenTurnOn = async (account?: string): Promise<void> => {
     const connected = await signIn.connect(choices, account)
-    if (!connected || (bot.google !== true && !(await turnOnGoogle(bot)))) {
+    if (
+      !connected ||
+      !(await giveBotGoogleAccount(bot, connected.email, turnOnGoogle, readFreshBot))
+    ) {
       return
     }
     // The sign-in can take minutes; compare with the default as it is now, not at the click.

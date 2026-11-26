@@ -40,7 +40,7 @@ export type InflightChecks = {
   wakeWslDistro?: boolean
 }
 export type InflightComments = {
-  promise: Promise<PRComment[]>
+  promise: Promise<PRComment[] | null>
   reply?: Promise<PRComment[]>
   requestId: number
   postedComments: PRComment[]

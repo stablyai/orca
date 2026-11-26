@@ -1,3 +1,4 @@
+import { mobileWaitingAgentMailRows } from './transcript/agent-messages/MobileWaitingAgentMailRows'
 import { MobileBotFirstScreen, useMobileBotFirstScreen } from './MobileBotFirstScreen'
 import { MobileBotCardSendContext } from './transcript/bot-cards/mobile-bot-card-host'
 import { mobileNativeChatOtherBotCard } from './transcript/bot-cards/mobile-native-chat-bot-cards'
@@ -143,7 +144,7 @@ export function MobileNativeChatView({
   workerApprovals,
   promptKey,
   onRespondPermission,
-  composerTray: { content: trayContent, composerInputRef: inputRef, steerHead } = NO_COMPOSER_TRAY,
+  composerTray: { content: trayContent, composerInputRef: inputRef, ...tray } = NO_COMPOSER_TRAY,
   onOpenFile,
   keyboardInset = 0
 }: Props): React.JSX.Element {
@@ -279,22 +280,23 @@ export function MobileNativeChatView({
   const header = mobileNativeChatListHeader(hasMore, olderPages, loadEarlier)
   // Changing text size, face or spacing relays out every row, so preserve the page’s reading anchor.
   const layoutKey = `${fontScale}:${font}:${lineSpacing}`
-  const footer = mobileNativeChatListFooter(liveStatus, turns.waitingRows, renderItem)
+  const mailRows = mobileWaitingAgentMailRows(tray.waitingAgentMail, fontScale, tail.viewport)
+  const footer = mobileNativeChatListFooter(liveStatus, turns.waitingRows, renderItem, mailRows)
   const emptyState = mobileNativeChatEmptyState(status, agent, error, sessionLive, clearing)
 
   const composerPlaceholder = mobileNativeChatComposerPlaceholder(
     offlineQueue.lockReason,
     turnIndicator?.afterStop
   )
-  // A collapsed structured question still holds the input: the agent waits on that answer alone.
-  const promptHeld = promptShown || collapsedPrompt?.holdsInput === true
   const workerApproval = useMobileNativeChatWorkerApprovalSlot(
     workerApprovals,
-    (ask ?? permission ?? question ?? collapsedPrompt) != null
+    (ask ?? permission ?? question ?? collapsedPrompt) != null,
+    onDismissSendError ? null : sendErrorMessage
   )
   const promptOwnsInput = useMobileNativeChatPromptInputOwner(
     {
-      promptShown: promptHeld || workerApproval.card !== null,
+      // A collapsed structured question still holds the input: the agent waits on that answer alone.
+      promptShown: promptShown || !!collapsedPrompt?.holdsInput || workerApproval.card !== null,
       ask,
       askRequiresTerminal,
       permission,
@@ -303,6 +305,9 @@ export function MobileNativeChatView({
     },
     inputRef
   )
+  // A failed answer shows on the open card that took the composer's place; a dismissable one stays over it.
+  const onCard = promptOwnsInput && !collapsedPrompt && !onDismissSendError
+  const [notice, banner] = onCard ? [sendErrorMessage, null] : [null, sendErrorMessage]
   const emptyStateView = emptyState ? <MobileNativeChatEmptyStateView copy={emptyState} /> : null
 
   // The queue sits above a shown prompt card in a closed box, rather than tucking into the composer.
@@ -314,7 +319,7 @@ export function MobileNativeChatView({
         waitingText={composerPlaceholder}
         hostOutage={hostOutage}
       />
-      <MobileNativeChatSendErrorBanner message={sendErrorMessage} onDismiss={onDismissSendError} />
+      <MobileNativeChatSendErrorBanner message={banner} onDismiss={onDismissSendError} />
       <MobileNativeChatQueueAbovePromptContext value={promptShown}>
         {trayContent}
         <MobileNativeChatOfflineQueue queue={offlineQueue} />
@@ -323,13 +328,11 @@ export function MobileNativeChatView({
       <MobileNativeChatPromptCard
         key={promptKey ?? undefined}
         answering={promptOwnsInput && keyboardInset > 0}
-        {...{ askPending, askSendSource }}
-        {...{ ask, askKey, onDismissAsk, onAnswerAsk }}
+        {...{ askPending, askSendSource, ask, askKey, onDismissAsk, onAnswerAsk }}
         {...{ onCancelAsk, onCancelPrompt, onCollapseAsk }}
         requiresTerminal={askRequiresTerminal}
-        onAnswerInTerminal={onAnswerInTerminal}
         {...{ permission, onRespondPermission, question, onAnswerQuestion, onCollapsePrompt }}
-        collapsedPrompt={collapsedPrompt}
+        {...{ onAnswerInTerminal, collapsedPrompt, notice }}
       />
       <View style={promptOwnsInput ? styles.hidden : undefined}>
         <MobileNativeChatDraftComposer
@@ -339,13 +342,8 @@ export function MobileNativeChatView({
           onChangeText={onComposerTextChange}
           onSend={handleSend}
           sendSurfaceId={sendSurfaceId}
-          {...{
-            getSendCompletionGeneration,
-            getComposerEditGeneration,
-            inputRef,
-            sendFollowUp,
-            steerHead
-          }}
+          {...{ getSendCompletionGeneration, getComposerEditGeneration, inputRef, sendFollowUp }}
+          steerHead={tray.steerHead}
           {...{ agent, sessionOptions, contextUsage }}
           {...{ onAttachImage, onPasteImages, attachments, onRemoveAttachment }}
           {...{ isAttaching, onMicPress, micActive, micStarting, micProcessing }}
@@ -373,7 +371,7 @@ export function MobileNativeChatView({
             title={t('session.nativeChatView.loading', 'Loading conversation…')}
           />
         ) : firstScreen ? (
-          <MobileBotFirstScreen firstScreen={firstScreen} />
+          <MobileBotFirstScreen firstScreen={firstScreen} after={mailRows} />
         ) : (
           <GestureHandlerRootView style={styles.listWrap}>
             <MobileNativeChatDisclosureContext.Provider value={disclosures}>

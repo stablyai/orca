@@ -16,9 +16,6 @@ export type BotItemsListMembers = {
   placeOf: (item: BotItem) => string | null
   /** Which rows have that second line, without naming it; null when no row can. */
   placed?: ((item: BotItem) => boolean) | null
-  /** Needs you's rows the shown bots have outside the list's chats, "N more outside this group", and
-   *  what those chats are. */
-  outside: { count: number; of: 'group' | 'room' | 'thread' }
 }
 
 export type ListOwner = Omit<BotItemsListMembers, 'needBot'> & {
@@ -37,7 +34,6 @@ export function listOwner(bot: Bot | BotItemsListMembers, seenEventId: string): 
     seenOf: () => seenEventId,
     needBot: bot,
     placeOf: () => null,
-    outside: { count: 0, of: 'group' },
     faces: false
   }
 }

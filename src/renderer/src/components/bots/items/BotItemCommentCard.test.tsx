@@ -6,7 +6,14 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
 import type { BotItem, BotItemEvent } from '../../../../../shared/bots/bot-items'
 import { fixtureCos } from '../../../component-fixtures/fixture-bot-panel'
+import {
+  botItemHeldAnswer,
+  writeBotItemHeldAnswers
+} from '../../../../../shared/bots/bot-item-held-answers'
+import { botItemQuestionShape } from '../../../../../shared/bots/bot-item-ask'
+import { writeNativeChatDraftCache } from '../../native-chat/drafts/native-chat-draft-views'
 import { BotItemActivityList } from './BotItemActivityList'
+import { botItemHeldAnswersScope } from './bot-item-held-answers'
 
 // A body's height follows its text: a question's long context overflows its 8-line cut, a reply does not.
 const sizes = ['scrollHeight', 'clientHeight'] as const
@@ -99,4 +106,73 @@ it('keeps an answered question whole until the item is opened again', () => {
   render(<Activity item={asking(null)} events={all} />)
   expect(toggle('Show more')).toHaveLength(2)
   expect(toggle('Show less')).toHaveLength(0)
+})
+
+const askOf = (id: string, prompts: string[], at: number): BotItemEvent => ({
+  id,
+  kind: 'commented',
+  actor: { kind: 'bot', botId: fixtureCos.id, chatId: 'chat-home' },
+  data: {
+    text: id,
+    ask: {
+      questions: prompts.map((prompt) => ({ prompt, options: [{ label: 'Yes' }, { label: 'No' }] }))
+    }
+  },
+  at
+})
+const NO_ACTIONS = {
+  send: () => {},
+  edit: () => {},
+  restore: () => true,
+  type: () => {}
+}
+const replacedLabel = (): HTMLElement[] =>
+  screen.queryAllByRole('button', { name: 'Replaced by a newer question' })
+
+it('a replaced ask with answers held on it still reads replaced, and leads to the waiting ask', () => {
+  Element.prototype.scrollIntoView ??= () => {}
+  const old = askOf('q1', ['Which region?', 'Keep the old index?'], 1)
+  const live = askOf('q2', ['Roll out everywhere?'], 2)
+  const shape = botItemQuestionShape(old.data)
+  writeNativeChatDraftCache(
+    botItemHeldAnswersScope(fixtureCos, 'uid-1', 'q1'),
+    writeBotItemHeldAnswers(shape, [botItemHeldAnswer('Yes'), botItemHeldAnswer('No')])
+  )
+  const item = makeTestBotItem(1, {
+    status: 'needs_you',
+    question: { eventId: 'q2', text: 'Roll out everywhere?' }
+  })
+  render(
+    <TooltipProvider>
+      <BotItemActivityList
+        bot={fixtureCos}
+        item={item}
+        events={[old, live]}
+        quickReplies={NO_ACTIONS}
+      />
+    </TooltipProvider>
+  )
+  // The held answers still show, to recover, under the replaced label.
+  expect(screen.getAllByText(/not sent yet/)).toHaveLength(2)
+  expect(replacedLabel()).toHaveLength(1)
+  fireEvent.click(replacedLabel()[0]!)
+  expect(document.activeElement?.getAttribute('data-bot-item-comment-id')).toBe('q2')
+})
+
+it('a replaced ask leads nowhere once no ask waits, even with a Needs you move in the Activity', () => {
+  const old = askOf('q1', ['Which region?', 'Keep the old index?'], 1)
+  const live = askOf('q2', ['Roll out everywhere?'], 2)
+  const moved: BotItemEvent = {
+    id: 's1',
+    kind: 'status',
+    actor: { kind: 'bot', botId: fixtureCos.id, chatId: 'chat-home' },
+    data: { from: 'working', to: 'needs_you' },
+    at: 4
+  }
+  const events = [old, live, reply('r2', 'q2', 3), moved]
+  render(
+    <Activity item={makeTestBotItem(1, { status: 'needs_you', question: null })} events={events} />
+  )
+  expect(screen.getByText('Replaced by a newer question')).toBeTruthy()
+  expect(replacedLabel()).toHaveLength(0)
 })

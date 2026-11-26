@@ -56,7 +56,7 @@ const workers: OrchestrationCrewRow[] = [
       sequence: 2
     }
   }),
-  row('w3', 'perf-audit', 'gemini', 'waiting', {
+  row('w3', 'perf-audit', 'antigravity', 'waiting', {
     task: { title: 'Profile token refresh under load', state: 'dispatched' },
     approvals: [
       {
@@ -129,7 +129,7 @@ const workerRows: OrchestrationCrewSnapshot = {
           sequence: 5
         }
       }),
-      row('p3', 'perf-audit', 'gemini', 'working', {
+      row('p3', 'perf-audit', 'antigravity', 'working', {
         role: 'peer',
         sendAddress: undefined,
         latest: {

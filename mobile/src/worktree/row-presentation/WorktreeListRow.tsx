@@ -21,6 +21,7 @@ import { getWorktreeMetaGlyphPresence } from './worktree-meta-glyph-presence'
 import { MobileBotHomeRow } from '../../bots/MobileBotHomeRow'
 import { MobileBotWorkerLine } from '../../bots/MobileBotChatRows'
 import { botWorkspaceLineAgent } from '../../../../src/shared/bots/bot-sidebar-workspaces'
+import { structuredAgentSessionStatusPaneKey } from '../../../../src/shared/agent-session/view/structured-agent-session-tab'
 import { BotLineAgentLogos } from './BotLineAgentLogos'
 import { agentDotState } from '../agent-lineage/agent-row-display'
 import { useNow } from '../../hooks/use-now'
@@ -154,7 +155,15 @@ function WorktreeListRowComponent({
         view={view}
         isReadOnly={isReadOnly}
         pairedHostId={pairedHostId}
-        onPress={() => onPress(item)}
+        // The bot opens on its Home Chat, which no row under it lists.
+        onPress={() => {
+          const chat = view.botFacts?.line.chatSessionId
+          if (chat && onAgentPress) {
+            onAgentPress(item, structuredAgentSessionStatusPaneKey(chat))
+          } else {
+            onPress(item)
+          }
+        }}
         onLongPress={openActions}
         onToggle={onToggleLineage ? () => onToggleLineage({ row: item, view }) : undefined}
       />

@@ -1,5 +1,5 @@
 import { classifyFilesystemDirectoryEntries } from '../../../filesystem/local-file-io/filesystem-symlink-directory-entries'
-import { hasSymlinkBelowRoot } from '../../../filesystem/local-file-io/filesystem-symlink-ancestor'
+import { findSymlinkBelowRoot } from '../../../filesystem/local-file-io/filesystem-symlink-ancestor'
 import { markdownDocumentsFromRelativePaths } from '../../../../shared/file-listing/markdown-document-paths'
 import {
   capturePathExistence,
@@ -209,12 +209,19 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
   )
 
   ipcMain.handle(
-    'fs:hasSymlinkBelowRoot',
-    (_event, args: { rootPath: string; path: string }): Promise<boolean> =>
+    'fs:findSymlinkBelowRoot',
+    (
+      _event,
+      args: { rootPath: string; path: string; which: 'first' | 'deepest' }
+    ): Promise<string | null> =>
       guardWslUncPathAccess(args.rootPath, async () => {
-        // Why the root: the walk stops at the first link, so it never touches anything outside it.
+        // Why the root: the walk only lstats the segments of a path lexically below it, never lists or reads.
         await resolveDesktopAuthorizedPath(args.rootPath, store)
-        return hasSymlinkBelowRoot(args.rootPath, args.path)
+        return findSymlinkBelowRoot(
+          args.rootPath,
+          args.path,
+          args.which === 'first' ? 'first' : 'deepest'
+        )
       })
   )
 

@@ -2,6 +2,7 @@
 // belongs to, so editing the credentials file can't re-point a value or move it to another tool or bot.
 import { resolve } from 'node:path'
 import { z } from 'zod'
+import { BotFailureError } from '../../shared/bots/bot-failure-copy'
 import { getSecretStore, hasSecretStore } from '../../shared/secure-storage/secret-store'
 
 const Envelope = z.string().regex(/^(?:sealed|plain):[A-Za-z0-9+/=]*$/)
@@ -21,10 +22,11 @@ export const Entry = z.discriminatedUnion('kind', [
 export type Entry = z.infer<typeof Entry>
 /** What one envelope seals: the whole entry with the folder and id it belongs to. */
 const SealedEntry = z.object({ folder: z.string(), id: z.string(), entry: Entry })
-export const CredentialsFile = z.object({
+const CredentialsFile = z.object({
   version: z.literal(2),
   credentials: z.record(z.string(), Envelope)
 })
+const OlderLayout = z.object({ credentials: z.record(z.string(), z.unknown()) })
 /** An entry as read: its envelope, kept as written, and what it holds, null when it doesn't open here. */
 export type Slot = { envelope: string; entry: Entry | null }
 export type Stored = Record<string, Slot>
@@ -63,6 +65,35 @@ export function refuseUnsealedSecrets(hasSecret: boolean): void {
 
 export function sealEntry(folder: string, id: string, entry: Entry): Slot {
   return { envelope: seal(JSON.stringify({ folder: resolve(folder), id, entry })), entry }
+}
+
+const parseJson = (text: string): unknown => {
+  try {
+    return JSON.parse(text)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The file's envelopes, still sealed. A file in the older layout, with plaintext addresses beside
+ * separately sealed values, is never opened: nothing vouches for its addresses, so its tools need
+ * signing in again.
+ */
+export function parseEnvelopes(text: string | null): Record<string, string> {
+  if (text === null) {
+    return {}
+  }
+  const json = parseJson(text)
+  const parsed = CredentialsFile.safeParse(json)
+  if (parsed.success) {
+    return parsed.data.credentials
+  }
+  if (OlderLayout.safeParse(json).success) {
+    warnOnce(text, '[bot-tool-credentials] ignored credentials saved in the older layout')
+    return {}
+  }
+  throw new BotFailureError('toolCredentialsUnreadable')
 }
 
 /** The entry an envelope holds, only when it was sealed for this folder and id. */

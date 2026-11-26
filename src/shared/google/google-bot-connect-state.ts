@@ -1,6 +1,9 @@
 // Whether a bot may use Google and where this host's Google sign-in stands, as separate facts; each
 // caller (offer, a bot's setup start, `bot connectors`, Add connector) picks its own step from them.
+import type { Bot } from '../bot-types'
 import type { GoogleAccountView } from './google-connect-types'
+import { botGoogleAccess, botMayUseGoogleAccount } from './google-bot-accounts'
+import { googleSetupRunActive, type GoogleSetupRun } from './google-setup-run'
 
 export type GoogleHostConnect = 'no-app' | 'signed-out' | 'reconnect' | 'connected'
 
@@ -24,6 +27,28 @@ export function googleBotConnectState(input: {
         ? 'signed-out'
         : 'no-app'
   return { allowed, host }
+}
+
+/** One bot's Google, as `orca bot connectors` and its Google row read it: only the host accounts it may use. */
+export function botGoogleConnectState<A extends Pick<GoogleAccountView, 'email' | 'status'>>(
+  bot: Pick<Bot, 'google' | 'googleAccounts'>,
+  host: { client: unknown; accounts: readonly A[] }
+): GoogleBotConnectState & { accounts: A[] } {
+  const access = botGoogleAccess(bot)
+  const accounts = host.accounts.filter((account) => botMayUseGoogleAccount(access, account.email))
+  return {
+    ...googleBotConnectState({ allowed: bot.google === true, client: host.client, accounts }),
+    accounts
+  }
+}
+
+/** Setting up, on the bot's Google row: a setup runs and the bot can't use Google yet. A run left
+ *  open after Google started working some other way doesn't count. */
+export function botGoogleSettingUp(
+  state: GoogleBotConnectState,
+  run: Pick<GoogleSetupRun, 'state'> | null | undefined
+): boolean {
+  return googleSetupRunActive(run) && !(state.allowed && state.host === 'connected')
 }
 
 /** What a bot's ask for Google comes to: nothing to do, a Connect card, or (where no owner window can

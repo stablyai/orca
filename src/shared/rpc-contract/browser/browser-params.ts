@@ -109,6 +109,8 @@ export const ProfileClearGoogleCookies = ProfileDelete.extend({
   executorRuntimeId: z.string().min(1)
 })
 
+export const ProfileClearCookies = ProfileClearGoogleCookies
+
 export const ProfileImportFromBrowser = z.object({
   profileId: requiredString('Missing required --profile'),
   browserFamily: requiredString('Missing required --browser-family'),

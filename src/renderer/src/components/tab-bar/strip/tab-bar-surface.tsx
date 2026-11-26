@@ -32,10 +32,13 @@ import { BotNewChatMenuItems } from '../../bots/BotNewChatMenuItems'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotGroup } from '../../../../../shared/bots/bot-group'
 import { BotGroupNewThreadMenuItems } from '../../bots/BotGroupNewThreadMenuItems'
-import type { ClientHostedBrowserRow } from '../../../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import { advanceAgentSessionsTourPastNewTab } from '@/components/contextual-tours/agent-sessions-tour-new-tab'
-
-const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
+import { PinnedHomeTabSlot } from './PinnedHomeTabSlot'
+import {
+  newTabButtonHideClassName,
+  type RenderedTabStrip,
+  stripSizeClassName
+} from './rendered-tab-strip'
 
 export function renderTabBarSurface(
   {
@@ -43,6 +46,7 @@ export function renderTabBarSurface(
     runtime,
     createMenu,
     itemProjection,
+    strip,
     tabStripNavigation,
     tabStripDragScroll,
     activeClientHostedBrowserRowId,
@@ -55,6 +59,8 @@ export function renderTabBarSurface(
     runtime: TabBarRuntimeModel
     createMenu: TabBarCreateMenuController
     itemProjection: TabBarItemProjection
+    /** What renders: a pinned bot Home in its own slot, then the scrolling strip's tabs. */
+    strip: RenderedTabStrip
     tabStripNavigation: ReturnType<typeof useTabStripOverflowNavigation>
     tabStripDragScroll: ReturnType<typeof useTabStripDragScrollHandlers>
     activeClientHostedBrowserRowId: string | null
@@ -102,8 +108,14 @@ export function renderTabBarSurface(
     queueFocusAfterNewTabMenuClose,
     showStaticCreateMenuItems
   } = createMenu
-  const { orderedItems, dropIndicatorByVisibleId, sortableIds, activeVisibleTabId } = itemProjection
-  const clientHostedBrowserRows = props.clientHostedBrowserRows ?? EMPTY_CLIENT_HOSTED_ROWS
+  const { activeVisibleTabId } = itemProjection
+  const {
+    orderedItems,
+    sortableIds,
+    dropIndicatorByVisibleId,
+    clientHostedBrowserRows,
+    pinnedCount
+  } = strip
   const {
     tabStripRef,
     tabStripOverflowState,
@@ -113,7 +125,10 @@ export function renderTabBarSurface(
   } = tabStripNavigation
   const singleTab = orderedItems.length + clientHostedBrowserRows.length === 1
   const includeTopTabBorder = tabStripChrome !== 'floating-panel'
-  const renderItems = (segments: readonly TabStripSegment[]): React.ReactNode[] =>
+  const renderItems = (
+    segments: readonly TabStripSegment[],
+    itemOffset = pinnedCount
+  ): React.ReactNode[] =>
     renderTabBarItems({
       items: orderedItems,
       props,
@@ -122,12 +137,21 @@ export function renderTabBarSurface(
       dropIndicatorByVisibleId,
       includeTopTabBorder,
       activeClientHostedBrowserRowId,
-      segments
+      segments,
+      itemOffset
     })
 
-  const hasTabs = orderedItems.length + clientHostedBrowserRows.length > 0
   return (
     <div ref={surfaceRef} className="flex items-stretch h-full overflow-hidden flex-1 min-w-0">
+      {pinnedCount > 0 ? (
+        <PinnedHomeTabSlot
+          sortableIds={strip.pinnedSortableIds}
+          singleTab={singleTab}
+          withStrip={strip.stripHasTabs}
+        >
+          {renderItems([{ kind: 'tabs', start: 0, end: pinnedCount }], 0)}
+        </PinnedHomeTabSlot>
+      ) : null}
       {tabStripOverflowState.hasOverflow ? (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -164,9 +188,7 @@ export function renderTabBarSurface(
           <div
             data-single-tab={singleTab ? '' : undefined}
             // Why: tabs are the only drag source, so a narrow pane clips the "+" before the last tab sliver.
-            className={`group/tab-strip relative flex min-h-0 w-max max-w-full shrink ${
-              hasTabs ? 'min-w-10' : 'min-w-0'
-            }`}
+            className={`group/tab-strip relative flex min-h-0 w-max max-w-full ${stripSizeClassName(strip)}`}
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >
             <div
@@ -235,11 +257,11 @@ export function renderTabBarSurface(
         modal={false}
       >
         <DropdownMenuTrigger asChild>
-          {/* Why: below 86px (40 tab floor + 36 "+" + 8 action padding + 2 sub-pixel slack) "+" would only clip; hide it whole so Tab never lands on it. Empty groups keep it. */}
+          {/* Why: "+" hides whole rather than clip, so Tab never lands on it (rendered-tab-strip.ts). */}
           <button
-            className={`ml-2 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground ${
-              hasTabs ? '@max-[86px]/tab-strip:hidden' : ''
-            }`}
+            className={`ml-2 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground ${newTabButtonHideClassName(
+              strip
+            )}`}
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             title={t('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
             aria-label={t('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
@@ -271,8 +293,10 @@ export function renderTabBarSurface(
                 }
                 menuOpen={newTabMenuOpen}
                 menuOptions={createMenuOptions}
-                // A bot's or group's home offers its agents only through its chats, above.
-                hideAgents={bot !== null || botGroup !== null}
+                // A group's home offers its agents only through its thread, below; a bot's
+                // home searches its own chats in their place.
+                hideAgents={botGroup !== null}
+                botHome={bot && !terminalOnly ? { bot, agentMenu } : null}
                 onLaunchAgentOption={launchAgentFromNewTabEntry}
                 onOpenDefaultTerminal={() => {
                   queueNewActiveTerminalFocusAfterNewTabMenuClose()
@@ -287,7 +311,10 @@ export function renderTabBarSurface(
               {showStaticCreateMenuItems ? <DropdownMenuSeparator className="my-0 mb-1.5" /> : null}
             </>
           ) : null}
-          {bot && !terminalOnly ? <BotNewChatMenuItems bot={bot} model={agentMenu} /> : null}
+          {/* While a query is typed, the bot's chats are search results above instead. */}
+          {bot && !terminalOnly && showStaticCreateMenuItems ? (
+            <BotNewChatMenuItems bot={bot} model={agentMenu} />
+          ) : null}
           {botGroup && !terminalOnly ? (
             <>
               <BotGroupNewThreadMenuItems group={botGroup} />

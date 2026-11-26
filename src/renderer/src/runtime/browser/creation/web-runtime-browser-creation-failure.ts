@@ -1,5 +1,10 @@
 import { useAppStore } from '../../../store/index'
 import { hasRuntimeRpcErrorCode } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
+import {
+  browserCreateFailureCode,
+  DEFINITIVE_BROWSER_CREATE_FAILURE_CODES
+} from './web-runtime-browser-create-failure-code'
+import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
 import { clearWebSessionFocusIntentIfMatches } from '../../web-session-tabs-sync/navigation/web-session-focus-intent'
 import {
   claimWebSessionBrowserPlacementGroupCleanup,
@@ -10,19 +15,10 @@ import {
   discardStagedWebRuntimeBrowserTab,
   StagedWebRuntimeBrowserTabCancelledError
 } from './web-runtime-browser-tab-staging'
-import type { WebRuntimeBrowserCreationContext } from './web-runtime-browser-creation-context'
-
-const DEFINITIVE_BROWSER_CREATE_FAILURE_CODES = [
-  'browser_error',
-  'capability_unsupported',
-  'invalid_argument',
-  'invalid_params',
-  'method_not_found',
-  'runtime_rpc_queue_overloaded',
-  'selector_ambiguous',
-  'selector_not_found',
-  'unauthorized'
-] as const
+import type {
+  WebRuntimeBrowserCreationContext,
+  WebRuntimeBrowserCreationFailureInfo
+} from './web-runtime-browser-creation-context'
 
 function isDefinitiveBrowserCreateFailure(error: unknown): boolean {
   return DEFINITIVE_BROWSER_CREATE_FAILURE_CODES.some((code) => hasRuntimeRpcErrorCode(error, code))
@@ -90,10 +86,20 @@ export function finishWebRuntimeBrowserCreationFailure(
   ) {
     useAppStore.getState().closeEmptyGroup(args.worktreeId, args.clientTargetGroupId)
   }
-  if (error instanceof StagedWebRuntimeBrowserTabCancelledError) {
+  const cancelled = error instanceof StagedWebRuntimeBrowserTabCancelledError
+  // Why: without stage and code a failed link open left only a generic toast (P0 "Unable to open URL").
+  const info: WebRuntimeBrowserCreationFailureInfo = {
+    stage: context.createdPageId ? 'materialize' : context.createAttempted ? 'create' : 'prepare',
+    code: cancelled ? 'closed_before_open' : browserCreateFailureCode(error)
+  }
+  args.onFailure?.(info)
+  if (cancelled) {
     console.warn('[web-runtime-session] browser tab was closed before its create finished')
   } else if (args.failureLogMode === 'operation-only') {
-    console.warn('[web-runtime-session] failed to create browser tab')
+    console.warn(
+      `[web-runtime-session] failed to open browser tab at ${info.stage} (${info.code ?? 'no code'})`
+    )
+    recordRendererCrashBreadcrumb('web_runtime_browser_create_failed', info)
   } else {
     console.warn(
       '[web-runtime-session] failed to create browser tab:',

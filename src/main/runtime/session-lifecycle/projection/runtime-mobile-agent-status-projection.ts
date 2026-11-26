@@ -61,7 +61,7 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
     pty.lastAgentStatus !== 'working' &&
     pty.lastAgentStatus !== 'permission'
   ) {
-    const updatedAt = Math.max(status.updatedAt, titleEvidenceAt ?? 0)
+    const updatedAt = Math.max(status.updatedAt, ptyStatusEvidenceAt(pty, titleEvidenceAt ?? 0))
     return updatedAt === status.updatedAt
       ? status
       : { ...status, updatedAt, evidenceObservedAt: agentStatusAuthorityObservedAt(status) }

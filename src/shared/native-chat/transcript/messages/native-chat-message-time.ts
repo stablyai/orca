@@ -14,6 +14,13 @@ function createNativeChatMessageTimeFormatter(locale: string | undefined, timeZo
   const dateTime = new Intl.DateTimeFormat(locale, dateOptions)
   const dateTimeWithYear = new Intl.DateTimeFormat(locale, { ...dateOptions, year: 'numeric' })
   const full = new Intl.DateTimeFormat(locale, { dateStyle: 'full', timeStyle: 'long', timeZone })
+  const day = new Intl.DateTimeFormat(locale, { timeZone, month: 'short', day: 'numeric' })
+  const dayWithYear = new Intl.DateTimeFormat(locale, {
+    timeZone,
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  })
 
   return {
     /** `yesterday` wraps the time in the UI language's "Yesterday {{time}}"; without it, yesterday shows its date. */
@@ -31,6 +38,13 @@ function createNativeChatMessageTimeFormatter(locale: string | undefined, timeZo
       return date.getFullYear() === now.getFullYear()
         ? dateTime.format(date)
         : dateTimeWithYear.format(date)
+    },
+    /** For a narrow column: today's time, else only the day. */
+    formatCompact(date: Date, now = new Date()): string {
+      if (date.toDateString() === now.toDateString()) {
+        return time.format(date)
+      }
+      return date.getFullYear() === now.getFullYear() ? day.format(date) : dayWithYear.format(date)
     },
     formatFull(date: Date): string {
       return full.format(date)

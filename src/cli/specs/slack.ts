@@ -52,7 +52,7 @@ export const SLACK_COMMAND_SPECS: CommandSpec[] = [
       AS_BOT,
       PLACE,
       '--limit is 1 to 100 (default 20). When older messages remain, the output ends with the --before ref that reads them.',
-      'A message lists its files by id; `read <message> --download <id>` saves one (up to 640 KB) to --out, or under its own name here.'
+      'A message lists its files by id; `read <message> --download <id>` saves one (up to 640 KB) to --out, or under its own name here (numbered when taken); open the path it prints.'
     ]
   },
   {

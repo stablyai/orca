@@ -68,7 +68,7 @@ function getSleepingStatusLabel(t: Translate = translate): string {
 }
 // Offset optically left-heavy branch glyphs to align with centered activity dots.
 const compactReviewAndBranchStatusIconClassName = 'size-[13px] translate-x-px'
-export const branchStatusIconClassName = `${compactReviewAndBranchStatusIconClassName} text-muted-foreground/70`
+export const branchStatusIconClassName = `${compactReviewAndBranchStatusIconClassName} text-muted-foreground opacity-70 forced-colors:opacity-100`
 // The whole sleeping row is dimmed; extra glyph tint would double-dim it.
 const sleepingStatusIconClassName = 'size-[13px] text-muted-foreground'
 // Overlay unread on the glyph's corner without widening the lane; the ring separates it from busy glyphs.
