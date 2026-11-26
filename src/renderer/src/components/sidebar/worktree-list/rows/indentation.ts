@@ -21,6 +21,12 @@ export const PROJECT_GROUP_HEADER_BASE_PADDING = 10
 export const WORKTREE_SECTION_HEADER_PADDING_LEFT = PROJECT_GROUP_HEADER_BASE_PADDING
 export const PROJECT_GROUP_HEADER_INDENT = 10
 export const MAX_PROJECT_GROUP_HEADER_DEPTH = 6
+// Why: the section rail drops from the center of the header's size-4 icon box.
+export const SECTION_HEADER_ICON_CENTER_OFFSET = 8
+// Why: seats a section's workspace cards under the header rail like lineage children under a parent card.
+export const SECTION_CHILD_SURFACE_GAP = 8
+// Why: host header cards pad px-2 around a px-2 card with a size-3.5 glyph.
+export const HOST_SECTION_HEADER_GUIDE_X = 8 + 8 + 7
 
 function clampDepth(depth: number): number {
   return Math.max(0, Math.floor(Number.isFinite(depth) ? depth : 0))

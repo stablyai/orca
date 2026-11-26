@@ -10,7 +10,10 @@ import { WorktreeListScrollToTopButton } from './WorktreeListScrollToTopButton'
 import { renderWorktreeSidebarDropIndicators } from './drop-indicators'
 import { useWorktreeListScrollToTop } from './use-scroll-to-top'
 import { getActiveDescendantOptionId } from '../navigation/active-descendant-option'
-import { useDraggedSubtreeRanges, useLineageRowProjection } from '../listing/lineage-row-projection'
+import {
+  useDraggedSubtreeRanges,
+  useLineageRowProjection
+} from '../listing/use-lineage-row-projection'
 import { useFolderWorkspacePathStatusRows } from '../listing/use-folder-path-statuses'
 import { useGroupToggleWithScrollAnchor } from './use-group-toggle'
 import { usePendingSidebarReveal } from '../navigation/use-pending-reveal'
